@@ -14,7 +14,7 @@ import { ACCEPTS_VIDEO, ACCEPTS_AUDIO, FFMPEG_COLORS } from "@/lib/ffmpeg-handle
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
-import { useEstimatedCredits } from "@/hooks/use-estimated-credits"
+import { useVideoUtilityCredits } from "@/hooks/use-estimated-credits"
 import { VideoResultOverlay } from "./video-result-overlay"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { videoNodeSizing } from "./video-node-defaults"
@@ -28,7 +28,7 @@ function AssembleNarratedVideoNodeComponent({ id, data, selected }: NodeProps) {
   // — same client-side estimator pattern as combine-videos, so the Run
   // button reflects the actual block-count-driven charge instead of a flat
   // per-model rate.
-  const credits = useEstimatedCredits({ id, type: "assemble-narrated-video", data: nodeData } as any)
+  const credits = useVideoUtilityCredits({ id, type: "assemble-narrated-video", data: nodeData } as any)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const selectNode = useWorkflowStore((s) => s.selectNode)
   const isSettingsOpen = useWorkflowStore((s) => s.selectedNodeId === id)

@@ -37,6 +37,7 @@ import { mergeExposedSettings, applyHandleInputOverride, isHandleInputWired, res
 import { computeLlmChatFields, computeNodePrompt, pickerFanoutTargets, applyPromptAffixes } from "@nodaro/prompts"
 import type { ComponentMetadata } from "@nodaro/shared"
 import { getAppSettings } from "../../lib/app-settings.js"
+import { videoUtilityBaseCredits } from "../../lib/video-utility-credits.js"
 import { probeAndCheckRefVideoDurations, probeRefVideoDurations } from "../../lib/ref-video-probe.js"
 import { computeEditPlanReserveId } from "../../lib/edit-plan-pricing.js"
 import type {
@@ -1244,6 +1245,24 @@ async function probeRefVideosForReservation(payload: Record<string, unknown>): P
   return probeRefVideoDurations({ provider: provider as string, referenceVideoUrls })
 }
 
+/**
+ * Video-utility nodes (Trim, Loop, Combine, Assemble Narrated Video) are priced
+ * by the length or count of what they make. The workflow run reserves what the
+ * single-node route charges for the same request — one mapping,
+ * lib/video-utility-credits.ts — instead of the node's flat one-unit row,
+ * which priced a two-minute trim like a five-second one.
+ */
+async function computeVideoUtilityCreditOverride(
+  jobName: string,
+  payload: Record<string, unknown>,
+  modelIdentifier: string,
+): Promise<number | undefined> {
+  const base = videoUtilityBaseCredits(jobName, payload)
+  if (base === undefined) return undefined
+  const { applyServiceMarkup } = await import("../../ee/billing/service-margin.js")
+  return applyServiceMarkup(base, await getAppSettings(), modelIdentifier)
+}
+
 async function computeSeedance2RefVideoCreditOverride(
   payload: Record<string, unknown>,
   probedDurationsSec?: number[],
@@ -1736,6 +1755,7 @@ async function executeWorkerNode(
         await applyEdlCreditOverride(jobName, payload) ??
         await projectDubbingCreditOverride(jobName, payload) ??
         computeImageOverlayCreditOverride(payload) ??
+        (await computeVideoUtilityCreditOverride(jobName, payload, modelIdentifier)) ??
         (await computeGenerateVideoProCreditOverride(payload, modelIdentifier))?.override ??
         (await computeEditVideoProCreditOverride(payload, modelIdentifier))?.override ??
         (await computeSeedance2RefVideoCreditOverride(payload, refVideoDurationsSec, modelIdentifier)) ??

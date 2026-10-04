@@ -189,7 +189,8 @@ export const CREDIT_BAND_SOURCES: Readonly<Record<string, CreditBandSource>> = {
   // never charged, so the quote is the range across the sources.
   "web-scrape": { ids: familyIds("web-scrape") },
   "speed-ramp": { ids: familyIds("speed-ramp") },
-  "assemble-narrated-video": { ids: familyIds("assemble-narrated-video") },
+  // One-unit row; a run is 3 units + 1 per 6 blocks: 1–60 blocks span 4–13 units.
+  "assemble-narrated-video": { ids: familyIds("assemble-narrated-video"), span: [4, 13] },
   "after-effects": { ids: familyIds("after-effects") },
   "motion-graphics": { ids: familyIds("motion-graphics") },
   // Billed on the scene-graph-ai rows (routes/scene-graph-ai.ts) — the band

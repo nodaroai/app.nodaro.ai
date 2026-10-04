@@ -59,33 +59,28 @@ Assemble Narrated Video is priced **per block**, not per second of output (all p
 is local FFmpeg — no external provider cost):
 
 ```
-credits = 3 + ceil(N / 6)
+credits = 10 × (3 + ceil(N / 6))
 ```
 
 where `N` is the number of blocks (video clips) in the run.
 
 | Block count (N) | Credits |
 |---|---|
-| 1–6 | 4 |
-| 7–12 | 5 |
-| 13–18 | 6 |
-| 19–24 | 7 |
-| 25–30 | 8 |
-| 31–36 | 9 |
-| 37–42 | 10 |
-| 43–48 | 11 |
-| 49–54 | 12 |
-| 55–60 | 13 |
+| 1–6 | 40 |
+| 7–12 | 50 |
+| 13–18 | 60 |
+| 19–24 | 70 |
+| 25–30 | 80 |
+| 31–36 | 90 |
+| 37–42 | 100 |
+| 43–48 | 110 |
+| 49–54 | 120 |
+| 55–60 | 130 |
 
-Worked examples: 6 blocks → **4** credits, 24 blocks → **7** credits, 60 blocks (the cap) →
-**13** credits.
+Worked examples: 6 blocks → **40** credits, 7 blocks → **50** credits, 24 blocks → **70**
+credits, 60 blocks (the cap) → **130** credits.
 
-> **Known gap:** the formula above is exact for single-node Run, MCP, and SDK calls (they
-> go through the route's `computeCredits` hook). Server-side **workflow-engine** runs
-> (executing this node as part of a larger workflow) currently reserve the flat 6-block
-> base — **40 credits** — regardless of actual block count; the payload builder does not yet
-> build a block-count-scaled composite identifier the way it does for other dynamically
-> priced nodes. This is a tracked billing follow-up, not a docs error.
+A single-node run, a run inside a workflow, and MCP or SDK calls are all charged this way, and the workflow's estimate before a run quotes the same price.
 
 ## Fallback & Edge-Case Behaviors
 

@@ -25,6 +25,7 @@ import { PIPELINE_PINNABLE_SCRIPT_LLMS, captionRoutesToRemotion, DEFAULT_TRANSCR
 import { flux2BaseCredits } from "../../lib/pricing/flux2-cost.js"
 import { AI_AVATAR_RATE_USD_PER_SEC, aiAvatarHoldCredits } from "../../lib/pricing/ai-avatar-cost.js"
 import { applyServiceMarkup } from "./service-margin.js"
+import { videoUtilityBaseCredits, videoUtilityEstimateBody } from "../../lib/video-utility-credits.js"
 import { getWelcomeOfferConfig } from "../lib/welcome-offer-config.js"
 import { ConsentRequiredError } from "../lib/consent-required.js"
 import { CINEMATIC_RATE_USD_PER_SEC, cinematicHoldCredits } from "../../lib/pricing/cinematic-avatar-cost.js"
@@ -1516,12 +1517,13 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "qa-check": 20,
   "qa-check:economy": 10,
   "qa-check:premium": 40,
-  // ── Dynamic-priced video utilities (NOT used by routes, but kept as
-  //    safety-net fallback). The three rows below are unreachable when
-  //    routes/loop-video.ts, routes/trim-video.ts, routes/combine-videos.ts
-  //    use the computeCredits hook in creditGuard. Their model_pricing rows
-  //    (also 0) are likewise unreachable.
-  "combine-videos": 30,
+  // ── Video utilities priced per unit (Trim / Loop / Combine / Assemble
+  //    Narrated Video). A run is charged units × VIDEO_UTIL_PRICING.CREDIT_UNIT
+  //    (@nodaro/shared) on both paths — the route's computeCredits and the
+  //    workflow run's override, one mapping in lib/video-utility-credits.ts.
+  //    Each row is ONE unit and mirrors that constant, so an estimate can quote
+  //    the row × units (pinned by video-utility-credits.test.ts).
+  "combine-videos": 10,
   // apply-edl — render an EDL into ONE media file (local ffmpeg, no provider
   // cost). Priced PER MINUTE of rendered output: the route's computeCredits and
   // the DAG's applyEdlCreditOverride both reserve `this × ceil(edlDurationMs/
@@ -1544,11 +1546,10 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   // per extra platform render via imageOverlayCredits (@nodaro/shared).
   "image-overlay": 10,
   // Assemble Narrated Video — fits N ordered (clip, voice) blocks into one
-  // MP4 via ffmpeg (local compute, no external provider cost). BASE credits
-  // (pre-markup) is the 6-block case: 3 + ceil = 4. The route scales
-  // with block count via computeCredits (assembleNarratedVideoCredits).
-  // See migration 246.
-  "assemble-narrated-video": 40,
+  // MP4 via ffmpeg (local compute, no external provider cost). ONE unit (see
+  // the video-utility rows above): a run is 3 units + 1 per 6 blocks
+  // (assembleNarratedVideoCredits), on the route and the workflow run alike.
+  "assemble-narrated-video": 10,
   "merge-video-audio": 20,
   "add-captions": 30,
   "add-captions:kinetic": 50,
@@ -3433,6 +3434,14 @@ function sumWorkflowEstimate(
     // marked up once as a whole, the way its route's creditGuard reserves it.
     if (node.type === "image-overlay") {
       return sum + prices.charge("image-overlay", imageOverlayCredits((node.data?.variants as unknown[] | undefined)))
+    }
+    // Trim / Loop / Combine / Assemble Narrated Video are priced per unit of
+    // what they make — the same estimator the route and the workflow run
+    // charge with (lib/video-utility-credits.ts), marked up once as a whole.
+    const utilityBody = videoUtilityEstimateBody(node, edges)
+    if (utilityBody) {
+      const base = videoUtilityBaseCredits(node.type, utilityBody)
+      if (base !== undefined) return sum + prices.charge(node.type, base)
     }
     const modelId = getNodeModelIdentifier(withWiredSettings(node, nodes, edges), {
       timedCaptionSourceWired: timedCaptionSourceWired(node, nodes, edges),

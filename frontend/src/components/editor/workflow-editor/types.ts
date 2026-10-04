@@ -2,6 +2,7 @@ import type { WorkflowNode, WorkflowEdge, GenerateVideoProNodeData, EditVideoPro
 import { StorageExceededError, SubscriptionRequiredError } from "@/lib/api";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { resolveApplyEdlEstimateMinutes } from "@/lib/apply-edl-estimate";
+import { videoUtilityPricingUnits } from "@/lib/video-utility-estimate";
 import { audioSyncCreditId, audioSyncWiredSourceCount } from "@/lib/audio-sync";
 import { wiredSocialPostsVideoSec } from "@/lib/video-analysis-handles";
 import { buildMotionCreditModelIdentifier, isDefaultSelectorConfig, selectListItems, type SelectorFields, getEffectiveRepeatCount, buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, bucketSecondsFromCreditId, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAuditCreditId, VIDEO_AUDIT_BUCKET_CREDITS, FAN_OUT_EACH_TYPES, FAN_OUT_EACH_HANDLES, defaultEdgeOutputMode, listResultsServeHandle, EDIT_PLAN_DEFAULT_CLIP_COUNT, EDIT_PLAN_MAX_CLIP_COUNT, buildVideoCreditModelIdentifier, SEEDANCE_2_CONTINUATION_REF_SEC, isSeedance2Provider, isMinimaxH3Provider, maxSegmentSecFor, normalizeMinimaxH3Resolution, PRO3D_RENDER_CREDIT_ID, withWiredSettings, FAN_IN_TARGETS, contentRecipeCreditId, contentIdeasCreditId, clampContentIdeasCount, SOCIAL_SEARCH_CREDIT_COSTS, socialSearchCreditIdFromNode, socialPostsFrom, socialSearchPickTop, isSocialSearchPickFrozen } from "@nodaro/shared"
@@ -52,7 +53,7 @@ export const NODE_CREDIT_COSTS: Record<string, number> = {
   "extend-video": 400,
   "face-swap": 160,
   "transcribe": 10,
-  "combine-videos": 30,
+  "combine-videos": 10,
   "apply-edl": 10,
   "silence-detect": 10,
   // audio-sync: 10 × (sources − 1), keyed by the wired source count — the
@@ -83,7 +84,7 @@ export const NODE_CREDIT_COSTS: Record<string, number> = {
   "content-ideas:10:economy": 20,
   "content-ideas:10": 70,
   "content-ideas:10:premium": 100,
-  "assemble-narrated-video": 40,
+  "assemble-narrated-video": 10,
   "image-collage": 20,
   "image-overlay": 10,
   "video-overlay": 20,
@@ -848,31 +849,37 @@ export function getFanOutMultiplier(
 export const NO_RERUNS: ReadonlySet<string> = new Set();
 
 /**
- * Node types priced per OUTPUT MINUTE → how many minutes the estimate prices.
- * Their model cost is a per-minute RATE, so quoting it bare prices one minute of
- * a render that reserves for all of them. Data-driven on purpose: the next
- * per-minute node is one entry here, and every estimate surface picks it up.
+ * Node types priced per UNIT of what they make → how many units the estimate
+ * prices: minutes of an Apply EDL render, 5-second steps of a trimmed, looped
+ * or combined video, steps of an Assemble Narrated Video. Their model cost is
+ * the price of ONE unit, so quoting it bare prices one unit of a run that
+ * reserves for all of them. Data-driven on purpose: the next per-unit node is
+ * one entry here, and every estimate surface picks it up.
  */
-const OUTPUT_MINUTE_ESTIMATORS: Readonly<
+const PRICING_UNIT_ESTIMATORS: Readonly<
   Record<
     string,
     (node: WorkflowNode, allNodes: WorkflowNode[], edges: WorkflowEdge[], rerunIds: ReadonlySet<string>) => number
   >
 > = {
   "apply-edl": resolveApplyEdlEstimateMinutes,
+  "trim-video": videoUtilityPricingUnits,
+  "loop-video": videoUtilityPricingUnits,
+  "combine-videos": videoUtilityPricingUnits,
+  "assemble-narrated-video": videoUtilityPricingUnits,
 };
 
-/** Minutes a per-output-minute node's estimate prices; 1 for every other node. */
-export function getOutputMinuteUnits(
+/** Units a per-unit node's estimate prices; 1 for every other node. */
+export function getPricingUnits(
   node: WorkflowNode,
   allNodes: WorkflowNode[],
   edges: WorkflowEdge[],
   rerunIds: ReadonlySet<string>,
 ): number {
-  const estimator = OUTPUT_MINUTE_ESTIMATORS[node.type ?? ""];
+  const estimator = PRICING_UNIT_ESTIMATORS[node.type ?? ""];
   if (!estimator) return 1;
-  const minutes = estimator(node, allNodes, edges, rerunIds);
-  return Number.isFinite(minutes) && minutes >= 1 ? Math.ceil(minutes) : 1;
+  const units = estimator(node, allNodes, edges, rerunIds);
+  return Number.isFinite(units) && units >= 1 ? Math.ceil(units) : 1;
 }
 
 /**
@@ -895,7 +902,7 @@ export function getCostMultiplier(
   rerunIds: ReadonlySet<string>,
 ): number {
   return (
-    getFanOutMultiplier(node, allNodes, edges, rerunIds) * getOutputMinuteUnits(node, allNodes, edges, rerunIds)
+    getFanOutMultiplier(node, allNodes, edges, rerunIds) * getPricingUnits(node, allNodes, edges, rerunIds)
   );
 }
 

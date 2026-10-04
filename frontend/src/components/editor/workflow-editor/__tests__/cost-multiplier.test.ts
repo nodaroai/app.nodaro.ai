@@ -15,7 +15,7 @@ vi.mock("@/components/editor/config-panels/helpers", () => ({
 }))
 
 import { FAN_OUT_EACH_TYPES } from "@nodaro/shared"
-import { EACH_WIRE_FAN_OUT, getCostMultiplier, getFanOutMultiplier, getOutputMinuteUnits, NO_RERUNS, PRODUCER_FAN_OUT } from "../types"
+import { EACH_WIRE_FAN_OUT, getCostMultiplier, getFanOutMultiplier, getPricingUnits, NO_RERUNS, PRODUCER_FAN_OUT } from "../types"
 import { estimateRunCredits } from "../estimate-run-credits"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 
@@ -33,17 +33,27 @@ const edlOf = (minutes: number) => ({
 const RATE: Record<string, number> = { transcribe: 10, "edit-plan": 240, "apply-edl": 10, "add-captions": 20, "generate-image": 5, "image-to-video": 50 }
 const cachedCost = (id: string) => RATE[id]
 
-describe("getOutputMinuteUnits", () => {
-  it("is 1 for every node that is not priced per output minute", () => {
+describe("getPricingUnits", () => {
+  it("is 1 for every node that is not priced per unit", () => {
     const img = n("i", "generate-image")
-    expect(getOutputMinuteUnits(img, [img], [], NO_RERUNS)).toBe(1)
+    expect(getPricingUnits(img, [img], [], NO_RERUNS)).toBe(1)
   })
   it("is the render's minutes for apply-edl", () => {
     const master = n("m", "upload-audio", { metadata: { durationSeconds: 45 * 60 } })
     const plan = n("ep", "edit-plan", { mode: "tighten" })
     const ae = n("ae", "apply-edl")
     const edges = [e("m", "ep", "sources"), e("ep", "ae", "edl")]
-    expect(getOutputMinuteUnits(ae, [master, plan, ae], edges, ids(plan, ae))).toBe(45)
+    expect(getPricingUnits(ae, [master, plan, ae], edges, ids(plan, ae))).toBe(45)
+  })
+
+  // The workflow run reserves 10 credits per 5 s of a trim's output (the
+  // single-node route's price); its one-unit row times these units is that.
+  it("is the 5-second steps of a trim's output, and the steps of an Assemble Narrated Video", () => {
+    const trim = { id: "t", type: "trim-video", position: { x: 0, y: 0 }, data: { trimMode: "time", startTime: 0, endTime: 60 } } as never
+    expect(getPricingUnits(trim, [trim], [], NO_RERUNS)).toBe(12)
+    const assemble = { id: "a", type: "assemble-narrated-video", position: { x: 0, y: 0 }, data: {} } as never
+    const blocks = Array.from({ length: 7 }, (_, i) => ({ id: `e${i}`, source: `v${i}`, target: "a", targetHandle: "video" })) as never
+    expect(getPricingUnits(assemble, [assemble], blocks, NO_RERUNS)).toBe(5)
   })
 })
 

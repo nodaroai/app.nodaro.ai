@@ -41,7 +41,7 @@ import { IterationResultsPanel } from "./iteration-results-panel"
 import { getUpstreamNodes, buildNodeRefMap } from "@/lib/node-refs"
 import { isTileGridPickerType } from "@/lib/picker-handles"
 import { REPEATABLE_NODE_TYPES, getEffectiveRepeatCount } from "@nodaro/shared"
-import { getOutputMinuteUnits, NO_RERUNS } from "@/components/editor/workflow-editor/types"
+import { getPricingUnits, NO_RERUNS } from "@/components/editor/workflow-editor/types"
 import { NodeLookPreviewStyleScope } from "@/components/nodes/look-preview-style"
 import { NodeDocsPill } from "@/components/editor/node-docs/node-docs-pill"
 import { NodeDocsTypeContext } from "@/components/editor/node-docs/node-docs-context"
@@ -872,7 +872,7 @@ export function ConfigPanel() {
   // persisted upstream result is exactly what renders — the cost is exact.
   const _repeatMultiplier = (_earlyType && REPEATABLE_NODE_TYPES.has(_earlyType)
     ? getEffectiveRepeatCount(_earlyData)
-    : 1) * (displayNode ? getOutputMinuteUnits(displayNode, nodes, edges, NO_RERUNS) : 1)
+    : 1) * (displayNode ? getPricingUnits(displayNode, nodes, edges, NO_RERUNS) : 1)
 
   if (!displayNode) {
     // On mobile, render nothing when no node selected (bottom sheet simply gone)

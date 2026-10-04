@@ -37,24 +37,27 @@ The Trim Video node extracts or shapes a section of video. Six modes:
 
 ## Credit Cost
 
-Trim Video is **dynamically priced** based on output length:
+Trim Video is **dynamically priced** based on output length, in units of **10 credits**:
 
-- **Time mode:** 1 credit per 5 seconds of `(endTime - startTime)`, minimum 1
-- **Seconds mode:** 1 credit per 5 seconds of `(upstream - trimStartSeconds - trimEndSeconds)`
-- **Keep first/last seconds:** 1 credit per 5 seconds of `min(upstream, keepN)`
-- **Frames mode:** 1 credit per 5 seconds of remaining duration (assumes 24fps for estimation)
-- **Smart loop cut:** 1 credit per 5 seconds of upstream length + 1 credit per ~24 frames of lookback
+- **Time mode:** 10 credits per 5 seconds of `(endTime - startTime)`, minimum 10
+- **Seconds mode:** 10 credits per 5 seconds of `(upstream - trimStartSeconds - trimEndSeconds)`
+- **Keep first/last seconds:** 10 credits per 5 seconds of `min(upstream, keepN)`
+- **Frames mode:** 10 credits per 5 seconds of remaining duration (assumes 24fps for estimation)
+- **Smart loop cut:** 10 credits per 5 seconds of upstream length + 10 credits per ~24 frames of lookback
+
+A single-node run, a run inside a workflow, and MCP or SDK calls are all charged this way, and the workflow's estimate before a run quotes the same price.
 
 Examples:
 
 | Configuration | Output | Credits |
 |---|---|---|
-| Time mode, 0–10s | 10s | 2 |
-| Seconds mode on a 30s clip, trim 2+3 | 25s | 5 |
-| Keep first 8s of a 20s clip | 8s | 2 |
-| Keep last 10s of a 30s clip | 10s | 2 |
-| Frames mode on a 10s clip, trim 24+24 frames | ~8s | 2 |
-| Smart loop cut on a 10s clip, lookback 16 | ≤10s | 3 |
+| Time mode, 0–10s | 10s | 20 |
+| Time mode, 0–60s | 60s | 120 |
+| Seconds mode on a 30s clip, trim 2+3 | 25s | 50 |
+| Keep first 8s of a 20s clip | 8s | 20 |
+| Keep last 10s of a 30s clip | 10s | 20 |
+| Frames mode on a 10s clip, trim 24+24 frames | ~8s | 20 |
+| Smart loop cut on a 10s clip, lookback 16 | ≤10s | 30 |
 
 The Run button shows the live estimate. When the upstream isn't generated yet, an 8-second fallback is used.
 

@@ -74,6 +74,11 @@ vi.mock("@/ee/hooks/use-model-credits", () => ({
   useModelCredits: () => 1,
 }))
 
+// The video-utility pills read their one-unit price through the core shim.
+vi.mock("@/hooks/use-model-credit-cost", () => ({
+  useModelCredits: () => 0,
+  useModelCreditCost: () => ({ data: undefined }),
+}))
 vi.mock("@/ee/hooks/use-providers-credits-sum", () => ({
   useProvidersCreditsSum: () => 0,
 }))
