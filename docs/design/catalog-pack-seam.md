@@ -56,8 +56,10 @@ from the `promptHint` before it goes in the parentheses — whatever the heading
 says, and on rows a pack adds exactly as on base rows. A pack author who wants
 those words in the prompt writes them as part of the sentence, not as a
 `Heading:`. A comma-separated item that only restates the term is dropped too,
-and a pack row marked `instant` gets the shared anti-blend clause (see
-[Transition](../nodes/parameters/transition.md)).
+and a pack row marked `instant` gets the shared anti-blend clause, and one
+also marked `blendable` becomes a blended cut at a `blendsCut` duration (see
+[Transition](../nodes/parameters/transition.md)). A pack that rewrites a base
+row keeps the base row's `instant` and `blendable`.
 
 ## The composition funnel + deferred policy
 

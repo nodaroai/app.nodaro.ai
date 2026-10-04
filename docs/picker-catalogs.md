@@ -108,6 +108,8 @@ fx.dimensions     // [{ field: "position", … }, { field: "duration", … }, { 
 
 Transition and Character FX share the same ids (`start` / `middle` / `end` / `full`, `instant` / `short` / `medium` / `long`, `subtle` / `natural` / `dynamic` / `crazy`) but **not** the same wording — a transition *occurs* and *spans* the clip, an effect *manifests* and *persists* — so always read the rows from the node's own catalog. Character Motion shares the position ids and adds pace ids (`slow-motion` / `slow` / `natural` / `fast` / `explosive`) with its own wording — a movement *begins* and *plays out*.
 
+**Transition cut flags.** In the `@nodaro/prompts` catalog (`getPickerCatalog("transition")`), a transition option whose mechanism is a cut carries `instant: true`: its Duration and Intensity add no clause, and Position `full` adds nothing. The two cuts that can blend, `seamless-match` and `jump-match`, also carry `blendable: true`, and the `duration` dimension's `short` row carries `blendsCut: true`: the step that turns a blendable cut into a blended cut (see [Transition](./nodes/parameters/transition.md)). Offer a cut Position without `full` and no Intensity, and offer a blendable cut its Duration as Blend: `auto` (a hard cut) plus the `blendsCut` steps. For a multi-pick, `isInstantTransition` and `isBlendableTransition` (both exported by `@nodaro/prompts`) are true only when every pick is. These flags are on the in-memory catalog only: the wire projection (`GET /v1/picker-catalogs/transition`, `client.pickerCatalogs.get("transition")`, the MCP `get_picker_catalog` tool) does not carry them.
+
 <a id="per-option-parameters-a-wipes-direction"></a>
 
 ### Per-option parameters (a wipe's direction)
