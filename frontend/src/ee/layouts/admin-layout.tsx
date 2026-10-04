@@ -173,7 +173,7 @@ export default function AdminLayout() {
 
   return (
     <TooltipProvider delayDuration={0}>
-      <div className="flex h-screen bg-background">
+      <div className="flex h-screen overflow-hidden bg-background">
         {/* Mobile overlay */}
         {mobileMenuOpen && (
           <div
@@ -243,7 +243,7 @@ export default function AdminLayout() {
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 px-2 py-3 flex flex-col gap-1">
+          <nav className="flex-1 min-h-0 overflow-y-auto px-2 py-3 flex flex-col gap-1">
             {ADMIN_NAV.map((item) => {
               const isActive =
                 item.href === "/admin"
