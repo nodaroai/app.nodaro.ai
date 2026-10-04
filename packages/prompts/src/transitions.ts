@@ -49,10 +49,11 @@ export interface Transition {
    * as a 1.75 s cross-dissolve in QA. The composer therefore skips the duration
    * clause when every picked transition is instant (on a BLENDABLE cut, a
    * `blendsCut` step changes the cut itself instead — see `blendable`), and
-   * consumers (the canvas panel, Studio) read `isInstantTransition` and
-   * `isBlendableTransition` to offer only the levers a cut takes: Position
-   * without `full`, no Intensity, and Duration only on a blendable cut, as a
-   * Blend lever of "hard cut" plus the `blendsCut` steps.
+   * consumers offer only the levers a cut takes — Position without `full`, no
+   * Intensity, and Duration only on a blendable cut, as a Blend lever of "hard
+   * cut" plus the `blendsCut` steps — reading `isInstantTransition` /
+   * `isBlendableTransition` (the canvas panel) or the picker catalog's
+   * `instant` / `blendable` / `blendsCut` flags (an id-only client).
    *
    * The same holds for INTENSITY: every intensity clause describes how the
    * change PERFORMS over time ("natural unhurried timing", "wild flourishes and
