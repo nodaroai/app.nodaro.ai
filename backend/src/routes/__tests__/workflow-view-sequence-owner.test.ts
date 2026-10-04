@@ -349,15 +349,21 @@ describe("GET /v1/workflows/:id/export (template) — the result rows are gone a
   )
 })
 
-/** The two ways a move can be asked for; both answer it the same way. */
+/**
+ * The two ways a move can be asked for. Both answer `data` the same way; beside
+ * it, each reports the grants the move dropped in its own documented shape
+ * (docs/api-integration.md), which the third column gives.
+ */
 const MOVES = [
   ["POST /v1/workflows/:id/move", (user: string) => app.inject({ method: "POST", url: `/v1/workflows/${WF}/move`,
-    headers: { "x-user-id": user }, payload: { projectId: TARGET_PROJECT } })],
+    headers: { "x-user-id": user }, payload: { projectId: TARGET_PROJECT } }),
+    (granted: ReadonlyArray<string>) => ({ droppedCollaborators: dropped(granted) })],
   ["PATCH /v1/workflows/:id { projectId }", (user: string) => app.inject({ method: "PATCH", url: `/v1/workflows/${WF}`,
-    headers: { "x-user-id": user }, payload: { projectId: TARGET_PROJECT } })],
+    headers: { "x-user-id": user }, payload: { projectId: TARGET_PROJECT } }),
+    (granted: ReadonlyArray<string>) => (granted.length > 0 ? { droppedCollaborators: dropped(granted) } : {})],
 ] as const
 
-describe.each(MOVES)("%s — the moved row goes back to the mover on GET's terms (T87)", (_form, move) => {
+describe.each(MOVES)("%s — the moved row goes back to the mover on GET's terms (T87)", (_form, move, reported) => {
   // A move that drops a grant and one that drops none: PATCH answers each from
   // its own return, and names the dropped grants only when there are some; the
   // move endpoint always names them.
@@ -385,7 +391,7 @@ describe.each(MOVES)("%s — the moved row goes back to the mover on GET's terms
     expect(graph.settings.studio.keyframes).toEqual([frameEntry(false)])
     // The frame keeps its acceptance and the check it waived; only the owner's reason goes.
     expect((graph.settings.studio.keyframes as Array<{ acceptance: unknown }>)[0]!.acceptance).toEqual(acceptance(false))
-    expect(res.json().droppedCollaborators ?? []).toEqual(dropped(granted))
+    expect(res.json()).toEqual({ data: expect.anything(), ...reported(granted) })
   })
 
   it.each([
@@ -400,7 +406,7 @@ describe.each(MOVES)("%s — the moved row goes back to the mover on GET's terms
     const graph = res.json().data as Graph
     expect(graph.nodes).toEqual(PRODUCTION.nodes)
     expect(graph.settings.studio).toEqual(PRODUCTION.settings.studio)
-    expect(res.json().droppedCollaborators ?? []).toEqual(dropped(granted))
+    expect(res.json()).toEqual({ data: expect.anything(), ...reported(granted) })
   })
 })
 
