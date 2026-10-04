@@ -34,16 +34,18 @@ import { getCurrentUserId, getWorkflowDocument, type WorkflowAccessLevel, type W
  * polls a content-free stamp instead and re-reads through the server when it
  * moves (T85 / T86, `use-workflow-realtime-sync.ts`).
  *
- * Accepted residual (#1596): the row policies (`workflows_select`, migration
- * 338) still let a `view` reader query the table through PostgREST themselves.
- * The same SELECT right would also deliver the row's broadcasts to a Realtime
- * subscription such a reader opens by hand; the app never opens one for them.
- * This module keeps the APP from ever holding what it should not; only a
- * database change can stop a determined reader. RLS chooses rows, not columns,
- * and a column privilege binds every signed-in caller alike (owners included),
- * so closing it means narrowing the SELECT policy to `own` / `edit` and moving
- * a `view` reader's remaining table reads, the T85 stamp poll among them,
- * behind the server.
+ * Residual, accepted for now by Tal on 2026-10-04 (T96): a `view` reader who
+ * deliberately queries the database with their own token can still read the
+ * stored row. The row policies (`workflows_select`, migration 338) let them
+ * SELECT it, so a direct PostgREST query returns it whole, and a Realtime
+ * channel they open on the row by hand receives its broadcasts (the app never
+ * opens one for them). This module keeps the APP from ever holding what it
+ * should not; only a database change can stop a determined reader. RLS chooses
+ * rows, not columns, and a column privilege binds every signed-in caller alike
+ * (owners included), so closing it is a separate future program, the database
+ * permission change: narrow `workflows_select` to `own` / `edit`, and move a
+ * `view` reader's remaining table reads, the T85 stamp poll among them, behind
+ * server routes.
  */
 
 /** What the reader was judged at. `own` on the owner's branch is a statement
