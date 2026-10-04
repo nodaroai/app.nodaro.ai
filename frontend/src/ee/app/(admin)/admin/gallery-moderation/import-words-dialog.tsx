@@ -51,7 +51,7 @@ export function ImportWordsDialog({ open, onOpenChange }: { readonly open: boole
 
   return (
     <Dialog open={open} onOpenChange={(next) => !importWords.isPending && onOpenChange(next)}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{t("galleryModeration.importTitle")}</DialogTitle>
           <DialogDescription>{t("galleryModeration.importHelp")}</DialogDescription>
@@ -61,7 +61,7 @@ export function ImportWordsDialog({ open, onOpenChange }: { readonly open: boole
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder={'["word1", "word2", "a short phrase"]'}
-            className="min-h-[160px] font-mono text-xs"
+            className="h-56 max-h-[40dvh] resize-none overflow-y-auto font-mono text-xs field-sizing-fixed"
             dir="auto"
             disabled={importWords.isPending}
           />
