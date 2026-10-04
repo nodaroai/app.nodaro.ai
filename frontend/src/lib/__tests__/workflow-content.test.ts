@@ -46,7 +46,7 @@ vi.mock("@/lib/supabase", () => ({
   }),
 }))
 
-import { mayHoldStoredRow, readWorkflowContent, readWorkflowContentFromServer } from "../workflow-content"
+import { mayHoldStoredRow, readWorkflowContent, readWorkflowContentFromServer, recheckedAccess } from "../workflow-content"
 
 const STORED = {
   id: "w1",
@@ -146,6 +146,8 @@ describe("mayHoldStoredRow (T86)", () => {
     expect(mayHoldStoredRow({ workflowId: "w1", access: "own" }, "w1")).toBe(true)
     expect(mayHoldStoredRow({ workflowId: "w1", access: "edit" }, "w1")).toBe(true)
     expect(mayHoldStoredRow({ workflowId: "w1", access: "view" }, "w1")).toBe(false)
+    // What a re-check records when the reader has no access left (T97).
+    expect(mayHoldStoredRow({ workflowId: "w1", access: "none" }, "w1")).toBe(false)
   })
 
   it("fails closed: no answer yet, or an answer about another workflow, is `view`", () => {
@@ -154,5 +156,27 @@ describe("mayHoldStoredRow (T86)", () => {
     expect(mayHoldStoredRow({ workflowId: "w0", access: "own" }, "w1")).toBe(false)
     expect(mayHoldStoredRow({ workflowId: "w1", access: "own" }, null)).toBe(false)
     expect(mayHoldStoredRow({ workflowId: "", access: "own" }, "")).toBe(false)
+  })
+})
+
+describe("recheckedAccess (T97)", () => {
+  it("a re-check's answer replaces the level, narrower or wider, `none` included", () => {
+    expect(recheckedAccess({ workflowId: "w1", access: "edit" }, "view")).toEqual({ workflowId: "w1", access: "view" })
+    expect(recheckedAccess({ workflowId: "w1", access: "edit" }, "none")).toEqual({ workflowId: "w1", access: "none" })
+    expect(recheckedAccess({ workflowId: "w1", access: "view" }, "edit")).toEqual({ workflowId: "w1", access: "edit" })
+    expect(recheckedAccess({ workflowId: "w1", access: "none" }, "view")).toEqual({ workflowId: "w1", access: "view" })
+  })
+
+  it("the caller's own row stays `own`, whatever the verdict says they may do with it", () => {
+    // An archived workspace answers its creator `view`; a suspended membership, `none`.
+    const own = { workflowId: "w1", access: "own" } as const
+    expect(recheckedAccess(own, "view")).toBe(own)
+    expect(recheckedAccess(own, "none")).toBe(own)
+    expect(recheckedAccess(own, "edit")).toBe(own)
+  })
+
+  it("an answer that changes nothing returns the record itself", () => {
+    const edit = { workflowId: "w1", access: "edit" } as const
+    expect(recheckedAccess(edit, "edit")).toBe(edit)
   })
 })

@@ -916,7 +916,8 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
   // seeing those ids for the first time. See use-workflow-realtime-sync.ts.
   // A canvas whose load answered `view` (or has not answered) never
   // subscribes: the hook polls and re-reads through the server instead
-  // (T85 / T86), deciding that itself from the store's `loadedAccess`.
+  // (T85 / T86), deciding that itself from the store's `loadedAccess` — which
+  // it also keeps current, re-asking the access while the canvas is open (T97).
   const realtimeWorkflowId = useWorkflowStore((s) => s.workflowId)
   const isWorkflowLoading = useWorkflowStore((s) => s.isWorkflowLoading)
   /** Which of the two empty-canvas surfaces shows, if either — see the module. */

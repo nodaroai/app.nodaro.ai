@@ -206,6 +206,14 @@ A grant takes effect the moment it is written — there is no acceptance step.
 The recipient finds the workflow under **Shared with me** (below), and it
 also turns up in their search, the same as anything else they can open.
 
+A change also reaches an editor that already has the workflow open. The
+editor asks again what its reader may do with it: every minute while the tab
+is in view, as soon as a hidden tab is shown again, and whenever a save is
+refused. Someone lowered to `view` gets a read-only canvas that from then on
+receives the workflow the way any viewer does; someone removed gets a
+read-only canvas that receives nothing more. Someone raised from `view`
+keeps a read-only canvas until they reopen the workflow.
+
 ### Work shared with me
 
 | Method | Path | Who | Body / query |

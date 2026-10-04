@@ -1419,8 +1419,9 @@ export function useWorkflowPersistence(projectId?: string) {
         // The same answer decides how this canvas hears about writes made
         // elsewhere (T86): `own` / `edit` subscribe to the row's Realtime
         // broadcasts, `view` polls and re-reads through the server
-        // (use-workflow-realtime-sync.ts). Recorded only here, once the content
-        // is on the canvas, so a load that fails before this stays unknown.
+        // (use-workflow-realtime-sync.ts). The load records it only here, once
+        // the content is on the canvas, so a load that fails before this stays
+        // unknown; from then on each re-check of the access updates it (T97).
         useWorkflowStore.setState({
           isReadOnly: isStudioWorkflowSettings(settings) || content.access === "view",
           readOnlyReason: null,
@@ -1428,9 +1429,10 @@ export function useWorkflowPersistence(projectId?: string) {
         })
 
         // What THIS person may do with THIS workflow, asked of the server and
-        // applied to the canvas. Fire-and-forget: the workflow is interactive
-        // immediately, and a failure leaves it writable — the state it is in
-        // today, with the server still refusing anything it should.
+        // applied to the canvas — and asked again while it stays open (T97,
+        // use-workflow-access-recheck.ts). Fire-and-forget: the workflow is
+        // interactive immediately, and a failure leaves it writable — the state
+        // it is in today, with the server still refusing anything it should.
         void applyWorkflowAccess(id)
 
         // Reconcile per-node `generatedResults` against the backend's

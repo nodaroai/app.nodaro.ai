@@ -29,18 +29,31 @@ import { getCurrentUserId, getWorkflowDocument, type WorkflowAccessLevel, type W
  *
  * Realtime is the other way a row reaches the browser: a broadcast IS the
  * stored row (REPLICA IDENTITY FULL), pushed to every socket subscribed to it.
- * So a canvas subscribes only when its load answered `own` or `edit`
+ * So a canvas subscribes only while its access is `own` or `edit`
  * (`mayHoldStoredRow`); a `view` reader's canvas opens no subscription at all,
  * polls a content-free stamp instead and re-reads through the server when it
  * moves (T85 / T86, `use-workflow-realtime-sync.ts`).
+ *
+ * That access is the reader's CURRENT one, not only what the load was told: it
+ * can change while a canvas is open (an `edit` collaborator lowered to `view`,
+ * or removed), so the canvas re-asks it (T97, `use-workflow-access-recheck.ts`)
+ * every minute while its tab is visible, as soon as the tab is shown again, and
+ * the moment a save is refused. Each answer goes into the record the load
+ * wrote, and an answer of `view` or `none` closes the subscription and turns
+ * the canvas read-only on the spot. So the app never holds what the reader's
+ * CURRENT access forbids, with two exceptions. Between two asks a canvas acts
+ * on the last answer it had: up to a minute in a visible tab, and in a hidden
+ * one until it is shown again or a save is refused. And what it was shown
+ * under an earlier, wider access stays on screen, read-only, until the row
+ * next moves and the stripped re-read replaces it.
  *
  * Residual, accepted for now by Tal on 2026-10-04 (T96): a `view` reader who
  * deliberately queries the database with their own token can still read the
  * stored row. The row policies (`workflows_select`, migration 338) let them
  * SELECT it, so a direct PostgREST query returns it whole, and a Realtime
  * channel they open on the row by hand receives its broadcasts (the app never
- * opens one for them). This module keeps the APP from ever holding what it
- * should not; only a database change can stop a determined reader. RLS chooses
+ * opens one for them). All of the above governs what the APP asks for and
+ * keeps; only a database change can stop a determined reader. RLS chooses
  * rows, not columns, and a column privilege binds every signed-in caller alike
  * (owners included), so closing it is a separate future program, the database
  * permission change: narrow `workflows_select` to `own` / `edit`, and move a
@@ -113,27 +126,53 @@ export async function readWorkflowContentFromServer(workflowId: string): Promise
 }
 
 /**
- * The access a canvas loaded a workflow with — keyed by the workflow it was
- * answered for, so it can only ever speak for that one (the store's
- * `loadedAccess`; T86).
+ * The access a canvas holds a workflow under — what its load answered, then
+ * whatever each re-check of it answered since (T97) — keyed by the workflow it
+ * was answered for, so it can only ever speak for that one (the store's
+ * `loadedAccess`; T86). `none` is a re-check's answer only: a load that cannot
+ * reach the workflow records nothing.
  */
 export interface LoadedWorkflowAccess {
   readonly workflowId: string
-  readonly access: WorkflowContentAccess
+  readonly access: WorkflowAccessLevel
 }
 
 /**
  * Whether the canvas showing `workflowId` may hold its row as stored — which is
  * what a Realtime broadcast carries. Its owner and an `edit` collaborator may
- * (the server answers both the stored row); a `view` reader may not. Fails
- * closed: no record yet (the load has not answered, or it failed), or a record
- * for another workflow, counts as `view`.
+ * (the server answers both the stored row); a `view` reader may not, nor one a
+ * re-check found with no access left. Fails closed: no record yet (the load
+ * has not answered, or it failed), or a record for another workflow, counts as
+ * `view`.
  */
 export function mayHoldStoredRow(
   loaded: LoadedWorkflowAccess | null | undefined,
   workflowId: string | null | undefined,
 ): boolean {
   return !!loaded && !!workflowId && loaded.workflowId === workflowId && (loaded.access === "own" || loaded.access === "edit")
+}
+
+/**
+ * The record after a re-check of its access answered `answer` (T97).
+ *
+ * The answer replaces the level, with one exception: `own` stays `own`. On the
+ * load's owner branch `own` says whose row it is (the query matched the
+ * caller's own `user_id`), and that is not something an access verdict takes
+ * away: the server answers the creator `view` once their workspace is archived
+ * and `none` while their membership is suspended, the row policies still hand
+ * them the row, and the drafts in it are their own. Their canvas still turns
+ * read-only on such an answer, as a load's does (`applyWorkflowAccess`). A
+ * workflow's creator cannot change from a browser
+ * (`check_workflows_update_allowed`, migration 338). The one other `own`
+ * record is a platform admin's, answered by the server; losing that role
+ * mid-session is not the access change these re-checks are for.
+ *
+ * The same object comes back when nothing changed, so a re-check that confirms
+ * the record re-renders nothing that reads it.
+ */
+export function recheckedAccess(loaded: LoadedWorkflowAccess, answer: WorkflowAccessLevel): LoadedWorkflowAccess {
+  if (loaded.access === "own" || loaded.access === answer) return loaded
+  return { workflowId: loaded.workflowId, access: answer }
 }
 
 function toContentRow(doc: WorkflowDocument): WorkflowContentRow {

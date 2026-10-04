@@ -93,6 +93,13 @@
  *     load itself reads the row. Polling pauses while the tab is hidden and
  *     looks once as soon as it is visible again.
  *
+ * The record does not stay the load's answer: while the canvas is open the
+ * access is re-asked (T97, `use-workflow-access-recheck.ts`) and each answer is
+ * written into the same record — the owner's own row excepted, which stays
+ * `own` (`recheckedAccess`). One that says `view` or `none` closes the
+ * subscription and starts the poll on the spot; one that says `own` or `edit`
+ * opens it again.
+ *
  * Migration: supabase/migrations/115_workflows_realtime.sql adds
  *   ALTER TABLE workflows REPLICA IDENTITY FULL;
  *   ALTER PUBLICATION supabase_realtime ADD TABLE workflows;
@@ -115,6 +122,8 @@ import type { Node, Edge } from "@xyflow/react"
 import { createClient } from "@/lib/supabase"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { mayHoldStoredRow, readWorkflowContentFromServer, type WorkflowContentRow } from "@/lib/workflow-content"
+import { coalesced } from "./coalesced"
+import { useWorkflowAccessRecheck } from "./use-workflow-access-recheck"
 
 /** How often a `view` reader's visible canvas asks whether the row moved (T85). */
 export const VIEW_POLL_INTERVAL_MS = 5_000
@@ -247,33 +256,6 @@ function asBroadcastRow(row: WorkflowContentRow): RealtimeWorkflowRow {
 }
 
 /**
- * Runs `task` one at a time. Asked while it runs, it queues ONE more run for
- * when it finishes, however many times it is asked — enough, because every run
- * reads the row as it is then. The queued run is dropped once `alive` says the
- * caller is gone.
- */
-function coalesced(task: () => Promise<void>, alive: () => boolean): () => void {
-  let running = false
-  let queued = false
-  const run = (): void => {
-    running = true
-    void task()
-      .catch(() => {})
-      .finally(() => {
-        running = false
-        if (queued && alive()) {
-          queued = false
-          run()
-        }
-      })
-  }
-  return () => {
-    if (running) queued = true
-    else run()
-  }
-}
-
-/**
  * Keeps the open canvas in step with writes made elsewhere — by the row's
  * Realtime broadcasts, or by polling when this canvas may not hold the row as
  * stored. See the file-level docstring for both, and for the reconcile-vs-
@@ -324,8 +306,13 @@ export function useWorkflowRealtimeSync(
   onAppendEdgesRef.current = onAppendEdges
   onRemoteUpdatedAtRef.current = onRemoteUpdatedAt
 
+  // Keeps that access current while the canvas is open (T97): every answer is
+  // written into the same `loadedAccess` record, so `live` below follows it.
+  useWorkflowAccessRecheck(workflowId)
+
   // Whether this canvas may hold the row as stored: by the access its load
-  // answered, read here rather than handed in, so no caller can opt out.
+  // answered, or a re-check since, read here rather than handed in, so no
+  // caller can opt out.
   const live = mayHoldStoredRow(useWorkflowStore((s) => s.loadedAccess), workflowId)
 
   useEffect(() => {

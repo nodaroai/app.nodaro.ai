@@ -41,6 +41,8 @@ vi.mock("@/lib/api", () => ({
   // these tests already expect to find it, which is what this stub asserts by
   // being the failing case.
   getWorkflowAccess: () => Promise.reject(new Error("not mocked in this file")),
+  // How the check tells a 404 (no access at all, an answer) from a failure.
+  isNotFoundError: (err: unknown) => err instanceof Error && (err as { code?: unknown }).code === "not_found",
   // The load reads the workflow through lib/workflow-content.ts: the stored
   // row only for its owner (the signed-in "u1"), the server's answer for
   // anyone else.
