@@ -44,8 +44,10 @@ import { getCurrentUserId, getWorkflowDocument, type WorkflowAccessLevel, type W
  * CURRENT access forbids, with two exceptions. Between two asks a canvas acts
  * on the last answer it had: up to a minute in a visible tab, and in a hidden
  * one until it is shown again or a save is refused. And what it was shown
- * under an earlier, wider access stays on screen, read-only, until the row
- * next moves and the stripped re-read replaces it.
+ * under an earlier, wider access stays on screen, read-only, until the canvas
+ * is reloaded, or, with no unsaved changes on it, until the row next moves and
+ * the stripped re-read replaces it (a reader with no access left is sent
+ * nothing to replace it with).
  *
  * Residual, accepted for now by Tal on 2026-10-04 (T96): a `view` reader who
  * deliberately queries the database with their own token can still read the
