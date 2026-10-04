@@ -22,10 +22,10 @@ function respond(status: number, body: unknown) {
 }
 
 const LOW = {
-  id: "scrapecreators-low",
+  id: "search-provider-low",
   severity: "warning",
-  title: "ScrapeCreators credits are low: 1,234 left (alert below 2,000).",
-  action: "Top up the ScrapeCreators account.",
+  title: "The search provider's credits are low.",
+  action: "Top up the provider account.",
   checkedAt: "2026-10-03T20:00:00.000Z",
 }
 
