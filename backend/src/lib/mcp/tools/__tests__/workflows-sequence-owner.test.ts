@@ -13,11 +13,12 @@ import { buildServer, callTool } from "./_helpers.js"
  * (`keyframePendingImages`), the director's
  * `settings.studio.sequenceRecommendations`, the entries of the owner's
  * current `sequenceGenerationPolicies` (the record goes out empty), each
- * sequence take unit's `continuationAcceptance` and each keyframe's
- * `rejections`. The rest still goes out, including what the codec's reader
- * requires to read the production (a take's `policy` and `compilation`, the
- * unit results its takes select). `edit` and `own` keep all of it: that reader
- * saves the graph back.
+ * sequence take unit's `continuationAcceptance`, each keyframe's `rejections`
+ * and its acceptance's `waivedReason`. The rest still goes out, including what
+ * the codec's reader requires to read the production (a take's `policy` and
+ * `compilation`, the unit results its takes select) and the rest of a frame's
+ * acceptance. `edit` and `own` keep all of it: that reader saves the graph
+ * back.
  *
  * Like `workflows-workspace-scope.test.ts`, this runs the WORKSPACE branch with
  * the access seam mocked: only there can a caller hold `view` on someone
@@ -91,9 +92,14 @@ const PROVENANCE = { planRevision: 1, attemptId: "attempt-1", resolvedRequestHas
 const FRAME_RUN = { jobId: "frame-run-private", startedAt: 5, frame: { prompt: "a private pending frame" }, provenance: PROVENANCE }
 /** The owner sent one of A's results back for revision. */
 const REJECTION = { result: PIN("A", "kf-a-1"), rejectedBy: "rejector-private", rejectedAt: NOW, reason: "a private rejection reason" }
+/** The owner waived keyframe A's one requirement when accepting its other result, and said why. */
+const WAIVER = "a private waiver reason"
+/** A's acceptance: the waived check stays, the owner's reason for it does not. */
+const acceptance = (reasoned: boolean) => ({ result: PIN("A", "kf-a-2"), acceptedBy: "acceptor", acceptedAt: NOW,
+  requirementChecks: [{ requirementId: "req-1", outcome: "waived" }], ...(reasoned ? { waivedReason: WAIVER } : {}) })
 const PRIVATE = ["frame-private-a", "a private director reason", "job-private", "owner-actor-private", "preference-private",
   "a private compiled prompt", "reference-private", "a private unsent slot", "frame-run-private", "a private pending frame",
-  "rejector-private", "a private rejection reason"]
+  "rejector-private", "a private rejection reason", WAIVER]
 
 const take = (reviewed: boolean) => ({ id: "take1", sequenceId: "zoom", authoringHash: "h1", revision: 2, createdAt: NOW,
   policy: POLICY, compilation: COMPILATION, units: [{ unitId: "zoom:u0", videoNodeId: "owner0", selectedResultKey: "result0",
@@ -103,16 +109,19 @@ const nodes = (owner: boolean) => [
   { id: "clip-AB", type: "generate-video", position: { x: 0, y: 0 }, data: { prompt: "Approach",
     generatedResults: [{ url: "https://r2/clip.mp4", ...(owner ? { sequenceEndpoints: PINS } : {}) }] } },
   { id: "frame-A", type: "generate-image", position: { x: -340, y: 0 }, data: { keyframeId: "A",
-    generatedResults: [{ url: "https://r2/a1.png", jobId: "kf-a-1", pin: PIN("A", "kf-a-1"), provenance: PROVENANCE }],
+    generatedResults: [{ url: "https://r2/a1.png", jobId: "kf-a-1", pin: PIN("A", "kf-a-1"), provenance: PROVENANCE },
+      { url: "https://r2/a2.png", jobId: "kf-a-2", pin: PIN("A", "kf-a-2"), provenance: PROVENANCE }],
     ...(owner ? { keyframePendingImages: [FRAME_RUN] } : {}) } },
   { id: "owner0", type: "generate-video", position: { x: 680, y: 0 }, data: { sequenceUnitId: "zoom:u0",
     sequenceUnitResults: [{ url: "https://r2/unit0.mp4", requestHash: "request-0",
       pin: { unitId: "zoom:u0", resultKey: "result0", jobId: "result0", assetId: "asset-0", contentHash: "hash-0", durationSec: 4 },
       ...(owner ? { requestManifest: MANIFEST } : {}) }] } },
 ]
-/** Keyframe A's entry, with the owner's review of it or without. */
+/** Keyframe A's entry, with the owner's review of it and the reason for its waiver or without. */
 const frameEntry = (reviewed: boolean) => ({ imageNodeId: "frame-A",
-  plan: { id: "A", label: "A", revision: 1, frame: { prompt: "A" }, requirements: [] },
+  plan: { id: "A", label: "A", revision: 1, frame: { prompt: "A" },
+    requirements: [{ id: "req-1", text: "Same window light", severity: "required" }] },
+  acceptance: acceptance(reviewed),
   ...(reviewed ? { rejections: [REJECTION] } : {}) })
 
 /** A linked production with a take, its director recommendations, a reviewed continuation and a reviewed frame. */
@@ -146,6 +155,8 @@ describe("get_workflow_json / export_workflow — a linked production's owner st
     expect(parsed(text).nodes).toEqual(nodes(false))
     expect(parsed(text).settings.studio).toEqual({ version: 3, shots: [{ id: "AB" }], keyframes: [frameEntry(false)],
       sequenceGenerationPolicies: {}, sequenceTakes: [take(false)] })
+    // The frame keeps its acceptance and the check it waived; only the owner's reason goes.
+    expect((parsed(text).settings.studio.keyframes as Array<{ acceptance: unknown }>)[0]!.acceptance).toEqual(acceptance(false))
   })
 
   it.each([

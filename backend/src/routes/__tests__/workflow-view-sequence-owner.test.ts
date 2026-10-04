@@ -15,7 +15,8 @@ import Fastify, { type FastifyInstance } from "fastify"
  * - the owner's current preferences: `settings.studio.sequenceGenerationPolicies`
  *   goes out EMPTY;
  * - each sequence take unit's `continuationAcceptance`;
- * - each keyframe entry's `rejections`.
+ * - each keyframe entry's `rejections`, and the owner's reason for waiving its
+ *   requirements (`waivedReason` in its `acceptance`).
  *
  * The rest of a take or a frame still goes out: these strips drop keys, never
  * rows. Part of it the studio codec's reader cannot read a production with
@@ -23,9 +24,9 @@ import Fastify, { type FastifyInstance } from "fastify"
  * `policy` and `compilation`, the unit results its takes select, a frame
  * plan's `id` / `label` / `revision` / `frame` / `requirements` and the result
  * its preview names. The rest (a unit's other results, a frame's other history
- * rows, its acceptance record) the reader can do without, and it stays too.
- * `edit` and `own` keep all of it: an editor saves the whole graph back
- * (T21 / T77).
+ * rows, the rest of its acceptance record, the waived check included) the
+ * reader can do without, and it stays too. `edit` and `own` keep all of it: an
+ * editor saves the whole graph back (T21 / T77).
  */
 
 vi.mock("@/lib/supabase.js", () => ({
@@ -129,12 +130,17 @@ const PROVENANCE = { planRevision: 1, attemptId: "attempt-1", resolvedRequestHas
 const FRAME_RUN = { jobId: "frame-run-private", startedAt: 5, frame: { prompt: "a private pending frame" }, provenance: PROVENANCE }
 /** The owner sent one of A's results back for revision. */
 const REJECTION = { result: PIN("A", "kf-a-2"), rejectedBy: "rejector-private", rejectedAt: NOW, reason: "a private rejection reason" }
+/** The owner waived keyframe A's one requirement when accepting it, and said why. */
+const WAIVER = "a private waiver reason"
+/** A's acceptance: the waived check stays, the owner's reason for it does not. */
+const acceptance = (reasoned: boolean) => ({ result: PIN("A", "kf-a-1"), acceptedBy: "acceptor", acceptedAt: NOW,
+  requirementChecks: [{ requirementId: "req-1", outcome: "waived" }], ...(reasoned ? { waivedReason: WAIVER } : {}) })
 const PRIVATE = ["frame-private-a", "a private director reason", "job-private", "owner-actor-private", "preference-private",
   "a private compiled prompt", "reference-private", "a private unsent slot", "frame-run-private", "a private pending frame",
-  "rejector-private", "a private rejection reason"]
+  "rejector-private", "a private rejection reason", WAIVER]
 /** The keys that carry the owner's state; a `view` reader receives none of them. */
 const OWNER_KEYS = ["sequenceEndpoints", "requestManifest", "keyframePendingImages", "sequenceRecommendations",
-  "continuationAcceptance", "rejections"]
+  "continuationAcceptance", "rejections", "waivedReason"]
 
 /** A linked scene's clip; its take carries the pins. */
 const clipNode = (pinned: boolean) => ({ id: "clip-AB", type: "generate-video", position: { x: 0, y: 0 }, data: { prompt: "Approach",
@@ -156,9 +162,11 @@ const unitNode = (frozen: boolean) => ({ id: "owner0", type: "generate-video", p
 /** A linked scene's clip, keyframe A's image node and one unit video node of a take. */
 const linkedNodes = () => [clipNode(true), frameNode(true), unitNode(true)]
 
-/** Keyframe A's entry: its plan stays, its review record does not. */
+/** Keyframe A's entry: its plan and acceptance stay, its review record and the acceptance's waiver reason do not. */
 const frameEntry = (reviewed: boolean) => ({ imageNodeId: "frame-A",
-  plan: { id: "A", label: "A", revision: 1, frame: { prompt: "A" }, requirements: [] },
+  plan: { id: "A", label: "A", revision: 1, frame: { prompt: "A" },
+    requirements: [{ id: "req-1", text: "Same window light", severity: "required" }] },
+  acceptance: acceptance(reviewed),
   ...(reviewed ? { rejections: [REJECTION] } : {}) })
 
 /** The take as the codec writes it — and, without `continuationAcceptance`, as a reader gets it. */
@@ -280,6 +288,8 @@ describe.each(DOORS)("%s — a linked production's owner state is the owner's (T
     expect(graph.settings.studio.sequenceGenerationPolicies).toEqual({})
     expect(graph.settings.studio.sequenceTakes).toEqual([take(false)])
     expect(graph.settings.studio.keyframes).toEqual([frameEntry(false)])
+    // The frame keeps its acceptance and the check it waived; only the owner's reason goes.
+    expect((graph.settings.studio.keyframes as Array<{ acceptance: unknown }>)[0]!.acceptance).toEqual(acceptance(false))
   })
 
   it.each(["edit", "own"])("`%s` keeps all of it — that reader saves the graph back", async (access) => {
