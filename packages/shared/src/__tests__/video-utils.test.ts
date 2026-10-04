@@ -257,29 +257,34 @@ describe("estimateLoopTrimAddonCredits", () => {
     expect(estimateLoopTrimAddonCredits({ enabled: false }, 8)).toBe(0)
   })
 
-  it("computes ceil(duration/5) + ceil(framesToTest/24) when enabled", () => {
-    // 8s / 5 = 2 (ceil), 16 / 24 = 1 (ceil) → 3
-    expect(estimateLoopTrimAddonCredits({ enabled: true, framesToTest: 16 }, 8)).toBe(3)
+  // In the video-utility unit (VIDEO_UTIL_PRICING.CREDIT_UNIT = 10), the
+  // same as Trim Video's smart loop cut. Worked examples repeated in
+  // docs/nodes/ai-video/generate-video.md ("Loop trim add-on").
+  it("computes 10 × (ceil(duration/5) + ceil(framesToTest/24)) when enabled", () => {
+    // 8s / 5 = 2 (ceil), 16 / 24 = 1 (ceil) → 3 units → 30
+    expect(estimateLoopTrimAddonCredits({ enabled: true, framesToTest: 16 }, 8)).toBe(30)
+    // 5s / 5 = 1, 16 / 24 = 1 → 2 units → 20
+    expect(estimateLoopTrimAddonCredits({ enabled: true, framesToTest: 16 }, 5)).toBe(20)
   })
 
   it("uses default framesToTest=16 when omitted", () => {
-    // 10s / 5 = 2, 16 / 24 = 1 → 3
-    expect(estimateLoopTrimAddonCredits({ enabled: true }, 10)).toBe(3)
+    // 10s / 5 = 2, 16 / 24 = 1 → 3 units → 30
+    expect(estimateLoopTrimAddonCredits({ enabled: true }, 10)).toBe(30)
   })
 
   it("clamps framesToTest to 64 max", () => {
-    // 8s / 5 = 2, 64 / 24 = 3 → 5
-    expect(estimateLoopTrimAddonCredits({ enabled: true, framesToTest: 999 }, 8)).toBe(5)
+    // 8s / 5 = 2, 64 / 24 = 3 → 5 units → 50
+    expect(estimateLoopTrimAddonCredits({ enabled: true, framesToTest: 999 }, 8)).toBe(50)
   })
 
   it("clamps framesToTest to 1 min", () => {
-    // 8s / 5 = 2, 1 / 24 = 1 → 3
-    expect(estimateLoopTrimAddonCredits({ enabled: true, framesToTest: 0 }, 8)).toBe(3)
+    // 8s / 5 = 2, 1 / 24 = 1 → 3 units → 30
+    expect(estimateLoopTrimAddonCredits({ enabled: true, framesToTest: 0 }, 8)).toBe(30)
   })
 
   it("scales with output duration", () => {
-    // 60s / 5 = 12, 16 / 24 = 1 → 13
-    expect(estimateLoopTrimAddonCredits({ enabled: true, framesToTest: 16 }, 60)).toBe(13)
+    // 60s / 5 = 12, 16 / 24 = 1 → 13 units → 130
+    expect(estimateLoopTrimAddonCredits({ enabled: true, framesToTest: 16 }, 60)).toBe(130)
   })
 
   it("returns 0 when framesToTest=64 but enabled is false (precedence)", () => {

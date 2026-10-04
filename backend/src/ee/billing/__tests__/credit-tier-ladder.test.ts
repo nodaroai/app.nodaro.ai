@@ -14,8 +14,8 @@ const table = STATIC_CREDIT_COSTS as Record<string, number>
 
 /** Families whose ladder is known not to rise, each with the reason. */
 const LADDER_EXEMPT: Readonly<Record<string, string>> = {
-  "ai-writer": "premium sits below standard; awaiting the owner's call (raised 2026-10-04)",
-  "lottie-overlay": "economy sits above standard; awaiting the owner's call (raised 2026-10-04)",
+  "ai-writer": "premium sits below standard; kept as is by the owner's decision (2026-10-04)",
+  "lottie-overlay": "economy sits above standard; kept as is by the owner's decision (2026-10-04)",
 }
 
 describe("LLM tier ladders", () => {

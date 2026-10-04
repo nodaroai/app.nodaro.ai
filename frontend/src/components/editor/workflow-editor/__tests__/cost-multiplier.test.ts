@@ -66,6 +66,17 @@ describe("getPricingUnits", () => {
     const veo = n("z", "extend-video", { provider: "veo-extend", duration: 20 })
     expect(getPricingUnits(veo, [veo], [], NO_RERUNS)).toBe(1)
   })
+
+  // Video Retake reserves its per-second row × the window (2 s minimum); a
+  // fractional window is quoted at its whole seconds, never below the charge.
+  it("is the seconds of a Video Retake window", () => {
+    const retake = n("r", "video-retake", { retakeDuration: 6 })
+    expect(getPricingUnits(retake, [retake], [], NO_RERUNS)).toBe(6)
+    const shortest = n("s", "video-retake", {})
+    expect(getPricingUnits(shortest, [shortest], [], NO_RERUNS)).toBe(2)
+    const fractional = n("f", "video-retake", { retakeDuration: 2.5 })
+    expect(getPricingUnits(fractional, [fractional], [], NO_RERUNS)).toBe(3)
+  })
 })
 
 describe("fan-out — Edit Plan clips", () => {

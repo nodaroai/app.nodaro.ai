@@ -4,6 +4,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { resolveApplyEdlEstimateMinutes } from "@/lib/apply-edl-estimate";
 import { videoUtilityPricingUnits } from "@/lib/video-utility-estimate";
 import { extendVideoPricingUnits } from "@/lib/extend-video-estimate";
+import { videoRetakePricingUnits } from "@/lib/video-retake-estimate";
 import { audioSyncCreditId, audioSyncWiredSourceCount } from "@/lib/audio-sync";
 import { wiredSocialPostsVideoSec } from "@/lib/video-analysis-handles";
 import { buildMotionCreditModelIdentifier, isDefaultSelectorConfig, selectListItems, type SelectorFields, getEffectiveRepeatCount, buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, bucketSecondsFromCreditId, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAuditCreditId, VIDEO_AUDIT_BUCKET_CREDITS, FAN_OUT_EACH_TYPES, FAN_OUT_EACH_HANDLES, defaultEdgeOutputMode, listResultsServeHandle, EDIT_PLAN_DEFAULT_CLIP_COUNT, EDIT_PLAN_MAX_CLIP_COUNT, buildVideoCreditModelIdentifier, SEEDANCE_2_CONTINUATION_REF_SEC, isSeedance2Provider, isMinimaxH3Provider, maxSegmentSecFor, normalizeMinimaxH3Resolution, PRO3D_RENDER_CREDIT_ID, withWiredSettings, FAN_IN_TARGETS, contentRecipeCreditId, contentIdeasCreditId, clampContentIdeasCount, SOCIAL_SEARCH_CREDIT_COSTS, socialSearchCreditIdFromNode, socialPostsFrom, socialSearchPickTop, isSocialSearchPickFrozen } from "@nodaro/shared"
@@ -869,6 +870,7 @@ const PRICING_UNIT_ESTIMATORS: Readonly<
   "combine-videos": videoUtilityPricingUnits,
   "assemble-narrated-video": videoUtilityPricingUnits,
   "extend-video": extendVideoPricingUnits,
+  "video-retake": videoRetakePricingUnits,
 };
 
 /** Units a per-unit node's estimate prices; 1 for every other node. */

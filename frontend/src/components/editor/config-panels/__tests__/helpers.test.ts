@@ -229,6 +229,11 @@ describe("getModelIdentifier", () => {
     expect(getModelIdentifier(sfx)).toBe("replicate-mmaudio:8s")
   })
 
+  it("prices Video Retake at its per-second row (the estimate multiplies by the window)", () => {
+    const node = makeNode({ type: "video-retake", data: { label: "Retake", provider: "ltx-2.3-pro", retakeDuration: 4 } as any })
+    expect(getModelIdentifier(node)).toBe("ltx-2.3-pro-retake:per-second")
+  })
+
   it("prices LTX 2.3 Pro Extend at its per-second row (the estimate multiplies by the seconds)", () => {
     const node = makeNode({ type: "extend-video", data: { label: "Extend", provider: "ltx-2.3-pro", duration: 12 } as any })
     expect(getModelIdentifier(node)).toBe("ltx-2.3-pro-extend:per-second")

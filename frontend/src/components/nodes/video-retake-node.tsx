@@ -39,6 +39,7 @@ import { getHandleConnectionLimit } from "@/lib/handle-limits"
 import { extractNodeOutput } from "@/components/editor/workflow-editor/execution-graph"
 import { copyToClipboard, computeDeleteResultUpdates } from "@/lib/utils"
 import type { VideoRetakeData, GeneratedResult, WorkflowNode, JobErrorHint } from "@/types/nodes"
+import { LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec } from "@nodaro/shared"
 
 // Stable, module-level `accepts` predicates per typed handle — hoisting
 // keeps the predicate ref stable across renders. Inline arrows bust
@@ -140,13 +141,12 @@ function VideoRetakeNodeComponent({ id, data, selected }: NodeProps) {
     [id, nodeData.videoDurationSec, updateNodeData],
   )
 
-  // Credit math — LTX retake is per-second. `STATIC_CREDIT_COSTS` has
-  // `ltx-2.3-pro-retake:per-second` = 50; multiply by the user-chosen
-  // retake duration to get the per-press cost. RunNodeButton already
-  // multiplies by repeatCount + list fan-out.
-  const perSecondCost = useModelCredits("ltx-2.3-pro-retake:per-second", 50)
-  const retakeDuration = Math.max(2, nodeData.retakeDuration ?? 2)
-  const credits = Math.ceil(perSecondCost * retakeDuration)
+  // Credit math — LTX retake is per-second: the per-second row × the
+  // replaced window (`ltxRetakeDurationSec`, at least 2 — the reading the
+  // route and a workflow run reserve on). RunNodeButton already multiplies
+  // by repeatCount + list fan-out.
+  const perSecondCost = useModelCredits(LTX_RETAKE_PER_SECOND_CREDIT_ID, 44)
+  const credits = Math.ceil(perSecondCost * ltxRetakeDurationSec(nodeData.retakeDuration))
 
   // Result-aspect-ratio for the BaseNode minHeight calc + video sizing.
   const { aspectRatio: mediaAspectRatio, onLoadDimensions: handleLoadDimensions } =

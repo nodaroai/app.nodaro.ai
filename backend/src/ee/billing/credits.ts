@@ -1,4 +1,4 @@
-import { usdToCredits, PARAMETER_NODE_TYPES, withWiredSettings, MUSIC_CREDIT_ID, CAMERA_SWITCH_CREDIT_ID, LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec, videoSfxCreditId } from "@nodaro/shared"
+import { usdToCredits, PARAMETER_NODE_TYPES, withWiredSettings, MUSIC_CREDIT_ID, CAMERA_SWITCH_CREDIT_ID, LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec, LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec, videoSfxCreditId } from "@nodaro/shared"
 import { trySettleManagedJob } from "./managed-job-settlement.js"
 import { supabase } from "../../lib/supabase.js"
 import { ReserveRpcError, reservePrefixOf } from "../../lib/reserve-errors.js"
@@ -2019,11 +2019,12 @@ export interface ChargedPriceTable {
  * The price a user pays for `units` of `identifier` (1 by default), or
  * undefined when it is priced nowhere. Units multiply the base BEFORE the
  * markup, as a route that computes its price reserves it (a per-second rate ×
- * seconds, marked up once).
+ * seconds, rounded up to a whole credit, marked up once). Units may be
+ * fractional — a retake window is set to the frame.
  */
 export function chargedCredits(prices: ChargedPriceTable, identifier: string, units = 1): number | undefined {
   const base = prices.base(identifier)
-  return base === undefined ? undefined : prices.charge(identifier, base * units)
+  return base === undefined ? undefined : prices.charge(identifier, Math.ceil(base * units))
 }
 
 /**
@@ -3460,6 +3461,8 @@ function sumWorkflowEstimate(
 function estimatePricingUnits(node: EstimateNode): number {
   const data = node.data ?? {}
   if (node.type === "extend-video" && data.provider === "ltx-2.3-pro") return ltxExtendDurationSec(data.duration)
+  // Video Retake: the seconds of the replaced window (lib/ltx-retake-credits.ts).
+  if (node.type === "video-retake") return ltxRetakeDurationSec(data.retakeDuration)
   return 1
 }
 
@@ -3667,6 +3670,10 @@ function getNodeModelIdentifier(
   if (nodeType === "transcribe") {
     return (typeof data.provider === "string" && data.provider) || DEFAULT_TRANSCRIBE_NODE_PROVIDER
   }
+
+  // Video Retake: priced per second of the replaced window — the per-second
+  // row, which sumWorkflowEstimate multiplies by the seconds (estimatePricingUnits).
+  if (nodeType === "video-retake") return LTX_RETAKE_PER_SECOND_CREDIT_ID
 
   // Video SFX: a price row per input-clip length, chosen when the run measures
   // the clip. The clip is not measured before a run, so the estimate quotes

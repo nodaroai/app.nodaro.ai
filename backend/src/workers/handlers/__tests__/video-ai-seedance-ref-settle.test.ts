@@ -138,7 +138,7 @@ describe("image-to-video handler — Seedance reference-video settlement", () =>
     expect(mocks.mockMeasure.mock.invocationCallOrder[0]).toBeLessThan(mocks.mockApplySmartLoopCut.mock.invocationCallOrder[0]!)
     expect(finalizeArg().meteredBaseCredits).toBe(7193)
     // The retained add-on still rides separately; finalize adds it on top.
-    expect(finalizeArg().extraNonProviderCredits).toBe(3)
+    expect(finalizeArg().extraNonProviderCredits).toBe(30)
   })
 
   it("no measurement (not a Seedance ref run, or unmeasurable) → finalize commits the reservation as before", async () => {

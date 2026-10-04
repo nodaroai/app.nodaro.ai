@@ -13,13 +13,13 @@ import { loopTrimAddonForReconcile } from "../loop-trim-refund.js"
 // see the "loop-trim addon" tests in lib/__tests__/job-finalize.test.ts.
 describe("loopTrimAddonForReconcile", () => {
   it("returns the addon for an i2v job with loopTrim enabled", () => {
-    // addon = ceil(8/5) + ceil(16/24) = 2 + 1 = 3
+    // addon = 10 × (ceil(8/5) + ceil(16/24)) = 10 × (2 + 1) = 30
     expect(
       loopTrimAddonForReconcile("image-to-video", {
         loopTrim: { enabled: true, framesToTest: 16 },
         duration: 8,
       }),
-    ).toBe(3)
+    ).toBe(30)
   })
 
   it("defaults duration to 8 when absent", () => {
@@ -27,7 +27,7 @@ describe("loopTrimAddonForReconcile", () => {
       loopTrimAddonForReconcile("image-to-video", {
         loopTrim: { enabled: true, framesToTest: 16 },
       }),
-    ).toBe(3)
+    ).toBe(30)
   })
 
   it("returns 0 for a non-i2v job", () => {

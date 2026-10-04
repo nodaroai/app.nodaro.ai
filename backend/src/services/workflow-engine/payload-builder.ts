@@ -7,7 +7,7 @@ import {
 import { assembleVideoOverlayRequest, formatVideoOverlayError, validateVideoOverlayRequest, videoOverlayCompositionKey, videoOverlaySlotSources, type VideoOverlayNodeFields } from "@nodaro/shared"
 import { effectiveContentModel, contentRecipeCreditId, contentIdeasCreditId, clampContentIdeasCount, CONTENT_RECIPE_SOURCE_MAX, CONTENT_IDEAS_MAX_RECIPE_INPUTS, CONTENT_IDEAS_BRAND_MAX, CONTENT_IDEAS_LANGUAGE_MAX } from "@nodaro/shared"
 import { TELEGRAM_ACCOUNT_SEND_NODE_TYPE, telegramSendAsOf, telegramSendDestinationOf } from "@nodaro/shared"
-import { LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec } from "@nodaro/shared"
+import { LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec, LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec } from "@nodaro/shared"
 import type { Scene3DReference } from "@nodaro/shared"
 import { scene3DInputAssetsForEngine, type Scene3DInputAsset } from "@nodaro/shared"
 import { socialSearchRequestFromNode, socialSearchCreditId, socialSearchPickTop } from "@nodaro/shared"
@@ -5001,9 +5001,9 @@ export function buildPayload(
     // Replace a portion of a video — audio only / video only / both —
     // using LTX 2.3 Pro's `retake` task on Replicate. Webhook-driven
     // completion via the standard Replicate reconcile path. Credit math is
-    // `ltx-2.3-pro-retake:per-second × retakeDuration` (the route hook
-    // applies the multiplication on the single-node path; the orchestrator
-    // path also bills `:per-second` here so reconciliation sums match).
+    // `ltx-2.3-pro-retake:per-second × retakeDuration` on both paths: the
+    // route's guard multiplies on the single-node path, node-executor's
+    // computeLtxRetakeCreditOverride on this one.
     case "video-retake": {
       // Walk incoming edges to derive the LTX camera_motion enum. Mirror of
       // the LTX generate-video case — `ltxCameraMotionFromUpstream` consumes
@@ -5021,19 +5021,16 @@ export function buildPayload(
       return {
         jobName: "video-retake",
         queueName: "video-generation",
-        // Orchestrator path uses the static `video-retake` fallback (100cr,
-        // ~2s worth). Single-node route uses `computeCredits` with the actual
-        // `ltx-2.3-pro-retake:per-second × retakeDuration` math — mirrors the
-        // extend-video LTX pattern where orchestrator reserves the base rate
-        // and reconciliation refunds the diff once Replicate reports actual.
-        modelIdentifier: "video-retake",
+        // The per-second row; the reservation multiplies it by the window
+        // sent below (lib/ltx-retake-credits.ts, the route guard's own math).
+        modelIdentifier: LTX_RETAKE_PER_SECOND_CREDIT_ID,
         payload: {
           jobId,
           provider: "ltx-2.3-pro",
           video: resolvedInputs.videoUrl || (data.videoUrl as string | undefined),
           prompt: promptFor("video-retake"),
           retake_start_time: data.retakeStartTime as number | undefined,
-          retake_duration: data.retakeDuration as number | undefined,
+          retake_duration: ltxRetakeDurationSec(data.retakeDuration),
           retake_mode: data.retakeMode as string | undefined,
           resolution: "1080p",
           aspect_ratio: (data.aspectRatio as string | undefined) ?? "16:9",

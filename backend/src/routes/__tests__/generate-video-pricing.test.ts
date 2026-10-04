@@ -114,10 +114,10 @@ describe("/v1/generate-video pricing with loopTrim", () => {
       },
     })
     expect(res.statusCode).toBe(200)
-    // 19 base + ceil(8/5)=2 + ceil(16/24)=1 = 22
+    // 19 base + 10 × (ceil(8/5)=2 + ceil(16/24)=1) = 19 + 30 = 49
     expect(reserveSpy).toHaveBeenCalledWith(
       "u-1", "job-1", expect.any(String), 0, 0,
-      expect.objectContaining({ creditOverride: 22 }),
+      expect.objectContaining({ creditOverride: 49 }),
     )
     await app.close()
   })
@@ -135,10 +135,10 @@ describe("/v1/generate-video pricing with loopTrim", () => {
       },
     })
     expect(res.statusCode).toBe(200)
-    // 19 base + ceil(8/5)=2 + ceil(8/24)=1 = 22
+    // 19 base + 10 × (ceil(8/5)=2 + ceil(8/24)=1) = 19 + 30 = 49
     expect(reserveSpy).toHaveBeenCalledWith(
       "u-1", "job-1", expect.any(String), 0, 0,
-      expect.objectContaining({ creditOverride: 22 }),
+      expect.objectContaining({ creditOverride: 49 }),
     )
     await app.close()
   })

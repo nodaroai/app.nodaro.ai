@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest"
 import {
   LTX_EXTEND_DURATION,
+  LTX_RETAKE_MIN_DURATION_SEC,
+  LTX_RETAKE_PER_SECOND_CREDIT_ID,
+  ltxRetakeDurationSec,
   LTX_EXTEND_PER_SECOND_CREDIT_ID,
   VIDEO_SFX_PRICING,
   ltxExtendDurationSec,
@@ -66,5 +69,29 @@ describe("ltxExtendDurationSec", () => {
       expect(ltxExtendDurationSec(raw)).toBe(LTX_EXTEND_DURATION.DEFAULT_SEC)
     }
     expect(LTX_EXTEND_DURATION.DEFAULT_SEC).toBe(6)
+  })
+})
+
+describe("ltxRetakeDurationSec", () => {
+  it("names the per-second price row", () => {
+    expect(LTX_RETAKE_PER_SECOND_CREDIT_ID).toBe("ltx-2.3-pro-retake:per-second")
+  })
+
+  it.each([
+    [2, 2],
+    [2.5, 2.5],
+    [12, 12],
+    ["4", 4],
+    [1, 2],
+    [0, 2],
+    [-3, 2],
+  ])("%j → %s seconds (never below the 2-second minimum)", (raw, seconds) => {
+    expect(ltxRetakeDurationSec(raw)).toBe(seconds)
+  })
+
+  it("an absent or unreadable window is the minimum", () => {
+    for (const raw of [undefined, null, "", "abc", Number.NaN, {}]) {
+      expect(ltxRetakeDurationSec(raw)).toBe(LTX_RETAKE_MIN_DURATION_SEC)
+    }
   })
 })

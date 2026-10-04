@@ -60,7 +60,6 @@ const ALLOWLIST = new Set([
   "backend/src/routes/social-publish.ts",
   "backend/src/routes/suno.ts",
   "backend/src/routes/three-d-title-ai.ts",
-  "backend/src/routes/video-retake.ts",
   "backend/src/routes/workflow-execution.ts",
   "backend/src/routes/workflow-templates.ts",
 

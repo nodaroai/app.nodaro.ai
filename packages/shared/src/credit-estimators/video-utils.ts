@@ -156,16 +156,17 @@ export interface LoopTrimEstimatorInput {
 
 /** Add-on credits charged for the smart-loop-cut post-process applied to an
  *  image-to-video output. Returns 0 when loopTrim is undefined or disabled.
- *  Formula: ceil(duration / 5) + ceil(framesToTest / 24) — matches the
- *  trim-video smart-loop-cut formula for consistency. */
+ *  Formula: CREDIT_UNIT × (ceil(duration / 5) + ceil(framesToTest / 24)) —
+ *  the same units as Trim Video's smart loop cut, so 8 s at 16 frames → 30. */
 export function estimateLoopTrimAddonCredits(
   loopTrim: LoopTrimEstimatorInput | undefined,
   outputDurationSeconds: number,
 ): number {
   if (!loopTrim?.enabled) return 0
   const frames = Math.max(1, Math.min(loopTrim.framesToTest ?? 16, 64))
-  return Math.ceil(outputDurationSeconds / 5) +
-         Math.ceil(frames / VIDEO_UTIL_PRICING.FRAMES_PER_CREDIT)
+  return unitsToCredits(
+    Math.ceil(outputDurationSeconds / 5) + Math.ceil(frames / VIDEO_UTIL_PRICING.FRAMES_PER_CREDIT),
+  )
 }
 
 /** BASE credits for assemble-narrated-video: 3 units flat + 1 per 6

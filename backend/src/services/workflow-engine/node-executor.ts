@@ -40,6 +40,7 @@ import { getAppSettings } from "../../lib/app-settings.js"
 import { videoUtilityBaseCredits } from "../../lib/video-utility-credits.js"
 import { stampVideoSfxDuration, videoSfxReserveId } from "../../lib/video-sfx-duration.js"
 import { ltxExtendBaseCredits } from "../../lib/ltx-extend-credits.js"
+import { ltxRetakeBaseCredits } from "../../lib/ltx-retake-credits.js"
 import { probeAndCheckRefVideoDurations, probeRefVideoDurations } from "../../lib/ref-video-probe.js"
 import { computeEditPlanReserveId } from "../../lib/edit-plan-pricing.js"
 import type {
@@ -1282,6 +1283,24 @@ export async function computeLtxExtendCreditOverride(
   return applyServiceMarkup(base, await getAppSettings(), modelIdentifier)
 }
 
+/**
+ * LTX 2.3 Pro Retake is priced per second of the replaced window. The workflow
+ * run reserves what the route's guard charges for the same request — the
+ * per-second row times the window the payload sends (lib/ltx-retake-credits.ts)
+ * — instead of the flat `video-retake` row it used to. Undefined for every
+ * other job.
+ */
+export async function computeLtxRetakeCreditOverride(
+  jobName: string,
+  payload: Record<string, unknown>,
+  modelIdentifier: string,
+): Promise<number | undefined> {
+  if (jobName !== "video-retake") return undefined
+  const base = await ltxRetakeBaseCredits(payload.retake_duration)
+  const { applyServiceMarkup } = await import("../../ee/billing/service-margin.js")
+  return applyServiceMarkup(base, await getAppSettings(), modelIdentifier)
+}
+
 async function computeSeedance2RefVideoCreditOverride(
   payload: Record<string, unknown>,
   probedDurationsSec?: number[],
@@ -1795,6 +1814,7 @@ async function executeWorkerNode(
         computeImageOverlayCreditOverride(payload) ??
         (await computeVideoUtilityCreditOverride(jobName, payload, modelIdentifier)) ??
         (await computeLtxExtendCreditOverride(jobName, payload, modelIdentifier)) ??
+        (await computeLtxRetakeCreditOverride(jobName, payload, modelIdentifier)) ??
         (await computeGenerateVideoProCreditOverride(payload, modelIdentifier))?.override ??
         (await computeEditVideoProCreditOverride(payload, modelIdentifier))?.override ??
         (await computeSeedance2RefVideoCreditOverride(payload, refVideoDurationsSec, modelIdentifier)) ??

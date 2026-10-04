@@ -27,7 +27,7 @@ import {
   runLtxRetake,
 } from "../../providers/replicate/ltx-video.js"
 import { config } from "../../lib/config.js"
-import { FAL_LIP_SYNC_PROVIDERS, isAutoVideoDuration, ltxExtendDurationSec, pricedOutputDurationSec, REPLICATE_LIP_SYNC_PROVIDERS, SEEDANCE_2_EXTEND_STITCH, SEEDANCE_2_R2V_MIN_REF_VIDEO_SEC, SEEDANCE_LIP_SYNC_PROVIDERS, estimateLoopTrimAddonCredits, getMaxTtsChars, isVeoProvider, getVideoAudioCapability, parseAttributedDialogue, resolveDialogueVoices } from "@nodaro/shared"
+import { FAL_LIP_SYNC_PROVIDERS, isAutoVideoDuration, ltxExtendDurationSec, ltxRetakeDurationSec, pricedOutputDurationSec, REPLICATE_LIP_SYNC_PROVIDERS, SEEDANCE_2_EXTEND_STITCH, SEEDANCE_2_R2V_MIN_REF_VIDEO_SEC, SEEDANCE_LIP_SYNC_PROVIDERS, estimateLoopTrimAddonCredits, getMaxTtsChars, isVeoProvider, getVideoAudioCapability, parseAttributedDialogue, resolveDialogueVoices } from "@nodaro/shared"
 import type { CharacterVoiceSpec, DialogueLine, ResolvedDialogueVoiceLine } from "@nodaro/shared"
 import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
 import { combineVideos } from "../../providers/video/combine-videos.js"
@@ -1453,7 +1453,9 @@ const handleVideoRetake: HandlerFn = async function handleVideoRetake(job, ctx) 
       video: d.video as string,
       prompt: (d.prompt as string | undefined) ?? "",
       retakeStartTime: d.retake_start_time as number,
-      retakeDuration: d.retake_duration as number,
+      // The seconds the run was priced for (at least 2) — the route and the
+      // workflow run send this same reading.
+      retakeDuration: ltxRetakeDurationSec(d.retake_duration),
       retakeMode: d.retake_mode as "replace_audio" | "replace_video" | "replace_audio_and_video",
       resolution: "1080p",
       aspectRatio: (d.aspect_ratio as "16:9" | "9:16" | undefined) ?? "16:9",

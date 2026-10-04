@@ -165,3 +165,16 @@ describe("workflow estimate — the quote matches the reservation", () => {
     ).toBe(credits)
   })
 })
+
+describe("workflow estimate — Video Retake is the per-second row × the window", () => {
+  it.each([
+    [{ retakeDuration: 2.5 }, 100],
+    [{ retakeDuration: 6 }, 240],
+    [{}, 80],
+  ])("%j → %i base credits", async (data, credits) => {
+    const { CreditsService } = await import("../../ee/billing/credits.js")
+    expect(
+      CreditsService.estimateWorkflowBaseCredits([{ type: "video-retake", data: { provider: "ltx-2.3-pro", ...data } }]),
+    ).toBe(credits)
+  })
+})
