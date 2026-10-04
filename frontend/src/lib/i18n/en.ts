@@ -10395,6 +10395,16 @@ export const en = {
   "tgsend.botStartHint": "Open your bot in Telegram and press Start once: a bot cannot write to you first.",
   "tgsend.text": "Message when nothing is connected",
   "tgsend.textHint": "Text connected to the node is sent instead. A long message is split into up to 3 parts.",
+  "tgsend.addBot": "Connect a new bot",
+  "tgsend.botHelp": "How do I make a bot?",
+  "tgsend.botHelpTitle": "How to make a Telegram bot",
+  "tgsend.botHelpStep1": "Open @BotFather in Telegram (the button below).",
+  "tgsend.botHelpStep2": "Send it /newbot, then pick a name and a username for your bot.",
+  "tgsend.botHelpStep3": "BotFather answers with a token — a long line such as 123456789:ABC… Copy it.",
+  "tgsend.botHelpStep4": "Here, click “Connect a new bot” and paste the token.",
+  "tgsend.botHelpStep5": "Open your new bot in Telegram and press Start once, so it may write to you.",
+  "tgsend.openBotFather": "Open BotFather",
+  "tgsend.botConnected": "@{username} is connected",
   // Failed API calls: the headline per action (lib/api.ts), the translated reasons by
   // server error code and the join between them (lib/api-error-copy.ts).
   "apiErr.startImageGeneration": "Failed to start image generation",
