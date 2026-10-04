@@ -274,6 +274,7 @@ export {
   pricedVideoSelection,
   buildMotionCreditModelIdentifier,
   speedRampCreditId,
+  applyEdlCreditId,
   sunoCreditType,
   SUNO_VERSION_CREDIT_KEYS,
   SUNO_VERSION_PRICED_OPERATIONS,

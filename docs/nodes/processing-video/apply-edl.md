@@ -45,7 +45,7 @@ Selecting a render also sets the **Transcript** output to the transcript that re
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | Output | Select | video | Render `video` (picture + sound) or `audio` (sound only). |
-| Quality | Select | final | `final` = full-quality delivery, with stereo sound (AAC at 192 kbps, 48 kHz). `proxy` = a fast review render: the picture at most 720p at the final's frame rate, and lighter **mono** sound (AAC at 96 kbps, still 48 kHz), for a video render and an audio-only one alike. See [Proxy renders](#proxy-renders). |
+| Quality | Select | final | `final` = full-quality delivery, with stereo sound (AAC at 192 kbps, 48 kHz). `proxy` = a fast review render: the picture at most 720p at the final's frame rate, and lighter **mono** sound (AAC at 96 kbps, still 48 kHz), for a video render and an audio-only one alike, billed at the lower **preview** rate (see [Credit Cost](#credit-cost)). See [Proxy renders](#proxy-renders). |
 | Default crossfade (ms) | Number | 0 | Crossfade applied at every boundary that has **no** explicit transition in the EDL. Clamped per-boundary to 90% of the shorter neighbouring segment (the FFmpeg limit), so it can never over-blend a short segment. `0` = hard cuts. |
 
 ## How the edit is rendered
@@ -63,22 +63,26 @@ Selecting a render also sets the **Transcript** output to the transcript that re
 
 ## Credit Cost
 
-Priced **per minute of rendered output**, measured on the finished (crossfade-compressed) length:
+Priced **per minute of rendered output**, measured on the finished (crossfade-compressed) length, at the rate of the render's **Quality**. A **preview** (`proxy`) has its own, lower rate, for a video render and an audio-only one alike:
 
-- **Formula:** `10 credits × ceil(output_seconds ÷ 60)`
-- **Floor:** minimum 1 minute (10 credits)
+- **Final:** `10 credits × ceil(output_seconds ÷ 60)` — minimum 1 minute (10 credits)
+- **Preview (`proxy`):** `2 credits × ceil(output_seconds ÷ 60)` — minimum 1 minute (2 credits)
 
-| Rendered output length | Minutes billed | Credits |
-|------------------------|----------------|---------|
-| 40 seconds | 1 | 10 |
-| 3 min 10 s | 4 | 40 |
-| 12 min 00 s | 12 | 120 |
+| Rendered output length | Minutes billed | Final | Preview (`proxy`) |
+|------------------------|----------------|-------|-------------------|
+| 40 seconds | 1 | 10 | 2 |
+| 3 min 10 s | 4 | 40 | 8 |
+| 12 min 00 s | 12 | 120 | 24 |
 
-The **reserve** is computed from the EDL's own durations (crossfades already subtracted), so what you are charged matches the render.
+A Clip Pack renders each clip on its own, billed at that clip's length: 8 clips of 90 seconds are 2 minutes each, so previewing all 8 costs 8 × 4 = **32** credits and rendering all 8 at Final costs 8 × 20 = **160**.
+
+The **reserve** is computed from the EDL's own durations (crossfades already subtracted), so what you are charged matches the render. A preview and its final are two separate renders, each billed at its own rate.
+
+The two rates are two separate price rows, `apply-edl` (final) and `apply-edl:proxy` (preview), and nothing links them. An administrator who changes one in the admin panel's model prices (`/admin/models`) should change the other with it, keeping the preview below the final.
 
 ### What the estimate shows before you run
 
-The cost on the node, the **Run** button and the run-confirm dialog is an **estimate** at the current rate — what a render realistically costs, leaning high. It is not a guarantee: the true length of a cut is decided by the plan, and when that plan is about to be regenerated the editor cannot know it yet.
+The cost on the node, the **Run** button and the run-confirm dialog is an **estimate** at the current rate of the node's **Quality** (the preview rate for `proxy`) — what a render realistically costs, leaning high. It is not a guarantee: the true length of a cut is decided by the plan, and when that plan is about to be regenerated the editor cannot know it yet.
 
 **When the cut already exists, the estimate is exact:**
 
@@ -103,5 +107,5 @@ The balance check before a run compares against this estimate. You are **charged
 ## Tips
 
 - Leave **Default crossfade** at 0 for talking-head/podcast edits — hard cuts on speech read cleanly, and the EDL can still ask for a crossfade on any individual boundary.
-- Use **Proxy** quality for review passes, then switch to **Final** for delivery. A proxy's sound is lighter mono, at the final's exact timing: fine for judging cuts, filler and breaths, but not a master.
+- Use **Proxy** quality for review passes — billed at the lower preview rate — then switch to **Final** for delivery. A proxy's sound is lighter mono, at the final's exact timing: fine for judging cuts, filler and breaths, but not a master.
 - Wire a Transcribe node's transcript into the **Transcript** input so the `json` output carries the transcript **remapped onto the finished edit** — every word timestamp shifts to match the cut. Downstream nodes read that aligned transcript — wire it into [Add Captions](add-captions.md#transcript-input)' `transcript` input and the captions follow the cut. Captions need the transcript's **words**, so run that Transcribe node on `elevenlabs-stt` or `incredibly-fast-whisper`: a `whisper` transcript (phrase segments, no words) that reaches Add Captions through this node is [refused before the run](../ai-text/transcribe.md#a-whisper-transcript-wired-into-add-captions-is-refused-before-the-run), with nothing billed.

@@ -192,7 +192,7 @@ Needs `workflows:execute`.
 | `sources` | string (URL)[] |  | Positional media-URL overrides for the EDL's sources[], in sources order. |
 | `transcript` | object (map of any) |  | Optional upstream transcript object, remapped through the cut for the result's transcript output. |
 | `output` | string |  | Render a video (default) or an audio-only cut. One of `video`, `audio`. |
-| `quality` | string |  | proxy (fast preview) or final (default). One of `proxy`, `final`. |
+| `quality` | string |  | proxy (a fast 720p preview, at its own lower per-minute rate) or final (default). One of `proxy`, `final`. |
 | `crossfade_ms` | number |  | Default crossfade on boundaries with no explicit transition, in ms. 0 = hard cuts (default). From 0 to 5000. |
 
 ## `approve_creature_main_image`

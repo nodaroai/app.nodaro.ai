@@ -13,6 +13,7 @@ import {
   applyEdlBaseCredits,
   validateEffectiveEdl,
   APPLY_EDL_CREDITS_PER_OUTPUT_MINUTE,
+  APPLY_EDL_PROXY_CREDITS_PER_OUTPUT_MINUTE,
 } from "../apply-edl-plan.js"
 
 const oneSegment = (durMs: number): Edl => ({
@@ -36,6 +37,26 @@ describe("apply-edl pricing (matches the docs worked examples)", () => {
     expect(applyEdlReserveMinutes(oneSegment(720_000))).toBe(12)
     // base = per-minute × minutes
     expect(applyEdlBaseCredits(oneSegment(190_000))).toBe(APPLY_EDL_CREDITS_PER_OUTPUT_MINUTE * 4)
+  })
+
+  it("a final render, named or defaulted, bills the final's rate", () => {
+    expect(applyEdlBaseCredits(oneSegment(190_000), "final")).toBe(40)
+    expect(applyEdlBaseCredits(oneSegment(190_000), undefined)).toBe(40)
+  })
+
+  it("a preview (proxy) bills its own per-minute rate on the same minutes", () => {
+    // docs table, Preview column: 40 s → 2 · 3 min 10 s (190 s) → 8 · 12 min (720 s) → 24
+    expect(applyEdlBaseCredits(oneSegment(40_000), "proxy")).toBe(2)
+    expect(applyEdlBaseCredits(oneSegment(190_000), "proxy")).toBe(8)
+    expect(applyEdlBaseCredits(oneSegment(720_000), "proxy")).toBe(24)
+    expect(applyEdlBaseCredits(oneSegment(190_000), "proxy")).toBe(APPLY_EDL_PROXY_CREDITS_PER_OUTPUT_MINUTE * 4)
+  })
+
+  it("a Clip Pack bills each clip at its own length (docs: 8 clips × 90 s)", () => {
+    // Each 90 s clip is 2 billed minutes: preview 8 × 4 = 32, final 8 × 20 = 160.
+    expect(applyEdlReserveMinutes(oneSegment(90_000))).toBe(2)
+    expect(8 * applyEdlBaseCredits(oneSegment(90_000), "proxy")).toBe(32)
+    expect(8 * applyEdlBaseCredits(oneSegment(90_000), "final")).toBe(160)
   })
 
   it("reserves on the OVERLAP-COMPRESSED duration (a crossfade shortens the bill)", () => {

@@ -7,7 +7,7 @@ import { extendVideoPricingUnits } from "@/lib/extend-video-estimate";
 import { videoRetakePricingUnits } from "@/lib/video-retake-estimate";
 import { audioSyncCreditId, audioSyncWiredSourceCount } from "@/lib/audio-sync";
 import { wiredSocialPostsVideoSec } from "@/lib/video-analysis-handles";
-import { buildMotionCreditModelIdentifier, isDefaultSelectorConfig, selectListItems, type SelectorFields, getEffectiveRepeatCount, buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, bucketSecondsFromCreditId, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAuditCreditId, VIDEO_AUDIT_BUCKET_CREDITS, FAN_OUT_EACH_TYPES, FAN_OUT_EACH_HANDLES, defaultEdgeOutputMode, listResultsServeHandle, EDIT_PLAN_DEFAULT_CLIP_COUNT, EDIT_PLAN_MAX_CLIP_COUNT, buildVideoCreditModelIdentifier, SEEDANCE_2_CONTINUATION_REF_SEC, isSeedance2Provider, isMinimaxH3Provider, maxSegmentSecFor, normalizeMinimaxH3Resolution, PRO3D_RENDER_CREDIT_ID, withWiredSettings, FAN_IN_TARGETS, contentRecipeCreditId, contentIdeasCreditId, clampContentIdeasCount, SOCIAL_SEARCH_CREDIT_COSTS, socialSearchCreditIdFromNode, socialPostsFrom, socialSearchPickTop, isSocialSearchPickFrozen } from "@nodaro/shared"
+import { buildMotionCreditModelIdentifier, isDefaultSelectorConfig, selectListItems, type SelectorFields, getEffectiveRepeatCount, buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, bucketSecondsFromCreditId, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAuditCreditId, VIDEO_AUDIT_BUCKET_CREDITS, FAN_OUT_EACH_TYPES, FAN_OUT_EACH_HANDLES, defaultEdgeOutputMode, listResultsServeHandle, EDIT_PLAN_DEFAULT_CLIP_COUNT, EDIT_PLAN_MAX_CLIP_COUNT, buildVideoCreditModelIdentifier, SEEDANCE_2_CONTINUATION_REF_SEC, isSeedance2Provider, isMinimaxH3Provider, maxSegmentSecFor, normalizeMinimaxH3Resolution, PRO3D_RENDER_CREDIT_ID, withWiredSettings, FAN_IN_TARGETS, contentRecipeCreditId, contentIdeasCreditId, clampContentIdeasCount, SOCIAL_SEARCH_CREDIT_COSTS, socialSearchCreditIdFromNode, socialPostsFrom, socialSearchPickTop, isSocialSearchPickFrozen, applyEdlCreditId } from "@nodaro/shared"
 // getCachedCredits reads the live React-Query model-cost cache (an `ee/`
 // concern — credits are enterprise-only). Allowlisted in
 // tools/check-ee-imports.mjs (same coupling as ./run-handlers.ts).
@@ -56,7 +56,12 @@ export const NODE_CREDIT_COSTS: Record<string, number> = {
   "face-swap": 160,
   "transcribe": 10,
   "combine-videos": 10,
+  // apply-edl: per-minute RATES, one row per render quality (applyEdlCreditId)
+  // — a final, and a preview (`quality: "proxy"`); both decided 2026-10-04.
+  // Pinned to STATIC_CREDIT_COSTS by
+  // backend/src/lib/__tests__/frontend-credit-fallback-parity.test.ts.
   "apply-edl": 10,
+  "apply-edl:proxy": 2,
   "silence-detect": 10,
   // audio-sync: 10 × (sources − 1), keyed by the wired source count — the
   // run-level estimate names the composite (getModelIdentifier) and reads it
@@ -591,6 +596,12 @@ export function estimateNodeCredits(
   // read). No edges → the 6-source ceiling (never under-quote).
   if (nodeType === "audio-sync") {
     return NODE_CREDIT_COSTS[audioSyncCreditId(audioSyncWiredSourceCount(node.id, edges))] ?? 0
+  }
+  // Apply EDL: the per-minute rate of the render's quality — the SAME id
+  // getModelIdentifier names (a preview's `apply-edl:proxy`, else `apply-edl`).
+  // A rate: every estimate multiplies it by the render's minutes.
+  if (nodeType === "apply-edl") {
+    return NODE_CREDIT_COSTS[applyEdlCreditId(node.data?.quality)] ?? 0
   }
   if (nodeType === "video-audit" && node.data) {
     // Family from the edges (see videoAuditAnalysisWired), duration from the
