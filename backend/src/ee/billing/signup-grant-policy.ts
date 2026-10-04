@@ -37,6 +37,14 @@ export const SIGNUP_GRANT_RULES = {
   /** More than this many other claims from the network inside the lookback. */
   ipClaimsLookbackMax: 3,
   ipLookbackMs: 24 * 60 * 60 * 1000,
+  /** A claim with no browser or device key: any other account ever seen on this network withholds. */
+  keylessIpOthersMax: 0,
+  /** Another account named like this one (the same name with other digits, same domain) withholds. */
+  similarEmailOthersMax: 0,
+  /** The fewest letters an email name must keep once its trailing digits are cut, to be compared at all. */
+  similarEmailMinStem: 5,
+  /** Only accounts made this recently count as "named like this one": a series is made in days, a namesake any time. */
+  similarEmailLookbackMs: 30 * 24 * 60 * 60 * 1000,
 } as const
 
 export type GrantReason =
@@ -45,6 +53,8 @@ export type GrantReason =
   | "device_ip_match"
   | "device_cluster"
   | "ip_velocity"
+  | "keyless_ip_reuse"
+  | "similar_email"
 
 export interface GrantDecision {
   decision: "granted" | "withheld"
@@ -56,11 +66,17 @@ export interface SignupSignalCounts {
   deviceKeySameIpOthers: number
   deviceKeyOthers: number
   ipClaimsInWindow: number
+  /** Other accounts ever seen on this network — read only for a claim with no keys. */
+  ipEverOthers?: number
+  /** Other accounts whose email is this one's name with other digits, same domain. */
+  similarEmailOthers?: number
 }
 
 export function decideSignupGrant(input: {
   providers: readonly string[] | null
   counts: SignupSignalCounts | null
+  /** The claim carried neither a browser nor a device key (blocked, or a keyless fallback). */
+  keyless?: boolean
 }): GrantDecision {
   const reasons: GrantReason[] = []
 
@@ -76,30 +92,86 @@ export function decideSignupGrant(input: {
     if (c.deviceKeySameIpOthers > SIGNUP_GRANT_RULES.deviceKeySameIpOthersMax) reasons.push("device_ip_match")
     if (c.deviceKeyOthers > SIGNUP_GRANT_RULES.deviceKeyOthersMax) reasons.push("device_cluster")
     if (c.ipClaimsInWindow > SIGNUP_GRANT_RULES.ipClaimsLookbackMax) reasons.push("ip_velocity")
+    // Without keys the device rules above see nothing, which is exactly what a
+    // repeat signup that blocks fingerprinting relies on: the network is the
+    // only observation left, so ANY earlier account on it withholds.
+    if (input.keyless && (c.ipEverOthers ?? 0) > SIGNUP_GRANT_RULES.keylessIpOthersMax) reasons.push("keyless_ip_reuse")
+    if ((c.similarEmailOthers ?? 0) > SIGNUP_GRANT_RULES.similarEmailOthersMax) reasons.push("similar_email")
   }
 
   return { decision: reasons.length > 0 ? "withheld" : "granted", reasons }
 }
 
 /**
- * The account's identity providers as GoTrue stamped them. `null` when the
- * read fails — the decision fails open on it.
+ * The account's identity providers as GoTrue stamped them, and its email.
+ * `null` providers when the read fails — the decision fails open on it.
  */
-export async function readAuthProviders(userId: string, log: FastifyBaseLogger): Promise<string[] | null> {
+export async function readAuthUser(userId: string, log: FastifyBaseLogger): Promise<{ providers: string[] | null; email: string | null }> {
   try {
     const { data, error } = await supabase.auth.admin.getUserById(userId)
     if (error || !data?.user) {
       log.warn({ err: error, userId }, "signup grant: provider read failed")
-      return null
+      return { providers: null, email: null }
     }
     const meta = (data.user.app_metadata ?? {}) as { provider?: unknown; providers?: unknown }
-    if (Array.isArray(meta.providers)) {
-      return meta.providers.filter((p): p is string => typeof p === "string")
-    }
-    return typeof meta.provider === "string" ? [meta.provider] : null
+    const providers = Array.isArray(meta.providers)
+      ? meta.providers.filter((p): p is string => typeof p === "string")
+      : typeof meta.provider === "string"
+        ? [meta.provider]
+        : null
+    return { providers, email: typeof data.user.email === "string" ? data.user.email : null }
   } catch (err) {
     log.warn({ err, userId }, "signup grant: provider read threw")
-    return null
+    return { providers: null, email: null }
+  }
+}
+
+export async function readAuthProviders(userId: string, log: FastifyBaseLogger): Promise<string[] | null> {
+  return (await readAuthUser(userId, log)).providers
+}
+
+/**
+ * An email's comparable name: its domain, and its name with Gmail's ignored
+ * dots and any +tag dropped and the trailing digits cut — "a.name27+x@googlemail.com"
+ * → { stem: "aname", domain: "googlemail.com" }. Null when too little is left
+ * to compare without catching strangers.
+ */
+export function emailStem(email: string): { stem: string; domain: string; local: string } | null {
+  const at = email.lastIndexOf("@")
+  if (at <= 0) return null
+  const domain = email.slice(at + 1).trim().toLowerCase()
+  let local = email.slice(0, at).trim().toLowerCase().split("+")[0] ?? ""
+  if (domain === "gmail.com" || domain === "googlemail.com") local = local.replace(/\./g, "")
+  const stem = local.replace(/\d+$/, "")
+  if (stem === local) return null // no trailing digits: not a numbered series
+  if (stem.replace(/[^a-z]/g, "").length < SIGNUP_GRANT_RULES.similarEmailMinStem) return null
+  return { stem, domain, local }
+}
+
+/** Other accounts named like this one: the same stem with other digits, at the same domain. */
+export async function countSimilarEmails(userId: string, email: string | null, log: FastifyBaseLogger): Promise<number> {
+  const parts = email ? emailStem(email) : null
+  if (!parts) return 0
+  try {
+    const prefix = parts.stem.replace(/[\\%_]/g, (ch) => `\\${ch}`)
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id, email")
+      .ilike("email", `${prefix}%@${parts.domain.replace(/[\\%_]/g, (ch) => `\\${ch}`)}`)
+      .neq("id", userId)
+      .gte("created_at", new Date(Date.now() - SIGNUP_GRANT_RULES.similarEmailLookbackMs).toISOString())
+      .limit(200)
+    if (error) {
+      log.warn({ err: error }, "signup grant: similar email count failed")
+      return 0
+    }
+    return (data ?? []).filter((row) => {
+      const other = typeof row.email === "string" ? emailStem(row.email) : null
+      return other !== null && other.stem === parts.stem && other.domain === parts.domain
+    }).length
+  } catch (err) {
+    log.warn({ err }, "signup grant: similar email count threw")
+    return 0
   }
 }
 
@@ -138,7 +210,8 @@ export async function countSignupSignals(
   const { userId, browserKey, deviceKey, ipHash } = params
   const since = new Date(Date.now() - SIGNUP_GRANT_RULES.ipLookbackMs).toISOString()
 
-  const [browserKeyOthers, deviceKeySameIpOthers, deviceKeyOthers, ipClaimsInWindow] = await Promise.all([
+  const keyless = !browserKey && !deviceKey
+  const [browserKeyOthers, deviceKeySameIpOthers, deviceKeyOthers, ipClaimsInWindow, ipEverOthers] = await Promise.all([
     browserKey
       ? countOthers((q) => q.eq("browser_key", browserKey).neq("user_id", userId), "browser_match", log)
       : Promise.resolve(0),
@@ -157,18 +230,21 @@ export async function countSignupSignals(
       "ip_velocity",
       log,
     ),
+    keyless ? countOthers((q) => q.eq("ip_hash", ipHash).neq("user_id", userId), "keyless_ip_reuse", log) : Promise.resolve(0),
   ])
 
-  return { browserKeyOthers, deviceKeySameIpOthers, deviceKeyOthers, ipClaimsInWindow }
+  return { browserKeyOthers, deviceKeySameIpOthers, deviceKeyOthers, ipClaimsInWindow, ipEverOthers }
 }
 
 export async function evaluateSignupGrant(
   params: { userId: string; browserKey: string | null; deviceKey: string | null; ipHash: string },
   log: FastifyBaseLogger,
 ): Promise<GrantDecision> {
-  const [providers, counts] = await Promise.all([
-    readAuthProviders(params.userId, log),
-    countSignupSignals(params, log),
-  ])
-  return decideSignupGrant({ providers, counts })
+  const [{ providers, email }, counts] = await Promise.all([readAuthUser(params.userId, log), countSignupSignals(params, log)])
+  const similarEmailOthers = await countSimilarEmails(params.userId, email, log)
+  return decideSignupGrant({
+    providers,
+    counts: { ...counts, similarEmailOthers },
+    keyless: !params.browserKey && !params.deviceKey,
+  })
 }
