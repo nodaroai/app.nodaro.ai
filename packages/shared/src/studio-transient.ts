@@ -26,9 +26,11 @@
  * endpoint pins ({@link STUDIO_TAKE_SEQUENCE_KEYS}, on the result rows), a
  * sequence take unit's continuation review
  * ({@link STUDIO_SEQUENCE_UNIT_REVIEW_KEYS}), a unit result's frozen request
- * ({@link STUDIO_SEQUENCE_UNIT_MANIFEST_KEYS}), and a keyframe's in-flight
- * runs and review record ({@link STUDIO_KEYFRAME_NODE_TRANSIENT_KEYS},
- * {@link STUDIO_KEYFRAME_TRANSIENT_KEYS}, {@link STUDIO_KEYFRAME_REVIEW_KEYS}).
+ * ({@link STUDIO_SEQUENCE_UNIT_MANIFEST_KEYS}), a keyframe's in-flight runs
+ * and review record ({@link STUDIO_KEYFRAME_NODE_TRANSIENT_KEYS},
+ * {@link STUDIO_KEYFRAME_TRANSIENT_KEYS}, {@link STUDIO_KEYFRAME_REVIEW_KEYS}),
+ * and the owner's reason for waiving a keyframe's requirements, inside its
+ * acceptance ({@link STUDIO_KEYFRAME_ACCEPTANCE_PRIVATE_KEYS}).
  *
  * They do NOT all live at the same level, and that is the whole reason this
  * file exists rather than one array: the writer puts `trash` and
@@ -132,7 +134,8 @@ const STUDIO_TAKE_PRIVATE_KEYS: ReadonlyArray<string> = [...STUDIO_TAKE_VOICE_KE
  * a keyframe's `plan`, its `acceptance` record and all its results but the
  * preview and the accepted one — because it builds that view AFTER reading
  * the row. These strips drop KEYS from the stored row; they never filter rows
- * or rewrite records, so all of it still goes out.
+ * or rewrite records, so all of it still goes out, the acceptance without its
+ * waiver reason ({@link STUDIO_KEYFRAME_ACCEPTANCE_PRIVATE_KEYS}).
  *
  * Part of it the codec's reader requires (0.13.0's `parseProduction`; without
  * it every reader's load of the production fails): each take's `policy` and
@@ -143,7 +146,8 @@ const STUDIO_TAKE_PRIVATE_KEYS: ReadonlyArray<string> = [...STUDIO_TAKE_VOICE_KE
  * `previewResultKey` names. The rest it can do without: the unit node's
  * mirror, the unit results no take selects, a keyframe's other results, its
  * plan's `frame` content and `references`, and its `acceptance` — from which
- * the non-owner view reads the accepted result.
+ * the non-owner view reads the accepted result. Studio ruling T94 keeps all of
+ * it visible.
  */
 export const STUDIO_SEQUENCE_PLANNING_KEYS = ["sequenceRecommendations"] as const
 
@@ -197,12 +201,32 @@ export const STUDIO_KEYFRAME_TRANSIENT_KEYS = ["pendingImages"] as const
  * ...and a KEYFRAME's review record (T87): `rejections` — which of its results
  * the owner sent back for revision, who, when and why — on each
  * `settings.studio.keyframes[]` entry and on a deleted keyframe in the bin.
- * Optional to the codec's reader. The frame's `acceptance` stays: every reader
+ * Optional to the codec's reader. The frame's `acceptance` stays, without its
+ * waiver reason ({@link STUDIO_KEYFRAME_ACCEPTANCE_PRIVATE_KEYS}): every reader
  * is shown the accepted result, and that is where the reader finds it.
  */
 export const STUDIO_KEYFRAME_REVIEW_KEYS = ["rejections"] as const
 
-/** Everything a deleted keyframe loses on its way to a reader who is not its owner. */
+/**
+ * ...and a KEYFRAME acceptance's private part (T87): `waivedReason`, the
+ * owner's own words on why the requirements they waived are acceptable. It is
+ * one level down, inside the `acceptance` record of each
+ * `settings.studio.keyframes[]` entry and of a deleted keyframe in the bin, so
+ * the walk goes into the record ({@link keyframeForReader}).
+ *
+ * Optional to the codec's reader; the rest of the record stays, the waived
+ * requirement checks included. Only the codec's resolution of an accepted
+ * frame checks the reason (`reviewValid`): in a copy made from a stripped row,
+ * a frame that waived a requirement must be accepted again before the codec
+ * resolves it for a dependent frame or a clip.
+ */
+export const STUDIO_KEYFRAME_ACCEPTANCE_PRIVATE_KEYS = ["waivedReason"] as const
+
+/**
+ * Everything a deleted keyframe entry loses on its way to a reader who is not
+ * its owner. Its acceptance loses {@link STUDIO_KEYFRAME_ACCEPTANCE_PRIVATE_KEYS}
+ * as well.
+ */
 const STUDIO_KEYFRAME_PRIVATE_KEYS: ReadonlyArray<string> = [...STUDIO_KEYFRAME_TRANSIENT_KEYS, ...STUDIO_KEYFRAME_REVIEW_KEYS]
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -309,8 +333,8 @@ export function stripStudioTakeVoiceRecords(nodes: unknown): unknown {
 
 /**
  * A list of rows with the given keys off every row — a node's result rows, a
- * production's keyframe entries. The SAME array back when no row carries one,
- * and anything that is not a list, or not a row, rides through untouched.
+ * unit's result rows. The SAME array back when no row carries one, and
+ * anything that is not a list, or not a row, rides through untouched.
  */
 function stripRows(value: unknown, drop: ReadonlyArray<string>): unknown {
   if (!Array.isArray(value)) return value
@@ -329,9 +353,10 @@ function stripRows(value: unknown, drop: ReadonlyArray<string>): unknown {
  * {@link STUDIO_SEQUENCE_POLICY_KEYS} record EMPTIED, never dropped and never
  * added; every sequence take's units without their
  * {@link STUDIO_SEQUENCE_UNIT_REVIEW_KEYS}; and every keyframe entry without
- * its {@link STUDIO_KEYFRAME_REVIEW_KEYS}. Every other part of a take or a
- * frame stays, including what the codec's reader requires to read the row
- * (which part that is: {@link STUDIO_SEQUENCE_PLANNING_KEYS}).
+ * its {@link STUDIO_KEYFRAME_REVIEW_KEYS} or its acceptance's
+ * {@link STUDIO_KEYFRAME_ACCEPTANCE_PRIVATE_KEYS}. Every other part of a take
+ * or a frame stays, including what the codec's reader requires to read the
+ * row (which part that is: {@link STUDIO_SEQUENCE_PLANNING_KEYS}).
  *
  * The ONE change site for both settings strips. The SAME object back when it
  * carries none of it, and anything that is not take- or frame-shaped rides
@@ -339,7 +364,7 @@ function stripRows(value: unknown, drop: ReadonlyArray<string>): unknown {
  */
 function stripLinkedOwnerState(studio: Record<string, unknown>): Record<string, unknown> {
   const takes = stripTakeUnitReviews(studio.sequenceTakes)
-  const keyframes = stripRows(studio.keyframes, STUDIO_KEYFRAME_REVIEW_KEYS)
+  const keyframes = stripKeyframes(studio.keyframes)
   const preferences = STUDIO_SEQUENCE_POLICY_KEYS.filter((key) => {
     const value = studio[key]
     return isRecord(value) && Object.keys(value).length > 0
@@ -370,6 +395,41 @@ function stripTakeUnitReviews(value: unknown): unknown {
     return { ...take, units }
   })
   return changed ? out : value
+}
+
+/**
+ * `settings.studio.keyframes` with every entry as {@link keyframeForReader}
+ * leaves it: no {@link STUDIO_KEYFRAME_REVIEW_KEYS}, no acceptance waiver
+ * reason. The SAME array back when no entry carries either, and anything that
+ * is not a list, or not an entry, rides through untouched.
+ */
+function stripKeyframes(value: unknown): unknown {
+  if (!Array.isArray(value)) return value
+  let changed = false
+  const out = value.map((frame: unknown) => {
+    if (!isRecord(frame)) return frame
+    const kept = keyframeForReader(frame, STUDIO_KEYFRAME_REVIEW_KEYS)
+    if (kept !== frame) changed = true
+    return kept
+  })
+  return changed ? out : value
+}
+
+/**
+ * A keyframe entry, live or deleted, without the given keys and without its
+ * acceptance's {@link STUDIO_KEYFRAME_ACCEPTANCE_PRIVATE_KEYS}; the rest of the
+ * acceptance stays. The ONE place either level is dropped, for the live
+ * entries ({@link stripKeyframes}) and the bin's ({@link binKeyframeForReader}).
+ * The SAME entry back when it carries none of it; an acceptance that is not a
+ * record rides through.
+ */
+function keyframeForReader(frame: Record<string, unknown>, drop: ReadonlyArray<string>): Record<string, unknown> {
+  const acceptance = frame.acceptance
+  const waived = isRecord(acceptance) && STUDIO_KEYFRAME_ACCEPTANCE_PRIVATE_KEYS.some((key) => key in acceptance)
+  if (!waived && !drop.some((key) => key in frame)) return frame
+  const kept = withoutKeys(frame, drop)
+  if (waived) kept.acceptance = withoutKeys(acceptance, STUDIO_KEYFRAME_ACCEPTANCE_PRIVATE_KEYS)
+  return kept
 }
 
 /**
@@ -418,7 +478,8 @@ export function stripStudioDraftSettings(settings: unknown): unknown {
  *   runs), its slots and runs off the graph's scene entry, and its linked
  *   owner state off the graph's settings;
  * - a deleted KEYFRAME (`kind: "keyframe"`) keeps the frame without its
- *   in-flight runs or its review record ({@link binKeyframeForReader});
+ *   in-flight runs, its review record or its acceptance's waiver reason
+ *   ({@link binKeyframeForReader});
  * - any other entry — a deleted take (`kind: "clip"`, or a legacy entry with
  *   no kind, which the bin reads as a clip) — keeps its result without the
  *   voice record or the sequence pins. A deleted still carries none and rides
@@ -465,11 +526,17 @@ function binTakeForReader(entry: Record<string, unknown>): Record<string, unknow
   return { ...entry, result: withoutKeys(result, STUDIO_TAKE_PRIVATE_KEYS) }
 }
 
-/** A deleted keyframe without its in-flight runs or its review record ({@link STUDIO_KEYFRAME_PRIVATE_KEYS}). */
+/**
+ * A deleted keyframe without its in-flight runs or its review record
+ * ({@link STUDIO_KEYFRAME_PRIVATE_KEYS}), and without its acceptance's waiver
+ * reason ({@link keyframeForReader}); the SAME entry back when it carries none
+ * of it.
+ */
 function binKeyframeForReader(entry: Record<string, unknown>): Record<string, unknown> {
   const keyframe = entry.keyframe
-  if (!isRecord(keyframe) || !STUDIO_KEYFRAME_PRIVATE_KEYS.some((key) => key in keyframe)) return entry
-  return { ...entry, keyframe: withoutKeys(keyframe, STUDIO_KEYFRAME_PRIVATE_KEYS) }
+  if (!isRecord(keyframe)) return entry
+  const kept = keyframeForReader(keyframe, STUDIO_KEYFRAME_PRIVATE_KEYS)
+  return kept === keyframe ? entry : { ...entry, keyframe: kept }
 }
 
 /**

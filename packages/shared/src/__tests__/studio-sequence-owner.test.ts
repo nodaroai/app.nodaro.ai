@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest"
 
 import {
+  STUDIO_KEYFRAME_ACCEPTANCE_PRIVATE_KEYS,
   STUDIO_KEYFRAME_NODE_TRANSIENT_KEYS,
   STUDIO_KEYFRAME_REVIEW_KEYS,
   STUDIO_KEYFRAME_TRANSIENT_KEYS,
@@ -30,16 +31,19 @@ import {
  * - the entries of `settings.studio.sequenceGenerationPolicies` — EMPTIED to
  *   `{}`, because the reader requires the record on a production with takes;
  * - `continuationAcceptance` on each sequence take's units;
- * - `rejections` on each keyframe entry;
- * - and, in the bin, a deleted keyframe's `pendingImages` and `rejections`.
+ * - `rejections` on each keyframe entry, and `waivedReason` inside its
+ *   `acceptance`;
+ * - and, in the bin, a deleted keyframe's `pendingImages`, `rejections` and
+ *   acceptance `waivedReason`.
  *
  * Everything else of a take or a frame stays: the strips drop keys, never
  * rows. Part of it the codec refuses to read a production without — a take's
  * `policy` and `compilation`, the unit result rows its takes select (pin, url
  * and request hash), a frame plan's `id` / `label` / `revision` / `frame` /
  * `requirements` and the result its preview names. The rest (a unit's other
- * results, a frame's other history rows, its acceptance record) the reader can
- * do without, and it stays too (see `STUDIO_SEQUENCE_PLANNING_KEYS`).
+ * results, a frame's other history rows, the rest of its acceptance record,
+ * a waived check included) the reader can do without, and it stays too (see
+ * `STUDIO_SEQUENCE_PLANNING_KEYS`).
  */
 
 const NOW = "2026-09-08T12:00:00.000Z"
@@ -92,10 +96,16 @@ const linkedNodes = (): Array<Record<string, unknown>> => [clipNode(true), frame
 /** What a reader who is not the owner keeps of {@link linkedNodes}. */
 const readerNodes = (): Array<Record<string, unknown>> => [clipNode(false), frameNode(false), unitNode(false)]
 
-/** Keyframe A's settings entry: its plan and acceptance stay, its review record does not. */
+/** The owner waived keyframe A's one requirement when accepting it, and said why. */
+const WAIVER = "a private waiver reason"
+/** A's acceptance: the waived check stays, the owner's reason for it does not. */
+const acceptance = (reasoned: boolean) => ({ result: PIN("A", "kf-a-1"), acceptedBy: "acceptor", acceptedAt: NOW,
+  requirementChecks: [{ requirementId: "req-1", outcome: "waived" }], ...(reasoned ? { waivedReason: WAIVER } : {}) })
+/** Keyframe A's settings entry: its plan and acceptance stay, its review record and the acceptance's waiver reason do not. */
 const frameEntry = (reviewed: boolean) => ({ imageNodeId: "frame-A",
-  plan: { id: "A", label: "A", revision: 1, frame: { prompt: "A" }, requirements: [] },
-  acceptance: { result: PIN("A", "kf-a-1"), acceptedBy: "acceptor", acceptedAt: NOW, requirementChecks: [] },
+  plan: { id: "A", label: "A", revision: 1, frame: { prompt: "A" },
+    requirements: [{ id: "req-1", text: "Same window light", severity: "required" }] },
+  acceptance: acceptance(reviewed),
   ...(reviewed ? { rejections: [REJECTION] } : {}) })
 /** The take as the codec writes it — and, without `continuationAcceptance`, as a reader gets it. */
 const take = (reviewed: boolean) => ({ id: "take1", sequenceId: "zoom", authoringHash: "h1", revision: 2, createdAt: NOW,
@@ -129,7 +139,7 @@ const studioOf = (settings: unknown) => (settings as { studio: Record<string, un
 const NODE_PRIVATE = ["frame-private-a", "a private compiled prompt", "reference-private", "a private unsent slot",
   "frame-run-private", "a private pending frame"]
 const SETTINGS_PRIVATE = ["a private director reason", "job-private", "owner-actor-private", "preference-private",
-  "rejector-private", "a private rejection reason"]
+  "rejector-private", "a private rejection reason", WAIVER]
 
 /**
  * Productions that each carry ONE kind of the settings' owner state and none
@@ -150,6 +160,9 @@ const ONE_KIND: ReadonlyArray<readonly [string, () => Record<string, unknown>, (
   ["a frame's rejections",
     () => ({ version: 3, keyframes: [{ ...frameEntry(false), rejections: [REJECTION] }] }),
     () => ({ version: 3, keyframes: [frameEntry(false)] }), "a private rejection reason"],
+  ["a frame's waiver reason",
+    () => ({ version: 3, keyframes: [{ ...frameEntry(false), acceptance: acceptance(true) }] }),
+    () => ({ version: 3, keyframes: [frameEntry(false)] }), WAIVER],
 ]
 
 describe("the T87 lists", () => {
@@ -162,6 +175,7 @@ describe("the T87 lists", () => {
     expect([...STUDIO_SEQUENCE_UNIT_REVIEW_KEYS]).toEqual(["continuationAcceptance"])
     expect([...STUDIO_KEYFRAME_REVIEW_KEYS]).toEqual(["rejections"])
     expect([...STUDIO_KEYFRAME_TRANSIENT_KEYS]).toEqual(["pendingImages"])
+    expect([...STUDIO_KEYFRAME_ACCEPTANCE_PRIVATE_KEYS]).toEqual(["waivedReason"])
   })
 })
 
@@ -207,13 +221,15 @@ describe.each([
   ["stripStudioDraftSettings (the `view` doors)", stripStudioDraftSettings],
   ["stripStudioTransientSettings (the public share read of an ordinary production)", stripStudioTransientSettings],
 ] as const)("%s — a linked production's owner state is the owner's (T87)", (_name, strip) => {
-  it("drops the recommendations, the reviews and the rejections, empties the preferences, and keeps what the codec's reader requires", () => {
+  it("drops the recommendations, the reviews, the rejections and the waiver reason, empties the preferences, and keeps what the codec's reader requires", () => {
     const stored = { studio: linkedStudio() }
     const out = strip(stored)
     expect(studioOf(out)).toEqual(readerStudio())
     for (const secret of SETTINGS_PRIVATE) expect(JSON.stringify(out)).not.toContain(secret)
     // The take keeps the policy it was made with; only the owner's newer preference goes.
     expect((studioOf(out).sequenceTakes as Array<{ policy: unknown }>)[0]!.policy).toEqual(POLICY)
+    // The frame keeps its acceptance and the check it waived; only the owner's reason goes.
+    expect((studioOf(out).keyframes as Array<{ acceptance: unknown }>)[0]!.acceptance).toEqual(acceptance(false))
     // Copy-on-write: the stored row keeps all of it.
     expect(stored).toEqual({ studio: linkedStudio() })
   })
@@ -243,11 +259,12 @@ describe.each([
     }
   })
 
-  it("keeps a take that has no review, and a frame that has no rejections, as the very same entries", () => {
+  it("keeps a take that has no review, and a frame that has no rejections or waiver reason, as the very same entries", () => {
     const studio = linkedStudio()
     const reviewed = (studio.sequenceTakes as Array<Record<string, unknown>>)[0]!
     const unreviewed = { ...reviewed, id: "take0", units: [{ unitId: "zoom:u0", videoNodeId: "owner0" }] }
-    const unrejected = { imageNodeId: "frame-B", plan: { id: "B", label: "B", revision: 1, frame: { prompt: "B" }, requirements: [] } }
+    const unrejected = { imageNodeId: "frame-B", plan: { id: "B", label: "B", revision: 1, frame: { prompt: "B" }, requirements: [] },
+      acceptance: { result: PIN("B", "kf-b-1"), acceptedBy: "acceptor", acceptedAt: NOW, requirementChecks: [] } }
     const out = studioOf(strip({ studio: { ...studio, sequenceTakes: [unreviewed, reviewed],
       keyframes: [unrejected, ...(studio.keyframes as unknown[])] } }))
     expect((out.sequenceTakes as unknown[])[0]).toBe(unreviewed)
@@ -257,12 +274,14 @@ describe.each([
 
   it("lets a take or a frame list it cannot read ride through", () => {
     const odd = [null, 7, "x", { id: "t" }, { id: "t2", units: "nope" }, { id: "t3", units: [null, 4, { unitId: "u", continuationAcceptance: REVIEW }] }]
-    const frames = [null, 7, "x", { imageNodeId: "f" }, { imageNodeId: "g", rejections: [REJECTION] }]
+    const frames = [null, 7, "x", { imageNodeId: "f" }, { imageNodeId: "g", rejections: [REJECTION] },
+      { imageNodeId: "h", acceptance: "nope" }, { imageNodeId: "i", acceptance: null }]
     const out = studioOf(strip({ studio: { version: 3, sequenceTakes: odd, keyframes: frames } }))
     const takes = out.sequenceTakes as unknown[]
     expect(takes.slice(0, 5)).toEqual(odd.slice(0, 5))
     expect((takes[5] as { units: unknown[] }).units).toEqual([null, 4, { unitId: "u" }])
-    expect(out.keyframes).toEqual([null, 7, "x", { imageNodeId: "f" }, { imageNodeId: "g" }])
+    expect(out.keyframes).toEqual([null, 7, "x", { imageNodeId: "f" }, { imageNodeId: "g" },
+      { imageNodeId: "h", acceptance: "nope" }, { imageNodeId: "i", acceptance: null }])
     const notAList = { studio: { version: 3, sequenceTakes: "nope", keyframes: "nope" } }
     expect(strip(notAList)).toBe(notAList)
   })
@@ -270,9 +289,9 @@ describe.each([
 
 describe("stripStudioDraftSettings — the bin keeps the owner's deleted work, without the owner's state in it", () => {
   /**
-   * A deleted take with its pins, a deleted frame with a run in flight and a
-   * review, a deleted linked scene, and a deleted frame with a review and no
-   * run in flight.
+   * A deleted take with its pins, a deleted frame with a run in flight, a
+   * review and a waiver reason, a deleted linked scene, and two deleted frames
+   * that each carry ONE of those: rejections alone, a waiver reason alone.
    */
   const bin = () => [
     { kind: "clip", id: "t-clip", shotId: "AB", index: 0, deletedAt: NOW, clipBase: { nodeId: "clip-AB" },
@@ -283,31 +302,35 @@ describe("stripStudioDraftSettings — the bin keeps the owner's deleted work, w
       graph: { nodes: linkedNodes(), edges: [], settings: { studio: linkedStudio() } } },
     { kind: "keyframe", id: "t-rejected", index: 2, deletedAt: NOW,
       keyframe: { ...frameEntry(false), results: FRAME_RESULTS, rejections: [REJECTION] } },
+    { kind: "keyframe", id: "t-waived", index: 3, deletedAt: NOW,
+      keyframe: { ...frameEntry(false), results: FRAME_RESULTS, acceptance: acceptance(true) } },
   ]
 
-  it("drops a deleted take's pins, a deleted frame's runs and review, and a deleted scene's owner state, and keeps the rest of each", () => {
+  it("drops a deleted take's pins, a deleted frame's runs, review and waiver reason, and a deleted scene's owner state, and keeps the rest of each", () => {
     const stored = { studio: { version: 3, trash: bin() } }
     const trash = studioOf(stripStudioDraftSettings(stored)).trash as Array<Record<string, unknown>>
-    expect(trash.map((entry) => entry.id)).toEqual(["t-clip", "t-frame", "t-shot", "t-rejected"])
+    expect(trash.map((entry) => entry.id)).toEqual(["t-clip", "t-frame", "t-shot", "t-rejected", "t-waived"])
     expect(trash[0]!.result).toEqual({ url: "https://r2/old.mp4", jobId: "clip-0" })
     expect(trash[1]!.keyframe).toEqual({ ...frameEntry(false), results: FRAME_RESULTS })
     const graph = trash[2]!.graph as { nodes: unknown; settings: unknown }
     expect(graph.nodes).toEqual(readerNodes())
     expect(studioOf(graph.settings)).toEqual(readerStudio())
     expect(trash[3]!.keyframe).toEqual({ ...frameEntry(false), results: FRAME_RESULTS })
+    expect(trash[4]!.keyframe).toEqual({ ...frameEntry(false), results: FRAME_RESULTS })
     for (const secret of [...NODE_PRIVATE, ...SETTINGS_PRIVATE]) expect(JSON.stringify(trash)).not.toContain(secret)
     // Copy-on-write.
     expect(stored).toEqual({ studio: { version: 3, trash: bin() } })
   })
 
-  it("keeps a deleted frame that carries neither as the very same bin", () => {
+  it("keeps a deleted frame that carries none of it as the very same bin", () => {
     const quiet = { kind: "keyframe", id: "t-frame", index: 0, deletedAt: NOW, keyframe: { ...frameEntry(false), results: FRAME_RESULTS } }
     const stored = { studio: { version: 3, trash: [quiet] } }
     expect(stripStudioDraftSettings(stored)).toBe(stored)
   })
 
   it("lets a deleted frame it cannot read ride through", () => {
-    const odd = [{ kind: "keyframe", id: "t-null", keyframe: null }, { kind: "keyframe", id: "t-text", keyframe: "nope" }]
+    const odd = [{ kind: "keyframe", id: "t-null", keyframe: null }, { kind: "keyframe", id: "t-text", keyframe: "nope" },
+      { kind: "keyframe", id: "t-odd", keyframe: { imageNodeId: "f", acceptance: "nope" } }]
     const stored = { studio: { version: 3, trash: odd } }
     expect(stripStudioDraftSettings(stored)).toBe(stored)
   })
