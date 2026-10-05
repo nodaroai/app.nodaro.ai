@@ -206,6 +206,30 @@ A grant takes effect the moment it is written — there is no acceptance step.
 The recipient finds the workflow under **Shared with me** (below), and it
 also turns up in their search, the same as anything else they can open.
 
+A change also reaches an editor that already has the workflow open. The
+editor asks again what its reader may do with it: every minute while the tab
+is in view, as soon as a hidden tab is shown again, and whenever a save is
+refused. Once it learns that its reader was lowered to `view` or removed,
+nothing more is saved from that editor, and its canvas turns read-only once
+no node on it shows a run in progress: a node waiting on a job, queued or
+running, partway through running once per item of a list, making a scene's
+image, or waiting for the result of a paid run started in that editor from a
+character's or object's page opened from **My Library** (Generate All
+Assets, a custom variation, Refine), from a **Suno Voice** node's setup, from
+an **Image Overlay** layer's **Suggest placement (AI)**, or from **Suggest
+seed prompt** beside a **Character Studio**'s **Seed Prompt**. Refine's
+images wait for one to be picked, so Refine counts until one is picked, or
+its picker or the page is closed. So a run that was already going still
+delivers its result. A run still waiting to start when the canvas turns
+read-only, such as one waiting to be confirmed, does not start, and none of
+those paid runs starts on a canvas that is already read-only.
+From then on, someone lowered to `view` receives the workflow the way any
+viewer does; someone removed receives nothing more. Someone raised from
+`view` keeps a read-only canvas until they reopen the workflow. A node left
+showing a run that has ended, such as one cut short when its tab was closed,
+keeps the canvas editable, with nothing on it saved, until the node stops
+showing it.
+
 ### Work shared with me
 
 | Method | Path | Who | Body / query |

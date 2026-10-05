@@ -171,4 +171,27 @@ describe("useImportableWorkflows", () => {
     const opts = mockUseQuery.mock.calls[0][0]
     expect(opts.staleTime).toBe(30_000)
   })
+
+  it("reads only each workflow's character list, never its whole settings (T76)", async () => {
+    // This lists other people's workflows too, and a studio production keeps
+    // its owner's drafts under `settings.studio`.
+    const selects: string[] = []
+    const rows = [
+      { id: "wf-1", name: "With cast", characterDefinitions: [{ id: "c1", name: "Kira" }] },
+      { id: "wf-2", name: "The open one", characterDefinitions: [{ id: "c2", name: "Ada" }] },
+      { id: "wf-3", name: "No cast", characterDefinitions: null },
+    ]
+    const query = {
+      select: (projection: string) => { selects.push(projection); return query },
+      order: () => query,
+      eq: () => Promise.resolve({ data: rows, error: null }),
+    }
+    mockCreateClient.mockReturnValue({ from: () => query })
+    mockUseQuery.mockReturnValue({ data: null })
+    useImportableWorkflows("proj-1", "wf-2", true)
+    const result = await mockUseQuery.mock.calls[0][0].queryFn()
+
+    expect(selects).toEqual(["id, name, characterDefinitions:settings->characterDefinitions"])
+    expect(result).toEqual([{ id: "wf-1", name: "With cast", characters: [{ id: "c1", name: "Kira" }] }])
+  })
 })

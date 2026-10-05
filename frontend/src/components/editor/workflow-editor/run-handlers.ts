@@ -97,6 +97,34 @@ function refuseWhileStreaming(): boolean {
 }
 
 /**
+ * True — and says why, when there is a reason to give — when a Run must not go
+ * on because the canvas turned read-only while it waited.
+ *
+ * Every Run awaits its confirm dialog (and the checks before it) and the Video
+ * URL downloads before it marks any node, and a re-check of the access (T97,
+ * `applyWorkflowAccess`) can answer `view` or `none` meanwhile. With no node
+ * showing a run, that freezes the canvas at once. Going on would mark nodes
+ * `pending` on a frozen canvas (`markNodesStatus` is not gated) while every
+ * write the run makes is a no-op: a single node's job is still created and
+ * paid for, and its result is dropped (`shouldAbandonNode`).
+ *
+ * Asked right after those awaits, with nothing awaited between it and the
+ * first mark, so the freeze cannot land in between. From that mark on, the
+ * nodes themselves hold it back (`showsARunInFlight`).
+ *
+ * `isReadOnly` alone, the same gate the Run callbacks are registered under. A
+ * canvas whose saves are refused while its freeze waits for the runs out still
+ * runs and paints, and a run started there holds the freeze with its own marks
+ * until its result lands.
+ */
+function refuseWhileReadOnly(): boolean {
+  const { isReadOnly, readOnlyReason } = useWorkflowStore.getState();
+  if (!isReadOnly) return false;
+  if (readOnlyReason) toast.error(readOnlyReason);
+  return true;
+}
+
+/**
  * Track A — does THIS DEPLOYMENT have a billing payer (not "am I the payer")?
  *
  * `spendableCredits` needs it to read `allowance: null`, which means two things
@@ -368,6 +396,8 @@ export async function handleRun(
     // must hold its file by the time the pre-run save below writes it.
     if (!(await ensureVideoLinksBeforeRun(exec.map((n) => n.id), setIsRunning))) return;
   }
+  // The canvas may have turned read-only while those were awaited.
+  if (refuseWhileReadOnly()) return;
 
   rejectAllManualEdits();
   const { nodes } = collapseExpandedClones();
@@ -542,6 +572,11 @@ export async function handleRunSingleNode(
     if (!(await ensureVideoLinksBeforeRun([nodeId], setIsRunning))) return;
   }
 
+  // The canvas may have turned read-only while those were awaited. This is
+  // the one handler that would lose a paid result to it: its job is followed
+  // and painted from the browser, and every write it makes would be a no-op.
+  if (refuseWhileReadOnly()) return;
+
   // Read the graph only NOW. The confirm and the download above can each take
   // minutes; the canvas may have been edited meanwhile, and running a snapshot
   // taken before them would execute a node as it no longer is.
@@ -667,6 +702,8 @@ export async function handleRunFromHere(
     if (!(await confirmRunOrAbort(ctx, exec, st.nodes, st.edges, "from-here", false))) return;
     if (!(await ensureVideoLinksBeforeRun(exec.map((n) => n.id), setIsRunning))) return;
   }
+  // The canvas may have turned read-only while those were awaited.
+  if (refuseWhileReadOnly()) return;
   rejectAllManualEdits();
   const { nodes, edges } = collapseExpandedClones();
   const startNode = nodes.find((n) => n.id === nodeId);
@@ -762,6 +799,8 @@ export async function handleRunSelected(
     if (!(await confirmRunOrAbort(ctx, exec, st.nodes, st.edges, "selected", false))) return;
     if (!(await ensureVideoLinksBeforeRun(exec.map((n) => n.id), setIsRunning))) return;
   }
+  // The canvas may have turned read-only while those were awaited.
+  if (refuseWhileReadOnly()) return;
   rejectAllManualEdits();
   const { nodes } = collapseExpandedClones();
   const selectedNodes = nodes.filter((n) => n.selected);

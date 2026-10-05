@@ -1518,6 +1518,7 @@ export {
   STUDIO_SHOT_TRANSIENT_KEYS,
   STUDIO_SHOT_DRAFT_KEYS,
   STUDIO_TAKE_VOICE_KEYS,
+  STUDIO_PREVIZ_RUN_STATE_KEYS,
   stripStudioTransientSettings,
   stripStudioDraftSettings,
   stripStudioDraftWorkflow,

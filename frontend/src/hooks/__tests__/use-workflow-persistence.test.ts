@@ -17,6 +17,7 @@ const mockSetSaveStatus = vi.fn()
 const mockSetLoadedUpdatedAt = vi.fn()
 const mockSetLoadedVersion = vi.fn()
 const mockSetRemoteUpdatedAt = vi.fn()
+const mockGetWorkflowDocument = vi.fn()
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -40,6 +41,13 @@ vi.mock("@/lib/api", () => ({
   // these tests already expect to find it, which is what this stub asserts by
   // being the failing case.
   getWorkflowAccess: () => Promise.reject(new Error("not mocked in this file")),
+  // How the check tells a 404 (no access at all, an answer) from a failure.
+  isNotFoundError: (err: unknown) => err instanceof Error && (err as { code?: unknown }).code === "not_found",
+  // The load reads the workflow through lib/workflow-content.ts: the stored
+  // row only for its owner (the signed-in "u1"), the server's answer for
+  // anyone else.
+  getCurrentUserId: async () => "u1",
+  getWorkflowDocument: (...args: unknown[]) => mockGetWorkflowDocument(...args),
 }))
 
 vi.mock("@/lib/supabase", () => ({
@@ -104,6 +112,8 @@ vi.mock("@/hooks/use-workflow-store", () => {
 // ---------------------------------------------------------------------------
 
 import { videoOverlayResultFresh } from "@/lib/video-overlay-composition"
+import { stripStudioDraftWorkflow } from "@nodaro/shared"
+import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useWorkflowPersistence, TERMINAL_RESTORABLE_STATUSES, executionSettledAt, applyCompletedExecutionResults, applyBackendExecutionState } from "../use-workflow-persistence"
 
 // ---------------------------------------------------------------------------
@@ -123,17 +133,39 @@ function makeNode(overrides: Record<string, unknown> = {}) {
   }
 }
 
+/**
+ * A PostgREST read of one stored row that honours `.eq` filters the way the
+ * table does, so a read that drops the owner filter hands back the row — and
+ * the tests below see it. `returned` records every row a read actually handed
+ * back to the browser.
+ */
+const returned: unknown[] = []
+function rowQuery(row: Record<string, unknown> | null, error: { message: string } | null = null) {
+  const filters: Array<[string, unknown]> = []
+  const match = () => (row && filters.every(([col, val]) => row[col] === val) ? row : null)
+  const answer = () => {
+    const data = error ? null : match()
+    if (data) returned.push(data)
+    return { data, error }
+  }
+  const query = {
+    eq: (col: string, val: unknown) => {
+      filters.push([col, val])
+      return query
+    },
+    maybeSingle: async () => answer(),
+  }
+  return query
+}
+
 function setupSupabaseLoad(workflowData: Record<string, unknown>) {
   // Default updated_at when callers don't supply one — keeps the new
   // optimistic-locking code path happy without forcing every existing
-  // fixture to opt in.
-  const withUpdatedAt = { updated_at: "2026-01-01T00:00:00Z", ...workflowData }
+  // fixture to opt in. Owned by the signed-in "u1" unless a fixture says
+  // otherwise.
+  const withUpdatedAt = { updated_at: "2026-01-01T00:00:00Z", user_id: "u1", ...workflowData }
   mockSupabaseFrom.mockReturnValue({
-    select: () => ({
-      eq: () => ({
-        single: async () => ({ data: withUpdatedAt, error: null }),
-      }),
-    }),
+    select: () => rowQuery(withUpdatedAt),
     update: () => ({
       eq: () => ({
         // Direct await path (legacy `await .update(...).eq(...)`).
@@ -216,6 +248,27 @@ describe("useWorkflowPersistence — syncNodeResultsFromDB (via load)", () => {
     })
 
     expect(mockGetBatchJobStatus).not.toHaveBeenCalled()
+  })
+
+  it("drops a paid run's mark found in a row: a load has no run out to hold the freeze back", async () => {
+    // Nothing saves one (it is transient); this is the belt that makes "a
+    // reload starts without it" hold whatever wrote the row.
+    const nodes = [
+      makeNode({ id: "n1", data: { label: "Img", executionStatus: "completed", __runsInFlight: ["run-1"] } }),
+      makeNode({ id: "n2", data: { label: "Img2", executionStatus: "idle", __listRunning: true, __runsInFlight: ["run-2"] } }),
+      makeNode({ id: "n3", data: { label: "Img3", executionStatus: "idle" } }),
+    ]
+    setupSupabaseLoad({ id: "w1", name: "Test", nodes, edges: [], settings: {} })
+
+    const { result } = renderHook(() => useWorkflowPersistence("p1"))
+    await act(async () => {
+      await result.current.load("w1")
+    })
+
+    const synced = getSyncedNodes().map((n) => n.data as Record<string, unknown>)
+    expect(synced.filter((d) => "__runsInFlight" in d)).toEqual([])
+    expect(synced.map((d) => d.label)).toEqual(["Img", "Img2", "Img3"])
+    expect(synced[1].__listRunning).toBe(false)
   })
 
   // -----------------------------------------------------------------------
@@ -1148,11 +1201,7 @@ describe("useWorkflowPersistence — syncNodeResultsFromDB (via load)", () => {
 
   it("returns success: false when supabase fetch fails", async () => {
     mockSupabaseFrom.mockReturnValue({
-      select: () => ({
-        eq: () => ({
-          single: async () => ({ data: null, error: { message: "Not found" } }),
-        }),
-      }),
+      select: () => rowQuery(null, { message: "Not found" }),
     })
 
     const { result } = renderHook(() => useWorkflowPersistence("p1"))
@@ -1342,7 +1391,7 @@ describe("useWorkflowPersistence — single-node restore via load (Gap 3)", () =
     // nodesChanged=true (so the side-save fires), alongside a single-node restore.
     const captured: { nodes?: Array<{ data?: Record<string, unknown> }> } = {}
     mockSupabaseFrom.mockReturnValue({
-      select: () => ({ eq: () => ({ single: async () => ({ data: { updated_at: "2026-01-01T00:00:00Z", id: "w1", name: "WF", nodes: [makeNode({ id: "n0", data: { executionStatus: "idle" } }), makeNode({ id: "n1", data: { executionStatus: "idle" } })], edges: [] }, error: null }) }) }),
+      select: () => rowQuery({ updated_at: "2026-01-01T00:00:00Z", user_id: "u1", id: "w1", name: "WF", nodes: [makeNode({ id: "n0", data: { executionStatus: "idle" } }), makeNode({ id: "n1", data: { executionStatus: "idle" } })], edges: [] }),
       update: (payload: { nodes?: Array<{ data?: Record<string, unknown> }> }) => {
         if (payload?.nodes) captured.nodes = payload.nodes
         return {
@@ -1943,6 +1992,178 @@ describe("Content Recipe / Content Ideas — both load-time lanes", () => {
     const nodes = [{ id: "recipe", type: "content-recipe", position: { x: 0, y: 0 }, data: { label: "Content Recipe" } }] as unknown as Parameters<typeof applyCompletedExecutionResults>[0]
     const [out] = applyCompletedExecutionResults(nodes, { recipe: { status: "completed", output: { json: { version: 1 }, text: "CONTENT RECIPE: t" } } }, null)
     expect(out!.data).toMatchObject({ generatedJson: { version: 1 }, generatedText: "CONTENT RECIPE: t" })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// T76 — the canvas load for a reader who is not the owner.
+//
+// A studio production keeps its owner's working state in the row: an empty
+// media slot and a run in flight on each scene and drafts in the bin
+// (`settings.studio`), a finished take's voice plan on the canvas node's result
+// rows. A `view` reader may not hold any of it (T11 / T21 / T42). The stored
+// row reaches the browser only for its owner; anyone else's canvas loads the
+// server's answer — which strips for `view` and not for `edit`.
+// ---------------------------------------------------------------------------
+
+describe("useWorkflowPersistence — load, by who is reading (T76)", () => {
+  const OWNER = "owner-1"
+
+  /** The owner's stored row, as the table holds it. */
+  function storedProduction(): Record<string, unknown> {
+    return {
+      id: "w1",
+      name: "A production",
+      user_id: OWNER,
+      updated_at: "2026-10-01T00:00:00Z",
+      version: 4,
+      edges: [],
+      nodes: [makeNode({
+        id: "clip-1",
+        type: "generate-video",
+        data: { label: "Clip", executionStatus: "completed", generatedResults: [{ url: "https://cdn/take.mp4", revoiceTo: { voiceId: "owner-voice" }, voiceMode: "recast" }] },
+      })],
+      settings: {
+        studio: {
+          shots: [{ id: "s1", stillSlots: [{ id: "slot-1", prompt: "unsent words" }], pendingClips: [{ jobId: "job-1" }] }],
+          trash: [{ id: "t1", kind: "slot", deletedAt: "2026-10-01T00:00:00Z" }],
+        },
+      },
+    }
+  }
+
+  /** `GET /v1/workflows/:id` exactly as the route answers: the platform's own
+   *  strip for `view`, the stored row for `edit` and `own`. */
+  function serverAnswer(row: Record<string, unknown>, access: "view" | "edit" | "own") {
+    const shown = access === "view" ? stripStudioDraftWorkflow(row) : row
+    return {
+      id: shown.id, projectId: "p1", userId: shown.user_id, folderId: null, name: shown.name,
+      version: shown.version, nodes: shown.nodes, edges: shown.edges, settings: shown.settings,
+      createdAt: "2026-09-01T00:00:00Z", updatedAt: shown.updated_at, access,
+    }
+  }
+
+  function loadedTake(): Record<string, unknown> {
+    const node = getSyncedNodes().find((n) => (n as { id: string }).id === "clip-1") as { data: { generatedResults: Record<string, unknown>[] } }
+    return node.data.generatedResults[0]!
+  }
+
+  /** Every `isReadOnly` the load wrote to the store. */
+  function readOnlyWrites(): unknown[] {
+    return vi.mocked(useWorkflowStore.setState).mock.calls
+      .map(([patch]) => (patch as { isReadOnly?: unknown }).isReadOnly)
+      .filter((v) => v !== undefined)
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    returned.length = 0
+    mockGetBatchJobStatus.mockResolvedValue([])
+    mockListWorkflowExecutions.mockResolvedValue({ data: [] })
+  })
+
+  async function loadAs(row: Record<string, unknown>, server?: ReturnType<typeof serverAnswer> | null) {
+    setupSupabaseLoad(row)
+    mockGetWorkflowDocument.mockResolvedValue(server ?? null)
+    const { result } = renderHook(() => useWorkflowPersistence("p1"))
+    let out: { success: boolean; error?: string } | undefined
+    await act(async () => {
+      out = await result.current.load("w1")
+    })
+    return out!
+  }
+
+  it("a `view` reader's canvas loads the server's projection — and the stored row never reaches the browser", async () => {
+    const stored = storedProduction()
+    const out = await loadAs(stored, serverAnswer(stored, "view"))
+
+    expect(out.success).toBe(true)
+    // The table was asked only for the caller's OWN row, and handed back nothing.
+    expect(returned).toEqual([])
+    expect(mockGetWorkflowDocument).toHaveBeenCalledWith("w1")
+    // The take is on the canvas, its owner's voice plan is not.
+    const take = loadedTake()
+    expect(take.url).toBe("https://cdn/take.mp4")
+    expect("revoiceTo" in take).toBe(false)
+    expect("voiceMode" in take).toBe(false)
+    expect(readOnlyWrites()).toEqual([true])
+  })
+
+  it("the owner's canvas loads the stored row, drafts and voice plan included, without asking the server", async () => {
+    const out = await loadAs({ ...storedProduction(), user_id: "u1" })
+
+    expect(out.success).toBe(true)
+    expect(mockGetWorkflowDocument).not.toHaveBeenCalled()
+    expect(returned).toHaveLength(1)
+    const row = returned[0] as { settings: { studio: { shots: Record<string, unknown>[] } } }
+    expect(row.settings.studio.shots[0]!.stillSlots).toEqual([{ id: "slot-1", prompt: "unsent words" }])
+    expect(loadedTake().revoiceTo).toEqual({ voiceId: "owner-voice" })
+  })
+
+  it("an `edit` collaborator's canvas loads the stored row through the server — they save it back whole", async () => {
+    const stored = storedProduction()
+    const out = await loadAs(stored, serverAnswer(stored, "edit"))
+
+    expect(out.success).toBe(true)
+    expect(returned).toEqual([])
+    expect(loadedTake().revoiceTo).toEqual({ voiceId: "owner-voice" })
+    expect(loadedTake().voiceMode).toBe("recast")
+  })
+
+  it("`view` freezes the canvas from the load itself; `edit` on an ordinary workflow does not", async () => {
+    const ordinary = { ...storedProduction(), settings: {} }
+    await loadAs(ordinary, serverAnswer(ordinary, "view"))
+    expect(readOnlyWrites()).toEqual([true])
+
+    vi.mocked(useWorkflowStore.setState).mockClear()
+    await loadAs(ordinary, serverAnswer(ordinary, "edit"))
+    expect(readOnlyWrites()).toEqual([false])
+  })
+
+  it("a workflow the caller cannot reach fails the load", async () => {
+    const out = await loadAs(storedProduction(), null)
+    expect(out).toEqual({ success: false, error: "Workflow not found" })
+    expect(returned).toEqual([])
+  })
+
+  // T86: the canvas hears about writes made elsewhere by the access its load
+  // answered — `own` / `edit` subscribe to the row's broadcasts, anything else
+  // polls and re-reads through the server (use-workflow-realtime-sync.ts).
+
+  /** Every `loadedAccess` the load wrote to the store. */
+  function accessWrites(): unknown[] {
+    return vi.mocked(useWorkflowStore.setState).mock.calls
+      .map(([patch]) => (patch as { loadedAccess?: unknown }).loadedAccess)
+      .filter((v) => v !== undefined)
+  }
+
+  it("records the access the load answered, keyed by the workflow it answered for", async () => {
+    const stored = storedProduction()
+    await loadAs(stored, serverAnswer(stored, "view"))
+    expect(accessWrites()).toEqual([{ workflowId: "w1", access: "view" }])
+
+    vi.mocked(useWorkflowStore.setState).mockClear()
+    await loadAs(stored, serverAnswer(stored, "edit"))
+    expect(accessWrites()).toEqual([{ workflowId: "w1", access: "edit" }])
+
+    vi.mocked(useWorkflowStore.setState).mockClear()
+    await loadAs({ ...stored, user_id: "u1" })
+    expect(accessWrites()).toEqual([{ workflowId: "w1", access: "own" }])
+  })
+
+  it("a failed load records no access, so the canvas stays unknown — and fails closed", async () => {
+    await loadAs(storedProduction(), null)
+    expect(accessWrites()).toEqual([])
+
+    vi.mocked(useWorkflowStore.setState).mockClear()
+    mockSupabaseFrom.mockReturnValue({ select: () => rowQuery(null, { message: "boom" }) })
+    const { result } = renderHook(() => useWorkflowPersistence("p1"))
+    let out: { success: boolean } | undefined
+    await act(async () => {
+      out = await result.current.load("w1")
+    })
+    expect(out?.success).toBe(false)
+    expect(accessWrites()).toEqual([])
   })
 })
 

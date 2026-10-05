@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase"
+import { readWorkflowContent } from "@/lib/workflow-content"
 import type { WorkflowNode, WorkflowEdge, SubWorkflowData, SubWorkflowInputData, SubWorkflowOutputData } from "@/types/nodes"
 
 /** Nesting limit for sub-workflow execution (and for any walk that mirrors it). */
@@ -57,16 +57,14 @@ export interface SubWorkflowRouteGraph {
  * (a preflight) swallow the throw and let the run surface it.
  */
 export async function loadSubWorkflowRouteGraph(data: SubWorkflowData): Promise<SubWorkflowRouteGraph> {
-  const supabase = createClient()
-  const { data: wfData, error } = await supabase
-    .from("workflows")
-    .select("id, nodes, edges")
-    .eq("id", data.referencedWorkflowId)
-    .single()
-
-  if (error || !wfData) {
+  // The referenced workflow may be somebody else's: read it as THIS caller may
+  // hold it (lib/workflow-content.ts). A failed read is the same "not found"
+  // the executor has always reported.
+  const content = await readWorkflowContent(data.referencedWorkflowId, "id, nodes, edges").catch(() => null)
+  if (!content) {
     throw new Error("Referenced workflow not found")
   }
+  const wfData = content.row
 
   const allSubNodes = (wfData.nodes as unknown as WorkflowNode[]) ?? []
   const allSubEdges = (wfData.edges as unknown as WorkflowEdge[]) ?? []

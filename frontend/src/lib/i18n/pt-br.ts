@@ -10360,6 +10360,7 @@ export const ptBR: ChromeDict = {
   "apiErr.loadSharedWork": "Não foi possível carregar os trabalhos compartilhados com você",
   "apiErr.shareWorkflow": "Não foi possível compartilhar o workflow",
   "apiErr.unshareWorkflow": "Não foi possível cancelar o compartilhamento do workflow",
+  "apiErr.loadWorkflow": "Não foi possível carregar o workflow",
   "apiErr.loadSharedWorkflow": "Não foi possível carregar o workflow compartilhado",
   "apiErr.runSharedWorkflow": "Não foi possível executar o workflow compartilhado",
   "apiErr.getExecutionStatus": "Não foi possível obter o status da execução",

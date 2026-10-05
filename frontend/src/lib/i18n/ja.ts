@@ -10360,6 +10360,7 @@ export const ja: ChromeDict = {
   "apiErr.loadSharedWork": "共有アイテムを読み込めませんでした",
   "apiErr.shareWorkflow": "ワークフローを共有できませんでした",
   "apiErr.unshareWorkflow": "ワークフローの共有を解除できませんでした",
+  "apiErr.loadWorkflow": "ワークフローを読み込めませんでした",
   "apiErr.loadSharedWorkflow": "共有ワークフローを読み込めませんでした",
   "apiErr.runSharedWorkflow": "共有ワークフローを実行できませんでした",
   "apiErr.getExecutionStatus": "実行ステータスを取得できませんでした",

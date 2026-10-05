@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { OVERLAY_HANDLE_IDS, type OverlayAnchor, type OverlayLayerConfig } from "@/types/nodes"
 import { TextStyleEditor, QrStyleEditor, ShapeStyleEditor, ImageEffectsEditor } from "./image-overlay-kind-editors"
 import { suggestOverlayPlacement } from "@/lib/api"
+import { withRunInFlight } from "@/hooks/run-in-flight"
 import { ANCHOR_GRID, PctSlider, Section, pctPx as px } from "./panel-section"
 
 /**
@@ -20,13 +21,15 @@ import { ANCHOR_GRID, PctSlider, Section, pctPx as px } from "./panel-section"
  * sits first because it is the point of that layer.
  */
 export function OverlayLayerEditor({
-  index, layer, connected, base, onChange, baseUrl, safeArea, compact = false, wiredQrText,
+  index, layer, connected, base, onChange, nodeId, baseUrl, safeArea, compact = false, wiredQrText,
 }: {
   index: number
   layer: OverlayLayerConfig
   connected: boolean
   base: { w: number; h: number } | undefined
   onChange: (patch: Partial<OverlayLayerConfig>) => void
+  /** The node these layers belong to: "Suggest placement" is a paid run whose result lands on it. */
+  nodeId?: string
   /** The base image URL — enables "Suggest placement". */
   baseUrl?: string
   safeArea?: { x: number; y: number; w: number; h: number }
@@ -38,21 +41,25 @@ export function OverlayLayerEditor({
   const t = useT()
   const [suggesting, setSuggesting] = useState(false)
   async function suggest() {
-    if (!baseUrl) return
-    setSuggesting(true)
-    try {
-      const kindWord = layer.kind === "text" ? `a headline: "${layer.text?.text ?? ""}"` : layer.kind === "qr" ? "a QR code" : layer.kind === "shape" ? "a badge" : "a logo"
-      const aspect = layer.kind === "qr" ? 1 : layer.kind === "shape" ? (layer.width || 30) / (layer.height || 8) : 2
-      const { placement } = await suggestOverlayPlacement({ imageUrl: baseUrl, layerAspect: aspect, intent: kindWord, safeArea })
-      const patch: Partial<OverlayLayerConfig> = { anchor: placement.anchor as OverlayAnchor, x: placement.x, y: placement.y }
-      if (layer.kind !== "text") patch.width = placement.width
-      onChange(patch)
-      toast.success(placement.reason)
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : t("overlayAi.suggestFailed"))
-    } finally {
-      setSuggesting(false)
-    }
+    if (!baseUrl || !nodeId) return
+    // The suggestion is written onto the node, so the node shows a run in
+    // flight until it is (T100: a read-only freeze waits for it).
+    await withRunInFlight(nodeId, async () => {
+      setSuggesting(true)
+      try {
+        const kindWord = layer.kind === "text" ? `a headline: "${layer.text?.text ?? ""}"` : layer.kind === "qr" ? "a QR code" : layer.kind === "shape" ? "a badge" : "a logo"
+        const aspect = layer.kind === "qr" ? 1 : layer.kind === "shape" ? (layer.width || 30) / (layer.height || 8) : 2
+        const { placement } = await suggestOverlayPlacement({ imageUrl: baseUrl, layerAspect: aspect, intent: kindWord, safeArea })
+        const patch: Partial<OverlayLayerConfig> = { anchor: placement.anchor as OverlayAnchor, x: placement.x, y: placement.y }
+        if (layer.kind !== "text") patch.width = placement.width
+        onChange(patch)
+        toast.success(placement.reason)
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : t("overlayAi.suggestFailed"))
+      } finally {
+        setSuggesting(false)
+      }
+    })
   }
   const handleId = OVERLAY_HANDLE_IDS[index]
   const shadow = layer.shadow
@@ -124,7 +131,7 @@ export function OverlayLayerEditor({
       </Section>
 
       <Section title={t("overlayEditor.section.placement")} summary={`${layer.anchor} · ${layer.width}%`} defaultOpen={!compact}>
-        {baseUrl && (
+        {baseUrl && nodeId && (
           <Button type="button" variant="outline" size="sm" className="w-full" disabled={suggesting} onClick={() => void suggest()}>
             <Wand2 className="w-3.5 h-3.5 me-1.5" />
             {suggesting ? t("overlayAi.suggesting") : t("overlayAi.suggestPlacement")}
