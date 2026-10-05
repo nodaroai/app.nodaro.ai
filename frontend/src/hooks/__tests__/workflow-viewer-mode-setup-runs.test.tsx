@@ -181,6 +181,7 @@ describe("a Suno voice's persona", () => {
     openSetup()
     await createVoice()
     await lowerToView()
+    expect(isFrozen()).toBe(false)
     h.voice = { status: "fail", errorMessage: "rejected" }
     // The first few failed checks count as a blip; the next one is believed.
     await advance(RECORD_POLL_MS * 4)
@@ -271,6 +272,7 @@ describe("an overlay layer's placement suggestion", () => {
     openEditor()
     await suggest()
     await lowerToView()
+    expect(isFrozen()).toBe(false)
     h.suggestion!.reject(new Error("no placement"))
     await advance(0)
     expect(layerOn()).toEqual(DEFAULT_OVERLAY_LAYER)

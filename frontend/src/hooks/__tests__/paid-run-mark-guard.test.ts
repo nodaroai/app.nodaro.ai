@@ -514,7 +514,9 @@ describe("the paid set", () => {
       expect(CLIENT.has(name), `${name} is no longer a client function: update the guard`).toBe(true)
       expect(PAID.has(name), name).toBe(true)
     }
-    // An executor's paid call, and a job only a dialog starts.
+    // An executor's paid call that starts no job of its own (a whole run),
+    // an executor's job, and a job only a dialog starts.
+    expect(PAID.has("runWorkflow")).toBe(true)
     expect(PAID.has("generateVideo")).toBe(true)
     expect(PAID.has("suggestOverlayPlacement")).toBe(true)
     expect(PAID.has("getJobStatusLean")).toBe(false)
@@ -532,35 +534,51 @@ describe("the paid set", () => {
   })
 })
 
+/**
+ * What is wrong with these scans: a paid call outside the wrapper in a file
+ * neither an executor's nor allowed, an allowed count that no longer matches,
+ * an entry with nothing left to allow, and any use of the client the scan
+ * could not follow. Pure, so the guard tests its own verdict.
+ */
+function verdict(
+  scans: ReadonlyMap<string, Scan>,
+  executorFiles: ReadonlyMap<string, string>,
+  allowed: ReadonlyMap<string, Allowed>,
+): string[] {
+  const problems: string[] = []
+  const outsideOf = (file: string) => scans.get(file)?.references.filter((r) => !r.wrapped) ?? []
+  for (const [file, scan] of scans) {
+    for (const what of scan.unresolved) problems.push(`${file}: ${what}`)
+    const outside = outsideOf(file)
+    if (outside.length === 0 || executorFiles.has(file)) continue
+    const entry = allowed.get(file)
+    if (!entry) {
+      problems.push(`${file}: a paid call outside ${WRAPPER}: ${describeRefs(outside)}. Run it inside ${WRAPPER}(nodeId, …) when its result lands on a canvas node; otherwise allow the file, with why`)
+    } else if (outside.length !== entry.refs) {
+      problems.push(`${file}: ${outside.length} paid calls outside ${WRAPPER}, ${entry.refs} allowed (${describeRefs(outside)}). Decide the new one, then update the count`)
+    }
+  }
+  for (const file of [...executorFiles.keys(), ...allowed.keys()]) {
+    if (outsideOf(file).length === 0) problems.push(`${file}: allowed, but holds no paid call outside ${WRAPPER} any more: remove the entry`)
+  }
+  return problems
+}
+
+/** The reasons an entry can check, checked against these scans. */
+function brokenReasons(scans: ReadonlyMap<string, Scan>, allowed: ReadonlyMap<string, Allowed>): string[] {
+  return [...allowed].flatMap(([file, entry]) => {
+    const what = entry.check?.(scans.get(file)?.references.filter((r) => !r.wrapped) ?? [])
+    return what ? [`${file}: ${what}`] : []
+  })
+}
+
 describe("every paid client call outside the executors is inside withRunInFlight", () => {
   it("or is allowed, with its reason and its count", { timeout: SCAN_TIMEOUT_MS }, () => {
-    const scans = scanAll()
-    const problems: string[] = []
-    for (const [file, scan] of scans) {
-      for (const what of scan.unresolved) problems.push(`${file}: ${what}`)
-      const outside = scan.references.filter((r) => !r.wrapped)
-      if (outside.length === 0 || EXECUTOR_FILES.has(file)) continue
-      const allowed = ALLOWED.get(file)
-      if (!allowed) {
-        problems.push(`${file}: a paid call outside ${WRAPPER}: ${describeRefs(outside)}. Run it inside ${WRAPPER}(nodeId, …) when its result lands on a canvas node; otherwise allow the file below, with why`)
-      } else if (outside.length !== allowed.refs) {
-        problems.push(`${file}: ${outside.length} paid calls outside ${WRAPPER}, ${allowed.refs} allowed (${describeRefs(outside)}). Decide the new one, then update the count`)
-      }
-    }
-    for (const file of [...EXECUTOR_FILES.keys(), ...ALLOWED.keys()]) {
-      const outside = scans.get(file)?.references.filter((r) => !r.wrapped) ?? []
-      if (outside.length === 0) problems.push(`${file}: allowed, but holds no paid call outside ${WRAPPER} any more: remove the entry`)
-    }
-    expect(problems).toEqual([])
+    expect(verdict(scanAll(), EXECUTOR_FILES, ALLOWED)).toEqual([])
   })
 
   it("the reasons it can check still hold", { timeout: SCAN_TIMEOUT_MS }, () => {
-    const scans = scanAll()
-    const broken = [...ALLOWED].flatMap(([file, allowed]) => {
-      const what = allowed.check?.(scans.get(file)?.references.filter((r) => !r.wrapped) ?? [])
-      return what ? [`${file}: ${what}`] : []
-    })
-    expect(broken).toEqual([])
+    expect(brokenReasons(scanAll(), ALLOWED)).toEqual([])
   })
 
   it("finds the calls it is meant to police", { timeout: SCAN_TIMEOUT_MS }, () => {
@@ -661,5 +679,41 @@ describe("the checks an allowed reason can carry", () => {
   it("insideOf: every call is handed to the function named", () => {
     expect(insideOf("pollImageRefineToNode")([ref({ via: "pollImageRefineToNode" })])).toBeNull()
     expect(insideOf("pollImageRefineToNode")([ref({ via: "then" })])).toMatch(/outside `pollImageRefineToNode`/)
+  })
+})
+
+describe("the verdict", () => {
+  const call = (over: Partial<Reference> = {}): Reference => ({ name: "generateImage", line: 3, wrapped: false, via: null, argKeys: [], ...over })
+  const scanOf = (references: Reference[], unresolved: string[] = []): Scan => ({ references, unresolved, imported: [] })
+  const executors = new Map([["exec.ts", "an executor"]])
+  const allowed = new Map<string, Allowed>([["dialog.tsx", { refs: 1, why: "stays in the dialog" }]])
+  const judge = (scans: Record<string, Scan>) =>
+    verdict(new Map(Object.entries({ "exec.ts": scanOf([call()]), "dialog.tsx": scanOf([call()]), ...scans })), executors, allowed)
+
+  it("passes wrapped calls, executor files and allowed files at their count", () => {
+    expect(judge({ "page.tsx": scanOf([call({ wrapped: true })]) })).toEqual([])
+  })
+
+  it("fails a paid call outside the wrapper in a file nobody allowed", () => {
+    expect(judge({ "page.tsx": scanOf([call({ line: 7 })]) })).toEqual([expect.stringMatching(/^page\.tsx: a paid call outside withRunInFlight: generateImage \(line 7\)/)])
+  })
+
+  it("fails an allowed file whose count moved, either way", () => {
+    expect(judge({ "dialog.tsx": scanOf([call(), call()]) })).toEqual([expect.stringMatching(/^dialog\.tsx: 2 paid calls outside withRunInFlight, 1 allowed/)])
+    expect(judge({ "dialog.tsx": scanOf([call({ wrapped: true })]) })).toEqual([expect.stringMatching(/^dialog\.tsx: allowed, but holds no paid call/)])
+  })
+
+  it("fails an entry with nothing left to allow, executor files included", () => {
+    expect(judge({ "exec.ts": scanOf([]) })).toEqual([expect.stringMatching(/^exec\.ts: allowed, but holds no paid call/)])
+  })
+
+  it("fails a use of the client it could not follow, wherever it is", () => {
+    expect(judge({ "exec.ts": scanOf([call()], ["a re-export of the whole client at line 1"]) })).toEqual(["exec.ts: a re-export of the whole client at line 1"])
+  })
+
+  it("reports a reason that no longer holds", () => {
+    const checked = new Map<string, Allowed>([["studio.tsx", { refs: 1, why: "attaches to a row", check: attachesToARow }]])
+    expect(brokenReasons(new Map([["studio.tsx", scanOf([call({ argKeys: ["attachToCharacterId"] })])]]), checked)).toEqual([])
+    expect(brokenReasons(new Map([["studio.tsx", scanOf([call({ argKeys: ["variant"] })])]]), checked)).toEqual([expect.stringMatching(/^studio\.tsx: a call that names no entity row/)])
   })
 })
