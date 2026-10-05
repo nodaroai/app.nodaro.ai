@@ -294,6 +294,15 @@ describe("build_ugc_cards", () => {
     await callTool(serverWith(fastify), "build_ugc_cards", { plan: { p: 1 }, alignment: [{ word: "hi", start: 0, end: 0.3 }] })
     expect(received.cards!.body).toEqual({ userId: USER, plan: { p: 1 }, alignment: [{ word: "hi", start: 0, end: 0.3 }] })
   })
+  it("forwards caption_style as captionStyle, and refuses an unknown style before the builder", async () => {
+    const { fastify, received } = builder({ cards: [200, { layers: [] }] })
+    await callTool(serverWith(fastify), "build_ugc_cards", { plan: { p: 1 }, alignment: [{ word: "hi", start: 0, end: 0.3 }], caption_style: "karaoke" })
+    expect(received.cards!.body).toEqual({ userId: USER, plan: { p: 1 }, alignment: [{ word: "hi", start: 0, end: 0.3 }], captionStyle: "karaoke" })
+    const fresh = builder({ cards: [200, { layers: [] }] })
+    const res = await callTool(serverWith(fresh.fastify), "build_ugc_cards", { plan: { p: 1 }, alignment: [{ word: "hi", start: 0, end: 0.3 }], caption_style: "loud" })
+    expect(res.isError).toBe(true)
+    expect(fresh.received.cards).toBeUndefined()
+  })
 })
 
 describe("errors", () => {

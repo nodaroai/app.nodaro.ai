@@ -296,6 +296,13 @@ export function registerUgcTools({ server, session, fastify }: RegisterUgcToolsO
         alignment: z.array(z.object({ word: z.string(), start: z.number(), end: z.number() })).optional(),
         words: z.array(z.object({ text: z.string(), startMs: z.number(), endMs: z.number() })).optional(),
         video_duration_ms: z.number().min(0).optional(),
+        caption_style: z
+          .enum(["body-captions", "karaoke", "clean-subtitles", "none"])
+          .optional()
+          .describe(
+            "How the captions after the opening line look: body-captions (word by word, the default), karaoke, " +
+              "clean-subtitles, or none. The opening line always keeps its plate.",
+          ),
       },
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
@@ -305,6 +312,7 @@ export function registerUgcTools({ server, session, fastify }: RegisterUgcToolsO
         ...(args.alignment ? { alignment: args.alignment } : {}),
         ...(args.words ? { words: args.words } : {}),
         ...(args.video_duration_ms !== undefined ? { videoDurationMs: args.video_duration_ms } : {}),
+        ...(args.caption_style ? { captionStyle: args.caption_style } : {}),
       })
       if (res.statusCode >= 400) return ugcError(res.statusCode, res.body)
       return textResult(JSON.parse(res.body))

@@ -527,6 +527,14 @@ const TEXT_TO_AUDIO_PER_SECOND_PRICING_BYTES = 54
 // wording = 70 B, which keeps the 13 B of headroom the list had before.
 const ELEVENLABS_V4_DEFAULT_WORDING_BYTES = 70
 
+// RAISED by ONE argument and nothing else: `caption_style` on `build_ugc_cards`
+// (how the captions after the opening line look — word by word, karaoke, plain
+// subtitles or none; the builder takes it as `captionStyle`). No tool was added,
+// so the fixture does NOT move. measured by this suite: 387_082 total − 386_807
+// base = 275 B (build_ugc_cards 1_140 -> 1_415, far under the 8_192 B per-tool
+// budget).
+const UGC_CARDS_CAPTION_STYLE_BYTES = 275
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192,
   totalBytes:
@@ -577,7 +585,8 @@ export const TOOL_WIRE_BUDGET = {
     LIP_SYNC_AUDIO_LENGTH_BYTES +
     VIDEO_ANALYSIS_SMART_ONLY_BYTES +
     TEXT_TO_AUDIO_PER_SECOND_PRICING_BYTES +
-    ELEVENLABS_V4_DEFAULT_WORDING_BYTES,
+    ELEVENLABS_V4_DEFAULT_WORDING_BYTES +
+    UGC_CARDS_CAPTION_STYLE_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

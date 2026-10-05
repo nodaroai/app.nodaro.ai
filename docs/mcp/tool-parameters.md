@@ -319,6 +319,7 @@ Always visible · Nodaro Cloud only.
 | `words[].startMs` | number | yes |  |
 | `words[].endMs` | number | yes |  |
 | `video_duration_ms` | number |  | At least 0. |
+| `caption_style` | string |  | How the captions after the opening line look: body-captions (word by word, the default), karaoke, clean-subtitles, or none. The opening line always keeps its plate. One of `body-captions`, `karaoke`, `clean-subtitles`, `none`. |
 
 ## `build_ugc_clips`
 
