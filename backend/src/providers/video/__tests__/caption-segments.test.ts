@@ -338,6 +338,21 @@ describe("resolveCaptionSegments — maxWordsPerLine", () => {
     expect(none!.maxWordsPerLine).toBe(2)
   })
 
+  it("a subtitle segment's own text wraps to the cap as one block, and the render gets no cap", () => {
+    const [five, eight] = resolveCaptionSegments(
+      SHARED,
+      [
+        { startMs: 0, endMs: 1600, style: "subtitle", text: "Saved 3 hours a week", maxWordsPerLine: 4 },
+        { startMs: 1600, endMs: 3000, style: "subtitle", text: "one two three four five six seven eight" },
+      ],
+      { ...DEFAULTS, maxWordsPerLine: 4 },
+    )
+    expect(five!.captions).toEqual([{ text: "Saved 3 hours\na week", startMs: 0, endMs: 1600, timestampMs: 0, confidence: null }])
+    expect(five!.maxWordsPerLine).toBeUndefined()
+    expect(eight!.captions.map((c) => c.text)).toEqual(["one two three four\nfive six seven eight"])
+    expect(eight!.maxWordsPerLine).toBeUndefined()
+  })
+
   it("stays undefined when neither level sets one (unset = fit the width)", () => {
     const [seg] = resolveCaptionSegments(SHARED, [{ startMs: 0, endMs: 1000 }], DEFAULTS)
     expect(seg!.maxWordsPerLine).toBeUndefined()
@@ -500,6 +515,13 @@ describe("staticTextCaptionBlock", () => {
     // A blank line the caller wrote survives.
     expect(staticTextCaptionBlock("a b\n\nc d", { videoDurationSeconds: 3, maxWordsPerLine: 2 }).text)
       .toBe("a b\n\nc d")
+  })
+
+  it("spreads the words evenly over the fewest lines the cap allows", () => {
+    const wrap = (text: string) => staticTextCaptionBlock(text, { videoDurationSeconds: 3, maxWordsPerLine: 4 }).text
+    expect(wrap("Saved 3 hours a week")).toBe("Saved 3 hours\na week")
+    expect(wrap("one two three four five six seven eight")).toBe("one two three four\nfive six seven eight")
+    expect(wrap("one two three four five six seven eight nine")).toBe("one two three\nfour five six\nseven eight nine")
   })
 
   it("leaves the text alone when no cap is set", () => {
