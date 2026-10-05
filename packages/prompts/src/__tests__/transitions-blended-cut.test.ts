@@ -321,5 +321,7 @@ describe("blended cut — the rule holds for every row and lever (self-consisten
         check([a, b], levers(position, duration, "natural"), "clip")
       }
     }
-  })
+    // An exhaustive sweep: under a second locally, but past vitest's 5 s default
+    // on a loaded 2-vCPU CI runner (it timed out there three times on 2026-10-05).
+  }, 60_000)
 })
