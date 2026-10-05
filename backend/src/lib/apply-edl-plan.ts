@@ -38,13 +38,13 @@ export const APPLY_EDL_CREDITS_PER_OUTPUT_MINUTE = 10
  *  "proxy"`, a video or an audio output) — the `apply-edl:proxy` row
  *  (`applyEdlCreditId`). The ONE value behind
  *  `STATIC_CREDIT_COSTS['apply-edl:proxy']`, the `model_pricing` row
- *  (migration 454), the editor's cold-cache fallback and the docs' worked
- *  examples; tests pin each of those copies to this constant.
+ *  (migrations 454 and 455), the editor's cold-cache fallback and the docs'
+ *  worked examples; tests pin each of those copies to this constant.
  *
- *  Decided 2026-10-04. A retune moves this constant, the `model_pricing` row,
+ *  Decided 2026-10-05: 1 per output minute (was 2). A retune moves this constant, the `model_pricing` row,
  *  the editor fallback and the docs together, and keeps the preview below the
  *  final. */
-export const APPLY_EDL_PROXY_CREDITS_PER_OUTPUT_MINUTE = 2
+export const APPLY_EDL_PROXY_CREDITS_PER_OUTPUT_MINUTE = 1
 
 /** The per-minute rate of each id `applyEdlCreditId` can name. Keyed by its
  *  return type, so an id it gains cannot compile here without a rate. */

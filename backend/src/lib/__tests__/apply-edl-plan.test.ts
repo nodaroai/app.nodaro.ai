@@ -45,17 +45,17 @@ describe("apply-edl pricing (matches the docs worked examples)", () => {
   })
 
   it("a preview (proxy) bills its own per-minute rate on the same minutes", () => {
-    // docs table, Preview column: 40 s → 2 · 3 min 10 s (190 s) → 8 · 12 min (720 s) → 24
-    expect(applyEdlBaseCredits(oneSegment(40_000), "proxy")).toBe(2)
-    expect(applyEdlBaseCredits(oneSegment(190_000), "proxy")).toBe(8)
-    expect(applyEdlBaseCredits(oneSegment(720_000), "proxy")).toBe(24)
+    // docs table, Preview column: 40 s → 1 · 3 min 10 s (190 s) → 4 · 12 min (720 s) → 12
+    expect(applyEdlBaseCredits(oneSegment(40_000), "proxy")).toBe(1)
+    expect(applyEdlBaseCredits(oneSegment(190_000), "proxy")).toBe(4)
+    expect(applyEdlBaseCredits(oneSegment(720_000), "proxy")).toBe(12)
     expect(applyEdlBaseCredits(oneSegment(190_000), "proxy")).toBe(APPLY_EDL_PROXY_CREDITS_PER_OUTPUT_MINUTE * 4)
   })
 
   it("a Clip Pack bills each clip at its own length (docs: 8 clips × 90 s)", () => {
-    // Each 90 s clip is 2 billed minutes: preview 8 × 4 = 32, final 8 × 20 = 160.
+    // Each 90 s clip is 2 billed minutes: preview 8 × 2 = 16, final 8 × 20 = 160.
     expect(applyEdlReserveMinutes(oneSegment(90_000))).toBe(2)
-    expect(8 * applyEdlBaseCredits(oneSegment(90_000), "proxy")).toBe(32)
+    expect(8 * applyEdlBaseCredits(oneSegment(90_000), "proxy")).toBe(16)
     expect(8 * applyEdlBaseCredits(oneSegment(90_000), "final")).toBe(160)
   })
 

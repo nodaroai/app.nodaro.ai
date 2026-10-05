@@ -4,14 +4,15 @@
  * `applyEdlCreditId(quality)` for a video and an audio output alike.
  *
  * The rows mirror ONE constant each in `lib/apply-edl-plan.ts`; the
- * `model_pricing` rows (migrations 431 and 454) are pinned to the same values
+ * `model_pricing` rows (migration 431; 454, repriced by 455) are pinned to the
+ * same values
  * by `credit-pricing-migration-sync.test.ts`, and the editor's cold-cache rows
  * by `lib/__tests__/frontend-credit-fallback-parity.test.ts`.
  *
  * Both rates are decided, and the comments that state them say so: a rate
  * still labelled a placeholder would send the next reader to re-derive a
- * settled price or hold its promotion. Migration 454 is applied once and then
- * read forever, so it must not call its value "not final" either.
+ * settled price or hold its promotion. Migrations 454 and 455 are applied once
+ * and then read forever, so they must not call their value "not final" either.
  */
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
@@ -91,6 +92,7 @@ describe("both rates read as decided wherever their value is written", () => {
     { site: "the preview's STATIC_CREDIT_COSTS row", text: () => lineCommentsAbove(credits, "export const STATIC_CREDIT_COSTS", `"apply-edl:proxy":`) },
     { site: "the editor's cold-cache rows", text: () => lineCommentsAbove(editor, "export const NODE_CREDIT_COSTS", `"apply-edl":`) },
     { site: "migration 454", text: () => readRepoFile("supabase/migrations/454_apply_edl_proxy_pricing.sql") },
+    { site: "migration 455", text: () => readRepoFile("supabase/migrations/455_apply_edl_proxy_reprice.sql") },
   ])("$site", ({ text }) => {
     const comment = text()
     expect(comment).toMatch(/\bdecided\b/i)

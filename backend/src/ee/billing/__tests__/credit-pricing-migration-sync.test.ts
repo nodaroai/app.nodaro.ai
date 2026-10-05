@@ -92,6 +92,15 @@ const INSERTED_IDENTIFIERS = extractInsertedIdentifiers()
  * VALUE_SYNCED_FAMILIES rather than applied globally, because the legacy
  * migrations carry pre-re-denomination values they never corrected (167's
  * image-to-video rows, for one).
+ *
+ * A repricing migration moves an already-applied row with an UPDATE (an
+ * applied INSERT cannot be edited, and ON CONFLICT DO NOTHING would skip a
+ * re-seed), so a literal single-row UPDATE is replayed too, in statement order:
+ *   UPDATE model_pricing SET credit_cost = N WHERE model_identifier = 'x' [AND credit_cost = M];
+ * A guarded one moves the value only when the row still holds M, as the
+ * database would; an UPDATE of a row no migration seeded is a no-op. Any other
+ * UPDATE shape (a computed `credit_cost * 10`, an IN list, a rename) is not
+ * read — keep a value-synced family's repricing in the literal form.
  */
 function extractInsertedValues(): Map<string, number> {
   const values = new Map<string, number>()
@@ -100,13 +109,35 @@ function extractInsertedValues(): Map<string, number> {
     .sort()
   for (const file of migrationFiles) {
     const sql = readFileSync(join(MIGRATIONS_DIR, file), "utf8")
+    const writes: Array<{ at: number; apply: () => void }> = []
     const inserts = sql.matchAll(
       /INSERT\s+INTO\s+(?:public\.)?model_pricing(?:(?!\bSELECT\b)[\s\S])*?VALUES([\s\S]*?)(?:ON\s+CONFLICT|;\s*$)/gim,
     )
     for (const match of inserts) {
-      const rowMatches = (match[1] ?? "").matchAll(/\(\s*'([^']+)'\s*,\s*(\d+)/g)
-      for (const m of rowMatches) values.set(m[1]!, Number(m[2]))
+      writes.push({
+        at: match.index!,
+        apply: () => {
+          const rowMatches = (match[1] ?? "").matchAll(/\(\s*'([^']+)'\s*,\s*(\d+)/g)
+          for (const m of rowMatches) values.set(m[1]!, Number(m[2]))
+        },
+      })
     }
+    const updates = sql.matchAll(
+      /UPDATE\s+(?:public\.)?model_pricing\s+SET\s+credit_cost\s*=\s*(\d+)\s+WHERE\s+model_identifier\s*=\s*'([^']+)'(?:\s+AND\s+credit_cost\s*=\s*(\d+))?\s*;/gi,
+    )
+    for (const match of updates) {
+      writes.push({
+        at: match.index!,
+        apply: () => {
+          const [, to, id, from] = match
+          const current = values.get(id!)
+          if (current === undefined) return
+          if (from !== undefined && current !== Number(from)) return
+          values.set(id!, Number(to))
+        },
+      })
+    }
+    for (const w of writes.sort((a, b) => a.at - b.at)) w.apply()
   }
   return values
 }
@@ -122,7 +153,8 @@ const INSERTED_VALUES = extractInsertedValues()
  * `wan-2.7-t2v` are untouched.)
  */
 // `apply-edl`: the final's row (migration 431) and the preview's
-// `apply-edl:proxy` (migration 454), each one constant in lib/apply-edl-plan.ts
+// `apply-edl:proxy` (seeded by migration 454, repriced by 455's UPDATE), each
+// one constant in lib/apply-edl-plan.ts
 // — so retuning a constant fails here until its migration row says the same.
 const VALUE_SYNCED_FAMILIES = ["wan-3", "wan-3-prime", "gemini-omni-flash", "apply-edl"] as const
 const VALUE_SYNCED_ROW_COUNT = 189 // 88 wan-3 + 88 wan-3-prime + 11 gemini-omni-flash + 2 apply-edl

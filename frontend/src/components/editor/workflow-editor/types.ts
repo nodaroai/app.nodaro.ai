@@ -57,11 +57,12 @@ export const NODE_CREDIT_COSTS: Record<string, number> = {
   "transcribe": 10,
   "combine-videos": 10,
   // apply-edl: per-minute RATES, one row per render quality (applyEdlCreditId)
-  // — a final, and a preview (`quality: "proxy"`); both decided 2026-10-04.
+  // — a final (decided 2026-10-04), and a preview (`quality: "proxy"`,
+  // decided 2026-10-05).
   // Pinned to STATIC_CREDIT_COSTS by
   // backend/src/lib/__tests__/frontend-credit-fallback-parity.test.ts.
   "apply-edl": 10,
-  "apply-edl:proxy": 2,
+  "apply-edl:proxy": 1,
   "silence-detect": 10,
   // audio-sync: 10 × (sources − 1), keyed by the wired source count — the
   // run-level estimate names the composite (getModelIdentifier) and reads it
