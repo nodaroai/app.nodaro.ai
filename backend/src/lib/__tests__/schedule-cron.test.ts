@@ -259,8 +259,27 @@ describe("scheduleDue — the legacy lanes (rows made by hand, rows not re-proje
 // startScheduleCron — one check per calendar minute, just after the boundary
 // ---------------------------------------------------------------------------
 
+/**
+ * The default decides on Railway's environment name, read at call time — and
+ * the CI runners are hosted on Railway too, so every test that starts the
+ * cron pins it instead of inheriting whatever the runner carries.
+ */
+function pinRailwayEnvironment(): void {
+  let saved: string | undefined
+  beforeEach(() => {
+    saved = process.env.RAILWAY_ENVIRONMENT_NAME
+    delete process.env.RAILWAY_ENVIRONMENT_NAME
+  })
+  afterEach(() => {
+    if (saved === undefined) delete process.env.RAILWAY_ENVIRONMENT_NAME
+    else process.env.RAILWAY_ENVIRONMENT_NAME = saved
+  })
+}
+
 describe("startScheduleCron — one check per calendar minute, just after the boundary", () => {
   const checks = () => vi.mocked(supabase.from).mock.calls.filter(([table]) => table === "workflow_triggers").length
+
+  pinRailwayEnvironment()
 
   beforeEach(() => {
     vi.useFakeTimers()
@@ -330,5 +349,45 @@ describe("startScheduleCron — one check per calendar minute, just after the bo
     expect(checks()).toBe(2)
     await vi.advanceTimersByTimeAsync(61_000) // 10:03:00.250 (+1 s for the two quick checks) — catches up 10:02, then 10:03
     expect(checks()).toBe(4)
+  })
+})
+
+describe("startScheduleCron — only the environment that owns the schedules fires them", () => {
+  const reads = () => vi.mocked(supabase.from).mock.calls.length
+
+  pinRailwayEnvironment()
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-09-22T10:00:20.000Z"))
+    vi.mocked(supabase.from).mockReset()
+    vi.mocked(supabase.from).mockImplementation((() => ({
+      select: () => ({ eq: () => ({ eq: async () => ({ data: [], error: null }) }) }),
+    })) as never)
+  })
+
+  afterEach(() => {
+    stopScheduleCron()
+    vi.useRealTimers()
+  })
+
+  it("a Railway environment other than production (staging shares production's database) reads nothing and fires nothing", async () => {
+    process.env.RAILWAY_ENVIRONMENT_NAME = "staging"
+    startScheduleCron()
+    await vi.advanceTimersByTimeAsync(180_000)
+    expect(reads()).toBe(0)
+  })
+
+  it("Railway's production environment fires with no new variable set", async () => {
+    process.env.RAILWAY_ENVIRONMENT_NAME = "production"
+    startScheduleCron()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(reads()).toBe(1)
+  })
+
+  it("an install off Railway (self-host, community) fires by default", async () => {
+    startScheduleCron()
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(reads()).toBe(2)
   })
 })

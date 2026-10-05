@@ -381,6 +381,28 @@ export const envSchema = z.object({
     .string()
     .optional()
     .transform((v) => v === "true" || v === "1"),
+  /**
+   * Whether THIS process fires scheduled workflows (the schedule cron,
+   * `lib/schedule-cron.ts`). Unset = the deployment default, see
+   * `scheduleTriggersEnabled()`: on Railway only the environment named
+   * `production` fires (staging shares production's database and would
+   * otherwise fire production users' schedules on staging's build); off
+   * Railway every install fires, as it always has. Tri-state and strict:
+   * `true`/`1` on, `false`/`0` off, blank = unset, anything else refuses to
+   * boot — a typo must not silently pick a side.
+   */
+  SCHEDULE_TRIGGERS_ENABLED: z
+    .string()
+    .optional()
+    .transform((v) => {
+      const trimmed = v?.trim().toLowerCase()
+      return trimmed ? trimmed : undefined
+    })
+    .refine(
+      (v) => v === undefined || v === "true" || v === "1" || v === "false" || v === "0",
+      "SCHEDULE_TRIGGERS_ENABLED must be true, 1, false or 0 (or unset for the deployment default)",
+    )
+    .transform((v) => (v === undefined ? undefined : v === "true" || v === "1")),
   /** Dynamic Client Registration mode. "allowlist" = only allow known MCP clients (Claude/Cursor/etc); "open" = allow any client_name; "off" = DCR disabled entirely (returns 403). */
   MCP_DYNAMIC_REGISTRATION: z.enum(["allowlist", "open", "off"]).default("allowlist"),
   /** Comma-separated allowlist of MCP client_name values that may register dynamically. Only used when MCP_DYNAMIC_REGISTRATION="allowlist". */
@@ -436,6 +458,34 @@ export function isMultiUser(): boolean {
  */
 export function hasOrganizations(): boolean {
   return config.EDITION === "cloud" && config.ORGS_ENABLED
+}
+
+/** The one Railway environment that fires scheduled workflows by default. */
+export const SCHEDULE_TRIGGERS_DEFAULT_RAILWAY_ENVIRONMENT = "production"
+
+/**
+ * Whether scheduled workflows fire here, given an explicit setting (or none)
+ * and Railway's environment name (or none). Pure, so the decision is pinned
+ * directly: an explicit value wins; otherwise an install off Railway fires
+ * and, on Railway, only `production` does.
+ */
+export function resolveScheduleTriggersEnabled(
+  explicit: boolean | undefined,
+  railwayEnvironmentName: string | undefined,
+): boolean {
+  if (explicit !== undefined) return explicit
+  const railway = railwayEnvironmentName?.trim()
+  if (!railway) return true
+  return railway === SCHEDULE_TRIGGERS_DEFAULT_RAILWAY_ENVIRONMENT
+}
+
+/**
+ * Whether this process fires scheduled workflows. `RAILWAY_ENVIRONMENT_NAME`
+ * is injected by Railway and read at CALL time (like `lib/runtime-env.ts`),
+ * never memoized.
+ */
+export function scheduleTriggersEnabled(): boolean {
+  return resolveScheduleTriggersEnabled(config.SCHEDULE_TRIGGERS_ENABLED, process.env.RAILWAY_ENVIRONMENT_NAME)
 }
 
 function loadConfig() {

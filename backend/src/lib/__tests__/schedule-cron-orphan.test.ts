@@ -51,7 +51,7 @@ function tables(opts: { trigger: ReturnType<typeof managed>; graph: Array<{ id: 
             ? { eq: vi.fn().mockReturnValue({ maybeSingle: vi.fn().mockResolvedValue({ data: { owner_initiated: false }, error: null }) }) }
             : { eq: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ data: [opts.trigger], error: null }) }) },
         ),
-        update: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ data: null, error: null }) }),
+        update: claimableUpdate(),
         delete: vi.fn().mockReturnValue({ eq: deleteEq }),
       }
     }
@@ -82,6 +82,22 @@ function tables(opts: { trigger: ReturnType<typeof managed>; graph: Array<{ id: 
     }
   }) as never)
   return { deletes }
+}
+
+/**
+ * A `workflow_triggers` update as the cron issues it: the tick claim
+ * (`.eq("id").eq|is("last_triggered_at").select("id")`, answered as won) and
+ * the run count (`.eq("id")`, awaited directly).
+ */
+function claimableUpdate() {
+  return vi.fn(() => {
+    const chain: Record<string, unknown> = {}
+    chain.eq = vi.fn(() => chain)
+    chain.is = vi.fn(() => chain)
+    chain.select = vi.fn(async () => ({ data: [{ id: "trig-1" }], error: null }))
+    chain.then = (resolve: (v: unknown) => unknown) => resolve({ data: null, error: null })
+    return chain
+  })
 }
 
 beforeEach(() => vi.clearAllMocks())
