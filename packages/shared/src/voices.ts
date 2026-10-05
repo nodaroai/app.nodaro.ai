@@ -24,19 +24,23 @@ export interface Voice {
 export interface SharedVoice extends Voice {
   /**
    * The best of our TTS providers whose underlying ElevenLabs model the
-   * voice lists in `verified_languages` (v3 preferred when verified — it's
-   * the fully-multilingual default and renders any voice unmodified —
-   * else the cheapest v2 model: turbo preferred, else multilingual).
+   * voice lists in `verified_languages` (v4 preferred when verified, then v3,
+   * which renders any voice unmodified, then the cheapest v2 model: turbo
+   * preferred, else multilingual). Only the base model id `eleven_v4` counts
+   * toward v4; its `eleven_v4_…` variants do not. Models the deployment does
+   * not offer are never recommended.
    * Clients without a provider picker should send it as the `provider` on
    * text-to-speech so generation uses a model the voice is actually verified
    * for — rendering a voice on an unverified model is what makes output drift
-   * audibly from its preview. Absent when the entry has no model metadata.
+   * audibly from its preview. Absent when the entry has no model metadata, or
+   * when none of the models it is verified for is offered by the deployment.
    */
   recommendedProvider?: TtsProvider
   /**
-   * Every TTS provider the voice is verified on (subset of `elevenlabs-v3` /
-   * `elevenlabs-turbo` / `elevenlabs-multilingual`, v3 first when present,
-   * then turbo). Clients WITH a provider picker should only snap the
+   * Every TTS provider the voice is verified on and the deployment offers
+   * (subset of `elevenlabs-v4` / `elevenlabs-v3` / `elevenlabs-turbo` /
+   * `elevenlabs-multilingual`, v4 first when present, then v3, turbo,
+   * multilingual); absent whenever `recommendedProvider` is. Clients WITH a provider picker should only snap the
    * provider when the current choice is NOT in this set — most voices verify
    * more than one, and an explicit user choice within the set must win.
    */

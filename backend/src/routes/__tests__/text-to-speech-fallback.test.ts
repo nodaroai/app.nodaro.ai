@@ -87,18 +87,24 @@ describe("deriveVerifiedTtsProviders", () => {
     expect(deriveVerifiedTtsProviders(["eleven_multilingual_v2"])).toEqual(["elevenlabs-multilingual"])
   })
 
-  it("never reads a v4 model id as a v2 one — eleven_v4_turbo is not Turbo v2.5", () => {
-    // The Voice Library lists the v4 family beside the v2 ids. A voice verified
-    // ONLY for the v4 models is verified for none of ours until v4 is a provider.
-    // (`_hq`, `_exp` and `_turbo_exp` are stand-ins for any `eleven_v4_…` variant, not observed ids.)
+  it("v4 is verified only by the base model id, never by a v4 variant", () => {
+    expect(deriveVerifiedTtsProviders(["eleven_v4"])).toEqual(["elevenlabs-v4"])
     expect(deriveVerifiedTtsProviders(["eleven_v4_turbo"])).toEqual([])
-    expect(deriveVerifiedTtsProviders(["eleven_v4", "eleven_v4_hq", "eleven_v4_exp", "eleven_v4_turbo_exp"])).toEqual([])
+    expect(deriveVerifiedTtsProviders(["eleven_v4_other"])).toEqual([])
+    // (`_hq`, `_exp` and `_turbo_exp` are stand-ins for any `eleven_v4_…` variant, not observed ids.)
+    // A variant is neither v4 nor a v2 model: `eleven_v4_turbo` is not Turbo v2.5.
+    expect(deriveVerifiedTtsProviders(["eleven_v4_hq", "eleven_v4_exp", "eleven_v4_turbo_exp"])).toEqual([])
     // The family is `eleven_v4` and `eleven_v4_…`; an id that merely starts with those characters is not a v4
     // id and is judged by the old rules.
     expect(deriveVerifiedTtsProviders(["eleven_v40_turbo"])).toEqual(["elevenlabs-turbo"])
-    // …and a voice verified for both families keeps exactly the v2-era providers it had.
+  })
+
+  it("puts v4 first, then v3, turbo and multilingual, for a voice verified on all of them", () => {
+    expect(deriveVerifiedTtsProviders(["eleven_multilingual_v2", "eleven_turbo_v2_5", "eleven_v3", "eleven_v4", "eleven_v4_turbo"]))
+      .toEqual(["elevenlabs-v4", "elevenlabs-v3", "elevenlabs-turbo", "elevenlabs-multilingual"])
+    // A voice verified for both families keeps every v2-era provider it had, behind v4.
     expect(deriveVerifiedTtsProviders(["eleven_v4", "eleven_v4_turbo", "eleven_multilingual_v2", "eleven_turbo_v2_5"]))
-      .toEqual(["elevenlabs-turbo", "elevenlabs-multilingual"])
+      .toEqual(["elevenlabs-v4", "elevenlabs-turbo", "elevenlabs-multilingual"])
   })
 })
 

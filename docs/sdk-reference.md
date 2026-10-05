@@ -3533,16 +3533,24 @@ Each returned voice may carry model-verification hints derived from the
 library's `verified_languages` metadata:
 
 - `recommendedProvider` — the best TTS provider the voice is verified on
-  (`elevenlabs-v3` preferred when the voice is verified for it — v3 is the
-  fully-multilingual default and renders any voice unmodified — else the
-  cheapest v2 model: `elevenlabs-turbo` preferred, else
-  `elevenlabs-multilingual`). Apps without a provider picker should send it
+  (`elevenlabs-v4` preferred when the voice is verified for it, then
+  `elevenlabs-v3`, which renders any voice unmodified, then the cheapest v2
+  model: `elevenlabs-turbo` preferred, else `elevenlabs-multilingual`). Only
+  the base model id `eleven_v4` counts toward v4; a voice verified only for an
+  `eleven_v4_…` variant (such as `eleven_v4_turbo`) is not verified for
+  `elevenlabs-v4`. Apps without a provider picker should send it
   as the `provider` when generating speech with this voice, so the voice
   renders on a model it's verified for (that's what keeps generation
   sounding like the library preview).
-- `verifiedProviders` — every provider the voice is verified on (v3 first
-  when present, then turbo). Apps WITH a provider picker should only
+- `verifiedProviders` — every provider the voice is verified on, in the
+  order v4 → v3 → turbo → multilingual. Apps WITH a provider picker should only
   override the user's choice when it is **not** in this set.
+
+Both hints only name models the deployment offers. On a deployment that does
+not offer `elevenlabs-v4` (a curated model list, or a model an admin has
+withheld), a voice verified for v4 and v3 recommends `elevenlabs-v3`. A voice
+verified only for models the deployment does not offer carries neither field,
+the same as a voice with no model metadata: keep the user's current provider.
 
 ```ts
 const { voices, hasMore } = await client.voices.searchLibrary({ search: "deep", language: "en" })

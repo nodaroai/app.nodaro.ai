@@ -315,3 +315,88 @@ describe("GET /v1/voices/library", () => {
     expect(res.json()).toEqual({ voices: [], hasMore: false })
   })
 })
+
+// ═══════════════════════════════════════════════════════════════════════════
+// GET /v1/voices/library — the recommendation never names a denied model
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe("GET /v1/voices/library — model availability", () => {
+  type LibVoice = { voice_id: string; recommendedProvider?: string; verifiedProviders?: string[] }
+
+  /** One upstream page with a voice per verified-model list. */
+  function libraryPage(...modelLists: string[][]) {
+    return jsonResponse({
+      voices: modelLists.map((ids, i) => ({
+        voice_id: `lib-${i}`,
+        name: `Voice ${i}`,
+        verified_languages: ids.map((model_id) => ({ model_id })),
+      })),
+      has_more: false,
+    })
+  }
+
+  async function fetchLibrary(url = "/v1/voices/library"): Promise<LibVoice[]> {
+    const res = await app.inject({ method: "GET", url })
+    expect(res.statusCode).toBe(200)
+    return (res.json() as { voices: LibVoice[] }).voices
+  }
+
+  afterEach(async () => {
+    delete process.env.NODARO_SURFACE_PROFILE
+    cfgState.business = false
+    const { __resetAvailabilityOverridesForTests } = await import("@/lib/availability-override.js")
+    __resetAvailabilityOverridesForTests()
+  })
+
+  it("a deployment that denies nothing recommends v4 first", async () => {
+    fetchMock.mockResolvedValueOnce(libraryPage(["eleven_v4", "eleven_v3", "eleven_turbo_v2_5"]))
+    const [voice] = await fetchLibrary()
+    expect(voice.recommendedProvider).toBe("elevenlabs-v4")
+    expect(voice.verifiedProviders).toEqual(["elevenlabs-v4", "elevenlabs-v3", "elevenlabs-turbo"])
+  })
+
+  it("a deployment that denies v4 recommends v3, and the rest keep their order", async () => {
+    cfgState.business = true
+    process.env.NODARO_SURFACE_PROFILE = JSON.stringify({ models: { deny: ["elevenlabs-v4"] } })
+    fetchMock.mockResolvedValueOnce(libraryPage(["eleven_v4", "eleven_v3", "eleven_turbo_v2_5"]))
+    const [voice] = await fetchLibrary()
+    expect(voice.recommendedProvider).toBe("elevenlabs-v3")
+    expect(voice.verifiedProviders).toEqual(["elevenlabs-v3", "elevenlabs-turbo"])
+  })
+
+  it("a models allow-list written before v4 existed denies v4 by omission", async () => {
+    cfgState.business = true
+    process.env.NODARO_SURFACE_PROFILE = JSON.stringify({
+      models: { allow: ["elevenlabs-v3", "elevenlabs-turbo", "elevenlabs-multilingual"] },
+    })
+    fetchMock.mockResolvedValueOnce(libraryPage(["eleven_v4", "eleven_v3"]))
+    const [voice] = await fetchLibrary()
+    expect(voice.recommendedProvider).toBe("elevenlabs-v3")
+    expect(voice.verifiedProviders).toEqual(["elevenlabs-v3"])
+  })
+
+  it("a voice verified only for denied models carries no recommendation — the same shape as a voice verified for none", async () => {
+    cfgState.business = true
+    process.env.NODARO_SURFACE_PROFILE = JSON.stringify({ models: { deny: ["elevenlabs-v4"] } })
+    fetchMock.mockResolvedValueOnce(libraryPage(["eleven_v4"], ["eleven_english_sts_v2"]))
+    const [onlyDenied, verifiedForNone] = await fetchLibrary()
+    expect(onlyDenied).not.toHaveProperty("recommendedProvider")
+    expect(onlyDenied).not.toHaveProperty("verifiedProviders")
+    expect(Object.keys(onlyDenied).sort()).toEqual(Object.keys(verifiedForNone).sort())
+  })
+
+  it("an admin availability change reaches a page already in the 5-minute cache", async () => {
+    fetchMock.mockResolvedValueOnce(libraryPage(["eleven_v4", "eleven_v3"]))
+    const [before] = await fetchLibrary("/v1/voices/library?search=cached")
+    expect(before.recommendedProvider).toBe("elevenlabs-v4")
+
+    // An admin saves an override that withholds v4 (same module generation as the route).
+    const { __resetAvailabilityOverridesForTests } = await import("@/lib/availability-override.js")
+    __resetAvailabilityOverridesForTests({ models: new Set(["elevenlabs-v3", "elevenlabs-turbo"]) })
+
+    const [after] = await fetchLibrary("/v1/voices/library?search=cached")
+    expect(fetchMock).toHaveBeenCalledTimes(1) // served from the cache
+    expect(after.recommendedProvider).toBe("elevenlabs-v3")
+    expect(after.verifiedProviders).toEqual(["elevenlabs-v3"])
+  })
+})

@@ -33,7 +33,7 @@ import { formatDate } from "@/lib/i18n/format"
 /** Library-voice model verification, threaded so the TTS config can snap to
  *  a provider the voice IS verified for (preview-fidelity guard). Uses the
  *  shared `TtsProvider` union (single source) rather than a hand-narrowed
- *  copy — the voice may be verified on v3 in addition to the v2 models. */
+ *  copy — the voice may be verified on v4 and v3 in addition to the v2 models. */
 export interface VoiceProviderMeta {
   readonly recommendedProvider?: TtsProvider
   readonly verifiedProviders?: TtsProvider[]
