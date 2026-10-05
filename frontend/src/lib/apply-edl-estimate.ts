@@ -86,20 +86,42 @@ function edlMinutes(value: unknown): number | undefined {
 /** Nodes whose output EDL is their input EDL re-cut by camera, never longer
  *  or shorter: the estimate reads through them to the edit that feeds them.
  *  Each holds `{ edl, transcript }` on `generatedJson`. */
-const EDL_LENGTH_PRESERVING_TYPES: ReadonlySet<string> = new Set(["camera-switch"])
+export const EDL_LENGTH_PRESERVING_TYPES: ReadonlySet<string> = new Set(["camera-switch"])
 
-/** The plan a producer holds on the canvas (`generatedJson` — the field the
- *  `json`/`edl` output handles read). A clips plan is a bare `Edl[]`. */
-function persistedPlanMinutes(producer: GraphNode): number | undefined {
+/**
+ * The EDL a producer holds on the canvas — what its `edl` output would deliver
+ * now: `generatedJson`, the field the `json`/`edl` output handles read. A clips
+ * plan is a bare `Edl[]`. A length-preserving producer holds `{ edl, transcript }`
+ * per run and, run once per clip, the whole batch on `__listResults`
+ * (`generatedJson` is then only whichever clip finished last). The estimate's
+ * reader; the Apply EDL panel's badge reads what the engines read instead
+ * (`apply-edl-render-input.ts`).
+ */
+export function persistedEdlPlan(producer: GraphNode): unknown {
   const data = dataOf(producer)
   const held = data.generatedJson
-  const unwrap = (v: unknown) => (v && typeof v === "object" && !Array.isArray(v) && "edl" in v ? (v as { edl: unknown }).edl : v)
-  // Run once per clip, it holds the batch — one switched EDL per clip — on
-  // `__listResults`; `generatedJson` is only whichever clip finished last.
+  if (!EDL_LENGTH_PRESERVING_TYPES.has(producer.type ?? "")) return held
   const batch = Array.isArray(data.__listResults) && data.__listResults.length > 0 ? (data.__listResults as unknown[]) : undefined
-  const plan = EDL_LENGTH_PRESERVING_TYPES.has(producer.type ?? "")
-    ? (batch ?? (Array.isArray(held) ? held.map(unwrap) : unwrap(held)))
-    : held
+  return batch ?? (Array.isArray(held) ? unwrapAll(held) : unwrapSwitched(held))
+}
+
+const unwrapSwitched = (v: unknown) => (v && typeof v === "object" && !Array.isArray(v) && "edl" in v ? (v as { edl: unknown }).edl : v)
+
+/** The same held array always unwraps to the same array, so a store selector
+ *  built on `persistedEdlPlan` returns a stable value while nothing changed. */
+const unwrappedCache = new WeakMap<readonly unknown[], readonly unknown[]>()
+function unwrapAll(held: readonly unknown[]): readonly unknown[] {
+  let out = unwrappedCache.get(held)
+  if (!out) {
+    out = held.map(unwrapSwitched)
+    unwrappedCache.set(held, out)
+  }
+  return out
+}
+
+/** The plan a producer holds on the canvas, in output minutes. */
+function persistedPlanMinutes(producer: GraphNode): number | undefined {
+  const plan = persistedEdlPlan(producer)
   if (Array.isArray(plan)) {
     // Each clip renders in its own iteration; price the LONGEST so no single
     // iteration's reserve is under-quoted (the fan-out multiplier counts them).

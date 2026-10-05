@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { resolveApplyEdlEstimateMinutes } from "../apply-edl-estimate"
+import { persistedEdlPlan, resolveApplyEdlEstimateMinutes } from "../apply-edl-estimate"
 
 const node = (id: string, type: string, data: Record<string, unknown> = {}) => ({ id, type, data })
 const edge = (source: string, target: string, targetHandle: string | null) => ({ source, target, targetHandle })
@@ -213,3 +213,27 @@ describe("Camera Switch run once per clip (B5): the batch prices, not the last c
     expect(resolveApplyEdlEstimateMinutes(ae, [master, plan, cs, ae], edges, NONE)).toBe(10)
   })
 })
+
+// The Apply EDL panel badge reads a producer's plan through the same reader the
+// estimate prices (`persistedEdlPlan`), from inside a store selector.
+describe("persistedEdlPlan, the one reader of a held plan", () => {
+  const planA = edlOf(seg(0, 60_000))
+  const planB = edlOf(seg(0, 120_000))
+
+  it("the same held array always reads as the same array (a stable store selector)", () => {
+    const held = [{ edl: planA, transcript: {} }, { edl: planB, transcript: {} }]
+    const cs = node("cs", "camera-switch", { generatedJson: held })
+    const first = persistedEdlPlan(cs)
+    expect(first).toEqual([planA, planB])
+    expect(persistedEdlPlan(cs)).toBe(first)
+  })
+
+  it("Camera Switch: its switched EDL, or the whole per-clip batch; an Edit Plan: its plan as held", () => {
+    expect(persistedEdlPlan(node("cs", "camera-switch", { generatedJson: { edl: planA, transcript: {} } }))).toBe(planA)
+    const batch = [JSON.stringify(planA), "", JSON.stringify(planB)]
+    expect(persistedEdlPlan(node("cs", "camera-switch", { generatedJson: { edl: planB, transcript: {} }, __listResults: batch }))).toBe(batch)
+    const clips = [planA, planB]
+    expect(persistedEdlPlan(node("p", "edit-plan", { generatedJson: clips }))).toBe(clips)
+  })
+})
+

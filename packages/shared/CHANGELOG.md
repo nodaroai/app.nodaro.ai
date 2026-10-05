@@ -1,5 +1,18 @@
 # @nodaro/shared
 
+## 3.18.0
+
+### Minor Changes
+
+- 8159691: Text to Audio (`elevenlabs-sfx`) is priced per second of audio requested. Export `textToAudioCreditId(provider, duration)` — the price row a request is charged from (`elevenlabs-sfx:<n>s`, whole seconds rounded up, 1–30; no duration → `:5s`) — with `textToAudioBilledSeconds`, `TEXT_TO_AUDIO_SFX_CREDIT_IDS` and `TEXT_TO_AUDIO_PRICING`. The `elevenlabs-sfx` model-catalog entry now lists per-second pricing rows.
+
+## 3.17.1
+
+### Patch Changes
+
+- 5b63574: A LinkedIn account can be a person's profile (`linkedin.com/in/…`) as well as a company page: the `SocialSearchMode` and `SocialSearchRequest.query` docs say so, and `nodaro competitors add --linkedin` describes the field as a company page or person's profile. No types change.
+- 4a6fd02: `EXECUTION_DATA_KEYS` gains `resultsRunEndedAt`: when the run whose results a node shows ended that node, recorded beside `resultsRunId`. It is bookkeeping, so presets, templates and run-only patches never treat it as configuration.
+
 ## 3.17.0
 
 ### Minor Changes

@@ -1,7 +1,7 @@
 ---
 node_type: text-to-audio
-generated_at: 2026-09-27T12:51:23.432Z
-generated_from: c607aa02c
+generated_at: 2026-10-05T10:30:53.927Z
+generated_from: b7bcf7726
 ---
 
 # Text to Audio
@@ -9,7 +9,7 @@ generated_from: c607aa02c
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `text-to-audio`
 **Category:** ai
-**Credit cost:** `30` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `1-30` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
 **Inputs (target handles):** `prompt`, `audio-style`
 **Outputs (source handles):** `audio`
 

@@ -24,6 +24,7 @@
     "@fingerprintjs/fingerprintjs": "5.2.0",
     "@nodaro/picker-ui": "*",
     "@nodaro/prompts": "*",
+    "@nodaro/render-rules": "*",
     "@nodaro/sdk": "*",
     "@nodaro/shared": "*",
     "@radix-ui/react-accordion": "^1.2.12",

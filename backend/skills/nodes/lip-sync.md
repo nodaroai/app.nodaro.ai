@@ -1,7 +1,7 @@
 ---
 node_type: lip-sync
-generated_at: 2026-09-27T12:51:24.588Z
-generated_from: c607aa02c
+generated_at: 2026-10-05T10:05:29.833Z
+generated_from: c16e60f70
 ---
 
 # Lip Sync
@@ -107,6 +107,7 @@ Make a face talk to an audio track (`lip_sync` over MCP): lip-sync, talking head
 - `video_asset_id`
 - `audio_url`
 - `audio_asset_id`
+- `audio_duration_sec`
 - `prompt`
 - `model`
 - `resolution`

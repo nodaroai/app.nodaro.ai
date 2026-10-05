@@ -8,7 +8,7 @@ import { assembleVideoOverlayRequest, formatVideoOverlayError, validateVideoOver
 import { effectiveContentModel, contentRecipeCreditId, contentIdeasCreditId, clampContentIdeasCount, CONTENT_RECIPE_SOURCE_MAX, CONTENT_IDEAS_MAX_RECIPE_INPUTS, CONTENT_IDEAS_BRAND_MAX, CONTENT_IDEAS_LANGUAGE_MAX } from "@nodaro/shared"
 import { TELEGRAM_ACCOUNT_SEND_NODE_TYPE, telegramSendAsOf, telegramSendDestinationOf } from "@nodaro/shared"
 import { DEFAULT_TEXT_TO_AUDIO_PROVIDER } from "@nodaro/shared"
-import { LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec, LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec } from "@nodaro/shared"
+import { LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec, LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec, textToAudioCreditId } from "@nodaro/shared"
 import { applyEdlCreditId } from "@nodaro/shared"
 import type { Scene3DReference } from "@nodaro/shared"
 import { scene3DInputAssetsForEngine, type Scene3DInputAsset } from "@nodaro/shared"
@@ -5166,7 +5166,9 @@ export function buildPayload(
       const userPrompt = promptFor("text-to-audio")
       const composed = truncateForField(audioStyle.text, userPrompt, 2000)
       const finalPrompt = appendField(userPrompt, composed)
-      return simpleResult("text-to-audio", DEFAULT_TEXT_TO_AUDIO_PROVIDER, {
+      // Reserved on the per-second row for the length asked for (no duration
+      // = 5 s) — the same row POST /v1/text-to-audio charges for this body.
+      return simpleResult("text-to-audio", textToAudioCreditId(t2aProvider, data.duration), {
         jobId,
         prompt: finalPrompt,
         provider: t2aProvider,

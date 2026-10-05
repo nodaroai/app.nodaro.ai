@@ -3,8 +3,8 @@
  * EDL whose output exceeds the product's 3-hour cap with a clear 400, so no
  * budget can exceed ~3 h of render time."
  *
- * One constant (`APPLY_EDL_MAX_OUTPUT_MS`, in the pure budget leaf) is read by
- * both halves: ingress refuses a longer edit (`validateEffectiveEdl` — the
+ * One constant (`APPLY_EDL_MAX_OUTPUT_MS`, in `@nodaro/render-rules`, which the
+ * pure budget leaf re-exports) is read by both halves: ingress refuses a longer edit (`validateEffectiveEdl` — the
  * route, the DAG payload-builder and the MCP verb all call it), and the job's
  * declared budget refuses to size one (`applyEdlJobBudgetMs`), so a payload
  * that bypassed ingress can never be budgeted past a 180-minute output.

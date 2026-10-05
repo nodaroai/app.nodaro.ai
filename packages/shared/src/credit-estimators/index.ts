@@ -17,6 +17,13 @@ export {
 export { VIDEO_SFX_PRICING, videoSfxCreditId } from "./video-sfx.js"
 
 export {
+  TEXT_TO_AUDIO_PRICING,
+  TEXT_TO_AUDIO_SFX_CREDIT_IDS,
+  textToAudioBilledSeconds,
+  textToAudioCreditId,
+} from "./text-to-audio.js"
+
+export {
   LTX_EXTEND_PER_SECOND_CREDIT_ID,
   LTX_EXTEND_DURATION,
   ltxExtendDurationSec,

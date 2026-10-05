@@ -112,6 +112,26 @@ describe("directElevenLabsTTS", () => {
     expect(urls.some((u) => u.includes("21m00Tcm4TlvDq8ikWAM"))).toBe(true)
   })
 
+  it("never falls back for a library or custom voice, even on an MCP request; a premade-typed guess still does", async () => {
+    const urls: string[] = []
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      const u = String(url)
+      urls.push(u)
+      if (u.includes("Ttt333Uuu444Vvv555Ww")) {
+        return new Response(JSON.stringify({ detail: { status: "voice_not_found" } }), { status: 404 })
+      }
+      return audioResponse()
+    }))
+    for (const voiceType of ["library", "custom"] as const) {
+      await expect(
+        directElevenLabsTTS("hi", "Ttt333Uuu444Vvv555Ww", undefined, { allowDefaultVoiceFallback: true, voiceType }),
+      ).rejects.toThrow(/was not found on ElevenLabs/)
+    }
+    expect(urls.some((u) => u.includes("21m00Tcm4TlvDq8ikWAM"))).toBe(false)
+    await directElevenLabsTTS("hi", "Ttt333Uuu444Vvv555Ww", undefined, { allowDefaultVoiceFallback: true, voiceType: "premade" })
+    expect(urls.some((u) => u.includes("21m00Tcm4TlvDq8ikWAM"))).toBe(true)
+  })
+
   it("fails loudly on voice_not_found for user-picked voices (no fallback flag)", async () => {
     vi.stubGlobal("fetch", vi.fn(async () =>
       new Response(JSON.stringify({ detail: { status: "voice_not_found" } }), { status: 404 }),

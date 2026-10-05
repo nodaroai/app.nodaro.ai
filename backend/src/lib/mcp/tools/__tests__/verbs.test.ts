@@ -10,14 +10,23 @@ import {
   buildVideoAnalysisCreditId,
   resolveVideoAnalysisModel,
   getMaxTtsChars,
+  buildLipSyncCreditId,
 } from "@nodaro/shared"
 import { newSession } from "../../session.js"
 import { _resetRegistry } from "../../tasks.js"
 import type { Scope } from "../../../scopes.js"
 import { buildServer, callTool, listTools, executeSession, stubRoute } from "./_helpers.js"
 
+const audio = vi.hoisted(() => ({ measured: vi.fn() }))
+vi.mock("../_audio-length.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../_audio-length.js")>()),
+  measuredAudioSeconds: audio.measured,
+}))
+
 beforeEach(() => {
   _resetRegistry()
+  // No test reaches the network: an unmeasured file reads as "could not be measured".
+  audio.measured.mockReset().mockResolvedValue(undefined)
 })
 
 /**
@@ -451,6 +460,44 @@ describe("lip_sync verb", () => {
       audio_url: "https://a/v.mp3",
     })
     expect(received.body?.provider).toBe("kling-avatar")
+  })
+
+  it("forwards audio_duration_sec as audioDurationSec and measures nothing", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/lip-sync", { jobId: "j" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    await callTool(server, "lip_sync", { video_url: "https://a/clip.mp4", audio_url: "https://a/v.mp3", model: "heygen-lipsync-precision", audio_duration_sec: 8 })
+    expect(received.body?.audioDurationSec).toBe(8)
+    expect(audio.measured).not.toHaveBeenCalled()
+  })
+
+  it("a per-second model with no length measures the audio first, so a 10 s file reserves the 15 s bucket", async () => {
+    audio.measured.mockResolvedValue(10.1)
+    const { fastify, received } = stubRoute("POST", "/v1/lip-sync", { jobId: "j" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    await callTool(server, "lip_sync", { video_url: "https://a/clip.mp4", audio_url: "https://a/v.mp3", model: "heygen-lipsync-precision" })
+    expect(audio.measured).toHaveBeenCalledWith("https://a/v.mp3")
+    expect(received.body?.audioDurationSec).toBe(10.1)
+    expect(buildLipSyncCreditId("heygen-lipsync-precision", received.body?.audioDurationSec as number)).toBe("heygen-lipsync-precision:15s")
+  })
+
+  it("a failed measurement sends no length (the route keeps today's bucket)", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/lip-sync", { jobId: "j" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    await callTool(server, "lip_sync", { video_url: "https://a/clip.mp4", audio_url: "https://a/v.mp3", model: "heygen-lipsync-precision" })
+    expect(audio.measured).toHaveBeenCalled()
+    expect(received.body).not.toHaveProperty("audioDurationSec")
+  })
+
+  it("a model that is not billed by the second is never measured", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/lip-sync", { jobId: "j" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    await callTool(server, "lip_sync", { image_url: "https://a/face.jpg", audio_url: "https://a/v.mp3", model: "infinitalk" })
+    expect(audio.measured).not.toHaveBeenCalled()
+    expect(received.body).not.toHaveProperty("audioDurationSec")
   })
 
   it("returns isError without face source", async () => {

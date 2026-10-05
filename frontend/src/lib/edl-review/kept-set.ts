@@ -11,16 +11,11 @@
  * K holds no history: a span restored and then cut again is simply cut, and
  * shows the plan's reason again. Every operation returns a new canonical set
  * (intervals.ts) and is idempotent — applying it twice is applying it once.
+ * Cuts live here; restores live in restore.ts, because a restore the render
+ * rule would refuse is locked (decided 2026-10-05) and a cut never is.
  */
 import type { Edl, EdlDropped } from "@nodaro/shared"
-import {
-  spanIntersect,
-  subtractIntervals,
-  toIntervalSet,
-  unionIntervals,
-  type Interval,
-  type IntervalSet,
-} from "./intervals"
+import { spanIntersect, subtractIntervals, toIntervalSet, type Interval, type IntervalSet } from "./intervals"
 
 /** The kept intervals, on the master clock, in canonical form. */
 export type KeptSet = IntervalSet
@@ -38,23 +33,6 @@ export interface TimedUnit {
  *  saved edit's K reopens one. A segment with no length keeps nothing. */
 export function keptSetOf(edl: Edl): KeptSet {
   return toIntervalSet(edl.segments)
-}
-
-/** Keep a dropped span's time again: one of the plan's dropped spans, or a
- *  piece of the edit's. Everything inside it comes back, including a shorter
- *  span of another reason nested in it (a filler inside a tangent). */
-export function restoreSpan(kept: KeptSet, span: Interval): KeptSet {
-  return unionIntervals(kept, toIntervalSet([span]))
-}
-
-/** Keep every span dropped for `reason`. For the plan's reasons these are its
- *  spans of that reason; for "manual" they are the reviewer's own cuts (the
- *  plan's kept time K no longer keeps), so restoring the reason undoes them.
- *  A reason nothing was dropped for changes nothing. */
-export function restoreReason(kept: KeptSet, base: Edl, reason: string): KeptSet {
-  const spans: Interval[] = (base.dropped ?? []).filter((d) => d.reason === reason)
-  if (reason === MANUAL_REASON) spans.push(...keptSetOf(base))
-  return spans.length === 0 ? kept : unionIntervals(kept, toIntervalSet(spans))
 }
 
 /**

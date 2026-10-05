@@ -92,6 +92,13 @@ export interface DirectTTSOptions {
    * "the voice sounds wrong" bugs hide.
    */
   allowDefaultVoiceFallback?: boolean
+  /**
+   * What the caller said the voice is. A `library` or `custom` voice is a
+   * deliberate pick, never a guess, so it is never replaced by the default
+   * voice: a voice removed from the Voice Library fails loudly even on an
+   * MCP request. Absent or `premade` keeps the fallback above.
+   */
+  voiceType?: "premade" | "custom" | "library"
 }
 
 // ---------------------------------------------------------------------------
@@ -270,7 +277,8 @@ export async function directElevenLabsTTS(
   ) {
     const errPreview = await response.clone().text().catch(() => "")
     if (errPreview.includes("voice_not_found")) {
-      if (options?.allowDefaultVoiceFallback) {
+      const pickedOnPurpose = options?.voiceType === "library" || options?.voiceType === "custom"
+      if (options?.allowDefaultVoiceFallback && !pickedOnPurpose) {
         // B4c: the default fallback is policy-owned — the first allowed-gender
         // premade voice (Rachel when unrestricted). Resolve its name → id for
         // the direct API. Byte-identical to the old Rachel fallback when

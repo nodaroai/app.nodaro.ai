@@ -190,15 +190,68 @@ describe("POST /v1/text-to-audio", () => {
         provider: "elevenlabs-sfx",
       })
     )
+    // No duration → priced as 5 seconds, on the default engine's row.
     expect(reserveCreditsForJob).toHaveBeenCalledWith(
       expect.anything(),
       expect.anything(),
       "job-1",
-      "elevenlabs-sfx",
+      "elevenlabs-sfx:5s",
     )
-    // The pre-handler price check names the same default.
-    expect(guardResolvers.at(-1)?.({ body: { prompt: "x" } })).toBe("elevenlabs-sfx")
-    expect(guardResolvers.at(-1)?.({ body: { prompt: "x", provider: "elevenlabs-sfx" } })).toBe("elevenlabs-sfx")
+    // The pre-handler price check names the same default row.
+    expect(guardResolvers.at(-1)?.({ body: { prompt: "x" } })).toBe("elevenlabs-sfx:5s")
+    expect(guardResolvers.at(-1)?.({ body: { prompt: "x", provider: "elevenlabs-sfx" } })).toBe("elevenlabs-sfx:5s")
+  })
+
+  describe("priced by length — one row per whole second, rounded up", () => {
+    it.each([
+      [0.5, "elevenlabs-sfx:1s"],
+      [6, "elevenlabs-sfx:6s"],
+      [10, "elevenlabs-sfx:10s"],
+      [22, "elevenlabs-sfx:22s"],
+      [22.3, "elevenlabs-sfx:23s"],
+      [30, "elevenlabs-sfx:30s"],
+    ])("duration %s s → the guard prices and the job reserves %s", async (duration, creditId) => {
+      mockJobInsert({ data: { id: "job-1" }, error: null })
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/text-to-audio",
+        payload: { prompt: "door slam", provider: "elevenlabs-sfx", duration, userId: VALID_UUID },
+      })
+
+      expect(res.statusCode).toBe(200)
+      expect(guardResolvers.at(-1)?.({ body: { prompt: "door slam", duration } })).toBe(creditId)
+      // Reservation = charge: the worker commits the reservation verbatim
+      // (it reports no metered cost), so the reserved row IS the price.
+      expect(reserveCreditsForJob).toHaveBeenCalledWith(expect.anything(), expect.anything(), "job-1", creditId)
+      // The worker still runs the engine itself, with the length as asked.
+      expect(videoQueue.add).toHaveBeenCalledWith(
+        "text-to-audio",
+        expect.objectContaining({ provider: "elevenlabs-sfx", duration }),
+      )
+    })
+
+    it("the guard and the reservation name the same row for the same body", async () => {
+      mockJobInsert({ data: { id: "job-1" }, error: null })
+      const payload = { prompt: "rain", duration: 7.2, userId: VALID_UUID }
+
+      await app.inject({ method: "POST", url: "/v1/text-to-audio", payload })
+
+      const guarded = guardResolvers.at(-1)?.({ body: payload })
+      expect(guarded).toBe("elevenlabs-sfx:8s")
+      expect(reserveCreditsForJob).toHaveBeenCalledWith(expect.anything(), expect.anything(), "job-1", guarded)
+    })
+
+    it("a length past 30 s is refused before anything is reserved", async () => {
+      mockJobInsert({ data: { id: "job-1" }, error: null })
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/text-to-audio",
+        payload: { prompt: "rain", duration: 31, userId: VALID_UUID },
+      })
+      expect(res.statusCode).toBe(400)
+      expect(reserveCreditsForJob).not.toHaveBeenCalled()
+    })
   })
 
   it("passes optional params (duration, loop, promptInfluence) through to input_data and queue", async () => {

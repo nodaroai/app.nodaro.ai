@@ -243,4 +243,21 @@
 	# assets above, which keep their 1yr immutable header.
 	@html path_regexp html ^([^.]*|/.*\.html)$
 	header @html Cache-Control "no-cache"
+
+	# Which SPA routes search engines may index: an allow-list, so a route
+	# added later stays out of search unless it is listed here on purpose.
+	# Indexable: "/", /login and /signup (a search for the brand finds the
+	# app), the public gallery, published apps (/app/*: crawlers get the OG
+	# page, see @social_bot) and tutorials. Everything else the SPA answers
+	# carries X-Robots-Tag: noindex: the dashboard, settings, shared
+	# presentations (/present/<token>), embeds, auth and OAuth screens, the
+	# in-app pricing and MCP pages (nodaro.ai has the public ones) and unknown
+	# paths. robots.txt still allows these paths, because a crawler has to
+	# fetch a page to read its noindex. Backend and proxied paths are left alone.
+	@spa_noindex {
+		path_regexp spa_route ^([^.]*|/.*\.html)$
+		not path / /login /signup /gallery /app/* /tutorials/*
+		not path /v1/* /.well-known/* /storage/* /supabase/* /og/*
+	}
+	header @spa_noindex X-Robots-Tag "noindex"
 }

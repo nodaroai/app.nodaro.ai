@@ -38,6 +38,7 @@ import { MODEL_CATALOG, MODEL_RECOMMENDATIONS } from "@nodaro/shared"
 import { captureMcpToolSchemas, type CapturedSchema } from "./lib/gen-skills/capture-mcp-schemas.js"
 import { rewriteBlock } from "./lib/gen-skills/marker-blocks.js"
 import { renderNodeHandlesModule } from "./lib/gen-skills/render-node-handles.js"
+import { renderExposableSlidersModule } from "./lib/gen-skills/render-exposable-sliders.js"
 import { captureToolSurface } from "./lib/gen-skills/tool-surface.js"
 import {
   renderScopesBlock,
@@ -76,6 +77,9 @@ const MCP_TOOL_PARAMETERS_DOC = join(REPO_ROOT, "docs", "mcp", "tool-parameters.
 // Backend-internal handle map (Copilot edge validation). Generated here so the
 // backend never hand-copies handle ids from the frontend NODE_DEFINITIONS.
 const NODE_HANDLES_FILE = join(REPO_ROOT, "backend", "src", "lib", "mcp", "generated", "node-handles.ts")
+// Backend-internal slider table (app-input schema: an exposed slider is a
+// number with its range). Same reason: the descriptors live in the frontend.
+const EXPOSABLE_SLIDERS_FILE = join(REPO_ROOT, "backend", "src", "lib", "mcp", "generated", "exposable-sliders.ts")
 
 const CHECK_MODE = process.argv.includes("--check")
 
@@ -286,6 +290,15 @@ async function main(): Promise<void> {
   if (existingHandles !== handlesSource) {
     mkdirSync(dirname(NODE_HANDLES_FILE), { recursive: true })
     writeFileSync(NODE_HANDLES_FILE, handlesSource)
+  }
+
+  // backend/src/lib/mcp/generated/exposable-sliders.ts — slider bounds per node type.
+  console.log("[gen-skills] rendering backend exposable-sliders table")
+  const slidersSource = renderExposableSlidersModule(defs)
+  const existingSliders = existsSync(EXPOSABLE_SLIDERS_FILE) ? readFileSync(EXPOSABLE_SLIDERS_FILE, "utf-8") : null
+  if (existingSliders !== slidersSource) {
+    mkdirSync(dirname(EXPOSABLE_SLIDERS_FILE), { recursive: true })
+    writeFileSync(EXPOSABLE_SLIDERS_FILE, slidersSource)
   }
 
   // workflow-editor.md catalog block.

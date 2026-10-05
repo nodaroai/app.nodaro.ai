@@ -30,8 +30,10 @@
  *
  * Restored time takes the look of a neighbouring segment, so restoring a span
  * dropped as "no-picture" names a camera that did not film it: structurally
- * valid, but not renderable as video. Whether a restore is allowed is the
- * render rule's call, not this model's.
+ * valid, but possibly not renderable (time before a late camera's first
+ * segment reads before that camera starts). buildEdited builds any K; whether
+ * a restore is allowed is the render rule's call, and restore.ts locks the
+ * restores it refuses (decided 2026-10-05).
  */
 import { normalizeEdl, speakerSwitchOverlaps, type Edl, type EdlDropped, type EdlLayout, type EdlSegment } from "@nodaro/shared"
 import { spanMinus, subtractIntervals } from "./intervals"

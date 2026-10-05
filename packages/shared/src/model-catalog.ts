@@ -2700,7 +2700,15 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
     series: "ElevenLabs",
     description: "Generate short sound effects from a text prompt.",
     useCases: ["sfx", "ambient"],
-    pricing: [{ identifier: "elevenlabs-sfx", credits: 3, note: "~5s clip" }],
+    // Priced per whole second asked for (`elevenlabs-sfx:<n>s`, 1–30 s, rounded
+    // up — textToAudioCreditId); representative rows, every second has its own.
+    // First row = the default variant (a request with no duration bills 5 s).
+    pricing: [
+      { identifier: "elevenlabs-sfx:5s", credits: 5, note: "5s — also the price when no duration is set; 1 credit per second, rounded up" },
+      { identifier: "elevenlabs-sfx:1s", credits: 1, note: "1s (min)" },
+      { identifier: "elevenlabs-sfx:10s", credits: 10, note: "10s" },
+      { identifier: "elevenlabs-sfx:30s", credits: 30, note: "30s (max)" },
+    ],
   },
 
   // ── Suno music ──

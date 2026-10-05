@@ -10,7 +10,24 @@
  * but the contract allows (crossfades, layout switches, an uncovered gap, no
  * `dropped` at all), so the model is checked against the contract, not one
  * producer.
+ *
+ * `randomRenderableBase` draws the plans a Tighten render accepts (decided
+ * 2026-10-05). It never adds a layout transition other than a cut, which Apply
+ * EDL's render rule always refuses. A camera that starts after the master clock
+ * (a positive `offsetMs`) is NOT refused as such: the rule refuses only a
+ * segment that reads before its source's offset, so a plan whose late-camera
+ * segments all start at or after that offset renders. The generator draws such
+ * cameras and redraws any plan the rule refuses, so it covers every plan shape
+ * the rule accepts. Restoring time before a late camera's first segment would
+ * read before the camera starts (seeds 92, 106 and 119 of `randomBase`); the
+ * restore lock refuses it (decided 2026-10-05, restore.ts).
+ *
+ * The operations come in two kinds. With a render context, `applyOp` runs the
+ * model's own restores, under the restore lock. Without one it applies the bare
+ * set operation (`keepSpan`, `keepReason`), so the properties of `buildEdited`
+ * hold for any K, including the ones the lock would refuse.
  */
+import { buildEffectiveEdl, validateEffectiveEdl } from "@nodaro/render-rules"
 import {
   normalizeEdl,
   normalizeTranscript,
@@ -18,8 +35,9 @@ import {
   type Edl,
   type Transcript,
 } from "@nodaro/shared"
-import type { Interval } from "../intervals"
-import { cutRange, restoreReason, restoreSpan, type KeptSet } from "../kept-set"
+import { toIntervalSet, unionIntervals, type Interval } from "../intervals"
+import { cutRange, type KeptSet } from "../kept-set"
+import { reasonSpans, restoreReason, restoreSpan, type ReviewRenderContext } from "../restore"
 
 export interface Rng {
   readonly next: () => number
@@ -95,8 +113,14 @@ function removedBlock(rng: Rng, at: number, dropped: RawDropped[]): number {
   return end
 }
 
+/** What a generator may put in a plan beyond Edit Plan's own shape. */
+interface PlanShape {
+  /** A layout switch with an `xfade:*` transition (Apply EDL renders only a cut). */
+  readonly layoutBlends: boolean
+}
+
 /** Transitions into segments 1.., within ffmpeg's bound so the plan stays valid. */
-function addTransitions(rng: Rng, segments: RawSegment[]): void {
+function addTransitions(rng: Rng, segments: RawSegment[], shape: PlanShape): void {
   for (let i = 1; i < segments.length; i++) {
     const dur = (s: RawSegment) => s.outMs - s.inMs
     const bound = Math.floor(0.9 * Math.min(dur(segments[i]), dur(segments[i - 1])))
@@ -105,7 +129,7 @@ function addTransitions(rng: Rng, segments: RawSegment[]): void {
       segments[i] = { ...segments[i], transition: { type: "crossfade", durationMs: rng.int(1, bound) } }
     } else if (roll < 0.2) {
       segments[i] = { ...segments[i], transition: { type: "cut" } }
-    } else if (roll < 0.26 && bound >= 1) {
+    } else if (roll < 0.26 && bound >= 1 && shape.layoutBlends) {
       segments[i] = { ...segments[i], layout: { mode: "single", transition: { type: "xfade:fade", durationMs: rng.int(1, bound) } } }
     } else if (roll < 0.3) {
       segments[i] = { ...segments[i], layout: { mode: "single" } }
@@ -116,6 +140,40 @@ function addTransitions(rng: Rng, segments: RawSegment[]): void {
 /** A valid, reviewable plan. Throws if the generator ever makes an invalid one,
  *  so a generator bug never reads as a model bug. */
 export function randomBase(rng: Rng): Edl {
+  return planOf(rng, { layoutBlends: true })
+}
+
+/** The render settings a Tighten render uses: the Apply EDL node's defaults
+ *  (video output, hard cuts), and its one `sources` wire only swaps in another
+ *  url, so no override is the same render. */
+export const TIGHTEN_RENDER: ReviewRenderContext = { output: "video", crossfadeMs: 0, sources: [] }
+
+/** Apply EDL's render rule on an EDL, as every ingress and the editor's badge
+ *  run it: the effective EDL with the Tighten settings, then the rule. */
+export function renderIssues(edl: Edl): readonly string[] {
+  const effective = buildEffectiveEdl(edl, { crossfadeMs: TIGHTEN_RENDER.crossfadeMs, sourceOverrides: TIGHTEN_RENDER.sources })
+  return validateEffectiveEdl(effective, TIGHTEN_RENDER.output).issues
+}
+
+/** How many draws `randomRenderableBase` makes before it gives up on finding a
+ *  plan the render rule accepts. */
+const RENDERABLE_DRAWS = 200
+
+/**
+ * A valid, reviewable plan that a Tighten render accepts: no layout blends, and
+ * cam-b may start after the master clock. A plan the rule refuses (a
+ * late-camera segment that reads before its offset) is redrawn, so the plans
+ * are every shape the rule accepts.
+ */
+export function randomRenderableBase(rng: Rng): Edl {
+  for (let draw = 0; draw < RENDERABLE_DRAWS; draw++) {
+    const base = planOf(rng, { layoutBlends: false })
+    if (renderIssues(base).length === 0) return base
+  }
+  throw new Error(`no renderable plan in ${RENDERABLE_DRAWS} draws`)
+}
+
+function planOf(rng: Rng, shape: PlanShape): Edl {
   const mic = rng.chance(0.6)
   const sources = [
     { id: "cam-a", url: "https://cdn.test/cam-a.mp4", kind: "video", role: "camera" },
@@ -130,7 +188,7 @@ export function randomBase(rng: Rng): Edl {
   const ctx = { cam: rng.pick(CAMS) as string, mic }
   let t = rng.chance(0.3) ? rng.int(1, 1500) : 0
   for (const kind of kinds) t = kind === "kept" ? keptBlock(rng, t, segments, ctx) : removedBlock(rng, t, dropped)
-  addTransitions(rng, segments)
+  addTransitions(rng, segments, shape)
   const withDropped = !rng.chance(0.08)
   const raw = {
     version: 1,
@@ -203,12 +261,31 @@ export function randomOp(rng: Rng, base: Edl, edited: Edl, transcript: Transcrip
   return { kind: "cutRange", range: { inMs: a, outMs: a + rng.int(0, 3000) } }
 }
 
-export function applyOp(kept: KeptSet, op: Op, base: Edl, transcript: Transcript, offsetMs: number): KeptSet {
+/** K with `span` kept again: the bare set operation, without the restore lock. */
+export function keepSpan(kept: KeptSet, span: Interval): KeptSet {
+  return unionIntervals(kept, toIntervalSet([span]))
+}
+
+/** K with every span of `reason` kept again: the bare set operation, without the restore lock. */
+export function keepReason(kept: KeptSet, base: Edl, reason: string): KeptSet {
+  return unionIntervals(kept, reasonSpans(base, reason))
+}
+
+/** Apply one operation. With `render`, the restores are the model's own, under
+ *  the restore lock for that render; without it, the bare set operations. */
+export function applyOp(
+  kept: KeptSet,
+  op: Op,
+  base: Edl,
+  transcript: Transcript,
+  offsetMs: number,
+  render?: ReviewRenderContext,
+): KeptSet {
   switch (op.kind) {
     case "restoreSpan":
-      return restoreSpan(kept, op.span)
+      return render ? restoreSpan(kept, base, op.span, render).kept : keepSpan(kept, op.span)
     case "restoreReason":
-      return restoreReason(kept, base, op.reason)
+      return render ? restoreReason(kept, base, op.reason, render).kept : keepReason(kept, base, op.reason)
     case "cutRange":
       return cutRange(kept, op.range, transcript.words, offsetMs)
   }

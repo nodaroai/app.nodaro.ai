@@ -458,7 +458,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "face-swap": return <FaceSwapConfig {...configProps} nodeId={selectedNodeId} />
     case "video-sfx": return <VideoSfxConfig {...configProps} nodeId={selectedNodeId} />
     case "combine-videos": return <CombineVideosConfig {...configProps} />
-    case "apply-edl": return <ApplyEdlConfig {...configProps} />
+    case "apply-edl": return <ApplyEdlConfig {...configProps} nodeId={selectedNodeId} />
     case "edit-plan": return <EditPlanConfig {...configProps} />
     case "camera-switch": return <CameraSwitchConfig {...configProps} nodeId={selectedNodeId} />
     case "content-recipe": return <ContentRecipeConfig {...configProps} />

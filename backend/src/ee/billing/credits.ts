@@ -1,4 +1,4 @@
-import { usdToCredits, PARAMETER_NODE_TYPES, withWiredSettings, MUSIC_CREDIT_ID, CAMERA_SWITCH_CREDIT_ID, LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec, LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec, videoSfxCreditId, applyEdlCreditId } from "@nodaro/shared"
+import { usdToCredits, PARAMETER_NODE_TYPES, withWiredSettings, MUSIC_CREDIT_ID, TEXT_TO_AUDIO_SFX_CREDIT_IDS, textToAudioCreditId, CAMERA_SWITCH_CREDIT_ID, LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec, LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec, videoSfxCreditId, applyEdlCreditId } from "@nodaro/shared"
 import { trySettleManagedJob } from "./managed-job-settlement.js"
 import { supabase } from "../../lib/supabase.js"
 import { ReserveRpcError, reservePrefixOf } from "../../lib/reserve-errors.js"
@@ -371,6 +371,18 @@ export class PriceNotConfiguredError extends Error {
  * time somebody edits one of them.
  */
 const RENDER_VIDEO_BASE_CREDITS = 50
+
+/**
+ * ElevenLabs sound effects (Text to Audio) are priced by the length asked
+ * for: BASE credits per whole second (the requested length rounded up, 1–30 s;
+ * a request with no length is billed as 5 s). One row per second, derived
+ * here from the shared id list so a row cannot be typed wrong — the migration
+ * that seeds them (457) is value-checked against this table.
+ */
+const ELEVENLABS_SFX_CREDITS_PER_SECOND = 1
+const ELEVENLABS_SFX_PER_SECOND_ROWS: Record<string, number> = Object.fromEntries(
+  TEXT_TO_AUDIO_SFX_CREDIT_IDS.map((id, i) => [id, (i + 1) * ELEVENLABS_SFX_CREDITS_PER_SECOND]),
+)
 
 export const STATIC_CREDIT_COSTS: Record<string, number> = {
   // Credits = ceil(kieCredits / 4) at 0% markup.
@@ -1285,7 +1297,12 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "elevenlabs-turbo": 15,         // per 1K chars
   "elevenlabs-multilingual": 30,  // per 1K chars
   "elevenlabs": 15,               // alias for turbo
-  "elevenlabs-sfx": 3,           // 0.24 cr/sec * ~5s
+  // Sound effects are priced by the length asked for: one row per whole second
+  // (`elevenlabs-sfx:1s` … `:30s`, ELEVENLABS_SFX_PER_SECOND_ROWS below), picked
+  // by `textToAudioCreditId` on every path. The bare row is the no-duration
+  // default (billed as 5 s) for any caller that still names the engine alone.
+  "elevenlabs-sfx": 5 * ELEVENLABS_SFX_CREDITS_PER_SECOND,
+  ...ELEVENLABS_SFX_PER_SECOND_ROWS,
   // Replicate disabled
   // "tangoflux": 4, // Replicate SFX, estimated
   "suno": 30,                     // (V4) — base
@@ -3683,6 +3700,12 @@ function getNodeModelIdentifier(
   // Video Retake: priced per second of the replaced window — the per-second
   // row, which sumWorkflowEstimate multiplies by the seconds (estimatePricingUnits).
   if (nodeType === "video-retake") return LTX_RETAKE_PER_SECOND_CREDIT_ID
+
+  // Text to Audio: a price row per whole second of requested audio (no
+  // duration = 5 s), on the engine the run uses — the default when the node
+  // names none. ABOVE the `!provider` bail: a provider-less node reserves on
+  // the default engine's row, never the bare node-type fallback.
+  if (nodeType === "text-to-audio") return textToAudioCreditId(data.provider as string | undefined, data.duration)
 
   // Video SFX: a price row per input-clip length, chosen when the run measures
   // the clip. The clip is not measured before a run, so the estimate quotes

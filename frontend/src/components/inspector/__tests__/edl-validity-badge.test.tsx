@@ -23,6 +23,7 @@ describe("EdlValidityBadge", () => {
     render(<EdlValidityBadge value={VALID} />)
     expect(screen.getByTestId("edl-validity-badge").textContent).toContain("Well-formed EDL")
     expect(screen.getByTestId("edl-validity-badge").textContent).not.toMatch(/\bValid\b/)
+    expect(screen.getByTestId("edl-validity-badge").dataset.mode).toBe("structure")
     expect(screen.queryByRole("button")).toBeNull()
   })
 
@@ -32,6 +33,95 @@ describe("EdlValidityBadge", () => {
     expect(badge.dataset.ok).toBe("false")
     await userEvent.click(badge)
     expect((await screen.findAllByText(/ghost/)).length).toBeGreaterThan(0)
+  })
+
+  // The Apply EDL panel's badge (A2b): judged with Apply EDL's own render rule,
+  // which refuses what a well-formed EDL can still describe and this renderer
+  // cannot draw. Its pass reads "Ready to render".
+  describe("in render mode", () => {
+    const SETTINGS = { output: "video", crossfadeMs: 0 } as const
+    const one = (edl: unknown) => [{ edl, sources: [] }]
+    const LAYOUT = {
+      ...VALID,
+      sources: [...VALID.sources, { id: "w", url: "https://cdn/w.mp4", kind: "video" }],
+      segments: [
+        seg("s0", 0, 3000),
+        { ...seg("s1", 3000, 6000), layout: { mode: "side-by-side", slots: [{ source: "v" }, { source: "w" }] } },
+      ],
+    }
+
+    it("a renderable EDL reads 'Ready to render', with nothing to open", () => {
+      render(<EdlValidityBadge renders={one(VALID)} settings={SETTINGS} />)
+      const badge = screen.getByTestId("edl-validity-badge")
+      expect(badge.textContent).toContain("Ready to render")
+      expect(badge.textContent).not.toContain("Well-formed")
+      expect(badge.dataset.mode).toBe("render")
+      expect(screen.queryByRole("button")).toBeNull()
+    })
+
+    it("a well-formed EDL the renderer cannot draw is an issue, listed in the rule's words", async () => {
+      const { unmount } = render(<EdlValidityBadge value={LAYOUT} />)
+      expect(screen.getByTestId("edl-validity-badge").textContent).toContain("Well-formed EDL")
+      unmount()
+      render(<EdlValidityBadge renders={one(LAYOUT)} settings={SETTINGS} />)
+      const badge = screen.getByTestId("edl-validity-badge")
+      expect(badge.dataset.ok).toBe("false")
+      expect(badge.textContent).toContain("2 EDL issues")
+      await userEvent.click(badge)
+      expect((await screen.findAllByText(/layout mode "side-by-side"/)).length).toBeGreaterThan(0)
+    })
+
+    it("judges with the node's settings: an audio render needs no picture", () => {
+      const noPicture = {
+        ...VALID,
+        sources: [...VALID.sources, { id: "m", url: "https://cdn/m.wav", kind: "audio", role: "master-audio" }],
+        segments: [seg("s0", 0, 3000), { id: "s1", inMs: 3000, outMs: 6000 }],
+      }
+      const { unmount } = render(<EdlValidityBadge renders={one(noPicture)} settings={SETTINGS} />)
+      expect(screen.getByTestId("edl-validity-badge").dataset.ok).toBe("false")
+      unmount()
+      render(<EdlValidityBadge renders={one(noPicture)} settings={{ ...SETTINGS, output: "audio" }} />)
+      expect(screen.getByTestId("edl-validity-badge").textContent).toContain("Ready to render")
+    })
+
+    it("an inline list is an issue", () => {
+      render(<EdlValidityBadge renders={one([VALID])} settings={SETTINGS} />)
+      expect(screen.getByTestId("edl-validity-badge").dataset.ok).toBe("false")
+    })
+
+    // Decided 2026-10-05: a run that fans out makes several renders, each with
+    // its own EDL and Sources. One pill sums them up; the popover lists each
+    // failing render by its number, with its reasons.
+    it("several renders: one summary pill, and the failing renders listed by number", async () => {
+      const unresolved = { ...VALID, sources: [{ id: "v", url: "", kind: "video" }] }
+      const renders = [
+        { row: 0, edl: unresolved, sources: ["https://cdn/0.mp4"] },
+        { row: 1, edl: unresolved, sources: [] },
+        { row: 2, edl: LAYOUT, sources: [] },
+      ]
+      render(<EdlValidityBadge renders={renders} settings={SETTINGS} />)
+      const badge = screen.getByTestId("edl-validity-badge")
+      expect(badge.dataset.ok).toBe("false")
+      expect(badge.textContent).toContain("Issues in 2 of 3 renders")
+      await userEvent.click(badge)
+      const rows = await screen.findAllByTestId("edl-render-issues")
+      expect(rows.map((r) => r.dataset.row)).toEqual(["1", "2"])
+      expect(rows[0]!.textContent).toContain("Render 2")
+      expect(rows[0]!.textContent).toMatch(/source "v" has no url/)
+      expect(rows[1]!.textContent).toContain("Render 3")
+      expect(rows[1]!.textContent).toMatch(/layout mode "side-by-side"/)
+      expect(screen.queryByText("Render 1")).toBeNull()
+    })
+
+    it("several renders that all pass: 'Ready to render'", () => {
+      render(<EdlValidityBadge renders={[{ row: 0, edl: VALID, sources: [] }, { row: 1, edl: VALID, sources: [] }]} settings={SETTINGS} />)
+      expect(screen.getByTestId("edl-validity-badge").textContent).toContain("Ready to render")
+    })
+
+    it("says nothing when there is nothing to render", () => {
+      const { container } = render(<EdlValidityBadge renders={one(undefined)} settings={SETTINGS} />)
+      expect(container.innerHTML).toBe("")
+    })
   })
 
   // Review of #1789: on the canvas node, the popover's keys reached React Flow

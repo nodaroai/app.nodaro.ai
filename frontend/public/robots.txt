@@ -4,4 +4,7 @@ Disallow: /admin
 Disallow: /api/
 Disallow: /v1/
 
-Sitemap: https://app.nodaro.ai/sitemap.xml
+# No Sitemap line: the app has no sitemap, and the SPA answers /sitemap.xml
+# with its HTML shell. Which app pages may be indexed is decided per route in
+# frontend/Caddyfile (X-Robots-Tag), so crawlers must still be allowed to
+# fetch a page to read it.

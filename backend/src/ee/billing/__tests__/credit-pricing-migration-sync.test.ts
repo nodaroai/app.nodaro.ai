@@ -156,8 +156,10 @@ const INSERTED_VALUES = extractInsertedValues()
 // `apply-edl:proxy` (seeded by migration 454, repriced by 455's UPDATE), each
 // one constant in lib/apply-edl-plan.ts
 // — so retuning a constant fails here until its migration row says the same.
-const VALUE_SYNCED_FAMILIES = ["wan-3", "wan-3-prime", "gemini-omni-flash", "apply-edl"] as const
-const VALUE_SYNCED_ROW_COUNT = 189 // 88 wan-3 + 88 wan-3-prime + 11 gemini-omni-flash + 2 apply-edl
+// `elevenlabs-sfx`: the per-second sound-effect rows `:1s` … `:30s` (migration
+// 457) plus the bare no-duration row (repriced 3 → 5 by 457's guarded UPDATE).
+const VALUE_SYNCED_FAMILIES = ["wan-3", "wan-3-prime", "gemini-omni-flash", "apply-edl", "elevenlabs-sfx"] as const
+const VALUE_SYNCED_ROW_COUNT = 220 // 88 wan-3 + 88 wan-3-prime + 11 gemini-omni-flash + 2 apply-edl + 31 elevenlabs-sfx
 
 function familyOf(key: string): string | undefined {
   return VALUE_SYNCED_FAMILIES.find((f) => key === f || key.startsWith(`${f}:`))

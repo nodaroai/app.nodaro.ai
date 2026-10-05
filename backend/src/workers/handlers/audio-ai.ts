@@ -107,11 +107,13 @@ async function generateSpeechViaCloud(
 }
 
 const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx) {
-  const { text, voice, provider: rawProvider, stability, similarityBoost, style, speed, languageCode, allowDefaultVoiceFallback } = job.data as {
+  const { text, voice, provider: rawProvider, voiceType, stability, similarityBoost, style, speed, languageCode, allowDefaultVoiceFallback } = job.data as {
     jobId: string
     text: string
     voice?: string
     provider?: string
+    /** Enqueued by routes/text-to-speech.ts (default "premade"); a library or custom voice never falls back. */
+    voiceType?: "premade" | "custom" | "library"
     stability?: number
     similarityBoost?: number
     style?: number
@@ -153,6 +155,7 @@ const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx
     audioBuffer = await directElevenLabsTTS(processedText, voice ?? defaultAllowedVoiceId(FALLBACK_VOICES, "Rachel"), provider, {
       ...(hasOptions ? ttsOptions : {}),
       allowDefaultVoiceFallback: Boolean(allowDefaultVoiceFallback),
+      ...(voiceType ? { voiceType } : {}),
     })
   } else if (await isNodaroConnected().catch(() => false)) {
     cloudAudio = await generateSpeechViaCloud(

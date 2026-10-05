@@ -29,6 +29,7 @@ export interface GraphNode {
 export interface GraphEdge {
   readonly source: string
   readonly target: string
+  readonly sourceHandle?: string | null
   readonly targetHandle?: string | null
 }
 

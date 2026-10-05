@@ -48,6 +48,7 @@
     "@google/genai": "^2.13.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@nodaro/prompts": "*",
+    "@nodaro/render-rules": "*",
     "@nodaro/shared": "*",
     "@remotion/bundler": "^4.0.0",
     "@remotion/renderer": "^4.0.0",

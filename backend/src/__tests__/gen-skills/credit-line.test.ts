@@ -74,6 +74,7 @@ describe("the skill header can never carry the frontend number again", () => {
       inputs: ["in"],
       outputs: ["video"],
       defaultData: {},
+      sliders: [],
     }
     const other: NodeDef = { ...base, type: "transcribe" }
     expect(renderNodeDataShapeBlock(base, undefined)).toContain(renderCreditCostLine("add-captions"))

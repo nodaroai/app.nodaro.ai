@@ -340,6 +340,15 @@ describe("errors", () => {
     expect(res.isError).toBe(true)
     expect(text(res)).toBe(JSON.stringify(body))
   })
+  it("any other 422 (a builder refusing a request it cannot serve) goes through the shared renderer, code and message shown", async () => {
+    const body = { error: { code: "language_not_available", message: "Not available yet." } }
+    const { fastify } = builder({ clips: [422, body] })
+    const res = await callTool(serverWith(fastify), "build_ugc_clips", { plan: {}, gender: "woman", identity_images: ["x"] })
+    expect(res.isError).toBe(true)
+    expect(text(res)).toBe("Nodaro rejected the request (422 language_not_available): Not available yet.")
+    expect(text(res)).not.toBe(JSON.stringify(body))
+    expect(h.quote).not.toHaveBeenCalled()
+  })
   it("anything else goes through the shared renderer", async () => {
     const { fastify } = builder({ cards: [500, { error: { code: "boom", message: "internal detail" } }] })
     const res = await callTool(serverWith(fastify), "build_ugc_cards", { plan: {}, alignment: [] })

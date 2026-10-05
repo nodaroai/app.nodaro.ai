@@ -128,15 +128,30 @@ A published app keeps the field keys it was published with. When a node field is
 
 ### Slider inputs
 
-A Text to Speech **Stability** or **Similarity** card starts at the node's own value, or at the node's default when the node has none: a Text to Speech node saved without voice settings (built by an agent, or imported) starts **Stability** at `0.5` and **Similarity** at `0.75`, as its config panel does. Other nodes' slider cards do not all start at their node's default, so for those, pre-fill your control from the node's own value in `snapshotNodes[i].data[field]` rather than assuming a starting value.
+A slider or toggle card starts at the node's own value. When the node has none (it was built by an agent, imported, or saved before the field existed), the card starts at the field's declared default: the value a new node gets. For example, a Text to Speech node saved without voice settings starts **Stability** at `0.5` and **Similarity** at `0.75`; Generate Video Pro starts **Duration** at `8` and **Generate Audio** on; Edit Video Pro starts **Generate Audio** on and **Span End** 8 seconds after its **Span Start**; Generate Music starts **Duration** at `8`; a Prompt (LLM Chat) node starts **Temperature** at `0.7` and **Max Tokens** at `8192`. A field with no declared default starts at the slider's minimum, or off for a toggle.
+
+The starting value is the declared default, not a promise about the editor or the run. For most cards the node's config panel shows the same value and a run without the field uses it, but not for these:
+
+- Generate Music **Duration** starts at `8`, but the music model available today takes no duration, so the value does not change the result.
+- Prompt (LLM Chat) **Max Tokens** starts at `8192`, which is what an app's run uses; the node's config panel in the editor shows `2048`, and running that single node from the editor uses `2048`.
+- Text to Video **Generate Audio** has no declared default, so its card starts off; a run without the field leaves audio to the chosen model's own default.
+
+Two cards start away from the declared default, because a node saved without the field runs differently from a new node:
+
+- Generate Music **Instrumental** starts off (a new node gets on): such a node runs with vocals.
+- Text to Audio **Duration** starts at the slider's minimum (`1`) (a new node gets `10`): such a node runs at the sound-effect model's automatic length, which a slider cannot show.
+
+The starting value is only what the card shows. A run sends a card's value only after the viewer changes it; until then the run uses the node's own saved value, or the node's run-time default when it has none. To mirror a card in your own UI, pre-fill your control from `snapshotNodes[i].data[field]` when it is set, and send the field only when your viewer changes it.
 
 For the Text to Speech voice settings (`stability`, `similarityBoost`, `style`, `speed`), a number or a numeric string is accepted (`0.4` or `"0.4"`), in `inputOverrides` and in MCP or SDK flat inputs alike. A value outside the setting's range (`stability`, `similarityBoost` and `style` 0–1, `speed` 0.7–1.2) is clamped into it. A value that is not a number (an empty string, a word) is ignored, and the voice's own setting applies. `null` depends on where you send it: in `inputOverrides` it replaces the node's saved value and is ignored the same way, so the voice's own setting applies; as an MCP or SDK flat input it is dropped before it reaches the node, so the node's saved value applies (the voice's own setting applies only when the node has none).
+
+Every exposed slider, on any node, is typed in the flat input schema MCP `get_app_inputs` returns: `type: "number"` with the slider's own `min`, `max` and `step` (Text to Speech **Stability**: `0`, `1`, `0.05`). A flat input (MCP `run_app`, SDK `apps.run(slug, inputs)`, the `inputs` of `POST /v1/app/:slug/run`) for such a field takes a number or a numeric string, and a numeric string reaches the node as a number; a value that is not a number is passed on unchanged, for the node to treat as it always has. The range is not enforced when the input is translated: Text to Speech clamps its voice settings as described above, and for other nodes keep your control inside the range.
 
 ---
 
 ## 3. Step 2 — Probe each node type for field schemas
 
-The `inputItems` from step 1 give you `(nodeId, field)` pairs but **no type info** (text vs slider vs select). To learn the field type, look up the node:
+The `inputItems` from step 1 give you `(nodeId, field)` pairs but **no type info** (text vs slider vs select). MCP `get_app_inputs` types only part of this: an exposed slider comes back as `type: "number"` with its `min` / `max` / `step` (see [Slider inputs](#slider-inputs)), a field the publisher limited to a list of values comes back as `type: "select"` with those `options`, and a Lottie `slot:` field comes back typed by its slot (see [Lottie slot fields](#lottie-slot-fields-slotsid)). Every other exposed field (a toggle, a color picker, an aspect ratio, a select with no publisher limit) comes back as `type: "text"` with no options, so over MCP too, look up the node for those fields. To look up a node:
 
 ```bash
 curl https://app.nodaro.ai/v1/nodes/generate-image

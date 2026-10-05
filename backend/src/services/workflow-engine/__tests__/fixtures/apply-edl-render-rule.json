@@ -1,0 +1,2298 @@
+{
+  "description": "Apply EDL's render rule, judged by both sides on the same canvases (decided 2026-10-04: the badge is split by surface, and whatever is anchored at a render judges with the render's own rule). Each case is a canvas: the Apply EDL node is `render`, with the producers wired into it holding their saved results. `sources` is what its Sources wires deliver, in slot order; a render lists its own `sources` when a list wired into Sources fans the render out. `renders` lists the renders a run of `render` makes, in order (a list that fans the render out renders once per row, `clip` naming the row: a plan's clip, a List's row): the EDL each one reads, and what the server says about it — its issues, or none when it renders. The server test (apply-edl-render-rule-parity.test.ts, beside this folder) runs the canvas the way a Run from here at the render does (saved results seeded, the fan-out, the input resolver, the DAG payload builder); the route test (backend/src/routes/__tests__/apply-edl-render-rule-parity.test.ts) sends each render to POST /v1/apply-edl, as a single-node Run does; the editor test (frontend/src/lib/__tests__/apply-edl-render-rule-parity.test.ts) runs the editor's own Run of `render` (the fan-out planned, each render's inputs resolved), then takes the renders the panel badge judges and runs its render verdict. All three must reach these verdicts. Where a run makes several renders, the badge judges each with its own EDL and Sources and names each issue by its render, numbered from 1 by its row (`render 2: …`); `badgeIssues` is set only where the editor words the same refusal differently: on a case, the badge's whole list; on one render of several, that render's issues as the badge names them.",
+  "cases": {
+    "ready": {
+      "note": "A single-camera Tighten plan the renderer draws as it is: one render, nothing refused.",
+      "nodes": [
+        {
+          "id": "plan",
+          "type": "edit-plan",
+          "data": {
+            "mode": "tighten",
+            "generatedJson": {
+              "version": 1,
+              "clock": "master",
+              "sources": [
+                {
+                  "id": "cam",
+                  "url": "https://media.test/cam.mp4",
+                  "kind": "video"
+                }
+              ],
+              "segments": [
+                {
+                  "id": "s0",
+                  "inMs": 0,
+                  "outMs": 4000,
+                  "video": "cam"
+                },
+                {
+                  "id": "s1",
+                  "inMs": 6000,
+                  "outMs": 9000,
+                  "video": "cam"
+                }
+              ],
+              "dropped": [
+                {
+                  "inMs": 4000,
+                  "outMs": 6000,
+                  "reason": "silence"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "render",
+          "type": "apply-edl",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "source": "plan",
+          "target": "render",
+          "sourceHandle": "edl",
+          "targetHandle": "edl"
+        }
+      ],
+      "sources": [],
+      "renders": [
+        {
+          "edl": {
+            "version": 1,
+            "clock": "master",
+            "sources": [
+              {
+                "id": "cam",
+                "url": "https://media.test/cam.mp4",
+                "kind": "video"
+              }
+            ],
+            "segments": [
+              {
+                "id": "s0",
+                "inMs": 0,
+                "outMs": 4000,
+                "video": "cam"
+              },
+              {
+                "id": "s1",
+                "inMs": 6000,
+                "outMs": 9000,
+                "video": "cam"
+              }
+            ],
+            "dropped": [
+              {
+                "inMs": 4000,
+                "outMs": 6000,
+                "reason": "silence"
+              }
+            ]
+          },
+          "issues": []
+        }
+      ]
+    },
+    "layouts": {
+      "note": "Camera Switch with layout hints on: a side-by-side, two-slot layout is a well-formed EDL that this renderer cannot draw (one source full frame per segment).",
+      "nodes": [
+        {
+          "id": "switch",
+          "type": "camera-switch",
+          "data": {
+            "generatedJson": {
+              "edl": {
+                "version": 1,
+                "clock": "master",
+                "sources": [
+                  {
+                    "id": "cam",
+                    "url": "https://media.test/cam.mp4",
+                    "kind": "video"
+                  },
+                  {
+                    "id": "cam2",
+                    "url": "https://media.test/cam2.mp4",
+                    "kind": "video"
+                  }
+                ],
+                "segments": [
+                  {
+                    "id": "s0",
+                    "inMs": 0,
+                    "outMs": 3000,
+                    "video": "cam"
+                  },
+                  {
+                    "id": "s1",
+                    "inMs": 3000,
+                    "outMs": 6000,
+                    "video": "cam",
+                    "layout": {
+                      "mode": "side-by-side",
+                      "slots": [
+                        {
+                          "source": "cam"
+                        },
+                        {
+                          "source": "cam2"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              },
+              "transcript": {
+                "version": 1,
+                "words": []
+              }
+            }
+          }
+        },
+        {
+          "id": "render",
+          "type": "apply-edl",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "source": "switch",
+          "target": "render",
+          "sourceHandle": "edl",
+          "targetHandle": "edl"
+        }
+      ],
+      "sources": [],
+      "renders": [
+        {
+          "edl": {
+            "version": 1,
+            "clock": "master",
+            "sources": [
+              {
+                "id": "cam",
+                "url": "https://media.test/cam.mp4",
+                "kind": "video"
+              },
+              {
+                "id": "cam2",
+                "url": "https://media.test/cam2.mp4",
+                "kind": "video"
+              }
+            ],
+            "segments": [
+              {
+                "id": "s0",
+                "inMs": 0,
+                "outMs": 3000,
+                "video": "cam"
+              },
+              {
+                "id": "s1",
+                "inMs": 3000,
+                "outMs": 6000,
+                "video": "cam",
+                "layout": {
+                  "mode": "side-by-side",
+                  "slots": [
+                    {
+                      "source": "cam"
+                    },
+                    {
+                      "source": "cam2"
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          "issues": [
+            "segment[1] \"s1\": layout mode \"side-by-side\" — this renderer shows one source full-frame per segment (multi-camera layouts are a speaker-view feature)",
+            "segment[1] \"s1\": layout with 2 slots — this renderer shows one source per segment (multi-slot layouts are a speaker-view feature)"
+          ]
+        }
+      ]
+    },
+    "over the 180-minute cap": {
+      "note": "A Text node holding one EDL (a wire that is not a plan delivers ONE value per run) that renders 181 minutes: over the cap for one render.",
+      "nodes": [
+        {
+          "id": "text",
+          "type": "text-prompt",
+          "data": {
+            "text": "{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"cam\",\"url\":\"https://media.test/cam.mp4\",\"kind\":\"video\"}],\"segments\":[{\"id\":\"s0\",\"inMs\":0,\"outMs\":10860000,\"video\":\"cam\"}]}"
+          }
+        },
+        {
+          "id": "render",
+          "type": "apply-edl",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "source": "text",
+          "target": "render",
+          "targetHandle": "edl"
+        }
+      ],
+      "sources": [],
+      "renders": [
+        {
+          "edl": {
+            "version": 1,
+            "clock": "master",
+            "sources": [
+              {
+                "id": "cam",
+                "url": "https://media.test/cam.mp4",
+                "kind": "video"
+              }
+            ],
+            "segments": [
+              {
+                "id": "s0",
+                "inMs": 0,
+                "outMs": 10860000,
+                "video": "cam"
+              }
+            ]
+          },
+          "issues": [
+            "the edit renders 181 minutes of output — over the 180-minute limit for one render; split it into parts of at most 180 minutes"
+          ]
+        }
+      ]
+    },
+    "a default crossfade brings it under the cap": {
+      "note": "An inline EDL 2 s over 180 minutes; the node's Default crossfade of 1 s at its two boundaries overlaps 2 s, so the output is exactly 180 minutes.",
+      "nodes": [
+        {
+          "id": "render",
+          "type": "apply-edl",
+          "data": {
+            "edl": {
+              "version": 1,
+              "clock": "master",
+              "sources": [
+                {
+                  "id": "cam",
+                  "url": "https://media.test/cam.mp4",
+                  "kind": "video"
+                }
+              ],
+              "segments": [
+                {
+                  "id": "s0",
+                  "inMs": 0,
+                  "outMs": 3600000,
+                  "video": "cam"
+                },
+                {
+                  "id": "s1",
+                  "inMs": 3600000,
+                  "outMs": 7200000,
+                  "video": "cam"
+                },
+                {
+                  "id": "s2",
+                  "inMs": 7200000,
+                  "outMs": 10802000,
+                  "video": "cam"
+                }
+              ]
+            },
+            "crossfadeMs": 1000
+          }
+        }
+      ],
+      "edges": [],
+      "sources": [],
+      "renders": [
+        {
+          "edl": {
+            "version": 1,
+            "clock": "master",
+            "sources": [
+              {
+                "id": "cam",
+                "url": "https://media.test/cam.mp4",
+                "kind": "video"
+              }
+            ],
+            "segments": [
+              {
+                "id": "s0",
+                "inMs": 0,
+                "outMs": 3600000,
+                "video": "cam"
+              },
+              {
+                "id": "s1",
+                "inMs": 3600000,
+                "outMs": 7200000,
+                "video": "cam"
+              },
+              {
+                "id": "s2",
+                "inMs": 7200000,
+                "outMs": 10802000,
+                "video": "cam"
+              }
+            ]
+          },
+          "issues": []
+        }
+      ]
+    },
+    "the same edit with hard cuts": {
+      "note": "The edit above with Default crossfade 0: 180.1 minutes, over the cap.",
+      "nodes": [
+        {
+          "id": "render",
+          "type": "apply-edl",
+          "data": {
+            "edl": {
+              "version": 1,
+              "clock": "master",
+              "sources": [
+                {
+                  "id": "cam",
+                  "url": "https://media.test/cam.mp4",
+                  "kind": "video"
+                }
+              ],
+              "segments": [
+                {
+                  "id": "s0",
+                  "inMs": 0,
+                  "outMs": 3600000,
+                  "video": "cam"
+                },
+                {
+                  "id": "s1",
+                  "inMs": 3600000,
+                  "outMs": 7200000,
+                  "video": "cam"
+                },
+                {
+                  "id": "s2",
+                  "inMs": 7200000,
+                  "outMs": 10802000,
+                  "video": "cam"
+                }
+              ]
+            },
+            "crossfadeMs": 0
+          }
+        }
+      ],
+      "edges": [],
+      "sources": [],
+      "renders": [
+        {
+          "edl": {
+            "version": 1,
+            "clock": "master",
+            "sources": [
+              {
+                "id": "cam",
+                "url": "https://media.test/cam.mp4",
+                "kind": "video"
+              }
+            ],
+            "segments": [
+              {
+                "id": "s0",
+                "inMs": 0,
+                "outMs": 3600000,
+                "video": "cam"
+              },
+              {
+                "id": "s1",
+                "inMs": 3600000,
+                "outMs": 7200000,
+                "video": "cam"
+              },
+              {
+                "id": "s2",
+                "inMs": 7200000,
+                "outMs": 10802000,
+                "video": "cam"
+              }
+            ]
+          },
+          "issues": [
+            "the edit renders 180.1 minutes of output — over the 180-minute limit for one render; split it into parts of at most 180 minutes"
+          ]
+        }
+      ]
+    },
+    "an unknown role": {
+      "note": "A misspelled master-audio role: only a warning in the EDL contract, refused by the renderer (it would take each segment's sound from its own camera).",
+      "nodes": [
+        {
+          "id": "plan",
+          "type": "edit-plan",
+          "data": {
+            "mode": "tighten",
+            "generatedJson": {
+              "version": 1,
+              "clock": "master",
+              "sources": [
+                {
+                  "id": "cam",
+                  "url": "https://media.test/cam.mp4",
+                  "kind": "video"
+                },
+                {
+                  "id": "mic",
+                  "url": "https://media.test/mic.wav",
+                  "kind": "audio",
+                  "role": "master_audio"
+                }
+              ],
+              "segments": [
+                {
+                  "id": "s0",
+                  "inMs": 0,
+                  "outMs": 5000,
+                  "video": "cam"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "render",
+          "type": "apply-edl",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "source": "plan",
+          "target": "render",
+          "sourceHandle": "edl",
+          "targetHandle": "edl"
+        }
+      ],
+      "sources": [],
+      "renders": [
+        {
+          "edl": {
+            "version": 1,
+            "clock": "master",
+            "sources": [
+              {
+                "id": "cam",
+                "url": "https://media.test/cam.mp4",
+                "kind": "video"
+              },
+              {
+                "id": "mic",
+                "url": "https://media.test/mic.wav",
+                "kind": "audio",
+                "role": "master_audio"
+              }
+            ],
+            "segments": [
+              {
+                "id": "s0",
+                "inMs": 0,
+                "outMs": 5000,
+                "video": "cam"
+              }
+            ]
+          },
+          "issues": [
+            "source \"mic\": unknown role \"master_audio\" — this renderer knows only master-audio, camera, wide, screen (a misspelled \"master-audio\" would take each segment's sound from its own camera)"
+          ]
+        }
+      ]
+    },
+    "a segment with no picture, video output": {
+      "note": "A segment with sound (master audio) but no picture source: a video render needs a picture on every segment.",
+      "nodes": [
+        {
+          "id": "plan",
+          "type": "edit-plan",
+          "data": {
+            "mode": "tighten",
+            "generatedJson": {
+              "version": 1,
+              "clock": "master",
+              "sources": [
+                {
+                  "id": "cam",
+                  "url": "https://media.test/cam.mp4",
+                  "kind": "video"
+                },
+                {
+                  "id": "mic",
+                  "url": "https://media.test/mic.wav",
+                  "kind": "audio",
+                  "role": "master-audio"
+                }
+              ],
+              "segments": [
+                {
+                  "id": "s0",
+                  "inMs": 0,
+                  "outMs": 4000,
+                  "video": "cam"
+                },
+                {
+                  "id": "s1",
+                  "inMs": 4000,
+                  "outMs": 6000
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "render",
+          "type": "apply-edl",
+          "data": {
+            "output": "video"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "plan",
+          "target": "render",
+          "sourceHandle": "edl",
+          "targetHandle": "edl"
+        }
+      ],
+      "sources": [],
+      "renders": [
+        {
+          "edl": {
+            "version": 1,
+            "clock": "master",
+            "sources": [
+              {
+                "id": "cam",
+                "url": "https://media.test/cam.mp4",
+                "kind": "video"
+              },
+              {
+                "id": "mic",
+                "url": "https://media.test/mic.wav",
+                "kind": "audio",
+                "role": "master-audio"
+              }
+            ],
+            "segments": [
+              {
+                "id": "s0",
+                "inMs": 0,
+                "outMs": 4000,
+                "video": "cam"
+              },
+              {
+                "id": "s1",
+                "inMs": 4000,
+                "outMs": 6000
+              }
+            ]
+          },
+          "issues": [
+            "segment[1] \"s1\" has no video source (required for a video-output edit; use output:\"audio\" for an audio-only cut)"
+          ]
+        }
+      ]
+    },
+    "a segment with no picture, audio output": {
+      "note": "The same plan rendered as audio: the picture is never read.",
+      "nodes": [
+        {
+          "id": "plan",
+          "type": "edit-plan",
+          "data": {
+            "mode": "tighten",
+            "generatedJson": {
+              "version": 1,
+              "clock": "master",
+              "sources": [
+                {
+                  "id": "cam",
+                  "url": "https://media.test/cam.mp4",
+                  "kind": "video"
+                },
+                {
+                  "id": "mic",
+                  "url": "https://media.test/mic.wav",
+                  "kind": "audio",
+                  "role": "master-audio"
+                }
+              ],
+              "segments": [
+                {
+                  "id": "s0",
+                  "inMs": 0,
+                  "outMs": 4000,
+                  "video": "cam"
+                },
+                {
+                  "id": "s1",
+                  "inMs": 4000,
+                  "outMs": 6000
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "render",
+          "type": "apply-edl",
+          "data": {
+            "output": "audio"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "plan",
+          "target": "render",
+          "sourceHandle": "edl",
+          "targetHandle": "edl"
+        }
+      ],
+      "sources": [],
+      "renders": [
+        {
+          "edl": {
+            "version": 1,
+            "clock": "master",
+            "sources": [
+              {
+                "id": "cam",
+                "url": "https://media.test/cam.mp4",
+                "kind": "video"
+              },
+              {
+                "id": "mic",
+                "url": "https://media.test/mic.wav",
+                "kind": "audio",
+                "role": "master-audio"
+              }
+            ],
+            "segments": [
+              {
+                "id": "s0",
+                "inMs": 0,
+                "outMs": 4000,
+                "video": "cam"
+              },
+              {
+                "id": "s1",
+                "inMs": 4000,
+                "outMs": 6000
+              }
+            ]
+          },
+          "issues": []
+        }
+      ]
+    },
+    "a read before a source starts, video output": {
+      "note": "cam2 starts 3 s into the master clock (offsetMs 3000); the segment reads its picture from 1 s.",
+      "nodes": [
+        {
+          "id": "plan",
+          "type": "edit-plan",
+          "data": {
+            "mode": "tighten",
+            "generatedJson": {
+              "version": 1,
+              "clock": "master",
+              "sources": [
+                {
+                  "id": "cam2",
+                  "url": "https://media.test/cam2.mp4",
+                  "kind": "video",
+                  "offsetMs": 3000
+                },
+                {
+                  "id": "mic",
+                  "url": "https://media.test/mic.wav",
+                  "kind": "audio",
+                  "role": "master-audio"
+                }
+              ],
+              "segments": [
+                {
+                  "id": "s0",
+                  "inMs": 1000,
+                  "outMs": 5000,
+                  "video": "cam2"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "render",
+          "type": "apply-edl",
+          "data": {
+            "output": "video"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "plan",
+          "target": "render",
+          "sourceHandle": "edl",
+          "targetHandle": "edl"
+        }
+      ],
+      "sources": [],
+      "renders": [
+        {
+          "edl": {
+            "version": 1,
+            "clock": "master",
+            "sources": [
+              {
+                "id": "cam2",
+                "url": "https://media.test/cam2.mp4",
+                "kind": "video",
+                "offsetMs": 3000
+              },
+              {
+                "id": "mic",
+                "url": "https://media.test/mic.wav",
+                "kind": "audio",
+                "role": "master-audio"
+              }
+            ],
+            "segments": [
+              {
+                "id": "s0",
+                "inMs": 1000,
+                "outMs": 5000,
+                "video": "cam2"
+              }
+            ]
+          },
+          "issues": [
+            "segment[0] \"s0\": starts at 1000ms on the master clock but source \"cam2\" begins at 3000ms (offsetMs) — the segment would read before the source starts"
+          ]
+        }
+      ]
+    },
+    "a read before a source starts, audio output": {
+      "note": "The same plan rendered as audio reads only the master audio, which starts at 0.",
+      "nodes": [
+        {
+          "id": "plan",
+          "type": "edit-plan",
+          "data": {
+            "mode": "tighten",
+            "generatedJson": {
+              "version": 1,
+              "clock": "master",
+              "sources": [
+                {
+                  "id": "cam2",
+                  "url": "https://media.test/cam2.mp4",
+                  "kind": "video",
+                  "offsetMs": 3000
+                },
+                {
+                  "id": "mic",
+                  "url": "https://media.test/mic.wav",
+                  "kind": "audio",
+                  "role": "master-audio"
+                }
+              ],
+              "segments": [
+                {
+                  "id": "s0",
+                  "inMs": 1000,
+                  "outMs": 5000,
+                  "video": "cam2"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "render",
+          "type": "apply-edl",
+          "data": {
+            "output": "audio"
+          }
+        }
+      ],
+      "edges": [
+        {
+          "source": "plan",
+          "target": "render",
+          "sourceHandle": "edl",
+          "targetHandle": "edl"
+        }
+      ],
+      "sources": [],
+      "renders": [
+        {
+          "edl": {
+            "version": 1,
+            "clock": "master",
+            "sources": [
+              {
+                "id": "cam2",
+                "url": "https://media.test/cam2.mp4",
+                "kind": "video",
+                "offsetMs": 3000
+              },
+              {
+                "id": "mic",
+                "url": "https://media.test/mic.wav",
+                "kind": "audio",
+                "role": "master-audio"
+              }
+            ],
+            "segments": [
+              {
+                "id": "s0",
+                "inMs": 1000,
+                "outMs": 5000,
+                "video": "cam2"
+              }
+            ]
+          },
+          "issues": []
+        }
+      ]
+    },
+    "an inline list": {
+      "note": "A list typed into the node's own EDL renders whole, as one EDL, which it is not. The server reads it as an EDL with no segments; the editor names the list.",
+      "nodes": [
+        {
+          "id": "render",
+          "type": "apply-edl",
+          "data": {
+            "edl": [
+              {
+                "version": 1,
+                "clock": "master",
+                "sources": [
+                  {
+                    "id": "cam",
+                    "url": "https://media.test/cam.mp4",
+                    "kind": "video"
+                  }
+                ],
+                "segments": [
+                  {
+                    "id": "a0",
+                    "inMs": 1000,
+                    "outMs": 31000,
+                    "video": "cam"
+                  }
+                ]
+              },
+              {
+                "version": 1,
+                "clock": "master",
+                "sources": [
+                  {
+                    "id": "cam",
+                    "url": "https://media.test/cam.mp4",
+                    "kind": "video"
+                  }
+                ],
+                "segments": [
+                  {
+                    "id": "b0",
+                    "inMs": 40000,
+                    "outMs": 70000,
+                    "video": "cam"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "edges": [],
+      "sources": [],
+      "renders": [
+        {
+          "edl": [
+            {
+              "version": 1,
+              "clock": "master",
+              "sources": [
+                {
+                  "id": "cam",
+                  "url": "https://media.test/cam.mp4",
+                  "kind": "video"
+                }
+              ],
+              "segments": [
+                {
+                  "id": "a0",
+                  "inMs": 1000,
+                  "outMs": 31000,
+                  "video": "cam"
+                }
+              ]
+            },
+            {
+              "version": 1,
+              "clock": "master",
+              "sources": [
+                {
+                  "id": "cam",
+                  "url": "https://media.test/cam.mp4",
+                  "kind": "video"
+                }
+              ],
+              "segments": [
+                {
+                  "id": "b0",
+                  "inMs": 40000,
+                  "outMs": 70000,
+                  "video": "cam"
+                }
+              ]
+            }
+          ],
+          "issues": [
+            "segments is empty"
+          ]
+        }
+      ],
+      "badgeIssues": [
+        "expected one EDL, got a list"
+      ]
+    },
+    "a chapters plan": {
+      "note": "An Edit Plan in chapters mode wired into the render: a wired value that is not an EDL is an invalid EDL, not 'no EDL'.",
+      "nodes": [
+        {
+          "id": "plan",
+          "type": "edit-plan",
+          "data": {
+            "mode": "chapters",
+            "generatedJson": {
+              "version": 1,
+              "chapters": [
+                {
+                  "startMs": 0,
+                  "title": "Intro"
+                },
+                {
+                  "startMs": 60000,
+                  "title": "Main"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "render",
+          "type": "apply-edl",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "source": "plan",
+          "target": "render",
+          "sourceHandle": "edl",
+          "targetHandle": "edl"
+        }
+      ],
+      "sources": [],
+      "renders": [
+        {
+          "edl": {
+            "version": 1,
+            "chapters": [
+              {
+                "startMs": 0,
+                "title": "Intro"
+              },
+              {
+                "startMs": 60000,
+                "title": "Main"
+              }
+            ]
+          },
+          "issues": [
+            "segments is empty"
+          ]
+        }
+      ]
+    },
+    "an Edit Plan clip list": {
+      "note": "Clips mode: one render per clip. The second clip carries a region crop, which this renderer cannot draw.",
+      "nodes": [
+        {
+          "id": "plan",
+          "type": "edit-plan",
+          "data": {
+            "mode": "clips",
+            "generatedJson": [
+              {
+                "version": 1,
+                "clock": "master",
+                "sources": [
+                  {
+                    "id": "cam",
+                    "url": "https://media.test/cam.mp4",
+                    "kind": "video"
+                  }
+                ],
+                "segments": [
+                  {
+                    "id": "a0",
+                    "inMs": 1000,
+                    "outMs": 31000,
+                    "video": "cam"
+                  }
+                ]
+              },
+              {
+                "version": 1,
+                "clock": "master",
+                "sources": [
+                  {
+                    "id": "cam",
+                    "url": "https://media.test/cam.mp4",
+                    "kind": "video"
+                  }
+                ],
+                "segments": [
+                  {
+                    "id": "c1s0",
+                    "inMs": 50000,
+                    "outMs": 80000,
+                    "video": "cam",
+                    "region": {
+                      "x": 0,
+                      "y": 0,
+                      "w": 0.5,
+                      "h": 0.5
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "render",
+          "type": "apply-edl",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "source": "plan",
+          "target": "render",
+          "sourceHandle": "edl",
+          "targetHandle": "edl"
+        }
+      ],
+      "sources": [],
+      "renders": [
+        {
+          "clip": 0,
+          "edl": {
+            "version": 1,
+            "clock": "master",
+            "sources": [
+              {
+                "id": "cam",
+                "url": "https://media.test/cam.mp4",
+                "kind": "video"
+              }
+            ],
+            "segments": [
+              {
+                "id": "a0",
+                "inMs": 1000,
+                "outMs": 31000,
+                "video": "cam"
+              }
+            ]
+          },
+          "issues": []
+        },
+        {
+          "clip": 1,
+          "edl": {
+            "version": 1,
+            "clock": "master",
+            "sources": [
+              {
+                "id": "cam",
+                "url": "https://media.test/cam.mp4",
+                "kind": "video"
+              }
+            ],
+            "segments": [
+              {
+                "id": "c1s0",
+                "inMs": 50000,
+                "outMs": 80000,
+                "video": "cam",
+                "region": {
+                  "x": 0,
+                  "y": 0,
+                  "w": 0.5,
+                  "h": 0.5
+                }
+              }
+            ]
+          },
+          "issues": [
+            "segment[0] \"c1s0\": region crops are not renderable here (a speaker-view feature) — remove segment.region"
+          ]
+        }
+      ]
+    },
+    "a Camera Switch batch held as JSON strings": {
+      "note": "Camera Switch run once per clip holds its latest batch on __listResults, one JSON STRING per clip, with '' for a clip whose run failed (skipped, as the fan-out skips it). The third clip switches with an xfade, which this renderer cannot draw.",
+      "nodes": [
+        {
+          "id": "switch",
+          "type": "camera-switch",
+          "data": {
+            "generatedJson": {
+              "edl": {
+                "version": 1,
+                "clock": "master",
+                "sources": [
+                  {
+                    "id": "cam",
+                    "url": "https://media.test/cam.mp4",
+                    "kind": "video"
+                  },
+                  {
+                    "id": "cam2",
+                    "url": "https://media.test/cam2.mp4",
+                    "kind": "video"
+                  }
+                ],
+                "segments": [
+                  {
+                    "id": "seg-0",
+                    "inMs": 90000,
+                    "outMs": 100000,
+                    "video": "cam"
+                  },
+                  {
+                    "id": "seg-1",
+                    "inMs": 100000,
+                    "outMs": 110000,
+                    "video": "cam2",
+                    "layout": {
+                      "mode": "single",
+                      "transition": {
+                        "type": "xfade:fade",
+                        "durationMs": 400
+                      }
+                    }
+                  }
+                ]
+              },
+              "transcript": {
+                "version": 1,
+                "words": []
+              }
+            },
+            "__listResults": [
+              "{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"cam\",\"url\":\"https://media.test/cam.mp4\",\"kind\":\"video\"},{\"id\":\"cam2\",\"url\":\"https://media.test/cam2.mp4\",\"kind\":\"video\"}],\"segments\":[{\"id\":\"seg-0\",\"inMs\":1000,\"outMs\":16000,\"video\":\"cam\"},{\"id\":\"seg-1\",\"inMs\":16000,\"outMs\":31000,\"video\":\"cam2\"}]}",
+              "",
+              "{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"cam\",\"url\":\"https://media.test/cam.mp4\",\"kind\":\"video\"},{\"id\":\"cam2\",\"url\":\"https://media.test/cam2.mp4\",\"kind\":\"video\"}],\"segments\":[{\"id\":\"seg-0\",\"inMs\":90000,\"outMs\":100000,\"video\":\"cam\"},{\"id\":\"seg-1\",\"inMs\":100000,\"outMs\":110000,\"video\":\"cam2\",\"layout\":{\"mode\":\"single\",\"transition\":{\"type\":\"xfade:fade\",\"durationMs\":400}}}]}"
+            ]
+          }
+        },
+        {
+          "id": "render",
+          "type": "apply-edl",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "source": "switch",
+          "target": "render",
+          "sourceHandle": "edl",
+          "targetHandle": "edl"
+        }
+      ],
+      "sources": [],
+      "renders": [
+        {
+          "clip": 0,
+          "edl": {
+            "version": 1,
+            "clock": "master",
+            "sources": [
+              {
+                "id": "cam",
+                "url": "https://media.test/cam.mp4",
+                "kind": "video"
+              },
+              {
+                "id": "cam2",
+                "url": "https://media.test/cam2.mp4",
+                "kind": "video"
+              }
+            ],
+            "segments": [
+              {
+                "id": "seg-0",
+                "inMs": 1000,
+                "outMs": 16000,
+                "video": "cam"
+              },
+              {
+                "id": "seg-1",
+                "inMs": 16000,
+                "outMs": 31000,
+                "video": "cam2"
+              }
+            ]
+          },
+          "issues": []
+        },
+        {
+          "clip": 2,
+          "edl": {
+            "version": 1,
+            "clock": "master",
+            "sources": [
+              {
+                "id": "cam",
+                "url": "https://media.test/cam.mp4",
+                "kind": "video"
+              },
+              {
+                "id": "cam2",
+                "url": "https://media.test/cam2.mp4",
+                "kind": "video"
+              }
+            ],
+            "segments": [
+              {
+                "id": "seg-0",
+                "inMs": 90000,
+                "outMs": 100000,
+                "video": "cam"
+              },
+              {
+                "id": "seg-1",
+                "inMs": 100000,
+                "outMs": 110000,
+                "video": "cam2",
+                "layout": {
+                  "mode": "single",
+                  "transition": {
+                    "type": "xfade:fade",
+                    "durationMs": 400
+                  }
+                }
+              }
+            ]
+          },
+          "issues": [
+            "segment[1] \"seg-1\": layout transition \"xfade:fade\" is not renderable here (only \"cut\", or a segment `transition` of type \"crossfade\", is) — remove it or use segment.transition"
+          ]
+        }
+      ]
+    },
+    "an empty url a wired source fills": {
+      "note": "The plan's source has no url; the media wired into the render's Sources input fills it, positionally. Structurally the plan has an empty url; as a render it is complete.",
+      "nodes": [
+        {
+          "id": "plan",
+          "type": "edit-plan",
+          "data": {
+            "mode": "tighten",
+            "generatedJson": {
+              "version": 1,
+              "clock": "master",
+              "sources": [
+                {
+                  "id": "cam",
+                  "url": "",
+                  "kind": "video"
+                }
+              ],
+              "segments": [
+                {
+                  "id": "s0",
+                  "inMs": 0,
+                  "outMs": 5000,
+                  "video": "cam"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "upload",
+          "type": "upload-video",
+          "data": {
+            "url": "https://media.test/cam-upload.mp4"
+          }
+        },
+        {
+          "id": "render",
+          "type": "apply-edl",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "source": "plan",
+          "target": "render",
+          "sourceHandle": "edl",
+          "targetHandle": "edl"
+        },
+        {
+          "source": "upload",
+          "target": "render",
+          "targetHandle": "sources"
+        }
+      ],
+      "sources": [
+        "https://media.test/cam-upload.mp4"
+      ],
+      "renders": [
+        {
+          "edl": {
+            "version": 1,
+            "clock": "master",
+            "sources": [
+              {
+                "id": "cam",
+                "url": "",
+                "kind": "video"
+              }
+            ],
+            "segments": [
+              {
+                "id": "s0",
+                "inMs": 0,
+                "outMs": 5000,
+                "video": "cam"
+              }
+            ]
+          },
+          "issues": []
+        }
+      ]
+    },
+    "a source wire that delivers nothing": {
+      "note": "Two Sources wires: the first comes from an upload with no media yet, which delivers nothing, so the second wire's media takes slot 0 and fills source 'a'.",
+      "nodes": [
+        {
+          "id": "plan",
+          "type": "edit-plan",
+          "data": {
+            "mode": "tighten",
+            "generatedJson": {
+              "version": 1,
+              "clock": "master",
+              "sources": [
+                {
+                  "id": "a",
+                  "url": "",
+                  "kind": "video"
+                },
+                {
+                  "id": "b",
+                  "url": "https://media.test/b.mp4",
+                  "kind": "video"
+                }
+              ],
+              "segments": [
+                {
+                  "id": "s0",
+                  "inMs": 0,
+                  "outMs": 3000,
+                  "video": "a"
+                },
+                {
+                  "id": "s1",
+                  "inMs": 3000,
+                  "outMs": 6000,
+                  "video": "b"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "upload-empty",
+          "type": "upload-video",
+          "data": {}
+        },
+        {
+          "id": "upload-a",
+          "type": "upload-video",
+          "data": {
+            "url": "https://media.test/a-upload.mp4"
+          }
+        },
+        {
+          "id": "render",
+          "type": "apply-edl",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "source": "plan",
+          "target": "render",
+          "sourceHandle": "edl",
+          "targetHandle": "edl"
+        },
+        {
+          "source": "upload-empty",
+          "target": "render",
+          "targetHandle": "sources"
+        },
+        {
+          "source": "upload-a",
+          "target": "render",
+          "targetHandle": "sources"
+        }
+      ],
+      "sources": [
+        "https://media.test/a-upload.mp4"
+      ],
+      "renders": [
+        {
+          "edl": {
+            "version": 1,
+            "clock": "master",
+            "sources": [
+              {
+                "id": "a",
+                "url": "",
+                "kind": "video"
+              },
+              {
+                "id": "b",
+                "url": "https://media.test/b.mp4",
+                "kind": "video"
+              }
+            ],
+            "segments": [
+              {
+                "id": "s0",
+                "inMs": 0,
+                "outMs": 3000,
+                "video": "a"
+              },
+              {
+                "id": "s1",
+                "inMs": 3000,
+                "outMs": 6000,
+                "video": "b"
+              }
+            ]
+          },
+          "issues": []
+        }
+      ]
+    },
+    "the last wire holding an EDL": {
+      "note": "Two plans wired into EDL; the later wire's plan has not run, so it delivers nothing and the earlier wire's plan renders.",
+      "nodes": [
+        {
+          "id": "plan-a",
+          "type": "edit-plan",
+          "data": {
+            "mode": "tighten",
+            "generatedJson": {
+              "version": 1,
+              "clock": "master",
+              "sources": [
+                {
+                  "id": "cam",
+                  "url": "https://media.test/cam.mp4",
+                  "kind": "video"
+                }
+              ],
+              "segments": [
+                {
+                  "id": "s0",
+                  "inMs": 0,
+                  "outMs": 10860000,
+                  "video": "cam"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "plan-b",
+          "type": "edit-plan",
+          "data": {
+            "mode": "tighten"
+          }
+        },
+        {
+          "id": "render",
+          "type": "apply-edl",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "source": "plan-a",
+          "target": "render",
+          "sourceHandle": "edl",
+          "targetHandle": "edl"
+        },
+        {
+          "source": "plan-b",
+          "target": "render",
+          "sourceHandle": "edl",
+          "targetHandle": "edl"
+        }
+      ],
+      "sources": [],
+      "renders": [
+        {
+          "edl": {
+            "version": 1,
+            "clock": "master",
+            "sources": [
+              {
+                "id": "cam",
+                "url": "https://media.test/cam.mp4",
+                "kind": "video"
+              }
+            ],
+            "segments": [
+              {
+                "id": "s0",
+                "inMs": 0,
+                "outMs": 10860000,
+                "video": "cam"
+              }
+            ]
+          },
+          "issues": [
+            "the edit renders 181 minutes of output — over the 180-minute limit for one render; split it into parts of at most 180 minutes"
+          ]
+        }
+      ]
+    },
+    "a List of EDLs": {
+      "note": "A List holding one EDL per row fans the render out, one render per row, like a plan's clip list: the second row's side-by-side layout is refused for that render alone.",
+      "nodes": [
+        {
+          "id": "rows",
+          "type": "list",
+          "data": {
+            "columns": [
+              {
+                "id": "a",
+                "name": "EDL",
+                "handleId": "col_a",
+                "type": "text"
+              }
+            ],
+            "rows": [
+              [
+                "{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"cam\",\"url\":\"https://media.test/cam.mp4\",\"kind\":\"video\"}],\"segments\":[{\"id\":\"a0\",\"inMs\":0,\"outMs\":5000,\"video\":\"cam\"}]}"
+              ],
+              [
+                "{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"cam\",\"url\":\"https://media.test/cam.mp4\",\"kind\":\"video\"},{\"id\":\"cam2\",\"url\":\"https://media.test/cam2.mp4\",\"kind\":\"video\"}],\"segments\":[{\"id\":\"s0\",\"inMs\":0,\"outMs\":3000,\"video\":\"cam\"},{\"id\":\"s1\",\"inMs\":3000,\"outMs\":6000,\"video\":\"cam\",\"layout\":{\"mode\":\"side-by-side\",\"slots\":[{\"source\":\"cam\"},{\"source\":\"cam2\"}]}}]}"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "render",
+          "type": "apply-edl",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "source": "rows",
+          "target": "render",
+          "sourceHandle": "col_a",
+          "targetHandle": "edl"
+        }
+      ],
+      "sources": [],
+      "renders": [
+        {
+          "clip": 0,
+          "edl": {
+            "version": 1,
+            "clock": "master",
+            "sources": [
+              {
+                "id": "cam",
+                "url": "https://media.test/cam.mp4",
+                "kind": "video"
+              }
+            ],
+            "segments": [
+              {
+                "id": "a0",
+                "inMs": 0,
+                "outMs": 5000,
+                "video": "cam"
+              }
+            ]
+          },
+          "issues": []
+        },
+        {
+          "clip": 1,
+          "edl": {
+            "version": 1,
+            "clock": "master",
+            "sources": [
+              {
+                "id": "cam",
+                "url": "https://media.test/cam.mp4",
+                "kind": "video"
+              },
+              {
+                "id": "cam2",
+                "url": "https://media.test/cam2.mp4",
+                "kind": "video"
+              }
+            ],
+            "segments": [
+              {
+                "id": "s0",
+                "inMs": 0,
+                "outMs": 3000,
+                "video": "cam"
+              },
+              {
+                "id": "s1",
+                "inMs": 3000,
+                "outMs": 6000,
+                "video": "cam",
+                "layout": {
+                  "mode": "side-by-side",
+                  "slots": [
+                    {
+                      "source": "cam"
+                    },
+                    {
+                      "source": "cam2"
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          "issues": [
+            "segment[1] \"s1\": layout mode \"side-by-side\" — this renderer shows one source full-frame per segment (multi-camera layouts are a speaker-view feature)",
+            "segment[1] \"s1\": layout with 2 slots — this renderer shows one source per segment (multi-slot layouts are a speaker-view feature)"
+          ]
+        }
+      ]
+    },
+    "Generate Text items, one EDL per item": {
+      "note": "Generate Text wired from its Items output delivers one item per run (its text split on ===NEXT===), so each item is its own render; its whole text is not one EDL.",
+      "nodes": [
+        {
+          "id": "writer",
+          "type": "llm-chat",
+          "data": {
+            "generatedText": "{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"cam\",\"url\":\"https://media.test/cam.mp4\",\"kind\":\"video\"}],\"segments\":[{\"id\":\"a0\",\"inMs\":0,\"outMs\":5000,\"video\":\"cam\"}]}\n===NEXT===\n{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"cam\",\"url\":\"https://media.test/cam.mp4\",\"kind\":\"video\"}],\"segments\":[{\"id\":\"b0\",\"inMs\":5000,\"outMs\":9000,\"video\":\"cam\"}]}"
+          }
+        },
+        {
+          "id": "render",
+          "type": "apply-edl",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "source": "writer",
+          "target": "render",
+          "sourceHandle": "items",
+          "targetHandle": "edl"
+        }
+      ],
+      "sources": [],
+      "renders": [
+        {
+          "clip": 0,
+          "edl": {
+            "version": 1,
+            "clock": "master",
+            "sources": [
+              {
+                "id": "cam",
+                "url": "https://media.test/cam.mp4",
+                "kind": "video"
+              }
+            ],
+            "segments": [
+              {
+                "id": "a0",
+                "inMs": 0,
+                "outMs": 5000,
+                "video": "cam"
+              }
+            ]
+          },
+          "issues": []
+        },
+        {
+          "clip": 1,
+          "edl": {
+            "version": 1,
+            "clock": "master",
+            "sources": [
+              {
+                "id": "cam",
+                "url": "https://media.test/cam.mp4",
+                "kind": "video"
+              }
+            ],
+            "segments": [
+              {
+                "id": "b0",
+                "inMs": 5000,
+                "outMs": 9000,
+                "video": "cam"
+              }
+            ]
+          },
+          "issues": []
+        }
+      ]
+    },
+    "Camera Switch's transcript wired into the EDL input": {
+      "note": "This wire leaves Camera Switch's Transcript output, not its switched EDL: the render reads the transcript as its EDL, which has no segments.",
+      "nodes": [
+        {
+          "id": "switch",
+          "type": "camera-switch",
+          "data": {
+            "generatedJson": {
+              "edl": {
+                "version": 1,
+                "clock": "master",
+                "sources": [
+                  {
+                    "id": "cam",
+                    "url": "https://media.test/cam.mp4",
+                    "kind": "video"
+                  }
+                ],
+                "segments": [
+                  {
+                    "id": "a0",
+                    "inMs": 0,
+                    "outMs": 5000,
+                    "video": "cam"
+                  }
+                ]
+              },
+              "transcript": {
+                "version": 1,
+                "words": []
+              }
+            }
+          }
+        },
+        {
+          "id": "render",
+          "type": "apply-edl",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "source": "switch",
+          "target": "render",
+          "sourceHandle": "transcript",
+          "targetHandle": "edl"
+        }
+      ],
+      "sources": [],
+      "renders": [
+        {
+          "edl": {
+            "version": 1,
+            "words": []
+          },
+          "issues": [
+            "segments is empty"
+          ]
+        }
+      ]
+    },
+    "a List wired into Sources, a row missing its second camera": {
+      "note": "Two columns of a List wired into Sources fan the render out, one render per row, each row's media filling the plan's sources in slot order. The second row has no second camera: its render gets one override, so the plan's second source keeps its empty url and that render alone is refused.",
+      "nodes": [
+        {
+          "id": "plan",
+          "type": "edit-plan",
+          "data": {
+            "mode": "tighten",
+            "generatedJson": {
+              "version": 1,
+              "clock": "master",
+              "sources": [
+                {
+                  "id": "cam",
+                  "url": "",
+                  "kind": "video"
+                },
+                {
+                  "id": "cam2",
+                  "url": "",
+                  "kind": "video"
+                }
+              ],
+              "segments": [
+                {
+                  "id": "s0",
+                  "inMs": 0,
+                  "outMs": 3000,
+                  "video": "cam"
+                },
+                {
+                  "id": "s1",
+                  "inMs": 3000,
+                  "outMs": 6000,
+                  "video": "cam2"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "cams",
+          "type": "list",
+          "data": {
+            "columns": [
+              {
+                "id": "a",
+                "name": "Camera A",
+                "handleId": "col_a",
+                "type": "text"
+              },
+              {
+                "id": "b",
+                "name": "Camera B",
+                "handleId": "col_b",
+                "type": "text"
+              }
+            ],
+            "rows": [
+              [
+                "https://media.test/a-0.mp4",
+                "https://media.test/b-0.mp4"
+              ],
+              [
+                "https://media.test/a-1.mp4",
+                ""
+              ]
+            ]
+          }
+        },
+        {
+          "id": "render",
+          "type": "apply-edl",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "source": "plan",
+          "target": "render",
+          "sourceHandle": "edl",
+          "targetHandle": "edl"
+        },
+        {
+          "source": "cams",
+          "target": "render",
+          "sourceHandle": "col_a",
+          "targetHandle": "sources"
+        },
+        {
+          "source": "cams",
+          "target": "render",
+          "sourceHandle": "col_b",
+          "targetHandle": "sources"
+        }
+      ],
+      "sources": [],
+      "renders": [
+        {
+          "clip": 0,
+          "edl": {
+            "version": 1,
+            "clock": "master",
+            "sources": [
+              {
+                "id": "cam",
+                "url": "",
+                "kind": "video"
+              },
+              {
+                "id": "cam2",
+                "url": "",
+                "kind": "video"
+              }
+            ],
+            "segments": [
+              {
+                "id": "s0",
+                "inMs": 0,
+                "outMs": 3000,
+                "video": "cam"
+              },
+              {
+                "id": "s1",
+                "inMs": 3000,
+                "outMs": 6000,
+                "video": "cam2"
+              }
+            ]
+          },
+          "sources": [
+            "https://media.test/a-0.mp4",
+            "https://media.test/b-0.mp4"
+          ],
+          "issues": []
+        },
+        {
+          "clip": 1,
+          "edl": {
+            "version": 1,
+            "clock": "master",
+            "sources": [
+              {
+                "id": "cam",
+                "url": "",
+                "kind": "video"
+              },
+              {
+                "id": "cam2",
+                "url": "",
+                "kind": "video"
+              }
+            ],
+            "segments": [
+              {
+                "id": "s0",
+                "inMs": 0,
+                "outMs": 3000,
+                "video": "cam"
+              },
+              {
+                "id": "s1",
+                "inMs": 3000,
+                "outMs": 6000,
+                "video": "cam2"
+              }
+            ]
+          },
+          "sources": [
+            "https://media.test/a-1.mp4"
+          ],
+          "issues": [
+            "source \"cam2\": url is empty (media resolves from url)",
+            "source \"cam2\" has no url — resolve it or wire a `sources` override"
+          ]
+        }
+      ]
+    },
+    "a clip list paired with a List of sources": {
+      "note": "A plan's clip list and a List wired into Sources with the same rows fan the render out together: each render reads its clip and its row's media, in slot order. The second clip cuts between two cameras but its row brings one, so its second source keeps its empty url and that render alone is refused; the first renders.",
+      "nodes": [
+        {
+          "id": "plan",
+          "type": "edit-plan",
+          "data": {
+            "mode": "clips",
+            "generatedJson": [
+              {
+                "version": 1,
+                "clock": "master",
+                "sources": [
+                  {
+                    "id": "cam",
+                    "url": "",
+                    "kind": "video"
+                  }
+                ],
+                "segments": [
+                  {
+                    "id": "c0",
+                    "inMs": 0,
+                    "outMs": 4000,
+                    "video": "cam"
+                  }
+                ]
+              },
+              {
+                "version": 1,
+                "clock": "master",
+                "sources": [
+                  {
+                    "id": "cam",
+                    "url": "",
+                    "kind": "video"
+                  },
+                  {
+                    "id": "cam2",
+                    "url": "",
+                    "kind": "video"
+                  }
+                ],
+                "segments": [
+                  {
+                    "id": "c1a",
+                    "inMs": 0,
+                    "outMs": 2500,
+                    "video": "cam"
+                  },
+                  {
+                    "id": "c1b",
+                    "inMs": 2500,
+                    "outMs": 5000,
+                    "video": "cam2"
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "media",
+          "type": "list",
+          "data": {
+            "columns": [
+              {
+                "id": "a",
+                "name": "Media",
+                "handleId": "col_a",
+                "type": "text"
+              }
+            ],
+            "rows": [
+              [
+                "https://media.test/clip-0.mp4"
+              ],
+              [
+                "https://media.test/clip-1.mp4"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "render",
+          "type": "apply-edl",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "source": "plan",
+          "target": "render",
+          "sourceHandle": "edl",
+          "targetHandle": "edl"
+        },
+        {
+          "source": "media",
+          "target": "render",
+          "sourceHandle": "col_a",
+          "targetHandle": "sources"
+        }
+      ],
+      "sources": [],
+      "renders": [
+        {
+          "clip": 0,
+          "edl": {
+            "version": 1,
+            "clock": "master",
+            "sources": [
+              {
+                "id": "cam",
+                "url": "",
+                "kind": "video"
+              }
+            ],
+            "segments": [
+              {
+                "id": "c0",
+                "inMs": 0,
+                "outMs": 4000,
+                "video": "cam"
+              }
+            ]
+          },
+          "sources": [
+            "https://media.test/clip-0.mp4"
+          ],
+          "issues": []
+        },
+        {
+          "clip": 1,
+          "edl": {
+            "version": 1,
+            "clock": "master",
+            "sources": [
+              {
+                "id": "cam",
+                "url": "",
+                "kind": "video"
+              },
+              {
+                "id": "cam2",
+                "url": "",
+                "kind": "video"
+              }
+            ],
+            "segments": [
+              {
+                "id": "c1a",
+                "inMs": 0,
+                "outMs": 2500,
+                "video": "cam"
+              },
+              {
+                "id": "c1b",
+                "inMs": 2500,
+                "outMs": 5000,
+                "video": "cam2"
+              }
+            ]
+          },
+          "sources": [
+            "https://media.test/clip-1.mp4"
+          ],
+          "issues": [
+            "source \"cam2\": url is empty (media resolves from url)",
+            "source \"cam2\" has no url — resolve it or wire a `sources` override"
+          ]
+        }
+      ]
+    },
+    "a List row with no EDL that its camera keeps": {
+      "note": "A List's EDL column is wired into EDL and its camera column into Sources. The second row's EDL cell is empty, but its camera cell keeps the row in the run, so the run still makes that render with no EDL: the server refuses it (an empty EDL has no segments) and the editor's Run refuses it before sending (\"apply-edl requires an EDL\"). The badge counts it as a render that fails with no EDL, so the node is not ready.",
+      "nodes": [
+        {
+          "id": "rows",
+          "type": "list",
+          "data": {
+            "columns": [
+              {
+                "id": "a",
+                "name": "EDL",
+                "handleId": "col_a",
+                "type": "text"
+              },
+              {
+                "id": "b",
+                "name": "Camera",
+                "handleId": "col_b",
+                "type": "text"
+              }
+            ],
+            "rows": [
+              [
+                "{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"cam\",\"url\":\"\",\"kind\":\"video\"}],\"segments\":[{\"id\":\"s0\",\"inMs\":0,\"outMs\":5000,\"video\":\"cam\"}]}",
+                "https://media.test/a-0.mp4"
+              ],
+              [
+                "",
+                "https://media.test/a-1.mp4"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "render",
+          "type": "apply-edl",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "source": "rows",
+          "target": "render",
+          "sourceHandle": "col_a",
+          "targetHandle": "edl"
+        },
+        {
+          "source": "rows",
+          "target": "render",
+          "sourceHandle": "col_b",
+          "targetHandle": "sources"
+        }
+      ],
+      "sources": [],
+      "renders": [
+        {
+          "clip": 0,
+          "edl": {
+            "version": 1,
+            "clock": "master",
+            "sources": [
+              {
+                "id": "cam",
+                "url": "",
+                "kind": "video"
+              }
+            ],
+            "segments": [
+              {
+                "id": "s0",
+                "inMs": 0,
+                "outMs": 5000,
+                "video": "cam"
+              }
+            ]
+          },
+          "sources": [
+            "https://media.test/a-0.mp4"
+          ],
+          "issues": []
+        },
+        {
+          "clip": 1,
+          "sources": [
+            "https://media.test/a-1.mp4"
+          ],
+          "issues": [
+            "segments is empty"
+          ],
+          "badgeIssues": [
+            "no EDL"
+          ]
+        }
+      ]
+    }
+  }
+}

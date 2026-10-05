@@ -221,6 +221,17 @@ describe("extractDisplayValue", () => {
 })
 
 describe("getModelIdentifier", () => {
+  it("text-to-audio: the per-second row for the node's length — the row the run reserves", () => {
+    const t2a = (data: Record<string, unknown>) =>
+      makeNode({ id: "t1", type: "text-to-audio", data: { label: "SFX", prompt: "rain", ...data } } as Partial<WorkflowNode>)
+    expect(getModelIdentifier(t2a({ provider: "elevenlabs-sfx", duration: 10 }))).toBe("elevenlabs-sfx:10s")
+    expect(getModelIdentifier(t2a({ provider: "elevenlabs-sfx", duration: 0.5 }))).toBe("elevenlabs-sfx:1s")
+    expect(getModelIdentifier(t2a({ provider: "elevenlabs-sfx", duration: 22.3 }))).toBe("elevenlabs-sfx:23s")
+    // No duration → billed as 5 s; no provider → the default engine's row.
+    expect(getModelIdentifier(t2a({ provider: "elevenlabs-sfx" }))).toBe("elevenlabs-sfx:5s")
+    expect(getModelIdentifier(t2a({ duration: 8 }))).toBe("elevenlabs-sfx:8s")
+  })
+
   it("prices Video SFX at the row for the wired clip's length, the 8s row when it is unknown", () => {
     const sfx = makeNode({ id: "sfx", type: "video-sfx", data: { label: "SFX", provider: "replicate-mmaudio" } as any })
     const clip = makeNode({ id: "clip", type: "upload-video", data: { label: "Clip", videoDuration: 42 } as any })

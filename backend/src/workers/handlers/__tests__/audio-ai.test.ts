@@ -383,6 +383,22 @@ describe("text-to-speech handler", () => {
     )
   })
 
+  it("passes the job's voiceType through, so a library voice on an MCP job never falls back to the default voice", async () => {
+    const job = makeJob("text-to-speech", { text: "Hi", provider: "elevenlabs-v3", voice: "Lib000Voice111Id2223", voiceType: "library", allowDefaultVoiceFallback: true })
+    await handler(job as never, makeCtx())
+    expect(mocks.mockDirectElevenLabsTTS).toHaveBeenCalledWith(
+      "Hi", "Lib000Voice111Id2223", "elevenlabs-v3",
+      expect.objectContaining({ allowDefaultVoiceFallback: true, voiceType: "library" }),
+    )
+  })
+
+  it("an MCP job with a library voice the provider no longer has fails with the provider's not-found error", async () => {
+    mocks.mockDirectElevenLabsTTS.mockRejectedValueOnce(new Error('Voice "Lib000Voice111Id2223" was not found on ElevenLabs — it may have been removed from the Voice Library or deleted from your clones. Pick a different voice and try again.'))
+    const job = makeJob("text-to-speech", { text: "Hi", provider: "elevenlabs-v3", voice: "Lib000Voice111Id2223", voiceType: "library", allowDefaultVoiceFallback: true })
+    await expect(handler(job as never, makeCtx())).rejects.toThrow(/was not found on ElevenLabs/)
+    expect(mocks.mockFinalizeJobWithMedia).not.toHaveBeenCalled()
+  })
+
   it("uses custom voice and options", async () => {
     const job = makeJob("text-to-speech", { text: "Hi", provider: "elevenlabs-v3", voice: "Daniel", stability: 0.5, speed: 1.2, languageCode: "en-US" })
     await handler(job as never, makeCtx())

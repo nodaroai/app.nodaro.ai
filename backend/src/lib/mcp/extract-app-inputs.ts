@@ -20,9 +20,16 @@
  * Both produce the same NormalizedInputSchema so the run_* tools can use
  * one translation function.
  */
-import { migrateToItems, getInputFieldSchema, deriveLottieSlotFields, LOTTIE_SLOT_FIELD_PREFIX } from "@nodaro/shared"
+import {
+  migrateToItems,
+  getInputFieldSchema,
+  deriveLottieSlotFields,
+  LOTTIE_SLOT_FIELD_PREFIX,
+  canonicalExposedFieldKey,
+} from "@nodaro/shared"
 import type { ComponentMetadata, PresentationItem, InputFieldSchema, LottieSlotField } from "@nodaro/shared"
 import { sanitizeSlug } from "./slug-sanitizer.js"
+import { EXPOSABLE_SLIDERS } from "./generated/exposable-sliders.js"
 import { normalizeLegacyNodeTypes } from "../../services/workflow-engine/normalize-node-types.js"
 
 /** Public schema entry surfaced to the LLM. No node-id leak. */
@@ -45,13 +52,24 @@ export interface NormalizedInputField {
   readonly required: boolean
   /** When type=select: enum of allowed values (string|number|boolean) */
   readonly options?: ReadonlyArray<string | number | boolean>
+  /**
+   * When type=number and the control is a slider (an exposed node slider, or a
+   * lottie number slot): its bounds and step, as the app's own slider uses them.
+   */
+  readonly min?: number
+  readonly max?: number
+  readonly step?: number
   /** Human description if we have one */
   readonly description?: string
 }
 
-/** Internal mapping for translating flat inputs → nested inputOverrides. */
+/**
+ * Internal mapping for translating flat inputs → nested inputOverrides. Never
+ * returned to the caller. `type: "number"` marks a field whose numeric string
+ * `flatInputsToOverrides` turns into a number.
+ */
 export interface InputKeyMap {
-  readonly [key: string]: { readonly nodeId: string; readonly fieldKey: string }
+  readonly [key: string]: { readonly nodeId: string; readonly fieldKey: string; readonly type?: "number" }
 }
 
 export interface NormalizedInputSchema {
@@ -141,6 +159,32 @@ function resolveListInfo(
   return { fieldKey: "items", type: "list" }
 }
 
+/** The defined bounds of a slider descriptor, as optional schema keys (an absent bound adds no key). */
+function sliderBounds(s: { min?: number; max?: number; step?: number }): { min?: number; max?: number; step?: number } {
+  return {
+    ...(s.min !== undefined ? { min: s.min } : {}),
+    ...(s.max !== undefined ? { max: s.max } : {}),
+    ...(s.step !== undefined ? { step: s.step } : {}),
+  }
+}
+
+/**
+ * An exposed node field whose descriptor (frontend NODE_DEFINITIONS
+ * `exposableFields`) is a slider: its bounds, read from the table gen-skills
+ * renders from those descriptors — the backend never hand-copies a range.
+ * The stored key goes through `canonicalExposedFieldKey`, so an app published
+ * under a renamed key (Text to Speech `similarity`) still finds its slider.
+ */
+function exposedSliderInfo(
+  nodeType: string | undefined,
+  storedKey: string,
+): { min?: number; max?: number; step?: number } | undefined {
+  if (!nodeType || !Object.hasOwn(EXPOSABLE_SLIDERS, nodeType)) return undefined
+  const sliders = EXPOSABLE_SLIDERS[nodeType]!
+  const key = canonicalExposedFieldKey(nodeType, storedKey)
+  return Object.hasOwn(sliders, key) ? sliders[key] : undefined
+}
+
 /**
  * A `slot:<sid>` field item on a motion-graphics node resolves through the
  * shared `deriveLottieSlotFields` (the single source of truth the editor picker
@@ -151,13 +195,23 @@ function resolveListInfo(
  * Coarse-type mapping for the LLM schema:
  *   - color  → `"color"` (NormalizedInputField gained the member; MCP clients
  *     just see the string hint, no exhaustive consumer to break)
- *   - slider → `"number"` (+ a description carrying the slider range)
+ *   - slider → `"number"` (+ `min` / `max` / `step`, and a description carrying the range)
  *   - text   → `"text"`
  */
 function lottieSlotFieldInfo(
   node: { type?: string; data?: Record<string, unknown> } | undefined,
   fieldKey: string,
-): { type: NormalizedInputField["type"]; label: string; description?: string; defaultValue?: unknown } | undefined {
+):
+  | {
+      type: NormalizedInputField["type"]
+      label: string
+      description?: string
+      defaultValue?: unknown
+      min?: number
+      max?: number
+      step?: number
+    }
+  | undefined {
   if (node?.type !== "motion-graphics") return undefined
   const derived = deriveLottieSlotFields(node.data?.motionPlan as Record<string, unknown> | undefined)
   const slot: LottieSlotField | undefined = derived.find((f) => f.key === fieldKey)
@@ -177,6 +231,7 @@ function lottieSlotFieldInfo(
       label: slot.label,
       description: `Number between ${slot.min ?? 0} and ${slot.max ?? 100}.`,
       defaultValue: slot.defaultValue,
+      ...sliderBounds(slot),
     }
   }
   return { type: "text", label: slot.label, defaultValue: slot.defaultValue }
@@ -223,6 +278,33 @@ function flattenInputItems(
     // Skip output, richtext (no value to surface).
   }
   return out
+}
+
+/** One keyMap entry; a `number` field carries the marker `flatInputsToOverrides` coerces by. */
+function keyMapEntry(
+  nodeId: string,
+  fieldKey: string,
+  type: NormalizedInputField["type"],
+): InputKeyMap[string] {
+  return type === "number" ? { nodeId, fieldKey, type: "number" } : { nodeId, fieldKey }
+}
+
+/** A decimal number: optional sign, digits with an optional fraction (or a bare fraction), optional exponent. */
+const DECIMAL_NUMBER = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/
+
+/**
+ * A flat input for a `number` field: a decimal numeric string (surrounding
+ * spaces allowed) becomes that number — the same rule the Text to Speech
+ * voice-setting normaliser applies. Anything else (a number included) passes
+ * through unchanged, so a value this layer cannot read reaches the node's own
+ * funnel exactly as it did before fields were typed. Never clamps.
+ */
+function coerceNumberInput(value: unknown): unknown {
+  if (typeof value !== "string") return value
+  const trimmed = value.trim()
+  if (!DECIMAL_NUMBER.test(trimmed)) return value
+  const parsed = Number(trimmed)
+  return Number.isFinite(parsed) ? parsed : value
 }
 
 /** Make a key collision-safe within the schema. */
@@ -328,7 +410,7 @@ export function extractAppInputSchema({
         required: type !== "text",
         ...(description ? { description } : {}),
       })
-      keyMap[key] = { nodeId: item.nodeId, fieldKey }
+      keyMap[key] = keyMapEntry(item.nodeId, fieldKey, type)
     } else {
       // type === "field"
       const node = nodesById.get(item.nodeId)
@@ -341,6 +423,9 @@ export function extractAppInputSchema({
       const lottieSlot = item.field.startsWith(LOTTIE_SLOT_FIELD_PREFIX)
         ? lottieSlotFieldInfo(node, item.field)
         : undefined
+      // An `allowedValues` card is a select whatever its control; otherwise an
+      // exposed slider is a number with its descriptor's range.
+      const slider = lottieSlot || item.allowedValues ? undefined : exposedSliderInfo(node?.type, item.field)
       let field: NormalizedInputField
       if (lottieSlot) {
         field = {
@@ -348,7 +433,16 @@ export function extractAppInputSchema({
           label: `${nodeLabel}: ${lottieSlot.label}`,
           type: lottieSlot.type,
           required: false,
+          ...sliderBounds(lottieSlot),
           ...(lottieSlot.description ? { description: lottieSlot.description } : {}),
+        }
+      } else if (slider) {
+        field = {
+          key,
+          label: `${nodeLabel}: ${item.field}`,
+          type: "number",
+          required: false,
+          ...sliderBounds(slider),
         }
       } else {
         const type: NormalizedInputField["type"] = item.allowedValues ? "select" : "text"
@@ -361,7 +455,9 @@ export function extractAppInputSchema({
         }
       }
       fields.push(field)
-      keyMap[key] = { nodeId: item.nodeId, fieldKey: item.field }
+      // The STORED key stays on the wire: the run-request override lock reads
+      // it, and the orchestrator's merge canonicalizes it afterwards.
+      keyMap[key] = keyMapEntry(item.nodeId, item.field, field.type)
     }
   }
 
@@ -397,7 +493,8 @@ export function extractComponentInputSchema(
  * Translate the LLM's flat `inputs` into the nested `inputOverrides`
  * shape `/v1/app/:slug/run` and `/v1/component/execute` accept.
  * Unknown keys are silently dropped — schema mismatch shouldn't bring
- * down the run.
+ * down the run. A field the schema typed `number` accepts a number or a
+ * numeric string; the string arrives at the node as a number.
  */
 export function flatInputsToOverrides(
   flat: Record<string, unknown> | undefined,
@@ -410,7 +507,7 @@ export function flatInputsToOverrides(
     if (!target || value === undefined || value === null) continue
     overrides[target.nodeId] = {
       ...overrides[target.nodeId],
-      [target.fieldKey]: value,
+      [target.fieldKey]: target.type === "number" ? coerceNumberInput(value) : value,
     }
   }
   return Object.keys(overrides).length ? overrides : undefined

@@ -1928,7 +1928,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
             "explicit fields below override it. A preset's promptPrefix/promptSuffix " +
             "wrap your prompt.",
           ),
-        duration: z.number().min(0.5).max(30).optional().describe("Duration in seconds (0.5–30). Defaults to model choice."),
+        duration: z.number().min(0.5).max(30).optional().describe("Duration in seconds (0.5–30). Priced per second, rounded up; omitted = model picks the length, billed as 5 s."),
         loop: z.boolean().optional().describe("Whether the output should loop seamlessly."),
         prompt_influence: z.number().min(0).max(1).optional().describe("How strongly the prompt guides generation (0–1)."),
       },

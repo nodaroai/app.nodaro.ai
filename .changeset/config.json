@@ -11,6 +11,7 @@
     "nodaro-backend",
     "frontend",
     "@nodaro/remotion",
-    "@nodaro/picker-ui"
+    "@nodaro/picker-ui",
+    "@nodaro/render-rules"
   ]
 }

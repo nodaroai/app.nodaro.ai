@@ -173,7 +173,7 @@ Text-to-speech, voice design/changing, dubbing, sound effects, transcription, an
 <!-- AUTO-GEN:START model-table-audio -->
 | Model | Family | Tier | Credits | Modes | Best for |
 | --- | --- | --- | --- | --- | --- |
-| ElevenLabs Sound Effects | ElevenLabs | Everyday | 3 | sfx | Generate short sound effects from a text prompt. |
+| ElevenLabs Sound Effects | ElevenLabs | Everyday | 5 | sfx | Generate short sound effects from a text prompt. |
 | ElevenLabs Turbo v2.5 | ElevenLabs | Everyday | 15 | tts | Fast, cheap ElevenLabs TTS via the direct ElevenLabs API. Good for narration. |
 | ElevenLabs STT | ElevenLabs | Everyday | 22 | stt | Speech-to-text with WORD-level timestamps (always on), speaker diarization and audio-event tags. The engine to use when the transcript feeds captions. |
 | ElevenLabs Dialogue v3 | ElevenLabs | Everyday | 25 | dialogue | Multi-speaker dialogue via the direct ElevenLabs API — give it a script, it voices each role (any voice: premade, library, or cloned). |

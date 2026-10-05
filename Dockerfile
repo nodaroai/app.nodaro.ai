@@ -34,6 +34,7 @@ COPY packages/prompts/package.json ./packages/prompts/
 COPY packages/client/package.json ./packages/client/
 COPY packages/remotion/package.json ./packages/remotion/
 COPY packages/picker-ui/package.json ./packages/picker-ui/
+COPY packages/render-rules/package.json ./packages/render-rules/
 COPY backend/package.json ./backend/
 COPY frontend/package.json ./frontend/
 
@@ -69,6 +70,17 @@ COPY packages/picker-ui/tsup.config.ts ./packages/picker-ui/
 WORKDIR /app/packages/picker-ui
 RUN npm run build
 
+# @nodaro/render-rules (workspace, SUL, not published) — what the renderers
+# accept: Apply EDL's render rule, which the backend refuses with at every
+# ingress and the editor judges a render with before a run (one source for
+# both). Depends on the @nodaro/shared dist above.
+WORKDIR /app
+COPY packages/render-rules/src ./packages/render-rules/src
+COPY packages/render-rules/tsconfig.json ./packages/render-rules/
+COPY packages/render-rules/tsup.config.ts ./packages/render-rules/
+WORKDIR /app/packages/render-rules
+RUN npm run build
+
 # ── Stage 2b: Build @nodaro/sdk (tsup) ─────────────────────────────
 # Frontend imports @nodaro/sdk from node_modules (workspace symlink).
 # Client depends on @nodaro/shared, so shared/dist must be in place first.
@@ -100,6 +112,8 @@ COPY --from=shared-build /app/packages/shared/dist ./packages/shared/dist
 COPY --from=shared-build /app/packages/shared/package.json ./packages/shared/package.json
 COPY --from=shared-build /app/packages/prompts/dist ./packages/prompts/dist
 COPY --from=shared-build /app/packages/prompts/package.json ./packages/prompts/package.json
+COPY --from=shared-build /app/packages/render-rules/dist ./packages/render-rules/dist
+COPY --from=shared-build /app/packages/render-rules/package.json ./packages/render-rules/package.json
 
 # Backend source.
 COPY backend/ ./backend/
@@ -149,6 +163,11 @@ COPY --from=client-build /app/packages/client/package.json ./packages/client/pac
 # its CSS ships as dist/index.css, imported once by the frontend barrel).
 COPY --from=shared-build /app/packages/picker-ui/dist ./packages/picker-ui/dist
 COPY --from=shared-build /app/packages/picker-ui/package.json ./packages/picker-ui/package.json
+
+# Render-rules dist (the Apply EDL panel badge judges with the same rule the
+# backend refuses with; Vite imports it via the workspace symlink → dist).
+COPY --from=shared-build /app/packages/render-rules/dist ./packages/render-rules/dist
+COPY --from=shared-build /app/packages/render-rules/package.json ./packages/render-rules/package.json
 
 # Remotion package source (Vite alias `@remotion-pkg` points at src/).
 COPY packages/remotion/ ./packages/remotion/
@@ -273,6 +292,7 @@ COPY packages/prompts/package.json ./packages/prompts/
 COPY packages/client/package.json ./packages/client/
 COPY packages/remotion/package.json ./packages/remotion/
 COPY packages/picker-ui/package.json ./packages/picker-ui/
+COPY packages/render-rules/package.json ./packages/render-rules/
 COPY backend/package.json ./backend/
 COPY frontend/package.json ./frontend/
 
@@ -471,6 +491,7 @@ COPY --chown=node:node --from=prod-deps /app/node_modules ./node_modules
 # 3. Workspace package manifests (so Node's resolver knows the layout).
 COPY --chown=node:node --from=prod-deps /app/packages/shared/package.json ./packages/shared/package.json
 COPY --chown=node:node --from=prod-deps /app/packages/prompts/package.json ./packages/prompts/package.json
+COPY --chown=node:node --from=prod-deps /app/packages/render-rules/package.json ./packages/render-rules/package.json
 COPY --chown=node:node --from=prod-deps /app/packages/remotion/package.json ./packages/remotion/package.json
 COPY --chown=node:node --from=prod-deps /app/backend/package.json ./backend/package.json
 COPY --chown=node:node --from=prod-deps /app/frontend/package.json ./frontend/package.json
@@ -487,6 +508,7 @@ COPY --chown=node:node --from=prod-deps /app/backend/node_modules ./backend/node
 # 4. Built @nodaro/shared dist (resolved via the workspace symlink).
 COPY --chown=node:node --from=shared-build /app/packages/shared/dist ./packages/shared/dist
 COPY --chown=node:node --from=shared-build /app/packages/prompts/dist ./packages/prompts/dist
+COPY --chown=node:node --from=shared-build /app/packages/render-rules/dist ./packages/render-rules/dist
 
 # 5. Backend compiled JS (flat dist/server.js because tsconfig rootDir = ./src).
 COPY --chown=node:node --from=backend-build /app/backend/dist ./backend/dist
