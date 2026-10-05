@@ -1,5 +1,18 @@
 # @nodaro/shared
 
+## 3.20.0
+
+### Minor Changes
+
+- 3fb30e4: Competitors, platform by platform. `CompetitorCardsResult.brands` gives each tracked brand's latest scan per platform (`CompetitorBrandTally`: the scan id, its time and one `CompetitorPlatformTally` per platform — the brand's own posts and posts about it there, the searches that ran and the ones that failed, its usual reach with its unit, and the strongest lesson). `CompetitorDetail.platforms` gives the same for one brand, and `TrackedCompetitor.searchPlan` lists what its next scan searches (`CompetitorSearch`). All three are optional: a server older than them leaves them out. The SDK re-exports the new types.
+- 3430225: Export `DEFAULT_TTS_PROVIDER` (`"elevenlabs-v4"`): the speech model a request runs on when it names none. ElevenLabs v4 is now the default text-to-speech model (v3 stays selectable): it carries the catalog's featured star and leads the "voice over / narration" recommendation, which now lists v4, v3 and Turbo.
+- 605638c: An Edit Plan's review edit has one resolver. `resolveEditPlanOutput(plan, editedEdl)` applies a person's review to the plan (`{json, listResults?, status}`), and `editPlanSavedOutput(data)` is the saved-output read every edit-plan reader makes. A review edit (`EditedEdl`: `EditedEdlCut` for a Tighten plan, `EditedClipSet` for a clip set, holding `{keep, hook?}` decisions) is fingerprinted with `editPlanBasis(plan)`, an FNV-1a-64 hash of the plan's key-sorted JSON, so an edit made against another plan is ignored. A clip set's list stays on the plan's indices, with `""` at each dropped clip. `validateEditedEdl(editedEdl, plan)` checks an edit before it is saved. `editedEdl` joins `EXECUTION_DATA_KEYS`. Also `EDITED_EDL_VERSION`, `EditedClipDecision`, `EditPlanEditStatus`, `EditPlanSavedOutput` and `ResolvedEditPlanOutput`. Additive.
+- 6e2cfac: Export `OWN_LIST_NODE_TYPES` and `ownsItsList(nodeType)`: the node types (Extract Field, JSON Process) whose saved list is the list their last run produced (`__listResults`), never an accumulated `generatedResults` history. The backend engine and the editor read a saved list of these nodes the same way.
+
+### Patch Changes
+
+- 01fa4ed: `SharedVoice.recommendedProvider` / `verifiedProviders` (from `GET /v1/voices/library`) now document the new recommendation order: a Voice Library entry verified for ElevenLabs v4 recommends `elevenlabs-v4` first, then `elevenlabs-v3`, `elevenlabs-turbo`, `elevenlabs-multilingual`. Only the base model id `eleven_v4` counts toward v4; its `eleven_v4_…` variants do not. Both fields only name models the deployment offers, and are absent when none of a voice's verified models is offered. Documentation only: no type or export changed.
+
 ## 3.19.0
 
 ### Minor Changes

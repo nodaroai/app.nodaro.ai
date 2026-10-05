@@ -1,5 +1,20 @@
 # @nodaro/sdk
 
+## 2.19.0
+
+### Minor Changes
+
+- 3fb30e4: Competitors, platform by platform. `CompetitorCardsResult.brands` gives each tracked brand's latest scan per platform (`CompetitorBrandTally`: the scan id, its time and one `CompetitorPlatformTally` per platform — the brand's own posts and posts about it there, the searches that ran and the ones that failed, its usual reach with its unit, and the strongest lesson). `CompetitorDetail.platforms` gives the same for one brand, and `TrackedCompetitor.searchPlan` lists what its next scan searches (`CompetitorSearch`). All three are optional: a server older than them leaves them out. The SDK re-exports the new types.
+
+### Patch Changes
+
+- Updated dependencies [3fb30e4]
+- Updated dependencies [3430225]
+- Updated dependencies [605638c]
+- Updated dependencies [6e2cfac]
+- Updated dependencies [01fa4ed]
+  - @nodaro/shared@3.20.0
+
 ## 2.18.0
 
 ### Minor Changes
