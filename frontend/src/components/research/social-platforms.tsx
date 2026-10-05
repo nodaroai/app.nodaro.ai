@@ -26,7 +26,7 @@ export const SOCIAL_PLATFORM_META: Readonly<Record<SocialPlatform, SocialPlatfor
   meta_ads: { name: "Meta Ads", icon: (c) => <Megaphone className={c} />, accountLabel: "social.modeAdvertiser", accountPlaceholder: "social.phAdvertiser" },
 }
 
-/** The label of a search mode on a platform ("Company page" is LinkedIn's account). */
+/** The label of a search mode on a platform ("Page or profile" is LinkedIn's account). */
 export function socialModeLabel(platform: SocialPlatform, mode: SocialSearchMode): MessageKey {
   if (mode === "keyword") return "social.modeKeyword"
   if (mode === "community") return "social.modeCommunity"

@@ -267,7 +267,7 @@ export function registerCompetitorTools({ server, session, fastify }: RegisterOp
           accounts: z
             .object(Object.fromEntries(COMPETITOR_ACCOUNT_KEYS.map((k) => [k, z.string().max(300).optional()])) as Record<string, z.ZodOptional<z.ZodString>>)
             .optional()
-            .describe("Handles or links: tiktok, instagram, youtube, x, linkedin (company page), meta_ads (advertiser name)."),
+            .describe("Handles or links: tiktok, instagram, youtube, x, linkedin (page or profile), meta_ads (advertiser name)."),
           about_platforms: z.array(z.enum(COMPETITOR_ABOUT_PLATFORMS)).optional().describe("Where to search posts naming it."),
           is_own: z.boolean().optional().describe("The user's own brand."),
           schedule: z.enum(COMPETITOR_SCHEDULES).optional().describe("Default weekly."),

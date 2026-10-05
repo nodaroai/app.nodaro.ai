@@ -6,7 +6,7 @@
  */
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { NodeExecutionState, TriggeredRunPaint } from "./run-handlers"
-import { RESULTS_RUN_ID_KEY, paintableStates, triggerNodesOf, type FollowRun } from "./triggered-run-follow"
+import { paintableStates, resultsRunMark, triggerNodesOf, type FollowRun } from "./triggered-run-follow"
 
 type States = Record<string, NodeExecutionState>
 
@@ -16,7 +16,7 @@ const ENDED_NODE: ReadonlySet<string> = new Set(["completed", "failed"])
 export function stampEnded(runId: string, states: States): void {
   const { updateNodeData } = useWorkflowStore.getState()
   for (const [nodeId, state] of Object.entries(states)) {
-    if (ENDED_NODE.has(state.status)) updateNodeData(nodeId, { [RESULTS_RUN_ID_KEY]: runId })
+    if (ENDED_NODE.has(state.status)) updateNodeData(nodeId, resultsRunMark(runId, state.completedAt ?? new Date().toISOString()))
   }
 }
 

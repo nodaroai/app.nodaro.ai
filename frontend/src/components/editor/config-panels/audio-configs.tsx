@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label"
 import { TagTextarea } from "./tag-textarea"
 import { getLanguagesForModel, ALL_LANGUAGES } from "@/lib/audio-tags"
 import { TtsVoiceSettings } from "./tts-voice-settings"
+import { ttsModelSwitchPatch } from "@/lib/tts-model-switch"
 import { SUNO_SUGGESTION_ITEMS, SUNO_LYRICS_SUGGESTION_ITEMS, SUNO_STYLE_SUGGESTION_ITEMS } from "@/lib/suno-tags"
 import { SUNO_SLIDER_META, SUNO_SLIDER_LABEL_KEYS, SUNO_SLIDER_DESC_KEYS } from "@/lib/suno-sliders"
 import { Button } from "@/components/ui/button"
@@ -60,7 +61,7 @@ import type {
   ForcedAlignmentData,
   GeneratedScript,
 } from "@/types/nodes"
-import { VOICE_CHANGER_MODELS, DEFAULT_VOICE_CHANGER_MODEL, AUDIO_FX_PRESETS, AUDIO_FX_REVERB_PRESETS, REPLICATE_LIP_SYNC_PROVIDERS, FAL_LIP_SYNC_PROVIDERS, VIDEO_INPUT_LIP_SYNC_PROVIDERS, isPerSecondLipSyncProvider, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, sunoModelHonoursDuration, SUNO_HARD_CEILING, SUNO_TITLE_MAX, getMaxSunoPromptChars, getMaxSunoStyleChars, getMaxTtsChars, sunoCreditType } from "@nodaro/shared"
+import { VOICE_CHANGER_MODELS, DEFAULT_VOICE_CHANGER_MODEL, AUDIO_FX_PRESETS, AUDIO_FX_REVERB_PRESETS, REPLICATE_LIP_SYNC_PROVIDERS, FAL_LIP_SYNC_PROVIDERS, VIDEO_INPUT_LIP_SYNC_PROVIDERS, isPerSecondLipSyncProvider, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, sunoModelHonoursDuration, SUNO_HARD_CEILING, SUNO_TITLE_MAX, getMaxSunoPromptChars, getMaxSunoStyleChars, getMaxTtsChars, sunoCreditType, DEFAULT_TEXT_TO_AUDIO_PROVIDER } from "@nodaro/shared"
 import type { AudioFxPreset } from "@nodaro/shared"
 import { getEffectiveSunoCustomMode } from "@nodaro/prompts"
 import { MappableField } from "./mappable-field"
@@ -172,7 +173,7 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
       <MappableField field="provider" label={t("field.model")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="voice">
         <Select
           value={data.provider === "elevenlabs" ? "elevenlabs-v3" : (data.provider || "elevenlabs-v3")}
-          onValueChange={(v) => onUpdate({ provider: v as TextToSpeechData["provider"] })}
+          onValueChange={(v) => onUpdate({ provider: v as TextToSpeechData["provider"], ...ttsModelSwitchPatch(v, data) })}
         >
           <SelectTrigger aria-label={t("field.model")}><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -233,7 +234,7 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
                 providerMeta?.recommendedProvider &&
                 (current === "elevenlabs-turbo" || current === "elevenlabs-multilingual") &&
                 !verified.includes(current)
-                  ? { provider: providerMeta.recommendedProvider }
+                  ? { provider: providerMeta.recommendedProvider, ...ttsModelSwitchPatch(providerMeta.recommendedProvider, data) }
                   : {}
               onUpdate({ voiceId: id, voiceType: voiceType, voiceDisplayName: name, voiceLabel: name, ...snap })
             } else {
@@ -275,7 +276,8 @@ export function TextToAudioConfig({ data, onUpdate, sources, fieldMappings, onMa
     edges: edges ?? EMPTY_EDGES,
     snippets: promptSnippets,
   })
-  const isSfx = data.provider === "elevenlabs-sfx"
+  // No provider saved = the default engine, which is the SFX model.
+  const isSfx = (data.provider || DEFAULT_TEXT_TO_AUDIO_PROVIDER) === "elevenlabs-sfx"
   const maxPromptLen = isSfx ? 450 : 2000
   const minDuration = isSfx ? 0.5 : 1
   const maxDuration = isSfx ? 22 : 30
@@ -325,7 +327,7 @@ export function TextToAudioConfig({ data, onUpdate, sources, fieldMappings, onMa
       </MappableField>
       <MappableField field="provider" label={t("field.provider")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select
-          value={data.provider || "elevenlabs-sfx"}
+          value={data.provider || DEFAULT_TEXT_TO_AUDIO_PROVIDER}
           onValueChange={(v) => onUpdate({ provider: v as TextToAudioData["provider"] })}
         >
           <SelectTrigger aria-label={t("field.provider")}><SelectValue /></SelectTrigger>

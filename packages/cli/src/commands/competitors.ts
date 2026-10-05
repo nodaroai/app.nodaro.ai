@@ -88,7 +88,7 @@ function withAccountFlags(cmd: Command): Command {
     .option("--instagram <handle>", "Instagram account")
     .option("--youtube <channel>", "YouTube channel (@handle or link)")
     .option("--x <handle>", "X account")
-    .option("--linkedin <page>", "LinkedIn company page (link or slug)")
+    .option("--linkedin <page>", "LinkedIn company page or person's profile (link or slug)")
     .option("--meta-ads <advertiser>", "Meta ads advertiser name or page id")
     .option("--about <platforms>", `where to search posts naming it, comma separated: ${COMPETITOR_ABOUT_PLATFORMS.join(",")}`)
     .option("--schedule <when>", `${COMPETITOR_SCHEDULES.join(" | ")} (default weekly)`)

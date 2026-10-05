@@ -7,7 +7,7 @@ import { describe, it, expect, vi, afterEach } from "vitest"
 import { render, cleanup } from "@testing-library/react"
 
 const m = vi.hoisted(() => ({
-  rate: { "apply-edl": 10, "apply-edl:proxy": 2 } as Record<string, number>,
+  rate: { "apply-edl": 10, "apply-edl:proxy": 1 } as Record<string, number>,
   pill: [] as number[],
   button: [] as number[],
   ids: [] as Array<string | undefined>,
@@ -69,8 +69,8 @@ describe("ApplyEdlNode prices the render on its quality's row", () => {
   afterEach(() => cleanup())
 
   it.each([
-    { name: "a video proxy", data: { output: "video", quality: "proxy" }, id: "apply-edl:proxy", credits: 2 * 4 },
-    { name: "an audio proxy", data: { output: "audio", quality: "proxy" }, id: "apply-edl:proxy", credits: 2 * 4 },
+    { name: "a video proxy", data: { output: "video", quality: "proxy" }, id: "apply-edl:proxy", credits: 1 * 4 },
+    { name: "an audio proxy", data: { output: "audio", quality: "proxy" }, id: "apply-edl:proxy", credits: 1 * 4 },
     { name: "a final", data: { quality: "final" }, id: "apply-edl", credits: 10 * 4 },
     { name: "no quality (the final)", data: {}, id: "apply-edl", credits: 10 * 4 },
   ])("$name → $id × minutes on the pill and the Run button", ({ data, id, credits }) => {

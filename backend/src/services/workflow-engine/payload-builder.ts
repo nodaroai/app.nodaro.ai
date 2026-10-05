@@ -7,6 +7,7 @@ import {
 import { assembleVideoOverlayRequest, formatVideoOverlayError, validateVideoOverlayRequest, videoOverlayCompositionKey, videoOverlaySlotSources, type VideoOverlayNodeFields } from "@nodaro/shared"
 import { effectiveContentModel, contentRecipeCreditId, contentIdeasCreditId, clampContentIdeasCount, CONTENT_RECIPE_SOURCE_MAX, CONTENT_IDEAS_MAX_RECIPE_INPUTS, CONTENT_IDEAS_BRAND_MAX, CONTENT_IDEAS_LANGUAGE_MAX } from "@nodaro/shared"
 import { TELEGRAM_ACCOUNT_SEND_NODE_TYPE, telegramSendAsOf, telegramSendDestinationOf } from "@nodaro/shared"
+import { DEFAULT_TEXT_TO_AUDIO_PROVIDER } from "@nodaro/shared"
 import { LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec, LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec } from "@nodaro/shared"
 import { applyEdlCreditId } from "@nodaro/shared"
 import type { Scene3DReference } from "@nodaro/shared"
@@ -5160,12 +5161,12 @@ export function buildPayload(
     }
 
     case "text-to-audio": {
-      const t2aProvider = (data.provider as string) ?? "elevenlabs-sfx"
+      const t2aProvider = (data.provider as string) || DEFAULT_TEXT_TO_AUDIO_PROVIDER
       const audioStyle = collectAudioStyleHints(node, "text-to-audio", buildCtx)
       const userPrompt = promptFor("text-to-audio")
       const composed = truncateForField(audioStyle.text, userPrompt, 2000)
       const finalPrompt = appendField(userPrompt, composed)
-      return simpleResult("text-to-audio", "elevenlabs-sfx", {
+      return simpleResult("text-to-audio", DEFAULT_TEXT_TO_AUDIO_PROVIDER, {
         jobId,
         prompt: finalPrompt,
         provider: t2aProvider,

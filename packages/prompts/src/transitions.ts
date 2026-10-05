@@ -47,8 +47,13 @@ export interface Transition {
    * approximately 1 second") on such a row tells the video model to spend a
    * second on the change, and it obliges with a dissolve: a match cut rendered
    * as a 1.75 s cross-dissolve in QA. The composer therefore skips the duration
-   * lever when every picked transition is instant, and consumers (the picker
-   * UI, Studio) read `isInstantTransition` to hide that lever.
+   * clause when every picked transition is instant (on a BLENDABLE cut, a
+   * `blendsCut` step changes the cut itself instead — see `blendable`), and
+   * consumers offer only the levers a cut takes — Position without `full`, no
+   * Intensity, and Duration only on a blendable cut, as a Blend lever of "hard
+   * cut" plus the `blendsCut` steps — reading `isInstantTransition` /
+   * `isBlendableTransition` (the canvas panel) or the picker catalog's
+   * `instant` / `blendable` / `blendsCut` flags (an id-only client).
    *
    * The same holds for INTENSITY: every intensity clause describes how the
    * change PERFORMS over time ("natural unhurried timing", "wild flourishes and
@@ -65,6 +70,24 @@ export interface Transition {
    * anti-blend instruction that made the model render a true single-frame cut.
    */
   readonly instant?: boolean
+  /**
+   * `true` on a CUT that may become a BLENDED CUT: picked with a duration step
+   * that `blendsCut` (Short), the pick's anti-blend `INSTANT_CUT_CLAUSE` is
+   * REPLACED by `blendedCutClause` — the two shots blend into each other over
+   * that step's own `term` — and every other rule of a cut stands (position
+   * without `full`, no duration clause, no intensity clause). Any other
+   * duration leaves it a hard cut. See `isBlendableTransition`.
+   *
+   * Set on `seamless-match` and `jump-match` only. In the blended-cut test
+   * round (2026-10-04) their blended takes at Short kept what makes each row
+   * itself — the invisible cut still hid its join, the jump match still held
+   * the subject's place across the leap — and were approved. The blended takes
+   * of `match-cut`, `jump-cut` and `action-relay` lost their trait and rated
+   * below their hard cut, so those rows stay hard cuts at every duration, as
+   * do `none`, `snap-to-black` and `smash-cut`, whose descriptions a blend
+   * would contradict ("instantaneous", "on a single frame", "no fade").
+   */
+  readonly blendable?: boolean
   /**
    * PER-ROW OPTIONS — extra choices that only mean something for THIS
    * transition (a wipe's direction), each written into the row's own hint.
@@ -323,7 +346,7 @@ export const TRANSITIONS: ReadonlyArray<Transition> = [
   { id: "roll-transition",   label: "Roll",              category: "standard", description: "Frame rolls 90-180°, second shot upright on landing",
     promptHint: "the picture rolls around its centre in one smooth, fast turn, blurred by the speed of the turn. The camera stays in the same spot, turning only around its lens axis. During the turn the second shot takes over, and the roll slows and stops with it level and upright. The shot ends on the second shot, level, upright and still. The roll turns one way only and stops once, with no swing back", term: "camera roll transition" },
   { id: "seamless-match",    label: "Seamless Match",    category: "standard", description: "Hidden cut disguised by matched motion and color",
-    promptHint: "hidden seamless transition: the camera motion, color palette, and on-screen motion at the end of the first shot continue exactly across the cut into the second shot, so the boundary is invisible and the two shots feel like one unbroken take", term: "invisible cut" , instant: true },
+    promptHint: "hidden seamless transition: the camera motion, color palette, and on-screen motion at the end of the first shot continue exactly across the cut into the second shot, so the boundary is invisible and the two shots feel like one unbroken take", term: "invisible cut" , instant: true, blendable: true },
   { id: "whip-pan",          label: "Whip Pan",          category: "standard", description: "Camera whips sideways into blur, next shot rides the same direction",
     promptHint: "whip pan transition: the camera whips sideways at high speed, smearing the frame into heavy horizontal motion blur, and the second shot enters already travelling in the same direction before it settles into its framing", term: "whip pan" },
   { id: "jump-cut",          label: "Jump Cut",          category: "standard", description: "Same framing, time skips forward",
@@ -455,7 +478,7 @@ export const TRANSITIONS: ReadonlyArray<Transition> = [
   { id: "vehicle-explosion", label: "Vehicle Explosion",  category: "physics", description: "Vehicle detonates in foreground, scene changes behind",
     promptHint: "a vehicle in the frame bursts into a violent explosion of fire and twisted metal, and the fireball billows toward the lens until orange flame fills the whole picture. The camera stays where it is and the framing does not change. The flame gives way to thick smoke, and as the smoke parts the second shot is revealed. The shot ends on the second shot, clear and fully resolved, with no fire or smoke left. The explosion comes from that vehicle itself, and the second shot appears only as the smoke parts" },
   { id: "jump-match",        label: "Jump Match",         category: "physics", description: "Subject jumps, landing matches into new scene",
-    promptHint: "the subject launches into a jump, and at the height of the leap the picture cuts to a new place. The camera follows the arc of the jump at the same speed on both sides of the cut, and the subject stays at the same place in the frame. In the second shot the same jump carries on without a break, and the subject comes down and lands in the new place. The shot ends on the subject landed in the second shot, fully resolved", term: "match cut on a jump" , instant: true },
+    promptHint: "the subject launches into a jump, and at the height of the leap the picture cuts to a new place. The camera follows the arc of the jump at the same speed on both sides of the cut, and the subject stays at the same place in the frame. In the second shot the same jump carries on without a break, and the subject comes down and lands in the new place. The shot ends on the subject landed in the second shot, fully resolved", term: "match cut on a jump" , instant: true, blendable: true },
   { id: "hand-swipe",        label: "Hand Swipe",         category: "physics", description: "Hand swipes across lens, scene changes during occlusion",
     promptHint: "a hand sweeps across the camera lens at close range, fully occluding the frame in motion blur for a single beat, and as the hand exits the opposite side the scene has changed to the new setting" },
   { id: "action-relay",      label: "Action Match",      category: "physics", description: "Subject exits on an action and lands in the new scene mid-move",
@@ -615,6 +638,25 @@ export function isInstantTransition(
 }
 
 /**
+ * Whether a pick may become a BLENDED CUT (see `Transition.blendable`): every
+ * picked id is a blendable cut. Same lookup and same empty-pick answer as
+ * `isInstantTransition`, so a pick is blendable only where it is instant. Like
+ * that check, it reads the ids it is given: the composer passes only the ids
+ * that contribute a fragment, so a no-op "auto" beside a blendable cut does not
+ * stop the blend there (`["auto", "seamless-match"]` given whole is `false`).
+ */
+export function isBlendableTransition(
+  id: string | ReadonlyArray<string> | undefined | null,
+): boolean {
+  const ids = typeof id === "string" ? [id] : id ? [...id] : []
+  if (ids.length === 0) return false
+  return ids.every((one) => {
+    const t = getTransition(one)
+    return t?.instant === true && t.blendable === true
+  })
+}
+
+/**
  * The anti-blend instruction an all-instant transition pick carries — the ONE
  * place this sentence lives (see `Transition.instant`). Each row keeps its own
  * meaning in its own hint (a match cut still matches shapes, snap to black
@@ -658,14 +700,16 @@ function transitionHintBody(id: string, term: string, values?: TransitionOptionV
  * One picked transition as a VIDEO prompt reads it: `<term> (<hint body>)`.
  * The term names the move in the editor's own words; the parentheses carry the
  * model-facing mechanism, which the term alone does not convey (a bare "match
- * cut" rendered as a dissolve on prod). `withCutClause` appends
- * `; INSTANT_CUT_CLAUSE` inside the parentheses. A row whose hint is just its
- * term (or empty) renders as the term alone; an unknown id or "auto" as "".
+ * cut" rendered as a dissolve on prod). A non-empty `cutClause` is appended
+ * as `; <cutClause>` inside the parentheses — the hard cut's
+ * `INSTANT_CUT_CLAUSE`, or a blended cut's `blendedCutClause`. A row whose hint
+ * is just its term (or empty) renders as the term alone; an unknown id or
+ * "auto" as "".
  */
-function transitionFragment(id: string, withCutClause: boolean, values?: TransitionOptionValues): string {
+function transitionFragment(id: string, cutClause: string, values?: TransitionOptionValues): string {
   const term = getTransitionTerm(id)
   if (!term) return ""
-  const inner = [transitionHintBody(id, term, values), withCutClause ? INSTANT_CUT_CLAUSE : ""]
+  const inner = [transitionHintBody(id, term, values), cutClause]
     .filter((part) => part.length > 0)
     .join("; ")
   return inner.length > 0 && normalizePhrase(inner) !== normalizePhrase(term)
@@ -699,17 +743,44 @@ function transitionFragment(id: string, withCutClause: boolean, values?: Transit
  * `values` are the per-row option choices (`TransitionOptionValues`) — a wipe's
  * direction. The direction registry passes none, so a `direction.transition`
  * wipe reads as `auto`.
+ *
+ * These bases are always the HARD cut's: a pick here has no duration, so it
+ * never becomes a blended cut. The blend exists only where a duration is
+ * picked, in `composeTransitionHintFromConnections`.
  */
 export function renderTransitionBases(
   ids: ReadonlyArray<string>,
   _mode: PickerHintMode = "full",
   values?: TransitionOptionValues,
 ): string[] {
+  return renderBasesWith(ids, INSTANT_CUT_CLAUSE, values)
+}
+
+/** `renderTransitionBases` with the all-instant pick's clause chosen by the
+ *  caller — the hard cut's, or a blended cut's. */
+function renderBasesWith(
+  ids: ReadonlyArray<string>,
+  cutClause: string,
+  values?: TransitionOptionValues,
+): string[] {
   // Only ids that contribute a fragment count — a no-op "auto" beside a cut
   // must not make the pick look non-instant.
   const picked = ids.filter((id) => getTransitionTerm(id).length > 0)
   const instant = isInstantTransition(picked)
-  return picked.map((id, i) => transitionFragment(id, instant && i === 0, values))
+  return picked.map((id, i) => transitionFragment(id, instant && i === 0 ? cutClause : "", values))
+}
+
+/**
+ * THE BLENDED CUT — what a blendable cut becomes when a duration that
+ * `blendsCut` (Short) is picked on it: instead of the anti-blend
+ * `INSTANT_CUT_CLAUSE`, the two shots blend into each other over that step's
+ * own `term` ("about 1 second"), so the time words are the catalog's and never
+ * typed here. "" for every other value (auto, instant, medium, long, an unknown
+ * id, none), which leaves the cut a hard cut.
+ */
+export function blendedCutClause(duration: string | undefined): string {
+  const row = TRANSITION_DURATIONS.find((d) => d.id === duration) as TransitionTimingOption | undefined
+  return row?.blendsCut ? `instead of a hard cut, the two shots blend into each other over ${row.term}` : ""
 }
 
 // ---------------------------------------------------------------------------
@@ -736,6 +807,12 @@ export interface TransitionTimingOption {
   readonly description: string
   readonly promptHint: string
   readonly term?: string
+  /** Duration rows only: `true` on a step a blendable CUT may take — picked on
+   *  such a pick it turns the cut into a BLENDED CUT over this row's `term`
+   *  (see `blendedCutClause`). Absent = a cut ignores the step and stays a
+   *  hard cut. Set on `short` only: the 2026-10-04 test round approved the
+   *  blend at about 1 second, not at Medium's 2. */
+  readonly blendsCut?: boolean
 }
 
 export const TRANSITION_POSITIONS = [
@@ -749,7 +826,7 @@ export const TRANSITION_POSITIONS = [
 export const TRANSITION_DURATIONS = [
   { id: "auto",    label: "Auto",    description: "Let the model time it",       promptHint: "", term: "" },
   { id: "instant", label: "Instant", description: "No perceptible duration",     promptHint: "occurring instantaneously", term: "instantaneous" },
-  { id: "short",   label: "Short (~1s)",   description: "Approximately 1 second",  promptHint: "lasting approximately 1 second", term: "about 1 second" },
+  { id: "short",   label: "Short (~1s)",   description: "Approximately 1 second",  promptHint: "lasting approximately 1 second", term: "about 1 second", blendsCut: true },
   { id: "medium",  label: "Medium (~2s)",  description: "Approximately 2 seconds", promptHint: "lasting approximately 2 seconds", term: "about 2 seconds" },
   { id: "long",    label: "Long (~3s)",    description: "Approximately 3 seconds", promptHint: "lasting approximately 3 seconds", term: "about 3 seconds" },
 ] as const satisfies ReadonlyArray<TransitionTimingOption>
@@ -830,9 +907,16 @@ const INTENSITY_CLAUSES = clausesOf(TRANSITION_INTENSITIES)
  *   first base's parentheses carry `INSTANT_CUT_CLAUSE` once, and the
  *   duration and intensity clauses are dropped; position still applies,
  *   except `full` — a single-frame cut spans nothing, so it adds no clause
+ * - A BLENDED CUT: when every picked id is a blendable cut
+ *   (`isBlendableTransition`) and the duration `blendsCut` (Short), that
+ *   clause is `blendedCutClause(duration)` INSTEAD of `INSTANT_CUT_CLAUSE`
+ *   (replaced, not appended; still once, in the first parentheses); every
+ *   other rule above stands as for a hard cut, so there is still no duration
+ *   clause, no intensity clause and no `full`. Any other duration on such a
+ *   pick, and any duration on any other cut, leaves the hard cut
  * - null input is treated like undefined (falsy short-circuit → returns "")
  *
- * @param mode Accepted for the picker-hint signature; a transition composes
+ * @param _mode Accepted for the picker-hint signature; a transition composes
  *   the same text in both modes — each pick as `<term> (<hint body>)`, see
  *   `renderTransitionBases`.
  * @param options `scope: "shot"` when the hint is folded into one shot's time
@@ -847,16 +931,18 @@ export function composeTransitionHintFromConnections(
   startHints: ReadonlyArray<string>,
   endHints: ReadonlyArray<string>,
   timing?: TransitionTiming,
-  mode: PickerHintMode = "full",
+  _mode: PickerHintMode = "full",
   options?: TransitionHintOptions,
 ): string {
   const ids = Array.isArray(transitionId)
     ? Array.from(new Set(transitionId)).slice(0, 2)
     : transitionId ? [transitionId] : []
-  const baseHints = renderTransitionBases(ids, mode, options?.optionValues)
-  if (baseHints.length === 0) return ""
   // Same "contributes a fragment" filter `renderTransitionBases` applies.
-  const instant = isInstantTransition(ids.filter((id) => getTransitionTerm(id).length > 0))
+  const contributing = ids.filter((id) => getTransitionTerm(id).length > 0)
+  const instant = isInstantTransition(contributing)
+  const blend = instant && isBlendableTransition(contributing) ? blendedCutClause(timing?.duration) : ""
+  const baseHints = renderBasesWith(ids, blend || INSTANT_CUT_CLAUSE, options?.optionValues)
+  if (baseHints.length === 0) return ""
 
   const combinedBase = baseHints.join(", and ")
   const parts: string[] = [combinedBase]
@@ -870,7 +956,8 @@ export function composeTransitionHintFromConnections(
   // A cut has no duration and no performance: "lasting approximately 1
   // second" or "with natural timing" on a match cut makes the model
   // render a dissolve. Skipped only when EVERY picked id is instant — a mixed
-  // pick still has a non-cut to time and shape.
+  // pick still has a non-cut to time and shape. (A blended cut's duration has
+  // already done its work above, inside the parentheses.)
   if (timing?.duration && timing.duration !== "auto" && !instant) {
     parts.push(DURATION_CLAUSES[timing.duration])
   }

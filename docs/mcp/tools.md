@@ -680,8 +680,6 @@ the job's `output_data`.
 | `video_asset_id` | uuid, optional | Nodaro video job id or uploaded-asset id. |
 | `video_url` | string, optional | Direct URL of a video file. |
 | `youtube_url` | string, optional | YouTube video URL (youtube.com / youtu.be). |
-| `llm_model` | enum, optional | Analysis quality tier: `fast` (economy), `pro` (default, higher fidelity), or `mixed` / `mixed-fast` (advanced tiers — maximum completeness and accuracy). |
-| `selection_mode` | enum, optional | Result strategy: `choose` (default — standard result) or `combine` (enhanced, verified result with maximum detail; slightly slower, recommended). |
 | `variations` | boolean, optional | Cast-variations opt-in: the analysis also detects per-entity appearance **looks** — a plain wardrobe change between scenes counts exactly as much as a dream / flashback / disguise / era look — and binds each look to its scenes (`slots[].variations` + `scenes[].slotVariations`). Default `false`: the result keeps the pre-variations shape. |
 | `music_video` | boolean, optional | Declare the clip a music video: the song IS the piece, so all sung lyrics are transcribed verbatim as per-scene `speech` layers (the instrumental bed stays its own `music` layer). Default `false`: soundtrack vocals nobody on screen performs are folded into the `music` layer's description, and `speech` carries only words uttered inside the story world. |
 | `translate_speech_to_english` | boolean, optional | Spoken and sung words come back in English. Default `false`: speech is quoted verbatim in the language actually spoken. Independent of the on-screen-text flag. |
@@ -693,16 +691,23 @@ passing zero or more than one returns a tool error naming what was provided.
 Maximum duration is **10 minutes** (600s) for any source; YouTube live streams
 are rejected.
 
-**Pricing** — duration-bucketed credits per quality tier. The bucket is the smallest
-of 60s / 180s / 360s / 600s that fits the video's probed duration. The values
-below are the shared pricing formula's current outputs:
+**Analysis quality** — the tool always runs the **Smart** analysis, the
+highest-accuracy tier, which always refines its merged result. It takes no
+quality or result-strategy argument; a client that still sends `llm_model` or
+`selection_mode` from an older tool list gets Smart, and those keys are
+ignored. The other tiers (`pro`, `fast`, `mixed`, `mixed-fast`) and the
+`choose` / `combine` strategy stay available outside this tool: on the
+[Video Analysis node](../nodes/processing-video/video-analysis.md) — in the
+editor and in workflows, including workflows run over MCP — and on
+`POST /v1/video-analysis`, which takes `llmModel` / `selectionMode`.
+
+**Pricing** — duration-bucketed credits for the Smart analysis. The bucket is
+the smallest of 60s / 180s / 360s / 600s that fits the video's probed duration.
+The values below are the shared pricing formula's current outputs:
 
 | Tier | ≤60s | ≤180s | ≤360s | ≤600s |
 |------|------|-------|-------|-------|
-| `fast` (economy) | 181 | 185 | 515 | 848 |
-| `pro` (default) | 216 | 232 | 640 | 1056 |
-| `mixed` / `mixed-fast` | 270 | 291 | 729 | 1177 |
-| `smart` (highest accuracy) | 413 | 503 | 1267 | 2076 |
+| `smart` (highest accuracy) | 414 | 504 | 1270 | 2081 |
 
 The live tool description carries these same numbers — it is generated from the
 shared pricing table at server start, so it is always current. This table is
@@ -748,7 +753,7 @@ hand-maintained; if the two ever disagree, the tool description is right.
 | Tool | Description |
 |------|-------------|
 | `generate_music` | Text-to-music generation. Accepts `prompt`, `genre`, `mood`, `duration`, `instrumental`, `lyrics`, `title`, `model` — `suno-v6` (default; greater musical expression, more natural vocals, richer details), `suno-v6_wild` (bolder, more distinctive, less predictable), `suno-v6_mini` (lightweight and fast), `suno-v5_5` (alias `suno-v5-5`), `suno-v5`, `suno`; `minimax` (MiniMax Music) follows a reference song, voice or instrumental and needs `reference_audio_url` or `reference_audio_asset_id` (a Nodaro audio job id) — without one the tool asks for it instead of starting a job. Also accepts `presetId` (from `list_node_presets { nodeType: "generate-music" }`) to apply a built-in or saved preset's config server-side; any explicit field above overrides the preset, and `prompt` may be omitted when the preset supplies one. A preset's `promptPrefix` / `promptSuffix` wrap your `prompt`. |
-| `generate_speech` | Text-to-speech. Accepts `text`, `voice_id` (with `voice_type`: `premade`, `custom` or `library`), `model` — `elevenlabs-v3` (default), `elevenlabs-turbo` or `elevenlabs-multilingual` (v2) — and the delivery levers `stability`, `similarity_boost`, `style`, `speed` and `language_code`. Also accepts `presetId` (from `list_node_presets { nodeType: "text-to-speech" }`) to apply a built-in delivery preset (speed/stability/style) server-side; explicit fields override it, and `text` is always required (presets tune delivery; a preset's `promptPrefix` / `promptSuffix` wrap your `text`). |
+| `generate_speech` | Text-to-speech. Accepts `text`, `voice_id` (with `voice_type`: `premade`, `custom` or `library`), `model` — `elevenlabs-v3` (default), `elevenlabs-v4` (newer: stability + similarity only, up to 10,000 characters), `elevenlabs-turbo` or `elevenlabs-multilingual` (v2) — and the delivery levers `stability`, `similarity_boost`, `style`, `speed` and `language_code`. Also accepts `presetId` (from `list_node_presets { nodeType: "text-to-speech" }`) to apply a built-in delivery preset (speed/stability/style) server-side; explicit fields override it, and `text` is always required (presets tune delivery; a preset's `promptPrefix` / `promptSuffix` wrap your `text`). |
 | `generate_dialogue` | Multi-speaker dialogue as ONE audio file (ElevenLabs Dialogue v3, direct API). Accepts `dialogue` — an ordered array of `{ text, voice_id }` lines (premade names or cloned/library UUIDs, mixed casts fine; `[audio tags]` allowed in line text) — plus optional `stability` (0 / 0.5 / 1), `language_code`, `seed`, `apply_text_normalization`. Limits: 5,000 chars total across lines, 10 unique voices. Use it instead of stitching per-line `generate_speech` calls. |
 | `text_to_audio` | Text-to-sound-effect (ElevenLabs SFX). Accepts `prompt` and optional `duration`, `loop` (a seamlessly looping effect) and `prompt_influence` (0–1, how closely it follows the prompt). Also accepts `presetId` (from `list_node_presets { nodeType: "text-to-audio" }`) to apply a built-in or saved preset's config server-side; any explicit field overrides the preset, and `prompt` may be omitted when the preset supplies one. A preset's `promptPrefix` / `promptSuffix` wrap your `prompt`. |
 | `list_voices` | List the available premade voices (id + name, plus any gender/accent/description metadata) so you can pick a `voice_id` for `generate_speech`, `voice_changer`, or `voice_changer_pro` — all of which require a voice id. Read-only; returns the catalog as JSON. |

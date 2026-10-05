@@ -1281,6 +1281,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "hailuo-avatar": 190,           // estimated (not in KIE pricing data)
   // ── Audio / TTS / Music ──
   "elevenlabs-v3": 30,             // direct ElevenLabs API
+  "elevenlabs-v4": 30,             // direct ElevenLabs API; the same flat price as v3, per request
   "elevenlabs-turbo": 15,         // per 1K chars
   "elevenlabs-multilingual": 30,  // per 1K chars
   "elevenlabs": 15,               // alias for turbo
@@ -1535,8 +1536,8 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   // site takes the id from `applyEdlCreditId(quality)` (@nodaro/shared).
   "apply-edl": APPLY_EDL_CREDITS_PER_OUTPUT_MINUTE,
   // The preview (`quality: "proxy"`) — its own, lower per-minute rate,
-  // decided 2026-10-04. Value is `APPLY_EDL_PROXY_CREDITS_PER_OUTPUT_MINUTE`
-  // (lib/apply-edl-plan.ts); migration 454 mirrors it. The proxy < final guard
+  // decided 2026-10-05. Value is `APPLY_EDL_PROXY_CREDITS_PER_OUTPUT_MINUTE`
+  // (lib/apply-edl-plan.ts); migration 454 seeded the row, 455 reprices it. The proxy < final guard
   // reads these code values, not the admin rows, so the two model_pricing rows
   // are retuned together (the node docs say so).
   "apply-edl:proxy": APPLY_EDL_PROXY_CREDITS_PER_OUTPUT_MINUTE,

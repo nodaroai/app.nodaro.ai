@@ -115,6 +115,8 @@ import { videoOverlayResultFresh } from "@/lib/video-overlay-composition"
 import { stripStudioDraftWorkflow } from "@nodaro/shared"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useWorkflowPersistence, TERMINAL_RESTORABLE_STATUSES, executionSettledAt, applyCompletedExecutionResults, applyBackendExecutionState } from "../use-workflow-persistence"
+import { deriveInstagramScrapeCardState } from "@/components/nodes/instagram-scrape-run-state"
+import type { InstagramScrapeNodeData } from "@/types/nodes"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -122,6 +124,9 @@ import { useWorkflowPersistence, TERMINAL_RESTORABLE_STATUSES, executionSettledA
 
 const VALID_UUID = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
 const VALID_UUID_2 = "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+/** When a node the run EXECUTED started. A completed state with no start only
+ *  passed the node's saved data through, and writes nothing (lib/seeded-node-state.ts). */
+const RAN_AT = "2026-10-04T10:00:00.000Z"
 
 function makeNode(overrides: Record<string, unknown> = {}) {
   return {
@@ -1486,8 +1491,8 @@ describe("useWorkflowPersistence — terminal-execution restore via load", () =>
     })
     mockTerminal([
       failedRun({
-        ok1: { status: "completed", output: { imageUrl: "https://cdn.test/ok1.png" } },
-        ok2: { status: "completed", output: { imageUrl: "https://cdn.test/ok2.png" } },
+        ok1: { status: "completed", startedAt: RAN_AT, output: { imageUrl: "https://cdn.test/ok1.png" } },
+        ok2: { status: "completed", startedAt: RAN_AT, output: { imageUrl: "https://cdn.test/ok2.png" } },
         bad: { status: "failed", error: "Invalid aspect ratio setting." },
       }),
     ])
@@ -1526,7 +1531,7 @@ describe("useWorkflowPersistence — terminal-execution restore via load", () =>
         createdAt: new Date().toISOString(),
         nodeStates: { ok1: { nodeId: "ok1", jobId: VALID_UUID, status: "completed" } },
       },
-      failedRun({ ok1: { status: "completed", output: { imageUrl: "https://cdn.test/ok1.png" } } }),
+      failedRun({ ok1: { status: "completed", startedAt: RAN_AT, output: { imageUrl: "https://cdn.test/ok1.png" } } }),
     ])
 
     const { result } = renderHook(() => useWorkflowPersistence("p1"))
@@ -1538,6 +1543,51 @@ describe("useWorkflowPersistence — terminal-execution restore via load", () =>
       data: Record<string, unknown>
     }
     expect(ok1.data.generatedImageUrl).toBe("https://cdn.test/ok1.png")
+  })
+
+  // TA3 (c), decided 2026-10-04 and 2026-10-05: on a canvas with a render, a run
+  // that ended while the editor was closed loads WHOLE onto every node it ran,
+  // not only into empty slots — the plan and the preview stay a pair.
+  it("loads the newest ended run onto a render and the plan it ran, over their older results, and marks them", async () => {
+    const OLD = "https://cdn.test/old-preview.mp4"
+    const NEW = "https://cdn.test/new-preview.mp4"
+    const NEW_PLAN = { version: 1, segments: [{ id: "seg-0", inMs: 0, outMs: 1000, video: "src" }], dropped: [] }
+    setupSupabaseLoad({
+      id: "w1",
+      name: "WF",
+      nodes: [
+        makeNode({ id: "plan", type: "edit-plan", data: { label: "Plan", generatedJson: { version: 1, segments: [], dropped: [] } } }),
+        makeNode({ id: "cut", type: "apply-edl", data: { label: "Cut", output: "video", generatedVideoUrl: OLD, generatedResults: [{ url: OLD, timestamp: "2026-10-04T09:00:00.000Z", jobId: "job-old" }], activeResultIndex: 0 } }),
+      ],
+      edges: [{ id: "e1", source: "plan", sourceHandle: "edl", target: "cut", targetHandle: "edl" }],
+    })
+    mockTerminal([
+      {
+        id: "exec-new",
+        triggerType: "manual",
+        status: "completed",
+        createdAt: "2026-10-04T10:00:00.000Z",
+        completedAt: "2026-10-04T10:05:00.000Z",
+        nodeStates: {
+          plan: { status: "completed", startedAt: RAN_AT, completedAt: "2026-10-04T10:02:00.000Z", output: { json: NEW_PLAN } },
+          cut: { status: "completed", startedAt: RAN_AT, completedAt: "2026-10-04T10:05:00.000Z", output: { videoUrl: NEW } },
+        },
+      },
+    ])
+
+    const { result } = renderHook(() => useWorkflowPersistence("p1"))
+    await act(async () => {
+      await result.current.load("w1")
+    })
+
+    const byId = Object.fromEntries(
+      getSyncedNodes().map((n) => [(n as { id: string }).id, (n as { data: Record<string, unknown> }).data]),
+    )
+    expect(byId.plan.generatedJson).toEqual(NEW_PLAN)
+    expect(byId.cut.generatedVideoUrl).toBe(NEW)
+    expect((byId.cut.generatedResults as Array<{ url: string }>)[0]!.url).toBe(NEW)
+    expect(byId.plan.resultsRunId).toBe("exec-new")
+    expect(byId.cut.resultsRunId).toBe("exec-new")
   })
 
   it("asks for the terminal statuses with room to skip single-node rows", async () => {
@@ -1572,10 +1622,10 @@ describe("useWorkflowPersistence — terminal-execution restore via load", () =>
    */
   describe("named side outputs come back under the names their readers use", () => {
     const sideOutputs = {
-      sep: { status: "completed", output: { audioUrl: "https://cdn.test/mix.mp3", vocalUrl: "https://cdn.test/vocals.mp3", instrumentalUrl: "https://cdn.test/inst.mp3" } },
-      align: { status: "completed", output: { alignment: [{ word: "hi", start: 0, end: 1 }] } },
-      combine: { status: "completed", output: { combinedText: "a b" } },
-      split: { status: "completed", output: { splitResults: ["a", "b"] } },
+      sep: { status: "completed", startedAt: RAN_AT, output: { audioUrl: "https://cdn.test/mix.mp3", vocalUrl: "https://cdn.test/vocals.mp3", instrumentalUrl: "https://cdn.test/inst.mp3" } },
+      align: { status: "completed", startedAt: RAN_AT, output: { alignment: [{ word: "hi", start: 0, end: 1 }] } },
+      combine: { status: "completed", startedAt: RAN_AT, output: { combinedText: "a b" } },
+      split: { status: "completed", startedAt: RAN_AT, output: { splitResults: ["a", "b"] } },
     }
     const canvas = () =>
       setupSupabaseLoad({
@@ -1669,8 +1719,8 @@ describe("useWorkflowPersistence — terminal-execution restore via load", () =>
         edges: [],
       })
     const bothCompleted = {
-      cleared: { status: "completed", output: { imageUrl: "https://cdn.test/old-a.png" } },
-      untouched: { status: "completed", output: { imageUrl: "https://cdn.test/old-b.png" } },
+      cleared: { status: "completed", startedAt: RAN_AT, output: { imageUrl: "https://cdn.test/old-a.png" } },
+      untouched: { status: "completed", startedAt: RAN_AT, output: { imageUrl: "https://cdn.test/old-b.png" } },
     }
 
     it("stays empty when the last run settled BEFORE the clear — the un-cleared node beside it is still restored", async () => {
@@ -1832,7 +1882,7 @@ describe("Scene3D workflow reload", () => {
       makeNode({ id: "recorded", type: "generate-3d-scene", data: { label: "Recorded", scenePlan: manual, sceneHistory: recorded } }),
     ] })
     const run = { id: "exec", triggerType: "manual", status, nodeStates: Object.fromEntries(
-      ["fresh", "manual", "recorded"].map(id => [id, { status: "completed", output: { plan: incoming, changeSummary: "Updated scene" } }]),
+      ["fresh", "manual", "recorded"].map(id => [id, { status: "completed", startedAt: RAN_AT, output: { plan: incoming, changeSummary: "Updated scene" } }]),
     ) }
     mockListWorkflowExecutions.mockImplementation((_id: string, opts: { status?: string }) => Promise.resolve({
       data: (opts.status === "pending,running,stopping") === (status === "running") ? [run] : [],
@@ -1860,7 +1910,7 @@ describe("applyCompletedExecutionResults — Video Overlay run facts", () => {
     const nodes = [{ id: "vo", type: "video-overlay", position: { x: 0, y: 0 }, data: { label: "Video Overlay" } }] as unknown as Parameters<typeof applyCompletedExecutionResults>[0]
     const [out] = applyCompletedExecutionResults(
       nodes,
-      { vo: { status: "completed", output: { videoUrl: "https://cdn/o.mp4", warnings: [skipped], width: 1080, height: 1920, durationSec: 5 } } },
+      { vo: { status: "completed", startedAt: RAN_AT, output: { videoUrl: "https://cdn/o.mp4", warnings: [skipped], width: 1080, height: 1920, durationSec: 5 } } },
       null,
     )
     const data = out!.data as Record<string, unknown>
@@ -1870,7 +1920,7 @@ describe("applyCompletedExecutionResults — Video Overlay run facts", () => {
 
   it("stamps the freshness key a backend run carried on the node and the result", () => {
     const nodes = [{ id: "vo", type: "video-overlay", position: { x: 0, y: 0 }, data: { label: "Video Overlay" } }] as unknown as Parameters<typeof applyCompletedExecutionResults>[0]
-    const [out] = applyCompletedExecutionResults(nodes, { vo: { status: "completed", output: { videoUrl: "https://cdn/k.mp4", resultCompositionKey: "K1" } } }, null)
+    const [out] = applyCompletedExecutionResults(nodes, { vo: { status: "completed", startedAt: RAN_AT, output: { videoUrl: "https://cdn/k.mp4", resultCompositionKey: "K1" } } }, null)
     const data = out!.data as Record<string, unknown>
     expect(data.resultCompositionKey).toBe("K1")
     expect((data.generatedResults as Array<Record<string, unknown>>)[0]).toMatchObject({ url: "https://cdn/k.mp4", resultCompositionKey: "K1" })
@@ -1884,6 +1934,7 @@ describe("Video Overlay list fan-out rows — each row's own freshness key (both
   const nodes = () => [{ id: "vo", type: "video-overlay", position: { x: 0, y: 0 }, data: { label: "Video Overlay" } }] as unknown as Parameters<typeof applyCompletedExecutionResults>[0]
   const state = {
     status: "completed" as const,
+    startedAt: RAN_AT,
     output: {
       videoUrl: "https://cdn/a.mp4",
       resultCompositionKey: "KA",
@@ -1964,6 +2015,7 @@ describe("Content Recipe / Content Ideas — both load-time lanes", () => {
   const ideasNode = () => [{ id: "ideas", type: "content-ideas", position: { x: 0, y: 0 }, data: { label: "Content Ideas" } }] as unknown as Parameters<typeof applyCompletedExecutionResults>[0]
   const state = {
     status: "completed" as const,
+    startedAt: RAN_AT,
     output: { json: [{ title: "one" }], text: "CONTENT IDEAS (1)", listResults: ["IDEA 1 of 1: one"] },
   }
 
@@ -1990,7 +2042,7 @@ describe("Content Recipe / Content Ideas — both load-time lanes", () => {
 
   it("a recipe lands as its object and its text", () => {
     const nodes = [{ id: "recipe", type: "content-recipe", position: { x: 0, y: 0 }, data: { label: "Content Recipe" } }] as unknown as Parameters<typeof applyCompletedExecutionResults>[0]
-    const [out] = applyCompletedExecutionResults(nodes, { recipe: { status: "completed", output: { json: { version: 1 }, text: "CONTENT RECIPE: t" } } }, null)
+    const [out] = applyCompletedExecutionResults(nodes, { recipe: { status: "completed", startedAt: RAN_AT, output: { json: { version: 1 }, text: "CONTENT RECIPE: t" } } }, null)
     expect(out!.data).toMatchObject({ generatedJson: { version: 1 }, generatedText: "CONTENT RECIPE: t" })
   })
 })
@@ -2190,7 +2242,7 @@ describe("Apply EDL — every load lane leaves the node holding one cut", () => 
       ...extra,
     },
   }] as unknown as Parameters<typeof applyCompletedExecutionResults>[0]
-  const audioRun = { cut: { status: "completed" as const, output: { audioUrl: NEW_AUDIO } } }
+  const audioRun = { cut: { status: "completed" as const, startedAt: RAN_AT, output: { audioUrl: NEW_AUDIO } } }
 
   it("applyCompletedExecutionResults (a run that finished while the editor was closed)", () => {
     const [out] = applyCompletedExecutionResults(applyEdlNode(), audioRun, null)
@@ -2249,7 +2301,7 @@ describe("Apply EDL — every load lane lands the render's own Transcript", () =
       ...extra,
     },
   }] as unknown as Parameters<typeof applyCompletedExecutionResults>[0]
-  const run = (json?: unknown) => ({ cut: { status: "completed" as const, output: { videoUrl: NEW_VIDEO, ...(json ? { json } : {}) } } })
+  const run = (json?: unknown) => ({ cut: { status: "completed" as const, startedAt: RAN_AT, output: { videoUrl: NEW_VIDEO, ...(json ? { json } : {}) } } })
   const landedTake = (data: Record<string, unknown>) => (data.generatedResults as Array<Record<string, unknown>>)[0]
 
   const lanes = [
@@ -2302,5 +2354,113 @@ describe("Apply EDL — every load lane lands the render's own Transcript", () =
     const data = await loadWithJobOutput({ videoUrl: NEW_VIDEO })
     expect(data).toHaveProperty("generatedJson", undefined)
     expect(landedTake(data)).toHaveProperty("generatedJson", undefined)
+  })
+})
+
+// A scraper finished by a SERVER run (Execute workflow, Run from here, a
+// schedule, an app) used to come back with only its featured image — the card
+// stayed "Not run yet" while every node after it had run on its posts. Both
+// load lanes now put the single-node Run's own patch on it, once per job.
+describe("Scrapers — both load-time lanes paint the posts, not the featured image", () => {
+  const POSTS = [{ postId: "p1", caption: "hi", images: ["https://cdn/i.jpg"], videos: [], videoPreviews: [] }]
+  const state = {
+    status: "completed" as const,
+    jobId: "job-ig-1",
+    output: { json: POSTS, text: "hi", imageUrl: "https://cdn/i.jpg" },
+  }
+  const igNode = (data: Record<string, unknown> = {}) =>
+    [{ id: "ig", type: "instagram-scrape", position: { x: 0, y: 0 }, data: { label: "Instagram", mode: "post", ...data } }] as unknown as Parameters<typeof applyCompletedExecutionResults>[0]
+
+  it("applyCompletedExecutionResults (a run that finished while the editor was closed)", () => {
+    const [out] = applyCompletedExecutionResults(igNode(), { ig: state }, "2026-10-04T21:35:46.000Z")
+    const data = out!.data as Record<string, unknown>
+    expect(data).toMatchObject({ executionStatus: "completed", generatedJson: POSTS, lastRunOutcome: "success", lastRunCount: 1, featuredIndex: 0, lastAppliedJobId: "job-ig-1" })
+    expect(data.generatedResults).toBeUndefined()
+    expect(data.generatedImageUrl).toBeUndefined()
+  })
+
+  it("repairs a node an older build marked completed with only its featured image", () => {
+    const stale = igNode({ executionStatus: "completed", generatedImageUrl: "https://cdn/i.jpg", generatedResults: [{ url: "https://cdn/i.jpg" }] })
+    const [out] = applyCompletedExecutionResults(stale, { ig: state }, "2026-10-04T21:35:46.000Z")
+    expect((out!.data as Record<string, unknown>).generatedJson).toEqual(POSTS)
+  })
+
+  it("applies once per job — a reload after the patch leaves the user's featured post alone", () => {
+    const nodes = igNode({ generatedJson: POSTS, lastAppliedJobId: "job-ig-1", featuredIndex: 3 })
+    const [out] = applyCompletedExecutionResults(nodes, { ig: state }, "2026-10-04T21:35:46.000Z")
+    expect(out).toBe(nodes[0])
+  })
+
+  it("keeps a newer run of the node from the editor (started after this execution ended)", () => {
+    const newer = Date.parse("2026-10-04T22:00:00.000Z")
+    const nodes = igNode({ generatedJson: [{ postId: "mine" }], lastRunOutcome: "success", lastRunStartedAt: newer, lastRunAt: newer + 5_000 })
+    const [out] = applyCompletedExecutionResults(nodes, { ig: state }, "2026-10-04T21:35:46.000Z")
+    expect(out).toBe(nodes[0])
+  })
+
+  it("applyBackendExecutionState (a reload while the run is still active)", () => {
+    const [out] = applyBackendExecutionState(igNode(), { ig: state })
+    const data = out!.data as Record<string, unknown>
+    expect(data).toMatchObject({ generatedJson: POSTS, lastRunOutcome: "success", lastAppliedJobId: "job-ig-1" })
+    expect(data.generatedResults).toBeUndefined()
+  })
+
+  it("applyBackendExecutionState leaves the featured post alone once the job is on the node", () => {
+    const nodes = igNode({ generatedJson: POSTS, lastAppliedJobId: "job-ig-1", featuredIndex: 3, viewFormat: "square" })
+    const [out] = applyBackendExecutionState(nodes, { ig: state })
+    expect(out!.data).toMatchObject({ featuredIndex: 3, viewFormat: "square", lastAppliedJobId: "job-ig-1" })
+    expect((out!.data as Record<string, unknown>).generatedResults).toBeUndefined()
+  })
+
+  // A Run from here / Run selected outside the scraper, or a skipped scraper:
+  // the server passes its SAVED posts through with no job. A fresh-run patch
+  // there would reset the post the person picked, and the next partial run
+  // would hand post #1 downstream instead of theirs.
+  it("a passed-through scraper (saved data, no job) keeps the picked post in both lanes", () => {
+    const passThrough = { status: "completed" as const, output: { json: POSTS, text: "hi", imageUrl: "https://cdn/i.jpg" } }
+    const picked = igNode({ generatedJson: POSTS, featuredIndex: 3, viewFormat: "square", lastAppliedJobId: "job-single" })
+    const [done] = applyCompletedExecutionResults(picked, { ig: passThrough }, "2026-10-04T21:35:46.000Z")
+    expect(done).toBe(picked[0])
+    const [active] = applyBackendExecutionState(picked, { ig: passThrough })
+    expect(active!.data).toMatchObject({ featuredIndex: 3, viewFormat: "square", lastAppliedJobId: "job-single" })
+    expect((active!.data as Record<string, unknown>).generatedResults).toBeUndefined()
+  })
+
+  it("an empty result records the outcome and keeps the posts the node already had", () => {
+    const [out] = applyCompletedExecutionResults(igNode({ generatedJson: POSTS }), { ig: { ...state, output: { json: [] } } }, "2026-10-04T21:35:46.000Z")
+    expect(out!.data).toMatchObject({ lastRunOutcome: "empty", lastRunCount: 0, generatedJson: POSTS, lastAppliedJobId: "job-ig-1" })
+  })
+
+  it("with no end time it fills only an empty node", () => {
+    const full = igNode({ generatedJson: [{ postId: "mine" }] })
+    const [kept] = applyCompletedExecutionResults(full, { ig: state }, null)
+    expect(kept).toBe(full[0])
+    const [filled] = applyCompletedExecutionResults(igNode(), { ig: state }, null)
+    expect((filled!.data as Record<string, unknown>).generatedJson).toEqual(POSTS)
+  })
+
+  it("a fresh server result never reads as \"Inputs changed\" after an earlier single-node run on other targets", () => {
+    const earlier = igNode({ targets: "https://www.instagram.com/p/New1/", lastRunFingerprint: "[\"post\",[\"https://www.instagram.com/p/Old1/\"]]" })
+    const [out] = applyCompletedExecutionResults(earlier, { ig: state }, "2026-10-04T21:35:46.000Z")
+    expect(deriveInstagramScrapeCardState(out!.data as InstagramScrapeNodeData)).toMatchObject({ kind: "success", stale: false })
+  })
+
+  it("clears the media fields an older build wrote as the scraper's result", () => {
+    const stale = igNode({ generatedImageUrl: "https://cdn/i.jpg", generatedResults: [{ url: "https://cdn/i.jpg" }], generatedText: "hi", activeResultIndex: 0 })
+    const [out] = applyCompletedExecutionResults(stale, { ig: state }, "2026-10-04T21:35:46.000Z")
+    const data = out!.data as Record<string, unknown>
+    expect(data.generatedResults).toBeUndefined()
+    expect(data.generatedImageUrl).toBeUndefined()
+    expect(data.generatedText).toBeUndefined()
+  })
+
+  it("covers Meta Ads and Web Scrape the same way", () => {
+    const ads = [{ adId: "a1" }]
+    const metaNodes = [{ id: "meta", type: "meta-ads-scrape", position: { x: 0, y: 0 }, data: { label: "Meta Ads" } }] as unknown as Parameters<typeof applyCompletedExecutionResults>[0]
+    const [meta] = applyCompletedExecutionResults(metaNodes, { meta: { status: "completed", jobId: "job-m", output: { json: ads } } }, null)
+    expect(meta!.data).toMatchObject({ generatedJson: ads, lastRunOutcome: "success", lastAppliedJobId: "job-m" })
+    const webNodes = [{ id: "web", type: "web-scrape", position: { x: 0, y: 0 }, data: { label: "Web Scrape" } }] as unknown as Parameters<typeof applyCompletedExecutionResults>[0]
+    const [web] = applyCompletedExecutionResults(webNodes, { web: { status: "completed", jobId: "job-w", output: { json: [{ title: "t" }] } } }, null)
+    expect(web!.data).toMatchObject({ generatedJson: [{ title: "t" }], lastAppliedJobId: "job-w" })
   })
 })

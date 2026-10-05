@@ -69,8 +69,9 @@ an admin preview until it opens to everyone). Set `platform`
 - `keyword` (every platform) — `query` is the words. On X the X search syntax
   works (`"exact phrase"`, `-word`, `lang:en`).
 - `account` — `query` is a handle or profile link (TikTok, Instagram, X), a
-  channel (`@handle`, link or `UC…` id on YouTube), a company page link
-  (LinkedIn), or an advertiser's name, Page ID or Ad Library link (Meta ads).
+  channel (`@handle`, link or `UC…` id on YouTube), a company page or a
+  person's profile link (LinkedIn), or an advertiser's name, Page ID or Ad
+  Library link (Meta ads).
 - `community` (Reddit only) — `query` is a subreddit; `subreddit` instead
   narrows a Reddit KEYWORD search to one community.
 

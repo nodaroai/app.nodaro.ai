@@ -11,6 +11,15 @@ import { TTS_PROVIDERS, getMaxTtsChars } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { isVoiceGenderAllowed, premadeVoiceGender } from "../lib/voice-policy.js"
+import { TTS_VOICE_SETTING_RANGES, type TtsVoiceSettingKey } from "../providers/elevenlabs/voice-settings.js"
+
+/**
+ * A voice setting, validated with the range the provider funnel clamps into (one source of truth, so the route and
+ * the funnel cannot disagree). The route still rejects what the funnel would clamp or ignore: a REST caller gets a
+ * 400, not a silently changed request.
+ */
+const voiceSetting = (key: TtsVoiceSettingKey) =>
+  z.number().min(TTS_VOICE_SETTING_RANGES[key].min).max(TTS_VOICE_SETTING_RANGES[key].max).optional()
 
 /**
  * Resolve the effective TTS provider when the caller omits `provider` entirely.
@@ -39,10 +48,10 @@ export const textToSpeechBody = z.object({
   provider: z.enum(TTS_PROVIDERS).optional(),
   userId: z.string().uuid().optional(),
   voiceType: z.enum(["premade", "custom", "library"]).optional().default("premade"),
-  stability: z.number().min(0).max(1).optional(),
-  similarityBoost: z.number().min(0).max(1).optional(),
-  style: z.number().min(0).max(1).optional(),
-  speed: z.number().min(0.7).max(1.2).optional(),
+  stability: voiceSetting("stability"),
+  similarityBoost: voiceSetting("similarityBoost"),
+  style: voiceSetting("style"),
+  speed: voiceSetting("speed"),
   languageCode: z.string().optional(),
 })
 

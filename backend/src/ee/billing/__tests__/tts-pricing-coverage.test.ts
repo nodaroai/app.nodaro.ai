@@ -33,4 +33,9 @@ describe("text-to-speech pricing coverage", () => {
       expect(STATIC_CREDIT_COSTS[alias], alias).toBe(STATIC_CREDIT_COSTS[canonicalTtsProvider(target)])
     }
   })
+
+  it("v4 costs the same flat 30 credits as v3", () => {
+    expect(STATIC_CREDIT_COSTS["elevenlabs-v4"]).toBe(30)
+    expect(STATIC_CREDIT_COSTS["elevenlabs-v4"]).toBe(STATIC_CREDIT_COSTS["elevenlabs-v3"])
+  })
 })

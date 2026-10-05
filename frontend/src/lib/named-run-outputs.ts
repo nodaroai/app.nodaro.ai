@@ -38,3 +38,20 @@ export function namedRunOutputFields(output: NamedRunOutputs): Record<string, un
   if (output.splitResults) fields.splitResults = output.splitResults
   return fields
 }
+
+/** Choose Best's run output: the winner and the strategy's meta. */
+export interface ReduceRunOutput {
+  readonly result?: unknown
+  readonly reduceMeta?: Record<string, unknown>
+}
+
+/**
+ * Choose Best (reduce): the orchestrator reports the winner as `result` (+ the
+ * strategy's meta), under the fields the single-node Run writes
+ * (execute-node.ts). The same three lanes call it, so a reopen never sets the
+ * node completed with no winner on it.
+ */
+export function reduceRunOutputFields(nodeType: string | null | undefined, output: ReduceRunOutput): Record<string, unknown> {
+  if (nodeType !== "reduce" || typeof output.result !== "string") return {}
+  return output.reduceMeta ? { result: output.result, lastMeta: output.reduceMeta } : { result: output.result }
+}

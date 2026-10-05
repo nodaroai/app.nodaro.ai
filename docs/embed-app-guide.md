@@ -124,7 +124,13 @@ Use the helper `flattenItems()` mental model: walk `inputItems`, recurse into `g
 
 ### Renamed field keys
 
-A published app keeps the field keys it was published with. When a node field is renamed, apps published earlier still list the old key in `inputItems`, and the server accepts it in `inputOverrides`. Today there is one: **Text to Speech `similarity`**, which is that node's `similarityBoost`. A card exposed from now on is stored as `similarityBoost`, while an app republished from a workflow that already exposes `similarity` keeps listing `similarity`, so read whichever key `inputItems` gives you. Send either — if you send both, `similarityBoost` wins — and pre-fill the control from `snapshotNodes[i].data.similarityBoost` for either. The control changes the result on the v2 models (`elevenlabs-turbo`, `elevenlabs-multilingual`); `elevenlabs-v3` ignores it.
+A published app keeps the field keys it was published with. When a node field is renamed, apps published earlier still list the old key in `inputItems`, and the server accepts it in `inputOverrides`. Today there is one: **Text to Speech `similarity`**, which is that node's `similarityBoost`. A card exposed from now on is stored as `similarityBoost`, while an app republished from a workflow that already exposes `similarity` keeps listing `similarity`, so read whichever key `inputItems` gives you. Send either — if you send both, `similarityBoost` wins — and pre-fill the control from `snapshotNodes[i].data.similarityBoost` for either. The control changes the result on `elevenlabs-v4` and the v2 models (`elevenlabs-turbo`, `elevenlabs-multilingual`); `elevenlabs-v3` ignores it.
+
+### Slider inputs
+
+A Text to Speech **Stability** or **Similarity** card starts at the node's own value, or at the node's default when the node has none: a Text to Speech node saved without voice settings (built by an agent, or imported) starts **Stability** at `0.5` and **Similarity** at `0.75`, as its config panel does. Other nodes' slider cards do not all start at their node's default, so for those, pre-fill your control from the node's own value in `snapshotNodes[i].data[field]` rather than assuming a starting value.
+
+For the Text to Speech voice settings (`stability`, `similarityBoost`, `style`, `speed`), a number or a numeric string is accepted (`0.4` or `"0.4"`), in `inputOverrides` and in MCP or SDK flat inputs alike. A value outside the setting's range (`stability`, `similarityBoost` and `style` 0–1, `speed` 0.7–1.2) is clamped into it. A value that is not a number (an empty string, a word) is ignored, and the voice's own setting applies. `null` depends on where you send it: in `inputOverrides` it replaces the node's saved value and is ignored the same way, so the voice's own setting applies; as an MCP or SDK flat input it is dropped before it reaches the node, so the node's saved value applies (the voice's own setting applies only when the node has none).
 
 ---
 

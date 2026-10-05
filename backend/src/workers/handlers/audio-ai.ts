@@ -9,7 +9,8 @@ import { uploadToR2, uploadBufferToR2, uploadFileToR2, mediaObjectKey } from "..
 import { runPostProcessing } from "../../lib/post-processing-error.js"
 import { directElevenLabsTTS, stripAudioTags } from "../../providers/elevenlabs/direct-tts.js"
 import { directElevenLabsDialogue } from "../../providers/elevenlabs/direct-dialogue.js"
-import { ttsSupportsAudioTags } from "@nodaro/shared"
+import { generateSoundEffect } from "../../providers/elevenlabs/sound-effects.js"
+import { ttsSupportsAudioTags, DEFAULT_TEXT_TO_AUDIO_PROVIDER, type TextToAudioProvider } from "@nodaro/shared"
 import { defaultAllowedVoiceId } from "../../lib/voice-policy.js"
 import { FALLBACK_VOICES } from "../../lib/premade-voices.js"
 import { generateMusic, type MusicProvider } from "../../providers/audio/generate-music.js"
@@ -216,46 +217,94 @@ const handleGenerateMusic: HandlerFn = async function handleGenerateMusic(job, c
 }
 
 const handleTextToAudio: HandlerFn = async function handleTextToAudio(job, ctx) {
-  const { prompt, provider, duration, loop, promptInfluence } = job.data as {
-    jobId: string; prompt: string; provider?: AudioProvider | "elevenlabs-sfx"
+  const { prompt, provider: rawProvider, duration, loop, promptInfluence } = job.data as {
+    jobId: string; prompt: string; provider?: AudioProvider | TextToAudioProvider
     duration?: number; loop?: boolean; promptInfluence?: number
   }
-  console.log(`[worker] text-to-audio ${ctx.jobId} (provider: ${provider ?? "tangoflux"})`)
+  // The route always enqueues a resolved engine; this default only covers a
+  // payload enqueued before it did (or a future caller that forgets).
+  const provider = rawProvider ?? DEFAULT_TEXT_TO_AUDIO_PROVIDER
+  console.log(`[worker] text-to-audio ${ctx.jobId} (provider: ${provider})`)
 
-  const sfxOnTaskCreated = makeOnTaskCreated(ctx.jobId, "kie-standard")
-  const audioUrl: string = await withProgressRamp(
-    job,
-    ctx.jobId,
-    { start: 5, cap: 45 },
-    async () => {
-      if (provider === "elevenlabs-sfx") {
-        const kieAudio = new KieAudioProvider()
-        const result = await kieAudio.generateSoundEffect(prompt, {
-          duration,
-          loop,
-          promptInfluence,
-        }, { onTaskCreated: sfxOnTaskCreated })
-        return result.url
-      }
-      // Replicate `replicate.run()` path (tangoflux) blocks until done; no
-      // early taskId is exposed, so no onTaskCreated wiring possible.
-      return await textToAudio(prompt, provider as AudioProvider | undefined, duration)
-    },
-  )
+  // The legacy Replicate engine (disabled in TEXT_TO_AUDIO_PROVIDERS, so only a
+  // stale orchestrator payload can still name it) returns a URL; it keeps its
+  // own path.
+  if (provider === "tangoflux") {
+    // `replicate.run()` blocks until done; no early taskId is exposed, so no
+    // onTaskCreated wiring is possible.
+    const replicateUrl = await withProgressRamp(job, ctx.jobId, { start: 5, cap: 45 }, () =>
+      textToAudio(prompt, provider, duration),
+    )
+    await setJobProgress(job, ctx.jobId, 50)
+    // POST-PROVIDER: the provider already delivered (we were billed) — an R2
+    // upload failure here is post-delivery, so skip the refund.
+    const r2Url = await runPostProcessing(() => uploadToR2(replicateUrl, ctx.jobId, "audio", ctx.jobUserId))
+    await setJobProgress(job, ctx.jobId, 100)
+    const { ok } = await finalizeJobWithMedia({
+      jobId: ctx.jobId,
+      jobType: "text-to-audio",
+      result: { url: r2Url, cost: null, providerUsed: provider },
+      mediaUrl: r2Url,
+    })
+    if (!ok) return
+    console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
+    return
+  }
+
+  // elevenlabs-sfx — straight to the ElevenLabs Sound Effects API (KIE's
+  // wrapper of the same model failed every request from October 2026). The
+  // call is synchronous and answers with the audio bytes, so there is no task
+  // id to persist: the row keeps the worker's pre-task sentinel, as TTS does.
+  //
+  // The same three-way ladder as handleTextToSpeech / handleTranscribe, in
+  // the same order — the order IS the contract:
+  //   1. local key            -> direct ElevenLabs (keyed installs unchanged)
+  //   2. no key, connected    -> replay the job on the connected cloud and
+  //      take its audio back (the worker calls the vendor itself, so no
+  //      capability declaration could rescue a keyless install otherwise)
+  //   3. no key, not connected -> generateSoundEffect's own shared
+  //      missing-key error (MissingProviderKeyError, thrown before any request)
+  const { shouldRunOnCloud, runJobOnCloud } = await import("../../providers/nodaro/run-on-cloud.js")
+  let audioBuffer: Buffer
+  if (await shouldRunOnCloud(config.ELEVENLABS_API_KEY)) {
+    const cloud = await runJobOnCloud(
+      "text-to-audio",
+      { ...(job.data as Record<string, unknown>), provider },
+      async (p) => {
+        await setJobProgress(job, ctx.jobId, Math.min(45, Math.max(5, Math.round(p))))
+      },
+    )
+    // Validate rather than trust — a version-skewed cloud must fail loudly,
+    // not complete with no audio.
+    if (typeof cloud.audioUrl !== "string" || !cloud.audioUrl) {
+      throw new Error("nodaro.ai returned no sound effect audio")
+    }
+    const res = await safeFetch(cloud.audioUrl)
+    if (!res.ok) {
+      throw new Error(`nodaro.ai: could not download the generated audio (${res.status})`)
+    }
+    audioBuffer = Buffer.from(await res.arrayBuffer())
+  } else {
+    audioBuffer = await withProgressRamp(job, ctx.jobId, { start: 5, cap: 45 }, () =>
+      generateSoundEffect(prompt, { duration, loop, promptInfluence }),
+    )
+  }
 
   await setJobProgress(job, ctx.jobId, 50)
-  // POST-PROVIDER: the SFX/audio provider already delivered `audioUrl` (we were
-  // billed) — an R2 upload failure here is post-delivery, so skip the refund.
-  const r2Url = await runPostProcessing(() => uploadToR2(audioUrl, ctx.jobId, "audio", ctx.jobUserId))
+  // POST-PROVIDER: the provider already delivered the audio (we were billed) —
+  // an R2 upload failure here is post-delivery, so skip the refund.
+  const r2Url = await runPostProcessing(() =>
+    uploadBufferToR2(audioBuffer, mediaObjectKey(ctx.jobId, "audio", "mp3"), "audio/mpeg", ctx.jobUserId),
+  )
   await setJobProgress(job, ctx.jobId, 100)
   const { ok } = await finalizeJobWithMedia({
     jobId: ctx.jobId,
     jobType: "text-to-audio",
-    result: { url: r2Url, cost: null, providerUsed: provider ?? "tangoflux" },
+    result: { url: r2Url, cost: null, providerUsed: provider },
     mediaUrl: r2Url,
   })
   if (!ok) return
-  console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url}`)
+  console.log(`[worker] Job ${ctx.jobId} completed: ${r2Url} (provider: ${provider})`)
 }
 
 // URLs for social platforms that need audio extraction before the STT provider

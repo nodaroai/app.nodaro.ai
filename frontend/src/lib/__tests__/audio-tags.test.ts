@@ -91,6 +91,11 @@ describe("getLanguagesForModel", () => {
     expect(langs).toHaveLength(32)
   })
 
+  it("returns the same 46 languages for v4 as for v3 (the curated picker; v4 itself speaks more)", () => {
+    expect(getLanguagesForModel("elevenlabs-v4")).toEqual(getLanguagesForModel("elevenlabs-v3"))
+    expect(getLanguagesForModel("elevenlabs-v4").some((l) => l.value === "he")).toBe(true)
+  })
+
   it("the legacy alias lists what turbo lists (it runs as turbo)", () => {
     expect(getLanguagesForModel("elevenlabs")).toEqual(getLanguagesForModel("elevenlabs-turbo"))
   })
@@ -112,6 +117,7 @@ describe("getLanguagesForModel", () => {
       "elevenlabs-multilingual",
       "elevenlabs-turbo",
       "elevenlabs-v3",
+      "elevenlabs-v4",
       undefined,
     ]) {
       const labels = getLanguagesForModel(provider).map((l) => l.label)

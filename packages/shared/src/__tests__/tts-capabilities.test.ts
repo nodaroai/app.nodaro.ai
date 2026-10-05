@@ -190,3 +190,48 @@ describe("character caps derive from the sheets", () => {
     expect(getMaxTtsChars(undefined)).toBe(TTS_TEXT_MAX)
   })
 })
+
+describe("elevenlabs-v4 — added beside v3", () => {
+  it("is a text-to-speech provider, in the catalog, with the sheet below", () => {
+    expect(TTS_PROVIDERS).toContain("elevenlabs-v4")
+    expect(MODEL_CATALOG["elevenlabs-v4"]?.modes).toContain("tts")
+  })
+
+  it("tags, no SSML, stability + similarity, 10,000 characters, the same 46 languages as v3", () => {
+    const c = getTtsCapabilities("elevenlabs-v4")
+    expect(c.audioTags).toBe(true)
+    expect(c.ssmlBreaks).toBe(false)
+    expect(c.levers).toEqual(["stability", "similarity"])
+    expect(c.languageCode).toBe(true)
+    expect(c.maxChars).toBe(10000)
+    expect(c.languages).toEqual(getTtsCapabilities("elevenlabs-v3").languages)
+  })
+
+  it("keeps [audio tags] and has no SSML breaks", () => {
+    expect(ttsSupportsAudioTags("elevenlabs-v4")).toBe(true)
+    expect(ttsSupportsSsmlBreaks("elevenlabs-v4")).toBe(false)
+  })
+
+  it("honours similarity but not speed, style or speaker boost", () => {
+    expect(ttsHasLever("elevenlabs-v4", "similarity")).toBe(true)
+    expect(ttsHasLever("elevenlabs-v4", "speed")).toBe(false)
+    expect(ttsHasLever("elevenlabs-v4", "style")).toBe(false)
+    expect(ttsHasLever("elevenlabs-v4", "speakerBoost")).toBe(false)
+  })
+
+  it("is capped at 10,000 characters; v3 stays at 5,000", () => {
+    expect(getMaxTtsChars("elevenlabs-v4")).toBe(10000)
+    expect(getMaxTtsChars("elevenlabs-v3")).toBe(5000)
+  })
+
+  it("costs a flat 30 credits with no per-length note, and is not the featured model — v3 stays the default", () => {
+    const v4 = MODEL_CATALOG["elevenlabs-v4"]!
+    expect(v4.pricing).toEqual([{ identifier: "elevenlabs-v4", credits: 30 }])
+    expect(v4.featured).toBeUndefined()
+    expect(MODEL_CATALOG["elevenlabs-v3"]!.featured).toBe(true)
+  })
+
+  it("does not call v3 the latest model any more", () => {
+    expect(MODEL_CATALOG["elevenlabs-v3"]!.description).not.toMatch(/latest/i)
+  })
+})

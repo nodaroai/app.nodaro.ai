@@ -1,0 +1,19 @@
+{
+  "apply-edl": "generatedJson",
+  "audio-sync": "generatedJson",
+  "camera-switch": "generatedJson",
+  "content-ideas": "generatedJson",
+  "content-recipe": "generatedJson",
+  "describe-to-picker": "generatedPickerJson",
+  "edit-plan": "generatedJson",
+  "extract-field": "generatedJson",
+  "instagram-scrape": "generatedJson",
+  "json-process": "processedResult",
+  "meta-ads-scrape": "generatedJson",
+  "silence-detect": "generatedJson",
+  "social-search": "generatedJson",
+  "transcribe": "generatedJson",
+  "video-analysis": "generatedJson",
+  "video-audit": "generatedJson",
+  "web-scrape": "generatedJson"
+}

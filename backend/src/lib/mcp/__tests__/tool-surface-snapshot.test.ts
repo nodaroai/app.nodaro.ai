@@ -486,6 +486,24 @@ const CARD_MARK_TOOLS_BYTES = 1_198
 // by this suite: 386_799 total − 386_715 base = 84 B (43 + 41), which keeps the
 // 19 B of headroom the list had before.
 const APPLY_EDL_PREVIEW_RATE_WORDING_BYTES = 84
+// RAISED 2026-10-05 by generate_speech's ElevenLabs v4 wording and nothing else
+// — one NEW enum value (`elevenlabs-v4`, now taken from TTS_PROVIDERS), `text`
+// allowed to 10,000, and a clause each on the tool and its `model` argument
+// saying v4 is newer (same tags, stability + similarity only) and that the cap
+// is per model. No tool was added, so the fixture does NOT move. measured by
+// this suite: 386_995 total − 386_799 base = 196 B (generate_speech is now
+// 4_191 B, far under the 8_192 B per-tool budget, and the only tool that names
+// v4), which keeps the 19 B of headroom the list had before.
+const ELEVENLABS_V4_SPEECH_BYTES = 196
+// LOWERED 2026-10-05 by the video_analysis tool's one analysis quality and
+// nothing else — a refund, by the same rule as CAPTION_DOCTRINE_TO_SKILL_BYTES:
+// the budget moves by exactly what the change costs. The tool always runs the
+// Smart tier, so its `llm_model` and `selection_mode` arguments left the schema
+// and its description prices one ladder instead of five. No tool was added or
+// removed, so the membership fixture does not move. measured by this suite:
+// 386_449 total − 386_995 base = −546 B (video_analysis 4_882 -> 4_336), which
+// keeps the 19 B of headroom the list had before.
+const VIDEO_ANALYSIS_SMART_ONLY_BYTES = -546
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192,
   totalBytes:
@@ -531,7 +549,9 @@ export const TOOL_WIRE_BUDGET = {
     SWITCH_CAMERAS_TOOL_BYTES +
     COMPETITOR_LESSONS_TOOL_BYTES +
     CARD_MARK_TOOLS_BYTES +
-    APPLY_EDL_PREVIEW_RATE_WORDING_BYTES,
+    APPLY_EDL_PREVIEW_RATE_WORDING_BYTES +
+    ELEVENLABS_V4_SPEECH_BYTES,
+    VIDEO_ANALYSIS_SMART_ONLY_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

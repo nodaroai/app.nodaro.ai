@@ -18,7 +18,7 @@ import {
   uiMeta,
 } from "./_verb-helpers.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
-import { modelIdsByKindMode, VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, ALL_CAPTION_STYLES, CAPTION_LOOK_IDS, SUPPORTED_FONT_NAMES, COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, MOTION_TRANSFER_PROVIDERS, VIDEO_ANALYSIS_TIER_ORDER, resolveVideoAnalysisModel, DEFAULT_VIDEO_ANALYSIS_TIER, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_MAX_SCENE_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoAuditCreditId, readPromptAffixes, LIP_SYNC_PROVIDERS, VIDEO_TO_VIDEO_NODE_PROVIDERS, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDL_SOURCE_ROLES, resolveEditPlanSources, describeAudioSyncOffsetIssue, transcriptSpeakerLabels, cameraSwitchEdlProblem, cleanSpeakerNames, CAMERA_SWITCH_BOUNDS, TRANSCRIBE_LANES, CAPTION_MAX_WORDS_PER_LINE_MIN, CAPTION_MAX_WORDS_PER_LINE_MAX } from "@nodaro/shared"
+import { modelIdsByKindMode, VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, ALL_CAPTION_STYLES, CAPTION_LOOK_IDS, SUPPORTED_FONT_NAMES, COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, MOTION_TRANSFER_PROVIDERS, type VideoAnalysisTier, VIDEO_ANALYSIS_TIER_LABELS, resolveVideoAnalysisModel, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_MAX_SCENE_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoAuditCreditId, readPromptAffixes, LIP_SYNC_PROVIDERS, VIDEO_TO_VIDEO_NODE_PROVIDERS, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDL_SOURCE_ROLES, resolveEditPlanSources, describeAudioSyncOffsetIssue, transcriptSpeakerLabels, cameraSwitchEdlProblem, cleanSpeakerNames, CAMERA_SWITCH_BOUNDS, TRANSCRIBE_LANES, CAPTION_MAX_WORDS_PER_LINE_MIN, CAPTION_MAX_WORDS_PER_LINE_MAX } from "@nodaro/shared"
 import { applyPromptAffixes, buildSeedanceVideoEditPrompt } from "@nodaro/prompts"
 
 // Map list_models catalog/display ids → /v1/motion-transfer route providers.
@@ -45,19 +45,25 @@ import { mcpInject } from "../internal-request.js"
 const T2V_MODEL_IDS = modelIdsByKindMode(null, ["t2v"], { includeHidden: true })
 const I2V_MODEL_IDS = modelIdsByKindMode("video", ["i2v"], { includeHidden: true })
 
+// The ONE analysis quality the video_analysis tool runs. This tool offers no
+// tier choice, so every video_analysis call is Smart, the accuracy tier; the
+// REST route, the SDK and the Video Analysis node (in the editor, and in
+// workflows run over MCP) keep every tier. Smart always refines its merged
+// result, so the tool never sends a `selectionMode` either.
+const MCP_VIDEO_ANALYSIS_TIER: VideoAnalysisTier = "smart"
+
 // Credit hint for the video_analysis tool description — derived from the
 // shared duration-bucket formula (NEVER hand-write the numbers; the formula is
 // the single source of truth, shape-guarded by packages/shared's pricing test; the $-formula itself lives in the private analysis plugin).
-// Renders like: "fast <a>/<b>/<c>/<d> credits; pro …; mixed …" — deliberately
-// no example VALUES here: this comment sat three repricings stale, which is
-// exactly the failure the derived hint exists to prevent.
+// Renders the one tier's ladder, a figure per duration bucket, like
+// "<a>/<b>/<c>/<d> credits" — deliberately no example VALUES here: this comment
+// sat three repricings stale, which is exactly the failure the derived hint
+// exists to prevent.
 // Priced per quality TIER — the underlying model is never surfaced.
-// resolveVideoAnalysisModel is sentinel-aware: mixed tiers resolve to their
-// roll-plan sentinel, which buildVideoAnalysisCreditId prices under the shared
-// `mixed` credit family (both mixed variants share one ladder).
-const VIDEO_ANALYSIS_PRICING_HINT = VIDEO_ANALYSIS_TIER_ORDER.map(
-  (tier) => `${tier} ${VIDEO_ANALYSIS_DURATION_BUCKETS.map((b) => VIDEO_ANALYSIS_BUCKET_CREDITS[buildVideoAnalysisCreditId(resolveVideoAnalysisModel(tier), b)]).join("/")} credits`,
-).join("; ")
+// resolveVideoAnalysisModel is sentinel-aware: `smart` resolves to its own
+// engine-plan sentinel, which buildVideoAnalysisCreditId prices under the
+// `smart` credit family.
+const VIDEO_ANALYSIS_PRICING_HINT = `${VIDEO_ANALYSIS_DURATION_BUCKETS.map((b) => VIDEO_ANALYSIS_BUCKET_CREDITS[buildVideoAnalysisCreditId(resolveVideoAnalysisModel(MCP_VIDEO_ANALYSIS_TIER), b)]).join("/")} credits`
 
 // Credit hint for the video_audit tool description — same derivation
 // discipline as VIDEO_ANALYSIS_PRICING_HINT above (never hand-write the
@@ -2757,23 +2763,14 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         "**Source** — pass EXACTLY ONE of `video_asset_id`, `video_url`, or " +
         `\`youtube_url\`. Maximum duration ${VIDEO_ANALYSIS_MAX_DURATION_SEC / 60} minutes ` +
         `(${VIDEO_ANALYSIS_MAX_DURATION_SEC}s) for any source; YouTube live streams are rejected.\n\n` +
-        "**Pricing** — duration-bucketed credits per model (buckets " +
+        `**Pricing** — this tool always runs the ${VIDEO_ANALYSIS_TIER_LABELS[MCP_VIDEO_ANALYSIS_TIER]} analysis ` +
+        "(the highest-accuracy tier), billed per duration bucket (" +
         `${VIDEO_ANALYSIS_DURATION_BUCKETS.map((b) => `≤${b}s`).join(" / ")}): ` +
         `${VIDEO_ANALYSIS_PRICING_HINT}.`,
       inputSchema: {
         video_asset_id: z.string().uuid().optional().describe("Nodaro video job id or uploaded-asset id."),
         video_url: z.string().url().optional().describe("Direct URL of a video file."),
         youtube_url: z.string().optional().describe("YouTube video URL (youtube.com / youtu.be). Max 10 minutes; no live streams."),
-        llm_model: z
-          .enum(VIDEO_ANALYSIS_TIER_ORDER)
-          .optional()
-          .describe(`Analysis quality tier. Default "pro" (higher fidelity); "fast" is cheaper. Options: ${VIDEO_ANALYSIS_TIER_ORDER.join(", ")}.`),
-        selection_mode: z
-          .enum(["choose", "combine"])
-          .optional()
-          .describe(
-            'Result strategy. "choose" (default): the standard result. "combine": an enhanced, verified result with maximum captured detail (slightly slower, recommended).',
-          ),
         variations: z
           .boolean()
           .optional()
@@ -2860,8 +2857,11 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
       const payload: Record<string, unknown> = {
         ...(videoUrl ? { videoUrl } : {}),
         ...(args.youtube_url ? { youtubeUrl: args.youtube_url } : {}),
-        ...(args.llm_model ? { llmModel: args.llm_model } : {}),
-        ...(args.selection_mode ? { selectionMode: args.selection_mode } : {}),
+        // Always the one tier this tool runs, and no selectionMode (Smart
+        // always refines). A caller still sending the retired llm_model /
+        // selection_mode never reaches here with them: the SDK's input parse
+        // drops keys the schema does not declare.
+        llmModel: MCP_VIDEO_ANALYSIS_TIER,
         ...(args.variations ? { variations: true } : {}),
         ...(args.music_video ? { musicVideo: true } : {}),
         ...(args.translate_speech_to_english ? { translateSpeechToEnglish: true } : {}),
@@ -2877,7 +2877,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         widgetKind: "generic",
         widgetData: {
           prompt: args.analysis_focus ? args.analysis_focus.slice(0, 80) : "(video analysis)",
-          model: args.llm_model ?? DEFAULT_VIDEO_ANALYSIS_TIER,
+          model: MCP_VIDEO_ANALYSIS_TIER,
         },
       })
     },

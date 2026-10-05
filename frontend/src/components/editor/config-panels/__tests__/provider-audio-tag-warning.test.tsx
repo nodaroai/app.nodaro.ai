@@ -18,6 +18,13 @@ describe("ProviderAudioTagWarning", () => {
     expect(container).toBeEmptyDOMElement()
   })
 
+  it("renders nothing when provider is v4 (it performs audio tags)", () => {
+    const { container } = render(
+      <ProviderAudioTagWarning provider="elevenlabs-v4" fieldValues={["[whispers] hello"]} />,
+    )
+    expect(container).toBeEmptyDOMElement()
+  })
+
   it("renders the warning for the legacy elevenlabs id — it runs as turbo, which strips tags", () => {
     render(<ProviderAudioTagWarning provider="elevenlabs" fieldValues={["[whispers] hello"]} />)
     expect(screen.getByText(translate("en", "cfgext.provWarnAudioTags"))).toBeInTheDocument()

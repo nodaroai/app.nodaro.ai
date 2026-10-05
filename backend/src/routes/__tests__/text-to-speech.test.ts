@@ -66,6 +66,7 @@ vi.mock("@/lib/url-validator.js", async () => {
 import { textToSpeechRoutes, resolveOmittedTtsProvider } from "../text-to-speech.js"
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
+import { reserveCreditsForJob } from "@/middleware/credit-guard.js"
 import { getMaxTtsChars } from "@nodaro/shared"
 import { __resetSurfaceProfileCacheForTests } from "../../lib/surface-profile.js"
 
@@ -388,6 +389,48 @@ describe("POST /v1/text-to-speech", () => {
     // provider call and elevenlabs rejects the over-long request.
     expect(queuedPayload.text.length).toBe(getMaxTtsChars("elevenlabs-v3"))
     expect(getMaxTtsChars("elevenlabs-v3")).toBe(5000)
+  })
+
+  describe("elevenlabs-v4", () => {
+    const userId = "00000000-0000-4000-8000-000000000001"
+
+    it("is accepted, reserved under its own credit id, and queued as itself", async () => {
+      mockJobInsert({ data: { id: "job-1" }, error: null })
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/text-to-speech",
+        payload: { text: "hello", provider: "elevenlabs-v4", userId },
+      })
+
+      expect(res.statusCode).toBe(200)
+      expect(reserveCreditsForJob).toHaveBeenCalledWith(expect.anything(), expect.anything(), "job-1", "elevenlabs-v4")
+      expect(videoQueue.add).toHaveBeenCalledWith("text-to-speech", expect.objectContaining({ provider: "elevenlabs-v4" }))
+    })
+
+    it("takes the full 10,000 characters unclamped, and clamps past 10,000 (v3 would stop at 5,000)", async () => {
+      mockJobInsert({ data: { id: "job-1" }, error: null })
+      await app.inject({
+        method: "POST",
+        url: "/v1/text-to-speech",
+        payload: { text: "a".repeat(10000), provider: "elevenlabs-v4", userId },
+      })
+      expect((vi.mocked(videoQueue.add).mock.calls[0]![1] as { text: string }).text.length).toBe(10000)
+
+      vi.mocked(videoQueue.add).mockClear()
+      mockJobInsert({ data: { id: "job-2" }, error: null })
+      await app.inject({
+        method: "POST",
+        url: "/v1/text-to-speech",
+        payload: { text: "a".repeat(10001), provider: "elevenlabs-v4", userId },
+      })
+      expect((vi.mocked(videoQueue.add).mock.calls[0]![1] as { text: string }).text.length).toBe(10000)
+    })
+
+    it("does not change what an omitted provider resolves to (still v3, then turbo past v3's cap)", () => {
+      expect(resolveOmittedTtsProvider("short text")).toBe("elevenlabs-v3")
+      expect(resolveOmittedTtsProvider("a".repeat(5001))).toBe("elevenlabs-turbo")
+    })
   })
 
   it("maps legacy elevenlabs provider to elevenlabs-turbo", async () => {

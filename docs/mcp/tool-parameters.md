@@ -74,7 +74,7 @@ Needs `assets:write` · Nodaro Cloud only.
 |---|---|---|---|
 | `brand` | string |  | Its name; read from the website when left out. At most 100 characters. |
 | `website` | string |  | At most 500 characters. |
-| `accounts` | object |  | Handles or links: tiktok, instagram, youtube, x, linkedin (company page), meta_ads (advertiser name). |
+| `accounts` | object |  | Handles or links: tiktok, instagram, youtube, x, linkedin (page or profile), meta_ads (advertiser name). |
 | `accounts.tiktok` | string |  | At most 300 characters. |
 | `accounts.instagram` | string |  | At most 300 characters. |
 | `accounts.youtube` | string |  | At most 300 characters. |
@@ -1096,10 +1096,10 @@ Needs `workflows:execute`.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `text` | string | yes | From 1 to 5000 characters. |
+| `text` | string | yes | From 1 to 10000 characters. |
 | `presetId` | string |  | Apply a built-in/custom preset by id from list_node_presets; the preset tunes delivery (speed/stability/style). Explicit fields below override it. A preset's promptPrefix/promptSuffix wrap your text. From 1 to 200 characters. |
 | `voice_id` | string |  | Voice — pass a premade voice NAME (recommended) or an ElevenLabs UUID (only for custom voices the user has explicitly cloned). DO NOT invent UUIDs — passing an unknown UUID fails with 'voice_not_found'. Premade names: Rachel, Aria, Roger, Sarah, Laura, Charlie, George, Callum, River, Liam, Charlotte, Alice, Matilda, Will, Jessica, Eric, Chris, Brian, Daniel, Lily, Bill. If unsure pick by character: female warm = Rachel; female young = Aria / Lily; male deep = Roger / Brian; male neutral = George / Daniel; British = Charlie / Charlotte. Defaults to Rachel. |
-| `model` | string |  | TTS model. Default `elevenlabs-v3` (newest) supports `[audio tags]` like `[laughs]`, `[whispers]`, `[sighs]` for emotion, and is fully multilingual — use it for ALL languages including Hebrew/Arabic/CJK. `elevenlabs-turbo` is cheaper for plain narration. `elevenlabs-multilingual` is a legacy v2 model via a third-party wrapper known to garble some languages (Hebrew observed) — only use it for a v2-only-verified voice (`text` is capped at 5,000 chars on every model — split longer scripts). `elevenlabs` is the legacy id of `elevenlabs-turbo`. Call list_models { kind: "audio", mode: "tts" } for the full sheet. One of `elevenlabs-v3`, `elevenlabs-turbo`, `elevenlabs-multilingual`, `elevenlabs`. |
+| `model` | string |  | TTS model. Default `elevenlabs-v3` supports `[audio tags]` like `[laughs]`, `[whispers]`, `[sighs]` for emotion, and is fully multilingual — use it for ALL languages including Hebrew/Arabic/CJK. `elevenlabs-v4` is newer (same tags; stability + similarity only, no speed/style). `elevenlabs-turbo` is cheaper for plain narration. `elevenlabs-multilingual` is a legacy v2 model via a third-party wrapper known to garble some languages (Hebrew observed) — only use it for a v2-only-verified voice (`text` is capped per model: 5,000 chars on v3, 10,000 on v4 — split longer scripts). `elevenlabs` is the legacy id of `elevenlabs-turbo`. Call list_models { kind: "audio", mode: "tts" } for the full sheet. One of `elevenlabs-v3`, `elevenlabs-v4`, `elevenlabs-turbo`, `elevenlabs-multilingual`, `elevenlabs`. |
 | `voice_type` | string |  | One of `premade`, `custom`, `library`. |
 | `stability` | number |  | From 0 to 1. |
 | `similarity_boost` | number |  | From 0 to 1. |
@@ -2312,7 +2312,7 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `platform` | string | yes | The platform to search. One of `tiktok`, `instagram`, `youtube`, `x`, `reddit`, `linkedin`, `meta_ads`. |
-| `query` | string | yes | A keyword (X search syntax works on X), or an account: @handle or profile link; a subreddit with mode `community`; a LinkedIn company page link; a Meta advertiser name or Page ID. From 1 to 300 characters. |
+| `query` | string | yes | A keyword (X search syntax works on X), or an account: @handle or profile link; a subreddit with mode `community`; a LinkedIn page or profile link; a Meta advertiser name or Page ID. From 1 to 300 characters. |
 | `mode` | string |  | `keyword` (default), `account`, or `community` (Reddit only; Reddit has no `account`). One of `keyword`, `account`, `community`. |
 | `count` | number |  | Results: 20 (default), 40 or 60. One of `20`, `40`, `60`. |
 | `period` | string |  | Posted within: day, week, month (default), year, all. One of `day`, `week`, `month`, `year`, `all`. |
@@ -2759,8 +2759,6 @@ Needs `workflows:execute`.
 | `video_asset_id` | string |  | Nodaro video job id or uploaded-asset id. |
 | `video_url` | string (URL) |  | Direct URL of a video file. |
 | `youtube_url` | string |  | YouTube video URL (youtube.com / youtu.be). Max 10 minutes; no live streams. |
-| `llm_model` | string |  | Analysis quality tier. Default "pro" (higher fidelity); "fast" is cheaper. Options: smart, pro, fast, mixed, mixed-fast. One of `smart`, `pro`, `fast`, `mixed`, `mixed-fast`. |
-| `selection_mode` | string |  | Result strategy. "choose" (default): the standard result. "combine": an enhanced, verified result with maximum captured detail (slightly slower, recommended). One of `choose`, `combine`. |
 | `variations` | boolean |  | Cast-variations opt-in: the analysis also detects per-entity appearance LOOKS — a plain wardrobe change between scenes counts exactly as much as a dream / flashback / disguise / era look — and binds each look to its scenes (`slots[].variations` + `scenes[].slotVariations`). Default false: the result keeps the pre-variations shape. |
 | `music_video` | boolean |  | Declare the clip a MUSIC VIDEO: the song IS the piece, so ALL sung lyrics are transcribed verbatim as per-scene `speech` layers (the instrumental bed stays its own `music` layer). Default false: soundtrack vocals nobody on screen performs are folded into the `music` layer's description, and `speech` carries only words uttered inside the story world. |
 | `translate_speech_to_english` | boolean |  | Translate spoken and sung words to English. Default false: speech is quoted verbatim in the language actually spoken. Independent of `translate_on_screen_text_to_english` — set this alone for English narration over footage whose signage stays in its original script. |

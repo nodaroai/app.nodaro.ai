@@ -27,11 +27,13 @@ import { estimateRunCredits } from "./estimate-run-credits";
 import { liveExecutable, getDownstreamNodeIds, runFromHereExecutable } from "./run-from-here-set";
 import { wordTimingsPreflight } from "./add-captions-preflight";
 import { nestedWordTimingsPreflight } from "./sub-workflow-preflight";
-import { COMPOSER_PLAN_MAP, CREDIT_BASE_USD, planFanOut, TRANSIENT_RUNTIME_KEYS, isExpandedClone, unwrapEditPlanOutput, withWiredSettings } from "@nodaro/shared"
+import { COMPOSER_PLAN_MAP, CREDIT_BASE_USD, planFanOut, TRANSIENT_RUNTIME_KEYS, isExpandedClone, withWiredSettings } from "@nodaro/shared"
 import { clearedConnectedListRows } from "./clear-run-results"
-import { namedRunOutputFields } from "@/lib/named-run-outputs"
+import { namedRunOutputFields, reduceRunOutputFields } from "@/lib/named-run-outputs"
 import { perHandleRunFields } from "@/lib/per-handle-batch"
 import { applyEdlRunCutFields, applyEdlTakeTranscriptField } from "@/lib/apply-edl-cut"
+import { isJsonRunResultType, jobRunOutput, jsonRunResultIsList, jsonRunResultLandsText, jsonRunResultPatch } from "@/lib/json-run-result"
+import { isSeededState } from "@/lib/seeded-node-state"
 import { videoOverlayListRowFields, videoOverlayRunOutputFields } from "@/lib/video-overlay-run-output"
 import type { NodeExecutionStatus as SharedNodeExecutionStatus, NodeExecutionStateWire } from "@nodaro/shared"
 import { collapseExpandedClones } from "./execution-graph";
@@ -45,11 +47,12 @@ import { buildVariantResults } from "./variant-results";
 // The restore poller shares the canvas loops' one flag writer. No cycle:
 // poll-job.ts imports nothing from this file.
 import { getJobStatusLeanForNode } from "./poll-job";
-import { FOLLOWED_LANES } from "./triggered-run-follow";
+import { FOLLOWED_LANES, resultsRunMark } from "./triggered-run-follow";
+import { recoverAuditReportsOnCanvas } from "./audit-report-canvas";
 import { beginTriggeredRunPaint } from "./triggered-run-paint";
 import { sunoVariantFields } from "@/lib/suno-ids";
 import { tx } from "@/lib/i18n";
-import { isScrapeNodeType, scrapeResultPatch } from "@/components/nodes/scrape-result-recovery";
+import { isScrapeNodeType, scrapeResultPatch, scrapeServerRunPatch } from "@/components/nodes/scrape-result-recovery";
 import { applyWebScrapeFailure } from "@/components/nodes/web-scrape-run-state";
 import { resolveSceneCompletion } from "@/lib/scene3d/revisions";
 import { planRevisionId } from "@/lib/scene3d/plan-view";
@@ -1011,7 +1014,8 @@ export function restorePollingForRunningJobs(
   }
 }
 
-function applyRestoredJobCompletion(
+/** Exported for tests: the poll restored after a reload lands a finished job through here. */
+export function applyRestoredJobCompletion(
   nodeId: string,
   nodeType: string,
   job: {
@@ -1027,23 +1031,19 @@ function applyRestoredJobCompletion(
 ): void {
   const { updateNodeData } = useWorkflowStore.getState();
 
-  // Analysis emitters: the result is a JSON scene breakdown (`output_data.json`
-  // → `data.generatedJson`), not a media URL — the generic path below would
-  // complete the node EMPTY plus a blank-url generatedResults entry (these
-  // nodes render generatedJson only). Same gap as reconcile-completed-jobs
-  // (reported 2026-08-03: run billed + completed while the poll was dead; node
-  // showed nothing).
-  //
-  // video-audit additionally restores its fix-and-disclose report
-  // (`output_data.report` → `data.lastAuditReport`); without it a recovered
-  // audit renders its corrected JSON with a blank disclosure strip.
-  if (nodeType === "video-analysis" || nodeType === "video-audit") {
-    const json = job.output_data?.json;
-    const report = nodeType === "video-audit" ? job.output_data?.report : undefined;
+  // JSON results — Edit Plan, Transcribe, Silence Detect, Audio Sync, Video
+  // Analysis / Audit: no media URL, so the generic path below would complete
+  // the node EMPTY plus a blank-url generatedResults entry (reported 2026-08-03
+  // for the analysis pair: run billed + completed while the poll was dead; node
+  // showed nothing). The mapping every lane shares (lib/json-run-result.ts):
+  // Edit Plan's plan is unwrapped from the top of output_data (clips → bare
+  // Edl[], which fans out), Video Audit restores its fix-and-disclose report,
+  // Transcribe its text and a take carrying the transcript.
+  if (isJsonRunResultType(nodeType)) {
+    const nodeData = useWorkflowStore.getState().nodes.find((n) => n.id === nodeId)?.data as Record<string, unknown> | undefined;
     updateNodeData(nodeId, {
       executionStatus: "completed",
-      ...(json && typeof json === "object" ? { generatedJson: json } : {}),
-      ...(report && typeof report === "object" ? { lastAuditReport: report } : {}),
+      ...(jsonRunResultPatch(nodeType, jobRunOutput(nodeType, job.output_data), { data: nodeData, jobId, timestamp: new Date().toISOString() }) ?? {}),
       currentJobId: undefined,
       currentJobProgress: undefined,
       jobAwaitingReview: undefined,
@@ -1081,42 +1081,12 @@ function applyRestoredJobCompletion(
     return;
   }
 
-  // audio-sync: the offsets are `output_data.json` (→ `data.generatedJson`),
-  // not a media URL — same recovery gap as the analysis branch above.
-  if (nodeType === "audio-sync") {
-    const json = job.output_data?.json;
-    updateNodeData(nodeId, {
-      executionStatus: "completed",
-      ...(json && typeof json === "object" ? { generatedJson: json } : {}),
-      currentJobId: undefined,
-      currentJobProgress: undefined,
-      jobAwaitingReview: undefined,
-    });
-    toast.success(tx("run.backgroundJobCompleted"));
-    return;
-  }
-
-  // edit-plan: same JSON-result recovery gap — the EDL plan is the top-level
-  // output_data, unwrapped onto generatedJson (clips → bare Edl[], fans out).
-  // ONE unwrap rule shared with the live path + backend (unwrapEditPlanOutput).
   // camera-switch: the { edl, transcript } pair, the same shape the live run writes.
   if (nodeType === "camera-switch") {
     const out = (job.output_data ?? {}) as { json?: unknown; transcript?: unknown };
     updateNodeData(nodeId, {
       executionStatus: "completed",
       ...(out.json !== undefined && out.json !== null && typeof out.json === "object" ? { generatedJson: { edl: out.json, transcript: out.transcript } } : {}),
-      currentJobId: undefined,
-      currentJobProgress: undefined,
-      jobAwaitingReview: undefined,
-    });
-    toast.success(tx("run.backgroundJobCompleted"));
-    return;
-  }
-  if (nodeType === "edit-plan") {
-    const plan = unwrapEditPlanOutput(job.output_data);
-    updateNodeData(nodeId, {
-      executionStatus: "completed",
-      ...(plan !== undefined && plan !== null && typeof plan === "object" ? { generatedJson: plan } : {}),
       currentJobId: undefined,
       currentJobProgress: undefined,
       jobAwaitingReview: undefined,
@@ -1230,7 +1200,9 @@ export function streamBackendExecution(
 
   const applyStates = (s: Record<string, NodeExecutionState>) => {
     if (abandoned || finished) return; // a discarded or ended stream stops painting the canvas
-    syncNodeStatesToStore(triggered ? triggered.paintable(s) : s);
+    // Every node that ends in this run is stamped with its id, so a reopen
+    // never paints the same run again over what changed since.
+    syncNodeStatesToStore(triggered ? triggered.paintable(s) : s, { runId: executionId });
   };
   // Whole-workflow discard reverts only IN-FLIGHT / QUEUED nodes to idle (clears the
   // node's currentJobId so the per-node poll guard bails); earlier-completed nodes
@@ -1555,8 +1527,8 @@ export interface TriggeredRunPaint {
 }
 
 /** Paint a run's node states onto the canvas — the same mapping a followed Run uses. */
-export function paintRunStates(states: Record<string, NodeExecutionState>): void {
-  syncNodeStatesToStore(states)
+export function paintRunStates(states: Record<string, NodeExecutionState>, opts: SyncNodeStatesOptions = {}): void {
+  syncNodeStatesToStore(states, opts)
 }
 
 // ---------------------------------------------------------------------------
@@ -1651,6 +1623,13 @@ export interface NodeExecutionState {
   /** When the node started and ended in this run (absent for a node that only passed its saved data through). */
   startedAt?: string | null;
   completedAt?: string | null;
+  /**
+   * The run never ran this node: it handed the node's SAVED output on (a
+   * source, a parameter, a Skip-frozen node, a node outside a Run from here).
+   * The orchestrator stamps it on the state; it is not part of the published
+   * wire contract. Such a state writes no result (lib/seeded-node-state.ts).
+   */
+  fromSavedData?: true;
 }
 
 /**
@@ -1700,6 +1679,15 @@ function scene3DRevisionPatch(
   }).patch;
 }
 
+/** What a paint of a run's node states knows about the run. */
+export interface SyncNodeStatesOptions {
+  /** The run the states belong to. Each node that ends in it is stamped with
+   *  this id and the time the run ended it (`resultsRunMark`), which is how the
+   *  reopen lane knows the node already shows the run, or a newer one
+   *  (newer-run-review.ts). */
+  readonly runId?: string;
+}
+
 /**
  * Sync a nodeStates snapshot from the backend into the Zustand store.
  * Batches all node updates into a single setState call (O(N) instead of
@@ -1708,8 +1696,14 @@ function scene3DRevisionPatch(
  */
 function syncNodeStatesToStore(
   nodeStates: Record<string, NodeExecutionState>,
+  opts: SyncNodeStatesOptions = {},
 ): void {
   const { nodes } = useWorkflowStore.getState();
+  // Written in the same patch as the node's terminal state, so it lands once
+  // per transition, never on every tick.
+  const runId = opts.runId;
+  const endedMark = (state: NodeExecutionState): Record<string, unknown> =>
+    runId ? resultsRunMark(runId, state.completedAt ?? new Date().toISOString()) : {};
 
   // Build per-node update patches in one pass
   const patchMap = new Map<string, Record<string, unknown>>();
@@ -1730,8 +1724,13 @@ function syncNodeStatesToStore(
       currentStatus === "completed" &&
       !isContentNodeType(node.type) &&
       // Social Search's posts live on searchResults / generatedJson, never on
-      // generatedResults, so an empty generatedResults is its normal state.
+      // generatedResults, so an empty generatedResults is its normal state —
+      // and so do every scraper's (scrapeServerRunPatch).
       node.type !== "social-search" &&
+      !isScrapeNodeType(node.type) &&
+      // Neither do json results (an Edit Plan's clips are its generatedJson):
+      // re-syncing them would rewrite the plan on every 3 s tick of the run.
+      !isJsonRunResultType(node.type) &&
       state.output?.listResults &&
       state.output.listResults.length > 1 &&
       !((data.generatedResults as GeneratedResult[] | undefined)?.length);
@@ -1740,6 +1739,16 @@ function syncNodeStatesToStore(
       (state.status === "completed" && currentStatus !== "completed") ||
       needsResultSync
     ) {
+      if (isSeededState(state)) {
+        // The run never ran this node: it passed the node's SAVED output on (a
+        // source, a parameter, a Skip-frozen node, a node outside a Run from
+        // here). Writing that back is never a result — on Edit Plan it would
+        // replace the planner's output with whatever the seed carried. Only
+        // the status settles: Run marks every executable node pending,
+        // Skip-frozen ones included, and nothing else would end their spinner.
+        if (currentStatus !== "completed") patchMap.set(node.id, { executionStatus: "completed" });
+        continue;
+      }
       const updates: Record<string, unknown> = {
         executionStatus: "completed",
         // Terminal — clear the hold flag. Required even though the overlay is
@@ -1747,7 +1756,9 @@ function syncNodeStatesToStore(
         // because approve goes pending_review -> completed with no tick in
         // between and nothing else would ever clear it.
         jobAwaitingReview: undefined,
+        ...endedMark(state),
       };
+      const scrapePatch = scrapeServerRunPatch(node.type, state.output as Record<string, unknown> | undefined, state.jobId, data);
       if (state.output && isContentNodeType(node.type)) {
         // Content Recipe / Content Ideas: the live run's own mapping
         // (lib/content-run-output.ts). Never the generic writes below — the
@@ -1765,6 +1776,12 @@ function syncNodeStatesToStore(
         // never the generic text write below, whose run history in
         // generatedResults would be read as a list downstream.
         Object.assign(updates, socialSearchServerRunPatch(data as SocialSearchNodeData, state.output as Record<string, unknown>));
+      } else if (scrapePatch) {
+        // A scraper (Instagram / Meta Ads / Web Scrape): its posts, ads or
+        // pages on generatedJson plus the run outcome its card reads — the
+        // single-node Run's own patch. Never the generic writes below: the
+        // featured image is not the node's result.
+        Object.assign(updates, scrapePatch);
       } else if (state.output) {
         const nodeType = node.type ?? "";
         if (state.output.imageUrl) {
@@ -1796,7 +1813,9 @@ function syncNodeStatesToStore(
         // Not on a trigger node: its "text" is the incoming message or payload,
         // which stays in the run history (the editor reads a trigger's values
         // from the transient __triggerData, never from a saved result).
-        if (state.output.text && !state.output.combinedText) {
+        // Not on Transcribe either: its take carries the transcript too, so the
+        // json mapping below lands its text (lib/json-run-result.ts).
+        if (state.output.text && !state.output.combinedText && !jsonRunResultLandsText(nodeType)) {
           updates.generatedText = state.output.text;
           const prevTextResults = (data.generatedResults ?? []) as Array<{ text?: string; jobId?: string }>;
           const alreadyHas = prevTextResults.some((r) => r.text === state.output!.text);
@@ -1809,15 +1828,10 @@ function syncNodeStatesToStore(
             updates.activeResultIndex = 0;
           }
         }
-        // Choose Best (reduce): the orchestrator reports the winner as
-        // `result` (+ the strategy's meta). Without this copy an Execute /
-        // Run-from-here run completed on the backend while the node kept
-        // saying "Run to see the result" — only the single-node Run (which
-        // writes `result` itself in execute-node.ts) ever painted it.
-        if (nodeType === "reduce" && typeof state.output.result === "string") {
-          updates.result = state.output.result;
-          if (state.output.reduceMeta) updates.lastMeta = state.output.reduceMeta;
-        }
+        // Choose Best (reduce): the winner + the strategy's meta. Without it an
+        // Execute / Run-from-here run completed on the backend while the node
+        // kept saying "Run to see the result".
+        Object.assign(updates, reduceRunOutputFields(nodeType, state.output));
         if (state.output.plan) {
           const mapping = COMPOSER_PLAN_MAP[node.type ?? ""];
           if (mapping?.planType === "3d-scene") {
@@ -1857,7 +1871,9 @@ function syncNodeStatesToStore(
         }
         if (state.output.thumbnailUrl)
           updates.thumbnailUrl = state.output.thumbnailUrl;
-        if (state.output.listResults && state.output.listResults.length > 0) {
+        // Not on Edit Plan: its Clips list IS its plan (generatedJson), and a
+        // canvas run never writes this generic list for it.
+        if (state.output.listResults && state.output.listResults.length > 0 && !jsonRunResultIsList(nodeType)) {
           updates.__listResults = state.output.listResults;
           updates.__listTotal = state.output.listResults.length;
           updates.__listCompleted = state.output.listResults.length;
@@ -1955,6 +1971,15 @@ function syncNodeStatesToStore(
             }
           }
         }
+        // Edit Plan, Transcribe, Silence Detect, Audio Sync, Video Analysis /
+        // Audit: the run's json — and Transcribe's text, on a take carrying the
+        // transcript — under the fields the canvas run writes. ONE mapping with
+        // the reopen lanes and the job restores (lib/json-run-result.ts).
+        Object.assign(updates, jsonRunResultPatch(nodeType, state.output, {
+          data,
+          jobId: state.jobId ?? `exec-${node.id}`,
+          timestamp: state.completedAt ?? new Date().toISOString(),
+        }));
       }
       patchMap.set(node.id, updates);
     } else if (state.status === "running") {
@@ -2025,6 +2050,7 @@ function syncNodeStatesToStore(
         errorMessage: state.error ?? "Node failed",
         errorHint: state.errorHint,
         jobAwaitingReview: undefined,
+        ...endedMark(state),
       });
     } else if (state.status === "skipped" && currentStatus !== "completed") {
       // Router-gated node: mark as idle (not stuck in "pending")
@@ -2056,4 +2082,6 @@ function syncNodeStatesToStore(
     ...(hasPersistentChange ? { isDirty: true } : {}),
   }));
   setSkipUndoCapture(false);
+  // Video Audit: the node output carries no report — read it off the job row.
+  recoverAuditReportsOnCanvas(nodeStates);
 }

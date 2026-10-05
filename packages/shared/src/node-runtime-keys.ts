@@ -123,6 +123,10 @@ export const EXECUTION_DATA_KEYS: ReadonlySet<string> = new Set([
   // and not config: it stops a reload from painting the same run again over
   // edits made since. Persisted for the same reason as resultsClearedAt.
   "resultsRunId",
+  // When that run ended the node (beside resultsRunId): the editor's reopen
+  // keeps a result a NEWER run left even when its own run listing cannot see
+  // that run. Bookkeeping, persisted for the same reason.
+  "resultsRunEndedAt",
   // A trigger's last run values (also in TRANSIENT_RUNTIME_KEYS: never saved).
   "__triggerData",
 ])

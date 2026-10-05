@@ -23,10 +23,16 @@ import { refreshEntityNodes } from "@/lib/entity-node-data"
 import { settledBeforeClear } from "@/lib/results-cleared"
 import { createTriggerSyncTracker, syncTriggersAfterSave, type TriggerSyncTracker } from "@/lib/trigger-sync-after-save"
 import { adoptUnsavedAccountTriggerIntents } from "@/lib/account-trigger-intent"
-import { namedRunOutputFields } from "@/lib/named-run-outputs"
+import { namedRunOutputFields, reduceRunOutputFields } from "@/lib/named-run-outputs"
 import { videoOverlayListRowFields, videoOverlayRunOutputFields } from "@/lib/video-overlay-run-output"
 import { perHandleRunFields } from "@/lib/per-handle-batch"
 import { applyEdlRunCutFields, applyEdlTakeTranscriptField } from "@/lib/apply-edl-cut"
+import { holdsJsonRunResult, isJsonRunResultType, jobRunOutput, jsonRunResultPatch } from "@/lib/json-run-result"
+import { isSeededState } from "@/lib/seeded-node-state"
+import { reviewStatesToLoad, type ListedRun } from "@/components/editor/workflow-editor/newer-run-review"
+import { resultsRunMark } from "@/components/editor/workflow-editor/triggered-run-follow"
+import { recoverAuditReportsOnCanvas } from "@/components/editor/workflow-editor/audit-report-canvas"
+import { scrapeJobNeedsApplying, scrapeServerRunPatch } from "@/components/nodes/scrape-result-recovery"
 
 /**
  * Execution statuses whose `node_states` are worth restoring onto the canvas on
@@ -74,6 +80,13 @@ interface NodeExecutionState {
   /** The backend job this node ran as. Recorded onto a recovered scene
    *  revision so a later `{kind:'scene'}` source can name its run. */
   jobId?: string
+  /** When the node started and ended in the run (no start: it only passed its
+   *  saved data through). */
+  startedAt?: string | null
+  completedAt?: string | null
+  /** The run never ran this node — it handed the node's SAVED output on. Such
+   *  a state writes no result (lib/seeded-node-state.ts). */
+  fromSavedData?: true
   output?: {
     imageUrl?: string
     videoUrl?: string
@@ -363,6 +376,13 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<{ nodes: Wo
       // make its Transcript output this render's — cleared when it was cut with
       // none (lib/apply-edl-cut.ts).
       Object.assign(newData, applyEdlRunCutFields(nodeType, job.output_data))
+      // Edit Plan, Transcribe, Silence Detect, Audio Sync, Video Analysis /
+      // Audit: the job's json (and Transcribe's text) — every lane's mapping.
+      Object.assign(newData, jsonRunResultPatch(nodeType, jobRunOutput(nodeType, job.output_data), {
+        data: { ...data, generatedResults: updatedResults },
+        jobId: job.id,
+        timestamp: new Date().toISOString(),
+      }))
 
       // CONTENT-POLICY DISCLOSURE passthrough (Task A4 follow-up, 2026-08-03) —
       // GVP-only. `BatchJobStatus.output_data` (api.ts) is narrowly typed with
@@ -420,10 +440,21 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<{ nodes: Wo
 /**
  * Apply backend execution node states to frontend nodes.
  * Maps orchestrator nodeStates → node.data.executionStatus + output URLs.
+ *
+ * The states are authoritative: a node's result is what the run says it is.
+ * Used for a run still going when the editor reopens, and for a newer run that
+ * ended while it was closed, on a canvas with a render (newer-run-review.ts). With a
+ * `runId`, each node that ended in the run is stamped with it.
  */
 export function applyBackendExecutionState(
   nodes: WorkflowNode[],
   nodeStates: Record<string, NodeExecutionState>,
+  opts: {
+    /** The run the states belong to: each node that ends in it is marked as showing it. */
+    readonly runId?: string
+    /** When that run ended — a node state with no end time of its own is marked with it. */
+    readonly runEndedAt?: string | null
+  } = {},
 ): WorkflowNode[] {
   return nodes.map(node => {
     const state = nodeStates[node.id]
@@ -434,7 +465,16 @@ export function applyBackendExecutionState(
     // Map backend status → frontend executionStatus
     if (state.status === "completed") {
       data.executionStatus = "completed"
-      if (state.output && isContentNodeType(node.type)) {
+      // The run passed this node's SAVED output through: the status settles,
+      // and no result is written back (lib/seeded-node-state.ts).
+      if (isSeededState(state)) return { ...node, data: data as SceneNodeData }
+      if (opts.runId) Object.assign(data, resultsRunMark(opts.runId, state.completedAt ?? opts.runEndedAt ?? undefined))
+      // A scraper: the single-node Run's own patch (scrape-result-recovery.ts),
+      // never the generic media writes below — its featured image is not its result.
+      const scrapePatch = scrapeServerRunPatch(node.type, state.output as Record<string, unknown> | undefined, state.jobId, data)
+      if (scrapePatch) {
+        Object.assign(data, scrapePatch)
+      } else if (state.output && isContentNodeType(node.type)) {
         // Content Recipe / Content Ideas: the live run's own mapping — the
         // generic list/result writes below do not fit a recipe or the briefs.
         Object.assign(data, contentRunResultPatch(node.type, state.output as Record<string, unknown>) ?? {})
@@ -464,6 +504,8 @@ export function applyBackendExecutionState(
         // Video Overlay: warnings / canvas / length — the live run's mapping.
         const overlayRun = nodeType === "video-overlay" ? videoOverlayRunOutputFields(state.output) : undefined
         if (overlayRun) Object.assign(data, overlayRun)
+        // Choose Best (reduce): the winner + the strategy's meta — the live lane's mapping.
+        Object.assign(data, reduceRunOutputFields(nodeType, state.output))
 
         // Build generated result entries from the output
         const listResultUrls = (state.output.listResults ?? []).filter(
@@ -511,6 +553,13 @@ export function applyBackendExecutionState(
           }
         }
         Object.assign(data, perHandleRunFields(nodeType, state.output))
+        // Edit Plan, Transcribe, Silence Detect, Audio Sync, Video Analysis /
+        // Audit: the run's json (and Transcribe's text) — the live lane's mapping.
+        Object.assign(data, jsonRunResultPatch(nodeType, state.output, {
+          data,
+          jobId: state.jobId ?? `exec-${node.id}`,
+          timestamp: state.completedAt ?? new Date().toISOString(),
+        }))
       }
     } else if (state.status === "running") {
       data.executionStatus = "running"
@@ -525,6 +574,7 @@ export function applyBackendExecutionState(
       if (state.error) data.errorMessage = state.error
       if (state.errorHint) data.errorHint = state.errorHint
       data.jobAwaitingReview = undefined
+      if (opts.runId) Object.assign(data, resultsRunMark(opts.runId, state.completedAt ?? opts.runEndedAt ?? undefined))
     }
     // "skipped" → leave as-is (idle)
 
@@ -550,6 +600,9 @@ export function applyCompletedExecutionResults(
   return nodes.map(node => {
     const state = nodeStates[node.id]
     if (!state || state.status !== "completed" || !state.output) return node
+    // The run passed this node's SAVED output through — not a result of its
+    // own (lib/seeded-node-state.ts).
+    if (isSeededState(state)) return node
 
     const data = node.data as Record<string, unknown>
     if (settledBeforeClear(data, settledAt)) return node
@@ -564,6 +617,22 @@ export function applyCompletedExecutionResults(
       return patch ? { ...node, data: { ...data, ...patch } as SceneNodeData } : node
     }
 
+    // A scraper: its posts / ads / pages, once per job (the patch stamps
+    // `lastAppliedJobId`). Asked BEFORE the "already completed" skip below — a
+    // build that predates this branch marked the node completed with only its
+    // featured image, which is exactly the state this repairs. A run of the node
+    // in the editor after this execution ended (`scrapeJobNeedsApplying`) keeps
+    // its own, newer result; with no end time to compare, only an empty node is
+    // filled.
+    const scrapePatch = scrapeServerRunPatch(node.type, state.output as Record<string, unknown>, state.jobId, data)
+    if (scrapePatch) {
+      if (Object.keys(scrapePatch).length === 0) return node
+      const apply = settledAt
+        ? scrapeJobNeedsApplying(data, { id: state.jobId ?? "", createdAt: settledAt })
+        : data.generatedJson === undefined
+      return apply ? { ...node, data: { ...data, ...scrapePatch } as SceneNodeData } : node
+    }
+
     // Skip nodes that were already marked completed in the saved workflow.
     // Their results were already synced (via SSE or a previous load).
     // Any changes the user made (e.g. deleting images) should be respected.
@@ -576,6 +645,11 @@ export function applyCompletedExecutionResults(
       const patch = contentRunResultPatch(node.type, state.output as Record<string, unknown>)
       return patch ? { ...node, data: { ...data, ...patch } as SceneNodeData } : node
     }
+
+    // Edit Plan, Transcribe, Silence Detect, …: a node already holding a json
+    // result keeps it (this lane only fills what is empty; on a canvas with a
+    // render a newer run is loaded before it instead — newer-run-review.ts).
+    if (isJsonRunResultType(node.type) && holdsJsonRunResult(node.type, data)) return node
 
     const outputUrl = state.output.imageUrl ?? state.output.videoUrl ?? state.output.audioUrl
 
@@ -614,12 +688,8 @@ export function applyCompletedExecutionResults(
     // Video Overlay: warnings / canvas / length — the live run's mapping.
     const overlayRun = nodeType === "video-overlay" ? videoOverlayRunOutputFields(state.output) : undefined
     if (overlayRun) Object.assign(newData, overlayRun)
-    // Choose Best (reduce): winner + the judge's reasoning, same fields the
-    // single-node Run writes (execute-node.ts) — mirrors syncNodeStatesToStore.
-    if (nodeType === "reduce" && typeof state.output.result === "string") {
-      newData.result = state.output.result
-      if (state.output.reduceMeta) newData.lastMeta = state.output.reduceMeta
-    }
+    // Choose Best (reduce): winner + the judge's reasoning — the live lane's mapping.
+    Object.assign(newData, reduceRunOutputFields(nodeType, state.output))
 
     // Handle fan-out list results — create a generatedResult entry for each URL
     const listResultUrls = (state.output.listResults ?? []).filter(
@@ -662,9 +732,44 @@ export function applyCompletedExecutionResults(
       newData.activeResultIndex = 0
     }
     Object.assign(newData, perHandleRunFields(nodeType, state.output))
+    // Edit Plan, Transcribe, Silence Detect, Audio Sync, Video Analysis /
+    // Audit: the run's json (and Transcribe's text) — the live lane's mapping.
+    Object.assign(newData, jsonRunResultPatch(nodeType, state.output, {
+      data,
+      jobId: state.jobId ?? `exec-${node.id}`,
+      timestamp: state.completedAt ?? new Date().toISOString(),
+    }))
 
     return { ...node, data: newData as SceneNodeData }
   })
+}
+
+/**
+ * Land an editor run that has ENDED onto the canvas being opened. On a canvas
+ * with a render every node the run ran takes it whole (TA3 c,
+ * newer-run-review.ts) — overwritten through the reopen-while-live lane and
+ * stamped with the run — except a node that keeps a newer run, and every node
+ * a hold reaches from one or from a render the run never completed (failed,
+ * or still pending or running when it ended: upstream, and what they feed on
+ * the edl path), which keep what they hold. An unmarked
+ * node off the edl path, and every node on any other canvas, takes it only
+ * where it is still empty (`applyCompletedExecutionResults`).
+ *
+ * `rows` is the listing the run came from: a completed single-node run in it
+ * that settled on a node after the run did keeps that newer result.
+ */
+export function restoreEndedEditorRun(
+  nodes: WorkflowNode[],
+  edges: readonly WorkflowEdge[],
+  run: ListedRun,
+  rows: readonly ListedRun[],
+): WorkflowNode[] {
+  const states = (run.nodeStates ?? {}) as Record<string, NodeExecutionState>
+  const settledAt = executionSettledAt(run)
+  const { load, region } = reviewStatesToLoad(nodes, edges, { id: run.id, completedAt: settledAt ?? null, nodeStates: states }, rows)
+  const reviewed = applyBackendExecutionState(nodes, load, { runId: run.id, runEndedAt: settledAt })
+  const rest = Object.fromEntries(Object.entries(states).filter(([nodeId]) => !region.has(nodeId)))
+  return applyCompletedExecutionResults(reviewed, rest, settledAt)
 }
 
 export function useWorkflowPersistence(projectId?: string) {
@@ -1347,6 +1452,9 @@ export function useWorkflowPersistence(projectId?: string) {
         // in the console on every workflow refresh.
         let activeBackendExecution: ActiveBackendExecution | undefined
         let restoredSingleNodeJobs: StillRunningJob[] = []
+        // The run whose states this load lands on the canvas (Video Audit's
+        // report is read back for it once the canvas is loaded).
+        let landedRunStates: Record<string, NodeExecutionState> | undefined
         try {
           // One call returns BOTH the active orchestrator execution AND active
           // standalone single-node jobs (per-node Run), merged + source=editor
@@ -1366,13 +1474,14 @@ export function useWorkflowPersistence(projectId?: string) {
             // poll (once restored) will fetch fresh state and correct any
             // drift (e.g. execution completed between load and render).
             const stillActive = orchestrator.status === "pending" || orchestrator.status === "running" || orchestrator.status === "stopping"
+            if (Object.keys(nodeStates).length > 0) landedRunStates = nodeStates
             if (stillActive && Object.keys(nodeStates).length > 0) {
-              nodes = applyBackendExecutionState(nodes, nodeStates)
+              nodes = applyBackendExecutionState(nodes, nodeStates, { runId: orchestrator.id })
               nodesChanged = true
               activeBackendExecution = { executionId: orchestrator.id, nodeStates }
             } else if (Object.keys(nodeStates).length > 0) {
               // Execution already finished — apply results like a completed execution
-              nodes = applyCompletedExecutionResults(nodes, nodeStates, executionSettledAt(orchestrator))
+              nodes = restoreEndedEditorRun(nodes, edges ?? [], orchestrator, activeItems)
               nodesChanged = true
             }
           }
@@ -1426,9 +1535,11 @@ export function useWorkflowPersistence(projectId?: string) {
             if (lastOrchestrated) {
               const nodeStates = (lastOrchestrated.nodeStates ?? {}) as Record<string, NodeExecutionState>
               if (Object.keys(nodeStates).length > 0) {
-                // Only apply outputs to nodes that don't already have results
+                landedRunStates = nodeStates
+                // On a canvas with a render the run loads whole; elsewhere
+                // only where a node has no result yet (restoreEndedEditorRun).
                 const before = JSON.stringify(nodes)
-                nodes = applyCompletedExecutionResults(nodes, nodeStates, executionSettledAt(lastOrchestrated))
+                nodes = restoreEndedEditorRun(nodes, edges ?? [], lastOrchestrated, terminalExecs)
                 if (JSON.stringify(nodes) !== before) {
                   nodesChanged = true
                 }
@@ -1487,6 +1598,10 @@ export function useWorkflowPersistence(projectId?: string) {
         // user can manually re-run if reconciliation can't reach the job.
         const { updateNodeData: storeUpdateNodeData } = useWorkflowStore.getState()
         reconcileWorkflowNodeResults(nodes, storeUpdateNodeData).catch(() => {})
+
+        // Video Audit: a workflow run's node output carries no report, so the
+        // strip of an audit this load landed is read back off its job row.
+        if (landedRunStates) recoverAuditReportsOnCanvas(landedRunStates)
 
         // Recover the RESULT of a completed single-node Run whose in-memory poll
         // died before it finished — the long-job case (generate-video-pro can

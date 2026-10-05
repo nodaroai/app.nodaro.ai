@@ -25,7 +25,6 @@ export interface TestConfig {
     | "lip-sync"
     | "music"
     | "tts"
-    | "sound-effect"
     | "audio-isolation"
     | "stt"
     | "dialogue"
@@ -1413,23 +1412,6 @@ export const AUDIO_TEST_CONFIGS: TestConfig[] = [
     requiresAudio: false,
     requiresVideo: false,
     estimatedTimeSec: 120,
-    skipByDefault: false,
-  },
-
-  // --- Sound Effects ---
-  {
-    modelKey: "elevenlabs-sfx",
-    category: "sound-effect",
-    kieModel: "elevenlabs/sound-effect-v2",
-    expectedKieCredits: 10,
-    expectedCostUsd: 0.0012,
-    configDesc: "ElevenLabs SFX V2",
-    apiType: "standard",
-    input: { text: "a short beep", duration_seconds: 1 },
-    requiresImage: false,
-    requiresAudio: false,
-    requiresVideo: false,
-    estimatedTimeSec: 15,
     skipByDefault: false,
   },
 

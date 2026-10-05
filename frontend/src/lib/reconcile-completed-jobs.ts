@@ -45,7 +45,7 @@
  */
 
 import { getJobStatusLean } from "./api"
-import { COMPOSER_PLAN_MAP, unwrapEditPlanOutput } from "@nodaro/shared"
+import { COMPOSER_PLAN_MAP } from "@nodaro/shared"
 import { findRevision, resolveSceneCompletion } from "@/lib/scene3d/revisions"
 import { planRevisionId } from "@/lib/scene3d/plan-view"
 import { isScrapeNodeType, scrapeJobNeedsApplying, scrapeResultPatch } from "@/components/nodes/scrape-result-recovery"
@@ -53,6 +53,7 @@ import { settledBeforeClear } from "@/lib/results-cleared"
 import { videoOverlayRunOutputFields } from "@/lib/video-overlay-run-output"
 import { contentRunResultPatch, isContentNodeType } from "@/lib/content-run-output"
 import { applyEdlRunCutFields, applyEdlTakeTranscriptField } from "@/lib/apply-edl-cut"
+import { isJsonRunResultType, jobRunOutput, jsonRunResultPatch } from "@/lib/json-run-result"
 import type { GeneratedResult, Scene3DRevisionEntry, WorkflowNode } from "@/types/nodes"
 
 /** The single-entry nodeState a completed single-node job carries (backend
@@ -355,8 +356,8 @@ export function buildCompletedResultPatch(
   output: Record<string, unknown> | null | undefined,
   jobId: string,
   timestamp: string,
-  /** The node's LIVE data. Only the Scene3D lane reads it (its guard compares
-   *  the arriving revision against what the node holds now). */
+  /** The node's LIVE data. The Scene3D lane's guard compares the arriving
+   *  revision against it; a Transcribe take is added to the takes it holds. */
   nodeData: Record<string, unknown> = {},
 ): Record<string, unknown> | null {
   if (!output) return null
@@ -365,52 +366,30 @@ export function buildCompletedResultPatch(
   // what that guard reads — a caller that cannot supply it gets the
   // fresh-node answer (adopt), which is the right default for an empty node.
   if (isScene3DNodeType(nodeType)) return buildScene3DRecoveryPatch(nodeData, output, nodeType === "edit-3d-scene" ? "edit" : "generate", jobId, timestamp)
-  // The analysis emitters are the nodes whose result is a JSON payload
-  // (`output_data.json` → `data.generatedJson`), not a media URL — without this
-  // branch a completed analysis fell through every recovery layer and the node
-  // stayed empty after any reload whose live poll died (billed, result in My
-  // Library, nothing on canvas — reported 2026-08-03). Type-gated so a stray
+  // The JSON results — Edit Plan, Transcribe, Silence Detect, Audio Sync,
+  // Video Analysis / Audit — are not media URLs: without this branch a
+  // completed one fell through every recovery layer and the node stayed empty
+  // after any reload whose live poll died (billed, result in My Library,
+  // nothing on canvas — reported 2026-08-03 for the analysis pair). The
+  // mapping every lane shares (lib/json-run-result.ts): Edit Plan's plan
+  // unwrapped from the top of output_data (an Edl for tighten, a bare Edl[] for
+  // clips, which fans out), Video Audit's report beside its corrected analysis,
+  // Transcribe's text and a take carrying its transcript. Type-gated so a stray
   // `json` field on a media job can never shadow its real URL result.
-  //
-  // video-audit rides the same branch AND restores its fix-and-disclose report
-  // (`output_data.report` → `data.lastAuditReport`) beside the corrected
-  // analysis: the report strip is the node's primary reading surface, so
-  // recovering only the JSON would render a completed audit half-blank.
-  if (nodeType === "video-analysis" || nodeType === "video-audit") {
-    if (!output.json || typeof output.json !== "object") return null
-    const patch: Record<string, unknown> = { executionStatus: "completed", generatedJson: output.json }
-    if (nodeType === "video-audit" && output.report && typeof output.report === "object") {
-      patch.lastAuditReport = output.report
-    }
-    return patch
+  if (isJsonRunResultType(nodeType)) {
+    const patch = jsonRunResultPatch(nodeType, jobRunOutput(nodeType, output), { data: nodeData, jobId, timestamp })
+    return patch ? { executionStatus: "completed", ...patch } : null
   }
   // Scrapers: the result is `output_data.json` too, written through the live
   // run's own patch so the card, the counts and the kept-last-good contract are
   // identical however the result arrived.
   if (nodeType && isScrapeNodeType(nodeType)) return scrapeResultPatch(nodeType, output.json, jobId, nodeData)
-  // audio-sync: its offsets are `output_data.json` → `data.generatedJson`, not a
-  // media URL (type-gated like the analysis branch above).
-  if (nodeType === "audio-sync") {
-    if (!output.json || typeof output.json !== "object") return null
-    return { executionStatus: "completed", generatedJson: output.json }
-  }
-  // edit-plan: the EDL plan is the top-level output_data (an Edl for tighten, an
-  // EdlClipSet for clips, a { version, chapters } for chapters) + viaNodaroCloud.
-  // Unwrap it onto generatedJson (clips → bare Edl[], which fans out) — the ONE
-  // rule shared with the live path + backend (unwrapEditPlanOutput). Same
-  // recovery gap as the analysis branch above: no media URL, so it would
-  // otherwise fall through and leave a completed node blank.
   // camera-switch: output_data is { json: <Edl>, transcript } — the node keeps
   // the pair on generatedJson (the SAME shape the live run writes).
   if (nodeType === "camera-switch") {
     const edl = (output as { json?: unknown }).json
     if (edl === undefined || edl === null || typeof edl !== "object") return null
     return { executionStatus: "completed", generatedJson: { edl, transcript: (output as { transcript?: unknown }).transcript } }
-  }
-  if (nodeType === "edit-plan") {
-    const plan = unwrapEditPlanOutput(output)
-    if (plan === undefined || plan === null || typeof plan !== "object") return null
-    return { executionStatus: "completed", generatedJson: plan }
   }
   // Content Recipe / Content Ideas: a recipe object or the ideas (with one
   // brief per idea — the list the next node runs on). The SAME mapping the live

@@ -163,7 +163,9 @@ const STATIC_TEXT_FALLBACK_MS = 5000
 /**
  * Re-wrap text to at most `maxWordsPerLine` words per line, treating each
  * existing `\n` as a paragraph the cap never merges across — the caller's own
- * breaks are forced breaks. No cap → the text is returned as given.
+ * breaks are forced breaks. A paragraph takes the fewest lines the cap allows,
+ * its words spread evenly with earlier lines never shorter. No cap → the text
+ * is returned as given.
  */
 function wrapToWordCap(text: string, maxWordsPerLine?: number): string {
   if (!maxWordsPerLine || maxWordsPerLine < 1) return text
@@ -172,9 +174,15 @@ function wrapToWordCap(text: string, maxWordsPerLine?: number): string {
     .flatMap((para) => {
       const words = para.split(/\s+/).filter(Boolean)
       if (words.length === 0) return [""] // a blank line the caller wrote survives
+      const lineCount = Math.ceil(words.length / maxWordsPerLine)
+      const base = Math.floor(words.length / lineCount)
+      const longer = words.length % lineCount
       const lines: string[] = []
-      for (let i = 0; i < words.length; i += maxWordsPerLine) {
-        lines.push(words.slice(i, i + maxWordsPerLine).join(" "))
+      let start = 0
+      for (let line = 0; line < lineCount; line++) {
+        const size = line < longer ? base + 1 : base
+        lines.push(words.slice(start, start + size).join(" "))
+        start += size
       }
       return lines
     })
@@ -319,12 +327,16 @@ export function resolveCaptionSegments(
     // left in the list would be shown as part of a held/straddling line. Enforce
     // the contract here, where the words are chosen — a WORD by the segment its
     // start falls in, a PHRASE clipped to every segment it overlaps.
+    const maxWordsPerLine = seg.maxWordsPerLine ?? defaults.maxWordsPerLine
+    // The segment's own text on a subtitle is a static block, as at the top level
+    // (staticTextCaptionBlock): the cap wraps the text and is not passed on.
+    const textBlock = !(seg.captions && seg.captions.length > 0) && !!seg.text && style === "subtitle"
     let captions: Caption[]
     if (seg.captions && seg.captions.length > 0) {
       captions = splitCaptionsAcrossWindows(seg.captions, [seg])[0]!
     } else if (seg.text) {
-      captions = style === "subtitle"
-        ? [block(seg.text)]
+      captions = textBlock
+        ? [block(wrapToWordCap(seg.text.trim(), maxWordsPerLine))]
         : syntheticCaptionsFromText(seg.text, { startMs: seg.startMs, endMs: seg.endMs })
     } else {
       const shared = sharedPerSegment[segIndex]!
@@ -371,7 +383,7 @@ export function resolveCaptionSegments(
       // a subtitle segment, which has no motion to switch off).
       animate: seg.animate ?? defaults.animate,
       // Words per line: the segment's own, else the top-level cap.
-      maxWordsPerLine: seg.maxWordsPerLine ?? defaults.maxWordsPerLine,
+      maxWordsPerLine: textBlock ? undefined : maxWordsPerLine,
       ...levers,
       captions,
     }

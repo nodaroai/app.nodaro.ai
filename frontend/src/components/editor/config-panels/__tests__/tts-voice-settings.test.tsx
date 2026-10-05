@@ -15,6 +15,7 @@ const shown = () => ({
 describe("TtsVoiceSettings — only the levers the model honours", () => {
   it.each([
     ["elevenlabs-v3", { stability: true, similarity: false, style: false, speed: false }],
+    ["elevenlabs-v4", { stability: true, similarity: true, style: false, speed: false }],
     ["elevenlabs-turbo", { stability: true, similarity: true, style: true, speed: true }],
     ["elevenlabs-multilingual", { stability: true, similarity: true, style: true, speed: true }],
     ["elevenlabs", { stability: true, similarity: true, style: true, speed: true }], // legacy alias runs as turbo

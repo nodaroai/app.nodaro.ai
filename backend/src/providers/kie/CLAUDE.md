@@ -136,7 +136,6 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
 | `suno-v6` / `suno-v6_wild` / `suno-v6_mini` (music — current family, V6 = default; the earlier versions stay offered and KIE still serves them even though its docs tag them "Discontinued") | `suno/v6` / `suno/v6_wild` / `suno/v6_mini` | [suno generate](https://docs.kie.ai/suno-api/generate-music.md) |
 | `elevenlabs-turbo` | `elevenlabs/text-to-speech-turbo-2-5` | [11labs turbo](https://docs.kie.ai/market/elevenlabs/text-to-speech-turbo-2-5.md) |
 | `elevenlabs-multilingual` | `elevenlabs/text-to-speech-multilingual-v2` | [11labs multilingual](https://docs.kie.ai/market/elevenlabs/text-to-speech-multilingual-v2.md) |
-| `elevenlabs-sfx` | `elevenlabs/sound-effect-v2` | [11labs sfx](https://docs.kie.ai/market/elevenlabs/sound-effect-v2.md) |
 | `elevenlabs-stt` | `elevenlabs/speech-to-text` | [11labs stt](https://docs.kie.ai/market/elevenlabs/speech-to-text.md) |
 
 ### Wan 3.0 wire notes (`wan-3` / `wan-3-prime`, bespoke `runWan3`)

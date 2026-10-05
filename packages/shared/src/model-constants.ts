@@ -1215,6 +1215,7 @@ export type MotionTransferProviderType = typeof MOTION_TRANSFER_PROVIDERS[number
 /** Text-to-speech providers */
 export const TTS_PROVIDERS = [
   "elevenlabs-v3",
+  "elevenlabs-v4",
   "elevenlabs-turbo",
   "elevenlabs-multilingual",
   "elevenlabs",
@@ -1228,6 +1229,14 @@ export const TEXT_TO_AUDIO_PROVIDERS = [
   "elevenlabs-sfx",
 ] as const
 export type TextToAudioProvider = typeof TEXT_TO_AUDIO_PROVIDERS[number]
+
+/**
+ * The Text to Audio engine used when a request names none — the route's
+ * credit reservation, the worker, the orchestrator payload and the editor's
+ * node default all read THIS, so they can never disagree about which model
+ * ran and which one was billed.
+ */
+export const DEFAULT_TEXT_TO_AUDIO_PROVIDER: TextToAudioProvider = "elevenlabs-sfx"
 
 /** Music generation providers */
 export const MUSIC_PROVIDERS = [

@@ -6,7 +6,6 @@ vi.mock("../client.js", () => ({ runKieTask: (...a: unknown[]) => runKieTask(...
 vi.mock("../models.js", () => ({
   KIE_MUSIC_MODELS: {},
   KIE_TTS_MODELS: {},
-  KIE_SOUND_EFFECT_MODELS: {},
   KIE_AUDIO_ISOLATION_MODELS: {},
   KIE_STT_MODELS: {
     "elevenlabs-stt": { model: "elevenlabs/speech-to-text", cost: 0.01 },

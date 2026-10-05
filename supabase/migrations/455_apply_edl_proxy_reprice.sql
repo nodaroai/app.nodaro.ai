@@ -1,0 +1,13 @@
+-- apply-edl preview renders: 1 credit per minute of rendered output (was 2).
+--
+-- Migration 454 seeded 'apply-edl:proxy' at 2 and is already applied, so the
+-- new preview rate, decided 2026-10-05, reaches the row here. The final
+-- ('apply-edl', migration 431) stays at 10, keeping the preview below it.
+--
+-- Conditional UPDATE: only a row still at the seeded 2 moves, so an
+-- administrator's own retune is preserved, and re-applying is a no-op.
+-- Mirrors STATIC_CREDIT_COSTS['apply-edl:proxy'] in
+-- backend/src/ee/billing/credits.ts, whose value is
+-- APPLY_EDL_PROXY_CREDITS_PER_OUTPUT_MINUTE in backend/src/lib/apply-edl-plan.ts
+-- (pinned to this row by credit-pricing-migration-sync.test.ts).
+UPDATE model_pricing SET credit_cost = 1 WHERE model_identifier = 'apply-edl:proxy' AND credit_cost = 2;

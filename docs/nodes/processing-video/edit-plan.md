@@ -33,6 +33,8 @@ Because the plan is just data, an agent or you can decide *what* the edit is; th
 
 Once the node has a plan, it shows a badge: **Well-formed EDL**, or the number of issues. A Clips plan is checked clip by clip. Click the badge to see each issue and warning, in the validator's own words. The badge checks the plan's structure only. Apply EDL can still refuse a well-formed plan it cannot draw, for example one with a layout or one over 180 minutes; the render reports that itself. Warnings never make a plan fail the check: they flag values a newer version may accept, such as an unknown layout id.
 
+The plan a workflow run makes (Run, Run from here) lands on the node like one from running the node alone, also when the run finished while the editor was closed. A Run from here that starts after Edit Plan leaves the plan the node holds untouched. See [Run results on the canvas](../../features/run-results.md).
+
 ## Configuration
 
 | Field | Type | Default | Description |

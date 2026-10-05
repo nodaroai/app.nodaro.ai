@@ -4,9 +4,9 @@ const mocks = vi.hoisted(() => {
   const mockGenerateMusic = vi.fn()
   const mockTextToAudio = vi.fn()
   const mockKieAudioProviderInstance = {
-    generateSoundEffect: vi.fn(),
     isolateAudio: vi.fn(),
   }
+  const mockGenerateSoundEffect = vi.fn().mockResolvedValue(Buffer.from("fake-sfx"))
   const mockKieAudioProvider = vi.fn().mockImplementation(function () { return mockKieAudioProviderInstance })
   const mockTranscribe = vi.fn()
   const mockExtractYouTubeAudio = vi.fn()
@@ -67,6 +67,7 @@ const mocks = vi.hoisted(() => {
     mockTextToAudio,
     mockKieAudioProvider,
     mockKieAudioProviderInstance,
+    mockGenerateSoundEffect,
     mockTranscribe,
     mockExtractYouTubeAudio,
     mockExtractYouTubeAudioWithMeta,
@@ -117,6 +118,7 @@ vi.mock("@/providers/audio/generate-music.js", () => ({ generateMusic: mocks.moc
 vi.mock("@/providers/audio/text-to-audio.js", () => ({ textToAudio: mocks.mockTextToAudio }))
 vi.mock("@/providers/elevenlabs/direct-tts.js", () => ({ directElevenLabsTTS: mocks.mockDirectElevenLabsTTS, stripAudioTags: mocks.mockStripAudioTags }))
 vi.mock("@/providers/elevenlabs/direct-dialogue.js", () => ({ directElevenLabsDialogue: mocks.mockDirectElevenLabsDialogue }))
+vi.mock("@/providers/elevenlabs/sound-effects.js", () => ({ generateSoundEffect: mocks.mockGenerateSoundEffect }))
 vi.mock("@/providers/kie/audio.js", () => ({ KieAudioProvider: mocks.mockKieAudioProvider }))
 vi.mock("@/providers/elevenlabs/voice-changer.js", () => ({ voiceChangerFromUrl: mocks.mockVoiceChangerFromUrl, directVoiceChanger: mocks.mockDirectVoiceChanger }))
 vi.mock("@/providers/video/extract-audio-track.js", async (importOriginal) => ({
@@ -210,7 +212,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.mockGenerateMusic.mockResolvedValue("https://replicate.example.com/music.mp3")
   mocks.mockTextToAudio.mockResolvedValue("https://replicate.example.com/audio.mp3")
-  mocks.mockKieAudioProviderInstance.generateSoundEffect.mockResolvedValue({ url: "https://kie.example.com/sfx.mp3", cost: 0.01 })
+  mocks.mockGenerateSoundEffect.mockResolvedValue(Buffer.from("fake-sfx"))
   mocks.mockKieAudioProviderInstance.isolateAudio.mockResolvedValue({ url: "https://kie.example.com/isolated.mp3", cost: 0.01 })
   mocks.mockDirectElevenLabsDialogue.mockResolvedValue(Buffer.from("fake-dialogue"))
   mocks.mockTranscribe.mockResolvedValue({ text: "Hello world", language: "en", segments: [] })
@@ -456,6 +458,17 @@ describe("text-to-speech handler", () => {
     },
   )
 
+  it("elevenlabs-v4 routes direct as v4 and keeps its tags (it performs them)", async () => {
+    const job = makeJob("text-to-speech", { text: "Hello [whispers]", provider: "elevenlabs-v4", voice: "Rachel", voiceType: "premade" })
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockDirectElevenLabsTTS).toHaveBeenCalledWith(
+      "Hello [whispers]", "Rachel", "elevenlabs-v4",
+      expect.objectContaining({ allowDefaultVoiceFallback: false }),
+    )
+    expect(mocks.mockStripAudioTags).not.toHaveBeenCalled()
+  })
+
   it("defaults an absent provider to elevenlabs-v3 (direct), tags NOT stripped", async () => {
     const job = makeJob("text-to-speech", { text: "no provider given [whispers]" })
     await handler(job as never, makeCtx())
@@ -501,24 +514,96 @@ describe("generate-music handler", () => {
 describe("text-to-audio handler", () => {
   const handler = audioAIHandlers["text-to-audio"]
 
-  it("happy path with default provider", async () => {
+  it("no provider → the default engine (elevenlabs-sfx), direct, never the KIE proxy or Replicate", async () => {
     const job = makeJob("text-to-audio", { prompt: "rain sounds" })
     await handler(job as never, makeCtx())
 
-    expect(mocks.mockTextToAudio).toHaveBeenCalledWith("rain sounds", undefined, undefined)
-    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalled()
+    expect(mocks.mockGenerateSoundEffect).toHaveBeenCalledWith("rain sounds", {
+      duration: undefined,
+      loop: undefined,
+      promptInfluence: undefined,
+    })
+    expect(mocks.mockTextToAudio).not.toHaveBeenCalled()
+    expect(mocks.mockKieAudioProvider).not.toHaveBeenCalled()
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(
+      expect.objectContaining({
+        jobType: "text-to-audio",
+        result: expect.objectContaining({ providerUsed: "elevenlabs-sfx" }),
+      }),
+    )
   })
 
-  it("uses KieAudioProvider for elevenlabs-sfx", async () => {
+  it("elevenlabs-sfx: passes duration/loop/promptInfluence and stores the returned bytes on R2 as mp3", async () => {
+    mocks.mockGenerateSoundEffect.mockResolvedValueOnce(Buffer.from("boom"))
     const job = makeJob("text-to-audio", { prompt: "explosion", provider: "elevenlabs-sfx", duration: 5, loop: true, promptInfluence: 0.8 })
     await handler(job as never, makeCtx())
 
-    expect(mocks.mockKieAudioProviderInstance.generateSoundEffect).toHaveBeenCalledWith(
-      "explosion",
-      { duration: 5, loop: true, promptInfluence: 0.8 },
-      expect.objectContaining({ onTaskCreated: expect.any(Function) }),
+    expect(mocks.mockGenerateSoundEffect).toHaveBeenCalledWith("explosion", { duration: 5, loop: true, promptInfluence: 0.8 })
+    expect(mocks.mockUploadBufferToR2).toHaveBeenCalledWith(Buffer.from("boom"), "audios/job-1.mp3", "audio/mpeg", "user-1")
+    expect(mocks.mockUploadToR2).not.toHaveBeenCalled()
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(
+      expect.objectContaining({ jobId: "job-1", jobType: "text-to-audio", mediaUrl: "https://r2.example.com/audio/job-1.mp3" }),
     )
     expect(mocks.mockTextToAudio).not.toHaveBeenCalled()
+  })
+
+  it("a provider failure propagates untouched (the worker's failure writer owns the message + refund)", async () => {
+    const providerErr = Object.assign(new Error("Sound effect generation failed. Please try again or contact support if the issue persists."), { internalDetails: "[sound-generation 500] boom" })
+    mocks.mockGenerateSoundEffect.mockRejectedValueOnce(providerErr)
+    const job = makeJob("text-to-audio", { prompt: "x", provider: "elevenlabs-sfx" })
+    await expect(handler(job as never, makeCtx())).rejects.toBe(providerErr)
+    expect(mocks.mockFinalizeJobWithMedia).not.toHaveBeenCalled()
+  })
+
+  it("an R2 upload failure after delivery is a post-processing error (no refund)", async () => {
+    mocks.mockUploadBufferToR2.mockRejectedValueOnce(new Error("R2 down"))
+    const job = makeJob("text-to-audio", { prompt: "x", provider: "elevenlabs-sfx" })
+    const err = await handler(job as never, makeCtx()).catch((e: unknown) => e)
+    expect(isPostProcessingError(err)).toBe(true)
+  })
+
+  it("keyless + connected → replays the job on the cloud and stores the cloud's audio locally", async () => {
+    config.ELEVENLABS_API_KEY = ""
+    mocks.mockShouldRunOnCloud.mockResolvedValueOnce(true)
+    mocks.mockRunJobOnCloud.mockResolvedValueOnce({ audioUrl: "https://cloud.nodaro.ai/sfx.mp3" })
+    const job = makeJob("text-to-audio", { prompt: "rain", duration: 8, usageLogId: "usage-1" })
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockShouldRunOnCloud).toHaveBeenCalledWith("")
+    expect(mocks.mockRunJobOnCloud).toHaveBeenCalledWith(
+      "text-to-audio",
+      expect.objectContaining({ jobId: "job-1", prompt: "rain", duration: 8, provider: "elevenlabs-sfx" }),
+      expect.any(Function),
+    )
+    expect(mocks.mockGenerateSoundEffect).not.toHaveBeenCalled()
+    expect(mocks.mockSafeFetch).toHaveBeenCalledWith("https://cloud.nodaro.ai/sfx.mp3")
+    expect(mocks.mockUploadBufferToR2).toHaveBeenCalledWith(Buffer.from("cloud-audio"), "audios/job-1.mp3", "audio/mpeg", "user-1")
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalled()
+  })
+
+  it("a cloud answer with no audio fails loudly instead of completing empty", async () => {
+    config.ELEVENLABS_API_KEY = ""
+    mocks.mockShouldRunOnCloud.mockResolvedValueOnce(true)
+    mocks.mockRunJobOnCloud.mockResolvedValueOnce({})
+    const job = makeJob("text-to-audio", { prompt: "rain" })
+    await expect(handler(job as never, makeCtx())).rejects.toThrow(/no sound effect audio/)
+    expect(mocks.mockFinalizeJobWithMedia).not.toHaveBeenCalled()
+  })
+
+  it("keyless + not connected → the direct funnel runs and owns the missing-key error", async () => {
+    config.ELEVENLABS_API_KEY = ""
+    mocks.mockShouldRunOnCloud.mockResolvedValueOnce(false)
+    const job = makeJob("text-to-audio", { prompt: "rain" })
+    await handler(job as never, makeCtx())
+    expect(mocks.mockRunJobOnCloud).not.toHaveBeenCalled()
+    expect(mocks.mockGenerateSoundEffect).toHaveBeenCalled()
+  })
+
+  it("a stale orchestrator payload naming the retired Replicate engine keeps its own path", async () => {
+    const job = makeJob("text-to-audio", { prompt: "rain", provider: "tangoflux", duration: 4 })
+    await handler(job as never, makeCtx())
+    expect(mocks.mockTextToAudio).toHaveBeenCalledWith("rain", "tangoflux", 4)
+    expect(mocks.mockGenerateSoundEffect).not.toHaveBeenCalled()
   })
 
   it("returns early when finalize signals not-ok (cancelled)", async () => {
@@ -935,11 +1020,11 @@ describe("revenue-leak: post-provider upload failure → PostProcessingError (re
     expect(isPostProcessingError(err)).toBe(true)
   })
 
-  it("text-to-audio (uploadToR2)", async () => {
-    mocks.mockUploadToR2.mockRejectedValueOnce(rawUploadError())
+  it("text-to-audio (uploadBufferToR2)", async () => {
+    mocks.mockUploadBufferToR2.mockRejectedValueOnce(rawUploadError())
     const job = makeJob("text-to-audio", { prompt: "rain" })
     const err = await captureThrow(() => audioAIHandlers["text-to-audio"](job as never, makeCtx()))
-    expect(mocks.mockTextToAudio).toHaveBeenCalled()
+    expect(mocks.mockGenerateSoundEffect).toHaveBeenCalled()
     expect(isPostProcessingError(err)).toBe(true)
   })
 

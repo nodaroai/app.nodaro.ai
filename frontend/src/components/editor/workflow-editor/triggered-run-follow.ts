@@ -9,6 +9,7 @@
  */
 import { isProjectedTriggerNodeType } from "@nodaro/shared"
 import { settledBeforeClear } from "@/lib/results-cleared"
+import { isSeededState } from "@/lib/seeded-node-state"
 
 /**
  * The run lanes the canvas follows: a Telegram message started them, and the
@@ -29,8 +30,28 @@ const ENDED: ReadonlySet<string> = new Set(["completed", "failed", "timed_out"])
 /** The node states an ended run paints: a node still "running" in an ended run was orphaned, not running. */
 const NODE_ENDED: ReadonlySet<string> = new Set(["completed", "failed"])
 
-/** On a node: the id of the trigger-started run whose results it shows (registered in EXECUTION_DATA_KEYS). */
+/**
+ * On a node: the id of the run whose results it shows (registered in
+ * EXECUTION_DATA_KEYS) — a run a Telegram message started, and the editor's own
+ * runs too (the live lane stamps each node as it ends, and the reopen lane as it
+ * loads one), so no reload ever paints the same run again over edits made since.
+ */
 export const RESULTS_RUN_ID_KEY = "resultsRunId"
+
+/**
+ * On a node, beside {@link RESULTS_RUN_ID_KEY}: when that run ended the node
+ * (its node state's `completedAt`, else the run's end). The reopen lane reads
+ * it to keep a result a NEWER run left that its own listing cannot see — a
+ * run another member started, one that was discarded, a Telegram run
+ * (newer-run-review.ts). Registered in EXECUTION_DATA_KEYS.
+ */
+export const RESULTS_RUN_ENDED_AT_KEY = "resultsRunEndedAt"
+
+/** The two marks a node gets when a run ends it: which run, and when (always
+ *  both, so an earlier run's end time never stays paired with a later run). */
+export function resultsRunMark(runId: string, endedAt: string | null | undefined): Record<string, string | undefined> {
+  return { [RESULTS_RUN_ID_KEY]: runId, [RESULTS_RUN_ENDED_AT_KEY]: endedAt || undefined }
+}
 
 /** The fields of a listed run these rules read. */
 export interface FollowRun {
@@ -47,6 +68,10 @@ export interface PaintState {
   readonly status: string
   readonly startedAt?: string | null
   readonly completedAt?: string | null
+  /** The run passed the node's saved output through (see lib/seeded-node-state.ts). */
+  readonly fromSavedData?: boolean
+  /** The job the run gave the node; a node a Router skipped has none. */
+  readonly jobId?: string | null
 }
 
 interface NodeLike {
@@ -117,7 +142,7 @@ export function paintableStates<S extends PaintState>(
       if (data[RESULTS_RUN_ID_KEY] === run.id) return false
       if (run.active && (state.status === "pending" || state.status === "running")) return true
       if (!NODE_ENDED.has(state.status)) return false
-      if (state.status === "completed" && !state.startedAt) return false
+      if (isSeededState(state)) return false
       return !settledBeforeClear(data, state.completedAt ?? run.completedAt)
     }),
   )

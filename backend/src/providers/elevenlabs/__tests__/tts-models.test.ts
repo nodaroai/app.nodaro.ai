@@ -58,4 +58,9 @@ describe("tts-models — our provider id → ElevenLabs model id", () => {
     expect(ttsWireModel("elevenlabs-multilingual")).toBe("eleven_multilingual_v2")
     expect(ttsWireModel("elevenlabs-turbo")).toBe("eleven_turbo_v2_5")
   })
+
+  it("v4 runs as eleven_v4 and is keyed as itself — never as turbo", () => {
+    expect(ttsWireModel("elevenlabs-v4")).toBe("eleven_v4")
+    expect(ttsModelKey("elevenlabs-v4")).toBe("elevenlabs-v4")
+  })
 })

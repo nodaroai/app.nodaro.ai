@@ -30,6 +30,7 @@ REST-first; the included visual editor is one of many possible clients.
 - **Browse & clone the shared community library** (admin-curated characters / locations / objects; Business + Cloud) → [Community Library](./community-library.md)
 - **Build a workflow by describing it** (in-app chat that edits your canvas; Cloud) → [Workflow Copilot](./features/workflow-copilot.md)
 - **Wipe a run off the canvas before changing the workflow** (what Clear results removes, what it never touches, and how to get it back) → [Clear results](./features/clear-results.md)
+- **See what a workflow run produced, and what reopening shows after a long run** (structured results on the canvas, nodes a Run from here only passes through, the newer run on a render and its plan) → [Run results on the canvas](./features/run-results.md)
 - **Free credits on a new account** (what the signup grant is, and when activation asks for a card; Cloud) → [Free credits](./features/free-credits.md)
 - **Keep the posts worth coming back to** (save Social Search results with notes and tags, find them again; Cloud) → [Inspiration](./features/inspiration.md)
 - **Know what your competitors are doing, and what to do about it** (tracked brands, scheduled scans, action cards; Cloud) → [Competitors](./features/competitors.md)
