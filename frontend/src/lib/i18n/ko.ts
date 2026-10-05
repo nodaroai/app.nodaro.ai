@@ -6259,6 +6259,8 @@ export const ko: ChromeDict = {
   "node.contentIdeasIdeas": "아이디어",
   "node.editPlanConnectTranscript": "편집 계획을 세우려면 녹취록을 연결하세요",
   "node.applyEdlConnectVideo": "동영상을 렌더링하려면 EDL을 연결하세요",
+  "node.renderPreviewBadge": "미리 보기",
+  "node.renderPreviewBadgeHint": "720p 미리 보기(비공개)",
   "node.audioSyncConnect": "녹음 2~6개를 연결하세요",
   "node.audioSyncReference": "기준",
   "node.audioSyncNotes": "참고 사항: {count}개 — 마우스를 올려 확인",

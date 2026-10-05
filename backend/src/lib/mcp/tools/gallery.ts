@@ -566,12 +566,15 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
             assetUrl: a.r2_url as string,
             createdAt: a.created_at as string,
             favorited: false,
+            // A render made at proxy quality is a private 720p Preview (F1):
+            // labelled from the asset's own record, as My Library labels it.
+            ...(meta.quality === "proxy" ? { preview: true } : {}),
           }
         })
 
         const lines = items.length > 0
           ? items
-              .map((it) => `- ${it.kind} ${it.jobId} ${it.prompt ? `(${it.prompt})` : ""}`)
+              .map((it) => `- ${it.kind}${"preview" in it ? " (preview)" : ""} ${it.jobId} ${it.prompt ? `(${it.prompt})` : ""}`)
               .join("\n")
           : "(no uploads)"
         const cursorLine = nextCursor

@@ -16,6 +16,7 @@ import { useModelCredits } from "@/hooks/use-model-credit-cost"
 import { useApplyEdlEstimateMinutes } from "@/hooks/use-apply-edl-estimate-minutes"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { videoNodeSizing } from "./video-node-defaults"
+import { PreviewBadge, isPreviewQuality } from "@/components/render/preview-badge"
 import { useT } from "@/lib/i18n"
 import type { ApplyEdlData } from "@/types/nodes"
 
@@ -36,6 +37,9 @@ function ApplyEdlNodeComponent({ id, data, selected }: NodeProps) {
   const activeIndex = nodeData.activeResultIndex ?? 0
   const activeResult = results[activeIndex]
   const activeUrl = activeResult?.url ?? nodeData.generatedVideoUrl ?? nodeData.generatedAudioUrl
+  // The take on show is a Preview (a private 720p render) — from what the take
+  // IS, never from the node's Quality setting.
+  const showsPreview = isPreviewQuality(activeResult)
   const [mediaError, setMediaError] = useState(false)
 
   useEffect(() => { setMediaError(false) }, [activeUrl])
@@ -67,7 +71,8 @@ function ApplyEdlNodeComponent({ id, data, selected }: NodeProps) {
           { id: "json",       type: "source", position: Position.Right, customStyle: { top: "24px",              right: "-29px" }, external: true },
         ]}
       >
-        <div className="flex flex-col gap-1 p-2 h-full" style={{ minHeight: 120 }}>
+        <div className="relative flex flex-col gap-1 p-2 h-full" style={{ minHeight: 120 }}>
+          {hasResult && showsPreview && <PreviewBadge className="absolute start-3 top-3 z-10 pointer-events-none" />}
           {status === "running" && (
             <div className="flex flex-col items-center justify-center gap-2 flex-1 rounded-md bg-muted/30">
               <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />

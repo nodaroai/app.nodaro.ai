@@ -1,0 +1,416 @@
+{
+  "_comment": "Cross-engine guard for an Apply EDL render's clipKey (A1b review rounds): a selector on the render's edl wire, and one on the Edit Plan to Camera Switch wire. Row k of an each wire is row k of what its selector picks, never row k of the plan. A wire that hands on ONE value (Selected, item, item:N, all) names the clip it picks, as both input resolvers pick it (decided 2026-10-05); such a render runs once (expectedRows null). Selected (outputMode last) is the plan's own output, its FIRST clip. `direct` cases also check the key is the span of the EDL the render receives. The backend test (apply-edl-clip-key.test.ts) and the editor test of the same name read this file.",
+  "plan": {
+    "id": "plan",
+    "type": "edit-plan",
+    "data": {
+      "mode": "clips",
+      "generatedJson": [
+        {
+          "version": 1,
+          "clock": "master",
+          "sources": [
+            {
+              "id": "A",
+              "url": "https://media.test/a.mp4",
+              "kind": "video"
+            }
+          ],
+          "segments": [
+            {
+              "id": "seg-0",
+              "inMs": 0,
+              "outMs": 500,
+              "video": "A"
+            },
+            {
+              "id": "seg-1",
+              "inMs": 500,
+              "outMs": 1000,
+              "video": "A"
+            }
+          ]
+        },
+        {
+          "version": 1,
+          "clock": "master",
+          "sources": [
+            {
+              "id": "A",
+              "url": "https://media.test/a.mp4",
+              "kind": "video"
+            }
+          ],
+          "segments": [
+            {
+              "id": "seg-0",
+              "inMs": 2000,
+              "outMs": 2500,
+              "video": "A"
+            },
+            {
+              "id": "seg-1",
+              "inMs": 2500,
+              "outMs": 3000,
+              "video": "A"
+            }
+          ]
+        },
+        {
+          "version": 1,
+          "clock": "master",
+          "sources": [
+            {
+              "id": "A",
+              "url": "https://media.test/a.mp4",
+              "kind": "video"
+            }
+          ],
+          "segments": [
+            {
+              "id": "seg-0",
+              "inMs": 4000,
+              "outMs": 4500,
+              "video": "A"
+            },
+            {
+              "id": "seg-1",
+              "inMs": 4500,
+              "outMs": 5000,
+              "video": "A"
+            }
+          ]
+        },
+        {
+          "version": 1,
+          "clock": "master",
+          "sources": [
+            {
+              "id": "A",
+              "url": "https://media.test/a.mp4",
+              "kind": "video"
+            }
+          ],
+          "segments": [
+            {
+              "id": "seg-0",
+              "inMs": 6000,
+              "outMs": 6500,
+              "video": "A"
+            },
+            {
+              "id": "seg-1",
+              "inMs": 6500,
+              "outMs": 7000,
+              "video": "A"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "render": {
+    "id": "render",
+    "type": "apply-edl",
+    "data": {
+      "output": "video",
+      "quality": "proxy"
+    }
+  },
+  "cases": [
+    {
+      "name": "a list selector on the render's edl wire",
+      "nodes": [],
+      "edges": [
+        {
+          "id": "e-plan",
+          "source": "plan",
+          "sourceHandle": "edl",
+          "target": "render",
+          "targetHandle": "edl",
+          "data": {
+            "outputMode": "each",
+            "selectorMode": "list",
+            "listExpression": "3,4"
+          }
+        }
+      ],
+      "expectedRows": [
+        0,
+        1
+      ],
+      "expected": [
+        "4000-5000",
+        "6000-7000"
+      ],
+      "direct": true
+    },
+    {
+      "name": "a range selector on the Edit Plan to Camera Switch wire",
+      "nodes": [
+        {
+          "id": "switch",
+          "type": "camera-switch",
+          "data": {
+            "__listResults": [
+              "{\"version\": 1, \"clock\": \"master\", \"sources\": [{\"id\": \"A\", \"url\": \"https://media.test/a.mp4\", \"kind\": \"video\"}], \"segments\": [{\"id\": \"seg-0\", \"inMs\": 2200, \"outMs\": 2500, \"video\": \"A\"}, {\"id\": \"seg-1\", \"inMs\": 2500, \"outMs\": 3000, \"video\": \"A\"}]}",
+              "{\"version\": 1, \"clock\": \"master\", \"sources\": [{\"id\": \"A\", \"url\": \"https://media.test/a.mp4\", \"kind\": \"video\"}], \"segments\": [{\"id\": \"seg-0\", \"inMs\": 6200, \"outMs\": 6500, \"video\": \"A\"}, {\"id\": \"seg-1\", \"inMs\": 6500, \"outMs\": 7000, \"video\": \"A\"}]}"
+            ]
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-plan",
+          "source": "plan",
+          "sourceHandle": "edl",
+          "target": "switch",
+          "targetHandle": "edl",
+          "data": {
+            "outputMode": "each",
+            "rangeFrom": "2",
+            "rangeTo": "last",
+            "rangeStep": 2
+          }
+        },
+        {
+          "id": "e-switch",
+          "source": "switch",
+          "sourceHandle": "edl",
+          "target": "render",
+          "targetHandle": "edl"
+        }
+      ],
+      "expectedRows": [
+        0,
+        1
+      ],
+      "expected": [
+        "2000-3000",
+        "6000-7000"
+      ],
+      "direct": false
+    },
+    {
+      "name": "a Selected (last) wire names the plan's own output, its first clip",
+      "nodes": [],
+      "edges": [
+        {
+          "id": "e-plan",
+          "source": "plan",
+          "sourceHandle": "edl",
+          "target": "render",
+          "targetHandle": "edl",
+          "data": {
+            "outputMode": "last"
+          }
+        }
+      ],
+      "expectedRows": null,
+      "expected": [
+        "0-1000"
+      ],
+      "direct": true
+    },
+    {
+      "name": "an item wire names the clip at its index",
+      "nodes": [],
+      "edges": [
+        {
+          "id": "e-plan",
+          "source": "plan",
+          "sourceHandle": "edl",
+          "target": "render",
+          "targetHandle": "edl",
+          "data": {
+            "outputMode": "item",
+            "itemIndex": "2"
+          }
+        }
+      ],
+      "expectedRows": null,
+      "expected": [
+        "2000-3000"
+      ],
+      "direct": true
+    },
+    {
+      "name": "a legacy item:N wire names the N-th clip from 0",
+      "nodes": [],
+      "edges": [
+        {
+          "id": "e-plan",
+          "source": "plan",
+          "sourceHandle": "edl",
+          "target": "render",
+          "targetHandle": "edl",
+          "data": {
+            "outputMode": "item:1"
+          }
+        }
+      ],
+      "expectedRows": null,
+      "expected": [
+        "2000-3000"
+      ],
+      "direct": true
+    },
+    {
+      "name": "an item wire ignores its list selector",
+      "nodes": [],
+      "edges": [
+        {
+          "id": "e-plan",
+          "source": "plan",
+          "sourceHandle": "edl",
+          "target": "render",
+          "targetHandle": "edl",
+          "data": {
+            "outputMode": "item",
+            "itemIndex": "1",
+            "selectorMode": "list",
+            "listExpression": "3,4"
+          }
+        }
+      ],
+      "expectedRows": null,
+      "expected": [
+        "0-1000"
+      ],
+      "direct": true
+    },
+    {
+      "name": "an all wire whose list selector leaves one clip names it",
+      "nodes": [],
+      "edges": [
+        {
+          "id": "e-plan",
+          "source": "plan",
+          "sourceHandle": "edl",
+          "target": "render",
+          "targetHandle": "edl",
+          "data": {
+            "outputMode": "all",
+            "selectorMode": "list",
+            "listExpression": "3"
+          }
+        }
+      ],
+      "expectedRows": null,
+      "expected": [
+        "4000-5000"
+      ],
+      "direct": true
+    },
+    {
+      "name": "a teleport hands the item wire's pick on",
+      "nodes": [
+        {
+          "id": "tp-send",
+          "type": "teleport-send",
+          "data": {}
+        },
+        {
+          "id": "tp-recv",
+          "type": "teleport-receive",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-plan",
+          "source": "plan",
+          "sourceHandle": "edl",
+          "target": "tp-send",
+          "targetHandle": "in"
+        },
+        {
+          "id": "e-tp",
+          "source": "tp-send",
+          "target": "tp-recv"
+        },
+        {
+          "id": "e-recv",
+          "source": "tp-recv",
+          "target": "render",
+          "targetHandle": "edl",
+          "data": {
+            "outputMode": "item",
+            "itemIndex": "3"
+          }
+        }
+      ],
+      "expectedRows": null,
+      "expected": [
+        "4000-5000"
+      ],
+      "direct": true
+    },
+    {
+      "name": "a single pick into Camera Switch names that clip on the render after it",
+      "nodes": [
+        {
+          "id": "switch",
+          "type": "camera-switch",
+          "data": {
+            "generatedJson": {
+              "edl": {
+                "version": 1,
+                "clock": "master",
+                "sources": [
+                  {
+                    "id": "A",
+                    "url": "https://media.test/a.mp4",
+                    "kind": "video"
+                  }
+                ],
+                "segments": [
+                  {
+                    "id": "seg-0",
+                    "inMs": 6200,
+                    "outMs": 6500,
+                    "video": "A"
+                  },
+                  {
+                    "id": "seg-1",
+                    "inMs": 6500,
+                    "outMs": 7000,
+                    "video": "A"
+                  }
+                ]
+              },
+              "transcript": {
+                "segments": []
+              }
+            }
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-plan",
+          "source": "plan",
+          "sourceHandle": "edl",
+          "target": "switch",
+          "targetHandle": "edl",
+          "data": {
+            "outputMode": "item",
+            "itemIndex": "4"
+          }
+        },
+        {
+          "id": "e-switch",
+          "source": "switch",
+          "sourceHandle": "edl",
+          "target": "render",
+          "targetHandle": "edl"
+        }
+      ],
+      "expectedRows": null,
+      "expected": [
+        "6000-7000"
+      ],
+      "direct": false
+    }
+  ]
+}

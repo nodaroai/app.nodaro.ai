@@ -24,6 +24,7 @@ import {
   changesStudioPublishFlag,
 } from "../lib/studio-audience.js"
 import { loadWorkflowFor, toAccessRow } from "../lib/workflow-route-access.js"
+import { isCodecOwnedDocument, resolveCanvasResultIds, withResolvedResultIds } from "../lib/canvas-result-ids.js"
 import { reconcileWorkflowTriggers, type ChangedAccountNode, type GraphNode, type ReconcileResult } from "../lib/workflow-trigger-sync.js"
 import { isProjectedTriggerNodeType } from "@nodaro/shared"
 import { graphNeedsCredentialGate, sendCredentialUnbound, unboundCredentialUsesFor, workflowIsExposed } from "../lib/credential-gate.js"
@@ -1365,10 +1366,14 @@ export async function workflowRoutes(app: FastifyInstance) {
       return notFound(reply, "Workflow not found")
     }
 
+    // Saved result ids resolved by the owner's jobs, as every read hands them
+    // — only once the workflow is known to be shared, so an unshared id never
+    // costs a lookup. A codec-owned document is never touched by it.
+    const nodes = await resolveCanvasResultIds(full.nodes, data.user_id, { settings: full.settings })
     // Extension documents require their codec's public read projection.
     // Missing support must not fall back to raw private authoring state.
     const graph = publicWorkflowProjection({ id: params.id, name: typeof full.name === "string" ? full.name : "",
-      nodes: Array.isArray(full.nodes) ? full.nodes : [], edges: Array.isArray(full.edges) ? full.edges : [],
+      nodes: Array.isArray(nodes) ? nodes : [], edges: Array.isArray(full.edges) ? full.edges : [],
       settings: full.settings && typeof full.settings === "object" && !Array.isArray(full.settings)
         ? full.settings as Record<string, unknown> : {} }, getPluginServices())
     if (!graph) return notFound(reply, "Workflow not found")
@@ -1407,6 +1412,9 @@ export async function workflowRoutes(app: FastifyInstance) {
       req, reply, userId, params.id, "edit",
       "id, user_id, workspace_id, visibility, nodes",
       "Failed to sync triggers",
+      // Reads trigger nodes' configuration and answers counts: no saved result
+      // leaves this route, so it never pays the result-id jobs lookup.
+      { resolveResultIds: false },
     )
     if (!loaded.ok) return
 
@@ -1621,8 +1629,11 @@ export async function workflowRoutes(app: FastifyInstance) {
 
     // The full-body path's authorization. `edit` is the bar for changing the
     // canvas; `visibility` is asked separately below because it is not an edit.
+    // Not resolved on load: this request resolves the nodes it WRITES (below),
+    // or else its answer — one jobs lookup, never two (canvas-result-ids.ts).
     const loaded = await loadWorkflowFor(
       req, reply, userId, params.id, "edit", WORKFLOW_FULL_COLS, "Failed to update workflow",
+      { resolveResultIds: false },
     )
     if (!loaded.ok) return
     const target = toAccessRow(loaded.row)
@@ -1664,8 +1675,20 @@ export async function workflowRoutes(app: FastifyInstance) {
       // Then Video Overlay (D10): presets expanded, and a layer whose
       // `overlay<i>` handle the saved edges wire keeps no stored `imageUrl` —
       // a body without edges keeps the stored ones, as the gate above reads.
+      // First the saved result ids: placeholder `exec-…` ids and unlabelled
+      // Apply EDL takes the rule names exactly, resolved by the workflow's
+      // OWNER (canvas-result-ids.ts). Never on a codec-owned (Studio) document,
+      // stored or sent: its write guard refuses any other writer's change, so a
+      // save that renamed a result could be refused where the same save
+      // unrenamed passes.
+      const settingsAfter = body.settings ?? loaded.row.settings
+      const codecOwned = isCodecOwnedDocument(body.nodes, settingsAfter)
+        || isCodecOwnedDocument(loaded.row.nodes, loaded.row.settings)
+      const savedNodes = codecOwned
+        ? body.nodes
+        : await resolveCanvasResultIds(body.nodes, loaded.row.user_id, { settings: settingsAfter })
       updates.nodes = normalizeVideoOverlayNodes(
-        stripTransientRuntimeData(body.nodes as Array<{ data?: Record<string, unknown> }>),
+        stripTransientRuntimeData(savedNodes as Array<{ data?: Record<string, unknown> }>),
         (body.edges ?? loaded.row.edges) as ReadonlyArray<{ target?: unknown; targetHandle?: unknown }> | undefined,
       )
     } else if (body.edges !== undefined && Array.isArray(loaded.row.nodes)) {
@@ -1841,7 +1864,8 @@ export async function workflowRoutes(app: FastifyInstance) {
         move.targetProject.workspaceId,
       )
       if (droppedCollaborators.length > 0) {
-        return { data: await movedWorkflowFor(userId, data), droppedCollaborators }
+        const answered = body.nodes !== undefined ? data : await withResolvedResultIds(data as Record<string, unknown>)
+        return { data: await movedWorkflowFor(userId, answered), droppedCollaborators }
       }
     }
 
@@ -1876,8 +1900,10 @@ export async function workflowRoutes(app: FastifyInstance) {
     }
 
     // A move answers as the move endpoint does; any other save goes back
-    // whole to the editor who made it.
-    return { data: move ? await movedWorkflowFor(userId, data) : toWorkflowFull(data) }
+    // whole to the editor who made it. Nodes this save wrote were resolved
+    // above; stored nodes it left alone are resolved here, on the way out.
+    const answered = body.nodes !== undefined ? data : await withResolvedResultIds(data as Record<string, unknown>)
+    return { data: move ? await movedWorkflowFor(userId, answered) : toWorkflowFull(answered) }
   })
 
   // Delete workflow
@@ -2220,8 +2246,8 @@ export async function workflowRoutes(app: FastifyInstance) {
     )
 
     // On GET's terms, judged on the row as it now stands; PATCH answers a
-    // move the same way.
-    return reply.send({ data: await movedWorkflowFor(userId, data), droppedCollaborators })
+    // move the same way — its saved result ids resolved, as GET hands them.
+    return reply.send({ data: await movedWorkflowFor(userId, await withResolvedResultIds(data as Record<string, unknown>)), droppedCollaborators })
   })
 
   // Create a child sub-workflow under a parent

@@ -11,6 +11,7 @@ import { type RunSlot, type RunSlotNodeState } from "@/components/app-runner/typ
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import type { OutputStatus } from "../output-cards/shared"
 import { OutputCard } from "../output-card"
+import { outputIsPreview } from "../render-preview"
 import {
   buildStepChips,
   getThreadMessages,
@@ -346,6 +347,7 @@ function ChatMessage({
                   text={out?.text as string | undefined}
                   onOpenMedia={u ? openResult : undefined}
                   progress={isRunning ? combinedProgress[node.id] : undefined}
+                  preview={outputIsPreview(node.type, undefined, out as Record<string, unknown> | undefined)}
                 />
               )
             })}
@@ -401,6 +403,7 @@ function ChatMessage({
                     url={u}
                     text={out?.text as string | undefined}
                     onOpenMedia={u ? openResult : undefined}
+                    preview={outputIsPreview(node?.type, undefined, out as Record<string, unknown> | undefined)}
                   />
                 )
               })}

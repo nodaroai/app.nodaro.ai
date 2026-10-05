@@ -6,6 +6,7 @@ import {
 } from "../../workflow-access.js"
 import { toAccessRow } from "../../workflow-route-access.js"
 import { ensureMcpProject } from "./_mcp-project.js"
+import { withResolvedResultIds } from "../../canvas-result-ids.js"
 import type { McpSession } from "../session.js"
 
 /**
@@ -73,11 +74,14 @@ export async function loadMcpWorkflow(
     const row = data as unknown as Record<string, unknown>
     const access = await workflowAccessFromRow(session.userId, toAccessRow(row))
     if (!accessAtLeast(access, min)) return { ok: false, message: NOT_FOUND }
+    // Saved result ids resolved by the OWNER's jobs (canvas-result-ids.ts),
+    // before the owner column goes: the same row a REST read hands out.
+    const resolved: Record<string, unknown> = { ...(await withResolvedResultIds(row)) }
     // Strip the columns only the access rule needed, so the row the tool sees
     // carries exactly what it selected — identical in shape to the no-workspace
     // branch below.
-    for (const c of added) delete row[c]
-    return { ok: true, row, access }
+    for (const c of added) delete resolved[c]
+    return { ok: true, row: resolved, access }
   }
 
   // No workspace: the long-standing scoping, unchanged. Creator always; the
@@ -94,8 +98,10 @@ export async function loadMcpWorkflow(
   if (error) return { ok: false, message: `Error: ${error.message}` }
   if (!data) return { ok: false, message: NOT_FOUND }
   // A caller-and-project-scoped row is the caller's own: `own` is the honest
-  // level, and it satisfies every `min` these tools ask for.
-  return { ok: true, row: data as unknown as Record<string, unknown>, access: "own" }
+  // level, and it satisfies every `min` these tools ask for. Its saved result
+  // ids are resolved by the caller's jobs, since the caller is its owner.
+  const row = await withResolvedResultIds(data as unknown as Record<string, unknown>, { ownerUserId: session.userId })
+  return { ok: true, row, access: "own" }
 }
 
 /** The columns the access rule reads, added to the select if not already there. */

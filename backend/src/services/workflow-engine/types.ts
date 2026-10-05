@@ -6,7 +6,7 @@ import type { MediaItem } from "../social/platforms/index.js"
 import type { BillingContext } from "../../lib/billing-context.js"
 import type { Caption } from "@remotion/captions"
 import type { ErrorHint } from "../../lib/safety-block.js"
-import type { NodeExecutionStatus, NodeExecutionStateWire, VideoOverlayWarning } from "@nodaro/shared"
+import type { NodeExecutionStatus, NodeExecutionStateWire, VideoOverlayWarning, RenderQuality, RunResultRowStamp } from "@nodaro/shared"
 
 // ---------------------------------------------------------------------------
 // Node execution state (stored in workflow_executions.node_states JSONB)
@@ -92,6 +92,17 @@ export interface NodeOutput {
    * iteration carried a key. The canvas stamps each result row with it.
    */
   listResultCompositionKeys?: string[]
+  /**
+   * Each row's identity — its job, thumbnail and, for a render, `quality` and
+   * `clipKey` — ROW-ALIGNED with `listResults` (`{}` where the row has none).
+   * The editor stamps each result row with it; pairing rows with `jobIds` by
+   * position mis-paired once a row failed or finished out of order.
+   */
+  listResultStamps?: RunResultRowStamp[]
+  /** apply-edl: the quality the render was made at ("proxy" is a Preview). */
+  quality?: RenderQuality
+  /** apply-edl: the plan clip the render cut (`edlSpanKey`), as its payload gave it. */
+  clipKey?: string
   /** Selector node `picked` output channel (selected items). */
   pickedResults?: string[]
   /** Selector node `rest` output channel (items NOT picked). */

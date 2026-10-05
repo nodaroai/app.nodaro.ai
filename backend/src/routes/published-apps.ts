@@ -11,6 +11,7 @@ import { accessAtLeast, workflowAccessFromRow } from "../lib/workflow-access.js"
 import { toAccessRow } from "../lib/workflow-route-access.js"
 import { findUnpublishableNodeTypes, unpublishableNodesMessage } from "../lib/surface-deny.js"
 import { sendCredentialUnbound, unboundCredentialUsesFor } from "../lib/credential-gate.js"
+import { resolveCanvasResultIds } from "../lib/canvas-result-ids.js"
 
 const VALID_CATEGORIES = [
   "image-generation", "video-production", "audio-music", "content-writing",
@@ -579,8 +580,10 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
     const prevWasListed = prevVersion?.is_listed ?? false
     const effectiveIsListed = isListed ?? prevWasListed
 
-    // Estimate credits
-    const nodes = workflow.nodes || []
+    // Estimate credits. The snapshot keeps the canvas's results, so their saved
+    // ids are resolved first (canvas-result-ids.ts): a published version is
+    // immutable and is never resolved again on an app open.
+    const nodes = await resolveCanvasResultIds(workflow.nodes || [], workflow.user_id, { settings: workflow.settings })
     const edges = workflow.edges || []
 
     // A published app runs this snapshot for strangers: every Webhook Output

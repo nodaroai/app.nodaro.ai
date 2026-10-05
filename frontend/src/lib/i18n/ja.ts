@@ -6259,6 +6259,8 @@ export const ja: ChromeDict = {
   "node.contentIdeasIdeas": "アイデア",
   "node.editPlanConnectTranscript": "編集プランを作成するには、文字起こしを接続してください",
   "node.applyEdlConnectVideo": "動画をレンダリングするには、EDL を接続してください",
+  "node.renderPreviewBadge": "プレビュー",
+  "node.renderPreviewBadgeHint": "720p のプレビュー（非公開）",
   "node.audioSyncConnect": "2〜6本の録音を接続",
   "node.audioSyncReference": "基準",
   "node.audioSyncNotes": "メモ：{count}（ホバーで表示）",

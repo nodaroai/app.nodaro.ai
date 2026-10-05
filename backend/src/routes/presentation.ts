@@ -21,6 +21,7 @@ import { billingPairColumns } from "../lib/insert-job.js"
 import type { WorkflowExecutionJob } from "../services/workflow-engine/types.js"
 import { ACTIVE_EXECUTION_STATUSES } from "../lib/request-helpers.js"
 import { estimateWorkflowCredits, type EstimateNode, type EstimateEdge } from "../ee/billing/credits.js"
+import { resolveCanvasResultIds } from "../lib/canvas-result-ids.js"
 
 const workflowIdParams = z.object({
   id: z.string().uuid(),
@@ -212,11 +213,15 @@ export async function presentationRoutes(app: FastifyInstance) {
     const settings = (workflow.settings ?? {}) as Record<string, unknown>
     const presentationSettings = settings.presentationSettings as { runTarget: string; subWorkflowNodeId?: string } | undefined
 
+    // Saved result ids resolved by the owner's jobs (canvas-result-ids.ts), so
+    // a viewer's output cards label an older Preview render as the editor does.
+    const nodes = await resolveCanvasResultIds(workflow.nodes, workflow.user_id, { settings: workflow.settings })
+
     return reply.send({
       workflowId: workflow.id,
       name: workflow.name,
       // A take's voice record is the owner's (studio ruling T42).
-      nodes: isOwner ? workflow.nodes : stripStudioTakeVoiceRecords(workflow.nodes),
+      nodes: isOwner ? nodes : stripStudioTakeVoiceRecords(nodes),
       edges: workflow.edges,
       isOwner,
       estimatedCost,

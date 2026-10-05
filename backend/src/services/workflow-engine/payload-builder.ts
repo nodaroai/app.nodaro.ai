@@ -9,7 +9,7 @@ import { effectiveContentModel, contentRecipeCreditId, contentIdeasCreditId, cla
 import { TELEGRAM_ACCOUNT_SEND_NODE_TYPE, telegramSendAsOf, telegramSendDestinationOf } from "@nodaro/shared"
 import { DEFAULT_TEXT_TO_AUDIO_PROVIDER } from "@nodaro/shared"
 import { LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec, LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec, textToAudioCreditId } from "@nodaro/shared"
-import { applyEdlCreditId } from "@nodaro/shared"
+import { applyEdlCreditId, renderPlanClipKey } from "@nodaro/shared"
 import type { Scene3DReference } from "@nodaro/shared"
 import { scene3DInputAssetsForEngine, type Scene3DInputAsset } from "@nodaro/shared"
 import { socialSearchRequestFromNode, socialSearchCreditId, socialSearchPickTop } from "@nodaro/shared"
@@ -48,7 +48,7 @@ import { buildEffectiveEdl, validateEffectiveEdl } from "../../lib/apply-edl-pla
 import { audioSyncCreditId } from "../../lib/audio-sync-credit-id.js"
 import { AUDIO_SYNC_MAX_SOURCES, AUDIO_SYNC_MIN_SOURCES } from "../../providers/audio/audio-sync-budget.js"
 import { extractSavedNodeOutput, extractSourceNodeOutput, getPrimaryOutput, savedOutputFor } from "./output-extractor.js"
-import { savedDataAllowed } from "./saved-data.js"
+import { savedDataAllowed, listFor } from "./saved-data.js"
 import {
   appendScene3DStillScopingLines,
   collectScene3DLayoutReferences,
@@ -100,6 +100,10 @@ export interface PayloadBuildContext {
    *  `viewerForNode` because this builder is synchronous. ABSENT = a user:
    *  a caller that does not say who is asking never gets the admin's view. */
   viewer?: AvailabilityViewer
+  /** The list ROW a fan-out iteration reads (`plan.rows[i]`), absent for a node
+   *  run once and for a Repeat xN copy nothing list-drives. A render reads its
+   *  plan clip's identity from it. */
+  listRow?: number
 }
 
 // ---------------------------------------------------------------------------
@@ -2335,6 +2339,24 @@ export function effectiveDispatchProvider(
     return resolvedInputs?.provider || dataProvider
   }
   return dataProvider
+}
+
+/** The clip key an Apply EDL iteration stamps: the clip its list row reads of
+ *  the Edit Plan behind its `edl` input (through teleports and Camera Switch,
+ *  picked by every wire's selector on the way — `renderPlanClipKey`, the rule
+ *  the editor calls too), read as the run holds that plan: this run's clips,
+ *  or its saved ones when the run passed it through (`listFor`). */
+function applyEdlClipKey(node: SimpleNode, buildCtx: PayloadBuildContext | undefined): string | undefined {
+  const nodes = buildCtx?.nodes
+  const edges = buildCtx?.edges
+  if (!nodes || !edges) return undefined
+  return renderPlanClipKey(
+    node.id,
+    nodes,
+    edges,
+    (planNode) => listFor(planNode as SimpleNode, buildCtx?.nodeStates?.[planNode.id]),
+    buildCtx?.listRow,
+  )
 }
 
 export function buildPayload(
@@ -5887,6 +5909,10 @@ export function buildPayload(
         throw new Error(`apply-edl: invalid EDL — ${shown.join("; ")}${more > 0 ? ` (+${more} more)` : ""}`)
       }
       const transcript = resolvedInputs.transcript ?? (typeof data.transcript === "string" ? data.transcript : undefined)
+      // The plan clip this iteration cuts (A1b): taken from the Edit Plan ROW
+      // the iteration reads, never from the EDL rendered here — Camera Switch
+      // can move a clip's outer span inward. Stamped on the result as given.
+      const clipKey = applyEdlClipKey(node, buildCtx)
       // The job is always `apply-edl`; the run reserves on the row of its
       // quality (a preview on `apply-edl:proxy`) — the id the route reserves
       // on, and the one applyEdlCreditOverride prices from `payload.quality`.
@@ -5898,6 +5924,7 @@ export function buildPayload(
           transcript,
           output,
           quality,
+          ...(clipKey ? { clipKey } : {}),
           usageLogId,
         },
         applyEdlCreditId(quality),

@@ -141,15 +141,24 @@ export async function executeNodeForList(
     }
 
     // poll-job.ts prepends each iteration in completion order during fan-out.
-    // The final write below overwrites that with list-index order.
+    // The final write below overwrites that with list-index order — keeping
+    // each iteration's OWN result as the poll landed it (its real job id,
+    // thumbnail and a render's stamps). The history was emptied when the batch
+    // started, so every entry there is this batch's. Only an iteration whose
+    // lane wrote no result (an inline node) gets a synthetic id.
     const batchTimestamp = new Date().toISOString();
+    const landed = new Map<string, GeneratedResult>();
+    const landedResults = (useWorkflowStore.getState().nodes.find((n) => n.id === node.id)?.data as Record<string, unknown> | undefined)
+      ?.generatedResults as readonly GeneratedResult[] | undefined;
+    for (const r of landedResults ?? []) if (r.url && !landed.has(r.url)) landed.set(r.url, r);
     const batchResults: GeneratedResult[] = results
       .map((url, i) =>
         url
           ? {
+              ...landed.get(url),
               url,
               timestamp: batchTimestamp,
-              jobId: `iter-${runId}-${i}`,
+              jobId: landed.get(url)?.jobId ?? `iter-${runId}-${i}`,
             }
           : null,
       )

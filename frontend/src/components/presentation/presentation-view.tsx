@@ -82,6 +82,7 @@ import { ViewModeSelector } from "./view-mode-selector"
 import { resolveAllowedModes, resolveViewMode } from "./resolve-view-mode"
 import { InputCard } from "./input-card"
 import { OutputCard, type FieldBadgeEntry } from "./output-card"
+import { anyOutputIsPreview, outputIsPreview } from "./render-preview"
 import { ConfigFieldRenderer } from "./config-field-renderer"
 import { RichtextBlock } from "./richtext-block"
 import { RichtextEditor } from "./richtext-editor"
@@ -1234,6 +1235,10 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
     const progress = combinedProgress[node.id]
     const displayMode = settings.outputDisplayModes?.[node.id] ?? "individual"
     const { listResults, iterationTotal, iterationCompleted } = getListResults(node)
+    // A render's take says it is a Preview (F1): from the run on show, else the
+    // node's saved take (render-preview.ts).
+    const nodeData = node.data as Record<string, unknown>
+    const runOutput = isFullscreen ? (presNodeStates[node.id]?.output as Record<string, unknown> | undefined) : undefined
 
     // Gallery mode: single card with all results
     if (listResults && listResults.length > 1 && displayMode === "gallery") {
@@ -1254,6 +1259,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
           elementSize={elementSize}
           fieldBadges={fieldBadges}
           actions={nodeActions}
+          preview={anyOutputIsPreview(node.type, nodeData, runOutput, listResults)}
         />
       )
     }
@@ -1287,6 +1293,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                 elementSize={elementSize}
                 fieldBadges={i === 0 ? fieldBadges : undefined}
                 actions={resultActions}
+                preview={outputIsPreview(node.type, nodeData, runOutput, resultUrl)}
               />
             )
           })}
@@ -1308,6 +1315,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
         elementSize={elementSize}
         fieldBadges={fieldBadges}
         actions={nodeActions}
+        preview={outputIsPreview(node.type, nodeData, runOutput)}
       />
     )
   }, [getNodeStatus, getResult, getCardTitle, handleOpenMedia, combinedProgress, settings.outputDisplayModes, getListResults, isFullscreen, presNodeStates, settings.cardMeta, fieldBadgesByNode, hiddenResultKeys, isRevealingHidden, getNodeActions, getResultActions, t])

@@ -13,6 +13,8 @@ const selects: string[] = []
 const filterLog: Array<Array<[string, unknown]>> = []
 let tableRow: Record<string, unknown> | null = null
 let tableError: { message: string } | null = null
+/** Columns the owner's projection does not return (the filters still match). */
+let unselected: string[] = []
 
 vi.mock("@/lib/api", () => ({
   getCurrentUserId: () => mockGetCurrentUserId(),
@@ -36,7 +38,10 @@ vi.mock("@/lib/supabase", () => ({
             maybeSingle: async () => {
               if (tableError) return { data: null, error: tableError }
               const hit = tableRow && filters.every(([col, val]) => tableRow![col] === val)
-              return { data: hit ? tableRow : null, error: null }
+              if (!hit || unselected.length === 0) return { data: hit ? tableRow : null, error: null }
+              const projected: Record<string, unknown> = { ...tableRow }
+              for (const col of unselected) delete projected[col]
+              return { data: projected, error: null }
             },
           }
           return query
@@ -46,7 +51,11 @@ vi.mock("@/lib/supabase", () => ({
   }),
 }))
 
-import { mayHoldStoredRow, readWorkflowContent, readWorkflowContentFromServer, recheckedAccess } from "../workflow-content"
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
+import { mayHoldStoredRow, readWorkflowContent, readWorkflowContentFromServer, recheckedAccess, savedBaselineNodes } from "../workflow-content"
+import { buildWorkflowDelta } from "../workflow-delta"
+import type { WorkflowNode } from "@/types/nodes"
 
 const STORED = {
   id: "w1",
@@ -74,6 +83,7 @@ beforeEach(() => {
   filterLog.length = 0
   tableRow = STORED
   tableError = null
+  unselected = []
 })
 
 describe("readWorkflowContent", () => {
@@ -178,5 +188,128 @@ describe("recheckedAccess (T97)", () => {
   it("an answer that changes nothing returns the record itself", () => {
     const edit = { workflowId: "w1", access: "edit" } as const
     expect(recheckedAccess(edit, "edit")).toBe(edit)
+  })
+})
+
+describe("readWorkflowContent — saved result ids the server resolves (decided 2026-10-05)", () => {
+  const PLACEHOLDER_ROW = {
+    ...STORED,
+    nodes: [{ id: "gen", type: "generate-image", data: { generatedResults: [{ url: "https://m.test/a.png", jobId: "exec-gen" }] } }],
+  }
+  const UNLABELLED_RENDER_ROW = {
+    ...STORED,
+    nodes: [{ id: "render", type: "apply-edl", data: { generatedResults: [{ url: "https://m.test/e.mp4", jobId: "f0000000-0000-4000-8000-000000000001" }] } }],
+  }
+  const SERVER_OWN = {
+    ...SERVER_VIEW,
+    access: "own",
+    nodes: [{ id: "gen", type: "generate-image", data: { generatedResults: [{ url: "https://m.test/a.png", jobId: "job-1" }] } }],
+  }
+
+  it("the owner's row holding a placeholder job id is read through the server, which resolves it", async () => {
+    mockGetCurrentUserId.mockResolvedValue("owner-1")
+    tableRow = PLACEHOLDER_ROW
+    mockGetWorkflowDocument.mockResolvedValue(SERVER_OWN)
+    const content = await readWorkflowContent("w1", "*")
+    expect(mockGetWorkflowDocument).toHaveBeenCalledTimes(1)
+    expect(content?.access).toBe("own")
+    expect(content?.row.nodes).toEqual(SERVER_OWN.nodes)
+    // The save cursor is the stored row's: the server read wrote nothing.
+    expect(content?.row.version).toBe(9)
+    expect(content?.row.updated_at).toBe(STORED.updated_at)
+  })
+
+  it("so is an Apply EDL take with no render quality", async () => {
+    mockGetCurrentUserId.mockResolvedValue("owner-1")
+    tableRow = UNLABELLED_RENDER_ROW
+    mockGetWorkflowDocument.mockResolvedValue({ ...SERVER_OWN, nodes: UNLABELLED_RENDER_ROW.nodes })
+    await readWorkflowContent("w1", "*")
+    expect(mockGetWorkflowDocument).toHaveBeenCalledTimes(1)
+  })
+
+  it("a row with nothing to resolve never asks the server", async () => {
+    mockGetCurrentUserId.mockResolvedValue("owner-1")
+    tableRow = {
+      ...STORED,
+      nodes: [
+        { id: "gen", type: "generate-image", data: { generatedResults: [{ url: "https://m.test/a.png", jobId: "f0000000-0000-4000-8000-000000000001" }] } },
+        { id: "render", type: "apply-edl", data: { generatedResults: [{ url: "https://m.test/e.mp4", jobId: "f0000000-0000-4000-8000-000000000002", quality: "proxy" }] } },
+      ],
+    }
+    await readWorkflowContent("w1", "*")
+    expect(mockGetWorkflowDocument).not.toHaveBeenCalled()
+  })
+
+  it("takes the server's answer for a projection that selected no `id` (duplicate's read)", async () => {
+    mockGetCurrentUserId.mockResolvedValue("owner-1")
+    tableRow = PLACEHOLDER_ROW
+    unselected = ["id"]
+    mockGetWorkflowDocument.mockResolvedValue(SERVER_OWN)
+    const content = await readWorkflowContent("w1", "project_id, folder_id, name, nodes, edges, settings")
+    expect(mockGetWorkflowDocument).toHaveBeenCalledTimes(1)
+    expect(content?.row.nodes).toEqual(SERVER_OWN.nodes)
+    // …and never an answer about another workflow.
+    mockGetWorkflowDocument.mockResolvedValue({ ...SERVER_OWN, id: "w2" })
+    expect((await readWorkflowContent("w1", "project_id, folder_id, name, nodes, edges, settings"))?.row.nodes).toEqual(PLACEHOLDER_ROW.nodes)
+  })
+
+  it("hands the owner's stored nodes along with a served answer, so the canvas knows what is NOT saved yet", async () => {
+    mockGetCurrentUserId.mockResolvedValue("owner-1")
+    tableRow = PLACEHOLDER_ROW
+    mockGetWorkflowDocument.mockResolvedValue(SERVER_OWN)
+    const content = await readWorkflowContent("w1", "*")
+    expect(content?.storedNodes).toBe(PLACEHOLDER_ROW.nodes)
+    // A stored row taken as it is carries none: it IS what is saved.
+    tableRow = STORED
+    expect((await readWorkflowContent("w1", "*"))?.storedNodes).toBeUndefined()
+  })
+
+  it("keeps the stored row when the server fails, has none, or answers the owner less than `own`", async () => {
+    mockGetCurrentUserId.mockResolvedValue("owner-1")
+    tableRow = PLACEHOLDER_ROW
+    mockGetWorkflowDocument.mockRejectedValueOnce(new Error("offline"))
+    expect((await readWorkflowContent("w1", "*"))?.row).toBe(PLACEHOLDER_ROW)
+    mockGetWorkflowDocument.mockResolvedValueOnce(null)
+    expect((await readWorkflowContent("w1", "*"))?.row).toBe(PLACEHOLDER_ROW)
+    // An archived workspace answers its creator `view` — a STRIPPED projection
+    // the owner's canvas would then save back over their drafts.
+    mockGetWorkflowDocument.mockResolvedValueOnce({ ...SERVER_OWN, access: "view" })
+    const content = await readWorkflowContent("w1", "*")
+    expect(content?.row).toBe(PLACEHOLDER_ROW)
+    expect(content?.access).toBe("own")
+  })
+})
+
+describe("savedBaselineNodes — a delta save persists what the server resolved on load (decided 2026-10-05)", () => {
+  const stored = [
+    { id: "gen", type: "generate-image", position: { x: 0, y: 0 }, data: { generatedResults: [{ url: "https://m.test/a.png", jobId: "exec-gen" }] } },
+    { id: "text", type: "text", position: { x: 0, y: 0 }, data: { text: "hi" } },
+  ] as unknown as WorkflowNode[]
+  const served = [
+    { ...stored[0], data: { generatedResults: [{ url: "https://m.test/a.png", jobId: "job-1" }] } },
+    stored[1],
+  ] as unknown as WorkflowNode[]
+
+  it("puts the STORED copy of each resolved node in the save baseline, and only those", () => {
+    // The canvas's own copies (what a load hands the store), equal in content to the served ones.
+    const loaded = served.map((n) => ({ ...n })) as WorkflowNode[]
+    const baseline = savedBaselineNodes(loaded, { row: { nodes: served }, storedNodes: stored })
+    expect(baseline[0]).toBe(stored[0])
+    expect(baseline[1]).toBe(loaded[1])
+    // Against the canvas's load baseline the resolved node never diffs, so a
+    // delta save would never write it; against this one it is upserted once.
+    expect(buildWorkflowDelta({ nodes: loaded, edges: [] }, { nodes: loaded, edges: [] }).upsertNodes).toEqual([])
+    expect(buildWorkflowDelta({ nodes: loaded, edges: [] }, { nodes: baseline, edges: [] }).upsertNodes.map((n) => n.id)).toEqual(["gen"])
+  })
+
+  it("returns the SAME baseline when nothing was served in place of the stored row", () => {
+    const loaded = served.map((n) => ({ ...n })) as WorkflowNode[]
+    expect(savedBaselineNodes(loaded, { row: { nodes: served } })).toBe(loaded)
+    expect(savedBaselineNodes(loaded, { row: { nodes: served }, storedNodes: served })).toBe(loaded)
+  })
+
+  it("is what the editor's load seeds its save baseline with", () => {
+    const src = readFileSync(join(__dirname, "..", "..", "hooks", "use-workflow-persistence.ts"), "utf8")
+    expect(src).toMatch(/savedBaselineNodes\(/)
   })
 })

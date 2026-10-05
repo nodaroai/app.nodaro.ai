@@ -25,6 +25,7 @@ import {
 } from "@/hooks/queries/use-assets-queries"
 import { useStorageProfile } from "@/ee/hooks/queries/use-billing-queries"
 import { CachedImage } from "@/components/ui/cached-image"
+import { PreviewBadge, isPreviewQuality } from "@/components/render/preview-badge"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { useBackToClose } from "@/hooks/use-back-to-close"
 import { useVirtualGrid, rowItems, GRID_BREAKPOINTS } from "@/hooks/use-virtual-grid"
@@ -155,6 +156,8 @@ const LibraryAssetCard = memo(function LibraryAssetCard({
               <TypeIcon type={asset.type} />
               {asset.type}
             </Badge>
+            {/* A render made at proxy quality: a private 720p Preview (F1). */}
+            {isPreviewQuality(asset.metadata) && <PreviewBadge />}
             {asset.sizeBytes > 0 && (
               <span className="text-[10px] text-muted-foreground">{formatBytes(asset.sizeBytes)}</span>
             )}

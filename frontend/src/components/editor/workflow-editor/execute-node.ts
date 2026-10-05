@@ -1,6 +1,6 @@
 import { toast } from "sonner";
 import { DEFAULT_OVERLAY_LAYER, OVERLAY_MAX_LAYERS } from "@/types/nodes";
-import { assertCanvasExecutionAllowed, scene3DInputAssetsForEngine, overlayVariantIdFromHandle, readScriptSettings, applySettingsInput, SETTINGS_INPUT_CONSUMERS, resolveMusicProvider, resolveEditPlanSources, describeAudioSyncOffsetIssue, type AudioSyncOffsetSource, transcriptSpeakerLabels, cameraSwitchEdlProblem, cameraSwitchSettingsPayload } from "@nodaro/shared";
+import { assertCanvasExecutionAllowed, scene3DInputAssetsForEngine, overlayVariantIdFromHandle, readScriptSettings, applySettingsInput, SETTINGS_INPUT_CONSUMERS, resolveMusicProvider, resolveEditPlanSources, describeAudioSyncOffsetIssue, type AudioSyncOffsetSource, transcriptSpeakerLabels, cameraSwitchEdlProblem, cameraSwitchSettingsPayload, renderPlanClipKey } from "@nodaro/shared";
 import { findUpstreamSunoIds } from "@/lib/suno-ids";
 import { contentRunResultPatch } from "@/lib/content-run-output";
 import { llmAdvancedParams } from "@/lib/llm-advanced-params"
@@ -6994,6 +6994,20 @@ function executeNodeCore(
     };
     const edl = parseMaybe(edlRaw);
     const transcript = inputs.transcript !== undefined ? parseMaybe(inputs.transcript) : undefined;
+    // The plan clip this iteration cuts (A1b): the clip its list row reads of
+    // the Edit Plan behind its `edl` wire, picked by every wire's selector on
+    // the way — never the EDL rendered here (Camera Switch can move a clip's
+    // outer span). The row only when a list drives it (`listRowIndex`), never
+    // the iteration number. The server calls the same rule (applyEdlClipKey);
+    // the worker stamps it on the result.
+    const { nodes: graphNodes, edges: graphEdges } = useWorkflowStore.getState();
+    const clipKey = renderPlanClipKey(
+      node.id,
+      graphNodes,
+      graphEdges,
+      (planNode) => extractNodeOutputAsList(planNode as WorkflowNode, "edl"),
+      listRowIndex,
+    );
     setUserPromptTemplate(undefined);
     return runApplyEdl(
       node.id,
@@ -7004,6 +7018,7 @@ function executeNodeCore(
         crossfadeMs: aeData.crossfadeMs,
         sources: inputs.sources,
         transcript,
+        ...(clipKey ? { clipKey } : {}),
       },
       ctx,
     );

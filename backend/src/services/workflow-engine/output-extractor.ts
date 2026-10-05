@@ -18,6 +18,7 @@ import {
 import {
   pro3DRenderShotStills, COMPOSER_PLAN_MAP, COMPOSER_PLAN_FIELDS, extractAllGeneratedResults, splitGeneratedItems, aggregateByType, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member, overlayVariantIdFromHandle, featuredMetaAdOutputs, featuredInstagramOutputs, unwrapEditPlanOutput, resolveVideoLinkOutput, telegramAccountTriggerOutputs, isTelegramAccountTriggerNamedHandle, pickSocialPosts, socialPostsFrom, socialPostsDigest, FAN_OUT_EACH_HANDLES } from "@nodaro/shared"
 import type { SceneData, Transcript } from "@nodaro/shared"
+import { renderResultStamp, savedRenderOutput } from "@nodaro/shared"
 import { buildScenePrompt } from "@nodaro/prompts"
 export { extractVideoDurationFromNode } from "@nodaro/shared"
 export { extractAllGeneratedResults }
@@ -1340,14 +1341,18 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
   // default handle and the transcript on `json`. Mirrors the frontend
   // extractNodeOutput apply-edl branch and the live getPrimaryOutput branch.
   if (type === "apply-edl") {
+    // The SELECTED take, as the node's medium, with its stamps — the one reader
+    // the editor uses too (`savedRenderOutput`). It used to take
+    // `generatedVideoUrl` first, so a picked older take reached the canvas but
+    // never a workflow run, and a pick saved before #1804 kept them apart.
     const out: NodeOutput = {}
-    const videoUrl = data.generatedVideoUrl as string | undefined
-    const audioUrl = data.generatedAudioUrl as string | undefined
-    if (videoUrl) out.videoUrl = videoUrl
-    else if (audioUrl) out.audioUrl = audioUrl
-    else {
-      const fallback = getActiveResultUrl(data)
-      if (fallback) out.videoUrl = fallback
+    const saved = savedRenderOutput(data)
+    if (saved) {
+      if (saved.medium === "audio") out.audioUrl = saved.url
+      else out.videoUrl = saved.url
+      if (saved.thumbnailUrl) out.thumbnailUrl = saved.thumbnailUrl
+      if (saved.quality) out.quality = saved.quality
+      if (saved.clipKey) out.clipKey = saved.clipKey
     }
     const json = data.generatedJson
     if (json !== undefined) out.json = json
@@ -1834,6 +1839,11 @@ export function buildNodeOutputFromJobData(
     const transcript = outputData.transcript
     if (edl !== undefined) output.json = { edl, ...(transcript !== undefined ? { transcript } : {}) }
   }
+
+  // Apply EDL: the render's identity — its quality ("proxy" is a Preview) and
+  // the plan clip it cut — read only off a render's output (another node's
+  // `quality` is something else entirely).
+  if (nodeType === "apply-edl") Object.assign(output, renderResultStamp(outputData))
 
   if (nodeType === "edit-plan") {
     const plan = unwrapEditPlanOutput(outputData)

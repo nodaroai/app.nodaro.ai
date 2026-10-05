@@ -1560,6 +1560,8 @@ export * from "./speaker-layouts.js"
 export * from "./edl-multicam.js"
 export * from "./camera-switch-contract.js"
 export * from "./edit-plan-contract.js"
+// A render's saved output (one reader for both engines) and its result stamps.
+export * from "./render-output.js"
 // A person's review of an Edit Plan (`editedEdl`) and the one resolver that applies it.
 export * from "./edit-plan-review.js"
 

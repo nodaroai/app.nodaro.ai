@@ -1,6 +1,6 @@
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { proShotStills } from "@/lib/scene3d/pro-media-result";
-import { collectAncestorRefs as sharedCollectAncestorRefs, isExpandedClone, PARAMETER_NODE_TYPES, aggregateByType, buildChildrenByParent, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member, ASPECT_RATIO_DIMENSIONS, overlayVariantIdFromHandle, featuredMetaAdOutputs, featuredInstagramOutputs, resolveVideoLinkOutput, isTelegramAccountTriggerNamedHandle, telegramAccountTriggerOutputs, type Transcript, isSocialSearchPickFrozen, socialPostsFrom, socialPostsDigest } from "@nodaro/shared";
+import { collectAncestorRefs as sharedCollectAncestorRefs, isExpandedClone, PARAMETER_NODE_TYPES, aggregateByType, buildChildrenByParent, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member, ASPECT_RATIO_DIMENSIONS, overlayVariantIdFromHandle, featuredMetaAdOutputs, featuredInstagramOutputs, resolveVideoLinkOutput, isTelegramAccountTriggerNamedHandle, telegramAccountTriggerOutputs, type Transcript, isSocialSearchPickFrozen, socialPostsFrom, socialPostsDigest, savedRenderOutput } from "@nodaro/shared";
 import { getParameterPromptHint } from "@nodaro/prompts"
 import type {
   WorkflowNode,
@@ -587,13 +587,10 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
       const json = data.generatedJson;
       return json === undefined ? undefined : JSON.stringify(json);
     }
-    const results = (data.generatedResults as GeneratedResult[] | undefined) ?? [];
-    const activeIndex = (data.activeResultIndex as number | undefined) ?? 0;
-    return (
-      results[activeIndex]?.url ??
-      (data.generatedVideoUrl as string | undefined) ??
-      (data.generatedAudioUrl as string | undefined)
-    );
+    // The selected take — the one reader the server uses too (@nodaro/shared
+    // savedRenderOutput), so a pick reaches a workflow run exactly as it
+    // reaches the canvas.
+    return savedRenderOutput(data)?.url;
   }
   if (type === "trim-audio" || type === "mix-audio" || type === "combine-audio" || type === "extract-audio") {
     const results =

@@ -31,10 +31,11 @@ import { clearedConnectedListRows } from "./clear-run-results"
 import { namedRunOutputFields, reduceRunOutputFields } from "@/lib/named-run-outputs"
 import { perHandleRunFields } from "@/lib/per-handle-batch"
 import { applyEdlRunCutFields, applyEdlTakeTranscriptField } from "@/lib/apply-edl-cut"
+import { runResultIdentity, runResultRowIdentity } from "@/lib/run-result-identity"
 import { isJsonRunResultType, jobRunOutput, jsonRunResultPatch } from "@/lib/json-run-result"
 import { isSeededState } from "@/lib/seeded-node-state"
 import { videoOverlayListRowFields, videoOverlayRunOutputFields } from "@/lib/video-overlay-run-output"
-import type { NodeExecutionStatus as SharedNodeExecutionStatus, NodeExecutionStateWire } from "@nodaro/shared"
+import type { NodeExecutionStatus as SharedNodeExecutionStatus, NodeExecutionStateWire, RenderQuality, RunResultRowStamp } from "@nodaro/shared"
 import { collapseExpandedClones } from "./execution-graph";
 import { shouldAbandonNode } from "./abandon-guard";
 import { getListFanOutForNode } from "./node-input-resolver";
@@ -1109,6 +1110,7 @@ export function applyRestoredJobCompletion(
     url: (outputUrl as string) ?? "",
     timestamp: new Date().toISOString(),
     jobId,
+    ...runResultIdentity(nodeType, job.output_data),
     ...(overlayRun ?? {}),
     // Apply EDL: the take keeps the Transcript its render was cut with.
     ...applyEdlTakeTranscriptField(nodeType, job.output_data, outputUrl),
@@ -1605,6 +1607,11 @@ export interface NodeExecutionState {
     resultCompositionKey?: string;
     /** Video Overlay list fan-out: each row's own freshness key, row-aligned with listResults. */
     listResultCompositionKeys?: string[];
+    /** Each fan-out row's own job, thumbnail and render stamps, row-aligned with listResults. Mirrors backend NodeOutput. */
+    listResultStamps?: RunResultRowStamp[];
+    /** Apply EDL: the quality the render was made at, and the plan clip it cut. */
+    quality?: RenderQuality;
+    clipKey?: string;
   };
   error?: string;
   /** Stable billing-refusal code (backend reserve-errors.ts) — branch on this, never on text. */
@@ -1929,14 +1936,21 @@ function syncNodeStatesToStore(
           const rowFields = videoOverlayListRowFields(nodeType, state.output);
           const newResults = listResultUrls
             .filter((url) => !existingUrls.has(url))
-            .map((url, i) => ({
-              url,
-              timestamp: state.completedAt ?? new Date().toISOString(),
-              jobId: state.jobIds?.[i] ?? `exec-${node.id}-${i}`,
-              ...rowFields(url),
-              // Apply EDL: only the render the output describes keeps its Transcript.
-              ...applyEdlTakeTranscriptField(nodeType, state.output, url),
-            }));
+            .map((url, i) => {
+              // The row's OWN job, thumbnail and stamps (listResultStamps) —
+              // never `jobIds[i]`: that list is in settle order, without the
+              // rows that failed, so position paired a row with a sibling's job.
+              const { jobId: rowJobId, ...rowIdentity } = runResultRowIdentity(nodeType, state.output, url);
+              return {
+                url,
+                timestamp: state.completedAt ?? new Date().toISOString(),
+                jobId: rowJobId ?? `exec-${node.id}-${i}`,
+                ...rowIdentity,
+                ...rowFields(url),
+                // Apply EDL: only the render the output describes keeps its Transcript.
+                ...applyEdlTakeTranscriptField(nodeType, state.output, url),
+              };
+            });
           if (newResults.length > 0) {
             updates.generatedResults = [...newResults, ...prev];
             updates.activeResultIndex = 0;
@@ -1972,6 +1986,7 @@ function syncNodeStatesToStore(
                   url: outputUrl,
                   timestamp: state.completedAt ?? new Date().toISOString(),
                   jobId: state.jobId ?? `exec-${node.id}`,
+                  ...runResultIdentity(nodeType, state.output),
                   ...(overlayRun ?? {}),
                   // Apply EDL: the take keeps the Transcript its render was cut with.
                   ...applyEdlTakeTranscriptField(nodeType, state.output, outputUrl),

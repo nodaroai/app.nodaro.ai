@@ -126,6 +126,13 @@ describe("edit.applyEdl", () => {
     expect(result.jobId).toBe("job-edl")
   })
 
+  it("sends the plan clip's key when given (stamped on the result as clipKey)", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "j" }))
+    await client(fetchMock).edit.applyEdl({ edl, quality: "proxy", clipKey: "0-12000" })
+    const sent = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body) as Record<string, unknown>
+    expect(sent.clipKey).toBe("0-12000")
+  })
+
   it("sends only edl when no options are given", async () => {
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "j" }))
     await client(fetchMock).edit.applyEdl({ edl })

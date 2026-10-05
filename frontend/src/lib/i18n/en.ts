@@ -6448,6 +6448,8 @@ export const en = {
   "node.contentIdeasIdeas": "Ideas",
   "node.editPlanConnectTranscript": "Connect a transcript to plan the edit",
   "node.applyEdlConnectVideo": "Connect an EDL to render the video",
+  "node.renderPreviewBadge": "Preview",
+  "node.renderPreviewBadgeHint": "A 720p preview, kept private",
   "node.audioSyncConnect": "Connect 2–6 recordings",
   "node.audioSyncReference": "reference",
   "node.audioSyncNotes": "Notes: {count} — hover to read",

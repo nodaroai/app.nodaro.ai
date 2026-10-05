@@ -22,6 +22,7 @@ import { accessAtLeast, workflowAccessFromRow } from "../lib/workflow-access.js"
 import { toAccessRow } from "../lib/workflow-route-access.js"
 import { findUnpublishableNodeTypes, unpublishableNodesMessage } from "../lib/surface-deny.js"
 import { VALID_OUTPUT_TYPES, publishBodySchema } from "../lib/template-publish-schema.js"
+import { resolveCanvasResultIds } from "../lib/canvas-result-ids.js"
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -456,7 +457,9 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
       return reply.status(403).send({ error: { code: "forbidden", message: "Not your workflow" } })
     }
 
-    const nodes = (workflow.nodes || []) as Array<Record<string, unknown>>
+    // A template snapshot keeps the canvas's results: their saved ids are
+    // resolved first (canvas-result-ids.ts), as every read hands them.
+    const nodes = (await resolveCanvasResultIds(workflow.nodes || [], workflow.user_id, { settings: workflow.settings })) as Array<Record<string, unknown>>
     const edges = (workflow.edges || []) as Array<Record<string, unknown>>
     // What is published is run by its USERS, so it must be runnable by them —
     // asked as the users' view even when the publisher is an admin who can run

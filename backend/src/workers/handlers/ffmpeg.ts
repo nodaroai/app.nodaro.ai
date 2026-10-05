@@ -9,6 +9,7 @@ import { supabase } from "../../lib/supabase.js"
 import { cleanupWorkDir, createWorkDir, downloadFile, runFfmpeg, BROWSER_SAFE_VIDEO_ARGS, probeVideoSource } from "../../providers/video/ffmpeg-utils.js"
 import { combineVideos } from "../../providers/video/combine-videos.js"
 import { applyEdl } from "../../providers/video/apply-edl.js"
+import { applyEdlOutputData } from "../../lib/apply-edl-output.js"
 import { declaredJobBudgetMs } from "../../lib/job-budget.js"
 import { assembleNarratedVideo } from "../../providers/video/assemble-narrated-video.js"
 import { createImageCollage } from "../../providers/image/collage.js"
@@ -160,7 +161,7 @@ function safeParseJson(s: string): unknown {
  * output modes.
  */
 const handleApplyEdl: HandlerFn = async function handleApplyEdl(job, ctx) {
-  const { edl, transcript, output, quality } = job.data as {
+  const { edl, transcript, output, quality, clipKey } = job.data as {
     jobId: string
     edl: Edl
     /** Optional upstream Transcript (JSON string OR object) to remap through
@@ -168,6 +169,8 @@ const handleApplyEdl: HandlerFn = async function handleApplyEdl(job, ctx) {
     transcript?: unknown
     output?: "video" | "audio"
     quality?: "proxy" | "final"
+    /** The plan clip this render cuts, stamped on the result as given. */
+    clipKey?: string
   }
   const outputKind = output === "audio" ? "audio" : "video"
   console.log(`[worker] apply-edl ${ctx.jobId}: ${edl.segments.length} segments, output=${outputKind}, quality=${quality ?? "final"}`)
@@ -202,10 +205,16 @@ const handleApplyEdl: HandlerFn = async function handleApplyEdl(job, ctx) {
 
   if (!await shouldSaveJobResult(ctx.jobId)) return
 
-  const output_data: Record<string, unknown> = outputKind === "video"
-    ? { videoUrl: mediaUrl, ...(thumbUrl ? { thumbnailUrl: thumbUrl } : {}) }
-    : { audioUrl: mediaUrl }
-  if (remapped) output_data.json = remapped
+  // The cut, its Transcript, and the render's identity (quality + clip):
+  // lib/apply-edl-output.ts.
+  const output_data = applyEdlOutputData({
+    medium: outputKind,
+    mediaUrl,
+    thumbnailUrl: thumbUrl ?? undefined,
+    quality,
+    clipKey,
+    json: remapped,
+  })
 
   const ok = await markJobCompleted(ctx.jobId, { output_data })
   if (!ok) return

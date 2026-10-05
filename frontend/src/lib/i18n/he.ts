@@ -6405,6 +6405,8 @@ export const he: ChromeDict = {
   "node.contentIdeasIdeas": "רעיונות",
   "node.editPlanConnectTranscript": "חברו תמלול כדי לתכנן את העריכה",
   "node.applyEdlConnectVideo": "חברו רשימת עריכה (EDL) כדי לרנדר את הווידאו",
+  "node.renderPreviewBadge": "תצוגה מקדימה",
+  "node.renderPreviewBadgeHint": "תצוגה מקדימה ב-720p, פרטית",
   "node.audioSyncConnect": "חברו 2–6 הקלטות",
   "node.audioSyncReference": "ייחוס",
   "node.audioSyncNotes": "הערות: {count} — רחפו כדי לקרוא",

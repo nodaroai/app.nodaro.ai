@@ -2,7 +2,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { proShotStills } from "@/lib/scene3d/pro-media-result";
 import { readSunoIds } from "@/lib/suno-ids";
 import { getParameterPromptHint } from "@nodaro/prompts"
-import { DYNAMIC_PRODUCER_TYPES, DEFAULT_CHARACTER_FACET, PARAMETER_NODE_TYPES, getParameterValue, OBJECT_PICKER_NODE_TYPES, parseGroupHandle, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, editPlanSourceDurationSec, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, FAN_OUT_EACH_TYPES, FAN_OUT_EACH_HANDLES, defaultEdgeOutputMode, listResultsServeHandle, compactWithRows, liveRowColumn, resolveListFanOut, type FanOutCandidate, type ListFanOut, extractAllGeneratedResults, extractGeneratedJsonAsList, splitGeneratedItems, SOCIAL_POST_NODE_TYPES, resolveSourceThroughConnectedList, VARIABLES_HANDLE_ID, extractReferencedLabels, canonicalVarName, characterMentionSlug, SUNO_TRACK_SOURCE_TYPES, isFanInEdge, isFanInNodeType, videoLinkPageUrl, socialSearchPostVideo, ownsItsList } from "@nodaro/shared"
+import { DYNAMIC_PRODUCER_TYPES, DEFAULT_CHARACTER_FACET, PARAMETER_NODE_TYPES, getParameterValue, OBJECT_PICKER_NODE_TYPES, parseGroupHandle, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, editPlanSourceDurationSec, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, FAN_OUT_EACH_TYPES, FAN_OUT_EACH_HANDLES, defaultEdgeOutputMode, listResultsServeHandle, compactWithRows, liveRowColumn, resolveListFanOut, type FanOutCandidate, type ListFanOut, extractAllGeneratedResults, extractGeneratedJsonAsList, splitGeneratedItems, SOCIAL_POST_NODE_TYPES, resolveSourceThroughConnectedList, VARIABLES_HANDLE_ID, extractReferencedLabels, canonicalVarName, characterMentionSlug, SUNO_TRACK_SOURCE_TYPES, isFanInEdge, isFanInNodeType, videoLinkPageUrl, socialSearchPostVideo, ownsItsList, savedRenderBatchUrls } from "@nodaro/shared"
 import type { EntityKind, ConnectedReference } from "@nodaro/shared"
 import { VIDEO_OVERLAY_LAYER_PLAN_HANDLE, videoOverlaySlotOfHandle, editPlanTranscriptOrigin } from "@nodaro/shared"
 import { buildNodeRefMap, resolveTextRefs } from "@/lib/node-refs";
@@ -902,6 +902,11 @@ export function extractNodeOutputAsList(
     return requestedType ? buckets[requestedType] : undefined;
   }
   const data = node.data as Record<string, unknown>;
+  // A render (Apply EDL) on its media handle: its LATEST batch only — never
+  // its accumulated history, which holds earlier runs' clips too (TA6, decided
+  // 2026-10-04). None after a single run: the edge reads its one result.
+  // Mirror of the backend's savedListFor / getListFanOutForNode branch.
+  if (node.type === "apply-edl" && sourceHandle !== "json") return savedRenderBatchUrls(data);
   // A node that ran once per upstream item (Camera Switch per clip): its "each"
   // handle lists the LAST batch's per-item results — never its accumulated
   // history, which holds earlier runs' items too; its other handles never list.
@@ -1297,6 +1302,10 @@ export function resolveNodeInputs(
     // read below, which would hand the transcript handle the clips' EDLs.
     const srcListResults = Object.prototype.hasOwnProperty.call(FAN_OUT_EACH_HANDLES, src.type ?? "")
       ? extractNodeOutputAsList(src, resolvedSourceHandle ?? undefined)
+      // A render lists its latest batch only, on every handle — the backend's
+      // listFor (savedListFor) reads it the same way.
+      : src.type === "apply-edl"
+      ? savedRenderBatchUrls(srcData)
       : src.type === "group" || src.type === "collect"
       ? extractNodeOutputAsList(src, resolvedSourceHandle ?? undefined)
       : src.type === "split-media"

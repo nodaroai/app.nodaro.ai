@@ -114,3 +114,29 @@ describe("POST /v1/apply-edl — the 3-hour output cap", () => {
     )
   })
 })
+
+describe("POST /v1/apply-edl — a preview is private and carries its clip's identity (A1b)", () => {
+  it("a proxy render's job is inserted force_private; a final keeps the caller's choice", async () => {
+    const app = await makeApp()
+    await app.inject({ method: "POST", url: "/v1/apply-edl", payload: { edl: edlOf(MINUTE), quality: "proxy" } })
+    expect(m.insertJob.mock.calls[0][1]).toMatchObject({ force_private: true })
+    m.insertJob.mockClear()
+    await app.inject({ method: "POST", url: "/v1/apply-edl", payload: { edl: edlOf(MINUTE), quality: "final" } })
+    expect(m.insertJob.mock.calls[0][1].force_private).toBeUndefined()
+  })
+
+  it("forwards the plan clip's key to the worker and the stored input", async () => {
+    const app = await makeApp()
+    const res = await app.inject({ method: "POST", url: "/v1/apply-edl", payload: { edl: edlOf(MINUTE), quality: "proxy", clipKey: "1200-61200" } })
+    expect(res.statusCode).toBe(200)
+    expect(m.queueAdd).toHaveBeenCalledWith("apply-edl", expect.objectContaining({ clipKey: "1200-61200", quality: "proxy" }))
+    expect(m.insertJob.mock.calls[0][1].input_data).toMatchObject({ clipKey: "1200-61200" })
+  })
+
+  it("refuses a clip key that is not a span", async () => {
+    const app = await makeApp()
+    const res = await app.inject({ method: "POST", url: "/v1/apply-edl", payload: { edl: edlOf(MINUTE), clipKey: "seg-0" } })
+    expect(res.statusCode).toBe(400)
+    expect(m.insertJob).not.toHaveBeenCalled()
+  })
+})

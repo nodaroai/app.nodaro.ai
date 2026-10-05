@@ -1,5 +1,6 @@
 import { projectDubbingCreditOverride, stampDubbingDuration } from "../../lib/dubbing-pricing.js"
 import { applyEdlCreditOverride } from "../../lib/apply-edl-plan.js"
+import { isPreviewRender } from "../../lib/preview-render.js"
 import { assertCanvasExecutionAllowed, imageOverlayCredits, applySettingsInput, SETTINGS_INPUT_CONSUMERS } from "@nodaro/shared"
 /**
  * Node executor — dispatches node execution based on type category.
@@ -357,6 +358,9 @@ export async function executeNode(
   // re-running + re-charging it (loadCompletedFanOutIterations). Undefined for
   // single (non-fan-out) executions.
   iterationIndex?: number,
+  // The ROW that iteration reads its inputs on (`plan.rows[i]`) — a render
+  // stamps the plan clip of that row on its result. Undefined when not fanned out.
+  listRow?: number,
 ): Promise<ExecuteNodeResult> {
   assertCanvasExecutionAllowed([node])
   // Source nodes — should already have output set
@@ -498,11 +502,11 @@ export async function executeNode(
   // worker-queued compose, which re-fetches the entity and finds the new panels.
   if (node.type === "reference-sheet") {
     await ensureWorkflowSheetPanels(node, ctx, { nodes: allNodes, edges, nodeStates })
-    return executeWorkerNode(node, resolvedInputs, ctx, edges, allNodes, nodeStates, userPromptTemplate, iterationIndex, authoredData)
+    return executeWorkerNode(node, resolvedInputs, ctx, edges, allNodes, nodeStates, userPromptTemplate, iterationIndex, authoredData, listRow)
   }
 
   // Worker-queued nodes (default)
-  return executeWorkerNode(node, resolvedInputs, ctx, edges, allNodes, nodeStates, userPromptTemplate, iterationIndex, authoredData)
+  return executeWorkerNode(node, resolvedInputs, ctx, edges, allNodes, nodeStates, userPromptTemplate, iterationIndex, authoredData, listRow)
 }
 
 // ---------------------------------------------------------------------------
@@ -1558,6 +1562,7 @@ async function executeWorkerNode(
   // `executeNode`. Handed to buildPayload as `PayloadBuildContext.authoredData`
   // so its §4.6 settle pass can tell an authored prompt field from a mapped one.
   authoredData?: Record<string, unknown>,
+  listRow?: number,
 ): Promise<ExecuteNodeResult> {
   // 0. Adoption: a prior orchestrator attempt's in-flight job for THIS node
   // that must not be re-run — its provider call already went out (audit A2:
@@ -1610,7 +1615,9 @@ async function executeWorkerNode(
     status: "pending",
     input_data: { type: node.type, node_id: node.id, ...(iterationIndex !== undefined ? { iterationIndex } : {}) },
     job_type: node.type,
-    ...(isUploadDescendant && { force_private: true }),
+    // An Apply EDL preview (proxy) is private on every lane (F1). The node's
+    // data already carries this run's overrides (merged before seeding).
+    ...((isUploadDescendant || isPreviewRender(node.type, node.data.quality)) && { force_private: true }),
   }, { billingContext: ctx.billingContext })
 
   // A registered job policy refused this generation at the REQUEST gate (spec
@@ -1658,6 +1665,7 @@ async function executeWorkerNode(
         nodeStates,
         authoredData,
         viewer,
+        listRow,
       },
     )
   } catch (err) {

@@ -958,6 +958,17 @@ export function getListFanOutForNode(
       continue
     }
 
+    // 4b. A render (Apply EDL) on its media handle: THIS run's per-clip
+    //     results, else its LATEST saved batch only — never its accumulated
+    //     history, which holds earlier runs' clips too (TA6, decided
+    //     2026-10-04). A render that ran once lists nothing: the edge reads its
+    //     one result. Its `json` handle keeps the generic path below.
+    if (sourceNode.type === "apply-edl" && edge.sourceHandle !== "json") {
+      const items = listFor(sourceNode, state)
+      if (items && items.length > 1) consider(edge, selectListItems(items, selectorArg))
+      continue
+    }
+
     // 4. Any node with listResults from a prior fan-out execution — read through
     //    its row-aligned twin when it publishes one (Extract Field), so its holes
     //    keep the rows of a sibling list in place.

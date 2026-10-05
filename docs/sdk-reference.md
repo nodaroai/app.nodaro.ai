@@ -5390,7 +5390,10 @@ applyEdl(input: ApplyEdlInput): Promise<EditJobResult>
 | `output` | `"video" \| "audio"` | no | Default `"video"`. |
 | `quality` | `"proxy" \| "final"` | no | Default `"final"`. `"proxy"` is a 720p preview (lighter mono sound on an audio cut), billed per output minute at its own, lower rate — see [Apply EDL](nodes/processing-video/apply-edl.md#credit-cost). |
 | `crossfadeMs` | `number` | no | Default crossfade on boundaries without an explicit transition; `0` = hard cuts. Default `0`. |
+| `clipKey` | `string` | no | The plan clip this render cuts — `edlSpanKey(clip)` from `@nodaro/shared` (`"<first inMs>-<last outMs>"`). Returned on the job's `output_data.clipKey`. |
 | `workflowId` | `string` | no | Execution-history display. |
+
+The finished job's `output_data` carries the cut (`videoUrl` + `thumbnailUrl`, or `audioUrl`), the remapped transcript on `json` when one was sent, `quality` (`"proxy"` or `"final"`) and, when given, `clipKey`. A `proxy` render is a **preview**: always private, never in the public gallery (see [Apply EDL](nodes/processing-video/apply-edl.md#previews)).
 
 The EDL is validated at ingress — an unresolvable source, a picture-less
 segment on a video edit, or an edit longer than **180 minutes of output**

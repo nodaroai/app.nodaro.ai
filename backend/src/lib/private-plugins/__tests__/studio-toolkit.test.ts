@@ -231,6 +231,30 @@ describe("tk.workflows — the by-id door", () => {
     expect(opsNamed(lastQuery(), "eq")).toEqual([["eq", "id", WF]])
   })
 
+  it("hands a plugin the row as stored unless it asks for saved result ids resolved", async () => {
+    // Resolving costs a jobs lookup; a plugin that only judges or rewrites the
+    // row (Studio's own documents are never resolved anyway) must not pay it
+    // on every call, so the plugin door resolves only on request.
+    const nodes = [{ id: "gen", type: "generate-image", data: { generatedResults: [
+      { url: "https://m.test/a.png", jobId: "exec-gen" },
+    ] } }]
+    const row = { id: WF, user_id: CALLER, workspace_id: null, visibility: "private", settings: {}, nodes }
+    state.result = { data: row, error: null }
+    mockWorkflowAccessFromRow.mockResolvedValue("own")
+    const loaded = await tk.workflows!.loadWorkflowFor(
+      {} as never, replyStub().reply as never, CALLER, WF, "view", `${WORKFLOW_ACCESS_COLS}, nodes, settings`, "Failed",
+    )
+    expect(loaded).toEqual({ ok: true, row, access: "own" })
+    expect(state.queries.map((q) => q.table)).toEqual(["workflows"])
+
+    state.queries = []
+    await tk.workflows!.loadWorkflowFor(
+      {} as never, replyStub().reply as never, CALLER, WF, "view", `${WORKFLOW_ACCESS_COLS}, nodes, settings`, "Failed",
+      { resolveResultIds: true },
+    )
+    expect(state.queries.map((q) => q.table)).toEqual(["workflows", "jobs"])
+  })
+
   it("delegates the visibility question to the app's own authority", () => {
     expect(tk.workflows?.canChangeVisibility).toBe(canChangeWorkflowVisibility)
   })

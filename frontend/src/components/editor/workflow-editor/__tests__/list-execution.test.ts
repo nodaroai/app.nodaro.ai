@@ -533,3 +533,41 @@ describe("executeNodeForList — fan-out plan (handle + rows)", () => {
     expect(call[7]).toBeUndefined()
   })
 })
+
+describe("executeNodeForList — each iteration keeps its own result (A1b)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it("the batch keeps the job id, thumbnail and render stamps each iteration landed, in list order", async () => {
+    // The store applies every patch (the batch start empties the history).
+    mockNodes = [makeNode({ type: "apply-edl", data: { label: "Render Clip", generatedResults: [{ url: "old.mp4", jobId: "job-old", timestamp: "t" }] } })]
+    mockUpdateNodeData.mockReset().mockImplementation((id: string, patch: Record<string, unknown>) => {
+      mockNodes = mockNodes.map((n) => (n.id === id ? { ...n, data: { ...n.data, ...patch } } : n))
+    })
+    // Each iteration lands its take the way poll-job does: prepended, in
+    // COMPLETION order — row 2 before row 0; row 1 renders nothing.
+    const takes = [
+      { url: "a.mp4", jobId: "job-a", thumbnailUrl: "a.jpg", timestamp: "t", quality: "proxy", clipKey: "0-1" },
+      undefined,
+      { url: "c.mp4", jobId: "job-c", thumbnailUrl: "c.jpg", timestamp: "t", quality: "proxy", clipKey: "4-5" },
+    ]
+    mockExecuteNode.mockReset().mockImplementation(async (...args: unknown[]) => {
+      const take = takes[args[4] as number]
+      if (!take) return ""
+      const prev = (mockNodes[0].data.generatedResults as unknown[] | undefined) ?? []
+      mockNodes = [{ ...mockNodes[0], data: { ...mockNodes[0].data, generatedResults: [take, ...prev] } }]
+      return take.url
+    })
+
+    await executeNodeForList(mockNodes[0] as unknown as WorkflowNode, ["x", "y", "z"], makeCtx())
+
+    const data = mockNodes[0].data
+    expect(data.__listResults).toEqual(["a.mp4", "", "c.mp4"])
+    expect(data.generatedResults).toEqual([
+      expect.objectContaining({ url: "a.mp4", jobId: "job-a", thumbnailUrl: "a.jpg", quality: "proxy", clipKey: "0-1" }),
+      expect.objectContaining({ url: "c.mp4", jobId: "job-c", thumbnailUrl: "c.jpg", quality: "proxy", clipKey: "4-5" }),
+      expect.objectContaining({ url: "old.mp4", jobId: "job-old" }),
+    ])
+  })
+})

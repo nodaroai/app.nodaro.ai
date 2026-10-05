@@ -6259,6 +6259,8 @@ export const ptBR: ChromeDict = {
   "node.contentIdeasIdeas": "Ideias",
   "node.editPlanConnectTranscript": "Conecte uma transcrição para planejar a edição",
   "node.applyEdlConnectVideo": "Conecte uma EDL para renderizar o vídeo",
+  "node.renderPreviewBadge": "Prévia",
+  "node.renderPreviewBadgeHint": "Prévia em 720p, privada",
   "node.audioSyncConnect": "Conecte de 2 a 6 gravações",
   "node.audioSyncReference": "referência",
   "node.audioSyncNotes": "Notas: {count} — passe o mouse para ler",

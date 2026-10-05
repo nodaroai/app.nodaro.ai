@@ -201,6 +201,23 @@ describe("browse_uploads tool", () => {
     expect(sc?.loadMoreTool).toBe("browse_uploads")
   })
 
+  it("labels a render made at proxy quality as a Preview (A1b), from the asset's own record", async () => {
+    ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
+      makeChainable([
+        { id: "a-prev", type: "video", filename: "cut.mp4", mime_type: "video/mp4", size_bytes: 1, r2_url: "https://cdn/cut.mp4", metadata: { thumbnail_url: "https://cdn/t.jpg", quality: "proxy" }, created_at: "2026-10-05T10:00:00Z" },
+        { id: "a-final", type: "video", filename: "final.mp4", mime_type: "video/mp4", size_bytes: 1, r2_url: "https://cdn/final.mp4", metadata: { quality: "final" }, created_at: "2026-10-05T09:00:00Z" },
+      ]),
+    )
+    const server = buildServer()
+    registerGallery({ server, session: readSession(), fastify: Fastify() })
+    const result = await callTool(server, "browse_uploads", { limit: 10 })
+    const items = (result as { structuredContent?: { items?: Array<Record<string, unknown>> } }).structuredContent?.items ?? []
+    expect(items[0]?.preview).toBe(true)
+    expect(items[1]?.preview).toBeUndefined()
+    expect(result.content[0]?.text).toContain("- video (preview) a-prev")
+    expect(result.content[0]?.text).toContain("- video a-final")
+  })
+
   it("hands a loadMoreTool hint to the gallery widget", async () => {
     ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
       makeChainable([]),

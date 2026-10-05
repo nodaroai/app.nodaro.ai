@@ -72,6 +72,13 @@ export interface GeneratedResult {
   // (grok-2-segment / grok-2-edit / grok-upscale) key off the ACTIVE result's
   // task id so region edits target the version the user is looking at.
   readonly kieTaskId?: string
+  // A render's (Apply EDL) identity, stamped by its worker and carried by every
+  // lane that lands the take (lib/run-result-identity.ts): the quality it was
+  // made at ("proxy" is a Preview — labelled so, and private) and the plan clip
+  // it cut (`edlSpanKey`). The node's own `quality` is its SETTING; this is
+  // what the take IS.
+  readonly quality?: import("@nodaro/shared").RenderQuality
+  readonly clipKey?: string
 }
 
 /**

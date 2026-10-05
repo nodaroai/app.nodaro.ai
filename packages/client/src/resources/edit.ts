@@ -139,6 +139,13 @@ export interface ApplyEdlInput {
    * cuts. Per-boundary clamped to the ffmpeg-xfade limit server-side. Default 0.
    */
   crossfadeMs?: number
+  /**
+   * The plan clip this render cuts — `edlSpanKey(clip)` from `@nodaro/shared`
+   * (`"<first inMs>-<last outMs>"`). The job's result carries it back as
+   * `output_data.clipKey`, so renders of a clip set can be matched to their
+   * clips. Omit for a render of no plan clip.
+   */
+  clipKey?: string
   /** Optionally associate this run with a workflow execution (display only). */
   workflowId?: string
 }
@@ -316,6 +323,7 @@ export class EditResource {
         ...(input.output !== undefined ? { output: input.output } : {}),
         ...(input.quality !== undefined ? { quality: input.quality } : {}),
         ...(input.crossfadeMs !== undefined ? { crossfadeMs: input.crossfadeMs } : {}),
+        ...(input.clipKey !== undefined ? { clipKey: input.clipKey } : {}),
         ...(input.workflowId !== undefined ? { workflowId: input.workflowId } : {}),
       },
     })

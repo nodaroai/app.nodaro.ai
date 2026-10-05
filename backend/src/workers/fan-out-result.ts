@@ -1,3 +1,4 @@
+import type { RunResultRowStamp } from "@nodaro/shared"
 import type { NodeOutput } from "../services/workflow-engine/types.js"
 import type { ExecuteNodeResult } from "../services/workflow-engine/node-executor.js"
 import { DrainAbortError } from "../lib/worker-drain.js"
@@ -28,6 +29,17 @@ export interface FanOutAssembly {
 function isCancellationReason(reason: unknown): boolean {
   const msg = reason instanceof Error ? reason.message : String(reason)
   return msg === "Cancelled" || msg === "Execution cancelled"
+}
+
+/** One iteration's identity: its job, its thumbnail, and what a render stamped. */
+function rowStampOf(result: ExecuteNodeResult): RunResultRowStamp {
+  const o = result.output
+  return {
+    ...(result.jobId ? { jobId: result.jobId } : {}),
+    ...(typeof o.thumbnailUrl === "string" && o.thumbnailUrl ? { thumbnailUrl: o.thumbnailUrl } : {}),
+    ...(o.quality ? { quality: o.quality } : {}),
+    ...(o.clipKey ? { clipKey: o.clipKey } : {}),
+  }
 }
 
 /**
@@ -66,6 +78,11 @@ export function assembleFanOutResult(
   // composition) — row-aligned with allResults, "" where the row has none.
   const allCompositionKeys: string[] = new Array(itemCount).fill("")
   let anyCompositionKey = false
+  // Each row's identity (job, thumbnail, a render's quality + clip) —
+  // row-aligned with allResults, `{}` where the row produced nothing. The
+  // editor stamps each result row from it; `allJobIds` below is compacted in
+  // settle order and cannot be paired with the rows by position.
+  const allStamps: RunResultRowStamp[] = Array.from({ length: itemCount }, () => ({}))
   const allJobIds: string[] = []
   let firstOutput: NodeOutput | undefined            // iteration 0's output (preferred primary)
   let firstSuccessfulOutput: NodeOutput | undefined  // first fulfilled output (fallback primary)
@@ -84,6 +101,7 @@ export function assembleFanOutResult(
         allCompositionKeys[index] = key
         anyCompositionKey = true
       }
+      allStamps[index] = rowStampOf(result)
       succeededCount++
       if (index === 0) firstOutput = result.output
       if (!firstSuccessfulOutput) firstSuccessfulOutput = result.output
@@ -124,6 +142,7 @@ export function assembleFanOutResult(
     listResults: allResults,
     // The primary's `resultCompositionKey` is iteration 0's; the rows carry their own.
     ...(anyCompositionKey ? { listResultCompositionKeys: allCompositionKeys } : {}),
+    listResultStamps: allStamps,
   }
 
   return {

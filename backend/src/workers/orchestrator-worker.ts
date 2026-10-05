@@ -73,6 +73,7 @@ import { settledWithLimit } from "../lib/settled-with-limit.js"
 import { assembleFanOutResult } from "./fan-out-result.js"
 import { resolveFanOutIterationInputs } from "./fan-out-inputs.js"
 import { hydrateEntityNodes } from "../lib/entity-hydration.js"
+import { withResolvedResultIds } from "../lib/canvas-result-ids.js"
 
 /** Env-var ceiling — tier limits are capped by this. */
 const MAX_CONCURRENT_NODES_CEILING = config.MAX_CONCURRENT_NODES_PER_EXECUTION
@@ -554,7 +555,9 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
         await failExecution(executionId, `Workflow ${workflowId} not found`)
         return
       }
-      workflowData = workflow
+      // Saved result ids resolved by the owner's jobs (canvas-result-ids.ts):
+      // a render the run skips hands its saved take downstream, label included.
+      workflowData = await withResolvedResultIds(workflow)
       ctx.workflowOwnerId = (workflow.user_id as string | null) ?? undefined
     }
 
@@ -1553,6 +1556,10 @@ async function executeNodeForList(
         nodeStates,
         ctx,
         i,
+        // The list row only — never the iteration number: a Repeat xN copy of
+        // a run nothing list-drives has no row (its inputs above still read
+        // `rows[i] ?? i`), and the render's clip key must not index the plan by it.
+        plan.rows[i],
       )
     }
 

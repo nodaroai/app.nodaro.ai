@@ -5,7 +5,7 @@ import { dirname, join } from "node:path"
 import { tmpdir } from "node:os"
 import youtubedl from "youtube-dl-exec"
 import { ytProxyOption } from "../providers/video/yt-proxy.js"
-import { variantJobId } from "@nodaro/shared"
+import { variantJobId, renderResultStamp } from "@nodaro/shared"
 import { config, hasCredits } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
 import { getAppSettings } from "../lib/app-settings.js"
@@ -777,6 +777,22 @@ export async function completeFfmpegAudioJob(
 }
 
 /**
+ * The `metadata` of a generated asset row: its thumbnail, and — for a render —
+ * the quality it was made at, so My Library and the asset lists label a
+ * Preview (`quality: "proxy"`) from the asset itself (A1b, F1).
+ */
+export function generatedAssetMetadata(output: Record<string, unknown>, jobType: unknown): Record<string, unknown> {
+  const thumbnailUrl = (output.thumbnail_url ?? output.thumbnailUrl ?? null) as string | null
+  // Only a render's quality is a render quality (another job's output may use
+  // the word for something else).
+  const { quality } = jobType === "apply-edl" ? renderResultStamp(output) : {}
+  return {
+    ...(thumbnailUrl ? { thumbnail_url: thumbnailUrl } : {}),
+    ...(quality ? { quality } : {}),
+  }
+}
+
+/**
  * Create asset records in the `assets` table for a completed job's media outputs.
  * This makes generated media appear in the /library page.
  * Wrapped in try-catch — never fails the job if asset creation fails.
@@ -792,7 +808,7 @@ export async function createAssetFromJob(
       .from("jobs")
       // `relay_job_id` (migration 383) rides along so the asset can carry the
       // DURABLE half of the relay delete rule — see the insert below.
-      .select("output_data, status, source, source_detail, relay_job_id")
+      .select("output_data, status, source, source_detail, relay_job_id, job_type")
       .eq("id", jobId)
       .single()
 
@@ -806,8 +822,6 @@ export async function createAssetFromJob(
       { key: "videoUrl", type: "video", mime: "video/mp4" },
       { key: "audioUrl", type: "audio", mime: "audio/mpeg" },
     ]
-
-    const thumbnailUrl = (output.thumbnail_url ?? output.thumbnailUrl ?? null) as string | null
 
     for (const { key, type, mime } of mediaFields) {
       const url = output[key]
@@ -871,7 +885,7 @@ export async function createAssetFromJob(
         // Immutable once written — a job's calling surface never changes.
         source: job.source ?? null,
         source_detail: job.source_detail ?? null,
-        metadata: thumbnailUrl ? { thumbnail_url: thumbnailUrl } : {},
+        metadata: generatedAssetMetadata(output, job.job_type),
       })
     }
   } catch (err) {

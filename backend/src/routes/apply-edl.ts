@@ -11,6 +11,7 @@ import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { applyEdlCreditId } from "@nodaro/shared"
 import { buildEffectiveEdl, validateEffectiveEdl, applyEdlReserveMinutes } from "../lib/apply-edl-plan.js"
+import { isPreviewRender } from "../lib/preview-render.js"
 
 /** An SDK/MCP caller may send the EDL as a JSON string on the `edl` field;
  *  parse it before `buildEffectiveEdl` so this ingress behaves identically to
@@ -76,6 +77,11 @@ const applyEdlBody = z.object({
   /** Default crossfade (ms) on boundaries with no explicit transition;
    *  per-boundary clamped to the ffmpeg-xfade limit. 0 = hard cuts. */
   crossfadeMs: z.number().min(0).max(5000).optional().default(0),
+  /** The plan clip this render cuts (`edlSpanKey` of the Edit Plan's clip,
+   *  `${min inMs}-${max outMs}`), stamped on the result as `clipKey` so a
+   *  render's results can be matched to the clips they came from. The editor
+   *  sends it for a clip-pack render; omit it for anything else. */
+  clipKey: z.string().regex(/^\d{1,12}-\d{1,12}$/).optional(),
   userId: z.string().uuid().optional(),
 })
 
@@ -129,7 +135,7 @@ export async function applyEdlRoutes(app: FastifyInstance) {
       })
     }
 
-    const { edl, sources, transcript, output, quality, crossfadeMs } = parsed.data
+    const { edl, sources, transcript, output, quality, crossfadeMs, clipKey } = parsed.data
     const userId = req.userId
     if (!userId) {
       return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
@@ -149,11 +155,12 @@ export async function applyEdlRoutes(app: FastifyInstance) {
     const { data: job, error } = await insertJob(req, {
       workflow_id: extractWorkflowId(req.body),
       node_id: extractNodeId(req.body),
-      force_private: extractForcePrivate(req.body) || undefined,
+      // A preview (proxy) is private on every lane (F1).
+      force_private: extractForcePrivate(req.body) || isPreviewRender("apply-edl", quality) || undefined,
       user_id: userId,
       status: "pending",
       input_data: buildJobInputData(
-        { edl: effectiveEdl, transcript, output, quality, crossfadeMs },
+        { edl: effectiveEdl, transcript, output, quality, crossfadeMs, ...(clipKey ? { clipKey } : {}) },
         "apply-edl",
       ),
       ...(mcpClient ? { mcp_client: mcpClient } : {}),
@@ -173,6 +180,7 @@ export async function applyEdlRoutes(app: FastifyInstance) {
       transcript,
       output,
       quality,
+      ...(clipKey ? { clipKey } : {}),
       usageLogId,
     })
 

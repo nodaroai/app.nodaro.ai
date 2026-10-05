@@ -7,6 +7,7 @@ import { shareMedia } from "./share-utils"
 import { ELEMENT_SIZES } from "@/lib/presentation-display"
 import { SwitchXAttribution } from "@/components/switchx-attribution"
 import { useT } from "@/lib/i18n"
+import { PreviewBadge } from "@/components/render/preview-badge"
 
 interface VideoOutputCardProps {
   label: string
@@ -18,9 +19,11 @@ interface VideoOutputCardProps {
   actions?: OutputCardActions
   /** Producing node type — drives required brand attribution (e.g. switchx). */
   nodeType?: string
+  /** The take is a Preview (a render at proxy quality) — labelled so (F1). */
+  preview?: boolean
 }
 
-function VideoOutputCardImpl({ label, status, url, nodeId, onOpenMedia, elementSize, actions, nodeType }: VideoOutputCardProps) {
+function VideoOutputCardImpl({ label, status, url, nodeId, onOpenMedia, elementSize, actions, nodeType, preview }: VideoOutputCardProps) {
   const t = useT()
   const maxHClass = ELEMENT_SIZES.videoOutput[elementSize ?? "md"]
   const bound = resolveCardActions(actions, nodeId, "video", url)
@@ -52,7 +55,7 @@ function VideoOutputCardImpl({ label, status, url, nodeId, onOpenMedia, elementS
   return (
     <GlassCard>
       <div className="flex items-center justify-between mb-3">
-        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{label}</span>
+        <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wider">{label}{preview && <PreviewBadge />}</span>
         <StatusBadge status={status} />
       </div>
 

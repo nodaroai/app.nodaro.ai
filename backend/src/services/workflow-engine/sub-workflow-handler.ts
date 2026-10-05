@@ -35,6 +35,7 @@ import type {
   ResolvedInputs,
 } from "./types.js"
 import { MAX_SUB_WORKFLOW_DEPTH } from "./types.js"
+import { resolveCanvasResultIds } from "../../lib/canvas-result-ids.js"
 
 /**
  * Result of executing a sub-workflow node.
@@ -129,7 +130,10 @@ export async function loadSubWorkflowGraph(
   // Migrate legacy node types before processing, via the shared helper (single
   // source of truth). Re-threads parentId so group children flow into the
   // sub-workflow execution graph — see prepareSubWorkflowNodes.
-  let subNodes: SimpleNode[] = prepareSubWorkflowNodes((workflow.nodes as SimpleNode[]) ?? [])
+  // Saved result ids resolved by the owner's jobs (canvas-result-ids.ts), as
+  // the parent graph's are: a child render the run skips hands its saved take on.
+  const savedNodes = await resolveCanvasResultIds(workflow.nodes, ownerId)
+  let subNodes: SimpleNode[] = prepareSubWorkflowNodes((savedNodes as SimpleNode[]) ?? [])
   let subEdges: SimpleEdge[] = (workflow.edges as SimpleEdge[]) ?? []
 
   // Filter to reachable nodes for the selected route (if route filtering is configured)

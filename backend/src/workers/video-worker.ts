@@ -21,6 +21,7 @@ import {
   fallbackLabelOf,
 } from "../lib/safety-block.js"
 import { resolveIsPublicOutput, mcpClientForcesPrivate } from "./output-visibility.js"
+import { isPreviewRender } from "../lib/preview-render.js"
 import { isPromptBlocked } from "../config/content-filter.js"
 import { refundJobCredits, createAssetFromJob, isFinalJobAttempt, type HandlerFn, type JobContext } from "./shared.js"
 import { imageAIHandlers } from "./handlers/image-ai.js"
@@ -187,6 +188,9 @@ export function createVideoWorker() {
         // was always false and leaked direct-MCP output to the public gallery.
         mcpClient: mcpClientForcesPrivate(jobRecord?.mcp_client),
         workflowExecutionId: null,
+        // An Apply EDL preview (proxy) is private on every lane (F1) — also
+        // inserted force_private by the route and the workflow run.
+        previewRender: isPreviewRender(job.name, jobData.quality),
       })
       // Workflow / app run: the parent workflow_execution carries `mcp_client`;
       // per-node child jobs don't (the orchestrator's internal per-node calls

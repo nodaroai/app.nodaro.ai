@@ -1595,10 +1595,15 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
     workflows: {
       writeCompatible,
       accessCols: WORKFLOW_ACCESS_COLS,
-      loadWorkflowFor,
+      // As stored unless the plugin asks (types.ts `loadWorkflowFor`): the
+      // core loaders resolve saved result ids by default, which a plugin call
+      // that only judges the row would pay for and throw away.
+      loadWorkflowFor: (req, reply, userId, workflowId, min, cols, failureMessage, opts) =>
+        loadWorkflowFor(req, reply, userId, workflowId, min, cols, failureMessage, { resolveResultIds: false, ...opts }),
       canChangeVisibility: canChangeWorkflowVisibility,
       supportsEditableCopySharing: true,
-      loadStudioEditableCopySource,
+      loadStudioEditableCopySource: (req, reply, userId, workflowId, min, cols, failureMessage, opts) =>
+        loadStudioEditableCopySource(req, reply, userId, workflowId, min, cols, failureMessage, { resolveResultIds: false, ...opts }),
       changesStudioPublishFlag,
     },
     entities: { listOwned: listOwnedEntities },

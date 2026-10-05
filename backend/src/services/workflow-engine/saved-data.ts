@@ -24,7 +24,7 @@
  * and listed. A count cannot tell a gated site swapped for an ungated one in
  * the same file; the reasons in that test are the record of what was checked.
  */
-import { extractAllGeneratedResults, extractGeneratedJsonAsList, FAN_OUT_EACH_HANDLES, ownsItsList } from "@nodaro/shared"
+import { extractAllGeneratedResults, extractGeneratedJsonAsList, FAN_OUT_EACH_HANDLES, ownsItsList, savedRenderBatchUrls } from "@nodaro/shared"
 import type { NodeExecutionState, NodeOutput, SimpleNode } from "./types.js"
 
 /**
@@ -74,6 +74,9 @@ export function savedListFor(node: SimpleNode, state: NodeExecutionState | undef
     const batch = data.__listResults
     return Array.isArray(batch) && batch.length > 0 ? (batch as string[]) : undefined
   }
+  // A render (Apply EDL) lists its LATEST batch too — the one reader both
+  // engines share (TA6). None after a single run: the edge reads its one result.
+  if (node.type === "apply-edl") return savedRenderBatchUrls(data)
   // Extract Field / JSON Process: the list their run produced (Extract Field's
   // JSON value), or none — never a history in generatedResults, which no run
   // of theirs writes (an earlier build's server runs left one).

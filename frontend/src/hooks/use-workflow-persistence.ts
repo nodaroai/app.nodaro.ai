@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { createClient } from "@/lib/supabase"
 import { useWorkflowStore, type PresentationSettings } from "@/hooks/use-workflow-store"
 import { getBatchJobStatus, listWorkflowExecutions, type BatchJobStatus } from "@/lib/api"
-import { readWorkflowContent } from "@/lib/workflow-content"
+import { readWorkflowContent, savedBaselineNodes } from "@/lib/workflow-content"
 import { withoutRunsInFlight } from "@/lib/run-in-flight-mark"
 import { applyWorkflowAccess, requestAccessRecheck } from "@/hooks/workflow-access-mode"
 import { classifyZeroRowSave, isSaveRefused } from "@/hooks/workflow-save-refusal"
@@ -14,6 +14,7 @@ import { prefetchModelCredits } from "@/ee/hooks/queries/use-credits-queries"
 import { toast } from "sonner"
 import type { WorkflowNode, WorkflowEdge, CharacterDefinition, GeneratedResult, SceneNodeData, JobErrorHint } from "@/types/nodes"
 import { filterCloneNodes, stripTransientRuntimeData } from "@nodaro/shared"
+import type { RenderQuality, RunResultRowStamp } from "@nodaro/shared"
 import { buildWorkflowDelta, applyDeltaToGraph, findContestedNodes } from "@/lib/workflow-delta"
 import { orderNodesParentFirst } from "@/components/editor/workflow-editor/group-coords"
 import { isStudioWorkflowSettings } from "@/lib/studio"
@@ -27,6 +28,7 @@ import { namedRunOutputFields, reduceRunOutputFields } from "@/lib/named-run-out
 import { videoOverlayListRowFields, videoOverlayRunOutputFields } from "@/lib/video-overlay-run-output"
 import { perHandleRunFields } from "@/lib/per-handle-batch"
 import { applyEdlRunCutFields, applyEdlTakeTranscriptField } from "@/lib/apply-edl-cut"
+import { runResultIdentity, runResultRowIdentity } from "@/lib/run-result-identity"
 import { holdsJsonRunResult, isJsonRunResultType, jobRunOutput, jsonRunResultPatch } from "@/lib/json-run-result"
 import { isSeededState } from "@/lib/seeded-node-state"
 import { reviewStatesToLoad, type ListedRun } from "@/components/editor/workflow-editor/newer-run-review"
@@ -117,6 +119,12 @@ interface NodeExecutionState {
     resultCompositionKey?: string
     /** Video Overlay list fan-out: each row's own freshness key, row-aligned with listResults. */
     listResultCompositionKeys?: string[]
+    /** Each fan-out row's own job, thumbnail and render stamps, row-aligned with listResults. Mirrors backend NodeOutput. */
+    listResultStamps?: RunResultRowStamp[]
+    thumbnailUrl?: string
+    /** Apply EDL: the quality the render was made at, and the plan clip it cut. */
+    quality?: RenderQuality
+    clipKey?: string
   }
   error?: string
   /** Stable billing-refusal code — mirrors backend NodeExecutionState. */
@@ -288,11 +296,13 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<{ nodes: Wo
 
       // Apply EDL: the take keeps the Transcript its render was cut with.
       const takeTranscript = applyEdlTakeTranscriptField(node.type, job.output_data, outputUrl)
+      // …and its thumbnail and render stamps (lib/run-result-identity.ts).
+      const takeIdentity = runResultIdentity(node.type, job.output_data)
 
       // Update the result with the URL if it was missing
       const updatedResults = results.map((r, i) => {
         if (i === 0 && r.jobId === job.id && !r.url && outputUrl) {
-          return { ...r, url: outputUrl, ...(overlayRun ?? {}), ...takeTranscript }
+          return { ...r, url: outputUrl, ...takeIdentity, ...(overlayRun ?? {}), ...takeTranscript }
         }
         return r
       })
@@ -300,7 +310,7 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<{ nodes: Wo
       // If the job was tracked by currentJobId but has no result entry, prepend one
       const hasResultForJob = updatedResults.some(r => r.jobId === job.id)
       if (!hasResultForJob && outputUrl) {
-        updatedResults.unshift({ url: outputUrl, timestamp: new Date().toISOString(), jobId: job.id, ...(overlayRun ?? {}), ...takeTranscript })
+        updatedResults.unshift({ url: outputUrl, timestamp: new Date().toISOString(), jobId: job.id, ...takeIdentity, ...(overlayRun ?? {}), ...takeTranscript })
       }
 
       const newData: Record<string, unknown> = {
@@ -529,14 +539,19 @@ export function applyBackendExecutionState(
           const rowFields = videoOverlayListRowFields(nodeType, state.output)
           const newResults = listResultUrls
             .filter((url: string) => !existingUrls.has(url))
-            .map((url: string, i: number) => ({
-              url,
-              timestamp: new Date().toISOString(),
-              jobId: `exec-${node.id}-${i}`,
-              ...rowFields(url),
-              // Apply EDL: only the render the output describes keeps its Transcript.
-              ...applyEdlTakeTranscriptField(nodeType, state.output, url),
-            }))
+            .map((url: string, i: number) => {
+              // The row's OWN job, thumbnail and stamps (lib/run-result-identity.ts).
+              const { jobId: rowJobId, ...rowIdentity } = runResultRowIdentity(nodeType, state.output, url)
+              return {
+                url,
+                timestamp: new Date().toISOString(),
+                jobId: rowJobId ?? `exec-${node.id}-${i}`,
+                ...rowIdentity,
+                ...rowFields(url),
+                // Apply EDL: only the render the output describes keeps its Transcript.
+                ...applyEdlTakeTranscriptField(nodeType, state.output, url),
+              }
+            })
           if (newResults.length > 0) {
             data.generatedResults = [...newResults, ...results]
             data.activeResultIndex = 0
@@ -552,7 +567,8 @@ export function applyBackendExecutionState(
           if (outputUrl && !existingUrls.has(outputUrl)) {
             data.generatedResults = [
               {
-                url: outputUrl, timestamp: new Date().toISOString(), jobId: `exec-${node.id}`, ...(overlayRun ?? {}),
+                url: outputUrl, timestamp: new Date().toISOString(), jobId: state.jobId ?? `exec-${node.id}`,
+                ...runResultIdentity(nodeType, state.output), ...(overlayRun ?? {}),
                 // Apply EDL: the take keeps the Transcript its render was cut with.
                 ...applyEdlTakeTranscriptField(nodeType, state.output, outputUrl),
               },
@@ -714,14 +730,19 @@ export function applyCompletedExecutionResults(
       const rowFields = videoOverlayListRowFields(nodeType, state.output)
       const newResults = listResultUrls
         .filter((url: string) => !existingUrls.has(url))
-        .map((url: string, i: number) => ({
-          url,
-          timestamp: new Date().toISOString(),
-          jobId: `exec-${node.id}-${i}`,
-          ...rowFields(url),
-          // Apply EDL: only the render the output describes keeps its Transcript.
-          ...applyEdlTakeTranscriptField(nodeType, state.output, url),
-        }))
+        .map((url: string, i: number) => {
+          // The row's OWN job, thumbnail and stamps (lib/run-result-identity.ts).
+          const { jobId: rowJobId, ...rowIdentity } = runResultRowIdentity(nodeType, state.output, url)
+          return {
+            url,
+            timestamp: new Date().toISOString(),
+            jobId: rowJobId ?? `exec-${node.id}-${i}`,
+            ...rowIdentity,
+            ...rowFields(url),
+            // Apply EDL: only the render the output describes keeps its Transcript.
+            ...applyEdlTakeTranscriptField(nodeType, state.output, url),
+          }
+        })
       if (newResults.length > 0) {
         newData.generatedResults = [...newResults, ...existingResults]
         newData.activeResultIndex = 0
@@ -735,7 +756,8 @@ export function applyCompletedExecutionResults(
     } else if (outputUrl) {
       newData.generatedResults = [
         {
-          url: outputUrl, timestamp: new Date().toISOString(), jobId: `exec-${node.id}`, ...(overlayRun ?? {}),
+          url: outputUrl, timestamp: new Date().toISOString(), jobId: state.jobId ?? `exec-${node.id}`,
+                ...runResultIdentity(nodeType, state.output), ...(overlayRun ?? {}),
           // Apply EDL: the take keeps the Transcript its render was cut with.
           ...applyEdlTakeTranscriptField(nodeType, state.output, outputUrl),
         },
@@ -1565,6 +1587,16 @@ export function useWorkflowPersistence(projectId?: string) {
           presSettings,
           savedViewport,
         )
+        // The save baseline is what is STORED: results the server resolved on
+        // the way out (lib/workflow-content.ts) differ from it, so the next
+        // save — a delta save writes only what differs — persists them once.
+        {
+          const baseline = useWorkflowStore.getState().lastSavedSnapshot
+          const nodesAsStored = baseline ? savedBaselineNodes(baseline.nodes, content) : null
+          if (baseline && nodesAsStored && nodesAsStored !== baseline.nodes) {
+            useWorkflowStore.setState({ lastSavedSnapshot: { ...baseline, nodes: nodesAsStored as WorkflowNode[] } })
+          }
+        }
         setLoadedUpdatedAt(data.updated_at as string)
         setLoadedVersion(typeof (data as { version?: unknown }).version === "number" ? (data as { version: number }).version : null)
 

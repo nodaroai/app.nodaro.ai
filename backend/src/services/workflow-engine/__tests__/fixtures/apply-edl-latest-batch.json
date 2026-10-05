@@ -1,0 +1,116 @@
+{
+  "description": "An Apply EDL node (Clip Pack's Render Clip) that rendered a FINAL batch of three clips and then a PREVIEW batch of the same three, with the person's selected result toggled back to a final take. Both engines read it through the shared savedRenderOutput / savedRenderBatch (A1b, TA6/TA8): a scalar edge hands on the SELECTED result, an each edge iterates the LATEST batch only (never the history of six), and every item keeps the stamps its render wrote. The backend test (apply-edl-latest-batch.test.ts, beside this folder) runs the orchestrator's saved-data path; the frontend test (frontend/src/components/editor/workflow-editor/__tests__/apply-edl-latest-batch.test.ts) runs the canvas readers. `legacyPick` is a pick saved before #1804: the picked take on generatedImageUrl, the newest on generatedVideoUrl, the index on the pick \u2014 both engines now hand on the pick.",
+  "render": {
+    "id": "render-clip",
+    "type": "apply-edl",
+    "data": {
+      "label": "Render Clip",
+      "output": "video",
+      "quality": "proxy",
+      "generatedResults": [
+        {
+          "url": "https://media.test/preview-0.mp4",
+          "thumbnailUrl": "https://media.test/preview-0.jpg",
+          "timestamp": "2026-10-05T10:00:00.000Z",
+          "jobId": "00000000-0000-4000-8000-000000000100",
+          "quality": "proxy",
+          "clipKey": "0-60000"
+        },
+        {
+          "url": "https://media.test/preview-1.mp4",
+          "thumbnailUrl": "https://media.test/preview-1.jpg",
+          "timestamp": "2026-10-05T10:00:00.000Z",
+          "jobId": "00000000-0000-4000-8000-000000000101",
+          "quality": "proxy",
+          "clipKey": "120000-180000"
+        },
+        {
+          "url": "https://media.test/preview-2.mp4",
+          "thumbnailUrl": "https://media.test/preview-2.jpg",
+          "timestamp": "2026-10-05T10:00:00.000Z",
+          "jobId": "00000000-0000-4000-8000-000000000102",
+          "quality": "proxy",
+          "clipKey": "240000-300000"
+        },
+        {
+          "url": "https://media.test/final-0.mp4",
+          "thumbnailUrl": "https://media.test/final-0.jpg",
+          "timestamp": "2026-10-05T10:00:00.000Z",
+          "jobId": "00000000-0000-4000-8000-000000000000",
+          "quality": "final",
+          "clipKey": "0-60000"
+        },
+        {
+          "url": "https://media.test/final-1.mp4",
+          "thumbnailUrl": "https://media.test/final-1.jpg",
+          "timestamp": "2026-10-05T10:00:00.000Z",
+          "jobId": "00000000-0000-4000-8000-000000000001",
+          "quality": "final",
+          "clipKey": "120000-180000"
+        },
+        {
+          "url": "https://media.test/final-2.mp4",
+          "thumbnailUrl": "https://media.test/final-2.jpg",
+          "timestamp": "2026-10-05T10:00:00.000Z",
+          "jobId": "00000000-0000-4000-8000-000000000002",
+          "quality": "final",
+          "clipKey": "240000-300000"
+        }
+      ],
+      "activeResultIndex": 4,
+      "generatedVideoUrl": "https://media.test/preview-0.mp4",
+      "__listResults": [
+        "https://media.test/preview-0.mp4",
+        "https://media.test/preview-1.mp4",
+        "https://media.test/preview-2.mp4"
+      ]
+    }
+  },
+  "expected": {
+    "scalar": {
+      "url": "https://media.test/final-1.mp4",
+      "quality": "final",
+      "clipKey": "120000-180000"
+    },
+    "batch": [
+      "https://media.test/preview-0.mp4",
+      "https://media.test/preview-1.mp4",
+      "https://media.test/preview-2.mp4"
+    ],
+    "batchQualities": [
+      "proxy",
+      "proxy",
+      "proxy"
+    ],
+    "batchClipKeys": [
+      "0-60000",
+      "120000-180000",
+      "240000-300000"
+    ]
+  },
+  "legacyPick": {
+    "render": {
+      "id": "legacy",
+      "type": "apply-edl",
+      "data": {
+        "label": "Apply Cut",
+        "generatedResults": [
+          {
+            "url": "https://media.test/newest.mp4",
+            "timestamp": "2026-10-03T10:00:00.000Z",
+            "jobId": "00000000-0000-4000-8000-000000000201"
+          },
+          {
+            "url": "https://media.test/picked.mp4",
+            "timestamp": "2026-10-02T10:00:00.000Z",
+            "jobId": "00000000-0000-4000-8000-000000000202"
+          }
+        ],
+        "activeResultIndex": 1,
+        "generatedVideoUrl": "https://media.test/newest.mp4",
+        "generatedImageUrl": "https://media.test/picked.mp4"
+      }
+    },
+    "expected": "https://media.test/picked.mp4"
+  }
+}

@@ -43,6 +43,7 @@ import type { useRunSlots } from "./use-run-slots"
 
 import { InputCard } from "@/components/presentation/input-card"
 import { OutputCard, type FieldBadgeEntry } from "@/components/presentation/output-card"
+import { anyOutputIsPreview, outputIsPreview } from "@/components/presentation/render-preview"
 import { ConfigFieldRenderer } from "@/components/presentation/config-field-renderer"
 import { RichtextBlock } from "@/components/presentation/richtext-block"
 import { GroupCard } from "@/components/presentation/group-card"
@@ -756,6 +757,10 @@ export function MobileAppShell({
     const fieldBadges = fieldBadgesByNode.get(node.id)
     const displayMode = settings.outputDisplayModes?.[node.id] ?? "individual"
     const { listResults, iterationTotal, iterationCompleted } = getListResults(node)
+    // A render's take says it is a Preview (F1): from the run on show, else the
+    // node's saved take (render-preview.ts).
+    const nodeData = node.data as Record<string, unknown>
+    const runOutput = presNodeStates[node.id]?.output as Record<string, unknown> | undefined
 
     // Gallery mode: single card with all results
     if (listResults && listResults.length > 1 && displayMode === "gallery") {
@@ -776,6 +781,7 @@ export function MobileAppShell({
           iterationCompleted={iterationCompleted}
           elementSize={elementSize}
           fieldBadges={fieldBadges}
+          preview={anyOutputIsPreview(node.type, nodeData, runOutput, listResults)}
         />
       )
     }
@@ -796,6 +802,7 @@ export function MobileAppShell({
               onOpenMedia={handleOpenMedia}
               elementSize={elementSize}
               fieldBadges={i === 0 ? fieldBadges : undefined}
+              preview={outputIsPreview(node.type, nodeData, runOutput, resultUrl)}
             />
           ))}
         </div>
@@ -815,9 +822,10 @@ export function MobileAppShell({
         progress={progress}
         elementSize={elementSize}
         fieldBadges={fieldBadges}
+        preview={outputIsPreview(node.type, nodeData, runOutput)}
       />
     )
-  }, [getNodeStatus, getFullscreenResult, getCardTitle, handleOpenMedia, combinedProgress, settings.cardMeta, fieldBadgesByNode, settings.outputDisplayModes, getListResults, t])
+  }, [getNodeStatus, getFullscreenResult, getCardTitle, handleOpenMedia, combinedProgress, settings.cardMeta, fieldBadgesByNode, settings.outputDisplayModes, getListResults, presNodeStates, t])
 
   // ---- Item-based output renderer (mirrors PresentationView renderOutputItem) ----
   const renderOutputItem = useCallback(

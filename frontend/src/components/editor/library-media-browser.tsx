@@ -15,6 +15,7 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import { useT, tx, type MessageKey } from "@/lib/i18n"
+import { PreviewBadge, isPreviewQuality } from "@/components/render/preview-badge"
 import { useQueryClient } from "@tanstack/react-query"
 import { useAuth } from "@/hooks/use-auth"
 import {
@@ -494,11 +495,12 @@ const AssetCard = memo(function AssetCard({
           typeIcon(asset.type)
         )}
 
-        {/* Type badge */}
-        <span
-          className={`absolute top-1.5 start-1.5 px-1.5 py-0.5 text-[10px] font-medium rounded ${typeBadgeColor(asset.type)}`}
-        >
-          {asset.type}
+        {/* Type badge, and the Preview label of a render made at proxy quality (F1) */}
+        <span className="absolute top-1.5 start-1.5 flex items-center gap-1">
+          <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded ${typeBadgeColor(asset.type)}`}>
+            {asset.type}
+          </span>
+          {isPreviewQuality(asset.metadata) && <PreviewBadge />}
         </span>
 
         {/* Shared library badge */}

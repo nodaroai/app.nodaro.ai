@@ -2266,6 +2266,13 @@ export interface PluginWorkflowsToolkit {
    * they can already see it but need more than they have.
    *
    * Additive-optional with its group (no CONTRACT_VERSION bump).
+   *
+   * The row comes back AS STORED: saved result ids (placeholder `exec-…` job
+   * ids, unlabelled Apply EDL takes) are resolved only when the plugin asks,
+   * with `opts.resolveResultIds: true` and `settings` among `cols` — a plugin
+   * that hands a canvas's nodes to a client asks; one that only judges or
+   * rewrites the row does not pay the jobs lookup. `opts` is additive-optional:
+   * an older host ignores it.
    */
   loadWorkflowFor(
     req: FastifyRequest,
@@ -2275,6 +2282,7 @@ export interface PluginWorkflowsToolkit {
     min: Exclude<WorkflowAccessLevel, "none">,
     cols: string,
     failureMessage: string,
+    opts?: { readonly resolveResultIds?: boolean },
   ): Promise<PluginLoadedWorkflow>
   /**
    * Mirrors `canChangeWorkflowVisibility` (`lib/workflow-access.ts`) — may
