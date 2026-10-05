@@ -177,6 +177,27 @@ export function ffmpegThreads(read: ReadText = readText): FfmpegThreads | undefi
   return budget === undefined ? undefined : ffmpegThreadsFor(budget)
 }
 
+/**
+ * The counts ffmpeg picks by itself on a box with `cpus` CPUs and no quota
+ * below them (decided 2026-10-05, for the memory prediction of a launch that
+ * is not told its counts): the decoder and the filter graph use every CPU, and
+ * libx264 runs 1.5 frame threads per CPU up to its own ceiling of 128 — the
+ * rule its SEI line shows (`threads=67` on 48 CPUs, where the macroblock-row
+ * cap bit first). A deliberate over-estimate where the row cap would bite.
+ */
+export function ffmpegAutoThreadsFor(cpus: number): FfmpegThreads {
+  const n = Math.max(1, Math.floor(cpus))
+  return { decode: n, filter: n, encode: Math.min(128, Math.ceil(n * 1.5)) }
+}
+
+/** The counts a launch on THIS box actually runs with: the explicit ones
+ *  `ffmpegThreads` places, or — when no quota sits below the cores ffmpeg
+ *  counts and nothing is placed — the ones ffmpeg picks (`ffmpegAutoThreadsFor`).
+ *  What the memory prediction (`ffmpeg-memory-model.ts`) reads. */
+export function ffmpegEffectiveThreads(read: ReadText = readText): FfmpegThreads {
+  return ffmpegThreads(read) ?? ffmpegAutoThreadsFor(affinityCpuCount(read) ?? cpus().length)
+}
+
 // ── Placing the counts into an argv ─────────────────────────────────────────
 //
 // Every ffmpeg the backend runs gets the counts (decided 2026-10-05), most of

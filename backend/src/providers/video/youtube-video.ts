@@ -1,13 +1,14 @@
 import { spawnFfmpeg } from "./ffmpeg-process.js"
-import { createRequire } from "node:module"
+import { withFfmpegSlot } from "./ffmpeg-utils.js"
 import {
+  FetchDeadline,
   YtDlpHaltError,
   remainingLimits,
   runYtDlpCaptureWith,
   spawnYtDlpDownloadWith,
   type YtDlpRunLimits,
 } from "./ytdlp-process.js"
-import { promises as fs, existsSync } from "node:fs"
+import { promises as fs } from "node:fs"
 import { dirname, join } from "node:path"
 import { randomUUID } from "node:crypto"
 import {
@@ -21,6 +22,8 @@ import { ytProxyArgs, resolveAttemptChain } from "./yt-proxy.js"
 import { startProxyAuthShim } from "./proxy-auth-shim.js"
 import { ytDataApiProbe } from "./youtube-data-api.js"
 import { probeStreams, reencodeToH264 } from "./video-file-stages.js"
+import { withYtDlpAdmission } from "./ytdlp-admission.js"
+import { resolveYtDlpBin, ytDlpBin } from "./ytdlp-bin.js"
 
 /**
  * Shared yt-dlp video provider — the single source of the referer/UA spoof for
@@ -39,43 +42,9 @@ import { probeStreams, reencodeToH264 } from "./video-file-stages.js"
  * (bypassing `safeFetch`), so the exact-suffix allowlist IS the SSRF gate.
  */
 
-const isWindows = process.platform === "win32"
-const require = createRequire(import.meta.url)
+export { resolveYtDlpBin }
 
-/**
- * Resolve the yt-dlp binary — in the SAME order `youtube-dl-exec` itself does,
- * so the library-based callers (trim-audio, youtube-extractor, youtube-audio,
- * workers/shared) and this direct-spawn path can never disagree about which
- * binary runs.
- *
- * WHY this is not just `<pkg>/bin/yt-dlp`: the image sets
- * `YOUTUBE_DL_SKIP_DOWNLOAD=1` (deps AND prod-deps stages), which tells
- * `youtube-dl-exec`'s postinstall NOT to fetch that binary — deliberately, since
- * a system yt-dlp was apt-installed instead. But nothing ever pointed the code at
- * the system one, so every yt-dlp path in the platform spawned a file that does
- * not exist and died with `ENOENT`, silently (see the route's catch). The image
- * now installs the official pinned binary and sets `YOUTUBE_DL_DIR`; honour that
- * first, then the bundled copy (local dev, where the download is not skipped),
- * then a bare PATH lookup.
- */
-export function resolveYtDlpBin(env: NodeJS.ProcessEnv = process.env): string {
-  const name = `yt-dlp${isWindows ? ".exe" : ""}`
-  if (env.YOUTUBE_DL_DIR) {
-    const fromEnv = join(env.YOUTUBE_DL_DIR, env.YOUTUBE_DL_FILENAME ?? name)
-    if (existsSync(fromEnv)) return fromEnv
-  }
-  const bundled = join(
-    dirname(require.resolve("youtube-dl-exec/package.json")),
-    "bin",
-    name,
-  )
-  if (existsSync(bundled)) return bundled
-  // Last resort: let the OS find it on PATH rather than spawning a path we
-  // already know does not exist (which is what produced the silent ENOENT).
-  return name
-}
-
-const YT_DLP_BIN = resolveYtDlpBin()
+const YT_DLP_BIN = ytDlpBin()
 
 /**
  * referer/UA spoof — the ONLY copy for the video path. Shared verbatim between
@@ -351,7 +320,8 @@ export function runYtDlpCapture(
   args: string[],
   opts: YtDlpRunLimits & { timeoutMs: number; maxBytes?: number },
 ): Promise<string> {
-  return runYtDlpCaptureWith(YT_DLP_BIN, args, opts)
+  // Classified like every yt-dlp run (`ytdlp-transcode.ts`): a capture runs no ffmpeg, so it is never held.
+  return withYtDlpAdmission(args, (hold) => runYtDlpCaptureWith(YT_DLP_BIN, hold?.args ?? args, opts), { signal: opts.signal })
 }
 
 const runYtDlp = runYtDlpCapture
@@ -457,9 +427,33 @@ const DOWNLOAD_STALL_TIMEOUT_MS = 90_000
 export function spawnYtDlpDownload(
   args: string[],
   onProgress?: (pct: number) => void,
-  opts?: YtDlpRunLimits & { idleTimeoutMs?: number },
+  opts?: YtDlpRunLimits & {
+    idleTimeoutMs?: number
+    /** The fetch's one deadline, when held to one: read AFTER admission (the wait is excused from it), it sets the run's wall-clock limit. */
+    deadline?: FetchDeadline
+  },
 ): Promise<void> {
-  return spawnYtDlpDownloadWith(YT_DLP_BIN, args, onProgress, { ...opts, idleTimeoutMs: opts?.idleTimeoutMs ?? DOWNLOAD_STALL_TIMEOUT_MS })
+  const { deadline, ...limits } = opts ?? {}
+  // A run that may RE-ENCODE (`ytdlp-transcode.ts`: a section cut at keyframes, an
+  // audio conversion) holds a slot and a reservation sized to what it requested for
+  // the whole download — yt-dlp's own ffmpeg is invisible to the launcher — and it
+  // spawns the argv the admission hands it (`hold.args`), which tells that ffmpeg the
+  // quota's thread counts. A stream-copy run is not delayed and spawns its own argv.
+  // Limits are read once the run is admitted.
+  return withYtDlpAdmission(
+    args,
+    (hold) => {
+      const bound = { ...limits, ...(deadline ? remainingLimits(deadline, limits) : {}) }
+      // The process dies no later than the hold: the reservation must never outlive the ffmpeg it stands for.
+      const caps = [bound.totalTimeoutMs, hold?.holdMs].filter((ms): ms is number => typeof ms === "number")
+      return spawnYtDlpDownloadWith(YT_DLP_BIN, hold?.args ?? args, onProgress, {
+        ...bound,
+        ...(caps.length > 0 ? { totalTimeoutMs: Math.min(...caps) } : {}),
+        idleTimeoutMs: limits.idleTimeoutMs ?? DOWNLOAD_STALL_TIMEOUT_MS,
+      })
+    },
+    { signal: limits.signal, deadline },
+  )
 }
 
 /**
@@ -469,28 +463,36 @@ export function spawnYtDlpDownload(
  * squares off the halves' slightly different section boundaries. Same
  * promise/watchdog pattern as `reencodeToH264`.
  */
-function muxSectionStreams(videoPath: string, audioPath: string, outPath: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const proc = spawnFfmpeg([
-      "-y",
-      "-i", videoPath,
-      "-i", audioPath,
-      "-c:v", "copy",
-      "-c:a", "aac",
-      "-movflags", "+faststart",
-      "-shortest",
-      outPath,
-    ], { stdio: ["ignore", "ignore", "pipe"] })
-    const watchdog = setTimeout(() => proc.kill("SIGKILL"), 10 * 60 * 1000)
-    let stderrBuf = ""
-    proc.stderr.on("data", (chunk: Buffer) => { stderrBuf += chunk.toString() })
-    proc.on("error", (err) => { clearTimeout(watchdog); reject(err) })
-    proc.on("close", (code) => {
-      clearTimeout(watchdog)
-      if (code === 0) resolve()
-      else reject(new Error(`ffmpeg section mux exited with code ${code}: ${stderrBuf.trim().split("\n").pop()}`))
-    })
-  })
+/** The longest the section mux holds its slot — its watchdog's own limit. */
+const MUX_HOLD_MS = 10 * 60 * 1000
+
+async function muxSectionStreams(videoPath: string, audioPath: string, outPath: string): Promise<void> {
+  // Admitted like every ffmpeg. The video stream is COPIED and only the audio
+  // re-encodes, so it takes the default estimate for the threads it will run with.
+  await withFfmpegSlot(
+    () => new Promise<void>((resolve, reject) => {
+      const proc = spawnFfmpeg([
+        "-y",
+        "-i", videoPath,
+        "-i", audioPath,
+        "-c:v", "copy",
+        "-c:a", "aac",
+        "-movflags", "+faststart",
+        "-shortest",
+        outPath,
+      ], { stdio: ["ignore", "ignore", "pipe"] })
+      const watchdog = setTimeout(() => proc.kill("SIGKILL"), MUX_HOLD_MS)
+      let stderrBuf = ""
+      proc.stderr.on("data", (chunk: Buffer) => { stderrBuf += chunk.toString() })
+      proc.on("error", (err) => { clearTimeout(watchdog); reject(err) })
+      proc.on("close", (code) => {
+        clearTimeout(watchdog)
+        if (code === 0) resolve()
+        else reject(new Error(`ffmpeg section mux exited with code ${code}: ${stderrBuf.trim().split("\n").pop()}`))
+      })
+    }),
+    { timeoutMs: MUX_HOLD_MS, label: "section mux" },
+  )
 }
 
 /**
@@ -602,15 +604,24 @@ export async function downloadYouTubeVideo(opts: {
 }): Promise<void> {
   const { url, outPath, maxFilesizeBytes, maxHeight, section, requireAudio, onProgress, onProcessingStart, hardening } = opts
   if (hardening && section) throw new Error("a hardened download fetches the whole video")
-  const deadline = hardening ? Date.now() + hardening.totalTimeoutMs : undefined
-  // What is left of a hardened fetch's one deadline, for the next step — a halt
+  const deadline = hardening ? new FetchDeadline(hardening.totalTimeoutMs) : undefined
+  // The next step's limits, held to a hardened fetch's one deadline — a halt
   // (YtDlpHaltError) when the caller aborted or nothing is left, so no client,
-  // proxy or stage starts late.
-  const spawnLimits = () =>
-    hardening && deadline !== undefined ? remainingLimits(deadline, { env: hardening.env, signal: hardening.signal }) : undefined
+  // proxy or stage starts late. The deadline itself travels with the step: the
+  // time a step waits for the ffmpeg admission is excused from it, so what is
+  // left is read once the step is admitted.
+  const spawnLimits = () => {
+    if (!hardening || !deadline) return undefined
+    remainingLimits(deadline, { env: hardening.env, signal: hardening.signal })
+    return { env: hardening.env, signal: hardening.signal, deadline }
+  }
   const stageLimits = () => {
     const left = spawnLimits()
-    return left ? { timeoutMs: left.totalTimeoutMs, signal: left.signal } : undefined
+    return left ? { timeoutMs: left.deadline.remainingMs(), signal: left.signal } : undefined
+  }
+  const reencodeLimits = () => {
+    const left = spawnLimits()
+    return left ? { deadline: left.deadline, signal: left.signal } : undefined
   }
 
   // SSRF gate — the same social-or-direct-file admission the download-video
@@ -641,7 +652,7 @@ export async function downloadYouTubeVideo(opts: {
   // the degraded-source signature, and burning more paid-proxy attempts on them
   // buys nothing.
   let lastError: unknown = new Error("download not attempted")
-  let result: { actualPath: string; videoCodec: string | null; hasAudio: boolean | null } | undefined
+  let result: { actualPath: string; videoCodec: string | null; hasAudio: boolean | null; width?: number | null; height?: number | null } | undefined
   for (let i = 0; i < attempts.length && !result; i++) {
     const proxy = attempts[i]
     const isLastAttempt = i === attempts.length - 1
@@ -664,6 +675,8 @@ export async function downloadYouTubeVideo(opts: {
             downloadSectionHd({ url, outPath, maxHeight, section, proxyArgs, extractorArgs: [...rung.extractorArgs], onProgress }),
           )
         } catch (hdErr) {
+          // A halt (the hold's ceiling, an abort) is the same on the progressive path: never start a second section run.
+          if (hdErr instanceof YtDlpHaltError) throw hdErr
           const firstLine = (hdErr instanceof Error ? hdErr.message : String(hdErr)).split("\n")[0]
           console.log(`[download-video] HD section download failed (${firstLine}); progressive section fallback`)
           const args = buildYtDlpVideoArgs({ url, outPath, maxFilesizeBytes, maxHeight, section, proxyArgs })
@@ -721,7 +734,7 @@ export async function downloadYouTubeVideo(opts: {
     result = { actualPath, ...probed }
   }
   if (!result) throw lastError
-  const { actualPath, videoCodec, hasAudio } = result
+  const { actualPath, videoCodec, hasAudio, width, height } = result
 
   // Import callers (requireAudio) fail on a silent download — a voice changer
   // can't use it, and it's the signal of a degraded session (bot-block → android
@@ -742,7 +755,7 @@ export async function downloadYouTubeVideo(opts: {
   if (videoCodec !== "h264") {
     onProcessingStart?.()
     const tmpPath = join(dirname(outPath), `.reencode-${randomUUID()}.mp4`)
-    await reencodeToH264(actualPath, tmpPath, hasAudio, stageLimits())
+    await reencodeToH264(actualPath, tmpPath, hasAudio, reencodeLimits(), width && height ? { canvas: { width, height } } : undefined)
     await fs.unlink(actualPath).catch(() => {})
     await fs.rename(tmpPath, outPath)
   } else if (actualPath !== outPath) {

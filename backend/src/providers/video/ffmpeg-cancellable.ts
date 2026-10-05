@@ -1,8 +1,13 @@
 import { spawnFfmpeg } from "./ffmpeg-process.js"
-import { withFfmpegSlot } from "./ffmpeg-utils.js"
+import { withFfmpegSlot, type FfmpegLaunchOptions } from "./ffmpeg-utils.js"
 
 /** Release the shared CPU slot only after the child process has actually closed. */
-export function runFfmpegCancellable(args: readonly string[], signal: AbortSignal, timeoutMs = 10 * 60 * 1000): Promise<void> {
+export function runFfmpegCancellable(
+  args: readonly string[],
+  signal: AbortSignal,
+  timeoutMs = 10 * 60 * 1000,
+  launch?: FfmpegLaunchOptions,
+): Promise<void> {
   return withFfmpegSlot(() => new Promise<void>((resolve, reject) => {
     signal.throwIfAborted()
     const child = spawnFfmpeg(args, { stdio: ["ignore", "ignore", "pipe"] })
@@ -30,5 +35,5 @@ export function runFfmpegCancellable(args: readonly string[], signal: AbortSigna
     if (signal.aborted) abort()
     // Its own watchdog SIGKILLs the child; the slot releases itself shortly
     // after `timeoutMs` regardless (`FFMPEG_SLOT_BACKSTOP_MS`).
-  }), { timeoutMs, signal, label: "ffmpeg" })
+  }), { timeoutMs, signal, label: "ffmpeg", peakMemoryMiB: launch?.peakMemoryMiB })
 }

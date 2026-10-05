@@ -22,7 +22,7 @@ import { hostnameMatchesAllowlist } from "../../lib/url-validator.js"
 import { YT_SPOOF_ARGS, YtUrlNotAllowedError, downloadYouTubeVideo, runThroughClientLadder, runYtDlpCapture } from "./youtube-video.js"
 import { ytDataApiProbe, youtubeVideoId } from "./youtube-data-api.js"
 import { resolveAttemptChain } from "./yt-proxy.js"
-import { YtDlpHaltError, remainingLimits } from "./ytdlp-process.js"
+import { FetchDeadline, YtDlpHaltError, remainingLimits } from "./ytdlp-process.js"
 
 export type SocialPostPlatform = "youtube" | "tiktok" | "instagram" | "x" | "facebook"
 
@@ -165,7 +165,7 @@ function parseProbe(raw: string): SocialPostMetadata {
 export async function probeSocialPostVideo(link: string, opts: { signal?: AbortSignal } = {}): Promise<SocialPostMetadata> {
   const post = socialPostOf(link)
   if (!post) throw new YtUrlNotAllowedError("not a social post this lane reads")
-  const deadline = Date.now() + PROBE_TOTAL_MS
+  const deadline = new FetchDeadline(PROBE_TOTAL_MS)
   if (post.platform === "youtube") {
     const api = await ytDataApiProbe(post.url, { timeoutMs: 10_000 })
     if (api) return api

@@ -327,6 +327,61 @@ jobs:
         if: ${{ !cancelled() && steps.build-packages.outcome == 'success' }}
         run: npm run test --workspace=@nodaro/prompts
 
+  # The ffmpeg memory ledger's real Lua scripts. Every other ledger test runs on
+  # a JS twin of them (fake-ledger-redis.ts), so a mistake in the scripts — a
+  # string compared with a number, a wrong key — would ship green. This job runs
+  # the same contract against a real Redis and FAILS (never skips) if it cannot
+  # reach one. A job of its own, not a service on Backend Tests: that job may run
+  # on a self-hosted runner, where a service container needs Docker.
+  ffmpeg-ledger-redis:
+    name: FFmpeg Ledger (real Redis)
+    needs: [changes, prepare-packages]
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.prepare-packages.result != 'success' || needs.changes.outputs.backend == 'true') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      SUPABASE_URL: https://test.supabase.co
+      SUPABASE_SERVICE_ROLE_KEY: test-key
+      EDITION: cloud
+      NODE_ENV: test
+      YOUTUBE_DL_SKIP_DOWNLOAD: true
+      FFMPEG_LEDGER_TEST_REDIS_URL: redis://localhost:6379
+      FFMPEG_LEDGER_REQUIRE_REDIS: "1"
+    steps:
+      - name: Require successful preparation
+        env:
+          DEPENDENCIES: ${{ toJSON(needs) }}
+        run: echo "$DEPENDENCIES" | jq -e 'all(.[]; .result == "success")'
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Pin npm 11
+        run: corepack enable npm && corepack prepare npm@11.12.1 --activate
+      - name: Install workspace dependencies
+        run: npm ci
+      - name: Restore shared packages
+        uses: ./.github/actions/restore-ci-build
+        with:
+          kind: packages
+      - name: Run the ledger suites against the real Redis
+        working-directory: backend
+        run: npx vitest run src/providers/video/__tests__/ffmpeg-memory-ledger.redis.test.ts
+
   typecheck:
     name: Type Check
     needs: [changes, prepare-packages]
@@ -947,7 +1002,7 @@ jobs:
     # Without it here, a migration whose proof failed still reached production
     # — the job ran, went red, and nothing downstream cared. Found while
     # planning the content-scoping migrations, 2026-08-23.
-    needs: [prepare-packages, build-backend, frontend-tests, backend-tests, typecheck, tenant-scope-lint, check-locale-completeness, check-ee-imports, check-pricing-leaks, check-billing-dumps, check-public-surface, check-surface-funnel, i18n-completeness, backend-boot-smoke, migration-behavior]
+    needs: [prepare-packages, build-backend, frontend-tests, backend-tests, ffmpeg-ledger-redis, typecheck, tenant-scope-lint, check-locale-completeness, check-ee-imports, check-pricing-leaks, check-billing-dumps, check-public-surface, check-surface-funnel, i18n-completeness, backend-boot-smoke, migration-behavior]
     env:
       # Disable CLI telemetry. The CLI flushes anonymous PostHog analytics on
       # exit; on a runner that flush can time out and surface as a spurious

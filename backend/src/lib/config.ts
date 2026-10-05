@@ -325,6 +325,18 @@ export const envSchema = z.object({
   RENDER_WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(10).default(2),
   /** Max concurrent ffmpeg child processes (default 4). FFmpeg is CPU-bound; too many parallel processes thrash the box. Applies across every ffmpeg node (resize, combine, social-format, etc.). */
   FFMPEG_CONCURRENCY: z.coerce.number().int().min(1).max(32).default(4),
+  /** ffmpeg memory admission (`providers/video/ffmpeg-memory.ts`, which owns the defaults): every ffmpeg reserves its predicted peak from (limit − reserve) × headroom before it starts. The limit is the container's cgroup memory limit; this is the limit to assume when it has none (default: the host's memory). */
+  FFMPEG_MEMORY_LIMIT_MIB: z.coerce.number().int().min(1).optional(),
+  /** Memory kept back from the ffmpeg budget for the Node processes and the rest of the container (default 2048 MiB). */
+  FFMPEG_MEMORY_RESERVE_MIB: z.coerce.number().int().min(0).optional(),
+  /** Share of (limit − reserve) the ffmpeg launches may reserve together, in (0, 1] (default 0.9). */
+  FFMPEG_MEMORY_HEADROOM: z.coerce.number().gt(0).max(1).optional(),
+  /** One fixed MiB figure for an ffmpeg launch that predicts nothing. Unset (default): the thread-scaled estimate, 393 + 22.9 × threads MiB. */
+  FFMPEG_DEFAULT_PEAK_MIB: z.coerce.number().int().min(1).optional(),
+  /** Where the ffmpeg memory budget is spent: `redis` (default) — ONE budget shared by every process of the container through a Redis ledger, keyed by RAILWAY_REPLICA_ID (else the hostname); `local` — this process spends the whole budget alone (one process per container, tests). */
+  FFMPEG_MEMORY_LEDGER: z.enum(["redis", "local"]).default("redis"),
+  /** The share of the ffmpeg memory budget ONE process may spend while the shared ledger is unreachable, in (0, 1] (default 0.5: the heavy renders run in the video worker and the render worker, so half each never sums past the whole; the server's lighter in-process launches are the residual). */
+  FFMPEG_MEMORY_LOCAL_SHARE: z.coerce.number().gt(0).max(1).optional(),
   /** Shared secret for authenticating internal orchestrator → API calls (replaces the unreliable `req.ip === 127.0.0.1` check). MUST be set to ≥32 random bytes hex. In Docker, start.sh auto-generates one if unset so all sibling processes inherit the same value. */
   INTERNAL_ORCHESTRATOR_SECRET: z.string().min(32, "INTERNAL_ORCHESTRATOR_SECRET must be at least 32 characters (use `openssl rand -hex 32`)"),
   /** Cloud: the plugin daemon host's internal listener (`dist/plugin-daemons.js`). `/health` answers openly; every other route requires the internal secret above. */
