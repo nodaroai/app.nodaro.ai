@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest"
+import { DEFAULT_TTS_PROVIDER } from "@nodaro/shared"
 import { registerVerbs } from "../verbs.js"
 import { _resetRegistry } from "../../tasks.js"
 import { buildServer, callTool, executeSession, stubRoute } from "./_helpers.js"
@@ -432,14 +433,24 @@ describe("generate_speech — the model and its per-request cap", () => {
   })
 
   it("refuses text over the model's own cap with the numbers, instead of letting the route truncate it", async () => {
-    // 6,000 characters fit the tool's schema but not v3's 5,000 (the default model).
-    const v3 = await runGenerateSpeech({ text: "a".repeat(6000) })
+    // 6,000 characters fit the tool's schema but not v3's 5,000.
+    const v3 = await runGenerateSpeech({ text: "a".repeat(6000), model: "elevenlabs-v3" })
     expect(v3.result.isError).toBe(true)
     expect((v3.result.content[0] as { text: string }).text).toMatch(/6000 characters; elevenlabs-v3 takes at most 5000/)
     expect(v3.body).toBeUndefined() // the route was never hit
 
-    const v3Explicit = await runGenerateSpeech({ text: "a".repeat(5001), model: "elevenlabs-v3" })
-    expect(v3Explicit.result.isError).toBe(true)
+    const v3AtCapPlusOne = await runGenerateSpeech({ text: "a".repeat(5001), model: "elevenlabs-v3" })
+    expect(v3AtCapPlusOne.result.isError).toBe(true)
+  })
+
+  it("with no model, takes the default model's (v4's) full 10,000 characters — 6,000 is no longer refused", async () => {
+    const { result, body } = await runGenerateSpeech({ text: "a".repeat(6000) })
+    expect(result.isError).toBeUndefined()
+    expect(body?.provider).toBe(DEFAULT_TTS_PROVIDER)
+    expect((body?.text as string).length).toBe(6000)
+    const full = await runGenerateSpeech({ text: "a".repeat(10000) })
+    expect(full.result.isError).toBeUndefined()
+    expect((full.body?.text as string).length).toBe(10000)
   })
 
   it("an explicit turbo takes its own, larger cap", async () => {
@@ -447,7 +458,7 @@ describe("generate_speech — the model and its per-request cap", () => {
     expect(turbo.result.isError).toBeUndefined() // turbo takes 40,000
   })
 
-  it("the legacy elevenlabs id is capped as the model it runs as (turbo), not as the 5,000-character default", async () => {
+  it("the legacy elevenlabs id is capped as the model it runs as (turbo), not as the default model", async () => {
     const legacy = await runGenerateSpeech({ text: "a".repeat(9000), model: "elevenlabs" })
     expect(legacy.result.isError).toBeUndefined()
     expect(legacy.body?.provider).toBe("elevenlabs") // the route resolves the alias; the tool still sends the id it was given
@@ -473,8 +484,8 @@ describe("generate_speech preset application", () => {
     expect(body?.stability).toBe(0.25)
     expect(body?.style).toBe(0.8)
     expect(body?.similarityBoost).toBe(0.7)
-    // The verb's elevenlabs-v3 default is preserved (the factory preset sets no provider).
-    expect(body?.provider).toBe("elevenlabs-v3")
+    // The verb's default model is preserved (the factory preset sets no provider).
+    expect(body?.provider).toBe(DEFAULT_TTS_PROVIDER)
     expect(body?.presetId).toBeUndefined()
   })
 
@@ -504,17 +515,19 @@ describe("generate_speech preset application", () => {
 
   // ── Task 5 `.default()`→in-handler-default migration guards ────────────────
   // `model` was Zod `.default("elevenlabs-v3")`; Task 5 made it `.optional()`
-  // and moved the default into the handler (`(effective.model ?? "elevenlabs-v3")`)
+  // and moved the default into the handler (`effective.model ?? DEFAULT_TTS_PROVIDER`)
   // so a defaulted model can't clobber a custom preset's provider.
 
   // 2. No presetId, no model → the IN-HANDLER default fires: the dispatched
-  // payload's provider is `elevenlabs-v3`. Drop the `?? "elevenlabs-v3"`
-  // fallback and `provider` would go out as `undefined`.
-  it("dispatches the in-handler default provider (elevenlabs-v3) with no preset and no model", async () => {
+  // payload's provider is the default speech model (v4 since the default flip).
+  // Drop the `?? DEFAULT_TTS_PROVIDER` fallback and `provider` would go out as
+  // `undefined`.
+  it("dispatches the in-handler default provider (ElevenLabs v4) with no preset and no model", async () => {
     const { result, body } = await runGenerateSpeech({ text: "x" })
 
     expect(result.isError).toBeUndefined()
-    expect(body?.provider).toBe("elevenlabs-v3")
+    expect(DEFAULT_TTS_PROVIDER).toBe("elevenlabs-v4")
+    expect(body?.provider).toBe(DEFAULT_TTS_PROVIDER)
     expect(body?.text).toBe("x")
   })
 

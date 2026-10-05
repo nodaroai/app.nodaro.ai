@@ -27,8 +27,14 @@ vi.mock("@/lib/queue.js", () => ({
   redis: {},
 }))
 
+// The credit guard is a no-op here, but the resolver the route hands it is kept so
+// a test can ask it which model it would bill (it must be the model the run uses).
+const guard = vi.hoisted(() => ({ resolver: undefined as undefined | ((req: { body: unknown }) => string) }))
 vi.mock("@/middleware/credit-guard.js", () => ({
-  creditGuard: () => async () => {},
+  creditGuard: (resolver: (req: { body: unknown }) => string) => {
+    guard.resolver = resolver
+    return async () => {}
+  },
   reserveCreditsForJob: vi.fn().mockResolvedValue({
     usageLogId: "usage-1",
     creditsReserved: 1,
@@ -63,11 +69,12 @@ vi.mock("@/lib/url-validator.js", async () => {
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
-import { textToSpeechRoutes, resolveOmittedTtsProvider } from "../text-to-speech.js"
+import { textToSpeechRoutes } from "../text-to-speech.js"
+import { resolveOmittedTtsProvider } from "../../lib/omitted-tts-provider.js"
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
 import { reserveCreditsForJob } from "@/middleware/credit-guard.js"
-import { getMaxTtsChars } from "@nodaro/shared"
+import { getMaxTtsChars, DEFAULT_TTS_PROVIDER } from "@nodaro/shared"
 import { __resetSurfaceProfileCacheForTests } from "../../lib/surface-profile.js"
 
 // ---------------------------------------------------------------------------
@@ -209,7 +216,7 @@ describe("POST /v1/text-to-speech", () => {
     )
   })
 
-  it("defaults an omitted provider to elevenlabs-v3", async () => {
+  it("defaults an omitted provider to the default speech model (ElevenLabs v4), and bills that model", async () => {
     const { mockInsert } = mockJobInsert({
       data: { id: "job-1" },
       error: null,
@@ -235,13 +242,15 @@ describe("POST /v1/text-to-speech", () => {
       })
     )
 
-    // The BullMQ worker receives the resolved default: elevenlabs-v3.
+    // The BullMQ worker receives the resolved default, and the reservation is for it.
+    expect(DEFAULT_TTS_PROVIDER).toBe("elevenlabs-v4")
     expect(videoQueue.add).toHaveBeenCalledWith(
       "text-to-speech",
       expect.objectContaining({
-        provider: "elevenlabs-v3",
+        provider: DEFAULT_TTS_PROVIDER,
       })
     )
+    expect(reserveCreditsForJob).toHaveBeenCalledWith(expect.anything(), expect.anything(), "job-1", DEFAULT_TTS_PROVIDER)
   })
 
   describe("voice.allowedGenders enforcement (B4c)", () => {
@@ -285,22 +294,27 @@ describe("POST /v1/text-to-speech", () => {
   })
 
   // ── length-aware omitted-provider default (non-lossy) ────────────────────
-  // v3 is the default for the common (short) case, but v3's per-request cap
-  // (5,000 chars) is far below the route's 40,000-char ceiling. Legacy
-  // callers that always omit `provider` and send long text must keep landing
-  // on turbo (cap 40,000, lossless) — not get silently truncated by v3.
+  // The default model (v4) takes the common case, but its per-request cap
+  // (10,000 chars) is below the route's 40,000-char ceiling. Callers that
+  // omit `provider` and send longer text keep landing on turbo (cap 40,000,
+  // lossless) — never silently truncated by the default model's clamp.
 
-  it("resolveOmittedTtsProvider: v3 at and under the v3 cap, turbo beyond it", () => {
-    const v3Cap = getMaxTtsChars("elevenlabs-v3")
-    expect(v3Cap).toBe(5000)
-    expect(resolveOmittedTtsProvider("a".repeat(v3Cap))).toBe("elevenlabs-v3")
-    expect(resolveOmittedTtsProvider("a".repeat(v3Cap + 1))).toBe("elevenlabs-turbo")
-    expect(resolveOmittedTtsProvider("short text")).toBe("elevenlabs-v3")
+  it("resolveOmittedTtsProvider: the default model at and under its own cap, turbo beyond it", () => {
+    const cap = getMaxTtsChars(DEFAULT_TTS_PROVIDER)
+    expect(cap).toBe(10000)
+    expect(resolveOmittedTtsProvider("a".repeat(cap))).toBe(DEFAULT_TTS_PROVIDER)
+    expect(resolveOmittedTtsProvider("a".repeat(cap + 1))).toBe("elevenlabs-turbo")
+    expect(resolveOmittedTtsProvider("short text")).toBe(DEFAULT_TTS_PROVIDER)
   })
 
-  it("defaults an omitted provider to elevenlabs-v3 at exactly the 5000-char v3 cap", async () => {
+  it("a request that omits the provider with 5,001 to 10,000 characters now runs on the default model, not turbo (v3's old cap no longer decides)", () => {
+    expect(resolveOmittedTtsProvider("a".repeat(5001))).toBe(DEFAULT_TTS_PROVIDER)
+    expect(resolveOmittedTtsProvider("a".repeat(8000))).toBe(DEFAULT_TTS_PROVIDER)
+  })
+
+  it("defaults an omitted provider to the default model at exactly its 10,000-char cap", async () => {
     const { mockInsert } = mockJobInsert({ data: { id: "job-1" }, error: null })
-    const text = "a".repeat(5000)
+    const text = "a".repeat(10000)
 
     const res = await app.inject({
       method: "POST",
@@ -311,19 +325,19 @@ describe("POST /v1/text-to-speech", () => {
     expect(res.statusCode).toBe(200)
     expect(videoQueue.add).toHaveBeenCalledWith(
       "text-to-speech",
-      expect.objectContaining({ provider: "elevenlabs-v3" })
+      expect.objectContaining({ provider: DEFAULT_TTS_PROVIDER })
     )
-    // At exactly the cap, the v3 clamp is a no-op — full text preserved.
+    // At exactly the cap, the clamp is a no-op — full text preserved.
     expect(mockInsert).toHaveBeenCalledWith(
       expect.objectContaining({
-        input_data: expect.objectContaining({ text: expect.stringMatching(/^a{5000}$/) }),
+        input_data: expect.objectContaining({ text: expect.stringMatching(/^a{10000}$/) }),
       })
     )
   })
 
-  it("defaults an omitted provider to elevenlabs-turbo above the 5000-char v3 cap (non-lossy)", async () => {
+  it("defaults an omitted provider to elevenlabs-turbo above the default model's 10,000-char cap (non-lossy)", async () => {
     const { mockInsert } = mockJobInsert({ data: { id: "job-1" }, error: null })
-    const text = "a".repeat(5001)
+    const text = "a".repeat(10001)
 
     const res = await app.inject({
       method: "POST",
@@ -336,13 +350,32 @@ describe("POST /v1/text-to-speech", () => {
       "text-to-speech",
       expect.objectContaining({ provider: "elevenlabs-turbo", text })
     )
-    // turbo's cap is 40000 — well above 5001, so the clamp is a no-op and the
-    // full text is preserved (not truncated to v3's 5000).
+    // turbo's cap is 40000 — well above 10001, so the clamp is a no-op and the
+    // full text is preserved (not truncated to the default model's 10000).
     expect(mockInsert).toHaveBeenCalledWith(
       expect.objectContaining({
-        input_data: expect.objectContaining({ text: expect.stringMatching(/^a{5001}$/) }),
+        input_data: expect.objectContaining({ text: expect.stringMatching(/^a{10001}$/) }),
       })
     )
+  })
+
+  // The credit guard (pre-handler) and the handler resolve the provider separately;
+  // the model the guard checks the balance for must be the model reserved and run.
+  it.each([
+    ["omitted, short text", { text: "hello" }, DEFAULT_TTS_PROVIDER],
+    ["omitted, at the default model's cap", { text: "a".repeat(10000) }, DEFAULT_TTS_PROVIDER],
+    ["omitted, past the default model's cap", { text: "a".repeat(10001) }, "elevenlabs-turbo"],
+    ["legacy elevenlabs", { text: "hello", provider: "elevenlabs" }, "elevenlabs-turbo"],
+    ["explicit v3", { text: "hello", provider: "elevenlabs-v3" }, "elevenlabs-v3"],
+    ["explicit v4", { text: "hello", provider: "elevenlabs-v4" }, "elevenlabs-v4"],
+  ])("the credit guard, the reservation and the queued job agree on the model (%s)", async (_label, body, expected) => {
+    mockJobInsert({ data: { id: "job-1" }, error: null })
+    const payload = { ...body, userId: "00000000-0000-4000-8000-000000000001" }
+    const res = await app.inject({ method: "POST", url: "/v1/text-to-speech", payload })
+    expect(res.statusCode).toBe(200)
+    expect(guard.resolver?.({ body: payload })).toBe(expected)
+    expect(reserveCreditsForJob).toHaveBeenCalledWith(expect.anything(), expect.anything(), "job-1", expected)
+    expect(videoQueue.add).toHaveBeenCalledWith("text-to-speech", expect.objectContaining({ provider: expected }))
   })
 
   it("respects an explicit elevenlabs-v3 provider for long text — clamp still applies", async () => {
@@ -427,9 +460,9 @@ describe("POST /v1/text-to-speech", () => {
       expect((vi.mocked(videoQueue.add).mock.calls[0]![1] as { text: string }).text.length).toBe(10000)
     })
 
-    it("does not change what an omitted provider resolves to (still v3, then turbo past v3's cap)", () => {
-      expect(resolveOmittedTtsProvider("short text")).toBe("elevenlabs-v3")
-      expect(resolveOmittedTtsProvider("a".repeat(5001))).toBe("elevenlabs-turbo")
+    it("is what an omitted provider resolves to (then turbo past its 10,000-character cap)", () => {
+      expect(resolveOmittedTtsProvider("short text")).toBe("elevenlabs-v4")
+      expect(resolveOmittedTtsProvider("a".repeat(10001))).toBe("elevenlabs-turbo")
     })
   })
 

@@ -1222,6 +1222,19 @@ export const TTS_PROVIDERS = [
 ] as const
 export type TtsProvider = typeof TTS_PROVIDERS[number]
 
+/**
+ * The speech model a request runs on when it names none — ElevenLabs v4 since the
+ * default flip (decided 2026-10-05; v3 stays selectable). The REST route's credit
+ * guard and handler, the workflow engine's text-to-speech dispatch, the worker's
+ * defensive default, the MCP `generate_speech` tool, the narration pipeline, the
+ * video director and the editor's new-node default all read THIS, so they can never
+ * disagree about which model ran and which one was billed. A request with no model
+ * also follows a length rule: text longer than this model's cap runs on turbo instead.
+ * The REST route, the workflow engine, the narration pipeline and the worker apply it
+ * through one backend function; the MCP tool refuses such text with the number.
+ */
+export const DEFAULT_TTS_PROVIDER: TtsProvider = "elevenlabs-v4"
+
 /** Text-to-audio providers */
 export const TEXT_TO_AUDIO_PROVIDERS = [
   // Replicate disabled

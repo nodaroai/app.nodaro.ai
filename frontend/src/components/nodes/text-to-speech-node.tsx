@@ -16,6 +16,7 @@ import { computeDeleteResultUpdates } from "@/lib/utils"
 import { getVoiceName } from "@/lib/tts-voices"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
+import { DEFAULT_TTS_PROVIDER } from "@nodaro/shared"
 import { AudioResultOverlay } from "./audio-result-overlay"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import type { TextToSpeechData } from "@/types/nodes"
@@ -36,7 +37,8 @@ function TextToSpeechNodeComponent({ id, data, selected }: NodeProps) {
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [showThumbnails, setShowThumbnails] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
-  const credits = useModelCredits(nodeData.provider ?? "elevenlabs-turbo", 4)
+  // A node with no stored model runs, and is billed, as the default speech model.
+  const credits = useModelCredits(nodeData.provider || DEFAULT_TTS_PROVIDER, 4)
 
   function handleDeleteResult(indexToDelete: number) {
     updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedAudioUrl"))

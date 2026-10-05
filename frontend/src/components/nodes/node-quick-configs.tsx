@@ -45,7 +45,7 @@ import {
   getVideoResolutionOptions,
   VIDEO_RESOLUTION_OPTIONS,
 } from "@/components/editor/config-panels/model-options"
-import { availableReasoningEfforts, isSeedanceVideoEditProvider, orderedLlmModels, STRUCTURED_VISION_MODELS, SHEET_TYPES, SHEET_SKINS, type SheetType, type SheetSkin, VIDEO_ANALYSIS_TIER_ORDER, VIDEO_ANALYSIS_TIER_LABELS, DEFAULT_VIDEO_ANALYSIS_TIER, SCENE3D_LIMITS, VIDEO_OVERLAY_OUTPUT_ASPECTS } from "@nodaro/shared"
+import { availableReasoningEfforts, isSeedanceVideoEditProvider, orderedLlmModels, STRUCTURED_VISION_MODELS, SHEET_TYPES, SHEET_SKINS, type SheetType, type SheetSkin, VIDEO_ANALYSIS_TIER_ORDER, VIDEO_ANALYSIS_TIER_LABELS, DEFAULT_VIDEO_ANALYSIS_TIER, SCENE3D_LIMITS, VIDEO_OVERLAY_OUTPUT_ASPECTS, DEFAULT_TTS_PROVIDER } from "@nodaro/shared"
 import { EFFORT_LABELS } from "@/components/editor/config-panels/reasoning-effort-select"
 import { ALL_LANGUAGES } from "@/lib/audio-tags"
 import { ttsModelSwitchPatch, type TtsSwitchFields } from "@/lib/tts-model-switch"
@@ -180,6 +180,9 @@ const ttsProviderControl = (): QuickConfigControl => ({
   ariaLabel: tx("field.model"),
   icon: Sparkles,
   options: toOptions(TTS_MODELS),
+  // A node with no stored model runs on the default speech model — show that, not
+  // whichever model happens to be listed first.
+  defaultValue: DEFAULT_TTS_PROVIDER,
   write: (value, data) => ({ provider: value, ...ttsModelSwitchPatch(value, (data ?? {}) as TtsSwitchFields) }),
 })
 

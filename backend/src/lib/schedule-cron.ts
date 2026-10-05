@@ -13,6 +13,7 @@ import {
   normalizeScheduleRules,
   scheduleMatchesAt,
 } from "@nodaro/shared"
+import { scheduleTriggersEnabled } from "./config.js"
 import { supabase } from "./supabase.js"
 import { orchestrationQueue } from "./orchestration-queue.js"
 import { canRunWorkflow } from "./workflow-access.js"
@@ -96,6 +97,15 @@ function armNextTick(): void {
  */
 export function startScheduleCron(): void {
   if (timer) return
+
+  // Staging and production share one database: a cron in both would read the
+  // same rows and fire production users' schedules on staging's build. Only
+  // the environment that owns them fires (`scheduleTriggersEnabled`, set by
+  // SCHEDULE_TRIGGERS_ENABLED, default: off Railway, or Railway's production).
+  if (!scheduleTriggersEnabled()) {
+    console.log("[schedule-cron] Disabled in this environment (SCHEDULE_TRIGGERS_ENABLED) — scheduled workflows are not fired here")
+    return
+  }
 
   console.log("[schedule-cron] Started, checking once a minute")
 
@@ -212,16 +222,11 @@ export async function checkScheduledTriggers(now: Date = new Date()): Promise<vo
 
       if (activeExec && activeExec.length > 0) continue
 
-      // Snapshot the previous fire time before we overwrite it below — this is
-      // what `{{trigger.last_triggered_at}}` filters compare against (e.g.
+      // Snapshot the previous fire time before the claim overwrites it — this
+      // is what `{{trigger.last_triggered_at}}` filters compare against (e.g.
       // "fetch items newer than the previous run").
       const previousLastTriggeredAt = trigger.last_triggered_at as string | null
 
-      // Create execution. idempotency_key closes the same SELECT-then-INSERT race
-      // as the webhook path: if >1 backend instance runs this cron, both can pass
-      // the activeExec check for the same tick (identical previousLastTriggeredAt),
-      // so the unique (user_id, idempotency_key) index rejects the duplicate INSERT
-      // (execError → `continue`) instead of double-executing (double-charging).
       // P14: payer resolved at FIRE TIME (same rule as the webhook fire);
       // the row carries the pair (W7), the payload carries the context.
       const billingContext = await resolveBillingContext({
@@ -235,6 +240,19 @@ export async function checkScheduledTriggers(now: Date = new Date()): Promise<vo
         console.error(`[schedule-cron] degraded billing resolve on workspace workflow ${trigger.workflow_id} — tick skipped`)
         continue
       }
+
+      // Claim the tick: move `last_triggered_at` from the value this tick READ
+      // to now, atomically. Every process that reads the row (two replicas,
+      // or two installs sharing one database) races here, and only one update
+      // can match — zero rows back means someone else fired, so skip. Made
+      // after every skip check above, so a skipped tick never consumes it.
+      const claimedAt = now.toISOString()
+      const claimed = await claimTick(trigger.id, previousLastTriggeredAt, claimedAt)
+      if (!claimed) continue
+
+      // Create execution. The idempotency key stays as a second line behind
+      // the claim: the unique (user_id, idempotency_key) index rejects a
+      // duplicate for the same previous fire whatever wrote it.
       const idempotencyKey = `schedule:${trigger.id}:${previousLastTriggeredAt ?? "initial"}`
       const { data: execution, error: execError } = await supabase
         .from("workflow_executions")
@@ -255,15 +273,22 @@ export async function checkScheduledTriggers(now: Date = new Date()): Promise<vo
         .select("id")
         .single()
 
-      if (execError || !execution) continue
+      if (execError || !execution) {
+        // A duplicate key means this previous fire already has its run: keep
+        // the claim, so the schedule moves on instead of colliding with that
+        // key every minute. Any other failure leaves the schedule as it was
+        // (the run never existed), so the next tick may retry — released only
+        // while the row still carries THIS claim.
+        if (execError?.code !== UNIQUE_VIOLATION) {
+          await releaseTick(trigger.id, claimedAt, previousLastTriggeredAt)
+        }
+        continue
+      }
 
-      // Update trigger
+      // Count the run. The claim already wrote `last_triggered_at`.
       await supabase
         .from("workflow_triggers")
-        .update({
-          last_triggered_at: now.toISOString(),
-          config: { ...config, executionCount: execCount + 1 },
-        })
+        .update({ config: { ...config, executionCount: execCount + 1 } })
         .eq("id", trigger.id)
 
       // Whether this schedule's runs count as the workflow OWNER'S OWN — the
@@ -317,6 +342,34 @@ export async function checkScheduledTriggers(now: Date = new Date()): Promise<vo
       console.error(`[schedule-cron] Error processing trigger ${trigger.id}:`, err)
     }
   }
+}
+
+const UNIQUE_VIOLATION = "23505"
+
+/**
+ * The atomic tick claim: `last_triggered_at` moves from `previous` to
+ * `claimedAt` only if it still holds `previous`. True when this call won.
+ * A failed write claims nothing (the tick is skipped, the next one retries).
+ */
+async function claimTick(triggerId: string, previous: string | null, claimedAt: string): Promise<boolean> {
+  const update = supabase.from("workflow_triggers").update({ last_triggered_at: claimedAt }).eq("id", triggerId)
+  const conditional = previous === null ? update.is("last_triggered_at", null) : update.eq("last_triggered_at", previous)
+  const { data, error } = await conditional.select("id")
+  if (error) {
+    console.error(`[schedule-cron] could not claim trigger ${triggerId}: ${error.message}`)
+    return false
+  }
+  return Array.isArray(data) && data.length > 0
+}
+
+/** Give a claim back — only while the row still carries it, so a later fire is never undone. */
+async function releaseTick(triggerId: string, claimedAt: string, previous: string | null): Promise<void> {
+  const { error } = await supabase
+    .from("workflow_triggers")
+    .update({ last_triggered_at: previous })
+    .eq("id", triggerId)
+    .eq("last_triggered_at", claimedAt)
+  if (error) console.error(`[schedule-cron] could not release the claim on trigger ${triggerId}: ${error.message}`)
 }
 
 // ---------------------------------------------------------------------------

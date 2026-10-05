@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { resolveOmittedTtsProvider } from "../../../lib/omitted-tts-provider.js"
 import { probeAudioDuration } from "./_probe-audio.js"
 import { runPipelineWorkerJob } from "./_run-worker-job.js"
 
@@ -12,9 +13,9 @@ import { runPipelineWorkerJob } from "./_run-worker-job.js"
  *
  * Routed through the same `text-to-speech` worker so we get the existing
  * ElevenLabs integration + R2 upload + jobs-row lifecycle for free. Defaults
- * to `elevenlabs-v3` because the v3 model accepts `[audio tags]` for
- * delivery-style cues (calm / epic / etc.) and is the canonical "expressive
- * narrator" model — see Backend CLAUDE.md "TTS v3 vs v2".
+ * to the platform's default speech model (`DEFAULT_TTS_PROVIDER`, ElevenLabs v4),
+ * which accepts `[audio tags]` for delivery-style cues (calm / epic / etc.) —
+ * see Backend CLAUDE.md "TTS v3 vs v2".
  *
  * The wrapper probes the rendered audio with ffprobe to capture its real
  * duration. The narration_audio_duration_sec is needed by the final-merge
@@ -35,8 +36,10 @@ export interface PipelineGenerateNarrationArgs {
   /** Optional ElevenLabs voice id. When omitted, the worker uses the account-
    *  level default voice (ElevenLabs returns a sensible narrator voice). */
   voiceId?: string
-  /** Optional model id override. Defaults to `elevenlabs-v3` (direct API)
-   *  which supports the [audio tag] delivery cues. Callers can pass
+  /** Optional model id override. Defaults to `DEFAULT_TTS_PROVIDER` (ElevenLabs
+   *  v4, direct API), which supports the [audio tag] delivery cues — or to turbo
+   *  when the text is over v4's cap (`resolveOmittedTtsProvider`, the REST route's
+   *  omitted-provider rule). Callers can pass
    *  `elevenlabs-turbo` for a cheaper run (also direct API — every TTS
    *  provider routes through ElevenLabs directly, never KIE). */
   modelId?: string
@@ -60,10 +63,12 @@ export async function pipelineGenerateNarration(
 ): Promise<PipelineGenerateNarrationResult> {
   const { supabase, pipelineId, userId, text, voiceId, modelId } = args
 
-  // Default to ElevenLabs v3 (direct API) — supports expressive delivery via
-  // [audio tags]. Every ElevenLabs TTS model routes through the direct API
-  // (never KIE). Callers can override with `elevenlabs-turbo` to save credits.
-  const provider = modelId ?? "elevenlabs-v3"
+  // No model given → the REST route's omitted-provider rule, through the same function:
+  // the default speech model (ElevenLabs v4, direct API — supports expressive delivery
+  // via [audio tags]) up to its own cap, turbo above it, so the model reserved is the
+  // model run. Every ElevenLabs TTS model routes through the direct API (never KIE).
+  // Callers can override with `elevenlabs-turbo` to save credits.
+  const provider = modelId ?? resolveOmittedTtsProvider(text)
   const modelIdentifier = provider === "elevenlabs" ? "elevenlabs-turbo" : provider
 
   const base = await runPipelineWorkerJob({

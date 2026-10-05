@@ -60,7 +60,7 @@ function tables(opts: { provenance?: boolean | null | "throws" } = {}) {
       single: vi.fn().mockResolvedValue({ data: { id: "exec-1" }, error: null }),
     }),
   })
-  const triggerUpdate = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ data: null, error: null }) })
+  const triggerUpdate = claimableUpdate()
   const provenanceEq = vi.fn().mockReturnValue({
     maybeSingle:
       provenance === "throws"
@@ -90,6 +90,22 @@ function tables(opts: { provenance?: boolean | null | "throws" } = {}) {
 
 const enqueuedWith = (partial: Record<string, unknown>) =>
   expect(orchestrationQueue.add).toHaveBeenCalledWith("workflow-execution", expect.objectContaining(partial), expect.anything())
+
+/**
+ * A `workflow_triggers` update as the cron issues it: the tick claim
+ * (`.eq("id").eq|is("last_triggered_at").select("id")`, answered as won) and
+ * the run count (`.eq("id")`, awaited directly).
+ */
+function claimableUpdate() {
+  return vi.fn(() => {
+    const chain: Record<string, unknown> = {}
+    chain.eq = vi.fn(() => chain)
+    chain.is = vi.fn(() => chain)
+    chain.select = vi.fn(async () => ({ data: [{ id: "trig-1" }], error: null }))
+    chain.then = (resolve: (v: unknown) => unknown) => resolve({ data: null, error: null })
+    return chain
+  })
+}
 
 beforeEach(() => {
   vi.clearAllMocks()

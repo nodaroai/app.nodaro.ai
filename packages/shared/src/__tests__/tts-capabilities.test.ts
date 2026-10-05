@@ -224,11 +224,12 @@ describe("elevenlabs-v4 — added beside v3", () => {
     expect(getMaxTtsChars("elevenlabs-v3")).toBe(5000)
   })
 
-  it("costs a flat 30 credits with no per-length note, and is not the featured model — v3 stays the default", () => {
+  it("costs a flat 30 credits with no per-length note — the same as v3 — and, as the default, is the featured model", () => {
     const v4 = MODEL_CATALOG["elevenlabs-v4"]!
     expect(v4.pricing).toEqual([{ identifier: "elevenlabs-v4", credits: 30 }])
-    expect(v4.featured).toBeUndefined()
-    expect(MODEL_CATALOG["elevenlabs-v3"]!.featured).toBe(true)
+    expect(MODEL_CATALOG["elevenlabs-v3"]!.pricing).toEqual([{ identifier: "elevenlabs-v3", credits: 30 }])
+    expect(v4.featured).toBe(true)
+    expect(MODEL_CATALOG["elevenlabs-v3"]!.featured).toBeUndefined()
   })
 
   it("does not call v3 the latest model any more", () => {

@@ -6,6 +6,7 @@ import { describeLimitedVoices } from "../providers/provider-keys.js"
 import { ELEVENLABS_BASE_URL } from "../providers/elevenlabs/client.js"
 import { FALLBACK_VOICES, type ElevenLabsVoice } from "../lib/premade-voices.js"
 import { filterVoicesByAllowedGender, clampLibraryGender } from "../lib/voice-policy.js"
+import { isModelDenied } from "../lib/surface-deny.js"
 
 // ---------------------------------------------------------------------------
 // In-memory cache (6-hour TTL, stampede-safe)
@@ -119,13 +120,18 @@ const V4_FAMILY = /^eleven_v4(_|$)/
 
 /**
  * Map a Voice Library entry's verified ElevenLabs models to the TTS
- * providers the voice is actually verified on. v3 is checked FIRST so it
- * wins the `recommendedProvider = verified[0]` pick whenever the voice
- * supports it — v3 is the fully-multilingual default and renders any voice
- * unmodified, so it's strictly preferable to a v2 model when available.
+ * providers the voice is actually verified on. v4 is checked FIRST so it
+ * wins the `recommendedProvider = verified[0]` pick whenever the voice is
+ * verified for the base model `eleven_v4` (decided 2026-10-05: library voices
+ * recommend v4 first); v3 comes next — it renders any voice unmodified, so
+ * it's preferable to a v2 model when available.
+ * Only the exact id `eleven_v4` counts: the `eleven_v4_…` variants
+ * (`eleven_v4_turbo`, …) are not providers of ours.
  * Library previews are rendered with the voice's verified models — generating
  * with an unverified model is what makes output drift audibly from the
- * preview. Clients without a provider picker send `verified[0]` back as the
+ * preview. This stays pure: the route drops the models the deployment does not
+ * offer afterwards (`withAvailableProviders`), before the recommendation is
+ * picked. Clients without a provider picker send `verified[0]` back as the
  * text-to-speech `provider` (credits then reserve at that provider's price up
  * front); clients with a picker only snap when the current choice isn't in
  * the set.
@@ -138,10 +144,40 @@ const V4_FAMILY = /^eleven_v4(_|$)/
 export function deriveVerifiedTtsProviders(modelIds: readonly string[]): TtsProvider[] {
   const verified: TtsProvider[] = []
   const v2Era = modelIds.filter((m) => !V4_FAMILY.test(m))
+  if (modelIds.includes("eleven_v4")) verified.push("elevenlabs-v4")
   if (modelIds.some((m) => m.includes("eleven_v3"))) verified.push("elevenlabs-v3")
   if (v2Era.some((m) => m.includes("turbo") || m.includes("flash"))) verified.push("elevenlabs-turbo")
   if (v2Era.some((m) => m.includes("multilingual_v2"))) verified.push("elevenlabs-multilingual")
   return verified
+}
+
+/**
+ * Drop the providers this deployment does not offer (surface profile
+ * `models.allow` / `models.deny`, or a saved Admin → Availability override)
+ * from each voice's verified list, keeping the order, and set
+ * `recommendedProvider` to the first one left. A voice with nothing left
+ * carries neither field — the same shape as a voice verified for no model of
+ * ours, so clients do not switch providers for it.
+ *
+ * Runs on every response, cache hits included: the 5-minute page cache holds
+ * the full verified list, so an availability change saved by an admin applies
+ * at once instead of after the page expires. Without it, a curated deployment
+ * that never listed a newer model (v4) would be told to send exactly the model
+ * its own text-to-speech route then refuses.
+ */
+function withAvailableProviders(page: { voices: SharedVoice[]; hasMore: boolean }): {
+  voices: SharedVoice[]
+  hasMore: boolean
+} {
+  return {
+    ...page,
+    voices: page.voices.map(({ verifiedProviders, ...voice }) => {
+      const available = (verifiedProviders ?? []).filter((p) => !isModelDenied(p))
+      return available.length > 0
+        ? { ...voice, recommendedProvider: available[0], verifiedProviders: available }
+        : voice
+    }),
+  }
 }
 
 interface SharedVoiceCacheEntry {
@@ -213,7 +249,7 @@ export async function voicesRoutes(app: FastifyInstance) {
     const cacheKey = getSharedCacheKey(params)
     const cached = sharedVoiceCache.get(cacheKey)
     if (cached && Date.now() < cached.expiresAt) {
-      return reply.send(cached.data)
+      return reply.send(withAvailableProviders(cached.data))
     }
 
     try {
@@ -269,9 +305,7 @@ export async function voicesRoutes(app: FastifyInstance) {
           description: v.description ?? "",
           use_case: v.use_case ?? "",
           category: v.category ?? "",
-          ...(verifiedProviders.length > 0
-            ? { recommendedProvider: verifiedProviders[0], verifiedProviders }
-            : {}),
+          ...(verifiedProviders.length > 0 ? { verifiedProviders } : {}),
         }
       })
 
@@ -280,13 +314,14 @@ export async function voicesRoutes(app: FastifyInstance) {
       // not honor). Inert when unrestricted.
       const result = { voices: filterVoicesByAllowedGender(voices), hasMore: data.has_more ?? false }
 
-      // Cache result (clear all on overflow)
+      // Cache result (clear all on overflow). The cache holds every verified
+      // provider; model availability is applied on the way out (below).
       if (sharedVoiceCache.size >= SHARED_CACHE_MAX) {
         sharedVoiceCache.clear()
       }
       sharedVoiceCache.set(cacheKey, { data: result, expiresAt: Date.now() + SHARED_CACHE_TTL_MS })
 
-      return reply.send(result)
+      return reply.send(withAvailableProviders(result))
     } catch (err) {
       console.error("[voices/library] Failed to fetch shared voices:", (err as Error).message)
       return reply.send({ voices: [], hasMore: false })

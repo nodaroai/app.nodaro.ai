@@ -10,6 +10,7 @@ import {
   buildVideoAnalysisCreditId,
   resolveVideoAnalysisModel,
   getMaxTtsChars,
+  DEFAULT_TTS_PROVIDER,
   buildLipSyncCreditId,
 } from "@nodaro/shared"
 import { newSession } from "../../session.js"
@@ -1932,5 +1933,17 @@ describe("audit follow-ups — descriptions tell the truth", () => {
     for (const n of stated) expect(n, `the description states ${n} but text stops at ${maxLength}`).toBeLessThanOrEqual(maxLength)
     // …and the schema lets v4 use its whole cap.
     expect(maxLength).toBeGreaterThanOrEqual(getMaxTtsChars("elevenlabs-v4"))
+  })
+
+  it("generate_speech's copy names the model the handler defaults to — and no other — as the default", async () => {
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify: Fastify() })
+    const tool = (await listTools(server)).find((t) => t.name === "generate_speech")
+    const modelDesc = ((tool?.inputSchema as { properties?: Record<string, { description?: string }> }).properties?.model?.description) ?? ""
+    for (const copy of [tool?.description ?? "", modelDesc]) {
+      expect(copy).toContain(`\`${DEFAULT_TTS_PROVIDER}\` (default)`)
+      expect(copy).not.toMatch(/`elevenlabs-v3` \(default\)|Default `elevenlabs-v3`/)
+      expect(copy).not.toMatch(/switch away from v3/)
+    }
   })
 })

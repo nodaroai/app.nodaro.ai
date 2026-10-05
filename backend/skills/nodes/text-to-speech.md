@@ -1,7 +1,7 @@
 ---
 node_type: text-to-speech
-generated_at: 2026-09-27T12:51:23.378Z
-generated_from: c607aa02c
+generated_at: 2026-10-05T10:55:37.632Z
+generated_from: 36ded98bd
 ---
 
 # Text to Speech
@@ -44,7 +44,7 @@ generated_from: c607aa02c
 ```json
 {
   "label": "Text to Speech",
-  "provider": "elevenlabs-v3",
+  "provider": "elevenlabs-v4",
   "voiceId": "Rachel",
   "voiceType": "premade",
   "voiceDisplayName": "Rachel",
@@ -98,7 +98,7 @@ generated_from: c607aa02c
   },
   "data": {
     "label": "Text to Speech",
-    "provider": "elevenlabs-v3",
+    "provider": "elevenlabs-v4",
     "voiceId": "Rachel",
     "voiceType": "premade",
     "voiceDisplayName": "Rachel",

@@ -96,7 +96,7 @@ async function runUntilSettled<T>(p: Promise<T>, stepMs = 3500, maxSteps = 30): 
 }
 
 describe("pipelineGenerateNarration", () => {
-  it("returns narration audio asset on happy path with elevenlabs-v3 default", async () => {
+  it("returns narration audio asset on happy path with the default speech model (ElevenLabs v4)", async () => {
     const supabase = makeSupabaseMock({
       jobStates: [
         {
@@ -123,9 +123,10 @@ describe("pipelineGenerateNarration", () => {
     // narration fits inside the video.
     expect(result.audioDurationSec).toBe(12.5)
     expect(getVideoDuration).toHaveBeenCalledWith("https://r2/narration.mp3")
-    // Default model is elevenlabs-v3 (direct API, supports [audio tags]).
+    // Default model is the default speech model, ElevenLabs v4 (direct API,
+    // supports [audio tags]) — reserved and run as the same model.
     expect(CreditsService.reserveCredits).toHaveBeenCalledWith(
-      "u1", "narr-job-1", "elevenlabs-v3", 0, 0, { isAppRun: false, billingContext: { payer: "user", userId: "u1" } },
+      "u1", "narr-job-1", "elevenlabs-v4", 0, 0, { isAppRun: false, billingContext: { payer: "user", userId: "u1" } },
     )
     expect(videoQueue.add).toHaveBeenCalledWith(
       "text-to-speech",
@@ -133,9 +134,60 @@ describe("pipelineGenerateNarration", () => {
         jobId: "narr-job-1",
         text: "In a world where the night never ends...",
         voice: "ElevenLabs-Adam",
-        provider: "elevenlabs-v3",
+        provider: "elevenlabs-v4",
       }),
     )
+  })
+
+  it("keeps an explicit model override, reserved and run as that model", async () => {
+    const supabase = makeSupabaseMock({
+      jobStates: [{ status: "completed", output_data: { audioUrl: "https://r2/narration.mp3" }, credits_actual: 4 }],
+      assetRow: { id: "asset-narr-1" },
+    })
+    const promise = pipelineGenerateNarration({ supabase, pipelineId: "p1", userId: "u1", text: "hi", modelId: "elevenlabs-v3" })
+    await runUntilSettled(promise)
+    expect(CreditsService.reserveCredits).toHaveBeenCalledWith(
+      "u1", "narr-job-1", "elevenlabs-v3", 0, 0, { isAppRun: false, billingContext: { payer: "user", userId: "u1" } },
+    )
+    expect(videoQueue.add).toHaveBeenCalledWith("text-to-speech", expect.objectContaining({ provider: "elevenlabs-v3" }))
+  })
+
+  // The REST route's omitted-provider rule, through the one shared function: the
+  // default model up to its own cap, turbo above it — reserved and run as one model.
+  it("reserves and runs turbo when no model is given and the text is over the default model's cap", async () => {
+    const supabase = makeSupabaseMock({
+      jobStates: [{ status: "completed", output_data: { audioUrl: "https://r2/narration.mp3" }, credits_actual: 4 }],
+      assetRow: { id: "asset-narr-1" },
+    })
+    const promise = pipelineGenerateNarration({ supabase, pipelineId: "p1", userId: "u1", text: "a".repeat(12000) })
+    await runUntilSettled(promise)
+    expect(CreditsService.reserveCredits).toHaveBeenCalledWith(
+      "u1", "narr-job-1", "elevenlabs-turbo", 0, 0, { isAppRun: false, billingContext: { payer: "user", userId: "u1" } },
+    )
+    expect(videoQueue.add).toHaveBeenCalledWith("text-to-speech", expect.objectContaining({ provider: "elevenlabs-turbo" }))
+  })
+
+  it("keeps the default model when no model is given and the text is within its cap", async () => {
+    const supabase = makeSupabaseMock({
+      jobStates: [{ status: "completed", output_data: { audioUrl: "https://r2/narration.mp3" }, credits_actual: 4 }],
+      assetRow: { id: "asset-narr-1" },
+    })
+    const promise = pipelineGenerateNarration({ supabase, pipelineId: "p1", userId: "u1", text: "a".repeat(9000) })
+    await runUntilSettled(promise)
+    expect(CreditsService.reserveCredits).toHaveBeenCalledWith(
+      "u1", "narr-job-1", "elevenlabs-v4", 0, 0, { isAppRun: false, billingContext: { payer: "user", userId: "u1" } },
+    )
+    expect(videoQueue.add).toHaveBeenCalledWith("text-to-speech", expect.objectContaining({ provider: "elevenlabs-v4" }))
+  })
+
+  it("never applies the length rule to an explicit model", async () => {
+    const supabase = makeSupabaseMock({
+      jobStates: [{ status: "completed", output_data: { audioUrl: "https://r2/narration.mp3" }, credits_actual: 4 }],
+      assetRow: { id: "asset-narr-1" },
+    })
+    const promise = pipelineGenerateNarration({ supabase, pipelineId: "p1", userId: "u1", text: "a".repeat(12000), modelId: "elevenlabs-v4" })
+    await runUntilSettled(promise)
+    expect(videoQueue.add).toHaveBeenCalledWith("text-to-speech", expect.objectContaining({ provider: "elevenlabs-v4" }))
   })
 
   it("returns audioDurationSec=null when ffprobe fails — non-fatal fallback", async () => {

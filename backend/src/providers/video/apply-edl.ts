@@ -59,14 +59,14 @@ import { ffmpegThreads, type FfmpegThreads } from "./ffmpeg-threads.js"
 import {
   audioMuxTimeoutMs,
   audioSourceId,
-  chunkOutputSec,
+  chunkOutputMs,
   referencedSourceIds,
   resolveChunksForOutput,
   secs,
   type ChunkPlanOptions,
   type PlanSegment,
 } from "./apply-edl-budget.js"
-import { aacArgs, buildSliceCommand, offsetOf, type SliceCommand, type SliceOptions } from "./apply-edl-slice.js"
+import { aacArgs, buildSliceCommand, offsetOf, pictureFramesOf, type SliceCommand, type SliceOptions } from "./apply-edl-slice.js"
 
 // The chunk plan and the liveness budget live in the pure leaf
 // `apply-edl-budget.ts` (the workflow orchestrator reads the budget without
@@ -93,6 +93,7 @@ export {
   WIDE_SLICE_SECS_PER_OUTPUT_SEC,
   applyEdlRenderBudgetMs,
   audioMuxTimeoutMs,
+  chunkOutputMs,
   chunkOutputSec,
   chunkRenderTimeoutMs,
   planChunks,
@@ -110,9 +111,13 @@ export {
   APPLY_EDL_GRID_READ_GUARD_FRAMES,
   aacArgs,
   buildSliceCommand,
+  pictureFramesOf,
   type SliceCommand,
   type SliceOptions,
 } from "./apply-edl-slice.js"
+
+// The one frame grid every output time → frame index goes through.
+export { frameAtMs, frameRate, frameRateOf, type FrameRate } from "./apply-edl-frame-grid.js"
 
 /** `maxSegmentsPerChunk` / `chunkThreshold` come from `ChunkPlanOptions`
  *  (`apply-edl-budget.ts`) — the same options the liveness budget plans with. */
@@ -460,23 +465,19 @@ export async function applyEdl(options: ApplyEdlOptions): Promise<ApplyEdlResult
     // Running GLOBAL output position handed to each chunk so the cumulative
     // frame grid (Track 0.14) is continuous across chunk seams — advanced by
     // every chunk, resumed ones included, so a resume can't shift the grid.
-    // Grid frames each picture chunk of a chunked video render holds, on the SAME
-    // accumulation as `chunkStartSec` below (bit for bit). A chunk that rounds to
+    // Grid frames each picture chunk of a chunked video render holds, from the
+    // SAME integer-ms positions as `chunkStartMs` below (`pictureFramesOf`, the
+    // one frame grid `frameAtMs`). A chunk that rounds to
     // no frame — slivers under half a frame in all — contributes NO picture: its
     // sound still plays in the continuous audio pass, and the next chunk's grid
     // position already accounts for it. Rendering it would add the single frame
     // `buildSliceCommand` keeps for a degenerate render and push every later
     // picture a frame behind the sound. (Unless NO chunk has a frame: then the
     // first keeps that one frame so a picture exists at all.)
-    const pictureFrames: number[] = []
-    for (let c = 0, at = 0; c < chunks.length; c++) {
-      const end = at + chunkOutputSec(chunks[c])
-      pictureFrames.push(Math.round(end * fps) - Math.round(at * fps))
-      at = end
-    }
+    const pictureFrames = pictureFramesOf(chunks, fps)
     const skipsPicture = (c: number) => muxAudioSeparately && pictureFrames[c] === 0 && pictureFrames.some((n) => n > 0)
 
-    let chunkStartSec = 0
+    let chunkStartMs = 0
     for (let c = 0; c < chunks.length; c++) {
       // Chunk boundary = cancellation boundary. A user cancel (or the
       // orchestrator's `cancelJobAndThrow` on a timed-out / cancelled run)
@@ -491,12 +492,12 @@ export async function applyEdl(options: ApplyEdlOptions): Promise<ApplyEdlResult
       // suite) this is a no-op.
       await throwIfJobCancelled()
       if (skipsPicture(c)) {
-        chunkStartSec += chunkOutputSec(chunks[c])
+        chunkStartMs += chunkOutputMs(chunks[c])
         continue
       }
       const chunkPath = join(workDir, `chunk-${c}.${pcmChunks ? "wav" : ext}`)
       const cmd = buildSliceCommand(edl, chunks[c], {
-        output, quality, target, fps, chunkStartSec, masterAudioId, audioPresent, omitAudio: muxAudioSeparately,
+        output, quality, target, fps, chunkStartMs, masterAudioId, audioPresent, omitAudio: muxAudioSeparately,
         ...(pcmChunks ? { audioCodec: "pcm" as const } : {}),
       })
       // The key is the command's fingerprint, so a checkpoint rendered for a
@@ -537,7 +538,7 @@ export async function applyEdl(options: ApplyEdlOptions): Promise<ApplyEdlResult
       }
       if (useCheckpoint) checkpointKeys.push(key)
       chunkPaths.push(chunkPath)
-      chunkStartSec += chunkOutputSec(chunks[c])
+      chunkStartMs += chunkOutputMs(chunks[c])
       onProgress?.(0.2 + 0.7 * ((c + 1) / chunks.length))
     }
 
@@ -575,7 +576,7 @@ export async function applyEdl(options: ApplyEdlOptions): Promise<ApplyEdlResult
           await throwIfJobCancelled()
           const pcmPath = join(workDir, `audio-${k}.wav`)
           await renderSlice(edl, audioChunks[k], {
-            output: "audio", audioCodec: "pcm", quality, target, fps, chunkStartSec: 0, masterAudioId, audioPresent, sourcePaths, outPath: pcmPath, threads,
+            output: "audio", audioCodec: "pcm", quality, target, fps, chunkStartMs: 0, masterAudioId, audioPresent, sourcePaths, outPath: pcmPath, threads,
           })
           pcmPaths.push(pcmPath)
         }

@@ -15,7 +15,7 @@ import {
   uiMeta,
 } from "./_verb-helpers.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
-import { SUNO_MODELS, SUNO_LEGACY_MODELS, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, SUNO_TITLE_MAX, SUNO_TEXT_MAX, AUDIO_FX_PRESETS, readPromptAffixes, MODEL_CATALOG, DEFAULT_TEXT_TO_AUDIO_PROVIDER, TTS_PROVIDERS, canonicalTtsProvider, getMaxTtsChars, type TranscribeProvider } from "@nodaro/shared"
+import { SUNO_MODELS, SUNO_LEGACY_MODELS, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, SUNO_TITLE_MAX, SUNO_TEXT_MAX, AUDIO_FX_PRESETS, readPromptAffixes, MODEL_CATALOG, DEFAULT_TEXT_TO_AUDIO_PROVIDER, TTS_PROVIDERS, DEFAULT_TTS_PROVIDER, canonicalTtsProvider, getMaxTtsChars, type TranscribeProvider } from "@nodaro/shared"
 
 /** The engine the MCP `transcribe` tool runs on. Typed against the ENABLED
  *  provider enum, so disabling this lane in @nodaro/shared fails the build here
@@ -367,18 +367,18 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       title: "Generate Speech",
       description:
         "Generate speech from text using ElevenLabs. Returns a job_id.\n\n" +
-        "**Picking a model**: `elevenlabs-v3` (default) supports `[audio tags]` " +
+        "**Picking a model**: `elevenlabs-v4` (default) supports `[audio tags]` " +
         "like `[laughs]`, `[whispers]`, `[sighs]` for emotion / pacing — best " +
         "for expressive narration, and it is FULLY MULTILINGUAL: use it for " +
-        "ALL languages including Hebrew/Arabic/CJK, not just English. " +
-        "`elevenlabs-v4` is newer: same tags, stability + similarity only " +
-        "(no speed/style). " +
+        "ALL languages including Hebrew/Arabic/CJK, not just English. It takes " +
+        "stability + similarity only (no speed/style). " +
+        "`elevenlabs-v3` is the previous model: same tags, stability only. " +
         "`elevenlabs-turbo` is cheaper for plain narration. " +
         "`elevenlabs-multilingual` is a legacy v2 model routed through a " +
         "third-party wrapper known to garble some languages (Hebrew observed) " +
         "— only pick it when a specific library voice is verified for v2 " +
-        "only. `text` is capped per model (5,000 chars on v3, 10,000 on v4) — " +
-        "split longer scripts into several calls. Never switch away from v3 for " +
+        "only. `text` is capped per model (10,000 chars on v4, 5,000 on v3) — " +
+        "split longer scripts into several calls. Never switch away from v4 for " +
         "language reasons alone. Call `list_models { kind: \"audio\", mode: \"tts\" }` " +
         "for the full sheet.\n\n" +
         "**Presets/templates**: call list_node_presets { nodeType: \"text-to-speech\" } " +
@@ -419,7 +419,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
           ),
         model: z
           // `.optional()` (NOT `.default()`): the in-handler default below keeps
-          // elevenlabs-v3 as the fallback, while leaving `args.model === undefined`
+          // DEFAULT_TTS_PROVIDER as the fallback, while leaving `args.model === undefined`
           // when the caller didn't pass it — so a defaulted model can't clobber a
           // custom preset's provider (the override rule, mirroring generate_image).
           // The enum IS the shared provider list, so a new model is accepted here
@@ -427,16 +427,16 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
           .enum(TTS_PROVIDERS)
           .optional()
           .describe(
-            "TTS model. Default `elevenlabs-v3` supports `[audio tags]` " +
+            "TTS model. `elevenlabs-v4` (default) supports `[audio tags]` " +
             "like `[laughs]`, `[whispers]`, `[sighs]` for emotion, and is fully " +
-            "multilingual — use it for ALL languages including Hebrew/Arabic/CJK. " +
-            "`elevenlabs-v4` is newer (same tags; stability + similarity only, " +
-            "no speed/style). " +
+            "multilingual — use it for ALL languages including Hebrew/Arabic/CJK " +
+            "(stability + similarity only, no speed/style). " +
+            "`elevenlabs-v3` is the previous model (same tags; stability only). " +
             "`elevenlabs-turbo` is cheaper for plain narration. " +
             "`elevenlabs-multilingual` is a legacy v2 model via a third-party " +
             "wrapper known to garble some languages (Hebrew observed) — only " +
             "use it for a v2-only-verified voice (`text` is capped per model: " +
-            "5,000 chars on v3, 10,000 on v4 — split longer scripts). `elevenlabs` " +
+            "10,000 chars on v4, 5,000 on v3 — split longer scripts). `elevenlabs` " +
             "is the legacy id of `elevenlabs-turbo`. Call " +
             "list_models { kind: \"audio\", mode: \"tts\" } for the full sheet.",
           ),
@@ -521,9 +521,9 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       // `presetId` is a control field — never submit it to the provider.
       delete effective.presetId
 
-      // `.optional()` model → default elevenlabs-v3 in-handler (so an
+      // `.optional()` model → the default speech model in-handler (so an
       // unspecified model can't clobber a custom preset's provider).
-      const modelId = (effective.model as string | undefined) ?? "elevenlabs-v3"
+      const modelId = (effective.model as string | undefined) ?? DEFAULT_TTS_PROVIDER
       // The route clamps text to the model's cap rather than refusing it; for an
       // agent that would be a silent truncation, so refuse here with the number.
       // The cap is the one of the model the request RUNS as: the legacy

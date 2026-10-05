@@ -7067,7 +7067,7 @@ export interface SharedVoice {
   description: string
   use_case: string
   category: string
-  /** Best TTS provider the voice is verified on (v3 preferred when verified, else cheapest v2). */
+  /** Best TTS provider the voice is verified on (v4 preferred when verified, then v3, else cheapest v2). */
   recommendedProvider?: TtsProvider
   /** All TTS providers the voice is verified on; snap only when the current pick isn't in here. */
   verifiedProviders?: TtsProvider[]

@@ -387,7 +387,7 @@ Stage 5 auto-forces `pipeline.config.shot_generation_mode = 'sequential'` when a
 
 ### Sub-step 7c — Narration audio
 
-When `plan.narration_script` is set on the Showrunner output (optional — best for trailers, documentaries, omniscient-narrator formats), sub-step 7c generates a single narrator-voice audio track via ElevenLabs (default model: `elevenlabs-v3` for `[audio tags]` support). Runs ONCE per pipeline (not per-scene) before sub-step 7d'. Persists `narration_audio_url` + `narration_audio_duration_sec` to `pipeline_stages.output`. Sub-step 7j mixes it as a second audio track over the music with **60% music duck** (constant amix ducking; sidechain compression is a follow-up).
+When `plan.narration_script` is set on the Showrunner output (optional — best for trailers, documentaries, omniscient-narrator formats), sub-step 7c generates a single narrator-voice audio track via ElevenLabs (default model: `elevenlabs-v4`, the default speech model, for `[audio tags]` support; a narration script over v4's 10,000-character cap runs, and is billed, on `elevenlabs-turbo` instead, the same length rule as a [Text to Speech](../ai-audio/text-to-speech.md) request with no model). Runs ONCE per pipeline (not per-scene) before sub-step 7d'. Persists `narration_audio_url` + `narration_audio_duration_sec` to `pipeline_stages.output`. Sub-step 7j mixes it as a second audio track over the music with **60% music duck** (constant amix ducking; sidechain compression is a follow-up).
 
 `pipelines.config.narration_enabled` (default `true`) lets the user opt out.
 

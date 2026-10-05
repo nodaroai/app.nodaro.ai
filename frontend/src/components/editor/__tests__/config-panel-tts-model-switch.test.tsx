@@ -84,7 +84,7 @@ beforeEach(() => {
 afterEach(() => cleanup())
 
 describe("text-to-speech panel — selecting another node rewrites nothing", () => {
-  it("a turbo node, then a default v3 node: the v3 node keeps the settings it carries and the workflow stays clean", async () => {
+  it("a turbo node, then a default node: the default node keeps the settings it carries and the workflow stays clean", async () => {
     useWorkflowStore.setState({ nodes: [ttsNode("A", { provider: "elevenlabs-turbo" }), ttsNode("B")], edges: [], selectedNodeId: "A", isDirty: false, isReadOnly: false } as never)
     mountPanel()
     await tick()
@@ -125,6 +125,24 @@ describe("text-to-speech panel — selecting another node rewrites nothing", () 
 
     expect(dataOf("B").languageCode).toBe("he")
     expect(useWorkflowStore.getState().isDirty).toBe(false)
+  })
+})
+
+describe("text-to-speech panel — the model it shows", () => {
+  it("a node that stores no model shows the default speech model (v4), which is what it runs as, and rewrites nothing", async () => {
+    useWorkflowStore.setState({ nodes: [ttsNode("A", { provider: undefined })], edges: [], selectedNodeId: "A", isDirty: false, isReadOnly: false } as never)
+    mountPanel()
+    await tick()
+    expect(screen.getByRole("combobox", { name: "Model" }).textContent).toMatch(/^ElevenLabs v4/)
+    expect(dataOf("A").provider).toBeUndefined()
+    expect(useWorkflowStore.getState().isDirty).toBe(false)
+  })
+
+  it("a node that stores v3 still shows v3", async () => {
+    useWorkflowStore.setState({ nodes: [ttsNode("A", { provider: "elevenlabs-v3" })], edges: [], selectedNodeId: "A", isDirty: false, isReadOnly: false } as never)
+    mountPanel()
+    await tick()
+    expect(screen.getByRole("combobox", { name: "Model" }).textContent).toMatch(/^ElevenLabs v3/)
   })
 })
 

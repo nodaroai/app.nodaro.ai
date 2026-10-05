@@ -143,6 +143,7 @@ here for each one anyway.
 | `SCENE3D_PRIVATE_S3_ACCESS_KEY_ID` / `SCENE3D_PRIVATE_S3_SECRET_ACCESS_KEY` | existing R2 credentials | Server-side credentials for the private scene bucket. Prefer credentials restricted to that bucket. |
 | `SCENE3D_PRIVATE_S3_FORCE_PATH_STYLE` | existing R2 setting | Enable with `true` or `1` for an S3-compatible store that requires path-style addressing. |
 | `RUNTIME_ENV` | `RAILWAY_ENVIRONMENT_NAME`, else `local` | Names this deployment. Only matters when two installs share ONE database but have SEPARATE Redis instances (a staging + production pair): each install's stale-execution sweeps then reconcile only the runs its own orchestrator claimed, instead of marking the other install's healthy executions "orphaned". On Railway, `RAILWAY_ENVIRONMENT_NAME` already supplies it — set `RUNTIME_ENV` yourself only elsewhere. Every container of one install (API, workers, orchestrator) must use the SAME value |
+| `SCHEDULE_TRIGGERS_ENABLED` | on — except on a Railway environment not named `production` | Whether this install fires scheduled workflows (Schedule Trigger nodes and schedule triggers made through the API). Unset: an install off Railway fires them, and on Railway only the environment named `production` does — a staging environment that shares production's database must not run production users' schedules on its own build. `true` / `1` turns it on anywhere, `false` / `0` turns it off anywhere; any other value stops the API from starting. Two installs that both fire the same database are still safe: each tick is claimed atomically, so only one of them starts the run. Restart to apply |
 | `CLIENT_IP_HEADER` | unset (Railway: `x-real-ip`, set by the image) | A header your platform's edge proxy uses to state the real client address. Trusted only from `CLIENT_IP_HEADER_FROM` hops — see §3, "How the backend picks the client address". `none` (or empty) switches it off, also on Railway |
 | `CLIENT_IP_HEADER_FROM` | unset (Railway: `100.64.0.0/10`) | Comma-separated ranges the edge connects from. Required with `CLIENT_IP_HEADER`: unset (or no valid range) and the API refuses to start; `any` trusts the header from every hop — only safe when nothing but your edge can reach the container |
 | `NETWORK_HASH_SECRET` | unset | 32+ characters. Keys the hash under which client networks are stored (free-credit signup checks, report dedup). Unset = plain sha256. Every install sharing one database must use the same value; changing it forgets every recorded network. A value shorter than 32 characters stops the API from starting |
@@ -943,6 +944,15 @@ orchestration jobs in its own Redis, fails to find them, and marks
 perfectly healthy runs failed with "Execution orphaned". Rows already
 running at the moment you upgrade carry no name yet; the install named
 `production` reconciles those.
+
+Scheduled workflows are stored in that shared database too, so only one
+of the installs should fire them. On Railway that is automatic: only the
+environment named `production` fires schedules unless you set
+`SCHEDULE_TRIGGERS_ENABLED`. Elsewhere every install fires by default —
+set `SCHEDULE_TRIGGERS_ENABLED=false` on the copy that should not. If two
+installs do fire, each tick is claimed atomically (its last-fired time
+moves only if no one else moved it first), so a schedule still starts one
+run per tick, but that run may come from either install's build.
 
 **Redis HA**: BullMQ supports Redis cluster mode out of the box. Set
 `REDIS_URL` to a cluster endpoint or a Sentinel URL.

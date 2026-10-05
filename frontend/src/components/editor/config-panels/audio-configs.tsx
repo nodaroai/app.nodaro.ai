@@ -61,7 +61,7 @@ import type {
   ForcedAlignmentData,
   GeneratedScript,
 } from "@/types/nodes"
-import { VOICE_CHANGER_MODELS, DEFAULT_VOICE_CHANGER_MODEL, AUDIO_FX_PRESETS, AUDIO_FX_REVERB_PRESETS, REPLICATE_LIP_SYNC_PROVIDERS, FAL_LIP_SYNC_PROVIDERS, VIDEO_INPUT_LIP_SYNC_PROVIDERS, isPerSecondLipSyncProvider, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, sunoModelHonoursDuration, SUNO_HARD_CEILING, SUNO_TITLE_MAX, getMaxSunoPromptChars, getMaxSunoStyleChars, getMaxTtsChars, sunoCreditType, DEFAULT_TEXT_TO_AUDIO_PROVIDER } from "@nodaro/shared"
+import { VOICE_CHANGER_MODELS, DEFAULT_VOICE_CHANGER_MODEL, AUDIO_FX_PRESETS, AUDIO_FX_REVERB_PRESETS, REPLICATE_LIP_SYNC_PROVIDERS, FAL_LIP_SYNC_PROVIDERS, VIDEO_INPUT_LIP_SYNC_PROVIDERS, isPerSecondLipSyncProvider, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, sunoModelHonoursDuration, SUNO_HARD_CEILING, SUNO_TITLE_MAX, getMaxSunoPromptChars, getMaxSunoStyleChars, getMaxTtsChars, sunoCreditType, DEFAULT_TEXT_TO_AUDIO_PROVIDER, DEFAULT_TTS_PROVIDER } from "@nodaro/shared"
 import type { AudioFxPreset } from "@nodaro/shared"
 import { getEffectiveSunoCustomMode } from "@nodaro/prompts"
 import { MappableField } from "./mappable-field"
@@ -139,6 +139,12 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
   const localizeOption = useLocalizeOptionLabel()
   const t = useT()
   const textSource = data.textSource || "connected"
+  // The model the dropdown, the description hint and the length counter show: a node
+  // with no model runs on DEFAULT_TTS_PROVIDER up to that model's cap (every run lane's
+  // omitted-provider rule; text over the cap runs on turbo, which this display does not
+  // follow — a known gap), so it shows that. The legacy `elevenlabs` id still shows as v3 although it runs as turbo
+  // — a known display mismatch, unchanged here (it has no entry in TTS_MODELS).
+  const shownModel = data.provider === "elevenlabs" ? "elevenlabs-v3" : (data.provider || DEFAULT_TTS_PROVIDER)
   const promptSnippets = useSnippetPool("audio", "prompt")
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "directText")
   const finalPrompt = useFinalPromptSegments({
@@ -172,7 +178,7 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
       </div>
       <MappableField field="provider" label={t("field.model")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="voice">
         <Select
-          value={data.provider === "elevenlabs" ? "elevenlabs-v3" : (data.provider || "elevenlabs-v3")}
+          value={shownModel}
           onValueChange={(v) => onUpdate({ provider: v as TextToSpeechData["provider"], ...ttsModelSwitchPatch(v, data) })}
         >
           <SelectTrigger aria-label={t("field.model")}><SelectValue /></SelectTrigger>
@@ -184,7 +190,7 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
         </Select>
       </MappableField>
       <ProviderAudioTagWarning provider={data.provider} fieldValues={[data.directText]} />
-      <ModelDescriptionHint modelId={data.provider === "elevenlabs" ? "elevenlabs-v3" : (data.provider || "elevenlabs-v3")} />
+      <ModelDescriptionHint modelId={shownModel} />
       {textSource === "direct" && (
         <MappableField field="directText" label={t("field.text")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} labelAction={<span className="inline-flex items-center gap-0.5">
           <PromptFieldModeToggle mode={promptFieldMode.mode} onToggle={promptFieldMode.toggle} />
@@ -209,7 +215,7 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
                 displayMode={variableDisplayMode}
                 refMap={refMap}
               />
-              <PromptLengthCounter value={data.directText || ""} max={getMaxTtsChars(data.provider === "elevenlabs" ? "elevenlabs-v3" : (data.provider || "elevenlabs-v3"))} modelLabel={data.provider === "elevenlabs" ? "elevenlabs-v3" : (data.provider || "elevenlabs-v3")} noun={t("audiocfg.text")} />
+              <PromptLengthCounter value={data.directText || ""} max={getMaxTtsChars(shownModel)} modelLabel={shownModel} noun={t("audiocfg.text")} />
               <p className="text-[10px] text-muted-foreground mt-1">{t("audiocfg.hintTypeTags")}</p>
             </>
           )}
@@ -2400,7 +2406,8 @@ const VOICE_DESIGN_MODEL_TO_TTS_PROVIDER: Record<string, string> = {
 
 export function VoiceDesignConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<VoiceDesignData> & { nodeId?: string }) {
   const t = useT()
-  const ttsProvider = VOICE_DESIGN_MODEL_TO_TTS_PROVIDER[data.model || "eleven_ttv_v3"] || "elevenlabs-v3"
+  // An unknown Voice Design model reads as its default, eleven_ttv_v3 (Voice Design stays on v3).
+  const ttsProvider = VOICE_DESIGN_MODEL_TO_TTS_PROVIDER[data.model || "eleven_ttv_v3"] ?? VOICE_DESIGN_MODEL_TO_TTS_PROVIDER.eleven_ttv_v3
   const promptSnippets = useSnippetPool("audio", "prompt")
   const promptFieldMode = usePromptFieldMode(nodeId ?? "", "voiceDescription")
   const finalPrompt = useFinalPromptSegments({

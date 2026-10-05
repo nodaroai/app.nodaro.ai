@@ -12,13 +12,15 @@ import type { Edl, EdlSegment, EdlSource } from "@nodaro/shared"
 import { COMBINE_DELIVERY_CRF } from "./ffmpeg-utils.js"
 import {
   audioSourceId,
+  boundaryOverlapMs,
   boundaryOverlapSecs,
-  chunkOutputSec,
+  chunkOutputMs,
   chunkRenderTimeoutMs,
   secs,
   INPUT_SEEK_MARGIN_SEC,
   type PlanSegment,
 } from "./apply-edl-budget.js"
+import { frameAtMs, frameRateOf } from "./apply-edl-frame-grid.js"
 
 /** A render's sound, by quality. A FINAL carries the delivery stream. A PROXY
  *  (review) render carries lighter MONO sound (A1c, TA7 decided 2026-10-04):
@@ -68,6 +70,23 @@ function gridHold(frames: number): string {
 
 export const offsetOf = (s: EdlSource | undefined): number => s?.offsetMs ?? 0
 
+/** The grid frames each chunk of a render holds: chunk c covers
+ *  [frameAtMs(start_c), frameAtMs(start_c + its length)) of the GLOBAL grid,
+ *  `start_c` being Σ of the chunks before it in whole ms — the position the
+ *  executor hands that chunk's slice (`chunkStartMs`), so a chunk's count and
+ *  its slice's `gridHold` are one computation. The counts telescope: the whole
+ *  render holds `frameAtMs(edlDurationMs(edl))` frames, the length of its sound. */
+export function pictureFramesOf(chunks: readonly (readonly PlanSegment[])[], fps: number): number[] {
+  const rate = frameRateOf(fps)
+  const out: number[] = []
+  for (let c = 0, atMs = 0; c < chunks.length; c++) {
+    const endMs = atMs + chunkOutputMs(chunks[c])
+    out.push(frameAtMs(endMs, rate) - frameAtMs(atMs, rate))
+    atMs = endMs
+  }
+  return out
+}
+
 /** How ONE contiguous slice of segments renders (see `buildSliceCommand`). */
 export interface SliceOptions {
   readonly output: "video" | "audio"
@@ -79,12 +98,14 @@ export interface SliceOptions {
    *  `PROXY_DOWNMIX`), lossless slices included. */
   readonly quality: "proxy" | "final"
   readonly target: { width: number; height: number }
+  /** The canvas rate, 0.001-keyed (`pickTargetFps`); the grid reads it as a
+   *  fraction (`frameRateOf`). */
   readonly fps: number
-  /** This chunk's start position on the GLOBAL output timeline, in seconds
-   *  (Σ of prior chunks' output length). The cumulative frame grid (Track
+  /** This chunk's start position on the GLOBAL output timeline, in whole ms
+   *  (Σ of prior chunks' `chunkOutputMs`). The cumulative frame grid (Track
    *  0.14) is laid from here so chunk seams sit on the same grid — a chunked
-   *  render holds round(totalDur·fps) frames end to end, not per chunk. */
-  readonly chunkStartSec: number
+   *  render holds frameAtMs(total) frames end to end, not per chunk. */
+  readonly chunkStartMs: number
   readonly masterAudioId: string | undefined
   readonly audioPresent: Map<string, boolean>
   /** Render the PICTURE only, no audio track (video output only). Used for the
@@ -128,7 +149,8 @@ export interface SliceCommand {
  * `audioPresent` maps a source id to whether its file carries an audio stream.
  */
 export function buildSliceCommand(edl: Edl, segs: readonly PlanSegment[], opts: SliceOptions): SliceCommand {
-  const { output, target, fps, chunkStartSec, masterAudioId, audioPresent, omitAudio, audioCodec = "aac" } = opts
+  const { output, target, fps, chunkStartMs, masterAudioId, audioPresent, omitAudio, audioCodec = "aac" } = opts
+  const rate = frameRateOf(fps)
   const wantVideo = output === "video"
   const emitAudio = !omitAudio // audio-only renders never pass omitAudio
 
@@ -170,33 +192,31 @@ export function buildSliceCommand(edl: Edl, segs: readonly PlanSegment[], opts: 
   const useGrid = wantVideo && !chunkHasXfade
 
   // Each segment's GLOBAL frame interval [startF, endF), for both kinds of
-  // chunk, computed with EXACTLY `chunkOutputSec`'s arithmetic: the running
-  // prefix is `(prefix + duration) − overlap` in that operation order, so the
-  // last segment's end is the bitwise-same double `gridN` rounds and the caller
-  // adds to the next chunk's `chunkStartSec`. A chunk's plan, its gridHold and
-  // the next chunk's first frame therefore agree even at an exact half-frame
-  // tie, where two float orders of the same sum round to opposite frames. A
-  // plan built from a different running sum disagreed with gridHold at ~1–5% of
-  // crossfade chunks at 25/30/50/60 fps (gridHold then cloned the last frame in
-  // place of a real one), and a cut-only chunk's end could miss the next
-  // chunk's start by a frame — a one-frame A/V step per such seam. A cut's
-  // start IS the previous end (the same integer), so the counts telescope.
-  const intervals: Array<{ readonly startF: number; readonly endF: number; readonly endSec: number; readonly overlapSec: number; readonly leadFrames: number }> = []
+  // chunk: every boundary is `frameAtMs` of an exact integer-ms position on the
+  // output timeline (`chunkOutputMs`'s sum), never a float product of seconds.
+  // A chunk's plan, its gridHold, the next chunk's first frame and the
+  // executor's totals (`pictureFramesOf`) are therefore one computation and
+  // agree even at an exact half-frame tie — where two float orders of the same
+  // sum round to opposite frames ((15.95 + 1.4)·30 = 520.4999…, 17 350 ms is
+  // frame 520.5): a [10, 1] chunked render came out a frame short of its sound
+  // (decided 2026-10-05: fix the seam). A cut's start IS the previous end (the
+  // same integer), so the counts telescope.
+  const intervals: Array<{ readonly startF: number; readonly endF: number; readonly endMs: number; readonly overlapMs: number; readonly leadFrames: number }> = []
   {
-    let prefix = 0
-    let prevEndF = Math.round(chunkStartSec * fps)
+    let prefixMs = 0
+    let prevEndF = frameAtMs(chunkStartMs, rate)
     segs.forEach((seg, i) => {
-      const overlapSec = i > 0 ? boundaryOverlapSecs(seg, segs[i - 1]) : 0
-      const startSec = chunkStartSec + (prefix - overlapSec)
-      const startF = overlapSec > 0 ? Math.round(startSec * fps) : prevEndF
-      prefix = prefix + secs(seg.outMs - seg.inMs) - overlapSec
-      const endSec = chunkStartSec + prefix
-      const endF = Math.round(endSec * fps)
+      const overlapMs = i > 0 ? boundaryOverlapMs(seg, segs[i - 1]) : 0
+      const startMs = chunkStartMs + prefixMs - overlapMs
+      const startF = overlapMs > 0 ? frameAtMs(startMs, rate) : prevEndF
+      prefixMs += seg.outMs - seg.inMs - overlapMs
+      const endMs = chunkStartMs + prefixMs
+      const endF = frameAtMs(endMs, rate)
       // A split tail (`PlanSegment.splitLeadMs`) is read from its whole
       // segment's start, so its frames are that segment's frames from here on:
       // skip the ones its head, in the previous chunk, already rendered.
-      const leadFrames = seg.splitLeadMs ? Math.max(0, startF - Math.round((startSec - secs(seg.splitLeadMs)) * fps)) : 0
-      intervals.push({ startF, endF, endSec, overlapSec, leadFrames })
+      const leadFrames = seg.splitLeadMs ? Math.max(0, startF - frameAtMs(startMs - seg.splitLeadMs, rate)) : 0
+      intervals.push({ startF, endF, endMs, overlapMs, leadFrames })
       prevEndF = endF
     })
   }
@@ -227,19 +247,19 @@ export function buildSliceCommand(edl: Edl, segs: readonly PlanSegment[], opts: 
   interface XfSeg { readonly frames: number; readonly join: "first" | "concat" | "xfade" | "none"; readonly xfFrames: number; readonly offsetFrames: number }
   const xfPlan: XfSeg[] = []
   if (chunkHasXfade) {
-    const chunkStartF = Math.round(chunkStartSec * fps)
+    const chunkStartF = frameAtMs(chunkStartMs, rate)
     let accEndF = chunkStartF
     let started = false
-    intervals.forEach(({ startF, endF, endSec, overlapSec }, i) => {
+    intervals.forEach(({ startF, endF, endMs, overlapMs }, i) => {
       const frames = Math.max(0, endF - startF)
       const covered = Math.max(0, accEndF - startF) // frames of this segment the picture already holds
       // A split head wholly inside the crossfade into it still blends — one pass
       // blends exactly those frames — when its segment goes on past them: its
       // tail (next chunk, `PlanSegment.splitTailMs`) holds a frame of its own on
-      // the grid. `endSec` is the next chunk's start, bit for bit (one arithmetic).
+      // the grid. `endMs` is the next chunk's start (one integer arithmetic).
       const tailMs = segs[i]!.splitTailMs ?? 0
-      const blendsWhole = tailMs > 0 && covered === frames && Math.round((endSec + secs(tailMs)) * fps) > endF
-      if (started && overlapSec > 0 && covered >= 1 && (covered < frames || blendsWhole)) {
+      const blendsWhole = tailMs > 0 && covered === frames && frameAtMs(endMs + tailMs, rate) > endF
+      if (started && overlapMs > 0 && covered >= 1 && (covered < frames || blendsWhole)) {
         xfPlan.push({ frames, join: "xfade", xfFrames: covered, offsetFrames: startF - chunkStartF })
         accEndF = endF
       } else if (frames - covered > 0) {
@@ -447,7 +467,7 @@ export function buildSliceCommand(edl: Edl, segs: readonly PlanSegment[], opts: 
       vAcc = out
     }
     chainParts.push(`${vAcc!}null[vxf]`)
-    const gridN = Math.max(1, Math.round((chunkStartSec + chunkOutputSec(segs)) * fps) - Math.round(chunkStartSec * fps))
+    const gridN = Math.max(1, frameAtMs(chunkStartMs + chunkOutputMs(segs), rate) - frameAtMs(chunkStartMs, rate))
     chainParts.push(`[vxf]${gridHold(gridN)}[vout]`)
     videoOutLabel = "[vout]"
   } else if (wantVideo) {

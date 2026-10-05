@@ -520,6 +520,13 @@ const LIP_SYNC_AUDIO_LENGTH_BYTES = 228
 // 386_737 total − 386_683 with the old description = 54 B.
 const TEXT_TO_AUDIO_PER_SECOND_PRICING_BYTES = 54
 
+// RAISED by generate_speech's default-flip wording and nothing else: the tool and
+// its `model` argument now name `elevenlabs-v4` as the default and describe v3 as
+// the previous model (decided 2026-10-05). No tool was added, so the fixture does
+// NOT move. measured by this suite: 386_807 total − 386_737 with the previous
+// wording = 70 B, which keeps the 13 B of headroom the list had before.
+const ELEVENLABS_V4_DEFAULT_WORDING_BYTES = 70
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192,
   totalBytes:
@@ -569,7 +576,8 @@ export const TOOL_WIRE_BUDGET = {
     ELEVENLABS_V4_SPEECH_BYTES +
     LIP_SYNC_AUDIO_LENGTH_BYTES +
     VIDEO_ANALYSIS_SMART_ONLY_BYTES +
-    TEXT_TO_AUDIO_PER_SECOND_PRICING_BYTES,
+    TEXT_TO_AUDIO_PER_SECOND_PRICING_BYTES +
+    ELEVENLABS_V4_DEFAULT_WORDING_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

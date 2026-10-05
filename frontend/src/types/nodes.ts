@@ -8144,14 +8144,16 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 3,
     inputs: ["prompt"],
     outputs: ["audio"],
-    defaultData: { label: "Text to Speech", provider: "elevenlabs-v3", voiceId: "Rachel", voiceType: "premade", voiceDisplayName: "Rachel", language: "en", ...TTS_VOICE_SETTING_DEFAULTS, languageCode: "", textSource: "connected", directText: "", fieldMappings: {} },
+    // `provider` is DEFAULT_TTS_PROVIDER (@nodaro/shared), spelled as a literal because the
+    // gen:skills parser reads this statically; text-to-speech-default-model.test.ts links them.
+    defaultData: { label: "Text to Speech", provider: "elevenlabs-v4", voiceId: "Rachel", voiceType: "premade", voiceDisplayName: "Rachel", language: "en", ...TTS_VOICE_SETTING_DEFAULTS, languageCode: "", textSource: "connected", directText: "", fieldMappings: {} },
     exposableOutputs: [{ key: "result", label: "Result", outputType: "audio" as const }],
     exposableFields: [
       {
         key: "provider", label: "Model", type: "select" as const,
         options: [
-          { value: "elevenlabs-v3", label: "ElevenLabs v3 (recommended)" },
-          { value: "elevenlabs-v4", label: "ElevenLabs v4" },
+          { value: "elevenlabs-v4", label: "ElevenLabs v4 (recommended)" },
+          { value: "elevenlabs-v3", label: "ElevenLabs v3" },
           { value: "elevenlabs-turbo", label: "ElevenLabs Turbo v2.5 (fast)" },
           { value: "elevenlabs-multilingual", label: "ElevenLabs Multilingual v2" },
         ],

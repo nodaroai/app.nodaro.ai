@@ -257,7 +257,7 @@ export const MODEL_RECOMMENDATIONS: readonly ModelRecommendation[] = [
   { intent: "cheap batch video clips", modelIds: ["veo3.1", "wan-turbo", "bytedance-lite"], note: "VEO 3.1 Fast is the best price/quality balance with native audio." },
   { intent: "video with start + end frame", modelIds: ["veo3", "veo3.1", "kling-turbo", "minimax", "hailuo-standard", "seedance-2"], note: "All listed support an end frame; VEO uses imageUrls[start, end]." },
   { intent: "music / song generation", modelIds: ["suno-v6", "suno-v6_wild", "suno-v6_mini", "suno-v5_5"], note: "V6 is the default flagship; V6 Wild for bolder, less predictable results; V6 Mini when speed matters; v5.5 / v5 / v4 keep their own character. Same price." },
-  { intent: "voice over / narration", modelIds: ["elevenlabs-v3", "elevenlabs-turbo"], note: "v3 supports [audio tags] for emotion; Turbo is cheaper for plain narration." },
+  { intent: "voice over / narration", modelIds: ["elevenlabs-v4", "elevenlabs-v3", "elevenlabs-turbo"], note: "v4 is the default: [audio tags] for emotion and up to 10,000 characters per request. v3 is the previous expressive model, still selectable. Turbo is cheaper for plain narration." },
   { intent: "lip-sync a portrait to audio", modelIds: ["kling-avatar-pro", "kling-avatar", "infinitalk"], note: "Pro for best mouth shape; InfiniTalk for resolution control." },
   { intent: "transcription / captions", modelIds: ["elevenlabs-stt", "incredibly-fast-whisper", "whisper"], note: "Captions need WORD timestamps: ElevenLabs STT (always) or Incredibly Fast Whisper. Plain Whisper returns phrase segments only." },
   { intent: "motion transfer (drive a subject by another video)", modelIds: ["motion-transfer", "kling-3.0-motion"], note: "Kling 2.6 base is cheap; Kling 3.0 is premium." },
@@ -2487,7 +2487,6 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
     useCases: ["tts", "voice-over", "narration", "expressive"],
     features: ["audio-tags", "voice-cloning"],
     pricing: [{ identifier: "elevenlabs-v3", credits: 30 }],
-    featured: true,
     tts: {
       audioTags: true,
       ssmlBreaks: false,
@@ -2508,6 +2507,8 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
     useCases: ["tts", "voice-over", "narration", "expressive", "long-form"],
     features: ["audio-tags", "voice-cloning"],
     pricing: [{ identifier: "elevenlabs-v4", credits: 30 }],
+    // The default speech model (DEFAULT_TTS_PROVIDER) carries the star.
+    featured: true,
     tts: {
       audioTags: true,
       ssmlBreaks: false,
