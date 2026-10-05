@@ -1,7 +1,9 @@
 /**
- * A change of the picked transition on the canvas: a switch INTO a cut from a pick that is not one drops the
- * Duration and the Intensity (the same rule as Studio's tile click), so a Short that timed a dissolve never turns
- * seamless-match / jump-match into a blend nobody chose. Every other change keeps every lever.
+ * A change of the picked transition on the canvas follows Studio's tile click: a switch INTO a cut from a pick that
+ * is not one drops the Duration and the Intensity, so a Short that timed a dissolve never turns seamless-match /
+ * jump-match into a blend nobody chose; a switch from a cut to a cut keeps the Intensity and keeps the Duration only
+ * as a Short between two picks that blend (seamless-match, jump-match), so a Short that did nothing on a match cut
+ * does not become a blend either. Every other change keeps every lever.
  * `@nodaro/prompts` is NOT mocked; the tile grid is a stand-in that sends the value a click would send.
  */
 import { describe, it, expect, vi } from "vitest"
@@ -67,12 +69,43 @@ describe("canvas Transition: a switch into a cut drops Duration and Intensity", 
     expect(onUpdate).toHaveBeenLastCalledWith({ transition: ["seamless-match"], duration: undefined, intensity: undefined })
   })
 
-  it("cut to cut, cut to non-cut and non-cut to non-cut keep every lever", () => {
-    for (const [transition, next] of [["match-cut", "seamless-match"], ["seamless-match", "whip-pan"], ["cross-dissolve", "whip-pan"]] as const) {
+  it("cut to non-cut and non-cut to non-cut keep every lever", () => {
+    for (const [transition, next] of [["seamless-match", "whip-pan"], ["match-cut", "whip-pan"], ["cross-dissolve", "whip-pan"]] as const) {
       document.body.innerHTML = ""
       const onUpdate = renderTransition({ transition, duration: "short", intensity: "natural" })
       pick(next)
       expect(onUpdate, `${transition} -> ${next}`).toHaveBeenLastCalledWith({ transition: next })
+    }
+  })
+})
+
+describe("canvas Transition: a switch from a cut to a cut keeps a Short only between the two rows that blend", () => {
+  it("seamless-match + Short -> jump-match: the blend stays a blend (only the pick is written)", () => {
+    for (const next of ["jump-match", ["seamless-match"]] as const) {
+      document.body.innerHTML = ""
+      const onUpdate = renderTransition({ transition: "seamless-match", position: "middle", duration: "short", intensity: "natural" })
+      pick(next as string | string[])
+      expect(onUpdate, JSON.stringify(next)).toHaveBeenCalledTimes(1)
+      expect(onUpdate, JSON.stringify(next)).toHaveBeenLastCalledWith({ transition: next })
+    }
+  })
+
+  it("match-cut + Short (a hard cut) -> seamless-match / jump-match: the Duration goes, the Intensity stays", () => {
+    for (const next of ["seamless-match", "jump-match"] as const) {
+      document.body.innerHTML = ""
+      const onUpdate = renderTransition({ transition: "match-cut", position: "middle", duration: "short", intensity: "natural" })
+      pick(next)
+      expect(onUpdate, next).toHaveBeenCalledTimes(1)
+      expect(onUpdate, next).toHaveBeenLastCalledWith({ transition: next, duration: undefined })
+    }
+  })
+
+  it("seamless-match + Medium (a hard cut) -> jump-match, and seamless-match + Short -> match-cut: the Duration goes", () => {
+    for (const [duration, next] of [["medium", "jump-match"], ["short", "match-cut"]] as const) {
+      document.body.innerHTML = ""
+      const onUpdate = renderTransition({ transition: "seamless-match", duration, intensity: "natural" })
+      pick(next)
+      expect(onUpdate, `${duration} -> ${next}`).toHaveBeenLastCalledWith({ transition: next, duration: undefined })
     }
   })
 })

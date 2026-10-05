@@ -1440,7 +1440,7 @@ export function TransitionConfig({ data, onUpdate }: ConfigProps<TransitionData>
       <Label>{t("paramcfg.transition")}</Label>
       <TransitionPicker
         value={data.transition}
-        onValueChange={(v) => onUpdate(transitionPickPatch(data.transition, v as string | string[] | undefined))}
+        onValueChange={(v) => onUpdate(transitionPickPatch(data.transition, v as string | string[] | undefined, data.duration))}
         maxSelected={2}
       />
 

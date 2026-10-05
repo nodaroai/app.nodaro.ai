@@ -1,7 +1,8 @@
 /**
- * The canvas Transition picker clears Duration and Intensity on a switch into an all-cut pick by writing the two keys
- * as `undefined` through the merging `updateNodeData` (the only door the panel's `onUpdate` offers). This pins what
- * that leaves behind, on the REAL path from the click to the wire:
+ * The canvas Transition picker clears Duration and Intensity on a switch into an all-cut pick, and the Duration alone
+ * on a switch from a cut to a cut unless a Short goes between the two rows that blend, by writing the keys as
+ * `undefined` through the merging `updateNodeData` (the only door the panel's `onUpdate` offers). This pins what that
+ * leaves behind, on the REAL path from the click to the wire:
  *
  * - the real panel, wired to the real workflow store exactly as `config-panel.tsx` wires it
  *   (`onUpdate` -> `updateNodeData(selectedNodeId, data)`), then the real persistence hook's `save()`; only the
@@ -39,7 +40,7 @@ vi.mock("@/lib/supabase", async (importOriginal) => ({
 vi.mock("../locale-header", () => ({ LocaleHeader: () => null }))
 
 // The tile grid sends the new pick through `onValueChange`: one button per value a click could produce.
-const NEXT: ReadonlyArray<string | string[]> = ["seamless-match", ["seamless-match"], "whip-pan"]
+const NEXT: ReadonlyArray<string | string[]> = ["seamless-match", ["seamless-match"], "jump-match", "whip-pan"]
 vi.mock("@/lib/picker-ui", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/picker-ui")>()),
   TransitionPicker: ({ onValueChange }: { onValueChange: (v: string | string[]) => void }) => (
@@ -157,6 +158,48 @@ describe("a switch into an all-cut pick, saved: no duration / intensity key reac
 
     const saved = await saveAndReadPayload()
     expect(saved).toStrictEqual({ transition: "whip-pan", position: "middle", duration: "short", intensity: "natural" })
+  })
+})
+
+describe("a switch from a cut to a cut, saved: the Duration key goes unless a Short goes between the two rows that blend", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockGetUser.mockResolvedValue({ data: { user: { id: "user-123" } } })
+  })
+  afterEach(() => {
+    cleanup()
+    useWorkflowStore.setState({ nodes: [], edges: [], workflowId: null, isDirty: false })
+  })
+
+  // A Short on a cut that does not blend did nothing (a hard cut); so does a Medium on seamless-match.
+  it.each([
+    ["match-cut", "short", "seamless-match"],
+    [["match-cut", "smash-cut"], "short", ["seamless-match"]],
+    ["seamless-match", "medium", "jump-match"],
+  ] as const)("%j + %s -> %j: no duration key reaches the wire; the Intensity is saved", async (before, duration, after) => {
+    seed({ transition: before, position: "middle", duration, intensity: "natural" })
+    render(<PanelOnTheStore />)
+
+    pick(after as string | string[])
+
+    const memory = useWorkflowStore.getState().nodes[0]!.data as Record<string, unknown>
+    expect(memory.transition).toEqual(after)
+    expect(memory.duration).toBeUndefined()
+    expect(memory.intensity).toBe("natural")
+
+    const saved = await saveAndReadPayload()
+    expect(saved).toStrictEqual({ transition: after, position: "middle", intensity: "natural" })
+    expect(Object.keys(saved)).not.toContain("duration")
+  })
+
+  it("control: seamless-match + Short -> jump-match saves the Short (the blend stays a blend)", async () => {
+    seed({ transition: "seamless-match", position: "middle", duration: "short", intensity: "natural" })
+    render(<PanelOnTheStore />)
+
+    pick("jump-match")
+
+    const saved = await saveAndReadPayload()
+    expect(saved).toStrictEqual({ transition: "jump-match", position: "middle", duration: "short", intensity: "natural" })
   })
 })
 

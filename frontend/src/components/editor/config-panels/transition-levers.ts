@@ -62,32 +62,57 @@ export function transitionLevers(kind: TransitionPickKind): ReadonlyArray<Transi
   return [position, { field: "duration", variant: "blend", options: BLEND_STEPS }]
 }
 
+/** Whether a stored duration is a step that blends a blendable cut (`blendsCut`: Short). */
+function isBlendStep(duration: unknown): boolean {
+  return (TRANSITION_DURATIONS as ReadonlyArray<TransitionTimingOption>).some(
+    (o) => o.id === duration && o.blendsCut === true,
+  )
+}
+
 /**
- * What a change of the picked transition writes. A switch INTO a cut from a
- * pick that is not one (a non-cut, a cut picked with a non-cut, or nothing)
- * drops the Duration and the Intensity: they timed and shaped the transition
- * being left, and a cut takes neither, so a carried Short would otherwise make
- * seamless-match / jump-match a blend nobody chose. Every other change keeps
- * every lever, as before. The keys are cleared (`undefined`), never set to
- * `auto`, so the node holds what a fresh pick holds.
+ * What a change of the picked transition writes — Studio's tile click
+ * (`pickTransition` in the studio codec), read over the canvas's picks by
+ * `transitionPickKind`:
+ *
+ * - INTO a cut from a pick that is not one (a non-cut, a cut picked with a
+ *   non-cut, or nothing): Duration and Intensity are cleared. They timed and
+ *   shaped the transition being left, and a cut takes neither, so a carried
+ *   Short would otherwise make seamless-match / jump-match a blend nobody chose.
+ * - from a cut to a cut: the Duration stays only when both picks blend
+ *   (`blendable-cut`) and it is a step that blends a cut (Short), which was
+ *   already a blend on the pick being left. Any other Duration is cleared: on a
+ *   cut that does not blend it did nothing, and carried into seamless-match /
+ *   jump-match it would make a blend nobody chose. The Intensity stays (a cut
+ *   hides it; it comes back into effect on a non-cut).
+ * - every other change (into a pick that is not all cuts, clearing the pick
+ *   included) writes only the pick.
+ *
+ * Cleared keys are written `undefined`, never `auto`, so the node holds what a
+ * fresh pick holds. Unlike Studio, a stored Position `full` is not cleared: a
+ * cut shows it as Auto, and the composer adds no clause for it.
  */
 export function transitionPickPatch(
   previous: unknown,
   next: string | string[] | undefined,
+  storedDuration: unknown,
 ): { transition: string | string[] | undefined; duration?: undefined; intensity?: undefined } {
-  if (transitionPickKind(previous) === "timed" && transitionPickKind(next) !== "timed") {
-    return { transition: next, duration: undefined, intensity: undefined }
+  const from = transitionPickKind(previous)
+  const to = transitionPickKind(next)
+  if (to === "timed") return { transition: next }
+  if (from === "timed") return { transition: next, duration: undefined, intensity: undefined }
+  if (from === "blendable-cut" && to === "blendable-cut" && isBlendStep(storedDuration)) {
+    return { transition: next }
   }
-  return { transition: next }
+  return { transition: next, duration: undefined }
 }
 
 /**
  * The row a lever shows for the stored value. On a cut, a stored value the
  * lever does not offer (`full`; a duration that does not blend; anything on a
  * lever a cut hides) shows as `auto` — which is what it renders: no position
- * clause, a hard cut. Display only: showing a value rewrites nothing (a pick
- * change clears Duration and Intensity only on a switch into a cut, see
- * `transitionPickPatch`). A timed pick shows the stored value as it always has.
+ * clause, a hard cut. Display only: showing a value rewrites nothing; only a
+ * change of the pick clears a lever (see `transitionPickPatch`). A timed pick
+ * shows the stored value as it always has.
  */
 export function transitionLeverValue(kind: TransitionPickKind, lever: TransitionLever, stored: unknown): string {
   const value = (stored as string | undefined) ?? "auto"
