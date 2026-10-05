@@ -50,9 +50,12 @@ export const queryKeys = {
   competitors: {
     all: ["competitors"] as const,
     list: () => ["competitors", "list"] as const,
-    detail: (id: string) => ["competitors", "detail", id] as const,
+    detail: (id: string, scanId: string | null = null) => ["competitors", "detail", id, scanId] as const,
     cards: () => ["competitors", "cards"] as const,
     lessons: (id: string) => ["competitors", "lessons", id] as const,
+    history: (id: string) => ["competitors", "history", id] as const,
+    compare: (id: string, key: string) => ["competitors", "compare", id, key] as const,
+    historyMonths: () => ["competitors", "historyMonths"] as const,
     marks: () => ["competitors", "marks"] as const,
   },
 

@@ -7,10 +7,12 @@ import type { ActionCard, CompetitorPost, SocialPlatform, TrackedCompetitor } fr
 import { Button } from "@/components/ui/button"
 import { CreditCost } from "@/components/ui/credit-cost"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { useCardMarks, useCompetitorDetail } from "@/hooks/queries/use-competitors-queries"
+import { useCardMarks, useCompetitorDetail, useCompetitorHistory, useCompetitorHistoryMonths } from "@/hooks/queries/use-competitors-queries"
 import { useT } from "@/lib/i18n"
 import { formatDate } from "@/lib/i18n/format"
+import { cn } from "@/lib/utils"
 import { AdviceRecordList } from "./advice-record"
+import { BrandOverTime } from "./brand-over-time"
 import { BrandPlatformCards, BrandPlatformTable, type BrandPlatformChoice } from "./brand-platform-table"
 import { BrandPlatformDetail } from "./brand-platform-detail"
 import { brandTallies } from "./brand-platforms"
@@ -64,13 +66,26 @@ export function BrandDialog({
 }) {
   const t = useT()
   const id = target?.competitor.id ?? null
-  const detail = useCompetitorDetail(id)
+  // The scan shown: the latest, or one picked from the history.
+  const [scanId, setScanId] = useState<string | null>(null)
+  const [view, setView] = useState<"latest" | "overTime">("latest")
+  const detail = useCompetitorDetail(id, scanId)
+  const history = useCompetitorHistory(id, target !== null)
+  const historyMonths = useCompetitorHistoryMonths(target !== null)
   const competitor = detail.data ?? target?.competitor ?? null
   const [choice, setChoice] = useState<BrandPlatformChoice>("all")
-  // Each opening starts where it was opened from; a reload keeps the choice.
+  // Each opening starts where it was opened from, on the latest scan; a reload keeps the choice.
   useEffect(() => {
-    if (target) setChoice(target.platform ?? "all")
+    if (target) {
+      setChoice(target.platform ?? "all")
+      setScanId(null)
+      setView("latest")
+    }
   }, [target])
+  const openScan = (picked: string) => {
+    setScanId(picked)
+    setView("latest")
+  }
   const tallies = useMemo(() => (detail.data ? brandTallies(detail.data) : []), [detail.data])
   const postIds = useMemo(() => (detail.data?.latestScan?.posts ?? []).map((p) => p.id), [detail.data])
   const save = useSaveControls(postIds, "competitors")
@@ -108,7 +123,22 @@ export function BrandDialog({
             </DialogDescription>
           </div>
           {competitor && (
-            <div className="me-8 flex shrink-0 gap-1.5">
+            <div className="me-8 flex shrink-0 flex-wrap items-center gap-1.5">
+              {(history.data?.scans.length ?? 0) > 1 && (
+                <select
+                  aria-label={t("competitors.pickScan")}
+                  value={scanId ?? ""}
+                  onChange={(event) => setScanId(event.target.value || null)}
+                  className="h-8 rounded-md border border-border bg-card px-2 text-[12.5px]"
+                >
+                  <option value="">{t("competitors.viewLatest")}</option>
+                  {[...history.data!.scans].reverse().map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {t("competitors.scanOf", { date: formatDate(Date.parse(s.at), { month: "short", day: "numeric" }) })}
+                    </option>
+                  ))}
+                </select>
+              )}
               <ScanButton competitor={competitor} busy={busy} onScan={() => onScan(competitor)} />
               <Button size="sm" variant="outline" onClick={() => onEdit(competitor)}>
                 <Pencil className="me-1 h-3.5 w-3.5" />
@@ -118,7 +148,22 @@ export function BrandDialog({
           )}
         </DialogHeader>
         <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-7 pt-5">
-          {detail.isLoading ? (
+          <div className="mb-4 flex gap-1 self-start rounded-[10px] border border-border p-1" role="group" aria-label={t("competitors.viewOverTime")}>
+            {(["latest", "overTime"] as const).map((key) => (
+              <button
+                key={key}
+                type="button"
+                aria-pressed={view === key}
+                onClick={() => setView(key)}
+                className={cn("rounded-[7px] px-3 py-1.5 text-[13px] font-semibold", view === key ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground")}
+              >
+                {t(key === "latest" ? "competitors.viewLatest" : "competitors.viewOverTime")}
+              </button>
+            ))}
+          </div>
+          {view === "overTime" && id ? (
+            <BrandOverTime competitorId={id} isOwn={isOwn} historyMonths={historyMonths.data ?? null} onOpenScan={openScan} />
+          ) : detail.isLoading ? (
             <div className="flex justify-center py-12">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>

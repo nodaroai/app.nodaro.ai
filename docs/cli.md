@@ -180,6 +180,8 @@ nodaro competitors discover <website> [--json]              # free
 nodaro competitors scan <id> [--watch] [--json]             # one Social Search page per search
 nodaro competitors cards [--json]                           # what to do now (shows the id to mark a card done)
 nodaro competitors lessons <id> [--json]                    # what works for a brand (free)
+nodaro competitors history <id> [--json]                    # its scans oldest first: posts, followers, usual reach per platform (free)
+nodaro competitors compare <id> --from <iso> --to <iso> [--vs-from <iso> --vs-to <iso>] [--json]   # one period, or two side by side (free)
 nodaro competitors done <card-id> [--link <url>] [--json]   # "I did this", with your post's full link (free)
 nodaro competitors tried [--json]                           # did it work? each mark, how it went, and your record
 nodaro competitors link <mark-id> <url> | link <mark-id> --remove

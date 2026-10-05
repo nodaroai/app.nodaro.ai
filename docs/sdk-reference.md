@@ -4786,7 +4786,10 @@ OAuth app tokens need `assets:read` / `assets:write`; a scan also needs a
 | Method | Route | Returns |
 |---|---|---|
 | `list()` | `GET /v1/competitors` | `TrackedCompetitor[]` |
-| `get(id)` | `GET /v1/competitors/:id` | `CompetitorDetail` (latest scan with posts and cards, that scan per platform in `platforms`, scan history) |
+| `listWithPlan()` | `GET /v1/competitors` | `CompetitorListResult` (`{ data, historyMonths }`: the brands, and how many months of scans your plan keeps) |
+| `get(id, { scan? })` | `GET /v1/competitors/:id` | `CompetitorDetail` (latest scan with posts and cards, that scan per platform in `platforms`, scan history; with `scan`, the brand as of that scan) |
+| `history(id)` | `GET /v1/competitors/:id/history` | `CompetitorHistory` (`{ scans }`: the brand's scans oldest first, per platform what each found and read; free) |
+| `compare(id, { from, to, vsFrom?, vsTo? })` | `GET /v1/competitors/:id/compare` | `CompetitorCompareResult` (`{ periods, posts }`: one or two periods — posts by publish date, usual reach, followers and their change, what worked, the best posts; free) |
 | `create(input)` | `POST /v1/competitors` | `TrackedCompetitor` |
 | `update(id, input)` | `PATCH /v1/competitors/:id` | `TrackedCompetitor` (`accounts` replaces the whole set; `409 scan_running` for a change to what a running scan was priced on) |
 | `delete(id)` | `DELETE /v1/competitors/:id` | `void` |

@@ -4722,8 +4722,28 @@ export async function listCompetitors(): Promise<TrackedCompetitor[]> {
   return res.data
 }
 
-export async function getCompetitor(id: string): Promise<import("@nodaro/shared").CompetitorDetail> {
-  return apiJson(`/v1/competitors/${encodeURIComponent(id)}`, { method: "GET", label: "apiErr.loadCompetitors" })
+/** The brand as of its latest scan, or of the scan asked for. */
+export async function getCompetitor(id: string, scanId?: string): Promise<import("@nodaro/shared").CompetitorDetail> {
+  const query = scanId ? `?scan=${encodeURIComponent(scanId)}` : ""
+  return apiJson(`/v1/competitors/${encodeURIComponent(id)}${query}`, { method: "GET", label: "apiErr.loadCompetitors" })
+}
+
+/** The list with how many months of scans the plan keeps. */
+export async function competitorList(): Promise<import("@nodaro/shared").CompetitorListResult> {
+  return apiJson("/v1/competitors", { method: "GET", label: "apiErr.loadCompetitors" })
+}
+
+export async function competitorHistory(id: string): Promise<import("@nodaro/shared").CompetitorHistory> {
+  return apiJson(`/v1/competitors/${encodeURIComponent(id)}/history`, { method: "GET", label: "apiErr.loadCompetitorHistory" })
+}
+
+export async function competitorCompare(id: string, input: import("@nodaro/shared").CompetitorCompareInput): Promise<import("@nodaro/shared").CompetitorCompareResult> {
+  const params = new URLSearchParams({ from: input.from, to: input.to })
+  if (input.vsFrom !== undefined && input.vsTo !== undefined) {
+    params.set("vsFrom", input.vsFrom)
+    params.set("vsTo", input.vsTo)
+  }
+  return apiJson(`/v1/competitors/${encodeURIComponent(id)}/compare?${params.toString()}`, { method: "GET", label: "apiErr.loadCompetitorCompare" })
 }
 
 export async function createCompetitor(input: import("@nodaro/shared").CreateCompetitorInput): Promise<TrackedCompetitor> {

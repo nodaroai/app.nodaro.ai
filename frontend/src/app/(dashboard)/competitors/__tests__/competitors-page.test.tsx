@@ -22,6 +22,9 @@ const api = vi.hoisted(() => ({
   discoverCompetitor: vi.fn(),
   getCompetitor: vi.fn(),
   competitorLessons: vi.fn(),
+  competitorHistory: vi.fn(),
+  competitorCompare: vi.fn(),
+  competitorList: vi.fn(),
   lookupSavedPosts: vi.fn(),
   savePost: vi.fn(),
   getModelCreditCost: vi.fn(),
@@ -186,6 +189,9 @@ beforeEach(() => {
   for (const fn of Object.values(api)) fn.mockReset()
   api.listCompetitors.mockResolvedValue([ACME])
   api.competitorCards.mockResolvedValue(CARDS)
+  api.competitorHistory.mockResolvedValue({ scans: [] })
+  api.competitorList.mockResolvedValue({ data: [ACME], historyMonths: 1 })
+  api.competitorCompare.mockResolvedValue({ periods: [], posts: {} })
   api.lookupSavedPosts.mockResolvedValue(new Map())
   // A server with no place for marks yet: no "I did this" (the tests below give it one).
   api.competitorCardActions.mockRejectedValue(Object.assign(new Error("not available"), { code: "not_available" }))

@@ -145,6 +145,30 @@ history at the next scan. While a scan of a brand runs, its name, accounts
 and platforms cannot be changed (the scan was priced on them); its schedule
 can.
 
+## Over time
+
+The brand's window has a second view, **Over time**. Pick what to compare:
+the last 7 days against the 7 before, the last 30 against the 30 before,
+this month against last month, one day, or any two ranges of dates. For
+each platform it shows, side by side: the brand's own posts in the period
+and the posts about it, its usual reach, its followers at the end of the
+period and how many it gained or lost since before it, what worked there
+(the strongest lesson of the period) and its best posts. A post belongs to
+a period by the day it was published, not by when it was scanned, so a post
+that several scans read is counted once, with its newest numbers.
+
+Below, a line per platform shows the account's followers scan after scan
+(or, where the platform gives no followers, the posts each scan found).
+Pressing a point opens the brand as it looked at that scan; the **Scan to
+show** list at the top of the window does the same for any scan.
+
+Followers come from TikTok, Instagram, X, LinkedIn and Meta Ads; YouTube and
+Reddit give none. Each platform card in the window shows the followers the
+latest scan read.
+
+How long the scans are kept follows your plan (see **How long scans are
+kept**); the window says so.
+
 ## What works
 
 **What works for you** (on the brand marked **This is my brand**) and **What
