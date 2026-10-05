@@ -11,9 +11,9 @@
  *   - a reopen while the run is still going (`applyBackendExecutionState`),
  *   - a reopen after it ended (`applyCompletedExecutionResults`, onto an empty node).
  *
- * A type the census finds that a lane does not map yet is listed in NOT_YET
- * with why. That list only shrinks: an entry whose lane now lands the json
- * fails here until it is removed.
+ * The census is exact: every type it finds must land through every lane, with
+ * no list of exceptions (the last seven were mapped, decided 2026-10-05). A new
+ * json producer the backend census pins fails here until the editor maps it.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { act } from "@testing-library/react"
@@ -49,19 +49,16 @@ const RUN_OUTPUT: Record<string, Data> = {
   "content-ideas": { json: [JSON_OBJECT], text: MARK, listResults: [MARK] },
   // Every post found, and the ones passed on (json).
   "social-search": { json: [POST], searchResults: [POST], text: MARK, listResults: [JSON.stringify(POST)] },
+  // A scrape's json is the list of pages / ads / posts; an empty or non-list one is "no results".
+  "web-scrape": { json: [JSON_OBJECT] },
+  "meta-ads-scrape": { json: [JSON_OBJECT] },
+  "instagram-scrape": { json: [JSON_OBJECT] },
+  // Extract Field in JSON mode: the text beside the structured value.
+  "extract-field": { extractedText: MARK, text: MARK, json: JSON_OBJECT },
+  // JSON Process carries its value on processedResult (never json).
+  "json-process": { processedResult: JSON_OBJECT, text: MARK, listResults: [JSON.stringify(JSON_OBJECT)] },
 }
 const outputOf = (type: string): Data => RUN_OUTPUT[type] ?? { json: JSON_OBJECT }
-
-/** Found by the census, not landed by that lane yet — and why. Shrink only. */
-const NOT_YET: Record<string, { readonly lanes: readonly Lane[]; readonly why: string }> = {
-  "web-scrape": { lanes: ["live", "reopen-running", "reopen-ended"], why: "scrapes land through scrapeResultPatch (kept-last-good, lastAppliedJobId), which only the job lanes call" },
-  "meta-ads-scrape": { lanes: ["live", "reopen-running", "reopen-ended"], why: "as web-scrape" },
-  "instagram-scrape": { lanes: ["live", "reopen-running", "reopen-ended"], why: "as web-scrape" },
-  "social-search": { lanes: ["reopen-running", "reopen-ended"], why: "socialSearchServerRunPatch is wired into the live lane only" },
-  "extract-field": { lanes: ["live", "reopen-running", "reopen-ended"], why: "an inline node: its extractedText and json are not mapped by any server-run lane" },
-  "json-process": { lanes: ["live", "reopen-running", "reopen-ended"], why: "its result is processedResult, which no server-run lane maps" },
-  "describe-to-picker": { lanes: ["live", "reopen-running", "reopen-ended"], why: "its result is generatedPickerJson, which no server-run lane maps" },
-}
 
 const LANES: Record<Lane, (node: WorkflowNode, state: Data) => Data> = {
   live: (node, state) => {
@@ -96,19 +93,13 @@ describe("every node type whose saved json the engine hands on (the backend cens
     expect([...JSON_RUN_RESULT_TYPES].filter((type) => !(type in census))).toEqual([])
   })
 
-  it("names only census types in NOT_YET", () => {
-    expect(Object.keys(NOT_YET).filter((type) => !(type in census))).toEqual([])
-  })
-
   for (const [type, field] of entries) {
     for (const lane of Object.keys(LANES) as Lane[]) {
-      const pending = NOT_YET[type]?.lanes.includes(lane)
-      it(`${type} → ${field}, through ${lane}${pending ? " (NOT YET: " + NOT_YET[type]!.why + ")" : ""}`, () => {
+      it(`${type} → ${field}, through ${lane}`, () => {
         const node = { id: "n", type, position: { x: 0, y: 0 }, data: { label: type } } as unknown as WorkflowNode
         const state = { status: "completed", startedAt: "2026-10-04T21:28:13.932Z", completedAt: "2026-10-04T21:28:26.196Z", jobId: "c0ffee00-0000-4000-8000-000000000001", output: outputOf(type) }
         const data = LANES[lane](node, state)
-        if (pending) expect(landed(type, field, data), "this lane lands it now: remove it from NOT_YET").toBe(false)
-        else expect(landed(type, field, data), `a server run's json never reaches ${field}`).toBe(true)
+        expect(landed(type, field, data), `a server run's json never reaches ${field}: map it (lib/json-run-result.ts)`).toBe(true)
       })
     }
   }

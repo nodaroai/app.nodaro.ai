@@ -1,0 +1,188 @@
+{
+  "web-scrape": {
+    "json": [
+      {
+        "url": "https://site.example.test/a",
+        "title": "Page A",
+        "meta": {
+          "lang": "en"
+        }
+      },
+      {
+        "url": "https://site.example.test/b",
+        "title": "Page B",
+        "meta": {
+          "lang": "fr"
+        }
+      }
+    ]
+  },
+  "meta-ads-scrape": {
+    "json": [
+      {
+        "adArchiveId": "ad-1",
+        "pageName": "Brand",
+        "body": "Ad one"
+      },
+      {
+        "adArchiveId": "ad-2",
+        "pageName": "Brand",
+        "body": "Ad two"
+      }
+    ]
+  },
+  "instagram-scrape": {
+    "json": [
+      {
+        "id": "ig-1",
+        "caption": "First",
+        "displayUrl": "https://media.example.test/ig-1.jpg"
+      }
+    ]
+  },
+  "social-search": {
+    "json": [
+      {
+        "id": "p1",
+        "url": "https://media.example.test/post/p1",
+        "text": "post p1",
+        "platform": "tiktok",
+        "author": {
+          "handle": "@p1",
+          "name": "Author p1"
+        },
+        "metrics": {
+          "likes": 1
+        },
+        "media": {},
+        "hashtags": [],
+        "extra": {}
+      },
+      {
+        "id": "p2",
+        "url": "https://media.example.test/post/p2",
+        "text": "post p2",
+        "platform": "tiktok",
+        "author": {
+          "handle": "@p2",
+          "name": "Author p2"
+        },
+        "metrics": {
+          "likes": 1
+        },
+        "media": {},
+        "hashtags": [],
+        "extra": {}
+      }
+    ],
+    "text": "1. @p1 · 1 likes\n   post p1\n   https://media.example.test/post/p1\n\n2. @p2 · 1 likes\n   post p2\n   https://media.example.test/post/p2",
+    "listResults": [
+      "{\"id\":\"p1\",\"url\":\"https://media.example.test/post/p1\",\"text\":\"post p1\",\"platform\":\"tiktok\",\"author\":{\"handle\":\"@p1\",\"name\":\"Author p1\"},\"metrics\":{\"likes\":1},\"media\":{},\"hashtags\":[],\"extra\":{}}",
+      "{\"id\":\"p2\",\"url\":\"https://media.example.test/post/p2\",\"text\":\"post p2\",\"platform\":\"tiktok\",\"author\":{\"handle\":\"@p2\",\"name\":\"Author p2\"},\"metrics\":{\"likes\":1},\"media\":{},\"hashtags\":[],\"extra\":{}}"
+    ],
+    "searchResults": [
+      {
+        "id": "p1",
+        "url": "https://media.example.test/post/p1",
+        "text": "post p1",
+        "platform": "tiktok",
+        "author": {
+          "handle": "@p1",
+          "name": "Author p1"
+        },
+        "metrics": {
+          "likes": 1
+        },
+        "media": {},
+        "hashtags": [],
+        "extra": {}
+      },
+      {
+        "id": "p2",
+        "url": "https://media.example.test/post/p2",
+        "text": "post p2",
+        "platform": "tiktok",
+        "author": {
+          "handle": "@p2",
+          "name": "Author p2"
+        },
+        "metrics": {
+          "likes": 1
+        },
+        "media": {},
+        "hashtags": [],
+        "extra": {}
+      },
+      {
+        "id": "p3",
+        "url": "https://media.example.test/post/p3",
+        "text": "post p3",
+        "platform": "tiktok",
+        "author": {
+          "handle": "@p3",
+          "name": "Author p3"
+        },
+        "metrics": {
+          "likes": 1
+        },
+        "media": {},
+        "hashtags": [],
+        "extra": {}
+      }
+    ]
+  },
+  "describe-to-picker": {
+    "json": {
+      "person": {
+        "gender": "woman",
+        "age": "adult"
+      },
+      "mood": {
+        "mood": "serene"
+      }
+    }
+  },
+  "extract-field:text": {
+    "extractedText": "Page A\nPage B",
+    "text": "Page A\nPage B"
+  },
+  "extract-field:list": {
+    "extractedText": "Page A\nPage B",
+    "text": "Page A\nPage B",
+    "listResults": [
+      "Page A",
+      "Page B"
+    ],
+    "alignedListResults": [
+      "Page A",
+      "Page B"
+    ]
+  },
+  "extract-field:json": {
+    "extractedText": "{\"lang\":\"en\"}\n{\"lang\":\"fr\"}",
+    "text": "{\"lang\":\"en\"}\n{\"lang\":\"fr\"}",
+    "json": [
+      {
+        "lang": "en"
+      },
+      {
+        "lang": "fr"
+      }
+    ]
+  },
+  "json-process": {
+    "text": "{\"title\":\"Page A\"}",
+    "processedResult": [
+      {
+        "title": "Page A"
+      },
+      {
+        "title": "Page B"
+      }
+    ],
+    "listResults": [
+      "{\"title\":\"Page A\"}",
+      "{\"title\":\"Page B\"}"
+    ]
+  }
+}

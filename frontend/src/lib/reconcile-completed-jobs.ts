@@ -53,7 +53,7 @@ import { settledBeforeClear } from "@/lib/results-cleared"
 import { videoOverlayRunOutputFields } from "@/lib/video-overlay-run-output"
 import { contentRunResultPatch, isContentNodeType } from "@/lib/content-run-output"
 import { applyEdlRunCutFields, applyEdlTakeTranscriptField } from "@/lib/apply-edl-cut"
-import { isJsonRunResultType, jobRunOutput, jsonRunResultPatch } from "@/lib/json-run-result"
+import { holdsJsonRunResult, isJsonRunResultType, jobRunOutput, jsonRunResultPatch } from "@/lib/json-run-result"
 import type { GeneratedResult, Scene3DRevisionEntry, WorkflowNode } from "@/types/nodes"
 
 /** The single-entry nodeState a completed single-node job carries (backend
@@ -201,6 +201,13 @@ function blocksRecovery(
   // edge or the tab closed mid-crawl, job finishes anyway. Their guard is by
   // JOB, not by emptiness.
   if (isScrapeNodeType(nodeType)) return !scrapeJobNeedsApplying(data, { id: ref.jobId, createdAt: ref.createdAt })
+  // The json producers whose result lives under a field of its own (Describe
+  // to Picker's `generatedPickerJson`, JSON Process's `processedResult`, …):
+  // `nodeHasResult` cannot see those, and `executionStatus` is stripped on
+  // save — so a node holding a server run's result (whose job carries no
+  // node_id, so it is never this node's single-node job) would get its OLDER
+  // canvas run written back over it on every reload.
+  if (isJsonRunResultType(nodeType)) return holdsJsonRunResult(nodeType, data) || nodeHasResult(data)
   return nodeHasResult(data)
 }
 
