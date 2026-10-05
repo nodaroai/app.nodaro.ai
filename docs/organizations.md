@@ -212,13 +212,17 @@ is in view, as soon as a hidden tab is shown again, and whenever a save is
 refused. Once it learns that its reader was lowered to `view` or removed,
 nothing more is saved from that editor, and its canvas turns read-only once
 no node on it shows a run in progress: a node waiting on a job, queued or
-running, partway through running once per item of a list, or making a
-scene's image. So a run of any of those kinds that was already going still
-delivers its result. Other runs are not waited for, such as Generate All
-Assets or a custom variation on a character's or object's page opened from
-**My Library**: what they finish once the canvas is read-only is not added to
-the node. A run still waiting to start when the canvas turns read-only, such
-as one waiting to be confirmed, does not start.
+running, partway through running once per item of a list, making a scene's
+image, or waiting for the result of a paid run started in that editor from a
+character's or object's page opened from **My Library** (Generate All
+Assets, a custom variation, Refine), from a **Suno Voice** node's setup, or
+from an **Image Overlay** layer's **Suggest placement (AI)**. Refine's images
+wait for one to be picked, so Refine counts until one is picked, or its
+picker or the page is closed. So a run that was already going still delivers
+its result. A run
+still waiting to start when the canvas turns read-only, such as one waiting
+to be confirmed, does not start, and none of those paid runs starts on a
+canvas that is already read-only.
 From then on, someone lowered to `view` receives the workflow the way any
 viewer does; someone removed receives nothing more. Someone raised from
 `view` keeps a read-only canvas until they reopen the workflow. A node left
