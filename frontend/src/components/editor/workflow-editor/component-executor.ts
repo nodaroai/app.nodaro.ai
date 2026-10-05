@@ -10,6 +10,7 @@ import { RUN_START_RESET } from "./poll-job"
 import { clearJobConnectionLost, jobGoneMessage, shouldStopPolling } from "./poll-connection"
 import { ComponentWaitDeadline } from "./component-wait"
 import { tx } from "@/lib/i18n"
+import { executionErrorText } from "@/lib/execution-error-text"
 
 const POLL_INTERVAL_MS = 2_500
 
@@ -174,7 +175,7 @@ export async function executeComponent(
       }
 
       if (job.status === "failed") {
-        throw new Error(job.error_message ?? "Component execution failed")
+        throw new Error(executionErrorText(job.error_message) ?? "Component execution failed")
       }
 
       // A wrapper job parked in `pending_review` is waiting on a HUMAN, and a

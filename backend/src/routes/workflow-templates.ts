@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto"
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
-import { estimateWorkflowCredits, type EstimateNode, type EstimateEdge } from "../ee/billing/credits.js"
+import { estimateWorkflowListingCredits, type EstimateNode, type EstimateEdge } from "../ee/billing/credits.js"
 import {
   DEFAULT_TEMPLATE_CATEGORY,
   TEMPLATE_CATEGORIES,
@@ -476,7 +476,8 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
     const providersUsed = extractProviders(nodes)
     const nodeCount = nodes.length
     const complexity = calculateComplexity(nodes, edges)
-    const estimatedCredits = await estimateWorkflowCredits(nodes as unknown as EstimateNode[], edges as unknown as EstimateEdge[])
+    // The listed price counts the whole graph, preview stop rule or not.
+    const estimatedCredits = await estimateWorkflowListingCredits(nodes as unknown as EstimateNode[], edges as unknown as EstimateEdge[])
     const snapshotNodes = nodes
 
     // Resolve the source URL for the template preview with priority:

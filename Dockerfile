@@ -730,6 +730,9 @@ done
 #   supabaseAnonKey <- SUPABASE_ANON_KEY
 #   defaultLocale   <- DEFAULT_LOCALE (the locale a fresh visitor to this install
 #                      starts in; unset/blank/unrecognised → browser detection)
+#   previewStopRule <- PREVIEW_STOP_RULE_ENABLED (the preview stop rule's
+#                      rollout flag; the backend reads the same variable, so
+#                      the editor and the server always agree)
 # ALWAYS written — a missing file would fall through try_files to index.html
 # served as JavaScript.
 FRONTEND_SUPABASE_URL_EFFECTIVE="$FRONTEND_SUPABASE_URL"
@@ -757,7 +760,7 @@ if [ "$PUBLIC_URL_SAME_ORIGIN" = "true" ]; then RUNTIME_API_URL_EFFECTIVE="/"; e
 # The writer prints the /config.js line to stdout (log line to stderr), so the
 # redirect captures only the payload; on failure the file is left empty, which
 # the frontend reads as "no override" → build-time values.
-if ! RUNTIME_API_URL="$RUNTIME_API_URL_EFFECTIVE" RUNTIME_SUPABASE_URL="$FRONTEND_SUPABASE_URL_EFFECTIVE" RUNTIME_SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" RUNTIME_FREECUT_URL="$FREECUT_URL" RUNTIME_AUDIOMASS_URL="$AUDIOMASS_URL" RUNTIME_DEFAULT_LOCALE="$DEFAULT_LOCALE" RUNTIME_SURFACE_PROFILE="$RUNTIME_SURFACE_PROFILE_RESOLVED" \
+if ! RUNTIME_API_URL="$RUNTIME_API_URL_EFFECTIVE" RUNTIME_SUPABASE_URL="$FRONTEND_SUPABASE_URL_EFFECTIVE" RUNTIME_SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" RUNTIME_FREECUT_URL="$FREECUT_URL" RUNTIME_AUDIOMASS_URL="$AUDIOMASS_URL" RUNTIME_DEFAULT_LOCALE="$DEFAULT_LOCALE" RUNTIME_SURFACE_PROFILE="$RUNTIME_SURFACE_PROFILE_RESOLVED" RUNTIME_PREVIEW_STOP_RULE="$PREVIEW_STOP_RULE_ENABLED" \
   node /app/tools/build-runtime-config.mjs > /app/frontend/dist/config.js; then
   echo "[start.sh] WARNING: could not write /app/frontend/dist/config.js — the frontend keeps its build-time URLs"
 fi

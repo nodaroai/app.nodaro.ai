@@ -1,4 +1,5 @@
 import React, { useState } from "react"
+import { executionErrorText } from "@/lib/execution-error-text"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { RefreshCw, ChevronLeft, ChevronRight, Loader2, AlertCircle, XCircle, ChevronDown, ChevronRight as ChevronRightIcon, Coins, Activity } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -511,7 +512,7 @@ function ExecutionRow({
                   <AlertCircle className="w-3.5 h-3.5 text-red-400 ms-1.5 inline" />
                 </TooltipTrigger>
                 <TooltipContent side="right" className="max-w-xs">
-                  <p className="text-xs">{exec.errorMessage}</p>
+                  <p className="text-xs">{executionErrorText(exec.errorMessage)}</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>

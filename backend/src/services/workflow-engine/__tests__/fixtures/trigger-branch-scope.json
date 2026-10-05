@@ -1,0 +1,430 @@
+{
+  "//": "Shared by the server's triggerRunScope test and the editor's triggerBranch test (preview-gate.ts): the trigger-branch walk must agree on both sides. Every trigger carries its lane's node type, since the server resolves the trigger by lane.",
+  "cases": [
+    {
+      "name": "a wired chain runs its descendants, not a node off the branch",
+      "triggerType": "webhook",
+      "triggerNodeId": "trig",
+      "nodes": [
+        {
+          "id": "trig",
+          "type": "webhook-trigger",
+          "data": {}
+        },
+        {
+          "id": "a",
+          "type": "llm-chat",
+          "data": {}
+        },
+        {
+          "id": "b",
+          "type": "generate-image",
+          "data": {}
+        },
+        {
+          "id": "c",
+          "type": "generate-video",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "id": "trig-a",
+          "source": "trig",
+          "target": "a"
+        },
+        {
+          "id": "a-b",
+          "source": "a",
+          "target": "b"
+        }
+      ],
+      "expected": [
+        "a",
+        "b",
+        "trig"
+      ]
+    },
+    {
+      "name": "every ancestor a descendant needs is pulled in, but not the ancestors' other children",
+      "triggerType": "webhook",
+      "triggerNodeId": "trig",
+      "nodes": [
+        {
+          "id": "trig",
+          "type": "webhook-trigger",
+          "data": {}
+        },
+        {
+          "id": "a",
+          "type": "llm-chat",
+          "data": {}
+        },
+        {
+          "id": "b",
+          "type": "generate-image",
+          "data": {}
+        },
+        {
+          "id": "s",
+          "type": "text-prompt",
+          "data": {}
+        },
+        {
+          "id": "s2",
+          "type": "text-prompt",
+          "data": {}
+        },
+        {
+          "id": "x",
+          "type": "generate-video",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "id": "trig-a",
+          "source": "trig",
+          "target": "a"
+        },
+        {
+          "id": "a-b",
+          "source": "a",
+          "target": "b"
+        },
+        {
+          "id": "s-b",
+          "source": "s",
+          "target": "b"
+        },
+        {
+          "id": "s2-s",
+          "source": "s2",
+          "target": "s"
+        },
+        {
+          "id": "s-x",
+          "source": "s",
+          "target": "x"
+        }
+      ],
+      "expected": [
+        "a",
+        "b",
+        "s",
+        "s2",
+        "trig"
+      ]
+    },
+    {
+      "name": "Group membership feeds the group",
+      "triggerType": "schedule",
+      "triggerNodeId": "trig",
+      "nodes": [
+        {
+          "id": "trig",
+          "type": "schedule-trigger",
+          "data": {}
+        },
+        {
+          "id": "a",
+          "type": "llm-chat",
+          "data": {},
+          "parentId": "grp"
+        },
+        {
+          "id": "grp",
+          "type": "group",
+          "data": {}
+        },
+        {
+          "id": "b",
+          "type": "generate-image",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "id": "trig-a",
+          "source": "trig",
+          "target": "a"
+        },
+        {
+          "id": "grp-b",
+          "source": "grp",
+          "target": "b"
+        }
+      ],
+      "expected": [
+        "a",
+        "b",
+        "grp",
+        "trig"
+      ]
+    },
+    {
+      "name": "a field mapping feeds its node with no edge",
+      "triggerType": "telegram",
+      "triggerNodeId": "trig",
+      "nodes": [
+        {
+          "id": "trig",
+          "type": "telegram-trigger",
+          "data": {}
+        },
+        {
+          "id": "a",
+          "type": "llm-chat",
+          "data": {}
+        },
+        {
+          "id": "b",
+          "type": "generate-image",
+          "data": {
+            "fieldMappings": {
+              "prompt": {
+                "sourceNodeId": "a",
+                "sourceField": "text"
+              }
+            }
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "trig-a",
+          "source": "trig",
+          "target": "a"
+        }
+      ],
+      "expected": [
+        "a",
+        "b",
+        "trig"
+      ]
+    },
+    {
+      "name": "an edge to a deleted node feeds nothing: the whole workflow runs",
+      "triggerType": "webhook",
+      "triggerNodeId": "trig",
+      "nodes": [
+        {
+          "id": "trig",
+          "type": "webhook-trigger",
+          "data": {}
+        },
+        {
+          "id": "a",
+          "type": "llm-chat",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "id": "trig-ghost",
+          "source": "trig",
+          "target": "ghost"
+        }
+      ],
+      "expected": null
+    },
+    {
+      "name": "an unwired trigger runs the whole workflow",
+      "triggerType": "schedule",
+      "triggerNodeId": "trig",
+      "nodes": [
+        {
+          "id": "trig",
+          "type": "schedule-trigger",
+          "data": {}
+        },
+        {
+          "id": "a",
+          "type": "llm-chat",
+          "data": {}
+        },
+        {
+          "id": "b",
+          "type": "generate-image",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "id": "a-b",
+          "source": "a",
+          "target": "b"
+        }
+      ],
+      "expected": null
+    },
+    {
+      "name": "a self-loop is no wiring",
+      "triggerType": "webhook",
+      "triggerNodeId": "trig",
+      "nodes": [
+        {
+          "id": "trig",
+          "type": "webhook-trigger",
+          "data": {}
+        },
+        {
+          "id": "a",
+          "type": "llm-chat",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "id": "trig-trig",
+          "source": "trig",
+          "target": "trig"
+        }
+      ],
+      "expected": null
+    },
+    {
+      "name": "two triggers each start their own branch (first)",
+      "triggerType": "schedule",
+      "triggerNodeId": "t1",
+      "nodes": [
+        {
+          "id": "t1",
+          "type": "schedule-trigger",
+          "data": {}
+        },
+        {
+          "id": "t2",
+          "type": "schedule-trigger",
+          "data": {}
+        },
+        {
+          "id": "a",
+          "type": "llm-chat",
+          "data": {}
+        },
+        {
+          "id": "b",
+          "type": "generate-image",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "id": "t1-a",
+          "source": "t1",
+          "target": "a"
+        },
+        {
+          "id": "t2-b",
+          "source": "t2",
+          "target": "b"
+        }
+      ],
+      "expected": [
+        "a",
+        "t1"
+      ]
+    },
+    {
+      "name": "two triggers each start their own branch (second)",
+      "triggerType": "schedule",
+      "triggerNodeId": "t2",
+      "nodes": [
+        {
+          "id": "t1",
+          "type": "schedule-trigger",
+          "data": {}
+        },
+        {
+          "id": "t2",
+          "type": "schedule-trigger",
+          "data": {}
+        },
+        {
+          "id": "a",
+          "type": "llm-chat",
+          "data": {}
+        },
+        {
+          "id": "b",
+          "type": "generate-image",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "id": "t1-a",
+          "source": "t1",
+          "target": "a"
+        },
+        {
+          "id": "t2-b",
+          "source": "t2",
+          "target": "b"
+        }
+      ],
+      "expected": [
+        "b",
+        "t2"
+      ]
+    },
+    {
+      "name": "a Preview render behind the trigger and the nodes past it are in the branch",
+      "triggerType": "telegram_account",
+      "triggerNodeId": "trig",
+      "nodes": [
+        {
+          "id": "trig",
+          "type": "telegram-account-trigger",
+          "data": {}
+        },
+        {
+          "id": "plan",
+          "type": "edit-plan",
+          "data": {}
+        },
+        {
+          "id": "cut",
+          "type": "apply-edl",
+          "data": {
+            "quality": "proxy"
+          }
+        },
+        {
+          "id": "cap",
+          "type": "add-captions",
+          "data": {}
+        },
+        {
+          "id": "side",
+          "type": "generate-image",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "id": "trig-plan",
+          "source": "trig",
+          "target": "plan"
+        },
+        {
+          "id": "plan-cut",
+          "source": "plan",
+          "target": "cut"
+        },
+        {
+          "id": "cut-cap",
+          "source": "cut",
+          "target": "cap"
+        }
+      ],
+      "expected": [
+        "cap",
+        "cut",
+        "plan",
+        "trig"
+      ]
+    }
+  ]
+}

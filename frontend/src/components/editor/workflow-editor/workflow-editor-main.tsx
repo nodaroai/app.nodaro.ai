@@ -79,6 +79,7 @@ import { InsufficientCreditsModal } from "@/ee/components/credits/InsufficientCr
 import { StorageExceededModal } from "@/ee/components/credits/StorageExceededModal";
 import { SubscriptionRequiredModal } from "@/ee/components/credits/SubscriptionRequiredModal";
 import { useRunConfirm } from "./run-confirm-dialog";
+import { previewRunnable, previewSingleRunRefusal } from "./preview-gate";
 import { PromptQuickEditModal } from "@/components/nodes/prompt-quick-edit-modal";
 import {
   NODE_CREDIT_COSTS,
@@ -498,9 +499,11 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   // ---------------------------------------------------------------------------
   useEffect(() => {
     if (!hasCredits()) return;
-    const executableNodes = storeNodes.filter((n) => isExecutableNode(n) && !isExpandedClone(n));
+    const allExecutable = storeNodes.filter((n) => isExecutableNode(n) && !isExpandedClone(n));
     // The whole-workflow badge: every executable node re-runs, planners included.
-    const rerunIds = new Set(executableNodes.map((n) => n.id));
+    const rerunIds = new Set(allExecutable.map((n) => n.id));
+    // …except what a Preview render gates: it runs only after Render final.
+    const executableNodes = previewRunnable(allExecutable, storeNodes, storeEdges);
 
     // Use composite model identifiers (e.g. "gpt-image:high") for accurate per-model lookup
     const computeEstimate = () => {
@@ -992,6 +995,10 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     // A server-only node (one that sends as the person) is never run on the
     // Copilot's say-so; the person runs it from the canvas.
     if (!node || !isExecutableNode(node) || SERVER_RUN_ONLY_TYPES.has(node.type ?? "")) return { started: false };
+    // A node a Preview render gates runs only after Render final: the run
+    // would be refused, so the panel must not wait for it.
+    const { nodes: graphNodes, edges: graphEdges } = useWorkflowStore.getState();
+    if (previewSingleRunRefusal(nodeId, graphNodes, graphEdges)) return { started: false };
     await handleRunSingleNode(nodeId, ctx, projectId, save, setIsRunning, pollIntervalsRef, opts);
     return { started: true };
   }
@@ -1005,6 +1012,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     const { nodes: storeNodes, edges: storeEdges } = useWorkflowStore.getState();
     const node = storeNodes.find((n) => n.id === nodeId);
     if (!node || !isExecutableNode(node)) return null;
+    // Gated by a Preview render: a single run of it is refused, so it has no price.
+    if (previewSingleRunRefusal(nodeId, storeNodes, storeEdges)) return null;
     const cached = getCachedCredits(getModelIdentifier(node, storeEdges, storeNodes));
     const cost = cached !== undefined
       ? cached

@@ -7341,12 +7341,12 @@ export async function runWorkflow(
    *  execution (intentional re-run). */
   idempotencyKey?: string,
 ): Promise<{ executionId: string }> {
-  let headers: Record<string, string> = { ...(await getAuthHeaders()) }
-  let body: string | undefined
-  if (nodeIds) {
-    headers["Content-Type"] = "application/json"
-    body = JSON.stringify({ nodeIds })
-  }
+  let headers: Record<string, string> = { ...(await getAuthHeaders()), "Content-Type": "application/json" }
+  // `reviewer: "editor"` marks this as the editor's run: a person is here to
+  // review a Preview render and press Render final. The server refuses a
+  // Preview run without it (a session JWT alone is not a reviewer — the SDK
+  // and the thin product clients send one too).
+  const body = JSON.stringify(nodeIds ? { nodeIds, reviewer: "editor" } : { reviewer: "editor" })
   headers = withIdempotencyHeader(headers, idempotencyKey)
   const res = await fetch(`${API_BASE_URL}/v1/workflows/${encodeURIComponent(workflowId)}/run`, {
     method: "POST",

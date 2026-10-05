@@ -1,4 +1,5 @@
 import type { MutableRefObject } from "react";
+import { executionErrorText } from "@/lib/execution-error-text";
 import { toast } from "sonner";
 import { assertCanvasExecutionAllowed, isProjectedTriggerNodeType, SequenceExecutionRequiredError } from "@nodaro/shared";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
@@ -25,7 +26,8 @@ import { connectionJustLost, jobGoneMessage, shouldStopPolling } from "./poll-co
 import { estimateRunCredits } from "./estimate-run-credits";
 import { liveExecutable, getDownstreamNodeIds, runFromHereExecutable } from "./run-from-here-set";
 import { wordTimingsPreflight } from "./add-captions-preflight";
-import { nestedWordTimingsPreflight } from "./sub-workflow-preflight";
+import { nestedRunPreflight } from "./sub-workflow-preflight";
+import { previewRunnable, previewSingleRunRefusal } from "./preview-gate";
 import { COMPOSER_PLAN_MAP, CREDIT_BASE_USD, planFanOut, TRANSIENT_RUNTIME_KEYS, isExpandedClone, withWiredSettings } from "@nodaro/shared"
 import { clearedConnectedListRows } from "./clear-run-results"
 import { namedRunOutputFields, reduceRunOutputFields } from "@/lib/named-run-outputs"
@@ -338,15 +340,36 @@ async function confirmRunOrAbort(
   // workflow used to pass every gate and be refused mid-run, once the parent's
   // upstream nodes had executed and billed. The nested pass loads the referenced
   // routes (one round-trip per sub-workflow node in the run, and only then).
+  //
+  // A sub-workflow holding a Preview render is refused in the same nested walk
+  // (one load per referenced route): it would hand a preview to this graph,
+  // where nothing can Render final.
+  //
+  // Both scans see only what the run EXECUTES — the set less the stop rule's
+  // closure, exactly as the orchestrator scans it. A node a Preview render
+  // gates never runs, so nothing wired or nested behind it can refuse the run
+  // (and no route is loaded for a gated sub-workflow).
+  const runs = previewRunnable(executable, allNodes, edges);
   {
     const blocked =
-      wordTimingsPreflight(executable, edges) ?? (await nestedWordTimingsPreflight(executable));
+      wordTimingsPreflight(runs, edges) ?? (await nestedRunPreflight(runs));
     if (blocked) { toast.error(blocked); return false; }
+  }
+  // A single-node ▶ inside a Preview render's closure would consume the
+  // preview: refused here, above the skip-confirm shortcut, so "Run instead"
+  // cannot bypass it. Run / Run from here / Run selected are never refused —
+  // the server skips the closure (the stop rule); the render's own run stays
+  // allowed.
+  if (trigger === "single") {
+    const refusal = executable.map((n) => previewSingleRunRefusal(n.id, allNodes, edges)).find(Boolean);
+    if (refusal) { toast.error(refusal); return false; }
   }
   if (skip || !ctx.confirmRun || executable.length === 0) return true;
   const estimatedCredits = hasCredits() ? estimateRunCredits(executable, allNodes, edges, getCachedCredits) : null;
   if (!alwaysConfirm && (estimatedCredits === null || estimatedCredits <= RUN_CONFIRM_CREDITS)) return true;
-  return ctx.confirmRun({ trigger, nodeCount: executable.length, estimatedCredits, alwaysConfirm });
+  // "N nodes" counts what the run executes — the set less the stop rule's
+  // closure, like the estimate above and the "N nodes to run" toast.
+  return ctx.confirmRun({ trigger, nodeCount: runs.length, estimatedCredits, alwaysConfirm });
 }
 
 // ---------------------------------------------------------------------------
@@ -407,11 +430,13 @@ export async function handleRun(
   warnUnderMinRows(nodes);
   clearConnectedListRows(nodes);
 
-  const executableNodes = nodes.filter(isExecutableNode);
-  if (executableNodes.length === 0) {
+  if (!nodes.some(isExecutableNode)) {
     toast.error(tx("run.noExecutableNodes"));
     return;
   }
+  // What this run executes: the stop rule's closure never runs, so it is never
+  // flipped to pending, reset, or priced in the precheck.
+  const executableNodes = previewRunnable(nodes.filter(isExecutableNode), nodes, useWorkflowStore.getState().edges);
 
   if (!workflowId) {
     toast.error(tx("run.saveBeforeRunning"));
@@ -725,13 +750,15 @@ export async function handleRunFromHere(
 
   warnUnderMinRows(nodes.filter((n) => downstream.has(n.id)));
 
-  const executableNodes = nodes.filter(
+  const downstreamExecutable = nodes.filter(
     (n) => downstream.has(n.id) && isExecutableNode(n),
   );
-  if (executableNodes.length === 0) {
+  if (downstreamExecutable.length === 0) {
     toast.error(tx("run.noExecutableDownstream"));
     return;
   }
+  // The stop rule's closure never runs: never reset, flipped or counted.
+  const executableNodes = previewRunnable(downstreamExecutable, nodes, edges);
 
   // Capture dirtiness BEFORE the per-run resets / optimistic flip so a clean
   // editor skips the pre-Run save round-trip (see FIX 4).
@@ -822,11 +849,13 @@ export async function handleRunSelected(
     return;
   }
 
-  const executableNodes = selectedNodes.filter(isExecutableNode);
-  if (executableNodes.length === 0) {
+  const selectedExecutable = selectedNodes.filter(isExecutableNode);
+  if (selectedExecutable.length === 0) {
     toast.error(tx("run.noExecutableInSelection"));
     return;
   }
+  // The stop rule's closure never runs: never reset, flipped or counted.
+  const executableNodes = previewRunnable(selectedExecutable, nodes, useWorkflowStore.getState().edges);
   warnUnderMinRows(selectedNodes);
 
   const selectedIds = selectedNodes.map((n) => n.id);
@@ -1276,7 +1305,7 @@ export function streamBackendExecution(
         if (finished) return;
         if (status === "failed" || status === "cancelled" || status === "timed_out") revertActiveNodesToIdle();
         cleanup();
-        if (status === "failed") toast.error(tx("run.backendFailed"), { description: errorMessage });
+        if (status === "failed") toast.error(tx("run.backendFailed"), { description: executionErrorText(errorMessage) });
         else if (status === "cancelled") toast.info(tx("run.backendCancelled"));
         else if (status === "timed_out") toast.error(tx("run.backendTimedOut"));
         else toast.success(tx("run.backendCompleted"));
@@ -1290,7 +1319,7 @@ export function streamBackendExecution(
         revertActiveNodesToIdle();
         cleanup();
         toast.error(tx("run.backendFailed"), {
-          description: (data.errorMessage as string) ?? undefined,
+          description: executionErrorText(data.errorMessage as string | undefined),
         });
       },
       onCancelled: () => {
@@ -1353,7 +1382,7 @@ export function streamBackendExecution(
           toast.success(tx("run.backendCompleted"));
         } else if (exec.status === "failed") {
           toast.error(tx("run.backendFailed"), {
-            description: exec.errorMessage,
+            description: executionErrorText(exec.errorMessage),
           });
         } else if (exec.status === "cancelled") {
           toast.info(tx("run.backendCancelled"));
@@ -1406,7 +1435,7 @@ export function streamBackendExecution(
           if (finalExec.status === "failed") {
             revertActiveNodesToIdle();
             cleanup();
-            toast.error(tx("run.backendFailed"), { description: finalExec.errorMessage });
+            toast.error(tx("run.backendFailed"), { description: executionErrorText(finalExec.errorMessage) });
             return;
           }
           if (finalExec.status === "cancelled") {

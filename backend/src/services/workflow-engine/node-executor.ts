@@ -1,7 +1,9 @@
 import { projectDubbingCreditOverride, stampDubbingDuration } from "../../lib/dubbing-pricing.js"
 import { applyEdlCreditOverride } from "../../lib/apply-edl-plan.js"
 import { isPreviewRender } from "../../lib/preview-render.js"
-import { assertCanvasExecutionAllowed, imageOverlayCredits, applySettingsInput, SETTINGS_INPUT_CONSUMERS } from "@nodaro/shared"
+import { assertCanvasExecutionAllowed, imageOverlayCredits, applySettingsInput, SETTINGS_INPUT_CONSUMERS, PREVIEW_RENDER_NESTED, PREVIEW_REVIEW_REQUIRED } from "@nodaro/shared"
+import { PREVIEW_RENDER_NESTED_MESSAGE } from "./nested-preview-renders.js"
+import { PREVIEW_REVIEW_REQUIRED_MESSAGE } from "../../lib/preview-review-gate.js"
 /**
  * Node executor — dispatches node execution based on type category.
  *
@@ -2322,6 +2324,13 @@ const COMPONENT_POLL_INTERVAL_MS = 3_000 // 3 seconds
 // run's own clocks grew (`BudgetedDeadline` below).
 const COMPONENT_TIMEOUT_MS = POLL_ABSOLUTE_TIMEOUT_MS
 
+/** Stable refusal codes a component's inner run records as its error_message,
+ *  and the copy (en) its canvas node shows for each. */
+const COMPONENT_REFUSAL_COPY: Readonly<Record<string, string>> = {
+  [PREVIEW_RENDER_NESTED]: PREVIEW_RENDER_NESTED_MESSAGE,
+  [PREVIEW_REVIEW_REQUIRED]: PREVIEW_REVIEW_REQUIRED_MESSAGE,
+}
+
 /** The inner execution a component wrapper job runs — stamped on the wrapper's
  *  `input_data._executionId` by the component route right after it starts it. */
 async function componentInnerExecutionId(wrapperJobId: string): Promise<string | undefined> {
@@ -2400,6 +2409,10 @@ async function executeComponentNode(
         componentDepth: depth + 1,
         executingComponentIds: [...ancestorIds, appSlug],
         userId: ctx.userId,
+        // The inner run is a NEW job: without this a parent the preview stop
+        // rule does not apply to (queued before the deploy) would still have
+        // its component refused. The route honors it on the internal lane only.
+        previewStopRule: ctx.previewStopRule === true,
         // P14: the component route replies 202 and starts a SEPARATE execution
         // in the background — a header would die with this wrapper request, so
         // the parent's resolved payer rides the BODY into the child execution's
@@ -2464,6 +2477,15 @@ async function executeComponentNode(
     }
 
     if (job.status === "failed") {
+      // A refusal the inner run recorded as a STABLE CODE (the preview stop
+      // rule) reads as its copy on the canvas node; the code rides `errorCode`
+      // for clients that branch on it, as the sub-workflow backstop does.
+      const copy = job.error_message ? COMPONENT_REFUSAL_COPY[job.error_message] : undefined
+      if (copy) {
+        const err = new Error(copy) as Error & { errorCode?: string }
+        err.errorCode = job.error_message!
+        throw err
+      }
       throw new Error(job.error_message ?? "Component execution failed")
     }
 

@@ -57,6 +57,7 @@ const EXEMPT: ReadonlyMap<string, string> = new Map([
   ["ee/pipelines/services/canvas-materializer.ts::workflows", "appends a pipeline node and writes the array back as stored; hands nothing out"],
   ["lib/credential-gate.ts::workflows", "reads credential references only"],
   ["lib/schedule-cron.ts::workflows", "reads Schedule Trigger configuration only"],
+  ["lib/preview-fire-refusal.ts::workflows", "reads the graph only to decide whether a fire is refused at a Preview render; hands no node out"],
   ["routes/api-tokens.ts::workflows", "the token API derives a workflow's inputs, outputs and sub-workflow names; run results come from executions, never from saved node results"],
   ["routes/sub-workflows.ts::workflows", "the callable interface (inputs and outputs) only"],
   ["routes/webhook-output.ts::workflows", "reads a Webhook Output's credential only"],

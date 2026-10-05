@@ -1,11 +1,60 @@
 import type { WorkflowNode, SubWorkflowData } from "@/types/nodes"
 import { wordTimingsPreflight } from "./add-captions-preflight"
+import { previewRenderPreflight } from "./preview-gate"
 import {
   SUB_WORKFLOW_MAX_DEPTH,
   loadSubWorkflowRouteGraph,
   subWorkflowRouteKey,
   type SubWorkflowRouteGraph,
 } from "./sub-workflow-route-graph"
+
+type GraphCheck = (nodes: SubWorkflowRouteGraph["nodes"], edges: SubWorkflowRouteGraph["edges"]) => string | null
+
+interface NestedPreflightOpts {
+  depth?: number
+  routeKeys?: ReadonlySet<string>
+  load?: (data: SubWorkflowData) => Promise<SubWorkflowRouteGraph>
+}
+
+/** Asks `check` of every graph a sub-workflow node in `executing` will run
+ *  (depth-first), returning the first blocking message. */
+async function nestedGraphPreflight(
+  executing: ReadonlyArray<WorkflowNode>,
+  check: GraphCheck,
+  opts: NestedPreflightOpts = {},
+): Promise<string | null> {
+  const depth = opts.depth ?? 0
+  const routeKeys = opts.routeKeys ?? new Set<string>()
+  const load = opts.load ?? loadSubWorkflowRouteGraph
+  if (depth >= SUB_WORKFLOW_MAX_DEPTH) return null
+
+  for (const node of executing) {
+    if (node.type !== "sub-workflow") continue
+    const data = node.data as SubWorkflowData
+    if ((data as { skipped?: boolean }).skipped === true) continue
+    if (!data.referencedWorkflowId || !data.routeSnapshot) continue
+    const routeKey = subWorkflowRouteKey(data)
+    if (routeKeys.has(routeKey)) continue
+
+    let graph: SubWorkflowRouteGraph
+    try {
+      graph = await load(data)
+    } catch {
+      continue
+    }
+
+    const blocked = check(graph.nodes, graph.edges)
+    if (blocked) return blocked
+
+    const nested = await nestedGraphPreflight(graph.nodes, check, {
+      depth: depth + 1,
+      routeKeys: new Set([...routeKeys, routeKey]),
+      load,
+    })
+    if (nested) return nested
+  }
+  return null
+}
 
 /**
  * The word-timings refusal, extended THROUGH sub-workflow nodes.
@@ -31,41 +80,24 @@ import {
  */
 export async function nestedWordTimingsPreflight(
   executing: ReadonlyArray<WorkflowNode>,
-  opts: {
-    depth?: number
-    routeKeys?: ReadonlySet<string>
-    load?: (data: SubWorkflowData) => Promise<SubWorkflowRouteGraph>
-  } = {},
+  opts: NestedPreflightOpts = {},
 ): Promise<string | null> {
-  const depth = opts.depth ?? 0
-  const routeKeys = opts.routeKeys ?? new Set<string>()
-  const load = opts.load ?? loadSubWorkflowRouteGraph
-  if (depth >= SUB_WORKFLOW_MAX_DEPTH) return null
+  return nestedGraphPreflight(executing, wordTimingsPreflight, opts)
+}
 
-  for (const node of executing) {
-    if (node.type !== "sub-workflow") continue
-    const data = node.data as SubWorkflowData
-    if ((data as { skipped?: boolean }).skipped === true) continue
-    if (!data.referencedWorkflowId || !data.routeSnapshot) continue
-    const routeKey = subWorkflowRouteKey(data)
-    if (routeKeys.has(routeKey)) continue
-
-    let graph: SubWorkflowRouteGraph
-    try {
-      graph = await load(data)
-    } catch {
-      continue
-    }
-
-    const blocked = wordTimingsPreflight(graph.nodes, graph.edges)
-    if (blocked) return blocked
-
-    const nested = await nestedWordTimingsPreflight(graph.nodes, {
-      depth: depth + 1,
-      routeKeys: new Set([...routeKeys, routeKey]),
-      load,
-    })
-    if (nested) return nested
-  }
-  return null
+/**
+ * Every up-front question a run asks of its nested graphs, in ONE walk (one
+ * load per referenced route): the word-timings refusal above, and a nested
+ * graph that holds a Preview render — it would hand a preview to the parent,
+ * where nothing can Render final (refused permanently, decided 2026-10-04).
+ */
+export async function nestedRunPreflight(
+  executing: ReadonlyArray<WorkflowNode>,
+  opts: NestedPreflightOpts = {},
+): Promise<string | null> {
+  return nestedGraphPreflight(
+    executing,
+    (nodes, edges) => wordTimingsPreflight(nodes, edges) ?? previewRenderPreflight(nodes, edges),
+    opts,
+  )
 }

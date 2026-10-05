@@ -32,6 +32,7 @@ import { useEffect, useRef, useState } from "react"
 import { isExpandedClone, mergeNodeInputOverrides } from "@nodaro/shared"
 import { estimateNodeCredits, isExecutableNode, getCostMultiplier } from "@/components/editor/workflow-editor/types"
 import { getModelIdentifier } from "@/components/editor/config-panels/helpers"
+import { previewRunnable } from "@/components/editor/workflow-editor/preview-gate"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 
 export interface LiveRunEstimateDeps {
@@ -78,9 +79,11 @@ export function computeLiveRunEstimate(
   getCachedCredits: LiveRunEstimateDeps["getCachedCredits"],
 ): { total: number; uncachedModelIds: string[] } {
   const effectiveNodes = applyRunInputValues(args.nodes, args.inputValues)
-  const executable = effectiveNodes.filter((n) => isExecutableNode(n) && !isExpandedClone(n))
+  const allExecutable = effectiveNodes.filter((n) => isExecutableNode(n) && !isExpandedClone(n))
   // A presented run executes every node, so any upstream planner re-plans.
-  const rerunIds = new Set(executable.map((n) => n.id))
+  const rerunIds = new Set(allExecutable.map((n) => n.id))
+  // …except what a Preview render gates: it runs only after Render final.
+  const executable = previewRunnable(allExecutable, effectiveNodes, args.edges)
   const modelIds = [...new Set(executable.map((n) => getModelIdentifier(n, args.edges, effectiveNodes, rerunIds)).filter(Boolean))]
   const uncachedModelIds = modelIds.filter((m) => getCachedCredits(m) === undefined)
   const total = executable.reduce((sum, node) => {

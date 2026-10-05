@@ -281,6 +281,33 @@ export interface WorkflowExecutionJob {
    * re-resolve; they read this.
    */
   billingContext: BillingContext
+  /**
+   * A person who can review a Preview render is at this run: true only for
+   * the editor's own run (a browser session on /run). Every other lane — a
+   * trigger, an API / SDK / MCP call, a present link, an app run — has nobody
+   * to press Render final, so a run of a Preview render there is refused
+   * before any node runs unless it overrides the render to Final (decided
+   * 2026-10-04). Decided at ENQUEUE, like `ownerInitiated` and
+   * `billingContext`, and REQUIRED so a new producer is compile-forced to
+   * answer it. Absent on the wire (a job queued before the deploy) means the
+   * stop rule does not apply to that run at all: no gate, no refusal, the
+   * whole graph runs (decided 2026-10-05).
+   */
+  reviewerPresent: boolean
+  /**
+   * A component's inner run is a NEW job, so it would otherwise always carry
+   * `reviewerPresent` and fall under the stop rule even when its parent does
+   * not (a parent queued before the deploy). The parent's answer
+   * (`OrchestratorContext.previewStopRule`) rides the internal
+   * `/v1/component/execute` hop and lands here; `false` exempts this run from
+   * the rule exactly as its parent is exempt (decided 2026-10-05). Absent =
+   * the rule's own answer (flag on + `reviewerPresent` present). Honored only
+   * on the internal lane, so no API caller can set it.
+   */
+  previewStopRule?: boolean
+  /** Marks a component's inner execution (`executeAppRun({isComponentExecution})`):
+   *  a nested graph with no Render final path. */
+  isComponentExecution?: boolean
   /** Current component nesting depth (limit 5, like sub-workflows) */
   componentDepth?: number
   /** Slugs of ancestor components in the execution chain — used for cycle detection */
@@ -620,6 +647,15 @@ export interface OrchestratorContext {
   workflowOwnerId?: string
   /** Copied from the job at pickup — see WorkflowExecutionJob.ownerInitiated. */
   ownerInitiated?: boolean
+  /** Does the preview stop rule apply to this run? Set once at pickup: the
+   *  rollout flag (`PREVIEW_STOP_RULE_ENABLED`) is on AND the job carries
+   *  `reviewerPresent` (one queued before the deploy does not, and runs as it
+   *  would have then) AND the job does not carry `previewStopRule: false`.
+   *  Absent = it does not apply. Inline sub-workflows share this context, so
+   *  their backstop follows the same answer; a component's inner run is a new
+   *  job, so the component dispatch sends this answer across the HTTP hop
+   *  (`WorkflowExecutionJob.previewStopRule`). */
+  previewStopRule?: boolean
 }
 
 // ---------------------------------------------------------------------------

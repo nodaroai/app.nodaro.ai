@@ -41,6 +41,9 @@ vi.mock("@/lib/config.js", () => ({
   hasOrganizations: () => false,
 }))
 
+const previewFlag = vi.hoisted(() => ({ on: true }))
+vi.mock("@/lib/preview-stop-rule-flag.js", () => ({ previewStopRuleEnabled: () => previewFlag.on }))
+
 vi.mock("@/lib/admin-check.js", () => ({
   warmAdminCache: vi.fn(),
   checkIsAdmin: mockCheckIsAdmin,
@@ -128,6 +131,7 @@ const TEST_JOB_ID = "00000000-0000-4000-8000-000000000070"
 let app: FastifyInstance
 
 beforeEach(async () => {
+  previewFlag.on = true
   vi.clearAllMocks()
 
   app = Fastify({ logger: false })
@@ -139,6 +143,8 @@ beforeEach(async () => {
       req.userId = header
       req.userRole = undefined
     }
+    const kind = req.headers["x-auth-kind"]
+    if (typeof kind === "string") (req as { authKind?: string }).authKind = kind
   })
 
   await app.register(async (instance) => {
@@ -501,7 +507,10 @@ describe("POST /v1/workflows/:id/run", () => {
    * lookup returning the given `nodes` graph (so the route can resolve each
    * node's primary input field).
    */
-  function mockRunWithGraph(nodes: Array<{ id: string; type: string; data?: Record<string, unknown> }>) {
+  function mockRunWithGraph(
+    nodes: Array<{ id: string; type: string; data?: Record<string, unknown> }>,
+    edges: Array<{ id: string; source: string; target: string }> = [],
+  ) {
     const mockFrom = vi.mocked(supabase.from)
     // Starts at 1: the workflow lookup below is keyed by table, not by
     // position, so the first table that IS counted is the second step.
@@ -522,6 +531,7 @@ describe("POST /v1/workflows/:id/run", () => {
                   workspace_id: null,
                   visibility: "private",
                   nodes,
+                  edges,
                 },
                 error: null,
               }),
@@ -564,6 +574,124 @@ describe("POST /v1/workflows/:id/run", () => {
   // outbound node. The orchestrator's merge refuses too; the route answers
   // 400 so the caller never gets a failed execution row.
   // -------------------------------------------------------------------------
+
+  // -------------------------------------------------------------------------
+  // A Preview render with nobody to review it (decided 2026-10-04): only an
+  // editor session (a browser JWT, no MCP client, the editor's own
+  // `reviewer: "editor"` mark) can press Render final.
+  // -------------------------------------------------------------------------
+
+  const previewGraph = (): [Array<{ id: string; type: string; data?: Record<string, unknown> }>, Array<{ id: string; source: string; target: string }>] => [
+    [
+      { id: "plan", type: "edit-plan", data: {} },
+      { id: "cut", type: "apply-edl", data: { quality: "proxy" } },
+      { id: "cap", type: "add-captions", data: {} },
+    ],
+    [
+      { id: "e1", source: "plan", target: "cut" },
+      { id: "e2", source: "cut", target: "cap" },
+    ],
+  ]
+
+  it("refuses an API-token run of a Preview render — 400 with the stable code, nothing enqueued", async () => {
+    mockRunWithGraph(...previewGraph())
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/workflows/${TEST_WORKFLOW_ID}/run`,
+      headers: { "x-user-id": TEST_USER_ID, "x-auth-kind": "api_token" },
+      payload: {},
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("preview_review_required")
+    // Studio, Voice and SDK scripts show this message as is: it says why, and what to do.
+    expect(res.json().error.message).toMatch(/only a run started in the Nodaro editor can stop for one/)
+    expect(res.json().error.message).toMatch(/Open it in the editor to run it there, or set the render to Final/)
+    expect(mockOrchestrationQueueAdd).not.toHaveBeenCalled()
+  })
+
+  it("refuses an MCP run (a browser session carrying an MCP client is not an editor)", async () => {
+    mockRunWithGraph(...previewGraph())
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/workflows/${TEST_WORKFLOW_ID}/run`,
+      headers: { "x-user-id": TEST_USER_ID, "x-auth-kind": "jwt" },
+      payload: { mcp_client: "claude" },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("preview_review_required")
+  })
+
+  it("lets an API-token run through when it overrides the render to Final, marked as nobody present", async () => {
+    mockRunWithGraph(...previewGraph())
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/workflows/${TEST_WORKFLOW_ID}/run`,
+      headers: { "x-user-id": TEST_USER_ID, "x-auth-kind": "api_token" },
+      payload: { inputOverrides: { cut: { quality: "final" } } },
+    })
+    expect(res.statusCode).toBe(202)
+    expect(enqueuedJob().reviewerPresent).toBe(false)
+  })
+
+  it("an editor session runs a Preview workflow, marked as reviewer present", async () => {
+    mockRunWithGraph(...previewGraph())
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/workflows/${TEST_WORKFLOW_ID}/run`,
+      headers: { "x-user-id": TEST_USER_ID, "x-auth-kind": "jwt" },
+      payload: { reviewer: "editor" },
+    })
+    expect(res.statusCode).toBe(202)
+    expect(enqueuedJob().reviewerPresent).toBe(true)
+  })
+
+  it("refuses a session-JWT run without the editor's mark (SDK supabaseAuth, a thin client)", async () => {
+    mockRunWithGraph(...previewGraph())
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/workflows/${TEST_WORKFLOW_ID}/run`,
+      headers: { "x-user-id": TEST_USER_ID, "x-auth-kind": "jwt" },
+      payload: {},
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("preview_review_required")
+    expect(mockOrchestrationQueueAdd).not.toHaveBeenCalled()
+  })
+
+  it("the editor's mark counts only on a session JWT — an API token carrying it is still refused", async () => {
+    mockRunWithGraph(...previewGraph())
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/workflows/${TEST_WORKFLOW_ID}/run`,
+      headers: { "x-user-id": TEST_USER_ID, "x-auth-kind": "api_token" },
+      payload: { reviewer: "editor" },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("preview_review_required")
+  })
+
+  describe("PREVIEW_STOP_RULE_ENABLED off (production until Render final): dev before the rule", () => {
+    for (const [name, kind, payload] of [
+      ["an API-token run", "api_token", {}],
+      ["an MCP run", "jwt", { mcp_client: "claude" }],
+      ["a session-JWT run without the editor's mark (Studio, Voice, the SDK)", "jwt", {}],
+    ] as const) {
+      it(`${name} of a Preview render is enqueued, not refused`, async () => {
+        previewFlag.on = false
+        mockRunWithGraph(...previewGraph())
+        const res = await app.inject({
+          method: "POST",
+          url: `/v1/workflows/${TEST_WORKFLOW_ID}/run`,
+          headers: { "x-user-id": TEST_USER_ID, "x-auth-kind": kind },
+          payload,
+        })
+        expect(res.statusCode).toBe(202)
+        expect(mockOrchestrationQueueAdd).toHaveBeenCalledTimes(1)
+        // A new job always carries the answer, whatever the flag.
+        expect(typeof enqueuedJob().reviewerPresent).toBe("boolean")
+      })
+    }
+  })
 
   it("refuses an override that re-points a Webhook Output — 400 locked_field, nothing enqueued", async () => {
     mockRunWithGraph([

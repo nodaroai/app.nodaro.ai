@@ -52,7 +52,7 @@ To answer in the inbox chat, end the workflow with a [Telegram Reply](../output/
 
 ## What a triggered run executes
 
-A trigger that is **wired to something** runs only the branch behind it. A trigger **wired to nothing** runs the whole workflow. The rules are the same as the [Telegram Trigger](./telegram-trigger.md#what-a-triggered-run-executes).
+A trigger that is **wired to something** runs only the branch behind it. A trigger **wired to nothing** runs the whole workflow. The rules are the same as the [Telegram Trigger](./telegram-trigger.md#what-a-triggered-run-executes), including the refusal of a branch that stops for a review.
 
 ## Seeing a run on the canvas
 

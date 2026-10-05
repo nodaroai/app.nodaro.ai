@@ -4,6 +4,7 @@ import { memo, useMemo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Clock, Type } from "lucide-react"
 import { BaseNode } from "./base-node"
+import { TriggerPreviewWarning } from "./trigger-preview-warning"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleWithPopover, HANDLE_COLORS } from "./handle-with-popover"
 import { cn } from "@/lib/utils"
@@ -96,6 +97,7 @@ function ScheduleTriggerNodeComponent({ id, data, selected }: NodeProps) {
             <span>{view.ruleCount}</span>
           </div>
         </div>
+        <TriggerPreviewWarning nodeId={id} armed={active} />
       </BaseNode>
       {/* A trigger starts the run; it takes nothing from the canvas (registry: inputs []). */}
       <HandleWithPopover nodeId={id} nodeType="schedule-trigger" handleId="payload" type="source" position={Position.Right} label="Payload" color={HANDLE_COLORS.control} icon={<Type />} side="right" top="24px" />

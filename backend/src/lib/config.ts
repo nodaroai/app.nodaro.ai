@@ -381,6 +381,16 @@ export const envSchema = z.object({
     .string()
     .optional()
     .transform((v) => v === "true" || v === "1"),
+  /** The preview stop rule (a run stops at a render set to Preview; nothing
+   *  downstream runs until Render final). Rollout gate, decided 2026-10-05:
+   *  on in staging, off in production until Render final ships. Off = every
+   *  surface behaves as before the rule existed. start.sh hands the same
+   *  value to the editor through /config.js, so one variable drives both.
+   *  Strict parsing like MCP_ENABLED. Read through `previewStopRuleEnabled()`. */
+  PREVIEW_STOP_RULE_ENABLED: z
+    .string()
+    .optional()
+    .transform((v) => v === "true" || v === "1"),
   /**
    * Whether THIS process fires scheduled workflows (the schedule cron,
    * `lib/schedule-cron.ts`). Unset = the deployment default, see

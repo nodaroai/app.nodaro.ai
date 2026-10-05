@@ -18,6 +18,7 @@ import { InlineGluedStripContext } from "./inline-glued-strip-context"
 import { NodeTopToolbar } from "./node-top-toolbar"
 import { NodePolicyOverlay } from "./node-policy-overlay"
 import { NodeConnectionBadge } from "./node-connection-badge"
+import { NodePreviewGateChip } from "./node-preview-gate-chip"
 import { computeFittedNodeBox } from "./video-node-defaults"
 import { InlineNodePrompt } from "./inline-node-prompt/inline-node-prompt"
 import { useInlinePromptActive } from "./inline-node-prompt/use-inline-prompt-active"
@@ -733,6 +734,9 @@ function BaseNodeComponent({
       {/* "Reconnecting…" while this node's job cannot be read. Mounted here
           for the same reason as the overlay above: every card, no prop. */}
       <NodeConnectionBadge nodeId={id} />
+      {/* "After Render final" on a node a Preview render gates: every card,
+          no prop, derived from the graph. */}
+      <NodePreviewGateChip nodeId={id} />
       {(!hideHeader || isSkipped) && (
         <div
           className={cn(

@@ -18,6 +18,7 @@ import { describeLockedOverrides, findLockedOverrides } from "../lib/input-overr
 import { sendCredentialUnbound, unboundCredentialUsesFor } from "../lib/credential-gate.js"
 import { personalPayer, shouldRefuseDegradedRun } from "../lib/billing-context.js"
 import { billingPairColumns } from "../lib/insert-job.js"
+import { previewReviewRefusal } from "../lib/preview-review-gate.js"
 import type { WorkflowExecutionJob } from "../services/workflow-engine/types.js"
 import { ACTIVE_EXECUTION_STATUSES } from "../lib/request-helpers.js"
 import { estimateWorkflowCredits, type EstimateNode, type EstimateEdge } from "../ee/billing/credits.js"
@@ -318,6 +319,32 @@ export async function presentationRoutes(app: FastifyInstance) {
         error: { code: "billing_unavailable", message: "Billing is temporarily unavailable for workspace runs. Try again shortly." },
       })
     }
+    // Compute nodeIds if targeting a specific sub-workflow node
+    let nodeIds: string[] | undefined
+    if (runTarget === "sub-workflow" && subWorkflowNodeId) {
+      nodeIds = [subWorkflowNodeId]
+    } else if (runTarget === "route" && selectedRouteId) {
+      const { getRouteReachableNodeIds } = await import("@nodaro/shared")
+      const wfNodes = (workflow.nodes ?? []) as Array<{ id: string; type?: string; data: Record<string, unknown> }>
+      const wfEdges = (workflow.edges ?? []) as Array<{ source: string; target: string }>
+      const reachable = getRouteReachableNodeIds(wfNodes, wfEdges, selectedRouteId)
+      if (reachable.size > 0) {
+        nodeIds = [...reachable]
+      }
+      // If empty (stale routeId), fall through with nodeIds=undefined → runs entire workflow
+    }
+
+    // A present-link viewer runs the owner's live graph with no Render final
+    // path: a run of a Preview render is refused before any row exists.
+    {
+      const refusal = previewReviewRefusal(
+        (workflow.nodes ?? []) as ReadonlyArray<{ id: string; type?: string; data?: Record<string, unknown> }>,
+        (workflow.edges ?? []) as ReadonlyArray<{ source: string; target: string }>,
+        { triggerType: "manual", nodeIds, inputOverrides },
+      )
+      if (refusal) return reply.status(400).send({ error: refusal })
+    }
+
     // Create execution under the VIEWER's userId (viewer pays credits)
     const { data: execution, error: execError } = await supabase
       .from("workflow_executions")
@@ -336,21 +363,6 @@ export async function presentationRoutes(app: FastifyInstance) {
       return sendInternalError(reply, req, execError, "Failed to create execution")
     }
 
-    // Compute nodeIds if targeting a specific sub-workflow node
-    let nodeIds: string[] | undefined
-    if (runTarget === "sub-workflow" && subWorkflowNodeId) {
-      nodeIds = [subWorkflowNodeId]
-    } else if (runTarget === "route" && selectedRouteId) {
-      const { getRouteReachableNodeIds } = await import("@nodaro/shared")
-      const wfNodes = (workflow.nodes ?? []) as Array<{ id: string; type?: string; data: Record<string, unknown> }>
-      const wfEdges = (workflow.edges ?? []) as Array<{ source: string; target: string }>
-      const reachable = getRouteReachableNodeIds(wfNodes, wfEdges, selectedRouteId)
-      if (reachable.size > 0) {
-        nodeIds = [...reachable]
-      }
-      // If empty (stale routeId), fall through with nodeIds=undefined → runs entire workflow
-    }
-
     // Enqueue orchestration job
     const jobData: WorkflowExecutionJob = {
       executionId: execution.id,
@@ -362,6 +374,8 @@ export async function presentationRoutes(app: FastifyInstance) {
       // P14: the viewer's authenticated context (a shared-workflow run —
       // the VIEWER pays; share-token runs have no member and stay personal).
       billingContext: req.billingContext ?? personalPayer(req.userId),
+      // A present-link viewer has no Render final path.
+      reviewerPresent: false,
     }
 
     await orchestrationQueue.add("workflow-execution", jobData, {

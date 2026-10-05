@@ -20,6 +20,7 @@ import { canRunWorkflow } from "./workflow-access.js"
 import { resolveBillingContext, shouldRefuseDegradedRunFor } from "./billing-context.js"
 import { billingPairColumns } from "./insert-job.js"
 import { recordTriggerFireRefusal } from "./trigger-fire-refusal.js"
+import { refusePreviewFire } from "./preview-fire-refusal.js"
 import type { WorkflowExecutionJob } from "../services/workflow-engine/types.js"
 
 export { matchesCronField }
@@ -207,6 +208,20 @@ export async function checkScheduledTriggers(now: Date = new Date()): Promise<vo
         continue
       }
 
+      // The branch this tick runs stops at a Preview render nobody is there
+      // to review: skip the tick, leaving the owner one deduped failed row.
+      if (
+        await refusePreviewFire({
+          workflowId: trigger.workflow_id,
+          userId: trigger.user_id,
+          triggerType: "schedule",
+          triggerId: trigger.id,
+          triggerNodeId: nodeId,
+        })
+      ) {
+        continue
+      }
+
       // Check for an execution THIS OWNER already has running. Scoped to them
       // like the webhook path and the run route: before workflows were shared,
       // "an active execution of this workflow" and "an active execution of
@@ -329,6 +344,8 @@ export async function checkScheduledTriggers(now: Date = new Date()): Promise<vo
           last_triggered_at: previousLastTriggeredAt,
         },
         billingContext,
+        // Nobody watches a scheduled run: it cannot review a Preview render.
+        reviewerPresent: false,
       }
 
       await orchestrationQueue.add("workflow-execution", jobData, {

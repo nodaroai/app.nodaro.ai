@@ -1,5 +1,6 @@
 import { usdToCredits, PARAMETER_NODE_TYPES, withWiredSettings, MUSIC_CREDIT_ID, TEXT_TO_AUDIO_SFX_CREDIT_IDS, textToAudioCreditId, CAMERA_SWITCH_CREDIT_ID, LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec, LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec, videoSfxCreditId, applyEdlCreditId } from "@nodaro/shared"
 import { trySettleManagedJob } from "./managed-job-settlement.js"
+import { previewStopsWhenEnabled } from "../../lib/preview-stop-rule.js"
 import { supabase } from "../../lib/supabase.js"
 import { ReserveRpcError, reservePrefixOf } from "../../lib/reserve-errors.js"
 import { refuseBlockedReservation } from "../../lib/access-blocks.js"
@@ -3427,11 +3428,12 @@ export class CreditsService {
      *  fact (does an edge feed add-captions a timed caption source?). Without
      *  edges the estimator assumes the pricier answer — never under-quote. */
     edges?: ReadonlyArray<EstimateEdge>,
+    options?: WorkflowEstimateOptions,
   ): Promise<number> {
     // Without a credit system nothing is charged, so there is no price table
     // to read: the figure stays the static one these editions always showed.
     const prices = hasCredits() ? await getChargedPriceTable() : STATIC_BASE_PRICES
-    return sumWorkflowEstimate(nodes, edges, prices)
+    return sumWorkflowEstimate(nodes, edges, prices, options)
   }
 
   /**
@@ -3442,10 +3444,21 @@ export class CreditsService {
   static estimateWorkflowBaseCredits(
     nodes: ReadonlyArray<EstimateNode>,
     edges?: ReadonlyArray<EstimateEdge>,
+    options?: WorkflowEstimateOptions,
   ): number {
-    return sumWorkflowEstimate(nodes, edges, STATIC_BASE_PRICES)
+    return sumWorkflowEstimate(nodes, edges, STATIC_BASE_PRICES, options)
   }
 }
+
+/**
+ * What a workflow estimate quotes. A RUN estimate (the default) quotes what
+ * one run executes, so the preview stop rule leaves out what a Preview render
+ * gates. A LISTING estimate (`scope: "whole-graph"`) is the figure stored at
+ * publish — an app's or template's listed price, and the base the monetization
+ * recalculation reads back — and counts every node, whatever the stop rule's
+ * flag says (decided 2026-10-05).
+ */
+export type WorkflowEstimateOptions = { scope?: "run" | "whole-graph" }
 
 /** `STATIC_CREDIT_COSTS` as a price table: the base prices, unmarked. */
 const STATIC_BASE_PRICES: ChargedPriceTable = {
@@ -3457,8 +3470,29 @@ function sumWorkflowEstimate(
   nodes: ReadonlyArray<EstimateNode>,
   edges: ReadonlyArray<EstimateEdge> | undefined,
   prices: ChargedPriceTable,
+  options: WorkflowEstimateOptions | undefined,
 ): number {
+  // A run stops at a Preview render: what it gates runs only after Render
+  // final, so the estimate of this run leaves it out (the stop rule, through
+  // its rollout flag — off, nothing is left out). Without edges the closure is
+  // unknown, and the estimate keeps every node — never under-quote. A listing
+  // estimate never asks the rule: it prices the whole graph.
+  const wholeGraph = options?.scope === "whole-graph"
+  const previewGated = edges && !wholeGraph
+    ? previewStopsWhenEnabled(
+        // Every feed the rule follows rides along: Group membership
+        // (`parentId`) on the nodes, and the wire's handle and mode on the
+        // edges — the same graph the editor's estimate hands it.
+        nodes.flatMap((n) => (n.id ? [{ id: n.id, type: n.type, data: n.data, parentId: n.parentId }] : [])),
+        edges.flatMap((e) =>
+          e.source
+            ? [{ source: e.source, target: e.target, sourceHandle: e.sourceHandle, targetHandle: e.targetHandle, data: e.data }]
+            : [],
+        ),
+      ).gatedNodeIds
+    : new Set<string>()
   return nodes.reduce((sum, node) => {
+    if (node.id && previewGated.has(node.id)) return sum
     // A parameter node (Provider, Duration, a picker) is read, never run: no
     // job, no charge. A Provider's data names a model ("veo3"), which the
     // lookups below would otherwise price as a run of that model. The editor's
@@ -3507,9 +3541,10 @@ function estimatePricingUnits(node: EstimateNode): number {
  *  passes the estimator's OWN type instead of re-declaring a structural copy at
  *  the call site — a copy cannot be widened (an `id`, an `edges` parameter)
  *  without someone noticing every place that still omits it. */
-export type EstimateNode = { id?: string; type: string; data?: Record<string, unknown> }
-/** Ditto for an edge. Only the three fields a price can depend on. */
-export type EstimateEdge = { source?: string; target: string; targetHandle?: string | null }
+export type EstimateNode = { id?: string; type: string; data?: Record<string, unknown>; parentId?: string | null }
+/** Ditto for an edge: the fields a price can depend on, and those the preview
+ *  stop rule follows (`sourceHandle`, `data.outputMode`). */
+export type EstimateEdge = { source?: string; target: string; sourceHandle?: string | null; targetHandle?: string | null; data?: unknown }
 
 /**
  * Does an edge feed this add-captions node a TIMED caption source — a Transcript
@@ -3826,4 +3861,19 @@ export function estimateWorkflowCredits(
   edges?: ReadonlyArray<EstimateEdge>,
 ): Promise<number> {
   return CreditsService.estimateWorkflowCredits(nodes, edges)
+}
+
+/**
+ * The estimate STORED at publish — a published app's (or component's, or
+ * template's) listed price and `base_estimated_credits`, on every publish and
+ * republish. It counts the whole graph: the preview stop rule shapes run
+ * estimates only, never the listing (decided 2026-10-05). Every publish path
+ * calls this, never `estimateWorkflowCredits` — a guard test
+ * (`__tests__/listing-estimate-sites.test.ts`) fails the build otherwise.
+ */
+export function estimateWorkflowListingCredits(
+  nodes: ReadonlyArray<EstimateNode>,
+  edges?: ReadonlyArray<EstimateEdge>,
+): Promise<number> {
+  return CreditsService.estimateWorkflowCredits(nodes, edges, { scope: "whole-graph" })
 }

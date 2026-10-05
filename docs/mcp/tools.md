@@ -502,6 +502,15 @@ registers an async task for progress tracking.
 the jobs/executions tools or the SDK to poll for completion. MCP clients that
 support the `tasks/*` API and widget rendering will show live progress inline.
 
+A workflow whose Apply EDL render is set to **Proxy** stops at that preview for
+a person to review in the editor. An MCP run has nobody to review it, so it is
+refused with `preview_review_required` unless `inputs` sets the render to Final
+for this run: `{ "<render node id>": { "quality": "final" } }`. A sub-workflow
+holding such a render is refused with `preview_render_nested`. See
+[API integration](../api-integration.md#runs-that-would-stop-for-a-review)
+(rolled out under the `PREVIEW_STOP_RULE_ENABLED` flag; where it is off,
+nothing is refused).
+
 ---
 
 ## Prompt tools

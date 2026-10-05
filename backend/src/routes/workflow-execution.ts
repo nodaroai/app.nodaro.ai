@@ -24,6 +24,7 @@ import { IN_FLIGHT_JOB_STATUSES, isParkedJobStatus } from "../lib/job-status.js"
 import { cancelOwnedJob } from "../lib/cancel-job.js"
 import { getRuntimeEnv } from "../lib/runtime-env.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
+import { previewReviewRefusal } from "../lib/preview-review-gate.js"
 import { checkIsAdmin } from "../lib/admin-check.js"
 import { CreditsService } from "../ee/billing/credits.js"
 import { invalidateBalanceCache } from "../ee/routes/credits.js"
@@ -275,7 +276,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     const { data: workflow, error: wfError } = await supabase
       // tenant-scope-ignore: authorization follows immediately, below.
       .from("workflows")
-      .select("id, user_id, workspace_id, visibility, nodes")
+      .select("id, user_id, workspace_id, visibility, nodes, edges")
       .eq("id", workflowId)
       .maybeSingle()
 
@@ -344,6 +345,26 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       })
     }
 
+    // Who can review a Preview render: only a person in the editor. An API
+    // token, an OAuth app or an MCP client runs with nobody to press Render
+    // final, and so does a session JWT that is not the editor — the SDK's
+    // `supabaseAuth` and the thin product clients send one too. So the editor
+    // marks its own runs (`reviewer: "editor"` in the body); without that mark
+    // a run of a Preview render is refused here, before any row exists, unless
+    // its overrides set every such render to Final. Forging the mark only lets
+    // a caller stop their OWN run at a preview, so it needs no protection. The
+    // orchestrator asks again (the wall every lane passes).
+    const mcpClient = extractMcpClient(req.body)
+    const reviewerPresent = req.authKind === "jwt" && !mcpClient && body.reviewer === "editor"
+    if (!reviewerPresent) {
+      const refusal = previewReviewRefusal(
+        (workflow.nodes as ReadonlyArray<{ id: string; type?: string; data?: Record<string, unknown> }> | null) ?? [],
+        (workflow.edges as ReadonlyArray<{ source: string; target: string }> | null) ?? [],
+        { triggerType: "manual", nodeIds, inputOverrides },
+      )
+      if (refusal) return reply.status(400).send({ error: refusal })
+    }
+
     // Check for an execution THIS CALLER already has running (best-effort fast
     // path; the DB UNIQUE constraint on (user_id, idempotency_key) is the
     // race-proof backstop below).
@@ -383,7 +404,6 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     //
     // No header → undefined key → plain INSERT → no dedup. That's the
     // correct behavior: two distinct user clicks must produce two rows.
-    const mcpClient = extractMcpClient(req.body)
     const headerKeyRaw = req.headers["idempotency-key"]
     const headerKey = typeof headerKeyRaw === "string" ? headerKeyRaw.trim() : ""
     const idempotencyKey =
@@ -465,6 +485,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       nodeIds,
       webFreeMode: await resolveWebSurfaceFlag(req),
       billingContext,
+      reviewerPresent,
       ...(inputOverrides ? { inputOverrides } : {}),
     }
 

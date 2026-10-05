@@ -12,6 +12,7 @@
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import { getModelIdentifier } from "@/components/editor/config-panels/helpers"
 import { NODE_CREDIT_COSTS, getCostMultiplier } from "./types"
+import { previewRunnable } from "./preview-gate"
 
 export function estimateRunCredits(
   executable: WorkflowNode[],
@@ -19,11 +20,14 @@ export function estimateRunCredits(
   edges: WorkflowEdge[],
   cachedCost: (modelId: string) => number | undefined,
 ): number {
+  // A run stops at a Preview render: what it gates never runs and is never
+  // billed in this run, so it is never priced here either.
+  const runs = previewRunnable(executable, allNodes, edges)
   // The executable set is exactly what re-runs: an upstream planner inside it
   // re-plans (its canvas result is stale); one outside it keeps its result, so a
   // single-node / run-from-here render is priced on the plan that will render.
   const rerunIds = new Set(executable.map((n) => n.id))
-  return executable.reduce((sum, node) => {
+  return runs.reduce((sum, node) => {
     const modelId = getModelIdentifier(node, edges, allNodes, rerunIds)
     const cached = cachedCost(modelId)
     // Cold cache: prefer the row for the identifier this run will actually

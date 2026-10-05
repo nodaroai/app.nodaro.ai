@@ -29,6 +29,9 @@ vi.mock("../../../lib/supabase.js", () => ({
 }))
 
 // Mock node-executor to avoid pulling in BullMQ, etc.
+// PREVIEW_STOP_RULE_ENABLED on: the backstop's own cases below decide per run.
+vi.mock("../../../lib/preview-stop-rule-flag.js", () => ({ previewStopRuleEnabled: () => true }))
+
 vi.mock("../node-executor.js", () => ({
   executeNode: vi.fn().mockResolvedValue({ output: { text: "mock output" } }),
 }))
@@ -250,6 +253,45 @@ describe("executeSubWorkflow", () => {
     await expect(run).rejects.toThrow(/does not return word timings/)
     await expect(run).rejects.toMatchObject({ code: "transcript_has_no_word_timings" })
     expect(executeNode).not.toHaveBeenCalled()
+  })
+
+  it("REFUSES a nested graph holding a Preview render — before any node runs (permanent, whoever runs it)", async () => {
+    // The orchestrator refuses it up front; the handler is the backstop for a
+    // graph that reaches it anyway (a reference edited mid-run).
+    const n = node("sw", "sub-workflow", { workflowId: "ref-wf" })
+    const subNodes: SimpleNode[] = [
+      node("plan", "llm-chat"),
+      node("cut", "apply-edl", { quality: "proxy" }),
+      node("out", "sub-workflow-output"),
+    ]
+    mockSingle.mockResolvedValue({ data: { nodes: subNodes, edges: [edge("plan", "cut"), edge("cut", "out")] }, error: null })
+
+    const run = executeSubWorkflow(n, {}, ctx({ previewStopRule: true }))
+    await expect(run).rejects.toThrow(/set to Preview/)
+    await expect(run).rejects.toMatchObject({ code: "preview_render_nested", errorCode: "preview_render_nested" })
+    expect(executeNode).not.toHaveBeenCalled()
+  })
+
+  it("does NOT refuse it when the stop rule is off for the run (the flag off, or a job queued before the deploy)", async () => {
+    const n = node("sw", "sub-workflow", { workflowId: "ref-wf" })
+    const subNodes: SimpleNode[] = [
+      node("plan", "llm-chat"),
+      node("cut", "apply-edl", { quality: "proxy" }),
+      node("out", "sub-workflow-output"),
+    ]
+    mockSingle.mockResolvedValue({ data: { nodes: subNodes, edges: [edge("plan", "cut"), edge("cut", "out")] }, error: null })
+    for (const previewStopRule of [false, undefined]) {
+      vi.mocked(executeNode).mockClear()
+      await expect(executeSubWorkflow(n, {}, ctx({ previewStopRule }))).resolves.toBeDefined()
+      expect(executeNode).toHaveBeenCalled()
+    }
+  })
+
+  it("does NOT refuse a nested graph whose render is Final", async () => {
+    const n = node("sw", "sub-workflow", { workflowId: "ref-wf" })
+    const subNodes: SimpleNode[] = [node("cut", "apply-edl", { quality: "final" }), node("out", "sub-workflow-output")]
+    mockSingle.mockResolvedValue({ data: { nodes: subNodes, edges: [edge("cut", "out")] }, error: null })
+    await expect(executeSubWorkflow(n, {}, ctx({ previewStopRule: true }))).resolves.toBeDefined()
   })
 
   it("does NOT refuse the same nested graph on a word-capable engine", async () => {

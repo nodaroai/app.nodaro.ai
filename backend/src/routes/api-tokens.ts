@@ -29,6 +29,7 @@ import { personalPayer } from "../lib/billing-context.js"
 import { deploymentPayerActive, deploymentPayerId } from "../lib/deployment-payer.js"
 import { billingPairColumns } from "../lib/insert-job.js"
 import { estimateWorkflowCredits, type EstimateNode } from "../ee/billing/credits.js"
+import { previewReviewRefusal } from "../lib/preview-review-gate.js"
 import type { WorkflowExecutionJob, NodeExecutionState } from "../services/workflow-engine/types.js"
 import { normalizeLegacyNodeTypes } from "../services/workflow-engine/normalize-node-types.js"
 import { getInputNodes, getOutputNodes, getOutputType, getNodeLabel, getInputFieldSchema, flattenItems, migrateToItems } from "@nodaro/shared"
@@ -744,7 +745,7 @@ export async function apiTokenRoutes(app: FastifyInstance) {
       // Load workflow
       const { data: workflow, error: wfError } = await supabase
         .from("workflows")
-        .select("id, nodes")
+        .select("id, nodes, edges")
         .eq("id", workflowId)
         .eq("user_id", resolved.userId)
         // P9 doctrine, now enforced at RUN time too (bind + list always had
@@ -774,6 +775,16 @@ export async function apiTokenRoutes(app: FastifyInstance) {
           error: { code: "locked_field", message: describeLockedOverrides(lockedOverrides) },
         })
       }
+
+      // A token caller cannot review a Preview render: refused before any row
+      // exists unless its inputs set every such render to Final
+      // (`{ "<render>": { "quality": "final" } }`).
+      const previewRefusal = previewReviewRefusal(
+        nodes as ReadonlyArray<{ id: string; type?: string; data?: Record<string, unknown> }>,
+        ((workflow as { edges?: unknown }).edges as ReadonlyArray<{ source: string; target: string }> | null) ?? [],
+        { triggerType: "api", inputOverrides },
+      )
+      if (previewRefusal) return reply.status(400).send({ error: previewRefusal })
 
       // Create execution
       const { data: execution, error: execError } = await supabase
@@ -805,6 +816,8 @@ export async function apiTokenRoutes(app: FastifyInstance) {
         // P14: the token's authenticated context — resolved once by the
         // billing hook (a workspace-BOUND token acts as an implicit header).
         billingContext: req.billingContext ?? personalPayer(resolved.userId),
+        // A token caller cannot review a Preview render.
+        reviewerPresent: false,
       }
 
       await orchestrationQueue.add("workflow-execution", jobData, {

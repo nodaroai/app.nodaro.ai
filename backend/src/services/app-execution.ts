@@ -33,6 +33,10 @@ export interface ExecuteAppRunParams {
   executingComponentIds?: string[]
   /** Mark the created workflow_execution as a component inner execution */
   isComponentExecution?: boolean
+  /** A component's inner run: the PARENT execution's answer to "does the
+   *  preview stop rule apply?", carried onto the job verbatim (see
+   *  `WorkflowExecutionJob.previewStopRule`). Absent = the rule's default. */
+  previewStopRule?: boolean
   /** Spend-surface flag captured at the originating route (D1 v2). */
   webFreeMode?: boolean
   /**
@@ -83,6 +87,7 @@ export async function executeAppRun(
     webFreeMode,
     billingContext,
     isComponentExecution,
+    previewStopRule,
     idempotencyKey,
   } = params
 
@@ -154,6 +159,11 @@ export async function executeAppRun(
     executingComponentIds,
     webFreeMode,
     billingContext: payloadBillingContext({ userId, billingContext }),
+    // An app run (and a component's inner run) has no Render final path.
+    reviewerPresent: false,
+    ...(isComponentExecution ? { isComponentExecution: true } : {}),
+    // A component's inner run inherits its parent's stop-rule answer.
+    ...(previewStopRule !== undefined ? { previewStopRule } : {}),
   }
 
   await orchestrationQueue.add("workflow-execution", jobData, {

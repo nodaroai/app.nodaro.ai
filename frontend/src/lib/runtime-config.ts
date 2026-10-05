@@ -37,6 +37,13 @@ export interface NodaroRuntimeConfig {
    * node then never calls moderation and never renders the overlay.
    */
   readonly moderation?: { readonly uploadImage?: boolean }
+  /**
+   * The preview stop rule's rollout flag (decided 2026-10-05). Set by the
+   * /config.js writer from the backend's own PREVIEW_STOP_RULE_ENABLED, so the
+   * editor and the server agree and flipping it needs no rebuild. Absent =
+   * off: the editor behaves as before the rule existed.
+   */
+  readonly previewStopRule?: boolean
 }
 
 declare global {
@@ -210,4 +217,13 @@ export function runtimeDefaultLocale(): string {
  */
 export function runtimeUploadModerationEnabled(): boolean {
   return runtime().moderation?.uploadImage === true
+}
+
+/**
+ * Is the preview stop rule on for this deployment? (`PREVIEW_STOP_RULE_ENABLED`,
+ * handed over by /config.js.) Only an explicit `true` turns it on; a dev
+ * server's empty /config.js, or production while it is off, reads false.
+ */
+export function runtimePreviewStopRule(): boolean {
+  return runtime().previewStopRule === true
 }

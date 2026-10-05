@@ -1,4 +1,4 @@
-import { assertCanvasExecutionAllowed, findWordlessTranscriptFeeds } from "@nodaro/shared"
+import { assertCanvasExecutionAllowed, findWordlessTranscriptFeeds, PREVIEW_REVIEW_REQUIRED, PREVIEW_RENDER_NESTED } from "@nodaro/shared"
 /**
  * Orchestrator worker — processes workflow executions.
  * Loads workflow graph, topological sort, executes nodes level-by-level.
@@ -46,11 +46,15 @@ import { resolveNodeInputs, getListInputForNode, getListFanOutForNode } from "..
 import { normalizeLegacyNodeTypes } from "../services/workflow-engine/normalize-node-types.js"
 import { migrateGenerateImageHandles } from "../lib/generate-image-handle-migration.js"
 import { extractSourceNodeOutput, extractSavedNodeOutput, fanOutIterationValue } from "../services/workflow-engine/output-extractor.js"
+import { runPreviewStops, runHoldsPreview } from "../lib/preview-review-gate.js"
+import { previewStopRuleEnabled } from "../lib/preview-stop-rule-flag.js"
+import { nestedPreviewRenders, nestedPreviewRenderLocation } from "../services/workflow-engine/nested-preview-renders.js"
 import { seededFromSavedData } from "../services/workflow-engine/saved-data.js"
 import { executeNode, loadCompletedFanOutIterations, type ExecuteNodeResult } from "../services/workflow-engine/node-executor.js"
 import { labelRefHintContext } from "../services/workflow-engine/label-ref-hint-context.js"
 import {
-  findNestedWordlessTranscriptFeeds,
+  loadNestedRunGraphs,
+  nestedWordlessTranscriptFeeds,
   nestedWordlessFeedMessage,
   subWorkflowOwnerId,
 } from "../services/workflow-engine/sub-workflow-handler.js"
@@ -510,6 +514,16 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     billingContext: payloadBillingContext(job.data),
     componentDepth: job.data.componentDepth ?? 0,
     executingComponentIds: job.data.executingComponentIds ?? [],
+    // The preview stop rule applies to this run only when the rollout flag is
+    // on AND the job carries `reviewerPresent` (decided 2026-10-05): a job
+    // queued before the deploy has no answer and gets the pre-deploy
+    // behaviour — no gate, the whole graph runs. Every new producer sets it.
+    // A component's inner run (a new job) inherits its parent's answer: a
+    // parent the rule does not apply to sends `previewStopRule: false`.
+    previewStopRule:
+      previewStopRuleEnabled() &&
+      typeof job.data.reviewerPresent === "boolean" &&
+      job.data.previewStopRule !== false,
   }
 
   try {
@@ -518,11 +532,14 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     //    `ctx.workflowOwnerId` scopes sub-workflow resolution so a shared/app viewer
     //    can run the owner's sub-flows without re-opening the IDOR path.
     let workflowData: { nodes: unknown; edges: unknown; settings: unknown } | null = null
+    // A component's inner run: flagged by its producer, or known by the
+    // published version's type (a version published before the flag existed).
+    let isComponentRun = job.data.isComponentExecution === true
 
     if (appVersionId) {
       const { data: appVersion, error: appError } = await supabase
         .from("published_apps")
-        .select("snapshot_nodes, snapshot_edges, snapshot_settings, creator_id")
+        .select("snapshot_nodes, snapshot_edges, snapshot_settings, creator_id, publish_type")
         .eq("id", appVersionId)
         .is("deleted_at", null)
         .single()
@@ -542,6 +559,7 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
         settings: appVersion.snapshot_settings,
       }
       ctx.workflowOwnerId = (appVersion.creator_id as string | null) ?? undefined
+      isComponentRun = isComponentRun || appVersion.publish_type === "component"
     }
 
     if (!workflowData) {
@@ -686,6 +704,38 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
       }
     }
 
+    // THE PREVIEW STOP RULE (decided 2026-10-04). Asked here, after the
+    // override merge (a Final override on a render lifts it) and before any
+    // node runs or reserves a credit. A render this run executes at Preview
+    // quality — or a saved Preview the run would hand on — stops the run:
+    // everything forward of it is seeded `skipped` below and never runs, is
+    // never counted and never billed. Two cases refuse the whole run instead,
+    // because there is nobody to press Render final:
+    //   - a component's inner run (a nested graph; permanent);
+    //   - a run with no reviewer present (`reviewerPresent: false`, decided
+    //     at enqueue — a trigger, an API / SDK / MCP call, a present link, an
+    //     app run).
+    // None of it applies while the rollout flag is off, nor to a job queued
+    // before the deploy (`ctx.previewStopRule`): that run is the run dev
+    // executed before the rule existed.
+    const previewStopsForRun = ctx.previewStopRule
+      ? runPreviewStops(nodes, edges, { nodeSubset })
+      : { previewRenderIds: [], savedPreviewRenderIds: [], gatedNodeIds: new Set<string>() }
+    if (runHoldsPreview(previewStopsForRun)) {
+      const renders = [...previewStopsForRun.previewRenderIds, ...previewStopsForRun.savedPreviewRenderIds]
+      if (isComponentRun) {
+        console.warn(`[preview-gate] execution ${executionId} REFUSED — a component run holds Preview render(s): ${renders.join(", ")}`)
+        await failExecution(executionId, PREVIEW_RENDER_NESTED)
+        return
+      }
+      if (job.data.reviewerPresent !== true) {
+        console.warn(`[preview-gate] execution ${executionId} REFUSED — nobody to review Preview render(s): ${renders.join(", ")}`)
+        await failExecution(executionId, PREVIEW_REVIEW_REQUIRED)
+        return
+      }
+    }
+    const previewGated = previewStopsForRun.gatedNodeIds
+
     // A transcription lane that cannot return per-word timings still RUNS and
     // BILLS — it hands back phrase segments with `words: []`. Wire that json
     // output into an add-captions `transcript` input and the run can only end
@@ -699,7 +749,8 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     // payload-builder's own transcript check instead). Skipped nodes are
     // ignored by the helper on both ends.
     {
-      const runNodes = nodeSubset ? nodes.filter((n) => nodeSubset.has(n.id)) : nodes
+      // A node the stop rule gates never runs, so nothing nested behind it does.
+      const runNodes = (nodeSubset ? nodes.filter((n) => nodeSubset.has(n.id)) : nodes).filter((n) => !previewGated.has(n.id))
       const wordless = findWordlessTranscriptFeeds(runNodes, edges)
       if (wordless.length > 0) {
         console.warn(
@@ -727,13 +778,27 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
       // construction: a chain that CROSSES the boundary (transcribe in the
       // parent, add-captions in the child, or the reverse) — no single graph
       // holds that edge pair.
-      const nested = await findNestedWordlessTranscriptFeeds(runNodes, edges, subWorkflowOwnerId(ctx))
+      const nestedGraphs = await loadNestedRunGraphs(runNodes, subWorkflowOwnerId(ctx))
+      const nested = nestedWordlessTranscriptFeeds(nestedGraphs)
       if (nested.length > 0) {
         console.warn(
           `[transcribe-preflight] execution ${executionId} REFUSED — ${nested.length} nested transcribe node(s) feed captions with no word timings: ` +
             nested.map((w) => `${w.subWorkflowPath.join("/")}:${w.transcribeNodeId}(${w.provider})->${w.consumerNodeId}`).join(", "),
         )
         await failExecution(executionId, nested.map(nestedWordlessFeedMessage).join(" "))
+        return
+      }
+
+      // A sub-workflow that holds a Preview render: its outputs would reach a
+      // parent node with no Render final path anywhere. Refused permanently,
+      // whoever runs it (the sub-workflow handler asks again as a backstop).
+      const nestedPreviews = ctx.previewStopRule ? nestedPreviewRenders(nestedGraphs) : []
+      if (nestedPreviews.length > 0) {
+        console.warn(
+          `[preview-gate] execution ${executionId} REFUSED — a sub-workflow holds Preview render(s): ` +
+            nestedPreviews.map(nestedPreviewRenderLocation).join("; "),
+        )
+        await failExecution(executionId, PREVIEW_RENDER_NESTED)
         return
       }
     }
@@ -794,7 +859,10 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
       for (const [id, st] of Object.entries(next)) {
         if (st?.status === "completed" || st?.status === "skipped") {
           nodeStates[id] = st
-          resumedNodeCount++
+          // A node the stop rule gates was seeded `skipped` by the first pick;
+          // it is never counted (out of totalExecutions too), so carrying it
+          // into the count would push completed past total on a re-pick.
+          if (!previewGated.has(id)) resumedNodeCount++
         }
       }
       if (resumedNodeCount > 0) {
@@ -920,6 +988,14 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
       }
     }
 
+    // The stop rule's closure: a node it gates is seeded `skipped` and never
+    // runs. Only nodes that would otherwise EXECUTE — one outside the subset,
+    // or frozen, already passes its saved data on and keeps that seed.
+    for (const node of nodes) {
+      if (!previewGated.has(node.id) || nodeStates[node.id]) continue
+      nodeStates[node.id] = { status: "skipped", nodeType: node.type, completedAt: new Date().toISOString() }
+    }
+
     // 4. Build execution levels (topological sort)
     //    Pass pre-resolved node IDs so their outgoing edges don't create
     //    execution-level barriers.  This lets downstream nodes whose only
@@ -948,6 +1024,8 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
       // (no phantom +1 the progress bar can never reach) and is never dispatched.
       if (isFrozenLottieOverride(n, inputOverrides)) return false
       if (nodeSubset && !nodeSubset.has(n.id)) return false
+      // Gated by the preview stop rule: never dispatched, never counted.
+      if (previewGated.has(n.id)) return false
       return true
     })
 
@@ -1104,7 +1182,8 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
       // Mark router-gated nodes as "skipped" so the UI reflects they were gated.
       // Also count them as completed so the progress bar stays accurate.
       for (const node of level) {
-        if (routerGatedIds.has(node.id) && nodeStates[node.id]?.status !== "completed") {
+        // A preview-gated node is already `skipped` and was never counted.
+        if (routerGatedIds.has(node.id) && nodeStates[node.id]?.status !== "completed" && !previewGated.has(node.id)) {
           nodeStates[node.id] = {
             status: "skipped",
             nodeType: node.type,
@@ -1122,6 +1201,7 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
         if (skippedIds.has(node.id)) return false
         if (isSkipNode(node.type)) return false
         if (routerGatedIds.has(node.id)) return false
+        if (previewGated.has(node.id)) return false
         if (nodeStates[node.id]?.status === "completed") return false
         return true
       })

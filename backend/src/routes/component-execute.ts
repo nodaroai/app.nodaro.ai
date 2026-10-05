@@ -26,6 +26,10 @@ const bodySchema = z.object({
   workflowId: z.string().uuid().optional(),
   componentDepth: z.number().int().min(0).max(5).optional(),
   executingComponentIds: z.array(z.string()).optional(),
+  /** The parent execution's answer to "does the preview stop rule apply?",
+   *  forwarded by the orchestrator's component dispatch. Honored ONLY on the
+   *  internal lane: from any other caller it would switch the gate off. */
+  previewStopRule: z.boolean().optional(),
   /** P14 — the parent execution's resolved payer, forwarded by the
    *  orchestrator's component dispatch. Honored ONLY on the internal lane
    *  (see below); shape-guarded, never trusted from the type alone. */
@@ -73,6 +77,10 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
         ? parsed.data.billingContext
         : undefined
     const runBillingContext = forwardedCtx ?? req.billingContext
+    // The parent's preview stop rule answer: internal lane only (a JWT / MCP
+    // caller sending `false` would switch the gate off for its own run).
+    const forwardedPreviewStopRule =
+      req.authKind === "internal" ? parsed.data.previewStopRule : undefined
 
     // Look up published app by slug. snapshot_nodes + snapshot_edges are
     // needed for compound output handles (sub-workflow-output ports) — they
@@ -198,6 +206,7 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
           executingComponentIds,
           webFreeMode: req.webFreeMode === true,
           billingContext: runBillingContext,
+          ...(forwardedPreviewStopRule !== undefined ? { previewStopRule: forwardedPreviewStopRule } : {}),
         })
 
         // Stamp the nested execution id on the wrapper IMMEDIATELY (it was
@@ -321,7 +330,7 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
       return reply.status(404).send({ error: { code: "not_found", message: "Component not found" } })
     }
 
-    const nodes = (app.snapshot_nodes ?? []) as Array<{ id?: string; type?: string; data?: Record<string, unknown> }>
+    const nodes = (app.snapshot_nodes ?? []) as Array<{ id?: string; type?: string; data?: Record<string, unknown>; parentId?: string | null }>
     const edges = (app.snapshot_edges ?? []) as EstimateEdge[]
     const overrides = exposedSettings ?? {}
 
@@ -337,7 +346,7 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
         if (sep < 0) continue
         if (key.slice(0, sep) === nodeId) data[key.slice(sep + 1)] = value
       }
-      return { id: nodeId, type: node.type ?? "", data }
+      return { id: nodeId, type: node.type ?? "", data, parentId: node.parentId }
     })
 
     return reply.send({ estimatedCredits: await estimateWorkflowCredits(priced, edges) })

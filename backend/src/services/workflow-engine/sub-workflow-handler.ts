@@ -1,4 +1,5 @@
-import { assertCanvasExecutionAllowed, findWordlessTranscriptFeeds, type WordlessTranscriptFeed } from "@nodaro/shared"
+import { assertCanvasExecutionAllowed, findWordlessTranscriptFeeds, PREVIEW_RENDER_NESTED, type WordlessTranscriptFeed } from "@nodaro/shared"
+import { previewRendersIn, PREVIEW_RENDER_NESTED_MESSAGE } from "./nested-preview-renders.js"
 /**
  * Sub-workflow handler — executes a referenced workflow recursively.
  * Ported from frontend sub-workflow-executor.ts.
@@ -175,41 +176,44 @@ export function nestedWordlessFeedMessage(feed: NestedWordlessTranscriptFeed): s
   )
 }
 
+/** A graph a `sub-workflow` node in the run will execute, as the run will load
+ *  it, with the sub-workflow node ids that lead to it (outermost first). */
+export interface NestedRunGraph {
+  readonly nodes: SimpleNode[]
+  readonly edges: SimpleEdge[]
+  readonly subWorkflowPath: readonly string[]
+}
+
 /**
- * The same word-timings question `findWordlessTranscriptFeeds` asks of the run
- * graph, asked of every graph a `sub-workflow` node in it will run — before any
- * node runs, so a nested whisper→captions chain is refused up front instead of
+ * Every graph a `sub-workflow` node in the run will execute, loaded ONCE for
+ * all the orchestrator's up-front checks (word timings, preview renders) —
+ * before any node runs, so a nested problem is refused up front instead of
  * mid-run, after upstream parent nodes executed and billed.
  *
- * Descends only (the caller has already asked about its own nodes), loads each
- * referenced graph through `loadSubWorkflowGraph` (so it sees exactly the nodes
- * the run would execute), and mirrors `executeSubWorkflow`'s limits: the same
- * `MAX_SUB_WORKFLOW_DEPTH` ceiling and the same `workflowId:routeId` cycle key,
- * carried down the path so a self-referencing graph is loaded once and not
- * walked again.
+ * Descends only (the caller asks its own questions of its own nodes), loads
+ * each referenced graph through `loadSubWorkflowGraph` (so it sees exactly the
+ * nodes the run would execute), and mirrors `executeSubWorkflow`'s limits: the
+ * same `MAX_SUB_WORKFLOW_DEPTH` ceiling and the same `workflowId:routeId` cycle
+ * key, carried down the path so a self-referencing graph is loaded once and not
+ * walked again. Depth-first: a graph comes before the graphs nested in it.
  *
- * A reference that cannot be loaded is NOT the preflight's problem: it answers
- * "no hit" and the run raises its own not-found error at that node. A load that
- * THROWS is swallowed the same way — this check may only ever refuse for a real
- * word-timings hit, never for an unreachable database.
- *
- * NOT covered, by construction: a chain that CROSSES a sub-workflow boundary
- * (transcribe in the parent, add-captions in the child, or the reverse). No
- * single graph holds that edge pair, so no graph-local check can see it.
+ * A reference that cannot be loaded is NOT a preflight's problem: it yields no
+ * graph and the run raises its own not-found error at that node. A load that
+ * THROWS is swallowed the same way — a preflight may only ever refuse for a
+ * real hit, never for an unreachable database.
  */
-export async function findNestedWordlessTranscriptFeeds(
+export async function loadNestedRunGraphs(
   nodes: ReadonlyArray<SimpleNode>,
-  edges: ReadonlyArray<SimpleEdge>,
   ownerId: string,
   depth: number = 0,
   visitedRouteKeys: ReadonlySet<string> = new Set(),
   path: ReadonlyArray<string> = [],
-): Promise<NestedWordlessTranscriptFeed[]> {
+): Promise<NestedRunGraph[]> {
   // Mirrors executeSubWorkflow's ceiling: a node at this depth throws instead of
   // running, so there is nothing below it to check.
   if (depth >= MAX_SUB_WORKFLOW_DEPTH) return []
 
-  const out: NestedWordlessTranscriptFeed[] = []
+  const out: NestedRunGraph[] = []
 
   for (const node of nodes) {
     if (node.type !== "sub-workflow" || node.data?.skipped === true) continue
@@ -221,7 +225,7 @@ export async function findNestedWordlessTranscriptFeeds(
       loaded = await loadSubWorkflowGraph(node, ownerId)
     } catch (err) {
       console.warn(
-        `[transcribe-preflight] could not load the graph behind sub-workflow node ${node.id}` +
+        `[nested-preflight] could not load the graph behind sub-workflow node ${node.id}` +
           ` — leaving it to the run: ${err instanceof Error ? err.message : String(err)}`,
       )
       continue
@@ -229,22 +233,36 @@ export async function findNestedWordlessTranscriptFeeds(
     if (!loaded) continue
 
     const nextPath = [...path, node.id]
-    for (const feed of findWordlessTranscriptFeeds(loaded.nodes, loaded.edges)) {
-      out.push({ ...feed, subWorkflowPath: nextPath })
-    }
+    out.push({ nodes: loaded.nodes, edges: loaded.edges, subWorkflowPath: nextPath })
     out.push(
-      ...(await findNestedWordlessTranscriptFeeds(
-        loaded.nodes,
-        loaded.edges,
-        ownerId,
-        depth + 1,
-        new Set([...visitedRouteKeys, routeKey]),
-        nextPath,
-      )),
+      ...(await loadNestedRunGraphs(loaded.nodes, ownerId, depth + 1, new Set([...visitedRouteKeys, routeKey]), nextPath)),
     )
   }
 
   return out
+}
+
+/** The word-timings question `findWordlessTranscriptFeeds` asks of the run
+ *  graph, asked of every nested graph (`loadNestedRunGraphs`). NOT covered, by
+ *  construction: a chain that CROSSES a sub-workflow boundary (transcribe in
+ *  the parent, add-captions in the child, or the reverse) — no single graph
+ *  holds that edge pair. */
+export function nestedWordlessTranscriptFeeds(graphs: readonly NestedRunGraph[]): NestedWordlessTranscriptFeed[] {
+  return graphs.flatMap((graph) =>
+    findWordlessTranscriptFeeds(graph.nodes, graph.edges).map((feed) => ({ ...feed, subWorkflowPath: graph.subWorkflowPath })),
+  )
+}
+
+/** `nestedWordlessTranscriptFeeds` over the graphs `loadNestedRunGraphs` loads. */
+export async function findNestedWordlessTranscriptFeeds(
+  nodes: ReadonlyArray<SimpleNode>,
+  _edges: ReadonlyArray<SimpleEdge>,
+  ownerId: string,
+  depth: number = 0,
+  visitedRouteKeys: ReadonlySet<string> = new Set(),
+  path: ReadonlyArray<string> = [],
+): Promise<NestedWordlessTranscriptFeed[]> {
+  return nestedWordlessTranscriptFeeds(await loadNestedRunGraphs(nodes, ownerId, depth, visitedRouteKeys, path))
 }
 
 /**
@@ -341,6 +359,23 @@ export async function executeSubWorkflow(
           .join(" "),
       ) as Error & { code?: string }
       err.code = "transcript_has_no_word_timings"
+      throw err
+    }
+  }
+
+  // A Preview render in a nested graph would hand a preview to the parent,
+  // where nothing can Render final. The orchestrator refuses that up front
+  // (its nested scan); this is the backstop for a graph that reaches here —
+  // only on a run the stop rule applies to (`ctx.previewStopRule`).
+  if (ctx.previewStopRule === true) {
+    const previews = previewRendersIn(subNodes, subEdges)
+    if (previews.length > 0) {
+      const err = new Error(`${PREVIEW_RENDER_NESTED_MESSAGE} (render ${previews.join(", ")})`) as Error & {
+        code?: string
+        errorCode?: string
+      }
+      err.code = PREVIEW_RENDER_NESTED
+      err.errorCode = PREVIEW_RENDER_NESTED
       throw err
     }
   }

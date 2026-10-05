@@ -4,6 +4,7 @@
  */
 
 import { create } from "zustand"
+import { executionErrorText } from "@/lib/execution-error-text"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import {
   getPublishedApp,
@@ -241,7 +242,8 @@ export const useAppRunnerStore = create<AppRunnerState>((set, get) => ({
       nodeStates,
       completedNodes: run.execution.completedNodes,
       totalNodes: run.execution.totalNodes,
-      errorMessage: run.execution.errorMessage ?? null,
+      // A refusal recorded as a stable code reads in the runner's language.
+      errorMessage: executionErrorText(run.execution.errorMessage),
     })
 
     // Resume polling only if this run is live and not already being polled.

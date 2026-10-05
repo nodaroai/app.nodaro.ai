@@ -5,6 +5,7 @@ import { useT } from "@/lib/i18n"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Link2, Loader2, Send, Type, Video } from "lucide-react"
 import { BaseNode } from "./base-node"
+import { TriggerPreviewWarning } from "./trigger-preview-warning"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleWithPopover, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -84,6 +85,7 @@ function TelegramAccountTriggerNodeComponent({ id, data, selected }: NodeProps) 
             </p>
           )}
         </div>
+        <TriggerPreviewWarning nodeId={id} armed={listening} />
       </BaseNode>
       {/* A trigger starts the run; it takes nothing from the canvas. */}
       <HandleWithPopover nodeId={id} nodeType="telegram-account-trigger" handleId="out" type="source" position={Position.Right} label="Message" color={TEXT_HANDLE_COLOR} icon={<Send />} side="right" top={TOP.out} />

@@ -41,6 +41,7 @@ vi.mock("@/lib/admin-check.js", () => ({
 
 vi.mock("@/ee/billing/credits.js", () => ({
   estimateWorkflowCredits: vi.fn().mockReturnValue(10),
+  estimateWorkflowListingCredits: vi.fn().mockReturnValue(10),
 }))
 
 // ---------------------------------------------------------------------------

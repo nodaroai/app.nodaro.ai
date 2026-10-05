@@ -1,7 +1,10 @@
+import { PREVIEW_RENDER_NESTED } from "@nodaro/shared"
+import { previewRendersIn } from "../services/workflow-engine/nested-preview-renders.js"
+import type { SimpleEdge, SimpleNode } from "../services/workflow-engine/types.js"
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
-import { estimateWorkflowCredits, type EstimateNode, type EstimateEdge } from "../ee/billing/credits.js"
+import { estimateWorkflowListingCredits, type EstimateNode, type EstimateEdge } from "../ee/billing/credits.js"
 import { invalidateAppCache } from "./app-runner.js"
 import { getNodeResult, getOutputType, parseHandleId, calculateMonetizationMarkup, calculateMonetizedCost } from "@nodaro/shared"
 import { sanitizeSlugBase, generateSlug, getCreatorDisplayName } from "../lib/marketplace-helpers.js"
@@ -484,6 +487,25 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
       })
     }
 
+    // A component runs inside its caller's run, with no Render final path: one
+    // that holds a Preview render is refused here, permanently (the
+    // orchestrator also refuses the inner run of a version published before
+    // this check).
+    if (publishType === "component") {
+      const previews = previewRendersIn(
+        (workflow.nodes ?? []) as SimpleNode[],
+        ((workflow as { edges?: unknown }).edges ?? []) as SimpleEdge[],
+      )
+      if (previews.length > 0) {
+        return reply.status(400).send({
+          error: {
+            code: PREVIEW_RENDER_NESTED,
+            message: "A component cannot stop for a review: set its render to Final before publishing it.",
+          },
+        })
+      }
+    }
+
     // Validate component handles and exposed settings against snapshot nodes
     if (publishType === "component" && componentMetadata) {
       const snapshotNodes = (workflow.nodes || []) as Array<Record<string, unknown>>
@@ -597,7 +619,9 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
     )
     if (unboundUses.length > 0) return sendCredentialUnbound(reply, unboundUses)
 
-    const baseEstimatedCredits = await estimateWorkflowCredits(nodes as EstimateNode[], edges as EstimateEdge[])
+    // The listed price counts the whole graph — never the run estimate the
+    // preview stop rule shortens (decided 2026-10-05).
+    const baseEstimatedCredits = await estimateWorkflowListingCredits(nodes as EstimateNode[], edges as EstimateEdge[])
 
     // Inherit monetization from previous version, then user defaults, then zeros
     let inheritedMonetizationEnabled = false

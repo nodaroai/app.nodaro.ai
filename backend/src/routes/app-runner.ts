@@ -7,6 +7,7 @@
  * DELETE /v1/app/:slug/runs/:runId  — Delete run from history
  */
 
+import { previewReviewRefusal } from "../lib/preview-review-gate.js"
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
 import { sendInternalError } from "../lib/http-errors.js"
 import { z } from "zod"
@@ -415,6 +416,18 @@ export async function appRunnerRoutes(app: FastifyInstance) {
     // (user, workflow) pair on every already-running guard.
     if (await refuseDegradedAppRun(req, reply, appRow.workflow_id as string)) return
 
+    // An app run has no Render final yet: a snapshot whose run holds a
+    // Preview render is refused before any row is written (the orchestrator
+    // asks again). Until app review ships, apps count as nobody to review.
+    {
+      const refusal = previewReviewRefusal(
+        (appRow.snapshot_nodes ?? []) as ReadonlyArray<{ id: string; type?: string; data?: Record<string, unknown> }>,
+        (appRow.snapshot_edges ?? []) as ReadonlyArray<{ source: string; target: string }>,
+        { triggerType: "app_run", nodeIds, inputOverrides },
+      )
+      if (refusal) return reply.status(400).send({ error: refusal })
+    }
+
     if (runId) {
       // Existing draft run path — create execution inline then link the draft
       const { data: execution, error: execError } = await supabase
@@ -467,6 +480,8 @@ export async function appRunnerRoutes(app: FastifyInstance) {
         // billing hook (rung 2, the validated workspace header); an app run
         // never resolves through the underlying workflow.
         billingContext: req.billingContext ?? personalPayer(req.userId),
+        // An app run has no Render final path yet.
+        reviewerPresent: false,
       }
 
       await orchestrationQueue.add("workflow-execution", jobData, {

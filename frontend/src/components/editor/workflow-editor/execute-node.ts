@@ -123,6 +123,7 @@ import { applySocialSearchFailure, applySocialSearchResult, socialSearchRunStart
 import { metaAdsAdvertisersFrom, metaAdsNodeMode, metaAdsScrapeWireSources, splitMetaAdsAdvertiserNames, splitInstagramTargets, instagramScrapeMode, socialSearchRequestFromNode } from "@nodaro/shared";
 import { clampContentIdeasCount, CONTENT_IDEAS_MAX_RECIPE_INPUTS } from "@nodaro/shared";
 import { tx } from "@/lib/i18n";
+import { previewSingleRunRefusal } from "./preview-gate";
 import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates";
 import {
   readPromptAffixes, unwrapEditPlanOutput, editPlanResultPatch, clampEditPlanClipCount, asEditPlanMode, asEditPlanTier, resolveSlideshowTransition, ASPECT_RATIO_DIMENSIONS, buildPro3DRenderSource, pro3DRenderTimingOverrides, resolveScene3DAuthoringEngine, COMPOSER_PLAN_MAP, VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, isSeedance2Provider, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, uiResolutionFill, supportsExtendRender, isMinimaxH3Provider, isVeoProvider, isGeminiOmniProvider, MODEL_CATALOG, splitGeneratedItems, LLM_FEATURE_DEFAULTS, resolveVideoProviderForMode, resolveVideoModeForInputs, VIDEO_REF_LIMITS_BY_PROVIDER, resolveEffectiveSourceType, sourceRefKey, hasFeature, countRefModalityEdges, type ReferenceModality, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionSlug, characterMentionableAssetArrays, selectLoraRoutingForMentions, expandExtraRefsToConnectedReferences, resolveSeparator, evaluateJsonPath, stringifyPathResults, alignedFieldList, spreadJsonArrayIfSingleton, zipMergeLists, evaluateJsonExpression, buildExpressionFromVisual, jsonResultToList, tryParseJson, evaluateCondition, evaluateConditionGroup, resolveConditionValue, sortListItems, runSelector, resolveSelectorRefs, buildConditionVariables, VARIABLES_HANDLE_ID, clampSmartCutWindow, resolveGvpAnchorWire, resolveTopazUpscale, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY, unresolvedRefTokens, classifyRefToken, canonicalVarName, parseNodeRef, NODE_REF_PATTERN, DEFAULT_TRANSCRIBE_NODE_PROVIDER, DEFAULT_TEXT_TO_AUDIO_PROVIDER, transcribeLaneSupportsWordTimestamps, transcribeWordTimestampsRefusal, normalizeCaptionNumericLevers } from "@nodaro/shared"
@@ -1160,6 +1161,17 @@ function executeNodeCore(
 ): Promise<string> {
   assertCanvasExecutionAllowed([node]);
   const { nodes, edges } = useWorkflowStore.getState();
+  // The backstop for every direct caller (auto-execute, a list iteration, the
+  // AI writer): a node a Preview render gates would consume the preview. The
+  // Run entry points refuse it first (confirmRunOrAbort).
+  {
+    const refusal = previewSingleRunRefusal(node.id, nodes, edges);
+    if (refusal) {
+      useWorkflowStore.getState().updateNodeData(node.id, { executionStatus: "failed", errorMessage: refusal });
+      toast.error(refusal);
+      return Promise.reject(new Error(refusal));
+    }
+  }
   // Inputs are resolved on the iteration's ROW (`listRowIndex`, from the fan-out
   // plan); `listIterationIndex` stays the iteration's identity — the idempotency
   // key below. They differ under Repeat xN and empty cells. Outside a list-

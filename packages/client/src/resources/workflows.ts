@@ -78,6 +78,15 @@ export interface UpdateWorkflowInput {
 export interface RunWorkflowParams {
   /** Optional subset of node IDs to execute. Omit to run the full workflow. */
   nodeIds?: string[]
+  /**
+   * Per-node field overrides for this run only, `{ [nodeId]: { field: value } }`,
+   * shallow-merged over each node's saved data (the node's saved results are
+   * not used). A run through the API has nobody to review a Preview render, so
+   * a workflow whose Apply EDL render is set to Preview is refused
+   * (`preview_review_required`) unless the run sets it to Final:
+   * `{ [renderNodeId]: { quality: "final" } }`.
+   */
+  inputOverrides?: Record<string, Record<string, unknown>>
 }
 
 export interface RunWorkflowResult {

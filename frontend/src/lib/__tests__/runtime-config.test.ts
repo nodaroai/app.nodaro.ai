@@ -9,7 +9,7 @@ import { describe, it, expect, afterEach } from "vitest"
 import { readdirSync, readFileSync, statSync } from "node:fs"
 import { join, resolve, dirname } from "node:path"
 import { fileURLToPath } from "node:url"
-import { runtimeApiUrl, runtimeDefaultLocale, runtimeSupabaseAnonKey, runtimeSupabaseUrl, runtimeUploadModerationEnabled } from "../runtime-config"
+import { runtimeApiUrl, runtimeDefaultLocale, runtimeSupabaseAnonKey, runtimeSupabaseUrl, runtimeUploadModerationEnabled, runtimePreviewStopRule } from "../runtime-config"
 
 const SRC = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..")
 
@@ -131,5 +131,22 @@ describe("runtimeUploadModerationEnabled (G3 — upload-moderation capability ga
     expect(runtimeUploadModerationEnabled()).toBe(false)
     window.__NODARO_RUNTIME__ = { moderation: {} }
     expect(runtimeUploadModerationEnabled()).toBe(false)
+  })
+})
+
+describe("runtimePreviewStopRule (the preview stop rule's rollout flag, decided 2026-10-05)", () => {
+  afterEach(() => { delete window.__NODARO_RUNTIME__ })
+
+  it("is true only when /config.js says exactly true", () => {
+    window.__NODARO_RUNTIME__ = { previewStopRule: true }
+    expect(runtimePreviewStopRule()).toBe(true)
+  })
+
+  it("is false with no /config.js value (a dev server, or production while it is off)", () => {
+    expect(runtimePreviewStopRule()).toBe(false)
+    window.__NODARO_RUNTIME__ = {}
+    expect(runtimePreviewStopRule()).toBe(false)
+    window.__NODARO_RUNTIME__ = { previewStopRule: "true" as unknown as boolean }
+    expect(runtimePreviewStopRule()).toBe(false)
   })
 })

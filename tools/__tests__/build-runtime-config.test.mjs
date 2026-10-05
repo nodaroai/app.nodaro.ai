@@ -1,6 +1,7 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
 import { spawnSync } from "node:child_process"
+import { readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import { dirname, resolve } from "node:path"
 import { buildRuntimeConfig } from "../build-runtime-config.mjs"
@@ -119,4 +120,25 @@ test("absent / falsey RUNTIME_UPLOAD_MODERATION → no moderation key (mainline 
   assert.ok(!("moderation" in buildRuntimeConfig({})))
   assert.ok(!("moderation" in buildRuntimeConfig({ RUNTIME_UPLOAD_MODERATION: "" })))
   assert.ok(!("moderation" in buildRuntimeConfig({ RUNTIME_UPLOAD_MODERATION: "false" })))
+})
+
+// The preview stop rule's rollout flag (decided 2026-10-05) reaches the editor
+// through /config.js, from the SAME variable the backend reads
+// (PREVIEW_STOP_RULE_ENABLED), with the same strict parse — so the editor and
+// the server can never disagree, and flipping it needs no rebuild.
+test("RUNTIME_PREVIEW_STOP_RULE true / 1 → previewStopRule true", () => {
+  assert.equal(buildRuntimeConfig({ RUNTIME_PREVIEW_STOP_RULE: "true" }).previewStopRule, true)
+  assert.equal(buildRuntimeConfig({ RUNTIME_PREVIEW_STOP_RULE: "1" }).previewStopRule, true)
+})
+
+test("an unset / falsey RUNTIME_PREVIEW_STOP_RULE leaves no key (production's /config.js is unchanged)", () => {
+  for (const value of [undefined, "", "false", "0", "TRUE", "yes"]) {
+    assert.ok(!("previewStopRule" in buildRuntimeConfig({ RUNTIME_PREVIEW_STOP_RULE: value })), String(value))
+  }
+})
+
+test("start.sh hands PREVIEW_STOP_RULE_ENABLED to the writer", () => {
+  const dockerfile = readFileSync(resolve(dirname(ENTRY), "..", "Dockerfile"), "utf8")
+  const writerCall = dockerfile.slice(dockerfile.indexOf("RUNTIME_API_URL=\"$RUNTIME_API_URL_EFFECTIVE\""))
+  assert.match(writerCall.slice(0, writerCall.indexOf("build-runtime-config.mjs")), /RUNTIME_PREVIEW_STOP_RULE="\$PREVIEW_STOP_RULE_ENABLED"/)
 })

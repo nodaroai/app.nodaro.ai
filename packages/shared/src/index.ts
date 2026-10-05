@@ -724,6 +724,25 @@ export {
 } from "./telegram-account-send.js"
 
 export { buildFeedMaps, nodeFeedsAnything, type FeedNode, type FeedEdge, type FeedMaps } from "./trigger-feeds.js"
+export {
+  PREVIEW_RENDER_NODE_TYPES,
+  PREVIEW_REVIEW_REQUIRED,
+  PREVIEW_RENDER_NESTED,
+  RUN_OVERRIDE_CLEARED_FIELDS,
+  SAVED_RENDER_STAMPS,
+  NO_SAVED_RENDER_STAMPS,
+  rendersAsPreview,
+  previewStops,
+  previewGatedNodeIds,
+  holdsPreviewRender,
+  withRunOverrides,
+  type PreviewGateNode,
+  type PreviewGateEdge,
+  type PreviewGateRun,
+  type PreviewStops,
+  type SavedRenderQualityStamp,
+  type SavedRenderStampReader,
+} from "./preview-gate.js"
 
 export {
   SCHEDULE_RULE_KINDS,

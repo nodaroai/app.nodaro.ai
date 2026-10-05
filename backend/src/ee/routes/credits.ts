@@ -163,6 +163,8 @@ const estimateWorkflowBody = z.object({
     id: z.string().optional(),
     type: z.string().min(1),
     data: z.record(z.string(), z.unknown()).optional(),
+    /** Group membership: the preview stop rule follows it. */
+    parentId: z.string().nullable().optional(),
   })),
   /** Optional wiring. Some prices depend on what a node is CONNECTED to
    *  (add-captions renders through the pricier lane when a transcript is
@@ -171,7 +173,10 @@ const estimateWorkflowBody = z.object({
   edges: z.array(z.object({
     source: z.string().optional(),
     target: z.string(),
+    sourceHandle: z.string().nullable().optional(),
     targetHandle: z.string().nullable().optional(),
+    /** The wire's `outputMode`, read by the preview stop rule. */
+    data: z.record(z.string(), z.unknown()).nullable().optional(),
   })).optional(),
   /** P14/W8 — lets the billing hook resolve the payer for this estimate
    *  (rung 1 runs the workflow's own run predicate; a viewer of a shared

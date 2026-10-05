@@ -9,6 +9,7 @@ import { resolveBillingContext, shouldRefuseDegradedRunFor } from "../lib/billin
 import { billingPairColumns } from "../lib/insert-job.js"
 import { canRunWorkflow } from "../lib/workflow-access.js"
 import { recordTriggerFireRefusal } from "../lib/trigger-fire-refusal.js"
+import { refusePreviewFire } from "../lib/preview-fire-refusal.js"
 import { getRouteForToken, downloadTelegramFile } from "../lib/telegram-router.js"
 import { ensureBotRegistration, syncBotRegistration } from "../lib/telegram-trigger-activation.js"
 
@@ -129,6 +130,21 @@ export async function telegramWebhookRoutes(app: FastifyInstance) {
         continue
       }
 
+      // The branch this message runs stops at a Preview render, and a bot
+      // conversation cannot review it: refuse before anything is created or
+      // billed, with one deduped failed row for the owner.
+      if (
+        await refusePreviewFire({
+          workflowId: trigger.workflowId,
+          userId: trigger.userId,
+          triggerType: "telegram",
+          triggerId: trigger.triggerId,
+          triggerNodeId: trigger.nodeId ?? null,
+        })
+      ) {
+        continue
+      }
+
       // P14: payer resolved at FIRE TIME under the trigger's owner and the
       // workflow's CURRENT home; the row carries the pair (W7).
       const billingContext = await resolveBillingContext({
@@ -170,6 +186,8 @@ export async function telegramWebhookRoutes(app: FastifyInstance) {
           ...(trigger.nodeId ? { triggerNodeId: trigger.nodeId } : {}),
           triggerData,
           billingContext,
+          // A bot conversation cannot review a Preview render.
+          reviewerPresent: false,
         }
         await orchestrationQueue.add("workflow-execution", jobData, {
           jobId: execution.id,

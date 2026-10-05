@@ -584,10 +584,24 @@ run(id: string, params?: RunWorkflowParams): Promise<RunWorkflowResult>
 ```
 
 Starts an execution and returns immediately with `{ executionId, status }`.
-Optionally restrict to a subset of node IDs.
+Optionally restrict to a subset of node IDs, and pass `inputOverrides` —
+nested `{ nodeId: { field: value } }` node data for THIS run, shallow-merged
+over each node's saved data (the overridden node's saved results are not
+used; a destination on an outbound node is refused with `400 locked_field`).
 
 ```ts
 const { executionId } = await client.workflows.run(id, { nodeIds: ["node-1"] })
+```
+
+A workflow whose Apply EDL render is set to **Proxy** stops at that preview
+for a person to review in the editor; a run through the SDK has nobody to
+review it, whichever auth it uses (an API key or `supabaseAuth`), so it is refused with `400 preview_review_required` unless the run
+sets the render to Final
+([details](./api-integration.md#runs-that-would-stop-for-a-review); rolled out under the
+`PREVIEW_STOP_RULE_ENABLED` flag, and where it is off nothing is refused):
+
+```ts
+await client.workflows.run(id, { inputOverrides: { [renderNodeId]: { quality: "final" } } })
 ```
 
 Throws `InsufficientCreditsError` if the user can't cover the worst-case cost.

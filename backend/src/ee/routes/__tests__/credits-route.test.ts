@@ -669,25 +669,28 @@ describe("POST /v1/credits/estimate-workflow", () => {
     expect(mockEstimateWorkflowCredits).toHaveBeenCalledWith(nodes, edges)
   })
 
-  it("keeps only the three edge fields a price can depend on", async () => {
-    // The schema is a `z.object`, so an edge's `id` / `sourceHandle` are
-    // stripped before the estimator sees them. Pinned so nobody later reads a
-    // field here that never arrives.
+  it("keeps only the fields the estimate reads: prices, and the preview stop rule's feeds", async () => {
+    // The schema is a `z.object`, so anything else (an edge's `id`) is stripped
+    // before the estimator sees it. Pinned so nobody later reads a field here
+    // that never arrives: the stop rule follows Group membership (`parentId`)
+    // and a wire's handle and mode (`sourceHandle`, `data.outputMode`).
     mockEstimateWorkflowCredits.mockReturnValue(30)
 
     const res = await app.inject({
       method: "POST",
       url: "/v1/credits/estimate-workflow",
       payload: {
-        nodes: [{ id: "ac1", type: "add-captions" }],
-        edges: [{ id: "e1", source: "tr1", sourceHandle: "json", target: "ac1", targetHandle: "transcript" }],
+        nodes: [{ id: "ac1", type: "add-captions", parentId: "grp", position: { x: 0, y: 0 } }],
+        edges: [
+          { id: "e1", source: "tr1", sourceHandle: "json", target: "ac1", targetHandle: "transcript", data: { outputMode: "each" } },
+        ],
       },
     })
 
     expect(res.statusCode).toBe(200)
     expect(mockEstimateWorkflowCredits).toHaveBeenCalledWith(
-      [{ id: "ac1", type: "add-captions" }],
-      [{ source: "tr1", target: "ac1", targetHandle: "transcript" }],
+      [{ id: "ac1", type: "add-captions", parentId: "grp" }],
+      [{ source: "tr1", sourceHandle: "json", target: "ac1", targetHandle: "transcript", data: { outputMode: "each" } }],
     )
   })
 

@@ -82,6 +82,17 @@ describe("workflows resource", () => {
     })
   })
 
+  it("run sends typed per-node inputOverrides — Render final is { [renderId]: { quality: \"final\" } }", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ executionId: "ex-1", status: "pending" }))
+    const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    await c.workflows.run("wf-1", { nodeIds: ["cut", "cap"], inputOverrides: { cut: { quality: "final" } } })
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/workflows/wf-1/run")
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      nodeIds: ["cut", "cap"],
+      inputOverrides: { cut: { quality: "final" } },
+    })
+  })
+
   it("get throws NotFoundError on 404", async () => {
     const fetchMock = vi.fn().mockReturnValueOnce(
       mockErr(404, { error: { code: "not_found", message: "Workflow not found" } }),

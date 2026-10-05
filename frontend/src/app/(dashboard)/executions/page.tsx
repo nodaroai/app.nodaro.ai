@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from "react"
+import { executionErrorText } from "@/lib/execution-error-text"
 import { Link } from "react-router-dom"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import {
@@ -400,7 +401,7 @@ function GlobalExecutionRow({
                   <AlertCircle className="w-3.5 h-3.5 text-red-400 ms-1.5 inline" />
                 </TooltipTrigger>
                 <TooltipContent side="right" className="max-w-xs">
-                  <p className="text-xs">{exec.errorMessage}</p>
+                  <p className="text-xs">{executionErrorText(exec.errorMessage)}</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>

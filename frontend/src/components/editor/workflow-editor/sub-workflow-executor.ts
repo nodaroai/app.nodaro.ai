@@ -10,7 +10,8 @@ import { RUN_START_RESET } from "./poll-job"
 import { planFanOut, withWiredSettings } from "@nodaro/shared"
 import { SUB_WORKFLOW_MAX_DEPTH as MAX_DEPTH, loadSubWorkflowRouteGraph, subWorkflowRouteKey } from "./sub-workflow-route-graph"
 import { wordTimingsPreflight } from "./add-captions-preflight"
-import { nestedWordTimingsPreflight } from "./sub-workflow-preflight"
+import { nestedRunPreflight } from "./sub-workflow-preflight"
+import { previewRenderPreflight } from "./preview-gate"
 import { nodeRunError } from "@/components/editor/workflow-editor/node-run-message"
 
 /**
@@ -89,9 +90,13 @@ export async function executeSubWorkflow(
     const childExecutingKeys = new Set(executingRouteKeys)
     childExecutingKeys.add(routeKey)
     {
+      // …and a nested graph holding a Preview render, which would hand a
+      // preview to the parent where nothing can Render final (refused
+      // permanently, like the server's handler).
       const blocked =
         wordTimingsPreflight(subNodes, subEdges) ??
-        (await nestedWordTimingsPreflight(subNodes, { depth: depth + 1, routeKeys: childExecutingKeys }))
+        previewRenderPreflight(subNodes, subEdges) ??
+        (await nestedRunPreflight(subNodes, { depth: depth + 1, routeKeys: childExecutingKeys }))
       if (blocked) throw new Error(blocked)
     }
 
