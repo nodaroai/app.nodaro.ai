@@ -2759,8 +2759,6 @@ Needs `workflows:execute`.
 | `video_asset_id` | string |  | Nodaro video job id or uploaded-asset id. |
 | `video_url` | string (URL) |  | Direct URL of a video file. |
 | `youtube_url` | string |  | YouTube video URL (youtube.com / youtu.be). Max 10 minutes; no live streams. |
-| `llm_model` | string |  | Analysis quality tier. Default "pro" (higher fidelity); "fast" is cheaper. Options: smart, pro, fast, mixed, mixed-fast. One of `smart`, `pro`, `fast`, `mixed`, `mixed-fast`. |
-| `selection_mode` | string |  | Result strategy. "choose" (default): the standard result. "combine": an enhanced, verified result with maximum captured detail (slightly slower, recommended). One of `choose`, `combine`. |
 | `variations` | boolean |  | Cast-variations opt-in: the analysis also detects per-entity appearance LOOKS — a plain wardrobe change between scenes counts exactly as much as a dream / flashback / disguise / era look — and binds each look to its scenes (`slots[].variations` + `scenes[].slotVariations`). Default false: the result keeps the pre-variations shape. |
 | `music_video` | boolean |  | Declare the clip a MUSIC VIDEO: the song IS the piece, so ALL sung lyrics are transcribed verbatim as per-scene `speech` layers (the instrumental bed stays its own `music` layer). Default false: soundtrack vocals nobody on screen performs are folded into the `music` layer's description, and `speech` carries only words uttered inside the story world. |
 | `translate_speech_to_english` | boolean |  | Translate spoken and sung words to English. Default false: speech is quoted verbatim in the language actually spoken. Independent of `translate_on_screen_text_to_english` — set this alone for English narration over footage whose signage stays in its original script. |

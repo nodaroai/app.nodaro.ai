@@ -1,7 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
 import { registerVerbs } from "../verbs.js"
-import { LIP_SYNC_PROVIDERS, VIDEO_TO_VIDEO_PROVIDERS, getMaxTtsChars } from "@nodaro/shared"
+import {
+  LIP_SYNC_PROVIDERS,
+  VIDEO_TO_VIDEO_PROVIDERS,
+  VIDEO_ANALYSIS_TIER_ORDER,
+  VIDEO_ANALYSIS_DURATION_BUCKETS,
+  VIDEO_ANALYSIS_BUCKET_CREDITS,
+  buildVideoAnalysisCreditId,
+  resolveVideoAnalysisModel,
+  getMaxTtsChars,
+} from "@nodaro/shared"
 import { newSession } from "../../session.js"
 import { _resetRegistry } from "../../tasks.js"
 import type { Scope } from "../../../scopes.js"
@@ -1357,14 +1366,12 @@ describe("motion_transfer verb", () => {
 })
 
 describe("video_analysis verb", () => {
-  it("calls /v1/video-analysis with snake_case → camelCase translation", async () => {
+  it("calls /v1/video-analysis with snake_case → camelCase translation, always on the Smart tier", async () => {
     const { fastify, received } = stubRoute("POST", "/v1/video-analysis", { jobId: "j-va" })
     const server = buildServer()
     registerVerbs({ server, session: executeSession(), fastify })
     const result = await callTool(server, "video_analysis", {
       video_url: "https://a/clip.mp4",
-      llm_model: "pro",
-      selection_mode: "combine",
       variations: true,
       music_video: true,
       analysis_focus: "focus on the product shots",
@@ -1372,10 +1379,13 @@ describe("video_analysis verb", () => {
     expect(result.isError).toBeUndefined()
     expect((result.structuredContent as Record<string, unknown>)?.jobId).toBe("j-va")
     expect(received.body?.videoUrl).toBe("https://a/clip.mp4")
-    // Verb forwards the quality tier; the route resolves tier→internal model.
-    expect(received.body?.llmModel).toBe("pro")
-    // Best-of-N strategy forwards snake→camel (audit gap: was untested).
-    expect(received.body?.selectionMode).toBe("combine")
+    // The tool has ONE analysis quality: it always asks the route for the
+    // Smart tier (the route resolves tier → engine plan) …
+    expect(received.body?.llmModel).toBe("smart")
+    // … and never sends a result strategy: Smart always refines its result.
+    expect(received.body).not.toHaveProperty("selectionMode")
+    // The job card names the tier that ran.
+    expect((result.structuredContent as Record<string, unknown>)?.model).toBe("smart")
     // Cast-variations opt-in forwards as-is (parity with the node checkbox and
     // recast — the verb previously had no way to request looks at all).
     expect(received.body?.variations).toBe(true)
@@ -1385,6 +1395,71 @@ describe("video_analysis verb", () => {
     expect(received.body?.analysisFocus).toBe("focus on the product shots")
     expect(received.body?.mcp_client).toBe("Claude")
     expect(received.body?.userId).toBe("u1")
+  })
+
+  it("a caller still sending the retired llm_model / selection_mode gets Smart — the keys are dropped, not forwarded", async () => {
+    // A client holding a cached tool list can still send them. The SDK's input
+    // parse strips keys the schema no longer declares, so the call runs (it is
+    // not rejected) and runs Smart, never the tier the caller asked for.
+    const { fastify, received } = stubRoute("POST", "/v1/video-analysis", { jobId: "j-va-stale" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "video_analysis", {
+      video_url: "https://a/clip.mp4",
+      llm_model: "fast",
+      selection_mode: "choose",
+    })
+    expect(result.isError).toBeUndefined()
+    expect(received.body?.llmModel).toBe("smart")
+    expect(received.body).not.toHaveProperty("selectionMode")
+    expect(received.body).not.toHaveProperty("llm_model")
+    expect(received.body).not.toHaveProperty("selection_mode")
+  })
+
+  it("offers no analysis-quality choice: llm_model and selection_mode are gone, every other parameter stays", async () => {
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify: Fastify() })
+    const tool = (await listTools(server)).find((t) => t.name === "video_analysis")
+    const properties = (tool?.inputSchema as { properties?: Record<string, unknown> } | undefined)?.properties ?? {}
+    expect(Object.keys(properties).sort()).toEqual(
+      [
+        "video_asset_id",
+        "video_url",
+        "youtube_url",
+        "variations",
+        "music_video",
+        "translate_speech_to_english",
+        "translate_on_screen_text_to_english",
+        "analysis_focus",
+      ].sort(),
+    )
+  })
+
+  it("prices only the Smart ladder, read from the shared credit table", async () => {
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify: Fastify() })
+    const tool = (await listTools(server)).find((t) => t.name === "video_analysis")
+    const pricing = tool?.description?.split("**Pricing**")[1] ?? ""
+    // A tier prices under the engine it resolves to (`pro` → its model id,
+    // `smart` / `mixed` → their own sentinels), exactly as the route does.
+    const ladderOf = (tier: string) =>
+      VIDEO_ANALYSIS_DURATION_BUCKETS.map(
+        (b) => VIDEO_ANALYSIS_BUCKET_CREDITS[buildVideoAnalysisCreditId(resolveVideoAnalysisModel(tier), b)],
+      )
+    const smart = ladderOf("smart")
+    // Every Smart bucket is priced. Without this, a missing row would read
+    // "undefined" in the expected string AND the description, and pass.
+    for (const credits of smart) expect(credits).toBeGreaterThan(0)
+    // No other tier is named or priced. Each of their ladders is checked as
+    // priced first, so its absence below is a real check, not a search for "///".
+    for (const tier of VIDEO_ANALYSIS_TIER_ORDER.filter((t) => t !== "smart")) {
+      const ladder = ladderOf(tier)
+      for (const credits of ladder) expect(credits).toBeGreaterThan(0)
+      expect(pricing).not.toMatch(new RegExp(`\\b${tier}\\b`, "i"))
+      expect(pricing).not.toContain(ladder.join("/"))
+    }
+    expect(pricing).toContain(`${smart.join("/")} credits`)
+    expect(pricing).toMatch(/\bSmart\b/)
   })
 
   it("omits musicVideo entirely when music_video is absent or false", async () => {
