@@ -551,13 +551,28 @@ describe("buildPayload", () => {
       const n = node("n1", "text-to-audio", { prompt: "thunder" })
       const result = buildPayload(n, jobId, {})
       expect(result.jobName).toBe("text-to-audio")
-      expect(result.modelIdentifier).toBe("elevenlabs-sfx")
+      // No duration → reserved as 5 s, the row the route charges the same body.
+      expect(result.modelIdentifier).toBe("elevenlabs-sfx:5s")
     })
 
     it("a node saved without a provider runs the default engine, SFX levers included", () => {
       const n = node("n1", "text-to-audio", { prompt: "wind", duration: 6, loop: true, promptInfluence: 0.4 })
       const result = buildPayload(n, jobId, {})
       expect(result.payload).toMatchObject({ provider: "elevenlabs-sfx", duration: 6, loop: true, promptInfluence: 0.4 })
+      expect(result.modelIdentifier).toBe("elevenlabs-sfx:6s")
+    })
+
+    it.each([
+      [0.5, "elevenlabs-sfx:1s"],
+      [10, "elevenlabs-sfx:10s"],
+      [22, "elevenlabs-sfx:22s"],
+      [22.3, "elevenlabs-sfx:23s"],
+      [30, "elevenlabs-sfx:30s"],
+    ])("reserves per whole second, rounded up: %s s → %s (the worker still runs the engine)", (duration, creditId) => {
+      const n = node("n1", "text-to-audio", { prompt: "rain", provider: "elevenlabs-sfx", duration })
+      const result = buildPayload(n, jobId, {})
+      expect(result.modelIdentifier).toBe(creditId)
+      expect(result.payload).toMatchObject({ provider: "elevenlabs-sfx", duration })
     })
   })
 

@@ -8,7 +8,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { TEXT_TO_AUDIO_PROVIDERS, DEFAULT_TEXT_TO_AUDIO_PROVIDER } from "@nodaro/shared"
+import { TEXT_TO_AUDIO_PROVIDERS, DEFAULT_TEXT_TO_AUDIO_PROVIDER, textToAudioCreditId } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 
@@ -23,7 +23,10 @@ const textToAudioBody = z.object({
 })
 
 export async function textToAudioRoutes(app: FastifyInstance) {
-  app.post("/v1/text-to-audio", { preHandler: creditGuard((req) => { const body = req.body as Record<string, unknown>; return (body?.provider as string) ?? DEFAULT_TEXT_TO_AUDIO_PROVIDER }) }, async (req, reply) => {
+  // Priced by length: the guard and the reservation both read the row
+  // `textToAudioCreditId` picks (`elevenlabs-sfx:<n>s` — whole seconds,
+  // rounded up; no duration = 5 s), the same row a workflow run reserves.
+  app.post("/v1/text-to-audio", { preHandler: creditGuard((req) => { const body = req.body as Record<string, unknown> | undefined; return textToAudioCreditId(body?.provider as string | undefined, body?.duration) }) }, async (req, reply) => {
     const parsed = textToAudioBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -51,6 +54,9 @@ export async function textToAudioRoutes(app: FastifyInstance) {
     // One resolved engine for the reservation AND the worker, so the model
     // that runs is always the model that was billed.
     const modelIdentifier = provider ?? DEFAULT_TEXT_TO_AUDIO_PROVIDER
+    // The price row for this engine at this length — what the guard checked.
+    // The worker reports no metered cost, so this reservation IS the charge.
+    const creditId = textToAudioCreditId(modelIdentifier, duration)
     const mcpClient = extractMcpClient(req.body)
 
     const { data: job, error } = await insertJob(req, {
@@ -68,7 +74,7 @@ export async function textToAudioRoutes(app: FastifyInstance) {
     }
 
     // Reserve credits
-    const reservation = await reserveCreditsForJob(req, reply, job.id, modelIdentifier)
+    const reservation = await reserveCreditsForJob(req, reply, job.id, creditId)
     if (reply.sent) return
     const usageLogId = reservation?.usageLogId
 

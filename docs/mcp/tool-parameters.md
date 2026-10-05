@@ -2606,7 +2606,7 @@ Needs `workflows:execute`.
 |---|---|---|---|
 | `prompt` | string |  | Describe the sound effect (e.g. 'thunderstorm with heavy rain'). From 1 to 2000 characters. |
 | `presetId` | string |  | Apply a built-in/custom preset by id from list_node_presets; explicit fields below override it. A preset's promptPrefix/promptSuffix wrap your prompt. From 1 to 200 characters. |
-| `duration` | number |  | Duration in seconds (0.5–30). Defaults to model choice. From 0.5 to 30. |
+| `duration` | number |  | Duration in seconds (0.5–30). Priced per second, rounded up; omitted = model picks the length, billed as 5 s. From 0.5 to 30. |
 | `loop` | boolean |  | Whether the output should loop seamlessly. |
 | `prompt_influence` | number |  | How strongly the prompt guides generation (0–1). From 0 to 1. |
 

@@ -8180,7 +8180,9 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "text-to-audio",
     label: "Text to Audio",
     category: "ai",
-    creditCost: 3,
+    // Coarse display fallback only: the default node (10 s) at 1 credit per
+    // second. The real price is per second asked for — textToAudioCreditId.
+    creditCost: 10,
     inputs: ["prompt", "audio-style"],
     outputs: ["audio"],
     defaultData: { label: "Text to Audio", prompt: "", provider: "elevenlabs-sfx", duration: 10, fieldMappings: {} },

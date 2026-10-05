@@ -18,7 +18,7 @@ import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { AudioResultOverlay } from "./audio-result-overlay"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import type { TextToAudioData } from "@/types/nodes"
-import { DEFAULT_TEXT_TO_AUDIO_PROVIDER } from "@nodaro/shared"
+import { DEFAULT_TEXT_TO_AUDIO_PROVIDER, textToAudioCreditId, textToAudioBilledSeconds } from "@nodaro/shared"
 
 const isVisualPicker = (s: string) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(s)
 const ACCEPTS_PROMPT      = (t: string) => isValidTextToAudioConnection("prompt",      t, isVisualPicker)
@@ -37,7 +37,10 @@ function TextToAudioNodeComponent({ id, data, selected }: NodeProps) {
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [showThumbnails, setShowThumbnails] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
-  const credits = useModelCredits(nodeData.provider ?? DEFAULT_TEXT_TO_AUDIO_PROVIDER, 4)
+  // Priced per second of audio asked for (no duration = 5 s): the same row
+  // (`textToAudioCreditId`) the route and the workflow run reserve.
+  const creditModelId = textToAudioCreditId(nodeData.provider, nodeData.duration)
+  const credits = useModelCredits(creditModelId, textToAudioBilledSeconds(nodeData.duration))
 
   function handleDeleteResult(indexToDelete: number) {
     updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedAudioUrl"))

@@ -1,4 +1,4 @@
-import { IMAGE_GEN_PROVIDERS, IMAGE_TO_VIDEO_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, LIP_SYNC_PROVIDERS, VOICE_CHANGER_MODEL_IDS, GVP_SUPPORTED_PROVIDERS, SEEDANCE_2_PROVIDERS, VIDEO_ANALYSIS_TIER_ORDER, MUSIC_PROVIDERS, TRANSCRIBE_PROVIDERS, MODIFY_IMAGE_PROVIDERS, UPSCALE_IMAGE_PROVIDERS, REFERENCE_BOARD_PROVIDERS, TTS_PROVIDERS, MOTION_TRANSFER_PROVIDERS, buildMotionCreditModelIdentifier, hasContiguousSegmentDurations, isMinimaxH3Provider, MODEL_CATALOG, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY, OVERLAY_PLATFORM_IDS, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, VIDEO_OVERLAY_OUTPUT_ASPECTS, VIDEO_OVERLAY_FITS } from "@nodaro/shared"
+import { IMAGE_GEN_PROVIDERS, IMAGE_TO_VIDEO_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, LIP_SYNC_PROVIDERS, VOICE_CHANGER_MODEL_IDS, GVP_SUPPORTED_PROVIDERS, SEEDANCE_2_PROVIDERS, VIDEO_ANALYSIS_TIER_ORDER, MUSIC_PROVIDERS, TRANSCRIBE_PROVIDERS, MODIFY_IMAGE_PROVIDERS, UPSCALE_IMAGE_PROVIDERS, REFERENCE_BOARD_PROVIDERS, TTS_PROVIDERS, TEXT_TO_AUDIO_PROVIDERS, MOTION_TRANSFER_PROVIDERS, buildMotionCreditModelIdentifier, hasContiguousSegmentDurations, isMinimaxH3Provider, MODEL_CATALOG, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY, OVERLAY_PLATFORM_IDS, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, VIDEO_OVERLAY_OUTPUT_ASPECTS, VIDEO_OVERLAY_FITS } from "@nodaro/shared"
 import type { OutputType } from "@nodaro/shared"
 import { nodeSupportsPromptAffixes } from "@nodaro/prompts"
 import { SCRAPER_ACTOR_LABELS, type ScraperActorId } from "@nodaro/shared"
@@ -149,6 +149,10 @@ export const CREDIT_BAND_SOURCES: Readonly<Record<string, CreditBandSource>> = {
   "text-to-speech": {
     ids: familyIds(...TTS_PROVIDERS),
     note: "Reserves on the ElevenLabs model row, not a node-type row (the legacy `elevenlabs` alias prices as turbo).",
+  },
+  "text-to-audio": {
+    ids: familyIds(...TEXT_TO_AUDIO_PROVIDERS),
+    note: "Priced per whole second of audio asked for (`elevenlabs-sfx:<n>s`, 1–30 s, rounded up); a request with no duration is billed as 5 s.",
   },
   "audio-separation": { ids: familyIds("audio-separation") },
   "audio-fx": { ids: familyIds("audio-fx") },
@@ -911,7 +915,7 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     creditCost: creditBandFor("suno-voice"),
   },
   // ---- Additional ai-audio nodes (outputType: AUDIO_OUTPUT_NODE_TYPES in input-resolver.ts; creditCost auto-filled from STATIC_CREDIT_COSTS) ----
-  { type: "text-to-audio", label: "Text to Audio", category: "ai-audio", description: "Generate sound effects and ambient audio from a text description using ElevenLabs SFX.", outputType: "audio" },
+  { type: "text-to-audio", label: "Text to Audio", category: "ai-audio", description: "Generate sound effects and ambient audio from a text description using ElevenLabs SFX. Priced per second of audio requested (rounded up; no duration is billed as 5 s).", outputType: "audio", creditCost: creditBandFor("text-to-audio") },
   {
     type: "text-to-dialogue",
     label: "Text to Dialogue",
