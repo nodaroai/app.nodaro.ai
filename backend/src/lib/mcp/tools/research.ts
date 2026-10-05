@@ -45,7 +45,7 @@ export function registerResearchTools({ server, session, fastify }: RegisterOpts
           .max(SOCIAL_SEARCH_MAX_QUERY_LENGTH)
           .describe(
             "A keyword (X search syntax works on X), or an account: @handle or profile link; a subreddit with mode " +
-              "`community`; a LinkedIn company page link; a Meta advertiser name or Page ID.",
+              "`community`; a LinkedIn page or profile link; a Meta advertiser name or Page ID.",
           ),
         mode: z
           .enum(SOCIAL_SEARCH_MODES)

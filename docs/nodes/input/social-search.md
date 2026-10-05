@@ -33,7 +33,7 @@ Social Search runs on Nodaro Cloud. It is in preview for admins.
 | YouTube | videos and Shorts matching the words | a channel's latest videos (`@handle`, channel link or channel ID) |
 | X | posts matching the words (X search syntax works) | an account's own posts, without its replies in other threads |
 | Reddit | threads matching the words (optionally inside one subreddit) | — (use **Subreddit**: a community's threads) |
-| LinkedIn | posts matching the words | a company page's posts (`linkedin.com/company/…`) |
+| LinkedIn | posts matching the words | a company page's posts (`linkedin.com/company/…`), or a person's latest posts from their profile (`linkedin.com/in/…`) |
 | Meta Ads | ads matching the words | an advertiser's ads (name, Page ID or Ad Library link) |
 
 ### Fields
@@ -41,7 +41,7 @@ Social Search runs on Nodaro Cloud. It is in preview for admins.
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | Platform | select | TikTok | One of the seven platforms above |
-| Search by | select | Keyword | Keyword, Account (Channel, Company page, Advertiser) or Subreddit, as the platform allows |
+| Search by | select | Keyword | Keyword, Account (Channel, Page or profile, Advertiser) or Subreddit, as the platform allows |
 | Query | text | — | The keyword or the account. A Text or List node wired into the input replaces it |
 | Results | 20 / 40 / 60 | 20 | How many posts to fetch |
 | Posted in | select | The last month | The last day, week, month or year, or any time. Not used for Meta ads (they are judged by how long they run) |

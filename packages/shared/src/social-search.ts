@@ -19,8 +19,8 @@ export const SOCIAL_SEARCH_NODE_TYPE = "social-search" as const
 export const SOCIAL_PLATFORMS = ["tiktok", "instagram", "youtube", "x", "reddit", "linkedin", "meta_ads"] as const
 export type SocialPlatform = (typeof SOCIAL_PLATFORMS)[number]
 
-/** `account` is a creator, a LinkedIn company page or a Meta advertiser;
- *  `community` is a subreddit. */
+/** `account` is a creator, a LinkedIn company page or person's profile, or
+ *  a Meta advertiser; `community` is a subreddit. */
 export const SOCIAL_SEARCH_MODES = ["keyword", "account", "community"] as const
 export type SocialSearchMode = (typeof SOCIAL_SEARCH_MODES)[number]
 
@@ -165,7 +165,7 @@ export type SocialSearchParams = {
   /** Default `keyword`. */
   readonly mode?: SocialSearchMode
   /** A keyword, or an account: a handle, a profile link, a subreddit, a
-   *  LinkedIn company page, a Meta advertiser's name or page id. */
+   *  LinkedIn company page or profile, a Meta advertiser's name or page id. */
   readonly query: string
   /** 20, 40 or 60 results. Default 20. */
   readonly count?: SocialSearchCount

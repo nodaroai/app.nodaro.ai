@@ -5568,9 +5568,9 @@ export type SocialSearchNodeData = {
   [key: string]: unknown
   label: string
   platform?: import("@nodaro/shared").SocialPlatform
-  /** "keyword" (default), "account" (a creator, a company page, an advertiser) or "community" (a subreddit) */
+  /** "keyword" (default), "account" (a creator, a company page or a person's profile, an advertiser) or "community" (a subreddit) */
   mode?: import("@nodaro/shared").SocialSearchMode
-  /** A keyword, or an account (handle, profile link, subreddit, company page, advertiser) */
+  /** A keyword, or an account (handle, profile link, subreddit, LinkedIn company page or profile, advertiser) */
   query?: string
   /** Results per search: 20, 40 or 60 */
   count?: import("@nodaro/shared").SocialSearchCount

@@ -12,6 +12,12 @@ YouTube, X, a LinkedIn company page. Accounts the site does not link may be
 filled in as guesses, marked **Guess, check it**. Check every account, and
 add a Meta advertiser if you want their ads read too.
 
+A LinkedIn account is a company page (`linkedin.com/company/…`) or a
+person's profile (`linkedin.com/in/…`), for a brand that is a person. Find
+accounts fills in company pages only; paste a profile yourself. A profile
+shows the person's latest posts (about eight) with their text and date, and
+no reaction counts, the same as a company page.
+
 A YouTube account is an `@handle` or a channel link
 (`youtube.com/channel/…`). An old custom link (`youtube.com/c/…` or
 `/user/…`) is refused: searched by its name it can lead to someone else's

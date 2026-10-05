@@ -74,7 +74,7 @@ Needs `assets:write` · Nodaro Cloud only.
 |---|---|---|---|
 | `brand` | string |  | Its name; read from the website when left out. At most 100 characters. |
 | `website` | string |  | At most 500 characters. |
-| `accounts` | object |  | Handles or links: tiktok, instagram, youtube, x, linkedin (company page), meta_ads (advertiser name). |
+| `accounts` | object |  | Handles or links: tiktok, instagram, youtube, x, linkedin (page or profile), meta_ads (advertiser name). |
 | `accounts.tiktok` | string |  | At most 300 characters. |
 | `accounts.instagram` | string |  | At most 300 characters. |
 | `accounts.youtube` | string |  | At most 300 characters. |
@@ -2312,7 +2312,7 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `platform` | string | yes | The platform to search. One of `tiktok`, `instagram`, `youtube`, `x`, `reddit`, `linkedin`, `meta_ads`. |
-| `query` | string | yes | A keyword (X search syntax works on X), or an account: @handle or profile link; a subreddit with mode `community`; a LinkedIn company page link; a Meta advertiser name or Page ID. From 1 to 300 characters. |
+| `query` | string | yes | A keyword (X search syntax works on X), or an account: @handle or profile link; a subreddit with mode `community`; a LinkedIn page or profile link; a Meta advertiser name or Page ID. From 1 to 300 characters. |
 | `mode` | string |  | `keyword` (default), `account`, or `community` (Reddit only; Reddit has no `account`). One of `keyword`, `account`, `community`. |
 | `count` | number |  | Results: 20 (default), 40 or 60. One of `20`, `40`, `60`. |
 | `period` | string |  | Posted within: day, week, month (default), year, all. One of `day`, `week`, `month`, `year`, `all`. |
