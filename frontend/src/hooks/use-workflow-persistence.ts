@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase"
 import { useWorkflowStore, type PresentationSettings } from "@/hooks/use-workflow-store"
 import { getBatchJobStatus, listWorkflowExecutions, type BatchJobStatus } from "@/lib/api"
 import { readWorkflowContent } from "@/lib/workflow-content"
+import { withoutRunsInFlight } from "@/lib/run-in-flight-mark"
 import { applyWorkflowAccess, requestAccessRecheck } from "@/hooks/workflow-access-mode"
 import { classifyZeroRowSave, isSaveRefused } from "@/hooks/workflow-save-refusal"
 import { tx } from "@/lib/i18n"
@@ -1317,12 +1318,16 @@ export function useWorkflowPersistence(projectId?: string) {
         // executeNodeForList running for a freshly-loaded workflow, so a stale
         // `true` (autosaved mid-batch before the finally cleared it) would
         // permanently exempt the node from the abandon-guard. Clear it on load.
+        // Likewise a paid run's `__runsInFlight` token (`withRunInFlight`):
+        // it is a run the tab that wrote it had out, and a load has none, so
+        // one found in a row (nothing saves one) would hold a read-only freeze
+        // back with nothing left to release it.
         nodes = nodes.map((n) => {
           const d = n.data as Record<string, unknown> | undefined
           if (d?.__listRunning) {
-            return { ...n, data: { ...d, __listRunning: false } as typeof n.data }
+            return withoutRunsInFlight({ ...n, data: { ...d, __listRunning: false } as typeof n.data })
           }
-          return n
+          return withoutRunsInFlight(n)
         })
 
         // Sync node results from jobs table via backend API

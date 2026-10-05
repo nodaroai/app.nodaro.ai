@@ -250,6 +250,27 @@ describe("useWorkflowPersistence — syncNodeResultsFromDB (via load)", () => {
     expect(mockGetBatchJobStatus).not.toHaveBeenCalled()
   })
 
+  it("drops a paid run's mark found in a row: a load has no run out to hold the freeze back", async () => {
+    // Nothing saves one (it is transient); this is the belt that makes "a
+    // reload starts without it" hold whatever wrote the row.
+    const nodes = [
+      makeNode({ id: "n1", data: { label: "Img", executionStatus: "completed", __runsInFlight: ["run-1"] } }),
+      makeNode({ id: "n2", data: { label: "Img2", executionStatus: "idle", __listRunning: true, __runsInFlight: ["run-2"] } }),
+      makeNode({ id: "n3", data: { label: "Img3", executionStatus: "idle" } }),
+    ]
+    setupSupabaseLoad({ id: "w1", name: "Test", nodes, edges: [], settings: {} })
+
+    const { result } = renderHook(() => useWorkflowPersistence("p1"))
+    await act(async () => {
+      await result.current.load("w1")
+    })
+
+    const synced = getSyncedNodes().map((n) => n.data as Record<string, unknown>)
+    expect(synced.filter((d) => "__runsInFlight" in d)).toEqual([])
+    expect(synced.map((d) => d.label)).toEqual(["Img", "Img2", "Img3"])
+    expect(synced[1].__listRunning).toBe(false)
+  })
+
   // -----------------------------------------------------------------------
   // Reset to idle (no valid job IDs)
   // -----------------------------------------------------------------------

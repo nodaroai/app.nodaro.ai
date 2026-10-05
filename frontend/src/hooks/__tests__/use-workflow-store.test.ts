@@ -28,6 +28,7 @@ vi.mock("@xyflow/react", () => ({
 }))
 
 import { useWorkflowStore, EXECUTION_DATA_KEYS, buildDuplicatedNodeData } from "../use-workflow-store"
+import { TRANSIENT_RUNTIME_KEYS } from "@nodaro/shared"
 import * as undoFlags from "../undo-flags"
 import { registerCatalogPack, resetCatalogPacks } from "@nodaro/prompts"
 
@@ -632,6 +633,14 @@ describe("buildDuplicatedNodeData", () => {
     expect(d.executionStatus).toBeUndefined()
     expect(d.currentJobId).toBeUndefined()
     expect(d.generatedResults).toEqual([{ url: "u" }])
+  })
+
+  it("strips every transient run-state key, a paid run's mark among them, and the last run's error and list results", () => {
+    const source: Record<string, unknown> = { label: "Img", generatedResults: [{ url: "u" }] }
+    for (const key of TRANSIENT_RUNTIME_KEYS) source[key] = "from the source's run"
+    source.__runsInFlight = ["run-1"]
+    const d = clone("generate-image", { ...source, errorMessage: "boom", __listResults: ["a"], __alignedListResults: ["a"] })
+    expect(Object.keys(d).sort()).toEqual(["generatedResults", "label"])
   })
 
   it("regenerates sub-workflow port/route ids and router route ids", () => {

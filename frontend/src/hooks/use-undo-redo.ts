@@ -2,6 +2,7 @@ import { useEffect, useCallback } from "react"
 import { useWorkflowStore } from "./use-workflow-store"
 import { useUndoRedoStore, type WorkflowSnapshot } from "./use-undo-redo-store"
 import { isSkipUndoCapture } from "./undo-flags"
+import { withoutRunsInFlight } from "@/lib/run-in-flight-mark"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 
 // Module-level state shared across hook instances
@@ -12,9 +13,13 @@ let _debounceTimer: ReturnType<typeof setTimeout> | null = null
 /**
  * Strip React Flow internal/transient fields from nodes so they don't
  * pollute undo snapshots (e.g. `selected`, `dragging`, `measured`).
+ *
+ * And a paid run's mark (`__runsInFlight`): it is a run this tab has out now,
+ * never a state to go back to. A restore takes each node's live marks instead
+ * (`restoreSnapshot`, `withLiveRunsInFlight`).
  */
 function cleanNodes(nodes: WorkflowNode[]): WorkflowNode[] {
-  return nodes.map(({ selected, dragging, measured, ...rest }) => rest as WorkflowNode)
+  return nodes.map(({ selected, dragging, measured, ...rest }) => withoutRunsInFlight(rest as WorkflowNode))
 }
 
 function cleanEdges(edges: WorkflowEdge[]): WorkflowEdge[] {

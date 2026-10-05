@@ -33,6 +33,7 @@ import { queryClient } from "@/lib/query-client"
 import { queryKeys } from "@/lib/query-keys"
 import { getCachedUserId } from "@/hooks/use-auth"
 import type { LoadedWorkflowAccess } from "@/lib/workflow-content"
+import { withLiveRunsInFlight } from "@/lib/run-in-flight-mark"
 import { getStickyLookPreviewStyle, getStickyParameterDisplayMode } from "@/lib/parameter-node-prefs"
 import { getInlinePromptMode, setInlinePromptMode as persistInlinePromptMode } from "@/lib/inline-prompt-pref"
 import type { GenerateTextTemplate } from "@/lib/generate-text-templates"
@@ -931,16 +932,16 @@ export function buildDuplicatedNodeData(
 ): SceneNodeData {
   const clonedData = { ...source.data } as SceneNodeData
   const d = clonedData as Record<string, unknown>
-  delete d.executionStatus
-  delete d.currentJobId
-  delete d.currentJobProgress
+  // A copy has run nothing, so no key of a run in flight comes with it: the
+  // whole of TRANSIENT_RUNTIME_KEYS, by the set itself rather than a list kept
+  // beside it. A paid run's `__runsInFlight` token on a copy, for one, would
+  // hold a read-only freeze back for good: nothing ever releases it there. The
+  // copy starts as a reload would show it, since none of these is saved.
+  for (const key of TRANSIENT_RUNTIME_KEYS) delete d[key]
+  // Nor the last run's error and list results, which are saved with the row.
   delete d.errorMessage
-  delete d.isStreaming
-  delete d.__listTotal
-  delete d.__listCompleted
   delete d.__listResults
   delete d.__alignedListResults
-  delete d.subWorkflowProgress
   // Clear "owns DB row X" pointers so the clone creates its own entity row on
   // first save. Otherwise editing/deleting the clone mutates the original's
   // row (object-page-modal passes the id to UPDATE-instead-of-INSERT) and the
@@ -3278,7 +3279,9 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
       nextNodeId = maxId + 1
     }
     set({
-      nodes: snapshot.nodes,
+      // A paid run's mark follows the runs this tab has out now, not the
+      // snapshot: Undo neither started nor stopped one (`withLiveRunsInFlight`).
+      nodes: withLiveRunsInFlight(snapshot.nodes, get().nodes),
       edges: snapshot.edges,
       characterDefinitions: snapshot.characterDefinitions,
       flowPromptTemplates: snapshot.flowPromptTemplates,

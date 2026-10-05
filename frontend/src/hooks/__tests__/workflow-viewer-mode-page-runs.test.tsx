@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import { render, screen, fireEvent, act, cleanup } from "@testing-library/react"
+import { render, renderHook, screen, fireEvent, act, cleanup } from "@testing-library/react"
 import type { ReactElement } from "react"
 
 /**
@@ -10,7 +10,9 @@ import type { ReactElement } from "react"
  * left a mark the freeze could see: a downgrade mid-run froze the canvas at
  * once, and every result after it was paid for and dropped. Now each runs
  * inside `withRunInFlight`, so the freeze waits until the run's last result is
- * on the node; Refine's mark lasts until an image is picked or set aside.
+ * on the node; Refine's mark lasts until an image is picked or set aside. An
+ * Undo on the canvas neither takes the mark away while the run is out nor
+ * brings it back once it is over.
  *
  * The real pages, the real store and the real `applyWorkflowAccess`; only the
  * network and the heavy children (image tiles, the training section) are
@@ -66,6 +68,8 @@ vi.mock("@/components/editor/character-asset-video-grid", () => ({ CharacterAsse
 
 import { toast } from "sonner"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useUndoRedoSubscription, useUndoRedoActions, flushPendingUndoSnapshot } from "@/hooks/use-undo-redo"
+import { useUndoRedoStore } from "@/hooks/use-undo-redo-store"
 import { applyWorkflowAccess, showsARunInFlight } from "@/hooks/workflow-access-mode"
 import { isSaveRefused } from "@/hooks/workflow-save-refusal"
 import { getWorkflowAccess } from "@/lib/api"
@@ -365,6 +369,55 @@ describe.each(PAGES)("a custom variation on the $name page", (page) => {
     await startCustom(page)
     expect(h.created).toEqual([])
     expect(toast.error).toHaveBeenCalledWith(READ_ONLY_REASON)
+  })
+})
+
+describe.each(PAGES)("Undo while a custom variation on the $name page is out", (page) => {
+  /** The canvas's Undo, as its toolbar and its shortcut reach it. */
+  function canvasUndo() {
+    useUndoRedoStore.getState().clear()
+    renderHook(() => useUndoRedoSubscription())
+    const { result } = renderHook(() => useUndoRedoActions())
+    return () => act(() => result.current.undo())
+  }
+
+  it("an Undo past its start keeps its mark: the variation lands, and only then the freeze", async () => {
+    const view = openPage(page)
+    const undo = canvasUndo()
+    act(() => useWorkflowStore.getState().setWorkflowName("Renamed before the run"))
+    flushPendingUndoSnapshot()
+    await startCustom(page)
+    // The page is closed and the run goes on: Undo is the canvas's again.
+    view.unmount()
+    await lowerToView()
+
+    undo()
+    expect(useWorkflowStore.getState().workflowName).toBe("W")
+    expect(inFlight()).toBe(true)
+    expect(isFrozen()).toBe(false)
+
+    h.jobs["job-0"] = { status: "completed", output_data: { imageUrl: url("job-0") } }
+    await advance(POLL_MS)
+    expect(variations().map((v) => v.url)).toEqual([url("job-0")])
+    expect(inFlight()).toBe(false)
+    expectFrozen()
+  })
+
+  it("an Undo of the variation once it landed brings no mark back: a downgrade then freezes at once", async () => {
+    const view = openPage(page)
+    const undo = canvasUndo()
+    h.settleAs = "completed"
+    await startCustom(page)
+    await advance(POLL_MS)
+    expect(variations()).toHaveLength(1)
+    flushPendingUndoSnapshot()
+    view.unmount()
+
+    undo()
+    expect(variations()).toEqual([])
+    expect(inFlight()).toBe(false)
+    await lowerToView()
+    expectFrozen()
   })
 })
 
