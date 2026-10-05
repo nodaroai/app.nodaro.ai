@@ -1,0 +1,10 @@
+{
+  "actorSpecification": 1,
+  "name": "nodaro-site-capture",
+  "title": "Nodaro Site Capture",
+  "version": "0.1",
+  "buildTag": "latest",
+  "input": "./input_schema.json",
+  "minMemoryMbytes": 1024,
+  "maxMemoryMbytes": 8192
+}

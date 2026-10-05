@@ -36,11 +36,10 @@ to the exact frame via forced alignment.
 - Visuals: text + rectangle/circle/line shapes, plus **image** media (freeform image
   elements and the `device-surface-showcase` / `cursor-ui-demo` image blueprints).
   Video media and the rest of the ~50 named HyperFrames blueprints are not yet available.
-- Real-UI capture: deferred. Passing a URL to `create_launch_video` without a
-  `brief` returns a "not yet supported" message rather than attempting a
-  screenshot; describe the product in `brief` instead. The `device-surface-showcase` /
-  `cursor-ui-demo` blueprints render screenshots you already uploaded — they don't
-  capture a live site themselves.
+- URL input: not yet supported. Passing a URL to `create_launch_video` without a
+  `brief` returns a message asking for `brief`. The `device-surface-showcase` /
+  `cursor-ui-demo` blueprints render screenshots you supply. To capture a live page as
+  screenshots, use `capture_site` where capture is enabled on the install.
 
 ## Credit costs
 
@@ -214,7 +213,7 @@ your Nodaro library.
 | Field | Type | Notes |
 |-------|------|-------|
 | `brief` | string (1–8000 chars) | Describe the product to launch (features, audience, tone). Required when no `url`. |
-| `url` | string | Not yet supported. Passing `url` without `brief` returns a "Real-UI capture isn't supported yet — pass `brief` instead" message. Passing both (`url` + `brief`) ignores the URL and proceeds with `brief`. |
+| `url` | string | Not yet supported. Passing `url` without `brief` returns a message asking for `brief`. Passing both ignores the URL and proceeds with `brief`. |
 | `brand` | string \| object | Optional. Same shape as `create_explainer`'s `brand` — see [Brand](#brand) below. |
 
 **Returns:** `{ job_id: string }`. Clients without card support poll `get_job`

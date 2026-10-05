@@ -3,7 +3,7 @@ import { requestLogSerializer } from "./lib/log-redaction.js"
 import { createHash } from "node:crypto"
 import cors from "@fastify/cors"
 import { isOriginAllowedDynamic } from "./lib/dynamic-origins.js"
-import { config, hasAdmin, hasCredits, isCloud, isMultiUser } from "./lib/config.js"
+import { config, hasAdmin, hasCredits, isCloud, isMultiUser, siteCaptureEnabled } from "./lib/config.js"
 import { registerNodaroCloudBillingProvider } from "./lib/billing-provider.js"
 import { loadOverlay } from "./lib/overlay/load.js"
 import { registerMainlinePromptPolicies } from "./lib/prompt-policies/index.js"
@@ -208,6 +208,7 @@ import { characterPortraitApprovalRoutes } from "./routes/character-portrait-app
 import { characterTrainingRoutes } from "./routes/character-training.js"
 import { replicateTrainingWebhookRoutes } from "./routes/replicate-training-webhook.js"
 import { webScrapeRoutes } from "./routes/web-scrape.js"
+import { siteCaptureRoutes } from "./routes/site-capture.js"
 import { metaAdsScrapeRoutes } from "./routes/meta-ads-scrape.js"
 import { instagramScrapeRoutes } from "./routes/instagram-scrape.js"
 import { reduceRoutes } from "./routes/reduce.js"
@@ -673,6 +674,7 @@ export async function buildApp() {
   if (hasCredits()) await app.register(characterTrainingRoutes)
   if (hasCredits()) await app.register(replicateTrainingWebhookRoutes)
   await app.register(webScrapeRoutes)
+  if (siteCaptureEnabled()) await app.register(siteCaptureRoutes)
   await app.register(metaAdsScrapeRoutes)
   await app.register(instagramScrapeRoutes)
   await app.register(reduceRoutes)

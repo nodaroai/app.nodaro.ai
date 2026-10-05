@@ -479,6 +479,15 @@ const COMPETITOR_LESSONS_TOOL_BYTES = 841
 // 386_689 total − 385_491 base = 1_198 B (503 + 695), far under the 8_192 B
 // per-tool budget, and the list keeps the 45 B of headroom it had.
 const CARD_MARK_TOOLS_BYTES = 1_198
+// raised by capture_site and nothing else — one new core tool (POST /v1/site-capture),
+// gated by workflows:execute and registered on every edition, so cloud/all and
+// community/all name it and the scope-less sets do not. measured by this suite:
+// 2_318 B, under the 8_192 B per-tool budget; the list keeps the headroom it had.
+const SITE_CAPTURE_TOOL_BYTES = 2_318
+// create_launch_video's url wording now points at capture_site where capture is offered,
+// and nothing else. no tool was added, so the fixture does not move. measured by this
+// suite: 31 B; the list keeps the headroom it had.
+const LAUNCH_VIDEO_CAPTURE_POINTER_BYTES = 31
 // RAISED 2026-10-04 by two `apply_edl` sentences and nothing else: a `proxy`
 // render (the 720p preview) is priced on its own, lower per-minute row
 // (`apply-edl:proxy`), so the description and the `quality` describe say so.
@@ -579,6 +588,8 @@ export const TOOL_WIRE_BUDGET = {
     COMPETITOR_TOOLS_BYTES +
     SWITCH_CAMERAS_TOOL_BYTES +
     COMPETITOR_LESSONS_TOOL_BYTES +
+    SITE_CAPTURE_TOOL_BYTES +
+    LAUNCH_VIDEO_CAPTURE_POINTER_BYTES +
     CARD_MARK_TOOLS_BYTES +
     APPLY_EDL_PREVIEW_RATE_WORDING_BYTES +
     ELEVENLABS_V4_SPEECH_BYTES +

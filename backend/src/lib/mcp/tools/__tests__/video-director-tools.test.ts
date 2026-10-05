@@ -1,5 +1,13 @@
-import { describe, it, expect, vi } from "vitest"
-import { registerVideoDirectorTools } from "../video-director-tools.js"
+import { describe, it, expect, vi, beforeEach } from "vitest"
+
+const offered = vi.hoisted(() => ({ on: true }))
+vi.mock("../verbs-site-capture.js", () => ({ siteCaptureOffered: () => offered.on }))
+
+const { registerVideoDirectorTools, launchVideoDescription, urlOnlyMessage } = await import("../video-director-tools.js")
+
+beforeEach(() => {
+  offered.on = true
+})
 
 type Handler = (args: Record<string, unknown>) => Promise<unknown>
 
@@ -64,7 +72,7 @@ describe("create_launch_video", () => {
       content: Array<{ text: string }>
     }
     expect(inject).not.toHaveBeenCalled()
-    expect(JSON.stringify(result.content)).toContain("Real-UI capture isn't supported yet")
+    expect(JSON.stringify(result.content)).toContain("This tool doesn't take a URL yet")
   })
 
   it("dispatches to /v1/video-director/run with genre=product-launch when brief is given", async () => {
@@ -112,5 +120,18 @@ describe("create_launch_video", () => {
     const result = (await tools.create_launch_video({})) as { content: Array<{ text: string }>; isError?: boolean }
     expect(inject).not.toHaveBeenCalled()
     expect(JSON.stringify(result.content)).toContain("brief")
+  })
+})
+
+describe("create_launch_video — the capture_site pointer (only where capture is offered)", () => {
+  it("names capture_site in the refusal and the description while capture is offered", () => {
+    expect(urlOnlyMessage()).toBe("This tool doesn't take a URL yet — pass `brief` describing the product. To capture a live page as screenshots, use `capture_site`.")
+    expect(launchVideoDescription()).toContain("(`url` is not supported yet — describe the product in `brief`. `capture_site` captures a live page as screenshots.)")
+  })
+  it("names nothing it does not list when capture is off", () => {
+    offered.on = false
+    expect(urlOnlyMessage()).toBe("This tool doesn't take a URL yet — pass `brief` describing the product.")
+    expect(launchVideoDescription()).toContain("(`url` is not supported yet — describe the product in `brief`.)")
+    expect(launchVideoDescription()).not.toContain("capture_site")
   })
 })

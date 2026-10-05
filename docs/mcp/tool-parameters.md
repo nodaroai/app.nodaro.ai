@@ -349,6 +349,16 @@ Always visible · Nodaro Cloud only.
 | `photo_url` | string (URL) |  |  |
 | `seed` | integer |  | From 0 to 2147483647. |
 
+## `capture_site`
+
+Needs `workflows:execute`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `url` | string | yes | The page to capture. The scheme is optional (example.com works). From 1 to 2048 characters. |
+| `max_stills` | integer |  | How many section stills at most (3–8, default 8). From 3 to 8. |
+| `client_request_id` | string |  | Optional retry token (8–128 chars of letters, digits, `_ - . :`). If a call times out or the connection drops, reuse the same value when retrying so the run is not started or charged twice; use a fresh value for a genuinely new run. From 8 to 128 characters. |
+
 ## `chat_pipeline_stage`
 
 Needs `pipelines:approve` · Nodaro Cloud only.

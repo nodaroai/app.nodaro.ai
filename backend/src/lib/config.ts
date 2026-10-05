@@ -25,6 +25,11 @@ export function baseUrl(fallback: string) {
     })
 }
 
+/** SITE_CAPTURE_ENABLED: unset, empty, or anything but "false" means on. */
+export function parseSiteCaptureEnabled(value: string | undefined): boolean {
+  return (value ?? "").trim().toLowerCase() !== "false"
+}
+
 /** An http(s) URL that is ONLY an origin: no credentials, and no path, query or fragment beyond `/`. */
 function isBareHttpOrigin(value: string): boolean {
   try {
@@ -381,6 +386,10 @@ export const envSchema = z.object({
     .string()
     .optional()
     .transform((v) => v === "true" || v === "1"),
+  /** Site Capture (POST /v1/site-capture and the capture_site MCP tool). On by
+   *  default; "false" keeps the route unregistered and the tool unlisted on this
+   *  install. Read through siteCaptureEnabled(). */
+  SITE_CAPTURE_ENABLED: z.string().optional().transform(parseSiteCaptureEnabled),
   /** The preview stop rule (a run stops at a render set to Preview; nothing
    *  downstream runs until Render final). Rollout gate, decided 2026-10-05:
    *  on in staging, off in production until Render final ships. Off = every
@@ -496,6 +505,11 @@ export function resolveScheduleTriggersEnabled(
  */
 export function scheduleTriggersEnabled(): boolean {
   return resolveScheduleTriggersEnabled(config.SCHEDULE_TRIGGERS_ENABLED, process.env.RAILWAY_ENVIRONMENT_NAME)
+}
+
+/** Site Capture is offered on this install (the SITE_CAPTURE_ENABLED switch; default on). */
+export function siteCaptureEnabled(): boolean {
+  return config.SITE_CAPTURE_ENABLED
 }
 
 function loadConfig() {

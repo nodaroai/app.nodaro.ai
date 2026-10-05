@@ -19,3 +19,9 @@
 # staging deploys. This entry pins the squash commit; the line itself also carries an inline
 # `gitleaks:allow`, which is content-keyed and survives any future rewrite.
 a89437509185b59cef6498046b3d560ccf0884ca:tools/__tests__/scene3d-acceptance-receipt.test.mjs:generic-api-key:93
+
+# backend/src/providers/apify/site-capture-actor.ts: the Apify actor id (a public-style
+# identifier, not a credential) trips generic-api-key on entropy. This pins the commit that
+# introduced it on the PR branch; the line now also carries an inline `gitleaks:allow`, which is
+# content-keyed and survives the squash merge that mints a new SHA.
+42800d5397b73743489ddd4ba22f55030dfafb3b:backend/src/providers/apify/site-capture-actor.ts:generic-api-key:34

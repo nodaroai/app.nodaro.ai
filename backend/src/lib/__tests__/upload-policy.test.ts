@@ -98,7 +98,7 @@ describe("upload-policy totality — every byte-carrying lane polices", () => {
   const SRC = resolve(HERE, "..", "..")
 
   it("HTTP ingestion and retained capture call applyUploadPolicies", () => {
-    for (const f of ["routes/upload.ts", "routes/upload-proxy.ts", "routes/upload-handoff.ts", "lib/retained-images.ts", "lib/retained-videos.ts", "lib/media-url-import.ts"]) {
+    for (const f of ["routes/upload.ts", "routes/upload-proxy.ts", "routes/upload-handoff.ts", "lib/retained-images.ts", "lib/retained-videos.ts", "lib/media-url-import.ts", "lib/site-capture-store.ts"]) {
       const src = readFileSync(resolve(SRC, f), "utf8")
       expect(src.includes("applyUploadPolicies("), `${f} never asks the upload policy`).toBe(true)
     }
@@ -164,5 +164,14 @@ describe("upload-policy totality — every byte-carrying lane polices", () => {
     }
     walk(SRC)
     expect(offenders, `presigner imported by: ${offenders.join(", ")}`).toEqual([])
+  })
+})
+
+describe("upload-policy — the site-capture lane", () => {
+  it("a policy sees the lane and can deny it", async () => {
+    const seen: string[] = []
+    registerUploadPolicy({ id: "lane-check", check: (i) => (seen.push(i.lane), { allow: i.lane !== "site-capture" }) })
+    expect(await applyUploadPolicies({ ...INPUT, lane: "site-capture" })).toEqual({ allow: false, reason: undefined, policyId: "lane-check" })
+    expect(seen).toEqual(["site-capture"])
   })
 })
