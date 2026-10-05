@@ -2,7 +2,7 @@ import { curatedNodeDefaults } from "@/lib/curated-node-defaults"
 import { surfaceFactoryPresets } from "@/lib/surface-selectors"
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react"
 import { Check, ChevronDown, ChevronRight, Download, Folder, FolderOpen, Layers, Plus, RotateCcw, Settings2, Star, Trash2, Upload } from "lucide-react"
-import { buildNodePresetExport, extractPresetData, parseNodePresetExport, presetApplyClearKeys, presetDataMatches } from "@nodaro/shared"
+import { buildNodePresetExport, extractPresetData, parseNodePresetExport, presetApplyClearKeys, presetDataMatches, presetLeverClearKeys } from "@nodaro/shared"
 import { getFactoryPresets, groupFactoryPresets, type FactoryPreset } from "@nodaro/prompts"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -78,11 +78,29 @@ const toMerged = (p: NodePreset): MergedPreset => ({
 export function buildPresetApplyPatch(
   presetData: Record<string, unknown>,
   presetId: string,
+  nodeType?: string,
 ): Record<string, unknown> {
   return {
-    ...Object.fromEntries(presetApplyClearKeys(presetData).map((k) => [k, undefined])),
+    ...Object.fromEntries(presetApplyClearKeys(presetData, nodeType).map((k) => [k, undefined])),
     ...presetData,
     __activePresetId: presetId,
+  }
+}
+
+/**
+ * The patch for selecting a preset the node already matches: no config is rewritten and the
+ * pre/post text is left as it is (the node equals the preset on every key the preset sets);
+ * only stale generated plan state and, for a node type with a lever group, the group's levers
+ * the preset does not set are cleared. Exported pure for unit testing.
+ */
+export function buildPresetMatchPatch(
+  presetData: Record<string, unknown>,
+  presetId: string,
+  nodeType?: string,
+): Record<string, unknown> {
+  return {
+    ...buildPresetApplyPatch({}, presetId),
+    ...Object.fromEntries(presetLeverClearKeys(presetData, nodeType).map((k) => [k, undefined])),
   }
 }
 
@@ -281,7 +299,7 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
       toast.error(t("preset.cantApplyRunning"))
       return
     }
-    updateNodeData(nodeId, buildPresetApplyPatch(p.data, p.id))
+    updateNodeData(nodeId, buildPresetApplyPatch(p.data, p.id, nodeType))
     toast.success(t("preset.applied", { name: presetDisplayName(p) }))
   }
 
@@ -295,7 +313,7 @@ function PresetDropdownInner({ nodeId, nodeType, data, updateNodeData, variant, 
       // clear any stale generated plan-state: the node can match the preset's
       // config yet carry a plan/lottieUrl from a prior run, which would otherwise
       // keep showing the old animation under the now-active preset.
-      updateNodeData(nodeId, buildPresetApplyPatch({}, p.id))
+      updateNodeData(nodeId, buildPresetMatchPatch(p.data, p.id, nodeType))
       setOpenState(false)
       return
     }

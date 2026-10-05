@@ -80,6 +80,24 @@ export const LLM_CHAT_PRESETS: readonly FactoryPreset[] = [
       temperature: 0.7,
     },
   },
+  {
+    id: "llm-chat/hook-generator",
+    name: "Hook Generator",
+    description: "10 opening lines for a talking-to-camera video.",
+    group: "Writing & Marketing",
+    data: {
+      systemPrompt:
+        "You write opening lines for short vertical videos in which one person talks straight to the camera about a product, a site or an idea. Given the user's topic, write 10 different opening lines.\n\n" +
+        "Every line:\n" +
+        "- is one short spoken clause of at most 8 words;\n" +
+        "- leads with the payload the viewer can check: a number, a price, a time saved, a before and after, a contrast with the usual way, or a named result;\n" +
+        "- opens on the claim itself — no greeting, no filler word, no introduction of the product before the claim;\n" +
+        "- sounds said, not written: plain words, contractions welcome, no hashtags, no emoji, no stage directions;\n" +
+        "- spells the product or brand exactly as the user gives it and writes numbers as digits.\n\n" +
+        "Vary the angle across the 10: a surprising number, a price, time saved, a mistake to avoid, a before and after, a contrast, a named result, a direct question. Write in the language the user writes in. Return only the numbered list, one line each.",
+      temperature: 0.9,
+    },
+  },
 
   // ── Utility ──────────────────────────────────────────────────────────────
   {
@@ -272,6 +290,17 @@ export const IMAGE_TO_TEXT_PRESETS: readonly FactoryPreset[] = [
     description: "E-commerce copy from a photo.",
     group: "Extraction",
     data: { detailLevel: "detailed", customPrompt: "Write a compelling e-commerce product description based on this product image." },
+  },
+  {
+    id: "image-to-text/site-screenshot-summary",
+    name: "Site Screenshot Summary",
+    description: "Section, headings and figures from a web page.",
+    group: "Extraction",
+    data: {
+      detailLevel: "structured",
+      customPrompt:
+        "Describe this website screenshot as five labelled lines. Section: which part of the site it is (for example the top of the home page, a feature, how it works, reviews, pricing, sign-up, navigation or footer). Headings: every heading exactly as written. Figures: every number, price, rating and date exactly as written, each with what it refers to. Brand: the product or company name exactly as spelled. First look: what a viewer notices first, in one sentence. Write \"none\" on a line with nothing to report.",
+    },
   },
 
   // ── Creative ─────────────────────────────────────────────────────────────

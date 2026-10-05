@@ -35,12 +35,21 @@ describe("rateLimitKeyGenerator", () => {
     expect(a).not.toBe(b)
   })
 
-  it("falls back to the first X-Forwarded-For hop for UNauthenticated requests", () => {
+  it("keys UNauthenticated requests on the client's network (lib/client-address.ts)", () => {
+    // Behind the bundled Caddy: one entry, the address Caddy decided.
+    expect(
+      rateLimitKeyGenerator({ headers: { "x-forwarded-for": "203.0.113.7" }, ip: "127.0.0.1" }),
+    ).toBe("203.0.113.7")
+  })
+
+  it("a client-chosen leftmost entry cannot pick the bucket", () => {
+    // An appending hop leaves the forged value on the left; the address that
+    // hop saw (the nearest untrusted one) is what the limiter keys on.
     const key = rateLimitKeyGenerator({
       headers: { "x-forwarded-for": "203.0.113.7, 70.0.0.1" },
       ip: "10.0.0.1",
     })
-    expect(key).toBe("203.0.113.7")
+    expect(key).toBe("70.0.0.1")
   })
 
   it("falls back to req.ip when neither auth nor XFF is present", () => {

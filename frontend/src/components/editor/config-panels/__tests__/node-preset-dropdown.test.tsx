@@ -47,7 +47,7 @@ vi.mock("@/hooks/queries/use-node-presets-queries", () => ({
 vi.mock("@/hooks/use-auth", () => ({ useAuth: () => ({ user: { id: "user-1" } }) }))
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
-import { PresetDropdown, buildPresetApplyPatch } from "../node-preset-dropdown"
+import { PresetDropdown, buildPresetApplyPatch, buildPresetMatchPatch } from "../node-preset-dropdown"
 import { PRESET_APPLY_CLEAR_KEYS } from "@nodaro/shared"
 
 function wrap(ui: ReactNode) {
@@ -229,6 +229,30 @@ describe("PresetDropdown", () => {
     // It must NOT re-write config fields on the no-change path.
     expect((h.updateNodeData.mock.calls[0]![1] as Record<string, unknown>).prompt).toBeUndefined()
   })
+
+  it("on an Add Captions node, applying a preset clears the caption levers it does not set", async () => {
+    h.nodeType = "add-captions"
+    h.data = { prompt: "a", backgroundColor: "#FFFFFF", positionY: 20 }
+    wrap(<PresetDropdown nodeId="n1" variant="panel" />)
+    fireEvent.click(screen.getByRole("button", { name: /presets/i }))
+    fireEvent.click(await screen.findByText(/My Look/i))
+    fireEvent.click(await screen.findByRole("button", { name: /^apply$/i }))
+    const patch = h.updateNodeData.mock.calls.at(-1)![1] as Record<string, unknown>
+    expect(patch.prompt).toBe("z")
+    for (const k of ["backgroundColor", "positionY"]) expect(k in patch && patch[k] === undefined, k).toBe(true)
+  })
+
+  it("on an Add Captions node, the already-matches path clears stale caption levers and keeps pre/post text", () => {
+    h.nodeType = "add-captions"
+    h.data = { prompt: "z", backgroundColor: "#FFFFFF", promptPrefix: "PRE" }
+    wrap(<PresetDropdown nodeId="n1" variant="panel" />)
+    fireEvent.click(screen.getByRole("button", { name: /presets/i }))
+    fireEvent.click(screen.getByText(/My Look/i))
+    const patch = h.updateNodeData.mock.calls[0]![1] as Record<string, unknown>
+    expect("backgroundColor" in patch && patch.backgroundColor === undefined).toBe(true)
+    expect("promptPrefix" in patch).toBe(false)
+    expect(patch.prompt).toBeUndefined()
+  })
 })
 
 describe("buildPresetApplyPatch", () => {
@@ -288,5 +312,32 @@ describe("buildPresetApplyPatch", () => {
     expect("promptSuffix" in patch).toBe(false)
     expect("prompt" in patch).toBe(false)
     expect(patch.__activePresetId).toBe("u7")
+  })
+
+  it("passes the node type through: a caption preset clears the caption levers it does not set", () => {
+    const patch = buildPresetApplyPatch(
+      { style: "subtitle", position: "bottom", fontSize: 32, color: "#FFFFFF", autoTranscribe: true },
+      "add-captions/clean-subtitles",
+      "add-captions",
+    )
+    for (const k of ["backgroundColor", "look", "positionY", "fontWeight", "maxWordsPerLine"]) {
+      expect(k in patch, `${k} not named`).toBe(true)
+      expect(patch[k]).toBeUndefined()
+    }
+    expect(patch.style).toBe("subtitle")
+  })
+
+  it("without a node type clears no caption lever (as before)", () => {
+    expect("backgroundColor" in buildPresetApplyPatch({ style: "subtitle" }, "x")).toBe(false)
+  })
+})
+
+describe("buildPresetMatchPatch", () => {
+  it("the no-change path clears only lever-group keys, never the affixes or the config", () => {
+    const patch = buildPresetMatchPatch({ prompt: "z", style: "subtitle" }, "u8", "add-captions")
+    expect("backgroundColor" in patch && patch.backgroundColor === undefined).toBe(true)
+    for (const k of ["promptPrefix", "promptSuffix", "prompt", "style"]) expect(k in patch, k).toBe(false)
+    expect(patch.__activePresetId).toBe("u8")
+    for (const k of PRESET_APPLY_CLEAR_KEYS) expect(patch[k], `${k} not cleared`).toBeUndefined()
   })
 })

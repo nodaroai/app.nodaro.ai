@@ -888,3 +888,37 @@ describe("buildCompletedResultPatch — Apply EDL holds one cut", () => {
     expect((patch.generatedResults as Array<Record<string, unknown>>)[0]).toHaveProperty("generatedJson", undefined)
   })
 })
+
+describe("a json result the node already holds", () => {
+  /** A server run lands Describe to Picker's json on `generatedPickerJson`
+   *  (lib/json-run-result.ts), and its job row has no canvas node_id — so the
+   *  node's newest SINGLE-NODE job is an older canvas run. Recovery must not
+   *  write that older json back over the newer one on reload. */
+  const fetchJson = (json: Record<string, unknown>) => vi.fn(async () => ({ status: "completed", output_data: { json } }))
+
+  it.each([
+    ["describe-to-picker", { generatedPickerJson: { person: { gender: "man" } } }],
+    ["json-process", { processedResult: { mine: true } }],
+    ["extract-field", { extractedText: "mine" }],
+  ])("%s holding its result gets no patch from an older single-node job", async (type, held) => {
+    const fetch = fetchJson({ person: { gender: "OLDER" } })
+    const patches = await computeCompletedJobPatches(
+      [{ nodeId: "n1", jobId: "j-old", status: "completed" }],
+      [node("n1", type, held)],
+      fetch,
+      NOW,
+    )
+    expect(patches).toEqual([])
+    expect(fetch).not.toHaveBeenCalled()
+  })
+
+  it("an empty Describe to Picker is still recovered", async () => {
+    const patches = await computeCompletedJobPatches(
+      [{ nodeId: "n1", jobId: "j1", status: "completed" }],
+      [node("n1", "describe-to-picker")],
+      fetchJson({ person: { gender: "man" } }),
+      NOW,
+    )
+    expect(patches).toEqual([{ nodeId: "n1", updates: expect.objectContaining({ generatedPickerJson: { person: { gender: "man" } } }) }])
+  })
+})

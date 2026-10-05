@@ -1,4 +1,5 @@
 import { execFile, spawn, type ExecFileException } from "node:child_process"
+import { execFileFfmpeg, spawnFfmpeg } from "./ffmpeg-process.js"
 import { createWriteStream } from "node:fs"
 import { promises as fs } from "node:fs"
 import { tmpdir } from "node:os"
@@ -416,7 +417,7 @@ export async function runFfmpeg(args: readonly string[], timeoutMs?: number): Pr
   return holdSlot(() => new Promise<string>((resolve, reject) => {
     // Declared first: the callback may run before execFile returns.
     let stopEscalation = () => {}
-    const child = execFile("ffmpeg", args as string[], {
+    const child = execFileFfmpeg(args, {
       maxBuffer: 10 * 1024 * 1024,
       timeout: limitMs,
     }, (error, stdout, stderr) => {
@@ -445,7 +446,7 @@ export async function runFfmpegCapture(
   return holdSlot(() => new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
       // Declared first: the callback may run before execFile returns.
       let stopEscalation = () => {}
-      const child = execFile("ffmpeg", args as string[], {
+      const child = execFileFfmpeg(args, {
         maxBuffer: 10 * 1024 * 1024,
         timeout: limitMs,
       }, (error, stdout, stderr) => {
@@ -490,7 +491,7 @@ export async function runFfmpegWithProgress(
 ): Promise<void> {
   const limitMs = ffmpegLimitMs(timeoutMs)
   return holdSlot(() => new Promise<void>((resolve, reject) => {
-      const proc = spawn("ffmpeg", ["-progress", "pipe:1", "-nostats", ...args], {
+      const proc = spawnFfmpeg(["-progress", "pipe:1", "-nostats", ...args], {
         stdio: ["ignore", "pipe", "pipe"],
       })
 
@@ -575,7 +576,7 @@ export function ffmpegVersionLine(): Promise<string> {
 }
 
 export function logFfmpegVersion(tag: string): void {
-  execFile("ffmpeg", ["-version"], { timeout: 10_000 }, (error, stdout) => {
+  execFileFfmpeg(["-version"], { timeout: 10_000 }, (error, stdout) => {
     if (error) {
       console.error(`[${tag}] ffmpeg -version failed (is ffmpeg installed?): ${error.message}`)
     } else {

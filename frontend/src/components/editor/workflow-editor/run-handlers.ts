@@ -15,8 +15,7 @@ import { queryKeys } from "@/lib/query-keys";
 import { getCachedCredits } from "@/ee/hooks/use-model-credits";
 import { spendableCredits, type CreditAllowance } from "@/lib/spendable-credits";
 import { BILLING_SURFACE_QUERY_KEY, type BillingSurface } from "@/lib/billing-surface";
-import type { GeneratedResult, WorkflowNode, WorkflowEdge, JobErrorHint, Scene3DRevisionEntry, SocialSearchNodeData } from "@/types/nodes";
-import { socialSearchServerRunPatch } from "@/components/nodes/social-search-run-state";
+import type { GeneratedResult, WorkflowNode, WorkflowEdge, JobErrorHint, Scene3DRevisionEntry } from "@/types/nodes";
 import {
   isExecutableNode,
   type ExecutionContext,
@@ -1573,6 +1572,10 @@ export interface NodeExecutionState {
     searchResults?: unknown[];
     /** Row-aligned twin of listResults (Extract Field, List output). */
     alignedListResults?: string[];
+    /** Extract Field: the newline-joined values. Mirrors backend NodeOutput. */
+    extractedText?: string;
+    /** JSON Process: the filtered / transformed value. Mirrors backend NodeOutput. */
+    processedResult?: unknown;
     /** Selector node `picked` output channel (selected items). */
     pickedResults?: string[];
     /** Selector node `rest` output channel (items NOT picked). */
@@ -1772,10 +1775,11 @@ function syncNodeStatesToStore(
         // transient __triggerData, which is never saved.
         if (state.output.paramOutputs) updates.__triggerData = state.output.paramOutputs;
       } else if (state.output && node.type === "social-search") {
-        // Its own mapping: every post found, the ones passed on, the digest —
-        // never the generic text write below, whose run history in
-        // generatedResults would be read as a list downstream.
-        Object.assign(updates, socialSearchServerRunPatch(data as SocialSearchNodeData, state.output as Record<string, unknown>));
+        // Its own mapping (scrapeServerRunPatch, shared with both reopen lanes):
+        // every post found, the ones passed on, the digest — never the generic
+        // text write below, whose run history in generatedResults would be read
+        // as a list downstream.
+        Object.assign(updates, scrapePatch ?? {});
       } else if (scrapePatch) {
         // A scraper (Instagram / Meta Ads / Web Scrape): its posts, ads or
         // pages on generatedJson plus the run outcome its card reads — the

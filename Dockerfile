@@ -624,6 +624,21 @@ if [ "$RUN_MIGRATIONS_ON_BOOT" = "true" ] && [ -n "$DATABASE_URL" ]; then
   fi
 fi
 
+# Client address (backend/src/lib/client-address.ts). On Railway every request
+# reaches this container through Railway's edge proxies, which connect from
+# 100.64.0.0/10 and state the real client (Cloudflare-aware) in X-Real-IP —
+# Caddy does not trust that range, so without this the backend sees the proxy
+# itself. Set here, not inferred in code: the backend's test runners are hosted
+# on Railway too and inherit RAILWAY_*. Each default applies only to a variable
+# that is UNSET, so an explicit value wins (CLIENT_IP_HEADER=none switches the
+# edge header off), and an explicit CLIENT_IP_HEADER still gets Railway's range
+# — the API refuses to start with a header and no range. A self-host gets
+# nothing and keeps the address its Caddy decided.
+if [ -n "$RAILWAY_ENVIRONMENT_NAME" ]; then
+  if [ -z "${CLIENT_IP_HEADER+set}" ]; then export CLIENT_IP_HEADER=x-real-ip; fi
+  if [ -z "${CLIENT_IP_HEADER_FROM+set}" ]; then export CLIENT_IP_HEADER_FROM=100.64.0.0/10; fi
+fi
+
 # Start backend API server on fixed internal port
 cd /app/backend
 export BACKEND_PORT=9000

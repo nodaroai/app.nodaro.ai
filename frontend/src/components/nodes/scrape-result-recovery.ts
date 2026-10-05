@@ -1,8 +1,9 @@
 import { applyWebScrapeResult, webScrapeFingerprint } from "./web-scrape-run-state"
 import { applyMetaAdsScrapeResult, metaAdsScrapeFingerprint } from "./meta-ads-scrape-run-state"
 import { applyInstagramScrapeResult, instagramScrapeFingerprint } from "./instagram-scrape-run-state"
-import { applySocialSearchResult } from "./social-search-run-state"
-import type { InstagramScrapeNodeData, MetaAdsScrapeNodeData, WebScrapeNodeData } from "@/types/nodes"
+import { applySocialSearchResult, socialSearchResults, socialSearchServerRunPatch } from "./social-search-run-state"
+import { socialPostsFrom } from "@nodaro/shared"
+import type { InstagramScrapeNodeData, MetaAdsScrapeNodeData, SocialSearchNodeData, WebScrapeNodeData } from "@/types/nodes"
 
 /**
  * Putting a scrape job's result on its node — the ONE rule the live run, the
@@ -76,9 +77,12 @@ const SCRAPE_FINGERPRINT: ReadonlyMap<string, (data: Readonly<Record<string, unk
  * and its featured image landed in `generatedResults` as if it were the result.
  *
  * - `null`: not a scraper this covers, or no `json` in the output — the
- *   caller's generic mapping applies. Social Search is excluded on purpose:
- *   its server run carries every post found on `searchResults` and has its
- *   own mapping (`socialSearchServerRunPatch`).
+ *   caller's generic mapping applies.
+ * - Social Search: its server run carries every post found on
+ *   `searchResults`, so it has its own mapping (`socialSearchServerRunPatch`),
+ *   stamped with the job like the others so a reopen that sees the run again
+ *   never resets the picks made since. It never falls through to the generic
+ *   writes (a text history in `generatedResults` would be read as its list).
  * - `{}`: nothing to change, and the generic writes must not run either:
  *   - the state carries NO job — the run did not execute the node, it passed
  *     its SAVED data through (outside a Run from here / Run selected subset,
@@ -92,14 +96,19 @@ const SCRAPE_FINGERPRINT: ReadonlyMap<string, (data: Readonly<Record<string, unk
  *   were the result cleared (the single-node Run never writes them on a
  *   scraper; the server's saved-list reader would otherwise hand on the
  *   featured image instead of the posts).
+ *
+ * `reopened`: the run is being seen AGAIN by a load-time lane, not landing
+ * live — see `socialSearchRunPatch`.
  */
 export function scrapeServerRunPatch(
   nodeType: string | undefined,
   output: Readonly<Record<string, unknown>> | undefined,
   jobId: string | undefined,
   data?: Readonly<Record<string, unknown>>,
+  opts: { readonly reopened?: boolean } = {},
 ): Record<string, unknown> | null {
-  if (nodeType === undefined || nodeType === "social-search" || !isScrapeNodeType(nodeType)) return null
+  if (nodeType === "social-search") return socialSearchRunPatch(output, jobId, data, opts.reopened === true)
+  if (nodeType === undefined || !isScrapeNodeType(nodeType)) return null
   if (!output || output.json === undefined) return null
   if (!jobId || data?.lastAppliedJobId === jobId) return {}
   const patch = scrapeResultPatch(nodeType, output.json, jobId, data)
@@ -113,6 +122,43 @@ export function scrapeServerRunPatch(
     generatedText: undefined,
     activeResultIndex: undefined,
   }
+}
+
+/**
+ * Social Search's server-run patch. A state with no job keeps the live run's
+ * old behaviour (painted, unstamped): a seeded state never reaches here, every
+ * lane asks `isSeededState` first.
+ *
+ * On a REOPEN, a node with no stamp that already lists exactly this run's posts
+ * is only stamped, never repainted. An older build's live lane painted Social
+ * Search without recording the job, so the stamp cannot say the node holds
+ * this run — and the timing guard cannot either, since that lane stamped
+ * `lastRunAt` when the NODE finished, while a reopen compares against when the
+ * whole RUN settled (minutes later when a video step follows). Repainting
+ * there would reset the picks made since. The live lane never takes this
+ * shortcut: a rerun that finds the same posts is a new run, and its outcome,
+ * time and fingerprint must land.
+ */
+function socialSearchRunPatch(
+  output: Readonly<Record<string, unknown>> | undefined,
+  jobId: string | undefined,
+  data: Readonly<Record<string, unknown>> = {},
+  reopened = false,
+): Record<string, unknown> | null {
+  if (!output) return null
+  if (jobId && data.lastAppliedJobId === jobId) return {}
+  if (reopened && jobId && data.lastAppliedJobId === undefined && showsSamePosts(data, output)) {
+    return { lastAppliedJobId: jobId }
+  }
+  const patch = socialSearchServerRunPatch(data as SocialSearchNodeData, output)
+  return jobId && Object.keys(patch).length > 0 ? { ...patch, lastAppliedJobId: jobId } : patch
+}
+
+/** The node lists exactly the posts the run found, in order — and it found some. */
+function showsSamePosts(data: Readonly<Record<string, unknown>>, output: Readonly<Record<string, unknown>>): boolean {
+  const found = socialPostsFrom(output.searchResults)
+  const shown = socialSearchResults(data)
+  return found.length > 0 && found.length === shown.length && found.every((post, i) => post.id === shown[i]!.id)
 }
 
 /**

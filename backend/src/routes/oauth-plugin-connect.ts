@@ -2,6 +2,7 @@ import type { FastifyBaseLogger, FastifyInstance, FastifyReply } from "fastify"
 import { createHash } from "node:crypto"
 import { z } from "zod"
 import { config } from "../lib/config.js"
+import { rateLimitAddressKey, type AddressedRequest } from "../lib/client-address.js"
 import { appBaseUrl } from "../lib/deployment-urls.js"
 import { openApiRegistry } from "../lib/openapi-registry.js"
 import { redeemCode } from "../lib/oauth-codes.js"
@@ -87,12 +88,10 @@ const pollHeaders = z.object({ [POLL_KEY_HEADER]: z.string().min(1).max(256) })
  * request with a random bearer. These routes key on what they actually trust:
  * the poll key for the poll, the client address for the rest.
  */
-type RateLimitedRequest = { headers: Record<string, string | string[] | undefined>; ip?: string }
+type RateLimitedRequest = AddressedRequest
 
 function addressKey(req: RateLimitedRequest): string {
-  const xff = req.headers["x-forwarded-for"]
-  if (typeof xff === "string" && xff.length > 0) return xff.split(",")[0]!.trim()
-  return req.ip || "unknown"
+  return rateLimitAddressKey(req)
 }
 
 function pollKeyKey(req: RateLimitedRequest): string {

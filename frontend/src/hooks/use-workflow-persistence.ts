@@ -471,7 +471,7 @@ export function applyBackendExecutionState(
       if (opts.runId) Object.assign(data, resultsRunMark(opts.runId, state.completedAt ?? opts.runEndedAt ?? undefined))
       // A scraper: the single-node Run's own patch (scrape-result-recovery.ts),
       // never the generic media writes below — its featured image is not its result.
-      const scrapePatch = scrapeServerRunPatch(node.type, state.output as Record<string, unknown> | undefined, state.jobId, data)
+      const scrapePatch = scrapeServerRunPatch(node.type, state.output as Record<string, unknown> | undefined, state.jobId, data, { reopened: true })
       if (scrapePatch) {
         Object.assign(data, scrapePatch)
       } else if (state.output && isContentNodeType(node.type)) {
@@ -624,7 +624,7 @@ export function applyCompletedExecutionResults(
     // in the editor after this execution ended (`scrapeJobNeedsApplying`) keeps
     // its own, newer result; with no end time to compare, only an empty node is
     // filled.
-    const scrapePatch = scrapeServerRunPatch(node.type, state.output as Record<string, unknown>, state.jobId, data)
+    const scrapePatch = scrapeServerRunPatch(node.type, state.output as Record<string, unknown>, state.jobId, data, { reopened: true })
     if (scrapePatch) {
       if (Object.keys(scrapePatch).length === 0) return node
       const apply = settledAt

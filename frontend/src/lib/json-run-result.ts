@@ -24,13 +24,18 @@ import { unwrapEditPlanOutput } from "@nodaro/shared"
  * (`output-extractor.ts :: extractSavedNodeOutput`). The canvas run's own write
  * (execute-node.ts) is the shape each type follows.
  *
- * The types whose whole result is json on `generatedJson` are here, and
- * Transcribe, whose result is a text AND a json on each take. Other json
- * producers keep a mapping of their own that already reaches every lane:
- * Camera Switch (`perHandleRunFields`), Apply EDL (`applyEdlRunCutFields`),
- * Content Recipe / Ideas (`contentRunResultPatch`). The census test
- * (`json-run-result-census.test.ts`) holds every node type whose saved json
- * the server reads against these, from a list a backend test computes.
+ * The types whose whole result is json on `generatedJson` are here; Transcribe,
+ * whose result is a text AND a json on each take; and three whose result lives
+ * under a field of its own (decided 2026-10-05): Describe to Picker's picker
+ * json (`generatedPickerJson`), JSON Process's value (`processedResult`) and
+ * Extract Field's text, list and json (`extractedText`, `__listResults`,
+ * `generatedJson`) — each as its canvas run writes it. Other json producers
+ * keep a mapping of their own that already reaches every lane: Camera Switch
+ * (`perHandleRunFields`), Apply EDL (`applyEdlRunCutFields`), Content Recipe /
+ * Ideas (`contentRunResultPatch`), the scrapers and Social Search
+ * (`scrapeServerRunPatch`). The census test (`json-run-result-census.test.ts`)
+ * holds every node type whose saved json the server reads against these, from
+ * a list a backend test computes.
  */
 export const JSON_RUN_RESULT_TYPES: ReadonlySet<string> = new Set([
   "edit-plan",
@@ -39,7 +44,21 @@ export const JSON_RUN_RESULT_TYPES: ReadonlySet<string> = new Set([
   "audio-sync",
   "video-analysis",
   "video-audit",
+  "describe-to-picker",
+  "json-process",
+  "extract-field",
 ])
+
+/**
+ * The field that says "this node holds a result" — what the saved-output
+ * reader reads first (`output-extractor.ts :: extractSavedNodeOutput`).
+ * `generatedJson` for every type not listed.
+ */
+const RESULT_FIELD: Readonly<Record<string, string>> = {
+  "describe-to-picker": "generatedPickerJson",
+  "json-process": "processedResult",
+  "extract-field": "extractedText",
+}
 
 export function isJsonRunResultType(nodeType: string | null | undefined): boolean {
   return typeof nodeType === "string" && JSON_RUN_RESULT_TYPES.has(nodeType)
@@ -73,6 +92,14 @@ export interface JsonRunOutput {
    *  orchestrator never promotes it onto the node output (it is node-local UI,
    *  not a graph output). */
   readonly report?: unknown
+  /** Extract Field: the newline-joined values (its `text` handle). */
+  readonly extractedText?: unknown
+  /** JSON Process: the filtered / transformed value. */
+  readonly processedResult?: unknown
+  /** Extract Field (List) / JSON Process: one item per value. */
+  readonly listResults?: unknown
+  /** Extract Field (List): the same list, one entry per array element. */
+  readonly alignedListResults?: unknown
 }
 
 /** The run a Transcribe take records. */
@@ -146,6 +173,30 @@ function transcribePatch(output: JsonRunOutput, take: JsonRunTake): Record<strin
   return { generatedResults: prev.map((r, i) => (i === already ? { ...r, transcript } : r)) }
 }
 
+const stringList = (value: unknown): string[] | undefined =>
+  Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : undefined
+
+/**
+ * Extract Field, as its canvas run writes it: the text, the list in List mode
+ * and the value in JSON mode — the other two cleared, so a mode switched since
+ * an earlier run leaves nothing of it behind.
+ */
+function extractFieldPatch(output: JsonRunOutput): Record<string, unknown> | undefined {
+  if (typeof output.extractedText !== "string") return undefined
+  return {
+    extractedText: output.extractedText,
+    __listResults: stringList(output.listResults),
+    __alignedListResults: stringList(output.alignedListResults),
+    generatedJson: output.json,
+  }
+}
+
+/** JSON Process, as its canvas run writes it: the value and one item per element. */
+function jsonProcessPatch(output: JsonRunOutput): Record<string, unknown> | undefined {
+  if (output.processedResult === undefined) return undefined
+  return { processedResult: output.processedResult, __listResults: stringList(output.listResults) ?? [] }
+}
+
 /**
  * The node-data patch for a finished run's json, or `undefined` for a node
  * type this mapping does not cover and for an output with no result to land.
@@ -158,7 +209,15 @@ export function jsonRunResultPatch(
 ): Record<string, unknown> | undefined {
   if (!output || !isJsonRunResultType(nodeType)) return undefined
   if (nodeType === "transcribe") return transcribePatch(output, take)
+  if (nodeType === "extract-field") return extractFieldPatch(output)
+  if (nodeType === "json-process") return jsonProcessPatch(output)
   if (!isObject(output.json)) return undefined
+  if (nodeType === "describe-to-picker") {
+    // The run's gaps never reach the job row or the node output (the route
+    // records them server-side), so an earlier canvas run's are cleared rather
+    // than left beside a picker json they do not describe.
+    return { generatedPickerJson: output.json, generatedGaps: undefined }
+  }
   if (nodeType === "video-audit") {
     // The report travels beside the corrected analysis, so the node never
     // renders a payload with an earlier run's disclosure strip. A node output
@@ -174,7 +233,8 @@ export function jsonRunResultPatch(
  * empty" lane (`applyCompletedExecutionResults`) leaves such a node alone.
  */
 export function holdsJsonRunResult(nodeType: string | null | undefined, data: Readonly<Record<string, unknown>>): boolean {
-  if (data.generatedJson !== undefined) return true
+  const field = (typeof nodeType === "string" && RESULT_FIELD[nodeType]) || "generatedJson"
+  if (data[field] !== undefined) return true
   if (nodeType !== "transcribe") return false
   const text = data.generatedText
   return (typeof text === "string" && text.trim() !== "") || (Array.isArray(data.generatedResults) && data.generatedResults.length > 0)

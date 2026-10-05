@@ -141,7 +141,7 @@ export async function claimSignupGrantRoutes(app: FastifyInstance) {
             userId,
             browserKey: keys.browserKey ?? null,
             deviceKey: keys.deviceKey ?? null,
-            ipHash: callerKeyHash(req),
+            ipHash: callerKeyHash(req, { unknownScope: userId }),
           },
           req.log,
           await welcomeClaimOptions(req),

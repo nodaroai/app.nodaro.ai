@@ -10,11 +10,11 @@ import { surfaceSsoOnly } from "../lib/surface-profile.js"
 import { deploymentPayerActive, deploymentPayerId } from "../lib/deployment-payer.js"
 import {
   BILLING_KEY_PREFIX,
-  callerIp,
   ipInAnyCidr,
   resolveBillingKey,
   touchBillingKeyLastUsed,
 } from "../lib/billing-key-resolver.js"
+import { clientAddress } from "../lib/client-address.js"
 import { SSO_APP_METADATA_KEY } from "../lib/sso-linking.js"
 
 /**
@@ -466,8 +466,9 @@ export function registerAuthHook(app: FastifyInstance): void {
 
       // The source restriction, when the payer set one. Not skipped on public
       // routes: a credential restricted to an integration's egress addresses
-      // must be restricted everywhere, or the restriction is decoration.
-      if (key.allowedCidrs && key.allowedCidrs.length > 0 && !ipInAnyCidr(callerIp(req), key.allowedCidrs)) {
+      // must be restricted everywhere, or the restriction is decoration. An
+      // address that cannot be known matches no range (fails closed).
+      if (key.allowedCidrs && key.allowedCidrs.length > 0 && !ipInAnyCidr(clientAddress(req), key.allowedCidrs)) {
         console.warn(`[billing-key] ${req.url}: REFUSED — key ${key.id} used from a source outside its allow-list`)
         reply.status(403).send({
           error: {

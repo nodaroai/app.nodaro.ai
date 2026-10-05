@@ -84,6 +84,14 @@ vi.mock("node:child_process", () => ({
   spawn: mocks.spawn,
 }))
 
+// A box with no CPU quota: these pin the argv each runner builds, exactly as
+// given. The counts a quota box adds are `ffmpeg-process.test.ts`'s — and a CI
+// runner has a real quota, which would otherwise reach these argv.
+vi.mock("../ffmpeg-threads.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../ffmpeg-threads.js")>()),
+  ffmpegThreads: () => undefined,
+}))
+
 vi.mock("node:fs", () => ({
   createWriteStream: mocks.createWriteStream,
   promises: {

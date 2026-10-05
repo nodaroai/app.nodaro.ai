@@ -53,6 +53,27 @@ export const TEXT_TO_AUDIO_PRESETS: readonly FactoryPreset[] = [
     group: "Ambiences (loopable)",
     data: { provider: "elevenlabs-sfx", duration: 22, loop: true, promptInfluence: 0.5, prompt: "low sci-fi ambient drone, ominous spaceship hum" },
   },
+  {
+    id: "text-to-audio/living-room-tone",
+    name: "Living Room Tone",
+    description: "Quiet, lived-in room.",
+    group: "Ambiences (loopable)",
+    data: { provider: "elevenlabs-sfx", duration: 22, loop: true, promptInfluence: 0.4, prompt: "quiet living room room tone, faint air and a soft distant household hum, steady and even, an empty room at rest" },
+  },
+  {
+    id: "text-to-audio/kitchen-hum",
+    name: "Kitchen Hum",
+    description: "Fridge hum in a still kitchen.",
+    group: "Ambiences (loopable)",
+    data: { provider: "elevenlabs-sfx", duration: 22, loop: true, promptInfluence: 0.4, prompt: "home kitchen room tone, a low steady refrigerator hum with faint air, calm and continuous, an empty kitchen at rest" },
+  },
+  {
+    id: "text-to-audio/cafe-murmur",
+    name: "Café Murmur",
+    description: "Soft, indistinct café chatter.",
+    group: "Ambiences (loopable)",
+    data: { provider: "elevenlabs-sfx", duration: 22, loop: true, promptInfluence: 0.4, prompt: "café background ambience, a soft indistinct murmur of distant conversation and the occasional faint cup clink, steady and even, no clear words" },
+  },
 
   // ── UI & Stingers ────────────────────────────────────────────────────────
   {

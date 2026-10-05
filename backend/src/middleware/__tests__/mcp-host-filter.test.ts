@@ -14,9 +14,28 @@ async function makeApp() {
   app.put("/v1/upload-proxy/:token", async (_req, reply) => reply.send({ ok: "upload-proxy" }))
   app.get("/v1/upload-page/:token", async (_req, reply) => reply.send({ ok: "upload-page-get" }))
   app.post("/v1/upload-page/:token", async (_req, reply) => reply.send({ ok: "upload-page-post" }))
+  app.get("/v1/admin/access/whoami", async (_req, reply) => reply.send({ ok: "whoami" }))
+  app.get("/v1/admin/access/blocks", async (_req, reply) => reply.send({ ok: "blocks" }))
   app.get("/", async (_req, reply) => reply.send({ ok: "root" }))
   return app
 }
+
+describe("mcp host filter — the address self-check", () => {
+  it("allows exactly /v1/admin/access/whoami on mcp.nodaro.ai (the no-Caddy path must be checkable)", async () => {
+    const app = await makeApp()
+    const res = await app.inject({ method: "GET", url: "/v1/admin/access/whoami", headers: { host: "mcp.nodaro.ai" } })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ ok: "whoami" })
+  })
+
+  it("still 404s every other admin path on mcp.nodaro.ai", async () => {
+    const app = await makeApp()
+    for (const url of ["/v1/admin/access/blocks", "/v1/admin/access/whoami/x"]) {
+      const res = await app.inject({ method: "GET", url, headers: { host: "mcp.nodaro.ai" } })
+      expect(res.statusCode, url).toBe(404)
+    }
+  })
+})
 
 describe("mcp host filter", () => {
   it("allows POST /mcp on mcp.nodaro.ai", async () => {

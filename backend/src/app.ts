@@ -160,6 +160,7 @@ import { claimSignupGrantRoutes } from "./ee/routes/claim-signup-grant.js"
 import { welcomeOfferRoutes } from "./ee/routes/welcome-offer.js"
 import { freeGrantActivationRoutes } from "./ee/routes/free-grant-activation.js"
 import { adminFreeGrantRoutes } from "./ee/routes/admin-free-grants.js"
+import { adminAccessRoutes } from "./ee/routes/admin-access.js"
 import { adminRoutes } from "./ee/routes/admin.js"
 import { libraryRoutes } from "./routes/library.js"
 import { storageStatusRoutes } from "./routes/storage-status.js"
@@ -308,6 +309,7 @@ import { registerSequenceExecutionGuard } from "./middleware/sequence-execution-
 import { registerOrgsContextHook } from "./lib/orgs-context.js"
 import { registerBillingContextHook } from "./lib/billing-context.js"
 import { registerMcpHostFilter } from "./middleware/mcp-host-filter.js"
+import { rateLimitAddressKey } from "./lib/client-address.js"
 import rateLimit from "@fastify/rate-limit"
 import formbody from "@fastify/formbody"
 import { installTolerantJsonParser } from "./lib/tolerant-json-parser.js"
@@ -323,22 +325,22 @@ import { registerInternalErrorSanitizer, registerErrorTelemetry } from "./lib/ht
  * by rotating the header — a stolen JWT could drain a balance at full speed.
  * Keying by the credential is unspoofable (the attacker would need the token)
  * and gives a stable per-identity bucket regardless of source IP. We only fall
- * back to IP/XFF for UNauthenticated routes (e.g. OAuth dynamic-client
- * registration), where there is no credential to key on.
+ * back to the client's network for UNauthenticated routes (e.g. OAuth
+ * dynamic-client registration), where there is no credential to key on —
+ * `lib/client-address.ts`, the one derivation every address reader shares.
  *
  * Exported for unit testing.
  */
 export function rateLimitKeyGenerator(req: {
   headers: Record<string, string | string[] | undefined>
   ip?: string
+  socket?: { remoteAddress?: string | undefined } | null
 }): string {
   const auth = req.headers["authorization"]
   if (typeof auth === "string" && auth.length > 0) {
     return "cred:" + createHash("sha256").update(auth).digest("hex")
   }
-  const xff = req.headers["x-forwarded-for"]
-  if (typeof xff === "string" && xff.length > 0) return xff.split(",")[0]!.trim()
-  return req.ip || "unknown"
+  return rateLimitAddressKey(req)
 }
 
 export async function buildApp() {
@@ -607,6 +609,7 @@ export async function buildApp() {
   if (hasCredits()) await app.register(consentRoutes)
   // The review surface only means something where the grant exists.
   if (hasCredits()) await app.register(adminFreeGrantRoutes)
+  if (hasAdmin()) await app.register(adminAccessRoutes)
   if (hasAdmin()) await app.register(adminRoutes)
   if (hasAdmin()) await app.register(adminJobsRoutes)
   if (hasAdmin()) await app.register(adminSsoRoutes)

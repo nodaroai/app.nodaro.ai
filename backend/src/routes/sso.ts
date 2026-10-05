@@ -38,8 +38,8 @@ function initiateUrlFor(provider: SsoProviderConfig, host: string | null): strin
 
 // Unauthenticated crypto + DB + Redis route ⇒ per-IP rate limit (the shared
 // rateLimiter middleware keys on req.userId, which is undefined here, so it is
-// inert on public routes — key on the caller IP instead, X-Forwarded-For-aware
-// behind Caddy via callerKeyHash).
+// inert on public routes — key on the caller's network instead, via
+// callerKeyHash and the shared client-address derivation).
 const RATE_WINDOW_SEC = 60
 const RATE_MAX = 20
 async function ssoRateLimited(req: FastifyRequest, reply: FastifyReply): Promise<boolean> {

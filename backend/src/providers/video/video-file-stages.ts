@@ -5,6 +5,7 @@
  */
 import { spawn } from "node:child_process"
 import { COMBINE_DELIVERY_CRF } from "./ffmpeg-utils.js"
+import { spawnFfmpeg } from "./ffmpeg-process.js"
 import { YtDlpHaltError } from "./ytdlp-process.js"
 
 /**
@@ -97,7 +98,7 @@ export function reencodeToH264(
   return new Promise((resolve, reject) => {
     let halted: YtDlpHaltError | undefined
     const audioArgs = hasAudio === false ? ["-an"] : ["-c:a", "aac"]
-    const proc = spawn("ffmpeg", [
+    const proc = spawnFfmpeg([
       "-i", inputPath,
       "-c:v", "libx264",
       "-preset", "fast",

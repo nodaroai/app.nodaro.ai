@@ -63,11 +63,43 @@ const PROMPT_CONTENT_KEYS: readonly string[] = ["prompt", "scenePrompt", "editPr
  */
 export function presetApplyClearKeys(
   presetData: Readonly<Record<string, unknown>>,
+  nodeType?: string,
 ): readonly string[] {
   const ownsPromptContent = PROMPT_CONTENT_KEYS.some((k) => presetData[k] !== undefined)
-  return ownsPromptContent
+  const base = ownsPromptContent
     ? [...PRESET_APPLY_CLEAR_KEYS, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY]
     : PRESET_APPLY_CLEAR_KEYS
+  const levers = presetLeverClearKeys(presetData, nodeType)
+  return levers.length > 0 ? [...base, ...levers] : base
+}
+
+/**
+ * Per node type, the look levers a preset may leave unset. Applying any preset
+ * with data to a node of a listed type clears every member that preset does not
+ * set, so one preset's plate colour, weight or position never carries over into
+ * the next. Data-driven, so a new preset of a listed type is covered by
+ * construction. The members stay capture-included: a saved preset carries the
+ * levers its node had, so it clears only the ones that were unset when it was saved.
+ */
+export const PRESET_LEVER_GROUPS: Readonly<Record<string, readonly string[]>> = {
+  "add-captions": [
+    "look", "fontFamily", "fontWeight", "strokeColor", "strokeWidth", "highlightColor",
+    "uppercase", "positionY", "animate", "maxWordsPerLine", "backgroundColor",
+  ],
+}
+
+/**
+ * The lever-group keys applying THIS preset clears on a node of `nodeType`: every
+ * member of the node type's group that the preset does not set. Nothing for a node
+ * type with no group, and nothing for empty preset data. Pure.
+ */
+export function presetLeverClearKeys(
+  presetData: Readonly<Record<string, unknown>>,
+  nodeType?: string,
+): readonly string[] {
+  if (!nodeType || !Object.hasOwn(PRESET_LEVER_GROUPS, nodeType)) return []
+  if (!Object.values(presetData).some((v) => v !== undefined)) return []
+  return PRESET_LEVER_GROUPS[nodeType]!.filter((k) => presetData[k] === undefined)
 }
 
 /**

@@ -143,6 +143,9 @@ here for each one anyway.
 | `SCENE3D_PRIVATE_S3_ACCESS_KEY_ID` / `SCENE3D_PRIVATE_S3_SECRET_ACCESS_KEY` | existing R2 credentials | Server-side credentials for the private scene bucket. Prefer credentials restricted to that bucket. |
 | `SCENE3D_PRIVATE_S3_FORCE_PATH_STYLE` | existing R2 setting | Enable with `true` or `1` for an S3-compatible store that requires path-style addressing. |
 | `RUNTIME_ENV` | `RAILWAY_ENVIRONMENT_NAME`, else `local` | Names this deployment. Only matters when two installs share ONE database but have SEPARATE Redis instances (a staging + production pair): each install's stale-execution sweeps then reconcile only the runs its own orchestrator claimed, instead of marking the other install's healthy executions "orphaned". On Railway, `RAILWAY_ENVIRONMENT_NAME` already supplies it — set `RUNTIME_ENV` yourself only elsewhere. Every container of one install (API, workers, orchestrator) must use the SAME value |
+| `CLIENT_IP_HEADER` | unset (Railway: `x-real-ip`, set by the image) | A header your platform's edge proxy uses to state the real client address. Trusted only from `CLIENT_IP_HEADER_FROM` hops — see §3, "How the backend picks the client address". `none` (or empty) switches it off, also on Railway |
+| `CLIENT_IP_HEADER_FROM` | unset (Railway: `100.64.0.0/10`) | Comma-separated ranges the edge connects from. Required with `CLIENT_IP_HEADER`: unset (or no valid range) and the API refuses to start; `any` trusts the header from every hop — only safe when nothing but your edge can reach the container |
+| `NETWORK_HASH_SECRET` | unset | 32+ characters. Keys the hash under which client networks are stored (free-credit signup checks, report dedup). Unset = plain sha256. Every install sharing one database must use the same value; changing it forgets every recorded network. A value shorter than 32 characters stops the API from starting |
 | `DATABASE_URL` | `""` | Direct Postgres URL — used only to apply migrations on boot |
 | `RUN_MIGRATIONS_ON_BOOT` | `false` (compose: `true`) | Apply `supabase/migrations` before the API starts; `false` on a managed Supabase project (see 2c) |
 | `KIE_API_KEY` | `""` | KIE.ai — broadest media/LLM coverage (or paste it on Install health) |
@@ -176,7 +179,7 @@ here for each one anyway.
 | `ORCHESTRATOR_CONCURRENCY` | `20` | BullMQ concurrency of the orchestrator (I/O-bound) |
 | `RENDER_WORKER_CONCURRENCY` | `2` (max 10) | Remotion renders in parallel — each is a headless Chrome |
 | `REMOTION_CONCURRENCY` | `2` for 3D scenes; Remotion default (50 % of cores) for other compositions | Browser tabs per render. An explicit value overrides both paths. Keep this low when running multiple 3D jobs: each WebGL tab uses additional threads and counts toward the container process limit. |
-| `FFMPEG_CONCURRENCY` | `4` (max 32) | Concurrent ffmpeg processes across every ffmpeg node. An Apply EDL render gives each of its ffmpegs the container's CPU quota (cgroup `cpu.max`) as its thread count: left to itself, ffmpeg counts every core of the host, and under a quota that multiplies the video encoder's memory |
+| `FFMPEG_CONCURRENCY` | `4` (max 32) | Concurrent ffmpeg processes across every ffmpeg node. Every ffmpeg the backend runs is given the container's CPU quota (cgroup `cpu.max`, rounded up) as its decoder, filter and encoder thread counts: left to itself, ffmpeg counts every core of the host, and under a quota that multiplies the video encoder's memory. With no quota below the host's core count, ffmpeg picks its own counts as before |
 | `MCP_PUBLIC_URL` | `""` = the Nodaro Cloud host | Public base of the MCP host when it differs from `PUBLIC_URL`; self-hosters serving MCP on their main host set it equal to `PUBLIC_URL` |
 | `MCP_DYNAMIC_REGISTRATION` · `MCP_DCR_ALLOWLIST` | `allowlist` · 14 known clients (Claude, Claude Code, Cursor, Cline, Continue, Goose, ChatGPT, OpenAI, Lovable, Gemini, Gemini CLI, Codex, MCP Inspector, mcp-inspector) | RFC 7591 dynamic client registration for MCP clients (`allowlist` · `open` · `off`), and the `client_name` allowlist consulted in `allowlist` mode — see §10 |
 | `FIGMA_PLUGIN_OAUTH_CLIENT_ID` | `""` = plugin connect off | client_id of the developer app the Figma plugin connects through; the app must list `<PUBLIC_URL>/v1/oauth/plugin/callback` in its redirect URIs and request `jobs:read`, `assets:read`, `assets:write`, `credits:read` — see the [plugin connect handshake](./oauth-flow.md#plugin-connect-handshake-figma) |
@@ -408,6 +411,35 @@ a public address has those headers replaced with the values Caddy itself
 observed. One consequence worth knowing if you serve an intranet: the same
 rule skips your users' own addresses when those are private too, so a client
 on the LAN can choose the address the backend records.
+
+### How the backend picks the client address
+
+Rate limits on unauthenticated routes, the free-credit signup checks and
+billing-key source restrictions all use one derivation:
+
+1. The nearest untrusted hop — `X-Forwarded-For` read from the right, skipping
+   loopback, private, link-local and unique-local addresses. Behind the bundled
+   Caddy that is Caddy's single entry. When every entry is private (an intranet
+   install), the leftmost one is used.
+2. If your platform puts its own edge proxy in front of the container and that
+   edge states the real client in a header, set `CLIENT_IP_HEADER` to that
+   header and `CLIENT_IP_HEADER_FROM` to the address ranges the edge connects
+   from. The header is then trusted only from those hops; a hop that sends no
+   usable public address leaves the client unknown rather than recording the
+   proxy. On Railway the image sets `x-real-ip` from `100.64.0.0/10` by itself
+   (Railway's edge connects from that range and resolves Cloudflare too).
+   Behind Cloudflare without such an edge, use `cf-connecting-ip` with
+   Cloudflare's published ranges (https://www.cloudflare.com/ips/).
+3. Otherwise, the hop from step 1.
+
+Admins can check the result for themselves at `GET /v1/admin/access/whoami`:
+call it through every way into the install, including with forged forwarding
+headers, and the address should be your own each time.
+
+Stored network identities are hashed. Set `NETWORK_HASH_SECRET` (32+
+characters) to key that hash; installs that share one database must use the
+same value, and changing it later starts a new hash space, which forgets every
+network recorded before.
 
 For HTTPS you have two options:
 

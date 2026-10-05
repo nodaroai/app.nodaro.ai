@@ -18,6 +18,11 @@ these show on the canvas too:
 | [Video Analysis](../nodes/processing-video/video-analysis.md) | the analysis |
 | [Video Audit](../nodes/processing-video/video-audit.md) | the corrected analysis |
 | [Apply EDL](../nodes/processing-video/apply-edl.md) | the render and the transcript remapped through it (as before) |
+| [Web Scrape](../nodes/input/web-scrape.md), [Meta Ads Scrape](../nodes/input/meta-ads-scrape.md), [Instagram Scrape](../nodes/input/instagram-scrape.md) | the pages, ads or posts it scraped, the first one featured |
+| [Social Search](../nodes/input/social-search.md) | every post found and the ones passed on; picks you make afterwards are kept when the editor is reopened |
+| [Describe to Picker](../nodes/ai-image/describe-to-picker.md) | the picker values it read from the image |
+| [Extract Field](../nodes/utility/extract-field.md) | the extracted text, the list (List output) or the value (JSON output) |
+| [JSON Process](../nodes/utility/json-process.md) | the processed value |
 
 Before, these nodes kept whatever their last single-node run had left, or
 stayed empty, so a later **Run from here** could start from an outdated plan or

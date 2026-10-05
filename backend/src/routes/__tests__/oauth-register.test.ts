@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import Fastify from "fastify"
 import rateLimit from "@fastify/rate-limit"
 import { registerOauthRegister } from "../oauth-register.js"
+import { rateLimitAddressKey } from "../../lib/client-address.js"
 
 const mockState = vi.hoisted(() => ({ openCount: 0, lastInsert: null as Record<string, unknown> | null }))
 
@@ -54,10 +55,12 @@ async function makeApp() {
   const app = Fastify()
   await app.register(rateLimit, {
     global: false,
+    // Shaped like app.ts's rateLimitKeyGenerator: a request that carries an
+    // Authorization header is bucketed by it, anything else by the client's
+    // network (the real derivation). The route must override the first half.
     keyGenerator: (req) => {
-      const xff = req.headers["x-forwarded-for"]
-      if (typeof xff === "string" && xff.length > 0) return xff.split(",")[0]!.trim()
-      return req.ip || "unknown"
+      const auth = req.headers.authorization
+      return typeof auth === "string" && auth.length > 0 ? `cred:${auth}` : rateLimitAddressKey(req)
     },
     errorResponseBuilder: (_req, context) => ({
       statusCode: 429,
@@ -162,38 +165,51 @@ describe("POST /v1/oauth/register (RFC 7591 DCR)", () => {
   })
 })
 
-describe("DCR abuse mitigations", () => {
-  it("returns 429 after 10 requests/min from the same IP (@fastify/rate-limit)", async () => {
-    const app = await makeApp()
-    for (let i = 0; i < 10; i++) {
-      const res = await app.inject({
+/** Sixty registrations from one network, concurrently: one at a time they
+ *  outlast the default test timeout on a loaded runner. */
+function fillBucket(app: Awaited<ReturnType<typeof makeApp>>, address: string) {
+  return Promise.all(
+    Array.from({ length: 60 }, (_, i) =>
+      app.inject({
         method: "POST",
         url: "/v1/oauth/register",
         payload: { client_name: "Claude", redirect_uris: [`https://claude.ai/cb-${i}`] },
-        headers: { "x-forwarded-for": "20.0.0.1" },
-      })
-      expect(res.statusCode).toBe(201)
-    }
+        headers: { "x-forwarded-for": address },
+      }),
+    ),
+  )
+}
+
+describe("DCR abuse mitigations", { timeout: 30_000 }, () => {
+  it("returns 429 after 60 requests/min from the same network (@fastify/rate-limit)", async () => {
+    const app = await makeApp()
+    const first = await fillBucket(app, "20.0.0.1")
+    expect(first.map((r) => r.statusCode)).toEqual(Array(60).fill(201))
     const blocked = await app.inject({
       method: "POST",
       url: "/v1/oauth/register",
-      payload: { client_name: "Claude", redirect_uris: ["https://claude.ai/cb-11"] },
+      payload: { client_name: "Claude", redirect_uris: ["https://claude.ai/cb-61"] },
       headers: { "x-forwarded-for": "20.0.0.1" },
     })
     expect(blocked.statusCode).toBe(429)
     expect(JSON.parse(blocked.body).error.code).toBe("rate_limit_exceeded")
   })
 
-  it("rate limit is per-IP (different IPs don't share buckets)", async () => {
+  it("a fresh Authorization header per request does not buy a fresh bucket", async () => {
     const app = await makeApp()
-    for (let i = 0; i < 10; i++) {
-      await app.inject({
-        method: "POST",
-        url: "/v1/oauth/register",
-        payload: { client_name: "Claude", redirect_uris: [`https://claude.ai/cb-${i}`] },
-        headers: { "x-forwarded-for": "20.0.0.2" },
-      })
-    }
+    await fillBucket(app, "20.0.0.3")
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/oauth/register",
+      payload: { client_name: "Claude", redirect_uris: ["https://claude.ai/cb-garbage"] },
+      headers: { "x-forwarded-for": "20.0.0.3", authorization: "Bearer garbage-61" },
+    })
+    expect(res.statusCode).toBe(429)
+  })
+
+  it("rate limit is per network (different addresses don't share buckets)", async () => {
+    const app = await makeApp()
+    await fillBucket(app, "20.0.0.2")
     const res = await app.inject({
       method: "POST",
       url: "/v1/oauth/register",

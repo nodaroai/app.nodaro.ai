@@ -115,6 +115,20 @@ export const VOICE_DESIGN_PRESETS: readonly FactoryPreset[] = [
     group: "Narration & Character",
     data: { voiceDescription: "A calm, soft-spoken meditation guide with a slow, breathy, reassuring delivery." },
   },
+  {
+    id: "voice-design/casual-creator-female",
+    name: "Casual Creator (female)",
+    description: "Relaxed, warm, everyday.",
+    group: "Narration & Character",
+    data: { voiceDescription: "An adult woman in her late twenties talking casually to the viewer as if telling a friend about something she tried: relaxed, warm and upbeat, a natural conversational pace with small pauses, a light neutral American accent, recorded close and dry in a quiet room, never polished or announcer-like." },
+  },
+  {
+    id: "voice-design/casual-creator-male",
+    name: "Casual Creator (male)",
+    description: "Relaxed, warm, everyday.",
+    group: "Narration & Character",
+    data: { voiceDescription: "An adult man in his late twenties talking casually to the viewer as if telling a friend about something he tried: relaxed, warm and upbeat, a natural conversational pace with small pauses, a light neutral American accent, recorded close and dry in a quiet room, never polished or announcer-like." },
+  },
 
   // ── Professional & Assistant ─────────────────────────────────────────────
   {

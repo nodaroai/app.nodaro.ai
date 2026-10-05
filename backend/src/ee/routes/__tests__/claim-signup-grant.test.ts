@@ -41,7 +41,9 @@ import { TIER_CREDITS } from "../../billing/stripe-config.js"
 
 const TEST_USER_ID = "00000000-0000-4000-8000-000000000001"
 const CALLER_IP = "203.0.113.5"
-/** What callerKeyHash MUST derive: sha256 of the first X-Forwarded-For hop. */
+/** What callerKeyHash MUST derive: the caller's hashed network — for an IPv4
+ *  caller behind Caddy, sha256 of Caddy's single X-Forwarded-For entry (no
+ *  NETWORK_HASH_SECRET in tests; lib/client-address.ts). */
 const EXPECTED_IP_HASH = createHash("sha256").update(CALLER_IP).digest("hex")
 const HEX64 = "a".repeat(64)
 const OTHER_HEX64 = "b".repeat(64)

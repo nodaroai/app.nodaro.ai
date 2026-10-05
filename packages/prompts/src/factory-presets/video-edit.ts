@@ -95,6 +95,20 @@ export const ADD_CAPTIONS_PRESETS: readonly FactoryPreset[] = [
     group: "Caption Styles",
     data: { style: "subtitle", position: "top", fontSize: 36, color: "#FFFFFF", autoTranscribe: true },
   },
+  {
+    id: "add-captions/hook-plate",
+    name: "Hook Plate",
+    description: "Your opening line as a bold plate near the top.",
+    group: "Caption Styles",
+    data: { style: "subtitle", look: "clean", position: "top", positionY: 20, fontSize: 32, fontWeight: 800, maxWordsPerLine: 4, color: "#111111", backgroundColor: "#FFFFFF", autoTranscribe: false },
+  },
+  {
+    id: "add-captions/body-captions",
+    name: "Body Captions",
+    description: "Word-by-word captions under the face.",
+    group: "Caption Styles",
+    data: { style: "word-highlight", look: "outline", position: "bottom", positionY: 72, fontSize: 32, maxWordsPerLine: 3, color: "#FFFFFF", autoTranscribe: true },
+  },
 ]
 
 export const COMBINE_VIDEOS_PRESETS: readonly FactoryPreset[] = [

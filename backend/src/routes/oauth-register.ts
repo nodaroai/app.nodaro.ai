@@ -1,8 +1,9 @@
 import type { FastifyInstance, FastifyRequest } from "fastify"
 import { z } from "zod"
-import { randomBytes, createHash } from "node:crypto"
+import { randomBytes } from "node:crypto"
 import { supabase } from "../lib/supabase.js"
 import { config } from "../lib/config.js"
+import { clientNetworkHash, rateLimitAddressKey, type AddressedRequest } from "../lib/client-address.js"
 import { ALL_SCOPES } from "../lib/scopes.js"
 import { hashSecret } from "./developer-apps.js"
 import { sendInternalError } from "../lib/http-errors.js"
@@ -11,14 +12,20 @@ const SECRET_TTL_DAYS = 90
 const CLIENT_ID_PREFIX = "ndr_dcr_"
 
 // Abuse mitigations for unauthenticated DCR (RFC 7591 endpoint is public by design):
-// - Per-IP rate limit: 10 req/min via @fastify/rate-limit (registered in app.ts).
-//   Configured per-route below via the `config.rateLimit` option.
+// - Per-network rate limit: 60 req/min via @fastify/rate-limit (registered in
+//   app.ts), configured per-route below via the `config.rateLimit` option. It
+//   was 10 while every caller was keyed on one of a few shared proxy addresses;
+//   with real client addresses, connector platforms (Claude.ai, ChatGPT)
+//   register every one of their users from a handful of egress addresses. The
+//   key is the ADDRESS, never the Authorization header: the global keyer
+//   buckets any request that carries one by that header, and this public route
+//   accepts any garbage there — a fresh header per request was a fresh bucket.
 // - Open-registration cap: max N unconsumed registrations per identity in
 //   the last 24 h (rejected with 429 once exceeded). "Consumed" = the row's
 //   owner_user_id was set at first consent (oauth.ts). The IDENTITY differs
 //   by kind, and that difference matters:
 //     * dynamic_mcp — (client_name + overlapping redirect_uris), as before.
-//     * community_instance — the CALLER (hashed X-Forwarded-For / ip). Every
+//     * community_instance — the CALLER (its hashed network, `callerKeyHash`). Every
 //       default self-hosted install registers as "Nodaro instance
 //       (localhost:3000)" with the same callback URL, so a name-keyed cap was
 //       ONE bucket shared by every install in the world: five people clicking
@@ -30,15 +37,17 @@ const OPEN_REGISTRATIONS_CAP_PER_CALLER = 10
 const OPEN_REGISTRATION_LOOKBACK_MS = 24 * 60 * 60 * 1000
 
 /**
- * The caller for the community-instance cap. Same derivation as the global
- * rate limiter's unauthenticated branch (app.ts rateLimitKeyGenerator): the
- * first X-Forwarded-For hop, else the socket ip. Hashed — an ip is personal
- * data and the row outlives the request.
+ * The caller's network as a stored identity — the community-instance cap, the
+ * SSO limit and the free-grant signals all key on it. The address comes from
+ * `lib/client-address.ts` (the one derivation every reader shares) and is
+ * hashed there: an address is personal data and these rows outlive the request.
+ *
+ * `unknownScope` decides what an address nobody knows becomes: unique to that
+ * scope (a free-grant signal must never match another account on it) or, when
+ * absent, one shared bucket (a cap is still a cap).
  */
-export function callerKeyHash(req: { headers: Record<string, string | string[] | undefined>; ip?: string }): string {
-  const xff = req.headers["x-forwarded-for"]
-  const raw = (typeof xff === "string" && xff.length > 0 ? xff.split(",")[0]!.trim() : req.ip) || "unknown"
-  return createHash("sha256").update(raw).digest("hex")
+export function callerKeyHash(req: AddressedRequest, opts: { unknownScope?: string } = {}): string {
+  return clientNetworkHash(req, opts)
 }
 
 // IMPORTANT: this schema must NOT be `.strict()`. RFC 7591 §2 requires the
@@ -131,10 +140,12 @@ export async function registerOauthRegister(app: FastifyInstance): Promise<void>
     "/v1/oauth/register",
     {
       config: {
-        // 10 req/min/IP. @fastify/rate-limit must be registered globally in app.ts.
+        // 60 req/min per network (see the note at the top of this file).
+        // @fastify/rate-limit must be registered globally in app.ts.
         rateLimit: {
-          max: 10,
+          max: 60,
           timeWindow: "1 minute",
+          keyGenerator: (req: FastifyRequest) => rateLimitAddressKey(req),
         },
       },
     },

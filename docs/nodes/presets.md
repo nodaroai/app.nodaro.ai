@@ -111,11 +111,11 @@ Both music nodes ship presets organized along the three axes professional librar
   *Advertising & Hype* (Commercial Read, Hype), *Conversational & Calm* (Podcast Host, Character,
   Meditation / ASMR).
 - **Text to Audio** (sound effects) — ready prompts for *Transitions & Impacts* (Whoosh, Impact,
-  Riser), *Ambiences (loopable)* (Rain, Forest, Fire, Sci-Fi Drone — `loop: true`), *UI & Stingers*
+  Riser), *Ambiences (loopable)* (Rain, Forest, Fire, Sci-Fi Drone, Living Room Tone, Kitchen Hum, Café Murmur — `loop: true`), *UI & Stingers*
   (Click, Notification, Applause), and *Foley & Action* (Footsteps, Door, Glass Break, Typing,
   Explosion, Magic Sparkle, Camera Shutter, Error Buzzer).
 - **Prompt** (LLM) — system-prompt roles in *Assistants*, *Writing & Marketing* (Copywriter,
-  Social Caption, SEO, Rewrite, Script Writer), *Utility* (Prompt Enhancer, Translator, Summarizer,
+  Social Caption, SEO, Rewrite, Script Writer, Hook Generator), *Utility* (Prompt Enhancer, Translator, Summarizer,
   Q&A, Brainstorm) and *Structured Output* (JSON Extractor, Classifier).
 
 ### Script, vision & voice catalogs
@@ -125,9 +125,9 @@ Both music nodes ship presets organized along the three axes professional librar
   Hook→Show→Proof→Opinion) and *Long-Form & Narrative* (Podcast Outline, Trailer Narration, Story
   Beats). Type your topic in the prompt.
 - **Image to Text** — analysis presets: *Accessibility & SEO* (Alt Text, SEO Caption, Social Caption),
-  *Extraction* (OCR, Tags, Product Description) and *Creative* (Detailed Description, Reverse Prompt).
+  *Extraction* (OCR, Tags, Product Description, Site Screenshot Summary) and *Creative* (Detailed Description, Reverse Prompt).
 - **Voice Design** — describe-a-voice presets: *Narration & Character* (Movie-Trailer Narrator, Warm
-  Female Audiobook, Old Wizard, Noir Detective, Meditation Guide) and *Professional & Assistant*
+  Female Audiobook, Old Wizard, Noir Detective, Meditation Guide, Casual Creator (female / male)) and *Professional & Assistant*
   (Energetic Hype, Friendly Assistant, Corporate IVR).
 
 ### Image edits (shared with Modify Image)
@@ -146,9 +146,17 @@ Clean — tuning stability / similarity / style and background-noise removal for
 
 ### Captions factory catalog
 
-**Add Captions** ships *Caption Styles* — Clean Subtitles, TikTok Bold, Karaoke Highlight, Word Pop,
-Bouncy Captions, Word Highlight, Top Banner — each pre-selecting the caption style, position, font
-size, and color.
+**Add Captions** ships *Caption Styles* — Clean Subtitles, TikTok Bold, Karaoke Highlight, Word
+Pop, Bouncy Captions, Word Highlight, Top Banner, Hook Plate, Body Captions — each pre-selecting
+the caption style, position, font size and color.
+
+**Hook Plate** sets one line — usually the opening line of a talking-to-camera video — as a bold
+dark-on-white plate near the top of the frame; wire the line in as text. **Body Captions** is
+word-by-word captions with an outline, in the band under a face. They are made to work together
+in one run: in an API or MCP call, pass them as two `segments` — the plate from the start to the
+end of the opening line, with that line as its `text`, then the body captions to the end with
+their words as `captions`. The `@nodaro/prompts` helper `hookPlateCaptionSegments` builds that
+list from the line, its end time and the timed words.
 
 ### Video restyle factory catalog
 

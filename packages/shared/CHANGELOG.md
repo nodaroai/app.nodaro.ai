@@ -1,5 +1,12 @@
 # @nodaro/shared
 
+## 3.19.0
+
+### Minor Changes
+
+- 1fe5f2d: `CaptionPlan` and `CaptionWordTiming`: an opening line with its end time and the timed words that follow it, with no styling — the input of `hookPlateCaptionSegments` in `@nodaro/prompts`.
+- 1fe5f2d: Applying an Add Captions preset clears the caption look levers it does not set, so a previous preset's plate colour, weight or position never carries over. `presetApplyClearKeys` takes an optional node type; `PRESET_LEVER_GROUPS` lists the groups and `presetLeverClearKeys` returns one preset's lever clears.
+
 ## 3.18.0
 
 ### Minor Changes
