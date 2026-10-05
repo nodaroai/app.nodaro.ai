@@ -848,3 +848,43 @@ describe("buildCompletedResultPatch — Video Overlay run facts (reload recovery
     expect("warnings" in patch).toBe(false)
   })
 })
+
+// Apply EDL renders ONE cut: the recovered render's medium is set and the other
+// medium's field cleared, the same as every other lane that lands a run's result
+// (lib/apply-edl-cut.ts) — so a recovered audio render can never sit beside an
+// earlier video render's URL, which both engines would read first.
+describe("buildCompletedResultPatch — Apply EDL holds one cut", () => {
+  it("an audio render clears generatedVideoUrl; a video render clears generatedAudioUrl", () => {
+    const audio = buildCompletedResultPatch("apply-edl", { audioUrl: "https://r2/cut.m4a" }, "j", NOW)!
+    expect(audio.generatedAudioUrl).toBe("https://r2/cut.m4a")
+    expect("generatedVideoUrl" in audio).toBe(true)
+    expect(audio.generatedVideoUrl).toBeUndefined()
+
+    const video = buildCompletedResultPatch("apply-edl", { videoUrl: "https://r2/cut.mp4" }, "j", NOW)!
+    expect(video.generatedVideoUrl).toBe("https://r2/cut.mp4")
+    expect("generatedAudioUrl" in video).toBe(true)
+    expect(video.generatedAudioUrl).toBeUndefined()
+  })
+
+  it("other nodes clear nothing", () => {
+    const patch = buildCompletedResultPatch("text-to-speech", { audioUrl: "https://r2/a.mp3" }, "j", NOW)!
+    expect("generatedVideoUrl" in patch).toBe(false)
+    expect("generatedJson" in patch).toBe(false)
+  })
+
+  // …and its Transcript output moves with the cut: the recovered render's own,
+  // kept on its take too, or CLEARED when it was cut with none — never the one
+  // an earlier take left on the node.
+  it("a render cut with a transcript: it is the node's Transcript output and its take's", () => {
+    const transcript = { version: 1, words: [{ text: "back", startMs: 420, endMs: 760 }] }
+    const patch = buildCompletedResultPatch("apply-edl", { videoUrl: "https://r2/cut.mp4", json: transcript }, "j", NOW)!
+    expect(patch.generatedJson).toEqual(transcript)
+    expect((patch.generatedResults as Array<Record<string, unknown>>)[0].generatedJson).toEqual(transcript)
+  })
+
+  it("a render cut with NO transcript clears the node's Transcript output, and its take keeps none", () => {
+    const patch = buildCompletedResultPatch("apply-edl", { videoUrl: "https://r2/cut.mp4" }, "j", NOW)!
+    expect(patch).toHaveProperty("generatedJson", undefined)
+    expect((patch.generatedResults as Array<Record<string, unknown>>)[0]).toHaveProperty("generatedJson", undefined)
+  })
+})

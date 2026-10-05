@@ -8,7 +8,8 @@ import { toast } from "sonner"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { TagTextarea } from "./tag-textarea"
-import { getLanguagesForModel, ALL_LANGUAGES, isV3Model } from "@/lib/audio-tags"
+import { getLanguagesForModel, ALL_LANGUAGES } from "@/lib/audio-tags"
+import { TtsVoiceSettings } from "./tts-voice-settings"
 import { SUNO_SUGGESTION_ITEMS, SUNO_LYRICS_SUGGESTION_ITEMS, SUNO_STYLE_SUGGESTION_ITEMS } from "@/lib/suno-tags"
 import { SUNO_SLIDER_META, SUNO_SLIDER_LABEL_KEYS, SUNO_SLIDER_DESC_KEYS } from "@/lib/suno-sliders"
 import { Button } from "@/components/ui/button"
@@ -257,30 +258,7 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
           </SelectContent>
         </Select>
       </div>
-      <div>
-        <Label htmlFor="stability">{t("field.stability")} ({data.stability ?? 0.5})</Label>
-        <Input id="stability" type="range" min={0} max={1} step={0.05} value={data.stability ?? 0.5} onChange={(e) => onUpdate({ stability: parseFloat(e.target.value) })} className="h-2" />
-        <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5"><span>{t("audiocfg.variable")}</span><span>{t("audiocfg.stable")}</span></div>
-      </div>
-      {!isV3Model(data.provider) && (
-        <>
-          <div>
-            <Label htmlFor="similarityBoost">{t("audiocfg.similarity")} ({data.similarityBoost ?? 0.75})</Label>
-            <Input id="similarityBoost" type="range" min={0} max={1} step={0.05} value={data.similarityBoost ?? 0.75} onChange={(e) => onUpdate({ similarityBoost: parseFloat(e.target.value) })} className="h-2" />
-            <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5"><span>{t("audiocfg.low")}</span><span>{t("audiocfg.high")}</span></div>
-          </div>
-          <div>
-            <Label htmlFor="style">{t("audiocfg.styleExaggeration")} ({data.style ?? 0})</Label>
-            <Input id="style" type="range" min={0} max={1} step={0.05} value={data.style ?? 0} onChange={(e) => onUpdate({ style: parseFloat(e.target.value) })} className="h-2" />
-            <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5"><span>{t("audiocfg.none")}</span><span>{t("audiocfg.exaggerated")}</span></div>
-          </div>
-          <div>
-            <Label htmlFor="speed">{t("audiocfg.speed")} ({data.speed ?? 1})</Label>
-            <Input id="speed" type="range" min={0.7} max={1.2} step={0.05} value={data.speed ?? 1} onChange={(e) => onUpdate({ speed: parseFloat(e.target.value) })} className="h-2" />
-            <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5"><span>0.7x</span><span>1.2x</span></div>
-          </div>
-        </>
-      )}
+      <TtsVoiceSettings provider={data.provider} data={data} onUpdate={onUpdate} />
     </div>
   )
 }

@@ -9,6 +9,7 @@ import { uploadToR2, uploadBufferToR2, uploadFileToR2, mediaObjectKey } from "..
 import { runPostProcessing } from "../../lib/post-processing-error.js"
 import { directElevenLabsTTS, stripAudioTags } from "../../providers/elevenlabs/direct-tts.js"
 import { directElevenLabsDialogue } from "../../providers/elevenlabs/direct-dialogue.js"
+import { ttsSupportsAudioTags } from "@nodaro/shared"
 import { defaultAllowedVoiceId } from "../../lib/voice-policy.js"
 import { FALLBACK_VOICES } from "../../lib/premade-voices.js"
 import { generateMusic, type MusicProvider } from "../../providers/audio/generate-music.js"
@@ -127,8 +128,8 @@ const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx
   const ttsOptions = { stability, similarityBoost, style, speed, languageCode }
   const hasOptions = stability != null || similarityBoost != null || style != null || speed != null || languageCode != null
 
-  // Strip [audio tags] from text when NOT using v3 — v2 models speak them as literal text
-  const processedText = provider === "elevenlabs-v3" ? text : stripAudioTags(text)
+  // Strip [audio tags] when the model does not perform them — v2 models speak them as literal text
+  const processedText = ttsSupportsAudioTags(provider) ? text : stripAudioTags(text)
 
   // Three ways out, in this order — the order IS the contract:
   //   1. local key      -> direct ElevenLabs (keyed installs are byte-identical)

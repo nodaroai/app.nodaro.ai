@@ -146,6 +146,7 @@ export function ProfilePage({ state }: StudioPageProps<CharacterStudioState, Cha
         </select>
 
         <SeedPromptTextarea
+          nodeId={state.nodeId}
           value={s.seedPrompt ?? ""}
           onChange={(next) => state.patch({ seedPrompt: next })}
           suggestContext={{

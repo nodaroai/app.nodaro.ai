@@ -7268,7 +7268,7 @@ export interface WorkflowTrigger {
 async function apiRequest<T>(
   path: string,
   errorMessage: MessageKey,
-  opts?: { method?: string; body?: unknown; skipAuth?: boolean },
+  opts?: { method?: string; body?: unknown; skipAuth?: boolean; signal?: AbortSignal },
 ): Promise<T> {
   const headers: Record<string, string> = opts?.skipAuth ? {} : { ...(await getAuthHeaders()) }
   if (opts?.body !== undefined) headers["Content-Type"] = "application/json"
@@ -7277,6 +7277,7 @@ async function apiRequest<T>(
     method: opts?.method ?? "GET",
     headers,
     body: opts?.body !== undefined ? JSON.stringify(opts.body) : undefined,
+    ...(opts?.signal ? { signal: opts.signal } : {}),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => null)
@@ -7659,12 +7660,65 @@ export interface SharedWorkflow {
  * exists twice — in the server and in the row policies, with a test proving
  * they agree. A third answer computed in the browser would be the one nobody
  * remembers to change.
+ *
+ * `signal` aborts the request: the open canvas asks this again and again
+ * (T97), and gives each ask a deadline (`applyWorkflowAccess`).
  */
-export function getWorkflowAccess(workflowId: string): Promise<{ data: WorkflowAccessInfo }> {
+export function getWorkflowAccess(
+  workflowId: string,
+  opts?: { readonly signal?: AbortSignal },
+): Promise<{ data: WorkflowAccessInfo }> {
   return apiRequest<{ data: WorkflowAccessInfo }>(
     `/v1/workflows/${encodeURIComponent(workflowId)}/access`,
     "apiErr.readWorkflowAccess",
+    opts?.signal ? { signal: opts.signal } : undefined,
   )
+}
+
+/**
+ * One workflow as `GET /v1/workflows/:id` hands it to THIS caller: the backend's
+ * `WorkflowFull` serializer (camelCase) plus the access it was judged at.
+ *
+ * Not always the stored row. A `view` reader receives the studio's reader
+ * projection — the owner's empty media slots, runs in flight and take voice
+ * records already removed, server-side (`stripStudioDraftWorkflow`, studio
+ * rulings T11 / T21 / T42); `edit` and `own` receive the row as stored.
+ */
+export interface WorkflowDocument {
+  id: string
+  projectId: string | null
+  userId: string
+  folderId: string | null
+  name: string
+  version: number | null
+  nodes: unknown
+  edges: unknown
+  settings: unknown
+  createdAt: string
+  updatedAt: string
+  access: Exclude<WorkflowAccessLevel, "none">
+}
+
+/**
+ * Read one workflow through the server's access door. Null when the caller
+ * cannot reach it — the server answers "not found" and "not yours" alike, on
+ * purpose.
+ *
+ * Call `readWorkflowContent` (`lib/workflow-content.ts`), not this: that is the
+ * one place that decides which readers may hold the stored row.
+ */
+export async function getWorkflowDocument(workflowId: string): Promise<WorkflowDocument | null> {
+  const res = await fetch(`${API_BASE_URL}/v1/workflows/${encodeURIComponent(workflowId)}`, {
+    method: "GET",
+    headers: { ...(await getAuthHeaders()) },
+  })
+  if (res.status === 404) return null
+  if (!res.ok) {
+    const err = await res.json().catch(() => null)
+    throwApiError(err, "apiErr.loadWorkflow")
+  }
+  const json = (await res.json()) as { data: WorkflowDocument }
+  return json.data
 }
 
 /** Everyone individually granted access to this workflow. Never emails. */

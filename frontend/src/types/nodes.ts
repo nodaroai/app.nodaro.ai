@@ -5523,11 +5523,11 @@ export type SilenceDetectNodeData = {
 export type InstagramScrapeNodeData = {
   [key: string]: unknown
   label: string
-  /** "profile" = posts by account; "hashtag" = posts under a hashtag */
+  /** "profile" = posts by account; "hashtag" = posts under a hashtag; "post" = exactly the linked posts */
   mode?: import("@nodaro/shared").InstagramScrapeMode
-  /** Usernames (profile) or hashtags (hashtag), one per line — up to 5 */
+  /** Usernames (profile), hashtags (hashtag) or post links (post), one per line — up to 5 */
   targets?: string
-  /** Posts per source, 1..100 */
+  /** Posts per source, 1..100 (post mode: one per link, this is ignored) */
   count?: number
   period?: import("@nodaro/shared").InstagramScrapePeriod
   /** Creative formats to keep (vertical / square / horizontal); empty/absent = every format */
@@ -8122,7 +8122,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
         ],
       },
       { key: "stability", label: "Stability", type: "slider" as const, min: 0, max: 1, step: 0.05 },
-      { key: "similarity", label: "Similarity", type: "slider" as const, min: 0, max: 1, step: 0.05 },
+      { key: "similarityBoost", label: "Similarity", type: "slider" as const, min: 0, max: 1, step: 0.05 },
     ],
   },
   {

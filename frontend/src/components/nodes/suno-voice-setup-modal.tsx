@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Loader2, Mic, RefreshCw, Upload, AlertCircle, CheckCircle2 } from "lucide-react"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { withRunInFlight } from "@/hooks/run-in-flight"
 import { toast } from "sonner"
 import { useModelCredits } from "@/hooks/use-model-credit-cost"
 import { hasCredits } from "@/lib/edition"
@@ -225,48 +226,53 @@ export function SunoVoiceSetupModal({ nodeId, data, open, onClose }: Props) {
       toast.error(tx("node.missingValidationTask"))
       return
     }
-    setGenerating(true)
-    setError(null)
-    persist({
-      voiceName: voiceName.trim() || undefined,
-      description: description.trim() || undefined,
-      style: style.trim() || undefined,
-      singerSkillLevel: skillLevel,
-      status: "generating",
-      errorMessage: undefined,
-    })
-    try {
-      const { jobId, kieTaskId } = await sunoVoiceGenerateApi({
-        taskId: validateTaskId,
-        verifyUrl: verifyUrl.trim(),
+    // A paid persona whose voice id lands on this node: the node shows a run
+    // in flight until it has, or the run failed, or closing the dialog stopped
+    // its poll (T100: a read-only freeze waits for it).
+    await withRunInFlight(nodeId, async () => {
+      setGenerating(true)
+      setError(null)
+      persist({
         voiceName: voiceName.trim() || undefined,
         description: description.trim() || undefined,
         style: style.trim() || undefined,
         singerSkillLevel: skillLevel,
-      })
-      persist({ generateJobId: jobId, generateKieTaskId: kieTaskId })
-
-      const controller = new AbortController()
-      pollAbort.current?.abort()
-      pollAbort.current = controller
-      const voiceId = await pollRecordInfo(kieTaskId, controller.signal)
-      if (!voiceId) return
-
-      persist({
-        voiceId,
-        status: "success",
+        status: "generating",
         errorMessage: undefined,
       })
-      toast.success(tx("node.voiceIsReady", { name: voiceName.trim() || tx("exec.untitled") }))
-      onClose()
-    } catch (err) {
-      const msg = (err as Error).message
-      setError(msg)
-      persist({ status: "fail", errorMessage: msg })
-      toast.error(tx("node.generationFailedWith", { message: msg }))
-    } finally {
-      setGenerating(false)
-    }
+      try {
+        const { jobId, kieTaskId } = await sunoVoiceGenerateApi({
+          taskId: validateTaskId,
+          verifyUrl: verifyUrl.trim(),
+          voiceName: voiceName.trim() || undefined,
+          description: description.trim() || undefined,
+          style: style.trim() || undefined,
+          singerSkillLevel: skillLevel,
+        })
+        persist({ generateJobId: jobId, generateKieTaskId: kieTaskId })
+
+        const controller = new AbortController()
+        pollAbort.current?.abort()
+        pollAbort.current = controller
+        const voiceId = await pollRecordInfo(kieTaskId, controller.signal)
+        if (!voiceId) return
+
+        persist({
+          voiceId,
+          status: "success",
+          errorMessage: undefined,
+        })
+        toast.success(tx("node.voiceIsReady", { name: voiceName.trim() || tx("exec.untitled") }))
+        onClose()
+      } catch (err) {
+        const msg = (err as Error).message
+        setError(msg)
+        persist({ status: "fail", errorMessage: msg })
+        toast.error(tx("node.generationFailedWith", { message: msg }))
+      } finally {
+        setGenerating(false)
+      }
+    })
   }
 
   async function pollRecordInfo(taskId: string, signal: AbortSignal): Promise<string | null> {

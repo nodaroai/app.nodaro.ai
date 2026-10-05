@@ -270,7 +270,7 @@ const HANDLE_LABELS_HE: Record<string, string> = {
   "Text": "טקסט",
   "URL / Query": "כתובת / שאילתה",
   "Keyword / Page URLs": "מילת חיפוש / כתובות עמודים",
-  "Profiles / Hashtags": "פרופילים / האשטאגים",
+  "Profiles / Hashtags / Links": "פרופילים / האשטאגים / קישורים",
   "Keyword or account": "מילת חיפוש או חשבון",
   "Variables": "משתנים",
   "Video": "וידאו",

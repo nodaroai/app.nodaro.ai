@@ -4,8 +4,17 @@ import { toast } from "sonner"
 import { useT } from "@/lib/i18n"
 
 interface AiHelperButtonProps {
-  readonly onSuggest: () => Promise<string>
-  readonly onReplace: (text: string) => void
+  /**
+   * Ask for a suggestion. The text it resolves with, trimmed and when not
+   * empty, goes to `onReplace`.
+   *
+   * A suggestion that must be written inside the run that paid for it writes
+   * the text itself, resolves with nothing and passes no `onReplace`: one whose
+   * answer lands on a canvas node runs inside `withRunInFlight`, and that mark
+   * has to outlast the write (T100).
+   */
+  readonly onSuggest: () => Promise<string | void>
+  readonly onReplace?: (text: string) => void
   readonly title?: string
   readonly disabled?: boolean
 }
@@ -24,8 +33,9 @@ export function AiHelperButton({
     if (busy) return
     setBusy(true)
     try {
-      const text = await onSuggest()
-      if (text.trim().length > 0) onReplace(text.trim())
+      const answer = await onSuggest()
+      const text = typeof answer === "string" ? answer.trim() : ""
+      if (text.length > 0) onReplace?.(text)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t("misc.suggestionFailed"))
     } finally {

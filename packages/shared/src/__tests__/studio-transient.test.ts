@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest"
 
 import {
+  STUDIO_PREVIZ_RUN_STATE_KEYS,
   STUDIO_SHOT_DRAFT_KEYS,
   STUDIO_SHOT_TRANSIENT_KEYS,
   STUDIO_TRANSIENT_KEYS,
@@ -219,6 +220,37 @@ describe("stripStudioTransientSettings", () => {
     expect(stripStudioDraftSettings(null)).toBeNull()
   })
 
+  it("drops a scene's 3D run state — its jobs in flight and its Pro submission — and keeps its finished renders", () => {
+    // The studio codec's own non-owner projection (`stripTransientSettings`)
+    // drops these two; the public share read must not hand out what the
+    // codec withholds. The codec's fixture shape, plus a Pro submission.
+    const settings = { studio: { version: 3, shots: [{ id: "s1", previsualization: {
+      pendingJobs: [{ jobId: "private-job" }],
+      proSubmission: { idempotencyKey: "pro-key-1", body: { kind: "scene", sceneRevisionId: "rev-1" } },
+      renders: [{ url: "https://cdn/blockout.mp4" }],
+      pendingPlan: { revisionId: "rev-2" },
+      sceneNodeId: "scene-node",
+    } }] } }
+    const before = JSON.stringify(settings)
+    expect(stripStudioTransientSettings(settings)).toEqual({ studio: { version: 3, shots: [{ id: "s1", previsualization: {
+      renders: [{ url: "https://cdn/blockout.mp4" }],
+      pendingPlan: { revisionId: "rev-2" },
+      sceneNodeId: "scene-node",
+    } }] } })
+    expect(JSON.stringify(settings)).toBe(before)
+    // Each key on its own is enough to strip.
+    const proOnly = { studio: { shots: [{ id: "s1", previsualization: { proSubmission: { idempotencyKey: "k" } } }] } }
+    expect(stripStudioTransientSettings(proOnly)).toEqual({ studio: { shots: [{ id: "s1", previsualization: {} }] } })
+    // A scene with a previsualization and no run state is handed back as it is.
+    const idle = { studio: { shots: [{ id: "s1", previsualization: { renders: [{ url: "u" }] } }] } }
+    expect(stripStudioTransientSettings(idle)).toBe(idle)
+  })
+
+  it("a `view` read keeps a scene's 3D run state, as the codec's read-only load does", () => {
+    const settings = { studio: { shots: [{ id: "s1", previsualization: { pendingJobs: [{ jobId: "j" }], proSubmission: { idempotencyKey: "k" } } }] } }
+    expect(stripStudioDraftSettings(settings)).toBe(settings)
+  })
+
   it("pins the two lists — a key added to the type alone strips nothing", () => {
     // The lists are the contract: the codec's own strip re-exports them, so a
     // key that falls off here falls off there too, silently, on both sides.
@@ -238,5 +270,7 @@ describe("stripStudioTransientSettings", () => {
     // The owner's drafts are a list of their own: the export projection reads
     // the transient list, and the owner's exports keep their slots.
     expect([...STUDIO_SHOT_DRAFT_KEYS]).toEqual(["stillSlots", "clipSlots"])
+    // The 3D run state the codec's non-owner projection drops.
+    expect([...STUDIO_PREVIZ_RUN_STATE_KEYS]).toEqual(["pendingJobs", "proSubmission"])
   })
 })

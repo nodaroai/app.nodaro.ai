@@ -58,6 +58,15 @@ Pull PUBLIC Instagram posts (feed images, carousels, reels) by `mode`:
   (`@` optional), up to 5.
 - `hashtag` — recent posts under hashtag(s); `targets` is one hashtag per line
   (`#` optional), up to 5.
+- `post` — exactly the linked post(s), however old; `targets` is one post link
+  per line (`https://www.instagram.com/p/…`, `/reel/…`, `/tv/…`), up to 5.
+  `count`, `period` and `formats` do not apply; each link bills as one post.
+
+To remake ONE post (e.g. a carousel someone else published): `post` mode with
+its link → an `extract-field` node (`field: "images"`, `outputType: "list"`) on
+the `json` handle → its outgoing edge set to `outputMode: "each"` hands every
+slide to the next node, one run per slide. In `post` mode with one link the
+first returned post IS that post, so a full workflow run always lands on it.
 
 A source node (no upstream required); emits a JSON array of posts on `json`,
 plus the FEATURED post's caption / image / video on the `text` / `image` /
@@ -75,7 +84,8 @@ summary.
 ## Common gotchas
 
 - **Pricing = 1 credit per REQUESTED post**, tiered on `count × sources` (each
-  profile / hashtag is a source, max 5). AI analysis adds per-post by the
+  profile / hashtag / post link is a source, max 5; in `post` mode each link is
+  one post, so 1–5 links cost the 10-post tier). AI analysis adds per-post by the
   model's tier, settled only for posts analysed. Keep `count` and the number of
   sources modest.
 - **The period is honoured server-side** (unlike Meta's keyword search), so a

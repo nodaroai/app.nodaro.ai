@@ -1,4 +1,4 @@
-import { isV2Model } from "@/lib/audio-tags"
+import { ttsSupportsAudioTags } from "@nodaro/shared"
 import { useT } from "@/lib/i18n"
 
 interface Props {
@@ -10,7 +10,8 @@ const BRACKET_RE = /\[[^\]]+\]/
 
 export function ProviderAudioTagWarning({ provider, fieldValues }: Props) {
   const t = useT()
-  if (provider === undefined || !isV2Model(provider)) return null
+  // Only a model that does NOT perform [audio tags] warns — it would read them aloud.
+  if (provider === undefined || ttsSupportsAudioTags(provider)) return null
   const anyHasBrackets = fieldValues.some((v) => v !== undefined && BRACKET_RE.test(v))
   if (!anyHasBrackets) return null
   return (

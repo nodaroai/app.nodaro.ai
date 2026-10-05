@@ -114,6 +114,9 @@ interface SharedVoice {
   verifiedProviders?: TtsProvider[]
 }
 
+/** The v4 family: `eleven_v4` and its variants (`eleven_v4_…`) — not an id that merely starts with those characters. */
+const V4_FAMILY = /^eleven_v4(_|$)/
+
 /**
  * Map a Voice Library entry's verified ElevenLabs models to the TTS
  * providers the voice is actually verified on. v3 is checked FIRST so it
@@ -123,18 +126,21 @@ interface SharedVoice {
  * Library previews are rendered with the voice's verified models — generating
  * with an unverified model is what makes output drift audibly from the
  * preview. Clients without a provider picker send `verified[0]` back as the
- * text-to-speech `provider` (credits then reserve at the correct per-provider
- * price up front; v3=3cr, turbo=2cr, multilingual=3cr); clients with a picker
- * only snap when the current choice isn't in the set.
+ * text-to-speech `provider` (credits then reserve at that provider's price up
+ * front); clients with a picker only snap when the current choice isn't in
+ * the set.
  *
- * Exact-substring match on "eleven_v3" so it doesn't accidentally match
- * "eleven_turbo_v2_5" / "eleven_flash_v2_5" / "eleven_multilingual_v2".
+ * Matching is by model id, and a v4 id is never mistaken for a v2 one: the
+ * library now lists `eleven_v4_turbo` (and `_hq`, `_exp`, …) beside the v2 ids,
+ * and a bare "turbo" substring test reported a voice verified only for v4
+ * Turbo as verified for Turbo v2.5.
  */
 export function deriveVerifiedTtsProviders(modelIds: readonly string[]): TtsProvider[] {
   const verified: TtsProvider[] = []
+  const v2Era = modelIds.filter((m) => !V4_FAMILY.test(m))
   if (modelIds.some((m) => m.includes("eleven_v3"))) verified.push("elevenlabs-v3")
-  if (modelIds.some((m) => m.includes("turbo") || m.includes("flash"))) verified.push("elevenlabs-turbo")
-  if (modelIds.some((m) => m.includes("multilingual_v2"))) verified.push("elevenlabs-multilingual")
+  if (v2Era.some((m) => m.includes("turbo") || m.includes("flash"))) verified.push("elevenlabs-turbo")
+  if (v2Era.some((m) => m.includes("multilingual_v2"))) verified.push("elevenlabs-multilingual")
   return verified
 }
 

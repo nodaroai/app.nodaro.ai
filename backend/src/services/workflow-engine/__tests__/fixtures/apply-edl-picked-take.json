@@ -1,0 +1,314 @@
+{
+  "description": "An Apply EDL node before and after the person picks an OLDER take in the config-panel results gallery (`cases`), and before and after a workflow run lands a new take on it (`runs`). `after` is exactly what the editor saves: the frontend tests click the real gallery (frontend/src/components/editor/config-panels/__tests__/apply-edl-picked-take.test.tsx) or run the real run-result lane (frontend/src/components/editor/workflow-editor/__tests__/sync-node-states-named-outputs.test.ts) and require the result to equal `after`; the server test (apply-edl-picked-take.test.ts, beside this folder) runs the orchestrator's saved-data path on `after`. Both require the selected take, generatedResults[activeResultIndex], to be what a downstream node receives, as the medium it is, with the Transcript that take was cut with, or with no Transcript at all when the editor cannot know that take's (never another take's). A case with a `job` is a take with no Transcript of its own: the editor reads it back from that job (GET /v1/jobs/:id/status, as the API returns it). Every lane that lands a run's take writes the Transcript that render was cut with, on the node and on the take, or clears the node's when it was cut with none (`runs.video`, `runs.untranscribed`).",
+  "cases": {
+    "video": {
+      "note": "Two video renders made by running the node on its own, take 1 from EDL A and take 2 from a tightened EDL B. Each run kept its own remapped Transcript on its result, and the node's Transcript output is the newest one's. Picking take 1 moves the Media AND the Transcript output to take 1, so captions built downstream stay aligned to the cut they burn into.",
+      "consumer": { "id": "captions", "type": "add-captions", "targetHandle": "in", "receives": "videoUrl", "transcriptHandle": "transcript" },
+      "pickIndex": 1,
+      "before": {
+        "id": "apply-cut",
+        "type": "apply-edl",
+        "data": {
+          "label": "Apply Cut",
+          "output": "video",
+          "quality": "final",
+          "crossfadeMs": 0,
+          "fieldMappings": {},
+          "generatedResults": [
+            { "url": "https://media.test/apply-cut-take-2.mp4", "timestamp": "2026-10-04T12:00:00.000Z", "jobId": "job-take-2", "generatedJson": { "version": 1, "words": [{ "text": "welcome", "startMs": 0, "endMs": 420 }, { "text": "back", "startMs": 420, "endMs": 760 }] } },
+            { "url": "https://media.test/apply-cut-take-1.mp4", "timestamp": "2026-10-04T11:00:00.000Z", "jobId": "job-take-1", "generatedJson": { "version": 1, "words": [{ "text": "welcome", "startMs": 0, "endMs": 420 }, { "text": "back", "startMs": 1310, "endMs": 1650 }] } }
+          ],
+          "activeResultIndex": 0,
+          "generatedVideoUrl": "https://media.test/apply-cut-take-2.mp4",
+          "generatedJson": { "version": 1, "words": [{ "text": "welcome", "startMs": 0, "endMs": 420 }, { "text": "back", "startMs": 420, "endMs": 760 }] }
+        }
+      },
+      "after": {
+        "id": "apply-cut",
+        "type": "apply-edl",
+        "data": {
+          "label": "Apply Cut",
+          "output": "video",
+          "quality": "final",
+          "crossfadeMs": 0,
+          "fieldMappings": {},
+          "generatedResults": [
+            { "url": "https://media.test/apply-cut-take-2.mp4", "timestamp": "2026-10-04T12:00:00.000Z", "jobId": "job-take-2", "generatedJson": { "version": 1, "words": [{ "text": "welcome", "startMs": 0, "endMs": 420 }, { "text": "back", "startMs": 420, "endMs": 760 }] } },
+            { "url": "https://media.test/apply-cut-take-1.mp4", "timestamp": "2026-10-04T11:00:00.000Z", "jobId": "job-take-1", "generatedJson": { "version": 1, "words": [{ "text": "welcome", "startMs": 0, "endMs": 420 }, { "text": "back", "startMs": 1310, "endMs": 1650 }] } }
+          ],
+          "activeResultIndex": 1,
+          "generatedVideoUrl": "https://media.test/apply-cut-take-1.mp4",
+          "generatedJson": { "version": 1, "words": [{ "text": "welcome", "startMs": 0, "endMs": 420 }, { "text": "back", "startMs": 1310, "endMs": 1650 }] }
+        }
+      }
+    },
+    "audio": {
+      "note": "Data saved before workflow runs cleared the other medium's field (`runs.audio` is what such a run leaves now): rendered as video once (take 0), then switched to audio and rendered twice by workflow runs, which left take 0's video URL on the node. Picking take 1 repairs it: the node then holds take 1 only, as audio.",
+      "consumer": { "id": "trim", "type": "trim-audio", "targetHandle": "in", "receives": "audioUrl" },
+      "pickIndex": 1,
+      "before": {
+        "id": "apply-cut",
+        "type": "apply-edl",
+        "data": {
+          "label": "Apply Cut",
+          "output": "audio",
+          "quality": "final",
+          "crossfadeMs": 0,
+          "fieldMappings": {},
+          "generatedResults": [
+            { "url": "https://media.test/apply-cut-take-2.m4a", "timestamp": "2026-10-04T12:00:00.000Z", "jobId": "job-take-2" },
+            { "url": "https://media.test/apply-cut-take-1.m4a", "timestamp": "2026-10-04T11:00:00.000Z", "jobId": "job-take-1" },
+            { "url": "https://media.test/apply-cut-take-0.mp4", "timestamp": "2026-10-04T10:00:00.000Z", "jobId": "job-take-0" }
+          ],
+          "activeResultIndex": 0,
+          "generatedAudioUrl": "https://media.test/apply-cut-take-2.m4a",
+          "generatedVideoUrl": "https://media.test/apply-cut-take-0.mp4"
+        }
+      },
+      "after": {
+        "id": "apply-cut",
+        "type": "apply-edl",
+        "data": {
+          "label": "Apply Cut",
+          "output": "audio",
+          "quality": "final",
+          "crossfadeMs": 0,
+          "fieldMappings": {},
+          "generatedResults": [
+            { "url": "https://media.test/apply-cut-take-2.m4a", "timestamp": "2026-10-04T12:00:00.000Z", "jobId": "job-take-2" },
+            { "url": "https://media.test/apply-cut-take-1.m4a", "timestamp": "2026-10-04T11:00:00.000Z", "jobId": "job-take-1" },
+            { "url": "https://media.test/apply-cut-take-0.mp4", "timestamp": "2026-10-04T10:00:00.000Z", "jobId": "job-take-0" }
+          ],
+          "activeResultIndex": 1,
+          "generatedAudioUrl": "https://media.test/apply-cut-take-1.m4a"
+        }
+      }
+    },
+    "fetched": {
+      "note": "Two video renders landed by workflow runs while the editor was open, saved before a landed take kept its own Transcript (a list run's renders after its first keep none either: the run's output carries only its first render's). Each take carries the real id of the job that rendered it. The node's Transcript output is take 2's, which the run that landed take 2 wrote. Picking take 1 clears it, then reads take 1's own back from take 1's job, whose output is take 1's file.",
+      "consumer": { "id": "captions", "type": "add-captions", "targetHandle": "in", "receives": "videoUrl", "transcriptHandle": "transcript" },
+      "pickIndex": 1,
+      "job": { "id": "7c1e2f4a-5b6d-4e8f-9a0b-1c2d3e4f5a6b", "status": "completed", "output_data": { "videoUrl": "https://media.test/apply-cut-run-take-1.mp4", "thumbnailUrl": "https://media.test/apply-cut-run-take-1.jpg", "json": { "version": 1, "words": [{ "text": "welcome", "startMs": 0, "endMs": 420 }, { "text": "back", "startMs": 1310, "endMs": 1650 }] } } },
+      "before": {
+        "id": "apply-cut",
+        "type": "apply-edl",
+        "data": {
+          "label": "Apply Cut",
+          "output": "video",
+          "quality": "final",
+          "crossfadeMs": 0,
+          "fieldMappings": {},
+          "generatedResults": [
+            { "url": "https://media.test/apply-cut-run-take-2.mp4", "timestamp": "2026-10-04T12:00:00.000Z", "jobId": "2b9d4c6e-8f1a-4b3c-8d5e-6f7a8b9c0d1e" },
+            { "url": "https://media.test/apply-cut-run-take-1.mp4", "timestamp": "2026-10-04T11:00:00.000Z", "jobId": "7c1e2f4a-5b6d-4e8f-9a0b-1c2d3e4f5a6b" }
+          ],
+          "activeResultIndex": 0,
+          "generatedVideoUrl": "https://media.test/apply-cut-run-take-2.mp4",
+          "generatedJson": { "version": 1, "words": [{ "text": "welcome", "startMs": 0, "endMs": 420 }, { "text": "back", "startMs": 420, "endMs": 760 }] }
+        }
+      },
+      "after": {
+        "id": "apply-cut",
+        "type": "apply-edl",
+        "data": {
+          "label": "Apply Cut",
+          "output": "video",
+          "quality": "final",
+          "crossfadeMs": 0,
+          "fieldMappings": {},
+          "generatedResults": [
+            { "url": "https://media.test/apply-cut-run-take-2.mp4", "timestamp": "2026-10-04T12:00:00.000Z", "jobId": "2b9d4c6e-8f1a-4b3c-8d5e-6f7a8b9c0d1e" },
+            { "url": "https://media.test/apply-cut-run-take-1.mp4", "timestamp": "2026-10-04T11:00:00.000Z", "jobId": "7c1e2f4a-5b6d-4e8f-9a0b-1c2d3e4f5a6b" }
+          ],
+          "activeResultIndex": 1,
+          "generatedVideoUrl": "https://media.test/apply-cut-run-take-1.mp4",
+          "generatedJson": { "version": 1, "words": [{ "text": "welcome", "startMs": 0, "endMs": 420 }, { "text": "back", "startMs": 1310, "endMs": 1650 }] }
+        }
+      }
+    },
+    "cleared": {
+      "note": "The same two renders, but take 1 carries a job id that is not its own: a workflow run's fan-out pairs its URLs with job ids by position after dropping the URLs the node already holds, so a take can carry a sibling's id. That job's output is take 2's file, so the editor does not use its Transcript. The pick leaves the Transcript output cleared, so no node downstream gets another cut's timing.",
+      "consumer": { "id": "captions", "type": "add-captions", "targetHandle": "in", "receives": "videoUrl", "transcriptHandle": "transcript" },
+      "pickIndex": 1,
+      "job": { "id": "2b9d4c6e-8f1a-4b3c-8d5e-6f7a8b9c0d1e", "status": "completed", "output_data": { "videoUrl": "https://media.test/apply-cut-run-take-2.mp4", "thumbnailUrl": "https://media.test/apply-cut-run-take-2.jpg", "json": { "version": 1, "words": [{ "text": "welcome", "startMs": 0, "endMs": 420 }, { "text": "back", "startMs": 420, "endMs": 760 }] } } },
+      "before": {
+        "id": "apply-cut",
+        "type": "apply-edl",
+        "data": {
+          "label": "Apply Cut",
+          "output": "video",
+          "quality": "final",
+          "crossfadeMs": 0,
+          "fieldMappings": {},
+          "generatedResults": [
+            { "url": "https://media.test/apply-cut-run-take-2.mp4", "timestamp": "2026-10-04T12:00:00.000Z", "jobId": "4a3b2c1d-0e9f-4a8b-9c7d-6e5f4a3b2c1d" },
+            { "url": "https://media.test/apply-cut-run-take-1.mp4", "timestamp": "2026-10-04T11:00:00.000Z", "jobId": "2b9d4c6e-8f1a-4b3c-8d5e-6f7a8b9c0d1e" }
+          ],
+          "activeResultIndex": 0,
+          "generatedVideoUrl": "https://media.test/apply-cut-run-take-2.mp4",
+          "generatedJson": { "version": 1, "words": [{ "text": "welcome", "startMs": 0, "endMs": 420 }, { "text": "back", "startMs": 420, "endMs": 760 }] }
+        }
+      },
+      "after": {
+        "id": "apply-cut",
+        "type": "apply-edl",
+        "data": {
+          "label": "Apply Cut",
+          "output": "video",
+          "quality": "final",
+          "crossfadeMs": 0,
+          "fieldMappings": {},
+          "generatedResults": [
+            { "url": "https://media.test/apply-cut-run-take-2.mp4", "timestamp": "2026-10-04T12:00:00.000Z", "jobId": "4a3b2c1d-0e9f-4a8b-9c7d-6e5f4a3b2c1d" },
+            { "url": "https://media.test/apply-cut-run-take-1.mp4", "timestamp": "2026-10-04T11:00:00.000Z", "jobId": "2b9d4c6e-8f1a-4b3c-8d5e-6f7a8b9c0d1e" }
+          ],
+          "activeResultIndex": 1,
+          "generatedVideoUrl": "https://media.test/apply-cut-run-take-1.mp4"
+        }
+      }
+    }
+  },
+  "runs": {
+    "audio": {
+      "note": "A workflow run renders take 2 as audio on a node that still holds an earlier VIDEO render's URL (take 0: rendered as video, then Output switched to audio). The run must leave the node holding take 2 only, as audio, with nobody picking anything: both engines treat the node as video whenever generatedVideoUrl is set.",
+      "consumer": { "id": "trim", "type": "trim-audio", "targetHandle": "in", "receives": "audioUrl" },
+      "state": {
+        "status": "completed",
+        "jobId": "job-take-2",
+        "completedAt": "2026-10-04T12:00:00.000Z",
+        "output": { "audioUrl": "https://media.test/apply-cut-take-2.m4a" }
+      },
+      "before": {
+        "id": "apply-cut",
+        "type": "apply-edl",
+        "data": {
+          "label": "Apply Cut",
+          "output": "audio",
+          "quality": "final",
+          "crossfadeMs": 0,
+          "fieldMappings": {},
+          "executionStatus": "running",
+          "generatedResults": [
+            { "url": "https://media.test/apply-cut-take-1.m4a", "timestamp": "2026-10-04T11:00:00.000Z", "jobId": "job-take-1" },
+            { "url": "https://media.test/apply-cut-take-0.mp4", "timestamp": "2026-10-04T10:00:00.000Z", "jobId": "job-take-0" }
+          ],
+          "activeResultIndex": 0,
+          "generatedAudioUrl": "https://media.test/apply-cut-take-1.m4a",
+          "generatedVideoUrl": "https://media.test/apply-cut-take-0.mp4"
+        }
+      },
+      "after": {
+        "id": "apply-cut",
+        "type": "apply-edl",
+        "data": {
+          "label": "Apply Cut",
+          "output": "audio",
+          "quality": "final",
+          "crossfadeMs": 0,
+          "fieldMappings": {},
+          "executionStatus": "completed",
+          "generatedResults": [
+            { "url": "https://media.test/apply-cut-take-2.m4a", "timestamp": "2026-10-04T12:00:00.000Z", "jobId": "job-take-2" },
+            { "url": "https://media.test/apply-cut-take-1.m4a", "timestamp": "2026-10-04T11:00:00.000Z", "jobId": "job-take-1" },
+            { "url": "https://media.test/apply-cut-take-0.mp4", "timestamp": "2026-10-04T10:00:00.000Z", "jobId": "job-take-0" }
+          ],
+          "activeResultIndex": 0,
+          "generatedAudioUrl": "https://media.test/apply-cut-take-2.m4a"
+        }
+      }
+    },
+    "video": {
+      "note": "A workflow run renders take 2 from a tightened EDL, with a transcript wired, on a node whose Transcript output is take 1's (cut from the untightened EDL). The run leaves take 2 selected, with the Transcript take 2 was cut with as the node's Transcript output and kept on take 2's result: captions built downstream are timed to take 2's cut, and a later pick of take 2 restores it with no job read.",
+      "consumer": { "id": "captions", "type": "add-captions", "targetHandle": "in", "receives": "videoUrl", "transcriptHandle": "transcript" },
+      "state": {
+        "status": "completed",
+        "jobId": "9e8d7c6b-5a4f-4e3d-8c2b-1a0f9e8d7c6b",
+        "completedAt": "2026-10-04T12:00:00.000Z",
+        "output": { "videoUrl": "https://media.test/apply-cut-run-take-2.mp4", "json": { "version": 1, "words": [{ "text": "welcome", "startMs": 0, "endMs": 420 }, { "text": "back", "startMs": 420, "endMs": 760 }] } }
+      },
+      "before": {
+        "id": "apply-cut",
+        "type": "apply-edl",
+        "data": {
+          "label": "Apply Cut",
+          "output": "video",
+          "quality": "final",
+          "crossfadeMs": 0,
+          "fieldMappings": {},
+          "executionStatus": "running",
+          "generatedResults": [
+            { "url": "https://media.test/apply-cut-run-take-1.mp4", "timestamp": "2026-10-04T11:00:00.000Z", "jobId": "7c1e2f4a-5b6d-4e8f-9a0b-1c2d3e4f5a6b", "generatedJson": { "version": 1, "words": [{ "text": "welcome", "startMs": 0, "endMs": 420 }, { "text": "back", "startMs": 1310, "endMs": 1650 }] } }
+          ],
+          "activeResultIndex": 0,
+          "generatedVideoUrl": "https://media.test/apply-cut-run-take-1.mp4",
+          "generatedJson": { "version": 1, "words": [{ "text": "welcome", "startMs": 0, "endMs": 420 }, { "text": "back", "startMs": 1310, "endMs": 1650 }] }
+        }
+      },
+      "after": {
+        "id": "apply-cut",
+        "type": "apply-edl",
+        "data": {
+          "label": "Apply Cut",
+          "output": "video",
+          "quality": "final",
+          "crossfadeMs": 0,
+          "fieldMappings": {},
+          "executionStatus": "completed",
+          "generatedResults": [
+            { "url": "https://media.test/apply-cut-run-take-2.mp4", "timestamp": "2026-10-04T12:00:00.000Z", "jobId": "9e8d7c6b-5a4f-4e3d-8c2b-1a0f9e8d7c6b", "generatedJson": { "version": 1, "words": [{ "text": "welcome", "startMs": 0, "endMs": 420 }, { "text": "back", "startMs": 420, "endMs": 760 }] } },
+            { "url": "https://media.test/apply-cut-run-take-1.mp4", "timestamp": "2026-10-04T11:00:00.000Z", "jobId": "7c1e2f4a-5b6d-4e8f-9a0b-1c2d3e4f5a6b", "generatedJson": { "version": 1, "words": [{ "text": "welcome", "startMs": 0, "endMs": 420 }, { "text": "back", "startMs": 1310, "endMs": 1650 }] } }
+          ],
+          "activeResultIndex": 0,
+          "generatedVideoUrl": "https://media.test/apply-cut-run-take-2.mp4",
+          "generatedJson": { "version": 1, "words": [{ "text": "welcome", "startMs": 0, "endMs": 420 }, { "text": "back", "startMs": 420, "endMs": 760 }] }
+        }
+      }
+    },
+    "untranscribed": {
+      "note": "The same node, but the run renders take 2 with NO transcript wired (it was unwired after take 1). The run clears the node's Transcript output: take 1's is timed to take 1's cut, so the node passes on no Transcript rather than another cut's (Add Captions then transcribes the cut it receives).",
+      "consumer": { "id": "captions", "type": "add-captions", "targetHandle": "in", "receives": "videoUrl", "transcriptHandle": "transcript" },
+      "state": {
+        "status": "completed",
+        "jobId": "9e8d7c6b-5a4f-4e3d-8c2b-1a0f9e8d7c6b",
+        "completedAt": "2026-10-04T12:00:00.000Z",
+        "output": { "videoUrl": "https://media.test/apply-cut-run-take-2.mp4" }
+      },
+      "before": {
+        "id": "apply-cut",
+        "type": "apply-edl",
+        "data": {
+          "label": "Apply Cut",
+          "output": "video",
+          "quality": "final",
+          "crossfadeMs": 0,
+          "fieldMappings": {},
+          "executionStatus": "running",
+          "generatedResults": [
+            { "url": "https://media.test/apply-cut-run-take-1.mp4", "timestamp": "2026-10-04T11:00:00.000Z", "jobId": "7c1e2f4a-5b6d-4e8f-9a0b-1c2d3e4f5a6b", "generatedJson": { "version": 1, "words": [{ "text": "welcome", "startMs": 0, "endMs": 420 }, { "text": "back", "startMs": 1310, "endMs": 1650 }] } }
+          ],
+          "activeResultIndex": 0,
+          "generatedVideoUrl": "https://media.test/apply-cut-run-take-1.mp4",
+          "generatedJson": { "version": 1, "words": [{ "text": "welcome", "startMs": 0, "endMs": 420 }, { "text": "back", "startMs": 1310, "endMs": 1650 }] }
+        }
+      },
+      "after": {
+        "id": "apply-cut",
+        "type": "apply-edl",
+        "data": {
+          "label": "Apply Cut",
+          "output": "video",
+          "quality": "final",
+          "crossfadeMs": 0,
+          "fieldMappings": {},
+          "executionStatus": "completed",
+          "generatedResults": [
+            { "url": "https://media.test/apply-cut-run-take-2.mp4", "timestamp": "2026-10-04T12:00:00.000Z", "jobId": "9e8d7c6b-5a4f-4e3d-8c2b-1a0f9e8d7c6b" },
+            { "url": "https://media.test/apply-cut-run-take-1.mp4", "timestamp": "2026-10-04T11:00:00.000Z", "jobId": "7c1e2f4a-5b6d-4e8f-9a0b-1c2d3e4f5a6b", "generatedJson": { "version": 1, "words": [{ "text": "welcome", "startMs": 0, "endMs": 420 }, { "text": "back", "startMs": 1310, "endMs": 1650 }] } }
+          ],
+          "activeResultIndex": 0,
+          "generatedVideoUrl": "https://media.test/apply-cut-run-take-2.mp4"
+        }
+      }
+    }
+  }
+}

@@ -278,6 +278,7 @@ export function ImageOverlayEditor({ nodeId, open, onOpenChange, initialSelected
                 connected={(filled[selected]?.kind ?? "image") !== "image" || !!upstream.layers[selected]}
                 base={upstream.baseSize}
                 onChange={(patch) => setLayer(selected, patch)}
+                nodeId={nodeId}
                 baseUrl={upstream.base}
                 safeArea={overlayPlatformById(nodeData.platform)?.safe}
                 wiredQrText={upstream.qrText}

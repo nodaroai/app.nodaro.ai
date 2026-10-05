@@ -2,7 +2,9 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { createClient } from "@/lib/supabase"
 import { useWorkflowStore, type PresentationSettings } from "@/hooks/use-workflow-store"
 import { getBatchJobStatus, listWorkflowExecutions, type BatchJobStatus } from "@/lib/api"
-import { applyWorkflowAccess } from "@/hooks/workflow-access-mode"
+import { readWorkflowContent } from "@/lib/workflow-content"
+import { withoutRunsInFlight } from "@/lib/run-in-flight-mark"
+import { applyWorkflowAccess, requestAccessRecheck } from "@/hooks/workflow-access-mode"
 import { classifyZeroRowSave, isSaveRefused } from "@/hooks/workflow-save-refusal"
 import { tx } from "@/lib/i18n"
 import { contentRunResultPatch, isContentNodeType } from "@/lib/content-run-output"
@@ -24,6 +26,7 @@ import { adoptUnsavedAccountTriggerIntents } from "@/lib/account-trigger-intent"
 import { namedRunOutputFields } from "@/lib/named-run-outputs"
 import { videoOverlayListRowFields, videoOverlayRunOutputFields } from "@/lib/video-overlay-run-output"
 import { perHandleRunFields } from "@/lib/per-handle-batch"
+import { applyEdlRunCutFields, applyEdlTakeTranscriptField } from "@/lib/apply-edl-cut"
 
 /**
  * Execution statuses whose `node_states` are worth restoring onto the canvas on
@@ -270,10 +273,13 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<{ nodes: Wo
       // reconcile skips the node, so leaving them off here would read "Result (old)".
       const overlayRun = node.type === "video-overlay" ? videoOverlayRunOutputFields(job.output_data) : undefined
 
+      // Apply EDL: the take keeps the Transcript its render was cut with.
+      const takeTranscript = applyEdlTakeTranscriptField(node.type, job.output_data, outputUrl)
+
       // Update the result with the URL if it was missing
       const updatedResults = results.map((r, i) => {
         if (i === 0 && r.jobId === job.id && !r.url && outputUrl) {
-          return { ...r, url: outputUrl, ...(overlayRun ?? {}) }
+          return { ...r, url: outputUrl, ...(overlayRun ?? {}), ...takeTranscript }
         }
         return r
       })
@@ -281,7 +287,7 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<{ nodes: Wo
       // If the job was tracked by currentJobId but has no result entry, prepend one
       const hasResultForJob = updatedResults.some(r => r.jobId === job.id)
       if (!hasResultForJob && outputUrl) {
-        updatedResults.unshift({ url: outputUrl, timestamp: new Date().toISOString(), jobId: job.id, ...(overlayRun ?? {}) })
+        updatedResults.unshift({ url: outputUrl, timestamp: new Date().toISOString(), jobId: job.id, ...(overlayRun ?? {}), ...takeTranscript })
       }
 
       const newData: Record<string, unknown> = {
@@ -353,6 +359,10 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<{ nodes: Wo
           }
         }
       }
+      // Apply EDL holds ONE cut: clear the medium this run did not render, and
+      // make its Transcript output this render's — cleared when it was cut with
+      // none (lib/apply-edl-cut.ts).
+      Object.assign(newData, applyEdlRunCutFields(nodeType, job.output_data))
 
       // CONTENT-POLICY DISCLOSURE passthrough (Task A4 follow-up, 2026-08-03) —
       // GVP-only. `BatchJobStatus.output_data` (api.ts) is narrowly typed with
@@ -444,6 +454,9 @@ export function applyBackendExecutionState(
         }
         if (state.output.videoUrl) data.generatedVideoUrl = state.output.videoUrl
         if (state.output.audioUrl) data.generatedAudioUrl = state.output.audioUrl
+        // Apply EDL holds ONE cut: clear the medium this run did not render, and
+        // make its Transcript output this render's (cleared when it had none).
+        Object.assign(data, applyEdlRunCutFields(nodeType, state.output))
         if (state.output.script) data.generatedScript = state.output.script
         // Voice id, stems, alignment, combined / split text — under the names
         // their readers use (#1547: this lane used to invent its own).
@@ -470,6 +483,8 @@ export function applyBackendExecutionState(
               timestamp: new Date().toISOString(),
               jobId: `exec-${node.id}-${i}`,
               ...rowFields(url),
+              // Apply EDL: only the render the output describes keeps its Transcript.
+              ...applyEdlTakeTranscriptField(nodeType, state.output, url),
             }))
           if (newResults.length > 0) {
             data.generatedResults = [...newResults, ...results]
@@ -485,7 +500,11 @@ export function applyBackendExecutionState(
           const outputUrl = state.output.imageUrl ?? state.output.videoUrl ?? state.output.audioUrl
           if (outputUrl && !existingUrls.has(outputUrl)) {
             data.generatedResults = [
-              { url: outputUrl, timestamp: new Date().toISOString(), jobId: `exec-${node.id}`, ...(overlayRun ?? {}) },
+              {
+                url: outputUrl, timestamp: new Date().toISOString(), jobId: `exec-${node.id}`, ...(overlayRun ?? {}),
+                // Apply EDL: the take keeps the Transcript its render was cut with.
+                ...applyEdlTakeTranscriptField(nodeType, state.output, outputUrl),
+              },
               ...results,
             ]
             data.activeResultIndex = 0
@@ -585,6 +604,9 @@ export function applyCompletedExecutionResults(
     }
     if (state.output.videoUrl) newData.generatedVideoUrl = state.output.videoUrl
     if (state.output.audioUrl) newData.generatedAudioUrl = state.output.audioUrl
+    // Apply EDL holds ONE cut: clear the medium this run did not render, and
+    // make its Transcript output this render's (cleared when it had none).
+    Object.assign(newData, applyEdlRunCutFields(nodeType, state.output))
     if (state.output.script) newData.generatedScript = state.output.script
     // Voice id, stems, alignment, combined / split text — under the names
     // their readers use (#1547: this lane used to invent its own).
@@ -615,6 +637,8 @@ export function applyCompletedExecutionResults(
           timestamp: new Date().toISOString(),
           jobId: `exec-${node.id}-${i}`,
           ...rowFields(url),
+          // Apply EDL: only the render the output describes keeps its Transcript.
+          ...applyEdlTakeTranscriptField(nodeType, state.output, url),
         }))
       if (newResults.length > 0) {
         newData.generatedResults = [...newResults, ...existingResults]
@@ -628,7 +652,11 @@ export function applyCompletedExecutionResults(
       newData.__listCompleted = state.output.listResults!.length
     } else if (outputUrl) {
       newData.generatedResults = [
-        { url: outputUrl, timestamp: new Date().toISOString(), jobId: `exec-${node.id}`, ...(overlayRun ?? {}) },
+        {
+          url: outputUrl, timestamp: new Date().toISOString(), jobId: `exec-${node.id}`, ...(overlayRun ?? {}),
+          // Apply EDL: the take keeps the Transcript its render was cut with.
+          ...applyEdlTakeTranscriptField(nodeType, state.output, outputUrl),
+        },
         ...existingResults,
       ]
       newData.activeResultIndex = 0
@@ -896,6 +924,11 @@ export function useWorkflowPersistence(projectId?: string) {
 
           // Rebase: adopt the fresh remote as the new base, replay local
           // edits on top, retry once with the fresh version.
+          // workflow-content-read: writers only — save() returns before this
+          // for a read-only canvas, and a `view` reader's canvas is read-only
+          // from the load that read its document; an `edit` collaborator must
+          // rebase onto the stored row, drafts included, because they save it
+          // back whole.
           const { data: fresh } = await supabase
             .from("workflows")
             .select("nodes, edges, settings, name, version, updated_at")
@@ -1056,7 +1089,16 @@ export function useWorkflowPersistence(projectId?: string) {
             // The re-read was a second wait — ask again before writing.
             if (editorMovedOn()) return { success: false, error: "workflow_changed" }
 
-            if (classifyZeroRowSave({ version: loadedVersion, updatedAt: loadedUpdatedAt || null }, current) === "refused") {
+            const cause = classifyZeroRowSave({ version: loadedVersion, updatedAt: loadedUpdatedAt || null }, current)
+            // A write turned away, or a row this tab can no longer read, can
+            // each mean the reader's access changed while the canvas was open:
+            // a collaborator removed can no longer SELECT the row, so their
+            // miss reads `unknown`. So the canvas re-asks its access now rather
+            // than at its next timed re-check (T97). A real conflict is somebody
+            // else's write, and asks nothing.
+            if (cause !== "conflict") requestAccessRecheck(workflowId)
+
+            if (cause === "refused") {
               // The token this tab sent is still the row's token, so nobody
               // else wrote: the write itself was refused. Say that, and stop
               // asking. `saveRefusedFor` is what ends the retries — `saveOnce`
@@ -1066,7 +1108,9 @@ export function useWorkflowPersistence(projectId?: string) {
               // seconds. NOT `isReadOnly`: a refusal usually lands mid-run (the
               // run's own first patch is what dirtied the canvas), and
               // read-only turns `updateNodeData` into a no-op — the result of
-              // a job already paid for would never reach its node.
+              // a job already paid for would never reach its node. The re-check
+              // asked above keeps to the same rule: if it answers `view` or
+              // `none`, read-only waits until no node shows a run in flight.
               const reason = tx("editor.notWritableReason")
               useWorkflowStore.setState({ saveRefusedFor: workflowId })
               setSaveStatus("error", reason)
@@ -1155,6 +1199,10 @@ export function useWorkflowPersistence(projectId?: string) {
           // this workflow until the channel id matches (re-subscribe is
           // triggered by `workflowId` change in `workflow-canvas.tsx`).
           // The window between insert and re-subscribe is broadcast-safe.
+          // The row was just inserted under this caller's own id, so its access
+          // is `own` — recorded BEFORE the id lands, so the canvas never sees
+          // the new id without it and subscribes as any owner does (T86).
+          useWorkflowStore.setState({ loadedAccess: { workflowId: data.id as string, access: "own" } })
           setWorkflowId(data.id)
           createdWorkflowId = data.id as string
           // What the owner set in this workflow's trigger panels before it had
@@ -1249,13 +1297,13 @@ export function useWorkflowPersistence(projectId?: string) {
       try {
         const supabase = createClient()
 
-        const { data, error } = await supabase
-          .from("workflows")
-          .select("*")
-          .eq("id", id)
-          .single()
-
-        if (error) return { success: false, error: error.message }
+        // The workflow as THIS caller may hold it: the stored row for its
+        // owner, the server's own answer for anyone else — so a `view` reader's
+        // canvas never receives a studio production's owner drafts, runs in
+        // flight or take voice records (lib/workflow-content.ts).
+        const content = await readWorkflowContent(id, "*")
+        if (!content) return { success: false, error: "Workflow not found" }
+        const data = content.row
 
         const settings = (data.settings ?? {}) as Record<string, unknown>
         const charDefs = (settings.characterDefinitions ?? []) as CharacterDefinition[]
@@ -1270,12 +1318,16 @@ export function useWorkflowPersistence(projectId?: string) {
         // executeNodeForList running for a freshly-loaded workflow, so a stale
         // `true` (autosaved mid-batch before the finally cleared it) would
         // permanently exempt the node from the abandon-guard. Clear it on load.
+        // Likewise a paid run's `__runsInFlight` token (`withRunInFlight`):
+        // it is a run the tab that wrote it had out, and a load has none, so
+        // one found in a row (nothing saves one) would hold a read-only freeze
+        // back with nothing left to release it.
         nodes = nodes.map((n) => {
           const d = n.data as Record<string, unknown> | undefined
           if (d?.__listRunning) {
-            return { ...n, data: { ...d, __listRunning: false } as typeof n.data }
+            return withoutRunsInFlight({ ...n, data: { ...d, __listRunning: false } as typeof n.data })
           }
-          return n
+          return withoutRunsInFlight(n)
         })
 
         // Sync node results from jobs table via backend API
@@ -1389,7 +1441,7 @@ export function useWorkflowPersistence(projectId?: string) {
 
         loadWorkflow(
           data.id,
-          data.name,
+          data.name ?? "",
           nodes,
           edges,
           charDefs,
@@ -1402,15 +1454,27 @@ export function useWorkflowPersistence(projectId?: string) {
 
         // Studio-origin workflows are view-only in the node editor (the Studio
         // app edits them). `settings` was computed above from data.settings.
+        // A `view` reader's canvas is read-only from this first frame too: the
+        // server said so in the same answer that carried the document, and a
+        // canvas that cannot save never reaches the save path's own reads of
+        // the stored row (its conflict rebase).
+        // The same answer decides how this canvas hears about writes made
+        // elsewhere (T86): `own` / `edit` subscribe to the row's Realtime
+        // broadcasts, `view` polls and re-reads through the server
+        // (use-workflow-realtime-sync.ts). The load records it only here, once
+        // the content is on the canvas, so a load that fails before this stays
+        // unknown; from then on each re-check of the access updates it (T97).
         useWorkflowStore.setState({
-          isReadOnly: isStudioWorkflowSettings(settings),
+          isReadOnly: isStudioWorkflowSettings(settings) || content.access === "view",
           readOnlyReason: null,
+          loadedAccess: { workflowId: data.id, access: content.access },
         })
 
         // What THIS person may do with THIS workflow, asked of the server and
-        // applied to the canvas. Fire-and-forget: the workflow is interactive
-        // immediately, and a failure leaves it writable — the state it is in
-        // today, with the server still refusing anything it should.
+        // applied to the canvas — and asked again while it stays open (T97,
+        // use-workflow-access-recheck.ts). Fire-and-forget: the workflow is
+        // interactive immediately, and a failure leaves it writable — the state
+        // it is in today, with the server still refusing anything it should.
         void applyWorkflowAccess(id)
 
         // Reconcile per-node `generatedResults` against the backend's

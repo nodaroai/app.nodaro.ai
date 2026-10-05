@@ -31,6 +31,7 @@ import { COMPOSER_PLAN_MAP, CREDIT_BASE_USD, planFanOut, TRANSIENT_RUNTIME_KEYS,
 import { clearedConnectedListRows } from "./clear-run-results"
 import { namedRunOutputFields } from "@/lib/named-run-outputs"
 import { perHandleRunFields } from "@/lib/per-handle-batch"
+import { applyEdlRunCutFields, applyEdlTakeTranscriptField } from "@/lib/apply-edl-cut"
 import { videoOverlayListRowFields, videoOverlayRunOutputFields } from "@/lib/video-overlay-run-output"
 import type { NodeExecutionStatus as SharedNodeExecutionStatus, NodeExecutionStateWire } from "@nodaro/shared"
 import { collapseExpandedClones } from "./execution-graph";
@@ -92,6 +93,34 @@ export function hasActiveWorkflowStream(): boolean {
 function refuseWhileStreaming(): boolean {
   if (!hasActiveWorkflowStream()) return false;
   toast.info(tx("run.alreadyRunning"));
+  return true;
+}
+
+/**
+ * True — and says why, when there is a reason to give — when a Run must not go
+ * on because the canvas turned read-only while it waited.
+ *
+ * Every Run awaits its confirm dialog (and the checks before it) and the Video
+ * URL downloads before it marks any node, and a re-check of the access (T97,
+ * `applyWorkflowAccess`) can answer `view` or `none` meanwhile. With no node
+ * showing a run, that freezes the canvas at once. Going on would mark nodes
+ * `pending` on a frozen canvas (`markNodesStatus` is not gated) while every
+ * write the run makes is a no-op: a single node's job is still created and
+ * paid for, and its result is dropped (`shouldAbandonNode`).
+ *
+ * Asked right after those awaits, with nothing awaited between it and the
+ * first mark, so the freeze cannot land in between. From that mark on, the
+ * nodes themselves hold it back (`showsARunInFlight`).
+ *
+ * `isReadOnly` alone, the same gate the Run callbacks are registered under. A
+ * canvas whose saves are refused while its freeze waits for the runs out still
+ * runs and paints, and a run started there holds the freeze with its own marks
+ * until its result lands.
+ */
+function refuseWhileReadOnly(): boolean {
+  const { isReadOnly, readOnlyReason } = useWorkflowStore.getState();
+  if (!isReadOnly) return false;
+  if (readOnlyReason) toast.error(readOnlyReason);
   return true;
 }
 
@@ -367,6 +396,8 @@ export async function handleRun(
     // must hold its file by the time the pre-run save below writes it.
     if (!(await ensureVideoLinksBeforeRun(exec.map((n) => n.id), setIsRunning))) return;
   }
+  // The canvas may have turned read-only while those were awaited.
+  if (refuseWhileReadOnly()) return;
 
   rejectAllManualEdits();
   const { nodes } = collapseExpandedClones();
@@ -541,6 +572,11 @@ export async function handleRunSingleNode(
     if (!(await ensureVideoLinksBeforeRun([nodeId], setIsRunning))) return;
   }
 
+  // The canvas may have turned read-only while those were awaited. This is
+  // the one handler that would lose a paid result to it: its job is followed
+  // and painted from the browser, and every write it makes would be a no-op.
+  if (refuseWhileReadOnly()) return;
+
   // Read the graph only NOW. The confirm and the download above can each take
   // minutes; the canvas may have been edited meanwhile, and running a snapshot
   // taken before them would execute a node as it no longer is.
@@ -666,6 +702,8 @@ export async function handleRunFromHere(
     if (!(await confirmRunOrAbort(ctx, exec, st.nodes, st.edges, "from-here", false))) return;
     if (!(await ensureVideoLinksBeforeRun(exec.map((n) => n.id), setIsRunning))) return;
   }
+  // The canvas may have turned read-only while those were awaited.
+  if (refuseWhileReadOnly()) return;
   rejectAllManualEdits();
   const { nodes, edges } = collapseExpandedClones();
   const startNode = nodes.find((n) => n.id === nodeId);
@@ -761,6 +799,8 @@ export async function handleRunSelected(
     if (!(await confirmRunOrAbort(ctx, exec, st.nodes, st.edges, "selected", false))) return;
     if (!(await ensureVideoLinksBeforeRun(exec.map((n) => n.id), setIsRunning))) return;
   }
+  // The canvas may have turned read-only while those were awaited.
+  if (refuseWhileReadOnly()) return;
   rejectAllManualEdits();
   const { nodes } = collapseExpandedClones();
   const selectedNodes = nodes.filter((n) => n.selected);
@@ -1101,6 +1141,8 @@ function applyRestoredJobCompletion(
     timestamp: new Date().toISOString(),
     jobId,
     ...(overlayRun ?? {}),
+    // Apply EDL: the take keeps the Transcript its render was cut with.
+    ...applyEdlTakeTranscriptField(nodeType, job.output_data, outputUrl),
   };
 
   const updates: Record<string, unknown> = {
@@ -1128,6 +1170,10 @@ function applyRestoredJobCompletion(
   } else if (job.output_data?.script) {
     updates.generatedScript = job.output_data.script;
   }
+  // Apply EDL holds ONE cut: clear the medium this run did not render, and make
+  // its Transcript output this render's — cleared when it was cut with none
+  // (lib/apply-edl-cut.ts).
+  Object.assign(updates, applyEdlRunCutFields(nodeType, job.output_data));
 
   // CONTENT-POLICY DISCLOSURE passthrough (Task A4 follow-up, 2026-08-03) —
   // GVP-only; this function restores a job that finished while the tab was
@@ -1732,6 +1778,11 @@ function syncNodeStatesToStore(
           updates.generatedVideoUrl = state.output.videoUrl;
         if (state.output.audioUrl)
           updates.generatedAudioUrl = state.output.audioUrl;
+        // Apply EDL holds ONE cut: clear the medium this run did not render, or
+        // an earlier render's URL of the other medium outranks it on both
+        // engines; and make its Transcript output this render's — cleared when
+        // it was cut with none, never an earlier take's (lib/apply-edl-cut.ts).
+        Object.assign(updates, applyEdlRunCutFields(nodeType, state.output));
         if (state.output.script)
           updates.generatedScript = state.output.script;
         // Voice id, stems, alignment, combined / split text: ONE mapping, shared
@@ -1856,6 +1907,8 @@ function syncNodeStatesToStore(
               timestamp: state.completedAt ?? new Date().toISOString(),
               jobId: state.jobIds?.[i] ?? `exec-${node.id}-${i}`,
               ...rowFields(url),
+              // Apply EDL: only the render the output describes keeps its Transcript.
+              ...applyEdlTakeTranscriptField(nodeType, state.output, url),
             }));
           if (newResults.length > 0) {
             updates.generatedResults = [...newResults, ...prev];
@@ -1893,6 +1946,8 @@ function syncNodeStatesToStore(
                   timestamp: state.completedAt ?? new Date().toISOString(),
                   jobId: state.jobId ?? `exec-${node.id}`,
                   ...(overlayRun ?? {}),
+                  // Apply EDL: the take keeps the Transcript its render was cut with.
+                  ...applyEdlTakeTranscriptField(nodeType, state.output, outputUrl),
                 },
                 ...prev,
               ];

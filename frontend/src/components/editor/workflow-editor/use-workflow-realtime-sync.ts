@@ -67,6 +67,39 @@
  * apply on Realtime (Supabase enforces the same policies on the
  * broadcast), so the user only receives events for rows they can SELECT.
  *
+ * Who subscribes, and who polls (T85 / T86)
+ * -----------------------------------------
+ * A broadcast is the row AS STORED, pushed into the browser whether or not
+ * the app uses it, and a studio production keeps its owner's drafts in that
+ * row — the empty media slots and runs in flight on each scene, the drafts in
+ * the bin, each take's voice plan (studio rulings T11 / T21 / T42). A `view`
+ * reader may not hold any of it, and the row policies let them SELECT the row,
+ * so they would receive every one of those broadcasts.
+ *
+ * So which of the two this canvas does is decided HERE, from the access its
+ * load answered (`loadedAccess` in the workflow store, keyed by workflow id;
+ * `mayHoldStoredRow`) — never by the caller:
+ *   - `own` / `edit`: the subscription above, adopting each broadcast exactly
+ *     as it always did. The server answers both of them the stored row anyway.
+ *   - `view`, or no answer yet (the load is in flight, or it failed): NO
+ *     subscription. While the tab is visible, every {@link
+ *     VIEW_POLL_INTERVAL_MS} the canvas reads the row's content-free stamp
+ *     (`updated_at, version`); when either moved it re-reads the content
+ *     through the server's door (`readWorkflowContentFromServer`), which
+ *     strips the owner's drafts for `view`, and reconciles that like a
+ *     broadcast. Re-reads are coalesced to one in flight plus one trailing —
+ *     enough, because each reads the row as it is then. A canvas that holds
+ *     nothing yet (a load in flight, or one that failed) asks nothing: the
+ *     load itself reads the row. Polling pauses while the tab is hidden and
+ *     looks once as soon as it is visible again.
+ *
+ * The record does not stay the load's answer: while the canvas is open the
+ * access is re-asked (T97, `use-workflow-access-recheck.ts`) and each answer is
+ * written into the same record — the owner's own row excepted, which stays
+ * `own` (`recheckedAccess`). One that says `view` or `none` closes the
+ * subscription and starts the poll on the spot; one that says `own` or `edit`
+ * opens it again.
+ *
  * Migration: supabase/migrations/115_workflows_realtime.sql adds
  *   ALTER TABLE workflows REPLICA IDENTITY FULL;
  *   ALTER PUBLICATION supabase_realtime ADD TABLE workflows;
@@ -87,6 +120,13 @@
 import { useEffect, useRef } from "react"
 import type { Node, Edge } from "@xyflow/react"
 import { createClient } from "@/lib/supabase"
+import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { mayHoldStoredRow, readWorkflowContentFromServer, type WorkflowContentRow } from "@/lib/workflow-content"
+import { coalesced } from "./coalesced"
+import { useWorkflowAccessRecheck } from "./use-workflow-access-recheck"
+
+/** How often a `view` reader's visible canvas asks whether the row moved (T85). */
+export const VIEW_POLL_INTERVAL_MS = 5_000
 
 interface RealtimeWorkflowRow {
   readonly id: string
@@ -106,6 +146,12 @@ interface RealtimeWorkflowRow {
    * own pan/zoom.
    */
   readonly settings: Record<string, unknown> | null
+}
+
+/** The row's content-free stamp — all a `view` reader's poll ever reads. */
+interface WorkflowStamp {
+  readonly updatedAt: string | null
+  readonly version: number | null
 }
 
 export interface UseWorkflowRealtimeSyncParams {
@@ -194,9 +240,26 @@ export interface UseWorkflowRealtimeSyncParams {
   readonly onRemoteUpdatedAt: (updatedAt: string) => void
 }
 
+/** A re-read row in the broadcast's own shape, so both reach the same reconcile. */
+function asBroadcastRow(row: WorkflowContentRow): RealtimeWorkflowRow {
+  return {
+    id: row.id,
+    nodes: Array.isArray(row.nodes) ? (row.nodes as Node[]) : null,
+    edges: Array.isArray(row.edges) ? (row.edges as Edge[]) : null,
+    updated_at: row.updated_at ?? null,
+    version: row.version ?? null,
+    settings:
+      row.settings && typeof row.settings === "object" && !Array.isArray(row.settings)
+        ? (row.settings as Record<string, unknown>)
+        : null,
+  }
+}
+
 /**
- * Subscribes to Realtime UPDATE events on `workflows` filtered by id.
- * See file-level docstring for the full reconcile-vs-append-only contract.
+ * Keeps the open canvas in step with writes made elsewhere — by the row's
+ * Realtime broadcasts, or by polling when this canvas may not hold the row as
+ * stored. See the file-level docstring for both, and for the reconcile-vs-
+ * append-only contract they share.
  */
 export function useWorkflowRealtimeSync(
   params: UseWorkflowRealtimeSyncParams,
@@ -243,115 +306,217 @@ export function useWorkflowRealtimeSync(
   onAppendEdgesRef.current = onAppendEdges
   onRemoteUpdatedAtRef.current = onRemoteUpdatedAt
 
+  // Keeps that access current while the canvas is open (T97): every answer is
+  // written into the same `loadedAccess` record, so `live` below follows it.
+  useWorkflowAccessRecheck(workflowId)
+
+  // Whether this canvas may hold the row as stored: by the access its load
+  // answered, or a re-check since, read here rather than handed in, so no
+  // caller can opt out.
+  const live = mayHoldStoredRow(useWorkflowStore((s) => s.loadedAccess), workflowId)
+
   useEffect(() => {
     if (!workflowId) return
 
     const supabase = createClient()
     const channelName = `workflow:${workflowId}`
 
-    const channel = supabase
-      .channel(channelName)
-      .on(
-        // Cast through unknown because supabase-js's overload for the
-        // "postgres_changes" listen type uses string-literal generics
-        // that confuse TS when destructured at our call site.
-        "postgres_changes" as never,
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "workflows",
-          filter: `id=eq.${workflowId}`,
-        },
-        (payload: { new: RealtimeWorkflowRow | null }) => {
-          const next = payload.new
-          if (!next) return
+    /**
+     * Whether this tab already holds the row's content: its own save's echo —
+     * possibly a late one — or a write that changed no content. Reads only the
+     * row's metadata, so it runs on a broadcast as it arrives, and on a re-read
+     * row when that lands.
+     */
+    const alreadyHeld = (next: RealtimeWorkflowRow): boolean => {
+      const incomingUpdatedAt = next.updated_at
+      if (!incomingUpdatedAt) return true
 
-          const incomingUpdatedAt = next.updated_at
-          if (!incomingUpdatedAt) return
+      // Skip our own save's broadcasts — on the monotonic content
+      // version first, so a LATE echo of an older own save (its
+      // updated_at no longer equals the cursor, which a newer save has
+      // already moved) is recognised as ours and not as another device.
+      // An `updated_at`-only write (same version) changed no content and
+      // has nothing to reconcile either.
+      const localVersion = getLoadedVersionRef.current()
+      if (typeof next.version === "number" && localVersion != null && next.version <= localVersion) return true
 
-          // Skip our own save's broadcasts — on the monotonic content
-          // version first, so a LATE echo of an older own save (its
-          // updated_at no longer equals the cursor, which a newer save has
-          // already moved) is recognised as ours and not as another device.
-          // An `updated_at`-only write (same version) changed no content and
-          // has nothing to reconcile either.
-          const localVersion = getLoadedVersionRef.current()
-          if (typeof next.version === "number" && localVersion != null && next.version <= localVersion) return
+      // Own IN-FLIGHT save echo: while a save is on the wire (saveStatus ===
+      // "saving"), a broadcast at a NEWER version is our own not-yet-
+      // acknowledged write — its ~116KB REPLICA-IDENTITY-FULL echo beat the
+      // HTTP response that advances `loadedVersion`. Skip it; letting it
+      // reach the dirty branch strands `remoteUpdatedAt` and freezes
+      // autosave (the durable "updated on another device" loop a large
+      // scrape result triggers). A genuine remote write in this window still
+      // 0-row-conflicts our next save's CAS and surfaces from the response.
+      if (getSaveInFlightRef.current?.() && typeof next.version === "number" && localVersion != null && next.version > localVersion) return true
 
-          // Own IN-FLIGHT save echo: while a save is on the wire (saveStatus ===
-          // "saving"), a broadcast at a NEWER version is our own not-yet-
-          // acknowledged write — its ~116KB REPLICA-IDENTITY-FULL echo beat the
-          // HTTP response that advances `loadedVersion`. Skip it; letting it
-          // reach the dirty branch strands `remoteUpdatedAt` and freezes
-          // autosave (the durable "updated on another device" loop a large
-          // scrape result triggers). A genuine remote write in this window still
-          // 0-row-conflicts our next save's CAS and surfaces from the response.
-          if (getSaveInFlightRef.current?.() && typeof next.version === "number" && localVersion != null && next.version > localVersion) return
+      // Rows without a version: the echo of the latest save only.
+      // Without this short-circuit, every successful save would
+      // briefly toggle remoteUpdatedAt and could re-trigger a no-op
+      // reconcile.
+      return incomingUpdatedAt === getLoadedUpdatedAtRef.current()
+    }
 
-          // Rows without a version: the echo of the latest save only.
-          // Without this short-circuit, every successful save would
-          // briefly toggle remoteUpdatedAt and could re-trigger a no-op
-          // reconcile.
-          const localUpdatedAt = getLoadedUpdatedAtRef.current()
-          if (incomingUpdatedAt === localUpdatedAt) return
+    /** Apply a row this caller may hold — the reconcile contract in the file docstring. */
+    const adopt = (next: RealtimeWorkflowRow, incomingUpdatedAt: string): void => {
+      const incomingNodes = Array.isArray(next.nodes) ? (next.nodes as Node[]) : []
+      const incomingEdges = Array.isArray(next.edges) ? (next.edges as Edge[]) : []
+      // `typeof === "object"` is true for both objects AND arrays —
+      // explicit `!Array.isArray` rejects accidental array shapes so
+      // the per-field guards downstream don't have to.
+      const incomingSettings =
+        next.settings &&
+        typeof next.settings === "object" &&
+        !Array.isArray(next.settings)
+          ? (next.settings as Record<string, unknown>)
+          : null
 
-          const incomingNodes = Array.isArray(next.nodes) ? (next.nodes as Node[]) : []
-          const incomingEdges = Array.isArray(next.edges) ? (next.edges as Edge[]) : []
-          // `typeof === "object"` is true for both objects AND arrays —
-          // explicit `!Array.isArray` rejects accidental array shapes so
-          // the per-field guards downstream don't have to.
-          const incomingSettings =
-            next.settings &&
-            typeof next.settings === "object" &&
-            !Array.isArray(next.settings)
-              ? (next.settings as Record<string, unknown>)
-              : null
+      if (!getIsDirtyRef.current()) {
+        // Clean local state — snap to remote. This is what kills the
+        // stale-state-resurrects-deleted-nodes bug: a passive tab
+        // sees a remote save and immediately drops any node ids that
+        // are no longer present, so the next time *this* tab's
+        // autosave runs (after some idle-time UI nudge) it can't
+        // resurrect them. `reconcileFromRemote` itself clears
+        // `remoteUpdatedAt`, so we skip the divergence-tracking call
+        // below in this branch to avoid a wasted set→clear pair on
+        // the store.
+        onReconcileRef.current({
+          nodes: incomingNodes,
+          edges: incomingEdges,
+          updatedAt: incomingUpdatedAt,
+          version: typeof next.version === "number" ? next.version : null,
+          settings: incomingSettings,
+        })
+        return
+      }
 
-          if (!getIsDirtyRef.current()) {
-            // Clean local state — snap to remote. This is what kills the
-            // stale-state-resurrects-deleted-nodes bug: a passive tab
-            // sees a remote save and immediately drops any node ids that
-            // are no longer present, so the next time *this* tab's
-            // autosave runs (after some idle-time UI nudge) it can't
-            // resurrect them. `reconcileFromRemote` itself clears
-            // `remoteUpdatedAt`, so we skip the divergence-tracking call
-            // below in this branch to avoid a wasted set→clear pair on
-            // the store.
-            onReconcileRef.current({
-              nodes: incomingNodes,
-              edges: incomingEdges,
-              updatedAt: incomingUpdatedAt,
-              version: typeof next.version === "number" ? next.version : null,
-              settings: incomingSettings,
-            })
-            return
-          }
+      // Dirty local state — track the divergence (drives the banner)
+      // and keep v1 append-only behavior so in-progress edits aren't
+      // clobbered (and so MCP-added nodes still land for the Film
+      // Director live-canvas demo). The banner + optimistic locking
+      // on save handle the actual conflict.
+      onRemoteUpdatedAtRef.current(incomingUpdatedAt)
 
-          // Dirty local state — track the divergence (drives the banner)
-          // and keep v1 append-only behavior so in-progress edits aren't
-          // clobbered (and so MCP-added nodes still land for the Film
-          // Director live-canvas demo). The banner + optimistic locking
-          // on save handle the actual conflict.
-          onRemoteUpdatedAtRef.current(incomingUpdatedAt)
+      if (incomingNodes.length > 0) {
+        const currentNodeIds = new Set(getCurrentNodesRef.current().map((n) => n.id))
+        const newNodes = incomingNodes.filter((n) => !currentNodeIds.has(n.id))
+        if (newNodes.length > 0) onAppendNodesRef.current(newNodes)
+      }
+      if (incomingEdges.length > 0) {
+        const currentEdgeIds = new Set(getCurrentEdgesRef.current().map((e) => e.id))
+        const newEdges = incomingEdges.filter((e) => !currentEdgeIds.has(e.id))
+        if (newEdges.length > 0) onAppendEdgesRef.current(newEdges)
+      }
+    }
 
-          if (incomingNodes.length > 0) {
-            const currentNodeIds = new Set(getCurrentNodesRef.current().map((n) => n.id))
-            const newNodes = incomingNodes.filter((n) => !currentNodeIds.has(n.id))
-            if (newNodes.length > 0) onAppendNodesRef.current(newNodes)
-          }
-          if (incomingEdges.length > 0) {
-            const currentEdgeIds = new Set(getCurrentEdgesRef.current().map((e) => e.id))
-            const newEdges = incomingEdges.filter((e) => !currentEdgeIds.has(e.id))
-            if (newEdges.length > 0) onAppendEdgesRef.current(newEdges)
-          }
-        },
-      )
-      .subscribe()
+    // ---- `own` / `edit`: the row's Realtime broadcasts, adopted as they arrive.
+    if (live) {
+      const channel = supabase
+        .channel(channelName)
+        .on(
+          // Cast through unknown because supabase-js's overload for the
+          // "postgres_changes" listen type uses string-literal generics
+          // that confuse TS when destructured at our call site.
+          "postgres_changes" as never,
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "workflows",
+            filter: `id=eq.${workflowId}`,
+          },
+          (payload: { new: RealtimeWorkflowRow | null }) => {
+            const next = payload.new
+            if (!next || alreadyHeld(next)) return
+            adopt(next, next.updated_at as string)
+          },
+        )
+        .subscribe()
+
+      return () => {
+        // removeChannel handles both an active subscription and one in
+        // the middle of joining; safe to call regardless of state.
+        supabase.removeChannel(channel)
+      }
+    }
+
+    // ---- `view`, or no answer yet: no subscription — poll the stamp (T85).
+    // Cleared on teardown, so nothing that lands after the editor moved on
+    // (another workflow, or the subscription once the load answers) is
+    // painted onto it.
+    let active = true
+    // The stamp this canvas last acted on; until its first look, what it holds.
+    let observed: WorkflowStamp | null = null
+    let looking = false
+    let timer: ReturnType<typeof setInterval> | null = null
+
+    /** What this canvas holds, or null while it holds nothing (a load in flight, or one that failed). */
+    const held = (): WorkflowStamp | null => {
+      const updatedAt = getLoadedUpdatedAtRef.current()
+      return updatedAt === null ? null : { updatedAt, version: getLoadedVersionRef.current() }
+    }
+
+    const reread = coalesced(async () => {
+      try {
+        const fresh = await readWorkflowContentFromServer(workflowId)
+        if (!active || !fresh) return
+        const row = asBroadcastRow(fresh.row)
+        // Re-checked on arrival: this tab may have applied a newer write meanwhile.
+        if (!alreadyHeld(row)) adopt(row, row.updated_at as string)
+      } catch {
+        // Forget what was seen, so the next look compares the row with what
+        // the canvas holds and asks again.
+        observed = null
+      }
+    }, () => active)
+
+    const look = async (): Promise<void> => {
+      if (looking || !held()) return
+      looking = true
+      try {
+        const { data, error } = await supabase
+          .from("workflows")
+          .select("updated_at, version")
+          .eq("id", workflowId)
+          .maybeSingle()
+        const holds = held()
+        if (!active || error || !data || !holds) return
+        const stamp: WorkflowStamp = {
+          updatedAt: typeof data.updated_at === "string" ? data.updated_at : null,
+          version: typeof data.version === "number" ? data.version : null,
+        }
+        const before = observed ?? holds
+        observed = stamp
+        if (stamp.updatedAt !== before.updatedAt || stamp.version !== before.version) reread()
+      } catch {
+        // A failed look changes nothing; the next one asks again.
+      } finally {
+        looking = false
+      }
+    }
+
+    const resume = (): void => {
+      if (timer !== null) return
+      void look()
+      timer = setInterval(() => void look(), VIEW_POLL_INTERVAL_MS)
+    }
+    const pause = (): void => {
+      if (timer === null) return
+      clearInterval(timer)
+      timer = null
+    }
+    const onVisibility = (): void => {
+      if (document.visibilityState === "hidden") pause()
+      else resume()
+    }
+
+    if (document.visibilityState !== "hidden") resume()
+    document.addEventListener("visibilitychange", onVisibility)
 
     return () => {
-      // removeChannel handles both an active subscription and one in
-      // the middle of joining; safe to call regardless of state.
-      supabase.removeChannel(channel)
+      active = false
+      pause()
+      document.removeEventListener("visibilitychange", onVisibility)
     }
-  }, [workflowId])
+  }, [workflowId, live])
 }

@@ -206,6 +206,30 @@ A grant takes effect the moment it is written — there is no acceptance step.
 The recipient finds the workflow under **Shared with me** (below), and it
 also turns up in their search, the same as anything else they can open.
 
+A change also reaches an editor that already has the workflow open. The
+editor asks again what its reader may do with it: every minute while the tab
+is in view, as soon as a hidden tab is shown again, and whenever a save is
+refused. Once it learns that its reader was lowered to `view` or removed,
+nothing more is saved from that editor, and its canvas turns read-only once
+no node on it shows a run in progress: a node waiting on a job, queued or
+running, partway through running once per item of a list, making a scene's
+image, or waiting for the result of a paid run started in that editor from a
+character's or object's page opened from **My Library** (Generate All
+Assets, a custom variation, Refine), from a **Suno Voice** node's setup, from
+an **Image Overlay** layer's **Suggest placement (AI)**, or from **Suggest
+seed prompt** beside a **Character Studio**'s **Seed Prompt**. Refine's
+images wait for one to be picked, so Refine counts until one is picked, or
+its picker or the page is closed. So a run that was already going still
+delivers its result. A run still waiting to start when the canvas turns
+read-only, such as one waiting to be confirmed, does not start, and none of
+those paid runs starts on a canvas that is already read-only.
+From then on, someone lowered to `view` receives the workflow the way any
+viewer does; someone removed receives nothing more. Someone raised from
+`view` keeps a read-only canvas until they reopen the workflow. A node left
+showing a run that has ended, such as one cut short when its tab was closed,
+keeps the canvas editable, with nothing on it saved, until the node stops
+showing it.
+
 ### Work shared with me
 
 | Method | Path | Who | Body / query |
@@ -223,9 +247,9 @@ this workflow — and enforces the answer:
 
 | Route | Needs |
 |-------|-------|
-| `GET /v1/workflows/:id` | `view`. The response carries the caller's own `access`, so an editor opening a workflow they may only read gets a read-only canvas without asking twice. A `view`-only reader does not receive a studio production's empty media slots (`stillSlots` / `clipSlots` on each `settings.studio.shots[]` entry) — they are the owner's unsubmitted drafts — nor the per-scene markers of the owner's runs in flight (`pendingStills` / `pendingClips`), nor a finished take's voice record (`revoiceTo` / `voiceMode` on each `data.generatedResults[]` row of the graph's nodes — the owner's voice plan). The recycle bin (`settings.studio.trash`) comes back without the same things in it: no deleted empty slot, and no voice record or empty slot on a deleted take or scene. `edit` and `own` do receive all of it, because an editor saves the graph back whole. The MCP `get_workflow_json` tool follows the same rule. |
+| `GET /v1/workflows/:id` | `view`. The response carries the caller's own `access`, so an editor opening a workflow they may only read gets a read-only canvas without asking twice. A `view`-only reader does not receive a studio production's empty media slots (`stillSlots` / `clipSlots` on each `settings.studio.shots[]` entry) — they are the owner's unsubmitted drafts — nor the per-scene markers of the owner's runs in flight (`pendingStills` / `pendingClips`), nor a finished take's voice record (`revoiceTo` / `voiceMode` on each `data.generatedResults[]` row of the graph's nodes — the owner's voice plan). Of a linked production (one with linked frames and clips), a `view`-only reader also does not receive the director's sequence recommendations (`settings.studio.sequenceRecommendations`), the current generation preferences (`settings.studio.sequenceGenerationPolicies`, which comes back empty), a take's endpoint pins (`sequenceEndpoints` on a `data.generatedResults[]` row), a unit's continuation review (`continuationAcceptance` on each `settings.studio.sequenceTakes[].units[]` entry), a unit result's frozen request (`requestManifest` on each `data.sequenceUnitResults[]` row), or a frame's runs in flight (`keyframePendingImages` on its image node), its rejections (`rejections` on each `settings.studio.keyframes[]` entry) and the owner's reason for waiving its requirements (`waivedReason` in its `acceptance`). The recycle bin (`settings.studio.trash`) comes back without the same things in it: no deleted empty slot, no voice record, endpoint pins or empty slot on a deleted take or scene, none of a deleted scene's linked-production state, and no runs, rejections or waiver reason on a deleted frame. `edit` and `own` do receive all of it, because an editor saves the graph back whole. The MCP `get_workflow_json` tool follows the same rule. |
 | `GET /v1/workflows/:id/access` | `view`. Just the answer — `{ access, workspaceId, visibility, canChangeVisibility }` and never the graph, for a client that already has the workflow and only needs to know what it may do with it. |
-| `GET /v1/workflows/:id/export` | `view`. Bundled assets (`?assets=true`) stay scoped to the CALLER: being allowed to read a workflow is not being allowed to walk out with the characters and locations behind it, so a shared export comes back with the graph and without them. A `view`-only reader's export leaves out the same studio drafts, run markers and take voice records, and bundles no asset that only those drafts reference; the MCP `export_workflow` tool does the same. |
+| `GET /v1/workflows/:id/export` | `view`. Bundled assets (`?assets=true`) stay scoped to the CALLER: being allowed to read a workflow is not being allowed to walk out with the characters and locations behind it, so a shared export comes back with the graph and without them. A `view`-only reader's export leaves out the same studio drafts, run markers and take voice records, and the same linked-production state: the sequence recommendations, the endpoint pins, the continuation reviews, the frozen requests, a frame's runs, rejections and waiver reason, and the current generation preferences, which come back empty. It bundles no asset that only what it leaves out references; the MCP `export_workflow` tool does the same. |
 | `GET /v1/workflows/:id/interface` | `view` |
 | `PATCH /v1/workflows/:id` | `edit` |
 | `POST /v1/workflows/:parentId/sub-workflows` | `edit` on the parent |

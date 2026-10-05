@@ -123,6 +123,7 @@ export function ImageOverlayConfig({ data, onUpdate, sources, nodeId }: ConfigPr
             connected={connectedHandles.has(OVERLAY_HANDLE_IDS[i])}
             base={base}
             onChange={(patch) => updateLayer(i, patch)}
+            nodeId={nodeId}
             baseUrl={baseUrl}
             safeArea={safeArea}
             compact

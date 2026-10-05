@@ -6,7 +6,7 @@
 // crossfade chunk's end-of-chunk hold to the frame grid (Track 0.14).
 import { describe, it, expect } from "vitest"
 import type { Edl, EdlSegment } from "@nodaro/shared"
-import { buildSliceCommand, chunkOutputSec, sliceFingerprint, INPUT_SEEK_MARGIN_SEC, type PlanSegment, type SliceOptions } from "../apply-edl.js"
+import { aacArgs, buildSliceCommand, chunkOutputSec, sliceFingerprint, INPUT_SEEK_MARGIN_SEC, type PlanSegment, type SliceOptions } from "../apply-edl.js"
 
 const EDL: Edl = {
   version: 1,
@@ -309,6 +309,62 @@ describe("the encoder follows the render's quality, not its canvas size (A1)", (
   })
   it("the resume key moves with the quality (a proxy chunk is never resumed into a final render)", () => {
     expect(sliceFingerprint(cmd({ quality: "proxy" }), EDL, "v")).not.toBe(sliceFingerprint(cmd({ quality: "final" }), EDL, "v"))
+  })
+})
+
+// A1c (TA7, decided 2026-10-04): a proxy's sound is lighter MONO — AAC at
+// 96 kbps, still at 48 kHz, so it keeps the final's timing sample for sample.
+// The mono mix is the AVERAGE of the final's two channels, made in the graph:
+// the encoder's own stereo→mono law would play every preview 3 dB louder than
+// its final (a player sends a mono file to both speakers at full level) and
+// could clip a hot source the final does not. Real-ffmpeg proof of all four
+// AAC encodes: `apply-edl-proxy-audio.e2e.test.ts`.
+describe("a proxy's sound is lighter mono at the final's 48 kHz (A1c)", () => {
+  const FINAL_AAC = ["-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2"]
+  const PROXY_AAC = ["-c:a", "aac", "-b:a", "96k", "-ar", "48000", "-ac", "1"]
+  const DOWNMIX = "pan=mono|c0=0.5*FL+0.5*FR"
+
+  it("one AAC encode per quality: the final's unchanged, the proxy's mono 96 kbps at 48 kHz", () => {
+    expect(aacArgs("final")).toEqual(FINAL_AAC)
+    expect(aacArgs("proxy")).toEqual(PROXY_AAC)
+  })
+
+  it("a final slice keeps its delivery encode byte for byte, with no downmix in its graph", () => {
+    expect(cmd({ quality: "final" }).outputArgs).toEqual([
+      "-map", "[vout]", "-map", "[aout]", "-c:v", "libx264", "-preset", "fast", "-crf", "18", "-pix_fmt", "yuv420p",
+      ...FINAL_AAC, "-movflags", "+faststart",
+    ])
+    expect(cmd({ quality: "final", output: "audio" }).outputArgs).toEqual(["-map", "[aout]", ...FINAL_AAC])
+    expect(cmd({ quality: "final", output: "audio", audioCodec: "pcm" }).outputArgs)
+      .toEqual(["-map", "[aout]", "-c:a", "pcm_f32le", "-ar", "48000", "-ac", "2", "-rf64", "auto"])
+    for (const output of ["video", "audio"] as const) expect(cmd({ quality: "final", output }).filterGraph).not.toContain("pan=")
+  })
+
+  it("a proxy slice, video or audio, maps the averaged mono mix and encodes it lighter", () => {
+    for (const output of ["video", "audio"] as const) {
+      const c = cmd({ quality: "proxy", output })
+      expect(c.filterGraph).toContain(`[aout]${DOWNMIX}[amono]`)
+      const args = c.outputArgs.join(" ")
+      expect(args).toContain("-map [amono]")
+      expect(args).not.toContain("-map [aout]")
+      expect(args).toContain(PROXY_AAC.join(" "))
+      expect(args).not.toContain("192k")
+    }
+  })
+
+  it("a one-segment proxy downmixes its only segment", () => {
+    expect(cmd({ quality: "proxy", output: "audio" }, EDL.segments.slice(0, 1)).filterGraph).toContain(`[a0]${DOWNMIX}[amono]`)
+  })
+
+  it("a proxy's lossless slice is mono, so the join and the mux encode exactly what the graph mixed", () => {
+    expect(cmd({ quality: "proxy", output: "audio", audioCodec: "pcm" }).outputArgs)
+      .toEqual(["-map", "[amono]", "-c:a", "pcm_f32le", "-ar", "48000", "-ac", "1", "-rf64", "auto"])
+  })
+
+  it("a picture-only proxy chunk carries no sound, so it has nothing to downmix", () => {
+    const c = cmd({ quality: "proxy", omitAudio: true })
+    expect(c.filterGraph).not.toContain("pan=")
+    expect(c.outputArgs).toContain("-an")
   })
 })
 

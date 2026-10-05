@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase"
 import { queryClient } from "@/lib/query-client"
 import { queryKeys } from "@/lib/query-keys"
 import { nodeTypesOf } from "@/lib/workflow-cover"
+import { readWorkflowContent } from "@/lib/workflow-content"
 import {
   fetchListedAppSlugs,
   isAppSlugColumnMissing,
@@ -446,25 +447,23 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return null
 
-      // Fetch original workflow with nodes/edges
-      const { data: original, error: fetchError } = await supabase
-        .from("workflows")
-        .select("*")
-        .eq("id", id)
-        .single()
-
-      if (fetchError || !original) return null
+      // Fetch original workflow with nodes/edges — as THIS caller may hold it,
+      // so a copy made by somebody the owner only let look carries none of the
+      // owner's studio drafts (lib/workflow-content.ts).
+      const content = await readWorkflowContent(id, "project_id, folder_id, name, nodes, edges, settings")
+      if (!content) return null
+      const original = content.row
 
       const { data, error } = await supabase
         .from("workflows")
         .insert({
-          project_id: original.project_id,
+          project_id: original.project_id as string,
           user_id: user.id,
           folder_id: original.folder_id,
           name: `${original.name} (Copy)`,
-          nodes: original.nodes,
-          edges: original.edges,
-          settings: original.settings,
+          nodes: original.nodes as Json,
+          edges: original.edges as Json,
+          settings: original.settings as Json,
         })
         .select(WORKFLOW_META_COLS)
         .single()

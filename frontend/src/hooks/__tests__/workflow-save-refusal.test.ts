@@ -71,16 +71,23 @@ describe("isSaveRefused", () => {
 
 describe("hasSavableChanges", () => {
   it("is the dirty flag while saves work", () => {
-    expect(hasSavableChanges({ workflowId: "a", saveRefusedFor: null, isDirty: true })).toBe(true)
-    expect(hasSavableChanges({ workflowId: "a", saveRefusedFor: null, isDirty: false })).toBe(false)
+    expect(hasSavableChanges({ workflowId: "a", saveRefusedFor: null, isDirty: true, isReadOnly: false })).toBe(true)
+    expect(hasSavableChanges({ workflowId: "a", saveRefusedFor: null, isDirty: false, isReadOnly: false })).toBe(false)
   })
 
   it("is false once this workflow's saves are refused — there is nothing a Save could keep", () => {
-    expect(hasSavableChanges({ workflowId: "a", saveRefusedFor: "a", isDirty: true })).toBe(false)
+    expect(hasSavableChanges({ workflowId: "a", saveRefusedFor: "a", isDirty: true, isReadOnly: false })).toBe(false)
   })
 
   it("ignores a refusal that belongs to another workflow", () => {
-    expect(hasSavableChanges({ workflowId: "b", saveRefusedFor: "a", isDirty: true })).toBe(true)
+    expect(hasSavableChanges({ workflowId: "b", saveRefusedFor: "a", isDirty: true, isReadOnly: false })).toBe(true)
+  })
+
+  it("is false on a dirty read-only canvas whose saves are NOT refused — its save writes nothing", () => {
+    // A Studio workflow, or a `view` load whose access check failed: dragging
+    // a node dirties it, and its save answers success without writing (the
+    // save suite pins that), so a Save offered on leaving would keep nothing.
+    expect(hasSavableChanges({ workflowId: "a", saveRefusedFor: null, isDirty: true, isReadOnly: true })).toBe(false)
   })
 })
 

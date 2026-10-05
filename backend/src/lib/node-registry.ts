@@ -502,7 +502,7 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     label: "Instagram",
     category: "input",
     // outputType: data — emits a JSON array of Instagram posts via the `json` handle (creditCost auto-filled from STATIC_CREDIT_COSTS).
-    description: "Pull public Instagram posts (images, carousels, reels) by profile or hashtag and emit structured JSON (caption, media, likes, comments).",
+    description: "Pull public Instagram posts (images, carousels, reels) by profile, by hashtag or by post link and emit structured JSON (caption, media, likes, comments).",
     outputType: "data",
   },
   {

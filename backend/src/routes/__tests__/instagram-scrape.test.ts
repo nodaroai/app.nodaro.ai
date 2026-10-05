@@ -138,6 +138,48 @@ describe("POST /v1/instagram-scrape", () => {
     expect(runInstagramScrape).not.toHaveBeenCalled()
   })
 
+  it("post mode: canonical links, one post per link billed, count / formats ignored, and the settlement agrees", async () => {
+    const { runInstagramScrape } = await import("../../providers/apify/instagram.js")
+    vi.mocked(runInstagramScrape).mockResolvedValue({ json: [POST] } as never)
+    analysisMocks.analyzeInstagramPosts.mockResolvedValue({
+      posts: [{ ...POST_OUT, analysis: { summary: "ok" } }],
+      stats: { requested: 1, analyzed: 1, failed: 0, skipped: 0, providerCostUsd: 0.001, usageComplete: true },
+    })
+    const app = await buildTestApp()
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/instagram-scrape",
+      payload: {
+        mode: "post",
+        targets: ["https://instagram.com/p/AbC123/?igsh=xyz", "https://www.instagram.com/p/AbC123/", "https://www.instagram.com/reel/Zz9/"],
+        count: 80,
+        formats: ["square"],
+        analyze: true,
+      },
+    })
+    expect(res.statusCode).toBe(200)
+    // 2 unique links → 2 requested posts → the 10 tier (not 80 × 2 → 200).
+    expect(creditMocks.guardIds).toEqual(["instagram-scrape:10:analysis:economy"])
+    expect(creditMocks.reserveCreditsForJob).toHaveBeenCalledWith(expect.anything(), expect.anything(), "job-1", "instagram-scrape:10:analysis:economy")
+    await vi.waitFor(() => expect(jobMocks.commitJobCredits).toHaveBeenCalled())
+    expect(runInstagramScrape).toHaveBeenCalledWith(expect.objectContaining({
+      mode: "post",
+      targets: ["https://www.instagram.com/p/AbC123/", "https://www.instagram.com/reel/Zz9/"],
+    }))
+    // A post link names one post: the format filter never reaches the media step.
+    expect(mediaMocks.classifyAndStoreInstagramMedia).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ formats: undefined }))
+    // Settlement re-derives the scrape base from the SAME requested count (the mock prices the scrape id at 20).
+    const { baseCreditCostFor } = await import("../../lib/credit-base-cost.js")
+    expect(baseCreditCostFor).toHaveBeenCalledWith("instagram-scrape:10")
+  })
+
+  it("post mode: 400 with a clear message when nothing is a post link", async () => {
+    const app = await buildTestApp()
+    const res = await app.inject({ method: "POST", url: "/v1/instagram-scrape", payload: { mode: "post", targets: ["nike", "https://www.instagram.com/nike/"] } })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.message).toMatch(/post links/)
+  })
+
   it("400 on empty / too many targets", async () => {
     const app = await buildTestApp()
     expect((await app.inject({ method: "POST", url: "/v1/instagram-scrape", payload: { mode: "profile", targets: [] } })).statusCode).toBe(400)

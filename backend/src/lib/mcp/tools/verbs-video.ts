@@ -3129,13 +3129,14 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         "An optional `transcript` is remapped through the cut. At most 180 minutes of output per " +
         "render. A malformed or over-long EDL is rejected " +
         "up front naming the offending segment and rule, so you can fix and retry. Returns a " +
-        "job_id — poll `get_job` for the rendered file. Priced per rendered minute.",
+        "job_id — poll `get_job` for the rendered file. Priced per rendered minute; a `proxy` " +
+        "preview has its own, lower rate.",
       inputSchema: {
         edl: z.union([z.record(z.string(), z.unknown()), z.string()]).describe("The edit-decision list, as an object OR a JSON string — from plan_edit, or hand-authored to the @nodaro/shared Edl contract."),
         sources: z.array(z.string().url()).optional().describe("Positional media-URL overrides for the EDL's sources[], in sources order."),
         transcript: z.record(z.string(), z.unknown()).optional().describe("Optional upstream transcript object, remapped through the cut for the result's transcript output."),
         output: z.enum(["video", "audio"]).optional().describe("Render a video (default) or an audio-only cut."),
-        quality: z.enum(["proxy", "final"]).optional().describe("proxy (fast preview) or final (default)."),
+        quality: z.enum(["proxy", "final"]).optional().describe("proxy (a fast 720p preview, at its own lower per-minute rate) or final (default)."),
         crossfade_ms: z.number().min(0).max(5000).optional().describe("Default crossfade on boundaries with no explicit transition, in ms. 0 = hard cuts (default)."),
       },
       outputSchema: JOB_OUTPUT_SCHEMA,

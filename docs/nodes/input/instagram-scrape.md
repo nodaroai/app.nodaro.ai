@@ -1,6 +1,6 @@
 # Instagram
 
-> Pull public Instagram posts (images, carousels, reels) by profile or hashtag and emit structured JSON (caption, media, likes, comments).
+> Pull public Instagram posts (images, carousels, reels) by profile, by hashtag or by post link and emit structured JSON (caption, media, likes, comments).
 
 ## Overview
 
@@ -10,6 +10,7 @@ The Instagram node scrapes PUBLIC Instagram posts and returns them as a JSON arr
 
 - Track a creator or brand's recent posts (profile mode)
 - Research what's performing under a hashtag (hashtag mode)
+- Remake one post you liked: paste its link (post mode), then an [Extract Field](../utility/extract-field.md) with the field `images` and **Output Type** `list` hands every slide of the carousel to the next step, one run per slide (set its outgoing wire to **Each**)
 - Seed a creative pipeline with real captions and visuals
 - Combine with a Schedule Trigger for a recurring content digest
 
@@ -21,14 +22,15 @@ The Instagram node scrapes PUBLIC Instagram posts and returns them as a JSON arr
 |------|-------|-------------|
 | `profile` (Profile) | Usernames | One username per line, up to 5 (`nike`; `@` optional). Use `{}` to inject an upstream list |
 | `hashtag` (Hashtag) | Hashtags | One hashtag per line, up to 5 (`running`; `#` optional). Use `{}` to inject an upstream list |
+| `post` (Post link) | Post links | One post link per line, up to 5 (`https://www.instagram.com/p/…`, `/reel/…` and `/tv/…` links too; tracking parameters are ignored). Each link brings exactly that post, however old. Anything that is not an Instagram post link is ignored |
 
 ### Fields
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| Posts per source | number | 20 | How many posts per profile / hashtag (1–100) |
-| Period | select | Last 30 days | `Last 24 hours`, `Last 7 days`, `Last 30 days` or `All time`, by the post's date (honoured by the scraper) |
-| Creative format | toggles | none (no filter) | Keep only posts whose creative is `vertical` (reels / portrait), `square` or `horizontal`, classified from the post's real pixels. Fewer posts than requested may come back |
+| Posts per source | number | 20 | How many posts per profile / hashtag (1–100). Not used in post mode — each link is one post |
+| Period | select | Last 30 days | `Last 24 hours`, `Last 7 days`, `Last 30 days` or `All time`, by the post's date (honoured by the scraper). Not used in post mode |
+| Creative format | toggles | none (no filter) | Keep only posts whose creative is `vertical` (reels / portrait), `square` or `horizontal`, classified from the post's real pixels. Fewer posts than requested may come back. Not used in post mode |
 | Copy all videos | toggle | off | Copy every returned post's video into your library (the expensive bytes; they count toward storage) |
 | AI analysis | toggle + model + focus | off | Run a content-analyst pass on every post — asset type, format, visual hooks, audiences, graphic identity, content angles, value, CTA and a summary. Priced per requested post by the model's tier, settled per post analysed |
 
@@ -40,7 +42,7 @@ Instagram's image and video links are signed and expire, so after every run the 
 
 ## Inputs & Outputs
 
-**Inputs:** `in` (optional) — upstream text: profiles (one per line) in `profile` mode, or hashtags in `hashtag` mode.
+**Inputs:** `in` (optional) — upstream text: profiles (one per line) in `profile` mode, hashtags in `hashtag` mode, or post links in `post` mode.
 
 **Outputs:**
 
@@ -51,7 +53,7 @@ Instagram's image and video links are signed and expire, so after every run the 
 | `image` | the featured post's first image (or its video cover) |
 | `video` | the featured post's first video |
 
-The featured post is the one shown on the card (‹ ›, or a Results row click). A run, from the editor or the API, features the first returned post; "Run from here" reuses the post featured on the saved node without scraping again.
+The featured post is the one shown on the card (‹ ›, or a Results row click). A run, from the editor or the API, features the first returned post; "Run from here" reuses the post featured on the saved node without scraping again. In `post` mode with one link, the first returned post IS that post — so a full run of a workflow lands on it every time.
 
 The `json` handle emits an array of posts, each shaped as:
 
@@ -75,7 +77,7 @@ The `json` handle emits an array of posts, each shaped as:
 
 ## Pricing
 
-**1 credit per requested post**, rounded up to the next tier of the requested total (`Posts per source × number of sources`). These are list prices: the node's Run button, and `GET /v1/models` / the MCP `list_models` tool, show the price your instance charges.
+**1 credit per requested post**, rounded up to the next tier of the requested total (`Posts per source × number of sources`; in `post` mode every link is one post, so the requested total is the number of links). These are list prices: the node's Run button, and `GET /v1/models` / the MCP `list_models` tool, show the price your instance charges.
 
 | Requested total | Credits |
 |-----------------|---------|
@@ -85,6 +87,8 @@ The `json` handle emits an array of posts, each shaped as:
 | up to 100 | 100 CR |
 | up to 200 | 200 CR |
 | up to 500 | 500 CR |
+
+Post mode: 1 link → requested total 1 → **10 CR**; 5 links → requested total 5 → still **10 CR** (the count setting does not apply).
 
 ### AI analysis add-on
 

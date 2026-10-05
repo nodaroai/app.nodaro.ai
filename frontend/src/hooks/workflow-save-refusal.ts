@@ -83,11 +83,18 @@ export function isSaveRefused(state: SaveRefusalState): boolean {
  * What the in-app "unsaved changes" dialog asks before it opens. A canvas
  * whose saves are refused stays dirty for good, and that dialog's Save button
  * is an offer the editor cannot honour — the person has already been told, on
- * screen, that nothing here is kept and how to take a copy. The browser's own
- * tab-close prompt is a different thing and still asks `isDirty`: it offers
- * nothing, so it promises nothing, and it is the last guard on results a copy
- * could still keep.
+ * screen, that nothing here is kept and how to take a copy. A read-only canvas
+ * is the same offer: dragging its nodes still dirties it, and its save
+ * answers success without writing anything (`useWorkflowPersistence`), so the
+ * dialog would report a save that kept nothing. That holds whether or not its
+ * saves are also refused: a Studio workflow has none refused, and nor has a
+ * `view` load whose access check failed or has not answered yet. The
+ * browser's own tab-close prompt is a different thing and still asks
+ * `isDirty`: it offers nothing, so it promises nothing, and it is the last
+ * guard on results a copy could still keep.
  */
-export function hasSavableChanges(state: SaveRefusalState & { readonly isDirty: boolean }): boolean {
-  return state.isDirty && !isSaveRefused(state)
+export function hasSavableChanges(
+  state: SaveRefusalState & { readonly isDirty: boolean; readonly isReadOnly: boolean },
+): boolean {
+  return state.isDirty && !state.isReadOnly && !isSaveRefused(state)
 }

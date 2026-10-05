@@ -614,7 +614,7 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
     { handleId: "in", label: "Keyword / Page URLs", accepts: (s) => isValidWebScrapeConnection("in", s) },
   ],
   "instagram-scrape": [
-    { handleId: "in", label: "Profiles / Hashtags", accepts: (s) => isValidWebScrapeConnection("in", s) },
+    { handleId: "in", label: "Profiles / Hashtags / Links", accepts: (s) => isValidWebScrapeConnection("in", s) },
   ],
   "social-search": [
     { handleId: "in", label: "Keyword or account", accepts: (s) => isValidWebScrapeConnection("in", s) },

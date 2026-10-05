@@ -536,7 +536,10 @@ describe("POST /v1/workflows/:id/move", () => {
     })
     const wfSelectEq = vi.fn().mockReturnValue({ maybeSingle: wfMaybeSingle })
     const updateSingle = vi.fn().mockResolvedValue({
-      data: { ...DB_WORKFLOW, project_id: OTHER_PROJECT },
+      // The moved row as the route's full-column select returns it, with the
+      // access facts the route judges it by; the database files a moved
+      // workflow under its new project's workspace.
+      data: { ...DB_WORKFLOW, project_id: OTHER_PROJECT, workspace_id: opts.project?.workspace_id ?? null, visibility: "private" },
       error: null,
     })
     // The move endpoint ends in .single(); PATCH scopes by user_id and ends in
