@@ -56,6 +56,7 @@ import {
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
 import { JobCancelledError, throwIfJobCancelled } from "../../lib/job-cancellation.js"
 import { pickTargetResolution, pickTargetFps } from "./combine-videos.js"
+import { ffmpegThreads, type FfmpegThreads } from "./ffmpeg-threads.js"
 import {
   audioMuxTimeoutMs,
   audioSourceId,
@@ -746,23 +747,44 @@ export function buildSliceCommand(edl: Edl, segs: readonly PlanSegment[], opts: 
   return { inputIds, needsSilence, filterGraph: fullFilter, outputArgs, inputSeekSec, timeoutMs: chunkRenderTimeoutMs(edl, segs, { video: wantVideo, audio: emitAudio }, { width: target.width, height: target.height, fps }) }
 }
 
-/** Run a built slice: bind the local source paths, hand ffmpeg the graph as a
- *  file (`-/filter_complex` — never as one argv string, see `SliceCommand`),
- *  write `outPath`. */
-async function runSlice(cmd: SliceCommand, sourcePaths: Map<string, string>, outPath: string): Promise<void> {
-  const graphPath = `${outPath}.filtergraph`
-  await fs.writeFile(graphPath, cmd.filterGraph)
+/** The ffmpeg argv that runs a built slice: the local source paths bound in
+ *  input order, the graph read from `graphPath` (`-/filter_complex` — never as
+ *  one argv string, see `SliceCommand`), the output at `outPath`. With
+ *  `threads` (the box's CPU quota sits below the cores ffmpeg counts —
+ *  `ffmpegThreads`) every part is told its count: the filter graph
+ *  (`-filter_complex_threads`, global, first), each source's decoder
+ *  (`-threads` before its `-i`) and the output's encoders (`-threads` before
+ *  the output path — an output option, so an audio-only slice's encoder takes
+ *  it too, harmlessly). Without, the argv is exactly the unthreaded one. Pure. */
+export function sliceArgv(
+  cmd: SliceCommand,
+  sourcePaths: ReadonlyMap<string, string>,
+  graphPath: string,
+  outPath: string,
+  threads?: FfmpegThreads,
+): string[] {
   const args: string[] = ["-y"]
+  if (threads) args.push("-filter_complex_threads", String(threads.filter))
   cmd.inputIds.forEach((id, k) => {
+    if (threads) args.push("-threads", String(threads.decode))
     // Omit the seek entirely at 0 — `-ss 0` still changes how an AAC input's
     // first frame is primed.
     if (cmd.inputSeekSec[k] > 0) args.push("-ss", cmd.inputSeekSec[k].toFixed(3))
     args.push("-i", sourcePaths.get(id)!)
   })
   if (cmd.needsSilence) args.push("-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo")
-  args.push("-/filter_complex", graphPath, ...cmd.outputArgs, outPath)
+  args.push("-/filter_complex", graphPath, ...cmd.outputArgs)
+  if (threads) args.push("-threads", String(threads.encode))
+  args.push(outPath)
+  return args
+}
+
+/** Run a built slice (`sliceArgv`): write the graph file, render `outPath`. */
+async function runSlice(cmd: SliceCommand, sourcePaths: Map<string, string>, outPath: string, threads?: FfmpegThreads): Promise<void> {
+  const graphPath = `${outPath}.filtergraph`
+  await fs.writeFile(graphPath, cmd.filterGraph)
   try {
-    await runFfmpeg(args, cmd.timeoutMs)
+    await runFfmpeg(sliceArgv(cmd, sourcePaths, graphPath, outPath, threads), cmd.timeoutMs)
   } finally {
     await fs.rm(graphPath, { force: true })
   }
@@ -771,26 +793,30 @@ async function runSlice(cmd: SliceCommand, sourcePaths: Map<string, string>, out
 async function renderSlice(
   edl: Edl,
   segs: readonly PlanSegment[],
-  opts: SliceOptions & { readonly sourcePaths: Map<string, string>; readonly outPath: string },
+  opts: SliceOptions & { readonly sourcePaths: Map<string, string>; readonly outPath: string; readonly threads?: FfmpegThreads },
 ): Promise<void> {
-  await runSlice(buildSliceCommand(edl, segs, opts), opts.sourcePaths, opts.outPath)
+  await runSlice(buildSliceCommand(edl, segs, opts), opts.sourcePaths, opts.outPath, opts.threads)
 }
 
 /**
  * The resume identity of a slice: a hash of EXACTLY what would render — the
  * filter graph (trims, frame counts, grid position, canvas, fps), each input's
  * seek (the graph's trims are relative to it), the encode arguments, the
- * sources by id + URL (never the per-run local paths), and the ffmpeg build. A checkpoint is reused only under this key, so any change to
- * chunk planning, the grid, the width cap, `omitAudio`, the encode, or the
- * ffmpeg pin misses the old object instead of splicing a chunk rendered for a
- * different plan into this one (which once completed a job with a scrambled
- * picture over the right audio — and deleted the evidence). There is no scheme
- * version to remember to bump: the key IS the command.
+ * sources by id + URL (never the per-run local paths), the ffmpeg build, and
+ * the thread counts it runs with (`sliceArgv` binds them at run time, like the
+ * paths, but they change the encoded bits — x264's frame threads shape its
+ * decisions). A checkpoint is reused only under this key, so any change to
+ * chunk planning, the grid, the width cap, `omitAudio`, the encode, the
+ * threads, or the ffmpeg pin misses the old object instead of splicing a chunk
+ * rendered for a different plan into this one (which once completed a job with
+ * a scrambled picture over the right audio — and deleted the evidence). There
+ * is no scheme version to remember to bump: the key IS the command. A render
+ * with no thread counts (no CPU quota) keeps the key it always had.
  */
-export function sliceFingerprint(cmd: SliceCommand, edl: Edl, ffmpegVersion: string): string {
+export function sliceFingerprint(cmd: SliceCommand, edl: Edl, ffmpegVersion: string, threads?: FfmpegThreads): string {
   const sources = cmd.inputIds.map((id) => [id, edl.sources.find((s) => s.id === id)?.url ?? null])
   return createHash("sha256")
-    .update(JSON.stringify({ ffmpegVersion, sources, inputSeekSec: cmd.inputSeekSec, needsSilence: cmd.needsSilence, filterGraph: cmd.filterGraph, outputArgs: cmd.outputArgs }))
+    .update(JSON.stringify({ ffmpegVersion, sources, inputSeekSec: cmd.inputSeekSec, needsSilence: cmd.needsSilence, filterGraph: cmd.filterGraph, outputArgs: cmd.outputArgs, threads }))
     .digest("hex")
     .slice(0, 16)
 }
@@ -893,6 +919,12 @@ export async function applyEdl(options: ApplyEdlOptions): Promise<ApplyEdlResult
     const useCheckpoint = checkpoint && muxAudioSeparately
     // Resume keys hash the exact command, including the ffmpeg build.
     const ffmpegVersion = useCheckpoint ? await ffmpegVersionLine() : ""
+    // Every slice of this render runs with the box's CPU budget, read once:
+    // ffmpeg's own auto-threading counts the host's cores, not the container's
+    // quota, and at 4K that multiplied x264's frame threads (and their memory)
+    // past what the box holds (`ffmpeg-threads.ts`). Undefined = no quota below
+    // the cores ffmpeg sees; the render then runs exactly as before.
+    const threads = ffmpegThreads()
 
     const chunkPaths: string[] = []
     // Running GLOBAL output position handed to each chunk so the cumulative
@@ -941,7 +973,7 @@ export async function applyEdl(options: ApplyEdlOptions): Promise<ApplyEdlResult
       // different plan (other chunk boundaries, grid position, width cap,
       // encode, or ffmpeg build — e.g. an attempt that started before a deploy)
       // is never spliced into this one: it simply isn't found.
-      const key = `apply-edl-cache/${jobId}/chunk-${c}-${sliceFingerprint(cmd, edl, ffmpegVersion)}.${ext}`
+      const key = `apply-edl-cache/${jobId}/chunk-${c}-${sliceFingerprint(cmd, edl, ffmpegVersion, threads)}.${ext}`
 
       // Resume: a chunk already checkpointed to R2 (a prior worker attempt) is
       // pulled back instead of re-rendered. Storage is dynamically imported so
@@ -961,7 +993,7 @@ export async function applyEdl(options: ApplyEdlOptions): Promise<ApplyEdlResult
       }
 
       if (!resumed) {
-        await runSlice(cmd, sourcePaths, chunkPath)
+        await runSlice(cmd, sourcePaths, chunkPath, threads)
         if (useCheckpoint) {
           try {
             const { uploadFileWithKeyToR2 } = await import("../../lib/storage.js")
@@ -1013,7 +1045,7 @@ export async function applyEdl(options: ApplyEdlOptions): Promise<ApplyEdlResult
           await throwIfJobCancelled()
           const pcmPath = join(workDir, `audio-${k}.wav`)
           await renderSlice(edl, audioChunks[k], {
-            output: "audio", audioCodec: "pcm", quality, target, fps, chunkStartSec: 0, masterAudioId, audioPresent, sourcePaths, outPath: pcmPath,
+            output: "audio", audioCodec: "pcm", quality, target, fps, chunkStartSec: 0, masterAudioId, audioPresent, sourcePaths, outPath: pcmPath, threads,
           })
           pcmPaths.push(pcmPath)
         }
