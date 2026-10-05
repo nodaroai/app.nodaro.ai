@@ -1,5 +1,15 @@
 # @nodaro/shared
 
+## 3.21.0
+
+### Minor Changes
+
+- 3430225: Export `DEFAULT_TTS_PROVIDER` (`"elevenlabs-v4"`): the speech model a request runs on when it names none. ElevenLabs v4 is now the default text-to-speech model (v3 stays selectable): it carries the catalog's featured star and leads the "voice over / narration" recommendation, which now lists v4, v3 and Turbo.
+
+### Patch Changes
+
+- 01fa4ed: `SharedVoice.recommendedProvider` / `verifiedProviders` (from `GET /v1/voices/library`) now document the new recommendation order: a Voice Library entry verified for ElevenLabs v4 recommends `elevenlabs-v4` first, then `elevenlabs-v3`, `elevenlabs-turbo`, `elevenlabs-multilingual`. Only the base model id `eleven_v4` counts toward v4; its `eleven_v4_…` variants do not. Both fields only name models the deployment offers, and are absent when none of a voice's verified models is offered. Documentation only: no type or export changed.
+
 ## 3.20.0
 
 ### Minor Changes
