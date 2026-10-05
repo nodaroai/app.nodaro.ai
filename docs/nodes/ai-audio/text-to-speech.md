@@ -31,7 +31,7 @@ Voice Library voices are verified per model by their creators. The Voice Browser
 
 ### Voice errors
 
-If the selected voice no longer exists on ElevenLabs (e.g. it was removed from the Voice Library or the clone was deleted), the job **fails with a clear error** instead of silently substituting a different voice. The only exception is LLM-originated requests through the MCP `generate_speech` tool, where a hallucinated voice id falls back to the default voice (Rachel) so the agent still gets audio back.
+If the selected voice no longer exists on ElevenLabs (e.g. it was removed from the Voice Library or the clone was deleted), the job **fails with a clear error** instead of silently substituting a different voice. The only exception is LLM-originated requests through the MCP `generate_speech` tool, where a hallucinated voice id falls back to the default voice (Rachel) so the agent still gets audio back — unless the request marks the voice as a `library` or `custom` voice (`voice_type`), which fails like any other missing voice.
 
 ### Settings from apps, agents and imports
 
