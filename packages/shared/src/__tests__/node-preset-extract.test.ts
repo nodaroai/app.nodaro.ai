@@ -4,7 +4,9 @@ import {
   extractPresetData,
   PRESET_EXCLUDED_KEYS,
   PRESET_APPLY_CLEAR_KEYS,
+  PRESET_LEVER_GROUPS,
   presetApplyClearKeys,
+  presetLeverClearKeys,
   presetDataMatches,
 } from "../node-preset-extract.js"
 
@@ -232,5 +234,65 @@ describe("Scene3D presets", () => {
       expect(presetApplyClearKeys({ scenePrompt: "New scene" })).toContain(key)
     }
     expect(presetApplyClearKeys({ scenePrompt: "New scene" })).toContain("promptPrefix")
+  })
+})
+
+describe("caption lever group (applying a caption preset over another)", () => {
+  // The values of the Hook Plate, Body Captions and Clean Subtitles presets in @nodaro/prompts.
+  const HOOK_PLATE = { style: "subtitle", look: "clean", position: "top", positionY: 20, fontSize: 32, fontWeight: 800, maxWordsPerLine: 4, color: "#111111", backgroundColor: "#FFFFFF", autoTranscribe: false }
+  const BODY = { style: "word-highlight", look: "outline", position: "bottom", positionY: 72, fontSize: 32, maxWordsPerLine: 3, color: "#FFFFFF", autoTranscribe: true }
+  const CLEAN = { style: "subtitle", position: "bottom", fontSize: 32, color: "#FFFFFF", autoTranscribe: true }
+  const apply = (node: Record<string, unknown>, preset: Record<string, unknown>, nodeType?: string) => ({
+    ...node,
+    ...Object.fromEntries(presetApplyClearKeys(preset, nodeType).map((k) => [k, undefined])),
+    ...preset,
+  })
+
+  it("Body Captions over Hook Plate clears the plate's backgroundColor and fontWeight", () => {
+    const after = apply(HOOK_PLATE, BODY, "add-captions")
+    expect(after.backgroundColor).toBeUndefined()
+    expect(after.fontWeight).toBeUndefined()
+    expect(after.look).toBe("outline")
+  })
+
+  it("Clean Subtitles over Hook Plate clears backgroundColor, look, positionY, fontWeight and maxWordsPerLine", () => {
+    const after = apply(HOOK_PLATE, CLEAN, "add-captions")
+    for (const k of ["backgroundColor", "look", "positionY", "fontWeight", "maxWordsPerLine"]) expect(after[k], k).toBeUndefined()
+    expect(after.position).toBe("bottom")
+  })
+
+  it("an existing caption preset over a clean node leaves no lever set", () => {
+    const after = apply({ style: "subtitle" }, CLEAN, "add-captions")
+    for (const k of PRESET_LEVER_GROUPS["add-captions"]!) expect(after[k], k).toBeUndefined()
+    expect(after).toMatchObject(CLEAN)
+  })
+
+  it("never clears a lever the preset sets", () => {
+    for (const k of presetLeverClearKeys(HOOK_PLATE, "add-captions")) expect(HOOK_PLATE).not.toHaveProperty(k)
+  })
+
+  it("empty preset data clears no group member", () => {
+    expect(presetLeverClearKeys({}, "add-captions")).toEqual([])
+    expect(presetLeverClearKeys({ style: undefined }, "add-captions")).toEqual([])
+  })
+
+  it("a node type with no group, or no node type, behaves as today", () => {
+    expect(presetLeverClearKeys(CLEAN, "generate-image")).toEqual([])
+    expect(presetLeverClearKeys(CLEAN)).toEqual([])
+    expect([...presetApplyClearKeys(CLEAN, "generate-image")].sort()).toEqual([...PRESET_APPLY_CLEAR_KEYS].sort())
+    expect([...presetApplyClearKeys(CLEAN)].sort()).toEqual([...PRESET_APPLY_CLEAR_KEYS].sort())
+  })
+
+  it("a hand-set fontFamily is cleared by any caption preset that does not set it (the stated cost)", () => {
+    expect(apply({ ...BODY, fontFamily: "Anton" }, CLEAN, "add-captions").fontFamily).toBeUndefined()
+  })
+
+  it("an inherited key name is not a node type", () => {
+    expect(presetLeverClearKeys(CLEAN, "constructor")).toEqual([])
+  })
+
+  it("group members stay capture-included, and PRESET_EXCLUDED_KEYS still covers PRESET_APPLY_CLEAR_KEYS", () => {
+    for (const k of PRESET_LEVER_GROUPS["add-captions"]!) expect(PRESET_EXCLUDED_KEYS.has(k), k).toBe(false)
+    for (const k of PRESET_APPLY_CLEAR_KEYS) expect(PRESET_EXCLUDED_KEYS.has(k), k).toBe(true)
   })
 })

@@ -1166,6 +1166,7 @@ export {
   resolveCaptionLevers,
 } from "./caption-styles.js"
 export type { StaticCaptionStyle, KineticCaptionStyle, CaptionStyle, CaptionLookId, CaptionLookLevers, KineticOnlyCaptionLeverKey } from "./caption-styles.js"
+export type { CaptionPlan, CaptionWordTiming } from "./caption-plan.js"
 
 export {
   transcribeWordTimestampsRefusal,
@@ -1409,7 +1410,7 @@ export {
   describeNodeAdjustments,
 } from "./normalize-node-params.js"
 export type { NodeParamAdjustment, NormalizedNodes } from "./normalize-node-params.js"
-export { extractPresetData, PRESET_EXCLUDED_KEYS, PRESET_APPLY_CLEAR_KEYS, presetApplyClearKeys, presetDataMatches } from "./node-preset-extract.js"
+export { extractPresetData, PRESET_EXCLUDED_KEYS, PRESET_APPLY_CLEAR_KEYS, PRESET_LEVER_GROUPS, presetApplyClearKeys, presetLeverClearKeys, presetDataMatches } from "./node-preset-extract.js"
 export { PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY, readPromptAffixes } from "./prompt-affixes.js"
 export type { PromptAffixFields, PromptAffixes } from "./prompt-affixes.js"
 

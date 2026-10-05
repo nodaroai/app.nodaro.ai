@@ -6,6 +6,7 @@ import { STYLE_IDS } from "../index.js"
 import { joinPromptParts } from "../resolve-prompt.js"
 import { nodeSupportsPromptAffixes } from "../node-prompt-fields.js"
 import { IMAGE_GEN_PROVIDERS, MODIFY_IMAGE_PROVIDERS, VIDEO_GEN_PROVIDERS, VIDEO_TO_VIDEO_PROVIDERS, MUSIC_PROVIDERS, SUNO_MODELS, TTS_PROVIDERS, TEXT_TO_AUDIO_PROVIDERS, ALL_CAPTION_STYLES, COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, aspectRatioOptionsByKind, durationsByMode, IMAGE_PROMPT_MAX, MODEL_CATALOG, NATIVE_NEGATIVE_VIDEO_PROVIDERS, VIDEO_DURATION_AUTO, supportsAutoVideoDuration } from "@nodaro/shared"
+import { CAPTION_LOOK_IDS, CAPTION_MAX_WORDS_PER_LINE_MAX, CAPTION_MAX_WORDS_PER_LINE_MIN, KINETIC_ONLY_CAPTION_LEVER_KEYS, SUPPORTED_FONT_NAMES } from "@nodaro/shared"
 
 /**
  * The text a preset ACTUALLY sends: a preset may ship its doctrine as pre/post
@@ -740,6 +741,37 @@ describe("add-captions factory preset data validity", () => {
     }
   })
 
+  it("keeps every look lever valid: positionY 0-100, a known look and font, fontWeight a 100-step in 100-900, maxWordsPerLine in bounds", () => {
+    for (const p of presets) {
+      const d = p.data
+      if (d.positionY !== undefined) {
+        expect(d.positionY as number, `${p.id}: positionY`).toBeGreaterThanOrEqual(0)
+        expect(d.positionY as number, `${p.id}: positionY`).toBeLessThanOrEqual(100)
+      }
+      if (d.look !== undefined) expect(CAPTION_LOOK_IDS, `${p.id}: look`).toContain(d.look as never)
+      if (d.fontFamily !== undefined) expect(SUPPORTED_FONT_NAMES, `${p.id}: fontFamily`).toContain(d.fontFamily as never)
+      if (d.fontWeight !== undefined) {
+        const w = d.fontWeight as number
+        expect(w % 100, `${p.id}: fontWeight step`).toBe(0)
+        expect(w, `${p.id}: fontWeight`).toBeGreaterThanOrEqual(100)
+        expect(w, `${p.id}: fontWeight`).toBeLessThanOrEqual(900)
+      }
+      if (d.maxWordsPerLine !== undefined) {
+        const m = d.maxWordsPerLine as number
+        expect(Number.isInteger(m), `${p.id}: maxWordsPerLine integer`).toBe(true)
+        expect(m).toBeGreaterThanOrEqual(CAPTION_MAX_WORDS_PER_LINE_MIN)
+        expect(m).toBeLessThanOrEqual(CAPTION_MAX_WORDS_PER_LINE_MAX)
+      }
+    }
+  })
+
+  it("a subtitle preset carries no kinetic-only lever (the route rejects them on subtitle)", () => {
+    for (const p of presets) {
+      if (p.data.style !== "subtitle") continue
+      for (const k of KINETIC_ONLY_CAPTION_LEVER_KEYS) expect(p.data[k], `${p.id}: ${k}`).toBeUndefined()
+    }
+  })
+
   it("groups every preset under a folder", () => {
     for (const p of presets) expect(p.group, `${p.id}: missing group`).toBeTruthy()
   })
@@ -1124,3 +1156,34 @@ describe("generate-video/edit-video — the Seedance 2.5 edit shape, up front", 
   })
 })
 
+
+describe("factory preset data carries no null", () => {
+  // The canvas sends a node's levers as they are, and the routes' optional fields reject null —
+  // a null in a preset would fail the run with a 400. "Unset" is expressed by leaving the key out.
+  const nullPaths = (data: Readonly<Record<string, unknown>>): string[] => {
+    const out: string[] = []
+    for (const [k, v] of Object.entries(data)) {
+      if (v === null) {
+        out.push(k)
+      } else if (Array.isArray(v)) {
+        v.forEach((x, i) => {
+          if (x === null) out.push(`${k}[${i}]`)
+        })
+      } else if (typeof v === "object") {
+        for (const [k2, v2] of Object.entries(v as Record<string, unknown>)) if (v2 === null) out.push(`${k}.${k2}`)
+      }
+    }
+    return out
+  }
+
+  it("finds a null at the top level and one level down (self-check)", () => {
+    expect(nullPaths({ a: null, b: { c: null }, d: [null], e: 1 })).toEqual(["a", "b.c", "d[0]"])
+  })
+
+  it("no factory preset data value is null", () => {
+    const offenders = Object.values(FACTORY_PRESETS)
+      .flat()
+      .flatMap((p) => nullPaths(p.data).map((path) => `${p.id}.${path}`))
+    expect(offenders, `null values: ${offenders.join(", ")}`).toEqual([])
+  })
+})
