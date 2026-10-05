@@ -6218,6 +6218,8 @@ export const ko: ChromeDict = {
   "node.editPlanClips": "클립 {count}개",
   "node.edlWellFormed": "형식이 올바른 EDL",
   "node.edlReadyToRender": "렌더링 준비 완료",
+  "node.edlRendersFailing": "렌더링 {total}개 중 {n}개에 문제",
+  "node.edlRenderN": "렌더링 {n}",
   "node.edlIssuesOne": "EDL 문제 1개",
   "node.edlIssuesMany": "EDL 문제 {n}개",
   "node.edlWarningsOne": "경고 1개",

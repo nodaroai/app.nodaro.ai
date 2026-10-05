@@ -7,6 +7,7 @@
  */
 import { describe, it, expect, vi, afterEach } from "vitest"
 import { render, screen, cleanup } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
 
 const { store } = vi.hoisted(() => {
   const store = {
@@ -99,5 +100,53 @@ describe("the Apply EDL panel badge judges what the node would render", () => {
     expect(canvas(unresolved).dataset.ok).toBe("false")
     cleanup()
     expect(canvas(unresolved, {}, { uploadUrl: "https://media.test/upload.mp4" }).textContent).toContain("Ready to render")
+  })
+
+  // Decided 2026-10-05: a List wired into Sources fans the render out, one
+  // render per row with that row's media; the badge judges every one of them.
+  it("judges each render of a List wired into Sources: a row missing a camera is flagged by its number", async () => {
+    const twoCams = edlOf(
+      [{ id: "cam", url: "", kind: "video" }, { id: "cam2", url: "", kind: "video" }],
+      [seg("s0", 0, 3000, { video: "cam" }), seg("s1", 3000, 6000, { video: "cam2" })],
+    )
+    store.nodes = [
+      { id: "plan", type: "edit-plan", data: { generatedJson: twoCams } },
+      {
+        id: "cams",
+        type: "list",
+        data: {
+          columns: [
+            { id: "a", name: "A", handleId: "col_a", type: "text" },
+            { id: "b", name: "B", handleId: "col_b", type: "text" },
+          ],
+          rows: [["https://media.test/a0.mp4", "https://media.test/b0.mp4"], ["https://media.test/a1.mp4", ""]],
+        },
+      },
+      { id: "render", type: "apply-edl", data: {} },
+    ]
+    store.edges = [
+      { id: "e-edl", source: "plan", sourceHandle: "edl", target: "render", targetHandle: "edl" },
+      { id: "e-a", source: "cams", sourceHandle: "col_a", target: "render", targetHandle: "sources" },
+      { id: "e-b", source: "cams", sourceHandle: "col_b", target: "render", targetHandle: "sources" },
+    ]
+    render(
+      <ApplyEdlConfig
+        data={{} as ApplyEdlData}
+        onUpdate={() => {}}
+        sources={[]}
+        fieldMappings={{}}
+        onMapField={() => {}}
+        nodes={[]}
+        nodeId="render"
+      />,
+    )
+    const badge = screen.getByTestId("edl-validity-badge")
+    expect(badge.dataset.ok).toBe("false")
+    expect(badge.textContent).toContain("Issues in 1 of 2 renders")
+    await userEvent.click(badge)
+    const failing = await screen.findAllByTestId("edl-render-issues")
+    expect(failing).toHaveLength(1)
+    expect(failing[0]!.textContent).toContain("Render 2")
+    expect(failing[0]!.textContent).toMatch(/source "cam2" has no url/)
   })
 })

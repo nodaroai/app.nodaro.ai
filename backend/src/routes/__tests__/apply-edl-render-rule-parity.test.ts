@@ -37,7 +37,7 @@ import { applyEdlRoutes } from "../apply-edl.js"
 interface Case {
   readonly nodes: ReadonlyArray<{ readonly id: string; readonly data: Record<string, unknown> }>
   readonly sources: readonly string[]
-  readonly renders: ReadonlyArray<{ readonly edl: unknown; readonly issues: readonly string[] }>
+  readonly renders: ReadonlyArray<{ readonly edl: unknown; readonly sources?: readonly string[]; readonly issues: readonly string[] }>
 }
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -70,6 +70,9 @@ describe("POST /v1/apply-edl reaches the render rule's verdicts (A2b parity)", (
       const node = c.nodes.find((n) => n.id === "render")!
       for (const [i, r] of c.renders.entries()) {
         const where = `${name}, render ${i}`
+        // This render's own Sources media when a list wired into Sources fans
+        // the render out, else the case's.
+        const sources = r.sources ?? c.sources
         const res = await app.inject({
           method: "POST",
           url: "/v1/apply-edl",
@@ -77,7 +80,7 @@ describe("POST /v1/apply-edl reaches the render rule's verdicts (A2b parity)", (
             edl: r.edl,
             output: node.data.output ?? "video",
             ...(typeof node.data.crossfadeMs === "number" ? { crossfadeMs: node.data.crossfadeMs } : {}),
-            ...(c.sources.length > 0 ? { sources: c.sources } : {}),
+            ...(sources.length > 0 ? { sources } : {}),
           },
         })
         if (r.issues.length === 0) {

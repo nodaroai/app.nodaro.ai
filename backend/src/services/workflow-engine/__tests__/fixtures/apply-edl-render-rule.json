@@ -1,5 +1,5 @@
 {
-  "description": "Apply EDL's render rule, judged by both sides on the same canvases (decided 2026-10-04: the badge is split by surface, and whatever is anchored at a render judges with the render's own rule). Each case is a canvas: the Apply EDL node is `render`, with the producers wired into it holding their saved results. `sources` is what its Sources wires deliver, in slot order. `renders` lists the renders a run of `render` makes, in order (a clip list renders once per clip, `clip` naming the item): the EDL each one reads, and what the server says about it — its issues, or none when it renders. The server test (apply-edl-render-rule-parity.test.ts, beside this folder) runs the canvas the way a Run from here at the render does (saved results seeded, the fan-out, the input resolver, the DAG payload builder); the route test (backend/src/routes/__tests__/apply-edl-render-rule-parity.test.ts) sends each render to POST /v1/apply-edl, as a single-node Run does; the editor test (frontend/src/lib/__tests__/apply-edl-render-rule-parity.test.ts) runs the editor's own Run of `render` (the fan-out planned, each render's inputs resolved), then picks the EDL and sources the panel badge judges and runs its render verdict. All three must reach these verdicts. The badge lists a clip list's issues as `clip[i]: …`; `badgeIssues` is set only where the editor words the same refusal differently.",
+  "description": "Apply EDL's render rule, judged by both sides on the same canvases (decided 2026-10-04: the badge is split by surface, and whatever is anchored at a render judges with the render's own rule). Each case is a canvas: the Apply EDL node is `render`, with the producers wired into it holding their saved results. `sources` is what its Sources wires deliver, in slot order; a render lists its own `sources` when a list wired into Sources fans the render out. `renders` lists the renders a run of `render` makes, in order (a list that fans the render out renders once per row, `clip` naming the row: a plan's clip, a List's row): the EDL each one reads, and what the server says about it — its issues, or none when it renders. The server test (apply-edl-render-rule-parity.test.ts, beside this folder) runs the canvas the way a Run from here at the render does (saved results seeded, the fan-out, the input resolver, the DAG payload builder); the route test (backend/src/routes/__tests__/apply-edl-render-rule-parity.test.ts) sends each render to POST /v1/apply-edl, as a single-node Run does; the editor test (frontend/src/lib/__tests__/apply-edl-render-rule-parity.test.ts) runs the editor's own Run of `render` (the fan-out planned, each render's inputs resolved), then takes the renders the panel badge judges and runs its render verdict. All three must reach these verdicts. Where a run makes several renders, the badge judges each with its own EDL and Sources and names each issue by its render, numbered from 1 by its row (`render 2: …`); `badgeIssues` is set only where the editor words the same refusal differently: on a case, the badge's whole list; on one render of several, that render's issues as the badge names them.",
   "cases": {
     "ready": {
       "note": "A single-camera Tighten plan the renderer draws as it is: one render, nothing refused.",
@@ -1844,6 +1844,452 @@
           },
           "issues": [
             "segments is empty"
+          ]
+        }
+      ]
+    },
+    "a List wired into Sources, a row missing its second camera": {
+      "note": "Two columns of a List wired into Sources fan the render out, one render per row, each row's media filling the plan's sources in slot order. The second row has no second camera: its render gets one override, so the plan's second source keeps its empty url and that render alone is refused.",
+      "nodes": [
+        {
+          "id": "plan",
+          "type": "edit-plan",
+          "data": {
+            "mode": "tighten",
+            "generatedJson": {
+              "version": 1,
+              "clock": "master",
+              "sources": [
+                {
+                  "id": "cam",
+                  "url": "",
+                  "kind": "video"
+                },
+                {
+                  "id": "cam2",
+                  "url": "",
+                  "kind": "video"
+                }
+              ],
+              "segments": [
+                {
+                  "id": "s0",
+                  "inMs": 0,
+                  "outMs": 3000,
+                  "video": "cam"
+                },
+                {
+                  "id": "s1",
+                  "inMs": 3000,
+                  "outMs": 6000,
+                  "video": "cam2"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "cams",
+          "type": "list",
+          "data": {
+            "columns": [
+              {
+                "id": "a",
+                "name": "Camera A",
+                "handleId": "col_a",
+                "type": "text"
+              },
+              {
+                "id": "b",
+                "name": "Camera B",
+                "handleId": "col_b",
+                "type": "text"
+              }
+            ],
+            "rows": [
+              [
+                "https://media.test/a-0.mp4",
+                "https://media.test/b-0.mp4"
+              ],
+              [
+                "https://media.test/a-1.mp4",
+                ""
+              ]
+            ]
+          }
+        },
+        {
+          "id": "render",
+          "type": "apply-edl",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "source": "plan",
+          "target": "render",
+          "sourceHandle": "edl",
+          "targetHandle": "edl"
+        },
+        {
+          "source": "cams",
+          "target": "render",
+          "sourceHandle": "col_a",
+          "targetHandle": "sources"
+        },
+        {
+          "source": "cams",
+          "target": "render",
+          "sourceHandle": "col_b",
+          "targetHandle": "sources"
+        }
+      ],
+      "sources": [],
+      "renders": [
+        {
+          "clip": 0,
+          "edl": {
+            "version": 1,
+            "clock": "master",
+            "sources": [
+              {
+                "id": "cam",
+                "url": "",
+                "kind": "video"
+              },
+              {
+                "id": "cam2",
+                "url": "",
+                "kind": "video"
+              }
+            ],
+            "segments": [
+              {
+                "id": "s0",
+                "inMs": 0,
+                "outMs": 3000,
+                "video": "cam"
+              },
+              {
+                "id": "s1",
+                "inMs": 3000,
+                "outMs": 6000,
+                "video": "cam2"
+              }
+            ]
+          },
+          "sources": [
+            "https://media.test/a-0.mp4",
+            "https://media.test/b-0.mp4"
+          ],
+          "issues": []
+        },
+        {
+          "clip": 1,
+          "edl": {
+            "version": 1,
+            "clock": "master",
+            "sources": [
+              {
+                "id": "cam",
+                "url": "",
+                "kind": "video"
+              },
+              {
+                "id": "cam2",
+                "url": "",
+                "kind": "video"
+              }
+            ],
+            "segments": [
+              {
+                "id": "s0",
+                "inMs": 0,
+                "outMs": 3000,
+                "video": "cam"
+              },
+              {
+                "id": "s1",
+                "inMs": 3000,
+                "outMs": 6000,
+                "video": "cam2"
+              }
+            ]
+          },
+          "sources": [
+            "https://media.test/a-1.mp4"
+          ],
+          "issues": [
+            "source \"cam2\": url is empty (media resolves from url)",
+            "source \"cam2\" has no url — resolve it or wire a `sources` override"
+          ]
+        }
+      ]
+    },
+    "a clip list paired with a List of sources": {
+      "note": "A plan's clip list and a List wired into Sources with the same rows fan the render out together: each render reads its clip and its row's media, in slot order. The second clip cuts between two cameras but its row brings one, so its second source keeps its empty url and that render alone is refused; the first renders.",
+      "nodes": [
+        {
+          "id": "plan",
+          "type": "edit-plan",
+          "data": {
+            "mode": "clips",
+            "generatedJson": [
+              {
+                "version": 1,
+                "clock": "master",
+                "sources": [
+                  {
+                    "id": "cam",
+                    "url": "",
+                    "kind": "video"
+                  }
+                ],
+                "segments": [
+                  {
+                    "id": "c0",
+                    "inMs": 0,
+                    "outMs": 4000,
+                    "video": "cam"
+                  }
+                ]
+              },
+              {
+                "version": 1,
+                "clock": "master",
+                "sources": [
+                  {
+                    "id": "cam",
+                    "url": "",
+                    "kind": "video"
+                  },
+                  {
+                    "id": "cam2",
+                    "url": "",
+                    "kind": "video"
+                  }
+                ],
+                "segments": [
+                  {
+                    "id": "c1a",
+                    "inMs": 0,
+                    "outMs": 2500,
+                    "video": "cam"
+                  },
+                  {
+                    "id": "c1b",
+                    "inMs": 2500,
+                    "outMs": 5000,
+                    "video": "cam2"
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "media",
+          "type": "list",
+          "data": {
+            "columns": [
+              {
+                "id": "a",
+                "name": "Media",
+                "handleId": "col_a",
+                "type": "text"
+              }
+            ],
+            "rows": [
+              [
+                "https://media.test/clip-0.mp4"
+              ],
+              [
+                "https://media.test/clip-1.mp4"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "render",
+          "type": "apply-edl",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "source": "plan",
+          "target": "render",
+          "sourceHandle": "edl",
+          "targetHandle": "edl"
+        },
+        {
+          "source": "media",
+          "target": "render",
+          "sourceHandle": "col_a",
+          "targetHandle": "sources"
+        }
+      ],
+      "sources": [],
+      "renders": [
+        {
+          "clip": 0,
+          "edl": {
+            "version": 1,
+            "clock": "master",
+            "sources": [
+              {
+                "id": "cam",
+                "url": "",
+                "kind": "video"
+              }
+            ],
+            "segments": [
+              {
+                "id": "c0",
+                "inMs": 0,
+                "outMs": 4000,
+                "video": "cam"
+              }
+            ]
+          },
+          "sources": [
+            "https://media.test/clip-0.mp4"
+          ],
+          "issues": []
+        },
+        {
+          "clip": 1,
+          "edl": {
+            "version": 1,
+            "clock": "master",
+            "sources": [
+              {
+                "id": "cam",
+                "url": "",
+                "kind": "video"
+              },
+              {
+                "id": "cam2",
+                "url": "",
+                "kind": "video"
+              }
+            ],
+            "segments": [
+              {
+                "id": "c1a",
+                "inMs": 0,
+                "outMs": 2500,
+                "video": "cam"
+              },
+              {
+                "id": "c1b",
+                "inMs": 2500,
+                "outMs": 5000,
+                "video": "cam2"
+              }
+            ]
+          },
+          "sources": [
+            "https://media.test/clip-1.mp4"
+          ],
+          "issues": [
+            "source \"cam2\": url is empty (media resolves from url)",
+            "source \"cam2\" has no url — resolve it or wire a `sources` override"
+          ]
+        }
+      ]
+    },
+    "a List row with no EDL that its camera keeps": {
+      "note": "A List's EDL column is wired into EDL and its camera column into Sources. The second row's EDL cell is empty, but its camera cell keeps the row in the run, so the run still makes that render with no EDL: the server refuses it (an empty EDL has no segments) and the editor's Run refuses it before sending (\"apply-edl requires an EDL\"). The badge counts it as a render that fails with no EDL, so the node is not ready.",
+      "nodes": [
+        {
+          "id": "rows",
+          "type": "list",
+          "data": {
+            "columns": [
+              {
+                "id": "a",
+                "name": "EDL",
+                "handleId": "col_a",
+                "type": "text"
+              },
+              {
+                "id": "b",
+                "name": "Camera",
+                "handleId": "col_b",
+                "type": "text"
+              }
+            ],
+            "rows": [
+              [
+                "{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"cam\",\"url\":\"\",\"kind\":\"video\"}],\"segments\":[{\"id\":\"s0\",\"inMs\":0,\"outMs\":5000,\"video\":\"cam\"}]}",
+                "https://media.test/a-0.mp4"
+              ],
+              [
+                "",
+                "https://media.test/a-1.mp4"
+              ]
+            ]
+          }
+        },
+        {
+          "id": "render",
+          "type": "apply-edl",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "source": "rows",
+          "target": "render",
+          "sourceHandle": "col_a",
+          "targetHandle": "edl"
+        },
+        {
+          "source": "rows",
+          "target": "render",
+          "sourceHandle": "col_b",
+          "targetHandle": "sources"
+        }
+      ],
+      "sources": [],
+      "renders": [
+        {
+          "clip": 0,
+          "edl": {
+            "version": 1,
+            "clock": "master",
+            "sources": [
+              {
+                "id": "cam",
+                "url": "",
+                "kind": "video"
+              }
+            ],
+            "segments": [
+              {
+                "id": "s0",
+                "inMs": 0,
+                "outMs": 5000,
+                "video": "cam"
+              }
+            ]
+          },
+          "sources": [
+            "https://media.test/a-0.mp4"
+          ],
+          "issues": []
+        },
+        {
+          "clip": 1,
+          "sources": [
+            "https://media.test/a-1.mp4"
+          ],
+          "issues": [
+            "segments is empty"
+          ],
+          "badgeIssues": [
+            "no EDL"
           ]
         }
       ]

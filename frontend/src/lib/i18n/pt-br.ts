@@ -6218,6 +6218,8 @@ export const ptBR: ChromeDict = {
   "node.editPlanClips": "{count} clipes",
   "node.edlWellFormed": "EDL bem formado",
   "node.edlReadyToRender": "Pronto para renderizar",
+  "node.edlRendersFailing": "Problemas em {n} de {total} renderizações",
+  "node.edlRenderN": "Renderização {n}",
   "node.edlIssuesOne": "1 problema no EDL",
   "node.edlIssuesMany": "{n} problemas no EDL",
   "node.edlWarningsOne": "1 aviso",

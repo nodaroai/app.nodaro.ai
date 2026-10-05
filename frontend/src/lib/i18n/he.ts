@@ -6364,6 +6364,8 @@ export const he: ChromeDict = {
   "node.editPlanClips": "{count} קליפים",
   "node.edlWellFormed": "EDL במבנה תקין",
   "node.edlReadyToRender": "מוכן לרינדור",
+  "node.edlRendersFailing": "בעיות ב-{n} מתוך {total} רינדורים",
+  "node.edlRenderN": "רינדור {n}",
   "node.edlIssuesOne": "בעיה אחת ב-EDL",
   "node.edlIssuesMany": "{n} בעיות ב-EDL",
   "node.edlWarningsOne": "אזהרה אחת",

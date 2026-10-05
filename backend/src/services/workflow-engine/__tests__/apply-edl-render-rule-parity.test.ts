@@ -31,6 +31,9 @@ interface Render {
   /** The item of a clip list this render reads; absent for a single render. */
   readonly clip?: number
   readonly edl: unknown
+  /** The media its Sources wires deliver, when it differs per render (a list
+   *  wired into Sources fans the render out); else the case's `sources`. */
+  readonly sources?: readonly string[]
   readonly issues: readonly string[]
 }
 
@@ -118,9 +121,10 @@ describe("Apply EDL's render rule on the server, from the canvas (A2b parity)", 
         const expected = c.renders[i]!
         const where = `${name}, render ${i}`
         // What it reads: the fixture's EDL (wired, or the node's own), and the
-        // Sources wires' media in slot order.
+        // Sources wires' media in slot order (this render's own, when a list
+        // wired into Sources fans the render out).
         expect(parsed(server.inputs.edl ?? render.data.edl), where).toEqual(expected.edl)
-        expect(server.inputs.sources ?? [], where).toEqual(c.sources)
+        expect(server.inputs.sources ?? [], where).toEqual(expected.sources ?? c.sources)
 
         const build = () => buildPayload(render, "job-render-rule", server.inputs, "usage-render-rule")
         if (expected.issues.length === 0) {

@@ -6218,6 +6218,8 @@ export const ja: ChromeDict = {
   "node.editPlanClips": "{count} 本のクリップ",
   "node.edlWellFormed": "形式が正しいEDL",
   "node.edlReadyToRender": "レンダリング可能",
+  "node.edlRendersFailing": "レンダリング {total} 件中 {n} 件に問題",
+  "node.edlRenderN": "レンダリング {n}",
   "node.edlIssuesOne": "EDLの問題 1件",
   "node.edlIssuesMany": "EDLの問題 {n}件",
   "node.edlWarningsOne": "警告 1件",
