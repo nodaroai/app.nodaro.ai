@@ -9,7 +9,7 @@ import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { PRICING_TIERS } from "../pricing-data"
 
-const MIGRATION = join(import.meta.dirname, "../../../../supabase/migrations/459_competitor_history_months.sql")
+const MIGRATION = join(import.meta.dirname, "../../../../supabase/migrations/461_competitor_history_months.sql")
 
 /** The tier → months pairs the migration seeds. */
 function seededMonths(): Map<string, number> {
