@@ -5,6 +5,7 @@ import { callerKeyHash } from "../../routes/oauth-register.js"
 import { fallbackClaimDue, runSignupGrantClaim } from "../billing/signup-grant.js"
 import { welcomeClaimOptions } from "../billing/welcome-offer-claim-options.js"
 import { supabase } from "../../lib/supabase.js"
+import { clientAddress } from "../../lib/client-address.js"
 
 /**
  * Free-credit abuse gate: the claim endpoint.
@@ -142,6 +143,7 @@ export async function claimSignupGrantRoutes(app: FastifyInstance) {
             browserKey: keys.browserKey ?? null,
             deviceKey: keys.deviceKey ?? null,
             ipHash: callerKeyHash(req, { unknownScope: userId }),
+            ipScheme: clientAddress(req) ? "client" : null,
           },
           req.log,
           await welcomeClaimOptions(req),

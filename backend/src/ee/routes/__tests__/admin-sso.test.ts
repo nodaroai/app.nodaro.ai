@@ -100,7 +100,9 @@ describe("DELETE /v1/admin/sso/:provider/users/:subject", () => {
     expect(res.json()).toMatchObject({ ok: true, userId: "u-1", mode: "ban" })
     expect(updateUserById).toHaveBeenCalledWith("u-1", {
       ban_duration: "876000h",
-      app_metadata: { sso: null, sso_subject: null },
+      // A block's marker goes too: from now on the ban is the de-provision's,
+      // and unblocking the account must not lift it.
+      app_metadata: { sso: null, sso_subject: null, nodaro_access_block: null },
     })
     expect(deleteUser).not.toHaveBeenCalled()
     expect(invalidateAuthCache).toHaveBeenCalledWith("u-1")

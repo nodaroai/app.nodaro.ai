@@ -20,6 +20,7 @@ import {
   readFreeGrant,
   readWelcomeOfferState,
   runSignupGrantClaim,
+  type FreeGrantState,
 } from "../billing/signup-grant.js"
 import { welcomeClaimOptions } from "../billing/welcome-offer-claim-options.js"
 import { getWelcomeOfferConfig } from "../lib/welcome-offer-config.js"
@@ -27,6 +28,7 @@ import { allowanceEnforcementActive, deploymentPayerActive, deploymentPayerId } 
 import { allowanceFor } from "../billing/deployment-allowance-service.js"
 import { externalWalletActive, externalWalletBalance } from "../billing/external-wallet.js"
 import { refusePayerBalanceToProgrammaticCaller } from "../lib/payer-balance-guard.js"
+import { clientAddress } from "../../lib/client-address.js"
 
 /**
  * Resolve the account's free-grant state for the balance read, claiming on
@@ -51,7 +53,7 @@ import { refusePayerBalanceToProgrammaticCaller } from "../lib/payer-balance-gua
 async function settleFreeGrant(
   userId: string,
   req: FastifyRequest,
-): Promise<{ state: "unclaimed" | "granted" | "withheld"; moved: boolean } | undefined> {
+): Promise<{ state: FreeGrantState; moved: boolean } | undefined> {
   try {
     const grant = await readFreeGrant(userId)
     if (!grant) return undefined
@@ -69,7 +71,13 @@ async function settleFreeGrant(
     // granted — anywhere — and an extension-origin read claims at once and
     // marks the consent as owed (welcomeClaimOptions).
     const outcome = await runSignupGrantClaim(
-      { userId, browserKey: null, deviceKey: null, ipHash: callerKeyHash(req, { unknownScope: userId }) },
+      {
+        userId,
+        browserKey: null,
+        deviceKey: null,
+        ipHash: callerKeyHash(req, { unknownScope: userId }),
+        ipScheme: clientAddress(req) ? "client" : null,
+      },
       req.log,
       await welcomeClaimOptions(req),
     )

@@ -4,21 +4,35 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { fetchRelated, fetchWithheld, restoreGrant } from "./api"
+import { FreeGrantActions } from "@/ee/components/admin/user-access/free-grant-actions"
+import { fetchGrants, fetchRelated, restoreGrant } from "./api"
 import { RelatedAccountsList } from "./related-accounts-list"
-import { PAGE_LIMIT, REASON_LABELS, type FreeGrantRow, type RelatedResponse } from "./types"
+import {
+  GRANT_LIST_TABS,
+  PAGE_LIMIT,
+  REASON_LABELS,
+  type FreeGrantRow,
+  type GrantListState,
+  type RelatedResponse,
+} from "./types"
 
 type RelatedData = RelatedResponse["data"]
 
 /**
- * Accounts whose signup grant was withheld, with the rules that fired and a
- * one-click restore. Restore is a platform-operator action server-side (it
- * mints credits); this just shows the button and reports the refusal.
+ * The accounts in one free-grant state, with the rules that fired at signup.
+ *
+ * Withheld rows get a one-click restore (it mints the grant). Given rows can
+ * have what is left of the grant taken back, and taken-back rows restored to
+ * exactly what was taken — through the same FreeGrantActions the user panel
+ * uses. All three are platform-operator actions server-side; this only shows
+ * the buttons and reports the refusal.
  *
  * Each row can expand to the accounts that share its machine or network. That
  * fetch is lazy and cached per user — toggling twice must not re-hit the API.
+ * The page keys this component by state, so a tab switch starts on page one.
  */
-export function WithheldTable() {
+export function GrantsTable({ state }: { readonly state: GrantListState }) {
+  const tab = GRANT_LIST_TABS.find((t) => t.value === state) ?? GRANT_LIST_TABS[0]
   const [rows, setRows] = useState<FreeGrantRow[] | null>(null)
   const [total, setTotal] = useState(0)
   const [offset, setOffset] = useState(0)
@@ -28,7 +42,7 @@ export function WithheldTable() {
   const [relatedBusy, setRelatedBusy] = useState<string[]>([])
 
   const reload = useCallback(() => {
-    fetchWithheld(offset)
+    fetchGrants(state, offset)
       .then((r) => {
         setRows(r.data)
         setTotal(r.total)
@@ -37,7 +51,7 @@ export function WithheldTable() {
         toast.error(err instanceof Error ? err.message : "Failed to load")
         setRows([])
       })
-  }, [offset])
+  }, [state, offset])
 
   useEffect(() => {
     reload()
@@ -77,7 +91,7 @@ export function WithheldTable() {
     <Card>
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-medium text-muted-foreground">
-          Withheld {rows ? `(${total})` : ""}
+          {tab.label} {rows ? `(${total})` : ""}
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -86,7 +100,7 @@ export function WithheldTable() {
             <Loader2 className="h-4 w-4 animate-spin" /> Loading…
           </div>
         ) : rows.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-6">Nothing withheld.</p>
+          <p className="text-sm text-muted-foreground py-6">{tab.empty}</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -111,6 +125,7 @@ export function WithheldTable() {
                     related={related[row.userId]}
                     onRestore={() => handleRestore(row)}
                     onToggleRelated={() => toggleRelated(row.userId)}
+                    onChanged={reload}
                   />
                 ))}
               </tbody>
@@ -154,6 +169,7 @@ function FragmentRow({
   related,
   onRestore,
   onToggleRelated,
+  onChanged,
 }: {
   row: FreeGrantRow
   busy: boolean
@@ -162,6 +178,7 @@ function FragmentRow({
   related: RelatedData | undefined
   onRestore: () => void
   onToggleRelated: () => void
+  onChanged: () => void
 }) {
   return (
     <>
@@ -193,14 +210,18 @@ function FragmentRow({
           </Button>
         </td>
         <td className="py-2 text-right">
-          <Button size="sm" variant="outline" disabled={busy} onClick={onRestore}>
-            {busy ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <ShieldCheck className="h-3.5 w-3.5" />
-            )}
-            Restore grant
-          </Button>
+          {row.state === "withheld" ? (
+            <Button size="sm" variant="outline" disabled={busy} onClick={onRestore}>
+              {busy ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <ShieldCheck className="h-3.5 w-3.5" />
+              )}
+              Restore grant
+            </Button>
+          ) : (
+            <FreeGrantActions userId={row.userId} state={row.state} onChanged={onChanged} />
+          )}
         </td>
       </tr>
       {expanded && (

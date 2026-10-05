@@ -93,6 +93,7 @@ function supabaseChain(result: { data: unknown; error: unknown; count?: number }
   chain.order = vi.fn().mockReturnValue(self())
   chain.range = vi.fn().mockReturnValue(self())
   chain.single = vi.fn().mockResolvedValue(result)
+  chain.maybeSingle = vi.fn().mockResolvedValue(result)
 
   // When the chain is awaited directly (no .single()), resolve with data + count
   chain.then = vi.fn().mockImplementation((resolve: (v: unknown) => void) => {
@@ -369,11 +370,13 @@ describe("PUT /v1/admin/users/:id/role", () => {
       data: { email: "user@example.com", role: "user" },
       error: null,
     })
-    // Third call: update role
+    // Then: is the target blocked? (no), and the update itself
+    const notBlockedChain = supabaseChain({ data: null, error: null })
     const updateChain = supabaseChain({ data: null, error: null })
 
     let callCount = 0
-    mockFrom.mockImplementation(() => {
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "account_blocks") return notBlockedChain
       callCount++
       if (callCount === 1) return adminProfileChain
       if (callCount === 2) return targetProfileChain
@@ -391,6 +394,59 @@ describe("PUT /v1/admin/users/:id/role", () => {
     const body = res.json()
     expect(body.role).toBe("admin")
     expect(body.previous_role).toBe("user")
+    expect(updateChain.update).toHaveBeenCalledWith({ role: "admin" })
+  })
+
+  // A blocked admin could not reach the page that lifts blocks.
+  it("refuses to make a blocked account an admin — unblock it first", async () => {
+    const adminProfileChain = supabaseChain({ data: { role: "super_admin" }, error: null })
+    const targetProfileChain = supabaseChain({ data: { email: "user@example.com", role: "user" }, error: null })
+    const blockedChain = supabaseChain({ data: { user_id: VALID_UUID }, error: null })
+    const updateChain = supabaseChain({ data: null, error: null })
+    let callCount = 0
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "account_blocks") return blockedChain
+      callCount++
+      if (callCount === 1) return adminProfileChain
+      if (callCount === 2) return targetProfileChain
+      return updateChain
+    })
+
+    const res = await app.inject({
+      method: "PUT",
+      url: `/v1/admin/users/${VALID_UUID}/role`,
+      headers: { "x-user-id": ADMIN_UUID },
+      payload: { role: "super_admin" },
+    })
+
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error).toMatch(/Unblock it before making it an admin/)
+    expect(updateChain.update).not.toHaveBeenCalled()
+  })
+
+  it("a blocked account can still be set back to user", async () => {
+    const adminProfileChain = supabaseChain({ data: { role: "super_admin" }, error: null })
+    const targetProfileChain = supabaseChain({ data: { email: "user@example.com", role: "admin" }, error: null })
+    const blockedChain = supabaseChain({ data: { user_id: VALID_UUID }, error: null })
+    const updateChain = supabaseChain({ data: null, error: null })
+    let callCount = 0
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "account_blocks") return blockedChain
+      callCount++
+      if (callCount === 1) return adminProfileChain
+      if (callCount === 2) return targetProfileChain
+      return updateChain
+    })
+
+    const res = await app.inject({
+      method: "PUT",
+      url: `/v1/admin/users/${VALID_UUID}/role`,
+      headers: { "x-user-id": ADMIN_UUID },
+      payload: { role: "user" },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(updateChain.update).toHaveBeenCalledWith({ role: "user" })
   })
 })
 

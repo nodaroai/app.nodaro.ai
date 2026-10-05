@@ -2,11 +2,19 @@ import { useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { createClient } from "@/lib/supabase"
 import { AUTH_REDIRECT_KEY } from "@/lib/storage-keys"
+import { isBlockedCallback } from "@/lib/sign-in-error"
 
 export default function AuthCallback() {
   const navigate = useNavigate()
 
   useEffect(() => {
+    // GoTrue refused a blocked account. Say so on the login page rather than
+    // waiting out the timeout below into a bare login form.
+    if (isBlockedCallback(window.location.search, window.location.hash)) {
+      navigate("/login?blocked=1", { replace: true })
+      return
+    }
+
     const supabase = createClient()
 
     // If opened as a popup (e.g., from embedded iframe), send the session

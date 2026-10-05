@@ -21,6 +21,7 @@ import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { hasAdmin, hasOrganizations } from "../lib/config.js"
 import { hashApiToken, invalidateApiTokenCache, resolveApiToken } from "../lib/api-token-resolver.js"
+import { ACCESS_BLOCKED_BODY, isUserBlocked } from "../lib/access-blocks.js"
 import { getPluginServices } from "../lib/private-plugins/load.js"
 import { rejectProgrammaticAuth } from "../lib/api-auth-mode.js"
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
@@ -485,6 +486,11 @@ export async function apiTokenRoutes(app: FastifyInstance) {
         return reply.status(401).send({
           error: { code: "unauthorized", message: "Invalid or inactive API token" },
         })
+      }
+      // The global auth hook already refuses a blocked account's token on this
+      // public lane; this lane resolves the token itself, so it asks too.
+      if (await isUserBlocked(resolved.userId)) {
+        return reply.status(403).send(ACCESS_BLOCKED_BODY)
       }
 
       req.apiToken = resolved

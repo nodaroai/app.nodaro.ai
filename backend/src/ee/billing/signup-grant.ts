@@ -4,6 +4,7 @@ import { CreditsService } from "./credits.js"
 import { TIER_CREDITS } from "./stripe-config.js"
 import { evaluateSignupGrant, type GrantDecision } from "./signup-grant-policy.js"
 import { hasGrantedConsent } from "../lib/consent-record.js"
+import { isMissingColumnError } from "../../lib/postgrest-errors.js"
 
 /**
  * Free-credit abuse gate: the two state transitions, as service functions.
@@ -22,7 +23,10 @@ import { hasGrantedConsent } from "../lib/consent-record.js"
  * invalidate the balance cache so the next read shows the credits.
  */
 
-export type FreeGrantState = "unclaimed" | "granted" | "withheld"
+// The state list lives in its own import-free module; re-exported here so
+// every existing reader keeps importing it from the grant module.
+import { FREE_GRANT_STATES, type FreeGrantState } from "./free-grant-states.js"
+export { FREE_GRANT_STATES, type FreeGrantState }
 
 export interface ClaimOutcome {
   state: FreeGrantState
@@ -52,9 +56,12 @@ export interface ClaimOptions {
 interface TransitionRow {
   did_claim?: boolean
   did_activate?: boolean
-  old_credits?: number
-  new_credits?: number
-  state?: string
+  did_revoke?: boolean
+  did_reinstate?: boolean
+  old_credits?: number | null
+  new_credits?: number | null
+  state?: string | null
+  refusal?: string | null
 }
 
 function firstRow(data: unknown): TransitionRow | null {
@@ -62,7 +69,7 @@ function firstRow(data: unknown): TransitionRow | null {
 }
 
 function asState(value: unknown, fallback: FreeGrantState): FreeGrantState {
-  return value === "granted" || value === "withheld" || value === "unclaimed" ? value : fallback
+  return (FREE_GRANT_STATES as readonly unknown[]).includes(value) ? (value as FreeGrantState) : fallback
 }
 
 /** Lazy: `routes/credits.ts` pulls in the whole billing surface. */
@@ -103,11 +110,15 @@ export async function runSignupGrantClaim(
     browserKey: string | null
     deviceKey: string | null
     ipHash: string
+    /** 'client' when ipHash is a real client network (only those may become a
+     *  network block); omitted/null for an unknown address. */
+    ipScheme?: "client" | null
   },
   log: FastifyBaseLogger,
   options: ClaimOptions = {},
 ): Promise<ClaimOutcome> {
   const { userId, browserKey, deviceKey, ipHash } = params
+  const ipScheme = params.ipScheme ?? null
 
   // Best-effort: a signal we failed to store is a worse observation, not a
   // reason to withhold credits from a legitimate signup.
@@ -117,10 +128,13 @@ export async function runSignupGrantClaim(
   // The keys are the observation worth keeping.
   const hasKeys = Boolean(browserKey || deviceKey)
   const recordSignals = async (): Promise<void> => {
-    const { error: signalError } = await supabase.from("signup_signals").upsert(
-      { user_id: userId, browser_key: browserKey, device_key: deviceKey, ip_hash: ipHash, source: "claim" },
-      { onConflict: "user_id,source", ignoreDuplicates: !hasKeys },
-    )
+    const row = { user_id: userId, browser_key: browserKey, device_key: deviceKey, ip_hash: ipHash, source: "claim" }
+    const upsert = (values: Record<string, unknown>) =>
+      supabase.from("signup_signals").upsert(values, { onConflict: "user_id,source", ignoreDuplicates: !hasKeys })
+    let { error: signalError } = await upsert({ ...row, ip_scheme: ipScheme })
+    // Staging runs this before migration 458 adds the column: keep the
+    // observation, without the marker, rather than losing the whole row.
+    if (signalError && isMissingColumnError(signalError)) ({ error: signalError } = await upsert(row))
     if (signalError) {
       log.warn({ err: signalError, userId }, "signup signal insert failed")
     }
@@ -201,6 +215,86 @@ export async function activateSignupGrant(
   await ledgerTopUp(userId, Number(row?.old_credits ?? 0), Number(row?.new_credits ?? 0), description)
 
   return { activated: row?.did_activate === true, state: asState(row?.state, "withheld") }
+}
+
+/** Why a take-back or a restore moved nothing (the RPC's own words, migration 458). */
+export type GrantChangeRefusal = "not_found" | "not_revocable" | "not_revoked" | "paid_account" | "reservations_open"
+
+export interface GrantChangeOutcome {
+  changed: boolean
+  /** The state the account is in afterwards (or was left in), null when it does not exist. */
+  state: FreeGrantState | null
+  /** Credits the change moved: removed by a take-back, returned by a restore. */
+  credits: number
+  refusal: GrantChangeRefusal | null
+}
+
+function asRefusal(value: unknown): GrantChangeRefusal {
+  return value === "not_revocable" || value === "not_revoked" || value === "paid_account" || value === "reservations_open"
+    ? value
+    : "not_found"
+}
+
+/**
+ * 'granted' | 'withheld' → 'revoked': an admin takes the free grant back.
+ *
+ * Removes what is left of the grant (never purchased top-ups) and closes the
+ * card-activation path; refused, moving nothing, for a paid or ever-subscribed
+ * account and while a reservation is still open (its refund would hand the
+ * credits back). The ledger line carries the amount ACTUALLY removed — its
+ * description is user-visible (/v1/billing/transactions), so it stays neutral.
+ */
+export async function revokeSignupGrant(userId: string, adminUserId: string): Promise<GrantChangeOutcome> {
+  const { data, error } = await supabase.rpc("revoke_signup_grant", {
+    p_user_id: userId,
+    p_grant_amount: TIER_CREDITS.free,
+    p_admin_id: adminUserId,
+  })
+  if (error) throw error
+  const row = firstRow(data)
+  if (row?.did_revoke !== true) {
+    return { changed: false, state: row?.state ? asState(row.state, "unclaimed") : null, credits: 0, refusal: asRefusal(row?.refusal) }
+  }
+  const before = Number(row.old_credits ?? 0)
+  const after = Number(row.new_credits ?? 0)
+  if (after < before) {
+    await CreditsService.logTransaction({
+      userId,
+      amount: after - before,
+      creditType: "subscription",
+      source: "admin_adjustment",
+      description: "Free credits removed",
+      adminUserId,
+      balanceAfter: after,
+    })
+  }
+  await invalidateBalance(userId)
+  return { changed: true, state: "revoked", credits: before - after, refusal: null }
+}
+
+/** 'revoked' → the state it was taken from, with exactly the credits removed. */
+export async function reinstateSignupGrant(userId: string, adminUserId: string): Promise<GrantChangeOutcome> {
+  const { data, error } = await supabase.rpc("reinstate_signup_grant", { p_user_id: userId })
+  if (error) throw error
+  const row = firstRow(data)
+  if (row?.did_reinstate !== true) {
+    return { changed: false, state: row?.state ? asState(row.state, "unclaimed") : null, credits: 0, refusal: asRefusal(row?.refusal) }
+  }
+  const before = Number(row.old_credits ?? 0)
+  const after = Number(row.new_credits ?? 0)
+  if (after > before) {
+    await CreditsService.logTransaction({
+      userId,
+      amount: after - before,
+      creditType: "subscription",
+      source: "admin_adjustment",
+      description: "Free credits restored",
+      adminUserId,
+      balanceAfter: after,
+    })
+  }
+  await invalidateBalance(userId)
+  return { changed: true, state: asState(row.state, "granted"), credits: after - before, refusal: null }
 }
 
 /** The account's current grant state, or null when the read fails. */

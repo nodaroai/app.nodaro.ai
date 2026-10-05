@@ -13,6 +13,7 @@ import { DrainAbortError, isWorkerDraining } from "../lib/worker-drain.js"
 import { TIER_PARALLELISM } from "../ee/billing/stripe-config.js"
 import { executionEvents, type ExecutionEvent } from "../lib/execution-events.js"
 import { supabase } from "../lib/supabase.js"
+import { isUserBlocked } from "../lib/access-blocks.js"
 import { payloadBillingContext } from "../lib/billing-context.js"
 import { monetizationRpcArgs } from "../services/workflow-engine/monetization-args.js"
 import { reconcileNodeStatesFromJobs } from "../lib/reconcile/node-states.js"
@@ -555,6 +556,24 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
       }
       workflowData = workflow
       ctx.workflowOwnerId = (workflow.user_id as string | null) ?? undefined
+    }
+
+    // A blocked account's run stops here, before anything is dispatched —
+    // whoever started it (a schedule, a webhook, a run queued before the
+    // block), and whether the blocked one is the runner or the owner whose
+    // workflow or published app it is.
+    // A re-pick (after a deploy) may find child jobs this run already started:
+    // cancel and refund the ones no provider has been paid for, as a resume
+    // would, rather than leave them running for a run that is over.
+    if (await isUserBlocked(userId)) {
+      await cancelInFlightChildJobs(executionId)
+      await failExecution(executionId, "This account is blocked.")
+      return
+    }
+    if (ctx.workflowOwnerId && ctx.workflowOwnerId !== userId && (await isUserBlocked(ctx.workflowOwnerId))) {
+      await cancelInFlightChildJobs(executionId)
+      await failExecution(executionId, "This workflow is unavailable.")
+      return
     }
 
     // Normalize legacy node types (edit-image → modify/upscale/remove-background,

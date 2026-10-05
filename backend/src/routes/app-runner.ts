@@ -11,6 +11,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
 import { sendInternalError } from "../lib/http-errors.js"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
+import { isUserBlocked } from "../lib/access-blocks.js"
 import { orchestrationQueue } from "../lib/orchestration-queue.js"
 import { resolveWebSurfaceFlag } from "../middleware/credit-guard.js"
 import { MIN_IDEMPOTENCY_KEY_LENGTH } from "../lib/dedup-fingerprint.js"
@@ -288,11 +289,17 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       return reply.status(404).send({ error: { code: "not_found", message: "App not found" } })
     }
 
-    const appRow = await loadAppVersion(workflowId, "id, workflow_id, max_runs_per_user_per_day, snapshot_nodes, snapshot_edges, snapshot_settings", version)
+    const appRow = await loadAppVersion(workflowId, "id, workflow_id, creator_id, max_runs_per_user_per_day, snapshot_nodes, snapshot_edges, snapshot_settings", version)
     if (!appRow) {
       return reply.status(404).send({
         error: { code: "not_found", message: version ? `Version ${version} not found` : "App not found" },
       })
+    }
+    // A blocked creator's app answers like a missing one. The orchestrator
+    // refuses its runs anyway (lib/access-blocks.ts); this says so before a
+    // run row is ever made.
+    if (await isUserBlocked((appRow.creator_id as string | null) ?? null)) {
+      return reply.status(404).send({ error: { code: "not_found", message: "App not found" } })
     }
 
     // Resolve the inputs the run will use. The flat SDK/CLI `inputs` map is translated

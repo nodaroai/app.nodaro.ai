@@ -154,6 +154,7 @@ function acceptedLine(p: ProfileRow, c: ConsentRow, product: string): string {
     parts.push(`dismissed ${humaniseDelta(granted - seen)} earlier, came back`)
   }
   if (p.free_grant_state === "withheld") parts.push("credits WITHHELD (shared machine)")
+  if (p.free_grant_state === "revoked") parts.push("credits TAKEN BACK by an admin")
   return parts.join(" · ")
 }
 
@@ -239,10 +240,14 @@ async function postOptOuts(cursor: string, nowIso: string, post: Post): Promise<
 // Digest helpers — the per-signup column and the totals
 // ---------------------------------------------------------------------------
 
-export type WelcomeLabel = "accepted" | "accepted, withheld" | "dismissed" | "not shown"
+export type WelcomeLabel = "accepted" | "accepted, withheld" | "accepted, taken back" | "dismissed" | "not shown"
 
 export function welcomeLabel(p: Pick<ProfileRow, "welcome_offer_seen_at" | "free_grant_state">, consent: ConsentRow | undefined): WelcomeLabel {
-  if (consent?.status === "granted") return p.free_grant_state === "withheld" ? "accepted, withheld" : "accepted"
+  if (consent?.status === "granted") {
+    if (p.free_grant_state === "withheld") return "accepted, withheld"
+    if (p.free_grant_state === "revoked") return "accepted, taken back"
+    return "accepted"
+  }
   if (p.welcome_offer_seen_at) return "dismissed"
   return "not shown"
 }

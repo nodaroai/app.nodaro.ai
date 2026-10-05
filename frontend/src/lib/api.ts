@@ -17,6 +17,7 @@ import { runtimeApiUrl } from "@/lib/runtime-config"
 import { tx, type MessageKey } from "@/lib/i18n"
 import { apiErrorMessage, refusalMessage } from "@/lib/api-error-copy"
 import { dispatchConsentRequired } from "@/lib/consent-required-event"
+import { dispatchAccessBlocked } from "@/lib/access-blocked-event"
 
 export const API_BASE_URL = ''
 
@@ -188,6 +189,14 @@ export class ConsentRequiredError extends Error {
   }
 }
 
+/** An admin blocked this account or its network (`403 access_blocked`). */
+export class AccessBlockedError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = "AccessBlockedError"
+  }
+}
+
 /** One Webhook Output that cannot send in front of strangers — the 409 `credential_unbound` detail row. */
 export interface UnboundCredentialUse {
   readonly nodeId: string
@@ -289,6 +298,10 @@ function throwApiError(errJson: Record<string, unknown> | null, fallback: Messag
   if (errObj?.code === "consent_required") {
     dispatchConsentRequired()
     throw new ConsentRequiredError(refusalMessage(serverMessage, "apiErr.consentRequired"))
+  }
+  if (errObj?.code === "access_blocked") {
+    dispatchAccessBlocked()
+    throw new AccessBlockedError(message)
   }
   if (errObj?.code === "concurrent_modification") {
     throw new ConcurrentModificationError(
@@ -6546,7 +6559,7 @@ export interface UserBalance {
    * not land; the activation banner shows. Absent on builds/deploys that
    * predate the gate.
    */
-  freeGrantState?: "unclaimed" | "granted" | "withheld"
+  freeGrantState?: "unclaimed" | "granted" | "withheld" | "revoked"
   /**
    * Welcome credits opt-in. PRESENT only while the offer is switched on —
    * absent means no popup, no banner, no block. `popupSeen`: the one-time

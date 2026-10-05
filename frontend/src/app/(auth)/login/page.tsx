@@ -13,6 +13,7 @@ import { FREE_TIER_CREDITS } from "@/lib/pricing-data"
 import { runtimeSupabaseAnonKey, runtimeSupabaseUrl } from "@/lib/runtime-config"
 import { useT } from "@/lib/i18n"
 import { formatNumber } from "@/lib/i18n/format"
+import { isBlockedSignIn } from "@/lib/sign-in-error"
 
 const PENDING_PLAN_KEY = "nodaro_pending_plan"
 
@@ -32,7 +33,18 @@ export default function LoginPage() {
   const { signInWithGoogle, signInWithEmail } = useAuth()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const [error, setError] = useState<string | null>(null)
+  // ?blocked=1: the sign-in callback saw GoTrue refuse a blocked account.
+  const [error, setError] = useState<string | null>(() =>
+    searchParams.get("blocked") === "1" ? t("auth.accessBlocked") : null,
+  )
+  // GoTrue answers a blocked account's sign-in with `user_banned` and an
+  // English sentence; say what it means, in the interface language.
+  const signInErrorText = (err: unknown): string =>
+    isBlockedSignIn(err)
+      ? t("auth.accessBlocked")
+      : err instanceof Error
+        ? err.message
+        : t("auth.signInFailed")
   const [pending, setPending] = useState(false)
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -173,7 +185,7 @@ export default function LoginPage() {
     try {
       await signInWithGoogle()
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("auth.signInFailed"))
+      setError(signInErrorText(err))
       setPending(false)
     }
   }
@@ -186,7 +198,7 @@ export default function LoginPage() {
       await signInWithEmail(email, password)
       navigate(consumeRedirect(), { replace: true })
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("auth.signInFailed"))
+      setError(signInErrorText(err))
       setPending(false)
     }
   }
@@ -213,7 +225,7 @@ export default function LoginPage() {
           : await supabase.auth.signInWithOAuth({ provider: p.id as never, options: { redirectTo } })
       if (error) throw error
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("auth.signInFailed"))
+      setError(signInErrorText(err))
       setPending(false)
     }
   }

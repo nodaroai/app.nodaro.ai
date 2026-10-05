@@ -304,6 +304,7 @@ import { nodaroExclusiveRoutes } from "./routes/nodaro-exclusive.js"
 import { providerKeysRoutes } from "./routes/provider-keys.js"
 import { openapiRoutes } from "./routes/openapi.js"
 import { registerAuthHook } from "./middleware/auth.js"
+import { registerNetworkBlockHook } from "./middleware/network-block.js"
 import { registerPluginRouteScopeHook } from "./lib/plugin-route-scopes.js"
 import { registerSequenceExecutionGuard } from "./middleware/sequence-execution-guard.js"
 import { registerOrgsContextHook } from "./lib/orgs-context.js"
@@ -485,6 +486,9 @@ export async function buildApp() {
   })
 
   registerAuthHook(app)
+  // Admin network blocks: browser sessions from a blocked network (after auth,
+  // so an admin is recognised and never refused). Inert without an admin panel.
+  registerNetworkBlockHook(app)
   // App-token scopes for routes a private plugin serves (it cannot see the grant).
   registerPluginRouteScopeHook(app)
   registerSequenceExecutionGuard(app)

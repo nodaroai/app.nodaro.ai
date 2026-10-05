@@ -225,9 +225,9 @@ export function useAuth() {
   const signInWithEmail = useCallback(async (email: string, password: string) => {
     const supabase = createClient()
     const { error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) {
-      throw new Error(error.message)
-    }
+    // The AuthError itself, not a copy of its message: its `code` is how the
+    // login page tells a blocked account (`user_banned`) from a wrong password.
+    if (error) throw error
   }, [])
 
   /** Email/password sign-up. Returns whether a live session was created:

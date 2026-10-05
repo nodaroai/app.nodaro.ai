@@ -3,6 +3,7 @@ import type {
   ClusterAxis,
   ClustersResponse,
   FreeGrantRow,
+  GrantListState,
   RelatedResponse,
 } from "./types"
 import { PAGE_LIMIT } from "./types"
@@ -18,14 +19,15 @@ async function errorFrom(res: Response, fallback: string): Promise<Error> {
   return new Error(body?.error?.message ?? fallback)
 }
 
-export async function fetchWithheld(
+export async function fetchGrants(
+  state: GrantListState,
   offset: number,
 ): Promise<{ data: FreeGrantRow[]; total: number }> {
   const res = await fetch(
-    `/v1/admin/free-grants?state=withheld&limit=${PAGE_LIMIT}&offset=${offset}`,
+    `/v1/admin/free-grants?state=${state}&limit=${PAGE_LIMIT}&offset=${offset}`,
     { headers: await getAuthHeaders() },
   )
-  if (!res.ok) throw await errorFrom(res, "Failed to load withheld grants")
+  if (!res.ok) throw await errorFrom(res, "Failed to load free grants")
   return (await res.json()) as { data: FreeGrantRow[]; total: number }
 }
 

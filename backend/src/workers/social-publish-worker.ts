@@ -16,6 +16,11 @@ import { resolveMediaRefs, type ScheduledMediaRef } from "../services/social/med
 import type { PublishRequest } from "../services/social/platforms/index.js"
 import { BadBodyError, RefreshTokenError } from "../services/social/providers/types.js"
 import { commitJobCredits, isFinalJobAttempt, refundJobCredits } from "./shared.js"
+import { mapReserveError } from "../lib/reserve-errors.js"
+import { isUserBlocked } from "../lib/access-blocks.js"
+
+/** A blocked account's post is refused for good (lib/access-blocks.ts). */
+class AccountBlockedError extends Error {}
 
 /**
  * Scheduled social publish worker.
@@ -129,6 +134,7 @@ export async function processScheduledPost(job: Job<SocialPublishJobData>, token
   let usageLogId: string | null = null
   let jobId: string | null = null
   try {
+    if (await isUserBlocked(row.user_id)) throw new AccountBlockedError("This account is blocked.")
     await updateRow(row.id, { status: "publishing", attempts: row.attempts + 1 })
 
     // P14: one coalesce for both the job row and the reservation.
@@ -192,7 +198,11 @@ export async function processScheduledPost(job: Job<SocialPublishJobData>, token
       err instanceof UnknownOutcomeError ||
       // A policy block is deterministic on the same content: retrying spends
       // attempts to be refused identically three times.
-      err instanceof JobBlockedError
+      err instanceof JobBlockedError ||
+      // So is a blocked account (lib/access-blocks.ts) — refused up front or
+      // at the reservation, identically, until an admin lifts it.
+      err instanceof AccountBlockedError ||
+      mapReserveError(err)?.code === "access_blocked"
 
     if (definitive || isFinalJobAttempt(job)) {
       await updateRow(row.id, { status: "error", last_error: message })

@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { authorizeExternalReservation } from "../billing/external-wallet.js"
 import type { BillingContext } from "../../lib/billing-context.js"
 import { mapReserveError, type MappedReserveError } from "../../lib/reserve-errors.js"
+import { blockedReservationRefusal } from "../../lib/access-blocks.js"
 // Track A: the step-8 enforcement flip (see pipelines/credits.ts).
 import { allowanceEnforcementActive } from "../../lib/deployment-payer.js"
 import { attemptAutoRecharge } from "../billing/auto-recharge.js"
@@ -64,6 +65,10 @@ export type ReserveHelperResult =
 export async function reserveHelperCredits(
   args: ReserveHelperCreditsArgs,
 ): Promise<ReserveHelperResult> {
+  // A blocked account reserves nothing — the same refusal every reserve site
+  // gives (lib/access-blocks.ts), in this lane's {ok:false} shape.
+  const blocked = await blockedReservationRefusal(args.userId)
+  if (blocked) return { ok: false, reason: blocked.code, detail: blocked.message }
   let credits: number
   try {
     credits = await helperCreditCost(args.helperName)

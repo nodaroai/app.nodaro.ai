@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
+import { isUserBlocked } from "../lib/access-blocks.js"
 import { resolveWebSurfaceFlag } from "../middleware/credit-guard.js"
 import { insertJob, insertJobIdempotent } from "../lib/insert-job.js"
 import { MIN_IDEMPOTENCY_KEY_LENGTH } from "../lib/dedup-fingerprint.js"
@@ -79,7 +80,7 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
     // upstream node's output from nodeStates.
     let appQuery = supabase
       .from("published_apps")
-      .select("id, workflow_id, name, component_metadata, estimated_credits, snapshot_nodes, snapshot_edges")
+      .select("id, workflow_id, creator_id, name, component_metadata, estimated_credits, snapshot_nodes, snapshot_edges")
       .eq("slug", appSlug)
       .eq("publish_type", "component")
       .eq("is_active", true)
@@ -93,7 +94,8 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
 
     const { data: appRows } = await appQuery
     const appRow = appRows?.[0]
-    if (!appRow) {
+    // A blocked author's component answers like a missing one (lib/access-blocks.ts).
+    if (!appRow || (await isUserBlocked((appRow.creator_id as string | null) ?? null))) {
       return reply.status(404).send({ error: { code: "not_found", message: "Component not found" } })
     }
 

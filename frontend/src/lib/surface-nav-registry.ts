@@ -104,6 +104,7 @@ export const ENTRY_BY_LINK: readonly string[] = [
   // hasAdmin(), never by a surface nav entry.
   "/admin",
   "users",
+  "blocks",
   "jobs",
   "usage",
   "alerts",
