@@ -4728,7 +4728,7 @@ export async function competitorLessons(id: string): Promise<import("@nodaro/sha
 }
 
 export async function competitorCards(): Promise<import("@nodaro/shared").CompetitorCardsResult> {
-  return apiJson("/v1/competitors/cards", { method: "GET", label: "apiErr.loadCompetitors" })
+  return apiJson("/v1/competitors/cards", { method: "GET", label: "apiErr.loadCompetitorCards" })
 }
 
 /** The cards the person marked "I did this", and how each went (free). */

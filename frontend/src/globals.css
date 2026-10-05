@@ -447,6 +447,27 @@
   color: var(--integ-muted);
 }
 
+/* A tracked brand's color on the Competitors page. Each brand has one hue
+   (components/competitors/brand-colors.ts), set inline as --brand-hue; the
+   lightness and chroma come from the theme, so one value reads on paper and
+   on a dark surface alike. swatch: the brand's square and its bars; top: the
+   colored top edge of its cards. */
+.brand-swatch {
+  background-color: oklch(0.62 0.15 var(--brand-hue));
+}
+
+.brand-top {
+  border-top-color: oklch(0.62 0.15 var(--brand-hue));
+}
+
+.dark .brand-swatch {
+  background-color: oklch(0.76 0.14 var(--brand-hue));
+}
+
+.dark .brand-top {
+  border-top-color: oklch(0.76 0.14 var(--brand-hue));
+}
+
 /* Inside the content panel the stock shadcn surface tokens point at the home
    ramp, so the components it reuses (workflow cards, inputs, the project grid)
    take the design's colours without a fork of each one. Portals (menus,

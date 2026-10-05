@@ -41,14 +41,56 @@ Adding a brand is free.
 A scan runs one Social Search page (up to 20 posts) per account and per
 platform its name is searched on. A brand with two accounts and five
 platforms is seven searches, so a scan costs seven Social Search pages.
-The window shows the price before you save, and the **Scan now** button
-shows it on each brand. Searches that fail are not charged; if every search
+The window shows the price before you save, and every scan button on the
+page shows it. Searches that fail are not charged; if every search
 fails, nothing is charged. Scheduled scans cost the same as manual ones.
+
+## Who is where
+
+The page opens with a table: every brand you track in a row, every platform
+in a column. A column shows when at least one brand is read there: X,
+Instagram, TikTok, YouTube, LinkedIn, Reddit or Meta Ads. Each cell comes from
+the brand's latest scan:
+
+- the number of the brand's own posts there, and the posts about it, with a
+  bar in the brand's color (a platform where only the name is searched, like
+  Reddit, shows the posts about it);
+- **Failed** when every search there failed on the latest scan, and a small
+  warning sign when one of two did (hover it to see which);
+- a dash where the brand is not read there, with a small clock for a
+  platform added since its last scan (read from the next one).
+
+Under each name: how many of its own posts and posts about it the latest
+scan kept, or that it is scanning. When some of the scan's searches failed,
+a small warning sign follows the numbers; press it to read what the scan
+reported. When a scan did not happen at all (every search failed, or there
+were no credits), the line says **Last scan failed** instead (press it to
+read why); the numbers in the row are then from the scan before, and its
+date is shown. A brand never scanned has **Scan now** under its name, and
+one whose last scan did not happen has **Scan again**, each with the price;
+a brand with nothing to search has **Edit**. The **⋯** menu on a row scans
+it now (with the price), changes its schedule, edits it or stops tracking
+it (after you confirm).
+
+Press a platform's name to rank the brands by their activity there (a
+brand whose search there failed comes after the brands read there, and one
+not read there last). A second table then shows, on that platform, each
+brand's own posts and posts about it, its usual reach (views, or likes on
+LinkedIn, points on Reddit), **what works for them** there (its strongest
+lesson, see **What works**) and **what people say** (complaints or a post
+about it spreading there). The usual reach and what works are worked out
+when a brand is scanned, so a brand shows them from its next scan on. Press
+the platform again, or **Back to all platforms**, to clear it.
+
+Each brand keeps one color on the page.
 
 ## Action cards
 
 **What to do now** lists the cards from each brand's latest scan, most
-urgent first:
+urgent first, six at a time (**Show all** for the rest). Each card shows the
+brand it is about and the platform. Press a brand under the heading to see
+only its cards; with a platform chosen in the table, only the cards about
+that platform show:
 
 | Card | What it says |
 |---|---|
@@ -69,9 +111,21 @@ how strong they are, across all your brands.
 The API's card kinds also include `top_in_sources`; competitor scans do not
 produce it.
 
-Each card shows the posts it rests on; the bookmark on a post saves it to
-[Inspiration](./inspiration.md). **Posts** on a brand opens everything its
-latest scan found: their posts, and the posts about them.
+Each card shows the post it rests on (more behind **+N**); the bookmark on a
+post saves it to [Inspiration](./inspiration.md).
+
+## A brand's window
+
+Press a brand's name to open its window, built around its platforms. A card
+per platform shows how many of its own posts and posts about it the latest
+scan found there and its usual reach, or that the search there failed. **All
+platforms** lays them side by side with each platform's top insight. Press a
+platform for what works for the brand there, what people say about it there,
+and the posts themselves (**Their posts** / **About them**; **Your posts** /
+**About you** on your own brand), each with a bookmark that saves it to
+[Inspiration](./inspiration.md). A platform whose
+search failed offers to scan the brand again: that scans every platform, at
+the brand's scan price.
 
 The newest twelve scans of each brand are kept. While a scan of a brand
 runs, its name, accounts and platforms cannot be changed (the scan was
@@ -81,8 +135,9 @@ priced on them); its schedule can.
 
 **What works for you** (on the brand marked **This is my brand**) and **What
 works for them** (on a competitor) read the brand's own posts across every
-scan kept, and say what its best posts share. Open it with the button on the
-brand's row, or the tab in its posts.
+scan kept, and say what its best posts share. It shows on each platform in
+the brand's window, and the strongest lesson per platform shows in the table
+when you rank by a platform.
 
 Per platform it shows:
 
@@ -91,11 +146,11 @@ Per platform it shows:
   trait went compared with the rest — a video length, a format, opening with
   a question, a first line that starts with a number, a short or a long
   caption, a hashtag, a sound, or the day of the week (UTC). Each lesson
-  shows the posts it rests on;
-- its best posts, which you can save to [Inspiration](./inspiration.md).
+  shows the posts it rests on.
 
 A platform needs enough of the brand's own posts before it gets lessons (the
-tab says how many it has and how many it needs); each scan adds more. It is
+brand's window says how many it has and how many it needs); each scan adds
+more. It is
 free: it reads the scans already made and charges nothing.
 
 **Content Ideas learns from it.** A [Content Ideas](../nodes/ai-text/content-ideas.md)
@@ -123,8 +178,8 @@ since went, without a verdict, and offers them to pick from. When a result
 comes in, the wall says so.
 
 Results add up per kind of advice: **Sound advice: 3 of 4 worked for you**.
-Once a kind has enough results, its record shows on its cards and in **What
-works for you**, and the cards of a kind that keeps working for you come
+Once a kind has enough results, its record shows on its cards and in your
+own brand's window, and the cards of a kind that keeps working for you come
 first among cards of the same urgency (a kind that keeps missing goes last).
 Urgency always comes first. Content Ideas leans on the same record.
 

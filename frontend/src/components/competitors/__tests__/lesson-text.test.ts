@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
-import { BRAND_LESSON_KINDS, type BrandLesson, type BrandPlatformLessons } from "@nodaro/shared"
+import { BRAND_LESSON_KINDS, type BrandLesson } from "@nodaro/shared"
 import { translate, type MessageKey } from "@/lib/i18n"
-import { lessonText, platformLine, weekdayName } from "../lesson-text"
+import { lessonText, weekdayName } from "../lesson-text"
 import { useLocaleStore } from "@/lib/locale-store"
 
 const t = (key: MessageKey, vars?: Record<string, string | number>) => translate("en", key, vars)
@@ -54,9 +54,4 @@ describe("a lesson in the reader's language", () => {
     }
   })
 
-  it("says how many posts a platform has, and its usual reach once there are enough", () => {
-    const pl: BrandPlatformLessons = { platform: "tiktok", posts: 32, usual: 1150, unit: "views", winners: [], misses: [], lessons: [] }
-    expect(bare(platformLine(pl, t))).toBe("32 posts · usually 1.2K views")
-    expect(platformLine({ ...pl, usual: null, posts: 5 }, t)).toBe("5 posts")
-  })
 })

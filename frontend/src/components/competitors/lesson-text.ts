@@ -1,7 +1,6 @@
-import type { BrandLesson, BrandPlatformLessons } from "@nodaro/shared"
+import type { BrandLesson } from "@nodaro/shared"
 import type { MessageKey } from "@/lib/i18n"
 import { formatDate, formatNumber } from "@/lib/i18n/format"
-import { compactNumber } from "./action-card-text"
 
 type T = (key: MessageKey, vars?: Record<string, string | number>) => string
 
@@ -85,9 +84,3 @@ export function lessonText(lesson: BrandLesson, t: T): LessonText {
   }
 }
 
-/** "32 posts · usually 1.2K views". */
-export function platformLine(pl: BrandPlatformLessons, t: T): string {
-  return pl.usual === null
-    ? t("competitors.lessonsPosts", { posts: pl.posts })
-    : t("competitors.lessonsPlatformLine", { posts: pl.posts, usual: compactNumber(pl.usual), unit: lessonUnit(pl.unit, t) })
-}

@@ -34,6 +34,15 @@ export const COMPETITORS_MAX = 50
 
 export type CompetitorAccounts = Partial<Record<CompetitorAccountKey, string>>
 
+/** A search of a brand: its account ("own") or its name ("about"). */
+export type CompetitorSearchKind = "own" | "about"
+
+/** One search a scan runs. */
+export interface CompetitorSearch {
+  readonly kind: CompetitorSearchKind
+  readonly platform: SocialPlatform
+}
+
 export interface TrackedCompetitor {
   readonly id: string
   readonly brand: string
@@ -52,8 +61,35 @@ export interface TrackedCompetitor {
   readonly scanning: boolean
   /** Searches one scan runs; a scan costs this many Social Search pages. */
   readonly searches: number
+  /** What the next scan searches. Absent from a server older than this field. */
+  readonly searchPlan?: readonly CompetitorSearch[]
   readonly createdAt: string
   readonly updatedAt: string
+}
+
+/** What a brand's latest scan found on one platform, and what works for it there. */
+export interface CompetitorPlatformTally {
+  readonly platform: SocialPlatform
+  /** The brand's own posts the scan kept there. */
+  readonly own: number
+  /** Posts about the brand the scan kept there. */
+  readonly about: number
+  /** The searches the scan ran there. */
+  readonly searched: readonly CompetitorSearchKind[]
+  /** Of those, the ones that failed; null when the scan cannot say which (a scan stored before this was kept, that had failures). */
+  readonly failed: readonly CompetitorSearchKind[] | null
+  /** Its typical reach there, in `unit`; null while too few of its posts, or until its next scan. */
+  readonly usual: number | null
+  readonly unit: "views" | "points" | "likes" | null
+  /** What its best posts there share most strongly; null when nothing stands out, or until its next scan. */
+  readonly top: BrandLesson | null
+}
+
+/** A brand's latest scan, platform by platform. */
+export interface CompetitorBrandTally {
+  readonly scanId: string
+  readonly at: string
+  readonly platforms: readonly CompetitorPlatformTally[]
 }
 
 export const ACTION_CARD_KINDS = [
@@ -129,6 +165,8 @@ export interface CompetitorScan {
 /** `GET /v1/competitors/:id`. */
 export interface CompetitorDetail extends TrackedCompetitor {
   readonly latestScan: CompetitorScan | null
+  /** Its latest scan, platform by platform; null before its first scan. Absent from an older server. */
+  readonly platforms?: readonly CompetitorPlatformTally[] | null
   /** Newest first, at most twelve. */
   readonly scans: readonly CompetitorScanSummary[]
 }
@@ -143,6 +181,8 @@ export interface CompetitorCardsResult {
    * order of priorities never changes. Empty until there are verdicts.
    */
   readonly record?: readonly AdviceRecord[]
+  /** Each tracked brand with a scan (by id): its latest scan, platform by platform. Absent from an older server. */
+  readonly brands?: Readonly<Record<string, CompetitorBrandTally>>
 }
 
 // ── Did it work? ("I did this" on a card) ─────────────────────────────────
