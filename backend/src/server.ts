@@ -24,6 +24,7 @@ import {
 import { createOrchestratorWorker } from "./workers/orchestrator-worker.js"
 import { createVideoDirectorWorker } from "./workers/video-director-worker.js"
 import { logFfmpegVersion } from "./providers/video/ffmpeg-utils.js"
+import { assertClientAddressConfig, describeClientAddressConfig } from "./lib/client-address.js"
 import { watchProviderCredentials } from "./providers/index.js"
 import { warmHeygenCatalog } from "./providers/heygen/catalog.js"
 import { ensureStorageBucket } from "./lib/storage.js"
@@ -39,6 +40,9 @@ process.on("uncaughtException", (err) => {
 })
 
 async function main() {
+  // Before anything listens: a half-configured client-address setup would
+  // quietly key every limit and signal on the wrong thing (lib/client-address.ts).
+  assertClientAddressConfig()
   const app = await buildApp()
   let stopScene3DArtifactCleanup: (() => Promise<void>) | undefined
   let stopRetainedImageCleanup: (() => Promise<void>) | undefined
@@ -63,6 +67,9 @@ async function main() {
   // version-dependent (see the Dockerfile FFMPEG_VERSION pin), and "which
   // ffmpeg?" is the first question when production output changes.
   logFfmpegVersion("server")
+  // And which client address — the line to compare across environments after
+  // NETWORK_HASH_SECRET changes (staging and production share one database).
+  console.info(describeClientAddressConfig())
 
   // Start billing cleanup cron jobs (cloud edition only)
   if (hasCredits()) {

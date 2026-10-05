@@ -69,7 +69,13 @@ describe("normalizeCidr", () => {
     ["  203.0.113.7  ", "203.0.113.7/32"],
     ["::1", "::1/128"],
     ["::", "::/128"],
-    ["2001:db8:0000:0000:0000:ff00:0042:8329", "2001:db8:0000:0000:0000:ff00:0042:8329/128"],
+    // Written back canonically (RFC 5952), the way Postgres stores it anyway.
+    ["2001:db8:0000:0000:0000:ff00:0042:8329", "2001:db8::ff00:42:8329/128"],
+    // An IPv4-mapped input IS the IPv4 address, in either spelling — stored as
+    // dotted IPv4, never as a v6 network with a v4-sized prefix (a 500 at insert).
+    ["::ffff:10.0.0.1", "10.0.0.1/32"],
+    ["::ffff:a00:1", "10.0.0.1/32"],
+    ["::ffff:1.2.3.0/24", "1.2.3.0/24"],
     // Networks whose host bits really are zero.
     ["10.0.0.0/8", "10.0.0.0/8"],
     ["203.0.113.0/24", "203.0.113.0/24"],

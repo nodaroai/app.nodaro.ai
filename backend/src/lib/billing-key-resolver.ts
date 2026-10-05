@@ -37,7 +37,6 @@
  */
 
 import { createHash, randomBytes } from "node:crypto"
-import { isIP } from "node:net"
 import { supabase } from "./supabase.js"
 
 export const BILLING_KEY_PREFIX = "ndr_bill_"
@@ -123,141 +122,11 @@ export function __resetBillingKeyCacheForTests(): void {
 // The source restriction
 // ---------------------------------------------------------------------------
 
-/**
- * The forwarded client address, or null when there is none to be had.
- *
- * Deliberately the SAME derivation as `routes/oauth-register.ts`'s
- * `callerKeyHash` and `app.ts`'s `rateLimitKeyGenerator`: the leftmost
- * `X-Forwarded-For` hop, else the socket address. It is duplicated rather than
- * imported because both existing copies are inlined inside functions that do
- * something else with the result (one hashes it, one builds a rate-limit key),
- * and extracting a shared helper would edit two files this change does not own.
- * A `callerIp()` in `lib/request-helpers.ts` with all three callers using it is
- * the right end state.
- *
- * Leftmost is trustworthy HERE because the deployment's reverse proxy rewrites
- * the header to the single real client address before the request reaches this
- * process. `req.ip` alone is not a substitute: behind that proxy every external
- * request arrives from 127.0.0.1.
- */
-export function callerIp(req: { headers: Record<string, string | string[] | undefined>; ip?: string }): string | null {
-  const xff = req.headers["x-forwarded-for"]
-  const first = typeof xff === "string" && xff.length > 0 ? xff.split(",")[0]?.trim() : undefined
-  const raw = first && first.length > 0 ? first : req.ip
-  return raw && raw.length > 0 ? raw : null
-}
-
-interface ParsedAddress {
-  version: 4 | 6
-  bits: bigint
-}
-
-function parseAddress(raw: string): ParsedAddress | null {
-  const version = isIP(raw)
-  if (version === 4) {
-    const octets = raw.split(".")
-    let bits = 0n
-    for (const o of octets) bits = (bits << 8n) | BigInt(Number(o))
-    return { version: 4, bits }
-  }
-  if (version !== 6) return null
-
-  // An IPv4-mapped address (`::ffff:1.2.3.4`) IS the v4 address — a proxy that
-  // hands one over must still match a `10.0.0.0/8` entry.
-  const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i.exec(raw)
-  if (mapped?.[1]) return parseAddress(mapped[1])
-
-  const [head, tail] = raw.includes("::") ? raw.split("::") : [raw, null]
-  const headParts = head && head.length > 0 ? head.split(":") : []
-  const tailParts = tail && tail.length > 0 ? tail.split(":") : []
-
-  // A trailing dotted quad inside a v6 literal expands to two groups.
-  const expand = (parts: string[]): string[] => {
-    const out: string[] = []
-    for (const p of parts) {
-      if (p.includes(".")) {
-        const v4 = parseAddress(p)
-        if (!v4) return []
-        out.push(((v4.bits >> 16n) & 0xffffn).toString(16), (v4.bits & 0xffffn).toString(16))
-      } else {
-        out.push(p)
-      }
-    }
-    return out
-  }
-
-  const headGroups = expand(headParts)
-  const tailGroups = expand(tailParts)
-  const missing = 8 - headGroups.length - tailGroups.length
-  if (missing < 0) return null
-  const groups =
-    tail === null ? headGroups : [...headGroups, ...Array<string>(missing).fill("0"), ...tailGroups]
-  if (groups.length !== 8) return null
-
-  let bits = 0n
-  for (const g of groups) {
-    const n = Number.parseInt(g === "" ? "0" : g, 16)
-    if (!Number.isInteger(n) || n < 0 || n > 0xffff) return null
-    bits = (bits << 16n) | BigInt(n)
-  }
-  return { version: 6, bits }
-}
-
-/**
- * Canonicalise one entry of `allowedCidrs`, or null if it is not one.
- *
- * A bare address becomes a single-host block (`/32`, `/128`). HOST BITS SET
- * ARE A REFUSAL, not a silent mask: Postgres's `cidr` type rejects
- * `10.0.0.1/24` outright, so accepting it here would turn a typo into a 500 at
- * insert time — and quietly widening it to `10.0.0.0/24` would grant the key a
- * range the payer did not ask for.
- */
-export function normalizeCidr(raw: unknown): string | null {
-  if (typeof raw !== "string") return null
-  const value = raw.trim()
-  if (value.length === 0 || value.length > 64) return null
-
-  const slash = value.lastIndexOf("/")
-  const addressPart = slash === -1 ? value : value.slice(0, slash)
-  // A zone-suffixed IPv6 literal (fe80::1%eth0) is not a range Postgres's cidr
-  // type accepts; refuse it here (400) rather than let the insert fail (500).
-  if (addressPart.includes("%")) return null
-  const parsed = parseAddress(addressPart)
-  if (!parsed) return null
-  const width = parsed.version === 4 ? 32 : 128
-
-  if (slash === -1) return `${addressPart}/${width}`
-
-  const prefixPart = value.slice(slash + 1)
-  if (!/^\d{1,3}$/.test(prefixPart)) return null
-  const prefix = Number(prefixPart)
-  if (prefix < 0 || prefix > width) return null
-
-  const hostBits = BigInt(width - prefix)
-  if (hostBits > 0n && (parsed.bits & ((1n << hostBits) - 1n)) !== 0n) return null
-  return `${addressPart}/${prefix}`
-}
-
-/** Is `ip` inside any of `cidrs`? A null or empty list means "any source". */
-export function ipInAnyCidr(ip: string | null, cidrs: string[] | null | undefined): boolean {
-  if (!cidrs || cidrs.length === 0) return true
-  if (!ip) return false
-  const addr = parseAddress(ip)
-  if (!addr) return false
-
-  for (const entry of cidrs) {
-    const slash = entry.lastIndexOf("/")
-    if (slash === -1) continue
-    const net = parseAddress(entry.slice(0, slash))
-    if (!net || net.version !== addr.version) continue
-    const width = net.version === 4 ? 32 : 128
-    const prefix = Number(entry.slice(slash + 1))
-    if (!Number.isInteger(prefix) || prefix < 0 || prefix > width) continue
-    const hostBits = BigInt(width - prefix)
-    if (addr.bits >> hostBits === net.bits >> hostBits) return true
-  }
-  return false
-}
+// The address arithmetic lives in `ip-address.ts` and the client address in
+// `client-address.ts` (the one derivation every reader shares). The two CIDR
+// helpers stay importable from here, where the billing surface has always
+// imported them.
+export { normalizeCidr, ipInAnyCidr } from "./ip-address.js"
 
 // ---------------------------------------------------------------------------
 // Resolution

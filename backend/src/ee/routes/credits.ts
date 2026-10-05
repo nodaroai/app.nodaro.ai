@@ -69,7 +69,7 @@ async function settleFreeGrant(
     // granted — anywhere — and an extension-origin read claims at once and
     // marks the consent as owed (welcomeClaimOptions).
     const outcome = await runSignupGrantClaim(
-      { userId, browserKey: null, deviceKey: null, ipHash: callerKeyHash(req) },
+      { userId, browserKey: null, deviceKey: null, ipHash: callerKeyHash(req, { unknownScope: userId }) },
       req.log,
       await welcomeClaimOptions(req),
     )

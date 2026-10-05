@@ -416,13 +416,47 @@ describe("revocation, expiry and the source restriction", () => {
     expect(res.statusCode).toBe(200)
   })
 
-  it("takes the LEFTMOST forwarded hop — the one Caddy rewrites to the real client", async () => {
+  it("checks the nearest untrusted hop, skipping internal proxies (lib/client-address.ts)", async () => {
     payerDeployment()
     liveKey({ allowed_cidrs: ["10.0.0.0/8"] })
     const res = await app.inject({
       method: "GET",
       url: "/v1/deployment-billing/overview",
       headers: { ...AS_KEY, "x-forwarded-for": "203.0.113.9, 10.1.2.3" },
+    })
+    expect(res.statusCode).toBe(403)
+    expect(res.json().error.code).toBe("billing_key_source")
+  })
+
+  it("fails closed when the address cannot be known (a configured edge that states nothing)", async () => {
+    payerDeployment()
+    liveKey({ allowed_cidrs: ["10.0.0.0/8"] })
+    process.env.CLIENT_IP_HEADER = "x-real-ip"
+    process.env.CLIENT_IP_HEADER_FROM = "100.64.0.0/10"
+    try {
+      const res = await app.inject({
+        method: "GET",
+        url: "/v1/deployment-billing/overview",
+        headers: { ...AS_KEY, "x-forwarded-for": "100.64.3.4" },
+      })
+      expect(res.statusCode).toBe(403)
+      expect(res.json().error.code).toBe("billing_key_source")
+    } finally {
+      process.env.CLIENT_IP_HEADER = ""
+      process.env.CLIENT_IP_HEADER_FROM = ""
+    }
+  })
+
+  it("a forged leftmost entry inside the range does not pass", async () => {
+    // An appending hop keeps the caller's own value on the left. Reading the
+    // leftmost entry let any caller name an allowed address; the address the
+    // hop actually saw is the rightmost untrusted one.
+    payerDeployment()
+    liveKey({ allowed_cidrs: ["10.0.0.0/8"] })
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/deployment-billing/overview",
+      headers: { ...AS_KEY, "x-forwarded-for": "10.1.2.3, 203.0.113.9" },
     })
     expect(res.statusCode).toBe(403)
     expect(res.json().error.code).toBe("billing_key_source")

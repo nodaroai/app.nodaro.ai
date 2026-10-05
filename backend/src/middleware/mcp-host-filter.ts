@@ -20,6 +20,10 @@ const MCP_ALLOWED_PATHS: RegExp[] = [
   // so without this entry the user clicks the link and lands on a
   // host-filter 404. Both GET (page render) and POST (multipart receive).
   /^\/v1\/upload-page\//,
+  // Admin-only: how the server sees the caller (ee/routes/admin-access.ts).
+  // This host reaches the backend WITHOUT the bundled Caddy, so the client
+  // address derivation has to be checkable here too. Exact path.
+  /^\/v1\/admin\/access\/whoami$/,
 ]
 
 function isMcpHost(host: string): boolean {

@@ -60,8 +60,9 @@ export interface RelatedAccount extends ClusterMember {
  * A cluster's display token: 12 hex characters of a KEYED digest of the stored
  * hash — never the head of the hash itself.
  *
- * WHY KEYED, AND NOT A SLICE. `ip_hash` is an UNSALTED sha256 of the caller's
- * IP (`callerKeyHash`, src/routes/oauth-register.ts). IPv4 is a 2^32 space, so
+ * WHY KEYED, AND NOT A SLICE. `ip_hash` is the caller's hashed network
+ * (`callerKeyHash`, src/routes/oauth-register.ts) — an UNSALTED sha256 unless
+ * `NETWORK_HASH_SECRET` is set, and rows written before it are. IPv4 is a 2^32 space, so
  * 48 bits of that digest pin the address down uniquely: anyone holding the head
  * of the hash — an operator's DevTools, a HAR file, a screenshot in a support
  * ticket — recovers the plaintext IP with a commodity brute force. Migration

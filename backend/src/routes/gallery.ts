@@ -3,6 +3,7 @@ import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { checkIsAdmin } from "../lib/admin-check.js"
 import { formatZodError } from "../lib/zod-error.js"
+import { clientNetworkHash } from "../lib/client-address.js"
 import { OWNER_VIEW_MODERATION, loadGalleryModeration } from "../lib/gallery-moderation.js"
 import { readGalleryPage, type GalleryPage } from "../lib/gallery-listing.js"
 import { MAX_GALLERY_REMOVAL, removeFromGallery } from "../lib/gallery-removal.js"
@@ -184,9 +185,11 @@ export async function galleryRoutes(app: FastifyInstance) {
     }
 
     const { jobId, reason, details } = parsed.data
-    const reporterIp = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim()
-      ?? req.ip
-      ?? null
+    // The reporter's HASHED network, not an address: `reporter_ip` (text) has
+    // only ever served the one-hour dedup below, and an anonymous reporter's
+    // address is personal data kept forever. One shared value for an address
+    // nobody knows — a dedup is still a dedup.
+    const reporterIp = clientNetworkHash(req)
 
     // Check job exists and is public
     const { data: job, error: jobError } = await supabase

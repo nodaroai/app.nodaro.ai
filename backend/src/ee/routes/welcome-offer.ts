@@ -102,7 +102,7 @@ export async function welcomeOfferRoutes(app: FastifyInstance): Promise<void> {
               userId,
               browserKey: body.browserKey ?? null,
               deviceKey: body.deviceKey ?? null,
-              ipHash: callerKeyHash(req),
+              ipHash: callerKeyHash(req, { unknownScope: userId }),
             },
             req.log,
             { requireConsent: true },

@@ -23,6 +23,13 @@ process.env.R2_REGION = "auto"
 process.env.STORAGE_OBJECT_ACL = ""
 process.env.KIE_API_BASE_URL = "https://api.kie.ai"
 process.env.ELEVENLABS_BASE_URL = "https://api.elevenlabs.io"
+// The client-address derivation reads these at call time. A developer's .env
+// (or a Railway-hosted runner) must not change which address a test sees or
+// how it is hashed; the client-address tests set them per case. Empty, not
+// deleted: dotenv fills only variables that are UNSET, and empty means "off".
+process.env.CLIENT_IP_HEADER = ""
+process.env.CLIENT_IP_HEADER_FROM = ""
+process.env.NETWORK_HASH_SECRET = ""
 // EDITION=cloud above means hasCredits() is true by default in every test
 // file, so any test that calls the real buildApp() (or imports
 // video-worker.ts) exercises the real loadPrivatePlugins() path
