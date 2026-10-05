@@ -46,7 +46,7 @@ import { OutputCard, type FieldBadgeEntry } from "@/components/presentation/outp
 import { ConfigFieldRenderer } from "@/components/presentation/config-field-renderer"
 import { RichtextBlock } from "@/components/presentation/richtext-block"
 import { GroupCard } from "@/components/presentation/group-card"
-import { getCardTitle as getCardTitleHelper, orderNodesByIds, getNodeResultWithInputFallback, areAllInputsFilled, resolveInputItems, resolveOutputItems, findExposableField } from "@/components/presentation/helpers"
+import { getCardTitle as getCardTitleHelper, orderNodesByIds, getNodeResultWithInputFallback, areAllInputsFilled, resolveInputItems, resolveOutputItems, findExposableField, exposedFieldValue, exposedFieldDataKey } from "@/components/presentation/helpers"
 import { calculateMonetizedCost, type PresentationItem } from "@nodaro/shared"
 import { NodeConfigModal, CONFIG_INPUT_TYPES } from "@/components/presentation/node-config-modal"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
@@ -459,15 +459,16 @@ export function MobileAppShell({
           const nodeData = (node.data ?? {}) as Record<string, unknown>
           const inputVals = presInputValues[item.nodeId]
           const mergedNodeData = inputVals ? { ...nodeData, ...inputVals } : nodeData
-          const currentValue = inputVals?.[item.field] ?? nodeData[item.field] ?? fieldDef.defaultValue
+          const dataKey = exposedFieldDataKey(node, item.field)
+          const currentValue = exposedFieldValue(node, item.field, inputVals, fieldDef)
           const customTitle = settings.cardMeta?.[item.id]?.title
           return (
             <ConfigFieldRenderer
               nodeType={node.type ?? ""}
-              field={item.field}
+              field={dataKey}
               value={currentValue}
               nodeData={mergedNodeData}
-              onChange={(v) => presUpdateInput(item.nodeId, item.field, v)}
+              onChange={(v) => presUpdateInput(item.nodeId, dataKey, v)}
               allowedValues={item.allowedValues}
               readOnly={inputsReadOnly || isRunning}
               customLabel={customTitle}
@@ -657,10 +658,9 @@ export function MobileAppShell({
       for (const item of items) {
         if (item.type === "field") {
           const fieldDef = findFieldDef(item.nodeId, item.field)
-          if (fieldDef) {
-            const nodeData = nodeMap.get(item.nodeId)?.data as Record<string, unknown> | undefined
-            const inputVals = presInputValues[item.nodeId]
-            const value = inputVals?.[item.field] ?? nodeData?.[item.field] ?? fieldDef.defaultValue
+          const fieldNode = nodeMap.get(item.nodeId)
+          if (fieldDef && fieldNode) {
+            const value = exposedFieldValue(fieldNode, item.field, presInputValues[item.nodeId], fieldDef)
             const existing = map.get(item.nodeId)
             if (existing) {
               existing.push({ id: item.id, fieldDef, value })

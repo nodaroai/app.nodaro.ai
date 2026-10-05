@@ -75,7 +75,7 @@ import { useIsMobile } from "@/hooks/use-is-mobile"
 import { StatusBadge } from "./output-cards/shared"
 import type { OutputCardActions } from "./output-cards/shared"
 import { HiddenNodesPill } from "./hidden-nodes-pill"
-import { getCardTitle as getCardTitleHelper, orderNodesByIds, getNodeResultWithInputFallback, getLoopFirstMedia, areAllInputsFilled, resolveInputItems, resolveOutputItems, findExposableField } from "./helpers"
+import { getCardTitle as getCardTitleHelper, orderNodesByIds, getNodeResultWithInputFallback, getLoopFirstMedia, areAllInputsFilled, resolveInputItems, resolveOutputItems, findExposableField, exposedFieldValue, exposedFieldDataKey } from "./helpers"
 import { buildNodeRefMap } from "@/lib/node-refs"
 import { RunTargetSelector } from "./run-target-selector"
 import { ViewModeSelector } from "./view-mode-selector"
@@ -1065,10 +1065,10 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
       for (const item of items) {
         if (item.type === "field") {
           const fieldDef = findFieldDef(item.nodeId, item.field)
-          if (fieldDef) {
-            const nodeData = nodeMap.get(item.nodeId)?.data as Record<string, unknown> | undefined
+          const fieldNode = nodeMap.get(item.nodeId)
+          if (fieldDef && fieldNode) {
             const inputVals = isFullscreen ? presInputValues[item.nodeId] : undefined
-            const value = inputVals?.[item.field] ?? nodeData?.[item.field] ?? fieldDef.defaultValue
+            const value = exposedFieldValue(fieldNode, item.field, inputVals, fieldDef)
             const existing = map.get(item.nodeId)
             if (existing) {
               existing.push({ id: item.id, fieldDef, value })
@@ -1329,19 +1329,20 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
           const nodeData = (node.data ?? {}) as Record<string, unknown>
           const inputVals = isFullscreen ? presInputValues[item.nodeId] : undefined
           const mergedNodeData = inputVals ? { ...nodeData, ...inputVals } : nodeData
-          const currentValue = inputVals?.[item.field] ?? nodeData[item.field] ?? fieldDef.defaultValue
+          const dataKey = exposedFieldDataKey(node, item.field)
+          const currentValue = exposedFieldValue(node, item.field, inputVals, fieldDef)
           const customTitle = settings.cardMeta?.[item.id]?.title
           return (
             <ConfigFieldRenderer
               nodeType={node.type ?? ""}
-              field={item.field}
+              field={dataKey}
               value={currentValue}
               nodeData={mergedNodeData}
               onChange={(v) => {
                 if (isFullscreen) {
-                  presUpdateInput(item.nodeId, item.field, v)
+                  presUpdateInput(item.nodeId, dataKey, v)
                 } else {
-                  updateNodeData(item.nodeId, { [item.field]: v })
+                  updateNodeData(item.nodeId, { [dataKey]: v })
                 }
               }}
               allowedValues={item.allowedValues}

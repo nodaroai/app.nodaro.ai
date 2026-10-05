@@ -1,6 +1,6 @@
 import type { WorkflowNode } from "@/types/nodes"
 import { NODE_DEF_MAP } from "@/types/nodes"
-import { migrateToItems, deriveLottieSlotFields, LOTTIE_SLOT_FIELD_PREFIX } from "@nodaro/shared"
+import { migrateToItems, deriveLottieSlotFields, LOTTIE_SLOT_FIELD_PREFIX, canonicalExposedFieldKey } from "@nodaro/shared"
 import type { ExposableField, PresentationItem } from "@nodaro/shared"
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
 import { getNodeLabel, getNodeResult } from "@/lib/presentation-utils"
@@ -39,7 +39,9 @@ export function findExposableField(
 ): ExposableField | undefined {
   if (!node?.type) return undefined
   const def = NODE_DEF_MAP.get(node.type)
-  const staticField = def?.exposableFields?.find((f) => f.key === fieldKey)
+  // An app published before a field was renamed still stores the old spelling (LEGACY_EXPOSED_FIELD_KEYS).
+  const key = canonicalExposedFieldKey(node.type, fieldKey)
+  const staticField = def?.exposableFields?.find((f) => f.key === key)
   if (staticField) return staticField
   if (fieldKey.startsWith(LOTTIE_SLOT_FIELD_PREFIX)) {
     const motionPlan = (node.data as Record<string, unknown> | undefined)?.motionPlan as
@@ -49,6 +51,27 @@ export function findExposableField(
     if (slot) return slot as ExposableField
   }
   return undefined
+}
+
+/** The node-data key a card reads and writes: the stored key, a renamed field's old spelling mapped to its current one. */
+export function exposedFieldDataKey(node: WorkflowNode | undefined, fieldKey: string): string {
+  return canonicalExposedFieldKey(node?.type, fieldKey)
+}
+
+/**
+ * What a card shows: this run's own value, else the node's saved value, else the descriptor's default.
+ * `fieldKey` is the STORED key; a value typed under an old spelling (a run slot saved before a rename) still
+ * counts, and the current key wins when both exist.
+ */
+export function exposedFieldValue(
+  node: WorkflowNode,
+  fieldKey: string,
+  runValues: Record<string, unknown> | undefined,
+  fieldDef: ExposableField,
+): unknown {
+  const key = canonicalExposedFieldKey(node.type, fieldKey)
+  const data = (node.data ?? {}) as Record<string, unknown>
+  return runValues?.[key] ?? runValues?.[fieldKey] ?? data[key] ?? fieldDef.defaultValue
 }
 
 /** Get display title for a presentation card — custom title from cardMeta, or fallback to node label */

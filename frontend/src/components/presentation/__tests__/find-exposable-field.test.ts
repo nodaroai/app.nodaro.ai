@@ -79,3 +79,28 @@ describe("findExposableField", () => {
     expect(findExposableField(node, "nonexistentField")).toBeUndefined()
   })
 })
+
+describe("findExposableField — text-to-speech", () => {
+  const tts = {
+    id: "t1",
+    type: "text-to-speech",
+    position: { x: 0, y: 0 },
+    data: {},
+  } as unknown as WorkflowNode
+
+  it("exposes Similarity under the node's real data field", () => {
+    const field = findExposableField(tts, "similarityBoost")
+    expect(field?.key).toBe("similarityBoost")
+    expect(field?.type).toBe("slider")
+    expect(field?.label).toBe("Similarity")
+  })
+
+  it("an app published with the old key still gets the same card", () => {
+    expect(findExposableField(tts, "similarity")).toBe(findExposableField(tts, "similarityBoost"))
+  })
+
+  it("does not remap `similarity` on another node type", () => {
+    const avatar = { id: "a1", type: "ai-avatar", position: { x: 0, y: 0 }, data: {} } as unknown as WorkflowNode
+    expect(findExposableField(avatar, "similarity")).toBeUndefined()
+  })
+})

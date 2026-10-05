@@ -317,6 +317,12 @@ export {
 } from "./presentation-utils.js"
 
 export {
+  LEGACY_EXPOSED_FIELD_KEYS,
+  canonicalExposedFieldKey,
+  canonicalizeOverrideKeys,
+} from "./exposed-field-keys.js"
+
+export {
   ITER_CLONE_PATTERN,
   isExpandedClone,
   filterCloneNodes,

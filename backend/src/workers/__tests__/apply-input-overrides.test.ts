@@ -201,3 +201,27 @@ describe("applyInputOverridesToNodes — the override lock (issue #1555)", () =>
     expect(nodes[1].data.target).toBe("https://creator.example")
   })
 })
+
+describe("applyInputOverridesToNodes — an exposed key that was renamed", () => {
+  it("a published app's `similarity` override reaches the text-to-speech node's `similarityBoost`", () => {
+    const nodes = [
+      { id: "tts1", type: "text-to-speech", data: { provider: "elevenlabs-turbo", stability: 0.5, similarityBoost: 0.75 } },
+    ]
+    applyInputOverridesToNodes(nodes, { tts1: { similarity: 0.2 } })
+    expect(nodes[0].data.similarityBoost).toBe(0.2)
+    expect("similarity" in nodes[0].data).toBe(false)
+    expect(nodes[0].data.stability).toBe(0.5)
+  })
+
+  it("the current key works the same", () => {
+    const nodes = [{ id: "tts1", type: "text-to-speech", data: { similarityBoost: 0.75 } }]
+    applyInputOverridesToNodes(nodes, { tts1: { similarityBoost: 0.3 } })
+    expect(nodes[0].data.similarityBoost).toBe(0.3)
+  })
+
+  it("does not touch `similarity` on a node that has it for real (AI Avatar's Fish voice)", () => {
+    const nodes = [{ id: "av1", type: "ai-avatar", data: { label: "Avatar" } as Record<string, unknown> }]
+    applyInputOverridesToNodes(nodes, { av1: { similarity: 0.4 } })
+    expect(nodes[0].data.similarity).toBe(0.4)
+  })
+})

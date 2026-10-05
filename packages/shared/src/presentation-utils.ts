@@ -6,6 +6,7 @@
 import type { GenericNode, GenericEdge } from "./types.js"
 import type { PresentationItem } from "./presentation-types.js"
 import { AUDIO_PRODUCER_TYPES, VIDEO_PRODUCER_TYPES } from "./producer-types.js"
+import { canonicalizeOverrideKeys } from "./exposed-field-keys.js"
 
 // ---------------------------------------------------------------------------
 // Node type sets
@@ -422,13 +423,16 @@ const MEDIA_INPUT_FIELD_TYPES: ReadonlySet<InputFieldSchema["type"]> = new Set([
  *
  * Schema-driven on purpose: a new media input node is covered by its
  * `INPUT_FIELD_MAP` row, with no list to remember here.
+ *
+ * An override sent under a renamed exposed-field key (an app published before
+ * the rename) lands on the node's current field — `canonicalizeOverrideKeys`.
  */
 export function mergeNodeInputOverrides(
   nodeType: string | undefined,
   data: Record<string, unknown>,
   overrides: Record<string, unknown>,
 ): Record<string, unknown> {
-  const merged: Record<string, unknown> = { ...data, ...overrides }
+  const merged: Record<string, unknown> = { ...data, ...canonicalizeOverrideKeys(nodeType, overrides) }
   const schema = nodeType ? INPUT_FIELD_MAP[nodeType] : undefined
   if (
     schema &&

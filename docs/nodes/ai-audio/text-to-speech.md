@@ -23,7 +23,7 @@ The Text to Speech node generates spoken audio from text input using ElevenLabs 
 
 ### Voice settings & preview fidelity
 
-When you don't touch the sliders, generation uses the **voice's own stored settings** (including speaker boost) — the same settings its preview was rendered with, so output matches what you heard in the Voice Browser. When you adjust one or more sliders, your values are merged **over** the voice's stored settings rather than resetting the others to generic defaults.
+When you don't touch the sliders, generation uses the **voice's own stored settings** (including speaker boost) — the same settings its preview was rendered with, so output matches what you heard in the Voice Browser. When you adjust one or more sliders, your values are merged **over** the voice's stored settings rather than resetting the others to generic defaults. In a published app the creator can expose **Stability** and **Similarity** as sliders; Similarity writes this node's Similarity Boost, so — like the field — it only changes the result on the v2 models.
 
 Voice Library voices are verified per model by their creators. The Voice Browser knows each library voice's verified models: selecting a library voice while the node is set to a v2 model the voice is **not** verified for automatically snaps the provider to a verified one (your explicit choice is kept whenever the voice is verified for it; the default v3 renders any voice and is never changed).
 
