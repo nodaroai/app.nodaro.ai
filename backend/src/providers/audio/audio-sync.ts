@@ -30,7 +30,7 @@
  *     Low confidence is a result, not an error: a silent camera has nothing to
  *     align.
  */
-import { spawn } from "node:child_process"
+import { spawnFfmpeg } from "../video/ffmpeg-process.js"
 import { join } from "node:path"
 import {
   cleanupWorkDir,
@@ -162,7 +162,7 @@ async function streamPcm(
     "-f", "f32le", "pipe:1",
   ]
   await withFfmpegSlot(() => new Promise<void>((resolve, reject) => {
-    const proc = spawn("ffmpeg", args, { stdio: ["ignore", "pipe", "pipe"] })
+    const proc = spawnFfmpeg(args, { stdio: ["ignore", "pipe", "pipe"] })
     let stderr = ""
     let carry = Buffer.alloc(0)
     const watchdog = setTimeout(() => proc.kill("SIGKILL"), timeoutMs)

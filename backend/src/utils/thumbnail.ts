@@ -5,6 +5,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { randomUUID } from "node:crypto"
 import { safeFetch } from "../lib/safe-fetch.js"
+import { execFileFfmpeg } from "../providers/video/ffmpeg-process.js"
 
 // ============================================================
 // Types
@@ -88,8 +89,7 @@ function runFfprobe(filePath: string): Promise<string> {
  */
 function extractFrame(videoPath: string, outputPath: string, timeSeconds: number): Promise<void> {
   return new Promise((resolve, reject) => {
-    execFile(
-      "ffmpeg",
+    execFileFfmpeg(
       [
         "-y",
         "-i", videoPath,

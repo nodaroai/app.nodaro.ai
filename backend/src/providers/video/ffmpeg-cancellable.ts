@@ -1,11 +1,11 @@
-import { spawn } from "node:child_process"
+import { spawnFfmpeg } from "./ffmpeg-process.js"
 import { withFfmpegSlot } from "./ffmpeg-utils.js"
 
 /** Release the shared CPU slot only after the child process has actually closed. */
 export function runFfmpegCancellable(args: readonly string[], signal: AbortSignal, timeoutMs = 10 * 60 * 1000): Promise<void> {
   return withFfmpegSlot(() => new Promise<void>((resolve, reject) => {
     signal.throwIfAborted()
-    const child = spawn("ffmpeg", [...args], { stdio: ["ignore", "ignore", "pipe"] })
+    const child = spawnFfmpeg(args, { stdio: ["ignore", "ignore", "pipe"] })
     let failure: Error | undefined
     let killTimer: ReturnType<typeof setTimeout> | undefined
     const stop = (reason: Error) => {

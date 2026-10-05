@@ -868,6 +868,8 @@ Rendered audio/video output is **ffmpeg-version-dependent** (the 5.1→8 upgrade
 
 Boot logs answer "which ffmpeg?": `logFfmpegVersion()` prints one line at server + worker startup.
 
+**Launching ffmpeg (decided 2026-10-05):** only through `providers/video/ffmpeg-process.ts` (`spawnFfmpeg` / `execFileFfmpeg`) or the runners built on it (`runFfmpeg`, `runFfmpegCapture`, `runFfmpegWithProgress`, `runFfmpegCancellable`). It places the box's CPU-quota thread counts (`ffmpeg-threads.ts :: withFfmpegThreads` — `-threads` before each `-i` and each output path, filter counts global) — ffmpeg's own auto-threading counts the HOST's cores, which under a 2-CPU quota ran x264 with 67 frame threads and OOM-killed a 4K render. An argv that already names a thread option is left as given (Apply EDL's `sliceArgv`, whose resume key hashes its counts); with no quota every argv is byte-identical. `ffmpeg-spawn-census.test.ts` fails the build on a direct `spawn("ffmpeg", …)` anywhere else. The argv reader mirrors ffmpeg's own splitter with the n8.1.2 valueless-option table — re-check it when bumping the pin.
+
 ## App Run Archive (soft-delete) — migrated from root CLAUDE.md
 
 `app_runs.deleted_at` makes `DELETE /v1/app/:slug/runs/:runId` a soft-delete. The run is hidden from the default list and recoverable from `/archived-runs` in the UI. API / SDK (`client.apps.deleteRun()`) / MCP (`delete_app_run` tool) all soft-delete by design — they cannot destroy data.

@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process"
+import { spawnFfmpeg } from "./ffmpeg-process.js"
 import { createRequire } from "node:module"
 import {
   YtDlpHaltError,
@@ -471,7 +471,7 @@ export function spawnYtDlpDownload(
  */
 function muxSectionStreams(videoPath: string, audioPath: string, outPath: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    const proc = spawn("ffmpeg", [
+    const proc = spawnFfmpeg([
       "-y",
       "-i", videoPath,
       "-i", audioPath,
