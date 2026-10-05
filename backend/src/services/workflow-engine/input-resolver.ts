@@ -12,12 +12,12 @@ import type {
 } from "./types.js"
 import { extractSourceNodeOutput, extractSourceNodeOutputAsList, extractSavedNodeOutput, extractAllGeneratedResults, extractVideoDurationFromNode, getPrimaryOutput, savedOutputFor, ANALYSIS_PRODUCER_TYPES, type ExtractContext } from "./output-extractor.js"
 import {
-  pro3DRenderShotStills, extractGeneratedJsonAsList, splitGeneratedItems, resolveNodeRefs, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, SOCIAL_POST_NODE_TYPES, PARAMETER_NODE_TYPES, getParameterValue, FAN_OUT_EACH_TYPES, FAN_OUT_EACH_HANDLES, defaultEdgeOutputMode, listResultsServeHandle, compactWithRows, liveRowColumn, resolveListFanOut, type FanOutCandidate, type ListFanOut, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES, editPlanSourceDurationSec, extractReferencedLabels, canonicalVarName, REFERENCE_HANDLE_MAP, parseGroupHandle, SUNO_TRACK_SOURCE_TYPES, isFanInEdge, isFanInNodeType, videoLinkPageUrl, socialSearchPostVideo } from "@nodaro/shared"
+  pro3DRenderShotStills, extractGeneratedJsonAsList, splitGeneratedItems, resolveNodeRefs, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, SOCIAL_POST_NODE_TYPES, PARAMETER_NODE_TYPES, getParameterValue, FAN_OUT_EACH_TYPES, FAN_OUT_EACH_HANDLES, defaultEdgeOutputMode, listResultsServeHandle, compactWithRows, liveRowColumn, resolveListFanOut, type FanOutCandidate, type ListFanOut, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES, editPlanSourceDurationSec, extractReferencedLabels, canonicalVarName, REFERENCE_HANDLE_MAP, parseGroupHandle, SUNO_TRACK_SOURCE_TYPES, isFanInEdge, isFanInNodeType, videoLinkPageUrl, socialSearchPostVideo, ownsItsList } from "@nodaro/shared"
 import { isSourceNode } from "./execution-graph.js"
 import { overlayHandleIndex } from "../../providers/image/overlay-contract.js"
 import { VIDEO_OVERLAY_LAYER_PLAN_HANDLE, videoOverlaySlotOfHandle, isTelegramAccountTriggerNamedHandle, editPlanTranscriptOrigin } from "@nodaro/shared"
 import { buildNodeRefMap } from "./payload-builder.js"
-import { jsonArrayItems, listFor, savedDataAllowed } from "./saved-data.js"
+import { jsonArrayItems, listFor, savedDataAllowed, savedListFor } from "./saved-data.js"
 import { IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE } from "./inline-executor.js"
 
 /**
@@ -758,7 +758,10 @@ function resolveListLoopColumnItems(
         if (state?.output?.listResults && state.output.listResults.length > 0) {
           upstreamVals = (keepEmpty ? (state.output.alignedListResults ?? state.output.listResults) : state.output.listResults).filter(isValue)
         } else if (savedDataAllowed(state)) {
-          const fromData = extractAllGeneratedResults(upstreamNode.data as Record<string, unknown>)
+          // Extract Field / JSON Process: their own saved list, never a history.
+          const fromData = ownsItsList(upstreamNode.type)
+            ? savedListFor(upstreamNode, state)
+            : extractAllGeneratedResults(upstreamNode.data as Record<string, unknown>)
           if (fromData && fromData.length > 0) upstreamVals = fromData
         }
       }
@@ -972,7 +975,15 @@ export function getListFanOutForNode(
       continue
     }
 
-    // 5. Fallback: accumulated generatedResults from multiple manual runs
+    // 5. Extract Field / JSON Process: their own saved list (or Extract Field's
+    //    JSON value) — never a history in generatedResults (saved-data.ts).
+    if (ownsItsList(sourceNode.type)) {
+      const own = savedListFor(sourceNode, state)
+      if (own) consider(edge, selectListItems(own, selectorArg))
+      continue
+    }
+
+    // 5b. Fallback: accumulated generatedResults from multiple manual runs
     const savedResults = extractAllGeneratedResults(
       sourceNode.data as Record<string, unknown>,
     )

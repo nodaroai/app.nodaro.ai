@@ -478,6 +478,15 @@ export function applyBackendExecutionState(
         // Content Recipe / Content Ideas: the live run's own mapping — the
         // generic list/result writes below do not fit a recipe or the briefs.
         Object.assign(data, contentRunResultPatch(node.type, state.output as Record<string, unknown>) ?? {})
+      } else if (state.output && isJsonRunResultType(node.type)) {
+        // A json producer (Edit Plan, Transcribe, Extract Field, JSON Process,
+        // …): exactly what its canvas run writes — the live lane's mapping,
+        // never the generic list/result writes below (lib/json-run-result.ts).
+        Object.assign(data, jsonRunResultPatch(node.type, state.output, {
+          data,
+          jobId: state.jobId ?? `exec-${node.id}`,
+          timestamp: state.completedAt ?? new Date().toISOString(),
+        }))
       } else if (state.output) {
         const nodeType = node.type ?? ""
         if (isScene3DNodeType(nodeType) && state.output.plan) {
@@ -553,13 +562,6 @@ export function applyBackendExecutionState(
           }
         }
         Object.assign(data, perHandleRunFields(nodeType, state.output))
-        // Edit Plan, Transcribe, Silence Detect, Audio Sync, Video Analysis /
-        // Audit: the run's json (and Transcribe's text) — the live lane's mapping.
-        Object.assign(data, jsonRunResultPatch(nodeType, state.output, {
-          data,
-          jobId: state.jobId ?? `exec-${node.id}`,
-          timestamp: state.completedAt ?? new Date().toISOString(),
-        }))
       }
     } else if (state.status === "running") {
       data.executionStatus = "running"
@@ -646,10 +648,20 @@ export function applyCompletedExecutionResults(
       return patch ? { ...node, data: { ...data, ...patch } as SceneNodeData } : node
     }
 
-    // Edit Plan, Transcribe, Silence Detect, …: a node already holding a json
-    // result keeps it (this lane only fills what is empty; on a canvas with a
-    // render a newer run is loaded before it instead — newer-run-review.ts).
-    if (isJsonRunResultType(node.type) && holdsJsonRunResult(node.type, data)) return node
+    // Edit Plan, Transcribe, Extract Field, …: exactly what the node's canvas
+    // run writes — the live lane's mapping, never the generic writes below. A
+    // node already holding a json result keeps it (this lane only fills what is
+    // empty; on a canvas with a render a newer run is loaded before it instead
+    // — newer-run-review.ts).
+    if (isJsonRunResultType(node.type)) {
+      if (holdsJsonRunResult(node.type, data)) return node
+      const patch = jsonRunResultPatch(node.type, state.output, {
+        data,
+        jobId: state.jobId ?? `exec-${node.id}`,
+        timestamp: state.completedAt ?? new Date().toISOString(),
+      })
+      return patch ? { ...node, data: { ...data, executionStatus: "completed", ...patch } as SceneNodeData } : node
+    }
 
     const outputUrl = state.output.imageUrl ?? state.output.videoUrl ?? state.output.audioUrl
 
@@ -732,13 +744,6 @@ export function applyCompletedExecutionResults(
       newData.activeResultIndex = 0
     }
     Object.assign(newData, perHandleRunFields(nodeType, state.output))
-    // Edit Plan, Transcribe, Silence Detect, Audio Sync, Video Analysis /
-    // Audit: the run's json (and Transcribe's text) — the live lane's mapping.
-    Object.assign(newData, jsonRunResultPatch(nodeType, state.output, {
-      data,
-      jobId: state.jobId ?? `exec-${node.id}`,
-      timestamp: state.completedAt ?? new Date().toISOString(),
-    }))
 
     return { ...node, data: newData as SceneNodeData }
   })

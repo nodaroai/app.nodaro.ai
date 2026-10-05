@@ -29,6 +29,14 @@ stayed empty, so a later **Run from here** could start from an outdated plan or
 transcript. They now hold what the workflow run produced, and a Run from here
 starts from that.
 
+Each of these nodes holds exactly what a run of that node alone would leave,
+and nothing more. Extract Field and JSON Process keep no list of past runs: the
+next node reads the list they produced, and their settings show no per-item
+results. Workflows saved before this change may still carry such a list from
+an earlier run; it is ignored, so those nodes hand on their own list again
+without being run, in the editor and in server runs alike (Run from here,
+webhook and schedule triggers).
+
 Video Audit lists what it changed in a strip under the analysis. After a
 workflow run the strip is read back from that run's audit a moment after the
 analysis appears, so the two always belong to the same run. If that audit

@@ -38,6 +38,7 @@ import { ParameterPreviewContext } from "./config-panels/parameter-preview-conte
 // Phase 1B.2: SceneConfig now ships from `./config-panels/scene-configs`.
 // Legacy `./scene-config` + `./scene-editor-modal` are dead code pending cleanup.
 import { IterationResultsPanel } from "./iteration-results-panel"
+import { iterationResultsShown } from "@/lib/iteration-results"
 import { getUpstreamNodes, buildNodeRefMap } from "@/lib/node-refs"
 import { isTileGridPickerType } from "@/lib/picker-handles"
 import { REPEATABLE_NODE_TYPES, getEffectiveRepeatCount } from "@nodaro/shared"
@@ -1215,8 +1216,7 @@ export function ConfigPanel() {
                   const listInputs = d.__listInputs as string[] | undefined
                   // Only show iteration results when fan-out data exists AND the
                   // node still has visible results (user may have deleted them).
-                  const hasResults = ((d.generatedResults ?? []) as unknown[]).length > 0
-                  if (!listResults || listResults.length <= 1 || !hasResults) return null
+                  if (!listResults || !iterationResultsShown(nodeType, d)) return null
                   return (
                     <IterationResultsPanel
                       nodeId={selectedNode.id}

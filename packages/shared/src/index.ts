@@ -1362,6 +1362,8 @@ export {
   DYNAMIC_PRODUCER_TYPES,
   FAN_OUT_EACH_TYPES,
   FAN_OUT_EACH_HANDLES,
+  OWN_LIST_NODE_TYPES,
+  ownsItsList,
   defaultEdgeOutputMode,
   listResultsServeHandle,
   FAN_IN_TARGETS,

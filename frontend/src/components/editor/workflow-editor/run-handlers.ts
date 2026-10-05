@@ -31,7 +31,7 @@ import { clearedConnectedListRows } from "./clear-run-results"
 import { namedRunOutputFields, reduceRunOutputFields } from "@/lib/named-run-outputs"
 import { perHandleRunFields } from "@/lib/per-handle-batch"
 import { applyEdlRunCutFields, applyEdlTakeTranscriptField } from "@/lib/apply-edl-cut"
-import { isJsonRunResultType, jobRunOutput, jsonRunResultIsList, jsonRunResultLandsText, jsonRunResultPatch } from "@/lib/json-run-result"
+import { isJsonRunResultType, jobRunOutput, jsonRunResultPatch } from "@/lib/json-run-result"
 import { isSeededState } from "@/lib/seeded-node-state"
 import { videoOverlayListRowFields, videoOverlayRunOutputFields } from "@/lib/video-overlay-run-output"
 import type { NodeExecutionStatus as SharedNodeExecutionStatus, NodeExecutionStateWire } from "@nodaro/shared"
@@ -1786,6 +1786,17 @@ function syncNodeStatesToStore(
         // single-node Run's own patch. Never the generic writes below: the
         // featured image is not the node's result.
         Object.assign(updates, scrapePatch);
+      } else if (state.output && isJsonRunResultType(node.type)) {
+        // A json producer (Edit Plan, Transcribe, Extract Field, JSON
+        // Process, …): exactly what its canvas run writes, ONE mapping with
+        // the reopen lanes and the job restores (lib/json-run-result.ts).
+        // Never the generic writes below — their text history and URL list in
+        // generatedResults were read downstream instead of the node's own list.
+        Object.assign(updates, jsonRunResultPatch(node.type, state.output, {
+          data,
+          jobId: state.jobId ?? `exec-${node.id}`,
+          timestamp: state.completedAt ?? new Date().toISOString(),
+        }));
       } else if (state.output) {
         const nodeType = node.type ?? "";
         if (state.output.imageUrl) {
@@ -1817,9 +1828,7 @@ function syncNodeStatesToStore(
         // Not on a trigger node: its "text" is the incoming message or payload,
         // which stays in the run history (the editor reads a trigger's values
         // from the transient __triggerData, never from a saved result).
-        // Not on Transcribe either: its take carries the transcript too, so the
-        // json mapping below lands its text (lib/json-run-result.ts).
-        if (state.output.text && !state.output.combinedText && !jsonRunResultLandsText(nodeType)) {
+        if (state.output.text && !state.output.combinedText) {
           updates.generatedText = state.output.text;
           const prevTextResults = (data.generatedResults ?? []) as Array<{ text?: string; jobId?: string }>;
           const alreadyHas = prevTextResults.some((r) => r.text === state.output!.text);
@@ -1875,9 +1884,7 @@ function syncNodeStatesToStore(
         }
         if (state.output.thumbnailUrl)
           updates.thumbnailUrl = state.output.thumbnailUrl;
-        // Not on Edit Plan: its Clips list IS its plan (generatedJson), and a
-        // canvas run never writes this generic list for it.
-        if (state.output.listResults && state.output.listResults.length > 0 && !jsonRunResultIsList(nodeType)) {
+        if (state.output.listResults && state.output.listResults.length > 0) {
           updates.__listResults = state.output.listResults;
           updates.__listTotal = state.output.listResults.length;
           updates.__listCompleted = state.output.listResults.length;
@@ -1975,15 +1982,6 @@ function syncNodeStatesToStore(
             }
           }
         }
-        // Edit Plan, Transcribe, Silence Detect, Audio Sync, Video Analysis /
-        // Audit: the run's json — and Transcribe's text, on a take carrying the
-        // transcript — under the fields the canvas run writes. ONE mapping with
-        // the reopen lanes and the job restores (lib/json-run-result.ts).
-        Object.assign(updates, jsonRunResultPatch(nodeType, state.output, {
-          data,
-          jobId: state.jobId ?? `exec-${node.id}`,
-          timestamp: state.completedAt ?? new Date().toISOString(),
-        }));
       }
       patchMap.set(node.id, updates);
     } else if (state.status === "running") {

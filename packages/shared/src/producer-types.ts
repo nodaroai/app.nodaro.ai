@@ -264,6 +264,21 @@ export const FAN_OUT_EACH_HANDLES: Readonly<Record<string, { readonly each: read
   "camera-switch": { each: ["edl"], primary: "edl" },
 }
 
+/**
+ * Nodes whose saved list is the list their last run PRODUCED — `__listResults`
+ * (Extract Field's JSON value on `generatedJson`) — and never a history in
+ * `generatedResults`: Extract Field and JSON Process. No run of either writes
+ * one; earlier builds' server runs did (the run's text, the links of a list of
+ * links), and both engines' list readers leave it out for these two (decided
+ * 2026-10-05). Single source of truth for the backend engine and the editor.
+ */
+export const OWN_LIST_NODE_TYPES: ReadonlySet<string> = new Set(["extract-field", "json-process"])
+
+/** Whether a node's saved list is its own `__listResults`, never a history. */
+export function ownsItsList(nodeType: string | null | undefined): boolean {
+  return typeof nodeType === "string" && OWN_LIST_NODE_TYPES.has(nodeType)
+}
+
 /** The `outputMode` an edge has when none is set on it — the ONE rule both
  *  engines, the credit estimate and the editor read. */
 export function defaultEdgeOutputMode(

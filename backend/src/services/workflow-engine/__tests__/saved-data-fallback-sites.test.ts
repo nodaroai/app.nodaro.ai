@@ -44,7 +44,7 @@ const EXPECTED: Record<string, { count: number; why: string }> = {
   "services/workflow-engine/input-resolver.ts": {
     count: 14,
     why: [
-      "calls: getSavedNodeOutput (its one caller asks savedDataAllowed), a connected List column's accumulated results (behind savedDataAllowed), fan-out steps 5 and 6 (after the !savedOk branch), Suno ids (behind savedDataAllowed)",
+      "calls: getSavedNodeOutput (its one caller asks savedDataAllowed), a connected List column's accumulated results (behind savedDataAllowed; Extract Field / JSON Process go through savedListFor instead), fan-out steps 5b and 6 (after the !savedOk branch), Suno ids (behind savedDataAllowed)",
       "fields: Selector picked/rest x3 pairs (behind savedOk), Generate Text items (behind savedDataAllowed), readSunoIdsFromData itself (its caller asks), producedVideoIn (behind savedDataAllowed)",
     ].join("; "),
   },
@@ -65,7 +65,10 @@ const EXPECTED: Record<string, { count: number; why: string }> = {
     count: 3,
     why: "calls: Extract Field and JSON Process text fallback (both behind savedDataAllowed); fields: extractSavedTextFallback itself",
   },
-  "services/workflow-engine/saved-data.ts": { count: 2, why: "calls: savedListFor, the reader itself" },
+  "services/workflow-engine/saved-data.ts": {
+    count: 3,
+    why: "calls: savedListFor, the reader itself (behind savedDataAllowed) — its history read, and Extract Field / JSON Process's JSON value beside the generic one",
+  },
   "services/workflow-engine/scene3d-reference-scoping.ts": { count: 1, why: "calls: layout references, behind savedDataAllowed" },
   "workers/orchestrator-worker.ts": { count: 2, why: "calls: seeding a frozen / outside-the-subset node's state (seededFromSavedData)" },
 }

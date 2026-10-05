@@ -139,6 +139,11 @@ export function savedOutputFor(node: SimpleNode, state: NodeExecutionState | und
   return savedDataAllowed(state) ? extractSavedNodeOutput(node) : undefined
 }
 
+/** A saved list as the engine's `listResults`: its string items, or nothing. */
+function savedStringList(value: unknown): string[] | undefined {
+  return Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : undefined
+}
+
 function processedResultToText(r: unknown): string | undefined {
   if (r === null || r === undefined) return undefined
   if (Array.isArray(r)) {
@@ -1593,19 +1598,32 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
   // downstream text consumers (split-text, generate-image, llm prompts, etc.)
   // receive the extracted value via the standard text-routing path without
   // needing a new branch in input-resolver.
+  //
+  // Extract Field and JSON Process also hand on the list their run produced
+  // (`__listResults`, Extract Field's row-aligned twin `__alignedListResults`),
+  // as their live output does — never a `generatedResults` history
+  // (`ownsItsList`, @nodaro/shared).
   if (type === "extract-field") {
     const extractedText = data.extractedText as string | undefined
     if (extractedText === undefined) return undefined
     const json = data.generatedJson as unknown
-    return json !== undefined
+    const out: NodeOutput = json !== undefined
       ? { extractedText, text: extractedText, json }
       : { extractedText, text: extractedText }
+    const listResults = savedStringList(data.__listResults)
+    if (listResults) out.listResults = listResults
+    const alignedListResults = savedStringList(data.__alignedListResults)
+    if (alignedListResults) out.alignedListResults = alignedListResults
+    return out
   }
 
   if (type === "json-process") {
     const processedResult = data.processedResult
     if (processedResult === undefined) return undefined
-    return { processedResult, text: processedResultToText(processedResult) ?? "", json: processedResult }
+    const out: NodeOutput = { processedResult, text: processedResultToText(processedResult) ?? "", json: processedResult }
+    const listResults = savedStringList(data.__listResults)
+    if (listResults) out.listResults = listResults
+    return out
   }
 
   if (type === "combine-text") {

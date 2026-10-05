@@ -1,21 +1,25 @@
 /**
- * What a server run hands the editor for the json producers mapped after A5.0
- * (decided 2026-10-05): the scrapers, Social Search, Extract Field, JSON Process
- * and Describe to Picker.
+ * What a server run hands the editor for the json producers: the scrapers,
+ * Social Search, Extract Field, JSON Process, Describe to Picker, and the
+ * job-backed json producers (Edit Plan, Transcribe, Silence Detect, Audio Sync,
+ * Video Analysis / Audit).
  *
  * Each output is COMPUTED here by the code a run actually goes through — the
  * job-row reader (`buildNodeOutputFromJobData`) for the job-backed nodes, the
  * inline executors for Extract Field and JSON Process — and pinned in
- * `fixtures/json-producer-run-outputs.json`. The editor's tests
- * (frontend `json-producers-run-results.test.ts`) paint exactly these outputs
- * through every lane, so a change to what the server writes fails here first,
- * and the editor's mapping is re-checked against the new shape.
+ * `fixtures/json-producer-run-outputs.json`. The job rows are pinned INPUT
+ * (`fixtures/json-producer-job-rows.json`): the editor's canvas run reads the
+ * same rows, so its tests compare what a canvas run of a node writes with what
+ * a server run of it writes (frontend `json-producers-run-results.test.ts`,
+ * `json-run-result-canvas-shape.test.ts`). A change to what the server writes
+ * fails here first, and the editor's mapping is re-checked against the new shape.
  */
 import { describe, expect, it } from "vitest"
 import { executeExtractField, executeJsonProcess } from "../inline-executor.js"
 import { buildNodeOutputFromJobData } from "../output-extractor.js"
 import type { NodeExecutionState, SimpleEdge, SimpleNode } from "../types.js"
 import pinned from "./fixtures/json-producer-run-outputs.json"
+import jobRows from "./fixtures/json-producer-job-rows.json"
 
 const post = (id: string) => ({
   id,
@@ -35,7 +39,8 @@ const PAGES = [
 ]
 const ADS = [{ adArchiveId: "ad-1", pageName: "Brand", body: "Ad one" }, { adArchiveId: "ad-2", pageName: "Brand", body: "Ad two" }]
 const IG_POSTS = [{ id: "ig-1", caption: "First", displayUrl: "https://media.example.test/ig-1.jpg" }]
-const PICKER_JSON = { person: { gender: "woman", age: "adult" }, mood: { mood: "serene" } }
+/** A job-backed node's output, from the job row its job wrote (pinned input). */
+const fromJobRow = (type: keyof typeof jobRows) => buildNodeOutputFromJobData(jobRows[type] as Record<string, unknown>, type)
 
 function inline(type: string, data: Record<string, unknown>, run: (node: SimpleNode, edges: SimpleEdge[], nodes: SimpleNode[], states: Record<string, NodeExecutionState>) => unknown) {
   const src: SimpleNode = { id: "src", type: "web-scrape", data: {} }
@@ -57,12 +62,18 @@ function computeOutputs(): Record<string, unknown> {
       // Every post found comes back; the node passes on the first `pickTop`.
       "social-search": buildNodeOutputFromJobData({ json: [post("p1"), post("p2"), post("p3")], pickTop: 2 }, "social-search"),
       // The job row the route writes: the floored picker json, the pickers it filled, usage.
-      "describe-to-picker": buildNodeOutputFromJobData(
-        { json: PICKER_JSON, targetPickers: ["person", "mood"], usage: { inputTokens: 1, outputTokens: 1 } },
-        "describe-to-picker",
-      ),
+      "describe-to-picker": fromJobRow("describe-to-picker"),
+      // The job-backed json producers, from the rows their jobs write.
+      "edit-plan": fromJobRow("edit-plan"),
+      transcribe: fromJobRow("transcribe"),
+      "silence-detect": fromJobRow("silence-detect"),
+      "audio-sync": fromJobRow("audio-sync"),
+      "video-analysis": fromJobRow("video-analysis"),
+      "video-audit": fromJobRow("video-audit"),
       "extract-field:text": inline("extract-field", { field: "title" }, (n, e, ns, s) => executeExtractField(n, e, ns, s)),
       "extract-field:list": inline("extract-field", { field: "title", outputType: "list" }, (n, e, ns, s) => executeExtractField(n, e, ns, s)),
+      // A list of links: a lane must not add them to the node's results either.
+      "extract-field:url-list": inline("extract-field", { field: "url", outputType: "list" }, (n, e, ns, s) => executeExtractField(n, e, ns, s)),
       "extract-field:json": inline("extract-field", { field: "meta", outputType: "json" }, (n, e, ns, s) => executeExtractField(n, e, ns, s)),
       "json-process": inline("json-process", { mode: "visual", inputPath: "", filters: [], projections: ["title"] }, (n, e, ns, s) => executeJsonProcess(n, e, ns, s)),
     }),

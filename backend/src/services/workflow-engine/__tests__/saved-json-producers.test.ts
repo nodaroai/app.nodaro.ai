@@ -30,7 +30,9 @@ const POST = { id: MARK, url: url("html"), text: MARK, platform: "tiktok", autho
 
 /** A value for every field the saved reader reads, each carrying the marker where it can. */
 const SAVED: Record<string, unknown> = {
+  __alignedListResults: [MARK],
   __injectedPortValues: { port: MARK },
+  __listResults: [MARK],
   activeResultIndex: 0,
   activeVideoResultIndex: 0,
   alignmentResults: [{ word: MARK, start: 0, end: 1 }],
