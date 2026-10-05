@@ -8,6 +8,7 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/re
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { TTS_PROVIDERS, getMaxTtsChars } from "@nodaro/shared"
+import { resolveOmittedTtsProvider } from "../lib/omitted-tts-provider.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { isVoiceGenderAllowed, premadeVoiceGender } from "../lib/voice-policy.js"
@@ -21,23 +22,11 @@ import { TTS_VOICE_SETTING_RANGES, type TtsVoiceSettingKey } from "../providers/
 const voiceSetting = (key: TtsVoiceSettingKey) =>
   z.number().min(TTS_VOICE_SETTING_RANGES[key].min).max(TTS_VOICE_SETTING_RANGES[key].max).optional()
 
-/**
- * Resolve the effective TTS provider when the caller omits `provider` entirely.
- *
- * v3 is the default for the common case (matches the editor's default and is
- * the highest-quality model), but v3's per-request cap
- * (`getMaxTtsChars("elevenlabs-v3")`, currently 5,000 chars) is far below the
- * route's 40,000-char ceiling. A legacy integration that always omits
- * `provider` and sends long text would otherwise be silently truncated by
- * the v3 clamp below it (previously "elevenlabs" aliased to turbo, cap
- * 40,000, effectively lossless). Falling back to turbo once text exceeds the
- * v3 cap preserves that legacy lossless behavior for long-text callers.
- * Reads the cap from the shared constant (not a literal 3000) so a future
- * change to elevenlabs-v3's cap flows through automatically.
- */
-export function resolveOmittedTtsProvider(text: string): "elevenlabs-v3" | "elevenlabs-turbo" {
-  return text.length <= getMaxTtsChars("elevenlabs-v3") ? "elevenlabs-v3" : "elevenlabs-turbo"
-}
+// An omitted `provider` resolves through `resolveOmittedTtsProvider` (lib/omitted-tts-provider.ts):
+// the default speech model up to its own cap, turbo above it. A legacy integration that always omits
+// `provider` and sends long text keeps its lossless behaviour (turbo, cap 40,000) instead of being
+// truncated by the default model's clamp below. The workflow engine, the narration pipeline and the
+// worker read the same function, so every lane picks the same model for the same text.
 
 export const textToSpeechBody = z.object({
   // Generous ceiling (eleven_turbo_v2.5 accepts 40000); the per-model cap is
@@ -59,10 +48,10 @@ export async function textToSpeechRoutes(app: FastifyInstance) {
   app.post("/v1/text-to-speech", {
     preHandler: creditGuard((req) => {
       const body = req.body as Record<string, unknown>
-      // v3 = fully-multilingual default; legacy "elevenlabs" alias intentionally stays on turbo.
-      // Length-aware: an omitted provider resolves to turbo (not v3) once the
-      // text exceeds v3's cap, so long legacy requests aren't under-priced
-      // for v3 credits then rejected/truncated by the v3-specific clamp.
+      // An omitted provider runs on the default speech model; the legacy "elevenlabs"
+      // alias intentionally stays on turbo. Length-aware: an omitted provider resolves
+      // to turbo once the text exceeds the default model's cap, so a long request is
+      // never priced for one model then truncated by that model's clamp.
       const provider = (body?.provider as string) ?? resolveOmittedTtsProvider((body?.text as string) ?? "")
       // Map legacy "elevenlabs" to "elevenlabs-turbo" for credit lookup
       return provider === "elevenlabs" ? "elevenlabs-turbo" : provider
@@ -96,9 +85,8 @@ export async function textToSpeechRoutes(app: FastifyInstance) {
       }
     }
 
-    // Map legacy "elevenlabs" to "elevenlabs-turbo" for credit check
-    // v3 = fully-multilingual default; legacy "elevenlabs" alias intentionally stays on turbo.
-    // Same length-aware resolution as the creditGuard resolver above — kept
+    // Map legacy "elevenlabs" to "elevenlabs-turbo" for credit check; an omitted
+    // provider runs on the default speech model. Same length-aware resolution as the creditGuard resolver above — kept
     // in the one shared helper so the two seams can't drift.
     const resolvedProvider =
       parsed.data.provider === "elevenlabs"

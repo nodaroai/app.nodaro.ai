@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest"
 import { render, screen } from "@testing-library/react"
+import { DEFAULT_TTS_PROVIDER } from "@nodaro/shared"
 
 // ---------------------------------------------------------------------------
 // Mocks — all declared before component imports
@@ -75,8 +76,13 @@ vi.mock("@/hooks/use-workflow-store", () => ({
   ),
 }))
 
+// Records the model id the card prices, so a test can check it is the model the node runs as.
+const pricedModel = vi.hoisted(() => ({ ids: [] as string[] }))
 vi.mock("@/ee/hooks/use-model-credits", () => ({
-  useModelCredits: () => 1,
+  useModelCredits: (id: string) => {
+    pricedModel.ids.push(id)
+    return 1
+  },
 }))
 
 vi.mock("@/lib/tts-voices", () => ({
@@ -130,6 +136,20 @@ function renderNode(overrides: Record<string, unknown> = {}) {
 // ---------------------------------------------------------------------------
 
 describe("TextToSpeechNode", () => {
+  it("prices a node with no stored model as the default speech model it runs as (not turbo)", () => {
+    pricedModel.ids = []
+    renderNode()
+    expect(DEFAULT_TTS_PROVIDER).toBe("elevenlabs-v4")
+    expect(pricedModel.ids.length).toBeGreaterThan(0)
+    expect(new Set(pricedModel.ids)).toEqual(new Set([DEFAULT_TTS_PROVIDER]))
+  })
+
+  it("prices a node with a stored model as that model", () => {
+    pricedModel.ids = []
+    renderNode({ data: { label: "Text to Speech", provider: "elevenlabs-turbo" } })
+    expect(new Set(pricedModel.ids)).toEqual(new Set(["elevenlabs-turbo"]))
+  })
+
   it("renders with empty data and shows placeholder mic icon", () => {
     renderNode()
     expect(screen.getByTestId("base-node")).toBeInTheDocument()

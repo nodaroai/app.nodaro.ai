@@ -40,6 +40,7 @@ import { scene3DReferenceListError } from "../scene3d/index.js"
 import { mergeScene3DReferences } from "../scene3d/scene3d-references.js"
 import { imageRequiredMessage } from "../../lib/video-image-required.js"
 import { isVoiceGenderAllowed, premadeVoiceGender } from "../../lib/voice-policy.js"
+import { resolveOmittedTtsProvider } from "../../lib/omitted-tts-provider.js"
 import { applyPromptPolicies } from "../../lib/prompt-policy.js"
 import { ltxCameraMotionFromUpstream } from "../../lib/ltx-camera-motion.js"
 import { buildSeedanceExtendCreditIdentifier } from "../../lib/seedance-extend-model.js"
@@ -2307,7 +2308,7 @@ function scene3DWarningsField(args: {
  * The provider a node will ACTUALLY dispatch (and be billed for) — the single
  * place that decides "which model does this node dispatch". Only `text-to-speech`
  * diverges from `data.provider`: its case dispatches
- * `resolvedInputs.provider || data.provider || "elevenlabs-v3"`, and
+ * `resolvedInputs.provider || data.provider || resolveOmittedTtsProvider(text)`, and
  * input-resolver auto-injects a wired Character/creature node's recommended TTS
  * provider into `resolvedInputs.provider` (a FieldMapping can inject it too), so
  * a denied model reaches dispatch through an UNSET `data.provider`. The surface
@@ -2317,8 +2318,9 @@ function scene3DWarningsField(args: {
  * does NOT read `resolvedInputs.provider` for them, so a node that merely carries
  * an unrelated `resolvedInputs.provider` is never falsely denied. Uses `||` to
  * mirror the TTS case's precedence byte-for-byte (an empty-string provider must
- * fall through exactly as dispatch does). The hardcoded `"elevenlabs-v3"` default
- * is intentionally NOT folded in — see the backstop's `typeof` guard.
+ * fall through exactly as dispatch does). The omitted-provider fallback
+ * (`resolveOmittedTtsProvider`) is intentionally NOT folded in — see the backstop's
+ * `typeof` guard.
  *
  * Exported so B3's egress-key derivation can consume the same helper later.
  */
@@ -5055,9 +5057,13 @@ export function buildPayload(
       // modelKey (worker → ttsModelKey(job.data.provider)) must read ONE helper
       // so a future edit to one cannot desync the other. §5.3 hard gate. The
       // helper's `||` precedence mirrors the old inline byte-for-byte.
-      const provider = effectiveDispatchProvider(type, data, resolvedInputs) || "elevenlabs-v3"
       // Frontend reads text from directText field when textSource is "direct"
       const ttsText = promptFor("text-to-speech")
+      // No provider anywhere → the REST route's omitted-provider rule, through the same
+      // function (resolveOmittedTtsProvider): the default speech model up to its own cap,
+      // turbo above it, measured on the text this node sends. It is also what the node
+      // is billed as (modelIdentifier below), so the model billed is the model run.
+      const provider = effectiveDispatchProvider(type, data, resolvedInputs) || resolveOmittedTtsProvider(ttsText)
       // The EFFECTIVE voice + type this node will DISPATCH — computed once with
       // the same precedence the payload below uses, so the value we vet is byte-
       // identical to the value we send.

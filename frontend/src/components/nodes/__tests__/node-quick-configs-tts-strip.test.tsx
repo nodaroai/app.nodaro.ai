@@ -48,7 +48,7 @@ vi.mock("@/components/ui/popover", () => ({
   PopoverContent: ({ children }: any) => <div>{children}</div>,
 }))
 
-import { QuickConfigSelect, getQuickConfigs } from "../node-quick-configs"
+import { QuickConfigSelect, getQuickConfigs, readQuickConfigValue } from "../node-quick-configs"
 
 const control = getQuickConfigs("text-to-speech").find((c) => c.field === "provider")!
 
@@ -70,6 +70,17 @@ describe("text-to-speech quick strip — the model dropdown, rendered", () => {
     expect(nodeId).toBe("n1")
     expect(patch).toStrictEqual({ provider: "elevenlabs-v3", similarityBoost: undefined, style: undefined, speed: undefined })
     expect(Object.keys(patch).sort()).toEqual(["provider", "similarityBoost", "speed", "style"])
+  })
+
+  it("a node with no stored model shows the default speech model (v4) — what it runs as — and writes nothing", () => {
+    const { getAllByText } = render(
+      // An unset provider reads as "" (readQuickConfigValue).
+      <QuickConfigSelect nodeId="n1" control={control} value={readQuickConfigValue(control, {})} data={{}} />,
+    )
+    expect(updateNodeData).not.toHaveBeenCalled()
+    // Once as the trigger's label, once as the menu item; v3 only as its item.
+    expect(getAllByText("ElevenLabs v4")).toHaveLength(2)
+    expect(getAllByText("ElevenLabs v3")).toHaveLength(1)
   })
 
   it("the fail-safe snap of a stale model writes the provider alone, whatever levers the node carries", () => {

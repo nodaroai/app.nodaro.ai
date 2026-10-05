@@ -3,7 +3,7 @@
 
 ## Overview
 
-The Text to Speech node generates spoken audio from text input using ElevenLabs models. It supports four providers with varying language coverage and feature sets. The recommended provider, ElevenLabs v3, and the newer ElevenLabs v4 support inline audio tags for emotions, reactions, and sound effects, while the v2 models automatically strip these tags before processing.
+The Text to Speech node generates spoken audio from text input using ElevenLabs models. It supports four providers with varying language coverage and feature sets. The default and recommended provider, ElevenLabs v4, and the previous ElevenLabs v3 support inline audio tags for emotions, reactions, and sound effects, while the v2 models automatically strip these tags before processing.
 
 ## Configuration
 
@@ -11,7 +11,7 @@ The Text to Speech node generates spoken audio from text input using ElevenLabs 
 |-------|------|---------|-------------|
 | Text Source | `"connected" \| "direct"` | `"connected"` | Whether text comes from an upstream node or is entered directly in the config panel |
 | Direct Text | `string` | `""` | Text to speak when Text Source is "direct" |
-| Provider | `TtsProvider` | `"elevenlabs-v3"` | Voice synthesis engine (see Providers table below) |
+| Provider | `TtsProvider` | `"elevenlabs-v4"` | Voice synthesis engine (see Providers table and Default model below) |
 | Voice | `string` | `"Rachel"` | Voice selection -- premade, custom (cloned), or library voice via VoiceBrowser |
 | Voice Type | `"premade" \| "custom" \| "library"` | `"premade"` | Source of the selected voice |
 | Language | `string` | `"en"` | Target language code, or empty for auto-detect. Available languages depend on provider model (see Language Support below) |
@@ -41,8 +41,8 @@ In a published app, the exposed **Stability** and **Similarity** cards start at 
 
 | Provider | Model | Languages | Audio Tags | Per-request character cap |
 |----------|-------|-----------|------------|----------------------------|
-| `elevenlabs-v3` | ElevenLabs v3 (recommended) | 46 | Yes | 5,000 |
-| `elevenlabs-v4` | ElevenLabs v4 | 46 | Yes | 10,000 |
+| `elevenlabs-v4` | ElevenLabs v4 (default, recommended) | 46 | Yes | 10,000 |
+| `elevenlabs-v3` | ElevenLabs v3 | 46 | Yes | 5,000 |
 | `elevenlabs-turbo` | Turbo v2.5 | 32 | No (stripped) | 40,000 |
 | `elevenlabs-multilingual` | Multilingual v2 | 29 | No (stripped) | 10,000 |
 
@@ -52,12 +52,26 @@ The editor's config panel warns before that point (warn-don't-block). The MCP
 script is never cut silently. It takes at most 10,000 characters of text on any
 model, so turbo's 40,000 cap is not reachable through MCP; within that, it
 refuses text over the chosen model's own cap (v3: 5,000) and says how many
-characters that model takes. Its default model is v3. Direct API/SDK callers that omit `provider` on
-`POST /v1/text-to-speech` get a length-aware default: text within v3's 5,000-char
-cap defaults to `elevenlabs-v3`, longer text defaults to `elevenlabs-turbo`
-(cap 40,000) instead, so a long request never gets silently truncated to v3's
-tighter cap just because `provider` was omitted. An explicitly-set `provider` is
-always respected as-is.
+characters that model takes. Its default model is v4, which takes the tool's full
+10,000 characters. A request or node that names no model gets a length-aware
+default (see **Default model** below), so long text is never cut to v4's tighter
+cap just because no model was named. An explicitly-set `provider` is always
+respected as-is; the legacy id `elevenlabs` runs, and is billed, as
+`elevenlabs-turbo`.
+
+### Default model
+
+ElevenLabs v4 is the default speech model, with one length rule. When no model is named, text of **up to 10,000 characters** (v4's cap) runs on v4, and **longer text runs on Turbo v2.5** (`elevenlabs-turbo`, cap 40,000). Either way the request is billed for the model it runs on. The length counted is the text actually sent, including any pre and post text. The same rule applies in every run lane: a single node run from the editor, a full workflow or app run, `POST /v1/text-to-speech` and the SDK, and the generative pipeline's narration.
+
+Where no model is named:
+
+- a **new** Text to Speech node starts on v4 (stored on the node, so the length rule does not apply to it), unless a default the administrator set for the node, or the model of the last Text to Speech node you edited in this browser (the editor remembers it), says otherwise;
+- a node that stores **no** model follows the length rule. Its credit badge, model dropdown and length counter show v4 whatever the length of its text, but text over 10,000 characters still runs, and is billed, on Turbo;
+- `POST /v1/text-to-speech` and the SDK, when the request names no model, follow the length rule;
+- the MCP `generate_speech` tool, when the request names no model, runs on v4. It takes at most 10,000 characters and refuses longer text (for example after a preset's pre and post text) with the number, rather than switching model;
+- the narration of the generative pipeline follows the length rule; the Video Director's voice-over names v4.
+
+A node that stores a model keeps it: a node saved on v3 still runs on v3, and v3 stays selectable everywhere. v4 costs the same credits per request as v3, so a request that used to default to v3 costs the same. One band of requests changes price: a REST or SDK request that names no model and sends 5,001 to 10,000 characters used to fall back to turbo, and now runs (and is billed) on v4. A voice can sound noticeably different on v4 than on v3, and often comes out quieter: integrations that name no model hear the new model from the switch on — name `elevenlabs-v3` to keep the old voice. Voice Design and the Text to Dialogue node have their own models and are unchanged.
 
 ### Language Support
 

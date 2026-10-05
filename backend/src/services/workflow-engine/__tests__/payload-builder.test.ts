@@ -484,7 +484,8 @@ describe("buildPayload", () => {
       const result = buildPayload(n, jobId, {})
       expect(result.jobName).toBe("text-to-speech")
       expect(result.payload.text).toBe("Hello world")
-      expect(result.payload.provider).toBe("elevenlabs-v3")
+      // The default speech model (DEFAULT_TTS_PROVIDER) since the default flip.
+      expect(result.payload.provider).toBe("elevenlabs-v4")
     })
 
     it("uses resolved prompt", () => {

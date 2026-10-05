@@ -1677,16 +1677,17 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > rates are in the [Generate Video node docs](nodes/ai-video/generate-video.md).
 
 > **Text to Speech provider default.** `run("text-to-speech", …)` and
-> `runAndWait("text-to-speech", …)` default `provider` to `elevenlabs-v3`
-> when omitted — but only when `text` is within v3's per-request cap
-> (5,000 chars; see the per-model caps table in the
-> [Text to Speech node docs](nodes/ai-audio/text-to-speech.md) — an explicit
-> `provider: "elevenlabs-v4"` takes up to 10,000). Text longer
+> `runAndWait("text-to-speech", …)` default `provider` to `elevenlabs-v4`
+> (the default speech model) when omitted — but only when `text` is within
+> v4's per-request cap (10,000 chars; see the per-model caps table in the
+> [Text to Speech node docs](nodes/ai-audio/text-to-speech.md)). Text longer
 > than that without an explicit `provider` falls back to `elevenlabs-turbo`
-> (cap 40,000) instead, so legacy integrations that always omit `provider`
-> don't get silently truncated by v3's tighter cap. An explicit `provider` is
-> always respected regardless of text length (its own cap still clamps the
-> stored record, unchanged).
+> (cap 40,000) instead, so integrations that always omit `provider` don't get
+> silently truncated by v4's cap. An explicit `provider` is always respected
+> regardless of text length (its own cap still clamps the stored record,
+> unchanged): pass `provider: "elevenlabs-v3"` to keep v3 (cap 5,000), which
+> was the default before v4. A request that omits `provider` and sends 5,001 to
+> 10,000 characters now runs, and is billed, on v4 instead of turbo.
 
 > **Typed structured references.**
 > `run("generate-image" | "generate-video" | "text-to-video", …)` (and the same

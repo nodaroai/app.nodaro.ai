@@ -15,6 +15,7 @@ import { ensureLogoLockupScene } from "./logo-lockup-net.js"
 import { waitForJob as _waitForJob } from "../../lib/mcp/tools/_wait-for-job.js"
 import { config } from "../../lib/config.js"
 import { resolveBrandInput, type BrandTokens } from "@nodaro/prompts"
+import { DEFAULT_TTS_PROVIDER } from "@nodaro/shared"
 import type { FastifyInstance } from "fastify"
 import type { AlignmentWord } from "../../providers/elevenlabs/forced-alignment.js"
 import type { ShotSequencePlan } from "../../lib/plan-schemas.js"
@@ -225,7 +226,8 @@ export async function runVideoDirector(
  * Mirrors the pattern used by verbs-audio.ts + verbs-shot-sequence.ts.
  *
  * CONCERNS (for Task 5 verification):
- * - TTS: uses elevenlabs-v3 model + no voice override (Rachel is the server
+ * - TTS: uses the default speech model (DEFAULT_TTS_PROVIDER, ElevenLabs v4)
+ *   + no voice override (Rachel is the server
  *   default). If the worker needs a specific voice, thread it through opts.
  * - Render: passes userId in the body; the /v1/render-video/plan route expects
  *   the internal-orchestrator-secret header only. Task 5 should verify the
@@ -255,7 +257,7 @@ export function defaultDirectorDeps(fastify: FastifyInstance): DirectorDeps {
     createSpeechJob: (text, userId) =>
       injectJob("/v1/text-to-speech", {
         text,
-        provider: "elevenlabs-v3",
+        provider: DEFAULT_TTS_PROVIDER,
         userId,
       }),
 

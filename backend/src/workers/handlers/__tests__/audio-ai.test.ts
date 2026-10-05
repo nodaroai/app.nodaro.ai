@@ -485,15 +485,29 @@ describe("text-to-speech handler", () => {
     expect(mocks.mockStripAudioTags).not.toHaveBeenCalled()
   })
 
-  it("defaults an absent provider to elevenlabs-v3 (direct), tags NOT stripped", async () => {
+  it("defaults an absent provider to the default speech model, ElevenLabs v4 (direct), tags NOT stripped", async () => {
     const job = makeJob("text-to-speech", { text: "no provider given [whispers]" })
     await handler(job as never, makeCtx())
 
     expect(mocks.mockDirectElevenLabsTTS).toHaveBeenCalledWith(
-      "no provider given [whispers]", "Rachel", "elevenlabs-v3",
+      "no provider given [whispers]", "Rachel", "elevenlabs-v4",
       expect.objectContaining({ allowDefaultVoiceFallback: false }),
     )
     expect(mocks.mockStripAudioTags).not.toHaveBeenCalled()
+  })
+
+  // Same omitted-provider rule as the REST route (one function): over the default
+  // model's cap an absent provider runs on turbo, never on a model that cannot take it.
+  it("runs an absent provider on turbo when the text is over the default model's cap", async () => {
+    const long = "a".repeat(12000)
+    const job = makeJob("text-to-speech", { text: long })
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockDirectElevenLabsTTS).toHaveBeenCalledWith(
+      expect.anything(), "Rachel", "elevenlabs-turbo",
+      expect.objectContaining({ allowDefaultVoiceFallback: false }),
+    )
+    expect(mocks.mockStripAudioTags).toHaveBeenCalledWith(long)
   })
 
   // Reconcile consideration: the direct call is synchronous — it never calls

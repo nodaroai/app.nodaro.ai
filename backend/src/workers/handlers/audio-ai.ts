@@ -12,6 +12,7 @@ import { directElevenLabsDialogue } from "../../providers/elevenlabs/direct-dial
 import { generateSoundEffect } from "../../providers/elevenlabs/sound-effects.js"
 import { ttsSupportsAudioTags, DEFAULT_TEXT_TO_AUDIO_PROVIDER, type TextToAudioProvider } from "@nodaro/shared"
 import { defaultAllowedVoiceId } from "../../lib/voice-policy.js"
+import { resolveOmittedTtsProvider } from "../../lib/omitted-tts-provider.js"
 import { FALLBACK_VOICES } from "../../lib/premade-voices.js"
 import { generateMusic, type MusicProvider } from "../../providers/audio/generate-music.js"
 import { textToAudio, type AudioProvider } from "../../providers/audio/text-to-audio.js"
@@ -124,8 +125,10 @@ const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx
   // Defensive default: every current enqueuer (routes/text-to-speech.ts,
   // payload-builder.ts's "text-to-speech" case, pipeline-generate-speech.ts,
   // pipeline-generate-narration.ts) already resolves a concrete provider
-  // before enqueueing — this only guards a future caller that forgets to.
-  const provider = rawProvider ?? "elevenlabs-v3"
+  // before enqueueing — this only guards a future caller that forgets to, and
+  // resolves it through the same omitted-provider rule those enqueuers use (the
+  // default speech model up to its own cap, turbo above it).
+  const provider = rawProvider ?? resolveOmittedTtsProvider(text)
   console.log(`[worker] text-to-speech ${ctx.jobId} (provider: ${provider}, direct API)`)
 
   const ttsOptions = { stability, similarityBoost, style, speed, languageCode }

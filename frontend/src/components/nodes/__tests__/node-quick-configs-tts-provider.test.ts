@@ -10,7 +10,7 @@
  * the store removes a stored value only when the patch carries its key.
  */
 import { describe, it, expect } from "vitest"
-import { TTS_PROVIDERS, TTS_PROVIDER_ALIASES } from "@nodaro/shared"
+import { TTS_PROVIDERS, TTS_PROVIDER_ALIASES, DEFAULT_TTS_PROVIDER } from "@nodaro/shared"
 import { getQuickConfigs, coerceQuickConfigValue } from "../node-quick-configs"
 
 const control = getQuickConfigs("text-to-speech").find((c) => c.field === "provider")!
@@ -50,6 +50,11 @@ describe("text-to-speech quick-strip model pill", () => {
 
   it("never clears stability — every model honours it", () => {
     for (const id of optionValues) expect("stability" in control.write!(id, tuned)).toBe(false)
+  })
+
+  it("reads a node with no stored model as the default speech model, not as the first option", () => {
+    expect(DEFAULT_TTS_PROVIDER).toBe("elevenlabs-v4")
+    expect(control.defaultValue).toBe(DEFAULT_TTS_PROVIDER)
   })
 
   it("still reads the stored provider like any other dropdown", () => {

@@ -69,8 +69,9 @@ export async function runNarrationAudio(
     userId,
     text: script.text,
     voiceId: script.voice_id,
-    // Stick with the default (elevenlabs-v3) — it accepts [audio tags] for
-    // delivery cues that the LLM may inline directly in `script.text`.
+    // Stick with the default rule (ElevenLabs v4, or turbo when the script is over v4's
+    // cap) — v4 accepts [audio tags] for delivery cues that the LLM may inline directly
+    // in `script.text`.
   })
 
   return {

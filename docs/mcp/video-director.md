@@ -56,7 +56,7 @@ are charged as four sub-jobs:
 | Step | Job type | Credits |
 |------|----------|---------|
 | Authoring (LLM — writes VO script + shot-sequence brief) | `video-director` | **90** |
-| Voiceover synthesis (ElevenLabs v3) | `text-to-speech` | **30** |
+| Voiceover synthesis (ElevenLabs v4, the default speech model) | `text-to-speech` | **30** |
 | Forced alignment (ElevenLabs — word timings) | `forced-alignment` | **30** |
 | Resolve (bake cue anchors to frames) | synchronous, no job | **0** |
 | Remotion render | `render-video` | **50** |

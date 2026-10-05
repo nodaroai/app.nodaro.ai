@@ -2,7 +2,7 @@
 name: video-explainer
 description: Narrated non-photoreal animated explainer video on Nodaro — style-key lock, per-block clips, one voice, audio-led assembly
 triggers: ["explainer video", "explain X in a video", "animated explainer", "narrated explainer", "explain this in a video", "make a video explaining", "how-it-works video", "concept video", "script to narrated video", "narrated video from a script", "turn my script into a video"]
-version: 2
+version: 3
 ---
 
 # Video Explainer
@@ -55,9 +55,9 @@ follow. Do not guess a default for any of them except language:
    instead of continuing this recipe.
 1. **Duration** in minutes, 1–10. This fixes the block count: **N = minutes × 6** blocks
    of 10 seconds each. (1 min → 6 blocks; 10 min → 60 blocks. 60 is the assembler's cap.)
-2. **Narration language** — default **English** if the user does not say. `elevenlabs-v3`
-   is fully multilingual (Hebrew verified) — keep it for EVERY language in Phase 5; never
-   switch models for language alone.
+2. **Narration language** — default **English** if the user does not say. `elevenlabs-v4`
+   (the default model) is fully multilingual — keep it for EVERY language in Phase 5;
+   never switch models for language alone.
 3. **Mascot vs faceless** — a recurring in-style character/mascot that appears across
    clips, or purely abstract/faceless visuals. NEVER assume; a mascot changes both the
    style key (Phase 1) and every SCENE.
@@ -138,8 +138,9 @@ against `list_models` if this recipe's `version` looks stale.
 
 Ask the user to pick ONE voice — **never auto-pick**. Then voice every block with
 `generate_speech`, passing the SAME `voice_id` (a premade voice name) on all N takes.
-`elevenlabs-v3` for ALL languages (fully multilingual — do not switch models for
-language); `elevenlabs-multilingual` only if the chosen voice is v2-only-verified.
+`elevenlabs-v4` (the default model) for ALL languages (fully multilingual — do not
+switch models for language); `elevenlabs-multilingual` only if the chosen voice is
+v2-only-verified.
 Block N's line → take N.
 
 ## Phase 6 — Assemble (mandatory, automatic)
