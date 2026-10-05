@@ -9,10 +9,8 @@
 ### Patch Changes
 
 - Updated dependencies [3fb30e4]
-- Updated dependencies [3430225]
 - Updated dependencies [605638c]
 - Updated dependencies [6e2cfac]
-- Updated dependencies [01fa4ed]
   - @nodaro/shared@3.20.0
 
 ## 2.18.0
