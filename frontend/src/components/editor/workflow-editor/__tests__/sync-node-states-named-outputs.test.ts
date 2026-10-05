@@ -84,10 +84,16 @@ const ctx = {
   setInsufficientCreditsData: vi.fn(),
 } as unknown as ExecutionContext
 
+/** Each state as the orchestrator sends it for a node it RAN: with the time it
+ *  started (a completed state without one only passed saved data through, and
+ *  writes nothing — lib/seeded-node-state.ts). */
+const ran = (states: Record<string, unknown>) =>
+  Object.fromEntries(Object.entries(states).map(([id, state]) => [id, { startedAt: "2026-10-04T10:00:00.000Z", ...(state as object) }]))
+
 function sync(states: Record<string, unknown>) {
   const calls = mockStreamWorkflowExecution.mock.calls
   const callbacks = calls[calls.length - 1]?.[1] as { onNodeStatesChanged?: (s: Record<string, unknown>) => void }
-  callbacks.onNodeStatesChanged?.(states)
+  callbacks.onNodeStatesChanged?.(ran(states))
   return Object.fromEntries(mockNodes.map((n) => [n.id, n.data]))
 }
 
@@ -301,6 +307,15 @@ describe("syncNodeStatesToStore — an Apply EDL run leaves the node holding one
     before: { id: string; type: string; data: Record<string, unknown> }
     after: { id: string; type: string; data: Record<string, unknown> }
   }
+  /** What the editor saves (the JSON round trip drops cleared fields), minus
+   *  the mark of the run the node now shows — bookkeeping the shared fixture,
+   *  read by both engines, does not carry. */
+  const saved = (data: Record<string, unknown>, runId: string) => {
+    const { resultsRunId, resultsRunEndedAt, ...rest } = JSON.parse(JSON.stringify(data)) as Record<string, unknown>
+    expect(resultsRunId).toBe(runId)
+    expect(typeof resultsRunEndedAt).toBe("string")
+    return rest
+  }
 
   it("an audio render clears the earlier video render's URL: the saved node is the fixture's `after`", () => {
     mockNodes = [{ id: run.before.id, type: run.before.type, data: structuredClone(run.before.data) }]
@@ -308,7 +323,7 @@ describe("syncNodeStatesToStore — an Apply EDL run leaves the node holding one
     const byId = sync({ [run.before.id]: run.state })
     expect(byId[run.before.id].generatedVideoUrl).toBeUndefined()
     // What the editor saves: the JSON round trip drops the cleared field.
-    expect(JSON.parse(JSON.stringify(byId[run.before.id]))).toEqual(run.after.data)
+    expect(saved(byId[run.before.id], "exec-edl-1")).toEqual(run.after.data)
   })
 
   it("a video render clears an earlier audio render's URL", () => {
@@ -345,7 +360,7 @@ describe("syncNodeStatesToStore — an Apply EDL run leaves the node holding one
     const transcript = (r.state.output as { json: unknown }).json
     expect(byId[r.before.id].generatedJson).toEqual(transcript)
     expect((byId[r.before.id].generatedResults as Array<{ generatedJson?: unknown }>)[0].generatedJson).toEqual(transcript)
-    expect(JSON.parse(JSON.stringify(byId[r.before.id]))).toEqual(r.after.data)
+    expect(saved(byId[r.before.id], "exec-edl-4")).toEqual(r.after.data)
   })
 
   it("a render cut with NO transcript clears the earlier take's, and its take keeps none — the saved node is the fixture's `after`", () => {
@@ -357,7 +372,7 @@ describe("syncNodeStatesToStore — an Apply EDL run leaves the node holding one
     expect(byId[r.before.id]).toHaveProperty("generatedJson", undefined)
     // Kept as "none", so a later pick of it clears with no job read.
     expect((byId[r.before.id].generatedResults as Array<Record<string, unknown>>)[0]).toHaveProperty("generatedJson", undefined)
-    expect(JSON.parse(JSON.stringify(byId[r.before.id]))).toEqual(r.after.data)
+    expect(saved(byId[r.before.id], "exec-edl-5")).toEqual(r.after.data)
   })
 
   it("a list run: only the take that IS the render the output describes keeps its Transcript; the others keep none, never its", () => {
@@ -388,6 +403,46 @@ describe("syncNodeStatesToStore — an Apply EDL run leaves the node holding one
     const byId = sync({ tc: { status: "completed", jobId: "j3", output: { videoUrl: "https://media.test/t.mp4" } } })
     expect(byId.tc.generatedJson).toEqual({ kept: true })
     expect((byId.tc.generatedResults as Array<Record<string, unknown>>)[0]).not.toHaveProperty("generatedJson")
+  })
+})
+
+// TA3 (c): on a canvas with a render, a reopen loads the newest ended run onto
+// every node it ran unless the node already shows it. The live lane is what marks that for the editor's own
+// runs — in the same patch as the node's terminal state, so once per node.
+describe("syncNodeStatesToStore — each node that ends in the run is marked as showing it", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.useFakeTimers()
+    teardownActiveWorkflowStream()
+    mockStreamWorkflowExecution.mockReturnValue(new Promise(() => {}))
+    mockGetWorkflowExecution.mockResolvedValue({ status: "running", nodeStates: {} })
+  })
+  afterEach(() => {
+    teardownActiveWorkflowStream()
+    vi.useRealTimers()
+  })
+
+  it("a node that completed or failed in it carries the run's id; one it only passed through gets the status and nothing else", () => {
+    mockNodes = [
+      { id: "done", type: "generate-image", data: { executionStatus: "running" } },
+      { id: "broke", type: "generate-image", data: { executionStatus: "running" } },
+      { id: "seed", type: "edit-plan", data: { executionStatus: "pending", generatedJson: { planned: true } } },
+    ]
+    streamBackendExecution("exec-mark", ctx, vi.fn(), vi.fn())
+    const calls = mockStreamWorkflowExecution.mock.calls
+    const callbacks = calls[calls.length - 1]?.[1] as { onNodeStatesChanged?: (s: Record<string, unknown>) => void }
+    callbacks.onNodeStatesChanged?.({
+      done: { status: "completed", startedAt: "2026-10-04T10:00:00.000Z", completedAt: "2026-10-04T10:00:09.000Z", output: { imageUrl: "https://cdn.test/d.png" } },
+      broke: { status: "failed", startedAt: "2026-10-04T10:00:00.000Z", error: "nope" },
+      seed: { status: "completed", fromSavedData: true, completedAt: "2026-10-04T10:00:00.000Z", output: { json: { edited: true } } },
+    })
+    const byId = Object.fromEntries(mockNodes.map((n) => [n.id, n.data]))
+    expect(byId.done.resultsRunId).toBe("exec-mark")
+    // …and when the run ended it, so a reopen keeps it over an OLDER run.
+    expect(byId.done.resultsRunEndedAt).toBe("2026-10-04T10:00:09.000Z")
+    expect(typeof byId.broke.resultsRunEndedAt).toBe("string")
+    expect(byId.broke.resultsRunId).toBe("exec-mark")
+    expect(byId.seed).toEqual({ executionStatus: "completed", generatedJson: { planned: true } })
   })
 })
 
@@ -443,5 +498,32 @@ describe("syncNodeStatesToStore — a scraper's posts", () => {
     expect(byId.ig).toMatchObject({ executionStatus: "failed", generatedJson: kept })
     expect(byId.meta).toMatchObject({ executionStatus: "completed", generatedJson: ads, lastRunOutcome: "success", lastAppliedJobId: "job-m" })
     expect(byId.meta.generatedResults).toBeUndefined()
+  })
+})
+
+// A50-2: the orchestrator's node output carries Video Audit's corrected
+// analysis but not its report; the live lane reads the report off the job row.
+describe("syncNodeStatesToStore — Video Audit's report", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.useFakeTimers()
+    teardownActiveWorkflowStream()
+    mockStreamWorkflowExecution.mockReturnValue(new Promise(() => {}))
+    mockGetWorkflowExecution.mockResolvedValue({ status: "running", nodeStates: {} })
+  })
+  afterEach(() => {
+    teardownActiveWorkflowStream()
+    vi.useRealTimers()
+  })
+
+  it("lands the analysis and asks the job row for the report the run left behind", async () => {
+    const { getJobStatusLean } = await import("@/lib/api")
+    vi.mocked(getJobStatusLean).mockResolvedValue({ id: "job-audit-live", status: "completed", output_data: { report: { summary: "s", findings: [] } } } as never)
+    const analysis = { scenes: [{ start: 0, end: 1 }] }
+    mockNodes = [{ id: "audit", type: "video-audit", data: { executionStatus: "running" } }]
+    streamBackendExecution("exec-audit", ctx, vi.fn(), vi.fn())
+    const byId = sync({ audit: { status: "completed", jobId: "job-audit-live", output: { json: analysis } } })
+    expect(byId.audit.generatedJson).toEqual(analysis)
+    expect(getJobStatusLean).toHaveBeenCalledWith("job-audit-live")
   })
 })

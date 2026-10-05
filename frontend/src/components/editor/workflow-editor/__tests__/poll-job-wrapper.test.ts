@@ -152,6 +152,9 @@ describe("poll-loop wrapper coverage", () => {
       // getJobStatusLeanForNode's own read + pollJobToCompletion's loop, which
       // resolves a URL to a caller that paints and holds no nodeId.
       "workflow-editor/poll-job.ts": 2,
+      // Video Audit's report read back once off a COMPLETED job after a
+      // workflow run landed its analysis — no loop, nothing held.
+      "workflow-editor/audit-report-canvas.ts": 1,
     })
   })
 })

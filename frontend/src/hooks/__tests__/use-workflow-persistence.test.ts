@@ -124,6 +124,9 @@ import type { InstagramScrapeNodeData } from "@/types/nodes"
 
 const VALID_UUID = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
 const VALID_UUID_2 = "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+/** When a node the run EXECUTED started. A completed state with no start only
+ *  passed the node's saved data through, and writes nothing (lib/seeded-node-state.ts). */
+const RAN_AT = "2026-10-04T10:00:00.000Z"
 
 function makeNode(overrides: Record<string, unknown> = {}) {
   return {
@@ -1488,8 +1491,8 @@ describe("useWorkflowPersistence — terminal-execution restore via load", () =>
     })
     mockTerminal([
       failedRun({
-        ok1: { status: "completed", output: { imageUrl: "https://cdn.test/ok1.png" } },
-        ok2: { status: "completed", output: { imageUrl: "https://cdn.test/ok2.png" } },
+        ok1: { status: "completed", startedAt: RAN_AT, output: { imageUrl: "https://cdn.test/ok1.png" } },
+        ok2: { status: "completed", startedAt: RAN_AT, output: { imageUrl: "https://cdn.test/ok2.png" } },
         bad: { status: "failed", error: "Invalid aspect ratio setting." },
       }),
     ])
@@ -1528,7 +1531,7 @@ describe("useWorkflowPersistence — terminal-execution restore via load", () =>
         createdAt: new Date().toISOString(),
         nodeStates: { ok1: { nodeId: "ok1", jobId: VALID_UUID, status: "completed" } },
       },
-      failedRun({ ok1: { status: "completed", output: { imageUrl: "https://cdn.test/ok1.png" } } }),
+      failedRun({ ok1: { status: "completed", startedAt: RAN_AT, output: { imageUrl: "https://cdn.test/ok1.png" } } }),
     ])
 
     const { result } = renderHook(() => useWorkflowPersistence("p1"))
@@ -1540,6 +1543,51 @@ describe("useWorkflowPersistence — terminal-execution restore via load", () =>
       data: Record<string, unknown>
     }
     expect(ok1.data.generatedImageUrl).toBe("https://cdn.test/ok1.png")
+  })
+
+  // TA3 (c), decided 2026-10-04 and 2026-10-05: on a canvas with a render, a run
+  // that ended while the editor was closed loads WHOLE onto every node it ran,
+  // not only into empty slots — the plan and the preview stay a pair.
+  it("loads the newest ended run onto a render and the plan it ran, over their older results, and marks them", async () => {
+    const OLD = "https://cdn.test/old-preview.mp4"
+    const NEW = "https://cdn.test/new-preview.mp4"
+    const NEW_PLAN = { version: 1, segments: [{ id: "seg-0", inMs: 0, outMs: 1000, video: "src" }], dropped: [] }
+    setupSupabaseLoad({
+      id: "w1",
+      name: "WF",
+      nodes: [
+        makeNode({ id: "plan", type: "edit-plan", data: { label: "Plan", generatedJson: { version: 1, segments: [], dropped: [] } } }),
+        makeNode({ id: "cut", type: "apply-edl", data: { label: "Cut", output: "video", generatedVideoUrl: OLD, generatedResults: [{ url: OLD, timestamp: "2026-10-04T09:00:00.000Z", jobId: "job-old" }], activeResultIndex: 0 } }),
+      ],
+      edges: [{ id: "e1", source: "plan", sourceHandle: "edl", target: "cut", targetHandle: "edl" }],
+    })
+    mockTerminal([
+      {
+        id: "exec-new",
+        triggerType: "manual",
+        status: "completed",
+        createdAt: "2026-10-04T10:00:00.000Z",
+        completedAt: "2026-10-04T10:05:00.000Z",
+        nodeStates: {
+          plan: { status: "completed", startedAt: RAN_AT, completedAt: "2026-10-04T10:02:00.000Z", output: { json: NEW_PLAN } },
+          cut: { status: "completed", startedAt: RAN_AT, completedAt: "2026-10-04T10:05:00.000Z", output: { videoUrl: NEW } },
+        },
+      },
+    ])
+
+    const { result } = renderHook(() => useWorkflowPersistence("p1"))
+    await act(async () => {
+      await result.current.load("w1")
+    })
+
+    const byId = Object.fromEntries(
+      getSyncedNodes().map((n) => [(n as { id: string }).id, (n as { data: Record<string, unknown> }).data]),
+    )
+    expect(byId.plan.generatedJson).toEqual(NEW_PLAN)
+    expect(byId.cut.generatedVideoUrl).toBe(NEW)
+    expect((byId.cut.generatedResults as Array<{ url: string }>)[0]!.url).toBe(NEW)
+    expect(byId.plan.resultsRunId).toBe("exec-new")
+    expect(byId.cut.resultsRunId).toBe("exec-new")
   })
 
   it("asks for the terminal statuses with room to skip single-node rows", async () => {
@@ -1574,10 +1622,10 @@ describe("useWorkflowPersistence — terminal-execution restore via load", () =>
    */
   describe("named side outputs come back under the names their readers use", () => {
     const sideOutputs = {
-      sep: { status: "completed", output: { audioUrl: "https://cdn.test/mix.mp3", vocalUrl: "https://cdn.test/vocals.mp3", instrumentalUrl: "https://cdn.test/inst.mp3" } },
-      align: { status: "completed", output: { alignment: [{ word: "hi", start: 0, end: 1 }] } },
-      combine: { status: "completed", output: { combinedText: "a b" } },
-      split: { status: "completed", output: { splitResults: ["a", "b"] } },
+      sep: { status: "completed", startedAt: RAN_AT, output: { audioUrl: "https://cdn.test/mix.mp3", vocalUrl: "https://cdn.test/vocals.mp3", instrumentalUrl: "https://cdn.test/inst.mp3" } },
+      align: { status: "completed", startedAt: RAN_AT, output: { alignment: [{ word: "hi", start: 0, end: 1 }] } },
+      combine: { status: "completed", startedAt: RAN_AT, output: { combinedText: "a b" } },
+      split: { status: "completed", startedAt: RAN_AT, output: { splitResults: ["a", "b"] } },
     }
     const canvas = () =>
       setupSupabaseLoad({
@@ -1671,8 +1719,8 @@ describe("useWorkflowPersistence — terminal-execution restore via load", () =>
         edges: [],
       })
     const bothCompleted = {
-      cleared: { status: "completed", output: { imageUrl: "https://cdn.test/old-a.png" } },
-      untouched: { status: "completed", output: { imageUrl: "https://cdn.test/old-b.png" } },
+      cleared: { status: "completed", startedAt: RAN_AT, output: { imageUrl: "https://cdn.test/old-a.png" } },
+      untouched: { status: "completed", startedAt: RAN_AT, output: { imageUrl: "https://cdn.test/old-b.png" } },
     }
 
     it("stays empty when the last run settled BEFORE the clear — the un-cleared node beside it is still restored", async () => {
@@ -1834,7 +1882,7 @@ describe("Scene3D workflow reload", () => {
       makeNode({ id: "recorded", type: "generate-3d-scene", data: { label: "Recorded", scenePlan: manual, sceneHistory: recorded } }),
     ] })
     const run = { id: "exec", triggerType: "manual", status, nodeStates: Object.fromEntries(
-      ["fresh", "manual", "recorded"].map(id => [id, { status: "completed", output: { plan: incoming, changeSummary: "Updated scene" } }]),
+      ["fresh", "manual", "recorded"].map(id => [id, { status: "completed", startedAt: RAN_AT, output: { plan: incoming, changeSummary: "Updated scene" } }]),
     ) }
     mockListWorkflowExecutions.mockImplementation((_id: string, opts: { status?: string }) => Promise.resolve({
       data: (opts.status === "pending,running,stopping") === (status === "running") ? [run] : [],
@@ -1862,7 +1910,7 @@ describe("applyCompletedExecutionResults — Video Overlay run facts", () => {
     const nodes = [{ id: "vo", type: "video-overlay", position: { x: 0, y: 0 }, data: { label: "Video Overlay" } }] as unknown as Parameters<typeof applyCompletedExecutionResults>[0]
     const [out] = applyCompletedExecutionResults(
       nodes,
-      { vo: { status: "completed", output: { videoUrl: "https://cdn/o.mp4", warnings: [skipped], width: 1080, height: 1920, durationSec: 5 } } },
+      { vo: { status: "completed", startedAt: RAN_AT, output: { videoUrl: "https://cdn/o.mp4", warnings: [skipped], width: 1080, height: 1920, durationSec: 5 } } },
       null,
     )
     const data = out!.data as Record<string, unknown>
@@ -1872,7 +1920,7 @@ describe("applyCompletedExecutionResults — Video Overlay run facts", () => {
 
   it("stamps the freshness key a backend run carried on the node and the result", () => {
     const nodes = [{ id: "vo", type: "video-overlay", position: { x: 0, y: 0 }, data: { label: "Video Overlay" } }] as unknown as Parameters<typeof applyCompletedExecutionResults>[0]
-    const [out] = applyCompletedExecutionResults(nodes, { vo: { status: "completed", output: { videoUrl: "https://cdn/k.mp4", resultCompositionKey: "K1" } } }, null)
+    const [out] = applyCompletedExecutionResults(nodes, { vo: { status: "completed", startedAt: RAN_AT, output: { videoUrl: "https://cdn/k.mp4", resultCompositionKey: "K1" } } }, null)
     const data = out!.data as Record<string, unknown>
     expect(data.resultCompositionKey).toBe("K1")
     expect((data.generatedResults as Array<Record<string, unknown>>)[0]).toMatchObject({ url: "https://cdn/k.mp4", resultCompositionKey: "K1" })
@@ -1886,6 +1934,7 @@ describe("Video Overlay list fan-out rows — each row's own freshness key (both
   const nodes = () => [{ id: "vo", type: "video-overlay", position: { x: 0, y: 0 }, data: { label: "Video Overlay" } }] as unknown as Parameters<typeof applyCompletedExecutionResults>[0]
   const state = {
     status: "completed" as const,
+    startedAt: RAN_AT,
     output: {
       videoUrl: "https://cdn/a.mp4",
       resultCompositionKey: "KA",
@@ -1966,6 +2015,7 @@ describe("Content Recipe / Content Ideas — both load-time lanes", () => {
   const ideasNode = () => [{ id: "ideas", type: "content-ideas", position: { x: 0, y: 0 }, data: { label: "Content Ideas" } }] as unknown as Parameters<typeof applyCompletedExecutionResults>[0]
   const state = {
     status: "completed" as const,
+    startedAt: RAN_AT,
     output: { json: [{ title: "one" }], text: "CONTENT IDEAS (1)", listResults: ["IDEA 1 of 1: one"] },
   }
 
@@ -1992,7 +2042,7 @@ describe("Content Recipe / Content Ideas — both load-time lanes", () => {
 
   it("a recipe lands as its object and its text", () => {
     const nodes = [{ id: "recipe", type: "content-recipe", position: { x: 0, y: 0 }, data: { label: "Content Recipe" } }] as unknown as Parameters<typeof applyCompletedExecutionResults>[0]
-    const [out] = applyCompletedExecutionResults(nodes, { recipe: { status: "completed", output: { json: { version: 1 }, text: "CONTENT RECIPE: t" } } }, null)
+    const [out] = applyCompletedExecutionResults(nodes, { recipe: { status: "completed", startedAt: RAN_AT, output: { json: { version: 1 }, text: "CONTENT RECIPE: t" } } }, null)
     expect(out!.data).toMatchObject({ generatedJson: { version: 1 }, generatedText: "CONTENT RECIPE: t" })
   })
 })
@@ -2192,7 +2242,7 @@ describe("Apply EDL — every load lane leaves the node holding one cut", () => 
       ...extra,
     },
   }] as unknown as Parameters<typeof applyCompletedExecutionResults>[0]
-  const audioRun = { cut: { status: "completed" as const, output: { audioUrl: NEW_AUDIO } } }
+  const audioRun = { cut: { status: "completed" as const, startedAt: RAN_AT, output: { audioUrl: NEW_AUDIO } } }
 
   it("applyCompletedExecutionResults (a run that finished while the editor was closed)", () => {
     const [out] = applyCompletedExecutionResults(applyEdlNode(), audioRun, null)
@@ -2251,7 +2301,7 @@ describe("Apply EDL — every load lane lands the render's own Transcript", () =
       ...extra,
     },
   }] as unknown as Parameters<typeof applyCompletedExecutionResults>[0]
-  const run = (json?: unknown) => ({ cut: { status: "completed" as const, output: { videoUrl: NEW_VIDEO, ...(json ? { json } : {}) } } })
+  const run = (json?: unknown) => ({ cut: { status: "completed" as const, startedAt: RAN_AT, output: { videoUrl: NEW_VIDEO, ...(json ? { json } : {}) } } })
   const landedTake = (data: Record<string, unknown>) => (data.generatedResults as Array<Record<string, unknown>>)[0]
 
   const lanes = [

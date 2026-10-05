@@ -189,7 +189,7 @@ describe("syncNodeStatesToStore — Scene3D revision guard on the full-DAG path"
     streamBackendExecution("exec-2", makeCtx(), vi.fn(), vi.fn())
     sync({ s1: { status: "running", nodeType: "edit-3d-scene" } })
     const byId = sync({
-      s1: { status: "completed", nodeType: "edit-3d-scene", output: { plan: plan(REV_B, REV_A), changeSummary: "moved the wall" } },
+      s1: { status: "completed", startedAt: "2026-10-03T10:00:00Z", nodeType: "edit-3d-scene", output: { plan: plan(REV_B, REV_A), changeSummary: "moved the wall" } },
     })
     expect((byId.s1.scenePlan as Record<string, unknown>).revisionId).toBe(REV_B)
     expect(byId.s1.expectedRevisionId).toBe(REV_B)
@@ -204,7 +204,7 @@ describe("syncNodeStatesToStore — Scene3D revision guard on the full-DAG path"
     // The manual nudge lands between the ticks.
     mockNodes[0].data = { ...mockNodes[0].data, scenePlan: plan(REV_C, REV_A) }
     const byId = sync({
-      s1: { status: "completed", nodeType: "edit-3d-scene", output: { plan: plan(REV_B, REV_A) } },
+      s1: { status: "completed", startedAt: "2026-10-03T10:00:00Z", nodeType: "edit-3d-scene", output: { plan: plan(REV_B, REV_A) } },
     })
     // The user's edit is still the active scene…
     expect((byId.s1.scenePlan as Record<string, unknown>).revisionId).toBe(REV_C)
@@ -321,7 +321,7 @@ describe("syncNodeStatesToStore — Scene3D revision guard on the full-DAG path"
     mockNodes = [{ id: "m1", type: "motion-graphics", data: { executionStatus: "idle" } }]
     streamBackendExecution("exec-4", makeCtx(), vi.fn(), vi.fn())
     const byId = sync({
-      m1: { status: "completed", nodeType: "motion-graphics", output: { plan: { kind: "motion" } } },
+      m1: { status: "completed", startedAt: "2026-10-03T10:00:00Z", nodeType: "motion-graphics", output: { plan: { kind: "motion" } } },
     })
     expect(byId.m1.motionPlan).toEqual({ kind: "motion" })
     expect(byId.m1.sceneHistory).toBeUndefined()

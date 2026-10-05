@@ -183,7 +183,7 @@ describe("streamBackendExecution — discarded run detach", () => {
       nodeStates: {
         // The discarded run "completed" done-node with a result. The detach
         // guard must prevent this from landing on the canvas.
-        "done-node": { status: "completed", output: { imageUrl: "https://cdn.example.com/discarded.png" } },
+        "done-node": { status: "completed", startedAt: "2026-10-03T10:00:00Z", output: { imageUrl: "https://cdn.example.com/discarded.png" } },
       },
     })
 
@@ -263,7 +263,7 @@ describe("streamBackendExecution — discarded run detach", () => {
     mockGetWorkflowExecution.mockResolvedValue({
       status: "running",
       nodeStates: {
-        "done-node": { status: "completed", output: { imageUrl: "https://cdn.example.com/discarded.png" } },
+        "done-node": { status: "completed", startedAt: "2026-10-03T10:00:00Z", output: { imageUrl: "https://cdn.example.com/discarded.png" } },
       },
     })
 
@@ -402,7 +402,7 @@ describe("streamBackendExecution — failed run settles orphaned nodes", () => {
   }
 
   const failedStates = {
-    done: { status: "completed", output: { imageUrl: "https://cdn.example.com/done.png" } },
+    done: { status: "completed", startedAt: "2026-10-03T10:00:00Z", output: { imageUrl: "https://cdn.example.com/done.png" } },
     bad: { status: "failed", error: "Invalid aspect ratio setting." },
   }
 
@@ -458,7 +458,7 @@ describe("streamBackendExecution — failed run settles orphaned nodes", () => {
     ]
     mockGetWorkflowExecution.mockResolvedValue({
       status: "completed",
-      nodeStates: { done: { status: "completed", output: { imageUrl: "https://cdn.example.com/done.png" } } },
+      nodeStates: { done: { status: "completed", startedAt: "2026-10-03T10:00:00Z", output: { imageUrl: "https://cdn.example.com/done.png" } } },
     })
 
     streamBackendExecution("exec-ok", makeCtx(), vi.fn(), vi.fn())
@@ -486,7 +486,7 @@ describe("streamBackendExecution — failed run settles orphaned nodes", () => {
     streamBackendExecution("exec-reduce", makeCtx(), vi.fn(), vi.fn())
     const cb = lastSseCallbacks()
     cb.onNodeStatesChanged?.({
-      best: { status: "completed", jobId: "job-9", output: { result: "https://cdn.example.com/b.png", reduceMeta: meta } },
+      best: { status: "completed", startedAt: "2026-10-03T10:00:00Z", jobId: "job-9", output: { result: "https://cdn.example.com/b.png", reduceMeta: meta } },
     } as Record<string, unknown>)
 
     const best = mockNodes.find((n) => n.id === "best")!.data as Record<string, unknown>
