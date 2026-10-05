@@ -506,8 +506,10 @@ describe("F8 cut bodies (2026-10-03 A/B: F8 arm B on snap-to-black, jump-match a
     expect(composeTransitionHintFromConnections(id, [], [])).toBe(clause)
   })
 
-  it.each(ROWS)("$id at middle / short / natural keeps only the position", ({ id, term, body }) => {
-    const levers = { position: "middle", duration: "short", intensity: "natural" } as const
+  // `long`: a duration every cut ignores. Short on `jump-match` is a blended cut, pinned in
+  // transitions-blended-cut.test.ts.
+  it.each(ROWS)("$id at middle / long / natural keeps only the position", ({ id, term, body }) => {
+    const levers = { position: "middle", duration: "long", intensity: "natural" } as const
     expect(composeTransitionHintFromConnections(id, [], [], levers)).toBe(
       `${term} (${body}; ${INSTANT_CUT_CLAUSE}), the transition occurs in the middle of the clip`,
     )
@@ -770,8 +772,10 @@ describe("double-exposure body (2026-10-04: dblexp3 D1, the silhouette wording)"
 })
 
 describe("L1 — a cut spans nothing, so `full` adds no clause", () => {
+  // `long`: a duration every cut ignores. Short on `seamless-match` / `jump-match` is a blended cut, and
+  // its `full` (also dropped) is pinned in transitions-blended-cut.test.ts.
   it.each(INSTANT_IDS)("%s + full renders no position clause", (id) => {
-    const out = composeTransitionHintFromConnections(id, [], [], { position: "full", duration: "short", intensity: "natural" })
+    const out = composeTransitionHintFromConnections(id, [], [], { position: "full", duration: "long", intensity: "natural" })
     expect(out).not.toContain("spans")
     expect(out).toBe(composeTransitionHintFromConnections(id, [], []))
   })

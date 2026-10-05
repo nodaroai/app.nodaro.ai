@@ -77,9 +77,10 @@ import { StylePicker } from "@/lib/picker-ui"
 import { SettingPicker } from "@/lib/picker-ui"
 import { LoopSubjectPicker } from "@/lib/picker-ui"
 import { PersonPicker } from "@/lib/picker-ui"
-import { MOODS as BASE_MOODS, POSES as BASE_POSES, buildFramingHints, getLensPromptHint, getCameraFormatPromptHint, buildLightingHints, getColorLookPromptHint, buildAtmosphereHints, buildActionFxHints, getStylePromptHint, getSettingPromptHint, getLoopSubjectPromptHint, buildMoodHints, buildPoseHints, buildStylingHints, buildTemporalHints, buildMaterialHints, getPhotoGenrePromptHint, getBackdropPromptHint, buildHeldPropHints, buildPhotographerHints, buildAestheticHints, getEraPromptHint, buildExposureHints, getRenderQualityPromptHint, getCompositionEffectPromptHint, buildPostProcessHints, buildPersonHints, TRANSITION_POSITIONS, TRANSITION_DURATIONS, TRANSITION_INTENSITIES, CHARACTER_FX_POSITIONS, CHARACTER_FX_DURATIONS, CHARACTER_FX_INTENSITIES, CHARACTER_MOTION_POSITIONS, CHARACTER_MOTION_PACES, CHARACTER_MOTION_MAX_PICKS } from "@nodaro/prompts"
+import { MOODS as BASE_MOODS, POSES as BASE_POSES, buildFramingHints, getLensPromptHint, getCameraFormatPromptHint, buildLightingHints, getColorLookPromptHint, buildAtmosphereHints, buildActionFxHints, getStylePromptHint, getSettingPromptHint, getLoopSubjectPromptHint, buildMoodHints, buildPoseHints, buildStylingHints, buildTemporalHints, buildMaterialHints, getPhotoGenrePromptHint, getBackdropPromptHint, buildHeldPropHints, buildPhotographerHints, buildAestheticHints, getEraPromptHint, buildExposureHints, getRenderQualityPromptHint, getCompositionEffectPromptHint, buildPostProcessHints, buildPersonHints, CHARACTER_FX_POSITIONS, CHARACTER_FX_DURATIONS, CHARACTER_FX_INTENSITIES, CHARACTER_MOTION_POSITIONS, CHARACTER_MOTION_PACES, CHARACTER_MOTION_MAX_PICKS } from "@nodaro/prompts"
 import { getAnimal, getVehicle, getWeapon, getFurniture, pickIds } from "@nodaro/shared"
 import { getTransitionLabel, getTransitionOptions, type TransitionOption } from "@nodaro/prompts"
+import { transitionLeverValue, transitionLevers, transitionPickKind, transitionPickPatch, type TransitionLeverField, type TransitionPickKind } from "./transition-levers"
 import { LookArt, MoodEmoji, useShowsLookRenders } from "@/lib/picker-ui"
 import { LookPreviewStyleSwitch } from "@/components/nodes/look-preview-style"
 import { DimensionTileGrid } from "@/lib/picker-ui"
@@ -1371,18 +1372,33 @@ const CHARACTER_MOTION_DESC_KEYS: Record<string, Record<string, TimingKey>> = {
   },
 }
 /** The option row's copy for the locale; an id the maps do not know falls back to the table's English. */
-function timingOptionCopy(descKeys: Record<string, TimingKey>, opt: { id: string; label: string; description: string }) {
-  const labelKey = TIMING_LABEL_KEYS[opt.id]
+function timingOptionCopy(
+  descKeys: Record<string, TimingKey>,
+  opt: { id: string; label: string; description: string },
+  labelKeys: Record<string, TimingKey> = TIMING_LABEL_KEYS,
+) {
+  const labelKey = labelKeys[opt.id]
   const descKey = descKeys[opt.id]
   return { label: labelKey ? tx(labelKey) : opt.label, description: descKey ? tx(descKey) : opt.description }
 }
 
-function TRANSITION_TIMING_SELECTS() {
-  return [
-  { key: "position",  label: tx("paramcfg.position"),  options: TRANSITION_POSITIONS, descKeys: TRANSITION_DESC_KEYS.position },
-  { key: "duration",  label: tx("field.duration"),  options: TRANSITION_DURATIONS, descKeys: TRANSITION_DESC_KEYS.duration },
-  { key: "intensity", label: tx("paramcfg.intensity"), options: TRANSITION_INTENSITIES, descKeys: TRANSITION_DESC_KEYS.intensity },
-] as const
+// A blendable cut's Duration reads as BLEND: its `auto` row is the hard cut,
+// and each step that blends a cut says what it does (`transition-levers.ts`).
+const TRANSITION_BLEND_LABEL_KEYS: Record<string, TimingKey> = { ...TIMING_LABEL_KEYS, auto: "paramcfg.trBlendOff" }
+const TRANSITION_BLEND_DESC_KEYS: Record<string, TimingKey> = { auto: "paramcfg.trBlendOffDesc", short: "paramcfg.trBlendShortDesc" }
+const TRANSITION_LEVER_LABEL_KEYS: Record<TransitionLeverField, TimingKey> = {
+  position: "paramcfg.position", duration: "field.duration", intensity: "paramcfg.intensity",
+}
+/** Static class names, one per select count, so Tailwind sees each one. */
+const TIMING_GRID_COLS: Record<number, string> = { 1: "grid-cols-1", 2: "grid-cols-2", 3: "grid-cols-3" }
+
+/** The transition timing selects for a pick — which levers a cut takes is `transitionLevers`'. */
+function transitionTimingSelects(kind: TransitionPickKind) {
+  return transitionLevers(kind).map((lever) =>
+    lever.variant === "blend"
+      ? { lever, label: tx("paramcfg.blend"), labelKeys: TRANSITION_BLEND_LABEL_KEYS, descKeys: TRANSITION_BLEND_DESC_KEYS }
+      : { lever, label: tx(TRANSITION_LEVER_LABEL_KEYS[lever.field]), labelKeys: TIMING_LABEL_KEYS, descKeys: TRANSITION_DESC_KEYS[lever.field]! },
+  )
 }
 
 function CHARACTER_FX_TIMING_SELECTS() {
@@ -1404,6 +1420,10 @@ export function TransitionConfig({ data, onUpdate }: ConfigProps<TransitionData>
   const t = useT()
   const dir = usePickerDir()
   const composed = composeTransitionHintForNode(data)
+  // A cut offers fewer levers (no Intensity, no `full`, Duration only as a
+  // blend on a blendable cut) — see `transition-levers.ts`.
+  const kind = transitionPickKind(data.transition)
+  const timingSelects = transitionTimingSelects(kind)
 
   return (
     <div className="flex flex-col gap-3" dir={dir}>
@@ -1420,22 +1440,22 @@ export function TransitionConfig({ data, onUpdate }: ConfigProps<TransitionData>
       <Label>{t("paramcfg.transition")}</Label>
       <TransitionPicker
         value={data.transition}
-        onValueChange={(v) => onUpdate({ transition: v as string | string[] | undefined })}
+        onValueChange={(v) => onUpdate(transitionPickPatch(data.transition, v as string | string[] | undefined, data.duration))}
         maxSelected={2}
       />
 
-      <div className="grid grid-cols-3 gap-2">
-        {TRANSITION_TIMING_SELECTS().map(({ key, label: labelText, options, descKeys }) => (
-          <div key={key} className="flex flex-col gap-1">
+      <div className={`grid ${TIMING_GRID_COLS[timingSelects.length]} gap-2`}>
+        {timingSelects.map(({ lever, label: labelText, labelKeys, descKeys }) => (
+          <div key={lever.field} className="flex flex-col gap-1">
             <Label className="text-[10px] uppercase">{labelText}</Label>
             <Select
-              value={(data[key] as string) ?? "auto"}
-              onValueChange={(v) => onUpdate({ [key]: v })}
+              value={transitionLeverValue(kind, lever, data[lever.field])}
+              onValueChange={(v) => onUpdate({ [lever.field]: v })}
             >
               <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
-                {options.map((opt) => {
-                  const copy = timingOptionCopy(descKeys, opt)
+                {lever.options.map((opt) => {
+                  const copy = timingOptionCopy(descKeys, opt, labelKeys)
                   return (
                   <SelectItem key={opt.id} value={opt.id} title={copy.description}>
                     {copy.label}

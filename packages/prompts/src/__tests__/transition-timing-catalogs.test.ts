@@ -151,3 +151,44 @@ describe("transition timing catalogs", () => {
     expect(singlesWithDims).toEqual(["transition", "character-fx", "character-motion"])
   })
 })
+
+describe("the blended-cut flags on the picker catalog", () => {
+  // What a consumer that reads only `getPickerCatalog("transition")` (Studio) builds its Blend lever from:
+  // the blendable cut rows, and the duration step that blends them. See transitions-blended-cut.test.ts.
+  it("the transition options carry `blendable` on exactly seamless-match and jump-match, beside `instant`", () => {
+    const flagged = transitionCatalog.options!.filter((o) => o.blendable)
+    expect(flagged.map((o) => o.id)).toEqual(["seamless-match", "jump-match"])
+    for (const o of flagged) expect(o.instant, o.id).toBe(true)
+    expect(transitionCatalog.options!.some((o) => o.blendsCut)).toBe(false)
+  })
+
+  it("the `duration` dimension carries `blendsCut` on `short` only; the other dimensions carry neither flag", () => {
+    for (const dim of transitionCatalog.dimensions!) {
+      const blendsCut = dim.options.filter((o) => o.blendsCut).map((o) => o.id)
+      expect(blendsCut, dim.field).toEqual(dim.field === "duration" ? ["short"] : [])
+      expect(dim.options.some((o) => o.blendable), dim.field).toBe(false)
+    }
+  })
+
+  it("Character FX and Character Motion carry neither flag", () => {
+    for (const nodeType of ["character-fx", "character-motion"]) {
+      const cat = PICKER_CATALOGS.find((c) => c.nodeType === nodeType)!
+      const rows = [...(cat.options ?? []), ...(cat.dimensions ?? []).flatMap((d) => d.options)]
+      expect(rows.some((o) => o.blendable || o.blendsCut), nodeType).toBe(false)
+    }
+  })
+
+  it("the wire projection carries no cut flag, like `instant` (in-memory catalog only)", () => {
+    // Publishing them on `/v1/picker-catalogs` (and `@nodaro/shared` / the SDK) would be a deliberate,
+    // additive change carrying all three flags together, not drift.
+    for (const detail of ["compact", "full"] as const) {
+      const wire = projectPickerCatalog(transitionCatalog, { detail })
+      const rows = [...(wire.options ?? []), ...(wire.dimensions ?? []).flatMap((d) => d.options)]
+      for (const row of rows) {
+        for (const flag of ["instant", "blendable", "blendsCut"]) {
+          expect(Object.prototype.hasOwnProperty.call(row, flag), `${detail} ${row.id} ${flag}`).toBe(false)
+        }
+      }
+    }
+  })
+})

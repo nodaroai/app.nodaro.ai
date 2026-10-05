@@ -142,7 +142,8 @@ describe("timing dropdowns render each node's OWN catalogs", () => {
   })
 
   it("Transition renders the transition timing catalogs", () => {
-    renderPanel(TransitionConfig, "transition", { transition: "smash-cut" })
+    // A transition that is not a cut: a cut offers fewer levers (transition-config-blend.test.tsx).
+    renderPanel(TransitionConfig, "transition", { transition: "cross-dissolve" })
     expect(renderedTiming()).toEqual(expectedTiming(TRANSITION_TIMING))
   })
 
