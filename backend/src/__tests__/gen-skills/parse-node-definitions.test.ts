@@ -1,5 +1,7 @@
-import { describe, it, expect } from "vitest"
-import { resolve } from "node:path"
+import { describe, it, expect, afterAll } from "vitest"
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join, resolve } from "node:path"
 import {
   parseNodeDefinitions,
   parseDataInterface,
@@ -164,5 +166,92 @@ describe("parseDataInterface edge cases", () => {
     expect(iface).toBeDefined()
     expect(iface!.name).toBe("SceneNodeData")
     expect(iface!.fields).toEqual([])
+  })
+})
+
+describe("parseNodeDefinitions exposable sliders", () => {
+  // The backend has no typed view of NODE_DEFINITIONS, so the slider bounds an
+  // app exposes reach `get_app_inputs` only through the generated table that
+  // gen-skills renders from these parsed entries (exposable-sliders.ts).
+  it("reads the Text to Speech voice-setting sliders (key, min, max, step only)", () => {
+    const defs = parseNodeDefinitions(NODES_TS)
+    const tts = defs.find((d) => d.type === "text-to-speech")
+    expect(tts?.sliders).toEqual([
+      { key: "stability", min: 0, max: 1, step: 0.05 },
+      { key: "similarityBoost", min: 0, max: 1, step: 0.05 },
+    ])
+  })
+
+  it("reads a negative bound (voice-design loudness)", () => {
+    const defs = parseNodeDefinitions(NODES_TS)
+    const vd = defs.find((d) => d.sliders.some((s) => s.key === "loudness"))
+    expect(vd?.sliders).toEqual([{ key: "loudness", min: -1, max: 1, step: 0.1 }])
+  })
+
+  it("gives every node a sliders array, empty when it exposes none", () => {
+    const defs = parseNodeDefinitions(NODES_TS)
+    for (const d of defs) expect(Array.isArray(d.sliders), d.type).toBe(true)
+    expect(defs.find((d) => d.type === "list")?.sliders).toEqual([])
+  })
+
+  describe("fails loudly on a shape it cannot read", () => {
+    const dir = mkdtempSync(join(tmpdir(), "parse-sliders-"))
+    afterAll(() => rmSync(dir, { recursive: true, force: true }))
+    const fixture = (name: string, fields: string): string => {
+      const file = join(dir, `${name}.ts`)
+      writeFileSync(
+        file,
+        `const SHARED = []\nexport const NODE_DEFINITIONS = [\n  { type: "x", label: "X", category: "ai", inputs: [], outputs: [], defaultData: {}, exposableFields: ${fields} },\n]\n`,
+      )
+      return file
+    }
+
+    it("a slider bound that is not a numeric literal", () => {
+      const file = fixture("ident", `[{ key: "a", label: "A", type: "slider" as const, min: 0, max: MAX, step: 1 }]`)
+      expect(() => parseNodeDefinitions(file)).toThrow(/slider 'a'.*max/)
+    })
+
+    it("an exposableFields value that is not an array literal", () => {
+      const file = fixture("notarray", `SHARED`)
+      expect(() => parseNodeDefinitions(file)).toThrow(/exposableFields/)
+    })
+
+    it("a spread element (a slider could hide in it)", () => {
+      const file = fixture("spread", `[...SHARED]`)
+      expect(() => parseNodeDefinitions(file)).toThrow(/exposableFields/)
+    })
+
+    it("a spread inside a slider entry (its bounds could hide in it)", () => {
+      const file = fixture("slider-spread", `[{ key: "a", label: "A", type: "slider" as const, ...SHARED }]`)
+      expect(() => parseNodeDefinitions(file)).toThrow(/entry 'a' has a spread \(\.\.\.SHARED\)/)
+    })
+
+    it("a spread inside any entry (it could make the entry a slider)", () => {
+      const file = fixture("entry-spread", `[{ key: "b", label: "B", type: "select" as const, ...SHARED }]`)
+      expect(() => parseNodeDefinitions(file)).toThrow(/entry 'b' has a spread/)
+    })
+
+    it("a slider property it cannot name (computed key)", () => {
+      const file = fixture("computed", `[{ key: "c", label: "C", type: "slider" as const, ["max"]: 9 }]`)
+      expect(() => parseNodeDefinitions(file)).toThrow(/slider 'c'.*\["max"\]/)
+    })
+
+    it("reads a bound written with a quoted name", () => {
+      const file = fixture("quoted", `[{ "key": "e", label: "E", "type": "slider" as const, "min": 2, 'max': 9 }]`)
+      expect(parseNodeDefinitions(file)[0]?.sliders).toEqual([{ key: "e", min: 2, max: 9 }])
+    })
+
+    it("a slider property that is not a plain assignment (shorthand)", () => {
+      const file = fixture("shorthand", `[{ key: "d", label: "D", type: "slider" as const, max }]`)
+      expect(() => parseNodeDefinitions(file)).toThrow(/slider 'd'.*max/)
+    })
+
+    it("still ignores a non-slider entry's unreadable values (select options from a call)", () => {
+      const file = fixture(
+        "select",
+        `[{ key: "p", label: "P", type: "select" as const, options: SHARED.map((v) => v), defaultValue: SHARED.length }, { key: "d", label: "D", type: "slider" as const, min: 1, max: 9 }]`,
+      )
+      expect(parseNodeDefinitions(file)[0]?.sliders).toEqual([{ key: "d", min: 1, max: 9 }])
+    })
   })
 })

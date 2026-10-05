@@ -23,6 +23,7 @@ const SAMPLE_DEF: NodeDef = {
     prompt: "",
     provider: "nano-banana-pro",
   },
+  sliders: [],
 }
 
 const SAMPLE_SHAPE: InterfaceShape = {

@@ -44,6 +44,20 @@ export interface NodeDef {
   inputs: string[]
   outputs: string[]
   defaultData: Record<string, unknown>
+  /**
+   * The node's `exposableFields` entries of `type: "slider"`: key and bounds only. These numbers are UI
+   * control ranges (what a published app's slider allows), not prices — the no-numbers rule above is about
+   * `creditCost`. They feed `backend/src/lib/mcp/generated/exposable-sliders.ts`, so the app-input schema
+   * MCP and the SDK see types a slider as a number with its real range instead of free text.
+   */
+  sliders: ExposableSliderDef[]
+}
+
+export interface ExposableSliderDef {
+  key: string
+  min?: number
+  max?: number
+  step?: number
 }
 
 export interface InterfaceField {
@@ -109,7 +123,112 @@ function readNodeDefObject(obj: ObjectLiteralExpression, ctx: ParseContext): Nod
     }
   }
 
-  return { type, label, category, inputs, outputs, defaultData }
+  return { type, label, category, inputs, outputs, defaultData, sliders: readExposableSliders(obj, type, ctx) }
+}
+
+const SLIDER_BOUNDS = ["min", "max", "step"] as const
+
+/**
+ * Read the slider entries of `exposableFields`. Only `type`, `key` and the bounds are read: other entries
+ * (and other properties of a slider, e.g. a `defaultValue` read from a constant) may be any expression.
+ * Fails loudly when it cannot tell whether a slider is there — a non-array value, a spread or a non-literal
+ * element, a spread inside any entry — or when it cannot read a slider's bounds: a key or bound that is not a
+ * literal, or a slider property that is not a plain `name: value` (computed name, shorthand, accessor). So a
+ * slider, or one of its bounds, never silently drops out of the generated table.
+ */
+function readExposableSliders(obj: ObjectLiteralExpression, nodeType: string, ctx: ParseContext): ExposableSliderDef[] {
+  const prop = obj.getProperty("exposableFields")
+  if (!prop) return []
+  const where = `node '${nodeType}' exposableFields`
+  const init = prop.asKindOrThrow(SyntaxKind.PropertyAssignment).getInitializer()
+  if (!init || init.getKind() !== SyntaxKind.ArrayLiteralExpression) {
+    throw new Error(`gen-skills parser: ${where} is not an array literal. Write the entries inline so their slider bounds can be read.`)
+  }
+  const sliders: ExposableSliderDef[] = []
+  for (const el of init.asKindOrThrow(SyntaxKind.ArrayLiteralExpression).getElements()) {
+    if (el.getKind() !== SyntaxKind.ObjectLiteralExpression) {
+      throw new Error(`gen-skills parser: ${where} has a ${el.getKindName()} element (${el.getText().slice(0, 60)}). Write each entry as an object literal.`)
+    }
+    const entry = el.asKindOrThrow(SyntaxKind.ObjectLiteralExpression)
+    // A spread can set `type` (making any entry a slider) or a bound, and the parser cannot see through it.
+    const spread = entry.getProperties().find((p) => p.getKind() === SyntaxKind.SpreadAssignment)
+    if (spread) {
+      throw new Error(
+        `gen-skills parser: ${where} entry ${entryName(entry)} has a spread (${spread.getText().slice(0, 60)}). Write the entry's properties inline so its type and slider bounds can be read.`,
+      )
+    }
+    // Looked up by unquoted name: `getProperty("max")` misses a quoted `"max": 9`, which would drop the bound.
+    const props = plainProperties(entry)
+    if (readEntryString(props, "type", `${where} entry ${entryName(entry)}`) !== "slider") continue
+    const key = readEntryString(props, "key", `${where} slider entry`)
+    // Every property of a slider must be a plain `name: value` with a literal name, or a bound could be
+    // set where the name lookup never looks (a computed `["max"]`, a shorthand `max`, an accessor).
+    for (const p of entry.getProperties()) {
+      const nameKind = p.getKind() === SyntaxKind.PropertyAssignment
+        ? p.asKindOrThrow(SyntaxKind.PropertyAssignment).getNameNode().getKind()
+        : undefined
+      if (nameKind !== SyntaxKind.Identifier && nameKind !== SyntaxKind.StringLiteral) {
+        throw new Error(
+          `gen-skills parser: ${where} slider '${key}' has a property it cannot read: ${p.getText().slice(0, 60)}. Write each property as \`name: value\`.`,
+        )
+      }
+    }
+    const slider: ExposableSliderDef = { key }
+    for (const bound of SLIDER_BOUNDS) {
+      const boundProp = props.get(bound)
+      if (!boundProp) continue
+      const boundInit = boundProp.getInitializer()
+      let value: unknown
+      try {
+        value = boundInit ? readLiteralValue(boundInit, ctx) : undefined
+      } catch {
+        value = undefined
+      }
+      if (typeof value !== "number" || !Number.isFinite(value)) {
+        throw new Error(`gen-skills parser: ${where} slider '${key}' has a ${bound} that is not a numeric literal: ${boundProp.getText().slice(0, 60)}`)
+      }
+      slider[bound] = value
+    }
+    sliders.push(slider)
+  }
+  return sliders
+}
+
+/**
+ * An entry's `name: value` properties keyed by their unquoted name (`max` and `"max"` alike); later ones win,
+ * as in JavaScript. Other property kinds (spread, shorthand, computed name, accessor) are left out.
+ */
+function plainProperties(entry: ObjectLiteralExpression): Map<string, import("ts-morph").PropertyAssignment> {
+  const out = new Map<string, import("ts-morph").PropertyAssignment>()
+  for (const p of entry.getProperties()) {
+    if (p.getKind() !== SyntaxKind.PropertyAssignment) continue
+    const pa = p.asKindOrThrow(SyntaxKind.PropertyAssignment)
+    const nameNode = pa.getNameNode()
+    if (nameNode.getKind() === SyntaxKind.Identifier) out.set(nameNode.getText(), pa)
+    else if (nameNode.getKind() === SyntaxKind.StringLiteral) {
+      out.set(nameNode.asKindOrThrow(SyntaxKind.StringLiteral).getLiteralText(), pa)
+    }
+  }
+  return out
+}
+
+function readEntryString(
+  props: Map<string, import("ts-morph").PropertyAssignment>,
+  name: string,
+  where: string,
+): string {
+  const init = props.get(name)?.getInitializer()
+  if (!init) throw new Error(`gen-skills parser: ${where} has no readable '${name}' (write it as \`${name}: "..."\`).`)
+  return readStringExpr(init, name)
+}
+
+/** An exposableFields entry's `key` for an error message, or its opening text when the key is not a plain literal. */
+function entryName(entry: ObjectLiteralExpression): string {
+  try {
+    return `'${readEntryString(plainProperties(entry), "key", "entry")}'`
+  } catch {
+    return entry.getText().slice(0, 40)
+  }
 }
 
 function readStringProp(obj: ObjectLiteralExpression, name: string): string {

@@ -132,11 +132,13 @@ A Text to Speech **Stability** or **Similarity** card starts at the node's own v
 
 For the Text to Speech voice settings (`stability`, `similarityBoost`, `style`, `speed`), a number or a numeric string is accepted (`0.4` or `"0.4"`), in `inputOverrides` and in MCP or SDK flat inputs alike. A value outside the setting's range (`stability`, `similarityBoost` and `style` 0–1, `speed` 0.7–1.2) is clamped into it. A value that is not a number (an empty string, a word) is ignored, and the voice's own setting applies. `null` depends on where you send it: in `inputOverrides` it replaces the node's saved value and is ignored the same way, so the voice's own setting applies; as an MCP or SDK flat input it is dropped before it reaches the node, so the node's saved value applies (the voice's own setting applies only when the node has none).
 
+Every exposed slider, on any node, is typed in the flat input schema MCP `get_app_inputs` returns: `type: "number"` with the slider's own `min`, `max` and `step` (Text to Speech **Stability**: `0`, `1`, `0.05`). A flat input (MCP `run_app`, SDK `apps.run(slug, inputs)`, the `inputs` of `POST /v1/app/:slug/run`) for such a field takes a number or a numeric string, and a numeric string reaches the node as a number; a value that is not a number is passed on unchanged, for the node to treat as it always has. The range is not enforced when the input is translated: Text to Speech clamps its voice settings as described above, and for other nodes keep your control inside the range.
+
 ---
 
 ## 3. Step 2 — Probe each node type for field schemas
 
-The `inputItems` from step 1 give you `(nodeId, field)` pairs but **no type info** (text vs slider vs select). To learn the field type, look up the node:
+The `inputItems` from step 1 give you `(nodeId, field)` pairs but **no type info** (text vs slider vs select). MCP `get_app_inputs` types only part of this: an exposed slider comes back as `type: "number"` with its `min` / `max` / `step` (see [Slider inputs](#slider-inputs)), a field the publisher limited to a list of values comes back as `type: "select"` with those `options`, and a Lottie `slot:` field comes back typed by its slot (see [Lottie slot fields](#lottie-slot-fields-slotsid)). Every other exposed field (a toggle, a color picker, an aspect ratio, a select with no publisher limit) comes back as `type: "text"` with no options, so over MCP too, look up the node for those fields. To look up a node:
 
 ```bash
 curl https://app.nodaro.ai/v1/nodes/generate-image

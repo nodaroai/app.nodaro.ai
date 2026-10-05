@@ -151,6 +151,12 @@ overrides for THIS run. The two are merged, not either/or: the nested overrides
 are applied OVER the flat `inputs`, per node and per field, so `inputOverrides`
 wins on any field both set and reaches fields no app input exposes (such as
 `promptPrefix`; see [Prompt pre & post text](./prompt-pre-post-text.md)).
+A flat input whose field is a number (an exposed slider, a Lottie number slot)
+takes a number or a numeric string: `"0.4"` arrives at the node as `0.4`. A
+value that is not a number is passed on unchanged, and the node treats it as it
+always has (Text to Speech, for one, ignores it and keeps the voice's own
+setting). The field types and slider ranges are what MCP `get_app_inputs`
+returns (see [MCP tools](./mcp/tools.md#get_app_inputs)).
 
 One class of field is refused on every run path (`/v1/app/:slug/run`,
 `/v1/workflows/:id/run`, `/v1/present/:token/run`, `/v1/component/execute`,

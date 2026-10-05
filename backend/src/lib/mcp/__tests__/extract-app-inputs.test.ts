@@ -418,6 +418,93 @@ describe("extractAppInputSchema", () => {
     expect(schema.fields[0]!.type).toBe("text")
     expect(schema.fields[0]!.label).toBe("Scene: slot:foo")
   })
+
+  it("gives a lottie number slot its slider bounds as min / max / step", () => {
+    const schema = extractAppInputSchema({
+      snapshotSettings: {
+        presentationSettings: { inputItems: [{ type: "field", id: "i1", nodeId: "mg1", field: "slot:opacity" }] },
+      },
+      snapshotNodes: [
+        {
+          id: "mg1",
+          type: "motion-graphics",
+          data: { label: "Card", motionPlan: { planType: "lottie-graphic", slots: { opacity: { p: { a: 0, k: 0.5 } } } } },
+        },
+      ],
+    })
+    expect(schema.fields[0]).toMatchObject({ type: "number", min: 0, max: 1, step: 0.01 })
+  })
+})
+
+// An exposed slider used to reach get_app_inputs as `type: "text"`. Its control
+// type and range come from the node's NODE_DEFINITIONS descriptor, through the
+// table gen-skills renders (generated/exposable-sliders.ts).
+describe("extractAppInputSchema — exposed sliders", () => {
+  const ttsApp = (items: unknown[]) =>
+    extractAppInputSchema({
+      snapshotSettings: { presentationSettings: { inputItems: items as never } },
+      snapshotNodes: [
+        { id: "tts", type: "text-to-speech", data: { label: "Voice" } },
+        { id: "llm", type: "llm-chat", data: { label: "Writer" } },
+        { id: "odd", type: "not-a-node-type", data: { label: "Odd" } },
+      ],
+    })
+
+  it("types an exposed slider as a number carrying the descriptor's min, max and step", () => {
+    const schema = ttsApp([{ type: "field", id: "f1", nodeId: "tts", field: "stability" }])
+    expect(schema.fields[0]).toEqual({
+      key: "voice_stability",
+      label: "Voice: stability",
+      type: "number",
+      required: false,
+      min: 0,
+      max: 1,
+      step: 0.05,
+    })
+    expect(schema.keyMap.voice_stability).toMatchObject({ nodeId: "tts", fieldKey: "stability" })
+  })
+
+  it("resolves a slider published under a legacy key, and keeps the stored key on the wire", () => {
+    // Apps published before the Similarity re-key store `similarity`; the
+    // descriptor now declares `similarityBoost`. The merge canonicalizes later.
+    const schema = ttsApp([{ type: "field", id: "f1", nodeId: "tts", field: "similarity" }])
+    expect(schema.fields[0]).toMatchObject({ type: "number", min: 0, max: 1, step: 0.05 })
+    expect(schema.keyMap[schema.fields[0]!.key]).toMatchObject({ nodeId: "tts", fieldKey: "similarity" })
+  })
+
+  it("reads each node's own sliders (llm-chat temperature and maxTokens)", () => {
+    const schema = ttsApp([
+      { type: "field", id: "f1", nodeId: "llm", field: "temperature" },
+      { type: "field", id: "f2", nodeId: "llm", field: "maxTokens" },
+    ])
+    expect(schema.fields.map((f) => [f.type, f.min, f.max, f.step])).toEqual([
+      ["number", 0, 2, 0.1],
+      ["number", 256, 16384, 256],
+    ])
+  })
+
+  it("keeps a non-slider field, an unknown node type and an allowedValues card as before", () => {
+    const schema = ttsApp([
+      { type: "field", id: "f1", nodeId: "llm", field: "systemPrompt" },
+      { type: "field", id: "f2", nodeId: "odd", field: "stability" },
+      { type: "field", id: "f3", nodeId: "tts", field: "stability", allowedValues: [0.25, 0.5] },
+      { type: "field", id: "f4", nodeId: "missing", field: "stability" },
+    ])
+    expect(schema.fields.map((f) => f.type)).toEqual(["text", "text", "select", "text"])
+    for (const f of schema.fields) expect(f).not.toHaveProperty("min")
+    expect(schema.fields[2]!.options).toEqual([0.25, 0.5])
+  })
+
+  it("a numeric string sent for the slider reaches the node as a number", () => {
+    const schema = ttsApp([
+      { type: "field", id: "f1", nodeId: "tts", field: "stability" },
+      { type: "field", id: "f2", nodeId: "llm", field: "systemPrompt" },
+    ])
+    expect(flatInputsToOverrides({ voice_stability: " 0.4 ", writer_systemprompt: "42" }, schema.keyMap)).toEqual({
+      tts: { stability: 0.4 },
+      llm: { systemPrompt: "42" },
+    })
+  })
 })
 
 describe("extractComponentInputSchema", () => {
@@ -465,6 +552,33 @@ describe("flatInputsToOverrides", () => {
         },
       ),
     ).toEqual({ n1: { c: "kept" } })
+  })
+
+  describe("a field the schema typed `number`", () => {
+    const keyMap = {
+      level: { nodeId: "n1", fieldKey: "level", type: "number" as const },
+      note: { nodeId: "n1", fieldKey: "note" },
+    }
+
+    it("takes a number as it is", () => {
+      expect(flatInputsToOverrides({ level: 0.7 }, keyMap)).toEqual({ n1: { level: 0.7 } })
+    })
+
+    it("turns a decimal numeric string (spaces allowed) into that number", () => {
+      for (const [sent, got] of [["0.4", 0.4], [" 12 ", 12], ["-1", -1], [".5", 0.5], ["1e2", 100]] as const) {
+        expect(flatInputsToOverrides({ level: sent }, keyMap)).toEqual({ n1: { level: got } })
+      }
+    })
+
+    it("passes an unusable value through unchanged, for the node's own funnel to judge (as before)", () => {
+      for (const sent of ["", "loud", "0x10", "Infinity", true, { v: 1 }]) {
+        expect(flatInputsToOverrides({ level: sent }, keyMap)).toEqual({ n1: { level: sent } })
+      }
+    })
+
+    it("leaves a numeric string on a field not typed number as a string", () => {
+      expect(flatInputsToOverrides({ note: "3" }, keyMap)).toEqual({ n1: { note: "3" } })
+    })
   })
 })
 
@@ -527,7 +641,8 @@ describe("extractAppInputSchema — a field published under its older key", () =
       snapshotNodes: [{ id: "tts1", type: "text-to-speech", data: { label: "Narration" } }],
     })
     expect(schema.fields.map((f) => f.key)).toEqual(["narration_similarity", "narration_similarityboost"])
-    expect(schema.keyMap["narration_similarity"]).toEqual({ nodeId: "tts1", fieldKey: "similarity" })
-    expect(schema.keyMap["narration_similarityboost"]).toEqual({ nodeId: "tts1", fieldKey: "similarityBoost" })
+    // `type: "number"`: both spellings are the Similarity slider (numeric strings are coerced).
+    expect(schema.keyMap["narration_similarity"]).toEqual({ nodeId: "tts1", fieldKey: "similarity", type: "number" })
+    expect(schema.keyMap["narration_similarityboost"]).toEqual({ nodeId: "tts1", fieldKey: "similarityBoost", type: "number" })
   })
 })

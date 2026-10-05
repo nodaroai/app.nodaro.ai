@@ -1437,6 +1437,17 @@ available input keys and their types.
 
 **Input:** `{ slug: string }`
 
+**Output:** `{ slug, name, description, inputs }`, where each entry of `inputs`
+is `{ key, label, type, required, options?, min?, max?, step?, description? }`.
+`type` is one of `image`, `video`, `audio`, `text`, `select`, `number`,
+`boolean`, `list`, `color`. An exposed slider (a Text to Speech **Stability**,
+an LLM **Temperature**, a **Duration**, a Lottie number slot, …) is
+`type: "number"` with the slider's own `min`, `max` and `step`, e.g.
+`{ "key": "narration_stability", "type": "number", "min": 0, "max": 1, "step": 0.05, … }`.
+(An exposed node slider used to be reported as `type: "text"` with no range.)
+`run_app` accepts a number or a numeric string for a `number` input; a
+value that is not a number is passed to the node unchanged.
+
 ---
 
 ### `run_app`
