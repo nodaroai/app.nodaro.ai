@@ -25,6 +25,7 @@ import { getCachedCredits, prefetchModelCredits } from "@/ee/hooks/use-model-cre
 import { Button } from "@/components/ui/button"
 import { X, Plus, Wand2 } from "lucide-react"
 import { toast } from "sonner"
+import { EDIT_VIDEO_PRO_DEFAULT_SPAN_SEC } from "@/types/nodes"
 import type {
   ImageToVideoData,
   VideoToVideoData,
@@ -4680,7 +4681,7 @@ function EditVideoProConfigImpl({ data, onUpdate, sources, fieldMappings, onMapF
   const promptSnippets = useSnippetPool("video", "prompt")
   const currentProvider = data.provider || "seedance-2"
   const spanStart = Math.max(0, data.spanStart ?? 0)
-  const spanEnd = data.spanEnd ?? spanStart + 8
+  const spanEnd = data.spanEnd ?? spanStart + EDIT_VIDEO_PRO_DEFAULT_SPAN_SEC
   const sourceDuration = data.sourceDurationSec
 
   // Fail-safe (Provider Enum Sync step 12b): same withdrawn-provider snap as

@@ -2014,6 +2014,26 @@ export type TextToSpeechData = PromptAffixFields & {
  */
 export const TTS_VOICE_SETTING_DEFAULTS = { speed: 1, stability: 0.5, similarityBoost: 0.75, style: 0 } as const
 
+/*
+ * The same one-place rule for the other exposed sliders whose node has a default: each node's `defaultData` spreads
+ * its object and the exposed card's `defaultValue` reads it, so a published-app card for a node saved without the
+ * field starts where the node's panel and its run start. Objects, not bare numbers, because the gen-skills parser
+ * follows a spread in `defaultData` but not an identifier; each holds keys `defaultData` already had side by side,
+ * in that order. The guard is `presentation/__tests__/exposable-field-defaults.test.tsx`.
+ */
+/** Generate Video Pro's total length in seconds; a run without one also asks for 8. */
+export const GENERATE_VIDEO_PRO_DURATION_DEFAULT = { duration: 8 } as const
+/**
+ * Edit Video Pro's replaced span. A node without an end replaces `EDIT_VIDEO_PRO_DEFAULT_SPAN_SEC` seconds from its
+ * start, in its panel, its card and its run, so the end is relative, not this absolute 8.
+ */
+export const EDIT_VIDEO_PRO_SPAN_DEFAULTS = { spanStart: 0, spanEnd: 8 } as const
+export const EDIT_VIDEO_PRO_DEFAULT_SPAN_SEC = EDIT_VIDEO_PRO_SPAN_DEFAULTS.spanEnd - EDIT_VIDEO_PRO_SPAN_DEFAULTS.spanStart
+/** Generate Music's length in seconds; a run without one also asks for 8. */
+export const GENERATE_MUSIC_DURATION_DEFAULT = { duration: 8 } as const
+/** Prompt (llm-chat) sampling; a server-side run without them (a published app's run) uses the same two values. */
+export const LLM_CHAT_SAMPLING_DEFAULTS = { temperature: 0.7, maxTokens: 8192 } as const
+
 /** @deprecated Use GenerateVideoNodeData. Kept for backward-compat aliases. */
 export type TextToVideoData = PromptAffixFields & {
   [key: string]: unknown
@@ -7875,7 +7895,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       label: "Generate Video Pro",
       provider: "seedance-2",
       prompt: "",
-      duration: 8,
+      ...GENERATE_VIDEO_PRO_DURATION_DEFAULT,
       segmentMode: "max",
       renderMethod: "keyframes",
       anchorMode: "start-only",
@@ -7915,6 +7935,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
         // numbers in sync by hand; the presentation-layer renderer
         // (presentation/config-field-renderer.tsx) imports the real constant.
         key: "duration", label: "Duration (seconds)", type: "slider" as const, min: 4, max: 120, step: 1,
+        defaultValue: GENERATE_VIDEO_PRO_DURATION_DEFAULT.duration,
       },
       {
         key: "aspectRatio", label: "Aspect Ratio", type: "aspect-ratio" as const,
@@ -7924,7 +7945,8 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
         key: "resolution", label: "Resolution", type: "select" as const,
         options: getVideoResolutionOptions("seedance-2") ?? [],
       },
-      { key: "generateAudio", label: "Generate Audio", type: "toggle" as const },
+      // A node saved without it generates audio (its panel shows it on; the run defaults it on).
+      { key: "generateAudio", label: "Generate Audio", type: "toggle" as const, defaultValue: true },
       { key: "noBackgroundMusic", label: "No background music", type: "toggle" as const },
     ],
   },
@@ -7946,8 +7968,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       provider: "seedance-2",
       mode: "replace",
       prompt: "",
-      spanStart: 0,
-      spanEnd: 8,
+      ...EDIT_VIDEO_PRO_SPAN_DEFAULTS,
       generateAudio: true,
       fieldMappings: {},
       executionStatus: "idle",
@@ -7963,11 +7984,15 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       { key: "prompt", label: "Prompt", type: "text" as const },
       {
         key: "spanStart", label: "Span Start (seconds)", type: "slider" as const, min: 0, max: 120, step: 1,
+        defaultValue: EDIT_VIDEO_PRO_SPAN_DEFAULTS.spanStart,
       },
       {
+        // No static defaultValue: a missing end is EDIT_VIDEO_PRO_DEFAULT_SPAN_SEC after the span START, so the
+        // card's start is derived from the node's other field (presentation/helpers.ts `exposedFieldValue`).
         key: "spanEnd", label: "Span End (seconds)", type: "slider" as const, min: 4, max: 120, step: 1,
       },
-      { key: "generateAudio", label: "Generate Audio", type: "toggle" as const },
+      // A node saved without it generates audio (its panel shows it on; the run defaults it on).
+      { key: "generateAudio", label: "Generate Audio", type: "toggle" as const, defaultValue: true },
     ],
   },
   {
@@ -8169,10 +8194,12 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     // "minimax" is DEFAULT_MUSIC_PROVIDER, written out (gen-skills parses this
     // file textually). New nodes used to start on "suno", a model this node
     // never ran: every first run failed validation.
-    defaultData: { label: "Generate Music", prompt: "", provider: "minimax", duration: 8, genre: "", mood: "", instrumental: true, lyrics: "", referenceAudioUrl: "", referenceYouTubeUrl: "", referenceSource: "none", modelVersion: "stereo-large", fieldMappings: {} },
+    defaultData: { label: "Generate Music", prompt: "", provider: "minimax", ...GENERATE_MUSIC_DURATION_DEFAULT, genre: "", mood: "", instrumental: true, lyrics: "", referenceAudioUrl: "", referenceYouTubeUrl: "", referenceSource: "none", modelVersion: "stereo-large", fieldMappings: {} },
     exposableOutputs: [{ key: "result", label: "Result", outputType: "audio" as const }],
     exposableFields: [
-      { key: "duration", label: "Duration (s)", type: "slider" as const, min: 1, max: 60, step: 1 },
+      { key: "duration", label: "Duration (s)", type: "slider" as const, min: 1, max: 60, step: 1, defaultValue: GENERATE_MUSIC_DURATION_DEFAULT.duration },
+      // No defaultValue on purpose: a node saved without it runs with vocals (a missing value reads as false), so
+      // the card's off state is what runs. Recorded in KNOWN_DEFAULT_DISAGREEMENTS (exposable-field-defaults.test.tsx).
       { key: "instrumental", label: "Instrumental", type: "toggle" as const },
     ],
   },
@@ -8188,6 +8215,8 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     defaultData: { label: "Text to Audio", prompt: "", provider: "elevenlabs-sfx", duration: 10, fieldMappings: {} },
     exposableOutputs: [{ key: "result", label: "Result", outputType: "audio" as const }],
     exposableFields: [
+      // No defaultValue on purpose: a node saved without it runs at the provider's automatic length, which a slider
+      // cannot show. Recorded in KNOWN_DEFAULT_DISAGREEMENTS (exposable-field-defaults.test.tsx).
       { key: "duration", label: "Duration (s)", type: "slider" as const, min: 1, max: 22, step: 0.5 },
     ],
   },
@@ -9717,8 +9746,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       label: "Prompt",
       systemPrompt: "",
       userInput: "",
-      temperature: 0.7,
-      maxTokens: 8192,
+      ...LLM_CHAT_SAMPLING_DEFAULTS,
       fieldMappings: {},
       templateId: "custom",
     } as LLMChatData,
@@ -9726,8 +9754,8 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     exposableFields: [
       { key: "systemPrompt", label: "System Prompt", type: "text" as const },
       { key: "userInput", label: "User Prompt", type: "text" as const },
-      { key: "temperature", label: "Temperature", type: "slider" as const, min: 0, max: 2, step: 0.1 },
-      { key: "maxTokens", label: "Max Tokens", type: "slider" as const, min: 256, max: 16384, step: 256 },
+      { key: "temperature", label: "Temperature", type: "slider" as const, min: 0, max: 2, step: 0.1, defaultValue: LLM_CHAT_SAMPLING_DEFAULTS.temperature },
+      { key: "maxTokens", label: "Max Tokens", type: "slider" as const, min: 256, max: 16384, step: 256, defaultValue: LLM_CHAT_SAMPLING_DEFAULTS.maxTokens },
     ],
   },
   // Utility

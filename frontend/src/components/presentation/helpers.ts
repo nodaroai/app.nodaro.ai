@@ -1,5 +1,5 @@
 import type { WorkflowNode } from "@/types/nodes"
-import { NODE_DEF_MAP } from "@/types/nodes"
+import { NODE_DEF_MAP, EDIT_VIDEO_PRO_SPAN_DEFAULTS, EDIT_VIDEO_PRO_DEFAULT_SPAN_SEC } from "@/types/nodes"
 import { migrateToItems, deriveLottieSlotFields, LOTTIE_SLOT_FIELD_PREFIX, canonicalExposedFieldKey } from "@nodaro/shared"
 import type { ExposableField, PresentationItem } from "@nodaro/shared"
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
@@ -59,7 +59,26 @@ export function exposedFieldDataKey(node: WorkflowNode | undefined, fieldKey: st
 }
 
 /**
- * What a card shows: this run's own value, else the node's saved value, else the descriptor's default.
+ * A field whose default depends on the node's OTHER fields, which no static descriptor `defaultValue` can say.
+ * Reads the node's saved data with this run's values on top. Edit Video Pro's panel shows a missing span end as
+ * EDIT_VIDEO_PRO_DEFAULT_SPAN_SEC seconds after the span start (clamped to 0), so its card does too. Its run matches
+ * for a non-negative span start; for a negative one the run adds the seconds to the raw start before pricing clamps it.
+ */
+const DERIVED_FIELD_DEFAULTS: Readonly<
+  Record<string, Readonly<Record<string, (data: Record<string, unknown>) => unknown>>>
+> = {
+  "edit-video-pro": {
+    spanEnd: (data) => {
+      const start = Number(data.spanStart ?? EDIT_VIDEO_PRO_SPAN_DEFAULTS.spanStart)
+      return (Number.isFinite(start) ? Math.max(0, start) : 0) + EDIT_VIDEO_PRO_DEFAULT_SPAN_SEC
+    },
+  },
+}
+
+/**
+ * What a card shows: this run's own value, else the node's saved value, else the field's default (derived from
+ * the node's other fields where it depends on them, else the descriptor's). Display only: nothing here is written
+ * into a run's inputs, which hold only what the viewer changed.
  * `fieldKey` is the STORED key; a value typed under an old spelling (a run slot saved before a rename) still
  * counts, and the current key wins when both exist.
  */
@@ -71,7 +90,14 @@ export function exposedFieldValue(
 ): unknown {
   const key = canonicalExposedFieldKey(node.type, fieldKey)
   const data = (node.data ?? {}) as Record<string, unknown>
-  return runValues?.[key] ?? runValues?.[fieldKey] ?? data[key] ?? fieldDef.defaultValue
+  const derive = node.type ? DERIVED_FIELD_DEFAULTS[node.type]?.[key] : undefined
+  return (
+    runValues?.[key] ??
+    runValues?.[fieldKey] ??
+    data[key] ??
+    derive?.({ ...data, ...runValues }) ??
+    fieldDef.defaultValue
+  )
 }
 
 /** Get display title for a presentation card — custom title from cardMeta, or fallback to node label */
