@@ -390,3 +390,58 @@ describe("syncNodeStatesToStore — an Apply EDL run leaves the node holding one
     expect((byId.tc.generatedResults as Array<Record<string, unknown>>)[0]).not.toHaveProperty("generatedJson")
   })
 })
+
+// A scraper on a BACKEND run: the card reads generatedJson + the run outcome,
+// so the live lane must write the single-node Run's own patch — the generic
+// media writes put the featured image in generatedResults and left the card on
+// "Not run yet" while every node after it ran on its posts.
+describe("syncNodeStatesToStore — a scraper's posts", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.useFakeTimers()
+    teardownActiveWorkflowStream()
+    mockStreamWorkflowExecution.mockReturnValue(new Promise(() => {}))
+    mockGetWorkflowExecution.mockResolvedValue({ status: "running", nodeStates: {} })
+  })
+  afterEach(() => {
+    teardownActiveWorkflowStream()
+    vi.useRealTimers()
+  })
+
+  it("lands the posts and the outcome on an Instagram node, never its featured image as a result", () => {
+    const posts = [{ postId: "p1", caption: "hi", images: ["https://cdn.test/i.jpg"], videos: [], videoPreviews: [] }]
+    mockNodes = [{ id: "ig", type: "instagram-scrape", data: { executionStatus: "running", mode: "post" } }]
+    streamBackendExecution("exec-ig", ctx, vi.fn(), vi.fn())
+    const byId = sync({ ig: { status: "completed", jobId: "job-ig", output: { json: posts, text: "hi", imageUrl: "https://cdn.test/i.jpg" } } })
+    expect(byId.ig).toMatchObject({ executionStatus: "completed", generatedJson: posts, lastRunOutcome: "success", lastRunCount: 1, featuredIndex: 0, lastAppliedJobId: "job-ig" })
+    expect(byId.ig.generatedResults).toBeUndefined()
+    expect(byId.ig.generatedImageUrl).toBeUndefined()
+  })
+
+  it("a passed-through scraper (saved data, no job) keeps the post the person picked", () => {
+    const posts = [{ postId: "p1" }, { postId: "p2" }, { postId: "p3" }, { postId: "p4" }]
+    mockNodes = [{ id: "ig", type: "instagram-scrape", data: { generatedJson: posts, featuredIndex: 3, viewFormat: "square" } }]
+    streamBackendExecution("exec-pass", ctx, vi.fn(), vi.fn())
+    const byId = sync({ ig: { status: "completed", output: { json: posts } } })
+    expect(byId.ig).toMatchObject({ executionStatus: "completed", featuredIndex: 3, viewFormat: "square" })
+    expect(byId.ig.lastAppliedJobId).toBeUndefined()
+    expect(byId.ig.generatedResults).toBeUndefined()
+  })
+
+  it("a failed scraper keeps its last good posts; Meta Ads gets the same patch as Instagram", () => {
+    const kept = [{ postId: "old" }]
+    const ads = [{ adId: "a1" }]
+    mockNodes = [
+      { id: "ig", type: "instagram-scrape", data: { executionStatus: "running", generatedJson: kept } },
+      { id: "meta", type: "meta-ads-scrape", data: { executionStatus: "running" } },
+    ]
+    streamBackendExecution("exec-mix", ctx, vi.fn(), vi.fn())
+    const byId = sync({
+      ig: { status: "failed", error: "blocked" },
+      meta: { status: "completed", jobId: "job-m", output: { json: ads, imageUrl: "https://cdn.test/ad.jpg" } },
+    })
+    expect(byId.ig).toMatchObject({ executionStatus: "failed", generatedJson: kept })
+    expect(byId.meta).toMatchObject({ executionStatus: "completed", generatedJson: ads, lastRunOutcome: "success", lastAppliedJobId: "job-m" })
+    expect(byId.meta.generatedResults).toBeUndefined()
+  })
+})

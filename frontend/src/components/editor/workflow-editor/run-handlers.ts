@@ -49,7 +49,7 @@ import { FOLLOWED_LANES } from "./triggered-run-follow";
 import { beginTriggeredRunPaint } from "./triggered-run-paint";
 import { sunoVariantFields } from "@/lib/suno-ids";
 import { tx } from "@/lib/i18n";
-import { isScrapeNodeType, scrapeResultPatch } from "@/components/nodes/scrape-result-recovery";
+import { isScrapeNodeType, scrapeResultPatch, scrapeServerRunPatch } from "@/components/nodes/scrape-result-recovery";
 import { applyWebScrapeFailure } from "@/components/nodes/web-scrape-run-state";
 import { resolveSceneCompletion } from "@/lib/scene3d/revisions";
 import { planRevisionId } from "@/lib/scene3d/plan-view";
@@ -1730,8 +1730,10 @@ function syncNodeStatesToStore(
       currentStatus === "completed" &&
       !isContentNodeType(node.type) &&
       // Social Search's posts live on searchResults / generatedJson, never on
-      // generatedResults, so an empty generatedResults is its normal state.
+      // generatedResults, so an empty generatedResults is its normal state —
+      // and so do every scraper's (scrapeServerRunPatch).
       node.type !== "social-search" &&
+      !isScrapeNodeType(node.type) &&
       state.output?.listResults &&
       state.output.listResults.length > 1 &&
       !((data.generatedResults as GeneratedResult[] | undefined)?.length);
@@ -1748,6 +1750,7 @@ function syncNodeStatesToStore(
         // between and nothing else would ever clear it.
         jobAwaitingReview: undefined,
       };
+      const scrapePatch = scrapeServerRunPatch(node.type, state.output as Record<string, unknown> | undefined, state.jobId, data);
       if (state.output && isContentNodeType(node.type)) {
         // Content Recipe / Content Ideas: the live run's own mapping
         // (lib/content-run-output.ts). Never the generic writes below — the
@@ -1765,6 +1768,12 @@ function syncNodeStatesToStore(
         // never the generic text write below, whose run history in
         // generatedResults would be read as a list downstream.
         Object.assign(updates, socialSearchServerRunPatch(data as SocialSearchNodeData, state.output as Record<string, unknown>));
+      } else if (scrapePatch) {
+        // A scraper (Instagram / Meta Ads / Web Scrape): its posts, ads or
+        // pages on generatedJson plus the run outcome its card reads — the
+        // single-node Run's own patch. Never the generic writes below: the
+        // featured image is not the node's result.
+        Object.assign(updates, scrapePatch);
       } else if (state.output) {
         const nodeType = node.type ?? "";
         if (state.output.imageUrl) {

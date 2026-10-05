@@ -115,6 +115,8 @@ import { videoOverlayResultFresh } from "@/lib/video-overlay-composition"
 import { stripStudioDraftWorkflow } from "@nodaro/shared"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useWorkflowPersistence, TERMINAL_RESTORABLE_STATUSES, executionSettledAt, applyCompletedExecutionResults, applyBackendExecutionState } from "../use-workflow-persistence"
+import { deriveInstagramScrapeCardState } from "@/components/nodes/instagram-scrape-run-state"
+import type { InstagramScrapeNodeData } from "@/types/nodes"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -2302,5 +2304,113 @@ describe("Apply EDL — every load lane lands the render's own Transcript", () =
     const data = await loadWithJobOutput({ videoUrl: NEW_VIDEO })
     expect(data).toHaveProperty("generatedJson", undefined)
     expect(landedTake(data)).toHaveProperty("generatedJson", undefined)
+  })
+})
+
+// A scraper finished by a SERVER run (Execute workflow, Run from here, a
+// schedule, an app) used to come back with only its featured image — the card
+// stayed "Not run yet" while every node after it had run on its posts. Both
+// load lanes now put the single-node Run's own patch on it, once per job.
+describe("Scrapers — both load-time lanes paint the posts, not the featured image", () => {
+  const POSTS = [{ postId: "p1", caption: "hi", images: ["https://cdn/i.jpg"], videos: [], videoPreviews: [] }]
+  const state = {
+    status: "completed" as const,
+    jobId: "job-ig-1",
+    output: { json: POSTS, text: "hi", imageUrl: "https://cdn/i.jpg" },
+  }
+  const igNode = (data: Record<string, unknown> = {}) =>
+    [{ id: "ig", type: "instagram-scrape", position: { x: 0, y: 0 }, data: { label: "Instagram", mode: "post", ...data } }] as unknown as Parameters<typeof applyCompletedExecutionResults>[0]
+
+  it("applyCompletedExecutionResults (a run that finished while the editor was closed)", () => {
+    const [out] = applyCompletedExecutionResults(igNode(), { ig: state }, "2026-10-04T21:35:46.000Z")
+    const data = out!.data as Record<string, unknown>
+    expect(data).toMatchObject({ executionStatus: "completed", generatedJson: POSTS, lastRunOutcome: "success", lastRunCount: 1, featuredIndex: 0, lastAppliedJobId: "job-ig-1" })
+    expect(data.generatedResults).toBeUndefined()
+    expect(data.generatedImageUrl).toBeUndefined()
+  })
+
+  it("repairs a node an older build marked completed with only its featured image", () => {
+    const stale = igNode({ executionStatus: "completed", generatedImageUrl: "https://cdn/i.jpg", generatedResults: [{ url: "https://cdn/i.jpg" }] })
+    const [out] = applyCompletedExecutionResults(stale, { ig: state }, "2026-10-04T21:35:46.000Z")
+    expect((out!.data as Record<string, unknown>).generatedJson).toEqual(POSTS)
+  })
+
+  it("applies once per job — a reload after the patch leaves the user's featured post alone", () => {
+    const nodes = igNode({ generatedJson: POSTS, lastAppliedJobId: "job-ig-1", featuredIndex: 3 })
+    const [out] = applyCompletedExecutionResults(nodes, { ig: state }, "2026-10-04T21:35:46.000Z")
+    expect(out).toBe(nodes[0])
+  })
+
+  it("keeps a newer run of the node from the editor (started after this execution ended)", () => {
+    const newer = Date.parse("2026-10-04T22:00:00.000Z")
+    const nodes = igNode({ generatedJson: [{ postId: "mine" }], lastRunOutcome: "success", lastRunStartedAt: newer, lastRunAt: newer + 5_000 })
+    const [out] = applyCompletedExecutionResults(nodes, { ig: state }, "2026-10-04T21:35:46.000Z")
+    expect(out).toBe(nodes[0])
+  })
+
+  it("applyBackendExecutionState (a reload while the run is still active)", () => {
+    const [out] = applyBackendExecutionState(igNode(), { ig: state })
+    const data = out!.data as Record<string, unknown>
+    expect(data).toMatchObject({ generatedJson: POSTS, lastRunOutcome: "success", lastAppliedJobId: "job-ig-1" })
+    expect(data.generatedResults).toBeUndefined()
+  })
+
+  it("applyBackendExecutionState leaves the featured post alone once the job is on the node", () => {
+    const nodes = igNode({ generatedJson: POSTS, lastAppliedJobId: "job-ig-1", featuredIndex: 3, viewFormat: "square" })
+    const [out] = applyBackendExecutionState(nodes, { ig: state })
+    expect(out!.data).toMatchObject({ featuredIndex: 3, viewFormat: "square", lastAppliedJobId: "job-ig-1" })
+    expect((out!.data as Record<string, unknown>).generatedResults).toBeUndefined()
+  })
+
+  // A Run from here / Run selected outside the scraper, or a skipped scraper:
+  // the server passes its SAVED posts through with no job. A fresh-run patch
+  // there would reset the post the person picked, and the next partial run
+  // would hand post #1 downstream instead of theirs.
+  it("a passed-through scraper (saved data, no job) keeps the picked post in both lanes", () => {
+    const passThrough = { status: "completed" as const, output: { json: POSTS, text: "hi", imageUrl: "https://cdn/i.jpg" } }
+    const picked = igNode({ generatedJson: POSTS, featuredIndex: 3, viewFormat: "square", lastAppliedJobId: "job-single" })
+    const [done] = applyCompletedExecutionResults(picked, { ig: passThrough }, "2026-10-04T21:35:46.000Z")
+    expect(done).toBe(picked[0])
+    const [active] = applyBackendExecutionState(picked, { ig: passThrough })
+    expect(active!.data).toMatchObject({ featuredIndex: 3, viewFormat: "square", lastAppliedJobId: "job-single" })
+    expect((active!.data as Record<string, unknown>).generatedResults).toBeUndefined()
+  })
+
+  it("an empty result records the outcome and keeps the posts the node already had", () => {
+    const [out] = applyCompletedExecutionResults(igNode({ generatedJson: POSTS }), { ig: { ...state, output: { json: [] } } }, "2026-10-04T21:35:46.000Z")
+    expect(out!.data).toMatchObject({ lastRunOutcome: "empty", lastRunCount: 0, generatedJson: POSTS, lastAppliedJobId: "job-ig-1" })
+  })
+
+  it("with no end time it fills only an empty node", () => {
+    const full = igNode({ generatedJson: [{ postId: "mine" }] })
+    const [kept] = applyCompletedExecutionResults(full, { ig: state }, null)
+    expect(kept).toBe(full[0])
+    const [filled] = applyCompletedExecutionResults(igNode(), { ig: state }, null)
+    expect((filled!.data as Record<string, unknown>).generatedJson).toEqual(POSTS)
+  })
+
+  it("a fresh server result never reads as \"Inputs changed\" after an earlier single-node run on other targets", () => {
+    const earlier = igNode({ targets: "https://www.instagram.com/p/New1/", lastRunFingerprint: "[\"post\",[\"https://www.instagram.com/p/Old1/\"]]" })
+    const [out] = applyCompletedExecutionResults(earlier, { ig: state }, "2026-10-04T21:35:46.000Z")
+    expect(deriveInstagramScrapeCardState(out!.data as InstagramScrapeNodeData)).toMatchObject({ kind: "success", stale: false })
+  })
+
+  it("clears the media fields an older build wrote as the scraper's result", () => {
+    const stale = igNode({ generatedImageUrl: "https://cdn/i.jpg", generatedResults: [{ url: "https://cdn/i.jpg" }], generatedText: "hi", activeResultIndex: 0 })
+    const [out] = applyCompletedExecutionResults(stale, { ig: state }, "2026-10-04T21:35:46.000Z")
+    const data = out!.data as Record<string, unknown>
+    expect(data.generatedResults).toBeUndefined()
+    expect(data.generatedImageUrl).toBeUndefined()
+    expect(data.generatedText).toBeUndefined()
+  })
+
+  it("covers Meta Ads and Web Scrape the same way", () => {
+    const ads = [{ adId: "a1" }]
+    const metaNodes = [{ id: "meta", type: "meta-ads-scrape", position: { x: 0, y: 0 }, data: { label: "Meta Ads" } }] as unknown as Parameters<typeof applyCompletedExecutionResults>[0]
+    const [meta] = applyCompletedExecutionResults(metaNodes, { meta: { status: "completed", jobId: "job-m", output: { json: ads } } }, null)
+    expect(meta!.data).toMatchObject({ generatedJson: ads, lastRunOutcome: "success", lastAppliedJobId: "job-m" })
+    const webNodes = [{ id: "web", type: "web-scrape", position: { x: 0, y: 0 }, data: { label: "Web Scrape" } }] as unknown as Parameters<typeof applyCompletedExecutionResults>[0]
+    const [web] = applyCompletedExecutionResults(webNodes, { web: { status: "completed", jobId: "job-w", output: { json: [{ title: "t" }] } } }, null)
+    expect(web!.data).toMatchObject({ generatedJson: [{ title: "t" }], lastAppliedJobId: "job-w" })
   })
 })

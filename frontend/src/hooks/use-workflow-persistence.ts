@@ -27,6 +27,7 @@ import { namedRunOutputFields } from "@/lib/named-run-outputs"
 import { videoOverlayListRowFields, videoOverlayRunOutputFields } from "@/lib/video-overlay-run-output"
 import { perHandleRunFields } from "@/lib/per-handle-batch"
 import { applyEdlRunCutFields, applyEdlTakeTranscriptField } from "@/lib/apply-edl-cut"
+import { scrapeJobNeedsApplying, scrapeServerRunPatch } from "@/components/nodes/scrape-result-recovery"
 
 /**
  * Execution statuses whose `node_states` are worth restoring onto the canvas on
@@ -434,7 +435,12 @@ export function applyBackendExecutionState(
     // Map backend status → frontend executionStatus
     if (state.status === "completed") {
       data.executionStatus = "completed"
-      if (state.output && isContentNodeType(node.type)) {
+      // A scraper: the single-node Run's own patch (scrape-result-recovery.ts),
+      // never the generic media writes below — its featured image is not its result.
+      const scrapePatch = scrapeServerRunPatch(node.type, state.output as Record<string, unknown> | undefined, state.jobId, data)
+      if (scrapePatch) {
+        Object.assign(data, scrapePatch)
+      } else if (state.output && isContentNodeType(node.type)) {
         // Content Recipe / Content Ideas: the live run's own mapping — the
         // generic list/result writes below do not fit a recipe or the briefs.
         Object.assign(data, contentRunResultPatch(node.type, state.output as Record<string, unknown>) ?? {})
@@ -562,6 +568,22 @@ export function applyCompletedExecutionResults(
         scenePlan: state.output.plan, changeSummary: state.output.changeSummary,
       }, node.type === "edit-3d-scene" ? "edit" : "generate", state.jobId)
       return patch ? { ...node, data: { ...data, ...patch } as SceneNodeData } : node
+    }
+
+    // A scraper: its posts / ads / pages, once per job (the patch stamps
+    // `lastAppliedJobId`). Asked BEFORE the "already completed" skip below — a
+    // build that predates this branch marked the node completed with only its
+    // featured image, which is exactly the state this repairs. A run of the node
+    // in the editor after this execution ended (`scrapeJobNeedsApplying`) keeps
+    // its own, newer result; with no end time to compare, only an empty node is
+    // filled.
+    const scrapePatch = scrapeServerRunPatch(node.type, state.output as Record<string, unknown>, state.jobId, data)
+    if (scrapePatch) {
+      if (Object.keys(scrapePatch).length === 0) return node
+      const apply = settledAt
+        ? scrapeJobNeedsApplying(data, { id: state.jobId ?? "", createdAt: settledAt })
+        : data.generatedJson === undefined
+      return apply ? { ...node, data: { ...data, ...scrapePatch } as SceneNodeData } : node
     }
 
     // Skip nodes that were already marked completed in the saved workflow.
