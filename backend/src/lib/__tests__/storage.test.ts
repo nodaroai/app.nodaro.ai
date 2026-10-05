@@ -166,6 +166,20 @@ describe("copyRecastObject (recast fork)", () => {
     expect((mocks.copyCalls[1] as { ContentType: string }).ContentType).toBe("image/png")
   })
 
+  it("a failed source HEAD does not report 0 bytes: the copy's size is read from the destination", async () => {
+    // The caller reserves quota from `bytes` — 0 would reserve nothing for a copy that happened.
+    mocks.mockSend.mockImplementation(async (cmd: { constructor: { name: string }; Key?: string }) => {
+      if (cmd.constructor.name === "MockHeadObjectCommand") {
+        if (cmd.Key === "videos/orig-big.mp4") throw Object.assign(new Error("timed out"), { name: "TimeoutError" })
+        return { ContentLength: 7_000_000_000 }
+      }
+      return {}
+    })
+    const result = await copyRecastObject("https://r2.test.com/videos/orig-big.mp4", "videos/fork-x3-big.mp4")
+    expect(result).toEqual({ url: "https://r2.test.com/videos/fork-x3-big.mp4", bytes: 7_000_000_000 })
+    expect(mocks.copyCalls).toHaveLength(1)
+  })
+
   it("throws on a foreign (non-R2) source URL rather than silently pointing at it", async () => {
     await expect(copyRecastObject("https://evil.example.com/x.wav", "audios/fork-x.wav")).rejects.toThrow()
   })
