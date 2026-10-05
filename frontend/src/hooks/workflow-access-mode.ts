@@ -1,6 +1,7 @@
 import { getWorkflowAccess, isNotFoundError, type WorkflowAccessLevel } from "@/lib/api"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { isSaveRefused } from "@/hooks/workflow-save-refusal"
+import { runsInFlightOn } from "@/lib/run-in-flight-mark"
 import { recheckedAccess } from "@/lib/workflow-content"
 
 /**
@@ -112,7 +113,8 @@ let stopWaitingForRuns: (() => void) | null = null
  * lands, the canvas is the one a refused save leaves, interactive with nothing
  * kept. A run clears its marks in the write that paints its last result (a
  * job's id, a Run over a list's batch flag, a status that turns `completed` or
- * `failed`), so the freeze lands right after that write.
+ * `failed`), or, outside the executors, right after it (`withRunInFlight`), so
+ * the freeze lands right after that write.
  *
  * Dropped, never applied, once the workflow it was for is no longer the one
  * open, or a load has replaced the verdict (a load clears `saveRefusedFor` and
@@ -187,11 +189,20 @@ function freeze(): void {
  *   (`workflow-viewer-mode-runs.test.ts` holds the executors to it).
  * - a script's scene image (`handleGenerateSceneImage`), whose only mark is
  *   its scene's `imageStatus` inside `generatedScript`.
+ * - `__runsInFlight`: a paid run outside the executors, which no mark above
+ *   covers (T100): Generate All Assets, a custom variation and Refine on a
+ *   character's or object's page, a Suno voice's persona, an overlay's
+ *   placement suggestion. `withRunInFlight` adds one token per run before its
+ *   first paid request and removes it once the run's last result is written,
+ *   or it fails; Refine keeps its token until an image is picked or the picker
+ *   is closed. Never saved, so a reload starts without it
+ *   (`lib/run-in-flight-mark.ts`).
  */
 export function showsARunInFlight(node: { readonly data?: unknown }): boolean {
   const data = node.data as Record<string, unknown> | undefined
   if (!data) return false
   if (data.currentJobId || data.__listRunning === true || data.executionStatus === "pending") return true
+  if (runsInFlightOn(data).length > 0) return true
   return Object.keys(data).some((key) => key.endsWith("Status") && data[key] === "running")
     || sceneImageInFlight(data.generatedScript)
 }

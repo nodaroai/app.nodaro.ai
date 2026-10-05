@@ -36,6 +36,7 @@ import { COMPOSER_PLAN_FIELDS, EXECUTION_DATA_KEYS, TRANSIENT_RUNTIME_KEYS, isEx
 import { NODE_DEF_MAP, type PreviewItem, type PreviewNodeData, type WorkflowEdge, type WorkflowNode } from "@/types/nodes"
 import { getPreviewItemKey } from "@/lib/preview-items"
 import { RESULTS_CLEARED_AT_KEY } from "@/lib/results-cleared"
+import { RUNS_IN_FLIGHT_KEY } from "@/lib/run-in-flight-mark"
 import { collectPreviewItems } from "./preview-items"
 import { isExecutableNode } from "./types"
 
@@ -53,6 +54,10 @@ export const RUN_RESULT_KEEP_KEYS: ReadonlyMap<string, string> = new Map([
   ["loraTriggerWord", "a trained LoRA is an asset, not a run result"],
   ["loraTrainingStatus", "a trained LoRA is an asset, not a run result"],
   [RESULTS_CLEARED_AT_KEY, "the clear's own watermark — what stops the next reload from painting the last run back"],
+  // Not even run STATE to a clear: the run it marks goes on whatever the clear
+  // does, and lifting the mark would let a pending read-only freeze land before
+  // that run's result does (`showsARunInFlight`).
+  [RUNS_IN_FLIGHT_KEY, "a paid run still out (`withRunInFlight`), which the clear does not stop"],
 ])
 
 /**
@@ -155,7 +160,7 @@ export const RUN_RESULT_TYPE_KEYS: Readonly<Record<string, readonly string[]>> =
 
 /** Run STATE only — what a content card may lose. Never its content. */
 const RUN_STATE_KEYS: ReadonlySet<string> = new Set([
-  ...TRANSIENT_RUNTIME_KEYS,
+  ...[...TRANSIENT_RUNTIME_KEYS].filter((key) => !RUN_RESULT_KEEP_KEYS.has(key)),
   "errorMessage",
   "errorHint",
   "jobRecovering",

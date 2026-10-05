@@ -1423,6 +1423,26 @@ describe("useWorkflowPersistence — save", () => {
     expect(savedData.prompt).toBe("a cat")
   })
 
+  it("never saves the mark of a paid run still out (T100), and keeps what the run wrote", async () => {
+    // The mark lives only as long as the tab that started the run: saved, a
+    // reload would show a run that nobody is waiting for any more.
+    const { update } = setupSupabaseUpdate()
+    resetStoreState({
+      workflowId: "w1",
+      nodes: [makeNode("n1", { __runsInFlight: ["run-1", "run-2"], customVariations: [{ url: "https://r2/v.png" }] })],
+    })
+
+    const { result } = renderHook(() => useWorkflowPersistence("proj-1"))
+    await act(async () => {
+      await result.current.save()
+    })
+
+    const payload = update.mock.calls[0]![0] as { nodes: Array<{ data: Record<string, unknown> }> }
+    const savedData = payload.nodes[0]!.data
+    expect("__runsInFlight" in savedData).toBe(false)
+    expect(savedData.customVariations).toEqual([{ url: "https://r2/v.png" }])
+  })
+
   it("attaches an abort signal to the update (hung saves cannot wedge saveStatus)", async () => {
     const { abortSignal } = setupSupabaseUpdate()
     resetStoreState({ workflowId: "w1", nodes: [makeNode("n1")] })
@@ -1540,6 +1560,50 @@ describe("useWorkflowPersistence — save", () => {
         expect.objectContaining({ name: "Test Workflow" }),
         0,
       )
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it("delta: a node whose only change is a paid run's in-flight mark writes nothing (T100)", async () => {
+    vi.stubEnv("VITE_DELTA_SAVES", "1")
+    try {
+      const { unchanged, snapshot } = deltaState()
+      const base = snapshot.nodes[1]!
+      storeState.nodes = [unchanged, { ...base, data: { ...base.data, __runsInFlight: ["run-1"] } }]
+
+      const { result } = renderHook(() => useWorkflowPersistence("proj-1"))
+      let saveResult: { success: boolean } | undefined
+      await act(async () => {
+        saveResult = await result.current.save()
+      })
+
+      expect(saveResult!.success).toBe(true)
+      expect(mockSupabaseRpc).not.toHaveBeenCalled()
+      expect(mockSupabaseFrom).not.toHaveBeenCalled()
+      expect(mockMarkClean).toHaveBeenCalled()
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it("delta: a node changed while a paid run is out is sent without the run's mark (T100)", async () => {
+    vi.stubEnv("VITE_DELTA_SAVES", "1")
+    try {
+      const { unchanged, edited } = deltaState()
+      storeState.nodes = [unchanged, { ...edited, data: { ...edited.data, __runsInFlight: ["run-1"] } }]
+      rpcResolves([{ ok: true, version: 42, updated_at: "2026-06-12T02:00:00Z" }])
+
+      const { result } = renderHook(() => useWorkflowPersistence("proj-1"))
+      await act(async () => {
+        await result.current.save()
+      })
+
+      const [, args] = mockSupabaseRpc.mock.calls[0]! as [string, Record<string, unknown>]
+      const sent = args.p_upsert_nodes as Array<{ id: string; data: Record<string, unknown> }>
+      expect(sent.map((n) => n.id)).toEqual([edited.id])
+      expect(sent[0]!.data.prompt).toBe("changed")
+      expect("__runsInFlight" in sent[0]!.data).toBe(false)
     } finally {
       vi.unstubAllEnvs()
     }

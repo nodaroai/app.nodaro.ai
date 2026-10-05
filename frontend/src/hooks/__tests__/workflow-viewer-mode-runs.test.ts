@@ -155,6 +155,7 @@ describe("what counts as a run in flight", () => {
     ["a Location's time of day", { timeOfDayStatus: "running" }],
     ["a scene node's video", { videoExecutionStatus: "running" }],
     ["a script's scene image", { generatedScript: { scenes: [{ imageStatus: "completed" }, { imageStatus: "running" }] } }],
+    ["a paid run outside the executors (withRunInFlight)", { __runsInFlight: ["run-1"] }],
   ])("%s", (_mark, data) => {
     expect(showsARunInFlight({ data })).toBe(true)
   })
@@ -165,6 +166,7 @@ describe("what counts as a run in flight", () => {
     ["a failed node", { executionStatus: "failed", anglesStatus: "failed" }],
     ["a Run over a list that has ended", { __listRunning: false }],
     ["a script whose scene images are done", { generatedScript: { scenes: [{ imageStatus: "completed" }] } }],
+    ["a node whose paid runs have all ended", { __runsInFlight: [] }],
     ["a node with no data", undefined],
   ])("not %s", (_mark, data) => {
     expect(showsARunInFlight({ data })).toBe(false)

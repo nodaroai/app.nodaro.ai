@@ -51,6 +51,11 @@ export const EXECUTION_DATA_KEYS: ReadonlySet<string> = new Set([
   // List fan-out window flag (abandon-guard exemption). Set/cleared by
   // executeNodeForList — purely execution-related, never user-edited.
   "__listRunning",
+  // One token per paid run still out on this node that no executor mark
+  // covers (the editor's `withRunInFlight`: a character's or object's page,
+  // a Suno voice's setup, an overlay placement suggestion). Purely
+  // execution-related, never user-edited; also in TRANSIENT_RUNTIME_KEYS.
+  "__runsInFlight",
   // Selector node dual-channel outputs (picked + rest). Server-side execution
   // output, not user-edited config.
   "pickedResults",
@@ -149,6 +154,9 @@ export const TRANSIENT_RUNTIME_KEYS: ReadonlySet<string> = new Set([
   "__listTotal",
   "__listCompleted",
   "__listRunning",
+  // A paid run still out, held by the editor tab that started it. Never
+  // saved, so a reload, which has no such run, starts without one.
+  "__runsInFlight",
   "_upstreamRefresh",
   "__upstreamCount",
   // Video URL node download ticks. They used to dirty the workflow twice a
