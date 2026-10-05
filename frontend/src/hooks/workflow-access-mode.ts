@@ -192,11 +192,12 @@ function freeze(): void {
  * - `__runsInFlight`: a paid run outside the executors, which no mark above
  *   covers (T100): Generate All Assets, a custom variation and Refine on a
  *   character's or object's page, a Suno voice's persona, an overlay's
- *   placement suggestion. `withRunInFlight` adds one token per run before its
- *   first paid request and removes it once the run's last result is written,
- *   or it fails; Refine keeps its token until an image is picked or the picker
- *   is closed. Never saved, so a reload starts without it
- *   (`lib/run-in-flight-mark.ts`).
+ *   placement suggestion, a Character Studio's seed prompt suggestion.
+ *   `withRunInFlight` adds one token per run before its first paid request
+ *   and removes it once the run's last result is written, or it fails; Refine
+ *   keeps its token until an image is picked or the picker is closed. Never
+ *   saved, so a reload starts without it; Undo and Redo keep the live tokens,
+ *   and a copy starts with none (`lib/run-in-flight-mark.ts`).
  */
 export function showsARunInFlight(node: { readonly data?: unknown }): boolean {
   const data = node.data as Record<string, unknown> | undefined

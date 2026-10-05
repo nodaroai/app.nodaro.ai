@@ -52,9 +52,9 @@ export const EXECUTION_DATA_KEYS: ReadonlySet<string> = new Set([
   // executeNodeForList — purely execution-related, never user-edited.
   "__listRunning",
   // One token per paid run still out on this node that no executor mark
-  // covers (the editor's `withRunInFlight`: a character's or object's page,
-  // a Suno voice's setup, an overlay placement suggestion). Purely
-  // execution-related, never user-edited; also in TRANSIENT_RUNTIME_KEYS.
+  // covers (the editor's `withRunInFlight`, around each paid call outside the
+  // executors). Purely execution-related, never user-edited; also in
+  // TRANSIENT_RUNTIME_KEYS.
   "__runsInFlight",
   // Selector node dual-channel outputs (picked + rest). Server-side execution
   // output, not user-edited config.

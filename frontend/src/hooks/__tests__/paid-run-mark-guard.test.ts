@@ -24,11 +24,15 @@
  * "A paid client call" is any reference to a function of the client module
  * (`lib/api.ts`) in the PAID set: the per-variant asset calls
  * (`generate*Asset`), `generateImage`, the Suno persona (`sunoVoiceGenerateApi`),
- * every client function a file in the executors' folders imports, and every
- * client function whose declared return type carries a `jobId` (it starts a
- * job, which is what the server reserves credits against), minus `FREE`. A
- * function in `FREE` must say why it is not paid, so the set fails closed: a
- * new import there, or a new job, is paid until somebody says otherwise.
+ * every client function a file in the executors' folders imports, every client
+ * function whose declared return type carries a `jobId` (it starts a job,
+ * which is what the server reserves credits against), and the functions in
+ * `METERED`, which charge and answer at once, with no job; minus `FREE`. A
+ * function in `FREE` must say why it is not paid. And the set is checked
+ * against the server's own route registrations (`metered-routes.ts`): a client
+ * function that calls a route which charges must be in it, or in `FREE`. So
+ * it fails closed: a new import there, a new job, or a new call to a route
+ * that charges is paid until somebody says otherwise.
  *
  * The scan is a TypeScript parse, not a text search: aliased imports, a
  * destructured dynamic import and imports by relative path are followed, the
@@ -39,14 +43,20 @@
  * handed on) fails it.
  *
  * Limits, stated: an executor file is allowed whole, so a new call added to
- * one is held only by the executors' own convention, as before. And a paid
+ * one is held only by the executors' own convention, as before. A paid
  * request made around the client module (a raw `fetch` to a route that
- * charges) is not seen.
+ * charges, or a client of its own: the copilot's, the pipelines') is not
+ * seen. And the check against the server reads only the routes this
+ * repository registers, and a client function only by the routes its own
+ * body names: a route served from elsewhere (the cloud plugin's), or a
+ * function whose path is built elsewhere or that hands its request to another
+ * function, is paid only when another rule says so.
  */
 import { describe, it, expect } from "vitest"
 import fs from "node:fs"
 import path from "node:path"
 import ts from "typescript"
+import { chargingRoutes, clientRoutesIn, type ChargingRoute } from "./metered-routes"
 
 const SRC = path.resolve(__dirname, "../..")
 /** The scan reads every source file under frontend/src: allow for a slow runner. */
@@ -94,6 +104,19 @@ const FREE: ReadonlyMap<string, string> = new Map([
   ["downloadYouTubeAudio", "`/v1/youtube-audio` charges no credits"],
   ["extractYouTubeAudioApi", "`/v1/extract-youtube-audio` charges no credits"],
   ["grokSegmentMap", "Grok region detection is priced at 0 credits (`grok-2-segment`)"],
+])
+
+/**
+ * Client functions whose route charges and answers at once: no job, so the job
+ * rule cannot see them, and no executor imports them. Each names its route,
+ * which its function must call and whose registration must charge.
+ */
+const METERED: ReadonlyMap<string, string> = new Map([
+  ["llmSuggestDescription", "POST /v1/llm-suggest-description"],
+  ["llmCaptionPortrait", "POST /v1/characters/:/llm-caption"],
+  ["recaptionObject", "POST /v1/objects/:/llm-caption"],
+  ["recaptionCreature", "POST /v1/creatures/:/llm-caption"],
+  ["recaptionLocation", "POST /v1/locations/:/llm-caption"],
 ])
 
 /**
@@ -189,6 +212,8 @@ const ALLOWED: ReadonlyMap<string, Allowed> = new Map<string, Allowed>([
   ["components/editor/reference-sheet/sheet-tab-adapter.ts", { refs: 3, why: STUDIO_ROW, check: attachesToARow }],
   ["components/editor/character-studio/pages/lora-page.tsx", { refs: 1, why: LORA }],
   ["components/editor/training-section.tsx", { refs: 1, why: LORA }],
+  ["components/editor/character-studio/canonical-description-expander.tsx", { refs: 1, why: "a character's caption: `/v1/characters/:id/llm-caption` writes it to the character's row server-side, where it stays whatever the canvas does; the node only mirrors it" }],
+  ["components/editor/character-studio/asset-gen-panel.tsx", { refs: 1, why: "a Studio's description suggestion: it stays in the panel's own field until the person submits the asset, which is their own edit" }],
   ["components/editor/studio-shell/voice-resource.tsx", { refs: 4, why: "a Studio's voice previews: what they play stays in the panel's own state, and nothing is written to a node" }],
   ["components/editor/config-panels/prompt-helper-dialog.tsx", { refs: 2, why: "the prompt helper: its answer stays in the dialog until the person accepts it, which is their own edit" }],
   ["components/editor/config-panels/refine-regions-section.tsx", { refs: 1, why: REFINE_POLL, check: insideOf("pollImageRefineToNode") }],
@@ -499,7 +524,18 @@ const EXECUTOR_IMPORTS = new Set(
 )
 const JOB_STARTERS = new Set([...CLIENT].filter(([, fn]) => fn.startsAJob).map(([name]) => name))
 const PAID: ReadonlySet<string> = new Set(
-  [...NAMED, ...EXECUTOR_IMPORTS, ...JOB_STARTERS].filter((name) => !FREE.has(name)),
+  [...NAMED, ...EXECUTOR_IMPORTS, ...JOB_STARTERS, ...METERED.keys()].filter((name) => !FREE.has(name)),
+)
+
+/** What the server charges for, and the routes each client function calls (`metered-routes.ts`). */
+const CHARGING = chargingRoutes(path.resolve(SRC, "../.."))
+const CLIENT_ROUTES = clientRoutesIn(`${API_MODULE}.ts`, fs.readFileSync(path.join(SRC, `${API_MODULE}.ts`), "utf8"))
+/** Every client function that calls a route which charges, with the first such route. */
+const CALLS_A_CHARGING_ROUTE = new Map(
+  [...CLIENT_ROUTES].flatMap(([name, paths]): Array<[string, ChargingRoute]> => {
+    const hit = CHARGING.find((route) => paths.includes(route.path))
+    return hit ? [[name, hit]] : []
+  }),
 )
 
 function scanAll(): Map<string, Scan> {
@@ -520,14 +556,34 @@ describe("the paid set", () => {
     expect(PAID.has("generateVideo")).toBe(true)
     expect(PAID.has("suggestOverlayPlacement")).toBe(true)
     expect(PAID.has("getJobStatusLean")).toBe(false)
+    // A route that charges and answers at once, with no job.
+    expect(PAID.has("llmSuggestDescription")).toBe(true)
+    expect(PAID.has("llmCaptionPortrait")).toBe(true)
     // The rules still find what they are for: a parse that matched nothing
     // would make every call free.
     expect(EXECUTOR_IMPORTS.size).toBeGreaterThan(80)
     expect(JOB_STARTERS.size).toBeGreaterThan(100)
+    expect(CHARGING.length).toBeGreaterThan(100)
+    expect(CALLS_A_CHARGING_ROUTE.size).toBeGreaterThan(100)
+  })
+
+  it("names, for each METERED function, a route it calls and whose registration charges", () => {
+    for (const [name, route] of METERED) {
+      const routePath = route.slice(route.indexOf(" ") + 1)
+      expect(CLIENT_ROUTES.get(name) ?? [], `${name} no longer calls ${route}`).toContain(routePath)
+      expect(CHARGING.map((r) => r.route), `${route} no longer charges`).toContain(route)
+    }
+  })
+
+  it("holds every client function that calls a route which charges, unless it is listed free", () => {
+    const missed = [...CALLS_A_CHARGING_ROUTE]
+      .filter(([name]) => !PAID.has(name) && !FREE.has(name))
+      .map(([name, route]) => `${name} calls ${route.route} (${route.at}), which charges: add it to METERED, or to FREE with why`)
+    expect(missed).toEqual([])
   })
 
   it("lists as free only client functions a rule brings in, never one T100 names", () => {
-    const candidates = new Set([...EXECUTOR_IMPORTS, ...JOB_STARTERS])
+    const candidates = new Set([...EXECUTOR_IMPORTS, ...JOB_STARTERS, ...CALLS_A_CHARGING_ROUTE.keys()])
     const stale = [...FREE.keys()].filter((name) => !candidates.has(name))
     expect(stale, "FREE entries no rule brings in").toEqual([])
     expect(NAMED.filter((name) => FREE.has(name))).toEqual([])
@@ -589,6 +645,7 @@ describe("every paid client call outside the executors is inside withRunInFlight
     expect(wrapped("components/editor/object-page-modal.tsx").sort()).toEqual(["generateImage", "generateObjectAsset", "generateObjectAsset"])
     expect(wrapped("components/nodes/suno-voice-setup-modal.tsx")).toEqual(["sunoVoiceGenerateApi"])
     expect(wrapped("components/editor/config-panels/image-overlay-layer-editor.tsx")).toEqual(["suggestOverlayPlacement"])
+    expect(wrapped("components/editor/character-studio/seed-prompt-textarea.tsx")).toEqual(["llmSuggestDescription"])
     expect(scans.get("components/editor/workflow-editor/execute-node.ts")!.references.length).toBeGreaterThan(50)
   })
 })
