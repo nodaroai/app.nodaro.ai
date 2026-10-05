@@ -138,6 +138,40 @@ describe("directElevenLabsTTS — the request body per model (existing models)",
     }
   })
 
+  describe("elevenlabs-v4", () => {
+    it("runs on eleven_v4", async () => {
+      expect((await bodyFor("elevenlabs-v4", undefined)).model_id).toBe("eleven_v4")
+    })
+
+    it("sends no voice_settings when the caller sets no lever", async () => {
+      expect((await bodyFor("elevenlabs-v4", undefined)).voice_settings).toBeUndefined()
+    })
+
+    it("sends stability and similarity only — style, speed and speaker boost never leave", async () => {
+      const body = await bodyFor("elevenlabs-v4", { stability: 0.4, similarityBoost: 0.8, style: 0.5, speed: 1.1 })
+      expect(body.voice_settings).toEqual({ stability: 0.4, similarity_boost: 0.8 })
+    })
+
+    it("takes a stability that is not 0 / 0.5 / 1 (v3's three-step rule does not apply)", async () => {
+      const body = await bodyFor("elevenlabs-v4", { stability: 0.3 })
+      expect((body.voice_settings as { stability: number }).stability).toBe(0.3)
+    })
+
+    it("fills the lever the caller left out from the voice's stored settings", async () => {
+      const body = await bodyFor("elevenlabs-v4", { stability: 0.4 })
+      expect(body.voice_settings).toEqual({ stability: 0.4, similarity_boost: 0.9 })
+    })
+
+    it("falls back to the API defaults when no stored settings are available", async () => {
+      const body = await bodyFor("elevenlabs-v4", { similarityBoost: 0.6 }, null)
+      expect(body.voice_settings).toEqual({ stability: 0.5, similarity_boost: 0.6 })
+    })
+
+    it("forwards a normalized language code (Hebrew included)", async () => {
+      expect((await bodyFor("elevenlabs-v4", { languageCode: "heb" })).language_code).toBe("he")
+    })
+  })
+
   describe("language_code", () => {
     it("forwards a normalized code on v3 and turbo", async () => {
       expect((await bodyFor("elevenlabs-v3", { languageCode: "heb" })).language_code).toBe("he")

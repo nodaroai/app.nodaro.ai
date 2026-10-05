@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label"
 import { TagTextarea } from "./tag-textarea"
 import { getLanguagesForModel, ALL_LANGUAGES } from "@/lib/audio-tags"
 import { TtsVoiceSettings } from "./tts-voice-settings"
+import { ttsModelSwitchPatch } from "@/lib/tts-model-switch"
 import { SUNO_SUGGESTION_ITEMS, SUNO_LYRICS_SUGGESTION_ITEMS, SUNO_STYLE_SUGGESTION_ITEMS } from "@/lib/suno-tags"
 import { SUNO_SLIDER_META, SUNO_SLIDER_LABEL_KEYS, SUNO_SLIDER_DESC_KEYS } from "@/lib/suno-sliders"
 import { Button } from "@/components/ui/button"
@@ -172,7 +173,7 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
       <MappableField field="provider" label={t("field.model")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="voice">
         <Select
           value={data.provider === "elevenlabs" ? "elevenlabs-v3" : (data.provider || "elevenlabs-v3")}
-          onValueChange={(v) => onUpdate({ provider: v as TextToSpeechData["provider"] })}
+          onValueChange={(v) => onUpdate({ provider: v as TextToSpeechData["provider"], ...ttsModelSwitchPatch(v, data) })}
         >
           <SelectTrigger aria-label={t("field.model")}><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -233,7 +234,7 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
                 providerMeta?.recommendedProvider &&
                 (current === "elevenlabs-turbo" || current === "elevenlabs-multilingual") &&
                 !verified.includes(current)
-                  ? { provider: providerMeta.recommendedProvider }
+                  ? { provider: providerMeta.recommendedProvider, ...ttsModelSwitchPatch(providerMeta.recommendedProvider, data) }
                   : {}
               onUpdate({ voiceId: id, voiceType: voiceType, voiceDisplayName: name, voiceLabel: name, ...snap })
             } else {

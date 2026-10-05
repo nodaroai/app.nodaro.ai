@@ -250,6 +250,7 @@ describe("voiced-video handler — [audio tags] on the single-voice path", () =>
 
   it.each([
     ["elevenlabs-v3", false],
+    ["elevenlabs-v4", false],
     ["elevenlabs-turbo", true],
     ["elevenlabs-multilingual", true],
     [undefined, true], // no ttsProvider on the voice → turbo, which strips

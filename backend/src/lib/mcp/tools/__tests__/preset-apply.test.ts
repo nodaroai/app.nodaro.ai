@@ -418,6 +418,48 @@ async function runGenerateSpeech(
   return { result, body: received.body }
 }
 
+describe("generate_speech — the model and its per-request cap", () => {
+  it("accepts elevenlabs-v4 and dispatches it as the provider", async () => {
+    const { result, body } = await runGenerateSpeech({ text: "hello", model: "elevenlabs-v4" })
+    expect(result.isError).toBeUndefined()
+    expect(body?.provider).toBe("elevenlabs-v4")
+  })
+
+  it("takes up to 10,000 characters on v4", async () => {
+    const { result, body } = await runGenerateSpeech({ text: "a".repeat(10000), model: "elevenlabs-v4" })
+    expect(result.isError).toBeUndefined()
+    expect((body?.text as string).length).toBe(10000)
+  })
+
+  it("refuses text over the model's own cap with the numbers, instead of letting the route truncate it", async () => {
+    // 6,000 characters fit the tool's schema but not v3's 5,000 (the default model).
+    const v3 = await runGenerateSpeech({ text: "a".repeat(6000) })
+    expect(v3.result.isError).toBe(true)
+    expect((v3.result.content[0] as { text: string }).text).toMatch(/6000 characters; elevenlabs-v3 takes at most 5000/)
+    expect(v3.body).toBeUndefined() // the route was never hit
+
+    const v3Explicit = await runGenerateSpeech({ text: "a".repeat(5001), model: "elevenlabs-v3" })
+    expect(v3Explicit.result.isError).toBe(true)
+  })
+
+  it("an explicit turbo takes its own, larger cap", async () => {
+    const turbo = await runGenerateSpeech({ text: "a".repeat(9000), model: "elevenlabs-turbo" })
+    expect(turbo.result.isError).toBeUndefined() // turbo takes 40,000
+  })
+
+  it("the legacy elevenlabs id is capped as the model it runs as (turbo), not as the 5,000-character default", async () => {
+    const legacy = await runGenerateSpeech({ text: "a".repeat(9000), model: "elevenlabs" })
+    expect(legacy.result.isError).toBeUndefined()
+    expect(legacy.body?.provider).toBe("elevenlabs") // the route resolves the alias; the tool still sends the id it was given
+    expect((legacy.body?.text as string).length).toBe(9000)
+  })
+
+  it("still rejects past 10,000 characters at the schema, whatever the model", async () => {
+    const { result } = await runGenerateSpeech({ text: "a".repeat(10001), model: "elevenlabs-turbo" })
+    expect(result.isError).toBe(true)
+  })
+})
+
 describe("generate_speech preset application", () => {
   it("applies a factory preset's tuning (speed/stability/style) as an overlay; caller supplies text", async () => {
     const { result, body } = await runGenerateSpeech({

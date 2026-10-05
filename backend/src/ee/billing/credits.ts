@@ -1281,6 +1281,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "hailuo-avatar": 190,           // estimated (not in KIE pricing data)
   // ── Audio / TTS / Music ──
   "elevenlabs-v3": 30,             // direct ElevenLabs API
+  "elevenlabs-v4": 30,             // direct ElevenLabs API; the same flat price as v3, per request
   "elevenlabs-turbo": 15,         // per 1K chars
   "elevenlabs-multilingual": 30,  // per 1K chars
   "elevenlabs": 15,               // alias for turbo

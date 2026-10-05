@@ -15,7 +15,7 @@ import {
   uiMeta,
 } from "./_verb-helpers.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
-import { SUNO_MODELS, SUNO_LEGACY_MODELS, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, SUNO_TITLE_MAX, SUNO_TEXT_MAX, AUDIO_FX_PRESETS, readPromptAffixes, MODEL_CATALOG, type TranscribeProvider } from "@nodaro/shared"
+import { SUNO_MODELS, SUNO_LEGACY_MODELS, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, SUNO_TITLE_MAX, SUNO_TEXT_MAX, AUDIO_FX_PRESETS, readPromptAffixes, MODEL_CATALOG, TTS_PROVIDERS, canonicalTtsProvider, getMaxTtsChars, type TranscribeProvider } from "@nodaro/shared"
 
 /** The engine the MCP `transcribe` tool runs on. Typed against the ENABLED
  *  provider enum, so disabling this lane in @nodaro/shared fails the build here
@@ -371,14 +371,16 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         "like `[laughs]`, `[whispers]`, `[sighs]` for emotion / pacing — best " +
         "for expressive narration, and it is FULLY MULTILINGUAL: use it for " +
         "ALL languages including Hebrew/Arabic/CJK, not just English. " +
+        "`elevenlabs-v4` is newer: same tags, stability + similarity only " +
+        "(no speed/style). " +
         "`elevenlabs-turbo` is cheaper for plain narration. " +
         "`elevenlabs-multilingual` is a legacy v2 model routed through a " +
         "third-party wrapper known to garble some languages (Hebrew observed) " +
         "— only pick it when a specific library voice is verified for v2 " +
-        "only. `text` is capped at 5,000 chars on every model here — split longer " +
-        "scripts into several calls. Never switch away from v3 for language reasons " +
-        "alone. Call `list_models { kind: \"audio\", mode: \"tts\" }` for the " +
-        "full sheet.\n\n" +
+        "only. `text` is capped per model (5,000 chars on v3, 10,000 on v4) — " +
+        "split longer scripts into several calls. Never switch away from v3 for " +
+        "language reasons alone. Call `list_models { kind: \"audio\", mode: \"tts\" }` " +
+        "for the full sheet.\n\n" +
         "**Presets/templates**: call list_node_presets { nodeType: \"text-to-speech\" } " +
         "to browse built-in delivery styles (e.g. Calm Narrator, Commercial Read, " +
         "Audiobook) + your saved presets, get_node_preset to read one's config, or " +
@@ -388,7 +390,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         // `text` stays required: the text-to-speech factory presets are a
         // delivery-tuning overlay (speed/stability/style) and supply NO text,
         // so a preset can never satisfy this content field — Zod enforces it.
-        text: z.string().min(1).max(5000),
+        text: z.string().min(1).max(10000),
         presetId: z
           .string()
           .min(1)
@@ -420,23 +422,22 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
           // elevenlabs-v3 as the fallback, while leaving `args.model === undefined`
           // when the caller didn't pass it — so a defaulted model can't clobber a
           // custom preset's provider (the override rule, mirroring generate_image).
-          .enum([
-            "elevenlabs-v3",
-            "elevenlabs-turbo",
-            "elevenlabs-multilingual",
-            "elevenlabs",
-          ])
+          // The enum IS the shared provider list, so a new model is accepted here
+          // the moment it joins TTS_PROVIDERS (no second list to forget).
+          .enum(TTS_PROVIDERS)
           .optional()
           .describe(
-            "TTS model. Default `elevenlabs-v3` (newest) supports `[audio tags]` " +
+            "TTS model. Default `elevenlabs-v3` supports `[audio tags]` " +
             "like `[laughs]`, `[whispers]`, `[sighs]` for emotion, and is fully " +
             "multilingual — use it for ALL languages including Hebrew/Arabic/CJK. " +
+            "`elevenlabs-v4` is newer (same tags; stability + similarity only, " +
+            "no speed/style). " +
             "`elevenlabs-turbo` is cheaper for plain narration. " +
             "`elevenlabs-multilingual` is a legacy v2 model via a third-party " +
             "wrapper known to garble some languages (Hebrew observed) — only " +
-            "use it for a v2-only-verified voice (`text` is capped at 5,000 chars on " +
-            "every model — split longer scripts). `elevenlabs` is the legacy id " +
-            "of `elevenlabs-turbo`. Call " +
+            "use it for a v2-only-verified voice (`text` is capped per model: " +
+            "5,000 chars on v3, 10,000 on v4 — split longer scripts). `elevenlabs` " +
+            "is the legacy id of `elevenlabs-turbo`. Call " +
             "list_models { kind: \"audio\", mode: \"tts\" } for the full sheet.",
           ),
         voice_type: z.enum(["premade", "custom", "library"]).optional(),
@@ -523,6 +524,23 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       // `.optional()` model → default elevenlabs-v3 in-handler (so an
       // unspecified model can't clobber a custom preset's provider).
       const modelId = (effective.model as string | undefined) ?? "elevenlabs-v3"
+      // The route clamps text to the model's cap rather than refusing it; for an
+      // agent that would be a silent truncation, so refuse here with the number.
+      // The cap is the one of the model the request RUNS as: the legacy
+      // `elevenlabs` id runs as turbo, and has no cap entry of its own.
+      const runsAs = canonicalTtsProvider(modelId)
+      const modelCap = getMaxTtsChars(runsAs)
+      if (typeof effective.text === "string" && effective.text.length > modelCap) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `text is ${effective.text.length} characters; ${runsAs} takes at most ${modelCap} per request. Split the script into several calls, or pick a model with a larger cap.`,
+            },
+          ],
+          isError: true as const,
+        }
+      }
       const payload = {
         text: effective.text as string,
         voice: effective.voice_id as string | undefined,

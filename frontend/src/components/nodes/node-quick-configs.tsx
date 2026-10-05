@@ -48,6 +48,7 @@ import {
 import { availableReasoningEfforts, isSeedanceVideoEditProvider, orderedLlmModels, STRUCTURED_VISION_MODELS, SHEET_TYPES, SHEET_SKINS, type SheetType, type SheetSkin, VIDEO_ANALYSIS_TIER_ORDER, VIDEO_ANALYSIS_TIER_LABELS, DEFAULT_VIDEO_ANALYSIS_TIER, SCENE3D_LIMITS, VIDEO_OVERLAY_OUTPUT_ASPECTS } from "@nodaro/shared"
 import { EFFORT_LABELS } from "@/components/editor/config-panels/reasoning-effort-select"
 import { ALL_LANGUAGES } from "@/lib/audio-tags"
+import { ttsModelSwitchPatch, type TtsSwitchFields } from "@/lib/tts-model-switch"
 
 /**
  * Data-driven quick-config controls for {@link NodeQuickStrip}. Each AI node
@@ -122,8 +123,11 @@ export interface QuickConfigControl {
   readonly read?: (data: Record<string, unknown>) => string
   /** Build the whole node-data patch for a chosen value instead of writing
    *  `data[field]`; the fail-safe snap uses it too, so a projected control can
-   *  never write its virtual `field` into the data. Pairs with {@link read}. */
-  readonly write?: (value: string) => Record<string, unknown>
+   *  never write its virtual `field` into the data. Pairs with {@link read}.
+   *  `data` is the node's current data when the USER made the choice, and absent
+   *  for the fail-safe snap (an effect must not clean up what it did not ask
+   *  about) — a `write` that reads it must work without. */
+  readonly write?: (value: string, data?: Record<string, unknown>) => Record<string, unknown>
 }
 
 /** The strip's current value for a control — the projection when it has one,
@@ -164,6 +168,19 @@ const providerControl = (
   ariaLabel: tx("field.model"),
   icon: Sparkles,
   options: toOptions(list),
+})
+
+/** Text-to-speech model dropdown. The user's choice also clears the voice
+ *  settings the new model does not honour and a language it is not offered in —
+ *  exactly what the config panel's dropdown does (`ttsModelSwitchPatch`), so the
+ *  two surfaces cannot disagree. The fail-safe snap calls `write` without data
+ *  and so writes the provider alone. */
+const ttsProviderControl = (): QuickConfigControl => ({
+  field: "provider",
+  ariaLabel: tx("field.model"),
+  icon: Sparkles,
+  options: toOptions(TTS_MODELS),
+  write: (value, data) => ({ provider: value, ...ttsModelSwitchPatch(value, (data ?? {}) as TtsSwitchFields) }),
 })
 
 /** Suno model dropdown (writes `data.model`), shared by all Suno nodes that
@@ -727,7 +744,7 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
   ],
   "extend-video": [providerControl(EXTEND_VIDEO_MODELS)],
   "lip-sync": [providerControl(LIP_SYNC_MODELS)],
-  "text-to-speech": [providerControl(TTS_MODELS)],
+  "text-to-speech": [ttsProviderControl()],
   "motion-transfer": [providerControl(MOTION_TRANSFER_MODELS)],
   // ── Suno (model: SunoModel) ──
   "suno-generate": [sunoModelControl(), sunoInstrumentalControl(), sunoVocalControl()],
@@ -983,7 +1000,7 @@ export function QuickConfigSelect({
   const CUSTOM = "__custom__"
   const writeValue = (v: string) => {
     const patch: Record<string, unknown> = control.write
-      ? control.write(v)
+      ? control.write(v, data)
       : { [control.field]: coerceQuickConfigValue(control, v) }
     if (control.additionalClear) {
       for (const f of control.additionalClear) patch[f] = undefined

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
 import { registerVerbs } from "../verbs.js"
-import { LIP_SYNC_PROVIDERS, VIDEO_TO_VIDEO_PROVIDERS } from "@nodaro/shared"
+import { LIP_SYNC_PROVIDERS, VIDEO_TO_VIDEO_PROVIDERS, getMaxTtsChars } from "@nodaro/shared"
 import { newSession } from "../../session.js"
 import { _resetRegistry } from "../../tasks.js"
 import type { Scope } from "../../../scopes.js"
@@ -1796,11 +1796,19 @@ describe("audit follow-ups — descriptions tell the truth", () => {
     expect(desc).not.toContain("use flux-kontext")
   })
 
-  it("generate_speech does not promise a 10,000-char v2 lane its own text cap forbids (C-5 #7)", async () => {
+  it("generate_speech never promises a text length its own schema forbids (C-5 #7)", async () => {
+    // Was: the description must not contain "10,000" — true while every model was
+    // capped at 5,000 and the schema stopped there. The invariant underneath is
+    // that no figure the description states exceeds what `text` accepts; v4 takes
+    // 10,000, so the schema allows it and the description may say so.
     const server = buildServer()
     registerVerbs({ server, session: executeSession(), fastify: Fastify() })
     const tool = (await listTools(server)).find((t) => t.name === "generate_speech")
-    const all = JSON.stringify(tool)
-    expect(all).not.toContain("10,000")
+    const maxLength = ((tool?.inputSchema as { properties?: Record<string, { maxLength?: number }> }).properties?.text?.maxLength) ?? 0
+    const stated = [...JSON.stringify(tool).matchAll(/\b\d{1,3}(?:,\d{3})+\b/g)].map((m) => Number(m[0].replace(/,/g, "")))
+    expect(stated.length).toBeGreaterThan(0)
+    for (const n of stated) expect(n, `the description states ${n} but text stops at ${maxLength}`).toBeLessThanOrEqual(maxLength)
+    // …and the schema lets v4 use its whole cap.
+    expect(maxLength).toBeGreaterThanOrEqual(getMaxTtsChars("elevenlabs-v4"))
   })
 })

@@ -2483,7 +2483,7 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
     family: "ElevenLabs",
     label: "ElevenLabs v3",
     series: "ElevenLabs",
-    description: "Latest ElevenLabs TTS — supports [audio tags] for emotion / pacing. Direct API.",
+    description: "Expressive ElevenLabs TTS — supports [audio tags] for emotion / pacing. Direct API.",
     useCases: ["tts", "voice-over", "narration", "expressive"],
     features: ["audio-tags", "voice-cloning"],
     pricing: [{ identifier: "elevenlabs-v3", credits: 30 }],
@@ -2494,6 +2494,29 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
       levers: ["stability"],
       languageCode: true,
       maxChars: 5000, // official cap (probed: 5,200 chars accepted; keep the clamp)
+      languages: TTS_LANGS_V3,
+    },
+  },
+  "elevenlabs-v4": {
+    id: "elevenlabs-v4",
+    kind: "audio",
+    modes: ["tts"] as const,
+    family: "ElevenLabs",
+    label: "ElevenLabs v4",
+    series: "ElevenLabs",
+    description: "Newest ElevenLabs TTS — [audio tags], stability and similarity control, up to 10,000 characters per request. Direct API.",
+    useCases: ["tts", "voice-over", "narration", "expressive", "long-form"],
+    features: ["audio-tags", "voice-cloning"],
+    pricing: [{ identifier: "elevenlabs-v4", credits: 30 }],
+    tts: {
+      audioTags: true,
+      ssmlBreaks: false,
+      levers: ["stability", "similarity"],
+      languageCode: true,
+      maxChars: 10000,
+      // The curated picker, the same 46 as v3. The model itself lists 85
+      // (it adds e.g. Cantonese, Maltese, Mongolian, Burmese, Uzbek); widening
+      // the picker is its own change — it needs a name and a translation per language.
       languages: TTS_LANGS_V3,
     },
   },

@@ -456,6 +456,17 @@ describe("text-to-speech handler", () => {
     },
   )
 
+  it("elevenlabs-v4 routes direct as v4 and keeps its tags (it performs them)", async () => {
+    const job = makeJob("text-to-speech", { text: "Hello [whispers]", provider: "elevenlabs-v4", voice: "Rachel", voiceType: "premade" })
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockDirectElevenLabsTTS).toHaveBeenCalledWith(
+      "Hello [whispers]", "Rachel", "elevenlabs-v4",
+      expect.objectContaining({ allowDefaultVoiceFallback: false }),
+    )
+    expect(mocks.mockStripAudioTags).not.toHaveBeenCalled()
+  })
+
   it("defaults an absent provider to elevenlabs-v3 (direct), tags NOT stripped", async () => {
     const job = makeJob("text-to-speech", { text: "no provider given [whispers]" })
     await handler(job as never, makeCtx())

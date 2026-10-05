@@ -1215,6 +1215,7 @@ export type MotionTransferProviderType = typeof MOTION_TRANSFER_PROVIDERS[number
 /** Text-to-speech providers */
 export const TTS_PROVIDERS = [
   "elevenlabs-v3",
+  "elevenlabs-v4",
   "elevenlabs-turbo",
   "elevenlabs-multilingual",
   "elevenlabs",

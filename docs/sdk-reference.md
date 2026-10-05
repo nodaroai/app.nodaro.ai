@@ -1679,8 +1679,9 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > **Text to Speech provider default.** `run("text-to-speech", …)` and
 > `runAndWait("text-to-speech", …)` default `provider` to `elevenlabs-v3`
 > when omitted — but only when `text` is within v3's per-request cap
-> (3,000 chars; see the per-model caps table in the
-> [Text to Speech node docs](nodes/ai-audio/text-to-speech.md)). Text longer
+> (5,000 chars; see the per-model caps table in the
+> [Text to Speech node docs](nodes/ai-audio/text-to-speech.md) — an explicit
+> `provider: "elevenlabs-v4"` takes up to 10,000). Text longer
 > than that without an explicit `provider` falls back to `elevenlabs-turbo`
 > (cap 40,000) instead, so legacy integrations that always omit `provider`
 > don't get silently truncated by v3's tighter cap. An explicit `provider` is

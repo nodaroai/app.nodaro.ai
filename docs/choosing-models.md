@@ -179,7 +179,8 @@ Text-to-speech, voice design/changing, dubbing, sound effects, transcription, an
 | ElevenLabs Dialogue v3 | ElevenLabs | Everyday | 25 | dialogue | Multi-speaker dialogue via the direct ElevenLabs API — give it a script, it voices each role (any voice: premade, library, or cloned). |
 | ElevenLabs Forced Alignment | ElevenLabs | Everyday | 30 | forced-alignment | Align an existing transcript to audio with word-level timestamps. |
 | ElevenLabs Multilingual v2 | ElevenLabs | Everyday | 30 | tts | Multi-language ElevenLabs TTS via the direct ElevenLabs API. |
-| ⭐ ElevenLabs v3 | ElevenLabs | Everyday | 30 | tts | Latest ElevenLabs TTS — supports [audio tags] for emotion / pacing. Direct API. |
+| ⭐ ElevenLabs v3 | ElevenLabs | Everyday | 30 | tts | Expressive ElevenLabs TTS — supports [audio tags] for emotion / pacing. Direct API. |
+| ElevenLabs v4 | ElevenLabs | Everyday | 30 | tts | Newest ElevenLabs TTS — [audio tags], stability and similarity control, up to 10,000 characters per request. Direct API. |
 | Suno v4 | Suno | Everyday | 30 | music | Suno v4 music generation — full songs with vocals, multiple genres. |
 | Suno v5 | Suno | Everyday | 30 | music | Suno v5 — better vocal quality than v4, more genres. Same price. |
 | Suno v5.5 | Suno | Everyday | 30 | music | Suno v5.5 — improved audio quality and expressiveness over v5. |

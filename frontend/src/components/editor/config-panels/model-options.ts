@@ -621,7 +621,8 @@ export const LIP_SYNC_MODELS: readonly { value: LipSyncProvider; label: string; 
 ]
 
 export const TTS_MODELS: readonly { value: string; label: string; desc: string }[] = [
-  { value: "elevenlabs-v3", label: "ElevenLabs v3", desc: "Latest, supports audio tags for emotions" },
+  { value: "elevenlabs-v3", label: "ElevenLabs v3", desc: "Expressive, supports audio tags for emotions" },
+  { value: "elevenlabs-v4", label: "ElevenLabs v4", desc: "Newest, supports audio tags, up to 10,000 characters" },
   { value: "elevenlabs-turbo", label: "ElevenLabs Turbo v2.5", desc: "Fast generation, 32 languages" },
   { value: "elevenlabs-multilingual", label: "ElevenLabs Multilingual v2", desc: "29 languages, natural delivery" },
 ]

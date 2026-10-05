@@ -8117,6 +8117,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
         key: "provider", label: "Model", type: "select" as const,
         options: [
           { value: "elevenlabs-v3", label: "ElevenLabs v3 (recommended)" },
+          { value: "elevenlabs-v4", label: "ElevenLabs v4" },
           { value: "elevenlabs-turbo", label: "ElevenLabs Turbo v2.5 (fast)" },
           { value: "elevenlabs-multilingual", label: "ElevenLabs Multilingual v2" },
         ],
