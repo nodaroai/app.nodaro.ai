@@ -42,6 +42,7 @@ import {
   type GraphEdge,
   type GraphNode,
 } from "@/lib/edit-plan-estimate"
+import { editPlanOutputOf } from "@/lib/edit-plan-saved-output"
 
 /** The clip length priced when the node sets no target. The planner is given no
  *  length in that case, so this is an assumption about typical clips, not a
@@ -90,7 +91,8 @@ export const EDL_LENGTH_PRESERVING_TYPES: ReadonlySet<string> = new Set(["camera
 
 /**
  * The EDL a producer holds on the canvas — what its `edl` output would deliver
- * now: `generatedJson`, the field the `json`/`edl` output handles read. A clips
+ * now: `generatedJson`, the field the `json`/`edl` output handles read; for an
+ * Edit Plan, with the person's review applied (`editPlanOutputOf`). A clips
  * plan is a bare `Edl[]`. A length-preserving producer holds `{ edl, transcript }`
  * per run and, run once per clip, the whole batch on `__listResults`
  * (`generatedJson` is then only whichever clip finished last). The estimate's
@@ -99,6 +101,9 @@ export const EDL_LENGTH_PRESERVING_TYPES: ReadonlySet<string> = new Set(["camera
  */
 export function persistedEdlPlan(producer: GraphNode): unknown {
   const data = dataOf(producer)
+  // An Edit Plan holds its plan as the person's review leaves it (TA13): the
+  // edited cut, or the KEPT clips only — what the render will be handed.
+  if (producer.type === "edit-plan") return editPlanOutputOf(data)?.json
   const held = data.generatedJson
   if (!EDL_LENGTH_PRESERVING_TYPES.has(producer.type ?? "")) return held
   const batch = Array.isArray(data.__listResults) && data.__listResults.length > 0 ? (data.__listResults as unknown[]) : undefined

@@ -2,10 +2,11 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { proShotStills } from "@/lib/scene3d/pro-media-result";
 import { readSunoIds } from "@/lib/suno-ids";
 import { getParameterPromptHint } from "@nodaro/prompts"
-import { DYNAMIC_PRODUCER_TYPES, DEFAULT_CHARACTER_FACET, PARAMETER_NODE_TYPES, getParameterValue, OBJECT_PICKER_NODE_TYPES, parseGroupHandle, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, editPlanSourceDurationSec, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, FAN_OUT_EACH_TYPES, FAN_OUT_EACH_HANDLES, defaultEdgeOutputMode, listResultsServeHandle, compactWithRows, liveRowColumn, resolveListFanOut, type FanOutCandidate, type ListFanOut, extractAllGeneratedResults, extractGeneratedJsonAsList, splitGeneratedItems, SOCIAL_POST_NODE_TYPES, resolveSourceThroughConnectedList, VARIABLES_HANDLE_ID, extractReferencedLabels, canonicalVarName, characterMentionSlug, SUNO_TRACK_SOURCE_TYPES, isFanInEdge, isFanInNodeType, videoLinkPageUrl, socialSearchPostVideo, ownsItsList, savedRenderBatchUrls } from "@nodaro/shared"
+import { DYNAMIC_PRODUCER_TYPES, DEFAULT_CHARACTER_FACET, PARAMETER_NODE_TYPES, getParameterValue, OBJECT_PICKER_NODE_TYPES, parseGroupHandle, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, editPlanSourceDurationSec, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, FAN_OUT_EACH_TYPES, FAN_OUT_EACH_HANDLES, defaultEdgeOutputMode, listResultsServeHandle, compactWithRows, pickHeldRow, liveRowColumn, resolveListFanOut, type FanOutCandidate, type ListFanOut, extractAllGeneratedResults, extractGeneratedJsonAsList, splitGeneratedItems, SOCIAL_POST_NODE_TYPES, resolveSourceThroughConnectedList, VARIABLES_HANDLE_ID, extractReferencedLabels, canonicalVarName, characterMentionSlug, SUNO_TRACK_SOURCE_TYPES, isFanInEdge, isFanInNodeType, videoLinkPageUrl, socialSearchPostVideo, ownsItsList, savedRenderBatchUrls } from "@nodaro/shared"
 import type { EntityKind, ConnectedReference } from "@nodaro/shared"
 import { VIDEO_OVERLAY_LAYER_PLAN_HANDLE, videoOverlaySlotOfHandle, editPlanTranscriptOrigin } from "@nodaro/shared"
 import { buildNodeRefMap, resolveTextRefs } from "@/lib/node-refs";
+import { editPlanOutputOf } from "@/lib/edit-plan-saved-output";
 import type {
   WorkflowNode,
   WorkflowEdge,
@@ -916,6 +917,14 @@ export function extractNodeOutputAsList(
     const batch = data.__listResults as string[] | undefined;
     return Array.isArray(batch) && batch.length > 0 ? batch : undefined;
   }
+  // An Edit Plan lists its clips as the person's review leaves them (TA13): the
+  // PLAN's rows, "" at every dropped clip (TA16) — never the raw plan, and never
+  // a `__listResults` an older server run persisted. A Tighten or Chapters plan
+  // lists nothing. The server reads it the same way (saved-data.ts savedListFor).
+  if (node.type === "edit-plan") {
+    const list = editPlanOutputOf(data)?.listResults;
+    return list && list.length > 0 ? list : undefined;
+  }
   // Generate Text (llm-chat) `items` handle: fan-out list = the LLM result
   // split on the ===NEXT=== delimiter (shared splitGeneratedItems, identical to
   // the backend output-extractor). The default/`text` handle is intentionally
@@ -1310,6 +1319,11 @@ export function resolveNodeInputs(
       ? extractNodeOutputAsList(src, resolvedSourceHandle ?? undefined)
       : src.type === "split-media"
         ? undefined
+        // An Edit Plan's list is its reviewed clips (extractNodeOutputAsList),
+        // read BEFORE the generic `__listResults` below, which may still hold
+        // the planner's clips from an older server run.
+        : src.type === "edit-plan"
+        ? extractNodeOutputAsList(src, resolvedSourceHandle ?? undefined)
         : src.type === "selector"
           ? (resolvedSourceHandle === "rest"
               ? ((srcData.__restResults as string[] | undefined) ?? (srcData.restResults as string[] | undefined))
@@ -1362,7 +1376,18 @@ export function resolveNodeInputs(
     // Set when this wire's list HAS the current row and the cell is empty: the
     // wire then contributes nothing for the row (no scalar fallback below).
     let rowIsEmpty = false;
-    if (edgeMode && srcListResults && srcListResults.length > 0) {
+    // An Edit Plan's clips as the person's review leaves them hold "" at every
+    // dropped clip (TA16). A wire that picks rows of them without iterating (a
+    // selector that leaves one kept clip or none, an item pick) reads the kept
+    // clip it selects, or nothing — never the scalar below, which is the plan's
+    // FIRST kept clip, one this wire may not have selected. Shared with the
+    // server engine (`pickHeldRow`, backend input-resolver.ts).
+    if (src.type === "edit-plan" && srcListResults && srcListResults.length > 0) {
+      const pick = pickHeldRow(srcListResults, srcEdge.data as SelectorFields | undefined, listIterationIndex !== undefined);
+      if (pick.kind === "none") continue;
+      if (pick.kind === "value") output = pick.value;
+    }
+    if (!output && edgeMode && srcListResults && srcListResults.length > 0) {
       if (edgeMode === "item") {
         // Structured item mode: use resolveIndex on itemIndex expression
         const itemIndex = (srcEdge.data as Record<string, unknown> | undefined)

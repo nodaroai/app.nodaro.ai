@@ -18,6 +18,7 @@ import type {
   DescribeToPickerData,
   TranscribeData,
 } from "@/types/nodes";
+import { editPlanOutputOf } from "@/lib/edit-plan-saved-output";
 import { entityActiveImageUrl } from "@/lib/entity-output-url";
 
 export function buildExecutionLevels(
@@ -827,8 +828,10 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     return value === undefined || value === null ? undefined : JSON.stringify(value);
   }
   if (type === "edit-plan") {
-    const d = node.data as { generatedJson?: unknown };
-    const plan = d.generatedJson;
+    // The plan as the person's review leaves it (TA13): a clip set holds the
+    // KEPT clips only, so this is the first kept clip. Mirrors the server's
+    // saved seed (output-extractor.ts, editPlanSavedOutput).
+    const plan = editPlanOutputOf(node.data as Record<string, unknown>)?.json;
     if (plan === undefined || plan === null) return undefined;
     if (Array.isArray(plan)) return plan.length > 0 ? JSON.stringify(plan[0]) : undefined;
     return JSON.stringify(plan);

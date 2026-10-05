@@ -25,7 +25,7 @@ import { EXECUTION_DATA_KEYS } from "@nodaro/shared"
 import { SAVED_RESULT_FIELDS } from "../saved-data.js"
 
 const SRC = join(__dirname, "..", "..", "..")
-const READERS = ["extractSavedNodeOutput", "extractAllGeneratedResults", "extractGeneratedJsonAsList", "extractSavedTextFallback", "readSunoIdsFromData", "savedRenderOutput", "savedRenderBatch", "savedRenderBatchUrls"]
+const READERS = ["extractSavedNodeOutput", "extractAllGeneratedResults", "extractGeneratedJsonAsList", "extractSavedTextFallback", "readSunoIdsFromData", "editPlanSavedOutput", "savedRenderOutput", "savedRenderBatch", "savedRenderBatchUrls"]
 const CALL = new RegExp(String.raw`(?<!function )\b(?:${READERS.join("|")})\(`, "g")
 const FIELDS = [...SAVED_RESULT_FIELDS].join("|")
 const FIELD_READ = new RegExp(
@@ -49,8 +49,8 @@ const EXPECTED: Record<string, { count: number; why: string }> = {
     ].join("; "),
   },
   "services/workflow-engine/output-extractor.ts": {
-    count: 3,
-    why: "calls: extractPrimaryNodeOutput (reached only through memberOutput's savedDataAllowed) and savedOutputFor; savedRenderOutput, Apply EDL's saved take inside extractSourceNodeOutput (reached only through those two)",
+    count: 4,
+    why: "calls: extractPrimaryNodeOutput (reached only through memberOutput's savedDataAllowed) and savedOutputFor; editPlanSavedOutput inside extractSavedNodeOutput (the saved-output reader itself: an Edit Plan's plan with the person's review applied); savedRenderOutput, Apply EDL's saved take inside extractSourceNodeOutput (reached only through those two)",
   },
   "services/workflow-engine/payload-builder.ts": {
     count: 5,
@@ -66,8 +66,8 @@ const EXPECTED: Record<string, { count: number; why: string }> = {
     why: "calls: Extract Field and JSON Process text fallback (both behind savedDataAllowed); fields: extractSavedTextFallback itself",
   },
   "services/workflow-engine/saved-data.ts": {
-    count: 4,
-    why: "calls: savedListFor, the reader itself (behind savedDataAllowed) — its history read, its render branch (savedRenderBatchUrls: Apply EDL's latest batch), and Extract Field / JSON Process's JSON value beside the generic one",
+    count: 5,
+    why: "calls: savedListFor, the reader itself (behind savedDataAllowed) — its history read, an Edit Plan's list through editPlanSavedOutput (never the raw plan), its render branch (savedRenderBatchUrls: Apply EDL's latest batch), and Extract Field / JSON Process's JSON value beside the generic one",
   },
   "services/workflow-engine/scene3d-reference-scoping.ts": { count: 1, why: "calls: layout references, behind savedDataAllowed" },
   "workers/orchestrator-worker.ts": { count: 2, why: "calls: seeding a frozen / outside-the-subset node's state (seededFromSavedData)" },

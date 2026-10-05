@@ -2,12 +2,13 @@ import type { WorkflowNode, WorkflowEdge, GenerateVideoProNodeData, EditVideoPro
 import { StorageExceededError, SubscriptionRequiredError } from "@/lib/api";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { resolveApplyEdlEstimateMinutes } from "@/lib/apply-edl-estimate";
+import { editPlanOutputOf } from "@/lib/edit-plan-saved-output";
 import { videoUtilityPricingUnits } from "@/lib/video-utility-estimate";
 import { extendVideoPricingUnits } from "@/lib/extend-video-estimate";
 import { videoRetakePricingUnits } from "@/lib/video-retake-estimate";
 import { audioSyncCreditId, audioSyncWiredSourceCount } from "@/lib/audio-sync";
 import { wiredSocialPostsVideoSec } from "@/lib/video-analysis-handles";
-import { buildMotionCreditModelIdentifier, isDefaultSelectorConfig, selectListItems, type SelectorFields, getEffectiveRepeatCount, buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, bucketSecondsFromCreditId, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAuditCreditId, VIDEO_AUDIT_BUCKET_CREDITS, FAN_OUT_EACH_TYPES, FAN_OUT_EACH_HANDLES, defaultEdgeOutputMode, listResultsServeHandle, EDIT_PLAN_DEFAULT_CLIP_COUNT, EDIT_PLAN_MAX_CLIP_COUNT, buildVideoCreditModelIdentifier, SEEDANCE_2_CONTINUATION_REF_SEC, isSeedance2Provider, isMinimaxH3Provider, maxSegmentSecFor, normalizeMinimaxH3Resolution, PRO3D_RENDER_CREDIT_ID, withWiredSettings, FAN_IN_TARGETS, contentRecipeCreditId, contentIdeasCreditId, clampContentIdeasCount, SOCIAL_SEARCH_CREDIT_COSTS, socialSearchCreditIdFromNode, socialPostsFrom, socialSearchPickTop, isSocialSearchPickFrozen, applyEdlCreditId } from "@nodaro/shared"
+import { buildMotionCreditModelIdentifier, isDefaultSelectorConfig, selectListItems, type SelectorFields, getEffectiveRepeatCount, buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, bucketSecondsFromCreditId, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAuditCreditId, VIDEO_AUDIT_BUCKET_CREDITS, FAN_OUT_EACH_TYPES, FAN_OUT_EACH_HANDLES, defaultEdgeOutputMode, listResultsServeHandle, EDIT_PLAN_DEFAULT_CLIP_COUNT, EDIT_PLAN_MAX_CLIP_COUNT, buildVideoCreditModelIdentifier, SEEDANCE_2_CONTINUATION_REF_SEC, isSeedance2Provider, isMinimaxH3Provider, maxSegmentSecFor, normalizeMinimaxH3Resolution, PRO3D_RENDER_CREDIT_ID, withWiredSettings, FAN_IN_TARGETS, contentRecipeCreditId, contentIdeasCreditId, clampContentIdeasCount, SOCIAL_SEARCH_CREDIT_COSTS, socialSearchCreditIdFromNode, socialPostsFrom, socialSearchPickTop, isSocialSearchPickFrozen, applyEdlCreditId, compactWithRows } from "@nodaro/shared"
 // getCachedCredits reads the live React-Query model-cost cache (an `ee/`
 // concern — credits are enterprise-only). Allowlisted in
 // tools/check-ee-imports.mjs (same coupling as ./run-handlers.ts).
@@ -927,6 +928,8 @@ export function getCostMultiplier(
  * mode. When the planner is NOT re-running, its persisted plan is what iterates —
  * exact. When it re-plans, it returns UP TO `count` clips, so the setting is the
  * figure; a persisted plan holding more is still honoured, never under-counted.
+ * A persisted clip set counts its KEPT clips the edge selects: 0 when it
+ * selects none, since nothing renders.
  */
 function editPlanClipFanOut(
   data: Record<string, unknown>,
@@ -935,20 +938,27 @@ function editPlanClipFanOut(
 ): number {
   const plan = data.generatedJson;
   const persisted = Array.isArray(plan) ? plan.length : 0;
-  let clips: number;
   if (!replans && plan !== undefined && plan !== null) {
     // Both engines fan out on the SHAPE of the persisted plan, not on the node's
     // current `mode` — the user may have switched mode without re-running. An
     // array iterates; an object (tighten / chapters) runs once.
     if (persisted === 0) return 1;
-    clips = persisted;
-  } else {
-    // Re-planning — or no plan yet (a fresh template): what the settings ask for,
-    // the same fallback the minutes resolver takes in that state.
-    if (data.mode !== "clips") return 1;
-    const raw = typeof data.count === "number" && data.count > 0 ? Math.floor(data.count) : EDIT_PLAN_DEFAULT_CLIP_COUNT;
-    clips = Math.max(Math.min(EDIT_PLAN_MAX_CLIP_COUNT, Math.max(1, raw)), persisted);
+    // The clips as the person's review leaves them: the PLAN's rows, "" at
+    // every dropped clip (TA13, TA16). The edge's range / list selector picks
+    // rows of the plan, and only the kept clips among them run — what both
+    // engines' fan-out does with the same list. None kept (by the review or by
+    // the selection) is 0: the wire carries no clip, so nothing renders
+    // (`pickHeldRow` in @nodaro/shared, on both engines).
+    const rows = editPlanOutputOf(data)?.listResults ?? [];
+    const picked = isDefaultSelectorConfig(selector) ? rows : selectListItems(rows, selector);
+    return compactWithRows(picked).items.length;
   }
+  // Re-planning — or no plan yet (a fresh template): what the settings ask for,
+  // the same fallback the minutes resolver takes in that state. A re-plan
+  // replaces any review, so the count is the planner's.
+  if (data.mode !== "clips") return 1;
+  const raw = typeof data.count === "number" && data.count > 0 ? Math.floor(data.count) : EDIT_PLAN_DEFAULT_CLIP_COUNT;
+  const clips = Math.max(Math.min(EDIT_PLAN_MAX_CLIP_COUNT, Math.max(1, raw)), persisted);
   // The edge may carry a range / list selector ("first 3 clips") that both
   // engines honour — count what it keeps, exactly as the `list` branches do.
   const kept = fanOutCount(Array.from({ length: clips }, (_, i) => String(i + 1)), selector);
@@ -1055,7 +1065,8 @@ function inheritedClipFanOut(
         rerunIds.has(upstream.id),
         edge.data as SelectorFields | undefined,
       );
-      if (n > 1) return n;
+      // 0: no kept clip reaches this chain, so nothing after it runs.
+      if (n !== 1) return n;
       continue;
     }
     if ((explicit ?? defaultEdgeOutputMode(upstream.type, edge.sourceHandle)) !== "each") continue;
@@ -1064,9 +1075,29 @@ function inheritedClipFanOut(
     const held = heldBatchFanOut(upstream, rerunIds);
     if (held > 1) return held;
     const n = inheritedClipFanOut(upstream, allNodes, edges, rerunIds, visited);
-    if (n > 1) return n;
+    if (n !== 1) return n;
   }
   return 1;
+}
+
+/** An Each wire whose producer emits nothing on it: 0 runs, read the way
+ *  `getBaseFanOut` reads the same wire (a fan-out producer, else a clips chain
+ *  it inherits). */
+function eachWireCarriesNothing(
+  edge: WorkflowEdge,
+  allNodes: WorkflowNode[],
+  edges: WorkflowEdge[],
+  rerunIds: ReadonlySet<string>,
+): boolean {
+  const sourceNode = allNodes.find((n) => n.id === edge.source);
+  if (!sourceNode) return false;
+  const edgeData = edge.data as Record<string, unknown> | undefined;
+  const mode = (edgeData?.outputMode as string | undefined) ?? defaultEdgeOutputMode(sourceNode.type, edge.sourceHandle);
+  if (mode !== "each") return false;
+  const producer = PRODUCER_FAN_OUT[sourceNode.type ?? ""] ?? EACH_WIRE_FAN_OUT[sourceNode.type ?? ""];
+  if (producer) return producer(sourceNode.data as Record<string, unknown>, rerunIds.has(sourceNode.id), edgeData as SelectorFields | undefined) === 0;
+  if (!listResultsServeHandle(sourceNode.type, edge.sourceHandle) || heldBatchFanOut(sourceNode, rerunIds) > 1) return false;
+  return inheritedClipFanOut(sourceNode, allNodes, edges, rerunIds, new Set()) === 0;
 }
 
 function getBaseFanOut(
@@ -1076,6 +1107,12 @@ function getBaseFanOut(
   rerunIds: ReadonlySet<string>,
 ): number {
   const incomingEdges = edges.filter((e) => e.target === node.id);
+
+  // A wire that carries nothing (an Edit Plan whose review or selection keeps
+  // no clip) means the node does not run, whatever another wire lists. Checked
+  // over every wire BEFORE any count, so the answer never depends on the order
+  // the wires were drawn in.
+  if (incomingEdges.some((edge) => eachWireCarriesNothing(edge, allNodes, edges, rerunIds))) return 0;
 
   for (const edge of incomingEdges) {
     const sourceNode = allNodes.find((n) => n.id === edge.source);

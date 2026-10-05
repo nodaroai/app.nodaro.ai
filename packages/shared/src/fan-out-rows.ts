@@ -17,6 +17,7 @@
  */
 import { evaluateJsonPath, stringifyPathResults } from "./json-path.js"
 import { expandItemsWithRepeat } from "./repeat-types.js"
+import { isDefaultSelectorConfig, resolveIndex, selectListItems, type SelectorFields } from "./selector.js"
 
 /**
  * The text LANES the input resolvers route somewhere OTHER than the prompt slot
@@ -75,6 +76,48 @@ export function compactWithRows(aligned: readonly string[]): { items: string[]; 
     rowIndices.push(row)
   })
   return { items, rowIndices }
+}
+
+/** What a wire reads off a list with holes when it reads ONE value (`pickHeldRow`). */
+export type HeldRowPick =
+  /** This read is not one the holes change: the engine's own rule stands. */
+  | { readonly kind: "unaffected" }
+  /** The wire carries this value. */
+  | { readonly kind: "value"; readonly value: string }
+  /** The wire carries nothing (no scalar fallback). */
+  | { readonly kind: "none" }
+
+/**
+ * One value off a ROW-ALIGNED list whose empty rows mean "nothing here" (an
+ * Edit Plan's clips as a person's review leaves them: the plan's rows, "" at
+ * every dropped clip), for a wire that does not iterate it.
+ *
+ * Without this, both engines fall back to the source's scalar output (the
+ * FIRST kept row of the whole list) whenever the wire's own pick is empty, so
+ * a wire could carry a row it never selected:
+ *   - an Each wire with a range / list selector, outside its fan-out (the
+ *     selection holds one kept row, or none, so nothing fans out): the first
+ *     kept row OF THE SELECTION, or nothing when it holds none;
+ *   - an item pick (`item` / `item:N`), in a fan-out or not: the picked row, or
+ *     nothing when it is empty.
+ * Every other read is `unaffected`: a default Each wire (its scalar IS the
+ * first kept row), Selected (`last`), Bundle (`all`), an Each wire inside its
+ * fan-out (the iteration reads its own row, and an empty row runs nothing),
+ * and an empty list. Both engines call this, so they cannot disagree.
+ */
+export function pickHeldRow(
+  rows: readonly string[],
+  edge: (SelectorFields & { outputMode?: string; itemIndex?: string }) | undefined,
+  iterating: boolean,
+): HeldRowPick {
+  if (rows.length === 0) return { kind: "unaffected" }
+  const mode = edge?.outputMode ?? "each"
+  const held = (row: string | undefined): HeldRowPick => (isBlank(row) ? { kind: "none" } : { kind: "value", value: row! })
+  if (mode === "item") return held(rows[resolveIndex(edge?.itemIndex ?? "1", rows.length)])
+  if (mode.startsWith("item:")) return held(rows[parseInt(mode.slice(5), 10)])
+  if (mode !== "each" || iterating || isDefaultSelectorConfig(edge)) return { kind: "unaffected" }
+  const kept = compactWithRows(selectListItems([...rows], edge)).items
+  return kept.length > 0 ? { kind: "value", value: kept[0]! } : { kind: "none" }
 }
 
 /**

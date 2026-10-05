@@ -6,6 +6,7 @@ import type { WardrobeValue, TransitionPosition, TransitionDuration, TransitionI
 import type { ReferencePhotoKind } from "@/lib/reference-photo-routing"
 import { IMAGE_STYLE_PRESETS, GVP_PROVIDERS, getAspectRatiosForVideoModel, getVideoResolutionOptions } from "@/components/editor/config-panels/model-options"
 import type { FrameFit, FrameDelivery } from "@nodaro/shared"
+import type { EditedEdl } from "@nodaro/shared"
 import type { ScheduleRule } from "@nodaro/shared"
 import type { VideoOverlayFit, VideoOverlayLayerInput, VideoOverlayOutputAspect, VideoOverlayWarning } from "@nodaro/shared"
 
@@ -5792,6 +5793,12 @@ export type EditPlanNodeData = PromptAffixFields & {
   /** The EDL plan (already unwrapped by the extractors): an Edl for tighten, a
    *  bare Edl[] for clips (fans out), or a { version, chapters } for chapters. */
   generatedJson?: unknown
+  /** A person's review of `generatedJson` (TA13): a Tighten cut, or a keep /
+   *  hook decision per clip, fingerprinted with the plan it was made on. Run
+   *  result data (TA14). Read only through `editPlanOutputOf`, which applies
+   *  it; a different plan landing clears it, the same plan keeps it
+   *  (`editPlanResultPatch`, decided 2026-10-05). */
+  editedEdl?: EditedEdl
 }
 
 /** camera-switch (podcast B5, decided 2026-10-03) — WHO is on screen, from who

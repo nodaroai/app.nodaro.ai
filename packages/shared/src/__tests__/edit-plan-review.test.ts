@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   EDITED_EDL_VERSION,
   editPlanBasis,
+  editPlanResultPatch,
   editPlanSavedOutput,
   resolveEditPlanOutput,
   validateEditedEdl,
@@ -108,6 +109,26 @@ describe("editPlanBasis — FNV-1a-64 over key-sorted JSON (TA13)", () => {
 
   it("ignores undefined-valued keys, as the stored JSON does", () => {
     expect(editPlanBasis({ ...TIGHTEN, derivedFrom: undefined })).toBe(editPlanBasis(TIGHTEN))
+  })
+
+  it("hashes a plan object once: a later edit of the same plan reuses its basis", () => {
+    // Each review keystroke makes a new `editedEdl` object over the SAME plan
+    // object, and both engines read a saved plan many times in one run; none of
+    // them may walk the whole plan again (about 20 ms on a large one). A
+    // counting getter sees every walk.
+    let reads = 0
+    const counted = Object.defineProperty({ ...CLIPS[0] }, "meta", {
+      get: () => (reads++, { title: "counted" }),
+      enumerable: true,
+    })
+    const plan = [counted, CLIPS[1]]
+    const first = editPlanBasis(plan)
+    expect(reads).toBe(1)
+    expect(editPlanBasis(plan)).toBe(first)
+    expect(validateEditedEdl({ v: EDITED_EDL_VERSION, kind: "clips", basis: first, clips: [{ keep: true }, { keep: false }] }, plan).ok).toBe(true)
+    expect(reads).toBe(1)
+    // A copy is another object: hashed on its own, to the same value.
+    expect(editPlanBasis(JSON.parse(JSON.stringify(plan)))).toBe(first)
   })
 })
 
@@ -363,6 +384,55 @@ describe("editedEdl is run-result data (TA14)", () => {
 
   it("is persisted: not transient run state", () => {
     expect(TRANSIENT_RUNTIME_KEYS.has("editedEdl")).toBe(false)
+  })
+})
+
+// ── A landing plan keeps an edit made on the same plan (decided 2026-10-05) ──
+
+describe("editPlanResultPatch — what a result writer writes when a plan lands", () => {
+  it("lands the plan", () => {
+    expect(editPlanResultPatch(TIGHTEN, undefined).generatedJson).toBe(TIGHTEN)
+  })
+
+  it("keeps an edit made on the same plan: the patch never names editedEdl", () => {
+    const edit = cutEdit(TIGHTEN, { segments: [], dropped: [] })
+    const patch = editPlanResultPatch(TIGHTEN, edit)
+    expect(patch).toEqual({ generatedJson: TIGHTEN })
+    expect(Object.prototype.hasOwnProperty.call(patch, "editedEdl")).toBe(false)
+  })
+
+  it("keeps it when the same plan comes back as another object (a reload, a JSONB round trip)", () => {
+    const edit = clipsEdit(CLIPS, [{ keep: true }, { keep: false }, { keep: true }])
+    const again = reverseKeysDeep(JSON.parse(JSON.stringify(CLIPS)))
+    expect(Object.prototype.hasOwnProperty.call(editPlanResultPatch(again, edit), "editedEdl")).toBe(false)
+  })
+
+  it("clears an edit made on a different plan", () => {
+    const edit = cutEdit(TIGHTEN, { segments: [], dropped: [] })
+    const replanned = { ...TIGHTEN, dropped: [] }
+    const patch = editPlanResultPatch(replanned, edit)
+    expect(patch).toEqual({ generatedJson: replanned, editedEdl: undefined })
+    expect(Object.prototype.hasOwnProperty.call(patch, "editedEdl")).toBe(true)
+  })
+
+  it("clears a clip review when the re-plan changes the clip set", () => {
+    const edit = clipsEdit(CLIPS, [{ keep: true }, { keep: false }, { keep: true }])
+    expect(editPlanResultPatch(CLIPS.slice(0, 2), edit)).toHaveProperty("editedEdl", undefined)
+  })
+
+  it.each([
+    ["no basis", { v: 1, kind: "edl", edl: { segments: [], dropped: [] } }],
+    ["an empty basis", { v: 1, kind: "edl", basis: "", edl: { segments: [], dropped: [] } }],
+    ["junk", "nope"],
+    ["null", null],
+  ])("clears an edit with %s (it names no plan)", (_name, edited) => {
+    expect(Object.prototype.hasOwnProperty.call(editPlanResultPatch(TIGHTEN, edited), "editedEdl")).toBe(true)
+  })
+
+  it("an edit kept by the patch still applies to the plan that landed", () => {
+    const edit = clipsEdit(CLIPS, [{ keep: false }, { keep: true }, { keep: false }])
+    const landed = { editedEdl: edit, ...editPlanResultPatch(CLIPS, edit) }
+    expect(editPlanSavedOutput(landed)?.json).toEqual([CLIPS[1]])
   })
 })
 

@@ -12,7 +12,7 @@ import type {
 } from "./types.js"
 import { extractSourceNodeOutput, extractSourceNodeOutputAsList, extractSavedNodeOutput, extractAllGeneratedResults, extractVideoDurationFromNode, getPrimaryOutput, savedOutputFor, ANALYSIS_PRODUCER_TYPES, type ExtractContext } from "./output-extractor.js"
 import {
-  pro3DRenderShotStills, extractGeneratedJsonAsList, splitGeneratedItems, resolveNodeRefs, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, SOCIAL_POST_NODE_TYPES, PARAMETER_NODE_TYPES, getParameterValue, FAN_OUT_EACH_TYPES, FAN_OUT_EACH_HANDLES, defaultEdgeOutputMode, listResultsServeHandle, compactWithRows, liveRowColumn, resolveListFanOut, type FanOutCandidate, type ListFanOut, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES, editPlanSourceDurationSec, extractReferencedLabels, canonicalVarName, REFERENCE_HANDLE_MAP, parseGroupHandle, SUNO_TRACK_SOURCE_TYPES, isFanInEdge, isFanInNodeType, videoLinkPageUrl, socialSearchPostVideo, ownsItsList } from "@nodaro/shared"
+  pro3DRenderShotStills, extractGeneratedJsonAsList, splitGeneratedItems, resolveNodeRefs, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, SOCIAL_POST_NODE_TYPES, PARAMETER_NODE_TYPES, getParameterValue, FAN_OUT_EACH_TYPES, FAN_OUT_EACH_HANDLES, defaultEdgeOutputMode, listResultsServeHandle, compactWithRows, pickHeldRow, liveRowColumn, resolveListFanOut, type FanOutCandidate, type ListFanOut, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES, editPlanSourceDurationSec, extractReferencedLabels, canonicalVarName, REFERENCE_HANDLE_MAP, parseGroupHandle, SUNO_TRACK_SOURCE_TYPES, isFanInEdge, isFanInNodeType, videoLinkPageUrl, socialSearchPostVideo, ownsItsList } from "@nodaro/shared"
 import { isSourceNode } from "./execution-graph.js"
 import { overlayHandleIndex } from "../../providers/image/overlay-contract.js"
 import { VIDEO_OVERLAY_LAYER_PLAN_HANDLE, videoOverlaySlotOfHandle, isTelegramAccountTriggerNamedHandle, editPlanTranscriptOrigin } from "@nodaro/shared"
@@ -246,7 +246,19 @@ export function resolveNodeInputs(
       continue
     }
 
-    if (edgeOutputMode && effectiveListResults && effectiveListResults.length > 0) {
+    // An Edit Plan's clips as the person's review leaves them hold "" at every
+    // dropped clip (TA16). A wire that picks rows of them without iterating (a
+    // selector that leaves one kept clip or none, an item pick) reads the kept
+    // clip it selects, or nothing — never the scalar below, which is the plan's
+    // FIRST kept clip, one this wire may not have selected. Shared with the
+    // browser engine (`pickHeldRow`).
+    if (sourceNode.type === "edit-plan" && effectiveListResults && effectiveListResults.length > 0) {
+      const pick = pickHeldRow(effectiveListResults, edgeData as SelectorFields | undefined, listIterationIndex != null)
+      if (pick.kind === "none") continue
+      if (pick.kind === "value") output = pick.value
+    }
+
+    if (!output && edgeOutputMode && effectiveListResults && effectiveListResults.length > 0) {
       if (edgeOutputMode === "item") {
         // Structured item mode: use resolveIndex on itemIndex expression
         const itemIndex = edgeData?.itemIndex as string | undefined
@@ -945,6 +957,17 @@ export function getListFanOutForNode(
         ? (state?.output?.restResults ?? (savedOk ? (data.restResults as string[] | undefined) : undefined))
         : (state?.output?.pickedResults ?? (savedOk ? (data.pickedResults as string[] | undefined) : undefined))
       if (channel && channel.length > 1) consider(edge, selectListItems(channel, selectorArg))
+      continue
+    }
+
+    // 3b. An Edit Plan: the clips it holds in this run, else its saved clips as
+    //     the person's review leaves them (`listFor` → `editPlanSavedOutput`):
+    //     the PLAN's rows, with "" at every dropped clip (TA13, TA16). Never the
+    //     generic fallbacks below, which re-read the raw plan and would run the
+    //     dropped clips too (one kept clip of four would fan out over all four).
+    if (sourceNode.type === "edit-plan") {
+      const items = listFor(sourceNode, state)
+      if (items && items.length > 1) consider(edge, selectListItems(items, selectorArg))
       continue
     }
 

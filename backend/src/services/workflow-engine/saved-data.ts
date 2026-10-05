@@ -26,6 +26,7 @@
  */
 import { extractAllGeneratedResults, extractGeneratedJsonAsList, FAN_OUT_EACH_HANDLES, ownsItsList, savedRenderBatchUrls } from "@nodaro/shared"
 import type { NodeExecutionState, NodeOutput, SimpleNode } from "./types.js"
+import { editPlanSavedOutput } from "@nodaro/shared"
 
 /**
  * The fields a run writes onto a node's data as its RESULTS. Reading one off a
@@ -52,6 +53,8 @@ export const SAVED_RESULT_FIELDS: ReadonlySet<string> = new Set([
   "processedResult",
   "ideaBriefs",
   "splitResults",
+  // Edit Plan's review (TA13/TA14): read only through editPlanSavedOutput.
+  "editedEdl",
 ])
 
 /** A state this run builds from the node's saved data (or its own config), not from running it. */
@@ -68,6 +71,10 @@ export function savedDataAllowed(state: NodeExecutionState | undefined): boolean
 export function savedListFor(node: SimpleNode, state: NodeExecutionState | undefined): string[] | undefined {
   if (!savedDataAllowed(state)) return undefined
   const data = node.data as Record<string, unknown>
+  // An Edit Plan lists its clips as the person's review leaves them (TA13): the
+  // PLAN's rows, "" at every dropped clip (TA16). Never the raw plan, and never
+  // a `__listResults` an older server run persisted.
+  if (node.type === "edit-plan") return editPlanSavedOutput(data)?.listResults
   // A node that runs once per upstream item (Camera Switch per clip) lists its
   // LAST batch — its accumulated history holds earlier runs' items too.
   if (Object.prototype.hasOwnProperty.call(FAN_OUT_EACH_HANDLES, node.type)) {

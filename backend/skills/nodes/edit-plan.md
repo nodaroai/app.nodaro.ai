@@ -1,7 +1,7 @@
 ---
 node_type: edit-plan
-generated_at: 2026-10-03T16:24:17.498Z
-generated_from: d7ba00fa2
+generated_at: 2026-10-05T15:27:08.173Z
+generated_from: 605638ce8
 ---
 
 # Edit Plan
@@ -37,6 +37,7 @@ generated_from: d7ba00fa2
 - `currentJobId?: string`
 - `currentJobProgress?: number`
 - `generatedJson?: unknown`
+- `editedEdl?: EditedEdl`
 
 **Default data:**
 ```json

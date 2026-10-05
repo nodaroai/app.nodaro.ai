@@ -464,12 +464,13 @@ export {
   fanOutTextFeedsPrompt,
   isFanOutUrlItem,
   compactWithRows,
+  pickHeldRow,
   liveRowColumn,
   resolveListFanOut,
   planFanOut,
   alignedFieldList,
 } from "./fan-out-rows.js"
-export type { FanOutCandidate, ListFanOut, FanOutPlan } from "./fan-out-rows.js"
+export type { FanOutCandidate, ListFanOut, FanOutPlan, HeldRowPick } from "./fan-out-rows.js"
 
 export { settledWithLimit } from "./settled-with-limit.js"
 

@@ -16,7 +16,7 @@ import {
   TEXT_SOURCE_TYPES,
 } from "./execution-graph.js"
 import {
-  pro3DRenderShotStills, COMPOSER_PLAN_MAP, COMPOSER_PLAN_FIELDS, extractAllGeneratedResults, splitGeneratedItems, aggregateByType, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member, overlayVariantIdFromHandle, featuredMetaAdOutputs, featuredInstagramOutputs, unwrapEditPlanOutput, resolveVideoLinkOutput, telegramAccountTriggerOutputs, isTelegramAccountTriggerNamedHandle, pickSocialPosts, socialPostsFrom, socialPostsDigest, FAN_OUT_EACH_HANDLES } from "@nodaro/shared"
+  pro3DRenderShotStills, COMPOSER_PLAN_MAP, COMPOSER_PLAN_FIELDS, extractAllGeneratedResults, splitGeneratedItems, aggregateByType, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member, overlayVariantIdFromHandle, featuredMetaAdOutputs, featuredInstagramOutputs, unwrapEditPlanOutput, editPlanSavedOutput, resolveVideoLinkOutput, telegramAccountTriggerOutputs, isTelegramAccountTriggerNamedHandle, pickSocialPosts, socialPostsFrom, socialPostsDigest, FAN_OUT_EACH_HANDLES } from "@nodaro/shared"
 import type { SceneData, Transcript } from "@nodaro/shared"
 import { renderResultStamp, savedRenderOutput } from "@nodaro/shared"
 import { buildScenePrompt } from "@nodaro/prompts"
@@ -824,7 +824,9 @@ export function getPrimaryOutput(
   // set, or an explicit "last"/first edge. It must NEVER stringify the ARRAY — a
   // downstream `edl` input's normalizeEdl would treat `[edl]` as an EDL with no
   // sources/segments → validateEdl 400. Emit the FIRST clip (one valid EDL), or
-  // nothing for an empty set. Mirrors the frontend extractNodeOutput branch.
+  // nothing for an empty set. A saved plan's `json` is already the person's
+  // review (`editPlanSavedOutput`, TA13): the kept clips only, so this is the
+  // first KEPT clip. Mirrors the frontend extractNodeOutput branch.
   // Camera Switch (B5): output.json is the pair { edl, transcript } — the
   // `transcript` handle carries the renamed transcript, the `edl` handle (and
   // the default) the switched edit. Mirrors the frontend extractNodeOutput.
@@ -1571,22 +1573,28 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
 
   // Edit Plan: the EDL plan is persisted (already unwrapped) on
   // data.generatedJson — the `Edl` for tighten, the bare `Edl[]` for clips, the
-  // `{version, chapters}` for chapters. Expose it on the `json` output so a
-  // skipped / "Run from here" node hydrates the `edl` handle without re-running;
-  // for the clips array, ALSO expose listResults so the fan-out has its per-item
-  // list off saved state. Mirrors the analysis json branch + the live
-  // buildNodeOutputFromJobData path.
+  // `{version, chapters}` for chapters — with a person's review of it beside
+  // it (`editedEdl`). Expose the resolved plan on the `json` output so a
+  // skipped / "Run from here" node hydrates the `edl` handle without
+  // re-running; for a clip set, ALSO expose listResults so the fan-out has its
+  // per-item list off saved state. Mirrors the analysis json branch + the live
+  // buildNodeOutputFromJobData path (a plan this run made carries no review).
   // Camera Switch: data.generatedJson is the { edl, transcript } pair.
   if (type === "camera-switch") {
     const json = data.generatedJson
     return json === undefined ? undefined : { json }
   }
 
+  // The person's review wins (`editedEdl`, TA13): `editPlanSavedOutput` is the
+  // one read of a saved plan on both engines. With no edit it is the plan as
+  // planned. A clip set keeps the PLAN's rows, with "" at every dropped clip
+  // (TA16), so a fan-out skips them and the scalar read (`getPrimaryOutput`,
+  // the first item of `json`) is the first kept clip.
   if (type === "edit-plan") {
-    const json = data.generatedJson
-    if (json === undefined) return undefined
-    const out: NodeOutput = { json }
-    if (Array.isArray(json)) out.listResults = json.map((c) => JSON.stringify(c))
+    const saved = editPlanSavedOutput(data)
+    if (!saved) return undefined
+    const out: NodeOutput = { json: saved.json }
+    if (saved.listResults) out.listResults = saved.listResults
     return out
   }
 

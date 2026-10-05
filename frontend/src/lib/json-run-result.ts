@@ -1,4 +1,4 @@
-import { unwrapEditPlanOutput } from "@nodaro/shared"
+import { editPlanResultPatch, unwrapEditPlanOutput } from "@nodaro/shared"
 
 /**
  * A finished node's JSON result, under the fields its card and its output
@@ -223,6 +223,10 @@ export function jsonRunResultPatch(
     // lanes read it back off the job row (lib/audit-report-recovery.ts).
     return { generatedJson: output.json, lastAuditReport: isObject(output.report) ? output.report : undefined }
   }
+  // Edit Plan: a different plan clears the person's review of the old one; the
+  // same plan landing again keeps it (decided 2026-10-05). `take.data` is the
+  // node's data now, the review included.
+  if (nodeType === "edit-plan") return { ...editPlanResultPatch(output.json, take.data?.editedEdl) }
   return { generatedJson: output.json }
 }
 

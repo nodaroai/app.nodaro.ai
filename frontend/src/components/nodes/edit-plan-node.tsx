@@ -19,6 +19,7 @@ import { ACCEPTS_JSON, DATA_HANDLE_COLORS } from "@/lib/data-handles"
 import { buildEditPlanCreditId, asEditPlanMode, asEditPlanTier } from "@nodaro/shared"
 import { useT } from "@/lib/i18n"
 import { copyToClipboard } from "@/lib/utils"
+import { editPlanOutputOf } from "@/lib/edit-plan-saved-output"
 import type { EditPlanNodeData } from "@/types/nodes"
 
 function EditPlanNodeComponent({ id, data, selected }: NodeProps) {
@@ -26,7 +27,10 @@ function EditPlanNodeComponent({ id, data, selected }: NodeProps) {
   const nodeData = data as EditPlanNodeData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const status = nodeData.executionStatus ?? "idle"
-  const plan = nodeData.generatedJson
+  // The plan as the person's review leaves it (TA13) — what the node hands
+  // downstream, so the badge, the count and the tree describe what renders:
+  // the edited cut, or the kept clips only.
+  const plan = editPlanOutputOf(nodeData)?.json
   // clips mode emits a bare Edl[] (fans out); tighten/chapters emit an object.
   const clipCount = Array.isArray(plan) ? plan.length : undefined
 
