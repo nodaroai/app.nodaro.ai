@@ -27,8 +27,14 @@ vi.mock("@/lib/queue.js", () => ({
   redis: {},
 }))
 
+// The guard's model resolver is captured so the default engine it prices can
+// be asserted (the reservation and the worker must name the same model).
+const guardResolvers = vi.hoisted(() => [] as Array<(req: { body: unknown }) => string>)
 vi.mock("@/middleware/credit-guard.js", () => ({
-  creditGuard: () => async () => {},
+  creditGuard: (resolve: (req: { body: unknown }) => string) => {
+    guardResolvers.push(resolve)
+    return async () => {}
+  },
   reserveCreditsForJob: vi.fn().mockResolvedValue({
     usageLogId: "usage-1",
     creditsReserved: 1,
@@ -61,6 +67,7 @@ vi.mock("@/lib/config.js", () => ({
 import { textToAudioRoutes } from "../text-to-audio.js"
 import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
+import { reserveCreditsForJob } from "../../middleware/credit-guard.js"
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -141,7 +148,7 @@ describe("POST /v1/text-to-audio", () => {
     expect(body.error.code).toBe("unauthorized")
   })
 
-  it("creates a job with default provider tangoflux", async () => {
+  it("creates a job with the default engine elevenlabs-sfx — priced, reserved and enqueued under it", async () => {
     const { mockFrom, mockInsert } = mockJobInsert({
       data: { id: "job-1" },
       error: null,
@@ -173,14 +180,25 @@ describe("POST /v1/text-to-audio", () => {
       })
     )
 
-    // Verify job was enqueued
+    // Verify job was enqueued — with the resolved engine, so the worker runs
+    // the model that was reserved for.
     expect(videoQueue.add).toHaveBeenCalledWith(
       "text-to-audio",
       expect.objectContaining({
         jobId: "job-1",
         prompt: "birds chirping in a forest",
+        provider: "elevenlabs-sfx",
       })
     )
+    expect(reserveCreditsForJob).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      "job-1",
+      "elevenlabs-sfx",
+    )
+    // The pre-handler price check names the same default.
+    expect(guardResolvers.at(-1)?.({ body: { prompt: "x" } })).toBe("elevenlabs-sfx")
+    expect(guardResolvers.at(-1)?.({ body: { prompt: "x", provider: "elevenlabs-sfx" } })).toBe("elevenlabs-sfx")
   })
 
   it("passes optional params (duration, loop, promptInfluence) through to input_data and queue", async () => {

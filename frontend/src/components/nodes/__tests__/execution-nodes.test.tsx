@@ -215,7 +215,7 @@ const NODES: NodeTestConfig[] = [
   { name: "VideoToVideoNode", Component: VideoToVideoNode, expectedCategory: "ai", defaultData: { label: "Video to Video", provider: "wan" }, skipIdlePlaceholder: true, skipFailedText: true },
   { name: "TextToSpeechNode", Component: TextToSpeechNode, expectedCategory: "ai", defaultData: { label: "Text to Speech", provider: "elevenlabs-turbo", voiceId: "test" } },
   { name: "GenerateMusicNode", Component: GenerateMusicNode, expectedCategory: "ai", defaultData: { label: "Generate Music", provider: "suno" } },
-  { name: "TextToAudioNode", Component: TextToAudioNode, expectedCategory: "ai", defaultData: { label: "Text to Audio", provider: "tangoflux" } },
+  { name: "TextToAudioNode", Component: TextToAudioNode, expectedCategory: "ai", defaultData: { label: "Text to Audio", provider: "elevenlabs-sfx" } },
   { name: "GenerateScriptNode", Component: GenerateScriptNode, expectedCategory: "script", defaultData: { label: "Generate Script" } },
   { name: "SunoGenerateNode", Component: SunoGenerateNode, expectedCategory: "ai", defaultData: { label: "Suno Create Music" } },
   { name: "SunoCoverNode", Component: SunoCoverNode, expectedCategory: "ai", defaultData: { label: "Suno Cover" } },

@@ -17,7 +17,7 @@ import {
   runKieTask,
   MAX_POLL_ATTEMPTS_VIDEO,
 } from "./client.js"
-import { KIE_MUSIC_MODELS, KIE_TTS_MODELS, KIE_SOUND_EFFECT_MODELS, KIE_AUDIO_ISOLATION_MODELS, KIE_STT_MODELS } from "./models.js"
+import { KIE_MUSIC_MODELS, KIE_TTS_MODELS, KIE_AUDIO_ISOLATION_MODELS, KIE_STT_MODELS } from "./models.js"
 import { deriveKieEgressDimensions } from "./egress-dimensions.js"
 import { logCreditAudit, extractCreditFields } from "../../lib/credit-audit.js"
 import { defaultAllowedVoiceId } from "../../lib/voice-policy.js"
@@ -226,57 +226,6 @@ export class KieAudioProvider
 
     console.log(
       `[KIE.ai] TTS completed: ${audioUrl} (cost: $${modelConfig.cost.toFixed(4)})`
-    )
-
-    return { url: audioUrl, cost: modelConfig.cost, ...(providerMs !== undefined && { providerMs }) }
-  }
-
-  async generateSoundEffect(
-    text: string,
-    options?: {
-      duration?: number
-      loop?: boolean
-      promptInfluence?: number
-    },
-    reconcileOpts?: ReconcileOpts,
-  ): Promise<ProviderResult> {
-    const modelConfig = KIE_SOUND_EFFECT_MODELS["elevenlabs-sfx"]
-    if (!modelConfig) {
-      throw createSanitizedError(
-        "elevenlabs-sfx model not configured",
-        "Sound effect generation"
-      )
-    }
-
-    console.log(
-      `[KIE.ai] Generating sound effect with ${modelConfig.model}: "${text.slice(0, 80)}"`
-    )
-
-    const input: Record<string, unknown> = { text }
-
-    if (options?.duration != null) input.duration_seconds = options.duration
-    if (options?.loop != null) input.loop = options.loop
-    if (options?.promptInfluence != null) input.prompt_influence = options.promptInfluence
-
-    const { resultJson, providerMs } = await runKieTask(
-      modelConfig.model,
-      input,
-      MAX_POLL_ATTEMPTS_VIDEO,
-      undefined,
-      { ...reconcileOpts, modelKey: "elevenlabs-sfx", dimensions: { ...reconcileOpts?.dimensions, ...deriveKieEgressDimensions(input) } },
-    )
-
-    const audioUrl =
-      resultJson.resultUrls?.[0] ?? resultJson.audioUrl
-    if (!audioUrl) {
-      throw createSanitizedError(
-        "sound effect task succeeded but no URL found",
-        "Sound effect generation"
-      )
-    }
-
-    console.log(
-      `[KIE.ai] Sound effect completed: ${audioUrl} (cost: $${modelConfig.cost.toFixed(4)})`
     )
 
     return { url: audioUrl, cost: modelConfig.cost, ...(providerMs !== undefined && { providerMs }) }

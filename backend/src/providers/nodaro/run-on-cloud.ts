@@ -72,6 +72,13 @@ const CLOUD_ROUTE_BY_JOB_TYPE: Readonly<Record<string, string>> = {
   // and the whisper/elevenlabs provider choice ride through verbatim (the
   // cloud holds keys for both lanes).
   "transcribe": "/v1/transcribe",
+  // Sound effects (2026-10-05): the handler calls the ElevenLabs Sound
+  // Effects API straight from the worker, like TTS, so a keyless install's
+  // only way to run it is the connection. Enqueue site read 2026-10-05
+  // (routes/text-to-audio.ts): the validated route body (prompt, provider,
+  // duration, loop, promptInfluence) plus jobId/usageLogId, both stripped
+  // below. No media fields.
+  "text-to-audio": "/v1/text-to-audio",
 }
 
 

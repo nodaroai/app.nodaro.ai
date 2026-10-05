@@ -115,6 +115,18 @@ describe("direct-ElevenLabs create funnels default OUR modelKey with no meta", (
     await srv.close()
   })
 
+  it("soundEffects → elevenlabs-sfx", async () => {
+    const srv = await loopback((_req, res) => { res.writeHead(200, { "content-type": "audio/mpeg" }); res.end(Buffer.from([1])) })
+    cfg.ELEVENLABS_BASE_URL = srv.base
+    vi.resetModules()
+    const { generateSoundEffect } = await import("../sound-effects.js")
+    const call = await keyFor("soundEffects", () => generateSoundEffect("glass breaking", { duration: 2 }))
+    expect(call?.provider).toBe("elevenlabs")
+    expect(call?.modelKey).toBe("elevenlabs-sfx")
+    expect(call?.dimensions?.duration).toBe(2)
+    await srv.close()
+  })
+
   it("forcedAlignment → elevenlabs-forced-alignment", async () => {
     const srv = await loopback((_req, res) => { res.writeHead(200, { "content-type": "application/json" }); res.end("{}") })
     cfg.ELEVENLABS_BASE_URL = srv.base

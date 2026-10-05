@@ -110,6 +110,9 @@ describe("runJobOnCloud", () => {
     expect(canRunOnCloud("suno-separate")).toBe(true)
     expect(canRunOnCloud("suno-music-video")).toBe(true)
     expect(canRunOnCloud("suno-convert-wav")).toBe(true)
+    // Sound effects call the vendor from the worker, so the connection is a
+    // keyless install's only way to run them.
+    expect(cloudRouteForJobType("text-to-audio")).toBe("/v1/text-to-audio")
   })
 })
 

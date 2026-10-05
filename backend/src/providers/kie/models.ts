@@ -1612,17 +1612,6 @@ export const KIE_TTS_MODELS: Record<string, KieModelConfig> = {
 }
 
 // =============================================================================
-// SOUND EFFECT MODELS
-// =============================================================================
-export const KIE_SOUND_EFFECT_MODELS: Record<string, KieModelConfig> = {
-  "elevenlabs-sfx": {
-    model: "elevenlabs/sound-effect-v2",
-    credits: 1.2,
-    cost: 0.006,  // 0.24 cr/sec * ~5s
-  },
-}
-
-// =============================================================================
 // AUDIO ISOLATION MODELS
 // =============================================================================
 export const KIE_AUDIO_ISOLATION_MODELS: Record<string, KieModelConfig> = {
@@ -1743,7 +1732,7 @@ export function kieSeedForWire(modelConfig: Pick<KieModelConfig, "seedType">, se
 // HELPER FUNCTIONS
 // =============================================================================
 
-export type KieCategory = "image" | "video" | "video-to-video" | "text-to-video" | "motion-transfer" | "video-upscale" | "lip-sync" | "speech-to-video" | "music" | "tts" | "sound-effect" | "audio-isolation" | "stt" | "special"
+export type KieCategory = "image" | "video" | "video-to-video" | "text-to-video" | "motion-transfer" | "video-upscale" | "lip-sync" | "speech-to-video" | "music" | "tts" | "audio-isolation" | "stt" | "special"
 
 /**
  * Get KIE.ai model config for a given category and provider
@@ -1774,8 +1763,6 @@ export function getKieModelConfig(
       return KIE_MUSIC_MODELS[provider] ?? null
     case "tts":
       return KIE_TTS_MODELS[provider] ?? null
-    case "sound-effect":
-      return KIE_SOUND_EFFECT_MODELS[provider] ?? null
     case "audio-isolation":
       return KIE_AUDIO_ISOLATION_MODELS[provider] ?? null
     case "stt":

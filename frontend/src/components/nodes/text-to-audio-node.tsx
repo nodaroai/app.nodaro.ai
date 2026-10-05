@@ -18,6 +18,7 @@ import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { AudioResultOverlay } from "./audio-result-overlay"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import type { TextToAudioData } from "@/types/nodes"
+import { DEFAULT_TEXT_TO_AUDIO_PROVIDER } from "@nodaro/shared"
 
 const isVisualPicker = (s: string) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(s)
 const ACCEPTS_PROMPT      = (t: string) => isValidTextToAudioConnection("prompt",      t, isVisualPicker)
@@ -36,7 +37,7 @@ function TextToAudioNodeComponent({ id, data, selected }: NodeProps) {
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [showThumbnails, setShowThumbnails] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
-  const credits = useModelCredits(nodeData.provider ?? "elevenlabs-sfx", 4)
+  const credits = useModelCredits(nodeData.provider ?? DEFAULT_TEXT_TO_AUDIO_PROVIDER, 4)
 
   function handleDeleteResult(indexToDelete: number) {
     updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedAudioUrl"))
@@ -145,7 +146,7 @@ function TextToAudioNodeComponent({ id, data, selected }: NodeProps) {
         )}
 
         <div className="flex justify-between text-muted-foreground">
-          <span>{nodeData.provider || "tangoflux"}</span>
+          <span>{nodeData.provider || DEFAULT_TEXT_TO_AUDIO_PROVIDER}</span>
           {nodeData.duration ? <span>{nodeData.duration}s</span> : null}
         </div>
       </div>

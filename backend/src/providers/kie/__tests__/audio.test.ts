@@ -20,9 +20,6 @@ vi.mock("../models.js", () => ({
     "elevenlabs-turbo": { model: "elevenlabs/text-to-speech-turbo-2-5", cost: 0.01 },
     "elevenlabs-multilingual": { model: "elevenlabs/text-to-speech-multilingual-v2", cost: 0.01 },
   },
-  KIE_SOUND_EFFECT_MODELS: {
-    "elevenlabs-sfx": { model: "elevenlabs/sound-effect-v2", cost: 0.01 },
-  },
   KIE_AUDIO_ISOLATION_MODELS: {
     "elevenlabs-isolation": { model: "elevenlabs/audio-isolation", cost: 0.01 },
   },
@@ -117,31 +114,6 @@ describe("KieAudioProvider.textToSpeech", () => {
   it("throws when no result URL", async () => {
     mocks.mockRunKieTask.mockResolvedValueOnce({ resultJson: {} })
     await expect(provider.textToSpeech("test")).rejects.toThrow()
-  })
-})
-
-describe("KieAudioProvider.generateSoundEffect", () => {
-  it("happy path", async () => {
-    const result = await provider.generateSoundEffect("explosion")
-    expect(mocks.mockRunKieTask).toHaveBeenCalledWith(
-      "elevenlabs/sound-effect-v2",
-      { text: "explosion" },
-      90,
-      undefined,
-      expect.objectContaining({ modelKey: "elevenlabs-sfx" }),
-    )
-    expect(result.url).toBe("https://kie.example.com/audio.mp3")
-  })
-
-  it("passes duration, loop, and promptInfluence options", async () => {
-    await provider.generateSoundEffect("rain", { duration: 10, loop: true, promptInfluence: 0.5 })
-    expect(mocks.mockRunKieTask).toHaveBeenCalledWith(
-      "elevenlabs/sound-effect-v2",
-      expect.objectContaining({ text: "rain", duration_seconds: 10, loop: true, prompt_influence: 0.5 }),
-      90,
-      undefined,
-      expect.objectContaining({ modelKey: "elevenlabs-sfx" }),
-    )
   })
 })
 

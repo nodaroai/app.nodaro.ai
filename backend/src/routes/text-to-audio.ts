@@ -8,7 +8,7 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { TEXT_TO_AUDIO_PROVIDERS } from "@nodaro/shared"
+import { TEXT_TO_AUDIO_PROVIDERS, DEFAULT_TEXT_TO_AUDIO_PROVIDER } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 
@@ -23,7 +23,7 @@ const textToAudioBody = z.object({
 })
 
 export async function textToAudioRoutes(app: FastifyInstance) {
-  app.post("/v1/text-to-audio", { preHandler: creditGuard((req) => { const body = req.body as Record<string, unknown>; return (body?.provider as string) ?? "tangoflux" }) }, async (req, reply) => {
+  app.post("/v1/text-to-audio", { preHandler: creditGuard((req) => { const body = req.body as Record<string, unknown>; return (body?.provider as string) ?? DEFAULT_TEXT_TO_AUDIO_PROVIDER }) }, async (req, reply) => {
     const parsed = textToAudioBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({
@@ -48,8 +48,9 @@ export async function textToAudioRoutes(app: FastifyInstance) {
     const finalPrompt = applyPromptPolicies({ prompt, negativePrompt: "", kind: "audio" }).prompt
     parsed.data.prompt = finalPrompt
 
-    // Determine model identifier for credit check (default to tangoflux)
-    const modelIdentifier = provider ?? "tangoflux"
+    // One resolved engine for the reservation AND the worker, so the model
+    // that runs is always the model that was billed.
+    const modelIdentifier = provider ?? DEFAULT_TEXT_TO_AUDIO_PROVIDER
     const mcpClient = extractMcpClient(req.body)
 
     const { data: job, error } = await insertJob(req, {
@@ -74,7 +75,7 @@ export async function textToAudioRoutes(app: FastifyInstance) {
     await videoQueue.add("text-to-audio", {
       jobId: job.id,
       prompt: finalPrompt,
-      provider,
+      provider: modelIdentifier,
       duration,
       loop,
       promptInfluence,

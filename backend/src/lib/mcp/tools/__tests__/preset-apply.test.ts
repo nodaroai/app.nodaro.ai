@@ -553,6 +553,12 @@ describe("text_to_audio preset application", () => {
     expect(body?.presetId).toBeUndefined()
   })
 
+  it("always names the default engine (elevenlabs-sfx) on the route call", async () => {
+    const { result, body } = await runTextToAudio({ prompt: "door slam" })
+    expect(result.isError).toBeUndefined()
+    expect(body?.provider).toBe("elevenlabs-sfx")
+  })
+
   it("lets an explicit prompt OVERRIDE the preset's prompt", async () => {
     const { result, body } = await runTextToAudio({
       presetId: "text-to-audio/rain-ambience",

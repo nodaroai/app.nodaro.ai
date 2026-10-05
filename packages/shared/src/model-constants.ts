@@ -1230,6 +1230,14 @@ export const TEXT_TO_AUDIO_PROVIDERS = [
 ] as const
 export type TextToAudioProvider = typeof TEXT_TO_AUDIO_PROVIDERS[number]
 
+/**
+ * The Text to Audio engine used when a request names none — the route's
+ * credit reservation, the worker, the orchestrator payload and the editor's
+ * node default all read THIS, so they can never disagree about which model
+ * ran and which one was billed.
+ */
+export const DEFAULT_TEXT_TO_AUDIO_PROVIDER: TextToAudioProvider = "elevenlabs-sfx"
+
 /** Music generation providers */
 export const MUSIC_PROVIDERS = [
   // Replicate disabled

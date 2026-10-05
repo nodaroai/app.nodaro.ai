@@ -61,7 +61,7 @@ import type {
   ForcedAlignmentData,
   GeneratedScript,
 } from "@/types/nodes"
-import { VOICE_CHANGER_MODELS, DEFAULT_VOICE_CHANGER_MODEL, AUDIO_FX_PRESETS, AUDIO_FX_REVERB_PRESETS, REPLICATE_LIP_SYNC_PROVIDERS, FAL_LIP_SYNC_PROVIDERS, VIDEO_INPUT_LIP_SYNC_PROVIDERS, isPerSecondLipSyncProvider, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, sunoModelHonoursDuration, SUNO_HARD_CEILING, SUNO_TITLE_MAX, getMaxSunoPromptChars, getMaxSunoStyleChars, getMaxTtsChars, sunoCreditType } from "@nodaro/shared"
+import { VOICE_CHANGER_MODELS, DEFAULT_VOICE_CHANGER_MODEL, AUDIO_FX_PRESETS, AUDIO_FX_REVERB_PRESETS, REPLICATE_LIP_SYNC_PROVIDERS, FAL_LIP_SYNC_PROVIDERS, VIDEO_INPUT_LIP_SYNC_PROVIDERS, isPerSecondLipSyncProvider, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, sunoModelHonoursDuration, SUNO_HARD_CEILING, SUNO_TITLE_MAX, getMaxSunoPromptChars, getMaxSunoStyleChars, getMaxTtsChars, sunoCreditType, DEFAULT_TEXT_TO_AUDIO_PROVIDER } from "@nodaro/shared"
 import type { AudioFxPreset } from "@nodaro/shared"
 import { getEffectiveSunoCustomMode } from "@nodaro/prompts"
 import { MappableField } from "./mappable-field"
@@ -276,7 +276,8 @@ export function TextToAudioConfig({ data, onUpdate, sources, fieldMappings, onMa
     edges: edges ?? EMPTY_EDGES,
     snippets: promptSnippets,
   })
-  const isSfx = data.provider === "elevenlabs-sfx"
+  // No provider saved = the default engine, which is the SFX model.
+  const isSfx = (data.provider || DEFAULT_TEXT_TO_AUDIO_PROVIDER) === "elevenlabs-sfx"
   const maxPromptLen = isSfx ? 450 : 2000
   const minDuration = isSfx ? 0.5 : 1
   const maxDuration = isSfx ? 22 : 30
@@ -326,7 +327,7 @@ export function TextToAudioConfig({ data, onUpdate, sources, fieldMappings, onMa
       </MappableField>
       <MappableField field="provider" label={t("field.provider")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
         <Select
-          value={data.provider || "elevenlabs-sfx"}
+          value={data.provider || DEFAULT_TEXT_TO_AUDIO_PROVIDER}
           onValueChange={(v) => onUpdate({ provider: v as TextToAudioData["provider"] })}
         >
           <SelectTrigger aria-label={t("field.provider")}><SelectValue /></SelectTrigger>

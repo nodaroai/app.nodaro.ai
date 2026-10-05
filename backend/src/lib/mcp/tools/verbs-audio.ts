@@ -15,7 +15,7 @@ import {
   uiMeta,
 } from "./_verb-helpers.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
-import { SUNO_MODELS, SUNO_LEGACY_MODELS, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, SUNO_TITLE_MAX, SUNO_TEXT_MAX, AUDIO_FX_PRESETS, readPromptAffixes, MODEL_CATALOG, TTS_PROVIDERS, canonicalTtsProvider, getMaxTtsChars, type TranscribeProvider } from "@nodaro/shared"
+import { SUNO_MODELS, SUNO_LEGACY_MODELS, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, SUNO_TITLE_MAX, SUNO_TEXT_MAX, AUDIO_FX_PRESETS, readPromptAffixes, MODEL_CATALOG, DEFAULT_TEXT_TO_AUDIO_PROVIDER, TTS_PROVIDERS, canonicalTtsProvider, getMaxTtsChars, type TranscribeProvider } from "@nodaro/shared"
 
 /** The engine the MCP `transcribe` tool runs on. Typed against the ENABLED
  *  provider enum, so disabling this lane in @nodaro/shared fails the build here
@@ -1944,7 +1944,8 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       // Mirrors generate_image: preset is the BASE; only caller-PROVIDED
       // fields override it. text-to-audio factory presets supply
       // prompt/duration/loop/promptInfluence — all mapped here. (The preset's
-      // `provider: "elevenlabs-sfx"` has no param: the route is fixed-provider.)
+      // `provider: "elevenlabs-sfx"` has no param: the tool always runs the
+      // Text to Audio default engine, named explicitly below.)
       let effective: Record<string, unknown> = { ...args }
       if (args.presetId) {
         const preset = await resolvePreset({
@@ -2001,13 +2002,16 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
 
       const payload: Record<string, unknown> = {
         prompt: effective.prompt as string,
+        // Named, not implied: the reservation, the job row and the widget all
+        // read the same engine.
+        provider: DEFAULT_TEXT_TO_AUDIO_PROVIDER,
         ...(effective.duration !== undefined ? { duration: effective.duration } : {}),
         ...(effective.loop !== undefined ? { loop: effective.loop } : {}),
         ...(effective.prompt_influence !== undefined ? { promptInfluence: effective.prompt_influence } : {}),
         mcp_client: session.clientName,
         userId: session.userId,
       }
-      return dispatchJob(fastify, session, { url: "/v1/text-to-audio", payload, label: "sound effect", widgetKind: "audio", widgetData: { prompt: effective.prompt as string, model: "elevenlabs-sfx" } })
+      return dispatchJob(fastify, session, { url: "/v1/text-to-audio", payload, label: "sound effect", widgetKind: "audio", widgetData: { prompt: effective.prompt as string, model: DEFAULT_TEXT_TO_AUDIO_PROVIDER } })
     },
   )
 

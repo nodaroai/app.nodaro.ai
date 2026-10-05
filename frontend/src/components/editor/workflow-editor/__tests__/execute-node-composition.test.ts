@@ -1050,6 +1050,28 @@ describe("text-to-audio", () => {
     )
   })
 
+  it("a node saved without a provider runs the default engine with its SFX options", async () => {
+    mockResolveNodeInputs.mockReturnValue({ prompt: "wind" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+
+    await executeNode(
+      makeNode("text-to-audio", { duration: 4, loop: true, promptInfluence: 0.6 }),
+      makeCtx(),
+    )
+
+    const apiCallFn = mockPollJobWithNodeUpdate.mock.calls[0][1]
+    mockTextToAudioApi.mockResolvedValue({ jobId: "ta-j3" })
+    await apiCallFn()
+
+    expect(mockTextToAudioApi).toHaveBeenCalledWith(
+      "wind",
+      "elevenlabs-sfx",
+      4,
+      "u1",
+      { loop: true, promptInfluence: 0.6 },
+    )
+  })
+
   it("passes undefined sfxOptions when provider is not elevenlabs-sfx", async () => {
     mockResolveNodeInputs.mockReturnValue({ prompt: "rain" })
     mockPollJobWithNodeUpdate.mockResolvedValue(undefined)

@@ -553,6 +553,12 @@ describe("buildPayload", () => {
       expect(result.jobName).toBe("text-to-audio")
       expect(result.modelIdentifier).toBe("elevenlabs-sfx")
     })
+
+    it("a node saved without a provider runs the default engine, SFX levers included", () => {
+      const n = node("n1", "text-to-audio", { prompt: "wind", duration: 6, loop: true, promptInfluence: 0.4 })
+      const result = buildPayload(n, jobId, {})
+      expect(result.payload).toMatchObject({ provider: "elevenlabs-sfx", duration: 6, loop: true, promptInfluence: 0.4 })
+    })
   })
 
   // --- FFmpeg nodes ---

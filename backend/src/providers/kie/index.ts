@@ -20,7 +20,6 @@ import {
   KIE_LIP_SYNC_MODELS,
   KIE_MUSIC_MODELS,
   KIE_TTS_MODELS,
-  KIE_SOUND_EFFECT_MODELS,
   KIE_AUDIO_ISOLATION_MODELS,
   KIE_STT_MODELS,
 } from "./models.js"
@@ -59,7 +58,10 @@ const kieInfo: ProviderInfo = {
     "speech-to-video": ["speech-to-video"],
     "music-generation": Object.keys(KIE_MUSIC_MODELS),
     "text-to-speech": Object.keys(KIE_TTS_MODELS),
-    "sound-effect": Object.keys(KIE_SOUND_EFFECT_MODELS),
+    // Sound effects left KIE for the direct ElevenLabs API (2026-10-05: KIE's
+    // sound-effect wrapper failed every request); the capability key stays —
+    // the Record is exhaustive over ProviderCapability.
+    "sound-effect": [],
     "audio-isolation": Object.keys(KIE_AUDIO_ISOLATION_MODELS),
     "audio-separation": [], // KIE has no Demucs; Replicate-only capability
     "transcription": Object.keys(KIE_STT_MODELS),
