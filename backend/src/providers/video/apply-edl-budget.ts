@@ -60,7 +60,7 @@ export { APPLY_EDL_MAX_OUTPUT_MS }
  *  it is a runner resource limit the graph must stay under. Every PURE-CUT video
  *  render is therefore chunked to at most this many segments per graph (a margin
  *  under the cliff) and the chunks stream-copy concat; the cumulative frame grid
- *  (`chunkStartSec`) keeps them continuous. A CROSSFADE run has no hard cut to
+ *  (`chunkStartMs`, `frameAtMs`) keeps them continuous. A CROSSFADE run has no hard cut to
  *  close a chunk at, so `planChunks` makes one INSIDE one of its segments
  *  (`splitInsideCrossfadeRun`); only a run whose segments are all too short for
  *  their crossfades to take that cut stays one wider graph. Audio graphs have
@@ -222,12 +222,18 @@ export const secs = (ms: number): number => ms / 1000
  *  `crossfade` segment-transition consumes time in phase 1 (layout xfades are
  *  phase 2). */
 export function boundaryOverlapSecs(seg: EdlSegment, prev: EdlSegment): number {
+  return secs(boundaryOverlapMs(seg, prev))
+}
+
+/** `boundaryOverlapSecs` in whole milliseconds — what the frame grid
+ *  (`frameAtMs`) is laid from. */
+export function boundaryOverlapMs(seg: EdlSegment, prev: EdlSegment): number {
   const t = seg.transition
   if (!t || t.type !== "crossfade") return 0
   const d = t.durationMs ?? 0
   if (d <= 0) return 0
   const minAdj = Math.min(seg.outMs - seg.inMs, prev.outMs - prev.inMs)
-  return secs(Math.min(d, Math.floor(0.9 * minAdj)))
+  return Math.min(d, Math.floor(0.9 * minAdj))
 }
 
 /** Resolve the source id that supplies a segment's SOUND (D19 audio doctrine). */
@@ -259,7 +265,14 @@ export function resolveChunksForOutput(
 
 /** The output seconds one chunk renders (D17: crossfade overlaps subtracted). */
 export function chunkOutputSec(segs: readonly EdlSegment[]): number {
-  return segs.reduce((acc, s, i) => acc + secs(s.outMs - s.inMs) - (i > 0 ? boundaryOverlapSecs(segs[i], segs[i - 1]) : 0), 0)
+  return secs(chunkOutputMs(segs))
+}
+
+/** The output length of one chunk in whole milliseconds — summed in integers,
+ *  so a chunk's position on the render's timeline is exact however it is
+ *  reached. The frame grid is laid from it (`frameAtMs`). */
+export function chunkOutputMs(segs: readonly EdlSegment[]): number {
+  return segs.reduce((acc, s, i) => acc + (s.outMs - s.inMs) - (i > 0 ? boundaryOverlapMs(segs[i], segs[i - 1]) : 0), 0)
 }
 
 /** The kill budget for a slice's WORK — its output seconds and the seconds of

@@ -192,7 +192,7 @@ const OPTS: SliceOptions = {
   quality: "final",
   target: { width: 320, height: 240 },
   fps: 30,
-  chunkStartSec: 0,
+  chunkStartMs: 0,
   masterAudioId: undefined,
   audioPresent: new Map([["A", true], ["B", true]]),
 }

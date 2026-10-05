@@ -35,10 +35,12 @@ function isMp3EncoderAvailable(): boolean {
 }
 export const mp3EncoderAvailable = ffmpegAvailable && isMp3EncoderAvailable()
 
-export async function makeSource(path: string, color: string, freq: number, durationSec: number): Promise<void> {
+/** A 320×240 solid-colour source with a constant tone; `rate` is the picture
+ *  rate as ffmpeg reads it (30, 25, "30000/1001"). */
+export async function makeSource(path: string, color: string, freq: number, durationSec: number, rate: number | string = 30): Promise<void> {
   await runFfmpeg([
     "-y",
-    "-f", "lavfi", "-i", `color=c=${color}:s=320x240:r=30:d=${durationSec}`,
+    "-f", "lavfi", "-i", `color=c=${color}:s=320x240:r=${rate}:d=${durationSec}`,
     "-f", "lavfi", "-i", `sine=f=${freq}:r=48000:d=${durationSec}`,
     "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest",
     path,

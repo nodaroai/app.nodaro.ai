@@ -35,7 +35,7 @@ describe.skipIf(!ffmpegAvailable)("apply-edl slice thread counts on the real ffm
         segments: [{ id: "s0", inMs: 500, outMs: 2500, video: "A" }],
       } as unknown as Edl
       const cmd = buildSliceCommand(edl, edl.segments, {
-        output: "video", quality: "final", target: { width: 320, height: 240 }, fps: 30, chunkStartSec: 0,
+        output: "video", quality: "final", target: { width: 320, height: 240 }, fps: 30, chunkStartMs: 0,
         masterAudioId: undefined, audioPresent: new Map([["A", true]]),
       })
       const graph = join(dir, "graph.txt")
