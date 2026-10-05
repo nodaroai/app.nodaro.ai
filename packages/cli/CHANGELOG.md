@@ -1,5 +1,14 @@
 # @nodaro/cli
 
+## 1.25.1
+
+### Patch Changes
+
+- 5b63574: A LinkedIn account can be a person's profile (`linkedin.com/in/…`) as well as a company page: the `SocialSearchMode` and `SocialSearchRequest.query` docs say so, and `nodaro competitors add --linkedin` describes the field as a company page or person's profile. No types change.
+- Updated dependencies [5b63574]
+- Updated dependencies [4a6fd02]
+  - @nodaro/shared@3.17.1
+
 ## 1.25.0
 
 ### Minor Changes

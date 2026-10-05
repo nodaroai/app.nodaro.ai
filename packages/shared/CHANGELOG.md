@@ -1,5 +1,12 @@
 # @nodaro/shared
 
+## 3.17.1
+
+### Patch Changes
+
+- 5b63574: A LinkedIn account can be a person's profile (`linkedin.com/in/…`) as well as a company page: the `SocialSearchMode` and `SocialSearchRequest.query` docs say so, and `nodaro competitors add --linkedin` describes the field as a company page or person's profile. No types change.
+- 4a6fd02: `EXECUTION_DATA_KEYS` gains `resultsRunEndedAt`: when the run whose results a node shows ended that node, recorded beside `resultsRunId`. It is bookkeeping, so presets, templates and run-only patches never treat it as configuration.
+
 ## 3.17.0
 
 ### Minor Changes
