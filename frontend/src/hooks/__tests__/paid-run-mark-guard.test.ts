@@ -79,6 +79,8 @@ const EXECUTOR_DIRS = ["components/editor/workflow-editor", "components/editor/r
 const FREE: ReadonlyMap<string, string> = new Map([
   ["getAuthHeaders", "reads the session's headers"],
   ["getJobStatusLean", "reads a job"],
+  ["getJobStatus", "reads a job (Render final reads the last final's stored EDL)"],
+  ["listWorkflowExecutions", "reads the run listing (Render final looks for a newer run)"],
   ["getExecutionEstimate", "reads an estimate"],
   ["getUserCredits", "reads the balance"],
   ["getWorkflowExecution", "reads a run"],
@@ -132,6 +134,7 @@ const EXECUTOR_FILES: ReadonlyMap<string, string> = new Map([
   ["components/editor/workflow-editor/asset-executors.ts", "entity generation (the run-start reset) and the variant loops (their own `*Status` key)"],
   ["components/editor/workflow-editor/scene-story-handlers.ts", "a script scene's image, marked by its own `imageStatus`"],
   ["components/editor/workflow-editor/run-handlers.ts", "a whole-workflow run, its nodes flipped to `pending` first"],
+  ["components/editor/workflow-editor/render-final-handler.ts", "Render final / Update preview: a run of the render set, its nodes flipped to `pending` first"],
   ["components/editor/workflow-editor/component-executor.ts", "a component node, run by a node's Run"],
 ])
 

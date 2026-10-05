@@ -45,4 +45,24 @@ describe("runWorkflow marks the run as the editor's", () => {
     const [, init] = fetchMock.mock.calls[0]
     expect(JSON.parse(init.body)).toEqual({ nodeIds: ["a", "b"], reviewer: "editor" })
   })
+
+  it("sends the nested input overrides beside the ids, and the mark (Render final's final override)", async () => {
+    const fetchMock = okFetch()
+    vi.stubGlobal("fetch", fetchMock)
+    await runWorkflow("wf-1", ["r"], "key-1", { inputOverrides: { r: { quality: "final" } } })
+    const [, init] = fetchMock.mock.calls[0]
+    expect(JSON.parse(init.body)).toEqual({
+      nodeIds: ["r"],
+      inputOverrides: { r: { quality: "final" } },
+      reviewer: "editor",
+    })
+  })
+
+  it("an empty override map is not sent", async () => {
+    const fetchMock = okFetch()
+    vi.stubGlobal("fetch", fetchMock)
+    await runWorkflow("wf-1", ["r"], undefined, { inputOverrides: {} })
+    const [, init] = fetchMock.mock.calls[0]
+    expect(JSON.parse(init.body)).toEqual({ nodeIds: ["r"], reviewer: "editor" })
+  })
 })

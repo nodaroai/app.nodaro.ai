@@ -18,12 +18,21 @@ import { getModelIdentifier } from "@/components/editor/config-panels/helpers"
 import { estimateRunCredits } from "@/components/editor/workflow-editor/estimate-run-credits"
 import { runFromHereExecutable } from "@/components/editor/workflow-editor/run-from-here-set"
 import { hasCredits } from "@/lib/edition"
+import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 
-export function useRunFromHereCredits(startId: string): number {
-  const nodes = useWorkflowStore((s) => s.nodes)
-  const edges = useWorkflowStore((s) => s.edges)
+/**
+ * The price of running `executable` — the run's own estimate — with its prices
+ * fetched when cold. `nodes` is the graph the run executes: for a run with
+ * input overrides (Render final), the OVERRIDDEN graph, never the canvas. Any
+ * run-set price (Run from here, Render final, Update preview) is this hook
+ * over its own set.
+ */
+export function useRunSetCredits(
+  executable: WorkflowNode[],
+  nodes: WorkflowNode[],
+  edges: WorkflowEdge[],
+): number {
   const [pricesLoaded, setPricesLoaded] = useState(0)
-  const executable = useMemo(() => runFromHereExecutable(startId, nodes, edges), [startId, nodes, edges])
 
   useEffect(() => {
     if (!hasCredits() || executable.length === 0) return
@@ -46,4 +55,11 @@ export function useRunFromHereCredits(startId: string): number {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [executable, nodes, edges, pricesLoaded],
   )
+}
+
+export function useRunFromHereCredits(startId: string): number {
+  const nodes = useWorkflowStore((s) => s.nodes)
+  const edges = useWorkflowStore((s) => s.edges)
+  const executable = useMemo(() => runFromHereExecutable(startId, nodes, edges), [startId, nodes, edges])
+  return useRunSetCredits(executable, nodes, edges)
 }

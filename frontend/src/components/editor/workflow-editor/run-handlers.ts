@@ -28,6 +28,7 @@ import { liveExecutable, getDownstreamNodeIds, runFromHereExecutable } from "./r
 import { wordTimingsPreflight } from "./add-captions-preflight";
 import { nestedRunPreflight } from "./sub-workflow-preflight";
 import { previewRunnable, previewSingleRunRefusal } from "./preview-gate";
+import { renderOwnRunRefusal, replanEditLosses } from "./render-review-guards";
 import { COMPOSER_PLAN_MAP, CREDIT_BASE_USD, planFanOut, TRANSIENT_RUNTIME_KEYS, isExpandedClone, withWiredSettings } from "@nodaro/shared"
 import { clearedConnectedListRows } from "./clear-run-results"
 import { namedRunOutputFields, reduceRunOutputFields } from "@/lib/named-run-outputs"
@@ -122,7 +123,7 @@ function refuseWhileStreaming(): boolean {
  * runs and paints, and a run started there holds the freeze with its own marks
  * until its result lands.
  */
-function refuseWhileReadOnly(): boolean {
+export function refuseWhileReadOnly(): boolean {
   const { isReadOnly, readOnlyReason } = useWorkflowStore.getState();
   if (!isReadOnly) return false;
   if (readOnlyReason) toast.error(readOnlyReason);
@@ -160,7 +161,7 @@ function deploymentPayerInstance(): boolean {
   }
 }
 
-function warnUnderMinRows(nodes: WorkflowNode[]): void {
+export function warnUnderMinRows(nodes: WorkflowNode[]): void {
   const underMin = nodes.filter((n) => {
     if (n.type !== "list") return false
     const data = n.data as Record<string, unknown>
@@ -254,13 +255,16 @@ const ACCUMULATION_FIELDS_TO_CLEAR: ReadonlyArray<string> = [
  * intact — used by single-node re-runs so the node's own history browser
  * accumulates new takes instead of wiping prior results. Transient list-state
  * fields are still cleared to avoid stale list badges.
+ *
+ * Returns an `undo` that restores what this call cleared.
  */
 export function resetNodeAccumulation(
   nodes: ReadonlyArray<WorkflowNode>,
   options: { preserveHistory?: boolean } = {},
-): void {
+): () => void {
   const { updateNodeData } = useWorkflowStore.getState()
   const fields = options.preserveHistory ? LIST_STATE_FIELDS : ACCUMULATION_FIELDS_TO_CLEAR
+  const undo: Array<[string, Record<string, unknown>]> = []
   for (const node of nodes) {
     if (!isExecutableNode(node)) continue
     const data = node.data as Record<string, unknown>
@@ -278,8 +282,17 @@ export function resetNodeAccumulation(
       }
     }
     if (Object.keys(patch).length > 0) {
+      const previous: Record<string, unknown> = {}
+      for (const key of Object.keys(patch)) previous[key] = data[key]
+      undo.push([node.id, previous])
       updateNodeData(node.id, patch)
     }
+  }
+  // Puts back exactly what this call cleared, for a caller that then aborts
+  // without running anything (a refused save).
+  return () => {
+    const { updateNodeData: restore } = useWorkflowStore.getState()
+    for (const [id, previous] of undo) restore(id, previous)
   }
 }
 
@@ -317,7 +330,7 @@ export const RUN_CONFIRM_CREDITS = Math.round(RUN_CONFIRM_USD / CREDIT_BASE_USD)
  * (e.g. "Run instead", which already confirmed via its discard dialog). A no-op
  * (proceed) when there's no `confirmRun` provider or nothing executable.
  */
-async function confirmRunOrAbort(
+export async function confirmRunOrAbort(
   ctx: ExecutionContext,
   executable: WorkflowNode[],
   allNodes: WorkflowNode[],
@@ -360,9 +373,31 @@ async function confirmRunOrAbort(
   // cannot bypass it. Run / Run from here / Run selected are never refused —
   // the server skips the closure (the stop rule); the render's own run stays
   // allowed.
+  // A render's own ▶ behind Camera Switch would preview the unedited cut: it
+  // refuses once the plan holds edits (TA19 a; with the stop-rule flag on). So
+  // does Run from here / Run selected on a render whose Camera Switch is NOT in
+  // the run (the server seeds it from its saved output) — one rule, every door.
   if (trigger === "single") {
-    const refusal = executable.map((n) => previewSingleRunRefusal(n.id, allNodes, edges)).find(Boolean);
+    const refusal =
+      executable.map((n) => previewSingleRunRefusal(n.id, allNodes, edges)).find(Boolean) ??
+      executable.map((n) => renderOwnRunRefusal(n.id, allNodes, edges)).find(Boolean);
     if (refusal) { toast.error(refusal); return false; }
+  } else if (trigger === "from-here" || trigger === "selected") {
+    const ids = new Set(executable.map((n) => n.id));
+    const refusal = executable.map((n) => renderOwnRunRefusal(n.id, allNodes, edges, ids)).find(Boolean);
+    if (refusal) { toast.error(refusal); return false; }
+  }
+  // A run that re-executes an Edit Plan holding a review replaces it (TA2
+  // item 3). Asked above the skip-confirm shortcut: "Run instead" confirmed a
+  // discard, not the loss of these edits.
+  {
+    const losses = replanEditLosses(runs);
+    if (losses.length > 0 && ctx.askConfirm) {
+      const body = losses
+        .map((l) => tx("renderFinal.replanBody", { plan: l.label, restored: l.restored, dropped: l.dropped }))
+        .join(" ");
+      if (!(await ctx.askConfirm({ title: tx("renderFinal.replanTitle"), body, confirmLabel: tx("renderFinal.replanConfirm") }))) return false;
+    }
   }
   if (skip || !ctx.confirmRun || executable.length === 0) return true;
   const estimatedCredits = hasCredits() ? estimateRunCredits(executable, allNodes, edges, getCachedCredits) : null;
