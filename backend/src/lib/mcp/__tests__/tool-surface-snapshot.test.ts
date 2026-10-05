@@ -504,6 +504,14 @@ const ELEVENLABS_V4_SPEECH_BYTES = 196
 // 386_449 total − 386_995 base = −546 B (video_analysis 4_882 -> 4_336), which
 // keeps the 19 B of headroom the list had before.
 const VIDEO_ANALYSIS_SMART_ONLY_BYTES = -546
+
+// RAISED by ONE argument and nothing else: `audio_duration_sec` on `lip_sync`
+// (models billed by the second reserve and charge by the audio's length; when
+// it is left out the verb measures the audio first). No tool was added, so the
+// fixture does NOT move. measured by this suite: 386_737 total − 386_509 base
+// = 228 B.
+const LIP_SYNC_AUDIO_LENGTH_BYTES = 228
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192,
   totalBytes:
@@ -550,7 +558,8 @@ export const TOOL_WIRE_BUDGET = {
     COMPETITOR_LESSONS_TOOL_BYTES +
     CARD_MARK_TOOLS_BYTES +
     APPLY_EDL_PREVIEW_RATE_WORDING_BYTES +
-    ELEVENLABS_V4_SPEECH_BYTES,
+    ELEVENLABS_V4_SPEECH_BYTES +
+    LIP_SYNC_AUDIO_LENGTH_BYTES,
     VIDEO_ANALYSIS_SMART_ONLY_BYTES,
 }
 

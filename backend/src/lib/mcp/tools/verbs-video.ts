@@ -1,5 +1,6 @@
 import { z } from "zod"
 import { creditsOf, creditHint, perSecondHint, lipSyncPriceSuffix } from "./_credit-hint.js"
+import { MAX_LIP_SYNC_AUDIO_SEC, measuredAudioSeconds } from "./_audio-length.js"
 import { resolveAssetId } from "../asset-resolver.js"
 import { buildCompositePrompt } from "../prompt-builder-bridge.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
@@ -18,7 +19,7 @@ import {
   uiMeta,
 } from "./_verb-helpers.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
-import { modelIdsByKindMode, VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, ALL_CAPTION_STYLES, CAPTION_LOOK_IDS, SUPPORTED_FONT_NAMES, COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, MOTION_TRANSFER_PROVIDERS, type VideoAnalysisTier, VIDEO_ANALYSIS_TIER_LABELS, resolveVideoAnalysisModel, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_MAX_SCENE_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoAuditCreditId, readPromptAffixes, LIP_SYNC_PROVIDERS, VIDEO_TO_VIDEO_NODE_PROVIDERS, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDL_SOURCE_ROLES, resolveEditPlanSources, describeAudioSyncOffsetIssue, transcriptSpeakerLabels, cameraSwitchEdlProblem, cleanSpeakerNames, CAMERA_SWITCH_BOUNDS, TRANSCRIBE_LANES, CAPTION_MAX_WORDS_PER_LINE_MIN, CAPTION_MAX_WORDS_PER_LINE_MAX } from "@nodaro/shared"
+import { modelIdsByKindMode, VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, ALL_CAPTION_STYLES, CAPTION_LOOK_IDS, SUPPORTED_FONT_NAMES, COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, MOTION_TRANSFER_PROVIDERS, type VideoAnalysisTier, VIDEO_ANALYSIS_TIER_LABELS, resolveVideoAnalysisModel, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_MAX_SCENE_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoAuditCreditId, readPromptAffixes, LIP_SYNC_PROVIDERS, isPerSecondLipSyncProvider, VIDEO_TO_VIDEO_NODE_PROVIDERS, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDL_SOURCE_ROLES, resolveEditPlanSources, describeAudioSyncOffsetIssue, transcriptSpeakerLabels, cameraSwitchEdlProblem, cleanSpeakerNames, CAMERA_SWITCH_BOUNDS, TRANSCRIBE_LANES, CAPTION_MAX_WORDS_PER_LINE_MIN, CAPTION_MAX_WORDS_PER_LINE_MAX } from "@nodaro/shared"
 import { applyPromptAffixes, buildSeedanceVideoEditPrompt } from "@nodaro/prompts"
 
 // Map list_models catalog/display ids → /v1/motion-transfer route providers.
@@ -1255,6 +1256,12 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         video_asset_id: z.string().optional(),
         audio_url: z.string().url().optional(),
         audio_asset_id: z.string().optional(),
+        audio_duration_sec: z
+          .number()
+          .min(0.1)
+          .max(MAX_LIP_SYNC_AUDIO_SEC)
+          .optional()
+          .describe("Length of the audio in seconds. Models billed by the second reserve and charge by this length; when it is left out, the audio is measured first."),
         prompt: z
           .string()
           .max(500)
@@ -1396,11 +1403,16 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
       }
 
       const provider = args.model ?? "kling-avatar"
+      // A per-second model reserves (and, for every one but Kling, charges) the bucket its audio
+      // length picks; with no length the route reserves its largest bucket. So the length is sent
+      // as given, or measured first; a failed measurement sends none, today's behaviour.
+      const audioDurationSec = args.audio_duration_sec ?? (isPerSecondLipSyncProvider(provider) ? await measuredAudioSeconds(audioUrl) : undefined)
       const payload: Record<string, unknown> = {
         ...(imageUrl ? { imageUrl } : {}),
         ...(videoUrl ? { videoUrl } : {}),
         audioUrl,
         provider,
+        ...(audioDurationSec !== undefined ? { audioDurationSec } : {}),
         ...(args.prompt ? { prompt: args.prompt } : {}),
         ...(args.resolution ? { resolution: args.resolution } : {}),
         ...(args.seed !== undefined ? { seed: args.seed } : {}),

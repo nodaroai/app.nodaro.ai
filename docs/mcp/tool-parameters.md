@@ -1591,6 +1591,7 @@ Needs `workflows:execute`.
 | `video_asset_id` | string |  |  |
 | `audio_url` | string (URL) |  |  |
 | `audio_asset_id` | string |  |  |
+| `audio_duration_sec` | number |  | Length of the audio in seconds. Models billed by the second reserve and charge by this length; when it is left out, the audio is measured first. From 0.1 to 600. |
 | `prompt` | string |  | Optional performance hint (e.g. 'a confident TED speaker'). Some models use it; others ignore. At most 500 characters. |
 | `model` | string |  | Lip-sync model. Default kling-avatar. Options (list price where the model has one fixed price; per-second models show their 15 s bucket; duration-tiered models say so): kling-avatar (300 cr/15s), kling-avatar-pro (600 cr/15s), infinitalk (420 cr), omnihuman-1-5 (1020 cr/15s), latentsync (7 cr), wav2lip (10 cr), video-retalking (200 cr), sadtalker (50 cr), heygen-lipsync-precision (510 cr/15s), lipsync-2-pro (630 cr/15s), sync-lipsync-v3 (1000 cr/15s), volcengine-lipsync (300 cr/15s), seedance-2 (duration-tiered), seedance-2-fast (duration-tiered), seedance-2-mini (duration-tiered), seedance-2-5 (duration-tiered), minimax-h3 (550 cr). Input type (image vs video) and which model fits singing, dubbing, cinematic or the cheapest draft: get_node_skill("lip-sync"). Unknown values fall back to kling-avatar. |
 | `resolution` | string |  | Resolution lever. infinitalk: 480p\|720p. seedance-2(-fast): 480p\|720p\|1080p. omnihuman-1-5: 720p\|1080p (default 1080p). Other models ignore this. One of `480p`, `720p`, `1080p`. |
