@@ -6,6 +6,7 @@ import { defaultAllowedVoiceId } from "../../lib/voice-policy.js"
 import { FALLBACK_VOICES } from "../../lib/premade-voices.js"
 import { languageCodeForModel } from "./language-code.js"
 import { ttsWireModel, ttsModelKey } from "./tts-models.js"
+import { normalizeTtsVoiceSettings } from "./voice-settings.js"
 import { getTtsCapabilities } from "@nodaro/shared"
 
 // 21 ElevenLabs premade voices — name → voice_id. KIE's TTS proxy accepts
@@ -178,9 +179,14 @@ export async function directElevenLabsTTS(
     body.language_code = languageCode
   }
 
+  // The four sliders arrive from every lane exactly as their enqueuer wrote them
+  // (only the REST route validates): a numeric string becomes its number, an
+  // out-of-range one is clamped, anything else is absent — so garbage never
+  // counts as an explicit setting nor reaches the wire. See voice-settings.ts.
+  const settings = normalizeTtsVoiceSettings(options)
   const hasExplicitSettings =
-    options?.stability != null || options?.similarityBoost != null ||
-    options?.style != null || options?.speed != null
+    settings.stability != null || settings.similarityBoost != null ||
+    settings.style != null || settings.speed != null
 
   // No explicit sliders → omit voice_settings entirely so ElevenLabs applies
   // the voice's stored/tuned settings (preview fidelity). With sliders, merge
@@ -192,19 +198,19 @@ export async function directElevenLabsTTS(
     // model ignores is never put on the wire.
     const voiceSettings: Record<string, number | boolean> = {}
     if (levers.includes("stability")) {
-      voiceSettings.stability = options?.stability ?? stored?.stability ?? 0.5
+      voiceSettings.stability = settings.stability ?? stored?.stability ?? 0.5
     }
     if (levers.includes("similarity")) {
-      voiceSettings.similarity_boost = options?.similarityBoost ?? stored?.similarity_boost ?? 0.75
+      voiceSettings.similarity_boost = settings.similarityBoost ?? stored?.similarity_boost ?? 0.75
     }
     if (levers.includes("style")) {
-      voiceSettings.style = options?.style ?? stored?.style ?? 0
+      voiceSettings.style = settings.style ?? stored?.style ?? 0
     }
     if (levers.includes("speakerBoost")) {
       voiceSettings.use_speaker_boost = stored?.use_speaker_boost ?? true
     }
     if (levers.includes("speed")) {
-      const speed = options?.speed ?? stored?.speed
+      const speed = settings.speed ?? stored?.speed
       if (speed != null) voiceSettings.speed = speed
     }
     body.voice_settings = voiceSettings

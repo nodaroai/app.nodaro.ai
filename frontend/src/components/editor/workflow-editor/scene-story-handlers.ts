@@ -15,6 +15,7 @@ import {
   getSceneCharacterNames,
   mapScriptSceneToNodeData,
   NODE_DEFINITIONS,
+  TTS_VOICE_SETTING_DEFAULTS,
 } from "@/types/nodes";
 import {
   WorkflowStaleError,
@@ -514,10 +515,7 @@ export function handleExpandStoryboard(
         provider: "elevenlabs-turbo",
         voiceId: "Rachel",
         language: "en",
-        speed: 1,
-        stability: 0.5,
-        similarityBoost: 0.75,
-        style: 0,
+        ...TTS_VOICE_SETTING_DEFAULTS,
         languageCode: "",
         fieldMappings: {},
       },

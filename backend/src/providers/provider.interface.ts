@@ -305,6 +305,9 @@ export interface MusicGenerationProvider {
 }
 
 export interface TextToSpeechOptions {
+  // Typed as numbers, but a job from any lane except the REST route carries the four voice settings unvalidated
+  // (a string, out of range): every implementation runs them through `normalizeTtsVoiceSettings`, which also owns
+  // the ranges (elevenlabs/voice-settings.ts; guarded by providers/__tests__/tts-voice-settings-exits.test.ts).
   stability?: number       // 0-1
   similarityBoost?: number // 0-1
   style?: number           // 0-1

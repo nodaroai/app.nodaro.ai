@@ -33,6 +33,10 @@ Voice Library voices are verified per model by their creators. The Voice Browser
 
 If the selected voice no longer exists on ElevenLabs (e.g. it was removed from the Voice Library or the clone was deleted), the job **fails with a clear error** instead of silently substituting a different voice. The only exception is LLM-originated requests through the MCP `generate_speech` tool, where a hallucinated voice id falls back to the default voice (Rachel) so the agent still gets audio back.
 
+### Settings from apps, agents and imports
+
+In a published app, the exposed **Stability** and **Similarity** cards start at the node's own value, or at its default (`0.5` / `0.75`) when the node has none, as the config panel does. On a workflow or published-app run, including one started by an agent or the SDK, a voice setting outside its range (Stability, Similarity Boost and Style 0–1, Speed 0.7–1.2) is clamped into it, a number sent as text (`"0.4"`) counts as that number, and anything else (an empty string, a word) is ignored, so the voice's own setting applies. A request made straight to `POST /v1/text-to-speech` is still validated: a value out of range, or a number sent as text, is rejected with a 400. Running a single Text to Speech node from the editor goes through that same route, so a node holding such a value (an imported one, for example) gets the same 400 there, while a full workflow run clamps an out-of-range value and counts a number sent as text as that number, as above.
+
 ### Providers
 
 | Provider | Model | Languages | Audio Tags | Per-request character cap |

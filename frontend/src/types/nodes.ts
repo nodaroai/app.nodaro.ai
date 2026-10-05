@@ -2005,6 +2005,15 @@ export type TextToSpeechData = PromptAffixFields & {
   activeResultIndex?: number
 }
 
+/**
+ * A Text to Speech node's voice-setting defaults: the ONE place these numbers live. The node's `defaultData`
+ * spreads them, its config panel shows them for a node saved without a value (`tts-voice-settings.tsx`), and the
+ * exposed Stability and Similarity cards start from them (`defaultValue`), so a node built by MCP or imported
+ * without these fields reads the same in the editor and in a published app. Keep the key order: it is the order
+ * `defaultData` has always had, and the generated node skill prints `defaultData` as written.
+ */
+export const TTS_VOICE_SETTING_DEFAULTS = { speed: 1, stability: 0.5, similarityBoost: 0.75, style: 0 } as const
+
 /** @deprecated Use GenerateVideoNodeData. Kept for backward-compat aliases. */
 export type TextToVideoData = PromptAffixFields & {
   [key: string]: unknown
@@ -8110,7 +8119,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     creditCost: 3,
     inputs: ["prompt"],
     outputs: ["audio"],
-    defaultData: { label: "Text to Speech", provider: "elevenlabs-v3", voiceId: "Rachel", voiceType: "premade", voiceDisplayName: "Rachel", language: "en", speed: 1, stability: 0.5, similarityBoost: 0.75, style: 0, languageCode: "", textSource: "connected", directText: "", fieldMappings: {} },
+    defaultData: { label: "Text to Speech", provider: "elevenlabs-v3", voiceId: "Rachel", voiceType: "premade", voiceDisplayName: "Rachel", language: "en", ...TTS_VOICE_SETTING_DEFAULTS, languageCode: "", textSource: "connected", directText: "", fieldMappings: {} },
     exposableOutputs: [{ key: "result", label: "Result", outputType: "audio" as const }],
     exposableFields: [
       {
@@ -8122,8 +8131,8 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
           { value: "elevenlabs-multilingual", label: "ElevenLabs Multilingual v2" },
         ],
       },
-      { key: "stability", label: "Stability", type: "slider" as const, min: 0, max: 1, step: 0.05 },
-      { key: "similarityBoost", label: "Similarity", type: "slider" as const, min: 0, max: 1, step: 0.05 },
+      { key: "stability", label: "Stability", type: "slider" as const, min: 0, max: 1, step: 0.05, defaultValue: TTS_VOICE_SETTING_DEFAULTS.stability },
+      { key: "similarityBoost", label: "Similarity", type: "slider" as const, min: 0, max: 1, step: 0.05, defaultValue: TTS_VOICE_SETTING_DEFAULTS.similarityBoost },
     ],
   },
   {

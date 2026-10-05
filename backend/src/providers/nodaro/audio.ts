@@ -19,6 +19,7 @@ import type {
 } from "../provider.interface.js"
 import { createCloudJob, waitForCloudJob, NodaroCloudError, type CloudJob } from "./client.js"
 import { relayResultFields } from "./relay-cost.js"
+import { normalizeTtsVoiceSettings } from "../elevenlabs/voice-settings.js"
 
 /** Read the finalized audio URL out of a completed cloud job. */
 function extractAudioResult(
@@ -51,16 +52,21 @@ export class NodaroCloudAudioProvider implements TextToSpeechProvider {
     options?: TextToSpeechOptions,
     _reconcileOpts?: ReconcileOpts,
   ): Promise<ProviderResult> {
+    // The cloud's REST route rejects (400) a string or an out-of-range value
+    // that a keyed install's funnel (directElevenLabsTTS) would clamp or
+    // ignore. Normalise the same way here, so a keyless self-host relaying to
+    // the cloud behaves exactly like a keyed one. See elevenlabs/voice-settings.ts.
+    const settings = normalizeTtsVoiceSettings(options)
     const body: Record<string, unknown> = {
       text,
       ...(voice !== undefined ? { voice } : {}),
       ...(model !== undefined ? { provider: model } : {}),
-      ...(options?.stability !== undefined ? { stability: options.stability } : {}),
-      ...(options?.similarityBoost !== undefined
-        ? { similarityBoost: options.similarityBoost }
+      ...(settings.stability !== undefined ? { stability: settings.stability } : {}),
+      ...(settings.similarityBoost !== undefined
+        ? { similarityBoost: settings.similarityBoost }
         : {}),
-      ...(options?.style !== undefined ? { style: options.style } : {}),
-      ...(options?.speed !== undefined ? { speed: options.speed } : {}),
+      ...(settings.style !== undefined ? { style: settings.style } : {}),
+      ...(settings.speed !== undefined ? { speed: settings.speed } : {}),
       ...(options?.languageCode !== undefined ? { languageCode: options.languageCode } : {}),
     }
     const jobId = await createCloudJob("/v1/text-to-speech", body)

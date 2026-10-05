@@ -23,6 +23,7 @@ import { logCreditAudit, extractCreditFields } from "../../lib/credit-audit.js"
 import { defaultAllowedVoiceId } from "../../lib/voice-policy.js"
 import { FALLBACK_VOICES } from "../../lib/premade-voices.js"
 import { languageCodeForModel } from "../elevenlabs/language-code.js"
+import { normalizeTtsVoiceSettings } from "../elevenlabs/voice-settings.js"
 
 // ---------------------------------------------------------------------------
 // KIE.ai voice resolution
@@ -192,11 +193,14 @@ export class KieAudioProvider
       voice: resolvedVoice,
     }
 
-    // Pass optional ElevenLabs parameters
-    if (options?.stability != null) input.stability = options.stability
-    if (options?.similarityBoost != null) input.similarity_boost = options.similarityBoost
-    if (options?.style != null) input.style = options.style
-    if (options?.speed != null) input.speed = options.speed
+    // Pass optional ElevenLabs parameters — normalised exactly as on the direct
+    // API (elevenlabs/voice-settings.ts): a numeric string becomes its number,
+    // an out-of-range one is clamped, anything else is left out.
+    const settings = normalizeTtsVoiceSettings(options)
+    if (settings.stability != null) input.stability = settings.stability
+    if (settings.similarityBoost != null) input.similarity_boost = settings.similarityBoost
+    if (settings.style != null) input.style = settings.style
+    if (settings.speed != null) input.speed = settings.speed
     // Same funnel as the direct API — this is the KIE ElevenLabs TTS proxy, so
     // the provider's constraints apply identically. (`speechToText` below is
     // deliberately NOT funnelled: Scribe speaks ISO 639-3.)
