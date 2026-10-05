@@ -3058,6 +3058,8 @@ export const he: ChromeDict = {
   "pricing.feat.basicModelsOnly": "מודלים בסיסיים בלבד",
   "pricing.feat.watermarkedExports": "ייצוא עם סימן מים",
   "pricing.feat.mediaRetention": "שמירת מדיה ל־{days} ימים",
+  "pricing.feat.competitorHistory": "היסטוריית מתחרים ל־{n} חודשים",
+  "pricing.feat.competitorHistoryOne": "היסטוריית מתחרים לחודש",
   "pricing.feat.noSubscription": "ללא מנוי — קונים חבילות קרדיטים",
   "pricing.feat.creditsValid12Months": "הקרדיטים בתוקף ל־12 חודשים",
   "pricing.feat.allModelsUnlocked": "כל המודלים זמינים",

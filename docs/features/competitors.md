@@ -127,9 +127,23 @@ and the posts themselves (**Their posts** / **About them**; **Your posts** /
 search failed offers to scan the brand again: that scans every platform, at
 the brand's scan price.
 
-The newest twelve scans of each brand are kept. While a scan of a brand
-runs, its name, accounts and platforms cannot be changed (the scan was
-priced on them); its schedule can.
+## How long scans are kept
+
+Each brand's scans are kept for a window that follows your plan; older
+scans are deleted when the brand is next scanned (by you or by its
+schedule):
+
+| Plan | Scans kept |
+|---|---|
+| Free, Pay as you go, Basic | 1 month |
+| Standard | 3 months |
+| Pro | 6 months |
+| Business | 12 months |
+
+Moving up a plan starts keeping more from then on; moving down shortens the
+history at the next scan. While a scan of a brand runs, its name, accounts
+and platforms cannot be changed (the scan was priced on them); its schedule
+can.
 
 ## What works
 

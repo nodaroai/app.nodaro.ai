@@ -2973,6 +2973,8 @@ export const ko: ChromeDict = {
   "pricing.feat.basicModelsOnly": "기본 모델만 이용 가능",
   "pricing.feat.watermarkedExports": "내보내기에 워터마크 포함",
   "pricing.feat.mediaRetention": "미디어 {days}일 보관",
+  "pricing.feat.competitorHistory": "경쟁사 기록 {n}개월 보관",
+  "pricing.feat.competitorHistoryOne": "경쟁사 기록 1개월 보관",
   "pricing.feat.noSubscription": "구독 없음 — 크레딧 팩 구매",
   "pricing.feat.creditsValid12Months": "크레딧 12개월간 유효",
   "pricing.feat.allModelsUnlocked": "모든 모델 이용 가능",

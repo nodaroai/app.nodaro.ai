@@ -3035,6 +3035,8 @@ export const ja: ChromeDict = {
   "pricing.feat.basicModelsOnly": "基本モデルのみ",
   "pricing.feat.watermarkedExports": "書き出しにウォーターマーク付き",
   "pricing.feat.mediaRetention": "メディアの保存期間 {days} 日",
+  "pricing.feat.competitorHistory": "競合の履歴 {n} か月",
+  "pricing.feat.competitorHistoryOne": "競合の履歴 1 か月",
   "pricing.feat.noSubscription": "サブスクリプション不要（クレジットパックを購入）",
   "pricing.feat.creditsValid12Months": "クレジットの有効期間 12 か月",
   "pricing.feat.allModelsUnlocked": "すべてのモデルを利用可能",

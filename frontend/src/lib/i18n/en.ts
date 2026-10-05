@@ -3078,6 +3078,8 @@ export const en = {
   "pricing.feat.basicModelsOnly": "Basic models only",
   "pricing.feat.watermarkedExports": "Watermarked exports",
   "pricing.feat.mediaRetention": "{days}-day media retention",
+  "pricing.feat.competitorHistory": "{n}-month competitor history",
+  "pricing.feat.competitorHistoryOne": "1-month competitor history",
   "pricing.feat.noSubscription": "No subscription — buy credit packs",
   "pricing.feat.creditsValid12Months": "Credits valid for 12 months",
   "pricing.feat.allModelsUnlocked": "All models unlocked",

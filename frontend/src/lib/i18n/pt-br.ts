@@ -2973,6 +2973,8 @@ export const ptBR: ChromeDict = {
   "pricing.feat.basicModelsOnly": "Apenas modelos básicos",
   "pricing.feat.watermarkedExports": "Exportações com marca d’água",
   "pricing.feat.mediaRetention": "Retenção de mídia por {days} dias",
+  "pricing.feat.competitorHistory": "Histórico de concorrentes por {n} meses",
+  "pricing.feat.competitorHistoryOne": "Histórico de concorrentes por 1 mês",
   "pricing.feat.noSubscription": "Sem assinatura — compre pacotes de créditos",
   "pricing.feat.creditsValid12Months": "Créditos válidos por 12 meses",
   "pricing.feat.allModelsUnlocked": "Todos os modelos liberados",
