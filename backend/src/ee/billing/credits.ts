@@ -2,6 +2,8 @@ import { usdToCredits, PARAMETER_NODE_TYPES, withWiredSettings, MUSIC_CREDIT_ID,
 import { trySettleManagedJob } from "./managed-job-settlement.js"
 import { supabase } from "../../lib/supabase.js"
 import { ReserveRpcError, reservePrefixOf } from "../../lib/reserve-errors.js"
+import { refuseBlockedReservation } from "../../lib/access-blocks.js"
+import type { FreeGrantState } from "./signup-grant.js"
 import { authorizeExternalReservation, deliverExternalWalletSettlements, externalWalletActive } from "./external-wallet.js"
 // Track A. `allowanceEnforcementActive()` is the step-8 flip (an active payer
 // AND `billing.allowances === "enforce"`); `deploymentPayerActive()` gates the
@@ -266,7 +268,7 @@ export interface UserBalance {
    * did not land — the client shows the activation path. Absent until the
    * gate's column exists (a dev deploy can run ahead of the migration).
    */
-  freeGrantState?: "unclaimed" | "granted" | "withheld"
+  freeGrantState?: FreeGrantState
   /**
    * Welcome-credits opt-in state. PRESENT only while the offer is switched on
    * (app_settings.welcome_offer_enabled) — absent means "no popup, no banner,
@@ -2595,6 +2597,11 @@ export class CreditsService {
       consentPendingAllowed?: boolean
     },
   ): Promise<ReserveResult> {
+    // A blocked account reserves nothing, on any lane — FIRST, ahead of the
+    // self-hosted skip, the zero-cost branch and the payer swap below (the
+    // requester is the one blocked, not the account that pays).
+    await refuseBlockedReservation(userId)
+
     // Self-hosted: skip reservation
     if (creditsDisabled()) {
       return { usageLogId: "self-hosted-skip", creditsReserved: 0, watermark: false }

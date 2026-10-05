@@ -50,6 +50,10 @@ const MONEY_MARKERS: ReadonlyArray<{ re: RegExp; what: string }> = [
   // Restores a withheld signup grant: 'withheld' → 'granted' plus a top-up to
   // TIER_CREDITS.free through the activate_signup_grant RPC.
   { re: /activateSignupGrant\(/, what: "grants credits (signup grant restore)" },
+  // Migration 458: an admin takes the free grant back (credits leave the
+  // account) or restores exactly what was taken (credits come back).
+  { re: /revokeSignupGrant\(/, what: "takes credits back (signup grant take-back)" },
+  { re: /reinstateSignupGrant\(/, what: "grants credits (restore after a take-back)" },
 ]
 
 /**

@@ -9,6 +9,7 @@ import { TIER_CREDITS } from "../billing/stripe-config.js"
 import { recordConsentGrant } from "../lib/consent-record.js"
 import { syncConsentRow } from "../lib/consent-loops-sync.js"
 import { getWelcomeOfferConfig } from "../lib/welcome-offer-config.js"
+import { clientAddress } from "../../lib/client-address.js"
 
 /**
  * Welcome credits opt-in — the two writes behind the popup and the banner.
@@ -103,6 +104,7 @@ export async function welcomeOfferRoutes(app: FastifyInstance): Promise<void> {
               browserKey: body.browserKey ?? null,
               deviceKey: body.deviceKey ?? null,
               ipHash: callerKeyHash(req, { unknownScope: userId }),
+              ipScheme: clientAddress(req) ? "client" : null,
             },
             req.log,
             { requireConsent: true },

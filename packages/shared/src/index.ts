@@ -956,6 +956,10 @@ export {
   type CompetitorAboutPlatform,
   type CompetitorSchedule,
   type CompetitorAccounts,
+  type CompetitorSearchKind,
+  type CompetitorSearch,
+  type CompetitorPlatformTally,
+  type CompetitorBrandTally,
   type TrackedCompetitor,
   type ActionCardKind,
   type ActionCardPriority,
@@ -1358,6 +1362,8 @@ export {
   DYNAMIC_PRODUCER_TYPES,
   FAN_OUT_EACH_TYPES,
   FAN_OUT_EACH_HANDLES,
+  OWN_LIST_NODE_TYPES,
+  ownsItsList,
   defaultEdgeOutputMode,
   listResultsServeHandle,
   FAN_IN_TARGETS,
@@ -1553,5 +1559,7 @@ export * from "./speaker-layouts.js"
 export * from "./edl-multicam.js"
 export * from "./camera-switch-contract.js"
 export * from "./edit-plan-contract.js"
+// A person's review of an Edit Plan (`editedEdl`) and the one resolver that applies it.
+export * from "./edit-plan-review.js"
 
 export { VIDEO_DURATION_AUTO, isAutoVideoDuration } from "./video-duration-auto.js"

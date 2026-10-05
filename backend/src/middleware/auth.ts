@@ -15,6 +15,7 @@ import {
   touchBillingKeyLastUsed,
 } from "../lib/billing-key-resolver.js"
 import { clientAddress } from "../lib/client-address.js"
+import { ACCESS_BLOCKED_BODY, isUserBlocked } from "../lib/access-blocks.js"
 import { SSO_APP_METADATA_KEY } from "../lib/sso-linking.js"
 
 /**
@@ -382,7 +383,7 @@ export function registerAuthHook(app: FastifyInstance): void {
         .select(`
           id, authorization_id, expires_at, revoked_at,
           developer_app_authorizations!inner ( id, app_id, user_id, scopes_granted, revoked_at, monthly_spend_cap_credits,
-            developer_apps!inner ( kind ) )
+            developer_apps!inner ( kind, owner_user_id ) )
         `)
         .eq("token_hash", tokenHash)
         .maybeSingle()
@@ -404,11 +405,21 @@ export function registerAuthHook(app: FastifyInstance): void {
         scopes_granted: string[]
         revoked_at: string | null
         monthly_spend_cap_credits: number | null
-        developer_apps: { kind: string | null } | null
+        developer_apps: { kind: string | null; owner_user_id: string | null } | null
       }
       if (authRow.revoked_at) {
         if (isPublic) return
         reply.status(401).send({ error: { code: "unauthorized", message: "Authorization revoked" } })
+        return
+      }
+      // A developer's own app is frozen with its developer: other people's
+      // tokens for it stop too. Only `user` apps — a dynamically registered
+      // client (an MCP connector) records its first consenting user as owner,
+      // and blocking that one person must not stop the client for anyone else.
+      const appKind = authRow.developer_apps?.kind ?? "user"
+      const appOwner = appKind === "user" ? (authRow.developer_apps?.owner_user_id ?? null) : null
+      if (appOwner && (await isUserBlocked(appOwner))) {
+        reply.status(403).send(ACCESS_BLOCKED_BODY)
         return
       }
 
@@ -530,6 +541,15 @@ export function registerAuthHook(app: FastifyInstance): void {
 
       const { data, error } = await supabase.auth.getUser(token)
 
+      // A blocked account is also banned from signing in (GoTrue), so an
+      // uncached session of it fails here before the block check below could
+      // name it — answer with the same refusal, not a bare 401 that sends the
+      // browser to a login page that will refuse it again.
+      if ((error as { code?: string } | null)?.code === "user_banned") {
+        reply.status(403).send(ACCESS_BLOCKED_BODY)
+        return
+      }
+
       if (error || !data.user) {
         // Public routes: silently skip invalid tokens (optional auth)
         if (isPublic) return
@@ -614,4 +634,30 @@ export function registerAuthHook(app: FastifyInstance): void {
       error: { code: "unauthorized", message: "Authentication required" },
     })
   })
+
+  // Runs right after the resolution above, for every request it let through
+  // (Fastify skips the rest of the chain once a hook has answered).
+  app.addHook("preHandler", refuseBlockedCaller)
+}
+
+/**
+ * A blocked account is refused on EVERY credential that resolves to it — a
+ * session (cached or fresh), an API token, a connected app's token — and on a
+ * public route too when it presents one. ONE check after resolution, so a new
+ * branch above cannot forget it.
+ *
+ * Not here, on purpose:
+ * - `internal` calls. They settle work already in flight (commits, refunds,
+ *   plugin steps of a paid job) and must keep doing so after a block; NEW work
+ *   for a blocked account is refused where it starts — the trigger lanes
+ *   (`canRunWorkflow`), the orchestrator's pickup, every job insert and every
+ *   credit reservation.
+ * - `billing_key`: it acts as the deployment payer, which cannot be blocked.
+ */
+async function refuseBlockedCaller(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+  if (!req.userId) return
+  if (req.authKind === "internal" || req.authKind === "billing_key") return
+  if (await isUserBlocked(req.userId)) {
+    reply.status(403).send(ACCESS_BLOCKED_BODY)
+  }
 }

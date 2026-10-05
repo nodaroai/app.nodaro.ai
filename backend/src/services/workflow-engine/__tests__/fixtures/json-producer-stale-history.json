@@ -1,0 +1,5 @@
+[
+  { "text": "Old A\nOld B", "jobId": "exec-ef", "timestamp": "2026-10-01T10:00:00.000Z" },
+  { "url": "https://site.example.test/old", "jobId": "exec-ef-0", "timestamp": "2026-10-01T09:00:00.000Z" },
+  { "text": "Older", "jobId": "exec-ef", "timestamp": "2026-09-30T10:00:00.000Z" }
+]

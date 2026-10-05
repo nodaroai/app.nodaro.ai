@@ -4777,11 +4777,11 @@ OAuth app tokens need `assets:read` / `assets:write`; a scan also needs a
 | Method | Route | Returns |
 |---|---|---|
 | `list()` | `GET /v1/competitors` | `TrackedCompetitor[]` |
-| `get(id)` | `GET /v1/competitors/:id` | `CompetitorDetail` (latest scan with posts and cards, scan history) |
+| `get(id)` | `GET /v1/competitors/:id` | `CompetitorDetail` (latest scan with posts and cards, that scan per platform in `platforms`, scan history) |
 | `create(input)` | `POST /v1/competitors` | `TrackedCompetitor` |
 | `update(id, input)` | `PATCH /v1/competitors/:id` | `TrackedCompetitor` (`accounts` replaces the whole set; `409 scan_running` for a change to what a running scan was priced on) |
 | `delete(id)` | `DELETE /v1/competitors/:id` | `void` |
-| `cards()` | `GET /v1/competitors/cards` | `CompetitorCardsResult` (`{ cards, posts, record }`) |
+| `cards()` | `GET /v1/competitors/cards` | `CompetitorCardsResult` (`{ cards, posts, record, brands }`: `brands` gives each brand's latest scan per platform) |
 | `lessons(id)` | `GET /v1/competitors/:id/lessons` | `CompetitorLessonsResult` (`{ lessons, posts }`: what the brand's best posts share, per platform; free) |
 | `tried()` | `GET /v1/competitors/actions` | `CompetitorActionsResult` (`{ actions, record, posts }`: the cards you marked done and how each went; free) |
 | `markDone(cardId, { postUrl? })` | `POST /v1/competitors/actions` | `CardActionResult` (`{ action, posts, created }`; a card marked before returns its mark) |
@@ -5517,6 +5517,8 @@ Every type used in a public method signature is re-exported from
 - `CompetitorScan` / `CompetitorScanSummary` / `CompetitorScanCounts` / `CompetitorPost` — a scan, its counts and its posts (a `SocialPost` plus `role`: `own`, `about` or `market`)
 - `ActionCard` / `ActionCardKind` / `ActionCardPriority` — a card: `kind`, `priority`, `params`, `evidence` (post ids), English `title` / `why` / `action`
 - `CompetitorCardsResult` / `CompetitorDiscovery` — `cards()` and `discover()` answers
+- `CompetitorBrandTally` / `CompetitorPlatformTally` — a brand's latest scan per platform: its own posts and posts about it there, the searches that ran (`searched`) and failed (`failed`), its usual reach (`usual`, `unit`) and its strongest lesson (`top`)
+- `CompetitorSearch` / `CompetitorSearchKind` — one search a scan runs (`TrackedCompetitor.searchPlan`): `own` (an account) or `about` (the name) on a platform
 - `CreateCompetitorInput` / `UpdateCompetitorInput` / `CompetitorAccounts` / `CompetitorAccountKey` / `CompetitorAboutPlatform` / `CompetitorSchedule` — the request shapes
 
 ### Client identity

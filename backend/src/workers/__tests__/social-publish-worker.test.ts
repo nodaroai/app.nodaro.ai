@@ -65,6 +65,12 @@ vi.mock("../../lib/config.js", () => ({
   config: {},
 }))
 
+// Who is blocked (lib/access-blocks.ts), per test.
+const blockedUsers = new Set<string>()
+vi.mock("../../lib/access-blocks.js", () => ({
+  isUserBlocked: async (id: string | null | undefined) => (id ? blockedUsers.has(id) : false),
+}))
+
 // The job-creation funnel. Explicit here (rather than left to the supabase
 // mock) because the REQUEST GATE lives inside it: a registered policy answers
 // `{ data: null, error: { blocked } }`, and this worker used to drop that error
@@ -117,6 +123,7 @@ beforeEach(() => {
   refundMock.mockClear()
   insertInternalJobMock.mockClear()
   insertInternalJobMock.mockResolvedValue({ data: { id: "job-1" }, error: null })
+  blockedUsers.clear()
 })
 
 describe("processScheduledPost", () => {
@@ -244,6 +251,28 @@ describe("processScheduledPost — the job row gates the publish", () => {
     await expect(processScheduledPost(fakeJob())).rejects.toThrow(/jobs insert failed/)
 
     expect(executeMock).not.toHaveBeenCalled()
+  })
+
+  it("a blocked account publishes nothing: refused for good, before any job row or provider call", async () => {
+    blockedUsers.add("u1")
+    scheduledRow = baseRow()
+
+    await expect(processScheduledPost(fakeJob())).rejects.toBeInstanceOf(UnrecoverableError)
+    expect(executeMock).not.toHaveBeenCalled()
+    expect(insertInternalJobMock).not.toHaveBeenCalled()
+    // One write — straight to error; it never went to "publishing".
+    expect(rowUpdates).toHaveLength(1)
+    expect(rowUpdates[0]).toMatchObject({ status: "error", last_error: "This account is blocked." })
+    expect(releaseMock).toHaveBeenCalledWith("c1", "lock-token")
+  })
+
+  it("…and on a retry too, where the job row already exists (no insert gate) and no credits are reserved", async () => {
+    blockedUsers.add("u1")
+    scheduledRow = baseRow({ job_id: "job-existing", status: "publishing", attempts: 1 })
+
+    await expect(processScheduledPost(fakeJob(1))).rejects.toBeInstanceOf(UnrecoverableError)
+    expect(executeMock).not.toHaveBeenCalled()
+    expect(rowUpdates.some((u) => u.status === "error" && u.last_error === "This account is blocked.")).toBe(true)
   })
 
   it("an existing job_id short-circuits: no second row, publish proceeds", async () => {

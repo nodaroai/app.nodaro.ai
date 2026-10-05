@@ -9,6 +9,7 @@ import { isAllowedRequestHost, requestHostname } from "../lib/allowed-origins.js
 import { verifyAssertion, SsoAssertionError } from "../lib/sso-assertion.js"
 import { claimAssertionJti } from "../lib/sso-replay.js"
 import { resolveSsoUser } from "../lib/sso-linking.js"
+import { ACCESS_BLOCKED_BODY, isUserBlocked } from "../lib/access-blocks.js"
 
 const ParamsSchema = z.object({ provider: z.string() })
 const QuerySchema = z.object({ assertion: z.string().optional(), next: z.string().optional() })
@@ -131,6 +132,8 @@ export async function ssoRoutes(app: FastifyInstance): Promise<void> {
     // 3. Account-linking rules — reject BEFORE minting any token.
     const link = await resolveSsoUser(provider, verified)
     if (!link.ok) return reply.status(403).send({ error: { code: link.code, message: link.message } })
+    // A blocked account gets no session from this door either (lib/access-blocks.ts).
+    if (await isUserBlocked(link.userId)) return reply.status(403).send(ACCESS_BLOCKED_BODY)
 
     // 4. Mint a one-time Supabase login token and hand it to the /sso landing.
     const { data, error } = await supabase.auth.admin.generateLink({ type: "magiclink", email: link.email })

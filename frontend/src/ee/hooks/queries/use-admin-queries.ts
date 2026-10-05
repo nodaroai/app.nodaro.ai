@@ -56,6 +56,9 @@ export interface AdminUser {
   readonly storage_limit_bytes: number
   readonly role: string
   readonly created_at: string
+  /** The free signup grant's state: unclaimed | granted | withheld | revoked
+   *  (revoked = an admin took it back). Absent from the payer route. */
+  readonly free_grant_state?: string | null
   /** The per-user deployment allowance, in DISPLAY UNITS, sent only under a payer.
    *  `null` is "unavailable" (the read failed, or the row has no figure yet) and
    *  renders as an em dash; 0 would read as "exhausted". It is NOT null merely
@@ -256,7 +259,7 @@ export function useAdminUsers(
         .select(
           // `tier` too: the Stripe paths write only `tier`, so reading
           // `subscription_tier` alone showed paying customers as "free".
-          "id, email, full_name, tier, subscription_tier, subscription_credits, topup_credits, daily_spent_credits, storage_used_bytes, storage_limit_bytes, role, created_at",
+          "id, email, full_name, tier, subscription_tier, subscription_credits, topup_credits, daily_spent_credits, storage_used_bytes, storage_limit_bytes, role, created_at, free_grant_state",
         )
         .order(sortColumn, { ascending, nullsFirst: false })
         // Stable secondary sort so paginated rows don't shift around between pages.

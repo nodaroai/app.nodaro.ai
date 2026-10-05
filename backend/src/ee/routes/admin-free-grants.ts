@@ -5,7 +5,16 @@ import { config } from "../../lib/config.js"
 import { sendInternalError } from "../../lib/http-errors.js"
 import { requireAdmin } from "../middleware/require-admin.js"
 import { requirePlatformOperator } from "../middleware/require-platform-operator.js"
-import { activateSignupGrant } from "../billing/signup-grant.js"
+import { FREE_GRANT_STATES } from "../billing/free-grant-states.js"
+import {
+  activateSignupGrant,
+  readFreeGrantState,
+  reinstateSignupGrant,
+  revokeSignupGrant,
+  type GrantChangeRefusal,
+} from "../billing/signup-grant.js"
+import { recordAdminAction } from "../lib/admin-actions.js"
+import { deploymentPayerActive } from "../../lib/deployment-payer.js"
 import {
   buildClusters,
   chunk,
@@ -31,12 +40,23 @@ import {
  */
 
 const listQuery = z.object({
-  state: z.enum(["withheld", "granted", "unclaimed"]).default("withheld"),
+  state: z.enum(FREE_GRANT_STATES).default("withheld"),
   limit: z.coerce.number().int().min(1).max(200).default(50),
   offset: z.coerce.number().int().min(0).default(0),
 })
 
-const userParams = z.object({ userId: z.uuid() })
+// Lower-cased: Postgres and GoTrue resolve an upper-case uuid to the same
+// account, so every id comparison downstream must see one spelling.
+const userParams = z.object({ userId: z.uuid().transform((s) => s.toLowerCase()) })
+
+/** What the admin is told when a take-back or a restore moves nothing. */
+const GRANT_REFUSAL_MESSAGE: Record<GrantChangeRefusal, string> = {
+  not_found: "No such account.",
+  not_revocable: "This account has no free credits to take back.",
+  not_revoked: "This account's free credits were not taken back.",
+  paid_account: "This is (or was) a paying account — use Adjust credits instead.",
+  reservations_open: "This account has work running. Block it first, or try again when the work has finished.",
+}
 
 /**
  * HMAC key for the display tokens (see `keyToken`). The service-role key is
@@ -133,13 +153,26 @@ export async function adminFreeGrantRoutes(app: FastifyInstance) {
     }
   })
 
-  /** POST /v1/admin/free-grants/:userId/activate — restore a withheld grant. */
+  /**
+   * POST /v1/admin/free-grants/:userId/activate — restore. A withheld grant is
+   * granted; a grant an admin took back returns exactly what was taken, in the
+   * state it was taken from.
+   */
   app.post("/v1/admin/free-grants/:userId/activate", { preHandler: requirePlatformOperator }, async (req, reply) => {
     const parsed = userParams.safeParse(req.params)
     if (!parsed.success) {
       return reply.status(400).send({ error: { code: "validation_error", message: "Invalid user id" } })
     }
     try {
+      if ((await readFreeGrantState(parsed.data.userId)) === "revoked") {
+        const back = await reinstateSignupGrant(parsed.data.userId, req.userId!)
+        if (!back.changed) {
+          return reply.status(409).send({ error: { code: back.refusal ?? "not_revoked", message: GRANT_REFUSAL_MESSAGE[back.refusal ?? "not_revoked"] } })
+        }
+        await recordAdminAction(req, "free_grant_restore", parsed.data.userId, { credits: back.credits, state: back.state })
+        req.log.info({ userId: parsed.data.userId, adminId: req.userId, credits: back.credits }, "free grant restored after a take-back")
+        return { data: { userId: parsed.data.userId, state: back.state, credits: back.credits } }
+      }
       const result = await activateSignupGrant(parsed.data.userId, "Free signup grant (restored by admin)")
       if (!result.activated) {
         return reply.status(409).send({
@@ -150,6 +183,37 @@ export async function adminFreeGrantRoutes(app: FastifyInstance) {
       return { data: { userId: parsed.data.userId, state: result.state } }
     } catch (err) {
       return sendInternalError(reply, req, err, "Failed to restore the free grant")
+    }
+  })
+
+  /**
+   * POST /v1/admin/free-grants/:userId/revoke — take the free grant back.
+   * Platform-operator, like the restore: it moves money. What is left of the
+   * grant comes off (never purchased top-ups); the account can no longer claim
+   * or card-activate it; a restore puts back exactly what was taken.
+   */
+  app.post("/v1/admin/free-grants/:userId/revoke", { preHandler: requirePlatformOperator }, async (req, reply) => {
+    const parsed = userParams.safeParse(req.params)
+    if (!parsed.success) {
+      return reply.status(400).send({ error: { code: "validation_error", message: "Invalid user id" } })
+    }
+    if (deploymentPayerActive()) {
+      return reply.status(409).send({ error: { code: "not_applicable", message: "Free signup credits do not apply on this deployment." } })
+    }
+    try {
+      const out = await revokeSignupGrant(parsed.data.userId, req.userId!)
+      if (!out.changed) {
+        const code = out.refusal ?? "not_found"
+        return reply.status(code === "not_found" ? 404 : 409).send({ error: { code, message: GRANT_REFUSAL_MESSAGE[code] } })
+      }
+      await recordAdminAction(req, "free_grant_revoke", parsed.data.userId, { credits: out.credits })
+      req.log.info({ userId: parsed.data.userId, adminId: req.userId, credits: out.credits }, "free grant taken back by admin")
+      return { data: { userId: parsed.data.userId, state: out.state, credits: out.credits } }
+    } catch (err) {
+      if (isMissingFunctionError(err as { code?: string; message?: string })) {
+        return reply.status(503).send({ error: { code: "not_available_yet", message: "Taking back free credits is not available on this database yet." } })
+      }
+      return sendInternalError(reply, req, err, "Failed to take back the free grant")
     }
   })
 

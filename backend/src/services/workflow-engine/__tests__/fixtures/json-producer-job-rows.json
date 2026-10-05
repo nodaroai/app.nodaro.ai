@@ -1,0 +1,39 @@
+{
+  "describe-to-picker": {
+    "json": { "person": { "gender": "woman", "age": "adult" }, "mood": { "mood": "serene" } },
+    "targetPickers": ["person", "mood"],
+    "usage": { "inputTokens": 1, "outputTokens": 1 }
+  },
+  "edit-plan": {
+    "version": 1,
+    "clock": "master",
+    "sources": [{ "id": "rec", "url": "https://media.example.test/rec.m4a", "kind": "audio" }],
+    "segments": [{ "sourceId": "rec", "inMs": 0, "outMs": 4000 }],
+    "dropped": [{ "inMs": 4000, "outMs": 4800, "reason": "silence" }],
+    "viaNodaroCloud": true
+  },
+  "transcribe": {
+    "text": "Welcome back to the show.",
+    "language": "en",
+    "words": [{ "text": "Welcome", "startMs": 0, "endMs": 400 }],
+    "json": {
+      "version": 1,
+      "language": "en",
+      "words": [{ "text": "Welcome", "startMs": 0, "endMs": 400 }],
+      "segments": [{ "text": "Welcome back to the show.", "startMs": 0, "endMs": 1800 }]
+    }
+  },
+  "silence-detect": {
+    "json": { "version": 1, "durationMs": 41866, "ranges": [{ "startMs": 120, "endMs": 891 }] }
+  },
+  "audio-sync": {
+    "json": { "version": 1, "reference": "cam-a", "offsets": [{ "id": "cam-a", "offsetMs": 0 }, { "id": "cam-b", "offsetMs": 1240 }] }
+  },
+  "video-analysis": {
+    "json": { "version": 1, "summary": "A host at a desk.", "scenes": [{ "startMs": 0, "endMs": 5000, "description": "A host speaks." }] }
+  },
+  "video-audit": {
+    "json": { "version": 1, "summary": "A host at a desk.", "scenes": [{ "startMs": 0, "endMs": 5000, "description": "A host speaks to camera." }] },
+    "report": { "changes": [{ "field": "scenes[0].description", "reason": "The host faces the camera." }] }
+  }
+}

@@ -15,7 +15,7 @@ export interface FreeGrantRow {
   fullName: string | null
   createdAt: string
   subscriptionCredits: number
-  state: "withheld" | "granted" | "unclaimed"
+  state: "withheld" | "granted" | "unclaimed" | "revoked"
   reasons: string[]
   decidedAt: string | null
 }
@@ -89,5 +89,14 @@ export const MATCH_LABELS: Record<ClusterAxis, string> = {
   browser: "Browser",
   ip: "Network",
 }
+
+/** The grant states an admin can list: refused by the abuse check, given, or taken back. */
+export type GrantListState = "withheld" | "granted" | "revoked"
+
+export const GRANT_LIST_TABS: ReadonlyArray<{ value: GrantListState; label: string; empty: string }> = [
+  { value: "withheld", label: "Withheld", empty: "Nothing withheld." },
+  { value: "granted", label: "Given", empty: "No account has free credits yet." },
+  { value: "revoked", label: "Taken back", empty: "No free credits were taken back." },
+]
 
 export const PAGE_LIMIT = 50

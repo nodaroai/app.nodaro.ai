@@ -45,10 +45,20 @@ export interface MappedReserveError {
     | "allowance_unconfigured"
     | "external_wallet_denied"
     | "external_wallet_unavailable"
+    | "access_blocked"
   message: string
 }
 
 const RESERVE_PREFIX_MAP: Readonly<Record<string, MappedReserveError>> = {
+  // A blocked account (lib/access-blocks.ts). Raised by the platform check
+  // AHEAD of the RPC at every reserve site (`refuseBlockedReservation`), never
+  // by the database — carried in this vocabulary so each site's existing
+  // catch already answers it, with the same code the auth hook uses.
+  ACCOUNT_BLOCKED: {
+    status: 403,
+    code: "access_blocked",
+    message: "Access has been blocked. If you think this is a mistake, contact support.",
+  },
   EXTERNAL_WALLET_DENIED: { status: 402, code: "external_wallet_denied", message: "The shared wallet could not authorize this generation." },
   EXTERNAL_WALLET_UNAVAILABLE: { status: 503, code: "external_wallet_unavailable", message: "The shared wallet is unavailable. Please try again." },
   BUDGET_EXCEEDED: {

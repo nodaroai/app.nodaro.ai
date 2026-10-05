@@ -28,7 +28,7 @@ import { useModelCredits } from "@/hooks/use-model-credit-cost"
 import { discoverCompetitor } from "@/lib/api"
 import { useT, type MessageKey } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
-import { SCHEDULE_LABEL } from "./competitor-row"
+import { SCHEDULE_LABEL } from "./schedule-label"
 
 const ACCOUNT_PLACEHOLDER: Readonly<Record<CompetitorAccountKey, MessageKey>> = {
   tiktok: "competitors.phHandle",

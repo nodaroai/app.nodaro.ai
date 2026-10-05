@@ -32,6 +32,8 @@ vi.mock("../../ee/billing/credits.js", () => ({
 
 vi.mock("../../lib/config.js", () => ({
   config: { KIE_API_KEY: "kie", ANTHROPIC_API_KEY: "ant" },
+  // The job-insert block check (lib/access-blocks.ts) has its own suite.
+  hasAdmin: () => false,
 }))
 
 /** The route now calls llmCompleteStructured, which returns already-validated

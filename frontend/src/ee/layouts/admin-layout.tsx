@@ -9,6 +9,7 @@ import type { MessageKey } from "@/lib/i18n/en"
 import {
   BarChart3,
   Users,
+  Ban,
   Briefcase,
   Activity,
   ArrowLeft,
@@ -59,6 +60,7 @@ const STORAGE_KEY = "nodaro-admin-sidebar-collapsed"
 const ADMIN_NAV = [
   { href: "/admin", label: "Dashboard", icon: BarChart3 },
   { href: "/admin/users", label: "Users", icon: Users },
+  { href: "/admin/blocks", label: "Blocks", icon: Ban },
   ...(hasOrganizations() ? [{ href: "/admin/organizations", label: "Organizations", icon: Building2 }] : []),
   { href: "/admin/jobs", label: "Jobs", icon: Briefcase },
   { href: "/admin/usage", label: "Usage", icon: Activity },

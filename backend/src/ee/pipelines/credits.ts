@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { authorizeExternalReservation, externalWalletActive } from "../billing/external-wallet.js"
 import { mapReserveError, type MappedReserveError } from "../../lib/reserve-errors.js"
+import { blockedReservationRefusal } from "../../lib/access-blocks.js"
 // Track A: the step-8 enforcement flip. False on any deployment with no
 // `billing.payerAccount`, and false until the overlay sets
 // `billing.allowances = "enforce"`.
@@ -227,6 +228,10 @@ export type ReservePipelineResult =
 export async function reservePipelineCredits(
   args: ReservePipelineCreditsArgs,
 ): Promise<ReservePipelineResult> {
+  // A blocked account reserves nothing — the same refusal every reserve site
+  // gives (lib/access-blocks.ts), in this lane's {ok:false} shape.
+  const blocked = await blockedReservationRefusal(args.userId)
+  if (blocked) return { ok: false, reason: blocked.code, detail: blocked.message }
   // P14/W4e: the pipeline's resolved payer rides `p_workspace_id` into the
   // RPC's workspace branch. Conditional spread — a personal pipeline's wire
   // shape stays byte-identical to pre-P14.

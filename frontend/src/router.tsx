@@ -100,6 +100,7 @@ const AdminApps = lazy(() => import("@/ee/app/(admin)/admin/apps/page"))
 const AdminCreditAudit = lazy(() => import("@/ee/app/(admin)/admin/credit-audit/page"))
 const AdminCreditAnomalies = lazy(() => import("@/ee/app/(admin)/admin/credit-anomalies/page"))
 const AdminFreeGrants = lazy(() => import("@/ee/app/(admin)/admin/free-grants/page"))
+const AdminBlocks = lazy(() => import("@/ee/app/(admin)/admin/blocks/page"))
 const AdminPickerGaps = lazy(() => import("@/ee/app/(admin)/admin/picker-gaps/page"))
 const AdminCopilotGaps = lazy(() => import("@/ee/app/(admin)/admin/copilot-gaps/page"))
 const AdminKieCredits = lazy(() => import("@/ee/app/(admin)/admin/kie-credits/page"))
@@ -137,6 +138,7 @@ const adminRoutes: RouteObject[] = hasAdmin() ? [
     children: [
       { index: true, element: <SuspenseWrapper><AdminDashboard /></SuspenseWrapper> },
       { path: "users", element: <SuspenseWrapper><AdminUsers /></SuspenseWrapper> },
+      { path: "blocks", element: <SuspenseWrapper><AdminBlocks /></SuspenseWrapper> },
       { path: "jobs", element: <SuspenseWrapper><AdminJobs /></SuspenseWrapper> },
       { path: "usage", element: <SuspenseWrapper><AdminUsage /></SuspenseWrapper> },
       { path: "alerts", element: <SuspenseWrapper><AdminAlerts /></SuspenseWrapper> },

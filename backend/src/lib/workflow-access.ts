@@ -1,6 +1,7 @@
 import { supabase } from "./supabase.js"
 import { hasOrganizations } from "./config.js"
 import { getPluginServices } from "./private-plugins/load.js"
+import { anyUserBlocked, isUserBlocked } from "./access-blocks.js"
 import type { PluginOrgsService, WorkflowAccessRow } from "./private-plugins/types.js"
 
 /**
@@ -113,6 +114,20 @@ async function creatorOnly(userId: string, workflowId: string): Promise<AccessLe
   return (data as { user_id: string }).user_id === userId ? "own" : "none"
 }
 
+/** Is the workflow's owner blocked? No read at all while nobody is blocked. */
+async function ownerBlocked(workflowId: string): Promise<boolean> {
+  if (!(await anyUserBlocked())) return false
+  const { data } = await supabase
+    // tenant-scope-ignore: reads the OWNER of a workflow the caller was already
+    // allowed to reach, to ask whether that owner is blocked; scoping by the
+    // caller would answer for the caller instead.
+    .from("workflows")
+    .select("user_id")
+    .eq("id", workflowId)
+    .maybeSingle()
+  return isUserBlocked((data as { user_id?: string | null } | null)?.user_id)
+}
+
 function creatorOnlyFromRow(userId: string, row: WorkflowAccessRow): AccessLevel {
   return row.user_id === userId ? "own" : "none"
 }
@@ -177,6 +192,13 @@ export async function canDeleteWorkflow(userId: string, workflowId: string): Pro
  * and change, and cannot start a job the class pays for.
  */
 export async function canRunWorkflow(userId: string, workflowId: string): Promise<boolean> {
+  // A blocked account runs nothing — and every trigger lane (schedules,
+  // webhooks, Telegram, plugin triggers) asks HERE before it starts a run, so
+  // they all stop with the account and resume when it is unblocked. Nor does
+  // anyone run a blocked OWNER's workflow: a teammate's schedule on it would
+  // otherwise start a run every tick, each failing at pickup.
+  if (await isUserBlocked(userId)) return false
+  if (await ownerBlocked(workflowId)) return false
   const orgs = accessCapableOrgs()
   if (!orgs) return (await creatorOnly(userId, workflowId)) === "own"
   return orgs.canRunWorkflow(userId, workflowId)

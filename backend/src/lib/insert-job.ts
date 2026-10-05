@@ -44,6 +44,10 @@ import {
   type JobRequestContext,
 } from "./job-policy.js"
 import { hashGateSubject, recordJobPolicyDecision } from "./job-policy-audit.js"
+import { ACCESS_BLOCKED_BODY, isUserBlocked } from "./access-blocks.js"
+
+/** The `policyId` a blocked account's refusal carries — the platform's own rule, not a registered policy. */
+export const ACCOUNT_BLOCK_POLICY_ID = "platform:access-block"
 
 /** Re-exported so a caller that handles a block never has to know the registry
  *  exists — and so `job-policy.ts` can own the type without an import cycle
@@ -153,6 +157,15 @@ function requestContextOf(rows: ReadonlyArray<Record<string, unknown>>): JobRequ
  * caller inherits the rule rather than discovering it.
  */
 async function gateJobInsert(rows: ReadonlyArray<Record<string, unknown>>): Promise<InsertGate> {
+  // Platform rule, ahead of the policy registry and never recorded as one of
+  // its decisions: a blocked account starts no new job. This is the one funnel
+  // every job insert passes on every edition and in every process — a trigger,
+  // a worker, a scheduled post — not only requests behind the auth hook. It
+  // reuses the registry's refusal shape, so every creator already handles it.
+  const owner = (rows[0]?.user_id as string | null | undefined) ?? null
+  if (await isUserBlocked(owner)) {
+    return { block: { code: "job_blocked", policyId: ACCOUNT_BLOCK_POLICY_ID, message: ACCESS_BLOCKED_BODY.error.message } }
+  }
   if (!hasJobPolicyFor("request")) return null
   const ctx = requestContextOf(rows)
   const hash = hashGateSubject({ jobType: ctx.jobType, userId: ctx.userId, inputData: ctx.inputData })

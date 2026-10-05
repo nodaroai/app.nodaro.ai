@@ -280,6 +280,8 @@ describe("POST /v1/credits/claim-signup-grant — the claim", () => {
       browser_key: HEX64,
       device_key: OTHER_HEX64,
       ip_hash: EXPECTED_IP_HASH,
+      // A real client address was read, so this network may be offered for blocking.
+      ip_scheme: "client",
       source: "claim",
     })
     // A KEYED claim may overwrite a keyless row the balance-read fallback
@@ -312,7 +314,7 @@ describe("POST /v1/credits/claim-signup-grant — the claim", () => {
     expect(row.ip_hash).toBe(EXPECTED_IP_HASH)
     expect(row.ip_hash).not.toBe(forged)
     // No body key reaches the insert other than the two fingerprints.
-    expect(Object.keys(row).sort()).toEqual(["browser_key", "device_key", "ip_hash", "source", "user_id"])
+    expect(Object.keys(row).sort()).toEqual(["browser_key", "device_key", "ip_hash", "ip_scheme", "source", "user_id"])
   })
 
   it("logs the top-up and invalidates the balance cache when credits actually rose", async () => {

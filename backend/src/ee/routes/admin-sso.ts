@@ -5,6 +5,7 @@ import { requireAdmin } from "../middleware/require-admin.js"
 import { invalidateAuthCache } from "../../middleware/auth.js"
 import { SSO_APP_METADATA_KEY } from "../../lib/sso-linking.js"
 import { deploymentPayerId } from "../../lib/deployment-payer.js"
+import { BAN_DURATION, BLOCK_BAN_MARKER } from "../lib/account-blocking.js"
 
 /**
  * SAI-6 / H7 — admin de-provisioning for federated (SSO) accounts.
@@ -48,7 +49,6 @@ import { deploymentPayerId } from "../../lib/deployment-payer.js"
  * de-provisionable, which is what this route exists for.
  */
 
-const BAN_DURATION = "876000h" // ~100 years — GoTrue's "permanent ban" idiom (undo: "none")
 
 const paramsSchema = z.object({
   provider: z.string().min(1),
@@ -113,10 +113,12 @@ export async function adminSsoRoutes(app: FastifyInstance): Promise<void> {
       }
     } else {
       // Ban re-login AND clear the SSO marker so the H6 gate rejects a lingering
-      // access token on its next verification (nulling a key removes it).
+      // access token on its next verification (nulling a key removes it). The
+      // ban is the de-provision's from now on: clear a block's marker too, or
+      // unblocking the account later would lift it.
       const { error } = await supabase.auth.admin.updateUserById(userId, {
         ban_duration: BAN_DURATION,
-        app_metadata: { [SSO_APP_METADATA_KEY]: null, sso_subject: null },
+        app_metadata: { [SSO_APP_METADATA_KEY]: null, sso_subject: null, [BLOCK_BAN_MARKER]: null },
       })
       if (error) {
         req.log.error({ err: error }, "admin/sso de-provision (ban) failed")

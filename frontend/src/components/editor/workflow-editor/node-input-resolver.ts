@@ -2,7 +2,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { proShotStills } from "@/lib/scene3d/pro-media-result";
 import { readSunoIds } from "@/lib/suno-ids";
 import { getParameterPromptHint } from "@nodaro/prompts"
-import { DYNAMIC_PRODUCER_TYPES, DEFAULT_CHARACTER_FACET, PARAMETER_NODE_TYPES, getParameterValue, OBJECT_PICKER_NODE_TYPES, parseGroupHandle, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, editPlanSourceDurationSec, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, FAN_OUT_EACH_TYPES, FAN_OUT_EACH_HANDLES, defaultEdgeOutputMode, listResultsServeHandle, compactWithRows, liveRowColumn, resolveListFanOut, type FanOutCandidate, type ListFanOut, extractAllGeneratedResults, extractGeneratedJsonAsList, splitGeneratedItems, SOCIAL_POST_NODE_TYPES, resolveSourceThroughConnectedList, VARIABLES_HANDLE_ID, extractReferencedLabels, canonicalVarName, characterMentionSlug, SUNO_TRACK_SOURCE_TYPES, isFanInEdge, isFanInNodeType, videoLinkPageUrl, socialSearchPostVideo } from "@nodaro/shared"
+import { DYNAMIC_PRODUCER_TYPES, DEFAULT_CHARACTER_FACET, PARAMETER_NODE_TYPES, getParameterValue, OBJECT_PICKER_NODE_TYPES, parseGroupHandle, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, editPlanSourceDurationSec, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, FAN_OUT_EACH_TYPES, FAN_OUT_EACH_HANDLES, defaultEdgeOutputMode, listResultsServeHandle, compactWithRows, liveRowColumn, resolveListFanOut, type FanOutCandidate, type ListFanOut, extractAllGeneratedResults, extractGeneratedJsonAsList, splitGeneratedItems, SOCIAL_POST_NODE_TYPES, resolveSourceThroughConnectedList, VARIABLES_HANDLE_ID, extractReferencedLabels, canonicalVarName, characterMentionSlug, SUNO_TRACK_SOURCE_TYPES, isFanInEdge, isFanInNodeType, videoLinkPageUrl, socialSearchPostVideo, ownsItsList } from "@nodaro/shared"
 import type { EntityKind, ConnectedReference } from "@nodaro/shared"
 import { VIDEO_OVERLAY_LAYER_PLAN_HANDLE, videoOverlaySlotOfHandle, editPlanTranscriptOrigin } from "@nodaro/shared"
 import { buildNodeRefMap, resolveTextRefs } from "@/lib/node-refs";
@@ -989,6 +989,13 @@ export function extractNodeOutputAsList(
   // JSON array output (e.g. web-scrape generatedJson) — each element is one list item.
   const jsonItems = extractGeneratedJsonAsList(data);
   if (jsonItems) return jsonItems;
+  // Extract Field / JSON Process: the list the node produced, or none — never
+  // a history in generatedResults, which no run of theirs writes (an earlier
+  // build's server runs left one; ownsItsList in @nodaro/shared).
+  if (ownsItsList(node.type)) {
+    const own = data.__listResults as string[] | undefined;
+    return Array.isArray(own) && own.length > 0 ? own : undefined;
+  }
   // Prefer the node's accumulated generatedResults (persistent, ordered).
   const accumulated = extractAllGeneratedResults(data);
   if (accumulated) return accumulated;
@@ -1299,7 +1306,10 @@ export function resolveNodeInputs(
               ? ((srcData.__restResults as string[] | undefined) ?? (srcData.restResults as string[] | undefined))
               : ((srcData.__pickedResults as string[] | undefined) ?? (srcData.pickedResults as string[] | undefined)))
           : (() => {
-              const fromState = (srcData.__listResults as string[] | undefined) ?? extractAllGeneratedResults(srcData);
+              // Extract Field / JSON Process: their own list only, never a
+              // stale history (ownsItsList, @nodaro/shared).
+              const fromState = (srcData.__listResults as string[] | undefined)
+                ?? (ownsItsList(src.type) ? undefined : extractAllGeneratedResults(srcData));
               if (fromState && fromState.length > 0) return fromState;
               // Data-only list-family sources (rows typed straight into the
               // table, node never "ran"): an explicit edge mode (Bundle) must

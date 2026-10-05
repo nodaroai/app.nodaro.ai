@@ -15,6 +15,17 @@ import { unwrapEditPlanOutput } from "@nodaro/shared"
  *     buildCompletedResultPatch`) and the persisted-run-state lane
  *     (`use-workflow-persistence.ts :: syncNodeResultsFromDB`).
  *
+ * In the three lanes that land a server run (the live run and the two
+ * load-time lanes), as in the two job restores, a type listed here takes this
+ * mapping ONLY — never the lane's generic media / text / list writes — so a
+ * server run writes
+ * exactly what the node's canvas run writes (decided 2026-10-05). The generic
+ * text write used to add a text history to `generatedResults` (and a list of
+ * links one entry per link) that no canvas run writes, which the list readers
+ * then preferred over the node's own list. `json-run-result-canvas-shape.test.ts`
+ * runs each type's real canvas executor and fails on any field a server-run
+ * lane writes that it does not.
+ *
  * The lanes used to map media URLs, text and a few named outputs and never
  * `json`. So a workflow run (Run, Run from here, a reopen after either) left
  * Edit Plan's plan, Transcribe's transcript and Silence Detect's ranges on the
@@ -62,20 +73,6 @@ const RESULT_FIELD: Readonly<Record<string, string>> = {
 
 export function isJsonRunResultType(nodeType: string | null | undefined): boolean {
   return typeof nodeType === "string" && JSON_RUN_RESULT_TYPES.has(nodeType)
-}
-
-/** Transcribe: this mapping lands its text (on a take that carries the
- *  transcript too), so a lane's generic text write must not add a second,
- *  transcript-less take. */
-export function jsonRunResultLandsText(nodeType: string | null | undefined): boolean {
-  return nodeType === "transcribe"
-}
-
-/** Edit Plan: a Clips plan's list IS its json (a bare `Edl[]` on
- *  `generatedJson`, which the list readers spread). A canvas run never writes
- *  the generic `__listResults` for it, and neither may a server run. */
-export function jsonRunResultIsList(nodeType: string | null | undefined): boolean {
-  return nodeType === "edit-plan"
 }
 
 /** What a lane reads off a finished run: the orchestrator's node output
@@ -200,7 +197,8 @@ function jsonProcessPatch(output: JsonRunOutput): Record<string, unknown> | unde
 /**
  * The node-data patch for a finished run's json, or `undefined` for a node
  * type this mapping does not cover and for an output with no result to land.
- * Spread it AFTER a lane's own generic writes.
+ * In a lane that lands a server run it is the node's WHOLE result patch (beside
+ * the status), never mixed with the lane's generic writes.
  */
 export function jsonRunResultPatch(
   nodeType: string | null | undefined,
