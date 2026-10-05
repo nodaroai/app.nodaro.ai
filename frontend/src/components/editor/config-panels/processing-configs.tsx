@@ -62,6 +62,9 @@ import { Textarea } from "@/components/ui/textarea"
 import { MappableField } from "./mappable-field"
 import type { ConfigProps } from "./types"
 import { formatNumber } from "@/lib/i18n/format"
+import { EdlValidityBadge } from "@/components/inspector/edl-validity-badge"
+import { useApplyEdlRenderEdl } from "@/hooks/use-apply-edl-render-edl"
+import { applyEdlRenderContext } from "@/lib/apply-edl-render-input"
 
 // Lazy — pulls @remotion/player + remotion (~63KB gz) out of the editor chunk;
 // only fetched when an Add Captions node's config panel is opened.
@@ -854,13 +857,18 @@ export function TrimAudioConfig({ data, onUpdate }: ConfigProps<TrimAudioData>) 
   )
 }
 
-export function ApplyEdlConfig({ data, onUpdate }: ConfigProps<ApplyEdlData>) {
+export function ApplyEdlConfig({ data, onUpdate, nodeId }: ConfigProps<ApplyEdlData> & { readonly nodeId?: string }) {
   const t = useT()
+  // The EDL this node would render now — what the wired producer holds, or its
+  // inline EDL — and its wired sources, judged with Apply EDL's own render rule
+  // and the node's settings, as the server will judge the run.
+  const renderEdl = useApplyEdlRenderEdl(nodeId)
   return (
     <div className="flex flex-col gap-3">
       <p className="text-[11px] text-muted-foreground">
         {t("proccfg.applyEdlHint")}
       </p>
+      <EdlValidityBadge value={renderEdl.value} render={applyEdlRenderContext(data, renderEdl)} />
       <div>
         <Label>{t("proccfg.applyEdlOutput")}</Label>
         <Select value={data.output ?? "video"} onValueChange={(v) => onUpdate({ output: v as "video" | "audio" })}>

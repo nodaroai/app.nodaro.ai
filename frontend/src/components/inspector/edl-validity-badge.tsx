@@ -1,19 +1,21 @@
 "use client"
 
 /**
- * "Well-formed EDL" / "N EDL issues" — the first frontend use of the shared EDL
- * validator, on the Edit Plan node's plan. It promises structure only (decided
- * 2026-10-04: the badge is split by surface): whatever is anchored at a render —
- * Apply EDL's panel, the review inspector, Render final — judges with the
- * render's own rule, which also refuses what the renderer cannot draw. The
- * verdict is `edlValidityOf`, computed once per value; the details are the
- * validator's own messages, shown left-to-right in every locale (they quote
+ * The EDL validity badge, split by surface (decided 2026-10-04):
+ *  - on the Edit Plan node's plan, "Well-formed EDL" / "N EDL issues": it
+ *    promises structure only;
+ *  - with `render` (the Apply EDL config panel; later the review inspector and
+ *    Render final), "Ready to render" / "N EDL issues": it judges the EDL the
+ *    node would render now with Apply EDL's own render rule, which also refuses
+ *    what the renderer cannot draw.
+ * The verdict is `edlValidityOf`, computed once per value; the details are the
+ * validators' own messages, shown left-to-right in every locale (they quote
  * field names).
  */
 import { useMemo, useState } from "react"
 import { AlertTriangle, CheckCircle2, XCircle } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { edlValidityOf, type EdlValidity } from "@/lib/edl-validity"
+import { edlValidityOf, type ApplyEdlRenderContext, type EdlValidity } from "@/lib/edl-validity"
 import { INSPECTOR_POPPER } from "./inspector-shell"
 import { useT } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
@@ -32,17 +34,38 @@ function MessageList({ title, messages }: { readonly title: string; readonly mes
   )
 }
 
-function label(v: EdlValidity, t: ReturnType<typeof useT>): string {
+function label(v: EdlValidity, rendered: boolean, t: ReturnType<typeof useT>): string {
   if (v.unparseable) return t("node.edlNotJson")
   if (!v.ok) return v.issues.length === 1 ? t("node.edlIssuesOne") : t("node.edlIssuesMany", { n: v.issues.length })
-  return t("node.edlWellFormed")
+  return rendered ? t("node.edlReadyToRender") : t("node.edlWellFormed")
 }
 
-export function EdlValidityBadge({ value, className }: { readonly value: unknown; readonly className?: string }) {
+export function EdlValidityBadge({ value, render, className }: {
+  readonly value: unknown
+  /** Judge `value` as what an Apply EDL node renders, with its render rule
+   *  (see `ApplyEdlRenderContext`). Absent: structure only. */
+  readonly render?: ApplyEdlRenderContext
+  readonly className?: string
+}) {
   const t = useT()
-  const validity = useMemo(() => edlValidityOf(value), [value])
+  // Keyed on the context's fields, not its object: a caller may build it inline.
+  const clipList = render?.clipList
+  const output = render?.output
+  const crossfadeMs = render?.crossfadeMs
+  const sources = render?.sources
+  const validity = useMemo(
+    () =>
+      edlValidityOf(
+        value,
+        clipList === undefined || output === undefined || crossfadeMs === undefined || sources === undefined
+          ? {}
+          : { render: { clipList, output, crossfadeMs, sources } },
+      ),
+    [value, clipList, output, crossfadeMs, sources],
+  )
   const [open, setOpen] = useState(false)
   if (!validity) return null
+  const mode = render ? "render" : "structure"
 
   const warningCount = validity.warnings.length
   const hasDetails = validity.issues.length > 0 || warningCount > 0
@@ -54,7 +77,7 @@ export function EdlValidityBadge({ value, className }: { readonly value: unknown
   const pill = (
     <span className="inline-flex items-center gap-1">
       <Icon className="h-3 w-3 shrink-0" />
-      <span>{label(validity, t)}</span>
+      <span>{label(validity, render !== undefined, t)}</span>
       {validity.ok && warningCount > 0 && (
         <span className="inline-flex items-center gap-0.5 text-amber-600 dark:text-amber-400">
           <AlertTriangle className="h-3 w-3" />
@@ -70,7 +93,7 @@ export function EdlValidityBadge({ value, className }: { readonly value: unknown
   )
 
   if (!hasDetails) {
-    return <span data-testid="edl-validity-badge" data-ok={validity.ok} className={pillClass}>{pill}</span>
+    return <span data-testid="edl-validity-badge" data-ok={validity.ok} data-mode={mode} className={pillClass}>{pill}</span>
   }
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -79,6 +102,7 @@ export function EdlValidityBadge({ value, className }: { readonly value: unknown
           type="button"
           data-testid="edl-validity-badge"
           data-ok={validity.ok}
+          data-mode={mode}
           // A trigger inside a canvas node must not start a drag or a pan, and
           // React Flow must not read its keys (Backspace would delete the node).
           className={cn(pillClass, "nodrag nopan nokey cursor-pointer hover:opacity-90")}

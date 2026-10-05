@@ -6363,6 +6363,7 @@ export const he: ChromeDict = {
   "node.cameraSwitchTranscriptOut": "תמלול (עם שמות)",
   "node.editPlanClips": "{count} קליפים",
   "node.edlWellFormed": "EDL במבנה תקין",
+  "node.edlReadyToRender": "מוכן לרינדור",
   "node.edlIssuesOne": "בעיה אחת ב-EDL",
   "node.edlIssuesMany": "{n} בעיות ב-EDL",
   "node.edlWarningsOne": "אזהרה אחת",

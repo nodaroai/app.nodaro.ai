@@ -15,6 +15,7 @@ import {
   APPLY_EDL_CREDITS_PER_OUTPUT_MINUTE,
   APPLY_EDL_PROXY_CREDITS_PER_OUTPUT_MINUTE,
 } from "../apply-edl-plan.js"
+import { findEffectiveEdlIssues, type ApplyEdlIssueCode } from "@nodaro/render-rules"
 
 const oneSegment = (durMs: number): Edl => ({
   version: 1,
@@ -358,5 +359,79 @@ describe("validateEffectiveEdl — a segment must start on its source", () => {
     )
     expect(validateEffectiveEdl(edl, "audio").ok).toBe(true)
     expect(validateEffectiveEdl(edl, "video").issues.some((i) => /source "cam" begins at 5000ms/.test(i))).toBe(true)
+  })
+})
+
+// The same checks, coded: each issue names the check that found it, so a caller
+// (the editor's review inspector) can say WHY without reading the message, and
+// the messages are exactly the ones every ingress returns.
+describe("findEffectiveEdlIssues — each issue names the check that found it", () => {
+  const cases: ReadonlyArray<{ code: ApplyEdlIssueCode; edl: Record<string, unknown> }> = [
+    { code: "structural", edl: { version: 1, clock: "master", sources: [], segments: [] } },
+    {
+      code: "output-cap",
+      edl: { version: 1, clock: "master", sources: [{ id: "A", url: "https://m.test/a.mp4", kind: "video" }], segments: [{ id: "s0", inMs: 0, outMs: 181 * 60_000, video: "A" }] },
+    },
+    {
+      code: "unknown-role",
+      edl: { version: 1, clock: "master", sources: [{ id: "A", url: "https://m.test/a.mp4", kind: "video", role: "master-audoi" }], segments: [{ id: "s0", inMs: 0, outMs: 2000, video: "A" }] },
+    },
+    {
+      code: "no-picture",
+      edl: { version: 1, clock: "master", sources: [{ id: "M", url: "https://m.test/m.wav", kind: "audio" }], segments: [{ id: "s0", inMs: 0, outMs: 2000, audio: "M" }] },
+    },
+    {
+      code: "layout",
+      edl: { version: 1, clock: "master", sources: [{ id: "A", url: "https://m.test/a.mp4", kind: "video" }], segments: [{ id: "s0", inMs: 0, outMs: 2000, video: "A", layout: { mode: "pip", slots: [{ source: "A" }] } }] },
+    },
+    {
+      code: "region",
+      edl: { version: 1, clock: "master", sources: [{ id: "A", url: "https://m.test/a.mp4", kind: "video" }], segments: [{ id: "s0", inMs: 0, outMs: 2000, video: "A", region: { x: 0.1, y: 0.1, w: 0.5, h: 0.5 } }] },
+    },
+    {
+      code: "reads-before-source",
+      edl: { version: 1, clock: "master", sources: [{ id: "A", url: "https://m.test/a.mp4", kind: "video", offsetMs: 700 }], segments: [{ id: "s0", inMs: 0, outMs: 2000, video: "A" }] },
+    },
+  ]
+
+  for (const { code, edl } of cases) {
+    it(`"${code}", with the messages validateEffectiveEdl returns`, () => {
+      const effective = buildEffectiveEdl(edl)
+      const found = findEffectiveEdlIssues(effective, "video")
+      expect(found.map((issue) => issue.code)).toEqual([code])
+      expect(found.map((issue) => issue.message)).toEqual(validateEffectiveEdl(effective, "video").issues)
+    })
+  }
+
+  it('"missing-url": a referenced source with no url (the structural check flags it too)', () => {
+    const effective = buildEffectiveEdl({
+      version: 1,
+      clock: "master",
+      sources: [{ id: "A", url: "", kind: "video" }],
+      segments: [{ id: "s0", inMs: 0, outMs: 2000, video: "A" }],
+    })
+    const found = findEffectiveEdlIssues(effective, "video")
+    expect(found.map((issue) => issue.code)).toContain("missing-url")
+    expect(found.map((issue) => issue.message)).toEqual(validateEffectiveEdl(effective, "video").issues)
+  })
+
+  it("the checks of one source name it; the others do not", () => {
+    const issueOf = (code: ApplyEdlIssueCode) => {
+      const edl = code === "missing-url"
+        ? { version: 1, clock: "master", sources: [{ id: "A", url: "", kind: "video" }], segments: [{ id: "s0", inMs: 0, outMs: 2000, video: "A" }] }
+        : cases.find((c) => c.code === code)!.edl
+      return findEffectiveEdlIssues(buildEffectiveEdl(edl), "video").find((issue) => issue.code === code)
+    }
+    for (const code of ["unknown-role", "missing-url", "reads-before-source"] as const) {
+      expect(issueOf(code)).toMatchObject({ code, sourceId: "A" })
+    }
+    // Every other check (region and layout among them) is matched by its code alone.
+    for (const { code } of cases.filter((c) => !["unknown-role", "reads-before-source"].includes(c.code))) {
+      expect(issueOf(code)).not.toHaveProperty("sourceId")
+    }
+  })
+
+  it("a renderable EDL has none", () => {
+    expect(findEffectiveEdlIssues(oneSegment(2000), "video")).toEqual([])
   })
 })

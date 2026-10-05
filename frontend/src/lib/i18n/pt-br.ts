@@ -6217,6 +6217,7 @@ export const ptBR: ChromeDict = {
   "node.cameraSwitchTranscriptOut": "Transcrição (com nomes)",
   "node.editPlanClips": "{count} clipes",
   "node.edlWellFormed": "EDL bem formado",
+  "node.edlReadyToRender": "Pronto para renderizar",
   "node.edlIssuesOne": "1 problema no EDL",
   "node.edlIssuesMany": "{n} problemas no EDL",
   "node.edlWarningsOne": "1 aviso",

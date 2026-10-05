@@ -6406,6 +6406,7 @@ export const en = {
   "node.cameraSwitchTranscriptOut": "Transcript (named)",
   "node.editPlanClips": "{count} clips",
   "node.edlWellFormed": "Well-formed EDL",
+  "node.edlReadyToRender": "Ready to render",
   "node.edlIssuesOne": "1 EDL issue",
   "node.edlIssuesMany": "{n} EDL issues",
   "node.edlWarningsOne": "1 warning",

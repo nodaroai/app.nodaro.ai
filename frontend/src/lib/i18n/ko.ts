@@ -6217,6 +6217,7 @@ export const ko: ChromeDict = {
   "node.cameraSwitchTranscriptOut": "녹취록(이름 적용)",
   "node.editPlanClips": "클립 {count}개",
   "node.edlWellFormed": "형식이 올바른 EDL",
+  "node.edlReadyToRender": "렌더링 준비 완료",
   "node.edlIssuesOne": "EDL 문제 1개",
   "node.edlIssuesMany": "EDL 문제 {n}개",
   "node.edlWarningsOne": "경고 1개",

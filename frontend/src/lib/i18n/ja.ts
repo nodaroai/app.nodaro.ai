@@ -6217,6 +6217,7 @@ export const ja: ChromeDict = {
   "node.cameraSwitchTranscriptOut": "文字起こし（名前付き）",
   "node.editPlanClips": "{count} 本のクリップ",
   "node.edlWellFormed": "形式が正しいEDL",
+  "node.edlReadyToRender": "レンダリング可能",
   "node.edlIssuesOne": "EDLの問題 1件",
   "node.edlIssuesMany": "EDLの問題 {n}件",
   "node.edlWarningsOne": "警告 1件",

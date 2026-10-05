@@ -6,7 +6,7 @@ import { resolve, join } from 'node:path'
 import { execFileSync } from 'node:child_process'
 
 const outputs = {
-  packages: ['packages/shared/dist', 'packages/prompts/dist', 'packages/client/dist', 'packages/picker-ui/dist'],
+  packages: ['packages/shared/dist', 'packages/prompts/dist', 'packages/client/dist', 'packages/picker-ui/dist', 'packages/render-rules/dist'],
   backend: ['backend/dist'],
 }
 const hash = path => createHash('sha256').update(readFileSync(path)).digest('hex')

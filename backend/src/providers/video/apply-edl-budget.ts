@@ -1,7 +1,8 @@
 /**
  * apply-edl's chunk plan and liveness budget — PURE (no ffmpeg, no storage, no
- * config): imports only `@nodaro/shared` and the dependency-free ceiling leaf
- * `ffmpeg-timeouts.ts`.
+ * config): imports only `@nodaro/shared`, the pure render rule
+ * (`@nodaro/render-rules`, for the output cap) and the dependency-free ceiling
+ * leaf `ffmpeg-timeouts.ts`.
  *
  * WHY A LEAF. Two readers need the SAME number for the same job:
  *   - the video worker, whose pre-task heartbeat beats for as long as the
@@ -19,6 +20,7 @@
  */
 import type { Edl, EdlSegment } from "@nodaro/shared"
 import { edlDurationMs } from "@nodaro/shared"
+import { APPLY_EDL_MAX_OUTPUT_MS } from "@nodaro/render-rules"
 import { DEFAULT_FFMPEG_TIMEOUT_MS, DOWNLOAD_MAX_MS, FFPROBE_TIMEOUT_MS } from "./ffmpeg-timeouts.js"
 
 /** How a render is split into chunks. Both the render (`ApplyEdlOptions`
@@ -36,20 +38,17 @@ export interface ChunkPlanOptions {
 
 /**
  * The longest OUTPUT one apply-edl render may produce: 180 minutes (product
- * decision 2026-09-24 — the 3-hour cap the podcast Phase-2 plan's F4 set on
- * apply-edl). THE one constant for it:
- *  - every ingress refuses a longer edit with a 400 naming both lengths
- *    (`validateEffectiveEdl` in `lib/apply-edl-plan.ts` — the REST route,
- *    the DAG payload-builder and the MCP verb all call it, before any credit
- *    is reserved);
- *  - the job's declared budget refuses to size one (`applyEdlJobBudgetMs`
- *    below), so a payload that reached a worker WITHOUT passing ingress can
- *    never be budgeted past a 180-minute output — it gets the default
- *    ceilings instead.
- * Measured on the rendered output (`edlDurationMs`, crossfade overlaps
- * subtracted) — the same length the per-minute reserve is priced on.
+ * decision 2026-09-24). THE one constant lives with the render rule in
+ * `@nodaro/render-rules`, where every ingress refuses a longer edit
+ * (`validateEffectiveEdl`, before any credit is reserved). Re-exported here
+ * because this leaf reads it too: the job's declared budget refuses to size a
+ * longer one (`applyEdlJobBudgetMs` below), so a payload that reached a worker
+ * WITHOUT passing ingress can never be budgeted past a 180-minute output — it
+ * gets the default ceilings instead. Measured on the rendered output
+ * (`edlDurationMs`, crossfade overlaps subtracted) — the same length the
+ * per-minute reserve is priced on.
  */
-export const APPLY_EDL_MAX_OUTPUT_MS = 180 * 60_000
+export { APPLY_EDL_MAX_OUTPUT_MS }
 
 /** Max segments in ONE video `filter_complex`. A single video graph SILENTLY
  *  DROPS FRAMES past ~45-60 segments on a cloud runner — measured on the CI

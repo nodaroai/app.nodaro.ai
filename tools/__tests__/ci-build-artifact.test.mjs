@@ -10,7 +10,7 @@ function fixture(t) {
   const root = mkdtempSync(join(tmpdir(), 'ci-artifact-'))
   t.after(() => rmSync(root, { recursive: true, force: true }))
   writeFileSync(join(root, 'package-lock.json'), 'lockfile')
-  for (const p of ['shared', 'prompts', 'client', 'picker-ui']) {
+  for (const p of ['shared', 'prompts', 'client', 'picker-ui', 'render-rules']) {
     mkdirSync(join(root, 'packages', p, 'dist'), { recursive: true })
     writeFileSync(join(root, 'packages', p, 'dist', 'index.js'), `export default '${p}'`)
   }

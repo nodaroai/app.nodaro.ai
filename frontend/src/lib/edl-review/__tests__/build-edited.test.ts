@@ -1,7 +1,10 @@
 import { describe, it, expect } from "vitest"
 import { edlDurationMs, normalizeEdl, validateEdl, type Edl } from "@nodaro/shared"
 import { buildEdited, isReviewableBase } from "../build-edited"
-import { cutRange, keptSetOf, restoreReason, restoreSpan } from "../kept-set"
+import { cutRange, keptSetOf } from "../kept-set"
+// K is built with the bare set operations: buildEdited builds any K, including
+// one the restore lock would refuse (restore.test.ts covers the lock).
+import { keepReason, keepSpan } from "./review-fixtures"
 
 const iv = (inMs: number, outMs: number) => ({ inMs, outMs })
 const word = (text: string, startMs: number, endMs: number) => ({ text, startMs, endMs })
@@ -39,7 +42,7 @@ describe("buildEdited", () => {
   })
 
   it("restoring a gap between two pieces of the same camera joins them; the boundary the plan split at (a camera change) stays", () => {
-    const edited = buildEdited(plan, restoreSpan(K0, plan.dropped![0]))
+    const edited = buildEdited(plan, keepSpan(K0, plan.dropped![0]))
     expect(spans(edited)).toEqual([
       ["seg-0", 0, 2000, "cam-a"],
       ["seg-2", 2000, 3000, "cam-b"],
@@ -49,7 +52,7 @@ describe("buildEdited", () => {
   })
 
   it("restored time between two different cameras takes the preceding camera", () => {
-    const edited = buildEdited(plan, restoreReason(K0, plan, "tangent"))
+    const edited = buildEdited(plan, keepReason(K0, plan, "tangent"))
     expect(spans(edited)).toEqual([
       ["seg-0", 0, 1000, "cam-a"],
       ["seg-1", 1300, 2000, "cam-a"],
@@ -73,12 +76,12 @@ describe("buildEdited", () => {
   })
 
   it("cutting restored time again shows the plan's reason, not manual: K holds no history", () => {
-    const k = cutRange(restoreSpan(K0, plan.dropped![0]), iv(1000, 1300), [word("um", 1000, 1300)])
+    const k = cutRange(keepSpan(K0, plan.dropped![0]), iv(1000, 1300), [word("um", 1000, 1300)])
     expect(buildEdited(plan, k)).toEqual(plan)
   })
 
   it("keeps the plan's sources, meta and the order of its dropped spans", () => {
-    const edited = buildEdited(plan, restoreReason(K0, plan, "silence"))
+    const edited = buildEdited(plan, keepReason(K0, plan, "silence"))
     expect(edited.sources).toEqual(plan.sources)
     expect(edited.meta).toEqual(plan.meta)
     expect(edited.dropped).toEqual([
@@ -96,7 +99,7 @@ describe("buildEdited", () => {
       segments: [{ id: "seg-0", inMs: 500, outMs: 2000, video: "cam-b", audio: "mic" }],
       dropped: [{ inMs: 0, outMs: 500, reason: "no-picture" }],
     })
-    const edited = buildEdited(late, restoreReason(keptSetOf(late), late, "no-picture"))
+    const edited = buildEdited(late, keepReason(keptSetOf(late), late, "no-picture"))
     expect(edited.segments).toEqual([{ id: "seg-0@0", inMs: 0, outMs: 2000, video: "cam-b", audio: "mic" }])
     expect(edited.dropped).toEqual([])
   })
@@ -111,7 +114,7 @@ describe("buildEdited", () => {
 
   it("never mutates the plan", () => {
     const frozen = JSON.stringify(plan)
-    buildEdited(plan, restoreReason(cutRange(K0, iv(0, 500), [word("x", 0, 500)]), plan, "tangent"))
+    buildEdited(plan, keepReason(cutRange(K0, iv(0, 500), [word("x", 0, 500)]), plan, "tangent"))
     expect(JSON.stringify(plan)).toBe(frozen)
   })
 })
@@ -178,7 +181,7 @@ describe("buildEdited: transitions", () => {
   })
 
   it("restored time between pieces of the same look joins them, and the transition at the old cut goes", () => {
-    const edited = buildEdited(xfade, restoreReason(k, xfade, "silence"))
+    const edited = buildEdited(xfade, keepReason(k, xfade, "silence"))
     expect(spans(edited)).toEqual([
       ["seg-0", 0, 1000, "cam-a"],
       ["seg-1", 1000, 4000, "cam-b"],
@@ -188,7 +191,7 @@ describe("buildEdited: transitions", () => {
   })
 
   it("restored time before another camera keeps the boundary but drops its transition: the join is continuous now", () => {
-    const edited = buildEdited(xfade, restoreReason(k, xfade, "filler"))
+    const edited = buildEdited(xfade, keepReason(k, xfade, "filler"))
     expect(spans(edited).slice(2)).toEqual([
       ["seg-2", 2500, 4500, "cam-b"],
       ["seg-3", 4500, 6000, "cam-a"],
