@@ -10656,6 +10656,7 @@ export const en = {
   "apiErr.loadSharedWork": "Failed to load shared work",
   "apiErr.shareWorkflow": "Failed to share workflow",
   "apiErr.unshareWorkflow": "Failed to unshare workflow",
+  "apiErr.loadWorkflow": "Failed to load workflow",
   "apiErr.loadSharedWorkflow": "Failed to load shared workflow",
   "apiErr.runSharedWorkflow": "Failed to run shared workflow",
   "apiErr.getExecutionStatus": "Failed to get execution status",

@@ -32,6 +32,8 @@ import { resolveNodeDefaults, rememberSelection, pickRelevantFields, isNodeDefau
 import { queryClient } from "@/lib/query-client"
 import { queryKeys } from "@/lib/query-keys"
 import { getCachedUserId } from "@/hooks/use-auth"
+import type { LoadedWorkflowAccess } from "@/lib/workflow-content"
+import { withLiveRunsInFlight } from "@/lib/run-in-flight-mark"
 import { getStickyLookPreviewStyle, getStickyParameterDisplayMode } from "@/lib/parameter-node-prefs"
 import { getInlinePromptMode, setInlinePromptMode as persistInlinePromptMode } from "@/lib/inline-prompt-pref"
 import type { GenerateTextTemplate } from "@/lib/generate-text-templates"
@@ -436,6 +438,19 @@ interface WorkflowState {
    */
   readonly loadedVersion: number | null
   /**
+   * The access the canvas loaded this workflow with (`own` / `edit` / `view`),
+   * keyed by the workflow it was answered for (T86), and kept current while
+   * the workflow stays open: each re-check of the access writes its answer
+   * here too, `none` included (T97, `applyWorkflowAccess`). Decides how the
+   * canvas hears about writes made elsewhere: a canvas whose access is `own`
+   * or `edit` subscribes to the row's Realtime broadcasts, anything else —
+   * `view`, `none`, or no answer yet — polls a content-free stamp and re-reads
+   * through the server (`mayHoldStoredRow`, lib/workflow-content.ts). Null
+   * until the load answers; `loadWorkflow` and `clearWorkflow` reset it, so a
+   * failed load or a reload stays unknown, and unknown fails closed.
+   */
+  readonly loadedAccess: LoadedWorkflowAccess | null
+  /**
    * References (NOT copies) to the graph + meta handed to the last
    * successful save / load / remote-reconcile. The delta-save builder
    * reference-diffs against this (store immutability makes `ref !==
@@ -616,6 +631,15 @@ interface WorkflowState {
    * somebody else's workflow). Deliberately NOT `isReadOnly`: that flag
    * makes `updateNodeData` a no-op, so raising it mid-run would drop the
    * result of a job already paid for and leave the node spinning.
+   *
+   * Also set the moment the server answers `view` or `none` for the open
+   * workflow, at load or on a re-check while it stays open (T97,
+   * `applyWorkflowAccess`), so nothing more is sent. That answer raises
+   * `isReadOnly` too, but only once no node shows a run in flight
+   * (`showsARunInFlight`: a job's id, a Run over a list, a node marked
+   * running or queued, a variant loop's own status, a scene's image, a paid
+   * run outside the executors (`withRunInFlight`)), for the reason above;
+   * until then this is what stops the saves.
    *
    * An id rather than a flag so a verdict can only apply to the workflow
    * it was reached for — read it through `isSaveRefused()`, never bare.
@@ -908,16 +932,16 @@ export function buildDuplicatedNodeData(
 ): SceneNodeData {
   const clonedData = { ...source.data } as SceneNodeData
   const d = clonedData as Record<string, unknown>
-  delete d.executionStatus
-  delete d.currentJobId
-  delete d.currentJobProgress
+  // A copy has run nothing, so no key of a run in flight comes with it: the
+  // whole of TRANSIENT_RUNTIME_KEYS, by the set itself rather than a list kept
+  // beside it. A paid run's `__runsInFlight` token on a copy, for one, would
+  // hold a read-only freeze back for good: nothing ever releases it there. The
+  // copy starts as a reload would show it, since none of these is saved.
+  for (const key of TRANSIENT_RUNTIME_KEYS) delete d[key]
+  // Nor the last run's error and list results, which are saved with the row.
   delete d.errorMessage
-  delete d.isStreaming
-  delete d.__listTotal
-  delete d.__listCompleted
   delete d.__listResults
   delete d.__alignedListResults
-  delete d.subWorkflowProgress
   // Clear "owns DB row X" pointers so the clone creates its own entity row on
   // first save. Otherwise editing/deleting the clone mutates the original's
   // row (object-page-modal passes the id to UPDATE-instead-of-INSERT) and the
@@ -1039,6 +1063,7 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
   saveError: null,
   loadedUpdatedAt: null,
   loadedVersion: null,
+  loadedAccess: null,
   lastSavedSnapshot: null,
   remoteUpdatedAt: null,
   videoAutoplay: typeof window !== "undefined" && typeof localStorage !== "undefined" && typeof localStorage.getItem === "function" && localStorage.getItem("videoAutoplay") !== null
@@ -2776,6 +2801,7 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
       saveError: null,
       loadedUpdatedAt: null,
       loadedVersion: null,
+      loadedAccess: null,
       remoteUpdatedAt: null,
       characterDefinitions: characterDefinitions ?? [],
       flowPromptTemplates: flowPromptTemplates ?? {},
@@ -2802,6 +2828,7 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
       saveError: null,
       loadedUpdatedAt: null,
       loadedVersion: null,
+      loadedAccess: null,
       lastSavedSnapshot: null,
       remoteUpdatedAt: null,
       characterDefinitions: [],
@@ -3252,7 +3279,9 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
       nextNodeId = maxId + 1
     }
     set({
-      nodes: snapshot.nodes,
+      // A paid run's mark follows the runs this tab has out now, not the
+      // snapshot: Undo neither started nor stopped one (`withLiveRunsInFlight`).
+      nodes: withLiveRunsInFlight(snapshot.nodes, get().nodes),
       edges: snapshot.edges,
       characterDefinitions: snapshot.characterDefinitions,
       flowPromptTemplates: snapshot.flowPromptTemplates,

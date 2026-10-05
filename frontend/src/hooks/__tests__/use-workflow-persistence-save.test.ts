@@ -117,6 +117,8 @@ vi.mock("@/hooks/use-workflow-store", () => {
 // ---------------------------------------------------------------------------
 
 import { useWorkflowPersistence, SAVE_QUEUE_WAIT_MS } from "../use-workflow-persistence"
+import { onAccessRecheckRequest } from "../workflow-access-mode"
+import { hasSavableChanges } from "../workflow-save-refusal"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -286,6 +288,25 @@ describe("useWorkflowPersistence — save", () => {
 
     expect(saveResult!.success).toBe(true)
     expect(mockSupabaseFrom).not.toHaveBeenCalled()
+  })
+
+  it("writes nothing for a dirty read-only canvas, yet answers success, so nothing may offer that Save", async () => {
+    // Dragging a node on a read-only canvas still dirties it, with no refusal
+    // to say a save is pointless (a Studio workflow, or a `view` load whose
+    // access check failed). The unsaved-changes dialog asks
+    // `hasSavableChanges` first, which says no for exactly this canvas.
+    resetStoreState({ workflowId: "w1", nodes: [makeNode("n1")], isDirty: true, isReadOnly: true, saveRefusedFor: null })
+
+    const { result } = renderHook(() => useWorkflowPersistence("proj-1"))
+    let saveResult: { success: boolean; error?: string } | undefined
+
+    await act(async () => {
+      saveResult = await result.current.save()
+    })
+
+    expect(saveResult!.success).toBe(true)
+    expect(mockSupabaseFrom).not.toHaveBeenCalled()
+    expect(hasSavableChanges(storeState as unknown as Parameters<typeof hasSavableChanges>[0])).toBe(false)
   })
 
   it("uses pid argument over hook projectId when both are provided", async () => {
@@ -621,6 +642,21 @@ describe("useWorkflowPersistence — save", () => {
     expect(mockSetWorkflowId).toHaveBeenCalledWith("brand-new-wf")
   })
 
+  it("records a workflow it just created as the caller's own BEFORE its id lands, so the canvas subscribes as an owner's does (T86)", async () => {
+    resetStoreState({ workflowId: null, nodes: [makeNode("n1")] })
+    setupSupabaseInsert({ id: "brand-new-wf" })
+
+    const { result } = renderHook(() => useWorkflowPersistence("proj-1"))
+
+    await act(async () => {
+      await result.current.save()
+    })
+
+    expect(mockStoreSetState).toHaveBeenCalledWith({ loadedAccess: { workflowId: "brand-new-wf", access: "own" } })
+    const recorded = mockStoreSetState.mock.calls.findIndex(([patch]) => "loadedAccess" in patch)
+    expect(mockStoreSetState.mock.invocationCallOrder[recorded]!).toBeLessThan(mockSetWorkflowId.mock.invocationCallOrder[0]!)
+  })
+
   it("returns error when user is not authenticated (insert path)", async () => {
     resetStoreState({ workflowId: null, nodes: [makeNode("n1")] })
     mockGetUser.mockResolvedValue({ data: { user: null } })
@@ -946,6 +982,84 @@ describe("useWorkflowPersistence — save", () => {
 
     expect(saveResult!.success).toBe(true)
     expect(mockApplySaveSuccess).toHaveBeenCalledTimes(1)
+  })
+
+  // -----------------------------------------------------------------------
+  // A miss that can mean the reader's access changed asks the open canvas to
+  // re-check it now, rather than at its next timed re-check (T97). A
+  // collaborator removed while the canvas was open can no longer read the row,
+  // so their miss reads `unknown`; a write turned away reads `refused`. What
+  // the canvas does with the answer is pinned beside the Realtime hook
+  // (use-workflow-realtime-sync.test.tsx).
+  // -----------------------------------------------------------------------
+
+  describe("which misses ask the canvas to re-check its access (T97)", () => {
+    let asked: string[] = []
+    let stopHearing: () => void = () => {}
+
+    beforeEach(() => {
+      asked = []
+      stopHearing = onAccessRecheckRequest((workflowId) => {
+        asked.push(workflowId)
+      })
+    })
+
+    afterEach(() => {
+      stopHearing()
+    })
+
+    async function saveOnce(): Promise<{ success: boolean; error?: string }> {
+      const { result } = renderHook(() => useWorkflowPersistence("proj-1"))
+      let saveResult: { success: boolean; error?: string } | undefined
+      await act(async () => {
+        saveResult = await result.current.save()
+      })
+      return saveResult!
+    }
+
+    it("a row this tab can no longer read — a removed collaborator's miss — asks, and keeps the conflict handling it had", async () => {
+      resetStoreState({ workflowId: "w1", nodes: [makeNode("n1")], loadedVersion: 20, loadedUpdatedAt: "T20" })
+      setupZeroRowSave(null)
+
+      expect(await saveOnce()).toEqual({ success: false, error: "remote_conflict" })
+      expect(asked).toEqual(["w1"])
+    })
+
+    it("a write turned away asks", async () => {
+      resetStoreState({ workflowId: "w1", nodes: [makeNode("n1")], loadedVersion: 20, loadedUpdatedAt: "T20" })
+      setupZeroRowSave({ updated_at: "T20", version: 20 })
+
+      expect(await saveOnce()).toEqual({ success: false, error: "not_writable" })
+      expect(asked).toEqual(["w1"])
+    })
+
+    it("a real conflict — somebody else's write — asks nothing", async () => {
+      resetStoreState({ workflowId: "w1", nodes: [makeNode("n1")], loadedVersion: 20, loadedUpdatedAt: "T20" })
+      setupZeroRowSave({ updated_at: "T21", version: 21 })
+
+      expect(await saveOnce()).toEqual({ success: false, error: "remote_conflict" })
+      expect(asked).toEqual([])
+    })
+
+    it("a miss that lands after the editor moved to another workflow asks nothing", async () => {
+      resetStoreState({ workflowId: "w1", nodes: [makeNode("n1")], loadedVersion: 20, loadedUpdatedAt: "T20" })
+      let release: () => void = () => {}
+      const holdReread = new Promise<void>((resolve) => { release = resolve })
+      const { rereadMaybeSingle } = setupZeroRowSave(null, { holdReread })
+
+      const { result } = renderHook(() => useWorkflowPersistence("proj-1"))
+      let saveResult: { success: boolean; error?: string } | undefined
+      await act(async () => {
+        const pending = result.current.save()
+        await vi.waitFor(() => expect(rereadMaybeSingle).toHaveBeenCalled())
+        Object.assign(storeState, { workflowId: "w2", saveStatus: "idle" })
+        release()
+        saveResult = await pending
+      })
+
+      expect(saveResult).toEqual({ success: false, error: "workflow_changed" })
+      expect(asked).toEqual([])
+    })
   })
 
   // -----------------------------------------------------------------------
@@ -1309,6 +1423,26 @@ describe("useWorkflowPersistence — save", () => {
     expect(savedData.prompt).toBe("a cat")
   })
 
+  it("never saves the mark of a paid run still out (T100), and keeps what the run wrote", async () => {
+    // The mark lives only as long as the tab that started the run: saved, a
+    // reload would show a run that nobody is waiting for any more.
+    const { update } = setupSupabaseUpdate()
+    resetStoreState({
+      workflowId: "w1",
+      nodes: [makeNode("n1", { __runsInFlight: ["run-1", "run-2"], customVariations: [{ url: "https://r2/v.png" }] })],
+    })
+
+    const { result } = renderHook(() => useWorkflowPersistence("proj-1"))
+    await act(async () => {
+      await result.current.save()
+    })
+
+    const payload = update.mock.calls[0]![0] as { nodes: Array<{ data: Record<string, unknown> }> }
+    const savedData = payload.nodes[0]!.data
+    expect("__runsInFlight" in savedData).toBe(false)
+    expect(savedData.customVariations).toEqual([{ url: "https://r2/v.png" }])
+  })
+
   it("attaches an abort signal to the update (hung saves cannot wedge saveStatus)", async () => {
     const { abortSignal } = setupSupabaseUpdate()
     resetStoreState({ workflowId: "w1", nodes: [makeNode("n1")] })
@@ -1426,6 +1560,50 @@ describe("useWorkflowPersistence — save", () => {
         expect.objectContaining({ name: "Test Workflow" }),
         0,
       )
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it("delta: a node whose only change is a paid run's in-flight mark writes nothing (T100)", async () => {
+    vi.stubEnv("VITE_DELTA_SAVES", "1")
+    try {
+      const { unchanged, snapshot } = deltaState()
+      const base = snapshot.nodes[1]!
+      storeState.nodes = [unchanged, { ...base, data: { ...base.data, __runsInFlight: ["run-1"] } }]
+
+      const { result } = renderHook(() => useWorkflowPersistence("proj-1"))
+      let saveResult: { success: boolean } | undefined
+      await act(async () => {
+        saveResult = await result.current.save()
+      })
+
+      expect(saveResult!.success).toBe(true)
+      expect(mockSupabaseRpc).not.toHaveBeenCalled()
+      expect(mockSupabaseFrom).not.toHaveBeenCalled()
+      expect(mockMarkClean).toHaveBeenCalled()
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it("delta: a node changed while a paid run is out is sent without the run's mark (T100)", async () => {
+    vi.stubEnv("VITE_DELTA_SAVES", "1")
+    try {
+      const { unchanged, edited } = deltaState()
+      storeState.nodes = [unchanged, { ...edited, data: { ...edited.data, __runsInFlight: ["run-1"] } }]
+      rpcResolves([{ ok: true, version: 42, updated_at: "2026-06-12T02:00:00Z" }])
+
+      const { result } = renderHook(() => useWorkflowPersistence("proj-1"))
+      await act(async () => {
+        await result.current.save()
+      })
+
+      const [, args] = mockSupabaseRpc.mock.calls[0]! as [string, Record<string, unknown>]
+      const sent = args.p_upsert_nodes as Array<{ id: string; data: Record<string, unknown> }>
+      expect(sent.map((n) => n.id)).toEqual([edited.id])
+      expect(sent[0]!.data.prompt).toBe("changed")
+      expect("__runsInFlight" in sent[0]!.data).toBe(false)
     } finally {
       vi.unstubAllEnvs()
     }

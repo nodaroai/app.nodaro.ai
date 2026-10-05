@@ -317,6 +317,12 @@ export {
 } from "./presentation-utils.js"
 
 export {
+  LEGACY_EXPOSED_FIELD_KEYS,
+  canonicalExposedFieldKey,
+  canonicalizeOverrideKeys,
+} from "./exposed-field-keys.js"
+
+export {
   ITER_CLONE_PATTERN,
   isExpandedClone,
   filterCloneNodes,
@@ -1512,6 +1518,7 @@ export {
   STUDIO_SHOT_TRANSIENT_KEYS,
   STUDIO_SHOT_DRAFT_KEYS,
   STUDIO_TAKE_VOICE_KEYS,
+  STUDIO_PREVIZ_RUN_STATE_KEYS,
   stripStudioTransientSettings,
   stripStudioDraftSettings,
   stripStudioDraftWorkflow,

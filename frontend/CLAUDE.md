@@ -149,6 +149,7 @@ Flexible curated I/O system for published apps and presentation mode:
 - `ParameterCard` — input card for parameter nodes (tone, style-guide, provider, etc.)
 - `presentationSettings.inputOrder` / `outputOrder` / `cardMeta` persisted in workflow store
 - `packages/shared/src/presentation-utils.ts` — `getInputNodes()` / `getOutputNodes()` with `curatedOnly` flag
+- An exposable field's `key` IS the node-data field its card reads and writes — guarded by `presentation/__tests__/exposable-field-keys.test.ts`. To rename one that apps already published, add the old spelling to `LEGACY_EXPOSED_FIELD_KEYS` (`@nodaro/shared`, `exposed-field-keys.ts`) and read stored keys through `exposedFieldDataKey` / `exposedFieldValue` (`presentation/helpers.ts`), never `item.field` as a data key (`exposed-field-sites.test.ts` fails on it).
 
 ---
 

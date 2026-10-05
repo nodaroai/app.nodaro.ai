@@ -2,7 +2,9 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { createClient } from "@/lib/supabase"
 import { useWorkflowStore, type PresentationSettings } from "@/hooks/use-workflow-store"
 import { getBatchJobStatus, listWorkflowExecutions, type BatchJobStatus } from "@/lib/api"
-import { applyWorkflowAccess } from "@/hooks/workflow-access-mode"
+import { readWorkflowContent } from "@/lib/workflow-content"
+import { withoutRunsInFlight } from "@/lib/run-in-flight-mark"
+import { applyWorkflowAccess, requestAccessRecheck } from "@/hooks/workflow-access-mode"
 import { classifyZeroRowSave, isSaveRefused } from "@/hooks/workflow-save-refusal"
 import { tx } from "@/lib/i18n"
 import { contentRunResultPatch, isContentNodeType } from "@/lib/content-run-output"
@@ -25,6 +27,7 @@ import { namedRunOutputFields } from "@/lib/named-run-outputs"
 import { videoOverlayListRowFields, videoOverlayRunOutputFields } from "@/lib/video-overlay-run-output"
 import { perHandleRunFields } from "@/lib/per-handle-batch"
 import { applyEdlRunCutFields, applyEdlTakeTranscriptField } from "@/lib/apply-edl-cut"
+import { scrapeJobNeedsApplying, scrapeServerRunPatch } from "@/components/nodes/scrape-result-recovery"
 
 /**
  * Execution statuses whose `node_states` are worth restoring onto the canvas on
@@ -432,7 +435,12 @@ export function applyBackendExecutionState(
     // Map backend status → frontend executionStatus
     if (state.status === "completed") {
       data.executionStatus = "completed"
-      if (state.output && isContentNodeType(node.type)) {
+      // A scraper: the single-node Run's own patch (scrape-result-recovery.ts),
+      // never the generic media writes below — its featured image is not its result.
+      const scrapePatch = scrapeServerRunPatch(node.type, state.output as Record<string, unknown> | undefined, state.jobId, data)
+      if (scrapePatch) {
+        Object.assign(data, scrapePatch)
+      } else if (state.output && isContentNodeType(node.type)) {
         // Content Recipe / Content Ideas: the live run's own mapping — the
         // generic list/result writes below do not fit a recipe or the briefs.
         Object.assign(data, contentRunResultPatch(node.type, state.output as Record<string, unknown>) ?? {})
@@ -560,6 +568,22 @@ export function applyCompletedExecutionResults(
         scenePlan: state.output.plan, changeSummary: state.output.changeSummary,
       }, node.type === "edit-3d-scene" ? "edit" : "generate", state.jobId)
       return patch ? { ...node, data: { ...data, ...patch } as SceneNodeData } : node
+    }
+
+    // A scraper: its posts / ads / pages, once per job (the patch stamps
+    // `lastAppliedJobId`). Asked BEFORE the "already completed" skip below — a
+    // build that predates this branch marked the node completed with only its
+    // featured image, which is exactly the state this repairs. A run of the node
+    // in the editor after this execution ended (`scrapeJobNeedsApplying`) keeps
+    // its own, newer result; with no end time to compare, only an empty node is
+    // filled.
+    const scrapePatch = scrapeServerRunPatch(node.type, state.output as Record<string, unknown>, state.jobId, data)
+    if (scrapePatch) {
+      if (Object.keys(scrapePatch).length === 0) return node
+      const apply = settledAt
+        ? scrapeJobNeedsApplying(data, { id: state.jobId ?? "", createdAt: settledAt })
+        : data.generatedJson === undefined
+      return apply ? { ...node, data: { ...data, ...scrapePatch } as SceneNodeData } : node
     }
 
     // Skip nodes that were already marked completed in the saved workflow.
@@ -922,6 +946,11 @@ export function useWorkflowPersistence(projectId?: string) {
 
           // Rebase: adopt the fresh remote as the new base, replay local
           // edits on top, retry once with the fresh version.
+          // workflow-content-read: writers only — save() returns before this
+          // for a read-only canvas, and a `view` reader's canvas is read-only
+          // from the load that read its document; an `edit` collaborator must
+          // rebase onto the stored row, drafts included, because they save it
+          // back whole.
           const { data: fresh } = await supabase
             .from("workflows")
             .select("nodes, edges, settings, name, version, updated_at")
@@ -1082,7 +1111,16 @@ export function useWorkflowPersistence(projectId?: string) {
             // The re-read was a second wait — ask again before writing.
             if (editorMovedOn()) return { success: false, error: "workflow_changed" }
 
-            if (classifyZeroRowSave({ version: loadedVersion, updatedAt: loadedUpdatedAt || null }, current) === "refused") {
+            const cause = classifyZeroRowSave({ version: loadedVersion, updatedAt: loadedUpdatedAt || null }, current)
+            // A write turned away, or a row this tab can no longer read, can
+            // each mean the reader's access changed while the canvas was open:
+            // a collaborator removed can no longer SELECT the row, so their
+            // miss reads `unknown`. So the canvas re-asks its access now rather
+            // than at its next timed re-check (T97). A real conflict is somebody
+            // else's write, and asks nothing.
+            if (cause !== "conflict") requestAccessRecheck(workflowId)
+
+            if (cause === "refused") {
               // The token this tab sent is still the row's token, so nobody
               // else wrote: the write itself was refused. Say that, and stop
               // asking. `saveRefusedFor` is what ends the retries — `saveOnce`
@@ -1092,7 +1130,9 @@ export function useWorkflowPersistence(projectId?: string) {
               // seconds. NOT `isReadOnly`: a refusal usually lands mid-run (the
               // run's own first patch is what dirtied the canvas), and
               // read-only turns `updateNodeData` into a no-op — the result of
-              // a job already paid for would never reach its node.
+              // a job already paid for would never reach its node. The re-check
+              // asked above keeps to the same rule: if it answers `view` or
+              // `none`, read-only waits until no node shows a run in flight.
               const reason = tx("editor.notWritableReason")
               useWorkflowStore.setState({ saveRefusedFor: workflowId })
               setSaveStatus("error", reason)
@@ -1181,6 +1221,10 @@ export function useWorkflowPersistence(projectId?: string) {
           // this workflow until the channel id matches (re-subscribe is
           // triggered by `workflowId` change in `workflow-canvas.tsx`).
           // The window between insert and re-subscribe is broadcast-safe.
+          // The row was just inserted under this caller's own id, so its access
+          // is `own` — recorded BEFORE the id lands, so the canvas never sees
+          // the new id without it and subscribes as any owner does (T86).
+          useWorkflowStore.setState({ loadedAccess: { workflowId: data.id as string, access: "own" } })
           setWorkflowId(data.id)
           createdWorkflowId = data.id as string
           // What the owner set in this workflow's trigger panels before it had
@@ -1275,13 +1319,13 @@ export function useWorkflowPersistence(projectId?: string) {
       try {
         const supabase = createClient()
 
-        const { data, error } = await supabase
-          .from("workflows")
-          .select("*")
-          .eq("id", id)
-          .single()
-
-        if (error) return { success: false, error: error.message }
+        // The workflow as THIS caller may hold it: the stored row for its
+        // owner, the server's own answer for anyone else — so a `view` reader's
+        // canvas never receives a studio production's owner drafts, runs in
+        // flight or take voice records (lib/workflow-content.ts).
+        const content = await readWorkflowContent(id, "*")
+        if (!content) return { success: false, error: "Workflow not found" }
+        const data = content.row
 
         const settings = (data.settings ?? {}) as Record<string, unknown>
         const charDefs = (settings.characterDefinitions ?? []) as CharacterDefinition[]
@@ -1296,12 +1340,16 @@ export function useWorkflowPersistence(projectId?: string) {
         // executeNodeForList running for a freshly-loaded workflow, so a stale
         // `true` (autosaved mid-batch before the finally cleared it) would
         // permanently exempt the node from the abandon-guard. Clear it on load.
+        // Likewise a paid run's `__runsInFlight` token (`withRunInFlight`):
+        // it is a run the tab that wrote it had out, and a load has none, so
+        // one found in a row (nothing saves one) would hold a read-only freeze
+        // back with nothing left to release it.
         nodes = nodes.map((n) => {
           const d = n.data as Record<string, unknown> | undefined
           if (d?.__listRunning) {
-            return { ...n, data: { ...d, __listRunning: false } as typeof n.data }
+            return withoutRunsInFlight({ ...n, data: { ...d, __listRunning: false } as typeof n.data })
           }
-          return n
+          return withoutRunsInFlight(n)
         })
 
         // Sync node results from jobs table via backend API
@@ -1415,7 +1463,7 @@ export function useWorkflowPersistence(projectId?: string) {
 
         loadWorkflow(
           data.id,
-          data.name,
+          data.name ?? "",
           nodes,
           edges,
           charDefs,
@@ -1428,15 +1476,27 @@ export function useWorkflowPersistence(projectId?: string) {
 
         // Studio-origin workflows are view-only in the node editor (the Studio
         // app edits them). `settings` was computed above from data.settings.
+        // A `view` reader's canvas is read-only from this first frame too: the
+        // server said so in the same answer that carried the document, and a
+        // canvas that cannot save never reaches the save path's own reads of
+        // the stored row (its conflict rebase).
+        // The same answer decides how this canvas hears about writes made
+        // elsewhere (T86): `own` / `edit` subscribe to the row's Realtime
+        // broadcasts, `view` polls and re-reads through the server
+        // (use-workflow-realtime-sync.ts). The load records it only here, once
+        // the content is on the canvas, so a load that fails before this stays
+        // unknown; from then on each re-check of the access updates it (T97).
         useWorkflowStore.setState({
-          isReadOnly: isStudioWorkflowSettings(settings),
+          isReadOnly: isStudioWorkflowSettings(settings) || content.access === "view",
           readOnlyReason: null,
+          loadedAccess: { workflowId: data.id, access: content.access },
         })
 
         // What THIS person may do with THIS workflow, asked of the server and
-        // applied to the canvas. Fire-and-forget: the workflow is interactive
-        // immediately, and a failure leaves it writable — the state it is in
-        // today, with the server still refusing anything it should.
+        // applied to the canvas — and asked again while it stays open (T97,
+        // use-workflow-access-recheck.ts). Fire-and-forget: the workflow is
+        // interactive immediately, and a failure leaves it writable — the state
+        // it is in today, with the server still refusing anything it should.
         void applyWorkflowAccess(id)
 
         // Reconcile per-node `generatedResults` against the backend's

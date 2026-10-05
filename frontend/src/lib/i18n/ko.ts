@@ -10364,6 +10364,7 @@ export const ko: ChromeDict = {
   "apiErr.loadSharedWork": "공유된 작업물을 불러오지 못했습니다",
   "apiErr.shareWorkflow": "워크플로를 공유하지 못했습니다",
   "apiErr.unshareWorkflow": "워크플로 공유를 해제하지 못했습니다",
+  "apiErr.loadWorkflow": "워크플로를 불러오지 못했습니다",
   "apiErr.loadSharedWorkflow": "공유된 워크플로를 불러오지 못했습니다",
   "apiErr.runSharedWorkflow": "공유된 워크플로를 실행하지 못했습니다",
   "apiErr.getExecutionStatus": "실행 상태를 가져오지 못했습니다",

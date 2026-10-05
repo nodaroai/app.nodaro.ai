@@ -578,6 +578,21 @@ describe("whether there is anything to clear, and whether it is safe to", () => 
     expect(isRunInProgress([node("a", "generate-image"), node("b", "llm-chat", { [key]: value })])).toBe(true)
   })
 
+  it("never lifts the mark of a paid run still out, which the clear does not stop (T100)", () => {
+    // The run goes on whatever the clear does. Lifting its mark would let a
+    // read-only freeze that waits for it land before its result does.
+    const marked = { __runsInFlight: ["run-1"] }
+    const character = node("c", "character", { characterName: "Kira", executionStatus: "failed", errorMessage: "no", ...marked })
+    const overlay = node("o", "image-overlay", { generatedImageUrl: RESULT.url, ...marked })
+    const out = clear([character, overlay], [])!
+    expect(dataOf(byId(out.nodes, "c"))).toMatchObject({ characterName: "Kira", ...marked })
+    expect(dataOf(byId(out.nodes, "c")).errorMessage).toBeUndefined()
+    expect(dataOf(byId(out.nodes, "o"))).toMatchObject(marked)
+    expect(dataOf(byId(out.nodes, "o")).generatedImageUrl).toBeUndefined()
+    // Nor does the mark alone light the button.
+    expect(hasRunResults([node("m", "character", marked), node("n", "generate-image", marked)])).toBe(false)
+  })
+
   it("finished, failed and idle nodes do not", () => {
     expect(
       isRunInProgress([
@@ -603,6 +618,7 @@ describe("the key set is derived from the registry, and every exception is on th
 
   it("the keep list is exactly this — a key joins it only with a reason a reviewer has read", () => {
     expect([...RUN_RESULT_KEEP_KEYS.keys()].sort()).toEqual([
+      "__runsInFlight",
       "loraReplicateVersion",
       "loraTrainingStatus",
       "loraTriggerWord",

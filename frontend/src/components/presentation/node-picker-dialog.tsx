@@ -24,7 +24,7 @@ import {
 import type { WorkflowNode } from "@/types/nodes"
 import { NODE_DEF_MAP } from "@/types/nodes"
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
-import { migrateToItems, deriveLottieSlotFields } from "@nodaro/shared"
+import { migrateToItems, deriveLottieSlotFields, canonicalExposedFieldKey } from "@nodaro/shared"
 import type { ExposableField, ExposableOutput, PresentationItem } from "@nodaro/shared"
 import { RestrictPopover } from "./restrict-popover"
 import { DEFAULT_SYSTEM_MAX_FANOUT } from "./input-card"
@@ -261,13 +261,19 @@ function NodeRow({
     ?? migrateToItems(presentationSettings[orderKey])
     ?? []
 
+  // A card exposed before a field was renamed is stored under the old spelling; it is the same field.
+  const isSameField = useCallback(
+    (storedKey: string, fieldKey: string) => canonicalExposedFieldKey(node.type, storedKey) === fieldKey,
+    [node.type],
+  )
+
   const isFieldChecked = useCallback(
     (fieldKey: string) => {
       return currentItems.some(
-        (item) => item.type === "field" && item.nodeId === node.id && item.field === fieldKey
+        (item) => item.type === "field" && item.nodeId === node.id && isSameField(item.field, fieldKey)
       )
     },
-    [currentItems, node.id]
+    [currentItems, node.id, isSameField]
   )
 
   const isOutputChecked = useCallback(
@@ -283,10 +289,10 @@ function NodeRow({
     (fieldKey: string) => {
       return currentItems.find(
         (item): item is Extract<PresentationItem, { type: "field" }> =>
-          item.type === "field" && item.nodeId === node.id && item.field === fieldKey
+          item.type === "field" && item.nodeId === node.id && isSameField(item.field, fieldKey)
       )
     },
-    [currentItems, node.id]
+    [currentItems, node.id, isSameField]
   )
 
   const handleFieldToggle = useCallback(
@@ -309,7 +315,7 @@ function NodeRow({
         updatePresentationSettings({ [itemsKey]: items })
       } else {
         const filtered = currentItems.filter(
-          (item) => !(item.type === "field" && item.nodeId === node.id && item.field === field.key)
+          (item) => !(item.type === "field" && item.nodeId === node.id && isSameField(item.field, field.key))
         )
         // If no items reference this node anymore, re-add node item so it stays visible
         const hasItemsForNode = filtered.some(
@@ -321,7 +327,7 @@ function NodeRow({
         updatePresentationSettings({ [itemsKey]: filtered })
       }
     },
-    [node.id, currentItems, itemsKey, isVisible, allVisibleNodeIds, updatePresentationSettings]
+    [node.id, currentItems, itemsKey, isVisible, allVisibleNodeIds, updatePresentationSettings, isSameField]
   )
 
   const handleOutputToggle = useCallback(
@@ -361,14 +367,14 @@ function NodeRow({
     (fieldKey: string, allowedValues: Array<string | number | boolean> | undefined) => {
       updatePresentationSettings({
         [itemsKey]: currentItems.map((item) => {
-          if (item.type === "field" && item.nodeId === node.id && item.field === fieldKey) {
+          if (item.type === "field" && item.nodeId === node.id && isSameField(item.field, fieldKey)) {
             return { ...item, allowedValues }
           }
           return item
         }),
       })
     },
-    [node.id, currentItems, itemsKey, updatePresentationSettings]
+    [node.id, currentItems, itemsKey, updatePresentationSettings, isSameField]
   )
 
   return (

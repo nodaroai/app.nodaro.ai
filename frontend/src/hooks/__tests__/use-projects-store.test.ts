@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest"
 import { useProjectsStore } from "../use-projects-store"
+import { stripStudioDraftWorkflow } from "@nodaro/shared"
 
 const { deleteProjectThroughApi, deleteWorkflowThroughApi } = vi.hoisted(() => ({
   deleteProjectThroughApi: vi.fn(),
@@ -12,7 +13,7 @@ const NOW = "2026-01-30T00:00:00.000Z"
 function makeChain(resolvedValue: { data: unknown; error: null } | { data: null; error: { message: string } }) {
   const chain: Record<string, unknown> = {}
   // "is" joined the list when the personal half of the workspace filter did.
-  const methods = ["select", "insert", "update", "delete", "eq", "is", "single", "order", "or"]
+  const methods = ["select", "insert", "update", "delete", "eq", "is", "single", "maybeSingle", "order", "or"]
   for (const m of methods) {
     chain[m] = vi.fn(() => chain)
   }
@@ -36,6 +37,10 @@ function createMockSupabase(overrides?: {
     auth: {
       getUser: vi.fn().mockResolvedValue({
         data: { user: { id: FAKE_USER_ID } },
+        error: null,
+      }),
+      getSession: vi.fn().mockResolvedValue({
+        data: { session: { user: { id: FAKE_USER_ID } } },
         error: null,
       }),
     },
@@ -375,6 +380,60 @@ describe("useProjectsStore", () => {
 
       const result = await useProjectsStore.getState().duplicateWorkflow("nonexistent")
       expect(result).toBeNull()
+    })
+
+    it("a copy made by a `view` reader carries none of the owner's studio drafts (T76)", async () => {
+      // The owner's stored row: an empty slot and a run in flight on a scene,
+      // and a take's voice plan on the canvas node.
+      const stored = {
+        id: "w1", user_id: "owner-1", project_id: "p1", folder_id: "f1", name: "Original",
+        updated_at: NOW, version: 3, edges: [],
+        nodes: [{ id: "clip", type: "generate-video", position: { x: 0, y: 0 }, data: { generatedResults: [{ url: "https://cdn/take.mp4", revoiceTo: { voiceId: "v" }, voiceMode: "recast" }] } }],
+        settings: { studio: { shots: [{ id: "s1", stillSlots: [{ id: "slot" }], pendingClips: [{ jobId: "j" }] }] } },
+      }
+      // GET /v1/workflows/:id as the route answers a `view` reader.
+      const shown = stripStudioDraftWorkflow(stored)
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
+        data: {
+          id: shown.id, projectId: shown.project_id, userId: shown.user_id, folderId: shown.folder_id, name: shown.name,
+          version: shown.version, nodes: shown.nodes, edges: shown.edges, settings: shown.settings,
+          createdAt: NOW, updatedAt: shown.updated_at, access: "view",
+        },
+      }), { status: 200 }))
+
+      const inserted: Record<string, unknown>[] = []
+      let calls = 0
+      mockSupabase = createMockSupabase({
+        fromHandler: (table: string) => {
+          if (table !== "workflows") return makeChain({ data: [], error: null })
+          calls++
+          // The owner probe: the table hands a non-owner nothing.
+          if (calls === 1) return makeChain({ data: null, error: null } as unknown as { data: null; error: { message: string } })
+          const chain = makeChain({
+            data: { id: "w2", project_id: "p1", folder_id: "f1", name: "Original (Copy)", created_at: NOW, updated_at: NOW },
+            error: null,
+          })
+          chain.insert = vi.fn((payload: Record<string, unknown>) => { inserted.push(payload); return chain })
+          return chain
+        },
+      })
+
+      try {
+        const copy = await useProjectsStore.getState().duplicateWorkflow("w1")
+        expect(copy).not.toBeNull()
+        expect(fetchSpy).toHaveBeenCalledTimes(1)
+        expect(inserted).toHaveLength(1)
+        const payload = inserted[0] as { user_id: string; nodes: Array<{ data: { generatedResults: Record<string, unknown>[] } }>; settings: { studio: { shots: Record<string, unknown>[] } } }
+        expect(payload.user_id).toBe(FAKE_USER_ID)
+        const take = payload.nodes[0]!.data.generatedResults[0]!
+        expect(take.url).toBe("https://cdn/take.mp4")
+        expect("revoiceTo" in take).toBe(false)
+        expect("voiceMode" in take).toBe(false)
+        expect("stillSlots" in payload.settings.studio.shots[0]!).toBe(false)
+        expect("pendingClips" in payload.settings.studio.shots[0]!).toBe(false)
+      } finally {
+        fetchSpy.mockRestore()
+      }
     })
   })
 

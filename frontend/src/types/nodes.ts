@@ -8122,7 +8122,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
         ],
       },
       { key: "stability", label: "Stability", type: "slider" as const, min: 0, max: 1, step: 0.05 },
-      { key: "similarity", label: "Similarity", type: "slider" as const, min: 0, max: 1, step: 0.05 },
+      { key: "similarityBoost", label: "Similarity", type: "slider" as const, min: 0, max: 1, step: 0.05 },
     ],
   },
   {

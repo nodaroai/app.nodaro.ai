@@ -10574,6 +10574,7 @@ export const he: ChromeDict = {
   "apiErr.loadSharedWork": "טעינת העבודות ששותפו נכשלה",
   "apiErr.shareWorkflow": "שיתוף התהליך נכשל",
   "apiErr.unshareWorkflow": "ביטול שיתוף התהליך נכשל",
+  "apiErr.loadWorkflow": "טעינת התהליך נכשלה",
   "apiErr.loadSharedWorkflow": "טעינת התהליך המשותף נכשלה",
   "apiErr.runSharedWorkflow": "הרצת התהליך המשותף נכשלה",
   "apiErr.getExecutionStatus": "טעינת סטטוס ההרצה נכשלה",

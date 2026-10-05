@@ -30,6 +30,7 @@ describe("TRANSIENT_RUNTIME_KEYS", () => {
       "__listTotal",
       "__listCompleted",
       "__listRunning",
+      "__runsInFlight",
       "_upstreamRefresh",
       "__upstreamCount",
       "downloadPercent",

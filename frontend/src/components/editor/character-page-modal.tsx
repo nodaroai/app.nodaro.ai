@@ -1,12 +1,13 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect, useRef } from "react"
 import { createPortal } from "react-dom"
 import { X, Loader2, Trash2, Plus, Maximize2, Sparkles, Expand } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ImageLightbox } from "@/components/ui/image-lightbox"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { withRunInFlight } from "@/hooks/run-in-flight"
 import {
   generateCharacterAsset,
   getJobStatusLean,
@@ -245,6 +246,28 @@ export function CharacterPageModal({ characterNodeId, onClose }: CharacterPageMo
   const selectNode = useWorkflowStore((s) => s.selectNode)
   const projectId = useWorkflowStore((s) => s.projectId)
 
+  // Refine's images wait on the person, and only the pick writes the node, so
+  // the run's mark stays until an image is picked or the picker is closed
+  // (T100: a read-only freeze waits for it). Closing the page leaves nobody to
+  // pick, so it lets the mark go too.
+  const refineMark = useRef<(() => void) | null>(null)
+  const pageOpen = useRef(true)
+  const releaseRefineMark = useCallback(() => {
+    refineMark.current?.()
+    refineMark.current = null
+  }, [])
+  useEffect(() => {
+    pageOpen.current = true
+    return () => {
+      pageOpen.current = false
+      releaseRefineMark()
+    }
+  }, [releaseRefineMark])
+  const closeRefinePicker = useCallback(() => {
+    setShowRefinePicker(false)
+    releaseRefineMark()
+  }, [releaseRefineMark])
+
   // Find node and derive data (used by hooks below)
   const node = nodes.find((n) => n.id === characterNodeId)
   const data = (node?.type === "character" ? node.data : null) as CharacterNodeData | null
@@ -280,7 +303,7 @@ export function CharacterPageModal({ characterNodeId, onClose }: CharacterPageMo
   }, [nodes, addNode, selectNode, onClose])
 
   // Refine character image - generate 4 clean versions
-  const handleRefine = useCallback(async () => {
+  const handleRefine = useCallback(() => withRunInFlight(characterNodeId, async (mark) => {
     if (!mainImageUrl || !data) {
       toast.error(tx("entity.noImageToRefine"))
       return
@@ -338,6 +361,11 @@ centered composition, high quality, single character`
         throw new Error(tx("entity.noRefinedGenerated"))
       }
 
+      // The node stays marked while the images wait to be picked.
+      if (pageOpen.current) {
+        releaseRefineMark()
+        refineMark.current = mark.keep()
+      }
       setShowRefinePicker(true)
       setSelectedRefinedIndex(null)
     } catch (err) {
@@ -355,7 +383,7 @@ centered composition, high quality, single character`
     } finally {
       setIsRefining(false)
     }
-  }, [mainImageUrl, data, user?.id])
+  }), [characterNodeId, mainImageUrl, data, user?.id, releaseRefineMark])
 
   // Handle selecting a refined image
   const handleSelectRefined = useCallback(async (imageUrl: string) => {
@@ -376,6 +404,8 @@ centered composition, high quality, single character`
       activeResultIndex: newIndex,
       sourceImageUrl: imageUrl,
     })
+    // The pick is on the node: Refine's run is over.
+    releaseRefineMark()
 
     // Update in database if persisted
     if (data.characterDbId && projectId) {
@@ -404,10 +434,10 @@ centered composition, high quality, single character`
     setRefinedResults([])
     setRefinementCompleted(true)
     toast.success(tx("entity.refinedSelected"))
-  }, [data, characterNodeId, projectId, updateNodeData])
+  }, [data, characterNodeId, projectId, updateNodeData, releaseRefineMark])
 
   // Generate all character assets (expressions, poses, lighting, angles)
-  const handleGenerateAllAssets = useCallback(async () => {
+  const handleGenerateAllAssets = useCallback(() => withRunInFlight(characterNodeId, async () => {
     if (!mainImageUrl || !data) {
       toast.error(tx("entity.noPortraitAvailable"))
       return
@@ -494,7 +524,7 @@ centered composition, high quality, single character`
     } finally {
       setGeneratingAllAssets(false)
     }
-  }, [mainImageUrl, data, characterNodeId, updateNodeData, user?.id])
+  }), [mainImageUrl, data, characterNodeId, updateNodeData, user?.id])
 
   // Map tab to data key for asset deletion
   const ASSET_DATA_KEYS: Record<string, string> = {
@@ -543,7 +573,7 @@ centered composition, high quality, single character`
     }
   }
 
-  const handleGenerateCustom = useCallback(async () => {
+  const handleGenerateCustom = useCallback(() => withRunInFlight(characterNodeId, async () => {
     if (!customPrompt.trim()) return
     if (!mainImageUrl || !data) {
       toast.error(tx("entity.mainPortraitFirst"))
@@ -602,7 +632,7 @@ centered composition, high quality, single character`
     } finally {
       setGenerating(false)
     }
-  }, [customPrompt, mainImageUrl, data, characterNodeId, updateNodeData, user?.id])
+  }), [customPrompt, mainImageUrl, data, characterNodeId, updateNodeData, user?.id])
 
   // Reset confirming state when switching tabs
   const handleTabChange = (tab: TabType) => {
@@ -1036,7 +1066,7 @@ centered composition, high quality, single character`
       {showRefinePicker && refinedResults.length > 0 && (
         <div
           className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 backdrop-blur-sm"
-          onClick={() => setShowRefinePicker(false)}
+          onClick={closeRefinePicker}
         >
           <div
             className="bg-card rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl border"
@@ -1044,7 +1074,7 @@ centered composition, high quality, single character`
           >
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold">{t("entity.selectRefinedImage")}</h3>
-              <Button variant="ghost" size="icon" onClick={() => setShowRefinePicker(false)} aria-label={t("common.close")}>
+              <Button variant="ghost" size="icon" onClick={closeRefinePicker} aria-label={t("common.close")}>
                 <X className="w-5 h-5" />
               </Button>
             </div>
@@ -1090,7 +1120,7 @@ centered composition, high quality, single character`
               ))}
             </div>
             <div className="flex justify-end gap-2 mt-4">
-              <Button variant="outline" onClick={() => setShowRefinePicker(false)}>
+              <Button variant="outline" onClick={closeRefinePicker}>
                 {t("common.cancel")}
               </Button>
               <Button

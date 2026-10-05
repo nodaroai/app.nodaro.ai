@@ -27,7 +27,7 @@ import { getNodeResult, getOutputType } from "@/lib/presentation-utils"
 import type { PresentationSettings, PresentationViewMode } from "@/hooks/use-workflow-store"
 import { VIEW_MODES, ALL_VIEW_MODES } from "./view-mode-selector"
 import { APP_CATEGORIES, OUTPUT_TYPES, categoryLabel, outputTypeLabel } from "@/lib/app-categories"
-import { INPUT_FIELD_MAP, OUTPUT_FIELD_MAP } from "@nodaro/shared"
+import { INPUT_FIELD_MAP, OUTPUT_FIELD_MAP, canonicalExposedFieldKey } from "@nodaro/shared"
 import type { ExposedSetting, PresentationItem } from "@nodaro/shared"
 import { deriveSubWorkflowHandles } from "./derive-sub-workflow-handles"
 import { useT } from "@/lib/i18n"
@@ -268,12 +268,14 @@ export function PublishDialog({ workflowId, presentationSettings, updatePresenta
     const fieldSelections = new Map<string, Set<string>>() // nodeId → selected field keys
     const nodeItemIds = new Set<string>() // nodes present as type:"node" (all fields)
     if (iItems && iItems.length > 0) {
+      // A field exposed before a rename is stored under its old key: collect the descriptor key it stands for.
+      const nodeTypeById = new Map(nodes.map((n) => [n.id, n.type]))
       const collect = (items: readonly PresentationItem[]) => {
         for (const item of items) {
           if (item.type === "field") {
             let fields = fieldSelections.get(item.nodeId)
             if (!fields) { fields = new Set(); fieldSelections.set(item.nodeId, fields) }
-            fields.add(item.field)
+            fields.add(canonicalExposedFieldKey(nodeTypeById.get(item.nodeId), item.field))
           } else if (item.type === "node") {
             nodeItemIds.add(item.nodeId)
           } else if (item.type === "group") {

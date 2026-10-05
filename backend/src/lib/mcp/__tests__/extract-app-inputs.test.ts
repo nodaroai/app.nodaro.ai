@@ -512,3 +512,22 @@ describe("mergeInputOverrides", () => {
     expect(merged!.n1).not.toBe(overlay.n1)
   })
 })
+
+describe("extractAppInputSchema — a field published under its older key", () => {
+  it("keeps the flat key and the stored field key, so MCP / SDK callers of a published app are unaffected", () => {
+    const schema = extractAppInputSchema({
+      snapshotSettings: {
+        presentationSettings: {
+          inputItems: [
+            { type: "field", id: "f1", nodeId: "tts1", field: "similarity" },
+            { type: "field", id: "f2", nodeId: "tts1", field: "similarityBoost" },
+          ],
+        },
+      },
+      snapshotNodes: [{ id: "tts1", type: "text-to-speech", data: { label: "Narration" } }],
+    })
+    expect(schema.fields.map((f) => f.key)).toEqual(["narration_similarity", "narration_similarityboost"])
+    expect(schema.keyMap["narration_similarity"]).toEqual({ nodeId: "tts1", fieldKey: "similarity" })
+    expect(schema.keyMap["narration_similarityboost"]).toEqual({ nodeId: "tts1", fieldKey: "similarityBoost" })
+  })
+})

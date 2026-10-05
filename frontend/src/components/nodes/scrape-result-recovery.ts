@@ -1,7 +1,8 @@
-import { applyWebScrapeResult } from "./web-scrape-run-state"
-import { applyMetaAdsScrapeResult } from "./meta-ads-scrape-run-state"
-import { applyInstagramScrapeResult } from "./instagram-scrape-run-state"
+import { applyWebScrapeResult, webScrapeFingerprint } from "./web-scrape-run-state"
+import { applyMetaAdsScrapeResult, metaAdsScrapeFingerprint } from "./meta-ads-scrape-run-state"
+import { applyInstagramScrapeResult, instagramScrapeFingerprint } from "./instagram-scrape-run-state"
 import { applySocialSearchResult } from "./social-search-run-state"
+import type { InstagramScrapeNodeData, MetaAdsScrapeNodeData, WebScrapeNodeData } from "@/types/nodes"
 
 /**
  * Putting a scrape job's result on its node — the ONE rule the live run, the
@@ -52,6 +53,66 @@ export function scrapeResultPatch(
   const build = SCRAPE_RESULT_PATCH.get(nodeType)
   if (!build) return null
   return { ...build(json, data), lastAppliedJobId: jobId }
+}
+
+/** The run-input fingerprint each scraper's card compares against its settings ("Inputs changed — rerun"). */
+const SCRAPE_FINGERPRINT: ReadonlyMap<string, (data: Readonly<Record<string, unknown>>) => string> = new Map<
+  string,
+  (data: Readonly<Record<string, unknown>>) => string
+>([
+  ["web-scrape", (d) => webScrapeFingerprint(d as WebScrapeNodeData)],
+  ["meta-ads-scrape", (d) => metaAdsScrapeFingerprint(d as MetaAdsScrapeNodeData)],
+  ["instagram-scrape", (d) => instagramScrapeFingerprint(d as InstagramScrapeNodeData)],
+])
+
+/**
+ * The patch for a scraper a SERVER run executed — Execute workflow, Run from
+ * here, Run selected: the single-node Run's own result mapping, stamped with
+ * the job, so the card shows the posts / ads / pages exactly as after a
+ * single-node Run. (A schedule's or an app's run reaches an open canvas through
+ * the live lane only — the load-time restores list manual runs.) The three
+ * lanes that paint a server run used to know only media URLs, so a scraper's
+ * card stayed "Not run yet" while every node after it had run on its posts —
+ * and its featured image landed in `generatedResults` as if it were the result.
+ *
+ * - `null`: not a scraper this covers, or no `json` in the output — the
+ *   caller's generic mapping applies. Social Search is excluded on purpose:
+ *   its server run carries every post found on `searchResults` and has its
+ *   own mapping (`socialSearchServerRunPatch`).
+ * - `{}`: nothing to change, and the generic writes must not run either:
+ *   - the state carries NO job — the run did not execute the node, it passed
+ *     its SAVED data through (outside a Run from here / Run selected subset,
+ *     or skipped). Applying a fresh-run patch there would reset the featured
+ *     post the person picked, and the next partial run would hand post #1
+ *     downstream instead of theirs;
+ *   - or the node already holds this job's result.
+ * - otherwise the patch: the run's result, the fingerprint of the settings the
+ *   run used (the node's current ones — so a fresh result never reads as
+ *   "Inputs changed"), and the media fields an older build wrote as if they
+ *   were the result cleared (the single-node Run never writes them on a
+ *   scraper; the server's saved-list reader would otherwise hand on the
+ *   featured image instead of the posts).
+ */
+export function scrapeServerRunPatch(
+  nodeType: string | undefined,
+  output: Readonly<Record<string, unknown>> | undefined,
+  jobId: string | undefined,
+  data?: Readonly<Record<string, unknown>>,
+): Record<string, unknown> | null {
+  if (nodeType === undefined || nodeType === "social-search" || !isScrapeNodeType(nodeType)) return null
+  if (!output || output.json === undefined) return null
+  if (!jobId || data?.lastAppliedJobId === jobId) return {}
+  const patch = scrapeResultPatch(nodeType, output.json, jobId, data)
+  if (!patch) return null
+  const fingerprint = SCRAPE_FINGERPRINT.get(nodeType)
+  return {
+    ...patch,
+    ...(fingerprint ? { lastRunFingerprint: fingerprint(data ?? {}) } : {}),
+    generatedResults: undefined,
+    generatedImageUrl: undefined,
+    generatedText: undefined,
+    activeResultIndex: undefined,
+  }
 }
 
 /**
