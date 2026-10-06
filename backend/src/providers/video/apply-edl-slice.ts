@@ -87,6 +87,64 @@ export function pictureFramesOf(chunks: readonly (readonly PlanSegment[])[], fps
   return out
 }
 
+/** The render's one sound rate. Every segment's sound is cut, joined and
+ *  encoded at it. */
+const RENDER_SAMPLE_RATE = 48_000
+
+/** Whether a source's sound needs the exact resample: a measured integer rate
+ *  that is not the render's. An unmeasured rate keeps today's graph. */
+const needsExactResample = (rate: number | undefined): boolean =>
+  rate !== undefined && Number.isInteger(rate) && rate > 0 && rate !== RENDER_SAMPLE_RATE
+
+/**
+ * One segment's sound from a source NOT at 48 kHz, cut sample-exactly (Track
+ * 0.18, fix F5, decided 2026-10-06). `atrim` in seconds rounds a cut to the
+ * SOURCE's sample grid, and the resampler's output length rounds again: an
+ * unseeked 44.1 kHz master lost ~0.7 samples per segment (−20 by segment 30,
+ * pinned 8.1.2), and a seek off a whole second shifted every segment by a
+ * constant fraction of a sample. Instead, with the input seeked to a WHOLE
+ * second (`seekOf`) — an exact sample at any integer rate:
+ *  1. cut coarsely, from a whole second at least 1 s before the segment to one
+ *     at least 1 s after it — exact samples again, and the resampler's lead-in
+ *     and lead-out, so no sample of the segment is interpolated against the
+ *     edge of the cut — held past the source end with silence;
+ *  2. resample to 48 kHz — that first whole second is sample 0 of the 48 kHz
+ *     stream on both grids, so every later 48 kHz sample has an exact position.
+ *     The cut is rebased on the WHOLE SECOND (`PTS-coarse/TB`), not on its
+ *     first packet: a sound that starts after its file does (MKV/WebM, OBS and
+ *     browser recordings, MPEG-TS, an MP4 whose edit list delays the sound)
+ *     has no sample at that second, so `atrim` starts at its first packet, and
+ *     `PTS-STARTPTS` would call that packet the second and put the segment late
+ *     by the whole delay. `first_pts=0` has the resampler pad the head with
+ *     silence up to the packet's true position instead; `min_comp=0` makes it
+ *     pad ANY delay — `first_pts` alone defaults the threshold to 1 ms, which a
+ *     delay must exceed, so a 1 ms start (MKV's timestamp unit) went unpadded.
+ *     A delay that is not a whole number of the source's samples is padded to
+ *     the source sample below it (the resampler inserts whole input samples),
+ *     as the seconds-based `atrim` did. For a sound present at the second, the
+ *     output is byte-identical to the rebase on its first packet;
+ *  3. cut EXACTLY in 48 kHz samples: [(start − coarse)·48 000, + dur·48 000),
+ *     held with silence as a backstop (the lead-out already covers it).
+ * Every segment is therefore exactly dur·48 kHz samples of the source
+ * resampled as one continuous stream: lag 0 per segment, seeked or not, and
+ * for a lossless source every sample equal to that stream's (pinned 8.1.2,
+ * 44.1 kHz WAV and AAC, cuts off the 10 ms grid: apply-edl-resample.e2e, which
+ * also renders MKVs whose sound starts 500 ms and 1 ms after the picture).
+ * Times are integer ms, so both sample numbers are exact integers.
+ */
+function exactResample(input: number, startMs: number, endMs: number, seekSec: number): string {
+  const relMs = startMs - seekSec * 1000
+  const relEndMs = endMs - seekSec * 1000
+  const coarse = Math.max(0, Math.floor(relMs / 1000) - 1)
+  const coarseEnd = Math.ceil(relEndMs / 1000) + 1
+  const startSample = Math.round((relMs - coarse * 1000) * (RENDER_SAMPLE_RATE / 1000))
+  const endSample = startSample + Math.round((endMs - startMs) * (RENDER_SAMPLE_RATE / 1000))
+  return (
+    `[${input}:a]apad,atrim=start=${coarse}:end=${coarseEnd},asetpts=PTS-${coarse}/TB,` +
+    `aresample=${RENDER_SAMPLE_RATE}:first_pts=0:min_comp=0,apad,atrim=start_sample=${startSample}:end_sample=${endSample},asetpts=PTS-STARTPTS`
+  )
+}
+
 /** How ONE contiguous slice of segments renders (see `buildSliceCommand`). */
 export interface SliceOptions {
   readonly output: "video" | "audio"
@@ -108,6 +166,12 @@ export interface SliceOptions {
   readonly chunkStartMs: number
   readonly masterAudioId: string | undefined
   readonly audioPresent: Map<string, boolean>
+  /** The sample rate, in Hz, of each source's audio stream (`probeAudioSampleRate`).
+   *  A source whose sound this slice reads at a measured integer rate OTHER
+   *  than 48 kHz is resampled sample-exactly (`exactResample`, Track 0.18). A
+   *  48 kHz source — or one whose rate is absent here — renders exactly the
+   *  command it always did. */
+  readonly audioSampleRate?: ReadonlyMap<string, number>
   /** Render the PICTURE only, no audio track (video output only). Used for the
    *  chunks of a multi-chunk video render: their audio would be encoded and
    *  concatenated per chunk, injecting AAC priming at every seam; instead the
@@ -155,7 +219,7 @@ export interface SliceCommand {
  * `audioPresent` maps a source id to whether its file carries an audio stream.
  */
 export function buildSliceCommand(edl: Edl, segs: readonly PlanSegment[], opts: SliceOptions): SliceCommand {
-  const { output, target, fps, chunkStartMs, masterAudioId, audioPresent, omitAudio, audioCodec = "aac" } = opts
+  const { output, target, fps, chunkStartMs, masterAudioId, audioPresent, audioSampleRate, omitAudio, audioCodec = "aac" } = opts
   const rate = frameRateOf(fps)
   const wantVideo = output === "video"
   const emitAudio = !omitAudio // audio-only renders never pass omitAudio
@@ -298,8 +362,19 @@ export function buildSliceCommand(edl: Edl, segs: readonly PlanSegment[], opts: 
     const aId = audioSourceId(edl, seg, masterAudioId)
     const aSrc = aId ? edl.sources.find((s) => s.id === aId) : undefined
     if (!aSrc || !audioPresent.get(aSrc.id)) return undefined
-    const start = Math.max(0, secs(seg.inMs - offsetOf(aSrc)))
-    return { id: aSrc.id, start, end: Math.max(start, secs(seg.outMs - offsetOf(aSrc))) }
+    const startMs = Math.max(0, seg.inMs - offsetOf(aSrc))
+    const endMs = Math.max(startMs, seg.outMs - offsetOf(aSrc))
+    return { id: aSrc.id, start: secs(startMs), end: secs(endMs), startMs, endMs }
+  }
+  // The sources whose sound this slice reads and must resample exactly
+  // (`exactResample`). A picture-only chunk reads none, so its command is
+  // unchanged whatever its sources' rates.
+  const exactAudio = new Set<string>()
+  if (emitAudio) {
+    for (const seg of segs) {
+      const a = audioReadOf(seg)
+      if (a && needsExactResample(audioSampleRate?.get(a.id))) exactAudio.add(a.id)
+    }
   }
 
   // INPUT SEEK. `trim`/`atrim` run AFTER the decoder, so without a seek a slice
@@ -310,6 +385,8 @@ export function buildSliceCommand(edl: Edl, segs: readonly PlanSegment[], opts: 
   // decodes from the prior keyframe and discards up to the target) to its
   // EARLIEST read in this slice minus INPUT_SEEK_MARGIN_SEC, and every trim on it
   // is rebased by that offset. Measured byte-identical to the unseeked render.
+  // An input whose sound is not at 48 kHz seeks to a whole second instead
+  // (`exactResample`).
   const minReadOf = new Map<string, number>()
   const noteRead = (id: string, t: number) => minReadOf.set(id, Math.min(minReadOf.get(id) ?? Infinity, t))
   segs.forEach((seg, i) => {
@@ -320,8 +397,13 @@ export function buildSliceCommand(edl: Edl, segs: readonly PlanSegment[], opts: 
       if (a) noteRead(a.id, a.start)
     }
   })
-  const seekOf = (id: string): number =>
-    Math.max(0, Math.floor(((minReadOf.get(id) ?? 0) - INPUT_SEEK_MARGIN_SEC) * 1000) / 1000)
+  // An input whose sound is resampled exactly seeks to a WHOLE second — an
+  // exact sample at any integer rate (Track 0.18); its picture reads, if any,
+  // rebase on the same seek. Every other input keeps its millisecond seek.
+  const seekOf = (id: string): number => {
+    const at = (minReadOf.get(id) ?? 0) - INPUT_SEEK_MARGIN_SEC
+    return exactAudio.has(id) ? Math.max(0, Math.floor(at)) : Math.max(0, Math.floor(at * 1000) / 1000)
+  }
 
   segs.forEach((seg, i) => {
     const durS = secs(seg.outMs - seg.inMs)
@@ -385,7 +467,12 @@ export function buildSliceCommand(edl: Edl, segs: readonly PlanSegment[], opts: 
     if (emitAudio) {
       const a = audioReadOf(seg)
       aLabel = `[a${i}]`
-      if (a) {
+      if (a && exactAudio.has(a.id)) {
+        filters.push(
+          `${exactResample(addInput(a.id), a.startMs, a.endMs, seekOf(a.id))},` +
+            `aformat=sample_rates=48000:channel_layouts=stereo${aLabel}`,
+        )
+      } else if (a) {
         const seek = seekOf(a.id)
         filters.push(
           `[${addInput(a.id)}:a]apad,atrim=start=${(a.start - seek).toFixed(6)}:end=${(a.end - seek).toFixed(6)},asetpts=PTS-STARTPTS,` +

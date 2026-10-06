@@ -46,6 +46,7 @@ import {
   downloadFile,
   runFfmpeg,
   runFfprobe,
+  probeAudioSampleRate,
   probeStreamEnds,
   type StreamEnds,
   createWorkDir,
@@ -381,6 +382,7 @@ export async function applyEdl(options: ApplyEdlOptions): Promise<ApplyEdlResult
 
     const sourcePaths = new Map<string, string>()
     const audioPresent = new Map<string, boolean>()
+    const audioSampleRate = new Map<string, number>()
     const sourceEnds = new Map<string, StreamEnds>()
     let dl = 0
     for (const id of referenced) {
@@ -394,6 +396,14 @@ export async function applyEdl(options: ApplyEdlOptions): Promise<ApplyEdlResult
       await downloadFile(src.url, localPath, { limits: BIG_MEDIA_DOWNLOAD_LIMITS })
       sourcePaths.set(id, localPath)
       audioPresent.set(id, await hasAudioStream(localPath))
+      // The sound's rate: one not at 48 kHz is resampled sample-exactly
+      // (`exactResample`, Track 0.18). A rate this cannot read leaves the
+      // source on the plain graph — exact for 48 kHz — rather than failing a
+      // paid job over a probe.
+      if (audioPresent.get(id)) {
+        const rate = await probeAudioSampleRate(localPath).catch(() => undefined)
+        if (rate !== undefined) audioSampleRate.set(id, rate)
+      }
       // The one per-source measurement that lets the window check below be
       // honest: each track's REAL end, from its own packets, on the render's
       // clock — not the container's declared duration (a Xing-less VBR mp3
@@ -505,7 +515,7 @@ export async function applyEdl(options: ApplyEdlOptions): Promise<ApplyEdlResult
       }
       const chunkPath = join(workDir, `chunk-${c}.${pcmChunks ? "wav" : ext}`)
       const cmd = buildSliceCommand(edl, chunks[c], {
-        output, quality, target, fps, chunkStartMs, masterAudioId, audioPresent, omitAudio: muxAudioSeparately,
+        output, quality, target, fps, chunkStartMs, masterAudioId, audioPresent, audioSampleRate, omitAudio: muxAudioSeparately,
         ...(pcmChunks ? { audioCodec: "pcm" as const } : {}),
       })
       // The key is the command's fingerprint, so a checkpoint rendered for a
@@ -584,7 +594,7 @@ export async function applyEdl(options: ApplyEdlOptions): Promise<ApplyEdlResult
           await throwIfJobCancelled()
           const pcmPath = join(workDir, `audio-${k}.wav`)
           await renderSlice(edl, audioChunks[k], {
-            output: "audio", audioCodec: "pcm", quality, target, fps, chunkStartMs: 0, masterAudioId, audioPresent, sourcePaths, outPath: pcmPath, threads,
+            output: "audio", audioCodec: "pcm", quality, target, fps, chunkStartMs: 0, masterAudioId, audioPresent, audioSampleRate, sourcePaths, outPath: pcmPath, threads,
           })
           pcmPaths.push(pcmPath)
         }

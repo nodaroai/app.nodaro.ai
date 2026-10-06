@@ -644,6 +644,24 @@ export async function hasAudioStream(filePath: string): Promise<boolean> {
 }
 
 /**
+ * The sample rate of a local media file's FIRST audio stream — the stream a
+ * filter graph's `[i:a]` binds — in Hz; undefined when the file has no audio
+ * stream or ffprobe reports no positive integer rate. Local paths only (no
+ * network, no SSRF surface).
+ */
+export async function probeAudioSampleRate(filePath: string): Promise<number | undefined> {
+  const output = await runFfprobe([
+    "-v", "error",
+    "-select_streams", "a:0",
+    "-show_entries", "stream=sample_rate",
+    "-of", "default=noprint_wrappers=1:nokey=1",
+    filePath,
+  ])
+  const rate = Number(output.trim().split("\n")[0])
+  return Number.isInteger(rate) && rate > 0 ? rate : undefined
+}
+
+/**
  * Probe the frame rate of a local video file. Falls back to 30fps if the
  * probe fails or returns something unparseable — a missing fps shouldn't
  * abort a frame-count-based trim.
