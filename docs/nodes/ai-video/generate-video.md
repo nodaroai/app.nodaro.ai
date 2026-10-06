@@ -168,13 +168,103 @@ LTX 2.3 Fast has its audio handle visually muted because Fast does not accept au
 **Key characteristics:**
 - **Audio** — Gemini Omni generates an audio track on **every** render, and takes its direction from your prompt. Per [Google's model docs](https://ai.google.dev/gemini-api/docs/omni), *"By default the model will try to generate an appropriate audio track for a video"*, and you steer it in prose — *"Include calm background music"*, *"The audio is a low tinny radio broadcast in the background"*, *"Sound design: gentle breeze, distant bird chirps"*. There is no audio on/off parameter anywhere in the request, so the track cannot be switched off; write what you want to hear instead.
 
-  What it will **not** do on this path is speak. The same docs scope spoken dialogue to multi-turn extension via `previous_interaction_id` — *"Generating spoken dialogue or speech is supported when extending previously generated videos via multi-turn"* — and [KIE's request schema](https://docs.kie.ai/market/gemini-omni-video) exposes no such field, so that path is unreachable here. Reference audio is out too (*"Uploading audio references is unsupported in the current version of the API"*), and while KIE's schema still lists an `audio_ids` array fed by the separate `gemini-omni-audio` model, the Nodaro integration forwards none (`runGeminiOmni` in `backend/src/providers/kie/video.ts` sends no `audio_ids`). So both SKUs are `ambient` in the audio-capability SSOT — neither `native_speech` nor `audio_driven` — and Gemini Omni stays excluded from [Character voice](#character-voice). `gemini-omni-flash` behaves identically on every point above.
+  What it will **not** do on this path is speak. The same docs scope spoken dialogue to multi-turn extension via `previous_interaction_id` — *"Generating spoken dialogue or speech is supported when extending previously generated videos via multi-turn"* — and [KIE's request schema](https://docs.kie.ai/market/gemini-omni-video) exposes no such field, so that path is unreachable here. Reference audio is out too (*"Uploading audio references is unsupported in the current version of the API"*), and while KIE's schema also lists an `audio_ids` array fed by the separate `gemini-omni-audio` model — which takes a preset voice name, never an uploaded recording, so it cannot carry a real speaker's voice (a source video can) — the Nodaro integration forwards one ONLY when you pin a voice to a character reference (see [Pinning a voice](#pinning-a-voice-to-a-character-reference)); otherwise `runGeminiOmni` in `backend/src/providers/kie/video.ts` sends no `audio_ids`. So both SKUs are `ambient` in the audio-capability SSOT — neither `native_speech` nor `audio_driven` — and Gemini Omni stays excluded from [Character voice](#character-voice). `gemini-omni-flash` behaves identically on every point above.
 - **Resolutions** — 720p, 1080p, and 4K on **both** SKUs. **4K is not available on the free tier.** (Flash's API also lists a 360p tier; Nodaro does not expose it — it falls in the same credit band as 720p/1080p, so it could only hand you a worse render at the same price.)
 - **Durations** — 4 / 6 / 8 / 10 seconds for 720p / 1080p; 4 / 6 / 8 / 10 seconds for 4K.
 - **Aspect ratio** — **16:9 or 9:16 only**, and the model requires one on every call (it does not pick a default of its own). Nodaro always sends one: leave the field untouched and you get **16:9**; any other ratio reaching the API (`1:1`, `4:3`, `21:9`, `Auto`, …) is snapped to whichever of 16:9 / 9:16 is closest rather than rejected.
 - **Reference images** — up to 7 images can be wired into the `imageReferences` handle (both SKUs).
 - **Choosing between them** — **Flash** is the cheaper, faster SKU; **Pro** is the higher-cost tier. Everything else — the 4 / 6 / 8 / 10 s menu, the resolution tiers, the aspect constraint, the reference quota and the V2V trim window — is identical, so the choice is purely price and turnaround.
 - **V2V trim window** — when a source video is connected, the fields `videoTrimStart` and `videoTrimEnd` (integer seconds) define the trim window, which must span ≤ 10 seconds. The duration is derived automatically from the wired clip; override manually in the config panel if needed.
+
+#### Character references (Gemini Omni)
+
+Reference images steer a Gemini Omni clip but do not hold a face: the provider treats an image reference as loose context for "characters, scenes, styles, or storyboard guidance", and the person in the clip comes back looking different. To keep a real person's face, send a **character reference** — a portrait plus a description — through the API (`characterReferences` on `POST /v1/generate-video` and `POST /v1/text-to-video`, `character_references` on the MCP `generate_video` tool, `characterReferences` on the SDK's `GenerateVideoParams` / `TextToVideoParams`). The editor node has no control for it yet.
+
+Each entry takes the portrait `imageUrl`, a `description` (appearance, clothing, style; ≤ 2000 characters), an optional full-body `bodyImageUrl`, an optional `name` (≤ 100 characters) and an optional `voice` (see [Pinning a voice](#pinning-a-voice-to-a-character-reference)). Up to **3** per request.
+
+- **Models:** `gemini-omni-video` and `gemini-omni-flash` only. Any other model answers `400` (`character_references_unsupported`) rather than running without the face lock.
+- **No start or end frame.** A character reference cannot be combined with a start frame (`imageUrl`) or an end frame (`endFrameUrl`); the request answers `400` (`character_references_with_start_frame` / `character_references_with_end_frame`) instead of silently dropping one of them. This is a current Nodaro limit, not a provider rule. Use references and, if needed, a source video in the same request.
+- **Input budget.** Characters share the model's 7-unit input quota with reference images (1 unit each) and a source video (2 units): `images + 2 × videos + characters ≤ 7`, where a character counts 1 unit, or 2 when it carries a `bodyImageUrl`. Over budget answers `400` (`character_references_quota`) — nothing is truncated.
+- **Same character, reused.** Nodaro creates the character from your portrait on the first run and remembers it for 24 hours, so an identical reference (same images, description, name and voice) is not created again on the next run. A voiced and an unvoiced copy of the same person are two different characters.
+- **A failed character creation fails the run** — it never falls back to sending the portrait as a plain reference image — and the run's credits are refunded like any failed generation.
+- **Price.** Character references add **no credit charge**: the run is priced by the same duration / resolution tier as any other Gemini Omni run.
+- **Observable.** The references you sent are recorded on the job's input.
+
+```json
+{
+  "provider": "gemini-omni-flash",
+  "prompt": "She looks into the camera and says hello.",
+  "characterReferences": [
+    {
+      "imageUrl": "https://example.com/assets/portrait.png",
+      "description": "A woman in her thirties with short silver hair and a utility jacket",
+      "name": "Ava"
+    }
+  ]
+}
+```
+
+##### Pinning a voice to a character reference
+
+Left to itself the model improvises a voice for each clip, so the same person sounds different from one generation to the next. Add a `voice` to a character reference to **pin one voice persona** to that character:
+
+```json
+{
+  "imageUrl": "https://example.com/assets/portrait.png",
+  "description": "A woman in her thirties with short silver hair and a utility jacket",
+  "name": "Ava",
+  "voice": { "preset": "kore", "description": "warm, unhurried, slightly husky", "exampleLine": "Good evening, everyone." }
+}
+```
+
+| Field | Required | Meaning |
+|---|---|---|
+| `voice.preset` | yes | The base voice — one of the 30 presets below. |
+| `voice.description` | no | Free text on timbre, pace and emotion (≤ 2000 characters). |
+| `voice.exampleLine` | no | One sample line the persona says (≤ 120 characters). |
+
+Nodaro creates the persona once and attaches it to the character **and** to the video request, so it drives that character's speech; an identical voice is remembered for 24 hours and reused. A voice is a preset plus your description — it is never a recording of a real speaker (use a source video for that).
+
+- **Models and limits.** Only the models that take `characterReferences`. A request carries at most **3 distinct voices** (a voice is its preset, description, example line and the character's `name`; two characters with all four identical count once); more answers `400` (`character_voices_over_limit`). Voices do not count against the 7-unit input budget.
+- **Description and policy.** The voice `description` is treated like the character `description`: it passes through the same content policies. The `preset` must be one of the ids below or the request answers `400` (`validation_error`).
+- **A failed voice creation fails the run** — it never falls back to an unvoiced character — and credits are refunded like any failed generation. A voice adds **no credit charge**.
+- **MCP.** The `generate_video` tool exposes the preset only, as `voice_preset` on each `character_references` entry; the description and example line are API / SDK levers.
+- **Not verified end to end.** Nodaro has not yet confirmed against live generations how strongly a pinned persona holds across clips; keep describing the speech you want in the prompt.
+
+The 30 presets (gender, style and pitch are the provider's own labels):
+
+| Preset | Gender | Style | Pitch |
+|---|---|---|---|
+| `achernar` | female | soft | high |
+| `achird` | male | friendly | mid |
+| `algenib` | male | raspy | low |
+| `algieba` | male | easygoing | mid-low |
+| `alnilam` | male | steady | mid-low |
+| `aoede` | female | brisk | mid |
+| `autonoe` | female | bright | mid |
+| `callirrhoe` | female | easygoing | mid |
+| `charon` | male | intellectual | low |
+| `despina` | female | smooth | mid |
+| `enceladus` | male | breathy | low |
+| `erinome` | female | clear | mid |
+| `fenrir` | male | lively | younger |
+| `gacrux` | female | mature | mid |
+| `iapetus` | male | clear | mid-low |
+| `kore` | female | capable | mid |
+| `laomedeia` | female | cheerful | mid-high |
+| `leda` | female | young | mid-high |
+| `orus` | male | steady | mid-low |
+| `puck` | male | cheerful | mid |
+| `pulcherrima` | genderless | forward | mid-high |
+| `rasalgethi` | male | intellectual | mid |
+| `sadachbia` | male | vivid | low |
+| `sadaltager` | male | knowledgeable | mid |
+| `schedar` | male | smooth | mid-low |
+| `sulafat` | female | warm | mid |
+| `umbriel` | male | smooth | low |
+| `vindemiatrix` | female | gentle | mid |
+| `zephyr` | female | bright | mid-high |
+| `zubenelgenubi` | male | casual | mid-low |
 
 #### Gemini Omni credit pricing
 
@@ -399,7 +489,7 @@ Examples — `wan-3` @480p: 2s = 40, 5s = 100, 8s = 160, 30s = 600; @720p: 5s = 
 
 **Reference videos on Wan 3.0 bill output seconds only.** The `input + output` rule above does **not** apply to `wan-3` / `wan-3-prime` — a wired reference video adds no input seconds to the reserve. The provider's own reference-video limits — each clip 1–15 s, ≤ 15 s combined, and input video duration + output duration ≤ 30 s — are **documented, not pre-flighted**: an over-long reference video is rejected by the provider mid-run, after credits are reserved (the reservation is refunded). Reference **audio** is the exception: the ≤ 15 s per-clip cap is checked before the job is submitted, with the same `audio_too_long` error as the Seedance / Hailuo family.
 
-**Not forwarded (out of scope).** Wan 3.0's `duration: -1` (model-chosen length), its document-to-video (`reference_file_urls`) and webpage-to-video (`reference_link_urls`) modes, and its `nsfw_checker` switch are not exposed. On both Gemini Omni SKUs, `audio_ids` and `character_ids` are likewise not forwarded.
+**Not forwarded (out of scope).** Wan 3.0's `duration: -1` (model-chosen length), its document-to-video (`reference_file_urls`) and webpage-to-video (`reference_link_urls`) modes, and its `nsfw_checker` switch are not exposed. On both Gemini Omni SKUs, `audio_ids` is forwarded only for a character's pinned `voice`, and `character_ids` through the API's `characterReferences` field (see [Character references](#character-references-gemini-omni)) — the editor node has no control for either yet.
 
 Cross-check the runtime table in `/admin/models` for the live numbers — the worked examples above match the `STATIC_CREDIT_COSTS` snapshot at the time of this writing.
 

@@ -20,7 +20,7 @@ import type {
   ProviderOptions,
   ReconcileOpts,
 } from "../provider.interface.js"
-import { FRAME_MODE_ADAPTIVE_ONLY_ASPECT, VIDEO_DURATION_AUTO, isAutoVideoDuration, supportsAutoVideoDuration, isSeedance2Provider, isMinimaxH3Provider, normalizeMinimaxH3Resolution, isGeminiOmniProvider, isWan3Provider, normalizeWan3Resolution, isVeoProvider, getLipSyncMaxAudioSeconds, applyVideoNegativePrompt, applyVideoAudioToggle, getModel, DEFAULT_VIDEO_PROVIDER, SEEDANCE_2_REF_LIMITS, VIDEO_REF_LIMITS_BY_PROVIDER } from "@nodaro/shared"
+import { FRAME_MODE_ADAPTIVE_ONLY_ASPECT, VIDEO_DURATION_AUTO, isAutoVideoDuration, supportsAutoVideoDuration, isSeedance2Provider, isMinimaxH3Provider, normalizeMinimaxH3Resolution, isGeminiOmniProvider, isWan3Provider, normalizeWan3Resolution, isVeoProvider, getLipSyncMaxAudioSeconds, applyVideoNegativePrompt, applyVideoAudioToggle, getModel, DEFAULT_VIDEO_PROVIDER, SEEDANCE_2_REF_LIMITS, VIDEO_REF_LIMITS_BY_PROVIDER, videoCharacterRefProblem, videoCharacterRefUnits, videoCharacterVoiceCap } from "@nodaro/shared"
 import { resolveSeedance2Inputs, resolveGeminiOmniI2vInputs, resolveVeoI2vInputs } from "@nodaro/prompts"
 import {
   createSanitizedError,
@@ -32,6 +32,7 @@ import {
 } from "./client.js"
 import { snapAspectRatioToken } from "../video/aspect-ratio.js"
 import { deriveKieEgressDimensions } from "./egress-dimensions.js"
+import { resolveOmniCharacterIds, forgetOmniCharacters, isInvalidOmniCharacterError, isInvalidOmniAudioError } from "./omni-character.js"
 import { kling3Generate } from "./kling3-client.js"
 import { runRunwayTask, runAlephTask } from "./runway-client.js"
 import { runLumaModifyTask } from "./luma-client.js"
@@ -1172,15 +1173,31 @@ async function runGeminiOmni(
     )
   }
   const videoConnected = videoUrls.length > 0
-  // KIE quota: images + videos*2 (+ character_ids, none in Phase 1) ≤ 7.
-  // Check the RAW count and reject overflow (do NOT silently truncate). The cap
-  // is the model's OWN declared image budget (both SKUs are 7 today) so a future
-  // divergence needs no edit here — the same map resolveGeminiOmniI2vInputs
-  // budgets against.
+  // Character references (the dedicated identity input → `character_ids`). A
+  // caller-assembled list, validated here for the same reason the quota below
+  // is: this is the single choke point both routes and the worker reach. A
+  // start frame is rejected by the caller (see the backstop in imageToVideo) —
+  // by the time we are here the frame, if any, is already inside `imageUrls`.
+  const characterRefs = options?.characterReferences ?? []
+  if (characterRefs.length > 0) {
+    const problem = videoCharacterRefProblem({
+      provider: modelKey,
+      characterReferences: characterRefs,
+      imageCount: imageUrls.length,
+      videoCount: videoUrls.length,
+      hasStartFrame: false,
+    })
+    if (problem) throw createSanitizedError(`Gemini Omni: ${problem.message}`, "Video generation")
+  }
+  // KIE quota: images + videos*2 + character units ≤ 7 (a character is 1 unit,
+  // 2 with a body image). Check the RAW count and reject overflow (do NOT
+  // silently truncate). The cap is the model's OWN declared image budget (both
+  // SKUs are 7 today) so a future divergence needs no edit here — the same map
+  // resolveGeminiOmniI2vInputs budgets against.
   const inputQuota = VIDEO_REF_LIMITS_BY_PROVIDER[modelKey]?.images ?? 7
-  if (imageUrls.length + (videoConnected ? 2 : 0) > inputQuota) {
+  if (imageUrls.length + (videoConnected ? 2 : 0) + videoCharacterRefUnits(characterRefs) > inputQuota) {
     throw createSanitizedError(
-      `Gemini Omni: too many inputs (images + 2×videos must be ≤ ${inputQuota})`,
+      `Gemini Omni: too many inputs (images + 2×videos + characters must be ≤ ${inputQuota})`,
       "Video generation",
     )
   }
@@ -1203,7 +1220,30 @@ async function runGeminiOmni(
   // Report the ACTUAL per-tier provider cost (resolution band × duration, or flat for V2V)
   // so the credit-commit charges the right tier instead of the flat cheapest-tier cost.
   const tierCostUsd = geminiOmniTierCostUsd(modelKey, resolution, snappedDuration, videoConnected)
-  const geminiInput: Record<string, unknown> = {
+  // Mint (or fetch cached) character ids BEFORE the task body is built. A
+  // failure here fails the job honestly — never a silent fallback to
+  // `image_urls`, which is exactly the loose-reference behavior (a different
+  // face) this input exists to replace.
+  const characterMeta = { modelKey }
+  let characters = characterRefs.length > 0 ? await resolveOmniCharacterIds(characterRefs, characterMeta) : null
+  // Voice personas ride the task's `audio_ids` too (not only the character
+  // create's): that is what makes the persona drive the speech. They are a
+  // separate input — never counted against the 7-unit quota above. The shared
+  // rule already capped DISTINCT voices before any paid create; this re-checks
+  // the resolved ids, the thing that actually ships.
+  const assertAudioIds = (audioIds: readonly string[] | undefined): string[] => {
+    const unique = [...new Set(audioIds ?? [])]
+    const cap = videoCharacterVoiceCap(modelKey)
+    if (unique.length > cap) {
+      throw createSanitizedError(
+        `Gemini Omni: a video takes at most ${cap} distinct character voices; got ${unique.length}`,
+        "Video generation",
+      )
+    }
+    return unique
+  }
+  if (characters) assertAudioIds(characters.audioIds)
+  const buildGeminiInput = (characterIds: readonly string[] | undefined, audioIds: readonly string[] = []): Record<string, unknown> => ({
     prompt,
     resolution,
     // Mandatory — see resolveGeminiOmniAspect. Never make this conditional again.
@@ -1216,14 +1256,41 @@ async function runGeminiOmni(
       ? { video_list: videoList, ...(modelConfig.requiresDuration ? { duration: String(snappedDuration) } : {}) }
       : { duration: String(snappedDuration) }),
     ...(imageUrls.length ? { image_urls: imageUrls } : {}),
+    // De-duplicated: two identical references resolve to one id, and KIE's
+    // tolerance for the same id twice is undocumented.
+    ...(characterIds?.length ? { character_ids: [...new Set(characterIds)] } : {}),
+    ...(audioIds.length ? { audio_ids: [...new Set(audioIds)] } : {}),
     // Omit the -1 "random" sentinel (and any negative); only forward real seeds.
     ...(options?.seed != null && options.seed >= 0 ? { seed: options.seed } : {}),
+  })
+  const submitGemini = (geminiInput: Record<string, unknown>) => {
+    console.log(`[KIE.ai] ${logLabel} input:`, JSON.stringify(geminiInput, null, 2))
+    return runKieTask(
+      modelConfig.model, geminiInput, MAX_POLL_ATTEMPTS_VIDEO, options?.onProgress,
+      { ...reconcileOpts, modelKey, dimensions: { ...reconcileOpts?.dimensions, ...deriveKieEgressDimensions(geminiInput) } },
+    )
   }
-  console.log(`[KIE.ai] ${logLabel} input:`, JSON.stringify(geminiInput, null, 2))
-  const { resultJson, taskId: gTaskId, providerMs } = await runKieTask(
-    modelConfig.model, geminiInput, MAX_POLL_ATTEMPTS_VIDEO, options?.onProgress,
-    { ...reconcileOpts, modelKey, dimensions: { ...reconcileOpts?.dimensions, ...deriveKieEgressDimensions(geminiInput) } },
-  )
+  let run
+  try {
+    run = await submitGemini(buildGeminiInput(characters?.ids, characters?.audioIds))
+  } catch (err) {
+    // KIE documents no validity period for a character id. When it rejects a
+    // CACHED id as invalid/expired, recreate ONCE and resubmit — a fresh id
+    // that is rejected is not retried (that would be a loop on a real error).
+    if (characters && characters.fromCache.some(Boolean) && (isInvalidOmniCharacterError(err) || isInvalidOmniAudioError(err))) {
+      console.warn(`[KIE.ai] ${logLabel}: cached character/voice id rejected; recreating once`)
+      // Drop and recreate ONLY the cache-served ids: a reference minted fresh in
+      // this very run is not stale, and the plain resolve below finds it in the
+      // cache it was just written to (one create per dead id, none for new ones).
+      await forgetOmniCharacters(characterRefs.filter((_, i) => characters!.fromCache[i]))
+      characters = await resolveOmniCharacterIds(characterRefs, characterMeta)
+      assertAudioIds(characters.audioIds)
+      run = await submitGemini(buildGeminiInput(characters.ids, characters.audioIds))
+    } else {
+      throw err
+    }
+  }
+  const { resultJson, taskId: gTaskId, providerMs } = run
   const videoUrl = resultJson.resultUrls?.[0] ?? resultJson.videoUrl
   if (!videoUrl) {
     throw createSanitizedError(`${logLabel} task succeeded but no URL found`, "Video generation")
@@ -1460,6 +1527,18 @@ export class KieVideoProvider
     console.log(
       `[KIE.ai] ==============================================`
     )
+
+    // A start frame (or end frame) together with character references is not
+    // supported on Gemini Omni: the routes 400 this combination first; this is
+    // the backstop for callers that bypass them (worker / orchestrator payloads)
+    // — and it sits BEFORE the frame download so nothing is fetched for a doomed
+    // request. Never drop one silently.
+    if (isGeminiOmniProvider(provider) && (imageUrl || endFrameUrl) && (options?.characterReferences ?? []).length > 0) {
+      throw createSanitizedError(
+        `Gemini Omni (${provider}): character references cannot be combined with a start or end frame`,
+        "Video generation",
+      )
+    }
 
     // Normalize input frames before handing them to KIE — see ensureImageForProvider.
     // The Hailuo/MiniMax backend returns "internal error" on large RGBA PNGs even

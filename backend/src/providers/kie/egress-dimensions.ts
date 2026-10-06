@@ -1,6 +1,6 @@
 /**
  * The money-bearing dimensions a KIE wire body implies — resolution, audio,
- * videoInput, durationLabel, duration, characters. A generic port of the raw
+ * videoInput, durationLabel, duration, characters (TTS text length), characterRefs (video identity inputs). A generic port of the raw
  * dimension reads in a private deployment fork's own options object, WITHOUT
  * that fork's price-key composition — which lives in the deployment's egress
  * decorator, never in core.
@@ -62,6 +62,13 @@ export function deriveKieEgressDimensions(
             .join("")
         : null
   if (text && text.length > 0) out.characters = text.length
+
+  // Identity inputs: Gemini Omni's `character_ids`. A distinct key — `characters`
+  // above already means the TTS text LENGTH. KIE documents no price for them, so
+  // this is for observability / a deployment decorator, never core pricing.
+  if (Array.isArray(body.character_ids) && body.character_ids.length > 0) {
+    out.characterRefs = body.character_ids.length
+  }
 
   return out
 }

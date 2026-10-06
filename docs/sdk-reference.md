@@ -1791,6 +1791,18 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > <caption>.` and bounded by the number of rail references that actually ship.
 > A blank entry is a hole in the alignment, not a line.
 
+> **Keeping a person's face (Gemini Omni).** `GenerateVideoParams` and
+> `TextToVideoParams` take `characterReferences` — up to 3
+> `VideoCharacterReference`s (`{ imageUrl, description, bodyImageUrl?, name?, voice? }`;
+> `voice` is `{ preset, description?, exampleLine? }` — `preset` is one of the
+> `GEMINI_OMNI_VOICE_PRESETS` ids exported by `@nodaro/shared`, and pins one voice
+> to that character across clips).
+> Only `gemini-omni-video` / `gemini-omni-flash` accept them (any other model
+> answers `400`), they cannot be combined with a start frame (`imageUrl`), and
+> they share the model's 7-unit input budget with reference images and a source
+> video (a character is 1 unit, 2 with a `bodyImageUrl`). They add no credit
+> charge. Prefer them over `referenceImageUrls` whenever the face must hold.
+
 > **Naming an image reference in the prompt.** On
 > `run("generate-image", …)`, a media reference (`source: "wired-image"` or
 > `"manual"`) is mentionable by the slug of its `defaultName` —

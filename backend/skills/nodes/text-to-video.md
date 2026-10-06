@@ -1,7 +1,7 @@
 ---
 node_type: text-to-video
-generated_at: 2026-09-27T12:51:23.361Z
-generated_from: c607aa02c
+generated_at: 2026-10-06T11:31:09.180Z
+generated_from: 63fade18b
 ---
 
 # Text to Video
@@ -87,6 +87,7 @@ generated_from: c607aa02c
 - `reference_video_urls`
 - `reference_video_captions`
 - `reference_audio_urls`
+- `character_references`
 <!-- AUTO-GEN:END mcp-call -->
 
 ## Common gotchas

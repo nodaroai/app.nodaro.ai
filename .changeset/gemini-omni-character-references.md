@@ -1,0 +1,6 @@
+---
+"@nodaro/shared": minor
+"@nodaro/sdk": minor
+---
+
+Character references on the video lanes. `@nodaro/shared`: the `VideoCharacterReference` type (portrait `imageUrl`, optional `bodyImageUrl`, `description`, optional `name`), a `characters` cap on `VIDEO_REF_LIMITS_BY_PROVIDER` (3 on `gemini-omni-video` and `gemini-omni-flash`), and the helpers that apply it: `videoCharacterRefCap`, `videoCharacterRefProviders`, `videoCharacterRefUnits` and `videoCharacterRefProblem` (provider support, the start- and end-frame limits, and the shared 7-unit input budget). `@nodaro/sdk`: `characterReferences` on `GenerateVideoParams` and `TextToVideoParams`, and the `VideoCharacterReference` type re-exported. Additive. Pinned voices: an optional `voice` on each character reference (`VideoCharacterVoice`: a `preset` from `GEMINI_OMNI_VOICE_PRESETS` / `GEMINI_OMNI_VOICE_PRESET_IDS` — the 30 Gemini voice ids with their gender / style / pitch labels, exported as data — plus an optional `description` and `exampleLine`), a `voices` cap on `VIDEO_REF_LIMITS_BY_PROVIDER`, and `videoCharacterVoiceCap` / `videoCharacterVoiceKey` / `videoCharacterDistinctVoices` / `videoCharacterVoiceProblem`. `@nodaro/sdk`: `VideoCharacterVoice` and `GeminiOmniVoicePresetId` re-exported.

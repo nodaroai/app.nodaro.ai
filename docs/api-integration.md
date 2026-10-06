@@ -1526,6 +1526,25 @@ IS, for this run only:
   `@audio_N: <caption>.`, and the list is bounded by the number of rail
   references that actually ship, so a caption can never bind a slot the payload
   dropped. Leave an entry blank to skip it without breaking the alignment.
+- **`characterReferences` (`POST /v1/generate-video` and `POST /v1/text-to-video`,
+  up to 3).** Identity inputs that keep a real person's face on models with a
+  dedicated character channel — today `gemini-omni-video` and
+  `gemini-omni-flash`. Each entry is `{ imageUrl, description, bodyImageUrl?,
+  name?, voice? }`: a portrait URL, a description of the person (appearance, clothing,
+  style; ≤ 2000 chars), an optional full-body image and an optional name (≤ 100
+  chars). Unlike `referenceImageUrls`, which a multimodal model treats as loose
+  context, this is the input that holds the face. Any other model answers `400`
+  `character_references_unsupported`; combining it with a start frame (`imageUrl`) or an end frame (`endFrameUrl`)
+  answers `400` `character_references_with_start_frame` /
+  `character_references_with_end_frame` (a current Nodaro limit); and the request must fit
+  the model's 7-unit input budget — `images + 2 × videos + characters ≤ 7`, a
+  character counting 1 unit (2 with a `bodyImageUrl`) — or it answers `400`
+  `character_references_quota`. It adds no credit charge. The references are
+  recorded on the job's input. `voice` — `{ preset, description?, exampleLine? }`, `preset` one of the 30
+  Gemini voice ids — pins one voice to that character across clips (up to 3
+  distinct voices a request, else `400` `character_voices_over_limit`; `description` ≤ 2000 chars, `exampleLine`
+  ≤ 120); see [Pinning a voice](nodes/ai-video/generate-video.md#pinning-a-voice-to-a-character-reference) for the presets. See [Character references
+  (Gemini Omni)](nodes/ai-video/generate-video.md#character-references-gemini-omni).
 
 ### Naming an image reference in the prompt (`@<name-slug>:<index>[:<role>]`)
 

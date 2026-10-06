@@ -96,6 +96,57 @@ describe("video create sites — full egress dimensions from the wire body (G9)"
   })
 })
 
+describe("Gemini Omni character create — threaded model key through the egress seam", () => {
+  it.each(["gemini-omni-video", "gemini-omni-flash"])(
+    "%s: the character-create call carries OUR model key and the createTask body carries character_ids",
+    async (modelKey) => {
+      const srv = await loopback((req, body, res) => {
+        res.writeHead(200, { "content-type": "application/json" })
+        if (req.url?.includes("omni/character/create")) {
+          res.end(JSON.stringify({ code: 200, msg: "success", data: { characterId: "char-xyz" } }))
+        } else if (req.url?.includes("recordInfo")) {
+          res.end(JSON.stringify({ code: 200, data: { state: "success", resultJson: JSON.stringify({ resultUrls: ["http://x/v.mp4"] }) } }))
+        } else {
+          void body
+          res.end(JSON.stringify({ code: 200, data: { taskId: "g-1" } }))
+        }
+      })
+      cfg.KIE_API_BASE_URL = srv.base
+      vi.resetModules()
+      const { setEgressDecorator, clearEgressDecorator } = await import("../../egress.js")
+      const { setOmniCharacterStore } = await import("../omni-character.js")
+      const { KieVideoProvider } = await import("../video.js")
+      // Hermetic: never reach for a real Redis from a unit test.
+      const mem = new Map<string, string>()
+      setOmniCharacterStore({
+        get: async (k) => mem.get(k) ?? null,
+        set: async (k, v) => { mem.set(k, v) },
+        del: async (k) => { mem.delete(k) },
+      })
+      const seen: EgressCall[] = []
+      setEgressDecorator({ decorate: (c: EgressCall) => { seen.push(c); return null } })
+      try {
+        await new KieVideoProvider().textToVideo(
+          "a woman speaks", modelKey, 8, "16:9",
+          { characterReferences: [{ imageUrl: "https://cdn.example/p.png", description: "A woman with silver hair" }] },
+          { modelKey },
+        )
+        const create = seen.find((c) => c.operation === "omni.character.create")
+        expect(create).toBeDefined()
+        expect(create!.provider).toBe("kie")
+        expect(create!.modelKey).toBe(modelKey) // threaded, never null
+        const task = seen.find((c) => c.operation === "jobs.createTask")
+        expect(task).toBeDefined()
+        expect((task!.body as { input: Record<string, unknown> }).input.character_ids).toEqual(["char-xyz"])
+      } finally {
+        clearEgressDecorator()
+        setOmniCharacterStore(null)
+        await srv.close()
+      }
+    },
+  )
+})
+
 describe("audio create sites — full egress dimensions from the wire body (G9)", () => {
   it("a TTS create call still surfaces characters", async () => {
     const srv = await loopback((req, _body, res) => {

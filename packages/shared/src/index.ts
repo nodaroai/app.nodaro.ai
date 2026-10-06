@@ -251,6 +251,25 @@ export type {
 } from "./model-constants.js"
 
 
+export {
+  VIDEO_CHARACTER_REFS_WIRE_MAX,
+  VIDEO_CHARACTER_DESCRIPTION_MAX,
+  VIDEO_CHARACTER_NAME_MAX,
+  videoCharacterRefCap,
+  videoCharacterRefProviders,
+  videoCharacterRefUnits,
+  videoCharacterRefProblem,
+  videoCharacterVoiceCap,
+  videoCharacterVoiceKey,
+  videoCharacterDistinctVoices,
+  videoCharacterVoiceProblem,
+  VIDEO_CHARACTER_VOICE_DESCRIPTION_MAX,
+  VIDEO_CHARACTER_VOICE_EXAMPLE_MAX,
+} from "./video-character-refs.js"
+export type { VideoCharacterReference, VideoCharacterVoice, VideoCharacterRefProblem } from "./video-character-refs.js"
+export { GEMINI_OMNI_VOICE_PRESETS, GEMINI_OMNI_VOICE_PRESET_IDS } from "./gemini-omni-voices.js"
+export type { GeminiOmniVoicePreset, GeminiOmniVoicePresetId } from "./gemini-omni-voices.js"
+
 export { describeMaskRegion } from "./inpaint-region.js"
 export type { MaskRegionDescriptor, PixelBox } from "./inpaint-region.js"
 

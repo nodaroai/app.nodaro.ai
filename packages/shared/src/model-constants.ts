@@ -2140,7 +2140,7 @@ export function findSeedance2AudioOverLimit(
  */
 export const VIDEO_REF_LIMITS_BY_PROVIDER: Record<
   string,
-  { images?: number; videos?: number; audio?: number } | undefined
+  { images?: number; videos?: number; audio?: number; characters?: number; voices?: number } | undefined
 > = {
   // Seedance 2 — full multimodal caps.
   "seedance-2": { ...SEEDANCE_2_REF_LIMITS },
@@ -2160,10 +2160,16 @@ export const VIDEO_REF_LIMITS_BY_PROVIDER: Record<
   "wan-3": { images: 10, videos: 5, audio: 5 },
   "wan-3-prime": { images: 10, videos: 5, audio: 5 },
   // Multi-image reference providers.
-  "gemini-omni-video": { images: 7, videos: 1 },
+  // `characters` = the dedicated identity input (KIE `character_ids`, max 3).
+  // It is NOT an image-reference lane: it draws from the SAME 7-unit budget as
+  // `images` (images + 2×videos + character units ≤ 7) — see
+  // `video-character-refs.ts`, the one place that budget is computed.
+  // `voices` = distinct audio personas per task (`audio_ids`, max 3). NOT part
+  // of the 7-unit quota: audio ids are a separate input.
+  "gemini-omni-video": { images: 7, videos: 1, characters: 3, voices: 3 },
   // Gemini Omni Flash 1.1 — identical quota to the pro sibling
   // (images + 2×videos + character_ids ≤ 7).
-  "gemini-omni-flash": { images: 7, videos: 1 },
+  "gemini-omni-flash": { images: 7, videos: 1, characters: 3, voices: 3 },
   "kling-3-omni": { images: 7 },     // catalog/docs: "end frame + up to 7 reference images"
   "grok-i2v": { images: 7 },         // backend kie/models.ts maxRefImages: 7
   "happyhorse-ref2v": { images: 9 }, // backend kie/models.ts maxRefImages: 9
@@ -2556,7 +2562,9 @@ export const VIDEO_AUDIO_CAPABILITY: Record<string, VideoAudioCapability> = {
   //   - NOT audio_driven either: "Uploading audio references is unsupported in
   //     the current version of the API", and "any audio in a video reference is
   //     ignored" — there is no reference-audio transport to be driven by, and
-  //     runGeminiOmni never sends `audio_ids`.
+  //     runGeminiOmni sends `audio_ids` ONLY for a
+  //     character's pinned voice persona (a preset voice, never a recording), which
+  //     is not a reference-audio transport and leaves the mode `ambient`.
   // Audio is priced into the per-tier rate, so NOT cost-affecting.
   "gemini-omni-video": { mode: "ambient", alwaysOn: true },
   "gemini-omni-flash": { mode: "ambient", alwaysOn: true },

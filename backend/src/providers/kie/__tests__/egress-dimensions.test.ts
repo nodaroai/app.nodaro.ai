@@ -68,6 +68,14 @@ describe("deriveKieEgressDimensions", () => {
     expect("characters" in d({ text: "" })).toBe(false)
   })
 
+  it("counts video identity inputs under characterRefs — never under the TTS-length `characters`", () => {
+    const out = d({ prompt: "x", character_ids: ["c1", "c2"] })
+    expect(out.characterRefs).toBe(2)
+    expect("characters" in out).toBe(false)
+    expect("characterRefs" in d({ prompt: "x", character_ids: [] })).toBe(false)
+    expect("characterRefs" in d({ prompt: "x" })).toBe(false)
+  })
+
   it("returns an empty object for a body with no billable dimension", () => {
     expect(d({ prompt: "hi" })).toEqual({})
   })

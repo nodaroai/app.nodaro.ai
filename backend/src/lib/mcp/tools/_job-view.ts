@@ -65,6 +65,9 @@ export const JOB_INPUT_VIEW_KEYS = [
   "referenceImageUrls",
   "referenceVideoUrls",
   "referenceAudioUrls",
+  // Identity inputs (portrait URLs + descriptions) — the caller's own creative
+  // input, the same standing as the reference lists above.
+  "characterReferences",
 ] as const
 
 /**

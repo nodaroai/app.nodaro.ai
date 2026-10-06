@@ -17,6 +17,19 @@ beforeEach(() => {
   }))
 })
 
+describe("applyFrameFitAndDelivery — frameless requests (the characterReferences lane)", () => {
+  it("hands the options through untouched when there is no frame, so characterReferences survive the router hop", async () => {
+    const characterReferences = [{ imageUrl: "https://cdn.example/a.png", description: "A woman with silver hair" }]
+    const options = { characterReferences, aspectRatio: "16:9" as const }
+    const out = await applyFrameFitAndDelivery({
+      model: "gemini-omni-video", imageUrl: undefined, endFrameUrl: undefined, prompt: "she speaks", options,
+    })
+    expect(prepareVideoFrames).not.toHaveBeenCalled()
+    expect(out.imageUrl).toBeUndefined()
+    expect(out.options?.characterReferences).toEqual(characterReferences)
+  })
+})
+
 describe("applyFrameFitAndDelivery — fit", () => {
   it("asks for the fit with the request's own provider, resolution and aspect", async () => {
     await applyFrameFitAndDelivery({

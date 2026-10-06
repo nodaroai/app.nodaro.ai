@@ -2,7 +2,7 @@ import type { GenerateScene3DParams, EditScene3DParams, RenderScene3DParams, Sce
 import type { NodaroClient } from "../client.js"
 import type { JobStatusResult } from "./jobs.js"
 import { JobAbortedError, JobFailedError, JobHeldError, JobTimeoutError } from "../errors.js"
-import type { ConnectedReference, DescribedReference, ModelInputAdjustment, SocialPost, SocialPlatform, SocialSearchMode, SocialSearchParams } from "@nodaro/shared"
+import type { ConnectedReference, DescribedReference, VideoCharacterReference, ModelInputAdjustment, SocialPost, SocialPlatform, SocialSearchMode, SocialSearchParams } from "@nodaro/shared"
 import type { DirectionFields, SubjectFields } from "@nodaro/prompts"
 
 export type NodeCategory =
@@ -162,6 +162,18 @@ export interface GenerateVideoParams extends StructuredReferenceParams, Referenc
   referenceImageUrls?: string[]
   referenceVideoUrls?: string[]
   referenceAudioUrls?: string[]
+  /**
+   * Identity inputs that keep a real person's face — a portrait + description
+   * per person, up to 3. Only models with a dedicated character channel take
+   * them (Gemini Omni: `gemini-omni-video`, `gemini-omni-flash`); any other
+   * model answers `400`. Distinct from `referenceImageUrls`, which a multimodal
+   * model treats as loose context. Cannot be combined with a start frame
+   * (`imageUrl`); each character uses 1 of the model's 7 input units (2 with a
+   * `bodyImageUrl`). Adds no credit charge. Give a character a `voice` to pin one
+   * voice persona (a Gemini preset + optional description / example line) across
+   * clips — up to 3 distinct voices a request.
+   */
+  characterReferences?: VideoCharacterReference[]
   /** How a start/end frame is reshaped before the model sees it. Default
    *  `"resolution"`: resize it to the pixel size that model actually renders,
    *  which is what stops the provider reshaping it mid-clip. `"ratio"` corrects
@@ -199,6 +211,8 @@ export interface TextToVideoParams extends StructuredReferenceParams, ReferenceC
   referenceImageUrls?: string[]
   referenceVideoUrls?: string[]
   referenceAudioUrls?: string[]
+  /** Identity inputs that keep a real person's face — see {@link GenerateVideoParams.characterReferences}. */
+  characterReferences?: VideoCharacterReference[]
   /** Cinematic direction as catalog IDS — the route renders the wording. */
   direction?: DirectionFields
   /** SUBJECT ids (who is in the shot), folded ahead of the direction clauses. */

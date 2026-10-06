@@ -592,9 +592,21 @@ const APPLY_EDL_CLIP_KEY_BYTES = 208
 // move. measured by this suite: 397_365 total − 397_154 base = 211 B, which
 // keeps the 1 B of headroom the list had before.
 const VOICE_CHANGER_PRO_V4_ENGINE_BYTES = 211
+// RAISED by PR #1916 (character references on Gemini Omni) and nothing else:
+// `character_references` on `generate_video` (items of image_url, body_image_url,
+// description, name, voice_preset; one short description line each, pointing to
+// the docs page) PLUS the restored guidance. An earlier revision of #1916 trimmed
+// the cost guidance, the Seedance storyboard paragraph and several parameter
+// descriptions of `generate_video` to stay inside the old cap; that text is back
+// exactly as on dev, so the cost is paid by the budget instead. No tool was
+// added, so the fixture does NOT move. measured by this suite: `generate_video`
+// 8_182 -> 8_671 B = 489 B, which is the whole movement of the total (397_365 ->
+// 397_854). The per-tool cap rises by the same 489 B (8_192 -> 8_681), keeping the
+// 10 B of headroom `generate_video` had on dev; no other tool is near it.
+const CHARACTER_REFERENCES_BYTES = 489
 
 export const TOOL_WIRE_BUDGET = {
-  perToolBytes: 8_192,
+  perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES,
   totalBytes:
     337_638 +
     IMAGE_OVERLAY_TOOL_BYTES +
@@ -654,7 +666,8 @@ export const TOOL_WIRE_BUDGET = {
     UGC_CARDS_CAPTION_STYLE_BYTES +
     COLLECTION_TOOLS_BYTES +
     APPLY_EDL_CLIP_KEY_BYTES +
-    VOICE_CHANGER_PRO_V4_ENGINE_BYTES,
+    VOICE_CHANGER_PRO_V4_ENGINE_BYTES +
+    CHARACTER_REFERENCES_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

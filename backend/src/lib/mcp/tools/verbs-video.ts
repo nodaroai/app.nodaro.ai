@@ -19,7 +19,7 @@ import {
   uiMeta,
 } from "./_verb-helpers.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
-import { modelIdsByKindMode, VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, ALL_CAPTION_STYLES, CAPTION_LOOK_IDS, SUPPORTED_FONT_NAMES, COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, MOTION_TRANSFER_PROVIDERS, type VideoAnalysisTier, VIDEO_ANALYSIS_TIER_LABELS, resolveVideoAnalysisModel, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_MAX_SCENE_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoAuditCreditId, readPromptAffixes, LIP_SYNC_PROVIDERS, isPerSecondLipSyncProvider, VIDEO_TO_VIDEO_NODE_PROVIDERS, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDL_SOURCE_ROLES, resolveEditPlanSources, describeAudioSyncOffsetIssue, transcriptSpeakerLabels, cameraSwitchEdlProblem, cleanSpeakerNames, CAMERA_SWITCH_BOUNDS, TRANSCRIBE_LANES, CAPTION_MAX_WORDS_PER_LINE_MIN, CAPTION_MAX_WORDS_PER_LINE_MAX } from "@nodaro/shared"
+import { modelIdsByKindMode, VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, ALL_CAPTION_STYLES, CAPTION_LOOK_IDS, SUPPORTED_FONT_NAMES, COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, MOTION_TRANSFER_PROVIDERS, type VideoAnalysisTier, VIDEO_ANALYSIS_TIER_LABELS, resolveVideoAnalysisModel, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_MAX_SCENE_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoAuditCreditId, readPromptAffixes, LIP_SYNC_PROVIDERS, isPerSecondLipSyncProvider, VIDEO_TO_VIDEO_NODE_PROVIDERS, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, VIDEO_CHARACTER_REFS_WIRE_MAX, videoCharacterRefProviders, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDL_SOURCE_ROLES, resolveEditPlanSources, describeAudioSyncOffsetIssue, transcriptSpeakerLabels, cameraSwitchEdlProblem, cleanSpeakerNames, CAMERA_SWITCH_BOUNDS, TRANSCRIBE_LANES, CAPTION_MAX_WORDS_PER_LINE_MIN, CAPTION_MAX_WORDS_PER_LINE_MAX } from "@nodaro/shared"
 import { applyPromptAffixes, buildSeedanceVideoEditPrompt } from "@nodaro/prompts"
 
 // Map list_models catalog/display ids → /v1/motion-transfer route providers.
@@ -199,6 +199,19 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
             "Wan 3.0 takes each clip at 1-15s and ≤15s combined. Dropped on models without " +
             "audio-reference support.",
           ),
+        character_references: z
+          .array(z.object({
+            image_url: z.string(),
+            body_image_url: z.string().optional(),
+            description: z.string(),
+            name: z.string().optional(),
+            voice_preset: z.string().optional().describe("Gemini voice id (e.g. kore): pins this character's voice."),
+          }))
+          .max(VIDEO_CHARACTER_REFS_WIRE_MAX)
+          .optional()
+          .describe(
+            `Keeps a person's face (${videoCharacterRefProviders().join(" / ")} only); see docs/nodes/ai-video/generate-video.md.`,
+          ),
       },
               outputSchema: {
           jobId: z.string(),
@@ -357,6 +370,21 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         ...(t2vRefVideos.length ? { referenceVideoUrls: t2vRefVideos } : {}),
         ...(t2vRefVideos.length && t2vRefCaptions ? { referenceVideoCaptions: t2vRefCaptions } : {}),
         ...(t2vRefAudio.length ? { referenceAudioUrls: t2vRefAudio } : {}),
+        // Forwarded verbatim: the route is the gate. An unsupported model 400s
+        // with a friendly message rather than silently running without the face.
+        ...(args.character_references?.length
+          ? {
+              characterReferences: args.character_references.map((c) => ({
+                imageUrl: c.image_url,
+                ...(c.body_image_url ? { bodyImageUrl: c.body_image_url } : {}),
+                description: c.description,
+                ...(c.name ? { name: c.name } : {}),
+                // Preset only: the full voice object (description, example line) does
+                // not fit the per-tool wire budget — it is an SDK / REST lever.
+                ...(c.voice_preset ? { voice: { preset: c.voice_preset } } : {}),
+              })),
+            }
+          : {}),
         mcp_client: session.clientName,
         userId: session.userId,
       }

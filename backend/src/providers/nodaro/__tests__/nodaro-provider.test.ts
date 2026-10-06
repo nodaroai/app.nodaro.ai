@@ -296,6 +296,24 @@ describe("NodaroCloudVideoProvider", () => {
     expect(body).not.toHaveProperty("motionPrompt")
   })
 
+  it("forwards characterReferences to the cloud on both video routes (never silently dropped on the relay)", async () => {
+    const characterReferences = [{ imageUrl: "https://cdn.example/a.png", description: "A woman with silver hair", name: "Ava" }]
+    queueResponses(
+      jsonResponse(200, { jobId: "cloud-vid-c1" }),
+      completedJob({ videoUrl: "https://r2.example/c1.mp4" }),
+      jsonResponse(200, { jobId: "cloud-vid-c2" }),
+      completedJob({ videoUrl: "https://r2.example/c2.mp4" }),
+    )
+    await new NodaroCloudVideoProvider().textToVideo("she speaks", "gemini-omni-video", 8, "16:9", { characterReferences })
+    await new NodaroCloudVideoProvider().imageToVideo(undefined as unknown as string, "she speaks", "gemini-omni-video", 8, undefined, { characterReferences })
+
+    const t2vBody = JSON.parse(String(mockFetch.mock.calls[0]![1]?.body)) as Record<string, unknown>
+    expect(mockFetch.mock.calls[0]![0]).toBe("/v1/text-to-video")
+    expect(t2vBody.characterReferences).toEqual(characterReferences)
+    const i2vCall = mockFetch.mock.calls.find((c) => c[0] === "/v1/generate-video")!
+    expect((JSON.parse(String(i2vCall[1]?.body)) as Record<string, unknown>).characterReferences).toEqual(characterReferences)
+  })
+
   it("throws when a completed video job carries no videoUrl", async () => {
     queueResponses(
       jsonResponse(200, { jobId: "cloud-vid-3" }),

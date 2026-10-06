@@ -159,6 +159,21 @@ describe("jobView — the job's input, allowlisted", () => {
     expect(input).toEqual({ prompt: "p" })
   })
 
+  it("echoes the character (identity) references the caller sent", () => {
+    const characterReferences = [{ imageUrl: "https://cdn.example/p.png", description: "a woman with silver hair", name: "Ava" }]
+    const input = jobView({ ...row, input_data: { prompt: "p", characterReferences, workflowId: "wf" } }).input as Record<string, unknown>
+    expect(input.characterReferences).toEqual(characterReferences)
+    expect(input).not.toHaveProperty("workflowId")
+  })
+
+  it("echoes a character's pinned voice with the reference (the voice is part of the input the caller sent)", () => {
+    const characterReferences = [
+      { imageUrl: "https://cdn.example/p.png", description: "a woman", voice: { preset: "kore", description: "warm", exampleLine: "Hi" } },
+    ]
+    const input = jobView({ ...row, input_data: { prompt: "p", characterReferences } }).input as Record<string, unknown>
+    expect(input.characterReferences).toEqual(characterReferences)
+  })
+
   it("is null when the row has no input, or none of it is allowlisted", () => {
     expect(jobView({ ...row, input_data: null }).input).toBeNull()
     expect(jobView({ ...row, input_data: undefined }).input).toBeNull()

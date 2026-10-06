@@ -18,11 +18,13 @@ import { insertJobIdempotent } from "../lib/insert-job.js"
 import { voicedDialogueProvider } from "../lib/voiced-dialogue-model.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
-import { VIDEO_GEN_PROVIDERS, VIDEO_DURATION_AUTO, isAutoVideoDuration, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, PROMPT_HARD_CEILING, isSeedance2Provider, pricedOutputDurationSec, isMinimaxH3Provider, isVeoProvider, estimateLoopTrimAddonCredits, seedance2AudioLimitSec, findSeedance2AudioOverLimit, videoModelCanSpeakDialogue, getVideoAudioCapability, TTS_PROVIDERS, buildVideoCreditModelIdentifier, applyDefaultVideoSelection, VIDEO_REF_LIMITS_BY_PROVIDER, videoProviderRequiresImage, videoProviderFoldsLoneEndFrame, type ConnectedReference, type DescribedReference } from "@nodaro/shared"
+import { VIDEO_GEN_PROVIDERS, VIDEO_DURATION_AUTO, isAutoVideoDuration, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, PROMPT_HARD_CEILING, isSeedance2Provider, pricedOutputDurationSec, isMinimaxH3Provider, isVeoProvider, estimateLoopTrimAddonCredits, seedance2AudioLimitSec, findSeedance2AudioOverLimit, videoModelCanSpeakDialogue, getVideoAudioCapability, TTS_PROVIDERS, buildVideoCreditModelIdentifier, applyDefaultVideoSelection, VIDEO_REF_LIMITS_BY_PROVIDER, videoProviderRequiresImage, videoProviderFoldsLoneEndFrame, videoCharacterRefProblem, type ConnectedReference, type DescribedReference } from "@nodaro/shared"
 import { imageRequiredError } from "../lib/video-image-required.js"
 import { resolveVideoReferenceCore, resolveReferenceTokens, resolveRefIdTokens, composeVideoPromptText, appendReferenceLines, renderDescribedReferenceLines, renderReferenceCaptionLines, type VideoExtraRef, type CharacterMeta } from "@nodaro/prompts"
 import { connectedReferenceSchema, describedReferenceSchema, referenceCaptionSchema, DESCRIBED_REFERENCE_LIMIT } from "../lib/connected-reference-schema.js"
 import { directionSchema } from "../lib/direction-schema.js"
+import { characterReferencesSchema } from "../lib/character-reference-schema.js"
+import { applyPromptPoliciesToCharacterReferences } from "../lib/character-reference-policy.js"
 import { subjectSchema } from "../lib/subject-schema.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { backendHybridRoles } from "../lib/reference-format.js"
@@ -78,6 +80,13 @@ export const generateVideoBody = z.object({
   referenceImageUrls: z.array(safeUrlSchema).max(SEEDANCE_2_5_REF_LIMITS.images).optional(),
   referenceVideoUrls: z.array(safeUrlSchema).max(SEEDANCE_2_5_REF_LIMITS.videos).optional(),
   referenceAudioUrls: z.array(safeUrlSchema).max(SEEDANCE_2_5_REF_LIMITS.audio).optional(),
+  // Identity inputs for models with a dedicated character channel (Gemini Omni:
+  // a portrait + description per person, up to 3). Distinct from
+  // `referenceImageUrls`, which a multimodal model treats as loose context —
+  // this is the input that keeps a real person's face. Which models take it is
+  // data (`characters` in VIDEO_REF_LIMITS_BY_PROVIDER), enforced in the
+  // handler by `videoCharacterRefProblem`; any other model → 400.
+  characterReferences: characterReferencesSchema.optional(),
   // Structured references (parity with generate-image). When present, the route
   // assembles them server-side via the shared video resolver — auto-attaching
   // unmentioned wired-ref URLs to `referenceImageUrls`, emitting per-ref
@@ -1058,11 +1067,34 @@ export async function generateVideoRoutes(app: FastifyInstance) {
     // taken the frame happily, so callers duplicated the same picture into
     // referenceImageUrls just to pass the gate (studio.nodaro.ai#475).
     const refCaps = VIDEO_REF_LIMITS_BY_PROVIDER[provider]
+    // Character references: provider support, the start-frame exclusion and the
+    // shared input budget are ONE shared rule (`videoCharacterRefProblem`),
+    // measured on the ASSEMBLED image list (after connectedReferences expansion)
+    // and BEFORE the imageUrl gate below, so an unsupported model answers
+    // "not supported" rather than a misleading "imageUrl is required".
+    const characterProblem = videoCharacterRefProblem({
+      provider,
+      characterReferences: parsed.data.characterReferences,
+      imageCount: referenceImageUrls?.length ?? 0,
+      videoCount: referenceVideoUrls?.length ?? 0,
+      hasStartFrame: imageUrl !== undefined,
+      hasEndFrame: endFrameUrl !== undefined,
+    })
+    if (characterProblem) {
+      return reply.status(400).send({ error: { code: characterProblem.code, message: characterProblem.message } })
+    }
+    // The description is subject text the prompt policies never see (it does not
+    // join `prompt`): police it here and mirror into parsed.data so the queued
+    // payload and the recorded input_data carry the policed text.
+    const characterReferences = applyPromptPoliciesToCharacterReferences(parsed.data.characterReferences)
+    if (characterReferences) parsed.data.characterReferences = characterReferences
     const foldsLoneEndFrame = endFrameUrl !== undefined && videoProviderFoldsLoneEndFrame(provider)
     const hasMultimodalRef =
       ((refCaps?.images ?? 0) > 0 && ((referenceImageUrls?.length ?? 0) > 0 || foldsLoneEndFrame)) ||
       ((refCaps?.videos ?? 0) > 0 && (referenceVideoUrls?.length ?? 0) > 0) ||
-      ((refCaps?.audio ?? 0) > 0 && (referenceAudioUrls?.length ?? 0) > 0)
+      ((refCaps?.audio ?? 0) > 0 && (referenceAudioUrls?.length ?? 0) > 0) ||
+      // Validated above: reaching here with characters means the provider takes them.
+      (characterReferences?.length ?? 0) > 0
 
     // VEO picks its REFERENCE_2_VIDEO wire mode from an explicit generationType
     // (the kie/video.ts i2v branch otherwise falls back to `[imageUrl!]`, which
@@ -1216,6 +1248,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       referenceImageUrls,
       referenceVideoUrls,
       referenceAudioUrls,
+      characterReferences,
       refVideoDurationsSec: req.refVideoDurationsSec,
       webSearch,
       nsfwChecker,

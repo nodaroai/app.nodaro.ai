@@ -36,6 +36,10 @@ export type { GenericNode, GenericEdge, WorkflowExport, WorkflowExportCharacter,
   // A reference the caller can NAME and DESCRIBE but has no media for — used by
   // `StructuredReferenceParams.describedReferences` on both media lanes.
   DescribedReference,
+  // A character (identity) reference for `characterReferences` on the video lanes.
+  VideoCharacterReference,
+  VideoCharacterVoice,
+  GeminiOmniVoicePresetId,
   // Node-data prompt affix fields (promptPrefix / promptSuffix) — set them via
   // workflow JSON or `apps.run(..., { inputOverrides })`.
   PromptAffixFields,

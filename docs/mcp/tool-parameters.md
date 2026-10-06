@@ -1259,6 +1259,12 @@ Needs `workflows:execute`.
 | `reference_video_urls` | string[] or string |  | Reference videos for style/motion transfer, capped at the model's own limit (seedance-2-5 10, seedance-2 family + minimax-h3 3, wan-3 / wan-3-prime 5, gemini-omni-video / gemini-omni-flash 1). Wan 3.0 takes each clip at 1-15s and ≤15s combined, and input video seconds + output duration must stay ≤30s. Dropped on models without video-reference support. |
 | `reference_video_captions` | string[] |  | Index-aligned with reference_video_urls: what each clip is FOR. Rendered `@video_N: <caption>.`. At most 10 items. |
 | `reference_audio_urls` | string[] or string |  | Reference audio for soundtrack-driven motion, capped at the model's own limit (seedance-2-5 10, seedance-2 family + minimax-h3 3, wan-3 / wan-3-prime 5). Wan 3.0 takes each clip at 1-15s and ≤15s combined. Dropped on models without audio-reference support. |
+| `character_references` | object[] |  | Keeps a person's face (gemini-omni-video / gemini-omni-flash only); see docs/nodes/ai-video/generate-video.md. At most 3 items. |
+| `character_references[].image_url` | string | yes |  |
+| `character_references[].body_image_url` | string |  |  |
+| `character_references[].description` | string | yes |  |
+| `character_references[].name` | string |  |  |
+| `character_references[].voice_preset` | string |  | Gemini voice id (e.g. kore): pins this character's voice. |
 
 ## `get_app_inputs`
 
