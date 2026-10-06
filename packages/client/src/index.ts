@@ -312,6 +312,8 @@ export type {
   WorkflowExecutionSummary,
   NodeExecutionState,
   NodeExecutionStatus,
+  NodeSkipReason,
+  ExecutionOutcome,
   ExecutionStatus,
   ExecutionTriggerType,
   ListExecutionsForWorkflowParams,
