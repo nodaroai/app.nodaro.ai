@@ -8,6 +8,7 @@
 import { Library } from "lucide-react"
 import { useAssetPicker } from "./use-asset-picker"
 import type { EntityKind } from "@/lib/entity-node-data"
+import { useT } from "@/lib/i18n"
 
 export function AssetPickerConfigButton({
   kind,
@@ -18,8 +19,9 @@ export function AssetPickerConfigButton({
   nodeId?: string
   currentDbId: string | null
 }) {
+  const t = useT()
   const { openPicker, pickerElement } = useAssetPicker({ kind, nodeId: nodeId ?? "", currentDbId })
-  const label = currentDbId ? "Replace from Library / Gallery" : "Choose from Library / Gallery"
+  const label = t(currentDbId ? "assetPicker.replaceFromLibraryGallery" : "assetPicker.chooseFromLibraryGallery")
   return (
     <>
       <button

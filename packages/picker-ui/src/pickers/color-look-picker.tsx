@@ -10,17 +10,31 @@ import { cn } from "../lib/cn"
 import { ColorLookPreview } from "../previews/color-look-preview"
 import { useLocalizedCatalog } from "../i18n"
 import { useCuratedEntries } from "../curated.js"
+import { identityLabel, type PickerSearchCopy } from "./picker-copy"
+
+/** The English copy, used when the host passes none. */
+export const COLOR_LOOK_PICKER_COPY_EN: PickerSearchCopy = {
+  searchPlaceholder: "Search color/look",
+  noMatch: (query) => `No color/look matches “${query}”`,
+}
 
 interface ColorLookPickerProps {
   readonly value: string
   readonly onValueChange: (colorLookId: string) => void
   readonly className?: string
+  /** Localizes an English section name (`COLOR_LOOK_CATEGORY_LABELS`) — the
+   *  host app's option-label table. Identity when omitted. */
+  readonly localizeLabel?: (english: string) => string
+  /** The picker's interface strings in the host's language. English when omitted. */
+  readonly copy?: PickerSearchCopy
 }
 
 export const ColorLookPicker = memo(function ColorLookPicker({
   value,
   onValueChange,
   className,
+  localizeLabel = identityLabel,
+  copy = COLOR_LOOK_PICKER_COPY_EN,
 }: ColorLookPickerProps) {
   // Curated view of the bundled catalog: filtered to ids this deployment
   // offers, relabelled where a pack rewrote an entry. Subscribed, so a late
@@ -49,8 +63,8 @@ export const ColorLookPicker = memo(function ColorLookPicker({
       <div className="relative">
         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
         <Input
-          aria-label="Search color/look"
-          placeholder="Search color/look"
+          aria-label={copy.searchPlaceholder}
+          placeholder={copy.searchPlaceholder}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           className="pl-8 h-8 text-xs"
@@ -59,16 +73,16 @@ export const ColorLookPicker = memo(function ColorLookPicker({
 
       {grouped.length === 0 && (
         <div className="text-xs text-muted-foreground text-center py-4">
-          No color/look matches "{query}"
+          {copy.noMatch(query)}
         </div>
       )}
 
       {grouped.map(({ category, colorLooks }) => (
         <div key={category} className="flex flex-col gap-1.5">
           <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground px-0.5">
-            {COLOR_LOOK_CATEGORY_LABELS[category]}
+            {localizeLabel(COLOR_LOOK_CATEGORY_LABELS[category])}
           </div>
-          <div role="radiogroup" aria-label={COLOR_LOOK_CATEGORY_LABELS[category]} className="grid grid-cols-3 gap-1.5">
+          <div role="radiogroup" aria-label={localizeLabel(COLOR_LOOK_CATEGORY_LABELS[category])} className="grid grid-cols-3 gap-1.5">
             {colorLooks.map((colorLook) => {
               const selected = colorLook.id === value
               const label = resolveLabel(colorLook.id, colorLook.label)

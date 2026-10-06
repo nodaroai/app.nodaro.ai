@@ -270,3 +270,35 @@ describe("targeted gap coverage: facial-geometry + brand camera/render entries",
     }
   })
 })
+
+// ---------------------------------------------------------------------------
+// Test 4 — the Camera Motion and Transition pickers carry a LABEL for every
+// option in Japanese and Brazilian Portuguese. Fourteen camera motions (Dolly
+// In, Zoom In, POV, …) had a translated description but no label in pt-BR, so
+// the editor and the docs gallery (which syncs these sidecars) showed the
+// English name. A rig or brand name keeps its canonical form as an explicit
+// label (Steadicam, Snorricam) — a present label is the decision; a missing one
+// is the bug. Scoped to the two locales whose docs pages are held to "no English
+// apart from model names"; extend the list when another locale is held to it.
+// ---------------------------------------------------------------------------
+
+const FULL_LABEL_CATALOGS = ["camera-motions", "transitions"] as const
+const FULL_LABEL_LOCALES: readonly LocaleId[] = ["ja", "pt-BR"]
+
+describe("Camera Motion and Transition labels are complete in ja and pt-BR", () => {
+  const cases: Array<[string, LocaleId]> = []
+  for (const catalogId of FULL_LABEL_CATALOGS) {
+    for (const locale of FULL_LABEL_LOCALES) cases.push([catalogId, locale])
+  }
+
+  it.each(cases)("%s [%s] labels every entry", (catalogId, locale) => {
+    const catalog = CATALOGS.find((c) => c.catalogId === catalogId)
+    expect(catalog, `${catalogId} is not a registered picker catalog`).toBeDefined()
+    const map = mapFor(catalogId, locale)
+    const unlabelled = (catalog?.options ?? []).filter((o) => !has(map[o.id]?.label)).map((o) => o.id)
+    expect(
+      unlabelled,
+      `packages/shared/src/i18n/${catalogId}.${locale}.ts has no label for these ids, so the picker shows the English name`,
+    ).toEqual([])
+  })
+})

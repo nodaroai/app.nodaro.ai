@@ -9,12 +9,51 @@ import { useLocalizedCatalog } from "../i18n"
 import { MultiPickBadge, useMultiPick } from "./multi-pick-ui"
 import { useCuratedEntries } from "../curated.js"
 
+/**
+ * Every interface string the picker renders around its tiles. The package owns
+ * no dictionary, so the host passes these in its own language; a field added
+ * here is a compile error at every host that passes `copy` until it translates
+ * it. Tile labels and descriptions come from the catalog's locale sidecars, and
+ * the category tab names go through `localizeLabel`.
+ */
+export interface TransitionPickerCopy {
+  /** The search box placeholder, which is also its accessible name. */
+  readonly searchPlaceholder: string
+  /** Accessible name of the search-results grid. */
+  readonly searchResults: string
+  /** Accessible name of the category tab list. */
+  readonly categories: string
+  /** The pick counter under the search box ("1 / 2 selected"). */
+  readonly selectedCount: (n: number, max: number) => string
+  /** Accessible name of a tab's badge counting the picks in that category. */
+  readonly categorySelectedCount: (n: number) => string
+  /** Shown when the search matches no transition. */
+  readonly noMatch: (query: string) => string
+}
+
+/** The English copy, used when the host passes none. */
+export const TRANSITION_PICKER_COPY_EN: TransitionPickerCopy = {
+  searchPlaceholder: "Search transitions…",
+  searchResults: "Transitions (search results)",
+  categories: "Transition categories",
+  selectedCount: (n, max) => `${n} / ${max} selected`,
+  categorySelectedCount: (n) => `${n} selected`,
+  noMatch: (query) => `No transitions match “${query}”`,
+}
+
 interface TransitionPickerProps {
   readonly value: string | ReadonlyArray<string> | undefined
   readonly onValueChange: (value: string | ReadonlyArray<string> | undefined) => void
   readonly className?: string
   readonly maxSelected?: number
+  /** Localizes an English category tab name (`TRANSITION_CATEGORY_LABELS`) —
+   *  the host app's option-label table. Identity when omitted. */
+  readonly localizeLabel?: (english: string) => string
+  /** The picker's interface strings in the host's language. English when omitted. */
+  readonly copy?: TransitionPickerCopy
 }
+
+const identity = (s: string): string => s
 
 /**
  * Multi-pick Transition picker (1–2 ids → composite transition clause).
@@ -32,6 +71,8 @@ export const TransitionPicker = memo(function TransitionPicker({
   onValueChange,
   className,
   maxSelected = 2,
+  localizeLabel = identity,
+  copy = TRANSITION_PICKER_COPY_EN,
 }: TransitionPickerProps) {
   // Curated view of the bundled catalog: filtered to ids this deployment
   // offers, relabelled where a pack rewrote an entry. Subscribed, so a late
@@ -116,8 +157,8 @@ export const TransitionPicker = memo(function TransitionPicker({
       <div className="relative">
         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
         <Input
-          aria-label="Search transitions"
-          placeholder="Search transitions..."
+          aria-label={copy.searchPlaceholder}
+          placeholder={copy.searchPlaceholder}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           className="pl-8 h-8 text-xs"
@@ -125,19 +166,19 @@ export const TransitionPicker = memo(function TransitionPicker({
       </div>
 
       <div className="text-[10px] text-muted-foreground px-0.5">
-        {selectedIds.length} / {maxSelected} selected
+        {copy.selectedCount(selectedIds.length, maxSelected)}
       </div>
 
       {isSearching ? (
         <>
           {filtered.length === 0 ? (
             <div className="text-xs text-muted-foreground text-center py-4">
-              No transitions match &quot;{query}&quot;
+              {copy.noMatch(query)}
             </div>
           ) : (
             <div
               role={maxSelected > 1 ? "group" : "radiogroup"}
-              aria-label="Transitions (search results)"
+              aria-label={copy.searchResults}
               className="grid grid-cols-2 gap-1.5"
             >
               {filtered.map(renderTile)}
@@ -148,7 +189,7 @@ export const TransitionPicker = memo(function TransitionPicker({
         <div className="flex flex-col gap-2">
           <div
             role="tablist"
-            aria-label="Transition categories"
+            aria-label={copy.categories}
             className="flex flex-wrap gap-x-3 gap-y-1 border-b border-gray-200 dark:border-[#2D2D2D]"
           >
             {TRANSITION_CATEGORY_ORDER.map((cat) => {
@@ -171,11 +212,11 @@ export const TransitionPicker = memo(function TransitionPicker({
                       : "border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/40",
                   )}
                 >
-                  <span>{TRANSITION_CATEGORY_LABELS[cat]}</span>
+                  <span>{localizeLabel(TRANSITION_CATEGORY_LABELS[cat])}</span>
                   {hasPick && (
                     <span
                       className="inline-flex items-center justify-center min-w-[15px] h-[15px] px-[4px] rounded-full bg-[#ff0073] text-white text-[9px] font-semibold leading-none"
-                      aria-label={`${count} selected`}
+                      aria-label={copy.categorySelectedCount(count)}
                     >
                       {count}
                     </span>
@@ -186,7 +227,7 @@ export const TransitionPicker = memo(function TransitionPicker({
           </div>
           <div
             role={maxSelected > 1 ? "group" : "radiogroup"}
-            aria-label={TRANSITION_CATEGORY_LABELS[activeTab]}
+            aria-label={localizeLabel(TRANSITION_CATEGORY_LABELS[activeTab])}
             className="grid grid-cols-2 gap-1.5"
           >
             {(byCategory.get(activeTab) ?? []).map(renderTile)}

@@ -4,9 +4,11 @@
  * used to read fixed constants (1 per panel, 4 to compose) that the credit
  * re-denomination left ten-fold stale.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest"
-import { render, screen } from "@testing-library/react"
-import { SHEET_PRESETS, estimateSheetCost, type SheetFlavour } from "@nodaro/shared"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
+import { act, render, screen } from "@testing-library/react"
+import { ALA_CARTE_BOARDS, SHEET_PRESETS, estimateSheetCost, type SheetFlavour } from "@nodaro/shared"
+import { localizeOptionLabel } from "@/lib/i18n/labels"
+import { useLocaleStore } from "@/lib/locale-store"
 
 vi.mock("@/lib/edition", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/edition")>()),
@@ -78,5 +80,24 @@ describe("CharacterSheetPanel cost readouts", () => {
 
     expect(screen.queryByText(/Prepare ~/)).toBeNull()
     expect(screen.queryByText(/to generate →/)).toBeNull()
+  })
+})
+
+describe("CharacterSheetPanel in another language", () => {
+  afterEach(() => act(() => useLocaleStore.getState().setLocale("en")))
+
+  it("names the presets, their descriptions and the boards in the interface language", () => {
+    act(() => useLocaleStore.getState().setLocale("ja"))
+    renderPanel()
+    for (const p of SHEET_PRESETS) {
+      expect(screen.getByText(localizeOptionLabel(p.label, "ja"))).toBeTruthy()
+      expect(screen.getByText(localizeOptionLabel(p.description, "ja"))).toBeTruthy()
+      expect(screen.queryByText(p.label)).toBeNull()
+    }
+    expect(screen.getByText("スタジオ · メイン")).toBeTruthy()
+    expect(screen.getByRole("button", { name: "パレット" })).toBeTruthy()
+    for (const b of ALA_CARTE_BOARDS) {
+      expect(screen.queryByText(new RegExp(`^${b.label}( \\+\\d+)?$`))).toBeNull()
+    }
   })
 })

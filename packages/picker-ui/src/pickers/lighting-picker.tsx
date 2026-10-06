@@ -13,6 +13,29 @@ import { LightingPreview } from "../previews/lighting-preview"
 import { useLocalizedCatalog } from "../i18n"
 import { MultiPickBadge } from "./multi-pick-ui"
 import { useCuratedEntries } from "../curated.js"
+import { identityLabel, type PickerSearchCopy } from "./picker-copy"
+
+/** The Lighting picker's interface strings — see `picker-copy.ts`. */
+export interface LightingPickerCopy extends PickerSearchCopy {
+  /** The hint beside a multi-pick section's name ("pick up to 2"). */
+  readonly pickUpTo: (n: number) => string
+  /** Accessible name of a multi-pick section's grid ("Style (pick up to 2)"). */
+  readonly sectionPickUpTo: (section: string, n: number) => string
+  /** Accessible name of a section's on/off switch ("Enable Style"). */
+  readonly enableSection: (section: string) => string
+  /** A tile's tooltip while its section is switched off. */
+  readonly clickToEnable: (description: string, section: string) => string
+}
+
+/** The English copy, used when the host passes none. */
+export const LIGHTING_PICKER_COPY_EN: LightingPickerCopy = {
+  searchPlaceholder: "Search lighting",
+  noMatch: (query) => `No lighting matches “${query}”`,
+  pickUpTo: (n) => `pick up to ${n}`,
+  sectionPickUpTo: (section, n) => `${section} (pick up to ${n})`,
+  enableSection: (section) => `Enable ${section}`,
+  clickToEnable: (description, section) => `${description} (click to enable ${section})`,
+}
 
 /** Per-category multi-select cap. style (lighting style) supports 2 picks
  *  (key + rim, soft + hard, beauty-dish + accent). All other categories
@@ -25,6 +48,11 @@ interface LightingPickerProps {
   readonly value: LightingValue
   readonly onChange: (patch: Partial<LightingValue>) => void
   readonly className?: string
+  /** Localizes an English section name (`LIGHTING_CATEGORY_LABELS`) — the
+   *  host app's option-label table. Identity when omitted. */
+  readonly localizeLabel?: (english: string) => string
+  /** The picker's interface strings in the host's language. English when omitted. */
+  readonly copy?: LightingPickerCopy
 }
 
 /**
@@ -38,6 +66,8 @@ export const LightingPicker = memo(function LightingPicker({
   value,
   onChange,
   className,
+  localizeLabel = identityLabel,
+  copy = LIGHTING_PICKER_COPY_EN,
 }: LightingPickerProps) {
   // Curated view of the bundled catalog: filtered to ids this deployment
   // offers, relabelled where a pack rewrote an entry. Subscribed, so a late
@@ -73,8 +103,8 @@ export const LightingPicker = memo(function LightingPicker({
       <div className="relative">
         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
         <Input
-          aria-label="Search lighting"
-          placeholder="Search lighting"
+          aria-label={copy.searchPlaceholder}
+          placeholder={copy.searchPlaceholder}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           className="pl-8 h-8 text-xs"
@@ -83,7 +113,7 @@ export const LightingPicker = memo(function LightingPicker({
 
       {!anyVisible && query && (
         <div className="text-xs text-muted-foreground text-center py-4">
-          No lighting matches "{query}"
+          {copy.noMatch(query)}
         </div>
       )}
 
@@ -104,7 +134,8 @@ export const LightingPicker = memo(function LightingPicker({
         return (
           <CategorySection
             key={category}
-            category={category}
+            sectionLabel={localizeLabel(LIGHTING_CATEGORY_LABELS[category])}
+            copy={copy}
             lightings={lightings}
             field={field}
             checked={checked}
@@ -159,7 +190,9 @@ export const LightingPicker = memo(function LightingPicker({
 })
 
 interface CategorySectionProps {
-  readonly category: LightingCategory
+  /** The section's name, already in the host's language. */
+  readonly sectionLabel: string
+  readonly copy: LightingPickerCopy
   readonly lightings: ReadonlyArray<Lighting>
   readonly field: (typeof LIGHTING_FIELD_BY_CATEGORY)[LightingCategory]
   readonly checked: boolean
@@ -175,7 +208,8 @@ interface CategorySectionProps {
 }
 
 function CategorySection({
-  category,
+  sectionLabel,
+  copy,
   lightings,
   field,
   checked,
@@ -190,9 +224,9 @@ function CategorySection({
   onDemoteToSingle,
 }: CategorySectionProps) {
   const id = useId()
-  const baseLabel = LIGHTING_CATEGORY_LABELS[category]
+  const baseLabel = sectionLabel
   const multi = maxSelected > 1
-  const label = multi ? `${baseLabel} (pick up to ${maxSelected})` : baseLabel
+  const label = multi ? copy.sectionPickUpTo(baseLabel, maxSelected) : baseLabel
   const switchId = `${id}-${field}`
   return (
     <div className="flex flex-col gap-1.5 border-t-[3px] border-border/40">
@@ -207,7 +241,7 @@ function CategorySection({
           {baseLabel}
           {multi && checked && (
             <span className="ml-2 text-[10px] font-normal normal-case tracking-normal text-muted-foreground">
-              pick up to {maxSelected}
+              {copy.pickUpTo(maxSelected)}
             </span>
           )}
         </label>
@@ -215,7 +249,7 @@ function CategorySection({
           id={switchId}
           checked={checked}
           onCheckedChange={onToggle}
-          aria-label={`Enable ${baseLabel}`}
+          aria-label={copy.enableSection(baseLabel)}
         />
       </div>
       <div role={multi ? "group" : "radiogroup"} aria-label={label} className={cn("grid grid-cols-3 gap-1.5 transition-opacity", !checked && "opacity-40")}>
@@ -230,7 +264,7 @@ function CategorySection({
                 type="button"
                 role={multi ? "checkbox" : "radio"}
                 aria-checked={selected}
-                title={checked ? entryDescription : `${entryDescription} (click to enable ${label})`}
+                title={checked ? entryDescription : copy.clickToEnable(entryDescription, baseLabel)}
                 onClick={() => onPick(lighting.id)}
                 className={cn(
                   "w-full group flex flex-col gap-1 p-1 rounded-lg border text-left transition-colors cursor-pointer overflow-hidden",
