@@ -29,7 +29,7 @@ import { liveExecutable, getDownstreamNodeIds, runFromHereExecutable } from "./r
 import { wordTimingsPreflight } from "./add-captions-preflight";
 import { nestedRunPreflight } from "./sub-workflow-preflight";
 import { previewRunnable, previewSingleRunRefusal } from "./preview-gate";
-import { renderOwnRunRefusal, replanEditLosses } from "./render-review-guards";
+import { renderOwnRunRefusal, replanEditLosses, replanLossBody } from "./render-review-guards";
 import { COMPOSER_PLAN_MAP, CREDIT_BASE_USD, planFanOut, TRANSIENT_RUNTIME_KEYS, isExpandedClone, withWiredSettings } from "@nodaro/shared"
 import { clearedConnectedListRows } from "./clear-run-results"
 import { namedRunOutputFields, reduceRunOutputFields } from "@/lib/named-run-outputs"
@@ -399,9 +399,7 @@ export async function confirmRunOrAbort(
   {
     const losses = replanEditLosses(runs);
     if (losses.length > 0 && ctx.askConfirm) {
-      const body = losses
-        .map((l) => tx("renderFinal.replanBody", { plan: l.label, restored: l.restored, dropped: l.dropped }))
-        .join(" ");
+      const body = losses.map(replanLossBody).join(" ");
       if (!(await ctx.askConfirm({ title: tx("renderFinal.replanTitle"), body, confirmLabel: tx("renderFinal.replanConfirm") }))) return false;
     }
   }

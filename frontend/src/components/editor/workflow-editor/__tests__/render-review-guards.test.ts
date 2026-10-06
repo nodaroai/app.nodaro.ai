@@ -4,9 +4,12 @@ import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 
 let flag = true
 vi.mock("@/lib/runtime-config", () => ({ runtimePreviewStopRule: () => flag }))
-vi.mock("@/lib/i18n", () => ({ tx: (key: string) => key }))
+vi.mock("@/lib/i18n", () => ({
+  tx: (key: string, vars?: Record<string, string | number>) =>
+    vars ? [key, ...Object.entries(vars).map(([k, v]) => `${k}=${v}`)].join("|") : key,
+}))
 
-import { renderOwnRunRefusal, replanEditLosses } from "../render-review-guards"
+import { renderOwnRunRefusal, replanEditLosses, replanLossBody } from "../render-review-guards"
 
 const node = (id: string, type: string, data: Record<string, unknown> = {}) =>
   ({ id, type, position: { x: 0, y: 0 }, data }) as unknown as WorkflowNode
@@ -91,7 +94,7 @@ describe("renderOwnRunRefusal (TA19 a)", () => {
 describe("replanEditLosses (TA2 item 3)", () => {
   it("counts what the review restored and what the reviewer dropped", () => {
     const p = node("p", "edit-plan", { label: "Tighten Plan", generatedJson: plan, editedEdl: review })
-    expect(replanEditLosses([p])).toEqual([{ planId: "p", label: "Tighten Plan", restored: 1, dropped: 1 }])
+    expect(replanEditLosses([p])).toEqual([{ kind: "edl", planId: "p", label: "Tighten Plan", restored: 1, dropped: 1 }])
   })
 
   it("is empty when the plan holds no review, or the review is stale", () => {
@@ -99,8 +102,56 @@ describe("replanEditLosses (TA2 item 3)", () => {
     expect(replanEditLosses([node("p", "edit-plan", { generatedJson: plan, editedEdl: { ...review, basis: "old" } })])).toEqual([])
   })
 
-  it("only reads plans a run would re-execute, and only Tighten reviews", () => {
-    const clips = node("c", "edit-plan", { generatedJson: [plan], editedEdl: { v: 1, kind: "clips", basis: editPlanBasis([plan]), clips: [{ keep: false }] } })
-    expect(replanEditLosses([clips, node("r", "apply-edl")])).toEqual([])
+  it("only reads plans a run would re-execute", () => {
+    expect(replanEditLosses([node("r", "apply-edl", { generatedJson: plan, editedEdl: review })])).toEqual([])
+  })
+})
+
+describe("replanEditLosses for a clip review (R14 a, decided 2026-10-06)", () => {
+  const clips = [plan, { ...plan, meta: { hook: "planned" } }, plan, plan]
+  const clipReview = (decisions: Array<{ keep: boolean; hook?: string }>) =>
+    ({ v: 1, kind: "clips", basis: editPlanBasis(clips), clips: decisions })
+
+  it("counts the clips dropped and the hooks edited", () => {
+    const p = node("c", "edit-plan", {
+      label: "Find Clips",
+      generatedJson: clips,
+      editedEdl: clipReview([{ keep: false }, { keep: true, hook: "rewritten" }, { keep: false }, { keep: true }]),
+    })
+    expect(replanEditLosses([p])).toEqual([{ kind: "clips", planId: "c", label: "Find Clips", dropped: 2, hooks: 1 }])
+  })
+
+  it("an explicit empty hook is an edited hook; a hook on a dropped clip is lost too", () => {
+    const p = node("c", "edit-plan", {
+      generatedJson: clips,
+      editedEdl: clipReview([{ keep: true, hook: "" }, { keep: false, hook: "x" }, { keep: true }, { keep: true }]),
+    })
+    expect(replanEditLosses([p])).toEqual([{ kind: "clips", planId: "c", label: "edit-plan", dropped: 1, hooks: 2 }])
+  })
+
+  it("is empty with nothing to lose, a stale review, or none", () => {
+    const allKept = node("c", "edit-plan", { generatedJson: clips, editedEdl: clipReview(clips.map(() => ({ keep: true }))) })
+    const stale = node("c", "edit-plan", { generatedJson: clips, editedEdl: { ...clipReview([{ keep: false }, { keep: true }, { keep: true }, { keep: true }]), basis: "old" } })
+    expect(replanEditLosses([allKept, stale, node("c", "edit-plan", { generatedJson: clips })])).toEqual([])
+  })
+})
+
+describe("replanLossBody: the confirm's sentence for each loss", () => {
+  it("a Tighten review names what was restored and dropped", () => {
+    expect(replanLossBody({ kind: "edl", planId: "p", label: "Tighten Plan", restored: 1, dropped: 2 })).toBe(
+      "renderFinal.replanBody|plan=Tighten Plan|restored=1|dropped=2",
+    )
+  })
+
+  it("a clip review names the clips dropped and the hooks edited, each counted, zero left out", () => {
+    expect(replanLossBody({ kind: "clips", planId: "c", label: "Find Clips", dropped: 2, hooks: 1 })).toBe(
+      "renderFinal.replanClipsBody|plan=Find Clips|changes=renderFinal.replanClipsDroppedMany|n=2common.listCommarenderFinal.replanClipsHooksOne|n=1",
+    )
+    expect(replanLossBody({ kind: "clips", planId: "c", label: "Find Clips", dropped: 1, hooks: 0 })).toBe(
+      "renderFinal.replanClipsBody|plan=Find Clips|changes=renderFinal.replanClipsDroppedOne|n=1",
+    )
+    expect(replanLossBody({ kind: "clips", planId: "c", label: "Find Clips", dropped: 0, hooks: 3 })).toBe(
+      "renderFinal.replanClipsBody|plan=Find Clips|changes=renderFinal.replanClipsHooksMany|n=3",
+    )
   })
 })

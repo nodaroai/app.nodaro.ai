@@ -8,6 +8,10 @@
  *    when K is the plan's own: an un-edited plan holds no edit, so it never
  *    shows EDITED and a re-plan never warns about nothing.
  *  - `writeReview`: the store write. With no edit it calls `clearReview`.
+ *  - `clipReviewOf` / `writeClipDecisions`: the same for a clip set's review
+ *    (A4-1): one `{keep, hook?}` per planned clip. Every clip kept with no hook
+ *    of its own is no edit, and clears the review. A hook edit is written
+ *    through the same debounced writer, and flushed at the same moments.
  *  - `clearReview`: the SECOND place a review is cleared (the first is a plan
  *    landing, `editPlanResultPatch`). "Reset to plan", the writer when K is back
  *    at the plan's, and discarding an edit made on an earlier plan use it.
@@ -25,7 +29,15 @@
  *    edit. Listener order cannot do this: the inspector mounts after the
  *    editor, so its own listener would run after the editor's had read.
  */
-import { EDITED_EDL_VERSION, editPlanBasis, type Edl, type EditedEdlCut } from "@nodaro/shared"
+import {
+  EDITED_EDL_VERSION,
+  editPlanBasis,
+  type Edl,
+  type EditedClipDecision,
+  type EditedClipSet,
+  type EditedEdl,
+  type EditedEdlCut,
+} from "@nodaro/shared"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { buildEdited } from "./build-edited"
 import { keptSetOf, type KeptSet } from "./kept-set"
@@ -69,6 +81,35 @@ export function writeReview(planId: string, plan: unknown, base: Edl, kept: Kept
   return true
 }
 
+/** The stored edit `decisions` give on a clip set `plan` (the plan as stored),
+ *  or `undefined` when every clip is kept with no hook of its own, or when the
+ *  decisions do not line up with the plan's clips. A hook of `""` is an
+ *  explicit empty hook; an absent hook stores no key (the plan's reads). */
+export function clipReviewOf(plan: unknown, decisions: readonly EditedClipDecision[]): EditedClipSet | undefined {
+  if (!Array.isArray(plan) || decisions.length !== plan.length) return undefined
+  if (decisions.every((d) => d.keep && d.hook === undefined)) return undefined
+  return {
+    v: EDITED_EDL_VERSION,
+    kind: "clips",
+    basis: editPlanBasis(plan),
+    clips: decisions.map((d) => (d.hook === undefined ? { keep: d.keep } : { keep: d.keep, hook: d.hook })),
+  }
+}
+
+/**
+ * Write a clip set's decisions to the plan node, or clear the review when they
+ * are the plan's own. Skipped, like `writeReview`, when the node no longer holds
+ * `plan`, and when the decisions do not line up with its clips. Returns whether
+ * it wrote.
+ */
+export function writeClipDecisions(planId: string, plan: unknown, decisions: readonly EditedClipDecision[]): boolean {
+  if (!planData(planId, plan) || !Array.isArray(plan) || decisions.length !== plan.length) return false
+  const review = clipReviewOf(plan, decisions)
+  if (!review) return clearReview(planId)
+  useWorkflowStore.getState().updateNodeData(planId, { editedEdl: review })
+  return true
+}
+
 /** Remove the plan's review: the plan is read as planned again. Returns
  *  whether there was one to remove. */
 export function clearReview(planId: string): boolean {
@@ -83,7 +124,7 @@ export function clearReview(planId: string): boolean {
 export function withPendingReview<N extends { readonly id: string; readonly data?: unknown }>(
   nodes: readonly N[],
   planId: string,
-  review: EditedEdlCut | undefined,
+  review: EditedEdl | undefined,
 ): N[] {
   return nodes.map((n) => (n.id === planId ? ({ ...n, data: { ...(n.data as object), editedEdl: review } } as N) : n))
 }

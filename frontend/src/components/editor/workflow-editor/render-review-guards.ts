@@ -10,11 +10,20 @@
  *    proxy. Shown only with the stop-rule flag on (decided 2026-10-06): off,
  *    there is no Update preview to point at, so ▶ behaves as it always did.
  *  - `replanEditLosses` (TA2 item 3): a run that would re-execute an Edit Plan
- *    holding a review replaces it. The run asks first, naming what is lost.
- *    Only a Tighten (cut) review is counted: a clip set's review has no
- *    inspector yet, and its wording is not settled.
+ *    holding a review replaces it. The run asks first, naming what is lost
+ *    (`replanLossBody`): for a Tighten review, the spans restored and dropped;
+ *    for a clip set's review (R14 a, decided 2026-10-06), the clips dropped and
+ *    the hooks edited.
  */
-import { normalizeEdl, PREVIEW_RENDER_NODE_TYPES, renderPlanPath, resolveEditPlanOutput, type Edl, type RenderGraphEdge } from "@nodaro/shared"
+import {
+  normalizeEdl,
+  PREVIEW_RENDER_NODE_TYPES,
+  renderPlanPath,
+  resolveEditPlanOutput,
+  type Edl,
+  type EditedEdl,
+  type RenderGraphEdge,
+} from "@nodaro/shared"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 import { tx } from "@/lib/i18n"
 import { runtimePreviewStopRule } from "@/lib/runtime-config"
@@ -63,18 +72,33 @@ export function renderOwnRunRefusal(
   return reviewed.passThroughIds.every((id) => runIds.has(id)) ? null : tx("renderFinal.ownRunRefusal")
 }
 
-/** What re-running an Edit Plan would replace. */
-export interface ReplanLoss {
+interface ReplanLossOf {
   readonly planId: string
   /** The plan node's label, for the dialog's sentence. */
   readonly label: string
-  /** Plan-dropped spans the review keeps again. */
-  readonly restored: number
-  /** Spans the reviewer cut that the plan kept. */
-  readonly dropped: number
 }
 
-/** The reviews a run of `runs` would replace: each Edit Plan in it that holds a Tighten review. */
+/** What re-running an Edit Plan would replace. */
+export type ReplanLoss =
+  | (ReplanLossOf & {
+      /** A Tighten review. */
+      readonly kind: "edl"
+      /** Plan-dropped spans the review keeps again. */
+      readonly restored: number
+      /** Spans the reviewer cut that the plan kept. */
+      readonly dropped: number
+    })
+  | (ReplanLossOf & {
+      /** A clip set's review. */
+      readonly kind: "clips"
+      /** Clips the reviewer dropped. */
+      readonly dropped: number
+      /** Clips whose hook the reviewer rewrote (an empty hook included). */
+      readonly hooks: number
+    })
+
+/** The reviews a run of `runs` would replace: each Edit Plan in it that holds
+ *  an applied review with something in it. */
 export function replanEditLosses(runs: readonly WorkflowNode[]): ReplanLoss[] {
   const losses: ReplanLoss[] = []
   for (const node of runs) {
@@ -82,13 +106,33 @@ export function replanEditLosses(runs: readonly WorkflowNode[]): ReplanLoss[] {
     const { generatedJson, editedEdl } = dataOf(node)
     if (generatedJson === undefined) continue
     if (resolveEditPlanOutput(generatedJson, editedEdl).status !== "applied") continue
-    const edited = editedEdl as { kind?: unknown; edl?: { segments?: unknown; dropped?: unknown } }
-    if (edited.kind !== "edl") continue
-    const plan = normalizeEdl(generatedJson)
-    const kept = keptSetOf({ ...plan, segments: (edited.edl?.segments ?? []) as Edl["segments"] })
-    const cuts = ((edited.edl?.dropped ?? []) as ReadonlyArray<{ reason?: unknown }>).filter((d) => d.reason === MANUAL_REASON)
     const label = typeof dataOf(node).label === "string" && dataOf(node).label ? (dataOf(node).label as string) : node.type ?? ""
-    losses.push({ planId: node.id, label, restored: restoredOf(plan, kept).length, dropped: cuts.length })
+    const edited = editedEdl as EditedEdl
+    if (edited.kind === "clips") {
+      const dropped = edited.clips.filter((d) => !d.keep).length
+      const hooks = edited.clips.filter((d) => d.hook !== undefined).length
+      if (dropped + hooks > 0) losses.push({ kind: "clips", planId: node.id, label, dropped, hooks })
+      continue
+    }
+    const plan = normalizeEdl(generatedJson)
+    const kept = keptSetOf({ ...plan, segments: edited.edl.segments as Edl["segments"] })
+    const cuts = (edited.edl.dropped as ReadonlyArray<{ reason?: unknown }>).filter((d) => d.reason === MANUAL_REASON)
+    losses.push({ kind: "edl", planId: node.id, label, restored: restoredOf(plan, kept).length, dropped: cuts.length })
   }
   return losses
+}
+
+/** The re-plan confirm's sentence for one loss, in the current language: "Re-running
+ *  Find Clips replaces your review: 2 clips dropped, 1 hook edited" (R14 a). A
+ *  count of zero is left out of a clip review's sentence. */
+export function replanLossBody(loss: ReplanLoss): string {
+  if (loss.kind === "edl") return tx("renderFinal.replanBody", { plan: loss.label, restored: loss.restored, dropped: loss.dropped })
+  const parts: string[] = []
+  if (loss.dropped > 0) {
+    parts.push(tx(loss.dropped === 1 ? "renderFinal.replanClipsDroppedOne" : "renderFinal.replanClipsDroppedMany", { n: loss.dropped }))
+  }
+  if (loss.hooks > 0) {
+    parts.push(tx(loss.hooks === 1 ? "renderFinal.replanClipsHooksOne" : "renderFinal.replanClipsHooksMany", { n: loss.hooks }))
+  }
+  return tx("renderFinal.replanClipsBody", { plan: loss.label, changes: parts.join(tx("common.listComma")) })
 }
