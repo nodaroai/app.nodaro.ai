@@ -37,18 +37,50 @@ export function normalizeChannel(input: string): string | null {
 const codePointOrLiteral = (n: number, literal: string): string =>
   Number.isInteger(n) && n >= 0 && n <= 0x10ffff && !(n >= 0xd800 && n <= 0xdfff) ? String.fromCodePoint(n) : literal
 
+/**
+ * The named entities Telegram's preview page writes into a post's text. The
+ * bidi marks (`&rlm;` / `&lrm;`) matter most: a Hebrew channel's posts carry
+ * them around Latin words, and shown as text they read as "&rlm;Speech".
+ * An unknown name stays as written.
+ */
+const NAMED_ENTITIES: Readonly<Record<string, string>> = {
+  nbsp: " ",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  apos: "'",
+  rlm: "‏",
+  lrm: "‎",
+  zwj: "‍",
+  zwnj: "‌",
+  shy: "",
+  hellip: "…",
+  mdash: "—",
+  ndash: "–",
+  laquo: "«",
+  raquo: "»",
+  bull: "•",
+  middot: "·",
+  times: "×",
+  copy: "©",
+  reg: "®",
+  trade: "™",
+}
+
 function decodeEntities(s: string): string {
   return s
     .replace(/<br\s*\/?>/gi, "\n")
     .replace(/<[^>]+>/g, "")
-    .replace(/&nbsp;/g, " ")
     // Numeric entities first, range-checked.
     .replace(/&#(\d+);/g, (m, n) => codePointOrLiteral(Number(n), m))
     .replace(/&#x([0-9a-f]+);/gi, (m, n) => codePointOrLiteral(parseInt(n, 16), m))
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    // `&amp;` LAST: "&amp;lt;" is the literal "&lt;" the author wrote, not "<".
+    // Named entities (never `amp` here, so "&amp;lt;" survives as the literal "&lt;" below).
+    .replace(/&([a-z]+);/gi, (m, name: string) => {
+      const key = name.toLowerCase()
+      // Own keys only: `&constructor;` must not read Object.prototype.
+      return key !== "amp" && Object.hasOwn(NAMED_ENTITIES, key) ? NAMED_ENTITIES[key]! : m
+    })
+    // `&amp;` LAST.
     .replace(/&amp;/g, "&")
     .replace(/[ \t]+\n/g, "\n")
     .trim()
@@ -73,6 +105,9 @@ function parseMedia(chunk: string): TelegramChannelPostMedia[] {
     const block = chunk.slice(start, end)
     const poster = block.match(/tgme_widget_message_video_thumb[^>]*?background-image:url\('([^']+)'/)?.[1]
     const src = block.match(/<video[^>]*\ssrc="([^"]+)"/)?.[1]
+    // A player with neither a file nor a poster yet (a post seconds old) is not a
+    // medium anyone can show or store — `{ type: "video" }` alone said nothing.
+    if (!src && !poster) return
     found.push({ index: start, media: { type: "video", ...(src ? { url: src } : {}), ...(poster ? { posterUrl: poster } : {}) } })
   })
   return found.sort((a, b) => a.index - b.index).map((f) => f.media)

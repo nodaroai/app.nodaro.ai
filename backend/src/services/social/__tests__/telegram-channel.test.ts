@@ -148,6 +148,19 @@ describe("entities a post can carry", () => {
     const posts = parseChannelHtml(wrap(21, "Type &amp;lt; for less-than, &amp;amp; for an ampersand"), "acme")
     expect(posts[0]!.text).toBe("Type &lt; for less-than, &amp; for an ampersand")
   })
+
+  it("the bidi marks and the other named entities a Hebrew channel carries decode to their characters; an unknown name stays", () => {
+    const posts = parseChannelHtml(wrap(22, "&rlm;Speech&lrm; זמין &hellip; A &mdash; B &laquo;q&raquo; &unknownthing; &constructor;"), "acme")
+    expect(posts[0]!.text).toBe("‏Speech‎ זמין … A — B «q» &unknownthing; &constructor;")
+  })
+
+  it("a video player with neither a file nor a poster yet yields no medium; the post is kept for its text", () => {
+    const html = `<div class="tgme_widget_message js-widget_message" data-post="acme/23"><a class="tgme_widget_message_video_player js-message_video_player" href="https://t.me/acme/23"><div class="message_video_play"></div></a><div class="tgme_widget_message_text js-message_text" dir="auto">Fresh video</div>${FOOTER(23, "2026-07-18T10:00:00+00:00", "1")}</div>`
+    const posts = parseChannelHtml(html, "acme")
+    expect(posts).toHaveLength(1)
+    expect(posts[0]!.media).toEqual([])
+    expect(posts[0]!.imageUrl).toBeUndefined()
+  })
 })
 
 describe("parseChannelPage / fetchChannelPage — the highest id the page rendered", () => {

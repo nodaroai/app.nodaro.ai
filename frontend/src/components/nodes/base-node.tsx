@@ -52,6 +52,13 @@ interface BaseNodeProps {
   readonly selected?: boolean
   readonly minWidth?: number
   readonly minHeight?: number
+  /**
+   * A content-driven card (a feed, a scrape): its height is its content's.
+   * A stored height — the size of an older, shorter card, or a resize made
+   * then — would clip the content behind the overflow-hidden body, so it is
+   * dropped; the width a person chose stays, and resize is width-only.
+   */
+  readonly fitContent?: boolean
   readonly isRunning?: boolean
   readonly listCount?: number
   readonly listProgress?: string
@@ -164,6 +171,7 @@ function BaseNodeComponent({
   selected,
   minWidth = 200,
   minHeight = 100,
+  fitContent = false,
   isRunning = false,
   listCount,
   listProgress,
@@ -317,8 +325,22 @@ function BaseNodeComponent({
   // PREVIEW floor (`minHeight`) so chrome is added exactly once.
   const effectiveMinHeight = Math.max(minHeight + chromeHeight, handleMinHeight)
   // With in-body chrome, height is width-derived (sizing effect) so resize is
-  // width-only; without chrome, keep the aspect-locked 2-corner resize.
-  const resizeDirection = chromeHeight > 0 ? "horizontal" : undefined
+  // width-only; without chrome, keep the aspect-locked 2-corner resize. A
+  // content-driven card is width-only too: its height is never a choice.
+  const resizeDirection = chromeHeight > 0 || fitContent ? "horizontal" : undefined
+
+  // A content-driven card drops any stored height (see `fitContent`): React
+  // Flow applies `node.height` to the node wrapper, and the body clips behind
+  // it. `visualH` re-fires this whenever something writes a height back.
+  useLayoutEffect(() => {
+    if (!fitContent || !id) return
+    const state = useWorkflowStore.getState()
+    const node = state.nodes.find((n) => n.id === id)
+    if (!node || typeof node.height !== "number") return
+    useWorkflowStore.setState({
+      nodes: state.nodes.map((n) => (n.id === id ? { ...n, height: undefined } : n)),
+    })
+  }, [fitContent, id, visualH])
 
   // Lift the measured chrome height to the node component — used for bottom-
   // anchored handle pips, which render as BaseNode siblings (no context reach).
@@ -439,6 +461,9 @@ function BaseNodeComponent({
     // chromeHeight. Loop-safe: the `currentHeight >= effectiveMinHeight` guard
     // below early-returns once the height already satisfies the floor.
     if (hasExplicitResize && chromeHeight === 0) return
+    // A content-driven card never gets a height written back: the DOM
+    // `minHeight` floor below is enough, and a stored height would clip it.
+    if (fitContent) return
     // Guard: if neither an explicit height nor a RF-measured height exists yet,
     // the node just mounted and React Flow's ResizeObserver hasn't fired. Skip
     // now — `measuredH` in the dep array will re-trigger the effect once RF
@@ -454,7 +479,7 @@ function BaseNodeComponent({
         n.id === id ? { ...n, height: effectiveMinHeight } : n
       ),
     })
-  }, [imageAspectRatio, id, visualW, visualH, measuredH, effectiveMinHeight, minWidth, inlineChromePending])
+  }, [imageAspectRatio, id, visualW, visualH, measuredH, effectiveMinHeight, minWidth, inlineChromePending, fitContent])
 
   // After any size change above, re-measure handle bounds. Needed for nodes
   // whose handles use `top: calc(100% - Npx)` (typed-pip stacks anchored to
