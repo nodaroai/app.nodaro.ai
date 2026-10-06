@@ -8,7 +8,7 @@ import { dubbingModelIdentifier } from "../lib/dubbing-model.js"
  */
 
 import { supabase } from "../lib/supabase.js"
-import { CATEGORY_DURATION_DEFAULTS, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
+import { CATEGORY_DURATION_DEFAULTS, LLM_FEATURE_DEFAULTS, dialogueProviderOf } from "@nodaro/shared"
 import type { LlmFeature } from "@nodaro/shared"
 
 // ---------------------------------------------------------------------------
@@ -195,7 +195,8 @@ export function buildStatsKey(nodeType: string, inputData: InputData): StatsKey 
 
     case "text-to-dialogue": {
       return {
-        model_identifier: "elevenlabs-dialogue",
+        // The dialogue model the run used (an unknown or missing one ran as v3 dialogue).
+        model_identifier: dialogueProviderOf(inputData.provider),
         aspect_ratio: "",
         quality: "",
         duration_seconds: 0,

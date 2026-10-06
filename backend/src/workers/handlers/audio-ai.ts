@@ -472,10 +472,13 @@ async function generateDialogueViaCloud(body: Record<string, unknown>): Promise<
 }
 
 const handleTextToDialogue: HandlerFn = async function handleTextToDialogue(job, ctx) {
-  const { dialogue, stability, languageCode, seed, applyTextNormalization } = job.data as {
+  const { dialogue, provider, stability, similarityBoost, languageCode, seed, applyTextNormalization } = job.data as {
     jobId: string
     dialogue: Array<{ text: string; voice: string }>
+    /** Our dialogue model id; the funnel runs an unknown or missing one as v3 dialogue. */
+    provider?: string
     stability?: number
+    similarityBoost?: number
     languageCode?: string
     seed?: number
     applyTextNormalization?: "auto" | "on" | "off"
@@ -495,7 +498,9 @@ const handleTextToDialogue: HandlerFn = async function handleTextToDialogue(job,
   // Set only on the cloud branch — the relay provenance the finalize literal
   // below carries onto the row.
   let cloudAudio: CloudAudioResult | undefined
-  const dialogueOptions = { stability, languageCode, seed, applyTextNormalization }
+  // The cloud relay spreads these into its body too, so the model reaches a
+  // cloud that knows it; an older cloud strips the key and renders v3 dialogue.
+  const dialogueOptions = { provider, stability, similarityBoost, languageCode, seed, applyTextNormalization }
   if (config.ELEVENLABS_API_KEY) {
     audioBuffer = await withProgressRamp(
       job,

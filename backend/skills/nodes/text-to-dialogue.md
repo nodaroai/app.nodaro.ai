@@ -1,7 +1,7 @@
 ---
 node_type: text-to-dialogue
-generated_at: 2026-09-27T12:51:23.720Z
-generated_from: c607aa02c
+generated_at: 2026-10-06T06:15:27.594Z
+generated_from: b573ef680
 ---
 
 # Text to Dialogue
@@ -9,7 +9,7 @@ generated_from: c607aa02c
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `text-to-dialogue`
 **Category:** ai
-**Credit cost:** `40` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `25` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
 **Inputs (target handles):** `prompt`
 **Outputs (source handles):** `audio`
 

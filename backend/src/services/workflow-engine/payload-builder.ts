@@ -7,7 +7,7 @@ import {
 import { assembleVideoOverlayRequest, formatVideoOverlayError, validateVideoOverlayRequest, videoOverlayCompositionKey, videoOverlaySlotSources, type VideoOverlayNodeFields } from "@nodaro/shared"
 import { effectiveContentModel, contentRecipeCreditId, contentIdeasCreditId, clampContentIdeasCount, CONTENT_RECIPE_SOURCE_MAX, CONTENT_IDEAS_MAX_RECIPE_INPUTS, CONTENT_IDEAS_BRAND_MAX, CONTENT_IDEAS_LANGUAGE_MAX } from "@nodaro/shared"
 import { TELEGRAM_ACCOUNT_SEND_NODE_TYPE, telegramSendAsOf, telegramSendDestinationOf } from "@nodaro/shared"
-import { DEFAULT_TEXT_TO_AUDIO_PROVIDER } from "@nodaro/shared"
+import { DEFAULT_TEXT_TO_AUDIO_PROVIDER, dialogueProviderOf, getDialogueCapabilities } from "@nodaro/shared"
 import { LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec, LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec, textToAudioCreditId } from "@nodaro/shared"
 import { applyEdlCreditId, renderPlanClipKey } from "@nodaro/shared"
 import type { Scene3DReference } from "@nodaro/shared"
@@ -2320,6 +2320,11 @@ function scene3DWarningsField(args: {
  * a denied model reaches dispatch through an UNSET `data.provider`. The surface
  * MODEL-deny backstop must consult this same value or that path bypasses it.
  *
+ * A text-to-dialogue node dispatches and bills `dialogueProviderOf(data.provider)`
+ * — an unset, unknown or non-string provider RUNS as v3 dialogue — so the deny
+ * check reads that same resolved id: a node that merely omits `provider` (every
+ * node saved before the field existed) cannot run a model the deployment denied.
+ *
  * Every OTHER node type dispatches on `data.provider` alone — this deliberately
  * does NOT read `resolvedInputs.provider` for them, so a node that merely carries
  * an unrelated `resolvedInputs.provider` is never falsely denied. Uses `||` to
@@ -2339,6 +2344,9 @@ export function effectiveDispatchProvider(
   const dataProvider = typeof raw === "string" ? raw : undefined
   if (nodeType === "text-to-speech") {
     return resolvedInputs?.provider || dataProvider
+  }
+  if (nodeType === "text-to-dialogue") {
+    return dialogueProviderOf(dataProvider)
   }
   return dataProvider
 }
@@ -5263,10 +5271,24 @@ export function buildPayload(
           throw err
         }
       }
-      return simpleResult("text-to-dialogue", "elevenlabs-dialogue", {
+      // The model the node runs on: `effectiveDispatchProvider` is what the
+      // deployment model-deny check above read, so deny and dispatch agree; an
+      // unknown id runs (and is billed) as v3 dialogue.
+      const dialogueProvider = dialogueProviderOf(effectiveDispatchProvider(type, data, resolvedInputs))
+      // Fail HONESTLY before dispatch when the script exceeds the model's total
+      // cap — the route's Zod cannot see this path, and the provider would
+      // refuse it mid-run after credits reserve.
+      const dialogueCap = getDialogueCapabilities(dialogueProvider).maxChars
+      const dialogueTotal = filteredDialogue.reduce((sum, l) => sum + l.text.length, 0)
+      if (dialogueTotal > dialogueCap) {
+        throw new Error(`Text to Dialogue has ${dialogueTotal} characters of dialogue; this model takes at most ${dialogueCap} characters in total — shorten the lines or split them across two nodes`)
+      }
+      return simpleResult("text-to-dialogue", dialogueProvider, {
         jobId,
+        provider: dialogueProvider,
         dialogue: filteredDialogue,
         stability: data.stability,
+        similarityBoost: data.similarityBoost,
         languageCode: data.languageCode,
         seed: data.seed,
         applyTextNormalization: data.applyTextNormalization,

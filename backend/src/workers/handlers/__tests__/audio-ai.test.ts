@@ -314,11 +314,11 @@ describe("text-to-dialogue provider selection (keyless self-host)", () => {
     config.ELEVENLABS_API_KEY = "el_test"
     mocks.mockIsNodaroConnected.mockResolvedValue(true)
 
-    await handler(makeJob("text-to-dialogue", { dialogue: lines, stability: 0.5, languageCode: "en", seed: 42, applyTextNormalization: "on" }) as never, makeCtx())
+    await handler(makeJob("text-to-dialogue", { dialogue: lines, provider: "elevenlabs-dialogue", stability: 0.5, similarityBoost: 0.7, languageCode: "en", seed: 42, applyTextNormalization: "on" }) as never, makeCtx())
 
     expect(mocks.mockDirectElevenLabsDialogue).toHaveBeenCalledWith(
       lines,
-      expect.objectContaining({ stability: 0.5, languageCode: "en", seed: 42, applyTextNormalization: "on" }),
+      expect.objectContaining({ provider: "elevenlabs-dialogue", stability: 0.5, similarityBoost: 0.7, languageCode: "en", seed: 42, applyTextNormalization: "on" }),
     )
     expect(mocks.mockCreateCloudJob).not.toHaveBeenCalled()
     expect(mocks.mockUploadBufferToR2).toHaveBeenCalledWith(
@@ -337,10 +337,11 @@ describe("text-to-dialogue provider selection (keyless self-host)", () => {
     config.ELEVENLABS_API_KEY = ""
     mocks.mockIsNodaroConnected.mockResolvedValue(true)
 
-    await handler(makeJob("text-to-dialogue", { dialogue: lines }) as never, makeCtx())
+    await handler(makeJob("text-to-dialogue", { dialogue: lines, provider: "elevenlabs-dialogue" }) as never, makeCtx())
 
+    // The model reaches a cloud that knows it (an older cloud strips the key and renders v3).
     expect(mocks.mockCreateCloudJob).toHaveBeenCalledWith(
-      "/v1/text-to-dialogue", expect.objectContaining({ dialogue: lines }),
+      "/v1/text-to-dialogue", expect.objectContaining({ dialogue: lines, provider: "elevenlabs-dialogue" }),
     )
     expect(mocks.mockDirectElevenLabsDialogue).not.toHaveBeenCalled()
     expect(mocks.mockUploadBufferToR2).toHaveBeenCalledWith(

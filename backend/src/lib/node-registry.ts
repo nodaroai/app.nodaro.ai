@@ -1,4 +1,4 @@
-import { IMAGE_GEN_PROVIDERS, IMAGE_TO_VIDEO_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, LIP_SYNC_PROVIDERS, VOICE_CHANGER_MODEL_IDS, GVP_SUPPORTED_PROVIDERS, SEEDANCE_2_PROVIDERS, VIDEO_ANALYSIS_TIER_ORDER, MUSIC_PROVIDERS, TRANSCRIBE_PROVIDERS, MODIFY_IMAGE_PROVIDERS, UPSCALE_IMAGE_PROVIDERS, REFERENCE_BOARD_PROVIDERS, TTS_PROVIDERS, TEXT_TO_AUDIO_PROVIDERS, MOTION_TRANSFER_PROVIDERS, buildMotionCreditModelIdentifier, hasContiguousSegmentDurations, isMinimaxH3Provider, MODEL_CATALOG, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY, OVERLAY_PLATFORM_IDS, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, VIDEO_OVERLAY_OUTPUT_ASPECTS, VIDEO_OVERLAY_FITS } from "@nodaro/shared"
+import { IMAGE_GEN_PROVIDERS, IMAGE_TO_VIDEO_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, LIP_SYNC_PROVIDERS, VOICE_CHANGER_MODEL_IDS, GVP_SUPPORTED_PROVIDERS, SEEDANCE_2_PROVIDERS, VIDEO_ANALYSIS_TIER_ORDER, MUSIC_PROVIDERS, TRANSCRIBE_PROVIDERS, MODIFY_IMAGE_PROVIDERS, UPSCALE_IMAGE_PROVIDERS, REFERENCE_BOARD_PROVIDERS, TTS_PROVIDERS, DIALOGUE_PROVIDERS, TEXT_TO_AUDIO_PROVIDERS, MOTION_TRANSFER_PROVIDERS, buildMotionCreditModelIdentifier, hasContiguousSegmentDurations, isMinimaxH3Provider, MODEL_CATALOG, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY, OVERLAY_PLATFORM_IDS, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, VIDEO_OVERLAY_OUTPUT_ASPECTS, VIDEO_OVERLAY_FITS } from "@nodaro/shared"
 import type { OutputType } from "@nodaro/shared"
 import { nodeSupportsPromptAffixes } from "@nodaro/prompts"
 import { SCRAPER_ACTOR_LABELS, type ScraperActorId } from "@nodaro/shared"
@@ -153,6 +153,10 @@ export const CREDIT_BAND_SOURCES: Readonly<Record<string, CreditBandSource>> = {
   "text-to-audio": {
     ids: familyIds(...TEXT_TO_AUDIO_PROVIDERS),
     note: "Priced per whole second of audio asked for (`elevenlabs-sfx:<n>s`, 1–30 s, rounded up); a request with no duration is billed as 5 s.",
+  },
+  "text-to-dialogue": {
+    ids: [...DIALOGUE_PROVIDERS],
+    note: "Reserves on the dialogue model's row (elevenlabs-dialogue, …), flat per request — never the node-type row.",
   },
   "audio-separation": { ids: familyIds("audio-separation") },
   "audio-fx": { ids: familyIds("audio-fx") },
@@ -922,6 +926,7 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     category: "ai-audio",
     description: "Generate multi-speaker dialogue audio where each line is spoken by a different voice (ElevenLabs Dialogue v3, direct API — any voice: premade, library, or cloned).",
     outputType: "audio",
+    creditCost: creditBandFor("text-to-dialogue"),
     inputSchema: {
       fields: [
         { key: "dialogue", type: "json", required: true },

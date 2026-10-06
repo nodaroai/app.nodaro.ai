@@ -3,7 +3,10 @@ import { requireProviderKey } from "../provider-keys.js"
 import { providerFetch, type EgressMeta } from "../egress.js"
 import { ELEVENLABS_BASE_URL } from "./client.js"
 import { resolveDirectVoiceId } from "./direct-tts.js"
-import { languageCodeForModel } from "./language-code.js"
+import { normalizeElevenLabsLanguageCode } from "./language-code.js"
+import { normalizeTtsVoiceSetting } from "./voice-settings.js"
+import { dialogueProviderOf, getDialogueCapabilities } from "@nodaro/shared"
+import { dialogueWireModel, dialogueModelKey } from "./dialogue-models.js"
 
 /** One script line: what to say, and which voice says it. */
 export interface DialogueInputLine {
@@ -12,10 +15,18 @@ export interface DialogueInputLine {
 }
 
 export interface DirectDialogueOptions {
-  /** v3 stability — the API accepts exactly 0 / 0.5 / 1 for eleven_v3. */
+  /** Our dialogue model id (`DIALOGUE_PROVIDERS`). Missing, unknown or not a string → v3 dialogue. */
+  provider?: string
+  /**
+   * 0–1. Sent as given: the steps v3 dialogue is limited to are the ROUTE's
+   * contract (dialogue-capabilities.ts), and the orchestrator path, which skips
+   * the route, has always forwarded the node's value.
+   */
   stability?: number
+  /** 0–1. Sent (as `settings.similarity`) only to a model whose sheet lists the `similarity` lever. */
+  similarityBoost?: number
   languageCode?: string
-  /** Deterministic sampling (0..4294967295), same semantics as v3 TTS. */
+  /** Deterministic sampling (0..4294967295). */
   seed?: number
   /** "auto" (default) | "on" | "off" — ElevenLabs text normalization. */
   applyTextNormalization?: "auto" | "on" | "off"
@@ -28,11 +39,10 @@ const DIALOGUE_GENERATION_TIMEOUT_MS = 300_000
 
 /**
  * Multi-speaker dialogue through the direct ElevenLabs API
- * (`POST /v1/text-to-dialogue`, model eleven_v3). Replaces the last KIE
- * ElevenLabs proxy (standing repo rule: always ElevenLabs direct) — which is
- * also what lifts the proxy's incidental premade-names-only voice limit:
- * per-line `resolveDirectVoiceId` means ANY voice works (premade name,
- * library UUID, clone UUID).
+ * (`POST /v1/text-to-dialogue`). The model, the settings it is sent and whether
+ * it takes a language code come from the dialogue model's capability sheet —
+ * never from a comparison with an id. Per-line `resolveDirectVoiceId` means ANY
+ * voice works (premade name, library UUID, clone UUID).
  *
  * Synchronous call → Buffer; no polling task, so no reconcile wiring — the
  * reconcile cron only picks up rows with a persisted provider_call_started_at,
@@ -48,14 +58,24 @@ export async function directElevenLabsDialogue(
     requireProviderKey(apiKey, "ELEVENLABS_API_KEY")
   }
 
+  const provider = dialogueProviderOf(options?.provider)
+  const sheet = getDialogueCapabilities(provider)
   const body: Record<string, unknown> = {
     inputs: inputs.map((l) => ({ text: l.text, voice_id: resolveDirectVoiceId(l.voice) })),
-    model_id: "eleven_v3",
+    model_id: dialogueWireModel(provider),
   }
-  if (options?.stability != null) body.settings = { stability: options.stability }
-  // This funnel hardcodes model_id "eleven_v3" (above), so pass that provider
-  // id to the language funnel rather than a caller-supplied one.
-  const languageCode = languageCodeForModel("elevenlabs-v3", options?.languageCode)
+  // Values arrive from every lane exactly as their enqueuer wrote them (only the
+  // route validates): a numeric string becomes its number, out of range is
+  // clamped, anything else is absent — see voice-settings.ts.
+  const stability = sheet.levers.includes("stability") ? normalizeTtsVoiceSetting("stability", options?.stability) : undefined
+  const similarity = sheet.levers.includes("similarity") ? normalizeTtsVoiceSetting("similarityBoost", options?.similarityBoost) : undefined
+  if (stability !== undefined || similarity !== undefined) {
+    const settings: Record<string, number> = {}
+    if (stability !== undefined) settings.stability = stability
+    if (similarity !== undefined) settings.similarity = similarity
+    body.settings = settings
+  }
+  const languageCode = sheet.languageCode ? normalizeElevenLabsLanguageCode(options?.languageCode) : undefined
   if (languageCode) body.language_code = languageCode
   if (options?.seed != null) body.seed = options.seed
   if (options?.applyTextNormalization) body.apply_text_normalization = options.applyTextNormalization
@@ -68,9 +88,8 @@ export async function directElevenLabsDialogue(
       {
         provider: "elevenlabs",
         operation: "dialogue",
-        // Single-purpose funnel → default OUR key inside (production callers
-        // pass no meta); the key mirrors the route's reservation identifier.
-        modelKey: meta?.modelKey ?? "elevenlabs-dialogue",
+        // OUR key: the id the request runs as, which IS the route's reservation identifier.
+        modelKey: meta?.modelKey ?? dialogueModelKey(provider),
         body,
         dimensions: meta?.dimensions ?? {
           characters: inputs.reduce((sum, l) => sum + l.text.length, 0),

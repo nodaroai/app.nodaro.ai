@@ -87,14 +87,11 @@ export type TtsSettingLever = "stability" | "similarity" | "style" | "speed" | "
 
 /**
  * What a speech model (text-to-speech or dialogue) accepts. The ONE source for
- * every "does this model do X" decision on the text-to-speech lane — tag
- * stripping, which voice settings are sent and shown, the language picker, the
- * per-request character cap. Never compare a provider id by hand; read the sheet
- * through the helpers in `tts-capabilities.ts`.
- *
- * The dialogue model carries a sheet for its own lane too, but until that lane
- * is moved onto it only `maxChars` and `languages` of that sheet are read:
- * editing its other fields changes no dialogue request.
+ * every "does this model do X" decision — tag stripping, which voice settings
+ * are sent and shown, the language picker, the per-request character cap. Never
+ * compare a provider id by hand; read the sheet through the helpers in
+ * `tts-capabilities.ts` (the text-to-speech lane) or `dialogue-capabilities.ts`
+ * (the dialogue lane). Each lane's helpers answer only for its own models.
  */
 export interface TtsCapabilities {
   /** Inline `[audio tags]` are performed. false ⇒ strip them before sending (the model reads them aloud). */
@@ -103,6 +100,13 @@ export interface TtsCapabilities {
   ssmlBreaks: boolean
   /** Voice settings the model honours. A lever not listed is never sent and never shown. */
   levers: readonly TtsSettingLever[]
+  /**
+   * The stability values THIS PLATFORM accepts for the model, when it offers
+   * steps instead of a 0–1 range (ascending). Absent ⇒ any value from 0 to 1.
+   * A product choice, not a vendor limit: ElevenLabs takes other values too on
+   * some models; the steps are what our routes validate and our pickers offer.
+   */
+  stabilitySteps?: readonly number[]
   /** The request may carry a language code. false ⇒ the field is omitted. */
   languageCode: boolean
   /**
@@ -2578,6 +2582,9 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
       audioTags: true,
       ssmlBreaks: false,
       levers: ["stability"],
+      // The dialogue route has offered exactly these three since it shipped
+      // (routes/text-to-dialogue.ts). Kept as the platform's v3 dialogue contract.
+      stabilitySteps: [0, 0.5, 1],
       languageCode: true,
       // Total across lines. The documented 2,000 is a recommendation, not a
       // limit (2,500 and 5,000 both probed 200); capped like v3, the model underneath.

@@ -1,4 +1,4 @@
-import { usdToCredits, PARAMETER_NODE_TYPES, withWiredSettings, MUSIC_CREDIT_ID, TEXT_TO_AUDIO_SFX_CREDIT_IDS, textToAudioCreditId, CAMERA_SWITCH_CREDIT_ID, LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec, LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec, videoSfxCreditId, applyEdlCreditId } from "@nodaro/shared"
+import { usdToCredits, PARAMETER_NODE_TYPES, withWiredSettings, MUSIC_CREDIT_ID, TEXT_TO_AUDIO_SFX_CREDIT_IDS, textToAudioCreditId, CAMERA_SWITCH_CREDIT_ID, LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec, LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec, videoSfxCreditId, applyEdlCreditId, dialogueProviderOf } from "@nodaro/shared"
 import { trySettleManagedJob } from "./managed-job-settlement.js"
 import { previewStopsWhenEnabled } from "../../lib/preview-stop-rule.js"
 import { supabase } from "../../lib/supabase.js"
@@ -3763,6 +3763,12 @@ function getNodeModelIdentifier(
   // `apply-edl:proxy`, a final on `apply-edl` — the id the route and the
   // workflow run reserve on. (Mirrors the frontend getModelIdentifier.)
   if (nodeType === "apply-edl") return applyEdlCreditId(data.quality)
+
+  // Text to Dialogue reserves on its dialogue model's own row — the route's
+  // guard and the payload builder both call dialogueProviderOf, so a node with
+  // no (or an unknown) provider is quoted as the v3 dialogue it runs as. ABOVE
+  // the `!provider` bail, which priced it at the node-type row.
+  if (nodeType === "text-to-dialogue") return dialogueProviderOf(data.provider)
 
   const provider = data.provider as string | undefined
   if (!provider) return nodeType

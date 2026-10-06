@@ -1,6 +1,6 @@
 import type { WorkflowNode, WorkflowEdge, FieldMappings, ProbedVideoInfo } from "@/types/nodes"
 import type { SourceNodeInfo } from "./types"
-import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, buildCreditModelIdentifier as sharedBuildCreditModelIdentifier, buildVideoCreditModelIdentifier, isSeedanceVideoEditProvider, seedanceVideoEditCreditId, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS, motionGraphicsFeature, buildScraperCreditId, isScraperActor, metaAdsScrapeCreditIdFromNode, instagramScrapeCreditIdFromNode, captionRoutesToRemotion, resolveAiAvatarCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, buildVideoAuditCreditId, buildEditPlanCreditId, asEditPlanMode, asEditPlanTier, sunoCreditType, speedRampCreditId, applyEdlCreditId, resolveTopazUpscale, applyDefaultVideoSelection, withWiredSettings, MUSIC_CREDIT_ID, contentRecipeCreditId, contentIdeasCreditId, socialSearchCreditIdFromNode, videoSfxCreditId, textToAudioCreditId, LTX_EXTEND_PER_SECOND_CREDIT_ID, LTX_RETAKE_PER_SECOND_CREDIT_ID } from "@nodaro/shared"
+import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, buildCreditModelIdentifier as sharedBuildCreditModelIdentifier, buildVideoCreditModelIdentifier, isSeedanceVideoEditProvider, seedanceVideoEditCreditId, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS, motionGraphicsFeature, buildScraperCreditId, isScraperActor, metaAdsScrapeCreditIdFromNode, instagramScrapeCreditIdFromNode, captionRoutesToRemotion, resolveAiAvatarCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, buildVideoAuditCreditId, buildEditPlanCreditId, asEditPlanMode, asEditPlanTier, sunoCreditType, speedRampCreditId, applyEdlCreditId, resolveTopazUpscale, applyDefaultVideoSelection, withWiredSettings, MUSIC_CREDIT_ID, contentRecipeCreditId, contentIdeasCreditId, socialSearchCreditIdFromNode, videoSfxCreditId, textToAudioCreditId, LTX_EXTEND_PER_SECOND_CREDIT_ID, LTX_RETAKE_PER_SECOND_CREDIT_ID, dialogueProviderOf } from "@nodaro/shared"
 import { videoAuditAnalysisWired } from "@/components/editor/workflow-editor/types"
 import { renderVideoCreditIdForNode } from "@/lib/render-video-plan"
 import { resolveEditPlanEstimateDurationSec } from "@/lib/edit-plan-estimate"
@@ -623,6 +623,13 @@ export function getModelIdentifier(
   if (nodeType === "video-sfx") {
     return videoSfxCreditId(upstreamVideoDurationSec(node.id, "video", nodes ?? [], edges ?? []))
   }
+
+  // Text to Dialogue reserves on its dialogue model's own row — the route's
+  // guard and the orchestrator both call dialogueProviderOf, so a node with no
+  // (or an unknown) provider is quoted as the v3 dialogue it runs as. ABOVE the
+  // `!provider` bail, which quoted the node-type row. Mirror of the backend
+  // estimator's branch (ee/billing/credits.ts).
+  if (nodeType === "text-to-dialogue") return dialogueProviderOf(data.provider)
 
   const provider = data.provider as string | undefined
   if (!provider) return nodeType

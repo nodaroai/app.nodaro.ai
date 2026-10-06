@@ -8,10 +8,9 @@
  * provider id by hand.
  *
  * "The text-to-speech lane" means the models that list the `tts` mode. The
- * dialogue model carries a sheet too, but a text-to-speech request that names it
- * runs as the fallback model, so these helpers answer for the fallback there.
- * (Today only the dialogue sheet's `maxChars` and `languages` are read, by
- * `MAX_TTS_CHARS_BY_PROVIDER` and the language picker.)
+ * dialogue models carry a sheet too, read by `dialogue-capabilities.ts`; a
+ * text-to-speech request that names one runs as the fallback model, so these
+ * helpers answer for the fallback there.
  */
 import { MODEL_CATALOG, type TtsCapabilities, type TtsSettingLever } from "./model-catalog.js"
 

@@ -84,30 +84,37 @@ export const ISO_639_3_TO_1: Readonly<Record<string, string>> = {
 }
 
 /**
- * Resolve the `language_code` to put on an ElevenLabs TTS / dialogue request.
- * Returns `undefined` when the field must be omitted — whether the model takes
- * it is its capability sheet's `languageCode` (today only `elevenlabs-multilingual`
- * says no: the API reference calls out "This parameter is not supported for
- * multilingual_v2 models").
+ * Normalise a caller's language code for an ElevenLabs speech request: empty /
+ * "auto" → undefined (auto-detect); lowercase; drop a region/script subtag;
+ * a known 3-letter code → ISO 639-1. Says nothing about whether the MODEL takes
+ * the field — that is the model's sheet (`languageCode`), asked by the caller.
+ */
+export function normalizeElevenLabsLanguageCode(raw: string | undefined): string | undefined {
+  if (!raw) return undefined
+  const trimmed = raw.trim().toLowerCase()
+  if (!trimmed || trimmed === "auto") return undefined
+  const base = trimmed.split(/[-_]/)[0]
+  if (!base) return undefined
+  if (base.length === 3) return ISO_639_3_TO_1[base] ?? base
+  return base
+}
+
+/**
+ * Resolve the `language_code` for a TEXT-TO-SPEECH request. Returns `undefined`
+ * when the field must be omitted — whether the model takes it is its capability
+ * sheet's `languageCode` (today only `elevenlabs-multilingual` says no: the API
+ * reference calls out "This parameter is not supported for multilingual_v2
+ * models"). The dialogue funnel asks its own sheet (`getDialogueCapabilities`).
  *
- * @param provider Nodaro provider id ("elevenlabs-v3" | "elevenlabs-multilingual"
- *                 | "elevenlabs-turbo" | "elevenlabs" | undefined) — NOT a raw
- *                 ElevenLabs model_id.
+ * @param provider Nodaro text-to-speech provider id — NOT a raw ElevenLabs model_id.
  * @param raw      Whatever the caller passed (free string, possibly 639-3).
  */
 export function languageCodeForModel(
   provider: string | undefined,
   raw: string | undefined,
 ): string | undefined {
-  if (!raw) return undefined
-  const trimmed = raw.trim().toLowerCase()
-  if (!trimmed || trimmed === "auto") return undefined
   // A missing or unknown provider runs as turbo, which takes the field — the
   // same answer the sheet's fallback gives, so no special case is needed.
   if (!getTtsCapabilities(provider).languageCode) return undefined
-
-  const base = trimmed.split(/[-_]/)[0]
-  if (!base) return undefined
-  if (base.length === 3) return ISO_639_3_TO_1[base] ?? base
-  return base
+  return normalizeElevenLabsLanguageCode(raw)
 }

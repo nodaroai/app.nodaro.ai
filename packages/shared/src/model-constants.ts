@@ -1223,6 +1223,18 @@ export const TTS_PROVIDERS = [
 export type TtsProvider = typeof TTS_PROVIDERS[number]
 
 /**
+ * Text-to-dialogue models (the `provider` of `/v1/text-to-dialogue` and of the
+ * Text to Dialogue node). Each IS its catalog id and its credit identifier.
+ * Never members of TTS_PROVIDERS: a dialogue model takes a script of lines, not
+ * one text (`dialogue-capabilities.test.ts` pins both directions).
+ */
+export const DIALOGUE_PROVIDERS = ["elevenlabs-dialogue"] as const
+export type DialogueProvider = typeof DIALOGUE_PROVIDERS[number]
+
+/** The model a dialogue request runs on when its provider is missing or unknown: v3 dialogue (decided 2026-10-04 — v3 stays the default). */
+export const DEFAULT_DIALOGUE_PROVIDER: DialogueProvider = "elevenlabs-dialogue"
+
+/**
  * The speech model a request runs on when it names none — ElevenLabs v4 since the
  * default flip (decided 2026-10-05; v3 stays selectable). The REST route's credit
  * guard and handler, the workflow engine's text-to-speech dispatch, the worker's

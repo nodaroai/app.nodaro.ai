@@ -55,7 +55,7 @@ const ROOTS = [
 const MAY_NAME_THE_IDS: Readonly<Record<string, string>> = {
   "backend/src/ee/billing/credits.ts": "STATIC_CREDIT_COSTS — the price table",
   "backend/src/lib/mcp/tools/verbs-audio.ts": "generate_speech's tool copy describes each model (its default is DEFAULT_TTS_PROVIDER)",
-  "backend/src/providers/elevenlabs/direct-dialogue.ts": "dialogue resolves its language code through the v3 sheet (its own lane, until it moves onto the sheet)",
+  "backend/src/providers/elevenlabs/dialogue-models.ts": "the dialogue wire-model table: each dialogue model's text-to-speech twin",
   "backend/src/providers/elevenlabs/tts-models.ts": "the wire-model table",
   "backend/src/routes/voices.ts": "the Voice Library's verified-provider order",
   "frontend/src/components/editor/config-panels/audio-configs.tsx": "the panel shows the legacy `elevenlabs` id as v3 (a known display mismatch, unchanged), and Voice Design's v3 model reads the v3 sheet",

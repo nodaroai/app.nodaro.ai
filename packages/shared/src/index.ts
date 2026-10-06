@@ -87,6 +87,8 @@ export {
   MOTION_TRANSFER_PROVIDERS,
   TTS_PROVIDERS,
   DEFAULT_TTS_PROVIDER,
+  DIALOGUE_PROVIDERS,
+  DEFAULT_DIALOGUE_PROVIDER,
   TEXT_TO_AUDIO_PROVIDERS,
   DEFAULT_TEXT_TO_AUDIO_PROVIDER,
   MUSIC_PROVIDERS,
@@ -222,6 +224,7 @@ export type {
   LipSyncProvider,
   MotionTransferProviderType,
   TtsProvider,
+  DialogueProvider,
   TextToAudioProvider,
   MusicProvider,
   TranscribeProvider,
@@ -1241,6 +1244,16 @@ export {
   ttsHasLever,
   ttsLanguageCodes,
 } from "./tts-capabilities.js"
+
+// The dialogue lane's lookups: answer only for dialogue models; an unknown id
+// runs as DEFAULT_DIALOGUE_PROVIDER (v3 dialogue).
+export {
+  findDialogueCapabilities,
+  dialogueProviderOf,
+  getDialogueCapabilities,
+  dialogueHasLever,
+  dialogueStabilityAccepted,
+} from "./dialogue-capabilities.js"
 
 // Per-model safety-filter retry/fallback policy (derives from
 // `ModelCatalogEntry.safetyFilter` above).
