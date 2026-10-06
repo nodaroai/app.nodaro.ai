@@ -184,7 +184,7 @@ overridable.
 | `GET`  | `/v1/api/workflows` | List workflows your token can run. Supports `?limit=` and `?cursor=` pagination. |
 | `GET`  | `/v1/api/schema?workflowId=…` | Inspect a workflow's input fields and output handles before running it. Includes `estimatedCredits`. |
 | `POST` | `/v1/api/run` | Execute a workflow. Optionally pass `inputs` to override input-node values. Supports `?wait=true&timeout=…` for sync mode. |
-| `GET`  | `/v1/api/status/:execId` | Poll a running execution. Returns `status`, progress counts, and credits used. |
+| `GET`  | `/v1/api/status/:execId` | Poll a running execution. Returns `status`, progress counts, credits used and, once completed, `outcome` (see [Runs that find nothing new](#runs-that-find-nothing-new)). |
 | `GET`  | `/v1/api/result/:execId` | Fetch the final outputs once `status` is `completed` or `failed`. |
 
 All responses use the same envelope: success returns the payload directly
@@ -338,6 +338,7 @@ A successful `result` response looks like:
 {
   "executionId": "…",
   "status": "completed",
+  "outcome": "succeeded",
   "creditsUsed": 4,
   "durationMs": 12450,
   "errorMessage": null,
@@ -581,6 +582,33 @@ POST /v1/api/run?wait=true&timeout=120
 Recommended cutoff: use sync for workflows you expect to finish in under
 a minute (text generation, light image work). For multi-step workflows
 that include video rendering or upscaling, use async.
+
+<a id="runs-that-find-nothing-new"></a>
+### Runs that find nothing new
+
+A scheduled run often has nothing to do: the feed it polls has no new posts, so
+the writer behind it would be asked to write about nothing. Such a run **ends
+`completed`, not `failed`.** A node that sends text to a model or a voice
+(Generate Text, Generate Script, Text to Speech, Generate Music, Text to Audio)
+is skipped when the text it would send is empty and that text came from a node
+which, in this run, produced nothing — and the nodes behind it are skipped with
+it. Nothing is billed for a skipped node.
+
+Where that shows:
+
+- `/v1/api/status/:execId` and `/v1/api/result/:execId` (and the
+  `?wait=true` answer) carry `"outcome": "nothing_new"` once the run completes;
+  every other completed run says `"succeeded"`. A failed or cancelled run has
+  no `outcome`, only its `status`. `errorMessage` stays `null` — nothing went
+  wrong.
+- In `GET /v1/workflow-executions/:id`, the skipped node's entry in
+  `nodeStates` reads `{ "status": "skipped", "skipReason": "empty_input" }`. A
+  node skipped by a Router's inactive route carries no `skipReason`, as before.
+- A Telegram Channel Feed that returns no new posts is not charged.
+
+A node with a typed prompt still runs on an empty wire (its prompt is the
+request), and a node with no wire at all still fails with the validation error
+it always had — only a wire that carried nothing in this run counts.
 
 Linked-frame canvas nodes require the Studio production generation API. The
 canvas workflow-run endpoint and direct media requests that identify a saved

@@ -730,6 +730,57 @@ describe("get_app_run tool", () => {
     expect(result.content[0]?.text).not.toMatch(/invalid input syntax/)
     expect(supabase.from).not.toHaveBeenCalled()
   })
+
+  it("reads the whole run: outcome, every node's text / media / skip reason, the labels from the workflow, and the output URLs", async () => {
+    const execution = {
+      id: JOB_UUID,
+      status: "completed",
+      workflow_id: JOB_UUID_2,
+      error_message: null,
+      user_id: "u1",
+      node_states: {
+        feed: { status: "completed", nodeType: "telegram-channel-feed", output: { text: "" } },
+        llm: { status: "skipped", nodeType: "llm-chat", skipReason: "empty_input" },
+        img: { status: "completed", nodeType: "generate-image", jobId: "job-img", output: { imageUrl: "https://cdn.test/a.png", imageUrls: ["https://cdn.test/a.png", "https://cdn.test/b.png"] } },
+      },
+    }
+    const workflow = { nodes: [{ id: "feed", type: "telegram-channel-feed", data: { label: "Tech news" } }, { id: "llm", type: "llm-chat", data: { label: "Writer" } }, { id: "img", type: "generate-image", data: { label: "Cover" } }] }
+    ;(supabase.from as unknown as ReturnType<typeof vi.fn>)
+      .mockReturnValueOnce(makeChainableSingle(execution))
+      .mockReturnValueOnce(makeChainableSingle(workflow))
+      .mockReturnValueOnce(makeChainable([{ id: "job-img", input_data: { prompt: "a cover", provider: "gpt-image-2" }, provider: "gpt-image-2", completed_at: "2026-10-06T10:00:00Z", created_at: "2026-10-06T09:59:00Z" }]))
+    const server = buildServer()
+    registerGallery({ server, session: readSession(), fastify: Fastify() })
+    const result = await callTool(server, "get_app_run", { execution_id: JOB_UUID })
+    expect(result.isError).toBeUndefined()
+    const sc = result.structuredContent as {
+      status: string
+      outcome?: string
+      errorMessage: string | null
+      summary: { total: number; completed: number; skipped: number; skippedForEmptyInput: number }
+      nodeStates: Array<{ id: string; label?: string; status: string; skipReason?: string; media?: Array<{ kind: string; url: string }> }>
+      outputs: Array<{ kind: string; url: string; prompt?: string; model?: string }>
+    }
+    expect(sc.status).toBe("completed")
+    expect(sc.outcome).toBe("nothing_new")
+    expect(sc.errorMessage).toBeNull()
+    expect(sc.summary).toMatchObject({ total: 3, completed: 2, skipped: 1, skippedForEmptyInput: 1 })
+    expect(sc.nodeStates.map((n) => [n.id, n.label, n.status])).toEqual([
+      ["feed", "Tech news", "completed"],
+      ["llm", "Writer", "skipped"],
+      ["img", "Cover", "completed"],
+    ])
+    expect(sc.nodeStates[1]?.skipReason).toBe("empty_input")
+    expect(sc.nodeStates[2]?.media).toEqual([
+      { kind: "image", url: "https://cdn.test/a.png" },
+      { kind: "image", url: "https://cdn.test/b.png" },
+    ])
+    // Every media URL is an output, enriched from its job.
+    expect(sc.outputs.map((o) => o.url)).toEqual(["https://cdn.test/a.png", "https://cdn.test/b.png"])
+    expect(sc.outputs[0]).toMatchObject({ kind: "image", prompt: "a cover", model: "gpt-image-2" })
+    // The text reply carries the same reading.
+    expect(result.content[0]?.text).toContain('"outcome": "nothing_new"')
+  })
 })
 
 describe("favorite_asset tool", () => {

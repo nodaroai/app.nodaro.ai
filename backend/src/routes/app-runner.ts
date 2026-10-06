@@ -1,3 +1,4 @@
+import { executionOutcome } from "@nodaro/shared"
 /**
  * App Runner routes — consumer-facing endpoints for running published apps.
  * GET    /v1/app/:slug          — Load published app (public, auth optional)
@@ -860,6 +861,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
         ? {
             id: exec.id,
             status: exec.status,
+            outcome: executionOutcome(exec.status, exec.node_states as Record<string, { status?: unknown; skipReason?: unknown }> | null),
             nodeStates: mergeNodeStates(exec.node_states, (run as { node_states?: unknown }).node_states),
             totalNodes: exec.total_nodes,
             completedNodes: exec.completed_nodes,

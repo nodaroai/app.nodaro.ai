@@ -51,6 +51,10 @@ export const EXECUTION_DATA_KEYS: ReadonlySet<string> = new Set([
   // List fan-out window flag (abandon-guard exemption). Set/cleared by
   // executeNodeForList — purely execution-related, never user-edited.
   "__listRunning",
+  // Why the last server run skipped this node (`empty_input`): a chip on the
+  // card for the run that just ended, never a saved result — also in
+  // TRANSIENT_RUNTIME_KEYS below.
+  "__runSkipReason",
   // One token per paid run still out on this node that no executor mark
   // covers (the editor's `withRunInFlight`, around each paid call outside the
   // executors). Purely execution-related, never user-edited; also in
@@ -163,6 +167,7 @@ export const TRANSIENT_RUNTIME_KEYS: ReadonlySet<string> = new Set([
   "__listTotal",
   "__listCompleted",
   "__listRunning",
+  "__runSkipReason",
   // A paid run still out, held by the editor tab that started it. Never
   // saved, so a reload, which has no such run, starts without one.
   "__runsInFlight",

@@ -102,7 +102,11 @@ export async function telegramChannelRoutes(app: FastifyInstance): Promise<void>
         })
         .eq("id", job.id)
         .eq("user_id", userId)
-      await commitReservedCreditsForJob(job.id)
+      // A fetch that found nothing new is not charged (decided 2026-10-05): the
+      // reservation is given back and the row stays completed with count 0, so
+      // a scheduled feed that polls an idle channel costs the person nothing.
+      if (capped.length === 0) await refundReservedCreditsForJob(job.id)
+      else await commitReservedCreditsForJob(job.id)
 
       return {
         jobId: job.id,

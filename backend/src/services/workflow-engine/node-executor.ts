@@ -37,7 +37,7 @@ import { videoAnalysisPostDuration } from "./video-analysis-post-probe.js"
 import { executeCombineText, executeSplitText, executeComposite, executeWebhookOutput, executePreview, executeTeleporterPassthrough, executeRouter, executeExtractField, executeJsonProcess, executeFilterList, executeDeduplicateList, executeMergeLists, executeSortList, executeSelector } from "./inline-executor.js"
 import { executeSubWorkflow } from "./sub-workflow-handler.js"
 import { mergeExposedSettings, applyHandleInputOverride, isHandleInputWired, resolveNodeRefs, SOCIAL_POST_NODE_TYPES, isSeedance2Provider, pricedOutputDurationSec, isMinimaxH3Provider, readPromptAffixes, WORKSPACE_HEADER_LOWER, metaAdsScrapeWireSources, splitInstagramTargets, instagramScrapeMode } from "@nodaro/shared"
-import { computeLlmChatFields, computeNodePrompt, pickerFanoutTargets, applyPromptAffixes } from "@nodaro/prompts"
+import { computeAiWriterInput, computeLlmChatFields, computeNodePrompt, pickerFanoutTargets, applyPromptAffixes } from "@nodaro/prompts"
 import type { ComponentMetadata } from "@nodaro/shared"
 import { getAppSettings } from "../../lib/app-settings.js"
 import { videoUtilityBaseCredits } from "../../lib/video-utility-credits.js"
@@ -836,7 +836,8 @@ export function buildSyncHttpBody(
     case "ai-writer":
       return withUserPrompt({
         systemPrompt: data.systemPrompt || data.template,
-        userInput: resolvedInputs.prompt || data.userInput || data.prompt,
+        // The one rule (@nodaro/prompts): the orchestrator's empty-input skip asks the same function.
+        userInput: computeAiWriterInput(data as Record<string, unknown>, { wired: resolvedInputs.prompt }),
         userId: ctx.userId,
         ...llmNodeParams(data),
         temperature: data.temperature ?? 0.7,

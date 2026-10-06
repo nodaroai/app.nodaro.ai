@@ -1489,6 +1489,26 @@ nodeStateMayCarryOutput(node.status) // "completed" | "failed" → true
 `OUTPUT_BEARING_NODE_STATUSES` (the same two statuses, as a `Set`) and the
 `NodeExecutionStatus` union are exported beside it.
 
+**`outcome` and `skipReason`.** A run that found nothing new ends `completed`,
+not `failed` (see [Runs that find nothing new](./api-integration.md#runs-that-find-nothing-new)):
+a text-requiring node whose wired text came from a node that produced nothing
+in this run is skipped with `nodeStates[id].skipReason === "empty_input"`, and
+the run carries `outcome: "nothing_new"` once it completes (`"succeeded"`
+otherwise; absent until then, and on an older server). The rule the server
+derives it with is exported, for a row you already hold:
+
+```ts
+import { executionOutcome, countEmptyInputSkips } from "@nodaro/sdk"
+
+const { data } = await client.executions.get(executionId)
+if (data.outcome === "nothing_new") {
+  console.log(`nothing new — ${countEmptyInputSkips(data.nodeStates)} node(s) had nothing to work on`)
+}
+executionOutcome(data.status, data.nodeStates) // the same answer, derived client-side
+```
+
+`WorkflowExecutionSummary` (from `listForWorkflow`) carries the same `outcome`.
+
 #### `listForWorkflow(workflowId, params?)`
 
 ```ts

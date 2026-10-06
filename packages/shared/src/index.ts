@@ -1439,7 +1439,10 @@ export {
 export type {
   NodeExecutionStatus,
   NodeExecutionStateWire,
+  NodeSkipReason,
 } from "./node-execution-state.js"
+export { executionOutcome, countEmptyInputSkips } from "./execution-outcome.js"
+export type { ExecutionOutcome } from "./execution-outcome.js"
 
 export {
   MODEL_PARAM_NODE_TYPES,

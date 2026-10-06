@@ -552,6 +552,8 @@ const GET_ASSET_PREVIEW_FLAG_BYTES = 29
 // against a 392_441 B budget — the 29 B above were measured on an older tree, and the live
 // delta of the `preview` field is 43 B. Carried as its own line so the correction stays visible.
 const GET_ASSET_PREVIEW_FLAG_CORRECTION_BYTES = 14
+// get_app_run reads the whole run: outcome, error, summary, per-node text / media / skipReason (1b).
+const GET_APP_RUN_OUTCOME_BYTES = 1_072 // measured: 393_485 total − 392_413 before (outcome, errorMessage, summary, per-node text / media / skipReason)
 // RAISED by ONE argument and nothing else: `caption_style` on `build_ugc_cards`
 // (how the captions after the opening line look — word by word, karaoke, plain
 // subtitles or none; the builder takes it as `captionStyle`). No tool was added,
@@ -616,6 +618,7 @@ export const TOOL_WIRE_BUDGET = {
     ELEVENLABS_V4_DEFAULT_WORDING_BYTES +
     GET_ASSET_PREVIEW_FLAG_BYTES +
     GET_ASSET_PREVIEW_FLAG_CORRECTION_BYTES +
+    GET_APP_RUN_OUTCOME_BYTES +
     UGC_CARDS_CAPTION_STYLE_BYTES,
 }
 

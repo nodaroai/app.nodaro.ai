@@ -78,6 +78,8 @@ interface ActiveBackendExecution {
 }
 
 interface NodeExecutionState {
+  /** Why the RUN skipped this node (`empty_input`); absent on a router-gated one. */
+  skipReason?: string
   status: "pending" | "running" | "completed" | "failed" | "skipped"
   /** The backend job this node ran as. Recorded onto a recovered scene
    *  revision so a later `{kind:'scene'}` source can name its run. */
@@ -471,6 +473,13 @@ export function applyBackendExecutionState(
     if (!state) return node
 
     const data = { ...(node.data as Record<string, unknown>) }
+
+    // A node the RUN skipped for want of input: it settles idle and wears the
+    // reason as a chip (`__runSkipReason`, transient — never saved); a
+    // router-gated skip carries no reason and is left as it was.
+    if (state.status === "skipped" && state.skipReason) {
+      return { ...node, data: { ...data, executionStatus: "idle", __runSkipReason: state.skipReason } as SceneNodeData }
+    }
 
     // Map backend status → frontend executionStatus
     if (state.status === "completed") {

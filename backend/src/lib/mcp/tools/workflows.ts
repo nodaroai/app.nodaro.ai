@@ -988,7 +988,12 @@ export function registerWorkflows({
           content: [
             {
               type: "text" as const,
-              text: `Started workflow execution ${executionId}.`,
+              text:
+                `Started workflow execution ${executionId}. ` +
+                `Read it with get_app_run(execution_id) — this is an EXECUTION id, not a job id (get_job will not find it): ` +
+                `it lists every node's status, text and media, and the run's outcome once it completes ` +
+                `("nothing_new" when the nodes had nothing to work on — a feed with no new posts — and nothing failed). ` +
+                `While the flow is open in the editor the run shows on the canvas live; otherwise its results land on the next open.`,
             },
           ],
           structuredContent: { executionId, name: workflowName },

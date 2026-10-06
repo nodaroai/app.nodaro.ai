@@ -7281,6 +7281,13 @@ export interface WorkflowExecution {
   kind?: 'execution' | 'job'
   workflowId: string
   status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'timed_out' | 'stopping' | 'discarded'
+  /**
+   * How a completed run ended: "nothing_new" when a node was skipped for want
+   * of input (its nodeStates entry carries skipReason "empty_input"),
+   * "succeeded" otherwise; absent until it completes. Derived by the server
+   * (executionOutcome, @nodaro/shared) — never stored.
+   */
+  outcome?: 'succeeded' | 'nothing_new'
   triggerType: 'manual' | 'webhook' | 'schedule' | 'telegram' | 'telegram_account' | 'api' | 'single-node' | 'app_run' | 'mcp'
   /** MCP client name (e.g. "Claude", "Cursor") when the execution was triggered via the MCP server. */
   mcpClient?: string | null
@@ -7912,6 +7919,8 @@ export async function getSharedExecutionStatus(
   failed_nodes: number
   total_credits_used: number
   error_message: string | null
+  /** See WorkflowExecution.outcome. */
+  outcome?: 'succeeded' | 'nothing_new'
 }> {
   return apiRequest(
     `/v1/present/${encodeURIComponent(token)}/status/${encodeURIComponent(execId)}`,
@@ -8382,6 +8391,8 @@ export interface AppRun {
   // Nested execution from detail endpoint
   execution?: {
     status: string
+    /** See WorkflowExecution.outcome. */
+    outcome?: 'succeeded' | 'nothing_new'
     nodeStates: Record<string, unknown>
     totalNodes: number
     completedNodes: number
@@ -8748,6 +8759,8 @@ export async function getAppExecutionStatus(execId: string): Promise<{
   completed_nodes: number
   failed_nodes: number
   error_message: string | null
+  /** See WorkflowExecution.outcome. */
+  outcome?: 'succeeded' | 'nothing_new'
 }> {
   const res = await apiRequest<{ data: Record<string, unknown> }>(
     `/v1/workflow-executions/${encodeURIComponent(execId)}`,
@@ -8761,6 +8774,7 @@ export async function getAppExecutionStatus(execId: string): Promise<{
     completed_nodes: (d.completedNodes ?? 0) as number,
     failed_nodes: (d.failedNodes ?? 0) as number,
     error_message: (d.errorMessage ?? null) as string | null,
+    outcome: d.outcome as 'succeeded' | 'nothing_new' | undefined,
   }
 }
 

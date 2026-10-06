@@ -56,6 +56,7 @@ const EXEMPT: ReadonlyMap<string, string> = new Map([
   ["ee/routes/copilot.ts::workflows", "the thread's context graph, read through the copilot views that drop generated output"],
   ["ee/pipelines/services/canvas-materializer.ts::workflows", "appends a pipeline node and writes the array back as stored; hands nothing out"],
   ["lib/credential-gate.ts::workflows", "reads credential references only"],
+  ["lib/mcp/tools/gallery.ts::workflows", "get_app_run names a run's node states by the workflow's labels and types; what it hands out comes from the execution's node_states, never from saved node results"],
   ["lib/schedule-cron.ts::workflows", "reads Schedule Trigger configuration only"],
   ["lib/preview-fire-refusal.ts::workflows", "reads the graph only to decide whether a fire is refused at a Preview render; hands no node out"],
   ["routes/api-tokens.ts::workflows", "the token API derives a workflow's inputs, outputs and sub-workflow names; run results come from executions, never from saved node results"],

@@ -104,3 +104,6 @@ export * from "./ad-creative-analysis.js"
 
 // --- Picker art: option pictures + topic icons (editor and API) ---
 export * from "./picker-art/index.js"
+
+// --- What a text-requiring node would send (the orchestrator's empty-input skip reads it) ---
+export * from "./node-send-text.js"

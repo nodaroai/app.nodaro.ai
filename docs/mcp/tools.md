@@ -519,9 +519,13 @@ registers an async task for progress tracking.
 | `client_request_id` | string | Optional retry token (8–128 chars of letters, digits, `_ - . :`). Reuse the same value when retrying after a timeout or dropped connection so the run is not started or charged twice; use a fresh value for a new run |
 | `inputs` | object | Optional; per-node input overrides keyed by node id |
 
-**Response:** `{ executionId: "...", name: "..." }` — use `executionId` with
-the jobs/executions tools or the SDK to poll for completion. MCP clients that
-support the `tasks/*` API and widget rendering will show live progress inline.
+**Response:** `{ executionId: "...", name: "..." }` — read the run with
+[`get_app_run(execution_id)`](#get_app_run): it is an **execution** id, not a job
+id (`get_job` will not find it), and `get_app_run` returns every node's status,
+text and media, why a node was skipped, and the run's `outcome` once it
+completes (`"nothing_new"` when the nodes had nothing to work on — a feed with
+no new posts — and nothing failed). MCP clients that support the `tasks/*` API
+and widget rendering will show live progress inline.
 
 A workflow whose Apply EDL render is set to **Proxy** stops at that preview for
 a person to review in the editor. An MCP run has nobody to review it, so it is
@@ -1339,11 +1343,28 @@ rendering) prefer `get_asset`.
 
 **Scope:** `assets:read`
 
-Fetch status of a workflow / published-app execution by id. Returns
-per-node states and output URLs produced so far. Used by widgets to poll
-progress.
+Read a workflow / published-app run by its **execution id** — the id
+`run_workflow` and `run_app` return (not a job id: `get_job` will not find it).
+Poll it every 5–10 s while the run is `pending` or `running`; the workflow and
+app-run widgets do.
 
 **Input:** `{ execution_id: string }`
+
+**Response (structuredContent):** `executionId`, `status`, `errorMessage`,
+`summary` (`total`, `completed`, `failed`, `skipped`, `skippedForEmptyInput`),
+`nodeStates[]` — one entry per node, in the workflow's order: `id`, `label`,
+`nodeType`, `status`, `skipReason` (why the run skipped it — `"empty_input"`:
+nothing reached its input in this run; absent on a router-gated node), `error`,
+`jobId`, `text` (the node's text output, cut at 1,500 characters —
+`textTruncated: true` when it was) and `media[]` (every image, video and audio
+URL the node produced, `{ kind, url }`) — and `outputs[]`, every media URL
+across the run with the source job's `prompt`, `model` and `createdAt`.
+
+Once the run completes it also carries `outcome`: `"nothing_new"` when at least
+one node was skipped for want of input and nothing failed — a feed that found no
+new posts, a writer with nothing to write — else `"succeeded"`. A failed or
+cancelled run has a `status`, not an outcome. See
+[Runs that find nothing new](../api-integration.md#runs-that-find-nothing-new).
 
 ---
 
@@ -1460,6 +1481,12 @@ remediation hint. Classes are heuristic (derived from the stored error string,
 not the error type), so treat them as guidance. Reserved credits are
 auto-refunded except for `post_processing` (post-delivery) failures; check
 `creditsActual` per node.
+
+A completed run also reports its `outcome` (`"succeeded"` or `"nothing_new"` —
+see [`get_app_run`](#get_app_run)), and a node in `nodes[]` that the run skipped
+for want of input carries `skipReason: "empty_input"` (absent on every other
+node). A run that found nothing new has no failures to diagnose: nothing
+went wrong, there was nothing to work on.
 
 **Input:** `{ id: string }` (a workflow execution id or a job id)
 

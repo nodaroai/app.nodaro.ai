@@ -21,6 +21,8 @@ interface NodeState {
   status: "pending" | "running" | "completed" | "failed" | "skipped"
   output?: Record<string, unknown>
   error?: string
+  /** Why the RUN skipped the node (`empty_input`); absent on a router-gated one. */
+  skipReason?: string
 }
 
 interface PresentationState {

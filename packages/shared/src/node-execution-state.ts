@@ -35,6 +35,17 @@ export type NodeExecutionStatus =
   | "skipped"
 
 /**
+ * Why a node was skipped at run time, when the run itself decided it (never
+ * for a node the person froze with Skip, which is a saved-data seed):
+ *   - `empty_input` — a text-requiring node whose wired text came from a node
+ *     that, in this run, produced nothing (a feed that found no new posts). A
+ *     completed run with one such skip reads as "nothing new"
+ *     (execution-outcome.ts).
+ * A router-gated node carries no reason, as before.
+ */
+export type NodeSkipReason = "empty_input"
+
+/**
  * The statuses whose node state MAY carry `output`.
  *
  * `completed` is the obvious one. `failed` is here because a run can refuse
@@ -92,4 +103,6 @@ export interface NodeExecutionStateWire<TOutput = Record<string, unknown>> {
   /** The node's job is parked in `pending_review`; `status` stays "running". */
   awaitingReview?: boolean
   progress?: number
+  /** Present on a `skipped` node the RUN skipped (see {@link NodeSkipReason}); absent on a router-gated one. */
+  skipReason?: NodeSkipReason | (string & {})
 }

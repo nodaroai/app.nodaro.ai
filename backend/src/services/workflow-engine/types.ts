@@ -6,7 +6,7 @@ import type { MediaItem } from "../social/platforms/index.js"
 import type { BillingContext } from "../../lib/billing-context.js"
 import type { Caption } from "@remotion/captions"
 import type { ErrorHint } from "../../lib/safety-block.js"
-import type { NodeExecutionStatus, NodeExecutionStateWire, VideoOverlayWarning, RenderQuality, RunResultRowStamp } from "@nodaro/shared"
+import type { NodeExecutionStatus, NodeExecutionStateWire, NodeSkipReason, VideoOverlayWarning, RenderQuality, RunResultRowStamp } from "@nodaro/shared"
 
 // ---------------------------------------------------------------------------
 // Node execution state (stored in workflow_executions.node_states JSONB)
@@ -225,6 +225,8 @@ export interface NodeExecutionState {
    *  Skip, a node outside a partial run's subset. Only then may a reader fall
    *  back to the node's saved results — see `saved-data.ts`. */
   fromSavedData?: true
+  /** Why the RUN skipped this node (`empty-input-skips.ts`); a router-gated node carries none. */
+  skipReason?: NodeSkipReason
 }
 
 /**

@@ -249,7 +249,7 @@ function BaseNodeComponent({
   // applyNodeChanges / onNodesChange). Subscribing to it lets the floor-clamp
   // effect re-fire once RF completes the first measurement of a new node,
   // instead of prematurely pinning the node before measurement arrives.
-  const { zoom, visualW, visualH, measuredH, isSkipped, isPending, quickStripPinned, hasActivePreset, nodeType } = useWorkflowStore(
+  const { zoom, visualW, visualH, measuredH, isSkipped, isPending, quickStripPinned, hasActivePreset, nodeType, runSkipReason } = useWorkflowStore(
     useShallow((s) => {
       const node = s.nodes.find((n) => n.id === id)
       const data = node?.data as Record<string, unknown> | undefined
@@ -261,6 +261,8 @@ function BaseNodeComponent({
         visualH: node?.height,
         measuredH: node?.measured?.height,
         isSkipped: !!data?.skipped,
+        // Why the last server run skipped this node (a chip; cleared when it runs again).
+        runSkipReason: typeof data?.__runSkipReason === "string" ? (data.__runSkipReason as string) : undefined,
         isPending: data?.executionStatus === "pending",
         quickStripPinned: s.quickStripPinnedNodeId === id,
         // A node with a preset applied keeps its preset pill visible (not just on hover)
@@ -737,7 +739,7 @@ function BaseNodeComponent({
       {/* "After Render final" on a node a Preview render gates: every card,
           no prop, derived from the graph. */}
       <NodePreviewGateChip nodeId={id} />
-      {(!hideHeader || isSkipped) && (
+      {(!hideHeader || isSkipped || !!runSkipReason) && (
         <div
           className={cn(
             "flex items-center gap-2 px-3 py-1.5 rounded-t-md font-sans text-[11px]",
@@ -805,6 +807,14 @@ function BaseNodeComponent({
           {isSkipped && (
             <span className="font-mono text-[9px] font-bold px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-300 border border-orange-500/30">
               {t("node.skipBadge")}
+            </span>
+          )}
+          {runSkipReason === "empty_input" && (
+            <span
+              title={t("node.skippedEmptyInputTitle")}
+              className="font-mono text-[9px] px-1.5 py-0.5 rounded bg-slate-500/15 text-slate-400 border border-slate-500/25"
+            >
+              {t("node.skippedEmptyInputChip")}
             </span>
           )}
         </div>

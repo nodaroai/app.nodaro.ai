@@ -34,12 +34,14 @@ vi.mock("../../middleware/credit-guard.js", () => ({
   reserveCreditsForJob: async () => ({ usageLogId: "usage-1" }),
 }))
 
+const commitReservedCreditsForJob = vi.fn(async (_jobId: string) => {})
+const refundReservedCreditsForJob = vi.fn(async (_jobId: string) => 0)
 vi.mock("../../lib/credits-job-lifecycle.js", () => ({
-  commitReservedCreditsForJob: async () => {},
-  refundReservedCreditsForJob: async () => 0,
+  commitReservedCreditsForJob: (jobId: string) => commitReservedCreditsForJob(jobId),
+  refundReservedCreditsForJob: (jobId: string) => refundReservedCreditsForJob(jobId),
 }))
 
-const fetchChannelPosts = vi.fn(async () => [
+const fetchChannelPosts = vi.fn(async (): Promise<Array<{ id: number; text: string }>> => [
   { id: 10, text: "first post" },
   { id: 11, text: "second post" },
 ])
@@ -55,6 +57,8 @@ let app: FastifyInstance
 
 beforeEach(async () => {
   jobUpdates = []
+  commitReservedCreditsForJob.mockClear()
+  refundReservedCreditsForJob.mockClear()
   app = Fastify({ logger: false })
   app.addHook("onRequest", async (req) => {
     ;(req as { userId?: string }).userId = "user-1"
@@ -86,6 +90,26 @@ describe("POST /v1/telegram-channel/fetch", () => {
     expect(output.generatedText, "output_data must carry the text for the poll branch").toContain("first post")
     expect(output.text).toContain("second post")
     expect(output.latestId).toBe(11)
+  })
+
+  it("a fetch that found nothing new is not charged: the reservation is refunded, the row still completes with count 0", async () => {
+    fetchChannelPosts.mockResolvedValueOnce([])
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/telegram-channel/fetch",
+      payload: { channel: "@somechannel", limit: 5 },
+    })
+    expect(res.statusCode).toBe(200)
+    const completion = jobUpdates.find((u) => u.status === "completed")
+    expect(completion?.output_data).toMatchObject({ count: 0, text: "" })
+    expect(refundReservedCreditsForJob).toHaveBeenCalledWith("job-1")
+    expect(commitReservedCreditsForJob).not.toHaveBeenCalled()
+  })
+
+  it("a fetch with posts commits the reservation", async () => {
+    await app.inject({ method: "POST", url: "/v1/telegram-channel/fetch", payload: { channel: "@somechannel", limit: 5 } })
+    expect(commitReservedCreditsForJob).toHaveBeenCalledWith("job-1")
+    expect(refundReservedCreditsForJob).not.toHaveBeenCalled()
   })
 
   it("returns a jobId, the response shape that selects the poll branch", async () => {

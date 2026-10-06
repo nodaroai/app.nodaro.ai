@@ -180,6 +180,80 @@ export function computeRouterGatedIds(
   return gatedIds
 }
 
+/** Why a node is gated out of a run: every wire into it is dead. */
+export type GateReason = "router" | "empty_input"
+
+/**
+ * The router gate, generalized: a node is gated when ALL its incoming edges
+ * come from an inactive router handle, from a node the RUN skipped (a
+ * `skipped` state without `fromSavedData` — a frozen node is a seed, not a
+ * dead source), or from another gated node. The reason is `empty_input` when
+ * any of what starved it was skipped for want of input (so the gate carries
+ * the "nothing new" verdict downstream), else `router`. Called before each
+ * level, like `computeRouterGatedIds`, which it supersedes in the
+ * orchestrator; that function stays for its other readers.
+ */
+export function computeGatedIds(
+  nodes: SimpleNode[],
+  edges: SimpleEdge[],
+  nodeStates: Record<string, NodeExecutionState>,
+): Map<string, GateReason> {
+  const inactiveHandles = new Set<string>()
+  for (const node of nodes) {
+    if (node.type !== "router") continue
+    const state = nodeStates[node.id]
+    if (!state || state.status !== "completed" || !state.output) continue
+    const routeOutputs = state.output.routeOutputs
+    if (!routeOutputs) continue
+    for (const routeId of Object.keys(routeOutputs)) {
+      if (routeOutputs[routeId] === undefined) inactiveHandles.add(`${node.id}:${routeId}`)
+    }
+  }
+  const gated = new Map<string, GateReason>()
+  for (const node of nodes) {
+    const state = nodeStates[node.id]
+    if (state?.status === "skipped" && !state.fromSavedData) {
+      gated.set(node.id, state.skipReason === "empty_input" ? "empty_input" : "router")
+    }
+  }
+  if (inactiveHandles.size === 0 && gated.size === 0) return new Map()
+
+  const incomingEdges = new Map<string, SimpleEdge[]>()
+  for (const edge of edges) {
+    const list = incomingEdges.get(edge.target) ?? []
+    list.push(edge)
+    incomingEdges.set(edge.target, list)
+  }
+
+  let changed = true
+  while (changed) {
+    changed = false
+    for (const node of nodes) {
+      if (gated.has(node.id)) continue
+      const incoming = incomingEdges.get(node.id)
+      if (!incoming || incoming.length === 0) continue
+      let reason: GateReason = "router"
+      const allDead = incoming.every((edge) => {
+        if (inactiveHandles.has(`${edge.source}:${edge.sourceHandle ?? ""}`)) return true
+        const upstream = gated.get(edge.source)
+        if (upstream === undefined) return false
+        if (upstream === "empty_input") reason = "empty_input"
+        return true
+      })
+      if (allDead) {
+        gated.set(node.id, reason)
+        changed = true
+      }
+    }
+  }
+  // The dead sources themselves are already skipped; the callers want the newly gated nodes.
+  for (const node of nodes) {
+    const state = nodeStates[node.id]
+    if (state?.status === "skipped" && !state.fromSavedData) gated.delete(node.id)
+  }
+  return gated
+}
+
 // ---------------------------------------------------------------------------
 // Source node detection
 // ---------------------------------------------------------------------------

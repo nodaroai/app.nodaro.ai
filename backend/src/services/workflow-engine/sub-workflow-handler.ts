@@ -17,10 +17,12 @@ import { DrainAbortError } from "../../lib/worker-drain.js"
 import { supabase } from "../../lib/supabase.js"
 import {
   buildExecutionLevels,
+  computeGatedIds,
   getEffectivelySkippedIds,
   isSourceNode,
   isSkipNode,
 } from "./execution-graph.js"
+import { computeEmptyInputSkipIds } from "./empty-input-skips.js"
 import { resolveNodeInputs } from "./input-resolver.js"
 import { normalizeLegacyNodeTypes } from "./normalize-node-types.js"
 import { extractSourceNodeOutput, getPrimaryOutput } from "./output-extractor.js"
@@ -436,12 +438,27 @@ export async function executeSubWorkflow(
   for (const level of levels) {
     if (ctx.cancelled) throw new Error("Execution cancelled")
 
+    // The same two gates the main orchestrator applies per level (a router's
+    // inactive routes, a node the run skipped) and the empty-input skip —
+    // without them an inner "no new posts" failed the whole sub-workflow.
+    const gated = computeGatedIds(subNodes, subEdges, nodeStates)
+    const emptyInputIds = computeEmptyInputSkipIds({ level, nodes: subNodes, edges: subEdges, nodeStates, deadIds: new Set(gated.keys()) })
+    for (const n of level) {
+      const gateReason = gated.get(n.id)
+      if (gateReason === undefined && !emptyInputIds.has(n.id)) continue
+      if (nodeStates[n.id]?.status === "completed") continue
+      const skipReason = gateReason === "empty_input" || emptyInputIds.has(n.id) ? "empty_input" : undefined
+      nodeStates[n.id] = { status: "skipped", nodeType: n.type, completedAt: new Date().toISOString(), ...(skipReason ? { skipReason } : {}) }
+    }
+    const deadIds = new Set([...gated.keys(), ...emptyInputIds])
+
     const executableNodes = level.filter((n) => {
       if (isSourceNode(n.type)) return false
       if (skippedIds.has(n.id)) return false
       if (isSkipNode(n.type)) return false
       // Parameter pickers are pre-completed above and have no job handler.
       if (n.type && PARAMETER_NODE_TYPES.has(n.type)) return false
+      if (deadIds.has(n.id)) return false
       if (nodeStates[n.id]?.status === "completed") return false
       // Recursive sub-workflow nodes are handled specially
       if (n.type === "sub-workflow") return true

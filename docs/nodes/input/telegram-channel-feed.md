@@ -27,7 +27,11 @@ The Telegram Channel Feed node reads a public channel's recent posts via its web
 
 ## Pricing
 
-Costs **10 credits** per run.
+Costs **10 credits** per run that returns at least one new post. A run that
+finds nothing new is not charged — and the nodes behind the feed that would
+have worked on its text are skipped, so the run ends `completed` with
+`outcome: "nothing_new"` (see
+[Runs that find nothing new](../../api-integration.md#runs-that-find-nothing-new)).
 
 ## Notes & limits
 

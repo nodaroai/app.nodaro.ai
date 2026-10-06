@@ -15,6 +15,16 @@ import { fillAssetRenderQuality, fillJobRenderQuality } from "../../render-label
 import { isPreviewRender } from "../../preview-render.js"
 import { APPLY_EDL_JOB, applyEdlMedium, isPreviewListing } from "../../apply-edl-listing.js"
 import { bannedGalleryUsersFilter, galleryHides, loadGalleryModeration } from "../../gallery-moderation.js"
+import { countEmptyInputSkips, executionOutcome, type GenericNode } from "@nodaro/shared"
+import { summarizeNodeStates } from "../../execution-result.js"
+import type { NodeExecutionState } from "../../../services/workflow-engine/types.js"
+
+/** The run's workflow nodes, for labels — or undefined: a run of a deleted (or another creator's app) workflow still reads. */
+async function loadWorkflowNodes(workflowId: string | null | undefined, userId: string): Promise<GenericNode[] | undefined> {
+  if (!workflowId) return undefined
+  const { data } = await supabase.from("workflows").select("nodes").eq("id", workflowId).eq("user_id", userId).maybeSingle()
+  return Array.isArray(data?.nodes) ? (data.nodes as GenericNode[]) : undefined
+}
 
 const readGate: ToolGate = { required: ["assets:read"] }
 const writeGate: ToolGate = { required: ["assets:write"] }
@@ -1073,22 +1083,36 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
       {
         title: "Get App Run",
         description:
-          "Fetch status of a workflow / published-app execution by id. " +
-          "Returns the execution's status, per-node states, and any output " +
-          "URLs (with prompt/model/jobId metadata) the run has produced so " +
-          "far. Used by the workflow + app-run widgets to poll progress.",
+          "Read a workflow / published-app run by its EXECUTION id — what run_workflow and run_app return; not a job id (get_job will not find it). " +
+          "Returns the run's status and, once it completes, its outcome (\"nothing_new\" when a node was skipped for want of input — a feed with no new posts — and nothing failed), " +
+          "every node's status, text (cut at 1,500 characters), media URLs, why it was skipped (skipReason) and its error, " +
+          "plus the output URLs with prompt/model/jobId metadata. Poll every 5–10 s while the run is pending or running.",
         inputSchema: {
           execution_id: z.string().min(1),
         },
         outputSchema: {
           executionId: z.string(),
           status: z.string(),
+          // How a completed run ended (execution-outcome.ts): "nothing_new" when a
+          // node was skipped for want of input and nothing failed; absent until it completes.
+          outcome: z.enum(["succeeded", "nothing_new"]).optional(),
+          errorMessage: z.string().nullable().optional(),
+          summary: z
+            .object({ total: z.number(), completed: z.number(), failed: z.number(), skipped: z.number(), skippedForEmptyInput: z.number() })
+            .optional(),
           nodeStates: z
             .array(
               z.object({
                 id: z.string(),
                 label: z.string().optional(),
                 status: z.string(),
+                nodeType: z.string().nullable().optional(),
+                skipReason: z.string().optional(),
+                error: z.string().optional(),
+                jobId: z.string().optional(),
+                text: z.string().optional(),
+                textTruncated: z.boolean().optional(),
+                media: z.array(z.object({ kind: z.string(), url: z.string() })).optional(),
               }),
             )
             .optional(),
@@ -1123,7 +1147,7 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
         }
         const { data, error } = await supabase
           .from("workflow_executions")
-          .select("id, status, node_states, created_at, completed_at, user_id")
+          .select("id, status, node_states, created_at, completed_at, user_id, workflow_id, error_message")
           .eq("id", args.execution_id)
           .eq("user_id", session.userId)
           .maybeSingle()
@@ -1140,45 +1164,28 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
           }
         }
 
-        // node_states is JSONB keyed by node id with at least
-        // `{ status, jobId?, output?: { imageUrl?|videoUrl?|audioUrl? }, nodeType? }`.
-        // We flatten into the widget-friendly shapes — { id, label, status }
-        // for the pill list, plus an enriched { kind, url, jobId?, prompt?,
-        // model?, createdAt? } array for gallery-style grid rendering.
-        const ns = (data.node_states ?? {}) as Record<
-          string,
-          {
-            status?: string
-            jobId?: string
-            output?: { imageUrl?: string; videoUrl?: string; audioUrl?: string; outputUrl?: string }
-            nodeType?: string
-          }
-        >
-        const nodeStates: Array<{ id: string; label?: string; status: string }> = []
+        // node_states is JSONB keyed by node id. ONE reading for every machine
+        // client (lib/execution-result.ts — the API token's result and
+        // diagnose_run read the same): each node's label, status, why it was
+        // skipped, its text (cut at 1,500 chars) and EVERY media URL. The
+        // widgets keep reading `{ id, label, status }` + `outputs`.
+        const ns = (data.node_states ?? {}) as Record<string, NodeExecutionState>
+        const workflowNodes = await loadWorkflowNodes(data.workflow_id as string | null | undefined, session.userId)
+        const summaries = summarizeNodeStates(ns, workflowNodes)
+        const nodeStates = summaries.map((s) => ({
+          id: s.nodeId,
+          label: s.label,
+          status: s.status,
+          nodeType: s.nodeType,
+          ...(s.skipReason ? { skipReason: s.skipReason } : {}),
+          ...(s.error ? { error: s.error } : {}),
+          ...(s.jobId ? { jobId: s.jobId } : {}),
+          ...(s.text !== undefined ? { text: s.text } : {}),
+          ...(s.textTruncated ? { textTruncated: true } : {}),
+          media: s.media,
+        }))
         type RawOutput = { kind: string; url: string; jobId?: string }
-        const rawOutputs: RawOutput[] = []
-        for (const [nodeId, state] of Object.entries(ns)) {
-          nodeStates.push({
-            id: nodeId,
-            label: state.nodeType ?? nodeId,
-            status: state.status ?? "queued",
-          })
-          if (state.output) {
-            const url =
-              state.output.imageUrl ??
-              state.output.videoUrl ??
-              state.output.audioUrl ??
-              state.output.outputUrl
-            const kind = state.output.imageUrl
-              ? "image"
-              : state.output.videoUrl
-                ? "video"
-                : state.output.audioUrl
-                  ? "audio"
-                  : null
-            if (url && kind) rawOutputs.push({ kind, url, jobId: state.jobId })
-          }
-        }
+        const rawOutputs: RawOutput[] = summaries.flatMap((s) => s.media.map((m) => ({ kind: m.kind, url: m.url, jobId: s.jobId })))
 
         // Batch-fetch the source jobs for prompt/model/createdAt enrichment.
         // Skip cleanly if no jobIds (e.g. inline-only nodes produced the
@@ -1222,14 +1229,28 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
           }
         })
 
+        // How the run ended — derived here from the states, never a column.
+        const outcome = executionOutcome(data.status, ns)
+        const summary = {
+          total: summaries.length,
+          completed: summaries.filter((s) => s.status === "completed").length,
+          failed: summaries.filter((s) => s.status === "failed").length,
+          skipped: summaries.filter((s) => s.status === "skipped").length,
+          skippedForEmptyInput: countEmptyInputSkips(ns),
+        }
+        const errorMessage = (data.error_message as string | null | undefined) ?? null
+        const run = {
+          executionId: data.id,
+          status: data.status,
+          ...(outcome ? { outcome } : {}),
+          errorMessage,
+          summary,
+          nodeStates,
+          outputs,
+        }
         return {
-          content: [{ type: "text", text: JSON.stringify({ data: { id: data.id, status: data.status, nodeStates, outputs } }, null, 2) }],
-          structuredContent: {
-            executionId: data.id,
-            status: data.status,
-            nodeStates,
-            outputs,
-          },
+          content: [{ type: "text", text: JSON.stringify({ data: { id: data.id, ...run } }, null, 2) }],
+          structuredContent: run,
         }
       },
     )
