@@ -503,16 +503,20 @@ export function MobileAppShell({
   // Only compute media items when lightbox is open — avoids recalculating on every nodeStates poll
   const mediaItems = useMemo(() => {
     if (!lightboxNodeId) return []
-    const items: { nodeId: string; type: "image" | "video"; url: string }[] = []
+    const items: { nodeId: string; type: "image" | "video"; url: string; quality?: "proxy" }[] = []
     for (const node of [...orderedInputNodes, ...orderedOutputNodes]) {
       const outputType = getOutputType(node.type)
       if (outputType !== "image" && outputType !== "video") continue
       const result = getFullscreenResult(node.id)
       if (!result.url) continue
-      items.push({ nodeId: node.id, type: outputType, url: result.url })
+      // A render's take says it is a Preview: the same read the output card
+      // makes, by the url on show (render-preview.ts).
+      const runOutput = presNodeStates[node.id]?.output as Record<string, unknown> | undefined
+      const preview = outputIsPreview(node.type, node.data as Record<string, unknown>, runOutput, result.url)
+      items.push({ nodeId: node.id, type: outputType, url: result.url, ...(preview ? { quality: "proxy" as const } : {}) })
     }
     return items
-  }, [lightboxNodeId, orderedInputNodes, orderedOutputNodes, getFullscreenResult])
+  }, [lightboxNodeId, orderedInputNodes, orderedOutputNodes, getFullscreenResult, presNodeStates])
 
   const lightboxIndex = lightboxNodeId ? mediaItems.findIndex((m) => m.nodeId === lightboxNodeId) : -1
   const lightboxItem = lightboxIndex >= 0 ? mediaItems[lightboxIndex] : null
@@ -863,15 +867,24 @@ export function MobileAppShell({
   )
 
   // ---- View props for override views (gallery/fullscreen/compare) ----
+  // A render's take says it is a Preview (F1): the run on show, else the node's saved take.
+  const isPreview = useCallback((nodeId: string, url?: string) => {
+    const node = [...orderedInputNodes, ...orderedOutputNodes].find((n) => n.id === nodeId)
+    if (!node) return false
+    const runOutput = presNodeStates[nodeId]?.output as Record<string, unknown> | undefined
+    return outputIsPreview(node.type, node.data as Record<string, unknown>, runOutput, url)
+  }, [orderedInputNodes, orderedOutputNodes, presNodeStates])
+
   const viewProps = useMemo(() => ({
     orderedInputNodes,
     orderedOutputNodes,
     getNodeStatus,
     getResult: getFullscreenResult,
     getCardTitle,
+    isPreview,
     onOpenMedia: handleOpenMedia,
     onOpenConfig: setConfigNode,
-  }), [orderedInputNodes, orderedOutputNodes, getNodeStatus, getFullscreenResult, getCardTitle, handleOpenMedia])
+  }), [orderedInputNodes, orderedOutputNodes, getNodeStatus, getFullscreenResult, getCardTitle, isPreview, handleOpenMedia])
 
   // ---- Version data ----
   const versions = runSlots.versions
@@ -1156,6 +1169,7 @@ export function MobileAppShell({
         onClose={() => setLightboxNodeId(null)}
         type={lightboxItem?.type ?? "image"}
         url={lightboxItem?.url ?? ""}
+        quality={lightboxItem?.quality}
         currentIndex={lightboxIndex >= 0 ? lightboxIndex : undefined}
         totalCount={mediaItems.length > 0 ? mediaItems.length : undefined}
         onPrev={lightboxIndex > 0 ? handleLightboxPrev : undefined}

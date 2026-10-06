@@ -15,6 +15,7 @@ import { useAppDir } from "@/lib/locale-store"
 import { cn } from "@/lib/utils"
 import { CachedImage } from "@/components/ui/cached-image"
 import { WaveformAudioPlayer } from "@/components/audio-player"
+import { PreviewBadge, isPreviewOutput } from "@/components/render/preview-badge"
 import { type NodeState, formatNodeType } from "./execution-utils"
 import { formatDate } from "@/lib/i18n/format"
 
@@ -379,6 +380,8 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
       return null
     })()
     const stateOutputText = typeof state.output?.text === "string" ? state.output.text : null
+    // A render's output says it is a Preview (a private 720p cut).
+    const stateIsPreview = isPreviewOutput(state.nodeType, state.output)
 
     return (
       <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
@@ -508,7 +511,10 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
               {/* Right Column - Output */}
               <div className="bg-white dark:bg-[#1E1E1E] rounded-xl border border-gray-200 dark:border-[#2D2D2D] overflow-hidden">
                 <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-[#2D2D2D]">
-                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{t("node.output")}</h3>
+                  <h3 className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
+                    {t("node.output")}
+                    {stateIsPreview && <PreviewBadge />}
+                  </h3>
                   <div role="tablist" className="flex items-center gap-1">
                     <button
                       type="button"
@@ -614,6 +620,9 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
   const outputUrl = getOutputUrl(job.output_data)
   const isVideo = outputUrl ? isVideoUrl(outputUrl) : false
   const isAudio = outputUrl ? isAudioUrl(outputUrl) : false
+  // A render's output says it is a Preview (a private 720p cut). The job read
+  // fills the stamp from the order for a render recorded before it was stored.
+  const jobIsPreview = isPreviewOutput(job.job_type, job.output_data)
   const jobType = extractJobType(job.input_data, job)
   const provider = extractProvider(job.input_data, job)
 
@@ -796,7 +805,10 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
             {/* Right Column - Output */}
             <div className="bg-white dark:bg-[#1E1E1E] rounded-xl border border-gray-200 dark:border-[#2D2D2D] overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-[#2D2D2D]">
-                <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{t("node.output")}</h3>
+                <h3 className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
+                  {t("node.output")}
+                  {jobIsPreview && <PreviewBadge />}
+                </h3>
                 <div role="tablist" className="flex items-center gap-1">
                   <button
                     type="button"
@@ -970,6 +982,7 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
           >
             <X className="w-6 h-6" />
           </Button>
+          {jobIsPreview && <PreviewBadge className="absolute top-5 start-4 z-10 px-2 py-1 text-[11px]" />}
           {isVideo ? (
             <video
               src={outputUrl}

@@ -1236,6 +1236,8 @@ widget in compatible clients.
 
 The public scope shows what the web gallery shows: work an admin took out of the gallery — by blocking its creator or banning a word in its prompt — is left out. A page can therefore hold fewer items than `limit`; keep following `next_cursor` until it is absent.
 
+Your own gallery (`scope: "mine"`) also lists your Apply EDL renders: a video render under `video`, an audio render under `audio`, per render. A render made at Preview quality (`proxy`) carries `preview: true` and its text line says `(preview)`; a render recorded before the label was stored takes it from the quality it was ordered at. The public scope never lists an Apply EDL render.
+
 ---
 
 ### `browse_uploads`
@@ -1245,7 +1247,7 @@ The public scope shows what the web gallery shows: work an admin took out of the
 Browse assets you've uploaded (source files — distinct from generated
 outputs). Use to retrieve existing upload URLs to feed into generation
 tools. An item that is an Apply EDL preview (a render at `proxy` quality)
-carries `preview: true`, and its text line says `(preview)`.
+carries `preview: true`, and its text line says `(preview)`. A render stored before the label existed takes it from the job that made it.
 
 **Input:** `kind`, `limit`, `cursor`
 
@@ -1255,7 +1257,7 @@ carries `preview: true`, and its text line says `(preview)`.
 
 **Scope:** `assets:read`
 
-List your favorited gallery items, most recent first.
+List your favorited gallery items, most recent first. A favorited Apply EDL render of yours is listed too (`preview: true` on a Preview); another person's is not.
 
 **Input:** `limit`, `cursor`
 
@@ -1342,6 +1344,8 @@ cursor pagination.
 
 The public scope lists what the public gallery shows, with the same moderation as `browse_gallery`, and never carries another creator's id. A page can hold fewer jobs than `limit`.
 
+Your own jobs (`scope: "mine"`) include your Apply EDL renders: a render is listed under the kind its output is — `video` for a cut, `audio` for a mix (a render still running, under the kind its order asks for) — and the public scope never lists one. A Preview (`output_data.quality` is `"proxy"`) carries `preview: true`.
+
 ---
 
 ### `get_job`
@@ -1379,6 +1383,15 @@ policy reason if the review rejects it.
 `retryable`, `guidance` and `suggestedProvider` on a failed, cancelled or held
 job. `get_asset` and `wait_for_job` return the same envelope (`get_asset` without
 `input`).
+
+An Apply EDL render made at Preview quality (`outputData.quality` is `"proxy"`:
+the private 720p cut to review, not the final) also carries `preview: true`. A
+render recorded before `quality` was stored reads back with the quality it was
+ordered at filled into `outputData.quality` (`"proxy"` is a Preview, anything
+else the final) by `get_job`, `wait_for_job`, `get_asset` and `display_asset`
+(`display_asset` carries only the `preview` flag); nothing is rewritten.
+`list_jobs` reads the label the same way for the Apply EDL renders it lists (your
+own jobs only; see `list_jobs` above), and marks a Preview with `preview: true`.
 
 `input` is a safe subset of what the job was submitted with, or null — enough
 to check what the model was actually sent: `prompt` (the prompt as rendered,

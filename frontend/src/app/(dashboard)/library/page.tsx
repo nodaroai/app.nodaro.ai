@@ -25,7 +25,7 @@ import {
 } from "@/hooks/queries/use-assets-queries"
 import { useStorageProfile } from "@/ee/hooks/queries/use-billing-queries"
 import { CachedImage } from "@/components/ui/cached-image"
-import { PreviewBadge, isPreviewQuality } from "@/components/render/preview-badge"
+import { PreviewBadge, isPreviewQuality, qualityOf } from "@/components/render/preview-badge"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import { useBackToClose } from "@/hooks/use-back-to-close"
 import { useVirtualGrid, rowItems, GRID_BREAKPOINTS } from "@/hooks/use-virtual-grid"
@@ -508,6 +508,7 @@ export default function LibraryPage() {
         onClose={closePreview}
         type={previewAsset?.type ?? "image"}
         url={previewAsset?.url ?? ""}
+        quality={qualityOf(previewAsset?.metadata)}
         currentIndex={previewIndex ?? 0}
         totalCount={totalCount}
         onPrev={previewIndex !== null && previewIndex > 0 ? handlePreviewPrev : undefined}

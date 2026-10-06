@@ -12,6 +12,7 @@ import { z } from "zod"
 import { DIRECTION_KEYS, getRegisteredSubjectKeys } from "@nodaro/prompts"
 import { redactPrivateJobData } from "../../public-job-data.js"
 import { failureGuidance } from "./_job-error.js"
+import { isPreviewRender } from "../../preview-render.js"
 
 /** The public asset URL of a job's output — whichever per-type key it used. */
 export function resolveOutputUrl(out: Record<string, unknown> | null | undefined): string | null {
@@ -115,6 +116,8 @@ export const JOB_VIEW_SCHEMA = {
   assetKind: z.string().nullable().optional(),
   outputUrl: z.string().nullable().optional(),
   outputData: z.record(z.string(), z.unknown()).nullable().optional(),
+  /** A Preview render (Apply EDL at proxy quality). */
+  preview: z.boolean().optional(),
   /** Safe subset of the job's input: prompt (rendered), userPrompt (source), direction, frames, provider, duration… */
   input: z.record(z.string(), z.unknown()).nullable().optional(),
   errorMessage: z.string().nullable().optional(),
@@ -164,6 +167,7 @@ export function jobView(row: JobRowLike): JobView {
     startedAt: row.started_at ?? null,
     completedAt: row.completed_at ?? null,
   }
+  if (isPreviewRender(row.job_type, out?.quality)) view.preview = true
   if (status === "failed" || status === "cancelled") {
     const g = failureGuidance({ error_message: row.error_message ?? null, error_hint: row.error_hint })
     view.retryable = g.retryable

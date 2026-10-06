@@ -11,6 +11,9 @@ import { isUuid } from "./_id-guard.js"
 import { failureGuidance } from "./_job-error.js"
 import { redactPrivateJobData } from "../../public-job-data.js"
 import { escapeLikeArgument } from "./_like-escape.js"
+import { fillAssetRenderQuality, fillJobRenderQuality } from "../../render-label-fill.js"
+import { isPreviewRender } from "../../preview-render.js"
+import { APPLY_EDL_JOB, applyEdlMedium, isPreviewListing } from "../../apply-edl-listing.js"
 import { bannedGalleryUsersFilter, galleryHides, loadGalleryModeration } from "../../gallery-moderation.js"
 
 const readGate: ToolGate = { required: ["assets:read"] }
@@ -82,21 +85,27 @@ const AUDIO_JOBS = new Set([
  *  decides audio vs video, so the static sets alone mis-kind their video rows. */
 const DUAL_MODE_JOBS = new Set(["voice-changer", "voice-changer-pro", "dubbing"])
 
-function getKind(jobType: string | null): "image" | "video" | "audio" | null {
+/** Apply EDL renders list in the OWNER's own views only (decided 2026-10-06; see
+ *  lib/apply-edl-listing.ts): a Preview is private, and a public final would be
+ *  exposure nobody decided. Their kind is their output's medium, per row. */
+const OWNER_ONLY_JOBS = new Set(["apply-edl"])
+
+function getKind(jobType: string | null, row?: Pick<GalleryRow, "input_data" | "output_data">): "image" | "video" | "audio" | null {
   if (!jobType) return null
+  if (jobType === APPLY_EDL_JOB) return applyEdlMedium(row?.input_data, row?.output_data)
   if (IMAGE_JOBS.has(jobType)) return "image"
   if (VIDEO_JOBS.has(jobType)) return "video"
   if (AUDIO_JOBS.has(jobType)) return "audio"
   return null
 }
 
-function jobNamesForKind(kind: "image" | "video" | "audio"): string[] {
+function jobNamesForKind(kind: "image" | "video" | "audio", ownerView: boolean): string[] {
   if (kind === "image") return [...IMAGE_JOBS]
   // Dual-mode rows can be the requested kind either way — include them in the
   // video filter too (they already sit in the audio set); the per-row display
   // reads what the run actually produced.
-  if (kind === "video") return [...VIDEO_JOBS, ...DUAL_MODE_JOBS]
-  return [...AUDIO_JOBS]
+  if (kind === "video") return [...VIDEO_JOBS, ...DUAL_MODE_JOBS, ...(ownerView ? OWNER_ONLY_JOBS : [])]
+  return [...AUDIO_JOBS, ...(ownerView ? OWNER_ONLY_JOBS : [])]
 }
 
 function formatRow(row: GalleryRow): string {
@@ -104,12 +113,13 @@ function formatRow(row: GalleryRow): string {
   const kind =
     row.job_type && DUAL_MODE_JOBS.has(row.job_type)
       ? (typeof outputData.videoUrl === "string" && outputData.videoUrl ? "video" : "audio")
-      : getKind(row.job_type) ?? "unknown"
+      : getKind(row.job_type, row) ?? "unknown"
   const prompt = (row.input_data?.prompt as string | undefined) ?? ""
   const truncated = prompt.length > 80 ? `${prompt.slice(0, 77)}...` : prompt
   const model = (row.input_data?.provider as string | undefined) ?? row.provider ?? "?"
   const date = (row.completed_at ?? "").split("T")[0]
-  return `${row.id}: ${kind} — "${truncated}" (${model}, ${date})`
+  const preview = isPreviewListing(row) ? " (preview)" : ""
+  return `${row.id}: ${kind}${preview} — "${truncated}" (${model}, ${date})`
 }
 
 /**
@@ -175,7 +185,10 @@ function extractReferences(input: Record<string, unknown> | null): string[] {
  * model from `input_data`.
  */
 function rowToGalleryItem(row: GalleryRow, viewerUserId: string): GalleryItem | null {
-  const kind = getKind(row.job_type)
+  // An owner-only job is the viewer's own or nothing: `list_favorites` hydrates
+  // other people's PUBLIC rows too, and an Apply EDL final can be one.
+  if (row.job_type && OWNER_ONLY_JOBS.has(row.job_type) && row.user_id !== viewerUserId) return null
+  const kind = getKind(row.job_type, row)
   if (!kind) return null
   const out = row.output_data ?? {}
   const assetUrl =
@@ -199,7 +212,7 @@ function rowToGalleryItem(row: GalleryRow, viewerUserId: string): GalleryItem | 
     jobId: row.id,
     kind,
     prompt: (input.prompt as string | undefined) ?? "",
-    model: (input.provider as string | undefined) ?? row.provider ?? "?",
+    model: (input.provider as string | undefined) ?? row.provider ?? (row.job_type === APPLY_EDL_JOB ? APPLY_EDL_JOB : "?"),
     thumbnailUrl,
     assetUrl,
     createdAt: row.completed_at ?? "",
@@ -212,6 +225,8 @@ function rowToGalleryItem(row: GalleryRow, viewerUserId: string): GalleryItem | 
     // row carries it. Decided per ROW rather than per scope, so a third
     // caller cannot reintroduce the leak by forgetting to pass a scope.
     references: row.user_id === viewerUserId ? extractReferences(row.input_data) : [],
+    // A render made at proxy quality is a private 720p Preview (F1).
+    ...(isPreviewListing(row) ? { preview: true } : {}),
   }
 }
 
@@ -315,7 +330,8 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
             : args.kind
               ? [args.kind]
               : ["image", "video"]
-        const allowedJobTypes = kinds.flatMap((k) => jobNamesForKind(k))
+        // Apply EDL renders list in the caller's own view only — never the public scope.
+        const allowedJobTypes = kinds.flatMap((k) => jobNamesForKind(k, scope === "mine"))
 
         // Chain filters first, then order, then limit — keeps the test
         // mock chain readable and matches Supabase's typical pattern.
@@ -365,6 +381,14 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
         }
         const rows = (data ?? []) as GalleryRow[]
         const last = rows[rows.length - 1]
+        // What the query was not asked for is not shown either: a row of an
+        // owner-only job outside the caller's own scope is dropped, and one of
+        // the wrong medium for the kinds asked is too (a render has one).
+        const listable = (row: GalleryRow): boolean => {
+          if (!row.job_type || !OWNER_ONLY_JOBS.has(row.job_type)) return true
+          const medium = getKind(row.job_type, row)
+          return scope === "mine" && row.user_id === session.userId && !!medium && kinds.includes(medium)
+        }
         // Cursor matches the column we ordered by (created_at for mine,
         // completed_at for public). For "mine" some rows may not yet
         // have completed_at (still processing) so we explicitly fall back.
@@ -376,9 +400,10 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
           rows.length === limit && lastCursorVal ? lastCursorVal : null
         // The cursor above follows every row READ, so paging goes on past a
         // stretch the moderation hides; only what is shown is filtered.
-        const shown = moderation
+        const shown = (moderation
           ? rows.filter((row) => !galleryHides(moderation, { userId: row.user_id, inputData: row.input_data, outputData: row.output_data }))
           : rows
+        ).filter(listable)
         const lines = shown.map(formatRow)
         const cursorLine = nextCursor
           ? `\n(next_cursor: ${nextCursor} — call browse_gallery again with this cursor)`
@@ -515,7 +540,7 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
         let query = supabase
           .from("assets")
           .select(
-            "id, type, filename, mime_type, size_bytes, r2_url, metadata, created_at",
+            "id, type, filename, mime_type, size_bytes, r2_url, metadata, created_at, job_id",
           )
           .eq("user_id", session.userId)
           .order("created_at", { ascending: false })
@@ -534,8 +559,12 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
         }
         const rows = data ?? []
         const hasMore = rows.length > limit
-        const pageRows = hasMore ? rows.slice(0, limit) : rows
-        const nextCursor = hasMore ? (pageRows[pageRows.length - 1]?.id as string | undefined) ?? null : null
+        const storedRows = hasMore ? rows.slice(0, limit) : rows
+        const nextCursor = hasMore ? (storedRows[storedRows.length - 1]?.id as string | undefined) ?? null : null
+        // A render made before its Preview label was stored takes it from the
+        // job that made it (one batched lookup per page, none when no file needs
+        // one) — the same read-time fill /v1/library applies (decided 2026-10-05).
+        const pageRows = await fillAssetRenderQuality(storedRows)
 
         // Total count on first page only (matches /v1/library's behaviour).
         let totalCount: number | null = null
@@ -702,6 +731,8 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
           errorMessage: z.string().nullable().optional(),
           retryable: z.boolean().optional(),
           outputData: z.record(z.string(), z.unknown()).optional(),
+          /** A Preview render (Apply EDL at proxy quality) — the same flag get_job carries. */
+          preview: z.boolean().optional(),
         },
         annotations: { readOnlyHint: true },
       },
@@ -750,12 +781,18 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
           }
         }
 
-        const data = redactPrivateJobData(rawData)
+        // An old render carries no stored Preview label: fill it from the order by
+        // the rule get_job uses, so both readers say the same of one job (response
+        // only; decided 2026-10-06).
+        const data = redactPrivateJobData(fillJobRenderQuality(rawData))
 
         // Extract the public asset URL from output_data (varies by job_type:
         // imageUrl / videoUrl / audioUrl / outputUrl). The widget polls this
         // tool every 2s and reads structuredContent to update its preview.
         const out = (data.output_data ?? {}) as Record<string, unknown>
+        const previewField = isPreviewRender(data.job_type as string | null | undefined, out.quality)
+          ? { preview: true as const }
+          : {}
         // Shared with get_job / wait_for_job (audit 2026-09-06 fix #2): one
         // resolver for the per-type output keys, one asset-kind rule.
         const outputUrl = resolveOutputUrl(out)
@@ -815,6 +852,7 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
               errorMessage: null,
               retryable: false,
               outputData: out,
+              ...previewField,
             },
           }
         }
@@ -849,6 +887,7 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
               retryable,
               ...(suggestedProvider ? { suggestedProvider } : {}),
               outputData: out,
+              ...previewField,
             },
           }
         }
@@ -871,6 +910,7 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
             // URL field names. Do not remove or trim without bumping the
             // widget URIs. Guarded by __tests__/job-auto-bindings.test.ts.
             outputData: out,
+            ...previewField,
           },
         }
       },
@@ -957,7 +997,9 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
           }
         }
 
-        const out = (data.output_data ?? {}) as Record<string, unknown>
+        // Same fill as get_asset / get_job: an old render's label comes from the order.
+        const filled = fillJobRenderQuality(data)
+        const out = (filled.output_data ?? {}) as Record<string, unknown>
         const input = (data.input_data ?? {}) as Record<string, unknown>
         const outputUrl =
           (out.imageUrl as string | undefined) ??
@@ -1014,6 +1056,7 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
             outputUrl,
             assetKind,
             imageActions: assetKind === "image",
+            ...(isPreviewRender(data.job_type as string | null | undefined, out.quality) ? { preview: true } : {}),
           },
         }
       },

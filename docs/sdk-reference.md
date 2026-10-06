@@ -5438,7 +5438,7 @@ applyEdl(input: ApplyEdlInput): Promise<EditJobResult>
 | `clipKey` | `string` | no | The plan clip this render cuts — `edlSpanKey(clip)` from `@nodaro/shared` (`"<first inMs>-<last outMs>"`). Returned on the job's `output_data.clipKey`. |
 | `workflowId` | `string` | no | Execution-history display. |
 
-The finished job's `output_data` carries the cut (`videoUrl` + `thumbnailUrl`, or `audioUrl`), the remapped transcript on `json` when one was sent, `quality` (`"proxy"` or `"final"`) and, when given, `clipKey`. A `proxy` render is a **preview**: always private, never in the public gallery (see [Apply EDL](nodes/processing-video/apply-edl.md#previews)).
+The finished job's `output_data` carries the cut (`videoUrl` + `thumbnailUrl`, or `audioUrl`), the remapped transcript on `json` when one was sent, `quality` (`"proxy"` or `"final"`) and, when given, `clipKey`. A `proxy` render is a **preview**: always private, never in the public gallery (see [Apply EDL](nodes/processing-video/apply-edl.md#previews)). A job recorded before `quality` was written reads back with the quality it was ordered at filled in (`"proxy"` is a preview, anything else the final) by `jobs.get`, `jobs.getStatus` and `jobs.list`; the stored job is unchanged.
 
 The EDL is validated at ingress — an unresolvable source, a picture-less
 segment on a video edit, or an edit longer than **180 minutes of output**

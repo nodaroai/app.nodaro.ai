@@ -543,6 +543,11 @@ const TEXT_TO_AUDIO_PER_SECOND_PRICING_BYTES = 54
 // wording = 70 B, which keeps the 13 B of headroom the list had before.
 const ELEVENLABS_V4_DEFAULT_WORDING_BYTES = 70
 
+// RAISED by one field: get_asset's outputSchema now declares `preview` (a boolean),
+// as get_job's and wait_for_job's envelope already does, so a Preview render reads
+// the same through every job reader (decided 2026-10-06). No tool was added.
+// measured by this suite: 386_849 total − 386_820 before the field = 29 B.
+const GET_ASSET_PREVIEW_FLAG_BYTES = 29
 // RAISED by ONE argument and nothing else: `caption_style` on `build_ugc_cards`
 // (how the captions after the opening line look — word by word, karaoke, plain
 // subtitles or none; the builder takes it as `captionStyle`). No tool was added,
@@ -605,6 +610,7 @@ export const TOOL_WIRE_BUDGET = {
     VIDEO_ANALYSIS_SMART_ONLY_BYTES +
     TEXT_TO_AUDIO_PER_SECOND_PRICING_BYTES +
     ELEVENLABS_V4_DEFAULT_WORDING_BYTES +
+    GET_ASSET_PREVIEW_FLAG_BYTES +
     UGC_CARDS_CAPTION_STYLE_BYTES,
 }
 

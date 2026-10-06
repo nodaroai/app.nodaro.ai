@@ -15,7 +15,7 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import { useT, tx, type MessageKey } from "@/lib/i18n"
-import { PreviewBadge, isPreviewQuality } from "@/components/render/preview-badge"
+import { PreviewBadge, isPreviewQuality, qualityOf } from "@/components/render/preview-badge"
 import { useQueryClient } from "@tanstack/react-query"
 import { useAuth } from "@/hooks/use-auth"
 import {
@@ -390,6 +390,7 @@ export function LibraryMediaBrowser({
           onClose={() => setPreviewAsset(null)}
           type={previewAsset.type as "image" | "video" | "audio"}
           url={previewAsset.url}
+          quality={qualityOf(previewAsset.metadata)}
         />
       )}
     </div>

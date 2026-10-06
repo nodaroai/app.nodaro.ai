@@ -464,8 +464,12 @@ describe("GET /v1/jobs/status", () => {
       url: `/v1/jobs/status?ids=job-a&__userId=${TEST_USER_ID}`,
     })
 
+    // `job_type` + `input_quality` are the two read-only columns the Preview
+    // label fill needs (render-label-fill.ts); the route removes both again
+    // before answering (jobs-render-label.test.ts pins that).
     expect(capturedSelect).toEqual([
       "id", "status", "progress", "output_data", "error_message", "error_hint", "usage_log_id",
+      "job_type", "input_quality:input_data->>quality",
     ])
     for (const secret of ["provider_cost", "display_cost", "credits", "provider"]) {
       expect(capturedSelect).not.toContain(secret)

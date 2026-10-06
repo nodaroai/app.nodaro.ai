@@ -8,6 +8,7 @@ import { sendInternalError } from "../lib/http-errors.js"
 import { JOB_STATUSES } from "../lib/job-status.js"
 import { redactPrivateJobData } from "../lib/public-job-data.js"
 import { deleteJobWithPrivateMedia } from "../lib/workflow-delete.js"
+import { ORDER_QUALITY_COLUMNS, fillJobRenderQuality, fillJobsRenderQuality } from "../lib/render-label-fill.js"
 import type { ErrorHint } from "../lib/safety-block.js"
 
 const batchStatusBody = z.object({
@@ -314,7 +315,7 @@ export async function jobRoutes(app: FastifyInstance) {
     // same reason.
     const { data, error } = await supabase
       .from("jobs")
-      .select("id, status, progress, output_data, error_message, error_hint, usage_log_id")
+      .select(`id, status, progress, output_data, error_message, error_hint, usage_log_id, ${ORDER_QUALITY_COLUMNS}`)
       .in("id", ids)
       .eq("user_id", req.userId)
 
@@ -322,7 +323,12 @@ export async function jobRoutes(app: FastifyInstance) {
       return sendInternalError(reply, req, error, "Failed to fetch job statuses")
     }
 
-    const rows = (data ?? []) as (Record<string, unknown> & { usage_log_id?: string | null })[]
+    // An old render carries no stored Preview label: fill it from the order
+    // (read-time only, never written; the lean answer stays lean).
+    const rows = fillJobsRenderQuality(
+      (data ?? []) as unknown as (Record<string, unknown> & { usage_log_id?: string | null })[],
+      { dropJobType: true },
+    )
     const creditMap = await creditStatusMapFor(rows.map((r) => r.usage_log_id))
     const withCreditStatus = rows.map(({ usage_log_id: usageLogId, ...rest }) => ({
       ...rest,
@@ -369,7 +375,9 @@ export async function jobRoutes(app: FastifyInstance) {
 
     return {
       data: {
-        ...sanitizeJobForPublic(job as unknown as JobRecord, isAdmin),
+        // An old render has no stored Preview label: fill it from the order
+        // (read-time only; the Executions tab reads this job).
+        ...sanitizeJobForPublic(fillJobRenderQuality(job) as unknown as JobRecord, isAdmin),
         credit_status: creditStatusOf(usageLogId, creditMap),
       },
     }
@@ -396,7 +404,7 @@ export async function jobRoutes(app: FastifyInstance) {
 
     let query = supabase
       .from("jobs")
-      .select("id, status, progress, output_data, error_message, error_hint, reconcile_attempts, usage_log_id")
+      .select(`id, status, progress, output_data, error_message, error_hint, reconcile_attempts, usage_log_id, ${ORDER_QUALITY_COLUMNS}`)
       .eq("id", id)
 
     if (!isAdmin) {
@@ -413,11 +421,14 @@ export async function jobRoutes(app: FastifyInstance) {
 
     // Recovery visibility (audit UX): a processing row the reconcile system
     // has touched is being self-healed, not just slow — let pollers say so.
+    // An old render carries no stored Preview label: a reopened workflow, a
+    // finishing background job and the completed-job check all restore from
+    // this read, so it fills the label from the order (never written back).
     const {
       reconcile_attempts: attempts,
       usage_log_id: usageLogId,
       ...rest
-    } = job as Record<string, unknown> & { usage_log_id?: string | null }
+    } = fillJobRenderQuality(job as unknown as Record<string, unknown>, { dropJobType: true }) as Record<string, unknown> & { usage_log_id?: string | null }
     const creditMap = await creditStatusMapFor([usageLogId])
     return redactPrivateJobData({
       data: {
@@ -552,7 +563,8 @@ export async function jobRoutes(app: FastifyInstance) {
     // Strip the joined workflow_executions data (only used for filtering)
     const cleanedJobs = visibleJobs.map(({ workflow_executions: _we, ...job }) => job)
     const sanitizedJobs = cleanedJobs.map((job) => {
-      const sanitized = sanitizeJobForPublic(job as JobRecord, isAdmin)
+      // An old render has no stored Preview label: fill it from the order.
+      const sanitized = sanitizeJobForPublic(fillJobRenderQuality(job) as JobRecord, isAdmin)
       if (!attachToCharacterId) return sanitized
       // Derived, not stored. The raw flag does reach the client inside
       // input_data today, but that blob is a free-form payload whose keys
@@ -606,7 +618,7 @@ export async function jobRoutes(app: FastifyInstance) {
 
     let query = supabase
       .from("jobs")
-      .select("id, status, output_data, error_message, error_hint")
+      .select(`id, status, output_data, error_message, error_hint, ${ORDER_QUALITY_COLUMNS}`)
       .in("id", jobIds)
 
     if (!isAdmin) {
@@ -619,7 +631,13 @@ export async function jobRoutes(app: FastifyInstance) {
       return sendInternalError(reply, req, error, "Failed to fetch job statuses")
     }
 
-    return { data: redactPrivateJobData(jobs ?? []) }
+    // The reopen restore reads this: an old render's Preview label comes from
+    // the order (read-time only; the answer stays lean).
+    return {
+      data: redactPrivateJobData(
+        fillJobsRenderQuality((jobs ?? []) as unknown as Record<string, unknown>[], { dropJobType: true }),
+      ),
+    }
   })
 
   app.delete<{ Params: { id: string } }>("/v1/jobs/:id", async (req, reply) => {

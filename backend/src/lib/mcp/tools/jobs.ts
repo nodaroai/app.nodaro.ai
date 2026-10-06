@@ -10,6 +10,8 @@ import { redactPrivateJobData } from "../../public-job-data.js"
 import { JOB_STATUSES } from "../../job-status.js"
 import { jobView, JOB_VIEW_SCHEMA } from "./_job-view.js"
 import { waitForJob } from "./_wait-for-job.js"
+import { fillJobRenderQuality, fillJobsRenderQuality } from "../../render-label-fill.js"
+import { APPLY_EDL_JOB, applyEdlMedium, isPreviewListing } from "../../apply-edl-listing.js"
 import { bannedGalleryUsersFilter, galleryHides, loadGalleryModeration } from "../../gallery-moderation.js"
 
 const jobsReadGate: ToolGate = { required: ["jobs:read"] }
@@ -164,12 +166,16 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
           "combine-videos",
           "add-captions",
           "extract-frame",
+          // An Apply EDL render is a video OR an audio file: it sits on both
+          // kinds and is matched per job by its output below (decided 2026-10-06).
+          "apply-edl",
         ],
         audio: [
           "text-to-speech",
           "generate-music",
           "text-to-audio",
           "extract-youtube-audio",
+          "apply-edl",
         ],
       }
       // Default kinds: image + video. Audio is opt-in because most users
@@ -177,9 +183,23 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
       // default clutters the gallery view. Caller can pass `["audio"]`
       // or `["image","video","audio"]` etc. for any combination.
       const kinds = args.kinds ?? ["image", "video"]
-      const allowed = new Set(kinds.flatMap((k) => setForKind[k] ?? []))
-      rows = rows.filter((r) => r.job_type && allowed.has(r.job_type as string))
-      rows = redactPrivateJobData(rows)
+      // A job is listed when a requested kind's allowlist holds its type. Apply
+      // EDL is on two kinds but is only ONE of them per job — the medium its
+      // output holds (its order's, while it runs) — and it is owner-only: the
+      // public scope is a gallery, which has never listed a render (a Preview is
+      // private; a public final would be exposure nobody decided).
+      const listedUnder = (r: { job_type?: unknown; input_data?: unknown; output_data?: unknown }): readonly string[] => {
+        const type = r.job_type as string | null | undefined
+        if (!type) return []
+        if (type === APPLY_EDL_JOB) return scope === "mine" ? [applyEdlMedium(r.input_data, r.output_data)] : []
+        return Object.keys(setForKind).filter((k) => setForKind[k]?.includes(type))
+      }
+      rows = rows.filter((r) => listedUnder(r).some((k) => kinds.includes(k as "image" | "video" | "audio")))
+      // An old render carries no stored Preview label: fill it from the order,
+      // by the rule the job-status routes use (decided 2026-10-06; response only).
+      rows = redactPrivateJobData(fillJobsRenderQuality(rows)).map((r) =>
+        isPreviewListing(r) ? { ...r, preview: true } : r,
+      )
       const last = rows[rows.length - 1]
       const nextCursor =
         rows.length === limit && last?.created_at ? (last.created_at as string) : null
@@ -207,7 +227,7 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
         "Fetch one of your jobs by id. structuredContent is the job envelope: status (pending | processing | completed | failed | cancelled | pending_review), " +
         "progress, jobType, assetKind, outputUrl (the finished image/video/audio), outputData, input (the prompt as sent), errorMessage, credits and timestamps; on failed/cancelled/pending_review " +
         "also retryable, guidance and — for a safety block with a catalog fallback — suggestedProvider. " +
-        "Poll every 5–10 s (an image usually finishes within a minute, a video in 2–10 minutes), or call wait_for_job to block up to 120 s.",
+        "Poll every 5–10 s (image: about a minute; video: 2–10 minutes), or wait_for_job (blocks up to 120 s).",
       inputSchema: {
         job_id: z.string().min(1),
       },
@@ -253,7 +273,10 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
       // On failure, add an explicit `retryable` flag (mirrors get_asset) plus
       // `guidance` and — for a safety-block with a catalog fallback —
       // `suggestedProvider`, a real model id the SAME request can retry on.
-      const publicData = redactPrivateJobData(data)
+      // An old render carries no stored Preview label: fill it from the order
+      // (response only, never written back), as the job-status routes do.
+      const filled = fillJobRenderQuality(data)
+      const publicData = redactPrivateJobData(filled)
       const failed = publicData.status === "failed" || publicData.status === "cancelled"
       const payload = failed
         ? {
@@ -286,7 +309,7 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
         // `{ data, … }` shape for existing clients; hosts and agents that read
         // structuredContent get the same normalised view get_asset and
         // wait_for_job return.
-        structuredContent: jobView(data as Parameters<typeof jobView>[0]),
+        structuredContent: jobView(filled as Parameters<typeof jobView>[0]),
       }
     },
   )
@@ -303,7 +326,7 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
       description:
         "Block until one of your jobs finishes (up to timeout_s, max 120 s) and return the same job envelope get_job returns. " +
         "If the job is still running at the deadline the result is status `timeout` (not an error): call wait_for_job again or poll get_job. " +
-        "A held job answers `pending_review` at once — do not re-run it. Use this instead of a tight get_job loop; for a long video render prefer polling every 5–10 s.",
+        "A held job answers `pending_review` at once — do not re-run it. Prefer this to a tight get_job loop; for long video renders poll every 5–10 s.",
       inputSchema: {
         job_id: z.string().min(1),
         timeout_s: z
@@ -348,7 +371,7 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
         .eq("user_id", session.userId)
         .maybeSingle()
       const view = row
-        ? jobView(row as Parameters<typeof jobView>[0])
+        ? jobView(fillJobRenderQuality(row) as Parameters<typeof jobView>[0])
         : { jobId: args.job_id, status: waited.status, outputUrl: waited.outputUrl, outputData: waited.outputData, errorMessage: waited.error, jobType: waited.jobType }
       const summary =
         view.status === "completed"
