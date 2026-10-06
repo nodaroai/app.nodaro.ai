@@ -771,6 +771,26 @@ describe("add-captions handler — maxWordsPerLine reaches the render plan", () 
   })
 })
 
+// A request built from a wired caption plan carries ONLY videoUrl, segments and
+// usageLogId — every segment self-sourced, no top-level lever. It must take the
+// Remotion segment render (never the drawtext burn) and never transcribe.
+describe("add-captions handler — a segments-only payload from a caption plan", () => {
+  const handler = ffmpegHandlers["add-captions"]
+
+  it("renders both segments through Remotion without transcribing", async () => {
+    const plate = { startMs: 0, endMs: 1400, text: "Sample hook", style: "subtitle", look: "clean", positionY: 20 }
+    const body = { startMs: 1400, endMs: 5300, captions: [{ text: "one", startMs: 1500, endMs: 1800 }], style: "word-highlight", look: "outline" }
+    const job = makeJob("add-captions", { videoUrl: "https://v.mp4", segments: [plate, body], usageLogId: "u-1" })
+
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockRenderQueueAdd).toHaveBeenCalledTimes(1)
+    const plan = mocks.mockRenderQueueAdd.mock.calls[0][1].plan as { segments?: Array<{ startMs: number; endMs: number }> }
+    expect(plan.segments?.map((s) => [s.startMs, s.endMs])).toEqual([[0, 1400], [1400, 5300]])
+    expect(mocks.mockTranscribe).not.toHaveBeenCalled()
+  })
+})
+
 // ---------------------------------------------------------------------------
 // apply-edl — liveness budget
 // ---------------------------------------------------------------------------

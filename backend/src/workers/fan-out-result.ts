@@ -1,4 +1,4 @@
-import type { RunResultRowStamp } from "@nodaro/shared"
+import { FAN_OUT_ALL_OR_NOTHING_TYPES, fanOutItemMeta, type FanOutItemMeta, type RunResultRowStamp } from "@nodaro/shared"
 import type { NodeOutput } from "../services/workflow-engine/types.js"
 import type { ExecuteNodeResult } from "../services/workflow-engine/node-executor.js"
 import { DrainAbortError } from "../lib/worker-drain.js"
@@ -70,11 +70,18 @@ function rowStampOf(result: ExecuteNodeResult): RunResultRowStamp {
  *     keep the successful results, set genuineFailure for the caller to log,
  *     and hydrate the primary output from the first successful iteration so a
  *     failed/cancelled index 0 doesn't blank it.
+ *   - an ALL-OR-NOTHING node type (`FAN_OUT_ALL_OR_NOTHING_TYPES`, UGC Clip)
+ *     with ANY genuine failure                              -> THROW the first
+ *     one; nothing partial reaches a Bundle edge (spec R17). Cancellation-only
+ *     rejections are not failures. Already-started items finished and settled;
+ *     their jobs are reused on the next run.
  */
 export function assembleFanOutResult(
   settled: PromiseSettledResult<FanOutIterationValue>[],
   itemCount: number,
+  nodeType?: string,
 ): FanOutAssembly {
+  const allOrNothing = nodeType !== undefined && FAN_OUT_ALL_OR_NOTHING_TYPES.has(nodeType)
   const allResults: string[] = new Array(itemCount).fill("")
   // Each row's own freshness key (Video Overlay: every list item is its own
   // composition) — row-aligned with allResults, "" where the row has none.
@@ -86,6 +93,9 @@ export function assembleFanOutResult(
   // settle order and cannot be paired with the rows by position.
   const allStamps: RunResultRowStamp[] = Array.from({ length: itemCount }, () => ({}))
   const allJobIds: string[] = []
+  // Each row's notes (warnings + real length) — row-aligned with allResults.
+  // Filled only for all-or-nothing types (UGC Clip); nothing else reads it.
+  const allMeta: (FanOutItemMeta | null)[] = new Array(itemCount).fill(null)
   let firstOutput: NodeOutput | undefined            // iteration 0's output (preferred primary)
   let firstSuccessfulOutput: NodeOutput | undefined  // first fulfilled output (fallback primary)
   let succeededCount = 0
@@ -104,6 +114,7 @@ export function assembleFanOutResult(
         anyCompositionKey = true
       }
       allStamps[index] = rowStampOf(result)
+      if (allOrNothing) allMeta[index] = fanOutItemMeta(result.output)
       succeededCount++
       if (index === 0) firstOutput = result.output
       if (!firstSuccessfulOutput) firstSuccessfulOutput = result.output
@@ -129,6 +140,11 @@ export function assembleFanOutResult(
     }
   }
 
+  // All-or-nothing (spec R17): one genuine failure fails the node; nothing partial reaches a Bundle edge.
+  if (genuineFailure !== undefined && allOrNothing) {
+    throw genuineFailure instanceof Error ? genuineFailure : new Error(String(genuineFailure))
+  }
+
   if (succeededCount === 0 && genuineFailure !== undefined) {
     throw genuineFailure instanceof Error
       ? genuineFailure
@@ -145,6 +161,9 @@ export function assembleFanOutResult(
     // The primary's `resultCompositionKey` is iteration 0's; the rows carry their own.
     ...(anyCompositionKey ? { listResultCompositionKeys: allCompositionKeys } : {}),
     listResultStamps: allStamps,
+    ...(allMeta.some(Boolean)
+      ? { listResultMeta: allMeta.map((m): FanOutItemMeta => m ?? { warnings: [], durationSec: null }) }
+      : {}),
   }
 
   return {

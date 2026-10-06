@@ -3978,7 +3978,15 @@ export async function addCaptionsApi(videoUrl: string, text: string, style?: str
   // style; only highlightColor + animate are kinetic-only (see the strip below).
   look?: string; fontFamily?: string; fontWeight?: number; strokeColor?: string; strokeWidth?: number; highlightColor?: string; uppercase?: boolean; positionY?: number; animate?: boolean;
   maxWordsPerLine?: number;
+  /** Timed segments built from a wired caption plan (styleCaptionPlan). When set the request
+   *  is exactly { videoUrl, segments, userId } — no text, style or lever may ride along. */
+  segments?: Record<string, unknown>[];
 }): Promise<{ jobId: string }> {
+  if (opts?.segments) {
+    const planBody: Record<string, unknown> = { videoUrl, segments: opts.segments }
+    if (userId) planBody.userId = userId
+    return apiJson("/v1/add-captions", { body: planBody, workflowId: true, label: "apiErr.startAddCaptions" })
+  }
   // text is OMITTED when empty — the route's schema is `min(1).optional()`,
   // so sending `text: ""` fails validation even though absent-text is the
   // normal auto-transcribe request (#759's second half: with the guard fixed,

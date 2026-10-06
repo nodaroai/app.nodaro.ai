@@ -9,6 +9,7 @@ import {
   getNodeResult,
   getOutputType,
   normalizeTemplateCategory,
+  stripUgcRunState,
   templateCategoryStoredValues,
 } from "@nodaro/shared"
 import { sanitizeSlugBase, generateSlug, getCreatorDisplayName } from "../lib/marketplace-helpers.js"
@@ -478,7 +479,8 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
     const complexity = calculateComplexity(nodes, edges)
     // The listed price counts the whole graph, preview stop rule or not.
     const estimatedCredits = await estimateWorkflowListingCredits(nodes as unknown as EstimateNode[], edges as unknown as EstimateEdge[])
-    const snapshotNodes = nodes
+    // Whoever clones this template gets the snapshot: UGC run state (a kept creator, the last plan, clip tickets) never ships.
+    const snapshotNodes = stripUgcRunState(nodes)
 
     // Resolve the source URL for the template preview with priority:
     //   1. explicit previewMediaUrl from request body

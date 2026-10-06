@@ -21,9 +21,13 @@ import {
   TRANSCRIBE_LANES,
   TRANSCRIBE_PROVIDER_CAPABILITIES,
   transcribeProvidersWithWordTimestamps,
+  captionFontWeightSchema,
+  captionInputSchema,
+  captionSegmentInputSchema,
+  findSegmentOverlap,
+  nonBlankCaptionText,
 } from "@nodaro/shared"
-import { captionFontWeightSchema } from "../lib/plan-schemas.js"
-import { captionsNeedWordTimings, findSegmentOverlap, isStaticTextCaptionSource } from "../providers/video/caption-segments.js"
+import { captionsNeedWordTimings, isStaticTextCaptionSource } from "../providers/video/caption-segments.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 
@@ -38,52 +42,6 @@ function safeParseJsonForTranscript(v: string): unknown {
     return undefined
   }
 }
-
-// A text caption source must carry a visible glyph — whitespace-only text
-// synthesises to zero words (splitWithLeadingSpace drops it) and would leave the
-// render with no captions, failing plan validation AFTER credits reserve. Reject
-// it as a clean 400 instead.
-const nonBlankText = z.string().min(1).refine((t) => /\S/.test(t), { message: "text must contain a non-whitespace character" })
-
-const captionInputSchema = z.object({
-  text: z.string(),
-  // Word-timed entry (one per word for the kinetic styles). startMs/endMs are
-  // the visibility window and drive the highlight; timestampMs is the word
-  // timestamp used by tiktok-words token timing; confidence is metadata,
-  // ignored by rendering. timestampMs/confidence are optional (default null).
-  startMs: z.number().min(0),
-  endMs: z.number().min(0),
-  timestampMs: z.number().min(0).nullable().default(null),
-  confidence: z.number().min(0).max(1).nullable().default(null),
-})
-
-// One caption SEGMENT: a time range with optional style/look overrides (each
-// inherits the top-level value when omitted) and optional own words (`text` or
-// `captions[]`; falls back to the shared transcript filtered to the range).
-// A segmented render is entirely Remotion, so any `style` (incl. subtitle) and
-// any look lever is valid on a segment.
-const captionSegmentInputSchema = z.object({
-  startMs: z.number().min(0),
-  endMs: z.number().min(0),
-  style: z.enum(ALL_CAPTION_STYLES).optional(),
-  position: z.enum(["bottom", "top", "center"]).optional(),
-  fontSize: z.number().min(12).max(200).optional(),
-  color: z.string().optional(),
-  backgroundColor: z.string().optional(),
-  // A named look preset (outline/clean); explicit levers below override it.
-  look: z.enum(CAPTION_LOOK_IDS).optional(),
-  fontFamily: z.enum(SUPPORTED_FONT_NAMES).optional(),
-  fontWeight: captionFontWeightSchema.optional(),
-  strokeColor: z.string().optional(),
-  strokeWidth: z.number().min(0).max(40).optional(),
-  highlightColor: z.string().optional(),
-  uppercase: z.boolean().optional(),
-  positionY: z.number().min(0).max(100).optional(),
-  animate: z.boolean().optional(),
-  maxWordsPerLine: z.number().int().min(CAPTION_MAX_WORDS_PER_LINE_MIN).max(CAPTION_MAX_WORDS_PER_LINE_MAX).optional(),
-  text: nonBlankText.optional(),
-  captions: z.array(captionInputSchema).optional(),
-}).refine((s) => s.endMs > s.startMs, { message: "segment endMs must be greater than startMs" })
 
 function buildAddCaptionsCreditId(body: unknown): string {
   if (!body || typeof body !== "object") return "add-captions"
@@ -120,7 +78,7 @@ function buildAddCaptionsCreditId(body: unknown): string {
 // failure the refine below guards against.
 export const addCaptionsBody = z.object({
   videoUrl: safeUrlSchema,
-  text: nonBlankText.optional(),
+  text: nonBlankCaptionText.optional(),
   captions: z.array(captionInputSchema).optional(),
   // A wired upstream Transcript (from `transcribe` or `apply-edl`'s json
   // handle) used as the caption source. Object or JSON string — normalized +

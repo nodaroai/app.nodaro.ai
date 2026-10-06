@@ -283,6 +283,7 @@ Key points your generated UI must respect:
 
 - **Form keys are `nodeId`, not field labels.** When the user submits, the body shape is `{ inputOverrides: { [nodeId]: { [field]: value } } }`.
 - **`allowedValues` is enforced server-side.** Submitting a value not in the list returns 400 `validation_error`.
+- **Picker restrictions are enforced server-side too.** A picker node (Setting, Mood, Person, ...) can be limited to a subset of its catalog in `snapshotSettings.presentationSettings.cardMeta[nodeId]`: `pickerAllowedValues` for a single-dimension picker, `pickerAllowedValuesByField` (`{ field: [ids] }`) for a multi-dimension one such as Person. A submitted value outside the list returns 400 `validation_error` (`Invalid value for <field>: <value>. Allowed: ...`), including on apps that were already published. To withdraw a pick, omit the key (or send an empty value); do not send the catalog default.
 - **Pre-fill defaults from `snapshotNodes[i].data`.** A user who submits without changing anything still gets a meaningful run.
 - **Show `estimatedCredits`** somewhere visible — users like knowing the cost.
 - **If `maxRunsPerUserPerDay` is set, surface it** (e.g. "You've used 2 of 5 today") to avoid surprise 429s.
@@ -482,7 +483,7 @@ All errors have shape `{ "error": { "code": "...", "message": "..." } }`.
 
 | HTTP | Code | Cause | Action |
 |---|---|---|---|
-| 400 | `validation_error` | Bad `inputOverrides` shape, value not in `allowedValues`, malformed slug | Fix the request body |
+| 400 | `validation_error` | Bad `inputOverrides` shape, value not in `allowedValues` or a picker card's allowed list, malformed slug | Fix the request body |
 | 400 | `locked_field` | An `inputOverrides` entry names a destination on an outbound node (a Webhook Output's `url`, a publisher's account, a scraper's target) | Remove it — where the app sends to or fetches from is decided by the app itself |
 | 401 | `unauthorized` | Missing/expired/revoked token | Re-mint or re-authorize |
 | 402 | `insufficient_app_credits` | Token's account is out of credits | Top up credits or switch plan |

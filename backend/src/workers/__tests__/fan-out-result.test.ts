@@ -155,5 +155,31 @@ describe("assembleFanOutResult", () => {
     const r = assembleFanOutResult([ok(0, "https://img/0.png"), ok(1, "https://img/1.png")], 2)
     expect(r.output).not.toHaveProperty("listResultCompositionKeys")
   })
-})
 
+  // All-or-nothing (spec §6.4.2, R17): UGC Clip must not silently drop a beat.
+  it("an all-or-nothing type fails on ONE genuine failure and keeps nothing partial", () => {
+    expect(() => assembleFanOutResult([ok(0, "https://cdn.example/1.mp4"), fail("provider 503")], 2, "ugc-clip")).toThrow("provider 503")
+  })
+  it("a normal type keeps today's partial result", () => {
+    const r = assembleFanOutResult([ok(0, "a"), fail("provider 503")], 2, "generate-image")
+    expect(r.output.listResults).toEqual(["a", ""])
+    expect(r.genuineFailure).toBeDefined()
+  })
+  it("a cancellation-only tail is not a failure for an all-or-nothing type", () => {
+    const r = assembleFanOutResult([ok(0, "a"), fail("Execution cancelled")], 2, "ugc-clip")
+    expect(r.succeededCount).toBe(1)
+  })
+  it("returns rows in list order whatever the completion order, with row-aligned meta", () => {
+    const r = assembleFanOutResult(
+      [ok(1, "b", { output: { clipWarnings: ["frame_check_failed"], durationSec: 9 } }), ok(0, "a", { output: { durationSec: 12 } })],
+      2,
+      "ugc-clip",
+    )
+    expect(r.output.listResults).toEqual(["a", "b"])
+    expect(r.output.listResultMeta).toEqual([{ warnings: [], durationSec: 12 }, { warnings: ["frame_check_failed"], durationSec: 9 }])
+  })
+  it("only all-or-nothing types carry per-item meta (nothing else reads it)", () => {
+    expect(assembleFanOutResult([ok(0, "a", { output: { durationSec: 5 } })], 1, "generate-image").output).not.toHaveProperty("listResultMeta")
+    expect(assembleFanOutResult([ok(0, "a")], 1).output).not.toHaveProperty("listResultMeta")
+  })
+})

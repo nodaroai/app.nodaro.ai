@@ -27,9 +27,9 @@ const KEYS = (Object.keys(en) as MessageKey[]).filter((k) => /^proccfg\.videoOve
 const placeholders = (s: string) => [...s.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort()
 
 describe("Video Overlay strings in every chrome locale", () => {
-  it("covers every registered locale and the node's 62 keys", () => {
+  it("covers every registered locale and the node's 66 keys", () => {
     expect(new Set(registeredChromeLocales())).toEqual(new Set(["en", ...Object.keys(DICTS)]))
-    expect(KEYS).toHaveLength(62)
+    expect(KEYS).toHaveLength(66)
   })
 
   for (const [locale, dict] of Object.entries(DICTS)) {

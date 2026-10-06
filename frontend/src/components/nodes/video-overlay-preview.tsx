@@ -32,6 +32,8 @@ export interface VideoOverlayPreviewProps {
   readonly sources: ReadonlyArray<string | undefined>
   /** Per slot, the EXPANDED layer (the default badge for an untouched slot). */
   readonly layers: ReadonlyArray<VideoOverlayLayer>
+  /** The wired layer plan's EXPANDED layers (each with its own `imageUrl`): drawn under the slot layers, read-only — no selection, no drag handles. */
+  readonly planLayers?: ReadonlyArray<VideoOverlayLayer>
   readonly outputAspect?: VideoOverlayOutputAspect
   readonly baseFit: VideoOverlayFit
   readonly backgroundColor: string
@@ -191,7 +193,13 @@ export function VideoOverlayPreview(p: VideoOverlayPreviewProps) {
   // Each slot at its OWN position (slot = i + 1), whatever a JSON writer stored
   // in `slot` — the engine assemblies stamp the same, so the stage and the
   // render stack alike.
-  const order = videoOverlayRenderOrder(p.layers.map((l, i) => ({ zIndex: l?.zIndex, slot: i + 1 })))
+  // The wired plan's layers go in the same ordering (they sit under every slot
+  // layer unless they set a zIndex), so the stage stacks exactly as the worker does.
+  const planLayers = p.planLayers ?? []
+  const order = videoOverlayRenderOrder([
+    ...planLayers.map((l, i) => ({ zIndex: l.zIndex, planLayer: i + 1 })),
+    ...p.layers.map((l, i) => ({ zIndex: l?.zIndex, slot: i + 1 })),
+  ])
   const videoFit = p.outputAspect ? (p.baseFit === "contain" ? "contain" : "cover") : "fill"
   const selectedDrawn = p.selected !== null && !!p.sources[p.selected] && !!p.layers[p.selected] && hasDrawableVideoOverlayBox(p.layers[p.selected]) && videoOverlayLayerLive(p.layers[p.selected]!, time)
 
@@ -240,7 +248,42 @@ export function VideoOverlayPreview(p: VideoOverlayPreviewProps) {
           )}
           {guides.v.map((f, i) => <div key={`v${i}`} className="absolute top-0 bottom-0 w-px bg-[#ff0073] pointer-events-none" style={{ left: `${f * 100}%` }} />)}
           {guides.h.map((f, i) => <div key={`h${i}`} className="absolute left-0 right-0 h-px bg-[#ff0073] pointer-events-none" style={{ top: `${f * 100}%` }} />)}
-          {order.map((i, z) => {
+          {order.map((entry, z) => {
+            if (entry < planLayers.length) {
+              // A plan layer: read-only, no selection or drag handles.
+              const i = entry
+              const layer = planLayers[i]!
+              const url = layer.imageUrl
+              if (!url || !videoOverlayLayerLive(layer, time) || !hasDrawableVideoOverlayBox(layer)) return null
+              const { drawn } = resolveVideoOverlayGeometry(canvas, layer, aspects[-(i + 1)] ?? 1)
+              const s = stage.scale
+              return (
+                <div
+                  key={`plan${i}`}
+                  className="absolute"
+                  title={t("node.videoOverlayFromPlan")}
+                  style={{ left: drawn.left * s, top: drawn.top * s, width: drawn.width * s, height: drawn.height * s, zIndex: 1 + z, opacity: layer.opacity }}
+                  role="img"
+                  aria-label={t("node.videoOverlayFromPlan")}
+                >
+                  <img
+                    src={url}
+                    alt=""
+                    draggable={false}
+                    className="w-full h-full pointer-events-none"
+                    style={{ objectFit: layer.fit === "cover" ? "cover" : "fill" }}
+                    onLoad={(e) => {
+                      const img = e.currentTarget
+                      if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+                        const a = img.naturalWidth / img.naturalHeight
+                        setAspects((prev) => (prev[-(i + 1)] === a ? prev : { ...prev, [-(i + 1)]: a }))
+                      }
+                    }}
+                  />
+                </div>
+              )
+            }
+            const i = entry - planLayers.length
             const layer = p.layers[i]
             const url = p.sources[i]
             if (!layer || !url || !videoOverlayLayerLive(layer, time)) return null

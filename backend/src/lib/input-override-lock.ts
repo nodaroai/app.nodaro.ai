@@ -17,8 +17,14 @@
  * fields on those nodes (a caption, a limit) stay overridable; destination
  * fields on ordinary nodes (an upload's `url`) stay overridable too. The
  * vocabulary is the copilot's, in `lib/outbound-node-lock.ts`.
+ *
+ * The lock also refuses every key of a UGC node that is not in the allow-list
+ * `UGC_OVERRIDABLE_FIELDS` (`@nodaro/shared`): a runner may choose a creator's
+ * source, gender and photo and a script's length, but may never inject a run's
+ * state (a kept creator, a plan, a clip ticket) into the publisher's graph.
  */
 
+import { findUgcLockedFields } from "@nodaro/shared"
 import {
   DENIED_NODE_TYPES,
   OUTBOUND_SELECTOR_FIELDS,
@@ -31,6 +37,8 @@ export interface LockedOverride {
   readonly nodeType: string
   /** Dotted path of the refused field inside the node's override map. */
   readonly field: string
+  /** Why it is refused. Absent means an outbound-node destination. */
+  readonly kind?: "outbound" | "ugc"
 }
 
 /** The node shape the lock needs — id and type; data is irrelevant. */
@@ -40,8 +48,8 @@ export interface LockableNode {
 }
 
 /**
- * Every override entry that would set a locked field on an outbound node.
- * Pure: neither argument is touched.
+ * Every override entry that would set a locked field on an outbound node, or
+ * any non-allow-listed key on a UGC node. Pure: neither argument is touched.
  *
  * Walks the GRAPH and looks each node up in the map — the same iteration and
  * the same `inputOverrides[node.id]` lookup `applyInputOverridesToNodes` does
@@ -71,8 +79,14 @@ export function findLockedOverrides(
       const key = `${nodeId}\u0000${field}`
       if (seen.has(key)) continue
       seen.add(key)
-      found.push({ nodeId, nodeType, field })
+      found.push({ nodeId, nodeType, field, kind: "outbound" })
     }
+  }
+  for (const entry of findUgcLockedFields(nodes, inputOverrides)) {
+    const key = `${entry.nodeId}\u0000${entry.field}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    found.push({ ...entry, kind: "ugc" })
   }
   return found
 }
@@ -99,17 +113,30 @@ function clip(value: string, max: number): string {
 export function describeLockedOverrides(locked: ReadonlyArray<LockedOverride>): string {
   const shown = locked.slice(0, MESSAGE_MAX_ENTRIES)
   const rest = locked.length - shown.length
-  const list =
-    shown
-      .map(
-        (entry) =>
-          `"${clip(entry.field, MESSAGE_MAX_PATH_CHARS)}" on ${entry.nodeType} node "${clip(entry.nodeId, MESSAGE_MAX_PATH_CHARS)}"`,
-      )
-      .join(", ") + (rest > 0 ? `, and ${rest} more` : "")
-  return (
-    "inputOverrides cannot set a destination — or the selector that chooses one — on an outbound node: " +
-    `where a workflow sends to or fetches from is decided by the workflow itself, not by a run request. Refused: ${list}`
-  )
+  const outbound = shown.filter((entry) => entry.kind !== "ugc")
+  const ugc = shown.filter((entry) => entry.kind === "ugc")
+  const parts: string[] = []
+  if (outbound.length > 0) {
+    const list =
+      outbound
+        .map(
+          (entry) =>
+            `"${clip(entry.field, MESSAGE_MAX_PATH_CHARS)}" on ${entry.nodeType} node "${clip(entry.nodeId, MESSAGE_MAX_PATH_CHARS)}"`,
+        )
+        .join(", ") + (ugc.length === 0 && rest > 0 ? `, and ${rest} more` : "")
+    parts.push(
+      "inputOverrides cannot set a destination — or the selector that chooses one — on an outbound node: " +
+        `where a workflow sends to or fetches from is decided by the workflow itself, not by a run request. Refused: ${list}`,
+    )
+  }
+  for (const entry of ugc) {
+    parts.push(
+      `inputOverrides cannot set "${clip(entry.field, MESSAGE_MAX_PATH_CHARS)}" on a UGC node "${clip(entry.nodeId, MESSAGE_MAX_PATH_CHARS)}".`,
+    )
+  }
+  // With a UGC sentence in the message the overflow cannot ride on the outbound list.
+  if (ugc.length > 0 && rest > 0) parts.push(`${rest} more refused.`)
+  return parts.join(" ")
 }
 
 /** Thrown by the merge; the orchestrator turns it into a failed execution. */

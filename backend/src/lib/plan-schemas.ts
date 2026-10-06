@@ -6,6 +6,7 @@ import {
   CAPTION_MAX_WORDS_PER_LINE_MIN,
   CAPTION_MAX_WORDS_PER_LINE_MAX,
   scene3DAnyPlanSchema,
+  captionFontWeightSchema,
 } from "@nodaro/shared"
 import type { BrandTokens } from "@nodaro/prompts"
 import type { ShotElement } from "@nodaro/shared"
@@ -481,7 +482,7 @@ const captionSchema = z.object({
 // CSS numeric font weight (100–900 in 100 steps). Exported so the add-captions
 // route Zod imports the SAME constraint — the wire body and the render plan
 // can't drift on what a valid weight is.
-export const captionFontWeightSchema = z.number().int().min(100).max(900).multipleOf(100)
+export { captionFontWeightSchema } from "@nodaro/shared"
 
 // The frame rates the burn-captions render accepts. Exported because the worker
 // derives the plan's fps from the SOURCE clip's own frame rate and has to land

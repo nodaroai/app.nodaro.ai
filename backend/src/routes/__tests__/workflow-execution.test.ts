@@ -709,6 +709,18 @@ describe("POST /v1/workflows/:id/run", () => {
     expect(mockOrchestrationQueueAdd).not.toHaveBeenCalled()
   })
 
+  it("refuses an injected UGC run state — 400 locked_field, nothing enqueued", async () => {
+    mockRunWithGraph([{ id: "ugc-1", type: "ugc-creator", data: { source: "sampled", gender: "woman", keepResult: false } }])
+
+    const res = await authedPost(`/v1/workflows/${TEST_WORKFLOW_ID}/run`, {
+      inputOverrides: { "ugc-1": { keepResult: true } },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("locked_field")
+    expect(res.json().error.message).toContain('inputOverrides cannot set "keepResult" on a UGC node "ugc-1".')
+    expect(mockOrchestrationQueueAdd).not.toHaveBeenCalled()
+  })
+
   it("refuses a destination hidden inside a nested override object on a publisher", async () => {
     mockRunWithGraph([{ id: "tg-1", type: "telegram-post", data: {} }])
 

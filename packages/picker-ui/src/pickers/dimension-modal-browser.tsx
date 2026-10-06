@@ -47,6 +47,7 @@ export const DimensionModalBrowser = memo(function DimensionModalBrowser({
   triggerVariant = "full",
   triggerLabel = "Pick by look",
   catalog,
+  field,
 }: {
   readonly entries: ReadonlyArray<DimensionEntry>
   readonly value: string | undefined
@@ -59,6 +60,8 @@ export const DimensionModalBrowser = memo(function DimensionModalBrowser({
   readonly triggerVariant?: "full" | "compact"
   readonly triggerLabel?: string
   readonly catalog?: I18nCatalogId
+  /** The data field these entries are options of — see `DimensionTileGrid`'s `field`. */
+  readonly field?: string
 }) {
   const [open, setOpen] = useState(false)
   // Always call the hook (sentinel when no catalog) so hook order stays stable.
@@ -136,6 +139,7 @@ export const DimensionModalBrowser = memo(function DimensionModalBrowser({
               autoFocusSearch
               showClear
               catalog={catalog}
+              field={field}
             />
           </TileCommitContext.Provider>
         </div>

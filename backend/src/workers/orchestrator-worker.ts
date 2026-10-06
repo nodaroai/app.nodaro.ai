@@ -1780,7 +1780,7 @@ async function executeNodeForList(
   // first genuine failure when NOTHING succeeded (so the orchestrator marks
   // this node failed and the run fail-fasts) instead of the old behavior of
   // always returning success with empty/partial output. See assembleFanOutResult.
-  const assembly = assembleFanOutResult(settled, items.length)
+  const assembly = assembleFanOutResult(settled, items.length, node.type)
   // Report tolerated (non-fatal) iteration failures. assembleFanOutResult throws
   // when NOTHING succeeded, so reaching here means succeededCount >= 1 and the
   // fan-out NODE is marked completed. These failures count toward completed_nodes

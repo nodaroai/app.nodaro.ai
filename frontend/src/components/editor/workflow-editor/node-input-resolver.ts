@@ -3,7 +3,8 @@ import { proShotStills } from "@/lib/scene3d/pro-media-result";
 import { readSunoIds } from "@/lib/suno-ids";
 import { getParameterPromptHint } from "@nodaro/prompts"
 import { DYNAMIC_PRODUCER_TYPES, DEFAULT_CHARACTER_FACET, PARAMETER_NODE_TYPES, getParameterValue, OBJECT_PICKER_NODE_TYPES, parseGroupHandle, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, editPlanSourceDurationSec, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, FAN_OUT_EACH_TYPES, FAN_OUT_EACH_HANDLES, defaultEdgeOutputMode, listResultsServeHandle, compactWithRows, pickHeldRow, liveRowColumn, resolveListFanOut, type FanOutCandidate, type ListFanOut, extractAllGeneratedResults, extractGeneratedJsonAsList, splitGeneratedItems, SOCIAL_POST_NODE_TYPES, resolveSourceThroughConnectedList, VARIABLES_HANDLE_ID, extractReferencedLabels, canonicalVarName, characterMentionSlug, SUNO_TRACK_SOURCE_TYPES, isFanInEdge, isFanInNodeType, videoLinkPageUrl, socialSearchPostVideo, ownsItsList, savedRenderBatchUrls, isRenderNodeType, renderNodeOf, rendersLatestBatch } from "@nodaro/shared"
-import type { EntityKind, ConnectedReference } from "@nodaro/shared"
+import { clipNotesFrom, fanOutItemMeta } from "@nodaro/shared"
+import type { EntityKind, ConnectedReference, ClipNote, FanOutItemMeta } from "@nodaro/shared"
 import { VIDEO_OVERLAY_LAYER_PLAN_HANDLE, videoOverlaySlotOfHandle, editPlanTranscriptOrigin } from "@nodaro/shared"
 import { buildNodeRefMap, resolveTextRefs } from "@/lib/node-refs";
 import { editPlanOutputOf } from "@/lib/edit-plan-saved-output";
@@ -648,7 +649,7 @@ export interface FrontendResolvedInputs {
   overlayImageUrls?: (string | undefined)[];
   /** Text wired into an image-overlay node's "qrText" handle. Mirrors backend ResolvedInputs.overlayQrText. */
   overlayQrText?: string;
-  /** Video Overlay's reserved JSON layer-plan input — routed, not read in v1. Mirrors backend ResolvedInputs.layerPlan. */
+  /** Video Overlay's JSON layer-plan input — read by the assembly (plan layers first). Mirrors backend ResolvedInputs.layerPlan. */
   layerPlan?: string;
   audioUrl?: string;
   audioUrl2?: string;
@@ -727,6 +728,11 @@ export interface FrontendResolvedInputs {
    *  backend ResolvedInputs.edl / transcript / sources. */
   edl?: string;
   transcript?: string;
+  /** add-captions: a wired CaptionPlan (stringified json). Wins over text, segments and transcript.
+   *  Mirrors backend ResolvedInputs.captionPlan. */
+  captionPlan?: string;
+  /** UGC Cards' `notes` input: each clip's warnings and real length. Mirrors backend ResolvedInputs.clipNotes. */
+  clipNotes?: ClipNote[];
   sources?: string[];
   /** edit-plan: the optional silence-ranges (stringified json) wired into the
    *  `silence` handle, and the wired media sources (node id + url + kind) from
@@ -1301,6 +1307,16 @@ export function resolveNodeInputs(
     const edgeMode = (srcEdge.data as Record<string, unknown> | undefined)
       ?.outputMode as string | undefined;
     const srcData = src.data as Record<string, unknown>;
+    // UGC Cards' notes: each clip's warnings and real length (spec §6.4.3) — never URLs.
+    // (`ugc-cards` joins SceneNodeType when the UGC nodes register, Task C1; compared as a string until then.)
+    if ((node.type as string) === "ugc-cards" && srcEdge.targetHandle === "notes") {
+      const hasRun = srcData.generatedVideoUrl !== undefined || srcData.clipWarnings !== undefined || srcData.durationSec !== undefined;
+      inputs.clipNotes = clipNotesFrom(
+        srcData.__listResultMeta as ReadonlyArray<FanOutItemMeta | null | undefined> | undefined,
+        hasRun ? fanOutItemMeta({ clipWarnings: srcData.clipWarnings, durationSec: srcData.durationSec }) : undefined,
+      );
+      continue;
+    }
     // split-media uses outputChunkIndex routing, skip __listResults.
     // Group + Collect: route through extractNodeOutputAsList (no __listResults on data).
     // Selector: dual-output list — picked vs rest channel selected by edge.sourceHandle.
@@ -1596,8 +1612,8 @@ export function resolveNodeInputs(
     }
 
     // Video Overlay routes by HANDLE too: "video" is the base, "overlay".."overlay12"
-    // the layer images (index-aligned with data.layers[]), the reserved JSON id
-    // "layerPlan" is routed but not read in v1. An edge with no known handle
+    // the layer images (index-aligned with data.layers[]), the JSON id
+    // "layerPlan" is read by the assembly (plan layers first). An edge with no known handle
     // fills the base only while it is empty. Mirrors backend input-resolver.ts.
     if (node.type === "video-overlay") {
       const handle = srcEdge?.targetHandle ?? "";
@@ -1957,6 +1973,12 @@ export function resolveNodeInputs(
     // input-resolver add-captions branch.
     if (node.type === "add-captions" && srcEdge.targetHandle === "transcript") {
       inputs.transcript = output;
+      continue;
+    }
+    // add-captions `captionPlan` (json) input — a CaptionPlan from a creator node,
+    // routed by handle like `transcript`. Mirror of the backend input-resolver.
+    if (node.type === "add-captions" && srcEdge.targetHandle === "captionPlan") {
+      inputs.captionPlan = output;
       continue;
     }
 

@@ -60,6 +60,8 @@ const { transcribeRoutes } = await import("@/routes/transcribe.js")
 const { videoOverlayRoutes } = await import("@/routes/video-overlay.js")
 const { addCaptionsRoutes } = await import("@/routes/add-captions.js")
 const { silenceDetectRoutes } = await import("@/routes/silence-detect.js")
+const { generateImageRoutes } = await import("@/routes/generate-image.js")
+const { imageToImageRoutes } = await import("@/routes/image-to-image.js")
 
 const URLS: Record<string, string> = {
   generate_video: "/v1/text-to-video",
@@ -73,6 +75,8 @@ const URLS: Record<string, string> = {
   overlay_images: "/v1/video-overlay",
   add_captions: "/v1/add-captions",
   silence_detect: "/v1/silence-detect",
+  generate_image: "/v1/generate-image",
+  image_to_image: "/v1/image-to-image",
 }
 
 const VIDEO = "https://cdn.example/clip.mp4"
@@ -98,6 +102,12 @@ const CASES: Array<{ tool: string; quoted: Record<string, unknown>; added: Recor
   { tool: "add_captions", quoted: { segments: [{ style: "subtitle" }, { style: "word-highlight" }] }, added: { video_url: VIDEO } },
   { tool: "generate_speech", quoted: { text: "hello there", model: "elevenlabs-v3" }, added: { voice_id: "Rachel" } },
   { tool: "silence_detect", quoted: {}, added: { audio_url: VIDEO } },
+  // The creator image and the realism pass: the quote rule maps the call with ugcCallToRouteBody and asks the route's own id function.
+  { tool: "generate_image", quoted: { prompt: "a person", model: "nano-banana-pro", aspect_ratio: "3:4", resolution: "1K" }, added: {} },
+  { tool: "generate_image", quoted: { prompt: "a person", model: "gpt-image-2", aspect_ratio: "3:4", resolution: "2K" }, added: {} },
+  { tool: "generate_image", quoted: { prompt: "a person", model: "qwen", aspect_ratio: "3:4" }, added: {} },
+  { tool: "image_to_image", quoted: { prompt: "make it real", model: "gpt-image-2", resolution: "2K" }, added: { image_url: IMAGE } },
+  { tool: "image_to_image", quoted: { prompt: "make it real", model: "qwen-i2i" }, added: { image_url: IMAGE } },
 ]
 
 /** The verb receives `segments` WITH times (the real call's); the quote item carries them without. */
@@ -120,7 +130,7 @@ beforeAll(async () => {
     })
   }
   routes = Fastify({ logger: false })
-  for (const plugin of [textToVideoRoutes, textToSpeechRoutes, extractFrameRoutes, imageCollageRoutes, imageToTextRoutes, combineVideosRoutes, forcedAlignmentRoutes, transcribeRoutes, videoOverlayRoutes, addCaptionsRoutes, silenceDetectRoutes]) {
+  for (const plugin of [textToVideoRoutes, textToSpeechRoutes, extractFrameRoutes, imageCollageRoutes, imageToTextRoutes, combineVideosRoutes, forcedAlignmentRoutes, transcribeRoutes, videoOverlayRoutes, addCaptionsRoutes, silenceDetectRoutes, generateImageRoutes, imageToImageRoutes]) {
     await routes.register(plugin)
   }
   await routes.ready()

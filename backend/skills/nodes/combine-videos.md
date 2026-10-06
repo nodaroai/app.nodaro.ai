@@ -1,7 +1,7 @@
 ---
 node_type: combine-videos
-generated_at: 2026-10-04T11:03:01.382Z
-generated_from: 7d3b3cf86
+generated_at: 2026-10-06T06:15:10.228Z
+generated_from: 9d6d0a802
 ---
 
 # Combine Videos
@@ -22,6 +22,7 @@ generated_from: 7d3b3cf86
 
 **Optional data fields:**
 - `currentJobProgress?: number`
+- `passThroughWarning?: PassThroughWarning`
 - `audioCrossfadeCurve?: string`
 - `audioCrossfadeDuration?: number`
 - `smartCutEnabled?: boolean`

@@ -4,7 +4,9 @@ import {
   captionRoutesToRemotion,
   estimateCombineVideosCredits,
   resolveLlmCreditId,
+  ugcCallToRouteBody,
 } from "@nodaro/shared"
+import type { FastifyRequest } from "fastify"
 import { z } from "zod"
 import { getAppSettings } from "../../lib/app-settings.js"
 import type { BillingContext } from "../../lib/billing-context.js"
@@ -15,10 +17,13 @@ import { llmPayloadFields, type LlmMcpArgs } from "../../lib/mcp/tools/_llm-fiel
 import { MCP_TRANSCRIBE_PROVIDER } from "../../lib/mcp/tools/verbs-audio.js"
 import { supabase } from "../../lib/supabase.js"
 import { resolveVideoRequestNorm } from "../../lib/video-request-norm.js"
+import { resolveImageCreditIdentifier } from "../../routes/generate-image.js"
+import { resolveImageToImageCreditIdentifier } from "../../routes/image-to-image.js"
 import { getModelCreditCostFromDB, type ModelPricing } from "../billing/credits.js"
 import {
   modelAvailabilityNeedsGates,
   modelAvailabilityRefusal,
+  TIER_ORDER,
   type ModelAvailabilityGates,
 } from "../billing/model-availability.js"
 import { effectiveTierOf, payerProfileId, spendGates } from "../billing/org-entitlements.js"
@@ -127,6 +132,16 @@ const PRICING: Record<string, (args: Readonly<Record<string, unknown>>, ctx: Quo
   image_collage: (args) => ({ id: imageCollageCreditModelIdentifier(args.resolution) }),
   // image_to_text → POST /v1/image-to-text/describe: the LLM tier from the verb's own LLM fields.
   image_to_text: (args) => ({ id: resolveLlmCreditId("image-to-text", llmPayloadFields(args as LlmMcpArgs)) }),
+  // generate_image → POST /v1/generate-image: the route's own id function over the body the mapper builds.
+  generate_image: (args) => {
+    const mapped = ugcCallToRouteBody({ tool: "generate_image", args })
+    return mapped && "body" in mapped ? { id: resolveImageCreditIdentifier({ body: mapped.body } as FastifyRequest) } : null
+  },
+  // image_to_image → POST /v1/image-to-image (a realism pass); the image does not change the price.
+  image_to_image: (args) => {
+    const mapped = ugcCallToRouteBody({ tool: "image_to_image", args, imageArg: "image_url" }, { image: "https://price.invalid/x.png" })
+    return mapped && "body" in mapped ? { id: resolveImageToImageCreditIdentifier({ body: mapped.body } as FastifyRequest) } : null
+  },
   // combine_videos → POST /v1/combine-videos: a COMPUTED base (the verb sends no upstream durations).
   combine_videos: (args, ctx) => {
     if (ctx.clipCount < 2) return null
@@ -315,4 +330,35 @@ export async function buildUgcQuote(input: {
   const { spent, skipped } = await spentLines(input.spentJobIds.slice(0, 30), input.userId)
   const total = [...spent, ...lines].reduce((sum, l) => sum + l.credits, 0)
   return { spent, lines, total, skipped }
+}
+
+/** No payer: a planning figure (publish, editor, API-token and template estimates), never a reservation. */
+export const ESTIMATE_CALLER = Object.freeze({ kind: "estimate" as const })
+export type UgcPriceCaller = { userId: string; billingContext?: BillingContext } | typeof ESTIMATE_CALLER
+
+/** Identity, not shape: only the frozen constant is an estimate, so a payer object can never opt out of its gates. */
+const isEstimate = (caller: UgcPriceCaller): caller is typeof ESTIMATE_CALLER => caller === ESTIMATE_CALLER
+
+/** The top tier, never free semantics: an estimate is the price of a runnable model, not a refusal. */
+const ESTIMATE_GATES: ModelAvailabilityGates = { tierForGates: TIER_ORDER[TIER_ORDER.length - 1]!, freeSemantics: false }
+
+/**
+ * The charge-time price of each builder call, in order — the pricer behind the
+ * plugin's `tk.http.priceUgcCalls` (the UGC Clip ceiling) and the canvas quote.
+ * Same rows, same gates as `buildUgcQuote`; an unpriceable call throws
+ * `UgcQuoteError`, never 0. A user caller is priced under the gates the credit
+ * guard will use for that payer; `ESTIMATE_CALLER` reads no profile and is
+ * priced under the top tier's gates (a disabled model still throws).
+ */
+export async function priceUgcCalls(
+  caller: UgcPriceCaller,
+  calls: ReadonlyArray<{ tool: string; args: Readonly<Record<string, unknown>> }>,
+): Promise<number[]> {
+  const callerGates: CallerGates = isEstimate(caller) ? async () => ESTIMATE_GATES : callerGatesOf(caller.userId, caller.billingContext)
+  const out: number[] = []
+  for (const [i, c] of calls.entries()) {
+    const line = await priceItem({ label: `${c.tool} #${i + 1}`, tool: c.tool, args: c.args, count: 1 }, { clipCount: 1 }, callerGates)
+    out.push(line.credits)
+  }
+  return out
 }

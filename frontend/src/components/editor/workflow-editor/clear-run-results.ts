@@ -70,6 +70,7 @@ export const RUN_RESULT_EXTRA_KEYS: readonly string[] = [
   // Fan-out bookkeeping — the run-start reset clears these too (run-handlers LIST_STATE_FIELDS).
   "listResults",
   "__listInputs",
+  "__listResultMeta",
   "__currentRunId",
   "jobRecovering",
   // Media and text outputs.
@@ -110,6 +111,8 @@ export const RUN_RESULT_EXTRA_KEYS: readonly string[] = [
   "overlayVariants",
   "overlayComposition",
   "warningMessage",
+  // A public video node that had nothing to do and passed its input through (R14).
+  "passThroughWarning",
   // Delivery receipts.
   "savedUrl",
   "platformPostId",

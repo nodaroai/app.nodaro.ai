@@ -9,7 +9,7 @@ import { TIER_PARALLELISM } from "@/lib/pricing-data";
 import { hasCredits } from "@/lib/edition";
 import { executeNode } from "./execute-node";
 import type { ExecutionContext } from "./types";
-import { REPEAT_PLACEHOLDER, decodeProviderItem, settledWithLimit, fanOutTextFeedsPrompt, fanOutUrlItemIsText, isFanOutUrlItem, type FanOutPlan } from "@nodaro/shared"
+import { REPEAT_PLACEHOLDER, FAN_OUT_ALL_OR_NOTHING_TYPES, decodeProviderItem, settledWithLimit, fanOutTextFeedsPrompt, fanOutUrlItemIsText, isFanOutUrlItem, type FanOutItemMeta, type FanOutPlan } from "@nodaro/shared"
 import { setSuppressToasts, RUN_START_RESET } from "./poll-job";
 
 /**
@@ -60,6 +60,8 @@ export async function executeNodeForList(
     __listTotal: items.length,
     __listCompleted: 0,
     __listResults: [],
+    // Each iteration writes its own row (`writeListResultMeta`); a new batch starts empty.
+    __listResultMeta: [],
     __listInputs: [...items],
     __currentRunId: runId,
     // Signals the abandon-guard that N iterations share this node's single
@@ -167,7 +169,13 @@ export async function executeNodeForList(
       .filter((r): r is GeneratedResult => r !== null);
 
     useWorkflowStore.getState().updateNodeData(node.id, {
-      executionStatus: failedCount === items.length ? "failed" : "completed",
+      // An all-or-nothing type (UGC Clip) fails on ONE failed item (spec R17);
+      // every other type keeps the partial list unless every item failed.
+      executionStatus:
+        failedCount === items.length ||
+        (failedCount > 0 && FAN_OUT_ALL_OR_NOTHING_TYPES.has(node.type as string))
+          ? "failed"
+          : "completed",
       __listTotal: items.length,
       __listCompleted: completedCount + failedCount,
       __listResults: results,
@@ -398,4 +406,14 @@ export function expandLoopResults(): void {
     edges: [...edges, ...newEdges],
     isDirty: true,
   });
+}
+
+/** One fan-out row's notes (UGC Clip), written by the iteration; reset at batch start. */
+export function writeListResultMeta(nodeId: string, index: number, meta: FanOutItemMeta): void {
+  const store = useWorkflowStore.getState()
+  const node = store.nodes.find((n) => n.id === nodeId)
+  const prev = ((node?.data as Record<string, unknown> | undefined)?.__listResultMeta as FanOutItemMeta[] | undefined) ?? []
+  const next = [...prev]
+  next[index] = meta
+  store.updateNodeData(nodeId, { __listResultMeta: next })
 }

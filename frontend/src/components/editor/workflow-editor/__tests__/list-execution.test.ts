@@ -27,7 +27,7 @@ vi.mock("../execution-graph", () => ({
   extractNodeOutput: (...args: unknown[]) => mockExtractNodeOutput(...args),
 }))
 
-import { executeNodeForList, expandLoopResults } from "../list-execution"
+import { executeNodeForList, expandLoopResults, writeListResultMeta } from "../list-execution"
 import type { ExecutionContext } from "../types"
 import type { WorkflowNode } from "@/types/nodes"
 
@@ -218,6 +218,58 @@ describe("executeNodeForList", () => {
     const lastCall = mockUpdateNodeData.mock.calls[mockUpdateNodeData.mock.calls.length - 1]
     expect(lastCall[1].errorMessage).toContain("1/2 succeeded")
     expect(lastCall[1].errorMessage).toContain("1 failed")
+  })
+
+  // All-or-nothing fan-out (spec §6.4.2, R17): one failed UGC Clip fails the node.
+  it("an all-or-nothing node type fails on ONE failed item and still writes the list in index order", async () => {
+    mockNodes = [makeNode({ type: "ugc-clip" })]
+    mockExecuteNode.mockImplementation(async (_n: unknown, _c: unknown, _p: unknown, _m: unknown, i: number) => {
+      if (i === 1) throw new Error("provider 503")
+      return `https://cdn.example/${i}.mp4`
+    })
+
+    await executeNodeForList(mockNodes[0] as unknown as WorkflowNode, ["a", "b"], makeCtx(), undefined)
+
+    const lastCall = mockUpdateNodeData.mock.calls[mockUpdateNodeData.mock.calls.length - 1]
+    expect(lastCall[1]).toEqual(expect.objectContaining({
+      executionStatus: "failed",
+      __listResults: ["https://cdn.example/0.mp4", ""],
+    }))
+    expect(lastCall[1].errorMessage).toContain("1/2 succeeded")
+  })
+
+  it("a normal node type keeps today's partial result as completed", async () => {
+    mockNodes = [makeNode({ type: "generate-image" })]
+    mockExecuteNode.mockImplementation(async (_n: unknown, _c: unknown, _p: unknown, _m: unknown, i: number) => {
+      if (i === 1) throw new Error("provider 503")
+      return `https://cdn.example/${i}.png`
+    })
+
+    await executeNodeForList(mockNodes[0] as unknown as WorkflowNode, ["a", "b"], makeCtx(), undefined)
+
+    const lastCall = mockUpdateNodeData.mock.calls[mockUpdateNodeData.mock.calls.length - 1]
+    expect(lastCall[1]).toEqual(expect.objectContaining({
+      executionStatus: "completed",
+      __listResults: ["https://cdn.example/0.png", ""],
+    }))
+  })
+
+  it("an all-or-nothing node with every item succeeding completes", async () => {
+    mockNodes = [makeNode({ type: "ugc-clip" })]
+    mockExecuteNode.mockImplementation(async (_n: unknown, _c: unknown, _p: unknown, _m: unknown, i: number) => `v${i}`)
+
+    await executeNodeForList(mockNodes[0] as unknown as WorkflowNode, ["a", "b"], makeCtx(), undefined)
+
+    const lastCall = mockUpdateNodeData.mock.calls[mockUpdateNodeData.mock.calls.length - 1]
+    expect(lastCall[1].executionStatus).toBe("completed")
+  })
+
+  it("resets __listResultMeta to [] at batch start", async () => {
+    mockExecuteNode.mockResolvedValue(undefined)
+
+    await executeNodeForList(mockNodes[0] as unknown as WorkflowNode, ["a", "b"], makeCtx())
+
+    expect(mockUpdateNodeData.mock.calls[0][1]).toEqual(expect.objectContaining({ __listResultMeta: [] }))
   })
 
   it("names why an item failed (toasts are muted for the batch), never a cancelled item's stop", async () => {
@@ -569,5 +621,25 @@ describe("executeNodeForList — each iteration keeps its own result (A1b)", () 
       expect.objectContaining({ url: "c.mp4", jobId: "job-c", thumbnailUrl: "c.jpg", quality: "proxy", clipKey: "4-5" }),
       expect.objectContaining({ url: "old.mp4", jobId: "job-old" }),
     ])
+  })
+})
+
+describe("writeListResultMeta", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockNodes = [makeNode({ type: "ugc-clip", data: { label: "Clip", __listResultMeta: [] } })]
+  })
+
+  it("writes row i and leaves the others, whatever order the iterations finish in", () => {
+    writeListResultMeta("n1", 1, { warnings: ["frame_check_failed"], durationSec: 9 })
+    expect(mockUpdateNodeData).toHaveBeenLastCalledWith("n1", {
+      __listResultMeta: [undefined, { warnings: ["frame_check_failed"], durationSec: 9 }],
+    })
+    // The store applies the patch; the next write reads it back and keeps row 1.
+    mockNodes[0].data.__listResultMeta = [undefined, { warnings: ["frame_check_failed"], durationSec: 9 }]
+    writeListResultMeta("n1", 0, { warnings: [], durationSec: 12 })
+    expect(mockUpdateNodeData).toHaveBeenLastCalledWith("n1", {
+      __listResultMeta: [{ warnings: [], durationSec: 12 }, { warnings: ["frame_check_failed"], durationSec: 9 }],
+    })
   })
 })

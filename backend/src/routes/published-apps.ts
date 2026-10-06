@@ -1,4 +1,4 @@
-import { PREVIEW_RENDER_NESTED } from "@nodaro/shared"
+import { PREVIEW_RENDER_NESTED, stripUgcRunState } from "@nodaro/shared"
 import { previewRendersIn } from "../services/workflow-engine/nested-preview-renders.js"
 import type { SimpleEdge, SimpleNode } from "../services/workflow-engine/types.js"
 import type { FastifyInstance } from "fastify"
@@ -696,7 +696,8 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
           slug,
           icon_url: iconUrl || null,
           version,
-          snapshot_nodes: nodes,
+          // A runner reads this snapshot: UGC run state (a kept creator, the last plan, clip tickets) never ships.
+          snapshot_nodes: stripUgcRunState(nodes as Array<{ type?: unknown; data?: unknown }>),
           snapshot_edges: edges,
           snapshot_settings: workflow.settings || {},
           base_estimated_credits: baseEstimatedCredits,

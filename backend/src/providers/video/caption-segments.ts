@@ -444,19 +444,5 @@ export function captionRenderFpsWithinFrameCap(fps: number, durationSeconds: num
   return Math.ceil(durationSeconds * fps) > BURN_CAPTIONS_MAX_FRAMES ? BURN_CAPTIONS_FPS_FALLBACK : fps
 }
 
-/**
- * Segments must be sorted and non-overlapping. Returns an error string naming
- * the first offending pair, or null when the set is valid. `startMs < endMs`
- * per segment is enforced by the route Zod; this is the cross-segment rule.
- */
-export function findSegmentOverlap(
-  segments: readonly { startMs: number; endMs: number }[],
-): string | null {
-  const sorted = [...segments].sort((a, b) => a.startMs - b.startMs)
-  for (let i = 1; i < sorted.length; i++) {
-    if (sorted[i]!.startMs < sorted[i - 1]!.endMs) {
-      return `segments overlap: [${sorted[i - 1]!.startMs}, ${sorted[i - 1]!.endMs}) and [${sorted[i]!.startMs}, ${sorted[i]!.endMs})`
-    }
-  }
-  return null
-}
+/** Moved to @nodaro/shared (one definition for the route and both engines); re-exported for existing importers. */
+export { findSegmentOverlap } from "@nodaro/shared"

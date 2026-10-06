@@ -396,6 +396,22 @@ export const INPUT_FIELD_MAP: Record<string, InputFieldSchema> = {
   "instrumentation": { key: "production", type: "select" },
   "voice-character": { key: "timbre", type: "select" },
   "voice-delivery": { key: "archetype", type: "select" },
+  // --- UGC (Cloud) ---
+  "ugc-creator": { key: "source", type: "select" },
+}
+
+/**
+ * Extra API-settable keys for node types whose card writes more than one field
+ * (INPUT_FIELD_MAP is one key per node type). Read by extract-app-inputs and the
+ * app runner; every key here must be in UGC_OVERRIDABLE_FIELDS for a UGC type.
+ */
+export const INPUT_FIELD_EXTRA_KEYS: Readonly<Record<string, readonly InputFieldSchema[]>> = {
+  "ugc-creator": [{ key: "gender", type: "select" }, { key: "photoUrl", type: "image-url" }],
+}
+
+/** The extra override fields of a node type (none for most types). */
+export function getInputFieldExtraKeys(nodeType: string): readonly InputFieldSchema[] {
+  return Object.hasOwn(INPUT_FIELD_EXTRA_KEYS, nodeType) ? INPUT_FIELD_EXTRA_KEYS[nodeType]! : []
 }
 
 /** Get the overridable field schema for an input node type. */

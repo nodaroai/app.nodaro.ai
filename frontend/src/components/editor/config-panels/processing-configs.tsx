@@ -435,8 +435,10 @@ export const CAPTION_STROKE_WIDTH_MAX = 40
 // no onValueChange, so without this the user couldn't switch back to plain).
 const LOOK_NONE = "__none"
 
-export function AddCaptionsConfig({ data, onUpdate }: ConfigProps<AddCaptionsData>) {
+export function AddCaptionsConfig({ data, onUpdate, nodeId }: ConfigProps<AddCaptionsData> & { readonly nodeId?: string }) {
   const t = useT()
+  // A wired caption plan styles the opening line with Hook Plate and the rest with this node's style.
+  const planWired = useWorkflowStore((s) => nodeId !== undefined && s.edges.some((e) => e.target === nodeId && e.targetHandle === "captionPlan"))
   const localizeHandle = useLocalizeHandleLabel()
   const isKinetic = data.style !== "subtitle"
   // Every current style honours the pure styling levers (look / font / uppercase
@@ -477,6 +479,7 @@ export function AddCaptionsConfig({ data, onUpdate }: ConfigProps<AddCaptionsDat
 
   return (
     <div className="flex flex-col gap-3">
+      {planWired && <p className="text-xs text-muted-foreground">{t("addCaptions.captionPlanNote")}</p>}
       <div>
         <Label>{t("field.style")}</Label>
         <Select

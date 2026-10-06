@@ -395,6 +395,7 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
   "add-captions":       [
     { handleId: "in", label: "Video", accepts: ACCEPTS_VIDEO },
     { handleId: "transcript", label: "Transcript", accepts: ACCEPTS_JSON },
+    { handleId: "captionPlan", label: "Caption plan", accepts: ACCEPTS_JSON },
   ],
   "extract-audio":      [{ handleId: "in", label: "Video", accepts: ACCEPTS_VIDEO }],
   "remove-audio":       [{ handleId: "in", label: "Video", accepts: ACCEPTS_VIDEO }],
@@ -681,6 +682,7 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
   "video-overlay": [
     { handleId: "video", label: IMAGE_PRODUCER_HANDLE_LABELS["video-overlay"].video, accepts: (s) => isValidVideoOverlayConnection("video", s) },
     ...VIDEO_OVERLAY_HANDLE_IDS.map((h) => ({ handleId: h, label: IMAGE_PRODUCER_HANDLE_LABELS["video-overlay"][h], accepts: (s: string) => isValidVideoOverlayConnection(h, s) })),
+    { handleId: "layerPlan", label: IMAGE_PRODUCER_HANDLE_LABELS["video-overlay"].layerPlan, accepts: (s) => isValidVideoOverlayConnection("layerPlan", s) },
   ],
   "upscale-image": [
     { handleId: "image", label: IMAGE_PRODUCER_HANDLE_LABELS["upscale-image"].image, accepts: (s) => isValidUpscaleImageConnection("image", s) },

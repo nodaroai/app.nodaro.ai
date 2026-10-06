@@ -41,6 +41,7 @@ if (edition === "cloud") {
     publicWorkflow: {} as never,
     orgs: {} as never,
     billing: {} as never,
+    ugc: {} as never,
     policy: {} as never,
     collab: {} as never,
   }

@@ -156,6 +156,7 @@ import { generateMaskRoutes } from "./routes/generate-mask.js"
 import { statsRoutes } from "./routes/stats.js"
 import { cancelJobsRoutes } from "./routes/cancel-jobs.js"
 import { creditsRoutes } from "./ee/routes/credits.js"
+import { ugcQuoteRoutes } from "./ee/routes/ugc-quote.js"
 import { registerCreditsBalanceRoutes } from "./ee/routes/credits-balance.js"
 import { registerCopilotRoutes } from "./ee/routes/copilot.js"
 import { claimSignupGrantRoutes } from "./ee/routes/claim-signup-grant.js"
@@ -619,6 +620,7 @@ export async function buildApp() {
   await app.register(executionStatsRoutes)
   await app.register(cancelJobsRoutes)
   if (hasCredits()) await app.register(creditsRoutes)
+  if (hasCredits()) await app.register(ugcQuoteRoutes)
   if (hasCredits()) await registerCreditsBalanceRoutes(app)
   if (hasCredits()) await registerCopilotRoutes(app)
   if (hasCredits()) await app.register(claimSignupGrantRoutes)

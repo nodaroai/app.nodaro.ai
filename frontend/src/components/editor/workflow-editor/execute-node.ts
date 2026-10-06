@@ -1,6 +1,6 @@
 import { toast } from "sonner";
 import { DEFAULT_OVERLAY_LAYER, OVERLAY_MAX_LAYERS } from "@/types/nodes";
-import { assertCanvasExecutionAllowed, scene3DInputAssetsForEngine, overlayVariantIdFromHandle, readScriptSettings, applySettingsInput, SETTINGS_INPUT_CONSUMERS, resolveMusicProvider, resolveEditPlanSources, describeAudioSyncOffsetIssue, type AudioSyncOffsetSource, transcriptSpeakerLabels, cameraSwitchEdlProblem, cameraSwitchSettingsPayload, renderPlanClipKey, collectionRecordHeadline, isCollectionUrl } from "@nodaro/shared";
+import { captionPlanPassThrough, styleCaptionPlan, combineVideosPassThrough, videoOverlayPassThrough, assertCanvasExecutionAllowed, scene3DInputAssetsForEngine, overlayVariantIdFromHandle, readScriptSettings, applySettingsInput, SETTINGS_INPUT_CONSUMERS, resolveMusicProvider, resolveEditPlanSources, describeAudioSyncOffsetIssue, type AudioSyncOffsetSource, transcriptSpeakerLabels, cameraSwitchEdlProblem, cameraSwitchSettingsPayload, renderPlanClipKey, collectionRecordHeadline, isCollectionUrl } from "@nodaro/shared";
 import { browserRenderPlanBasis } from "./apply-edl-stamps";
 import { findUpstreamSunoIds } from "@/lib/suno-ids";
 import { contentRunResultPatch } from "@/lib/content-run-output";
@@ -126,10 +126,11 @@ import { clampContentIdeasCount, CONTENT_IDEAS_MAX_RECIPE_INPUTS } from "@nodaro
 import { ttsSupportsStitching, normalizeTtsNeighbourText } from "@nodaro/shared";
 import { tx } from "@/lib/i18n";
 import { previewSingleRunRefusal } from "./preview-gate";
+import { completeAsPassThrough } from "./pass-through";
 import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates";
 import {
   readPromptAffixes, unwrapEditPlanOutput, editPlanResultPatch, clampEditPlanClipCount, parseEditPlanMode, asEditPlanTier, resolveSlideshowTransition, ASPECT_RATIO_DIMENSIONS, buildPro3DRenderSource, pro3DRenderTimingOverrides, resolveScene3DAuthoringEngine, COMPOSER_PLAN_MAP, VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, isSeedance2Provider, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, uiResolutionFill, supportsExtendRender, isMinimaxH3Provider, isVeoProvider, isGeminiOmniProvider, MODEL_CATALOG, splitGeneratedItems, LLM_FEATURE_DEFAULTS, resolveVideoProviderForMode, resolveVideoModeForInputs, VIDEO_REF_LIMITS_BY_PROVIDER, resolveEffectiveSourceType, sourceRefKey, hasFeature, countRefModalityEdges, type ReferenceModality, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionSlug, characterMentionableAssetArrays, selectLoraRoutingForMentions, expandExtraRefsToConnectedReferences, resolveSeparator, evaluateJsonPath, stringifyPathResults, alignedFieldList, spreadJsonArrayIfSingleton, zipMergeLists, evaluateJsonExpression, buildExpressionFromVisual, jsonResultToList, tryParseJson, evaluateCondition, evaluateConditionGroup, resolveConditionValue, sortListItems, runSelector, resolveSelectorRefs, buildConditionVariables, VARIABLES_HANDLE_ID, clampSmartCutWindow, resolveGvpAnchorWire, resolveTopazUpscale, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY, unresolvedRefTokens, classifyRefToken, canonicalVarName, parseNodeRef, NODE_REF_PATTERN, DEFAULT_TRANSCRIBE_NODE_PROVIDER, DEFAULT_TEXT_TO_AUDIO_PROVIDER, transcribeLaneSupportsWordTimestamps, transcribeWordTimestampsRefusal, normalizeCaptionNumericLevers } from "@nodaro/shared"
-import { applyPromptAffixes, appendPromptHints, ownMotionHint, buildSeedanceVideoEditPrompt, composeNegative, computeNodePrompt, computeScriptTopic, computeLlmChatFields, pickerFanoutTargets, buildImagePrompt, assembleImageInput, composeVideoPromptText, readDirectionFields, readStructuredFields, readSubjectFields, collectIdentityLockClause, characterLockToRefLock, assembleSunoInput, type AssembleSunoResult, NODE_PROMPT_CANDIDATE_FIELDS } from "@nodaro/prompts"
+import { applyPromptAffixes, appendPromptHints, ownMotionHint, buildSeedanceVideoEditPrompt, composeNegative, computeNodePrompt, computeScriptTopic, computeLlmChatFields, pickerFanoutTargets, buildImagePrompt, assembleImageInput, composeVideoPromptText, readDirectionFields, readStructuredFields, readSubjectFields, collectIdentityLockClause, characterLockToRefLock, assembleSunoInput, type AssembleSunoResult, NODE_PROMPT_CANDIDATE_FIELDS, hookPlateCaptionSegments, CAPTION_SEGMENT_LEVER_KEYS } from "@nodaro/prompts"
 import {
   appendScene3DStillScopingLines,
   collectScene3DLayoutReferences,
@@ -6970,7 +6971,11 @@ function executeNodeCore(
     // the default corner badge (D2); empty slots dropped; `slot` stamped;
     // presets expanded. Mirrors backend payload-builder.ts case "video-overlay".
     const wired = inputs.overlayImageUrls ?? [];
-    const request = assembleVideoOverlayRequest({ videoUrl: baseUrl, data: d, wiredImageUrls: wired });
+    // A wired layer plan rides in `planLayers` (plan layers first, then the slot layers).
+    const request = assembleVideoOverlayRequest({ videoUrl: baseUrl, data: d, wiredImageUrls: wired, planLayers: inputs.layerPlan });
+    // An empty plan with no other layer outputs the base unchanged — free, no job (R14).
+    const pass = videoOverlayPassThrough({ videoUrl: baseUrl, planWired: inputs.layerPlan !== undefined, layerCount: request.layers.length });
+    if (pass && !request.planError) return Promise.resolve(completeAsPassThrough(node.id, pass));
     const verdict = validateVideoOverlayRequest(request);
 
     if (!verdict.ok) {
@@ -6983,7 +6988,7 @@ function executeNodeCore(
     // It also rides on the request (within the route's bound): the worker
     // echoes it into output_data, so a run that lands after a page reload
     // (restore / reconcile read the REST job) reads fresh as well.
-    const resultCompositionKey = videoOverlayCompositionKey({ baseUrl, sources: videoOverlaySlotSources(d.layers ?? [], wired), data: d });
+    const resultCompositionKey = videoOverlayCompositionKey({ baseUrl, sources: videoOverlaySlotSources(d.layers ?? [], wired), data: d, planLayers: inputs.layerPlan });
     const sentKey = resultCompositionKey.length <= VIDEO_OVERLAY_MAX_COMPOSITION_KEY_LENGTH ? { resultCompositionKey } : {};
     setUserPromptTemplate(undefined);
     return runProcessingNode(
@@ -7097,6 +7102,8 @@ function executeNodeCore(
       if (ordered.length >= 2) videoUrls = ordered;
     }
 
+    const single = combineVideosPassThrough(videoUrls);
+    if (single) return Promise.resolve(completeAsPassThrough(node.id, single));
     if (videoUrls.length < 2) {
       toast.error(
         nodeRunError(combineData.label, "nodeRun.needAtLeast2Video"),
@@ -8401,6 +8408,27 @@ function executeNodeCore(
       return Promise.reject(new Error("No video"));
     }
     const d = node.data as AddCaptionsData;
+    // A wired caption plan (spec §6.2): the opening line is Hook Plate, the rest
+    // this node's style — the ONE shared composition the DAG engine runs, checked
+    // against the route's segment schema before the request. The request carries
+    // only videoUrl and segments (no lever can leak into the plate). Nothing
+    // timed → the video passes through, free.
+    if (inputs.captionPlan !== undefined) {
+      const styled = styleCaptionPlan(inputs.captionPlan, node.data as Record<string, unknown>, { segmentsFor: hookPlateCaptionSegments, leverKeys: CAPTION_SEGMENT_LEVER_KEYS });
+      if ("error" in styled) {
+        toast.error(nodeRunText(d.label, styled.error));
+        return Promise.reject(new Error(styled.error));
+      }
+      const pass = captionPlanPassThrough({ videoUrl, planWired: true, segmentCount: styled.segments.length });
+      if (pass) return Promise.resolve(completeAsPassThrough(node.id, pass));
+      return runProcessingNode(
+        node.id,
+        () => addCaptionsApi(videoUrl, "", undefined, undefined, undefined, undefined, undefined, ctx.userId, { segments: styled.segments }),
+        "generatedVideoUrl",
+        "Add Captions",
+        ctx,
+      );
+    }
     // Wired text first, then the node's OWN `text` — the same precedence the DAG
     // engine uses (payload-builder: `resolvedInputs.prompt || resolveRefs(data.text)`).
     // Reading only `inputs.prompt` dropped the authored text of every imported /

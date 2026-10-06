@@ -7,7 +7,7 @@ import type { WardrobeValue, TransitionPosition, TransitionDuration, TransitionI
 import type { ReferencePhotoKind } from "@/lib/reference-photo-routing"
 import { IMAGE_STYLE_PRESETS, GVP_PROVIDERS, getAspectRatiosForVideoModel, getVideoResolutionOptions } from "@/components/editor/config-panels/model-options"
 import type { FrameFit, FrameDelivery } from "@nodaro/shared"
-import type { EditedEdl } from "@nodaro/shared"
+import type { EditedEdl, PassThroughWarning } from "@nodaro/shared"
 import type { ScheduleRule } from "@nodaro/shared"
 import type { VideoOverlayFit, VideoOverlayLayerInput, VideoOverlayOutputAspect, VideoOverlayWarning } from "@nodaro/shared"
 
@@ -3584,6 +3584,8 @@ export type DescribeToPickerData = {
 
 export type CombineVideosData = {
   currentJobProgress?: number
+  /** Set when the last run passed the input through unchanged — nothing to do, nothing charged. */
+  passThroughWarning?: PassThroughWarning
   [key: string]: unknown
   label: string
   /** Any id from `COMBINE_TRANSITIONS` (`@nodaro/shared`). The catalog
@@ -3829,6 +3831,8 @@ export type ProbedVideoInfo = {
  *  wired slot with no settings runs as DEFAULT_VIDEO_OVERLAY_LAYER. */
 export type VideoOverlayData = {
   currentJobProgress?: number
+  /** Set when the last run passed the input through unchanged — nothing to do, nothing charged. */
+  passThroughWarning?: PassThroughWarning
   [key: string]: unknown
   label: string
   layers: Array<VideoOverlayLayerInput | null>
@@ -3911,6 +3915,8 @@ export type MergeVideoAudioData = {
 
 export type AddCaptionsData = {
   currentJobProgress?: number
+  /** Set when the last run passed the input through unchanged — nothing to do, nothing charged. */
+  passThroughWarning?: PassThroughWarning
   [key: string]: unknown
   label: string
   style: CaptionStyle
@@ -8869,10 +8875,10 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     // Base video + the 12 layer handles, index-aligned with data.layers[]
     // (overlay → 0, overlay2 → 1, …). Literal on purpose (the gen-skills
     // parser reads this file as text) — must equal ["video",
-    // ...VIDEO_OVERLAY_HANDLE_IDS]; node-input-handles-completeness pins it.
-    // The reserved JSON id "layerPlan" is deliberately NOT an input: no pip
-    // renders for it in v1.
-    inputs: ["video", "overlay", "overlay2", "overlay3", "overlay4", "overlay5", "overlay6", "overlay7", "overlay8", "overlay9", "overlay10", "overlay11", "overlay12"],
+    // ...VIDEO_OVERLAY_HANDLE_IDS, VIDEO_OVERLAY_LAYER_PLAN_HANDLE]; node-input-handles-completeness pins it.
+    // The JSON id "layerPlan" takes a list of layers (a layer plan), drawn under
+    // the handle layers.
+    inputs: ["video", "overlay", "overlay2", "overlay3", "overlay4", "overlay5", "overlay6", "overlay7", "overlay8", "overlay9", "overlay10", "overlay11", "overlay12", "layerPlan"],
     outputs: ["video-out"],
     defaultData: {
       label: "Video Overlay",
@@ -8934,7 +8940,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Add Captions",
     category: "processing",
     creditCost: 2,
-    inputs: ["in", "transcript"],
+    inputs: ["in", "transcript", "captionPlan"],
     outputs: ["video"],
     defaultData: { label: "Add Captions", style: "subtitle", position: "bottom", fontSize: 32, color: "#ffffff", fieldMappings: {} },
   },

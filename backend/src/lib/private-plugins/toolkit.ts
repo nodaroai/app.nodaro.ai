@@ -10,6 +10,7 @@ import { createSceneRenderingToolkit } from "./scene3d-render-toolkit.js"
 import { completeStructuredMetered } from "./llm-metered.js"
 import { createSSEStream } from "../sse.js"
 import { directVoiceChanger } from "../../providers/elevenlabs/voice-changer.js"
+import { directElevenLabsTTS } from "../../providers/elevenlabs/direct-tts.js"
 import { hostTtsCapabilities } from "./tts-capabilities-toolkit.js"
 import { createScene3DArtifactToolkit } from "./scene3d-artifact-toolkit.js"
 import { createScene3DPlaybackToolkit } from "./scene3d-playback-toolkit.js"
@@ -1260,6 +1261,15 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
     stages: createDurableScene3DStageJournal(),
     providers: {
       directVoiceChanger,
+      // Voice `text` with one ElevenLabs voice and store it under the job's key. `opts.voiceType`
+      // is accepted for the contract and not forwarded: `directElevenLabsTTS` falls back to a
+      // default voice only when `allowDefaultVoiceFallback` is set, which this member never
+      // sets — a missing voice fails the step (SP6 §7).
+      textToSpeech: async (text, opts) => {
+        const audio = await directElevenLabsTTS(text, opts.voiceId, opts.model, opts.languageCode ? { languageCode: opts.languageCode } : {})
+        const audioUrl = await uploadBufferToR2(audio, mediaObjectKey(opts.jobId, "audio", "mp3"), "audio/mpeg", opts.userId)
+        return { audioUrl, durationSec: await probeMediaDuration(audioUrl) }
+      },
       // The host's speech-model capability sheet, from THIS app's catalog —
       // a plugin never reads model capability from its own lagging pin.
       ttsCapabilities: hostTtsCapabilities,
@@ -1444,6 +1454,12 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       hasWaivingRecastRun,
     },
     http: {
+      // Dynamic import keeps the core/ee boundary (see computeGenerateVideoProPricing below).
+      priceUgcCalls: async (caller, calls) => {
+        if (!hasCredits()) throw new Error("UGC pricing needs Nodaro Cloud")
+        const { priceUgcCalls } = await import("../../ee/lib/ugc-quote.js")
+        return priceUgcCalls(caller, calls)
+      },
       supabase,
       internalRequest,
       supportsJobSubmissionContext: true,

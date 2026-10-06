@@ -138,6 +138,17 @@ describe("POST /v1/present/:token/run — the override lock (issue #1555)", () =
     expect(mockOrchestrationQueueAdd).not.toHaveBeenCalled()
   })
 
+  it("refuses a viewer's injected UGC run state — 400 locked_field, nothing enqueued", async () => {
+    mockSharedWorkflow([{ id: "ugc-1", type: "ugc-creator", data: { source: "sampled", gender: "woman", keepResult: false } }])
+
+    const res = await viewerRun({ inputOverrides: { "ugc-1": { keepResult: true } } })
+
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("locked_field")
+    expect(res.json().error.message).toContain('inputOverrides cannot set "keepResult" on a UGC node "ugc-1".')
+    expect(mockOrchestrationQueueAdd).not.toHaveBeenCalled()
+  })
+
   it("still runs with an ordinary input — the override reaches the orchestrator job", async () => {
     mockSharedWorkflow([{ id: "text-1", type: "text-prompt", data: { text: "hello" } }])
 

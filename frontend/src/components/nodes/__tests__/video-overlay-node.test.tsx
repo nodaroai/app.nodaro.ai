@@ -137,6 +137,61 @@ describe("VideoOverlayNode", () => {
     })
   })
 
+  describe("a wired layer plan (spec §6.1)", () => {
+    const planEdges = [
+      { id: "e1", source: "vid", target: "vo", targetHandle: "video" },
+      { id: "e3", source: "plan", target: "vo", targetHandle: "layerPlan" },
+    ]
+    const box = { anchor: "top", x: 0, y: 12, width: 78, height: 52, fit: "contain" } as const
+    const plan = [{ imageUrl: "https://x/s1.png", start: 0, ...box }]
+    function renderPlanNode(planText: string, extra: Record<string, unknown> = {}, layers: unknown[] = []) {
+      seedStore(planEdges, layers, extra)
+      useWorkflowStore.setState((st) => ({ nodes: [...st.nodes, { id: "plan", type: "text-prompt", position: { x: 0, y: 0 }, data: { text: planText } }] }) as never)
+      const data = useWorkflowStore.getState().nodes[0]!.data
+      render(<VideoOverlayNode {...({ id: "vo", data, selected: false } as unknown as NodeProps)} />)
+    }
+
+    it("a plan with a layer enables Run (no handle layer needed)", () => {
+      renderPlanNode(JSON.stringify(plan))
+      expect(screen.getByTestId("run")).not.toBeDisabled()
+    })
+    it("an empty plan with no other layer enables Run — it passes the video through", () => {
+      renderPlanNode("[]")
+      expect(screen.getByTestId("run")).not.toBeDisabled()
+    })
+    it("an unreadable plan disables Run with the invalid_layer_plan reason", () => {
+      renderPlanNode("not json")
+      expect(screen.getByTestId("run")).toBeDisabled()
+      expect(screen.getByTestId("run")).toHaveAttribute("title", "The layer plan must be a list of layers")
+    })
+    it("draws the plan's layer on the stage, read-only, with the hint", () => {
+      const realRO = globalThis.ResizeObserver
+      // A stage with a real size (the setup polyfill never reports one).
+      globalThis.ResizeObserver = class {
+        constructor(private cb: ResizeObserverCallback) {}
+        observe() { this.cb([{ contentRect: { width: 400, height: 300 } } as ResizeObserverEntry], this as unknown as ResizeObserver) }
+        unobserve() {}
+        disconnect() {}
+      } as unknown as typeof ResizeObserver
+      try {
+        renderPlanNode(JSON.stringify(plan))
+        expect(screen.getByRole("img", { name: "From the layer plan" })).toBeInTheDocument()
+      } finally {
+        globalThis.ResizeObserver = realRO
+      }
+    })
+    it("parity: the canvas key equals the key the executor computes with the wired plan → the result reads fresh", () => {
+      const key = videoOverlayCompositionKey({ baseUrl: "https://x/base.mp4", sources: videoOverlaySlotSources([], []), data: { layers: [] }, planLayers: JSON.stringify(plan) })
+      renderPlanNode(JSON.stringify(plan), {
+        executionStatus: "completed",
+        generatedVideoUrl: "https://x/out.mp4",
+        activeResultIndex: 0,
+        generatedResults: [{ url: "https://x/out.mp4", jobId: "j1", resultCompositionKey: key }],
+      })
+      expect(screen.getByRole("button", { name: "Result" })).toHaveAttribute("aria-pressed", "true")
+    })
+  })
+
   describe("freshness of a result a backend run stamped (resultCompositionKey)", () => {
     const wiredEdges = [
       { id: "e1", source: "vid", target: "vo", targetHandle: "video" },

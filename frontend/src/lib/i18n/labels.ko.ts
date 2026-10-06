@@ -223,6 +223,8 @@ const NODE_LABELS_KO: Record<string, string> = {
 
 const HANDLE_LABELS_KO: Record<string, string> = {
   "Offsets": "오프셋",
+  "Layer plan": "레이어 플랜",
+  "Caption plan": "캡션 플랜",
   "QR link": "QR 링크",
   "Extend Source": "연장 원본",
   "Source video": "원본 동영상",

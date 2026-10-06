@@ -270,6 +270,26 @@ export interface PluginProvidersToolkit {
     options?: PluginVoiceChangerOptions,
   ): Promise<Buffer>
   /**
+   * ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump) — `?.`-guard it.
+   * Voices `text` with one ElevenLabs voice and returns the stored file and its
+   * measured length. Mirrors the text-to-speech worker's direct ElevenLabs call
+   * (`workers/handlers/audio-ai.ts`), stored under the job's key (`jobId`) and
+   * counted to the user's storage quota (`userId`). Never enables the
+   * default-voice fallback: a missing voice fails the step, and no other voice
+   * is tried. `voiceType` is accepted for the contract and not forwarded.
+   */
+  textToSpeech?(
+    text: string,
+    opts: {
+      model: string
+      voiceId: string
+      voiceType?: string
+      languageCode?: string
+      jobId: string
+      userId: string
+    },
+  ): Promise<{ audioUrl: string; durationSec: number }>
+  /**
    * The HOST's capability sheet for a text-to-speech model id (e.g.
    * "elevenlabs-v4"), or `undefined` when the id is not a text-to-speech model.
    * Read from the app's own `@nodaro/shared` — see `PluginTtsCapabilities`.
@@ -1565,6 +1585,17 @@ export interface PluginHttpToolkit {
   /** Applies the same configured service/global markup used by creditGuard to
    *  a dynamic pre-markup total, without checking balance or reserving it. */
   applyCreditMarkup(modelIdentifier: string, baseCredits: number): Promise<number>
+  /**
+   * ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump) — `?.`-guard it.
+   * The charge-time price of each UGC builder call (`{ tool, args }`, MCP
+   * argument names), one number per call, in order — the same rows and the same
+   * gates the credit guard uses for that payer. An unpriceable call rejects;
+   * it is never priced 0. Nodaro Cloud only: rejects on any other edition.
+   */
+  priceUgcCalls?(
+    caller: { userId: string; billingContext?: PluginBillingContext },
+    calls: ReadonlyArray<{ tool: string; args: Readonly<Record<string, unknown>> }>,
+  ): Promise<number[]>
   /** Mirrors `supabase` (`lib/supabase.ts`), shaped to VCP route usage. */
   supabase: PluginSupabaseClient
   /** Mirrors `videoQueue` (`lib/queue.ts`), narrowed to the one method used. */
@@ -2884,6 +2915,30 @@ export interface PluginBillingService {
   headroom?(workspaceId: string, userId: string): Promise<{ headroomCredits: number; workspaceLabel?: string } | null>
 }
 
+/** What a UGC video's planned length and inputs ask the plugin to plan (spec §5.4). */
+export interface PluginUgcEstimateInput {
+  readonly targetDurationSec: number
+  readonly screenshotCount: number
+  readonly source: "sampled" | "photo"
+}
+
+/**
+ * The calls a UGC video will make, as the plugin plans them: `tickets` are the
+ * builder's per-clip tickets (opaque to the host), `creatorImage` the creator's
+ * image call (null for a photo creator) and `creatorChecks` the additive slot
+ * for the gender reading on a sampled creator and the photo reading on `photo`.
+ */
+export interface PluginUgcEstimate {
+  readonly tickets: unknown[]
+  readonly creatorImage: { tool: string; args: Record<string, unknown> } | null
+  readonly creatorChecks?: ReadonlyArray<{ tool: string; args: Record<string, unknown> }>
+}
+
+/** UGC planning, provided by the plugin (the host prices what it returns with `http.priceUgcCalls`). */
+export interface PluginUgcService {
+  estimate(input: PluginUgcEstimateInput): PluginUgcEstimate
+}
+
 export interface PluginServices {
   /** Public read projection for extension documents. Called only after the
    * host's share-by-link authorization. Null means unsupported; never return
@@ -2898,6 +2953,11 @@ export interface PluginServices {
    * member here: an older plugin build simply has no workspace payers.
    */
   billing?: PluginBillingService
+  /**
+   * ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump) — `?.`-guard it.
+   * UGC video planning (spec §5.4).
+   */
+  ugc?: PluginUgcService
   /** Model-policy enforcement — narrowed when the policy seam lands. */
   policy?: unknown
   /** Live-document writer — narrowed when the collaboration seam lands. */

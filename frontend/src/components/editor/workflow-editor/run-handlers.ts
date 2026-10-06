@@ -225,6 +225,8 @@ const LIST_STATE_FIELDS: ReadonlyArray<string> = [
   "__listTotal",
   "__listCompleted",
   "__listInputs",
+  // UGC Clip's per-row notes: a later single run must not read a fan-out run's rows.
+  "__listResultMeta",
   "listResults",
   // Selector dual-channel outputs — clear pre-run so stale picked/rest from a
   // previous run don't survive upstream-input changes or run-from-here. The

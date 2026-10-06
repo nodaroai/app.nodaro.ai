@@ -56,9 +56,9 @@ export type VideoOverlayOutputAspect = (typeof VIDEO_OVERLAY_OUTPUT_ASPECTS)[num
 /**
  * Reserved input id for a JSON layer plan. Payload: `VideoOverlayLayer[]` — the
  * same shape as the node's `layers[]`, a `preset` tag allowed and expanded at
- * the boundary. v1 renders NO pip for it: it is not in the node's inputs nor
- * any handle registry; both input resolvers route an edge on it into
- * `inputs.layerPlan`, which v1 ignores.
+ * the boundary. It has a pip on the node; both input resolvers route an edge on
+ * it into `inputs.layerPlan`, which `assembleVideoOverlayRequest` reads (plan
+ * layers first, then the handle layers).
  */
 export const VIDEO_OVERLAY_LAYER_PLAN_HANDLE = "layerPlan"
 /** Box and look bounds. */
@@ -87,7 +87,7 @@ export const VIDEO_OVERLAY_WARNING_CODES = ["clipped", "skipped", "animated_firs
 export type VideoOverlayWarningCode = (typeof VIDEO_OVERLAY_WARNING_CODES)[number]
 export const VIDEO_OVERLAY_ERROR_CODES = [
   "no_layers", "too_many_layers", "incomplete_box", "layer_without_image",
-  "time_out_of_range", "end_before_start", "fit_without_aspect", "field_out_of_bounds",
+  "time_out_of_range", "end_before_start", "fit_without_aspect", "field_out_of_bounds", "invalid_layer_plan",
 ] as const
 export type VideoOverlayErrorCode = (typeof VIDEO_OVERLAY_ERROR_CODES)[number]
 
@@ -111,6 +111,8 @@ export interface VideoOverlayLayer {
   imageUrl?: string
   /** 1-based canvas slot (overlay = 1 … overlay12 = 12; 13 and up handle-less), stamped by both engine assemblies. Messages prefer it. */
   slot?: number
+  /** 1-based entry of a wired layer plan, stamped by the assembly. Messages prefer it. */
+  planLayer?: number
   /** Seconds, 0..3600, stored ms-precise; rendered on the base's frame grid (±1 frame). */
   start: number
   /** Seconds, 0..3600, > start; absent = until the video ends. */
@@ -158,12 +160,16 @@ export interface VideoOverlayRequest {
 /** A request whose layers went through `expandVideoOverlayPresets`. */
 export interface ExpandedVideoOverlayRequest extends Omit<VideoOverlayRequest, "layers"> {
   layers: VideoOverlayLayer[]
+  /** Set by the assembly when a wired layer plan could not be read; `validateVideoOverlayRequest` reports it first. */
+  planError?: "invalid_layer_plan"
 }
 
 /** `output_data.warnings[]`: `layer` = 0-based index of the request's layers (absent for a render-wide warning such as `audio_reencoded`), `slot` when known. */
 export interface VideoOverlayWarning {
   readonly layer?: number
   readonly slot?: number
+  /** Set instead of `slot` when the layer came from the layer plan. */
+  readonly planLayer?: number
   readonly code: VideoOverlayWarningCode
   readonly detail: string
 }
@@ -418,10 +424,14 @@ export interface VideoOverlayOrderable {
   readonly zIndex?: number | null
   /** 1-based canvas slot (stamped by both engine assemblies). */
   readonly slot?: number | null
+  /** 1-based layer-plan entry. Plan layers sit BELOW every slot layer (handle layers draw above the plan), unless they set a `zIndex`. */
+  readonly planLayer?: number | null
   /** 0-based index in the request's `layers[]` (the worker's graph layers carry it). */
   readonly index?: number | null
 }
 
+/** A plan layer's default position sits this far below layer 1's (slot 1 = 0), so the whole plan renders under the slot layers. */
+const PLAN_LAYER_Z_BASE = 1000
 const isSlot = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v) && v >= 1
 const isIndex = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v) && v >= 0
 
@@ -438,7 +448,7 @@ const isIndex = (v: unknown): v is number => typeof v === "number" && Number.isI
 export function videoOverlayRenderOrder(layers: ReadonlyArray<VideoOverlayOrderable | null | undefined>): number[] {
   return layers
     .map((l, i) => {
-      const own = isSlot(l?.slot) ? l.slot - 1 : isIndex(l?.index) ? l.index : i
+      const own = isSlot(l?.planLayer) ? l.planLayer - 1 - PLAN_LAYER_Z_BASE : isSlot(l?.slot) ? l.slot - 1 : isIndex(l?.index) ? l.index : i
       return { i, z: typeof l?.zIndex === "number" && Number.isFinite(l.zIndex) ? l.zIndex : own }
     })
     .sort((a, b) => a.z - b.z || a.i - b.i)
@@ -540,6 +550,7 @@ export interface VideoOverlayIssue {
   /** 0-based index into the validated `layers[]`. */
   readonly layer?: number
   readonly slot?: number
+  readonly planLayer?: number
   readonly params: Readonly<Record<string, string | number>>
 }
 export type VideoOverlayValidation = { readonly ok: true } | VideoOverlayIssue
@@ -549,6 +560,8 @@ export interface VideoOverlayValidationInput {
   readonly outputAspect?: string | null
   readonly baseFit?: string | null
   readonly backgroundColor?: string | null
+  /** From `assembleVideoOverlayRequest`: the wired layer plan was unreadable. */
+  readonly planError?: "invalid_layer_plan"
 }
 
 const inTimeRange = (v: unknown): v is number =>
@@ -614,6 +627,7 @@ export function hasDrawableVideoOverlayBox(layer: unknown): boolean {
  * FIRST failure, as a code.
  */
 export function validateVideoOverlayRequest(body: VideoOverlayValidationInput): VideoOverlayValidation {
+  if (body.planError) return { ok: false, code: "invalid_layer_plan", params: {} }
   const layers = Array.isArray(body.layers) ? body.layers : []
   if (layers.length === 0) return { ok: false, code: "no_layers", params: {} }
   if (layers.length > VIDEO_OVERLAY_MAX_LAYERS) {
@@ -626,6 +640,7 @@ export function validateVideoOverlayRequest(body: VideoOverlayValidationInput): 
       code,
       layer: i,
       ...(typeof l.slot === "number" ? { slot: l.slot } : {}),
+      ...(typeof l.planLayer === "number" ? { planLayer: l.planLayer } : {}),
       params,
     })
     const boxFields = VIDEO_OVERLAY_BOX_FIELDS.filter((f) => l[f] !== undefined && l[f] !== null)
@@ -654,18 +669,39 @@ const MESSAGES: { readonly [C in VideoOverlayErrorCode]: (p: Readonly<Record<str
   end_before_start: (p) => `end (${p.end} s) must be after start (${p.start} s)`,
   fit_without_aspect: () => "baseFit and backgroundColor need an outputAspect",
   field_out_of_bounds: (p) => `${p.field} is out of range (allowed: ${p.allowed})`,
+  invalid_layer_plan: () => "the layer plan must be a list of layers",
 }
 
-/** `Layer <slot>` when the layer came from the canvas, else `layers[<index>]`; "" for a request-wide failure. */
-export function videoOverlayLayerLabel(ref: { readonly layer?: number; readonly slot?: number }): string {
+const PLAN_LAYER_WITHOUT_IMAGE = "no image — set imageUrl on this layer in the plan."
+
+/** `Plan layer <n>` for a layer-plan entry, `Layer <slot>` when the layer came from the canvas, else `layers[<index>]`; "" for a request-wide failure. */
+export function videoOverlayLayerLabel(ref: { readonly layer?: number; readonly slot?: number; readonly planLayer?: number }): string {
+  if (typeof ref.planLayer === "number") return `Plan layer ${ref.planLayer}`
   return typeof ref.slot === "number" ? `Layer ${ref.slot}` : typeof ref.layer === "number" ? `layers[${ref.layer}]` : ""
 }
 
 /** The ONE English rendering of a verdict — the route's 400 text and the worker's error message. */
 export function formatVideoOverlayError(issue: VideoOverlayIssue): string {
   const label = videoOverlayLayerLabel(issue)
-  const text = MESSAGES[issue.code](issue.params)
+  // A plan layer has no handle to connect — its image can only come from its own imageUrl.
+  const text = issue.code === "layer_without_image" && typeof issue.planLayer === "number" ? PLAN_LAYER_WITHOUT_IMAGE : MESSAGES[issue.code](issue.params)
   return label ? `${label}: ${text}` : text
+}
+
+/** The wired `layerPlan` value (a JSON string or an array) → its layers, or `invalid_layer_plan`. */
+export function parseVideoOverlayLayerPlan(raw: unknown): { layers: VideoOverlayLayerInput[] } | { error: "invalid_layer_plan" } {
+  let value: unknown = raw
+  if (typeof raw === "string") {
+    try {
+      value = JSON.parse(raw)
+    } catch {
+      return { error: "invalid_layer_plan" }
+    }
+  }
+  if (!Array.isArray(value) || !value.every((l) => l !== null && typeof l === "object" && !Array.isArray(l))) {
+    return { error: "invalid_layer_plan" }
+  }
+  return { layers: value as VideoOverlayLayerInput[] }
 }
 
 /** The node-data fields the assembly reads. */
@@ -692,11 +728,19 @@ export interface VideoOverlayNodeFields {
  * (The canvas never builds that request: its two aspect writers clear both
  * fields with the aspect.) A value the route's schema would reject — an
  * unknown aspect or fit, a colour that is not `#rrggbb` — is dropped here.
+ *
+ * A wired layer plan (`planLayers`, a JSON string or an array) contributes its
+ * layers FIRST, then the slot layers: plan layers carry `planLayer` (1-based)
+ * and never a `slot`, and a plan layer's image is only its own `imageUrl` —
+ * never the index-aligned handle's (R18). An unreadable plan sets `planError`,
+ * which the validator reports before anything else.
  */
 export function assembleVideoOverlayRequest(input: {
   readonly videoUrl: string
   readonly data: VideoOverlayNodeFields
   readonly wiredImageUrls: ReadonlyArray<string | null | undefined>
+  /** The wired `layerPlan` value (string or array); absent when nothing is wired. */
+  readonly planLayers?: unknown
 }): ExpandedVideoOverlayRequest {
   const stored = Array.isArray(input.data.layers) ? input.data.layers : []
   const wired = input.wiredImageUrls.slice(0, VIDEO_OVERLAY_HANDLE_IDS.length)
@@ -718,13 +762,19 @@ export function assembleVideoOverlayRequest(input: {
   const baseFit = isFit(input.data.baseFit) ? input.data.baseFit : undefined
   const backgroundColor =
     typeof input.data.backgroundColor === "string" && HEX6.test(input.data.backgroundColor) ? input.data.backgroundColor : undefined
-  return {
-    videoUrl: input.videoUrl,
-    layers,
+  const rest = {
     ...(outputAspect ? { outputAspect } : {}),
     ...(baseFit ? { baseFit } : {}),
     ...(backgroundColor ? { backgroundColor } : {}),
   }
+  if (input.planLayers === undefined) return { videoUrl: input.videoUrl, layers, ...rest }
+  const plan = parseVideoOverlayLayerPlan(input.planLayers)
+  if ("error" in plan) return { videoUrl: input.videoUrl, layers, ...rest, planError: plan.error }
+  const planned = expandVideoOverlayPresets(plan.layers).map((l, i) => {
+    const { slot: _slot, ...own } = l
+    return { ...own, planLayer: i + 1 }
+  })
+  return { videoUrl: input.videoUrl, layers: [...planned, ...layers], ...rest }
 }
 
 /**
@@ -757,6 +807,8 @@ export interface VideoOverlayComposition {
   readonly sources: ReadonlyArray<string | null | undefined>
   /** The node's stored settings — never the expanded request. */
   readonly data: VideoOverlayNodeFields
+  /** The wired `layerPlan` value (string or array); absent when nothing is wired. */
+  readonly planLayers?: unknown
 }
 
 /**
@@ -799,14 +851,19 @@ export const VIDEO_OVERLAY_MAX_COMPOSITION_KEY_LENGTH = 65_536
 export function videoOverlayCompositionKey(c: VideoOverlayComposition): string {
   const sources = c.sources.map((s) => (typeof s === "string" && s.length > 0 ? s : null))
   while (sources.length > 0 && sources[sources.length - 1] === null) sources.pop()
-  return JSON.stringify(
-    canonicalValue([
-      c.baseUrl || null,
-      sources,
-      Array.isArray(c.data.layers) ? c.data.layers : [],
-      c.data.outputAspect ?? null,
-      c.data.baseFit ?? null,
-      c.data.backgroundColor ?? null,
-    ]),
-  )
+  const parts: unknown[] = [
+    c.baseUrl || null,
+    sources,
+    Array.isArray(c.data.layers) ? c.data.layers : [],
+    c.data.outputAspect ?? null,
+    c.data.baseFit ?? null,
+    c.data.backgroundColor ?? null,
+  ]
+  // Appended only when a plan is wired, so a node with no plan keeps today's key.
+  // The PARSED plan is hashed: a JSON string and its array give one key.
+  if (c.planLayers !== undefined) {
+    const plan = parseVideoOverlayLayerPlan(c.planLayers)
+    parts.push("error" in plan ? "invalid" : plan.layers)
+  }
+  return JSON.stringify(canonicalValue(parts))
 }

@@ -1,4 +1,4 @@
-import { usdToCredits, PARAMETER_NODE_TYPES, withWiredSettings, MUSIC_CREDIT_ID, TEXT_TO_AUDIO_SFX_CREDIT_IDS, textToAudioCreditId, CAMERA_SWITCH_CREDIT_ID, LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec, LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec, videoSfxCreditId, applyEdlCreditId, dialogueProviderOf } from "@nodaro/shared"
+import { usdToCredits, PARAMETER_NODE_TYPES, withWiredSettings, MUSIC_CREDIT_ID, TEXT_TO_AUDIO_SFX_CREDIT_IDS, textToAudioCreditId, CAMERA_SWITCH_CREDIT_ID, LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec, LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec, videoSfxCreditId, applyEdlCreditId, UGC_NODE_TYPES, dialogueProviderOf } from "@nodaro/shared"
 import { trySettleManagedJob } from "./managed-job-settlement.js"
 import { previewStopsWhenEnabled } from "../../lib/preview-stop-rule.js"
 import { supabase } from "../../lib/supabase.js"
@@ -1676,6 +1676,18 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "content-recipe:economy": 5,
   "content-recipe": 20,
   "content-recipe:premium": 35,
+  // UGC Script (Cloud only): one flat price per run, however many rewrites it takes; refunded when it fails.
+  "ugc-script": 20,
+  // UGC Clip (Cloud only): admitted with a computed ceiling (creditOverride) that replaces this row; the
+  // row exists only so the price read before the override never throws. Never charged, never shown
+  // (the estimate prices UGC through the plugin seam).
+  "ugc-clip": 0,
+  // UGC Creator / UGC Clips / UGC Cards (Cloud only): free nodes. Their paid steps run as their own jobs
+  // (images, readings, clips, alignment), each priced under its own row. These 0 rows match the editor's
+  // cold-cache fallbacks (NODE_CREDIT_COSTS, frontend-credit-fallback-parity.test.ts), as sub-workflow's does.
+  "ugc-creator": 0,
+  "ugc-clips": 0,
+  "ugc-cards": 0,
   // Content Ideas — charged per batch of up to five ideas (owner decision
   // 2026-10-02): 1–5 ideas bill the base id, 6–10 the `:10` id at two batches.
   // The count rule lives in @nodaro/shared content-recipe-ideas.ts.
@@ -3435,6 +3447,41 @@ export class CreditsService {
   }
 
   /**
+   * Does the payer's spendable balance cover `credits`? The same pools the
+   * reservation reads: the payer's profile (a deployment payer's row, else the
+   * requester's), the subscription pool plus the top-up pool, the top-up pool
+   * excluded on a web surface for a pay-as-you-go account (`webFreeMode`).
+   * A workspace payer is never refused here: its personal pools are not what
+   * pays, and the headroom is the reserve RPC's atomic job. A profile that
+   * cannot be read passes (the per-node reservation refuses, as
+   * `checkAppRunEligibility` does). With credits disabled it passes.
+   */
+  static async checkBalanceCovers(
+    userId: string,
+    credits: number,
+    billingContext?: BillingContext,
+    webFreeMode?: boolean,
+  ): Promise<{ ok: true } | { ok: false; balance: number }> {
+    if (creditsDisabled()) return { ok: true }
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("tier, subscription_tier, lifetime_topup_credits, subscription_credits, topup_credits")
+      .eq("id", payerProfileId(userId, billingContext))
+      .single()
+    if (!profile) return { ok: true }
+
+    const gates = spendGates(
+      effectiveTierOf(profile as unknown as { tier: string | null; subscription_tier: string | null; lifetime_topup_credits: number }),
+      { webFreeMode, billingContext },
+    )
+    if (!gates.personalBalance) return { ok: true }
+
+    const balance = ((profile.subscription_credits as number | null) ?? 0) + (gates.webFree ? 0 : ((profile.topup_credits as number | null) ?? 0))
+    return balance >= credits ? { ok: true } : { ok: false, balance }
+  }
+
+  /**
    * Get credit cost for a specific model
    */
   static async getModelCreditCost(modelIdentifier: string): Promise<number> {
@@ -3460,7 +3507,15 @@ export class CreditsService {
     // Without a credit system nothing is charged, so there is no price table
     // to read: the figure stays the static one these editions always showed.
     const prices = hasCredits() ? await getChargedPriceTable() : STATIC_BASE_PRICES
-    return sumWorkflowEstimate(nodes, edges, prices, options)
+    // UGC graphs (Cloud only): the clip model and length live in the plugin, so the UGC part is priced through
+    // its seam (spec 6.8). The UGC nodes, and the nodes downstream of UGC Clip that the seam's figure already
+    // counts as its fixed lines, stay out of the per-node sum; they stay IN the graph the sum reads, so the
+    // preview stop rule still sees every wire.
+    const ugc = hasCredits() && nodes.some((n) => n.type === "ugc-clip") ? await estimateUgcPart(nodes, edges) : null
+    const skip = ugc
+      ? (n: EstimateNode) => UGC_NODE_TYPES.has(n.type) || (n.id !== undefined && ugc.downstream.has(n.id))
+      : undefined
+    return sumWorkflowEstimate(nodes, edges, prices, options, skip) + (ugc?.credits ?? 0)
   }
 
   /**
@@ -3504,6 +3559,8 @@ function sumWorkflowEstimate(
   edges: ReadonlyArray<EstimateEdge> | undefined,
   prices: ChargedPriceTable,
   options: WorkflowEstimateOptions | undefined,
+  /** Nodes priced elsewhere (the UGC seam): read as part of the graph, never summed. */
+  skip?: (node: EstimateNode) => boolean,
 ): number {
   // A run stops at a Preview render: what it gates runs only after Render
   // final, so the estimate of this run leaves it out (the stop rule, through
@@ -3528,6 +3585,7 @@ function sumWorkflowEstimate(
   return nodes.reduce((sum, node) => {
     if (runNodeIds && !(node.id && runNodeIds.has(node.id))) return sum
     if (node.id && previewGated.has(node.id)) return sum
+    if (skip?.(node)) return sum
     // A parameter node (Provider, Duration, a picker) is read, never run: no
     // job, no charge. A Provider's data names a model ("veo3"), which the
     // lookups below would otherwise price as a run of that model. The editor's
@@ -3553,6 +3611,43 @@ function sumWorkflowEstimate(
     })
     return sum + (chargedCredits(prices, modelId, estimatePricingUnits(priced)) ?? chargedCredits(prices, node.type) ?? 0)
   }, 0)
+}
+
+/** Nodes a UGC estimate already prices as its fixed lines, when they sit downstream of UGC Clip. */
+const UGC_DOWNSTREAM_TYPES: ReadonlySet<string> = new Set(["combine-videos", "video-overlay", "add-captions"])
+
+/**
+ * The UGC part of a graph, priced through the plugin seam with no payer
+ * (`ESTIMATE_CALLER`): the same figure for every caller of `estimateWorkflowCredits`.
+ * A node with no `id`, or a call with no edges, cannot be shown to be downstream
+ * and is counted by the per-node sum (over-quote, never under-quote).
+ */
+async function estimateUgcPart(
+  nodes: ReadonlyArray<EstimateNode>,
+  edges: ReadonlyArray<EstimateEdge> | undefined,
+): Promise<{ credits: number; downstream: ReadonlySet<string> }> {
+  const typeById = new Map(nodes.filter((n) => n.id !== undefined).map((n) => [n.id!, n.type] as const))
+  const reached = new Set<string>()
+  const queue = nodes.filter((n) => n.type === "ugc-clip" && n.id !== undefined).map((n) => n.id!)
+  while (queue.length > 0) {
+    const id = queue.shift()!
+    for (const e of edges ?? []) {
+      if (e.source !== id || reached.has(e.target)) continue
+      reached.add(e.target)
+      queue.push(e.target)
+    }
+  }
+  const downstream = new Set([...reached].filter((id) => UGC_DOWNSTREAM_TYPES.has(typeById.get(id) ?? "")))
+  try {
+    // ee -> ee, dynamic only so that this module's graph does not load the quote module on every import.
+    const { estimateUgcRun, ugcEstimateInputOf } = await import("../lib/ugc-estimate.js")
+    const { ESTIMATE_CALLER } = await import("../lib/ugc-quote.js")
+    const r = await estimateUgcRun(ESTIMATE_CALLER, ugcEstimateInputOf(nodes, edges))
+    return { credits: r.expected, downstream }
+  } catch (err) {
+    console.warn("[estimate] UGC estimate unavailable; UGC nodes counted as 0", err instanceof Error ? err.message : err)
+    return { credits: 0, downstream }
+  }
 }
 
 /**

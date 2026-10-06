@@ -28,7 +28,7 @@ import { migrateToItems, deriveLottieSlotFields, canonicalExposedFieldKey } from
 import type { ExposableField, ExposableOutput, PresentationItem } from "@nodaro/shared"
 import { RestrictPopover } from "./restrict-popover"
 import { DEFAULT_SYSTEM_MAX_FANOUT } from "./input-card"
-import { PickerRestrictDialog } from "./picker-restrict-dialog"
+import { PickerFieldRestrictDialog, PickerRestrictDialog } from "./picker-restrict-dialog"
 import {
   getParameterPickerMeta,
   useCatalogPacksVersion,
@@ -69,11 +69,20 @@ function PickerInputConfig({
   const allowedCount = allowed?.length ?? 0
   const total = meta.kind === "single" ? meta.entries.length : 0
   const restricted = allowed && allowed.length > 0 && allowed.length < total
+  const byField = card?.pickerAllowedValuesByField
+  const restrictedFieldCount = Object.values(byField ?? {}).filter((v) => v.length > 0).length
   const restrictLabel = restricted
     ? t("present.restrictCount", { n: allowedCount, total })
     : t("present.restrictAll")
+  const fieldRestrictLabel = restrictedFieldCount > 0
+    ? t("present.restrictFieldsCount", { n: restrictedFieldCount })
+    : t("present.restrictAll")
 
-  const updateCard = (patch: { pickerMode?: "inline" | "modal" | "compact"; pickerAllowedValues?: string[] | undefined }) => {
+  const updateCard = (patch: {
+    pickerMode?: "inline" | "modal" | "compact"
+    pickerAllowedValues?: string[] | undefined
+    pickerAllowedValuesByField?: Record<string, string[]> | undefined
+  }) => {
     const current = presentationSettings.cardMeta ?? {}
     const next = { ...current, [nodeId]: { ...(current[nodeId] ?? {}), ...patch } }
     updatePresentationSettings({ cardMeta: next })
@@ -119,6 +128,26 @@ function PickerInputConfig({
             meta={meta}
             value={allowed}
             onChange={(v) => updateCard({ pickerAllowedValues: v ? [...v] : undefined })}
+          />
+        </>
+      )}
+      {meta.kind === "multi" && meta.honoursFieldRestrictions && (
+        <>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setRestrictOpen(true)}
+            className="h-6 px-2 gap-1 text-[10px] text-muted-foreground hover:text-foreground"
+          >
+            <Filter className="size-3" />
+            {fieldRestrictLabel}
+          </Button>
+          <PickerFieldRestrictDialog
+            open={restrictOpen}
+            onOpenChange={setRestrictOpen}
+            meta={meta}
+            value={byField}
+            onChange={(v) => updateCard({ pickerAllowedValuesByField: v })}
           />
         </>
       )}

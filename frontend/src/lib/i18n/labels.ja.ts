@@ -223,6 +223,8 @@ const NODE_LABELS_JA: Record<string, string> = {
 
 const HANDLE_LABELS_JA: Record<string, string> = {
   "Offsets": "オフセット",
+  "Layer plan": "レイヤープラン",
+  "Caption plan": "キャプションプラン",
   "QR link": "QR リンク",
   "Extend Source": "延長元",
   "Source video": "元動画",

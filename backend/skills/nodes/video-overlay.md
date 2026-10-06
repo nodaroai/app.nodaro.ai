@@ -1,7 +1,7 @@
 ---
 node_type: video-overlay
-generated_at: 2026-09-27T12:51:23.965Z
-generated_from: c607aa02c
+generated_at: 2026-10-06T06:36:56.641Z
+generated_from: 10acec64f
 ---
 
 # Video Overlay
@@ -10,7 +10,7 @@ generated_from: c607aa02c
 **Type:** `video-overlay`
 **Category:** processing
 **Credit cost:** `20` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
-**Inputs (target handles):** `video`, `overlay`, `overlay2`, `overlay3`, `overlay4`, `overlay5`, `overlay6`, `overlay7`, `overlay8`, `overlay9`, `overlay10`, `overlay11`, `overlay12`
+**Inputs (target handles):** `video`, `overlay`, `overlay2`, `overlay3`, `overlay4`, `overlay5`, `overlay6`, `overlay7`, `overlay8`, `overlay9`, `overlay10`, `overlay11`, `overlay12`, `layerPlan`
 **Outputs (source handles):** `video-out`
 
 **Required data fields:**
@@ -20,6 +20,7 @@ generated_from: c607aa02c
 
 **Optional data fields:**
 - `currentJobProgress?: number`
+- `passThroughWarning?: PassThroughWarning`
 - `layerCount?: number`
 - `outputAspect?: VideoOverlayOutputAspect`
 - `baseFit?: VideoOverlayFit`

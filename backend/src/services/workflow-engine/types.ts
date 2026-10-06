@@ -106,6 +106,12 @@ export interface NodeOutput {
    * position mis-paired once a row failed or finished out of order.
    */
   listResultStamps?: RunResultRowStamp[]
+  /**
+   * Each row's notes (warnings + real length), ROW-ALIGNED with `listResults`.
+   * Written only for all-or-nothing fan-out types (UGC Clip); UGC Cards'
+   * `notes` input reads it (spec §6.4.3).
+   */
+  listResultMeta?: import("@nodaro/shared").FanOutItemMeta[]
   /** apply-edl: the quality the render was made at ("proxy" is a Preview). */
   quality?: RenderQuality
   /** apply-edl: the plan clip the render cut (`edlSpanKey`), as its payload gave it. */
@@ -175,8 +181,12 @@ export interface NodeOutput {
   width?: number
   height?: number
   durationSec?: number
+  /** UGC Clip: the clip's own warnings. `warnings` stays Video Overlay's typed list. */
+  clipWarnings?: readonly string[]
   /** Video Overlay: the freshness key the DAG payload stamped (`videoOverlayCompositionKey`). */
   resultCompositionKey?: string
+  /** A public video node that had nothing to do and passed its input through (R14). */
+  passThroughWarning?: import("@nodaro/shared").PassThroughWarning
 }
 
 /**
@@ -427,8 +437,12 @@ export interface ResolvedInputs {
    *  data.layers[i] by index. */
   overlayImageUrls?: (string | undefined)[]
   /** Video Overlay's reserved JSON layer-plan input (VIDEO_OVERLAY_LAYER_PLAN_HANDLE).
-   *  Routed, never read in v1 — no pip renders for it yet. */
+   *  Read by the assembly (plan layers first). */
   layerPlan?: string
+  /** Add Captions: a wired CaptionPlan (string). Wins over text, segments and transcript. */
+  captionPlan?: string
+  /** UGC Cards' `notes` input: each clip's warnings and real length (A7). */
+  clipNotes?: import("@nodaro/shared").ClipNote[]
   /** Text wired into an image-overlay node's "qrText" handle (fills its fromInput QR layers). */
   overlayQrText?: string
 

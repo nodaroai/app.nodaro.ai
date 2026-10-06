@@ -8,6 +8,8 @@ export interface VideoOverlayUpstream {
   readonly base?: string
   /** Wired layer images by handle: [0] ↔ overlay, [1] ↔ overlay2 … sparse when unwired. */
   readonly layers: ReadonlyArray<string | undefined>
+  /** The wired layer plan (the `layerPlan` handle's output, a JSON string), when it has one. */
+  readonly plan?: string
   /** Every target handle that has a wire (even if its source has no result yet). */
   readonly connected: ReadonlySet<string>
 }
@@ -17,7 +19,7 @@ export interface VideoOverlayUpstream {
  * through `extractNodeOutput` — the single source of truth the executor uses.
  * The selector returns ONE string (a JSON array of `[handle, url]` pairs) so
  * the component re-renders only when a wire or an upstream result changes.
- * The reserved `layerPlan` id is ignored in v1.
+ * The `layerPlan` id is the wired layer plan (`plan`), never a layer image.
  */
 export function useVideoOverlayUpstream(nodeId: string): VideoOverlayUpstream {
   const key = useWorkflowStore((s) => {
@@ -36,15 +38,19 @@ export function useVideoOverlayUpstream(nodeId: string): VideoOverlayUpstream {
     const layers: Array<string | undefined> = []
     const connected = new Set<string>()
     let base: string | undefined
+    let plan: string | undefined
     const pairs = key ? (JSON.parse(key) as Array<[string, string]>) : []
     for (const [handle, rawUrl] of pairs) {
       const url = rawUrl || undefined
       if (handle) connected.add(handle)
-      if (handle === "layerPlan") continue
+      if (handle === "layerPlan") {
+        plan = url
+        continue
+      }
       const idx = (VIDEO_OVERLAY_HANDLE_IDS as readonly string[]).indexOf(handle)
       if (idx >= 0) layers[idx] = url
       else if (handle === "video" || base === undefined) base = url
     }
-    return { base, layers, connected }
+    return { base, layers, plan, connected }
   }, [key])
 }

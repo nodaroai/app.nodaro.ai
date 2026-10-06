@@ -919,6 +919,17 @@ describe("adjustVolumeApi", () => {
 // ---------------------------------------------------------------------------
 
 describe("addCaptionsApi", () => {
+  it("with opts.segments the body is exactly videoUrl, segments and userId — no text, style or lever", async () => {
+    noSession()
+    const mock = mockFetchJson({ jobId: "jp" })
+    vi.stubGlobal("fetch", mock)
+    const segments = [{ startMs: 0, endMs: 1400, text: "Sample hook" }]
+
+    await addCaptionsApi("http://vid.mp4", "ignored", "karaoke", "top", 40, "#fff", "#000", "u1", { segments, look: "outline", positionY: 20 })
+
+    expect(JSON.parse(mock.mock.calls[0][1].body as string)).toEqual({ videoUrl: "http://vid.mp4", segments, userId: "u1" })
+  })
+
   it("sends correct URL and body with videoUrl and text", async () => {
     noSession()
     const mock = mockFetchJson({ jobId: "j1" })

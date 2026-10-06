@@ -16,6 +16,7 @@ const ERROR_KEYS: { readonly [C in VideoOverlayErrorCode]: MessageKey } = {
   end_before_start: "proccfg.videoOverlay.err.end_before_start",
   fit_without_aspect: "proccfg.videoOverlay.err.fit_without_aspect",
   field_out_of_bounds: "proccfg.videoOverlay.err.field_out_of_bounds",
+  invalid_layer_plan: "proccfg.videoOverlay.err.invalid_layer_plan",
 }
 
 const WARNING_KEYS: { readonly [C in VideoOverlayWarningCode]: MessageKey } = {
@@ -36,12 +37,16 @@ function layerNumber(ref: { readonly layer?: number; readonly slot?: number }): 
 
 /** The layer-free text of a verdict ("End must be after start"). */
 export function videoOverlayIssueMessage(issue: VideoOverlayIssue, t: TFunction): string {
+  // A plan layer has no handle to connect: its image can only be the plan's own imageUrl.
+  if (issue.code === "layer_without_image" && typeof issue.planLayer === "number") return t("proccfg.videoOverlay.err.layer_without_image_plan")
   return t(ERROR_KEYS[issue.code], { ...issue.params })
 }
 
 /** A verdict as the canvas says it: "Layer 2: End must be after start". */
 export function videoOverlayIssueText(issue: VideoOverlayIssue, t: TFunction): string {
   const text = videoOverlayIssueMessage(issue, t)
+  // A layer-plan entry is named "Plan layer n" — its number is the plan's, not a canvas slot.
+  if (typeof issue.planLayer === "number") return t("proccfg.videoOverlay.planLayerPrefix", { n: issue.planLayer, text })
   const n = layerNumber(issue)
   return n === undefined ? text : t("proccfg.videoOverlay.layerPrefix", { n, text })
 }

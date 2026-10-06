@@ -2556,8 +2556,8 @@ describe("video-composer", () => {
 // ---------------------------------------------------------------------------
 
 describe("combine-videos", () => {
-  it("rejects when fewer than 2 videos", async () => {
-    mockResolveNodeInputs.mockReturnValue({ videoUrls: ["http://a.mp4"] })
+  it("rejects when there is no video", async () => {
+    mockResolveNodeInputs.mockReturnValue({ videoUrls: [] })
     const promise = executeNode(
       makeNode("combine-videos", {}),
       makeCtx(),
@@ -2565,6 +2565,17 @@ describe("combine-videos", () => {
     promise.catch(() => {})
     await expect(promise).rejects.toThrow("Need at least 2 videos")
     expect(mockToastError).toHaveBeenCalled()
+  })
+
+  it("passes a single resolved video through: result written, no combine call (R14)", async () => {
+    mockResolveNodeInputs.mockReturnValue({ videoUrls: ["http://a.mp4"] })
+    await expect(executeNode(makeNode("combine-videos", {}), makeCtx())).resolves.toBe("http://a.mp4")
+    expect(mockRunCombineVideos).not.toHaveBeenCalled()
+    expect(mockToastError).not.toHaveBeenCalled()
+    expect(mockUpdateNodeData).toHaveBeenCalledWith(
+      "n1",
+      expect.objectContaining({ generatedVideoUrl: "http://a.mp4", passThroughWarning: "single_input", executionStatus: "completed" }),
+    )
   })
 
   it("calls runCombineVideos with urls and options", async () => {

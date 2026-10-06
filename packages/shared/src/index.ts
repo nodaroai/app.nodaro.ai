@@ -330,6 +330,8 @@ export {
   getNodeResult,
   getNodeLabel,
   getInputFieldSchema,
+  INPUT_FIELD_EXTRA_KEYS,
+  getInputFieldExtraKeys,
   mergeNodeInputOverrides,
   flattenItems,
   migrateToItems,
@@ -345,6 +347,8 @@ export {
   canonicalExposedFieldKey,
   canonicalizeOverrideKeys,
 } from "./exposed-field-keys.js"
+
+export { findRestrictedPickerValue, type PickerCardRestrictions } from "./picker-restrictions.js"
 
 export {
   ITER_CLONE_PATTERN,
@@ -1322,6 +1326,10 @@ export {
 } from "./caption-styles.js"
 export type { StaticCaptionStyle, KineticCaptionStyle, CaptionStyle, CaptionLookId, CaptionLookLevers, KineticOnlyCaptionLeverKey } from "./caption-styles.js"
 export type { CaptionPlan, CaptionWordTiming } from "./caption-plan.js"
+export { parseCaptionPlan } from "./caption-plan.js"
+export * from "./caption-segment-schema.js"
+export * from "./add-captions-plan.js"
+export * from "./node-pass-through.js"
 
 export {
   transcribeWordTimestampsRefusal,
@@ -1514,6 +1522,7 @@ export {
   IMAGE_PRODUCER_TYPES,
   FAN_OUT_EACH_TYPES,
   FAN_OUT_EACH_HANDLES,
+  FAN_OUT_ALL_OR_NOTHING_TYPES,
   OWN_LIST_NODE_TYPES,
   ownsItsList,
   defaultEdgeOutputMode,
@@ -1522,6 +1531,8 @@ export {
   isFanInNodeType,
   isFanInEdge,
 } from "./producer-types.js"
+
+export * from "./fan-out-meta.js"
 
 export { SUNO_TRACK_SOURCE_TYPES } from "./suno-track-sources.js"
 
@@ -1726,3 +1737,7 @@ export { VIDEO_DURATION_AUTO, isAutoVideoDuration } from "./video-duration-auto.
 export * from "./handle-aliases.js"
 // Telegram Channel Feed: the post shape, the digest, and the cursor rule (where the feed stands after a run).
 export * from "./telegram-channel.js"
+// UGC run state: which node-data keys are a run's state (stripped on publish) and which a runner may override.
+export * from "./ugc-run-state.js"
+// UGC builder call → the REST body of the public route it dispatches to (the canvas and the app run the builder's calls through it).
+export * from "./ugc-call-body.js"

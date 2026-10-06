@@ -19,8 +19,8 @@ import { resolveWebSurfaceFlag } from "../middleware/credit-guard.js"
 import { MIN_IDEMPOTENCY_KEY_LENGTH } from "../lib/dedup-fingerprint.js"
 import { hasCredits } from "../lib/config.js"
 import { CreditsService } from "../ee/billing/credits.js"
-import { flattenItems } from "@nodaro/shared"
-import type { PresentationItem } from "@nodaro/shared"
+import { findRestrictedPickerValue, flattenItems } from "@nodaro/shared"
+import type { PickerCardRestrictions, PresentationItem } from "@nodaro/shared"
 import { executeAppRun } from "../services/app-execution.js"
 import { shouldRefuseDegradedRunFor, personalPayer } from "../lib/billing-context.js"
 import { billingPairColumns } from "../lib/insert-job.js"
@@ -109,19 +109,28 @@ function mergeNodeStates(execStates: unknown, editedStates: unknown): unknown {
 function validateRestrictedFields(
   snapshotSettings: Record<string, unknown> | null | undefined,
   inputValues: Record<string, Record<string, unknown>> | undefined,
+  snapshotNodes: ReadonlyArray<{ id: string; type?: string }> | null | undefined,
 ): string | null {
   const presSettings = (snapshotSettings ?? {} as Record<string, unknown>).presentationSettings as Record<string, unknown> | undefined
-  if (!presSettings?.inputItems || !inputValues) return null
-  const fieldItems = flattenItems(presSettings.inputItems as PresentationItem[])
-    .filter((item): item is Extract<PresentationItem, { type: "field" }> => item.type === "field")
-  for (const fieldItem of fieldItems) {
-    if (!fieldItem.allowedValues) continue
-    const submitted = inputValues[fieldItem.nodeId]?.[fieldItem.field]
-    if (submitted !== undefined && !fieldItem.allowedValues.includes(submitted as string | number | boolean)) {
-      return `Invalid value for ${fieldItem.field}: ${submitted}. Allowed: ${fieldItem.allowedValues.join(", ")}`
+  if (!presSettings || !inputValues) return null
+  if (presSettings.inputItems) {
+    const fieldItems = flattenItems(presSettings.inputItems as PresentationItem[])
+      .filter((item): item is Extract<PresentationItem, { type: "field" }> => item.type === "field")
+    for (const fieldItem of fieldItems) {
+      if (!fieldItem.allowedValues) continue
+      const submitted = inputValues[fieldItem.nodeId]?.[fieldItem.field]
+      if (submitted !== undefined && !fieldItem.allowedValues.includes(submitted as string | number | boolean)) {
+        return `Invalid value for ${fieldItem.field}: ${submitted}. Allowed: ${fieldItem.allowedValues.join(", ")}`
+      }
     }
   }
-  return null
+  // Picker cards keep their allowed values in cardMeta (per field for a
+  // multi-dimension picker), not on an input item.
+  return findRestrictedPickerValue({
+    cardMeta: presSettings.cardMeta as Record<string, PickerCardRestrictions | undefined> | undefined,
+    nodes: snapshotNodes ?? [],
+    inputValues,
+  })
 }
 
 async function resolveSlug(slug: string): Promise<string | null> {
@@ -345,6 +354,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
     const restrictedError = validateRestrictedFields(
       (appRow.snapshot_settings ?? {}) as Record<string, unknown>,
       inputOverrides,
+      appRow.snapshot_nodes as ReadonlyArray<{ id: string; type?: string }> | null,
     )
     if (restrictedError) {
       return reply.status(400).send({ error: { code: "validation_error", message: restrictedError } })
@@ -399,6 +409,36 @@ export async function appRunnerRoutes(app: FastifyInstance) {
           appCreditsAllowance: allowanceResult.appCreditsAllowance,
         },
       })
+    }
+
+    // A UGC video holds its clip's ceiling while it renders (R13): refuse a run
+    // the runner cannot carry to the end, before any node spends (R25).
+    if (hasCredits()) {
+      const snapshotNodes = (appRow.snapshot_nodes ?? []) as Array<{ id: string; type: string; data?: Record<string, unknown> }>
+      if (snapshotNodes.some((n) => n.type === "ugc-clip")) {
+        // Core may not import ee/ statically (tools/check-ee-imports.mjs): every name comes from the dynamic import.
+        const { estimateUgcRun, ugcEstimateInputOf, UgcEstimateUnavailable } = await import("../ee/lib/ugc-estimate.js")
+        // `?? {}`: a run with no overrides still counts the slots that HOLD an image, not the slots that are wired.
+        const runInput = ugcEstimateInputOf(
+          snapshotNodes,
+          (appRow.snapshot_edges ?? []) as Array<{ source: string; target: string; targetHandle?: string | null }>,
+          inputOverrides ?? {},
+        )
+        try {
+          const est = await estimateUgcRun({ userId: req.userId, billingContext: req.billingContext }, runInput)
+          const cover = await CreditsService.checkBalanceCovers(req.userId, est.worstCase, req.billingContext, await resolveWebSurfaceFlag(req))
+          if (!cover.ok) {
+            return reply.status(402).send({
+              error: {
+                code: "insufficient_credits",
+                message: `This video can hold up to about ${est.worstCase} credits while it renders; your balance is ${cover.balance}.`,
+              },
+            })
+          }
+        } catch (err) {
+          if (!(err instanceof UgcEstimateUnavailable)) throw err
+        }
+      }
     }
 
     // Compute nodeIds if baked presentation settings target a specific route
@@ -593,7 +633,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       return reply.status(404).send({ error: { code: "not_found", message: "App not found" } })
     }
 
-    const appRow = await loadAppVersion(workflowId, "id, snapshot_settings", version)
+    const appRow = await loadAppVersion(workflowId, "id, snapshot_nodes, snapshot_settings", version)
     if (!appRow) {
       return reply.status(404).send({
         error: { code: "not_found", message: version ? `Version ${version} not found` : "App not found" },
@@ -604,6 +644,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
     const restrictedErrorDraft = validateRestrictedFields(
       (appRow.snapshot_settings ?? {}) as Record<string, unknown>,
       inputValues,
+      appRow.snapshot_nodes as ReadonlyArray<{ id: string; type?: string }> | null,
     )
     if (restrictedErrorDraft) {
       return reply.status(400).send({ error: { code: "validation_error", message: restrictedErrorDraft } })

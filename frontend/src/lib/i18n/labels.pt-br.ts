@@ -223,6 +223,8 @@ const NODE_LABELS_PT_BR: Record<string, string> = {
 
 const HANDLE_LABELS_PT_BR: Record<string, string> = {
   "Offsets": "Deslocamentos",
+  "Layer plan": "Plano de camadas",
+  "Caption plan": "Plano de legendas",
   "QR link": "Link do QR",
   "Extend Source": "Vídeo a estender",
   "Source video": "Vídeo de origem",

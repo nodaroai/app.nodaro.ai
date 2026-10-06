@@ -28,6 +28,7 @@ import { buildScene3DHttpBody, isScene3DAuthoringType } from "./scene3d-http.js"
 import { loopbackFetch } from "./loopback-fetch.js"
 import { buildPayload, buildNodeRefMap, type WorkflowSettings } from "./payload-builder.js"
 import { assertNodeAvailableForUser, viewerForNode } from "../../lib/availability-viewer.js"
+import { passThroughFor } from "./pass-through.js"
 import { ensureWorkflowSheetPanels } from "./reference-sheet-stage-a.js"
 import { buildNodeOutputFromJobData } from "./output-extractor.js"
 import { retainedOutputOfFailedJob } from "./failed-node-output.js"
@@ -503,6 +504,12 @@ export async function executeNode(
   // as this short-circuit fires before the worker-queued path.
   if (node.type === "scene") {
     return { output: {} }
+  }
+
+  // Nothing to do → the input, unchanged: no job, no reservation (spec R14).
+  const passThrough = passThroughFor(node, resolvedInputs)
+  if (passThrough) {
+    return { output: { videoUrl: passThrough.videoUrl, passThroughWarning: passThrough.warning } }
   }
 
   // Inline nodes

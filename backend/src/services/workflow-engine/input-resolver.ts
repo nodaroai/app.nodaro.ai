@@ -15,7 +15,7 @@ import {
   pro3DRenderShotStills, extractGeneratedJsonAsList, splitGeneratedItems, resolveNodeRefs, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, SOCIAL_POST_NODE_TYPES, PARAMETER_NODE_TYPES, getParameterValue, FAN_OUT_EACH_TYPES, FAN_OUT_EACH_HANDLES, defaultEdgeOutputMode, listResultsServeHandle, compactWithRows, pickHeldRow, liveRowColumn, resolveListFanOut, type FanOutCandidate, type ListFanOut, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES, editPlanSourceDurationSec, extractReferencedLabels, canonicalVarName, REFERENCE_HANDLE_MAP, parseGroupHandle, SUNO_TRACK_SOURCE_TYPES, isFanInEdge, isFanInNodeType, videoLinkPageUrl, socialSearchPostVideo, ownsItsList } from "@nodaro/shared"
 import { isSourceNode } from "./execution-graph.js"
 import { overlayHandleIndex } from "../../providers/image/overlay-contract.js"
-import { VIDEO_OVERLAY_LAYER_PLAN_HANDLE, videoOverlaySlotOfHandle, isTelegramAccountTriggerNamedHandle, editPlanTranscriptOrigin, isRenderNodeType, rendersLatestBatch } from "@nodaro/shared"
+import { VIDEO_OVERLAY_LAYER_PLAN_HANDLE, videoOverlaySlotOfHandle, isTelegramAccountTriggerNamedHandle, editPlanTranscriptOrigin, clipNotesFrom, fanOutItemMeta, isRenderNodeType, rendersLatestBatch } from "@nodaro/shared"
 import { buildNodeRefMap } from "./payload-builder.js"
 import { jsonArrayItems, listFor, savedDataAllowed, savedListFor } from "./saved-data.js"
 import { IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE } from "./inline-executor.js"
@@ -155,6 +155,14 @@ export function resolveNodeInputs(
 
     const edgeData = edge.data as Record<string, unknown> | undefined
     const edgeOutputMode = edgeData?.outputMode as string | undefined
+
+    // UGC Cards' notes: each clip's warnings and real length, from UGC Clip's
+    // per-item notes channel (fan-out) or its single output — never URLs (spec §6.4.3).
+    if (targetNode.type === "ugc-cards" && edge.targetHandle === "notes") {
+      const out = state?.output
+      inputs.clipNotes = clipNotesFrom(out?.listResultMeta, out ? fanOutItemMeta(out) : undefined)
+      continue
+    }
 
     // Generate Text (llm-chat) `items` handle MUST resolve via the current
     // ===NEXT=== split (resolveLlmChatItems below), NEVER via a stale
@@ -1430,8 +1438,8 @@ function routeOutput(
 
   // --- Video Overlay: routed by HANDLE like Image Overlay. "video" is the
   // base; "overlay".."overlay12" are the layer images, index-aligned with
-  // data.layers[]; the reserved JSON id "layerPlan" lands in inputs.layerPlan,
-  // which v1 does not read. A wire on an unknown / missing handle fills the
+  // data.layers[]; the JSON id "layerPlan" lands in inputs.layerPlan, read by
+  // the assembly (plan layers first). A wire on an unknown / missing handle fills the
   // base only while it is still empty (an API-authored edge still runs).
   if (targetType === "video-overlay") {
     const handle = edge.targetHandle ?? ""
@@ -1775,6 +1783,14 @@ function routeOutput(
   // Mirrors the frontend node-input-resolver add-captions branch. ---
   if (targetType === "add-captions" && edge.targetHandle === "transcript") {
     inputs.transcript = output
+    return
+  }
+  // --- add-captions `captionPlan` (json) input: a CaptionPlan from a creator
+  // node — the opening line is styled with Hook Plate, the rest with this node's
+  // caption style (styleCaptionPlan). Routed by handle before source-type
+  // routing, for the same reason as `transcript` above. ---
+  if (targetType === "add-captions" && edge.targetHandle === "captionPlan") {
+    inputs.captionPlan = output
     return
   }
 

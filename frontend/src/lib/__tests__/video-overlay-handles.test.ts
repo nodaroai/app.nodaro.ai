@@ -1,7 +1,7 @@
 /**
  * Video Overlay's handle rules (the video-sfx-handles.test.ts twin): the base
  * takes a video, each of the twelve layer handles an image — dynamic sources
- * (list / sub-workflow …) on both — and the reserved layerPlan id nothing.
+ * (list / sub-workflow …) on both — and the layerPlan pip a JSON source.
  */
 import { describe, it, expect } from "vitest"
 import { VIDEO_OVERLAY_HANDLE_IDS, VIDEO_OVERLAY_OUTPUT_ASPECTS } from "@nodaro/shared"
@@ -44,8 +44,14 @@ describe("isValidVideoOverlayConnection", () => {
       expect(isValidVideoOverlayConnection(h, "generate-video")).toBe(false)
     }
   })
-  it("layerPlan and unknown handles connect nothing", () => {
+  it("the layerPlan handle accepts JSON producers (and lists), never images, video or text", () => {
+    expect(isValidVideoOverlayConnection("layerPlan", "extract-field")).toBe(true)
+    expect(isValidVideoOverlayConnection("layerPlan", "list")).toBe(true)
+    expect(isValidVideoOverlayConnection("layerPlan", "generate-image")).toBe(false)
+    expect(isValidVideoOverlayConnection("layerPlan", "generate-video")).toBe(false)
     expect(isValidVideoOverlayConnection("layerPlan", "text-prompt")).toBe(false)
+  })
+  it("unknown handles connect nothing", () => {
     expect(isValidVideoOverlayConnection("overlay13", "generate-image")).toBe(false)
     expect(isValidVideoOverlayConnection("in", "generate-video")).toBe(false)
   })

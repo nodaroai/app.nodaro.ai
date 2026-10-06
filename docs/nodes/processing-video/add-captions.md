@@ -244,6 +244,15 @@ A caption render that goes through Remotion — every kinetic style, a styled / 
 
 **Worked example.** On a 1920-tall frame, `position_y: 83.5` puts the block **centre** at ~1603 px (0.835 × 1920); a single line at the default `font_size` then has its bottom edge near ~1620 px — well below centre but still clear of the very bottom.
 
+## Caption plan input
+
+Add Captions has a **Caption plan** input for captions that are already timed: the opening line, where it ends, and the timed words of the rest of the video. When a plan is wired:
+
+- The opening line is drawn with the **Hook Plate** look; the rest uses this node's own caption style. Apply a caption preset to the node to restyle the rest — the opening line stays Hook Plate.
+- The plan replaces the node's own text, segments and wired transcript.
+- It always uses the styled caption renderer, so it bills at the kinetic price (see [Kinetic style look](#kinetic-style-look)).
+- **An empty plan passes the video through**: when the plan has nothing to caption, the node outputs its video unchanged, at no cost.
+
 ## Inputs & Outputs
 
 **Inputs:** Video with audio (required); an optional Transcript (JSON) on the `transcript` handle

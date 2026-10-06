@@ -554,6 +554,24 @@ describe("POST /v1/app/:slug/run", () => {
     expect(orchestrationQueue.add).not.toHaveBeenCalled()
   })
 
+  it("refuses an injected UGC run state — 400 locked_field, no run", async () => {
+    setupSuccessfulRunMocks({
+      snapshot_nodes: [{ id: "ugc-1", type: "ugc-creator", data: { source: "sampled", gender: "woman", keepResult: false } }],
+    })
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/app/${TEST_SLUG}/run`,
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { inputOverrides: { "ugc-1": { keepResult: true } } },
+    })
+
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("locked_field")
+    expect(res.json().error.message).toContain('inputOverrides cannot set "keepResult" on a UGC node "ugc-1".')
+    expect(mockExecuteAppRun).not.toHaveBeenCalled()
+  })
+
   it("refuses the flat `inputs` lane the same way once it is translated onto an outbound node", async () => {
     // A publisher cannot expose a destination as an app input today (no
     // INPUT_FIELD_MAP entry, no exposableFields), so a translated flat input

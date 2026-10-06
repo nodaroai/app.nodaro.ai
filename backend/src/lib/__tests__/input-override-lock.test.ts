@@ -24,16 +24,16 @@ const GRAPH = [
 describe("findLockedOverrides — what a run request may not re-point", () => {
   it("refuses the url of a Webhook Output (the published-app exfiltration path)", () => {
     expect(findLockedOverrides(GRAPH, { "hook-1": { url: "https://attacker.example/collect" } })).toEqual([
-      { nodeId: "hook-1", nodeType: "webhook-output", field: "url" },
+      { nodeId: "hook-1", nodeType: "webhook-output", field: "url", kind: "outbound" },
     ])
   })
 
   it("refuses a publisher's destination and a fetcher's target alike", () => {
     expect(findLockedOverrides(GRAPH, { "tg-1": { chatId: "@attacker" } })).toEqual([
-      { nodeId: "tg-1", nodeType: "telegram-post", field: "chatId" },
+      { nodeId: "tg-1", nodeType: "telegram-post", field: "chatId", kind: "outbound" },
     ])
     expect(findLockedOverrides(GRAPH, { "scrape-1": { target: "https://attacker.example/?q=x" } })).toEqual([
-      { nodeId: "scrape-1", nodeType: "web-scrape", field: "target" },
+      { nodeId: "scrape-1", nodeType: "web-scrape", field: "target", kind: "outbound" },
     ])
   })
 
@@ -42,7 +42,7 @@ describe("findLockedOverrides — what a run request may not re-point", () => {
     // the request, so it is locked by name (plan D9).
     expect(isLockedField("credentialId")).toBe(true)
     expect(findLockedOverrides(GRAPH, { "hook-1": { credentialId: "11111111-1111-4111-8111-111111111111" } })).toEqual([
-      { nodeId: "hook-1", nodeType: "webhook-output", field: "credentialId" },
+      { nodeId: "hook-1", nodeType: "webhook-output", field: "credentialId", kind: "outbound" },
     ])
   })
 
@@ -51,17 +51,17 @@ describe("findLockedOverrides — what a run request may not re-point", () => {
       findLockedOverrides(GRAPH, {
         "hook-1": { probedVideo: { url: "https://attacker.example/x.mp4" } },
       }),
-    ).toEqual([{ nodeId: "hook-1", nodeType: "webhook-output", field: "probedVideo.url" }])
+    ).toEqual([{ nodeId: "hook-1", nodeType: "webhook-output", field: "probedVideo.url", kind: "outbound" }])
     expect(
       findLockedOverrides(GRAPH, {
         "tg-1": { extraRefs: [{ kind: "image" }, { url: "https://attacker.example/a.png" }] },
       }),
-    ).toEqual([{ nodeId: "tg-1", nodeType: "telegram-post", field: "extraRefs[1].url" }])
+    ).toEqual([{ nodeId: "tg-1", nodeType: "telegram-post", field: "extraRefs[1].url", kind: "outbound" }])
   })
 
   it("reports a locked list field once, whatever it holds", () => {
     expect(findLockedOverrides(GRAPH, { "tg-1": { imageUrls: ["https://a.example/1.png", "https://a.example/2.png"] } })).toEqual([
-      { nodeId: "tg-1", nodeType: "telegram-post", field: "imageUrls" },
+      { nodeId: "tg-1", nodeType: "telegram-post", field: "imageUrls", kind: "outbound" },
     ])
   })
 
@@ -86,7 +86,7 @@ describe("findLockedOverrides — what a run request may not re-point", () => {
       findLockedOverrides(GRAPH, { "scrape-1": { url: "", target: null, query: "" } }).map((f) => f.field).sort(),
     ).toEqual(["query", "target", "url"])
     expect(findLockedOverrides(GRAPH, { "tg-1": { imageUrls: [] } })).toEqual([
-      { nodeId: "tg-1", nodeType: "telegram-post", field: "imageUrls" },
+      { nodeId: "tg-1", nodeType: "telegram-post", field: "imageUrls", kind: "outbound" },
     ])
   })
 
@@ -122,7 +122,7 @@ describe("findLockedOverrides — review follow-ups", () => {
     // every destination key an executor reads.
     expect(isLockedField("targets")).toBe(true)
     expect(findLockedOverrides([{ id: "ig-1", type: "instagram-scrape" }], { "ig-1": { targets: "victimprofile" } })).toEqual([
-      { nodeId: "ig-1", nodeType: "instagram-scrape", field: "targets" },
+      { nodeId: "ig-1", nodeType: "instagram-scrape", field: "targets", kind: "outbound" },
     ])
   })
 
@@ -130,10 +130,10 @@ describe("findLockedOverrides — review follow-ups", () => {
     // Flipping `actor` to a branch whose own field is empty aims the fetch at
     // the upstream text (each branch falls back to it).
     expect(findLockedOverrides([{ id: "ws-1", type: "web-scrape" }], { "ws-1": { actor: "content-crawler" } })).toEqual([
-      { nodeId: "ws-1", nodeType: "web-scrape", field: "actor" },
+      { nodeId: "ws-1", nodeType: "web-scrape", field: "actor", kind: "outbound" },
     ])
     expect(findLockedOverrides([{ id: "ads-1", type: "meta-ads-scrape" }], { "ads-1": { mode: "search" } })).toEqual([
-      { nodeId: "ads-1", nodeType: "meta-ads-scrape", field: "mode" },
+      { nodeId: "ads-1", nodeType: "meta-ads-scrape", field: "mode", kind: "outbound" },
     ])
     // `mode` is an ordinary key everywhere else — not part of the copilot-wide
     // field lock, and free on a node that is not outbound.
@@ -144,7 +144,7 @@ describe("findLockedOverrides — review follow-ups", () => {
   it("looks nodes up exactly as the merge does — a numeric id coerces the same way on both sides", () => {
     const nodes = [{ id: 7 as unknown as string, type: "webhook-output" }]
     expect(findLockedOverrides(nodes, { "7": { url: "https://attacker.example/" } })).toEqual([
-      { nodeId: "7", nodeType: "webhook-output", field: "url" },
+      { nodeId: "7", nodeType: "webhook-output", field: "url", kind: "outbound" },
     ])
   })
 
@@ -154,7 +154,7 @@ describe("findLockedOverrides — review follow-ups", () => {
       { id: "dup", type: "webhook-output" },
     ]
     expect(findLockedOverrides(nodes, { dup: { url: "https://attacker.example/" } })).toEqual([
-      { nodeId: "dup", nodeType: "webhook-output", field: "url" },
+      { nodeId: "dup", nodeType: "webhook-output", field: "url", kind: "outbound" },
     ])
     // Two outbound holders of one id report once, not twice.
     const twice = [
@@ -175,7 +175,7 @@ describe("findLockedOverrides — review follow-ups", () => {
     const node = [{ id: "ads-1", type: "meta-ads-scrape" }]
     for (const value of [[], null, [{ pageId: "1", name: "x" }], [{ name: "x", url: "https://attacker.example/p" }]]) {
       expect(findLockedOverrides(node, { "ads-1": { advertisers: value } }), JSON.stringify(value)).toEqual([
-        { nodeId: "ads-1", nodeType: "meta-ads-scrape", field: "advertisers" },
+        { nodeId: "ads-1", nodeType: "meta-ads-scrape", field: "advertisers", kind: "outbound" },
       ])
     }
     // Ordinary keys on that node stay free.
@@ -198,7 +198,7 @@ describe("findLockedOverrides — review follow-ups", () => {
     ).toEqual(["fieldMappings.mode", "fieldMappings.url"])
     // A selector nested anywhere is refused like a nested url.
     expect(findLockedOverrides([{ id: "ws-1", type: "web-scrape" }], { "ws-1": { config: { actor: "rss" } } })).toEqual([
-      { nodeId: "ws-1", nodeType: "web-scrape", field: "config.actor" },
+      { nodeId: "ws-1", nodeType: "web-scrape", field: "config.actor", kind: "outbound" },
     ])
   })
 
@@ -239,7 +239,7 @@ describe("assertNoLockedOverrides / the message", () => {
     expect(caught).toBeInstanceOf(LockedOverrideError)
     const error = caught as LockedOverrideError
     expect(error.code).toBe("locked_field")
-    expect(error.locked).toEqual([{ nodeId: "hook-1", nodeType: "webhook-output", field: "url" }])
+    expect(error.locked).toEqual([{ nodeId: "hook-1", nodeType: "webhook-output", field: "url", kind: "outbound" }])
   })
 
   it("does not throw when nothing is locked", () => {
@@ -247,7 +247,7 @@ describe("assertNoLockedOverrides / the message", () => {
   })
 
   it("names the field, node type and node id — and never the value", () => {
-    const message = describeLockedOverrides([{ nodeId: "hook-1", nodeType: "webhook-output", field: "url" }])
+    const message = describeLockedOverrides([{ nodeId: "hook-1", nodeType: "webhook-output", field: "url", kind: "outbound" }])
     expect(message).toContain('"url" on webhook-output node "hook-1"')
     expect(message).not.toContain("attacker")
     expect(message).not.toContain("http")

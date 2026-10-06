@@ -303,6 +303,14 @@ export const FAN_OUT_EACH_HANDLES: Readonly<Record<string, { readonly each: read
 }
 
 /**
+ * Fan-out nodes whose iterations must ALL succeed: one failed item fails the
+ * node (today's rule tolerates a partial list). UGC Clip — a missing clip
+ * silently drops a beat from the script (spec R17). Already-started items
+ * finish and settle; their jobs are reused on the next run.
+ */
+export const FAN_OUT_ALL_OR_NOTHING_TYPES: ReadonlySet<string> = new Set(["ugc-clip"])
+
+/**
  * Nodes whose saved list is the list their last run PRODUCED — `__listResults`
  * (Extract Field's JSON value on `generatedJson`) — and never a history in
  * `generatedResults`: Extract Field and JSON Process. No run of either writes

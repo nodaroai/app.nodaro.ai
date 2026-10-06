@@ -23,6 +23,7 @@
 import {
   migrateToItems,
   getInputFieldSchema,
+  getInputFieldExtraKeys,
   deriveLottieSlotFields,
   LOTTIE_SLOT_FIELD_PREFIX,
   canonicalExposedFieldKey,
@@ -123,6 +124,26 @@ function sharedFieldInfo(
   const s = getInputFieldSchema(nodeType)
   if (!s) return undefined
   return { fieldKey: s.key, type: SHARED_FIELD_TYPE_TO_NORMALIZED[s.type] }
+}
+
+/**
+ * The allowed values of a node type's select fields that the shared field map
+ * cannot carry (it holds a key and a coarse type, no values). Covers a type's
+ * primary key and its INPUT_FIELD_EXTRA_KEYS.
+ */
+const EXTRA_KEY_OPTIONS: Readonly<Record<string, Readonly<Record<string, readonly string[]>>>> = {
+  "ugc-creator": { source: ["sampled", "photo"], gender: ["woman", "man"] },
+}
+
+function selectOptionsFor(nodeType: string | undefined, fieldKey: string): readonly string[] | undefined {
+  if (!nodeType || !Object.hasOwn(EXTRA_KEY_OPTIONS, nodeType)) return undefined
+  const byField = EXTRA_KEY_OPTIONS[nodeType]!
+  return Object.hasOwn(byField, fieldKey) ? byField[fieldKey] : undefined
+}
+
+/** `photoUrl` → `photo_url`: an extra key's slug suffix. */
+function snakeCase(key: string): string {
+  return key.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toLowerCase()
 }
 
 /**
@@ -403,14 +424,31 @@ export function extractAppInputSchema({
       const label =
         (node?.data?.label as string | undefined) ?? node?.type ?? item.nodeId
       const key = uniqueKey(seen, label, item.nodeId)
+      const primaryOptions = type === "select" ? selectOptionsFor(node?.type, fieldKey) : undefined
       fields.push({
         key,
         label,
         type,
         required: type !== "text",
         ...(description ? { description } : {}),
+        ...(primaryOptions ? { options: primaryOptions } : {}),
       })
       keyMap[key] = keyMapEntry(item.nodeId, fieldKey, type)
+      // A card that writes more than one field (UGC Creator: source, gender,
+      // photo) surfaces each extra key as its own optional field.
+      for (const extra of node?.type ? getInputFieldExtraKeys(node.type) : []) {
+        const extraType = SHARED_FIELD_TYPE_TO_NORMALIZED[extra.type]
+        const extraKey = uniqueKey(seen, `${label}_${snakeCase(extra.key)}`, `${item.nodeId}_${snakeCase(extra.key)}`)
+        const extraOptions = extraType === "select" ? selectOptionsFor(node?.type, extra.key) : undefined
+        fields.push({
+          key: extraKey,
+          label: `${label}: ${extra.key}`,
+          type: extraType,
+          required: false,
+          ...(extraOptions ? { options: extraOptions } : {}),
+        })
+        keyMap[extraKey] = keyMapEntry(item.nodeId, extra.key, extraType)
+      }
     } else {
       // type === "field"
       const node = nodesById.get(item.nodeId)

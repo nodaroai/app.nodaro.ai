@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useMemo, useState, type ReactNode } from "react"
 import { Filter, Search } from "lucide-react"
 import {
   Dialog,
@@ -15,7 +15,16 @@ import { useLocalizedCatalog } from "@/hooks/use-localized-entry"
 import { usePickerDir } from "@/lib/locale-store"
 import { useT } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
-import type { SingleDimParameterPickerMeta } from "@/lib/picker-ui"
+import { getPickerCatalog } from "@nodaro/prompts"
+import type { I18nCatalogId } from "@nodaro/shared"
+import type { MultiDimParameterPickerMeta, PickerCatalogEntry, SingleDimParameterPickerMeta } from "@/lib/picker-ui"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { usePickerLabel } from "./picker-label"
 
 interface PickerRestrictDialogProps {
@@ -25,6 +34,21 @@ interface PickerRestrictDialogProps {
   /** Currently allowed value ids. Empty/undefined = all allowed. */
   value: ReadonlyArray<string> | undefined
   onChange: (value: ReadonlyArray<string> | undefined) => void
+}
+
+interface ChecklistDialogProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  /** What is being restricted — fills "Restrict {label}". */
+  label: string
+  catalogId: I18nCatalogId
+  entries: ReadonlyArray<PickerCatalogEntry>
+  groupOrder?: ReadonlyArray<string>
+  groupLabels?: Readonly<Record<string, string>>
+  value: ReadonlyArray<string> | undefined
+  onChange: (value: ReadonlyArray<string> | undefined) => void
+  /** Rendered under the title (the multi-dim dialog's field switcher). */
+  header?: ReactNode
 }
 
 /**
@@ -42,13 +66,110 @@ export function PickerRestrictDialog({
   value,
   onChange,
 }: PickerRestrictDialogProps) {
-  const dir = usePickerDir()
-  const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog(meta.catalogId)
-  const [query, setQuery] = useState("")
+  const pickerLabel = usePickerLabel(meta)
+  return (
+    <RestrictChecklistDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      label={pickerLabel}
+      catalogId={meta.catalogId}
+      entries={meta.entries}
+      groupOrder={meta.groupOrder}
+      groupLabels={meta.groupLabels}
+      value={value}
+      onChange={onChange}
+    />
+  )
+}
+
+/** The dimensions of a multi-dimension picker a card can restrict, in field order. */
+export function restrictableDimensions(meta: MultiDimParameterPickerMeta) {
+  const dims = getPickerCatalog(meta.nodeType)?.dimensions ?? []
+  return dims.filter((d) => d.options.length > 0)
+}
+
+interface PickerFieldRestrictDialogProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  meta: MultiDimParameterPickerMeta
+  /** Allowed ids per data field. A field with no entry is unrestricted. */
+  value: Readonly<Record<string, ReadonlyArray<string>>> | undefined
+  /** The whole next map; `undefined` when no field is restricted any more. */
+  onChange: (value: Record<string, string[]> | undefined) => void
+}
+
+/**
+ * Editor dialog for a multi-dimension picker: choose which field to restrict,
+ * then whitelist its values. Saves to cardMeta[nodeId].pickerAllowedValuesByField;
+ * selecting every value (or none) removes that field's key.
+ */
+export function PickerFieldRestrictDialog({ open, onOpenChange, meta, value, onChange }: PickerFieldRestrictDialogProps) {
+  const dims = useMemo(() => restrictableDimensions(meta), [meta])
+  const [field, setField] = useState<string | undefined>(undefined)
   const t = useT()
   const pickerLabel = usePickerLabel(meta)
+  const current = dims.find((d) => d.field === field) ?? dims[0]
+  if (!current) return null
 
-  const allIds = useMemo(() => meta.entries.map((e) => e.id), [meta.entries])
+  const entries: ReadonlyArray<PickerCatalogEntry> = current.options.map((o) => ({
+    id: o.id,
+    label: o.label,
+    description: o.description ?? "",
+    group: o.category,
+  }))
+  const setFieldValue = (ids: ReadonlyArray<string> | undefined) => {
+    const next: Record<string, string[]> = {}
+    for (const [k, v] of Object.entries(value ?? {})) if (k !== current.field && v.length > 0) next[k] = [...v]
+    if (ids && ids.length > 0) next[current.field] = [...ids]
+    onChange(Object.keys(next).length > 0 ? next : undefined)
+  }
+
+  return (
+    <RestrictChecklistDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      label={current.label}
+      catalogId={meta.catalogId}
+      entries={entries}
+      value={value?.[current.field]}
+      onChange={setFieldValue}
+      header={
+        <Select value={current.field} onValueChange={setField}>
+          <SelectTrigger className="h-8 text-xs" aria-label={t("present.restrictLabel", { label: pickerLabel })}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent className="max-h-72">
+            {dims.map((d) => (
+              <SelectItem key={d.field} value={d.field}>
+                {d.label}
+                {(value?.[d.field]?.length ?? 0) > 0 ? ` (${value![d.field]!.length}/${d.options.length})` : ""}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      }
+    />
+  )
+}
+
+function RestrictChecklistDialog({
+  open,
+  onOpenChange,
+  label: pickerLabel,
+  catalogId,
+  entries,
+  groupOrder,
+  groupLabels,
+  value,
+  onChange,
+  header,
+}: ChecklistDialogProps) {
+  const dir = usePickerDir()
+  const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog(catalogId)
+  const [query, setQuery] = useState("")
+  const t = useT()
+
+  const allIds = useMemo(() => entries.map((e) => e.id), [entries])
 
   // undefined / empty → "all" (treated as full whitelist for UX)
   const checked = useMemo(() => {
@@ -57,13 +178,13 @@ export function PickerRestrictDialog({
   }, [value, allIds])
 
   const filtered = useMemo(() => {
-    return meta.entries.filter((e) =>
+    return entries.filter((e) =>
       matches(e.id, e.label, e.description, query),
     )
-  }, [meta.entries, query, matches])
+  }, [entries, query, matches])
 
   const grouped = useMemo(() => {
-    if (!meta.groupOrder || !meta.groupLabels) {
+    if (!groupOrder || !groupLabels) {
       return [{ key: null, label: null, entries: filtered }]
     }
     const map = new Map<string, typeof filtered[number][]>()
@@ -73,15 +194,15 @@ export function PickerRestrictDialog({
       list.push(e)
       map.set(key, list)
     }
-    const order = [...meta.groupOrder, "other"]
+    const order = [...groupOrder, "other"]
     return order
       .filter((k) => map.has(k))
       .map((k) => ({
         key: k,
-        label: meta.groupLabels?.[k] ?? k,
+        label: groupLabels?.[k] ?? k,
         entries: map.get(k)!,
       }))
-  }, [filtered, meta.groupOrder, meta.groupLabels])
+  }, [filtered, groupOrder, groupLabels])
 
   const checkedCount = checked.size
   const total = allIds.length
@@ -114,6 +235,7 @@ export function PickerRestrictDialog({
             {t("present.restrictLabel", { label: pickerLabel })}
           </DialogTitle>
         </DialogHeader>
+        {header}
 
         <div className="flex items-center justify-between gap-2 pb-2">
           <p className="text-xs text-muted-foreground">

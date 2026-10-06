@@ -231,6 +231,8 @@ const NODE_LABELS_HE: Record<string, string> = {
 
 const HANDLE_LABELS_HE: Record<string, string> = {
   "Offsets": "היסטים",
+  "Layer plan": "תוכנית שכבות",
+  "Caption plan": "תוכנית כתוביות",
   "QR link": "קישור QR",
   "Extend Source": "מקור להרחבה",
   "Source video": "וידאו מקור",

@@ -766,6 +766,23 @@ describe("POST /v1/api/run — the override lock (issue #1555)", () => {
     expect(mockOrchestrationQueueAdd).not.toHaveBeenCalled()
   })
 
+  it("refuses an injected UGC run state — by node id — 400 locked_field, nothing enqueued", async () => {
+    mockTokenRunWithGraph([
+      { id: "ugc-1", type: "ugc-creator", data: { label: "Creator", source: "sampled", gender: "woman", keepResult: false } },
+    ])
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/api/run",
+      headers: { authorization: "Bearer ndr_test_token" },
+      payload: { workflowId: WORKFLOW_ID, inputs: { "ugc-1": { keepResult: true } } },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("locked_field")
+    expect(res.json().error.message).toContain('inputOverrides cannot set "keepResult" on a UGC node "ugc-1".')
+    expect(mockOrchestrationQueueAdd).not.toHaveBeenCalled()
+  })
+
   it("refuses a run of a Preview render — 400 preview_review_required — unless inputs set it to Final", async () => {
     mockTokenRunWithGraph([
       { id: "cut", type: "apply-edl", data: { label: "Cut", quality: "proxy" } },

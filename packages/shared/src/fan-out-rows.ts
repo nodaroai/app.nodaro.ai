@@ -46,6 +46,8 @@ export const NON_PROMPT_TEXT_LANES: Readonly<Record<string, "*" | readonly strin
   silence: ["edit-plan"],
   offsets: ["edit-plan"],
   qrText: ["image-overlay"],
+  layerPlan: ["video-overlay"],
+  captionPlan: ["add-captions"],
   transition: ["slideshow"],
   // Content Recipe's `link` carries the post's address (inputs.sourceLink), not
   // the material it analyzes — a list of links fanned through it must not be
