@@ -10,6 +10,8 @@ import {
   FULL_PAGE_MAX_CSS_PX,
   hideConsentOverlays,
   hideFixedForStill,
+  measureStillShare,
+  planFallbackStills,
   planSections,
   runCapture,
   scrollThroughPage,
@@ -23,7 +25,7 @@ import {
 import { LANDING, summaryOf } from "./fixtures/site-capture-summaries.js"
 
 const OPTS: PageFunctionOptions = { maxStills: 8, stillAspect: STILL_ASPECT, fullPageMaxCssPx: FULL_PAGE_MAX_CSS_PX, stillFormat: "png" }
-const FNS = { collectPageSummary, hideConsentOverlays, scrollThroughPage, hideFixedForStill, planSections, computeVerdict }
+const FNS = { collectPageSummary, hideConsentOverlays, scrollThroughPage, hideFixedForStill, planSections, computeVerdict, measureStillShare, planFallbackStills }
 
 /** Minimal DOM stand-ins: enough for each in-page function to run to its end on an empty page. */
 function domStubs() {
@@ -218,7 +220,7 @@ describe("self-containment — every stringified function runs in an empty vm co
   it("the assembled page function compiles and runs end to end inside the vm", async () => {
     const source = buildPageFunctionSource(OPTS)
     expect(source.startsWith("async function pageFunction(context) {")).toBe(true)
-    const pageFunction = vm.runInNewContext(`(${source})`, { setTimeout })
+    const pageFunction = vm.runInNewContext(`(${source})`, { setTimeout, Buffer })
     const { context, writes } = fakeContext(summaryOf(LANDING))
     const item = (await pageFunction(context)) as CaptureItem
     expect(item.verdict).toBe("ok")

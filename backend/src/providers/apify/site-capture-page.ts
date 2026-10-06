@@ -271,6 +271,74 @@ export function planSections(summary: PageSummary, opts: PlanOptions): SectionPl
 }
 
 /**
+ * STRINGIFIED. The sections that have no still, as candidates for a still that turns out blank (probe run 1, T2:
+ * 7 of 71 stills were one flat colour). The same order the planner takes them in (spec §4.4 step 6.8): key
+ * sections in page order, then filler with the FAQ last. The rectangle follows step 6.7 (full width, a phone-card
+ * shape, from 24 px above the section, 0 for the hero); the section map holds the band's top, not its heading's,
+ * so a section inside a tall landmark is shot from the landmark's top, which is where step 6.7 puts a band
+ * taller than the still anyway. Never overlaps a planned still or an earlier candidate by more than 40 %. Pure,
+ * and separate from `planSections`, so the section finder itself is untouched.
+ */
+export function planFallbackStills(
+  plan: SectionPlan,
+  geometry: { viewportWidth: number; pageHeight: number },
+  opts: { stillAspect: number },
+): PlannedStill[] {
+  const vw = geometry.viewportWidth
+  const pageHeight = Math.max(1, Math.round(geometry.pageHeight))
+  const stillHeight = Math.min(pageHeight, Math.round(vw / opts.stillAspect))
+  const overlap = (a: { y: number; height: number }, b: { y: number; height: number }): number => {
+    const inter = Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y)
+    return inter <= 0 ? 0 : inter / Math.max(1, Math.min(a.height, b.height))
+  }
+  const taken = plan.stills.map((s) => s.sectionOrder)
+  const rest = plan.sections.filter((s) => !taken.includes(s.order))
+  const ordered = [
+    ...rest.filter((s) => s.kind === "key"),
+    ...rest.filter((s) => s.kind !== "key" && s.category !== "faq"),
+    ...rest.filter((s) => s.kind !== "key" && s.category === "faq"),
+  ]
+  return ordered.reduce<PlannedStill[]>((acc, s) => {
+    const top = s.category === "hero" ? 0 : s.rect.y - 24
+    const rect = { x: 0, y: Math.max(0, Math.min(top, pageHeight - stillHeight)), width: vw, height: stillHeight }
+    if ([...plan.stills, ...acc].some((o) => overlap(o.rect, rect) > 0.4)) return acc
+    return [...acc, { index: plan.stills.length + acc.length, sectionOrder: s.order, label: s.label, category: s.category, rect }]
+  }, [])
+}
+
+/**
+ * STRINGIFIED, runs in the page. How much of a still is one colour: the share of its pixels in the most common
+ * colour, each channel quantised to 5 bits so encoder noise does not split a flat background. 1 is a still with no
+ * variance at all. Decoded with createImageBitmap from a Blob (a data: URL image is refused by a page whose CSP
+ * limits img-src); null when the image cannot be decoded, which keeps the still.
+ */
+export async function measureStillShare(args: { base64: string; mime: string }): Promise<{ dominantShare: number } | null> {
+  try {
+    const bin = atob(args.base64)
+    const bytes = new Uint8Array(bin.length)
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+    const bitmap = await createImageBitmap(new Blob([bytes], { type: args.mime }))
+    const w = bitmap.width
+    const h = bitmap.height
+    const canvas = document.createElement("canvas")
+    canvas.width = w
+    canvas.height = h
+    const ctx = canvas.getContext("2d")
+    if (!ctx || w === 0 || h === 0) return null
+    ctx.drawImage(bitmap, 0, 0)
+    bitmap.close()
+    const px = ctx.getImageData(0, 0, w, h).data
+    const counts = new Uint32Array(32768)
+    for (let i = 0; i < px.length; i += 4) counts[((px[i]! >> 3) << 10) | ((px[i + 1]! >> 3) << 5) | (px[i + 2]! >> 3)]++
+    let top = 0
+    for (let k = 0; k < counts.length; k++) if (counts[k]! > top) top = counts[k]!
+    return { dominantShare: top / (w * h) }
+  } catch {
+    return null
+  }
+}
+
+/**
  * STRINGIFIED. The bot-wall verdict (spec §4.4 step 7), from the summary alone.
  * The wall phrases count on the title always, and on the visible text only for
  * a short page: a long marketing page may mention "DDoS protection" in its copy.
@@ -280,6 +348,14 @@ export function planSections(summary: PageSummary, opts: PlanOptions): SectionPl
  * not `blocked` (the spec's "status AND marker").
  * "verifying your browser" is the Vercel Security Checkpoint's wording (spike run
  * RQ0IC632nbtTpZj3t), folded in beside "checking your browser".
+ *
+ * Two rules beyond the spec's step 7 (probe run 1, T4; rulings SP4-R-T4a / SP4-R-T4b):
+ *  - a main-document 403 or 429 is `blocked` with or without a marker, ahead of the `empty` check: the
+ *    site refused the visit, whatever it put in the body (g2.com: HTTP 403, an empty page, was `empty`);
+ *  - a challenge widget on a page with nothing else (under the `empty` text threshold) is `blocked`: a widget
+ *    paints its own "Verify you are human", so the DOM text never carries the phrase, and a 336 x 140 widget
+ *    stays under the 30 % coverage rule (nowsecure.nl, probe run 1: `ok` with a still of the challenge).
+ *    A real page with a Turnstile on a form has far more text and stays `ok`.
  */
 export function computeVerdict(summary: PageSummary): CaptureVerdict {
   const WALL_TEXT = /just a moment|attention required|verify you are human|(checking|verifying) your browser|access denied|request blocked|are you a robot|unusual traffic|pardon our interruption|ddos protection/i
@@ -289,9 +365,11 @@ export function computeVerdict(summary: PageSummary): CaptureVerdict {
   const wallText = WALL_TEXT.test(summary.bodyText)
   const marker = summary.challenge.markerCount > 0 || wallTitle || wallText
   if (status !== null && (status === 401 || status === 403 || status === 429 || status === 503) && marker) return "blocked"
+  if (status === 403 || status === 429) return "blocked"
   if (wallTitle) return "blocked"
   if (summary.visibleTextLength < 3000 && wallText) return "blocked"
   if (summary.challenge.coverage > 0.3) return "blocked"
+  if (summary.challenge.markerCount > 0 && summary.visibleTextLength < 150) return "blocked"
   if (status !== null && (status === 404 || status === 410 || status >= 500)) return "unreachable"
   const headings = summary.anchors.filter((a) => a.rect.height >= 12 && a.rect.width >= 120 && !a.inChrome && !CHROME_TEXT.test(a.text))
   if (summary.visibleTextLength < 150 && headings.length === 0) return "empty"
@@ -382,7 +460,9 @@ export function collectPageSummary(args: { status: number | null; finalUrl: stri
   const challengeEls = Array.from(
     document.querySelectorAll(
       'iframe[src*="hcaptcha"], iframe[src*="recaptcha"], iframe[src*="challenges.cloudflare.com"], iframe[src*="turnstile"], ' +
-        "#challenge-form, #challenge-running, #cf-challenge-running, #px-captcha, #captcha-container, .cf-browser-verification",
+        "#challenge-form, #challenge-running, #cf-challenge-running, #px-captcha, #captcha-container, .cf-browser-verification, " +
+        // Widgets rendered into a div or a hidden input: a Turnstile / hCaptcha / reCAPTCHA iframe can carry an empty src.
+        '.cf-turnstile, .h-captcha, .g-recaptcha, [data-sitekey], input[name="cf-turnstile-response"], input[name="h-captcha-response"], textarea[name="g-recaptcha-response"]',
     ),
   )
   const coverage = challengeEls.reduce((max, el) => {
@@ -519,6 +599,8 @@ export interface PageFunctions {
   hideFixedForStill: typeof hideFixedForStill
   planSections: typeof planSections
   computeVerdict: typeof computeVerdict
+  measureStillShare: typeof measureStillShare
+  planFallbackStills: typeof planFallbackStills
 }
 
 /** The dataset item one capture run writes (read by providers/apify/site-capture.ts). */
@@ -590,17 +672,45 @@ export async function runCapture(context: CaptureContextLike, opts: PageFunction
   await writer.setValue("FULL_PAGE", full, { contentType: "image/jpeg" })
   if (truncated) warnings.push("full_page_truncated")
 
-  const stills: CaptureItem["stills"] = []
-  for (const still of plan.stills) {
+  // A still with no content (a flat colour: content faded in by scroll, a page still loading) is never kept.
+  // The budget is the planned count; a blank one is skipped and the next candidate section takes its place,
+  // for at most six extra shots. Kept stills are numbered in page order and written once the set is final.
+  const BLANK_SHARE = 0.995
+  const MAX_EXTRA_SHOTS = 6
+  const isBlank = async (bytes: Uint8Array): Promise<boolean> => {
+    if (typeof Buffer === "undefined" || typeof fns.measureStillShare !== "function") return false
+    const measured = await page
+      .evaluate(fns.measureStillShare, { base64: Buffer.from(bytes).toString("base64"), mime: opts.stillFormat === "jpeg" ? "image/jpeg" : "image/png" })
+      .catch(() => null)
+    return measured !== null && typeof measured === "object" && typeof measured.dominantShare === "number" && measured.dominantShare >= BLANK_SHARE
+  }
+  const budget = plan.stills.length
+  const queue =
+    budget === 0 ? [] : [...plan.stills, ...fns.planFallbackStills(plan, { viewportWidth: summary.viewport.width, pageHeight: summary.pageHeight }, { stillAspect: opts.stillAspect })]
+  const kept: Array<{ still: (typeof queue)[number]; bytes: Uint8Array }> = []
+  let shots = 0
+  for (const still of queue) {
+    if (kept.length >= budget || shots >= budget + MAX_EXTRA_SHOTS) break
+    shots++
     await page.evaluate(fns.hideFixedForStill, { keepTopHeader: still.category === "hero", headerMaxPx: Math.round(summary.viewport.height * 0.2) })
-    const key = "STILL_" + still.index
     const quality = opts.stillFormat === "jpeg" ? { quality: 90 } : {}
     const bytes = await page.screenshot(
       playwright ? { fullPage: true, clip: still.rect, type: opts.stillFormat, ...quality } : { clip: still.rect, type: opts.stillFormat, ...quality },
     )
-    await writer.setValue(key, bytes, { contentType: opts.stillFormat === "jpeg" ? "image/jpeg" : "image/png" })
-    stills.push({ key, index: still.index, sectionOrder: still.sectionOrder, label: still.label, category: still.category })
+    if (await isBlank(bytes)) warnings.push("still_blank_skipped:" + still.sectionOrder)
+    else kept.push({ still, bytes })
   }
+  const final = kept.slice().sort((a, b) => a.still.sectionOrder - b.still.sectionOrder)
+  const stills: CaptureItem["stills"] = []
+  for (const [n, { still, bytes }] of final.entries()) {
+    const key = "STILL_" + n
+    await writer.setValue(key, bytes, { contentType: opts.stillFormat === "jpeg" ? "image/jpeg" : "image/png" })
+    stills.push({ key, index: n, sectionOrder: still.sectionOrder, label: still.label, category: still.category })
+  }
+  const sections = plan.sections.map((sec) => {
+    const n = stills.findIndex((st) => st.sectionOrder === sec.order)
+    return { ...sec, stillIndex: n === -1 ? null : n }
+  })
 
   return {
     verdict,
@@ -614,7 +724,7 @@ export async function runCapture(context: CaptureContextLike, opts: PageFunction
     coarsePointer: summary.coarsePointer,
     fullPage: { key: "FULL_PAGE", truncated },
     stills,
-    sections: plan.sections,
+    sections,
     warnings,
     pageText: summary.bodyText,
   }
@@ -646,6 +756,8 @@ export function buildPageFunctionSource(opts: PageFunctionOptions): string {
     ["hideFixedForStill", hideFixedForStill],
     ["planSections", planSections],
     ["computeVerdict", computeVerdict],
+    ["measureStillShare", measureStillShare],
+    ["planFallbackStills", planFallbackStills],
   ]
   const source = [
     "async function pageFunction(context) {",
