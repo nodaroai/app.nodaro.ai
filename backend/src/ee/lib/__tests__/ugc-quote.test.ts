@@ -135,6 +135,16 @@ describe("pricing each item", () => {
   })
 })
 
+describe("the lane's two job tools are priced by their own ids", () => {
+  it("ugc_split_speech and ugc_finish_clips are flat ids", () => {
+    expect(pricingFor("ugc_split_speech", {}, { clipCount: 1 })).toEqual({ id: "ugc-segments" })
+    expect(pricingFor("ugc_finish_clips", { segments: [{}] }, { clipCount: 3 })).toEqual({ id: "ugc-finish" })
+  })
+  it("an id the plugin has not registered a price for is a quote error, never a zero", async () => {
+    await expect(buildUgcQuote({ items: [{ label: "Split the speech", tool: "ugc_split_speech", args: {}, count: 1 }], clipCount: 1, spentJobIds: [], userId: "u1" })).rejects.toThrow(/could not price/)
+  })
+})
+
 describe("refusing to guess", () => {
   it.each([
     ["an unknown tool", item("teleport_video", {}, "Mystery step")],

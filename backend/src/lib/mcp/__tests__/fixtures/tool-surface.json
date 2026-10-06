@@ -190,6 +190,8 @@
   "transcribe",
   "trim_audio",
   "trim_video",
+  "ugc_finish_clips",
+  "ugc_split_speech",
   "update_character",
   "update_location",
   "update_workflow_json",
@@ -230,6 +232,8 @@
   "start_film_director",
   "start_video_director",
   "start_workflow_editor",
+  "ugc_finish_clips",
+  "ugc_split_speech",
   "validate_recast_script",
   "wait_for_job"
  ],
@@ -250,6 +254,8 @@
   "start_film_director",
   "start_video_director",
   "start_workflow_editor",
+  "ugc_finish_clips",
+  "ugc_split_speech",
   "validate_recast_script"
  ],
  "community/all": [

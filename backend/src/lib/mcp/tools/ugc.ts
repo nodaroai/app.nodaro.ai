@@ -7,8 +7,9 @@ import { mcpInject } from "../internal-request.js"
 import type { McpSession } from "../session.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { entityOwnerFilter } from "./_entity-scope.js"
+import { resolveAssetId } from "../asset-resolver.js"
 import { internalHeaders, isRouterNotFound, textResult } from "./_studio-helpers.js"
-import { errorResult } from "./_verb-helpers.js"
+import { errorResult, jobResultWithWidget, parseJobId } from "./_verb-helpers.js"
 
 /**
  * UGC video builders — `build_ugc_creator`, `build_ugc_clips`, `build_ugc_cards`.
@@ -25,7 +26,7 @@ import { errorResult } from "./_verb-helpers.js"
  * No `outputSchema` on any tool: the answers are the plugin's to shape.
  */
 
-export const UGC_TOOL_NAMES = ["build_ugc_creator", "build_ugc_clips", "build_ugc_cards"] as const
+export const UGC_TOOL_NAMES = ["build_ugc_creator", "build_ugc_clips", "build_ugc_cards", "ugc_split_speech", "ugc_finish_clips"] as const
 
 const UGC_NOT_AVAILABLE = "UGC videos are a Nodaro Cloud feature and are not served on this deployment."
 
@@ -237,6 +238,11 @@ export function registerUgcTools({ server, session, fastify }: RegisterUgcToolsO
           .max(30)
           .optional()
           .describe("Job ids of the calls already made for this video; the quote lists them as already spent."),
+        segments: z
+          .array(z.record(z.string(), z.unknown()))
+          .max(8)
+          .optional()
+          .describe("The segments from ugc_split_speech's output, when the answer to the first call asked for them. Leave out on the first call."),
       },
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
@@ -247,14 +253,15 @@ export function registerUgcTools({ server, session, fastify }: RegisterUgcToolsO
         ...(args.traits ? { traits: args.traits } : {}),
         identityImages: args.identity_images,
         ...(args.seed !== undefined ? { seed: args.seed } : {}),
+        ...(args.segments ? { segments: args.segments } : {}),
       })
       if (res.statusCode >= 400) return ugcError(res.statusCode, res.body)
-      const body = JSON.parse(res.body) as { errors?: unknown[]; quoteItems?: unknown; clips?: unknown[] } & Record<string, unknown>
+      const body = JSON.parse(res.body) as { errors?: unknown[]; quoteItems?: unknown; estimateQuoteItems?: unknown; worstCaseQuoteItems?: unknown; clips?: unknown[] } & Record<string, unknown>
       // An invalid plan comes back as { errors, warnings } — there is nothing to price yet.
       if (Array.isArray(body.errors) && body.errors.length > 0) return textResult(body)
       // A valid plan always carries its quote items: an answer without them is never passed on unpriced.
       if (!Array.isArray(body.quoteItems)) return refuse("could not price the rest of the video")
-      const { quoteItems, ...rest } = body
+      const { quoteItems, estimateQuoteItems, worstCaseQuoteItems, ...rest } = body
       // Loaded on demand (the credit-guard shim pattern): core never imports ee/ statically.
       const { buildUgcQuote, UgcQuoteError } = await import("../../../ee/lib/ugc-quote.js")
       // The payer the calls this quote prices will be billed to: the billing hook's own
@@ -266,15 +273,17 @@ export function registerUgcTools({ server, session, fastify }: RegisterUgcToolsO
         isAppRun: false,
         internal: true,
       })
+      // A builder that cannot yet know its clip count (it is decided by the recorded speech) says so:
+      // `clipCount` / `estimateClipCount` are its own figures; otherwise the answer's clips are counted, as always.
+      const count = (own: unknown): number => (typeof own === "number" && Number.isInteger(own) && own >= 0 ? own : Array.isArray(body.clips) ? body.clips.length : 0)
+      const price = (items: readonly unknown[], clipCount: number) =>
+        buildUgcQuote({ items, clipCount, spentJobIds: args.spent_job_ids ?? [], userId: session.userId, ...(billingContext ? { billingContext } : {}) })
       try {
-        const quote = await buildUgcQuote({
-          items: quoteItems,
-          clipCount: Array.isArray(body.clips) ? body.clips.length : 0,
-          spentJobIds: args.spent_job_ids ?? [],
-          userId: session.userId,
-          ...(billingContext ? { billingContext } : {}),
-        })
-        return textResult({ ...rest, quote })
+        const quote = await price(quoteItems, count(body.clipCount))
+        // The estimate and the worst case ride only an answer that asks for them (`quote` is the one the user's OK covers).
+        const estimate = Array.isArray(estimateQuoteItems) ? await price(estimateQuoteItems, count(body.estimateClipCount)) : undefined
+        const worstCase = Array.isArray(worstCaseQuoteItems) ? await price(worstCaseQuoteItems, count(body.worstCaseClipCount)) : undefined
+        return textResult({ ...rest, quote, ...(estimate ? { estimate } : {}), ...(worstCase ? { worstCase } : {}) })
       } catch (err) {
         if (err instanceof UgcQuoteError) return refuse(err.message)
         throw err
@@ -316,6 +325,84 @@ export function registerUgcTools({ server, session, fastify }: RegisterUgcToolsO
       })
       if (res.statusCode >= 400) return ugcError(res.statusCode, res.body)
       return textResult(JSON.parse(res.body))
+    },
+  )
+
+  /** A job-creating plugin route, called as the session: its answer is a job id, read with wait_for_job. */
+  async function postJob(url: string, payload: Record<string, unknown>, label: string) {
+    const res = await postBuilder(fastify, session, url, payload)
+    if (res.statusCode >= 400) return ugcError(res.statusCode, res.body)
+    const jobId = parseJobId(res.body)
+    if (!jobId) return refuse("the service answered without a job id")
+    return jobResultWithWidget({ jobId, label, session })
+  }
+
+  server.registerTool(
+    "ugc_split_speech",
+    {
+      title: "Split UGC Speech",
+      description:
+        "Cut a UGC video's recorded speech into segments at its own pauses, each saved as an audio file with a short " +
+        "silence either side. Pass the speech (audio_url or audio_asset_id), its word timings from forced_alignment as " +
+        "`alignment`, and the script as `plan`. Returns a job id: its output lists every segment's text, timing and " +
+        "audio file, which build_ugc_clips turns into one clip request per segment (pass them as `segments`). " +
+        "Charges a flat fee per call. Used by the ugc-website recipe (get_recipe).",
+      inputSchema: {
+        plan: z.record(z.string(), z.unknown()),
+        audio_url: z.string().url().optional(),
+        audio_asset_id: z.string().optional().describe("Nodaro job id or upload asset id of the speech."),
+        alignment: z.array(z.object({ word: z.string(), start: z.number(), end: z.number() })).min(1).max(2000),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+    },
+    async (args) => {
+      const audioUrl =
+        args.audio_url ??
+        (args.audio_asset_id ? await resolveAssetId({ assetId: args.audio_asset_id, userId: session.userId, expectedKind: "audio" }) : null)
+      if (!audioUrl) return refuse("Pass audio_url or audio_asset_id — the speech to split.")
+      return postJob("/v1/ugc/segments", { plan: args.plan, audioUrl, alignment: args.alignment }, "split speech")
+    },
+  )
+
+  server.registerTool(
+    "ugc_finish_clips",
+    {
+      title: "Finish UGC Clips",
+      description:
+        "Check every rendered clip against the audio it was given, put that original audio on each clip, and trim the " +
+        "dead air between words, then return the finished clips in order, ready to join. Pass the `segments` from " +
+        "ugc_split_speech and one entry per clip: its video (video_url or video_asset_id) and, when it was rendered " +
+        "again, the new render as reroll_video_url / reroll_video_asset_id. If a clip does not match its audio the job " +
+        "answers which clips to render again and changes nothing. Returns a job id. Charges a flat fee per call. " +
+        "Used by the ugc-website recipe (get_recipe).",
+      inputSchema: {
+        segments: z.array(z.record(z.string(), z.unknown())).min(1).max(8),
+        clips: z
+          .array(
+            z.object({
+              clip: z.number().int().min(1).max(8),
+              video_url: z.string().url().optional(),
+              video_asset_id: z.string().optional(),
+              reroll_video_url: z.string().url().optional(),
+              reroll_video_asset_id: z.string().optional(),
+            }),
+          )
+          .min(1)
+          .max(8),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+    },
+    async (args) => {
+      const urlOf = async (url: string | undefined, assetId: string | undefined): Promise<string | null> =>
+        url ?? (assetId ? await resolveAssetId({ assetId, userId: session.userId, expectedKind: "video" }) : null)
+      const clips: Array<{ clip: number; rolls: string[] }> = []
+      for (const c of args.clips) {
+        const first = await urlOf(c.video_url, c.video_asset_id)
+        if (!first) return refuse(`Clip ${c.clip}: pass video_url or video_asset_id.`)
+        const again = await urlOf(c.reroll_video_url, c.reroll_video_asset_id)
+        clips.push({ clip: c.clip, rolls: again ? [first, again] : [first] })
+      }
+      return postJob("/v1/ugc/finish", { segments: args.segments, clips }, "finish clips")
     },
   )
 }

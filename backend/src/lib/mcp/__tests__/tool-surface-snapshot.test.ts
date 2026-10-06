@@ -636,6 +636,12 @@ const RENDER_FINAL_TOOL_BYTES = 2_191
 // 10 B of headroom `generate_video` had on dev; no other tool is near it.
 const CHARACTER_REFERENCES_BYTES = 489
 
+// RAISED by the two UGC job tools and one argument: `ugc_split_speech` and `ugc_finish_clips`
+// (cloud-only, ungated like the builders: every cloud set names them) and `segments` on
+// `build_ugc_clips`. measured by this suite: 404_519 total − 401_613 base = 2_906 B, each tool
+// far under the 8_192 B per-tool budget.
+const UGC_JOB_TOOLS_BYTES = 2_906
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES,
   totalBytes:
@@ -671,6 +677,7 @@ export const TOOL_WIRE_BUDGET = {
     AUDIO_SYNC_TOOL_BYTES +
     MIX_AUDIO_TOOL_BYTES +
     UGC_BUILDER_TOOL_BYTES +
+    UGC_JOB_TOOLS_BYTES +
     GET_RECIPE_UGC_SENTENCE_BYTES +
     GENERATE_SCRIPT_STYLE_GUIDE_BYTES +
     GENERATE_MUSIC_REFERENCE_BYTES +

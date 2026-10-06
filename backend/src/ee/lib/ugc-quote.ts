@@ -157,6 +157,11 @@ const PRICING: Record<string, (args: Readonly<Record<string, unknown>>, ctx: Quo
   forced_alignment: () => ({ id: "elevenlabs-forced-alignment" }),
   // silence_detect → POST /v1/silence-detect: one flat id (the route's inline literal).
   silence_detect: () => ({ id: "silence-detect" }),
+  // ugc_split_speech / ugc_finish_clips → the private plugin's job routes: one flat id each. The price
+  // row is the plugin's (`staticCreditCosts`, or an admin pricing row); with none registered the quote
+  // fails as "could not price", never as a zero.
+  ugc_split_speech: () => ({ id: "ugc-segments" }),
+  ugc_finish_clips: () => ({ id: "ugc-finish" }),
   // transcribe → POST /v1/transcribe: the engine the verb always sends.
   transcribe: () => ({ id: MCP_TRANSCRIBE_PROVIDER }),
   // overlay_images → POST /v1/video-overlay: one flat id.

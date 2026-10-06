@@ -91,6 +91,7 @@ const IMAGE = "https://cdn.example/still.png"
 const CASES: Array<{ tool: string; quoted: Record<string, unknown>; added: Record<string, unknown>; clipCount?: number; computed?: boolean }> = [
   { tool: "generate_video", computed: true, quoted: { prompt: "a person talks", model: "seedance-2-5", aspect_ratio: "16:9", duration: 8, resolution: "720p", reference_image_urls: [IMAGE, "https://cdn.example/b.png"] }, added: {} },
   { tool: "generate_video", computed: true, quoted: { prompt: "a person talks", model: "seedance-2-5", aspect_ratio: "16:9", duration: 5, resolution: "720p", reference_image_urls: [IMAGE] }, added: { reference_audio_urls: ["https://cdn.example/sound.mp3"] } },
+  { tool: "generate_video", computed: true, quoted: { prompt: "a person talks", model: "minimax-h3", aspect_ratio: "9:16", duration: 7, resolution: "768P", reference_image_urls: [IMAGE] }, added: { reference_audio_urls: ["https://cdn.example/segment.mp3"] } },
   { tool: "extract_frame", quoted: { mode: "timestamp", time_seconds: 2 }, added: { video_url: VIDEO } },
   { tool: "image_collage", quoted: { resolution: "2K", layout: "grid" }, added: { images: [{ url: IMAGE }, { url: IMAGE }, { url: IMAGE }] } },
   { tool: "image_to_text", quoted: { custom_prompt: "Answer yes or no." }, added: { image_url: IMAGE } },
@@ -160,5 +161,16 @@ describe("the UGC quote reserves what each route reserves", () => {
     // while the quote reads the row must compute exactly that row's base.
     if (quoted?.base !== undefined) expect(guard.base).toBe(quoted.base)
     else if (guard.base !== undefined) expect(guard.base).toBe(STATIC_CREDIT_COSTS[quoted!.id])
+  })
+})
+
+describe("the lane's clip request keeps its wire values through the verb", () => {
+  it("minimax-h3 / 7 s / 768P is priced as the 768P composite, and a lower-case resolution is not what the verb sends", async () => {
+    const quoted = pricingFor("generate_video", { prompt: "p", model: "minimax-h3", aspect_ratio: "9:16", duration: 7, resolution: "768P", reference_image_urls: [IMAGE] }, { clipCount: 1 })
+    expect(quoted?.id).toBe("minimax-h3:7s:768p")
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify: verbsFastify })
+    await callTool(server, "generate_video", { prompt: "p", model: "minimax-h3", aspect_ratio: "9:16", duration: 7, resolution: "768P", reference_image_urls: [IMAGE], reference_audio_urls: ["https://cdn.example/segment.mp3"] })
+    expect(captured.body).toMatchObject({ provider: "minimax-h3", resolution: "768P", duration: 7, aspectRatio: "9:16", referenceAudioUrls: ["https://cdn.example/segment.mp3"] })
   })
 })

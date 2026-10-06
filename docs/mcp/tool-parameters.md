@@ -353,6 +353,7 @@ Always visible · Nodaro Cloud only.
 | `identity_images` | string[] | yes | From 1 to 2 items. |
 | `seed` | integer |  | From 0 to 2147483647. |
 | `spent_job_ids` | string[] |  | Job ids of the calls already made for this video; the quote lists them as already spent. At most 30 items. |
+| `segments` | object (map of any)[] |  | The segments from ugc_split_speech's output, when the answer to the first call asked for them. Leave out on the first call. At most 8 items. |
 
 ## `build_ugc_creator`
 
@@ -2744,6 +2745,34 @@ Needs `workflows:execute`.
 | `smart_loop_cut` | boolean |  | Smart loop cut mode — worker picks trailing frame closest to frame 0 (PSNR) and trims there. Overrides time/frame trim. |
 | `smart_loop_cut_lookback` | integer |  | How many trailing frames to evaluate as candidate cut points. Default 16, max 64. From 2 to 64. |
 | `silent` | boolean |  | Strip audio from the output. Default false. |
+
+## `ugc_finish_clips`
+
+Always visible · Nodaro Cloud only.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `segments` | object (map of any)[] | yes | From 1 to 8 items. |
+| `clips` | object[] | yes | From 1 to 8 items. |
+| `clips[].clip` | integer | yes | From 1 to 8. |
+| `clips[].video_url` | string (URL) |  |  |
+| `clips[].video_asset_id` | string |  |  |
+| `clips[].reroll_video_url` | string (URL) |  |  |
+| `clips[].reroll_video_asset_id` | string |  |  |
+
+## `ugc_split_speech`
+
+Always visible · Nodaro Cloud only.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `plan` | object (map of any) | yes |  |
+| `audio_url` | string (URL) |  |  |
+| `audio_asset_id` | string |  | Nodaro job id or upload asset id of the speech. |
+| `alignment` | object[] | yes | From 1 to 2000 items. |
+| `alignment[].word` | string | yes |  |
+| `alignment[].start` | number | yes |  |
+| `alignment[].end` | number | yes |  |
 
 ## `update_character`
 
