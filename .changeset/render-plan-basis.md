@@ -1,5 +1,0 @@
----
-"@nodaro/shared": minor
----
-
-A rendered cut's clock, and the two fingerprints a render is stamped with. `edlSegmentOutputStarts(edl)` (each segment's start on the output clock) and `outputMsToMasterMs(edl, outputMs)` (the inverse of `remapMsThroughEdl`: the master instant the output plays at a time, the incoming segment's inside a crossfade, `null` past the end). `RenderResultStamp` gains `planBasis` and `renderBasis` (16 lowercase hex digits; `renderResultStamp` drops anything else): `renderReadBasis(value)` fingerprints the plan value a render read (its top-level `meta` left out, so a hook edit does not change it), `renderSettingsBasis(settings, sources)` the render's own `output`, `crossfadeMs` and effective source URLs, and `renderPlanBasis(renderId, nodes, edges, planOutput, row, ranIds)` is the plan basis a render iteration stamps — only when every Camera Switch between the plan and the render ran in the render's run. `renderPlanValue(plan, row, hops?)` is the plan value an iteration reads (`renderClipKey` now derives from it). Additive.
