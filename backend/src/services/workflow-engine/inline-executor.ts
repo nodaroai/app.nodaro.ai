@@ -3,7 +3,7 @@
  * These run synchronously in the orchestrator process.
  */
 
-import { ASPECT_RATIO_DIMENSIONS, resolveSeparator, evaluateJsonPath, stringifyPathResults, alignedFieldList, evaluateJsonExpression, buildExpressionFromVisual, jsonResultToList, type JsonFilter, tryParseJson, evaluateCondition, evaluateConditionGroup, resolveConditionValue, type FilterListCondition, type RouterConditionGroup, sortListItems, type SortType, type SortDirection, runSelector, resolveSelectorRefs, type SelectorConfig, spreadJsonArrayIfSingleton, zipMergeLists, resolveSourceThroughConnectedList, buildConditionVariables, VARIABLES_HANDLE_ID } from "@nodaro/shared"
+import { ASPECT_RATIO_DIMENSIONS, resolveSeparator, evaluateJsonPath, stringifyPathResults, alignedFieldList, evaluateJsonExpression, buildExpressionFromVisual, jsonResultToList, type JsonFilter, tryParseJson, evaluateCondition, evaluateConditionGroup, resolveConditionValue, type FilterListCondition, type RouterConditionGroup, sortListItems, type SortType, type SortDirection, runSelector, resolveSelectorRefs, type SelectorConfig, spreadJsonArrayIfSingleton, zipMergeLists, resolveSourceThroughConnectedList, buildConditionVariables, VARIABLES_HANDLE_ID, LEGACY_SOURCE_HANDLE_ALIASES } from "@nodaro/shared"
 
 // Re-export for tests and downstream consumers.
 export type { FilterListCondition }
@@ -18,6 +18,27 @@ import { JobBlockedError } from "../../lib/job-policy.js"
 import { safeFetch } from "../../lib/safe-fetch.js"
 import { HttpCredentialError, resolveHttpAuthHeaders, type ResolvedHttpAuth } from "../../lib/http-credentials.js"
 import { safeUrlSchema } from "../../lib/url-validator.js"
+
+/**
+ * A wire on a source's TEXT pip asks for the text the node makes of its
+ * structured result — a feed's digest, a collection's headlines — never one
+ * JSON row per item. Those nodes carry `json` beside a per-item `listResults`
+ * (the fan-out view), and expanding the list here handed Combine Text raw JSON
+ * posts off a `text` wire (the Telegram news flow, 2026-10-06). A fan-out's
+ * per-iteration values are not that view, so they still expand. The legacy spelling of the
+ * pip (`out` on the feed) is read through the same alias table as the canvas.
+ */
+function wantsTextOfStructuredOutput(output: NodeOutput, sourceType: string, sourceHandle: string | null | undefined): boolean {
+  if (!sourceHandle || !Array.isArray(output.json)) return false
+  const handle = LEGACY_SOURCE_HANDLE_ALIASES[sourceType]?.[sourceHandle] ?? sourceHandle
+  if (handle !== "text") return false
+  // Only the node's OWN per-item view of its rows. A fan-out spreads iteration
+  // 0's output (its json included) beside one value PER ITERATION — those must
+  // still expand, so the list has to be exactly the rows, stringified.
+  const rows = output.json
+  const list = output.listResults
+  return list !== undefined && list.length === rows.length && list.every((item, i) => item === JSON.stringify(rows[i]))
+}
 
 /**
  * Collect text outputs from all upstream nodes connected to a target node.
@@ -41,7 +62,7 @@ function collectUpstreamTexts(
     if (!srcNode) continue
     const state = nodeStates[srcNode.id]
     if (state?.output) {
-      if (includeListResults) {
+      if (includeListResults && !wantsTextOfStructuredOutput(state.output, srcNode.type, edge.sourceHandle)) {
         const listResults = state.output.listResults
         if (listResults && listResults.length > 0) {
           for (const item of listResults) {

@@ -189,6 +189,64 @@ describe("executeCombineText", () => {
     const result = executeCombineText(target, edges, allNodes, states)
     expect(result.text).toBe("from data")
   })
+
+  // A feed, a collection, a social search: `json` rows beside a per-item
+  // `listResults` (the fan-out view) and a `text` digest. A wire on the TEXT
+  // pip wants the digest — expanding the list handed Combine Text one raw JSON
+  // post per row off the Telegram feed's `text` pip (2026-10-06).
+  describe("a structured source (json + per-item listResults)", () => {
+    const posts = [
+      { id: 1, channel: "news", text: "first post" },
+      { id: 2, channel: "news", text: "second post" },
+    ]
+    const feedState: NodeExecutionState = {
+      status: "completed",
+      output: { json: posts, text: "first post\n\n---\n\nsecond post", listResults: posts.map((p) => JSON.stringify(p)) },
+    }
+
+    it("the `text` pip gives the digest, never one JSON row per item", () => {
+      const target = node("combine", "combine-text", { separator: "comma" })
+      const allNodes = [node("feed", "telegram-channel-feed"), target]
+      const result = executeCombineText(target, [edge("feed", "combine", "text")], allNodes, { feed: feedState })
+      expect(result.text).toBe("first post\n\n---\n\nsecond post")
+    })
+
+    it("the feed's legacy `out` spelling is its text pip", () => {
+      const target = node("combine", "combine-text", { separator: "comma" })
+      const allNodes = [node("feed", "telegram-channel-feed"), target]
+      const result = executeCombineText(target, [edge("feed", "combine", "out")], allNodes, { feed: feedState })
+      expect(result.text).toBe("first post\n\n---\n\nsecond post")
+    })
+
+    it("the `json` pip still expands to one item per row", () => {
+      const target = node("combine", "combine-text", { separator: "comma" })
+      const allNodes = [node("feed", "telegram-channel-feed"), target]
+      const result = executeCombineText(target, [edge("feed", "combine", "json")], allNodes, { feed: feedState })
+      expect(result.text).toBe(posts.map((p) => JSON.stringify(p)).join(", "))
+    })
+
+    it("a fan-out of a json-producing node on a `text` wire still expands every iteration", () => {
+      // The orchestrator spreads iteration 0's output (its json included) beside
+      // one value per iteration — that list is not the node's per-item view.
+      const target = node("combine", "combine-text", { separator: "comma" })
+      const allNodes = [node("fan", "social-search"), target]
+      const states: Record<string, NodeExecutionState> = {
+        fan: { status: "completed", output: { json: [{ id: 1, text: "a" }], text: "digest a", listResults: ["digest a", "digest b"] } },
+      }
+      const result = executeCombineText(target, [edge("fan", "combine", "text")], allNodes, states)
+      expect(result.text).toBe("digest a, digest b")
+    })
+
+    it("a fan-out result (no json) on a `text` wire still expands every iteration", () => {
+      const target = node("combine", "combine-text", { separator: "comma" })
+      const allNodes = [node("fan", "llm-chat"), target]
+      const states: Record<string, NodeExecutionState> = {
+        fan: { status: "completed", output: { text: "third", listResults: ["first", "second", "third"] } },
+      }
+      const result = executeCombineText(target, [edge("fan", "combine", "text")], allNodes, states)
+      expect(result.text).toBe("first, second, third")
+    })
+  })
 })
 
 // ---------------------------------------------------------------------------
