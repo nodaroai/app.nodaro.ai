@@ -38,6 +38,7 @@ walkthrough-style introduction, see the [SDK Quickstart](./sdk-quickstart.md).
   - [`client.library`](#clientlibrary)
   - [`client.presets`](#clientpresets)
   - [`client.savedPosts`](#clientsavedposts)
+  - [`client.collections`](#clientcollections)
   - [`client.competitors`](#clientcompetitors)
   - [`client.pickerCatalogs`](#clientpickercatalogs)
   - [`client.shots`](#clientshots)
@@ -4833,6 +4834,106 @@ delete(id: string): Promise<void>
 
 `PATCH` / `DELETE /v1/saved-posts/:id` → change a save's note or tags, or
 remove the save and its copied still.
+
+---
+
+### `client.collections`
+
+Where a workflow's records live: named sets of records a workflow saves to and
+reads back (see [Collections](./features/collections.md)). A record holds a
+title, a text, a link, media links, up to 50 scalar `fields` and a `source` —
+text and links only, never files. The same link saved twice is one record;
+past the plan's cap the oldest records are evicted after a write. OAuth app
+tokens need `assets:read` for the reads and `assets:write` for the writes
+(no-op for user/API-key auth).
+
+#### `list()` / `get(id)`
+
+```ts
+list(): Promise<ListCollectionsResult>
+get(id: string): Promise<Collection>
+```
+
+`GET /v1/collections` → your collections with their `recordCount`, plus
+`available` (false on a server whose database has no collections yet) and your
+`caps` (`{ collections, records }`, `null` = no limit). `get` reads one.
+
+#### `create(input)` / `update(id, input)` / `delete(id)`
+
+```ts
+create(input: { name: string; description?: string }): Promise<Collection>
+update(id: string, input: { name?: string; description?: string }): Promise<Collection>
+delete(id: string): Promise<void>
+```
+
+`POST` / `PATCH` / `DELETE /v1/collections[/:id]`. Creating one past your cap
+throws `ForbiddenError` (`collection_limit_reached`); a name you already use
+throws `ConflictError` (`name_taken`). Deleting a collection deletes its records.
+
+#### `records(id, params?)`
+
+```ts
+records(id: string, params?: { q?: string; since?: string; cursor?: string; limit?: number }): Promise<ListCollectionRecordsResult>
+```
+
+`GET /v1/collections/:id/records` → the records, newest first. `q` finds words
+in the title, text or link; `since` (ISO) keeps only records saved at or after
+it; page with `cursor` (the previous page's `nextCursor`) and `limit` (1-100,
+default 50).
+
+```ts
+const since = new Date(Date.now() - 48 * 3_600_000).toISOString()
+let page = await client.collections.records(newsId, { since })
+for (const record of page.data) console.log(record.title, record.url)
+while (page.nextCursor) page = await client.collections.records(newsId, { since, cursor: page.nextCursor })
+```
+
+#### `addRecord(id, input, opts?)`
+
+```ts
+addRecord(
+  id: string,
+  input: { title?; text?; url?; media?; fields?; dedupeKey?; source?; item?: unknown },
+  opts?: { idempotencyKey?: string },
+): Promise<AddCollectionRecordResult>
+```
+
+`POST /v1/collections/:id/records` → save one record. Give the fields, or
+`item` — any JSON (a feed post, a search result, an article object) the server
+maps to a record (title ← `title` / `headline` / `name`, text ← `text` / `body`
+/ `caption` / `description`, link ← `url` / `postUrl` / `link`, media, the rest
+as `fields`); explicit fields win. The answer's `outcome` is `inserted`,
+`duplicate` (the same link or dedupe key was already there — the existing
+record comes back) or `replayed` (a write with the same `idempotencyKey`
+already happened); `evicted` says how many of the oldest records went past
+your cap.
+
+```ts
+// `posts` — any JSON items: a feed's posts, a search's results, articles an LLM wrote
+for (const post of posts) {
+  const { outcome, evicted } = await client.collections.addRecord(
+    newsId,
+    { item: post, fields: { topic: "tech" } },
+    // One key per item, stable across retries: the item's own id or link, never a counter.
+    { idempotencyKey: `telegram-${post.channel}-${post.id}` },
+  )
+  console.log(outcome, evicted) // "inserted" 0 · "duplicate" 0 · "replayed" 0
+}
+```
+
+#### `deleteRecord(id, recordId)` / `export(id, params?)`
+
+```ts
+deleteRecord(id: string, recordId: string): Promise<void>
+export(id: string, params?: { format?: "csv" | "json"; since?: string; q?: string }): Promise<string>
+```
+
+`DELETE /v1/collections/:id/records/:recordId` removes one record.
+`GET /v1/collections/:id/export` returns the whole collection as CSV (the
+default) or JSON text, newest first, narrowed by `since` and `q`. The text is
+read whole under the client's request timeout (`timeoutMs`, 60 s by default):
+for a collection of many thousands of records, give the client a longer
+timeout or narrow the export with `since`.
 
 ---
 

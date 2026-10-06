@@ -561,6 +561,15 @@ const GET_APP_RUN_OUTCOME_BYTES = 1_072 // measured: 393_485 total − 392_413 b
 // base = 275 B (build_ugc_cards 1_140 -> 1_415, far under the 8_192 B per-tool
 // budget).
 const UGC_CARDS_CAPTION_STYLE_BYTES = 275
+// RAISED 2026-10-06 by the three collection tools and nothing else —
+// list_collections, read_collection and add_collection_record (where a
+// workflow's records live: the Collections page's API over MCP). The routes
+// are core, so the tools register on every edition, gated by assets:read /
+// assets:write: cloud/all AND community/all name them, the scope-less sets do
+// not. measured by this suite: 395_875 total − 392_455 base = 3_420 B (432 +
+// 1_158 + 1_830), each far under the 8_192 B per-tool budget, and the list
+// keeps the headroom it had.
+const COLLECTION_TOOLS_BYTES = 3_420
 
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192,
@@ -619,7 +628,8 @@ export const TOOL_WIRE_BUDGET = {
     GET_ASSET_PREVIEW_FLAG_BYTES +
     GET_ASSET_PREVIEW_FLAG_CORRECTION_BYTES +
     GET_APP_RUN_OUTCOME_BYTES +
-    UGC_CARDS_CAPTION_STYLE_BYTES,
+    UGC_CARDS_CAPTION_STYLE_BYTES +
+    COLLECTION_TOOLS_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

@@ -51,6 +51,15 @@ export const queryKeys = {
     lookup: (postIds: readonly string[]) => ["savedPosts", "lookup", postIds.join("|")] as const,
   },
 
+  // Collections (per-user): the records a workflow saves and reads back
+  collections: {
+    all: ["collections"] as const,
+    list: () => ["collections", "list"] as const,
+    detail: (id: string) => ["collections", "detail", id] as const,
+    records: (id: string, filters: { q?: string; since?: string }) =>
+      ["collections", "records", id, filters.q ?? "", filters.since ?? ""] as const,
+  },
+
   // Competitors (Cloud; per-user)
   competitors: {
     all: ["competitors"] as const,

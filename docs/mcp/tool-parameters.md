@@ -66,6 +66,25 @@ Needs `workflows:execute`.
 | `segments[].captions[].timestampMs` | number or null |  | At least 0. Default `null`. |
 | `segments[].captions[].confidence` | number or null |  | From 0 to 1. Default `null`. |
 
+## `add_collection_record`
+
+Needs `assets:write`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `collection` | string | yes | The collection's id or name. From 1 to 80 characters. |
+| `create_if_missing` | boolean |  | Create the collection by that name when it does not exist. |
+| `title` | string |  | At most 500 characters. |
+| `text` | string |  | At most 20000 characters. |
+| `url` | string |  | An http(s) link; the default dedupe key. At most 2000 characters. |
+| `media` | object[] |  | At most 20 items. |
+| `media[].type` | string | yes | One of `image`, `video`, `audio`, `link`. |
+| `media[].url` | string | yes | At most 2000 characters. |
+| `media[].posterUrl` | string |  | At most 2000 characters. |
+| `fields` | object (map of string or number or boolean) |  | Extra scalar fields. |
+| `dedupe_key` | string |  | Overrides the link as the dedupe key. At most 300 characters. |
+| `item` | object (map of any) |  | Any JSON object to map into the record; explicit fields win. |
+
 ## `add_competitor`
 
 Needs `assets:write` · Nodaro Cloud only.
@@ -1642,6 +1661,12 @@ Needs `assets:read`.
 | `search` | string |  | Case-insensitive substring of the character's name. Use this when the user named a character — do not page through the list hoping to find it. From 1 to 100 characters. |
 | `limit` | integer |  | Max characters to return (default 50, max 100). From 1 to 100. |
 
+## `list_collections`
+
+Needs `assets:read`.
+
+No parameters.
+
 ## `list_competitors`
 
 Needs `assets:read` · Nodaro Cloud only.
@@ -2067,6 +2092,20 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | `style` | string |  | Always `clay`. |
 | `max_repair_passes` | integer |  | Correction budget, 0-2. Each pass is paid work; default 2. From 0 to 2. |
 | `client_request_id` | string |  | Optional retry token (8–128 chars of letters, digits, `_ - . :`). If a call times out or the connection drops, reuse the same value when retrying so the run is not started or charged twice; use a fresh value for a genuinely new run. From 8 to 128 characters. |
+
+## `read_collection`
+
+Needs `assets:read`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `collection` | string | yes | The collection's id or name. From 1 to 80 characters. |
+| `hours` | integer |  | Only records from the last N hours. From 1 to 720. |
+| `days` | integer |  | Only records from the last N days. From 1 to 90. |
+| `q` | string |  | Words to find in the title, text or link. At most 200 characters. |
+| `limit` | integer |  | Default 50. From 1 to 100. |
+| `cursor` | string |  | next_cursor from the previous call. At most 200 characters. |
+| `format` | string |  | Default headlines. One of `headlines`, `full`. |
 
 ## `recaption_character`
 

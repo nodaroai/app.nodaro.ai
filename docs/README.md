@@ -33,6 +33,7 @@ REST-first; the included visual editor is one of many possible clients.
 - **See what a workflow run produced, and what reopening shows after a long run** (structured results on the canvas, nodes a Run from here only passes through, the newer run on a render and its plan) → [Run results on the canvas](./features/run-results.md)
 - **Free credits on a new account** (what the signup grant is, and when activation asks for a card; Cloud) → [Free credits](./features/free-credits.md)
 - **Keep the posts worth coming back to** (save Social Search results with notes and tags, find them again; Cloud) → [Inspiration](./features/inspiration.md)
+- **Give a workflow a place to keep what it produces** (collections of records a workflow saves and reads back: one record per story, caps per plan, CSV / JSON export) → [Collections](./features/collections.md)
 - **Know what your competitors are doing, and what to do about it** (tracked brands, scheduled scans, action cards; Cloud) → [Competitors](./features/competitors.md)
 - **Connect an AI client (Claude.ai, Cursor, Cline, Continue, Goose) via MCP** → [MCP](./mcp/index.md)
 - **Contribute to Nodaro** → [Architecture](./architecture.md) → [Contributing](./contributing.md)

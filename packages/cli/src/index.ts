@@ -14,6 +14,7 @@ import { mediaCommand } from "./commands/media.js"
 import { audioCommand } from "./commands/audio.js"
 import { presetsCommand } from "./commands/presets.js"
 import { savedPostsCommand } from "./commands/saved-posts.js"
+import { collectionsCommand } from "./commands/collections.js"
 import { competitorsCommand } from "./commands/competitors.js"
 import { communityCommand } from "./commands/community.js"
 import { pickerCatalogsCommand } from "./commands/picker-catalogs.js"
@@ -70,6 +71,7 @@ program.addCommand(mediaCommand())
 program.addCommand(audioCommand())
 program.addCommand(presetsCommand())
 program.addCommand(savedPostsCommand())
+program.addCommand(collectionsCommand())
 program.addCommand(competitorsCommand())
 program.addCommand(communityCommand())
 program.addCommand(pickerCatalogsCommand())

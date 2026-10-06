@@ -4722,6 +4722,83 @@ export async function deleteSavedPost(id: string): Promise<void> {
   await apiJson(`/v1/saved-posts/${encodeURIComponent(id)}`, { method: "DELETE", label: "apiErr.deleteSavedPost" })
 }
 
+// ---- Collections (where a workflow's records live) ----
+
+type Collection = import("@nodaro/shared").Collection
+
+export async function listCollections(): Promise<import("@nodaro/shared").ListCollectionsResult> {
+  return apiJson("/v1/collections", { method: "GET", label: "apiErr.loadCollections" })
+}
+
+export async function getCollection(id: string): Promise<Collection> {
+  return apiJson(`/v1/collections/${encodeURIComponent(id)}`, { method: "GET", label: "apiErr.loadCollections" })
+}
+
+export async function createCollection(input: import("@nodaro/shared").CreateCollectionInput): Promise<Collection> {
+  return apiJson("/v1/collections", { body: { ...input }, label: "apiErr.createCollection" })
+}
+
+export async function updateCollection(id: string, input: import("@nodaro/shared").UpdateCollectionInput): Promise<Collection> {
+  return apiJson(`/v1/collections/${encodeURIComponent(id)}`, { method: "PATCH", body: { ...input }, label: "apiErr.updateCollection" })
+}
+
+export async function deleteCollection(id: string): Promise<void> {
+  await apiJson(`/v1/collections/${encodeURIComponent(id)}`, { method: "DELETE", label: "apiErr.deleteCollection" })
+}
+
+export async function listCollectionRecords(
+  id: string,
+  params: import("@nodaro/shared").ListCollectionRecordsParams = {},
+): Promise<import("@nodaro/shared").ListCollectionRecordsResult> {
+  const qs = new URLSearchParams()
+  if (params.q) qs.set("q", params.q)
+  if (params.since) qs.set("since", params.since)
+  if (params.cursor) qs.set("cursor", params.cursor)
+  if (params.limit) qs.set("limit", String(params.limit))
+  const query = qs.toString()
+  return apiJson(`/v1/collections/${encodeURIComponent(id)}/records${query ? `?${query}` : ""}`, { method: "GET", label: "apiErr.loadCollectionRecords" })
+}
+
+export async function addCollectionRecord(
+  id: string,
+  input: import("@nodaro/shared").AddCollectionRecordInput,
+): Promise<import("@nodaro/shared").AddCollectionRecordResult> {
+  return apiJson(`/v1/collections/${encodeURIComponent(id)}/records`, { body: { ...input, source: { via: "ui", ...input.source } }, label: "apiErr.addCollectionRecord" })
+}
+
+export async function deleteCollectionRecord(id: string, recordId: string): Promise<void> {
+  await apiJson(`/v1/collections/${encodeURIComponent(id)}/records/${encodeURIComponent(recordId)}`, { method: "DELETE", label: "apiErr.deleteCollectionRecord" })
+}
+
+/** The whole collection as a file (CSV or JSON), with the server's file name. */
+export async function exportCollection(
+  id: string,
+  format: import("@nodaro/shared").CollectionExportFormat,
+): Promise<{ blob: Blob; filename: string }> {
+  const headers = await getAuthHeaders()
+  const res = await fetch(`${API_BASE_URL}/v1/collections/${encodeURIComponent(id)}/export?format=${format}`, { headers })
+  if (!res.ok) {
+    const payload = (await res.json().catch(() => null)) as Record<string, unknown> | null
+    throwApiError(payload, "apiErr.exportCollection")
+  }
+  const blob = await res.blob()
+  return { blob, filename: exportFilenameOf(res.headers.get("Content-Disposition"), `collection.${format}`) }
+}
+
+/** The file name a `Content-Disposition` carries: the collection's own name (`filename*`, RFC 6266) when given, else the ASCII one. */
+export function exportFilenameOf(disposition: string | null, fallback: string): string {
+  const own = /filename\*=UTF-8''([^;]+)/i.exec(disposition ?? "")
+  if (own?.[1]) {
+    try {
+      return decodeURIComponent(own[1])
+    } catch {
+      // A malformed encoding: the ASCII name below.
+    }
+  }
+  const ascii = /filename="?([^";]+)"?/.exec(disposition ?? "")
+  return ascii?.[1] ?? fallback
+}
+
 // ---- Competitors (Cloud: tracked brands, scans, action cards) ----
 
 type TrackedCompetitor = import("@nodaro/shared").TrackedCompetitor

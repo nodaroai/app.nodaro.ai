@@ -2620,6 +2620,77 @@ curl -s "https://app.nodaro.ai/v1/saved-posts?platform=tiktok&tag=hooks" \
 The same routes are wrapped by the SDK (`client.savedPosts`), the MCP tools
 (`save_post` / `list_saved_posts`) and the CLI (`nodaro saved-posts`).
 
+## 16d. Collections
+
+Where a workflow's records live: named sets of records a workflow saves to and
+reads back (see [Collections](./features/collections.md)). A record holds a
+title, a text (up to 20,000 characters), a link, media links (as given — never
+fetched, never copied), up to 50 scalar `fields` and a `source`. Text and links
+only, never files. Available on every edition.
+
+| Method | Path | Query / Body | Purpose |
+|---|---|---|---|
+| `GET` | `/v1/collections` | none | Your collections, newest first, each with `recordCount`. Returns `{ data: Collection[], available, caps: { collections, records } }` — `available: false` on a server whose database does not have collections yet (then `data` is empty), `caps` are yours (`null` = no limit). |
+| `POST` | `/v1/collections` | body `{ name, description? }` | Create a collection. `201`; `409 name_taken` when you already have one by that name (case-insensitive); `403 collection_limit_reached` at your plan's cap. 30 a minute. |
+| `GET` | `/v1/collections/:id` | none | One collection. |
+| `PATCH` | `/v1/collections/:id` | body `{ name?, description? }` | Rename or re-describe (`409 name_taken` when the new name is already yours). |
+| `DELETE` | `/v1/collections/:id` | none | Remove a collection and every record in it. Returns `{ success: true }`. |
+| `GET` | `/v1/collections/:id/records` | `q`, `since` (an ISO date **and** time, e.g. `2026-10-06T00:00:00Z`), `cursor`, `limit` (1-100, default 50) | The records, newest first. Returns `{ data: CollectionRecord[], nextCursor }`. |
+| `POST` | `/v1/collections/:id/records` | body `{ title?, text?, url?, media?, fields?, dedupeKey?, source?, item? }`; header `Idempotency-Key` (optional, up to 200 characters) | Save one record. `201 { record, outcome: "inserted", evicted }`; `200` with `outcome: "duplicate"` (the same dedupe key is already there — the existing record comes back) or `"replayed"` (a write with the same `Idempotency-Key` already happened); `409 conflict` when a rule fired but that record was removed in the same instant (send it again). 120 a minute. |
+| `DELETE` | `/v1/collections/:id/records/:recordId` | none | Remove one record. |
+| `GET` | `/v1/collections/:id/export` | `format` (`csv`, the default, or `json`), `since`, `q` | The whole collection as a file, newest first (`Content-Disposition: attachment`). 10 a minute. |
+
+**Mapping an item.** Instead of (or besides) the explicit fields, send `item`:
+any JSON — a Telegram post, a Social Search result, an article object an LLM
+wrote — and the server maps it: title ← `title` / `headline` / `name`; text ←
+`text` / `body` / `caption` / `description`; link ← `url` / `postUrl` / `link`;
+media ← `media[]` and the `imageUrl` / `videoUrl` / `audioUrl` keys; every other
+scalar lands in `fields`. An explicit field wins over the mapping. A record with
+no title, text, link or medium is refused (`400 empty_record`).
+
+**One record per story.** The dedupe key is `dedupeKey` when given, else the
+link, else the item's `slug` / `id` / `postId`; it is trimmed, lower-cased and
+unique within the collection. Keys and idempotency keys are both optional — a
+record with neither is always inserted.
+
+**Caps.** Your plan's caps come back on the list (`caps`; pay-as-you-go
+accounts get Basic's). Past the records cap the oldest records are evicted
+after the write; `evicted` says how many. On a self-hosted server the caps are
+the operator's two env ceilings (unset = `null`, no limit). A cap the server
+cannot determine for a request (a failed plan lookup) is `null` for that
+request — nothing is ever evicted on a guess.
+
+`q` finds words in the title, the text and the link. `nextCursor` is an opaque
+token; pass it back as `?cursor=` (`null` on the last page); a cursor the list
+did not give out is refused with `400 invalid_cursor`. In the CSV export, a
+cell starting with `=`, `+`, `-` or `@` is prefixed with `'` so a spreadsheet
+opens it as text.
+
+OAuth app tokens need `assets:read` for the reads and `assets:write` for the
+writes (no-op for user / API-key auth). On a server that does not have
+collections yet, the list answers `available: false`, the other reads answer
+`404` and the writes answer `503 not_available`.
+
+```bash
+# Create a collection, then save one feed post into it
+curl -s -X POST https://app.nodaro.ai/v1/collections \
+  -H "Authorization: Bearer $NODARO_TOKEN" -H "Content-Type: application/json" \
+  -d '{"name":"News","description":"Articles the pipeline wrote"}' | jq -r .id
+
+curl -s -X POST "https://app.nodaro.ai/v1/collections/$COLLECTION_ID/records" \
+  -H "Authorization: Bearer $NODARO_TOKEN" -H "Content-Type: application/json" \
+  -H "Idempotency-Key: run-42-item-0" \
+  -d "$(jq -n --slurpfile p post.json '{item: $p[0], fields: {topic: "tech"}}')" | jq '{outcome, evicted, id: .record.id}'
+
+# What was saved in the last two days, as CSV
+curl -s "https://app.nodaro.ai/v1/collections/$COLLECTION_ID/export?since=$(date -u -d '2 days ago' +%FT%TZ)" \
+  -H "Authorization: Bearer $NODARO_TOKEN" -o news.csv
+```
+
+The same routes are wrapped by the SDK (`client.collections`), the MCP tools
+(`list_collections` / `read_collection` / `add_collection_record`) and the CLI
+(`nodaro collections`).
+
 ## 16c. Competitors (Nodaro Cloud)
 
 Track brands (your competitors, or your own) and get action cards: what

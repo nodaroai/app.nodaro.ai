@@ -103,6 +103,8 @@ const TENANT_TABLES = new Set([
   "node_cursors",
   "folders",
   "saved_posts",
+  "collections",
+  "collection_records",
   // Organizations (second tenancy axis). Scoped by org_id / workspace_id and
   // the require* helpers rather than user_id; the routes PR teaches this
   // scanner those forms before any route under ee/routes/orgs lands.
