@@ -91,6 +91,10 @@ export const JSON_PRODUCER_TYPES: ReadonlySet<string> = new Set<string>([
   // handle keeps it in DATA_TEXT_PRODUCER_TYPES). Dual producer, like the
   // analysis pair.
   "transcribe",
+  // Text to Dialogue's `json` handle emits the Transcript built from the model's
+  // timings (its `audio` handle is the audio producer, @nodaro/shared
+  // AUDIO_PRODUCER_TYPES). Dual producer, like transcribe.
+  "text-to-dialogue",
   ...ANALYSIS_PRODUCER_TYPES,
   // apply-edl's `json` output handle carries the remapped Transcript. Its OTHER
   // (default) output handle is dynamic media (video|audio), declared in

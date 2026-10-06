@@ -1272,6 +1272,7 @@ export {
   ttsSupportsStitching,
   ttsHasLever,
   ttsLanguageCodes,
+  ttsSupportsTimestamps,
 } from "./tts-capabilities.js"
 
 // The neighbour-text rule (cap + normaliser) every Text to Speech sender and exit shares.
@@ -1286,6 +1287,7 @@ export {
   getDialogueCapabilities,
   dialogueHasLever,
   dialogueStabilityAccepted,
+  dialogueSupportsTimestamps,
 } from "./dialogue-capabilities.js"
 
 // Per-model safety-filter retry/fallback policy (derives from

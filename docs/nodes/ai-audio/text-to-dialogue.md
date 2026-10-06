@@ -57,6 +57,8 @@ A dialogue is priced on the total characters across its lines, in **units of 100
 
 Worked examples, on either model: **100 characters** (any script up to 800) → **32 credits**; **1,000 characters** → **40 credits**; **5,000 characters** (the cap) → **200 credits**. A script over 5,000 characters is refused before anything is charged, on the API and in a workflow alike. The editor's estimate, a published app's advertised price and the credits reserved when the node runs all read the same rows.
 
+The timings add nothing: 25 base credits per request on either model. Both models return their timings at the same character cost as the plain render (measured 2026-10-06), so every dialogue run carries them and there is no switch to turn them off.
+
 ## API
 
 `POST /v1/text-to-dialogue` takes the node's fields: `dialogue` (`[{ text, voice }]`, in speaking order), optional `provider` (`elevenlabs-dialogue`, the default, or `elevenlabs-dialogue-v4`), `stability`, `similarityBoost`, `languageCode`, `seed` and `applyTextNormalization`. A `stability` Dialogue v3 does not take is refused with `Stability must be 0, 0.5, or 1`; a script over the chosen model's total cap is refused with the cap. The same choice is available as `model` on the `generate_dialogue` MCP tool, `provider` on the SDK's `voices.textToDialogue` and `--model` on `nodaro voice dialogue`.
@@ -65,6 +67,7 @@ Worked examples, on either model: **100 characters** (any script up to 800) → 
 
 - **Input**: `in` -- optional upstream connection (not typically used; dialogue is configured directly in the panel)
 - **Output**: `audio` -- single audio file containing all dialogue lines spoken in sequence (URL)
+- **Output**: `json` -- the dialogue's timings as a Transcript: one `segments[]` entry per line (`startMs`, `endMs`, `text`, `speaker` = that line's voice) and `words[]` with per-word `startMs` / `endMs` / `speaker`. Filled on both Dialogue v3 and Dialogue v4 — every dialogue run returns its timings. Over the API the same Transcript is `output_data.transcript` on the finished job.
 
 ## Best Practices
 
@@ -72,6 +75,12 @@ Worked examples, on either model: **100 characters** (any script up to 800) → 
 - Keep individual lines at a natural conversational length -- avoid putting entire paragraphs into a single dialogue entry.
 - Use Stability at 0.5 for natural-sounding conversation. Lower it for more dramatic or emotional dialogue, raise it for formal or narration-like delivery. On Dialogue v4 you can pick any value in between.
 - The 5,000-character total limit applies across all lines combined on either model. Plan longer dialogues by splitting them across multiple Text to Dialogue nodes if needed.
+
+### Captions without a second transcription
+
+Wire the node's `json` output into [Add Captions](../processing-video/add-captions.md)' `Transcript` input. Add Captions then reads the dialogue's own words and skips its transcription step — and its charge for it — so the captions are timed by the model that spoke the lines, with each line's voice as the speaker. A `json` with nothing in it (Dialogue v3) leaves Add Captions transcribing the track as before. `[audio tags]` in the lines (including multi-word ones such as `[clears throat]`) are never turned into caption words.
+
+Worked example: a two-voice, 1,200-character dialogue run costs 25 base credits on either model, and the Add Captions node downstream spends nothing on transcription — it reads the dialogue's own `json`.
 
 ## Common Use Cases
 
@@ -85,6 +94,6 @@ Worked examples, on either model: **100 characters** (any script up to 800) → 
 
 - Each dialogue line can use ANY voice — premade names, Voice Library voices, and your own clones all work, in any mix. There is no curated dialogue-only voice subset.
 - Line text supports `[audio tags]` like `[laughs]`, `[whispers]`, `[sighs]` for emotion and pacing on both models, same as ElevenLabs v3 and v4 Text to Speech.
-- The output is a single continuous audio file, not separate clips per line. If you need individual clips, use separate Text to Speech nodes instead.
+- The output is a single continuous audio file, not separate clips per line — the `json` output tells you where each line starts and ends. If you need individual clips, use separate Text to Speech nodes instead.
 - Language auto-detection works well for monolingual dialogues. For multilingual conversations, explicitly set the language to the primary language being used.
 - Stability is a three-step dropdown on Dialogue v3 and a 0–1 slider on Dialogue v4; Similarity appears only on Dialogue v4. Its effect on v4 dialogue is documented by the provider; the platform forwards it as given.

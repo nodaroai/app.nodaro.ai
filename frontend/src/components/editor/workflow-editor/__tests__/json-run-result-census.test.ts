@@ -46,6 +46,8 @@ const RUN_OUTPUT: Record<string, Data> = {
   "apply-edl": { audioUrl: "https://media.example.test/cut.m4a", json: JSON_OBJECT },
   // The plain transcript rides beside the json.
   transcribe: { text: MARK, json: JSON_OBJECT },
+  // The dialogue's audio beside its timings (the json). A model without timings sends the audio alone.
+  "text-to-dialogue": { audioUrl: "https://media.example.test/dialogue.mp3", json: JSON_OBJECT },
   "content-recipe": { json: JSON_OBJECT, text: MARK },
   "content-ideas": { json: [JSON_OBJECT], text: MARK, listResults: [MARK] },
   // Every post found, and the ones passed on (json).

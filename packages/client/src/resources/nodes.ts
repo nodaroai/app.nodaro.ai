@@ -267,7 +267,9 @@ export interface AssembleNarratedVideoParams {
  * `jobs.output_data` on completion — `generate-image` → `imageUrl`,
  * `generate-video` / `combine-videos` / `merge-video-audio` / `video-upscale`
  * → `videoUrl` (+ `thumbnailUrl`), `text-to-speech` / `generate-music` →
- * `audioUrl`. Resolved by {@link NodesResource.runAndWait}. Extra fields may be
+ * `audioUrl` (a `text-to-speech` run with `withTimestamps: true` on a model
+ * that returns timings, and every `text-to-dialogue` run on one, also carries
+ * `transcript`). Resolved by {@link NodesResource.runAndWait}. Extra fields may be
  * present, so the index signature is open.
  */
 /**

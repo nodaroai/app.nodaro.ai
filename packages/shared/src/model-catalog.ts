@@ -110,6 +110,14 @@ export interface TtsCapabilities {
   /** The request may carry a language code. false ⇒ the field is omitted. */
   languageCode: boolean
   /**
+   * The model answers the `/with-timestamps` form of its endpoint with
+   * character timings (and, for dialogue, per-line `voice_segments`). When true
+   * the platform ALWAYS renders dialogue through it and the job output carries a
+   * `transcript` (decided 2026-10-06); when false the plain endpoint is used
+   * and the request is byte-identical to before the field existed.
+   */
+  timestamps: boolean
+  /**
    * The model conditions a request on the text spoken before and after it
    * (`previous_text` / `next_text`), for continuous intonation across clips
    * produced separately. false ⇒ the fields are never sent: a model that does
@@ -2514,6 +2522,7 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
       ssmlBreaks: false,
       levers: ["stability"],
       languageCode: true,
+      timestamps: true, // measured 2026-10-06: /with-timestamps answers 200 at the same character cost
       // Rejects previous_text / next_text with a 400 (probed 2026-10-04).
       stitching: false,
       maxChars: 5000, // official cap (probed: 5,200 chars accepted; keep the clamp)
@@ -2538,6 +2547,7 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
       ssmlBreaks: false,
       levers: ["stability", "similarity"],
       languageCode: true,
+      timestamps: true, // measured 2026-10-06: /with-timestamps answers 200 at the same character cost
       // Accepts previous_text / next_text (probed 2026-10-04).
       stitching: true,
       maxChars: 10000,
@@ -2562,6 +2572,7 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
       ssmlBreaks: true,
       levers: TTS_LEVERS_V2,
       languageCode: true,
+      timestamps: true, // measured 2026-10-06: /with-timestamps answers 200 at the same character cost
       // Measured 2026-10-06: the direct API accepts previous_text / next_text on this model (200).
       stitching: true,
       maxChars: 40000, // == eleven_flash_v2_5 (functionally equivalent)
@@ -2584,6 +2595,7 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
       levers: TTS_LEVERS_V2,
       // The API reference: "This parameter is not supported for multilingual_v2 models."
       languageCode: false,
+      timestamps: true, // measured 2026-10-06: /with-timestamps answers 200 at the same character cost
       // Measured 2026-10-06: the direct API accepts previous_text / next_text on this model (200).
       stitching: true,
       maxChars: 10000,
@@ -2614,6 +2626,7 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
       // (routes/text-to-dialogue.ts). Kept as the platform's v3 dialogue contract.
       stabilitySteps: [0, 0.5, 1],
       languageCode: true,
+      timestamps: true, // measured 2026-10-06: /with-timestamps answers 200 at the same character cost
       // The dialogue funnel does not read this field (its own lane; phase 2 declares
       // the v4 dialogue model's value). v3 underneath.
       stitching: false,
@@ -2641,6 +2654,7 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
       ssmlBreaks: false,
       levers: ["stability", "similarity"],
       languageCode: true,
+      timestamps: true, // measured 2026-10-06: /with-timestamps answers 200 at the same character cost
       // Dialogue models never stitch neighbour text (the funnel does not read this).
       stitching: false,
       maxChars: DIALOGUE_V4_MAX_CHARS,

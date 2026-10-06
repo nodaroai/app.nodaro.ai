@@ -17,6 +17,7 @@ import type {
   VideoAuditNodeData,
   DescribeToPickerData,
   TranscribeData,
+  TextToDialogueData,
 } from "@/types/nodes";
 import { editPlanOutputOf } from "@/lib/edit-plan-saved-output";
 import { entityActiveImageUrl } from "@/lib/entity-output-url";
@@ -454,6 +455,16 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
       results[activeIndex]?.url ??
       (data.generatedAudioUrl as string | undefined)
     );
+  }
+  if (type === "text-to-dialogue" && sourceHandle === "json") {
+    // The Transcript of the ACTIVE result (per-result, falling back to the bare
+    // field), stringified for generic consumers — the transcribe rule. The
+    // audio handle falls through to the audio group below, unchanged.
+    const d = node.data as TextToDialogueData;
+    const results = d.generatedResults ?? [];
+    const active = d.activeResultIndex ?? 0;
+    const transcript = results[active]?.transcript ?? d.generatedJson;
+    return transcript === undefined ? undefined : JSON.stringify(transcript);
   }
   if (
     type === "text-to-speech" ||
@@ -1227,6 +1238,9 @@ export function detectPreviewItemType(
   sourceHandle?: string,
 ): "image" | "video" | "audio" | "data" | "text" {
   if (nodeType === "voice-design" && sourceHandle === "voiceId") return "text"
+  // Text to Dialogue's `json` pip is its Transcript (data); its audio pip falls
+  // through to the audio set below. Must come before AUDIO_SOURCE_TYPES.
+  if (nodeType === "text-to-dialogue" && sourceHandle === "json") return "data"
   if (IMAGE_SOURCE_TYPES.has(nodeType)) return "image"
   if (VIDEO_SOURCE_TYPES_FOR_RENDER.has(nodeType)) return "video"
   if (AUDIO_SOURCE_TYPES.has(nodeType)) return "audio"

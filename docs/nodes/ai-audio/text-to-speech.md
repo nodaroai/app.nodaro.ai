@@ -117,6 +117,9 @@ Characters are counted as the text's length (an emoji or other character outside
 - **Input**: `in` -- text string (from Text Prompt, Generate Text, Combine Text, or any text-producing node)
 - **Field mappings**: `previousText` / `nextText` can be bound to any text-producing node (Continuity).
 - **Output**: `audio` -- generated speech audio file (URL)
+
+Over the REST API and the SDK, `POST /v1/text-to-speech` also takes `withTimestamps: true`: every speech model (ElevenLabs v3, v4, Turbo v2.5 and Multilingual v2) returns its timings at the same character cost as the plain render (measured 2026-10-06), so the finished job's `output_data.transcript` carries the speech's per-word timings (`words[]` with `startMs` / `endMs`, no segments) at no extra credits. Without the flag the request is exactly the plain one and no `transcript` is written. The node itself has no timings output.
+
 ## Best Practices
 
 - Use ElevenLabs v3 or v4 for the widest language support and audio tag capabilities. v4 takes up to 10,000 characters per request, but has no Speed or Style setting, and a voice can sound noticeably different on v4 than on v3 — compare the two on your own voice before switching a finished project.

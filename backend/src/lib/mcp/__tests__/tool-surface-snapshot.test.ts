@@ -518,6 +518,12 @@ const ELEVENLABS_V4_SPEECH_BYTES = 196
 // second tool that names v4). No tool was added, so the fixture does NOT move.
 // measured by this suite: 397_581 total − 397_155 base = 426 B.
 const ELEVENLABS_V4_DIALOGUE_BYTES = 426
+// RAISED 2026-10-06 by one generate_dialogue sentence and nothing else — the job
+// output carries `transcript` (per-word timings + per-line speakers) on a
+// model that returns them, to feed add_captions. No tool or argument was
+// added, so the fixture does NOT move. measured by this suite:
+// 397_860 total − 397_581 base = 279 B.
+const DIALOGUE_TRANSCRIPT_WORDING_BYTES = 279
 // LOWERED 2026-10-05 by the video_analysis tool's one analysis quality and
 // nothing else — a refund, by the same rule as CAPTION_DOCTRINE_TO_SKILL_BYTES:
 // the budget moves by exactly what the change costs. The tool always runs the
@@ -675,6 +681,7 @@ export const TOOL_WIRE_BUDGET = {
     APPLY_EDL_PREVIEW_RATE_WORDING_BYTES +
     ELEVENLABS_V4_SPEECH_BYTES +
     ELEVENLABS_V4_DIALOGUE_BYTES +
+    DIALOGUE_TRANSCRIPT_WORDING_BYTES +
     LIP_SYNC_AUDIO_LENGTH_BYTES +
     VIDEO_ANALYSIS_SMART_ONLY_BYTES +
     TEXT_TO_AUDIO_PER_SECOND_PRICING_BYTES +

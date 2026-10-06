@@ -78,6 +78,11 @@ export function ttsHasLever(provider: string | undefined, lever: TtsSettingLever
   return getTtsCapabilities(provider).levers.includes(lever)
 }
 
+/** The model answers `/v1/text-to-speech/{voice}/with-timestamps` (character timings). */
+export function ttsSupportsTimestamps(provider: string | undefined): boolean {
+  return getTtsCapabilities(provider).timestamps
+}
+
 /** Language codes offered for the model, in catalog order. */
 export function ttsLanguageCodes(provider: string | undefined): readonly string[] {
   return getTtsCapabilities(provider).languages

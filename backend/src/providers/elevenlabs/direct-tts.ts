@@ -8,7 +8,8 @@ import { languageCodeForModel } from "./language-code.js"
 import { ttsWireModel, ttsModelKey } from "./tts-models.js"
 import { normalizeTtsVoiceSettings } from "./voice-settings.js"
 import { normalizeTtsNeighbourText } from "./neighbour-text.js"
-import { getTtsCapabilities } from "@nodaro/shared"
+import { getTtsCapabilities, ttsSupportsTimestamps, type Transcript } from "@nodaro/shared"
+import { transcriptFromSpeechTimestamps } from "./alignment-transcript.js"
 
 // 21 ElevenLabs premade voices — name → voice_id. KIE's TTS proxy accepts
 // these names directly, so the rest of the codebase passes names around.
@@ -170,13 +171,24 @@ async function fetchStoredVoiceSettings(voiceId: string, apiKey: string): Promis
   return value
 }
 
-export async function directElevenLabsTTS(
+/** What a timed render hands back: the MP3 bytes and, when the model returns timings, their transcript (words only). */
+export interface SpeechResult {
+  audio: Buffer
+  transcript?: Transcript
+}
+
+/**
+ * The one request builder behind both exports. `wantTimestamps` asks for the
+ * `/with-timestamps` form; the model's sheet decides whether it is honoured.
+ */
+async function renderElevenLabsTTS(
   text: string,
   voiceId: string,
-  provider?: string,
-  options?: DirectTTSOptions,
-  meta?: EgressMeta,
-): Promise<Buffer> {
+  provider: string | undefined,
+  options: DirectTTSOptions | undefined,
+  meta: EgressMeta | undefined,
+  wantTimestamps: boolean,
+): Promise<SpeechResult> {
   const apiKey = config.ELEVENLABS_API_KEY
   if (!apiKey) {
     requireProviderKey(apiKey, "ELEVENLABS_API_KEY")
@@ -185,6 +197,10 @@ export async function directElevenLabsTTS(
   const capabilities = getTtsCapabilities(provider)
   const levers = capabilities.levers
   const resolvedVoiceId = resolveDirectVoiceId(voiceId)
+  // The sheet gates the endpoint: a caller may ASK for timings on any model,
+  // but only a model that returns them posts /with-timestamps — the others
+  // stay byte-identical (plain URL, Accept: audio/mpeg, same body).
+  const withTimestamps = wantTimestamps && ttsSupportsTimestamps(provider)
 
   const body: Record<string, unknown> = {
     text,
@@ -261,13 +277,13 @@ export async function directElevenLabsTTS(
           body,
           dimensions: meta?.dimensions ?? {},
         },
-        `${ELEVENLABS_BASE_URL}/v1/text-to-speech/${vid}`,
+        `${ELEVENLABS_BASE_URL}/v1/text-to-speech/${vid}${withTimestamps ? "/with-timestamps" : ""}`,
         {
           method: "POST",
           headers: {
             "xi-api-key": apiKey,
             "Content-Type": "application/json",
-            Accept: "audio/mpeg",
+            Accept: withTimestamps ? "application/json" : "audio/mpeg",
           },
           body: JSON.stringify(body),
           signal: controller.signal,
@@ -326,6 +342,49 @@ export async function directElevenLabsTTS(
     throw new Error(`ElevenLabs TTS failed (${response.status}): ${errorText}`)
   }
 
-  const arrayBuffer = await response.arrayBuffer()
-  return Buffer.from(arrayBuffer)
+  if (!withTimestamps) {
+    return { audio: Buffer.from(await response.arrayBuffer()) }
+  }
+
+  // JSON branch: the audio must be there — a body without it delivered nothing,
+  // so fail HERE, before any upload. The timings are best-effort: a shape the
+  // builder cannot read leaves `transcript` absent and the audio still ships.
+  const json = (await response.json().catch(() => undefined)) as { audio_base64?: unknown; alignment?: unknown } | undefined
+  if (!json || typeof json.audio_base64 !== "string" || json.audio_base64.length === 0) {
+    throw new Error("ElevenLabs TTS (with-timestamps) returned no audio")
+  }
+  const audio = Buffer.from(json.audio_base64, "base64")
+  // A string that is not base64 decodes to zero bytes without throwing — that is no audio either.
+  if (audio.length === 0) throw new Error("ElevenLabs TTS (with-timestamps) returned no audio")
+  const transcript = transcriptFromSpeechTimestamps(json.alignment, { language: languageCode })
+  if (!transcript) {
+    // eslint-disable-next-line no-console
+    console.warn("[elevenlabs] tts with-timestamps: alignment unreadable; delivering audio without timings")
+  }
+  return transcript ? { audio, transcript } : { audio }
+}
+
+/** Speech bytes — today's funnel, byte-identical for every caller. */
+export async function directElevenLabsTTS(
+  text: string,
+  voiceId: string,
+  provider?: string,
+  options?: DirectTTSOptions,
+  meta?: EgressMeta,
+): Promise<Buffer> {
+  return (await renderElevenLabsTTS(text, voiceId, provider, options, meta, false)).audio
+}
+
+/**
+ * Speech bytes plus per-word timings when the model's sheet says it returns
+ * them (otherwise exactly {@link directElevenLabsTTS}'s request, with no transcript).
+ */
+export async function directElevenLabsTTSWithTimestamps(
+  text: string,
+  voiceId: string,
+  provider?: string,
+  options?: DirectTTSOptions,
+  meta?: EgressMeta,
+): Promise<SpeechResult> {
+  return renderElevenLabsTTS(text, voiceId, provider, options, meta, true)
 }

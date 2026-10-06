@@ -4003,7 +4003,12 @@ fine, and line text may carry `[audio tags]` like `[laughs]`. At most 5,000
 characters total across lines on either model (under 2,000 recommended for
 best quality) and 10 unique voices per generation. Flat credits per request
 under the chosen model's identifier. Poll `jobs.get(jobId)` for
-`output_data.audioUrl`.
+`output_data.audioUrl` and — on every dialogue model, since both return timings
+at no extra credits — `output_data.transcript`, a `Transcript`
+(`@nodaro/shared`): `words[]` with `startMs` / `endMs` / `speaker` and one
+`segments[]` entry per line, `speaker` being the line's `voice` as you sent it.
+Pass `transcript.words` to `addCaptions({ captions, autoTranscribe: false })` to
+caption the dialogue without a second transcription.
 
 ---
 

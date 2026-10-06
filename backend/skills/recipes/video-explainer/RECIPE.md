@@ -50,7 +50,7 @@ follow. Do not guess a default for any of them except language:
    cost/speed tradeoff and WAIT for their choice: (a) animated footage (this recipe,
    ~450cr per 10s block ≈ 2700cr/min of video, slower, illustrated scenes) vs (b) motion
    graphics (`start_video_director`, typography + shapes revealing on the voiceover,
-   a fixed ~200cr total via `create_explainer` / ~110cr driving the tools directly,
+   a fixed ~170cr total via `create_explainer` (~200cr when the speech model returns no word timings) / ~110cr driving the tools directly,
    length-independent, fast). If they pick (b), STOP and call `start_video_director`
    instead of continuing this recipe.
 1. **Duration** in minutes, 1–10. This fixes the block count: **N = minutes × 6** blocks

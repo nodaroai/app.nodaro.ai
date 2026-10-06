@@ -506,6 +506,20 @@ describe("POST /v1/text-to-speech", () => {
   describe("elevenlabs-v4", () => {
     const userId = "00000000-0000-4000-8000-000000000001"
 
+    it("withTimestamps rides to the queue as a boolean; omitted stays omitted; a non-boolean is a 400", async () => {
+      mockJobInsert({ data: { id: "job-1" }, error: null })
+      await app.inject({ method: "POST", url: "/v1/text-to-speech", payload: { text: "Hi", provider: "elevenlabs-v4", userId, withTimestamps: true } })
+      expect(videoQueue.add).toHaveBeenLastCalledWith("text-to-speech", expect.objectContaining({ withTimestamps: true }))
+
+      mockJobInsert({ data: { id: "job-2" }, error: null })
+      await app.inject({ method: "POST", url: "/v1/text-to-speech", payload: { text: "Hi", provider: "elevenlabs-v4", userId } })
+      const payload = vi.mocked(videoQueue.add).mock.lastCall![1] as Record<string, unknown>
+      expect("withTimestamps" in payload).toBe(false)
+
+      const bad = await app.inject({ method: "POST", url: "/v1/text-to-speech", payload: { text: "Hi", provider: "elevenlabs-v4", userId, withTimestamps: "yes" } })
+      expect(bad.statusCode).toBe(400)
+    })
+
     it("is accepted, reserved under its own credit id, and queued as itself", async () => {
       mockJobInsert({ data: { id: "job-1" }, error: null })
 

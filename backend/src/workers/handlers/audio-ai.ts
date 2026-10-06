@@ -7,10 +7,10 @@ import type { TextToSpeechOptions } from "../../providers/provider.interface.js"
 import { promises as fs } from "node:fs"
 import { uploadToR2, uploadBufferToR2, uploadFileToR2, mediaObjectKey } from "../../lib/storage.js"
 import { runPostProcessing } from "../../lib/post-processing-error.js"
-import { directElevenLabsTTS, stripAudioTags } from "../../providers/elevenlabs/direct-tts.js"
+import { directElevenLabsTTS, directElevenLabsTTSWithTimestamps, stripAudioTags } from "../../providers/elevenlabs/direct-tts.js"
 import { directElevenLabsDialogue } from "../../providers/elevenlabs/direct-dialogue.js"
 import { generateSoundEffect } from "../../providers/elevenlabs/sound-effects.js"
-import { ttsSupportsAudioTags, DEFAULT_TEXT_TO_AUDIO_PROVIDER, type TextToAudioProvider } from "@nodaro/shared"
+import { ttsSupportsAudioTags, ttsSupportsTimestamps, DEFAULT_TEXT_TO_AUDIO_PROVIDER, normalizeTranscript, type TextToAudioProvider, type Transcript } from "@nodaro/shared"
 import { defaultAllowedVoiceId } from "../../lib/voice-policy.js"
 import { resolveOmittedTtsProvider } from "../../lib/omitted-tts-provider.js"
 import { elevenlabsSpeechCostUsd } from "../../lib/pricing/elevenlabs-speech-cost.js"
@@ -76,6 +76,8 @@ import { makeOnTaskCreated, markProviderCallStart } from "../../lib/reconcile/pe
  */
 interface CloudAudioResult {
   audio: Buffer
+  /** The cloud's per-word timings, when its model returned them (dialogue relay only). */
+  transcript?: Transcript
   relayJobId?: string
   relayCredits?: number | null
 }
@@ -109,7 +111,7 @@ async function generateSpeechViaCloud(
 }
 
 const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx) {
-  const { text, voice, provider: rawProvider, voiceType, stability, similarityBoost, style, speed, languageCode, previousText, nextText, allowDefaultVoiceFallback } = job.data as {
+  const { text, voice, provider: rawProvider, voiceType, stability, similarityBoost, style, speed, languageCode, previousText, nextText, allowDefaultVoiceFallback, withTimestamps } = job.data as {
     jobId: string
     text: string
     voice?: string
@@ -124,6 +126,8 @@ const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx
     previousText?: string
     nextText?: string
     allowDefaultVoiceFallback?: boolean
+    /** The request asked for per-word timings; honoured only when the model's sheet returns them. */
+    withTimestamps?: boolean
   }
   // Defensive default: every current enqueuer (routes/text-to-speech.ts,
   // payload-builder.ts's "text-to-speech" case, pipeline-generate-speech.ts,
@@ -163,16 +167,28 @@ const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx
   // family this whole effort exists to remove, so the keyless-unconnected
   // install must reach `requireProviderKey` and no further.
   let audioBuffer: Buffer
+  // Per-word timings, when asked for AND the model returns them (the sheet decides).
+  let transcript: Transcript | undefined
   // Set only on the cloud branch — the relay provenance the finalize literal
   // below carries onto the row.
   let cloudAudio: CloudAudioResult | undefined
   if (config.ELEVENLABS_API_KEY) {
-    audioBuffer = await directElevenLabsTTS(processedText, voice ?? defaultAllowedVoiceId(FALLBACK_VOICES, "Rachel"), provider, {
+    const ttsArgs = [processedText, voice ?? defaultAllowedVoiceId(FALLBACK_VOICES, "Rachel"), provider, {
       ...(hasOptions ? ttsOptions : {}),
       allowDefaultVoiceFallback: Boolean(allowDefaultVoiceFallback),
       ...(voiceType ? { voiceType } : {}),
-    })
+    }] as const
+    if (withTimestamps && ttsSupportsTimestamps(provider)) {
+      // The timed funnel: same request body; the response carries the alignment.
+      const rendered = await directElevenLabsTTSWithTimestamps(...ttsArgs)
+      audioBuffer = rendered.audio
+      transcript = rendered.transcript
+    } else {
+      audioBuffer = await directElevenLabsTTS(...ttsArgs)
+    }
   } else if (await isNodaroConnected().catch(() => false)) {
+    // The cloud relay is not widened for timings: a keyless install's speech
+    // carries no transcript (the director there falls back to forced alignment).
     cloudAudio = await generateSpeechViaCloud(
       processedText,
       voice,
@@ -210,7 +226,9 @@ const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx
       // hand. Absent on the local-key branch ⇒ no key, no column written.
       ...(cloudAudio?.relayJobId && { relayJobId: cloudAudio.relayJobId, relayCredits: cloudAudio.relayCredits ?? null }),
     },
-    extraOutputData: { billedCharacters },
+    // Per-word timings (words only) — absent unless asked for on a model that
+    // returns them; then no `transcript` key at all (billedCharacters stays).
+    extraOutputData: { billedCharacters, ...(transcript ? { transcript } : {}) },
     mediaUrl: r2Url,
   })
   if (!ok) return
@@ -475,7 +493,7 @@ async function generateDialogueViaCloud(body: Record<string, unknown>): Promise<
   const { relayResultFields } = await import("../../providers/nodaro/relay-cost.js")
   const jobId = await createCloudJob("/v1/text-to-dialogue", body)
   const cloudJob = await waitForCloudJob(jobId)
-  const output = (cloudJob.output_data ?? {}) as { audioUrl?: unknown }
+  const output = (cloudJob.output_data ?? {}) as { audioUrl?: unknown; transcript?: unknown }
   const url = typeof output.audioUrl === "string" ? output.audioUrl : undefined
   if (!url) {
     throw new NodaroCloudError(`nodaro.ai: dialogue job ${jobId} completed but returned no audioUrl`)
@@ -484,8 +502,14 @@ async function generateDialogueViaCloud(body: Record<string, unknown>): Promise<
   if (!res.ok) {
     throw new Error(`nodaro.ai: could not download the generated audio (${res.status})`)
   }
+  // The cloud's timings ride along when it sent them (a cloud older than this
+  // code sends none — "no timings", never an error).
+  const relayed = output.transcript && typeof output.transcript === "object" ? normalizeTranscript(output.transcript) : undefined
+  // A wordless transcript is no timings (a caption node would reject it instead of transcribing).
+  const transcript = relayed?.words.length ? relayed : undefined
   return {
     audio: Buffer.from(await res.arrayBuffer()),
+    ...(transcript ? { transcript } : {}),
     ...relayResultFields(cloudJob),
   }
 }
@@ -514,6 +538,9 @@ const handleTextToDialogue: HandlerFn = async function handleTextToDialogue(job,
   // its 5-minute stale threshold would race a legitimate near-300s dialogue
   // + R2 upload into a false fail+refund.
   let audioBuffer: Buffer
+  // The model's per-line timings (the node's `json` handle); absent on a model
+  // whose sheet has none, or when the vendor's alignment was unreadable.
+  let transcript: Transcript | undefined
   // Set only on the cloud branch — the relay provenance the finalize literal
   // below carries onto the row.
   let cloudAudio: CloudAudioResult | undefined
@@ -521,12 +548,14 @@ const handleTextToDialogue: HandlerFn = async function handleTextToDialogue(job,
   // cloud that knows it; an older cloud strips the key and renders v3 dialogue.
   const dialogueOptions = { provider, stability, similarityBoost, languageCode, seed, applyTextNormalization }
   if (config.ELEVENLABS_API_KEY) {
-    audioBuffer = await withProgressRamp(
+    const rendered = await withProgressRamp(
       job,
       ctx.jobId,
       { start: 5, cap: 45 },
       () => directElevenLabsDialogue(dialogue, dialogueOptions),
     )
+    audioBuffer = rendered.audio
+    transcript = rendered.transcript
   } else if (await isNodaroConnected().catch(() => false)) {
     cloudAudio = await withProgressRamp(
       job,
@@ -535,6 +564,7 @@ const handleTextToDialogue: HandlerFn = async function handleTextToDialogue(job,
       () => generateDialogueViaCloud({ dialogue, ...dialogueOptions }),
     )
     audioBuffer = cloudAudio.audio
+    transcript = cloudAudio.transcript
   } else {
     // Throws MissingProviderKeyError — the one phrasing every provider uses.
     requireProviderKey(config.ELEVENLABS_API_KEY, "ELEVENLABS_API_KEY")
@@ -558,7 +588,10 @@ const handleTextToDialogue: HandlerFn = async function handleTextToDialogue(job,
       // Same rebuilt-literal carry as text-to-speech above, same reason.
       ...(cloudAudio?.relayJobId && { relayJobId: cloudAudio.relayJobId, relayCredits: cloudAudio.relayCredits ?? null }),
     },
-    extraOutputData: { billedCharacters },
+    // Per-line timings (the node's `json` handle, captions without a paid
+    // transcription). Absent on a model without timings — then no `transcript`
+    // key at all (billedCharacters stays).
+    extraOutputData: { billedCharacters, ...(transcript ? { transcript } : {}) },
     mediaUrl: r2Url,
   })
   if (!ok) return

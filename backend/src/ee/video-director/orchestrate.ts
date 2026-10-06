@@ -2,7 +2,9 @@
  * Video-director orchestration chain (Unit D).
  *
  * Pure, injectable sequencing function:
- *   author → speech → forced-alignment → bake(resolve) → render.
+ *   author → speech → alignment (the speech job's own word timings, or a
+ *   forced-alignment job when the speech model returns none) → bake(resolve)
+ *   → render.
  *
  * All side-effecting steps are abstracted behind the DirectorDeps interface so
  * the chain is fully unit-testable without network I/O. The real wiring lives
@@ -11,6 +13,7 @@
 
 import { authorShotSequence, type AuthoredSequence, type VideoGenre } from "./author.js"
 import { bakeShotSequence } from "../../services/shot-sequence/baker.js"
+import { alignmentWordsFromTranscript } from "../../services/shot-sequence/aligner.js"
 import { ensureLogoLockupScene } from "./logo-lockup-net.js"
 import { waitForJob as _waitForJob } from "../../lib/mcp/tools/_wait-for-job.js"
 import { config } from "../../lib/config.js"
@@ -57,8 +60,9 @@ export interface DirectorDeps {
  * Run the full video-director pipeline for one brief.
  *
  * Step order (contract):
- *   author → createSpeechJob(voScript) → waitForJob → audioUrl
- *   → createAlignmentJob(audioUrl, voScript) → waitForJob → alignment
+ *   author → createSpeechJob(voScript) → waitForJob → audioUrl (+ transcript)
+ *   → alignment: the transcript's words when the speech model returned them,
+ *     else createAlignmentJob(audioUrl, voScript) → waitForJob → alignment
  *   → bakeShotSequence(shotSequenceBrief, alignment, audioUrl) → plan
  *   → createRenderJob(plan) → waitForJob → videoUrl.
  *
@@ -112,19 +116,28 @@ export async function runVideoDirector(
   if (!audioUrl) throw new Error("speech: no audioUrl in job output")
 
   // ── 3. Alignment ───────────────────────────────────────────────────────────
+  // The stage name is the progress contract and stays whichever way the
+  // timings come. A speech model that returns timings (the speech job asked
+  // for them; `ttsSupportsTimestamps` decided) hands us the words here and no
+  // forced-alignment job is created or charged; a speech output without
+  // usable words runs today's alignment job unchanged (decided 2026-10-06).
   await deps.onProgress?.("alignment")
-  let alignJobId: string
-  try {
-    const r = await deps.createAlignmentJob(audioUrl, authored.voScript, userId)
-    alignJobId = r.jobId
-  } catch (err) {
-    throw new Error(`alignment: ${err instanceof Error ? err.message : String(err)}`)
+  let alignment = alignmentWordsFromTranscript(speechOut.output.transcript)
+  if (alignment.length === 0) {
+    let alignJobId: string
+    try {
+      const r = await deps.createAlignmentJob(audioUrl, authored.voScript, userId)
+      alignJobId = r.jobId
+    } catch (err) {
+      throw new Error(`alignment: ${err instanceof Error ? err.message : String(err)}`)
+    }
+    const alignOut = await deps.waitForJob(alignJobId).catch((e: unknown) => {
+      throw new Error(`alignment: ${e instanceof Error ? e.message : String(e)}`)
+    })
+    const aligned = alignOut.output.alignment as AlignmentWord[] | undefined
+    if (!aligned) throw new Error("alignment: no alignment in job output")
+    alignment = aligned
   }
-  const alignOut = await deps.waitForJob(alignJobId).catch((e: unknown) => {
-    throw new Error(`alignment: ${e instanceof Error ? e.message : String(e)}`)
-  })
-  const alignment = alignOut.output.alignment as AlignmentWord[] | undefined
-  if (!alignment) throw new Error("alignment: no alignment in job output")
 
   // ── 4. Bake (resolve) ──────────────────────────────────────────────────────
   // When the caller supplied a brand, set the resolved tokens on the brief so
@@ -151,8 +164,8 @@ export async function runVideoDirector(
     // where one repair round usually fixes it. Give the author ONE chance to
     // correct ONLY the scene/shot/reveal structure before failing the job.
     //
-    // Speech + forced alignment are already generated from voScript/cues and
-    // cannot be redone without re-billing, so the repaired output's voScript
+    // Speech (and forced alignment, when it ran) are already generated from
+    // voScript/cues and cannot be redone without re-billing, so the repaired output's voScript
     // AND cues (ids + text, order) MUST stay byte-identical to the original.
     // Any drift discards the repair and surfaces the ORIGINAL bake error, as
     // if no repair had been attempted at all. No third attempt.
@@ -259,6 +272,9 @@ export function defaultDirectorDeps(fastify: FastifyInstance): DirectorDeps {
         text,
         provider: DEFAULT_TTS_PROVIDER,
         userId,
+        // Per-word timings on the speech job itself (honoured when the model's
+        // sheet returns them) — the alignment stage then needs no second job.
+        withTimestamps: true,
       }),
 
     createAlignmentJob: (audioUrl, transcript, userId) =>

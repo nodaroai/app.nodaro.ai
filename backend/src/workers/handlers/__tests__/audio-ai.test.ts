@@ -14,7 +14,8 @@ const mocks = vi.hoisted(() => {
   const mockUploadToR2 = vi.fn().mockResolvedValue("https://r2.example.com/audio/job-1.mp3")
   const mockUploadBufferToR2 = vi.fn().mockResolvedValue("https://r2.example.com/audio/job-1.mp3")
   const mockDirectElevenLabsTTS = vi.fn().mockResolvedValue(Buffer.from("fake-audio"))
-  const mockDirectElevenLabsDialogue = vi.fn().mockResolvedValue(Buffer.from("fake-dialogue"))
+  const mockDirectElevenLabsTTSWithTimestamps = vi.fn().mockResolvedValue({ audio: Buffer.from("fake-audio"), transcript: { version: 1, words: [{ text: "Hi", startMs: 0, endMs: 100 }] } })
+  const mockDirectElevenLabsDialogue = vi.fn().mockResolvedValue({ audio: Buffer.from("fake-dialogue") })
   const mockStripAudioTags = vi.fn((text: string) => text)
   const mockVoiceChangerFromUrl = vi.fn().mockResolvedValue(Buffer.from("fake-audio"))
   const mockStartDubbing = vi.fn().mockResolvedValue({ dubbingId: "dub-id", expectedDurationSec: 30 })
@@ -74,6 +75,7 @@ const mocks = vi.hoisted(() => {
     mockUploadToR2,
     mockUploadBufferToR2,
     mockDirectElevenLabsTTS,
+    mockDirectElevenLabsTTSWithTimestamps,
     mockDirectElevenLabsDialogue,
     mockStripAudioTags,
     mockVoiceChangerFromUrl,
@@ -116,7 +118,7 @@ vi.mock("@/lib/supabase.js", () => ({ supabase: { from: mocks.mockFrom } }))
 vi.mock("@/lib/storage.js", () => ({ uploadToR2: mocks.mockUploadToR2, uploadBufferToR2: mocks.mockUploadBufferToR2, uploadFileToR2: mocks.mockUploadFileToR2, mediaObjectKey: (id: string, type: string, ext: string) => `${type}s/${id}.${ext}` }))
 vi.mock("@/providers/audio/generate-music.js", () => ({ generateMusic: mocks.mockGenerateMusic }))
 vi.mock("@/providers/audio/text-to-audio.js", () => ({ textToAudio: mocks.mockTextToAudio }))
-vi.mock("@/providers/elevenlabs/direct-tts.js", () => ({ directElevenLabsTTS: mocks.mockDirectElevenLabsTTS, stripAudioTags: mocks.mockStripAudioTags }))
+vi.mock("@/providers/elevenlabs/direct-tts.js", () => ({ directElevenLabsTTS: mocks.mockDirectElevenLabsTTS, directElevenLabsTTSWithTimestamps: mocks.mockDirectElevenLabsTTSWithTimestamps, stripAudioTags: mocks.mockStripAudioTags }))
 vi.mock("@/providers/elevenlabs/direct-dialogue.js", () => ({ directElevenLabsDialogue: mocks.mockDirectElevenLabsDialogue }))
 vi.mock("@/providers/elevenlabs/sound-effects.js", () => ({ generateSoundEffect: mocks.mockGenerateSoundEffect }))
 vi.mock("@/providers/kie/audio.js", () => ({ KieAudioProvider: mocks.mockKieAudioProvider }))
@@ -214,7 +216,7 @@ beforeEach(() => {
   mocks.mockTextToAudio.mockResolvedValue("https://replicate.example.com/audio.mp3")
   mocks.mockGenerateSoundEffect.mockResolvedValue(Buffer.from("fake-sfx"))
   mocks.mockKieAudioProviderInstance.isolateAudio.mockResolvedValue({ url: "https://kie.example.com/isolated.mp3", cost: 0.01 })
-  mocks.mockDirectElevenLabsDialogue.mockResolvedValue(Buffer.from("fake-dialogue"))
+  mocks.mockDirectElevenLabsDialogue.mockResolvedValue({ audio: Buffer.from("fake-dialogue") })
   mocks.mockTranscribe.mockResolvedValue({ text: "Hello world", language: "en", segments: [] })
   mocks.mockExtractYouTubeAudio.mockResolvedValue("https://example.com/yt-audio.mp3")
   mocks.mockExtractYouTubeAudioWithMeta.mockResolvedValue({ url: "https://example.com/yt-audio.mp3", durationSeconds: 3564.2 })
@@ -368,6 +370,48 @@ describe("text-to-dialogue provider selection (keyless self-host)", () => {
     expect(mocks.mockCreateCloudJob).not.toHaveBeenCalled()
     expect(mocks.mockDirectElevenLabsDialogue).not.toHaveBeenCalled()
   })
+
+  it("writes the model's timings onto the job output as `transcript` (v4 and v3 dialogue alike), and nothing when the funnel returns none", async () => {
+    config.ELEVENLABS_API_KEY = "el_test"
+    const transcript = { version: 1, words: [{ text: "Hi", startMs: 0, endMs: 200, speaker: "Rachel" }], segments: [{ startMs: 0, endMs: 200, text: "Hi", speaker: "Rachel" }] }
+    mocks.mockDirectElevenLabsDialogue.mockResolvedValueOnce({ audio: Buffer.from("fake-dialogue"), transcript })
+    await handler(makeJob("text-to-dialogue", { dialogue: lines, provider: "elevenlabs-dialogue-v4" }) as never, makeCtx())
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(expect.objectContaining({ extraOutputData: expect.objectContaining({ transcript }) }))
+
+    mocks.mockFinalizeJobWithMedia.mockClear()
+    mocks.mockFinalizeJobWithMedia.mockClear()
+    mocks.mockDirectElevenLabsDialogue.mockResolvedValueOnce({ audio: Buffer.from("fake-dialogue"), transcript })
+    await handler(makeJob("text-to-dialogue", { dialogue: lines, provider: "elevenlabs-dialogue" }) as never, makeCtx())
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(expect.objectContaining({ extraOutputData: expect.objectContaining({ transcript }) }))
+
+    // A malformed alignment leaves the funnel with audio and no transcript: the key stays absent.
+    mocks.mockFinalizeJobWithMedia.mockClear()
+    mocks.mockDirectElevenLabsDialogue.mockResolvedValueOnce({ audio: Buffer.from("fake-dialogue") })
+    await handler(makeJob("text-to-dialogue", { dialogue: lines, provider: "elevenlabs-dialogue" }) as never, makeCtx())
+    const call = mocks.mockFinalizeJobWithMedia.mock.calls[0]![0] as Record<string, unknown>
+    expect("transcript" in ((call.extraOutputData ?? {}) as Record<string, unknown>)).toBe(false)
+  })
+
+  it("the cloud relay forwards the cloud's transcript, normalized", async () => {
+    config.ELEVENLABS_API_KEY = ""
+    mocks.mockIsNodaroConnected.mockResolvedValue(true)
+    mocks.mockWaitForCloudJob.mockResolvedValueOnce({ output_data: { audioUrl: "https://cloud.nodaro.ai/dlg.mp3", transcript: { version: 1, words: [{ text: "Hi", startMs: 0, endMs: 100 }] } } })
+    await handler(makeJob("text-to-dialogue", { dialogue: lines, provider: "elevenlabs-dialogue-v4" }) as never, makeCtx())
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(expect.objectContaining({
+      extraOutputData: expect.objectContaining({ transcript: { version: 1, words: [{ text: "Hi", startMs: 0, endMs: 100 }] } }),
+    }))
+  })
+})
+
+describe("text-to-dialogue cloud relay — wordless transcript", () => {
+  it("a cloud transcript with no words is no timings: the key stays absent", async () => {
+    config.ELEVENLABS_API_KEY = ""
+    mocks.mockIsNodaroConnected.mockResolvedValue(true)
+    mocks.mockWaitForCloudJob.mockResolvedValueOnce({ output_data: { audioUrl: "https://cloud.nodaro.ai/dlg.mp3", transcript: { version: 1, words: [] } } })
+    await audioAIHandlers["text-to-dialogue"]!(makeJob("text-to-dialogue", { dialogue: [{ text: "Hi", voice: "Rachel" }], provider: "elevenlabs-dialogue-v4" }) as never, makeCtx())
+    const call = mocks.mockFinalizeJobWithMedia.mock.calls.at(-1)![0] as Record<string, unknown>
+    expect("transcript" in ((call.extraOutputData ?? {}) as Record<string, unknown>)).toBe(false)
+  })
 })
 
 describe("text-to-dialogue handler", () => {
@@ -389,6 +433,41 @@ describe("text-to-dialogue handler", () => {
 
 describe("text-to-speech handler", () => {
   const handler = audioAIHandlers["text-to-speech"]
+
+  it("withTimestamps on a model with timings → the timed funnel, transcript on the job output", async () => {
+    config.ELEVENLABS_API_KEY = "el_test"
+    await handler(makeJob("text-to-speech", { text: "Hi", provider: "elevenlabs-v4", withTimestamps: true }) as never, makeCtx())
+    expect(mocks.mockDirectElevenLabsTTSWithTimestamps).toHaveBeenCalled()
+    expect(mocks.mockDirectElevenLabsTTS).not.toHaveBeenCalled()
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(expect.objectContaining({
+      extraOutputData: expect.objectContaining({ transcript: { version: 1, words: [{ text: "Hi", startMs: 0, endMs: 100 }] } }),
+    }))
+  })
+
+  it.each(["elevenlabs-v3", "elevenlabs-turbo", "elevenlabs-multilingual"])(
+    "withTimestamps on %s (measured 2026-10-06) → the timed funnel too, transcript on the job output",
+    async (provider) => {
+      config.ELEVENLABS_API_KEY = "el_test"
+      await handler(makeJob("text-to-speech", { text: "Hi", provider, withTimestamps: true }) as never, makeCtx())
+      expect(mocks.mockDirectElevenLabsTTSWithTimestamps).toHaveBeenCalled()
+      expect(mocks.mockDirectElevenLabsTTS).not.toHaveBeenCalled()
+      expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(expect.objectContaining({
+        extraOutputData: expect.objectContaining({ transcript: { version: 1, words: [{ text: "Hi", startMs: 0, endMs: 100 }] } }),
+      }))
+    },
+  )
+
+  it.each(["elevenlabs-v4", "elevenlabs-v3", "elevenlabs-turbo", "elevenlabs-multilingual"])(
+    "no flag → today's plain funnel on %s: no timed call, no transcript key",
+    async (provider) => {
+      config.ELEVENLABS_API_KEY = "el_test"
+      await handler(makeJob("text-to-speech", { text: "Hi", provider }) as never, makeCtx())
+      expect(mocks.mockDirectElevenLabsTTSWithTimestamps).not.toHaveBeenCalled()
+      expect(mocks.mockDirectElevenLabsTTS).toHaveBeenCalled()
+      const call = mocks.mockFinalizeJobWithMedia.mock.calls[0]![0] as Record<string, unknown>
+      expect("transcript" in ((call.extraOutputData ?? {}) as Record<string, unknown>)).toBe(false)
+    },
+  )
 
   it("happy path: generates speech via directElevenLabsTTS, uploads, finalizes", async () => {
     const job = makeJob("text-to-speech", { text: "Hello world", provider: "elevenlabs-v3" })

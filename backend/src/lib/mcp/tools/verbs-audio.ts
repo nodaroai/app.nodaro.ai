@@ -617,7 +617,11 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         "`[audio tags]` like `[laughs]`, `[whispers]` inside line text, and " +
         "ANY voice — premade names, cloned/library UUIDs, mixed casts.\n\n" +
         "Limits: 5,000 characters total across lines on either model (≤2,000 " +
-        "recommended for best quality), at most 10 unique voices per generation.",
+        "recommended for best quality), at most 10 unique voices per generation.\n\n" +
+        "The finished job's output_data carries `audioUrl` and, on both " +
+        "models (timings cost no extra credits), `transcript`: per-word timings and one " +
+        "segment per line with the line's voice as `speaker` — pass `words` as " +
+        "add_captions `captions` with `auto_transcribe: false`.",
       inputSchema: {
         model: z
           .enum(DIALOGUE_PROVIDERS)

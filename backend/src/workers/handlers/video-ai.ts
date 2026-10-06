@@ -1697,7 +1697,9 @@ async function synthesizeDialogueTrack(
     // Genuine multi-speaker, any voice mix → direct dialogue (one call) on the
     // model the route reserved; `dialogueProviderOf` is the funnel's own
     // default rule, spelled here so the egress key and the bill agree.
-    const buf = await directElevenLabsDialogue(
+    // Audio only: the per-shot split by the model's timings is its own later
+    // design (spec phase 4); the transcript is not read here.
+    const { audio: buf } = await directElevenLabsDialogue(
       resolved.map((r) => ({ text: r.text, voice: r.voice })),
       { provider: dialogueProviderOf(dialogueProvider), ...(languageCode ? { languageCode } : {}) },
     )

@@ -3541,7 +3541,16 @@ function executeNodeCore(
       .join("\n")
       .trim();
     setUserPromptTemplate(dialogueTemplate || undefined);
-    return runProcessingNode(
+    // The run's timings (`output_data.transcript`, a model that returns them):
+    // on the node as the bare active-result field every json consumer reads —
+    // ALWAYS written, so a run without timings clears an earlier run's — and on
+    // the result as its own `transcript`, so switching results switches
+    // timings. (The node fields also ride onto the result in poll-job, so a
+    // canvas take carries `generatedJson` beside `transcript`; the server lanes
+    // write `transcript` alone — lib/json-run-result.ts. Both engines read
+    // `transcript` first, then the bare field.)
+    const transcriptOf = (od: Record<string, unknown>) => (od.transcript !== undefined ? { transcript: od.transcript } : {});
+    return pollJobWithNodeUpdate(
       node.id,
       () =>
         textToDialogueApi(
@@ -3557,6 +3566,9 @@ function executeNodeCore(
       "generatedAudioUrl",
       "Text to Dialogue",
       ctx,
+      (od) => ({ generatedJson: od.transcript }),
+      undefined,
+      { resultFields: transcriptOf },
     );
   }
 

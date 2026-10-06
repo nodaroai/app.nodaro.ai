@@ -49,6 +49,13 @@ vi.mock("@/lib/api", async (importOriginal) => ({
   startVideoAnalysis: vi.fn(startJob),
   runVideoAudit: vi.fn(startJob),
   transcribeApi: vi.fn(startJob),
+  textToDialogueApi: vi.fn(startJob),
+  // The generic poll (pollJobWithNodeUpdate, Text to Dialogue) reads the row
+  // through poll-job's OWN import of getJobStatusLean — the poll-job mock below
+  // only reaches executors that import getJobStatusLeanForNode themselves — and
+  // fetches a progress estimate before its first tick. Neither is under test.
+  getJobStatusLean: vi.fn(() => Promise.resolve({ status: "completed", output_data: job.row })),
+  getExecutionEstimate: vi.fn(() => Promise.resolve({ estimatedMs: 1_000 })),
   editPlan: vi.fn(startJob),
   silenceDetectApi: vi.fn(startJob),
   audioSyncApi: vi.fn(startJob),
@@ -124,6 +131,8 @@ const SCENARIOS: Record<string, Scenario> = {
     },
   },
   transcribe: { inputs: { audioUrl: "https://media.example.test/rec.m4a" } },
+  // Text to Dialogue: its lines are its own data; the job row carries the audio and the model's timings.
+  "text-to-dialogue": { data: { dialogue: [{ id: "1", text: "Hi", voice: "Rachel" }, { id: "2", text: "Hello.", voice: "George" }], stability: 0.5, languageCode: "" } },
   "silence-detect": { inputs: { audioUrl: "https://media.example.test/rec.m4a" } },
   "audio-sync": {
     inputs: { audioSyncSources: [{ nodeId: "cam-a", url: MEDIA }, { nodeId: "cam-b", url: "https://media.example.test/b.mp4" }] },

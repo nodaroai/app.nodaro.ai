@@ -7,6 +7,7 @@ import {
   dialogueProviderOf,
   dialogueHasLever,
   dialogueStabilityAccepted,
+  dialogueSupportsTimestamps,
 } from "../dialogue-capabilities.js"
 import { findTtsCapabilities } from "../tts-capabilities.js"
 
@@ -136,5 +137,15 @@ describe("elevenlabs-dialogue-v4 — added beside v3 dialogue", () => {
     expect(MODEL_CATALOG["elevenlabs-dialogue"]!.pricing).toEqual([{ identifier: "elevenlabs-dialogue", credits: 25 }])
     expect(DEFAULT_DIALOGUE_PROVIDER).toBe("elevenlabs-dialogue")
     expect(dialogueProviderOf(undefined)).toBe("elevenlabs-dialogue")
+  })
+})
+
+describe("dialogueSupportsTimestamps", () => {
+  it("both dialogue models return timings (measured 2026-10-06); an unknown id runs as v3 dialogue, so it does too", () => {
+    expect(dialogueSupportsTimestamps("elevenlabs-dialogue-v4")).toBe(true)
+    expect(dialogueSupportsTimestamps("elevenlabs-dialogue")).toBe(true)
+    for (const id of [undefined, "", "nope", "constructor", ["elevenlabs-dialogue-v4"], "elevenlabs-v4"] as unknown[]) {
+      expect(dialogueSupportsTimestamps(id), JSON.stringify(id)).toBe(true)
+    }
   })
 })

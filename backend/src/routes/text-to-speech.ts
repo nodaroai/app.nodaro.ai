@@ -54,6 +54,10 @@ export const textToSpeechBody = z.object({
   style: voiceSetting("style"),
   speed: voiceSetting("speed"),
   languageCode: z.string().optional(),
+  // Ask for per-word timings (`output_data.transcript`). Every speech model returns them
+  // (measured 2026-10-06), through the model's sheet (`timestamps`); without the flag the
+  // request is exactly the plain one. No price change.
+  withTimestamps: z.boolean().optional(),
   // What is spoken just before / after this clip in the finished piece — context a stitching
   // model (v4) uses for one continuous intonation across clips; the funnel sends it only to a
   // model whose sheet takes it. Checked in the refinement below, because whether a value can
@@ -164,7 +168,7 @@ export async function textToSpeechRoutes(app: FastifyInstance) {
     // the destructured `text`) see the clamped value.
     parsed.data.text = parsed.data.text.slice(0, getMaxTtsChars(resolvedProvider))
 
-    const { text, voice, voiceType, stability, similarityBoost, style, speed, languageCode, previousText, nextText } = parsed.data
+    const { text, voice, voiceType, stability, similarityBoost, style, speed, languageCode, previousText, nextText, withTimestamps } = parsed.data
 
     const mcpClient = extractMcpClient(req.body)
     const { data: job, error } = await insertJob(req, {
@@ -198,6 +202,8 @@ export async function textToSpeechRoutes(app: FastifyInstance) {
       style,
       speed,
       languageCode,
+      // Only when asked: an absent key keeps the payload byte-identical.
+      ...(withTimestamps ? { withTimestamps } : {}),
       previousText,
       nextText,
       // LLM-originated (MCP) requests may carry a hallucinated voice id —

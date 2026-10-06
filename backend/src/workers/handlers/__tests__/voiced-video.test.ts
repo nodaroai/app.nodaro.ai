@@ -115,7 +115,7 @@ const VIDEO_RESULT = { url: "https://r2.example.com/raw.mp4", providerUsed: "kie
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.mockImageToVideo.mockResolvedValue(VIDEO_RESULT)
-  mocks.mockDirectDialogue.mockResolvedValue(Buffer.from("dialogue-audio"))
+  mocks.mockDirectDialogue.mockResolvedValue({ audio: Buffer.from("dialogue-audio") })
   mocks.mockDirectTTS.mockResolvedValue(Buffer.from("tts-audio"))
   mocks.mockUploadToR2.mockResolvedValue("https://r2.example.com/dialogue.mp3")
   mocks.mockUploadBufferToR2.mockResolvedValue("https://r2.example.com/tts.mp3")

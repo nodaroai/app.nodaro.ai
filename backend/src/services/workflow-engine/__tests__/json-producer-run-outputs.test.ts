@@ -104,6 +104,8 @@ function computeOutputs(): Record<string, unknown> {
       "audio-sync": fromJobRow("audio-sync"),
       "video-analysis": fromJobRow("video-analysis"),
       "video-audit": fromJobRow("video-audit"),
+      // Text to Dialogue: the audio beside the timings the worker wrote as `transcript` (→ json).
+      "text-to-dialogue": fromJobRow("text-to-dialogue"),
       "extract-field:text": inline("extract-field", { field: "title" }, (n, e, ns, s) => executeExtractField(n, e, ns, s)),
       "extract-field:list": inline("extract-field", { field: "title", outputType: "list" }, (n, e, ns, s) => executeExtractField(n, e, ns, s)),
       // A list of links: a lane must not add them to the node's results either.

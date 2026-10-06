@@ -1,7 +1,7 @@
 ---
 node_type: text-to-dialogue
-generated_at: 2026-10-06T07:11:47.408Z
-generated_from: dc25afa28
+generated_at: 2026-10-06T11:41:13.378Z
+generated_from: 44fe12205
 ---
 
 # Text to Dialogue
@@ -11,7 +11,7 @@ generated_from: dc25afa28
 **Category:** ai
 **Credit cost:** `25` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
 **Inputs (target handles):** `prompt`
-**Outputs (source handles):** `audio`
+**Outputs (source handles):** `audio`, `json`
 
 **Required data fields:**
 - `label: string`
@@ -28,7 +28,8 @@ generated_from: dc25afa28
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`
 - `generatedAudioUrl?: string`
-- `generatedResults?: GeneratedResult[]`
+- `generatedResults?: Array<GeneratedResult & { readonly transcript?: Transcript }>`
+- `generatedJson?: Transcript`
 - `activeResultIndex?: number`
 - `currentJobId?: string`
 - `currentJobProgress?: number`

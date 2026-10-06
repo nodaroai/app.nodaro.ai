@@ -104,6 +104,17 @@ describe("direct-ElevenLabs create funnels default OUR modelKey with no meta", (
     await srv.close()
   })
 
+  it("dialogue with timings → the same operation and key (the endpoint suffix is not a different lane)", async () => {
+    const srv = await loopback((_req, res) => { res.writeHead(200, { "content-type": "application/json" }); res.end(JSON.stringify({ audio_base64: "AAAA", alignment: null })) })
+    cfg.ELEVENLABS_BASE_URL = srv.base
+    vi.resetModules()
+    const { directElevenLabsDialogue } = await import("../direct-dialogue.js")
+    const call = await keyFor("dialogue", () => directElevenLabsDialogue([{ text: "Hi", voice: "Rachel" }], { provider: "elevenlabs-dialogue-v4" }))
+    expect(call?.operation).toBe("dialogue")
+    expect(call?.modelKey).toBe("elevenlabs-dialogue-v4")
+    await srv.close()
+  })
+
   it("voiceDesign → elevenlabs-voice-design", async () => {
     const srv = await loopback((_req, res) => { res.writeHead(200, { "content-type": "application/json" }); res.end("{}") })
     cfg.ELEVENLABS_BASE_URL = srv.base

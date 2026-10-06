@@ -5,8 +5,9 @@ import { ELEVENLABS_BASE_URL } from "./client.js"
 import { resolveDirectVoiceId } from "./direct-tts.js"
 import { normalizeElevenLabsLanguageCode } from "./language-code.js"
 import { normalizeTtsVoiceSetting } from "./voice-settings.js"
-import { dialogueProviderOf, getDialogueCapabilities } from "@nodaro/shared"
+import { dialogueProviderOf, getDialogueCapabilities, dialogueSupportsTimestamps, type Transcript } from "@nodaro/shared"
 import { dialogueWireModel, dialogueModelKey } from "./dialogue-models.js"
+import { transcriptFromDialogueTimestamps } from "./alignment-transcript.js"
 
 /** One script line: what to say, and which voice says it. */
 export interface DialogueInputLine {
@@ -32,6 +33,20 @@ export interface DirectDialogueOptions {
   applyTextNormalization?: "auto" | "on" | "off"
 }
 
+/** What a dialogue render hands back: the MP3 bytes and, on a model that returns timings, their transcript. */
+export interface DialogueResult {
+  audio: Buffer
+  /** Per-word timings and one segment per line (speaker = the line's voice as sent). Absent when the model has no timings or the vendor's alignment was unusable. */
+  transcript?: Transcript
+}
+
+/** The with-timestamps response (vendor shape; every field read defensively in alignment-transcript.ts). */
+interface DialogueTimestampsResponse {
+  audio_base64?: unknown
+  alignment?: unknown
+  voice_segments?: unknown
+}
+
 // Generous bound, explicit for the same reason as direct-tts's: a stalled
 // connection must never idle a worker slot until undici's implicit ~300s.
 // A 5,000-char dialogue was measured at 125s — 300s leaves real headroom.
@@ -44,15 +59,16 @@ const DIALOGUE_GENERATION_TIMEOUT_MS = 300_000
  * never from a comparison with an id. Per-line `resolveDirectVoiceId` means ANY
  * voice works (premade name, library UUID, clone UUID).
  *
- * Synchronous call → Buffer; no polling task, so no reconcile wiring — the
- * reconcile cron only picks up rows with a persisted provider_call_started_at,
- * which this path never sets (the worker pre-task sentinel covers crashes).
+ * Synchronous call → bytes (+ transcript); no polling task, so no reconcile
+ * wiring — the reconcile cron only picks up rows with a persisted
+ * provider_call_started_at, which this path never sets (the worker pre-task
+ * sentinel covers crashes).
  */
 export async function directElevenLabsDialogue(
   inputs: DialogueInputLine[],
   options?: DirectDialogueOptions,
   meta?: EgressMeta,
-): Promise<Buffer> {
+): Promise<DialogueResult> {
   const apiKey = config.ELEVENLABS_API_KEY
   if (!apiKey) {
     requireProviderKey(apiKey, "ELEVENLABS_API_KEY")
@@ -80,6 +96,12 @@ export async function directElevenLabsDialogue(
   if (options?.seed != null) body.seed = options.seed
   if (options?.applyTextNormalization) body.apply_text_normalization = options.applyTextNormalization
 
+  // The sheet decides the endpoint (decided 2026-10-06: always on when the
+  // model has it). Same body either way; only the URL suffix and Accept move,
+  // so a model without timings is byte-identical to before.
+  const withTimestamps = dialogueSupportsTimestamps(provider)
+  const url = `${ELEVENLABS_BASE_URL}/v1/text-to-dialogue${withTimestamps ? "/with-timestamps" : ""}`
+
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), DIALOGUE_GENERATION_TIMEOUT_MS)
   let response: Response
@@ -95,13 +117,13 @@ export async function directElevenLabsDialogue(
           characters: inputs.reduce((sum, l) => sum + l.text.length, 0),
         },
       },
-      `${ELEVENLABS_BASE_URL}/v1/text-to-dialogue`,
+      url,
       {
         method: "POST",
         headers: {
           "xi-api-key": apiKey,
           "Content-Type": "application/json",
-          Accept: "audio/mpeg",
+          Accept: withTimestamps ? "application/json" : "audio/mpeg",
         },
         body: JSON.stringify(body),
         signal: controller.signal,
@@ -135,5 +157,23 @@ export async function directElevenLabsDialogue(
     throw new Error(`ElevenLabs dialogue failed (${response.status}): ${errorText}`)
   }
 
-  return Buffer.from(await response.arrayBuffer())
+  if (!withTimestamps) {
+    return { audio: Buffer.from(await response.arrayBuffer()) }
+  }
+
+  // JSON branch: the audio must be there — a body without it delivered nothing,
+  // so fail HERE, before any upload. The timings are best-effort: a shape the
+  // builder cannot read leaves `transcript` absent and the audio still ships.
+  const json = (await response.json().catch(() => undefined)) as DialogueTimestampsResponse | undefined
+  if (!json || typeof json.audio_base64 !== "string" || json.audio_base64.length === 0) {
+    throw new Error("ElevenLabs dialogue (with-timestamps) returned no audio")
+  }
+  const audio = Buffer.from(json.audio_base64, "base64")
+  // A string that is not base64 decodes to zero bytes without throwing — that is no audio either.
+  if (audio.length === 0) throw new Error("ElevenLabs dialogue (with-timestamps) returned no audio")
+  const transcript = transcriptFromDialogueTimestamps(json.alignment, json.voice_segments, inputs, { language: languageCode })
+  if (!transcript) {
+    console.warn("[elevenlabs] dialogue with-timestamps: alignment unreadable; delivering audio without timings")
+  }
+  return transcript ? { audio, transcript } : { audio }
 }

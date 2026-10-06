@@ -2768,7 +2768,9 @@ describe("text-to-dialogue", () => {
       "generatedAudioUrl",
       "Text to Dialogue",
       expect.anything(),
+      expect.any(Function),
       undefined,
+      { resultFields: expect.any(Function) },
     )
   })
 

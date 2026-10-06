@@ -17,8 +17,9 @@ illustrated or filmed scenes (see "What Phase-1 can produce" below). If the
 user asks for a bare "explainer" without specifying a visual style, both the
 tool descriptions and the motion-director doctrine instruct the LLM to confirm
 the method with the user *before* calling any tool: motion graphics (this
-family — a fixed **~200 credits** via `create_explainer`, or **~110 credits**
-driving the Phase-0 pipeline manually) vs. animated illustrated footage
+family — a fixed **~170 credits** via `create_explainer` (200 when the speech
+model returns no word timings), or **~110 credits** driving the Phase-0
+pipeline manually) vs. animated illustrated footage
 (`get_recipe` → `video-explainer`, **~450 credits per 10-second block**). Only
 proceed once the user has chosen, or has already stated a style in the
 original ask. See [Content Recipes](./recipes.md) for the `video-explainer`
@@ -50,32 +51,35 @@ Free. Zero credits. No side effects.
 ### `create_explainer` and `create_launch_video`
 
 Each one-shot tool runs the full authoring and rendering pipeline. The credits
-are charged as four sub-jobs:
+are charged per sub-job:
 
 | Step | Job type | Credits |
 |------|----------|---------|
 | Authoring (LLM — writes VO script + shot-sequence brief) | `video-director` | **90** |
-| Voiceover synthesis (ElevenLabs v4, the default speech model) | `text-to-speech` | **30** |
-| Forced alignment (ElevenLabs — word timings) | `forced-alignment` | **30** |
+| Voiceover synthesis (ElevenLabs v4, the default speech model), with per-word timings | `text-to-speech` | **30** |
+| Forced alignment (ElevenLabs — word timings) — only when the speech model returned no timings | `forced-alignment` | **0** (30 when it runs) |
 | Resolve (bake cue anchors to frames) | synchronous, no job | **0** |
 | Remotion render | `render-video` | **50** |
-| **Total per video** | | **200** |
+| **Total per video** | | **170** (200 when forced alignment runs) |
 
-Arithmetic: 90 + 30 + 30 + 0 + 50 = **200 credits per generated video**.
+Arithmetic: 90 + 30 + 0 + 0 + 50 = **170 credits per generated video** on
+ElevenLabs v4, whose speech comes back with word timings; a speech model
+without them adds the 30-credit forced-alignment job (90 + 30 + 30 + 0 + 50 =
+200).
 
 The authoring credit is refunded if the run fails. Each sub-job (speech,
-alignment, render) is metered independently and is refunded only if that step
-itself fails — a step that already completed is not refunded when a later step
-fails (e.g. if render fails, the speech + alignment credits already spent are
-not returned).
+alignment when it runs, render) is metered independently and is refunded only
+if that step itself fails — a step that already completed is not refunded when
+a later step fails (e.g. if render fails, the speech credits already spent —
+and forced alignment's, when it ran — are not returned).
 
 **Automatic resolve repair:** the authoring LLM occasionally produces a brief
 that violates a resolver invariant (e.g. two scenes with overlapping reveal
 timing). When that happens the director silently gives the author ONE
 corrective pass — feeding back the resolver's exact error — before failing the
 job. The corrected brief must keep the voiceover script and cues byte-identical
-to the original (speech and forced alignment have already been generated from
-them and are not redone), so only scene/shot/reveal structure and timing may
+to the original (speech — and forced alignment, when it ran — have already been
+generated from them and are not redone), so only scene/shot/reveal structure and timing may
 change. This repair round is free — no extra credits are charged — and is
 invisible when it succeeds. If the repair either drifts the script/cues or
 still fails the resolver, the job fails exactly as it would without the

@@ -145,7 +145,7 @@ export const HANDLE_OUTPUT_TYPES: Record<string, Partial<Record<string, HandleCo
   "collection-read": { json: "look", text: "text" },
   "collection-write": { json: "look" },
   "text-to-audio": { audio: "audio" },
-  "text-to-dialogue": { audio: "audio" },
+  "text-to-dialogue": { audio: "audio", json: "look" },
   "text-to-speech": { audio: "audio" },
   "transcode-video": { video: "video" },
   "transcribe": { json: "look", text: "text" },

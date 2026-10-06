@@ -37,6 +37,7 @@ const mockRenderVideoWithPlan = vi.fn()
 const mockGenerateAIWriterStream = vi.fn()
 const mockImageToTextApi = vi.fn()
 const mockLipSyncApi = vi.fn()
+const mockTextToDialogueApi = vi.fn()
 const mockMotionTransferApi = vi.fn()
 const mockVideoUpscaleApi = vi.fn()
 const mockMergeVideoAudioApi = vi.fn()
@@ -123,6 +124,7 @@ vi.mock("@/lib/api", () => ({
   transcribeApi: (...args: unknown[]) => mockTranscribeApi(...args),
   downloadYouTubeAudio: vi.fn(),
   lipSyncApi: (...args: unknown[]) => mockLipSyncApi(...args),
+  textToDialogueApi: (...args: unknown[]) => mockTextToDialogueApi(...args),
   motionTransferApi: (...args: unknown[]) => mockMotionTransferApi(...args),
   videoUpscaleApi: (...args: unknown[]) => mockVideoUpscaleApi(...args),
   mergeVideoAudioApi: (...args: unknown[]) =>
@@ -306,6 +308,26 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 // lip-sync
 // ---------------------------------------------------------------------------
+
+describe("text-to-dialogue", () => {
+  it("polls with the transcript as a per-result field and generatedJson on the node (cleared when the run has none)", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    mockTextToDialogueApi.mockResolvedValue({ jobId: "j1" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(makeNode("text-to-dialogue", { dialogue: [{ id: "1", text: "Hi", voice: "Rachel" }], stability: 0.5, languageCode: "" }), makeCtx())
+    expect(mockPollJobWithNodeUpdate).toHaveBeenCalledWith(
+      "n1", expect.any(Function), "generatedAudioUrl", "Text to Dialogue", expect.anything(), expect.any(Function), undefined,
+      expect.objectContaining({ resultFields: expect.any(Function) }),
+    )
+    const [, , , , , extraOutputFields, , opts] = mockPollJobWithNodeUpdate.mock.calls[0]
+    const transcript = { version: 1, words: [] }
+    expect(extraOutputFields({ audioUrl: "https://x/a.mp3", transcript })).toStrictEqual({ generatedJson: transcript })
+    // A run without timings (a model that has none) clears a stale transcript from the bare field.
+    expect(extraOutputFields({ audioUrl: "https://x/a.mp3" })).toStrictEqual({ generatedJson: undefined })
+    expect(opts.resultFields({ audioUrl: "https://x/a.mp3", transcript })).toStrictEqual({ transcript })
+    expect(opts.resultFields({ audioUrl: "https://x/a.mp3" })).toStrictEqual({})
+  })
+})
 
 describe("lip-sync", () => {
   it("rejects when no portrait image found", async () => {

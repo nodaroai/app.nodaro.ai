@@ -3319,7 +3319,10 @@ export type TextToDialogueData = {
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
   generatedAudioUrl?: string
-  generatedResults?: GeneratedResult[]
+  /** Each result's Transcript (the `json` output handle) rides WITH its audio, so switching the active result switches both. Absent on a model without timings. */
+  generatedResults?: Array<GeneratedResult & { readonly transcript?: Transcript }>
+  /** The ACTIVE result's Transcript — the bare field every json consumer reads (Extract Field / JSON Process), kept in sync with `activeResultIndex` like `generatedAudioUrl`. */
+  generatedJson?: Transcript
   activeResultIndex?: number
   currentJobId?: string
   currentJobProgress?: number
@@ -8530,7 +8533,8 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "ai",
     creditCost: 4,
     inputs: ["prompt"],
-    outputs: ["audio"],
+    // json = the Transcript built from the model's timings (words + one segment per line); empty on a model without them.
+    outputs: ["audio", "json"],
     defaultData: {
       label: "Text to Dialogue",
       // v3 dialogue stays the default (decided 2026-10-04); spelled here because

@@ -895,6 +895,14 @@ export function getPrimaryOutput(
     return output.json === undefined ? undefined : JSON.stringify(output.json)
   }
 
+  // Text to Dialogue: dual output. `json` → the Transcript the model's timings
+  // built (stringified for generic consumers; Extract Field reads
+  // state.output.json directly); `audio` / no handle fall through to the audio
+  // set below and return output.audioUrl UNCHANGED. Mirrors transcribe.
+  if (sourceType === "text-to-dialogue" && sourceHandle === "json") {
+    return output.json === undefined ? undefined : JSON.stringify(output.json)
+  }
+
   // Extract Field: single `text` output.
   if (sourceType === "extract-field") {
     return output.extractedText
@@ -1346,6 +1354,19 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
     if (videoUrls[0]) out.videoUrl = videoUrls[0]
     if (audioUrls[0]) out.audioUrl = audioUrls[0]
     return out.videoUrl || out.audioUrl ? out : undefined
+  }
+
+  // Text to Dialogue: the ACTIVE result's url plus its transcript (the json
+  // handle), stored per result like transcribe's; `generatedJson` is the bare
+  // active-result field every json consumer reads. Above the generic audio
+  // set, which would answer `{ audioUrl }` alone.
+  if (type === "text-to-dialogue") {
+    const audioUrl = getActiveResultUrl(data) ?? (data.generatedAudioUrl as string | undefined)
+    if (!audioUrl) return undefined
+    const results = (data.generatedResults as Array<{ transcript?: Transcript }> | undefined) ?? []
+    const activeIndex = (data.activeResultIndex as number | undefined) ?? 0
+    const transcript = results[activeIndex]?.transcript ?? (data.generatedJson as Transcript | undefined)
+    return transcript !== undefined ? { audioUrl, json: transcript } : { audioUrl }
   }
 
   // Dubbing is dual-mode (voice-changer pattern): prefer the video result so
@@ -1918,6 +1939,10 @@ export function buildNodeOutputFromJobData(
     const transcript = outputData.transcript
     if (edl !== undefined) output.json = { edl, ...(transcript !== undefined ? { transcript } : {}) }
   }
+
+  // Text to Dialogue: the worker writes the timings as `transcript` (the public
+  // job-output key); the node's json handle reads output.json.
+  if (nodeType === "text-to-dialogue" && outputData.transcript !== undefined) output.json = outputData.transcript
 
   // A render (RENDER_NODE_TYPES; Apply EDL): its identity — its quality ("proxy" is a Preview) and
   // the plan clip it cut — read only off a render's output (another node's

@@ -35,6 +35,11 @@ export function dialogueHasLever(provider: unknown, lever: TtsSettingLever): boo
   return getDialogueCapabilities(provider).levers.includes(lever)
 }
 
+/** The dialogue model answers `/v1/text-to-dialogue/with-timestamps` (character timings + per-line voice segments). */
+export function dialogueSupportsTimestamps(provider: unknown): boolean {
+  return getDialogueCapabilities(provider).timestamps
+}
+
 /** `value` is a stability this platform accepts for the dialogue model: one of its steps, or any finite 0–1 when it has none. */
 export function dialogueStabilityAccepted(provider: unknown, value: number): boolean {
   if (!Number.isFinite(value) || value < 0 || value > 1) return false

@@ -329,6 +329,21 @@
       "{\"id\":11,\"channel\":\"acme\",\"postUrl\":\"https://t.me/acme/11\",\"text\":\"post 11\",\"media\":[]}"
     ]
   },
+  "text-to-dialogue": {
+    "audioUrl": "https://media.example.test/dialogue.mp3",
+    "json": {
+      "version": 1,
+      "language": "en",
+      "words": [
+        { "text": "Hi", "startMs": 0, "endMs": 200, "speaker": "Rachel" },
+        { "text": "Hello.", "startMs": 300, "endMs": 900, "speaker": "George" }
+      ],
+      "segments": [
+        { "startMs": 0, "endMs": 200, "text": "Hi", "speaker": "Rachel" },
+        { "startMs": 300, "endMs": 900, "text": "Hello.", "speaker": "George" }
+      ]
+    }
+  },
   "collection-read": {
     "text": "- Story r1 · 2026-10-06 · https://news.example.test/r1\n- Story r2 · 2026-10-06 · https://news.example.test/r2",
     "json": [
