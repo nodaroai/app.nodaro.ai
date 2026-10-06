@@ -139,7 +139,7 @@ export async function loadContinuationSource(
   const withOverrides = opts.withStates || opts.withPin === true
   // The seeding read (and a route's `withPin` check) also takes the overrides
   // the run pinned when it started (round 3) — through the column guard: until
-  // migration 464 reaches the shared database the column is missing, and the
+  // migration 466 reaches the shared database the column is missing, and the
   // read retries without it.
   const select = (columns: string) =>
     supabase.from("workflow_executions").select(columns).eq("id", executionId).maybeSingle()

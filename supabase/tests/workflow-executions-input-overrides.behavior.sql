@@ -1,4 +1,4 @@
--- Behaviour of `workflow_executions.input_overrides` (migration 464): the
+-- Behaviour of `workflow_executions.input_overrides` (migration 466): the
 -- input overrides a run applied, pinned on its execution when it starts, so a
 -- continuation re-applies exactly those (decided 2026-10-06).
 --

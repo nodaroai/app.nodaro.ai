@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import { readdirSync, readFileSync, statSync } from "node:fs"
 import { join, relative } from "node:path"
 
-// `workflow_executions.input_overrides` (migration 464, decided 2026-10-06):
+// `workflow_executions.input_overrides` (migration 466, decided 2026-10-06):
 // the input overrides a run applied, pinned on its execution when it starts,
 // so a later continuation re-applies exactly those. Until the migration
 // reaches the shared database (staging runs dev against it, and migrations
