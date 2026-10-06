@@ -42,6 +42,7 @@ import type { ZodError, ZodType } from "zod"
 import type { AudioFxPreset, PresetSettings, SurroundDirection } from "@nodaro/shared"
 import type { PluginScene3DEngine, PluginStageToolkit } from "./scene3d-contract.js"
 import type { FrameFit, FrameDelivery } from "@nodaro/shared"
+import type { Edl, EdlRegion, EdlSegment } from "@nodaro/shared"
 import type {
   PluginAccountSecretsToolkit,
   PluginDaemon,
@@ -585,6 +586,121 @@ export interface PluginFfmpegToolkit {
    * of the input container into an mp4 at `outputPath`.
    */
   remuxToMp4(inputPath: string, outputPath: string): Promise<void>
+  /**
+   * The EDL timeline (`providers/video/edl-timeline.ts`) — Apply EDL's
+   * renderer, lent to a plugin that draws its OWN picture on it (Speaker View,
+   * SV1 b, decided 2026-10-06). Core keeps everything that makes the cut
+   * correct and long renders survivable: the cumulative frame grid, chunks
+   * split at hard cuts, per-input seeks, the one lossless sound pass with a
+   * single AAC encode, fingerprinted R2 checkpoints, the per-chunk kill
+   * budgets and each launch's memory reservation. The plugin supplies only
+   * `picture(ctx)`: per segment, the filter-graph fragment that draws its
+   * slots onto the canvas. Slots come from the EDL (`layout.slots`, D20 via
+   * `resolveEdlSegmentSlots` with `speakerRegions`), so write the layouts
+   * into `edl` before calling. An `xfade:<id>` layout switch joins with that
+   * combine-videos transition and blends the sound like a crossfade,
+   * consuming the overlap (D17; SV21 c — write one only where master time is
+   * discontinuous).
+   *
+   * Uploads the render PLAIN under `jobId` (tracked to `jobUserId`'s storage),
+   * plus a thumbnail for video, exactly as core Apply EDL does, and removes
+   * its local files. Runs inside the worker's cancellation context: a cancel
+   * stops it at the next chunk boundary with the host's `JobCancelledError`.
+   * The plugin passes its OWN `label` (e.g. `"speaker-view"`, required) so
+   * its checkpoints and logs never mix with Apply EDL's `apply-edl-cache/`.
+   * A refusal that depends only on the inputs (a missing or invalid label, a
+   * segment past its media, an unknown `xfade:` id) is a deterministic error
+   * the worker fails without retrying. The handler still owns its heartbeat budget: the host sizes it
+   * from `DECLARED_JOB_BUDGETS[job.name]` at dispatch.
+   *
+   * ADDITIVE-OPTIONAL: absent on an older host. A plugin feature-detects it
+   * (`typeof tk.ffmpeg.renderEdlTimeline === "function"`) and refuses BEFORE
+   * any credit is reserved when it is missing.
+   */
+  renderEdlTimeline?(opts: PluginEdlTimelineOptions): Promise<PluginEdlTimelineResult>
+}
+
+/** Mirrors `EdlPictureSlot` (`providers/video/edl-picture.ts`). */
+export interface PluginEdlPictureSlot {
+  readonly source: string
+  /** Crop on the source, fractions of its frame (D20); full frame when none was set. */
+  readonly region: EdlRegion
+  readonly regionFrom: "slot" | "segment" | "resolver" | "speaker" | "source" | "full"
+  readonly speaker?: string
+  readonly weight?: number
+  /** The slot stream's graph label (e.g. `[p3s0]`), read by a `graph`
+   *  fragment (one slot included); a `chain` ignores it. Held past the source's end, trimmed to
+   *  the segment's read window, timestamps from 0 at `leadSec` before the
+   *  segment's own start, a few frames past its end. */
+  readonly label?: string
+}
+
+/** Mirrors `EdlPictureContext` (`providers/video/edl-picture.ts`). */
+export interface PluginEdlPictureContext {
+  readonly segment: EdlSegment
+  readonly index: number
+  readonly slots: readonly PluginEdlPictureSlot[]
+  readonly canvas: { readonly width: number; readonly height: number }
+  readonly fps: number
+  readonly quality: "proxy" | "final"
+  readonly durationSec: number
+  readonly leadSec: number
+  /** Frames this segment holds on the output grid; the host keeps exactly these. */
+  readonly frames: number
+  /** Its first frame on the GLOBAL output grid (`frameAtMs`). */
+  readonly startFrame: number
+  /** The label a `graph` fragment must write: one canvas-sized stream. */
+  readonly output: string
+  /** Prefix for every intermediate label a `graph` fragment defines. */
+  readonly scope: string
+}
+
+/**
+ * Mirrors `EdlPictureFragment`: `{ chain }` — a linear filter chain (no
+ * labels, no `;`) applied to a ONE-slot segment's stream; `{ graph }` —
+ * statements that read every slot's `label` and write `ctx.output`. The host
+ * conforms the result to the canvas rate and the segment's exact frame count.
+ * The builder is called synchronously while each slice is planned and its
+ * fragment is part of the checkpoint key, so it must be pure.
+ */
+export type PluginEdlPictureFragment = { readonly chain: string } | { readonly graph: string }
+
+/** Mirrors `EdlTimelineOptions` (`providers/video/edl-timeline.ts`). */
+export interface PluginEdlTimelineOptions {
+  readonly edl: Edl
+  /** Default `"video"`. */
+  readonly output?: "video" | "audio"
+  readonly quality: "proxy" | "final"
+  /** Keys the checkpoints (a retry of the same job resumes them) and the upload. */
+  readonly jobId: string
+  readonly jobUserId?: string
+  /** Default: the full-frame picture (Apply EDL's). */
+  readonly picture?: (ctx: PluginEdlPictureContext) => PluginEdlPictureFragment
+  /** D20's per-(source, speaker) framing (`ResolveEdlSlotsOptions.speakerRegions`). */
+  readonly speakerRegions?: ReadonlyArray<{ readonly source: string; readonly speaker: string; readonly region: EdlRegion }>
+  /** A fixed canvas (even-rounded) for every quality — the plugin sizes it
+   *  (SV7). Default: the most common source resolution, 720p-capped for a proxy. */
+  readonly canvas?: { readonly width: number; readonly height: number }
+  /** REQUIRED (decided 2026-10-06): the plugin's own render name, e.g.
+   *  `"speaker-view"` — it names the renderer in refusals and logs, its work
+   *  directory and its checkpoint prefix (`<label>-cache/`), so a plugin's
+   *  checkpoints never mix with Apply EDL's `apply-edl-cache/`. A short slug:
+   *  lowercase letters and digits in words joined by single hyphens, a letter
+   *  first, at most 40 characters; never `"apply-edl"`. No default — a
+   *  missing or invalid label is refused as a deterministic error (failed now,
+   *  never retried) before anything is downloaded or rendered. */
+  readonly label: string
+  /** 0..1 render progress. */
+  readonly onProgress?: (fraction: number) => void
+}
+
+export interface PluginEdlTimelineResult {
+  /** The render, uploaded plain (no watermark, no transcode). */
+  readonly url: string
+  /** Video only; null when the thumbnail could not be made. */
+  readonly thumbnailUrl: string | null
+  /** The rendered length — `edlDurationMs(edl)` by construction. */
+  readonly durationMs: number
 }
 
 // ============================================================================

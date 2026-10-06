@@ -110,6 +110,7 @@ import { executeNode } from "../node-executor.js"
 import { NODE_TIMEOUT_MS, POLL_ABSOLUTE_TIMEOUT_MS } from "../types.js"
 import type { SimpleNode, OrchestratorContext, ResolvedInputs } from "../types.js"
 import { BUDGETED_JOB_NAMES, declaredJobBudgetMs } from "../../../lib/job-budget.js"
+import { VIDEO_PRODUCER_TYPES } from "@nodaro/shared"
 import { applyEdlRenderBudgetMs } from "../../../providers/video/apply-edl-budget.js"
 import { audioSyncRenderBudgetMs } from "../../../providers/audio/audio-sync-budget.js"
 
@@ -434,8 +435,23 @@ describe("every registered budgeted job is dispatched under its node type's own 
     }),
   }
 
+  // A budgeted job registered before its node exists: Speaker View's budget
+  // ships with its renderer (C2.0) so the worker beats for the plugin's
+  // handler; the node, and with it this dispatch fixture, lands in C3.2. The
+  // tripwire: once `speaker-view` is a video-producing node, this exception
+  // fails until the fixture replaces it.
+  const AWAITING_NODE: Record<string, string> = { "speaker-view": "Speaker View's node (C3.2)" }
+
+  it("a budget awaiting its node is not a node yet", () => {
+    for (const [name, why] of Object.entries(AWAITING_NODE)) {
+      expect(VIDEO_PRODUCER_TYPES.has(name), `${name} is a node now — add its dispatch fixture and drop it from AWAITING_NODE (${why})`).toBe(false)
+      expect(FIXTURES[name], name).toBeUndefined()
+    }
+  })
+
   it("has a dispatch fixture for every registered name, and each dispatches as its node type", async () => {
     for (const name of BUDGETED_JOB_NAMES) {
+      if (name in AWAITING_NODE) continue
       const make = FIXTURES[name]
       expect(make, `add a dispatch fixture for budgeted job "${name}"`).toBeTypeOf("function")
       mockVideoAdd.mockClear()

@@ -198,9 +198,11 @@ describe("census — every time → frame index in the apply-edl render goes thr
   const here = dirname(fileURLToPath(import.meta.url))
   const videoDir = join(here, "..")
   const renderRules = join(here, "../../../../../packages/render-rules/src/apply-edl.ts")
-  // Every apply-edl render module, present and future, plus the render rule.
+  // Every apply-edl render module, present and future — and the EDL timeline
+  // they run on since the Speaker View extraction (`edl-*.ts`) — plus the
+  // render rule.
   const files = [
-    ...readdirSync(videoDir).filter((f) => /^apply-edl.*\.ts$/.test(f) && f !== "apply-edl-frame-grid.ts").map((f) => join(videoDir, f)),
+    ...readdirSync(videoDir).filter((f) => /^(apply-edl|edl-).*\.ts$/.test(f) && f !== "apply-edl-frame-grid.ts").map((f) => join(videoDir, f)),
     renderRules,
   ]
   const stripComments = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1")
@@ -209,9 +211,9 @@ describe("census — every time → frame index in the apply-edl render goes thr
   // duration and offset, the read guard) is not a grid boundary and is allowed.
   const TIME_TO_FRAME = [/\*\s*(?:[\w.]+\.)?fps\b/, /\bfps\s*\*/, /Math\.(?:round|floor|ceil|trunc)\([^;]*\bfps\b/]
 
-  it("covers the modules it must (slice, executor, budget)", () => {
+  it("covers the modules it must (slice, executor, timeline, picture, budget)", () => {
     const names = files.map((f) => f.split("/").pop())
-    expect(names).toEqual(expect.arrayContaining(["apply-edl.ts", "apply-edl-slice.ts", "apply-edl-budget.ts"]))
+    expect(names).toEqual(expect.arrayContaining(["apply-edl.ts", "apply-edl-slice.ts", "apply-edl-budget.ts", "edl-timeline.ts", "edl-picture.ts", "edl-picture-fullframe.ts"]))
   })
 
   it("no apply-edl module scales a time by the fps itself", () => {
@@ -230,7 +232,8 @@ describe("census — every time → frame index in the apply-edl render goes thr
       expect(src).toMatch(/from "\.\/apply-edl-frame-grid\.js"/)
       expect(src).toMatch(/frameAtMs\(/)
     }
-    // The executor's per-chunk totals are `pictureFramesOf` (slice module).
-    expect(readFileSync(join(videoDir, "apply-edl.ts"), "utf8")).toMatch(/pictureFramesOf\(chunks, fps\)/)
+    // The executor's per-chunk totals are `pictureFramesOf` (slice module) —
+    // the executor being the EDL timeline Apply EDL runs on.
+    expect(readFileSync(join(videoDir, "edl-timeline.ts"), "utf8")).toMatch(/pictureFramesOf\(chunks, fps\)/)
   })
 })

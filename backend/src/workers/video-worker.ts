@@ -9,6 +9,7 @@ import { runWithJobCancellation, JobCancelledError } from "../lib/job-cancellati
 // the test harness mocks shared.js wholesale and would undefine them.
 import { isPostProcessingError } from "../lib/post-processing-error.js"
 import { isDeterministicJobError } from "../lib/deterministic-job-error.js"
+import { declaredJobBudgetMs } from "../lib/job-budget.js"
 import { providerDetailOf } from "../lib/provider-error-detail.js"
 import { userFacingMessage } from "../lib/user-facing-error.js"
 import { markJobFailed } from "../lib/job-failure.js"
@@ -342,12 +343,17 @@ export function createVideoWorker() {
         // A short handler never beats (the first tick is a minute out); one that
         // replaced or cleared the sentinel is a CAS no-op; beats stop at a cap
         // so a hung handler still ages into the sweep. The cap is the
-        // orchestrator's per-node ceiling unless the handler declares its own
-        // budget (`livenessBudgetMs` — apply-edl sums the kill budgets of its
-        // bounded steps), so "hung" means one thing to the heartbeat and to
-        // those steps.
+        // orchestrator's per-node ceiling unless the job declares its own
+        // budget: the handler's (`livenessBudgetMs` — apply-edl sums the kill
+        // budgets of its bounded steps), else the registry's for this job name
+        // and payload (`declaredJobBudgetMs` — the same number the orchestrator
+        // sizes the node from). The fallback is what reaches a PLUGIN handler,
+        // which cannot carry `livenessBudgetMs` (core-only): a long plugin
+        // render (Speaker View) would otherwise stop beating at the default
+        // and be swept while still rendering. "Hung" means one thing to the
+        // heartbeat and to those steps.
         const handler = withPreTaskHeartbeat(found, {
-          maxMs: found.livenessBudgetMs?.(job),
+          maxMs: found.livenessBudgetMs?.(job) ?? declaredJobBudgetMs(job.name, job.data),
           // An earlier attempt's ffmpeg-slot wait (a re-pick): this one adds to it.
           slotWaitBaseMs: Number((pickedRows[0] as { slot_wait_ms?: unknown }).slot_wait_ms ?? 0) || 0,
         })

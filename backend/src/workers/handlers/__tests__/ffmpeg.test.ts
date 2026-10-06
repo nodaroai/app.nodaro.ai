@@ -914,8 +914,15 @@ describe("handler liveness budget ⇔ job-budget registry (the orchestrator's nu
     }
   })
 
+  // A budgeted job whose handler is a PRIVATE PLUGIN's cannot declare
+  // `livenessBudgetMs` (core-only): the video worker's dispatch site falls back
+  // to the registry for it (pinned by video-worker-heartbeat-wiring.test.ts).
+  // Listed by name, so a CORE handler for one of them still has to declare.
+  const PLUGIN_HANDLED = new Set(["speaker-view"])
+
   it("every registered job name is declared by its handler (no budget the heartbeat would not beat for)", () => {
     for (const name of BUDGETED_JOB_NAMES) {
+      if (PLUGIN_HANDLED.has(name) && !ffmpegHandlers[name]) continue
       expect(typeof ffmpegHandlers[name]?.livenessBudgetMs, name).toBe("function")
     }
   })

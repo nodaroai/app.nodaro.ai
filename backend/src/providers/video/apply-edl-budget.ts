@@ -18,8 +18,8 @@
  * (`applyEdlJobBudgetMs`) to both readers. `__tests__/job-budget-leaf.test.ts`
  * fails the build if this file ever imports the ffmpeg runtime.
  */
-import type { Edl, EdlSegment } from "@nodaro/shared"
-import { edlDurationMs } from "@nodaro/shared"
+import type { Edl, EdlLayout, EdlSegment } from "@nodaro/shared"
+import { edlDurationMs, resolveEdlSegmentSlots, speakerSwitchOverlaps } from "@nodaro/shared"
 import { APPLY_EDL_MAX_OUTPUT_MS } from "@nodaro/render-rules"
 import { DEFAULT_FFMPEG_TIMEOUT_MS, DOWNLOAD_MAX_MS, FFPROBE_TIMEOUT_MS } from "./ffmpeg-timeouts.js"
 
@@ -34,6 +34,56 @@ export interface ChunkPlanOptions {
   readonly maxSegmentsPerChunk?: number
   /** At or below this many segments the whole edit renders in ONE pass. */
   readonly chunkThreshold?: number
+  /** Picture slots per segment the plan sizes a VIDEO graph for (default 1):
+   *  the picture cap (`VIDEO_FILTERGRAPH_MAX_SEGMENTS`) counts graph BRANCHES,
+   *  and a segment that composites k slot sources is k branches, so the cap
+   *  is divided by it (`videoSegmentCap`). Apply EDL draws one source per
+   *  segment, so its plan is exactly the one-slot plan. The timeline passes
+   *  the most slots any segment shows (`maxPictureSlots`); a dispatch-time
+   *  budget that cannot know the layouts yet passes its worst case. */
+  readonly pictureSlots?: number
+}
+
+/** The picture cap for a video graph whose segments show `slots` sources
+ *  each: `VIDEO_FILTERGRAPH_MAX_SEGMENTS` branches, never less than one
+ *  segment. One slot is exactly the Apply EDL cap. */
+export function videoSegmentCap(slots = 1): number {
+  return Math.max(1, Math.floor(VIDEO_FILTERGRAPH_MAX_SEGMENTS / Math.max(1, Math.floor(slots))))
+}
+
+/** How much more picture work per output second a segment compositing
+ *  `slots` sources costs than one full-frame source: each slot is its own
+ *  decode → crop → scale branch into the composite, so the per-output picture
+ *  term is charged once per slot — LINEAR, an upper bound. Exactly 1 for one
+ *  slot (Apply EDL).
+ *
+ *  Measured (C2.0, F9): one 1080p30 FINAL slice of 5 × 4 s segments, each
+ *  slot cover-cropped into a tile and `xstack`ed, threads 2/2/2 — CPU-seconds
+ *  per output second 0.49 (1 slot), 0.60 (2), 1.18 (6): 1.23× and 2.4× the
+ *  one-slot cost, well under the 2× and 6× charged; peak RSS 457 / 591 /
+ *  822 MiB against the #1860 model's 677 / 769 / 1,136 (it counts every slot
+ *  as a branch). Measured on a dev machine's ffmpeg 9.0.2, NOT the pinned
+ *  n8.1.2 image: re-measure there (C4 does, before any price) before trusting
+ *  more than the direction — sublinear, so the linear charge only over-covers. */
+export function pictureSlotFactor(slots = 1): number {
+  return Math.max(1, Math.floor(slots))
+}
+
+/** The picture sources ONE segment reads, in slot order, each once: its
+ *  resolved slots (D20, `resolveEdlSegmentSlots` — `layout.slots`, else the
+ *  one implicit slot of `seg.video`). For every edit Apply EDL accepts that is
+ *  exactly `[seg.video]`; a segment with no picture reads none. */
+export function pictureSourceIdsOf(edl: Edl, seg: EdlSegment): string[] {
+  const ids: string[] = []
+  for (const slot of resolveEdlSegmentSlots(edl, seg)) if (slot.source && !ids.includes(slot.source)) ids.push(slot.source)
+  return ids
+}
+
+/** The most picture slots any of these segments composites, at least 1. */
+export function maxPictureSlots(edl: Edl, segs: readonly EdlSegment[]): number {
+  let max = 1
+  for (const seg of segs) max = Math.max(max, resolveEdlSegmentSlots(edl, seg).length)
+  return max
 }
 
 /**
@@ -187,7 +237,8 @@ export interface ChunkReads {
  * latest read end — exactly how the render seeks and trims. Pure; counts every
  * read the segments name (the render may skip a zero-frame picture read or a
  * soundless source, so this is never less than the real decode), including the
- * picture a split tail re-reads from its whole segment's start (`splitLeadMs`).
+ * picture a split tail re-reads from its whole segment's start (`splitLeadMs`)
+ * and every slot source of a composited segment (`pictureSourceIdsOf`).
  */
 export function chunkDecodeSpanSec(
   edl: Edl,
@@ -207,7 +258,7 @@ export function chunkDecodeSpanSec(
     windows[kind].set(id, w ? [Math.min(w[0], start), Math.max(w[1], end)] : [start, end])
   }
   for (const seg of segs) {
-    if (reads.video) note("video", seg.video, seg)
+    if (reads.video) for (const id of pictureSourceIdsOf(edl, seg)) note("video", id, seg)
     if (reads.audio) note("audio", audioSourceId(edl, seg, masterAudioId), seg)
   }
   const span = (m: Map<string, [number, number]>) =>
@@ -218,9 +269,12 @@ export function chunkDecodeSpanSec(
 export const secs = (ms: number): number => ms / 1000
 
 /** The overlap (seconds) at the boundary INTO `seg`, clamped PER-BOUNDARY to
- *  `0.9·min(adjacent)` (R5 silent-edit guard: never a global clamp). Only a
- *  `crossfade` segment-transition consumes time in phase 1 (layout xfades are
- *  phase 2). */
+ *  `0.9·min(adjacent)` (R5 silent-edit guard: never a global clamp). Two
+ *  transitions consume time (D17, the rule `edlDurationMs` follows): a
+ *  `crossfade` segment-transition, and a layout switch of the `xfade:*` family
+ *  (`speakerSwitchOverlaps`). A segment carries at most one of the two
+ *  (`validateEdl`). Apply EDL's rule refuses every layout transition but a
+ *  cut, so for the edits it accepts only the crossfade counts. */
 export function boundaryOverlapSecs(seg: EdlSegment, prev: EdlSegment): number {
   return secs(boundaryOverlapMs(seg, prev))
 }
@@ -228,12 +282,25 @@ export function boundaryOverlapSecs(seg: EdlSegment, prev: EdlSegment): number {
 /** `boundaryOverlapSecs` in whole milliseconds — what the frame grid
  *  (`frameAtMs`) is laid from. */
 export function boundaryOverlapMs(seg: EdlSegment, prev: EdlSegment): number {
-  const t = seg.transition
-  if (!t || t.type !== "crossfade") return 0
-  const d = t.durationMs ?? 0
+  const d = overlapRequestedMs(seg)
   if (d <= 0) return 0
   const minAdj = Math.min(seg.outMs - seg.inMs, prev.outMs - prev.inMs)
   return Math.min(d, Math.floor(0.9 * minAdj))
+}
+
+/** The overlap the transition INTO `seg` asks for, before the clamp: a
+ *  crossfade's, else an `xfade:*` layout switch's (mirrors `@nodaro/shared`'s
+ *  `overlapMsInto`). */
+function overlapRequestedMs(seg: EdlSegment): number {
+  const t = seg.transition
+  if (t && t.type === "crossfade" && (t.durationMs ?? 0) > 0) return t.durationMs ?? 0
+  return layoutSwitchOverlaps(seg.layout) ? seg.layout!.transition!.durationMs ?? 0 : 0
+}
+
+/** Is this layout's switch a time-consuming `xfade:*` one (with a duration)? */
+export function layoutSwitchOverlaps(layout: EdlLayout | undefined): boolean {
+  const t = layout?.transition
+  return !!t && typeof t.type === "string" && speakerSwitchOverlaps(t.type) && (t.durationMs ?? 0) > 0
 }
 
 /** Resolve the source id that supplies a segment's SOUND (D19 audio doctrine). */
@@ -249,15 +316,16 @@ export function audioSourceId(edl: Edl, seg: EdlSegment, masterAudioId: string |
  *  `planChunks`; a run with no segment long enough stays whole). The cap is
  *  `VIDEO_FILTERGRAPH_MAX_SEGMENTS` for a video render's picture chunks and
  *  `AUDIO_FILTERGRAPH_MAX_SEGMENTS` for sound (an audio render, and option B's
- *  audio pass, which plans with `"audio"`). Both the render and its liveness
- *  budget call THIS, so they agree on how many chunks there are. The cap is a
- *  ceiling — an explicit smaller option still wins. */
+ *  audio pass, which plans with `"audio"`), the picture cap divided by the
+ *  slots each segment composites (`ChunkPlanOptions.pictureSlots`). Both the
+ *  render and its liveness budget call THIS, so they agree on how many chunks
+ *  there are. The cap is a ceiling — an explicit smaller option still wins. */
 export function resolveChunksForOutput(
   segs: readonly EdlSegment[],
   output: "video" | "audio",
   options: ChunkPlanOptions = {},
 ): PlanSegment[][] {
-  const cap = output === "video" ? VIDEO_FILTERGRAPH_MAX_SEGMENTS : AUDIO_FILTERGRAPH_MAX_SEGMENTS
+  const cap = output === "video" ? videoSegmentCap(options.pictureSlots) : AUDIO_FILTERGRAPH_MAX_SEGMENTS
   const threshold = Math.min(options.chunkThreshold ?? cap, cap)
   const maxPerChunk = Math.min(options.maxSegmentsPerChunk ?? cap, cap)
   return segs.length > threshold ? planChunks(segs, maxPerChunk) : [segs as PlanSegment[]]
@@ -287,9 +355,14 @@ export function chunkBudgetMs(work: {
   readonly audioSpanSec: number
   /** `canvasPixelFactor` of the canvas; scales the picture terms only. */
   readonly pixelFactor: number
+  /** Picture slots composited per segment (default 1): the per-output
+   *  picture term grows with each slot's own decode→crop→scale branch
+   *  (`PICTURE_SLOT_FACTOR`). The decode term needs no factor — it already
+   *  sums every slot SOURCE's span (`chunkDecodeSpanSec`). */
+  readonly slots?: number
 }): number {
   const pf = Math.max(1, work.pixelFactor)
-  const perOutput = work.encodesVideo ? CHUNK_RENDER_SECS_PER_OUTPUT_SEC * pf : CHUNK_RENDER_SECS_PER_AUDIO_OUTPUT_SEC
+  const perOutput = work.encodesVideo ? CHUNK_RENDER_SECS_PER_OUTPUT_SEC * pf * pictureSlotFactor(work.slots) : CHUNK_RENDER_SECS_PER_AUDIO_OUTPUT_SEC
   const workSec = perOutput * work.outputSec
     + CHUNK_RENDER_SECS_PER_VIDEO_SPAN_SEC * pf * work.videoSpanSec
     + CHUNK_RENDER_SECS_PER_AUDIO_SPAN_SEC * work.audioSpanSec
@@ -315,9 +388,25 @@ export const WIDE_SLICE_SECS_PER_OUTPUT_SEC = 6
 /** The ffmpeg kill budget `renderSlice` gives one chunk: `chunkBudgetMs` of the
  *  chunk's output and the source spans it decodes for the tracks it reads, on
  *  its canvas — floored for a slice wider than its graph cap (picture cap when
- *  it reads picture, else the sound cap; see `WIDE_SLICE_FLOOR_MS`). */
-export function chunkRenderTimeoutMs(edl: Edl, segs: readonly PlanSegment[], reads: ChunkReads, canvas: RenderCanvas): number {
-  const { videoSec, audioSec } = chunkDecodeSpanSec(edl, segs, reads)
+ *  it reads picture, else the sound cap; see `WIDE_SLICE_FLOOR_MS`).
+ *
+ *  A picture slice is charged for the slots its segments composite: the most
+ *  any of them shows (`maxPictureSlots` — one for every Apply EDL edit, so its
+ *  budget is the one-slot formula unchanged). `assumeSlots` is the dispatch-time
+ *  worst case of a renderer that assigns layouts AFTER dispatch (Speaker View):
+ *  every segment is charged that many slots, each decoding a span as long as
+ *  the one its segment names today. */
+export function chunkRenderTimeoutMs(
+  edl: Edl,
+  segs: readonly PlanSegment[],
+  reads: ChunkReads,
+  canvas: RenderCanvas,
+  assumeSlots?: number,
+): number {
+  const spans = chunkDecodeSpanSec(edl, segs, reads)
+  const slots = reads.video ? (assumeSlots !== undefined ? Math.max(1, Math.floor(assumeSlots)) : maxPictureSlots(edl, segs)) : 1
+  const videoSec = assumeSlots !== undefined ? spans.videoSec * slots : spans.videoSec
+  const audioSec = spans.audioSec
   const outputSec = chunkOutputSec(segs)
   const linear = chunkBudgetMs({
     outputSec,
@@ -325,8 +414,9 @@ export function chunkRenderTimeoutMs(edl: Edl, segs: readonly PlanSegment[], rea
     videoSpanSec: videoSec,
     audioSpanSec: audioSec,
     pixelFactor: canvasPixelFactor(canvas),
+    slots,
   })
-  const cap = reads.video ? VIDEO_FILTERGRAPH_MAX_SEGMENTS : AUDIO_FILTERGRAPH_MAX_SEGMENTS
+  const cap = reads.video ? videoSegmentCap(slots) : AUDIO_FILTERGRAPH_MAX_SEGMENTS
   if (segs.length <= cap) return linear
   return Math.max(linear, WIDE_SLICE_FLOOR_MS, Math.ceil(outputSec * WIDE_SLICE_SECS_PER_OUTPUT_SEC) * 1000)
 }
@@ -345,14 +435,16 @@ export const APPLY_EDL_PER_SOURCE_PREP_MS =
  *  at the ffprobe ceiling. An audio-only render skips them. */
 export const APPLY_EDL_CANVAS_PROBE_MS = 2 * FFPROBE_TIMEOUT_MS
 
-/** The sources `applyEdl` downloads for this output — the picture source of
- *  each segment for a video render, and each segment's sound source
+/** The sources `applyEdl` downloads for this output — the picture sources of
+ *  each segment for a video render (`pictureSourceIdsOf`: its one `video`
+ *  source for every Apply EDL edit, every slot source of a composited one),
+ *  and each segment's sound source
  *  (`audioSourceId`) always. The one read set the render and its budget share. */
 export function referencedSourceIds(edl: Edl, output: "video" | "audio"): Set<string> {
   const masterAudioId = edl.sources.find((s) => s.role === "master-audio")?.id
   const referenced = new Set<string>()
   for (const seg of edl.segments) {
-    if (output === "video" && seg.video) referenced.add(seg.video)
+    if (output === "video") for (const id of pictureSourceIdsOf(edl, seg)) referenced.add(id)
     const aId = audioSourceId(edl, seg, masterAudioId)
     if (aId) referenced.add(aId)
   }
@@ -388,8 +480,28 @@ export function applyEdlRenderBudgetMs(
   edl: Edl,
   options: ChunkPlanOptions & { readonly output?: "video" | "audio" } = {},
 ): number {
+  return edlTimelineRenderBudgetMs(edl, options)
+}
+
+/**
+ * `applyEdlRenderBudgetMs` for any renderer on the EDL timeline
+ * (`edl-timeline.ts`). Without `assumeSlots` it charges the slots the EDL's
+ * segments show (one each for Apply EDL — the same number, by construction).
+ * With it — a renderer that lays out its segments AFTER dispatch (Speaker
+ * View) — the plan's picture cap and every picture chunk are sized for that
+ * many slots per segment: the worst case the payload allows.
+ */
+export function edlTimelineRenderBudgetMs(
+  edl: Edl,
+  options: ChunkPlanOptions & { readonly output?: "video" | "audio"; readonly assumeSlots?: number } = {},
+): number {
   const output = options.output === "audio" ? "audio" : "video"
-  const chunks = resolveChunksForOutput(edl.segments, output, options)
+  const assumeSlots = options.assumeSlots
+  const planOptions: ChunkPlanOptions = {
+    ...options,
+    pictureSlots: options.pictureSlots ?? assumeSlots ?? maxPictureSlots(edl, edl.segments),
+  }
+  const chunks = resolveChunksForOutput(edl.segments, output, planOptions)
   // The same reads each slice makes: a multi-chunk video render's chunks are
   // picture-only (option B renders the sound separately); a single-pass video
   // render reads both; an audio render reads sound only.
@@ -398,8 +510,12 @@ export function applyEdlRenderBudgetMs(
     : { video: true, audio: chunks.length === 1 }
   // Dispatch-time: no source is probed yet, so every chunk is charged at the
   // liveness canvas — never less than the kill budget it will get.
-  const render = chunks.reduce((acc, chunk) => acc + chunkRenderTimeoutMs(edl, chunk, chunkReads, LIVENESS_CANVAS), 0)
-  const prep = referencedSourceIds(edl, output).size * APPLY_EDL_PER_SOURCE_PREP_MS
+  const render = chunks.reduce((acc, chunk) => acc + chunkRenderTimeoutMs(edl, chunk, chunkReads, LIVENESS_CANVAS, assumeSlots), 0)
+  // A renderer that lays its segments out after dispatch may put any picture
+  // source of the edit into a slot: its worst case fetches every one.
+  const fetched = referencedSourceIds(edl, output)
+  if (assumeSlots !== undefined && output === "video") for (const s of edl.sources) if (s.kind === "video") fetched.add(s.id)
+  const prep = fetched.size * APPLY_EDL_PER_SOURCE_PREP_MS
     + (output === "video" ? APPLY_EDL_CANVAS_PROBE_MS : 0)
   // Past one chunk — exactly the steps `applyEdl` runs, keep in lockstep:
   //  - VIDEO: probe the ffmpeg build (the picture checkpoints' resume keys hash
@@ -462,10 +578,15 @@ export function splitInsideCrossfadeRun(
   const inOverlap = boundaryOverlapSecs(seg, prev)
   const outOverlap = boundaryOverlapSecs(next, seg)
   if (inOverlap <= 0 || outOverlap <= 0) return undefined
+  // The tail opens on a hard cut: it drops the transition INTO the segment —
+  // a crossfade, or an `xfade:*` layout switch (whose layout it otherwise keeps).
   const { transition: _incoming, ...untransitioned } = seg
+  const tailBase: EdlSegment = layoutSwitchOverlaps(seg.layout)
+    ? { ...untransitioned, layout: withoutSwitch(seg.layout!) }
+    : untransitioned
   const cut = (x: number) => ({
     head: { ...seg, id: `${seg.id}~1`, outMs: seg.inMs + x, splitTailMs: durMs - x } as PlanSegment,
-    tail: { ...untransitioned, id: `${seg.id}~2`, inMs: seg.inMs + x, splitLeadMs: x } as PlanSegment,
+    tail: { ...tailBase, id: `${seg.id}~2`, inMs: seg.inMs + x, splitLeadMs: x } as PlanSegment,
   })
   // The shortest head that keeps the crossfade in (0.9·x ≥ overlap, give or
   // take the clamp's integer floor); a longer head only shortens the tail.
@@ -476,6 +597,11 @@ export function splitInsideCrossfadeRun(
     return boundaryOverlapSecs(next, tail) === outOverlap ? { head, tail } : undefined
   }
   return undefined
+}
+
+const withoutSwitch = (layout: EdlLayout): EdlLayout => {
+  const { transition: _switch, ...rest } = layout
+  return rest
 }
 
 /** Split the timeline into contiguous slices of at most `maxPerChunk` segments,

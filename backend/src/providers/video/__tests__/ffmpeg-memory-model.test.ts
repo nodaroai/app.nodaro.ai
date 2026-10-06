@@ -193,7 +193,9 @@ describe("buildSliceCommand carries what the prediction is made from", () => {
 
 describe("census: every Apply EDL slice launch passes its prediction to the launcher", () => {
   const HERE = dirname(fileURLToPath(import.meta.url))
-  const source = readFileSync(join(HERE, "..", "apply-edl.ts"), "utf8")
+  // The slice runner is the EDL timeline's since the Speaker View extraction
+  // (Apply EDL runs on it), so every renderer on it inherits the reservation.
+  const source = readFileSync(join(HERE, "..", "edl-timeline.ts"), "utf8")
 
   it("textually: every ffmpeg run of a slice argv passes peakMemoryMiB", () => {
     // A slice is launched with `sliceArgv(...)` as runFfmpeg's argv; the call's

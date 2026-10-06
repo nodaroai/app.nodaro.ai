@@ -8,7 +8,9 @@
  * Everything here that `apply-edl.ts` used to export is re-exported from it,
  * so every existing import keeps working.
  */
-import type { Edl, EdlSegment, EdlSource } from "@nodaro/shared"
+import type { Edl, EdlSegment, EdlSource, ResolveEdlSlotsOptions } from "@nodaro/shared"
+import { resolveEdlSegmentSlots, resolveXfadeName, speakerSwitchOverlaps } from "@nodaro/shared"
+import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
 import { COMBINE_DELIVERY_CRF } from "./ffmpeg-utils.js"
 import {
   audioSourceId,
@@ -21,6 +23,8 @@ import {
   type PlanSegment,
 } from "./apply-edl-budget.js"
 import { frameAtMs, frameRateOf } from "./apply-edl-frame-grid.js"
+import { pictureFragmentError, type EdlPictureBuilder, type EdlPictureContext, type EdlPictureSlot } from "./edl-picture.js"
+import { fullFramePicture } from "./edl-picture-fullframe.js"
 
 /** A render's sound, by quality. A FINAL carries the delivery stream. A PROXY
  *  (review) render carries lighter MONO sound (A1c, TA7 decided 2026-10-04):
@@ -183,6 +187,52 @@ export interface SliceOptions {
    *  chunks of a chunked audio render, which join sample-exactly and are
    *  encoded to AAC ONCE (no per-seam priming). */
   readonly audioCodec?: "aac" | "pcm"
+  /** What each segment's frame shows (the timeline's picture seam,
+   *  `edl-picture.ts`). Default: the full-frame picture — Apply EDL's. */
+  readonly picture?: EdlPictureBuilder
+  /** D20's per-(source, speaker) framing (a Speaker View setting), handed to
+   *  `resolveEdlSegmentSlots` so every slot reaches the picture builder with
+   *  its region already resolved. */
+  readonly speakerRegions?: ResolveEdlSlotsOptions["speakerRegions"]
+}
+
+/** The ffmpeg xfade an `xfade:<id>` layout switch INTO `seg` names, or null
+ *  when the segment carries no time-consuming switch. A switch id the catalog
+ *  does not know is refused as deterministic — the same EDL fails the same
+ *  way on every attempt. */
+export function xfadeSwitchNameOf(seg: EdlSegment): string | null {
+  const sw = seg.layout?.transition?.type
+  if (typeof sw !== "string" || !speakerSwitchOverlaps(sw)) return null
+  const id = sw.slice(sw.indexOf(":") + 1)
+  let name: string | null = null
+  try {
+    name = resolveXfadeName(id)
+  } catch {
+    name = null
+  }
+  if (!name) {
+    throw new DeterministicJobError(`segment "${seg.id}": switch "${sw}" names no crossfade this renderer knows`)
+  }
+  return name
+}
+
+/** The ffmpeg xfade transition at a boundary INTO `seg`: `fade` for a
+ *  `crossfade` segment transition (Apply EDL's only one), the combine-videos
+ *  transition an `xfade:<id>` layout switch names (`xfadeSwitchNameOf`). */
+export function xfadeTransitionInto(seg: EdlSegment): string {
+  const t = seg.transition
+  if (t && t.type === "crossfade" && (t.durationMs ?? 0) > 0) return "fade"
+  return xfadeSwitchNameOf(seg) ?? "fade"
+}
+
+/** Pre-flight (run before any source is downloaded): every `xfade:<id>`
+ *  switch in the EDL names a transition this renderer knows. The slice only
+ *  resolves a switch at the chunk that draws it, and not at all when the
+ *  blend rounds under one frame (the join becomes a cut) or the render is
+ *  sound-only — so an unknown id would otherwise surface hours in, or never.
+ *  Apply EDL's validated EDLs carry no layout switch: a no-op for it. */
+export function assertEdlSwitchesResolve(edl: Edl): void {
+  for (const seg of edl.segments) xfadeSwitchNameOf(seg)
 }
 
 /** One slice's ffmpeg command, built WITHOUT touching the filesystem so a
@@ -220,6 +270,7 @@ export interface SliceCommand {
  */
 export function buildSliceCommand(edl: Edl, segs: readonly PlanSegment[], opts: SliceOptions): SliceCommand {
   const { output, target, fps, chunkStartMs, masterAudioId, audioPresent, audioSampleRate, omitAudio, audioCodec = "aac" } = opts
+  const picture = opts.picture ?? fullFramePicture
   const rate = frameRateOf(fps)
   const wantVideo = output === "video"
   const emitAudio = !omitAudio // audio-only renders never pass omitAudio
@@ -344,13 +395,19 @@ export function buildSliceCommand(edl: Edl, segs: readonly PlanSegment[], opts: 
     if (!started && xfPlan.length > 0) xfPlan[0] = { frames: 1, join: "first", xfFrames: 0, offsetFrames: 0 }
   }
 
-  const scalePad =
-    `scale=${target.width}:${target.height}:force_original_aspect_ratio=decrease,` +
-    `pad=${target.width}:${target.height}:(ow-iw)/2:(oh-ih)/2:color=black`
+  // Each segment's picture slots (D20): its `layout.slots`, else the one
+  // implicit slot of `seg.video` — which is every segment Apply EDL accepts.
+  const slotsOf = (seg: PlanSegment) => {
+    const slots = resolveEdlSegmentSlots(edl, seg, opts.speakerRegions ? { speakerRegions: opts.speakerRegions } : undefined)
+    if (slots.length === 0) throw new DeterministicJobError(`segment "${seg.id}" has no picture source for a video render`)
+    return slots
+  }
 
-  // Where each segment reads, on its source's own clock (master − offsetMs).
-  const videoReadOf = (seg: PlanSegment) => {
-    const vs = edl.sources.find((s) => s.id === seg.video)!
+  // Where a segment reads one picture source, on that source's own clock
+  // (master − offsetMs).
+  const pictureReadOf = (seg: PlanSegment, sourceId: string) => {
+    const vs = edl.sources.find((s) => s.id === sourceId)
+    if (!vs) throw new Error(`segment "${seg.id}" shows unknown source "${sourceId}"`)
     // max(0): unreachable in a render — assertSegmentsWithinSources refuses a
     // pre-origin read first; kept so a direct builder call never asks for
     // negative source time. A split tail reads from its whole segment's start
@@ -391,7 +448,12 @@ export function buildSliceCommand(edl: Edl, segs: readonly PlanSegment[], opts: 
   const noteRead = (id: string, t: number) => minReadOf.set(id, Math.min(minReadOf.get(id) ?? Infinity, t))
   segs.forEach((seg, i) => {
     const dropped = useGrid ? gridFrames[i] <= 0 : chunkHasXfade && xfPlan[i]!.join === "none"
-    if (wantVideo && !dropped) noteRead(videoReadOf(seg).id, videoReadOf(seg).start)
+    if (wantVideo && !dropped) {
+      for (const slot of slotsOf(seg)) {
+        const v = pictureReadOf(seg, slot.source)
+        noteRead(v.id, v.start)
+      }
+    }
     if (emitAudio) {
       const a = audioReadOf(seg)
       if (a) noteRead(a.id, a.start)
@@ -403,6 +465,66 @@ export function buildSliceCommand(edl: Edl, segs: readonly PlanSegment[], opts: 
   const seekOf = (id: string): number => {
     const at = (minReadOf.get(id) ?? 0) - INPUT_SEEK_MARGIN_SEC
     return exactAudio.has(id) ? Math.max(0, Math.floor(at)) : Math.max(0, Math.floor(at * 1000) / 1000)
+  }
+
+  // One segment's picture: each slot source held past its end (`tpad`
+  // clone) and trimmed to the segment's window — a few frames past it, so
+  // `fps` yields at least `nFrames` — then the picture builder's fragment,
+  // then the conform that puts EXACTLY `nFrames` frames on the shared output
+  // grid (no per-segment `fps` accumulation; Track 0.14). Every picture read
+  // starts from the SOURCE held past its end: a window that reaches beyond the
+  // camera's last frame — inside SOURCE_END_TOLERANCE_SEC, which the window
+  // check accepts — reads a frozen last frame instead of coming up short. A
+  // short segment would otherwise pull every later cut ahead of the single
+  // continuous audio track (option B) for the rest of the render. (`:V` — a
+  // real video stream, never embedded cover art; the same stream
+  // `probeStreamEnds` measured.) A one-slot `chain` (the full-frame picture)
+  // is inlined into its read: the exact graph Apply EDL has always rendered.
+  const vLabelOf = (seg: PlanSegment, i: number, nFrames: number, vLabel: string): void => {
+    const lead = intervals[i].leadFrames
+    const conform = `fps=${fps},trim=start_frame=${lead}:end_frame=${lead + nFrames},setpts=PTS-STARTPTS,format=yuv420p,setsar=1`
+    const reads = slotsOf(seg).map((slot) => {
+      const v = pictureReadOf(seg, slot.source)
+      const seek = seekOf(v.id)
+      const readEnd = v.end - seek + APPLY_EDL_GRID_READ_GUARD_FRAMES / fps
+      return {
+        slot,
+        read: `[${addInput(v.id)}:V]tpad=stop_mode=clone:stop=-1,trim=start=${(v.start - seek).toFixed(6)}:end=${readEnd.toFixed(6)},setpts=PTS-STARTPTS`,
+      }
+    })
+    const scope = `p${i}`
+    const ctx: EdlPictureContext = {
+      segment: seg,
+      index: i,
+      slots: reads.map(({ slot }, j): EdlPictureSlot => ({ ...slot, label: `[${scope}s${j}]` })),
+      canvas: { width: target.width, height: target.height },
+      fps,
+      quality: opts.quality,
+      durationSec: secs(seg.outMs - seg.inMs),
+      leadSec: secs(seg.splitLeadMs ?? 0),
+      frames: nFrames,
+      startFrame: intervals[i].startF,
+      output: `[${scope}o]`,
+      scope: `${scope}_`,
+    }
+    // The builder is pure (the seam's contract): whatever it refuses, or
+    // draws wrong, it refuses or draws the same way on every attempt — a
+    // retry would only re-download every source to fail at this slice again.
+    let fragment: ReturnType<EdlPictureBuilder>
+    try {
+      fragment = picture(ctx)
+    } catch (e) {
+      throw new DeterministicJobError(`picture for segment "${seg.id}": ${e instanceof Error ? e.message : String(e)}`, { cause: e })
+    }
+    const problem = pictureFragmentError(fragment, ctx)
+    if (problem) throw new DeterministicJobError(`picture for segment "${seg.id}": ${problem}`)
+    if ("chain" in fragment) {
+      filters.push(`${reads[0]!.read},${fragment.chain},${conform}${vLabel}`)
+      return
+    }
+    reads.forEach(({ read }, j) => filters.push(`${read}[${scope}s${j}]`))
+    filters.push(fragment.graph)
+    filters.push(`${ctx.output}${conform}${vLabel}`)
   }
 
   segs.forEach((seg, i) => {
@@ -417,45 +539,19 @@ export function buildSliceCommand(edl: Edl, segs: readonly PlanSegment[], opts: 
     // single continuous audio track (option B) for the rest of the render.
     let vLabel: string | undefined
     if (wantVideo) {
-      const v = videoReadOf(seg)
-      const seek = seekOf(v.id)
-      const start = v.start - seek
-      const end = v.end - seek
-      const held = `[${addInput(v.id)}:V]tpad=stop_mode=clone:stop=-1,`
-      if (useGrid) {
-        const nFrames = gridFrames[i]
-        // nFrames === 0 is a sub-half-frame cut: it contributes NO video frame
-        // (skipped from the chain), while its audio atrim below still plays and
-        // the next segment's N absorbs the rounding — the total stays on grid.
-        if (nFrames > 0) {
-          vLabel = `[v${i}]`
-          // Read a few frames past the window so `fps` yields at least N_i
-          // frames, then keep EXACTLY N_i — every kept frame sits on the shared
-          // output grid, with no per-segment `fps` accumulation. The held source
-          // always has those frames, even past its real end.
-          const readEnd = end + APPLY_EDL_GRID_READ_GUARD_FRAMES / fps
-          const lead = intervals[i].leadFrames
-          filters.push(
-            `${held}trim=start=${start.toFixed(6)}:end=${readEnd.toFixed(6)},setpts=PTS-STARTPTS,` +
-              `${scalePad},fps=${fps},trim=start_frame=${lead}:end_frame=${lead + nFrames},setpts=PTS-STARTPTS,` +
-              `format=yuv420p,setsar=1${vLabel}`,
-          )
-        }
-      } else {
-        // xfade chunk (Track 0.16): exactly the segment's grid frames — read
-        // past the window from the held source, then keep that many, like the
-        // grid path.
-        const plan = xfPlan[i]!
-        if (plan.join !== "none") {
-          vLabel = `[v${i}]`
-          const readEnd = end + APPLY_EDL_GRID_READ_GUARD_FRAMES / fps
-          const lead = intervals[i].leadFrames
-          filters.push(
-            `${held}trim=start=${start.toFixed(6)}:end=${readEnd.toFixed(6)},setpts=PTS-STARTPTS,` +
-              `${scalePad},fps=${fps},trim=start_frame=${lead}:end_frame=${lead + plan.frames},setpts=PTS-STARTPTS,` +
-              `format=yuv420p,setsar=1${vLabel}`,
-          )
-        }
+      // nFrames === 0 (grid) / join "none" (xfade) is a segment that adds no
+      // picture: a sub-half-frame cut, or one wholly inside the crossfade into
+      // it. It is skipped from the chain, while its audio atrim below still
+      // plays and the next segment's frames absorb the rounding — the total
+      // stays on grid. An xfade chunk keeps exactly the segment's grid frames
+      // (Track 0.16), read past the window like the grid path.
+      // Every picture source joins the input list in segment order, even one
+      // whose segment adds no frame (it has always been an input).
+      for (const slot of slotsOf(seg)) addInput(pictureReadOf(seg, slot.source).id)
+      const nFrames = useGrid ? gridFrames[i] : xfPlan[i]!.join === "none" ? 0 : xfPlan[i]!.frames
+      if (nFrames > 0) {
+        vLabel = `[v${i}]`
+        vLabelOf(seg, i, nFrames, vLabel)
       }
     }
 
@@ -553,7 +649,7 @@ export function buildSliceCommand(edl: Edl, segs: readonly PlanSegment[], opts: 
       }
       const out = `[vAcc${i}]`
       if (plan.join === "xfade") {
-        chainParts.push(`${vAcc}${label}xfade=transition=fade:duration=${(plan.xfFrames / fps).toFixed(6)}:offset=${(plan.offsetFrames / fps).toFixed(6)}${out}`)
+        chainParts.push(`${vAcc}${label}xfade=transition=${xfadeTransitionInto(segs[i]!)}:duration=${(plan.xfFrames / fps).toFixed(6)}:offset=${(plan.offsetFrames / fps).toFixed(6)}${out}`)
       } else {
         chainParts.push(`${vAcc}${label}concat=n=2:v=1:a=0,setpts=N/FRAME_RATE/TB,fps=${fps}${out}`)
       }
@@ -611,6 +707,10 @@ export function buildSliceCommand(edl: Edl, segs: readonly PlanSegment[], opts: 
   return {
     inputIds, needsSilence, filterGraph: fullFilter, outputArgs, inputSeekSec,
     timeoutMs: chunkRenderTimeoutMs(edl, segs, { video: wantVideo, audio: emitAudio }, { width: target.width, height: target.height, fps }),
-    memoryBasis: wantVideo ? { width: target.width, height: target.height, segments: segs.length } : undefined,
+    // Every slot is its own decoded branch of the graph (#1860's model counts
+    // branches): one per segment for Apply EDL.
+    memoryBasis: wantVideo
+      ? { width: target.width, height: target.height, segments: segs.reduce((n, seg) => n + Math.max(1, slotsOf(seg).length), 0) }
+      : undefined,
   }
 }

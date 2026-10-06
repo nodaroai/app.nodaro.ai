@@ -25,7 +25,11 @@ describe("video-worker pre-task heartbeat wiring", () => {
   const WRAP = "const handler = withPreTaskHeartbeat(found, {"
   // The wrap passes the handler's budget and the job's earlier ffmpeg-slot wait
   // (Track 0.13 — a re-pick adds to it).
-  const WRAP_ARGS = /const handler = withPreTaskHeartbeat\(found, \{\s*maxMs: found\.livenessBudgetMs\?\.\(job\),\s*slotWaitBaseMs: [^\n]*pickedRows\[0\][^\n]*slot_wait_ms/
+  // The cap is the handler's own budget, else the registry's for the job
+  // (`declaredJobBudgetMs`): a PLUGIN handler cannot carry `livenessBudgetMs`
+  // (core-only), so without the fallback a long plugin render (Speaker View)
+  // stopped beating at the 90-minute default and was swept mid-render.
+  const WRAP_ARGS = /const handler = withPreTaskHeartbeat\(found, \{\s*maxMs: found\.livenessBudgetMs\?\.\(job\) \?\? declaredJobBudgetMs\(job\.name, job\.data\),\s*slotWaitBaseMs: [^\n]*pickedRows\[0\][^\n]*slot_wait_ms/
 
   it("wraps the looked-up handler at the dispatch site, before it is invoked", () => {
     // The lookup binds `found`; the invoked `handler` is the wrapped one.
@@ -54,6 +58,11 @@ describe("video-worker pre-task heartbeat wiring", () => {
   })
 
   it("honours a handler's own liveness budget at the dispatch site (apply-edl declares its ffmpeg kill budget)", () => {
+    expect(code).toMatch(WRAP_ARGS)
+  })
+
+  it("falls back to the job's registered budget when the handler declares none (a plugin handler — Speaker View)", () => {
+    expect(code).toMatch(/import \{[^}]*\bdeclaredJobBudgetMs\b[^}]*\} from "\.\.\/lib\/job-budget\.js"/)
     expect(code).toMatch(WRAP_ARGS)
   })
 })
