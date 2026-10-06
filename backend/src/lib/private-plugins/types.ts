@@ -779,10 +779,65 @@ export interface PluginAudioFxOptions {
   readonly eqHigh?: number
 }
 
+/** Mirrors `ProxySpan` (`services/media-proxy-span-map.ts`): ms on the source's own clock. */
+export interface PluginProxySpan {
+  readonly startMs: number
+  readonly endMs: number
+}
+
+/** Mirrors `ProxySpanMapRow` (`services/media-proxy-span-map.ts`). Frame
+ * `firstFrame + k` of the proxy shows the source at
+ * `sourceStartMs + k × 1000 / fps`; proxy time is half-open
+ * `[proxyStartMs, proxyEndMs)`. */
+export interface PluginProxySpanMapRow {
+  readonly proxyStartMs: number
+  readonly proxyEndMs: number
+  readonly sourceStartMs: number
+  readonly firstFrame: number
+  readonly frameCount: number
+}
+
+/** Mirrors `MediaProxyOptions` (`services/media-proxy.ts`), video side. */
+export interface PluginVideoProxyOptions {
+  readonly fps?: number
+  /** Even px, at most 2160; a shorter source is never upscaled. Default 360. */
+  readonly height?: number
+  /** Omitted = the whole source. Padding (the 2 s detection margin) is the caller's. */
+  readonly spans?: readonly PluginProxySpan[]
+  readonly timeoutMs?: number
+}
+
+/** Mirrors `VideoProxyResult` (`services/media-proxy.ts`). */
+export interface PluginVideoProxy {
+  readonly url: string
+  readonly key: string
+  readonly kind: "video"
+  readonly cached: boolean
+  readonly fps: number
+  /** The proxy's only clock: built from the frames actually written. */
+  readonly spanMap: readonly PluginProxySpanMapRow[]
+  /** Display-oriented, square-pixel frame size; box fractions refer to it. */
+  readonly frame: { readonly w: number; readonly h: number }
+  readonly frameCount: number
+}
+
 export interface PluginMediaToolkit {
   /** Authorize the source first. Public-only bounded video download and local
    * still extraction; no jobs, storage credentials or automatic media spend. */
   readPublicVideoFrame?(input: { videoUrl: string; timeSec: number }): Promise<Buffer>
+  /**
+   * Mirrors `ensureMediaProxy(url, "video", opts)` (`services/media-proxy.ts`)
+   * — the cached detection/review proxy (P3.2), span-scoped and height-keyed,
+   * with its span map. Additive-optional: feature-detect and refuse before any
+   * reserve when absent.
+   */
+  ensureMediaProxy?(sourceUrl: string, kind: "video", opts?: PluginVideoProxyOptions): Promise<PluginVideoProxy>
+  /**
+   * Mirrors `proxyFrameToSourceMs` (`services/media-proxy-span-map.ts`): a proxy
+   * frame index → source-clock ms, undefined when no row holds it (drop and
+   * count it). The only conversion a detection may go through.
+   */
+  proxyFrameToSourceMs?(spanMap: readonly PluginProxySpanMapRow[], fps: number, frame: number): number | undefined
   /** Mirrors `extractAudio` (`providers/video/extract-audio.ts`). */
   extractAudio(options: { readonly videoUrl: string }): Promise<{ readonly audioPath: string }>
   /** Mirrors `mixAudio` (`providers/video/mix-audio.ts`). */

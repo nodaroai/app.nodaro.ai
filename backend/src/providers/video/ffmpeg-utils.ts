@@ -1263,6 +1263,57 @@ function scanPacketEnds(filePath: string, streamIndex: number): Promise<{ maxPts
   })
 }
 
+/** Presentation times (ms) of a LOCAL file's first video track's frames,
+ *  sorted (packets come in decode order; B-frames reorder them). One csv line
+ *  per frame, so the packet list is STREAMED: a long proxy at a high fps is
+ *  megabytes of csv, past `runFfprobe`'s buffer (a 2 h proxy at 60 fps is
+ *  ~430k lines, over 5 MiB). Packets with no pts are skipped. */
+export function probeVideoFramePtsMs(filePath: string): Promise<number[]> {
+  return new Promise((resolve, reject) => {
+    const proc = spawn("ffprobe", [
+      "-v", "error",
+      "-select_streams", "v:0",
+      "-show_entries", "packet=pts_time",
+      "-of", "csv=p=0",
+      filePath,
+    ], { stdio: ["ignore", "pipe", "pipe"] })
+
+    let timedOut = false
+    const watchdog = setTimeout(() => {
+      timedOut = true
+      proc.kill("SIGKILL")
+    }, DEFAULT_FFMPEG_TIMEOUT_MS)
+
+    const ptsMs: number[] = []
+    let lineBuf = ""
+    const take = (line: string) => {
+      const sec = Number.parseFloat(line)
+      if (Number.isFinite(sec)) ptsMs.push(sec * 1000)
+    }
+    proc.stdout.on("data", (chunk: Buffer) => {
+      lineBuf += chunk.toString()
+      const lines = lineBuf.split("\n")
+      lineBuf = lines.pop() ?? ""
+      for (const line of lines) take(line)
+    })
+    let stderrTail = ""
+    proc.stderr.on("data", (chunk: Buffer) => {
+      stderrTail = (stderrTail + chunk.toString()).slice(-2048)
+    })
+    proc.on("error", (err) => {
+      clearTimeout(watchdog)
+      reject(new Error(`ffprobe failed to spawn: ${err.message}`))
+    })
+    proc.on("close", (code) => {
+      clearTimeout(watchdog)
+      if (lineBuf) take(lineBuf)
+      if (timedOut) reject(new Error(`probeVideoFramePtsMs: ffprobe timed out after ${DEFAULT_FFMPEG_TIMEOUT_MS}ms`))
+      else if (code !== 0) reject(new Error(`probeVideoFramePtsMs: ffprobe exit ${code}: ${stderrTail.trim() || "no output"}`))
+      else resolve(ptsMs.sort((a, b) => a - b))
+    })
+  })
+}
+
 export interface MediaStreams {
   /** At least one REAL video stream — embedded cover art (attached_pic) does not count. */
   readonly hasVideo: boolean

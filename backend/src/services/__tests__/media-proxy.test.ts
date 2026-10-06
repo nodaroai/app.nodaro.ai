@@ -9,38 +9,68 @@ vi.mock("../../providers/video/ffmpeg-utils.js", () => ({
   hasAudioStream: vi.fn().mockResolvedValue(true),
   runFfmpeg: vi.fn().mockResolvedValue(""),
 }))
+vi.mock("../video-proxy-encode.js", () => ({
+  encodeVideoProxy: vi.fn(),
+}))
 vi.mock("../../lib/storage.js", () => ({
   getR2ObjectSize: vi.fn().mockResolvedValue(0),
+  readR2ObjectBuffer: vi.fn().mockResolvedValue(null),
+  uploadBufferToR2: vi.fn((_b: Buffer, key: string) => Promise.resolve(`https://cdn.test/${key}`)),
   r2KeyFromOurUrl: vi.fn().mockReturnValue(null), // treat every source as an external URL
   r2Url: vi.fn((key: string) => `https://cdn.test/${key}`),
   uploadLocalFileToR2Key: vi.fn((_f: string, key: string) => Promise.resolve(`https://cdn.test/${key}`)),
 }))
 
 import { createWorkDir, cleanupWorkDir, downloadFile, hasAudioStream, runFfmpeg } from "../../providers/video/ffmpeg-utils.js"
-import { getR2ObjectSize, uploadLocalFileToR2Key } from "../../lib/storage.js"
-import { ensureMediaProxy, MediaHasNoAudioError, mediaProxyKey } from "../media-proxy.js"
+import { getR2ObjectSize, readR2ObjectBuffer, uploadBufferToR2, uploadLocalFileToR2Key } from "../../lib/storage.js"
+import { encodeVideoProxy } from "../video-proxy-encode.js"
+import { ensureMediaProxy, MediaHasNoAudioError, mediaProxyKey, mediaProxyManifestKey } from "../media-proxy.js"
+import { InvalidProxySpansError } from "../media-proxy-span-map.js"
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
 
 const SRC = "https://example.com/episode.mp4"
+
+const SPAN_MAP = [
+  { proxyStartMs: 0, proxyEndMs: 3500, sourceStartMs: 0, firstFrame: 0, frameCount: 7 },
+  { proxyStartMs: 3500, proxyEndMs: 8500, sourceStartMs: 10_300, firstFrame: 7, frameCount: 10 },
+]
+const ENCODED = { outPath: "/tmp/media-proxy-work/proxy.mp4", spanMap: SPAN_MAP, frame: { w: 960, h: 540 }, frameCount: 17 }
+const SPANS = [{ startMs: 10_300, endMs: 14_900 }, { startMs: 0, endMs: 3300 }]
+const DETECT = { fps: 2, height: 540, spans: SPANS }
 
 beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(createWorkDir).mockResolvedValue("/tmp/media-proxy-work")
   vi.mocked(getR2ObjectSize).mockResolvedValue(0)
   vi.mocked(hasAudioStream).mockResolvedValue(true)
+  vi.mocked(readR2ObjectBuffer).mockResolvedValue(null)
+  vi.mocked(encodeVideoProxy).mockResolvedValue(ENCODED)
 })
 
 describe("mediaProxyKey", () => {
   it("is stable for the same source/kind/fps and under the proxies/ prefix", () => {
     expect(mediaProxyKey(SRC, "audio")).toBe(mediaProxyKey(SRC, "audio"))
     expect(mediaProxyKey(SRC, "audio")).toMatch(/^proxies\/[0-9a-f]{40}\/audio-v2\.m4a$/)
-    expect(mediaProxyKey(SRC, "video", 15)).toMatch(/^proxies\/[0-9a-f]{40}\/video@15fps\.mp4$/)
+    expect(mediaProxyKey(SRC, "video", { fps: 15 })).toMatch(/^proxies\/[0-9a-f]{40}\/video-v2@15fps-360p\.mp4$/)
+    expect(mediaProxyKey(SRC, "video", DETECT)).toMatch(/^proxies\/[0-9a-f]{40}\/video-v2@2fps-540p-spans-[0-9a-f]{16}\.mp4$/)
   })
 
-  it("varies by kind, by fps, and by source", () => {
+  it("varies by kind, by fps, by height, by spans and by source", () => {
     expect(mediaProxyKey(SRC, "audio")).not.toBe(mediaProxyKey(SRC, "video"))
-    expect(mediaProxyKey(SRC, "video", 2)).not.toBe(mediaProxyKey(SRC, "video", 15))
+    expect(mediaProxyKey(SRC, "video", { fps: 2 })).not.toBe(mediaProxyKey(SRC, "video", { fps: 15 }))
+    expect(mediaProxyKey(SRC, "video", { fps: 2, height: 540 })).not.toBe(mediaProxyKey(SRC, "video", { fps: 2, height: 360 }))
+    expect(mediaProxyKey(SRC, "video", DETECT)).not.toBe(mediaProxyKey(SRC, "video", { fps: 2, height: 540 }))
+    expect(mediaProxyKey(SRC, "video", DETECT)).not.toBe(mediaProxyKey(SRC, "video", { ...DETECT, spans: [{ startMs: 0, endMs: 3300 }] }))
     expect(mediaProxyKey(SRC, "audio")).not.toBe(mediaProxyKey("https://other/x.mp4", "audio"))
+  })
+
+  it("is the same for equivalent spans: order, overlaps and sub-ms noise do not split the cache", () => {
+    const same = [{ startMs: 0, endMs: 2000 }, { startMs: 1500.2, endMs: 3300 }, { startMs: 10_300, endMs: 14_900 }]
+    expect(mediaProxyKey(SRC, "video", { ...DETECT, spans: same })).toBe(mediaProxyKey(SRC, "video", DETECT))
+  })
+
+  it("keeps the span map beside the proxy", () => {
+    expect(mediaProxyManifestKey(mediaProxyKey(SRC, "video", DETECT))).toBe(mediaProxyKey(SRC, "video", DETECT).replace(/\.mp4$/, ".json"))
   })
 })
 
@@ -76,13 +106,9 @@ describe("ensureMediaProxy — cache miss", () => {
     expect(cleanupWorkDir).toHaveBeenCalledWith("/tmp/media-proxy-work")
   })
 
-  it("encodes a 360p low-fps video proxy with no audio", async () => {
+  it("a video proxy defaults to 360 px tall over the whole source", async () => {
     await ensureMediaProxy(SRC, "video", { fps: 2 })
-    const a = vi.mocked(runFfmpeg).mock.calls[0][0].join(" ")
-    expect(a).toContain("-an")
-    expect(a).toContain("scale=-2:360")
-    expect(a).toContain("-r 2")
-    expect(a).toContain("libx264")
+    expect(encodeVideoProxy).toHaveBeenCalledWith("/tmp/media-proxy-work/source", "/tmp/media-proxy-work", expect.objectContaining({ fps: 2, height: 360, spans: undefined }))
   })
 
   it("an audio proxy of a source with no audio track is a typed error, checked on the downloaded file before any encode", async () => {
@@ -99,6 +125,71 @@ describe("ensureMediaProxy — cache miss", () => {
   it("a video proxy never asks for an audio track", async () => {
     await ensureMediaProxy(SRC, "video", { fps: 2 })
     expect(hasAudioStream).not.toHaveBeenCalled()
+  })
+})
+
+describe("ensureMediaProxy — video with spans (the detection proxy)", () => {
+  it("encodes only the normalized spans, at the asked fps and height, and returns the span map from the cut", async () => {
+    const r = await ensureMediaProxy(SRC, "video", DETECT)
+    expect(r.cached).toBe(false)
+    expect(encodeVideoProxy).toHaveBeenCalledOnce()
+    const [, , opts] = vi.mocked(encodeVideoProxy).mock.calls[0]
+    expect(opts).toMatchObject({ fps: 2, height: 540, spans: [{ startMs: 0, endMs: 3300 }, { startMs: 10_300, endMs: 14_900 }] })
+    expect(r.spanMap).toEqual(SPAN_MAP)
+    expect(r.frame).toEqual({ w: 960, h: 540 })
+    expect(r.frameCount).toBe(17)
+    expect(r.fps).toBe(2)
+    expect(r.url).toBe(`https://cdn.test/${mediaProxyKey(SRC, "video", DETECT)}`)
+  })
+
+  it("writes the proxy first and its span map second, so a half-written pair reads as a miss", async () => {
+    await ensureMediaProxy(SRC, "video", DETECT)
+    const key = mediaProxyKey(SRC, "video", DETECT)
+    expect(vi.mocked(uploadLocalFileToR2Key).mock.calls[0][1]).toBe(key)
+    const [body, manifestKey] = vi.mocked(uploadBufferToR2).mock.calls[0]
+    expect(manifestKey).toBe(mediaProxyManifestKey(key))
+    expect(vi.mocked(uploadLocalFileToR2Key).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(uploadBufferToR2).mock.invocationCallOrder[0])
+    expect(JSON.parse(body.toString("utf8"))).toMatchObject({ fps: 2, height: 540, spanMap: SPAN_MAP, frame: { w: 960, h: 540 }, frameCount: 17 })
+  })
+
+  it("a cache hit returns the stored span map without downloading or encoding", async () => {
+    vi.mocked(getR2ObjectSize).mockResolvedValue(4242)
+    vi.mocked(readR2ObjectBuffer).mockResolvedValue(Buffer.from(JSON.stringify({ version: 1, fps: 2, height: 540, spanMap: SPAN_MAP, frame: { w: 960, h: 540 }, frameCount: 17 })))
+    const r = await ensureMediaProxy(SRC, "video", DETECT)
+    expect(r.cached).toBe(true)
+    expect(r.spanMap).toEqual(SPAN_MAP)
+    expect(vi.mocked(readR2ObjectBuffer).mock.calls[0][0]).toBe(mediaProxyManifestKey(mediaProxyKey(SRC, "video", DETECT)))
+    expect(downloadFile).not.toHaveBeenCalled()
+    expect(encodeVideoProxy).not.toHaveBeenCalled()
+  })
+
+  it("a proxy with no span map beside it (or an unreadable one) is re-encoded, never served without its clock", async () => {
+    vi.mocked(getR2ObjectSize).mockResolvedValue(4242)
+    for (const manifest of [null, Buffer.from("{not json"), Buffer.from(JSON.stringify({ version: 1, spanMap: "nope" }))]) {
+      vi.mocked(encodeVideoProxy).mockClear()
+      vi.mocked(readR2ObjectBuffer).mockResolvedValueOnce(manifest)
+      const r = await ensureMediaProxy(SRC, "video", DETECT)
+      expect(r.cached).toBe(false)
+      expect(encodeVideoProxy).toHaveBeenCalledOnce()
+    }
+  })
+
+  it("refuses bad spans before any download", async () => {
+    const err = await ensureMediaProxy(SRC, "video", { fps: 2, height: 540, spans: [] }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(InvalidProxySpansError)
+    expect(downloadFile).not.toHaveBeenCalled()
+  })
+
+  it("refuses a height or fps it cannot encode before any download", async () => {
+    for (const bad of [{ fps: 0, height: 540 }, { fps: Number.NaN, height: 540 }, { fps: 2, height: 541 }, { fps: 2, height: 0 }, { fps: 2, height: 99_999 }]) {
+      await expect(ensureMediaProxy(SRC, "video", bad)).rejects.toBeInstanceOf(DeterministicJobError)
+    }
+    expect(downloadFile).not.toHaveBeenCalled()
+  })
+
+  it("spans and height are video-only: an audio proxy given spans is a programming error", async () => {
+    await expect(ensureMediaProxy(SRC, "audio", { spans: SPANS })).rejects.toThrow(/video/)
+    expect(downloadFile).not.toHaveBeenCalled()
   })
 
   it("cleans up the work dir even when the encode fails", async () => {

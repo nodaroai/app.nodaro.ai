@@ -5,6 +5,8 @@ import { retainImage, readRetainedImage, copyRetainedImage } from "../retained-i
 import { retainJobImage, readRetainedJobImages } from "../retained-job-images.js"
 import { recordRetainedImageCopy, readRetainedImageCopies } from "../retained-image-copies.js"
 import { readPublicVideoFrame } from "../public-video-frame.js"
+import { ensureMediaProxy } from "../../services/media-proxy.js"
+import { proxyFrameToSourceMs } from "../../services/media-proxy-span-map.js"
 import { isStorageConfigured } from "../storage.js"
 import { createSceneRenderingToolkit } from "./scene3d-render-toolkit.js"
 import { completeStructuredMetered } from "./llm-metered.js"
@@ -1357,6 +1359,8 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
     },
     media: {
       readPublicVideoFrame,
+      ensureMediaProxy,
+      proxyFrameToSourceMs,
       extractAudio,
       mixAudio,
       mergeVideoAudio,

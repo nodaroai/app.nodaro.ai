@@ -188,6 +188,7 @@ import {
   parsePacketLine,
   parseStreamListing,
   probeStreamEnds,
+  probeVideoFramePtsMs,
 } from "../ffmpeg-utils.js"
 
 beforeEach(() => {
@@ -1794,5 +1795,34 @@ describe("runFfmpeg / runFfprobe — the watchdog flags", () => {
   it("runFfprobe carries the same flags", async () => {
     execFileOnce("", Object.assign(new Error("Command failed"), { killed: true }) as NodeJS.ErrnoException, "")
     await expect(runFfprobe(["x"])).rejects.toMatchObject({ killed: true, timedOut: true })
+  })
+})
+
+// probeVideoFramePtsMs — one line per frame, so a long proxy at a high fps is
+// megabytes of csv: it must be STREAMED, never read through runFfprobe's buffer.
+describe("probeVideoFramePtsMs", () => {
+  it("streams the first video track's packet times through spawn (not runFfprobe's 5 MiB buffer), sorted, in ms", async () => {
+    // Decode order with B-frame reordering, plus a packet with no pts.
+    mocks.spawnScripts.push({ stdout: "0.000000\n1.000000\n0.500000\nN/A\n1.500000\n" })
+    const pts = await probeVideoFramePtsMs("/tmp/proxy.mp4")
+    expect(pts).toEqual([0, 500, 1000, 1500])
+    expect(mocks.execFile).not.toHaveBeenCalled()
+    expect(mocks.spawn).toHaveBeenCalledTimes(1)
+    const [cmd, args] = mocks.spawn.mock.calls[0]!
+    expect(cmd).toBe("ffprobe")
+    expect(args).toEqual(expect.arrayContaining(["-select_streams", "v:0", "-show_entries", "packet=pts_time", "-of", "csv=p=0", "/tmp/proxy.mp4"]))
+  })
+
+  it("holds more frame lines than runFfprobe's buffer could (a 2 h proxy at 60 fps)", async () => {
+    const frames = 450_000 // ~5.1 MiB of csv at ~11.4 bytes a line
+    mocks.spawnScripts.push({ stdout: Array.from({ length: frames }, (_, k) => (k / 60).toFixed(6)).join("\n") + "\n" })
+    const pts = await probeVideoFramePtsMs("/tmp/long.mp4")
+    expect(pts).toHaveLength(frames)
+    expect(pts[frames - 1]).toBeCloseTo(((frames - 1) / 60) * 1000, 3)
+  })
+
+  it("a failed probe rejects with ffprobe's stderr", async () => {
+    mocks.spawnScripts.push({ stdout: "", code: 1, stderr: "moov atom not found" })
+    await expect(probeVideoFramePtsMs("/tmp/bad.mp4")).rejects.toThrow(/moov atom not found/)
   })
 })
