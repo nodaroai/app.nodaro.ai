@@ -26,7 +26,7 @@ The Filter List node filters an upstream list down to the items that satisfy a s
 
 ## Inputs & Outputs
 
-**Inputs:** A list from an upstream node.
+**Inputs:** A list from an upstream node. Filter List always works on the whole list it is wired to: it runs once, never once per item, whatever the wire's mode says.
 
 **Outputs:** The filtered list (items that passed the conditions).
 

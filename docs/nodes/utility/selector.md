@@ -13,6 +13,8 @@ List ──▶ Selector ──▶ DownstreamNode (uses `picked`)
 |--------|---------|-------|
 | `in` | `text`, `image-url`, `video-url`, `audio-url`, `json` | Single list source. Multiple incoming edges concatenate in connection order. |
 
+Selector always works on the whole list wired into it: it runs once, never once per item, whatever the wire's mode says.
+
 ## Outputs
 
 | Handle | Emits |

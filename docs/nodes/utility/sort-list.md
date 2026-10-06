@@ -24,7 +24,7 @@ The Sort List node orders an upstream list. You can sort whole items or sort by 
 
 ## Inputs & Outputs
 
-**Inputs:** A list from an upstream node.
+**Inputs:** A list from an upstream node. Sort List always works on the whole list it is wired to: it runs once, never once per item, whatever the wire's mode says.
 
 **Outputs:** The sorted list.
 

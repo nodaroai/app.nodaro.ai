@@ -363,6 +363,18 @@ export const FAN_IN_TARGETS: Readonly<Record<string, "*" | readonly string[]>> =
   // input: a list (or a writer that ran once per item) arrives as one
   // message, never as a burst of sends to the owner's chat.
   "telegram-account-send": ["in"],
+  // The list operators — they READ the whole list wired into them (their
+  // executors collect every upstream item themselves) and emit a list. Run
+  // once per item by an "each" wire (a Split Text, a List, a node that ran per
+  // item), every iteration saw the same whole list and answered with its
+  // first match: a Filter List fed 11 stories handed 11 copies of story one
+  // downstream, and every paid stage after it ran 11 times on it
+  // (2026-10-06). A list operator is never fanned out, on any wire.
+  "filter-list": "*",
+  deduplicate: "*",
+  "merge-lists": "*",
+  "sort-list": "*",
+  selector: "*",
 }
 
 export function isFanInNodeType(nodeType: string | undefined | null): boolean {
