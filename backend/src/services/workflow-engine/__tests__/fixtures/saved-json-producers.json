@@ -2,6 +2,8 @@
   "apply-edl": "generatedJson",
   "audio-sync": "generatedJson",
   "camera-switch": "generatedJson",
+  "collection-read": "generatedJson",
+  "collection-write": "generatedJson",
   "content-ideas": "generatedJson",
   "content-recipe": "generatedJson",
   "describe-to-picker": "generatedPickerJson",

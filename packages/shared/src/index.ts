@@ -462,6 +462,7 @@ export { REPEATABLE_NODE_TYPES, REPEAT_PLACEHOLDER, PROVIDER_PLACEHOLDER_PREFIX,
 export {
   NON_PROMPT_TEXT_LANES,
   fanOutTextFeedsPrompt,
+  fanOutUrlItemIsText,
   isFanOutUrlItem,
   compactWithRows,
   pickHeldRow,
@@ -960,6 +961,9 @@ export {
   COLLECTION_MEDIA_TYPES,
   COLLECTION_TIER_CAPS,
   COLLECTION_DIGEST_SEPARATOR,
+  COLLECTION_READ_WINDOW_HOURS_MAX,
+  COLLECTION_READ_LIMIT_MAX,
+  collectionReadSince,
   collectionCapsForTier,
   clampChars,
   normalizeDedupeKey,
@@ -988,6 +992,8 @@ export {
   type AddCollectionRecordResult,
   type CollectionExportFormat,
   type CollectionDigestFormat,
+  type CollectionReadWindowUnit,
+  type CollectionReadOrder,
   type IngestedRecord,
 } from "./collections.js"
 

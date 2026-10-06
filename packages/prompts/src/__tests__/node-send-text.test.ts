@@ -54,6 +54,15 @@ describe("computeNodeSendText", () => {
     expect(computeNodeSendText("generate-music", {}, { wired: "", refMap: none })).toBe("")
   })
 
+  it("collection-write: the item (a fan-out row, else the wire), else a typed title / text / link; nothing of those is nothing to save", () => {
+    const refMap = new Map<string, string>()
+    expect(computeNodeSendText("collection-write", {}, { wired: "", refMap })).toBe("")
+    expect(computeNodeSendText("collection-write", { title: " " }, { wired: "", refMap })).toBe("")
+    expect(computeNodeSendText("collection-write", { link: "https://news.example.test/daily" }, { wired: "", refMap })).toBe("https://news.example.test/daily")
+    expect(computeNodeSendText("collection-write", { title: "Daily" }, { wired: "the wire", refMap })).toBe("the wire")
+    expect(computeNodeSendText("collection-write", {}, { override: "row 3", wired: "the wire", refMap })).toBe("row 3")
+  })
+
   it("text-to-speech / text-to-audio: the wired text passes through; nothing wired and nothing typed is nothing", () => {
     expect(computeNodeSendText("text-to-speech", {}, { wired: "read this", refMap: none })).toContain("read this")
     expect(computeNodeSendText("text-to-speech", {}, { wired: "", refMap: none })).toBe("")

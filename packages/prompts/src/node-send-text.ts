@@ -16,6 +16,9 @@ export const TEXT_REQUIRED_NODE_TYPES: ReadonlySet<string> = new Set([
   "text-to-speech",
   "generate-music",
   "text-to-audio",
+  // Save to Collection refuses an empty record ("nothing to save"): a feed
+  // with nothing new wired straight into it must skip it, not fail the run.
+  "collection-write",
 ])
 
 export interface NodeSendTextArgs {
@@ -75,6 +78,14 @@ export function computeNodeSendText(
     case "text-to-speech":
     case "text-to-audio":
       return computeNodePrompt(nodeType, data, { override: args.override, wired: args.wired, refMap: args.refMap })
+    case "collection-write": {
+      // The record's content: the item (a fan-out row, else what reached `in`),
+      // else a title, text or link typed on the node. A picture alone is a
+      // record too, but it never starves the node: only a wired TEXT input that
+      // produced nothing can (the skip rule's precondition).
+      const typed = [data.title, data.text, data.link].find((v): v is string => present(v as string | undefined))
+      return [args.override, args.wired, typed].find(present) ?? ""
+    }
     default:
       return undefined
   }

@@ -58,11 +58,12 @@ unless the operator sets `COLLECTIONS_MAX_PER_USER` /
 
 ## In a workflow
 
-Two nodes write and read collections from a workflow — **Save to Collection**
-(one record per item it receives) and **Read Collection** (what was saved in
-the last N hours or days, as a list and as text). They land in a following
-release; until then the API, SDK, CLI and MCP below write and read the same
-records.
+Two nodes write and read collections from a workflow —
+[**Save to Collection**](../nodes/output/collection-write.md) (one record per
+item it receives; a JSON item fills the title, text and link by itself; no
+duplicates) and [**Read Collection**](../nodes/input/collection-read.md) (what
+was saved in the last N hours or days, as a list and as text for a prompt).
+Both are free. The API, SDK, CLI and MCP below write and read the same records.
 
 ## From code
 

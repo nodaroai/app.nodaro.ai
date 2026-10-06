@@ -1,7 +1,7 @@
 import { projectDubbingCreditOverride, stampDubbingDuration } from "../../lib/dubbing-pricing.js"
 import { applyEdlCreditOverride } from "../../lib/apply-edl-plan.js"
 import { isPreviewRender } from "../../lib/preview-render.js"
-import { assertCanvasExecutionAllowed, imageOverlayCredits, applySettingsInput, SETTINGS_INPUT_CONSUMERS, PREVIEW_RENDER_NESTED, PREVIEW_REVIEW_REQUIRED } from "@nodaro/shared"
+import { assertCanvasExecutionAllowed, imageOverlayCredits, applySettingsInput, SETTINGS_INPUT_CONSUMERS, PREVIEW_RENDER_NESTED, PREVIEW_REVIEW_REQUIRED, isCollectionUrl } from "@nodaro/shared"
 import { PREVIEW_RENDER_NESTED_MESSAGE } from "./nested-preview-renders.js"
 import { PREVIEW_REVIEW_REQUIRED_MESSAGE } from "../../lib/preview-review-gate.js"
 /**
@@ -35,6 +35,7 @@ import { videoAnalysisPostDuration } from "./video-analysis-post-probe.js"
 
 import { executeCombineText, executeSplitText, executeComposite, executeWebhookOutput, executePreview, executeTeleporterPassthrough, executeRouter, executeExtractField, executeJsonProcess, executeFilterList, executeDeduplicateList, executeMergeLists, executeSortList, executeSelector } from "./inline-executor.js"
 import { executeSubWorkflow } from "./sub-workflow-handler.js"
+import { idempotencyScopeSegment, syncHttpIdempotencyKey } from "./idempotency-key.js"
 import { mergeExposedSettings, applyHandleInputOverride, isHandleInputWired, resolveNodeRefs, SOCIAL_POST_NODE_TYPES, isSeedance2Provider, pricedOutputDurationSec, isMinimaxH3Provider, readPromptAffixes, WORKSPACE_HEADER_LOWER, metaAdsScrapeWireSources, splitInstagramTargets, instagramScrapeMode } from "@nodaro/shared"
 import { computeAiWriterInput, computeLlmChatFields, computeNodePrompt, pickerFanoutTargets, applyPromptAffixes } from "@nodaro/prompts"
 import type { ComponentMetadata } from "@nodaro/shared"
@@ -69,7 +70,10 @@ import { noteSlotWaitColumnError, withSlotWaitColumn } from "../../lib/jobs-slot
 // Sync HTTP node types — called via internal fetch
 // ---------------------------------------------------------------------------
 
-const SYNC_HTTP_NODES = new Set([
+// Exported for the parity guard: this set and SYNC_HTTP_ROUTES must name the
+// same node types, or a node falls through to the worker-queued path and
+// buildPayload throws "Unknown node type" mid-run.
+export const SYNC_HTTP_NODES = new Set([
   "generate-3d-scene",
   "edit-3d-scene",
   "pro-3d-render",
@@ -99,7 +103,16 @@ const SYNC_HTTP_NODES = new Set([
   "meta-ads-scrape",
   "instagram-scrape",
   "reduce",
+  "collection-write",
+  "collection-read",
 ])
+
+/**
+ * Sync-HTTP nodes whose route takes an `Idempotency-Key`: the orchestrator sends
+ * `wf-<executionId>-<nodeId>[-<iteration>]`, so a re-pick of the node buys /
+ * writes once. Exported for the dispatch test.
+ */
+export const IDEMPOTENT_SYNC_HTTP_NODES: ReadonlySet<string> = new Set(["pro-3d-render", "collection-write"])
 
 // Maps node type to internal route path.
 // NOTE: these must exactly match the paths registered in each route file.
@@ -123,6 +136,8 @@ export const SYNC_HTTP_ROUTES: Record<string, string> = {
   "qa-check": "/v1/qa-check",
   "image-critic": "/v1/image-critic",
   "save-to-storage": "/v1/save-to-storage",
+  "collection-write": "/v1/collection-write",
+  "collection-read": "/v1/collection-read",
   "web-scrape": "/v1/web-scrape",
   "meta-ads-scrape": "/v1/meta-ads-scrape",
   "instagram-scrape": "/v1/instagram-scrape",
@@ -362,6 +377,10 @@ export async function executeNode(
   // The ROW that iteration reads its inputs on (`plan.rows[i]`) — a render
   // stamps the plan clip of that row on its result. Undefined when not fanned out.
   listRow?: number,
+  // The sub-workflow nodes this node sits under, each with the fan-out
+  // iteration that entered it — the scope of its Idempotency-Key
+  // (`syncHttpIdempotencyKey`). Empty for a top-level node.
+  idempotencyScope?: readonly string[],
 ): Promise<ExecuteNodeResult> {
   assertCanvasExecutionAllowed([node])
   // Source nodes — should already have output set
@@ -449,7 +468,10 @@ export async function executeNode(
   // (rolled up recursively for nested sub-workflows) so it contributes to the
   // parent execution's total + monetization base.
   if (node.type === "sub-workflow") {
-    const result = await executeSubWorkflow(node, resolvedInputs, ctx)
+    // The inner nodes' idempotency keys carry THIS node and the iteration that
+    // entered it: a fan-out into a sub-workflow writes once per iteration.
+    const scope = [...(idempotencyScope ?? []), idempotencyScopeSegment(node.id, iterationIndex)]
+    const result = await executeSubWorkflow(node, resolvedInputs, ctx, 0, new Set(), scope)
     return { output: result.output, creditsUsed: result.creditsUsed }
   }
 
@@ -492,7 +514,7 @@ export async function executeNode(
   const isLottieMotionGraphics =
     node.type === "motion-graphics" && (node.data.engine as string | undefined) === "lottie"
   if (SYNC_HTTP_NODES.has(node.type) && !isLottieMotionGraphics) {
-    return executeSyncHttpNode(node, resolvedInputs, ctx, userPromptTemplate, edges, allNodes, nodeStates, authoredData, iterationIndex)
+    return executeSyncHttpNode(node, resolvedInputs, ctx, userPromptTemplate, edges, allNodes, nodeStates, authoredData, iterationIndex, idempotencyScope)
   }
 
   // Reference Sheet — run Stage A (generate the panels the chosen type needs but
@@ -589,6 +611,7 @@ async function executeSyncHttpNode(
   nodeStates?: Record<string, NodeExecutionState>,
   authoredData?: Record<string, unknown>,
   iterationIndex?: number,
+  idempotencyScope?: readonly string[],
 ): Promise<ExecuteNodeResult> {
   const isScene3D = isScene3DAuthoringType(node.type)
   const adopted = isScene3D && iterationIndex === undefined ? ctx.adoptableJobs?.get(node.id) : undefined
@@ -704,8 +727,11 @@ async function executeSyncHttpNode(
       throw new Error(`3D Render Pro quote returned no quoteId`)
     }
     body.quoteId = quote.quoteId
-    headers["Idempotency-Key"] =
-      `wf-${ctx.executionId}-${node.id}${iterationIndex === undefined ? "" : `-${iterationIndex}`}`
+  }
+  // A re-pick of the same node (and fan-out iteration) must resolve to the same
+  // write, not a second one: the route keys the request on this header.
+  if (IDEMPOTENT_SYNC_HTTP_NODES.has(node.type)) {
+    headers["Idempotency-Key"] = syncHttpIdempotencyKey(ctx.executionId, node.id, iterationIndex, idempotencyScope)
   }
 
   const response = await loopbackFetch(
@@ -1007,6 +1033,47 @@ export function buildSyncHttpBody(
         workflowId: ctx.workflowId,
         userId: ctx.userId,
       })
+
+    case "collection-write": {
+      // One record per call: the item the node received on `in` (JSON text
+      // from a json wire, or plain text), the mapped title / text / link /
+      // dedupe key, the picture and the video wired in. The link field is
+      // `link` on the node (the Copilot deny-list locks node-data keys ending
+      // in url); the route takes it as `link` too.
+      // Only a real address rides along as a medium: a fan-out guess that put
+      // something else into imageUrl must not become a 400 for the whole item.
+      const media: Array<{ type: "image" | "video"; url: string }> = []
+      if (isCollectionUrl(resolvedInputs.imageUrl)) media.push({ type: "image", url: resolvedInputs.imageUrl })
+      if (isCollectionUrl(resolvedInputs.videoUrl)) media.push({ type: "video", url: resolvedInputs.videoUrl })
+      const str = (v: unknown) => (typeof v === "string" && v.trim() ? v : undefined)
+      return {
+        collectionId: data.collectionId,
+        item: resolvedInputs.overridePrompt ?? resolvedInputs.prompt,
+        title: str(data.title),
+        text: str(data.text),
+        link: str(data.link),
+        dedupeKey: str(data.dedupeKey),
+        ...(media.length > 0 ? { media } : {}),
+        executionId: ctx.executionId,
+        workflowId: ctx.workflowId,
+        nodeId: node.id,
+        userId: ctx.userId,
+      }
+    }
+
+    case "collection-read":
+      // Reads by the node's own settings; nothing is wired in.
+      return {
+        collectionId: data.collectionId,
+        windowAmount: data.windowAmount,
+        windowUnit: data.windowUnit,
+        limit: data.limit,
+        order: data.order,
+        textFormat: data.textFormat,
+        workflowId: ctx.workflowId,
+        nodeId: node.id,
+        userId: ctx.userId,
+      }
 
     case "save-to-storage":
       // No user-typed prompt — operates on upstream URLs only.

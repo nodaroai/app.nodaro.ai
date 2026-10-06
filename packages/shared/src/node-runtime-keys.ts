@@ -121,6 +121,12 @@ export const EXECUTION_DATA_KEYS: ReadonlySet<string> = new Set([
   "searchResults",
   "pickedIds",
   "searchWarnings",
+  // Save to Collection: how the last run ended for this node (inserted /
+  // duplicate / replayed) and how many old records the cap evicted. RESULTS of
+  // a run — Clear results wipes them, and a template, a preset or a run-only
+  // patch never carries them as configuration.
+  "lastOutcome",
+  "lastEvicted",
   // When the editor's "Clear results" last emptied this node (ISO time). Not a
   // result and not config: bookkeeping that tells the load-time recovery lanes
   // "this node is empty ON PURPOSE" — without it, every reload reads an empty

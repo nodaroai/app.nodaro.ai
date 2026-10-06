@@ -1,6 +1,6 @@
 import { toast } from "sonner";
 import { DEFAULT_OVERLAY_LAYER, OVERLAY_MAX_LAYERS } from "@/types/nodes";
-import { assertCanvasExecutionAllowed, scene3DInputAssetsForEngine, overlayVariantIdFromHandle, readScriptSettings, applySettingsInput, SETTINGS_INPUT_CONSUMERS, resolveMusicProvider, resolveEditPlanSources, describeAudioSyncOffsetIssue, type AudioSyncOffsetSource, transcriptSpeakerLabels, cameraSwitchEdlProblem, cameraSwitchSettingsPayload, renderPlanClipKey } from "@nodaro/shared";
+import { assertCanvasExecutionAllowed, scene3DInputAssetsForEngine, overlayVariantIdFromHandle, readScriptSettings, applySettingsInput, SETTINGS_INPUT_CONSUMERS, resolveMusicProvider, resolveEditPlanSources, describeAudioSyncOffsetIssue, type AudioSyncOffsetSource, transcriptSpeakerLabels, cameraSwitchEdlProblem, cameraSwitchSettingsPayload, renderPlanClipKey, collectionRecordHeadline, isCollectionUrl } from "@nodaro/shared";
 import { findUpstreamSunoIds } from "@/lib/suno-ids";
 import { contentRunResultPatch } from "@/lib/content-run-output";
 import { sourceJsonOf } from "@/lib/edit-plan-saved-output";
@@ -260,6 +260,8 @@ import type {
   InstagramScrapeNodeData,
   SocialSearchNodeData,
   TelegramChannelFeedData,
+  CollectionReadData,
+  CollectionWriteData,
   ExtractFieldNodeData,
   JsonProcessNodeData,
   FilterListNodeData,
@@ -5437,6 +5439,103 @@ function executeNodeCore(
         .catch((err: Error) => {
           updateNodeData(node.id, { executionStatus: "failed", errorMessage: err.message || "Failed to read channel" });
           guardedToast.error(err.message || tx("nodeRun.failedToReadChannel"));
+          throw err;
+        }),
+    );
+  }
+
+  if (node.type === "collection-read") {
+    const d = node.data as CollectionReadData;
+    const { updateNodeData } = useWorkflowStore.getState();
+    if (!d.collectionId) {
+      const msg = nodeRunError(d.label, "nodeRun.collectionPickOne");
+      updateNodeData(node.id, { executionStatus: "failed", errorMessage: msg });
+      guardedToast.error(msg);
+      return Promise.reject(new Error(msg));
+    }
+    updateNodeData(node.id, { ...RUN_START_RESET });
+    return import("@/lib/api").then(({ collectionReadApi }) =>
+      collectionReadApi({
+        collectionId: d.collectionId,
+        windowAmount: d.windowAmount,
+        windowUnit: d.windowUnit,
+        limit: d.limit,
+        order: d.order,
+        textFormat: d.textFormat,
+        nodeId: node.id,
+      })
+        .then((res) => {
+          updateNodeData(node.id, {
+            executionStatus: "completed",
+            generatedJson: res.records,
+            generatedText: res.text,
+          });
+          guardedToast.success(
+            res.count === 0 ? tx("nodeRun.collectionNone") : res.count === 1 ? tx("nodeRun.collectionReadOne") : tx("nodeRun.collectionRead", { count: res.count }),
+          );
+          return res.text ?? "";
+        })
+        .catch((err: Error) => {
+          updateNodeData(node.id, { executionStatus: "failed", errorMessage: err.message || tx("nodeRun.collectionReadFailed") });
+          guardedToast.error(err.message || tx("nodeRun.collectionReadFailed"));
+          throw err;
+        }),
+    );
+  }
+
+  if (node.type === "collection-write") {
+    const d = node.data as CollectionWriteData;
+    const { updateNodeData } = useWorkflowStore.getState();
+    if (!d.collectionId) {
+      const msg = nodeRunError(d.label, "nodeRun.collectionPickOne");
+      updateNodeData(node.id, { executionStatus: "failed", errorMessage: msg });
+      guardedToast.error(msg);
+      return Promise.reject(new Error(msg));
+    }
+    // The item: what reached `in` (JSON text from a json wire, or plain text);
+    // the picture and the video wired in ride along as links.
+    const item = overridePrompt ?? inputs.prompt;
+    // Only a real address rides along as a medium — the wires, and a list row
+    // the fan-out read as a media link (mirrors the server's body builder).
+    const media: Array<{ type: "image" | "video"; url: string }> = [];
+    if (isCollectionUrl(inputs.imageUrl)) media.push({ type: "image", url: inputs.imageUrl });
+    if (isCollectionUrl(inputs.videoUrl)) media.push({ type: "video", url: inputs.videoUrl });
+    if (isCollectionUrl(overrideMediaUrl) && !media.some((m) => m.url === overrideMediaUrl)) {
+      media.push({ type: /\.(mp4|mov|webm)(\?|$)/i.test(overrideMediaUrl) ? "video" : "image", url: overrideMediaUrl });
+    }
+    const field = (v: unknown) => (typeof v === "string" && v.trim() ? v : undefined);
+    updateNodeData(node.id, { ...RUN_START_RESET });
+    return import("@/lib/api").then(({ collectionWriteApi }) =>
+      collectionWriteApi({
+        collectionId: d.collectionId,
+        item,
+        title: field(d.title),
+        text: field(d.text),
+        link: field(d.link),
+        dedupeKey: field(d.dedupeKey),
+        media,
+        nodeId: node.id,
+      })
+        .then((res) => {
+          const headline = collectionRecordHeadline(res.record);
+          updateNodeData(node.id, {
+            executionStatus: "completed",
+            generatedJson: res.record,
+            generatedText: headline,
+            lastOutcome: res.outcome,
+            lastEvicted: res.evicted,
+          });
+          // A replay IS the record saved (the same write answered twice); only a duplicate key is "not saved twice".
+          guardedToast.success(
+            res.outcome === "duplicate"
+              ? tx("nodeRun.collectionDuplicate", { name: res.collection.name })
+              : tx("nodeRun.collectionSaved", { name: res.collection.name }),
+          );
+          return JSON.stringify(res.record);
+        })
+        .catch((err: Error) => {
+          updateNodeData(node.id, { executionStatus: "failed", errorMessage: err.message || tx("nodeRun.collectionWriteFailed") });
+          guardedToast.error(err.message || tx("nodeRun.collectionWriteFailed"));
           throw err;
         }),
     );

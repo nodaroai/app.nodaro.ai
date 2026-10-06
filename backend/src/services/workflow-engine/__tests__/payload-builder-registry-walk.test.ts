@@ -103,6 +103,11 @@ const NON_BUILDPAYLOAD_NODES: ReadonlySet<string> = new Set([
   "telegram-post",
   "publish-social",
   "telegram-channel-feed",
+  // Collections: both nodes answer from their route (POST /v1/collection-read,
+  // /v1/collection-write) — sync-HTTP so a fan-out item is written per
+  // iteration; buildPayload is never asked for them.
+  "collection-read",
+  "collection-write",
   "qa-check",
   "save-to-storage",
   "web-scrape",

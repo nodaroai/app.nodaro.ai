@@ -473,7 +473,7 @@ describe("POST /v1/collections/:id/records", () => {
     expect(insert.insert).toHaveBeenCalledWith({
       collection_id: COLL,
       user_id: USER,
-      dedupe_key: "https://t.me/telegram/441",
+      dedupe_key: "https://t.me/Telegram/441",
       idempotency_key: "wf-exec1-node1-0",
       title: "Telegram turns ten",
       text: "Telegram turns ten.",

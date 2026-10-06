@@ -93,7 +93,10 @@ const ROUTE_DIRS = [
  * misclassified — the review caught it), so the default payer-aware guard is
  * correct for them.
  */
-const CHECK_ONLY_ROUTES = ["nodaro-exclusive.ts", "save-to-storage.ts"].sort()
+// - collection-nodes.ts: the two free collection nodes (Save to Collection,
+//   Read Collection) — the plan's caps bound them, not credits; the guard keeps
+//   the account gates and reserves nothing.
+const CHECK_ONLY_ROUTES = ["nodaro-exclusive.ts", "save-to-storage.ts", "collection-nodes.ts"].sort()
 
 /**
  * Markers whose presence means the route DOES reserve in-request. The

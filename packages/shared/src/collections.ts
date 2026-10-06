@@ -176,6 +176,18 @@ export type CollectionExportFormat = "csv" | "json"
 export type CollectionDigestFormat = "headlines" | "full"
 export const COLLECTION_DIGEST_SEPARATOR = "\n\n---\n\n"
 
+/** The Read Collection node: how far back it may look (720 hours = 30 days; `days` × 24 is held to the same ceiling) and how many records one run emits. */
+export const COLLECTION_READ_WINDOW_HOURS_MAX = 720
+export const COLLECTION_READ_LIMIT_MAX = 200
+export type CollectionReadWindowUnit = "hours" | "days"
+export type CollectionReadOrder = "newest" | "oldest"
+
+/** The start of a Read Collection window, as an ISO timestamp — `amount` × `unit` back from `now`, held to the ceiling. */
+export function collectionReadSince(amount: number, unit: CollectionReadWindowUnit, now = Date.now()): string {
+  const hours = Math.min(COLLECTION_READ_WINDOW_HOURS_MAX, Math.max(1, Math.floor(Number.isFinite(amount) ? amount : 24)) * (unit === "days" ? 24 : 1))
+  return new Date(now - hours * 3_600_000).toISOString()
+}
+
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v)
 const str = (v: unknown): string | undefined => (typeof v === "string" && v.trim().length > 0 ? v : undefined)
 const isScalar = (v: unknown): v is CollectionFieldValue =>
@@ -205,8 +217,23 @@ export function clampChars(text: string, max: number): string {
 export function normalizeDedupeKey(raw: unknown): string | null {
   if (typeof raw === "number" && Number.isFinite(raw)) raw = String(raw)
   if (typeof raw !== "string") return null
-  const key = clampChars(raw.trim().replace(/\s+/g, " ").toLowerCase(), COLLECTION_DEDUPE_KEY_MAX).trim()
+  const compact = raw.trim().replace(/\s+/g, " ")
+  // A link keeps its path's case: a short link or a video id is case-sensitive
+  // (bit.ly/AbC and bit.ly/abc are two pages). Only its scheme and host are
+  // case-insensitive, and the URL parser folds exactly those.
+  const key = clampChars(looksLikeLink(compact) ? canonicalUrl(compact) : compact.toLowerCase(), COLLECTION_DEDUPE_KEY_MAX).trim()
   return key.length > 0 ? key : null
+}
+
+// A boolean wrapper: the type guard would narrow the string to `never` in the else branch.
+const looksLikeLink = (s: string): boolean => isCollectionUrl(s)
+
+function canonicalUrl(url: string): string {
+  try {
+    return new URL(url).href
+  } catch {
+    return url
+  }
 }
 
 export function isCollectionMedia(v: unknown): v is CollectionMedia {
@@ -250,16 +277,20 @@ export function normalizeCollectionFields(value: unknown): Record<string, Collec
   return out
 }
 
-/** A record's one-line name: its title, else the first line of its text, else its link. */
-export function collectionRecordHeadline(record: Pick<CollectionRecord, "title" | "text" | "url">): string {
-  const title = record.title.trim()
+/**
+ * A record's one-line name: its title, else the first line of its text, else
+ * its link. Tolerates a partial record (a hand-written node result in workflow
+ * JSON): a missing field reads as empty rather than throwing on the canvas.
+ */
+export function collectionRecordHeadline(record: Partial<Pick<CollectionRecord, "title" | "text" | "url">>): string {
+  const title = (typeof record.title === "string" ? record.title : "").trim()
   if (title) return clampChars(title, COLLECTION_HEADLINE_MAX)
-  const line = record.text
+  const line = (typeof record.text === "string" ? record.text : "")
     .split(/\r?\n/)
     .map((l) => l.trim())
     .find((l) => l.length > 0)
   if (line) return line.length > COLLECTION_HEADLINE_MAX ? `${clampChars(line, COLLECTION_HEADLINE_MAX - 1)}…` : line
-  return record.url ?? ""
+  return typeof record.url === "string" ? record.url : ""
 }
 
 /**
@@ -269,25 +300,31 @@ export function collectionRecordHeadline(record: Pick<CollectionRecord, "title" 
  * under its headline, separated by a rule.
  */
 export function collectionRecordsDigest(
-  records: ReadonlyArray<Pick<CollectionRecord, "title" | "text" | "url" | "createdAt">>,
+  records: ReadonlyArray<Partial<Pick<CollectionRecord, "title" | "text" | "url" | "createdAt">> | null | undefined>,
   format: CollectionDigestFormat = "headlines",
 ): string {
+  // Tolerates a partial or null record (a hand-written node result in
+  // workflow JSON): the engines rebuild this digest from saved data.
+  const rows = records.filter((r): r is Partial<Pick<CollectionRecord, "title" | "text" | "url" | "createdAt">> => typeof r === "object" && r !== null)
+  const str = (v: unknown): string => (typeof v === "string" ? v : "")
   if (format === "full") {
-    return records
+    return rows
       .map((r) => {
         const head = collectionRecordHeadline(r)
-        const body = r.text.trim()
-        const lines = [head ? `### ${head}` : "", body && body !== head ? body : "", r.url ?? ""].filter((l) => l.length > 0)
+        const body = str(r.text).trim()
+        const lines = [head ? `### ${head}` : "", body && body !== head ? body : "", str(r.url)].filter((l) => l.length > 0)
         return lines.join("\n")
       })
       .filter((block) => block.length > 0)
       .join(COLLECTION_DIGEST_SEPARATOR)
   }
-  return records
+  return rows
     .map((r) => {
       const parts = [collectionRecordHeadline(r)]
-      if (r.createdAt) parts.push(r.createdAt.slice(0, 10))
-      if (r.url && r.url !== parts[0]) parts.push(r.url)
+      const created = str(r.createdAt)
+      if (created) parts.push(created.slice(0, 10))
+      const url = str(r.url)
+      if (url && url !== parts[0]) parts.push(url)
       return `- ${parts.filter((p) => p.length > 0).join(" · ")}`
     })
     .join("\n")
@@ -306,7 +343,17 @@ export interface IngestedRecord {
 const TITLE_KEYS = ["title", "headline", "name", "subject"] as const
 const TEXT_KEYS = ["text", "body", "caption", "description", "content", "summary", "dek"] as const
 const URL_KEYS = ["url", "postUrl", "link", "href", "permalink"] as const
-const DEDUPE_KEYS = ["slug", "id", "postId", "externalId"] as const
+/**
+ * Keys a record is told apart by when it has no link. `id` comes last and only
+ * as a non-numeric string: an LLM writing `{ "id": 1, … }` per article, or a
+ * scraper's ordinal, numbers each RUN's items from 1 — a key that would mark
+ * every later run's first item a duplicate of the first run's.
+ */
+const DEDUPE_KEYS = ["slug", "postId", "externalId", "id"] as const
+const isDedupeValue = (key: string, v: unknown): boolean =>
+  key === "id"
+    ? typeof v === "string" && v.trim().length > 0 && !/^\d+$/.test(v.trim())
+    : (typeof v === "string" && v.trim().length > 0) || (typeof v === "number" && Number.isFinite(v))
 const IMAGE_KEYS = ["imageUrl", "thumbnailUrl", "image", "thumbnail"] as const
 const VIDEO_KEYS = ["videoUrl", "video"] as const
 const AUDIO_KEYS = ["audioUrl", "audio"] as const
@@ -396,7 +443,7 @@ export function ingestRecordFromJson(item: unknown): IngestedRecord {
     else continue
     kept += 1
   }
-  const dedupeSource = url ?? DEDUPE_KEYS.map((k) => item[k]).find((v) => (typeof v === "string" && v.trim()) || (typeof v === "number" && Number.isFinite(v)))
+  const dedupeSource = url ?? DEDUPE_KEYS.filter((k) => isDedupeValue(k, item[k])).map((k) => item[k])[0]
   return {
     title,
     text,

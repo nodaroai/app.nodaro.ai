@@ -233,6 +233,8 @@ import {
   TelegramAccountTriggerConfig,
   TelegramAccountSendConfig,
   TelegramChannelFeedConfig,
+  CollectionReadConfig,
+  CollectionWriteConfig,
   InstagramPostConfig,
   TiktokPostConfig,
   YoutubeUploadConfig,
@@ -534,6 +536,8 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     // Keyed by node: a draft typed for one trigger never lands on another.
     case "telegram-account-trigger": return <TelegramAccountTriggerConfig key={selectedNodeId ?? ""} {...configProps} onUpdate={updateAccountTrigger} />
     case "telegram-channel-feed": return <TelegramChannelFeedConfig {...configProps} nodeId={selectedNodeId} />
+    case "collection-read": return <CollectionReadConfig {...configProps} />
+    case "collection-write": return <CollectionWriteConfig {...configProps} />
     case "sub-workflow-input": return <SubWorkflowInputConfig {...configProps} />
     case "sub-workflow-output": return <SubWorkflowOutputConfig {...configProps} />
     case "sub-workflow": return <SubWorkflowConfig {...configProps} />

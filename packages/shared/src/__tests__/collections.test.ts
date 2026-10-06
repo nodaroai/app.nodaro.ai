@@ -75,8 +75,8 @@ describe("clampChars", () => {
 })
 
 describe("normalizeDedupeKey", () => {
-  it("trims, collapses spaces, lower-cases and caps the length", () => {
-    expect(normalizeDedupeKey("  Https://T.me/Telegram/441  ")).toBe("https://t.me/telegram/441")
+  it("trims, collapses spaces, lower-cases (a link: only its scheme and host) and caps the length", () => {
+    expect(normalizeDedupeKey("  Https://T.me/Telegram/441  ")).toBe("https://t.me/Telegram/441")
     expect(normalizeDedupeKey("a   b\n\tc")).toBe("a b c")
     expect(normalizeDedupeKey("x".repeat(400))!.length).toBe(300)
   })
@@ -205,11 +205,22 @@ describe("ingestRecordFromJson", () => {
     expect(r.fields).toEqual({ slug: "Markets-Rally", confidence: 0.9, topic: "business" })
   })
 
-  it("a link that is not http(s) is not a link, and the dedupe key then falls back to an id", () => {
+  it("a link that is not http(s) is not a link; a NUMERIC id is no key (each run numbers its items from 1), a named id is", () => {
     const r = ingestRecordFromJson({ url: "javascript:alert(1)", id: 7, text: "x" })
     expect(r.url).toBeNull()
-    expect(r.dedupeKey).toBe("7")
+    expect(r.dedupeKey).toBeNull()
     expect(r.fields).toEqual({ id: 7 })
+    expect(ingestRecordFromJson({ id: "12", text: "x" }).dedupeKey).toBeNull()
+    expect(ingestRecordFromJson({ id: "post-12", text: "x" }).dedupeKey).toBe("post-12")
+    // slug, then postId, then externalId, then a named id.
+    expect(ingestRecordFromJson({ id: "named", externalId: "ext", postId: 44, slug: "The-Slug", text: "x" }).dedupeKey).toBe("the-slug")
+    expect(ingestRecordFromJson({ id: "named", externalId: "ext", postId: 44, text: "x" }).dedupeKey).toBe("44")
+  })
+
+  it("a link keeps its path's case as a key — only the scheme and host fold", () => {
+    expect(normalizeDedupeKey("https://Bit.LY/AbC")).toBe("https://bit.ly/AbC")
+    expect(normalizeDedupeKey("  https://T.me/Telegram/441 ")).toBe("https://t.me/Telegram/441")
+    expect(normalizeDedupeKey("Story Seven")).toBe("story seven")
   })
 
   it("the first link key whose value IS a link wins over an earlier key that is not", () => {

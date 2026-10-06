@@ -392,6 +392,7 @@ function getMiniMapNodeColor(node: { type?: string }): string {
       nodeType === 'upload-video' ||
       nodeType === 'upload-audio' ||
       nodeType === 'rss-feed' ||
+      nodeType === 'collection-read' ||
       nodeType === 'reference-audio') return '#38BDF8'
   // Parameter nodes - modern indigo
   if (nodeType === 'image-provider' ||
@@ -423,6 +424,7 @@ function getMiniMapNodeColor(node: { type?: string }): string {
       nodeType === 'combine-text') return '#475569'
   // Output nodes - green
   if (nodeType === 'save-to-storage' ||
+      nodeType === 'collection-write' ||
       nodeType === 'webhook-output') return '#22c55e'
   // Sticky notes - hidden from MiniMap
   if (nodeType === 'sticky-note') return 'transparent'

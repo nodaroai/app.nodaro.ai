@@ -1,4 +1,4 @@
-import { fanOutTextFeedsPrompt, isFanOutUrlItem } from "@nodaro/shared"
+import { fanOutTextFeedsPrompt, fanOutUrlItemIsText, isFanOutUrlItem } from "@nodaro/shared"
 import type { ResolvedInputs } from "../services/workflow-engine/types.js"
 
 /** Apply a single list fan-out item to resolved inputs. Text items set both
@@ -20,7 +20,9 @@ export function overrideInputWithListItem(
 ): void {
   // An empty cell overrides nothing — the row simply has no value for this input.
   if (item.trim().length === 0) return
-  if (isFanOutUrlItem(item)) {
+  // On a lane where a link IS the item (Save to Collection's `in`), it stays
+  // the item: the record's link, not a picture to attach.
+  if (isFanOutUrlItem(item) && !(lane && fanOutUrlItemIsText(lane.nodeType, lane.targetHandle))) {
     if (/\.(mp4|mov|webm)(\?|$)/i.test(item)) inputs.videoUrl = item
     else if (/\.(mp3|wav|ogg)(\?|$)/i.test(item)) inputs.audioUrl = item
     else inputs.imageUrl = item

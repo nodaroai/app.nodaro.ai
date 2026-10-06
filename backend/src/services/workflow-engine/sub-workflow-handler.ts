@@ -282,6 +282,9 @@ export async function executeSubWorkflow(
   ctx: OrchestratorContext,
   depth: number = 0,
   executingRouteKeys: Set<string> = new Set(),
+  // The sub-workflow nodes above this one (each with the fan-out iteration
+  // that entered it): the Idempotency-Key scope of every node inside.
+  idempotencyScope: readonly string[] = [],
 ): Promise<SubWorkflowResult> {
   // Check depth limit
   if (depth >= MAX_SUB_WORKFLOW_DEPTH) {
@@ -484,6 +487,7 @@ export async function executeSubWorkflow(
             ctx,
             depth + 1,
             newRouteKeys,
+            [...idempotencyScope, subNode.id],
           )
         } else {
           result = await executeNode(
@@ -493,6 +497,9 @@ export async function executeSubWorkflow(
             subNodes,
             nodeStates,
             ctx,
+            undefined,
+            undefined,
+            idempotencyScope,
           )
         }
 

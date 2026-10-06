@@ -41,6 +41,8 @@ export const LIST_PRODUCER_TYPES: ReadonlySet<string> = new Set<string>([
   "content-ideas",
   // Telegram Channel Feed: one post per `listResults` item (an "each" wire).
   "telegram-channel-feed",
+  // Read Collection: one record per `listResults` item (an "each" wire).
+  "collection-read",
 ])
 
 /**
@@ -76,6 +78,9 @@ export const JSON_PRODUCER_TYPES: ReadonlySet<string> = new Set<string>([
   ...SCRAPE_NODE_TYPES, "extract-field", "silence-detect",
   // Telegram Channel Feed's `json` handle carries the posts (TelegramChannelPost[]).
   "telegram-channel-feed",
+  // Collections: Read Collection's `json` carries the records (CollectionRecord[]), Save to Collection's the saved record.
+  "collection-read",
+  "collection-write",
   // audio-sync's `json` handle carries { version, reference, offsets, notes }.
   "audio-sync",
   "list", "filter-list",

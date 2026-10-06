@@ -60,6 +60,10 @@ export const JSON_RUN_RESULT_TYPES: ReadonlySet<string> = new Set([
   "extract-field",
   // Telegram Channel Feed: the posts on generatedJson, their digest on generatedText.
   "telegram-channel-feed",
+  // Collections: Read Collection's records on generatedJson, their digest on generatedText;
+  // Save to Collection's saved record on generatedJson, its headline on generatedText.
+  "collection-read",
+  "collection-write",
 ])
 
 /**
@@ -216,6 +220,16 @@ export function jsonRunResultPatch(
     const posts = telegramPostsFrom(output.json)
     if (posts.length === 0) return undefined
     return { generatedJson: posts, ...(typeof output.text === "string" ? { generatedText: output.text } : {}) }
+  }
+  if (nodeType === "collection-read") {
+    // The records beside their digest — what the canvas run writes (execute-node.ts).
+    if (!Array.isArray(output.json)) return undefined
+    return { generatedJson: output.json, ...(typeof output.text === "string" ? { generatedText: output.text } : {}) }
+  }
+  if (nodeType === "collection-write") {
+    // The one record saved, beside its headline.
+    if (!isObject(output.json)) return undefined
+    return { generatedJson: output.json, ...(typeof output.text === "string" ? { generatedText: output.text } : {}) }
   }
   if (!isObject(output.json)) return undefined
   if (nodeType === "describe-to-picker") {

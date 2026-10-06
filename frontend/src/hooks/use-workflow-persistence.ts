@@ -368,6 +368,18 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<{ nodes: Wo
             // Backend stores `url`, frontend uses `savedUrl`
             newData.savedUrl = outputData.url
             break
+          case "collection-read":
+            // The route writes the records on json and their digest on text / generatedText.
+            if (Array.isArray(outputData.json)) newData.generatedJson = outputData.json
+            if (typeof outputData.generatedText === "string") newData.generatedText = outputData.generatedText
+            break
+          case "collection-write":
+            // The route writes the saved record on json, its headline on generatedText, and the outcome.
+            if (outputData.json && typeof outputData.json === "object") newData.generatedJson = outputData.json
+            if (typeof outputData.generatedText === "string") newData.generatedText = outputData.generatedText
+            if (typeof outputData.outcome === "string") newData.lastOutcome = outputData.outcome
+            if (typeof outputData.evicted === "number") newData.lastEvicted = outputData.evicted
+            break
           case "webhook-output":
             newData.webhookSuccess = outputData.success
             newData.webhookStatusCode = outputData.statusCode

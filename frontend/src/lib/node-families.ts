@@ -221,7 +221,7 @@ export const NODE_FAMILIES: readonly NodeFamily[] = [
     id: "automate-get-content",
     label: "Get Content",
     tab: "automate",
-    types: ["web-scrape", "meta-ads-scrape", "instagram-scrape", "social-search", "youtube-video", "telegram-channel-feed"],
+    types: ["web-scrape", "meta-ads-scrape", "instagram-scrape", "social-search", "youtube-video", "telegram-channel-feed", "collection-read"],
   },
   {
     id: "automate-text",
@@ -269,7 +269,7 @@ export const NODE_FAMILIES: readonly NodeFamily[] = [
     id: "publish-export",
     label: "Export",
     tab: "publish",
-    types: ["save-to-storage", "webhook-output", "telegram-account-send"],
+    types: ["save-to-storage", "webhook-output", "telegram-account-send", "collection-write"],
   },
   {
     id: "cc-subject",

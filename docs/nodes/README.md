@@ -91,7 +91,7 @@ the foot of the list.
 | Family | Nodes |
 |---|---|
 | **Triggers** | Schedule Trigger · Webhook Trigger · Telegram Trigger |
-| **Get Content** | Web Scrape · Video URL · Telegram Channel Feed |
+| **Get Content** | Web Scrape · Video URL · Telegram Channel Feed · Read Collection |
 | **Text** | Text · Combine Text · Split Text · Prompt |
 | **Lists & Batching** | List · Collect · Selector · Filter List · Sort List · Remove Duplicates · Merge Lists · Choose Best |
 | **Logic & Data** | Router · Extract Field · QA Check |
@@ -104,7 +104,7 @@ the foot of the list.
 |---|---|
 | **One-Click** | Publish to Social |
 | **Platforms** | Instagram Post · TikTok Post · YouTube Upload · Facebook Post · X Post · LinkedIn Post · Telegram Post |
-| **Export** | Save to Storage · Webhook Output · Telegram Reply |
+| **Export** | Save to Storage · Save to Collection · Webhook Output · Telegram Reply |
 
 ### Creative Controls
 
@@ -168,6 +168,7 @@ Provide data to your workflow: text, images, video, audio, or external triggers.
 | [Telegram Trigger](./input/telegram-trigger.md) | Trigger workflow when a Telegram bot receives a message | Run pipelines from chat messages, photos, or videos sent to your bot |
 | [Telegram Account Trigger](./input/telegram-account-trigger.md) | Trigger workflow when a message arrives in a chosen chat of your connected Telegram account (Cloud, preview) | React to posts in the channels and groups you follow, private ones included |
 | [Telegram Channel Feed](./input/telegram-channel-feed.md) | Read recent posts from a public Telegram channel | Follow channels, pull posts, rewrite and repost |
+| [Read Collection](./input/collection-read.md) | Read what a collection holds from the last hours or days | Know what a pipeline already covered; feed saved records into a prompt |
 
 ---
 
@@ -481,6 +482,7 @@ Deliver results to storage, webhooks, or social media platforms.
 |------|-------------|-------------|
 | [Save to Storage](./output/save-to-storage.md) | Export final asset to cloud storage | Persist generated content to R2 cloud storage |
 | [Webhook Output](./output/webhook-output.md) | Send result to external webhook URL | Deliver results to external systems or APIs |
+| [Save to Collection](./output/collection-write.md) | Keep each item a run produces as a record in a collection | Store articles, posts, leads; dedupe across runs; export later |
 | [Instagram Post](./output/instagram-post.md) | Publish to Instagram | Post images, reels, stories, or carousels |
 | [TikTok Post](./output/tiktok-post.md) | Publish to TikTok | Upload video content to TikTok |
 | [YouTube Upload](./output/youtube-upload.md) | Upload to YouTube | Publish videos or shorts with title, tags, privacy |

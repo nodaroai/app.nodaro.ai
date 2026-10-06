@@ -13,127 +13,52 @@ import {
   COLLECTION_RECORD_URL_MAX,
   COLLECTIONS_PAGE_DEFAULT,
   COLLECTIONS_PAGE_MAX,
-  clampChars,
-  collectionCapsForTier,
-  ingestRecordFromJson,
   isCollectionUrl,
-  normalizeCollectionFields,
-  normalizeCollectionMedia,
-  normalizeDedupeKey,
-  resolveEffectiveTier,
   type AddCollectionRecordResult,
-  type Collection,
-  type CollectionLimits,
   type CollectionRecord,
   type CollectionRecordSource,
-  type CollectionWriteOutcome,
   type ListCollectionsResult,
 } from "@nodaro/shared"
 import { supabase } from "../lib/supabase.js"
-import { config, hasCredits } from "../lib/config.js"
 import { requireAppScope } from "../lib/scope-prehandler.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { isMissingTableError } from "../lib/postgrest-errors.js"
+import {
+  COLLECTION_COLUMNS,
+  findCollection,
+  limitsFor,
+  readRecordsPage,
+  toCollection,
+  toRecord,
+  writeCollectionRecord,
+  type CollectionRow,
+  type RecordRow,
+} from "../lib/collections-store.js"
+
+export { searchWords, toCollection, violatedRule } from "../lib/collections-store.js"
 
 /**
- * Collections — where a workflow's records live (migration 462). Personal
- * data: every query is scoped to the caller's user_id (the table names are
- * spelled out at every `.from()` so the tenant-scope lint sees each one).
- * Table-tolerant: staging and production share one database and the
- * migration lands only on main, so a missing table reads as "not available"
- * (`available: false`, empty lists) and refuses writes with a 503, never a 500.
+ * Collections — where a workflow's records live (migration 462). The API over
+ * `lib/collections-store.ts`, which the two collection nodes share
+ * (`routes/collection-nodes.ts`). Personal data: every query is scoped to the
+ * caller's user_id. Table-tolerant: staging and production share one database
+ * and the migration lands only on main, so a missing table reads as "not
+ * available" (`available: false`, empty lists) and refuses writes with a 503,
+ * never a 500.
  *
  * Caps (decided 2026-10-05): on Nodaro Cloud by effective tier
  * (`COLLECTION_TIER_CAPS`), self-hosted by two env ceilings (unset = none).
  * Past a collection's records cap the OLDEST records are evicted after the
- * write — a scheduled pipeline is never stalled by a full collection; the
- * answer says how many went (`evicted`). Because the cap is enforced by
- * DELETING records, a limits lookup that fails, or a tier the caps table does
- * not know, means NO cap for that request — never free's.
- *
- * Two unique rules, both partial indexes (a NULL key is no rule), told apart
- * by the index name in the 23505 message: `uq_collection_records_dedupe`
- * (the same story twice is one record — 200 `duplicate`) and
- * `uq_collection_records_idempotency` (a replayed write — 200 `replayed`).
+ * write (the store's one range delete); the answer says how many went
+ * (`evicted`). A limits lookup that fails, or a tier the caps table does not
+ * know, means NO cap for that request — never free's.
  */
 
-const COLLECTION_COLUMNS = "id, name, description, created_at, updated_at, collection_records(count)"
-/** The ownership read: enough to answer 404 and name the collection, no count over its records. */
-const COLLECTION_LIGHT_COLUMNS = "id, name"
-const RECORD_COLUMNS = "id, collection_id, title, text, url, media, fields, dedupe_key, source, created_at"
-const DEDUPE_INDEX = "uq_collection_records_dedupe"
-const IDEMPOTENCY_INDEX = "uq_collection_records_idempotency"
 /** Records fetched per round while streaming an export. */
 const EXPORT_PAGE = 200
 const SOURCE_VIAS = ["api", "mcp", "node", "ui"] as const
 /** The byte-order mark that makes a spreadsheet read a CSV as UTF-8 (Hebrew, Japanese, Korean text). */
 const CSV_BOM = "﻿"
-
-type CollectionRow = {
-  id: string
-  name: string
-  description: string
-  created_at: string
-  updated_at: string
-  collection_records?: Array<{ count: number }> | { count: number } | null
-}
-
-type CollectionLight = { id: string; name: string }
-
-type RecordRow = {
-  id: string
-  collection_id: string
-  title: string
-  text: string
-  url: string | null
-  media: unknown
-  fields: unknown
-  dedupe_key: string | null
-  source: unknown
-  created_at: string
-}
-
-export function toCollection(row: CollectionRow): Collection {
-  const embed = row.collection_records
-  const count = Array.isArray(embed) ? (embed[0]?.count ?? 0) : embed && typeof embed === "object" ? (embed.count ?? 0) : 0
-  return {
-    id: row.id,
-    name: row.name,
-    description: row.description ?? "",
-    recordCount: Number(count) || 0,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  }
-}
-
-function sourceFrom(value: unknown): CollectionRecordSource {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return {}
-  const v = value as Record<string, unknown>
-  const pick = (key: string) => (typeof v[key] === "string" && (v[key] as string).length > 0 ? (v[key] as string) : undefined)
-  const via = pick("via")
-  return {
-    ...(via && (SOURCE_VIAS as readonly string[]).includes(via) ? { via: via as CollectionRecordSource["via"] } : {}),
-    ...(pick("nodeType") ? { nodeType: pick("nodeType") } : {}),
-    ...(pick("workflowId") ? { workflowId: pick("workflowId") } : {}),
-    ...(pick("executionId") ? { executionId: pick("executionId") } : {}),
-    ...(pick("nodeId") ? { nodeId: pick("nodeId") } : {}),
-  }
-}
-
-export function toRecord(row: RecordRow): CollectionRecord {
-  return {
-    id: row.id,
-    collectionId: row.collection_id,
-    title: row.title ?? "",
-    text: row.text ?? "",
-    url: row.url ?? null,
-    media: normalizeCollectionMedia(row.media),
-    fields: normalizeCollectionFields(row.fields),
-    dedupeKey: row.dedupe_key ?? null,
-    source: sourceFrom(row.source),
-    createdAt: row.created_at,
-  }
-}
 
 function notAvailable(reply: FastifyReply) {
   return reply.status(503).send({ error: { code: "not_available", message: "Collections are not available on this server yet." } })
@@ -228,16 +153,6 @@ const exportQuery = z.object({
 const idParams = z.object({ id: z.string().uuid() })
 const recordParams = z.object({ id: z.string().uuid(), recordId: z.string().uuid() })
 
-/** Words for an ilike filter, with every PostgREST / LIKE special character removed. */
-export function searchWords(q: string): string[] {
-  return q
-    .replace(/[%_*,()\\.:"'`]/g, " ")
-    .split(/\s+/)
-    .map((w) => w.trim())
-    .filter((w) => w.length > 0)
-    .slice(0, 5)
-}
-
 /** The last row of a page, as the next page's starting point (base64url, like the saved-posts cursor). */
 export function encodeRecordsCursor(row: { created_at: string; id: string }): string {
   return Buffer.from(`${row.created_at}|${row.id}`, "utf8").toString("base64url")
@@ -304,129 +219,6 @@ export function exportContentDisposition(name: string, format: "csv" | "json", n
   return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(own)}`
 }
 
-/**
- * The caller's limits: by effective tier on Nodaro Cloud; the two env
- * ceilings elsewhere (unset = no limit). A limits lookup that FAILS, or a
- * tier the caps table does not know, is NO limit for this request — the cap
- * is enforced by deleting records, so it must never fall back to free's. Only
- * a missing profile row reads as free.
- */
-async function limitsFor(req: FastifyRequest, userId: string): Promise<CollectionLimits> {
-  if (!hasCredits()) {
-    return {
-      collections: config.COLLECTIONS_MAX_PER_USER ?? null,
-      records: config.COLLECTIONS_MAX_RECORDS_PER_COLLECTION ?? null,
-    }
-  }
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("tier, subscription_tier, lifetime_topup_credits")
-    .eq("id", userId)
-    .maybeSingle()
-  if (error) {
-    req.log.warn({ err: error, userId }, "collections: tier lookup failed; holding the account to no cap for this request")
-    return { collections: null, records: null }
-  }
-  const tier = data
-    ? resolveEffectiveTier({
-        tier: (data.tier as string | null) ?? null,
-        subscription_tier: (data.subscription_tier as string | null) ?? null,
-        lifetime_topup_credits: Number(data.lifetime_topup_credits ?? 0),
-      })
-    : "free"
-  const caps = collectionCapsForTier(tier)
-  if (!caps) {
-    req.log.warn({ tier, userId }, "collections: no caps for this tier; holding the account to no cap (add the tier to COLLECTION_TIER_CAPS)")
-    return { collections: null, records: null }
-  }
-  return { collections: caps.collections, records: caps.records }
-}
-
-type Lookup<R> = { row?: R; missingTable?: boolean; error?: unknown }
-
-/** The caller's collection, by id — the light read for ownership; with the count for the detail answer. */
-async function findCollection(id: string, userId: string): Promise<Lookup<CollectionLight>>
-async function findCollection(id: string, userId: string, opts: { withCount: true }): Promise<Lookup<CollectionRow>>
-async function findCollection(id: string, userId: string, opts?: { withCount: true }): Promise<Lookup<CollectionLight | CollectionRow>> {
-  const { data, error } = await supabase
-    .from("collections")
-    .select(opts?.withCount ? COLLECTION_COLUMNS : COLLECTION_LIGHT_COLUMNS)
-    .eq("id", id)
-    .eq("user_id", userId)
-    .maybeSingle()
-  if (isMissingTableError(error)) return { missingTable: true }
-  if (error) return { error }
-  return data ? { row: data as unknown as CollectionRow } : {}
-}
-
-/**
- * Delete the oldest records past the cap — ONE range delete from the cap-th
- * newest record, however far over the cap the collection is (a downgrade can
- * leave it thousands over; a delete by id list would hit the gateway's row
- * and URL limits and never catch up). Best effort — a failed eviction never
- * fails the write; it is logged and the next write tries again.
- */
-async function evictPastCap(req: FastifyRequest, collectionId: string, userId: string, cap: number | null): Promise<number> {
-  if (cap === null || cap < 1) return 0
-  const counted = await supabase
-    .from("collection_records")
-    .select("id", { count: "exact", head: true })
-    .eq("collection_id", collectionId)
-    .eq("user_id", userId)
-  const count = counted.count ?? 0
-  if (counted.error || count <= cap) return 0
-  // The newest `cap` records stay: the cap-th newest is the boundary.
-  const boundary = await supabase
-    .from("collection_records")
-    .select("created_at, id")
-    .eq("collection_id", collectionId)
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false })
-    .order("id", { ascending: false })
-    .range(cap - 1, cap - 1)
-    .maybeSingle()
-  const edge = boundary.data as { created_at: string; id: string } | null
-  if (boundary.error || !edge) return 0
-  const deleted = await supabase
-    .from("collection_records")
-    .delete({ count: "exact" })
-    .eq("collection_id", collectionId)
-    .eq("user_id", userId)
-    .or(`created_at.lt.${edge.created_at},and(created_at.eq.${edge.created_at},id.lt.${edge.id})`)
-  if (deleted.error) {
-    req.log.warn({ err: deleted.error, collectionId }, "collection eviction failed")
-    return 0
-  }
-  return deleted.count ?? count - cap
-}
-
-function applyRecordFilters<Q extends { or: (f: string) => Q; gte: (c: string, v: string) => Q }>(query: Q, q: string | undefined, since: string | undefined): Q {
-  let out = query
-  if (since) out = out.gte("created_at", since)
-  for (const word of searchWords(q ?? "")) {
-    out = out.or(`title.ilike.*${word}*,text.ilike.*${word}*,url.ilike.*${word}*`)
-  }
-  return out
-}
-
-type Page = { rows: RecordRow[]; error: unknown; missingTable: boolean }
-
-async function readRecordsPage(opts: {
-  collectionId: string
-  userId: string
-  q?: string
-  since?: string
-  after?: { createdAt: string; id: string } | null
-  limit: number
-}): Promise<Page> {
-  let query = supabase.from("collection_records").select(RECORD_COLUMNS).eq("collection_id", opts.collectionId).eq("user_id", opts.userId)
-  query = applyRecordFilters(query, opts.q, opts.since)
-  if (opts.after) query = query.or(`created_at.lt.${opts.after.createdAt},and(created_at.eq.${opts.after.createdAt},id.lt.${opts.after.id})`)
-  const { data, error } = await query.order("created_at", { ascending: false }).order("id", { ascending: false }).limit(opts.limit)
-  if (isMissingTableError(error)) return { rows: [], error: null, missingTable: true }
-  return { rows: ((data ?? []) as unknown[]) as RecordRow[], error, missingTable: false }
-}
-
 /** The whole collection, newest first, a page at a time — what an export streams. */
 async function* iterateRecords(collectionId: string, userId: string, q: string | undefined, since: string | undefined): AsyncGenerator<CollectionRecord> {
   let after: { createdAt: string; id: string } | null = null
@@ -459,14 +251,6 @@ async function* exportBody(req: FastifyRequest, records: AsyncGenerator<Collecti
     req.log.error({ err }, "collection export failed mid-stream")
     throw err
   }
-}
-
-/** Which unique rule a 23505 came from, by the index named in the message. */
-export function violatedRule(message: string | undefined): "dedupe" | "idempotency" | "unknown" {
-  if (!message) return "unknown"
-  if (message.includes(IDEMPOTENCY_INDEX)) return "idempotency"
-  if (message.includes(DEDUPE_INDEX)) return "dedupe"
-  return "unknown"
 }
 
 function idempotencyKeyOf(req: FastifyRequest): { key: string | null; invalid: boolean } {
@@ -609,71 +393,31 @@ export async function collectionRoutes(app: FastifyInstance) {
       if (!parsed.success) return zodError(reply, parsed.error)
       const idem = idempotencyKeyOf(req)
       if (idem.invalid) return validationError(reply, `Idempotency-Key must be 1-${COLLECTION_IDEMPOTENCY_KEY_MAX} characters`)
+      const { source: given, ...input } = parsed.data
+      const source: CollectionRecordSource = { via: "api", ...(given ?? {}) }
 
-      // Ownership first: nothing of the item is read for a collection that is not the caller's.
-      const found = await findCollection(params.data.id, userId)
-      if (found.missingTable) return notAvailable(reply)
-      if (found.error) return sendInternalError(reply, req, found.error, "Failed to save the record")
-      if (!found.row) return notFound(reply, "Collection")
-
-      // An explicit field wins over what the item maps to.
-      const body = parsed.data
-      const ingested = body.item !== undefined ? ingestRecordFromJson(body.item) : null
-      const title = clampChars((body.title ?? ingested?.title ?? "").trim(), COLLECTION_RECORD_TITLE_MAX)
-      const text = clampChars(body.text ?? ingested?.text ?? "", COLLECTION_RECORD_TEXT_MAX)
-      const url = body.url ?? ingested?.url ?? null
-      const media = normalizeCollectionMedia(body.media ?? ingested?.media ?? [])
-      const fields = normalizeCollectionFields({ ...(ingested?.fields ?? {}), ...(body.fields ?? {}) })
-      const dedupeKey = normalizeDedupeKey(body.dedupeKey) ?? (url ? normalizeDedupeKey(url) : null) ?? ingested?.dedupeKey ?? null
-      if (!title && !text && !url && media.length === 0) {
-        return reply.status(400).send({ error: { code: "empty_record", message: "A record needs a title, a text, a link or a medium." } })
-      }
-      const source: CollectionRecordSource = { via: "api", ...(body.source ?? {}) }
-
-      const inserted = await supabase
-        .from("collection_records")
-        .insert({
-          collection_id: params.data.id,
-          user_id: userId,
-          dedupe_key: dedupeKey,
-          idempotency_key: idem.key,
-          title,
-          text,
-          url,
-          media,
-          fields,
-          source,
-        })
-        .select(RECORD_COLUMNS)
-        .single()
-      if (!inserted.error) {
-        const caps = await limitsFor(req, userId)
-        const evicted = await evictPastCap(req, params.data.id, userId, caps.records)
-        const result: AddCollectionRecordResult = { record: toRecord(inserted.data as unknown as RecordRow), outcome: "inserted", evicted }
-        return reply.status(201).send(result)
-      }
-      if (isMissingTableError(inserted.error)) return notAvailable(reply)
-      if (inserted.error.code !== "23505") return sendInternalError(reply, req, inserted.error, "Failed to save the record")
-
-      // The same story, or the same write, is already there: answer with it.
-      const rule = violatedRule(inserted.error.message)
-      const lookups: Array<{ outcome: CollectionWriteOutcome; column: string; value: string }> = []
-      if (idem.key && rule !== "dedupe") lookups.push({ outcome: "replayed", column: "idempotency_key", value: idem.key })
-      if (dedupeKey && rule !== "idempotency") lookups.push({ outcome: "duplicate", column: "dedupe_key", value: dedupeKey })
-      for (const lookup of lookups) {
-        const existing = await supabase
-          .from("collection_records")
-          .select(RECORD_COLUMNS)
-          .eq("collection_id", params.data.id)
-          .eq("user_id", userId)
-          .eq(lookup.column, lookup.value)
-          .maybeSingle()
-        if (existing.data) {
-          const result: AddCollectionRecordResult = { record: toRecord(existing.data as unknown as RecordRow), outcome: lookup.outcome, evicted: 0 }
+      const outcome = await writeCollectionRecord(req, { userId, collectionId: params.data.id, input, idempotencyKey: idem.key, source })
+      switch (outcome.kind) {
+        case "inserted": {
+          const result: AddCollectionRecordResult = { record: outcome.record, outcome: "inserted", evicted: outcome.evicted }
+          return reply.status(201).send(result)
+        }
+        case "duplicate":
+        case "replayed": {
+          const result: AddCollectionRecordResult = { record: outcome.record, outcome: outcome.kind, evicted: 0 }
           return reply.status(200).send(result)
         }
+        case "not_found":
+          return notFound(reply, "Collection")
+        case "missing_table":
+          return notAvailable(reply)
+        case "empty":
+          return reply.status(400).send({ error: { code: "empty_record", message: "A record needs a title, a text, a link or a medium." } })
+        case "conflict":
+          return reply.status(409).send({ error: { code: "conflict", message: "The record changed while saving. Try again." } })
+        case "error":
+          return sendInternalError(reply, req, outcome.error, "Failed to save the record")
       }
-      return reply.status(409).send({ error: { code: "conflict", message: "The record changed while saving. Try again." } })
     },
   )
 
@@ -721,3 +465,5 @@ export async function collectionRoutes(app: FastifyInstance) {
     },
   )
 }
+
+export type { RecordRow }

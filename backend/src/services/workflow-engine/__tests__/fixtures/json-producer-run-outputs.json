@@ -328,5 +328,59 @@
       "{\"id\":10,\"channel\":\"acme\",\"postUrl\":\"https://t.me/acme/10\",\"text\":\"post 10\",\"media\":[]}",
       "{\"id\":11,\"channel\":\"acme\",\"postUrl\":\"https://t.me/acme/11\",\"text\":\"post 11\",\"media\":[]}"
     ]
+  },
+  "collection-read": {
+    "text": "- Story r1 · 2026-10-06 · https://news.example.test/r1\n- Story r2 · 2026-10-06 · https://news.example.test/r2",
+    "json": [
+      {
+        "id": "r1",
+        "collectionId": "c1",
+        "title": "Story r1",
+        "text": "The body.",
+        "url": "https://news.example.test/r1",
+        "media": [],
+        "fields": {},
+        "dedupeKey": "https://news.example.test/r1",
+        "source": {
+          "via": "node"
+        },
+        "createdAt": "2026-10-06T09:00:00.000Z"
+      },
+      {
+        "id": "r2",
+        "collectionId": "c1",
+        "title": "Story r2",
+        "text": "The body.",
+        "url": "https://news.example.test/r2",
+        "media": [],
+        "fields": {},
+        "dedupeKey": "https://news.example.test/r2",
+        "source": {
+          "via": "node"
+        },
+        "createdAt": "2026-10-06T09:00:00.000Z"
+      }
+    ],
+    "listResults": [
+      "{\"id\":\"r1\",\"collectionId\":\"c1\",\"title\":\"Story r1\",\"text\":\"The body.\",\"url\":\"https://news.example.test/r1\",\"media\":[],\"fields\":{},\"dedupeKey\":\"https://news.example.test/r1\",\"source\":{\"via\":\"node\"},\"createdAt\":\"2026-10-06T09:00:00.000Z\"}",
+      "{\"id\":\"r2\",\"collectionId\":\"c1\",\"title\":\"Story r2\",\"text\":\"The body.\",\"url\":\"https://news.example.test/r2\",\"media\":[],\"fields\":{},\"dedupeKey\":\"https://news.example.test/r2\",\"source\":{\"via\":\"node\"},\"createdAt\":\"2026-10-06T09:00:00.000Z\"}"
+    ]
+  },
+  "collection-write": {
+    "text": "Story r1",
+    "json": {
+      "id": "r1",
+      "collectionId": "c1",
+      "title": "Story r1",
+      "text": "The body.",
+      "url": "https://news.example.test/r1",
+      "media": [],
+      "fields": {},
+      "dedupeKey": "https://news.example.test/r1",
+      "source": {
+        "via": "node"
+      },
+      "createdAt": "2026-10-06T09:00:00.000Z"
+    }
   }
 }

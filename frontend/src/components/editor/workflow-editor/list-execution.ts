@@ -9,7 +9,7 @@ import { TIER_PARALLELISM } from "@/lib/pricing-data";
 import { hasCredits } from "@/lib/edition";
 import { executeNode } from "./execute-node";
 import type { ExecutionContext } from "./types";
-import { REPEAT_PLACEHOLDER, decodeProviderItem, settledWithLimit, fanOutTextFeedsPrompt, isFanOutUrlItem, type FanOutPlan } from "@nodaro/shared"
+import { REPEAT_PLACEHOLDER, decodeProviderItem, settledWithLimit, fanOutTextFeedsPrompt, fanOutUrlItemIsText, isFanOutUrlItem, type FanOutPlan } from "@nodaro/shared"
 import { setSuppressToasts, RUN_START_RESET } from "./poll-job";
 
 /**
@@ -85,7 +85,9 @@ export async function executeNodeForList(
     const providerOverride = decodeProviderItem(item);
     // An empty driving cell (a row another column keeps alive) overrides nothing.
     const isRepeat = providerOverride !== undefined || item === REPEAT_PLACEHOLDER || item.trim().length === 0;
-    const isUrl = !isRepeat && isFanOutUrlItem(item);
+    // A link driving a lane where the link IS the item (Save to Collection's
+    // `in`) stays the item — the same rule the server's override applies.
+    const isUrl = !isRepeat && isFanOutUrlItem(item) && !(fanOut && fanOutUrlItemIsText(node.type, fanOut.targetHandle));
     const isPrompt = !isRepeat && !isUrl && (!fanOut || fanOutTextFeedsPrompt(node.type, fanOut.targetHandle));
     const listRowIndex = fanOut?.rows[i];
 

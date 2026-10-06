@@ -52,6 +52,9 @@ const RUN_OUTPUT: Record<string, Data> = {
   "social-search": { json: [POST], searchResults: [POST], text: MARK, listResults: [JSON.stringify(POST)] },
   // The feed's posts need a numeric id and a text to count as posts (telegramPostsFrom).
   "telegram-channel-feed": { json: [FEED_POST], text: MARK, listResults: [JSON.stringify(FEED_POST)] },
+  // Read Collection's json is the LIST of records (an object is not a result); Save to Collection's is the one record.
+  "collection-read": { json: [JSON_OBJECT], text: MARK, listResults: [JSON.stringify(JSON_OBJECT)] },
+  "collection-write": { json: JSON_OBJECT, text: MARK },
   // A scrape's json is the list of pages / ads / posts; an empty or non-list one is "no results".
   "web-scrape": { json: [JSON_OBJECT] },
   "meta-ads-scrape": { json: [JSON_OBJECT] },

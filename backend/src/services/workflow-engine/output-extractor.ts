@@ -1,4 +1,4 @@
-import { telegramFeedDigest, telegramPostsFrom } from "@nodaro/shared"
+import { collectionRecordHeadline, collectionRecordsDigest, telegramFeedDigest, telegramPostsFrom } from "@nodaro/shared"
 /**
  * Extract output from completed node execution or source node data.
  * Backend equivalent of frontend extractNodeOutput().
@@ -801,6 +801,21 @@ export function getPrimaryOutput(
     return output.text
   }
 
+  // Collections: Read Collection's `json` → the records (stringified for text
+  // consumers; Extract Field and List read state.output.json directly), `text`
+  // or no handle → their digest. Save to Collection's one handle `json` → the
+  // saved record; a text consumer gets its headline.
+  if (sourceType === "collection-read") {
+    // An empty window is NOTHING on both pips — "[]" would run a paid model on
+    // two brackets and save a junk record (the canvas returns undefined too).
+    if (sourceHandle === "json") return Array.isArray(output.json) && output.json.length > 0 ? JSON.stringify(output.json) : undefined
+    return output.text
+  }
+  if (sourceType === "collection-write") {
+    if (sourceHandle === "json" || !sourceHandle) return output.json === undefined ? output.text : JSON.stringify(output.json)
+    return output.text
+  }
+
   // Social Search: `json` → the posts the node passes on (stringified for text
   // consumers; Extract Field and List read state.output.json directly), `text`
   // → the same posts as a digest. Unknown handles return nothing.
@@ -1570,6 +1585,28 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
     return typeof text === "string" && text.trim() ? { text } : undefined
   }
 
+  // Read Collection → the records its last run saved (data.generatedJson),
+  // their digest (data.generatedText, in the format the node was set to) and
+  // one item per record — what a skipped / "Run from here" node passes on
+  // without reading again. Save to Collection → the record its last run saved.
+  if (type === "collection-read") {
+    const records = Array.isArray(data.generatedJson) ? (data.generatedJson as unknown[]) : []
+    if (records.length > 0) {
+      const text = typeof data.generatedText === "string" ? data.generatedText : collectionRecordsDigest(records as never)
+      return { json: records, text, listResults: records.map((r) => JSON.stringify(r)) }
+    }
+    const text = data.generatedText
+    return typeof text === "string" && text.trim() ? { text } : undefined
+  }
+  if (type === "collection-write") {
+    const record = data.generatedJson
+    if (record && typeof record === "object" && !Array.isArray(record)) {
+      const text = typeof data.generatedText === "string" ? data.generatedText : collectionRecordHeadline(record as never)
+      return { json: record, text }
+    }
+    return undefined
+  }
+
   // Social Search → the posts the editor saved as the node's choice
   // (data.generatedJson: a person's picks, else the first few), their digest,
   // and one item per post. This is what a skipped node, and a node keeping its
@@ -1904,6 +1941,17 @@ export function buildNodeOutputFromJobData(
       output.json = posts
       output.listResults = posts.map((p) => JSON.stringify(p))
     }
+  }
+
+  // Collections: the routes write the records on `json` (one per `listResults`
+  // item for Read Collection; the one record for Save to Collection) and the
+  // digest / headline on text / generatedText (through the generic branch below).
+  if (nodeType === "collection-read" && Array.isArray(outputData.json)) {
+    output.json = outputData.json
+    output.listResults = (outputData.json as unknown[]).map((r) => JSON.stringify(r))
+  }
+  if (nodeType === "collection-write" && outputData.json && typeof outputData.json === "object" && !Array.isArray(outputData.json)) {
+    output.json = outputData.json
   }
 
   if (nodeType === "social-search") {

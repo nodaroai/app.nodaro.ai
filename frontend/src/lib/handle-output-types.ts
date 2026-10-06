@@ -141,6 +141,9 @@ export const HANDLE_OUTPUT_TYPES: Record<string, Partial<Record<string, HandleCo
   // platform's text id (the definition's `text`); saved `out` edges are
   // rewired on load through LEGACY_SOURCE_HANDLE_ALIASES.
   "telegram-channel-feed": { json: "look", text: "text" },
+  // Collections: Read Collection's records (json) and their digest (text); Save to Collection's saved record (json).
+  "collection-read": { json: "look", text: "text" },
+  "collection-write": { json: "look" },
   "text-to-audio": { audio: "audio" },
   "text-to-dialogue": { audio: "audio" },
   "text-to-speech": { audio: "audio" },

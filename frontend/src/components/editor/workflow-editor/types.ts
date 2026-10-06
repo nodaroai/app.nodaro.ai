@@ -8,7 +8,7 @@ import { extendVideoPricingUnits } from "@/lib/extend-video-estimate";
 import { videoRetakePricingUnits } from "@/lib/video-retake-estimate";
 import { audioSyncCreditId, audioSyncWiredSourceCount } from "@/lib/audio-sync";
 import { wiredSocialPostsVideoSec } from "@/lib/video-analysis-handles";
-import { buildMotionCreditModelIdentifier, isDefaultSelectorConfig, selectListItems, type SelectorFields, getEffectiveRepeatCount, buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, bucketSecondsFromCreditId, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAuditCreditId, VIDEO_AUDIT_BUCKET_CREDITS, FAN_OUT_EACH_TYPES, FAN_OUT_EACH_HANDLES, defaultEdgeOutputMode, listResultsServeHandle, EDIT_PLAN_DEFAULT_CLIP_COUNT, EDIT_PLAN_MAX_CLIP_COUNT, buildVideoCreditModelIdentifier, SEEDANCE_2_CONTINUATION_REF_SEC, isSeedance2Provider, isMinimaxH3Provider, maxSegmentSecFor, normalizeMinimaxH3Resolution, PRO3D_RENDER_CREDIT_ID, withWiredSettings, FAN_IN_TARGETS, contentRecipeCreditId, contentIdeasCreditId, clampContentIdeasCount, SOCIAL_SEARCH_CREDIT_COSTS, socialSearchCreditIdFromNode, socialPostsFrom, socialSearchPickTop, isSocialSearchPickFrozen, applyEdlCreditId, compactWithRows, telegramPostsFrom, TELEGRAM_FEED_LIMIT_MAX, TELEGRAM_FEED_DEFAULT_LIMIT } from "@nodaro/shared"
+import { buildMotionCreditModelIdentifier, isDefaultSelectorConfig, selectListItems, type SelectorFields, getEffectiveRepeatCount, buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, bucketSecondsFromCreditId, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAuditCreditId, VIDEO_AUDIT_BUCKET_CREDITS, FAN_OUT_EACH_TYPES, FAN_OUT_EACH_HANDLES, defaultEdgeOutputMode, listResultsServeHandle, EDIT_PLAN_DEFAULT_CLIP_COUNT, EDIT_PLAN_MAX_CLIP_COUNT, buildVideoCreditModelIdentifier, SEEDANCE_2_CONTINUATION_REF_SEC, isSeedance2Provider, isMinimaxH3Provider, maxSegmentSecFor, normalizeMinimaxH3Resolution, PRO3D_RENDER_CREDIT_ID, withWiredSettings, FAN_IN_TARGETS, contentRecipeCreditId, contentIdeasCreditId, clampContentIdeasCount, SOCIAL_SEARCH_CREDIT_COSTS, socialSearchCreditIdFromNode, socialPostsFrom, socialSearchPickTop, isSocialSearchPickFrozen, applyEdlCreditId, compactWithRows, telegramPostsFrom, TELEGRAM_FEED_LIMIT_MAX, COLLECTION_READ_LIMIT_MAX, TELEGRAM_FEED_DEFAULT_LIMIT } from "@nodaro/shared"
 // getCachedCredits reads the live React-Query model-cost cache (an `ee/`
 // concern — credits are enterprise-only). Allowlisted in
 // tools/check-ee-imports.mjs (same coupling as ./run-handlers.ts).
@@ -162,6 +162,8 @@ export const NODE_CREDIT_COSTS: Record<string, number> = {
   "publish-social": 10,
   "telegram-account-send": 10,
   "telegram-channel-feed": 10,
+  "collection-read": 0,
+  "collection-write": 0,
   "save-to-storage": 0,
   "qa-check": 20,
   "image-critic": 20,
@@ -764,6 +766,9 @@ export const EXECUTABLE_TYPES = new Set([
   "telegram-account-send",
   "telegram-channel-feed",
   "save-to-storage",
+  // Collections: both answer from their route directly (no job to poll).
+  "collection-read",
+  "collection-write",
   "qa-check",
   "image-critic",
   "web-scrape",
@@ -1029,11 +1034,20 @@ function telegramFeedFanOut(data: Record<string, unknown>, reruns: boolean, sele
   return kept > 0 ? kept : 1;
 }
 
+/** Read Collection on an "each" wire: the records it holds, else its limit. */
+function collectionReadFanOut(data: Record<string, unknown>, reruns: boolean, selector?: SelectorFields): number {
+  const held = Array.isArray(data.generatedJson) ? data.generatedJson.length : 0;
+  const records = !reruns && held > 0 ? held : Math.max(1, Math.min(COLLECTION_READ_LIMIT_MAX, Number(data.limit) || 50));
+  const kept = fanOutCount(Array.from({ length: records }, (_, i) => String(i + 1)), selector);
+  return kept > 0 ? kept : 1;
+}
+
 export const EACH_WIRE_FAN_OUT: Readonly<
   Record<string, (data: Record<string, unknown>, reruns: boolean, selector?: SelectorFields) => number>
 > = {
   "social-search": socialSearchFanOut,
   "telegram-channel-feed": telegramFeedFanOut,
+  "collection-read": collectionReadFanOut,
 };
 
 /**

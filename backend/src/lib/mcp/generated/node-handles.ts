@@ -33,6 +33,8 @@ export const NODE_HANDLES: Readonly<Record<string, NodeHandleSpec>> = {
   "character-motion": { inputs: ["target", "partner"], outputs: ["out"] },
   "cinematic-avatar": { inputs: ["prompt", "ref-video", "ref-audio", "ref-image"], outputs: ["video"] },
   "collect": { inputs: ["in"], outputs: ["out"] },
+  "collection-read": { inputs: [], outputs: ["json", "text"] },
+  "collection-write": { inputs: ["in", "image", "video"], outputs: ["json"] },
   "color-look": { inputs: ["in"], outputs: ["out"] },
   "combine-audio": { inputs: ["in"], outputs: ["audio"] },
   "combine-text": { inputs: ["text"], outputs: ["text"] },

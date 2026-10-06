@@ -126,6 +126,7 @@ import {
   Zap,
   ZoomIn,
   Megaphone,
+  Database,
 } from "lucide-react"
 import { hasCredits } from "@/lib/edition"
 import { CLOUD_ONLY_NODE_TYPES } from "@/lib/cloud-only-nodes"
@@ -227,6 +228,25 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     category: "Input",
     group: "automate-get-content",
     keywords: ["telegram", "channel", "feed", "monitor", "follow", "scrape", "rss"],
+  },
+  {
+    type: "collection-read",
+    label: "Read Collection",
+    icon: <Database className="h-4 w-4" />,
+    category: "Input",
+    group: "automate-get-content",
+    keywords: ["collection", "records", "read", "history", "covered", "dedupe", "storage", "database"],
+    // Preview: admins check the two collection nodes before they open to everyone.
+    adminOnly: true,
+  },
+  {
+    type: "collection-write",
+    label: "Save to Collection",
+    icon: <Database className="h-4 w-4" />,
+    category: "Output",
+    group: "publish-export",
+    keywords: ["collection", "save", "record", "store", "keep", "archive", "database"],
+    adminOnly: true,
   },
   // Data
   {

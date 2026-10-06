@@ -169,7 +169,7 @@ export function resolveListFanOut<C extends FanOutCandidate>(
   const held = (c: C) => compactWithRows(c.aligned).items.length
   const primary = candidates.reduce((best, c) => (held(c) > held(best) ? c : best))
   const space = candidates.filter((c) => c.aligned.length === primary.aligned.length)
-  const feedsPrompt = (c: C) => fanOutTextFeedsPrompt(nodeType, c.targetHandle) && isTextList(c.aligned)
+  const feedsPrompt = (c: C) => fanOutTextFeedsPrompt(nodeType, c.targetHandle) && isTextList(c.aligned, nodeType, c.targetHandle)
   const driver = feedsPrompt(primary) ? primary : (space.find(feedsPrompt) ?? primary)
   const rowIndices: number[] = []
   for (let row = 0; row < primary.aligned.length; row++) {
@@ -188,14 +188,38 @@ export function resolveListFanOut<C extends FanOutCandidate>(
  * the backend worker and the in-browser executor cannot disagree on it.
  */
 export function isFanOutUrlItem(item: string): boolean {
-  return item.startsWith("http") || /\.(png|jpg|jpeg|webp|gif|mp4|mov|webm|mp3|wav|ogg)(\?|$)/i.test(item)
+  const s = item.trim()
+  // A media link is ONE address. JSON (`{…}` / `[…]`) and a sentence that merely
+  // contains an image address are text: a scraped post's JSON with a
+  // `.jpg?token=` inside it used to be read as a picture and dropped from the
+  // prompt (review finding H3, 2026-10-06).
+  if (s.length === 0 || /\s/.test(s) || s.startsWith("{") || s.startsWith("[")) return false
+  return s.startsWith("http") || /\.(png|jpg|jpeg|webp|gif|mp4|mov|webm|mp3|wav|ogg)(\?|$)/i.test(s)
 }
 
-/** A media list never supplies a prompt override, whatever handle it is wired to.
+/**
+ * Lanes where an item that LOOKS like a media link is still the item itself —
+ * a record's link is what a Save to Collection stores, not a picture to show
+ * it. Data-driven so a new consumer declares its lane here, never a name check
+ * in either engine.
+ */
+const URL_ITEM_IS_TEXT_LANES: Readonly<Record<string, readonly string[]>> = {
+  "collection-write": ["in"],
+}
+
+/** Does a fan-out item that looks like a link stay TEXT on this lane (the item, not a media input)? */
+export function fanOutUrlItemIsText(nodeType: string | null | undefined, targetHandle: string | null | undefined): boolean {
+  const lanes = URL_ITEM_IS_TEXT_LANES[nodeType ?? ""]
+  return lanes !== undefined && lanes.includes(targetHandle ?? "")
+}
+
+/** A media list never supplies a prompt override, whatever handle it is wired to —
+ *  except on a lane where a link IS the item (`fanOutUrlItemIsText`).
  *  The FIRST value decides — a column is one kind of thing; this is not a scan. */
-function isTextList(aligned: readonly string[]): boolean {
+function isTextList(aligned: readonly string[], nodeType?: string | null, targetHandle?: string | null): boolean {
   const first = aligned.find((v) => !isBlank(v))
-  return first !== undefined && !isFanOutUrlItem(first)
+  if (first === undefined) return false
+  return !isFanOutUrlItem(first) || fanOutUrlItemIsText(nodeType, targetHandle)
 }
 
 /** What a fan-out source resolved to. */

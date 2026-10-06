@@ -1697,6 +1697,9 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   // 2026-10-02). Cloud-only: the private plugin sends it.
   "telegram-account-send": 10,
   "telegram-channel-feed": 10,
+  // Collections (migration 462 / pricing rows 463): free — the plan's caps, not credits, bound them.
+  "collection-write": 0,
+  "collection-read": 0,
   "save-to-storage": 0,
   "router": 0,
   "component": 0,               // Component node itself is free; inner nodes have their own costs

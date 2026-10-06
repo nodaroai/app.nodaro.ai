@@ -42,6 +42,21 @@ const IG_POSTS = [{ id: "ig-1", caption: "First", displayUrl: "https://media.exa
 /** A Telegram Channel Feed post as the feed's route writes it (TelegramChannelPost). */
 const feedPost = (id: number) => ({ id, channel: "acme", postUrl: `https://t.me/acme/${id}`, text: `post ${id}`, media: [] })
 const FEED_POSTS = [feedPost(10), feedPost(11)]
+/** A collection record as the collection routes write it (CollectionRecord). */
+const collectionRecord = (id: string) => ({
+  id,
+  collectionId: "c1",
+  title: `Story ${id}`,
+  text: "The body.",
+  url: `https://news.example.test/${id}`,
+  media: [],
+  fields: {},
+  dedupeKey: `https://news.example.test/${id}`,
+  source: { via: "node" },
+  createdAt: "2026-10-06T09:00:00.000Z",
+})
+const RECORDS = [collectionRecord("r1"), collectionRecord("r2")]
+const RECORDS_DIGEST = "- Story r1 · 2026-10-06 · https://news.example.test/r1\n- Story r2 · 2026-10-06 · https://news.example.test/r2"
 const FEED_TEXT = "post 10\n\n---\n\npost 11"
 /** A job-backed node's output, from the job row its job wrote (pinned input). */
 const fromJobRow = (type: keyof typeof jobRows) => buildNodeOutputFromJobData(jobRows[type] as Record<string, unknown>, type)
@@ -66,6 +81,16 @@ function computeOutputs(): Record<string, unknown> {
       // Every post found comes back; the node passes on the first `pickTop`.
       "social-search": buildNodeOutputFromJobData({ json: [post("p1"), post("p2"), post("p3")], pickTop: 2 }, "social-search"),
       // The feed's route writes the posts on json, one per listResults item, and the digest on text / generatedText.
+      // Collections: Read Collection writes the records on json, one per listResults item, the digest on text;
+      // Save to Collection writes the one record on json and its headline on text.
+      "collection-read": buildNodeOutputFromJobData(
+        { json: RECORDS, listResults: RECORDS.map((r) => JSON.stringify(r)), text: RECORDS_DIGEST, generatedText: RECORDS_DIGEST, count: 2, since: "2026-10-05T09:00:00.000Z", collectionName: "News" },
+        "collection-read",
+      ),
+      "collection-write": buildNodeOutputFromJobData(
+        { json: collectionRecord("r1"), text: "Story r1", generatedText: "Story r1", recordId: "r1", outcome: "inserted", evicted: 0, collectionName: "News" },
+        "collection-write",
+      ),
       "telegram-channel-feed": buildNodeOutputFromJobData(
         { json: FEED_POSTS, listResults: FEED_POSTS.map((p) => JSON.stringify(p)), text: FEED_TEXT, generatedText: FEED_TEXT, count: 2, latestId: 11 },
         "telegram-channel-feed",

@@ -8237,6 +8237,56 @@ export async function telegramChannelFetchApi(params: {
   return apiJson("/v1/telegram-channel/fetch", { body, workflowId: true, label: "apiErr.readTelegramChannel" })
 }
 
+// ---- Collection nodes (Read Collection / Save to Collection) ----
+
+/** What the Read Collection node's route answers: the window's records, their digest, the collection. */
+export async function collectionReadApi(params: {
+  collectionId: string
+  windowAmount?: number
+  windowUnit?: import("@nodaro/shared").CollectionReadWindowUnit
+  limit?: number
+  order?: import("@nodaro/shared").CollectionReadOrder
+  textFormat?: import("@nodaro/shared").CollectionDigestFormat
+  nodeId?: string
+}): Promise<{ jobId: string; records: import("@nodaro/shared").CollectionRecord[]; text: string; count: number; since: string; collection: { id: string; name: string } }> {
+  const body: Record<string, unknown> = { collectionId: params.collectionId }
+  if (params.windowAmount !== undefined) body.windowAmount = params.windowAmount
+  if (params.windowUnit) body.windowUnit = params.windowUnit
+  if (params.limit !== undefined) body.limit = params.limit
+  if (params.order) body.order = params.order
+  if (params.textFormat) body.textFormat = params.textFormat
+  if (params.nodeId) body.nodeId = params.nodeId
+  return apiJson("/v1/collection-read", { body, workflowId: true, label: "apiErr.collectionRead" })
+}
+
+/** What the Save to Collection node's route answers: the record saved (or already there), the outcome, the collection. */
+export async function collectionWriteApi(params: {
+  collectionId: string
+  item?: unknown
+  title?: string
+  text?: string
+  link?: string
+  dedupeKey?: string
+  media?: ReadonlyArray<{ type: "image" | "video"; url: string }>
+  nodeId?: string
+}): Promise<{
+  jobId: string
+  record: import("@nodaro/shared").CollectionRecord
+  outcome: import("@nodaro/shared").CollectionWriteOutcome
+  evicted: number
+  collection: { id: string; name: string }
+}> {
+  const body: Record<string, unknown> = { collectionId: params.collectionId }
+  if (params.item !== undefined) body.item = params.item
+  if (params.title) body.title = params.title
+  if (params.text) body.text = params.text
+  if (params.link) body.link = params.link
+  if (params.dedupeKey) body.dedupeKey = params.dedupeKey
+  if (params.media && params.media.length > 0) body.media = params.media
+  if (params.nodeId) body.nodeId = params.nodeId
+  return apiJson("/v1/collection-write", { body, workflowId: true, label: "apiErr.collectionWrite" })
+}
+
 /** The feed's stored position for a node of a saved workflow (null when it has none). */
 export async function getTelegramFeedCursor(workflowId: string, nodeId: string): Promise<{ lastSeenId: number | null; updatedAt: string | null }> {
   const res = await apiRequest<{ data: { lastSeenId: number | null; updatedAt: string | null } }>(

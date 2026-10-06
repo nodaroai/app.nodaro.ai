@@ -487,6 +487,24 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
   // fell through to `undefined`, and the input resolver drops falsy outputs —
   // so downstream prompts, {Label} refs, and FieldMappings all came up empty in
   // every client-side run mode, even though the edge connected fine.
+  if (type === "collection-read") {
+    // `json` → the records the last run read (stringified for text consumers;
+    // Extract Field / List read generatedJson directly), `text` / no handle →
+    // their digest. Mirrors the backend getPrimaryOutput branch.
+    if (sourceHandle === "json") {
+      const records = Array.isArray(data.generatedJson) ? data.generatedJson : [];
+      return records.length > 0 ? JSON.stringify(records) : undefined;
+    }
+    return data.generatedText as string | undefined;
+  }
+  if (type === "collection-write") {
+    // Its one handle `json` → the record the last run saved; a text consumer gets its headline.
+    const record = data.generatedJson;
+    if (sourceHandle === "json" || !sourceHandle) {
+      return record && typeof record === "object" ? JSON.stringify(record) : (data.generatedText as string | undefined);
+    }
+    return data.generatedText as string | undefined;
+  }
   if (type === "telegram-channel-feed") {
     // `json` → the posts of the last run (stringified for text consumers;
     // Extract Field / List read generatedJson directly), `text` / no handle →

@@ -52,6 +52,25 @@ describe("computeEmptyInputSkipIds", () => {
     expect([...skipped]).toEqual(["llm"])
   })
 
+  it("a Read Collection whose window held nothing starves the writer behind it — the news template's dedupe path ends 'nothing new'", () => {
+    const graph: SimpleNode[] = [node("reader", "collection-read", { collectionId: "c1", windowAmount: 48, windowUnit: "hours" }), node("writer", "llm-chat")]
+    const wires: SimpleEdge[] = [edge("reader", "writer", "text", "prompt")]
+    const idle = computeEmptyInputSkipIds({ level: [graph[1]!], nodes: graph, edges: wires, nodeStates: { reader: completed("") }, deadIds: new Set() })
+    expect([...idle]).toEqual(["writer"])
+    const busy = computeEmptyInputSkipIds({ level: [graph[1]!], nodes: graph, edges: wires, nodeStates: { reader: completed("- Story r1 · 2026-10-06") }, deadIds: new Set() })
+    expect(busy.size).toBe(0)
+  })
+
+  it("a Save to Collection straight after a feed with nothing new is skipped — a typed title or link keeps it running", () => {
+    const graph: SimpleNode[] = [node("feed", "telegram-channel-feed", { channel: "acme" }), node("save", "collection-write", { collectionId: "c1" })]
+    const wires: SimpleEdge[] = [edge("feed", "save", "text", "in")]
+    const idle = computeEmptyInputSkipIds({ level: [graph[1]!], nodes: graph, edges: wires, nodeStates: { feed: completed("") }, deadIds: new Set() })
+    expect([...idle]).toEqual(["save"])
+    const typed: SimpleNode[] = [graph[0]!, node("save", "collection-write", { collectionId: "c1", link: "https://news.example.test/daily" })]
+    expect(computeEmptyInputSkipIds({ level: [typed[1]!], nodes: typed, edges: wires, nodeStates: { feed: completed("") }, deadIds: new Set() }).size).toBe(0)
+    expect(computeEmptyInputSkipIds({ level: [graph[1]!], nodes: graph, edges: wires, nodeStates: { feed: completed("post 1") }, deadIds: new Set() }).size).toBe(0)
+  })
+
   it("a typed prompt still runs on an empty wire; a node with no wire at all is left to fail loudly", () => {
     const nodeStates = { feed: completed(""), feed2: completed(""), combine: completed("") }
     const skipped = computeEmptyInputSkipIds({ level: level("typed", "lonely"), nodes, edges, nodeStates, deadIds: new Set() })

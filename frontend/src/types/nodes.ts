@@ -1,4 +1,4 @@
-import type { TelegramChannelPost } from "@nodaro/shared"
+import type { TelegramChannelPost, CollectionRecord, CollectionWriteOutcome, CollectionReadWindowUnit, CollectionReadOrder, CollectionDigestFormat } from "@nodaro/shared"
 import type { Node, Edge } from "@xyflow/react"
 import { MODIFY_IMAGE_PROVIDERS, OVERLAY_ANCHORS } from "@nodaro/shared"
 import { MUSIC_GENRE_DEFAULT_DATA, MUSIC_MOOD_DEFAULT_DATA, INSTRUMENTATION_DEFAULT_DATA, VOICE_CHARACTER_DEFAULT_DATA, VOICE_DELIVERY_DEFAULT_DATA } from "@nodaro/prompts"
@@ -6608,6 +6608,61 @@ export type TelegramChannelFeedData = {
   currentJobProgress?: number
 }
 
+/**
+ * Save to Collection — one record per item that reaches `in`, into the
+ * collection the node names. The record's own fields are mappable from an
+ * upstream node or a `{Ref}`; left empty, they come from the item (a feed
+ * post's text and link, an article's headline, …). The link field is named
+ * `link`: node-data keys ending in `url` are locked by the Copilot's deny-list.
+ */
+export type CollectionWriteData = {
+  [key: string]: unknown
+  label: string
+  /** The collection to save into (its id — the truth). */
+  collectionId: string
+  /** The collection's name as last seen, for the card. */
+  collectionName?: string
+  title: string
+  text: string
+  link: string
+  dedupeKey: string
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  currentJobId?: string
+  /** The record the last run saved (the `json` handle). */
+  generatedJson?: CollectionRecord
+  /** Its headline (what a text consumer gets). */
+  generatedText?: string
+  lastOutcome?: CollectionWriteOutcome
+  lastEvicted?: number
+}
+
+/**
+ * Read Collection — the records a collection gained in the last N hours /
+ * days, newest or oldest first, up to a limit: `json` the records (one per
+ * list item on an "each" wire), `text` their digest.
+ */
+export type CollectionReadData = {
+  [key: string]: unknown
+  label: string
+  collectionId: string
+  collectionName?: string
+  windowAmount: number
+  windowUnit: CollectionReadWindowUnit
+  limit: number
+  order: CollectionReadOrder
+  textFormat: CollectionDigestFormat
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  currentJobId?: string
+  currentJobProgress?: number
+  /** The records the last run read (the `json` handle). */
+  generatedJson?: CollectionRecord[]
+  /** Their digest (the `text` handle), in the format the node was set to. */
+  generatedText?: string
+}
+
 export interface GenerativePipelineNodeData {
   [key: string]: unknown
   label?: string
@@ -6879,6 +6934,8 @@ export type SceneNodeData =
   | TelegramAccountTriggerData
   | TelegramAccountSendData
   | TelegramChannelFeedData
+  | CollectionWriteData
+  | CollectionReadData
   | SocialPostData
   | MusicGenreData
   | MusicMoodData
@@ -7087,6 +7144,8 @@ export type SceneNodeType =
   | "telegram-account-trigger"
   | "telegram-account-send"
   | "telegram-channel-feed"
+  | "collection-write"
+  | "collection-read"
   | "component"
   | "music-genre"
   | "music-mood"
@@ -10298,6 +10357,41 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       channel: "",
       limit: 5,
     } as TelegramChannelFeedData,
+  },
+  // Collections (where a workflow's records live)
+  {
+    type: "collection-read",
+    label: "Read Collection",
+    category: "input",
+    creditCost: 0,
+    inputs: [],
+    outputs: ["json", "text"],
+    defaultData: {
+      label: "Read Collection",
+      collectionId: "",
+      windowAmount: 24,
+      windowUnit: "hours",
+      limit: 50,
+      order: "newest",
+      textFormat: "headlines",
+    } as CollectionReadData,
+  },
+  {
+    type: "collection-write",
+    label: "Save to Collection",
+    category: "output",
+    creditCost: 0,
+    inputs: ["in", "image", "video"],
+    outputs: ["json"],
+    defaultData: {
+      label: "Save to Collection",
+      collectionId: "",
+      title: "",
+      text: "",
+      link: "",
+      dedupeKey: "",
+      fieldMappings: {},
+    } as CollectionWriteData,
   },
   // Components
   {

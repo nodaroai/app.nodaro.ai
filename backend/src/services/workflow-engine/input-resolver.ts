@@ -1215,6 +1215,9 @@ const TEXT_SOURCE_NODE_TYPES = new Set([
   "telegram-account-trigger",
   // Telegram Channel Feed — the recent posts' text.
   "telegram-channel-feed",
+  // Collections — Read Collection's digest, Save to Collection's headline.
+  "collection-read",
+  "collection-write",
   // Content Recipe (the readable recipe) and Content Ideas (one brief per idea,
   // or the digest) — text is the primary output of both.
   "content-recipe",

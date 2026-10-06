@@ -30,6 +30,10 @@ export const NODE_MAPPABLE_FIELDS: Readonly<Record<string, readonly string[]>> =
   "video-analysis":      ["analysisFocus", "youtubeUrl"],
   "video-to-video":      ["prompt"],
   "text-to-speech":      ["directText"],
+  // Save to Collection: the record's own fields, each mappable from an upstream
+  // node or a {Ref}; the link field is `link` (node-data keys ending in url are
+  // locked by the Copilot's deny-list).
+  "collection-write":    ["title", "text", "link", "dedupeKey"],
   "lip-sync":            ["prompt"],
   "generate-music":      ["prompt", "lyrics", "genre", "mood"],
   "text-to-audio":       ["prompt"],
