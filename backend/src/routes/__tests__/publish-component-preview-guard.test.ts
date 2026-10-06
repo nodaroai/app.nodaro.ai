@@ -33,7 +33,7 @@ vi.mock("@/lib/preview-stop-rule-flag.js", () => ({ previewStopRuleEnabled: () =
 vi.mock("@/lib/admin-check.js", () => ({ warmAdminCache: vi.fn(), checkIsAdmin: vi.fn().mockResolvedValue(false) }))
 vi.mock("@/ee/billing/credits.js", () => ({
   estimateWorkflowCredits: vi.fn().mockReturnValue(10),
-  estimateWorkflowListingCredits: vi.fn().mockReturnValue(10),
+  estimateWorkflowListingCredits: vi.fn().mockResolvedValue({ preview: 10, final: 0 }),
 }))
 vi.mock("@/lib/node-registry.js", () => ({
   NODE_REGISTRY: [

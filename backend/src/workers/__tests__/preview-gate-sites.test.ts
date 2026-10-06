@@ -33,30 +33,52 @@ const FILES = sourceFiles(SRC).map((path) => ({ rel: relative(SRC, path), text: 
 describe("every enqueue producer answers reviewerPresent", () => {
   const producers = FILES.filter((f) => /orchestrationQueue\.add\(\s*"workflow-execution"/.test(f.text))
 
-  it("there are nine, as the spec counts them", () => {
-    expect(producers.map((f) => f.rel).sort()).toEqual([
-      "lib/plugin-triggers.ts",
-      "lib/schedule-cron.ts",
-      "routes/api-tokens.ts",
-      "routes/app-runner.ts",
-      "routes/presentation.ts",
-      "routes/telegram-webhook.ts",
-      "routes/webhook-triggers.ts",
-      "routes/workflow-execution.ts",
-      "services/app-execution.ts",
-    ])
+  // The spec's nine, and since Render final in the app runner a tenth: the
+  // app's Render final (a continuation of an app run).
+  const PRODUCERS = [
+    "lib/plugin-triggers.ts",
+    "lib/schedule-cron.ts",
+    "routes/api-tokens.ts",
+    "routes/app-runner.ts",
+    "routes/presentation.ts",
+    "routes/telegram-webhook.ts",
+    "routes/webhook-triggers.ts",
+    "routes/workflow-execution.ts",
+    "services/app-execution.ts",
+    "services/app-render-final.ts",
+  ]
+
+  it("there are ten: the spec's nine, and the app's Render final", () => {
+    expect(producers.map((f) => f.rel).sort()).toEqual(PRODUCERS)
   })
 
-  it.each(["lib/plugin-triggers.ts", "lib/schedule-cron.ts", "routes/api-tokens.ts", "routes/app-runner.ts", "routes/presentation.ts", "routes/telegram-webhook.ts", "routes/webhook-triggers.ts", "routes/workflow-execution.ts", "services/app-execution.ts"])(
-    "%s sets it",
-    (rel) => expect(FILES.find((f) => f.rel === rel)!.text).toMatch(/reviewerPresent[,:]/),
-  )
+  it.each(PRODUCERS)("%s sets it", (rel) => expect(FILES.find((f) => f.rel === rel)!.text).toMatch(/reviewerPresent[,:]/))
 
-  it("only the editor's /run can say a reviewer is present", () => {
+  // A reviewer is a person who can press Render final: the editor
+  // (`reviewer: "editor"`) and the app runner (`reviewer: "app"`, decided
+  // 2026-10-04 with Render final in the app runner). Every other lane is
+  // nobody to review.
+  const APP_RUNNER_LANES = ["routes/app-runner.ts", "services/app-execution.ts", "services/app-render-final.ts"]
+
+  it("only the editor's /run and the app runner's lanes can say a reviewer is present", () => {
     for (const f of producers) {
-      if (f.rel === "routes/workflow-execution.ts") continue
+      if (f.rel === "routes/workflow-execution.ts" || APP_RUNNER_LANES.includes(f.rel)) continue
       expect(f.text, f.rel).toMatch(/reviewerPresent: false/)
     }
+  })
+
+  it("the app runner's routes answer it from the runner's mark alone (lib/app-reviewer.ts)", () => {
+    for (const rel of ["routes/app-runner.ts", "routes/app-render-final.ts"]) {
+      expect(FILES.find((f) => f.rel === rel)!.text, rel).toMatch(/const reviewerPresent = appReviewerPresent\(req, /)
+    }
+    const mark = FILES.find((f) => f.rel === "lib/app-reviewer.ts")!.text
+    expect(mark).toContain('req.authKind === "jwt"')
+    expect(mark).toContain("extractMcpClient(req.body)")
+    expect(mark).toMatch(/if \(opts\.component \|\| opts\.headless\) return false/)
+  })
+
+  it("a component's inner run is never a reviewer", () => {
+    expect(FILES.find((f) => f.rel === "services/app-execution.ts")!.text).toMatch(/reviewerPresent === true && !isComponentExecution/)
   })
 })
 
@@ -92,6 +114,11 @@ describe("the shared stop rule is read only through the flag-gated funnel (decid
 
   it("lib/preview-stop-rule.ts is the one caller", () => {
     expect(FILES.filter((f) => CALL.test(f.text)).map((f) => f.rel)).toEqual(["lib/preview-stop-rule.ts"])
+  })
+
+  it("its flag-free reading is the app listing's alone (decided 2026-10-06)", () => {
+    const callers = FILES.filter((f) => f.rel !== "lib/preview-stop-rule.ts" && /\bpreviewStopsForListing\(/.test(f.text)).map((f) => f.rel)
+    expect(callers).toEqual(["ee/billing/credits.ts"])
   })
 
   it("the funnel asks the flag", () => {

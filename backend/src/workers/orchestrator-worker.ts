@@ -88,6 +88,7 @@ import { assembleFanOutResult } from "./fan-out-result.js"
 import { resolveFanOutIterationInputs } from "./fan-out-inputs.js"
 import { hydrateEntityNodes } from "../lib/entity-hydration.js"
 import { withResolvedResultIds } from "../lib/canvas-result-ids.js"
+import { settleAppRunFinalEdits } from "../lib/app-run-final-column.js"
 
 /** Env-var ceiling — tier limits are capped by this. */
 const MAX_CONCURRENT_NODES_CEILING = config.MAX_CONCURRENT_NODES_PER_EXECUTION
@@ -1613,7 +1614,10 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     })
 
     // --- App monetization: credit creator earnings ---
-    if (ctx.isAppRun && appVersionId && hasCredits()) {
+    // Settled once per app run, on the execution `app_runs.execution_id`
+    // names. A CONTINUED run (an app's Render final) is outside the run and
+    // earns no markup — the final nor the nodes after it (decided 2026-10-04).
+    if (ctx.isAppRun && appVersionId && hasCredits() && !job.data.continueFromExecutionId) {
       try {
         const { data: appVersion } = await supabase
           .from("published_apps")
@@ -1675,6 +1679,12 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     const message = err instanceof Error ? err.message : String(err)
     console.error(`[orchestrator] Execution ${executionId} error:`, message)
     await failExecution(executionId, message)
+  } finally {
+    // An app's Render final (a continuation of an app run) has ended — however
+    // it ended: the runner's edits of what it replaced go now, not when it was
+    // asked for (decided 2026-10-06). Reads the row's status, so a drain
+    // (requeued, still running) settles nothing. Never throws.
+    if (ctx.isAppRun && job.data.continueFromExecutionId) await settleAppRunFinalEdits(executionId, userId)
   }
 }
 

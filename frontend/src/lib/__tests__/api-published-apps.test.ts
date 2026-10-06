@@ -208,6 +208,17 @@ describe("getPublishedApp", () => {
 // runPublishedApp
 // ---------------------------------------------------------------------------
 
+describe("runPublishedApp — a headless call carries no reviewer mark", () => {
+  it("never marks a headless run", async () => {
+    const mock = mockFetchJson({ executionId: "e", runId: "r", status: "pending" })
+    vi.stubGlobal("fetch", mock)
+    await runPublishedApp("my-app", undefined, undefined, undefined, true)
+    const body = JSON.parse(mock.mock.calls[0][1].body as string)
+    expect(body.reviewer).toBeUndefined()
+    expect(body.headless).toBe(true)
+  })
+})
+
 describe("runPublishedApp", () => {
   it("sends POST to /v1/app/:slug/run with inputOverrides", async () => {
     const runResult = { executionId: "ex-1", runId: "run-1", status: "running" }
@@ -222,7 +233,8 @@ describe("runPublishedApp", () => {
     expect(url).toBe("/v1/app/my-app/run")
     expect(opts.method).toBe("POST")
     const body = JSON.parse(opts.body as string)
-    expect(body).toEqual({ inputOverrides: overrides })
+    // The app runner's mark: a person here can review a Preview and press Render final.
+    expect(body).toEqual({ inputOverrides: overrides, reviewer: "app" })
     expect(result).toEqual(runResult)
   })
 
@@ -233,7 +245,7 @@ describe("runPublishedApp", () => {
     await runPublishedApp("my-app")
 
     const body = JSON.parse(mock.mock.calls[0][1].body as string)
-    expect(body).toEqual({ inputOverrides: undefined })
+    expect(body).toEqual({ inputOverrides: undefined, reviewer: "app" })
   })
 
   it("URL-encodes special characters in slug", async () => {

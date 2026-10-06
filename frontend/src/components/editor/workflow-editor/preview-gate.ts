@@ -15,15 +15,20 @@
  *   Preview render: refused, permanently.
  * - `triggerBranchHoldsPreview` — an armed trigger whose runs the server
  *   will refuse, because nobody is there to review them.
+ * - `runPreviewGate` — an app run on show: which renders offer Render final,
+ *   and which cards wait for it.
  *
  * Every answer here goes through the rollout flag (`PREVIEW_STOP_RULE_ENABLED`,
  * read from /config.js — decided 2026-10-05). Off, the editor behaves as it did
  * before the rule existed: nothing gated, refused, warned about or left out of
- * an estimate. This is the ONLY editor module that calls the shared rule (a
+ * an estimate. One deliberate exception: `runPreviewGate` still names the
+ * renders whose take is a Preview with the flag off, so an app card offers
+ * Render final as the editor's node does (decided 2026-10-06). This is the ONLY editor module that calls the shared rule (a
  * guard test in preview-gate-sites.test.ts holds that).
  */
 import {
   buildFeedMaps,
+  PREVIEW_RENDER_NODE_TYPES,
   previewGatedNodeIds,
   previewStops,
   type FeedEdge,
@@ -31,6 +36,7 @@ import {
   type PreviewGateEdge,
   type PreviewGateNode,
 } from "@nodaro/shared"
+import { FROM_RENDER_FINAL } from "@nodaro/render-rules"
 import { tx } from "@/lib/i18n"
 import { runtimePreviewStopRule } from "@/lib/runtime-config"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
@@ -149,4 +155,84 @@ export function triggerBranchHoldsPreview(
     executes: (id) => (!scope || scope.has(id)) && !isFrozen(byId.get(id)),
   })
   return stops.previewRenderIds.length > 0 || stops.savedPreviewRenderIds.length > 0
+}
+
+/** A node's state in a run on show, as the app runner holds it. */
+interface RunNodeState {
+  readonly status?: string
+  readonly output?: Readonly<Record<string, unknown>>
+  /** The run's own Render final's result (`appRunFinalStates` marks it). */
+  readonly [FROM_RENDER_FINAL]?: unknown
+}
+
+/** What a run on show says about review (Render final in the app runner, decided 2026-10-04). */
+export interface RunPreviewGate {
+  /**
+   * Renders whose take in the run is a Preview: each card offers Render final.
+   * A Preview the run's own final made (a second Preview render further on)
+   * too: its Render final continues from the run's newest final, one render
+   * at a time (a chain, decided 2026-10-06).
+   */
+  readonly previewRenderIds: ReadonlySet<string>
+  /** Nodes that waited for Render final: forward of a Preview take, with no result of their own in the run. */
+  readonly gatedNodeIds: ReadonlySet<string>
+}
+
+const NO_RUN_GATE: RunPreviewGate = { previewRenderIds: new Set<string>(), gatedNodeIds: new Set<string>() }
+const RESULT_STATUSES: ReadonlySet<string> = new Set(["completed", "failed"])
+
+const stampOf = (quality: unknown): { quality?: string } => (typeof quality === "string" ? { quality } : {})
+
+/** A render's take in the run: its one result, and its latest batch's rows. */
+function runTakeStamps(state: RunNodeState | undefined) {
+  const output = state?.status === "completed" ? state.output : undefined
+  const rows = Array.isArray(output?.listResults) ? (output!.listResults as unknown[]) : []
+  const stamps = Array.isArray(output?.listResultStamps) ? (output!.listResultStamps as Array<{ quality?: unknown } | null>) : []
+  return {
+    output: output ? stampOf(output.quality) : undefined,
+    batch: rows.length > 0 ? rows.map((url, i) => (url ? stampOf(stamps[i]?.quality) : null)) : undefined,
+  }
+}
+
+/**
+ * The stop rule read over a RUN ON SHOW (an app run): every render by its take
+ * in that run, never by the creator's snapshot. A render whose take is a
+ * Preview offers Render final, and every node forward of it that holds no
+ * result of its own in the run waited for that final — its card says so and
+ * never falls back to the snapshot's output.
+ *
+ * Off with the rollout flag, a Preview take still offers Render final, as the
+ * editor's node does (decided 2026-10-06): the run executed the whole graph,
+ * so nothing waited, and Render final re-renders that render at Final.
+ */
+export function runPreviewGate(
+  nodes: readonly GraphNode[],
+  edges: readonly GraphEdge[],
+  nodeStates: Readonly<Record<string, RunNodeState | undefined>>,
+): RunPreviewGate {
+  const stopRule = runtimePreviewStopRule()
+  const takes = new WeakMap<object, ReturnType<typeof runTakeStamps>>()
+  const previewRenderIds = new Set<string>()
+  const keyed = nodes.map((n) => {
+    if (!PREVIEW_RENDER_NODE_TYPES.has(n.type ?? "")) return n
+    const state = nodeStates[n.id]
+    const take = runTakeStamps(state)
+    if (take.output?.quality === "proxy" || take.batch?.some((s) => s?.quality === "proxy")) previewRenderIds.add(n.id)
+    const data = { ...((n.data as Record<string, unknown> | undefined) ?? {}) }
+    takes.set(data, take)
+    return { ...n, data } as GraphNode
+  })
+  // Every Preview take holds back what follows it, whichever run made it —
+  // with the rule on. Off, nothing was held back.
+  if (previewRenderIds.size === 0 || !stopRule) return { previewRenderIds, gatedNodeIds: NO_RUN_GATE.gatedNodeIds }
+  const stops = previewStops(asGate(keyed), asGateEdges(edges), {
+    // Nothing executes: the run on show has ended, and every render hands on its take.
+    executes: () => false,
+    savedRenders: {
+      output: (data) => takes.get(data)?.output,
+      batch: (data) => takes.get(data)?.batch,
+    },
+  })
+  const gatedNodeIds = new Set([...stops.gatedNodeIds].filter((id) => !RESULT_STATUSES.has(nodeStates[id]?.status ?? "")))
+  return { previewRenderIds, gatedNodeIds }
 }

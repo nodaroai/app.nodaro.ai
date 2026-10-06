@@ -40,6 +40,11 @@ function applySlotToPresentation(slot: Pick<RunSlot, "inputValues" | "nodeStates
   }
 }
 
+/** Follow a run's Render final that is still rendering (a reload, or another tab asked for it). */
+function followSlotFinal(slot: Pick<RunSlot, "id" | "finalExecution" | "nodeStates">) {
+  if (slot.finalExecution) useAppRunnerStore.getState().followFinal(slot.id, slot.finalExecution, slot.nodeStates)
+}
+
 /** First completed-output media URL for a run's nodeStates (prefer thumbnailNodeId, else first media). */
 function extractSlotThumbnail(
   nodeStates: Record<string, { output?: Record<string, unknown> }>,
@@ -244,8 +249,12 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
         version: run.version ?? null,
         thumbnailUrl: run.thumbnailUrl ?? null,
         hiddenNodes: run.hiddenNodes ?? undefined,
+        finalExecution: run.finalExecution ?? null,
+        nodeStateEdits: run.nodeStateEdits ?? null,
       }))
       setSlots(dbSlots)
+      // Every write of a run's edits sends the merged whole: seed what the server holds.
+      for (const slot of dbSlots) useAppRunnerStore.getState().seedRunEdits(slot.id, slot.nodeStateEdits)
 
       // If initialRunId targets a DB run that wasn't available during init, select it now
       if (initialRunId) {
@@ -262,6 +271,7 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
             totalNodes: target.totalNodes,
             errorMessage: null,
           })
+          followSlotFinal(target)
         }
       }
       setRunsFetchDone(true)
@@ -530,6 +540,7 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
         errorMessage: null,
       })
     }
+    followSlotFinal(slot)
 
     // Update URL for deep-linking (replaceState, no navigation)
     const url = new URL(window.location.href)

@@ -1,6 +1,7 @@
 import { usdToCredits, PARAMETER_NODE_TYPES, withWiredSettings, MUSIC_CREDIT_ID, TEXT_TO_AUDIO_SFX_CREDIT_IDS, textToAudioCreditId, CAMERA_SWITCH_CREDIT_ID, LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec, LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec, videoSfxCreditId, applyEdlCreditId, UGC_NODE_TYPES, dialogueProviderOf } from "@nodaro/shared"
 import { trySettleManagedJob } from "./managed-job-settlement.js"
-import { previewStopsWhenEnabled } from "../../lib/preview-stop-rule.js"
+import { previewStopsForListing, previewStopsWhenEnabled } from "../../lib/preview-stop-rule.js"
+import { renderFinalRunSet } from "@nodaro/render-rules"
 import { supabase } from "../../lib/supabase.js"
 import { ReserveRpcError, reservePrefixOf } from "../../lib/reserve-errors.js"
 import { refuseBlockedReservation } from "../../lib/access-blocks.js"
@@ -3511,11 +3512,8 @@ export class CreditsService {
     // its seam (spec 6.8). The UGC nodes, and the nodes downstream of UGC Clip that the seam's figure already
     // counts as its fixed lines, stay out of the per-node sum; they stay IN the graph the sum reads, so the
     // preview stop rule still sees every wire.
-    const ugc = hasCredits() && nodes.some((n) => n.type === "ugc-clip") ? await estimateUgcPart(nodes, edges) : null
-    const skip = ugc
-      ? (n: EstimateNode) => UGC_NODE_TYPES.has(n.type) || (n.id !== undefined && ugc.downstream.has(n.id))
-      : undefined
-    return sumWorkflowEstimate(nodes, edges, prices, options, skip) + (ugc?.credits ?? 0)
+    const ugc = await ugcPartOf(nodes, edges)
+    return sumWorkflowEstimate(nodes, edges, prices, options, ugc?.skip) + (ugc?.credits ?? 0)
   }
 
   /**
@@ -3530,15 +3528,28 @@ export class CreditsService {
   ): number {
     return sumWorkflowEstimate(nodes, edges, STATIC_BASE_PRICES, options)
   }
+
+  /**
+   * The listing (`estimateWorkflowListingCredits`) at `STATIC_CREDIT_COSTS`'
+   * base prices, with no database read, no markup and no UGC seam: what a
+   * built-in template's stored price pins.
+   */
+  static estimateWorkflowBaseListing(
+    nodes: ReadonlyArray<EstimateNode>,
+    edges: ReadonlyArray<EstimateEdge> | undefined,
+    publishType: ListingPublishType,
+  ): AppListingEstimate {
+    return listingEstimate(nodes, edges ?? [], STATIC_BASE_PRICES, publishType)
+  }
 }
 
 /**
  * What a workflow estimate quotes. A RUN estimate (the default) quotes what
  * one run executes, so the preview stop rule leaves out what a Preview render
- * gates. A LISTING estimate (`scope: "whole-graph"`) is the figure stored at
- * publish — an app's or template's listed price, and the base the monetization
- * recalculation reads back — and counts every node, whatever the stop rule's
- * flag says (decided 2026-10-05).
+ * gates. A WHOLE-GRAPH estimate (`scope: "whole-graph"`) counts every node,
+ * whatever the stop rule's flag says (decided 2026-10-05): it is a listing's
+ * preview part (`estimateWorkflowListingCredits`, which stores the figure at
+ * publish).
  */
 export type WorkflowEstimateOptions = {
   scope?: "run" | "whole-graph"
@@ -3547,6 +3558,33 @@ export type WorkflowEstimateOptions = {
    *  wired setting, a caption source, the stop rule's closure). */
   runNodeIds?: ReadonlySet<string>
 }
+
+/**
+ * A listing in two parts (decided 2026-10-06), for an app, a component and a
+ * template alike:
+ *
+ * - PREVIEW — the WHOLE graph, every node at its saved settings (each render
+ *   set to Preview at Preview). The creator's fee applies to this part.
+ * - FINAL — each Render final: the render at Final and everything after it,
+ *   run outside the app run without the fee. A node after two Preview renders
+ *   is counted in each of their finals. An app with no Preview render has
+ *   none; a component never stops at a Preview, so its final part is 0.
+ *
+ * Never under-quote: with the preview stop rule off an app run executes the
+ * whole graph at Preview and the fee applies to all of it, and a final never
+ * stops at a later Preview; staging and production share one database, so
+ * the stored listing cannot follow the flag. With the flag on, a run leaves
+ * the tail for its final, and a final stops at a later Preview, so both parts
+ * can over-quote (accepted). Revisit when production turns the flag on.
+ * Stored and priced by `lib/app-listing-price.ts`.
+ */
+export interface AppListingEstimate {
+  readonly preview: number
+  readonly final: number
+}
+
+/** What is being listed: an app, a component (never stops at a Preview), or a template. */
+export type ListingPublishType = "app" | "component" | "template"
 
 /** `STATIC_CREDIT_COSTS` as a price table: the base prices, unmarked. */
 const STATIC_BASE_PRICES: ChargedPriceTable = {
@@ -3582,10 +3620,22 @@ function sumWorkflowEstimate(
       ).gatedNodeIds
     : new Set<string>()
   const runNodeIds = options?.runNodeIds
+  return sumEstimatedNodes(nodes, edges, prices, (node) => {
+    if (runNodeIds && !(node.id && runNodeIds.has(node.id))) return false
+    if (node.id && previewGated.has(node.id)) return false
+    return !skip?.(node)
+  })
+}
+
+/** The estimate of the nodes `include` keeps, each priced as a run of it would be. */
+function sumEstimatedNodes(
+  nodes: ReadonlyArray<EstimateNode>,
+  edges: ReadonlyArray<EstimateEdge> | undefined,
+  prices: ChargedPriceTable,
+  include: (node: EstimateNode) => boolean,
+): number {
   return nodes.reduce((sum, node) => {
-    if (runNodeIds && !(node.id && runNodeIds.has(node.id))) return sum
-    if (node.id && previewGated.has(node.id)) return sum
-    if (skip?.(node)) return sum
+    if (!include(node)) return sum
     // A parameter node (Provider, Duration, a picker) is read, never run: no
     // job, no charge. A Provider's data names a model ("veo3"), which the
     // lookups below would otherwise price as a run of that model. The editor's
@@ -3611,6 +3661,23 @@ function sumWorkflowEstimate(
     })
     return sum + (chargedCredits(prices, modelId, estimatePricingUnits(priced)) ?? chargedCredits(prices, node.type) ?? 0)
   }, 0)
+}
+
+/**
+ * The UGC part of a graph that has a UGC Clip (Cloud only), with the nodes its
+ * figure already counts — every caller of the per-node sum skips them, the run
+ * estimate and the listing alike. `null` when there is none.
+ */
+async function ugcPartOf(
+  nodes: ReadonlyArray<EstimateNode>,
+  edges: ReadonlyArray<EstimateEdge> | undefined,
+): Promise<{ credits: number; skip: (node: EstimateNode) => boolean } | null> {
+  if (!hasCredits() || !nodes.some((n) => n.type === "ugc-clip")) return null
+  const ugc = await estimateUgcPart(nodes, edges)
+  return {
+    credits: ugc.credits,
+    skip: (n) => UGC_NODE_TYPES.has(n.type) || (n.id !== undefined && ugc.downstream.has(n.id)),
+  }
 }
 
 /** Nodes a UGC estimate already prices as its fixed lines, when they sit downstream of UGC Clip. */
@@ -3648,6 +3715,56 @@ async function estimateUgcPart(
     console.warn("[estimate] UGC estimate unavailable; UGC nodes counted as 0", err instanceof Error ? err.message : err)
     return { credits: 0, downstream }
   }
+}
+
+const listingGateNodes = (nodes: ReadonlyArray<EstimateNode>) =>
+  nodes.flatMap((n) => (n.id ? [{ id: n.id, type: n.type, data: n.data, parentId: n.parentId }] : []))
+const listingGateEdges = (edges: ReadonlyArray<EstimateEdge>) =>
+  edges.flatMap((e) =>
+    e.source ? [{ source: e.source, target: e.target, sourceHandle: e.sourceHandle, targetHandle: e.targetHandle, data: e.data }] : [],
+  )
+
+/**
+ * The listing's two parts (`AppListingEstimate`), an upper bound whatever the
+ * stop rule's flag says (the listing never asks it). The preview part is the
+ * whole graph at its saved settings. Each render the run executes at Preview
+ * has its Render final: the render's whole Render final set
+ * (`renderFinalRunSet`, what the app runner's Render final runs) with the
+ * render at Final and every other render at its saved settings — never cut
+ * short at a later render still at Preview. With the flag off a final does
+ * not stop there, and the runner's card offers Render final on every render
+ * whose take is a Preview, so a node after two Preview renders (in a chain,
+ * or fed by both) runs in each of their finals and is priced in each (review
+ * round 3, decided 2026-10-06). With the flag on a final stops at a later
+ * Preview and that node runs once; the listing then over-quotes by it
+ * (accepted; revisit when production turns the flag on).
+ */
+function listingEstimate(
+  nodes: ReadonlyArray<EstimateNode>,
+  edges: ReadonlyArray<EstimateEdge>,
+  prices: ChargedPriceTable,
+  publishType: ListingPublishType,
+  /** Nodes priced elsewhere (the UGC seam): read as part of the graph, never summed. */
+  skip?: (node: EstimateNode) => boolean,
+): AppListingEstimate {
+  // The preview part is the whole graph at its saved settings — never only
+  // the run up to each Preview: a flag-off app run executes all of it, with
+  // the fee (see AppListingEstimate). Revisit when production turns the flag on.
+  const preview = sumEstimatedNodes(nodes, edges, prices, (n) => !skip?.(n))
+  // A component runs inside its caller's run and never stops at a Preview.
+  if (publishType === "component") return { preview, final: 0 }
+  const gateNodes = listingGateNodes(nodes)
+  const gateEdges = listingGateEdges(edges)
+  const frozen = (n: EstimateNode) => (n.data as { skipped?: unknown } | undefined)?.skipped === true
+  let final = 0
+  // Every render the run executes at Preview (gated or not: with the flag off
+  // a run executes them all, and each take is offered its Render final).
+  for (const renderId of previewStopsForListing(gateNodes, gateEdges).previewRenderIds) {
+    const runSet = renderFinalRunSet(renderId, gateNodes, gateEdges)
+    const atFinal = nodes.map((n) => (n.id === renderId ? { ...n, data: { ...(n.data ?? {}), quality: "final" } } : n))
+    final += sumEstimatedNodes(atFinal, edges, prices, (n) => !!n.id && runSet.has(n.id) && !frozen(n) && !skip?.(n))
+  }
+  return { preview, final }
 }
 
 /**
@@ -4102,16 +4219,25 @@ export async function checkRunSetCredits(
 }
 
 /**
- * The estimate STORED at publish — a published app's (or component's, or
- * template's) listed price and `base_estimated_credits`, on every publish and
- * republish. It counts the whole graph: the preview stop rule shapes run
- * estimates only, never the listing (decided 2026-10-05). Every publish path
- * calls this, never `estimateWorkflowCredits` — a guard test
- * (`__tests__/listing-estimate-sites.test.ts`) fails the build otherwise.
+ * The listing STORED at publish — a published app's, component's or
+ * template's listed price and an app's `base_estimated_credits`, on every
+ * publish and republish — in two parts (`AppListingEstimate`, decided
+ * 2026-10-06): the preview part, the whole graph at its saved settings, which
+ * the creator's fee applies to; and the final part, each Render final, which
+ * it does not (0 for a component). ONE function for every listing: the
+ * preview stop rule shapes run estimates only, never the listing (decided
+ * 2026-10-05). Every publish path calls this, never `estimateWorkflowCredits`
+ * — a guard test (`__tests__/listing-estimate-sites.test.ts`) fails the build
+ * otherwise.
  */
-export function estimateWorkflowListingCredits(
+export async function estimateWorkflowListingCredits(
   nodes: ReadonlyArray<EstimateNode>,
-  edges?: ReadonlyArray<EstimateEdge>,
-): Promise<number> {
-  return CreditsService.estimateWorkflowCredits(nodes, edges, { scope: "whole-graph" })
+  edges: ReadonlyArray<EstimateEdge> | undefined,
+  options: { readonly publishType: ListingPublishType },
+): Promise<AppListingEstimate> {
+  const prices = hasCredits() ? await getChargedPriceTable() : STATIC_BASE_PRICES
+  // The UGC part is priced through its seam, in the preview part (it is the app run's).
+  const ugc = await ugcPartOf(nodes, edges)
+  const split = listingEstimate(nodes, edges ?? [], prices, options.publishType, ugc?.skip)
+  return { preview: split.preview + (ugc?.credits ?? 0), final: split.final }
 }

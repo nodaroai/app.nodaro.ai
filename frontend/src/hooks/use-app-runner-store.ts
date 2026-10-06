@@ -9,6 +9,9 @@ import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import {
   getPublishedApp,
   runPublishedApp,
+  renderAppRunFinal,
+  updateAppRunInputs,
+  WorkflowAlreadyRunningError,
   getAppRuns,
   getAppExecutionStatus,
   deleteAppRun,
@@ -23,6 +26,7 @@ import { migrateListLoopNodes } from "@/lib/list-loop-migration"
 import { composeLottieSlotOverrides, collectSlotExposedNodeIds } from "@/lib/lottie-slot-overrides"
 import { resolveInputItems } from "@/components/presentation/helpers"
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
+import { appRunFinalReplacedIds, appRunFinalStates } from "@nodaro/render-rules"
 
 export type AppRunnerStatus = "idle" | "loading" | "running" | "completed" | "failed"
 
@@ -41,7 +45,27 @@ interface NodeState {
  * output-node-id, which collides across concurrent same-app runs unless it
  * lives per-run — that collision is the core reason this map exists.
  */
+/**
+ * An app run's Render final, as the runner follows it (Render final in the app
+ * runner, decided 2026-10-04): a second execution, a continuation outside the
+ * run. Its results show over the run's own once it has them; until then (and
+ * after a failure) the preview stays on show.
+ */
+export interface RunFinal {
+  /** The render it finishes; `null` when followed after a reload. */
+  readonly renderNodeId: string | null
+  readonly executionId: string | null
+  readonly status: "starting" | "running" | "completed" | "failed"
+  readonly completedNodes: number
+  readonly totalNodes: number
+  readonly errorMessage: string | null
+  /** The run's states the final's results show over. */
+  readonly base: Record<string, NodeState>
+}
+
 export interface RunRuntime {
+  /** The run's Render final, while followed this session. */
+  final?: RunFinal
   executionId: string | null
   status: AppRunnerStatus
   /** How a completed run ended ("nothing_new" when a node was skipped for want of input); absent until then. */
@@ -111,6 +135,25 @@ interface AppRunnerState {
   setSelectedVersion: (version: number | null) => void
   getRunState: (runId: string) => RunRuntime
   reset: () => void
+
+  /**
+   * The runner's own edits of each run's results (`app_runs.node_states`, an
+   * overlay), by run id — what a PATCH of the run's node states REPLACES, so
+   * every write sends the merged whole (`saveRunEdits`).
+   */
+  runEdits: Record<string, Record<string, unknown>>
+  /** Seed a run's known edits from the server (the run views' `nodeStateEdits`). */
+  seedRunEdits: (runId: string, edits: Record<string, unknown> | null | undefined) => void
+  /** Merge `patch` into the run's edits and write the merged whole. */
+  saveRunEdits: (runId: string, patch: Record<string, unknown>) => Promise<void>
+  /** Render final of a run whose render made a Preview (a continuation outside the run). */
+  renderFinal: (runId: string, renderNodeId: string) => Promise<void>
+  /** Follow a final already asked for (a reload, or another tab). */
+  followFinal: (
+    runId: string,
+    final: { readonly id: string; readonly status: string; readonly completedNodes?: number | null; readonly totalNodes?: number | null },
+    base: Record<string, NodeState>,
+  ) => void
 }
 
 // One poller per in-flight execution, keyed by executionId so concurrent runs
@@ -188,6 +231,62 @@ export const useAppRunnerStore = create<AppRunnerState>((set, get) => ({
   combinedProgress: {},
 
   getRunState: (runId: string) => get().runtimes[runId] ?? EMPTY_RUNTIME,
+
+  runEdits: {},
+
+  seedRunEdits: (runId, edits) => {
+    if (!edits || typeof edits !== "object" || Object.keys(edits).length === 0) return
+    if (get().runEdits[runId]) return
+    set({ runEdits: { ...get().runEdits, [runId]: { ...edits } } })
+  },
+
+  saveRunEdits: async (runId, patch) => {
+    const { slug } = get()
+    if (!slug) return
+    const merged = mergeRunEdits(get().runEdits[runId], patch)
+    set({ runEdits: { ...get().runEdits, [runId]: merged } })
+    await updateAppRunInputs(slug, runId, undefined, undefined, undefined, merged)
+  },
+
+  renderFinal: async (runId, renderNodeId) => {
+    const { slug } = get()
+    if (!slug) return
+    const base = runStatesOf(get(), runId)
+    const starting: RunFinal = { renderNodeId, executionId: null, status: "starting", completedNodes: 0, totalNodes: 0, errorMessage: null, base }
+    patchRuntime(set, get, runId, { ...seedRuntime(get(), runId), final: starting })
+    let executionId: string
+    try {
+      executionId = (await renderAppRunFinal(slug, runId, renderNodeId, crypto.randomUUID())).executionId
+    } catch (err) {
+      if (err instanceof WorkflowAlreadyRunningError) {
+        executionId = err.executionId
+      } else {
+        const message = err instanceof Error ? err.message : "Render final failed"
+        patchRuntime(set, get, runId, { final: { ...starting, status: "failed", errorMessage: message } })
+        return
+      }
+    }
+    patchRuntime(set, get, runId, { final: { ...starting, executionId, status: "running" } })
+    startFinalPolling(set, get, runId)
+  },
+
+  followFinal: (runId, final, base) => {
+    const active = final.status === "pending" || final.status === "running" || final.status === "stopping"
+    if (!active || pollers.has(final.id)) return
+    patchRuntime(set, get, runId, {
+      ...seedRuntime(get(), runId),
+      final: {
+        renderNodeId: null,
+        executionId: final.id,
+        status: "running",
+        completedNodes: final.completedNodes ?? 0,
+        totalNodes: final.totalNodes ?? 0,
+        errorMessage: null,
+        base,
+      },
+    })
+    startFinalPolling(set, get, runId)
+  },
 
   loadApp: async (slug: string) => {
     if (get().loading) return
@@ -423,6 +522,7 @@ export const useAppRunnerStore = create<AppRunnerState>((set, get) => ({
       insufficientCredits: false,
       progressSegments: {},
       combinedProgress: {},
+      runEdits: {},
     })
   },
 }))
@@ -631,4 +731,116 @@ async function computeProgressSegments(
   // Discard if the run was replaced/cleared while estimates were in flight.
   if (!get().runtimes[runId]) return
   patchRuntime(set, get, runId, { progressSegments: buildSegments(estimates) })
+}
+
+/** A run's states on show: its runtime's, else (the active run loaded from history) the flat mirror's. */
+function runStatesOf(state: AppRunnerState, runId: string): Record<string, NodeState> {
+  return state.runtimes[runId]?.nodeStates ?? (state.activeRunId === runId ? state.nodeStates : {})
+}
+
+/** A runtime for a run loaded from history (it has none until something follows it): its states on show. */
+function seedRuntime(state: AppRunnerState, runId: string): Partial<RunRuntime> {
+  if (state.runtimes[runId]) return {}
+  const active = state.activeRunId === runId
+  return {
+    executionId: active ? state.executionId : null,
+    status: active ? state.executionStatus : "completed",
+    nodeStates: runStatesOf(state, runId),
+    completedNodes: active ? state.completedNodes : 0,
+    totalNodes: active ? state.totalNodes : 0,
+  }
+}
+
+/**
+ * The run's edits with `patch` over them, per node: the patch's fields over
+ * the known entry's, its `output` fields over the entry's output — the merge
+ * the server applies when it shows them.
+ */
+export function mergeRunEdits(
+  known: Readonly<Record<string, unknown>> | undefined,
+  patch: Readonly<Record<string, unknown>>,
+): Record<string, unknown> {
+  const merged: Record<string, unknown> = { ...(known ?? {}) }
+  for (const [nodeId, entry] of Object.entries(patch)) {
+    const prior = (merged[nodeId] ?? {}) as Record<string, unknown>
+    const next = (entry ?? {}) as Record<string, unknown>
+    merged[nodeId] = {
+      ...prior,
+      ...next,
+      output: { ...(prior.output as Record<string, unknown> | undefined), ...(next.output as Record<string, unknown> | undefined) },
+    }
+  }
+  return merged
+}
+
+/**
+ * A final has COMPLETED: the overlay's edits of the nodes it completed itself
+ * (the states it replaced) were edits of the preview, so they go — as the
+ * server drops them at the same point (decided 2026-10-06). Not before, and
+ * not for a final that fails: it keeps the preview on show, and the edit of it.
+ */
+function dropReplacedEdits(
+  set: (partial: Partial<AppRunnerState>) => void,
+  get: () => AppRunnerState,
+  runId: string,
+  finalStates: unknown,
+) {
+  const edits = get().runEdits[runId]
+  if (!edits) return
+  const replaced = new Set(appRunFinalReplacedIds(finalStates))
+  if (!Object.keys(edits).some((id) => replaced.has(id))) return
+  const kept = Object.fromEntries(Object.entries(edits).filter(([nodeId]) => !replaced.has(nodeId)))
+  set({ runEdits: { ...get().runEdits, [runId]: kept } })
+}
+
+/** Poll a run's final to its end, showing its results over the run's as they land. */
+function startFinalPolling(
+  set: (partial: Partial<AppRunnerState>) => void,
+  get: () => AppRunnerState,
+  runId: string,
+) {
+  const executionId = get().runtimes[runId]?.final?.executionId
+  if (!executionId) return
+
+  const poll = async () => {
+    const final = get().runtimes[runId]?.final
+    if (!final || final.executionId !== executionId || final.status !== "running") return
+    try {
+      const status = await getAppExecutionStatus(executionId)
+      const current = get().runtimes[runId]?.final
+      if (!current || current.executionId !== executionId) return
+      const nodeStates = appRunFinalStates(current.base, status.node_states) as Record<string, NodeState>
+      const progress = { completedNodes: status.completed_nodes, totalNodes: status.total_nodes }
+      if (status.status === "completed") {
+        patchRuntime(set, get, runId, { nodeStates, final: { ...current, ...progress, status: "completed" } })
+        dropReplacedEdits(set, get, runId, status.node_states)
+        clearPoller(executionId)
+        const { slug } = get()
+        if (slug) getAppRuns(slug).then(({ data }) => set({ runs: data })).catch(() => {})
+        return
+      }
+      if (status.status === "failed" || status.status === "cancelled") {
+        // A final that did not complete is never laid over the run (the
+        // server's views agree, review round 2): back to the states it started
+        // from, and the runner's edits of them stay.
+        patchRuntime(set, get, runId, {
+          nodeStates: current.base,
+          final: { ...current, ...progress, status: "failed", errorMessage: executionErrorText(status.error_message) ?? "Render final failed" },
+        })
+        clearPoller(executionId)
+        return
+      }
+      patchRuntime(set, get, runId, { nodeStates, final: { ...current, ...progress } })
+      pollers.set(executionId, setTimeout(poll, 2000))
+    } catch (err) {
+      const current = get().runtimes[runId]?.final
+      if (!current || current.executionId !== executionId) return
+      patchRuntime(set, get, runId, {
+        final: { ...current, status: "failed", errorMessage: err instanceof Error ? err.message : "Connection lost" },
+      })
+      clearPoller(executionId)
+    }
+  }
+
+  pollers.set(executionId, setTimeout(poll, 1000))
 }

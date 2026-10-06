@@ -32,3 +32,20 @@ export function previewStopsWhenEnabled(
 ): PreviewStops {
   return previewStopRuleEnabled() ? previewStops(nodes, edges, run) : noStops()
 }
+
+/**
+ * The stop rule read WITHOUT the flag — for a listing price alone
+ * (`estimateWorkflowListingCredits`, which takes `nodes, edges, { publishType }`,
+ * decided 2026-10-06): one listing for an app, a component and a template, whose
+ * preview part is the whole graph. The listing never asks the flag (decided
+ * 2026-10-05), so the renders it gives a Render final are the graph's, not
+ * the deployment's. Never a run's rule: a guard test holds it to the billing
+ * module.
+ */
+export function previewStopsForListing(
+  nodes: readonly PreviewGateNode[],
+  edges: readonly PreviewGateEdge[],
+  run?: PreviewGateRun,
+): PreviewStops {
+  return previewStops(nodes, edges, run)
+}

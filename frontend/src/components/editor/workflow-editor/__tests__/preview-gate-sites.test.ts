@@ -92,6 +92,7 @@ describe("preview stop rule — every derived set builder is classified (Render 
     "components/editor/workflow-editor/render-final-handler.ts", // Render final / Update preview: previewRunnable on the overridden graph
     "hooks/use-render-final.ts", // the bar's prices: estimateRunCredits (via useRunSetCredits) on the overridden graph
     "hooks/use-run-from-here-credits.ts", // the button's quote: estimateRunCredits
+    "components/render/app-render-review.tsx", // the app runner's Render final price: estimateRunCredits (via useRunSetCredits) on the overridden run graph
   ])
   const DERIVED_EXEMPT: Readonly<Record<string, string>> = {
     "components/editor/workflow-editor/run-from-here-set.ts": "defines liveExecutable / runFromHereExecutable",
@@ -117,6 +118,14 @@ describe("preview stop rule — every derived set builder is classified (Render 
     const src = FILES.find((f) => f.rel === "hooks/use-render-final.ts")!.text
     expect(src).toContain("withRunOverrides(")
     expect(src).toMatch(/useRunSetCredits\(asFinal\.executable, asFinal\.graph/)
+  })
+})
+
+describe("the app runner's Render final price (A6.3)", () => {
+  it("is the overridden run graph's estimate, never the snapshot's", () => {
+    const src = FILES.find((f) => f.rel === "components/render/app-render-review.tsx")!.text
+    expect(src).toMatch(/withRunOverrides\(graph as WorkflowNode\[\], \{ \[renderId\]: \{ quality: "final" \} \}\)/)
+    expect(src).toMatch(/useRunSetCredits\(run\.executable, run\.nodes/)
   })
 })
 

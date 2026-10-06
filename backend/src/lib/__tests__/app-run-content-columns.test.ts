@@ -45,6 +45,9 @@ const KEPT_RUN_RECORD_COLUMNS = [
   // The runner's hidden node ids (081): ids of the app's own nodes, not text
   // or media the runner supplied, so the run record keeps them.
   "hidden_nodes",
+  // The run's Render final (473): the id of a server-written execution, whose
+  // media the harvest reaches through it, not content the runner supplied.
+  "final_execution_id",
 ]
 
 describe("migration column reader", () => {
@@ -154,12 +157,19 @@ describe("collectAppR2Keys", () => {
           app_runs: [
             {
               id: "00000000-0000-4000-8000-000000000010",
+              runner_id: "00000000-0000-4000-8000-0000000000a1",
               execution_id: "00000000-0000-4000-8000-000000000020",
               input_values: { "input-1": { imageUrl: "https://r2.example.com/uploads/runner-photo.png" } },
               node_states: { "gen-1": { results: [{ url: "https://r2.example.com/images/edited.png" }] } },
             },
           ],
-          workflow_executions: [{ node_states: { "gen-1": { url: "https://r2.example.com/images/generated.png" } } }],
+          workflow_executions: [
+            {
+              id: "00000000-0000-4000-8000-000000000020",
+              user_id: "00000000-0000-4000-8000-0000000000a1",
+              node_states: { "gen-1": { url: "https://r2.example.com/images/generated.png" } },
+            },
+          ],
           jobs: [{ id: "00000000-0000-4000-8000-000000000030", output_data: { url: "https://r2.example.com/videos/job.mp4" } }],
         },
         touched,
@@ -209,6 +219,7 @@ describe("collectAppR2Keys — objects the app does not own", () => {
     app_runs: [
       {
         id: "00000000-0000-4000-8000-000000000010",
+        runner_id: RUNNER,
         execution_id: "00000000-0000-4000-8000-000000000020",
         input_values: {
           "input-1": { url: "https://r2.example.com/images/other-user-old.png" },
@@ -217,7 +228,9 @@ describe("collectAppR2Keys — objects the app does not own", () => {
         node_states: null,
       },
     ],
-    workflow_executions: [{ node_states: { "gen-1": { url: "https://r2.example.com/images/generated.png" } } }],
+    workflow_executions: [
+      { id: "00000000-0000-4000-8000-000000000020", user_id: RUNNER, node_states: { "gen-1": { url: "https://r2.example.com/images/generated.png" } } },
+    ],
     jobs: [{ id: APP_JOB, output_data: { url: "https://r2.example.com/videos/job.mp4" } }],
     assets,
   })

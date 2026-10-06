@@ -40,6 +40,12 @@ export interface ExecuteAppRunParams {
   /** Spend-surface flag captured at the originating route (D1 v2). */
   webFreeMode?: boolean
   /**
+   * A person in the app runner can review a Preview render of this run (its
+   * card carries Render final; lib/app-reviewer.ts). Absent = nobody: an SDK /
+   * MCP / headless run, and always a component's inner run.
+   */
+  reviewerPresent?: boolean
+  /**
    * The originating lane's resolved payer (P14), carried verbatim — this
    * function never resolves. A component inner execution inherits the
    * PARENT execution's context this way; absent means personal.
@@ -89,6 +95,7 @@ export async function executeAppRun(
     isComponentExecution,
     previewStopRule,
     idempotencyKey,
+    reviewerPresent,
   } = params
 
   // 1. Create workflow_execution record — through the idempotent insert
@@ -160,8 +167,9 @@ export async function executeAppRun(
     executingComponentIds,
     webFreeMode,
     billingContext: payloadBillingContext({ userId, billingContext }),
-    // An app run (and a component's inner run) has no Render final path.
-    reviewerPresent: false,
+    // Only the app runner, never a component's inner run (a nested graph
+    // has no Render final path).
+    reviewerPresent: reviewerPresent === true && !isComponentExecution,
     ...(isComponentExecution ? { isComponentExecution: true } : {}),
     // A component's inner run inherits its parent's stop-rule answer.
     ...(previewStopRule !== undefined ? { previewStopRule } : {}),

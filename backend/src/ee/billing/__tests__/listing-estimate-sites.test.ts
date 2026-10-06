@@ -6,7 +6,10 @@
  * template, written on publish and republish and read back by the monetization
  * recalculation — counts the whole graph. So every file that writes one of
  * those columns prices it with `estimateWorkflowListingCredits`, never with the
- * run estimate, and the listing estimator is used for nothing else.
+ * run estimate, and the listing estimator is used for nothing else. Every
+ * listing — app, component and template — asks it for two parts (decided
+ * 2026-10-06): the whole graph at Preview (the creator's fee applies to it),
+ * plus each Render final without the fee.
  */
 import { describe, it, expect } from "vitest"
 import { readFileSync, readdirSync, statSync } from "node:fs"

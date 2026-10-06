@@ -152,7 +152,7 @@ export async function appAnalyticsRoutes(app: FastifyInstance) {
 
     let query = supabase
       .from("app_runs")
-      .select("id, runner_id, credits_used, created_at, workflow_executions(user_id, workflow_id, status, completed_nodes, total_nodes, completed_at)")
+      .select("id, runner_id, credits_used, created_at, workflow_executions!execution_id(user_id, workflow_id, status, completed_nodes, total_nodes, completed_at)")
       .eq("app_id", appId)
       .order("created_at", { ascending: false })
       .limit(limit + 1)

@@ -6,7 +6,8 @@ import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { estimateWorkflowListingCredits, type EstimateNode, type EstimateEdge } from "../ee/billing/credits.js"
 import { invalidateAppCache } from "./app-runner.js"
-import { getNodeResult, getOutputType, parseHandleId, calculateMonetizationMarkup, calculateMonetizedCost } from "@nodaro/shared"
+import { getNodeResult, getOutputType, parseHandleId } from "@nodaro/shared"
+import { appListingPrice, storedListingFinalCredits, type StoredAppListing } from "../lib/app-listing-price.js"
 import { sanitizeSlugBase, generateSlug, getCreatorDisplayName } from "../lib/marketplace-helpers.js"
 import { bareOriginSchema } from "../lib/url-validator.js"
 import { sendInternalError } from "../lib/http-errors.js"
@@ -73,6 +74,8 @@ function toCamelCase(row: Record<string, unknown>) {
     allowedOrigins: row.allowed_origins,
     estimatedCredits: row.estimated_credits,
     baseEstimatedCredits: row.base_estimated_credits ?? 0,
+    // The Render finals' part of the listed price, which the creator's fee never marks up.
+    finalEstimatedCredits: storedListingFinalCredits(row as StoredAppListing),
     thumbnailNodeId: row.thumbnail_node_id ?? null,
     category: row.category ?? "other",
     outputTypes: row.output_types ?? [],
@@ -619,9 +622,12 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
     )
     if (unboundUses.length > 0) return sendCredentialUnbound(reply, unboundUses)
 
-    // The listed price counts the whole graph — never the run estimate the
-    // preview stop rule shortens (decided 2026-10-05).
-    const baseEstimatedCredits = await estimateWorkflowListingCredits(nodes as EstimateNode[], edges as EstimateEdge[])
+    // The listed price is never the run estimate the preview stop rule
+    // shortens (decided 2026-10-05). It is the whole graph at Preview with
+    // the creator's fee, plus each Render final without it (decided
+    // 2026-10-06; a component's final part is 0): the listing estimator's two
+    // parts, priced below once the fee is known.
+    const listingSplit = await estimateWorkflowListingCredits(nodes as EstimateNode[], edges as EstimateEdge[], { publishType })
 
     // Inherit monetization from previous version, then user defaults, then zeros
     let inheritedMonetizationEnabled = false
@@ -649,11 +655,12 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
       }
     }
 
-    // Calculate estimated_credits including monetization markup
-    let estimatedCredits = baseEstimatedCredits
-    if (inheritedMonetizationEnabled && baseEstimatedCredits > 0) {
-      estimatedCredits = calculateMonetizedCost(baseEstimatedCredits, inheritedMonetizationFlatFee, inheritedMonetizationPercent)
-    }
+    // The fee's base is the preview part (the whole graph at Preview); the listed price adds each final, unmarked.
+    const { base: baseEstimatedCredits, estimated: estimatedCredits } = appListingPrice(listingSplit, {
+      enabled: inheritedMonetizationEnabled,
+      flatFee: inheritedMonetizationFlatFee,
+      percent: inheritedMonetizationPercent,
+    })
 
     // Auto-derive preview media from snapshot nodes if not provided
     let effectivePreviewUrl = previewMediaUrl ?? null
@@ -792,6 +799,8 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
       allowedOrigins: app.allowed_origins,
       estimatedCredits: app.estimated_credits,
       baseEstimatedCredits: app.base_estimated_credits ?? 0,
+      // The Render finals' part of the listed price, which the creator's fee never marks up.
+      finalEstimatedCredits: storedListingFinalCredits(app),
       monetizationEnabled: app.monetization_enabled ?? false,
       monetizationFlatFee: app.monetization_flat_fee ?? 0,
       monetizationPercent: app.monetization_percent ?? 0,
@@ -857,7 +866,7 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
     // Verify ownership (include monetization fields to avoid a second SELECT)
     const { data: existing, error: fetchError } = await supabase
       .from("published_apps")
-      .select("id, creator_id, base_estimated_credits, monetization_enabled, monetization_flat_fee, monetization_percent, slug, workflow_id")
+      .select("id, creator_id, base_estimated_credits, estimated_credits, monetization_enabled, monetization_flat_fee, monetization_percent, slug, workflow_id")
       .eq("id", appId)
       .single()
 
@@ -897,11 +906,10 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
       const flat = body.monetizationFlatFee ?? existing.monetization_flat_fee ?? 0
       const pct = body.monetizationPercent ?? existing.monetization_percent ?? 0
 
-      if (enabled && base > 0) {
-        updates.estimated_credits = calculateMonetizedCost(base, flat, pct)
-      } else {
-        updates.estimated_credits = base
-      }
+      // The fee applies to the preview run (the stored base); each Render
+      // final, held in the stored price, stays unmarked (decided 2026-10-06).
+      const final = storedListingFinalCredits(existing)
+      updates.estimated_credits = appListingPrice({ preview: base, final }, { enabled: !!enabled, flatFee: flat, percent: pct }).estimated
 
       invalidateAppCache(existing.slug)
 

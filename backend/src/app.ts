@@ -276,6 +276,7 @@ import { telegramChannelRoutes } from "./routes/telegram-channel.js"
 import { publishedAppsRoutes } from "./routes/published-apps.js"
 import { workflowTemplatesRoutes } from "./routes/workflow-templates.js"
 import { appRunnerRoutes } from "./routes/app-runner.js"
+import { appRenderFinalRoutes } from "./routes/app-render-final.js"
 import { componentExecuteRoutes } from "./routes/component-execute.js"
 import { ogTagsRoutes } from "./routes/og-tags.js"
 import { appAnalyticsRoutes } from "./routes/app-analytics.js"
@@ -760,6 +761,7 @@ export async function buildApp() {
   await app.register(publishedAppsRoutes)
   await app.register(workflowTemplatesRoutes)
   await app.register(appRunnerRoutes)
+  await app.register(appRenderFinalRoutes)
   await app.register(componentExecuteRoutes)
   await app.register(ogTagsRoutes)
   await app.register(appAnalyticsRoutes)

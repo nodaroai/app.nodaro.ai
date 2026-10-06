@@ -43,6 +43,7 @@ import type { useRunSlots } from "./use-run-slots"
 
 import { InputCard } from "@/components/presentation/input-card"
 import { OutputCard, type FieldBadgeEntry } from "@/components/presentation/output-card"
+import { useAppRunGatedIds } from "@/components/render/app-render-review"
 import { anyOutputIsPreview, outputIsPreview } from "@/components/presentation/render-preview"
 import { ConfigFieldRenderer } from "@/components/presentation/config-field-renderer"
 import { RichtextBlock } from "@/components/presentation/richtext-block"
@@ -350,8 +351,13 @@ export function MobileAppShell({
     [presNodeStates],
   )
 
+  // Nodes that waited for Render final in the run on show: their cards say so
+  // (OutputCard) and never fall back to the snapshot's output.
+  const gatedNodeIds = useAppRunGatedIds()
+
   const getFullscreenResult = useCallback(
     (nodeId: string) => {
+      if (gatedNodeIds?.has(nodeId)) return { url: undefined, text: undefined }
       const state = presNodeStates[nodeId]
       if (state?.output) {
         const output = state.output as Record<string, unknown>
@@ -369,7 +375,7 @@ export function MobileAppShell({
       if (!node) return { url: undefined, text: undefined }
       return getNodeResultWithInputFallback(node)
     },
-    [presNodeStates, presInputValues, nodeMap, suppressOutputFallback, inputNodeIdSet],
+    [presNodeStates, presInputValues, nodeMap, suppressOutputFallback, inputNodeIdSet, gatedNodeIds],
   )
 
   const getCardTitle = useCallback(

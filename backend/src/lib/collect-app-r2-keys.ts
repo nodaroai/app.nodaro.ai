@@ -1,20 +1,28 @@
 import { supabase } from "./supabase.js"
 import { r2KeyFromUrl } from "../ee/billing/cleanup-service.js"
 import { APP_RUN_USER_CONTENT_COLUMNS } from "./app-run-content.js"
+import { appRenderFinalStampOf, finalExecutionIdOf, selectWithFinalExecution } from "./app-run-final-column.js"
 
 /**
  * Walk every R2 key referenced by an app: the app row's own media (icon,
  * preview, snapshot_nodes), every app_runs row's user-content columns
  * (`APP_RUN_USER_CONTENT_COLUMNS`: the runner's inputs, edited results and
- * run label), the linked workflow_executions node_states, and the linked
- * jobs.output_data
+ * run label), the linked workflow_executions node_states (the run's, its
+ * Render final's, and the earlier finals of a chain, by their stamps), and the
+ * linked jobs.output_data
  * (worker handlers write URLs here that don't always mirror to node_states —
  * skipping jobs would leak files past expunge). Used by the admin expunge
  * handler to prepare the batchDeleteFromR2 call.
  *
+ * A run's execution ids are server-written (migration 469), but a chain's
+ * earlier finals are found by their executions' stamps, which the runner can
+ * write; and the service-role read bypasses RLS. So an execution — and its
+ * jobs — is harvested only when it is the run's runner's own: a run pointing at another user's execution must not get that
+ * user's media deleted with this app (decided 2026-10-06).
+ *
  * Returns only the keys this app owns — see `appOwnedKeys`. A runner's inputs
  * can point at objects the app never made, and those are not expunge's to
- * delete.
+ * delete. The app's own jobs are the jobs of the executions harvested above.
  *
  * Pages app_runs in batches of 500 to bound memory.
  */
@@ -46,15 +54,20 @@ export async function collectAppR2Keys(appId: string): Promise<string[]> {
 
   let cursor: string | null = null
   while (true) {
-    let q = supabase
-      .from("app_runs")
-      .select(["id", "execution_id", ...APP_RUN_USER_CONTENT_COLUMNS].join(", "))
-      .eq("app_id", appId)
-      .order("id", { ascending: true })
-      .limit(500)
-    if (cursor) q = q.gt("id", cursor)
+    // A run's Render final (`final_execution_id`, through the column guard)
+    // is a second execution of the run: its renders are the run's too.
+    const page = (columns: string) => {
+      let q = supabase
+        .from("app_runs")
+        .select(columns)
+        .eq("app_id", appId)
+        .order("id", { ascending: true })
+        .limit(500)
+      if (cursor) q = q.gt("id", cursor)
+      return q as unknown as PromiseLike<{ data: Array<Record<string, unknown>> | null; error: { code?: string | null; message?: string } | null }>
+    }
 
-    const { data, error } = await q
+    const { data, error } = await selectWithFinalExecution(["id", "runner_id", "execution_id", ...APP_RUN_USER_CONTENT_COLUMNS].join(", "), page)
     if (error) throw new Error(`collectAppR2Keys failed at runs page: ${error.message}`)
     // The select is built from a list, so the client cannot type the rows.
     const rows = (data ?? []) as unknown as Array<Record<string, unknown>>
@@ -64,18 +77,51 @@ export async function collectAppR2Keys(appId: string): Promise<string[]> {
       for (const column of APP_RUN_USER_CONTENT_COLUMNS) harvest(row[column])
     }
 
-    const execIds = rows.map((r) => r.execution_id).filter((x): x is string => typeof x === "string" && x.length > 0)
-    if (execIds.length > 0) {
-      const [execsRes, jobsRes] = await Promise.all([
-        supabase.from("workflow_executions").select("node_states").in("id", execIds),
-        supabase.from("jobs").select("id, output_data").in("workflow_execution_id", execIds),
-      ])
-      if (execsRes.error) throw new Error(`collectAppR2Keys failed at executions: ${execsRes.error.message}`)
-      if (jobsRes.error) throw new Error(`collectAppR2Keys failed at jobs: ${jobsRes.error.message}`)
-      for (const e of execsRes.data ?? []) harvest(e.node_states)
-      for (const j of jobsRes.data ?? []) {
-        if (typeof j.id === "string") appJobIds.add(j.id)
-        harvest(j.output_data)
+    // Each execution id with the runner of every run that names it.
+    const namedBy = new Map<string, Set<string>>()
+    for (const r of rows) {
+      const runner = r.runner_id
+      if (typeof runner !== "string" || runner.length === 0) continue
+      for (const id of [r.execution_id, finalExecutionIdOf(r)]) {
+        if (typeof id !== "string" || id.length === 0) continue
+        const runners = namedBy.get(id) ?? new Set<string>()
+        runners.add(runner)
+        namedBy.set(id, runners)
+      }
+    }
+    if (namedBy.size > 0) {
+      // A chain's earlier finals (decided 2026-10-06): the run links only its
+      // newest; each final's stamp names the execution it continued. An
+      // earlier final inherits the runners of the final that names it, so it
+      // too is harvested only when it is that runner's own.
+      const runExecutions = new Set(rows.map((r) => r.execution_id).filter((id): id is string => typeof id === "string"))
+      const owned: Array<{ id: string; node_states: unknown }> = []
+      const read = new Set<string>()
+      let batch = [...namedBy.keys()]
+      for (let step = 0; batch.length > 0 && step < 32; step++) {
+        for (const id of batch) read.add(id)
+        const execsRes = await supabase.from("workflow_executions").select("id, user_id, node_states, trigger_data").in("id", batch)
+        if (execsRes.error) throw new Error(`collectAppR2Keys failed at executions: ${execsRes.error.message}`)
+        const next = new Set<string>()
+        for (const e of (execsRes.data ?? []) as Array<{ id: string; user_id: string | null; node_states: unknown; trigger_data?: unknown }>) {
+          const runners = namedBy.get(e.id)
+          if (typeof e.user_id !== "string" || !runners?.has(e.user_id)) continue
+          owned.push(e)
+          const earlier = appRenderFinalStampOf(e.trigger_data)?.continuedFrom
+          if (!earlier || read.has(earlier) || runExecutions.has(earlier)) continue
+          namedBy.set(earlier, new Set([...(namedBy.get(earlier) ?? []), e.user_id]))
+          next.add(earlier)
+        }
+        batch = [...next]
+      }
+      for (const e of owned) harvest(e.node_states)
+      if (owned.length > 0) {
+        const jobsRes = await supabase.from("jobs").select("id, output_data").in("workflow_execution_id", owned.map((e) => e.id))
+        if (jobsRes.error) throw new Error(`collectAppR2Keys failed at jobs: ${jobsRes.error.message}`)
+        for (const j of jobsRes.data ?? []) {
+          if (typeof j.id === "string") appJobIds.add(j.id)
+          harvest(j.output_data)
+        }
       }
     }
 

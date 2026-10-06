@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from "react"
+import { useEffect, useCallback, type ReactNode } from "react"
 import { useParams, useSearchParams, Link } from "react-router-dom"
 import { Loader2, Clock, MoreVertical, Trash2, Link as LinkIcon } from "lucide-react"
 import {
@@ -25,6 +25,7 @@ import { DEFAULT_PRESENTATION_SETTINGS, type PresentationSettings } from "@/hook
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import { useRunSlots, AppRunnerLayout, RunsSidebar, MobileAppShell, ORIGINAL_SLOT_ID } from "@/components/app-runner"
 import { updateAppRunInputs } from "@/lib/api"
+import { AppRenderReviewProvider } from "@/components/render/app-render-review"
 import { resolveViewMode } from "@/components/presentation/resolve-view-mode"
 import { useT } from "@/lib/i18n"
 
@@ -97,11 +98,13 @@ export default function AppRunnerPage() {
     }
   }, [runSlots.activeSlotId, slug])
 
-  // Persist edited node states (from media edit) to the backend
+  // Persist edited node states (from media edit) to the backend. The run's
+  // edits are one column the PATCH replaces whole, so the store merges this
+  // edit into the run's known edits and writes the merged whole.
   const handleNodeStatesChange = useCallback((editedNodeStates: Record<string, unknown>) => {
     const activeId = runSlots.activeSlotId
     if (activeId && activeId !== ORIGINAL_SLOT_ID && slug) {
-      updateAppRunInputs(slug, activeId, undefined, undefined, undefined, editedNodeStates).catch(() => {})
+      useAppRunnerStore.getState().saveRunEdits(activeId, editedNodeStates).catch(() => {})
     }
   }, [runSlots.activeSlotId, slug])
 
@@ -154,16 +157,31 @@ export default function AppRunnerPage() {
     </Dialog>
   )
 
+  // Render final in the app runner: the run on show's render cards carry it,
+  // and the cards of the nodes that waited for it say so.
+  const reviewRunId = runSlots.activeSlotId && runSlots.activeSlotId !== ORIGINAL_SLOT_ID ? runSlots.activeSlotId : null
+  const withReview = (children: ReactNode) => (
+    <AppRenderReviewProvider
+      runId={reviewRunId}
+      executionId={runSlots.activeSlot?.executionId ?? null}
+      finalExecution={runSlots.activeSlot?.finalExecution ?? null}
+    >
+      {children}
+    </AppRenderReviewProvider>
+  )
+
   if (isMobile) {
     return (
       <>
-        <MobileAppShell
-          app={app}
-          user={user ?? null}
-          runSlots={runSlots}
-          cancel={cancel}
-          initialRunId={initialRunId}
-        />
+        {withReview(
+          <MobileAppShell
+            app={app}
+            user={user ?? null}
+            runSlots={runSlots}
+            cancel={cancel}
+            initialRunId={initialRunId}
+          />,
+        )}
         {deleteDialog}
       </>
     )
@@ -200,7 +218,7 @@ export default function AppRunnerPage() {
             <span className="text-sm text-muted-foreground">{t("runner.loadingRun")}</span>
           </div>
         </div>
-      ) : (
+      ) : withReview(
         <PresentationView
           mode="fullscreen"
           isOwner={false}
@@ -264,7 +282,7 @@ export default function AppRunnerPage() {
               </DropdownMenu>
             ) : null
           }
-        />
+        />,
       )}
       {deleteDialog}
     </AppRunnerLayout>

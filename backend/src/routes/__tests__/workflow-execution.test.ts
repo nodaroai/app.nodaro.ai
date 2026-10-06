@@ -604,8 +604,8 @@ describe("POST /v1/workflows/:id/run", () => {
     expect(res.statusCode).toBe(400)
     expect(res.json().error.code).toBe("preview_review_required")
     // Studio, Voice and SDK scripts show this message as is: it says why, and what to do.
-    expect(res.json().error.message).toMatch(/only a run started in the Nodaro editor can stop for one/)
-    expect(res.json().error.message).toMatch(/Open it in the editor to run it there, or set the render to Final/)
+    expect(res.json().error.message).toMatch(/only a run started in the Nodaro editor or on an app.s own page can stop for one/)
+    expect(res.json().error.message).toMatch(/Open it there to run it, or set the render to Final/)
     expect(mockOrchestrationQueueAdd).not.toHaveBeenCalled()
   })
 

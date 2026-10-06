@@ -83,6 +83,7 @@ import { resolveAllowedModes, resolveViewMode } from "./resolve-view-mode"
 import { InputCard } from "./input-card"
 import { OutputCard, type FieldBadgeEntry } from "./output-card"
 import { anyOutputIsPreview, outputIsPreview } from "./render-preview"
+import { useAppRunGatedIds } from "@/components/render/app-render-review"
 import { ConfigFieldRenderer } from "./config-field-renderer"
 import { RichtextBlock } from "./richtext-block"
 import { RichtextEditor } from "./richtext-editor"
@@ -758,8 +759,13 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
     [isFullscreen, presNodeStates, nodeMap],
   )
 
+  // The app runner's run on show: nodes that waited for Render final. Their
+  // cards say so (OutputCard) and never fall back to the snapshot's output.
+  const gatedNodeIds = useAppRunGatedIds()
+
   const getFullscreenResult = useCallback(
     (nodeId: string) => {
+      if (gatedNodeIds?.has(nodeId)) return { url: undefined, text: undefined }
       // Check execution state first (from a recent run)
       const state = presNodeStates[nodeId]
       if (state?.output) {
@@ -792,7 +798,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
       if (!node) return { url: undefined, text: undefined }
       return getNodeResultWithInputFallback(node)
     },
-    [presNodeStates, presInputValues, nodeMap, suppressOutputFallback, inputNodeIdSet],
+    [presNodeStates, presInputValues, nodeMap, suppressOutputFallback, inputNodeIdSet, gatedNodeIds],
   )
 
   const getResult = useCallback(

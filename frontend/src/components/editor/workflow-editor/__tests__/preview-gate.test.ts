@@ -5,6 +5,7 @@ import {
   previewRenderPreflight,
   previewRunnable,
   previewSingleRunRefusal,
+  runPreviewGate,
   triggerBranchHoldsPreview,
 } from "../preview-gate"
 import { estimateRunCredits } from "../estimate-run-credits"
@@ -159,5 +160,75 @@ describe("PREVIEW_STOP_RULE_ENABLED off (production until Render final): the edi
     expect(editorPreviewGatedIds(nodes, edges).size).toBe(2)
     previewRuleOff()
     expect(editorPreviewGatedIds(nodes, edges).size).toBe(0)
+  })
+})
+
+describe("runPreviewGate — an app run on show (Render final in the app runner)", () => {
+  const preview = { status: "completed", output: { videoUrl: "https://r2/p.mp4", quality: "proxy" } }
+  const final = { status: "completed", output: { videoUrl: "https://r2/f.mp4", quality: "final" } }
+
+  it("a render whose take is a Preview offers Render final; the nodes after it wait — whatever the snapshot's quality", () => {
+    // The snapshot says Final; the run on show rendered a Preview (an input override).
+    const { nodes, edges } = tighten("final")
+    const gate = runPreviewGate(nodes, edges, { plan: { status: "completed" }, cut: preview, cap: { status: "skipped" } })
+    expect([...gate.previewRenderIds]).toEqual(["cut"])
+    expect([...gate.gatedNodeIds].sort()).toEqual(["cap", "img"])
+  })
+
+  it("once the final shows, nothing waits", () => {
+    const { nodes, edges } = tighten("proxy")
+    const gate = runPreviewGate(nodes, edges, { cut: final, cap: { status: "completed", output: {} }, img: { status: "completed" } })
+    expect(gate.previewRenderIds.size).toBe(0)
+    expect(gate.gatedNodeIds.size).toBe(0)
+  })
+
+  it("a node that ran on the preview anyway (a run from before the rule) keeps its result", () => {
+    const { nodes, edges } = tighten("proxy")
+    const gate = runPreviewGate(nodes, edges, { cut: preview, cap: { status: "completed", output: { videoUrl: "x" } } })
+    expect([...gate.gatedNodeIds]).toEqual(["img"])
+  })
+
+  it("a batch: any row stamped proxy is a Preview take", () => {
+    const { nodes, edges } = tighten("final")
+    const batch = { status: "completed", output: { listResults: ["a", "b"], listResultStamps: [{ quality: "proxy" }, { quality: "proxy" }] } }
+    expect([...runPreviewGate(nodes, edges, { cut: batch }).previewRenderIds]).toEqual(["cut"])
+  })
+
+  it("a Preview the run's own final made (a second Preview render further on) offers its own Render final; what follows it still waits", () => {
+    // A chain (decided 2026-10-06): that Render final continues from the run's
+    // newest final, one render at a time.
+    const nodes = [node("plan", "edit-plan"), node("cut", "apply-edl", { quality: "proxy" }), node("cap", "add-captions"), node("cut2", "apply-edl", { quality: "proxy" }), node("img", "generate-image", { provider: "nano-banana" })]
+    const edges = [edge("plan", "cut"), edge("cut", "cap"), edge("cap", "cut2"), edge("cut2", "img")]
+    const gate = runPreviewGate(nodes, edges, {
+      plan: { status: "completed" },
+      cut: { ...final, fromRenderFinal: true },
+      cap: { status: "completed", output: {}, fromRenderFinal: true },
+      cut2: { ...preview, fromRenderFinal: true },
+      img: { status: "skipped" },
+    } as never)
+    expect([...gate.previewRenderIds]).toEqual(["cut2"])
+    expect([...gate.gatedNodeIds]).toEqual(["img"])
+  })
+
+  it("a render the run never reached offers nothing", () => {
+    const { nodes, edges } = tighten("proxy")
+    expect(runPreviewGate(nodes, edges, {}).previewRenderIds.size).toBe(0)
+  })
+
+  // Decided 2026-10-06: the app result card offers Render final whatever the
+  // flag, as the editor's node does. With the flag off the run ran the whole
+  // graph, so nothing waited; Render final re-renders the render at Final.
+  it("off with the flag: a Preview take still offers Render final, and nothing waits", () => {
+    previewRuleOff()
+    const { nodes, edges } = tighten("proxy")
+    const gate = runPreviewGate(nodes, edges, { cut: preview, cap: { status: "completed", output: { videoUrl: "x" } } })
+    expect([...gate.previewRenderIds]).toEqual(["cut"])
+    expect(gate.gatedNodeIds.size).toBe(0)
+  })
+
+  it("off with the flag: a Final take offers nothing", () => {
+    previewRuleOff()
+    const { nodes, edges } = tighten("proxy")
+    expect(runPreviewGate(nodes, edges, { cut: final }).previewRenderIds.size).toBe(0)
   })
 })

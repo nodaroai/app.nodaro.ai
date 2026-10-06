@@ -69,7 +69,7 @@ The response is JSON. The fields you care about (others omitted for brevity):
   "description": "...",
   "iconUrl": "https://...",
   "version": 3,                        // latest version number
-  "estimatedCredits": 5,               // credits one run costs
+  "estimatedCredits": 5,               // the listed price: a run (with any Render final after it)
   "maxRunsPerUserPerDay": null,        // or a number
   "thumbnailNodeId": "node-abc",       // node whose output is the "hero" result
   "snapshotNodes": [                   // the workflow's nodes

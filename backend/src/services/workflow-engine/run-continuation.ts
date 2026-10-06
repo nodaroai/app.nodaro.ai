@@ -78,6 +78,7 @@ import {
   pinnedInputOverridesOf,
   withInputOverridesColumn,
 } from "../../lib/execution-input-overrides.js"
+import { appRenderFinalStampOf } from "../../lib/app-run-final-column.js"
 import { isSkipNode, isSourceNode } from "./execution-graph.js"
 import type { NodeExecutionState, NodeOutput, SimpleNode } from "./types.js"
 
@@ -135,7 +136,10 @@ export async function loadContinuationSource(
         readonly isRenderNode: (nodeId: string) => boolean
       },
 ): Promise<ContinuationSource | null> {
-  const base = opts.withStates ? "id, user_id, workflow_id, status, node_states" : "id, user_id, workflow_id, status"
+  // `trigger_data`: a Render final's stamp names the version it ran (below).
+  const base = opts.withStates
+    ? "id, user_id, workflow_id, status, trigger_data, node_states"
+    : "id, user_id, workflow_id, status, trigger_data"
   const withOverrides = opts.withStates || opts.withPin === true
   // The seeding read (and a route's `withPin` check) also takes the overrides
   // the run pinned when it started (round 3) — through the column guard: until
@@ -152,6 +156,7 @@ export async function loadContinuationSource(
     user_id: string
     workflow_id: string
     status: string
+    trigger_data?: unknown
     node_states?: Record<string, NodeExecutionState> | null
   }
   const pinned = withOverrides ? pinnedInputOverridesOf(row as unknown as Record<string, unknown>) : null
@@ -169,12 +174,18 @@ export async function loadContinuationSource(
     .maybeSingle()
   if (appRunError) throw new Error(`continuation: ${appRunError.message}`)
   const appRow = appRun as { app_id?: string | null; input_values?: unknown } | null
+  // An app run's Render final is an execution no app run names by
+  // `execution_id`; a later final continues from it (a chain, decided
+  // 2026-10-06). Its stamp, written when it was created, names the version it
+  // ran — so the check holds at the worker too, after the run's link has
+  // moved on to the new final.
+  const finalVersion = appRow ? null : (appRenderFinalStampOf(execution.trigger_data)?.appVersionId ?? null)
   return {
     id: execution.id,
     userId: execution.user_id,
     workflowId: execution.workflow_id,
     status: execution.status,
-    appVersionId: (appRow?.app_id ?? null) || null,
+    appVersionId: (appRow?.app_id ?? null) || finalVersion,
     ...(opts.withStates
       ? { nodeStates: await resolveRunStateStamps(execution.node_states ?? {}, opts.isRenderNode, execution.user_id) }
       : {}),

@@ -8517,7 +8517,10 @@ export interface PublishedApp {
   isEmbeddable: boolean
   allowedOrigins: string[]
   estimatedCredits: number
+  /** The part of the price the creator's fee applies to: the app run (its preview). */
   baseEstimatedCredits?: number
+  /** The Render finals' part of the price: never marked up by the creator's fee (decided 2026-10-06). */
+  finalEstimatedCredits?: number
   thumbnailNodeId: string | null
   category: string
   outputTypes: string[]
@@ -8562,6 +8565,17 @@ export interface AppBrowseCard {
   componentMetadata?: Record<string, unknown> | null
 }
 
+/** An app run's Render final, as the run views carry it. */
+export interface AppRunFinalExecution {
+  id: string
+  status: string
+  completedNodes: number | null
+  totalNodes: number | null
+  errorMessage: string | null
+  completedAt: string | null
+  creditsUsed: number | null
+}
+
 export interface AppRun {
   id: string
   appId: string
@@ -8580,6 +8594,10 @@ export interface AppRun {
   totalNodes?: number
   completedAt?: string | null
   hiddenNodes?: string[] | null
+  /** The runner's own edits alone (`app_runs.node_states`) — what a PATCH of `nodeStates` replaces. */
+  nodeStateEdits?: Record<string, unknown> | null
+  /** The run's Render final: a continuation outside the run (its results are merged into the node states). */
+  finalExecution?: AppRunFinalExecution | null
   // Nested execution from detail endpoint
   execution?: {
     status: string
@@ -8783,8 +8801,38 @@ export async function runPublishedApp(
   return apiRequest(
     `/v1/app/${encodeURIComponent(slug)}/run`,
     "apiErr.runApp",
-    { method: "POST", body: { inputOverrides, runId, version, headless } },
+    {
+      method: "POST",
+      // `reviewer: "app"` marks the app runner's own run: a person is here to
+      // review a Preview render and press Render final on its card. A headless
+      // call has nobody there, so it never carries the mark.
+      body: { inputOverrides, runId, version, headless, ...(headless ? {} : { reviewer: "app" }) },
+    },
   )
+}
+
+/**
+ * Render final of an app run whose render made a Preview: the render at
+ * Final and the nodes after it, as a continuation outside the run (charged to
+ * the runner, no creator markup). The server decides what runs.
+ */
+export async function renderAppRunFinal(
+  slug: string,
+  runId: string,
+  renderNodeId: string,
+  /** One key per click: a retry of the same click starts one final. */
+  idempotencyKey?: string,
+): Promise<{ executionId: string; runId: string; status: string }> {
+  const headers = withIdempotencyHeader({ ...(await getAuthHeaders()), "Content-Type": "application/json" }, idempotencyKey)
+  const res = await fetch(
+    `${API_BASE_URL}/v1/app/${encodeURIComponent(slug)}/runs/${encodeURIComponent(runId)}/render-final`,
+    { method: "POST", headers, body: JSON.stringify({ renderNodeId, reviewer: "app" }) },
+  )
+  const json = (await res.json().catch(() => null)) as Record<string, unknown> | null
+  // A final of this run already rendering: follow it.
+  if (res.status === 409 && typeof json?.executionId === "string") throw new WorkflowAlreadyRunningError(json.executionId)
+  if (!res.ok) throwApiError(json, "apiErr.renderFinal")
+  return json as { executionId: string; runId: string; status: string }
 }
 
 /** Execute a component node — creates a wrapper job and runs the inner workflow. */

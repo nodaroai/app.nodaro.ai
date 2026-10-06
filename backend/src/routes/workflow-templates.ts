@@ -477,8 +477,13 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
     const providersUsed = extractProviders(nodes)
     const nodeCount = nodes.length
     const complexity = calculateComplexity(nodes, edges)
-    // The listed price counts the whole graph, preview stop rule or not.
-    const estimatedCredits = await estimateWorkflowListingCredits(nodes as unknown as EstimateNode[], edges as unknown as EstimateEdge[])
+    // The listed price is an app's (decided 2026-10-06): the whole graph at
+    // Preview plus each Render final, preview stop rule or not. A template has
+    // no creator fee.
+    const listing = await estimateWorkflowListingCredits(nodes as unknown as EstimateNode[], edges as unknown as EstimateEdge[], {
+      publishType: "template",
+    })
+    const estimatedCredits = listing.preview + listing.final
     // Whoever clones this template gets the snapshot: UGC run state (a kept creator, the last plan, clip tickets) never ships.
     const snapshotNodes = stripUgcRunState(nodes)
 

@@ -17,10 +17,11 @@ import type { TutorialTemplateDoc } from "../types.js"
  * Operator packs (NODARO_TUTORIAL_PACKS) are not in this repository and are
  * outside this guard.
  *
- * The price is the LISTING scope (every node counted, as a published
- * template's stored price is) at STATIC_CREDIT_COSTS' base prices — what the
- * doc can know without a database. Unknown recording lengths price at the
- * ceilings.
+ * The price is the LISTING a published template stores (decided 2026-10-06:
+ * the same function as an app's) — its preview part, every node at its saved
+ * settings, plus its final part, each render set to Preview at Final and the
+ * nodes after it — at STATIC_CREDIT_COSTS' base prices, what the doc can know
+ * without a database. Unknown recording lengths price at the ceilings.
  */
 const here = dirname(fileURLToPath(import.meta.url))
 const templatesDir = join(here, "..", "templates")
@@ -42,14 +43,10 @@ describe("built-in template listing prices", () => {
     expect(priced.length).toBeGreaterThan(30)
   })
 
-  it.each(priced)("%s stores the estimate the pricing functions derive for its whole graph", (file) => {
+  it.each(priced)("%s stores the listing the pricing functions derive for it", (file) => {
     const t = load(file)
-    const derived = CreditsService.estimateWorkflowBaseCredits(
-      t.nodes as Node[],
-      t.edges as Edge[],
-      { scope: "whole-graph" },
-    )
-    expect(derived).toBeGreaterThan(0)
-    expect(t.estimatedCredits).toBe(derived)
+    const { preview, final } = CreditsService.estimateWorkflowBaseListing(t.nodes as Node[], t.edges as Edge[], "template")
+    expect(preview).toBeGreaterThan(0)
+    expect(t.estimatedCredits).toBe(preview + final)
   })
 })

@@ -21,6 +21,7 @@ import { useAuth } from "@/hooks/use-auth"
 import { useAppRunnerStore, createBridgedRun } from "@/hooks/use-app-runner-store"
 import { usePresentationStore } from "@/hooks/use-presentation-store"
 import { PresentationView } from "@/components/presentation/presentation-view"
+import { AppRenderReviewProvider } from "@/components/render/app-render-review"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -258,6 +259,12 @@ export default function EmbedPage() {
         />
       ) : null}
     >
+      {/* Render final in the app runner: the run on show's render cards carry it. */}
+      <AppRenderReviewProvider
+        runId={runSlots.activeSlotId && runSlots.activeSlotId !== ORIGINAL_SLOT_ID ? runSlots.activeSlotId : null}
+        executionId={runSlots.activeSlot?.executionId ?? null}
+        finalExecution={runSlots.activeSlot?.finalExecution ?? null}
+      >
       <PresentationView
         mode="fullscreen"
         isOwner={false}
@@ -281,6 +288,7 @@ export default function EmbedPage() {
           ) : null
         }
       />
+      </AppRenderReviewProvider>
 
       {/* Delete confirmation dialog */}
       <Dialog open={runSlots.deleteConfirmSlotId !== null} onOpenChange={(open) => { if (!open) runSlots.setDeleteConfirmSlotId(null) }}>

@@ -115,6 +115,12 @@ const ALLOWED_PATHS = [
   /^src\/routes\/shots\.ts$/,
   /^src\/routes\/download\.ts$/,
   /^src\/routes\/app-runner\.ts$/,
+  // Render final of an app run (A6.3): reads the published version (any
+  // creator's — the app runtime) and the caller's own run, executions and
+  // finals. Every run read and write scopes `runner_id = req.userId`, every
+  // execution read `user_id = req.userId` and the app's workflow, and
+  // continuationRefusal ({ userId, workflowId }) answers 404 otherwise.
+  /^src\/routes\/app-render-final\.ts$/,
   /^src\/routes\/component-execute\.ts$/,
   /^src\/routes\/app-analytics\.ts$/,
   /^src\/routes\/published-apps\.ts$/,

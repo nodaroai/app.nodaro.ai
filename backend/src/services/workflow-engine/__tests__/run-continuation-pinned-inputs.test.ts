@@ -144,6 +144,44 @@ describe("the overrides a continuation re-applies: the earlier execution's pin",
   })
 })
 
+// A chain of Render finals in the app runner (decided 2026-10-06): a later
+// final continues from the run's NEWEST final, an execution no app_runs row
+// names by `execution_id`. Its stamp (`trigger_data.appRenderFinal`, written
+// when it was created) names the published version it ran, so the version
+// check holds — at the route, and at the worker after the run's link has
+// already moved on to the new final.
+describe("a Render final's execution as the source: the version its stamp names", () => {
+  const stamped = (over: Record<string, unknown> = {}) => ({
+    ...db.execution!,
+    trigger_data: { appRenderFinal: { appRunId: "run-1", appVersionId: "app-1", continuedFrom: "exec-run" } },
+    ...over,
+  })
+
+  it("no app_runs row names it: the stamp's version is the source's", async () => {
+    db.execution = stamped({ input_overrides: { cut: { quality: "final" } } })
+    const source = await load()
+    expect(source!.appVersionId).toBe("app-1")
+    expect(source!.inputOverrides).toEqual({ cut: { quality: "final" } })
+    expect(db.executionSelects.every((c) => c.includes("trigger_data"))).toBe(true)
+  })
+
+  it("the route's check reads it too", async () => {
+    db.execution = stamped()
+    expect((await loadContinuationSource("exec-0", { withStates: false }))!.appVersionId).toBe("app-1")
+  })
+
+  it("an execution with no stamp and no app run is the live workflow's", async () => {
+    db.execution = { ...db.execution!, trigger_data: { triggerId: "t-1" } }
+    expect((await load())!.appVersionId).toBeNull()
+  })
+
+  it("an app run's own row wins over a stamp", async () => {
+    db.execution = stamped()
+    db.appRun = { app_id: "app-2" }
+    expect((await load())!.appVersionId).toBe("app-2")
+  })
+})
+
 describe("the app run behind an execution is the execution owner's (decided 2026-10-06)", () => {
   it("the app_runs lookup filters the execution's owner as the runner", async () => {
     db.appRun = { app_id: "app-1", input_values: null }

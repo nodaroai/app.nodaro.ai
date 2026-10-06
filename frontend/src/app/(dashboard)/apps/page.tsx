@@ -59,7 +59,7 @@ import { queryKeys } from "@/lib/query-keys"
 import { hasCredits } from "@/lib/edition"
 import { CreditCost } from "@/components/ui/credit-cost"
 import { creditUnits, creditUnitLabel } from "@/lib/credit-units"
-import { calculateMonetizedCost } from "@nodaro/shared"
+import { listedAppCredits } from "@/lib/app-listing-price"
 import { useAuth } from "@/hooks/use-auth"
 import { Label } from "@/components/ui/label"
 import { APP_CATEGORIES, OUTPUT_TYPES, CATEGORY_COLORS, categoryLabel, getCategoryLabelKey, outputTypeLabel } from "@/lib/app-categories"
@@ -746,7 +746,7 @@ function MyAppCard({
             {/* Label and figure are joined by the dictionary (no gap after a
                 full-width colon); the space between the two pairs follows the
                 Latin credit unit, so it stays in every language. */}
-            {t("apps.baseLabel")}{t("common.fragmentGap")}<CreditCost credits={app.baseEstimatedCredits ?? 0} /> {t("apps.totalLabel")}{t("common.fragmentGap")}
+            {t("apps.baseLabel")}{t("common.fragmentGap")}<CreditCost credits={(app.baseEstimatedCredits ?? 0) + (app.finalEstimatedCredits ?? 0)} /> {t("apps.totalLabel")}{t("common.fragmentGap")}
             <CreditCost credits={app.estimatedCredits ?? 0} />
           </span>
         ) : (
@@ -986,10 +986,14 @@ function EditAppDialog({
     }
   }, [t])
 
-  const baseCredits = app?.baseEstimatedCredits ?? 0
-  const calculatedCredits = monetizationEnabled
-    ? calculateMonetizedCost(baseCredits, monetizationFlatFee, monetizationPercent)
-    : baseCredits
+  // The fee marks up the app run (its preview) alone; each Render final is
+  // charged at its own price (decided 2026-10-06).
+  const finalCredits = app?.finalEstimatedCredits ?? 0
+  const baseCredits = (app?.baseEstimatedCredits ?? 0) + finalCredits
+  const calculatedCredits = listedAppCredits(
+    { base: app?.baseEstimatedCredits ?? 0, final: finalCredits },
+    { enabled: monetizationEnabled, flatFee: monetizationFlatFee, percent: monetizationPercent },
+  )
 
   const handleAddTag = useCallback(() => {
     const trimmed = tagInput.trim().toLowerCase()
@@ -1220,6 +1224,9 @@ function EditAppDialog({
                   <p className="text-[11px] text-muted-foreground">
                     {t("apps.monetizationCalc", { base: creditUnits(baseCredits), total: creditUnits(calculatedCredits), u: creditUnitLabel(t("credits.unitShort")) })}
                   </p>
+                  {finalCredits > 0 && (
+                    <p className="text-[11px] text-muted-foreground">{t("apps.monetizationFinalNote")}</p>
+                  )}
 
                   <Button
                     type="button"

@@ -10,6 +10,7 @@ import { Progress } from "@/components/ui/progress"
 import { FieldBadge } from "./field-badge"
 import { useT } from "@/lib/i18n"
 import { PreviewBadge } from "@/components/render/preview-badge"
+import { AppGatedOutputCard, AppRenderReviewBar, useAppRenderReview } from "@/components/render/app-render-review"
 import type { ExposableField } from "@nodaro/shared"
 
 export interface FieldBadgeEntry {
@@ -48,6 +49,9 @@ export interface OutputCardProps {
   actions?: OutputCardActions
   /** The output is a Preview — a render at proxy quality (F1, `outputIsPreview`). */
   preview?: boolean
+  /** The app run this card shows, where a surface lists several (the chat
+   *  thread). Absent: the run on show. Only that run's cards carry Render final. */
+  runId?: string
 }
 
 /** Renders the appropriate output card based on output type */
@@ -57,7 +61,7 @@ function OutputCardImpl({
   label,
   outputType,
   status,
-  url,
+  url: runUrl,
   text,
   onOpenMedia,
   progress,
@@ -69,9 +73,19 @@ function OutputCardImpl({
   columns,
   fieldBadges,
   actions,
-  preview,
+  preview: runPreview,
+  runId,
 }: OutputCardProps) {
   const t = useT()
+  // The app runner's review of this card (Render final in the app runner):
+  // a node that waited for the final never shows the snapshot's output; a
+  // render's card carries its Render final, and its final's "Show preview".
+  const review = useAppRenderReview(nodeId, nodeType, runId)
+  if (review?.kind === "gated") return <AppGatedOutputCard label={label} />
+  const showingPreview = review?.kind === "final" && review.showingPreview
+  const url = showingPreview ? (review.previewUrl ?? runUrl) : runUrl
+  const preview = showingPreview || runPreview
+  const reviewBar = review ? <AppRenderReviewBar review={review} /> : null
   const showProgress = status === "running" || status === "waiting"
   const progressValue = progress ?? 0
   const badgeRow = fieldBadges && fieldBadges.length > 0 ? (
@@ -123,6 +137,7 @@ function OutputCardImpl({
           columns={columns}
         />
         {badgeRow}
+        {reviewBar}
         {showProgress && (
           <div className="px-1">
             <Progress
@@ -152,12 +167,13 @@ function OutputCardImpl({
     }
   })()
 
-  if (!showProgress && !badgeRow) return card
+  if (!showProgress && !badgeRow && !reviewBar) return card
 
   return (
     <div className="flex flex-col gap-2">
       {card}
       {badgeRow}
+      {reviewBar}
       {showProgress && (
         <div className="px-1">
           <Progress

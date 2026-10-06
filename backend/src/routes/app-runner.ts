@@ -26,6 +26,10 @@ import { shouldRefuseDegradedRunFor, personalPayer } from "../lib/billing-contex
 import { billingPairColumns } from "../lib/insert-job.js"
 import { extractAppInputSchema, flatInputsToOverrides, mergeInputOverrides } from "../lib/mcp/extract-app-inputs.js"
 import { describeLockedOverrides, findLockedOverrides } from "../lib/input-override-lock.js"
+import { appReviewerPresent } from "../lib/app-reviewer.js"
+import { appRunViewStates } from "../lib/app-run-states.js"
+import { appRunFinalChain, finalExecutionIdOf, loadAppRunFinals, selectWithFinalExecution, type AppRunFinal } from "../lib/app-run-final-column.js"
+import { PREVIEW_RENDER_NESTED } from "@nodaro/shared"
 import { clientRunUpdates, executionBelongsToRun } from "../lib/app-run-ownership.js"
 
 // In-memory cache for published app data (30min TTL — explicit invalidation on publish)
@@ -56,6 +60,8 @@ const runBody = z.object({
   runId: z.string().uuid().optional(),
   version: z.coerce.number().int().min(1).optional(),
   headless: z.boolean().optional(),
+  /** The app runner's mark (`"app"`): a person is there to review a Preview (lib/app-reviewer.ts). */
+  reviewer: z.string().max(32).optional(),
 })
 
 const createRunBody = z.object({
@@ -88,21 +94,18 @@ const appQuery = z.object({
 // No is_active filter: runs and app data remain visible even when deactivated.
 // ---------------------------------------------------------------------------
 
-/** Merge user-edited node_states over execution node_states (per-node deep merge of output). */
-function mergeNodeStates(execStates: unknown, editedStates: unknown): unknown {
-  if (!editedStates) return execStates ?? null
-  if (!execStates) return editedStates
-  const base = execStates as Record<string, { output?: Record<string, unknown>; [k: string]: unknown }>
-  const edits = editedStates as Record<string, { output?: Record<string, unknown>; [k: string]: unknown }>
-  const merged = { ...base }
-  for (const [nodeId, editState] of Object.entries(edits)) {
-    merged[nodeId] = {
-      ...merged[nodeId],
-      ...editState,
-      output: { ...merged[nodeId]?.output, ...editState?.output },
-    }
+/** A run's final as the run views carry it (its states are merged into `nodeStates`). */
+function finalView(final: AppRunFinal | undefined): Record<string, unknown> | null {
+  if (!final) return null
+  return {
+    id: final.id,
+    status: final.status,
+    completedNodes: final.completedNodes,
+    totalNodes: final.totalNodes,
+    errorMessage: final.errorMessage,
+    completedAt: final.completedAt,
+    creditsUsed: final.creditsUsed,
   }
-  return merged
 }
 
 /** Validate restricted field values against allowedValues. Returns error message or null. */
@@ -297,14 +300,14 @@ export async function appRunnerRoutes(app: FastifyInstance) {
     }
 
     const { slug } = paramsParsed.data
-    const { inputOverrides: nestedOverrides, inputs: flatInputs, runId, version, headless } = bodyParsed.data
+    const { inputOverrides: nestedOverrides, inputs: flatInputs, runId, version, headless, reviewer } = bodyParsed.data
 
     const workflowId = await resolveSlug(slug)
     if (!workflowId) {
       return reply.status(404).send({ error: { code: "not_found", message: "App not found" } })
     }
 
-    const appRow = await loadAppVersion(workflowId, "id, workflow_id, creator_id, max_runs_per_user_per_day, snapshot_nodes, snapshot_edges, snapshot_settings", version)
+    const appRow = await loadAppVersion(workflowId, "id, workflow_id, creator_id, max_runs_per_user_per_day, snapshot_nodes, snapshot_edges, snapshot_settings, publish_type", version)
     if (!appRow) {
       return reply.status(404).send({
         error: { code: "not_found", message: version ? `Version ${version} not found` : "App not found" },
@@ -461,16 +464,27 @@ export async function appRunnerRoutes(app: FastifyInstance) {
     // (user, workflow) pair on every already-running guard.
     if (await refuseDegradedAppRun(req, reply, appRow.workflow_id as string)) return
 
-    // An app run has no Render final yet: a snapshot whose run holds a
-    // Preview render is refused before any row is written (the orchestrator
-    // asks again). Until app review ships, apps count as nobody to review.
-    {
+    // Who can review a Preview render: a person in the app runner, which
+    // shows the render's card with its Render final (lib/app-reviewer.ts). A
+    // run without the runner's mark — the SDK, the CLI, MCP, a headless call —
+    // has nobody to press it, so a snapshot whose run holds a Preview render
+    // is refused before any row is written (the orchestrator asks again). A
+    // component never stops for a review (permanent).
+    const isComponent = appRow.publish_type === "component"
+    const reviewerPresent = appReviewerPresent(req, { mark: reviewer, headless, component: isComponent })
+    if (!reviewerPresent) {
       const refusal = previewReviewRefusal(
         (appRow.snapshot_nodes ?? []) as ReadonlyArray<{ id: string; type?: string; data?: Record<string, unknown> }>,
         (appRow.snapshot_edges ?? []) as ReadonlyArray<{ source: string; target: string }>,
         { triggerType: "app_run", nodeIds, inputOverrides },
       )
-      if (refusal) return reply.status(400).send({ error: refusal })
+      if (refusal) {
+        return reply.status(400).send({
+          error: isComponent
+            ? { code: PREVIEW_RENDER_NESTED, message: "A component cannot stop for a review: its render must be set to Final." }
+            : refusal,
+        })
+      }
     }
 
     if (runId) {
@@ -557,8 +571,8 @@ export async function appRunnerRoutes(app: FastifyInstance) {
         // billing hook (rung 2, the validated workspace header); an app run
         // never resolves through the underlying workflow.
         billingContext: req.billingContext ?? personalPayer(req.userId),
-        // An app run has no Render final path yet.
-        reviewerPresent: false,
+        // From the app runner's mark: a person there can press Render final.
+        reviewerPresent,
       }
 
       await orchestrationQueue.add("workflow-execution", jobData, {
@@ -589,6 +603,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
         idempotencyKey,
         webFreeMode: await resolveWebSurfaceFlag(req),
         billingContext: req.billingContext ?? personalPayer(req.userId),
+        reviewerPresent,
       })
 
       if (result.deduped) reply.header("X-Dedup-Hit", "1")
@@ -786,28 +801,33 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       cursorDate = cursorRow?.created_at as string | undefined
     }
 
-    let query = supabase
-      .from("app_runs")
-      .select(
-        "id, app_id, created_at, execution_id, input_values, status, name, credits_used, hidden_nodes, node_states, deleted_at, workflow_executions(user_id, workflow_id, status, node_states, completed_nodes, total_nodes, completed_at, total_credits_used)"
-      )
-      .in("app_id", versionIds)
-      .eq("runner_id", req.userId)
-      .order("created_at", { ascending: false })
-      .limit(limit + 1) // fetch one extra for cursor
+    // The run's Render final (`final_execution_id`, through the column guard)
+    // rides along: its results show over the preview's.
+    const buildRunsPage = (columns: string) => {
+      let query = supabase
+        .from("app_runs")
+        .select(columns)
+        .in("app_id", versionIds)
+        .eq("runner_id", req.userId!)
+        .order("created_at", { ascending: false })
+        .limit(limit + 1) // fetch one extra for cursor
 
-    // Default: active runs only. archived=true: only soft-deleted runs.
-    if (archived) {
-      query = query.not("deleted_at", "is", null)
-    } else {
-      query = query.is("deleted_at", null)
+      // Default: active runs only. archived=true: only soft-deleted runs.
+      if (archived) {
+        query = query.not("deleted_at", "is", null)
+      } else {
+        query = query.is("deleted_at", null)
+      }
+
+      if (cursorDate) {
+        query = query.lt("created_at", cursorDate)
+      }
+      return query as unknown as PromiseLike<{ data: Array<Record<string, unknown>> | null; error: { code?: string | null; message?: string } | null }>
     }
-
-    if (cursorDate) {
-      query = query.lt("created_at", cursorDate)
-    }
-
-    const { data: runs, error: runsError } = await query
+    const { data: runs, error: runsError } = await selectWithFinalExecution(
+      "id, app_id, created_at, execution_id, input_values, status, name, credits_used, hidden_nodes, node_states, deleted_at, workflow_executions!execution_id(user_id, workflow_id, status, node_states, completed_nodes, total_nodes, completed_at, total_credits_used)",
+      buildRunsPage,
+    )
 
     if (runsError) {
       return sendInternalError(reply, req, runsError, "Failed to fetch runs")
@@ -824,9 +844,20 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       const exec = run.workflow_executions as unknown as { user_id?: unknown; workflow_id?: unknown } | null
       return !exec || executionBelongsToRun(exec, { runnerId: req.userId, workflowId })
     })
+    // Each run's finals, with the earlier finals of a chain (decided 2026-10-06):
+    // the runner's own executions of this app's workflow only, as for the run's own.
+    const finals = await loadAppRunFinals(
+      items.map((run) => finalExecutionIdOf(run)).filter((id): id is string => !!id),
+      req.userId,
+      items.map((run) => run.execution_id).filter((id): id is string => typeof id === "string" && id.length > 0),
+      { workflowId },
+    )
 
     return reply.send({
       data: items.map((run) => {
+        const chain = appRunFinalChain(finalExecutionIdOf(run), finals)
+        const final = chain.at(-1)
+        const edits = (run as { node_states?: unknown }).node_states ?? null
         const exec = run.workflow_executions as unknown as {
           status: string
           node_states: unknown
@@ -836,10 +867,15 @@ export async function appRunnerRoutes(app: FastifyInstance) {
           total_credits_used: number | null
         } | null
 
+        // What the runner sees: the run's states, its completed finals' over
+        // them (oldest first), their edits over all. `finalExecution` is the
+        // newest, whatever its end: a failed one is how the runner learns it failed.
+        const viewStates = appRunViewStates(exec?.node_states, chain, edits)
+
         // Extract thumbnail URL from the designated node's output
         let thumbnailUrl: string | null = null
-        if (thumbnailNodeId && exec?.node_states) {
-          const ns = exec.node_states as Record<string, { output?: Record<string, unknown> }>
+        if (thumbnailNodeId && viewStates) {
+          const ns = viewStates as Record<string, { output?: Record<string, unknown> }>
           const nodeOutput = ns[thumbnailNodeId]?.output
           if (nodeOutput) {
             // Try common output keys: url, imageUrl, videoUrl, audioUrl, resultUrl
@@ -854,12 +890,15 @@ export async function appRunnerRoutes(app: FastifyInstance) {
           name: (run as { name?: string | null }).name ?? null,
           inputValues: run.input_values ?? null,
           status: exec?.status ?? (run as { status?: string }).status ?? "draft",
-          nodeStates: mergeNodeStates(exec?.node_states, (run as { node_states?: unknown }).node_states),
+          nodeStates: viewStates,
+          /** The runner's own edits alone (`app_runs.node_states`): what a PATCH of `nodeStates` replaces. */
+          nodeStateEdits: edits,
+          finalExecution: finalView(final),
           completedNodes: exec?.completed_nodes ?? 0,
           totalNodes: exec?.total_nodes ?? 0,
           completedAt: exec?.completed_at ?? null,
           creditsUsed: exec?.total_credits_used ?? (run as { credits_used?: number }).credits_used ?? 0,
-          version: versionMap.get(run.app_id) ?? null,
+          version: versionMap.get(run.app_id as string) ?? null,
           thumbnailUrl,
           hiddenNodes: (run as { hidden_nodes?: string[] }).hidden_nodes ?? [],
           deletedAt: (run as { deleted_at?: string | null }).deleted_at ?? null,
@@ -886,14 +925,14 @@ export async function appRunnerRoutes(app: FastifyInstance) {
 
     const { runId } = parsed.data
 
-    const { data: run, error: runError } = await supabase
-      .from("app_runs")
-      .select(
-        "id, app_id, runner_id, execution_id, input_values, status, name, credits_used, hidden_nodes, node_states, created_at, published_apps!app_id(version, thumbnail_node_id, workflow_id), workflow_executions(id, user_id, workflow_id, status, node_states, total_nodes, completed_nodes, failed_nodes, total_credits_used, error_message, completed_at)"
-      )
-      .eq("id", runId)
-      .eq("runner_id", req.userId)
-      .single()
+    const { data: run, error: runError } = await selectWithFinalExecution<Record<string, unknown>>(
+      "id, app_id, runner_id, execution_id, input_values, status, name, credits_used, hidden_nodes, node_states, created_at, published_apps!app_id(version, thumbnail_node_id, workflow_id), workflow_executions!execution_id(id, user_id, workflow_id, status, node_states, total_nodes, completed_nodes, failed_nodes, total_credits_used, error_message, completed_at)",
+      (columns) =>
+        supabase.from("app_runs").select(columns).eq("id", runId).eq("runner_id", req.userId!).single() as unknown as PromiseLike<{
+          data: Record<string, unknown> | null
+          error: { code?: string | null; message?: string } | null
+        }>,
+    )
 
     if (runError || !run) {
       return reply.status(404).send({
@@ -927,11 +966,22 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       })
     }
 
+    // The run's Render final: its results over the preview's, the runner's edits over both.
+    const finalId = finalExecutionIdOf(run)
+    const chain = finalId
+      ? appRunFinalChain(finalId, await loadAppRunFinals([finalId], req.userId, run.execution_id ? [run.execution_id as string] : [], {
+          workflowId: pubApp?.workflow_id ?? null,
+        }))
+      : []
+    const final = chain.at(-1)
+    const edits = (run as { node_states?: unknown }).node_states ?? null
+    const viewStates = exec ? appRunViewStates(exec.node_states, chain, edits) : null
+
     // Extract thumbnail URL
     let thumbnailUrl: string | null = null
     const tnNodeId = pubApp?.thumbnail_node_id
-    if (tnNodeId && exec?.node_states) {
-      const ns = exec.node_states as Record<string, { output?: Record<string, unknown> }>
+    if (tnNodeId && viewStates) {
+      const ns = viewStates as Record<string, { output?: Record<string, unknown> }>
       const nodeOutput = ns[tnNodeId]?.output
       if (nodeOutput) {
         thumbnailUrl = (nodeOutput.url ?? nodeOutput.imageUrl ?? nodeOutput.videoUrl ?? nodeOutput.audioUrl ?? nodeOutput.resultUrl ?? null) as string | null
@@ -950,12 +1000,16 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       version: pubApp?.version ?? null,
       thumbnailUrl,
       hiddenNodes: (run as { hidden_nodes?: string[] }).hidden_nodes ?? [],
+      /** The runner's own edits alone (`app_runs.node_states`): what a PATCH of `nodeStates` replaces. */
+      nodeStateEdits: edits,
+      /** The run's Render final — a continuation outside the run, not counted in `creditsUsed`. */
+      finalExecution: finalView(final),
       execution: exec
         ? {
             id: exec.id,
             status: exec.status,
             outcome: executionOutcome(exec.status, exec.node_states as Record<string, { status?: unknown; skipReason?: unknown }> | null),
-            nodeStates: mergeNodeStates(exec.node_states, (run as { node_states?: unknown }).node_states),
+            nodeStates: viewStates,
             totalNodes: exec.total_nodes,
             completedNodes: exec.completed_nodes,
             failedNodes: exec.failed_nodes,
@@ -1006,7 +1060,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
     let query = supabase
       .from("app_runs")
       .select(
-        "id, app_id, created_at, deleted_at, name, input_values, status, credits_used, execution_id, node_states, published_apps!app_id(slug, name, icon_url, version, thumbnail_node_id, workflow_id), workflow_executions(user_id, workflow_id, node_states, total_credits_used, completed_at)"
+        "id, app_id, created_at, deleted_at, name, input_values, status, credits_used, execution_id, node_states, published_apps!app_id(slug, name, icon_url, version, thumbnail_node_id, workflow_id), workflow_executions!execution_id(user_id, workflow_id, node_states, total_credits_used, completed_at)"
       )
       .eq("runner_id", req.userId)
       .not("deleted_at", "is", null)
@@ -1173,12 +1227,14 @@ export async function appRunnerRoutes(app: FastifyInstance) {
 
     // Must already be archived. This guards against accidental hard-deletes
     // bypassing the archive flow.
-    const { data: run, error: findError } = await supabase
-      .from("app_runs")
-      .select("id, execution_id, deleted_at")
-      .eq("id", runId)
-      .eq("runner_id", req.userId)
-      .single()
+    const { data: run, error: findError } = await selectWithFinalExecution<{ id: string; execution_id: string | null; deleted_at: string | null }>(
+      "id, execution_id, deleted_at",
+      (columns) =>
+        supabase.from("app_runs").select(columns).eq("id", runId).eq("runner_id", req.userId!).single() as unknown as PromiseLike<{
+          data: { id: string; execution_id: string | null; deleted_at: string | null } | null
+          error: { code?: string | null; message?: string } | null
+        }>,
+    )
 
     if (findError || !run) {
       return reply.status(404).send({
@@ -1195,11 +1251,18 @@ export async function appRunnerRoutes(app: FastifyInstance) {
     // Delete the underlying execution row first (its node_states JSONB holds
     // the output URLs). Best-effort: if it's gone or not owned, we still
     // proceed with deleting the app_runs row.
-    if (run.execution_id) {
+    // Its Render finals — the newest and the earlier ones of a chain — are the
+    // run's other executions: they go with the run.
+    const newestFinal = finalExecutionIdOf(run as unknown as Record<string, unknown>)
+    const finalChain = newestFinal
+      ? appRunFinalChain(newestFinal, await loadAppRunFinals([newestFinal], req.userId, run.execution_id ? [run.execution_id] : []))
+      : []
+    for (const executionId of new Set([run.execution_id, newestFinal, ...finalChain.map((f) => f.id)])) {
+      if (!executionId) continue
       await supabase
         .from("workflow_executions")
         .delete()
-        .eq("id", run.execution_id)
+        .eq("id", executionId)
         .eq("user_id", req.userId)
     }
 

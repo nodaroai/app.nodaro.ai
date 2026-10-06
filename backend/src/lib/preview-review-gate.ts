@@ -3,8 +3,9 @@
  * server will actually execute, and the refusal for a run nobody can review.
  *
  * A Preview render ends a run at a 720p preview; only a person in the editor
- * can review it and press Render final. A run with nobody there — a trigger,
- * an API / SDK / MCP call, a present link, an app run — would bill the
+ * or in an app's runner can review it and press Render final. A run with
+ * nobody there — a trigger, an API / SDK / MCP call, a present link, an app
+ * run without the runner's mark — would bill the
  * upstream and the preview while every delivery node downstream stays silent.
  * So such a run is refused before any node runs, unless it overrides every
  * Preview render to Final (decided 2026-10-04). Whether a reviewer is present
@@ -30,8 +31,8 @@ import type { SimpleEdge, SimpleNode } from "../services/workflow-engine/types.j
  *  shows the message as is (Studio, Voice, an SDK script) must still tell its
  *  reader why and what to do, with no editor context. */
 export const PREVIEW_REVIEW_REQUIRED_MESSAGE =
-  "This workflow stops for a review: its render is set to Preview, and only a run started in the Nodaro editor can stop for one. " +
-  "Open it in the editor to run it there, or set the render to Final (or send a Final quality override for it)."
+  "This workflow stops for a review: its render is set to Preview, and only a run started in the Nodaro editor or on an app's own page can stop for one. " +
+  "Open it there to run it, or set the render to Final (or send a Final quality override for it)."
 
 export interface PreviewRefusal {
   readonly code: string

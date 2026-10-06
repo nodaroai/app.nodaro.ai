@@ -344,7 +344,7 @@ function ChatMessage({
               return (
                 <OutputCard
                   key={node.id}
-                  nodeId={node.id} nodeType={node.type}
+                  nodeId={node.id} nodeType={node.type} runId={slot.id}
                   label={getNodeLabel(node)}
                   outputType={getOutputType(node.type)}
                   status={toOutputStatus(st?.status, slot.executionStatus)}
@@ -401,7 +401,7 @@ function ChatMessage({
                 return (
                   <OutputCard
                     key={c.nodeId}
-                    nodeId={c.nodeId} nodeType={node?.type}
+                    nodeId={c.nodeId} nodeType={node?.type} runId={slot.id}
                     label={c.label}
                     outputType={node ? getOutputType(node.type) : "text"}
                     status={toOutputStatus(c.status, slot.executionStatus)}

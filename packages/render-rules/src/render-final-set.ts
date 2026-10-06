@@ -14,22 +14,25 @@
  * membership, field mappings), so the tail a Preview gated is exactly what a
  * Render final runs: nothing the preview held back is left unrun.
  *
- * ONE home for both engines (decided 2026-10-06): the editor's Render final
- * and the server's (`renderFinal` on POST /v1/workflows/:id/run, which an
- * agent's SDK `renderFinal` and MCP `render_final` send) read this rule, so
- * the set an agent runs is the set the editor runs. A guard test fails the
- * build on a copy anywhere else; both engines read one parity fixture.
+ * ONE home for every caller (decided 2026-10-06): the editor's Render final,
+ * the agent route (`renderFinal` on POST /v1/workflows/:id/run, which an
+ * agent's SDK `renderFinal` and MCP `render_final` send), the app runner's
+ * Render final (POST /v1/app/:slug/runs/:runId/render-final — a caller never
+ * names the nodes it runs) and the listing estimator's final part all read
+ * this rule, so the set an agent or an app runs, and the set a listing prices,
+ * is the set the editor runs. A guard test fails the build on a copy anywhere
+ * else; both engines read one parity fixture.
  */
 import { buildFeedMaps, PREVIEW_RENDER_NODE_TYPES, renderPlanPath, type FeedEdge, type FeedNode } from "@nodaro/shared"
 
 /** A node and a wire as the walk reads them: either engine's graph fits. */
-interface GraphNode {
+export interface RenderFinalGraphNode {
   readonly id: string
   readonly type?: string | null
   readonly data?: unknown
   readonly parentId?: string | null
 }
-interface GraphEdge {
+export interface RenderFinalGraphEdge {
   readonly source: string
   readonly target: string
   readonly sourceHandle?: string | null
@@ -56,8 +59,8 @@ function reach(start: string, next: ReadonlyMap<string, ReadonlyArray<string>>):
 /** The ids a Render final on `renderId` runs. Empty when the node is not on the graph. */
 export function renderFinalRunSet(
   renderId: string,
-  nodes: readonly GraphNode[],
-  edges: readonly GraphEdge[],
+  nodes: readonly RenderFinalGraphNode[],
+  edges: readonly RenderFinalGraphEdge[],
 ): ReadonlySet<string> {
   if (!nodes.some((n) => n.id === renderId)) return new Set()
   const { children, parents } = buildFeedMaps(nodes as readonly FeedNode[], edges as readonly FeedEdge[])
@@ -96,9 +99,9 @@ export function renderRunOverrides(
  */
 export function rendersOfPlan(
   planId: string,
-  nodes: readonly GraphNode[],
-  edges: readonly GraphEdge[],
-): GraphNode[] {
+  nodes: readonly RenderFinalGraphNode[],
+  edges: readonly RenderFinalGraphEdge[],
+): RenderFinalGraphNode[] {
   return nodes.filter(
     (n) => PREVIEW_RENDER_NODE_TYPES.has(n.type ?? "") && renderPlanPath(n.id, nodes, edges)?.planId === planId,
   )

@@ -2,14 +2,17 @@ import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from "vite
 import Fastify, { type FastifyInstance } from "fastify"
 
 /**
- * The price stored at publish is the WHOLE graph (decided 2026-10-05).
+ * The price stored at publish is never the run estimate (decided 2026-10-05).
  *
  * With the preview stop rule on, a run stops at an Apply EDL render set to
  * Proxy and its estimate leaves out the tail. An app's, component's or
- * template's listed price is not a run estimate: publish and republish store
- * the whole-graph figure, and the monetization recalculation reads that stored
- * figure back. Here the two estimators answer different numbers, so a publish
- * that reached for the run estimate would store the wrong one.
+ * template's listed price comes from ONE listing estimator (decided
+ * 2026-10-06): its preview part (the whole graph at Preview) WITH the
+ * creator's fee, plus its final part (each Render final) WITHOUT it. A
+ * component's final part is 0 (it never stops at a Preview), a template has
+ * no fee. The monetization recalculation reads the stored figures back. Here
+ * the estimators answer different numbers, so a publish that reached for the
+ * wrong one would store the wrong price.
  */
 
 vi.mock("@/lib/supabase.js", () => ({
@@ -37,6 +40,9 @@ vi.mock("@/lib/admin-check.js", () => ({ warmAdminCache: vi.fn(), checkIsAdmin: 
 /** What a run of the workflow is quoted (the tail left out) vs its whole graph. */
 const RUN_ESTIMATE = 40
 const WHOLE_GRAPH = 130
+/** The listing's two parts: the whole graph at Preview, and the Render final (the render at Final, then the tail). */
+const PREVIEW = WHOLE_GRAPH
+const FINAL = 150
 const estimates = vi.hoisted(() => ({
   run: vi.fn(),
   listing: vi.fn(),
@@ -116,7 +122,9 @@ beforeEach(async () => {
   writes = []
   flag.on = true
   estimates.run.mockResolvedValue(RUN_ESTIMATE)
-  estimates.listing.mockResolvedValue(WHOLE_GRAPH)
+  estimates.listing.mockImplementation(async (_n: unknown, _e: unknown, options: { publishType: string }) =>
+    ({ preview: PREVIEW, final: options.publishType === "component" ? 0 : FINAL }),
+  )
   __resetAvailabilityOverridesForTests({ nodes: new Set(["llm-chat", "apply-edl", "generate-image"]) })
   app = Fastify({ logger: false })
   app.addHook("preHandler", async (req) => {
@@ -138,8 +146,8 @@ function insertInto(table: string): Record<string, unknown> {
   return write!.payload
 }
 
-describe.each([true, false])("PREVIEW_STOP_RULE_ENABLED=%s: the price stored at publish is the whole graph", (on) => {
-  it("publishing an app stores the whole-graph estimate as its base and listed price", async () => {
+describe.each([true, false])("PREVIEW_STOP_RULE_ENABLED=%s: the price stored at publish", (on) => {
+  it("an app: the preview run is the fee's base; the listed price adds the final", async () => {
     flag.on = on
     serve({ workflows: WORKFLOW })
     await app.inject({
@@ -149,13 +157,40 @@ describe.each([true, false])("PREVIEW_STOP_RULE_ENABLED=%s: the price stored at 
       payload: { workflowId: WORKFLOW_ID, name: "Cut app" },
     })
     const row = insertInto("published_apps")
-    expect(row.base_estimated_credits).toBe(WHOLE_GRAPH)
-    expect(row.estimated_credits).toBe(WHOLE_GRAPH)
-    expect(estimates.listing).toHaveBeenCalledWith(NODES, EDGES)
+    expect(row.base_estimated_credits).toBe(PREVIEW)
+    expect(row.estimated_credits).toBe(PREVIEW + FINAL)
+    expect(estimates.listing).toHaveBeenCalledWith(NODES, EDGES, { publishType: "app" })
     expect(estimates.run).not.toHaveBeenCalled()
   })
 
-  it("republishing (a new version over an earlier one, monetized) marks up the whole-graph estimate", async () => {
+  // With the flag on a component holding a Preview render is refused at
+  // publish; with it off it publishes, and must still list no final part.
+  it.runIf(!on)("a component: the listing asks for the component's split, whose final part is 0", async () => {
+    flag.on = on
+    serve({ workflows: WORKFLOW })
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/apps/publish",
+      headers: { "x-user-id": OWNER },
+      payload: {
+        workflowId: WORKFLOW_ID,
+        name: "Cut component",
+        publishType: "component",
+        componentMetadata: {
+          inputs: [],
+          outputs: [{ id: "tail", name: "Out", type: "image", required: true, mediaPreview: true, fieldKey: "imageUrl" }],
+          exposedSettings: [],
+        },
+      },
+    })
+    expect(res.statusCode).not.toBe(400)
+    const row = insertInto("published_apps")
+    expect(estimates.listing).toHaveBeenCalledWith(NODES, EDGES, { publishType: "component" })
+    expect(row.base_estimated_credits).toBe(PREVIEW)
+    expect(row.estimated_credits).toBe(PREVIEW)
+  })
+
+  it("republishing (a new version over an earlier one, monetized): the fee marks up the preview alone", async () => {
     flag.on = on
     serve({
       workflows: WORKFLOW,
@@ -166,7 +201,7 @@ describe.each([true, false])("PREVIEW_STOP_RULE_ENABLED=%s: the price stored at 
         is_listed: false,
         monetization_enabled: true,
         monetization_flat_fee: 10,
-        monetization_percent: 0,
+        monetization_percent: 50,
       },
     })
     await app.inject({
@@ -176,12 +211,13 @@ describe.each([true, false])("PREVIEW_STOP_RULE_ENABLED=%s: the price stored at 
       payload: { workflowId: WORKFLOW_ID, name: "Cut app" },
     })
     const row = insertInto("published_apps")
-    expect(row.base_estimated_credits).toBe(WHOLE_GRAPH)
-    expect(row.estimated_credits).toBeGreaterThan(WHOLE_GRAPH)
+    expect(row.base_estimated_credits).toBe(PREVIEW)
+    // 130 + 10 + ceil(130 × 50%) = 205 for the preview part; the final's 150 unmarked.
+    expect(row.estimated_credits).toBe(205 + FINAL)
     expect(estimates.run).not.toHaveBeenCalled()
   })
 
-  it("publishing a template stores the whole-graph estimate", async () => {
+  it("publishing a template stores the app listing's figure: the preview part plus the final (no fee)", async () => {
     flag.on = on
     serve({ workflows: WORKFLOW })
     await app.inject({
@@ -190,17 +226,19 @@ describe.each([true, false])("PREVIEW_STOP_RULE_ENABLED=%s: the price stored at 
       headers: { "x-user-id": OWNER },
       payload: { workflowId: WORKFLOW_ID, name: "Cut template" },
     })
-    expect(insertInto("workflow_templates").estimated_credits).toBe(WHOLE_GRAPH)
+    expect(insertInto("workflow_templates").estimated_credits).toBe(PREVIEW + FINAL)
+    expect(estimates.listing).toHaveBeenCalledWith(NODES, EDGES, { publishType: "template" })
     expect(estimates.run).not.toHaveBeenCalled()
   })
 
-  it("the monetization recalculation reads the stored base back, never re-estimating", async () => {
+  it("the monetization recalculation reads the stored parts back, never re-estimating", async () => {
     flag.on = on
     serve({
       published_apps: {
         id: APP_ID,
         creator_id: OWNER,
-        base_estimated_credits: WHOLE_GRAPH,
+        base_estimated_credits: PREVIEW,
+        estimated_credits: PREVIEW + FINAL,
         monetization_enabled: false,
         monetization_flat_fee: 0,
         monetization_percent: 0,
@@ -212,11 +250,36 @@ describe.each([true, false])("PREVIEW_STOP_RULE_ENABLED=%s: the price stored at 
       method: "PATCH",
       url: `/v1/apps/${APP_ID}`,
       headers: { "x-user-id": OWNER },
-      payload: { monetizationEnabled: false },
+      payload: { monetizationEnabled: true, monetizationFlatFee: 10 },
     })
     const update = writes.find((w) => w.table === "published_apps" && w.op === "update")
-    expect(update?.payload.estimated_credits).toBe(WHOLE_GRAPH)
+    expect(update?.payload.estimated_credits).toBe(PREVIEW + 10 + FINAL)
     expect(estimates.run).not.toHaveBeenCalled()
     expect(estimates.listing).not.toHaveBeenCalled()
+  })
+
+  it("a listing stored before the split has no final part: the fee marks up its base, as before, until its next publish", async () => {
+    flag.on = on
+    serve({
+      published_apps: {
+        id: APP_ID,
+        creator_id: OWNER,
+        base_estimated_credits: WHOLE_GRAPH,
+        estimated_credits: WHOLE_GRAPH,
+        monetization_enabled: false,
+        monetization_flat_fee: 0,
+        monetization_percent: 0,
+        slug: "cut-app-abc123",
+        workflow_id: WORKFLOW_ID,
+      },
+    })
+    await app.inject({
+      method: "PATCH",
+      url: `/v1/apps/${APP_ID}`,
+      headers: { "x-user-id": OWNER },
+      payload: { monetizationEnabled: true, monetizationFlatFee: 10 },
+    })
+    const update = writes.find((w) => w.table === "published_apps" && w.op === "update")
+    expect(update?.payload.estimated_credits).toBe(WHOLE_GRAPH + 10)
   })
 })

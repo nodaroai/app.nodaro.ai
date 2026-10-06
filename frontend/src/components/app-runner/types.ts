@@ -2,6 +2,7 @@ import type { WorkflowNode } from "@/types/nodes"
 import { getNodeResult, getOutputType } from "@/lib/presentation-utils"
 import { isMultiColumnList } from "@/lib/list-loop-migration"
 import type { MessageKey } from "@/lib/i18n"
+import type { AppRunFinalExecution } from "@/lib/api"
 
 export const ORIGINAL_SLOT_ID = "original"
 
@@ -50,6 +51,10 @@ export interface RunSlot {
   version: number | null
   thumbnailUrl: string | null
   hiddenNodes?: string[]
+  /** The run's Render final (a continuation outside the run), when one was asked for. */
+  finalExecution?: AppRunFinalExecution | null
+  /** The runner's own edits of the run's results (`app_runs.node_states`). */
+  nodeStateEdits?: Record<string, unknown> | null
 }
 
 export function makeEmptyInputs(inputNodes: WorkflowNode[]): Record<string, Record<string, unknown>> {
