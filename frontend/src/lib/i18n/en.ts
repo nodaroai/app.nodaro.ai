@@ -11016,6 +11016,7 @@ export const en = {
   "apiErr.reason.storageFull": "Your storage is full.",
   "apiErr.reason.subscriptionRequired": "This needs a paid plan.",
   "apiErr.reason.scanRunning": "A scan of this brand is running. Try again once it has finished.",
+  "apiErr.reason.runInProgress": "This run is still running. Stop it or wait for it to finish, then delete it.",
   "apiErr.reason.alreadyTracked": "You already track this brand.",
   "apiErr.reason.tooManyBrands": "You've reached the number of brands you can track. Remove one to add another.",
   "apiErr.reason.cardGone": "This card is no longer on your wall. Refresh and try again.",

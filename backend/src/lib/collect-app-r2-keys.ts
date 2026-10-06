@@ -1,5 +1,6 @@
 import { supabase } from "./supabase.js"
 import { r2KeyFromUrl } from "../ee/billing/cleanup-service.js"
+import { isOwnedObjectKey } from "./job-policy-outputs.js"
 import { APP_RUN_USER_CONTENT_COLUMNS } from "./app-run-content.js"
 import { appRenderFinalStampOf, finalExecutionIdOf, selectWithFinalExecution } from "./app-run-final-column.js"
 
@@ -14,15 +15,26 @@ import { appRenderFinalStampOf, finalExecutionIdOf, selectWithFinalExecution } f
  * skipping jobs would leak files past expunge). Used by the admin expunge
  * handler to prepare the batchDeleteFromR2 call.
  *
- * A run's execution ids are server-written (migration 469), but a chain's
- * earlier finals are found by their executions' stamps, which the runner can
- * write; and the service-role read bypasses RLS. So an execution — and its
- * jobs — is harvested only when it is the run's runner's own: a run pointing at another user's execution must not get that
- * user's media deleted with this app (decided 2026-10-06).
+ * Keys are harvested only from rows that are the run's own: an execution its
+ * runner owns, and that execution's owner's jobs (decided 2026-10-06; migration
+ * 474). A run's execution ids are server-written (migration 469), but a
+ * chain's earlier finals are found by their executions' stamps, which the
+ * runner can write; a job row naming the execution is a pointer; and the
+ * service-role read bypasses RLS. What this collects is DELETED — a planted
+ * pointer would delete someone else's file. So an execution (the run's, its
+ * Render final's, or an earlier final of the chain) is harvested only when it
+ * is the run's runner's own, and a job only when its owner is that
+ * execution's. For the same reason a job's `output_data` yields only keys in
+ * that job's own key family (`isOwnedObjectKey`: `<prefix>/<jobId>` or
+ * `<prefix>/<jobId>-<suffix>`): before 474 a client could insert its own job
+ * as 'completed' with any output, so owning the row does not vouch for the
+ * URLs in it. A job's output that names another object (an upload, a relayed
+ * far-end file) is left alone.
  *
  * Returns only the keys this app owns — see `appOwnedKeys`. A runner's inputs
  * can point at objects the app never made, and those are not expunge's to
- * delete. The app's own jobs are the jobs of the executions harvested above.
+ * delete. Only jobs that pass the owner check above count as this app's jobs
+ * there, so a key must clear both fences to be deleted.
  *
  * Pages app_runs in batches of 500 to bound memory.
  */
@@ -30,14 +42,14 @@ export async function collectAppR2Keys(appId: string): Promise<string[]> {
   const seen = new Set<string>()
   const appJobIds = new Set<string>()
 
-  const harvest = (val: unknown) => {
+  const harvest = (val: unknown, keep: (key: string) => boolean = () => true) => {
     if (typeof val === "string") {
       const key = r2KeyFromUrl(val)
-      if (key) seen.add(key)
+      if (key && keep(key)) seen.add(key)
     } else if (Array.isArray(val)) {
-      for (const v of val) harvest(v)
+      for (const v of val) harvest(v, keep)
     } else if (val && typeof val === "object") {
-      for (const v of Object.values(val)) harvest(v)
+      for (const v of Object.values(val)) harvest(v, keep)
     }
   }
 
@@ -95,7 +107,7 @@ export async function collectAppR2Keys(appId: string): Promise<string[]> {
       // earlier final inherits the runners of the final that names it, so it
       // too is harvested only when it is that runner's own.
       const runExecutions = new Set(rows.map((r) => r.execution_id).filter((id): id is string => typeof id === "string"))
-      const owned: Array<{ id: string; node_states: unknown }> = []
+      const owned: Array<{ id: string; user_id: string; node_states: unknown }> = []
       const read = new Set<string>()
       let batch = [...namedBy.keys()]
       for (let step = 0; batch.length > 0 && step < 32; step++) {
@@ -106,7 +118,7 @@ export async function collectAppR2Keys(appId: string): Promise<string[]> {
         for (const e of (execsRes.data ?? []) as Array<{ id: string; user_id: string | null; node_states: unknown; trigger_data?: unknown }>) {
           const runners = namedBy.get(e.id)
           if (typeof e.user_id !== "string" || !runners?.has(e.user_id)) continue
-          owned.push(e)
+          owned.push({ id: e.id, user_id: e.user_id, node_states: e.node_states })
           const earlier = appRenderFinalStampOf(e.trigger_data)?.continuedFrom
           if (!earlier || read.has(earlier) || runExecutions.has(earlier)) continue
           namedBy.set(earlier, new Set([...(namedBy.get(earlier) ?? []), e.user_id]))
@@ -116,11 +128,23 @@ export async function collectAppR2Keys(appId: string): Promise<string[]> {
       }
       for (const e of owned) harvest(e.node_states)
       if (owned.length > 0) {
-        const jobsRes = await supabase.from("jobs").select("id, output_data").in("workflow_execution_id", owned.map((e) => e.id))
+        // execution id → its owner (the runner it was harvested for).
+        const ownerOf = new Map(owned.map((e) => [e.id, e.user_id] as const))
+        // Many runners' executions in one read, so no single user filter fits:
+        // `user_id` is compared below, row by row, against the execution owner.
+        const jobsRes = await supabase
+          .from("jobs")
+          .select("id, user_id, workflow_execution_id, output_data")
+          .in("workflow_execution_id", [...ownerOf.keys()])
         if (jobsRes.error) throw new Error(`collectAppR2Keys failed at jobs: ${jobsRes.error.message}`)
         for (const j of jobsRes.data ?? []) {
-          if (typeof j.id === "string") appJobIds.add(j.id)
-          harvest(j.output_data)
+          const owner = ownerOf.get(j.workflow_execution_id as string)
+          if (owner === undefined || j.user_id !== owner || typeof j.id !== "string") continue
+          const jobId = j.id
+          // Only an owned job is one of this app's jobs for `appOwnedKeys`: a
+          // planted job's library row must not make a key deletable.
+          appJobIds.add(jobId)
+          harvest(j.output_data, (key) => isOwnedObjectKey(jobId, key))
         }
       }
     }

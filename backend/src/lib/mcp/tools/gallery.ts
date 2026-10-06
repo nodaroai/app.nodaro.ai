@@ -1199,10 +1199,13 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
           { prompt?: string; provider?: string; createdAt?: string }
         >()
         if (jobIds.length) {
+          // The ids come from node_states, so they are pointers: read only
+          // the caller's own jobs (the execution is theirs, checked above).
           const { data: jobs } = await supabase
             .from("jobs")
             .select("id, input_data, provider, completed_at, created_at")
             .in("id", jobIds)
+            .eq("user_id", session.userId)
           for (const j of jobs ?? []) {
             const input = (j.input_data ?? {}) as Record<string, unknown>
             jobMeta.set(j.id as string, {

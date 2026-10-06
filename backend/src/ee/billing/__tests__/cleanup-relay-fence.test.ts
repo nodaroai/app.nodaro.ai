@@ -122,7 +122,8 @@ import {
 } from "../cleanup-service.js"
 
 const FAR_KEY = "images/ffffffff-ffff-4000-8000-000000000001.png"
-const OURS_KEY = "videos/11111111-1111-4000-8000-000000000001.mp4"
+const OURS_JOB = "11111111-1111-4000-8000-000000000001"
+const OURS_KEY = `videos/${OURS_JOB}.mp4`
 
 function queue(table: string, responses: Array<{ data: unknown; error: unknown }>): void {
   tableResponses.set(table, [...responses])
@@ -172,9 +173,9 @@ describe("cleanupFreeUserMedia — the relay fence", () => {
       {
         data: [
           {
-            id: "job-1",
+            id: OURS_JOB,
             user_id: "free-user-1",
-            output_data: { imageUrl: `https://cdn.example.com/${FAR_KEY}` },
+            output_data: { videoUrl: `https://cdn.example.com/${OURS_KEY}` },
           },
         ],
         error: null,
@@ -184,7 +185,7 @@ describe("cleanupFreeUserMedia — the relay fence", () => {
 
     await cleanupFreeUserMedia()
 
-    expect(mockDeletableKeys).toHaveBeenCalledWith([FAR_KEY])
+    expect(mockDeletableKeys).toHaveBeenCalledWith([OURS_KEY])
     // Nothing deletable ⇒ no batch call at all.
     expect(mockBatchDeleteFromR2).not.toHaveBeenCalled()
   })
@@ -246,5 +247,63 @@ describe("sweepSoftDeletedLocationAssets — the relay fence", () => {
     expect(mockBatchDeleteFromR2).toHaveBeenCalledWith([OURS_KEY])
     // Only what was actually deleted is counted.
     expect(result.r2KeysDeleted).toBe(1)
+  })
+})
+
+/**
+ * THE KEY-FAMILY FENCE (decided 2026-10-06; migration 474). Before 474 a client
+ * could insert its own job as 'completed' with any `output_data` — a URL of
+ * another user's file — and an old `created_at`. Owning the row says nothing
+ * about the URLs in it, so a job's output yields only keys of its own family
+ * (`<prefix>/<jobId>` or `<prefix>/<jobId>-<suffix>`, `isOwnedObjectKey`).
+ */
+const VICTIM_KEY = "images/99999999-9999-4000-8000-000000000009.png"
+const SEG_KEY = `videos/${OURS_JOB}-seg1.mp4`
+const plantedJob = {
+  id: OURS_JOB,
+  user_id: "free-user-1",
+  output_data: {
+    videoUrl: `https://cdn.example.com/${OURS_KEY}`,
+    segmentUrl: `https://cdn.example.com/${SEG_KEY}`,
+    imageUrl: `https://cdn.example.com/${VICTIM_KEY}`,
+  },
+}
+
+describe("cleanupFreeUserMedia — the key-family fence", () => {
+  it("attacker: a planted URL in the user's own job output is never deleted; the job's own family is", async () => {
+    queue("profiles", [{ data: [{ id: "free-user-1" }], error: null }])
+    queue("assets", [{ data: [], error: null }])
+    queue("jobs", [{ data: [plantedJob], error: null }])
+    mockBatchDeleteFromR2.mockResolvedValue({ deleted: 2, errors: 0 })
+
+    await cleanupFreeUserMedia()
+
+    expect(mockDeletableKeys).toHaveBeenCalledWith([OURS_KEY, SEG_KEY])
+    expect(mockBatchDeleteFromR2).toHaveBeenCalledWith([OURS_KEY, SEG_KEY])
+  })
+})
+
+describe("cleanupCanceledUserMedia — the key-family fence", () => {
+  it("attacker: a planted URL in the user's own job output is never deleted; the job's own family is", async () => {
+    queue("profiles", [
+      {
+        data: [
+          {
+            id: "free-user-1",
+            subscription_tier: "creator",
+            subscription_status: "canceled",
+            subscription_ends_at: new Date(Date.now() - 90 * 86400_000).toISOString(),
+          },
+        ],
+        error: null,
+      },
+    ])
+    queue("assets", [{ data: [], error: null }])
+    queue("jobs", [{ data: [plantedJob], error: null }])
+
+    await cleanupCanceledUserMedia()
+
+    expect(mockBatchDeleteFromR2).toHaveBeenCalledWith([OURS_KEY, SEG_KEY])
+    for (const call of mockBatchDeleteFromR2.mock.calls) expect(call[0]).not.toContain(VICTIM_KEY)
   })
 })

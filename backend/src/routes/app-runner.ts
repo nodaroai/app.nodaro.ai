@@ -11,6 +11,8 @@ import { executionOutcome } from "@nodaro/shared"
 import { previewReviewRefusal } from "../lib/preview-review-gate.js"
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
 import { sendInternalError } from "../lib/http-errors.js"
+import { ACTIVE_EXECUTION_STATUSES } from "../lib/request-helpers.js"
+import { IN_FLIGHT_JOB_STATUSES } from "../lib/job-status.js"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { isUserBlocked } from "../lib/access-blocks.js"
@@ -1209,6 +1211,16 @@ export async function appRunnerRoutes(app: FastifyInstance) {
   // states / outputs in DB). Generated R2 assets are reaped by the existing
   // cleanup-cron based on storage retention; we don't block this request on
   // R2 deletion.
+  //
+  // Only a SETTLED run (decided 2026-10-06): one whose execution is no longer
+  // pending / running / stopping and has no job of the runner's still in
+  // flight. A monetized app's creator fee is settled
+  // once, when the run completes — the orchestrator prices it from the run's
+  // final credits and finds this row by its execution. Deleting mid-run left
+  // nothing to settle against (the creator went unpaid while the run kept
+  // spending), and a fee cannot be settled here instead because the final
+  // credits do not exist yet. So the delete waits; archiving does not (it
+  // keeps the row).
   app.delete("/v1/app/:slug/runs/:runId/permanent", async (req, reply) => {
     if (!req.userId) {
       return reply.status(401).send({
@@ -1246,6 +1258,44 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       return reply.status(400).send({
         error: { code: "not_archived", message: "Run must be archived before permanent deletion. Call DELETE first." },
       })
+    }
+
+    if (run.execution_id) {
+      const { data: execution, error: execError } = await supabase
+        .from("workflow_executions")
+        .select("status")
+        .eq("id", run.execution_id)
+        .eq("user_id", req.userId)
+        .maybeSingle()
+      // Could not tell whether it is still running: refuse rather than guess.
+      if (execError) return sendInternalError(reply, req, execError, "Failed to delete run")
+      // Both facts are server-written (474): the execution's status, and the
+      // runner's own jobs of it that are still in flight (the same set the
+      // reconcile cron keeps a run alive for, parked review holds included).
+      // A job still working means the run has not settled, whatever the
+      // status column reads.
+      const executionActive = !!execution &&
+        (ACTIVE_EXECUTION_STATUSES as readonly string[]).includes(execution.status as string)
+      let inFlightJob = false
+      if (!executionActive) {
+        const { data: liveJobs, error: jobsError } = await supabase
+          .from("jobs")
+          .select("id")
+          .eq("workflow_execution_id", run.execution_id)
+          .eq("user_id", req.userId)
+          .in("status", [...IN_FLIGHT_JOB_STATUSES])
+          .limit(1)
+        if (jobsError) return sendInternalError(reply, req, jobsError, "Failed to delete run")
+        inFlightJob = (liveJobs ?? []).length > 0
+      }
+      if (executionActive || inFlightJob) {
+        return reply.status(409).send({
+          error: {
+            code: "run_in_progress",
+            message: "This run is still running. Stop it or wait for it to finish, then delete it.",
+          },
+        })
+      }
     }
 
     // Delete the underlying execution row first (its node_states JSONB holds

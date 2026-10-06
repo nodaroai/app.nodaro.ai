@@ -781,6 +781,50 @@ describe("get_app_run tool", () => {
     // The text reply carries the same reading.
     expect(result.content[0]?.text).toContain('"outcome": "nothing_new"')
   })
+
+  it("attacker: a node_states jobId naming another user's job adds none of its prompt or model", async () => {
+    // node_states was client-writable before 474, so a jobId in it is a
+    // pointer: the enrichment reads the caller's own jobs only.
+    const execution = {
+      id: JOB_UUID,
+      status: "completed",
+      workflow_id: JOB_UUID_2,
+      created_at: "2026-10-06T09:00:00Z",
+      completed_at: "2026-10-06T10:00:00Z",
+      error_message: null,
+      user_id: "u1",
+      node_states: {
+        img: { status: "completed", nodeType: "generate-image", jobId: "job-planted", output: { imageUrl: "https://cdn.test/mine.png" } },
+      },
+    }
+    const jobFilters: Array<Record<string, unknown>> = []
+    const victimJob = { id: "job-planted", user_id: "victim", input_data: { prompt: "victim's private prompt" }, provider: "victim-model", completed_at: "2026-10-01T10:00:00Z", created_at: "2026-10-01T09:00:00Z" }
+    const jobsChain = () => {
+      const filters: Record<string, unknown> = {}
+      const q: Record<string, unknown> = {}
+      q.select = () => q
+      q.in = () => q
+      q.eq = (col: string, v: unknown) => { filters[col] = v; return q }
+      q.then = (res: (v: unknown) => unknown, rej?: (e: unknown) => unknown) => {
+        jobFilters.push({ ...filters })
+        const rows = [victimJob].filter((r) => filters.user_id === undefined || r.user_id === filters.user_id)
+        return Promise.resolve({ data: rows, error: null }).then(res, rej)
+      }
+      return q
+    }
+    ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockImplementation((table: string) =>
+      table === "jobs" ? jobsChain() : makeChainableSingle(table === "workflow_executions" ? execution : null))
+    const server = buildServer()
+    registerGallery({ server, session: readSession(), fastify: Fastify() })
+    const result = await callTool(server, "get_app_run", { execution_id: JOB_UUID })
+    expect(result.isError).toBeUndefined()
+    expect(jobFilters).toEqual([{ user_id: "u1" }])
+    const sc = result.structuredContent as { outputs: Array<{ url: string; prompt?: string; model?: string }> }
+    expect(sc.outputs.map((o) => o.url)).toEqual(["https://cdn.test/mine.png"])
+    expect(sc.outputs[0]?.prompt).toBeUndefined()
+    expect(sc.outputs[0]?.model).toBeUndefined()
+    expect(JSON.stringify(result)).not.toContain("victim")
+  })
 })
 
 describe("favorite_asset tool", () => {

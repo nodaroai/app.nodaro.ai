@@ -1626,7 +1626,8 @@ refused with `400 locked_field`.
 **Scope:** `workflows:execute`
 
 Soft-delete (archive) a published-app run. The run can be restored or
-permanently deleted from the Nodaro web UI at `/archived-runs`.
+permanently deleted from the Nodaro web UI at `/archived-runs` (permanent
+deletion waits until the run has finished or been stopped).
 
 **Input:** `{ slug: string, runId: uuid }`
 

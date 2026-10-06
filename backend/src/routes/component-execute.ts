@@ -225,7 +225,7 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
         // the excess of any long render it dispatches, so this wait must too.
         // Looked up only once the base is spent: a component with nothing
         // budgeted inside times out exactly as before.
-        const deadline = new BudgetedDeadline(POLL_ABSOLUTE_TIMEOUT_MS, () => executionBudgetExcessMs(result.executionId))
+        const deadline = new BudgetedDeadline(POLL_ABSOLUTE_TIMEOUT_MS, () => executionBudgetExcessMs(result.executionId, req.userId!))
         const startTime = Date.now()
         while (!(await deadline.reached(Date.now() - startTime))) {
           // Poll status + progress counts to propagate progress to wrapper job
@@ -387,8 +387,8 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
     if (!wrapper || wrapper.provider !== "component") {
       return reply.status(404).send({ error: { code: "not_found", message: "Component run not found" } })
     }
-    // `_executionId` sits in client-writable job input (a client may insert
-    // its own jobs row), so it is only a pointer to check: the inner run counts
+    // `_executionId` sits in job input written before clients lost their
+    // jobs writes (474), so it is only a pointer to check: the inner run counts
     // only when the wrapper's owner owns it. Anyone else's execution reads as
     // "no inner run" — its budget is never looked at.
     const stamped = (wrapper.input_data as Record<string, unknown> | null)?._executionId
@@ -409,7 +409,12 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
     // run the server keeps waiting on. No inner run stamped → false (a wrapper
     // with no inner run has nothing to wait for).
     const [budgetExcessMs, pendingBudgetedNodes] = inner !== null
-      ? await Promise.all([executionBudgetExcessMs(inner), executionMayDispatchBudgetedJob(inner)])
+      // The readers are owner-scoped too (a second fence behind the lookup
+      // above): another user's execution reads as missing.
+      ? await Promise.all([
+        executionBudgetExcessMs(inner, wrapper.user_id as string),
+        executionMayDispatchBudgetedJob(inner, wrapper.user_id as string),
+      ])
       : [0, false]
     return reply.send({
       data: { budgetExcessMs, waitLimitMs: POLL_ABSOLUTE_TIMEOUT_MS + budgetExcessMs, pendingBudgetedNodes },

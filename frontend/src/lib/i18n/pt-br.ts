@@ -10723,6 +10723,7 @@ export const ptBR: ChromeDict = {
   "apiErr.reason.storageFull": "Seu armazenamento está cheio.",
   "apiErr.reason.subscriptionRequired": "Isso exige um plano pago.",
   "apiErr.reason.scanRunning": "Uma varredura desta marca está em andamento. Tente novamente quando ela terminar.",
+  "apiErr.reason.runInProgress": "Esta execução ainda está em andamento. Interrompa-a ou aguarde o término e depois exclua-a.",
   "apiErr.reason.alreadyTracked": "Você já acompanha esta marca.",
   "apiErr.reason.tooManyBrands": "Você atingiu o número de marcas que pode acompanhar. Remova uma para adicionar outra.",
   "apiErr.reason.cardGone": "Este card não está mais no seu mural. Atualize e tente de novo.",

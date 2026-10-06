@@ -1001,6 +1001,9 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
           .from("jobs")
           .select("id")
           .eq("workflow_execution_id", parsed.data.id)
+          // The execution is the caller's (checked above); so are its jobs.
+          // Another user's row naming it is not cancelled or refunded here.
+          .eq("user_id", userId)
           .in("status", ["pending", "queued", "processing"])
 
         if (activeJobs && activeJobs.length > 0) {

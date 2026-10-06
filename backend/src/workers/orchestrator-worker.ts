@@ -136,7 +136,7 @@ const STARTUP_RECONCILE_BATCH_LIMIT = 100
 export async function cleanupStaleExecutions(): Promise<void> {
   const scan = supabase
     .from("workflow_executions")
-    .select("id, started_at, node_states")
+    .select("id, user_id, started_at, node_states")
     .in("status", ["running", "stopping"])
 
   // Only THIS environment's rows. Staging and production share one Supabase
@@ -247,7 +247,7 @@ export async function cleanupStaleExecutions(): Promise<void> {
     // If the previous orchestrator died after the worker marked a child
     // job completed but before it could write node_states[X]="completed",
     // this catches that case and lets us close out the execution cleanly.
-    const { next: states, changed } = await reconcileNodeStatesFromJobs(rawStates, row.id)
+    const { next: states, changed } = await reconcileNodeStatesFromJobs(rawStates, row.id, row.user_id as string)
 
     const nodeStatuses = Object.values(states).map((s) => s?.status)
     const allCompleted = nodeStatuses.length > 0 && nodeStatuses.every((s) => s === "completed" || s === "skipped")
@@ -296,7 +296,7 @@ export async function cleanupStaleExecutions(): Promise<void> {
     const isAbandonable =
       startedAt === 0 ||
       (startedAt > 0 && now - startedAt > STALE_EXECUTION_THRESHOLD_MS &&
-        now - startedAt > staleExecutionThresholdMs(await executionBudgetExcessMs(row.id, states)))
+        now - startedAt > staleExecutionThresholdMs(await executionBudgetExcessMs(row.id, row.user_id as string, states)))
 
     if (isAbandonable) {
       await tryTerminalWrite(
@@ -602,12 +602,12 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     // cancel and refund the ones no provider has been paid for, as a resume
     // would, rather than leave them running for a run that is over.
     if (await isUserBlocked(userId)) {
-      await cancelInFlightChildJobs(executionId)
+      await cancelInFlightChildJobs(executionId, userId)
       await failExecution(executionId, "This account is blocked.")
       return
     }
     if (ctx.workflowOwnerId && ctx.workflowOwnerId !== userId && (await isUserBlocked(ctx.workflowOwnerId))) {
-      await cancelInFlightChildJobs(executionId)
+      await cancelInFlightChildJobs(executionId, userId)
       await failExecution(executionId, "This workflow is unavailable.")
       return
     }
@@ -911,7 +911,7 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
       // node is running/pending (fresh first pick), so always calling it is free
       // on the common path. Carry forward only TERMINAL-DONE states; genuinely
       // in-flight or failed nodes are not carried and re-attempt on resume.
-      const { next } = await reconcileNodeStatesFromJobs(persisted, executionId)
+      const { next } = await reconcileNodeStatesFromJobs(persisted, executionId, userId)
       for (const [id, st] of Object.entries(next)) {
         if (st?.status === "completed" || st?.status === "skipped") {
           nodeStates[id] = st
@@ -939,7 +939,7 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     // would make reconcile map these to "skipped" and carry their nodes
     // forward as done). No-op on a first pick. See cancelInFlightChildJobs for
     // the residual-race note.
-    const { adoptable } = await cancelInFlightChildJobs(executionId, { adoptLiveBudgetedRenders: true })
+    const { adoptable } = await cancelInFlightChildJobs(executionId, userId, { adoptLiveBudgetedRenders: true })
     if (adoptable.size > 0) ctx.adoptableJobs = adoptable
     // Jobs → owning node. Fan-out creates one job per iteration, so the
     // scalar nodeStates[node].jobId field would only remember the last one
@@ -1730,7 +1730,7 @@ async function executeNodeForList(
   // (reconcile leaves it "running"). Reuse the iterations that ALREADY completed
   // (+ committed) on the prior attempt instead of re-running them, so the re-run
   // doesn't double-charge or double-spend at the provider. Empty on a first run.
-  const priorIterations = await loadCompletedFanOutIterations(executionId, node.id, node.type ?? "")
+  const priorIterations = await loadCompletedFanOutIterations(executionId, ctx.userId, node.id, node.type ?? "")
 
   let iterationCompleted = 0
   const cancelRef = { cancelled: false }

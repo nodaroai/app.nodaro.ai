@@ -10723,6 +10723,7 @@ export const ko: ChromeDict = {
   "apiErr.reason.storageFull": "저장 공간이 가득 찼습니다.",
   "apiErr.reason.subscriptionRequired": "유료 요금제가 필요합니다.",
   "apiErr.reason.scanRunning": "이 브랜드를 스캔하고 있습니다. 스캔이 끝난 뒤 다시 시도하세요.",
+  "apiErr.reason.runInProgress": "이 실행은 아직 진행 중입니다. 중지하거나 끝날 때까지 기다린 뒤 삭제하세요.",
   "apiErr.reason.alreadyTracked": "이미 추적 중인 브랜드입니다.",
   "apiErr.reason.tooManyBrands": "추적할 수 있는 브랜드 수에 도달했습니다. 하나를 삭제한 뒤 추가하세요.",
   "apiErr.reason.cardGone": "이 카드는 더 이상 월에 없습니다. 새로고침 후 다시 시도하세요.",

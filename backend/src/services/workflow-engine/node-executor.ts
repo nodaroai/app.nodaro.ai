@@ -2078,9 +2078,14 @@ function completedJobResult(
  * (immutable, already-completed) upstream, so index i maps to the same item
  * across the original run and the re-run. On a FIRST run no prior completed
  * iteration jobs exist yet, so this returns an empty map (no behaviour change).
+ *
+ * Only the execution owner's jobs (`ownerId`): a job row naming this execution
+ * is not proof it belongs to it (decided 2026-10-06; migration 474), and a
+ * reused iteration's output flows straight into the run.
  */
 export async function loadCompletedFanOutIterations(
   executionId: string,
+  ownerId: string,
   nodeId: string,
   nodeType: string,
 ): Promise<Map<number, ExecuteNodeResult>> {
@@ -2089,6 +2094,7 @@ export async function loadCompletedFanOutIterations(
     .from("jobs")
     .select("id, output_data, credits_actual, credits, input_data")
     .eq("workflow_execution_id", executionId)
+    .eq("user_id", ownerId)
     .eq("status", "completed")
   if (error || !jobs) return byIndex
   for (const j of jobs) {
@@ -2541,7 +2547,7 @@ async function executeComponentNode(
   // abandoned (and its inner run cancelled) at minute 90.
   const deadline = new BudgetedDeadline(COMPONENT_TIMEOUT_MS, async () => {
     const innerId = await componentInnerExecutionId(jobId)
-    return innerId ? executionBudgetExcessMs(innerId) : 0
+    return innerId ? executionBudgetExcessMs(innerId, ctx.userId) : 0
   })
   const startTime = Date.now()
   while (!(await deadline.reached(Date.now() - startTime))) {
@@ -2562,7 +2568,7 @@ async function executeComponentNode(
       const innerId = (job.output_data as Record<string, unknown> | null)?._executionId
       addBudgetExcess(
         ctx,
-        Math.max(deadline.excessMs, typeof innerId === "string" ? await executionBudgetExcessMs(innerId) : 0),
+        Math.max(deadline.excessMs, typeof innerId === "string" ? await executionBudgetExcessMs(innerId, ctx.userId) : 0),
       )
       // credits_actual on the wrapper job = the inner execution's
       // total_credits_used (set by component-execute.ts on completion). This is
@@ -2615,7 +2621,7 @@ async function executeComponentNode(
       // No `adoptLiveBudgetedRenders`: the parent has given up, so an inner
       // render that is still running is cancelled (it stops at its next chunk
       // boundary), not kept alive for a resume that will never come.
-      await cancelInFlightChildJobs(innerExecutionId)
+      await cancelInFlightChildJobs(innerExecutionId, ctx.userId)
       await supabase
         .from("workflow_executions")
         .update({
@@ -2624,6 +2630,8 @@ async function executeComponentNode(
           completed_at: new Date().toISOString(),
         })
         .eq("id", innerExecutionId)
+        // The inner run is this run's owner's (component-execute creates it for them).
+        .eq("user_id", ctx.userId)
         .in("status", ["pending", "running", "stopping"])
     }
     const { data: failedWrapper } = await supabase

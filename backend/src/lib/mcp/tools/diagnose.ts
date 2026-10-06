@@ -168,10 +168,13 @@ export function registerDiagnose({ server, session }: RegisterDiagnoseOpts): voi
 
         const jobMap = new Map<string, JobRow>()
         if (jobIds.length > 0) {
+          // The ids come from node_states, so they are pointers: read only
+          // the caller's own jobs (the execution is theirs, checked above).
           const { data: jobs } = await supabase
             .from("jobs")
             .select("id, error_message, input_data, credits_actual")
             .in("id", jobIds)
+            .eq("user_id", session.userId)
           for (const j of (jobs ?? []) as JobRow[]) {
             if (j.id) jobMap.set(j.id, j)
           }

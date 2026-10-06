@@ -3,10 +3,20 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 const mocks = vi.hoisted(() => {
   const refundMock = vi.fn().mockResolvedValue(1)
   // select chain: from("jobs").select(...).eq(...).in(...) → rows
-  const rows: unknown[] = []
-  const selectInMock = vi.fn(() => Promise.resolve({ data: rows, error: null as { message: string } | null }))
-  const selectEqMock = vi.fn(() => ({ in: selectInMock }))
-  const selectMock = vi.fn(() => ({ eq: selectEqMock }))
+  const rows: Array<Record<string, unknown>> = []
+  // The `.eq` filters are APPLIED (a row with no such column reads as the
+  // execution's own: exec-1, owned by owner-1), so a filter the query leaves
+  // out shows up as a row the test did not expect.
+  const ROW_DEFAULTS: Record<string, unknown> = { workflow_execution_id: "exec-1", user_id: "owner-1" }
+  const selectInMock = vi.fn((filters: Record<string, unknown>) => Promise.resolve({
+    data: rows.filter((r) => Object.entries(filters).every(([c, v]) => (r[c] ?? ROW_DEFAULTS[c]) === v)),
+    error: null as { message: string } | null,
+  }))
+  const selectChain = (filters: Record<string, unknown>): Record<string, unknown> => ({
+    eq: (col: string, v: unknown) => selectChain({ ...filters, [col]: v }),
+    in: () => selectInMock(filters),
+  })
+  const selectMock = vi.fn(() => selectChain({}))
   // update chain: from("jobs").update(...).eq(...).in(...).select("id") → flipped
   const updateCalls: Array<Record<string, unknown>> = []
   const updSelectMock = vi.fn(() => Promise.resolve({ data: [{ id: "flipped" }], error: null }))
@@ -43,7 +53,7 @@ describe("cancelInFlightChildJobs — adoption split (audit A2)", () => {
       credits: 4,
     })
 
-    const { cancelled, adoptable } = await cancelInFlightChildJobs("exec-1")
+    const { cancelled, adoptable } = await cancelInFlightChildJobs("exec-1", "owner-1")
 
     expect(cancelled).toBe(1)
     expect(adoptable.size).toBe(0)
@@ -64,7 +74,7 @@ describe("cancelInFlightChildJobs — adoption split (audit A2)", () => {
       credits: 15,
     })
 
-    const { cancelled, adoptable } = await cancelInFlightChildJobs("exec-1")
+    const { cancelled, adoptable } = await cancelInFlightChildJobs("exec-1", "owner-1")
 
     expect(cancelled).toBe(0)
     expect(mocks.updateMock).not.toHaveBeenCalled()
@@ -90,7 +100,7 @@ describe("cancelInFlightChildJobs — adoption split (audit A2)", () => {
       id: "j-img", input_data: { node_id: "node-10", type: "generate-image" }, provider_task_id: "kie-10", usage_log_id: "ul-10", credits: 4, job_type: "generate-image",
     })
 
-    const { adoptable } = await cancelInFlightChildJobs("exec-1")
+    const { adoptable } = await cancelInFlightChildJobs("exec-1", "owner-1")
 
     expect(adoptable.get("node-9")?.budgetMs).toBe(declaredJobBudgetMs("apply-edl", inputData))
     expect(adoptable.get("node-9")?.budgetMs).toBeGreaterThan(90 * 60_000)
@@ -106,7 +116,7 @@ describe("cancelInFlightChildJobs — adoption split (audit A2)", () => {
       credits: 5,
     })
 
-    const { cancelled, adoptable } = await cancelInFlightChildJobs("exec-1")
+    const { cancelled, adoptable } = await cancelInFlightChildJobs("exec-1", "owner-1")
 
     expect(cancelled).toBe(1)
     expect(adoptable.size).toBe(0)
@@ -122,7 +132,7 @@ describe("cancelInFlightChildJobs — adoption split (audit A2)", () => {
       credits: null,
     })
 
-    const { cancelled, adoptable } = await cancelInFlightChildJobs("exec-1")
+    const { cancelled, adoptable } = await cancelInFlightChildJobs("exec-1", "owner-1")
 
     expect(cancelled).toBe(1)
     expect(adoptable.size).toBe(0)
@@ -135,12 +145,31 @@ describe("cancelInFlightChildJobs — adoption split (audit A2)", () => {
       { id: "j-c", input_data: { node_id: "n2" }, provider_task_id: null, usage_log_id: "ul-c", credits: 2 },
     )
 
-    const { cancelled, adoptable } = await cancelInFlightChildJobs("exec-1")
+    const { cancelled, adoptable } = await cancelInFlightChildJobs("exec-1", "owner-1")
 
     // j-a adopted for n1; j-b (duplicate for n1) cancelled; j-c (pre-provider) cancelled.
     expect(adoptable.get("n1")?.jobId).toBe("j-a")
     expect(cancelled).toBe(2)
     expect(mocks.refundMock).toHaveBeenCalledWith("j-b")
     expect(mocks.refundMock).toHaveBeenCalledWith("j-c")
+  })
+
+  it("attacker: an in-flight job another user pointed at this execution is neither adopted nor touched", async () => {
+    // Before 474 a browser could insert its own `jobs` row naming any
+    // execution, with a provider task id and a node id of its choosing. The
+    // resume must not adopt it (its result would become the node's), and must
+    // not cancel or refund a row it does not own.
+    mocks.rows.push(
+      { id: "j-planted", user_id: "attacker", input_data: { node_id: "n1" }, provider_task_id: "evil-task", usage_log_id: null, credits: 0 },
+      { id: "j-own", input_data: { node_id: "n2" }, provider_task_id: "t-own", usage_log_id: "ul-own", credits: 3 },
+    )
+
+    const { cancelled, adoptable } = await cancelInFlightChildJobs("exec-1", "owner-1")
+
+    expect(adoptable.has("n1")).toBe(false)
+    expect(adoptable.get("n2")?.jobId).toBe("j-own")
+    expect(cancelled).toBe(0)
+    expect(mocks.updateMock).not.toHaveBeenCalled()
+    expect(mocks.refundMock).not.toHaveBeenCalled()
   })
 })

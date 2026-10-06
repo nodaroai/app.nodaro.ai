@@ -10933,6 +10933,7 @@ export const he: ChromeDict = {
   "apiErr.reason.storageFull": "נפח האחסון שלכם מלא.",
   "apiErr.reason.subscriptionRequired": "לשם כך נדרשת תוכנית בתשלום.",
   "apiErr.reason.scanRunning": "סריקה של המותג הזה כבר רצה. נסו שוב כשהיא תסתיים.",
+  "apiErr.reason.runInProgress": "ההרצה עדיין פועלת. עצרו אותה או המתינו לסיומה, ואז מחקו אותה.",
   "apiErr.reason.alreadyTracked": "אתם כבר עוקבים אחרי המותג הזה.",
   "apiErr.reason.tooManyBrands": "הגעתם למספר המותגים שאפשר לעקוב אחריהם. הסירו אחד כדי להוסיף אחר.",
   "apiErr.reason.cardGone": "הכרטיס הזה כבר לא על הקיר שלכם. רעננו ונסו שוב.",

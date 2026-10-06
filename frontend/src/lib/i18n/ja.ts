@@ -10723,6 +10723,7 @@ export const ja: ChromeDict = {
   "apiErr.reason.storageFull": "ストレージがいっぱいです。",
   "apiErr.reason.subscriptionRequired": "この機能には有料プランが必要です。",
   "apiErr.reason.scanRunning": "このブランドはスキャン中です。完了してからもう一度お試しください。",
+  "apiErr.reason.runInProgress": "この実行はまだ進行中です。停止するか、完了を待ってから削除してください。",
   "apiErr.reason.alreadyTracked": "このブランドはすでに追跡しています。",
   "apiErr.reason.tooManyBrands": "追跡できるブランド数の上限に達しました。追加するには、いずれかを削除してください。",
   "apiErr.reason.cardGone": "このカードはウォールにもうありません。再読み込みしてやり直してください。",

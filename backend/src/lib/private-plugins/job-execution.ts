@@ -4,8 +4,9 @@ import type { PluginJobExecution } from "./types.js"
 /**
  * `tk.jobs.readJobExecution` — the workflow run a job belongs to. Nothing
  * comes from the job's payload. What each field is worth:
- *   - `runnerId`, `executionId`, `nodeId`: from the job row, which the host
- *     wrote and no client can update;
+ *   - `runnerId`, `executionId`, `nodeId`: from the job row, which only the
+ *     host writes (migration 474 took every write on `jobs` from the browser
+ *     roles), and whose run must be the same user's;
  *   - `workflowId` and `workflowOwnerId`: through the run row, whose user may
  *     re-point it (`workflow_executions` carries an owner update policy) — to
  *     a workflow of their OWN, never to another user's without the owner
@@ -43,10 +44,13 @@ export async function readJobExecution(jobId: string, scope: { runnerId: string 
   if (jobError) throw new Error(`jobs read failed: ${jobError.message}`)
   if (!job || typeof job.workflow_execution_id !== "string") return null
 
+  // The run must be the job's own user's (migration 474 makes the database
+  // refuse anything else; this read does not lean on that).
   const { data: run, error: runError } = await supabase
     .from("workflow_executions")
     .select("id, workflow_id")
     .eq("id", job.workflow_execution_id)
+    .eq("user_id", runnerId)
     .maybeSingle()
   if (runError) throw new Error(`workflow_executions read failed: ${runError.message}`)
   if (!run) return null

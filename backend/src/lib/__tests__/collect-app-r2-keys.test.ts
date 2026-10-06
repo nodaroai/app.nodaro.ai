@@ -1,11 +1,12 @@
 /**
- * collectAppR2Keys harvests an app's media for the admin expunge. A run's
- * execution ids (`execution_id`, and its Render final's `final_execution_id`)
- * are server-written since migration 469, but rows planted before it, and a
- * chain's runner-writable stamps, remain; so the harvest reads an execution —
- * and its jobs — only when it is that run's runner's own: a run pointing at
- * another user's execution must not get that user's media deleted when the
- * app is expunged (decided 2026-10-06).
+ * `collectAppR2Keys` feeds the admin expunge, which DELETES every key it
+ * returns. So it harvests only rows that are the run's own (decided
+ * 2026-10-06; migration 474): an execution the run's runner owns — the run's
+ * `execution_id`, its Render final's `final_execution_id`, and a chain's
+ * earlier finals found by their runner-writable stamps — and that owner's
+ * jobs. A row another user planted — a job naming the execution, or a run
+ * pointing at someone else's execution — must not turn its URLs into
+ * deletions of files that are not this app's.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
@@ -79,11 +80,12 @@ beforeEach(() => {
         trigger_data: { appRenderFinal: { appRunId: "r3", appVersionId: "app", continuedFrom: "e-bob" } },
       },
     ],
+    // Each job's key is its own key family (`<jobId>`), as a worker writes it.
     jobs: [
-      { workflow_execution_id: "f-alice", output_data: { url: url("alice-final-job") } },
-      { workflow_execution_id: "f0-alice", output_data: { url: url("alice-first-final-job") } },
-      { workflow_execution_id: "e-bob", output_data: { url: url("bob-run-job") } },
-      { workflow_execution_id: "f-bob", output_data: { url: url("bob-final-job") } },
+      { id: "alice-final-job", user_id: "alice", workflow_execution_id: "f-alice", output_data: { url: url("alice-final-job") } },
+      { id: "alice-first-final-job", user_id: "alice", workflow_execution_id: "f0-alice", output_data: { url: url("alice-first-final-job") } },
+      { id: "bob-run-job", user_id: "bob", workflow_execution_id: "e-bob", output_data: { url: url("bob-run-job") } },
+      { id: "bob-final-job", user_id: "bob", workflow_execution_id: "f-bob", output_data: { url: url("bob-final-job") } },
     ],
   }
 })
@@ -102,5 +104,63 @@ describe("collectAppR2Keys", () => {
   it("never harvests an execution (or its jobs) that is not the run's runner's own", async () => {
     const keys = await collectAppR2Keys("app")
     expect(keys.filter((k) => k.startsWith("bob"))).toEqual([])
+  })
+})
+
+describe("collectAppR2Keys — only the run's own rows", () => {
+  beforeEach(() => {
+    tables.current = {
+      published_apps: [{ id: "app-1", icon_url: null, preview_media_url: null, snapshot_nodes: null }],
+      app_runs: [{ id: "run-1", app_id: "app-1", runner_id: "runner-1", input_values: null, node_states: null, execution_id: "exec-1" }],
+      workflow_executions: [{ id: "exec-1", user_id: "runner-1", node_states: { n: { output: { imageUrl: url("runner/own-node.png") } } } }],
+      jobs: [
+        {
+          id: "job-1", user_id: "runner-1", workflow_execution_id: "exec-1",
+          output_data: { imageUrl: url("images/job-1.png"), thumbnailUrl: url("thumbnails/job-1-v2.png") },
+        },
+      ],
+    }
+  })
+
+  it("collects the run's execution and its owner's jobs", async () => {
+    expect((await collectAppR2Keys("app-1")).sort()).toEqual(["images/job-1.png", "runner/own-node.png", "thumbnails/job-1-v2.png"])
+  })
+
+  it("attacker: the run owner's own job, with another user's URL planted in its output, adds only its own key family", async () => {
+    // Before 474 a client could insert its own job as 'completed' with any
+    // output_data. Owner checks pass for such a row, so the key itself must
+    // be the job's: `<prefix>/<jobId>` or `<prefix>/<jobId>-<suffix>`.
+    tables.current.jobs!.push({
+      id: "job-2", user_id: "runner-1", workflow_execution_id: "exec-1",
+      output_data: { imageUrl: url("images/victim-job.png"), videoUrl: url("videos/job-2.mp4"), extra: [url("videos/job-1.mp4")] },
+    })
+    const keys = await collectAppR2Keys("app-1")
+    expect(keys).toContain("videos/job-2.mp4")
+    expect(keys).not.toContain("images/victim-job.png")
+    // Not even a sibling job's key: each job vouches only for its own family.
+    expect(keys).not.toContain("videos/job-1.mp4")
+  })
+
+  it("attacker: a job another user pointed at the run's execution adds no key to delete", async () => {
+    tables.current.jobs!.push({ id: "job-a", user_id: "attacker", workflow_execution_id: "exec-1", output_data: { imageUrl: url("victim/job-a.png") } })
+    expect(await collectAppR2Keys("app-1")).not.toContain("victim/job-a.png")
+  })
+
+  it("attacker: a job another user pointed at a run's Render final adds no key to delete", async () => {
+    tables.current.app_runs = [{ ...tables.current.app_runs![0]!, final_execution_id: "final-1" }]
+    tables.current.workflow_executions!.push({ id: "final-1", user_id: "runner-1", node_states: {} })
+    tables.current.jobs!.push(
+      { id: "job-f", user_id: "runner-1", workflow_execution_id: "final-1", output_data: { url: url("videos/job-f.mp4") } },
+      { id: "job-p", user_id: "attacker", workflow_execution_id: "final-1", output_data: { url: url("videos/job-p.mp4") } },
+    )
+    const keys = await collectAppR2Keys("app-1")
+    expect(keys).toContain("videos/job-f.mp4")
+    expect(keys).not.toContain("videos/job-p.mp4")
+  })
+
+  it("a run pointing at another user's execution adds neither that execution's keys nor its jobs'", async () => {
+    tables.current.workflow_executions = [{ id: "exec-1", user_id: "victim", node_states: { n: { output: { imageUrl: url("victim/node.png") } } } }]
+    tables.current.jobs = [{ id: "job-v", user_id: "victim", workflow_execution_id: "exec-1", output_data: { imageUrl: url("images/job-v.png") } }]
+    expect(await collectAppR2Keys("app-1")).toEqual([])
   })
 })

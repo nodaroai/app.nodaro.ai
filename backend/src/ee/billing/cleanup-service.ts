@@ -27,6 +27,7 @@ export const VIDEO_ANALYSIS_TMP_PREFIX = "video-analysis-tmp"
 export const EDIT_PLAN_TMP_PREFIX = "edit-plan-tmp"
 import { updateStorageUsage } from "../../utils/file-validation.js"
 import { relayOwnedKeys, deletableKeys } from "../../lib/asset-delete.js"
+import { isOwnedObjectKey } from "../../lib/job-policy-outputs.js"
 import { TIER_STORAGE_LIMITS, TIER_CREDITS } from "./stripe-config.js"
 import { invalidateBalanceCache } from "../routes/credits.js"
 import { CreditsService } from "./credits.js"
@@ -102,6 +103,31 @@ function extractR2UrlsFromOutput(outputData: Record<string, unknown>): string[] 
   }
 
   return urls
+}
+
+/**
+ * The R2 keys a reaper may delete on a completed job's behalf: the ones in
+ * the job's own key family (`<prefix>/<jobId>` or `<prefix>/<jobId>-<suffix>`,
+ * `isOwnedObjectKey`), and no other (decided 2026-10-06; migration 474).
+ *
+ * Owning the row does not vouch for the URLs in it: before 474 a client could
+ * insert its own job as 'completed' with any `output_data` (another user's
+ * file) and any `created_at`, and these reapers delete every key they find.
+ * A legitimate output that names another object (an upload, a saved
+ * reference, a relayed far-end file) is left alone too: that object's own
+ * job, asset or location row is what reaps it. `heldBack` counts the keys
+ * kept, so the cron's log shows how many the fence held.
+ */
+function ownedJobOutputKeys(jobId: string, output: Record<string, unknown>): { keys: string[]; heldBack: number } {
+  const keys: string[] = []
+  let heldBack = 0
+  for (const url of extractR2UrlsFromOutput(output)) {
+    const r2Key = r2KeyFromUrl(url)
+    if (!r2Key) continue
+    if (isOwnedObjectKey(jobId, r2Key)) keys.push(r2Key)
+    else heldBack++
+  }
+  return { keys, heldBack }
 }
 
 /**
@@ -217,6 +243,7 @@ export async function cleanupFreeUserMedia(): Promise<CleanupResult> {
   let filesDeleted = 0
   let bytesFreed = 0
   let errors = 0
+  let keysHeldBack = 0
 
   const cutoffDate = new Date()
   cutoffDate.setDate(cutoffDate.getDate() - MEDIA_RETENTION_DAYS)
@@ -392,15 +419,12 @@ export async function cleanupFreeUserMedia(): Promise<CleanupResult> {
       break
     }
 
-    // Collect all R2 keys across all jobs in this batch
+    // Collect the R2 keys each job owns (its own key family) across the batch
     const allR2Keys: string[] = []
     for (const job of jobsToClean) {
-      const output = job.output_data as Record<string, unknown>
-      const urls = extractR2UrlsFromOutput(output)
-      for (const url of urls) {
-        const r2Key = r2KeyFromUrl(url)
-        if (r2Key) allR2Keys.push(r2Key)
-      }
+      const owned = ownedJobOutputKeys(job.id as string, job.output_data as Record<string, unknown>)
+      allR2Keys.push(...owned.keys)
+      keysHeldBack += owned.heldBack
     }
 
     // Batch delete all R2 files, minus anything our relay target created:
@@ -453,7 +477,7 @@ export async function cleanupFreeUserMedia(): Promise<CleanupResult> {
     errors += batchResult.errors
   }
 
-  console.log(`[cleanup] Deleted ${filesDeleted} files for free users (${bytesFreed} bytes freed, ${errors} errors)`)
+  console.log(`[cleanup] Deleted ${filesDeleted} files for free users (${bytesFreed} bytes freed, ${errors} errors, ${keysHeldBack} job-output keys outside their job's family kept)`)
   return { filesDeleted, bytesFreed, errors }
 }
 
@@ -465,6 +489,7 @@ export async function cleanupCanceledUserMedia(): Promise<CleanupResult> {
   let filesDeleted = 0
   let bytesFreed = 0
   let errors = 0
+  let keysHeldBack = 0
 
   const cutoffDate = new Date()
   cutoffDate.setDate(cutoffDate.getDate() - MEDIA_RETENTION_DAYS)
@@ -612,15 +637,12 @@ export async function cleanupCanceledUserMedia(): Promise<CleanupResult> {
         break
       }
 
-      // Collect all R2 keys across jobs
+      // Collect the R2 keys each job owns (its own key family)
       const allR2Keys: string[] = []
       for (const job of jobsToClean) {
-        const output = job.output_data as Record<string, unknown>
-        const urls = extractR2UrlsFromOutput(output)
-        for (const url of urls) {
-          const r2Key = r2KeyFromUrl(url)
-          if (r2Key) allR2Keys.push(r2Key)
-        }
+        const owned = ownedJobOutputKeys(job.id as string, job.output_data as Record<string, unknown>)
+        allR2Keys.push(...owned.keys)
+        keysHeldBack += owned.heldBack
       }
 
       const deletableJobKeys = await deletableKeys(allR2Keys)
@@ -669,7 +691,7 @@ export async function cleanupCanceledUserMedia(): Promise<CleanupResult> {
     console.log(`[cleanup] Cleaned up canceled user ${user.id} -- ${userFilesDeleted} files deleted, downgraded to free`)
   }
 
-  console.log(`[cleanup] Canceled user cleanup: ${filesDeleted} files, ${bytesFreed} bytes freed across ${users.length} users (${errors} errors)`)
+  console.log(`[cleanup] Canceled user cleanup: ${filesDeleted} files, ${bytesFreed} bytes freed across ${users.length} users (${errors} errors, ${keysHeldBack} job-output keys outside their job's family kept)`)
   return { filesDeleted, bytesFreed, errors }
 }
 

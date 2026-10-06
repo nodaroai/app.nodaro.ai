@@ -23,8 +23,8 @@ vi.mock("../../supabase.js", () => {
         selects.push(cols)
         return chain
       },
-      eq() {
-        isPath2 = true
+      eq(col: string) {
+        if (col === "workflow_execution_id") isPath2 = true
         return chain
       },
       in() {
@@ -61,7 +61,7 @@ describe("reconcileNodeStatesFromJobs — a refused run's retained draft", () =>
     ]
     const { next, changed } = await reconcileNodeStatesFromJobs({
       s1: { status: "running", nodeType: "generate-3d-scene", jobId: "job-1" },
-    })
+    }, "exec-1", "owner-1")
     expect(changed).toBe(true)
     expect(next.s1.status).toBe("failed")
     expect(next.s1.error).toContain("SCENE_QUALITY_FAILED")
@@ -81,6 +81,7 @@ describe("reconcileNodeStatesFromJobs — a refused run's retained draft", () =>
     const { next } = await reconcileNodeStatesFromJobs(
       { s2: { status: "pending", nodeType: "edit-3d-scene" } },
       "exec-1",
+      "owner-1",
     )
     expect(next.s2.status).toBe("failed")
     expect(next.s2.output).toEqual({ plan: DRAFT })
@@ -90,7 +91,7 @@ describe("reconcileNodeStatesFromJobs — a refused run's retained draft", () =>
   it("reads output_data on BOTH lookup paths", async () => {
     path1Rows = []
     path2Rows = []
-    await reconcileNodeStatesFromJobs({ s1: { status: "running", jobId: "job-1" } }, "exec-1")
+    await reconcileNodeStatesFromJobs({ s1: { status: "running", jobId: "job-1" } }, "exec-1", "owner-1")
     expect(selects).toHaveLength(2)
     for (const cols of selects) expect(cols).toContain("output_data")
   })
@@ -99,7 +100,7 @@ describe("reconcileNodeStatesFromJobs — a refused run's retained draft", () =>
     path1Rows = [{ id: "job-3", status: "failed", error_message: "Provider timeout", output_data: null }]
     const { next } = await reconcileNodeStatesFromJobs({
       s3: { status: "running", nodeType: "generate-video", jobId: "job-3" },
-    })
+    }, "exec-1", "owner-1")
     expect(next.s3.status).toBe("failed")
     expect(next.s3.output).toBeUndefined()
   })
@@ -109,7 +110,7 @@ describe("reconcileNodeStatesFromJobs — a refused run's retained draft", () =>
     const kept = { plan: { planType: "3d-scene", revisionId: "rev-earlier" } }
     const { next } = await reconcileNodeStatesFromJobs({
       s4: { status: "running", nodeType: "generate-3d-scene", jobId: "job-4", output: kept },
-    })
+    }, "exec-1", "owner-1")
     expect(next.s4.output).toEqual(kept)
   })
 })

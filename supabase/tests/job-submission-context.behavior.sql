@@ -10,6 +10,10 @@ SET LOCAL ROLE service_role;
 INSERT INTO public.jobs (id, user_id, job_type, status, credits, submission_context) VALUES
  ('f0000000-0000-4000-8000-000000000981', '00000000-0000-4000-8000-000000000981',
   'generate-image', 'pending', 0, '{"attemptId":"server-captured"}');
+-- A job written with no context (the legacy shape). Since 474 only the server
+-- writes jobs, so the server writes this one too.
+INSERT INTO public.jobs (id, user_id, job_type, status, credits)
+ VALUES ('f0000000-0000-4000-8000-000000000983', '00000000-0000-4000-8000-000000000981', 'generate-image', 'pending', 0);
 
 -- Normal job progress and explicitly retaining the same context remain legal.
 UPDATE public.jobs SET status = 'processing', submission_context = submission_context
@@ -43,10 +47,14 @@ RESET ROLE;
 SET LOCAL ROLE authenticated;
 SET LOCAL request.jwt.claims = '{"sub":"00000000-0000-4000-8000-000000000981","role":"authenticated"}';
 SET LOCAL request.jwt.claim.sub = '00000000-0000-4000-8000-000000000981';
--- A legitimate legacy insert remains allowed.
-INSERT INTO public.jobs (id, user_id, job_type, status, credits)
- VALUES ('f0000000-0000-4000-8000-000000000983', '00000000-0000-4000-8000-000000000981', 'generate-image', 'pending', 0);
 DO $$ BEGIN
+  -- Since 474 the browser writes no job at all — not even a plain one of its own.
+  BEGIN
+    INSERT INTO public.jobs (user_id, job_type, status, credits)
+    VALUES ('00000000-0000-4000-8000-000000000981', 'generate-image', 'pending', 0);
+    RAISE EXCEPTION 'ASSERT FAIL: the browser inserted a job';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
   BEGIN
     INSERT INTO public.jobs (user_id, job_type, status, credits, submission_context)
     VALUES ('00000000-0000-4000-8000-000000000981', 'generate-image', 'pending', 0, '{"attemptId":"forged"}');

@@ -518,14 +518,19 @@ async function sweepStuckOrchestratorJobs(result: ReconcileResult): Promise<void
  *  AND its nested execution is itself terminal/gone — so it never fails a
  *  legitimately long-running (deeply nested) component. It relies on the
  *  `_executionId` stamped on the wrapper at nested-execution-create time
- *  (routes/component-execute.ts). */
+ *  (routes/component-execute.ts).
+ *
+ *  The nested run is read only if the wrapper's owner owns it (decided
+ *  2026-10-06; migration 474): `_executionId` is a pointer, and the status of
+ *  the run it names lands in the wrapper's error message, which its owner
+ *  reads. Anyone else's run reads as missing. Exported for unit tests. */
 const COMPONENT_WRAPPER_STALE_MS = 90 * 60 * 1000
 
-async function sweepStuckComponentWrappers(result: ReconcileResult): Promise<void> {
+export async function sweepStuckComponentWrappers(result: ReconcileResult): Promise<void> {
   const cutoff = new Date(Date.now() - COMPONENT_WRAPPER_STALE_MS).toISOString()
   const { data, error } = await supabase
     .from("jobs")
-    .select("id, input_data")
+    .select("id, user_id, input_data")
     .eq("provider", "component")
     .eq("status", "processing")
     .lt("started_at", cutoff)
@@ -547,6 +552,7 @@ async function sweepStuckComponentWrappers(result: ReconcileResult): Promise<voi
           .from("workflow_executions")
           .select("status")
           .eq("id", nestedId)
+          .eq("user_id", row.user_id as string)
           .maybeSingle()
         nestedStatus = (nested?.status as string | undefined) ?? null
       }
