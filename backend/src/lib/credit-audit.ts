@@ -23,6 +23,21 @@ export interface CreditAuditEntry {
   notes?: string
 }
 
+/** Longest JSON text kept verbatim in `raw_response_sample`. */
+export const RAW_SAMPLE_MAX_CHARS = 2048
+
+/**
+ * Keep a response sample small without breaking it. A prefix of a JSON text is
+ * not JSON, so the cut text is stored as a string inside a small object (the
+ * column is JSONB) instead of being parsed back, which threw for every sample
+ * over the limit and lost the whole audit row.
+ */
+export function truncateRawSample(sample: unknown): unknown {
+  const json = JSON.stringify(sample)
+  if (json === undefined || json.length <= RAW_SAMPLE_MAX_CHARS) return sample
+  return { truncated: true, originalLength: json.length, head: json.substring(0, RAW_SAMPLE_MAX_CHARS) }
+}
+
 /**
  * Log a credit cost audit entry. Never throws — errors are logged silently.
  * This is fire-and-forget to avoid affecting the main request flow.
@@ -30,13 +45,7 @@ export interface CreditAuditEntry {
 export async function logCreditAudit(entry: CreditAuditEntry): Promise<void> {
   try {
     // Truncate raw response to ~2KB to avoid bloating the table
-    let rawSample = entry.rawResponseSample
-    if (rawSample) {
-      const json = JSON.stringify(rawSample)
-      if (json.length > 2048) {
-        rawSample = JSON.parse(json.substring(0, 2048) + '..."')
-      }
-    }
+    const rawSample = entry.rawResponseSample ? truncateRawSample(entry.rawResponseSample) : entry.rawResponseSample
 
     // Determine mismatch
     const mismatch = entry.expectedKieCredits != null &&
