@@ -1743,6 +1743,112 @@ describe("plan_edit verb — audio_sync offsets", () => {
   })
 })
 
+describe("mix_audio verb", () => {
+  const tracks = [{ audio_url: "https://a/voice.mp3" }, { audio_url: "https://a/bed.mp3" }]
+
+  it("calls /v1/mix-audio with the urls in track order", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/mix-audio", { jobId: "j-mix" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    const result = await callTool(server, "mix_audio", { tracks })
+
+    expect(result.isError).toBeUndefined()
+    expect((result.structuredContent as Record<string, unknown>)?.jobId).toBe("j-mix")
+    expect(received.body?.audioUrls).toEqual(["https://a/voice.mp3", "https://a/bed.mp3"])
+    expect(received.body?.mcp_client).toBe("Claude")
+    expect(received.body?.userId).toBe("u1")
+  })
+
+  it("sends neither trackVolumes nor duck when none is asked for (a plain mix)", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/mix-audio", { jobId: "j-plain" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    await callTool(server, "mix_audio", { tracks })
+    expect(received.body && "trackVolumes" in received.body).toBe(false)
+    expect(received.body && "duck" in received.body).toBe(false)
+  })
+
+  it("sends per-track volumes positionally, defaulting an unset one to 100", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/mix-audio", { jobId: "j-vol" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    await callTool(server, "mix_audio", {
+      tracks: [{ audio_url: "https://a/voice.mp3" }, { audio_url: "https://a/bed.mp3", volume: 40 }],
+    })
+    expect(received.body?.trackVolumes).toEqual([100, 40])
+  })
+
+  it("maps duck to the route's camelCase levers", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/mix-audio", { jobId: "j-duck" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    const result = await callTool(server, "mix_audio", {
+      tracks,
+      duck: { under: 0, amount: 80, threshold_db: -35, ratio: 6, attack_ms: 10, release_ms: 700 },
+    })
+
+    expect(result.isError).toBeUndefined()
+    expect(received.body?.duck).toEqual({ under: 0, amount: 80, thresholdDb: -35, ratio: 6, attackMs: 10, releaseMs: 700 })
+  })
+
+  it("sends only the levers that were given", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/mix-audio", { jobId: "j-duck2" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    await callTool(server, "mix_audio", { tracks, duck: { under: 0 } })
+    expect(received.body?.duck).toEqual({ under: 0 })
+  })
+
+  it("refuses a duck.under that is not one of the tracks, naming the range, without calling the route", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/mix-audio", { jobId: "j-bad" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    const result = await callTool(server, "mix_audio", { tracks, duck: { under: 2 } })
+
+    expect(result.isError).toBe(true)
+    expect((result.content[0] as { text: string }).text).toMatch(/duck\.under.*0.*1/)
+    expect(received.body).toBeUndefined()
+  })
+
+  it("returns isError if a track has neither audio_url nor audio_asset_id", async () => {
+    const { fastify } = stubRoute("POST", "/v1/mix-audio", { jobId: "j" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "mix_audio", { tracks: [{ audio_url: "https://a/a.mp3" }, {}] })
+    expect(result.isError).toBe(true)
+  })
+
+  it("rejects fewer than two tracks, and levers outside the compressor's range", async () => {
+    const { fastify } = stubRoute("POST", "/v1/mix-audio", { jobId: "j" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    expect((await callTool(server, "mix_audio", { tracks: [tracks[0]] })).isError).toBe(true)
+    expect((await callTool(server, "mix_audio", { tracks, duck: { under: 0, amount: 101 } })).isError).toBe(true)
+    expect((await callTool(server, "mix_audio", { tracks, duck: { under: 0, ratio: 25 } })).isError).toBe(true)
+  })
+
+  it("returns isError when /v1/mix-audio responds 402 (the credit guard's refusal reaches the caller)", async () => {
+    const fastify = Fastify()
+    fastify.post("/v1/mix-audio", async (_req, reply) =>
+      reply.status(402).send({ error: { code: "insufficient_credits", message: "Not enough credits" } }),
+    )
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "mix_audio", { tracks })
+    expect(result.isError).toBe(true)
+  })
+
+  it("does NOT register without workflows:execute scope", async () => {
+    const server = buildServer()
+    registerVerbs({ server, session: readOnlySession(), fastify: Fastify() })
+    const tools = await listTools(server)
+    expect(tools.map((t) => t.name)).not.toContain("mix_audio")
+  })
+})
+
 describe("apply_edl verb", () => {
   const validEdl = {
     version: 1,

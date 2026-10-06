@@ -4031,10 +4031,19 @@ export async function addCaptionsApi(videoUrl: string, text: string, style?: str
   })
 }
 
-export async function mixAudioApi(audioUrls: string[], trackVolumes?: number[], userId?: string): Promise<{ jobId: string }> {
+export async function mixAudioApi(
+  audioUrls: string[],
+  trackVolumes?: number[],
+  userId?: string,
+  /** Duck every other track under track `under` (an index into `audioUrls`). */
+  duck?: { under: number; amount?: number },
+): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { audioUrls }
   if (trackVolumes?.length) {
     body.trackVolumes = trackVolumes
+  }
+  if (duck) {
+    body.duck = duck
   }
   if (userId) {
     body.userId = userId

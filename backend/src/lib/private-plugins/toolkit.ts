@@ -129,7 +129,7 @@ import { randomUUID } from "node:crypto"
 import { dirname, join } from "node:path"
 import { promises as fs } from "node:fs"
 import type { ZodType } from "zod"
-import type { PluginEntityRead, PluginEntityTable, PluginInternalRequestOptions, PluginOwnedJobRow } from "./types.js"
+import type { PluginCapabilities, PluginEntityRead, PluginEntityTable, PluginInternalRequestOptions, PluginOwnedJobRow } from "./types.js"
 import type { PluginToolkit, PluginLlmRequest, PluginLlmMultimodalRequest, PluginVideoGenOptions, PluginVideoGenResult, PluginImageGenOptions, PluginImageGenResult, PluginMusicGenOptions, PluginMusicGenResult, PipelineSnapshot } from "./types.js"
 import { applyFrameFitAndDelivery } from "../video-frame-dispatch.js"
 
@@ -1157,6 +1157,15 @@ function assertNotLeaseKey(key: string): void {
   if (key.startsWith(LEASE_KEY_PREFIX)) throw new Error(`keys under "${LEASE_KEY_PREFIX}" belong to tk.redis.lease`)
 }
 
+/**
+ * Additive capability markers (`PluginCapabilities`). Frozen module constant:
+ * every member is a static fact about this build, so there is nothing to
+ * compute per toolkit. Add a member here WITH the feature it describes.
+ */
+const HOST_CAPABILITIES: PluginCapabilities = Object.freeze({
+  mixAudioDuck: true,
+})
+
 export interface BuildToolkitOptions {
   /**
    * `"daemon"` — the toolkit the plugin daemon host (`plugin-daemons.ts`)
@@ -1550,6 +1559,7 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       scene3dAdvanced: hasCredits() && config.SCENE3D_ADVANCED_ENABLED,
       scene3dLocal: hasCredits() && config.SCENE3D_ADVANCED_ENABLED && config.SCENE3D_LOCAL_ENABLED,
     },
+    capabilities: HOST_CAPABILITIES,
     deployment: { publicUrl: appBaseUrl() },
     redis: {
       url: config.REDIS_URL,

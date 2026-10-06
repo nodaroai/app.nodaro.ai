@@ -4,6 +4,8 @@ import { hasCredits } from "../../config.js"
 import { supabase } from "../../supabase.js"
 import { resolveAssetId } from "../asset-resolver.js"
 import { resolveSpeechSourceUrl } from "./_speech-source.js"
+import { creditHint } from "./_credit-hint.js"
+import { DUCK_DEFAULT_AMOUNT, DUCK_DEFAULTS } from "../../mix-audio-duck.js"
 import type { RegisterOpts } from "./verbs-image.js"
 import {
   parseJobId,
@@ -2141,6 +2143,105 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         label: "audio fx",
         widgetKind: "audio",
         widgetData: { prompt: "(audio fx)", model: "audio-fx" },
+      })
+    },
+  )
+
+  // ── mix_audio ──
+  // Layer 2–20 audio tracks into one, optionally ducking the others under a
+  // key track (a music bed under speech). Mirrors the Mix Audio node and
+  // POST /v1/mix-audio; the route's credit guard reserves the (flat) price, so
+  // the verb adds no credit logic of its own. CORE and ungated, like
+  // silence_detect: ducking is one ffmpeg pass that every install has.
+  server.registerTool(
+    "mix_audio",
+    {
+      title: "Mix Audio",
+      description:
+        "Layer 2-20 audio tracks into one file, each at its own volume. `tracks` is a list of " +
+        "`{ audio_url | audio_asset_id, volume? }` (volume 0-200 %, default 100). Set `duck` to " +
+        "put a music bed under speech: every track EXCEPT `duck.under` (the 0-based index of the " +
+        "voice track) dips while that track is loud and rises back in its pauses (sidechain " +
+        `compression). \`duck.amount\` 0-100 (default ${DUCK_DEFAULT_AMOUNT}) is how hard; \`threshold_db\`, \`ratio\`, ` +
+        "`attack_ms` and `release_ms` are optional fine controls (`ratio` overrides `amount`). " +
+        `A ducked mix sums the tracks instead of averaging them, so the voice keeps its level. Price: ${creditHint("mix-audio")}, ` +
+        "flat, with or without a duck. Returns a job_id - poll `get_job` for the mixed audio.",
+      inputSchema: {
+        tracks: z
+          .array(
+            z.object({
+              audio_url: z.string().url().optional(),
+              audio_asset_id: z.string().optional().describe("Nodaro audio or video job id."),
+              volume: z.number().min(0).max(200).optional().describe("Track level in percent (default 100)."),
+            }),
+          )
+          .min(2)
+          .max(20)
+          .describe("2-20 tracks, in mix order. Each needs audio_url or audio_asset_id."),
+        duck: z
+          .object({
+            under: z.number().int().min(0).max(19).describe("0-based index in `tracks` of the key track (the voice) the others duck under."),
+            amount: z.number().min(0).max(100).optional().describe(`How hard the others dip, 0-100. Default ${DUCK_DEFAULT_AMOUNT}.`),
+            threshold_db: z.number().min(-60).max(0).optional().describe(`dBFS the key track must exceed to start the dip. Default ${DUCK_DEFAULTS.thresholdDb}.`),
+            ratio: z.number().min(1).max(20).optional().describe("Compressor ratio 1-20. Overrides amount."),
+            attack_ms: z.number().min(1).max(2000).optional().describe(`How fast the dip starts, ms. Default ${DUCK_DEFAULTS.attackMs}.`),
+            release_ms: z.number().min(10).max(9000).optional().describe(`How slowly the others return, ms. Default ${DUCK_DEFAULTS.releaseMs}.`),
+          })
+          .optional()
+          .describe("Duck every other track under one key track. Omit for a plain mix."),
+      },
+      outputSchema: JOB_OUTPUT_SCHEMA,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: uiMeta(WIDGET_URI.jobAudio),
+    },
+    async (args) => {
+      if (args.duck && args.duck.under >= args.tracks.length) {
+        return {
+          content: [{
+            type: "text" as const,
+            text: `mix_audio: duck.under (${args.duck.under}) must be the index of one of the ${args.tracks.length} tracks (0-${args.tracks.length - 1}).`,
+          }],
+          isError: true as const,
+        }
+      }
+      const audioUrls: string[] = []
+      for (const track of args.tracks) {
+        const url =
+          track.audio_url ??
+          (track.audio_asset_id ? await resolveSpeechSourceUrl(track.audio_asset_id, session.userId) : null)
+        if (!url) {
+          return {
+            content: [{ type: "text" as const, text: "mix_audio: each track needs an audio_url or an audio_asset_id." }],
+            isError: true as const,
+          }
+        }
+        audioUrls.push(url)
+      }
+      const d = args.duck
+      const payload: Record<string, unknown> = {
+        audioUrls,
+        ...(args.tracks.some((t) => t.volume !== undefined) ? { trackVolumes: args.tracks.map((t) => t.volume ?? 100) } : {}),
+        ...(d
+          ? {
+              duck: {
+                under: d.under,
+                ...(d.amount !== undefined ? { amount: d.amount } : {}),
+                ...(d.threshold_db !== undefined ? { thresholdDb: d.threshold_db } : {}),
+                ...(d.ratio !== undefined ? { ratio: d.ratio } : {}),
+                ...(d.attack_ms !== undefined ? { attackMs: d.attack_ms } : {}),
+                ...(d.release_ms !== undefined ? { releaseMs: d.release_ms } : {}),
+              },
+            }
+          : {}),
+        mcp_client: session.clientName,
+        userId: session.userId,
+      }
+      return dispatchJob(fastify, session, {
+        url: "/v1/mix-audio",
+        payload,
+        label: "mix audio",
+        widgetKind: "audio",
+        widgetData: { prompt: `(mix ${audioUrls.length} tracks${d ? ", ducked" : ""})`, model: "mix-audio" },
       })
     },
   )

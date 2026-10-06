@@ -9,12 +9,29 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/re
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { duckSchema } from "../lib/mix-audio-duck.js"
 
-const mixAudioBody = z.object({
-  audioUrls: z.array(safeUrlSchema).min(2).max(20),
-  trackVolumes: z.array(z.number().min(0).max(200)).max(20).optional(),
-  userId: z.string().uuid().optional(),
-})
+const mixAudioBody = z
+  .object({
+    audioUrls: z.array(safeUrlSchema).min(2).max(20),
+    trackVolumes: z.array(z.number().min(0).max(200)).max(20).optional(),
+    /**
+     * Duck every other track under track `duck.under` (sidechain compression):
+     * a music bed that dips under speech and rises in the pauses. Same price as
+     * a plain mix — one ffmpeg pass either way.
+     */
+    duck: duckSchema.optional(),
+    userId: z.string().uuid().optional(),
+  })
+  .superRefine((body, ctx) => {
+    if (body.duck && body.duck.under >= body.audioUrls.length) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["duck", "under"],
+        message: `duck.under must be the index of one of the ${body.audioUrls.length} audioUrls (0–${body.audioUrls.length - 1})`,
+      })
+    }
+  })
 
 export async function mixAudioRoutes(app: FastifyInstance) {
   app.post("/v1/mix-audio", { preHandler: creditGuard(() => "mix-audio") }, async (req, reply) => {

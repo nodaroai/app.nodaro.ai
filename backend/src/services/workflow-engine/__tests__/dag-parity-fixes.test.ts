@@ -341,6 +341,55 @@ describe("mix-audio — trackVolumes converted to ordered array", () => {
 })
 
 // ---------------------------------------------------------------------------
+// mix-audio duck: node data names the key track by NODE id; the worker wants an
+// index into the final (trackOrder-applied) audioUrls — same translation as
+// trackVolumes.
+// ---------------------------------------------------------------------------
+
+describe("mix-audio — duck keyed by node id becomes an index", () => {
+  const entries = [
+    { nodeId: "music", url: "https://music.mp3" },
+    { nodeId: "voice", url: "https://voice.mp3" },
+  ]
+
+  it("sends no duck by default", () => {
+    const result = buildPayload(node("m1", "mix-audio", {}), JOB_ID, { audioUrlsWithSourceIds: entries })
+    expect(result.payload.duck).toBeUndefined()
+  })
+
+  it("converts duckUnder (a node id) to the key track's index, with the amount", () => {
+    const n = node("m1", "mix-audio", { duckUnder: "voice", duckAmount: 80 })
+    const result = buildPayload(n, JOB_ID, { audioUrlsWithSourceIds: entries })
+    expect(result.payload.duck).toEqual({ under: 1, amount: 80 })
+  })
+
+  it("leaves the amount to the default when none is set", () => {
+    const n = node("m1", "mix-audio", { duckUnder: "voice" })
+    const result = buildPayload(n, JOB_ID, { audioUrlsWithSourceIds: entries })
+    expect(result.payload.duck).toEqual({ under: 1 })
+  })
+
+  it("indexes AFTER trackOrder is applied", () => {
+    const n = node("m1", "mix-audio", { duckUnder: "voice", trackOrder: ["voice", "music"] })
+    const result = buildPayload(n, JOB_ID, { audioUrlsWithSourceIds: entries })
+    expect(result.payload.audioUrls).toEqual(["https://voice.mp3", "https://music.mp3"])
+    expect(result.payload.duck).toEqual({ under: 0 })
+  })
+
+  it("drops the duck when the key track is no longer connected (a stale node id is not an error)", () => {
+    const n = node("m1", "mix-audio", { duckUnder: "deleted-node", duckAmount: 80 })
+    const result = buildPayload(n, JOB_ID, { audioUrlsWithSourceIds: entries })
+    expect(result.payload.duck).toBeUndefined()
+  })
+
+  it("clamps a stored amount outside 0–100 so a hand-edited node cannot 400 the run", () => {
+    const n = node("m1", "mix-audio", { duckUnder: "voice", duckAmount: 250 })
+    const result = buildPayload(n, JOB_ID, { audioUrlsWithSourceIds: entries })
+    expect(result.payload.duck).toEqual({ under: 1, amount: 100 })
+  })
+})
+
+// ---------------------------------------------------------------------------
 // Fix: suno-upload-extend uses `uploadUrl` + non-negative continueAt
 // ---------------------------------------------------------------------------
 

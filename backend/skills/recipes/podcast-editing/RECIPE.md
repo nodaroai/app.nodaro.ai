@@ -29,6 +29,7 @@ This recipe covers the two phase-1 components:
 | `silence_detect` | Detect the silent ranges (one local ffmpeg pass, no transcript) | everywhere (CORE, keyless) |
 | `plan_edit` | Read the transcript and WRITE an EDL — `mode`: `tighten` / `clips` / `chapters` | **Cloud only** |
 | `apply_edl` | RENDER an EDL into a finished video or audio cut | everywhere (CORE) |
+| `mix_audio` | Layer tracks into one file; with `duck: { under: <voice track index> }` a music bed dips under speech and rises in the pauses — run it on an `apply_edl` audio render plus the bed | everywhere (CORE) |
 
 **Read the asymmetry before you start.** `silence_detect` and `apply_edl` are core verbs —
 they register on every install. `plan_edit` is the editorial planner and is **Cloud only**.

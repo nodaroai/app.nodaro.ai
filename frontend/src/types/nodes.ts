@@ -4085,6 +4085,10 @@ export type MixAudioData = {
   trackCount: number
   trackVolumes: Record<string, number>
   trackOrder?: string[]
+  /** Node id of the track the others duck under (sidechain compression) — unset = a plain mix. */
+  duckUnder?: string
+  /** 0–100: how hard the other tracks dip under `duckUnder`. Unset = the server default. */
+  duckAmount?: number
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string

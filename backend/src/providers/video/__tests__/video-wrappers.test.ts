@@ -507,6 +507,58 @@ describe("mixAudio", () => {
     expect(args[fcIdx + 1]).toMatch(/normalize=0,alimiter=level=disabled:limit=0\.95\[aout\]/)
   })
 
+  describe("duck (sidechain compression)", () => {
+    const graph = async (opts: Parameters<typeof mixAudio>[0]) => {
+      await mixAudio(opts)
+      const args = ffargs()
+      return args[args.indexOf("-filter_complex") + 1]
+    }
+
+    it("leaves the no-duck graph byte-identical", async () => {
+      expect(await graph({ audioUrls: ["a.mp3", "b.mp3"] })).toBe(
+        "[0:a]volume=1[a0];[1:a]volume=1[a1];[a0][a1]amix=inputs=2:duration=longest[aout]",
+      )
+    })
+
+    it("splits the key track, pads its sidechain copy and compresses the other track against it", async () => {
+      const g = await graph({ audioUrls: ["voice.mp3", "bed.mp3"], duck: { under: 0 } })
+      expect(g).toContain("[a0]asplit=2[k0][s0_0]")
+      expect(g).toContain("[s0_0]apad[p0_0]")
+      expect(g).toContain("[a1][p0_0]sidechaincompress=")
+      expect(g).toContain("makeup=1")
+      // Mix inputs keep the caller's track order: the key as itself, the other track ducked.
+      expect(g).toContain("[k0][d1]amix=inputs=2:duration=longest:normalize=0,alimiter=level=disabled:limit=0.95[aout]")
+    })
+
+    it("converts thresholdDb to the linear amplitude sidechaincompress expects", async () => {
+      const g = await graph({ audioUrls: ["a.mp3", "b.mp3"], duck: { under: 0, thresholdDb: -20, ratio: 6, attackMs: 10, releaseMs: 300 } })
+      expect(g).toContain("sidechaincompress=threshold=0.1:ratio=6:attack=10:release=300:makeup=1")
+    })
+
+    it("uses the defaults when only `under` is given", async () => {
+      const g = await graph({ audioUrls: ["a.mp3", "b.mp3"], duck: { under: 0 } })
+      expect(g).toContain("threshold=0.031623:ratio=4:attack=20:release=500:makeup=1")
+    })
+
+    it("ducks every other track under a key that is not first, in track order", async () => {
+      const g = await graph({ audioUrls: ["music.mp3", "voice.mp3", "sfx.mp3"], duck: { under: 1 } })
+      expect(g).toContain("[a1]asplit=3[k1][s1_0][s1_1]")
+      expect(g).toContain("[s1_0]apad[p1_0]")
+      expect(g).toContain("[a0][p1_0]sidechaincompress=")
+      expect(g).toContain("[a2][p1_1]sidechaincompress=")
+      expect(g).toContain("[d0][k1][d2]amix=inputs=3:duration=longest:normalize=0")
+    })
+
+    it("still applies per-track volumes before the duck", async () => {
+      const g = await graph({ audioUrls: ["a.mp3", "b.mp3"], trackVolumes: [100, 40], duck: { under: 0 } })
+      expect(g).toContain("[1:a]volume=0.4[a1]")
+    })
+
+    it("rejects a key track that is not one of the inputs", async () => {
+      await expect(mixAudio({ audioUrls: ["a.mp3", "b.mp3"], duck: { under: 2 } })).rejects.toThrow(/duck\.under/)
+    })
+  })
+
   it("maps the [aout] output", async () => {
     await mixAudio({ audioUrls: ["a.mp3"] })
     const args = ffargs()

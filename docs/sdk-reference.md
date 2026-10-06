@@ -4496,12 +4496,40 @@ is the reverb wet/dry; `delayMs` + `decay` drive `echo`/`custom`;
 #### `mix(input)`
 
 ```ts
-mix(input: { audioUrls: string[]; trackVolumes?: number[] }): Promise<{ jobId: string }>
+mix(input: {
+  audioUrls: string[]
+  trackVolumes?: number[]
+  duck?: {
+    under: number
+    amount?: number
+    thresholdDb?: number
+    ratio?: number
+    attackMs?: number
+    releaseMs?: number
+  }
+}): Promise<{ jobId: string }>
 ```
 
 Layer multiple audio tracks into one (`POST /v1/mix-audio`). `audioUrls`
 (2–20) are summed; optional `trackVolumes` (0–200% each, positionally) set
 per-track level.
+
+`duck` puts a music bed under speech: every track except `audioUrls[under]`
+(the voice) dips while that track is loud and rises back in its pauses
+(sidechain compression). `amount` (0–100, default 75) is how hard;
+`thresholdDb` (-60–0, default -30), `attackMs` (1–2000, default 20),
+`releaseMs` (10–9000, default 500) and `ratio` (1–20, overrides `amount`) are
+optional fine controls. A ducked mix sums its tracks rather than averaging
+them, so the voice keeps its level. The price is the same with or without a
+duck.
+
+```ts
+await client.audio.mix({
+  audioUrls: [voiceUrl, musicUrl],
+  trackVolumes: [100, 60],
+  duck: { under: 0, amount: 80 },
+})
+```
 
 #### `adjustVolume(input)`
 

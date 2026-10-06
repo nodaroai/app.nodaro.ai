@@ -6594,10 +6594,25 @@ export function buildPayload(
         trackVolumes = data.volumes as number[]
       }
 
+      // Ducking: the node names its key track by node id (like trackVolumes);
+      // the worker wants its index in the final order. A key that is no longer
+      // connected simply means no duck — never a failed run.
+      const duckUnder = typeof data.duckUnder === "string" ? data.duckUnder : undefined
+      const duckIndex = duckUnder && orderedEntries.length > 0
+        ? orderedEntries.findIndex((e) => e.nodeId === duckUnder)
+        : -1
+      const duckAmount = typeof data.duckAmount === "number" && Number.isFinite(data.duckAmount)
+        ? Math.min(100, Math.max(0, data.duckAmount))
+        : undefined
+      const duck = duckIndex >= 0
+        ? { under: duckIndex, ...(duckAmount !== undefined ? { amount: duckAmount } : {}) }
+        : undefined
+
       return ffmpegResult("mix-audio", {
         jobId,
         audioUrls: mixAudioUrls,
         trackVolumes,
+        ...(duck ? { duck } : {}),
         usageLogId,
       })
     }

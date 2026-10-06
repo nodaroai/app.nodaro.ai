@@ -389,6 +389,13 @@ const VIDEO_OVERLAY_TOOL_BYTES = 3_805
 // size; well under the 8_192 B per-tool budget, and the list keeps exactly the
 // headroom it had before.
 const AUDIO_SYNC_TOOL_BYTES = 2_200
+// RAISED 2026-10-05 by mix_audio (podcast Track D2) and nothing else — one NEW
+// core, execute-scoped tool (the Mix Audio node's verb, with its duck), UNGATED
+// like silence_detect and audio_sync, so BOTH the cloud/all AND the
+// community/all membership fixtures move (each names it). Measured by this
+// suite: 389_788 total − 386_820 base = 2_968 B, the tool's full serialized
+// size; well under the 8_192 B per-tool budget.
+const MIX_AUDIO_TOOL_BYTES = 2_968
 // RAISED by the three UGC video builders (build_ugc_creator / build_ugc_clips /
 // build_ugc_cards) and nothing else — three NEW cloud-only tools, registered
 // inside the hasCredits() block and ungated by scope, so cloud/all, cloud/jobs
@@ -577,6 +584,7 @@ export const TOOL_WIRE_BUDGET = {
     JOB_ENVELOPE_INPUT_BYTES +
     VIDEO_OVERLAY_TOOL_BYTES +
     AUDIO_SYNC_TOOL_BYTES +
+    MIX_AUDIO_TOOL_BYTES +
     UGC_BUILDER_TOOL_BYTES +
     GET_RECIPE_UGC_SENTENCE_BYTES +
     GENERATE_SCRIPT_STYLE_GUIDE_BYTES +
