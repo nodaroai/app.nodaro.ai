@@ -64,6 +64,7 @@ import { supabase } from "../../../lib/supabase.js"
 import { requireAdmin } from "../../middleware/require-admin.js"
 import { collectAppR2Keys } from "../../../lib/collect-app-r2-keys.js"
 import { batchDeleteFromR2 } from "../../../lib/storage.js"
+import { migrationColumnsOf } from "../../../test/migration-columns.js"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -195,6 +196,8 @@ describe("DELETE /v1/admin/apps/:appId/expunge", () => {
 
     // Capture the audit insert mock at the outer scope so we can assert on it
     const auditInsertMock = vi.fn().mockResolvedValue({ error: null })
+    const runRedactEq = vi.fn().mockResolvedValue({ error: null })
+    const runRedactUpdate = vi.fn().mockReturnValue({ eq: runRedactEq })
 
     vi.mocked(supabase.from).mockImplementation((table: string) => {
       if (table === "published_apps") {
@@ -215,9 +218,7 @@ describe("DELETE /v1/admin/apps/:appId/expunge", () => {
         }
       }
       if (table === "app_runs") {
-        const mockEq = vi.fn().mockResolvedValue({ error: null })
-        const mockUpdate = vi.fn().mockReturnValue({ eq: mockEq })
-        return { update: mockUpdate } as never
+        return { update: runRedactUpdate } as never
       }
       if (table === "admin_actions") {
         return { insert: auditInsertMock } as never
@@ -260,6 +261,12 @@ describe("DELETE /v1/admin/apps/:appId/expunge", () => {
     expect(fromArgs).toContain("published_apps")
     expect(fromArgs).toContain("app_runs")
     expect(fromArgs).toContain("admin_actions")
+
+    // The runs keep their record and lose the runner's content: the columns
+    // that hold it, and nothing else.
+    expect(runRedactUpdate).toHaveBeenCalledTimes(1)
+    expect(runRedactUpdate).toHaveBeenCalledWith({ input_values: null, node_states: null, name: null })
+    expect(runRedactEq).toHaveBeenCalledWith("app_id", TEST_APP_ID)
 
     // Verify audit log insert was called with the correct payload
     expect(auditInsertMock).toHaveBeenCalledWith(
@@ -318,5 +325,66 @@ describe("DELETE /v1/admin/apps/:appId/expunge — the relay fence", () => {
     expect(res.statusCode).toBe(200)
     expect(mockDeletableKeys).toHaveBeenCalledWith(["images/far.png", "images/ours.png"])
     expect(batchDeleteFromR2).toHaveBeenCalledWith(["images/ours.png"])
+  })
+})
+
+describe("DELETE /v1/admin/apps/:appId/expunge — the schema it writes", () => {
+  it("clears and filters app_runs only by columns the migrations create", async () => {
+    // Every case above mocks supabase, so a column that does not exist passes
+    // them all. This one checks the names the route actually sends against the
+    // migrations: the redact once cleared `input_data` / `output_data`, which
+    // app_runs never had.
+    const writes: Array<{ table: string; column: string }> = []
+    let sawSelect = false
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === "published_apps") {
+        if (!sawSelect) {
+          sawSelect = true
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({ data: fakeApp, error: null }),
+              }),
+            }),
+          } as never
+        }
+        return { delete: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) }) } as never
+      }
+      if (table === "app_runs") {
+        return {
+          update: (patch: Record<string, unknown>) => {
+            for (const column of Object.keys(patch)) writes.push({ table, column })
+            return {
+              eq: (column: string) => {
+                writes.push({ table, column })
+                return Promise.resolve({ error: null })
+              },
+            }
+          },
+        } as never
+      }
+      if (table === "admin_actions") {
+        return {
+          insert: (row: Record<string, unknown>) => {
+            for (const column of Object.keys(row)) writes.push({ table, column })
+            return Promise.resolve({ error: null })
+          },
+        } as never
+      }
+      return {} as never
+    })
+    vi.mocked(supabase.rpc).mockResolvedValue({ data: null, error: null } as never)
+
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/v1/admin/apps/${TEST_APP_ID}/expunge`,
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { reason: TEST_REASON },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(writes.some((w) => w.table === "app_runs")).toBe(true)
+    const missing = writes.filter(({ table, column }) => !migrationColumnsOf(table).has(column))
+    expect(missing.map(({ table, column }) => `${table}.${column}`)).toEqual([])
   })
 })
