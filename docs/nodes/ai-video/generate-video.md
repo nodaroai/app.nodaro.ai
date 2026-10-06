@@ -525,7 +525,7 @@ A request is **voiced** only when a spec is present **and** the model can carry 
 
 | Audio mode | Models | Chain |
 |---|---|---|
-| `audio_driven` | `seedance-2`, `seedance-2-fast`, `seedance-2-mini`, `seedance-2-5`, `minimax-h3` (audio always on — no toggle) | Synthesize the dialogue (each line in its own voice) via ElevenLabs dialogue (direct API — any voice mix works: premade, Voice Library, and cloned voices, no premade-only restriction) → feed as reference audio → the model lip-syncs to it. A single voice renders on that voice's own `ttsProvider`; a multi-speaker cast renders on **Dialogue v4** when every voice names a speech model with the same dialogue twin (today: every voice on `elevenlabs-v4`), otherwise on **Dialogue v3** (the default — a mixed cast, a voice with no model, or a model with no dialogue twin). |
+| `audio_driven` | `seedance-2`, `seedance-2-fast`, `seedance-2-mini`, `seedance-2-5`, `minimax-h3` (audio always on — no toggle) | Synthesize the dialogue (each line in its own voice) via ElevenLabs (direct API — any voice mix works: premade, Voice Library, and cloned voices, no premade-only restriction) → feed as reference audio → the model lip-syncs to it. A single voice renders on that voice's own `ttsProvider`; a multi-speaker cast renders in one dialogue call on **Dialogue v4** when every voice names a speech model with the same dialogue twin (today: every voice on `elevenlabs-v4`), otherwise on **Dialogue v3** (the default — a mixed cast, a voice with no model, or a model with no dialogue twin). |
 | `native_speech` | `veo3`, `veo3.1`, `veo3_lite` (always on); `kling`, `kling-3.0` (behind the `sound` toggle — enabling it on Kling raises the credit cost, see the `:audio` composites below); `kling-3-omni` (audio included in the flat rate) | Bake the line during generation, then revoice the baked audio to the primary character voice (ElevenLabs voice-changer, keeping the music/SFX bed). |
 
 **Wan 3.0** (`wan-3` / `wan-3-prime`) carries an ambient audio track (on by default, switchable off) but is not a dialogue model in the audio-capability SSOT — it is neither `native_speech` nor `audio_driven`, so a character-voice spec on it is ignored with the non-fatal `voice_unsupported_for_provider` warning and no audio add-on is charged.
@@ -542,8 +542,7 @@ The audio step is reserved as an add-on **on top of** the base video cost — sa
 
 | Mode | Add-on identifier | Add-on credits |
 |---|---|---|
-| `audio_driven` (Seedance 2 / MiniMax H3), cast on Dialogue v3 | `elevenlabs-dialogue` | +25 (flat per request, whatever the length) |
-| `audio_driven` (Seedance 2 / MiniMax H3), every voice on `elevenlabs-v4` | `elevenlabs-dialogue-v4` | +25 (flat per request, whatever the length) |
+| `audio_driven` (Seedance 2 / MiniMax H3) | the model the track is synthesised on: `elevenlabs-dialogue-v4` for a multi-voice cast whose every voice is on `elevenlabs-v4`, `elevenlabs-dialogue` for any other multi-voice cast, else the voice's own text-to-speech model | Rolling out: by length — every started 100 characters of the voiced lines (a single voice's lines are counted joined by a space, as they are sent), at least 8 units; 4 credits per unit on Dialogue v3, Dialogue v4, v3, v4 and Multilingual v2 (so 1–800 characters cost 32, 5,000 cost 200), 2 on Turbo v2.5 (16 and 100). Until the rollout reaches your instance: a flat 25, whichever dialogue model the cast renders on |
 | `native_speech` (VEO 3.x) | `elevenlabs-voice-changer` | +40 |
 
 The dialogue add-on is reserved under the identifier of the model the cast actually renders on, chosen once when the request is accepted and forwarded to the worker.
@@ -556,7 +555,7 @@ Example: `veo3.1` 8s / 1080p i2v voiced = 170 (base) + 40 (revoice) = **210 cred
 - **No voice resolves** (dialogue / voices empty or unparseable): the clip generates silently and the reserved audio add-on is refunded automatically (committed at the video provider cost only).
 - **A chain step fails** (TTS / revoice / generation): the whole job fails and credits are fully refunded.
 
-> **Phase 1 scope.** Single-speaker clips are fully supported in both modes. A multi-speaker prompt produces a correct multi-voice **audio** track (Dialogue v3 voices each line separately) for a single-subject `audio_driven` clip; true per-face lip-sync across multiple on-screen speakers is not yet supported. The silent / ambient-only chain (separate-stems → voice-change → re-merge → lip-sync) for `none` / `ambient` models is deferred to Phase 2.
+> **Phase 1 scope.** Single-speaker clips are fully supported in both modes. A multi-speaker prompt produces a correct multi-voice **audio** track (the cast's dialogue model voices each line separately) for a single-subject `audio_driven` clip; true per-face lip-sync across multiple on-screen speakers is not yet supported. The silent / ambient-only chain (separate-stems → voice-change → re-merge → lip-sync) for `none` / `ambient` models is deferred to Phase 2.
 
 ## Content policy
 

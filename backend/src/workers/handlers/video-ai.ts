@@ -27,7 +27,7 @@ import {
   runLtxRetake,
 } from "../../providers/replicate/ltx-video.js"
 import { config } from "../../lib/config.js"
-import { FAL_LIP_SYNC_PROVIDERS, isAutoVideoDuration, ltxExtendDurationSec, ltxRetakeDurationSec, pricedOutputDurationSec, REPLICATE_LIP_SYNC_PROVIDERS, SEEDANCE_2_EXTEND_STITCH, SEEDANCE_2_R2V_MIN_REF_VIDEO_SEC, SEEDANCE_LIP_SYNC_PROVIDERS, estimateLoopTrimAddonCredits, getDialogueCapabilities, dialogueProviderOf, ttsSupportsAudioTags, isVeoProvider, getVideoAudioCapability, parseAttributedDialogue, resolveDialogueVoices } from "@nodaro/shared"
+import { FAL_LIP_SYNC_PROVIDERS, isAutoVideoDuration, ltxExtendDurationSec, ltxRetakeDurationSec, pricedOutputDurationSec, REPLICATE_LIP_SYNC_PROVIDERS, SEEDANCE_2_EXTEND_STITCH, SEEDANCE_2_R2V_MIN_REF_VIDEO_SEC, SEEDANCE_LIP_SYNC_PROVIDERS, estimateLoopTrimAddonCredits, getDialogueCapabilities, dialogueProviderOf, ttsSupportsAudioTags, isVeoProvider, getVideoAudioCapability } from "@nodaro/shared"
 import type { CharacterVoiceSpec, DialogueLine, ResolvedDialogueVoiceLine, VideoCharacterReference } from "@nodaro/shared"
 import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
 import { combineVideos } from "../../providers/video/combine-videos.js"
@@ -55,6 +55,7 @@ import { probeVideoSource } from "../../providers/video/ffmpeg-utils.js"
 import { directVoiceChanger } from "../../providers/elevenlabs/voice-changer.js"
 import { directElevenLabsTTS, stripAudioTags } from "../../providers/elevenlabs/direct-tts.js"
 import { directElevenLabsDialogue } from "../../providers/elevenlabs/direct-dialogue.js"
+import { planVoicedDialogue } from "../../lib/voiced-dialogue-lines.js"
 
 /**
  * VEO3 / VEO3.1 always produce a video with background audio per KIE's
@@ -1602,26 +1603,13 @@ const handleGenerateMask: HandlerFn = async function handleGenerateMask(job, ctx
 // job_type via the worker CAS, but finalize/asset both key off the passed
 // jobType + output_data, so the deliverable is always handled as a video.
 
-// Total-text cap for synthesis — the chosen dialogue model's sheet (the SAME
-// getter the route and panel read), never a hand-kept copy (a literal here
-// drifted before). An unset or unknown model reads as v3 dialogue.
-const maxDialogueChars = (dialogueProvider: unknown) => getDialogueCapabilities(dialogueProvider).maxChars
-
-/** Trim resolved lines to the model's synthesis char budget; logs any drop (no silent cap). */
-function capDialogueLines(lines: ResolvedDialogueVoiceLine[], jobId: string, dialogueProvider: unknown): ResolvedDialogueVoiceLine[] {
-  const cap = maxDialogueChars(dialogueProvider)
-  let total = 0
-  const out: ResolvedDialogueVoiceLine[] = []
-  for (const l of lines) {
-    if (total + l.text.length > cap) break
-    total += l.text.length
-    out.push(l)
-  }
-  if (out.length < lines.length) {
-    console.warn(`[worker] voiced-video ${jobId}: dropped ${lines.length - out.length} dialogue line(s) over the ${cap}-char dialogue cap`)
-  }
-  return out
-}
+// Which lines are voiced, and the total-text cap that trims them (the chosen
+// dialogue model's capability sheet), come from `planVoicedDialogue`
+// (lib/voiced-dialogue-lines.ts) — the SAME reading the generate-video route
+// priced the audio add-on from, never a worker-local copy (a hand-kept cap
+// literal here once drifted from the route's). The model is the one the route
+// forwarded (`dialogueProvider`), passed back in as given; an unset or unknown
+// one reads as v3 dialogue.
 
 /** Revoice a generated clip to `voiceId` (extract -> speech-to-speech -> remux), keeping the bed. */
 async function revoiceClipToR2(
@@ -1753,10 +1741,14 @@ const handleVoicedVideo: HandlerFn = async function handleVoicedVideo(job, ctx) 
   const audioAddon = d.voicedAudioAddon ?? 0
   const mode = getVideoAudioCapability(provider).mode
 
-  const lines = d.dialogue && d.dialogue.length > 0 ? d.dialogue : parseAttributedDialogue(d.prompt ?? "")
+  const dialogueModel = dialogueProviderOf(d.dialogueProvider)
+  const plan = planVoicedDialogue({ ...d, dialogueProvider: dialogueModel })
   const voices = d.characterVoices ?? []
   const primaryVoiceId = voices[0]?.voiceId
-  const resolved = capDialogueLines(resolveDialogueVoices(lines, voices, primaryVoiceId), ctx.jobId, d.dialogueProvider)
+  const resolved = plan.lines
+  if (plan.dropped > 0) {
+    console.warn(`[worker] voiced-video ${ctx.jobId}: dropped ${plan.dropped} dialogue line(s) over the ${getDialogueCapabilities(dialogueModel).maxChars}-char dialogue cap`)
+  }
 
   console.log(`[worker] voiced-video ${ctx.jobId} (provider: ${provider}, mode: ${mode}, lines: ${resolved.length})`)
   await setJobProgress(job, ctx.jobId, 5)

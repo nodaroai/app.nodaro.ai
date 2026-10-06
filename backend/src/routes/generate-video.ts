@@ -11,6 +11,7 @@ import { resolveVideoRequestNorm } from "../lib/video-request-norm.js"
 import { probeMediaDuration } from "../providers/video/ffmpeg-utils.js"
 import { probeAndCheckRefVideoDurations, probeRefVideoDurations } from "../lib/ref-video-probe.js"
 import { getModelCreditBaseCost } from "../ee/billing/credits.js"
+import { voicedAddonBaseCredits } from "../lib/voiced-dialogue-lines.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
@@ -489,13 +490,33 @@ function dispatchesVoicedVideo(b: Record<string, unknown>): boolean {
  * synthesises a dialogue track on the cast's dialogue model (v3 dialogue unless
  * every voice names a speech model with one shared dialogue twin —
  * `voicedDialogueProvider`); native_speech (VEO) revoices the baked audio via
- * the voice-changer. Single source for both the reservation (here) and the
- * worker's commit (forwarded through the queue as `voicedAudioAddon`).
+ * the voice-changer. The audio_driven id is the FLAT row, read only while
+ * length-based speech pricing is off — see `voicedAudioAddonAmount`.
  */
 function voicedAudioAddonId(provider: string | undefined, characterVoices: unknown): string {
   return getVideoAudioCapability(provider).mode === "audio_driven"
     ? voicedDialogueProvider(Array.isArray(characterVoices) ? characterVoices : undefined)
     : "elevenlabs-voice-changer"
+}
+
+/**
+ * Base (pre-markup) credits of the voiced-video audio step on `provider`, for a
+ * request already known to be voiced. ONE amount for the reservation
+ * (`voicedAudioAddonCredits`) and for the number the handler forwards on the
+ * queue as `voicedAudioAddon` (the worker commits it when the audio step runs
+ * and refunds it when it does not), so the two can never disagree.
+ *
+ * audio_driven (a synthesised dialogue track): by length on the row of the
+ * model actually synthesised while SPEECH_LENGTH_PRICING_ENABLED is on — the
+ * dialogue model for a multi-voice cast, the sole voice's own model otherwise
+ * (decided 2026-10-06, Q-VOICED); the flat dialogue row while it is off.
+ * native_speech (a speech-to-speech revoice, billed per minute by the vendor)
+ * is unchanged.
+ */
+async function voicedAudioAddonAmount(provider: string | undefined, b: Record<string, unknown>): Promise<number> {
+  if (getVideoAudioCapability(provider).mode === "audio_driven") return voicedAddonBaseCredits(b)
+  const { creditCost } = await getModelCreditBaseCost(voicedAudioAddonId(provider, b.characterVoices))
+  return creditCost
 }
 
 /**
@@ -507,8 +528,7 @@ function voicedAudioAddonId(provider: string | undefined, characterVoices: unkno
 async function voicedAudioAddonCredits(b: Record<string, unknown>): Promise<number> {
   const provider = b.provider as string | undefined
   if (!voiceSpecPresent(b) || !videoModelCanSpeakDialogue(provider)) return 0
-  const { creditCost } = await getModelCreditBaseCost(voicedAudioAddonId(provider, b.characterVoices))
-  return creditCost
+  return voicedAudioAddonAmount(provider, b)
 }
 
 /**
@@ -1217,9 +1237,10 @@ export async function generateVideoRoutes(app: FastifyInstance) {
     const isVoiced = dispatchesVoicedVideo(parsed.data)
     // Credit addon the worker commits on top of the video provider cost (mirrors
     // loop-trim's extraNonProviderCredits). Computed here so the route owns all
-    // billing math; the worker forwards it verbatim to finalize.
+    // billing math — the SAME amount the guard reserved, from the same function
+    // — and the worker forwards it verbatim to finalize.
     const voicedAudioAddon = isVoiced
-      ? (await getModelCreditBaseCost(voicedAudioAddonId(provider, characterVoices))).creditCost
+      ? await voicedAudioAddonAmount(provider, parsed.data as Record<string, unknown>)
       : 0
 
     await videoQueue.add(isVoiced ? "voiced-video" : "image-to-video", {

@@ -29,6 +29,8 @@ vi.mock("../../lib/config.js", () => ({
   isBusiness: () => false,
   isCloud: () => true,
   hasAdmin: () => true,
+  // Flag off: the voiced add-on reads the flat dialogue row, as today.
+  speechLengthPricingEnabled: () => false,
 }))
 
 vi.mock("../../lib/admin-check.js", () => ({ warmAdminCache: vi.fn() }))
