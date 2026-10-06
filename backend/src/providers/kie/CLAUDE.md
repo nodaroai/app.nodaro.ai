@@ -253,8 +253,9 @@ it cannot carry a real speaker's recording; a real voice goes through
 clips, a reference may carry `voice: { preset, description?, exampleLine? }`.
 `omni-character.ts` mints a persona via the synchronous
 `POST /api/v1/omni/audio/create` (`{ audio_id: <one of 30 presets>, name,
-voice_description?, example_dialogue? }` → `data.kieAudioId`; the doc example
-shows envelope `code: 0` while the character endpoint shows `200` — BOTH are
+voice_description?, example_dialogue? }` → `data.audioId` (live; the doc example
+shows `kieAudioId`, accepted second; no id at all = deterministic, non-retryable
+failure). The doc example shows envelope `code: 0` while the character endpoint shows `200` — BOTH are
 accepted, any other code fails; `operation: "omni.audio.create"` through
 `providerFetch`, OUR model key). The id rides TWICE: the character create's
 `audio_ids` and the video task's `audio_ids` (de-duplicated, max 3 =

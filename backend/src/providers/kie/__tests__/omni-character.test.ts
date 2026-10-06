@@ -42,6 +42,7 @@ import {
   type OmniCharacterStore,
 } from "../omni-character.js"
 import { setEgressDecorator, clearEgressDecorator, type EgressCall } from "../../egress.js"
+import { isDeterministicJobError } from "../../../lib/deterministic-job-error.js"
 
 let fetchMock: ReturnType<typeof vi.fn>
 
@@ -133,6 +134,19 @@ describe("createOmniCharacter", () => {
     const err = await createOmniCharacter(ref(), meta).catch((e) => e)
     expect(err.internalDetails).toContain("missing characterId")
     expect(err.message).not.toMatch(/kie/i)
+  })
+
+  it("a success response with no id is NON-retryable (deterministic)", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ code: 200, msg: "success", data: {} }))
+    const err = await createOmniCharacter(ref(), meta).catch((e) => e)
+    expect(isDeterministicJobError(err)).toBe(true)
+  })
+
+  it("accepts a bare `id` when characterId is absent, and prefers characterId", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ code: 200, msg: "success", data: { id: "char-bare" } }))
+    await expect(createOmniCharacter(ref(), meta)).resolves.toBe("char-bare")
+    fetchMock.mockResolvedValueOnce(jsonResponse({ code: 200, msg: "success", data: { characterId: "char-A", id: "other" } }))
+    await expect(createOmniCharacter(ref(), meta)).resolves.toBe("char-A")
   })
 
   it("a 200 envelope with data:null fails honestly too", async () => {
@@ -313,13 +327,13 @@ describe("default Redis store (lazy)", () => {
 // Voice persona — POST /api/v1/omni/audio/create
 // ---------------------------------------------------------------------------
 
-const audioCreated = (id: string, code = 0) => jsonResponse({ code, msg: "success", data: { kieAudioId: id, name: "n" } })
+const audioCreated = (id: string, code = 0) => jsonResponse({ code, msg: "success", data: { audioId: id, name: "n" } })
 const voice = { preset: "kore", description: "warm, unhurried", exampleLine: "Hello there" } as const
 const bodyOf = (call: number) => JSON.parse((fetchMock.mock.calls[call] as [string, RequestInit])[1].body as string)
 const urlOf = (call: number) => (fetchMock.mock.calls[call] as [string, RequestInit])[0]
 
 describe("createOmniAudio", () => {
-  it("POSTs the documented body to /omni/audio/create with the bearer key and returns kieAudioId", async () => {
+  it("POSTs the documented body to /omni/audio/create with the bearer key and returns the audio id", async () => {
     fetchMock.mockResolvedValueOnce(audioCreated("aud-1"))
     const id = await createOmniAudio({ ...voice }, "Ava", meta)
     expect(id).toBe("aud-1")
@@ -363,13 +377,53 @@ describe("createOmniAudio", () => {
     expect(err.internalDetails).toContain("voice service down")
   })
 
-  it("a response with no kieAudioId, data:null, or non-JSON fails (never returns an empty id)", async () => {
-    fetchMock.mockResolvedValueOnce(jsonResponse({ code: 0, msg: "success", data: {} }))
-    await expect(createOmniAudio({ preset: "kore" }, "n", meta)).rejects.toThrow()
-    fetchMock.mockResolvedValueOnce(jsonResponse({ code: 0, msg: "success", data: null }))
-    await expect(createOmniAudio({ preset: "kore" }, "n", meta)).rejects.toThrow()
+  it("parses the REAL observed response: data = { audioId, name } (staging logs, 2026-10-06)", async () => {
+    // Verbatim from the staging log. KIE's doc example says `kieAudioId`; the
+    // live endpoint answers `audioId`.
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ code: 200, msg: "success", data: { audioId: "39b830eae2da49a6ac9f2f9a13e6ec6d", name: "Maya" } }),
+    )
+    await expect(createOmniAudio({ preset: "kore" }, "Maya", meta)).resolves.toBe("39b830eae2da49a6ac9f2f9a13e6ec6d")
+  })
+
+  it("still accepts the documented shape: data = { kieAudioId }", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ code: 0, msg: "success", data: { kieAudioId: "aud-doc" } }))
+    await expect(createOmniAudio({ preset: "kore" }, "n", meta)).resolves.toBe("aud-doc")
+  })
+
+  it("prefers audioId when both are present", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ code: 200, msg: "success", data: { audioId: "observed", kieAudioId: "doc" } }))
+    await expect(createOmniAudio({ preset: "kore" }, "n", meta)).resolves.toBe("observed")
+  })
+
+  it("a blank audioId falls through to kieAudioId", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ code: 200, msg: "success", data: { audioId: "", kieAudioId: "doc" } }))
+    await expect(createOmniAudio({ preset: "kore" }, "n", meta)).resolves.toBe("doc")
+  })
+
+  it("a success response with no id at all fails NON-retryably (it will not fix itself, and every retry mints a paid persona)", async () => {
+    for (const data of [{}, { name: "Maya" }, { audioId: 123 }, null]) {
+      fetchMock.mockResolvedValueOnce(jsonResponse({ code: 200, msg: "success", data }))
+      const err = await createOmniAudio({ preset: "kore" }, "n", meta).catch((e) => e)
+      expect(err).toBeInstanceOf(Error)
+      expect(isDeterministicJobError(err)).toBe(true)
+      expect(err.internalDetails).toContain("audioId")
+      expect(err.message).not.toMatch(/kie/i)
+    }
+  })
+
+  it("non-JSON 200 still fails (never returns an empty id)", async () => {
     fetchMock.mockResolvedValueOnce(new Response("<html>", { status: 200 }))
     await expect(createOmniAudio({ preset: "kore" }, "n", meta)).rejects.toThrow()
+  })
+
+  it("an HTTP or envelope error stays retryable (only a malformed SUCCESS is deterministic)", async () => {
+    fetchMock.mockResolvedValueOnce(new Response("voice service down", { status: 503 }))
+    const httpErr = await createOmniAudio({ preset: "kore" }, "n", meta).catch((e) => e)
+    expect(isDeterministicJobError(httpErr)).toBe(false)
+    fetchMock.mockResolvedValueOnce(jsonResponse({ code: 500, msg: "oops", data: null }))
+    const envErr = await createOmniAudio({ preset: "kore" }, "n", meta).catch((e) => e)
+    expect(isDeterministicJobError(envErr)).toBe(false)
   })
 
   it("goes through the egress seam with OUR model key (never null) and a stable operation", async () => {

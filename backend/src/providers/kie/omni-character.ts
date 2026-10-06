@@ -14,13 +14,20 @@
  * deliberately conservative guess) and a stale one is recreated once by the
  * caller; see `isInvalidOmniCharacterError`.
  *
- * Voice persona: `POST /api/v1/omni/audio/create` (`gemini-omni-audio`) mints a
- * `kieAudioId` from one of 30 preset voices + an optional description / example
+ * Voice persona: `POST /api/v1/omni/audio/create` (`gemini-omni-audio`) mints an
+ * audio id from one of 30 preset voices + an optional description / example
  * line. The id rides TWICE — in the character create's `audio_ids` (voice traits
  * for the character) and in the video task's `audio_ids` (so the persona drives
  * the speech, which is what keeps one voice across separate clips). Synchronous;
  * the envelope's success code is documented as `0` on this endpoint but `200` on
  * the character one, so BOTH are accepted.
+ *
+ * The audio endpoint's id field: the KIE doc example shows `data.kieAudioId`, but
+ * the LIVE response (staging logs, 2026-10-06) is
+ * `{"code":200,"msg":"success","data":{"audioId":"39b830ea…","name":"Maya"}}`.
+ * `audioId` is read first, `kieAudioId` second. A success response carrying
+ * neither is a `DeterministicJobError` — it will not fix itself, and each retry
+ * would mint (and bill for) another persona.
  *
  * Own module, not `client.ts`: the shared client is mocked wholesale by every
  * Gemini provider test, and a character failure must never be able to hide in
@@ -30,7 +37,7 @@ import { createHash } from "node:crypto"
 import { config } from "../../lib/config.js"
 import { throwIfJobCancelled } from "../../lib/job-cancellation.js"
 import { providerFetch, readUserSafeMessage, type EgressMeta } from "../egress.js"
-import { requireKieKey, createSanitizedError, KIE_API_BASE } from "./client.js"
+import { requireKieKey, createSanitizedError, KIE_API_BASE, type KieError } from "./client.js"
 import type { VideoCharacterReference, VideoCharacterVoice } from "@nodaro/shared"
 
 /** KIE documents no validity period for a character id; 24h is a guess that
@@ -169,6 +176,35 @@ export function omniAudioCacheKey(voice: VideoCharacterVoice, name: string): str
 // Create
 // ---------------------------------------------------------------------------
 
+/**
+ * KIE answered a create call with a SUCCESS envelope that carries no usable id.
+ * Retrying cannot help (the response shape is not going to change between
+ * attempts) and each retry would mint — and bill — another persona/character, so
+ * the error is marked deterministic (`lib/deterministic-job-error.ts`): the video
+ * worker treats the attempt as final and throws BullMQ's `UnrecoverableError`.
+ *
+ * It stays an ordinary `createSanitizedError` KieError (worker KIE logging of
+ * `internalDetails`, sanitized user message) carrying the marker property
+ * `isDeterministicJobError` reads — NOT a subclass: the Gemini provider tests
+ * mock `./client.js` wholesale, and a module-level `extends KieError` would
+ * crash every one of them at import.
+ */
+function malformedCreateResponse(internalDetails: string, context: string): KieError {
+  const err = createSanitizedError(internalDetails, context, false, false, {
+    userSafeMessage: `${context} failed: the provider returned an unexpected response. Retrying will not help — please contact support.`,
+  })
+  return Object.assign(err, { deterministic: true as const })
+}
+
+/** First non-empty string among `keys` of `data`, in order; else null. */
+function pickId(data: Record<string, unknown>, keys: readonly string[]): string | null {
+  for (const key of keys) {
+    const v = data[key]
+    if (typeof v === "string" && v) return v
+  }
+  return null
+}
+
 interface OmniEnvelope {
   code?: number
   msg?: string
@@ -245,7 +281,7 @@ async function postOmniCreate(args: {
 }
 
 /**
- * Create one audio persona and return its `kieAudioId`. Throws a sanitized
+ * Create one audio persona and return its id. Throws a sanitized
  * `KieError` on ANY failure — a voiced character never silently degrades to an
  * unvoiced one. `meta.modelKey` must be OUR video model key, never defaulted.
  */
@@ -263,9 +299,13 @@ export async function createOmniAudio(voice: VideoCharacterVoice, name: string, 
       ...(voice.exampleLine ? { example_dialogue: voice.exampleLine } : {}),
     },
   })
-  const id = data.kieAudioId
-  if (typeof id !== "string" || !id) {
-    throw createSanitizedError(`audio create response missing kieAudioId: ${JSON.stringify(data)}`, AUDIO_CONTEXT)
+  // `audioId` is what the live endpoint returns; `kieAudioId` is the doc shape.
+  const id = pickId(data, ["audioId", "kieAudioId"])
+  if (!id) {
+    throw malformedCreateResponse(
+      `audio create response missing audioId (or kieAudioId): ${JSON.stringify(data)}`,
+      AUDIO_CONTEXT,
+    )
   }
   console.log("[KIE.ai] omni audio persona created")
   return id
@@ -296,9 +336,13 @@ export async function createOmniCharacter(
       ...(ref.name ? { character_name: ref.name } : {}),
     },
   })
-  const id = data.characterId
-  if (typeof id !== "string" || !id) {
-    throw createSanitizedError(`character create response missing characterId: ${JSON.stringify(data)}`, CONTEXT)
+  // `characterId` is documented and observed; a bare `id` is tolerated.
+  const id = pickId(data, ["characterId", "id"])
+  if (!id) {
+    throw malformedCreateResponse(
+      `character create response missing characterId (or id): ${JSON.stringify(data)}`,
+      CONTEXT,
+    )
   }
   console.log("[KIE.ai] omni character created")
   return id
@@ -318,8 +362,8 @@ export interface ResolvedOmniCharacters {
 }
 
 /**
- * Resolve each reference to a `characterId` (and, when it carries a voice, a
- * `kieAudioId`): cache hit, else create + cache. Identical references inside one
+ * Resolve each reference to a `characterId` (and, when it carries a voice, an
+ * audio id): cache hit, else create + cache. Identical references inside one
  * call share one create. `force` skips the cache READ (and overwrites the entry)
  * — the recreate half of the stale-id retry.
  *
