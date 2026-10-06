@@ -47,6 +47,13 @@ const ADMIN_IMPORT_RE = /^\s*import\b[\s\S]*?from\s+["']([^"']*\/lib\/supabase)(
 // ---------------------------------------------------------------------------
 
 const ALLOWED_PATHS = [
+  // Render final quote (#1922): reads the workflow and a prior execution's node
+  // states for the caller, the same reads POST /v1/workflows/:id/run makes (that
+  // route is in the legacy baseline). Ownership is checked explicitly before any
+  // read is used: workflowAccessFromRow(req.userId, …) and continuationRefusal
+  // ({ userId }) answer 404 for anything not the caller's.
+  /^src\/routes\/workflow-render-final\.ts$/,
+
   // Admin routes: authorize on req.userRole, legitimately operate across
   // users.
   /^src\/routes\/admin.*\.ts$/,

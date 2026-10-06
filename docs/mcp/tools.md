@@ -13,7 +13,7 @@ authorizing the connector; missing scopes cause tools to be omitted entirely
 |-------|-------|
 | `workflows:read` | `export_workflow`, `get_component_inputs`, `get_project`, `get_recast_status`†, `get_studio_production`†, `get_workflow`, `get_workflow_json`, `list_components`, `list_projects`, `list_studio_productions`†, `list_workflows`, `plan_studio_export`†, `validate_studio_plan`† |
 | `workflows:write` | `clone_studio_production`†, `create_studio_production`†, `create_workflow`, `delete_workflow`, `edit_studio_production`†, `import_recast_script`†, `import_studio_production`†, `import_workflow`, `share_studio_production`†, `update_workflow_json` |
-| `workflows:execute` | `add_captions`, `analyze_prompt`, `animate_image`, `apply_audio_fx`, `apply_edl`, `assemble_narrated_video`, `audio_isolation`, `audio_sync`, `capture_site`, `combine_videos`, `continue_video_pro`, `create_explainer`†, `create_launch_video`†, `delete_app_run`, `download_youtube_audio`, `dubbing`, `edit_3d_scene`, `edit_image`, `enhance_prompt`, `extend_video`, `extract_frame`, `face_swap`, `forced_alignment`, `generate_3d_scene`, `generate_character`, `generate_character_motion`, `generate_creature`, `generate_creature_motion`, `generate_dialogue`, `generate_image`, `generate_location`, `generate_location_motion`, `generate_mask`, `generate_music`, `generate_object`, `generate_object_motion`, `generate_prompt`, `generate_script`, `generate_speech`, `generate_video`, `gif_to_video`, `image_collage`, `image_overlay`, `image_to_image`, `image_to_text`, `lip_sync`, `list_voices`, `loop_video`, `merge_video_audio`, `mix_audio`, `modify_image`, `modify_video`, `motion_transfer`, `overlay_images`, `plan_edit`†, `pro_3d_render`†, `reduce`, `relight_video`, `render_3d_scene`, `render_shot_sequence`, `resolve_recast_gate`†, `resolve_shot_sequence`, `run_app`, `run_component`, `run_workflow`, `save_image_defaults`, `scan_competitor`†, `separate_audio`, `silence_detect`, `slideshow`, `social_search`†, `speech_to_video`, `start_recast`†, `still_to_video`, `stop_video_pro`, `suggest_overlay_placement`, `suno_add_instrumental`, `suno_add_vocals`, `suno_convert_wav`, `suno_cover`, `suno_extend`, `suno_generate`, `suno_lyrics`, `suno_mashup`, `suno_music_video`, `suno_replace_section`, `suno_separate_stems`, `suno_style_boost`, `suno_upload_extend`, `switch_cameras`†, `text_to_audio`, `transcribe`, `trim_audio`, `trim_video`, `video_analysis`, `video_audit`, `video_upscale`, `voice_changer`, `voice_changer_pro`†, `voice_changer_pro_analyze`†, `voice_changer_pro_export`†, `voice_design`, `voice_remix` |
+| `workflows:execute` | `add_captions`, `analyze_prompt`, `animate_image`, `apply_audio_fx`, `apply_edl`, `assemble_narrated_video`, `audio_isolation`, `audio_sync`, `capture_site`, `combine_videos`, `continue_video_pro`, `create_explainer`†, `create_launch_video`†, `delete_app_run`, `download_youtube_audio`, `dubbing`, `edit_3d_scene`, `edit_image`, `enhance_prompt`, `extend_video`, `extract_frame`, `face_swap`, `forced_alignment`, `generate_3d_scene`, `generate_character`, `generate_character_motion`, `generate_creature`, `generate_creature_motion`, `generate_dialogue`, `generate_image`, `generate_location`, `generate_location_motion`, `generate_mask`, `generate_music`, `generate_object`, `generate_object_motion`, `generate_prompt`, `generate_script`, `generate_speech`, `generate_video`, `gif_to_video`, `image_collage`, `image_overlay`, `image_to_image`, `image_to_text`, `lip_sync`, `list_voices`, `loop_video`, `merge_video_audio`, `mix_audio`, `modify_image`, `modify_video`, `motion_transfer`, `overlay_images`, `plan_edit`†, `pro_3d_render`†, `reduce`, `relight_video`, `render_3d_scene`, `render_final`, `render_shot_sequence`, `resolve_recast_gate`†, `resolve_shot_sequence`, `run_app`, `run_component`, `run_workflow`, `save_image_defaults`, `scan_competitor`†, `separate_audio`, `silence_detect`, `slideshow`, `social_search`†, `speech_to_video`, `start_recast`†, `still_to_video`, `stop_video_pro`, `suggest_overlay_placement`, `suno_add_instrumental`, `suno_add_vocals`, `suno_convert_wav`, `suno_cover`, `suno_extend`, `suno_generate`, `suno_lyrics`, `suno_mashup`, `suno_music_video`, `suno_replace_section`, `suno_separate_stems`, `suno_style_boost`, `suno_upload_extend`, `switch_cameras`†, `text_to_audio`, `transcribe`, `trim_audio`, `trim_video`, `video_analysis`, `video_audit`, `video_upscale`, `voice_changer`, `voice_changer_pro`†, `voice_changer_pro_analyze`†, `voice_changer_pro_export`†, `voice_design`, `voice_remix` |
 | `jobs:read` | `diagnose_run`, `get_job`, `list_jobs`, `wait_for_job` |
 | `assets:read` | `browse_gallery`, `browse_uploads`, `competitor_cards`†, `competitor_lessons`†, `competitor_tried`†, `display_asset`, `get_app_run`, `get_asset`, `get_character`, `get_creature`, `get_location`, `get_object`, `list_characters`, `list_collections`, `list_competitors`†, `list_creatures`, `list_favorites`, `list_locations`, `list_objects`, `list_saved_posts`†, `read_collection` |
 | `assets:write` | `add_collection_record`, `add_competitor`†, `approve_creature_main_image`, `approve_main_image`, `approve_object_main_image`, `approve_portrait`, `create_character`, `create_location`, `favorite_asset`, `mark_card_done`†, `prepare_audio_upload`, `prepare_image_upload`, `prepare_video_upload`, `recaption_character`, `recaption_creature`, `recaption_location`, `recaption_object`, `request_audio_upload`, `request_image_upload`, `request_video_upload`, `save_post`†, `update_character`, `update_location`, `upload_audio_widget`, `upload_image_widget`, `upload_video_widget` |
@@ -145,6 +145,7 @@ agents do not need to set it up.
 | `create_workflow`, `delete_workflow`, `update_workflow_json`, `import_workflow` | Only touches the mcp project |
 | `export_workflow` | Can read **any** of your workflows (use it to pull work from a personal project into the mcp project via export → import) |
 | `run_workflow` | Only runs workflows in the mcp project |
+| `render_final` | Only runs workflows in the mcp project |
 
 This isolation keeps agent-managed workflows out of your personal projects.
 
@@ -540,6 +541,55 @@ The run's results land on the workflow's canvas the way an editor-started run's
 do: live while the flow is open in the editor (it looks for such runs about every
 10 seconds), and on the next open otherwise — unless something was run in the
 editor since. The run is also listed in the **Executions** tab.
+
+### `render_final`
+
+Renders the final of an [Apply EDL](../nodes/processing-video/apply-edl.md#render-final)
+render whose run stopped at its Preview, once the user has reviewed it — the
+same **Render final** the editor's button runs: the render at **Final** for this
+run only (the node keeps its own Quality), and every node after it; with Camera
+Switch between the Edit Plan and the render, Camera Switch runs again first. The
+server works out which nodes run, by the editor's own rule; the Edit Plan is not
+run again (the render reads its plan with the user's review applied). It
+continues the execution that stopped at the preview
+([continuing a run](../api-integration.md#continuing-a-run)): every node it does
+not run hands on what that execution produced.
+
+**Scope:** `workflows:execute`
+
+**Input:**
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `workflow_id` | UUID string | Must be in the mcp project |
+| `render_node_id` | string | The Apply EDL render node to finalize |
+| `execution_id` | UUID string | The execution that stopped at the preview: your own `completed` run of this workflow |
+| `confirm` | boolean | Omit to get the price quote only. `true` runs it — only after the user accepted the quoted credits |
+| `client_request_id` | string | Optional retry token, as on `run_workflow` |
+
+**Without `confirm`** it returns the quote and runs nothing: `{ renderNodeId,
+nodeIds, inputOverrides, estimatedCredits, sufficient, available, confirmed: false }`
+— the nodes the run executes, the override it runs with (`{ "<render node id>":
+{ "quality": "final" } }`), the credits it is estimated at, whether the user's
+credits cover them and their spendable credits (`available` is `null` when a
+workspace budget or a deployment's operator pays; all three are `null` in an
+edition without credits). When they cannot cover it, the tool says so instead of
+asking for confirmation. **With `confirm: true`** it starts the run: `{ executionId, nodeIds,
+estimatedCredits, confirmed: true }`; read it with
+[`get_app_run(execution_id)`](#get_app_run).
+
+Refusals come back as tool errors with their code:
+insufficient credits (the run is checked against the user's credits on the
+quoted figure before any execution exists),
+`render_final_node_not_found` (the workflow has no such node),
+`render_final_not_a_render` (the node is not an Apply EDL render), the
+[continuation codes](../api-integration.md#continuing-a-run)
+(`continuation_not_found`, `continuation_workflow_mismatch`,
+`continuation_version_mismatch`, `continuation_not_completed`), and
+`preview_review_required` when another render after this one still reads Proxy
+(rolled out under the `PREVIEW_STOP_RULE_ENABLED` flag; where it is off, that is
+not refused).
+Writing the review (the Edit Plan's edits) is not part of this tool.
 
 ---
 

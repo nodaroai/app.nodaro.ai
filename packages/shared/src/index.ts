@@ -787,6 +787,12 @@ export {
   RUN_CONTINUATION_CODES,
   type RunContinuationCode,
 } from "./run-continuation.js"
+export {
+  RENDER_FINAL_NODE_NOT_FOUND,
+  RENDER_FINAL_NOT_A_RENDER,
+  RENDER_FINAL_CODES,
+  type RenderFinalCode,
+} from "./render-final.js"
 
 export {
   SCHEDULE_RULE_KINDS,

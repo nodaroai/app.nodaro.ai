@@ -106,6 +106,44 @@ export interface RunWorkflowResult {
   status: "pending" | "running"
 }
 
+/**
+ * A Render final: the Apply EDL render at Final for this run only, and every
+ * node after it (Camera Switch first, in multicam). The server works out which
+ * nodes run — the same rule as the editor's Render final button.
+ */
+export interface RenderFinalParams {
+  /** The Apply EDL render node to finalize. */
+  renderNodeId: string
+  /**
+   * The execution that stopped at the preview: your own `completed` run of
+   * this workflow. Every node the Render final does not run hands on what it
+   * produced (an Edit Plan hands on its plan with the review applied).
+   */
+  continueFromExecutionId: string
+}
+
+/** What a Render final will run and charge. Nothing is created by the quote. */
+export interface RenderFinalQuote {
+  renderNodeId: string
+  /** The nodes the run executes, in canvas order. */
+  nodeIds: string[]
+  /** The one-shot override it runs with: `{ [renderNodeId]: { quality: "final" } }`. */
+  inputOverrides: Record<string, Record<string, unknown>>
+  /** Estimated credits; `null` in an edition without credits. */
+  estimatedCredits: number | null
+  /**
+   * Whether the payer can cover `estimatedCredits`; `null` in an edition
+   * without credits. When `false`, {@link WorkflowsResource.renderFinal} is
+   * refused with `InsufficientCreditsError` before any execution exists.
+   */
+  sufficient: boolean | null
+  /**
+   * The payer's spendable credits; `null` when it is not yours to see (a
+   * deployment's operator pays) or a workspace budget pays.
+   */
+  available: number | null
+}
+
 /** A person granted access to a workflow. Email is never returned (privacy). */
 export interface Collaborator {
   userId: string
@@ -255,6 +293,36 @@ export class WorkflowsResource {
       `/v1/workflows/${encodeURIComponent(id)}/run`,
       { body: params },
     )
+  }
+
+  /**
+   * Render final (`renderFinal` on `POST /v1/workflows/:id/run`): run the
+   * render at Final for this run only, and every node after it, continuing the
+   * execution that stopped at its preview. The server derives the nodes and
+   * the override — send nothing else. Quote it first with
+   * {@link estimateRenderFinal}. Refused with `render_final_node_not_found`,
+   * `render_final_not_a_render`, or a continuation code (see `run`); a run
+   * its payer cannot cover throws `InsufficientCreditsError` (with `required`
+   * and, when it is yours to see, `available`) before any execution exists.
+   */
+  renderFinal(id: string, params: RenderFinalParams): Promise<RunWorkflowResult> {
+    return this.client.request("POST", `/v1/workflows/${encodeURIComponent(id)}/run`, {
+      body: {
+        renderFinal: { renderNodeId: params.renderNodeId },
+        continueFromExecutionId: params.continueFromExecutionId,
+      },
+    })
+  }
+
+  /**
+   * Quote a Render final (`POST /v1/workflows/:id/render-final/estimate`): the
+   * nodes it will run, the override it runs with and its estimated credits.
+   * Nothing is created or charged.
+   */
+  estimateRenderFinal(id: string, params: RenderFinalParams): Promise<{ data: RenderFinalQuote }> {
+    return this.client.request("POST", `/v1/workflows/${encodeURIComponent(id)}/render-final/estimate`, {
+      body: { renderNodeId: params.renderNodeId, continueFromExecutionId: params.continueFromExecutionId },
+    })
   }
 
   /**

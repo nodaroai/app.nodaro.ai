@@ -275,6 +275,8 @@ export type {
   UpdateWorkflowInput,
   RunWorkflowParams,
   RunWorkflowResult,
+  RenderFinalParams,
+  RenderFinalQuote,
 } from "./resources/workflows.js"
 
 export type {

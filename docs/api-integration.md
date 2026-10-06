@@ -198,6 +198,27 @@ overridable.
 | `400` | `continuation_workflow_mismatch` | it ran another workflow |
 | `400` | `continuation_version_mismatch` | it ran a published app version of the workflow |
 | `409` | `continuation_not_completed` | it is still running, or it failed or was cancelled |
+
+<a id="render-final"></a>**Render final (`renderFinal`).** Instead of assembling a Render final yourself, name the render and let the server work it out: send `"renderFinal": { "renderNodeId": "<render node id>" }` with `continueFromExecutionId` (the run that stopped at the preview) on `POST /v1/workflows/:id/run`, and nothing else — no `nodeIds`, no `inputOverrides`. The server runs what the editor's [Render final](./nodes/processing-video/apply-edl.md#render-final) runs: the [Apply EDL](./nodes/processing-video/apply-edl.md) render at Final for this run only, and every node after it (directly, through a teleport, a Group or a field mapping); with Camera Switch between the Edit Plan and the render, Camera Switch runs again first. The Edit Plan does not run again. The run is then a continuation as above, with the same checks.
+
+```json
+{
+  "renderFinal": { "renderNodeId": "<render node id>" },
+  "continueFromExecutionId": "<the run that stopped at the preview>"
+}
+```
+
+Quote it first with `POST /v1/workflows/:id/render-final/estimate` and `{ "renderNodeId": "…", "continueFromExecutionId": "…" }`. It creates and charges nothing, and answers `200 { "data": { "renderNodeId", "nodeIds", "inputOverrides", "estimatedCredits", "sufficient", "available" } }`: the nodes the run executes, the override it runs with (`{ "<render node id>": { "quality": "final" } }`) and its estimated credits, priced on the graph the run executes (the earlier run's recorded `inputOverrides` with the render's Final over them); `sufficient` says whether the payer's credits cover them, and `available` is the payer's spendable credits (`null` when a workspace budget pays, or when a deployment's operator pays — that balance is not shown). All three figures are `null` in an edition without credits. It refuses with the continuation codes above, and both refuse:
+
+| Status | `error.code` | When |
+|---|---|---|
+| `400` | `render_final_node_not_found` | the workflow has no node with that id |
+| `400` | `render_final_not_a_render` | the node is not an Apply EDL render |
+| `400` | `validation_error` | `renderFinal` sent with `nodeIds` or `inputOverrides`, or without `continueFromExecutionId` |
+
+The run is checked against the payer's credits before it starts, on the figure the quote shows: one its payer cannot cover is refused with `402 { "error": { "code": "insufficient_credits", "message", "required", "available" } }` and no execution is created (`available` is left out when a deployment's operator pays). The check is the balance only; a model your plan cannot use, or a daily limit, is still refused by that node when the run reaches it. A workspace budget's headroom is checked as each node reserves.
+
+The run is the authority on every other refusal (`preview_review_required` when another render after this one still reads Proxy — under the `PREVIEW_STOP_RULE_ENABLED` flag, as [above](#runs-that-would-stop-for-a-review); a run already going).
 | `400` | `validation_error` | `continueFromExecutionId` is not an execution id |
 
 | Method | Path | Purpose |

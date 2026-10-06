@@ -2465,9 +2465,7 @@ export class CreditsService {
 
     // Calculate total balance. In web-free mode the topup pool is excluded —
     // it never spends on a consumer surface.
-    const subscriptionCredits = profile.subscription_credits ?? 0
-    const topupCredits = webFree ? 0 : (profile.topup_credits ?? 0)
-    const totalBalance = subscriptionCredits + topupCredits
+    const { subscriptionCredits, topupCredits, totalBalance } = spendableBalance(profile, webFree)
 
     // Check if user has enough credits. BYPASSED for a workspace payer: the
     // personal pools are not what pays, and headroom is the reserve RPC's
@@ -3487,7 +3485,13 @@ export class CreditsService {
  * recalculation reads back — and counts every node, whatever the stop rule's
  * flag says (decided 2026-10-05).
  */
-export type WorkflowEstimateOptions = { scope?: "run" | "whole-graph" }
+export type WorkflowEstimateOptions = {
+  scope?: "run" | "whole-graph"
+  /** A run of a SUBSET (Render final, a continued run): price only these
+   *  nodes. The rest of the graph is still the context a price reads (a
+   *  wired setting, a caption source, the stop rule's closure). */
+  runNodeIds?: ReadonlySet<string>
+}
 
 /** `STATIC_CREDIT_COSTS` as a price table: the base prices, unmarked. */
 const STATIC_BASE_PRICES: ChargedPriceTable = {
@@ -3520,7 +3524,9 @@ function sumWorkflowEstimate(
         ),
       ).gatedNodeIds
     : new Set<string>()
+  const runNodeIds = options?.runNodeIds
   return nodes.reduce((sum, node) => {
+    if (runNodeIds && !(node.id && runNodeIds.has(node.id))) return sum
     if (node.id && previewGated.has(node.id)) return sum
     // A parameter node (Provider, Duration, a picker) is read, never run: no
     // job, no charge. A Provider's data names a model ("veo3"), which the
@@ -3906,6 +3912,98 @@ export function estimateWorkflowCredits(
   edges?: ReadonlyArray<EstimateEdge>,
 ): Promise<number> {
   return CreditsService.estimateWorkflowCredits(nodes, edges)
+}
+
+/**
+ * What a run of a SUBSET of this workflow will be charged: the nodes in
+ * `runNodeIds`, priced on `nodes` (the graph the run executes, its overrides
+ * applied) — an agent's Render final quote (decided 2026-10-06).
+ */
+export function estimateRunSetCredits(
+  nodes: ReadonlyArray<EstimateNode>,
+  edges: ReadonlyArray<EstimateEdge>,
+  runNodeIds: ReadonlySet<string>,
+): Promise<number> {
+  return CreditsService.estimateWorkflowCredits(nodes, edges, { runNodeIds })
+}
+
+/**
+ * What a run can spend from a payer's personal pools. In web-free mode the
+ * topup pool is excluded — it never spends on a consumer surface. The ONE
+ * derivation both the per-model check (`checkCreditsWithProfile`) and the
+ * run-set check below read, so the two can never disagree about a balance.
+ */
+function spendableBalance(
+  profile: { subscription_credits?: number | null; topup_credits?: number | null },
+  webFree: boolean,
+): { subscriptionCredits: number; topupCredits: number; totalBalance: number } {
+  const subscriptionCredits = profile.subscription_credits ?? 0
+  const topupCredits = webFree ? 0 : (profile.topup_credits ?? 0)
+  return { subscriptionCredits, topupCredits, totalBalance: subscriptionCredits + topupCredits }
+}
+
+/** Whether a payer can cover a run set — see {@link checkRunSetCredits}. */
+export interface RunSetCreditsCheck {
+  sufficient: boolean
+  required: number
+  /**
+   * What the payer can spend, for the caller to see. `null` when it is not
+   * theirs to see (a deployment payer: the operator's pool stays private, as
+   * in the credit guard) or not what pays (a workspace budget, whose headroom
+   * is the reservation's to judge).
+   */
+  available: number | null
+  /** Why it is refused; only when `sufficient` is false. */
+  message?: string
+}
+
+/** The credit guard's own words for it (credit-guard-impl.ts): the operator is the fixer. */
+const DEPLOYMENT_OUT_OF_CREDITS = "This deployment is out of credits. Contact your administrator."
+
+/**
+ * Can the payer cover a run set priced at `required` credits? Asked BEFORE an
+ * execution row exists — an agent's Render final (decided 2026-10-06) — so a
+ * run that cannot finish is refused with a 402 rather than started, charged
+ * for its first node, and failed at the render's own reservation.
+ *
+ * Balance only, on the gates the reservation uses (`spendGates`, the payer's
+ * profile through `payerProfileId`). Model availability, daily caps and the
+ * allowance stay with each node's own preflight in the executor. A workspace
+ * payer passes: its budget's ceiling is the reserve RPC's atomic check, as in
+ * `checkCreditsWithProfile`. Throws when the payer's profile cannot be read —
+ * the caller refuses rather than run unchecked.
+ */
+export async function checkRunSetCredits(
+  userId: string,
+  required: number,
+  surface: CreditCheckSurface,
+): Promise<RunSetCreditsCheck> {
+  if (creditsDisabled()) return { sufficient: true, required, available: null }
+
+  const { data: profile, error } = await supabase
+    .from("profiles")
+    .select("tier, subscription_tier, lifetime_topup_credits, subscription_credits, topup_credits")
+    .eq("id", payerProfileId(userId, surface.billingContext))
+    .single()
+  if (error || !profile) throw new Error("The payer's credit profile could not be read")
+
+  const gates = spendGates(effectiveTierOf(profile as CreditProfile), surface)
+  if (!gates.personalBalance) return { sufficient: true, required, available: null }
+
+  const { totalBalance } = spendableBalance(profile as CreditProfile, gates.webFree)
+  const deployment = surface.billingContext?.payer === "deployment"
+  const available = deployment ? null : totalBalance
+  if (totalBalance >= required) return { sufficient: true, required, available }
+  return {
+    sufficient: false,
+    required,
+    available,
+    message: deployment
+      ? DEPLOYMENT_OUT_OF_CREDITS
+      : gates.webFree
+        ? `Your free credits can't cover this run (need ${required}, free pool has ${totalBalance}).`
+        : `Insufficient credits. Required: ${required}, Available: ${totalBalance}`,
+  }
 }
 
 /**

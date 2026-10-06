@@ -39,6 +39,7 @@ import { describeLockedOverrides, findLockedOverrides } from "../lib/input-overr
 import { migrateLegacyNodeType } from "../services/workflow-engine/normalize-node-types.js"
 import { accessAtLeast, canRunWorkflow, workflowAccessFromRow } from "../lib/workflow-access.js"
 import { toAccessRow } from "../lib/workflow-route-access.js"
+import { deriveRenderFinalRun, isRenderFinalRefusal, parseRenderFinalBody, renderFinalCredits } from "../lib/render-final-run.js"
 import {
   CONTINUATION_REFUSAL_MESSAGE,
   CONTINUATION_REFUSAL_STATUS,
@@ -77,6 +78,16 @@ openApiRegistry.registerPath({
                     "Continue from an earlier execution: your own completed run of this workflow (not of a published app version). " +
                     "Requires nodeIds; every node not named hands on that execution's output instead of the workflow's saved results.",
                 }),
+              renderFinal: z
+                .object({ renderNodeId: z.string() })
+                .optional()
+                .openapi({
+                  description:
+                    "Render final: run this Apply EDL render at Final for this run only, and every node after it. " +
+                    "The server derives nodeIds and the override (send neither); requires continueFromExecutionId. " +
+                    "Quote it first with POST /v1/workflows/{id}/render-final/estimate. A Render final its payer cannot cover " +
+                    "is refused with 402 insufficient_credits before any execution exists.",
+                }),
             })
             .openapi({
               description: "Optional execution overrides. Pass an empty body to run the full workflow.",
@@ -98,6 +109,21 @@ openApiRegistry.registerPath({
       },
     },
     401: { description: "Unauthorized" },
+    402: {
+      description: "A Render final its payer cannot cover (insufficient_credits): nothing was created",
+      content: {
+        "application/json": {
+          schema: z.object({
+            error: z.object({
+              code: z.literal("insufficient_credits"),
+              message: z.string(),
+              required: z.number(),
+              available: z.number().optional(),
+            }),
+          }),
+        },
+      },
+    },
     404: { description: "Workflow not found" },
     409: {
       description: "Workflow already has an active execution",
@@ -281,9 +307,22 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
 
     // Parse optional body (nodeIds for partial execution)
     const body = (req.body ?? {}) as Record<string, unknown>
-    const nodeIds = Array.isArray(body.nodeIds)
+    let nodeIds = Array.isArray(body.nodeIds)
       ? (body.nodeIds as string[]).filter((id) => typeof id === "string")
       : undefined
+
+    // Render final for agents (decided 2026-10-06): `renderFinal` names the
+    // render; the server derives the nodes and the render's Final override
+    // from the saved graph below, by the editor's own rule. Shape checked
+    // here, before any read.
+    let renderFinalNodeId: string | undefined
+    if (body.renderFinal !== undefined && body.renderFinal !== null) {
+      const asked = parseRenderFinalBody(body)
+      if (isRenderFinalRefusal(asked)) {
+        return reply.status(asked.status).send({ error: { code: asked.code, message: asked.message } })
+      }
+      renderFinalNodeId = asked.renderNodeId
+    }
 
     // Verify the workflow exists and that this caller may RUN it. We also load
     // `nodes` so we can resolve flat per-node overrides (MCP shape) to their
@@ -328,6 +367,20 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       })
     }
 
+    let rawInputOverrides: unknown = body.inputOverrides
+    if (renderFinalNodeId !== undefined) {
+      const derived = deriveRenderFinalRun(
+        renderFinalNodeId,
+        (workflow.nodes as ReadonlyArray<{ id: string; type?: string; data?: unknown }> | null) ?? [],
+        (workflow.edges as ReadonlyArray<{ source: string; target: string }> | null) ?? [],
+      )
+      if (isRenderFinalRefusal(derived)) {
+        return reply.status(derived.status).send({ error: { code: derived.code, message: derived.message } })
+      }
+      nodeIds = derived.nodeIds
+      rawInputOverrides = derived.inputOverrides
+    }
+
     try {
       const candidates = (workflow.nodes ?? []) as Array<{ id: string; data?: unknown }>
       assertCanvasExecutionAllowed(nodeIds ? candidates.filter((node) => nodeIds.includes(node.id)) : candidates)
@@ -347,7 +400,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     // discards the rest. The old strict Zod schema rejected the flat shape and
     // dropped the ENTIRE map on any single mismatch.
     const inputOverrides = normalizeInputOverrides(
-      body.inputOverrides,
+      rawInputOverrides,
       (workflow.nodes as ReadonlyArray<{ id: string; type?: string; data?: Record<string, unknown> }>) ?? [],
     )
 
@@ -509,6 +562,42 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
         error: { code: "billing_unavailable", message: "Billing is temporarily unavailable for workspace runs. Try again shortly." },
       })
     }
+    const webFreeMode = await resolveWebSurfaceFlag(req)
+
+    // An agent's Render final is checked against its payer BEFORE the row
+    // exists, on the figure its quote showed (`renderFinalCredits` is the
+    // quote's funnel): the graph the orchestrator executes (`effectiveOverrides`,
+    // the earlier run's pin with the render's Final over it) and only the nodes
+    // it runs. Without this a run its payer cannot cover would start, charge
+    // its first node (Camera Switch, in multicam) and fail at the render's own
+    // reservation, with no final. Balance only: model availability, daily caps
+    // and allowances stay with each node's preflight.
+    if (renderFinalNodeId !== undefined && nodeIds) {
+      let credits: Awaited<ReturnType<typeof renderFinalCredits>>
+      try {
+        credits = await renderFinalCredits({
+          userId: req.userId,
+          nodes: (workflow.nodes as ReadonlyArray<{ id: string; type?: string; data?: unknown }> | null) ?? [],
+          edges: (workflow.edges as ReadonlyArray<{ source: string; target: string }> | null) ?? [],
+          runNodeIds: nodeIds,
+          overrides: effectiveOverrides,
+          surface: { billingContext, webFreeMode },
+        })
+      } catch (err) {
+        return sendInternalError(reply, req, err, "Failed to check credits for the Render final")
+      }
+      if (credits && !credits.sufficient) {
+        return reply.status(402).send({
+          error: {
+            code: "insufficient_credits",
+            message: credits.message ?? "Insufficient credits",
+            required: credits.estimatedCredits,
+            // Withheld when it is not the caller's to see (a deployment payer).
+            ...(credits.available !== null ? { available: credits.available } : {}),
+          },
+        })
+      }
+    }
 
     let execution: { id: string }
     let dedupHit = false
@@ -563,7 +652,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       // req.userId to the owner, so the token kind is part of the answer.
       ownerInitiated: req.authKind === "jwt" && req.userId === (workflow.user_id as string | null),
       nodeIds,
-      webFreeMode: await resolveWebSurfaceFlag(req),
+      webFreeMode,
       billingContext,
       reviewerPresent,
       ...(inputOverrides ? { inputOverrides } : {}),

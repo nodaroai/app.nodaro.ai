@@ -165,6 +165,10 @@ or is billed until Render final — and a run started anywhere but the editor (i
 `run_workflow`) that would execute such a render is refused with
 `preview_review_required`, because nobody is there to review it. To run it anyway from
 MCP, override the render for that run: `inputs: { "<render node id>": { "quality": "final" } }`.
+Once the user has reviewed a preview their editor run stopped at, `render_final(workflow_id,
+render_node_id, execution_id)` runs the editor's Render final for them — the render at Final
+and every node after it, continuing that run; the server picks the nodes. Call it once for
+the price, and again with `confirm: true` once the user accepts it.
 A sub-workflow or component holding a Proxy render is refused with `preview_render_nested`.
 
 ---

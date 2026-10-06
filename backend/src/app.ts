@@ -250,6 +250,7 @@ import { shotSequenceRoutes } from "./routes/shot-sequence.js"
 import { videoDirectorRoutes } from "./routes/video-director.js"
 import { subWorkflowRoutes } from "./routes/sub-workflows.js"
 import { workflowExecutionRoutes } from "./routes/workflow-execution.js"
+import { workflowRenderFinalRoutes } from "./routes/workflow-render-final.js"
 import { webhookTriggerRoutes } from "./routes/webhook-triggers.js"
 import { pipelinesRoutes } from "./routes/pipelines.js"
 import { sceneHelpersRoutes } from "./routes/scene-helpers.js"
@@ -728,6 +729,7 @@ export async function buildApp() {
   await app.register(videoDirectorRoutes)
   await app.register(subWorkflowRoutes)
   await app.register(workflowExecutionRoutes)
+  await app.register(workflowRenderFinalRoutes)
   await app.register(webhookTriggerRoutes)
   await app.register(pipelinesRoutes)
   await app.register(sceneHelpersRoutes)

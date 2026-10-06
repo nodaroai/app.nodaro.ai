@@ -2184,6 +2184,18 @@ Needs `workflows:execute`.
 |---|---|---|---|
 | `scene_plan` | object (map of any) | yes |  |
 
+## `render_final`
+
+Needs `workflows:execute`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `workflow_id` | string | yes |  |
+| `render_node_id` | string | yes | The id of the Apply EDL render node to finalize (get_workflow_json). At least 1 character. |
+| `execution_id` | string | yes | The execution that stopped at the preview — your own completed run of this workflow. Its outputs feed every node the Render final does not run. |
+| `confirm` | boolean |  | true ONLY after the user accepted the quoted credits in this conversation. |
+| `client_request_id` | string |  | Optional retry token (8–128 chars of letters, digits, `_ - . :`). If a call times out or the connection drops, reuse the same value when retrying so the run is not started or charged twice; use a fresh value for a genuinely new run. From 8 to 128 characters. |
+
 ## `render_shot_sequence`
 
 Needs `workflows:execute`.

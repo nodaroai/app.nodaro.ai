@@ -634,6 +634,53 @@ A refused continuation throws before any execution exists: `NotFoundError`
 Throws `InsufficientCreditsError` if the user can't cover the worst-case cost.
 Requires `workflows:execute` scope when called via OAuth.
 
+#### `renderFinal(id, params)` / `estimateRenderFinal(id, params)`
+
+```ts
+renderFinal(id: string, params: RenderFinalParams): Promise<RunWorkflowResult>
+estimateRenderFinal(id: string, params: RenderFinalParams): Promise<{ data: RenderFinalQuote }>
+```
+
+Renders the final of an [Apply EDL](./nodes/processing-video/apply-edl.md#render-final)
+render whose run stopped at its preview, once it has been reviewed — what the
+editor's **Render final** button runs: the render at **Final** for this run only
+(the node keeps its own Quality), and every node after it; with Camera Switch
+between the Edit Plan and the render, Camera Switch runs again first. The server
+works out which nodes run, by the editor's own rule, so you send only the render
+and the execution that stopped at the preview (`continueFromExecutionId`, your
+own `completed` run of the workflow): it continues that execution, and every node
+it does not run hands on what that execution produced, the Edit Plan its plan
+with the review applied.
+
+`estimateRenderFinal` quotes it first and creates nothing: the nodes it will run,
+the override it runs with, its estimated credits, whether the payer can cover
+them (`sufficient`) and the payer's spendable credits (`available`, `null` when a
+workspace budget or a deployment's operator pays). The figures are `null` in an
+edition without credits.
+
+```ts
+const { data: quote } = await client.workflows.estimateRenderFinal(id, {
+  renderNodeId,
+  continueFromExecutionId: previewRunId,
+})
+// quote → { renderNodeId, nodeIds: ["cam", "cut", "captions"], inputOverrides: { cut: { quality: "final" } },
+//           estimatedCredits: 530, sufficient: true, available: 4200 }
+const { executionId } = await client.workflows.renderFinal(id, {
+  renderNodeId,
+  continueFromExecutionId: previewRunId,
+})
+```
+
+Both are refused before anything exists with `render_final_node_not_found` (no
+such node), `render_final_not_a_render` (not an Apply EDL render) or a
+[continuation code](./api-integration.md#continuing-a-run). `renderFinal` is
+otherwise refused as `run` is — `preview_review_required` when another render after
+this one still reads Proxy (under the `PREVIEW_STOP_RULE_ENABLED` flag; where it is off,
+that is not refused). A run its payer cannot cover — checked on the quoted
+figure, before any execution exists — throws `InsufficientCreditsError` (`402`),
+with `required` and, unless a deployment's operator pays, `available`.
+Requires `workflows:execute` scope when called via OAuth.
+
 #### `export(workflowId, opts?)`
 
 ```ts

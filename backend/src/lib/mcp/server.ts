@@ -6,6 +6,7 @@ import { registerVerbs } from "./tools/verbs.js"
 import { registerJobs } from "./tools/jobs.js"
 import { registerDiagnose } from "./tools/diagnose.js"
 import { registerWorkflows } from "./tools/workflows.js"
+import { registerRenderFinal } from "./tools/render-final.js"
 import { registerProjectTools } from "./tools/projects.js"
 import { registerComponents } from "./tools/components.js"
 import { registerApps } from "./tools/apps.js"
@@ -179,6 +180,7 @@ export async function buildMcpServer(opts: BuildOpts): Promise<McpServer> {
   registerJobs({ server, session, fastify: opts.fastify })
   registerDiagnose({ server, session, fastify: opts.fastify })
   registerWorkflows({ server, session, fastify: opts.fastify })
+  registerRenderFinal({ server, session, fastify: opts.fastify })
   registerProjectTools(server, session)
   registerComponents({ server, session, fastify: opts.fastify })
   registerApps({ server, session, fastify: opts.fastify })

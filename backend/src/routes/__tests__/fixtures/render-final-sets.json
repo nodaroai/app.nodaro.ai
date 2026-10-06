@@ -1,0 +1,99 @@
+{
+  "about": "What a Render final on `render` runs (TA17 a, decided 2026-10-04): (desc(plan) ∩ anc(render)) ∪ desc(render), minus the plan. One fixture, three readers: the rule itself (packages/render-rules), the editor's set builder (frontend render-final-set-parity.test.ts) and the server's (`renderFinal` on POST /v1/workflows/:id/run and its estimate, backend render-final-run-set-parity.test.ts). Each must reach `runSet` (sorted) for every case.",
+  "cases": {
+    "tighten": {
+      "nodes": [
+        { "id": "t", "type": "transcribe", "data": {} },
+        { "id": "p", "type": "edit-plan", "data": {} },
+        { "id": "render", "type": "apply-edl", "data": { "quality": "proxy" } },
+        { "id": "c", "type": "add-captions", "data": {} },
+        { "id": "u", "type": "upload-video", "data": {} }
+      ],
+      "edges": [
+        { "source": "t", "target": "p" },
+        { "source": "p", "target": "render", "targetHandle": "edl" },
+        { "source": "render", "target": "c" },
+        { "source": "u", "target": "render", "targetHandle": "sources" }
+      ],
+      "runSet": ["c", "render"]
+    },
+    "multicam": {
+      "nodes": [
+        { "id": "p", "type": "edit-plan", "data": {} },
+        { "id": "cam", "type": "camera-switch", "data": {} },
+        { "id": "render", "type": "apply-edl", "data": { "quality": "proxy" } },
+        { "id": "c", "type": "add-captions", "data": {} }
+      ],
+      "edges": [
+        { "source": "p", "target": "cam", "targetHandle": "edl" },
+        { "source": "cam", "target": "render", "targetHandle": "edl" },
+        { "source": "render", "target": "c" }
+      ],
+      "runSet": ["c", "cam", "render"]
+    },
+    "plan side branch stays out": {
+      "nodes": [
+        { "id": "p", "type": "edit-plan", "data": {} },
+        { "id": "cam", "type": "camera-switch", "data": {} },
+        { "id": "render", "type": "apply-edl", "data": { "quality": "proxy" } },
+        { "id": "side", "type": "extract-field", "data": {} }
+      ],
+      "edges": [
+        { "source": "p", "target": "cam", "targetHandle": "edl" },
+        { "source": "cam", "target": "render", "targetHandle": "edl" },
+        { "source": "p", "target": "side" }
+      ],
+      "runSet": ["cam", "render"]
+    },
+    "an ancestor not downstream of the plan stays seeded": {
+      "nodes": [
+        { "id": "p", "type": "edit-plan", "data": {} },
+        { "id": "cam", "type": "camera-switch", "data": {} },
+        { "id": "render", "type": "apply-edl", "data": { "quality": "proxy" } },
+        { "id": "t", "type": "transcribe", "data": {} }
+      ],
+      "edges": [
+        { "source": "p", "target": "cam", "targetHandle": "edl" },
+        { "source": "cam", "target": "render", "targetHandle": "edl" },
+        { "source": "t", "target": "cam", "targetHandle": "transcript" }
+      ],
+      "runSet": ["cam", "render"]
+    },
+    "the plan through a teleport pair": {
+      "nodes": [
+        { "id": "p", "type": "edit-plan", "data": {} },
+        { "id": "cam", "type": "camera-switch", "data": {} },
+        { "id": "tp", "type": "teleport-send", "data": {} },
+        { "id": "rcv", "type": "teleport-receive", "data": {} },
+        { "id": "render", "type": "apply-edl", "data": { "quality": "proxy" } }
+      ],
+      "edges": [
+        { "source": "p", "target": "cam", "targetHandle": "edl" },
+        { "source": "cam", "target": "tp" },
+        { "source": "tp", "target": "rcv" },
+        { "source": "rcv", "target": "render", "targetHandle": "edl" }
+      ],
+      "runSet": ["cam", "rcv", "render", "tp"]
+    },
+    "no plan behind the render": {
+      "nodes": [
+        { "id": "x", "type": "generate-text", "data": {} },
+        { "id": "render", "type": "apply-edl", "data": { "quality": "proxy" } },
+        { "id": "c", "type": "add-captions", "data": {} }
+      ],
+      "edges": [
+        { "source": "x", "target": "render", "targetHandle": "edl" },
+        { "source": "render", "target": "c" }
+      ],
+      "runSet": ["c", "render"]
+    },
+    "a field mapping from the render is part of the tail": {
+      "nodes": [
+        { "id": "render", "type": "apply-edl", "data": { "quality": "proxy" } },
+        { "id": "m", "type": "generate-text", "data": { "fieldMappings": { "prompt": { "sourceNodeId": "render" } } } }
+      ],
+      "edges": [],
+      "runSet": ["m", "render"]
+    }
+  }
+}

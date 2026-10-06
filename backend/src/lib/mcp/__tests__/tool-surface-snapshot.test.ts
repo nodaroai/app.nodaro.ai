@@ -617,6 +617,12 @@ const TTS_NEIGHBOUR_TEXT_ARGS_BYTES = 723
 // move. measured by this suite: 397_365 total − 397_154 base = 211 B, which
 // keeps the 1 B of headroom the list had before.
 const VOICE_CHANGER_PRO_V4_ENGINE_BYTES = 211
+// RAISED 2026-10-06 by ONE tool and nothing else: `render_final` (an agent's
+// Render final, decided 2026-10-06: quote without `confirm`, run with it; the
+// server derives the run set). Gated by workflows:execute on every edition, so
+// cloud/all AND community/all name it. measured by this suite: 399_983 total −
+// 397_792 base = 2_191 B, far under the 8_192 B per-tool budget.
+const RENDER_FINAL_TOOL_BYTES = 2_191
 // RAISED by PR #1916 (character references on Gemini Omni) and nothing else:
 // `character_references` on `generate_video` (items of image_url, body_image_url,
 // description, name, voice_preset; one short description line each, pointing to
@@ -696,7 +702,8 @@ export const TOOL_WIRE_BUDGET = {
     PLAN_EDIT_TRAILER_GATE_BYTES +
     TTS_NEIGHBOUR_TEXT_ARGS_BYTES +
     VOICE_CHANGER_PRO_V4_ENGINE_BYTES +
-    CHARACTER_REFERENCES_BYTES,
+    CHARACTER_REFERENCES_BYTES +
+    RENDER_FINAL_TOOL_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

@@ -63,6 +63,7 @@ const EXEMPT: ReadonlyMap<string, string> = new Map([
   ["routes/sub-workflows.ts::workflows", "the callable interface (inputs and outputs) only"],
   ["routes/webhook-output.ts::workflows", "reads a Webhook Output's credential only"],
   ["routes/workflow-execution.ts::workflows", "access and run validation; the engine re-reads the graph (orchestrator-worker)"],
+  ["routes/workflow-render-final.ts::workflows", "a Render final quote: the run set and its price from configuration; hands no saved result to a client, and the run re-reads the graph"],
   // Published app snapshots: immutable versions, taken from a resolved graph
   // since publishing resolves. Resolving an older snapshot on every open would
   // put a lookup of the creator's jobs on every public app open; republishing
