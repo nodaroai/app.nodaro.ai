@@ -9,6 +9,7 @@ import {
   getTtsCapabilities,
   ttsSupportsAudioTags,
   ttsSupportsSsmlBreaks,
+  ttsSupportsStitching,
   ttsHasLever,
   ttsLanguageCodes,
 } from "../tts-capabilities.js"
@@ -234,5 +235,41 @@ describe("elevenlabs-v4 — added beside v3", () => {
 
   it("does not call v3 the latest model any more", () => {
     expect(MODEL_CATALOG["elevenlabs-v3"]!.description).not.toMatch(/latest/i)
+  })
+})
+
+describe("stitching — conditioning on neighbouring text (previous_text / next_text)", () => {
+  it("every speech sheet declares it (a boolean, never undefined)", () => {
+    for (const m of Object.values(MODEL_CATALOG)) {
+      if (!m.tts) continue
+      expect(typeof m.tts.stitching, `${m.id} stitching`).toBe("boolean")
+    }
+  })
+
+  it("v4, Turbo and Multilingual condition on neighbouring text (probed 200 each); v3 rejects the fields (probed 400); the dialogue sheet says no (its lane does not read it)", () => {
+    expect(getTtsCapabilities("elevenlabs-v4").stitching).toBe(true)
+    expect(getTtsCapabilities("elevenlabs-turbo").stitching).toBe(true)
+    expect(getTtsCapabilities("elevenlabs-multilingual").stitching).toBe(true)
+    expect(getTtsCapabilities("elevenlabs-v3").stitching).toBe(false)
+    expect(MODEL_CATALOG["elevenlabs-dialogue"]!.tts!.stitching).toBe(false)
+  })
+
+  it("the reader answers from the sheet of the model the request runs as", () => {
+    expect(ttsSupportsStitching("elevenlabs-v4")).toBe(true)
+    expect(ttsSupportsStitching("elevenlabs-v3")).toBe(false)
+    expect(ttsSupportsStitching("elevenlabs-multilingual")).toBe(true)
+    const turbo = ttsSupportsStitching("elevenlabs-turbo")
+    expect(turbo).toBe(getTtsCapabilities("elevenlabs-turbo").stitching)
+    // The alias, a missing id, an unknown id, an inherited-member name and a non-string all run as turbo.
+    for (const id of ["elevenlabs", undefined, "not-a-model", "constructor", "elevenlabs-dialogue", ["elevenlabs-v4"] as unknown as string]) {
+      expect(ttsSupportsStitching(id), JSON.stringify(id)).toBe(turbo)
+    }
+  })
+})
+
+describe("field mappings — the neighbour text fields are mappable", () => {
+  it("text-to-speech maps directText and both neighbour fields, in that order", async () => {
+    const { NODE_MAPPABLE_FIELDS } = await import("../node-mappable-fields.js")
+    expect(NODE_MAPPABLE_FIELDS["text-to-speech"]).toEqual(["directText", "previousText", "nextText"])
   })
 })

@@ -110,6 +110,14 @@ export interface TtsCapabilities {
   /** The request may carry a language code. false ⇒ the field is omitted. */
   languageCode: boolean
   /**
+   * The model conditions a request on the text spoken before and after it
+   * (`previous_text` / `next_text`), for continuous intonation across clips
+   * produced separately. false ⇒ the fields are never sent: a model that does
+   * not take them rejects the request (eleven_v3: 400), which would fail a paid
+   * job. Values from live calls, never assumed (phase 6 plan, Task 0).
+   */
+  stitching: boolean
+  /**
    * Per-request character cap (the total across lines for a dialogue model).
    * `getMaxTtsChars` reads it by exact id and answers {@link TTS_TEXT_MAX}'s 5,000 for
    * the legacy alias and for ids with no sheet, while the sheet lookups answer
@@ -2506,6 +2514,8 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
       ssmlBreaks: false,
       levers: ["stability"],
       languageCode: true,
+      // Rejects previous_text / next_text with a 400 (probed 2026-10-04).
+      stitching: false,
       maxChars: 5000, // official cap (probed: 5,200 chars accepted; keep the clamp)
       languages: TTS_LANGS_V3,
     },
@@ -2528,6 +2538,8 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
       ssmlBreaks: false,
       levers: ["stability", "similarity"],
       languageCode: true,
+      // Accepts previous_text / next_text (probed 2026-10-04).
+      stitching: true,
       maxChars: 10000,
       // The curated picker, the same 46 as v3. The model itself lists 85
       // (it adds e.g. Cantonese, Maltese, Mongolian, Burmese, Uzbek); widening
@@ -2550,6 +2562,8 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
       ssmlBreaks: true,
       levers: TTS_LEVERS_V2,
       languageCode: true,
+      // Measured 2026-10-06: the direct API accepts previous_text / next_text on this model (200).
+      stitching: true,
       maxChars: 40000, // == eleven_flash_v2_5 (functionally equivalent)
       languages: TTS_LANGS_FLASH_V25,
     },
@@ -2570,6 +2584,8 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
       levers: TTS_LEVERS_V2,
       // The API reference: "This parameter is not supported for multilingual_v2 models."
       languageCode: false,
+      // Measured 2026-10-06: the direct API accepts previous_text / next_text on this model (200).
+      stitching: true,
       maxChars: 10000,
       languages: TTS_LANGS_MULTILINGUAL_V2,
     },
@@ -2598,6 +2614,9 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
       // (routes/text-to-dialogue.ts). Kept as the platform's v3 dialogue contract.
       stabilitySteps: [0, 0.5, 1],
       languageCode: true,
+      // The dialogue funnel does not read this field (its own lane; phase 2 declares
+      // the v4 dialogue model's value). v3 underneath.
+      stitching: false,
       // Total across lines. The documented 2,000 is a recommendation, not a
       // limit (2,500 and 5,000 both probed 200); capped like v3, the model underneath.
       maxChars: 5000,
@@ -2622,6 +2641,8 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
       ssmlBreaks: false,
       levers: ["stability", "similarity"],
       languageCode: true,
+      // Dialogue models never stitch neighbour text (the funnel does not read this).
+      stitching: false,
       maxChars: DIALOGUE_V4_MAX_CHARS,
       // The curated picker, v3's 46 (v4 lists 85; widening is its own change).
       languages: TTS_LANGS_V3,

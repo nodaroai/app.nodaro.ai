@@ -7,6 +7,7 @@ import { FALLBACK_VOICES } from "../../lib/premade-voices.js"
 import { languageCodeForModel } from "./language-code.js"
 import { ttsWireModel, ttsModelKey } from "./tts-models.js"
 import { normalizeTtsVoiceSettings } from "./voice-settings.js"
+import { normalizeTtsNeighbourText } from "./neighbour-text.js"
 import { getTtsCapabilities } from "@nodaro/shared"
 
 // 21 ElevenLabs premade voices — name → voice_id. KIE's TTS proxy accepts
@@ -84,6 +85,15 @@ export interface DirectTTSOptions {
   style?: number
   speed?: number
   languageCode?: string
+  /**
+   * What is spoken just BEFORE / just AFTER this clip in the finished piece (the neighbouring
+   * clips' lines) — context for one continuous intonation across clips produced separately.
+   * Sent as `previous_text` / `next_text` ONLY to a model whose sheet says it conditions on
+   * them (`tts.stitching`); the others reject the fields, so for them nothing is sent. Trimmed
+   * to TTS_NEIGHBOUR_TEXT_MAX_CHARS at this exit (neighbour-text.ts); garbage is absent.
+   */
+  previousText?: string
+  nextText?: string
   /**
    * Retry with the default premade voice (Rachel) when ElevenLabs reports
    * voice_not_found. ONLY for LLM-originated requests (MCP), where the voice
@@ -172,7 +182,8 @@ export async function directElevenLabsTTS(
     requireProviderKey(apiKey, "ELEVENLABS_API_KEY")
   }
 
-  const levers = getTtsCapabilities(provider).levers
+  const capabilities = getTtsCapabilities(provider)
+  const levers = capabilities.levers
   const resolvedVoiceId = resolveDirectVoiceId(voiceId)
 
   const body: Record<string, unknown> = {
@@ -221,6 +232,16 @@ export async function directElevenLabsTTS(
       if (speed != null) voiceSettings.speed = speed
     }
     body.voice_settings = voiceSettings
+  }
+
+  // Neighbouring text for continuity across separately produced clips — appended LAST, so a
+  // request without it is byte-identical to before. Only a model whose sheet conditions on it
+  // gets the fields: a model that does not (eleven_v3) rejects the request with a 400, which
+  // would fail a paid job. The sheet, never a model-id comparison, decides.
+  if (capabilities.stitching) {
+    const neighbours = normalizeTtsNeighbourText(options)
+    if (neighbours.previousText !== undefined) body.previous_text = neighbours.previousText
+    if (neighbours.nextText !== undefined) body.next_text = neighbours.nextText
   }
 
   async function attempt(vid: string): Promise<Response> {

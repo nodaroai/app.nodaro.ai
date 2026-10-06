@@ -29,7 +29,9 @@ export const NODE_MAPPABLE_FIELDS: Readonly<Record<string, readonly string[]>> =
   "edit-video-pro":      ["prompt"],
   "video-analysis":      ["analysisFocus", "youtubeUrl"],
   "video-to-video":      ["prompt"],
-  "text-to-speech":      ["directText"],
+  // + the two neighbour-text fields (continuity across clips): a wired Text node can feed
+  // what is spoken before / after this clip, and {} injection works in them as in directText.
+  "text-to-speech":      ["directText", "previousText", "nextText"],
   // Save to Collection: the record's own fields, each mappable from an upstream
   // node or a {Ref}; the link field is `link` (node-data keys ending in url are
   // locked by the Copilot's deny-list).

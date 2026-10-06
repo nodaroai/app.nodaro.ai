@@ -5609,6 +5609,13 @@ export const en = {
   "audiocfg.hintRevoicePost": " in to revoice a whole talking clip (you get the video back plus the new audio track). If both are wired, video wins and the audio input is ignored.",
   // Interpolated-label word parts (value in braces stays)
   "audiocfg.similarity": "Similarity",
+  "audiocfg.continuityTitle": "Continuity",
+  "audiocfg.continuitySetCount": "{count} set",
+  "audiocfg.previousText": "Previous text",
+  "audiocfg.nextText": "Next text",
+  "audiocfg.previousTextPh": "What is spoken just before this clip",
+  "audiocfg.nextTextPh": "What is spoken just after it",
+  "audiocfg.continuityHint": "Sent to the model as context, not spoken: the clip picks up the intonation of the line before it and leads into the one after. Shown only for a model that uses it.",
   "audiocfg.styleExaggeration": "Style Exaggeration",
   "audiocfg.speed": "Speed",
   "audiocfg.temperature": "Temperature",

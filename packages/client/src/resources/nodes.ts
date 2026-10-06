@@ -135,6 +135,33 @@ export interface ReferenceCaptionParams {
 }
 
 /**
+ * Typed request body for `nodes.run("text-to-speech", …)` / `runAndWait`.
+ * Common fields are typed; any other route field passes through.
+ */
+export interface TextToSpeechParams {
+  text: string
+  /** A premade voice NAME (Rachel, George, …) or a library / custom voice id. */
+  voice?: string
+  voiceType?: "premade" | "custom" | "library"
+  /** `elevenlabs-v4` (the default), `elevenlabs-v3`, `elevenlabs-turbo`, `elevenlabs-multilingual`. */
+  provider?: string
+  stability?: number
+  similarityBoost?: number
+  style?: number
+  speed?: number
+  languageCode?: string
+  /**
+   * Continuity across clips: the line spoken just BEFORE this one in the finished piece
+   * (the previous clip's text). Context, not spoken — a model that stitches (v4, Turbo, Multilingual; not v3) carries the
+   * intonation across the cut; others ignore it. Up to 1,000 characters (a 400 above, on a model that stitches).
+   */
+  previousText?: string
+  /** The line spoken just AFTER this one. Same rule as `previousText`. */
+  nextText?: string
+  [k: string]: unknown
+}
+
+/**
  * Typed request body for `nodes.run("generate-image", …)` / `runAndWait`.
  * Common fields are typed; any other route field passes through via the index
  * signature (the route Zod-validates the full body).
@@ -394,6 +421,7 @@ export class NodesResource {
   run(type: "render-video", params: RenderScene3DParams): Promise<RunNodeResult>
   run(type: "pro-3d-render", params: Pro3DRenderRunParams, options?: RunNodeOptions): Promise<RunNodeResult>
   run(type: "generate-image", params?: GenerateImageParams): Promise<RunNodeResult>
+  run(type: "text-to-speech", params: TextToSpeechParams): Promise<RunNodeResult>
   run(type: "generate-video", params?: GenerateVideoParams): Promise<RunNodeResult>
   run(type: "text-to-video", params: TextToVideoParams): Promise<RunNodeResult>
   run(type: "assemble-narrated-video", params?: AssembleNarratedVideoParams): Promise<RunNodeResult>
@@ -448,6 +476,7 @@ export class NodesResource {
   runAndWait(type: "render-video", params: RenderScene3DParams, options?: RunAndWaitOptions): Promise<NodeJobOutput>
   runAndWait(type: "pro-3d-render", params: Pro3DRenderRunParams, options?: RunAndWaitOptions): Promise<Pro3DRenderJobOutput>
   runAndWait(type: "generate-image", params?: GenerateImageParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
+  runAndWait(type: "text-to-speech", params: TextToSpeechParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
   runAndWait(type: "generate-video", params?: GenerateVideoParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
   runAndWait(type: "text-to-video", params: TextToVideoParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
   runAndWait(type: "assemble-narrated-video", params?: AssembleNarratedVideoParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>

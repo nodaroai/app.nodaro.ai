@@ -2049,6 +2049,36 @@ describe("text-to-speech", () => {
   })
 })
 
+describe("text-to-speech neighbour text (continuity)", () => {
+  const run = async (data: Record<string, unknown>) => {
+    mockResolveNodeInputs.mockReturnValue({})
+    mockRunTextToSpeechGeneration.mockResolvedValue(undefined)
+    await executeNode(makeNode("text-to-speech", { textSource: "direct", directText: "hello", ...data }), makeCtx())
+    return mockRunTextToSpeechGeneration.mock.calls[0][5] as Record<string, unknown> | undefined
+  }
+
+  it("sends the trimmed pair to a model that stitches", async () => {
+    const options = await run({ provider: "elevenlabs-v4", previousText: "  Before. ", nextText: "After.\n" })
+    expect(options).toMatchObject({ previousText: "Before.", nextText: "After." })
+  })
+
+  it("trims what is over the cap the way the backend does (previous keeps its end, next its start), so the route never answers 400", async () => {
+    const options = await run({ provider: "elevenlabs-v4", previousText: `${"a".repeat(300)}${"b".repeat(1000)}`, nextText: `${"c".repeat(1000)}${"d".repeat(300)}` })
+    expect(options?.previousText).toBe("b".repeat(1000))
+    expect(options?.nextText).toBe("c".repeat(1000))
+  })
+
+  it("sends nothing on a model that does not stitch, even if the node still carries a (mapped) value", async () => {
+    const options = await run({ provider: "elevenlabs-v3", previousText: "x".repeat(5000), nextText: "After." })
+    expect(options).toEqual({ voiceType: "premade" })
+  })
+
+  it("a blank value is not sent", async () => {
+    const options = await run({ provider: "elevenlabs-v4", previousText: "   ", nextText: "" })
+    expect(options).toEqual({ voiceType: "premade" })
+  })
+})
+
 // ---------------------------------------------------------------------------
 // generate-music
 // ---------------------------------------------------------------------------

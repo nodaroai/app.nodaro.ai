@@ -9,7 +9,9 @@
  * pre-refactor code and on the sheet-driven code.
  */
 import { describe, it, expect, vi, afterEach } from "vitest"
+import { ttsSupportsStitching } from "@nodaro/shared"
 import { directElevenLabsTTS } from "../direct-tts.js"
+import { TTS_NEIGHBOUR_TEXT_MAX_CHARS } from "../neighbour-text.js"
 
 vi.mock("../../../lib/config.js", () => ({
   config: { ELEVENLABS_API_KEY: "test-key" },
@@ -186,6 +188,74 @@ describe("directElevenLabsTTS — the request body per model (existing models)",
     it("omits it for auto / empty", async () => {
       expect((await bodyFor("elevenlabs-v3", { languageCode: "auto" })).language_code).toBeUndefined()
       expect((await bodyFor("elevenlabs-v3", { languageCode: "" })).language_code).toBeUndefined()
+    })
+  })
+
+  describe("neighbouring text (previous_text / next_text)", () => {
+    const NEIGHBOURS = { previousText: "The line before.", nextText: "The line after." }
+
+    it("a model that does not condition on it never puts the fields on the wire, and nothing else moves (characterization: passes before and after)", async () => {
+      for (const provider of ["elevenlabs-v3", "elevenlabs", undefined, "not-a-model", "elevenlabs-dialogue", "constructor"]) {
+        // Ids that RUN AS a non-stitching model. The alias, a missing / unknown id and the dialogue id all run as
+        // turbo, which stitches (measured 2026-10-06): those rows are skipped here and covered by the
+        // sheet-driven rows below — the sheet, never this list, decides.
+        if (ttsSupportsStitching(provider)) continue
+        const withNeighbours = await bodyFor(provider, { stability: 0.4, languageCode: "es", ...NEIGHBOURS })
+        const without = await bodyFor(provider, { stability: 0.4, languageCode: "es" })
+        expect(withNeighbours, String(provider)).toEqual(without)
+        expect(Object.keys(withNeighbours), String(provider)).not.toContain("previous_text")
+        expect(Object.keys(withNeighbours), String(provider)).not.toContain("next_text")
+      }
+    })
+
+    it("v4 sends both, after voice_settings, in the order previous_text then next_text", async () => {
+      const body = await bodyFor("elevenlabs-v4", { stability: 0.4, languageCode: "he", ...NEIGHBOURS })
+      expect(Object.keys(body)).toEqual(["text", "model_id", "language_code", "voice_settings", "previous_text", "next_text"])
+      expect(body.previous_text).toBe("The line before.")
+      expect(body.next_text).toBe("The line after.")
+    })
+
+    it.each(["elevenlabs-turbo", "elevenlabs-multilingual"])("%s (measured to accept them) sends both, in the same order as v4", async (provider) => {
+      const body = await bodyFor(provider, { stability: 0.4, ...NEIGHBOURS })
+      expect(Object.keys(body)).toEqual(["text", "model_id", "voice_settings", "previous_text", "next_text"])
+      expect(body.previous_text).toBe("The line before.")
+      expect(body.next_text).toBe("The line after.")
+    })
+
+    it("every id that runs as a stitching model sends the fields, whatever the id (the sheet decides)", async () => {
+      for (const provider of ["elevenlabs", undefined, "not-a-model", "elevenlabs-dialogue", "constructor"]) {
+        if (!ttsSupportsStitching(provider)) continue
+        expect(Object.keys(await bodyFor(provider, NEIGHBOURS)), String(provider)).toEqual(["text", "model_id", "previous_text", "next_text"])
+      }
+    })
+
+    it("v4 with no settings and only a next text: text, model_id, next_text", async () => {
+      expect(Object.keys(await bodyFor("elevenlabs-v4", { nextText: "Later." }))).toEqual(["text", "model_id", "next_text"])
+    })
+
+    it("v4 without neighbours is exactly what it was", async () => {
+      expect(Object.keys(await bodyFor("elevenlabs-v4", { stability: 0.4 }))).toEqual(["text", "model_id", "voice_settings"])
+    })
+
+    it("garbage never reaches the wire: a non-string, an empty or blank string is absent", async () => {
+      for (const bad of [["x"], 3, null, true, {}, "", "   \n"] as unknown[]) {
+        const body = await bodyFor("elevenlabs-v4", { previousText: bad as string, nextText: bad as string })
+        expect(Object.keys(body), JSON.stringify(bad)).toEqual(["text", "model_id"])
+      }
+    })
+
+    it("over the cap, previous text keeps its tail and next text its head — trimmed, never refused", async () => {
+      const prev = "a".repeat(500) + "b".repeat(TTS_NEIGHBOUR_TEXT_MAX_CHARS)
+      const next = "c".repeat(TTS_NEIGHBOUR_TEXT_MAX_CHARS) + "d".repeat(500)
+      const body = await bodyFor("elevenlabs-v4", { previousText: prev, nextText: next })
+      expect(body.previous_text).toBe("b".repeat(TTS_NEIGHBOUR_TEXT_MAX_CHARS))
+      expect(body.next_text).toBe("c".repeat(TTS_NEIGHBOUR_TEXT_MAX_CHARS))
+    })
+
+    it("surrounding whitespace is trimmed", async () => {
+      const body = await bodyFor("elevenlabs-v4", { previousText: "  Before.  ", nextText: "\nAfter.\n" })
+      expect(body.previous_text).toBe("Before.")
+      expect(body.next_text).toBe("After.")
     })
   })
 })

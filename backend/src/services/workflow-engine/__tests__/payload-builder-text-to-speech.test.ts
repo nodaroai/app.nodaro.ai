@@ -116,3 +116,24 @@ describe("buildPayload — text-to-speech with no model anywhere", () => {
     }
   })
 })
+
+describe("buildPayload — text-to-speech neighbour text", () => {
+  it("copies previousText / nextText from node data onto the job payload, verbatim (the exit normalises)", () => {
+    const n = node("t1", "text-to-speech", { voiceId: "Rachel", provider: "elevenlabs-v4", textSource: "direct", directText: "Middle.", previousText: "  Before. ", nextText: "After." })
+    const built = buildPayload(n, "job1", {}, "usage1")
+    expect(built.payload.previousText).toBe("  Before. ")
+    expect(built.payload.nextText).toBe("After.")
+  })
+
+  it("a node without them puts no neighbour key on the payload", () => {
+    const n = node("t1", "text-to-speech", { voiceId: "Rachel", provider: "elevenlabs-v4", textSource: "direct", directText: "hi" })
+    const built = buildPayload(n, "job1", {}, "usage1")
+    expect(built.payload.previousText).toBeUndefined()
+    expect(built.payload.nextText).toBeUndefined()
+  })
+
+  it("a value a field mapping wrote (any type) travels as it is — the funnel drops garbage", () => {
+    const n = node("t1", "text-to-speech", { voiceId: "Rachel", provider: "elevenlabs-v4", textSource: "direct", directText: "hi", previousText: ["not", "a", "string"] })
+    expect(buildPayload(n, "job1", {}, "usage1").payload.previousText).toEqual(["not", "a", "string"])
+  })
+})

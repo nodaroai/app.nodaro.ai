@@ -1139,6 +1139,8 @@ Needs `workflows:execute`.
 | `style` | number |  | From 0 to 1. |
 | `speed` | number |  | From 0.7 to 1.2. |
 | `language_code` | string |  |  |
+| `previous_text` | string |  | The line spoken just BEFORE this one in the finished piece (the previous clip's text) — context for continuous intonation across clips; up to 1,000 characters, the end of a longer passage. Used by models that stitch; others ignore it. Not spoken. At most 1000 characters. |
+| `next_text` | string |  | The line spoken just AFTER this one (the next clip's text) — the start of a longer passage; up to 1,000 characters. Same continuity rule as previous_text. At most 1000 characters. |
 
 ## `generate_studio_clip`
 

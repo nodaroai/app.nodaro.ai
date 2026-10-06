@@ -90,6 +90,8 @@ export const FIELD_COMPATIBLE_TYPES: Readonly<Record<string, ReadonlyArray<strin
   caption: TEXT_SOURCE_TYPES,
   transcript: TEXT_SOURCE_TYPES,
   directText: TEXT_SOURCE_TYPES,
+  previousText: TEXT_SOURCE_TYPES,
+  nextText: TEXT_SOURCE_TYPES,
   characterName: TEXT_SOURCE_TYPES,
   faceName: TEXT_SOURCE_TYPES,
   objectName: TEXT_SOURCE_TYPES,

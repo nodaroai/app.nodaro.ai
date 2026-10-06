@@ -42,4 +42,23 @@ describe("ttsModelSwitchPatch — what a user's model switch clears", () => {
       expect(ttsModelSwitchPatch(next, tuned), next).toStrictEqual({ languageCode: "" })
     }
   })
+
+  describe("neighbour text (continuity)", () => {
+    const withContext = { previousText: "Before.", nextText: "After." }
+
+    it("to a model that does not stitch (v3): both are reset to empty, in the same patch as the levers", () => {
+      const patch = ttsModelSwitchPatch("elevenlabs-v3", { ...tuned, ...withContext })
+      expect(patch).toStrictEqual({ similarityBoost: undefined, style: undefined, speed: undefined, previousText: "", nextText: "" })
+    })
+
+    it("to v4: both stay", () => {
+      expect(ttsModelSwitchPatch("elevenlabs-v4", withContext)).toStrictEqual({})
+    })
+
+    it("clears only a side the node actually carries, and never an already-empty one", () => {
+      expect(ttsModelSwitchPatch("elevenlabs-v3", { previousText: "Before." })).toStrictEqual({ previousText: "" })
+      expect(ttsModelSwitchPatch("elevenlabs-v3", { previousText: "", nextText: "" })).toStrictEqual({})
+      expect(ttsModelSwitchPatch("elevenlabs-v3", {})).toStrictEqual({})
+    })
+  })
 })

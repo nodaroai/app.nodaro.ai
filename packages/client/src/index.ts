@@ -367,6 +367,7 @@ export type {
   RunManyResult,
   StructuredReferenceParams,
   GenerateImageParams,
+  TextToSpeechParams,
   GenerateVideoParams,
   TextToVideoParams,
 } from "./resources/nodes.js"

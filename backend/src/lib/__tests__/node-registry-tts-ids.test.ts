@@ -25,4 +25,10 @@ describe("text-to-speech descriptor", () => {
     expect(fields.some((f) => f.key === "model")).toBe(false)
     expect(fields.find((f) => f.key === "provider")?.options).toEqual(tts.providers)
   })
+
+  it("lists the neighbour text fields the route takes", () => {
+    const keys = (tts.inputSchema?.fields ?? []).map((f) => f.key)
+    expect(keys).toContain("previousText")
+    expect(keys).toContain("nextText")
+  })
 })

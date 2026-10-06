@@ -898,6 +898,9 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
         { key: "text", type: "text", required: true },
         { key: "voiceId", type: "text" },
         { key: "provider", type: "select", options: TTS_CATALOG_PROVIDERS },
+        // Continuity across clips: the lines spoken just before / after this one (context, not spoken).
+        { key: "previousText", type: "text" },
+        { key: "nextText", type: "text" },
       ],
     },
   },

@@ -17,6 +17,7 @@ import { newSession } from "../../session.js"
 import { _resetRegistry } from "../../tasks.js"
 import type { Scope } from "../../../scopes.js"
 import { buildServer, callTool, listTools, executeSession, stubRoute } from "./_helpers.js"
+import { TTS_NEIGHBOUR_TEXT_MAX_CHARS } from "../../../../providers/elevenlabs/neighbour-text.js"
 
 const audio = vi.hoisted(() => ({ measured: vi.fn() }))
 vi.mock("../_audio-length.js", async (importOriginal) => ({
@@ -671,6 +672,34 @@ describe("generate_speech verb", () => {
     registerVerbs({ server, session: readOnlySession(), fastify })
     const tools = await listTools(server)
     expect(tools.map((t) => t.name)).not.toContain("generate_speech")
+  })
+
+  it("maps previous_text / next_text to the route's previousText / nextText", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/text-to-speech", { jobId: "j-tts-2" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "generate_speech", { text: "Middle.", previous_text: "Before.", next_text: "After." })
+    expect(result.isError).toBeUndefined()
+    expect(received.body?.previousText).toBe("Before.")
+    expect(received.body?.nextText).toBe("After.")
+  })
+
+  it("refuses a neighbour text over 1,000 characters at the schema", async () => {
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify: Fastify() })
+    const result = await callTool(server, "generate_speech", { text: "Hi.", previous_text: "x".repeat(1001) })
+    expect(result.isError).toBe(true)
+  })
+
+  it("declares both arguments with the funnel's cap", async () => {
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify: Fastify() })
+    const tool = (await listTools(server)).find((t) => t.name === "generate_speech")
+    const props = (tool?.inputSchema as { properties?: Record<string, { maxLength?: number; description?: string }> }).properties ?? {}
+    for (const key of ["previous_text", "next_text"]) {
+      expect(props[key]?.maxLength, key).toBe(TTS_NEIGHBOUR_TEXT_MAX_CHARS)
+      expect(props[key]?.description ?? "", key).toMatch(/continu/i)
+    }
   })
 })
 

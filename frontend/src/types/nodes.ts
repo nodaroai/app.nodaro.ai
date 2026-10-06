@@ -2009,6 +2009,12 @@ export type TextToSpeechData = PromptAffixFields & {
   languageCode: string
   textSource: "connected" | "direct"
   directText: string
+  /**
+   * Continuity across clips: the lines spoken just before / after this one in the finished piece.
+   * Context, not spoken; sent only to a model whose sheet stitches (the funnel decides). Empty by default.
+   */
+  previousText?: string
+  nextText?: string
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
@@ -8242,7 +8248,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     outputs: ["audio"],
     // `provider` is DEFAULT_TTS_PROVIDER (@nodaro/shared), spelled as a literal because the
     // gen:skills parser reads this statically; text-to-speech-default-model.test.ts links them.
-    defaultData: { label: "Text to Speech", provider: "elevenlabs-v4", voiceId: "Rachel", voiceType: "premade", voiceDisplayName: "Rachel", language: "en", ...TTS_VOICE_SETTING_DEFAULTS, languageCode: "", textSource: "connected", directText: "", fieldMappings: {} },
+    defaultData: { label: "Text to Speech", provider: "elevenlabs-v4", voiceId: "Rachel", voiceType: "premade", voiceDisplayName: "Rachel", language: "en", ...TTS_VOICE_SETTING_DEFAULTS, languageCode: "", textSource: "connected", directText: "", previousText: "", nextText: "", fieldMappings: {} },
     exposableOutputs: [{ key: "result", label: "Result", outputType: "audio" as const }],
     exposableFields: [
       {
@@ -8256,6 +8262,9 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       },
       { key: "stability", label: "Stability", type: "slider" as const, min: 0, max: 1, step: 0.05, defaultValue: TTS_VOICE_SETTING_DEFAULTS.stability },
       { key: "similarityBoost", label: "Similarity", type: "slider" as const, min: 0, max: 1, step: 0.05, defaultValue: TTS_VOICE_SETTING_DEFAULTS.similarityBoost },
+      // Continuity across clips (context, not spoken). A card the app creator may expose; dead on a model that does not stitch — the docs say which.
+      { key: "previousText", label: "Previous text", type: "text" as const },
+      { key: "nextText", label: "Next text", type: "text" as const },
     ],
   },
   {

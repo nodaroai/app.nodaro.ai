@@ -5178,6 +5178,10 @@ export function buildPayload(
           style: data.style,
           speed: data.speed,
           languageCode: data.languageCode,
+          // Continuity across clips — forwarded as the node (or a field mapping) wrote them; the
+          // exit normalises (neighbour-text.ts) and the sheet decides whether they are sent.
+          previousText: data.previousText,
+          nextText: data.nextText,
           usageLogId,
         },
       }

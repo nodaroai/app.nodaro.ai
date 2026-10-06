@@ -85,7 +85,7 @@ describe("every Text to Speech exit is known and normalises the voice settings",
 // What reaches each wire, from the same inputs
 // ---------------------------------------------------------------------------
 
-type Levers = { stability?: unknown; similarityBoost?: unknown; style?: unknown; speed?: unknown }
+type Levers = { stability?: unknown; similarityBoost?: unknown; style?: unknown; speed?: unknown; previousText?: unknown; nextText?: unknown }
 
 /** A string with spaces, a number far out of range, an empty string, a word. */
 const MIXED: Levers = { stability: " 0.4 ", similarityBoost: 7, style: "", speed: "fast" }
@@ -116,6 +116,22 @@ async function directWire(levers: Levers): Promise<Record<string, unknown> | und
   await directElevenLabsTTS("hello", freshVoice(), "elevenlabs-turbo", levers as never)
   expect(bodies).toHaveLength(1)
   return bodies[0]!.voice_settings as Record<string, unknown> | undefined
+}
+
+/** directElevenLabsTTS on v4 (a model that stitches): the WHOLE body, so the neighbour-text keys can be read. */
+async function directWireV4(levers: Levers): Promise<Record<string, unknown>> {
+  const bodies: Array<Record<string, unknown>> = []
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string, init?: RequestInit) => {
+      if (String(url).endsWith("/settings")) return new Response("unavailable", { status: 500 })
+      bodies.push(JSON.parse(String(init?.body)))
+      return new Response(new ArrayBuffer(4), { status: 200 })
+    }),
+  )
+  await directElevenLabsTTS("hello", freshVoice(), "elevenlabs-v4", levers as never)
+  expect(bodies).toHaveLength(1)
+  return bodies[0]!
 }
 
 /** The relay's POST body to the cloud's /v1/text-to-speech. */
@@ -198,6 +214,34 @@ describe("what each exit puts on its wire", () => {
     it("nothing usable sends no lever", async () => {
       const input = await kieWire(UNUSABLE)
       for (const key of ["stability", "similarity_boost", "style", "speed"]) expect(input, key).not.toHaveProperty(key)
+    })
+  })
+
+  describe("neighbour text", () => {
+    const LONG = "p".repeat(2_500)
+
+    it("directElevenLabsTTS (v4): a usable pair is sent, trimmed to the cap; garbage is absent", async () => {
+      const body = await directWireV4({ previousText: ` ${LONG} `, nextText: ["x"] })
+      expect(body.previous_text).toBe("p".repeat(1000))
+      expect(body.next_text).toBeUndefined()
+    })
+
+    it("the relay sends the pair to the cloud route under the node's spelling, trimmed to the cap so the cloud's Zod never 400s", async () => {
+      const body = await relayWire({ previousText: LONG, nextText: " After. " })
+      expect(body.previousText).toBe("p".repeat(1000))
+      expect(body.nextText).toBe("After.")
+    })
+
+    it("the relay sends no neighbour key when none is usable", async () => {
+      const body = await relayWire({ previousText: "", nextText: 7 })
+      expect(body).not.toHaveProperty("previousText")
+      expect(body).not.toHaveProperty("nextText")
+    })
+
+    it("KIE's proxy (no live caller) does not carry them — the exit is listed, the pair is not part of its wire", async () => {
+      const input = await kieWire({ previousText: "Before." })
+      expect(input).not.toHaveProperty("previousText")
+      expect(input).not.toHaveProperty("previous_text")
     })
   })
 })

@@ -109,7 +109,7 @@ async function generateSpeechViaCloud(
 }
 
 const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx) {
-  const { text, voice, provider: rawProvider, voiceType, stability, similarityBoost, style, speed, languageCode, allowDefaultVoiceFallback } = job.data as {
+  const { text, voice, provider: rawProvider, voiceType, stability, similarityBoost, style, speed, languageCode, previousText, nextText, allowDefaultVoiceFallback } = job.data as {
     jobId: string
     text: string
     voice?: string
@@ -121,6 +121,8 @@ const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx
     style?: number
     speed?: number
     languageCode?: string
+    previousText?: string
+    nextText?: string
     allowDefaultVoiceFallback?: boolean
   }
   // Defensive default: every current enqueuer (routes/text-to-speech.ts,
@@ -132,11 +134,20 @@ const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx
   const provider = rawProvider ?? resolveOmittedTtsProvider(text)
   console.log(`[worker] text-to-speech ${ctx.jobId} (provider: ${provider}, direct API)`)
 
-  const ttsOptions = { stability, similarityBoost, style, speed, languageCode }
-  const hasOptions = stability != null || similarityBoost != null || style != null || speed != null || languageCode != null
-
-  // Strip [audio tags] when the model does not perform them — v2 models speak them as literal text
-  const processedText = ttsSupportsAudioTags(provider) ? text : stripAudioTags(text)
+  // Strip [audio tags] when the model does not perform them — v2 models speak them as literal
+  // text. The neighbour texts follow the same rule: they are context the model reads, and a
+  // literal "[laughs]" in the run-in would be read aloud by a model that does not perform tags.
+  const speakable = (value: unknown): string | undefined =>
+    typeof value === "string" ? (ttsSupportsAudioTags(provider) ? value : stripAudioTags(value)) : undefined
+  const processedText = speakable(text) ?? text
+  const ttsOptions = {
+    stability, similarityBoost, style, speed, languageCode,
+    previousText: speakable(previousText),
+    nextText: speakable(nextText),
+  }
+  const hasOptions =
+    stability != null || similarityBoost != null || style != null || speed != null || languageCode != null ||
+    ttsOptions.previousText != null || ttsOptions.nextText != null
 
   // Three ways out, in this order — the order IS the contract:
   //   1. local key      -> direct ElevenLabs (keyed installs are byte-identical)

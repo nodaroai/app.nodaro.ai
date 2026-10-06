@@ -1,4 +1,4 @@
-import { ttsHasLever, ttsLanguageCodes } from "@nodaro/shared"
+import { ttsHasLever, ttsLanguageCodes, ttsSupportsStitching } from "@nodaro/shared"
 
 /** The text-to-speech node fields a model switch can invalidate, keyed as node data spells them. */
 export interface TtsSwitchFields {
@@ -6,14 +6,18 @@ export interface TtsSwitchFields {
   style?: number
   speed?: number
   languageCode?: string
+  previousText?: string
+  nextText?: string
 }
 
-/** What a switch writes besides the provider: cleared levers (`undefined` removes the key on merge) and a reset language. */
+/** What a switch writes besides the provider: cleared levers (`undefined` removes the key on merge), a reset language, emptied neighbour text. */
 export interface TtsSwitchPatch {
   similarityBoost?: undefined
   style?: undefined
   speed?: undefined
   languageCode?: string
+  previousText?: ""
+  nextText?: ""
 }
 
 /** [the lever on the model's sheet, the node field that stores it]. Stability is honoured by every model and never cleared. */
@@ -22,6 +26,9 @@ const CLEARABLE_LEVERS = [
   ["style", "style"],
   ["speed", "speed"],
 ] as const
+
+/** The neighbour-text fields: shown and sent only for a model that stitches; a hidden value must not come back on the next switch. */
+const NEIGHBOUR_TEXT_FIELDS = ["previousText", "nextText"] as const
 
 /**
  * What to write next to `{ provider: next }` when a USER switches a
@@ -48,5 +55,10 @@ export function ttsModelSwitchPatch(next: string, data: TtsSwitchFields): TtsSwi
     if (!ttsHasLever(next, lever) && data[field] !== undefined) patch[field] = undefined
   }
   if (data.languageCode && !ttsLanguageCodes(next).includes(data.languageCode)) patch.languageCode = ""
+  if (!ttsSupportsStitching(next)) {
+    for (const field of NEIGHBOUR_TEXT_FIELDS) {
+      if (data[field]) patch[field] = ""
+    }
+  }
   return patch
 }

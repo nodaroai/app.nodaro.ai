@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label"
 import { TagTextarea } from "./tag-textarea"
 import { getLanguagesForModel, ALL_LANGUAGES } from "@/lib/audio-tags"
 import { TtsVoiceSettings } from "./tts-voice-settings"
+import { TtsContinuitySection } from "./tts-continuity-section"
 import { VcpVoiceSettings } from "./vcp-voice-settings"
 import { ttsModelSwitchPatch } from "@/lib/tts-model-switch"
 import { DialogueVoiceSettings } from "./dialogue-voice-settings"
@@ -269,6 +270,8 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
         </Select>
       </div>
       <TtsVoiceSettings provider={data.provider} data={data} onUpdate={onUpdate} />
+      {/* `shownModel`, not `data.provider`: a node storing no model runs on the default speech model, and the section shows for what the node shows and runs as. */}
+      <TtsContinuitySection provider={shownModel} data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
     </div>
   )
 }

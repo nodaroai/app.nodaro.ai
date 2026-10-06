@@ -318,6 +318,31 @@ describe("textToSpeech", () => {
     const headers = mock.mock.calls[0][1].headers
     expect(headers.Authorization).toBe("Bearer tok-tts")
   })
+
+  it("sends previousText / nextText when given", async () => {
+    noSession()
+    const mock = mockFetchJson({ jobId: "j4" })
+    vi.stubGlobal("fetch", mock)
+
+    await textToSpeech("Middle.", "Rachel", "elevenlabs-v4", undefined, { previousText: "Before.", nextText: "After." })
+
+    const body = JSON.parse(mock.mock.calls[0][1].body as string)
+    expect(body.previousText).toBe("Before.")
+    expect(body.nextText).toBe("After.")
+  })
+
+  it("sends no neighbour key for an empty or missing value", async () => {
+    noSession()
+    const mock = mockFetchJson({ jobId: "j5" })
+    vi.stubGlobal("fetch", mock)
+
+    await textToSpeech("Middle.", "Rachel", "elevenlabs-v4", undefined, { previousText: "", stability: 0.5 })
+
+    const body = JSON.parse(mock.mock.calls[0][1].body as string)
+    expect(body).not.toHaveProperty("previousText")
+    expect(body).not.toHaveProperty("nextText")
+    expect(body.stability).toBe(0.5)
+  })
 })
 
 // ---------------------------------------------------------------------------

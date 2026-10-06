@@ -5579,6 +5579,13 @@ export const he: ChromeDict = {
   "audiocfg.hintRevoicePost": " בכניסה כדי להחליף קול לקליפ דיבור שלם (מקבלים בחזרה את הווידאו בתוספת רצועת האודיו החדשה). אם שניהם מחוברים, הווידאו גובר והמערכת מתעלמת מקלט האודיו.",
   // Interpolated-label word parts
   "audiocfg.similarity": "דמיון",
+  "audiocfg.continuityTitle": "רציפות",
+  "audiocfg.continuitySetCount": "{count} הוגדרו",
+  "audiocfg.previousText": "טקסט קודם",
+  "audiocfg.nextText": "טקסט הבא",
+  "audiocfg.previousTextPh": "מה נאמר ממש לפני הקטע הזה",
+  "audiocfg.nextTextPh": "מה נאמר מיד אחריו",
+  "audiocfg.continuityHint": "נשלח למודל כהקשר ולא מוקרא: הקטע ממשיך את האינטונציה של השורה שלפניו ומוביל אל זו שאחריו. מוצג רק עבור מודל שמשתמש בכך.",
   "audiocfg.styleExaggeration": "הדגשת סגנון",
   "audiocfg.speed": "מהירות",
   "audiocfg.temperature": "טמפרטורה",

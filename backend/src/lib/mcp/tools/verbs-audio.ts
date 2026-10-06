@@ -52,6 +52,7 @@ const sunoWidgetModel = (version: string | undefined): string => SUNO_CATALOG_ID
 import { applyPromptAffixes } from "@nodaro/prompts"
 import { resolvePreset } from "../../presets/resolve-preset.js"
 import { mcpInject } from "../internal-request.js"
+import { TTS_NEIGHBOUR_TEXT_MAX_CHARS, normalizeTtsNeighbourText } from "../../../providers/elevenlabs/neighbour-text.js"
 import { VOICE_CHANGER_PRO_ENGINES } from "./voice-changer-pro-engines.js"
 
 /**
@@ -381,7 +382,11 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         "third-party wrapper known to garble some languages (Hebrew observed) " +
         "— only pick it when a specific library voice is verified for v2 " +
         "only. `text` is capped per model (10,000 chars on v4, 5,000 on v3) — " +
-        "split longer scripts into several calls. Never switch away from v4 for " +
+        "split longer scripts into several calls. " +
+        "For clips that follow one another, pass the neighbouring lines as " +
+        "`previous_text` / `next_text` so the intonation stays continuous across " +
+        "clips (v4 uses them; other models ignore them). " +
+        "Never switch away from v4 for " +
         "language reasons alone. Call `list_models { kind: \"audio\", mode: \"tts\" }` " +
         "for the full sheet.\n\n" +
         "**Presets/templates**: call list_node_presets { nodeType: \"text-to-speech\" } " +
@@ -449,6 +454,24 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         style: z.number().min(0).max(1).optional(),
         speed: z.number().min(0.7).max(1.2).optional(),
         language_code: z.string().optional(),
+        previous_text: z
+          .string()
+          .max(TTS_NEIGHBOUR_TEXT_MAX_CHARS)
+          .optional()
+          .describe(
+            "The line spoken just BEFORE this one in the finished piece (the previous " +
+            "clip's text) — context for continuous intonation across clips; up to 1,000 " +
+            "characters, the end of a longer passage. Used by models that stitch; " +
+            "others ignore it. Not spoken.",
+          ),
+        next_text: z
+          .string()
+          .max(TTS_NEIGHBOUR_TEXT_MAX_CHARS)
+          .optional()
+          .describe(
+            "The line spoken just AFTER this one (the next clip's text) — the start of a " +
+            "longer passage; up to 1,000 characters. Same continuity rule as previous_text.",
+          ),
       },
               outputSchema: {
           jobId: z.string(),
@@ -507,6 +530,12 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         if (d.style !== undefined) presetParams.style = d.style
         if (d.speed !== undefined) presetParams.speed = d.speed
         if (d.languageCode !== undefined) presetParams.language_code = d.languageCode
+        // A preset is node data: its neighbour text was never held to the tool schema's cap above (the panel
+        // has none), so it goes through the same rule the provider exits apply — trimmed, shortened to the cap
+        // — rather than reaching the route over-length for a caller who passed nothing.
+        const presetNeighbours = normalizeTtsNeighbourText(d)
+        if (presetNeighbours.previousText !== undefined) presetParams.previous_text = presetNeighbours.previousText
+        if (presetNeighbours.nextText !== undefined) presetParams.next_text = presetNeighbours.nextText
         const callerProvided = Object.fromEntries(
           Object.entries(args).filter(([, v]) => v !== undefined),
         )
@@ -554,6 +583,8 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         style: effective.style as number | undefined,
         speed: effective.speed as number | undefined,
         languageCode: effective.language_code as string | undefined,
+        previousText: effective.previous_text as string | undefined,
+        nextText: effective.next_text as string | undefined,
         mcp_client: session.clientName,
         userId: session.userId,
       }

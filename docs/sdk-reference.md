@@ -1750,6 +1750,11 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > was the default before v4. A request that omits `provider` and sends 5,001 to
 > 10,000 characters now runs, and is billed, on v4 instead of turbo.
 
+> **Continuity across clips.** `run("text-to-speech", { text, previousText, nextText, … })`
+> passes the lines spoken just before and after the clip; a model that stitches
+> (ElevenLabs v4, Turbo v2.5 and Multilingual v2; not v3) keeps one intonation across clips produced separately. Up to 1,000
+> characters each; context is not spoken. See the Text to Speech node docs.
+
 > **Typed structured references.**
 > `run("generate-image" | "generate-video" | "text-to-video", …)` (and the same
 > three on `runAndWait`) have typed overloads — `GenerateImageParams` /

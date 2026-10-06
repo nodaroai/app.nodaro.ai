@@ -19,6 +19,8 @@ The Text to Speech node generates spoken audio from text input using ElevenLabs 
 | Similarity Boost | `number` (0-1) | voice's own | How closely output matches the target voice timbre. v4 and the v2 models only |
 | Style Exaggeration | `number` (0-1) | voice's own | Amplifies the style of the original voice. v2 models only |
 | Speed | `number` (0.7-1.2) | voice's own | Playback speed multiplier. v2 models only |
+| Previous text | `string` | `""` | **Continuity:** the line spoken just before this clip in the finished piece. Context the model reads, not spoken. Up to 1,000 characters; a longer passage keeps its end. Used by models that stitch (see Providers) |
+| Next text | `string` | `""` | **Continuity:** the line spoken just after it. Up to 1,000 characters; a longer passage keeps its start |
 | `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
 The panel shows only the settings the chosen model uses: v3 has Stability alone, v4 has Stability and Similarity Boost, and the v2 models have all four. When you choose a different model — in the panel or in the node's model dropdown — the settings the new model does not use are cleared, and a language it does not offer is reset to auto-detect.
@@ -37,14 +39,22 @@ If the selected voice no longer exists on ElevenLabs (e.g. it was removed from t
 
 In a published app, the exposed **Stability** and **Similarity** cards start at the node's own value, or at its default (`0.5` / `0.75`) when the node has none, as the config panel does. On a workflow or published-app run, including one started by an agent or the SDK, a voice setting outside its range (Stability, Similarity Boost and Style 0–1, Speed 0.7–1.2) is clamped into it, a number sent as text (`"0.4"`) counts as that number, and anything else (an empty string, a word) is ignored, so the voice's own setting applies. A request made straight to `POST /v1/text-to-speech` is still validated: a value out of range, or a number sent as text, is rejected with a 400. Running a single Text to Speech node from the editor goes through that same route, so a node holding such a value (an imported one, for example) gets the same 400 there, while a full workflow run clamps an out-of-range value and counts a number sent as text as that number, as above.
 
+### Continuity across clips
+
+When a voice-over is produced one clip at a time — one per shot, one per scene, one per block of a narrated video — each clip restarts its intonation at the cut. A model that stitches takes the neighbouring lines as context: set **Previous text** to what is spoken just before this clip and **Next text** to what follows, and the clip picks up where the previous one left off and leads into the next. The context is not spoken and does not change the length of the clip.
+
+The panel shows the **Continuity** section (collapsed) only for a model that stitches; switching the node to one that does not clears both fields. Both are mappable — wire a Text node that holds the previous shot's line — and both can be exposed as text inputs of a published app. Over the API: `previousText` / `nextText` on `POST /v1/text-to-speech`, `previous_text` / `next_text` on the MCP `generate_speech` tool, `previousText` / `nextText` in the SDK's `nodes.run("text-to-speech", …)`. For a model that stitches, the route rejects a value over 1,000 characters (counted after trimming surrounding whitespace); a workflow run and a single-node Run in the editor trim it instead (the end of a previous text, the start of a next text), as a workflow run does for a voice setting out of range. A model that does not stitch never sends these fields, so the route accepts and ignores them. Audio tags in the context follow the same rule as in the text (stripped for a model that does not perform them).
+
+Credits do not change: a request with context costs what it costs without.
+
 ### Providers
 
-| Provider | Model | Languages | Audio Tags | Per-request character cap |
-|----------|-------|-----------|------------|----------------------------|
-| `elevenlabs-v4` | ElevenLabs v4 (default, recommended) | 46 | Yes | 10,000 |
-| `elevenlabs-v3` | ElevenLabs v3 | 46 | Yes | 5,000 |
-| `elevenlabs-turbo` | Turbo v2.5 | 32 | No (stripped) | 40,000 |
-| `elevenlabs-multilingual` | Multilingual v2 | 29 | No (stripped) | 10,000 |
+| Provider | Model | Languages | Audio Tags | Continuity | Per-request character cap |
+|----------|-------|-----------|------------|------------|----------------------------|
+| `elevenlabs-v4` | ElevenLabs v4 (default, recommended) | 46 | Yes | **Yes** | 10,000 |
+| `elevenlabs-v3` | ElevenLabs v3 | 46 | Yes | No | 5,000 |
+| `elevenlabs-turbo` | Turbo v2.5 | 32 | No (stripped) | **Yes** | 40,000 |
+| `elevenlabs-multilingual` | Multilingual v2 | 29 | No (stripped) | **Yes** | 10,000 |
 
 Over the API and the SDK, text past a provider's cap is clamped, not rejected.
 The editor's config panel warns before that point (warn-don't-block). The MCP
@@ -105,6 +115,7 @@ Characters are counted as the text's length (an emoji or other character outside
 ## Inputs & Outputs
 
 - **Input**: `in` -- text string (from Text Prompt, Generate Text, Combine Text, or any text-producing node)
+- **Field mappings**: `previousText` / `nextText` can be bound to any text-producing node (Continuity).
 - **Output**: `audio` -- generated speech audio file (URL)
 ## Best Practices
 

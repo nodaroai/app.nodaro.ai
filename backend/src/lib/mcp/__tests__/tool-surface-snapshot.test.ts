@@ -584,6 +584,14 @@ const COLLECTION_TOOLS_BYTES = 3_420
 // the SDK already took it). No tool was added, so the fixture does NOT move.
 // measured by this suite: 392_662 total − 392_454 base = 208 B.
 const APPLY_EDL_CLIP_KEY_BYTES = 208
+// RAISED by two arguments and one sentence on `generate_speech` and nothing else:
+// `previous_text` / `next_text` (the neighbouring clips' lines, context for
+// continuous intonation across clips — models that stitch use them) and the
+// sentence that says when to pass them. No tool was added, so the fixture does
+// NOT move. measured by this suite: 397_877 total − 397_154 base = 723 B
+// (generate_speech 4_261 -> 4_984 B, far under the 8_192 B per-tool budget),
+// which keeps the 1 B of headroom the list had before.
+const TTS_NEIGHBOUR_TEXT_ARGS_BYTES = 723
 // RAISED 2026-10-06 by ONE enum value and its wording, and nothing else:
 // `voice_changer_pro`'s per-voice `engine` now also takes `"v4"` (Re-speak on
 // the newer model — any stability 0–1, similarity honoured, each line
@@ -666,6 +674,7 @@ export const TOOL_WIRE_BUDGET = {
     UGC_CARDS_CAPTION_STYLE_BYTES +
     COLLECTION_TOOLS_BYTES +
     APPLY_EDL_CLIP_KEY_BYTES +
+    TTS_NEIGHBOUR_TEXT_ARGS_BYTES +
     VOICE_CHANGER_PRO_V4_ENGINE_BYTES +
     CHARACTER_REFERENCES_BYTES,
 }

@@ -572,6 +572,55 @@ describe("text-to-speech handler", () => {
     await handler(job as never, makeCtx())
     expect(mocks.mockUpdate).not.toHaveBeenCalled()
   })
+
+  it("forwards previousText / nextText to the funnel as options — on every model; the funnel decides whether they are sent", async () => {
+    for (const provider of ["elevenlabs-v4", "elevenlabs-v3"]) {
+      mocks.mockDirectElevenLabsTTS.mockClear()
+      const job = makeJob("text-to-speech", { text: "Middle.", provider, previousText: "Before.", nextText: "After." })
+      await handler(job as never, makeCtx())
+      expect(mocks.mockDirectElevenLabsTTS).toHaveBeenCalledWith(
+        "Middle.", "Rachel", provider,
+        expect.objectContaining({ previousText: "Before.", nextText: "After." }),
+      )
+    }
+  })
+
+  it("strips [audio tags] from the neighbours exactly as from the text, by the model's sheet", async () => {
+    mocks.mockStripAudioTags.mockImplementation((text: string) => text.replace(/\[[^\]]+\]/g, "").trim())
+    try {
+      const job = makeJob("text-to-speech", { text: "[sighs] Middle.", provider: "elevenlabs-turbo", previousText: "[laughs] Before.", nextText: "After. [pause]" })
+      await handler(job as never, makeCtx())
+      expect(mocks.mockDirectElevenLabsTTS).toHaveBeenCalledWith(
+        "Middle.", "Rachel", "elevenlabs-turbo",
+        expect.objectContaining({ previousText: "Before.", nextText: "After." }),
+      )
+      mocks.mockDirectElevenLabsTTS.mockClear()
+      const v4 = makeJob("text-to-speech", { text: "[sighs] Middle.", provider: "elevenlabs-v4", previousText: "[laughs] Before." })
+      await handler(v4 as never, makeCtx())
+      expect(mocks.mockDirectElevenLabsTTS).toHaveBeenCalledWith(
+        "[sighs] Middle.", "Rachel", "elevenlabs-v4",
+        expect.objectContaining({ previousText: "[laughs] Before." }),
+      )
+    } finally {
+      mocks.mockStripAudioTags.mockImplementation((text: string) => text)
+    }
+  })
+
+  it("the keyless relay carries the pair to the cloud route", async () => {
+    // The mechanics of the file's own relay cases: `config` is the live import the handler
+    // reads, so setting the key empty routes to the cloud.
+    config.ELEVENLABS_API_KEY = ""
+    mocks.mockIsNodaroConnected.mockResolvedValue(true)
+
+    const job = makeJob("text-to-speech", { text: "Middle.", provider: "elevenlabs-v4", previousText: "Before.", nextText: "After." })
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockCloudTextToSpeech).toHaveBeenCalledWith(
+      "Middle.", undefined, "elevenlabs-v4",
+      expect.objectContaining({ previousText: "Before.", nextText: "After." }),
+    )
+    expect(mocks.mockDirectElevenLabsTTS).not.toHaveBeenCalled()
+  })
 })
 
 describe("generate-music handler", () => {

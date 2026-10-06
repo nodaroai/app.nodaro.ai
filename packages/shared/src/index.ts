@@ -1269,9 +1269,14 @@ export {
   getTtsCapabilities,
   ttsSupportsAudioTags,
   ttsSupportsSsmlBreaks,
+  ttsSupportsStitching,
   ttsHasLever,
   ttsLanguageCodes,
 } from "./tts-capabilities.js"
+
+// The neighbour-text rule (cap + normaliser) every Text to Speech sender and exit shares.
+export { TTS_NEIGHBOUR_TEXT_MAX_CHARS, normalizeTtsNeighbourText } from "./tts-neighbour-text.js"
+export type { TtsNeighbourText } from "./tts-neighbour-text.js"
 
 // The dialogue lane's lookups: answer only for dialogue models; an unknown id
 // runs as DEFAULT_DIALOGUE_PROVIDER (v3 dialogue).

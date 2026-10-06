@@ -3218,6 +3218,9 @@ export async function textToSpeech(
     speed?: number
     languageCode?: string
     voiceType?: "premade" | "custom" | "library"
+    /** Continuity across clips: the lines spoken just before / after this one (context, not spoken). */
+    previousText?: string
+    nextText?: string
   }
 ): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { text, voice, provider }
@@ -3228,6 +3231,8 @@ export async function textToSpeech(
   if (options?.speed != null) body.speed = options.speed
   if (options?.languageCode) body.languageCode = options.languageCode
   if (options?.voiceType) body.voiceType = options.voiceType
+  if (options?.previousText) body.previousText = options.previousText
+  if (options?.nextText) body.nextText = options.nextText
   return apiJson("/v1/text-to-speech", {
     body,
     workflowId: true,

@@ -123,6 +123,7 @@ import { applyInstagramScrapeFailure, applyInstagramScrapeResult, instagramScrap
 import { applySocialSearchFailure, applySocialSearchResult, socialSearchRunStartPatch } from "@/components/nodes/social-search-run-state";
 import { metaAdsAdvertisersFrom, metaAdsNodeMode, metaAdsScrapeWireSources, splitMetaAdsAdvertiserNames, splitInstagramTargets, instagramScrapeMode, socialSearchRequestFromNode } from "@nodaro/shared";
 import { clampContentIdeasCount, CONTENT_IDEAS_MAX_RECIPE_INPUTS } from "@nodaro/shared";
+import { ttsSupportsStitching, normalizeTtsNeighbourText } from "@nodaro/shared";
 import { tx } from "@/lib/i18n";
 import { previewSingleRunRefusal } from "./preview-gate";
 import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates";
@@ -3345,6 +3346,10 @@ function executeNodeCore(
       ...(ttsData.style != null && { style: ttsData.style }),
       ...(ttsData.speed != null && { speed: ttsData.speed }),
       ...(ttsData.languageCode && { languageCode: ttsData.languageCode }),
+      // Continuity across clips — `node.data` is already field-mapping-resolved here, so a wired Text node's value is what is sent.
+      // Only for a model whose sheet stitches (a node switched away from one keeps a mapping the panel no longer shows), and
+      // through the one rule the server's exits apply — trimmed, shortened to the cap — so the route never answers 400.
+      ...(ttsSupportsStitching(ttsData.provider) ? normalizeTtsNeighbourText(ttsData) : {}),
       voiceType: (ttsData.voiceType as "premade" | "custom" | "library" | undefined) || "premade",
     };
     setUserPromptTemplate(ttsData.directText?.trim() || undefined);

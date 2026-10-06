@@ -317,6 +317,9 @@ export interface TextToSpeechOptions {
   style?: number           // 0-1
   speed?: number           // 0.7-1.2
   languageCode?: string    // e.g. "en", "he", "es"
+  /** The lines spoken just before / after this clip (continuity across clips). Models that stitch use them; trimmed at every exit (elevenlabs/neighbour-text.ts). */
+  previousText?: string
+  nextText?: string
 }
 
 export interface TextToSpeechProvider {
