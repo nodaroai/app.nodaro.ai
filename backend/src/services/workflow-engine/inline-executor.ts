@@ -351,6 +351,18 @@ function collectItemsForEdge(
     return items
   }
 
+  // Generate Text's `items` pip: the ===NEXT=== split the extractor derives
+  // (`output.items`, the same split the fan-out planner reads). Only the
+  // `items` wire reads it — the `text` wire stays one value. Without this the
+  // edge fell through to getPrimaryOutput and a list operator got ONE item,
+  // the whole text (#1920); the editor's collector splits it.
+  if (resolvedEdge.sourceHandle === "items" && Array.isArray(output.items) && output.items.length > 0) {
+    for (const item of output.items) {
+      if (typeof item === "string" && item.trim()) items.push(item)
+    }
+    return items
+  }
+
   // Structured JSON arrays (web-scrape's `generatedJson`, any future source
   // that emits `{ json: [...] }`) need to be spread so each element becomes
   // its own filter-list item. Otherwise getPrimaryOutput would collapse the
