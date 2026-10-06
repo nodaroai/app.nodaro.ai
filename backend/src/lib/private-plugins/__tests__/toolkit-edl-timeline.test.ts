@@ -31,8 +31,9 @@ vi.mock("node:fs", async (importOriginal) => {
 
 import { buildToolkit } from "../toolkit.js"
 import { isDeterministicJobError } from "../../deterministic-job-error.js"
-import { CONTRACT_VERSION, type PluginEdlTimelineOptions, type PluginFfmpegToolkit } from "../types.js"
+import { CONTRACT_VERSION, type PluginEdlPictureContext, type PluginEdlPictureSlot, type PluginEdlTimelineOptions, type PluginFfmpegToolkit } from "../types.js"
 import type { EdlTimelineOptions } from "../../../providers/video/edl-timeline.js"
+import type { EdlPictureContext, EdlPictureSlot } from "../../../providers/video/edl-picture.js"
 
 const EDL = { version: 1, clock: "master", sources: [{ id: "A", url: "https://f.test/a.mp4", kind: "video" }], segments: [{ id: "s0", inMs: 0, outMs: 1000, video: "A" }] } as never
 
@@ -52,14 +53,15 @@ describe("tk.ffmpeg.renderEdlTimeline", () => {
   it("renders on core's timeline with the plugin's picture, framing, canvas and label, then uploads plain with a thumbnail", async () => {
     const picture = vi.fn(() => ({ chain: "null" }))
     const regions = [{ source: "A", speaker: "Host", region: { x: 0, y: 0, w: 0.5, h: 1 } }]
+    const regionFor = vi.fn(() => ({ x: 0.2, y: 0, w: 0.4, h: 1 }))
     const onProgress = vi.fn()
     const res = await buildToolkit().ffmpeg.renderEdlTimeline!({
       edl: EDL, quality: "proxy", jobId: "job-1", jobUserId: "user-1",
-      picture, speakerRegions: regions, canvas: { width: 720, height: 1280 }, label: "speaker-view", onProgress,
+      picture, speakerRegions: regions, regionFor, canvas: { width: 720, height: 1280 }, label: "speaker-view", onProgress,
     })
     expect(fx.render).toHaveBeenCalledWith({
       edl: EDL, output: "video", quality: "proxy", jobId: "job-1", jobUserId: "user-1", label: "speaker-view",
-      picture, speakerRegions: regions, canvas: { width: 720, height: 1280 }, onProgress,
+      picture, speakerRegions: regions, regionFor, canvas: { width: 720, height: 1280 }, onProgress,
     })
     expect(fx.upload).toHaveBeenCalledWith("/work/speaker-view-x/chunk-0.mp4", "job-1", "video", "user-1")
     expect(fx.thumb).toHaveBeenCalledWith("https://r2.test/videos/job-1.mp4", "job-1", "user-1")
@@ -119,6 +121,14 @@ describe("tk.ffmpeg.renderEdlTimeline", () => {
     type Plugin = Omit<PluginEdlTimelineOptions, "output">
     expectTypeOf<keyof Plugin>().toEqualTypeOf<keyof Core>()
     expectTypeOf<NonNullable<PluginEdlTimelineOptions["picture"]>>().toExtend<NonNullable<EdlTimelineOptions["picture"]>>()
+    expectTypeOf<NonNullable<PluginEdlTimelineOptions["regionFor"]>>().toExtend<NonNullable<EdlTimelineOptions["regionFor"]>>()
+    // The picture's context is mirrored field for field: a field core hands the
+    // builder (each slot's source-clock span, the frame grid's lead — P3.8t)
+    // that the mirror lacks is one a plugin can never read. The `toExtend`
+    // above cannot see it (a parameter type is contravariant).
+    expectTypeOf<keyof PluginEdlPictureContext>().toEqualTypeOf<keyof EdlPictureContext>()
+    expectTypeOf<keyof PluginEdlPictureSlot>().toEqualTypeOf<keyof EdlPictureSlot>()
+    expectTypeOf<PluginEdlPictureSlot["sourceSpan"]>().toEqualTypeOf<EdlPictureSlot["sourceSpan"]>()
     // Required for a plugin (decided 2026-10-06); only core's own caller may
     // lean on the timeline's Apply EDL default.
     expectTypeOf<PluginEdlTimelineOptions["label"]>().toEqualTypeOf<string>()

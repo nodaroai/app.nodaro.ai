@@ -194,6 +194,13 @@ export interface SliceOptions {
    *  `resolveEdlSegmentSlots` so every slot reaches the picture builder with
    *  its region already resolved. */
   readonly speakerRegions?: ResolveEdlSlotsOptions["speakerRegions"]
+  /** D20's resolver rung (Speaker View v3, phase 3): a per-(segment, slot)
+   *  region, e.g. from a face track, below an explicit slot/segment region and
+   *  above `speakerRegions`. Asked about the EDL's own segment — a chunk's
+   *  split half is mapped back to it (`PlanSegment.splitOf`). Must be pure,
+   *  like the picture builder: its regions reach the fragment the checkpoint
+   *  key hashes. */
+  readonly regionFor?: ResolveEdlSlotsOptions["regionFor"]
 }
 
 /** The ffmpeg xfade an `xfade:<id>` layout switch INTO `seg` names, or null
@@ -397,8 +404,33 @@ export function buildSliceCommand(edl: Edl, segs: readonly PlanSegment[], opts: 
 
   // Each segment's picture slots (D20): its `layout.slots`, else the one
   // implicit slot of `seg.video` — which is every segment Apply EDL accepts.
+  const { regionFor } = opts
+  const resolveOpts = (seg: PlanSegment): ResolveEdlSlotsOptions | undefined =>
+    opts.speakerRegions || regionFor
+      ? {
+          ...(opts.speakerRegions ? { speakerRegions: opts.speakerRegions } : {}),
+          // a split half asks about its whole segment (a chunk seam is not an edit)
+          ...(regionFor
+            ? {
+                regionFor: (q: Parameters<typeof regionFor>[0]) => {
+                  // pure, like `picture`: a throw fails the same way on every
+                  // retry, so it must not be retried (each retry re-downloads
+                  // every source before it reaches this chunk again)
+                  try {
+                    return regionFor({ ...q, segment: seg.splitOf ?? seg })
+                  } catch (e) {
+                    throw new DeterministicJobError(
+                      `region for segment "${seg.id}": ${e instanceof Error ? e.message : String(e)}`,
+                      { cause: e },
+                    )
+                  }
+                },
+              }
+            : {}),
+        }
+      : undefined
   const slotsOf = (seg: PlanSegment) => {
-    const slots = resolveEdlSegmentSlots(edl, seg, opts.speakerRegions ? { speakerRegions: opts.speakerRegions } : undefined)
+    const slots = resolveEdlSegmentSlots(edl, seg, resolveOpts(seg))
     if (slots.length === 0) throw new DeterministicJobError(`segment "${seg.id}" has no picture source for a video render`)
     return slots
   }
@@ -412,8 +444,9 @@ export function buildSliceCommand(edl: Edl, segs: readonly PlanSegment[], opts: 
     // pre-origin read first; kept so a direct builder call never asks for
     // negative source time. A split tail reads from its whole segment's start
     // (`splitLeadMs` earlier) so its picture keeps that segment's frame phase.
-    const start = Math.max(0, secs(seg.inMs - (seg.splitLeadMs ?? 0) - offsetOf(vs)))
-    return { id: vs.id, start, end: Math.max(start, secs(seg.outMs - offsetOf(vs))) }
+    const startMs = Math.max(0, seg.inMs - (seg.splitLeadMs ?? 0) - offsetOf(vs))
+    const endMs = Math.max(startMs, seg.outMs - offsetOf(vs))
+    return { id: vs.id, start: secs(startMs), end: secs(endMs), startMs, endMs }
   }
   const audioReadOf = (seg: EdlSegment) => {
     const aId = audioSourceId(edl, seg, masterAudioId)
@@ -489,6 +522,7 @@ export function buildSliceCommand(edl: Edl, segs: readonly PlanSegment[], opts: 
       const readEnd = v.end - seek + APPLY_EDL_GRID_READ_GUARD_FRAMES / fps
       return {
         slot,
+        sourceSpan: { startMs: v.startMs, endMs: v.endMs },
         read: `[${addInput(v.id)}:V]tpad=stop_mode=clone:stop=-1,trim=start=${(v.start - seek).toFixed(6)}:end=${readEnd.toFixed(6)},setpts=PTS-STARTPTS`,
       }
     })
@@ -496,7 +530,7 @@ export function buildSliceCommand(edl: Edl, segs: readonly PlanSegment[], opts: 
     const ctx: EdlPictureContext = {
       segment: seg,
       index: i,
-      slots: reads.map(({ slot }, j): EdlPictureSlot => ({ ...slot, label: `[${scope}s${j}]` })),
+      slots: reads.map(({ slot, sourceSpan }, j): EdlPictureSlot => ({ ...slot, label: `[${scope}s${j}]`, sourceSpan })),
       canvas: { width: target.width, height: target.height },
       fps,
       quality: opts.quality,
@@ -504,6 +538,7 @@ export function buildSliceCommand(edl: Edl, segs: readonly PlanSegment[], opts: 
       leadSec: secs(seg.splitLeadMs ?? 0),
       frames: nFrames,
       startFrame: intervals[i].startF,
+      leadFrames: lead,
       output: `[${scope}o]`,
       scope: `${scope}_`,
     }

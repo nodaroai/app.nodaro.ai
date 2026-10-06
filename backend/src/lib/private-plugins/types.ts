@@ -653,6 +653,11 @@ export interface PluginEdlPictureSlot {
    *  the segment's read window, timestamps from 0 at `leadSec` before the
    *  segment's own start, a few frames past its end. */
   readonly label?: string
+  /** The slot stream's read window on its SOURCE's own clock, whole ms
+   *  (`masterMs − offsetMs`, D19) — the clock face tracks are kept on.
+   *  `startMs` is the stream's t = 0 (a split tail's: its whole segment's
+   *  start, `leadSec` earlier); `endMs` the segment's own end. */
+  readonly sourceSpan: { readonly startMs: number; readonly endMs: number }
 }
 
 /** Mirrors `EdlPictureContext` (`providers/video/edl-picture.ts`). */
@@ -669,6 +674,13 @@ export interface PluginEdlPictureContext {
   readonly frames: number
   /** Its first frame on the GLOBAL output grid (`frameAtMs`). */
   readonly startFrame: number
+  /** The output frame grid on the slot streams: kept output frame k
+   *  (0 ≤ k < `frames`) is the canvas-rate frame at stream time
+   *  `(leadFrames + k) / fps`, i.e. at
+   *  `slots[j].sourceSpan.startMs + 1000·(leadFrames + k)/fps` ms on slot j's
+   *  source clock (to within one source frame) — where a glide samples its
+   *  face track. Non-zero only on a split tail (its head rendered those). */
+  readonly leadFrames: number
   /** The label a `graph` fragment must write: one canvas-sized stream. */
   readonly output: string
   /** Prefix for every intermediate label a `graph` fragment defines. */
@@ -681,7 +693,11 @@ export interface PluginEdlPictureContext {
  * statements that read every slot's `label` and write `ctx.output`. The host
  * conforms the result to the canvas rate and the segment's exact frame count.
  * The builder is called synchronously while each slice is planned and its
- * fragment is part of the checkpoint key, so it must be pure.
+ * fragment is part of the checkpoint key, so it must be pure and
+ * self-contained — the key hashes a file's path, not its content. A `movie=` /
+ * `amovie=` source or a `sendcmd` command file (pass the commands inline,
+ * `c=`) is refused as deterministic; other file-reading filters are not
+ * checked, and must not be used either.
  */
 export type PluginEdlPictureFragment = { readonly chain: string } | { readonly graph: string }
 
@@ -698,6 +714,14 @@ export interface PluginEdlTimelineOptions {
   readonly picture?: (ctx: PluginEdlPictureContext) => PluginEdlPictureFragment
   /** D20's per-(source, speaker) framing (`ResolveEdlSlotsOptions.speakerRegions`). */
   readonly speakerRegions?: ReadonlyArray<{ readonly source: string; readonly speaker: string; readonly region: EdlRegion }>
+  /** D20's resolver rung (`ResolveEdlSlotsOptions.regionFor`, Speaker View
+   *  v3): a per-(segment, slot) region — the tracked framing — below an
+   *  explicit slot/segment region and above `speakerRegions`. Asked about the
+   *  EDL's own segment, never a chunk's split half. Pure, like `picture`: its
+   *  regions reach the fragments the checkpoint key hashes. Additive-optional:
+   *  a host older than this field ignores it (as it lacks `sourceSpan` and
+   *  `leadFrames`), so a plugin that relies on them ships after the host does. */
+  readonly regionFor?: (q: { readonly segment: EdlSegment; readonly source: string; readonly speaker?: string }) => EdlRegion | undefined
   /** A fixed canvas (even-rounded) for every quality — the plugin sizes it
    *  (SV7). Default: the most common source resolution, 720p-capped for a proxy. */
   readonly canvas?: { readonly width: number; readonly height: number }

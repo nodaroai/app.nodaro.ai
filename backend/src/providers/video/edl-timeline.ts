@@ -112,6 +112,12 @@ export interface EdlTimelineOptions extends ChunkPlanOptions {
   /** D20's per-(source, speaker) framing, resolved into each slot's region
    *  before the picture builder sees it (`resolveEdlSegmentSlots`). */
   readonly speakerRegions?: ResolveEdlSlotsOptions["speakerRegions"]
+  /** D20's resolver rung (Speaker View v3, phase 3; reserved in C1): a
+   *  per-(segment, slot) region, e.g. the tracked framing of a face track,
+   *  resolved below an explicit slot/segment region and above
+   *  `speakerRegions`. Asked about the EDL's own segment, never a chunk's split
+   *  half. Pure, like `picture`. */
+  readonly regionFor?: ResolveEdlSlotsOptions["regionFor"]
   /** A fixed output canvas (even-rounded), used as given for every quality —
    *  the caller sizes it (Speaker View: per aspect, SV7). Default: the most
    *  common source resolution, capped at 720p for a proxy (Apply EDL's). */
@@ -343,7 +349,13 @@ async function renderSlice(
  * rendered for a different plan into this one (which once completed a job with
  * a scrambled picture over the right audio — and deleted the evidence). There
  * is no scheme version to remember to bump: the key IS the command. A render
- * with no thread counts (no CPU quota) keeps the key it always had.
+ * with no thread counts (no CPU quota) keeps the key it always had. The
+ * picture is in it too: every segment's picture fragment is a statement of
+ * the filter graph, and a fragment must be self-contained (`EdlPictureBuilder`;
+ * `pictureFragmentError` refuses a movie or `sendcmd` command file), so a
+ * changed face track, track assignment or `motion` re-keys exactly the chunks
+ * whose segments it re-frames, and a retried render never splices a chunk
+ * framed for other tracks.
  */
 export function sliceFingerprint(cmd: SliceCommand, edl: Edl, ffmpegVersion: string, threads?: FfmpegThreads): string {
   const sources = cmd.inputIds.map((id) => [id, edl.sources.find((s) => s.id === id)?.url ?? null])
@@ -354,7 +366,7 @@ export function sliceFingerprint(cmd: SliceCommand, edl: Edl, ffmpegVersion: str
 }
 
 export async function renderEdlTimeline(options: EdlTimelineOptions): Promise<EdlTimelineResult> {
-  const { edl, output, quality, jobId, jobUserId, onProgress, checkpoint = true, picture, speakerRegions, label = APPLY_EDL_LABEL } = options
+  const { edl, output, quality, jobId, jobUserId, onProgress, checkpoint = true, picture, speakerRegions, regionFor, label = APPLY_EDL_LABEL } = options
   // Pre-flight, before any work dir or download: a switch this renderer does
   // not know fails the same way on every attempt, so find it now — not at the
   // chunk that draws it, hours in (or never, under one frame / sound-only).
@@ -366,7 +378,7 @@ export async function renderEdlTimeline(options: EdlTimelineOptions): Promise<Ed
   const plan: ChunkPlanOptions = { ...options, pictureSlots: wantVideo ? maxPictureSlots(edl, edl.segments) : 1 }
   // What every slice draws beyond the shared timeline: the picture builder
   // and the framing it resolves slots with. Absent → Apply EDL's slice.
-  const pictureOpts = { ...(picture ? { picture } : {}), ...(speakerRegions ? { speakerRegions } : {}) }
+  const pictureOpts = { ...(picture ? { picture } : {}), ...(speakerRegions ? { speakerRegions } : {}), ...(regionFor ? { regionFor } : {}) }
   const ext = wantVideo ? "mp4" : "m4a"
   // Every checkpoint key this attempt uploaded or resumed — outside the `try`
   // so a cancelled render can delete them too (see the catch).

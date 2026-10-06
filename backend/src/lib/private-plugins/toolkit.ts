@@ -496,6 +496,7 @@ async function renderEdlTimelineToUrl(opts: PluginEdlTimelineOptions): Promise<P
     label,
     ...(opts.picture ? { picture: opts.picture } : {}),
     ...(opts.speakerRegions ? { speakerRegions: opts.speakerRegions } : {}),
+    ...(opts.regionFor ? { regionFor: opts.regionFor } : {}),
     ...(opts.canvas ? { canvas: opts.canvas } : {}),
     ...(opts.onProgress ? { onProgress: opts.onProgress } : {}),
   })

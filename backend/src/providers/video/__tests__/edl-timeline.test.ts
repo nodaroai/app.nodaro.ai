@@ -156,7 +156,7 @@ describe("the picture seam — slots come from the EDL, the builder draws them",
     const cmd = buildSliceCommand(two, two.segments, { ...OPTS, picture: grid, speakerRegions: regions })
     expect(cmd.inputIds).toEqual(["W", "MIC", "A"])
     // segment 0: one slot, a chain inlined into its read, the speaker's region resolved
-    expect(seen[0]!.slots).toEqual([{ source: "W", speaker: "Host", region: regions[0]!.region, regionFrom: "speaker", label: "[p0s0]" }])
+    expect(seen[0]!.slots).toEqual([{ source: "W", speaker: "Host", region: regions[0]!.region, regionFrom: "speaker", label: "[p0s0]", sourceSpan: { startMs: 0, endMs: 2000 } }])
     expect(cmd.filterGraph).toContain("setpts=PTS-STARTPTS,crop=iw/2:ih:0:0,scale=1080:1920")
     // segment 1: two labelled slot reads, the fragment, the conform
     expect(seen[1]!.slots.map((s) => [s.source, s.label, s.regionFrom])).toEqual([["W", "[p1s0]", "speaker"], ["A", "[p1s1]", "full"]])
@@ -165,7 +165,7 @@ describe("the picture seam — slots come from the EDL, the builder draws them",
     expect(cmd.filterGraph).toContain(`[p1o]fps=30,trim=start_frame=0:end_frame=${seen[1]!.frames},setpts=PTS-STARTPTS,format=yuv420p,setsar=1[v1]`)
     // the grid: 2.0 s then 2.5 s at 30 fps
     expect(seen.map((c) => [c.frames, c.startFrame])).toEqual([[60, 0], [75, 60]])
-    expect(seen[1]!).toMatchObject({ canvas: { width: 1080, height: 1920 }, fps: 30, durationSec: 2.5, leadSec: 0, output: "[p1o]", scope: "p1_" })
+    expect(seen[1]!).toMatchObject({ canvas: { width: 1080, height: 1920 }, fps: 30, durationSec: 2.5, leadSec: 0, leadFrames: 0, output: "[p1o]", scope: "p1_" })
   })
 
   it("reserves memory for every slot branch (#1860 counts graph branches) and charges the slice for them", () => {

@@ -60,6 +60,14 @@ describe.skipIf(!ffmpegAvailable)("EDL timeline (real ffmpeg)", () => {
     process.env.EDL_TIMELINE_FIXTURE_DIR = dir
     await makeSource(join(dir, "red.mp4"), "red", 440, 12)
     await makeSource(join(dir, "blue.mp4"), "blue", 880, 12)
+    // a two-shot: the host on the left (red), the guest on the right (blue)
+    await runFfmpeg([
+      "-y",
+      "-f", "lavfi", "-i", "color=c=red:s=320x240:r=30:d=12,drawbox=x=160:y=0:w=160:h=240:color=blue:t=fill",
+      "-f", "lavfi", "-i", "sine=f=440:r=48000:d=12",
+      "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest",
+      join(dir, "two-shot.mp4"),
+    ])
   }, 60_000)
 
   afterAll(async () => {
@@ -99,6 +107,49 @@ describe.skipIf(!ffmpegAvailable)("EDL timeline (real ffmpeg)", () => {
     const [lo, hi] = [toneAt(sound, 2.5, 440), toneAt(sound, 2.5, 880)]
     expect(Math.min(lo, hi)).toBeGreaterThan(0.1 * Math.max(lo, hi))
   }, 120_000)
+
+  // P3.8t — tracked framing on the timeline. `static`: the resolver rung
+  // (`regionFor`) frames each segment on its speaker's track; `glide`: the
+  // builder moves its crop on the source clock it is handed (`sourceSpan`), so
+  // a camera with an offset is followed at the right instant (D19).
+  it("frames each segment on its speaker's tracked region (regionFor), and moves a crop on the source clock (sourceSpan)", async () => {
+    const tracked = { Host: { x: 0, y: 0, w: 0.5, h: 1 }, Guest: { x: 0.5, y: 0, w: 0.5, h: 1 } } as const
+    const cropRegion: EdlPictureBuilder = (ctx) => {
+      const r = ctx.slots[0]!.region
+      return { chain: `crop=iw*${r.w}:ih*${r.h}:iw*${r.x}:ih*${r.y},${scalePadChain(ctx.canvas)}` }
+    }
+    const edl = {
+      version: 1, clock: "master", sources: [src("W", "two-shot.mp4")],
+      segments: [
+        { id: "s0", inMs: 0, outMs: 2000, video: "W", speaker: "Host" },
+        { id: "s1", inMs: 2000, outMs: 4000, video: "W", speaker: "Guest" },
+      ],
+    } as unknown as Edl
+    const framed = await renderEdlTimeline({
+      edl, output: "video", quality: "proxy", jobId: "t-p38t-static", checkpoint: false, picture: cropRegion,
+      regionFor: ({ speaker }) => (speaker === "Host" || speaker === "Guest" ? tracked[speaker] : undefined),
+      canvas: { width: 160, height: 240 }, label: "speaker-view",
+    })
+    outs.push(dirname(framed.outputPath))
+    expect([await halfColour(framed.outputPath, 1, "left"), await halfColour(framed.outputPath, 1, "right")]).toEqual(["red", "red"])
+    expect([await halfColour(framed.outputPath, 3, "left"), await halfColour(framed.outputPath, 3, "right")]).toEqual(["blue", "blue"])
+
+    // The camera starts 500 ms after the master clock; the face track says the
+    // subject is on the right from 2,500 ms of the SOURCE's own clock — master
+    // 3,000 ms, output 2.0 s for an edit that starts at master 1,000 ms.
+    const offset = { ...edl, sources: [{ ...edl.sources[0]!, offsetMs: 500 }], segments: [{ id: "g0", inMs: 1000, outMs: 5000, video: "W" }] } as unknown as Edl
+    const follow: EdlPictureBuilder = (ctx) => {
+      const atSec = (2500 - ctx.slots[0]!.sourceSpan.startMs) / 1000
+      return { chain: `crop=iw/2:ih:x='if(gte(t\\,${atSec.toFixed(3)})\\,iw/2\\,0)':y=0,${scalePadChain(ctx.canvas)}` }
+    }
+    const glided = await renderEdlTimeline({
+      edl: offset, output: "video", quality: "proxy", jobId: "t-p38t-glide", checkpoint: false, picture: follow,
+      canvas: { width: 160, height: 240 }, label: "speaker-view",
+    })
+    outs.push(dirname(glided.outputPath))
+    expect(await halfColour(glided.outputPath, 1.8, "left")).toBe("red")
+    expect(await halfColour(glided.outputPath, 2.2, "left")).toBe("blue")
+  }, 180_000)
 
   // F9's A/V half (its timing half needs the pinned image): a two-slot
   // composite on every segment halves the picture cap, so 40 segments render

@@ -34,6 +34,13 @@ export interface EdlPictureSlot {
    *  frames past the segment's end. The timeline then conforms the
    *  builder's output to the canvas rate and keeps exactly `ctx.frames`. */
   readonly label?: string
+  /** The slot stream's read window on its SOURCE's own clock, in whole ms
+   *  (`masterMs − offsetMs`, D19) — the clock face tracks are kept on.
+   *  `startMs` is the stream's t = 0: the segment's start, or for a split
+   *  tail its whole segment's start (`ctx.leadSec` earlier). `endMs` is the
+   *  segment's own end (the stream runs a few frames past it). Where kept
+   *  output frame k samples it: `pictureFrameSourceMs`. */
+  readonly sourceSpan: { readonly startMs: number; readonly endMs: number }
 }
 
 /** What a picture builder knows about ONE segment of ONE slice. */
@@ -62,6 +69,15 @@ export interface EdlPictureContext {
   readonly frames: number
   /** Its first frame's index on the GLOBAL output grid (`frameAtMs`). */
   readonly startFrame: number
+  /** The output frame grid on the slot streams: kept output frame k
+   *  (0 ≤ k < `frames`) is the canvas-rate frame at stream time
+   *  `(leadFrames + k) / fps` — the conform keeps frames
+   *  [leadFrames, leadFrames + frames) of the builder's output at the canvas
+   *  rate. Non-zero only on a split tail: the frames its head, in the previous
+   *  chunk, already rendered. A builder that moves its picture over time (a
+   *  glide following a face track) samples its path on exactly these frames
+   *  (`pictureFrameSourceMs`). */
+  readonly leadFrames: number
   /** The label a `graph` fragment must write — one canvas-sized stream. */
   readonly output: string
   /** Prefix for any intermediate label a `graph` fragment defines
@@ -83,15 +99,80 @@ export type EdlPictureFragment = { readonly chain: string } | { readonly graph: 
 /** Called once per segment of every picture slice, synchronously, while the
  *  slice's command is built (before anything runs), so the fragment is part of
  *  the command the checkpoint key hashes. Must be pure: the same context must
- *  give the same fragment, or a retry would never resume its checkpoints. */
+ *  give the same fragment, or a retry would never resume its checkpoints. And
+ *  the fragment MUST be self-contained: everything it draws is written in it
+ *  (a `sendcmd` carries its commands inline, `c=`), never read from a file the
+ *  key would see only the path of. `pictureFragmentError` refuses the readers a
+ *  moving crop would reach for (`movie` / `amovie`, a `sendcmd` / `asendcmd`
+ *  command file) — a named list, not every file-reading filter. So a changed
+ *  face track, track assignment or `motion` changes the fragment of exactly
+ *  the segments it moves, and with it the key of exactly their chunks. */
 export type EdlPictureBuilder = (ctx: EdlPictureContext) => EdlPictureFragment
+
+/** Where kept output frame `k` of a segment samples slot `slot`'s source, in
+ *  ms on that source's own clock (`EdlPictureSlot.sourceSpan`): the stream's
+ *  t = 0 is `sourceSpan.startMs`, and frame k is at t = (leadFrames + k) / fps.
+ *  Exact on the grid; the picture shown there is the source frame the canvas
+ *  conform picks, so within one source frame of it (the read rebases t = 0 on
+ *  the first frame it keeps). A follow path sampled here moves on exactly the
+ *  frames the render keeps. Pure. */
+export function pictureFrameSourceMs(ctx: Pick<EdlPictureContext, "slots" | "leadFrames" | "fps">, slot: number, k: number): number {
+  const s = ctx.slots[slot]
+  if (!s) throw new RangeError(`no slot ${slot} in this segment (it has ${ctx.slots.length})`)
+  return s.sourceSpan.startMs + ((ctx.leadFrames + k) * 1000) / ctx.fps
+}
+
+/** The file a fragment reads, if any: a `movie` / `amovie` source, or a
+ *  `sendcmd` / `asendcmd` command file (`f=` / `filename=`). The checkpoint
+ *  key would hash the path, not what the file holds; `sendcmd` takes its
+ *  commands inline (`c=` / `commands=`) instead. Quotes are honoured, so an
+ *  inline command never reads as an option. */
+function fileReadOf(text: string): string | undefined {
+  for (const raw of splitUnquoted(text, ",;[]")) {
+    const f = raw.trim()
+    const eq = f.indexOf("=")
+    // `name@instance` is the same filter under an instance name
+    const name = (eq < 0 ? f : f.slice(0, eq)).trim().split("@")[0]!.trim()
+    if (name === "movie" || name === "amovie") return `a ${name} source`
+    if ((name === "sendcmd" || name === "asendcmd") && eq >= 0) {
+      const opts = splitUnquoted(f.slice(eq + 1), ":")
+      if (opts.some((opt) => /^\s*(?:f|filename)\s*=/.test(opt))) return `a ${name} command file — pass the commands inline, c=`
+    }
+  }
+  return undefined
+}
+
+/** `text` split on any of `seps` outside ffmpeg's quoting (`'…'`, and a `\`
+ *  escaping the next character). */
+function splitUnquoted(text: string, seps: string): string[] {
+  const parts: string[] = []
+  let cur = ""
+  let quoted = false
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]!
+    if (ch === "\\" && i + 1 < text.length) {
+      cur += ch + text[++i]
+      continue
+    }
+    if (ch === "'") quoted = !quoted
+    if (!quoted && seps.includes(ch)) {
+      parts.push(cur)
+      cur = ""
+    } else cur += ch
+  }
+  parts.push(cur)
+  return parts
+}
 
 /** A fragment the timeline can place, or an Error naming what is wrong. Kept
  *  shallow on purpose: ffmpeg rejects a malformed graph with its own message;
- *  this only stops a fragment from breaking the graph AROUND it. */
+ *  this only stops a fragment from breaking the graph AROUND it, or from
+ *  reading a movie or command file the checkpoint key cannot see. */
 export function pictureFragmentError(fragment: unknown, ctx: EdlPictureContext): string | undefined {
   if (!fragment || typeof fragment !== "object") return "the picture builder returned no fragment"
   const f = fragment as { chain?: unknown; graph?: unknown }
+  const read = fileReadOf(typeof f.chain === "string" ? f.chain : typeof f.graph === "string" ? f.graph : "")
+  if (read) return `the fragment reads a file (${read}): a picture is written whole into its fragment, which the checkpoint key hashes`
   if (typeof f.chain === "string") {
     if (typeof f.graph === "string") return "a picture fragment is a chain OR a graph, not both"
     if (ctx.slots.length !== 1) return `a chain draws one slot; segment "${ctx.segment.id}" has ${ctx.slots.length}`

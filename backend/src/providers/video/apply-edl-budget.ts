@@ -553,6 +553,11 @@ export interface PlanSegment extends EdlSegment {
    *  has a frame of its own, i.e. when one pass would show the whole segment at
    *  all. Any other wholly-covered segment adds no picture. */
   readonly splitTailMs?: number
+  /** On BOTH halves of a split: the EDL's own segment they were cut from. A
+   *  chunk seam is the planner's, not the edit's, so anything keyed to "the
+   *  segment" — a per-segment tracked region (`regionFor`, the D20 resolver
+   *  rung) — is asked about this one, and both halves frame alike. */
+  readonly splitOf?: EdlSegment
 }
 
 /**
@@ -584,9 +589,12 @@ export function splitInsideCrossfadeRun(
   const tailBase: EdlSegment = layoutSwitchOverlaps(seg.layout)
     ? { ...untransitioned, layout: withoutSwitch(seg.layout!) }
     : untransitioned
+  // A chunk's first segment is never cut, so `seg` is the EDL's own; the
+  // `splitOf` read keeps that true should a half ever be cut again.
+  const splitOf = (seg as PlanSegment).splitOf ?? seg
   const cut = (x: number) => ({
-    head: { ...seg, id: `${seg.id}~1`, outMs: seg.inMs + x, splitTailMs: durMs - x } as PlanSegment,
-    tail: { ...tailBase, id: `${seg.id}~2`, inMs: seg.inMs + x, splitLeadMs: x } as PlanSegment,
+    head: { ...seg, id: `${seg.id}~1`, outMs: seg.inMs + x, splitTailMs: durMs - x, splitOf } as PlanSegment,
+    tail: { ...tailBase, id: `${seg.id}~2`, inMs: seg.inMs + x, splitLeadMs: x, splitOf } as PlanSegment,
   })
   // The shortest head that keeps the crossfade in (0.9·x ≥ overlap, give or
   // take the clamp's integer floor); a longer head only shortens the tail.
