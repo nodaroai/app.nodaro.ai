@@ -25,7 +25,7 @@
  * Reads only run-time state (never a node's saved data) — pinned by
  * saved-data-fallback-sites.test.ts.
  */
-import { TEXT_REQUIRED_NODE_TYPES, computeNodeSendText } from "@nodaro/prompts"
+import { TEXT_REQUIRED_NODE_TYPES, WIRED_OUTPUT_NODE_TYPES, computeNodeSendText } from "@nodaro/prompts"
 import type { NodeExecutionState, SimpleEdge, SimpleNode } from "./types.js"
 import { getListFanOutForNode, getNodeOutput, resolveNodeInputs } from "./input-resolver.js"
 import { NODE_MAPPABLE_FIELDS, resolveFieldMappings } from "./resolve-field-mappings.js"
@@ -67,7 +67,8 @@ export function computeEmptyInputSkipIds(args: EmptyInputSkipArgs): Set<string> 
   const byId = new Map(nodes.map((n) => [n.id, n] as const))
   const skipped = new Set<string>()
   for (const node of level) {
-    if (!TEXT_REQUIRED_NODE_TYPES.has(node.type)) continue
+    const wiredOutput = WIRED_OUTPUT_NODE_TYPES.has(node.type)
+    if (!wiredOutput && !TEXT_REQUIRED_NODE_TYPES.has(node.type)) continue
     if (deadIds.has(node.id)) continue
     if (nodeStates[node.id]?.status === "completed") continue
     const incoming = edges.filter((e) => e.target === node.id)
@@ -75,11 +76,18 @@ export function computeEmptyInputSkipIds(args: EmptyInputSkipArgs): Set<string> 
     // A fan-out is never evaluated — its items are non-empty by construction.
     const fanOut = getListFanOutForNode(node, edges, nodeStates, nodes, triggerData)
     if (fanOut && fanOut.items.length > 0) continue
-    const starved = incoming.some((e) => {
+    const starvedWires = incoming.filter((e) => {
       const source = byId.get(e.source)
       return source !== undefined && producedNothingThisRun(source, e.sourceHandle, args)
     })
-    if (!starved) continue
+    if (starvedWires.length === 0) continue
+    // An output node sends what is wired into it: nothing on EVERY wire this
+    // run (a filter that kept no row, a skipped source) is nothing to send. One
+    // live wire — a picture without its caption — still posts, as it did.
+    if (wiredOutput) {
+      if (starvedWires.length === incoming.length) skipped.add(node.id)
+      continue
+    }
     // What the node would send — the executor's own resolution, mirrored:
     // inputs, then field mappings and `{}` injection, then the prompt rule.
     const inputs = resolveNodeInputs(node, edges, nodeStates, nodes, triggerData)

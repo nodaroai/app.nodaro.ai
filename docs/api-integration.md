@@ -650,7 +650,9 @@ the writer behind it would be asked to write about nothing. Such a run **ends
 (Generate Text, Generate Script, Text to Speech, Generate Music, Text to Audio)
 is skipped when the text it would send is empty and that text came from a node
 which, in this run, produced nothing — and the nodes behind it are skipped with
-it. Nothing is billed for a skipped node.
+it. An output node that sends what is wired into it (Webhook Output, the social
+post nodes) is skipped when every one of its wires carried nothing in this run,
+so no empty request leaves the run. Nothing is billed for a skipped node.
 
 Where that shows:
 

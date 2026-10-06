@@ -46,6 +46,51 @@ const seeded = (text: string): NodeExecutionState => ({ status: "completed", out
 const level = (...ids: string[]) => nodes.filter((n) => ids.includes(n.id))
 
 describe("computeEmptyInputSkipIds", () => {
+  // An output node sends exactly what is wired into it (decided 2026-10-07): a
+  // run in which the filter before the site's webhook kept no story would have
+  // POSTed an empty payload (the site answers 400 and alerts its owner); the
+  // Telegram post behind a filter that kept nothing would have failed the run.
+  describe("output nodes with nothing wired this run", () => {
+    const graph: SimpleNode[] = [
+      node("siteOnly", "filter-list", { conditions: [] }),
+      node("hook", "webhook-output", { url: "https://site.example.test/ingest", params: [{ id: "article", name: "article", type: "text" }] }),
+      node("posts", "extract-field", { field: "post", outputType: "list" }),
+      node("pics", "generate-image", { prompt: "" }),
+      node("tg", "telegram-post", { caption: "" }),
+      node("typedTg", "telegram-post", { caption: "Good morning" }),
+    ]
+    const wires: SimpleEdge[] = [
+      edge("siteOnly", "hook", "out", "article"),
+      edge("posts", "tg", "text", "in"),
+      edge("pics", "tg", "image", "in"),
+    ]
+    const emptyList: NodeExecutionState = { status: "completed", output: { text: "", listResults: [] } }
+    const run = (level: string[], nodeStates: Record<string, NodeExecutionState>) =>
+      [...computeEmptyInputSkipIds({ level: graph.filter((n) => level.includes(n.id)), nodes: graph, edges: wires, nodeStates, deadIds: new Set() })]
+
+    it("a webhook whose only wire is a filter that kept no row is skipped — no empty POST", () => {
+      expect(run(["hook"], { siteOnly: emptyList })).toEqual(["hook"])
+    })
+
+    it("the same webhook posts when the filter kept rows (a fan-out) or one row", () => {
+      expect(run(["hook"], { siteOnly: { status: "completed", output: { text: "{\"a\":1}", listResults: ["{\"a\":1}", "{\"a\":2}"] } } })).toEqual([])
+      expect(run(["hook"], { siteOnly: { status: "completed", output: { text: "{\"a\":1}", listResults: ["{\"a\":1}"] } } })).toEqual([])
+    })
+
+    it("a social post with nothing on ANY wire is skipped; a picture alone still posts", () => {
+      expect(run(["tg"], { posts: emptyList, pics: { status: "skipped" } })).toEqual(["tg"])
+      expect(run(["tg"], { posts: emptyList, pics: { status: "completed", output: { imageUrl: "https://cdn.example.test/a.png" } } })).toEqual([])
+    })
+
+    it("a typed caption with no wire is the author's choice — never evaluated", () => {
+      expect(run(["typedTg"], {})).toEqual([])
+    })
+
+    it("a saved-data seed on the wire is not 'nothing this run'", () => {
+      expect(run(["hook"], { siteOnly: { ...emptyList, fromSavedData: true } })).toEqual([])
+    })
+  })
+
   it("skips a writer whose wired text came from nodes that produced nothing in this run", () => {
     const nodeStates = { feed: completed(""), feed2: completed(""), combine: completed("") }
     const skipped = computeEmptyInputSkipIds({ level: level("llm"), nodes, edges, nodeStates, deadIds: new Set() })

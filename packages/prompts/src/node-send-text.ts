@@ -1,4 +1,18 @@
+import { SOCIAL_POST_NODE_TYPES } from "@nodaro/shared"
 import { computeLlmChatFields, computeNodePrompt, computeScriptTopic } from "./resolve-prompt.js"
+
+/**
+ * Output nodes that send exactly what is WIRED into them — a webhook's
+ * parameters, a social post's caption and media. When every wire produced
+ * nothing in this run (a Filter List that kept no row, a node that was itself
+ * skipped), there is nothing to send: the node is skipped with
+ * `skipReason: "empty_input"` instead of posting an empty payload (a site that
+ * validates its input answers 400 and alerts its owner) or failing the run
+ * (a publish route refuses a post with no text and no media). A typed caption
+ * with no wire at all is the author's choice and still runs, as before. ONE
+ * list, read by the orchestrator's skip rule (`empty-input-skips.ts`).
+ */
+export const WIRED_OUTPUT_NODE_TYPES: ReadonlySet<string> = new Set(["webhook-output", ...SOCIAL_POST_NODE_TYPES])
 
 /**
  * Node types that send TEXT to a model or a voice and fail on an empty one —

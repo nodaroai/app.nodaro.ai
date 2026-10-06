@@ -16,6 +16,8 @@ The Webhook Output node sends the upstream media result and any configured param
 
 Wired to a list on an **Each** wire (a Filter List of articles, a node that ran once per item), the node sends ONE request per item. A second list wired into another parameter pairs by row — item 3 goes out with item 3; a list shorter than the run starts over from its first item; an empty cell sends nothing for that parameter in that request.
 
+When every wire into the node carried nothing in this run (a Filter List that kept no item, a source that was itself skipped), the node sends nothing and shows **Skipped · no input** — no empty request reaches your endpoint, and the run still ends `completed`.
+
 ### Sending with a credential
 
 Many webhook targets accept a delivery only with a key in a header (Zapier and
