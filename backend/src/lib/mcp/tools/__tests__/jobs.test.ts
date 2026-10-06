@@ -616,15 +616,17 @@ describe("list_jobs and Apply EDL renders", () => {
   })
 
   /** Pins exactly where Apply EDL sits: the video and the audio kind, never the image kind. */
-  it("Apply EDL is on exactly the video and audio kinds' allowlists", () => {
+  it("every render (Apply EDL) is on exactly the video and audio kinds' allowlists, from the registry", () => {
     const src = readFileSync(join(__dirname, "..", "jobs.ts"), "utf8")
     const block = src.slice(src.indexOf("const setForKind"), src.indexOf("const kinds ="))
     expect(block.length).toBeGreaterThan(100)
     const arrays = Object.fromEntries([...block.matchAll(/\b(image|video|audio): \[([^\]]*)\]/g)].map((m) => [m[1], m[2] ?? ""]))
     expect(Object.keys(arrays).sort()).toEqual(["audio", "image", "video"])
-    expect(arrays.video).toMatch(/["']apply-edl["']/)
-    expect(arrays.audio).toMatch(/["']apply-edl["']/)
-    expect(arrays.image).not.toMatch(/["']apply-edl["']/)
-    expect(block.match(/["']apply-edl["']/g)).toHaveLength(2)
+    // The registry's render types, spread into the video and audio kinds only.
+    expect(arrays.video).toMatch(/\.\.\.RENDER_NODE_TYPE_IDS\b/)
+    expect(arrays.audio).toMatch(/\.\.\.RENDER_NODE_TYPE_IDS\b/)
+    expect(arrays.image).not.toMatch(/RENDER_NODE_TYPE_IDS|["']apply-edl["']/)
+    expect(block.match(/RENDER_NODE_TYPE_IDS/g)).toHaveLength(2)
+    expect(block).not.toMatch(/["']apply-edl["']/)
   })
 })

@@ -80,12 +80,13 @@
 import type { FollowRun, PaintState } from "./triggered-run-follow"
 import { RESULTS_RUN_ENDED_AT_KEY, RESULTS_RUN_ID_KEY, paintableStates } from "./triggered-run-follow"
 import { isSeededState } from "@/lib/seeded-node-state"
+import { PREVIEW_RENDER_NODE_TYPES } from "@nodaro/shared"
 
 /**
- * The render nodes a review sits on. One member for now: G2-1's shared
- * `PREVIEW_RENDER_NODE_TYPES` (TA5) replaces this set when Speaker View joins.
+ * The render nodes a review sits on: the shared `PREVIEW_RENDER_NODE_TYPES`
+ * (TA5), itself derived from the render-node registry (SV18).
  */
-export const REVIEW_RENDER_NODE_TYPES: ReadonlySet<string> = new Set(["apply-edl"])
+export const REVIEW_RENDER_NODE_TYPES: ReadonlySet<string> = PREVIEW_RENDER_NODE_TYPES
 
 interface GraphNode {
   readonly id: string

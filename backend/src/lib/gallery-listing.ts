@@ -1,6 +1,6 @@
 import { supabase } from "./supabase.js"
 import { bannedGalleryUsersFilter, galleryHides, type GalleryModeration } from "./gallery-moderation.js"
-import { APPLY_EDL_JOB, applyEdlMedium, isPreviewListing } from "./apply-edl-listing.js"
+import { OWNER_ONLY_RENDER_JOBS, isPreviewListing, renderListingMedium } from "./render-listing.js"
 
 // Gallery only shows AI-generated creative content — NOT processing/application
 // results.
@@ -44,12 +44,13 @@ const AUDIO_JOBS = new Set([
 ])
 
 /** Apply EDL renders list in the OWNER's own view only (decided 2026-10-06; see
- *  lib/apply-edl-listing.ts): a Preview is private, and a public final would be
+ *  lib/render-listing.ts): a Preview is private, and a public final would be
  *  exposure the public gallery has never had. Their medium is read per row. */
-const OWNER_ONLY_JOBS = new Set(["apply-edl"])
+const OWNER_ONLY_JOBS: ReadonlySet<string> = OWNER_ONLY_RENDER_JOBS
 
 function getOutputType(jobName: string, inputData?: unknown, outputData?: unknown): "image" | "video" | "audio" | null {
-  if (jobName === APPLY_EDL_JOB) return applyEdlMedium(inputData, outputData)
+  const renderMedium = renderListingMedium(jobName, inputData, outputData)
+  if (renderMedium) return renderMedium
   if (IMAGE_JOBS.has(jobName)) return "image"
   if (VIDEO_JOBS.has(jobName)) return "video"
   if (AUDIO_JOBS.has(jobName)) return "audio"

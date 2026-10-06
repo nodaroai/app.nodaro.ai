@@ -1,3 +1,4 @@
+import { isRenderNodeType } from "@nodaro/shared"
 import { createClient } from "@/lib/supabase"
 import { getCurrentUserId, getWorkflowDocument, type WorkflowAccessLevel, type WorkflowDocument } from "@/lib/api"
 
@@ -172,7 +173,7 @@ export function mayHoldUnresolvedResultIds(nodes: unknown): boolean {
       const entry = (r && typeof r === "object" ? r : {}) as { jobId?: unknown; url?: unknown; quality?: unknown }
       if (typeof entry.jobId !== "string" || typeof entry.url !== "string" || entry.url.length === 0) return false
       if (entry.jobId.startsWith("exec-")) return true
-      return n.type === "apply-edl" && entry.quality !== "proxy" && entry.quality !== "final"
+      return isRenderNodeType(n.type) && entry.quality !== "proxy" && entry.quality !== "final"
     })
   })
 }

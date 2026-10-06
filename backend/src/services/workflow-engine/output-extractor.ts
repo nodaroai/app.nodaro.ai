@@ -19,7 +19,7 @@ import {
 import {
   pro3DRenderShotStills, COMPOSER_PLAN_MAP, COMPOSER_PLAN_FIELDS, extractAllGeneratedResults, splitGeneratedItems, aggregateByType, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member, overlayVariantIdFromHandle, featuredMetaAdOutputs, featuredInstagramOutputs, unwrapEditPlanOutput, editPlanSavedOutput, resolveVideoLinkOutput, telegramAccountTriggerOutputs, isTelegramAccountTriggerNamedHandle, pickSocialPosts, socialPostsFrom, socialPostsDigest, FAN_OUT_EACH_HANDLES } from "@nodaro/shared"
 import type { SceneData, Transcript } from "@nodaro/shared"
-import { renderResultStamp, savedRenderOutput } from "@nodaro/shared"
+import { isRenderNodeType, renderResultStamp, savedRenderOutput } from "@nodaro/shared"
 import { buildScenePrompt } from "@nodaro/prompts"
 export { extractVideoDurationFromNode } from "@nodaro/shared"
 export { extractAllGeneratedResults }
@@ -983,13 +983,14 @@ export function getPrimaryOutput(
     return output.videoUrl || output.audioUrl
   }
 
-  // apply-edl: dual-handle. The `json` handle carries the remapped Transcript
+  // A render (RENDER_NODE_TYPES; apply-edl): dual-handle. The `json` handle
+  // carries its json output — Apply EDL's is the remapped Transcript
   // (stringify for generic consumers; Extract Field reads state.output.json
   // directly). The DEFAULT (media) handle is the rendered cut — video OR audio
   // per the node's `output` setting. Without this branch the json edge resolves
   // to the video URL via the generic tail (the C4 audit-dag parity break).
   // Mirrors the frontend extractNodeOutput apply-edl branch.
-  if (sourceType === "apply-edl") {
+  if (isRenderNodeType(sourceType)) {
     if (sourceHandle === "json") {
       return output.json === undefined ? undefined : JSON.stringify(output.json)
     }
@@ -1363,13 +1364,13 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
     return audioUrl ? { audioUrl } : undefined
   }
 
-  // apply-edl (dual-handle): expose the rendered media (video OR audio per the
+  // A render (RENDER_NODE_TYPES; apply-edl), dual-handle: expose the rendered media (video OR audio per the
   // node's `output` setting) AND the remapped Transcript (data.generatedJson)
   // so a skipped / "Run from here" apply-edl hydrates BOTH handles from saved
   // node data without re-running. getPrimaryOutput then routes the media on the
   // default handle and the transcript on `json`. Mirrors the frontend
   // extractNodeOutput apply-edl branch and the live getPrimaryOutput branch.
-  if (type === "apply-edl") {
+  if (isRenderNodeType(type)) {
     // The SELECTED take, as the node's medium, with its stamps — the one reader
     // the editor uses too (`savedRenderOutput`). It used to take
     // `generatedVideoUrl` first, so a picked older take reached the canvas but
@@ -1910,10 +1911,10 @@ export function buildNodeOutputFromJobData(
     if (edl !== undefined) output.json = { edl, ...(transcript !== undefined ? { transcript } : {}) }
   }
 
-  // Apply EDL: the render's identity — its quality ("proxy" is a Preview) and
+  // A render (RENDER_NODE_TYPES; Apply EDL): its identity — its quality ("proxy" is a Preview) and
   // the plan clip it cut — read only off a render's output (another node's
   // `quality` is something else entirely).
-  if (nodeType === "apply-edl") Object.assign(output, renderResultStamp(outputData))
+  if (isRenderNodeType(nodeType)) Object.assign(output, renderResultStamp(outputData))
 
   if (nodeType === "edit-plan") {
     const plan = unwrapEditPlanOutput(outputData)

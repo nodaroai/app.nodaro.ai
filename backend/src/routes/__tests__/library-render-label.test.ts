@@ -32,7 +32,7 @@ const USER = "00000000-0000-4000-8000-000000000001"
 
 type Row = Record<string, unknown>
 let assetSelects: string[] = []
-let jobCalls: Array<{ select: string; ids: string[]; jobType: string | null }> = []
+let jobCalls: Array<{ select: string; ids: string[]; jobTypes: string[] | null }> = []
 
 function seed(assets: Row[], jobs: Row[]) {
   assetSelects = []
@@ -49,14 +49,13 @@ function seed(assets: Row[], jobs: Row[]) {
       return proxy as never
     }
     if (table === "jobs") {
-      const call = { select: "", ids: [] as string[], jobType: null as string | null }
+      const call = { select: "", ids: [] as string[], jobTypes: null as string[] | null }
       jobCalls.push(call)
       const proxy: unknown = new Proxy({}, {
         get(_t, prop) {
           if (prop === "then") return (res: (v: unknown) => void) => res({ data: jobs, error: null })
           if (prop === "select") return (s: string) => { call.select = s; return proxy }
-          if (prop === "in") return (_c: string, ids: string[]) => { call.ids = ids; return proxy }
-          if (prop === "eq") return (c: string, v: string) => { if (c === "job_type") call.jobType = v; return proxy }
+          if (prop === "in") return (c: string, vals: string[]) => { if (c === "job_type") call.jobTypes = vals; else call.ids = vals; return proxy }
           return () => proxy
         },
       })
@@ -102,7 +101,8 @@ describe("GET /v1/library — the Preview label of a render made before it was s
     expect(data[0]!.metadata.thumbnail_url).toBe("https://t/1.jpg")
     expect(jobCalls).toHaveLength(1)
     expect([...jobCalls[0]!.ids].sort()).toEqual(["j1", "j2"])
-    expect(jobCalls[0]!.jobType).toBe("apply-edl")
+    // Restricted to render jobs (RENDER_NODE_TYPES): Apply EDL today.
+    expect(jobCalls[0]!.jobTypes).toEqual(["apply-edl"])
   })
 
   it("asks the assets table for job_id (the link to the job)", async () => {

@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest"
-import { APPLY_EDL_JOB, applyEdlMedium, isPreviewListing } from "../apply-edl-listing.js"
+import { OWNER_ONLY_RENDER_JOBS, isPreviewListing, renderListingMedium } from "../render-listing.js"
+
+const APPLY_EDL_JOB = "apply-edl"
+const applyEdlMedium = (input: unknown, output: unknown) => renderListingMedium(APPLY_EDL_JOB, input, output)
 
 describe("applyEdlMedium — which kind an Apply EDL render lists under (decided 2026-10-06)", () => {
   it("a finished render is what its output holds: a cut is a video, a mix is an audio", () => {
@@ -15,6 +18,17 @@ describe("applyEdlMedium — which kind an Apply EDL render lists under (decided
     expect(applyEdlMedium({}, null)).toBe("video")
     expect(applyEdlMedium(null, undefined)).toBe("video")
     expect(applyEdlMedium({ output: "audio" }, { videoUrl: "" })).toBe("audio")
+  })
+})
+
+describe("renderListingMedium — a job that is not a render has no listing medium here", () => {
+  it("answers undefined for any other job, whatever its output holds", () => {
+    expect(renderListingMedium("generate-video", {}, { videoUrl: "https://r2/v.mp4" })).toBeUndefined()
+    expect(renderListingMedium(null, { output: "audio" }, null)).toBeUndefined()
+  })
+
+  it("gates exactly the registry's owner-only renders on the owner", () => {
+    expect([...OWNER_ONLY_RENDER_JOBS]).toEqual(["apply-edl"])
   })
 })
 

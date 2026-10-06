@@ -22,6 +22,7 @@
  * Both return copies. Neither writes, and a failed lookup never fails the read:
  * the rows go out as stored.
  */
+import { isRenderNodeType, RENDER_NODE_TYPE_IDS } from "@nodaro/shared"
 import { supabase } from "./supabase.js"
 import { jobFactsFromRow, jobFactsFromSelect, jobRowStamp } from "./canvas-result-ids.js"
 
@@ -41,7 +42,7 @@ export interface FillJobOptions {
 }
 
 /**
- * A job row, as a read route hands it on: for a COMPLETED Apply EDL job whose
+ * A job row, as a read route hands it on: for a COMPLETED render job whose
  * `output_data` holds no `quality`, a copy with the label `jobRowStamp` gives it
  * from the order. The row is read from `job_type` + `input_data.quality` (full
  * rows) or the lean projection's `input_quality`; any other job is returned as
@@ -55,7 +56,7 @@ export function fillJobRenderQuality<T extends object>(row: T, opts: FillJobOpti
 
   const output = r.output_data
   const needsLabel =
-    r.job_type === "apply-edl" && r.status === "completed" && isRecord(output) && !hasLabel(output)
+    isRenderNodeType(r.job_type) && r.status === "completed" && isRecord(output) && !hasLabel(output)
   if (!needsLabel) return (hadHelpers ? base : row) as T
 
   const order = isRecord(r.input_data) ? r.input_data : { quality: inputQuality }
@@ -88,7 +89,7 @@ const couldBeRender = (a: AssetLabelRow): a is AssetLabelRow & { job_id: string 
  * A library page whose Apply EDL files carry the label they were made at. A file
  * with a stored `metadata.quality` keeps it; a video or audio file with a job and
  * no stored label has its job looked up — all of the page's in ONE query,
- * restricted to Apply EDL jobs, and no query at all when no file needs one — and
+ * restricted to render jobs (RENDER_NODE_TYPES), and no query at all when no file needs one — and
  * takes `jobRowStamp`'s quality from it. A file with no job (`assets.job_id` is
  * `ON DELETE SET NULL`), or whose job is not a render, is left as stored.
  */
@@ -101,7 +102,7 @@ export async function fillAssetRenderQuality<T extends AssetLabelRow>(assets: re
     // tenant-scope-ignore: a shared library item's job belongs to another user; only the render label is read.
     .select(ASSET_JOB_SELECT)
     .in("id", ids)
-    .eq("job_type", "apply-edl")
+    .in("job_type", [...RENDER_NODE_TYPE_IDS])
   if (error || !data) return [...assets]
 
   const qualityByJob = new Map<string, string>()

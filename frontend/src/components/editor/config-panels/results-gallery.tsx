@@ -10,6 +10,7 @@ import { downloadFile } from "@/components/presentation/output-cards/shared"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { PreviewBadge, isPreviewQuality } from "@/components/render/preview-badge"
 import { restorePickedTakeTranscript } from "@/lib/apply-edl-take-transcript"
+import { isRenderNodeType } from "@nodaro/shared"
 import { cn } from "@/lib/utils"
 import { JobConfigDisplay } from "./job-config-display"
 import { resultsGalleryPickPatch, resultsGalleryPickRefusal, resultsGalleryTakeMedium } from "./results-gallery-media"
@@ -23,7 +24,7 @@ const NO_RESULTS: ReadonlyArray<GalleryResult> = []
 /** A take is a Preview by its OWN stamped quality — never the node's Quality
  *  setting — and only on a render: another node's `quality` means something else. */
 const isPreviewTake = (nodeType: string, r: GalleryResult | undefined): boolean =>
-  nodeType === "apply-edl" && isPreviewQuality(r)
+  isRenderNodeType(nodeType) && isPreviewQuality(r)
 
 /** Why a take of the other medium cannot be picked, by that take's medium
  *  (one whole sentence per medium, so no locale splices in a noun). */
@@ -78,9 +79,10 @@ export function ResultsGallery({
     const patch = resultsGalleryPickPatch(nodeType, nodeData, result.url, idx)
     if (!patch) return
     onUpdate(patch)
-    // Apply EDL: a take that kept no Transcript had the node's cleared by the
-    // pick; read the take's own back from its job (once per pick).
-    if (nodeType === "apply-edl" && nodeId) void restorePickedTakeTranscript(nodeId, { ...result, url: result.url })
+    // A render (Apply EDL): a take that kept no json output (its Transcript)
+    // had the node's cleared by the pick; read the take's own back from its
+    // job (once per pick).
+    if (isRenderNodeType(nodeType) && nodeId) void restorePickedTakeTranscript(nodeId, { ...result, url: result.url })
   }, [results, nodeId, nodeType, nodeData, onUpdate])
 
   if (results.length === 0 || !activeUrl) return null

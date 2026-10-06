@@ -14,19 +14,18 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 
 const jobsQuery = vi.hoisted(() => ({
   rows: [] as Array<Record<string, unknown>>,
-  calls: [] as Array<{ select: string; ids: string[]; jobType: string | null }>,
+  calls: [] as Array<{ select: string; ids: string[]; jobTypes: string[] | null }>,
 }))
 
 vi.mock("../supabase.js", () => ({
   supabase: {
     from: vi.fn((table: string) => {
       if (table !== "jobs") throw new Error(`unexpected table ${table}`)
-      const call = { select: "", ids: [] as string[], jobType: null as string | null }
+      const call = { select: "", ids: [] as string[], jobTypes: null as string[] | null }
       jobsQuery.calls.push(call)
       const chain: Record<string, unknown> = {}
       chain.select = (s: string) => { call.select = s; return chain }
-      chain.in = (_col: string, ids: string[]) => { call.ids = ids; return chain }
-      chain.eq = (col: string, v: string) => { if (col === "job_type") call.jobType = v; return chain }
+      chain.in = (col: string, vals: string[]) => { if (col === "job_type") call.jobTypes = vals; else call.ids = vals; return chain }
       chain.then = (res: (v: unknown) => unknown) => Promise.resolve({ data: jobsQuery.rows, error: null }).then(res)
       return chain
     }),
@@ -133,7 +132,8 @@ describe("fillAssetRenderQuality — a library page takes an old render's label 
     ])
     expect(jobsQuery.calls).toHaveLength(1)
     expect([...jobsQuery.calls[0]!.ids].sort()).toEqual(["j1", "j2"])
-    expect(jobsQuery.calls[0]!.jobType).toBe("apply-edl")
+    // Restricted to render jobs (RENDER_NODE_TYPES): Apply EDL today.
+    expect(jobsQuery.calls[0]!.jobTypes).toEqual(["apply-edl"])
     expect(out.map((a) => (a.metadata as Record<string, unknown>).quality)).toEqual(["proxy", "final", "proxy"])
     expect((out[0]!.metadata as Record<string, unknown>).thumbnail_url).toBe("t")
   })

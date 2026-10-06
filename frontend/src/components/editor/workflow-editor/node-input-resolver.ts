@@ -2,7 +2,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { proShotStills } from "@/lib/scene3d/pro-media-result";
 import { readSunoIds } from "@/lib/suno-ids";
 import { getParameterPromptHint } from "@nodaro/prompts"
-import { DYNAMIC_PRODUCER_TYPES, DEFAULT_CHARACTER_FACET, PARAMETER_NODE_TYPES, getParameterValue, OBJECT_PICKER_NODE_TYPES, parseGroupHandle, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, editPlanSourceDurationSec, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, FAN_OUT_EACH_TYPES, FAN_OUT_EACH_HANDLES, defaultEdgeOutputMode, listResultsServeHandle, compactWithRows, pickHeldRow, liveRowColumn, resolveListFanOut, type FanOutCandidate, type ListFanOut, extractAllGeneratedResults, extractGeneratedJsonAsList, splitGeneratedItems, SOCIAL_POST_NODE_TYPES, resolveSourceThroughConnectedList, VARIABLES_HANDLE_ID, extractReferencedLabels, canonicalVarName, characterMentionSlug, SUNO_TRACK_SOURCE_TYPES, isFanInEdge, isFanInNodeType, videoLinkPageUrl, socialSearchPostVideo, ownsItsList, savedRenderBatchUrls } from "@nodaro/shared"
+import { DYNAMIC_PRODUCER_TYPES, DEFAULT_CHARACTER_FACET, PARAMETER_NODE_TYPES, getParameterValue, OBJECT_PICKER_NODE_TYPES, parseGroupHandle, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, editPlanSourceDurationSec, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, FAN_OUT_EACH_TYPES, FAN_OUT_EACH_HANDLES, defaultEdgeOutputMode, listResultsServeHandle, compactWithRows, pickHeldRow, liveRowColumn, resolveListFanOut, type FanOutCandidate, type ListFanOut, extractAllGeneratedResults, extractGeneratedJsonAsList, splitGeneratedItems, SOCIAL_POST_NODE_TYPES, resolveSourceThroughConnectedList, VARIABLES_HANDLE_ID, extractReferencedLabels, canonicalVarName, characterMentionSlug, SUNO_TRACK_SOURCE_TYPES, isFanInEdge, isFanInNodeType, videoLinkPageUrl, socialSearchPostVideo, ownsItsList, savedRenderBatchUrls, isRenderNodeType, renderNodeOf, rendersLatestBatch } from "@nodaro/shared"
 import type { EntityKind, ConnectedReference } from "@nodaro/shared"
 import { VIDEO_OVERLAY_LAYER_PLAN_HANDLE, videoOverlaySlotOfHandle, editPlanTranscriptOrigin } from "@nodaro/shared"
 import { buildNodeRefMap, resolveTextRefs } from "@/lib/node-refs";
@@ -903,11 +903,12 @@ export function extractNodeOutputAsList(
     return requestedType ? buckets[requestedType] : undefined;
   }
   const data = node.data as Record<string, unknown>;
-  // A render (Apply EDL) on its media handle: its LATEST batch only — never
-  // its accumulated history, which holds earlier runs' clips too (TA6, decided
-  // 2026-10-04). None after a single run: the edge reads its one result.
-  // Mirror of the backend's savedListFor / getListFanOutForNode branch.
-  if (node.type === "apply-edl" && sourceHandle !== "json") return savedRenderBatchUrls(data);
+  // A render whose descriptor says so (Apply EDL) on its media handle: its
+  // LATEST batch only — never its accumulated history, which holds earlier
+  // runs' clips too (TA6, decided 2026-10-04). None after a single run: the
+  // edge reads its one result. Mirror of the backend's savedListFor /
+  // getListFanOutForNode branch.
+  if (rendersLatestBatch(node.type) && sourceHandle !== "json") return savedRenderBatchUrls(data);
   // A node that ran once per upstream item (Camera Switch per clip): its "each"
   // handle lists the LAST batch's per-item results — never its accumulated
   // history, which holds earlier runs' items too; its other handles never list.
@@ -1313,7 +1314,7 @@ export function resolveNodeInputs(
       ? extractNodeOutputAsList(src, resolvedSourceHandle ?? undefined)
       // A render lists its latest batch only, on every handle — the backend's
       // listFor (savedListFor) reads it the same way.
-      : src.type === "apply-edl"
+      : rendersLatestBatch(src.type)
       ? savedRenderBatchUrls(srcData)
       : src.type === "group" || src.type === "collect"
       ? extractNodeOutputAsList(src, resolvedSourceHandle ?? undefined)
@@ -2761,15 +2762,16 @@ export function resolveNodeInputs(
       } else {
         inputs.audioUrl = output;
       }
-    } else if (src.type === "apply-edl" && resolvedSourceHandle !== "json") {
+    } else if (isRenderNodeType(src.type) && resolvedSourceHandle !== "json") {
       // Dual-handle. The `json` handle (remapped Transcript) is handled by the
       // apply-edl / add-captions target interceptor above (or the generic json
       // routing) — never here. The DEFAULT (media) handle carries video OR audio
       // per the node's `output` setting; route it like the matching media source
       // so a combine-videos / mix-audio consumer accumulates it. Mirror of the
-      // backend input-resolver apply-edl branch.
+      // backend input-resolver render branch.
       const aeData = src.data as ApplyEdlData;
-      const producedVideo = Boolean(aeData.generatedVideoUrl) || aeData.output !== "audio";
+      const producedVideo =
+        Boolean(aeData.generatedVideoUrl) || renderNodeOf(src.type)!.mediumOf(src.data as Record<string, unknown>) === "video";
       if (producedVideo) {
         if (MULTI_VIDEO_INPUT_TYPES.has(node.type!)) {
           inputs.videoUrls = [...(inputs.videoUrls ?? []), output];

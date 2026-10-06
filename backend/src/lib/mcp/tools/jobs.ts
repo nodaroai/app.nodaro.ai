@@ -11,7 +11,8 @@ import { JOB_STATUSES } from "../../job-status.js"
 import { jobView, JOB_VIEW_SCHEMA } from "./_job-view.js"
 import { waitForJob } from "./_wait-for-job.js"
 import { fillJobRenderQuality, fillJobsRenderQuality } from "../../render-label-fill.js"
-import { APPLY_EDL_JOB, applyEdlMedium, isPreviewListing } from "../../apply-edl-listing.js"
+import { OWNER_ONLY_RENDER_JOBS, isPreviewListing, renderListingMedium } from "../../render-listing.js"
+import { RENDER_NODE_TYPE_IDS } from "@nodaro/shared"
 import { bannedGalleryUsersFilter, galleryHides, loadGalleryModeration } from "../../gallery-moderation.js"
 
 const jobsReadGate: ToolGate = { required: ["jobs:read"] }
@@ -166,16 +167,17 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
           "combine-videos",
           "add-captions",
           "extract-frame",
-          // An Apply EDL render is a video OR an audio file: it sits on both
-          // kinds and is matched per job by its output below (decided 2026-10-06).
-          "apply-edl",
+          // A render (RENDER_NODE_TYPES: Apply EDL) is a video OR an audio
+          // file: it sits on both kinds and is matched per job by its output
+          // below (decided 2026-10-06).
+          ...RENDER_NODE_TYPE_IDS,
         ],
         audio: [
           "text-to-speech",
           "generate-music",
           "text-to-audio",
           "extract-youtube-audio",
-          "apply-edl",
+          ...RENDER_NODE_TYPE_IDS,
         ],
       }
       // Default kinds: image + video. Audio is opt-in because most users
@@ -183,15 +185,17 @@ export function registerJobs({ server, session }: RegisterJobsOpts): void {
       // default clutters the gallery view. Caller can pass `["audio"]`
       // or `["image","video","audio"]` etc. for any combination.
       const kinds = args.kinds ?? ["image", "video"]
-      // A job is listed when a requested kind's allowlist holds its type. Apply
-      // EDL is on two kinds but is only ONE of them per job — the medium its
-      // output holds (its order's, while it runs) — and it is owner-only: the
-      // public scope is a gallery, which has never listed a render (a Preview is
-      // private; a public final would be exposure nobody decided).
+      // A job is listed when a requested kind's allowlist holds its type. A
+      // render is on two kinds but is only ONE of them per job — the medium its
+      // output holds (its order's, while it runs) — and an owner-only one
+      // (Apply EDL) lists in scope mine only: the public scope is a gallery,
+      // which has never listed a render (a Preview is private; a public final
+      // would be exposure nobody decided).
       const listedUnder = (r: { job_type?: unknown; input_data?: unknown; output_data?: unknown }): readonly string[] => {
         const type = r.job_type as string | null | undefined
         if (!type) return []
-        if (type === APPLY_EDL_JOB) return scope === "mine" ? [applyEdlMedium(r.input_data, r.output_data)] : []
+        const renderMedium = renderListingMedium(type, r.input_data, r.output_data)
+        if (renderMedium) return scope === "mine" || !OWNER_ONLY_RENDER_JOBS.has(type) ? [renderMedium] : []
         return Object.keys(setForKind).filter((k) => setForKind[k]?.includes(type))
       }
       rows = rows.filter((r) => listedUnder(r).some((k) => kinds.includes(k as "image" | "video" | "audio")))

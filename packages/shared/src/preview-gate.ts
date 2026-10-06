@@ -24,9 +24,10 @@
 import { buildFeedMaps } from "./trigger-feeds.js"
 import { defaultEdgeOutputMode } from "./producer-types.js"
 import { mergeNodeInputOverrides } from "./presentation-utils.js"
+import { RENDER_NODE_TYPE_IDS } from "./render-nodes.js"
 
-/** Render nodes a run can stop at. `speaker-view` joins when it renders. */
-export const PREVIEW_RENDER_NODE_TYPES: ReadonlySet<string> = new Set(["apply-edl"])
+/** Render nodes a run can stop at: every render in the registry (SV18). */
+export const PREVIEW_RENDER_NODE_TYPES: ReadonlySet<string> = new Set(RENDER_NODE_TYPE_IDS)
 
 /**
  * Stable refusal code: a run with nobody to review it (a trigger, an API or

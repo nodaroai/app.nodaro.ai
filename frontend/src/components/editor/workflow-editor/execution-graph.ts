@@ -1,6 +1,6 @@
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { proShotStills } from "@/lib/scene3d/pro-media-result";
-import { collectAncestorRefs as sharedCollectAncestorRefs, isExpandedClone, PARAMETER_NODE_TYPES, aggregateByType, buildChildrenByParent, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member, ASPECT_RATIO_DIMENSIONS, overlayVariantIdFromHandle, featuredMetaAdOutputs, featuredInstagramOutputs, resolveVideoLinkOutput, isTelegramAccountTriggerNamedHandle, telegramAccountTriggerOutputs, type Transcript, isSocialSearchPickFrozen, socialPostsFrom, socialPostsDigest, savedRenderOutput, telegramPostsFrom } from "@nodaro/shared";
+import { collectAncestorRefs as sharedCollectAncestorRefs, isExpandedClone, PARAMETER_NODE_TYPES, aggregateByType, buildChildrenByParent, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member, ASPECT_RATIO_DIMENSIONS, overlayVariantIdFromHandle, featuredMetaAdOutputs, featuredInstagramOutputs, resolveVideoLinkOutput, isTelegramAccountTriggerNamedHandle, telegramAccountTriggerOutputs, type Transcript, isSocialSearchPickFrozen, socialPostsFrom, socialPostsDigest, savedRenderOutput, telegramPostsFrom, isRenderNodeType } from "@nodaro/shared";
 import { getParameterPromptHint } from "@nodaro/prompts"
 import type {
   WorkflowNode,
@@ -602,8 +602,9 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     if (sourceHandle === "audio" || sourceHandle === "audio-out") return audioUrls[0];
     return videoUrls[0] ?? audioUrls[0];
   }
-  if (type === "apply-edl") {
-    // Dual-handle: the `json` handle carries the remapped Transcript
+  if (isRenderNodeType(type)) {
+    // A render (RENDER_NODE_TYPES), dual-handle: the `json` handle carries its
+    // json output — Apply EDL's is the remapped Transcript
     // (data.generatedJson, stringified for generic consumers). Every other
     // handle — the default (`!sourceHandle`) and the `media` handle — is the
     // rendered cut (video OR audio per the node's `output` setting). Mirrors
@@ -1248,9 +1249,9 @@ export function detectPreviewItemType(
   // and Content Ideas are readable text.
   if (nodeType === "content-recipe") return sourceHandle === "json" ? "data" : "text"
   if (nodeType === "content-ideas") return "text"
-  // apply-edl `json` handle = the remapped Transcript (data). Its media handle
-  // falls through to the URL regex below (mp4 → video, m4a → audio).
-  if (nodeType === "apply-edl" && sourceHandle === "json") return "data"
+  // A render's `json` handle (Apply EDL: the remapped Transcript) is data. Its
+  // media handle falls through to the URL regex below (mp4 → video, m4a → audio).
+  if (isRenderNodeType(nodeType) && sourceHandle === "json") return "data"
   if (value) {
     if (IMAGE_URL_RE.test(value)) return "image"
     if (VIDEO_URL_RE.test(value)) return "video"

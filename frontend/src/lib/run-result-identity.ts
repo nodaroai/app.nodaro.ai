@@ -10,7 +10,7 @@
  * Result fields only: a render's `quality` must never be written onto the node,
  * where `quality` is the node's own setting.
  */
-import { renderResultStamp, type RenderQuality, type RunResultRowStamp } from "@nodaro/shared"
+import { isRenderNodeType, renderResultStamp, type RenderQuality, type RunResultRowStamp } from "@nodaro/shared"
 
 export interface RunResultIdentity {
   readonly thumbnailUrl?: string
@@ -27,7 +27,7 @@ export function runResultIdentity(nodeType: string | null | undefined, output: u
   return {
     ...(thumbnailUrl ? { thumbnailUrl } : {}),
     // Only a render's quality is a render quality.
-    ...(nodeType === "apply-edl" ? renderResultStamp(o) : {}),
+    ...(isRenderNodeType(nodeType) ? renderResultStamp(o) : {}),
   }
 }
 

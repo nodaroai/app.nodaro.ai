@@ -25,9 +25,9 @@
  *                                 `<job>-v<N>`, the id a live run gives it.
  * Two jobs with that URL, no such job, a placeholder naming another node (a
  * pasted copy), a result whose URL is not a non-empty string, a run started by
- * a collaborator (their job, not the owner's): all stay as they are. An Apply
- * EDL take with a real id is labelled only when that id is a completed
- * `apply-edl` job of the owner whose output URL is the take's URL.
+ * a collaborator (their job, not the owner's): all stay as they are. A render
+ * take (Apply EDL) with a real id is labelled only when that id is a completed
+ * render job of the owner whose output URL is the take's URL.
  *
  * WHAT A MATCH WRITES. The job id; and, matched by the job's own output URL,
  * the fields of `jobRowStamp` the result does not already hold — `thumbnailUrl`
@@ -58,6 +58,7 @@
  * through `resolveCanvasResultIds` or is exempt with a reason:
  * `__tests__/canvas-result-ids-sites.test.ts` fails the build otherwise.
  */
+import { isRenderNodeType } from "@nodaro/shared"
 import { supabase } from "./supabase.js"
 import { needsPublicWorkflowProjection } from "./public-workflow-projection.js"
 
@@ -203,12 +204,12 @@ export interface JobRowStamp {
 
 /**
  * The stamp of a result `job` made: its id and thumbnail for every type; for an
- * Apply EDL render, also its `quality` — the worker's, else the order's by the
+ * render (RENDER_NODE_TYPES), also its `quality` — the worker's, else the order's by the
  * worker's own rule ("proxy" is a Preview, anything else the final) — and its
  * `clipKey` when it had one. Another node's `quality` is something else.
  */
 export function jobRowStamp(job: JobFacts): JobRowStamp {
-  const render = job.jobType === "apply-edl"
+  const render = isRenderNodeType(job.jobType)
   const thumbnailUrl = nonEmpty(job.thumbnailUrl)
   const quality = render ? (nonEmpty(job.quality) ?? (job.inputQuality === "proxy" ? "proxy" : "final")) : undefined
   const clipKey = render ? nonEmpty(job.clipKey) : undefined
@@ -255,7 +256,7 @@ function resultsOf(node: unknown): readonly unknown[] | undefined {
 /** An Apply EDL take landed before renders were labelled: a real job id, a
  *  URL, and no render quality. */
 function isUnlabelledRender(node: NodeLike, entry: Entry): boolean {
-  return node.type === "apply-edl"
+  return isRenderNodeType(node.type)
     && typeof entry.jobId === "string" && UUID.test(entry.jobId)
     && typeof entry.url === "string" && entry.url.length > 0
     && !RENDER_QUALITIES.has(entry.quality)
@@ -362,7 +363,7 @@ export function applyCanvasResultIds<T>(nodes: T, ownerUserId: string, jobs: rea
         }
       } else if (isUnlabelledRender(node, entry)) {
         const job = byId.get(entry.jobId)
-        if (job && job.jobType === "apply-edl" && jobOutputUrl(job) === url) {
+        if (job && isRenderNodeType(job.jobType) && jobOutputUrl(job) === url) {
           const fill = withStampFill(entry, jobRowStamp(job))
           if (Object.keys(fill).length > 0) renamed = { ...entry, ...fill }
         }

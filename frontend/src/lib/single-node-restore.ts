@@ -13,6 +13,8 @@
  * canvas `node_id`, and includes `{ nodeId, jobId, progress, status, nodeType }`.
  */
 
+import { RENDER_NODE_TYPE_IDS } from "@nodaro/shared"
+
 /** Stuck-job horizon for an ordinary single-node Run: 30 minutes. (It was set
  *  to mirror the backend `NODE_TIMEOUT_MS` when that was 30 minutes; the
  *  orchestrator's per-node ceiling is 90 minutes now, and this horizon was left
@@ -31,7 +33,8 @@ export const SINGLE_NODE_RESTORE_MAX_AGE_MS = 30 * 60 * 1000
  *  cron-written failure — the wider horizon only avoids abandoning a healthy
  *  long run. Keyed off the node type; everything else keeps the 30-min bound.
  *
- *  `apply-edl` joins for the same reason (podcast Track 0.11 follow-up): a
+ *  Every render (RENDER_NODE_TYPES; `apply-edl`) joins for the same reason
+ *  (podcast Track 0.11 follow-up): a
  *  final-quality render of a long episode legitimately runs for hours under its
  *  declared budget, and its worker's heartbeat stops at that budget, so a
  *  restored poll still ends on the cron-written failure of a hung render.
@@ -47,7 +50,7 @@ export const SINGLE_NODE_RESTORE_MAX_AGE_MS = 30 * 60 * 1000
 export const LONG_RUNNING_NODE_TYPES: ReadonlySet<string> = new Set([
   "generate-video-pro",
   "edit-video-pro",
-  "apply-edl",
+  ...RENDER_NODE_TYPE_IDS,
   "audio-sync",
   "silence-detect",
 ])

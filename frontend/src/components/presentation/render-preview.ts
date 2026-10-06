@@ -12,7 +12,7 @@
  * A card with no URL (the node's one card) reads the run's take, else the
  * node's selected take (@nodaro/shared savedRenderOutput).
  */
-import { savedRenderBatch, savedRenderOutput, type RunResultRowStamp } from "@nodaro/shared"
+import { isRenderNodeType, savedRenderBatch, savedRenderOutput, type RunResultRowStamp } from "@nodaro/shared"
 
 type Rec = Readonly<Record<string, unknown>>
 
@@ -39,7 +39,7 @@ export function outputIsPreview(
   runOutput: Rec | undefined,
   url?: string,
 ): boolean {
-  if (nodeType !== "apply-edl") return false
+  if (!isRenderNodeType(nodeType)) return false
   if (url !== undefined) {
     const quality = (runOutput ? runQualityOf(runOutput, url) : undefined) ?? (data ? savedQualityOf(data, url) : undefined)
     return quality === "proxy"

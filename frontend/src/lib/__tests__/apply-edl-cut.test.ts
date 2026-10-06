@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest"
-import { applyEdlCutFields, applyEdlMedium, applyEdlRunCutFields, applyEdlTakeTranscriptField } from "../apply-edl-cut"
+import { renderNodeOf } from "@nodaro/shared"
+import { applyEdlCutFields, applyEdlRunCutFields, applyEdlTakeTranscriptField } from "../apply-edl-cut"
+
+// The node's medium is the render registry's rule (RENDER_NODE_TYPES, SV18).
+const applyEdlMedium = (data: Readonly<Record<string, unknown>>) => renderNodeOf("apply-edl")!.mediumOf(data)
 
 describe("applyEdlMedium — the node's Output setting", () => {
   it("is audio only when Output says so; video otherwise (the node's default)", () => {

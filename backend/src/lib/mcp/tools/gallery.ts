@@ -13,9 +13,9 @@ import { redactPrivateJobData } from "../../public-job-data.js"
 import { escapeLikeArgument } from "./_like-escape.js"
 import { fillAssetRenderQuality, fillJobRenderQuality } from "../../render-label-fill.js"
 import { isPreviewRender } from "../../preview-render.js"
-import { APPLY_EDL_JOB, applyEdlMedium, isPreviewListing } from "../../apply-edl-listing.js"
+import { OWNER_ONLY_RENDER_JOBS, isPreviewListing, renderListingMedium } from "../../render-listing.js"
 import { bannedGalleryUsersFilter, galleryHides, loadGalleryModeration } from "../../gallery-moderation.js"
-import { countEmptyInputSkips, executionOutcome, type GenericNode } from "@nodaro/shared"
+import { countEmptyInputSkips, executionOutcome, isRenderNodeType, type GenericNode } from "@nodaro/shared"
 import { summarizeNodeStates } from "../../execution-result.js"
 import type { NodeExecutionState } from "../../../services/workflow-engine/types.js"
 
@@ -96,13 +96,14 @@ const AUDIO_JOBS = new Set([
 const DUAL_MODE_JOBS = new Set(["voice-changer", "voice-changer-pro", "dubbing"])
 
 /** Apply EDL renders list in the OWNER's own views only (decided 2026-10-06; see
- *  lib/apply-edl-listing.ts): a Preview is private, and a public final would be
+ *  lib/render-listing.ts): a Preview is private, and a public final would be
  *  exposure nobody decided. Their kind is their output's medium, per row. */
-const OWNER_ONLY_JOBS = new Set(["apply-edl"])
+const OWNER_ONLY_JOBS: ReadonlySet<string> = OWNER_ONLY_RENDER_JOBS
 
 function getKind(jobType: string | null, row?: Pick<GalleryRow, "input_data" | "output_data">): "image" | "video" | "audio" | null {
   if (!jobType) return null
-  if (jobType === APPLY_EDL_JOB) return applyEdlMedium(row?.input_data, row?.output_data)
+  const renderMedium = renderListingMedium(jobType, row?.input_data, row?.output_data)
+  if (renderMedium) return renderMedium
   if (IMAGE_JOBS.has(jobType)) return "image"
   if (VIDEO_JOBS.has(jobType)) return "video"
   if (AUDIO_JOBS.has(jobType)) return "audio"
@@ -222,7 +223,7 @@ function rowToGalleryItem(row: GalleryRow, viewerUserId: string): GalleryItem | 
     jobId: row.id,
     kind,
     prompt: (input.prompt as string | undefined) ?? "",
-    model: (input.provider as string | undefined) ?? row.provider ?? (row.job_type === APPLY_EDL_JOB ? APPLY_EDL_JOB : "?"),
+    model: (input.provider as string | undefined) ?? row.provider ?? (isRenderNodeType(row.job_type) ? row.job_type : "?"),
     thumbnailUrl,
     assetUrl,
     createdAt: row.completed_at ?? "",

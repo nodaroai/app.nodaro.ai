@@ -16,6 +16,7 @@ import { SHORTCUTS, formatBinding, isMacPlatform } from "@/lib/shortcuts"
 import { nodeDocsLinksShown, useNodeDocsUrl } from "@/lib/node-docs/node-docs"
 import { nodeThumbnailUrl } from "./node-thumbnail"
 import { rendersOfPlan } from "./workflow-editor/render-final-set"
+import { isRenderNodeType } from "@nodaro/shared"
 import { runtimePreviewStopRule } from "@/lib/runtime-config"
 
 interface NodeContextMenuProps {
@@ -56,7 +57,7 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
   // Render final, from the render itself or from the Edit Plan behind it. A
   // plan that feeds several renders asks which: one render per entry.
   const reviewRenders = useMemo(() => {
-    if (nodeType === "apply-edl") return [{ id: nodeId, name: "" }]
+    if (isRenderNodeType(nodeType)) return [{ id: nodeId, name: "" }]
     if (nodeType !== "edit-plan") return []
     return rendersOfPlan(nodeId, nodes, edges).map((n) => ({
       id: n.id,

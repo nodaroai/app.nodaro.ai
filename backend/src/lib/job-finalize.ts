@@ -1,3 +1,4 @@
+import { RENDER_NODE_TYPE_IDS } from "@nodaro/shared"
 import { supabase } from "./supabase.js"
 import { uploadToR2 } from "./storage.js"
 import { runPostProcessing } from "./post-processing-error.js"
@@ -255,10 +256,12 @@ export const NOT_GENERIC_RECOVERABLE: ReadonlySet<string> = new Set<string>([
   // audio-sync — the same shape: a SYNC local analysis (ffmpeg decode +
   // in-process correlation), own markJobCompleted with output_data.json.
   "audio-sync",
-  // apply-edl — a local-ffmpeg EDL render (no provider_task_id; chunked with its
-  // OWN R2 checkpoint-resume, all-or-nothing, own markJobCompleted). Recovery is
-  // the worker's, not the generic media-finalize path — like combine-videos above.
-  "apply-edl",
+  // Every render (RENDER_NODE_TYPES; Apply EDL today) — a local-ffmpeg EDL
+  // render (no provider_task_id; chunked with its OWN R2 checkpoint-resume,
+  // all-or-nothing, own markJobCompleted). Recovery is the worker's, not the
+  // generic media-finalize path — like combine-videos above. A render that
+  // joins the registry must complete that way too, or leave this spread.
+  ...RENDER_NODE_TYPE_IDS,
 
   // suno.ts — all 12 keys of workers/handlers/suno.ts:580-593. None call
   // finalizeJobWithMedia (own markJobCompleted per handler); the async

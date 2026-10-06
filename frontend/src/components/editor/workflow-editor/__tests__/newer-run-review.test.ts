@@ -13,6 +13,7 @@ vi.mock("@/lib/supabase", () => ({ createClient: () => ({}) }))
 
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 import { restoreEndedEditorRun } from "@/hooks/use-workflow-persistence"
+import { PREVIEW_RENDER_NODE_TYPES, RENDER_NODE_TYPES } from "@nodaro/shared"
 import { REVIEW_RENDER_NODE_TYPES, edlPathIds, heldBackIds, laterSingleNodeRunIds, pairedHoldIds, reviewRegionIds } from "../newer-run-review"
 import fixture from "../../../../../../backend/src/services/workflow-engine/__tests__/fixtures/server-run-json-results.json"
 
@@ -52,6 +53,9 @@ const activeTake = (data: Data) => (data.generatedResults as Data[] | undefined)
 describe("the review region", () => {
   it("is every node on a canvas with a render (Apply EDL today) — the tail after the render too (decided 2026-10-05)", () => {
     expect([...REVIEW_RENDER_NODE_TYPES]).toEqual(["apply-edl"])
+    // Not its own copy: the shared stop rule's set, derived from the render-node registry (SV18).
+    expect(REVIEW_RENDER_NODE_TYPES).toBe(PREVIEW_RENDER_NODE_TYPES)
+    expect([...REVIEW_RENDER_NODE_TYPES]).toEqual(Object.keys(RENDER_NODE_TYPES))
     const nodes = [...canvas(), { id: "caps", type: "add-captions", position: { x: 0, y: 0 }, data: {} }, { id: "thumb", type: "generate-image", position: { x: 0, y: 0 }, data: {} }] as unknown as WorkflowNode[]
     expect([...reviewRegionIds(nodes)].sort()).toEqual(["a50-apply", "a50-plan", "a50-silence", "a50-src", "a50-transcribe", "caps", "thumb"])
   })

@@ -18,8 +18,8 @@
  * reads it. results-gallery-medium-census.test.ts fails for a gallery type with
  * no medium.
  */
-import { AUDIO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES, VIDEO_PRODUCER_TYPES } from "@nodaro/shared"
-import { applyEdlCutFields, applyEdlMedium } from "@/lib/apply-edl-cut"
+import { AUDIO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES, RENDER_NODE_TYPES, VIDEO_PRODUCER_TYPES, renderNodeOf } from "@nodaro/shared"
+import { applyEdlCutFields } from "@/lib/apply-edl-cut"
 import { takeKeptTranscript, type ApplyEdlTake } from "@/lib/apply-edl-take-transcript"
 import { isAudioUrl, isImageUrl, isVideoUrl } from "@/lib/media-type"
 
@@ -56,8 +56,9 @@ function holdsVideo(data: NodeData): "video" | "audio" {
  *  one's own canvas picker reads it. Every other dynamic producer (Split into
  *  Chunks, Choose Best, …) has results of either medium, typed one by one. */
 export const NODE_DATA_MEDIUM: ReadonlyMap<string, (data: NodeData) => "video" | "audio"> = new Map([
-  // Its `output` field, video when absent.
-  ["apply-edl", applyEdlMedium],
+  // Every render (RENDER_NODE_TYPES): the medium its order asks for — Apply
+  // EDL's `output` field, video when absent.
+  ...Object.entries(RENDER_NODE_TYPES).map(([type, render]) => [type, render.mediumOf] as const),
   ["voice-changer", holdsVideo],
   ["voice-changer-pro", holdsVideo],
   ["dubbing", holdsVideo],
@@ -137,10 +138,11 @@ const MEDIA_FIELD = {
  * names no medium is taken to be the Output's.
  */
 export function resultsGalleryPickRefusal(nodeType: string, data: NodeData, url: string): "video" | "audio" | undefined {
-  if (nodeType !== "apply-edl") return undefined
+  const render = renderNodeOf(nodeType)
+  if (!render) return undefined
   const take = mediumOfUrl(url)
   if (take !== "video" && take !== "audio") return undefined
-  return take === applyEdlMedium(data) ? undefined : take
+  return take === render.mediumOf(data) ? undefined : take
 }
 
 /**
@@ -172,11 +174,12 @@ export function resultsGalleryPickPatch(
   index: number,
 ): Record<string, unknown> | undefined {
   if (resultsGalleryPickRefusal(nodeType, data, url)) return undefined
-  if (nodeType === "apply-edl") {
+  const render = renderNodeOf(nodeType)
+  if (render) {
     const take = (data.generatedResults as ReadonlyArray<ApplyEdlTake> | undefined)?.[index]
     return {
       activeResultIndex: index,
-      ...applyEdlCutFields(applyEdlMedium(data), url),
+      ...applyEdlCutFields(render.mediumOf(data), url),
       generatedJson: take && takeKeptTranscript(take) ? take.generatedJson : undefined,
     }
   }

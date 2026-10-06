@@ -5,7 +5,7 @@ import { dirname, join } from "node:path"
 import { tmpdir } from "node:os"
 import { ytProxyOption } from "../providers/video/yt-proxy.js"
 import { runYtDlpOptions } from "../providers/video/ytdlp-options-run.js"
-import { variantJobId, renderResultStamp } from "@nodaro/shared"
+import { variantJobId, renderResultStamp, isRenderNodeType } from "@nodaro/shared"
 import { config, hasCredits } from "../lib/config.js"
 import { supabase } from "../lib/supabase.js"
 import { getAppSettings } from "../lib/app-settings.js"
@@ -788,7 +788,7 @@ export function generatedAssetMetadata(output: Record<string, unknown>, jobType:
   const thumbnailUrl = (output.thumbnail_url ?? output.thumbnailUrl ?? null) as string | null
   // Only a render's quality is a render quality (another job's output may use
   // the word for something else).
-  const { quality } = jobType === "apply-edl" ? renderResultStamp(output) : {}
+  const { quality } = isRenderNodeType(jobType) ? renderResultStamp(output) : {}
   return {
     ...(thumbnailUrl ? { thumbnail_url: thumbnailUrl } : {}),
     ...(quality ? { quality } : {}),

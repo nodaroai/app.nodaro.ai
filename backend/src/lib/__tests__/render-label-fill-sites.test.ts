@@ -86,8 +86,11 @@ describe("every MCP job read fills the label an old render lacks (round 2, decid
  * gallery-listing-apply-edl.test.ts, mcp/tools/__tests__/gallery.test.ts and
  * jobs.test.ts; this fails when a NEW allowlist starts naming it.
  */
-describe("exactly these listings name Apply EDL, and each gates it on the owner", () => {
-  const named = (where: string) => count(code(where), /["']apply-edl["']/g)
+describe("exactly these listings name the renders, and each gates them on the owner", () => {
+  // A render is named only through the registry (RENDER_NODE_TYPES, SV18): the
+  // owner-only set is OWNER_ONLY_RENDER_JOBS (lib/render-listing.ts), never a literal.
+  const named = (where: string) => count(code(where), /\bOWNER_ONLY_RENDER_JOBS\b/g)
+  const literal = (where: string) => count(code(where), /["']apply-edl["']/g)
 
   it("the REST gallery's shared allowlists (IMAGE/VIDEO/AUDIO_JOBS) do not; its owner-only set does, once", () => {
     const src = code("lib/gallery-listing.ts")
@@ -95,8 +98,10 @@ describe("exactly these listings name Apply EDL, and each gates it on the owner"
       const block = src.slice(src.indexOf(`const ${set} = new Set`), src.indexOf("])", src.indexOf(`const ${set} = new Set`)))
       expect(block, `${set} names apply-edl: the public gallery would list it`).not.toMatch(/["']apply-edl["']/)
     }
-    expect(src).toMatch(/const OWNER_ONLY_JOBS = new Set\(\["apply-edl"\]\)/)
-    expect(named("lib/gallery-listing.ts")).toBe(1)
+    expect(src).toMatch(/const OWNER_ONLY_JOBS: ReadonlySet<string> = OWNER_ONLY_RENDER_JOBS\n/)
+    expect(literal("lib/gallery-listing.ts")).toBe(0)
+    // the import and the one set
+    expect(named("lib/gallery-listing.ts")).toBe(2)
     // The owner is the one read of one person's work BY that person — the flag alone is not it.
     expect(src).toMatch(/const ownerView = q\.includePrivate && !!q\.userId/)
     expect(src).toMatch(/OWNER_ONLY_JOBS\.has\(job\.job_type\) && !\(ownerView && job\.user_id === q\.userId\)/)
@@ -108,22 +113,26 @@ describe("exactly these listings name Apply EDL, and each gates it on the owner"
       const block = src.slice(src.indexOf(`const ${set} = new Set`), src.indexOf("])", src.indexOf(`const ${set} = new Set`)))
       expect(block, `${set} names apply-edl: the public scope would list it`).not.toMatch(/["']apply-edl["']/)
     }
-    expect(src).toMatch(/const OWNER_ONLY_JOBS = new Set\(\["apply-edl"\]\)/)
-    expect(named("lib/mcp/tools/gallery.ts")).toBe(1)
+    expect(src).toMatch(/const OWNER_ONLY_JOBS: ReadonlySet<string> = OWNER_ONLY_RENDER_JOBS\n/)
+    expect(literal("lib/mcp/tools/gallery.ts")).toBe(0)
+    expect(named("lib/mcp/tools/gallery.ts")).toBe(2)
     expect(src).toMatch(/jobNamesForKind\(k, scope === "mine"\)/)
     // list_favorites' hydration admits other people's public rows: the owner check is the guard.
     expect(src).toMatch(/OWNER_ONLY_JOBS\.has\(row\.job_type\) && row\.user_id !== viewerUserId\) return null/)
   })
 
-  it("list_jobs names it on the video and audio kinds only (two entries), and lists it only in scope mine", () => {
+  it("list_jobs names them on the video and audio kinds only (two entries), and lists an owner-only one only in scope mine", () => {
     const src = code("lib/mcp/tools/jobs.ts")
-    expect(named("lib/mcp/tools/jobs.ts")).toBe(2)
-    expect(src).toMatch(/type === APPLY_EDL_JOB\) return scope === "mine"/)
+    expect(literal("lib/mcp/tools/jobs.ts")).toBe(0)
+    expect(count(src, /\.\.\.RENDER_NODE_TYPE_IDS\b/g)).toBe(2)
+    expect(src).toMatch(/if \(renderMedium\) return scope === "mine" \|\| !OWNER_ONLY_RENDER_JOBS\.has\(type\) \? \[renderMedium\] : \[\]/)
   })
 
-  it("no other listing names it", () => {
-    expect(named("routes/gallery.ts")).toBe(0)
-    expect(named("ee/routes/admin-gallery-moderation.ts")).toBe(0)
+  it("no other listing names them", () => {
+    for (const where of ["routes/gallery.ts", "ee/routes/admin-gallery-moderation.ts"]) {
+      expect(literal(where)).toBe(0)
+      expect(named(where)).toBe(0)
+    }
   })
 })
 

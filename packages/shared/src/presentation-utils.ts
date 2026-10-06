@@ -7,6 +7,7 @@ import type { GenericNode, GenericEdge } from "./types.js"
 import type { PresentationItem } from "./presentation-types.js"
 import { AUDIO_PRODUCER_TYPES, VIDEO_PRODUCER_TYPES } from "./producer-types.js"
 import { canonicalizeOverrideKeys } from "./exposed-field-keys.js"
+import { RENDER_NODE_TYPE_IDS } from "./render-nodes.js"
 
 // ---------------------------------------------------------------------------
 // Node type sets
@@ -146,13 +147,14 @@ const VIDEO_OUTPUT_TYPES = new Set([
   "upload-video",
   "lip-sync", "motion-transfer", "video-upscale", "add-captions",
   "social-media-format",
-  // apply-edl renders an EDL into video OR audio. Its medium is decided at run
-  // time (DYNAMIC_PRODUCER_TYPES), so getOutputType would answer "data" and a
-  // published app would render the cut as a JSON blob. Declaring it here — as
-  // the voice-changer/dubbing precedent does for their default medium — makes
-  // the classifier answer "video" (the common case; an audio-only cut still
-  // plays in a video element). Asserted in producer-types.test.ts.
-  "apply-edl",
+  // A render (Apply EDL) renders an EDL into video OR audio. Its medium is
+  // decided at run time (DYNAMIC_PRODUCER_TYPES), so getOutputType would answer
+  // "data" and a published app would render the cut as a JSON blob. Declaring
+  // every render here — as the voice-changer/dubbing precedent does for their
+  // default medium — makes the classifier answer "video" (the common case; an
+  // audio-only cut still plays in a video element). Asserted in
+  // producer-types.test.ts.
+  ...RENDER_NODE_TYPE_IDS,
 ])
 
 const AUDIO_OUTPUT_TYPES = new Set([

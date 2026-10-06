@@ -15,7 +15,7 @@ import {
   pro3DRenderShotStills, extractGeneratedJsonAsList, splitGeneratedItems, resolveNodeRefs, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, SOCIAL_POST_NODE_TYPES, PARAMETER_NODE_TYPES, getParameterValue, FAN_OUT_EACH_TYPES, FAN_OUT_EACH_HANDLES, defaultEdgeOutputMode, listResultsServeHandle, compactWithRows, pickHeldRow, liveRowColumn, resolveListFanOut, type FanOutCandidate, type ListFanOut, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES, editPlanSourceDurationSec, extractReferencedLabels, canonicalVarName, REFERENCE_HANDLE_MAP, parseGroupHandle, SUNO_TRACK_SOURCE_TYPES, isFanInEdge, isFanInNodeType, videoLinkPageUrl, socialSearchPostVideo, ownsItsList } from "@nodaro/shared"
 import { isSourceNode } from "./execution-graph.js"
 import { overlayHandleIndex } from "../../providers/image/overlay-contract.js"
-import { VIDEO_OVERLAY_LAYER_PLAN_HANDLE, videoOverlaySlotOfHandle, isTelegramAccountTriggerNamedHandle, editPlanTranscriptOrigin } from "@nodaro/shared"
+import { VIDEO_OVERLAY_LAYER_PLAN_HANDLE, videoOverlaySlotOfHandle, isTelegramAccountTriggerNamedHandle, editPlanTranscriptOrigin, isRenderNodeType, rendersLatestBatch } from "@nodaro/shared"
 import { buildNodeRefMap } from "./payload-builder.js"
 import { jsonArrayItems, listFor, savedDataAllowed, savedListFor } from "./saved-data.js"
 import { IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE } from "./inline-executor.js"
@@ -981,12 +981,13 @@ export function getListFanOutForNode(
       continue
     }
 
-    // 4b. A render (Apply EDL) on its media handle: THIS run's per-clip
-    //     results, else its LATEST saved batch only — never its accumulated
-    //     history, which holds earlier runs' clips too (TA6, decided
-    //     2026-10-04). A render that ran once lists nothing: the edge reads its
-    //     one result. Its `json` handle keeps the generic path below.
-    if (sourceNode.type === "apply-edl" && edge.sourceHandle !== "json") {
+    // 4b. A render whose descriptor reads its latest batch (Apply EDL) on its
+    //     media handle: THIS run's per-clip results, else its LATEST saved
+    //     batch only — never its accumulated history, which holds earlier runs'
+    //     clips too (TA6, decided 2026-10-04). A render that ran once lists
+    //     nothing: the edge reads its one result. Its `json` handle keeps the
+    //     generic path below.
+    if (rendersLatestBatch(sourceNode.type) && edge.sourceHandle !== "json") {
       const items = listFor(sourceNode, state)
       if (items && items.length > 1) consider(edge, selectListItems(items, selectorArg))
       continue
@@ -2353,7 +2354,7 @@ function routeOutput(
     return
   }
 
-  // --- apply-edl → the DEFAULT (media) handle carries video OR audio, decided
+  // --- a render (RENDER_NODE_TYPES: apply-edl) → the DEFAULT (media) handle carries video OR audio, decided
   // at run time by the node's `output` setting. It is a DYNAMIC producer (not in
   // VIDEO/AUDIO_OUTPUT_NODE_TYPES), so without this branch its media output falls
   // through to the `prompt` fallback on server DAG runs — the exact drift its own
@@ -2362,7 +2363,7 @@ function routeOutput(
   // handle (the remapped Transcript) is NOT handled here — it was already caught
   // by the apply-edl / add-captions target interceptor, or falls through to the
   // generic json/text routing. Mirrors the frontend node-input-resolver. ---
-  if (srcType === "apply-edl" && edge.sourceHandle !== "json") {
+  if (isRenderNodeType(srcType) && edge.sourceHandle !== "json") {
     const producedVideo = producedVideoIn(src, nodeStates)
     if (producedVideo) {
       routeVideoOutput(inputs, output, targetType, src.id)
