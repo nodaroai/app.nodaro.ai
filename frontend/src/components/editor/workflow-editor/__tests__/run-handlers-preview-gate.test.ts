@@ -229,3 +229,90 @@ describe("PREVIEW_STOP_RULE_ENABLED off (production until Render final): the edi
     expect(walked.map((x) => x.id).sort()).toEqual(["cap", "cut", "plan"])
   })
 })
+
+// A6.1 — two guards around a review. Both read the canvas, in the one funnel
+// every run passes (confirmRunOrAbort).
+describe("a render's own ▶ behind Camera Switch, once the plan holds edits (TA19 a)", () => {
+  const seg = (inMs: number, outMs: number) => ({ id: `s${inMs}`, inMs, outMs, video: "v" })
+  const planEdl = {
+    version: 1, clock: "master", sources: [{ id: "v", url: "u", kind: "video" }],
+    segments: [seg(0, 10_000), seg(20_000, 30_000)],
+    dropped: [{ inMs: 10_000, outMs: 20_000, reason: "silence" }],
+  }
+  const REVIEWED = n("plan", "edit-plan", {
+    generatedJson: planEdl,
+    editedEdl: { v: 1, kind: "edl", basis: "WRONG", edl: { segments: [seg(0, 30_000)], dropped: [] } },
+  })
+  const CAM = n("cam", "camera-switch")
+  const MULTICAM_EDGES = [
+    { id: "a", source: "plan", target: "cam", targetHandle: "edl" },
+    { id: "c", source: "cam", target: "cut", targetHandle: "edl" },
+    { id: "b", source: "cut", target: "cap" },
+  ]
+
+  async function reviewedPlan() {
+    const { editPlanBasis } = await import("@nodaro/shared")
+    const edited = (REVIEWED.data.editedEdl as Record<string, unknown>)
+    return n("plan", "edit-plan", { generatedJson: planEdl, editedEdl: { ...edited, basis: editPlanBasis(planEdl) } })
+  }
+
+  it("refuses with the Update preview pointer, above the skip-confirm shortcut", async () => {
+    mockNodes = [await reviewedPlan(), CAM, n("cut", "apply-edl", { quality: "proxy" }), CAP]
+    mockEdges = MULTICAM_EDGES
+    await handleRunSingleNode("cut", makeCtx() as never, "p1", vi.fn(), vi.fn(), { current: new Set() } as never, { skipConfirm: true })
+    expect(mockToastError).toHaveBeenCalledWith(expect.stringMatching(/Update preview/))
+    expect(mockExecuteNode).not.toHaveBeenCalled()
+  })
+
+  it("is hidden while the stop-rule flag is off (decided 2026-10-06)", async () => {
+    delete window.__NODARO_RUNTIME__
+    mockNodes = [await reviewedPlan(), CAM, n("cut", "apply-edl", { quality: "proxy" }), CAP]
+    mockEdges = MULTICAM_EDGES
+    await handleRunSingleNode("cut", makeCtx() as never, "p1", vi.fn(), vi.fn(), { current: new Set() } as never, { skipConfirm: true })
+    expect(mockToastError).not.toHaveBeenCalledWith(expect.stringMatching(/Update preview/))
+  })
+})
+
+describe("a run that re-executes an Edit Plan holding a review asks first (TA2 item 3)", () => {
+  const seg = (inMs: number, outMs: number) => ({ id: `s${inMs}`, inMs, outMs, video: "v" })
+  const planEdl = {
+    version: 1, clock: "master", sources: [{ id: "v", url: "u", kind: "video" }],
+    segments: [seg(0, 10_000)], dropped: [],
+  }
+
+  async function reviewed() {
+    const { editPlanBasis } = await import("@nodaro/shared")
+    return n("plan", "edit-plan", {
+      label: "Tighten Plan",
+      generatedJson: planEdl,
+      editedEdl: { v: 1, kind: "edl", basis: editPlanBasis(planEdl), edl: { segments: [seg(0, 4_000)], dropped: [{ inMs: 4_000, outMs: 10_000, reason: "manual" }] } },
+    })
+  }
+
+  it("Run names what is lost; declining starts nothing", async () => {
+    mockNodes = [await reviewed(), CUT, CAP]
+    const askConfirm = vi.fn().mockResolvedValue(false)
+    await handleRun({ ...makeCtx(), askConfirm } as never, "p1", "wf-1", vi.fn(), vi.fn())
+    expect(askConfirm).toHaveBeenCalledWith(expect.objectContaining({ body: expect.stringContaining("0 restored, 1 dropped") }))
+    expect(mockRunWorkflow).not.toHaveBeenCalled()
+  })
+
+  it("accepting goes on", async () => {
+    mockNodes = [await reviewed(), CUT, CAP]
+    await handleRun({ ...makeCtx(), askConfirm: vi.fn().mockResolvedValue(true) } as never, "p1", "wf-1", vi.fn(), vi.fn())
+    expect(mockRunWorkflow).toHaveBeenCalled()
+  })
+
+  it("a run that does not re-execute the plan asks nothing (Render final never does)", async () => {
+    mockNodes = [await reviewed(), CUT, CAP]
+    const askConfirm = vi.fn().mockResolvedValue(true)
+    await handleRunSingleNode("cap", { ...makeCtx(), askConfirm } as never, "p1", vi.fn(), vi.fn(), { current: new Set() } as never, { skipConfirm: true })
+    expect(askConfirm).not.toHaveBeenCalled()
+  })
+
+  it("a plan with no review asks nothing", async () => {
+    const askConfirm = vi.fn()
+    await handleRun({ ...makeCtx(), askConfirm } as never, "p1", "wf-1", vi.fn(), vi.fn())
+    expect(askConfirm).not.toHaveBeenCalled()
+  })
+})

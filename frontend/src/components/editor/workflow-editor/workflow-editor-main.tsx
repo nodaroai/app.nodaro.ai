@@ -79,6 +79,7 @@ import { InsufficientCreditsModal } from "@/ee/components/credits/InsufficientCr
 import { StorageExceededModal } from "@/ee/components/credits/StorageExceededModal";
 import { SubscriptionRequiredModal } from "@/ee/components/credits/SubscriptionRequiredModal";
 import { useRunConfirm } from "./run-confirm-dialog";
+import { handleRenderFinal } from "./render-final-handler";
 import { previewRunnable, previewSingleRunRefusal } from "./preview-gate";
 import { PromptQuickEditModal } from "@/components/nodes/prompt-quick-edit-modal";
 import {
@@ -868,7 +869,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     return err instanceof StorageExceededError;
   }
 
-  const { confirmRun, isConfirming, dialog: runConfirmDialog } = useRunConfirm();
+  const { confirmRun, askConfirm, isConfirming, dialog: runConfirmDialog } = useRunConfirm();
 
   const ctx: ExecutionContext = {
     userId: user?.id,
@@ -885,6 +886,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     setInsufficientCreditsData,
     setShowSubscriptionRequired,
     confirmRun,
+    askConfirm,
   };
 
   // ---------------------------------------------------------------------------
@@ -1106,6 +1108,13 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       isReadOnly ? null : (nodeId: string) => handleRunFromHere(nodeId, ctx, projectId, save, setIsRunning, onExecutionStarted, onExecutionEnded),
     );
     return () => useWorkflowStore.getState().setRunFromHere(null);
+  });
+
+  useEffect(() => {
+    useWorkflowStore.getState().setRenderFinal(
+      isReadOnly ? null : (renderId: string, kind: "final" | "proxy") => handleRenderFinal(renderId, kind, ctx, projectId, save, setIsRunning, onExecutionStarted, onExecutionEnded),
+    );
+    return () => useWorkflowStore.getState().setRenderFinal(null);
   });
 
   useEffect(() => {

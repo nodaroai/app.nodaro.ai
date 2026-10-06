@@ -1,0 +1,2764 @@
+{
+ "finalUrl": "https://nodaro.ai/",
+ "status": 200,
+ "title": "Nodaro - AI Video Creation Workflows",
+ "lang": "en",
+ "dir": "ltr",
+ "viewport": {
+  "width": 412,
+  "height": 839
+ },
+ "dpr": 2.625,
+ "userAgent": "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.12 Mobile Safari/537.36 NodaroCapture/1.0 (+https://nodaro.ai/capture)",
+ "coarsePointer": false,
+ "pageHeight": 11886,
+ "visibleTextLength": 3472,
+ "bodyText": "",
+ "anchors": [
+  {
+   "text": "EVERY AI MODEL. ONE CANVAS.",
+   "rect": {
+    "x": 20,
+    "y": 440,
+    "width": 372,
+    "height": 174
+   },
+   "fontSize": 49.44,
+   "inChrome": false,
+   "landmarks": [
+    0
+   ]
+  },
+  {
+   "text": "$ git clone nodaroai/app.nodaro.ai",
+   "rect": {
+    "x": 21,
+    "y": 5917,
+    "width": 371,
+    "height": 30
+   },
+   "fontSize": 19,
+   "inChrome": false,
+   "landmarks": [
+    2,
+    1
+   ]
+  },
+  {
+   "text": "Simple, credit-based pricing",
+   "rect": {
+    "x": 21,
+    "y": 7029,
+    "width": 371,
+    "height": 75
+   },
+   "fontSize": 35.2,
+   "inChrome": false,
+   "landmarks": [
+    3,
+    1
+   ]
+  },
+  {
+   "text": "Basic",
+   "rect": {
+    "x": 46,
+    "y": 7347,
+    "width": 321,
+    "height": 33
+   },
+   "fontSize": 20.48,
+   "inChrome": false,
+   "landmarks": [
+    3,
+    1
+   ]
+  },
+  {
+   "text": "$10",
+   "rect": {
+    "x": 84,
+    "y": 7442,
+    "width": 54,
+    "height": 43
+   },
+   "fontSize": 43.2,
+   "inChrome": false,
+   "landmarks": [
+    3,
+    1
+   ]
+  },
+  {
+   "text": "Standard",
+   "rect": {
+    "x": 46,
+    "y": 7898,
+    "width": 321,
+    "height": 33
+   },
+   "fontSize": 20.48,
+   "inChrome": false,
+   "landmarks": [
+    3,
+    1
+   ]
+  },
+  {
+   "text": "$24",
+   "rect": {
+    "x": 89,
+    "y": 7993,
+    "width": 59,
+    "height": 43
+   },
+   "fontSize": 43.2,
+   "inChrome": false,
+   "landmarks": [
+    3,
+    1
+   ]
+  },
+  {
+   "text": "Pro",
+   "rect": {
+    "x": 46,
+    "y": 8449,
+    "width": 321,
+    "height": 33
+   },
+   "fontSize": 20.48,
+   "inChrome": false,
+   "landmarks": [
+    3,
+    1
+   ]
+  },
+  {
+   "text": "$49",
+   "rect": {
+    "x": 89,
+    "y": 8544,
+    "width": 59,
+    "height": 43
+   },
+   "fontSize": 43.2,
+   "inChrome": false,
+   "landmarks": [
+    3,
+    1
+   ]
+  },
+  {
+   "text": "Business",
+   "rect": {
+    "x": 46,
+    "y": 9000,
+    "width": 321,
+    "height": 33
+   },
+   "fontSize": 20.48,
+   "inChrome": false,
+   "landmarks": [
+    3,
+    1
+   ]
+  },
+  {
+   "text": "$109",
+   "rect": {
+    "x": 96,
+    "y": 9094,
+    "width": 77,
+    "height": 43
+   },
+   "fontSize": 43.2,
+   "inChrome": false,
+   "landmarks": [
+    3,
+    1
+   ]
+  },
+  {
+   "text": "NOW SHOOT YOURS.",
+   "rect": {
+    "x": 25,
+    "y": 9994,
+    "width": 231,
+    "height": 96
+   },
+   "fontSize": 52,
+   "inChrome": false,
+   "landmarks": [
+    4,
+    1
+   ]
+  },
+  {
+   "text": "● PRODUCT",
+   "rect": {
+    "x": 25,
+    "y": 10872,
+    "width": 164,
+    "height": 16
+   },
+   "fontSize": 10,
+   "inChrome": true,
+   "landmarks": []
+  },
+  {
+   "text": "● DOCS",
+   "rect": {
+    "x": 223,
+    "y": 10872,
+    "width": 164,
+    "height": 16
+   },
+   "fontSize": 10,
+   "inChrome": true,
+   "landmarks": []
+  },
+  {
+   "text": "● MODELS",
+   "rect": {
+    "x": 25,
+    "y": 11209,
+    "width": 164,
+    "height": 16
+   },
+   "fontSize": 10,
+   "inChrome": true,
+   "landmarks": []
+  },
+  {
+   "text": "● RESOURCES",
+   "rect": {
+    "x": 223,
+    "y": 11209,
+    "width": 164,
+    "height": 16
+   },
+   "fontSize": 10,
+   "inChrome": true,
+   "landmarks": []
+  },
+  {
+   "text": "● COMPANY",
+   "rect": {
+    "x": 25,
+    "y": 11512,
+    "width": 164,
+    "height": 16
+   },
+   "fontSize": 10,
+   "inChrome": true,
+   "landmarks": []
+  }
+ ],
+ "blocks": [
+  {
+   "tag": "section",
+   "role": null,
+   "rect": {
+    "x": 0,
+    "y": 0,
+    "width": 412,
+    "height": 5800
+   }
+  },
+  {
+   "tag": "div",
+   "role": null,
+   "rect": {
+    "x": 0,
+    "y": 5800,
+    "width": 412,
+    "height": 4788
+   }
+  },
+  {
+   "tag": "section",
+   "role": null,
+   "rect": {
+    "x": 0,
+    "y": 5800,
+    "width": 412,
+    "height": 1113
+   }
+  },
+  {
+   "tag": "section",
+   "role": null,
+   "rect": {
+    "x": 0,
+    "y": 6913,
+    "width": 412,
+    "height": 2927
+   }
+  },
+  {
+   "tag": "section",
+   "role": null,
+   "rect": {
+    "x": 0,
+    "y": 9840,
+    "width": 412,
+    "height": 658
+   }
+  }
+ ],
+ "leaves": [
+  {
+   "kind": "image",
+   "text": "",
+   "rect": {
+    "x": 0,
+    "y": 72,
+    "width": 412,
+    "height": 412
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "image",
+   "text": "",
+   "rect": {
+    "x": 0,
+    "y": 72,
+    "width": 412,
+    "height": 412
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "image",
+   "text": "",
+   "rect": {
+    "x": 0,
+    "y": 72,
+    "width": 412,
+    "height": 412
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "image",
+   "text": "",
+   "rect": {
+    "x": 0,
+    "y": 420,
+    "width": 412,
+    "height": 420
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "image",
+   "text": "",
+   "rect": {
+    "x": 0,
+    "y": 420,
+    "width": 412,
+    "height": 420
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "image",
+   "text": "",
+   "rect": {
+    "x": 0,
+    "y": 867,
+    "width": 412,
+    "height": 515
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "image",
+   "text": "",
+   "rect": {
+    "x": 0,
+    "y": 867,
+    "width": 412,
+    "height": 515
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "A CLOSER LOOK",
+   "rect": {
+    "x": 20,
+    "y": 1376,
+    "width": 372,
+    "height": 17
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "A closer look",
+   "rect": {
+    "x": 20,
+    "y": 1407,
+    "width": 372,
+    "height": 29
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "at AI.",
+   "rect": {
+    "x": 20,
+    "y": 1436,
+    "width": 372,
+    "height": 29
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Enter the world of creation.",
+   "rect": {
+    "x": 20,
+    "y": 1479,
+    "width": 372,
+    "height": 23
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "image",
+   "text": "",
+   "rect": {
+    "x": 0,
+    "y": 1562,
+    "width": 412,
+    "height": 515
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "image",
+   "text": "",
+   "rect": {
+    "x": 0,
+    "y": 1562,
+    "width": 412,
+    "height": 515
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "EVERY MODEL",
+   "rect": {
+    "x": 20,
+    "y": 2071,
+    "width": 372,
+    "height": 17
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "One prompt. Every model.",
+   "rect": {
+    "x": 20,
+    "y": 2102,
+    "width": 372,
+    "height": 57
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Different perspectives. Infinite possibilities.",
+   "rect": {
+    "x": 20,
+    "y": 2174,
+    "width": 372,
+    "height": 23
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "image",
+   "text": "",
+   "rect": {
+    "x": 0,
+    "y": 2257,
+    "width": 412,
+    "height": 412
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "image",
+   "text": "",
+   "rect": {
+    "x": 0,
+    "y": 2257,
+    "width": 412,
+    "height": 412
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "ONE PROMPT",
+   "rect": {
+    "x": 20,
+    "y": 2663,
+    "width": 372,
+    "height": 17
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "One prompt.",
+   "rect": {
+    "x": 20,
+    "y": 2694,
+    "width": 372,
+    "height": 29
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Endless directions.",
+   "rect": {
+    "x": 20,
+    "y": 2723,
+    "width": 372,
+    "height": 29
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "image",
+   "text": "",
+   "rect": {
+    "x": 0,
+    "y": 2812,
+    "width": 412,
+    "height": 343
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "image",
+   "text": "",
+   "rect": {
+    "x": 0,
+    "y": 2812,
+    "width": 412,
+    "height": 343
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "CONSISTENCY",
+   "rect": {
+    "x": 20,
+    "y": 3149,
+    "width": 372,
+    "height": 17
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Same character.",
+   "rect": {
+    "x": 20,
+    "y": 3180,
+    "width": 372,
+    "height": 29
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Every shot.",
+   "rect": {
+    "x": 20,
+    "y": 3209,
+    "width": 372,
+    "height": 29
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Lock your character, location, product and style across every scene.",
+   "rect": {
+    "x": 20,
+    "y": 3252,
+    "width": 372,
+    "height": 47
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "image",
+   "text": "",
+   "rect": {
+    "x": 0,
+    "y": 3358,
+    "width": 412,
+    "height": 343
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "image",
+   "text": "",
+   "rect": {
+    "x": 0,
+    "y": 3358,
+    "width": 412,
+    "height": 343
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "ALL IN ONE",
+   "rect": {
+    "x": 20,
+    "y": 3695,
+    "width": 372,
+    "height": 17
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Edit. Enhance.",
+   "rect": {
+    "x": 20,
+    "y": 3727,
+    "width": 372,
+    "height": 29
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Publish.",
+   "rect": {
+    "x": 20,
+    "y": 3756,
+    "width": 372,
+    "height": 29
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Cut, caption, composite and finish your film inside Nodaro.",
+   "rect": {
+    "x": 20,
+    "y": 3798,
+    "width": 372,
+    "height": 47
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "image",
+   "text": "",
+   "rect": {
+    "x": 0,
+    "y": 3905,
+    "width": 412,
+    "height": 330
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "image",
+   "text": "",
+   "rect": {
+    "x": 0,
+    "y": 3905,
+    "width": 412,
+    "height": 330
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "AUTOMATE",
+   "rect": {
+    "x": 20,
+    "y": 4228,
+    "width": 372,
+    "height": 17
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Turn any workflow",
+   "rect": {
+    "x": 20,
+    "y": 4260,
+    "width": 372,
+    "height": 29
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "into an app.",
+   "rect": {
+    "x": 20,
+    "y": 4288,
+    "width": 372,
+    "height": 29
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Or just talk to Claude and Nodaro builds it for you.",
+   "rect": {
+    "x": 20,
+    "y": 4331,
+    "width": 372,
+    "height": 23
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "image",
+   "text": "",
+   "rect": {
+    "x": 0,
+    "y": 4414,
+    "width": 412,
+    "height": 515
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "image",
+   "text": "",
+   "rect": {
+    "x": 0,
+    "y": 4414,
+    "width": 412,
+    "height": 515
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "image",
+   "text": "",
+   "rect": {
+    "x": 0,
+    "y": 4414,
+    "width": 412,
+    "height": 515
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "OPEN SOURCE",
+   "rect": {
+    "x": 20,
+    "y": 4444,
+    "width": 372,
+    "height": 17
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Open source.",
+   "rect": {
+    "x": 20,
+    "y": 4476,
+    "width": 372,
+    "height": 29
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Your way.",
+   "rect": {
+    "x": 20,
+    "y": 4504,
+    "width": 372,
+    "height": 29
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Host it yourself. Bring your own keys. Build without limits.",
+   "rect": {
+    "x": 20,
+    "y": 4547,
+    "width": 372,
+    "height": 23
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "github.com/nodaroai",
+   "rect": {
+    "x": 20,
+    "y": 4588,
+    "width": 196,
+    "height": 38
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "image",
+   "text": "",
+   "rect": {
+    "x": 0,
+    "y": 4961,
+    "width": 412,
+    "height": 839
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "image",
+   "text": "",
+   "rect": {
+    "x": 0,
+    "y": 4961,
+    "width": 412,
+    "height": 839
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "FROM IDEA TO EVERYTHING",
+   "rect": {
+    "x": 20,
+    "y": 5084,
+    "width": 372,
+    "height": 17
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "From idea",
+   "rect": {
+    "x": 20,
+    "y": 5117,
+    "width": 372,
+    "height": 62
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "to everything.",
+   "rect": {
+    "x": 20,
+    "y": 5147,
+    "width": 262,
+    "height": 33
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Every major AI model in one canvas: images, video, voice and music, compared, kept consistent, edited and published, from one idea.",
+   "rect": {
+    "x": 20,
+    "y": 5201,
+    "width": 296,
+    "height": 93
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "button",
+   "text": "Start creating →",
+   "rect": {
+    "x": 20,
+    "y": 5294,
+    "width": 159,
+    "height": 50
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "→",
+   "rect": {
+    "x": 144,
+    "y": 5307,
+    "width": 15,
+    "height": 24
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "button",
+   "text": "Explore Nodaro",
+   "rect": {
+    "x": 191,
+    "y": 5294,
+    "width": 148,
+    "height": 50
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "OPEN CORE · FAIR-CODE",
+   "rect": {
+    "x": 21,
+    "y": 5884,
+    "width": 371,
+    "height": 16
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "●",
+   "rect": {
+    "x": 97,
+    "y": 5886,
+    "width": 10,
+    "height": 12
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "$ git clone",
+   "rect": {
+    "x": 21,
+    "y": 5919,
+    "width": 135,
+    "height": 25
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "nodaroai/app.nodaro.ai",
+   "rect": {
+    "x": 155,
+    "y": 5919,
+    "width": 247,
+    "height": 25
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "The entire platform is source-available on GitHub — read it, run it, extend it. Deploy on your own infrastructure with your own API keys, or let the cloud version do the hosting.",
+   "rect": {
+    "x": 21,
+    "y": 5967,
+    "width": 371,
+    "height": 118
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "nodaro — zsh",
+   "rect": {
+    "x": 97,
+    "y": 6145,
+    "width": 81,
+    "height": 16
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "# clone & run",
+   "rect": {
+    "x": 36,
+    "y": 6186,
+    "width": 341,
+    "height": 23
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "$ git clone github.c",
+   "rect": {
+    "x": 36,
+    "y": 6209,
+    "width": 341,
+    "height": 23
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Docker in minutes",
+   "rect": {
+    "x": 129,
+    "y": 6431,
+    "width": 154,
+    "height": 46
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Bring your own keys — Replicate / KIE.ai",
+   "rect": {
+    "x": 58,
+    "y": 6487,
+    "width": 296,
+    "height": 46
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Full source on GitHub",
+   "rect": {
+    "x": 118,
+    "y": 6543,
+    "width": 175,
+    "height": 46
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Cloud version available",
+   "rect": {
+    "x": 112,
+    "y": 6598,
+    "width": 188,
+    "height": 46
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "button",
+   "text": "View source on GitHub →",
+   "rect": {
+    "x": 96,
+    "y": 6678,
+    "width": 221,
+    "height": 43
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "button",
+   "text": "MCP Server Docs",
+   "rect": {
+    "x": 123,
+    "y": 6732,
+    "width": 167,
+    "height": 45
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "LICENSE SUSTAINABLE USE · CE / EE · github.com/nodaroai/app.nodaro.ai",
+   "rect": {
+    "x": 21,
+    "y": 6807,
+    "width": 371,
+    "height": 34
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "PRICING",
+   "rect": {
+    "x": 21,
+    "y": 6997,
+    "width": 371,
+    "height": 16
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "●",
+   "rect": {
+    "x": 163,
+    "y": 6999,
+    "width": 10,
+    "height": 12
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Simple, credit-based pricing",
+   "rect": {
+    "x": 21,
+    "y": 7029,
+    "width": 371,
+    "height": 75
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Pay for what you use. Every plan includes all features - the only difference is credits.",
+   "rect": {
+    "x": 21,
+    "y": 7120,
+    "width": 371,
+    "height": 57
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Monthly",
+   "rect": {
+    "x": 51,
+    "y": 7217,
+    "width": 55,
+    "height": 24
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "button",
+   "text": "",
+   "rect": {
+    "x": 118,
+    "y": 7215,
+    "width": 52,
+    "height": 28
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Annual",
+   "rect": {
+    "x": 182,
+    "y": 7217,
+    "width": 48,
+    "height": 24
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "2 MONTHS FREE",
+   "rect": {
+    "x": 242,
+    "y": 7215,
+    "width": 119,
+    "height": 27
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Basic",
+   "rect": {
+    "x": 46,
+    "y": 7347,
+    "width": 321,
+    "height": 33
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "For hobbyists and side projects",
+   "rect": {
+    "x": 46,
+    "y": 7384,
+    "width": 321,
+    "height": 38
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "$ 12",
+   "rect": {
+    "x": 46,
+    "y": 7461,
+    "width": 31,
+    "height": 21
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "10",
+   "rect": {
+    "x": 84,
+    "y": 7442,
+    "width": 54,
+    "height": 43
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "$",
+   "rect": {
+    "x": 84,
+    "y": 7442,
+    "width": 11,
+    "height": 26
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "/mo",
+   "rect": {
+    "x": 146,
+    "y": 7467,
+    "width": 25,
+    "height": 14
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "CREDITS / MO",
+   "rect": {
+    "x": 46,
+    "y": 7500,
+    "width": 321,
+    "height": 17
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "4,500",
+   "rect": {
+    "x": 46,
+    "y": 7501,
+    "width": 39,
+    "height": 14
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "$120/YR · SAVE",
+   "rect": {
+    "x": 46,
+    "y": 7523,
+    "width": 321,
+    "height": 15
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "$24",
+   "rect": {
+    "x": 151,
+    "y": 7522,
+    "width": 21,
+    "height": 13
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "100 LLM requests / month",
+   "rect": {
+    "x": 47,
+    "y": 7581,
+    "width": 320,
+    "height": 19
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "10 GB storage",
+   "rect": {
+    "x": 47,
+    "y": 7611,
+    "width": 320,
+    "height": 19
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "All standard models",
+   "rect": {
+    "x": 47,
+    "y": 7641,
+    "width": 320,
+    "height": 19
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "No watermark",
+   "rect": {
+    "x": 47,
+    "y": 7671,
+    "width": 320,
+    "height": 19
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Priority queue",
+   "rect": {
+    "x": 47,
+    "y": 7700,
+    "width": 320,
+    "height": 19
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "button",
+   "text": "Subscribe",
+   "rect": {
+    "x": 46,
+    "y": 7745,
+    "width": 321,
+    "height": 50
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Standard",
+   "rect": {
+    "x": 46,
+    "y": 7898,
+    "width": 321,
+    "height": 33
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "For active creators",
+   "rect": {
+    "x": 46,
+    "y": 7935,
+    "width": 321,
+    "height": 38
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "$ 29",
+   "rect": {
+    "x": 46,
+    "y": 8012,
+    "width": 35,
+    "height": 21
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "24",
+   "rect": {
+    "x": 89,
+    "y": 7993,
+    "width": 59,
+    "height": 43
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "$",
+   "rect": {
+    "x": 89,
+    "y": 7993,
+    "width": 11,
+    "height": 26
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "/mo",
+   "rect": {
+    "x": 156,
+    "y": 8018,
+    "width": 25,
+    "height": 14
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "CREDITS / MO",
+   "rect": {
+    "x": 46,
+    "y": 8051,
+    "width": 321,
+    "height": 17
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "11,000",
+   "rect": {
+    "x": 46,
+    "y": 8052,
+    "width": 47,
+    "height": 14
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "$288/YR · SAVE",
+   "rect": {
+    "x": 46,
+    "y": 8074,
+    "width": 321,
+    "height": 15
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "$60",
+   "rect": {
+    "x": 151,
+    "y": 8073,
+    "width": 21,
+    "height": 13
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "300 LLM requests / month",
+   "rect": {
+    "x": 47,
+    "y": 8132,
+    "width": 320,
+    "height": 19
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "25 GB storage",
+   "rect": {
+    "x": 47,
+    "y": 8162,
+    "width": 320,
+    "height": 19
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "All models incl. premium",
+   "rect": {
+    "x": 47,
+    "y": 8192,
+    "width": 320,
+    "height": 19
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "No watermark",
+   "rect": {
+    "x": 47,
+    "y": 8222,
+    "width": 320,
+    "height": 19
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Priority queue",
+   "rect": {
+    "x": 47,
+    "y": 8251,
+    "width": 320,
+    "height": 19
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "button",
+   "text": "Subscribe",
+   "rect": {
+    "x": 46,
+    "y": 8296,
+    "width": 321,
+    "height": 50
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "MOST POPULAR",
+   "rect": {
+    "x": 46,
+    "y": 8420,
+    "width": 321,
+    "height": 15
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "●",
+   "rect": {
+    "x": 46,
+    "y": 8420,
+    "width": 9,
+    "height": 10
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Pro",
+   "rect": {
+    "x": 46,
+    "y": 8449,
+    "width": 321,
+    "height": 33
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "For professionals & teams",
+   "rect": {
+    "x": 46,
+    "y": 8486,
+    "width": 321,
+    "height": 38
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "$ 59",
+   "rect": {
+    "x": 46,
+    "y": 8563,
+    "width": 35,
+    "height": 21
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "49",
+   "rect": {
+    "x": 89,
+    "y": 8544,
+    "width": 59,
+    "height": 43
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "$",
+   "rect": {
+    "x": 89,
+    "y": 8544,
+    "width": 11,
+    "height": 26
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "/mo",
+   "rect": {
+    "x": 156,
+    "y": 8569,
+    "width": 25,
+    "height": 14
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "CREDITS / MO",
+   "rect": {
+    "x": 46,
+    "y": 8602,
+    "width": 321,
+    "height": 17
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "23,000",
+   "rect": {
+    "x": 46,
+    "y": 8603,
+    "width": 47,
+    "height": 14
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "$588/YR · SAVE",
+   "rect": {
+    "x": 46,
+    "y": 8625,
+    "width": 321,
+    "height": 15
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "$120",
+   "rect": {
+    "x": 151,
+    "y": 8624,
+    "width": 28,
+    "height": 13
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "1,000 LLM requests / month",
+   "rect": {
+    "x": 47,
+    "y": 8683,
+    "width": 320,
+    "height": 19
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "50 GB storage",
+   "rect": {
+    "x": 47,
+    "y": 8713,
+    "width": 320,
+    "height": 19
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "All models incl. premium",
+   "rect": {
+    "x": 47,
+    "y": 8743,
+    "width": 320,
+    "height": 19
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "No watermark",
+   "rect": {
+    "x": 47,
+    "y": 8772,
+    "width": 320,
+    "height": 19
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Fastest queue priority",
+   "rect": {
+    "x": 47,
+    "y": 8802,
+    "width": 320,
+    "height": 19
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "button",
+   "text": "Subscribe",
+   "rect": {
+    "x": 46,
+    "y": 8847,
+    "width": 321,
+    "height": 50
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Business",
+   "rect": {
+    "x": 46,
+    "y": 9000,
+    "width": 321,
+    "height": 33
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "For agencies & studios",
+   "rect": {
+    "x": 46,
+    "y": 9036,
+    "width": 321,
+    "height": 38
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "$ 129",
+   "rect": {
+    "x": 46,
+    "y": 9113,
+    "width": 42,
+    "height": 21
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "109",
+   "rect": {
+    "x": 96,
+    "y": 9094,
+    "width": 77,
+    "height": 43
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "$",
+   "rect": {
+    "x": 96,
+    "y": 9095,
+    "width": 11,
+    "height": 26
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "/mo",
+   "rect": {
+    "x": 181,
+    "y": 9119,
+    "width": 25,
+    "height": 14
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "CREDITS / MO",
+   "rect": {
+    "x": 46,
+    "y": 9152,
+    "width": 321,
+    "height": 17
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "52,000",
+   "rect": {
+    "x": 46,
+    "y": 9153,
+    "width": 47,
+    "height": 14
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "$1,308/YR · SAVE",
+   "rect": {
+    "x": 46,
+    "y": 9176,
+    "width": 321,
+    "height": 15
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "$240",
+   "rect": {
+    "x": 165,
+    "y": 9175,
+    "width": 28,
+    "height": 13
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Unlimited LLM requests",
+   "rect": {
+    "x": 47,
+    "y": 9234,
+    "width": 320,
+    "height": 19
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "200 GB storage",
+   "rect": {
+    "x": 47,
+    "y": 9264,
+    "width": 320,
+    "height": 19
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "All models incl. premium",
+   "rect": {
+    "x": 47,
+    "y": 9294,
+    "width": 320,
+    "height": 19
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "No watermark",
+   "rect": {
+    "x": 47,
+    "y": 9323,
+    "width": 320,
+    "height": 19
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Fastest queue + dedicated",
+   "rect": {
+    "x": 47,
+    "y": 9353,
+    "width": 320,
+    "height": 19
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "button",
+   "text": "Subscribe",
+   "rect": {
+    "x": 46,
+    "y": 9398,
+    "width": 321,
+    "height": 50
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "FREE TIER",
+   "rect": {
+    "x": 42,
+    "y": 9522,
+    "width": 329,
+    "height": 15
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "●",
+   "rect": {
+    "x": 160,
+    "y": 9525,
+    "width": 9,
+    "height": 10
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Try everything with — no credit card.",
+   "rect": {
+    "x": 42,
+    "y": 9546,
+    "width": 329,
+    "height": 54
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "1,500 free credits",
+   "rect": {
+    "x": 192,
+    "y": 9548,
+    "width": 132,
+    "height": 21
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "500 CREDITS / DAY CAP · 20 LLM REQ / MO · 1 GB · BASIC MODELS · WATERMARKED EXPORTS · 60-DAY RETENTION",
+   "rect": {
+    "x": 42,
+    "y": 9610,
+    "width": 329,
+    "height": 48
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "button",
+   "text": "Start Free",
+   "rect": {
+    "x": 42,
+    "y": 9686,
+    "width": 329,
+    "height": 50
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "image",
+   "text": "",
+   "rect": {
+    "x": 0,
+    "y": 9840,
+    "width": 412,
+    "height": 658
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "image",
+   "text": "",
+   "rect": {
+    "x": 0,
+    "y": 9840,
+    "width": 412,
+    "height": 658
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "REC · 06 · YOUR MOVE",
+   "rect": {
+    "x": 25,
+    "y": 9864,
+    "width": 175,
+    "height": 16
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "TC 00:01:24:00",
+   "rect": {
+    "x": 275,
+    "y": 9864,
+    "width": 112,
+    "height": 16
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "That whole campaign — one canvas",
+   "rect": {
+    "x": 25,
+    "y": 9942,
+    "width": 231,
+    "height": 34
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Now shoot",
+   "rect": {
+    "x": 25,
+    "y": 9994,
+    "width": 231,
+    "height": 96
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "yours.",
+   "rect": {
+    "x": 25,
+    "y": 10034,
+    "width": 178,
+    "height": 62
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Every frame, clip and voice on this page was made in Nodaro.",
+   "rect": {
+    "x": 25,
+    "y": 10120,
+    "width": 231,
+    "height": 83
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Your first one is free.",
+   "rect": {
+    "x": 25,
+    "y": 10178,
+    "width": 151,
+    "height": 20
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "button",
+   "text": "Start creating free →",
+   "rect": {
+    "x": 25,
+    "y": 10235,
+    "width": 231,
+    "height": 56
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "button",
+   "text": "See the gallery",
+   "rect": {
+    "x": 25,
+    "y": 10302,
+    "width": 231,
+    "height": 56
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "1,500 FREE CREDITS · NO CREDIT CARD · FIRST WORKFLOW IN MINUTES",
+   "rect": {
+    "x": 25,
+    "y": 10384,
+    "width": 231,
+    "height": 50
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "FADE TO BLACK",
+   "rect": {
+    "x": 145,
+    "y": 10535,
+    "width": 121,
+    "height": 16
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "image",
+   "text": "",
+   "rect": {
+    "x": 25,
+    "y": 10650,
+    "width": 170,
+    "height": 42
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Visual AI video creation platform. Build production-quality videos with drag-and-drop workflows.",
+   "rect": {
+    "x": 25,
+    "y": 10712,
+    "width": 290,
+    "height": 68
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "SOURCE-AVAILABLE · SUSTAINABLE USE LICENSE EDITIONS CE / EE · SELF-HOST OR CLOUD",
+   "rect": {
+    "x": 25,
+    "y": 10800,
+    "width": 363,
+    "height": 38
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Product",
+   "rect": {
+    "x": 25,
+    "y": 10872,
+    "width": 164,
+    "height": 16
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "●",
+   "rect": {
+    "x": 25,
+    "y": 10875,
+    "width": 9,
+    "height": 10
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Open Source",
+   "rect": {
+    "x": 25,
+    "y": 10906,
+    "width": 164,
+    "height": 34
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Pricing",
+   "rect": {
+    "x": 25,
+    "y": 10940,
+    "width": 164,
+    "height": 34
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Docs",
+   "rect": {
+    "x": 223,
+    "y": 10872,
+    "width": 164,
+    "height": 16
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "●",
+   "rect": {
+    "x": 223,
+    "y": 10875,
+    "width": 9,
+    "height": 10
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Get Started",
+   "rect": {
+    "x": 223,
+    "y": 10906,
+    "width": 164,
+    "height": 34
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Node Reference",
+   "rect": {
+    "x": 223,
+    "y": 10940,
+    "width": 164,
+    "height": 34
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "AI Models",
+   "rect": {
+    "x": 223,
+    "y": 10973,
+    "width": 164,
+    "height": 34
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "MCP Setup",
+   "rect": {
+    "x": 223,
+    "y": 11007,
+    "width": 164,
+    "height": 34
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "API & SDK",
+   "rect": {
+    "x": 223,
+    "y": 11041,
+    "width": 164,
+    "height": 34
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Self-hosting",
+   "rect": {
+    "x": 223,
+    "y": 11074,
+    "width": 164,
+    "height": 34
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Research",
+   "rect": {
+    "x": 223,
+    "y": 11108,
+    "width": 164,
+    "height": 34
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Camera Motion Lab",
+   "rect": {
+    "x": 223,
+    "y": 11141,
+    "width": 164,
+    "height": 34
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Models",
+   "rect": {
+    "x": 25,
+    "y": 11209,
+    "width": 164,
+    "height": 16
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "●",
+   "rect": {
+    "x": 25,
+    "y": 11212,
+    "width": 9,
+    "height": 10
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Kling 3.0",
+   "rect": {
+    "x": 25,
+    "y": 11243,
+    "width": 164,
+    "height": 34
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Seedance 2.5",
+   "rect": {
+    "x": 25,
+    "y": 11277,
+    "width": 164,
+    "height": 34
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "VEO 3.1 Quality",
+   "rect": {
+    "x": 25,
+    "y": 11310,
+    "width": 164,
+    "height": 34
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Nano Banana Pro",
+   "rect": {
+    "x": 25,
+    "y": 11344,
+    "width": 164,
+    "height": 34
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "GPT Image 2",
+   "rect": {
+    "x": 25,
+    "y": 11378,
+    "width": 164,
+    "height": 34
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Suno V6",
+   "rect": {
+    "x": 25,
+    "y": 11411,
+    "width": 164,
+    "height": 34
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "ElevenLabs v3",
+   "rect": {
+    "x": 25,
+    "y": 11445,
+    "width": 164,
+    "height": 34
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Resources",
+   "rect": {
+    "x": 223,
+    "y": 11209,
+    "width": 164,
+    "height": 16
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "●",
+   "rect": {
+    "x": 223,
+    "y": 11212,
+    "width": 9,
+    "height": 10
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Documentation",
+   "rect": {
+    "x": 223,
+    "y": 11243,
+    "width": 164,
+    "height": 34
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "MCP Server",
+   "rect": {
+    "x": 223,
+    "y": 11277,
+    "width": 164,
+    "height": 34
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Tutorials",
+   "rect": {
+    "x": 223,
+    "y": 11310,
+    "width": 164,
+    "height": 34
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Templates",
+   "rect": {
+    "x": 223,
+    "y": 11344,
+    "width": 164,
+    "height": 34
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Company",
+   "rect": {
+    "x": 25,
+    "y": 11512,
+    "width": 164,
+    "height": 16
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "●",
+   "rect": {
+    "x": 25,
+    "y": 11515,
+    "width": 9,
+    "height": 10
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "About",
+   "rect": {
+    "x": 25,
+    "y": 11546,
+    "width": 164,
+    "height": 34
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Blog",
+   "rect": {
+    "x": 25,
+    "y": 11580,
+    "width": 164,
+    "height": 34
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Terms of Service",
+   "rect": {
+    "x": 25,
+    "y": 11614,
+    "width": 164,
+    "height": 34
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Privacy Policy",
+   "rect": {
+    "x": 25,
+    "y": 11647,
+    "width": 164,
+    "height": 34
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "Refund Policy",
+   "rect": {
+    "x": 25,
+    "y": 11681,
+    "width": 164,
+    "height": 34
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  },
+  {
+   "kind": "text",
+   "text": "© 2026 Nodaro. All rights reserved.",
+   "rect": {
+    "x": 25,
+    "y": 11784,
+    "width": 251,
+    "height": 16
+   },
+   "inDetails": false,
+   "inBlockquote": false
+  }
+ ],
+ "challenge": {
+  "markerCount": 0,
+  "coverage": 0
+ }
+}

@@ -1516,6 +1516,8 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "web-scrape:instagram": 10,
   "web-scrape:tiktok": 10,
   "web-scrape:rss": 10,
+  // ── Site Capture (POST /v1/site-capture, MCP capture_site): flat per capture ──
+  "site-capture": 10,
   // Meta Ads scraper: 1 credit per REQUESTED ad, rounded up to a tier of
   // count × sources, plus the optional per-ad analysis multiples and their
   // per-ad settlement rows (packages/shared/src/meta-ads-scrape.ts is the

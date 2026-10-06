@@ -135,6 +135,68 @@ export function runYtDlpCaptureWith(
   })
 }
 
+/** What a failed run throws: the shape `youtube-dl-exec` gave its callers — the message IS stderr, and stderr, stdout and the exit code ride along. */
+export interface YtDlpExitError extends Error {
+  stderr: string
+  stdout: string
+  exitCode: number | null
+}
+
+/**
+ * Run yt-dlp to its end, for a caller that wants no output (an audio extraction
+ * writes a file). The run is its own process group (`spawnYtDlpProcess`), so the
+ * caller's abort or `totalTimeoutMs` stops yt-dlp AND the ffmpeg it started
+ * (`killYtDlpProcess`) — Node's own `signal` option reaches the one process only,
+ * and a child ffmpeg could outlive the hold that reserves its memory. Both are a
+ * halt. No idle watchdog: the hold is the bound.
+ *
+ * A non-zero exit rejects as `youtube-dl-exec` did (round 4 of #1860, decided
+ * 2026-10-05, replacing it in the audio lanes): an Error whose message is stderr,
+ * with `stderr`, `stdout` and `exitCode` attached — the audio route reports that
+ * message and `trimAudio` reads `.stderr`.
+ */
+export function runYtDlpToEndWith(bin: string, args: readonly string[], opts: YtDlpRunLimits = {}): Promise<void> {
+  if (opts.signal?.aborted) return Promise.reject(new YtDlpHaltError("yt-dlp aborted", "aborted"))
+  return new Promise<void>((resolve, reject) => {
+    const proc = spawnYtDlpProcess(bin, args, opts.env)
+    let stdout = ""
+    let stderr = ""
+    let settled = false
+    const finish = (fn: () => void) => {
+      if (settled) return
+      settled = true
+      clearTimeout(deadline)
+      opts.signal?.removeEventListener("abort", onAbort)
+      fn()
+    }
+    const stop = (err: Error) => {
+      if (settled) return
+      killYtDlpProcess(proc)
+      finish(() => reject(err))
+    }
+    const onAbort = () => stop(new YtDlpHaltError("yt-dlp aborted", "aborted"))
+    const deadline = opts.totalTimeoutMs
+      ? setTimeout(() => stop(new YtDlpHaltError(`yt-dlp took longer than ${opts.totalTimeoutMs}ms`, "out_of_time")), opts.totalTimeoutMs)
+      : undefined
+    opts.signal?.addEventListener("abort", onAbort, { once: true })
+    // Only a tail of each stream is kept: progress lines run to megabytes over a long download.
+    proc.stdout?.on("data", (chunk: Buffer) => {
+      stdout = (stdout + chunk.toString()).slice(-64 * 1024)
+    })
+    proc.stderr?.on("data", (chunk: Buffer) => {
+      stderr = (stderr + chunk.toString()).slice(-64 * 1024)
+    })
+    proc.on("error", (err) => finish(() => reject(err)))
+    proc.on("close", (code) =>
+      finish(() => {
+        if (code === 0) return resolve()
+        const message = stderr.trim() || `yt-dlp exited with code ${code}`
+        reject(Object.assign(new Error(message), { stderr, stdout, exitCode: code }) satisfies YtDlpExitError)
+      }),
+    )
+  })
+}
+
 /**
  * One yt-dlp download: progress lines (`download:NN%`) to `onProgress`, an
  * idle watchdog (`idleTimeoutMs`: no output for that long is a stall — an
@@ -198,15 +260,48 @@ export function spawnYtDlpDownloadWith(
 }
 
 /**
+ * The one deadline a fetch is held to — the clock `remainingLimits` reads.
+ *
+ * It runs on wall time, EXCEPT while a step waits for the ffmpeg admission: a
+ * launch that queues for a slot or for memory tells the deadline what it
+ * waited (`excuse`, from `withFfmpegSlot`'s `deadline` option), and the
+ * deadline moves out by that much. A busy box therefore never fails an import
+ * as `out_of_time`, while every step after admission — the download, the
+ * re-encode — is still held to what the fetch has left (decided 2026-10-05:
+ * the same philosophy as the slot-wait ledger that pauses the heartbeat).
+ * One rule, in one place, for every deadline-bounded caller of the admission.
+ */
+export class FetchDeadline {
+  private endsAt: number
+
+  constructor(
+    totalMs: number,
+    private readonly now: () => number = Date.now,
+  ) {
+    this.endsAt = now() + totalMs
+  }
+
+  /** Milliseconds left; zero or negative once the deadline has passed. */
+  remainingMs(): number {
+    return this.endsAt - this.now()
+  }
+
+  /** Time spent waiting for admission is not the fetch's: push the deadline out by it. */
+  excuse(waitedMs: number): void {
+    if (Number.isFinite(waitedMs) && waitedMs > 0) this.endsAt += waitedMs
+  }
+}
+
+/**
  * The limits left for the next step of a fetch held to one deadline: throws a
  * halt when the caller aborted or the time is up, so no step starts late.
  */
 export function remainingLimits(
-  deadlineAt: number,
+  deadline: FetchDeadline,
   base: Omit<YtDlpRunLimits, "totalTimeoutMs">,
 ): YtDlpRunLimits & { totalTimeoutMs: number } {
   if (base.signal?.aborted) throw new YtDlpHaltError("yt-dlp aborted", "aborted")
-  const left = deadlineAt - Date.now()
+  const left = deadline.remainingMs()
   if (left <= 0) throw new YtDlpHaltError("the fetch ran out of time", "out_of_time")
   return { ...base, totalTimeoutMs: left }
 }

@@ -1,5 +1,6 @@
 import { supabase } from "./supabase.js"
 import { bannedGalleryUsersFilter, galleryHides, type GalleryModeration } from "./gallery-moderation.js"
+import { APPLY_EDL_JOB, applyEdlMedium, isPreviewListing } from "./apply-edl-listing.js"
 
 // Gallery only shows AI-generated creative content — NOT processing/application
 // results.
@@ -42,7 +43,13 @@ const AUDIO_JOBS = new Set([
   //           extract-youtube-audio, audio-isolation (processing)
 ])
 
-function getOutputType(jobName: string): "image" | "video" | "audio" | null {
+/** Apply EDL renders list in the OWNER's own view only (decided 2026-10-06; see
+ *  lib/apply-edl-listing.ts): a Preview is private, and a public final would be
+ *  exposure the public gallery has never had. Their medium is read per row. */
+const OWNER_ONLY_JOBS = new Set(["apply-edl"])
+
+function getOutputType(jobName: string, inputData?: unknown, outputData?: unknown): "image" | "video" | "audio" | null {
+  if (jobName === APPLY_EDL_JOB) return applyEdlMedium(inputData, outputData)
   if (IMAGE_JOBS.has(jobName)) return "image"
   if (VIDEO_JOBS.has(jobName)) return "video"
   if (AUDIO_JOBS.has(jobName)) return "audio"
@@ -56,11 +63,12 @@ const DUAL_MODE_JOBS = new Set(["voice-changer", "voice-changer-pro", "dubbing"]
 function getOutputUrl(
   jobName: string,
   outputData: Record<string, unknown>,
+  inputData?: unknown,
 ): string | null {
   if (DUAL_MODE_JOBS.has(jobName)) {
     return (outputData?.videoUrl as string) ?? (outputData?.audioUrl as string) ?? null
   }
-  const type = getOutputType(jobName)
+  const type = getOutputType(jobName, inputData, outputData)
   if (type === "image") return (outputData?.imageUrl as string) ?? null
   if (type === "video") return (outputData?.videoUrl as string) ?? null
   if (type === "audio") return (outputData?.audioUrl as string) ?? null
@@ -87,6 +95,8 @@ export interface GalleryItem {
   readonly createdAt: string
   readonly prompt: string | null
   readonly model: string | null
+  /** A private 720p Preview render (Apply EDL at proxy quality). Present only when true. */
+  readonly preview?: true
 }
 
 /** A card and its creator — the creator stays on the server unless an admin asks. */
@@ -127,6 +137,27 @@ function mediaJobNames(type: string | undefined): string[] {
 }
 
 /**
+ * The job-type filter of one read, as the database applies it: `or` when set,
+ * else `in`. The owner's own view adds the owner-only jobs: with no type asked
+ * for, by name; with a type asked for, only the renders whose output is of it
+ * (an `or`, so the count and the page agree about an audio mix on the video tab).
+ * Every other read keeps the plain allowlist.
+ */
+function jobTypeFilter(
+  names: string[],
+  type: string | undefined,
+  ownerView: boolean,
+): { readonly in: string[]; readonly or?: undefined } | { readonly or: string; readonly in?: undefined } {
+  if (!ownerView || type === "image") return { in: names }
+  if (type === "video" || type === "audio") {
+    const url = type === "video" ? "videoUrl" : "audioUrl"
+    const owned = [...OWNER_ONLY_JOBS].map((j) => `and(job_type.eq.${j},output_data->>${url}.not.is.null)`)
+    return { or: [`job_type.in.(${names.join(",")})`, ...owned].join(",") }
+  }
+  return { in: [...names, ...OWNER_ONLY_JOBS] }
+}
+
+/**
  * One page of the gallery: completed media outputs, newest first, through the
  * gallery's moderation (lib/gallery-moderation.ts). Throws when the database
  * cannot be read.
@@ -135,6 +166,10 @@ export async function readGalleryPage(q: GalleryPageQuery): Promise<GalleryPage>
   const { limit, cursor, moderation } = q
   const excludedUsers = bannedGalleryUsersFilter(moderation)
   const jobNames = mediaJobNames(q.type)
+  // The owner's own view: a read of one person's work by that person. Neither
+  // flag alone is enough (the admin grid sets `includePrivate` with no owner).
+  const ownerView = q.includePrivate && !!q.userId
+  const typeFilter = jobTypeFilter(jobNames, q.type, ownerView)
 
   // Count query (only on first page — when no cursor)
   let totalCount: number | null = null
@@ -148,7 +183,7 @@ export async function readGalleryPage(q: GalleryPageQuery): Promise<GalleryPage>
     if (q.userId) countQuery = countQuery.eq("user_id", q.userId)
     if (excludedUsers) countQuery = countQuery.filter("user_id", "not.in", excludedUsers)
     if (q.favoriteJobIds) countQuery = countQuery.in("id", [...q.favoriteJobIds])
-    countQuery = countQuery.in("job_type", jobNames)
+    countQuery = typeFilter.or !== undefined ? countQuery.or(typeFilter.or) : countQuery.in("job_type", typeFilter.in)
     const { count } = await countQuery
     totalCount = count
   }
@@ -176,7 +211,7 @@ export async function readGalleryPage(q: GalleryPageQuery): Promise<GalleryPage>
     if (excludedUsers) dbQuery = dbQuery.filter("user_id", "not.in", excludedUsers)
     if (q.favoriteJobIds) dbQuery = dbQuery.in("id", [...q.favoriteJobIds])
     if (pageCursor) dbQuery = dbQuery.lt("completed_at", pageCursor)
-    dbQuery = dbQuery.in("job_type", jobNames)
+    dbQuery = typeFilter.or !== undefined ? dbQuery.or(typeFilter.or) : dbQuery.in("job_type", typeFilter.in)
 
     const { data: jobs, error } = await dbQuery
     if (error) throw new Error(`Gallery query failed: ${error.message}`)
@@ -195,9 +230,13 @@ export async function readGalleryPage(q: GalleryPageQuery): Promise<GalleryPage>
       }
       const outputData = (job.output_data ?? {}) as Record<string, unknown>
       const inputData = (job.input_data ?? {}) as Record<string, unknown>
-      const type = getOutputType(job.job_type)
-      const outputUrl = getOutputUrl(job.job_type, outputData)
+      // An owner-only job never leaves the owner's view, whatever the row says.
+      if (OWNER_ONLY_JOBS.has(job.job_type) && !(ownerView && job.user_id === q.userId)) continue
+      const type = getOutputType(job.job_type, inputData, outputData)
+      const outputUrl = getOutputUrl(job.job_type, outputData, inputData)
       if (!type || !outputUrl) continue
+      // The type asked for is the type listed (a render's medium is per row).
+      if (OWNER_ONLY_JOBS.has(job.job_type) && (q.type === "video" || q.type === "audio" || q.type === "image") && q.type !== type) continue
       if (galleryHides(moderation, { userId: job.user_id, inputData, outputData })) continue
       rows.push({
         userId: (job.user_id as string | null) ?? null,
@@ -210,6 +249,7 @@ export async function readGalleryPage(q: GalleryPageQuery): Promise<GalleryPage>
           createdAt: job.completed_at,
           prompt: (inputData.prompt as string) ?? (inputData.text as string) ?? null,
           model: (inputData.provider as string) ?? (job.provider as string) ?? null,
+          ...(isPreviewListing(job) ? { preview: true as const } : {}),
         },
       })
     }

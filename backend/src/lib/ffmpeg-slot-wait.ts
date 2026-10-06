@@ -9,6 +9,12 @@
  * the job waits (`workers/pre-task-heartbeat.ts`), and writes the total to
  * `jobs.slot_wait_ms`, which the workflow engine takes off the node's clocks.
  *
+ * A wait for MEMORY is the same wait (decided 2026-10-05): the queue also
+ * admits each launch against the box's ffmpeg memory budget
+ * (`providers/video/ffmpeg-admission.ts`), so a 4K chunk can queue with a slot
+ * free while another holds the memory — it records here exactly like a wait
+ * for a slot.
+ *
  * Per JOB, carried by AsyncLocalStorage: the heartbeat wrapper opens a ledger
  * around the handler, and the slot queue (`providers/video/ffmpeg-utils.ts`)
  * records into whichever ledger the waiting call belongs to. A job counts as

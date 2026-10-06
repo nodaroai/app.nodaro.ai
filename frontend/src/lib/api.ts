@@ -4031,10 +4031,19 @@ export async function addCaptionsApi(videoUrl: string, text: string, style?: str
   })
 }
 
-export async function mixAudioApi(audioUrls: string[], trackVolumes?: number[], userId?: string): Promise<{ jobId: string }> {
+export async function mixAudioApi(
+  audioUrls: string[],
+  trackVolumes?: number[],
+  userId?: string,
+  /** Duck every other track under track `under` (an index into `audioUrls`). */
+  duck?: { under: number; amount?: number },
+): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { audioUrls }
   if (trackVolumes?.length) {
     body.trackVolumes = trackVolumes
+  }
+  if (duck) {
+    body.duck = duck
   }
   if (userId) {
     body.userId = userId
@@ -7340,13 +7349,23 @@ export async function runWorkflow(
    *  into one execution. A new key on the next click creates a new
    *  execution (intentional re-run). */
   idempotencyKey?: string,
+  /** Per-node field overrides the server merges over the saved graph for this
+   *  run only (nested `{ nodeId: { field: value } }`; the server clears the
+   *  overridden node's saved results). Render final sends
+   *  `{ [renderId]: { quality: "final" } }`. */
+  opts?: { readonly inputOverrides?: Readonly<Record<string, Readonly<Record<string, unknown>>>> },
 ): Promise<{ executionId: string }> {
   let headers: Record<string, string> = { ...(await getAuthHeaders()), "Content-Type": "application/json" }
   // `reviewer: "editor"` marks this as the editor's run: a person is here to
   // review a Preview render and press Render final. The server refuses a
   // Preview run without it (a session JWT alone is not a reviewer — the SDK
   // and the thin product clients send one too).
-  const body = JSON.stringify(nodeIds ? { nodeIds, reviewer: "editor" } : { reviewer: "editor" })
+  const inputOverrides = opts?.inputOverrides && Object.keys(opts.inputOverrides).length > 0 ? opts.inputOverrides : undefined
+  const body = JSON.stringify({
+    ...(nodeIds ? { nodeIds } : {}),
+    ...(inputOverrides ? { inputOverrides } : {}),
+    reviewer: "editor",
+  })
   headers = withIdempotencyHeader(headers, idempotencyKey)
   const res = await fetch(`${API_BASE_URL}/v1/workflows/${encodeURIComponent(workflowId)}/run`, {
     method: "POST",

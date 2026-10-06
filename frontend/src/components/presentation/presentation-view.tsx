@@ -900,16 +900,20 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   const [lightboxNodeId, setLightboxNodeId] = useState<string | null>(null)
 
   const mediaItems = useMemo(() => {
-    const items: { nodeId: string; type: "image" | "video"; url: string }[] = []
+    const items: { nodeId: string; type: "image" | "video"; url: string; quality?: "proxy" }[] = []
     for (const node of [...orderedInputNodes, ...visibleOutputNodes]) {
       const outputType = getOutputType(node.type)
       if (outputType !== "image" && outputType !== "video") continue
       const result = getResult(node.id)
       if (!result.url) continue
-      items.push({ nodeId: node.id, type: outputType, url: result.url })
+      // A render's take says it is a Preview: the same read the output card
+      // makes, by the url on show (render-preview.ts).
+      const runOutput = isFullscreen ? (presNodeStates[node.id]?.output as Record<string, unknown> | undefined) : undefined
+      const preview = outputIsPreview(node.type, node.data as Record<string, unknown>, runOutput, result.url)
+      items.push({ nodeId: node.id, type: outputType, url: result.url, ...(preview ? { quality: "proxy" as const } : {}) })
     }
     return items
-  }, [orderedInputNodes, visibleOutputNodes, getResult])
+  }, [orderedInputNodes, visibleOutputNodes, getResult, isFullscreen, presNodeStates])
 
   const lightboxIndex = lightboxNodeId ? mediaItems.findIndex((m) => m.nodeId === lightboxNodeId) : -1
   const lightboxItem = lightboxIndex >= 0 ? mediaItems[lightboxIndex] : null
@@ -1558,6 +1562,18 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
     [orderedInputNodes, visibleOutputNodes],
   )
 
+  // Whether the take a view shows is a Preview (F1): the same read the output
+  // cards make, from the run on show, else the node's saved take.
+  const isPreview = useCallback(
+    (nodeId: string, url?: string) => {
+      const node = nodeMap.get(nodeId)
+      if (!node) return false
+      const runOutput = isFullscreen ? (presNodeStates[nodeId]?.output as Record<string, unknown> | undefined) : undefined
+      return outputIsPreview(node.type, node.data as Record<string, unknown>, runOutput, url)
+    },
+    [nodeMap, isFullscreen, presNodeStates],
+  )
+
   // Shared props for all views
   const viewProps = {
     orderedInputNodes,
@@ -1565,6 +1581,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
     getNodeStatus,
     getResult,
     getCardTitle,
+    isPreview,
     onOpenMedia: handleOpenMedia,
     onOpenConfig: setConfigNode,
   }
@@ -1978,6 +1995,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
           onClose={() => setLightboxNodeId(null)}
           type={lightboxItem.type}
           url={lightboxItem.url}
+          quality={lightboxItem.quality}
           currentIndex={lightboxIndex}
           totalCount={mediaItems.length}
           onPrev={lightboxIndex > 0 ? handleLightboxPrev : undefined}

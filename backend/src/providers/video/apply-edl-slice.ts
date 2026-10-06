@@ -141,6 +141,12 @@ export interface SliceCommand {
   readonly inputSeekSec: readonly number[]
   /** The ffmpeg kill budget for this slice (`chunkRenderTimeoutMs`). */
   readonly timeoutMs: number
+  /** What the slice's predicted peak memory is computed from — its canvas and
+   *  segment count (`canvasPeakMemoryMiB`, with the thread counts the launch
+   *  runs with: only `runSlice` knows them); undefined for a sound-only slice,
+   *  which reserves the launcher's default estimate. Not part of the resume
+   *  key — it changes when ffmpeg runs, not what it renders. */
+  readonly memoryBasis: { readonly width: number; readonly height: number; readonly segments: number } | undefined
 }
 
 /**
@@ -515,5 +521,9 @@ export function buildSliceCommand(edl: Edl, segs: readonly PlanSegment[], opts: 
   // Explicit longer timeout: the default 10-min per-spawn would kill a long
   // chunk. The handler's liveness budget (`applyEdlRenderBudgetMs`) is summed
   // from this same per-chunk figure, so "hung" means one thing to both.
-  return { inputIds, needsSilence, filterGraph: fullFilter, outputArgs, inputSeekSec, timeoutMs: chunkRenderTimeoutMs(edl, segs, { video: wantVideo, audio: emitAudio }, { width: target.width, height: target.height, fps }) }
+  return {
+    inputIds, needsSilence, filterGraph: fullFilter, outputArgs, inputSeekSec,
+    timeoutMs: chunkRenderTimeoutMs(edl, segs, { video: wantVideo, audio: emitAudio }, { width: target.width, height: target.height, fps }),
+    memoryBasis: wantVideo ? { width: target.width, height: target.height, segments: segs.length } : undefined,
+  }
 }

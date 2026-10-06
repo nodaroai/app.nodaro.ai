@@ -55,7 +55,8 @@ import {
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
 import { JobCancelledError, throwIfJobCancelled } from "../../lib/job-cancellation.js"
 import { pickTargetResolution, pickTargetFps } from "./combine-videos.js"
-import { ffmpegThreads, type FfmpegThreads } from "./ffmpeg-threads.js"
+import { ffmpegEffectiveThreads, ffmpegThreads, type FfmpegThreads } from "./ffmpeg-threads.js"
+import { canvasPeakMemoryMiB } from "./ffmpeg-memory-model.js"
 import {
   audioMuxTimeoutMs,
   audioSourceId,
@@ -314,12 +315,19 @@ export function sliceArgv(
   return args
 }
 
+/** The slice's predicted peak memory — its canvas and segments at the thread
+ *  counts it runs with (the explicit ones, or the ones ffmpeg picks when none
+ *  are placed); undefined for a sound-only slice (the launcher's default). */
+export function slicePeakMemoryMiB(cmd: SliceCommand, threads: FfmpegThreads | undefined): number | undefined {
+  return cmd.memoryBasis ? canvasPeakMemoryMiB(cmd.memoryBasis, cmd.memoryBasis.segments, threads ?? ffmpegEffectiveThreads()) : undefined
+}
+
 /** Run a built slice (`sliceArgv`): write the graph file, render `outPath`. */
 async function runSlice(cmd: SliceCommand, sourcePaths: Map<string, string>, outPath: string, threads?: FfmpegThreads): Promise<void> {
   const graphPath = `${outPath}.filtergraph`
   await fs.writeFile(graphPath, cmd.filterGraph)
   try {
-    await runFfmpeg(sliceArgv(cmd, sourcePaths, graphPath, outPath, threads), cmd.timeoutMs)
+    await runFfmpeg(sliceArgv(cmd, sourcePaths, graphPath, outPath, threads), cmd.timeoutMs, { peakMemoryMiB: slicePeakMemoryMiB(cmd, threads) })
   } finally {
     await fs.rm(graphPath, { force: true })
   }

@@ -402,6 +402,36 @@ await check("a keyless LLM route refuses cleanly", async () => {
 })
 
 // ---------------------------------------------------------------------------
+// Site Capture: a keyless, unconnected install accepts the capture, answers with
+// a job id at once (the route never holds the request), then fails the job with
+// a message the self-hoster can act on. The "none" runner makes no outbound
+// request, so this contract needs no network.
+// ---------------------------------------------------------------------------
+
+await check("a keyless Site Capture answers with a job id, then fails honestly", async () => {
+  const name = "a keyless Site Capture answers with a job id, then fails honestly"
+  if (ctx.keys.apify) return skip(name, "install has its own Apify token")
+  if (ctx.connected) return skip(name, "install is connected to nodaro.ai — the capture relays")
+  const submitted = await api("/v1/site-capture", { method: "POST", token: ctx.token, body: { url: "https://example.com/" } })
+  if (submitted.status === 404) return skip(name, "capture is not enabled on this install (SITE_CAPTURE_ENABLED)")
+  assert(submitted.status !== 500, `route 500'd: ${submitted.text.slice(0, 300)}`)
+  assert(submitted.status === 200, `expected 200 job-id-first, got ${submitted.status}: ${submitted.text.slice(0, 300)}`)
+  assert(submitted.json?.status === "pending" && typeof submitted.json?.jobId === "string", `expected { jobId, status: "pending" }, got ${submitted.text.slice(0, 200)}`)
+  const jobId = submitted.json.jobId
+  const deadline = Date.now() + JOB_TIMEOUT_MS
+  let last = null
+  while (Date.now() < deadline) {
+    const { json } = await api(`/v1/jobs/${jobId}/status`, { token: ctx.token })
+    last = json?.data
+    if (last?.status === "failed" || last?.status === "completed") break
+    await new Promise((r) => setTimeout(r, 2000))
+  }
+  assert(last?.status === "failed", `job ${jobId} is "${last?.status}" after ${JOB_TIMEOUT_MS / 1000}s — a keyless capture must fail, not strand or complete`)
+  assertActionable(last.error_message, "keyless site capture error_message")
+  return `job failed with: "${last.error_message}"`
+})
+
+// ---------------------------------------------------------------------------
 // Audio Sync: a CORE node that must SUCCEED keyless (podcast B3)
 //
 // The keyless checks above assert that paid lanes fail honestly. The podcast

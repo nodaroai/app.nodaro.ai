@@ -227,9 +227,9 @@ describe("probeStreams", () => {
 
   it("flags a file with no audio stream — the silent-TikTok download", async () => {
     vi.mocked(spawn).mockReturnValue(
-      fakeProc({ stdout: JSON.stringify({ streams: [{ codec_type: "video", codec_name: "h264" }] }) }) as never,
+      fakeProc({ stdout: JSON.stringify({ streams: [{ codec_type: "video", codec_name: "h264", width: 1920, height: 1080 }] }) }) as never,
     )
-    await expect(probeStreams("/tmp/x.mp4")).resolves.toEqual({ videoCodec: "h264", hasAudio: false })
+    await expect(probeStreams("/tmp/x.mp4")).resolves.toEqual({ videoCodec: "h264", hasAudio: false, width: 1920, height: 1080 })
   })
 
   it("sees audio regardless of stream order", async () => {
@@ -243,7 +243,8 @@ describe("probeStreams", () => {
         }),
       }) as never,
     )
-    await expect(probeStreams("/tmp/x.mp4")).resolves.toEqual({ videoCodec: "hevc", hasAudio: true })
+    // No size reported: unknown, not zero.
+    await expect(probeStreams("/tmp/x.mp4")).resolves.toEqual({ videoCodec: "hevc", hasAudio: true, width: null, height: null })
   })
 
   /**
@@ -253,12 +254,12 @@ describe("probeStreams", () => {
    */
   it("reports unknown (null), not missing, when the probe fails", async () => {
     vi.mocked(spawn).mockReturnValue(fakeProc({ code: 1 }) as never)
-    await expect(probeStreams("/tmp/x.mp4")).resolves.toEqual({ videoCodec: null, hasAudio: null })
+    await expect(probeStreams("/tmp/x.mp4")).resolves.toEqual({ videoCodec: null, hasAudio: null, width: null, height: null })
   })
 
   it("reports unknown when ffprobe cannot be spawned at all", async () => {
     vi.mocked(spawn).mockReturnValue(fakeProc({ error: new Error("ENOENT") }) as never)
-    await expect(probeStreams("/tmp/x.mp4")).resolves.toEqual({ videoCodec: null, hasAudio: null })
+    await expect(probeStreams("/tmp/x.mp4")).resolves.toEqual({ videoCodec: null, hasAudio: null, width: null, height: null })
   })
 })
 

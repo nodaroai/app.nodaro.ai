@@ -1,0 +1,38 @@
+{
+  "title": "Nodaro Site Capture",
+  "description": "One web page, captured the way a phone (Pixel 7) shows it. The page script decides what is captured.",
+  "type": "object",
+  "schemaVersion": 1,
+  "properties": {
+    "url": {
+      "title": "Page URL",
+      "type": "string",
+      "description": "The http(s) page to load.",
+      "editor": "textfield",
+      "pattern": "^https?://.+"
+    },
+    "pageScript": {
+      "title": "Page script",
+      "type": "string",
+      "description": "Source of an async function(context) that receives { page, response, request, Actor }, writes its screenshots with context.Actor.setValue and returns the dataset item. Nodaro builds it from site-capture-page.ts.",
+      "editor": "javascript"
+    },
+    "maxStills": {
+      "title": "Maximum stills",
+      "type": "integer",
+      "description": "Informational: the page script carries its own limit.",
+      "minimum": 1,
+      "maximum": 30,
+      "editor": "number"
+    },
+    "proxyConfiguration": {
+      "title": "Proxy",
+      "type": "object",
+      "description": "Off by default (a direct connection). Residential proxy groups are refused.",
+      "editor": "proxy",
+      "prefill": { "useApifyProxy": false },
+      "default": { "useApifyProxy": false }
+    }
+  },
+  "required": ["url", "pageScript"]
+}

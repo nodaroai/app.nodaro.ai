@@ -7,6 +7,7 @@ import { isAudioUrl, isVideoUrl } from "@/lib/media-type"
 import { GlassCard } from "../output-cards/shared"
 import { WaveformBars } from "../input-cards/shared"
 import { useT } from "@/lib/i18n"
+import { PreviewBadge } from "@/components/render/preview-badge"
 import { useAppDir } from "@/lib/locale-store"
 import { cn } from "@/lib/utils"
 import type { WorkflowNode } from "@/types/nodes"
@@ -33,6 +34,8 @@ interface FsItem {
   mediaType: MediaType
   url?: string
   text?: string
+  /** The take on show is a Preview (a render at proxy quality) — labelled so (F1). */
+  preview: boolean
 }
 
 function mediaTypeFor(node: WorkflowNode, result: { url?: string; text?: string }): MediaType {
@@ -47,6 +50,7 @@ export function FullscreenView({
   orderedOutputNodes,
   getResult,
   getCardTitle,
+  isPreview,
   onBack,
   runSlots,
   asOverlay,
@@ -75,11 +79,12 @@ export function FullscreenView({
             mediaType: mediaTypeFor(node, result),
             url: result.url,
             text: result.text,
+            preview: Boolean(result.url) && isPreview?.(node.id, result.url) === true,
           }
         })
         .filter((i): i is FsItem => i !== null)
     return [...build(orderedInputNodes, "input"), ...build(orderedOutputNodes, "output")]
-  }, [orderedInputNodes, orderedOutputNodes, resolveResult, getResult, getCardTitle])
+  }, [orderedInputNodes, orderedOutputNodes, resolveResult, getResult, getCardTitle, isPreview])
 
   // Seed to the requested node's CURRENT position. Keyed on the resolved index
   // (not the raw id) so it re-points when a run switch moves the node within
@@ -205,6 +210,7 @@ export function FullscreenView({
           {current.kind === "input" ? t("present.kindInput") : t("present.kindOutput")}
         </span>
         <span className="text-[11px] text-muted-foreground uppercase tracking-wider truncate max-w-[40vw]">{current.title}</span>
+        {current.preview && <PreviewBadge />}
       </div>
 
       {/* Counter + run-nav hint */}

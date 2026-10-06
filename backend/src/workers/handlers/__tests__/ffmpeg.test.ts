@@ -1283,6 +1283,30 @@ describe("mix-audio handler", () => {
     })
     expect(mocks.mockCompleteFfmpegAudioJob).toHaveBeenCalledWith("/tmp/mix-work/output.mp3", ctx)
   })
+
+  it("passes the duck through to mixAudio", async () => {
+    const duck = { under: 0, amount: 80 }
+    const job = makeJob("mix-audio", {
+      audioUrls: ["https://voice.mp3", "https://bed.mp3"],
+      trackVolumes: [100, 60],
+      duck,
+    })
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockMixAudio).toHaveBeenCalledWith({
+      audioUrls: ["https://voice.mp3", "https://bed.mp3"],
+      trackVolumes: [100, 60],
+      duck,
+    })
+  })
+
+  it("sends no duck when the job has none", async () => {
+    const job = makeJob("mix-audio", { audioUrls: ["https://a.mp3", "https://b.mp3"] })
+    await handler(job as never, makeCtx())
+
+    const arg = mocks.mockMixAudio.mock.calls.at(-1)?.[0] as Record<string, unknown>
+    expect(arg.duck).toBeUndefined()
+  })
 })
 
 // ---------------------------------------------------------------------------

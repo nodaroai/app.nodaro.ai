@@ -48,9 +48,12 @@
  *
  * WAITING FOR AN FFMPEG SLOT IS NOT RUNNING (Track 0.13, decided 2026-10-04).
  * `FFMPEG_CONCURRENCY` slots are shared by `VIDEO_WORKER_CONCURRENCY` jobs, so
- * a short job can queue behind hours of apply-edl renders. The wrapper opens a
- * slot-wait ledger around the handler (`lib/ffmpeg-slot-wait.ts`); while the
- * job is stalled on the queue the beats go on and the cap's clock pauses, and
+ * a short job can queue behind hours of apply-edl renders — and since
+ * 2026-10-05 behind their MEMORY too: a launch waits until its predicted peak
+ * fits the box's ffmpeg budget (`providers/video/ffmpeg-admission.ts`), which
+ * counts as the same wait. The wrapper opens a slot-wait ledger around the
+ * handler (`lib/ffmpeg-slot-wait.ts`); while the job is stalled on the queue
+ * the beats go on and the cap's clock pauses, and
  * a beat writes the job's total wait (earlier attempts included) to
  * `jobs.slot_wait_ms` whenever it grew — for any processing row, whatever its
  * provider kind — which the workflow engine takes off the node's clocks. The

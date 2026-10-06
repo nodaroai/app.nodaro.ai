@@ -9,7 +9,9 @@ import type { Edl } from "@nodaro/shared"
 import {
   affinityCpuCount,
   cgroupCpuQuota,
+  ffmpegAutoThreadsFor,
   ffmpegCpuBudget,
+  ffmpegEffectiveThreads,
   ffmpegThreads,
   ffmpegThreadsFor,
   parseCpuList,
@@ -164,6 +166,29 @@ describe("ffmpegThreads — the box's own counts", () => {
 
   it("no quota: ffmpeg decides, exactly as before", () => {
     expect(ffmpegThreads(box("max 100000", "0-47"))).toBeUndefined()
+  })
+})
+
+describe("ffmpegAutoThreadsFor / ffmpegEffectiveThreads — the counts ffmpeg picks when none are placed", () => {
+  const box = (cpuMax: string, allowed: string): ReadText => files({
+    "/proc/self/cgroup": "0::/\n",
+    "/sys/fs/cgroup/cpu.max": cpuMax,
+    "/proc/self/status": `Cpus_allowed_list:\t${allowed}\n`,
+  })
+
+  it("decoders and the filter graph use every CPU; x264 runs 1.5 frame threads per CPU, up to its ceiling of 128", () => {
+    expect(ffmpegAutoThreadsFor(8)).toEqual({ decode: 8, filter: 8, encode: 12 })
+    expect(ffmpegAutoThreadsFor(1)).toEqual({ decode: 1, filter: 1, encode: 2 })
+    expect(ffmpegAutoThreadsFor(48)).toEqual({ decode: 48, filter: 48, encode: 72 })
+    expect(ffmpegAutoThreadsFor(200).encode).toBe(128)
+  })
+
+  it("a quota'd box: the counts that are placed (production: 32 of 48 CPUs)", () => {
+    expect(ffmpegEffectiveThreads(box("3200000 100000", "0-47"))).toEqual({ decode: 32, filter: 32, encode: 32 })
+  })
+
+  it("no quota below the cores: what ffmpeg picks for the CPUs the process may run on", () => {
+    expect(ffmpegEffectiveThreads(box("max 100000", "0-7"))).toEqual({ decode: 8, filter: 8, encode: 12 })
   })
 })
 

@@ -1,7 +1,7 @@
 ---
 node_type: mix-audio
-generated_at: 2026-09-27T12:51:24.229Z
-generated_from: c607aa02c
+generated_at: 2026-10-05T19:57:37.251Z
+generated_from: 8777f7b1a
 ---
 
 # Mix Audio
@@ -22,6 +22,8 @@ generated_from: c607aa02c
 **Optional data fields:**
 - `currentJobProgress?: number`
 - `trackOrder?: string[]`
+- `duckUnder?: string`
+- `duckAmount?: number`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`
 - `generatedAudioUrl?: string`

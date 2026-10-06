@@ -165,3 +165,15 @@ describe("jobView — the job's input, allowlisted", () => {
     expect(jobView({ ...row, input_data: { workflowId: "wf" } }).input).toBeNull()
   })
 })
+
+// Round 2 (decided 2026-10-06): the envelope marks a Preview.
+describe("jobView — the Preview marker", () => {
+  const render = { id: "j1", status: "completed", job_type: "apply-edl", output_data: { videoUrl: "https://r2/c.mp4", quality: "proxy" } }
+
+  it("`preview: true` for an Apply EDL render at proxy, nothing otherwise", () => {
+    expect(jobView(render).preview).toBe(true)
+    expect(jobView({ ...render, output_data: { videoUrl: "v", quality: "final" } }).preview).toBeUndefined()
+    expect(jobView({ ...render, job_type: "generate-video" }).preview).toBeUndefined()
+    expect(jobView({ ...render, output_data: null }).preview).toBeUndefined()
+  })
+})

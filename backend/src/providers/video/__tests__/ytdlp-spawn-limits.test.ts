@@ -32,7 +32,8 @@ vi.mock("../yt-proxy.js", async (importOriginal) => ({
 }))
 
 import { downloadYouTubeVideo, probeStreams, reencodeToH264, runYtDlpCapture, spawnYtDlpDownload } from "../youtube-video.js"
-import { YTDLP_REFUSED_MESSAGE, YtDlpHaltError, killYtDlpProcess } from "../ytdlp-process.js"
+import { FetchDeadline, YTDLP_REFUSED_MESSAGE, YtDlpHaltError, killYtDlpProcess, remainingLimits } from "../ytdlp-process.js"
+import { withFfmpegSlot } from "../ffmpeg-utils.js"
 
 const flush = async () => {
   for (let i = 0; i < 10; i++) await Promise.resolve()
@@ -141,14 +142,16 @@ describe("spawnYtDlpDownload", () => {
 
 describe("the ffmpeg stages after a download, held to the fetch's deadline and abort", () => {
   it("the re-encode halts when the deadline passes, and when the caller aborts", async () => {
-    const late = reencodeToH264("/tmp/in.mp4", "/tmp/out.mp4", true, { timeoutMs: 1_000 }).catch((err: Error) => err)
+    const late = reencodeToH264("/tmp/in.mp4", "/tmp/out.mp4", true, { deadline: new FetchDeadline(1_000) }).catch((err: Error) => err)
+    await vi.advanceTimersByTimeAsync(0) // admitted: the ffmpeg starts once the queue lets it
     vi.advanceTimersByTime(1_001)
     spawned.procs[0].emit("close", null)
     expect(await late).toMatchObject({ name: "YtDlpHaltError", reason: "out_of_time" })
     expect(spawned.procs[0].kill).toHaveBeenCalledWith("SIGKILL")
 
     const controller = new AbortController()
-    const aborted = reencodeToH264("/tmp/in.mp4", "/tmp/out.mp4", true, { timeoutMs: 60_000, signal: controller.signal }).catch((err: Error) => err)
+    const aborted = reencodeToH264("/tmp/in.mp4", "/tmp/out.mp4", true, { deadline: new FetchDeadline(60_000), signal: controller.signal }).catch((err: Error) => err)
+    await vi.advanceTimersByTimeAsync(0)
     controller.abort()
     spawned.procs[1].emit("close", null)
     expect(await aborted).toMatchObject({ name: "YtDlpHaltError", reason: "aborted" })
@@ -159,7 +162,7 @@ describe("the ffmpeg stages after a download, held to the fetch's deadline and a
     vi.advanceTimersByTime(1_001)
     expect(spawned.procs[0].kill).toHaveBeenCalledWith("SIGKILL")
     spawned.procs[0].emit("close", null)
-    expect(await run).toEqual({ videoCodec: null, hasAudio: null })
+    expect(await run).toEqual({ videoCodec: null, hasAudio: null, width: null, height: null })
   })
 })
 
@@ -230,5 +233,111 @@ describe("downloadYouTubeVideo — a halt is never retried", () => {
     spawned.procs[0].emit("close", 1)
     expect(await run).toBeInstanceOf(YtDlpHaltError)
     expect(spawned.calls).toHaveLength(1)
+  })
+})
+
+// ONE RULE for every deadline-bounded caller of the ffmpeg admission (round 3 of
+// #1860, decided 2026-10-05): the time a launch spends WAITING for its slot or
+// its memory is not the fetch's. The admission excuses what a launch waited from
+// the deadline it was handed — the same philosophy as the slot-wait ledger that
+// pauses the heartbeat — so a busy box never fails an import as out_of_time, while
+// everything after admission is still held to the deadline.
+describe("the fetch deadline does not run while a launch waits for admission", () => {
+  /** Hold the whole memory budget: an oversized launch runs alone, so every other launch queues behind it. */
+  async function holdTheBox(): Promise<() => void> {
+    let release!: () => void
+    const held = withFfmpegSlot(() => new Promise<void>((resolve) => { release = resolve }), {
+      timeoutMs: 24 * 60 * 60_000, peakMemoryMiB: 1_000_000_000, label: "the box",
+    })
+    held.catch(() => undefined)
+    await vi.advanceTimersByTimeAsync(0)
+    return () => release()
+  }
+
+  it("FetchDeadline: remaining time shrinks with the clock and grows by what is excused", () => {
+    let t = 1_000
+    const deadline = new FetchDeadline(10_000, () => t)
+    expect(deadline.remainingMs()).toBe(10_000)
+    t += 4_000
+    expect(deadline.remainingMs()).toBe(6_000)
+    deadline.excuse(3_500)
+    expect(deadline.remainingMs()).toBe(9_500)
+    deadline.excuse(-5)
+    deadline.excuse(Number.NaN)
+    expect(deadline.remainingMs()).toBe(9_500)
+  })
+
+  it("remainingLimits reads the deadline: out_of_time once nothing is left, an abort first", () => {
+    let t = 0
+    const deadline = new FetchDeadline(1_000, () => t)
+    expect(remainingLimits(deadline, { env: { A: "1" } })).toEqual({ env: { A: "1" }, totalTimeoutMs: 1_000 })
+    t = 1_500
+    expect(() => remainingLimits(deadline, {})).toThrow(expect.objectContaining({ reason: "out_of_time" }))
+    deadline.excuse(1_000)
+    expect(remainingLimits(deadline, {}).totalTimeoutMs).toBe(500)
+    const controller = new AbortController()
+    controller.abort()
+    expect(() => remainingLimits(deadline, { signal: controller.signal })).toThrow(expect.objectContaining({ reason: "aborted" }))
+  })
+
+  it("a re-encode that waits far longer than its slice for memory is NOT failed out_of_time", async () => {
+    const release = await holdTheBox()
+    const run = reencodeToH264("/tmp/in.mp4", "/tmp/out.mp4", true, { deadline: new FetchDeadline(1_000) }).catch((err: Error) => err)
+    await vi.advanceTimersByTimeAsync(30_000) // 30 s queued behind a 1 s slice
+    expect(spawned.calls).toHaveLength(0)
+    release()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(spawned.calls).toHaveLength(1) // admitted and started
+    spawned.procs[0].emit("close", 0)
+    expect(await run).toBeUndefined() // the import succeeded
+    expect(spawned.procs[0].kill).not.toHaveBeenCalled()
+  })
+
+  it("a slow re-encode AFTER admission still hits its deadline — the wait bought no extra run time", async () => {
+    const release = await holdTheBox()
+    const deadline = new FetchDeadline(1_000)
+    const run = reencodeToH264("/tmp/in.mp4", "/tmp/out.mp4", true, { deadline }).catch((err: Error) => err)
+    await vi.advanceTimersByTimeAsync(30_000)
+    release()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(spawned.calls).toHaveLength(1)
+    await vi.advanceTimersByTimeAsync(900) // inside the slice
+    expect(spawned.procs[0].kill).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(200) // past it
+    spawned.procs[0].emit("close", null)
+    expect(await run).toMatchObject({ name: "YtDlpHaltError", reason: "out_of_time" })
+    expect(spawned.procs[0].kill).toHaveBeenCalledWith("SIGKILL")
+  })
+
+  it("a deadline already spent before the launch queues is out_of_time at once, not after a wait", async () => {
+    const deadline = new FetchDeadline(1_000)
+    await vi.advanceTimersByTimeAsync(2_000)
+    await expect(reencodeToH264("/tmp/in.mp4", "/tmp/out.mp4", true, { deadline })).rejects.toMatchObject({ reason: "out_of_time" })
+    expect(spawned.calls).toHaveLength(0)
+  })
+
+  it("the abort still ends the wait", async () => {
+    const release = await holdTheBox()
+    const controller = new AbortController()
+    const run = reencodeToH264("/tmp/in.mp4", "/tmp/out.mp4", true, { deadline: new FetchDeadline(60_000), signal: controller.signal }).catch((err: Error) => err)
+    await vi.advanceTimersByTimeAsync(5_000)
+    controller.abort()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(await run).toMatchObject({ name: "YtDlpHaltError", reason: "aborted" })
+    expect(spawned.calls).toHaveLength(0)
+    release()
+  })
+
+  it("the rule is the launcher's, for every caller: withFfmpegSlot excuses the deadline it is handed by what it waited", async () => {
+    const release = await holdTheBox()
+    const deadline = new FetchDeadline(1_000)
+    const ran = vi.fn(async () => deadline.remainingMs())
+    const run = withFfmpegSlot(ran, { timeoutMs: 60_000, deadline })
+    await vi.advanceTimersByTimeAsync(7_000)
+    expect(ran).not.toHaveBeenCalled()
+    release()
+    await vi.advanceTimersByTimeAsync(0)
+    // What is left once the work starts is the whole slice again.
+    expect(await run).toBe(1_000)
   })
 })

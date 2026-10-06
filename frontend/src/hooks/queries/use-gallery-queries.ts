@@ -22,6 +22,8 @@ export interface GalleryItem {
   readonly createdAt: string
   readonly prompt: string | null
   readonly model: string | null
+  /** A private 720p Preview render (Apply EDL at proxy quality) in the owner's own view. */
+  readonly preview?: true
 }
 
 /**

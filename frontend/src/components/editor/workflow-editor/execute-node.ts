@@ -8347,9 +8347,24 @@ function executeNodeCore(
     const volumes = sourceEntries.map(
       (e) => mixData.trackVolumes?.[e.nodeId] ?? 100,
     );
+    // Ducking is keyed by node id on the node; the API wants the key track's
+    // index in the final order. A key that is no longer connected is no duck.
+    const duckIndex = mixData.duckUnder
+      ? sourceEntries.findIndex((e) => e.nodeId === mixData.duckUnder)
+      : -1;
+    const duck =
+      duckIndex >= 0
+        ? {
+            under: duckIndex,
+            ...(typeof mixData.duckAmount === "number" &&
+            Number.isFinite(mixData.duckAmount)
+              ? { amount: Math.min(100, Math.max(0, mixData.duckAmount)) }
+              : {}),
+          }
+        : undefined;
     return runProcessingNode(
       node.id,
-      () => mixAudioApi(audioUrls, volumes, ctx.userId),
+      () => mixAudioApi(audioUrls, volumes, ctx.userId, duck),
       "generatedAudioUrl",
       "Mix Audio",
       ctx,

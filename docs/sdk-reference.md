@@ -4496,12 +4496,40 @@ is the reverb wet/dry; `delayMs` + `decay` drive `echo`/`custom`;
 #### `mix(input)`
 
 ```ts
-mix(input: { audioUrls: string[]; trackVolumes?: number[] }): Promise<{ jobId: string }>
+mix(input: {
+  audioUrls: string[]
+  trackVolumes?: number[]
+  duck?: {
+    under: number
+    amount?: number
+    thresholdDb?: number
+    ratio?: number
+    attackMs?: number
+    releaseMs?: number
+  }
+}): Promise<{ jobId: string }>
 ```
 
 Layer multiple audio tracks into one (`POST /v1/mix-audio`). `audioUrls`
 (2–20) are summed; optional `trackVolumes` (0–200% each, positionally) set
 per-track level.
+
+`duck` puts a music bed under speech: every track except `audioUrls[under]`
+(the voice) dips while that track is loud and rises back in its pauses
+(sidechain compression). `amount` (0–100, default 75) is how hard;
+`thresholdDb` (-60–0, default -30), `attackMs` (1–2000, default 20),
+`releaseMs` (10–9000, default 500) and `ratio` (1–20, overrides `amount`) are
+optional fine controls. A ducked mix sums its tracks rather than averaging
+them, so the voice keeps its level. The price is the same with or without a
+duck.
+
+```ts
+await client.audio.mix({
+  audioUrls: [voiceUrl, musicUrl],
+  trackVolumes: [100, 60],
+  duck: { under: 0, amount: 80 },
+})
+```
 
 #### `adjustVolume(input)`
 
@@ -5410,7 +5438,7 @@ applyEdl(input: ApplyEdlInput): Promise<EditJobResult>
 | `clipKey` | `string` | no | The plan clip this render cuts — `edlSpanKey(clip)` from `@nodaro/shared` (`"<first inMs>-<last outMs>"`). Returned on the job's `output_data.clipKey`. |
 | `workflowId` | `string` | no | Execution-history display. |
 
-The finished job's `output_data` carries the cut (`videoUrl` + `thumbnailUrl`, or `audioUrl`), the remapped transcript on `json` when one was sent, `quality` (`"proxy"` or `"final"`) and, when given, `clipKey`. A `proxy` render is a **preview**: always private, never in the public gallery (see [Apply EDL](nodes/processing-video/apply-edl.md#previews)).
+The finished job's `output_data` carries the cut (`videoUrl` + `thumbnailUrl`, or `audioUrl`), the remapped transcript on `json` when one was sent, `quality` (`"proxy"` or `"final"`) and, when given, `clipKey`. A `proxy` render is a **preview**: always private, never in the public gallery (see [Apply EDL](nodes/processing-video/apply-edl.md#previews)). A job recorded before `quality` was written reads back with the quality it was ordered at filled in (`"proxy"` is a preview, anything else the final) by `jobs.get`, `jobs.getStatus` and `jobs.list`; the stored job is unchanged.
 
 The EDL is validated at ingress — an unresolvable source, a picture-less
 segment on a video edit, or an edit longer than **180 minutes of output**

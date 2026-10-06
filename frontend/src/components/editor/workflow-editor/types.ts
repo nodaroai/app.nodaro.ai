@@ -1204,9 +1204,17 @@ function fanOutCount(items: string[], selector: SelectorFields | undefined): num
   return count > 1 ? count : 0;
 }
 
+/** A yes/no question a run asks before it goes on (the text is already translated). */
+export interface AskConfirmInfo {
+  readonly title: string;
+  readonly body: string;
+  readonly confirmLabel: string;
+}
+
 /** Payload for the run-confirmation dialog (Execute-All always; any run >100cr). */
 export interface RunConfirmInfo {
-  readonly trigger: "all" | "selected" | "from-here" | "single";
+  /** "render-final" / "update-preview": a run of a review's render set (`handleRenderFinal`). */
+  readonly trigger: "all" | "selected" | "from-here" | "single" | "render-final" | "update-preview";
   readonly nodeCount: number;
   /** Estimated credits, or null in non-credit editions (cost line hidden). */
   readonly estimatedCredits: number | null;
@@ -1267,6 +1275,12 @@ export interface ExecutionContext {
    * callers (and tests) can omit it — handlers treat an absent gate as "proceed".
    */
   confirmRun?: (info: RunConfirmInfo) => Promise<boolean>;
+  /**
+   * A question a run asks that is not about its price (re-running replaces a
+   * review's edits; Render final with nothing changed since the last final).
+   * Same contract as `confirmRun`: absent means "proceed".
+   */
+  askConfirm?: (info: AskConfirmInfo) => Promise<boolean>;
 }
 
 // `iterationIdempotencyKey` lives in `frontend/src/lib/idempotency-key.ts`

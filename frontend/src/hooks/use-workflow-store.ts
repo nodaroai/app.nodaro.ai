@@ -699,6 +699,11 @@ interface WorkflowState {
   readonly setRunFromHere: (fn: ((nodeId: string) => void) | null) => void
   readonly runSelected: (() => void) | null
   readonly setRunSelected: (fn: (() => void) | null) => void
+  /** Render final (`"final"`) or Update preview (`"proxy"`) on a render node:
+   *  a run of the review's render set with the render's quality overridden for
+   *  that run only (`render-final-handler.ts`). Null while the canvas is read-only. */
+  readonly renderFinal: ((renderId: string, kind: "final" | "proxy") => void) | null
+  readonly setRenderFinal: (fn: ((renderId: string, kind: "final" | "proxy") => void) | null) => void
   /** Opens the canvas add-node popup anchored to a specific handle. Wired
    *  by `workflow-canvas.tsx` at mount; consumed by HandleWithPopover's
    *  "Add new" affordance. Null when the canvas isn't mounted. */
@@ -2988,6 +2993,8 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
   setRunFromHere: (fn) => set({ runFromHere: fn }),
   runSelected: null,
   setRunSelected: (fn) => set({ runSelected: fn }),
+  renderFinal: null,
+  setRenderFinal: (fn) => set({ renderFinal: fn }),
   openAddNodePopupForHandle: null,
   setOpenAddNodePopupForHandle: (fn) => set({ openAddNodePopupForHandle: fn }),
   onNodeCreated: null,

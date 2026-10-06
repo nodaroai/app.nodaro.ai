@@ -12,6 +12,10 @@ process.env.SUPABASE_URL = "https://test.supabase.co"
 process.env.SUPABASE_SERVICE_ROLE_KEY = "test-key"
 process.env.EDITION = "cloud"
 process.env.NODE_ENV = "test"
+// The ffmpeg memory budget is spent from a Redis ledger shared by a container's
+// processes; a unit test is one process with no Redis to depend on. The ledger's
+// own tests build it directly.
+process.env.FFMPEG_MEMORY_LEDGER = "local"
 process.env.INTERNAL_ORCHESTRATOR_SECRET = "0".repeat(64)
 // The self-host config seams default to "vendor host / no ACL / auto region",
 // and the guard tests assert exactly that. config.ts loads the developer's

@@ -571,6 +571,15 @@ export interface PluginMixAudioOptions {
   readonly audioUrls: readonly string[]
   readonly trackVolumes?: readonly number[]
   readonly sumTracks?: boolean
+  /** Ducking (`MixAudioDuck`, `lib/mix-audio-duck.ts`): every track except `under` dips while track `under` is loud. */
+  readonly duck?: {
+    readonly under: number
+    readonly amount?: number
+    readonly thresholdDb?: number
+    readonly ratio?: number
+    readonly attackMs?: number
+    readonly releaseMs?: number
+  }
 }
 
 /** Mirrors the inline `AudioTrack` type (`providers/video/merge-video-audio.ts`). */
@@ -2024,6 +2033,12 @@ export interface PluginToolkit {
    */
   features: PluginFeatures
   /**
+   * Host capability markers (see `PluginCapabilities`). ADDITIVE-OPTIONAL for
+   * plugins (no CONTRACT_VERSION bump) — `?.`-guard it; an older host has no
+   * such member, and absence means "not supported".
+   */
+  capabilities?: PluginCapabilities
+  /**
    * Where this install lives, for links a plugin puts in front of people
    * (an invitation email, a share link). The public origin is decided in
    * exactly one place on the app side (`lib/deployment-urls.ts`, with its
@@ -2138,6 +2153,22 @@ export interface PluginFeatures {
   organizations: boolean
   scene3dAdvanced?: boolean
   scene3dLocal?: boolean
+}
+
+/**
+ * What THIS host's toolkit can do, one named boolean per additive capability.
+ * Distinct from `PluginFeatures` (edition / env gates a plugin must mirror):
+ * a capability is a code-level fact a plugin cannot infer from
+ * `CONTRACT_VERSION`, which is an exact-match integer that only moves for a
+ * breaking change. Always present on this side; the plugin side declares the
+ * group OPTIONAL and reads absence as off, so a plugin built for a newer
+ * host degrades cleanly on an older one:
+ * `if (tk.capabilities?.mixAudioDuck === true) { ...pass duck... }`.
+ * Grows one optional member at a time (additive-only, no CONTRACT_VERSION bump).
+ */
+export interface PluginCapabilities {
+  /** `tk.media.mixAudio` honours `PluginMixAudioOptions.duck`; an older host ignores it silently. */
+  readonly mixAudioDuck?: boolean
 }
 
 export interface PluginDeploymentToolkit {

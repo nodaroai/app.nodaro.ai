@@ -8,6 +8,7 @@ import { checkIsAdmin } from "../lib/admin-check.js"
 import { assetSourceColumns, JOB_SOURCES } from "../lib/job-source.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { fillAssetRenderQuality } from "../lib/render-label-fill.js"
 
 // ============================================================
 // Schemas
@@ -98,7 +99,7 @@ export async function libraryRoutes(app: FastifyInstance) {
 
     let query = supabase
       .from("assets")
-      .select("id, user_id, type, filename, mime_type, size_bytes, r2_key, r2_url, metadata, is_library_item, upload_source, source, source_detail, created_at")
+      .select("id, user_id, type, filename, mime_type, size_bytes, r2_key, r2_url, metadata, is_library_item, upload_source, source, source_detail, created_at, job_id")
 
     if (owned) {
       // Storage page: show ALL user assets (regardless of in_library flag)
@@ -173,8 +174,13 @@ export async function libraryRoutes(app: FastifyInstance) {
 
     const rows = data ?? []
     const hasMore = rows.length > limit
-    const items = hasMore ? rows.slice(0, limit) : rows
-    const nextCursor = hasMore ? items[items.length - 1]?.id ?? null : null
+    const pageRows = hasMore ? rows.slice(0, limit) : rows
+    const nextCursor = hasMore ? pageRows[pageRows.length - 1]?.id ?? null : null
+
+    // A render made before its Preview label was stored carries none on the
+    // file: take it from the job that made it — one batched lookup for the page,
+    // none when no file needs one (decided 2026-10-05; read-time, never written).
+    const items = await fillAssetRenderQuality(pageRows)
 
     // Transform snake_case to camelCase
     const assets = items.map((a) => ({

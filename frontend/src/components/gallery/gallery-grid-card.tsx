@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils"
 import { CachedImage } from "@/components/ui/cached-image"
 import type { GalleryItem } from "@/hooks/queries/use-gallery-queries"
 import { useT } from "@/lib/i18n"
+import { PreviewBadge } from "@/components/render/preview-badge"
 import { AudioCard, TYPE_LABEL_KEY, TypeBadge, VideoCard, formatGalleryDate } from "./gallery-media"
 
 interface GalleryGridCardProps {
@@ -43,6 +44,9 @@ export const GalleryGridCard = memo(function GalleryGridCard({
   const activate = () => (selecting ? onToggleSelected(item) : onSelect(index))
   const overlay = (
     <>
+      {/* A render made at proxy quality (the owner's own view only): always visible, not on hover. */}
+      {item.preview && <PreviewBadge className={cn("absolute top-2 z-[3] text-[10px]", selecting ? "start-9" : "start-2")} />}
+
       {/* Overlay */}
       <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-3 pt-8 opacity-0 group-hover:opacity-100 transition-opacity z-[3]">
         <div className="flex items-center justify-between">

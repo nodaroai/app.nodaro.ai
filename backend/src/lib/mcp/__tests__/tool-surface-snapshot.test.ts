@@ -389,6 +389,13 @@ const VIDEO_OVERLAY_TOOL_BYTES = 3_805
 // size; well under the 8_192 B per-tool budget, and the list keeps exactly the
 // headroom it had before.
 const AUDIO_SYNC_TOOL_BYTES = 2_200
+// RAISED 2026-10-05 by mix_audio (podcast Track D2) and nothing else — one NEW
+// core, execute-scoped tool (the Mix Audio node's verb, with its duck), UNGATED
+// like silence_detect and audio_sync, so BOTH the cloud/all AND the
+// community/all membership fixtures move (each names it). Measured by this
+// suite: 389_788 total − 386_820 base = 2_968 B, the tool's full serialized
+// size; well under the 8_192 B per-tool budget.
+const MIX_AUDIO_TOOL_BYTES = 2_968
 // RAISED by the three UGC video builders (build_ugc_creator / build_ugc_clips /
 // build_ugc_cards) and nothing else — three NEW cloud-only tools, registered
 // inside the hasCredits() block and ungated by scope, so cloud/all, cloud/jobs
@@ -479,6 +486,15 @@ const COMPETITOR_LESSONS_TOOL_BYTES = 841
 // 386_689 total − 385_491 base = 1_198 B (503 + 695), far under the 8_192 B
 // per-tool budget, and the list keeps the 45 B of headroom it had.
 const CARD_MARK_TOOLS_BYTES = 1_198
+// raised by capture_site and nothing else — one new core tool (POST /v1/site-capture),
+// gated by workflows:execute and registered on every edition, so cloud/all and
+// community/all name it and the scope-less sets do not. measured by this suite:
+// 2_318 B, under the 8_192 B per-tool budget; the list keeps the headroom it had.
+const SITE_CAPTURE_TOOL_BYTES = 2_318
+// create_launch_video's url wording now points at capture_site where capture is offered,
+// and nothing else. no tool was added, so the fixture does not move. measured by this
+// suite: 31 B; the list keeps the headroom it had.
+const LAUNCH_VIDEO_CAPTURE_POINTER_BYTES = 31
 // RAISED 2026-10-04 by two `apply_edl` sentences and nothing else: a `proxy`
 // render (the 720p preview) is priced on its own, lower per-minute row
 // (`apply-edl:proxy`), so the description and the `quality` describe say so.
@@ -527,6 +543,11 @@ const TEXT_TO_AUDIO_PER_SECOND_PRICING_BYTES = 54
 // wording = 70 B, which keeps the 13 B of headroom the list had before.
 const ELEVENLABS_V4_DEFAULT_WORDING_BYTES = 70
 
+// RAISED by one field: get_asset's outputSchema now declares `preview` (a boolean),
+// as get_job's and wait_for_job's envelope already does, so a Preview render reads
+// the same through every job reader (decided 2026-10-06). No tool was added.
+// measured by this suite: 386_849 total − 386_820 before the field = 29 B.
+const GET_ASSET_PREVIEW_FLAG_BYTES = 29
 // RAISED by ONE argument and nothing else: `caption_style` on `build_ugc_cards`
 // (how the captions after the opening line look — word by word, karaoke, plain
 // subtitles or none; the builder takes it as `captionStyle`). No tool was added,
@@ -568,6 +589,7 @@ export const TOOL_WIRE_BUDGET = {
     JOB_ENVELOPE_INPUT_BYTES +
     VIDEO_OVERLAY_TOOL_BYTES +
     AUDIO_SYNC_TOOL_BYTES +
+    MIX_AUDIO_TOOL_BYTES +
     UGC_BUILDER_TOOL_BYTES +
     GET_RECIPE_UGC_SENTENCE_BYTES +
     GENERATE_SCRIPT_STYLE_GUIDE_BYTES +
@@ -579,6 +601,8 @@ export const TOOL_WIRE_BUDGET = {
     COMPETITOR_TOOLS_BYTES +
     SWITCH_CAMERAS_TOOL_BYTES +
     COMPETITOR_LESSONS_TOOL_BYTES +
+    SITE_CAPTURE_TOOL_BYTES +
+    LAUNCH_VIDEO_CAPTURE_POINTER_BYTES +
     CARD_MARK_TOOLS_BYTES +
     APPLY_EDL_PREVIEW_RATE_WORDING_BYTES +
     ELEVENLABS_V4_SPEECH_BYTES +
@@ -586,6 +610,7 @@ export const TOOL_WIRE_BUDGET = {
     VIDEO_ANALYSIS_SMART_ONLY_BYTES +
     TEXT_TO_AUDIO_PER_SECOND_PRICING_BYTES +
     ELEVENLABS_V4_DEFAULT_WORDING_BYTES +
+    GET_ASSET_PREVIEW_FLAG_BYTES +
     UGC_CARDS_CAPTION_STYLE_BYTES,
 }
 

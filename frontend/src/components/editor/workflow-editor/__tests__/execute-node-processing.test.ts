@@ -1442,6 +1442,7 @@ describe("mix-audio", () => {
       ["http://a.mp3", "http://b.mp3"],
       [80, 120],
       "u1",
+      undefined, // no duck
     )
   })
 
@@ -1462,7 +1463,59 @@ describe("mix-audio", () => {
       ["http://a.mp3", "http://b.mp3"],
       [100, 100],
       "u1",
+      undefined, // no duck
     )
+  })
+})
+
+describe("mix-audio duck", () => {
+  const twoTracks = {
+    audioUrls: ["http://music.mp3", "http://voice.mp3"],
+    audioUrlsWithSourceIds: [
+      { nodeId: "music", url: "http://music.mp3" },
+      { nodeId: "voice", url: "http://voice.mp3" },
+    ],
+  }
+
+  async function runAndGetDuckArg(data: Record<string, unknown>) {
+    mockResolveNodeInputs.mockReturnValue(twoTracks)
+    mockMixAudioApi.mockResolvedValue({ jobId: "j1" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(makeNode("mix-audio", data), makeCtx())
+    const apiCallFn = mockPollJobWithNodeUpdate.mock.calls[0][1]
+    await apiCallFn()
+    return mockMixAudioApi.mock.calls[0]
+  }
+
+  it("sends no duck when none is set", async () => {
+    const args = await runAndGetDuckArg({})
+    expect(args[3]).toBeUndefined()
+  })
+
+  it("converts duckUnder (a node id) to the key track's index, with the amount", async () => {
+    const args = await runAndGetDuckArg({ duckUnder: "voice", duckAmount: 80 })
+    expect(args[3]).toEqual({ under: 1, amount: 80 })
+  })
+
+  it("indexes after trackOrder is applied — the same index the backend engine sends", async () => {
+    const args = await runAndGetDuckArg({ duckUnder: "voice", duckAmount: 60, trackOrder: ["voice", "music"] })
+    expect(args[0]).toEqual(["http://voice.mp3", "http://music.mp3"])
+    expect(args[3]).toEqual({ under: 0, amount: 60 })
+  })
+
+  it("leaves the amount to the server default when unset", async () => {
+    const args = await runAndGetDuckArg({ duckUnder: "voice" })
+    expect(args[3]).toEqual({ under: 1 })
+  })
+
+  it("drops the duck when the key track is no longer connected", async () => {
+    const args = await runAndGetDuckArg({ duckUnder: "deleted-node", duckAmount: 80 })
+    expect(args[3]).toBeUndefined()
+  })
+
+  it("clamps a stored amount to 0-100", async () => {
+    const args = await runAndGetDuckArg({ duckUnder: "voice", duckAmount: 250 })
+    expect(args[3]).toEqual({ under: 1, amount: 100 })
   })
 })
 

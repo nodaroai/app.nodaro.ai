@@ -286,6 +286,54 @@ describe("GET /v1/gallery — force_private is discovery-only, never owner-invis
   })
 })
 
+describe("GET /v1/gallery — Apply EDL renders (round 3, decided 2026-10-06)", () => {
+  const OTHER_USER_ID = "00000000-0000-4000-8000-000000000002"
+  const render = (id: string, quality: "proxy" | "final") => ({
+    id,
+    job_type: "apply-edl",
+    input_data: { quality, output: "video" },
+    output_data: { videoUrl: `https://r2/${id}.mp4`, thumbnailUrl: `https://r2/${id}.jpg`, quality },
+    completed_at: "2026-10-06T10:00:00Z",
+    user_id: TEST_USER_ID,
+    provider: null,
+  })
+  const rows = () => [render("prev", "proxy"), render("fin", "final")]
+
+  it("the owner's own view lists them, the Preview marked", async () => {
+    vi.mocked(supabase.from).mockReturnValue(createChainMock({ data: rows(), error: null }) as never)
+
+    const res = await app.inject({ method: "GET", url: `/v1/gallery?userId=${TEST_USER_ID}` })
+
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body.data.map((i: { id: string }) => i.id)).toEqual(["prev", "fin"])
+    expect(body.data[0]).toMatchObject({ type: "video", jobName: "apply-edl", preview: true })
+    expect(body.data[1]).not.toHaveProperty("preview")
+    // The creator is never part of a card.
+    expect(body.data[0]).not.toHaveProperty("userId")
+  })
+
+  it("the public gallery never lists an Apply EDL render, a Preview or a final — anonymous, another user, or the owner's page seen by someone else", async () => {
+    for (const [url, headers] of [
+      ["/v1/gallery", {}],
+      ["/v1/gallery?type=video", {}],
+      ["/v1/gallery?type=audio", {}],
+      [`/v1/gallery?userId=${TEST_USER_ID}`, { "x-user-id": OTHER_USER_ID }],
+      [`/v1/gallery?userId=${TEST_USER_ID}&favoritesOnly=true`, { "x-user-id": OTHER_USER_ID }],
+    ] as const) {
+      const rec = createRecordingChainMock({ data: rows(), error: null })
+      vi.mocked(supabase.from).mockReturnValue(rec.proxy as never)
+
+      const res = await app.inject({ method: "GET", url, headers })
+
+      expect(res.statusCode, url).toBe(200)
+      expect(res.json().data, url).toEqual([])
+      expect(JSON.stringify(rec.calls.filter((c) => c.method === "in" || c.method === "or").map((c) => c.args)), url).not.toContain("apply-edl")
+      expect(rec.calls.some((c) => c.method === "eq" && c.args[0] === "is_public" && c.args[1] === true), url).toBe(true)
+    }
+  })
+})
+
 describe("POST /v1/gallery/report", () => {
   it("returns 400 for invalid UUID", async () => {
     const res = await app.inject({

@@ -349,6 +349,16 @@ Always visible · Nodaro Cloud only.
 | `photo_url` | string (URL) |  |  |
 | `seed` | integer |  | From 0 to 2147483647. |
 
+## `capture_site`
+
+Needs `workflows:execute`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `url` | string | yes | The page to capture. The scheme is optional (example.com works). From 1 to 2048 characters. |
+| `max_stills` | integer |  | How many section stills at most (3–8, default 8). From 3 to 8. |
+| `client_request_id` | string |  | Optional retry token (8–128 chars of letters, digits, `_ - . :`). If a call times out or the connection drops, reuse the same value when retrying so the run is not started or charged twice; use a fresh value for a genuinely new run. From 8 to 128 characters. |
+
 ## `chat_pipeline_stage`
 
 Needs `pipelines:approve` · Nodaro Cloud only.
@@ -1812,6 +1822,24 @@ Needs `workflows:execute`.
 | `voiceover_volume` | number |  | From 0 to 200. |
 | `background_volume` | number |  | From 0 to 200. |
 | `keep_original_audio` | boolean |  |  |
+
+## `mix_audio`
+
+Needs `workflows:execute`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `tracks` | object[] | yes | 2-20 tracks, in mix order. Each needs audio_url or audio_asset_id. From 2 to 20 items. |
+| `tracks[].audio_url` | string (URL) |  |  |
+| `tracks[].audio_asset_id` | string |  | Nodaro audio or video job id. |
+| `tracks[].volume` | number |  | Track level in percent (default 100). From 0 to 200. |
+| `duck` | object |  | Duck every other track under one key track. Omit for a plain mix. |
+| `duck.under` | integer | yes | 0-based index in `tracks` of the key track (the voice) the others duck under. From 0 to 19. |
+| `duck.amount` | number |  | How hard the others dip, 0-100. Default 75. From 0 to 100. |
+| `duck.threshold_db` | number |  | dBFS the key track must exceed to start the dip. Default -30. From -60 to 0. |
+| `duck.ratio` | number |  | Compressor ratio 1-20. Overrides amount. From 1 to 20. |
+| `duck.attack_ms` | number |  | How fast the dip starts, ms. Default 20. From 1 to 2000. |
+| `duck.release_ms` | number |  | How slowly the others return, ms. Default 500. From 10 to 9000. |
 
 ## `modify_image`
 

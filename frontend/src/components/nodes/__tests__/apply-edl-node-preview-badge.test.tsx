@@ -41,6 +41,9 @@ vi.mock("@/hooks/use-result-aspect-ratio", () => ({
   useResultAspectRatio: () => ({ aspectRatio: undefined, onLoadDimensions: () => {} }),
 }))
 
+// The review bar has its own tests (apply-edl-node-render-final-bar.test.tsx).
+vi.mock("@/components/render/render-review-bar", () => ({ RenderReviewBar: () => null }))
+
 import { ApplyEdlNode } from "../apply-edl-node"
 import { translate } from "@/lib/i18n"
 

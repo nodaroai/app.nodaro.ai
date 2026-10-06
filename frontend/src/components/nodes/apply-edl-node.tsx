@@ -17,6 +17,7 @@ import { useApplyEdlEstimateMinutes } from "@/hooks/use-apply-edl-estimate-minut
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { videoNodeSizing } from "./video-node-defaults"
 import { PreviewBadge, isPreviewQuality } from "@/components/render/preview-badge"
+import { RenderReviewBar } from "@/components/render/render-review-bar"
 import { useT } from "@/lib/i18n"
 import type { ApplyEdlData } from "@/types/nodes"
 
@@ -97,6 +98,12 @@ function ApplyEdlNodeComponent({ id, data, selected }: NodeProps) {
               {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
               <audio src={activeUrl} controls className="w-full" onError={() => setMediaError(true)} />
             </div>
+          )}
+
+          {/* Render final / Update preview, while the take on show is a Preview.
+              "pending" is the runtime-only queued state (markNodesStatus), not in the narrower data type. */}
+          {hasResult && showsPreview && (
+            <RenderReviewBar renderId={id} busy={(status as string) === "pending"} />
           )}
 
           {status === "failed" && !activeUrl && (

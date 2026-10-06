@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { AspectRatioSelector } from "./aspect-ratio-selector"
+import { MIX_DUCK_DEFAULT_AMOUNT } from "@/lib/mix-audio-duck"
 import { COMPOSITION_RATIOS, COLLAGE_ASPECT_RATIOS } from "./model-options"
 import { CombineTransitionPicker } from "@/lib/picker-ui"
 import { AUDIO_CROSSFADE_CURVES, DEFAULT_AUDIO_CROSSFADE_CURVE_ID, clampSmartCutWindow, SMART_CUT_WINDOW_MIN, SMART_CUT_WINDOW_MAX, SMART_CUT_WINDOW_DEFAULT, CAPTION_LOOK_IDS, DEFAULT_CAPTION_LOOK, CAPTION_MAX_WORDS_PER_LINE_MIN, CAPTION_MAX_WORDS_PER_LINE_MAX, CAPTION_LEVER_BOUNDS, SUPPORTED_FONT_NAMES, type CaptionLookId, type CaptionLookLevers, type SupportedFontName, speedRampCreditId } from "@nodaro/shared"
@@ -1283,6 +1284,12 @@ export function MixAudioConfig({ data, onUpdate, nodes, sources }: ConfigProps<M
 
   const trackVolumes = data.trackVolumes ?? {}
 
+  // The key track is stored by node id, so reordering the tracks cannot
+  // re-point it. One that is no longer connected reads as Off (the run sends
+  // no duck for it either).
+  const duckKey = orderedNodes.some((n) => n.id === data.duckUnder) ? data.duckUnder : undefined
+  const duckAmount = data.duckAmount ?? MIX_DUCK_DEFAULT_AMOUNT
+
   return (
     <div className="flex flex-col gap-3">
       {connectedNodes.length === 0 && (
@@ -1321,6 +1328,54 @@ export function MixAudioConfig({ data, onUpdate, nodes, sources }: ConfigProps<M
           )
         })}
       </div>
+      {orderedNodes.length >= 2 && (
+        <div className="flex flex-col gap-2 border-t border-border pt-3">
+          <div>
+            <Label>{t("proccfg.mixDuckUnder")}</Label>
+            <Select
+              value={duckKey ?? "off"}
+              onValueChange={(v) =>
+                onUpdate(
+                  v === "off"
+                    ? { duckUnder: undefined, duckAmount: undefined }
+                    : { duckUnder: v, duckAmount }
+                )
+              }
+            >
+              <SelectTrigger aria-label={t("proccfg.mixDuckUnderAria")}><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="off">{t("proccfg.mixDuckOff")}</SelectItem>
+                {orderedNodes.map((node) => (
+                  <SelectItem key={node.id} value={node.id}>
+                    {((node.data as Record<string, unknown>)?.label as string) ?? node.type ?? node.id}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {duckKey && (
+            <>
+              <p className="text-xs text-muted-foreground">{t("proccfg.mixDuckHint")}</p>
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <Label htmlFor="mix-duck-amount" className="text-xs">{t("proccfg.mixDuckAmount")}</Label>
+                  <span className="text-xs text-muted-foreground ms-2 tabular-nums">{duckAmount}%</span>
+                </div>
+                <Input
+                  id="mix-duck-amount"
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={duckAmount}
+                  onChange={(e) => onUpdate({ duckAmount: parseInt(e.target.value, 10) })}
+                  className="w-full h-2 accent-[#ff0073]"
+                />
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </div>
   )
 }

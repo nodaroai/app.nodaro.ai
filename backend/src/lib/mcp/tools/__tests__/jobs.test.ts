@@ -4,10 +4,18 @@ import { newSession } from "../../session.js"
 import type { Scope } from "../../../scopes.js"
 import { buildServer, callTool, listTools } from "./_helpers.js"
 import { JOB_STATUSES } from "../../../job-status.js"
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
 
 vi.mock("../../../supabase.js", () => ({
   supabase: { from: vi.fn() },
 }))
+// The public scope loads the gallery's moderation (settings + accounts); these
+// tests are about which jobs it lists, so it loads the built-in word list alone.
+vi.mock("../../../gallery-moderation.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../gallery-moderation.js")>()
+  return { ...actual, loadGalleryModeration: async () => actual.OWNER_VIEW_MODERATION }
+})
 
 const { registerJobs } = await import("../jobs.js")
 const { supabase } = await import("../../../supabase.js")
@@ -439,5 +447,184 @@ describe("wait_for_job tool", () => {
     const noScope = buildServer()
     registerJobs({ server: noScope, session: newSession({ userId: "u1", scopes: [] as Scope[], clientName: "Claude" }), fastify: Fastify() })
     expect((await listTools(noScope)).map((t) => t.name)).not.toContain("wait_for_job")
+  })
+})
+
+// ── The Preview label on an old render (round 2, decided 2026-10-06) ────────
+// A render recorded before its quality was stored carries none in output_data.
+// The job reads fill it from the order, by the one rule (`jobRowStamp`), in the
+// response only — the same fill the job-status routes apply.
+describe("MCP job reads fill the Preview label of an old render", () => {
+  const render = (over: Record<string, unknown>) => ({
+    id: JOB,
+    user_id: "u1",
+    status: "completed",
+    job_type: "apply-edl",
+    progress: 100,
+    input_data: { quality: "proxy" },
+    output_data: { videoUrl: "https://r2/cut.mp4" },
+    error_message: null,
+    ...over,
+  })
+
+  it("get_job: an order at proxy is a Preview — output_data.quality filled, in the text and the envelope", async () => {
+    mockGetJob(render({}))
+    const server = buildServer()
+    registerJobs({ server, session: jobsSession(), fastify: Fastify() })
+    const result = await callTool(server, "get_job", { job_id: JOB })
+    const sc = result.structuredContent as { outputData?: Record<string, unknown>; preview?: boolean }
+    expect(sc.outputData?.quality).toBe("proxy")
+    expect(sc.preview).toBe(true)
+    const text = JSON.parse(result.content[0]?.text as string) as { data: { output_data: Record<string, unknown> } }
+    expect(text.data.output_data.quality).toBe("proxy")
+  })
+
+  it("get_job: an order at any other quality is the final — labelled final, never a Preview", async () => {
+    mockGetJob(render({ input_data: { quality: "final" } }))
+    const server = buildServer()
+    registerJobs({ server, session: jobsSession(), fastify: Fastify() })
+    const result = await callTool(server, "get_job", { job_id: JOB })
+    const sc = result.structuredContent as { outputData?: Record<string, unknown>; preview?: boolean }
+    expect(sc.outputData?.quality).toBe("final")
+    expect(sc.preview).toBeUndefined()
+  })
+
+  it("get_job: a stored label wins over the order, and a job that is not a render is left alone", async () => {
+    mockGetJob(render({ input_data: { quality: "final" }, output_data: { videoUrl: "https://r2/cut.mp4", quality: "proxy" } }))
+    const server = buildServer()
+    registerJobs({ server, session: jobsSession(), fastify: Fastify() })
+    const stored = await callTool(server, "get_job", { job_id: JOB })
+    expect((stored.structuredContent as { outputData?: Record<string, unknown> }).outputData?.quality).toBe("proxy")
+
+    mockGetJob(render({ job_type: "generate-video", input_data: { quality: "proxy" } }))
+    const other = await callTool(server, "get_job", { job_id: JOB })
+    const sc = other.structuredContent as { outputData?: Record<string, unknown>; preview?: boolean }
+    expect(sc.outputData).not.toHaveProperty("quality")
+    expect(sc.preview).toBeUndefined()
+  })
+
+  it("wait_for_job: the finished render's envelope carries the filled label", async () => {
+    mockJobReads([
+      render({ status: "processing", output_data: null }),
+      render({}),
+    ])
+    const server = buildServer()
+    registerJobs({ server, session: jobsSession(), fastify: Fastify() })
+    const result = await callTool(server, "wait_for_job", { job_id: JOB, timeout_s: 30 })
+    const sc = result.structuredContent as { status?: string; outputData?: Record<string, unknown>; preview?: boolean }
+    expect(sc.status).toBe("completed")
+    expect(sc.outputData?.quality).toBe("proxy")
+    expect(sc.preview).toBe(true)
+  })
+
+  it("the envelope declares `preview` in its outputSchema", async () => {
+    const server = buildServer()
+    registerJobs({ server, session: jobsSession(), fastify: Fastify() })
+    for (const name of ["get_job", "wait_for_job"]) {
+      const tool = (await listTools(server)).find((t) => t.name === name)
+      const schema = (tool as { outputSchema?: { properties?: Record<string, unknown> } } | undefined)?.outputSchema
+      expect(schema?.properties, name).toHaveProperty("preview")
+    }
+  })
+})
+
+// ── list_jobs lists Apply EDL renders (round 3, decided 2026-10-06) ─────────
+// Apply EDL is on the `video` and `audio` kinds: a render is listed under the
+// kind its OUTPUT is (a cut is a video, a mix is an audio), per job. It is
+// OWNER-ONLY: `scope: "public"` never lists one — a Preview is private, and a
+// final by a user whose outputs are public would be exposure nobody decided.
+// The Preview label an old render lacks is filled from its order, with `preview`.
+describe("list_jobs and Apply EDL renders", () => {
+  const edl = (id: string, over: Record<string, unknown> = {}) => ({
+    id,
+    status: "completed",
+    job_type: "apply-edl",
+    created_at: "2026-10-06T00:00:00Z",
+    input_data: { quality: "proxy", output: "video" },
+    output_data: { videoUrl: "https://r2/cut.mp4" },
+    ...over,
+  })
+  const mix = (id: string, over: Record<string, unknown> = {}) =>
+    edl(id, { input_data: { quality: "final", output: "audio" }, output_data: { audioUrl: "https://r2/mix.m4a" }, ...over })
+  const generated = {
+    id: "v1",
+    status: "completed",
+    job_type: "generate-video",
+    created_at: "2026-10-06T00:00:00Z",
+    input_data: { quality: "proxy" },
+    output_data: { videoUrl: "https://r2/v.mp4" },
+  }
+  const listed = async (rows: unknown[], args: Record<string, unknown>) => {
+    mockListJobs(rows)
+    const server = buildServer()
+    registerJobs({ server, session: jobsSession(), fastify: Fastify() })
+    const result = await callTool(server, "list_jobs", { limit: 10, ...args })
+    return (JSON.parse(result.content[0]?.text as string) as { data: Array<Record<string, any>> }).data
+  }
+  const ids = (rows: Array<Record<string, any>>) => rows.map((r) => r.id)
+
+  it("lists a render under the kind its output is — a cut under video, a mix under audio — per job", async () => {
+    const rows = [edl("cut"), mix("mix")]
+    expect(ids(await listed(rows, {}))).toEqual(["cut"])
+    expect(ids(await listed(rows, { kinds: ["video"] }))).toEqual(["cut"])
+    expect(ids(await listed(rows, { kinds: ["audio"] }))).toEqual(["mix"])
+    expect(ids(await listed(rows, { kinds: ["image", "video", "audio"] }))).toEqual(["cut", "mix"])
+    expect(ids(await listed(rows, { kinds: ["image"] }))).toEqual([])
+  })
+
+  it("an in-flight render has no output yet: its order's medium decides", async () => {
+    const rows = [
+      edl("run-v", { status: "processing", output_data: null }),
+      edl("run-a", { status: "processing", output_data: null, input_data: { quality: "final", output: "audio" } }),
+    ]
+    expect(ids(await listed(rows, { kinds: ["video"] }))).toEqual(["run-v"])
+    expect(ids(await listed(rows, { kinds: ["audio"] }))).toEqual(["run-a"])
+  })
+
+  it("an old proxy row has its output_data.quality filled and is marked a Preview; a final is labelled final, no marker", async () => {
+    const rows = await listed([edl("old"), edl("fin", { input_data: { quality: "final", output: "video" } })], {})
+    expect(rows[0]?.output_data.quality).toBe("proxy")
+    expect(rows[0]?.preview).toBe(true)
+    expect(rows[1]?.output_data.quality).toBe("final")
+    expect(rows[1]).not.toHaveProperty("preview")
+  })
+
+  it("a stored label wins over the order", async () => {
+    const [row] = await listed([edl("stored", { input_data: { quality: "final", output: "video" }, output_data: { videoUrl: "https://r2/cut.mp4", quality: "proxy" } })], {})
+    expect(row?.output_data.quality).toBe("proxy")
+    expect(row?.preview).toBe(true)
+  })
+
+  it("the rows around it are passed through as they were: no label, no marker, no helper columns", async () => {
+    const rows = await listed([edl("e1"), generated], {})
+    expect(ids(rows)).toEqual(["e1", "v1"])
+    expect(rows[1]?.output_data).toEqual({ videoUrl: "https://r2/v.mp4" })
+    expect(rows[1]).not.toHaveProperty("preview")
+    expect(rows[1]).not.toHaveProperty("input_quality")
+  })
+
+  it("scope public never lists an Apply EDL render — not a Preview, not a final, whatever the rows hold", async () => {
+    const rows = [edl("p1", { user_id: "someone-else" }), edl("f1", { user_id: "someone-else", input_data: { quality: "final", output: "video" } }), mix("m1", { user_id: "someone-else" }), { ...generated, user_id: "someone-else" }]
+    ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
+      new Proxy({}, { get: (_t, prop) => (prop === "then" ? (res: (v: unknown) => void) => res({ data: rows, error: null }) : () => (supabase.from as any)()) }),
+    )
+    const server = buildServer()
+    registerJobs({ server, session: jobsSession(), fastify: Fastify() })
+    const result = await callTool(server, "list_jobs", { limit: 10, scope: "public", kinds: ["image", "video", "audio"] })
+    const data = (JSON.parse(result.content[0]?.text as string) as { data: Array<Record<string, any>> }).data
+    expect(ids(data)).toEqual(["v1"])
+  })
+
+  /** Pins exactly where Apply EDL sits: the video and the audio kind, never the image kind. */
+  it("Apply EDL is on exactly the video and audio kinds' allowlists", () => {
+    const src = readFileSync(join(__dirname, "..", "jobs.ts"), "utf8")
+    const block = src.slice(src.indexOf("const setForKind"), src.indexOf("const kinds ="))
+    expect(block.length).toBeGreaterThan(100)
+    const arrays = Object.fromEntries([...block.matchAll(/\b(image|video|audio): \[([^\]]*)\]/g)].map((m) => [m[1], m[2] ?? ""]))
+    expect(Object.keys(arrays).sort()).toEqual(["audio", "image", "video"])
+    expect(arrays.video).toMatch(/["']apply-edl["']/)
+    expect(arrays.audio).toMatch(/["']apply-edl["']/)
+    expect(arrays.image).not.toMatch(/["']apply-edl["']/)
+    expect(block.match(/["']apply-edl["']/g)).toHaveLength(2)
   })
 })

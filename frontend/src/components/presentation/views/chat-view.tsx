@@ -207,6 +207,11 @@ export function ChatView({
           getResult={() => ({})}
           getCardTitle={getNodeLabel}
           resolveResult={(nodeId) => resolveSlotResult(viewer.slot, nodeId)}
+          isPreview={(nodeId, url) => {
+            const node = [...orderedInputNodes, ...orderedOutputNodes].find((n) => n.id === nodeId)
+            const out = viewer.slot.nodeStates[nodeId]?.output as Record<string, unknown> | undefined
+            return outputIsPreview(node?.type, undefined, out, url)
+          }}
           initialNodeId={viewer.nodeId}
           onRunChange={handleViewerRunChange}
           onBack={() => setViewer(null)}

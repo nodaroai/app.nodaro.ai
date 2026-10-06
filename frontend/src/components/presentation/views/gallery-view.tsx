@@ -9,6 +9,7 @@ import { isVideoUrl } from "@/lib/media-type"
 import { GlassCard, StatusBadge, type OutputStatus } from "../output-cards/shared"
 import { WaveformBars } from "../input-cards/shared"
 import { useT, type MessageKey } from "@/lib/i18n"
+import { PreviewBadge } from "@/components/render/preview-badge"
 import type { WorkflowNode } from "@/types/nodes"
 import type { ViewProps } from "./types"
 
@@ -26,6 +27,7 @@ export function GalleryView({
   getNodeStatus,
   getResult,
   getCardTitle,
+  isPreview,
   onOpenMedia,
   onOpenConfig,
 }: ViewProps) {
@@ -141,6 +143,7 @@ export function GalleryView({
                     status={status}
                     url={result.url}
                     text={result.text}
+                    preview={Boolean(result.url) && isPreview?.(node.id, result.url) === true}
                     onClickMedia={onOpenMedia}
                     onClickText={(text) => setTextPreview({ title, text })}
                     onOpenConfig={onOpenConfig}
@@ -178,6 +181,7 @@ function GalleryCard({
   status,
   url,
   text,
+  preview,
   onClickMedia,
   onClickText,
   onOpenConfig,
@@ -188,6 +192,8 @@ function GalleryCard({
   status: OutputStatus
   url?: string
   text?: string
+  /** The take is a Preview (a render at proxy quality) — labelled so (F1). */
+  preview?: boolean
   onClickMedia?: (nodeId: string) => void
   onClickText: (text: string) => void
   onOpenConfig?: (node: WorkflowNode) => void
@@ -212,7 +218,10 @@ function GalleryCard({
   return (
     <GlassCard className={hasContent ? "cursor-pointer hover:border-[#ff0073]/30 transition-colors" : ""}>
       <div className="flex items-center justify-between mb-2">
-        <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider truncate">{title}</span>
+        <span className="flex min-w-0 items-center gap-1.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+          <span className="truncate">{title}</span>
+          {preview && <PreviewBadge className="shrink-0" />}
+        </span>
         <StatusBadge status={status} />
       </div>
       <div className="aspect-square rounded-lg overflow-hidden bg-muted/30 flex items-center justify-center" onClick={handleClick}>

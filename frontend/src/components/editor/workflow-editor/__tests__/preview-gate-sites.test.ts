@@ -79,6 +79,72 @@ describe("preview stop rule — every executable-set builder is classified", () 
   })
 })
 
+describe("preview stop rule — every derived set builder is classified (Render final, A6.1)", () => {
+  // Render final and Update preview build their set from `liveExecutable`, not a
+  // fresh `isExecutableNode` filter, so the census above cannot see them: this
+  // one reads the other door. Each consumer prices or flips its set through the
+  // rule, on the graph the run executes.
+  const USES_LIVE_SET = /\b(liveExecutable|runFromHereExecutable)\(/
+  const DERIVED_GATED = new Set([
+    "components/editor/workflow-editor/run-handlers.ts", // Run from here / selected
+    "components/editor/workflow-editor/render-final-handler.ts", // Render final / Update preview: previewRunnable on the overridden graph
+    "hooks/use-render-final.ts", // the bar's prices: estimateRunCredits (via useRunSetCredits) on the overridden graph
+    "hooks/use-run-from-here-credits.ts", // the button's quote: estimateRunCredits
+  ])
+  const DERIVED_EXEMPT: Readonly<Record<string, string>> = {
+    "components/editor/workflow-editor/run-from-here-set.ts": "defines liveExecutable / runFromHereExecutable",
+  }
+
+  it("has no unclassified consumer", () => {
+    const users = FILES.filter((f) => USES_LIVE_SET.test(f.text)).map((f) => f.rel)
+    expect(users.filter((rel) => !DERIVED_GATED.has(rel) && !(rel in DERIVED_EXEMPT))).toEqual([])
+    for (const rel of [...DERIVED_GATED, ...Object.keys(DERIVED_EXEMPT)]) expect(users, `${rel} is stale`).toContain(rel)
+  })
+
+  it("Render final takes its set through the rule, built from the overridden graph", () => {
+    const src = FILES.find((f) => f.rel === "components/editor/workflow-editor/render-final-handler.ts")!.text
+    expect(src).toMatch(/previewRunnable\(/)
+    // The graph is overridden BEFORE anything is priced or checked from it.
+    expect(src.indexOf("withRunOverrides(")).toBeGreaterThan(-1)
+    expect(src.indexOf("withRunOverrides(")).toBeLessThan(src.indexOf("confirmRunOrAbort("))
+    // It confirms on the overridden graph, never the canvas's.
+    expect(src).toMatch(/confirmRunOrAbort\(ctx, exec, overridden,/)
+  })
+
+  it("the bar's price is the overridden graph's estimate, never the canvas's", () => {
+    const src = FILES.find((f) => f.rel === "hooks/use-render-final.ts")!.text
+    expect(src).toContain("withRunOverrides(")
+    expect(src).toMatch(/useRunSetCredits\(asFinal\.executable, asFinal\.graph/)
+  })
+})
+
+describe("Render final's guards (A6.1)", () => {
+  it("the render's own ▶ refusal sits in the single-node block, above the skip-confirm shortcut", () => {
+    const src = FILES.find((f) => f.rel === "components/editor/workflow-editor/run-handlers.ts")!.text
+    const gate = src.slice(src.indexOf("export async function confirmRunOrAbort("))
+    const refusal = gate.indexOf("renderOwnRunRefusal(")
+    expect(refusal).toBeGreaterThan(-1)
+    expect(refusal).toBeLessThan(gate.indexOf("if (skip ||"))
+    expect(gate.indexOf("replanEditLosses(")).toBeLessThan(gate.indexOf("if (skip ||"))
+  })
+
+  it("Run from here and Run selected are held to the same refusal, above the skip-confirm shortcut", () => {
+    const src = FILES.find((f) => f.rel === "components/editor/workflow-editor/run-handlers.ts")!.text
+    const gate = src.slice(src.indexOf("export async function confirmRunOrAbort("))
+    expect(gate).toMatch(/trigger === "from-here" \|\| trigger === "selected"/)
+    expect(gate).toMatch(/renderOwnRunRefusal\(n\.id, allNodes, edges, ids\)/)
+    expect(gate.indexOf('trigger === "from-here" ||')).toBeLessThan(gate.indexOf("if (skip ||"))
+  })
+
+  it("Render final saves before it runs, and a refused save stops it", () => {
+    const src = FILES.find((f) => f.rel === "components/editor/workflow-editor/render-final-handler.ts")!.text
+    const save = src.indexOf("await save(projectId)")
+    expect(save).toBeGreaterThan(-1)
+    expect(src.indexOf("saveFailed(saved)")).toBeGreaterThan(save)
+    expect(src.indexOf("saveFailed(saved)")).toBeLessThan(src.indexOf("runWorkflow(workflowId"))
+  })
+})
+
 describe("preview stop rule — every executeNode caller meets the backstop", () => {
   const EXECUTE_NODE = "components/editor/workflow-editor/execute-node.ts"
   const callers = FILES.filter((f) => f.rel !== EXECUTE_NODE && /\bexecuteNode\(/.test(f.text)).map((f) => f.rel)
