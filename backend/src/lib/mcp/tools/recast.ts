@@ -44,6 +44,12 @@ export interface RegisterRecastToolsOpts {
  *  + id tiebreak mirrors `_mcp-project.ts` so concurrent creators converge. */
 const RECAST_PROJECT_NAME = "Recast"
 
+/** The per-document guided marker version — the SAME number the recast app
+ *  writes (`recast-settings.ts` GUIDED_MARKER_VERSION). `settings.recast.guided
+ *  = { v: 1 }` is what opens a recast in the app's guided editor on every
+ *  device; an unmarked document opens classic. */
+const GUIDED_MARKER_VERSION = 1
+
 /** The recast client app's origin, derived from this deployment's own public
  *  URL (fleet convention: staging is `next.<domain>`). Prod fallback. */
 function recastAppOrigin(): string {
@@ -315,13 +321,19 @@ export function registerRecastTools({ server, session, fastify }: RegisterRecast
 
         // 3. Seed settings.recast — mirrors the app's seedAuthoredRecast:
         //    faithful + attested at seed, analysis born completed with the
-        //    SERVER's derived document as the raw blueprint (spec C2).
+        //    SERVER's derived document as the raw blueprint (spec C2), and the
+        //    guided marker the app's seed writes, so an MCP-minted recast opens
+        //    in the guided editor like one minted in the app. Only this MINT
+        //    stamps: the later writes (start_recast, get_recast_status) spread
+        //    the stored document — they keep whatever marker it carries and
+        //    never add one to a recast the app minted unmarked.
         const ok = await patchRecastSettings(fastify, session, workflowId, {
           recast: {
             version: 1,
             fidelity: "faithful",
             rightsAttestedAt: new Date().toISOString(),
             resolution: "720p",
+            guided: { v: GUIDED_MARKER_VERSION },
             results: [],
             analysis: { jobId: imported.jobId, status: "completed", blueprint: imported.json },
           },
