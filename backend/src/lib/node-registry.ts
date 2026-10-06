@@ -924,13 +924,15 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     type: "text-to-dialogue",
     label: "Text to Dialogue",
     category: "ai-audio",
-    description: "Generate multi-speaker dialogue audio where each line is spoken by a different voice (ElevenLabs Dialogue v3, direct API — any voice: premade, library, or cloned).",
+    description: "Generate multi-speaker dialogue audio where each line is spoken by a different voice (ElevenLabs Dialogue v3 by default or Dialogue v4 via `provider`, direct API — any voice: premade, library, or cloned). `stability` is 0–1: v3 takes exactly 0, 0.5 or 1, v4 any value; `similarityBoost` (0–1) is v4 only. Flat credits per request under the chosen model's identifier.",
     outputType: "audio",
     creditCost: creditBandFor("text-to-dialogue"),
     inputSchema: {
       fields: [
         { key: "dialogue", type: "json", required: true },
-        { key: "stability", type: "select", options: ["0", "0.5", "1"] },
+        { key: "provider", type: "select", options: [...DIALOGUE_PROVIDERS] },
+        { key: "stability", type: "number" },
+        { key: "similarityBoost", type: "number" },
         { key: "languageCode", type: "text" },
         { key: "seed", type: "number" },
         { key: "applyTextNormalization", type: "select", options: ["auto", "on", "off"] },

@@ -12,6 +12,8 @@ import { getLanguagesForModel, ALL_LANGUAGES } from "@/lib/audio-tags"
 import { TtsVoiceSettings } from "./tts-voice-settings"
 import { VcpVoiceSettings } from "./vcp-voice-settings"
 import { ttsModelSwitchPatch } from "@/lib/tts-model-switch"
+import { DialogueVoiceSettings } from "./dialogue-voice-settings"
+import { dialogueModelSwitchPatch } from "@/lib/dialogue-model-switch"
 import { SUNO_SUGGESTION_ITEMS, SUNO_LYRICS_SUGGESTION_ITEMS, SUNO_STYLE_SUGGESTION_ITEMS } from "@/lib/suno-tags"
 import { SUNO_SLIDER_META, SUNO_SLIDER_LABEL_KEYS, SUNO_SLIDER_DESC_KEYS } from "@/lib/suno-sliders"
 import { Button } from "@/components/ui/button"
@@ -62,7 +64,7 @@ import type {
   ForcedAlignmentData,
   GeneratedScript,
 } from "@/types/nodes"
-import { VOICE_CHANGER_MODELS, DEFAULT_VOICE_CHANGER_MODEL, AUDIO_FX_PRESETS, AUDIO_FX_REVERB_PRESETS, REPLICATE_LIP_SYNC_PROVIDERS, FAL_LIP_SYNC_PROVIDERS, VIDEO_INPUT_LIP_SYNC_PROVIDERS, isPerSecondLipSyncProvider, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, sunoModelHonoursDuration, SUNO_HARD_CEILING, SUNO_TITLE_MAX, getMaxSunoPromptChars, getMaxSunoStyleChars, getMaxTtsChars, sunoCreditType, DEFAULT_TEXT_TO_AUDIO_PROVIDER, DEFAULT_TTS_PROVIDER } from "@nodaro/shared"
+import { VOICE_CHANGER_MODELS, DEFAULT_VOICE_CHANGER_MODEL, AUDIO_FX_PRESETS, AUDIO_FX_REVERB_PRESETS, REPLICATE_LIP_SYNC_PROVIDERS, FAL_LIP_SYNC_PROVIDERS, VIDEO_INPUT_LIP_SYNC_PROVIDERS, isPerSecondLipSyncProvider, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, sunoModelHonoursDuration, SUNO_HARD_CEILING, SUNO_TITLE_MAX, getMaxSunoPromptChars, getMaxSunoStyleChars, getMaxTtsChars, sunoCreditType, DEFAULT_TEXT_TO_AUDIO_PROVIDER, DEFAULT_TTS_PROVIDER, dialogueProviderOf, getDialogueCapabilities } from "@nodaro/shared"
 import type { AudioFxPreset } from "@nodaro/shared"
 import { getEffectiveSunoCustomMode } from "@nodaro/prompts"
 import { MappableField } from "./mappable-field"
@@ -79,7 +81,7 @@ import { ModelDescriptionHint } from "./model-description-hint"
 import { ProviderAudioTagWarning } from "./provider-audio-tag-warning"
 import { ConnectedAudioSources } from "./connected-audio-sources"
 import { FinalAudioPromptPreview } from "./final-audio-prompt-preview"
-import { LIP_SYNC_MODELS, TTS_MODELS, SUNO_MODELS } from "./model-options"
+import { LIP_SYNC_MODELS, TTS_MODELS, DIALOGUE_MODELS, SUNO_MODELS } from "./model-options"
 import { PromptLengthCounter } from "./prompt-length-counter"
 import { SUNO_FIELD_EDIT_META, SunoFieldEditor, type SunoEditField } from "./suno-field-editor"
 import { SunoFieldAiButton, isSunoAiField } from "@/components/nodes/suno-field-ai-button"
@@ -2023,9 +2025,12 @@ export function TextToDialogueConfig({ data, onUpdate, sources, nodeRefs, refMap
   const t = useT()
   const dialogue = data.dialogue ?? [{ id: "1", text: "", voice: DEFAULT_DIALOGUE_VOICE }]
   const totalChars = dialogue.reduce((sum, l) => sum + l.text.length, 0)
-  // Shared cap — the same getter the route's Zod refine reads, so the counter
-  // can't drift from what the backend accepts (three copies drifted before).
-  const maxChars = getMaxTtsChars("elevenlabs-dialogue")
+  // The chosen model's cap, from its capability sheet — the same getter the
+  // route's Zod refine and the MCP verb read, so the counter can't drift from
+  // what the backend accepts (three copies drifted before). An unset provider
+  // reads as v3 dialogue, which is what the node runs as.
+  const shownModel = dialogueProviderOf(data.provider)
+  const maxChars = getDialogueCapabilities(data.provider).maxChars
   // Probed ElevenLabs hard limit: an 11th unique voice → 400 max_voices_exceeded.
   const uniqueVoices = new Set(dialogue.filter((l) => l.voice).map((l) => l.voice)).size
 
@@ -2081,6 +2086,24 @@ export function TextToDialogueConfig({ data, onUpdate, sources, nodeRefs, refMap
 
   return (
     <div className="flex flex-col gap-3">
+      <div>
+        <Label>{t("field.model")}</Label>
+        <Select
+          value={shownModel}
+          // The snap / clear rides on the USER's pick only — never an effect on
+          // `data.provider` (one panel instance is reused across dialogue nodes).
+          onValueChange={(v) => onUpdate({ provider: v as TextToDialogueData["provider"], ...dialogueModelSwitchPatch(v, data) })}
+        >
+          <SelectTrigger aria-label={t("field.model")}><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {DIALOGUE_MODELS.map((m) => (
+              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <ModelDescriptionHint modelId={shownModel} />
+
       <div className="flex items-center justify-between">
         <Label>{t("audiocfg.dialogueLines")}</Label>
         <div className="flex items-center gap-2">
@@ -2142,20 +2165,7 @@ export function TextToDialogueConfig({ data, onUpdate, sources, nodeRefs, refMap
         <Plus className="h-3 w-3 me-1" /> {t("audiocfg.addLine")}
       </Button>
 
-      <div>
-        <Label>{t("field.stability")}</Label>
-        <Select
-          value={String(data.stability ?? 0.5)}
-          onValueChange={(v) => onUpdate({ stability: parseFloat(v) })}
-        >
-          <SelectTrigger aria-label={t("field.stability")}><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="0">{t("audiocfg.mostVariable")}</SelectItem>
-            <SelectItem value="0.5">{t("audiocfg.balanced05")}</SelectItem>
-            <SelectItem value="1">{t("audiocfg.mostStable")}</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+      <DialogueVoiceSettings provider={data.provider} data={data} onUpdate={onUpdate} />
 
       <div>
         <Label>{t("field.language")}</Label>

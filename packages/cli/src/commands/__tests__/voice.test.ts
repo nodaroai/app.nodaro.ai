@@ -19,6 +19,7 @@ const mocks = {
   design: vi.fn(),
   remix: vi.fn(),
   dub: vi.fn(),
+  textToDialogue: vi.fn(),
   list: vi.fn(),
   listClones: vi.fn(),
   createClone: vi.fn(),
@@ -37,6 +38,7 @@ vi.mock("../../client.js", () => ({
       design: mocks.design,
       remix: mocks.remix,
       dub: mocks.dub,
+      textToDialogue: mocks.textToDialogue,
       list: mocks.list,
       listClones: mocks.listClones,
       createClone: mocks.createClone,
@@ -464,6 +466,37 @@ describe("voice export command", () => {
     ).rejects.toThrow("process.exit(1)")
     expect(vi.mocked(warn)).toHaveBeenCalledWith(expect.stringContaining("--voice-fx"))
     expect(mocks.exportMix).not.toHaveBeenCalled()
+  })
+})
+
+describe("voice dialogue command — the model", () => {
+  it("--model elevenlabs-dialogue-v4 sends provider, a stepless stability and similarity", async () => {
+    mocks.textToDialogue.mockResolvedValueOnce({ jobId: "dlg1" })
+    await runCmd(
+      "voice", "dialogue", "--model", "elevenlabs-dialogue-v4", "--stability", "0.3", "--similarity", "0.8",
+      "--line", "Rachel: hi", "--line", "George: hello", "--json",
+    )
+    expect(mocks.textToDialogue).toHaveBeenCalledWith({
+      dialogue: [{ voice: "Rachel", text: "hi" }, { voice: "George", text: "hello" }],
+      provider: "elevenlabs-dialogue-v4",
+      stability: 0.3,
+      similarityBoost: 0.8,
+    })
+  })
+
+  it("without --model sends no provider (the route runs v3 dialogue) and keeps v3's stability rule", async () => {
+    mocks.textToDialogue.mockResolvedValueOnce({ jobId: "dlg2" })
+    await runCmd("voice", "dialogue", "--stability", "0.5", "--line", "Rachel: hi", "--json")
+    expect(mocks.textToDialogue).toHaveBeenCalledWith({ dialogue: [{ voice: "Rachel", text: "hi" }], stability: 0.5 })
+    await expect(runCmd("voice", "dialogue", "--stability", "0.3", "--line", "Rachel: hi", "--json"))
+      .rejects.toThrow("--stability must be exactly 0, 0.5, or 1")
+    expect(mocks.textToDialogue).toHaveBeenCalledTimes(1)
+  })
+
+  it("an unknown --model is refused with the list of models", async () => {
+    await expect(runCmd("voice", "dialogue", "--model", "nope", "--line", "Rachel: hi", "--json"))
+      .rejects.toThrow(/--model must be one of elevenlabs-dialogue, elevenlabs-dialogue-v4/)
+    expect(mocks.textToDialogue).not.toHaveBeenCalled()
   })
 })
 

@@ -36,7 +36,34 @@ async function bodyFor(options: Options) {
   return bodies[0]!
 }
 
-afterEach(() => vi.unstubAllGlobals())
+afterEach(() => {
+  vi.unstubAllGlobals()
+  vi.restoreAllMocks()
+})
+
+function stubFetchFailing(status: number, text: string) {
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(text, { status })))
+}
+
+describe("directElevenLabsDialogue — a refused request", () => {
+  it("a 429 is the retryable 'temporarily busy' message the sound-effects funnel answers with, never the vendor's words", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    stubFetchFailing(429, '{"detail":{"status":"too_many_concurrent_requests","message":"ElevenLabs: concurrency limit"}}')
+    const err = await directElevenLabsDialogue(LINES, { provider: "elevenlabs-dialogue-v4" }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(Error)
+    expect((err as Error).message).toBe("Service is temporarily busy. Please try again in a moment.")
+    expect((err as Error).message).not.toMatch(/ElevenLabs|concurren/)
+    // Retryable: the queue re-sends it; the operator still sees the raw status + body.
+    expect((err as { deterministic?: unknown }).deterministic).not.toBe(true)
+    expect((err as { internalDetails?: unknown }).internalDetails).toMatch(/429/)
+    expect((err as { internalDetails?: unknown }).internalDetails).toMatch(/too_many_concurrent_requests/)
+  })
+
+  it("any other failure keeps the message it has always had", async () => {
+    stubFetchFailing(500, "boom")
+    await expect(directElevenLabsDialogue(LINES, undefined)).rejects.toThrow("ElevenLabs dialogue failed (500): boom")
+  })
+})
 
 describe("directElevenLabsDialogue — v3 dialogue, byte for byte (characterization)", () => {
   it("runs on eleven_v3 and keeps the lines, their order and their tags", async () => {
@@ -104,5 +131,28 @@ describe("directElevenLabsDialogue — the model it runs on", () => {
     expect((await bodyFor({ stability: "0.5" as unknown as number })).settings).toEqual({ stability: 0.5 })
     expect((await bodyFor({ stability: "loud" as unknown as number })).settings).toBeUndefined()
     expect((await bodyFor({ stability: 2 })).settings).toEqual({ stability: 1 }) // clamped, never a paid 400
+  })
+})
+
+describe("directElevenLabsDialogue — elevenlabs-dialogue-v4", () => {
+  it("runs on eleven_v4", async () => {
+    expect((await bodyFor({ provider: "elevenlabs-dialogue-v4" })).model_id).toBe("eleven_v4")
+  })
+
+  it("sends stability and similarity (as settings.similarity), in that order", async () => {
+    const body = await bodyFor({ provider: "elevenlabs-dialogue-v4", stability: 0.3, similarityBoost: 0.8 })
+    expect(body.settings).toEqual({ stability: 0.3, similarity: 0.8 })
+    expect(Object.keys(body.settings as object)).toEqual(["stability", "similarity"])
+  })
+
+  it("sends similarity alone when no stability is set, and nothing when neither is", async () => {
+    expect((await bodyFor({ provider: "elevenlabs-dialogue-v4", similarityBoost: 0.6 })).settings).toEqual({ similarity: 0.6 })
+    expect((await bodyFor({ provider: "elevenlabs-dialogue-v4" })).settings).toBeUndefined()
+  })
+
+  it("keeps [audio tags] and forwards a normalized language code", async () => {
+    const body = await bodyFor({ provider: "elevenlabs-dialogue-v4", languageCode: "heb" })
+    expect((body.inputs as Array<{ text: string }>)[1]!.text).toBe("[laughs] Hello!")
+    expect(body.language_code).toBe("he")
   })
 })

@@ -901,10 +901,12 @@ Needs `workflows:execute`.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
+| `model` | string |  | Dialogue model. Default `elevenlabs-dialogue` (v3). `elevenlabs-dialogue-v4` is newer: the same [audio tags], any stability from 0 to 1, and a similarity setting. One of `elevenlabs-dialogue`, `elevenlabs-dialogue-v4`. |
 | `dialogue` | object[] | yes | The script, in speaking order. Reuse voice_ids across lines for the same character. From 1 to 200 items. |
 | `dialogue[].text` | string | yes | What this line says. `[audio tags]` allowed. At least 1 character. |
 | `dialogue[].voice_id` | string | yes | Voice for this line — a premade voice NAME (recommended; same naming as `generate_speech`: Rachel, Aria, Roger, Sarah, Laura, Charlie, George, Callum, River, Liam, Charlotte, Alice, Matilda, Will, Jessica, Eric, Chris, Brian, Daniel, Lily, Bill) or an ElevenLabs UUID of a voice the user has cloned/saved. DO NOT invent UUIDs. At least 1 character. |
-| `stability` | number |  | v3 stability: 0 = most variable, 0.5 = balanced, 1 = most stable. One of `0`, `0.5`, `1`. |
+| `stability` | number |  | v3 (default): exactly 0, 0.5 or 1 (0 = most variable, 1 = most stable). v4: any value 0–1. From 0 to 1. |
+| `similarity_boost` | number |  | v4 only (v3 ignores it): how closely each line keeps its voice's character. From 0 to 1. |
 | `language_code` | string |  | ISO 639-1 hint (e.g. "en", "he"). Omit for auto-detect. At most 10 characters. |
 | `seed` | integer |  | Deterministic sampling. Omit for random. From 0 to 4294967295. |
 | `apply_text_normalization` | string |  | Spell out numbers/dates/abbreviations. Default auto. One of `auto`, `on`, `off`. |

@@ -2477,6 +2477,16 @@ const TTS_LANGS_V3 = [
 ] as const
 // Every lever the v2 families are sent today.
 const TTS_LEVERS_V2 = ["stability", "similarity", "style", "speed", "speakerBoost"] as const
+/**
+ * ElevenLabs Dialogue v4's total-character cap across lines — ONE constant, so
+ * the live probe's answer lands in one place. Rule (decided 2026-10-06): the
+ * largest of 2,500 / 5,000 that returned 200, voiced its last line and finished
+ * well inside the funnel's timeout in a live check of v4 dialogue above 2,000
+ * characters; never above 5,000 (parity with v3 dialogue) without a separate
+ * decision. Written at parity until that check reports; ElevenLabs recommends
+ * ≤ 2,000 for quality on either model.
+ */
+const DIALOGUE_V4_MAX_CHARS = 5000
 
 const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
   // ── ElevenLabs TTS ──
@@ -2577,7 +2587,9 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
     description: "Multi-speaker dialogue via the direct ElevenLabs API — give it a script, it voices each role (any voice: premade, library, or cloned).",
     useCases: ["tts", "dialogue", "multi-speaker"],
     features: ["audio-tags", "voice-cloning"],
-    pricing: [{ identifier: "elevenlabs-dialogue", credits: 25, note: "per 1K chars" }],
+    // Flat per request, whatever the length (decided 2026-10-06: the old
+    // "per 1K chars" note described a scaling that never existed).
+    pricing: [{ identifier: "elevenlabs-dialogue", credits: 25 }],
     tts: {
       audioTags: true,
       ssmlBreaks: false,
@@ -2589,6 +2601,29 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
       // Total across lines. The documented 2,000 is a recommendation, not a
       // limit (2,500 and 5,000 both probed 200); capped like v3, the model underneath.
       maxChars: 5000,
+      languages: TTS_LANGS_V3,
+    },
+  },
+  "elevenlabs-dialogue-v4": {
+    id: "elevenlabs-dialogue-v4",
+    kind: "audio",
+    // Its own mode, never "tts" — the same reason as v3 dialogue above.
+    modes: ["dialogue"] as const,
+    family: "ElevenLabs",
+    label: "ElevenLabs Dialogue v4",
+    series: "ElevenLabs",
+    description: "Multi-speaker dialogue on ElevenLabs v4 — [audio tags], stability and similarity control. Direct API.",
+    useCases: ["tts", "dialogue", "multi-speaker"],
+    features: ["audio-tags", "voice-cloning"],
+    // Flat per request, the same as v3 dialogue (decided 2026-10-06).
+    pricing: [{ identifier: "elevenlabs-dialogue-v4", credits: 25 }],
+    tts: {
+      audioTags: true,
+      ssmlBreaks: false,
+      levers: ["stability", "similarity"],
+      languageCode: true,
+      maxChars: DIALOGUE_V4_MAX_CHARS,
+      // The curated picker, v3's 46 (v4 lists 85; widening is its own change).
       languages: TTS_LANGS_V3,
     },
   },

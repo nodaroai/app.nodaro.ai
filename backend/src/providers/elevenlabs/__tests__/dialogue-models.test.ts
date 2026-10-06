@@ -21,6 +21,12 @@ describe("dialogue wire models", () => {
     expect(dialogueSpeechModel("elevenlabs-dialogue")).toBe("elevenlabs-v3")
   })
 
+  it("v4 dialogue runs on eleven_v4, keyed and billed as itself, sharing v4 speech's voices", () => {
+    expect(dialogueWireModel("elevenlabs-dialogue-v4")).toBe("eleven_v4")
+    expect(dialogueModelKey("elevenlabs-dialogue-v4")).toBe("elevenlabs-dialogue-v4")
+    expect(dialogueSpeechModel("elevenlabs-dialogue-v4")).toBe("elevenlabs-v4")
+  })
+
   it("a missing, unknown, inherited-member, non-string or text-to-speech id runs as the default", () => {
     for (const id of [undefined, "", "nope", "constructor", "__proto__", ["elevenlabs-dialogue"], "elevenlabs-v4"] as unknown[]) {
       expect(dialogueWireModel(id), JSON.stringify(id)).toBe(DIALOGUE_WIRE_MODELS[DEFAULT_DIALOGUE_PROVIDER].wire)

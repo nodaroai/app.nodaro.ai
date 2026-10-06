@@ -1228,7 +1228,7 @@ export type TtsProvider = typeof TTS_PROVIDERS[number]
  * Never members of TTS_PROVIDERS: a dialogue model takes a script of lines, not
  * one text (`dialogue-capabilities.test.ts` pins both directions).
  */
-export const DIALOGUE_PROVIDERS = ["elevenlabs-dialogue"] as const
+export const DIALOGUE_PROVIDERS = ["elevenlabs-dialogue", "elevenlabs-dialogue-v4"] as const
 export type DialogueProvider = typeof DIALOGUE_PROVIDERS[number]
 
 /** The model a dialogue request runs on when its provider is missing or unknown: v3 dialogue (decided 2026-10-04 — v3 stays the default). */

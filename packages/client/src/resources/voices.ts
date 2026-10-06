@@ -1,4 +1,4 @@
-import type { Voice, VoiceClone, VoiceLibraryParams, VoiceLibraryResponse, AudioFxPreset } from "@nodaro/shared"
+import type { Voice, VoiceClone, VoiceLibraryParams, VoiceLibraryResponse, AudioFxPreset, DialogueProvider } from "@nodaro/shared"
 export type { Voice, SharedVoice, VoiceClone, VoiceLibraryParams, VoiceLibraryResponse, AudioFxPreset } from "@nodaro/shared"
 import type { NodaroClient } from "../client.js"
 
@@ -201,18 +201,23 @@ export class VoicesResource {
 
   /**
    * Voice a multi-speaker script as ONE audio file
-   * (`POST /v1/text-to-dialogue`, ElevenLabs Dialogue v3). Each `dialogue`
-   * line is `{ text, voice }` in speaking order — `voice` is a premade voice
-   * name or an ElevenLabs voice UUID (cloned/library voices work too; mixed
-   * casts are fine). At most 5,000 characters total across lines (≤2,000
-   * recommended for best quality) and 10 unique voices. Line text may carry
-   * `[audio tags]` like `[laughs]`. Costs credits and runs async — poll
+   * (`POST /v1/text-to-dialogue`) on ElevenLabs Dialogue v3 — the default — or
+   * Dialogue v4 (`provider: "elevenlabs-dialogue-v4"`). Each `dialogue` line is
+   * `{ text, voice }` in speaking order — `voice` is a premade voice name or an
+   * ElevenLabs voice UUID (cloned/library voices work too; mixed casts are
+   * fine). At most 5,000 characters total across lines on either model
+   * (≤2,000 recommended for best quality) and 10 unique voices. Line text may
+   * carry `[audio tags]` like `[laughs]`. Costs credits and runs async — poll
    * `jobs.get(jobId)` for `output_data.audioUrl`.
    */
   textToDialogue(input: {
     dialogue: Array<{ text: string; voice: string }>
-    /** v3 stability: 0 (most variable) | 0.5 (balanced) | 1 (most stable). */
-    stability?: 0 | 0.5 | 1
+    /** Dialogue model: `"elevenlabs-dialogue"` (v3, the default) or `"elevenlabs-dialogue-v4"`. */
+    provider?: DialogueProvider
+    /** v3: exactly 0, 0.5 or 1 (0 = most variable, 1 = most stable). v4: any value 0–1. */
+    stability?: number
+    /** v4 only (v3 ignores it): how closely each line keeps its voice's character, 0–1. */
+    similarityBoost?: number
     /** ISO 639-1 language hint (e.g. "en"); auto-detected when omitted. */
     languageCode?: string
     /** Deterministic sampling seed (integer 0–4294967295). Omit for random. */

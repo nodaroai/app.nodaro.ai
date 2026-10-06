@@ -255,6 +255,57 @@ describe("/v1/generate-video Seedance 2 reference-video billing", () => {
     await app.close()
   })
 
+  it("a voiced cast whose voices are all on v4 reserves the v4 dialogue add-on and forwards the model to the worker", async () => {
+    const app = await buildGenerateVideoApp()
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-video",
+      payload: {
+        provider: "seedance-2-5",
+        resolution: "720p",
+        duration: 8,
+        referenceVideoUrls: ["https://r2.example.com/ref.mp4"],
+        characterVoices: [
+          { voiceId: "Rachel", speaker: "Maya", ttsProvider: "elevenlabs-v4" },
+          { voiceId: "George", speaker: "Ben", ttsProvider: "elevenlabs-v4" },
+        ],
+        dialogue: [{ speaker: "Maya", line: "Hello there." }, { speaker: "Ben", line: "Hi." }],
+      },
+    })
+    expect(res.statusCode).toBe(200)
+    const { STATIC_CREDIT_COSTS } = await import("../../ee/billing/credits.js")
+    expect(reserveSpy).toHaveBeenCalledWith(
+      "u-1", "job-1", "seedance-2-5:8s:720p-ref", 0, 0,
+      expect.objectContaining({ creditOverride: 1235 + STATIC_CREDIT_COSTS["elevenlabs-dialogue-v4"]! }),
+    )
+    const { videoQueue } = await import("../../lib/queue.js")
+    expect(videoQueue.add).toHaveBeenCalledWith(
+      "voiced-video",
+      expect.objectContaining({ dialogueProvider: "elevenlabs-dialogue-v4", voicedAudioAddon: STATIC_CREDIT_COSTS["elevenlabs-dialogue-v4"] }),
+    )
+    await app.close()
+  })
+
+  it("a voiced cast with one voice still forwards v3 dialogue as its model (a single voice renders on its own speech model)", async () => {
+    const app = await buildGenerateVideoApp()
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/generate-video",
+      payload: {
+        imageUrl: "https://r2.example.com/img.png",
+        provider: "seedance-2-5",
+        resolution: "720p",
+        duration: 8,
+        characterVoices: [{ voiceId: "Rachel", speaker: "Maya" }],
+        dialogue: [{ speaker: "Maya", line: "Hello there." }],
+      },
+    })
+    expect(res.statusCode).toBe(200)
+    const { videoQueue } = await import("../../lib/queue.js")
+    expect(videoQueue.add).toHaveBeenCalledWith("voiced-video", expect.objectContaining({ dialogueProvider: "elevenlabs-dialogue" }))
+    await app.close()
+  })
+
   it("falls back to the normal identifier (no scaling) when there are no reference videos", async () => {
     const app = await buildGenerateVideoApp()
     const res = await app.inject({

@@ -7,9 +7,10 @@ import { describe, it, expect, vi } from "vitest"
 const editionMock = vi.hoisted(() => ({ hasCredits: vi.fn(() => true) }))
 vi.mock("@/lib/edition", () => editionMock)
 
-import { SUNO_MODELS as SUNO_MODELS_SHARED } from "@nodaro/shared"
+import { SUNO_MODELS as SUNO_MODELS_SHARED, DIALOGUE_PROVIDERS } from "@nodaro/shared"
 import {
   SUNO_MODELS,
+  DIALOGUE_MODELS,
   IMAGE_GEN_MODELS,
   IMAGE_I2I_MODELS,
   VIDEO_I2V_MODELS,
@@ -197,6 +198,24 @@ describe("SUNO_MODELS mirrors the shared list", () => {
 
   it("every row has a label and a desc", () => {
     for (const m of SUNO_MODELS) {
+      expect(m.label).toBeTruthy()
+      expect(m.desc).toBeTruthy()
+    }
+  })
+})
+
+/**
+ * The dialogue model dropdown (panel + quick strip) offers exactly the route's
+ * enum, `DIALOGUE_PROVIDERS` in `@nodaro/shared`, in its order — a model the
+ * route takes but the picker hides, or the reverse, fails here.
+ */
+describe("DIALOGUE_MODELS mirrors the shared list", () => {
+  it("offers exactly DIALOGUE_PROVIDERS, in that order", () => {
+    expect(DIALOGUE_MODELS.map((m) => m.value)).toEqual([...DIALOGUE_PROVIDERS])
+  })
+
+  it("every row has a label and a desc", () => {
+    for (const m of DIALOGUE_MODELS) {
       expect(m.label).toBeTruthy()
       expect(m.desc).toBeTruthy()
     }

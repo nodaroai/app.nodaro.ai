@@ -27,7 +27,7 @@ import {
   runLtxRetake,
 } from "../../providers/replicate/ltx-video.js"
 import { config } from "../../lib/config.js"
-import { FAL_LIP_SYNC_PROVIDERS, isAutoVideoDuration, ltxExtendDurationSec, ltxRetakeDurationSec, pricedOutputDurationSec, REPLICATE_LIP_SYNC_PROVIDERS, SEEDANCE_2_EXTEND_STITCH, SEEDANCE_2_R2V_MIN_REF_VIDEO_SEC, SEEDANCE_LIP_SYNC_PROVIDERS, estimateLoopTrimAddonCredits, getMaxTtsChars, ttsSupportsAudioTags, isVeoProvider, getVideoAudioCapability, parseAttributedDialogue, resolveDialogueVoices } from "@nodaro/shared"
+import { FAL_LIP_SYNC_PROVIDERS, isAutoVideoDuration, ltxExtendDurationSec, ltxRetakeDurationSec, pricedOutputDurationSec, REPLICATE_LIP_SYNC_PROVIDERS, SEEDANCE_2_EXTEND_STITCH, SEEDANCE_2_R2V_MIN_REF_VIDEO_SEC, SEEDANCE_LIP_SYNC_PROVIDERS, estimateLoopTrimAddonCredits, getDialogueCapabilities, dialogueProviderOf, ttsSupportsAudioTags, isVeoProvider, getVideoAudioCapability, parseAttributedDialogue, resolveDialogueVoices } from "@nodaro/shared"
 import type { CharacterVoiceSpec, DialogueLine, ResolvedDialogueVoiceLine } from "@nodaro/shared"
 import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
 import { combineVideos } from "../../providers/video/combine-videos.js"
@@ -1583,8 +1583,8 @@ const handleGenerateMask: HandlerFn = async function handleGenerateMask(job, ctx
 // One job, one combined reservation. Two modes, chosen by the model's audio
 // capability (the route already gated this via videoModelCanSpeakDialogue):
 //   audio_driven (Seedance 2) -> synthesise the dialogue track (direct ElevenLabs
-//     TTS for a single voice; direct Dialogue v3 for multi-speaker, any voice
-//     mix), feed it as reference audio, model lip-syncs.
+//     TTS for a single voice; direct dialogue on the cast's dialogue model for
+//     multi-speaker, any voice mix), feed it as reference audio, model lip-syncs.
 //   native_speech (VEO)       -> bake the line during generation, then revoice the
 //     baked audio to the primary character voice (keeps the music/SFX bed).
 // The voice chain NEVER hard-fails the clip: a synth / revoice failure degrades to
@@ -1598,14 +1598,14 @@ const handleGenerateMask: HandlerFn = async function handleGenerateMask(job, ctx
 // job_type via the worker CAS, but finalize/asset both key off the passed
 // jobType + output_data, so the deliverable is always handled as a video.
 
-// Total-text cap for synthesis (Dialogue v3 / direct TTS) — the SAME shared
-// constant the route and panel read, never a third hand-kept copy (this
-// literal used to be one and drifted).
-const maxDialogueChars = () => getMaxTtsChars("elevenlabs-dialogue")
+// Total-text cap for synthesis — the chosen dialogue model's sheet (the SAME
+// getter the route and panel read), never a hand-kept copy (a literal here
+// drifted before). An unset or unknown model reads as v3 dialogue.
+const maxDialogueChars = (dialogueProvider: unknown) => getDialogueCapabilities(dialogueProvider).maxChars
 
-/** Trim resolved lines to the synthesis char budget; logs any drop (no silent cap). */
-function capDialogueLines(lines: ResolvedDialogueVoiceLine[], jobId: string): ResolvedDialogueVoiceLine[] {
-  const cap = maxDialogueChars()
+/** Trim resolved lines to the model's synthesis char budget; logs any drop (no silent cap). */
+function capDialogueLines(lines: ResolvedDialogueVoiceLine[], jobId: string, dialogueProvider: unknown): ResolvedDialogueVoiceLine[] {
+  const cap = maxDialogueChars(dialogueProvider)
   let total = 0
   const out: ResolvedDialogueVoiceLine[] = []
   for (const l of lines) {
@@ -1614,7 +1614,7 @@ function capDialogueLines(lines: ResolvedDialogueVoiceLine[], jobId: string): Re
     out.push(l)
   }
   if (out.length < lines.length) {
-    console.warn(`[worker] voiced-video ${jobId}: dropped ${lines.length - out.length} dialogue line(s) over the ${cap}-char Dialogue v3 cap`)
+    console.warn(`[worker] voiced-video ${jobId}: dropped ${lines.length - out.length} dialogue line(s) over the ${cap}-char dialogue cap`)
   }
   return out
 }
@@ -1672,25 +1672,30 @@ async function mergeVoiceTrackToR2(
 /**
  * Synthesise the resolved dialogue into ONE reference-audio track (R2 URL) for the
  * audio_driven (Seedance) path. Genuine multi-speaker goes through the direct
- * ElevenLabs Dialogue v3 API in ONE call — per-line voice resolution means ANY
+ * ElevenLabs dialogue API in ONE call, on the cast's dialogue model — the one the
+ * route chose and reserved (`dialogueProvider`: v3 dialogue unless every voice
+ * names a speech model with one shared dialogue twin; a job enqueued before the
+ * model travelled with it runs v3 dialogue). Per-line voice resolution means ANY
  * voice mix works (premade names, library UUIDs, clones); the old KIE proxy's
  * premade-names-only limit (and its degrade-to-primary-voice fallback) is gone
  * with the proxy itself. A single voice stays on direct TTS: it honours the
- * voice's `ttsProvider` (turbo/multilingual/v3), which dialogue — always
- * eleven_v3 — could not.
+ * voice's own `ttsProvider` (turbo/multilingual/v3/v4).
  */
 async function synthesizeDialogueTrack(
   ctx: Parameters<HandlerFn>[1],
   resolved: ResolvedDialogueVoiceLine[],
   voices: readonly CharacterVoiceSpec[],
   languageCode: string | undefined,
+  dialogueProvider: string | undefined,
 ): Promise<string> {
   const distinctVoices = new Set(resolved.map((r) => r.voice))
   if (distinctVoices.size > 1) {
-    // Genuine multi-speaker, any voice mix → direct Dialogue v3 (one call).
+    // Genuine multi-speaker, any voice mix → direct dialogue (one call) on the
+    // model the route reserved; `dialogueProviderOf` is the funnel's own
+    // default rule, spelled here so the egress key and the bill agree.
     const buf = await directElevenLabsDialogue(
       resolved.map((r) => ({ text: r.text, voice: r.voice })),
-      languageCode ? { languageCode } : undefined,
+      { provider: dialogueProviderOf(dialogueProvider), ...(languageCode ? { languageCode } : {}) },
     )
     return runPostProcessing(() =>
       uploadBufferToR2(buf, mediaObjectKey(ctx.jobId, "audio", "mp3"), "audio/mpeg", ctx.jobUserId),
@@ -1735,6 +1740,8 @@ const handleVoicedVideo: HandlerFn = async function handleVoicedVideo(job, ctx) 
     characterVoices?: CharacterVoiceSpec[]
     dialogue?: DialogueLine[]
     voicedAudioAddon?: number
+    /** The dialogue model the route reserved for a multi-speaker track (`DIALOGUE_PROVIDERS`); absent on jobs enqueued before it travelled → v3 dialogue. */
+    dialogueProvider?: string
   }
   const provider = d.provider ?? "minimax"
   const audioAddon = d.voicedAudioAddon ?? 0
@@ -1743,7 +1750,7 @@ const handleVoicedVideo: HandlerFn = async function handleVoicedVideo(job, ctx) 
   const lines = d.dialogue && d.dialogue.length > 0 ? d.dialogue : parseAttributedDialogue(d.prompt ?? "")
   const voices = d.characterVoices ?? []
   const primaryVoiceId = voices[0]?.voiceId
-  const resolved = capDialogueLines(resolveDialogueVoices(lines, voices, primaryVoiceId), ctx.jobId)
+  const resolved = capDialogueLines(resolveDialogueVoices(lines, voices, primaryVoiceId), ctx.jobId, d.dialogueProvider)
 
   console.log(`[worker] voiced-video ${ctx.jobId} (provider: ${provider}, mode: ${mode}, lines: ${resolved.length})`)
   await setJobProgress(job, ctx.jobId, 5)
@@ -1759,7 +1766,7 @@ const handleVoicedVideo: HandlerFn = async function handleVoicedVideo(job, ctx) 
     // hard-failing the job (the Studio-reported contract violation).
     try {
       const trackUrl = await withProgressRamp(job, ctx.jobId, { start: 5, cap: 30 },
-        () => synthesizeDialogueTrack(ctx, resolved, voices, d.languageCode))
+        () => synthesizeDialogueTrack(ctx, resolved, voices, d.languageCode, d.dialogueProvider))
       result = await withProgressRamp(job, ctx.jobId, { start: 30, cap: 85 },
         () => imageToVideo(d.imageUrl, provider, d.prompt, d.duration, undefined,
           { referenceAudioUrls: [trackUrl], generateAudio: false, resolution: d.resolution, aspectRatio: d.aspectRatio, seed: d.seed, negativePrompt: d.negativePrompt, referenceImageUrls: d.referenceImageUrls, referenceVideoUrls: d.referenceVideoUrls }))

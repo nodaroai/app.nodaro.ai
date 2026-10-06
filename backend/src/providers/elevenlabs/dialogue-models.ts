@@ -11,6 +11,7 @@ import { dialogueProviderOf, type DialogueProvider } from "@nodaro/shared"
  */
 export const DIALOGUE_WIRE_MODELS: Readonly<Record<DialogueProvider, { readonly wire: string; readonly speechModel: string }>> = {
   "elevenlabs-dialogue": { wire: "eleven_v3", speechModel: "elevenlabs-v3" },
+  "elevenlabs-dialogue-v4": { wire: "eleven_v4", speechModel: "elevenlabs-v4" },
 }
 
 /** The ElevenLabs model id sent as `model_id`. */

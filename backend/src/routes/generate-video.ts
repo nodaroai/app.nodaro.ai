@@ -15,6 +15,7 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/re
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { insertJobIdempotent } from "../lib/insert-job.js"
+import { voicedDialogueProvider } from "../lib/voiced-dialogue-model.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { VIDEO_GEN_PROVIDERS, VIDEO_DURATION_AUTO, isAutoVideoDuration, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, PROMPT_HARD_CEILING, isSeedance2Provider, pricedOutputDurationSec, isMinimaxH3Provider, isVeoProvider, estimateLoopTrimAddonCredits, seedance2AudioLimitSec, findSeedance2AudioOverLimit, videoModelCanSpeakDialogue, getVideoAudioCapability, TTS_PROVIDERS, buildVideoCreditModelIdentifier, applyDefaultVideoSelection, VIDEO_REF_LIMITS_BY_PROVIDER, videoProviderRequiresImage, videoProviderFoldsLoneEndFrame, type ConnectedReference, type DescribedReference } from "@nodaro/shared"
@@ -476,13 +477,15 @@ function dispatchesVoicedVideo(b: Record<string, unknown>): boolean {
 
 /**
  * Credit id for the voiced-video audio step: audio_driven (Seedance 2)
- * synthesises a Dialogue v3 track; native_speech (VEO) revoices the baked audio
- * via the voice-changer. Single source for both the reservation (here) and the
+ * synthesises a dialogue track on the cast's dialogue model (v3 dialogue unless
+ * every voice names a speech model with one shared dialogue twin —
+ * `voicedDialogueProvider`); native_speech (VEO) revoices the baked audio via
+ * the voice-changer. Single source for both the reservation (here) and the
  * worker's commit (forwarded through the queue as `voicedAudioAddon`).
  */
-function voicedAudioAddonId(provider: string | undefined): "elevenlabs-dialogue" | "elevenlabs-voice-changer" {
+function voicedAudioAddonId(provider: string | undefined, characterVoices: unknown): string {
   return getVideoAudioCapability(provider).mode === "audio_driven"
-    ? "elevenlabs-dialogue"
+    ? voicedDialogueProvider(Array.isArray(characterVoices) ? characterVoices : undefined)
     : "elevenlabs-voice-changer"
 }
 
@@ -495,7 +498,7 @@ function voicedAudioAddonId(provider: string | undefined): "elevenlabs-dialogue"
 async function voicedAudioAddonCredits(b: Record<string, unknown>): Promise<number> {
   const provider = b.provider as string | undefined
   if (!voiceSpecPresent(b) || !videoModelCanSpeakDialogue(provider)) return 0
-  const { creditCost } = await getModelCreditBaseCost(voicedAudioAddonId(provider))
+  const { creditCost } = await getModelCreditBaseCost(voicedAudioAddonId(provider, b.characterVoices))
   return creditCost
 }
 
@@ -1184,7 +1187,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
     // loop-trim's extraNonProviderCredits). Computed here so the route owns all
     // billing math; the worker forwards it verbatim to finalize.
     const voicedAudioAddon = isVoiced
-      ? (await getModelCreditBaseCost(voicedAudioAddonId(provider))).creditCost
+      ? (await getModelCreditBaseCost(voicedAudioAddonId(provider, characterVoices))).creditCost
       : 0
 
     await videoQueue.add(isVoiced ? "voiced-video" : "image-to-video", {
@@ -1223,7 +1226,10 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       enableTranslation,
       videoTrimStart,
       videoTrimEnd,
-      ...(isVoiced ? { characterVoices, dialogue, voicedAudioAddon } : {}),
+      // `dialogueProvider`: the model the multi-speaker track renders on —
+      // chosen HERE (the reservation above named its row) and passed through,
+      // so the worker never re-derives what it was billed for.
+      ...(isVoiced ? { characterVoices, dialogue, voicedAudioAddon, dialogueProvider: voicedDialogueProvider(characterVoices) } : {}),
       usageLogId,
     })
 

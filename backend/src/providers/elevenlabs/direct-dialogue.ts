@@ -118,6 +118,20 @@ export async function directElevenLabsDialogue(
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => "Unknown error")
+    if (response.status === 429) {
+      // The vendor's concurrency / rate limit (v4 runs in its own concurrency
+      // group, whose limit a dialogue holds for minutes). The user sees the
+      // sentence the sound-effects funnel and the KIE client answer with —
+      // `lib/mcp/tools/_job-error.ts` reads it as retryable, and the queue
+      // re-sends the same request (no `deterministic` marker) — while the
+      // operator keeps the raw status + body in `internalDetails`, the
+      // duck-typed field `providerDetailOf` reads into `jobs.error_detail`.
+      console.error(`[elevenlabs dialogue] 429: ${errorText.replace(/\s+/g, " ").slice(0, 500)}`)
+      throw Object.assign(new Error("Service is temporarily busy. Please try again in a moment."), {
+        internalDetails: `[text-to-dialogue 429] ${errorText}`.slice(0, 2000),
+        status: 429,
+      })
+    }
     throw new Error(`ElevenLabs dialogue failed (${response.status}): ${errorText}`)
   }
 

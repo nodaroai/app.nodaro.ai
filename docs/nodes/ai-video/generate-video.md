@@ -435,14 +435,14 @@ A request is **voiced** only when a spec is present **and** the model can carry 
 
 | Audio mode | Models | Chain |
 |---|---|---|
-| `audio_driven` | `seedance-2`, `seedance-2-fast`, `seedance-2-mini`, `seedance-2-5`, `minimax-h3` (audio always on — no toggle) | Synthesize the dialogue (each line in its own voice) via ElevenLabs Dialogue v3 (direct API — any voice mix works: premade, Voice Library, and cloned voices, no premade-only restriction) → feed as reference audio → the model lip-syncs to it. |
+| `audio_driven` | `seedance-2`, `seedance-2-fast`, `seedance-2-mini`, `seedance-2-5`, `minimax-h3` (audio always on — no toggle) | Synthesize the dialogue (each line in its own voice) via ElevenLabs dialogue (direct API — any voice mix works: premade, Voice Library, and cloned voices, no premade-only restriction) → feed as reference audio → the model lip-syncs to it. A single voice renders on that voice's own `ttsProvider`; a multi-speaker cast renders on **Dialogue v4** when every voice names a speech model with the same dialogue twin (today: every voice on `elevenlabs-v4`), otherwise on **Dialogue v3** (the default — a mixed cast, a voice with no model, or a model with no dialogue twin). |
 | `native_speech` | `veo3`, `veo3.1`, `veo3_lite` (always on); `kling`, `kling-3.0` (behind the `sound` toggle — enabling it on Kling raises the credit cost, see the `:audio` composites below); `kling-3-omni` (audio included in the flat rate) | Bake the line during generation, then revoice the baked audio to the primary character voice (ElevenLabs voice-changer, keeping the music/SFX bed). |
 
 **Wan 3.0** (`wan-3` / `wan-3-prime`) carries an ambient audio track (on by default, switchable off) but is not a dialogue model in the audio-capability SSOT — it is neither `native_speech` nor `audio_driven`, so a character-voice spec on it is ignored with the non-fatal `voice_unsupported_for_provider` warning and no audio add-on is charged.
 
 Kling models speak scripted dialogue natively: quote the line in the prompt (optionally with a voice description, e.g. `[Anna: warm calm voice]: "good morning"`) and enable sound. Kling 2.6 voices are English/Chinese; other languages are auto-translated to English by the model.
 
-**Speaker mapping.** Each `dialogue[].speaker` is matched (case-insensitive) to a `characterVoices[].speaker` to pick that line's `voiceId`. An unmatched speaker falls back to the default (first) voice, mirroring the pipeline's non-fatal missing-voice behavior. Total dialogue text is capped at 5,000 characters (the shared Dialogue v3 limit); lines over the budget are dropped with a log entry.
+**Speaker mapping.** Each `dialogue[].speaker` is matched (case-insensitive) to a `characterVoices[].speaker` to pick that line's `voiceId`. An unmatched speaker falls back to the default (first) voice, mirroring the pipeline's non-fatal missing-voice behavior. Total dialogue text is capped at the chosen dialogue model's limit (5,000 characters on both Dialogue v3 and v4); lines over the budget are dropped with a log entry.
 
 **References ride along.** Images, videos and audio wired to the node reach the model on the voiced path exactly as on an unvoiced run, with one substitution: on an `audio_driven` model the synthesised dialogue track takes the audio-reference slot. A Seedance reference-video run is reserved and settled like an unvoiced one (see *Reference videos bill input + output duration* under pricing), with the audio add-on on top.
 
@@ -452,8 +452,11 @@ The audio step is reserved as an add-on **on top of** the base video cost — sa
 
 | Mode | Add-on identifier | Add-on credits |
 |---|---|---|
-| `audio_driven` (Seedance 2 / MiniMax H3) | `elevenlabs-dialogue` | +25 (per 1K chars) |
+| `audio_driven` (Seedance 2 / MiniMax H3), cast on Dialogue v3 | `elevenlabs-dialogue` | +25 (flat per request, whatever the length) |
+| `audio_driven` (Seedance 2 / MiniMax H3), every voice on `elevenlabs-v4` | `elevenlabs-dialogue-v4` | +25 (flat per request, whatever the length) |
 | `native_speech` (VEO 3.x) | `elevenlabs-voice-changer` | +40 |
+
+The dialogue add-on is reserved under the identifier of the model the cast actually renders on, chosen once when the request is accepted and forwarded to the worker.
 
 Example: `veo3.1` 8s / 1080p i2v voiced = 170 (base) + 40 (revoice) = **210 credits**.
 

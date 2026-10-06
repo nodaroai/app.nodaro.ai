@@ -4293,10 +4293,16 @@ export async function textToDialogueApi(
   languageCode?: string,
   seed?: number,
   applyTextNormalization?: "auto" | "on" | "off",
+  /** The dialogue model (`DIALOGUE_PROVIDERS`); omitted = the route's default (v3 dialogue). */
+  provider?: string,
+  /** 0–1; the funnel sends it only to a model that honours similarity (v4 dialogue). */
+  similarityBoost?: number,
 ): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { dialogue }
+  if (provider) body.provider = provider
   if (userId) body.userId = userId
   if (stability != null) body.stability = stability
+  if (similarityBoost != null) body.similarityBoost = similarityBoost
   if (languageCode) body.languageCode = languageCode
   if (seed != null) body.seed = seed
   if (applyTextNormalization) body.applyTextNormalization = applyTextNormalization

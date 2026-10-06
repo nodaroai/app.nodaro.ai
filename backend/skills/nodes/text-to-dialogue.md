@@ -1,7 +1,7 @@
 ---
 node_type: text-to-dialogue
-generated_at: 2026-10-06T06:15:27.594Z
-generated_from: b573ef680
+generated_at: 2026-10-06T07:11:47.408Z
+generated_from: dc25afa28
 ---
 
 # Text to Dialogue
@@ -21,6 +21,8 @@ generated_from: b573ef680
 - `fieldMappings: FieldMappings`
 
 **Optional data fields:**
+- `provider?: DialogueProvider`
+- `similarityBoost?: number`
 - `seed?: number`
 - `applyTextNormalization?: "auto" | "on" | "off"`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
@@ -35,6 +37,7 @@ generated_from: b573ef680
 ```json
 {
   "label": "Text to Dialogue",
+  "provider": "elevenlabs-dialogue",
   "dialogue": [
     {
       "id": "1",
@@ -76,6 +79,7 @@ generated_from: b573ef680
   },
   "data": {
     "label": "Text to Dialogue",
+    "provider": "elevenlabs-dialogue",
     "dialogue": [
       {
         "id": "1",

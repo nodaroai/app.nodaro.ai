@@ -4,7 +4,7 @@ import { isModelUnavailable } from "@/lib/surface-availability"
 import { isVariablePricedModel, type CreditRange } from "@/lib/model-credit-range"
 import { VIDEO_DURATION_AUTO, supportsAutoVideoDuration, aspectRatioOptionsByKind, resolutionOptionsByKind, qualityOptionsByKind, durationsByMode, modelsWithFeature, isFlux2Model, isGvpSupportedProvider, isSeedance2Provider, GVP_SUPPORTED_PROVIDERS, VIDEO_GEN_COLLAPSED_T2V_IDS, type LabeledOption } from "@nodaro/shared"
 import { STYLES, curateEntries } from "@nodaro/prompts"
-import type { ImageGenProvider, ImageI2IProvider, ImageToVideoProvider, LipSyncProvider, MotionTransferProviderType, SunoModel, TextToVideoProvider, VideoGenProvider, VideoToVideoNodeProvider } from "@nodaro/shared"
+import type { DialogueProvider, ImageGenProvider, ImageI2IProvider, ImageToVideoProvider, LipSyncProvider, MotionTransferProviderType, SunoModel, TextToVideoProvider, VideoGenProvider, VideoToVideoNodeProvider } from "@nodaro/shared"
 export { MODELS_WITH_REFERENCE_IMAGE_SUPPORT, REF_IMAGE_MAX_LIMITS, DEFAULT_REF_IMAGE_MAX, NATIVE_NEGATIVE_PROMPT_MODELS, I2I_STRENGTH_SUPPORT, I2I_MASK_SUPPORT, IMAGE_MASK_MODE, SEED_SUPPORT, RENDERING_SPEED_SUPPORT, GUIDANCE_SCALE_SUPPORT } from "@nodaro/shared"
 export type { ImageMaskMode } from "@nodaro/shared"
 
@@ -627,6 +627,16 @@ export const TTS_MODELS: readonly { value: string; label: string; desc: string }
   { value: "elevenlabs-multilingual", label: "ElevenLabs Multilingual v2", desc: "29 languages, natural delivery" },
 ]
 
+/**
+ * The Text to Dialogue models (panel dropdown + quick strip), in `DIALOGUE_PROVIDERS`
+ * order — the route's enum; `model-options.test.ts` pins the two together. v3
+ * dialogue stays the default (decided 2026-10-04).
+ */
+export const DIALOGUE_MODELS: readonly { value: DialogueProvider; label: string; desc: string }[] = [
+  { value: "elevenlabs-dialogue", label: "ElevenLabs Dialogue v3", desc: "Expressive, supports audio tags; stability in three steps" },
+  { value: "elevenlabs-dialogue-v4", label: "ElevenLabs Dialogue v4", desc: "Newest, supports audio tags, stability and similarity" },
+]
+
 export type SunoModelOption = { value: SunoModel; label: string; desc: string }
 
 /**
@@ -752,6 +762,7 @@ export const MODEL_DESCRIPTIONS: Record<string, string> = Object.fromEntries([
   ...VIDEO_V2V_MODELS,
   ...LIP_SYNC_MODELS,
   ...TTS_MODELS,
+  ...DIALOGUE_MODELS,
   ...SUNO_MODELS,
   ...MOTION_TRANSFER_MODELS,
 ].map(m => [m.value, m.desc]))

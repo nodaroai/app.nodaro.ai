@@ -370,7 +370,7 @@ describe("voiced-video handler — audio_driven (Seedance 2)", () => {
         { text: "hi", voice: "Rachel" },
         { text: "hello", voice: "W3C2vBPukr5b5jvoXhPK" },
       ],
-      { languageCode: "en" },
+      { provider: "elevenlabs-dialogue", languageCode: "en" },
     )
     expect(mocks.mockDirectTTS).not.toHaveBeenCalled()
     // Bytes → R2 (the direct call returns a Buffer, not a URL to re-host).
@@ -380,6 +380,42 @@ describe("voiced-video handler — audio_driven (Seedance 2)", () => {
     expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(
       expect.objectContaining({ extraOutputData: expect.objectContaining({ voiceApplied: true }) }),
     )
+  })
+
+  it("a multi-speaker cast forwarded as v4 dialogue renders on v4 dialogue (the route chose it; the worker passes it through)", async () => {
+    await handler(
+      makeJob({
+        imageUrl: "https://x.png",
+        prompt: "two talk",
+        provider: "seedance-2",
+        duration: 8,
+        characterVoices: [
+          { voiceId: "Rachel", voiceType: "premade", speaker: "Anna", ttsProvider: "elevenlabs-v4" },
+          { voiceId: "George", voiceType: "premade", speaker: "Gordon", ttsProvider: "elevenlabs-v4" },
+        ],
+        dialogue: [{ speaker: "Anna", line: "hi" }, { speaker: "Gordon", line: "hello" }],
+        dialogueProvider: "elevenlabs-dialogue-v4",
+        voicedAudioAddon: 25,
+      }) as never,
+      ctx,
+    )
+    expect(mocks.mockDirectDialogue).toHaveBeenCalledWith(
+      [{ text: "hi", voice: "Rachel" }, { text: "hello", voice: "George" }],
+      { provider: "elevenlabs-dialogue-v4" },
+    )
+  })
+
+  it("a job enqueued before the model travelled with it (no dialogueProvider) still renders on v3 dialogue", async () => {
+    await handler(
+      makeJob({
+        imageUrl: "https://x.png", prompt: "two talk", provider: "seedance-2", duration: 8,
+        characterVoices: [{ voiceId: "Rachel", speaker: "Anna" }, { voiceId: "George", speaker: "Gordon" }],
+        dialogue: [{ speaker: "Anna", line: "hi" }, { speaker: "Gordon", line: "hello" }],
+        voicedAudioAddon: 25,
+      }) as never,
+      ctx,
+    )
+    expect(mocks.mockDirectDialogue).toHaveBeenCalledWith(expect.any(Array), { provider: "elevenlabs-dialogue" })
   })
 
   it("degrades to a silent clip (never hard-fails) when synthesis throws, and refunds the addon", async () => {

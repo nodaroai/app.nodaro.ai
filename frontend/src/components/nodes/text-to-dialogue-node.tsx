@@ -15,6 +15,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
+import { dialogueProviderOf } from "@nodaro/shared"
 import { AudioResultOverlay } from "./audio-result-overlay"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import type { TextToDialogueData } from "@/types/nodes"
@@ -35,7 +36,8 @@ function TextToDialogueNodeComponent({ id, data, selected }: NodeProps) {
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [showThumbnails, setShowThumbnails] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
-  const credits = useModelCredits("elevenlabs-dialogue", 4)
+  // The badge reads the row the run reserves on: the node's model (v3 dialogue when unset).
+  const credits = useModelCredits(dialogueProviderOf(nodeData.provider), 4)
 
   const dialogue = nodeData.dialogue ?? []
   const uniqueVoices = new Set(dialogue.map((l) => l.voice))

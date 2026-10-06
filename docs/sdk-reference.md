@@ -3968,19 +3968,24 @@ sources.
 ```ts
 textToDialogue(input: {
   dialogue: Array<{ text: string; voice: string }>  // in speaking order
-  stability?: 0 | 0.5 | 1
+  provider?: "elevenlabs-dialogue" | "elevenlabs-dialogue-v4"  // v3 (default) or v4
+  stability?: number                                 // v3: exactly 0, 0.5 or 1; v4: any 0–1
+  similarityBoost?: number                           // v4 only (v3 ignores it), 0–1
   languageCode?: string                              // ISO 639-1 hint, auto-detected when omitted
   seed?: number                                      // 0–4294967295; omit for random
   applyTextNormalization?: "auto" | "on" | "off"
 }): Promise<{ jobId: string }>
 ```
 
-Voice a multi-speaker script as ONE audio file (`POST /v1/text-to-dialogue`,
-ElevenLabs Dialogue v3). Each line's `voice` is a premade voice name or an
+Voice a multi-speaker script as ONE audio file (`POST /v1/text-to-dialogue`)
+on ElevenLabs Dialogue v3 — the default — or Dialogue v4
+(`provider: "elevenlabs-dialogue-v4"`, which also takes any 0–1 `stability`
+and a `similarityBoost`). Each line's `voice` is a premade voice name or an
 ElevenLabs voice UUID — cloned and Voice Library voices work, mixed casts are
 fine, and line text may carry `[audio tags]` like `[laughs]`. At most 5,000
-characters total across lines (under 2,000 recommended for best quality) and
-10 unique voices per generation. Poll `jobs.get(jobId)` for
+characters total across lines on either model (under 2,000 recommended for
+best quality) and 10 unique voices per generation. Flat credits per request
+under the chosen model's identifier. Poll `jobs.get(jobId)` for
 `output_data.audioUrl`.
 
 ---

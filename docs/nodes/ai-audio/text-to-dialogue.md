@@ -3,21 +3,34 @@
 
 ## Overview
 
-The Text to Dialogue node uses ElevenLabs Dialogue V3 (via the direct ElevenLabs API) to produce a single audio file containing multiple speakers. Each line of dialogue is assigned a voice, and the output is a cohesive conversational audio track. This is ideal for creating conversations, interviews, or any scenario requiring distinct speakers without manually generating and stitching individual TTS clips.
+The Text to Dialogue node voices a script as a single audio file containing multiple speakers, on one of two ElevenLabs dialogue models called through the direct ElevenLabs API: **ElevenLabs Dialogue v3** (the default) or **ElevenLabs Dialogue v4**. Each line of dialogue is assigned a voice, and the output is a cohesive conversational audio track. This is ideal for creating conversations, interviews, or any scenario requiring distinct speakers without manually generating and stitching individual TTS clips.
+
+## Models
+
+| Model | `provider` value | Stability | Similarity | Notes |
+|-------|------------------|-----------|------------|-------|
+| ElevenLabs Dialogue v3 | `elevenlabs-dialogue` (default) | Three steps: `0`, `0.5`, `1` | — | Expressive; supports `[audio tags]`. The model every node ran on before the model field existed |
+| ElevenLabs Dialogue v4 | `elevenlabs-dialogue-v4` | Any value from `0` to `1` | `0`–`1` | Newest; supports `[audio tags]`, stability and similarity |
+
+v3 stays the default everywhere: a new node, a request that omits `provider`, the `generate_dialogue` MCP tool and the SDK all run v3 dialogue unless you choose v4. Both models offer the same 46 languages.
 
 ## Limits
 
-| Limit | Value |
-|-------|-------|
-| Total text across all lines | 5,000 characters (≤2,000 recommended for best quality) |
-| Unique voices per generation | 10 (reusing a voice across lines does not count extra) |
+| Limit | Dialogue v3 | Dialogue v4 |
+|-------|-------------|-------------|
+| Total text across all lines | 5,000 characters (≤2,000 recommended for best quality) | 5,000 characters (≤2,000 recommended for best quality) |
+| Unique voices per generation | 10 (reusing a voice across lines does not count extra) | 10 |
+
+Dialogue v4's cap is the same 5,000 characters as v3 dialogue, and the platform never raises it above that so the per-request price stays honest. It may be lowered after a live check of v4 dialogue at longer lengths; this page will say so if that happens.
 
 ## Configuration
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
+| Model | `select: elevenlabs-dialogue, elevenlabs-dialogue-v4` | `elevenlabs-dialogue` | The dialogue model. Switching to v3 snaps a stability that is not one of its three steps to the nearest step and clears Similarity (v3 does not take it); switching to v4 keeps every value |
 | Dialogue Lines | `DialogueLine[]` | `[{ text: "", voice: "Sarah" }]` | Array of dialogue entries, each with text content and a voice selection. Add or remove lines as needed |
-| Stability | `number` (select: 0, 0.5, 1.0) | `0.5` | Voice consistency across the dialogue. 0 = most expressive, 1.0 = most consistent |
+| Stability | `number` | `0.5` | Voice consistency across the dialogue. 0 = most expressive, 1 = most consistent. **Dialogue v3:** a dropdown of exactly `0`, `0.5`, `1` (the API refuses any other value for v3). **Dialogue v4:** a 0–1 slider, any value |
+| Similarity | `number` 0–1 (Dialogue v4 only) | `0.75` | How closely each line keeps its voice's character. Shown only on Dialogue v4; v3 ignores it and the platform never sends it to v3 |
 | Language | `string` | `""` (auto-detect) | Target language code, or empty for automatic detection. Uses the full language list (`ALL_LANGUAGES`) |
 | Seed | `number` (optional) | random | Deterministic sampling (integer 0–4294967295). Same seed + same script + same settings reproduces the output |
 | Text Normalization | `select: auto, on, off` | `auto` | Whether numbers, dates, and abbreviations are spelled out so they are spoken naturally |
@@ -31,16 +44,32 @@ The Text to Dialogue node uses ElevenLabs Dialogue V3 (via the direct ElevenLabs
 | voice | `string` | Voice ID for this line's speaker |
 | voiceLabel | `string` (optional) | Display name of the selected voice |
 
+## Credits
+
+Dialogue is priced **flat per request**, whatever the length of the script, under the chosen model's own identifier:
+
+| Model | Credit identifier | Base credits per request |
+|-------|-------------------|--------------------------|
+| ElevenLabs Dialogue v3 | `elevenlabs-dialogue` | 25 |
+| ElevenLabs Dialogue v4 | `elevenlabs-dialogue-v4` | 25 |
+
+Worked example: a 4,800-character, three-voice dialogue on Dialogue v4 costs 25 base credits — the same as a 40-character one. The editor's estimate, a published app's advertised price and the credits reserved when the node runs all name the same row.
+
+## API
+
+`POST /v1/text-to-dialogue` takes the node's fields: `dialogue` (`[{ text, voice }]`, in speaking order), optional `provider` (`elevenlabs-dialogue`, the default, or `elevenlabs-dialogue-v4`), `stability`, `similarityBoost`, `languageCode`, `seed` and `applyTextNormalization`. A `stability` Dialogue v3 does not take is refused with `Stability must be 0, 0.5, or 1`; a script over the chosen model's total cap is refused with the cap. The same choice is available as `model` on the `generate_dialogue` MCP tool, `provider` on the SDK's `voices.textToDialogue` and `--model` on `nodaro voice dialogue`.
+
 ## Inputs & Outputs
 
 - **Input**: `in` -- optional upstream connection (not typically used; dialogue is configured directly in the panel)
 - **Output**: `audio` -- single audio file containing all dialogue lines spoken in sequence (URL)
+
 ## Best Practices
 
 - Assign distinct voices to each speaker to make the conversation easy to follow. Use the Voice Browser to preview voices before assigning them.
 - Keep individual lines at a natural conversational length -- avoid putting entire paragraphs into a single dialogue entry.
-- Use Stability at 0.5 for natural-sounding conversation. Lower it for more dramatic or emotional dialogue, raise it for formal or narration-like delivery.
-- The 5000-character total limit applies across all lines combined. Plan longer dialogues by splitting them across multiple Text to Dialogue nodes if needed.
+- Use Stability at 0.5 for natural-sounding conversation. Lower it for more dramatic or emotional dialogue, raise it for formal or narration-like delivery. On Dialogue v4 you can pick any value in between.
+- The 5,000-character total limit applies across all lines combined on either model. Plan longer dialogues by splitting them across multiple Text to Dialogue nodes if needed.
 
 ## Common Use Cases
 
@@ -53,7 +82,7 @@ The Text to Dialogue node uses ElevenLabs Dialogue V3 (via the direct ElevenLabs
 ## Tips
 
 - Each dialogue line can use ANY voice — premade names, Voice Library voices, and your own clones all work, in any mix. There is no curated dialogue-only voice subset.
-- Line text supports `[audio tags]` like `[laughs]`, `[whispers]`, `[sighs]` for emotion and pacing, same as ElevenLabs v3 Text to Speech.
+- Line text supports `[audio tags]` like `[laughs]`, `[whispers]`, `[sighs]` for emotion and pacing on both models, same as ElevenLabs v3 and v4 Text to Speech.
 - The output is a single continuous audio file, not separate clips per line. If you need individual clips, use separate Text to Speech nodes instead.
 - Language auto-detection works well for monolingual dialogues. For multilingual conversations, explicitly set the language to the primary language being used.
-- Stability is presented as a dropdown (0, 0.5, 1.0) rather than a continuous slider, matching the three modes that produce the best results with the Dialogue V3 model.
+- Stability is a three-step dropdown on Dialogue v3 and a 0–1 slider on Dialogue v4; Similarity appears only on Dialogue v4. Its effect on v4 dialogue is documented by the provider; the platform forwards it as given.

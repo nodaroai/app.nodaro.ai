@@ -125,3 +125,29 @@ describe("POST /v1/text-to-dialogue — the model", () => {
     expect((await post({ similarityBoost: 1.2 })).statusCode).toBe(400)
   })
 })
+
+describe("POST /v1/text-to-dialogue — elevenlabs-dialogue-v4", () => {
+  it("is priced, reserved and queued under its own id", async () => {
+    const res = await post({ provider: "elevenlabs-dialogue-v4" })
+    expect(res.statusCode).toBe(200)
+    expect(guardIds.value).toEqual(["elevenlabs-dialogue-v4"])
+    expect(reserveCreditsForJob).toHaveBeenCalledWith(expect.anything(), expect.anything(), "job-1", "elevenlabs-dialogue-v4")
+    expect(videoQueue.add).toHaveBeenCalledWith("text-to-dialogue", expect.objectContaining({ provider: "elevenlabs-dialogue-v4" }))
+  })
+
+  it("takes a stability off v3's steps, and similarity", async () => {
+    expect((await post({ provider: "elevenlabs-dialogue-v4", stability: 0.3, similarityBoost: 0.8 })).statusCode).toBe(200)
+    expect(videoQueue.add).toHaveBeenCalledWith("text-to-dialogue", expect.objectContaining({ stability: 0.3, similarityBoost: 0.8 }))
+  })
+
+  it("refuses a stability outside 0–1", async () => {
+    const res = await post({ provider: "elevenlabs-dialogue-v4", stability: 1.5 })
+    expect(res.statusCode).toBe(400)
+  })
+
+  it("its total cap is its own sheet's (the probe's number)", async () => {
+    expect((await post({ provider: "elevenlabs-dialogue-v4", dialogue: [{ text: "a".repeat(5000), voice: "Rachel" }] })).statusCode).toBe(200)
+    const over = await post({ provider: "elevenlabs-dialogue-v4", dialogue: [{ text: "a".repeat(5001), voice: "Rachel" }] })
+    expect(over.statusCode).toBe(400)
+  })
+})

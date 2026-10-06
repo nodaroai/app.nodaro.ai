@@ -511,6 +511,13 @@ const APPLY_EDL_PREVIEW_RATE_WORDING_BYTES = 84
 // 4_191 B, far under the 8_192 B per-tool budget, and the only tool that names
 // v4), which keeps the 19 B of headroom the list had before.
 const ELEVENLABS_V4_SPEECH_BYTES = 196
+// RAISED 2026-10-06 by generate_dialogue's ElevenLabs v4 wording and nothing else
+// — a `model` argument (the DIALOGUE_PROVIDERS enum), `stability` widened from a
+// literal union to a 0–1 number with a per-model sentence, a `similarity_boost`
+// argument, and the description naming v3 / v4 (generate_dialogue is now the
+// second tool that names v4). No tool was added, so the fixture does NOT move.
+// measured by this suite: 397_581 total − 397_155 base = 426 B.
+const ELEVENLABS_V4_DIALOGUE_BYTES = 426
 // LOWERED 2026-10-05 by the video_analysis tool's one analysis quality and
 // nothing else — a refund, by the same rule as CAPTION_DOCTRINE_TO_SKILL_BYTES:
 // the budget moves by exactly what the change costs. The tool always runs the
@@ -636,6 +643,7 @@ export const TOOL_WIRE_BUDGET = {
     CARD_MARK_TOOLS_BYTES +
     APPLY_EDL_PREVIEW_RATE_WORDING_BYTES +
     ELEVENLABS_V4_SPEECH_BYTES +
+    ELEVENLABS_V4_DIALOGUE_BYTES +
     LIP_SYNC_AUDIO_LENGTH_BYTES +
     VIDEO_ANALYSIS_SMART_ONLY_BYTES +
     TEXT_TO_AUDIO_PER_SECOND_PRICING_BYTES +

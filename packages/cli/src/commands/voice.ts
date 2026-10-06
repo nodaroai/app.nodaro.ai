@@ -4,6 +4,7 @@ import { buildClient, handleError } from "../client.js"
 import { emit, success, dim, info, warn, table, type OutputOpts } from "../output.js"
 import { reportQueuedJob } from "../util.js"
 import type { VcpAnalysis, VcpExportInput, VcpExportTrack, VoiceChangerProInput } from "@nodaro/sdk"
+import { DIALOGUE_PROVIDERS, dialogueProviderOf, dialogueStabilityAccepted, getDialogueCapabilities, type DialogueProvider } from "@nodaro/shared"
 
 interface GlobalOpts extends OutputOpts {
   profile?: string
@@ -671,14 +672,16 @@ Examples:
 
   cmd
     .command("dialogue")
-    .description("voice a multi-speaker script as one audio file (ElevenLabs Dialogue v3) — each --line is \"Voice: text\"")
+    .description("voice a multi-speaker script as one audio file (ElevenLabs Dialogue v3 by default, v4 with --model) — each --line is \"Voice: text\"")
     .requiredOption(
       "--line <line>",
       'one script line as "Voice: text" (e.g. "Rachel: Hello there") — repeat in speaking order; the voice is a premade name or an ElevenLabs voice UUID',
       (v: string, prev: string[]) => [...prev, v],
       [] as string[],
     )
-    .option("--stability <n>", "0 (most variable) | 0.5 (balanced) | 1 (most stable)", (v) => parseFloat(v))
+    .option("--model <id>", `dialogue model: ${DIALOGUE_PROVIDERS.join(" | ")} (default elevenlabs-dialogue, v3)`)
+    .option("--stability <n>", "v3: 0 (most variable) | 0.5 (balanced) | 1 (most stable); v4: any value 0..1", (v) => parseFloat(v))
+    .option("--similarity <n>", "v4 only (v3 ignores it): how closely each line keeps its voice's character, 0..1", (v) => parseFloat(v))
     .option("--language <code>", 'ISO 639-1 language hint, e.g. "en" (auto-detected when omitted)')
     .option("--seed <n>", "deterministic sampling seed (0-4294967295); omit for random", (v) => parseInt(v, 10))
     .option("--text-normalization <mode>", "spell out numbers/dates: auto | on | off")
@@ -687,16 +690,19 @@ Examples:
     .option("--profile <name>")
     .option("--json")
     .addHelpText("after", `
-Limits: 5,000 characters total (under 2,000 recommended), up to 10 unique voices.
+Limits: 5,000 characters total on either model (under 2,000 recommended), up to 10 unique voices.
 Line text may carry [audio tags] like [laughs].
 
-Example:
-  $ nodaro voice dialogue --line "Rachel: [excited] We did it!" --line "Daniel: I never doubted us." --watch`)
+Examples:
+  $ nodaro voice dialogue --line "Rachel: [excited] We did it!" --line "Daniel: I never doubted us." --watch
+  $ nodaro voice dialogue --model elevenlabs-dialogue-v4 --stability 0.3 --similarity 0.8 --line "Rachel: Hello there"`)
     .action(
       async (
         opts: {
           line: string[]
+          model?: string
           stability?: number
+          similarity?: number
           language?: string
           seed?: number
           textNormalization?: string
@@ -717,8 +723,22 @@ Example:
             }
             return { voice: raw.slice(0, idx).trim(), text: raw.slice(idx + 1).trim() }
           })
-          if (opts.stability !== undefined && ![0, 0.5, 1].includes(opts.stability)) {
-            throw new Error("--stability must be exactly 0, 0.5, or 1")
+          // The model's own rule (its capability sheet in @nodaro/shared): v3
+          // dialogue takes three steps, v4 any 0..1 — never a hand-kept list.
+          if (opts.model !== undefined && !(DIALOGUE_PROVIDERS as readonly string[]).includes(opts.model)) {
+            throw new Error(`--model must be one of ${DIALOGUE_PROVIDERS.join(", ")}`)
+          }
+          const model = opts.model as DialogueProvider | undefined
+          if (opts.stability !== undefined && !dialogueStabilityAccepted(dialogueProviderOf(model), opts.stability)) {
+            const steps = getDialogueCapabilities(model).stabilitySteps
+            throw new Error(
+              steps
+                ? `--stability must be exactly ${steps.slice(0, -1).join(", ")}, or ${steps[steps.length - 1]}`
+                : "--stability must be between 0 and 1",
+            )
+          }
+          if (opts.similarity !== undefined && !(opts.similarity >= 0 && opts.similarity <= 1)) {
+            throw new Error("--similarity must be between 0 and 1")
           }
           if (opts.textNormalization !== undefined && !["auto", "on", "off"].includes(opts.textNormalization)) {
             throw new Error("--text-normalization must be auto, on, or off")
@@ -726,7 +746,9 @@ Example:
           const client = buildClient(opts.profile)
           const result = await client.voices.textToDialogue({
             dialogue,
-            ...(opts.stability !== undefined ? { stability: opts.stability as 0 | 0.5 | 1 } : {}),
+            ...(model !== undefined ? { provider: model } : {}),
+            ...(opts.stability !== undefined ? { stability: opts.stability } : {}),
+            ...(opts.similarity !== undefined ? { similarityBoost: opts.similarity } : {}),
             ...(opts.language ? { languageCode: opts.language } : {}),
             ...(opts.seed !== undefined ? { seed: opts.seed } : {}),
             ...(opts.textNormalization ? { applyTextNormalization: opts.textNormalization as "auto" | "on" | "off" } : {}),

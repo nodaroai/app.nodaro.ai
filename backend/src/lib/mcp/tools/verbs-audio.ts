@@ -17,7 +17,7 @@ import {
   uiMeta,
 } from "./_verb-helpers.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
-import { SUNO_MODELS, SUNO_LEGACY_MODELS, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, SUNO_TITLE_MAX, SUNO_TEXT_MAX, AUDIO_FX_PRESETS, readPromptAffixes, MODEL_CATALOG, DEFAULT_TEXT_TO_AUDIO_PROVIDER, TTS_PROVIDERS, DEFAULT_TTS_PROVIDER, canonicalTtsProvider, getMaxTtsChars, type TranscribeProvider } from "@nodaro/shared"
+import { SUNO_MODELS, SUNO_LEGACY_MODELS, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, SUNO_TITLE_MAX, SUNO_TEXT_MAX, AUDIO_FX_PRESETS, readPromptAffixes, MODEL_CATALOG, DEFAULT_TEXT_TO_AUDIO_PROVIDER, TTS_PROVIDERS, DEFAULT_TTS_PROVIDER, canonicalTtsProvider, getMaxTtsChars, DIALOGUE_PROVIDERS, dialogueProviderOf, dialogueStabilityAccepted, getDialogueCapabilities, type TranscribeProvider } from "@nodaro/shared"
 
 /** The engine the MCP `transcribe` tool runs on. Typed against the ENABLED
  *  provider enum, so disabling this lane in @nodaro/shared fails the build here
@@ -577,17 +577,24 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       title: "Generate Dialogue",
       description:
         "Generate a multi-speaker dialogue as ONE audio file via ElevenLabs " +
-        "Dialogue v3 (direct API). Give it a script — an ordered list of " +
-        "{ text, voice_id } lines — and each line is spoken by its voice, " +
-        "combined into a single track. Returns a job_id.\n\n" +
+        "dialogue (direct API) — v3 by default, v4 on request. Give it a script " +
+        "— an ordered list of { text, voice_id } lines — and each line is spoken " +
+        "by its voice, combined into a single track. Returns a job_id.\n\n" +
         "Use this (never generate_speech per line + stitching) for " +
         "conversations, interviews, podcast-style exchanges, and scenes: the " +
         "model voices the exchange with natural turn-taking. Supports " +
         "`[audio tags]` like `[laughs]`, `[whispers]` inside line text, and " +
         "ANY voice — premade names, cloned/library UUIDs, mixed casts.\n\n" +
-        "Limits: 5,000 characters total across lines (≤2,000 recommended " +
-        "for best quality), at most 10 unique voices per generation.",
+        "Limits: 5,000 characters total across lines on either model (≤2,000 " +
+        "recommended for best quality), at most 10 unique voices per generation.",
       inputSchema: {
+        model: z
+          .enum(DIALOGUE_PROVIDERS)
+          .optional()
+          .describe(
+            "Dialogue model. Default `elevenlabs-dialogue` (v3). `elevenlabs-dialogue-v4` is newer: " +
+            "the same [audio tags], any stability from 0 to 1, and a similarity setting.",
+          ),
         dialogue: z
           .array(
             z.object({
@@ -609,9 +616,17 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
           .max(200)
           .describe("The script, in speaking order. Reuse voice_ids across lines for the same character."),
         stability: z
-          .union([z.literal(0), z.literal(0.5), z.literal(1)])
+          .number()
+          .min(0)
+          .max(1)
           .optional()
-          .describe("v3 stability: 0 = most variable, 0.5 = balanced, 1 = most stable."),
+          .describe("v3 (default): exactly 0, 0.5 or 1 (0 = most variable, 1 = most stable). v4: any value 0–1."),
+        similarity_boost: z
+          .number()
+          .min(0)
+          .max(1)
+          .optional()
+          .describe("v4 only (v3 ignores it): how closely each line keeps its voice's character."),
         language_code: z.string().max(10).optional().describe("ISO 639-1 hint (e.g. \"en\", \"he\"). Omit for auto-detect."),
         seed: z.number().int().min(0).max(4294967295).optional().describe("Deterministic sampling. Omit for random."),
         apply_text_normalization: z
@@ -627,9 +642,30 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       },
     },
     async (args) => {
+      // Refuse with the NUMBERS before the route, so nothing is reserved: a
+      // stability the chosen model does not take (v3's steps are the route's
+      // contract, read from the model's sheet), or a script over its total cap.
+      const provider = dialogueProviderOf(args.model)
+      const sheet = getDialogueCapabilities(provider)
+      if (args.stability !== undefined && !dialogueStabilityAccepted(provider, args.stability)) {
+        const steps = sheet.stabilitySteps
+        return {
+          content: [{ type: "text" as const, text: `${provider} takes stability ${steps ? steps.join(", ").replace(/, (?=[^,]*$)/, " or ") : "from 0 to 1"}; got ${args.stability}.` }],
+          isError: true as const,
+        }
+      }
+      const total = args.dialogue.reduce((sum, l) => sum + l.text.length, 0)
+      if (total > sheet.maxChars) {
+        return {
+          content: [{ type: "text" as const, text: `The script is ${total} characters in total; ${provider} takes at most ${sheet.maxChars}. Split it across several calls.` }],
+          isError: true as const,
+        }
+      }
       const payload = {
         dialogue: args.dialogue.map((l) => ({ text: l.text, voice: l.voice_id })),
+        provider,
         stability: args.stability,
+        similarityBoost: args.similarity_boost,
         languageCode: args.language_code,
         seed: args.seed,
         applyTextNormalization: args.apply_text_normalization,
@@ -643,7 +679,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         widgetKind: "audio",
         widgetData: {
           prompt: args.dialogue.map((l) => l.text).join("\n"),
-          model: "elevenlabs-dialogue",
+          model: provider,
         },
       })
     },

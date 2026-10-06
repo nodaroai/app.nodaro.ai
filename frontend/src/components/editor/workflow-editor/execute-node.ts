@@ -3546,6 +3546,8 @@ function executeNodeCore(
           d.languageCode || undefined,
           d.seed,
           d.applyTextNormalization,
+          d.provider,
+          d.similarityBoost,
         ),
       "generatedAudioUrl",
       "Text to Dialogue",

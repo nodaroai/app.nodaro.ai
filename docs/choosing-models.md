@@ -177,6 +177,7 @@ Text-to-speech, voice design/changing, dubbing, sound effects, transcription, an
 | ElevenLabs Turbo v2.5 | ElevenLabs | Everyday | 15 | tts | Fast, cheap ElevenLabs TTS via the direct ElevenLabs API. Good for narration. |
 | ElevenLabs STT | ElevenLabs | Everyday | 22 | stt | Speech-to-text with WORD-level timestamps (always on), speaker diarization and audio-event tags. The engine to use when the transcript feeds captions. |
 | ElevenLabs Dialogue v3 | ElevenLabs | Everyday | 25 | dialogue | Multi-speaker dialogue via the direct ElevenLabs API — give it a script, it voices each role (any voice: premade, library, or cloned). |
+| ElevenLabs Dialogue v4 | ElevenLabs | Everyday | 25 | dialogue | Multi-speaker dialogue on ElevenLabs v4 — [audio tags], stability and similarity control. Direct API. |
 | ElevenLabs Forced Alignment | ElevenLabs | Everyday | 30 | forced-alignment | Align an existing transcript to audio with word-level timestamps. |
 | ElevenLabs Multilingual v2 | ElevenLabs | Everyday | 30 | tts | Multi-language ElevenLabs TTS via the direct ElevenLabs API. |
 | ElevenLabs v3 | ElevenLabs | Everyday | 30 | tts | Expressive ElevenLabs TTS — supports [audio tags] for emotion / pacing. Direct API. |

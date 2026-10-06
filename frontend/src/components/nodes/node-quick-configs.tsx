@@ -23,6 +23,7 @@ import {
   EXTEND_VIDEO_MODELS,
   LIP_SYNC_MODELS,
   TTS_MODELS,
+  DIALOGUE_MODELS,
   SUNO_MODELS,
   MOTION_TRANSFER_MODELS,
   AI_AVATAR_ENGINE_OPTIONS,
@@ -45,10 +46,11 @@ import {
   getVideoResolutionOptions,
   VIDEO_RESOLUTION_OPTIONS,
 } from "@/components/editor/config-panels/model-options"
-import { availableReasoningEfforts, isSeedanceVideoEditProvider, orderedLlmModels, STRUCTURED_VISION_MODELS, SHEET_TYPES, SHEET_SKINS, type SheetType, type SheetSkin, VIDEO_ANALYSIS_TIER_ORDER, VIDEO_ANALYSIS_TIER_LABELS, DEFAULT_VIDEO_ANALYSIS_TIER, SCENE3D_LIMITS, VIDEO_OVERLAY_OUTPUT_ASPECTS, DEFAULT_TTS_PROVIDER } from "@nodaro/shared"
+import { availableReasoningEfforts, isSeedanceVideoEditProvider, orderedLlmModels, STRUCTURED_VISION_MODELS, SHEET_TYPES, SHEET_SKINS, type SheetType, type SheetSkin, VIDEO_ANALYSIS_TIER_ORDER, VIDEO_ANALYSIS_TIER_LABELS, DEFAULT_VIDEO_ANALYSIS_TIER, SCENE3D_LIMITS, VIDEO_OVERLAY_OUTPUT_ASPECTS, DEFAULT_TTS_PROVIDER, DEFAULT_DIALOGUE_PROVIDER } from "@nodaro/shared"
 import { EFFORT_LABELS } from "@/components/editor/config-panels/reasoning-effort-select"
 import { ALL_LANGUAGES } from "@/lib/audio-tags"
 import { ttsModelSwitchPatch, type TtsSwitchFields } from "@/lib/tts-model-switch"
+import { dialogueModelSwitchPatch, type DialogueSwitchFields } from "@/lib/dialogue-model-switch"
 
 /**
  * Data-driven quick-config controls for {@link NodeQuickStrip}. Each AI node
@@ -332,6 +334,19 @@ const targetLanguageControl = (): QuickConfigControl => ({
 })
 const dialogueLanguageControl = (): QuickConfigControl => ({
   field: "languageCode", ariaLabel: tx("field.language"), icon: Languages, options: ALL_LANGUAGES,
+})
+/** Text to Dialogue model dropdown. The user's choice also snaps / clears what
+ *  the new model does not take — exactly the panel's patch
+ *  (`dialogueModelSwitchPatch`), so the two surfaces cannot disagree. The
+ *  fail-safe snap calls `write` without data and writes the provider alone; an
+ *  unset node shows v3 dialogue (what it runs as) without a write. */
+const dialogueProviderControl = (): QuickConfigControl => ({
+  field: "provider",
+  ariaLabel: tx("field.model"),
+  icon: Sparkles,
+  options: toOptions(DIALOGUE_MODELS),
+  defaultValue: DEFAULT_DIALOGUE_PROVIDER,
+  write: (value, data) => ({ provider: value, ...dialogueModelSwitchPatch(value, (data ?? {}) as DialogueSwitchFields) }),
 })
 /** speech-to-video resolution — mirrors video-configs.tsx (dynamic credit labels there). */
 const speechVideoResControl = (): QuickConfigControl => ({
@@ -791,7 +806,7 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
   // ── Language / resolution (other dropdown configs) ──
   "dubbing": [targetLanguageControl()],
   "voice-changer": [targetLanguageControl()],
-  "text-to-dialogue": [dialogueLanguageControl()],
+  "text-to-dialogue": [dialogueProviderControl(), dialogueLanguageControl()],
   "speech-to-video": [speechVideoResControl()],
   // ── Last holdouts (their only configurable field) ──
   "face-swap": [faceSwapProviderControl()],

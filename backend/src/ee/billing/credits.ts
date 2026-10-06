@@ -1345,7 +1345,8 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "whisper": 40,                  // Replicate openai/whisper — no word timings (BASE price, = migration 288; the service markup is applied on top at read time)
   "incredibly-fast-whisper": 40,  // Replicate fast whisper — word timings on request (BASE price, = migration 288)
   "elevenlabs-stt": 22,           // avg (from audit)
-  "elevenlabs-dialogue": 25,     // per 1K chars
+  "elevenlabs-dialogue": 25,     // direct ElevenLabs API; flat per request, whatever the length
+  "elevenlabs-dialogue-v4": 25,  // direct ElevenLabs API; the same flat price as v3 dialogue, per request
   "elevenlabs-voice-changer": 40,  // ElevenLabs speech-to-speech
   // ElevenLabs dubbing (async) — PER MINUTE of the dubbed span (route
   // computeCredits: ceil(seconds/60) x this base, min 1 minute; 120s

@@ -636,6 +636,8 @@ const MODEL_DESCRIPTIONS_JA: Record<string, string> = {
   "Latest Seedream, fast and sharp": "最新の Seedream、高速でシャープ",
   "Expressive, supports audio tags for emotions": "表現力が豊か、感情を表すオーディオタグに対応",
   "Newest, supports audio tags, up to 10,000 characters": "最新モデル、オーディオタグに対応、最大 10,000 文字",
+  "Expressive, supports audio tags; stability in three steps": "表現力豊か、オーディオタグ対応。安定性は3段階",
+  "Newest, supports audio tags, stability and similarity": "最新、オーディオタグ対応、安定性と類似度を調整可能",
   "Light, fast, end frame support": "軽量・高速、終了フレームに対応",
   "Lightricks LTX 2.3 Fast — text/image→video, durations up to 20s": "Lightricks LTX 2.3 Fast：テキスト／画像→動画、最大 20 秒",
   "Lightricks LTX 2.3 Pro — text/image/audio→video, up to 4K": "Lightricks LTX 2.3 Pro：テキスト／画像／オーディオ→動画、最大 4K",

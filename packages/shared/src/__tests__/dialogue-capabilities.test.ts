@@ -102,3 +102,39 @@ describe("dialogue lane — lookups", () => {
     expect(dialogueStabilityAccepted("constructor", 0.3)).toBe(false)
   })
 })
+
+describe("elevenlabs-dialogue-v4 — added beside v3 dialogue", () => {
+  it("is a dialogue provider and a dialogue-mode catalog model, never a text-to-speech one", () => {
+    expect(DIALOGUE_PROVIDERS).toContain("elevenlabs-dialogue-v4")
+    expect(MODEL_CATALOG["elevenlabs-dialogue-v4"]?.modes).toEqual(["dialogue"])
+    expect(TTS_PROVIDERS as readonly string[]).not.toContain("elevenlabs-dialogue-v4")
+    expect(findTtsCapabilities("elevenlabs-dialogue-v4")).toBeUndefined()
+  })
+
+  it("tags, stability (any 0–1) and similarity, the probed total cap, v3's languages", () => {
+    const c = getDialogueCapabilities("elevenlabs-dialogue-v4")
+    expect(c.audioTags).toBe(true)
+    expect(c.ssmlBreaks).toBe(false)
+    expect(c.levers).toEqual(["stability", "similarity"])
+    expect(c.stabilitySteps).toBeUndefined()
+    expect(c.languageCode).toBe(true)
+    // The live-probe number (parity with v3 dialogue until the probe says otherwise); never above 5,000 here.
+    expect(c.maxChars).toBe(5000)
+    expect(c.languages).toEqual(getDialogueCapabilities("elevenlabs-dialogue").languages)
+  })
+
+  it("takes any stability from 0 to 1; v3 dialogue keeps its steps", () => {
+    for (const v of [0, 0.3, 0.55, 1]) expect(dialogueStabilityAccepted("elevenlabs-dialogue-v4", v), String(v)).toBe(true)
+    expect(dialogueStabilityAccepted("elevenlabs-dialogue-v4", 1.01)).toBe(false)
+    expect(dialogueStabilityAccepted("elevenlabs-dialogue", 0.3)).toBe(false)
+  })
+
+  it("costs a flat 25 credits with no per-length note on either dialogue row, and v3 dialogue stays the default", () => {
+    expect(MODEL_CATALOG["elevenlabs-dialogue-v4"]!.pricing).toEqual([{ identifier: "elevenlabs-dialogue-v4", credits: 25 }])
+    // Decided 2026-10-06: dialogue is charged flat per request, so the v3 row's
+    // "per 1K chars" note (a scaling that never existed) goes too.
+    expect(MODEL_CATALOG["elevenlabs-dialogue"]!.pricing).toEqual([{ identifier: "elevenlabs-dialogue", credits: 25 }])
+    expect(DEFAULT_DIALOGUE_PROVIDER).toBe("elevenlabs-dialogue")
+    expect(dialogueProviderOf(undefined)).toBe("elevenlabs-dialogue")
+  })
+})

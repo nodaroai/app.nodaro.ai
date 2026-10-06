@@ -2741,6 +2741,39 @@ describe("text-to-dialogue", () => {
       undefined,
     )
   })
+
+  it("sends the node's model and similarity with the lines", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    mockTextToDialogueApi.mockResolvedValue({ jobId: "j-dlg" })
+    await executeNode(
+      makeNode("text-to-dialogue", {
+        dialogue: [{ voice: "Rachel", text: "Hello" }],
+        provider: "elevenlabs-dialogue-v4",
+        stability: 0.3,
+        similarityBoost: 0.8,
+      }),
+      makeCtx(),
+    )
+    const start = mockPollJobWithNodeUpdate.mock.calls.at(-1)![1] as () => Promise<unknown>
+    await start()
+    const args = mockTextToDialogueApi.mock.calls.at(-1)!
+    expect(args[0]).toEqual([{ text: "Hello", voice: "Rachel" }])
+    expect(args[2]).toBe(0.3)
+    expect(args[6]).toBe("elevenlabs-dialogue-v4")
+    expect(args[7]).toBe(0.8)
+  })
+
+  it("a node saved before the model field existed sends no provider (the route runs v3 dialogue)", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    mockTextToDialogueApi.mockResolvedValue({ jobId: "j-dlg" })
+    await executeNode(makeNode("text-to-dialogue", { dialogue: [{ voice: "Rachel", text: "Hello" }] }), makeCtx())
+    const start = mockPollJobWithNodeUpdate.mock.calls.at(-1)![1] as () => Promise<unknown>
+    await start()
+    expect(mockTextToDialogueApi.mock.calls.at(-1)![6]).toBeUndefined()
+    expect(mockTextToDialogueApi.mock.calls.at(-1)![7]).toBeUndefined()
+  })
 })
 
 // ---------------------------------------------------------------------------
