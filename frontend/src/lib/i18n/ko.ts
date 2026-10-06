@@ -5286,6 +5286,7 @@ export const ko: ChromeDict = {
   "audiocfg.vcpEngine": "변환 엔진",
   "audiocfg.engineRecast": "음색 변환",
   "audiocfg.engineRespeak": "다시 읽기(v3)",
+  "audiocfg.engineRespeakV4": "다시 읽기(v4)",
   "audiocfg.hintRespeakWarning": "다시 읽기는 녹취록을 바탕으로 연기를 다시 생성합니다. 원래의 말투가 대체되며, 동영상에서는 입 모양이 맞지 않게 됩니다.",
   "audiocfg.dialogueLines": "대사 목록",
   "audiocfg.dialogueVoiceCount": "보이스 {count}/10",

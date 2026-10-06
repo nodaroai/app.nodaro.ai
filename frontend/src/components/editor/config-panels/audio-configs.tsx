@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label"
 import { TagTextarea } from "./tag-textarea"
 import { getLanguagesForModel, ALL_LANGUAGES } from "@/lib/audio-tags"
 import { TtsVoiceSettings } from "./tts-voice-settings"
+import { VcpVoiceSettings } from "./vcp-voice-settings"
 import { ttsModelSwitchPatch } from "@/lib/tts-model-switch"
 import { SUNO_SUGGESTION_ITEMS, SUNO_LYRICS_SUGGESTION_ITEMS, SUNO_STYLE_SUGGESTION_ITEMS } from "@/lib/suno-tags"
 import { SUNO_SLIDER_META, SUNO_SLIDER_LABEL_KEYS, SUNO_SLIDER_DESC_KEYS } from "@/lib/suno-sliders"
@@ -2707,78 +2708,10 @@ export function VoiceChangerProConfig({ data, onUpdate }: ConfigProps<VoiceChang
             <details className="border-t px-2 py-1">
               <summary className="cursor-pointer text-[11px] text-muted-foreground select-none">{t("audiocfg.voiceSettings")}</summary>
               <div className="flex flex-col gap-2 pt-2">
-                <div>
-                  <Label>{t("audiocfg.vcpEngine")}</Label>
-                  <div className="grid grid-cols-2 gap-1" role="radiogroup" aria-label={t("audiocfg.vcpEngine")}>
-                    <button
-                      type="button"
-                      role="radio"
-                      aria-checked={(v.engine ?? "sts") === "sts"}
-                      className={`h-7 rounded-md border text-xs ${(v.engine ?? "sts") === "sts" ? "border-[#ff0073] text-foreground" : "border-border text-muted-foreground"}`}
-                      onClick={() => updateVoice(i, { engine: undefined })}
-                    >
-                      {t("audiocfg.engineRecast")}
-                    </button>
-                    <button
-                      type="button"
-                      role="radio"
-                      aria-checked={v.engine === "v3"}
-                      className={`h-7 rounded-md border text-xs ${v.engine === "v3" ? "border-[#ff0073] text-foreground" : "border-border text-muted-foreground"}`}
-                      onClick={() => updateVoice(i, { engine: "v3", stability: v.stability === 0 || v.stability === 0.5 || v.stability === 1 ? v.stability : 0.5 })}
-                    >
-                      {t("audiocfg.engineRespeak")}
-                    </button>
-                  </div>
-                  {v.engine === "v3" && (
-                    <p className="text-[10px] text-amber-600 mt-1">{t("audiocfg.hintRespeakWarning")}</p>
-                  )}
-                </div>
-                {v.engine === "v3" ? (
-                  <div>
-                    <Label>{t("field.stability")}</Label>
-                    <Select
-                      value={String(v.stability ?? 0.5)}
-                      onValueChange={(val) => updateVoice(i, { stability: parseFloat(val) })}
-                    >
-                      <SelectTrigger aria-label={t("field.stability")}><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="0">{t("audiocfg.mostVariable")}</SelectItem>
-                        <SelectItem value="0.5">{t("audiocfg.balanced05")}</SelectItem>
-                        <SelectItem value="1">{t("audiocfg.mostStable")}</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                ) : (
-                <div>
-                  <Label htmlFor={`stability-${i}`}>{t("field.stability")} ({v.stability ?? 0.5})</Label>
-                  <Input id={`stability-${i}`} type="range" min={0} max={1} step={0.05} value={v.stability ?? 0.5} onChange={(e) => updateVoice(i, { stability: parseFloat(e.target.value) })} className="h-2" />
-                  <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5"><span>{t("audiocfg.variable")}</span><span>{t("audiocfg.stable")}</span></div>
-                </div>
-                )}
-                {/* STS-only levers — the v3 re-speak lane ignores all three
-                    (documented in the wire contract), so hide them rather
-                    than render dead controls. */}
-                {(v.engine ?? "sts") === "sts" && (<>
-                <div>
-                  <Label htmlFor={`similarity-${i}`}>{t("audiocfg.similarity")} ({v.similarityBoost ?? 0.75})</Label>
-                  <Input id={`similarity-${i}`} type="range" min={0} max={1} step={0.05} value={v.similarityBoost ?? 0.75} onChange={(e) => updateVoice(i, { similarityBoost: parseFloat(e.target.value) })} className="h-2" />
-                  <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5"><span>{t("audiocfg.low")}</span><span>{t("audiocfg.high")}</span></div>
-                </div>
-                <div>
-                  <Label htmlFor={`style-${i}`}>{t("audiocfg.styleExaggeration")} ({v.style ?? 0})</Label>
-                  <Input id={`style-${i}`} type="range" min={0} max={1} step={0.05} value={v.style ?? 0} onChange={(e) => updateVoice(i, { style: parseFloat(e.target.value) })} className="h-2" />
-                  <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5"><span>{t("audiocfg.none")}</span><span>{t("audiocfg.exaggerated")}</span></div>
-                </div>
-                <div>
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor={`speaker-boost-${i}`}>{t("field.speakerBoost")}</Label>
-                    <Switch id={`speaker-boost-${i}`} checked={v.useSpeakerBoost ?? true} onCheckedChange={(c) => updateVoice(i, { useSpeakerBoost: c })} />
-                  </div>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">
-                    {t("audiocfg.hintSpeakerBoostRecast")}
-                  </p>
-                </div>
-                </>)}
+                {/* Engine radio (Recast / Re-speak v3 / Re-speak v4) and the
+                    levers each engine honours — its own file so the
+                    per-engine rules live in one place. */}
+                <VcpVoiceSettings index={i} voice={v} updateVoice={updateVoice} />
                 <div>
                   <Label htmlFor={`volume-mode-${i}`}>{t("field.volume")}</Label>
                   <Select

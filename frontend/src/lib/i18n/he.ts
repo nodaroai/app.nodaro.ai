@@ -5415,6 +5415,7 @@ export const he: ChromeDict = {
   "audiocfg.vcpEngine": "מנוע המרה",
   "audiocfg.engineRecast": "המרת קול",
   "audiocfg.engineRespeak": "הקראה מחדש (v3)",
+  "audiocfg.engineRespeakV4": "הקראה מחדש (v4)",
   "audiocfg.hintRespeakWarning": "הקראה מחדש יוצרת את הביצוע מהתמליל — ההגשה המקורית מוחלפת, ובווידאו השפתיים לא יתואמו.",
   "audiocfg.dialogueLines": "שורות דיאלוג",
   "audiocfg.dialogueVoiceCount": "{count}/10 קולות",

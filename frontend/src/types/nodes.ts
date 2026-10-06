@@ -3369,8 +3369,11 @@ export type VoiceChangerProData = {
     /** Which lane converts this speaker: "sts" (default — speech-to-speech
      *  recast) | "v3" (Re-speak: the performance is regenerated from the
      *  transcript with eleven_v3; stability 0/0.5/1 only;
-     *  similarityBoost/style/useSpeakerBoost are ignored). */
-    engine?: "sts" | "v3"
+     *  similarityBoost/style/useSpeakerBoost are ignored) | "v4" (Re-speak
+     *  with eleven_v4: any stability 0–1, similarityBoost honoured,
+     *  style/useSpeakerBoost ignored; each line is generated with its
+     *  neighbouring lines as context). */
+    engine?: "sts" | "v3" | "v4"
     stability?: number
     similarityBoost?: number
     style?: number

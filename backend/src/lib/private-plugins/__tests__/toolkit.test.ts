@@ -52,6 +52,9 @@ describe("buildToolkit", () => {
 
   it("providers: every member is a function", () => {
     expect(typeof tk.providers.directVoiceChanger).toBe("function")
+    // Optional in the contract, but THIS host answers it — a dropped wiring
+    // line would silently send every plugin to its fallback table.
+    expect(typeof tk.providers.ttsCapabilities).toBe("function")
     expect(typeof tk.providers.separateAudio).toBe("function")
   })
 

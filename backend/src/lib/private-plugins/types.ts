@@ -243,6 +243,24 @@ export interface PluginMusicGenResult {
   taskId?: string
 }
 
+/**
+ * Mirrors the speech-model capability sheet `ModelCatalogEntry.tts` in the
+ * HOST's `@nodaro/shared` (app `packages/shared/src/model-catalog.ts`),
+ * narrowed to what a plugin reads. The host answers from ITS copy of the
+ * catalog — the plugin package's own `@nodaro/shared` pin lags the app's by
+ * whole releases, so a plugin must never read model capability from it.
+ */
+export interface PluginTtsCapabilities {
+  /** Per-request character cap. */
+  maxChars: number
+  /** Voice-setting levers the model honours ("stability", "similarity", "style", "speed", "speakerBoost"). */
+  levers: readonly string[]
+  /** ISO 639-1 codes offered for the model (`fil` has no two-letter code). A curated list. */
+  languages: readonly string[]
+  /** The model performs inline `[audio tags]`. */
+  audioTags: boolean
+}
+
 export interface PluginProvidersToolkit {
   /** Mirrors `directVoiceChanger` (`providers/elevenlabs/voice-changer.ts`). */
   directVoiceChanger(
@@ -250,6 +268,14 @@ export interface PluginProvidersToolkit {
     voiceId: string,
     options?: PluginVoiceChangerOptions,
   ): Promise<Buffer>
+  /**
+   * The HOST's capability sheet for a text-to-speech model id (e.g.
+   * "elevenlabs-v4"), or `undefined` when the id is not a text-to-speech model.
+   * Read from the app's own `@nodaro/shared` — see `PluginTtsCapabilities`.
+   * ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump) — `?.`-guard it; an older host
+   * has no such member and the caller falls back to its own table.
+   */
+  ttsCapabilities?(providerId: string): PluginTtsCapabilities | undefined
   /**
    * Mirrors `ReplicateAudioSeparationProvider#separateAudio`
    * (`providers/replicate/audio-separation.ts`), exposed as a plain

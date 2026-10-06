@@ -1702,6 +1702,34 @@ describe("voice-changer-pro", () => {
     )
   })
 
+  // The single-node Run path hand-copies each voice entry; the per-voice
+  // `engine` (Re-speak v3/v4) must ride along or the job silently runs on the
+  // default speech-to-speech lane at a different price.
+  it("forwards a per-voice engine (v4 / v3) and omits it when unset", async () => {
+    mockResolveNodeInputs.mockReturnValue({ audioUrl: "http://audio.mp3" })
+    mockVoiceChangerProApi.mockResolvedValue({ jobId: "j1" })
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    await executeNode(
+      makeNode("voice-changer-pro", {
+        orderedVoices: [
+          { voiceId: "v1", engine: "v4", stability: 0.37, similarityBoost: 0.6 },
+          { voiceId: "v2", engine: "v3", stability: 0.5 },
+          { voiceId: "v3" },
+        ],
+      }),
+      makeCtx(),
+    )
+    const apiCallFn = mockPollJobWithNodeUpdate.mock.calls[0][1]
+    await apiCallFn()
+    const sent = mockVoiceChangerProApi.mock.calls[0][1]
+    expect(sent).toEqual([
+      { voiceId: "v1", engine: "v4", stability: 0.37, similarityBoost: 0.6 },
+      { voiceId: "v2", engine: "v3", stability: 0.5 },
+      { voiceId: "v3" },
+    ])
+    expect(sent[2]).not.toHaveProperty("engine")
+  })
+
   // The backend decides audio-vs-video from the media's ACTUAL streams: a
   // video-wired run can legitimately deliver audio (an audio-only .mp4 has no
   // video to remux onto). The poller therefore gets an ordered key LIST —

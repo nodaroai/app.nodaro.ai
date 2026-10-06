@@ -4328,8 +4328,10 @@ export async function voiceChangerProApi(
   // orderedVoices keep-slot contract) — forwarded positionally as-is.
   orderedVoices: Array<{
     voiceId: string
-    /** "sts" (default recast) | "v3" (Re-speak — regenerate from transcript). */
-    engine?: "sts" | "v3"
+    /** "sts" (default recast) | "v3" | "v4" (Re-speak — regenerate from the
+     *  transcript; v3 takes stability 0/0.5/1 only, v4 any 0–1 plus
+     *  similarityBoost). */
+    engine?: "sts" | "v3" | "v4"
     stability?: number
     similarityBoost?: number
     style?: number

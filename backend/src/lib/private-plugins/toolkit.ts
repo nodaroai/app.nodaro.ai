@@ -10,6 +10,7 @@ import { createSceneRenderingToolkit } from "./scene3d-render-toolkit.js"
 import { completeStructuredMetered } from "./llm-metered.js"
 import { createSSEStream } from "../sse.js"
 import { directVoiceChanger } from "../../providers/elevenlabs/voice-changer.js"
+import { hostTtsCapabilities } from "./tts-capabilities-toolkit.js"
 import { createScene3DArtifactToolkit } from "./scene3d-artifact-toolkit.js"
 import { createScene3DPlaybackToolkit } from "./scene3d-playback-toolkit.js"
 import { createDurableScene3DStageJournal } from "./scene3d-stage-storage.js"
@@ -1194,6 +1195,9 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
     stages: createDurableScene3DStageJournal(),
     providers: {
       directVoiceChanger,
+      // The host's speech-model capability sheet, from THIS app's catalog —
+      // a plugin never reads model capability from its own lagging pin.
+      ttsCapabilities: hostTtsCapabilities,
       // Exposed as a plain function per the contract; the real capability is
       // a class method (`AudioSeparationProvider` interface implementation),
       // so this wraps a fresh instance per call — the class itself carries

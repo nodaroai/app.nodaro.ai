@@ -5286,6 +5286,7 @@ export const ptBR: ChromeDict = {
   "audiocfg.vcpEngine": "Mecanismo de conversão",
   "audiocfg.engineRecast": "Conversão",
   "audiocfg.engineRespeak": "Releitura (v3)",
+  "audiocfg.engineRespeakV4": "Releitura (v4)",
   "audiocfg.hintRespeakWarning": "A releitura gera a atuação novamente a partir da transcrição — a interpretação original é substituída, e os lábios não vão coincidir no vídeo.",
   "audiocfg.dialogueLines": "Falas",
   "audiocfg.dialogueVoiceCount": "{count}/10 vozes",

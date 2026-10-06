@@ -262,16 +262,21 @@ export type VoiceChangerProVoice =
       voiceId: string
       /**
        * Which lane converts this speaker. `"sts"` (default) is the classic
-       * speech-to-speech recast; `"v3"` is RE-SPEAK — the performance is
-       * REGENERATED from the transcript with eleven_v3 (supports `[audio
+       * speech-to-speech recast; `"v3"` and `"v4"` are RE-SPEAK — the
+       * performance is REGENERATED from the transcript (supports `[audio
        * tags]`; original delivery is replaced, and lips won't match on video).
-       * A v3 speaker needs transcript text: pass an `analysis` whose
+       * A Re-speak speaker needs transcript text: pass an `analysis` whose
        * `segments[].text` carries it (analyze now emits this), or omit
        * `analysis` and the engine re-speaks from its own transcription. For
-       * `"v3"`, `stability` accepts exactly 0 / 0.5 / 1, and
-       * `similarityBoost` / `style` / `useSpeakerBoost` are ignored.
+       * `"v3"` (eleven_v3), `stability` accepts exactly 0 / 0.5 / 1, and
+       * `similarityBoost` / `style` / `useSpeakerBoost` are ignored. For
+       * `"v4"` (eleven_v4), `stability` takes any value 0–1 and
+       * `similarityBoost` is honoured (`style` / `useSpeakerBoost` ignored);
+       * each line is generated with its neighbouring lines as context for
+       * smoother joins. Both Re-speak engines are priced the same, per started
+       * 1,000 characters.
        */
-      engine?: "sts" | "v3"
+      engine?: "sts" | "v3" | "v4"
       /** ElevenLabs stability (0–1). Higher = steadier, lower = more expressive. */
       stability?: number
       /** ElevenLabs similarity boost (0–1) — how closely the output hugs the target voice's timbre. */
@@ -377,8 +382,8 @@ export interface VcpAnalysisSpeaker {
   /** Stable speaker id (first-appearance order). */
   id: string
   /** The speaker's spoken time ranges (seconds). `text` is what was said in
-   *  the range — the paid input for a speaker recast with `engine: "v3"`
-   *  (editable before conversion); the STS lane ignores it. */
+   *  the range — the paid input for a Re-speak speaker (`engine: "v3"` or
+   *  `"v4"`; editable before conversion); the STS lane ignores it. */
   segments: Array<{ start: number; end: number; text?: string }>
   /** When the speaker first speaks (seconds). */
   firstStartSec?: number

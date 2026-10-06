@@ -1135,6 +1135,15 @@ describe("buildPayload", () => {
       ])
     })
 
+    it("voice-changer-pro passes a v4 voice object through whole (engine, stability, similarityBoost)", () => {
+      // Regression pin: the Re-speak v4 lane takes any stability 0–1 and
+      // honours similarityBoost — both must reach the plugin untouched.
+      const v = { voiceId: "Rachel", voiceLabel: "Rachel", voiceType: "premade", engine: "v4", stability: 0.37, similarityBoost: 0.8 }
+      const n = node("n1", "voice-changer-pro", { orderedVoices: [v] })
+      const result = buildPayload(n, jobId, { audioUrl: "https://r2/a.mp3" })
+      expect(result.payload.orderedVoices).toEqual([v])
+    })
+
     // Keep-slot: a null entry means "keep this speaker's original voice"
     // (cloud-plugins orderedVoices contract) — preserved positionally.
     it("voice-changer-pro preserves a null keep-original slot positionally", () => {

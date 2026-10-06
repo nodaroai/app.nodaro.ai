@@ -5348,6 +5348,7 @@ export const ja: ChromeDict = {
   "audiocfg.vcpEngine": "変換エンジン",
   "audiocfg.engineRecast": "声質変換",
   "audiocfg.engineRespeak": "再読み上げ（v3）",
+  "audiocfg.engineRespeakV4": "再読み上げ（v4）",
   "audiocfg.hintRespeakWarning": "再読み上げでは、文字起こしから演技を再生成します。元の話し方は置き換えられ、動画では口の動きが一致しなくなります。",
   "audiocfg.dialogueLines": "セリフ",
   "audiocfg.dialogueVoiceCount": "{count}/10 ボイス",

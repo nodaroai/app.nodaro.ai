@@ -2883,9 +2883,9 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | `audio_asset_id` | string |  |  |
 | `video_url` | string (URL) |  | Recast voices in a talking video — demux audio, run multi-speaker recast, remux. |
 | `video_asset_id` | string |  | A Nodaro video job id to recast (alternative to video_url). |
-| `ordered_voices` | (string or object or null)[] | yes | Ordered list of target voices — speaker 1 → voices[0], speaker 2 → voices[1], etc. Each entry is either a bare voice id (premade name or ElevenLabs UUID), an object { voiceId, stability, similarityBoost, style, useSpeakerBoost, seed, volumeMode, volume } with per-voice speech-to-speech settings, or null — a keep-slot that keeps that speaker's original voice while later speakers are still recast. At least one entry must be non-null. `seed` (0–4294967295) makes that speaker's recast reproducible. From 1 to 8 items. |
+| `ordered_voices` | (string or object or null)[] | yes | Ordered list of target voices — speaker 1 → voices[0], speaker 2 → voices[1], etc. Each entry is either a bare voice id (premade name or ElevenLabs UUID), an object { voiceId, engine, stability, similarityBoost, style, useSpeakerBoost, seed, volumeMode, volume } with per-voice settings, or null — a keep-slot that keeps that speaker's original voice while later speakers are still recast. At least one entry must be non-null. `engine`: "sts" (default, speech-to-speech recast), "v3" or "v4" (Re-speak — the performance is regenerated from the transcript; v3 takes stability 0/0.5/1 only, v4 any 0–1 plus similarityBoost). `seed` (0–4294967295) makes that speaker's recast reproducible. From 1 to 8 items. |
 | `ordered_voices[].voiceId` | string | yes | At least 1 character. |
-| `ordered_voices[].engine` | string |  | One of `sts`, `v3`. |
+| `ordered_voices[].engine` | string |  | One of `sts`, `v3`, `v4`. |
 | `ordered_voices[].stability` | number |  | From 0 to 1. |
 | `ordered_voices[].similarityBoost` | number |  | From 0 to 1. |
 | `ordered_voices[].style` | number |  | From 0 to 1. |
@@ -2898,7 +2898,7 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | `voice_fx.wetDryMix` | number |  | From 0 to 100. |
 | `voice_fx.delayMs` | number |  | From 20 to 2000. |
 | `voice_fx.decay` | number |  | From 0 to 1. |
-| `analysis` | object |  | A pre-computed analysis from a prior voice_changer_pro analyze run (its job output_data): the recast then works from the EXACT speaker list you mapped ordered_voices against, instead of re-detecting (which can produce a different list). Each speaker's segments[].text carries the transcript — required input for a speaker with engine "v3". This param existed in the wire contract before it existed here (the tool description referenced it — now it is real). |
+| `analysis` | object |  | A pre-computed analysis from a prior voice_changer_pro analyze run (its job output_data): the recast then works from the EXACT speaker list you mapped ordered_voices against, instead of re-detecting (which can produce a different list). Each speaker's segments[].text carries the transcript — required input for a speaker with engine "v3" or "v4". This param existed in the wire contract before it existed here (the tool description referenced it — now it is real). |
 | `analysis.vocalsUrl` | string (URL) | yes |  |
 | `analysis.backgroundUrl` | string (URL) |  |  |
 | `analysis.speakers` | object[] | yes | From 1 to 64 items. |

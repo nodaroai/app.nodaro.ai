@@ -5444,6 +5444,7 @@ export const en = {
   "audiocfg.vcpEngine": "Conversion Engine",
   "audiocfg.engineRecast": "Recast",
   "audiocfg.engineRespeak": "Re-speak (v3)",
+  "audiocfg.engineRespeakV4": "Re-speak (v4)",
   "audiocfg.hintRespeakWarning": "Re-speak regenerates the performance from the transcript — the original delivery is replaced, and lips won't match on video.",
   "audiocfg.dialogueLines": "Dialogue Lines",
   "audiocfg.dialogueVoiceCount": "{count}/10 voices",

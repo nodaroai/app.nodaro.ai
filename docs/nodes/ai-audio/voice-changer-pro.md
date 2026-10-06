@@ -42,7 +42,7 @@ Each entry in **Ordered Voices** may be an object that pins per-speaker ElevenLa
 | Field | Type | Range | Default | Description |
 |-------|------|-------|---------|-------------|
 | `voiceId` | `string` | — | *(required)* | Target voice — premade name (`Rachel`, `Aria`, …) or an ElevenLabs UUID for a custom clone. |
-| `engine` | `"sts" \| "v3"` | — | `"sts"` | Which lane converts this speaker. `"sts"` is the classic speech-to-speech recast. `"v3"` is **Re-speak**: the performance is regenerated from the transcript with eleven_v3 (`[audio tags]` supported) — the original delivery is replaced, and lips won't match on video. A v3 speaker needs transcript text (the analysis now carries per-segment `text`, editable before conversion); without an analysis the engine re-speaks from its own transcription. For `"v3"`, stability accepts exactly 0 / 0.5 / 1, and `similarityBoost`/`style`/`useSpeakerBoost` are ignored. Priced per started 1K characters of the re-spoken text (see Credit Pricing). |
+| `engine` | `"sts" \| "v3" \| "v4"` | — | `"sts"` | Which lane converts this speaker. `"sts"` is the classic speech-to-speech recast. `"v3"` is **Re-speak**: the performance is regenerated from the transcript with eleven_v3 (`[audio tags]` supported) — the original delivery is replaced, and lips won't match on video. For `"v3"`, stability accepts exactly 0 / 0.5 / 1, and `similarityBoost`/`style`/`useSpeakerBoost` are ignored. `"v4"` is **Re-speak** with eleven_v4: the same transcript-driven regeneration, with any stability from 0 to 1 and `similarityBoost` honoured (`style`/`useSpeakerBoost` ignored); each line is generated with its neighbouring lines as context for smoother joins. A Re-speak speaker (either engine) needs transcript text (the analysis carries per-segment `text`, editable before conversion); without an analysis the engine re-speaks from its own transcription. Both Re-speak engines are priced the same: per started 1K characters of the re-spoken text (see Credit Pricing). |
 | `stability` | `number` | 0–1 | model default | Higher = steadier and more consistent; lower = more expressive and variable. |
 | `similarityBoost` | `number` | 0–1 | model default | How closely the output hugs the target voice's timbre. |
 | `style` | `number` | 0–1 | `0` | Style exaggeration. `>0` amplifies delivery at the cost of latency / stability. |
@@ -86,8 +86,9 @@ audio it converts. A speech-to-speech voice is billed **by the length of its
 stem** — the stem runs from the start of the clip to that speaker's last
 line — at the `voice-changer-pro` rate (40 credits per minute, prorated per
 second and rounded up to the next credit). A Re-speak
-(`engine: "v3"`) voice is billed **per started 1,000 characters** of the text
-it re-speaks at the `voice-changer-pro-respeak` rate (30 credits per 1K).
+(`engine: "v3"` or `"v4"`) voice is billed **per started 1,000 characters** of
+the text it re-speaks at the `voice-changer-pro-respeak` rate (30 credits per
+1K) — the same rate for both Re-speak engines.
 Every voice has a floor of 4 credits (six billable seconds), and so does the
 run as a whole.
 

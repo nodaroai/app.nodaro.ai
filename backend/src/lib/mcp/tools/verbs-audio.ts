@@ -52,6 +52,7 @@ const sunoWidgetModel = (version: string | undefined): string => SUNO_CATALOG_ID
 import { applyPromptAffixes } from "@nodaro/prompts"
 import { resolvePreset } from "../../presets/resolve-preset.js"
 import { mcpInject } from "../internal-request.js"
+import { VOICE_CHANGER_PRO_ENGINES } from "./voice-changer-pro-engines.js"
 
 /**
  * Look up the Suno task / track ids stored on a completed Nodaro job's
@@ -844,7 +845,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         "in first-appearance order: speaker 1 → voices[0], speaker 2 → voices[1], and so on. A null " +
         "entry keeps that speaker's own voice while later speakers are still recast (at least one entry " +
         "must be non-null). Each entry is a bare voice id or an object with per-voice settings " +
-        "(engine sts|v3, stability, similarityBoost, style, useSpeakerBoost, seed, volumeMode, volume).\n\n" +
+        "(engine sts|v3|v4, stability, similarityBoost, style, useSpeakerBoost, seed, volumeMode, volume).\n\n" +
         "Provide ONE source: audio_url / audio_asset_id (audio → audio), OR video_url / video_asset_id " +
         "(recasts the voices inside the clip). Voice and music are always separated first; " +
         "preserve_background mixes the bed back in and music_volume_mode sets its level; voice_fx " +
@@ -873,14 +874,17 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
               z.string().min(1),
               z.object({
                 voiceId: z.string().min(1),
-                // "sts" (default — speech-to-speech recast) | "v3" (RE-SPEAK:
-                // the performance is regenerated from the transcript with
-                // eleven_v3; supports [audio tags]; stability 0/0.5/1 only;
-                // similarityBoost/style/useSpeakerBoost are ignored). A v3
-                // speaker needs transcript text: send `analysis` with
-                // segments[].text, or omit `analysis` and the engine
-                // re-speaks from its own transcription.
-                engine: z.enum(["sts", "v3"]).optional(),
+                // "sts" (default — speech-to-speech recast) | "v3" (RE-SPEAK
+                // with eleven_v3: supports [audio tags]; stability 0/0.5/1
+                // only; similarityBoost/style/useSpeakerBoost ignored) | "v4"
+                // (RE-SPEAK with eleven_v4: [audio tags]; any stability 0–1;
+                // similarityBoost honoured; style/useSpeakerBoost ignored;
+                // each line is generated with its neighbouring lines as
+                // context). A Re-speak speaker needs transcript text: send
+                // `analysis` with segments[].text, or omit `analysis` and the
+                // engine re-speaks from its own transcription. The enum is the
+                // plugin route's — see voice-changer-pro-engines.ts.
+                engine: z.enum(VOICE_CHANGER_PRO_ENGINES).optional(),
                 stability: z.number().min(0).max(1).optional(),
                 similarityBoost: z.number().min(0).max(1).optional(),
                 style: z.number().min(0).max(1).optional(),
@@ -902,10 +906,13 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
           .describe(
             "Ordered list of target voices — speaker 1 → voices[0], speaker 2 → voices[1], etc. " +
               "Each entry is either a bare voice id (premade name or ElevenLabs UUID), an object " +
-              "{ voiceId, stability, similarityBoost, style, useSpeakerBoost, seed, volumeMode, volume } " +
-              "with per-voice speech-to-speech settings, or null — a keep-slot that keeps that " +
+              "{ voiceId, engine, stability, similarityBoost, style, useSpeakerBoost, seed, volumeMode, volume } " +
+              "with per-voice settings, or null — a keep-slot that keeps that " +
               "speaker's original voice while later speakers are still recast. At least one entry " +
-              "must be non-null. `seed` (0–4294967295) makes that speaker's recast reproducible.",
+              "must be non-null. `engine`: \"sts\" (default, speech-to-speech recast), \"v3\" or \"v4\" " +
+              "(Re-speak — the performance is regenerated from the transcript; v3 takes stability " +
+              "0/0.5/1 only, v4 any 0–1 plus similarityBoost). `seed` (0–4294967295) makes that " +
+              "speaker's recast reproducible.",
           ),
         voice_fx: z
           .object({
@@ -934,8 +941,8 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
                         start: z.number().min(0),
                         end: z.number().min(0),
                         // What was said in the range — REQUIRED for a speaker
-                        // recast with engine "v3" (re-speak regenerates the
-                        // performance from it); ignored by the STS lane.
+                        // recast with engine "v3" or "v4" (Re-speak regenerates
+                        // the performance from it); ignored by the STS lane.
                         text: z.string().max(5000).optional(),
                       }),
                     )
@@ -953,7 +960,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
               "output_data): the recast then works from the EXACT speaker list you mapped " +
               "ordered_voices against, instead of re-detecting (which can produce a different " +
               "list). Each speaker's segments[].text carries the transcript — required input " +
-              "for a speaker with engine \"v3\". This param existed in the wire contract " +
+              "for a speaker with engine \"v3\" or \"v4\". This param existed in the wire contract " +
               "before it existed here (the tool description referenced it — now it is real).",
           ),
         model: z.string().optional().describe("Voice model override."),

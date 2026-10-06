@@ -186,6 +186,10 @@ Examples:
       "--v3 <indexes>",
       "comma-separated 1-based speaker indexes converted with the Re-speak (eleven_v3) engine instead of the recast — the performance is regenerated from the transcript ([audio tags] supported; delivery replaced; lips won't match on video). With --analysis-file the analysis text is the script; without one the engine re-speaks from its own transcription",
     )
+    .option(
+      "--v4 <indexes>",
+      "comma-separated 1-based speaker indexes converted with the Re-speak (eleven_v4) engine — like --v3, but stability takes any value 0–1, similarityBoost is honoured, and each line is generated with its neighbouring lines as context. An index may appear in --v3 or --v4, not both",
+    )
     .option("--model <id>", "speech-to-speech model override")
     .option("--output <mode>", "output mode: video (default — merged, rendered result) or stems (dry per-track stems for an interactive mix; render later with `voice export`)")
     .option("--analysis-json <json>", "a completed `voice analyze` job's output_data, inline — skips re-detection (the interactive-flow fast-path)")
@@ -212,7 +216,9 @@ Examples:
       --voices-json '[{"voiceId":"Rachel","stability":0.6},null,"Aria"]' --no-preserve-background
   $ nodaro voice recast --video https://.../panel.mp4 --voices Rachel,Aria \\
       --analysis-file analysis.json --output stems --watch
-      # interactive flow: reuse a \`voice analyze\` result, get dry stems to mix, render with \`voice export\``)
+      # interactive flow: reuse a \`voice analyze\` result, get dry stems to mix, render with \`voice export\`
+  $ nodaro voice recast --audio https://.../podcast.mp3 --voices Rachel,Aria --v4 2 --watch
+      # speaker 2 is re-spoken from the transcript on the v4 Re-speak engine; speaker 1 is a recast`)
     .action(
       async (
         opts: {
@@ -221,6 +227,7 @@ Examples:
           voices?: string
           voicesJson?: string
           v3?: string
+          v4?: string
           model?: string
           output?: string
           analysisJson?: string
@@ -285,22 +292,36 @@ Examples:
             process.exit(1)
           }
 
-          // --v3: 1-based indexes into --voices, marking Re-speak speakers
-          // (index-addressed like dropSpeakerIndexes — a parallel list would
-          // drift out of sync with --voices length; an index cannot).
-          if (opts.v3) {
-            const idxs = opts.v3.split(",").map((s) => parseInt(s.trim(), 10))
+          // --v3 / --v4: 1-based indexes into --voices, marking Re-speak
+          // speakers and their engine (index-addressed like dropSpeakerIndexes
+          // — a parallel list would drift out of sync with --voices length; an
+          // index cannot). A speaker runs on one engine, so an index named in
+          // both flags is refused before either flag touches the list.
+          const respeakIndexes = (raw: string | undefined): number[] =>
+            raw === undefined ? [] : raw.split(",").map((s) => parseInt(s.trim(), 10))
+          const v3Idxs = respeakIndexes(opts.v3)
+          const v4Idxs = respeakIndexes(opts.v4)
+          const inBoth = v3Idxs.filter((n) => v4Idxs.includes(n))
+          if (inBoth.length > 0) {
+            warn(`speaker index ${inBoth.join(", ")} is named in both --v3 and --v4 — a speaker is re-spoken by one engine`)
+            process.exit(1)
+          }
+          for (const [flag, idxs, engine] of [
+            ["--v3", v3Idxs, "v3"],
+            ["--v4", v4Idxs, "v4"],
+          ] as const) {
+            if (idxs.length === 0) continue
             if (idxs.some((n) => !Number.isInteger(n) || n < 1 || n > orderedVoices.length)) {
-              warn(`--v3 indexes must be 1..${orderedVoices.length} (matching --voices positions)`)
+              warn(`${flag} indexes must be 1..${orderedVoices.length} (matching --voices positions)`)
               process.exit(1)
             }
             for (const n of idxs) {
               const v = orderedVoices[n - 1]
               if (v === null) {
-                warn(`--v3 index ${n} is a keep-slot — a kept speaker is not converted at all`)
+                warn(`${flag} index ${n} is a keep-slot — a kept speaker is not converted at all`)
                 process.exit(1)
               }
-              orderedVoices[n - 1] = typeof v === "string" ? { voiceId: v, engine: "v3" } : { ...v, engine: "v3" }
+              orderedVoices[n - 1] = typeof v === "string" ? { voiceId: v, engine } : { ...v, engine }
             }
           }
 

@@ -3673,6 +3673,7 @@ function executeNodeCore(
       if (v === null) return null;
       const entry: {
         voiceId: string;
+        engine?: "sts" | "v3" | "v4";
         stability?: number;
         similarityBoost?: number;
         style?: number;
@@ -3681,6 +3682,9 @@ function executeNodeCore(
         volume?: number;
         seed?: number;
       } = { voiceId: v.voiceId };
+      // Re-speak lane (v3/v4). Dropping it runs the voice on the default
+      // speech-to-speech lane at a different price, with no error.
+      if (v.engine != null) entry.engine = v.engine;
       if (v.stability != null) entry.stability = v.stability;
       if (v.similarityBoost != null) entry.similarityBoost = v.similarityBoost;
       if (v.style != null) entry.style = v.style;

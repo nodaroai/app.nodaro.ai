@@ -577,6 +577,14 @@ const COLLECTION_TOOLS_BYTES = 3_420
 // the SDK already took it). No tool was added, so the fixture does NOT move.
 // measured by this suite: 392_662 total − 392_454 base = 208 B.
 const APPLY_EDL_CLIP_KEY_BYTES = 208
+// RAISED 2026-10-06 by ONE enum value and its wording, and nothing else:
+// `voice_changer_pro`'s per-voice `engine` now also takes `"v4"` (Re-speak on
+// the newer model — any stability 0–1, similarity honoured, each line
+// generated with its neighbours as context), and the `ordered_voices` /
+// `analysis` descriptions say so. No tool was added, so the fixture does NOT
+// move. measured by this suite: 397_365 total − 397_154 base = 211 B, which
+// keeps the 1 B of headroom the list had before.
+const VOICE_CHANGER_PRO_V4_ENGINE_BYTES = 211
 
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192,
@@ -637,7 +645,8 @@ export const TOOL_WIRE_BUDGET = {
     GET_APP_RUN_OUTCOME_BYTES +
     UGC_CARDS_CAPTION_STYLE_BYTES +
     COLLECTION_TOOLS_BYTES +
-    APPLY_EDL_CLIP_KEY_BYTES,
+    APPLY_EDL_CLIP_KEY_BYTES +
+    VOICE_CHANGER_PRO_V4_ENGINE_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }
