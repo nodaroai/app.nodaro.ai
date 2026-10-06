@@ -1,5 +1,81 @@
 # @nodaro/sdk
 
+## 2.20.0
+
+### Minor Changes
+
+- a451774: `edit.applyEdl` accepts an optional `clipKey`: the plan clip a render cuts (`edlSpanKey(clip)` from `@nodaro/shared`). The job's result carries it back as `output_data.clipKey`, beside `output_data.quality` (`"proxy"` for a preview, `"final"` otherwise), which every Apply EDL result now carries. Additive.
+- c48a85e: `edit.applyEdl` accepts an optional `planBasis`: the plan value a render cuts (`renderReadBasis(value)` from `@nodaro/shared`, 16 lowercase hex digits). The job's result carries it back as `output_data.planBasis`, beside `output_data.renderBasis`, which the server stamps on every Apply EDL result (the render's output, crossfade and effective sources). Additive.
+- 9d492ee: Collections — where a workflow's records live. A collection is a named set of records (a title, a text, a link, media links, extra fields, provenance) that a workflow writes to and reads back; text and links only, never files. The same link saved twice is one record; past the plan's cap the oldest records are evicted after a write.
+
+  - `@nodaro/shared`: `Collection`, `CollectionRecord`, `CollectionMedia`, `CollectionRecordSource`, the caps by tier (`COLLECTION_TIER_CAPS`, `collectionCapsForTier`), the wire shapes (`ListCollectionsResult` with `available` and `caps`, `ListCollectionRecordsResult`, `AddCollectionRecordInput` / `AddCollectionRecordResult` with `outcome: "inserted" | "duplicate" | "replayed"` and `evicted`), and the one rule every surface renders records with: `collectionRecordHeadline`, `collectionRecordsDigest(records, "headlines" | "full")`, `ingestRecordFromJson(item)` (any JSON item — a feed post, a search result, an article object — mapped to a record), `normalizeDedupeKey`, `normalizeCollectionMedia`, `normalizeCollectionFields`, `isCollectionUrl`.
+  - `@nodaro/sdk`: `client.collections` — `list`, `get`, `create`, `update`, `delete`, `records`, `addRecord` (with an `idempotencyKey`), `deleteRecord`, `export` (CSV or JSON text).
+  - `@nodaro/cli`: `nodaro collections list | create | show | update | delete | records | add | remove | export`.
+
+- 023327b: Competitors over time. Scans are kept for a window that follows the plan (`CompetitorListResult.historyMonths` on the list; `client.competitors.listWithPlan()`), every platform tally carries the account's `followers`, `client.competitors.get(id, { scan })` opens a brand as of one scan, `history(id)` (`CompetitorHistory`) is the brand's scans oldest first with what each found and read per platform, and `compare(id, { from, to, vsFrom?, vsTo? })` (`CompetitorCompareResult`) answers one or two periods: posts by publish date, usual reach, followers and their change, what worked, the best posts. The CLI gains `competitors history <id>` and `competitors compare <id> --from --to [--vs-from --vs-to]`.
+- 94c1fbf: Runs that find nothing new end `completed` with `outcome: "nothing_new"` instead of failing. A text-requiring node (`llm-chat`, `generate-script`, `text-to-speech`, `generate-music`, `text-to-audio`, the legacy `ai-writer`) whose wired text came from a node that produced nothing in this run is skipped with `skipReason: "empty_input"` on its node state, and the nodes behind it are skipped with it.
+
+  - `@nodaro/shared`: `NodeSkipReason`, `skipReason` on `NodeExecutionStateWire`, `ExecutionOutcome` + `executionOutcome(status, nodeStates)` + `countEmptyInputSkips(nodeStates)` (the one rule every surface derives the outcome with — never a stored column), `__runSkipReason` among the transient runtime keys.
+  - `@nodaro/sdk`: `WorkflowExecution` / `WorkflowExecutionSummary` gain `outcome?: "succeeded" | "nothing_new"`; `nodeStates[id].skipReason`; `executionOutcome`, `countEmptyInputSkips`, `NodeSkipReason` and `ExecutionOutcome` re-exported.
+  - `@nodaro/prompts`: `TEXT_REQUIRED_NODE_TYPES`, `computeNodeSendText(type, data, args)` and `computeAiWriterInput(data, args)` — what a text-requiring node would send, by its executor's own rule.
+
+- 1d106aa: Character references on the video lanes. `@nodaro/shared`: the `VideoCharacterReference` type (portrait `imageUrl`, optional `bodyImageUrl`, `description`, optional `name`), a `characters` cap on `VIDEO_REF_LIMITS_BY_PROVIDER` (3 on `gemini-omni-video` and `gemini-omni-flash`), and the helpers that apply it: `videoCharacterRefCap`, `videoCharacterRefProviders`, `videoCharacterRefUnits` and `videoCharacterRefProblem` (provider support, the start- and end-frame limits, and the shared 7-unit input budget). `@nodaro/sdk`: `characterReferences` on `GenerateVideoParams` and `TextToVideoParams`, and the `VideoCharacterReference` type re-exported. Additive. Pinned voices: an optional `voice` on each character reference (`VideoCharacterVoice`: a `preset` from `GEMINI_OMNI_VOICE_PRESETS` / `GEMINI_OMNI_VOICE_PRESET_IDS` — the 30 Gemini voice ids with their gender / style / pitch labels, exported as data — plus an optional `description` and `exampleLine`), a `voices` cap on `VIDEO_REF_LIMITS_BY_PROVIDER`, and `videoCharacterVoiceCap` / `videoCharacterVoiceKey` / `videoCharacterDistinctVoices` / `videoCharacterVoiceProblem`. `@nodaro/sdk`: `VideoCharacterVoice` and `GeminiOmniVoicePresetId` re-exported.
+- ceca5b3: `audio.mix` accepts an optional `duck`: every track except `duck.under` (the voice) dips while that track is loud and rises back in its pauses, so a music bed sits under speech. `amount` (0-100) sets how hard; `thresholdDb`, `ratio`, `attackMs` and `releaseMs` are optional fine controls. The CLI gains `nodaro audio mix --duck-under <index> [--duck-amount <0-100>]`. Additive; a mix without `duck` is unchanged.
+- 989c285: Render final for agents. `workflows.renderFinal(id, { renderNodeId, continueFromExecutionId })` renders the final of an Apply EDL render whose run stopped at its preview: the render at Final for that run only, and every node after it (Camera Switch first, in multicam), continuing that execution. The server works out which nodes run, by the same rule as the editor's Render final button, so the caller sends only the render and the execution. `workflows.estimateRenderFinal(id, params)` quotes it first — the nodes it runs, the override it runs with, its estimated credits and whether the payer can cover them (`sufficient`, `available`) — without creating anything; a Render final its payer cannot cover throws `InsufficientCreditsError` before any execution exists. `@nodaro/shared` adds the stable refusal codes `RENDER_FINAL_NODE_NOT_FOUND`, `RENDER_FINAL_NOT_A_RENDER` and `RENDER_FINAL_CODES`. Additive.
+- 2047248: A run can continue from an earlier execution. `workflows.run(id, { nodeIds, continueFromExecutionId })` runs only `nodeIds`; every other node hands on what that execution produced (an Edit Plan's plan with the person's review applied), never the workflow's saved results. Render final after a run that stopped at its preview is one: `{ nodeIds: [renderId, ...tail], inputOverrides: { [renderId]: { quality: "final" } }, continueFromExecutionId }`. The execution must be the caller's own completed run of the same workflow and the same version of its graph. `@nodaro/shared` adds the stable refusal codes `CONTINUATION_SUBSET_REQUIRED`, `CONTINUATION_NOT_FOUND`, `CONTINUATION_WORKFLOW_MISMATCH`, `CONTINUATION_VERSION_MISMATCH`, `CONTINUATION_NOT_COMPLETED`, and `RUN_CONTINUATION_CODES`. Additive.
+- fd20c51: `voices.textToDialogue` and `nodaro voice dialogue` can choose the dialogue model (`elevenlabs-dialogue`, the default, or `elevenlabs-dialogue-v4`) and send similarity; stability is any 0–1 value on v4 and 0, 0.5 or 1 on v3. The SDK's `stability` type widens from `0 | 0.5 | 1` to `number` (source-compatible for existing callers).
+- 9c2120c: `workflows.run(id, { inputOverrides })`: per-node field overrides for one run, `{ [nodeId]: { field: value } }`. A workflow whose Apply EDL render is set to Preview is refused through the API (`preview_review_required`) unless the run sets it to Final with `{ [renderNodeId]: { quality: "final" } }`.
+- 7dd35ec: `nodes.run("text-to-speech", …)` and `runAndWait` are typed (`TextToSpeechParams`) and take `previousText` / `nextText` — the lines spoken just before and after the clip, so a model that stitches (ElevenLabs v4, Turbo v2.5 and Multilingual v2; not v3) keeps one continuous intonation across clips produced separately. Up to 1,000 characters each. The CLI's `nodes run` help shows the two parameters.
+- 63fade1: `VoiceChangerProVoice.engine` (the per-voice setting of `voices.recast`) now also takes `"v4"`: Re-speak on the newer model — the performance is regenerated from the transcript like `"v3"`, with any `stability` from 0 to 1 and `similarityBoost` honoured (`style` / `useSpeakerBoost` ignored); each line is generated with its neighbouring lines as context for smoother joins. Priced like a `"v3"` Re-speak voice, per started 1,000 characters. `"v3"` is unchanged. Requires a Nodaro Cloud release that accepts the engine.
+
+### Patch Changes
+
+- 0be3860: Export `NodeSkipReason` and `ExecutionOutcome` from the package root, beside the other execution types (they were only reachable through the executions resource module).
+- 68f8146: `nodaro edit apply-edl` takes `--clip-key <key>`: the plan clip a render cuts (`"<first inMs>-<last outMs>"` of a clips-mode plan clip), passed as `clipKey` and stamped back on the job's result, as `edit.applyEdl` already allowed. The SDK's `edit` resource documentation now describes the multicam flow (`audioSync` → `editPlan` → `cameraSwitch` → a Preview, then the final) and that `cameraSwitch` relays from a connected self-hosted install like `editPlan`. Additive.
+- 835c6d3: `WorkflowExecution` / `WorkflowExecutionSummary` (from `client.executions.get` / `listForWorkflow`) gain `kind`: `"execution"` for an orchestrator run, `"job"` for a single-node job the list shows beside the runs. `ExecutionTriggerType` now also names the `telegram`, `telegram_account`, `api` and `mcp` lanes the server already reported. Types only: no call changed.
+- ff32a3f: Document `output_data.transcript` on text-to-dialogue jobs (per-word timings and per-line speakers on every dialogue model) and the `withTimestamps` request field of text-to-speech.
+- 1a11a27: `edit.editPlan` docs: a `"trailer"` plan's `output_data` is one `Edl`, like `"tighten"`, and `targetAspect` also applies to the teaser.
+- Updated dependencies [9cb2a0d]
+- Updated dependencies [9cb2a0d]
+- Updated dependencies [9cb2a0d]
+- Updated dependencies [3bec25f]
+- Updated dependencies [9d492ee]
+- Updated dependencies [023327b]
+- Updated dependencies [9cb2a0d]
+- Updated dependencies [86df84c]
+- Updated dependencies [8777f7b]
+- Updated dependencies [1a11a27]
+- Updated dependencies [8777f7b]
+- Updated dependencies [1a11a27]
+- Updated dependencies [fd20c51]
+- Updated dependencies [94c1fbf]
+- Updated dependencies [9cb2a0d]
+- Updated dependencies [1d106aa]
+- Updated dependencies [835c6d3]
+- Updated dependencies [3b4e26c]
+- Updated dependencies [c91946b]
+- Updated dependencies [9cb2a0d]
+- Updated dependencies [9cb2a0d]
+- Updated dependencies [9c2120c]
+- Updated dependencies [1e1ef73]
+- Updated dependencies [989c285]
+- Updated dependencies [829dc76]
+- Updated dependencies [c48a85e]
+- Updated dependencies [c48a85e]
+- Updated dependencies [a451774]
+- Updated dependencies [2047248]
+- Updated dependencies [7603c20]
+- Updated dependencies [747151b]
+- Updated dependencies [ff32a3f]
+- Updated dependencies [d81639f]
+- Updated dependencies [7dd35ec]
+- Updated dependencies [9cb2a0d]
+- Updated dependencies [9cb2a0d]
+- Updated dependencies [9cb2a0d]
+- Updated dependencies [9cb2a0d]
+  - @nodaro/shared@3.22.0
+  - @nodaro/prompts@1.31.0
+
 ## 2.19.0
 
 ### Minor Changes
