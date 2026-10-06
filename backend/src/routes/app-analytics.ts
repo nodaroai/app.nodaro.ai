@@ -8,6 +8,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { executionBelongsToRun } from "../lib/app-run-ownership.js"
 
 const appIdParams = z.object({
   appId: z.string().uuid(),
@@ -134,7 +135,7 @@ export async function appAnalyticsRoutes(app: FastifyInstance) {
     // Verify creator owns this app
     const { data: appRow, error: appError } = await supabase
       .from("published_apps")
-      .select("id, creator_id")
+      .select("id, creator_id, workflow_id")
       .eq("id", appId)
       .single()
 
@@ -151,7 +152,7 @@ export async function appAnalyticsRoutes(app: FastifyInstance) {
 
     let query = supabase
       .from("app_runs")
-      .select("id, runner_id, credits_used, created_at, workflow_executions(status, completed_nodes, total_nodes, completed_at)")
+      .select("id, runner_id, credits_used, created_at, workflow_executions(user_id, workflow_id, status, completed_nodes, total_nodes, completed_at)")
       .eq("app_id", appId)
       .order("created_at", { ascending: false })
       .limit(limit + 1)
@@ -161,7 +162,10 @@ export async function appAnalyticsRoutes(app: FastifyInstance) {
         .from("app_runs")
         .select("created_at")
         .eq("id", cursor)
-        .single()
+        // A run of this app only: a cursor naming another app's run would
+        // otherwise bisect out when it was made. No row → no cursor.
+        .eq("app_id", appId)
+        .maybeSingle()
       if (cursorRow) {
         query = query.lt("created_at", cursorRow.created_at)
       }
@@ -174,8 +178,16 @@ export async function appAnalyticsRoutes(app: FastifyInstance) {
     }
 
     const hasMore = (runs?.length ?? 0) > limit
-    const items = (runs ?? []).slice(0, limit)
-    const nextCursor = hasMore && items.length > 0 ? items[items.length - 1].id : null
+    const page = (runs ?? []).slice(0, limit)
+    const nextCursor = hasMore && page.length > 0 ? page[page.length - 1].id : null
+
+    // Left out: a run whose execution is not its runner's run of this app
+    // (lib/app-run-ownership.ts).
+    const appWorkflowId = (appRow as { workflow_id?: string | null }).workflow_id ?? null
+    const items = page.filter((run) => {
+      const exec = run.workflow_executions as unknown as { user_id?: unknown; workflow_id?: unknown } | null
+      return !exec || executionBelongsToRun(exec, { runnerId: run.runner_id as string | null, workflowId: appWorkflowId })
+    })
 
     return reply.send({
       data: items.map((run) => {

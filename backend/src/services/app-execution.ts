@@ -124,6 +124,7 @@ export async function executeAppRun(
       .from("app_runs")
       .select("id")
       .eq("execution_id", execution.id)
+      .eq("runner_id", userId)
       .maybeSingle()
     if (!existingRun) throw new Error("Failed to create app run")
     return { executionId: execution.id, appRunId: (existingRun as { id: string }).id, deduped: true }

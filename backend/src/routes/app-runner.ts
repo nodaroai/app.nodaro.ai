@@ -26,6 +26,7 @@ import { shouldRefuseDegradedRunFor, personalPayer } from "../lib/billing-contex
 import { billingPairColumns } from "../lib/insert-job.js"
 import { extractAppInputSchema, flatInputsToOverrides, mergeInputOverrides } from "../lib/mcp/extract-app-inputs.js"
 import { describeLockedOverrides, findLockedOverrides } from "../lib/input-override-lock.js"
+import { clientRunUpdates, executionBelongsToRun } from "../lib/app-run-ownership.js"
 
 // In-memory cache for published app data (30min TTL — explicit invalidation on publish)
 const APP_CACHE_TTL_MS = 30 * 60_000
@@ -62,6 +63,9 @@ const createRunBody = z.object({
   version: z.coerce.number().int().min(1).optional(),
 })
 
+// The run PATCH: a client's only write to its run. Unknown keys — every
+// server-owned field (execution_id, app_id, status, credits, …) — are dropped,
+// and the UPDATE is built from APP_RUN_CLIENT_WRITABLE_FIELDS.
 const updateRunBody = z.object({
   inputValues: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
   name: z.string().max(100).nullable().optional(),
@@ -430,7 +434,38 @@ export async function appRunnerRoutes(app: FastifyInstance) {
     }
 
     if (runId) {
-      // Existing draft run path — create execution inline then link the draft
+      // Existing draft run path — create execution inline then link the draft.
+      //
+      // The run must be this runner's run of THIS app — any version of it, so
+      // a draft made on an older version still runs. Checked before the
+      // execution row is written: a miss leaves no orphaned pending execution
+      // (which would brick the (user, workflow) pair, see P14 above), and the
+      // UPDATE below repeats the same scope so a race cannot widen it.
+      const { data: versionRows, error: versionsError } = await supabase
+        .from("published_apps")
+        .select("id")
+        .eq("workflow_id", appRow.workflow_id)
+        .is("deleted_at", null)
+      if (versionsError) {
+        return sendInternalError(reply, req, versionsError, "Failed to load app versions")
+      }
+      const versionIds = (versionRows ?? []).map((r) => r.id as string)
+      if (!versionIds.includes(appRow.id as string)) versionIds.push(appRow.id as string)
+
+      const { data: draft } = await supabase
+        .from("app_runs")
+        .select("id")
+        .eq("id", runId)
+        .eq("runner_id", req.userId)
+        .in("app_id", versionIds)
+        .is("deleted_at", null)
+        .maybeSingle()
+      if (!draft) {
+        return reply.status(404).send({
+          error: { code: "not_found", message: "Run not found" },
+        })
+      }
+
       const { data: execution, error: execError } = await supabase
         .from("workflow_executions")
         .insert({
@@ -457,6 +492,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
         })
         .eq("id", runId)
         .eq("runner_id", req.userId)
+        .in("app_id", versionIds)
         .is("deleted_at", null)
         .select("id")
         .single()
@@ -619,13 +655,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
     }
 
     const { runId } = paramsParsed.data
-    const { inputValues, name, hiddenNodes, nodeStates } = bodyParsed.data
-
-    const updates: Record<string, unknown> = {}
-    if (inputValues !== undefined) updates.input_values = inputValues
-    if (name !== undefined) updates.name = name
-    if (hiddenNodes !== undefined) updates.hidden_nodes = hiddenNodes
-    if (nodeStates !== undefined) updates.node_states = nodeStates
+    const updates = clientRunUpdates(bodyParsed.data)
 
     if (Object.keys(updates).length === 0) {
       return reply.status(400).send({
@@ -708,14 +738,17 @@ export async function appRunnerRoutes(app: FastifyInstance) {
         .from("app_runs")
         .select("created_at")
         .eq("id", cursor)
-        .single()
+        // The caller's own run only: a cursor naming someone else's run
+        // would otherwise bisect out when it was made. No row → no cursor.
+        .eq("runner_id", req.userId)
+        .maybeSingle()
       cursorDate = cursorRow?.created_at as string | undefined
     }
 
     let query = supabase
       .from("app_runs")
       .select(
-        "id, app_id, created_at, execution_id, input_values, status, name, credits_used, hidden_nodes, node_states, deleted_at, workflow_executions(status, node_states, completed_nodes, total_nodes, completed_at, total_credits_used)"
+        "id, app_id, created_at, execution_id, input_values, status, name, credits_used, hidden_nodes, node_states, deleted_at, workflow_executions(user_id, workflow_id, status, node_states, completed_nodes, total_nodes, completed_at, total_credits_used)"
       )
       .in("app_id", versionIds)
       .eq("runner_id", req.userId)
@@ -740,9 +773,16 @@ export async function appRunnerRoutes(app: FastifyInstance) {
     }
 
     const hasMore = (runs?.length ?? 0) > limit
-    const items = (runs ?? []).slice(0, limit)
+    const page = (runs ?? []).slice(0, limit)
 
-    const nextCursor = hasMore && items.length > 0 ? items[items.length - 1].id : undefined
+    const nextCursor = hasMore && page.length > 0 ? page[page.length - 1].id : undefined
+
+    // A row whose execution is not this runner's run of this app is left out
+    // (lib/app-run-ownership.ts). The cursor still follows the page as read.
+    const items = page.filter((run) => {
+      const exec = run.workflow_executions as unknown as { user_id?: unknown; workflow_id?: unknown } | null
+      return !exec || executionBelongsToRun(exec, { runnerId: req.userId, workflowId })
+    })
 
     return reply.send({
       data: items.map((run) => {
@@ -808,7 +848,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
     const { data: run, error: runError } = await supabase
       .from("app_runs")
       .select(
-        "id, app_id, runner_id, execution_id, input_values, status, name, credits_used, hidden_nodes, node_states, created_at, published_apps!app_id(version, thumbnail_node_id), workflow_executions(id, status, node_states, total_nodes, completed_nodes, failed_nodes, total_credits_used, error_message, completed_at)"
+        "id, app_id, runner_id, execution_id, input_values, status, name, credits_used, hidden_nodes, node_states, created_at, published_apps!app_id(version, thumbnail_node_id, workflow_id), workflow_executions(id, user_id, workflow_id, status, node_states, total_nodes, completed_nodes, failed_nodes, total_credits_used, error_message, completed_at)"
       )
       .eq("id", runId)
       .eq("runner_id", req.userId)
@@ -832,7 +872,19 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       completed_at: string | null
     } | null
 
-    const pubApp = run.published_apps as unknown as { version: number; thumbnail_node_id: string | null } | null
+    const pubApp = run.published_apps as unknown as { version: number; thumbnail_node_id: string | null; workflow_id?: string | null } | null
+
+    // The run's execution must be the runner's run of this app; otherwise the
+    // run answers as missing — never another user's execution
+    // (lib/app-run-ownership.ts).
+    if (exec && !executionBelongsToRun(exec as unknown as { user_id?: unknown; workflow_id?: unknown }, {
+      runnerId: run.runner_id as string | null,
+      workflowId: pubApp?.workflow_id ?? null,
+    })) {
+      return reply.status(404).send({
+        error: { code: "not_found", message: "Run not found" },
+      })
+    }
 
     // Extract thumbnail URL
     let thumbnailUrl: string | null = null
@@ -904,14 +956,16 @@ export async function appRunnerRoutes(app: FastifyInstance) {
         .from("app_runs")
         .select("deleted_at")
         .eq("id", cursor)
-        .single()
+        // The caller's own run only (see the run list's cursor). No row → no cursor.
+        .eq("runner_id", req.userId)
+        .maybeSingle()
       cursorDate = cursorRow?.deleted_at as string | undefined
     }
 
     let query = supabase
       .from("app_runs")
       .select(
-        "id, app_id, created_at, deleted_at, name, input_values, status, credits_used, execution_id, node_states, published_apps!app_id(slug, name, icon_url, version, thumbnail_node_id), workflow_executions(node_states, total_credits_used, completed_at)"
+        "id, app_id, created_at, deleted_at, name, input_values, status, credits_used, execution_id, node_states, published_apps!app_id(slug, name, icon_url, version, thumbnail_node_id, workflow_id), workflow_executions(user_id, workflow_id, node_states, total_credits_used, completed_at)"
       )
       .eq("runner_id", req.userId)
       .not("deleted_at", "is", null)
@@ -928,8 +982,16 @@ export async function appRunnerRoutes(app: FastifyInstance) {
     }
 
     const hasMore = (runs?.length ?? 0) > limit
-    const items = (runs ?? []).slice(0, limit)
-    const nextCursor = hasMore && items.length > 0 ? items[items.length - 1].id : undefined
+    const page = (runs ?? []).slice(0, limit)
+    const nextCursor = hasMore && page.length > 0 ? page[page.length - 1].id : undefined
+
+    // Left out: a row whose execution is not the runner's run of its app
+    // (lib/app-run-ownership.ts).
+    const items = page.filter((run) => {
+      const exec = run.workflow_executions as unknown as { user_id?: unknown; workflow_id?: unknown } | null
+      const app = run.published_apps as unknown as { workflow_id?: string | null } | null
+      return !exec || executionBelongsToRun(exec, { runnerId: req.userId, workflowId: app?.workflow_id ?? null })
+    })
 
     return reply.send({
       data: items.map((run) => {

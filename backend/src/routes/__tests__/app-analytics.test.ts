@@ -51,6 +51,7 @@ import { supabase } from "../../lib/supabase.js"
 
 const TEST_USER_ID = "00000000-0000-4000-8000-000000000001"
 const OTHER_USER_ID = "00000000-0000-4000-8000-000000000099"
+const TEST_WORKFLOW_ID = "00000000-0000-4000-8000-000000000020"
 const TEST_APP_ID = "00000000-0000-4000-8000-000000000010"
 
 /**
@@ -312,6 +313,8 @@ describe("GET /v1/apps/:appId/analytics/runs", () => {
         credits_used: 5,
         created_at: "2026-03-05T12:00:00Z",
         workflow_executions: {
+          user_id: "00000000-0000-4000-8000-000000000002",
+          workflow_id: TEST_WORKFLOW_ID,
           status: "completed",
           completed_nodes: 3,
           total_nodes: 3,
@@ -324,6 +327,8 @@ describe("GET /v1/apps/:appId/analytics/runs", () => {
         credits_used: 10,
         created_at: "2026-03-05T11:00:00Z",
         workflow_executions: {
+          user_id: "00000000-0000-4000-8000-000000000003",
+          workflow_id: TEST_WORKFLOW_ID,
           status: "failed",
           completed_nodes: 1,
           total_nodes: 3,
@@ -335,7 +340,7 @@ describe("GET /v1/apps/:appId/analytics/runs", () => {
     vi.mocked(supabase.from).mockImplementation((table: string) => {
       if (table === "published_apps") {
         return buildPublishedAppsMock({
-          data: { id: TEST_APP_ID, creator_id: TEST_USER_ID },
+          data: { id: TEST_APP_ID, creator_id: TEST_USER_ID, workflow_id: TEST_WORKFLOW_ID },
           error: null,
         }) as never
       }
@@ -380,5 +385,35 @@ describe("GET /v1/apps/:appId/analytics/runs", () => {
       totalNodes: 3,
       completedAt: null,
     })
+  })
+  it("leaves out a run whose execution is not its runner's, or not of the app's workflow (decided 2026-10-06)", async () => {
+    const runner = "00000000-0000-4000-8000-000000000002"
+    const exec = { status: "completed", completed_nodes: 1, total_nodes: 1, completed_at: null }
+    const runRows = [
+      { id: "00000000-0000-4000-8000-000000000061", runner_id: runner, credits_used: 1, created_at: "2026-03-05T12:00:00Z",
+        workflow_executions: { ...exec, user_id: runner, workflow_id: TEST_WORKFLOW_ID } },
+      { id: "00000000-0000-4000-8000-000000000062", runner_id: runner, credits_used: 1, created_at: "2026-03-05T11:00:00Z",
+        workflow_executions: { ...exec, user_id: OTHER_USER_ID, workflow_id: TEST_WORKFLOW_ID } },
+      { id: "00000000-0000-4000-8000-000000000063", runner_id: runner, credits_used: 1, created_at: "2026-03-05T10:00:00Z",
+        workflow_executions: { ...exec, user_id: runner, workflow_id: "00000000-0000-4000-8000-0000000000f9" } },
+    ]
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === "published_apps") {
+        return buildPublishedAppsMock({
+          data: { id: TEST_APP_ID, creator_id: TEST_USER_ID, workflow_id: TEST_WORKFLOW_ID },
+          error: null,
+        }) as never
+      }
+      return buildRunsMock({ data: runRows, error: null }) as never
+    })
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/apps/${TEST_APP_ID}/analytics/runs?limit=20`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.map((r: { id: string }) => r.id)).toEqual(["00000000-0000-4000-8000-000000000061"])
   })
 })

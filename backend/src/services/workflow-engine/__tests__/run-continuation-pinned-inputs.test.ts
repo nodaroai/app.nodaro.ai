@@ -18,6 +18,8 @@ const db = vi.hoisted(() => ({
   /** The database has no `input_overrides` column yet (staging before promotion). */
   columnMissing: false,
   executionSelects: [] as string[],
+  /** The filters the app_runs lookup applied, as [column, value]. */
+  appRunFilters: [] as Array<[string, unknown]>,
 }))
 
 vi.mock("@/lib/supabase.js", () => ({
@@ -26,7 +28,10 @@ vi.mock("@/lib/supabase.js", () => ({
       select: (columns: string) => {
         if (table === "workflow_executions") db.executionSelects.push(columns)
         const self = {
-          eq: () => self,
+          eq: (column: string, value: unknown) => {
+            if (table === "app_runs") db.appRunFilters.push([column, value])
+            return self
+          },
           maybeSingle: async () => {
             if (table === "workflow_executions") {
               if (db.columnMissing && columns.includes("input_overrides")) {
@@ -58,6 +63,7 @@ beforeEach(() => {
   resetInputOverridesColumnForTests()
   db.columnMissing = false
   db.executionSelects.length = 0
+  db.appRunFilters.length = 0
   db.execution = { id: "exec-0", user_id: "u1", workflow_id: "wf-1", status: "completed", node_states: {}, input_overrides: null }
   db.appRun = null
 })
@@ -135,5 +141,14 @@ describe("the overrides a continuation re-applies: the earlier execution's pin",
       expect(source!.status).toBe("completed")
       expect(source!.inputOverrides ?? null).toBeNull()
     })
+  })
+})
+
+describe("the app run behind an execution is the execution owner's (decided 2026-10-06)", () => {
+  it("the app_runs lookup filters the execution's owner as the runner", async () => {
+    db.appRun = { app_id: "app-1", input_values: null }
+    await load()
+    expect(db.appRunFilters).toContainEqual(["execution_id", "exec-0"])
+    expect(db.appRunFilters).toContainEqual(["runner_id", "u1"])
   })
 })

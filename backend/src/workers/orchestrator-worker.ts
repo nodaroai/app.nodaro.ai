@@ -1633,11 +1633,13 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
           const percentFee = markup - flatFee
 
           if (markup > 0) {
-            // Look up the app_run row for this execution
+            // Look up the app_run row for this execution — the runner's own
+            // (lib/app-run-ownership.ts).
             const { data: appRun } = await supabase
               .from("app_runs")
               .select("id")
               .eq("execution_id", executionId)
+              .eq("runner_id", ctx.userId)
               .single()
 
             if (appRun) {

@@ -95,9 +95,11 @@ const DB_RUN_ROW = {
   runner_id: TEST_USER_ID,
   execution_id: TEST_EXECUTION_ID,
   created_at: "2026-01-01T12:00:00Z",
-  published_apps: { version: 1 },
+  published_apps: { version: 1, workflow_id: TEST_WORKFLOW_ID },
   workflow_executions: {
     id: TEST_EXECUTION_ID,
+    user_id: TEST_USER_ID,
+    workflow_id: TEST_WORKFLOW_ID,
     status: "completed",
     node_states: { n1: { status: "completed" } },
     total_nodes: 1,
@@ -611,6 +613,8 @@ describe("GET /v1/app/:slug/runs", () => {
       created_at: "2026-01-01T12:00:00Z",
       execution_id: TEST_EXECUTION_ID,
       workflow_executions: {
+        user_id: TEST_USER_ID,
+        workflow_id: TEST_WORKFLOW_ID,
         status: "completed",
         node_states: { n1: { status: "completed" } },
         completed_nodes: 1,
@@ -770,6 +774,276 @@ describe("GET /v1/app/:slug/runs/:runId", () => {
 
     expect(res.statusCode).toBe(200)
     expect(res.json().execution).toBeNull()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// A run's execution is the runner's own (decided 2026-10-06)
+// ---------------------------------------------------------------------------
+
+describe("a run shows only an execution its runner owns", () => {
+  /** Another user, whose execution a run row must never surface. */
+  const VICTIM_ID = "00000000-0000-4000-8000-0000000000a1"
+  const VICTIM_SECRET = "https://r2.example/victim-only.png"
+  const victimExecution = {
+    ...DB_RUN_ROW.workflow_executions,
+    user_id: VICTIM_ID,
+    node_states: { n1: { status: "completed", output: { url: VICTIM_SECRET } } },
+  }
+
+  it("attacker: a run row pointing at another user's execution answers 404 with no data", async () => {
+    // User B (TEST_USER_ID) owns the run row; its execution_id names user A's execution.
+    vi.mocked(supabase.from).mockImplementation(() => {
+      return createChainMock({ data: { ...DB_RUN_ROW, workflow_executions: victimExecution }, error: null }) as never
+    })
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/app/${TEST_SLUG}/runs/${TEST_RUN_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(404)
+    expect(res.json().error.code).toBe("not_found")
+    expect(res.body).not.toContain(VICTIM_SECRET)
+    expect(res.body).not.toContain(TEST_EXECUTION_ID)
+  })
+
+  it("an execution of another workflow than the app's answers 404", async () => {
+    const otherWorkflow = { ...DB_RUN_ROW.workflow_executions, workflow_id: "00000000-0000-4000-8000-0000000000b2" }
+    vi.mocked(supabase.from).mockImplementation(() => {
+      return createChainMock({ data: { ...DB_RUN_ROW, workflow_executions: otherWorkflow }, error: null }) as never
+    })
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/app/${TEST_SLUG}/runs/${TEST_RUN_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(404)
+  })
+
+  it("the run list leaves out a row whose execution is not the runner's", async () => {
+    const own = {
+      id: TEST_RUN_ID,
+      app_id: TEST_APP_ID,
+      created_at: "2026-01-01T12:00:00Z",
+      execution_id: TEST_EXECUTION_ID,
+      workflow_executions: { ...DB_RUN_ROW.workflow_executions },
+    }
+    const forged = {
+      ...own,
+      id: "00000000-0000-4000-8000-0000000000c3",
+      workflow_executions: victimExecution,
+    }
+    let callCount = 0
+    vi.mocked(supabase.from).mockImplementation(() => {
+      callCount++
+      if (callCount === 1) return createChainMock({ data: { workflow_id: TEST_WORKFLOW_ID }, error: null }) as never
+      if (callCount === 2) {
+        return createChainMock({ data: [{ id: TEST_APP_ID, version: 1, thumbnail_node_id: "n1" }], error: null }) as never
+      }
+      return createChainMock({ data: [forged, own], error: null }) as never
+    })
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/app/${TEST_SLUG}/runs`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.map((r: { id: string }) => r.id)).toEqual([TEST_RUN_ID])
+    expect(res.body).not.toContain(VICTIM_SECRET)
+  })
+
+  it("the archive leaves out a row whose execution is not the runner's", async () => {
+    const base = {
+      app_id: TEST_APP_ID,
+      created_at: "2026-01-01T12:00:00Z",
+      deleted_at: "2026-01-02T12:00:00Z",
+      execution_id: TEST_EXECUTION_ID,
+      published_apps: { slug: TEST_SLUG, name: "App", icon_url: null, version: 1, thumbnail_node_id: "n1", workflow_id: TEST_WORKFLOW_ID },
+    }
+    const own = { ...base, id: TEST_RUN_ID, runner_id: TEST_USER_ID, workflow_executions: { ...DB_RUN_ROW.workflow_executions } }
+    const forged = { ...base, id: "00000000-0000-4000-8000-0000000000c4", runner_id: TEST_USER_ID, workflow_executions: victimExecution }
+    vi.mocked(supabase.from).mockImplementation(() => {
+      return createChainMock({ data: [forged, own], error: null }) as never
+    })
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/me/archived-runs",
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.map((r: { id: string }) => r.id)).toEqual([TEST_RUN_ID])
+    expect(res.body).not.toContain(VICTIM_SECRET)
+  })
+
+  it("the PATCH writes only its allowlisted columns — server-owned fields in the body are ignored", async () => {
+    const updates: unknown[] = []
+    vi.mocked(supabase.from).mockImplementation(() => {
+      const chain = createChainMock({ data: { id: TEST_RUN_ID, name: "Renamed" }, error: null })
+      return {
+        update: (payload: unknown) => {
+          updates.push(payload)
+          return chain
+        },
+      } as never
+    })
+
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/v1/app/${TEST_SLUG}/runs/${TEST_RUN_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: {
+        name: "Renamed",
+        executionId: TEST_EXECUTION_ID,
+        execution_id: TEST_EXECUTION_ID,
+        runnerId: VICTIM_ID,
+        runner_id: VICTIM_ID,
+        appId: TEST_APP_ID,
+        status: "completed",
+        creditsUsed: 0,
+        deletedAt: null,
+      },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(updates).toEqual([{ name: "Renamed" }])
+  })
+
+  it("a PATCH that names only server-owned fields changes nothing (400)", async () => {
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/v1/app/${TEST_SLUG}/runs/${TEST_RUN_ID}`,
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { executionId: TEST_EXECUTION_ID, execution_id: TEST_EXECUTION_ID },
+    })
+
+    expect(res.statusCode).toBe(400)
+    expect(supabase.from).not.toHaveBeenCalled()
+  })
+})
+
+describe("the draft lane writes an execution only onto a run of this app", () => {
+  const OLD_VERSION_ID = "00000000-0000-4000-8000-000000000011"
+  const OTHER_APP_ID = "00000000-0000-4000-8000-0000000000e1"
+
+  /**
+   * A table-aware mock that APPLIES the route's filters (eq / in / is) to a
+   * stored row, so a missing scope shows up as a wrong write — the plain
+   * chain mock ignores every argument.
+   */
+  function setupDraftLane(run: Record<string, unknown>) {
+    const runs = new Map<string, Record<string, unknown>>([[run.id as string, { ...run }]])
+    const executionInserts: unknown[] = []
+    const runUpdates: unknown[] = []
+    const versions = [
+      { id: TEST_APP_ID, workflow_id: TEST_WORKFLOW_ID, deleted_at: null },
+      { id: OLD_VERSION_ID, workflow_id: TEST_WORKFLOW_ID, deleted_at: null },
+      { id: OTHER_APP_ID, workflow_id: "00000000-0000-4000-8000-0000000000e2", deleted_at: null },
+    ]
+    function chain(table: string) {
+      const filters: Array<(row: Record<string, unknown>) => boolean> = []
+      let op: "select" | "insert" | "update" = "select"
+      let payload: Record<string, unknown> | undefined
+      const rowsOf = (): Array<Record<string, unknown>> =>
+        table === "app_runs" ? [...runs.values()] : table === "published_apps" ? versions : []
+      const resolve = (single: boolean) => {
+        if (table === "workflow_executions") {
+          if (op === "insert") executionInserts.push(payload)
+          return { data: { id: TEST_EXECUTION_ID }, error: null }
+        }
+        if (table === "published_apps" && single) {
+          return { data: { ...DB_APP_ROW, max_runs_per_user_per_day: null }, error: null }
+        }
+        const matched = rowsOf().filter((r) => filters.every((f) => f(r)))
+        if (table === "app_runs" && op === "update") {
+          for (const r of matched) {
+            runUpdates.push(payload)
+            runs.set(r.id as string, { ...r, ...payload })
+          }
+        }
+        if (single) return matched.length === 1 ? { data: matched[0], error: null } : { data: null, error: { code: "PGRST116" } }
+        return { data: matched, error: null }
+      }
+      const c: Record<string, unknown> = {
+        select: () => c,
+        insert: (p: Record<string, unknown>) => { op = "insert"; payload = p; return c },
+        update: (p: Record<string, unknown>) => { op = "update"; payload = p; return c },
+        eq: (col: string, v: unknown) => { filters.push((r) => r[col] === undefined || r[col] === v); return c },
+        in: (col: string, vs: unknown[]) => { filters.push((r) => vs.includes(r[col])); return c },
+        is: (col: string, v: unknown) => { filters.push((r) => (r[col] ?? null) === v); return c },
+        order: () => c,
+        limit: () => c,
+        single: async () => resolve(true),
+        maybeSingle: async () => {
+          const r = resolve(true)
+          return r.data ? r : { data: null, error: null }
+        },
+        then: (ok: (v: unknown) => void) => ok(resolve(false)),
+      }
+      return c
+    }
+    vi.mocked(supabase.from).mockImplementation(((table: string) => chain(table)) as never)
+    return { runs, executionInserts, runUpdates }
+  }
+
+  const runRow = (overrides: Record<string, unknown>) => ({
+    id: TEST_RUN_ID,
+    app_id: TEST_APP_ID,
+    runner_id: TEST_USER_ID,
+    execution_id: null,
+    status: "draft",
+    deleted_at: null,
+    ...overrides,
+  })
+
+  const post = () =>
+    app.inject({
+      method: "POST",
+      url: `/v1/app/${TEST_SLUG}/run`,
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { runId: TEST_RUN_ID },
+    })
+
+  it("a runId from another app answers 404, leaves the row unchanged, and starts no execution", async () => {
+    const before = runRow({ app_id: OTHER_APP_ID, status: "completed", execution_id: "00000000-0000-4000-8000-0000000000e3" })
+    const { runs, executionInserts, runUpdates } = setupDraftLane(before)
+
+    const res = await post()
+
+    expect(res.statusCode).toBe(404)
+    expect(runUpdates).toEqual([])
+    expect(runs.get(TEST_RUN_ID)).toEqual(before)
+    // Checked before the execution row is written — no orphaned pending execution.
+    expect(executionInserts).toEqual([])
+    expect(orchestrationQueue.add).not.toHaveBeenCalled()
+  })
+
+  it("a draft made on an older version of the same app still runs", async () => {
+    const { runs, executionInserts } = setupDraftLane(runRow({ app_id: OLD_VERSION_ID }))
+
+    const res = await post()
+
+    expect(res.statusCode).toBe(202)
+    expect(executionInserts).toHaveLength(1)
+    expect(runs.get(TEST_RUN_ID)).toMatchObject({ execution_id: TEST_EXECUTION_ID, status: "running" })
+  })
+
+  it("someone else's run answers 404 and starts no execution", async () => {
+    const before = runRow({ runner_id: "00000000-0000-4000-8000-0000000000a9" })
+    const { runs, executionInserts } = setupDraftLane(before)
+
+    const res = await post()
+
+    expect(res.statusCode).toBe(404)
+    expect(runs.get(TEST_RUN_ID)).toEqual(before)
+    expect(executionInserts).toEqual([])
   })
 })
 

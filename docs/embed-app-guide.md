@@ -363,6 +363,8 @@ Response shape:
 
 Show errors from `execution.errorMessage` on failure.
 
+**What a run's owner can change.** Only `name`, `inputValues`, `hiddenNodes` and `nodeStates` (the user's edits shown over the results), through `PATCH /v1/app/:slug/runs/:runId`. Every other field — `executionId`, the app, `status`, `creditsUsed`, the archive state — belongs to the server: a `PATCH` ignores them, and a `PATCH` that names nothing else answers `400 bad_request`. A run only ever shows its own execution: if a run's execution is not the run owner's run of that app, `GET /v1/app/:slug/runs/:runId` answers `404 not_found`, and the run lists leave the run out.
+
 ---
 
 ## 6. Step 5 — Extract and display the output
@@ -485,7 +487,7 @@ All errors have shape `{ "error": { "code": "...", "message": "..." } }`.
 | 401 | `unauthorized` | Missing/expired/revoked token | Re-mint or re-authorize |
 | 402 | `insufficient_app_credits` | Token's account is out of credits | Top up credits or switch plan |
 | 403 | `insufficient_scope` (with `missingScope` field) | OAuth token doesn't have required scope | Re-do `/oauth/authorize` with broader scopes |
-| 404 | `not_found` | Slug or runId doesn't exist (or app deactivated) | Check the slug; surface "App unavailable" |
+| 404 | `not_found` | Slug or runId doesn't exist (or app deactivated), or the run's execution is not the run owner's | Check the slug; surface "App unavailable" |
 | 429 | `rate_limit_exceeded` | Daily run cap (`maxRunsPerUserPerDay`) reached | Show "Daily limit reached" UI |
 | 500 | `internal_error` | Server fault | Retry once with backoff; alert if persistent |
 

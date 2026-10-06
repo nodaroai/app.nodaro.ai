@@ -164,6 +164,8 @@ export async function loadContinuationSource(
     .from("app_runs")
     .select(withOverrides && pinned === null ? "app_id, input_values" : "app_id")
     .eq("execution_id", executionId)
+    // The execution owner's run only (lib/app-run-ownership.ts).
+    .eq("runner_id", execution.user_id)
     .maybeSingle()
   if (appRunError) throw new Error(`continuation: ${appRunError.message}`)
   const appRow = appRun as { app_id?: string | null; input_values?: unknown } | null

@@ -379,7 +379,7 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: { code: "validation_error", message: "jobId must be a UUID" } })
     }
     const isAdmin = req.userRole === "admin" || req.userRole === "super_admin"
-    let query = supabase.from("jobs").select("provider, input_data").eq("id", params.data.jobId)
+    let query = supabase.from("jobs").select("user_id, provider, input_data").eq("id", params.data.jobId)
     if (!isAdmin) query = query.eq("user_id", req.userId)
     const { data: wrapper } = await query.maybeSingle()
     // Only a component WRAPPER has an inner execution; any other job (or one
@@ -387,14 +387,28 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
     if (!wrapper || wrapper.provider !== "component") {
       return reply.status(404).send({ error: { code: "not_found", message: "Component run not found" } })
     }
-    const inner = (wrapper.input_data as Record<string, unknown> | null)?._executionId
+    // `_executionId` sits in client-writable job input (a client may insert
+    // its own jobs row), so it is only a pointer to check: the inner run counts
+    // only when the wrapper's owner owns it. Anyone else's execution reads as
+    // "no inner run" — its budget is never looked at.
+    const stamped = (wrapper.input_data as Record<string, unknown> | null)?._executionId
+    let inner: string | null = null
+    if (typeof stamped === "string") {
+      const { data: innerRow } = await supabase
+        .from("workflow_executions")
+        .select("id")
+        .eq("id", stamped)
+        .eq("user_id", wrapper.user_id as string)
+        .maybeSingle()
+      if (innerRow) inner = stamped
+    }
     // `pendingBudgetedNodes`: the run may STILL dispatch a long render (one is
     // in its graph and has not settled). The excess only counts renders
     // already dispatched, so without this a client asking while the run is
     // still in its early steps would read "nothing budgeted" and give up on a
     // run the server keeps waiting on. No inner run stamped → false (a wrapper
     // with no inner run has nothing to wait for).
-    const [budgetExcessMs, pendingBudgetedNodes] = typeof inner === "string"
+    const [budgetExcessMs, pendingBudgetedNodes] = inner !== null
       ? await Promise.all([executionBudgetExcessMs(inner), executionMayDispatchBudgetedJob(inner)])
       : [0, false]
     return reply.send({
