@@ -641,6 +641,11 @@ const CHARACTER_REFERENCES_BYTES = 489
 // `build_ugc_clips`. measured by this suite: 404_519 total − 401_613 base = 2_906 B, each tool
 // far under the 8_192 B per-tool budget.
 const UGC_JOB_TOOLS_BYTES = 2_906
+// RAISED by two arguments on `combine_videos` and nothing else: `trim_start_frames` /
+// `trim_end_frames` (the join trims the route already takes, integers 0-120; one short
+// description line each). No tool was added, so the fixture does NOT move. measured by this
+// suite: 404_925 total - 404_519 base = 406 B, which keeps the 14 B of headroom the list had.
+const COMBINE_VIDEOS_TRIM_ARGS_BYTES = 406
 
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES,
@@ -710,7 +715,8 @@ export const TOOL_WIRE_BUDGET = {
     TTS_NEIGHBOUR_TEXT_ARGS_BYTES +
     VOICE_CHANGER_PRO_V4_ENGINE_BYTES +
     CHARACTER_REFERENCES_BYTES +
-    RENDER_FINAL_TOOL_BYTES,
+    RENDER_FINAL_TOOL_BYTES +
+    COMBINE_VIDEOS_TRIM_ARGS_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

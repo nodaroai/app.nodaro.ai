@@ -372,6 +372,64 @@ describe("combine_videos verb", () => {
     expect((received.body?.videoUrls as string[]).length).toBe(2)
   })
 
+  it("forwards trim_start_frames / trim_end_frames as trimStartFrames / trimEndFrames", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/combine-videos", { jobId: "j-cv-trim" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    const result = await callTool(server, "combine_videos", {
+      videos: [{ url: "https://a/v1.mp4" }, { url: "https://a/v2.mp4" }],
+      trim_start_frames: 1,
+      trim_end_frames: 2,
+    })
+
+    expect(result.isError).toBeUndefined()
+    expect(received.body?.trimStartFrames).toBe(1)
+    expect(received.body?.trimEndFrames).toBe(2)
+  })
+
+  it("forwards an explicit 0 trim (0 is a real value, not 'unset')", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/combine-videos", { jobId: "j-cv-zero" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    await callTool(server, "combine_videos", {
+      videos: [{ url: "https://a/v1.mp4" }, { url: "https://a/v2.mp4" }],
+      trim_start_frames: 0,
+      trim_end_frames: 0,
+    })
+
+    expect(received.body?.trimStartFrames).toBe(0)
+    expect(received.body?.trimEndFrames).toBe(0)
+  })
+
+  it("omits the trim fields when not given, so the route default stays in force", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/combine-videos", { jobId: "j-cv-omit" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    await callTool(server, "combine_videos", {
+      videos: [{ url: "https://a/v1.mp4" }, { url: "https://a/v2.mp4" }],
+    })
+
+    expect(received.body).not.toHaveProperty("trimStartFrames")
+    expect(received.body).not.toHaveProperty("trimEndFrames")
+  })
+
+  it("rejects an out-of-range trim (route bounds: integer 0..120)", async () => {
+    const { fastify } = stubRoute("POST", "/v1/combine-videos", { jobId: "j" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    for (const bad of [{ trim_start_frames: 121 }, { trim_end_frames: -1 }, { trim_end_frames: 1.5 }]) {
+      const result = await callTool(server, "combine_videos", {
+        videos: [{ url: "https://a/v1.mp4" }, { url: "https://a/v2.mp4" }],
+        ...bad,
+      })
+      expect(result.isError).toBe(true)
+    }
+  })
+
   it("returns isError if a video item lacks url and asset_id", async () => {
     const { fastify } = stubRoute("POST", "/v1/combine-videos", { jobId: "j" })
     const server = buildServer()

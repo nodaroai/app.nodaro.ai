@@ -853,6 +853,10 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .describe("Smart-cut search window at each clip's END (frames, default 8)"),
         smart_cut_frames_next: z.number().int().min(1).max(24).optional()
           .describe("Smart-cut search window at each clip's START (frames, default 8)"),
+        trim_start_frames: z.number().int().min(0).max(120).optional()
+          .describe("Frames trimmed from the START of each non-first clip (default 1). Pin it for frame-exact cuts; also the smart-cut fallback."),
+        trim_end_frames: z.number().int().min(0).max(120).optional()
+          .describe("Frames trimmed from the END of each non-final clip (default 2). Pin it for frame-exact cuts; also the smart-cut fallback."),
       },
               outputSchema: {
           jobId: z.string(),
@@ -912,6 +916,8 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         smartCutMode: args.smart_cut_mode,
         smartCutFramesPrev: args.smart_cut_frames_prev,
         smartCutFramesNext: args.smart_cut_frames_next,
+        ...(args.trim_start_frames !== undefined ? { trimStartFrames: args.trim_start_frames } : {}),
+        ...(args.trim_end_frames !== undefined ? { trimEndFrames: args.trim_end_frames } : {}),
         mcp_client: session.clientName,
         userId: session.userId,
       }

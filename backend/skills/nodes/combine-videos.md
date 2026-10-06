@@ -1,7 +1,7 @@
 ---
 node_type: combine-videos
-generated_at: 2026-10-06T06:15:10.228Z
-generated_from: 9d6d0a802
+generated_at: 2026-10-06T21:41:17.943Z
+generated_from: a76eff433
 ---
 
 # Combine Videos
@@ -73,6 +73,8 @@ generated_from: 9d6d0a802
 - `smart_cut_mode`
 - `smart_cut_frames_prev`
 - `smart_cut_frames_next`
+- `trim_start_frames`
+- `trim_end_frames`
 <!-- AUTO-GEN:END mcp-call -->
 
 ## Common gotchas

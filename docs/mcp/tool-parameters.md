@@ -423,6 +423,8 @@ Needs `workflows:execute`.
 | `smart_cut_mode` | string |  | Smart-cut cut-point algorithm. Default 'best-pair'. The preroll variants differ in which side of an overlap survives: 'preroll-keep-next' favors the incoming clip, 'preroll-keep-prev' the outgoing one. Same search windows and fixed-trims fallback in every mode. One of `best-pair`, `preroll-keep-prev`, `preroll-keep-next`. |
 | `smart_cut_frames_prev` | integer |  | Smart-cut search window at each clip's END (frames, default 8). From 1 to 24. |
 | `smart_cut_frames_next` | integer |  | Smart-cut search window at each clip's START (frames, default 8). From 1 to 24. |
+| `trim_start_frames` | integer |  | Frames trimmed from the START of each non-first clip (default 1). Pin it for frame-exact cuts; also the smart-cut fallback. From 0 to 120. |
+| `trim_end_frames` | integer |  | Frames trimmed from the END of each non-final clip (default 2). Pin it for frame-exact cuts; also the smart-cut fallback. From 0 to 120. |
 
 ## `competitor_cards`
 
