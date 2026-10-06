@@ -1653,11 +1653,17 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
   // planned. A clip set keeps the PLAN's rows, with "" at every dropped clip
   // (TA16), so a fan-out skips them and the scalar read (`getPrimaryOutput`,
   // the first item of `json`) is the first kept clip.
+  // When the review applies, `json` is no longer the plan as planned, so the
+  // state also carries the plan (`plannedJson`): a run continued from this
+  // execution judges a newer review against it (run-continuation.ts). The
+  // resolver hands the plan object back unchanged when no review applies; were
+  // it ever to copy it, `plannedJson` would only be set needlessly, never wrong.
   if (type === "edit-plan") {
     const saved = editPlanSavedOutput(data)
     if (!saved) return undefined
     const out: NodeOutput = { json: saved.json }
     if (saved.listResults) out.listResults = saved.listResults
+    if (saved.json !== data.generatedJson) out.plannedJson = data.generatedJson
     return out
   }
 

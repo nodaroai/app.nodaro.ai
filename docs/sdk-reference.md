@@ -605,6 +605,32 @@ sets the render to Final
 await client.workflows.run(id, { inputOverrides: { [renderNodeId]: { quality: "final" } } })
 ```
 
+`continueFromExecutionId` continues an earlier execution of the workflow — your
+own, `completed`, of the workflow itself — instead of starting over: the run
+executes `nodeIds` only (required with it), and every other node hands on what
+that execution produced, never the workflow's saved results in their place (a
+node that execution did not run either hands on the saved results it handed on
+there; an Edit Plan hands on its plan with your current review applied).
+The `inputOverrides` the earlier run applied are recorded on its execution and
+applied again, with the continuation's own `inputOverrides` over them, field by
+field (an execution that started before they were recorded has none: only the
+ones you pass apply).
+Render final after a run that stopped at its preview:
+
+```ts
+await client.workflows.run(id, {
+  nodeIds: [renderNodeId, ...nodesAfterIt],
+  inputOverrides: { [renderNodeId]: { quality: "final" } },
+  continueFromExecutionId: previewRunId,
+})
+```
+
+A refused continuation throws before any execution exists: `NotFoundError`
+(`continuation_not_found`), or a `NodaroError` whose `code` is
+`continuation_subset_required`, `continuation_workflow_mismatch`,
+`continuation_version_mismatch` or `continuation_not_completed`
+([details](./api-integration.md#continuing-a-run)).
+
 Throws `InsufficientCreditsError` if the user can't cover the worst-case cost.
 Requires `workflows:execute` scope when called via OAuth.
 
@@ -5734,7 +5760,7 @@ not two.
 - `ListWorkflowsParams` — `{ projectId }`
 - `CreateWorkflowInput` — `{ projectId, name, ... }`
 - `UpdateWorkflowInput` — partial workflow fields
-- `RunWorkflowParams` — `{ nodeIds? }`
+- `RunWorkflowParams` — `{ nodeIds?, inputOverrides?, continueFromExecutionId? }`
 - `RunWorkflowResult` — `{ executionId, status }`
 
 ### Projects

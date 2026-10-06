@@ -6,6 +6,7 @@ import {
   NotFoundError,
   NodaroError,
   WorkflowConflictError,
+  type RunWorkflowParams,
 } from "../../index.js"
 
 function mockOk<T>(body: T) {
@@ -91,6 +92,35 @@ describe("workflows resource", () => {
       nodeIds: ["cut", "cap"],
       inputOverrides: { cut: { quality: "final" } },
     })
+  })
+
+  it("run continues from an earlier execution: the nodes not named hand on that execution's output", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ executionId: "ex-2", status: "pending" }))
+    const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    const params = {
+      nodeIds: ["cut", "cap"],
+      inputOverrides: { cut: { quality: "final" } },
+      continueFromExecutionId: "ex-1",
+    } satisfies RunWorkflowParams
+    await c.workflows.run("wf-1", params)
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual(params)
+  })
+
+  it("a refused continuation: not found is a NotFoundError, the rest carry their stable code", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockReturnValueOnce(
+        mockErr(404, { error: { code: "continuation_not_found", message: "The execution to continue from was not found." } }),
+      )
+      .mockReturnValueOnce(
+        mockErr(400, { error: { code: "continuation_version_mismatch", message: "another version" } }),
+      )
+    const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    const missing = await c.workflows.run("wf-1", { nodeIds: ["cut"], continueFromExecutionId: "ex-x" }).catch((e: unknown) => e)
+    expect(missing).toBeInstanceOf(NotFoundError)
+    const mismatch = await c.workflows.run("wf-1", { nodeIds: ["cut"], continueFromExecutionId: "ex-app" }).catch((e: unknown) => e)
+    expect(mismatch).toBeInstanceOf(NodaroError)
+    expect((mismatch as NodaroError).code).toBe("continuation_version_mismatch")
   })
 
   it("get throws NotFoundError on 404", async () => {

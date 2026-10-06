@@ -15,9 +15,12 @@
  * week's recipe to Content Ideas, an old scrape to a digest) with no sign
  * anything is wrong.
  *
- * Every state the run builds FROM saved data goes through `seededFromSavedData`;
- * a read of saved node data asks `savedDataAllowed` or goes through one of the
- * readers below (or `savedOutputFor` in output-extractor.ts).
+ * Every state the run builds FROM saved data goes through `seededFromSavedData`
+ * — or, in a run continued from an earlier execution, is that execution's
+ * own saved-data seed of a node it did not run, carried over as it was
+ * (`continuationSeeds`, run-continuation.ts); a read of saved node data asks
+ * `savedDataAllowed` or goes through one of the readers below (or
+ * `savedOutputFor` in output-extractor.ts).
  * `__tests__/saved-data-fallback-sites.test.ts` counts, per file, every call of
  * a saved-data reader and every read of a `SAVED_RESULT_FIELDS` field off a
  * node's data in the engine, so a new one fails the build until it is gated

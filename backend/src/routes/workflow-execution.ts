@@ -9,7 +9,7 @@ import { executionOutcome } from "@nodaro/shared"
 
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import { assertCanvasExecutionAllowed, SequenceExecutionRequiredError } from "@nodaro/shared"
+import { assertCanvasExecutionAllowed, PREVIEW_RENDER_NODE_TYPES, SequenceExecutionRequiredError, type SavedRenderStampReader } from "@nodaro/shared"
 import { supabase } from "../lib/supabase.js"
 import { resolveWebSurfaceFlag } from "../middleware/credit-guard.js"
 import { tryRemoveFromQueue } from "../lib/queue.js"
@@ -17,7 +17,7 @@ import { orchestrationQueue } from "../lib/orchestration-queue.js"
 import { refuseIfConsentPending } from "../lib/consent-gate.js"
 import { createSSEStream } from "../lib/sse.js"
 import { executionEvents, type ExecutionEvent } from "../lib/execution-events.js"
-import type { WorkflowExecutionJob } from "../services/workflow-engine/types.js"
+import type { SimpleNode, WorkflowExecutionJob } from "../services/workflow-engine/types.js"
 import { resolveBillingContext, shouldRefuseDegradedRun } from "../lib/billing-context.js"
 import { billingPairColumns } from "../lib/insert-job.js"
 import { ACTIVE_EXECUTION_STATUSES } from "../lib/request-helpers.js"
@@ -39,6 +39,15 @@ import { describeLockedOverrides, findLockedOverrides } from "../lib/input-overr
 import { migrateLegacyNodeType } from "../services/workflow-engine/normalize-node-types.js"
 import { accessAtLeast, canRunWorkflow, workflowAccessFromRow } from "../lib/workflow-access.js"
 import { toAccessRow } from "../lib/workflow-route-access.js"
+import {
+  CONTINUATION_REFUSAL_MESSAGE,
+  CONTINUATION_REFUSAL_STATUS,
+  continuationRefusal,
+  continuationInputOverrides,
+  continuationRenderStamps,
+  continuationSeeds,
+  loadContinuationSource,
+} from "../services/workflow-engine/run-continuation.js"
 
 openApiRegistry.registerPath({
   method: "post",
@@ -58,6 +67,15 @@ openApiRegistry.registerPath({
                 .openapi({
                   description:
                     "Optional subset of node IDs to execute. If omitted, the full workflow is executed.",
+                }),
+              continueFromExecutionId: z
+                .string()
+                .uuid()
+                .optional()
+                .openapi({
+                  description:
+                    "Continue from an earlier execution: your own completed run of this workflow (not of a published app version). " +
+                    "Requires nodeIds; every node not named hands on that execution's output instead of the workflow's saved results.",
                 }),
             })
             .openapi({
@@ -333,12 +351,78 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       (workflow.nodes as ReadonlyArray<{ id: string; type?: string; data?: Record<string, unknown> }>) ?? [],
     )
 
+    // A CONTINUED run (`continueFromExecutionId`): the nodes it does not run
+    // hand on what that earlier execution produced. Checked here so a refusal
+    // leaves no execution row; the orchestrator asks again (it is the wall
+    // every producer of the job field passes) and seeds from the execution.
+    // This route runs the live workflow, so an app run's execution is another
+    // version of the graph.
+    //
+    // The orchestrator applies the earlier execution's pinned overrides under
+    // the sent ones (`continuationInputOverrides`), so the checks below judge
+    // that same merged map (`effectiveOverrides`), read through the same column
+    // guard (`withPin`) — else they refuse a continuation the orchestrator
+    // would run (a pinned Final render), or let through one it would fail. The
+    // job still carries only the sent overrides: the orchestrator merges.
+    //
+    // A render the continuation does not run is read by its SEED — what the
+    // earlier execution rendered — as the orchestrator reads it
+    // (`continuationRenderStamps` over `continuationSeeds`). So when the
+    // Preview review is asked below (no reviewer), the states are read too,
+    // through the render registry, as the orchestrator reads them; else a
+    // seeded Preview would pass here and fail the run there.
+    //
+    // Who can review a Preview render: only a person in the editor. An API
+    // token, an OAuth app or an MCP client runs with nobody to press Render
+    // final, and so does a session JWT that is not the editor — the SDK's
+    // `supabaseAuth` and the thin product clients send one too. So the editor
+    // marks its own runs (`reviewer: "editor"` in the body); without that mark
+    // a run of a Preview render is refused below, before any row exists, unless
+    // its overrides set every such render to Final. Forging the mark only lets
+    // a caller stop their OWN run at a preview, so it needs no protection. The
+    // orchestrator asks again (the wall every lane passes).
+    const mcpClient = extractMcpClient(req.body)
+    const reviewerPresent = req.authKind === "jwt" && !mcpClient && body.reviewer === "editor"
+    let continueFromExecutionId: string | undefined
+    let effectiveOverrides = inputOverrides
+    let continuationRenders: ((nodes: readonly SimpleNode[]) => SavedRenderStampReader) | undefined
+    if (body.continueFromExecutionId !== undefined && body.continueFromExecutionId !== null) {
+      const parsedContinue = z.string().uuid().safeParse(body.continueFromExecutionId)
+      if (!parsedContinue.success) {
+        return reply.status(400).send({
+          error: { code: "validation_error", message: "continueFromExecutionId must be an execution id" },
+        })
+      }
+      const typeOf = new Map(
+        ((workflow.nodes as ReadonlyArray<{ id: string; type?: string }> | null) ?? []).map((node) => [node.id, node.type ?? ""]),
+      )
+      const source = await loadContinuationSource(
+        parsedContinue.data,
+        reviewerPresent
+          ? { withStates: false, withPin: true }
+          : { withStates: true, isRenderNode: (id) => PREVIEW_RENDER_NODE_TYPES.has(typeOf.get(id) ?? "") },
+      )
+      const refusal = continuationRefusal(source, { userId: req.userId, workflowId, nodeIds })
+      if (refusal) {
+        return reply.status(CONTINUATION_REFUSAL_STATUS[refusal]).send({
+          error: { code: refusal, message: CONTINUATION_REFUSAL_MESSAGE[refusal] },
+        })
+      }
+      continueFromExecutionId = parsedContinue.data
+      effectiveOverrides = continuationInputOverrides(source!, inputOverrides)
+      // Seeded from the SENT overrides, as the orchestrator seeds (`job.data.inputOverrides`).
+      const runNodeIds = new Set(nodeIds)
+      if (!reviewerPresent) {
+        continuationRenders = (nodes) => continuationRenderStamps(nodes, continuationSeeds(nodes, source!, runNodeIds, inputOverrides))
+      }
+    }
+
     // A run request may not re-point an outbound node (issue #1555). The merge
     // in the orchestrator refuses too; answering here spares the caller a
     // failed execution row.
     const lockedOverrides = findLockedOverrides(
       (workflow.nodes as ReadonlyArray<{ id: string; type?: string }> | null) ?? [],
-      inputOverrides,
+      effectiveOverrides,
     )
     if (lockedOverrides.length > 0) {
       return reply.status(400).send({
@@ -346,22 +430,17 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       })
     }
 
-    // Who can review a Preview render: only a person in the editor. An API
-    // token, an OAuth app or an MCP client runs with nobody to press Render
-    // final, and so does a session JWT that is not the editor — the SDK's
-    // `supabaseAuth` and the thin product clients send one too. So the editor
-    // marks its own runs (`reviewer: "editor"` in the body); without that mark
-    // a run of a Preview render is refused here, before any row exists, unless
-    // its overrides set every such render to Final. Forging the mark only lets
-    // a caller stop their OWN run at a preview, so it needs no protection. The
-    // orchestrator asks again (the wall every lane passes).
-    const mcpClient = extractMcpClient(req.body)
-    const reviewerPresent = req.authKind === "jwt" && !mcpClient && body.reviewer === "editor"
+    // The Preview review (who may review: see above).
     if (!reviewerPresent) {
       const refusal = previewReviewRefusal(
         (workflow.nodes as ReadonlyArray<{ id: string; type?: string; data?: Record<string, unknown> }> | null) ?? [],
         (workflow.edges as ReadonlyArray<{ source: string; target: string }> | null) ?? [],
-        { triggerType: "manual", nodeIds, inputOverrides },
+        {
+          triggerType: "manual",
+          nodeIds,
+          inputOverrides: effectiveOverrides,
+          ...(continuationRenders ? { savedRenders: continuationRenders } : {}),
+        },
       )
       if (refusal) return reply.status(400).send({ error: refusal })
     }
@@ -488,6 +567,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       billingContext,
       reviewerPresent,
       ...(inputOverrides ? { inputOverrides } : {}),
+      ...(continueFromExecutionId ? { continueFromExecutionId } : {}),
     }
 
     await orchestrationQueue.add("workflow-execution", jobData, {

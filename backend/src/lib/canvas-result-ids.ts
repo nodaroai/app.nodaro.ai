@@ -474,3 +474,124 @@ export function isCodecOwnedDocument(nodes: unknown, settings: unknown): boolean
     settings: obj(settings),
   })
 }
+
+// ---------------------------------------------------------------------------
+// An earlier run's node states, handed to a continued run as its seeds
+// ---------------------------------------------------------------------------
+
+/** One batch row's identity, as a run's state carries it (`RunResultRowStamp`). */
+export interface RunStateRowStamp {
+  readonly jobId?: string
+  readonly thumbnailUrl?: string
+  readonly quality?: string
+  readonly clipKey?: string
+}
+
+/** A node state as the stamp rule reads it (`NodeExecutionState`'s fields). */
+export interface RunStateLike {
+  readonly status?: string
+  readonly jobId?: string | null
+  readonly jobIds?: readonly string[] | null
+  readonly output?: {
+    readonly videoUrl?: string
+    readonly audioUrl?: string
+    readonly quality?: string
+    readonly clipKey?: string
+    readonly listResults?: readonly string[]
+    readonly listResultStamps?: readonly RunStateRowStamp[]
+  }
+}
+
+/** A row stamp filled from `job`, beside what the row already holds (never overwriting). */
+function withRowStampFill(stamp: RunStateRowStamp, job: JobFacts): RunStateRowStamp {
+  const s = jobRowStamp(job)
+  return {
+    ...(typeof stamp.jobId === "string" && stamp.jobId ? {} : { jobId: s.jobId }),
+    ...(s.thumbnailUrl && !stamp.thumbnailUrl ? { thumbnailUrl: s.thumbnailUrl } : {}),
+    ...(s.quality && !RENDER_QUALITIES.has(stamp.quality) ? { quality: s.quality } : {}),
+    ...(s.clipKey && !stamp.clipKey ? { clipKey: s.clipKey } : {}),
+    ...stamp,
+  }
+}
+
+/**
+ * The renders in an earlier execution's node states, stamped as a saved
+ * canvas's are (#1844's rule, decided 2026-10-05): a render made before renders
+ * were labelled carries a real job id and no `quality`, and a continued run
+ * that seeds from those states (`run-continuation.ts`) would hand a preview on
+ * as a final. Matched EXACTLY and UNIQUELY: one of the state's own jobs
+ * (`jobId` / `jobIds`), a completed render job (`isRenderNodeType`) of `ownerUserId` (the user who
+ * started that execution), whose output URL is the result's URL — the scalar
+ * output's, and each batch row's own (`listResults`), never by position.
+ *
+ * Pure but for the one lookup (injected in tests). The SAME object comes back
+ * when nothing needed a stamp, nothing matched, or the lookup failed: a run is
+ * never failed over a label, exactly as a canvas read is not.
+ */
+export async function resolveRunStateStamps<S extends Record<string, RunStateLike>>(
+  states: S,
+  isRenderNode: (nodeId: string) => boolean,
+  ownerUserId: string,
+  opts: { readonly fetchJobs?: FetchJobFacts } = {},
+): Promise<S> {
+  const wanted = new Map<string, readonly string[]>()
+  for (const [nodeId, state] of Object.entries(states)) {
+    if (!isRenderNode(nodeId) || state?.status !== "completed" || !state.output) continue
+    const out = state.output
+    const rows = out.listResults ?? []
+    const scalarUnlabelled = !RENDER_QUALITIES.has(out.quality) && !!(out.videoUrl || out.audioUrl)
+    const rowUnlabelled = rows.some((url, i) => !!url && !RENDER_QUALITIES.has(out.listResultStamps?.[i]?.quality))
+    if (!scalarUnlabelled && !rowUnlabelled) continue
+    const ids = [...new Set([state.jobId, ...(state.jobIds ?? [])])].filter(
+      (j): j is string => typeof j === "string" && UUID.test(j),
+    )
+    if (ids.length > 0) wanted.set(nodeId, ids)
+  }
+  if (wanted.size === 0) return states
+  let jobs: readonly JobFacts[]
+  try {
+    jobs = await (opts.fetchJobs ?? fetchJobFacts)(ownerUserId, { nodeIds: [], jobIds: [...new Set([...wanted.values()].flat())] })
+  } catch {
+    return states
+  }
+  const mine = new Map(
+    jobs.filter((j) => j.userId === ownerUserId && j.status === "completed" && isRenderNodeType(j.jobType)).map((j) => [j.id, j]),
+  )
+  /** The one job of `ids` whose output URL is `url`; none when zero or several. */
+  const jobFor = (ids: readonly string[], url: string | undefined): JobFacts | undefined => {
+    if (!url) return undefined
+    const hits = ids.map((j) => mine.get(j)).filter((j): j is JobFacts => !!j && jobOutputUrl(j) === url)
+    return hits.length === 1 ? hits[0] : undefined
+  }
+
+  let changed = false
+  const next: Record<string, RunStateLike> = { ...states }
+  for (const [nodeId, ids] of wanted) {
+    const state = states[nodeId]!
+    const out = state.output!
+    let output: NonNullable<RunStateLike["output"]> = out
+    if (!RENDER_QUALITIES.has(out.quality)) {
+      const job = jobFor(ids, out.videoUrl || out.audioUrl)
+      const s = job ? jobRowStamp(job) : undefined
+      if (s?.quality) output = { ...output, quality: s.quality, ...(s.clipKey && !out.clipKey ? { clipKey: s.clipKey } : {}) }
+    }
+    const rows = out.listResults
+    if (rows && rows.length > 0) {
+      let rowsChanged = false
+      const stamps = rows.map((url, i) => {
+        const stamp: RunStateRowStamp = out.listResultStamps?.[i] ?? {}
+        if (!url || RENDER_QUALITIES.has(stamp.quality)) return stamp
+        const job = jobFor(ids, url)
+        if (!job) return stamp
+        rowsChanged = true
+        return withRowStampFill(stamp, job)
+      })
+      if (rowsChanged) output = { ...output, listResultStamps: stamps }
+    }
+    if (output !== out) {
+      next[nodeId] = { ...state, output }
+      changed = true
+    }
+  }
+  return (changed ? next : states) as S
+}

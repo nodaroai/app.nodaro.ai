@@ -759,6 +759,15 @@ export {
   type SavedRenderQualityStamp,
   type SavedRenderStampReader,
 } from "./preview-gate.js"
+export {
+  CONTINUATION_NOT_FOUND,
+  CONTINUATION_WORKFLOW_MISMATCH,
+  CONTINUATION_VERSION_MISMATCH,
+  CONTINUATION_NOT_COMPLETED,
+  CONTINUATION_SUBSET_REQUIRED,
+  RUN_CONTINUATION_CODES,
+  type RunContinuationCode,
+} from "./run-continuation.js"
 
 export {
   SCHEDULE_RULE_KINDS,

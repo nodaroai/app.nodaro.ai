@@ -87,6 +87,18 @@ export interface RunWorkflowParams {
    * `{ [renderNodeId]: { quality: "final" } }`.
    */
   inputOverrides?: Record<string, Record<string, unknown>>
+  /**
+   * Continue from an earlier execution of this workflow — Render final after a
+   * run that stopped at its preview. The run executes `nodeIds` only (required
+   * with this field); every other node hands on what that execution produced,
+   * not the workflow's saved results, and an Edit Plan hands on its plan with
+   * the person's review applied. The execution must be your own `completed`
+   * run of this workflow (not of a published app version). Refused with
+   * `continuation_subset_required`, `continuation_not_found` (404),
+   * `continuation_workflow_mismatch`, `continuation_version_mismatch` or
+   * `continuation_not_completed` (409).
+   */
+  continueFromExecutionId?: string
 }
 
 export interface RunWorkflowResult {

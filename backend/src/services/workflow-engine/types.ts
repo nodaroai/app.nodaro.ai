@@ -36,6 +36,13 @@ export interface NodeOutput {
   reduceMeta?: Record<string, unknown>
   /** JSON output for web-scrape and future JSON-emitting nodes. */
   json?: unknown
+  /** An Edit Plan state whose `json` is NOT the plan as planned — a seed (from
+   *  saved data, or from an earlier execution) with the person's review
+   *  applied — carries the plan as planned here, so a later continuation
+   *  judges a newer review against the plan it was made on. Absent: `json` IS
+   *  the plan as planned (the plan ran, or no review applied). See
+   *  `run-continuation.ts`. */
+  plannedJson?: unknown
   /** Extract Field node output — newline-joined list of extracted values. */
   extractedText?: string
   /** Generate Text (llm-chat) second output — the result split on `===NEXT===`
@@ -225,6 +232,14 @@ export interface NodeExecutionState {
    *  Skip, a node outside a partial run's subset. Only then may a reader fall
    *  back to the node's saved results — see `saved-data.ts`. */
   fromSavedData?: true
+  /** A continued run (`WorkflowExecutionJob.continueFromExecutionId`) built
+   *  this state from that EARLIER execution's state of the node, not by
+   *  running it: the id of that execution. Saved data only where that
+   *  execution's own state was (`fromSavedData`: a frozen node, or one outside
+   *  its subset — a source, parameter or Edit Plan only in a continuation of
+   *  an app run whose own overrides do not name it); otherwise no reader
+   *  falls back to the node's saved results — see `run-continuation.ts`. */
+  seededFromExecution?: string
   /** Why the RUN skipped this node (`empty-input-skips.ts`); a router-gated node carries none. */
   skipReason?: NodeSkipReason
 }
@@ -251,6 +266,22 @@ export interface WorkflowExecutionJob {
   triggerData?: Record<string, unknown>
   /** Optional subset of node IDs to execute (for "run from here" / "run selected"). */
   nodeIds?: string[]
+  /**
+   * Continue from an earlier execution of this workflow (Render final after a
+   * run that stopped at a preview): the run executes `nodeIds` only, and every
+   * other node hands on what THAT execution produced (its `node_states`, an
+   * Edit Plan with the person's review applied), never the workflow's saved
+   * results. The execution must be the caller's own, of this workflow and
+   * this version of its graph (`appVersionId`, or the live workflow on both
+   * sides), and ended `completed`; the worker refuses otherwise, with the
+   * stable codes in `@nodaro/shared` run-continuation. The run re-applies
+   * the input overrides that execution applied — pinned on it when it started
+   * (`lib/execution-input-overrides.ts`); an execution from before the pin
+   * falls back to an app run's `app_runs.input_values` — and `inputOverrides`
+   * here win over them, field by field. See
+   * `services/workflow-engine/run-continuation.ts`.
+   */
+  continueFromExecutionId?: string
   /**
    * For a triggered run: the trigger node that fired (the trigger row's
    * `config.nodeId`). The worker runs the branch behind it — see

@@ -131,6 +131,88 @@ function nodeReaders(): Set<string> {
 
 const fileOf = (key: string) => key.split("::")[0]
 
+// ---------------------------------------------------------------------------
+// An execution's node states (A6.2)
+// ---------------------------------------------------------------------------
+
+/**
+ * The same rule reaches a run's STATES once one run seeds another: a continued
+ * run (`continueFromExecutionId`) hands on an earlier execution's node states
+ * to the engine, and a render that execution made before renders were
+ * labelled must be stamped there (`resolveRunStateStamps`), or the stop rule
+ * reads a preview it hands on as a final. So every file that selects
+ * `node_states` from `workflow_executions` either resolves them or says why it
+ * seeds no run with them. File-keyed like the node tables above.
+ */
+const STATE_TABLE = "workflow_executions"
+const STATE_COLUMNS = /\bnode_states\b|\*/
+
+/** Reads of an execution's states that seed ANOTHER run: they resolve. */
+const STATE_RESOLVES: ReadonlyMap<string, string> = new Map([
+  ["services/workflow-engine/run-continuation.ts", "a continued run's seeds: the earlier execution's states, handed to the engine"],
+])
+
+/** Reads that seed no other run. */
+const STATE_EXEMPT: ReadonlyMap<string, string> = new Map([
+  ["workers/orchestrator-worker.ts", "a run's OWN states: the stale sweep, and a re-pick resuming the same execution"],
+  ["lib/reconcile/workflow-executions-cron.ts", "reconciles a running execution's own states against its jobs"],
+  ["lib/job-finalize.ts", "closes a single-node execution's own bookkeeping"],
+  ["lib/execution-budget.ts", "sums an execution's own budgets; hands no output on"],
+  ["lib/collect-app-r2-keys.ts", "harvests storage keys for deletion; hands nothing out"],
+  ["lib/app-report-sweep.ts", "files reports for failed executions; hands no output to a run"],
+  ["scripts/recover-stuck-execution.ts", "an operator script repairing one execution's status"],
+  ["routes/workflow-execution.ts", "hands an execution's states to its owner (detail, list, stream); seeds no run"],
+  ["routes/api-tokens.ts", "hands an API run's results to its caller (sync wait, /v1/api/result); seeds no run"],
+  ["routes/presentation.ts", "hands a present-link run's states to its viewer; seeds no run"],
+  ["routes/component-execute.ts", "hands a component's inner run — just started, and stamped as its results land — back to its caller"],
+  ["lib/mcp/tools/diagnose.ts", "describes an execution to an MCP client; seeds no run"],
+  ["lib/mcp/tools/gallery.ts", "lists an execution's outputs to an MCP client; seeds no run"],
+  ["ee/copilot/tools/get-graph.ts", "the last run's per-node status for the copilot; outputs are dropped"],
+  ["ee/copilot/tools/run-and-execution.ts", "a compact per-node status for the copilot; seeds no run"],
+])
+
+function stateReaders(): Set<string> {
+  const readers = new Set<string>()
+  const from = new RegExp(`\\.from\\(\\s*["'\`]${STATE_TABLE}["'\`]\\s*\\)`, "g")
+  for (const file of walk(SRC)) {
+    const src = readFileSync(file, "utf8")
+    for (const m of src.matchAll(from)) {
+      const rest = src.slice((m.index ?? 0) + m[0].length)
+      const next = rest.search(/\.from\(/)
+      const chain = rest.slice(0, next === -1 ? 1500 : Math.min(next, 1500))
+      const select = /\.select\(\s*([\s\S]*?)\)/.exec(chain)
+      if (!select) continue
+      const literal = /^["']([^"']*)["']\s*(,|$)/.exec(select[1].trim())
+      if (!literal || STATE_COLUMNS.test(literal[1])) readers.add(rel(file))
+    }
+  }
+  return readers
+}
+
+describe("every read of an execution's node states that seeds a run resolves render stamps", () => {
+  const readers = stateReaders()
+
+  it("finds the reads (a moved source tree must not pass vacuously)", () => {
+    expect(readers.size).toBeGreaterThan(10)
+    expect(readers.has("services/workflow-engine/run-continuation.ts")).toBe(true)
+  })
+
+  it("no file reads node states without resolving them or a reason", () => {
+    const unaccounted = [...readers].filter((f) => !STATE_RESOLVES.has(f) && !STATE_EXEMPT.has(f)).sort()
+    expect(unaccounted, "call resolveRunStateStamps, or add the file to STATE_EXEMPT with why it seeds no run").toEqual([])
+  })
+
+  it("every STATE_RESOLVES file calls the resolver", () => {
+    const missing = [...STATE_RESOLVES.keys()].filter((file) => !/\bresolveRunStateStamps\(/.test(readFileSync(join(SRC, file), "utf8")))
+    expect(missing).toEqual([])
+  })
+
+  it("no list entry is stale", () => {
+    expect([...STATE_RESOLVES.keys(), ...STATE_EXEMPT.keys()].filter((f) => !readers.has(f))).toEqual([])
+    expect([...STATE_RESOLVES.keys()].filter((f) => STATE_EXEMPT.has(f))).toEqual([])
+  })
+})
+
 describe("every server read of workflow nodes resolves canvas result ids", () => {
   const readers = nodeReaders()
 

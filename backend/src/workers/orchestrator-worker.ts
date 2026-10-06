@@ -1,4 +1,4 @@
-import { assertCanvasExecutionAllowed, findWordlessTranscriptFeeds, PREVIEW_REVIEW_REQUIRED, PREVIEW_RENDER_NESTED } from "@nodaro/shared"
+import { assertCanvasExecutionAllowed, findWordlessTranscriptFeeds, PREVIEW_REVIEW_REQUIRED, PREVIEW_RENDER_NESTED, PREVIEW_RENDER_NODE_TYPES, CONTINUATION_SUBSET_REQUIRED, type SavedRenderStampReader } from "@nodaro/shared"
 /**
  * Orchestrator worker — processes workflow executions.
  * Loads workflow graph, topological sort, executes nodes level-by-level.
@@ -48,7 +48,16 @@ import { normalizeLegacyNodeTypes } from "../services/workflow-engine/normalize-
 import { migrateGenerateImageHandles } from "../lib/generate-image-handle-migration.js"
 import { extractSourceNodeOutput, extractSavedNodeOutput, fanOutIterationValue } from "../services/workflow-engine/output-extractor.js"
 import { runPreviewStops, runHoldsPreview } from "../lib/preview-review-gate.js"
+import {
+  continuationInputOverrides,
+  continuationRefusal,
+  continuationRenderStamps,
+  continuationSeeds,
+  loadContinuationSource,
+  type ContinuationSource,
+} from "../services/workflow-engine/run-continuation.js"
 import { previewStopRuleEnabled } from "../lib/preview-stop-rule-flag.js"
+import { pinExecutionInputOverrides } from "../lib/execution-input-overrides.js"
 import { nestedPreviewRenders, nestedPreviewRenderLocation } from "../services/workflow-engine/nested-preview-renders.js"
 import { seededFromSavedData } from "../services/workflow-engine/saved-data.js"
 import { executeNode, loadCompletedFanOutIterations, type ExecuteNodeResult } from "../services/workflow-engine/node-executor.js"
@@ -493,7 +502,11 @@ function isFrozenLottieOverride(
  * the module's public surface — production callers use `createOrchestratorWorker`.
  */
 export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise<void> {
-  const { executionId, workflowId, userId, triggerType, triggerData, nodeIds, inputOverrides, appVersionId } = job.data
+  const { executionId, workflowId, userId, triggerType, triggerData, nodeIds, appVersionId } = job.data
+  // The overrides this run applies: the job's own, or — for a continuation —
+  // the earlier run's stored ones with the job's over them (set below, before
+  // the one merge every reader after it sees).
+  let inputOverrides = job.data.inputOverrides
   // An explicit subset ("run from here" / "run selected") wins; a triggered
   // run is scoped to the branch behind its trigger once the graph is loaded
   // (`runScope`, below).
@@ -678,6 +691,36 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
       ...(userProfile?.prompt_templates ? { userPromptTemplates: userProfile.prompt_templates } : {}),
     }
 
+    // A CONTINUED run (`continueFromExecutionId`: Render final after a run
+    // that stopped at its preview, an app's Render final). Asked here, before
+    // the override merge and before any node runs: the earlier execution must
+    // be the caller's own completed run of this workflow and this version of
+    // its graph. The run re-applies the input overrides that execution
+    // applied — its pin (written below when it started; round 3), or for an
+    // execution from before the pin an app run's `app_runs.input_values` —
+    // with the job's own over them (round 2, decided 2026-10-06) — ONE merge below, so
+    // every reader after it (the catalog guard, the stop rule, the seeds, the
+    // lottie freeze) sees the same graph. Every node the run does not execute
+    // is then seeded from THAT execution's states — never from the workflow's
+    // saved results — and the stop rule reads a render it does not run by its
+    // seed (run-continuation.ts).
+    let continuationSource: ContinuationSource | null = null
+    if (job.data.continueFromExecutionId) {
+      const typeOf = new Map(nodes.map((n) => [n.id, n.type]))
+      const source = await loadContinuationSource(job.data.continueFromExecutionId, {
+        withStates: true,
+        isRenderNode: (id) => PREVIEW_RENDER_NODE_TYPES.has(typeOf.get(id) ?? ""),
+      })
+      const refusal = continuationRefusal(source, { userId, workflowId, appVersionId, nodeIds: job.data.nodeIds })
+      if (refusal || !source || !nodeSubset) {
+        console.warn(`[continuation] execution ${executionId} REFUSED — ${refusal} (from ${job.data.continueFromExecutionId})`)
+        await failExecution(executionId, refusal ?? CONTINUATION_SUBSET_REQUIRED)
+        return
+      }
+      continuationSource = source
+      inputOverrides = continuationInputOverrides(source, job.data.inputOverrides)
+    }
+
     // Apply presentation / published-app input overrides to source node data.
     // SHALLOW merge per node — a top-level override key replaces the snapshot's
     // value wholesale (this is what makes the lottie full-plan `motionPlan`
@@ -719,8 +762,19 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     // None of it applies while the rollout flag is off, nor to a job queued
     // before the deploy (`ctx.previewStopRule`): that run is the run dev
     // executed before the rule existed.
+    // A continued run's seeds (checked and loaded above), built AFTER the
+    // override merge: an Edit Plan's seed applies the review its data holds
+    // (an override may carry one), and the render stamps key on the merged
+    // `node.data` objects the stop rule reads.
+    let continuation: Map<string, NodeExecutionState> | null = null
+    let continuationRenders: SavedRenderStampReader | undefined
+    if (continuationSource && nodeSubset) {
+      continuation = continuationSeeds(nodes, continuationSource, nodeSubset, job.data.inputOverrides)
+      continuationRenders = continuationRenderStamps(nodes, continuation)
+    }
+
     const previewStopsForRun = ctx.previewStopRule
-      ? runPreviewStops(nodes, edges, { nodeSubset })
+      ? runPreviewStops(nodes, edges, { nodeSubset, ...(continuationRenders ? { savedRenders: continuationRenders } : {}) })
       : { previewRenderIds: [], savedPreviewRenderIds: [], gatedNodeIds: new Set<string>() }
     if (runHoldsPreview(previewStopsForRun)) {
       const renders = [...previewStopsForRun.previewRenderIds, ...previewStopsForRun.savedPreviewRenderIds]
@@ -947,7 +1001,12 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     const skippedIds = getEffectivelySkippedIds(nodes, edges)
 
     for (const node of nodes) {
-      if (isFrozenLottieOverride(node, inputOverrides)) {
+      const seed = continuation?.get(node.id)
+      if (seed) {
+        // A continued run: the node hands on the EARLIER execution's output
+        // (seeded above) — never its saved data, whatever kind of node it is.
+        nodeStates[node.id] = seed
+      } else if (isFrozenLottieOverride(node, inputOverrides)) {
         // Freeze-on-exposure (design F16): an app/presentation run that carries a
         // lottie motionPlan override means the creator exposed slot fields — the
         // end-user edits the PUBLISHED animation rather than re-rolling it. Seed the
@@ -1102,6 +1161,15 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
       })
       .eq("id", executionId)
 
+    // PIN the overrides this run applied (round 3, decided 2026-10-06), before
+    // any node runs: a later continuation of this execution re-applies exactly
+    // these, never what is stored elsewhere and edited since (an app run's
+    // `app_runs.input_values`). Every lane's overrides pass this one point —
+    // for a continuation, its earlier run's pin with its own over it. A write
+    // of its own, through the column guard, so the claim above never depends
+    // on a column the shared database may not have yet.
+    await pinExecutionInputOverrides(executionId, inputOverrides)
+
     emitExecutionEvent({
       type: "execution:started",
       executionId,
@@ -1234,6 +1302,10 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
         if (isSkipNode(node.type)) return false
         if (deadIds.has(node.id)) return false
         if (previewGated.has(node.id)) return false
+        // A node outside the run's subset never runs, whatever its state: a
+        // continued run seeds one its earlier execution did not complete as
+        // `skipped`, and only a `completed` state kept such a node out here.
+        if (nodeSubset && !nodeSubset.has(node.id)) return false
         if (nodeStates[node.id]?.status === "completed") return false
         return true
       })

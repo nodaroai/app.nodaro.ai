@@ -21,15 +21,23 @@
  * executed always carries the time it started (`startedAt`), and a seeded one
  * never does. A state that names its job (`jobId`) ran too, whatever else it
  * lacks: a seeded state is never given one.
+ *
+ * A third signal, explicit like the first: a run CONTINUED from an earlier
+ * execution (`continueFromExecutionId`) hands on that execution's output for
+ * every node it does not run, and names it (`seededFromExecution`). Its output
+ * is not this run's either — for an Edit Plan it is the plan with the review
+ * applied, which must never be written back over the plan.
  */
 export interface SeedableNodeState {
   readonly status: string
   readonly startedAt?: string | null
   readonly fromSavedData?: boolean
   readonly jobId?: string | null
+  readonly seededFromExecution?: string | null
 }
 
 export function isSeededState(state: SeedableNodeState): boolean {
   if (state.fromSavedData === true) return true
+  if (typeof state.seededFromExecution === "string" && state.seededFromExecution.length > 0) return true
   return state.status === "completed" && !state.startedAt && !state.jobId
 }

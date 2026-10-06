@@ -19,6 +19,7 @@ import {
   PREVIEW_REVIEW_REQUIRED,
   withRunOverrides,
   type PreviewStops,
+  type SavedRenderStampReader,
 } from "@nodaro/shared"
 import { getEffectivelySkippedIds, triggerRunScope } from "../services/workflow-engine/execution-graph.js"
 import { previewStopsWhenEnabled } from "./preview-stop-rule.js"
@@ -49,11 +50,17 @@ type LooseEdge = { source: string; target: string; sourceHandle?: string | null;
 export function runPreviewStops(
   nodes: readonly SimpleNode[],
   edges: readonly SimpleEdge[],
-  opts: { readonly nodeSubset: ReadonlySet<string> | null },
+  opts: {
+    readonly nodeSubset: ReadonlySet<string> | null
+    /** How a render the run does not execute is read; default: its saved
+     *  results. A continued run reads its seeds (`continuationRenderStamps`). */
+    readonly savedRenders?: SavedRenderStampReader
+  },
 ): PreviewStops {
   const frozen = getEffectivelySkippedIds(nodes as SimpleNode[], edges as SimpleEdge[])
   return previewStopsWhenEnabled(nodes, edges, {
     executes: (id) => !frozen.has(id) && (!opts.nodeSubset || opts.nodeSubset.has(id)),
+    ...(opts.savedRenders ? { savedRenders: opts.savedRenders } : {}),
   })
 }
 
@@ -76,6 +83,12 @@ export function previewReviewRefusal(
     readonly triggerNodeId?: string | null
     readonly nodeIds?: readonly string[] | null
     readonly inputOverrides?: Readonly<Record<string, Readonly<Record<string, unknown>>>>
+    /** How a render the run does not execute is read, built over the run's
+     *  nodes AFTER its overrides (the very objects the rule reads — a reader
+     *  may key on a node's `data`). Default: its saved results. A continued
+     *  run passes the orchestrator's reader over its seeds
+     *  (`continuationRenderStamps`), so both judge the run alike. */
+    readonly savedRenders?: (nodes: readonly SimpleNode[]) => SavedRenderStampReader
   },
 ): PreviewRefusal | null {
   if (!previewStopRuleEnabled()) return null
@@ -94,7 +107,8 @@ export function previewReviewRefusal(
   const nodeSubset = run.nodeIds
     ? new Set(run.nodeIds)
     : triggerRunScope(nodes, edges, { triggerType: run.triggerType, triggerNodeId: run.triggerNodeId })
-  return runHoldsPreview(runPreviewStops(nodes, edges, { nodeSubset }))
+  const savedRenders = run.savedRenders?.(nodes)
+  return runHoldsPreview(runPreviewStops(nodes, edges, { nodeSubset, ...(savedRenders ? { savedRenders } : {}) }))
     ? { code: PREVIEW_REVIEW_REQUIRED, message: PREVIEW_REVIEW_REQUIRED_MESSAGE }
     : null
 }
