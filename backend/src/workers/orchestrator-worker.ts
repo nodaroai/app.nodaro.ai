@@ -60,6 +60,7 @@ import { previewStopRuleEnabled } from "../lib/preview-stop-rule-flag.js"
 import { pinExecutionInputOverrides } from "../lib/execution-input-overrides.js"
 import { nestedPreviewRenders, nestedPreviewRenderLocation } from "../services/workflow-engine/nested-preview-renders.js"
 import { seededFromSavedData } from "../services/workflow-engine/saved-data.js"
+import { applyEdlRowSentStamps } from "../services/workflow-engine/payload-builder.js"
 import { executeNode, loadCompletedFanOutIterations, type ExecuteNodeResult } from "../services/workflow-engine/node-executor.js"
 import { labelRefHintContext } from "../services/workflow-engine/label-ref-hint-context.js"
 import {
@@ -1732,6 +1733,13 @@ async function executeNodeForList(
   // doesn't double-charge or double-spend at the provider. Empty on a first run.
   const priorIterations = await loadCompletedFanOutIterations(executionId, ctx.userId, node.id, node.type ?? "")
 
+  // A render's batch has one row per run, not one per plan clip: every row is
+  // stamped with what it is sent for (its clip and the run's quality), up
+  // front, so a row that fails still names its clip (decided 2026-10-06). On
+  // the list rows, never `i` — the same rule each iteration's payload stamps
+  // (`applyEdlClipKey`).
+  const rowSent = applyEdlRowSentStamps(node, allNodes, edges, nodeStates, plan.rows)
+
   let iterationCompleted = 0
   const cancelRef = { cancelled: false }
 
@@ -1790,7 +1798,7 @@ async function executeNodeForList(
   // first genuine failure when NOTHING succeeded (so the orchestrator marks
   // this node failed and the run fail-fasts) instead of the old behavior of
   // always returning success with empty/partial output. See assembleFanOutResult.
-  const assembly = assembleFanOutResult(settled, items.length, node.type)
+  const assembly = assembleFanOutResult(settled, items.length, node.type, rowSent)
   // Report tolerated (non-fatal) iteration failures. assembleFanOutResult throws
   // when NOTHING succeeded, so reaching here means succeededCount >= 1 and the
   // fan-out NODE is marked completed. These failures count toward completed_nodes

@@ -9,7 +9,7 @@ import { effectiveContentModel, contentRecipeCreditId, contentIdeasCreditId, cla
 import { TELEGRAM_ACCOUNT_SEND_NODE_TYPE, telegramSendAsOf, telegramSendDestinationOf } from "@nodaro/shared"
 import { DEFAULT_TEXT_TO_AUDIO_PROVIDER, dialogueProviderOf, getDialogueCapabilities } from "@nodaro/shared"
 import { LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec, LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec, textToAudioCreditId } from "@nodaro/shared"
-import { applyEdlCreditId, renderPlanBasis, renderPlanClipKey } from "@nodaro/shared"
+import { applyEdlCreditId, isRenderNodeType, renderPlanBasis, renderPlanClipKey, renderPlanRowClipKeys, renderRunQuality, renderSentRowStamps, type RunResultRowStamp } from "@nodaro/shared"
 import type { Scene3DReference } from "@nodaro/shared"
 import { scene3DInputAssetsForEngine, type Scene3DInputAsset } from "@nodaro/shared"
 import { socialSearchRequestFromNode, socialSearchCreditId, socialSearchPickTop } from "@nodaro/shared"
@@ -2376,6 +2376,46 @@ function applyEdlClipKey(node: SimpleNode, buildCtx: PayloadBuildContext | undef
   )
 }
 
+/** What EVERY row of a render's fan-out is stamped with before it runs,
+ *  row-aligned with its batch (`renderSentRowStamps`, the rule the editor's
+ *  list execution calls too): the quality the run renders at, and the clip
+ *  each iteration's list row (`rows[k]`, never `k`) is sent for — the key
+ *  `applyEdlClipKey` gives it, read from the plan as the run holds it when the
+ *  fan-out begins (`renderPlanRowClipKeys`). Behind a Camera Switch that did
+ *  not run in this run no row is keyed (the same-run rule: the render iterates
+ *  the switch's SAVED batch, which an older review can have made). The
+ *  orchestrator stamps it on every batch row, a failed one included, so a
+ *  reader matches a row to its clip by key (decided 2026-10-06). `undefined`
+ *  for a node that is not a render. */
+export function applyEdlRowSentStamps(
+  node: SimpleNode,
+  nodes: readonly SimpleNode[],
+  edges: readonly SimpleEdge[],
+  nodeStates: Readonly<Record<string, NodeExecutionState>>,
+  rows: ReadonlyArray<number | undefined>,
+): RunResultRowStamp[] | undefined {
+  if (!isRenderNodeType(node.type)) return undefined
+  const keys = renderPlanRowClipKeys(
+    node.id,
+    nodes,
+    edges,
+    (planNode) => listFor(planNode as SimpleNode, nodeStates[planNode.id]),
+    rows,
+    ranNodeIds(nodeStates),
+  )
+  return renderSentRowStamps(renderRunQuality(node.data as Record<string, unknown> | undefined), keys)
+}
+
+/** The nodes executed in this run: their state is the run's own
+ *  (`savedDataAllowed` is false) and completed. */
+function ranNodeIds(states: Readonly<Record<string, NodeExecutionState>>): Set<string> {
+  return new Set(
+    Object.entries(states)
+      .filter(([, state]) => !savedDataAllowed(state) && state.status === "completed")
+      .map(([id]) => id),
+  )
+}
+
 /** The plan basis an Apply EDL iteration stamps (`renderPlanBasis`, the rule
  *  the editor calls too): the plan value its row reads, as the run holds the
  *  plan — this run's output, or its seeded saved one (the review applied) —
@@ -2387,11 +2427,7 @@ function applyEdlPlanBasis(node: SimpleNode, buildCtx: PayloadBuildContext | und
   const edges = buildCtx?.edges
   if (!nodes || !edges) return undefined
   const states = buildCtx?.nodeStates ?? {}
-  const ranIds = new Set(
-    Object.entries(states)
-      .filter(([, state]) => !savedDataAllowed(state) && state.status === "completed")
-      .map(([id]) => id),
-  )
+  const ranIds = ranNodeIds(states)
   return renderPlanBasis(
     node.id,
     nodes,
@@ -5986,7 +6022,7 @@ export function buildPayload(
       const rawEdlInput = resolvedInputs.edl ?? (data.edl as unknown)
       const rawEdl = typeof rawEdlInput === "string" ? parseJsonOrUndefined(rawEdlInput) : rawEdlInput
       const output = data.output === "audio" ? "audio" : "video"
-      const quality = data.quality === "proxy" ? "proxy" : "final"
+      const quality = renderRunQuality(data as Record<string, unknown>)
       const crossfadeMs = typeof data.crossfadeMs === "number" ? data.crossfadeMs : 0
       const effectiveEdl = buildEffectiveEdl(rawEdl, { crossfadeMs, sourceOverrides: resolvedInputs.sources })
       const validation = validateEffectiveEdl(effectiveEdl, output)

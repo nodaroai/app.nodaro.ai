@@ -44,10 +44,19 @@ export interface RenderResultStamp {
   readonly renderBasis?: string
 }
 
-/** One row of a run's per-item results, row-aligned with them (`{}` = a hole). */
+/** One row of a run's per-item results, row-aligned with them. A row that
+ *  produced nothing (a hole) carries no take's fields; a render's hole still
+ *  says what it was sent for (`renderSentRowStamps`): the quality its run
+ *  renders at and, when the run can name it, its clip (`clipKey`,
+ *  `renderPlanRowClipKeys`), so a failed row is matched to its clip by key.
+ *  `{}` is a hole that names none (a run made before every row was stamped, or
+ *  a node that is not a render). */
 export interface RunResultRowStamp extends RenderResultStamp {
   readonly jobId?: string
   readonly thumbnailUrl?: string
+  /** The row never ran: a Stop, or the fail-fast after another row failed,
+   *  skipped it. It is a hole, never a failure. */
+  readonly cancelled?: true
 }
 
 /** One saved render result. */
@@ -285,6 +294,12 @@ export function renderPlanPath(
   return undefined
 }
 
+/** Whether every pass-through node on the path (Camera Switch: the target of
+ *  every hop but the last) ran in this run (`ranIds`) — the same-run rule. */
+function passThroughRan(path: RenderPlanPath, ranIds: ReadonlySet<string>): boolean {
+  return path.hops.slice(0, -1).every((hop) => ranIds.has(hop.edge.target))
+}
+
 /** The Edit Plan whose clips a render's `edl` input comes from (`renderPlanPath`). */
 export function renderPlanNodeId(
   renderId: string,
@@ -408,6 +423,53 @@ export function renderPlanClipKey(
   return renderClipKey(planClips(planNode), row, path.hops)
 }
 
+/**
+ * The clip key of EVERY iteration of a render's fan-out, row-aligned with its
+ * batch: `rows[k]` is iteration k's list row (`FanOutPlan.rows`), as both
+ * engines hand it to `renderPlanClipKey` (never the iteration number). Both
+ * engines stamp it on each batch row up front, so a row that FAILED still
+ * names its clip (decided 2026-10-06): the batch has one row per run, not one
+ * per plan clip, and a reader matches rows to clips by this key, never by
+ * position. The plan is read once, as the run held it when the fan-out began.
+ */
+export function renderPlanRowClipKeys(
+  renderId: string,
+  nodes: readonly RenderGraphNode[],
+  edges: readonly RenderGraphEdge[],
+  planClips: (planNode: RenderGraphNode) => unknown,
+  rows: ReadonlyArray<number | undefined>,
+  ranIds: ReadonlySet<string>,
+): Array<string | undefined> {
+  const path = renderPlanPath(renderId, nodes, edges)
+  const planNode = path ? nodes.find((n) => n.id === path.planId) : undefined
+  // The same-run rule (`renderPlanBasis`): behind a pass-through node that did
+  // not run in this run the render iterates that node's SAVED batch, which can
+  // come from an older review, so the plan as it is now cannot name its rows.
+  if (!path || !planNode || !passThroughRan(path, ranIds)) return rows.map(() => undefined)
+  const plan = planClips(planNode)
+  return rows.map((row) => renderClipKey(plan, row, path.hops))
+}
+
+/** The quality a render runs at: its `quality` setting as the run holds it
+ *  ("proxy" is a Preview; anything else renders a final). */
+export function renderRunQuality(data: Readonly<Record<string, unknown>> | undefined): RenderQuality {
+  return data?.quality === "proxy" ? "proxy" : "final"
+}
+
+/**
+ * What every row of a render's fan-out batch is stamped with before it runs
+ * (decided 2026-10-06): the quality the run renders at and the clip the row is
+ * sent for (`renderPlanRowClipKeys`, absent when the run cannot name it). Both
+ * engines write it on every row; a landed take's own stamp wins over it, so a
+ * row that FAILED still says which clip, and at which quality, it was sent for.
+ */
+export function renderSentRowStamps(
+  quality: RenderQuality,
+  clipKeys: ReadonlyArray<string | undefined>,
+): RunResultRowStamp[] {
+  return clipKeys.map((clipKey) => ({ quality, ...(clipKey ? { clipKey } : {}) }))
+}
+
 // ─────────────────────────────────────────────────────────────────────────
 //  The bases a render is stamped with (A3-1)
 // ─────────────────────────────────────────────────────────────────────────
@@ -498,8 +560,6 @@ export function renderPlanBasis(
   const path = renderPlanPath(renderId, nodes, edges)
   const planNode = path ? nodes.find((n) => n.id === path.planId) : undefined
   if (!path || !planNode) return undefined
-  // Every hop but the last is a pass-through node's own `edl` wire.
-  const passThrough = path.hops.slice(0, -1).map((hop) => hop.edge.target)
-  if (!passThrough.every((id) => ranIds.has(id))) return undefined
+  if (!passThroughRan(path, ranIds)) return undefined
   return renderReadBasis(renderPlanValue(planOutput(planNode), row, path.hops))
 }

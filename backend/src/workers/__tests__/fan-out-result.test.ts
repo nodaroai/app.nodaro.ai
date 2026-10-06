@@ -151,6 +151,54 @@ describe("assembleFanOutResult", () => {
     expect(r.output.resultCompositionKey).toBe("K0")
   })
 
+  // Decided 2026-10-06: a render's batch has one row per run, so every row
+  // says what it was sent for (the caller's sent stamps: the run's quality and
+  // the row's clip) — a failed or cancelled row too — and a reader matches rows
+  // to clips by key, never by position.
+  it("stamps what each row was sent for on every row, a failed one included; a landed take's own stamp wins", () => {
+    const r = assembleFanOutResult(
+      [
+        ok(0, "https://v/0.mp4", { jobId: "j0", output: { videoUrl: "https://v/0.mp4", quality: "proxy", clipKey: "0-1000" } }),
+        fail("render failed"),
+        fail("Execution cancelled"),
+      ],
+      3,
+      "apply-edl",
+      // Row 0 lists another key: the take it landed carries its own, which wins.
+      [{ quality: "proxy", clipKey: "0-999" }, { quality: "proxy", clipKey: "4000-5000" }, { quality: "proxy" }],
+    )
+    expect(r.output.listResults).toEqual(["https://v/0.mp4", "", ""])
+    expect(r.output.listResultStamps).toEqual([
+      { jobId: "j0", quality: "proxy", clipKey: "0-1000" },
+      { quality: "proxy", clipKey: "4000-5000" },
+      { quality: "proxy", cancelled: true },
+    ])
+  })
+
+  // A Stop (or the fail-fast after a sibling failed) leaves the un-started rows
+  // to settledWithLimit's "Execution cancelled", and a row that saw the stop
+  // throws "Cancelled": neither was sent to a provider, so neither is a failure.
+  it("marks a row that never ran cancelled, its clip kept, so it never reads as a failed render", () => {
+    const sent = ["0-1000", "2000-3000", "4000-5000", "6000-7000"].map((clipKey) => ({ quality: "proxy" as const, clipKey }))
+    const r = assembleFanOutResult(
+      [ok(0, "https://v/0.mp4", { output: { videoUrl: "https://v/0.mp4", quality: "proxy", clipKey: "0-1000" } }), fail("Cancelled"), fail("Execution cancelled"), fail("render failed")],
+      4,
+      "apply-edl",
+      sent,
+    )
+    expect(r.output.listResultStamps).toEqual([
+      { quality: "proxy", clipKey: "0-1000" },
+      { quality: "proxy", clipKey: "2000-3000", cancelled: true },
+      { quality: "proxy", clipKey: "4000-5000", cancelled: true },
+      { quality: "proxy", clipKey: "6000-7000" },
+    ])
+  })
+
+  it("without row keys, a hole is `{}` as before", () => {
+    const r = assembleFanOutResult([ok(0, "a"), fail("provider 503")], 2, "generate-image")
+    expect(r.output.listResultStamps).toEqual([{}, {}])
+  })
+
   it("no iteration carries a key → no listResultCompositionKeys (every other node type)", () => {
     const r = assembleFanOutResult([ok(0, "https://img/0.png"), ok(1, "https://img/1.png")], 2)
     expect(r.output).not.toHaveProperty("listResultCompositionKeys")

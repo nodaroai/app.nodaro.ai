@@ -20,13 +20,25 @@
  *  - `previewStale`: the preview was cut from another plan value, or with
  *    other settings. An unstamped preview is stale. With the settings unknown
  *    now (a dropped clip has no render row), the plan value alone decides.
- *  - Holes: a row of the latest Preview batch with no take is `preview-failed`
- *    only for a clip kept now. Both engines stamp every hole `{}` — a sent row
- *    that failed and a dropped row the run skipped alike — so the stamp cannot
- *    tell them apart, and a dropped clip's hole reads "no preview yet". With no
- *    row stamps every hole reads "no preview yet", never "failed".
- *    Behind Camera Switch the batch's rows are the switch's own, which shift
- *    with the drops at that run, so a hole there says nothing about a card.
+ *  - Failed previews (decided 2026-10-06): the latest Preview batch has ONE ROW
+ *    PER RUN of the render — one per clip that run sent — never one per plan
+ *    clip, so a clip dropped at run time has no row. Both engines stamp every
+ *    row with what it was sent for, a failed row too (the render's
+ *    `__listResultStamps`: the clip and the run's quality), and a card is
+ *    `preview-failed` when a row of that batch names its clip and is empty
+ *    (and no row of it landed that clip). Rows are matched to cards by
+ *    `clipKey`, NEVER by position: behind Camera Switch and after a selector as
+ *    on a direct wire. A clip no row names reads "no preview yet", and so does
+ *    a row that never ran (`cancelled`: a Stop, or the fail-fast after another
+ *    row failed). Behind a Camera Switch that did not run with the render no
+ *    row is keyed (the same-run rule), so its holes read "no preview yet".
+ *    A batch with no landed take is a Preview when its rows were sent at
+ *    `proxy`.
+ *    A batch made before every row was keyed (its empty rows name no clip)
+ *    names a hole's clip only from the input the run sent that row (the
+ *    browser's `__listInputs`), on a direct wire — never from its position,
+ *    which a re-plan or a drop at that run can shift. Otherwise its holes read
+ *    "no preview yet", never "failed".
  *  - `orphanFinals`: finals whose clip matches no card, newest per clip — a
  *    clip the plan no longer has, or one the wire no longer sends.
  */
@@ -46,7 +58,6 @@ import {
   type RenderMedium,
   type RenderPlanHop,
   type RenderQuality,
-  type RunResultRowStamp,
   type SavedRenderItem,
   type SelectorFields,
 } from "@nodaro/shared"
@@ -69,7 +80,11 @@ export type ClipCardState =
 export interface ClipCard {
   /** The clip's index in the plan. */
   readonly row: number
-  /** The row of the render's own list it is cut from; absent for a render run once. */
+  /** The row of the list the render reads that holds this clip — the list row
+   *  its iteration's key is read on (`renderClipKey`); absent for a render run
+   *  once, or a clip a pass-through node does not hand on. It is NOT a position
+   *  in the render's batch, which has one row per run: batch rows are matched to
+   *  cards by `clipKey`. */
   readonly renderRow?: number
   readonly clipKey: string
   readonly title?: string
@@ -110,8 +125,6 @@ export interface ClipCardsInput {
   readonly hops: readonly RenderPlanHop[]
   /** The settings basis each clip's render would stamp now (`clipRenderBases`). */
   readonly renderBases?: ReadonlyMap<string, string>
-  /** The latest batch's row stamps, row-aligned with `__listResults`. */
-  readonly rowStamps?: ReadonlyArray<RunResultRowStamp | undefined>
   readonly live?: ClipLiveRun
 }
 
@@ -246,19 +259,78 @@ function newestTakes(results: readonly Rec[], medium: RenderMedium) {
   return { preview, final }
 }
 
-/** The rows of the latest batch that have a row stamp and produced nothing,
- *  when that batch is a Preview. A hole's stamp is `{}` whether the row was sent
- *  and failed or was a dropped clip the run skipped; the caller tells them apart
- *  by the clip's keep. */
-function failedPreviewRows(renderData: Rec, rowStamps: ClipCardsInput["rowStamps"]): ReadonlySet<number> {
-  const failed = new Set<number>()
+/** Row `row`'s stamp in the batch (`__listResultStamps`): what it was sent
+ *  for and, once it landed, what its take landed with. */
+function rowStamp(renderData: Rec, row: number): Rec | undefined {
+  const stamps = renderData.__listResultStamps
+  const stamp = Array.isArray(stamps) ? stamps[row] : undefined
+  return isRecord(stamp) ? stamp : undefined
+}
+
+/** The clip a batch row names in its stamp, if any. */
+function rowStampClip(renderData: Rec, row: number): string | undefined {
+  const key = rowStamp(renderData, row)?.clipKey
+  return typeof key === "string" && key.length > 0 ? key : undefined
+}
+
+/**
+ * The clip an UNKEYED hole was sent for, in a batch made before every row was
+ * keyed: read off what the run sent that row (`__listInputs`, the browser
+ * lane's per-item inputs), never guessed from its position. Only on a direct
+ * wire, where the row's input is the plan's clip itself (Camera Switch can move
+ * a clip's edges, so its EDL is not the clip's span), and only when the inputs
+ * are this batch's: one per row, and every landed take's clip is its row's
+ * input. `undefined` otherwise (a server batch has no inputs), so the hole
+ * reads "no preview yet".
+ */
+function sentInputClips(
+  batch: ReadonlyArray<SavedRenderItem | null>,
+  renderData: Rec,
+  hops: readonly RenderPlanHop[],
+): ((row: number) => string | undefined) | undefined {
+  if (hops.length !== 1) return undefined
+  const inputs = renderData.__listInputs
+  if (!Array.isArray(inputs) || inputs.length !== batch.length) return undefined
+  for (const [row, item] of batch.entries()) {
+    if (item?.clipKey && planClipKeyAt(inputs, row) !== item.clipKey) return undefined
+  }
+  return (row) => planClipKeyAt(inputs, row)
+}
+
+/** The clips the latest batch says failed, when it is a Preview: a row that
+ *  names a clip and produced nothing, unless another row of it landed that
+ *  clip. A row names its clip by its stamp, else (an older batch) by the input
+ *  the run sent it (`sentInputClips`). A row that never ran (`cancelled`) is
+ *  no failure. The batch's quality is what its takes landed at, else (no row
+ *  landed) what its rows were sent at. */
+function failedPreviewClips(renderData: Rec, hops: readonly RenderPlanHop[]): ReadonlySet<string> {
+  const failed = new Set<string>()
   const batch = savedRenderBatch(renderData)
-  if (!batch || !rowStamps) return failed
-  const qualities = batch.flatMap((item) => (item?.quality ? [item.quality] : []))
+  if (!batch) return failed
+  const landedQualities = batch.flatMap((item) => (item?.quality ? [item.quality] : []))
+  const qualities =
+    landedQualities.length > 0
+      ? landedQualities
+      : batch.flatMap((_, row) => {
+          const quality = rowStamp(renderData, row)?.quality
+          return quality === "proxy" || quality === "final" ? [quality] : []
+        })
   if (qualities.length === 0 || qualities.some((q) => q !== "proxy")) return failed
+  const landed = new Set(
+    batch.flatMap((item, row) => {
+      const key = item ? (item.clipKey ?? rowStampClip(renderData, row)) : undefined
+      return key ? [key] : []
+    }),
+  )
+  let byInput: ((row: number) => string | undefined) | undefined | null = null
   batch.forEach((item, row) => {
-    const stamp = rowStamps[row]
-    if (item === null && isRecord(stamp)) failed.add(row)
+    if (item !== null || rowStamp(renderData, row)?.cancelled === true) return
+    let key = rowStampClip(renderData, row)
+    if (!key) {
+      if (byInput === null) byInput = sentInputClips(batch, renderData, hops)
+      key = byInput?.(row)
+    }
+    if (key && !landed.has(key)) failed.add(key)
   })
   return failed
 }
@@ -279,20 +351,18 @@ function cardState(
 }
 
 export function buildClipCards(input: ClipCardsInput): ClipCards | null {
-  const { plan, editedEdl, renderData, hops, renderBases, rowStamps, live } = input
+  const { plan, editedEdl, renderData, hops, renderBases, live } = input
   const stored = clipDecisionsOf(plan, editedEdl)
   if (!stored || !Array.isArray(plan)) return null
   const decisions = input.decisions && input.decisions.length === plan.length ? input.decisions : stored
   const medium: RenderMedium = renderData.output === "audio" ? "audio" : "video"
   const results = (Array.isArray(renderData.generatedResults) ? renderData.generatedResults : []).filter(isRecord)
   const takes = newestTakes(results, medium)
-  // Holes are rowed in the plan's own rows only on a wire straight from the plan.
-  const failed = hops.length === 1 ? failedPreviewRows(renderData, rowStamps) : new Set<number>()
   const kept = (row: number) => decisions[row]?.keep ?? true
 
   const clipRows = plan.filter((_, row) => planClipKeyAt(plan, row) !== undefined).length
 
-  const cards: ClipCard[] = []
+  const drafts: Array<Omit<ClipCard, "state">> = []
   let picked = 0
   for (const { row, renderRow } of pickedRows(plan.length, hops, kept)) {
     const clipKey = planClipKeyAt(plan, row)
@@ -332,12 +402,13 @@ export function buildClipCards(input: ClipCardsInput): ClipCards | null {
       unchanged,
       previewStale,
     }
-    // Only a clip kept now can have been sent and failed: a dropped clip's hole
-    // carries the same `{}` stamp and reads "no preview yet".
-    const rowFailed = decision.keep && renderRow !== undefined && failed.has(renderRow)
-    cards.push({ ...card, state: cardState(card, rowFailed, medium, live) })
+    drafts.push(card)
   }
 
+  // A row names its clip, so a failed one marks that clip's card whatever was
+  // dropped at that run or since (the row was sent and failed).
+  const failed = failedPreviewClips(renderData, hops)
+  const cards: ClipCard[] = drafts.map((card) => ({ ...card, state: cardState(card, failed.has(card.clipKey), medium, live) }))
   const cardKeys = new Set(cards.map((c) => c.clipKey))
   const orphanFinals = [...takes.final.values()].filter((f) => !cardKeys.has(f.clipKey!))
   const keptCards = cards.filter((c) => c.keep)

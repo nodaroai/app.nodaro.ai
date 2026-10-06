@@ -504,6 +504,98 @@
         "2000-3000"
       ],
       "direct": true
+    },
+    {
+      "name": "a dropped clip on a direct each wire (rows count from 0; the clip at row 1 dropped): the render runs once per KEPT clip, on the plan's rows; the dropped row has no iteration, so the batch holds no row for it",
+      "dropped": [
+        1
+      ],
+      "nodes": [],
+      "edges": [
+        {
+          "id": "e-plan",
+          "source": "plan",
+          "sourceHandle": "edl",
+          "target": "render",
+          "targetHandle": "edl",
+          "data": {
+            "outputMode": "each"
+          }
+        }
+      ],
+      "expectedRows": [
+        0,
+        2,
+        3
+      ],
+      "expected": [
+        "0-1000",
+        "4000-5000",
+        "6000-7000"
+      ],
+      "direct": true,
+      "failedIteration": 1,
+      "expectedStamps": [
+        {
+          "quality": "proxy",
+          "clipKey": "0-1000"
+        },
+        {
+          "quality": "proxy",
+          "clipKey": "4000-5000"
+        },
+        {
+          "quality": "proxy",
+          "clipKey": "6000-7000"
+        }
+      ]
     }
-  ]
+  ],
+  "staleSwitchBatch": {
+    "_comment": "The same-run rule on the row keys (review round of #1947): Camera Switch ran with all four clips kept and saved its batch of four; the person has dropped clip 1 since, and only the render runs. The render iterates the switch's SAVED batch (rows 0-3, row 1 cut clip 1), so the review as it is now (three kept clips) cannot name its rows: no row is keyed, and the failed row 1 names no clip. Both engine tests read it; the editor test also checks no card but clip 1's reads Preview failed.",
+    "name": "a Camera Switch batch saved under an older review, a render-only run",
+    "dropped": [
+      1
+    ],
+    "nodes": [
+      {
+        "id": "switch",
+        "type": "camera-switch",
+        "data": {
+          "__listResults": [
+            "{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"A\",\"url\":\"https://media.test/a.mp4\",\"kind\":\"video\"}],\"segments\":[{\"id\":\"seg-0\",\"inMs\":200,\"outMs\":500,\"video\":\"A\"},{\"id\":\"seg-1\",\"inMs\":500,\"outMs\":1000,\"video\":\"A\"}]}",
+            "{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"A\",\"url\":\"https://media.test/a.mp4\",\"kind\":\"video\"}],\"segments\":[{\"id\":\"seg-0\",\"inMs\":2200,\"outMs\":2500,\"video\":\"A\"},{\"id\":\"seg-1\",\"inMs\":2500,\"outMs\":3000,\"video\":\"A\"}]}",
+            "{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"A\",\"url\":\"https://media.test/a.mp4\",\"kind\":\"video\"}],\"segments\":[{\"id\":\"seg-0\",\"inMs\":4200,\"outMs\":4500,\"video\":\"A\"},{\"id\":\"seg-1\",\"inMs\":4500,\"outMs\":5000,\"video\":\"A\"}]}",
+            "{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"A\",\"url\":\"https://media.test/a.mp4\",\"kind\":\"video\"}],\"segments\":[{\"id\":\"seg-0\",\"inMs\":6200,\"outMs\":6500,\"video\":\"A\"},{\"id\":\"seg-1\",\"inMs\":6500,\"outMs\":7000,\"video\":\"A\"}]}"
+          ]
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "e-plan",
+        "source": "plan",
+        "sourceHandle": "edl",
+        "target": "switch",
+        "targetHandle": "edl"
+      },
+      {
+        "id": "e-switch",
+        "source": "switch",
+        "sourceHandle": "edl",
+        "target": "render",
+        "targetHandle": "edl"
+      }
+    ],
+    "expectedRows": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "failedIteration": 1,
+    "expectedFailedStamp": {
+      "quality": "proxy"
+    }
+  }
 }

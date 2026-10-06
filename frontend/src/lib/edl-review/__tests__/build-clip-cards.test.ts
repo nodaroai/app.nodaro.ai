@@ -284,44 +284,192 @@ describe("previewStale: the card's preview predates this plan", () => {
   })
 })
 
-describe("holes in the latest preview batch", () => {
-  const batch = (rows: Array<number | null>) => {
-    const takes = rows.map((row) => (row === null ? null : take(row, "proxy")))
+// A Preview batch has ONE ROW PER RUN of the render (one per clip the run
+// sent), never one per plan clip: a clip dropped at run time has no row. Both
+// engines stamp every row with its clip's key, a failed row included (decided
+// 2026-10-06), on the render's `__listResultStamps`; a card reads "Preview
+// failed" when a row of the latest Preview batch names its clip and is empty.
+describe("failed rows in the latest preview batch, matched by clipKey", () => {
+  /** A Preview batch that ran on plan rows `ranOn`, where the rows in `failed`
+   *  produced nothing. `stamps`: "keyed" (every row names its clip, as both
+   *  engines stamp now), "legacy" (only landed rows carry a key, holes `{}`: a
+   *  server run before this lane), or "none" (no stamps on the node). */
+  const batchOn = (ranOn: readonly number[], failed: readonly number[], stamps: "keyed" | "legacy" | "none" = "keyed") => {
+    const takes = ranOn.map((row) => (failed.includes(row) ? null : take(row, "proxy")))
     return {
       __listResults: takes.map((t) => t?.url ?? ""),
       generatedResults: takes.filter((t) => t !== null),
+      ...(stamps === "none"
+        ? {}
+        : {
+            __listResultStamps: ranOn.map((row, k) =>
+              takes[k] ? { quality: "proxy", clipKey: keyOf(row) } : stamps === "keyed" ? { clipKey: keyOf(row) } : {},
+            ),
+          }),
     }
   }
-  const BATCH = batch([0, 1, null, null, 4, 5, 6, 7])
+  const ALL = PLAN.map((_, row) => row)
+  const statesOf = (result: ReturnType<typeof build>) => Object.fromEntries(result.cards.map((c) => [c.row, c.state]))
 
-  it("a sent row that failed (a plain row stamp) is preview-failed", () => {
-    const stamps = PLAN.map(() => ({}))
-    const result = build({ renderData: BATCH, rowStamps: stamps })
-    expect(result.cards[2]!.state).toBe("preview-failed")
-    expect(result.cards[0]!.state).toBe("preview")
+  it("#1941: a direct wire, clip 2 of 4 dropped, the run on row 3 failed: the card of row 3 reads Preview failed (rows count from 0)", () => {
+    const plan4 = PLAN.slice(0, 4)
+    const editedEdl = {
+      v: EDITED_EDL_VERSION,
+      kind: "clips",
+      basis: editPlanBasis(plan4),
+      clips: plan4.map((_, row) => ({ keep: row !== 1 })),
+    }
+    // The fixture's case (apply-edl-clip-key.json): the render ran on rows [0, 2, 3].
+    const result = buildClipCards({ plan: plan4, editedEdl, renderData: batchOn([0, 2, 3], [3]), hops: DIRECT, renderBases: allBases })!
+    expect(statesOf(result)).toEqual({ 0: "preview", 1: "no-preview", 2: "preview", 3: "preview-failed" })
   })
 
-  it("a dropped clip's hole shows no preview yet, never failed (both engines stamp every hole `{}`)", () => {
-    // No engine marks a skipped row, so a hole is failed only for a clip kept now.
-    const stamps = PLAN.map(() => ({}))
-    const result = build({ renderData: BATCH, rowStamps: stamps, editedEdl: clipsEdit(withDecision(3, { keep: false })) })
-    expect(result.cards[3]!.state).toBe("no-preview")
+  it("on the real engine batch, a failed run marks its own clip, not the one a dropped clip shifted onto it", () => {
+    const ranOn = [0, 2, 3, 4, 5, 6, 7]
+    const result = build({ renderData: batchOn(ranOn, [3]), editedEdl: clipsEdit(withDecision(1, { keep: false })) })
+    expect(result.cards[2]!.state).toBe("preview")
+    expect(result.cards[3]!.state).toBe("preview-failed")
+    expect(result.cards[1]!.state).toBe("no-preview")
+  })
+
+  it("a range selector: only the rows it picked ran, and the failed one names its clip", () => {
+    // PICK_3 picks rows 1–3; row 2 was dropped at run time, so the render ran on rows 1 and 3.
+    const result = build({ hops: PICK_3, renderData: batchOn([1, 3], [3]), editedEdl: clipsEdit(withDecision(2, { keep: false })) })
+    expect(statesOf(result)).toEqual({ 1: "preview", 2: "no-preview", 3: "preview-failed" })
+  })
+
+  it("behind Camera Switch the rows are the switch's, and the key still names the clip", () => {
+    const ranOn = [0, 2, 3, 4, 5, 6, 7]
+    const result = build({ hops: SWITCHED, renderData: batchOn(ranOn, [4]), editedEdl: clipsEdit(withDecision(1, { keep: false })) })
+    expect(result.cards[4]!.state).toBe("preview-failed")
+    expect(result.cards[3]!.state).toBe("preview")
+    expect(result.cards[1]!.state).toBe("no-preview")
+    const picked = build({ hops: SWITCHED_PICK, renderData: batchOn([0, 2, 3], [2]), editedEdl: clipsEdit(withDecision(1, { keep: false })) })
+    expect(statesOf(picked)).toEqual({ 0: "preview", 1: "no-preview", 2: "preview-failed", 3: "preview" })
+  })
+
+  it("a clip no row names reads no preview yet", () => {
+    const result = build({ renderData: batchOn([0, 1], [1]) })
+    expect(result.cards[1]!.state).toBe("preview-failed")
+    expect(result.cards.slice(2).map((c) => c.state)).toEqual(Array(6).fill("no-preview"))
+  })
+
+  it("a failed row names its clip even once that clip is dropped since: the row was sent and failed", () => {
+    const result = build({ renderData: batchOn(ALL, [2]), editedEdl: clipsEdit(withDecision(2, { keep: false })) })
     expect(result.cards[2]!.state).toBe("preview-failed")
   })
 
-  it("with no row stamps at all, every hole shows no preview yet", () => {
-    const result = build({ renderData: BATCH })
-    expect(result.cards[2]!.state).toBe("no-preview")
-    expect(result.cards[3]!.state).toBe("no-preview")
+  it("a clip whose take landed in the same batch is not failed, though another row naming it is empty", () => {
+    // A row past the clips starts over from the first, so two rows can name one clip.
+    const renderData = batchOn(ALL, [])
+    const withRepeat = {
+      ...renderData,
+      __listResults: [...renderData.__listResults, ""],
+      __listResultStamps: [...renderData.__listResultStamps!, { clipKey: keyOf(0) }],
+    }
+    expect(build({ renderData: withRepeat }).cards[0]!.state).toBe("preview")
   })
 
   it("only a Preview batch says a preview failed", () => {
-    const finals = { __listResults: ["", take(1, "final").url], generatedResults: [take(1, "final")] }
-    expect(build({ renderData: finals, rowStamps: [{}, {}] }).cards[0]!.state).toBe("no-preview")
+    const finals = {
+      __listResults: ["", take(1, "final").url],
+      generatedResults: [take(1, "final")],
+      __listResultStamps: [{ clipKey: keyOf(0) }, { quality: "final", clipKey: keyOf(1) }],
+    }
+    expect(build({ renderData: finals }).cards[0]!.state).toBe("no-preview")
   })
 
-  it("behind Camera Switch the batch's rows are the switch's, so a hole says nothing", () => {
-    expect(build({ hops: SWITCHED, renderData: BATCH, rowStamps: PLAN.map(() => ({})) }).cards[2]!.state).toBe("no-preview")
+  // A Stop (or the fail-fast after another row failed) leaves rows that never
+  // ran: each still names its clip, and is marked `cancelled` — never a failure.
+  it("a row that never ran reads no preview yet, though it names its clip", () => {
+    const renderData = batchOn(ALL, [3, 4, 5, 6, 7])
+    const stopped = {
+      ...renderData,
+      __listResultStamps: renderData.__listResultStamps!.map((stamp, row) => (row >= 3 ? { ...stamp, cancelled: true } : stamp)),
+    }
+    expect(statesOf(build({ renderData: stopped }))).toEqual({
+      0: "preview", 1: "preview", 2: "preview", 3: "no-preview", 4: "no-preview", 5: "no-preview", 6: "no-preview", 7: "no-preview",
+    })
+    // Beside a row that really failed, only that one reads failed.
+    const oneFailed = { ...stopped, __listResultStamps: stopped.__listResultStamps.map((stamp, row) => (row === 3 ? { clipKey: keyOf(3) } : stamp)) }
+    expect(build({ renderData: oneFailed }).cards.filter((c) => c.state === "preview-failed").map((c) => c.row)).toEqual([3])
+  })
+
+  // No row landed, so no take says the batch's quality: the rows say what they
+  // were sent at (the browser lane writes such a batch; the server's throws).
+  it("a batch where every row failed says Preview failed when its rows were sent at proxy", () => {
+    const sentAt = (quality: "proxy" | "final", extra: Record<string, unknown> = {}) => ({
+      __listResults: [""],
+      generatedResults: [],
+      __listResultStamps: [{ quality, clipKey: keyOf(2), ...extra }],
+    })
+    expect(build({ renderData: sentAt("proxy") }).cards[2]!.state).toBe("preview-failed")
+    expect(build({ renderData: sentAt("final") }).cards[2]!.state).toBe("no-preview")
+    expect(build({ renderData: sentAt("proxy", { cancelled: true }) }).cards[2]!.state).toBe("no-preview")
+    // A keyed row with no quality says nothing about the batch.
+    expect(build({ renderData: { __listResults: [""], __listResultStamps: [{ clipKey: keyOf(2) }] } }).cards[2]!.state).toBe("no-preview")
+  })
+
+  describe("a batch made before every row was keyed", () => {
+    /** The browser lane's per-item inputs: the EDL each row was sent (`""` at a hole of the plan). */
+    const inputsOn = (ranOn: readonly number[], plan: readonly unknown[] = PLAN) => ranOn.map((row) => JSON.stringify(plan[row]))
+
+    it("names a hole's clip from the input the run sent it, on a direct wire", () => {
+      for (const stamps of ["legacy", "none"] as const) {
+        const result = build({ renderData: { ...batchOn(ALL, [2], stamps), __listInputs: inputsOn(ALL) } })
+        expect(result.cards[2]!.state, stamps).toBe("preview-failed")
+        expect(result.cards[3]!.state, stamps).toBe("preview")
+      }
+    })
+
+    it("never by position: with no inputs (a server batch), a hole reads no preview yet", () => {
+      for (const stamps of ["legacy", "none"] as const) {
+        const result = build({ renderData: batchOn(ALL, [2], stamps) })
+        expect(result.cards[2]!.state, stamps).toBe("no-preview")
+      }
+    })
+
+    it("with a clip dropped at that run, the hole is the clip it was sent, not the one a drop shifted there", () => {
+      const ranOn = [0, 2, 3, 4, 5, 6, 7]
+      for (const stamps of ["legacy", "none"] as const) {
+        const result = build({ renderData: { ...batchOn(ranOn, [3], stamps), __listInputs: inputsOn(ranOn) }, editedEdl: clipsEdit(withDecision(1, { keep: false })) })
+        expect(result.cards.filter((c) => c.state === "preview-failed").map((c) => c.row), stamps).toEqual([3])
+        const blind = build({ renderData: batchOn(ranOn, [3], stamps), editedEdl: clipsEdit(withDecision(1, { keep: false })) })
+        expect(blind.cards.map((c) => c.state), stamps).not.toContain("preview-failed")
+      }
+    })
+
+    // The review round of #1947: plan [A, B, C, D], B dropped at run time, so the
+    // batch is [A, C, ""] (D failed). The person then re-plans to [A, C, X]: the
+    // landed rows still sit at their cards' positions, but X was never sent.
+    it("a re-plan that keeps the landed spans: the hole is the clip it was sent (D), never X", () => {
+      const [A, , C, D] = PLAN
+      const X = clip(6)
+      const replanned = [A, C, X]
+      const takeOf = (c: unknown) => ({ ...take(0, "proxy"), url: `https://cdn.test/${planClipKeyAt([c], 0)}.mp4`, clipKey: planClipKeyAt([c], 0), planBasis: renderReadBasis(c) })
+      const landed = [takeOf(A), takeOf(C)]
+      const renderData = {
+        __listResults: [landed[0]!.url, landed[1]!.url, ""],
+        generatedResults: landed,
+        __listResultStamps: [{ quality: "proxy", clipKey: landed[0]!.clipKey }, { quality: "proxy", clipKey: landed[1]!.clipKey }, {}],
+      }
+      const bases = new Map(replanned.map((c) => [planClipKeyAt([c], 0)!, SETTINGS_BASIS]))
+      const states = (data: Record<string, unknown>) =>
+        buildClipCards({ plan: replanned, editedEdl: undefined, renderData: data, hops: DIRECT, renderBases: bases })!.cards.map((c) => c.state)
+      // Without the inputs the run sent, the hole names no clip.
+      expect(states(renderData)).toEqual(["preview", "preview", "no-preview"])
+      // With them, it names D — which no card has — so X is not failed.
+      expect(states({ ...renderData, __listInputs: [A, C, D].map((c) => JSON.stringify(c)) })).toEqual(["preview", "preview", "no-preview"])
+    })
+
+    it("inputs from another batch (a landed take is not its row's input) are not read", () => {
+      const renderData = { ...batchOn(ALL, [2], "legacy"), __listInputs: inputsOn([1, 0, 2, 3, 4, 5, 6, 7]) }
+      expect(build({ renderData }).cards[2]!.state).toBe("no-preview")
+    })
+
+    it("behind Camera Switch, never from the inputs (the switch moves a clip's edges)", () => {
+      expect(build({ hops: SWITCHED, renderData: { ...batchOn(ALL, [2], "legacy"), __listInputs: inputsOn(ALL) } }).cards[2]!.state).toBe("no-preview")
+    })
   })
 })
 

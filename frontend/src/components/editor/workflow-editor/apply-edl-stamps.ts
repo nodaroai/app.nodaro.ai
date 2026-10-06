@@ -14,11 +14,17 @@
  * come from an older plan (the same-run rule, R1 a). Such a take reads as
  * unknown, never as current.
  *
+ * `browserRenderRowSentStamps` is what each row of the browser's own fan-out
+ * of a render is sent for — its clip and the run's quality — stamped on every
+ * batch row up front (decided 2026-10-06), like the server's
+ * `applyEdlRowSentStamps`, and under the same run set: behind Camera Switch no
+ * row is keyed.
+ *
  * `currentRenderPlanBasis` is the same rule with the pass-through nodes in the
  * run: the basis Render final or Update preview would stamp now, which the
  * review inspector compares a take with (A3-2).
  */
-import { renderPlanBasis, type RenderGraphEdge, type RenderGraphNode } from "@nodaro/shared"
+import { isRenderNodeType, renderPlanBasis, renderPlanRowClipKeys, renderRunQuality, renderSentRowStamps, type RenderGraphEdge, type RenderGraphNode, type RunResultRowStamp } from "@nodaro/shared"
 import type { WorkflowNode } from "@/types/nodes"
 import { editPlanOutputOf } from "@/lib/edit-plan-saved-output"
 import { extractNodeOutputAsList } from "./node-input-resolver"
@@ -59,4 +65,34 @@ export function currentRenderPlanBasis(
   row: number | undefined,
 ): string | undefined {
   return renderPlanBasis(renderId, nodes, edges, planOutputOf, row, new Set(nodes.map((n) => n.id)))
+}
+
+/**
+ * What EVERY iteration of a render's fan-out in the browser is sent for,
+ * row-aligned with its batch: the shared `renderSentRowStamps` (the rule the
+ * server's orchestrator calls too) — the quality the run renders at, and the
+ * clip `renderPlanRowClipKeys` names on the list rows (`FanOutPlan.rows`, never
+ * the iteration number), the plan read as the canvas holds it (the same reader
+ * execute-node's `renderPlanClipKey` call uses). The run set is the render
+ * alone, as for `browserRenderPlanBasis`: behind Camera Switch the render
+ * iterates the switch's SAVED batch, which an older review can have made, so
+ * no row is keyed. `undefined` for a node that is not a render. The list
+ * execution stamps it on every row, a failed one too.
+ */
+export function browserRenderRowSentStamps(
+  node: RenderGraphNode & { readonly data?: unknown },
+  nodes: readonly RenderGraphNode[],
+  edges: readonly RenderGraphEdge[],
+  rows: ReadonlyArray<number | undefined>,
+): RunResultRowStamp[] | undefined {
+  if (!isRenderNodeType(node.type)) return undefined
+  const keys = renderPlanRowClipKeys(
+    node.id,
+    nodes,
+    edges,
+    (planNode) => extractNodeOutputAsList(planNode as WorkflowNode, "edl"),
+    rows,
+    new Set([node.id]),
+  )
+  return renderSentRowStamps(renderRunQuality(node.data as Readonly<Record<string, unknown>> | undefined), keys)
 }

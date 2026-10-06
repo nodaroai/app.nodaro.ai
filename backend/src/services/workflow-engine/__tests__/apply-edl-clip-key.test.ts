@@ -14,21 +14,34 @@ import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { describe, it, expect } from "vitest"
 import { EDITED_EDL_VERSION, editPlanBasis, edlSpanKey, planFanOut, renderReadBasis } from "@nodaro/shared"
-import { buildPayload } from "../payload-builder.js"
+import { applyEdlRowSentStamps, buildPayload } from "../payload-builder.js"
 import { getListFanOutForNode, resolveNodeInputs } from "../input-resolver.js"
 import { extractSavedNodeOutput } from "../output-extractor.js"
 import { seededFromSavedData } from "../saved-data.js"
 import { resolveFanOutIterationInputs } from "../../../workers/fan-out-inputs.js"
+import { assembleFanOutResult, type FanOutIterationValue } from "../../../workers/fan-out-result.js"
 import type { NodeExecutionState, SimpleEdge, SimpleNode } from "../types.js"
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 /** `expectedRows: null` — the render does not fan out (a wire that hands on one value): it runs once, on no row. */
 /** `dropped`: the plan clips the person dropped in review (the TA16 holes). */
-interface Case { name: string; nodes: SimpleNode[]; edges: SimpleEdge[]; expectedRows: number[] | null; expected: string[]; direct: boolean; dropped?: number[] }
+/** `failedIteration` / `expectedStamps`: the batch's row stamps when that iteration fails (both engines assert them). */
+interface Case {
+  name: string
+  nodes: SimpleNode[]
+  edges: SimpleEdge[]
+  expectedRows: number[] | null
+  expected: string[]
+  direct: boolean
+  dropped?: number[]
+  failedIteration?: number
+  expectedStamps?: Array<Record<string, string>>
+}
 const FIXTURE = JSON.parse(readFileSync(join(HERE, "fixtures", "apply-edl-clip-key.json"), "utf8")) as {
   plan: SimpleNode
   render: SimpleNode
   cases: Case[]
+  staleSwitchBatch: Case & { expectedFailedStamp: Record<string, string> }
 }
 
 /** The plan as the case's review leaves it: `dropped` applied as its editedEdl. */
@@ -62,8 +75,11 @@ function run(render: SimpleNode, c: Case, ran: ReadonlySet<string> = new Set()) 
   if (!plan) {
     const inputs = resolveNodeInputs(render, c.edges, nodeStates, nodes)
     const { payload } = buildPayload(render, "job-once", inputs, "ul", { nodes, edges: c.edges, nodeStates, listRow: undefined })
-    return { rows: null, iterations: [{ clipKey: payload.clipKey as string | undefined, planBasis: payload.planBasis as string | undefined, edl: inputs.edl }] }
+    return { rows: null, rowSent: null, rowKeys: null, iterations: [{ clipKey: payload.clipKey as string | undefined, planBasis: payload.planBasis as string | undefined, edl: inputs.edl }] }
   }
+  // What the orchestrator stamps on every row of the batch, before any iteration runs.
+  const rowSent = applyEdlRowSentStamps(render, nodes, c.edges, nodeStates, plan.rows)!
+  const rowKeys = rowSent.map((stamp) => stamp.clipKey)
   const iterations = plan.items.map((_, k) => {
     const inputs = resolveFanOutIterationInputs(render, plan, k, c.edges, nodeStates, nodes)
     const { payload } = buildPayload(render, `job-${k}`, inputs, "ul", {
@@ -71,7 +87,7 @@ function run(render: SimpleNode, c: Case, ran: ReadonlySet<string> = new Set()) 
     })
     return { clipKey: payload.clipKey as string | undefined, planBasis: payload.planBasis as string | undefined, edl: inputs.edl }
   })
-  return { rows: plan.rows as number[], iterations }
+  return { rows: plan.rows as number[], rowSent, rowKeys, iterations }
 }
 
 describe("the clipKey of a render whose clips a selector picks (server)", () => {
@@ -112,6 +128,68 @@ describe("the clipKey of a render whose clips a selector picks (server)", () => 
         expect(planBasis, c.name).toBe(renderReadBasis(planClipOf(clipKey)))
         expect(planBasis, c.name).toMatch(/^[0-9a-f]{16}$/)
       }
+    }
+  })
+
+  // The render's batch is in ITERATION space: one row per iteration the plan
+  // ran, sized by the orchestrator's `assembleFanOutResult(settled,
+  // items.length)`. A dropped clip has no iteration, so it has no row in the
+  // batch. Every row names the clip its iteration cut, a FAILED one included
+  // (decided 2026-10-06), so a reader matches rows to clips by key.
+  // Behind a Camera Switch the keys follow the same-run rule: the switch ran
+  // in the render's run (Update preview, Render final), so its batch is the
+  // review as it is now.
+  const ranFor = (c: Case) => new Set(c.nodes.some((n) => n.type === "camera-switch") ? ["switch"] : [])
+
+  it("every row of the batch names its clip up front: the key each iteration stamps, and the run's quality", () => {
+    for (const c of FIXTURE.cases.filter((x) => x.expectedRows !== null)) {
+      const { rowSent, rowKeys, iterations } = run(FIXTURE.render, c, ranFor(c))
+      expect(rowKeys, c.name).toEqual(c.expected)
+      expect(rowKeys, c.name).toEqual(iterations.map((i) => i.clipKey))
+      expect(rowSent!.map((s) => s.quality), c.name).toEqual(c.expected.map(() => "proxy"))
+    }
+  })
+
+  it("behind a Camera Switch that did not run in the render's run, no row is keyed (the same-run rule)", () => {
+    const switched = [...FIXTURE.cases.filter((x) => x.expectedRows !== null && x.nodes.some((n) => n.type === "camera-switch")), FIXTURE.staleSwitchBatch]
+    for (const c of switched) {
+      const { rows, rowSent } = run(FIXTURE.render, c)
+      expect(rows, c.name).toEqual(c.expectedRows)
+      expect(rowSent, c.name).toEqual(rows!.map(() => ({ quality: "proxy" })))
+    }
+  })
+
+  it("a switch batch saved under an older review: the failed row names no clip, never the clip the review now puts there", () => {
+    const c = FIXTURE.staleSwitchBatch
+    const { rowSent, iterations } = run(FIXTURE.render, c)
+    const settled: PromiseSettledResult<FanOutIterationValue>[] = iterations.map((_, k) =>
+      k === c.failedIteration
+        ? { status: "rejected", reason: new Error("render failed") }
+        : { status: "fulfilled", value: { index: k, resultValue: `https://cdn.test/render-${k}.mp4`, result: { output: { videoUrl: `https://cdn.test/render-${k}.mp4`, quality: "proxy" }, creditsUsed: 0 } } as FanOutIterationValue },
+    )
+    const { output } = assembleFanOutResult(settled, iterations.length, FIXTURE.render.type, rowSent!)
+    expect((output.listResultStamps as unknown[])[c.failedIteration!]).toEqual(c.expectedFailedStamp)
+  })
+
+  it("a failed iteration's row still names its clip (the engines' shared stamps)", () => {
+    for (const c of FIXTURE.cases.filter((x) => x.expectedStamps)) {
+      const { rows, rowSent, iterations } = run(FIXTURE.render, c)
+      expect(rows, c.name).toEqual(c.expectedRows)
+      const settled: PromiseSettledResult<FanOutIterationValue>[] = iterations.map(({ clipKey }, k) =>
+        k === c.failedIteration
+          ? { status: "rejected", reason: new Error("render failed") }
+          : {
+              status: "fulfilled",
+              value: {
+                index: k,
+                resultValue: `https://cdn.test/render-${k}.mp4`,
+                result: { output: { videoUrl: `https://cdn.test/render-${k}.mp4`, quality: "proxy", clipKey }, creditsUsed: 0 },
+              } as FanOutIterationValue,
+            },
+      )
+      const { output } = assembleFanOutResult(settled, iterations.length, FIXTURE.render.type, rowSent!)
+      expect(output.listResults, c.name).toEqual(iterations.map((_, k) => (k === c.failedIteration ? "" : `https://cdn.test/render-${k}.mp4`)))
+      expect(output.listResultStamps, c.name).toEqual(c.expectedStamps)
     }
   })
 

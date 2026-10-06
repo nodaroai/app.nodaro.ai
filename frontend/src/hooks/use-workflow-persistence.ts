@@ -13,7 +13,7 @@ import { reconcileCompletedSingleNodeJobs, buildScene3DRecoveryPatch, isScene3DN
 import { prefetchModelCredits } from "@/ee/hooks/queries/use-credits-queries"
 import { toast } from "sonner"
 import type { WorkflowNode, WorkflowEdge, CharacterDefinition, GeneratedResult, SceneNodeData, JobErrorHint } from "@/types/nodes"
-import { filterCloneNodes, stripTransientRuntimeData } from "@nodaro/shared"
+import { filterCloneNodes, isRenderNodeType, stripTransientRuntimeData } from "@nodaro/shared"
 import type { RenderQuality, RunResultRowStamp } from "@nodaro/shared"
 import { buildWorkflowDelta, applyDeltaToGraph, findContestedNodes } from "@/lib/workflow-delta"
 import { orderNodesParentFirst } from "@/components/editor/workflow-editor/group-coords"
@@ -584,6 +584,8 @@ export function applyBackendExecutionState(
           // The row-aligned twin rides along (a list of URLs cut by Extract Field
           // lands here too), so a canvas run after a reload still pairs by row.
           data.__alignedListResults = state.output.alignedListResults
+          // A render's row stamps: the clip each row was sent for, a failed one too.
+          data.__listResultStamps = isRenderNodeType(nodeType) ? state.output.listResultStamps : undefined
           data.__listTotal = state.output.listResults!.length
           data.__listCompleted = state.output.listResults!.length
         } else {
@@ -775,6 +777,8 @@ export function applyCompletedExecutionResults(
       newData.__listResults = state.output.listResults
       // …and its row-aligned twin (see the first sync site above).
       newData.__alignedListResults = state.output.alignedListResults
+      // …and a render's row stamps (see the first sync site above).
+      newData.__listResultStamps = isRenderNodeType(nodeType) ? state.output.listResultStamps : undefined
       newData.__listTotal = state.output.listResults!.length
       newData.__listCompleted = state.output.listResults!.length
     } else if (outputUrl) {

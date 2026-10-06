@@ -947,6 +947,7 @@ export function buildDuplicatedNodeData(
   delete d.errorMessage
   delete d.__listResults
   delete d.__alignedListResults
+  delete d.__listResultStamps
   // Clear "owns DB row X" pointers so the clone creates its own entity row on
   // first save. Otherwise editing/deleting the clone mutates the original's
   // row (object-page-modal passes the id to UPDATE-instead-of-INSERT) and the

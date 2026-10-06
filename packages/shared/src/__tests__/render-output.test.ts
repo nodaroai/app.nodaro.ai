@@ -8,7 +8,10 @@ import {
   renderPlanClipKey,
   renderPlanNodeId,
   renderPlanPath,
+  renderPlanRowClipKeys,
   renderResultStamp,
+  renderRunQuality,
+  renderSentRowStamps,
   savedRenderBatch,
   savedRenderBatchUrls,
   savedRenderOutput,
@@ -202,6 +205,8 @@ describe("renderPlanClipKey — the clip a row reads is picked by every selector
     { id: "render", type: "apply-edl" },
   ]
   const planList = () => PLAN
+  /** A render-only run (no pass-through node ran with it). */
+  const ranRender: ReadonlySet<string> = new Set(["render"])
   const pick = (listExpression: string) => ({ selectorMode: "list" as const, listExpression })
 
   it("a selector on the render's edl wire: row k is row k of the SELECTED clips, not of the plan", () => {
@@ -228,6 +233,50 @@ describe("renderPlanClipKey — the clip a row reads is picked by every selector
     ]
     expect(renderPlanPath("render", nodes, edges)?.planId).toBe("plan")
     expect(renderPlanClipKey("render", nodes, edges, planList, 0)).toBe("4000-5000")
+  })
+
+  it("renderPlanRowClipKeys keys every iteration of a fan-out by its list row, the key renderPlanClipKey gives that row", () => {
+    const edges = [{ source: "plan", sourceHandle: "edl", target: "render", targetHandle: "edl", data: pick("2,3,4") }]
+    const rows = [0, 1, 2]
+    expect(renderPlanRowClipKeys("render", nodes, edges, planList, rows, ranRender)).toEqual(["2000-3000", "4000-5000", "6000-7000"])
+    for (const row of rows) {
+      expect(renderPlanRowClipKeys("render", nodes, edges, planList, [row], ranRender)[0]).toBe(renderPlanClipKey("render", nodes, edges, planList, row))
+    }
+    // A dropped clip (a hole in the plan's list) has no iteration: the rows skip it.
+    const holed = [PLAN[0], "", PLAN[2], PLAN[3]]
+    const direct = [{ source: "plan", sourceHandle: "edl", target: "render", targetHandle: "edl" }]
+    expect(renderPlanRowClipKeys("render", nodes, direct, () => holed, [0, 2, 3], ranRender)).toEqual(["0-1000", "4000-5000", "6000-7000"])
+  })
+
+  it("renderPlanRowClipKeys names nothing for a render no Edit Plan feeds, one key slot per row", () => {
+    expect(renderPlanRowClipKeys("render", nodes, [], planList, [0, 1], ranRender)).toEqual([undefined, undefined])
+  })
+
+  // The same-run rule (renderPlanBasis): the switch's SAVED batch was made under
+  // the review as it was then. Here it ran with all four clips kept; the person
+  // has dropped clip 1 since, and only the render runs. Its rows are the four
+  // the switch saved, so the review as it is now (three kept clips) would key
+  // row 1, which cut clip 1, as clip 2 — and wrap row 3 onto clip 0.
+  it("renderPlanRowClipKeys behind a Camera Switch that did not run in this run names no row", () => {
+    const switched = [
+      { source: "plan", sourceHandle: "edl", target: "switch", targetHandle: "edl" },
+      { source: "switch", sourceHandle: "edl", target: "render", targetHandle: "edl" },
+    ]
+    const reviewedNow = () => [PLAN[0], "", PLAN[2], PLAN[3]]
+    const rows = [0, 1, 2, 3]
+    expect(renderPlanRowClipKeys("render", nodes, switched, reviewedNow, rows, ranRender)).toEqual([undefined, undefined, undefined, undefined])
+    // With the switch in the run, its batch is the review as it is now.
+    expect(renderPlanRowClipKeys("render", nodes, switched, reviewedNow, [0, 1, 2], new Set(["switch", "render"]))).toEqual([
+      "0-1000",
+      "4000-5000",
+      "6000-7000",
+    ])
+  })
+
+  it("renderSentRowStamps stamps every row with the run's quality, and its clip when the run names one", () => {
+    expect(renderSentRowStamps("proxy", ["0-1000", undefined])).toEqual([{ quality: "proxy", clipKey: "0-1000" }, { quality: "proxy" }])
+    expect(renderRunQuality({ quality: "proxy" })).toBe("proxy")
+    for (const data of [{ quality: "final" }, {}, { quality: "PROXY" }, undefined]) expect(renderRunQuality(data)).toBe("final")
   })
 
   it("a row past the clips starts over from the first, as both input resolvers read it", () => {

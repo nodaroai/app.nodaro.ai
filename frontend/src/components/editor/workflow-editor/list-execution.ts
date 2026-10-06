@@ -9,8 +9,18 @@ import { TIER_PARALLELISM } from "@/lib/pricing-data";
 import { hasCredits } from "@/lib/edition";
 import { executeNode } from "./execute-node";
 import type { ExecutionContext } from "./types";
-import { REPEAT_PLACEHOLDER, FAN_OUT_ALL_OR_NOTHING_TYPES, decodeProviderItem, settledWithLimit, fanOutTextFeedsPrompt, fanOutUrlItemIsText, isFanOutUrlItem, type FanOutItemMeta, type FanOutPlan } from "@nodaro/shared"
+import { REPEAT_PLACEHOLDER, FAN_OUT_ALL_OR_NOTHING_TYPES, decodeProviderItem, isRenderNodeType, settledWithLimit, fanOutTextFeedsPrompt, fanOutUrlItemIsText, isFanOutUrlItem, type FanOutItemMeta, type FanOutPlan } from "@nodaro/shared"
 import { setSuppressToasts, RUN_START_RESET } from "./poll-job";
+import { browserRenderRowSentStamps } from "./apply-edl-stamps";
+import { fanOutRowStamps } from "./fan-out-row-stamps";
+
+/** An item that never ran: the per-item guard's "Cancelled" (a Stop, or the
+ *  batch cancelling the rest after a failure), or settledWithLimit's
+ *  "Execution cancelled" for an item it never started. Not a failure. */
+function isCancellation(reason: unknown): boolean {
+  const message = reason instanceof Error ? reason.message.trim() : "";
+  return message === "Cancelled" || message === "Execution cancelled";
+}
 
 /**
  * What one failed item says, for the node's summary: its error's own words.
@@ -19,7 +29,7 @@ import { setSuppressToasts, RUN_START_RESET } from "./poll-job";
  */
 function failureReason(reason: unknown): string | undefined {
   const message = reason instanceof Error ? reason.message.trim() : "";
-  return message && message !== "Cancelled" && message !== "Execution cancelled" ? message : undefined;
+  return message && !isCancellation(reason) ? message : undefined;
 }
 
 /**
@@ -46,6 +56,14 @@ export async function executeNodeForList(
 
   const { updateNodeData } = useWorkflowStore.getState();
   const runId = crypto.randomUUID();
+  // A render's batch has one row per run, not one per plan clip: every row is
+  // stamped with what it is sent for (its clip and the run's quality), read up
+  // front on the list rows (never the iteration number), so a row that fails
+  // still names its clip (decided 2026-10-06) — the server's orchestrator
+  // stamps the same.
+  const graph = useWorkflowStore.getState();
+  const rowSent = fanOut ? browserRenderRowSentStamps(node, graph.nodes, graph.edges, fanOut.rows) : undefined;
+  const stampsRows = isRenderNodeType(node.type);
 
   // Snapshot prior history before we clear it on the next line; re-appended
   // after the fan-out settles so prior runs aren't lost.
@@ -62,6 +80,8 @@ export async function executeNodeForList(
     __listResults: [],
     // Each iteration writes its own row (`writeListResultMeta`); a new batch starts empty.
     __listResultMeta: [],
+    // A render's row stamps are written with the batch; none from an earlier one.
+    __listResultStamps: undefined,
     __listInputs: [...items],
     __currentRunId: runId,
     // Signals the abandon-guard that N iterations share this node's single
@@ -131,11 +151,14 @@ export async function executeNodeForList(
     const results: string[] = new Array(items.length).fill("");
     // Toasts are muted for the batch, so the node's summary has to say why.
     let firstReason: string | undefined;
-    for (const entry of settled) {
+    // The items that never ran (`settled` is task-aligned: slot i is item i).
+    const cancelledRows = new Set<number>();
+    for (const [slot, entry] of settled.entries()) {
       if (entry.status === "fulfilled") {
         results[entry.value.index] = entry.value.value;
       } else {
         failedCount++;
+        if (isCancellation(entry.reason)) cancelledRows.add(slot);
         firstReason ??= failureReason(entry.reason);
         // Cancel remaining on first non-cancellation failure
         if (!cancelRef.cancelled) {
@@ -179,6 +202,8 @@ export async function executeNodeForList(
       __listTotal: items.length,
       __listCompleted: completedCount + failedCount,
       __listResults: results,
+      // A render's row stamps, row-aligned with __listResults (`fanOutRowStamps`).
+      __listResultStamps: stampsRows ? fanOutRowStamps(node.type, results, landed, rowSent, cancelledRows) : undefined,
       __listInputs: [...items],
       generatedResults: [...batchResults, ...preBatchHistory],
       activeResultIndex: 0,

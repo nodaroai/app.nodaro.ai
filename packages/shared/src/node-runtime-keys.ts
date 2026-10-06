@@ -48,6 +48,9 @@ export const EXECUTION_DATA_KEYS: ReadonlySet<string> = new Set([
   // Row-aligned twin of __listResults (Extract Field, List output) — read only
   // by the fan-out so two lists cut from one array pair by row.
   "__alignedListResults",
+  // A render's fan-out row stamps, row-aligned with __listResults: each row's
+  // take identity, and the clip every row was sent for (a failed row too).
+  "__listResultStamps",
   // List fan-out window flag (abandon-guard exemption). Set/cleared by
   // executeNodeForList — purely execution-related, never user-edited.
   "__listRunning",

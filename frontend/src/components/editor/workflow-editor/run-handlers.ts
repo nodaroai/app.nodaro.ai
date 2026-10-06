@@ -1,7 +1,7 @@
 import type { MutableRefObject } from "react";
 import { executionErrorText } from "@/lib/execution-error-text";
 import { toast } from "sonner";
-import { assertCanvasExecutionAllowed, isProjectedTriggerNodeType, SequenceExecutionRequiredError } from "@nodaro/shared";
+import { assertCanvasExecutionAllowed, isProjectedTriggerNodeType, isRenderNodeType, SequenceExecutionRequiredError } from "@nodaro/shared";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { getJobStatusLean, getUserCredits, getWorkflowExecution, runWorkflow, streamWorkflowExecution, WorkflowAlreadyRunningError, withDedupRaceRetry , NodaroConnectionRequiredError } from "@/lib/api";
 import { generateIdempotencyKey } from "@/lib/idempotency-key";
@@ -222,6 +222,8 @@ const HISTORY_FIELDS: ReadonlyArray<string> = [
 const LIST_STATE_FIELDS: ReadonlyArray<string> = [
   "__listResults",
   "__alignedListResults",
+  // A render's row stamps (the clip each row was sent for): the batch's own.
+  "__listResultStamps",
   "__listTotal",
   "__listCompleted",
   "__listInputs",
@@ -1999,6 +2001,10 @@ function syncNodeStatesToStore(
         // server-side run pairs by row exactly like that run did. Always written
         // (undefined clears a stale one from an earlier run).
         updates.__alignedListResults = state.output.alignedListResults;
+        // A render's row stamps: every row names the clip it was sent for, a
+        // failed one too, so the clip cards match rows by key (decided
+        // 2026-10-06). Always written (undefined clears an earlier batch's).
+        updates.__listResultStamps = isRenderNodeType(nodeType) ? state.output.listResultStamps : undefined;
         // Selector dual-channel mirror — orchestrator state carries
         // pickedResults/restResults but the SelectorNode UI reads from
         // node.data (`__pickedResults`/`__restResults` + the snapshot
