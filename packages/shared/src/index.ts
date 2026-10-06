@@ -1671,6 +1671,8 @@ export type { CharacterMotionMetadata } from "./character-motion-metadata.js"
 export * from "./edl.js"
 export * from "./speaker-layouts.js"
 export * from "./edl-multicam.js"
+// Speaker tracks: the face-tracking result (box body + the node's descriptor) and its validators.
+export * from "./speaker-tracks.js"
 export * from "./camera-switch-contract.js"
 export * from "./edit-plan-contract.js"
 // A render's saved output (one reader for both engines) and its result stamps.
