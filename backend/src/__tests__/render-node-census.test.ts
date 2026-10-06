@@ -60,6 +60,7 @@ const ALLOWLIST: readonly Entry[] = [
   ["frontend/src/components/editor/workflow-editor/types.ts", `"apply-edl:proxy"`, "pricing row (NODE_CREDIT_COSTS)"],
   ["frontend/src/components/editor/workflow-editor/types.ts", `if (nodeType === "apply-edl"`, "pricing: the per-minute rate (C4)"],
   ["frontend/src/components/editor/workflow-editor/types.ts", `"apply-edl"`, "pricing: OUTPUT_MINUTE_ESTIMATORS row (C4)"],
+  ["frontend/src/components/editor/workflow-editor/types.ts", `unitKind: node.type === "apply-edl"`, "pricing: the confirm's per-minute unit (C4)"],
   ["packages/shared/src/credit-identifiers.ts", `export function applyEdlCreditId(quality: unknown): "apply-edl" | "apply-edl:proxy"`, "the credit-id function itself"],
   ["packages/shared/src/credit-identifiers.ts", `return quality === "proxy" ? "apply-edl:proxy" : "apply-edl"`, "the credit-id function itself"],
 

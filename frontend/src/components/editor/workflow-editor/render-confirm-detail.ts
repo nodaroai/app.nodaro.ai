@@ -22,7 +22,7 @@
  * "Feeds" is the stop rule's own definition (`buildFeedMaps`), as for the run
  * set itself (`render-final-set.ts`).
  */
-import { buildFeedMaps, type FeedEdge, type FeedNode } from "@nodaro/shared"
+import { buildFeedMaps, isRenderNodeType, type FeedEdge, type FeedNode } from "@nodaro/shared"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 import { isExecutableNode, type RunConfirmInfo, type RunConfirmLine, type RunCreditLine } from "./types"
 import { runNodeLabel } from "./estimate-run-credits"
@@ -108,7 +108,7 @@ export function renderConfirmDetail(
       return {
         ...line,
         ...(ancestors.has(line.nodeId) ? { rerunsFirst: true } : {}),
-        ...(node?.type === "apply-edl" ? { renderQuality: quality === "proxy" ? ("proxy" as const) : ("final" as const) } : {}),
+        ...(isRenderNodeType(node?.type) ? { renderQuality: quality === "proxy" ? ("proxy" as const) : ("final" as const) } : {}),
       }
     })
 
