@@ -174,4 +174,16 @@ describe("node-registry credit bands are derived from the price table", () => {
         "drop the literal (enrichment fills it) or add the node to CREDIT_BAND_SOURCES",
     ).toEqual([])
   })
+
+  it("a per-unit RATE row never widens a band: text-to-speech states the flat per-request rows, not its :per-100-chars rows", () => {
+    // `<model>:per-100-chars` (decided 2026-10-06) prices ONE started 100 characters
+    // and is read only while SPEECH_LENGTH_PRICING_ENABLED is on; `familyIds` would
+    // otherwise fold it in and advertise "2-30" for a run that is never below 16.
+    const ids = CREDIT_BAND_SOURCES["text-to-speech"]!.ids
+    expect(ids.length).toBeGreaterThan(0)
+    expect(ids.some((id) => id.endsWith(":per-100-chars"))).toBe(false)
+    expect(Object.keys(STATIC_CREDIT_COSTS).some((id) => id.endsWith(":per-100-chars"))).toBe(true)
+    expect(NODE_REGISTRY.find((d) => d.type === "text-to-speech")!.creditCost).toBe(deriveBand("text-to-speech"))
+    expect(deriveBand("text-to-speech")).toBe("15-30")
+  })
 })

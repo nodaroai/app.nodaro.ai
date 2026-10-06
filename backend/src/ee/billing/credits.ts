@@ -1295,11 +1295,24 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "replicate-mmaudio:300s": 110,
   "hailuo-avatar": 190,           // estimated (not in KIE pricing data)
   // ── Audio / TTS / Music ──
-  "elevenlabs-v3": 30,             // direct ElevenLabs API
-  "elevenlabs-v4": 30,             // direct ElevenLabs API; the same flat price as v3, per request
-  "elevenlabs-turbo": 15,         // per 1K chars
-  "elevenlabs-multilingual": 30,  // per 1K chars
+  "elevenlabs-v3": 30,             // direct ElevenLabs API — flat per request; the price with length pricing off
+  "elevenlabs-v4": 30,             // same flat price as v3 (parity, decided 2026-10-05)
+  "elevenlabs-turbo": 15,         // flat per request (NOT per 1K chars — that scaling never existed)
+  "elevenlabs-multilingual": 30,  // flat per request (NOT per 1K chars)
   "elevenlabs": 15,               // alias for turbo
+  // Length-based speech pricing (decided 2026-10-06): the price of ONE started
+  // 100 characters, read by lib/speech-credits.ts while
+  // SPEECH_LENGTH_PRICING_ENABLED is on; a request is at least
+  // SPEECH_FLOOR_UNITS (8) units. The flat rows above stay as they are: they
+  // are what a run costs with the flag off and what every client that knows
+  // nothing of length pricing shows. Values are re-derived from
+  // lib/pricing/elevenlabs-speech-cost.ts by speech-unit-pricing.test.ts —
+  // never hand-edited alone. The legacy `elevenlabs` alias has no row: it
+  // prices on turbo's (speechUnitCreditId).
+  "elevenlabs-v3:per-100-chars": 4,
+  "elevenlabs-v4:per-100-chars": 4,
+  "elevenlabs-turbo:per-100-chars": 2,
+  "elevenlabs-multilingual:per-100-chars": 4,
   // Sound effects are priced by the length asked for: one row per whole second
   // (`elevenlabs-sfx:1s` … `:30s`, ELEVENLABS_SFX_PER_SECOND_ROWS below), picked
   // by `textToAudioCreditId` on every path. The bare row is the no-duration
@@ -1345,8 +1358,10 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "whisper": 40,                  // Replicate openai/whisper — no word timings (BASE price, = migration 288; the service markup is applied on top at read time)
   "incredibly-fast-whisper": 40,  // Replicate fast whisper — word timings on request (BASE price, = migration 288)
   "elevenlabs-stt": 22,           // avg (from audit)
-  "elevenlabs-dialogue": 25,     // direct ElevenLabs API; flat per request, whatever the length
+  "elevenlabs-dialogue": 25,     // direct ElevenLabs API; flat per request, whatever the length (the price with length pricing off)
+  "elevenlabs-dialogue:per-100-chars": 4, // one started 100 characters across lines (decided 2026-10-06)
   "elevenlabs-dialogue-v4": 25,  // direct ElevenLabs API; the same flat price as v3 dialogue, per request
+  "elevenlabs-dialogue-v4:per-100-chars": 4, // as v3 dialogue: one started 100 characters across lines (decided 2026-10-06)
   "elevenlabs-voice-changer": 40,  // ElevenLabs speech-to-speech
   // ElevenLabs dubbing (async) — PER MINUTE of the dubbed span (route
   // computeCredits: ceil(seconds/60) x this base, min 1 minute; 120s

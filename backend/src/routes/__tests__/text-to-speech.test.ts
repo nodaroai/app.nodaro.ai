@@ -27,12 +27,17 @@ vi.mock("@/lib/queue.js", () => ({
   redis: {},
 }))
 
-// The credit guard is a no-op here, but the resolver the route hands it is kept so
-// a test can ask it which model it would bill (it must be the model the run uses).
-const guard = vi.hoisted(() => ({ resolver: undefined as undefined | ((req: { body: unknown }) => string) }))
+// The credit guard is a no-op here, but the resolver and the options the route
+// hands it are kept so a test can ask which model it would bill and what it
+// would compute for the body (the length-pricing hook, when the flag is on).
+const guard = vi.hoisted(() => ({
+  resolver: undefined as undefined | ((req: { body: unknown }) => string),
+  opts: undefined as undefined | { computeCredits?: (body: unknown, req: unknown) => number | Promise<number> },
+}))
 vi.mock("@/middleware/credit-guard.js", () => ({
-  creditGuard: (resolver: (req: { body: unknown }) => string) => {
+  creditGuard: (resolver: (req: { body: unknown }) => string, opts?: { computeCredits?: (body: unknown, req: unknown) => number | Promise<number> }) => {
     guard.resolver = resolver
+    guard.opts = opts
     return async () => {}
   },
   reserveCreditsForJob: vi.fn().mockResolvedValue({
@@ -58,6 +63,7 @@ vi.mock("@/lib/config.js", () => ({
   isCommunity: () => false,
   isBusiness: () => false,
   hasAdmin: () => true,
+  speechLengthPricingEnabled: () => false,
 }))
 
 vi.mock("@/lib/url-validator.js", async () => {

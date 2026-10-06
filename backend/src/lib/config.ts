@@ -368,6 +368,17 @@ export const envSchema = z.object({
     .string()
     .optional()
     .transform((v) => v === "true" || v === "1"),
+  /** Length-based speech pricing (decided 2026-10-06): Text to Speech and Text
+   *  to Dialogue reserve per started 100 characters instead of the flat row.
+   *  Default OFF — the two seams (route guards, orchestrator override) are
+   *  byte-identical to today while it is off. Boot-time, per environment:
+   *  staging runs `dev` code on the production database, so this is the one
+   *  switch that can be on there and off in production. Strict parsing like
+   *  MCP_ENABLED. Read through `speechLengthPricingEnabled()`. */
+  SPEECH_LENGTH_PRICING_ENABLED: z
+    .string()
+    .optional()
+    .transform((v) => v === "true" || v === "1"),
   /** Multi-tenant organizations rollout gate (cloud only — see hasOrganizations()).
    *  Default OFF so the feature ships dark and is flipped on deliberately at
    *  launch; the migrations run everywhere regardless. Strict parsing like
@@ -531,6 +542,11 @@ export function scheduleTriggersEnabled(): boolean {
 /** Site Capture is offered on this install (the SITE_CAPTURE_ENABLED switch; default on). */
 export function siteCaptureEnabled(): boolean {
   return config.SITE_CAPTURE_ENABLED
+}
+
+/** Length-based speech pricing is on for this process (SPEECH_LENGTH_PRICING_ENABLED; default off). */
+export function speechLengthPricingEnabled(): boolean {
+  return config.SPEECH_LENGTH_PRICING_ENABLED
 }
 
 function loadConfig() {

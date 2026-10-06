@@ -5,6 +5,8 @@ import { supabase } from "../lib/supabase.js"
 import { insertJob } from "../lib/insert-job.js"
 import { videoQueue } from "../lib/queue.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
+import { speechLengthPricingEnabled } from "../lib/config.js"
+import { dialogueBaseCredits } from "../lib/speech-credits.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
@@ -64,7 +66,19 @@ export async function textToDialogueRoutes(app: FastifyInstance) {
     // deployment that denies the default is not bypassed by omitting the field.
     preHandler: creditGuard(
       (req) => dialogueProviderOf((req.body as Record<string, unknown> | undefined)?.provider),
-      { denyResolvedModel: true },
+      // Length-based pricing (decided 2026-10-06): the sum of the lines' texts,
+      // every started 100 characters, on the chosen model's unit row, attached
+      // only while the flag is on. The Zod refine below refuses a script over
+      // the model's total cap, so a priced script is always one that runs whole.
+      speechLengthPricingEnabled()
+        ? {
+            denyResolvedModel: true,
+            computeCredits: (body) => {
+              const raw = body as { dialogue?: unknown; provider?: unknown } | undefined
+              return dialogueBaseCredits(raw?.dialogue, raw?.provider)
+            },
+          }
+        : { denyResolvedModel: true },
     ),
   }, async (req, reply) => {
     const parsed = textToDialogueBody.safeParse(req.body)

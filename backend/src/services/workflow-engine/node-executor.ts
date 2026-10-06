@@ -19,7 +19,8 @@ import { supabase } from "../../lib/supabase.js"
 import { insertInternalJob, JobBlockedError } from "../../lib/insert-job.js"
 import { videoQueue } from "../../lib/queue.js"
 import { renderQueue } from "../../lib/render-queue.js"
-import { hasCredits, config } from "../../lib/config.js"
+import { hasCredits, config, speechLengthPricingEnabled } from "../../lib/config.js"
+import { speechBaseCredits, dialogueBaseCredits, speechRunsAs } from "../../lib/speech-credits.js"
 import { mapReserveError } from "../../lib/reserve-errors.js"
 import { CreditsService } from "../../ee/billing/credits.js"
 import { refundJobCredits } from "../../workers/shared.js"
@@ -1369,6 +1370,34 @@ export async function computeLtxRetakeCreditOverride(
   return applyServiceMarkup(base, await getAppSettings(), modelIdentifier)
 }
 
+/**
+ * Text to Speech / Text to Dialogue are priced by length (decided 2026-10-06):
+ * the model's `:per-100-chars` row × started hundreds of the text this payload
+ * sends, at least 8 units — exactly what the route's guard charges for the same
+ * request (lib/speech-credits.ts is the one counter and reader), marked up once
+ * at the MODEL id's margin. Undefined for every other job, and for every speech
+ * job while SPEECH_LENGTH_PRICING_ENABLED is off: the flat DB row then reserves
+ * as it always has. Gated on the explicit jobName, not a payload heuristic; the
+ * flag is consulted only for a speech job, so no other job's reservation reads it.
+ */
+export async function computeSpeechCreditOverride(
+  jobName: string,
+  payload: Record<string, unknown>,
+  modelIdentifier: string,
+): Promise<number | undefined> {
+  if (jobName !== "text-to-speech" && jobName !== "text-to-dialogue") return undefined
+  if (!speechLengthPricingEnabled()) return undefined
+  const isSpeech = jobName === "text-to-speech"
+  const base = isSpeech
+    ? await speechBaseCredits(payload.provider, payload.text)
+    : await dialogueBaseCredits(payload.dialogue, payload.provider)
+  // The margin key is the model the request RUNS as — the id the REST guard marks up at. A node saved
+  // with the legacy alias carries `elevenlabs` as its modelIdentifier, while the guard bills the alias
+  // as `elevenlabs-turbo`; keying on the resolved model keeps a per-service margin on turbo reaching both.
+  const { applyServiceMarkup } = await import("../../ee/billing/service-margin.js")
+  return applyServiceMarkup(base, await getAppSettings(), isSpeech ? speechRunsAs(payload.provider) : modelIdentifier)
+}
+
 async function computeSeedance2RefVideoCreditOverride(
   payload: Record<string, unknown>,
   probedDurationsSec?: number[],
@@ -1897,6 +1926,7 @@ async function executeWorkerNode(
         await applyEdlCreditOverride(jobName, payload) ??
         await projectDubbingCreditOverride(jobName, payload) ??
         computeImageOverlayCreditOverride(payload) ??
+        (await computeSpeechCreditOverride(jobName, payload, modelIdentifier)) ??
         (await computeVideoUtilityCreditOverride(jobName, payload, modelIdentifier)) ??
         (await computeLtxExtendCreditOverride(jobName, payload, modelIdentifier)) ??
         (await computeLtxRetakeCreditOverride(jobName, payload, modelIdentifier)) ??

@@ -9,6 +9,8 @@ import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { TTS_PROVIDERS, getMaxTtsChars } from "@nodaro/shared"
 import { resolveOmittedTtsProvider } from "../lib/omitted-tts-provider.js"
+import { speechLengthPricingEnabled } from "../lib/config.js"
+import { speechBaseCredits } from "../lib/speech-credits.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { isVoiceGenderAllowed, premadeVoiceGender } from "../lib/voice-policy.js"
@@ -44,18 +46,43 @@ export const textToSpeechBody = z.object({
   languageCode: z.string().optional(),
 })
 
+/**
+ * The model the credit guard bills a RAW (pre-Zod) body as — and, while
+ * length pricing is on, prices it on. An omitted provider runs on the default
+ * speech model up to its own cap and on turbo above it (one shared function,
+ * also read by the handler, the workflow engine and the worker), so a long
+ * request is never priced for one model then truncated by that model's clamp;
+ * the legacy "elevenlabs" alias intentionally stays on turbo. Exported for the
+ * route tests and for the seam-parity test.
+ */
+export function resolveTextToSpeechGuardProvider(body: Record<string, unknown> | undefined): string {
+  const provider = (body?.provider as string) ?? resolveOmittedTtsProvider((body?.text as string) ?? "")
+  // Map legacy "elevenlabs" to "elevenlabs-turbo" for credit lookup
+  return provider === "elevenlabs" ? "elevenlabs-turbo" : provider
+}
+
 export async function textToSpeechRoutes(app: FastifyInstance) {
   app.post("/v1/text-to-speech", {
-    preHandler: creditGuard((req) => {
-      const body = req.body as Record<string, unknown>
-      // An omitted provider runs on the default speech model; the legacy "elevenlabs"
-      // alias intentionally stays on turbo. Length-aware: an omitted provider resolves
-      // to turbo once the text exceeds the default model's cap, so a long request is
-      // never priced for one model then truncated by that model's clamp.
-      const provider = (body?.provider as string) ?? resolveOmittedTtsProvider((body?.text as string) ?? "")
-      // Map legacy "elevenlabs" to "elevenlabs-turbo" for credit lookup
-      return provider === "elevenlabs" ? "elevenlabs-turbo" : provider
-    }, { denyResolvedModel: true }), // the id priced above is the model that runs, so the surface deny reads it too
+    preHandler: creditGuard(
+      (req) => resolveTextToSpeechGuardProvider(req.body as Record<string, unknown>),
+      // `denyResolvedModel`: the id priced above is the model that runs, so the
+      // surface deny reads it too.
+      // Length-based pricing (decided 2026-10-06), attached only while the flag
+      // is on so the flag-off guard is the one that runs today, byte for byte.
+      // BASE credits of the text as it will be SENT — the handler's clamp (below)
+      // and the worker's tag strip are both folded into the count, so the guard
+      // never reserves for 40,000 characters of a 5,000-character run. The guard
+      // marks it up once and carries it to reserveCreditsForJob.
+      speechLengthPricingEnabled()
+        ? {
+            denyResolvedModel: true,
+            computeCredits: (body) => {
+              const b = body as Record<string, unknown> | undefined
+              return speechBaseCredits(resolveTextToSpeechGuardProvider(b), b?.text)
+            },
+          }
+        : { denyResolvedModel: true },
+    ),
   }, async (req, reply) => {
     const parsed = textToSpeechBody.safeParse(req.body)
     if (!parsed.success) {

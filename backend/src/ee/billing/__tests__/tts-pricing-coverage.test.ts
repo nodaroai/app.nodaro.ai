@@ -34,8 +34,8 @@ describe("text-to-speech pricing coverage", () => {
     }
   })
 
-  it("v4 costs the same flat 30 credits as v3", () => {
-    expect(STATIC_CREDIT_COSTS["elevenlabs-v4"]).toBe(30)
+  it("v4 is priced at parity with v3 — the flat row and the per-100-characters row alike", () => {
     expect(STATIC_CREDIT_COSTS["elevenlabs-v4"]).toBe(STATIC_CREDIT_COSTS["elevenlabs-v3"])
+    expect(STATIC_CREDIT_COSTS["elevenlabs-v4:per-100-chars"]).toBe(STATIC_CREDIT_COSTS["elevenlabs-v3:per-100-chars"])
   })
 })

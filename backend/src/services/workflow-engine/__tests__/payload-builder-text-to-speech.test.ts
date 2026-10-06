@@ -103,10 +103,16 @@ describe("buildPayload — text-to-speech with no model anywhere", () => {
 
   it("never applies the length rule to a stored model, v3 or v4", () => {
     for (const provider of ["elevenlabs-v3", "elevenlabs-v4"]) {
-      const n = node("t1", "text-to-speech", { voiceId: "Rachel", provider, textSource: "direct", directText: "a".repeat(12000) })
-      const built = buildPayload(n, "job1", {}, "usage1")
+      // Within the stored model's own cap: it runs as stored.
+      const within = node("t1", "text-to-speech", { voiceId: "Rachel", provider, textSource: "direct", directText: "a".repeat(getMaxTtsChars(provider)) })
+      const built = buildPayload(within, "job1", {}, "usage1")
       expect(built.payload.provider, provider).toBe(provider)
       expect(built.modelIdentifier, provider).toBe(provider)
+      // Over the default model's cap (where an OMITTED model would route to turbo): the
+      // stored model is kept and judged by ITS cap — refused honestly before any reservation
+      // (decided 2026-10-06), never silently rerouted to turbo. The refusal names it.
+      const over = node("t1", "text-to-speech", { voiceId: "Rachel", provider, textSource: "direct", directText: "a".repeat(12000) })
+      expect(() => buildPayload(over, "job1", {}, "usage1"), provider).toThrow(`${provider} takes at most ${getMaxTtsChars(provider)} per request`)
     }
   })
 })

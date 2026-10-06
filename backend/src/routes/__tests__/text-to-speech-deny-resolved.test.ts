@@ -19,6 +19,7 @@ vi.mock("@/lib/config.js", () => ({
   isCommunity: () => false,
   hasCredits: () => false,
   hasAdmin: () => true,
+  speechLengthPricingEnabled: () => false,
 }))
 vi.mock("@/lib/supabase.js", () => {
   const mockFrom = vi.fn().mockReturnValue({

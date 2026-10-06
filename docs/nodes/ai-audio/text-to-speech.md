@@ -79,6 +79,29 @@ A node that stores a model keeps it: a node saved on v3 still runs on v3, and v3
 - **Turbo v2.5 (32)**: All Multilingual v2 languages plus Hungarian, Norwegian, Vietnamese
 - **v3 and v4 (46)**: All Turbo v2.5 languages plus Hebrew, Thai, Bengali, Urdu, Persian, Serbian, Lithuanian, Latvian, Estonian, Georgian, Icelandic, Catalan, Afrikaans, Swahili
 
+## Credits
+
+> **Rolling out.** Length-based pricing is being turned on one environment at a time (it is on at `next.nodaro.ai` first). Until it reaches the instance you use, a request costs the flat amount listed for its model (30 credits on v4, v3 and Multilingual v2; 15 on Turbo v2.5), whatever its length. The editor's price badges and the workflow estimate still show that flat amount while the rollout completes.
+
+A request is priced on the text actually sent — after the per-request cap is applied and, on Turbo v2.5 and Multilingual v2, after `[audio tags]` are stripped — in **units of 100 characters, every started unit counting, with a minimum of 8 units per request**:
+
+```
+credits = max(8, ceil(characters / 100)) × unit
+```
+
+| Model | Credits per started 100 characters (`unit`) | Minimum per request |
+|-------|----------------------------------------------|---------------------|
+| ElevenLabs v4, v3, Multilingual v2 | 4 | 32 |
+| Turbo v2.5 (and the legacy `elevenlabs` id, which runs as Turbo) | 2 | 16 |
+
+Worked examples:
+
+- **100 characters on v4** → 1 started unit, below the minimum → 8 × 4 = **32 credits** (the same for anything up to 800 characters).
+- **1,000 characters on v3** → 10 units → 10 × 4 = **40 credits**.
+- **10,000 characters on v4** (its cap) → 100 units → **400 credits**; the same text on Turbo v2.5 → 100 × 2 = **200 credits**.
+
+Characters are counted as the text's length (an emoji or other character outside the Basic Multilingual Plane counts as 2). A request that names no model is priced on the model the length rule picks (above). In a workflow, text longer than the named model's cap is refused before anything is charged, with the number of characters and the cap; over the API the text is cut at the cap and priced as cut. Published-app prices and the editor's estimate move to this formula in a following release.
+
 ## Inputs & Outputs
 
 - **Input**: `in` -- text string (from Text Prompt, Generate Text, Combine Text, or any text-producing node)

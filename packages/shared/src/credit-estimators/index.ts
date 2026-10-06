@@ -41,3 +41,12 @@ export {
   LTX_RETAKE_MIN_DURATION_SEC,
   ltxRetakeDurationSec,
 } from "./ltx-retake.js"
+
+export {
+  SPEECH_PRICE_UNIT_CHARS,
+  SPEECH_FLOOR_UNITS,
+  SPEECH_UNIT_CREDIT_SUFFIX,
+  speechUnitCreditId,
+  speechPriceUnits,
+  speechCredits,
+} from "./speech.js"

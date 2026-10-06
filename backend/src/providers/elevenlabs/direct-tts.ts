@@ -73,10 +73,10 @@ function looksLikeUuid(s: string): boolean {
   return /^[A-Za-z0-9]{20}$/.test(s)
 }
 
-/** Strip [audio tags] from text — v2 models speak them as literal text */
-export function stripAudioTags(text: string): string {
-  return text.replace(/\[[^\]]+\]/g, "").replace(/\s{2,}/g, " ").trim()
-}
+/** Strip [audio tags] from text — v2 models speak them as literal text. Lives in
+ *  audio-tags.ts (dependency-free) so the credit counter can read it; re-exported
+ *  here for the worker's existing import. */
+export { stripAudioTags } from "./audio-tags.js"
 
 export interface DirectTTSOptions {
   stability?: number

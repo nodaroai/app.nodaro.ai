@@ -291,6 +291,10 @@ describe("text-to-speech provider selection (keyless self-host)", () => {
     expect(mocks.mockUploadBufferToR2).toHaveBeenCalledWith(
       Buffer.from("cloud-audio"), "audios/job-1.mp3", "audio/mpeg", "user-1",
     )
+    // The cloud paid the vendor; this install's cost is the relay credits — no provider cost recorded here.
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(
+      expect.objectContaining({ result: expect.objectContaining({ cost: null }) }),
+    )
   })
 
   it("no key + NOT connected — the shared missing-key error, not 'nodaro.ai is not connected'", async () => {
@@ -328,7 +332,7 @@ describe("text-to-dialogue provider selection (keyless self-host)", () => {
     expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(
       expect.objectContaining({
         jobType: "generate-dialogue",
-        result: expect.objectContaining({ cost: null, providerUsed: "elevenlabs-direct" }),
+        result: expect.objectContaining({ providerUsed: "elevenlabs-direct" }),
       }),
     )
   })
@@ -347,6 +351,10 @@ describe("text-to-dialogue provider selection (keyless self-host)", () => {
     expect(mocks.mockUploadBufferToR2).toHaveBeenCalledWith(
       Buffer.from("cloud-audio"), "audios/job-1.mp3", "audio/mpeg", "user-1",
     )
+    // The cloud paid the vendor; this install's cost is the relay credits — no provider cost recorded here.
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(
+      expect.objectContaining({ result: expect.objectContaining({ cost: null }) }),
+    )
   })
 
   it("no key + NOT connected — the shared missing-key error", async () => {
@@ -359,6 +367,23 @@ describe("text-to-dialogue provider selection (keyless self-host)", () => {
 
     expect(mocks.mockCreateCloudJob).not.toHaveBeenCalled()
     expect(mocks.mockDirectElevenLabsDialogue).not.toHaveBeenCalled()
+  })
+})
+
+describe("text-to-dialogue handler", () => {
+  const handler = audioAIHandlers["text-to-dialogue"]
+
+  it("records the dialogue's cost and the characters across its lines (direct API)", async () => {
+    const dialogue = [{ text: "a".repeat(300), voice: "Rachel" }, { text: "b".repeat(200), voice: "George" }]
+    const job = makeJob("text-to-dialogue", { dialogue })
+    await handler(job as never, makeCtx())
+    const { elevenlabsSpeechCostUsd } = await import("../../../lib/pricing/elevenlabs-speech-cost.js")
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(
+      expect.objectContaining({
+        result: expect.objectContaining({ cost: elevenlabsSpeechCostUsd("elevenlabs-dialogue", 500) }),
+        extraOutputData: expect.objectContaining({ billedCharacters: 500 }),
+      }),
+    )
   })
 })
 
@@ -379,8 +404,34 @@ describe("text-to-speech handler", () => {
     expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(
       expect.objectContaining({
         jobType: "text-to-speech",
-        result: expect.objectContaining({ cost: null, providerUsed: "elevenlabs-direct" }),
+        result: expect.objectContaining({ providerUsed: "elevenlabs-direct" }),
       }),
+    )
+  })
+
+  // What the run cost the platform and the characters it sent (decided 2026-10-06):
+  // recorded on every direct-API speech job. `cost` changes NO charge — the job is
+  // not metered, so the commit stays the reserved tier (workers/shared.ts).
+  it("records what the run cost the platform and the characters it sent (direct API)", async () => {
+    mocks.mockStripAudioTags.mockImplementationOnce((t: string) => t.replace(/\[[^\]]+\]/g, "").replace(/\s{2,}/g, " ").trim())
+    const text = "[whispers] " + "a".repeat(1000)
+    const job = makeJob("text-to-speech", { text, provider: "elevenlabs-turbo" })
+    await handler(job as never, makeCtx())
+    const { elevenlabsSpeechCostUsd } = await import("../../../lib/pricing/elevenlabs-speech-cost.js")
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(
+      expect.objectContaining({
+        result: expect.objectContaining({ cost: elevenlabsSpeechCostUsd("elevenlabs-turbo", 1000) }),
+        extraOutputData: expect.objectContaining({ billedCharacters: 1000 }),
+      }),
+    )
+  })
+
+  it("counts the text as sent on a tag-performing model (nothing stripped)", async () => {
+    const text = "[whispers] " + "a".repeat(100)
+    const job = makeJob("text-to-speech", { text, provider: "elevenlabs-v4" })
+    await handler(job as never, makeCtx())
+    expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(
+      expect.objectContaining({ extraOutputData: expect.objectContaining({ billedCharacters: text.length }) }),
     )
   })
 

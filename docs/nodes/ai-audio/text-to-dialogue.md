@@ -46,14 +46,16 @@ Dialogue v4's cap is the same 5,000 characters as v3 dialogue, and the platform 
 
 ## Credits
 
-Dialogue is priced **flat per request**, whatever the length of the script, under the chosen model's own identifier:
+> **Rolling out.** Length-based pricing is being turned on one environment at a time (on at `next.nodaro.ai` first). Until it reaches the instance you use, a dialogue costs a flat 25 credits per request, whatever its length and whichever model runs it.
 
-| Model | Credit identifier | Base credits per request |
-|-------|-------------------|--------------------------|
-| ElevenLabs Dialogue v3 | `elevenlabs-dialogue` | 25 |
-| ElevenLabs Dialogue v4 | `elevenlabs-dialogue-v4` | 25 |
+A dialogue is priced on the total characters across its lines, in **units of 100 characters, every started unit counting, with a minimum of 8 units per request**: `credits = max(8, ceil(total characters / 100)) × credits per unit`. Each model prices on its own row:
 
-Worked example: a 4,800-character, three-voice dialogue on Dialogue v4 costs 25 base credits — the same as a 40-character one. The editor's estimate, a published app's advertised price and the credits reserved when the node runs all name the same row.
+| Model | Credit identifier | Credits per started 100 characters | Flat price (length pricing off) |
+|-------|-------------------|------------------------------------|----------------------------------|
+| ElevenLabs Dialogue v3 | `elevenlabs-dialogue` | 4 | 25 per request |
+| ElevenLabs Dialogue v4 | `elevenlabs-dialogue-v4` | 4 | 25 per request |
+
+Worked examples, on either model: **100 characters** (any script up to 800) → **32 credits**; **1,000 characters** → **40 credits**; **5,000 characters** (the cap) → **200 credits**. A script over 5,000 characters is refused before anything is charged, on the API and in a workflow alike. The editor's estimate, a published app's advertised price and the credits reserved when the node runs all read the same rows.
 
 ## API
 

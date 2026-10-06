@@ -41,6 +41,8 @@ import { mergeScene3DReferences } from "../scene3d/scene3d-references.js"
 import { imageRequiredMessage } from "../../lib/video-image-required.js"
 import { isVoiceGenderAllowed, premadeVoiceGender } from "../../lib/voice-policy.js"
 import { resolveOmittedTtsProvider } from "../../lib/omitted-tts-provider.js"
+import { getMaxTtsChars } from "@nodaro/shared"
+import { speechRunsAs } from "../../lib/speech-credits.js"
 import { applyPromptPolicies } from "../../lib/prompt-policy.js"
 import { ltxCameraMotionFromUpstream } from "../../lib/ltx-camera-motion.js"
 import { buildSeedanceExtendCreditIdentifier } from "../../lib/seedance-extend-model.js"
@@ -5122,6 +5124,22 @@ export function buildPayload(
       // turbo above it, measured on the text this node sends. It is also what the node
       // is billed as (modelIdentifier below), so the model billed is the model run.
       const provider = effectiveDispatchProvider(type, data, resolvedInputs) || resolveOmittedTtsProvider(ttsText)
+      // Over the cap of the model this text will RUN on: refuse before any
+      // reservation, with the numbers (decided 2026-10-06, Q-OVERCAP). The REST
+      // route truncates instead (warn-don't-block, its documented contract); on
+      // this lane nothing clamps, so the alternative was sending it unclamped
+      // and paying for a mid-run vendor reject. The alias and an unknown id are
+      // judged by the cap of the model they run as (turbo), never the 5,000
+      // default `getMaxTtsChars` answers for an id with no sheet.
+      const speechRunsAsId = speechRunsAs(provider)
+      const speechCap = getMaxTtsChars(speechRunsAsId)
+      if (ttsText.length > speechCap) {
+        const err = new Error(
+          `text is ${ttsText.length} characters; ${speechRunsAsId} takes at most ${speechCap} per request. Split the script into several calls, or pick a model with a larger cap.`,
+        ) as Error & { errorCode?: string }
+        err.errorCode = "text_too_long"
+        throw err
+      }
       // The EFFECTIVE voice + type this node will DISPATCH — computed once with
       // the same precedence the payload below uses, so the value we vet is byte-
       // identical to the value we send.
@@ -5303,11 +5321,14 @@ export function buildPayload(
       const dialogueProvider = dialogueProviderOf(effectiveDispatchProvider(type, data, resolvedInputs))
       // Fail HONESTLY before dispatch when the script exceeds the model's total
       // cap — the route's Zod cannot see this path, and the provider would
-      // refuse it mid-run after credits reserve.
+      // refuse it mid-run after credits reserve. Refused unconditionally, before
+      // any reservation, with a stable code (length pricing never prices over-cap text).
       const dialogueCap = getDialogueCapabilities(dialogueProvider).maxChars
       const dialogueTotal = filteredDialogue.reduce((sum, l) => sum + l.text.length, 0)
       if (dialogueTotal > dialogueCap) {
-        throw new Error(`Text to Dialogue has ${dialogueTotal} characters of dialogue; this model takes at most ${dialogueCap} characters in total — shorten the lines or split them across two nodes`)
+        const err = new Error(`Text to Dialogue has ${dialogueTotal} characters of dialogue; this model takes at most ${dialogueCap} characters in total — shorten the lines or split them across two nodes`) as Error & { errorCode?: string }
+        err.errorCode = "text_too_long"
+        throw err
       }
       return simpleResult("text-to-dialogue", dialogueProvider, {
         jobId,

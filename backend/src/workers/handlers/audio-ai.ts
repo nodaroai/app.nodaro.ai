@@ -13,6 +13,7 @@ import { generateSoundEffect } from "../../providers/elevenlabs/sound-effects.js
 import { ttsSupportsAudioTags, DEFAULT_TEXT_TO_AUDIO_PROVIDER, type TextToAudioProvider } from "@nodaro/shared"
 import { defaultAllowedVoiceId } from "../../lib/voice-policy.js"
 import { resolveOmittedTtsProvider } from "../../lib/omitted-tts-provider.js"
+import { elevenlabsSpeechCostUsd } from "../../lib/pricing/elevenlabs-speech-cost.js"
 import { FALLBACK_VOICES } from "../../lib/premade-voices.js"
 import { generateMusic, type MusicProvider } from "../../providers/audio/generate-music.js"
 import { textToAudio, type AudioProvider } from "../../providers/audio/text-to-audio.js"
@@ -180,18 +181,25 @@ const handleTextToSpeech: HandlerFn = async function handleTextToSpeech(job, ctx
   const r2Url = await runPostProcessing(() => uploadBufferToR2(audioBuffer, mediaObjectKey(ctx.jobId, "audio", "mp3"), "audio/mpeg", ctx.jobUserId))
   await setJobProgress(job, ctx.jobId, 100)
 
+  // What this run cost the platform and the characters it sent (decided
+  // 2026-10-06): recorded on every speech job so the length-pricing rows can be
+  // checked against real spend. `cost` changes NO charge — the job is not
+  // metered, so the commit stays the reserved tier. On the relay branch the
+  // cloud paid the vendor; this install's cost is the relay credits.
+  const billedCharacters = processedText.length
   const { ok } = await finalizeJobWithMedia({
     jobId: ctx.jobId,
     jobType: "text-to-speech",
     result: {
       url: r2Url,
-      cost: null,
+      cost: cloudAudio ? null : elevenlabsSpeechCostUsd(provider, billedCharacters),
       providerUsed: "elevenlabs-direct",
       // Relay provenance (spec §8.2 lane 1, migration 383): this literal is
       // rebuilt from locals, so the pair only reaches finalize if carried by
       // hand. Absent on the local-key branch ⇒ no key, no column written.
       ...(cloudAudio?.relayJobId && { relayJobId: cloudAudio.relayJobId, relayCredits: cloudAudio.relayCredits ?? null }),
     },
+    extraOutputData: { billedCharacters },
     mediaUrl: r2Url,
   })
   if (!ok) return
@@ -526,16 +534,20 @@ const handleTextToDialogue: HandlerFn = async function handleTextToDialogue(job,
   // an R2 upload failure here is post-delivery, so skip the refund.
   const r2Url = await runPostProcessing(() => uploadBufferToR2(audioBuffer, mediaObjectKey(ctx.jobId, "audio", "mp3"), "audio/mpeg", ctx.jobUserId))
   await setJobProgress(job, ctx.jobId, 100)
+  // The characters across the lines and what they cost the platform (same rule
+  // and same charge-neutrality as text-to-speech above).
+  const billedCharacters = dialogue.reduce((sum, l) => sum + l.text.length, 0)
   const { ok } = await finalizeJobWithMedia({
     jobId: ctx.jobId,
     jobType: "generate-dialogue",
     result: {
       url: r2Url,
-      cost: null,
+      cost: cloudAudio ? null : elevenlabsSpeechCostUsd("elevenlabs-dialogue", billedCharacters),
       providerUsed: "elevenlabs-direct",
       // Same rebuilt-literal carry as text-to-speech above, same reason.
       ...(cloudAudio?.relayJobId && { relayJobId: cloudAudio.relayJobId, relayCredits: cloudAudio.relayCredits ?? null }),
     },
+    extraOutputData: { billedCharacters },
     mediaUrl: r2Url,
   })
   if (!ok) return
