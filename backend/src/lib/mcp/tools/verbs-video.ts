@@ -31,6 +31,7 @@ const MOTION_TRANSFER_PROVIDER_ALIASES: Record<string, string> = {
 }
 import { normalizeVideoInput } from "../normalize.js"
 import { buildEffectiveEdl, validateEffectiveEdl } from "../../apply-edl-plan.js"
+import { APPLY_EDL_CLIP_KEY_PATTERN } from "../../apply-edl-output.js"
 import { hasCredits } from "../../config.js"
 import { getUserMcpPreferences } from "../user-preferences.js"
 import { resolvePreset } from "../../presets/resolve-preset.js"
@@ -3150,6 +3151,8 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         output: z.enum(["video", "audio"]).optional().describe("Render a video (default) or an audio-only cut."),
         quality: z.enum(["proxy", "final"]).optional().describe("proxy (a fast 720p preview, at its own lower per-minute rate) or final (default)."),
         crossfade_ms: z.number().min(0).max(5000).optional().describe("Default crossfade on boundaries with no explicit transition, in ms. 0 = hard cuts (default)."),
+        clip_key: z.string().regex(APPLY_EDL_CLIP_KEY_PATTERN).optional()
+          .describe("clips-mode plan_edit clip this render cuts, \"<first inMs>-<last outMs>\" of the plan's clip; returned as clipKey on the result."),
       },
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
@@ -3196,6 +3199,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         ...(args.output ? { output: args.output } : {}),
         ...(args.quality ? { quality: args.quality } : {}),
         ...(args.crossfade_ms !== undefined ? { crossfadeMs: args.crossfade_ms } : {}),
+        ...(args.clip_key ? { clipKey: args.clip_key } : {}),
         mcp_client: session.clientName,
         userId: session.userId,
       }

@@ -399,16 +399,21 @@ nodaro edit audio-sync (--source <[id=]url> ... | --sources-file <file.json>) [-
                                                          # 2-6 recordings (audio or video); ids default to source-1, source-2, …
                                                          # output_data.json = { reference, offsets: [{ sourceId, offsetMs, confidence,
                                                          # driftMsPerHour }], notes } with referenceMs = sourceMs + offsetMs.
-nodaro edit apply-edl --edl <file.json> [--transcript <file.json>] [--source <url> ...] [--output video|audio] [--quality proxy|final] [--crossfade-ms <ms>] [--watch] [--poll-interval <ms>] [--json]
+nodaro edit apply-edl --edl <file.json> [--transcript <file.json>] [--source <url> ...] [--output video|audio] [--quality proxy|final] [--crossfade-ms <ms>] [--clip-key <inMs-outMs>] [--watch] [--poll-interval <ms>] [--json]
+                                                         # --quality proxy = a Preview to review (private, lower rate); final = the delivery.
+                                                         # --clip-key = "<first inMs>-<last outMs>" of the clips-mode plan clip this render cuts;
+                                                         # the result carries it back as output_data.clipKey, beside output_data.quality.
 nodaro edit plan --mode tighten|clips|chapters --plan-tier economy|standard|premium --transcript <file.json> (--source <[id=]url[@audio|@video]> ... | --sources-file <file.json>) [--silence <file.json>] [--offsets <file.json>] [--transcript-source <id>] [--instructions <text>] [--style-guide <text>] [--count <n>] [--target-duration-sec <n>] [--target-aspect 16:9|9:16|1:1|4:5] [--platform <name>] [--watch] [--poll-interval <ms>] [--json]
                                                          # multicam: --offsets = an audio-sync job's output_data.json over the SAME
                                                          # source ids (both commands default to source-1, source-2, …); each source's
                                                          # offset is applied before the request — refused if one was not measured or
                                                          # matched weakly (set its offsetMs in --sources-file).
-
-# Organizations — only on instances that have them
 nodaro edit switch-cameras --edl <file.json> --transcript <file.json> [--speaker-map <file.json>] [--speaker-names <file.json>] [--min-shot-ms <ms>] [--lead-ms <ms>] [--max-shot-ms <ms>] [--wide-every <n>] [--layout-hints] [--watch] [--poll-interval <ms>] [--json]
                                                          # multicam: each cut on the speaker's camera; the transcript needs speaker labels.
+                                                         # Multicam end to end: audio transcribe --provider elevenlabs-stt --diarize → edit audio-sync
+                                                         # → edit plan --offsets → edit switch-cameras → edit apply-edl --quality proxy (review) → --quality final.
+
+# Organizations — only on instances that have them
 nodaro org list [--json]
 nodaro org get <id> [--json]
 nodaro org create --name <name> --kind school|team [--slug <slug>] [--accept-terms] [--json]

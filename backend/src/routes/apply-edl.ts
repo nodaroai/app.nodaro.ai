@@ -12,6 +12,7 @@ import { sendInternalError } from "../lib/http-errors.js"
 import { applyEdlCreditId } from "@nodaro/shared"
 import { buildEffectiveEdl, validateEffectiveEdl, applyEdlReserveMinutes } from "../lib/apply-edl-plan.js"
 import { isPreviewRender } from "../lib/preview-render.js"
+import { APPLY_EDL_CLIP_KEY_PATTERN } from "../lib/apply-edl-output.js"
 
 /** An SDK/MCP caller may send the EDL as a JSON string on the `edl` field;
  *  parse it before `buildEffectiveEdl` so this ingress behaves identically to
@@ -81,7 +82,7 @@ const applyEdlBody = z.object({
    *  `${min inMs}-${max outMs}`), stamped on the result as `clipKey` so a
    *  render's results can be matched to the clips they came from. The editor
    *  sends it for a clip-pack render; omit it for anything else. */
-  clipKey: z.string().regex(/^\d{1,12}-\d{1,12}$/).optional(),
+  clipKey: z.string().regex(APPLY_EDL_CLIP_KEY_PATTERN).optional(),
   userId: z.string().uuid().optional(),
 })
 

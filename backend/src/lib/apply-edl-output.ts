@@ -15,6 +15,11 @@
  */
 import type { RenderQuality } from "@nodaro/shared"
 
+/** What a `clipKey` on an Apply EDL request may be: `edlSpanKey` of a plan
+ *  clip, `"<first inMs>-<last outMs>"` in integer ms. The REST route and the
+ *  MCP verb validate against this one pattern. */
+export const APPLY_EDL_CLIP_KEY_PATTERN = /^\d{1,12}-\d{1,12}$/
+
 export interface ApplyEdlOutputParts {
   readonly medium: "video" | "audio"
   readonly mediaUrl: string

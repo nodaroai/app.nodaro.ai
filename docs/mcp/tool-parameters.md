@@ -213,6 +213,7 @@ Needs `workflows:execute`.
 | `output` | string |  | Render a video (default) or an audio-only cut. One of `video`, `audio`. |
 | `quality` | string |  | proxy (a fast 720p preview, at its own lower per-minute rate) or final (default). One of `proxy`, `final`. |
 | `crossfade_ms` | number |  | Default crossfade on boundaries with no explicit transition, in ms. 0 = hard cuts (default). From 0 to 5000. |
+| `clip_key` | string |  | clips-mode plan_edit clip this render cuts, "&lt;first inMs>-&lt;last outMs>" of the plan's clip; returned as clipKey on the result. |
 
 ## `approve_creature_main_image`
 

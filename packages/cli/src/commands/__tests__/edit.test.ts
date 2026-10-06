@@ -135,6 +135,18 @@ describe("edit apply-edl", () => {
     })
   })
 
+  it("passes --clip-key through as clipKey", async () => {
+    mocks.applyEdl.mockResolvedValueOnce({ jobId: "j-ck" })
+    const edlPath = fixture("edl.json", EDL)
+    await runCmd("edit", "apply-edl", "--edl", edlPath, "--quality", "proxy", "--clip-key", "12000-98000", "--json")
+    expect(mocks.applyEdl).toHaveBeenCalledWith({
+      edl: EDL,
+      output: "video",
+      quality: "proxy",
+      clipKey: "12000-98000",
+    })
+  })
+
   it("errors on an unknown --output", async () => {
     const edlPath = fixture("edl.json", EDL)
     await expect(

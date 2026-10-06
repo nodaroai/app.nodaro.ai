@@ -1877,6 +1877,30 @@ describe("apply_edl verb", () => {
     expect(received.body?.userId).toBe("u1")
   })
 
+  it("passes quality and clip_key through as quality + clipKey (the render's result identity)", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/apply-edl", { jobId: "j-ae-ck" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    const result = await callTool(server, "apply_edl", { edl: validEdl, quality: "proxy", clip_key: "0-2000" })
+
+    expect(result.isError).toBeUndefined()
+    expect(received.body?.quality).toBe("proxy")
+    expect(received.body?.clipKey).toBe("0-2000")
+    expect(received.body).not.toHaveProperty("clip_key")
+  })
+
+  it("refuses a clip_key that is not '<first inMs>-<last outMs>', never dispatching", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/apply-edl", { jobId: "j-ae-bad-ck" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    const result = await callTool(server, "apply_edl", { edl: validEdl, clip_key: "clip-1" })
+
+    expect(result.isError).toBe(true)
+    expect(received.body).toBeUndefined()
+  })
+
   it("accepts a JSON-STRING EDL (client serialization slip) and dispatches", async () => {
     const { fastify, received } = stubRoute("POST", "/v1/apply-edl", { jobId: "j-ae-str" })
     const server = buildServer()

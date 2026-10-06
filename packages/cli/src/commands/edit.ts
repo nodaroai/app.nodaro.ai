@@ -168,6 +168,10 @@ export function editCommand(): Command {
     .option("--output <kind>", "video | audio", "video")
     .option("--quality <q>", "proxy | final", "final")
     .option("--crossfade-ms <ms>", "default crossfade on boundaries with no transition", (v) => parseInt(v, 10))
+    .option(
+      "--clip-key <key>",
+      'the plan clip this render cuts, "<first inMs>-<last outMs>" of a clips-mode plan clip; stamped back on the result as clipKey',
+    )
     .option("--watch", "poll the job until it finishes")
     .option("--poll-interval <ms>", "poll interval with --watch", (v) => parseInt(v, 10))
     .option("--profile <name>")
@@ -182,6 +186,7 @@ export function editCommand(): Command {
             output: string
             quality: string
             crossfadeMs?: number
+            clipKey?: string
           },
       ) => {
         if (opts.output !== "video" && opts.output !== "audio") {
@@ -201,6 +206,7 @@ export function editCommand(): Command {
             output: opts.output,
             quality: opts.quality,
             ...(opts.crossfadeMs !== undefined ? { crossfadeMs: opts.crossfadeMs } : {}),
+            ...(opts.clipKey !== undefined ? { clipKey: opts.clipKey } : {}),
           })
           await reportQueuedJob(result, () => client.jobs.getStatus(result.jobId), {
             json: opts.json,

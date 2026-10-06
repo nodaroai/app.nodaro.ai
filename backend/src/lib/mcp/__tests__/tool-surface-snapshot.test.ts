@@ -571,6 +571,13 @@ const UGC_CARDS_CAPTION_STYLE_BYTES = 275
 // keeps the headroom it had.
 const COLLECTION_TOOLS_BYTES = 3_420
 
+
+// RAISED by ONE argument and nothing else: `clip_key` on `apply_edl` (the plan
+// clip a render cuts, stamped back as `output_data.clipKey`; the REST route and
+// the SDK already took it). No tool was added, so the fixture does NOT move.
+// measured by this suite: 392_662 total − 392_454 base = 208 B.
+const APPLY_EDL_CLIP_KEY_BYTES = 208
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192,
   totalBytes:
@@ -629,7 +636,8 @@ export const TOOL_WIRE_BUDGET = {
     GET_ASSET_PREVIEW_FLAG_CORRECTION_BYTES +
     GET_APP_RUN_OUTCOME_BYTES +
     UGC_CARDS_CAPTION_STYLE_BYTES +
-    COLLECTION_TOOLS_BYTES,
+    COLLECTION_TOOLS_BYTES +
+    APPLY_EDL_CLIP_KEY_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

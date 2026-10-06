@@ -258,11 +258,17 @@ export interface CameraSwitchInput {
 }
 
 /**
- * Phase-1 editorial primitives for podcast / long-form video editing.
+ * Editorial primitives for podcast / long-form video editing, single-camera
+ * and multicam: measure the cameras' offsets ({@link audioSync}), plan the cut
+ * ({@link editPlan}), put each cut on the speaker's camera
+ * ({@link cameraSwitch}), render a Preview to review (`applyEdl` with
+ * `quality: "proxy"`), then the final (`quality: "final"`).
  *
  * - {@link silenceDetect}, {@link audioSync} and {@link applyEdl} are core nodes
  *   available on every edition.
- * - {@link editPlan} is a Cloud-edition transcript-driven planner.
+ * - {@link editPlan} and {@link cameraSwitch} run on nodaro.ai; a self-hosted
+ *   install relays them once it is connected (a 503
+ *   `code: "nodaro_connection_required"` otherwise).
  * - {@link remapTranscript} is a PURE local transform (no request) — the same
  *   remap `applyEdl` performs on its `transcript`, exposed for callers that hold
  *   an EDL and a transcript and only want the re-timed transcript.
