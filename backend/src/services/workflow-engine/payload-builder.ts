@@ -9,7 +9,7 @@ import { effectiveContentModel, contentRecipeCreditId, contentIdeasCreditId, cla
 import { TELEGRAM_ACCOUNT_SEND_NODE_TYPE, telegramSendAsOf, telegramSendDestinationOf } from "@nodaro/shared"
 import { DEFAULT_TEXT_TO_AUDIO_PROVIDER, dialogueProviderOf, getDialogueCapabilities } from "@nodaro/shared"
 import { LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec, LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec, textToAudioCreditId } from "@nodaro/shared"
-import { applyEdlCreditId, renderPlanClipKey } from "@nodaro/shared"
+import { applyEdlCreditId, renderPlanBasis, renderPlanClipKey } from "@nodaro/shared"
 import type { Scene3DReference } from "@nodaro/shared"
 import { scene3DInputAssetsForEngine, type Scene3DInputAsset } from "@nodaro/shared"
 import { socialSearchRequestFromNode, socialSearchCreditId, socialSearchPickTop } from "@nodaro/shared"
@@ -44,7 +44,7 @@ import { resolveOmittedTtsProvider } from "../../lib/omitted-tts-provider.js"
 import { applyPromptPolicies } from "../../lib/prompt-policy.js"
 import { ltxCameraMotionFromUpstream } from "../../lib/ltx-camera-motion.js"
 import { buildSeedanceExtendCreditIdentifier } from "../../lib/seedance-extend-model.js"
-import { buildEffectiveEdl, validateEffectiveEdl } from "../../lib/apply-edl-plan.js"
+import { buildEffectiveEdl, effectiveRenderBasis, validateEffectiveEdl } from "../../lib/apply-edl-plan.js"
 import { audioSyncCreditId } from "../../lib/audio-sync-credit-id.js"
 import { AUDIO_SYNC_MAX_SOURCES, AUDIO_SYNC_MIN_SOURCES } from "../../providers/audio/audio-sync-budget.js"
 import { extractSavedNodeOutput, extractSourceNodeOutput, getPrimaryOutput, savedOutputFor } from "./output-extractor.js"
@@ -2366,6 +2366,32 @@ function applyEdlClipKey(node: SimpleNode, buildCtx: PayloadBuildContext | undef
     edges,
     (planNode) => listFor(planNode as SimpleNode, buildCtx?.nodeStates?.[planNode.id]),
     buildCtx?.listRow,
+  )
+}
+
+/** The plan basis an Apply EDL iteration stamps (`renderPlanBasis`, the rule
+ *  the editor calls too): the plan value its row reads, as the run holds the
+ *  plan — this run's output, or its seeded saved one (the review applied) —
+ *  and only when every Camera Switch between them ran in this run. A node ran
+ *  in this run when its state is this run's own (`savedDataAllowed` is false)
+ *  and completed. */
+function applyEdlPlanBasis(node: SimpleNode, buildCtx: PayloadBuildContext | undefined): string | undefined {
+  const nodes = buildCtx?.nodes
+  const edges = buildCtx?.edges
+  if (!nodes || !edges) return undefined
+  const states = buildCtx?.nodeStates ?? {}
+  const ranIds = new Set(
+    Object.entries(states)
+      .filter(([, state]) => !savedDataAllowed(state) && state.status === "completed")
+      .map(([id]) => id),
+  )
+  return renderPlanBasis(
+    node.id,
+    nodes,
+    edges,
+    (planNode) => listFor(planNode as SimpleNode, states[planNode.id]) ?? states[planNode.id]?.output?.json,
+    buildCtx?.listRow,
+    ranIds,
   )
 }
 
@@ -5937,6 +5963,10 @@ export function buildPayload(
       // the iteration reads, never from the EDL rendered here — Camera Switch
       // can move a clip's outer span inward. Stamped on the result as given.
       const clipKey = applyEdlClipKey(node, buildCtx)
+      // The plan value it cuts (A3-1) — only when it reads the plan's own value
+      // (the same-run rule) — and its own settings with the effective sources.
+      const planBasis = applyEdlPlanBasis(node, buildCtx)
+      const renderBasis = effectiveRenderBasis(effectiveEdl, { output, crossfadeMs })
       // The job is always `apply-edl`; the run reserves on the row of its
       // quality (a preview on `apply-edl:proxy`) — the id the route reserves
       // on, and the one applyEdlCreditOverride prices from `payload.quality`.
@@ -5949,6 +5979,8 @@ export function buildPayload(
           output,
           quality,
           ...(clipKey ? { clipKey } : {}),
+          ...(planBasis ? { planBasis } : {}),
+          renderBasis,
           usageLogId,
         },
         applyEdlCreditId(quality),

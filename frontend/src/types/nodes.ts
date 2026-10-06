@@ -78,9 +78,12 @@ export interface GeneratedResult {
   // lane that lands the take (lib/run-result-identity.ts): the quality it was
   // made at ("proxy" is a Preview — labelled so, and private) and the plan clip
   // it cut (`edlSpanKey`). The node's own `quality` is its SETTING; this is
-  // what the take IS.
+  // what the take IS. A3-1: the plan value it cut (`planBasis`, only when that
+  // was the plan's own value) and its own settings (`renderBasis`).
   readonly quality?: import("@nodaro/shared").RenderQuality
   readonly clipKey?: string
+  readonly planBasis?: string
+  readonly renderBasis?: string
 }
 
 /**

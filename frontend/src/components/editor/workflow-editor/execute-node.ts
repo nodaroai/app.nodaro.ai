@@ -1,6 +1,7 @@
 import { toast } from "sonner";
 import { DEFAULT_OVERLAY_LAYER, OVERLAY_MAX_LAYERS } from "@/types/nodes";
 import { assertCanvasExecutionAllowed, scene3DInputAssetsForEngine, overlayVariantIdFromHandle, readScriptSettings, applySettingsInput, SETTINGS_INPUT_CONSUMERS, resolveMusicProvider, resolveEditPlanSources, describeAudioSyncOffsetIssue, type AudioSyncOffsetSource, transcriptSpeakerLabels, cameraSwitchEdlProblem, cameraSwitchSettingsPayload, renderPlanClipKey, collectionRecordHeadline, isCollectionUrl } from "@nodaro/shared";
+import { browserRenderPlanBasis } from "./apply-edl-stamps";
 import { findUpstreamSunoIds } from "@/lib/suno-ids";
 import { contentRunResultPatch } from "@/lib/content-run-output";
 import { sourceJsonOf } from "@/lib/edit-plan-saved-output";
@@ -7133,6 +7134,14 @@ function executeNodeCore(
       (planNode) => extractNodeOutputAsList(planNode as WorkflowNode, "edl"),
       listRowIndex,
     );
+    // The plan value it cuts (A3-1), only when that is the plan's own value:
+    // a render behind Camera Switch is never stamped here (apply-edl-stamps.ts).
+    const planBasis = browserRenderPlanBasis(
+      node.id,
+      graphNodes,
+      graphEdges,
+      listRowIndex,
+    );
     setUserPromptTemplate(undefined);
     return runApplyEdl(
       node.id,
@@ -7144,6 +7153,7 @@ function executeNodeCore(
         sources: inputs.sources,
         transcript,
         ...(clipKey ? { clipKey } : {}),
+        ...(planBasis ? { planBasis } : {}),
       },
       ctx,
     );

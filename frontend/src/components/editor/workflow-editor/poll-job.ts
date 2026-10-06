@@ -335,7 +335,8 @@ function handleJobCompleted(
 /** What a landed take carries beyond the node's own fields. */
 export interface PollJobResultOptions {
   /** Fields that go on the new RESULT only, never onto the node (a render's
-   *  `quality` and `clipKey`: the node's `quality` is its own setting). */
+   *  `quality`, `clipKey`, `planBasis` and `renderBasis`: the node's
+   *  `quality` is its own setting). */
   readonly resultFields?: (outputData: Record<string, unknown>) => Readonly<Record<string, unknown>> | RunResultIdentity
 }
 

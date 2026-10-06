@@ -3,7 +3,9 @@ import { describe, it, expect, vi } from "vitest"
 vi.mock("../supabase.js", () => ({ supabase: {} }))
 
 import {
+  applyCanvasResultIds,
   jobFactsFromRow,
+  jobRowStamp,
   parsePlaceholder,
   resolveCanvasResultIds,
   scanCanvasResults,
@@ -249,5 +251,49 @@ describe("withResolvedResultIds", () => {
   it("scans only what it can resolve", () => {
     expect(scanCanvasResults(null)).toEqual({ nodeIds: [], jobIds: [] })
     expect(scanCanvasResults([{ id: "x", data: { generatedResults: [{ url: "", jobId: "exec-x" }] } }])).toEqual({ nodeIds: [], jobIds: [] })
+  })
+})
+
+// A3-1: a render's plan basis and render basis ride the same stamp as its clip.
+// No job older than the stamp carries them, so the migration-459 backfill (which
+// shares job-row-stamps.sql with this rule) never meets one; the fill is pinned here.
+describe("jobRowStamp — a render's two bases", () => {
+  const PB = "0123456789abcdef"
+  const RB = "fedcba9876543210"
+
+  it("are read off the render's job, as 16 hex digits only", () => {
+    const facts = jobFactsFromRow({
+      id: id("030"),
+      user_id: OWNER,
+      status: "completed",
+      job_type: "apply-edl",
+      input_data: { node_id: "render", quality: "final" },
+      output_data: { videoUrl: "https://m.test/b0.mp4", quality: "final", planBasis: PB, renderBasis: RB },
+    })
+    expect(jobRowStamp(facts)).toEqual({ jobId: id("030"), quality: "final", planBasis: PB, renderBasis: RB })
+    const bad = jobFactsFromRow({ id: id("031"), job_type: "apply-edl", output_data: { videoUrl: "v", planBasis: "XYZ", renderBasis: 5 } })
+    expect(jobRowStamp(bad)).toEqual({ jobId: id("031"), quality: "final" })
+  })
+
+  it("are never read off another node's job", () => {
+    const facts = jobFactsFromRow({ id: id("032"), job_type: "generate-video", output_data: { videoUrl: "v", planBasis: PB, renderBasis: RB } })
+    expect(jobRowStamp(facts)).toEqual({ jobId: id("032") })
+  })
+
+  it("are filled onto a take that lacks them when its placeholder resolves, never over its own", () => {
+    const job = jobFactsFromRow({
+      id: id("033"),
+      user_id: OWNER,
+      status: "completed",
+      job_type: "apply-edl",
+      input_data: { node_id: "render", quality: "proxy" },
+      output_data: { videoUrl: "https://m.test/b3.mp4", quality: "proxy", planBasis: PB, renderBasis: RB },
+    })
+    const nodes = [{ id: "render", type: "apply-edl", data: { generatedResults: [{ url: "https://m.test/b3.mp4", jobId: "exec-render" }] } }]
+    const out = applyCanvasResultIds(nodes, OWNER, [job]) as typeof nodes
+    expect(out[0].data.generatedResults[0]).toMatchObject({ jobId: id("033"), planBasis: PB, renderBasis: RB })
+    const own = [{ id: "render", type: "apply-edl", data: { generatedResults: [{ url: "https://m.test/b3.mp4", jobId: "exec-render", planBasis: "00000000000000aa" }] } }]
+    const kept = applyCanvasResultIds(own, OWNER, [job]) as typeof own
+    expect(kept[0].data.generatedResults[0].planBasis).toBe("00000000000000aa")
   })
 })

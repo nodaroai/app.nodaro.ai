@@ -811,7 +811,7 @@ export function runCombineVideos(
  */
 export function runApplyEdl(
   nodeId: string,
-  params: { edl: unknown; output?: "video" | "audio"; quality?: "proxy" | "final"; crossfadeMs?: number; sources?: string[]; transcript?: unknown; clipKey?: string },
+  params: { edl: unknown; output?: "video" | "audio"; quality?: "proxy" | "final"; crossfadeMs?: number; sources?: string[]; transcript?: unknown; clipKey?: string; planBasis?: string },
   ctx: ExecutionContext,
 ): Promise<string> {
   return pollJobWithNodeUpdate(
@@ -822,7 +822,8 @@ export function runApplyEdl(
     ctx,
     (od) => ({ generatedJson: od.json ?? undefined }),
     undefined,
-    // The take's identity — its quality ("proxy" is a Preview) and plan clip —
+    // The take's identity — its quality ("proxy" is a Preview), plan clip,
+    // planBasis and renderBasis (lib/run-result-identity.ts) —
     // goes on the RESULT only, never the node: `quality` there is the node's
     // own setting, which a one-shot Render final must not flip.
     { resultFields: (od) => runResultIdentity("apply-edl", od) },

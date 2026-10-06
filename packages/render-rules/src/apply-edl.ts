@@ -23,6 +23,8 @@ import {
   normalizeEdl,
   validateEdl,
   edlDurationMs,
+  renderSettingsBasis,
+  type RenderSettingsInput,
 } from "@nodaro/shared"
 
 /**
@@ -297,4 +299,15 @@ export function findEffectiveEdlIssues(edl: Edl, output: "video" | "audio"): rea
   })
 
   return found
+}
+
+/**
+ * The `renderBasis` a render is stamped with (R19 a, decided 2026-10-06): its
+ * own settings and the EFFECTIVE sources of the cut it renders — the URL of
+ * each source of `effectiveEdl` (`buildEffectiveEdl`, the wired overrides
+ * applied), in order. The ingresses that build the effective EDL stamp it, and
+ * the editor compares a take with it, so both read the sources one way.
+ */
+export function effectiveRenderBasis(effectiveEdl: Edl, settings: RenderSettingsInput): string {
+  return renderSettingsBasis(settings, effectiveEdl.sources.map((s) => s.url))
 }

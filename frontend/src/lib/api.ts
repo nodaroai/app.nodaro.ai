@@ -3325,6 +3325,9 @@ export async function applyEdl(params: {
   transcript?: unknown
   /** The plan clip this render cuts (`edlSpanKey`), stamped on the result. */
   clipKey?: string
+  /** The plan value this render cuts (`renderReadBasis`), stamped on the result
+   *  as `planBasis`. The route stamps the render's own `renderBasis`. */
+  planBasis?: string
   userId?: string
 }): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { edl: params.edl }
@@ -3334,6 +3337,7 @@ export async function applyEdl(params: {
   if (params.sources && params.sources.length > 0) body.sources = params.sources
   if (params.transcript !== undefined) body.transcript = params.transcript
   if (params.clipKey) body.clipKey = params.clipKey
+  if (params.planBasis) body.planBasis = params.planBasis
   if (params.userId) body.userId = params.userId
   return apiJson("/v1/apply-edl", {
     body,

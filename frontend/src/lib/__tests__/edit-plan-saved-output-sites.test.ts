@@ -194,6 +194,8 @@ describe("editor reads of an Edit Plan's saved output", () => {
       if (n > 0) calls[where] = n
     }
     expect(calls).toEqual({
+      // browserRenderPlanBasis: a Tighten plan's EDL, the plan value a render read (A3-1)
+      "components/editor/workflow-editor/apply-edl-stamps.ts": 1,
       // extractNodeOutput's scalar
       "components/editor/workflow-editor/execution-graph.ts": 1,
       // extractNodeOutputAsList (resolveNodeInputs and the fan-out read through it)

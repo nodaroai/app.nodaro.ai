@@ -2242,6 +2242,8 @@ The listing, plus two endpoints that poll multiple job statuses in a single roun
 | `GET` | `/v1/jobs/status?ids=a,b,c` | Comma-separated IDs, max 100. Returns `{ jobs: { id, status, output_data, error_message, error_hint, credit_status }[] }`. Cross-user / non-existent IDs are silently omitted — reconcile locally. |
 | `POST` | `/v1/jobs/batch-status` | Body `{ jobIds: string[] }`, max 100. Returns `{ data: { id, status, output_data, error_message, error_hint }[] }` (no `credit_status` on this route). |
 
+An Apply EDL job's `output_data` says what the render was cut from: `quality` (`"proxy"` is a preview), `clipKey` (the plan clip, when one was given), `planBasis` (the plan value, when one was given: `POST /v1/apply-edl` accepts an optional `planBasis` of 16 lowercase hex digits, `renderReadBasis` in `@nodaro/shared`) and `renderBasis` (always: the server's fingerprint of the render's `output`, `crossfadeMs` and the effective source URLs). See the SDK's [`applyEdl`](./sdk-reference.md#applyedlinput) for the full parameter list.
+
 An Apply EDL job recorded before `output_data.quality` was written reads back with the quality it was ordered at filled in on every job read above, plus `GET /v1/jobs/:id` and `GET /v1/jobs/:id/status` (`"proxy"` is a preview, anything else the final). The stored job is unchanged.
 
 All three require `jobs:read` scope when using an OAuth token; admin tokens may

@@ -16,10 +16,12 @@
  *     that ran once has no batch; the edge then reads the one result.
  *
  * Every item carries what its render stamped on it — `quality` ("proxy" is a
- * Preview) and `clipKey` (the plan clip it was cut from) — copied onto the
- * result by every lane that lands a take.
+ * Preview), `clipKey` (the plan clip it was cut from), `planBasis` (the plan
+ * value it was cut from) and `renderBasis` (the render's own settings) —
+ * copied onto the result by every lane that lands a take.
  */
 import { normalizeEdl } from "./edl.js"
+import { editPlanBasis } from "./edit-plan-review.js"
 import { defaultEdgeOutputMode } from "./producer-types.js"
 import { resolveIndex, selectListItems, type SelectorFields } from "./selector.js"
 
@@ -34,6 +36,12 @@ export interface RenderResultStamp {
   readonly quality?: RenderQuality
   /** The plan clip the render was cut from (`edlSpanKey` of that clip). */
   readonly clipKey?: string
+  /** The plan value the render was cut from (`renderReadBasis`): stamped only
+   *  when that value is the plan's own (`renderPlanBasis`). Absent = unknown. */
+  readonly planBasis?: string
+  /** The render's own settings (`renderSettingsBasis`): its output, its
+   *  crossfade and the media it read. */
+  readonly renderBasis?: string
 }
 
 /** One row of a run's per-item results, row-aligned with them (`{}` = a hole). */
@@ -59,13 +67,25 @@ const MEDIUM_FIELD: Readonly<Record<RenderMedium, string>> = {
 
 const str = (v: unknown): string | undefined => (typeof v === "string" && v.length > 0 ? v : undefined)
 
-/** The stamp a finished render's output carries: a known quality and a
- *  non-empty clip key, nothing else (an unknown value is dropped, not trusted). */
+const BASIS = /^[0-9a-f]{16}$/
+/** A basis as `editPlanBasis` writes it — 16 lowercase hex digits — or nothing. */
+const basisOf = (v: unknown): string | undefined => (typeof v === "string" && BASIS.test(v) ? v : undefined)
+
+/** The stamp a finished render's output carries: a known quality, a non-empty
+ *  clip key and the two bases as 16 hex digits, nothing else (an unknown value
+ *  is dropped, not trusted). */
 export function renderResultStamp(output: unknown): RenderResultStamp {
   const o = (output && typeof output === "object" ? output : {}) as Record<string, unknown>
   const quality = o.quality === "proxy" || o.quality === "final" ? o.quality : undefined
   const clipKey = str(o.clipKey)
-  return { ...(quality ? { quality } : {}), ...(clipKey ? { clipKey } : {}) }
+  const planBasis = basisOf(o.planBasis)
+  const renderBasis = basisOf(o.renderBasis)
+  return {
+    ...(quality ? { quality } : {}),
+    ...(clipKey ? { clipKey } : {}),
+    ...(planBasis ? { planBasis } : {}),
+    ...(renderBasis ? { renderBasis } : {}),
+  }
 }
 
 /** The medium a render node renders: its `output`, video when absent. */
@@ -274,13 +294,20 @@ export function renderPlanNodeId(
   return renderPlanPath(renderId, nodes, edges)?.planId
 }
 
+/** A dropped clip's place in a plan list (TA16): `""` or `null`. Clips are
+ *  objects as well as JSON text, so this is never "not a string". */
+const isHole = (clip: unknown): boolean => clip == null || (typeof clip === "string" && !clip.trim())
+
+/** The clips left once the holes are dropped, in order. */
+const keptClips = (clips: readonly unknown[]): readonly unknown[] => clips.filter((clip) => !isHole(clip))
+
 /**
  * The clips a wire that hands on ONE value passes, as both input resolvers pick
  * it (decided 2026-10-05): `item` the clip at its index (its range / list
  * selector does not apply), legacy `item:N` the N-th from 0 (else the first),
  * `all` what its selector leaves (one value only when that is one clip), and
- * "Selected" (`last`) the source's own output — an Edit Plan's is its FIRST
- * clip. A Camera Switch that ran per clip keeps a different clip as its own
+ * "Selected" (`last`) the source's own output — an Edit Plan's is its first
+ * KEPT clip, the scalar both engines read off a list with holes. A Camera Switch that ran per clip keeps a different clip as its own
  * output in each engine (the server its first, the editor the last to land),
  * so a Selected wire out of it names a clip only when it had one.
  */
@@ -293,43 +320,72 @@ function singlePick(clips: readonly unknown[], hop: RenderPlanHop): readonly unk
   }
   if (mode?.startsWith("item:")) return [clips[parseInt(mode.slice(5), 10)] ?? clips[0]]
   if (mode === "all") return selectListItems(clips as string[], data)
-  if (hop.source === "edit-plan") return clips.slice(0, 1)
+  if (hop.source === "edit-plan") return keptClips(clips).slice(0, 1)
   return clips.length === 1 ? clips : []
 }
 
 /**
- * The clip a render iteration reads, as a key. `plan` is the plan's clips (a
- * list of EDLs, objects or JSON strings); `hops` the wires from the plan down
- * (`renderPlanPath`). Each "each" wire hands on the clips its selector picks —
- * Camera Switch's row k is row k of ITS selection, the render's row k row k of
- * its own — exactly as both input resolvers select before they index. A wire
- * that hands on one value hands on the clip it picks (`singlePick`), and names
- * one only when exactly one is picked.
+ * The plan value a render iteration reads. `plan` is the plan's output as the
+ * engine holds it: a clip set's clips (a list of EDLs, objects or JSON strings,
+ * `""` at a dropped clip), or a Tighten plan's one EDL — which every wire hands
+ * on as it is. `hops` are the wires from the plan down (`renderPlanPath`). Each
+ * "each" wire hands on the clips its selector picks — Camera Switch's row k is
+ * row k of ITS selection, the render's row k row k of its own — exactly as both
+ * input resolvers select before they index. A wire that hands on one value
+ * hands on the clip it picks (`singlePick`), and names one only when exactly
+ * one is picked.
+ *
+ * Holes (a dropped clip, TA16) follow the row space each wire really hands on.
+ * A pass-through node (Camera Switch: every hop but the last) runs once per
+ * KEPT clip of its selection and both engines store its batch by iteration, so
+ * the next wire reads a list without the holes. The last wire, into the
+ * render, is not compacted: a render wired straight to the plan is rowed in
+ * the plan's own rows, holes included.
  *
  * With a row on an "each" wire, the row's clip; a row past the clips starts
  * over from the first, as the resolvers read it. With no row (a render run
  * once, or Repeat xN with nothing list-driven), the clip only when exactly one
- * is left — any other plan names no single clip.
+ * KEPT clip is left — the scalar both engines read — and any other plan names
+ * no single clip. An empty row names nothing.
  */
-export function renderClipKey(
+export function renderPlanValue(
   plan: unknown,
   row: number | undefined,
   hops: readonly RenderPlanHop[] = [],
-): string | undefined {
-  if (!Array.isArray(plan)) return undefined
+): unknown {
+  if (!Array.isArray(plan)) return plan === null || typeof plan !== "object" ? undefined : plan
   let clips: readonly unknown[] = plan
-  for (const hop of hops) {
+  for (const [i, hop] of hops.entries()) {
     if (clips.length === 0) return undefined
-    if (hop.each) clips = selectListItems(clips as string[], hop.edge.data as SelectorFields | undefined)
-    else {
+    if (hop.each) {
+      clips = selectListItems(clips as string[], hop.edge.data as SelectorFields | undefined)
+      // Into a pass-through node: it hands on its batch by iteration, one per kept clip.
+      if (i < hops.length - 1) clips = keptClips(clips)
+    } else {
       clips = singlePick(clips, hop)
       if (clips.length !== 1) return undefined
     }
   }
   if (clips.length === 0) return undefined
   const rowed = row !== undefined && (hops.at(-1)?.each ?? true)
-  if (rowed) return planClipKeyAt(clips, row % clips.length)
-  return clips.length === 1 ? planClipKeyAt(clips, 0) : undefined
+  if (rowed) {
+    const clip = clips[row % clips.length]
+    return isHole(clip) ? undefined : clip
+  }
+  const kept = keptClips(clips)
+  return kept.length === 1 ? kept[0] : undefined
+}
+
+/** The clip a render iteration reads, as a key (`edlSpanKey` of the clip
+ *  `renderPlanValue` picks). A Tighten plan names no clip. */
+export function renderClipKey(
+  plan: unknown,
+  row: number | undefined,
+  hops: readonly RenderPlanHop[] = [],
+): string | undefined {
+  if (!Array.isArray(plan)) return undefined
+  const clip = renderPlanValue(plan, row, hops)
+  return clip === undefined ? undefined : planClipKeyAt([clip], 0)
 }
 
 /**
@@ -350,4 +406,100 @@ export function renderPlanClipKey(
   const planNode = path ? nodes.find((n) => n.id === path.planId) : undefined
   if (!path || !planNode) return undefined
   return renderClipKey(planClips(planNode), row, path.hops)
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+//  The bases a render is stamped with (A3-1)
+// ─────────────────────────────────────────────────────────────────────────
+
+/** `renderReadBasis` of every plan object already hashed (see `editPlanBasis`:
+ *  plan objects are never mutated in place). Keyed by the object the caller
+ *  holds, since stripping `meta` makes a new one every time. */
+const readBasisByValue = new WeakMap<object, string>()
+
+const isPlainObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v)
+
+/**
+ * The fingerprint of the plan value a render read (R2 a, decided 2026-10-06):
+ * `editPlanBasis` of the value with its top-level `meta` removed. No renderer
+ * reads `meta`, so an edited hook (a clip's `meta.hook`, text only) leaves it
+ * unchanged. A clip given as JSON text reads as its object. `undefined` for
+ * anything that is not one plan object (a list, a scalar, unparsable text).
+ */
+export function renderReadBasis(value: unknown): string | undefined {
+  let v = value
+  if (typeof v === "string") {
+    if (!v.trim()) return undefined
+    try {
+      v = JSON.parse(v)
+    } catch {
+      return undefined
+    }
+  }
+  if (!isPlainObject(v)) return undefined
+  const cached = readBasisByValue.get(v)
+  if (cached !== undefined) return cached
+  const { meta: _meta, ...rest } = v
+  const basis = editPlanBasis(rest)
+  readBasisByValue.set(v, basis)
+  return basis
+}
+
+/** A render's own settings, as it reads them. */
+export interface RenderSettingsInput {
+  /** Any value other than "audio" is a video render. */
+  readonly output?: unknown
+  /** The default crossfade in ms; missing, negative or non-finite is a hard cut. */
+  readonly crossfadeMs?: unknown
+}
+
+/**
+ * The fingerprint of a render's own settings (R19 a, decided 2026-10-06):
+ * `editPlanBasis({crossfadeMs, output, sources})`. `sources` is the EFFECTIVE
+ * source list — the URL of each source of the effective EDL the render cuts,
+ * in order, with the `sources` wires' overrides applied (`""` for a source with
+ * no URL). A change to any of the three changes the cut while the plan value
+ * stays equal. The settings are read as the render reads them: whole ms, a
+ * hard cut when the crossfade is missing.
+ */
+export function renderSettingsBasis(settings: RenderSettingsInput, sources: ReadonlyArray<string | undefined> = []): string {
+  const raw = settings.crossfadeMs
+  const crossfadeMs = typeof raw === "number" && Number.isFinite(raw) ? Math.max(0, Math.round(raw)) : 0
+  return editPlanBasis({
+    crossfadeMs,
+    output: settings.output === "audio" ? "audio" : "video",
+    sources: sources.map((url) => (typeof url === "string" ? url : "")),
+  })
+}
+
+/**
+ * The plan basis a render iteration stamps — the ONE rule both engines call
+ * (R1 a, decided 2026-10-06). The plan value the iteration read
+ * (`renderPlanValue` of `planOutput` — the plan's output as the run holds it —
+ * along `renderPlanPath`), as `renderReadBasis`.
+ *
+ * THE SAME-RUN RULE. Behind a pass-through node (Camera Switch) the render reads
+ * that node's output, which is the plan's current value only when the node ran
+ * in the same run as the render; a SAVED output can come from an older plan.
+ * So the basis is stamped only when every pass-through node on the path is in
+ * `ranIds`, the nodes executed in the render's run, and is `undefined`
+ * otherwise — the take then reads as unknown (stale), never as current. A
+ * render wired straight to the plan (through teleports at most) reads the
+ * plan's output itself and is always stamped.
+ */
+export function renderPlanBasis(
+  renderId: string,
+  nodes: readonly RenderGraphNode[],
+  edges: readonly RenderGraphEdge[],
+  planOutput: (planNode: RenderGraphNode) => unknown,
+  row: number | undefined,
+  ranIds: ReadonlySet<string>,
+): string | undefined {
+  const path = renderPlanPath(renderId, nodes, edges)
+  const planNode = path ? nodes.find((n) => n.id === path.planId) : undefined
+  if (!path || !planNode) return undefined
+  // Every hop but the last is a pass-through node's own `edl` wire.
+  const passThrough = path.hops.slice(0, -1).map((hop) => hop.edge.target)
+  if (!passThrough.every((id) => ranIds.has(id))) return undefined
+  return renderReadBasis(renderPlanValue(planOutput(planNode), row, path.hops))
 }

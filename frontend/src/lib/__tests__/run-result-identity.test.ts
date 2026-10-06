@@ -8,6 +8,14 @@ describe("runResultIdentity — what a landed take carries (A1b)", () => {
     })
   })
 
+  it("a render's plan basis and render basis (A3-1), as 16 hex digits only", () => {
+    expect(runResultIdentity("apply-edl", { videoUrl: "v", quality: "final", planBasis: "0123456789abcdef", renderBasis: "fedcba9876543210" })).toEqual({
+      quality: "final", planBasis: "0123456789abcdef", renderBasis: "fedcba9876543210",
+    })
+    expect(runResultIdentity("apply-edl", { videoUrl: "v", planBasis: "nope" })).toEqual({})
+    expect(runResultIdentity("generate-video", { videoUrl: "v", planBasis: "0123456789abcdef" })).toEqual({})
+  })
+
   it("another node keeps its thumbnail and never a render quality", () => {
     expect(runResultIdentity("generate-image", { imageUrl: "i", thumbnailUrl: "t", quality: "proxy" })).toEqual({ thumbnailUrl: "t" })
     expect(runResultIdentity("apply-edl", undefined)).toEqual({})
@@ -20,12 +28,12 @@ describe("runResultRowIdentity — a server fan-out row's own job", () => {
     listResultStamps: [
       { jobId: "job-a", thumbnailUrl: "a.jpg", quality: "proxy" as const, clipKey: "0-1" },
       {},
-      { jobId: "job-c", quality: "proxy" as const, clipKey: "4-5" },
+      { jobId: "job-c", quality: "proxy" as const, clipKey: "4-5", planBasis: "00000000000000cc" },
     ],
   }
 
   it("pairs by row, never by position among the URLs", () => {
-    expect(runResultRowIdentity("apply-edl", output, "c.mp4")).toEqual({ jobId: "job-c", quality: "proxy", clipKey: "4-5" })
+    expect(runResultRowIdentity("apply-edl", output, "c.mp4")).toEqual({ jobId: "job-c", quality: "proxy", clipKey: "4-5", planBasis: "00000000000000cc" })
     expect(runResultRowIdentity("apply-edl", output, "a.mp4")).toEqual({ jobId: "job-a", thumbnailUrl: "a.jpg", quality: "proxy", clipKey: "0-1" })
   })
 

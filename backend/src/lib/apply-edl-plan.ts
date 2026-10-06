@@ -18,6 +18,7 @@ import { type Edl, edlDurationMs, applyEdlCreditId } from "@nodaro/shared"
 export {
   APPLY_EDL_MAX_OUTPUT_MS,
   buildEffectiveEdl,
+  effectiveRenderBasis,
   validateEffectiveEdl,
   type ApplyEdlValidation,
   type EffectiveEdlOptions,

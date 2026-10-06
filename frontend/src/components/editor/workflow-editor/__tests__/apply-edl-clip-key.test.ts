@@ -11,7 +11,7 @@
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { describe, it, expect, vi } from "vitest"
-import { edlSpanKey, planFanOut, renderPlanClipKey } from "@nodaro/shared"
+import { EDITED_EDL_VERSION, editPlanBasis, edlSpanKey, planFanOut, renderPlanClipKey } from "@nodaro/shared"
 
 let storeNodes: unknown[] = []
 let storeEdges: unknown[] = []
@@ -28,9 +28,18 @@ import fixture from "../../../../../../backend/src/services/workflow-engine/__te
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const asNode = (n: { id: string; type: string; data: Record<string, unknown> }): any => ({ ...n, position: { x: 0, y: 0 } })
 
+/** The plan as a case's review leaves it: its `dropped` clips (the TA16 holes) applied as the plan's editedEdl. */
+function planOf(c: (typeof fixture.cases)[number]) {
+  const dropped = (c as { dropped?: number[] }).dropped
+  if (!dropped) return fixture.plan
+  const clips = fixture.plan.data.generatedJson as unknown[]
+  const editedEdl = { v: EDITED_EDL_VERSION, kind: "clips", basis: editPlanBasis(clips), clips: clips.map((_, i) => ({ keep: !dropped.includes(i) })) }
+  return { ...fixture.plan, data: { ...fixture.plan.data, editedEdl } }
+}
+
 function run(c: (typeof fixture.cases)[number]) {
   const render = asNode(fixture.render)
-  const nodes = [asNode(fixture.plan), ...c.nodes.map(asNode), render]
+  const nodes = [asNode(planOf(c)), ...c.nodes.map(asNode), render]
   const edges = c.edges as any[]
   storeNodes = nodes
   storeEdges = edges

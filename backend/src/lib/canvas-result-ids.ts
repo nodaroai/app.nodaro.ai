@@ -32,9 +32,11 @@
  * WHAT A MATCH WRITES. The job id; and, matched by the job's own output URL,
  * the fields of `jobRowStamp` the result does not already hold — `thumbnailUrl`
  * for every type, and for a render `quality` (the worker's, else the order's:
- * "proxy" is a Preview) and `clipKey`. Migration 459 stamps a server run's rows
- * by the same rule, and `supabase/tests/fixtures/job-row-stamps.sql` holds both
- * implementations to the same cases. A variant keeps only its new id: the job's
+ * "proxy" is a Preview), `clipKey`, `planBasis` and `renderBasis`. Migration 459
+ * stamps a server run's rows by the same rule, and
+ * `supabase/tests/fixtures/job-row-stamps.sql` holds both implementations to
+ * the same cases — except the two bases (A3-1), which only renders made after
+ * that backfill carry: no job it reads has one, so it does not read them. A variant keeps only its new id: the job's
  * thumbnail is its first output's.
  *
  * NOTHING IS WRITTEN ON A READ. A read hands back a patched copy; the editor
@@ -86,6 +88,9 @@ export interface JobFacts {
   /** What the worker wrote; for an Apply EDL render, "proxy" or "final". */
   readonly quality: string | null
   readonly clipKey: string | null
+  /** A render's `planBasis` / `renderBasis` (A3-1). */
+  readonly planBasis: string | null
+  readonly renderBasis: string | null
   readonly imageUrls: ReadonlyArray<string | null> | null
   readonly audioUrls: ReadonlyArray<string | null> | null
 }
@@ -106,6 +111,8 @@ export const JOB_FACTS_SELECT = [
   "thumbnail_url:output_data->>thumbnailUrl",
   "out_quality:output_data->>quality",
   "clip_key:output_data->>clipKey",
+  "plan_basis:output_data->>planBasis",
+  "render_basis:output_data->>renderBasis",
   "image_urls:output_data->imageUrls",
   "audio_urls:output_data->audioUrls",
 ].join(", ")
@@ -143,6 +150,8 @@ export function jobFactsFromSelect(row: Record<string, unknown>): JobFacts {
     thumbnailUrl: sqlText(row.thumbnail_url),
     quality: sqlText(row.out_quality),
     clipKey: sqlText(row.clip_key),
+    planBasis: sqlText(row.plan_basis),
+    renderBasis: sqlText(row.render_basis),
     imageUrls: sqlTextArray(row.image_urls),
     audioUrls: sqlTextArray(row.audio_urls),
   }
@@ -175,6 +184,8 @@ export function jobFactsFromRow(row: {
     thumbnail_url: output.thumbnailUrl,
     out_quality: output.quality,
     clip_key: output.clipKey,
+    plan_basis: output.planBasis,
+    render_basis: output.renderBasis,
     image_urls: output.imageUrls,
     audio_urls: output.audioUrls,
   })
@@ -200,24 +211,35 @@ export interface JobRowStamp {
   readonly thumbnailUrl?: string
   readonly quality?: string
   readonly clipKey?: string
+  readonly planBasis?: string
+  readonly renderBasis?: string
 }
 
+const BASIS = /^[0-9a-f]{16}$/
+const basisOf = (s: string | null): string | undefined => (s !== null && BASIS.test(s) ? s : undefined)
+
 /**
- * The stamp of a result `job` made: its id and thumbnail for every type; for an
- * render (RENDER_NODE_TYPES), also its `quality` — the worker's, else the order's by the
- * worker's own rule ("proxy" is a Preview, anything else the final) — and its
- * `clipKey` when it had one. Another node's `quality` is something else.
+ * The stamp of a result `job` made: its id and thumbnail for every type; for a
+ * render (RENDER_NODE_TYPES), also its `quality` — the worker's, else the order's
+ * by the worker's own rule ("proxy" is a Preview, anything else the final) —
+ * its `clipKey` when it had one, and its two bases when it had them (16 hex
+ * digits, as the shared `renderResultStamp` reads them). Another node's
+ * `quality` is something else.
  */
 export function jobRowStamp(job: JobFacts): JobRowStamp {
   const render = isRenderNodeType(job.jobType)
   const thumbnailUrl = nonEmpty(job.thumbnailUrl)
   const quality = render ? (nonEmpty(job.quality) ?? (job.inputQuality === "proxy" ? "proxy" : "final")) : undefined
   const clipKey = render ? nonEmpty(job.clipKey) : undefined
+  const planBasis = render ? basisOf(job.planBasis) : undefined
+  const renderBasis = render ? basisOf(job.renderBasis) : undefined
   return {
     jobId: job.id,
     ...(thumbnailUrl ? { thumbnailUrl } : {}),
     ...(quality ? { quality } : {}),
     ...(clipKey ? { clipKey } : {}),
+    ...(planBasis ? { planBasis } : {}),
+    ...(renderBasis ? { renderBasis } : {}),
   }
 }
 
@@ -296,6 +318,8 @@ function withStampFill(entry: Entry, stamp: JobRowStamp): Entry {
   if (stamp.thumbnailUrl && !(typeof entry.thumbnailUrl === "string" && entry.thumbnailUrl)) fill.thumbnailUrl = stamp.thumbnailUrl
   if (stamp.quality && !RENDER_QUALITIES.has(entry.quality)) fill.quality = stamp.quality
   if (stamp.clipKey && !(typeof entry.clipKey === "string" && entry.clipKey)) fill.clipKey = stamp.clipKey
+  if (stamp.planBasis && !(typeof entry.planBasis === "string" && entry.planBasis)) fill.planBasis = stamp.planBasis
+  if (stamp.renderBasis && !(typeof entry.renderBasis === "string" && entry.renderBasis)) fill.renderBasis = stamp.renderBasis
   return fill
 }
 

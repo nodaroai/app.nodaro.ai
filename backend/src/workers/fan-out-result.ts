@@ -39,6 +39,8 @@ function rowStampOf(result: ExecuteNodeResult): RunResultRowStamp {
     ...(typeof o.thumbnailUrl === "string" && o.thumbnailUrl ? { thumbnailUrl: o.thumbnailUrl } : {}),
     ...(o.quality ? { quality: o.quality } : {}),
     ...(o.clipKey ? { clipKey: o.clipKey } : {}),
+    ...(o.planBasis ? { planBasis: o.planBasis } : {}),
+    ...(o.renderBasis ? { renderBasis: o.renderBasis } : {}),
   }
 }
 

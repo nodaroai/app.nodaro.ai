@@ -1,5 +1,5 @@
 {
-  "_comment": "Cross-engine guard for an Apply EDL render's clipKey (A1b review rounds): a selector on the render's edl wire, and one on the Edit Plan to Camera Switch wire. Row k of an each wire is row k of what its selector picks, never row k of the plan. A wire that hands on ONE value (Selected, item, item:N, all) names the clip it picks, as both input resolvers pick it (decided 2026-10-05); such a render runs once (expectedRows null). Selected (outputMode last) is the plan's own output, its FIRST clip. `direct` cases also check the key is the span of the EDL the render receives. The backend test (apply-edl-clip-key.test.ts) and the editor test of the same name read this file.",
+  "_comment": "Cross-engine guard for an Apply EDL render's clipKey (A1b review rounds): a selector on the render's edl wire, and one on the Edit Plan to Camera Switch wire. Row k of an each wire is row k of what its selector picks, never row k of the plan. A wire that hands on ONE value (Selected, item, item:N, all) names the clip it picks, as both input resolvers pick it (decided 2026-10-05); such a render runs once (expectedRows null). Selected (outputMode last) is the plan's own output, its FIRST clip. `direct` cases also check the key is the span of the EDL the render receives. The backend test (apply-edl-clip-key.test.ts) and the editor test of the same name read this file. `dropped` (optional) lists the plan clips the person dropped in review (the TA16 holes: \"\" at each in the plan list); the harnesses apply it as the plan's editedEdl.",
   "plan": {
     "id": "plan",
     "type": "edit-plan",
@@ -411,6 +411,99 @@
         "6000-7000"
       ],
       "direct": false
+    },
+    {
+      "name": "a dropped clip before Camera Switch: the switch hands on its kept rows, so render row k is the k-th KEPT clip",
+      "dropped": [
+        0
+      ],
+      "nodes": [
+        {
+          "id": "switch",
+          "type": "camera-switch",
+          "data": {
+            "__listResults": [
+              "{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"A\",\"url\":\"https://media.test/a.mp4\",\"kind\":\"video\"}],\"segments\":[{\"id\":\"seg-0\",\"inMs\":2200,\"outMs\":2500,\"video\":\"A\"},{\"id\":\"seg-1\",\"inMs\":2500,\"outMs\":3000,\"video\":\"A\"}]}",
+              "{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"A\",\"url\":\"https://media.test/a.mp4\",\"kind\":\"video\"}],\"segments\":[{\"id\":\"seg-0\",\"inMs\":4200,\"outMs\":4500,\"video\":\"A\"},{\"id\":\"seg-1\",\"inMs\":4500,\"outMs\":5000,\"video\":\"A\"}]}",
+              "{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"A\",\"url\":\"https://media.test/a.mp4\",\"kind\":\"video\"}],\"segments\":[{\"id\":\"seg-0\",\"inMs\":6200,\"outMs\":6500,\"video\":\"A\"},{\"id\":\"seg-1\",\"inMs\":6500,\"outMs\":7000,\"video\":\"A\"}]}"
+            ]
+          }
+        }
+      ],
+      "edges": [
+        {
+          "id": "e-plan",
+          "source": "plan",
+          "sourceHandle": "edl",
+          "target": "switch",
+          "targetHandle": "edl"
+        },
+        {
+          "id": "e-switch",
+          "source": "switch",
+          "sourceHandle": "edl",
+          "target": "render",
+          "targetHandle": "edl"
+        }
+      ],
+      "expectedRows": [
+        0,
+        1,
+        2
+      ],
+      "expected": [
+        "2000-3000",
+        "4000-5000",
+        "6000-7000"
+      ],
+      "direct": false
+    },
+    {
+      "name": "a plan with one kept clip: the render runs once and names that clip",
+      "dropped": [
+        0,
+        2,
+        3
+      ],
+      "nodes": [],
+      "edges": [
+        {
+          "id": "e-plan",
+          "source": "plan",
+          "sourceHandle": "edl",
+          "target": "render",
+          "targetHandle": "edl"
+        }
+      ],
+      "expectedRows": null,
+      "expected": [
+        "2000-3000"
+      ],
+      "direct": true
+    },
+    {
+      "name": "a Selected (last) wire with the first clip dropped names the first KEPT clip",
+      "dropped": [
+        0
+      ],
+      "nodes": [],
+      "edges": [
+        {
+          "id": "e-plan",
+          "source": "plan",
+          "sourceHandle": "edl",
+          "target": "render",
+          "targetHandle": "edl",
+          "data": {
+            "outputMode": "last"
+          }
+        }
+      ],
+      "expectedRows": null,
+      "expected": [
+        "2000-3000"
+      ],
+      "direct": true
     }
   ]
 }

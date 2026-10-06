@@ -1,7 +1,8 @@
 /**
  * What a landed take carries on its RESULT besides its URL (A1b): its
  * thumbnail and, for a render, what the render stamped — `quality` ("proxy" is
- * a Preview) and `clipKey` (the plan clip it cut). Every lane that lands a take
+ * a Preview), `clipKey` (the plan clip it cut), `planBasis` (the plan value it
+ * cut) and `renderBasis` (its own settings). Every lane that lands a take
  * writes it — the single-node run, the browser fan-out, a server run (live and
  * at reopen) and the job restores — so the Preview label and the latest-batch
  * reader (@nodaro/shared savedRenderBatch) see the same take whichever lane
@@ -16,6 +17,8 @@ export interface RunResultIdentity {
   readonly thumbnailUrl?: string
   readonly quality?: RenderQuality
   readonly clipKey?: string
+  readonly planBasis?: string
+  readonly renderBasis?: string
 }
 
 const str = (v: unknown): string | undefined => (typeof v === "string" && v.length > 0 ? v : undefined)

@@ -1383,6 +1383,8 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
       if (saved.thumbnailUrl) out.thumbnailUrl = saved.thumbnailUrl
       if (saved.quality) out.quality = saved.quality
       if (saved.clipKey) out.clipKey = saved.clipKey
+      if (saved.planBasis) out.planBasis = saved.planBasis
+      if (saved.renderBasis) out.renderBasis = saved.renderBasis
     }
     const json = data.generatedJson
     if (json !== undefined) out.json = json

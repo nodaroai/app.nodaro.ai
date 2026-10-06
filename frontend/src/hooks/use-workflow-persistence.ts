@@ -124,9 +124,12 @@ interface NodeExecutionState {
     /** Each fan-out row's own job, thumbnail and render stamps, row-aligned with listResults. Mirrors backend NodeOutput. */
     listResultStamps?: RunResultRowStamp[]
     thumbnailUrl?: string
-    /** Apply EDL: the quality the render was made at, and the plan clip it cut. */
+    /** Apply EDL: the quality the render was made at, the plan clip it cut, the
+     *  plan value it cut and its own settings. */
     quality?: RenderQuality
     clipKey?: string
+    planBasis?: string
+    renderBasis?: string
   }
   error?: string
   /** Stable billing-refusal code — mirrors backend NodeExecutionState. */

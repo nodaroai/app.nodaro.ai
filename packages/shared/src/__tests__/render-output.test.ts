@@ -294,4 +294,50 @@ describe("renderPlanClipKey — the clip a row reads is picked by every selector
   it("no plan behind the edl wire stamps nothing", () => {
     expect(renderPlanClipKey("render", nodes, [], planList, 0)).toBeUndefined()
   })
+
+  // A person's review drops clips: the plan's list keeps its rows, with a hole
+  // ("" — or null) at each dropped clip (TA16). Clips may be objects as well as
+  // JSON text, so a hole is only "" / null, never "not a string".
+  describe("a plan with dropped clips", () => {
+    const clip = (inMs: number, outMs: number) => ({ version: 1, clock: "master", sources: [], segments: [{ id: `s${inMs}`, inMs, outMs }] })
+    const B = clip(2000, 3000)
+    const C = clip(4000, 5000)
+    const viaSwitch = (renderWire?: Record<string, unknown>) => [
+      { source: "plan", sourceHandle: "edl", target: "switch", targetHandle: "edl" },
+      { source: "switch", sourceHandle: "edl", target: "render", targetHandle: "edl", ...(renderWire ? { data: renderWire } : {}) },
+    ]
+
+    it("behind Camera Switch, row k is the k-th KEPT clip: the switch ran once per kept row and hands on its batch by iteration", () => {
+      for (const holes of [["", B, C], [null, B, C], ["", B, null, C], [" ", JSON.stringify(B), C]]) {
+        expect(renderPlanClipKey("render", nodes, viaSwitch(), () => holes, 0), JSON.stringify(holes)).toBe("2000-3000")
+        expect(renderPlanClipKey("render", nodes, viaSwitch(), () => holes, 1), JSON.stringify(holes)).toBe("4000-5000")
+      }
+      // The render's own selector picks from the switch's batch.
+      expect(renderPlanClipKey("render", nodes, viaSwitch(pick("2")), () => ["", B, C], 0)).toBe("4000-5000")
+    })
+
+    it("wired straight to the plan, a row is the plan's row, holes included", () => {
+      const edges = [{ source: "plan", sourceHandle: "edl", target: "render", targetHandle: "edl" }]
+      expect(renderPlanClipKey("render", nodes, edges, () => ["", B, C], 1)).toBe("2000-3000")
+      expect(renderPlanClipKey("render", nodes, edges, () => ["", B, C], 2)).toBe("4000-5000")
+      expect(renderPlanClipKey("render", nodes, edges, () => ["", B, C], 0)).toBeUndefined()
+    })
+
+    it("one kept clip: the render that runs once names it, straight from the plan or behind Camera Switch", () => {
+      const edges = [{ source: "plan", sourceHandle: "edl", target: "render", targetHandle: "edl" }]
+      expect(renderPlanClipKey("render", nodes, edges, () => ["", B, null], undefined)).toBe("2000-3000")
+      expect(renderPlanClipKey("render", nodes, viaSwitch(), () => ["", B, ""], undefined)).toBe("2000-3000")
+      expect(renderPlanClipKey("render", nodes, viaSwitch({ outputMode: "last" }), () => ["", B, ""], undefined)).toBe("2000-3000")
+      expect(renderPlanClipKey("render", nodes, edges, () => ["", null], undefined)).toBeUndefined()
+    })
+
+    it("a Selected wire from the plan names its first KEPT clip, as the scalar read hands it on", () => {
+      expect(renderPlanClipKey("render", nodes, wire({ outputMode: "last" }), () => ["", B, C], undefined)).toBe("2000-3000")
+      expect(renderPlanClipKey("render", nodes, wire({ outputMode: "last" }), () => [null, "", C], undefined)).toBe("4000-5000")
+    })
+
+    it("an item wire on a dropped clip names nothing (it hands on nothing)", () => {
+      expect(renderPlanClipKey("render", nodes, wire({ outputMode: "item", itemIndex: "1" }), () => ["", B, C], undefined)).toBeUndefined()
+    })
+  })
 })

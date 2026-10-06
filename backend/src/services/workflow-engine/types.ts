@@ -100,8 +100,8 @@ export interface NodeOutput {
    */
   listResultCompositionKeys?: string[]
   /**
-   * Each row's identity — its job, thumbnail and, for a render, `quality` and
-   * `clipKey` — ROW-ALIGNED with `listResults` (`{}` where the row has none).
+   * Each row's identity — its job, thumbnail and, for a render, `quality`,
+   * `clipKey`, `planBasis` and `renderBasis` — ROW-ALIGNED with `listResults` (`{}` where the row has none).
    * The editor stamps each result row with it; pairing rows with `jobIds` by
    * position mis-paired once a row failed or finished out of order.
    */
@@ -110,6 +110,10 @@ export interface NodeOutput {
   quality?: RenderQuality
   /** apply-edl: the plan clip the render cut (`edlSpanKey`), as its payload gave it. */
   clipKey?: string
+  /** apply-edl: the plan value the render cut (`renderReadBasis`), when it read the plan's own value. */
+  planBasis?: string
+  /** apply-edl: the render's own settings and effective sources (`effectiveRenderBasis`). */
+  renderBasis?: string
   /** Selector node `picked` output channel (selected items). */
   pickedResults?: string[]
   /** Selector node `rest` output channel (items NOT picked). */

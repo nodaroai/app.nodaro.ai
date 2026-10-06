@@ -146,6 +146,17 @@ export interface ApplyEdlInput {
    * clips. Omit for a render of no plan clip.
    */
   clipKey?: string
+  /**
+   * The plan value this render cuts — `renderReadBasis(value)` from
+   * `@nodaro/shared` (16 lowercase hex digits), where `value` is the Edit
+   * Plan's Tighten EDL with any review applied, or the clip this render cuts.
+   * The job's result carries it back as `output_data.planBasis`, so a take can
+   * be told apart from one cut from an earlier plan. Send it only when the EDL
+   * you send IS that value (not one an intermediate step re-cut from an older
+   * plan); omit it otherwise. The result's `output_data.renderBasis` (the
+   * render's own settings and sources) is stamped by the server.
+   */
+  planBasis?: string
   /** Optionally associate this run with a workflow execution (display only). */
   workflowId?: string
 }
@@ -330,6 +341,7 @@ export class EditResource {
         ...(input.quality !== undefined ? { quality: input.quality } : {}),
         ...(input.crossfadeMs !== undefined ? { crossfadeMs: input.crossfadeMs } : {}),
         ...(input.clipKey !== undefined ? { clipKey: input.clipKey } : {}),
+        ...(input.planBasis !== undefined ? { planBasis: input.planBasis } : {}),
         ...(input.workflowId !== undefined ? { workflowId: input.workflowId } : {}),
       },
     })

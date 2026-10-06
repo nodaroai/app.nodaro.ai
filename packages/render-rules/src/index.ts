@@ -7,6 +7,7 @@
 export {
   APPLY_EDL_MAX_OUTPUT_MS,
   buildEffectiveEdl,
+  effectiveRenderBasis,
   findEffectiveEdlIssues,
   validateEffectiveEdl,
   type ApplyEdlIssue,

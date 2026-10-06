@@ -162,7 +162,7 @@ function safeParseJson(s: string): unknown {
  * output modes.
  */
 const handleApplyEdl: HandlerFn = async function handleApplyEdl(job, ctx) {
-  const { edl, transcript, output, quality, clipKey } = job.data as {
+  const { edl, transcript, output, quality, clipKey, planBasis, renderBasis } = job.data as {
     jobId: string
     edl: Edl
     /** Optional upstream Transcript (JSON string OR object) to remap through
@@ -172,6 +172,9 @@ const handleApplyEdl: HandlerFn = async function handleApplyEdl(job, ctx) {
     quality?: "proxy" | "final"
     /** The plan clip this render cuts, stamped on the result as given. */
     clipKey?: string
+    /** The plan value this render cuts and its own settings, stamped as given. */
+    planBasis?: string
+    renderBasis?: string
   }
   const outputKind = output === "audio" ? "audio" : "video"
   console.log(`[worker] apply-edl ${ctx.jobId}: ${edl.segments.length} segments, output=${outputKind}, quality=${quality ?? "final"}`)
@@ -206,7 +209,7 @@ const handleApplyEdl: HandlerFn = async function handleApplyEdl(job, ctx) {
 
   if (!await shouldSaveJobResult(ctx.jobId)) return
 
-  // The cut, its Transcript, and the render's identity (quality + clip):
+  // The cut, its Transcript, and the render's identity (quality, clip, bases):
   // lib/apply-edl-output.ts.
   const output_data = applyEdlOutputData({
     medium: outputKind,
@@ -214,6 +217,8 @@ const handleApplyEdl: HandlerFn = async function handleApplyEdl(job, ctx) {
     thumbnailUrl: thumbUrl ?? undefined,
     quality,
     clipKey,
+    planBasis,
+    renderBasis,
     json: remapped,
   })
 

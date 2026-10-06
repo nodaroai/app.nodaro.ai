@@ -19,8 +19,17 @@ describe("applyEdlOutputData — what a finished Apply EDL render stores (A1b)",
     expect(applyEdlOutputData({ medium: "video", mediaUrl: "v.mp4", quality: undefined }).quality).toBe("final")
   })
 
+  it("the two bases (A3-1): written as given when they are bases, dropped otherwise", () => {
+    expect(applyEdlOutputData({ medium: "video", mediaUrl: "v.mp4", quality: "final", planBasis: "0123456789abcdef", renderBasis: "fedcba9876543210" })).toEqual({
+      videoUrl: "v.mp4", quality: "final", planBasis: "0123456789abcdef", renderBasis: "fedcba9876543210",
+    })
+    expect(applyEdlOutputData({ medium: "video", mediaUrl: "v.mp4", quality: "final", planBasis: "nope", renderBasis: 7 })).toEqual({
+      videoUrl: "v.mp4", quality: "final",
+    })
+  })
+
   it("the stamp it writes is exactly what the shared reader reads back", () => {
-    const od = applyEdlOutputData({ medium: "video", mediaUrl: "v.mp4", quality: "proxy", clipKey: "5-10" })
-    expect(renderResultStamp(od)).toEqual({ quality: "proxy", clipKey: "5-10" })
+    const od = applyEdlOutputData({ medium: "video", mediaUrl: "v.mp4", quality: "proxy", clipKey: "5-10", planBasis: "00000000000000aa", renderBasis: "00000000000000bb" })
+    expect(renderResultStamp(od)).toEqual({ quality: "proxy", clipKey: "5-10", planBasis: "00000000000000aa", renderBasis: "00000000000000bb" })
   })
 })

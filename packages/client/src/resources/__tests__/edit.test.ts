@@ -133,6 +133,13 @@ describe("edit.applyEdl", () => {
     expect(sent.clipKey).toBe("0-12000")
   })
 
+  it("sends the plan value's basis when given (stamped on the result as planBasis)", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "j" }))
+    await client(fetchMock).edit.applyEdl({ edl, planBasis: "0123456789abcdef" })
+    const sent = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body) as Record<string, unknown>
+    expect(sent.planBasis).toBe("0123456789abcdef")
+  })
+
   it("sends only edl when no options are given", async () => {
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "j" }))
     await client(fetchMock).edit.applyEdl({ edl })
