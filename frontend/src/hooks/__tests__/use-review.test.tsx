@@ -301,6 +301,25 @@ describe("useReviewChecks: the gate and the take's freshness over the pending ed
     expect(planData().editedEdl).toBeUndefined()
   })
 
+  it("hands the header the renders the Run would make, with the pending edit in place", () => {
+    const { result } = renderHook(() => useReview())
+    expect(result.current.checks.renders).toHaveLength(1)
+    act(() => result.current.edits.cutRange(SO))
+    act(() => vi.advanceTimersByTime(REVIEW_CHECK_DEBOUNCE_MS))
+    const edl = result.current.checks.renders[0]!.edl
+    const wired = (typeof edl === "string" ? JSON.parse(edl) : edl) as { segments: Array<{ inMs: number }> }
+    // The edit cut "So" (100–400): the render reads the edit, not the stored plan.
+    expect(wired.segments.map((g) => g.inMs)).toContain(400)
+    expect(JSON.stringify(wired)).toContain("manual")
+    expect(planData().editedEdl).toBeUndefined()
+  })
+
+  it("has no renders with no plan behind the render", () => {
+    useWorkflowStore.setState({ edges: [] as never })
+    const { result } = renderHook(() => useReview())
+    expect(result.current.checks.renders).toEqual([])
+  })
+
   it("a take cut from the plan as it stands is fresh, with a clock map; an edit makes it stale", () => {
     load({ cut: { generatedResults: [stampedTake(PLAN)], activeResultIndex: 0 } })
     const { result } = renderHook(() => useReview())

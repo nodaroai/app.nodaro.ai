@@ -22,6 +22,7 @@ const PLACEHOLDER = /\{[^{}]*\}/g
  * that gains Korean must leave this list.
  */
 const LATIN_OK: ReadonlySet<string> = new Set<string>([
+  "node.applyEdlEdlIn", // the Apply EDL pip: "EDL" is a format name, as in the handle table
   // Brand, product, model and provider names, and their fixed product labels.
   "audiocfg.providerElevenLabsStt",
   "audiocfg.providerIncrediblyFastWhisper",

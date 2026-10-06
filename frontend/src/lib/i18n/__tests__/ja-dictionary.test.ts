@@ -22,6 +22,7 @@ const PLACEHOLDER = /\{[^{}]*\}/g
  * that gains Japanese must leave this list.
  */
 const LATIN_OK: ReadonlySet<string> = new Set<string>([
+  "node.applyEdlEdlIn", // the Apply EDL pip: "EDL" is a format name, as in the handle table
   // Brand, model, product and unit names, URLs and code samples; the
   // tutorial number words render as digits.
   "apps.appUrlPrefix",

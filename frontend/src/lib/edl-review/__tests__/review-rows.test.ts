@@ -7,9 +7,12 @@ import {
   buildReviewRows,
   collapsedRunOfWord,
   COLLAPSE_MIN_CUT_MS,
+  expandedRuns,
+  runSpan,
   rowOfMasterMs,
   rowOfWord,
   type ReviewRow,
+  type WordSpan,
 } from "../review-rows"
 
 const SOURCES = [{ id: "cam", url: "https://cdn.test/cam.mp4", kind: "video" }]
@@ -23,7 +26,7 @@ function transcriptOf(turns: ReadonlyArray<{ speaker: string; words: number; at:
   return normalizeTranscript({ version: 1, words })
 }
 
-function rowsOf(edl: Edl, transcript: ReturnType<typeof transcriptOf>, expanded?: ReadonlySet<string>): ReviewRow[] {
+function rowsOf(edl: Edl, transcript: ReturnType<typeof transcriptOf>, expanded?: readonly WordSpan[]): ReviewRow[] {
   return buildReviewRows({
     paragraphs: buildParagraphs(transcript),
     wordIndex: buildWordIndex(edl, transcript),
@@ -78,13 +81,38 @@ describe("review rows: paragraphs, gaps and collapsed runs (R11)", () => {
     })
     const collapsed = rowsOf(edl, transcript)
     const id = collapsed[1]!.kind === "collapsed" ? collapsed[1]!.run : ""
-    const rows = rowsOf(edl, transcript, new Set([id]))
+    const span = runSpan(collapsed, id)!
+    expect(span).toEqual({ first: 10, end: 30 })
+    const rows = rowsOf(edl, transcript, [span])
     expect(rows.map((r) => [r.kind, r.kind === "paragraph" ? r.run : r.run])).toEqual([
       ["paragraph", undefined],
       ["paragraph", id],
       ["paragraph", id],
       ["paragraph", undefined],
     ])
+    expect(expandedRuns(rows)).toEqual([{ run: id, first: 10, end: 30 }])
+    expect(runSpan(rows, id)).toEqual(span)
+  })
+
+  it("a run stays open when its first paragraph is restored and its id moves to the next one", () => {
+    // Turns 2–4 cut (A, B, A from 12 s): a run of three paragraphs, words 10–40.
+    const four = transcriptOf([...turns, { speaker: "A", words: 10, at: 48 * S }])
+    const cut = normalizeEdl({
+      version: 1, clock: "master", sources: SOURCES,
+      segments: [{ id: "s0", inMs: 0, outMs: 11 * S, video: "cam" }, { id: "s1", inMs: 47 * S, outMs: 59 * S, video: "cam" }],
+      dropped: [{ inMs: 11 * S, outMs: 47 * S, reason: "tangent" }],
+    })
+    const open = rowsOf(cut, four, [{ first: 10, end: 40 }])
+    expect(expandedRuns(open)).toEqual([{ run: "run-10", first: 10, end: 40 }])
+    // B's turn (12–22 s) restored: the run is now words 20–40, "run-20".
+    const restored = normalizeEdl({
+      version: 1, clock: "master", sources: SOURCES,
+      segments: [{ id: "s0", inMs: 0, outMs: 11 * S, video: "cam" }, { id: "s1", inMs: 12 * S, outMs: 23 * S, video: "cam" }, { id: "s2", inMs: 47 * S, outMs: 59 * S, video: "cam" }],
+      dropped: [{ inMs: 11 * S, outMs: 12 * S, reason: "tangent" }, { inMs: 23 * S, outMs: 47 * S, reason: "tangent" }],
+    })
+    const rows = rowsOf(restored, four, [{ first: 10, end: 40 }])
+    expect(rows.some((r) => r.kind === "collapsed")).toBe(false)
+    expect(expandedRuns(rows)).toEqual([{ run: "run-20", first: 20, end: 40 }])
   })
 
   it("one cut paragraph collapses only when its cut span runs a minute or more", () => {

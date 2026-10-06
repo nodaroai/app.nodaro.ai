@@ -11,9 +11,12 @@
  * to the start of the kept time after its last word, so a long silence around
  * a cut paragraph counts. The row names the run's cut time, its word count and
  * the dominant reason by duration ("[Tangent · 2:14 · 312 words ▸ ↺]"). It
- * expands in place: a run whose id is in `expanded` lists its paragraphs again,
- * each marked with the run's id (find and follow playback expand the run that
- * hides a word: `collapsedRunOfWord`).
+ * expands in place: a run that overlaps a word range in `expanded` lists its
+ * paragraphs again, each marked with the run's id (find and follow playback
+ * expand the run that hides a word: `collapsedRunOfWord`). Expansion is by
+ * words, not by id, because a run's id is its first word: restoring that
+ * paragraph, or cutting the one before it, gives the same open run a new id,
+ * and it must stay open.
  *
  * GAPS (dropped spans that hold no whole word) sit in the row of the word they
  * come before; one after the last word sits in the last row.
@@ -74,9 +77,17 @@ export interface ReviewRowsInput {
   readonly offsetMs: number
   /** The edit as it stands (`buildEdited`): its kept time and dropped spans. */
   readonly edited: Edl
-  /** Ids of collapsed runs the reviewer opened. */
-  readonly expanded?: ReadonlySet<string>
+  /** Word ranges of the runs that are open: a run overlapping one lists its paragraphs. */
+  readonly expanded?: readonly WordSpan[]
 }
+
+/** Words [first, end) of the transcript. */
+export interface WordSpan {
+  readonly first: number
+  readonly end: number
+}
+
+export const spansOverlap = (a: WordSpan, b: WordSpan): boolean => a.first < b.end && b.first < a.end
 
 const runId = (firstWord: number): string => `run-${firstWord}`
 
@@ -178,7 +189,7 @@ export function buildReviewRows(input: ReviewRowsInput): ReviewRow[] {
     const id = runId(first)
     if (j - i < COLLAPSE_MIN_PARAGRAPHS && cutMs < COLLAPSE_MIN_CUT_MS) {
       for (let k = i; k < j; k++) rows.push(paragraphRow(k))
-    } else if (expanded?.has(id)) {
+    } else if (expanded?.some((span) => spansOverlap(span, { first, end }))) {
       for (let k = i; k < j; k++) rows.push(paragraphRow(k, id))
     } else {
       rows.push({
@@ -210,6 +221,26 @@ export function rowOfWord(rows: readonly ReviewRow[], word: number): number {
 /** The row playing at master time `ms`: the last row starting at or before it. */
 export function rowOfMasterMs(rows: readonly ReviewRow[], ms: number): number {
   return lastAtOrBefore(rows.length, (i) => rows[i]!.inMs, ms)
+}
+
+/** Each run that is open (expanded), with its word range, in order. */
+export function expandedRuns(rows: readonly ReviewRow[]): Array<{ readonly run: string } & WordSpan> {
+  const runs: Array<{ run: string; first: number; end: number }> = []
+  for (const row of rows) {
+    if (row.kind !== "paragraph" || !row.run) continue
+    const last = runs[runs.length - 1]
+    if (last?.run === row.run) last.end = row.end
+    else runs.push({ run: row.run, first: row.first, end: row.end })
+  }
+  return runs
+}
+
+/** The word range of run `run`, collapsed or open; undefined when no row shows it. */
+export function runSpan(rows: readonly ReviewRow[], run: string): WordSpan | undefined {
+  const collapsed = rows.find((row) => row.kind === "collapsed" && row.run === run)
+  if (collapsed) return { first: collapsed.first, end: collapsed.end }
+  const open = expandedRuns(rows).find((r) => r.run === run)
+  return open ? { first: open.first, end: open.end } : undefined
 }
 
 /** The collapsed run hiding word `word`, to expand before scrolling to it. */

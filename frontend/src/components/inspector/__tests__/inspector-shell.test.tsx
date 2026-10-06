@@ -165,4 +165,30 @@ describe("InspectorShell", () => {
     open({ footer: <button type="button">Render final</button> })
     expect(screen.getByRole("button", { name: "Render final" })).toBeTruthy()
   })
+
+  // §2.4 of the inspectors design: the review's own layers (selection toolbar,
+  // find bar, an expanded run) are not Radix layers, so the dialog asks first.
+  it("lets the inspector keep itself open on an Escape that closes a layer of its own", async () => {
+    const onEscapeKeyDown = vi.fn((e: KeyboardEvent) => e.preventDefault())
+    const { onClose } = open({ onEscapeKeyDown })
+    await userEvent.keyboard("{Escape}")
+    expect(onEscapeKeyDown).toHaveBeenCalledTimes(1)
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it("closes on an Escape the inspector lets through", async () => {
+    const onEscapeKeyDown = vi.fn()
+    const { onClose } = open({ onEscapeKeyDown })
+    await userEvent.keyboard("{Escape}")
+    expect(onEscapeKeyDown).toHaveBeenCalledTimes(1)
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it("hands the inspector the keys pressed with focus on the dialog itself", async () => {
+    const onKeyDown = vi.fn()
+    open({ onKeyDown })
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("dialog")))
+    await userEvent.keyboard("{Meta>}f{/Meta}")
+    expect(onKeyDown).toHaveBeenCalledWith(expect.objectContaining({ key: "f", metaKey: true }))
+  })
 })

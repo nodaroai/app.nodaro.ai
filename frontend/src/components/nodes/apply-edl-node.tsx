@@ -129,11 +129,14 @@ function ApplyEdlNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </BaseNode>
 
-      <HandleWithPopover nodeId={id} nodeType="apply-edl" handleId="edl"        type="target" position={Position.Left}  label="EDL"        color={DATA_HANDLE_COLORS.json}  icon={<Braces />}     side="left"  top="24px"              accepts={ACCEPTS_JSON} />
-      <HandleWithPopover nodeId={id} nodeType="apply-edl" handleId="transcript" type="target" position={Position.Left}  label="Transcript" color={DATA_HANDLE_COLORS.json}  icon={<Braces />}     side="left"  top="52px"              accepts={ACCEPTS_JSON} />
-      <HandleWithPopover nodeId={id} nodeType="apply-edl" handleId="sources"    type="target" position={Position.Left}  label="Sources"    color={HANDLE_COLORS.video}      icon={<Film />}       side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_MEDIA} orderMatters />
-      <HandleWithPopover nodeId={id} nodeType="apply-edl" handleId="media"      type="source" position={Position.Right} label={output === "audio" ? "Audio" : "Video"} color={output === "audio" ? HANDLE_COLORS.audio : HANDLE_COLORS.video} icon={output === "audio" ? <AudioLines /> : <Film />} side="right" top="calc(100% - 24px)" />
-      <HandleWithPopover nodeId={id} nodeType="apply-edl" handleId="json"       type="source" position={Position.Right} label="Transcript" color={DATA_HANDLE_COLORS.json}  icon={<Braces />}     side="right" top="24px" />
+      {/* Labels from the dictionary, not English literals: the pip looks an English
+          label up in its locale table, but its connection popover shows the
+          label as passed. */}
+      <HandleWithPopover nodeId={id} nodeType="apply-edl" handleId="edl"        type="target" position={Position.Left}  label={t("node.applyEdlEdlIn")} color={DATA_HANDLE_COLORS.json}  icon={<Braces />}     side="left"  top="24px"              accepts={ACCEPTS_JSON} />
+      <HandleWithPopover nodeId={id} nodeType="apply-edl" handleId="transcript" type="target" position={Position.Left}  label={t("node.transcript")} color={DATA_HANDLE_COLORS.json}  icon={<Braces />}     side="left"  top="52px"              accepts={ACCEPTS_JSON} />
+      <HandleWithPopover nodeId={id} nodeType="apply-edl" handleId="sources"    type="target" position={Position.Left}  label={t("node.sources")} color={HANDLE_COLORS.video}      icon={<Film />}       side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_MEDIA} orderMatters />
+      <HandleWithPopover nodeId={id} nodeType="apply-edl" handleId="media"      type="source" position={Position.Right} label={t(output === "audio" ? "node.applyEdlAudioOut" : "node.applyEdlVideoOut")} color={output === "audio" ? HANDLE_COLORS.audio : HANDLE_COLORS.video} icon={output === "audio" ? <AudioLines /> : <Film />} side="right" top="calc(100% - 24px)" />
+      <HandleWithPopover nodeId={id} nodeType="apply-edl" handleId="json"       type="source" position={Position.Right} label={t("node.transcript")} color={DATA_HANDLE_COLORS.json}  icon={<Braces />}     side="right" top="24px" />
     </div>
   )
 }

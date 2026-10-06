@@ -35,7 +35,7 @@
  * `.nokey` too and their lists scroll (the modal's scroll lock cancels wheel
  * events outside the content).
  */
-import type { ReactNode, SyntheticEvent } from "react"
+import type { KeyboardEvent as ReactKeyboardEvent, ReactNode, SyntheticEvent } from "react"
 import { useCallback, useRef } from "react"
 import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { useDismissableLayerSurface } from "@radix-ui/react-dismissable-layer"
@@ -69,6 +69,15 @@ export interface InspectorShellProps {
   /** Classes for the scrolling body; the default pads and stacks its children. */
   readonly bodyClassName?: string
   readonly children: ReactNode
+  /**
+   * Called on an Escape the dialog would close on. `preventDefault()` keeps it
+   * open: the review inspector closes a layer of its own first (its selection
+   * toolbar, find bar, an expanded run), which are not Radix layers.
+   */
+  readonly onEscapeKeyDown?: (event: KeyboardEvent) => void
+  /** Keys pressed anywhere in the dialog, including on the dialog itself (where
+   *  focus lands when it opens). Not stopped: listeners outside still see them. */
+  readonly onKeyDown?: (event: ReactKeyboardEvent<HTMLDivElement>) => void
 }
 
 const stop = (e: SyntheticEvent) => e.stopPropagation()
@@ -82,6 +91,7 @@ export const INSPECTOR_POPPER = { className: "nokey", onWheel: stop } as const
 
 export function InspectorShell({
   open, onClose, title, icon, meta, actions, copyValue, size = "compact", footer, bodyClassName, children,
+  onEscapeKeyDown, onKeyDown,
 }: InspectorShellProps) {
   const t = useT()
   const contentRef = useRef<HTMLDivElement | null>(null)
@@ -125,6 +135,8 @@ export function InspectorShell({
             openerRef.current = null
             if (opener?.isConnected) opener.focus()
           }}
+          onEscapeKeyDown={onEscapeKeyDown}
+          onKeyDown={onKeyDown}
           tabIndex={-1}
           className={cn(
             "nokey fixed left-1/2 top-1/2 z-[9999] -translate-x-1/2 -translate-y-1/2 flex flex-col",
