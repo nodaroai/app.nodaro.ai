@@ -60,7 +60,12 @@ export async function textToDialogueRoutes(app: FastifyInstance) {
   app.post("/v1/text-to-dialogue", {
     // Runs before Zod on the raw body: an unknown id prices the default here and
     // is refused by the schema right after — never priced as another lane's row.
-    preHandler: creditGuard((req) => dialogueProviderOf((req.body as Record<string, unknown> | undefined)?.provider)),
+    // `denyResolvedModel`: that same resolved id is what the surface deny reads, so a
+    // deployment that denies the default is not bypassed by omitting the field.
+    preHandler: creditGuard(
+      (req) => dialogueProviderOf((req.body as Record<string, unknown> | undefined)?.provider),
+      { denyResolvedModel: true },
+    ),
   }, async (req, reply) => {
     const parsed = textToDialogueBody.safeParse(req.body)
     if (!parsed.success) {

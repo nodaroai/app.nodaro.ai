@@ -55,7 +55,7 @@ export async function textToSpeechRoutes(app: FastifyInstance) {
       const provider = (body?.provider as string) ?? resolveOmittedTtsProvider((body?.text as string) ?? "")
       // Map legacy "elevenlabs" to "elevenlabs-turbo" for credit lookup
       return provider === "elevenlabs" ? "elevenlabs-turbo" : provider
-    }),
+    }, { denyResolvedModel: true }), // the id priced above is the model that runs, so the surface deny reads it too
   }, async (req, reply) => {
     const parsed = textToSpeechBody.safeParse(req.body)
     if (!parsed.success) {
