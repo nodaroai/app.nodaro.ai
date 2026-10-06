@@ -23,4 +23,5 @@ export {
   useModelCreditCost,
   getCachedModelCredits as getCachedCredits,
   prefetchModelCreditCosts as prefetchModelCredits,
+  isModelUnpriced,
 } from "@/hooks/use-model-credit-cost"

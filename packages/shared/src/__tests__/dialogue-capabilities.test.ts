@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { MODEL_CATALOG } from "../model-catalog.js"
+import { MODEL_CATALOG, SPEECH_UNIT_PRICE_NOTE } from "../model-catalog.js"
 import { DIALOGUE_PROVIDERS, DEFAULT_DIALOGUE_PROVIDER, TTS_PROVIDERS, getMaxTtsChars } from "../model-constants.js"
 import {
   findDialogueCapabilities,
@@ -130,11 +130,17 @@ describe("elevenlabs-dialogue-v4 — added beside v3 dialogue", () => {
     expect(dialogueStabilityAccepted("elevenlabs-dialogue", 0.3)).toBe(false)
   })
 
-  it("costs a flat 25 credits with no per-length note on either dialogue row, and v3 dialogue stays the default", () => {
-    expect(MODEL_CATALOG["elevenlabs-dialogue-v4"]!.pricing).toEqual([{ identifier: "elevenlabs-dialogue-v4", credits: 25 }])
-    // Decided 2026-10-06: dialogue is charged flat per request, so the v3 row's
-    // "per 1K chars" note (a scaling that never existed) goes too.
-    expect(MODEL_CATALOG["elevenlabs-dialogue"]!.pricing).toEqual([{ identifier: "elevenlabs-dialogue", credits: 25 }])
+  it("its flat row is 25 credits with no note, beside its per-100-characters row, on either dialogue model; v3 dialogue stays the default", () => {
+    expect(MODEL_CATALOG["elevenlabs-dialogue-v4"]!.pricing).toEqual([
+      { identifier: "elevenlabs-dialogue-v4", credits: 25 },
+      { identifier: "elevenlabs-dialogue-v4:per-100-chars", credits: 4, note: SPEECH_UNIT_PRICE_NOTE },
+    ])
+    // Decided 2026-10-06: the flat row carries no note (the old "per 1K chars"
+    // described a scaling that never existed); the length rule is its own row.
+    expect(MODEL_CATALOG["elevenlabs-dialogue"]!.pricing).toEqual([
+      { identifier: "elevenlabs-dialogue", credits: 25 },
+      { identifier: "elevenlabs-dialogue:per-100-chars", credits: 4, note: SPEECH_UNIT_PRICE_NOTE },
+    ])
     expect(DEFAULT_DIALOGUE_PROVIDER).toBe("elevenlabs-dialogue")
     expect(dialogueProviderOf(undefined)).toBe("elevenlabs-dialogue")
   })

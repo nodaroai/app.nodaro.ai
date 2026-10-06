@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { MODEL_CATALOG } from "../model-catalog.js"
+import { MODEL_CATALOG, SPEECH_UNIT_PRICE_NOTE } from "../model-catalog.js"
 import { TTS_PROVIDERS, MAX_TTS_CHARS_BY_PROVIDER, getMaxTtsChars, TTS_TEXT_MAX } from "../model-constants.js"
 import {
   TTS_PROVIDER_ALIASES,
@@ -244,10 +244,16 @@ describe("elevenlabs-v4 — added beside v3", () => {
     expect(getMaxTtsChars("elevenlabs-v3")).toBe(5000)
   })
 
-  it("costs a flat 30 credits with no per-length note — the same as v3 — and, as the default, is the featured model", () => {
+  it("its flat row is 30 credits with no note — the same as v3 — beside its per-100-characters row; as the default, it is the featured model", () => {
     const v4 = MODEL_CATALOG["elevenlabs-v4"]!
-    expect(v4.pricing).toEqual([{ identifier: "elevenlabs-v4", credits: 30 }])
-    expect(MODEL_CATALOG["elevenlabs-v3"]!.pricing).toEqual([{ identifier: "elevenlabs-v3", credits: 30 }])
+    expect(v4.pricing).toEqual([
+      { identifier: "elevenlabs-v4", credits: 30 },
+      { identifier: "elevenlabs-v4:per-100-chars", credits: 4, note: SPEECH_UNIT_PRICE_NOTE },
+    ])
+    expect(MODEL_CATALOG["elevenlabs-v3"]!.pricing).toEqual([
+      { identifier: "elevenlabs-v3", credits: 30 },
+      { identifier: "elevenlabs-v3:per-100-chars", credits: 4, note: SPEECH_UNIT_PRICE_NOTE },
+    ])
     expect(v4.featured).toBe(true)
     expect(MODEL_CATALOG["elevenlabs-v3"]!.featured).toBeUndefined()
   })

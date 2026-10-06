@@ -24,6 +24,7 @@ import { toAccessRow } from "../lib/workflow-route-access.js"
 import { findUnpublishableNodeTypes, unpublishableNodesMessage } from "../lib/surface-deny.js"
 import { VALID_OUTPUT_TYPES, publishBodySchema } from "../lib/template-publish-schema.js"
 import { resolveCanvasResultIds } from "../lib/canvas-result-ids.js"
+import { exposedTextCaps } from "../lib/exposed-text-caps.js"
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -479,9 +480,13 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
     const complexity = calculateComplexity(nodes, edges)
     // The listed price is an app's (decided 2026-10-06): the whole graph at
     // Preview plus each Render final, preview stop rule or not. A template has
-    // no creator fee.
+    // no creator fee. An exposed speech text is priced at its input's character
+    // limit, or the model's cap — never the author's placeholder
+    // (lib/exposed-text-caps.ts).
+    const speechTextCaps = exposedTextCaps(workflow.settings as Record<string, unknown> | null, nodes as unknown as EstimateNode[])
     const listing = await estimateWorkflowListingCredits(nodes as unknown as EstimateNode[], edges as unknown as EstimateEdge[], {
       publishType: "template",
+      speechTextCaps,
     })
     const estimatedCredits = listing.preview + listing.final
     // Whoever clones this template gets the snapshot: UGC run state (a kept creator, the last plan, clip tickets) never ships.

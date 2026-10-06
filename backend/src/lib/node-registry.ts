@@ -3,8 +3,9 @@ import type { OutputType } from "@nodaro/shared"
 import { nodeSupportsPromptAffixes } from "@nodaro/prompts"
 import { SCRAPER_ACTOR_LABELS, type ScraperActorId } from "@nodaro/shared"
 import { STATIC_CREDIT_COSTS } from "../ee/billing/credits.js"
-import { hasCredits } from "./config.js"
+import { hasCredits, speechLengthPricingEnabled } from "./config.js"
 import type { ChargedPrices } from "./pricing/charged-prices.js"
+import { SPEECH_FLOOR_UNITS, getDialogueCapabilities, getMaxTtsChars, speechPriceUnits, speechUnitCreditId } from "@nodaro/shared"
 
 // ===========================================================================
 // Credit bands — DERIVED from the price table, never hand-typed
@@ -100,6 +101,13 @@ export interface CreditBandSource {
    * row); everything else leaves it at the implicit `[1, 1]`.
    */
   span?: readonly [number, number]
+  /**
+   * A band `ids × span` cannot express — a rate row whose unit count differs
+   * per model (speech: 8 units up to each model's own cap). Consulted first
+   * with the price lookup in force (the static table at module load, the
+   * charged table for `GET /v1/nodes`); undefined falls through to `ids`.
+   */
+  band?: (credits: (id: string, units?: number) => number | undefined) => readonly [low: number, high: number] | undefined
   /** Why this id set, when the answer is not "the node's provider enum". */
   note?: string
 }
@@ -149,11 +157,12 @@ export const CREDIT_BAND_SOURCES: Readonly<Record<string, CreditBandSource>> = {
   "text-to-speech": {
     // The `<model>:per-100-chars` rows are a RATE (one started 100 characters,
     // read only while SPEECH_LENGTH_PRICING_ENABLED is on), not a whole charge:
-    // folding them into the band would advertise "2-30" for a run that is never
-    // below 16. The band stays the flat per-request rows — what a run costs
-    // with the flag off and what every quote surface shows until Phase 1b; the
-    // length formula is stated on the node's docs page.
+    // folding them into `ids` would advertise "2-30" for a run that is never
+    // below 16. With the flag off the band is the flat per-request rows (what a
+    // run then costs); with it on, `band` states the length rule's own range —
+    // the cheapest model's floor up to the priciest model's cap.
     ids: familyIds(...TTS_PROVIDERS).filter((id) => !id.endsWith(SPEECH_UNIT_CREDIT_SUFFIX)),
+    band: speechLengthBand(TTS_CATALOG_PROVIDERS, getMaxTtsChars),
     note: "Reserves on the ElevenLabs model row, not a node-type row (the legacy `elevenlabs` alias prices as turbo).",
   },
   "text-to-audio": {
@@ -162,7 +171,8 @@ export const CREDIT_BAND_SOURCES: Readonly<Record<string, CreditBandSource>> = {
   },
   "text-to-dialogue": {
     ids: [...DIALOGUE_PROVIDERS],
-    note: "Reserves on the dialogue model's row (elevenlabs-dialogue, …), flat per request — never the node-type row.",
+    band: speechLengthBand(DIALOGUE_PROVIDERS, (model) => getDialogueCapabilities(model).maxChars),
+    note: "Reserves on the dialogue model's row (elevenlabs-dialogue, …) — never the node-type row. Flat per request with length pricing off; by length (its :per-100-chars row) with it on.",
   },
   "audio-separation": { ids: familyIds("audio-separation") },
   "audio-fx": { ids: familyIds("audio-fx") },
@@ -242,6 +252,8 @@ export const CREDIT_BAND_SOURCES: Readonly<Record<string, CreditBandSource>> = {
 function creditBandFor(type: string): number | string {
   const source = CREDIT_BAND_SOURCES[type]
   if (!source) throw new Error(`node-registry: no credit-band source declared for "${type}"`)
+  const computed = source.band?.(staticCredits)
+  if (computed) return formatBand(computed[0], computed[1])
   const [minUnits, maxUnits] = source.span ?? [1, 1]
   const prices = source.ids
     .map((id) => STATIC_CREDIT_COSTS[id])
@@ -249,9 +261,42 @@ function creditBandFor(type: string): number | string {
   if (prices.length === 0) {
     throw new Error(`node-registry: credit-band source for "${type}" names no priced identifier`)
   }
-  const min = Math.min(...prices) * minUnits
-  const max = Math.max(...prices) * maxUnits
+  return formatBand(Math.min(...prices) * minUnits, Math.max(...prices) * maxUnits)
+}
+
+function formatBand(min: number, max: number): number | string {
   return min === max ? min : `${min}-${max}`
+}
+
+/** `STATIC_CREDIT_COSTS` as the price lookup a `band` computer takes: the base price × units, rounded up like a charge. */
+function staticCredits(id: string, units = 1): number | undefined {
+  const base = STATIC_CREDIT_COSTS[id]
+  return typeof base === "number" ? Math.ceil(base * units) : undefined
+}
+
+/**
+ * The speech band where length pricing is on (decided 2026-10-06): from the
+ * cheapest model's floor (8 units of its `:per-100-chars` row) up to the
+ * priciest model's cap (its per-request cap, in started hundreds, on its row).
+ * `span` cannot say this — one [min, max] unit pair would price every model at
+ * the same unit count, and v4's row at turbo's 400 units is a ceiling no v4 run
+ * can reach. Undefined while the flag is off: the flat per-request rows.
+ */
+function speechLengthBand(models: readonly string[], capOf: (model: string) => number): CreditBandSource["band"] {
+  return (credits) => {
+    if (!speechLengthPricingEnabled()) return undefined
+    const lows: number[] = []
+    const highs: number[] = []
+    for (const model of models) {
+      const unitId = speechUnitCreditId(model)
+      const low = credits(unitId, SPEECH_FLOOR_UNITS)
+      const high = credits(unitId, speechPriceUnits(capOf(model)))
+      if (low !== undefined) lows.push(low)
+      if (high !== undefined) highs.push(high)
+    }
+    if (lows.length === 0 || highs.length === 0) return undefined
+    return [Math.min(...lows), Math.max(...highs)]
+  }
 }
 
 /** How Web Scrape's description names each source. A Record over the actor
@@ -887,7 +932,8 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     type: "text-to-speech",
     label: "Text to Speech",
     category: "ai-audio",
-    description: "Synthesize speech from text using ElevenLabs.",
+    description:
+      "Synthesize speech from text using ElevenLabs. Where length pricing is on, priced per started 100 characters of the text sent, at least 8 units (32 credits on v4, v3 and Multilingual v2; 16 on Turbo v2.5); otherwise the flat per-request row.",
     outputType: "audio",
     creditCost: creditBandFor("text-to-speech"),
     // The ids the route takes (`provider` on /v1/text-to-speech) and the model
@@ -935,7 +981,7 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     type: "text-to-dialogue",
     label: "Text to Dialogue",
     category: "ai-audio",
-    description: "Generate multi-speaker dialogue audio where each line is spoken by a different voice (ElevenLabs Dialogue v3 by default or Dialogue v4 via `provider`, direct API — any voice: premade, library, or cloned). `stability` is 0–1: v3 takes exactly 0, 0.5 or 1, v4 any value; `similarityBoost` (0–1) is v4 only. Flat credits per request under the chosen model's identifier. Its `json` output carries the timings (one segment per line, per-word timings) on both models.",
+    description: "Generate multi-speaker dialogue audio where each line is spoken by a different voice (ElevenLabs Dialogue v3 by default or Dialogue v4 via `provider`, direct API — any voice: premade, library, or cloned). `stability` is 0–1: v3 takes exactly 0, 0.5 or 1, v4 any value; `similarityBoost` (0–1) is v4 only. Priced under the chosen model's identifier: where length pricing is on, per started 100 characters of the script, at least 8 units (32 credits on either dialogue model); otherwise flat per request. Its `json` output carries the timings (one segment per line, per-word timings) on both models.",
     outputType: "audio",
     creditCost: creditBandFor("text-to-dialogue"),
     inputSchema: {
@@ -1819,6 +1865,8 @@ function chargedCreditCost(desc: NodeDescriptor, prices: ChargedPrices): number 
   if (desc.creditCost === undefined) return undefined
   const source = CREDIT_BAND_SOURCES[desc.type]
   if (source) {
+    const computed = source.band?.((id, units) => prices.credits(id, units))
+    if (computed) return formatBand(computed[0], computed[1])
     const [minUnits, maxUnits] = source.span ?? [1, 1]
     const lows: number[] = []
     const highs: number[] = []

@@ -16,9 +16,10 @@
  * is `@nodaro/shared`'s `speechCredits`, so a client reading the same row
  * computes the same number.
  */
-import { getMaxTtsChars, ttsSupportsAudioTags, speechCredits, speechUnitCreditId, dialogueProviderOf, getDialogueCapabilities } from "@nodaro/shared"
+import { getMaxTtsChars, ttsSupportsAudioTags, speechCredits, speechUnitCreditId, dialogueProviderOf, getDialogueCapabilities, SPEECH_UNIT_CREDIT_SUFFIX } from "@nodaro/shared"
 import { stripAudioTags } from "../providers/elevenlabs/audio-tags.js"
 import { ttsModelKey } from "../providers/elevenlabs/tts-models.js"
+import { speechLengthPricingEnabled } from "./config.js"
 import { baseCreditCostFor } from "./credit-base-cost.js"
 
 /** The default dialogue model's credit id (v3 dialogue); another dialogue model passes its own id, resolved by `dialogueProviderOf`. */
@@ -33,6 +34,17 @@ export const DIALOGUE_CREDIT_ID = "elevenlabs-dialogue"
  */
 export function speechRunsAs(provider: unknown): string {
   return ttsModelKey(typeof provider === "string" ? provider : undefined)
+}
+
+/**
+ * May a PUBLIC price read serve `identifier`? A `:per-100-chars` row is a rate a
+ * client may only apply while this server charges by length, so it is served
+ * only while SPEECH_LENGTH_PRICING_ENABLED is on — its absence is how every
+ * client (the editor's pill, Studio, VCP) learns the flag's state. Every other
+ * id is always served. The reservation path does not ask this.
+ */
+export function speechUnitRowServed(identifier: string): boolean {
+  return !identifier.endsWith(SPEECH_UNIT_CREDIT_SUFFIX) || speechLengthPricingEnabled()
 }
 
 /** Characters of `text` the worker will send on `provider`: clamped to the model's cap, tags stripped when the model does not perform them. */

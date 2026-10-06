@@ -2,7 +2,7 @@
  * ElevenLabs speech — the provider-$ rate table and the cost it implies.
  * CORE (not ee/): the worker records `provider_cost` on every speech job in
  * every edition (`audio-ai.ts`), and `speech-unit-pricing.test.ts` re-derives
- * each `:per-100-chars` credit row from these rates — a rate edit that is not
+ * each per-100-characters credit row from these rates — a rate edit that is not
  * followed by a row edit fails that test instead of silently losing money.
  *
  * Kept out of `@nodaro/shared` (published Apache-2.0 — an irrevocable grant):

@@ -10,6 +10,8 @@ import type { FastifyRequest } from "fastify"
 import { z } from "zod"
 import { getAppSettings } from "../../lib/app-settings.js"
 import type { BillingContext } from "../../lib/billing-context.js"
+import { speechLengthPricingEnabled } from "../../lib/config.js"
+import { speechBaseCredits } from "../../lib/speech-credits.js"
 import { imageCollageCreditModelIdentifier } from "../../lib/image-collage-credit-id.js"
 import { normalizeVideoInput } from "../../lib/mcp/normalize.js"
 import { isUuid } from "../../lib/mcp/tools/_id-guard.js"
@@ -101,9 +103,11 @@ const num = (v: unknown): number | undefined => (typeof v === "number" && Number
 
 /**
  * The credit decision each quoted tool's route makes for the payload its MCP
- * verb dispatches. `null` = this tool cannot be priced from these args.
+ * verb dispatches. `null` = this tool cannot be priced from these args. A rule
+ * may be async when the route's guard computes its base from a priced row
+ * (speech by length reads the model's unit row).
  */
-const PRICING: Record<string, (args: Readonly<Record<string, unknown>>, ctx: QuoteContext) => UgcPricing | null> = {
+const PRICING: Record<string, (args: Readonly<Record<string, unknown>>, ctx: QuoteContext) => UgcPricing | null | Promise<UgcPricing | null>> = {
   // generate_video → POST /v1/text-to-video (creditGuard in routes/text-to-video.ts).
   generate_video: (args) => {
     const model = str(args.model)
@@ -120,11 +124,17 @@ const PRICING: Record<string, (args: Readonly<Record<string, unknown>>, ctx: Quo
     const sound = typeof args.sound === "boolean" ? args.sound : undefined
     return { id: buildVideoCreditModelIdentifier(sel.provider, norm.duration ?? sel.duration, sound, "text-to-video", undefined, norm.resolution, false) }
   },
-  // generate_speech → POST /v1/text-to-speech: the provider, with the legacy alias mapped.
-  generate_speech: (args) => {
+  // generate_speech → POST /v1/text-to-speech: the provider as the route bills it
+  // (the legacy alias mapped) and — while length pricing is on (decided
+  // 2026-10-06) — the guard's own BASE for the text sent: the one counter and
+  // reader (lib/speech-credits.ts), so the quote and the reservation agree to
+  // the credit. The quote prices `text` as the item carries it; a preset's
+  // pre/post text the verb folds in at call time is not resolvable here.
+  generate_speech: async (args) => {
     const model = str(args.model)
     if (!model) return null
-    return { id: model === "elevenlabs" ? "elevenlabs-turbo" : model }
+    const id = model === "elevenlabs" ? "elevenlabs-turbo" : model
+    return speechLengthPricingEnabled() ? { id, base: await speechBaseCredits(id, args.text) } : { id }
   },
   // extract_frame → POST /v1/extract-frame: one flat id.
   extract_frame: () => ({ id: "extract-frame" }),
@@ -188,7 +198,7 @@ const PRICING: Record<string, (args: Readonly<Record<string, unknown>>, ctx: Quo
 }
 
 /** The credit decision for one quote item, or null when it cannot be priced. Exported for the parity test. */
-export function pricingFor(tool: string, args: Readonly<Record<string, unknown>>, ctx: QuoteContext): UgcPricing | null {
+export async function pricingFor(tool: string, args: Readonly<Record<string, unknown>>, ctx: QuoteContext): Promise<UgcPricing | null> {
   const rule = Object.prototype.hasOwnProperty.call(PRICING, tool) ? PRICING[tool] : undefined
   return rule ? rule(args, ctx) : null
 }
@@ -248,7 +258,7 @@ function parseItem(raw: unknown): UgcQuoteItem {
 
 async function priceItem(raw: unknown, ctx: QuoteContext, callerGates: CallerGates): Promise<UgcQuoteLine> {
   const item = parseItem(raw)
-  const pricing = pricingFor(item.tool, item.args, ctx)
+  const pricing = await pricingFor(item.tool, item.args, ctx)
   if (!pricing) throw new UgcQuoteError(item.label)
   // The row the guard checks, even for a computed amount: an admin disabling a model still wins.
   let row: ModelPricing

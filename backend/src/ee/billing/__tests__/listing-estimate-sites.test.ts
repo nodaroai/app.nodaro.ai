@@ -70,6 +70,9 @@ describe("the forbidden call covers every run-scope estimator", () => {
 describe("every file that stores an estimate prices it over the whole graph", () => {
   it("the census finds the publish paths (and the seeded tutorials)", () => {
     expect(writers.map((f) => f.rel).sort()).toEqual([
+      // The published-app price backfill for length-based speech pricing: it
+      // rewrites the stored columns and MUST price them as a republish does.
+      "ee/scripts/backfill-speech-app-prices.ts",
       // Seeds a template's estimate from its JSON file; it estimates nothing.
       "lib/tutorial-seed/index.ts",
       // App + component publish and republish, and the monetization recalculation.
@@ -83,7 +86,7 @@ describe("every file that stores an estimate prices it over the whole graph", ()
     expect(FILES.find((f) => f.rel === rel)!.text).not.toMatch(RUN_ESTIMATE_CALL)
   })
 
-  it.each(["routes/published-apps.ts", "routes/workflow-templates.ts"])("%s calls the listing estimate", (rel) => {
+  it.each(["routes/published-apps.ts", "routes/workflow-templates.ts", "ee/scripts/backfill-speech-app-prices.ts"])("%s calls the listing estimate", (rel) => {
     expect(FILES.find((f) => f.rel === rel)!.text).toMatch(LISTING_ESTIMATE_CALL)
   })
 

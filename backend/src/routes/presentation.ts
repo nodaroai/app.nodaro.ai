@@ -23,6 +23,7 @@ import { previewReviewRefusal } from "../lib/preview-review-gate.js"
 import type { WorkflowExecutionJob } from "../services/workflow-engine/types.js"
 import { ACTIVE_EXECUTION_STATUSES } from "../lib/request-helpers.js"
 import { estimateWorkflowCredits, type EstimateNode, type EstimateEdge } from "../ee/billing/credits.js"
+import { exposedTextCaps } from "../lib/exposed-text-caps.js"
 import { resolveCanvasResultIds } from "../lib/canvas-result-ids.js"
 
 const workflowIdParams = z.object({
@@ -206,10 +207,14 @@ export async function presentationRoutes(app: FastifyInstance) {
     // isOwner only if user is authenticated and owns the workflow
     const isOwner = !!req.userId && workflow.user_id === req.userId
 
-    // Estimate credit cost from executable nodes
+    // Estimate credit cost from executable nodes. This describes the app
+    // BEFORE its user types, so an exposed speech text is priced at its input's
+    // character limit (or the model's cap), never the author's placeholder.
     const wfNodes = (workflow.nodes ?? []) as EstimateNode[]
     const wfEstimateEdges = (workflow.edges ?? []) as EstimateEdge[]
-    const estimatedCost = await estimateWorkflowCredits(wfNodes, wfEstimateEdges)
+    const estimatedCost = await estimateWorkflowCredits(wfNodes, wfEstimateEdges, {
+      speechTextCaps: exposedTextCaps(workflow.settings as Record<string, unknown> | null, wfNodes),
+    })
 
     // Extract presentation settings from workflow settings
     const settings = (workflow.settings ?? {}) as Record<string, unknown>

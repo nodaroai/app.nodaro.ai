@@ -16,6 +16,7 @@ import { toAccessRow } from "../lib/workflow-route-access.js"
 import { findUnpublishableNodeTypes, unpublishableNodesMessage } from "../lib/surface-deny.js"
 import { sendCredentialUnbound, unboundCredentialUsesFor } from "../lib/credential-gate.js"
 import { resolveCanvasResultIds } from "../lib/canvas-result-ids.js"
+import { exposedTextCaps } from "../lib/exposed-text-caps.js"
 
 const VALID_CATEGORIES = [
   "image-generation", "video-production", "audio-music", "content-writing",
@@ -144,6 +145,8 @@ const componentMetadataSchema = z.object({
     allowedValues: z.array(z.unknown()).optional(),
     options: z.array(z.object({ value: z.string(), label: z.string() })).optional(),
     defaultValue: z.unknown(),
+    /** A text setting's character limit (decided 2026-10-06). */
+    maxLength: z.number().int().positive().optional(),
   })),
 })
 
@@ -626,8 +629,13 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
     // shortens (decided 2026-10-05). It is the whole graph at Preview with
     // the creator's fee, plus each Render final without it (decided
     // 2026-10-06; a component's final part is 0): the listing estimator's two
-    // parts, priced below once the fee is known.
-    const listingSplit = await estimateWorkflowListingCredits(nodes as EstimateNode[], edges as EstimateEdge[], { publishType })
+    // parts, priced below once the fee is known. It is computed BEFORE any app
+    // user's input exists, so every exposed text input reaches the estimator
+    // with its character limit (or none): an exposed speech text is priced at
+    // that ceiling, never at the author's placeholder (decided 2026-10-06;
+    // lib/exposed-text-caps.ts).
+    const speechTextCaps = exposedTextCaps(workflow.settings as Record<string, unknown> | null, nodes as EstimateNode[])
+    const listingSplit = await estimateWorkflowListingCredits(nodes as EstimateNode[], edges as EstimateEdge[], { publishType, speechTextCaps })
 
     // Inherit monetization from previous version, then user defaults, then zeros
     let inheritedMonetizationEnabled = false

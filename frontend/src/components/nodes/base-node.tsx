@@ -47,6 +47,10 @@ interface BaseNodeProps {
   readonly icon: ReactNode
   readonly category: "input" | "parameter" | "ai" | "processing" | "output" | "scene" | "character" | "face" | "object" | "creature" | "location" | "script" | "i2v" | "component"
   readonly credits?: number
+  /** A price that is a RANGE — a speech node whose text arrives at run time:
+   *  from the floor up to the ceiling it runs at. Shown instead of `credits`
+   *  (pass `credits` undefined with it). */
+  readonly creditsRange?: { readonly min: number; readonly max: number }
   readonly handles: ReadonlyArray<HandleConfig>
   readonly children?: ReactNode
   readonly selected?: boolean
@@ -166,6 +170,7 @@ function BaseNodeComponent({
   icon,
   category,
   credits,
+  creditsRange,
   handles,
   children,
   selected,
@@ -828,6 +833,20 @@ function BaseNodeComponent({
                 ? "text-white/70 dark:text-[#ff0073]"
                 : "text-[#64748B] dark:text-[#ff0073]"
             )}>{credits}cr</span>
+          )}
+          {/* A ranged price (speech priced by length, text arriving at run
+              time): from the floor up to the ceiling the run reserves. */}
+          {hasCredits() && credits === undefined && creditsRange && (
+            <span
+              data-testid="node-credits-range"
+              title={t("node.creditsRangeTitle", { min: creditsRange.min, max: creditsRange.max })}
+              className={cn(
+                "font-mono text-[10px]",
+                (category === "ai" || category === "scene" || category === "script" || category === "i2v")
+                  ? "text-white/70 dark:text-[#ff0073]"
+                  : "text-[#64748B] dark:text-[#ff0073]"
+              )}
+            >{t("node.creditsRange", { min: creditsRange.min, max: creditsRange.max })}</span>
           )}
           {isSkipped && (
             <span className="font-mono text-[9px] font-bold px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-300 border border-orange-500/30">

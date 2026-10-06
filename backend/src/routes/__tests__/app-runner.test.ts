@@ -554,6 +554,72 @@ describe("POST /v1/app/:slug/run", () => {
     expect(orchestrationQueue.add).not.toHaveBeenCalled()
   })
 
+  // An exposed text input's character limit (decided 2026-10-06) caps the app's
+  // advertised speech price, so it holds at run time: refused before any row.
+  it("refuses a text input over the exposed field's character limit — 400 input_too_long, no row, no run", async () => {
+    setupSuccessfulRunMocks({
+      snapshot_nodes: [{ id: "tts-1", type: "text-to-speech", data: { textSource: "direct", directText: "hello" } }],
+      snapshot_settings: {
+        presentationSettings: { inputItems: [{ type: "field", id: "f1", nodeId: "tts-1", field: "directText", maxLength: 100 }] },
+      },
+    })
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/app/${TEST_SLUG}/run`,
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { inputOverrides: { "tts-1": { directText: "a".repeat(101) } } },
+    })
+
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("input_too_long")
+    expect(res.json().error.message).toContain("100")
+    expect(mockExecuteAppRun).not.toHaveBeenCalled()
+  })
+
+  it("holds the limit of a Text node exposed whole the same way — 400 input_too_long over it, runs within it", async () => {
+    const snapshot = {
+      snapshot_nodes: [{ id: "txt-1", type: "text-prompt", data: { label: "Script", text: "hello" } }],
+      snapshot_settings: { presentationSettings: { inputItems: [{ type: "node", nodeId: "txt-1", maxLength: 100 }] } },
+    }
+    setupSuccessfulRunMocks(snapshot)
+    const over = await app.inject({
+      method: "POST",
+      url: `/v1/app/${TEST_SLUG}/run`,
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { inputOverrides: { "txt-1": { text: "a".repeat(101) } } },
+    })
+    expect(over.statusCode).toBe(400)
+    expect(over.json().error.code).toBe("input_too_long")
+    expect(over.json().error.message).toContain("100")
+    expect(mockExecuteAppRun).not.toHaveBeenCalled()
+
+    setupSuccessfulRunMocks(snapshot)
+    const within = await app.inject({
+      method: "POST",
+      url: `/v1/app/${TEST_SLUG}/run`,
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { inputOverrides: { "txt-1": { text: "a".repeat(100) } } },
+    })
+    expect(within.statusCode).not.toBe(400)
+  })
+
+  it("a text input within the limit runs", async () => {
+    setupSuccessfulRunMocks({
+      snapshot_nodes: [{ id: "tts-1", type: "text-to-speech", data: { textSource: "direct", directText: "hello" } }],
+      snapshot_settings: {
+        presentationSettings: { inputItems: [{ type: "field", id: "f1", nodeId: "tts-1", field: "directText", maxLength: 100 }] },
+      },
+    })
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/app/${TEST_SLUG}/run`,
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { inputOverrides: { "tts-1": { directText: "a".repeat(100) } } },
+    })
+    expect(res.statusCode).not.toBe(400)
+  })
+
   it("refuses an injected UGC run state — 400 locked_field, no run", async () => {
     setupSuccessfulRunMocks({
       snapshot_nodes: [{ id: "ugc-1", type: "ugc-creator", data: { source: "sampled", gender: "woman", keepResult: false } }],

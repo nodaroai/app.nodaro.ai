@@ -4771,7 +4771,10 @@ modelCosts(ids: string[]): Promise<ModelCostsResult>
 `POST /v1/credits/model-costs` → batch credit cost lookup for editor cost
 previews. Capped at the first 50 identifiers. Preserves fault-isolation:
 identifiers with no pricing row land in `missing`; lookup failures in `errors`,
-instead of failing the whole batch.
+instead of failing the whole batch. A speech model's per-100-characters row
+(`<model>:per-100-chars`) is a valid identifier: it is priced on an instance
+that prices speech by length and lands in `missing` where that is off — which
+is how a client learns which rule the server charges by.
 
 **`ModelCostsResult`:**
 

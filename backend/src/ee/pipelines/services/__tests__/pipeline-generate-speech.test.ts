@@ -23,10 +23,17 @@ vi.mock("../../../billing/credits.js", () => ({
 vi.mock("../../../../providers/video/ffmpeg-utils.js", () => ({
   getVideoDuration: vi.fn().mockResolvedValue(3.2),
 }))
+// Seam 3 — the one job override (lib/speech-estimate.ts). Undefined is the
+// flag-off answer (the flat row reserves); a number is what the job reserves.
+// The arithmetic is pinned where the override lives; this file pins the WIRING.
+vi.mock("../../../../lib/speech-estimate.js", () => ({
+  speechChargeOverride: vi.fn().mockResolvedValue(undefined),
+}))
 
 import { videoQueue } from "../../../../lib/queue.js"
 import { CreditsService } from "../../../billing/credits.js"
 import { getVideoDuration } from "../../../../providers/video/ffmpeg-utils.js"
+import { speechChargeOverride } from "../../../../lib/speech-estimate.js"
 import { pipelineGenerateSpeech } from "../pipeline-generate-speech.js"
 
 beforeEach(() => {
@@ -136,6 +143,25 @@ describe("pipelineGenerateSpeech", () => {
         voice: "Rachel",
         provider: "elevenlabs-turbo",
       }),
+    )
+  })
+
+  // Seam 3 (decided 2026-10-06): while length pricing is on, each per-line job
+  // reserves what the one override computes for the text it SENDS, on the model
+  // the payload names (the legacy alias already mapped). Off, the override is
+  // undefined and the reserve options are exactly today's (the test above).
+  it("reserves the length-based override for the text it sends, on the model the payload names", async () => {
+    vi.mocked(speechChargeOverride).mockResolvedValueOnce(22)
+    const supabase = makeSupabaseMock({
+      jobStates: [{ status: "completed", output_data: { audioUrl: "https://r2/voice.mp3" }, credits_actual: 22 }],
+      assetRow: { id: "asset-audio-1" },
+    })
+    const text = "a".repeat(1000)
+    await runUntilSettled(pipelineGenerateSpeech({ supabase, pipelineId: "p1", userId: "u1", text, provider: "elevenlabs" }))
+    expect(speechChargeOverride).toHaveBeenCalledWith("text-to-speech", { provider: "elevenlabs-turbo", text }, "elevenlabs-turbo")
+    expect(CreditsService.reserveCredits).toHaveBeenCalledWith(
+      "u1", "tts-job-1", "elevenlabs-turbo", 0, 0,
+      { isAppRun: false, billingContext: { payer: "user", userId: "u1" }, creditOverride: 22 },
     )
   })
 

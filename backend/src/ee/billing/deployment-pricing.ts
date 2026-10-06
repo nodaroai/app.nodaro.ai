@@ -1,4 +1,5 @@
 import { buildLlmCreditIdentifier, getLlmModel, LLM_FEATURE_DEFAULTS, MODEL_CATALOG } from "@nodaro/shared"
+import { speechUnitRowServed } from "../../lib/speech-credits.js"
 
 /** Catalog identifiers are not always billing identifiers (notably text models). */
 export function deploymentPriceDefinitions(modelId: string) {
@@ -9,7 +10,8 @@ export function deploymentPriceDefinitions(modelId: string) {
       })) }
   }
   return { baseIdentifier: modelId, basis: "base-tariff" as const,
-    variants: (MODEL_CATALOG[modelId]?.pricing ?? []).map(({ identifier, note }) => ({ identifier, ...(note ? { note } : {}) })) }
+    // A speech unit row is a rate the server charges only while length pricing is on; off, it is not listed (it would price as price_not_configured).
+    variants: (MODEL_CATALOG[modelId]?.pricing ?? []).filter(({ identifier }) => speechUnitRowServed(identifier)).map(({ identifier, note }) => ({ identifier, ...(note ? { note } : {}) })) }
 }
 
 /** Resolve once per billing identifier; all values include runtime price overrides. */

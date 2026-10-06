@@ -635,6 +635,14 @@ const RENDER_FINAL_TOOL_BYTES = 2_191
 // 397_854). The per-tool cap rises by the same 489 B (8_192 -> 8_681), keeping the
 // 10 B of headroom `generate_video` had on dev; no other tool is near it.
 const CHARACTER_REFERENCES_BYTES = 489
+// RAISED 2026-10-06 by length-based speech pricing's wording and nothing else:
+// `generate_speech` and `generate_dialogue` each gain ONE sentence (where length
+// pricing is on, the charge is per started 100 characters of the text sent, at
+// least 8 units; `list_models` shows the per-100-characters row when it
+// applies) and `get_app_inputs` names the optional `maxLength` a publisher may
+// put on a text input. No tool was added, so the fixture does NOT move.
+// measured by this suite: 399_845 total − 399_436 budget = 409 B.
+const SPEECH_LENGTH_PRICING_WORDING_BYTES = 409
 
 // RAISED by the two UGC job tools and one argument: `ugc_split_speech` and `ugc_finish_clips`
 // (cloud-only, ungated like the builders: every cloud set names them) and `segments` on
@@ -716,6 +724,7 @@ export const TOOL_WIRE_BUDGET = {
     VOICE_CHANGER_PRO_V4_ENGINE_BYTES +
     CHARACTER_REFERENCES_BYTES +
     RENDER_FINAL_TOOL_BYTES +
+    SPEECH_LENGTH_PRICING_WORDING_BYTES +
     COMBINE_VIDEOS_TRIM_ARGS_BYTES,
 }
 

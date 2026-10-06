@@ -17,6 +17,9 @@ vi.mock("@/lib/api", () => ({
   getUserCredits: (...args: unknown[]) => mockGetUserCredits(...args),
   getModelCreditCost: (...args: unknown[]) => mockGetModelCreditCost(...args),
   getBatchModelCreditCosts: (...args: unknown[]) => mockGetBatchModelCreditCosts(...args),
+  // The prefetch reads the batch WITH its `missing` list; this harness's batch
+  // mock answers the data map alone, so nothing is ever reported missing here.
+  fetchBatchModelCreditCosts: async (...args: unknown[]) => ({ data: await mockGetBatchModelCreditCosts(...args), missing: [] }),
 }))
 
 vi.mock("@/lib/edition", () => ({

@@ -30,6 +30,14 @@ describe("text-to-speech.md Credits", () => {
     expect(tts).toContain("| Turbo v2.5 (and the legacy `elevenlabs` id, which runs as Turbo) | 2 | 16 |")
     expect(tts).toContain("**Rolling out.**")
   })
+
+  it("states that every estimate surface reads the same rows (Phase 1b), and no longer defers it to a following release", () => {
+    expect(tts).toContain("The editor's price badge, the workflow estimate and a published app's advertised price read the same rows")
+    expect(tts).toContain("priced at its text input's character limit when the app sets one, else at the cap")
+    expect(tts).toContain("follow the same switch: the flat amount where length pricing is off, the length price where it is on")
+    expect(tts).not.toContain("following release")
+    expect(dialogue).toContain("The editor's estimate, a published app's advertised price and the credits reserved when the node runs all read the same rows")
+  })
 })
 
 describe("text-to-dialogue.md Credits", () => {

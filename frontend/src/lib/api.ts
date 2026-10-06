@@ -6788,7 +6788,20 @@ export async function getModelCreditCost(model: string): Promise<{ data: { model
   return res.json()
 }
 
+export interface BatchModelCreditCosts {
+  /** The charged price of every id the server prices. */
+  data: Record<string, number>
+  /** Ids priced nowhere on this instance — a speech model's unit row while
+   *  length pricing is off, an unseeded admin row. A client that sees an id
+   *  here quotes without it (the flat row) and need not ask again. */
+  missing: string[]
+}
+
 export async function getBatchModelCreditCosts(models: string[]): Promise<Record<string, number>> {
+  return (await fetchBatchModelCreditCosts(models)).data
+}
+
+export async function fetchBatchModelCreditCosts(models: string[]): Promise<BatchModelCreditCosts> {
   const res = await fetch(`${API_BASE_URL}/v1/credits/model-costs`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -6818,7 +6831,7 @@ export async function getBatchModelCreditCosts(models: string[]): Promise<Record
       `[credits] model-costs: lookup failed for ${body.errors.length} identifier(s): ${body.errors.join(", ")}`,
     )
   }
-  return body.data
+  return { data: body.data, missing: body.missing ?? [] }
 }
 
 // ============================================================

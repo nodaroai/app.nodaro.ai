@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { resolveOmittedTtsProvider } from "../../../lib/omitted-tts-provider.js"
+import { speechChargeOverride } from "../../../lib/speech-estimate.js"
 import { probeAudioDuration } from "./_probe-audio.js"
 import { runPipelineWorkerJob } from "./_run-worker-job.js"
 
@@ -71,6 +72,11 @@ export async function pipelineGenerateNarration(
   const provider = modelId ?? resolveOmittedTtsProvider(text)
   const modelIdentifier = provider === "elevenlabs" ? "elevenlabs-turbo" : provider
 
+  // Seam 3 (decided 2026-10-06): while length pricing is on, the narration job
+  // reserves what the one override computes for the text it sends, on the model
+  // the payload names — the route guard's own number. Undefined while off: the row.
+  const creditOverride = await speechChargeOverride("text-to-speech", { provider: modelIdentifier, text }, modelIdentifier)
+
   const base = await runPipelineWorkerJob({
     supabase,
     pipelineId,
@@ -98,6 +104,7 @@ export async function pipelineGenerateNarration(
       allowDefaultVoiceFallback: true,
     }),
     modelIdentifier,
+    creditOverride,
     assetType: "audio",
     pickOutputUrl: (output) =>
       (output.audioUrl as string | undefined) ?? (output.url as string | undefined),

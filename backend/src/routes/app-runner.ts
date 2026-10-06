@@ -110,32 +110,52 @@ function finalView(final: AppRunFinal | undefined): Record<string, unknown> | nu
   }
 }
 
-/** Validate restricted field values against allowedValues. Returns error message or null. */
-function validateRestrictedFields(
+/**
+ * Validate the submitted values of the app's exposed fields: a restricted
+ * field's value must be one of its `allowedValues`; a text input's value may
+ * not exceed its `maxLength` (decided 2026-10-06 — the limit caps the price
+ * the app is advertised at, so it must hold when the app runs); a picker
+ * card's value must be within its allowed list (cardMeta). Returns the
+ * refusal, or null. The limits are read through the ONE input classifier
+ * (`extractAppInputSchema`, the pass `get_app_inputs` serves), so a limit on a
+ * `field` item and one on a Text node exposed whole are held the same way.
+ */
+function validateExposedInputs(
   snapshotSettings: Record<string, unknown> | null | undefined,
   inputValues: Record<string, Record<string, unknown>> | undefined,
-  snapshotNodes: ReadonlyArray<{ id: string; type?: string }> | null | undefined,
-): string | null {
+  snapshotNodes: ReadonlyArray<{ id: string; type?: string; data?: Record<string, unknown> }> | null | undefined,
+): { code: "validation_error" | "input_too_long"; message: string } | null {
   const presSettings = (snapshotSettings ?? {} as Record<string, unknown>).presentationSettings as Record<string, unknown> | undefined
   if (!presSettings || !inputValues) return null
   if (presSettings.inputItems) {
-    const fieldItems = flattenItems(presSettings.inputItems as PresentationItem[])
-      .filter((item): item is Extract<PresentationItem, { type: "field" }> => item.type === "field")
-    for (const fieldItem of fieldItems) {
-      if (!fieldItem.allowedValues) continue
+    const items = flattenItems(presSettings.inputItems as PresentationItem[])
+    for (const fieldItem of items.filter((item): item is Extract<PresentationItem, { type: "field" }> => item.type === "field")) {
       const submitted = inputValues[fieldItem.nodeId]?.[fieldItem.field]
-      if (submitted !== undefined && !fieldItem.allowedValues.includes(submitted as string | number | boolean)) {
-        return `Invalid value for ${fieldItem.field}: ${submitted}. Allowed: ${fieldItem.allowedValues.join(", ")}`
+      if (submitted === undefined) continue
+      if (fieldItem.allowedValues && !fieldItem.allowedValues.includes(submitted as string | number | boolean)) {
+        return { code: "validation_error", message: `Invalid value for ${fieldItem.field}: ${submitted}. Allowed: ${fieldItem.allowedValues.join(", ")}` }
+      }
+    }
+    if (items.some((item) => (item.type === "field" || item.type === "node") && item.maxLength !== undefined)) {
+      const { fields, keyMap } = extractAppInputSchema({ snapshotSettings, snapshotNodes: snapshotNodes ?? null })
+      for (const field of fields) {
+        const target = keyMap[field.key]
+        if (!target || field.type !== "text" || field.maxLength === undefined) continue
+        const submitted = inputValues[target.nodeId]?.[target.fieldKey]
+        if (typeof submitted === "string" && submitted.length > field.maxLength) {
+          return { code: "input_too_long", message: `The ${target.fieldKey} input takes at most ${field.maxLength} characters (${submitted.length} given).` }
+        }
       }
     }
   }
   // Picker cards keep their allowed values in cardMeta (per field for a
   // multi-dimension picker), not on an input item.
-  return findRestrictedPickerValue({
+  const pickerRefusal = findRestrictedPickerValue({
     cardMeta: presSettings.cardMeta as Record<string, PickerCardRestrictions | undefined> | undefined,
     nodes: snapshotNodes ?? [],
     inputValues,
   })
+  return pickerRefusal ? { code: "validation_error", message: pickerRefusal } : null
 }
 
 async function resolveSlug(slug: string): Promise<string | null> {
@@ -355,14 +375,14 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       })
     }
 
-    // Validate restricted field values against allowedValues
-    const restrictedError = validateRestrictedFields(
+    // Validate the exposed fields' values (allowedValues, maxLength)
+    const inputRefusal = validateExposedInputs(
       (appRow.snapshot_settings ?? {}) as Record<string, unknown>,
       inputOverrides,
-      appRow.snapshot_nodes as ReadonlyArray<{ id: string; type?: string }> | null,
+      appRow.snapshot_nodes as ReadonlyArray<{ id: string; type?: string; data?: Record<string, unknown> }> | null,
     )
-    if (restrictedError) {
-      return reply.status(400).send({ error: { code: "validation_error", message: restrictedError } })
+    if (inputRefusal) {
+      return reply.status(400).send({ error: inputRefusal })
     }
 
     // Run rate limit (skip for headless/component calls) + app credits allowance checks in parallel
@@ -657,14 +677,14 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       })
     }
 
-    // Validate restricted field values against allowedValues
-    const restrictedErrorDraft = validateRestrictedFields(
+    // Validate the exposed fields' values (allowedValues, maxLength)
+    const draftRefusal = validateExposedInputs(
       (appRow.snapshot_settings ?? {}) as Record<string, unknown>,
       inputValues,
-      appRow.snapshot_nodes as ReadonlyArray<{ id: string; type?: string }> | null,
+      appRow.snapshot_nodes as ReadonlyArray<{ id: string; type?: string; data?: Record<string, unknown> }> | null,
     )
-    if (restrictedErrorDraft) {
-      return reply.status(400).send({ error: { code: "validation_error", message: restrictedErrorDraft } })
+    if (draftRefusal) {
+      return reply.status(400).send({ error: draftRefusal })
     }
 
     const { data: run, error: runError } = await supabase

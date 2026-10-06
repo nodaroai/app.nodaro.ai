@@ -60,6 +60,13 @@ export interface NormalizedInputField {
   readonly min?: number
   readonly max?: number
   readonly step?: number
+  /**
+   * When type=text and the publisher set a character limit on the exposed
+   * input: the most characters the caller may pass (a run over it is refused,
+   * 400 `input_too_long`). It also caps the price a speech node fed by this
+   * input is advertised at.
+   */
+  readonly maxLength?: number
   /** Human description if we have one */
   readonly description?: string
 }
@@ -425,6 +432,9 @@ export function extractAppInputSchema({
         (node?.data?.label as string | undefined) ?? node?.type ?? item.nodeId
       const key = uniqueKey(seen, label, item.nodeId)
       const primaryOptions = type === "select" ? selectOptionsFor(node?.type, fieldKey) : undefined
+      // A node exposed whole whose input is text carries its character limit on
+      // the item, as a `field` item does (a whole number, at least 1).
+      const nodeLimit = type === "text" && Number.isInteger(item.maxLength) && (item.maxLength as number) >= 1 ? (item.maxLength as number) : undefined
       fields.push({
         key,
         label,
@@ -432,6 +442,7 @@ export function extractAppInputSchema({
         required: type !== "text",
         ...(description ? { description } : {}),
         ...(primaryOptions ? { options: primaryOptions } : {}),
+        ...(nodeLimit !== undefined ? { maxLength: nodeLimit } : {}),
       })
       keyMap[key] = keyMapEntry(item.nodeId, fieldKey, type)
       // A card that writes more than one field (UGC Creator: source, gender,
@@ -484,12 +495,16 @@ export function extractAppInputSchema({
         }
       } else {
         const type: NormalizedInputField["type"] = item.allowedValues ? "select" : "text"
+        // A text input's character limit, as the publisher set it (a whole
+        // number, at least 1); anything else is no limit.
+        const limit = type === "text" && Number.isInteger(item.maxLength) && (item.maxLength as number) >= 1 ? (item.maxLength as number) : undefined
         field = {
           key,
           label: `${nodeLabel}: ${item.field}`,
           type,
           required: false,
           ...(item.allowedValues ? { options: item.allowedValues } : {}),
+          ...(limit !== undefined ? { maxLength: limit } : {}),
         }
       }
       fields.push(field)

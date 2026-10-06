@@ -31,6 +31,7 @@ import { personalPayer } from "../lib/billing-context.js"
 import { deploymentPayerActive, deploymentPayerId } from "../lib/deployment-payer.js"
 import { billingPairColumns } from "../lib/insert-job.js"
 import { estimateWorkflowCredits, type EstimateNode } from "../ee/billing/credits.js"
+import { exposedTextCaps } from "../lib/exposed-text-caps.js"
 import { previewReviewRefusal } from "../lib/preview-review-gate.js"
 import type { WorkflowExecutionJob, NodeExecutionState } from "../services/workflow-engine/types.js"
 import { normalizeLegacyNodeTypes } from "../services/workflow-engine/normalize-node-types.js"
@@ -686,7 +687,12 @@ export async function apiTokenRoutes(app: FastifyInstance) {
         ? sortByOrder(outputNodes, outputNodeIds)
         : outputNodes
 
-      const estimatedCredits = await estimateWorkflowCredits(nodes as EstimateNode[], edges)
+      // Described BEFORE the caller's inputs exist: an exposed speech text is
+      // priced at its input's character limit (or the model's cap), never at
+      // the author's placeholder (lib/exposed-text-caps.ts).
+      const estimatedCredits = await estimateWorkflowCredits(nodes as EstimateNode[], edges, {
+        speechTextCaps: exposedTextCaps(settings, nodes as EstimateNode[]),
+      })
 
       const inputs = sortedInputs.map((node) => {
         const fieldSchema = getInputFieldSchema(node.type ?? "")

@@ -7,6 +7,10 @@ import { resolveEditPlanEstimateDurationSec } from "@/lib/edit-plan-estimate"
 import { audioSyncCreditId, audioSyncWiredSourceCount } from "@/lib/audio-sync"
 import { wiredSocialPostsVideoSec } from "@/lib/video-analysis-handles"
 import { upstreamVideoDurationSec } from "@/lib/upstream-video-duration"
+import { speechQuote, upstreamSpeechText } from "@/lib/speech-estimate"
+// The core price cache (the same one `getCachedCredits` under @/ee re-exports):
+// a speech unit row cached there means the server prices speech by length.
+import { getCachedModelCredits } from "@/hooks/use-model-credit-cost"
 import type { LlmFeature } from "@nodaro/shared"
 /** Every node type whose output is prose/text. Used to build the compatible
  *  source list for any text-shaped field so the MappableField dropdown is
@@ -624,6 +628,17 @@ export function getModelIdentifier(
   // node's own Run button quotes.
   if (nodeType === "video-sfx") {
     return videoSfxCreditId(upstreamVideoDurationSec(node.id, "video", nodes ?? [], edges ?? []))
+  }
+
+  // Text to Speech / Text to Dialogue by length (decided 2026-10-06): when the
+  // server serves the model's per-100-characters unit row (length pricing on — the
+  // row is in the price cache), the estimate prices on it; the units come from
+  // the SAME call in PRICING_UNIT_ESTIMATORS (workflow-editor/types.ts), so the
+  // id and the units can never flip apart. A row not served (flag off, or a
+  // cold cache) falls through to today's flat rows below.
+  if (nodeType === "text-to-speech" || nodeType === "text-to-dialogue") {
+    const speech = speechQuote(nodeType, data, upstreamSpeechText(node, nodes ?? [], edges ?? [], {}), getCachedModelCredits)
+    if (speech) return speech.id
   }
 
   // Text to Dialogue reserves on its dialogue model's own row — the route's

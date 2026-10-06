@@ -13,6 +13,7 @@ import { buildMotionCreditModelIdentifier, isDefaultSelectorConfig, selectListIt
 // concern — credits are enterprise-only). Allowlisted in
 // tools/check-ee-imports.mjs (same coupling as ./run-handlers.ts).
 import { getCachedCredits, getCachedVideoProCredits } from "@/ee/hooks/use-model-credits"
+import { speechQuote, upstreamSpeechText } from "@/lib/speech-estimate"
 
 /** Sentinel error thrown when a polling callback detects that the active
  *  workflow has changed. Callers should catch this silently (no error toast). */
@@ -143,7 +144,7 @@ export const NODE_CREDIT_COSTS: Record<string, number> = {
   "audio-isolation": 80,
   "image-to-text": 3,
   "describe-to-picker": 10,
-  "text-to-dialogue": 40,
+  "text-to-dialogue": 25,
   "transcode-video": 10,
   "sub-workflow": 0,
   "filter-list": 0,
@@ -889,7 +890,22 @@ const PRICING_UNIT_ESTIMATORS: Readonly<
   "assemble-narrated-video": videoUtilityPricingUnits,
   "extend-video": extendVideoPricingUnits,
   "video-retake": videoRetakePricingUnits,
+  "text-to-speech": speechPricingUnits,
+  "text-to-dialogue": speechPricingUnits,
 };
+
+/**
+ * Speech by length (decided 2026-10-06): the started hundreds of the text the
+ * node will send, at least 8, when the server serves the model's
+ * per-100-characters unit row — from the SAME call `getModelIdentifier` (helpers.ts)
+ * reads, so the id and the units flip together; 1 when the row is not served
+ * (flag off, or a cold cache): the flat row, today's number.
+ */
+function speechPricingUnits(node: WorkflowNode, allNodes: WorkflowNode[], edges: WorkflowEdge[]): number {
+  // Priced as it runs — the same wired view getModelIdentifier reads, so the two never disagree.
+  const wired = withWiredSettings(node, allNodes, edges)
+  return speechQuote(wired.type ?? "", wired.data as Record<string, unknown>, upstreamSpeechText(wired, allNodes, edges, {}), getCachedCredits)?.units ?? 1
+}
 
 /** Units a per-unit node's estimate prices; 1 for every other node. */
 export function getPricingUnits(

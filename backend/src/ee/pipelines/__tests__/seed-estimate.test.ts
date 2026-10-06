@@ -1,13 +1,28 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
+// SPEECH_LENGTH_PRICING_ENABLED, read at call time by the estimator: off (today's
+// arithmetic) for every test but the flag-on describe at the end.
+const flag = vi.hoisted(() => ({ on: false }))
+vi.mock("@/lib/config.js", async (importOriginal) => {
+  const orig = await importOriginal<typeof import("@/lib/config.js")>()
+  return { ...orig, speechLengthPricingEnabled: () => flag.on }
+})
+// The REAL price table (getChargedPriceTable / chargedCredits) over no
+// model_pricing rows and no markup, so every price is STATIC_CREDIT_COSTS.
+vi.mock("@/lib/supabase.js", () => ({
+  supabase: { from: () => ({ select: () => ({ order: () => ({ range: async () => ({ data: [], error: null }) }) }) }) },
+}))
+vi.mock("@/lib/app-settings.js", () => ({ getAppSettings: vi.fn().mockResolvedValue({ cost_markup_percent: 0 }) }))
 // Mock path matches what `../credits.js` (the SUT) imports, NOT relative to
 // this test file's own location — same convention as the sibling
-// `services/__tests__/pipeline-generate-*.test.ts` suites.
-vi.mock("../../billing/credits.js", () => ({
-  getModelCreditCostFromDB: vi.fn(),
-}))
+// `services/__tests__/pipeline-generate-*.test.ts` suites. Only the single
+// lookup is stubbed; the table is the real one.
+vi.mock("../../billing/credits.js", async (importOriginal) => {
+  const orig = await importOriginal<typeof import("../../billing/credits.js")>()
+  return { ...orig, getModelCreditCostFromDB: vi.fn() }
+})
 
-import { getModelCreditCostFromDB } from "../../billing/credits.js"
+import { getModelCreditCostFromDB, STATIC_CREDIT_COSTS } from "../../billing/credits.js"
 import { estimateSeededPipelineCredits, estimateSceneAnimationCredits } from "../credits.js"
 
 // Mirrors the real STATIC_CREDIT_COSTS entries (ee/billing/credits.ts) for
@@ -41,8 +56,10 @@ function makeScene(overrides: {
   shotCountHint?: number
   durationSeconds?: number
   dialogueLines?: number
+  /** Characters per dialogue line (default: a short label). */
+  lineLength?: number
 }) {
-  const { sceneIndex, shotCountHint = 1, durationSeconds = 5, dialogueLines = 0 } = overrides
+  const { sceneIndex, shotCountHint = 1, durationSeconds = 5, dialogueLines = 0, lineLength } = overrides
   return {
     scene_index: sceneIndex,
     description: `Scene ${sceneIndex}`,
@@ -53,7 +70,7 @@ function makeScene(overrides: {
     object_keys: [],
     dialogue: Array.from({ length: dialogueLines }, (_, i) => ({
       cast_key: "hero",
-      line: `Scene ${sceneIndex} line ${i + 1}`,
+      line: lineLength === undefined ? `Scene ${sceneIndex} line ${i + 1}` : "a".repeat(lineLength),
     })),
     narration: null,
     continuity_from_prev: "hard_cut" as const,
@@ -171,6 +188,47 @@ describe("estimateSeededPipelineCredits", () => {
 
     expect(getModelCreditCostFromDB).toHaveBeenCalledWith("nano-banana")
     expect(getModelCreditCostFromDB).toHaveBeenCalledWith("kling-turbo:5s")
+  })
+})
+
+// Seam 3 (decided 2026-10-06): scene-internal-pipeline runs ONE text-to-speech
+// job per dialogue line (ShowrunnerPlanSchema caps a line at 200 characters), so
+// every line is its own job at the floor. The estimate is therefore the SUM of
+// per-line prices through the one estimator — never the price of the joined text.
+describe("estimateSeededPipelineCredits — speech by length while the flag is on", () => {
+  beforeEach(() => {
+    flag.on = true
+  })
+  afterEach(() => {
+    flag.on = false
+  })
+
+  it("sums one floor-priced job per line on turbo's unit row — not the joined text's started hundreds", async () => {
+    // Three scenes (the schema's minimum), 10 lines of 150 characters in all.
+    const plan = {
+      ...makeSixScenePlan(),
+      scenes: [
+        makeScene({ sceneIndex: 1, dialogueLines: 4, lineLength: 150 }),
+        makeScene({ sceneIndex: 2, dialogueLines: 3, lineLength: 150 }),
+        makeScene({ sceneIndex: 3, dialogueLines: 3, lineLength: 150 }),
+      ],
+    }
+    const result = await estimateSeededPipelineCredits({} as never, { plan, config: { music_enabled: false, video_model: "kling-turbo" } })
+    const unit = STATIC_CREDIT_COSTS["elevenlabs-turbo:per-100-chars"]!
+    // 10 lines × 8 units × 2 = 160; the joined 1,500 characters would be 15 × 2 = 30.
+    expect(result.breakdown.speech).toBe(10 * 8 * unit)
+    expect(result.breakdown.speech).toBe(160)
+    // The flat row is not consulted on this branch.
+    expect(getModelCreditCostFromDB).not.toHaveBeenCalledWith("elevenlabs-turbo")
+    // The other lines are untouched by the flag.
+    expect(result.breakdown.keyframes).toBe(3)
+    expect(result.breakdown.animation).toBe(3 * 11)
+  })
+
+  it("a plan with no dialogue has a zero speech line and reads no speech price", async () => {
+    const plan = { ...makeSixScenePlan(), scenes: [makeScene({ sceneIndex: 1 }), makeScene({ sceneIndex: 2 }), makeScene({ sceneIndex: 3 })] }
+    const result = await estimateSeededPipelineCredits({} as never, { plan, config: { music_enabled: false, video_model: "kling-turbo" } })
+    expect(result.breakdown.speech).toBe(0)
   })
 })
 

@@ -388,7 +388,9 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         "clips (v4 uses them; other models ignore them). " +
         "Never switch away from v4 for " +
         "language reasons alone. Call `list_models { kind: \"audio\", mode: \"tts\" }` " +
-        "for the full sheet.\n\n" +
+        "for the full sheet. Where length pricing is on, the charge is per started 100 " +
+        "characters of the text sent, at least 8 units; `list_models` shows the " +
+        "per-100-characters row when it applies.\n\n" +
         "**Presets/templates**: call list_node_presets { nodeType: \"text-to-speech\" } " +
         "to browse built-in delivery styles (e.g. Calm Narrator, Commercial Read, " +
         "Audiobook) + your saved presets, get_node_preset to read one's config, or " +
@@ -617,7 +619,9 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         "`[audio tags]` like `[laughs]`, `[whispers]` inside line text, and " +
         "ANY voice — premade names, cloned/library UUIDs, mixed casts.\n\n" +
         "Limits: 5,000 characters total across lines on either model (≤2,000 " +
-        "recommended for best quality), at most 10 unique voices per generation.\n\n" +
+        "recommended for best quality), at most 10 unique voices per generation. " +
+        "Where length pricing is on, the charge is per started 100 characters of the " +
+        "script, at least 8 units; `list_models` shows the per-100-characters row when it applies.\n\n" +
         "The finished job's output_data carries `audioUrl` and, on both " +
         "models (timings cost no extra credits), `transcript`: per-word timings and one " +
         "segment per line with the line's voice as `speaker` — pass `words` as " +

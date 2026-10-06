@@ -7,7 +7,7 @@ import { hasCredits } from "../../config.js"
 import { supabase } from "../../supabase.js"
 import { CreditsService } from "../../../ee/billing/credits.js"
 import { deploymentPayerActive, deploymentPayerId } from "../../deployment-payer.js"
-import { MODEL_CATALOG, MODEL_RECOMMENDATIONS, listModels, groupByKindAndFamily, type ModelCatalogEntry, type ModelKind, type ModelMode } from "@nodaro/shared"
+import { MODEL_CATALOG, MODEL_RECOMMENDATIONS, listModels, groupByKindAndFamily, SPEECH_UNIT_CREDIT_SUFFIX, type ModelCatalogEntry, type ModelKind, type ModelMode } from "@nodaro/shared"
 import { isModelDenied } from "../../surface-deny.js"
 import { loadChargedPrices, type ChargedPrices } from "../../pricing/charged-prices.js"
 import { getPromptTips, getPromptDoctrine } from "@nodaro/prompts"
@@ -24,12 +24,15 @@ export interface RegisterModelsOpts {
  * The catalog's pricing rows at the credits a run is charged. The catalog
  * holds base prices; `prices` is what the Run button and the reservation read,
  * so a listed price is the price paid. A row nothing prices keeps its catalog
- * figure.
+ * figure — except a speech `:per-100-chars` row, a RATE this server does not
+ * charge while length pricing is off: it is omitted, so a client that sees the
+ * row may apply it (lib/speech-credits.ts :: speechUnitRowServed).
  */
-function chargedPricing(rows: ModelCatalogEntry["pricing"], prices: ChargedPrices): ModelCatalogEntry["pricing"] {
-  return rows.map((row) => {
+export function chargedPricing(rows: ModelCatalogEntry["pricing"], prices: ChargedPrices): ModelCatalogEntry["pricing"] {
+  return rows.flatMap((row) => {
     const credits = prices.credits(row.identifier)
-    return credits === undefined || credits === row.credits ? row : { ...row, credits }
+    if (credits === undefined && row.identifier.endsWith(SPEECH_UNIT_CREDIT_SUFFIX)) return []
+    return [credits === undefined || credits === row.credits ? row : { ...row, credits }]
   })
 }
 

@@ -14,6 +14,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Lock, LockOpen, ChevronDown, ChevronRight, Sparkles, Filter } from "lucide-react"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import {
@@ -406,6 +407,47 @@ function NodeRow({
     [node.id, currentItems, itemsKey, updatePresentationSettings, isSameField]
   )
 
+  // A text input's character limit (decided 2026-10-06): held at run time, and
+  // it caps the price a speech node fed by the input is advertised at. Cleared
+  // (no limit) when the box is emptied.
+  const handleMaxLengthUpdate = useCallback(
+    (fieldKey: string, maxLength: number | undefined) => {
+      updatePresentationSettings({
+        [itemsKey]: currentItems.map((item) => {
+          if (item.type === "field" && item.nodeId === node.id && isSameField(item.field, fieldKey)) {
+            const { maxLength: _dropped, ...rest } = item
+            return maxLength === undefined ? rest : { ...rest, maxLength }
+          }
+          return item
+        }),
+      })
+    },
+    [node.id, currentItems, itemsKey, updatePresentationSettings, isSameField]
+  )
+
+  // The same limit on a Text node exposed WHOLE (it has no field list to expand):
+  // it lives on the node item. An app still on the implicit inputs (no item list
+  // yet) gets its list seeded from the visible nodes first, as a field toggle does.
+  const nodeItem = currentItems.find(
+    (item): item is Extract<PresentationItem, { type: "node" }> => item.type === "node" && item.nodeId === node.id,
+  )
+  const handleNodeMaxLengthUpdate = useCallback(
+    (maxLength: number | undefined) => {
+      const withLimit = (items: PresentationItem[]): PresentationItem[] =>
+        items.map((item) => {
+          if (item.type === "group") return { ...item, items: withLimit(item.items) }
+          if (item.type !== "node" || item.nodeId !== node.id) return item
+          const { maxLength: _dropped, ...rest } = item
+          return maxLength === undefined ? rest : { ...rest, maxLength }
+        })
+      const seeded: PresentationItem[] = currentItems.length === 0 && allVisibleNodeIds.length > 0
+        ? allVisibleNodeIds.map((id) => ({ type: "node" as const, nodeId: id }))
+        : currentItems
+      updatePresentationSettings({ [itemsKey]: withLimit(seeded) })
+    },
+    [node.id, currentItems, itemsKey, allVisibleNodeIds, updatePresentationSettings]
+  )
+
   return (
     <div>
       <div className="flex items-center gap-1">
@@ -435,6 +477,24 @@ function NodeRow({
           </Badge>
           {isVisible && node.type === "text-prompt" && (
             <div className="flex items-center gap-0.5 ms-auto">
+              {section === "inputs" && (
+                <Input
+                  type="number"
+                  min={1}
+                  step={1}
+                  inputMode="numeric"
+                  className="h-6 w-24 px-1.5 text-[10px] shrink-0"
+                  aria-label={t("present.maxChars")}
+                  title={t("present.maxChars")}
+                  placeholder={t("present.maxCharsNoLimit")}
+                  value={nodeItem?.maxLength ?? ""}
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={(e) => {
+                    const n = Math.floor(Number(e.target.value))
+                    handleNodeMaxLengthUpdate(e.target.value !== "" && Number.isFinite(n) && n >= 1 ? n : undefined)
+                  }}
+                />
+              )}
               <Button
                 variant="ghost"
                 size="sm"
@@ -542,6 +602,23 @@ function NodeRow({
                         field={field}
                         allowedValues={fieldItem?.allowedValues}
                         onUpdate={(av) => handleRestrictUpdate(field.key, av)}
+                      />
+                    )}
+                    {checked && field.type === "text" && (
+                      <Input
+                        type="number"
+                        min={1}
+                        step={1}
+                        inputMode="numeric"
+                        className="h-6 w-24 px-1.5 text-[10px] shrink-0"
+                        aria-label={t("present.maxChars")}
+                        title={t("present.maxChars")}
+                        placeholder={t("present.maxCharsNoLimit")}
+                        value={fieldItem?.maxLength ?? ""}
+                        onChange={(e) => {
+                          const n = Math.floor(Number(e.target.value))
+                          handleMaxLengthUpdate(field.key, e.target.value !== "" && Number.isFinite(n) && n >= 1 ? n : undefined)
+                        }}
                       />
                     )}
                   </div>

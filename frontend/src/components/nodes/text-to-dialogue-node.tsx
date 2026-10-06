@@ -15,8 +15,7 @@ import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
-import { useModelCredits } from "@/ee/hooks/use-model-credits"
-import { dialogueProviderOf } from "@nodaro/shared"
+import { useSpeechPricing } from "@/ee/hooks/use-speech-pricing"
 import { AudioResultOverlay } from "./audio-result-overlay"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import type { TextToDialogueData } from "@/types/nodes"
@@ -37,8 +36,11 @@ function TextToDialogueNodeComponent({ id, data, selected }: NodeProps) {
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [showThumbnails, setShowThumbnails] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
-  // The badge reads the row the run reserves on: the node's model (v3 dialogue when unset).
-  const credits = useModelCredits(dialogueProviderOf(nodeData.provider), 4)
+  // The badge reads the row the run reserves on: the node's model (v3 dialogue
+  // when unset) — flat, or by the script's length when the server serves that
+  // model's per-100-characters row. A script that arrives at run time shows a
+  // range and runs at its ceiling.
+  const price = useSpeechPricing(id, "text-to-dialogue", nodeData as unknown as Record<string, unknown>)
 
   const dialogue = nodeData.dialogue ?? []
   const uniqueVoices = new Set(dialogue.map((l) => l.voice))
@@ -66,12 +68,13 @@ function TextToDialogueNodeComponent({ id, data, selected }: NodeProps) {
       label={nodeData.label}
       icon={<Users className="h-4 w-4" />}
       category="ai"
-      credits={credits}
+      credits={price.range ? undefined : price.credits}
+      creditsRange={price.range}
       selected={selected}
       isRunning={status === "running"}
       hideHeader
       topToolbarContent={
-                  <NodeQuickStrip nodeId={id} credits={credits} isRunning={status === "running"} />
+                  <NodeQuickStrip nodeId={id} credits={price.range?.max ?? price.credits} isRunning={status === "running"} />
       }
       bottomToolbarContent={
         showThumbnails && results.length > 1 ? (

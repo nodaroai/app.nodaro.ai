@@ -159,7 +159,9 @@ describe.each([true, false])("PREVIEW_STOP_RULE_ENABLED=%s: the price stored at 
     const row = insertInto("published_apps")
     expect(row.base_estimated_credits).toBe(PREVIEW)
     expect(row.estimated_credits).toBe(PREVIEW + FINAL)
-    expect(estimates.listing).toHaveBeenCalledWith(NODES, EDGES, { publishType: "app" })
+    // The listing carries the app's exposed text inputs (speechTextCaps); this
+    // fixture exposes none, so the map is empty.
+    expect(estimates.listing).toHaveBeenCalledWith(NODES, EDGES, { publishType: "app", speechTextCaps: {} })
     expect(estimates.run).not.toHaveBeenCalled()
   })
 
@@ -185,7 +187,7 @@ describe.each([true, false])("PREVIEW_STOP_RULE_ENABLED=%s: the price stored at 
     })
     expect(res.statusCode).not.toBe(400)
     const row = insertInto("published_apps")
-    expect(estimates.listing).toHaveBeenCalledWith(NODES, EDGES, { publishType: "component" })
+    expect(estimates.listing).toHaveBeenCalledWith(NODES, EDGES, { publishType: "component", speechTextCaps: {} })
     expect(row.base_estimated_credits).toBe(PREVIEW)
     expect(row.estimated_credits).toBe(PREVIEW)
   })
@@ -227,7 +229,7 @@ describe.each([true, false])("PREVIEW_STOP_RULE_ENABLED=%s: the price stored at 
       payload: { workflowId: WORKFLOW_ID, name: "Cut template" },
     })
     expect(insertInto("workflow_templates").estimated_credits).toBe(PREVIEW + FINAL)
-    expect(estimates.listing).toHaveBeenCalledWith(NODES, EDGES, { publishType: "template" })
+    expect(estimates.listing).toHaveBeenCalledWith(NODES, EDGES, { publishType: "template", speechTextCaps: {} })
     expect(estimates.run).not.toHaveBeenCalled()
   })
 

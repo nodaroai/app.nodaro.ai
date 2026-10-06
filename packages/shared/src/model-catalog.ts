@@ -82,6 +82,17 @@ export interface PriceVariant {
   note?: string
 }
 
+/**
+ * The note on every speech model's `<model>:per-100-chars` pricing row. The
+ * row is a rate: one started 100 characters of the text sent, at least 8 units
+ * per request (`credit-estimators/speech.ts`). An instance serves the row only
+ * while it prices speech by length; a client that does not see it quotes the
+ * flat row. (The ids are literals on the entries — this file cannot import
+ * the speech estimator without a cycle through tts-capabilities.ts; the
+ * pricing-coverage tests pin each literal to `speechUnitCreditId(id)`.)
+ */
+export const SPEECH_UNIT_PRICE_NOTE = "per started 100 characters, at least 8 units — where length pricing is on"
+
 /** A voice-setting lever a speech model honours. */
 export type TtsSettingLever = "stability" | "similarity" | "style" | "speed" | "speakerBoost"
 
@@ -2516,7 +2527,10 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
     description: "Expressive ElevenLabs TTS — supports [audio tags] for emotion / pacing. Direct API.",
     useCases: ["tts", "voice-over", "narration", "expressive"],
     features: ["audio-tags", "voice-cloning"],
-    pricing: [{ identifier: "elevenlabs-v3", credits: 30 }],
+    pricing: [
+      { identifier: "elevenlabs-v3", credits: 30 },
+      { identifier: "elevenlabs-v3:per-100-chars", credits: 4, note: SPEECH_UNIT_PRICE_NOTE },
+    ],
     tts: {
       audioTags: true,
       ssmlBreaks: false,
@@ -2539,7 +2553,10 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
     description: "Newest ElevenLabs TTS — [audio tags], stability and similarity control, up to 10,000 characters per request. Direct API.",
     useCases: ["tts", "voice-over", "narration", "expressive", "long-form"],
     features: ["audio-tags", "voice-cloning"],
-    pricing: [{ identifier: "elevenlabs-v4", credits: 30 }],
+    pricing: [
+      { identifier: "elevenlabs-v4", credits: 30 },
+      { identifier: "elevenlabs-v4:per-100-chars", credits: 4, note: SPEECH_UNIT_PRICE_NOTE },
+    ],
     // The default speech model (DEFAULT_TTS_PROVIDER) carries the star.
     featured: true,
     tts: {
@@ -2566,7 +2583,12 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
     series: "ElevenLabs",
     description: "Fast, cheap ElevenLabs TTS via the direct ElevenLabs API. Good for narration.",
     useCases: ["tts", "narration", "fast"],
-    pricing: [{ identifier: "elevenlabs-turbo", credits: 15, note: "per 1K chars" }],
+    // The flat row carries no note (a "per 1K chars" note once described a
+    // scaling that never existed; the minimum under length pricing is 8 units, 16).
+    pricing: [
+      { identifier: "elevenlabs-turbo", credits: 15 },
+      { identifier: "elevenlabs-turbo:per-100-chars", credits: 2, note: SPEECH_UNIT_PRICE_NOTE },
+    ],
     tts: {
       audioTags: false,
       ssmlBreaks: true,
@@ -2588,7 +2610,11 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
     series: "ElevenLabs",
     description: "Multi-language ElevenLabs TTS via the direct ElevenLabs API.",
     useCases: ["tts", "multilingual"],
-    pricing: [{ identifier: "elevenlabs-multilingual", credits: 30, note: "per 1K chars" }],
+    // The flat row carries no note (the old "per 1K chars" described a scaling that never existed).
+    pricing: [
+      { identifier: "elevenlabs-multilingual", credits: 30 },
+      { identifier: "elevenlabs-multilingual:per-100-chars", credits: 4, note: SPEECH_UNIT_PRICE_NOTE },
+    ],
     tts: {
       audioTags: false,
       ssmlBreaks: true,
@@ -2617,7 +2643,10 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
     features: ["audio-tags", "voice-cloning"],
     // Flat per request, whatever the length (decided 2026-10-06: the old
     // "per 1K chars" note described a scaling that never existed).
-    pricing: [{ identifier: "elevenlabs-dialogue", credits: 25 }],
+    pricing: [
+      { identifier: "elevenlabs-dialogue", credits: 25 },
+      { identifier: "elevenlabs-dialogue:per-100-chars", credits: 4, note: SPEECH_UNIT_PRICE_NOTE },
+    ],
     tts: {
       audioTags: true,
       ssmlBreaks: false,
@@ -2648,7 +2677,10 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
     useCases: ["tts", "dialogue", "multi-speaker"],
     features: ["audio-tags", "voice-cloning"],
     // Flat per request, the same as v3 dialogue (decided 2026-10-06).
-    pricing: [{ identifier: "elevenlabs-dialogue-v4", credits: 25 }],
+    pricing: [
+      { identifier: "elevenlabs-dialogue-v4", credits: 25 },
+      { identifier: "elevenlabs-dialogue-v4:per-100-chars", credits: 4, note: SPEECH_UNIT_PRICE_NOTE },
+    ],
     tts: {
       audioTags: true,
       ssmlBreaks: false,

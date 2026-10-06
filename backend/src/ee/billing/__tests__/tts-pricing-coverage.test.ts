@@ -10,7 +10,7 @@
  * but in neither would pass both and fail only for a user.
  */
 import { describe, it, expect } from "vitest"
-import { MODEL_CATALOG, TTS_PROVIDERS, TTS_PROVIDER_ALIASES, canonicalTtsProvider } from "@nodaro/shared"
+import { MODEL_CATALOG, TTS_PROVIDERS, TTS_PROVIDER_ALIASES, canonicalTtsProvider, speechUnitCreditId, SPEECH_UNIT_PRICE_NOTE } from "@nodaro/shared"
 import { STATIC_CREDIT_COSTS } from "../credits.js"
 
 describe("text-to-speech pricing coverage", () => {
@@ -25,6 +25,22 @@ describe("text-to-speech pricing coverage", () => {
       const row = MODEL_CATALOG[id]?.pricing[0]
       expect(row?.identifier, `${id} catalog pricing identifier`).toBe(id)
       expect(row?.credits, `${id} catalog credits vs STATIC_CREDIT_COSTS`).toBe(STATIC_CREDIT_COSTS[id])
+    }
+  })
+
+  it("every non-alias TTS provider carries its unit row as pricing[1], at the static value, and no flat row says 'per 1K chars'", () => {
+    // The unit row is what GET /v1/models and list_models serve (only while
+    // length pricing is on — speech-unit-rows-served.test.ts); a client that
+    // sees it quotes speechCredits(chars, row). The flat rows carried a
+    // "per 1K chars" note that described a scaling that never existed.
+    for (const id of TTS_PROVIDERS) {
+      if (id in TTS_PROVIDER_ALIASES) continue
+      const rows = MODEL_CATALOG[id]!.pricing
+      expect(rows[0]?.note ?? "", id).not.toMatch(/per 1K/i)
+      expect(rows[1]?.identifier, id).toBe(speechUnitCreditId(id))
+      expect(rows[1]?.credits, id).toBe(STATIC_CREDIT_COSTS[speechUnitCreditId(id)])
+      expect(rows[1]?.note, id).toBe(SPEECH_UNIT_PRICE_NOTE)
+      expect(rows, id).toHaveLength(2)
     }
   })
 

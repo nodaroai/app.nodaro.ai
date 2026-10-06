@@ -57,6 +57,8 @@ export interface InputCardProps {
   display?: PresentationDisplay
   inputMode?: InputMode
   minLines?: number
+  /** A Text node's character limit (its item's `maxLength`): the box takes no more and a counter shows against it. */
+  maxLength?: number
   nodes?: Array<{ id: string; type?: string; data: Record<string, unknown> }>
   edges?: Array<{ source: string; target: string }>
   /** "composer" renders compact card variants for the chat-mode bottom composer. */
@@ -76,6 +78,7 @@ function InputCardInner({
   display,
   inputMode,
   minLines,
+  maxLength,
   nodes,
   edges,
   variant,
@@ -140,6 +143,7 @@ function InputCardInner({
           presentationReadOnly={isPresReadOnly}
           inputMode={inputMode}
           minLines={minLines}
+          maxLength={maxLength}
           promptHelper={isPresReadOnly ? undefined : promptHelperProp}
         />
       )

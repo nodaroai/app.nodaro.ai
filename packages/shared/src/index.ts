@@ -1228,6 +1228,7 @@ export { pickIds, togglePick } from "./multi-pick.js"
 export {
   MODEL_CATALOG,
   MODEL_RECOMMENDATIONS,
+  SPEECH_UNIT_PRICE_NOTE,
   listModels,
   groupByFamily,
   groupByKindAndFamily,

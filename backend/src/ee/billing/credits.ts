@@ -30,6 +30,8 @@ import { flux2BaseCredits } from "../../lib/pricing/flux2-cost.js"
 import { AI_AVATAR_RATE_USD_PER_SEC, aiAvatarHoldCredits } from "../../lib/pricing/ai-avatar-cost.js"
 import { applyServiceMarkup } from "./service-margin.js"
 import { videoUtilityBaseCredits, videoUtilityEstimateBody } from "../../lib/video-utility-credits.js"
+import { speechUnitRowServed } from "../../lib/speech-credits.js"
+import { speechEstimate, upstreamSpeechText, type ExposedTextCaps } from "../../lib/speech-estimate.js"
 import { getWelcomeOfferConfig } from "../lib/welcome-offer-config.js"
 import { ConsentRequiredError } from "../lib/consent-required.js"
 import { CINEMATIC_RATE_USD_PER_SEC, cinematicHoldCredits } from "../../lib/pricing/cinematic-avatar-cost.js"
@@ -1654,7 +1656,8 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "slideshow": 0,
   "transcode-video": 10,
   "audio-isolation": 80,          // alias for elevenlabs-isolation
-  "text-to-dialogue": 40,
+  // node-type fallback — reachable only when the dialogue model's own row is unpriced; equals the default dialogue model's flat row
+  "text-to-dialogue": 25,
   "image-to-text": 3,
   "image-to-text:economy": 1,
   "image-to-text:premium": 4,
@@ -2145,7 +2148,9 @@ async function modelPricingRows(): Promise<ReadonlyMap<string, number>> {
 export async function getChargedPriceTable(): Promise<ChargedPriceTable> {
   const [rows, settings] = await Promise.all([modelPricingRows(), getAppSettings()])
   return {
-    base: (identifier) => rows.get(identifier) ?? STATIC_CREDIT_COSTS[identifier],
+    // A speech `:per-100-chars` row is served only while length pricing is on
+    // (lib/speech-credits.ts): its absence is how a client learns the flag.
+    base: (identifier) => (speechUnitRowServed(identifier) ? rows.get(identifier) ?? STATIC_CREDIT_COSTS[identifier] : undefined),
     charge: (identifier, baseCredits) => applyServiceMarkup(baseCredits, settings, identifier),
   }
 }
@@ -3483,9 +3488,13 @@ export class CreditsService {
   }
 
   /**
-   * Get credit cost for a specific model
+   * Get credit cost for a specific model — the single PUBLIC lookup
+   * (`GET /v1/credits/model-cost`). A speech `:per-100-chars` row is refused
+   * while length pricing is off, exactly as an id priced nowhere is: the
+   * reservation seams read `getModelCreditBaseCost` and are not affected.
    */
   static async getModelCreditCost(modelIdentifier: string): Promise<number> {
+    if (!speechUnitRowServed(modelIdentifier)) throw new PriceNotConfiguredError(modelIdentifier)
     const pricing = await getModelCreditCostFromDB(modelIdentifier)
     return pricing.creditCost
   }
@@ -3553,6 +3562,14 @@ export class CreditsService {
  */
 export type WorkflowEstimateOptions = {
   scope?: "run" | "whole-graph"
+  /** EVERY exposed text input of a published app, "<nodeId>:<field>" → its
+   *  character limit, or null when it has none (built at publish from the
+   *  presentation items). A limit caps the ceiling an unknown speech text is
+   *  priced at; an exposed field without one makes a node's stored text UNKNOWN
+   *  (it is a placeholder the app user replaces); an absent key means the field
+   *  is not exposed and a literal text is priced exactly. Never shrinks a
+   *  literal, unexposed text. */
+  speechTextCaps?: ExposedTextCaps
   /** A run of a SUBSET (Render final, a continued run): price only these
    *  nodes. The rest of the graph is still the context a price reads (a
    *  wired setting, a caption source, the stop rule's closure). */
@@ -3624,7 +3641,7 @@ function sumWorkflowEstimate(
     if (runNodeIds && !(node.id && runNodeIds.has(node.id))) return false
     if (node.id && previewGated.has(node.id)) return false
     return !skip?.(node)
-  })
+  }, options?.speechTextCaps)
 }
 
 /** The estimate of the nodes `include` keeps, each priced as a run of it would be. */
@@ -3633,6 +3650,8 @@ function sumEstimatedNodes(
   edges: ReadonlyArray<EstimateEdge> | undefined,
   prices: ChargedPriceTable,
   include: (node: EstimateNode) => boolean,
+  /** The app's exposed text inputs, when the caller has them (see `WorkflowEstimateOptions.speechTextCaps`). */
+  speechTextCaps?: ExposedTextCaps,
 ): number {
   return nodes.reduce((sum, node) => {
     if (!include(node)) return sum
@@ -3655,6 +3674,14 @@ function sumEstimatedNodes(
       if (base !== undefined) return sum + prices.charge(node.type, base)
     }
     const priced = withWiredSettings(node, nodes, edges)
+    // Text to Speech / Text to Dialogue by length (decided 2026-10-06): the
+    // model's :per-100-chars row × started hundreds of the text the run will
+    // send, at least 8 units — the id and the units from ONE call, so they can
+    // never flip apart. A connected text follows the edge one hop (a literal
+    // Text node is exact; an exposed Text input's limit caps it). Undefined
+    // while the flag is off: the flat row below, byte for byte.
+    const speech = speechEstimate(priced.type, priced.data ?? {}, upstreamSpeechText(priced, nodes, edges ?? [], speechTextCaps ?? {}))
+    if (speech) return sum + (chargedCredits(prices, speech.id, speech.units) ?? chargedCredits(prices, node.type) ?? 0)
     const modelId = getNodeModelIdentifier(priced, {
       timedCaptionSourceWired: timedCaptionSourceWired(node, nodes, edges),
       audioSyncSourceCount: audioSyncWiredSourceCount(node, edges),
@@ -3746,11 +3773,13 @@ function listingEstimate(
   publishType: ListingPublishType,
   /** Nodes priced elsewhere (the UGC seam): read as part of the graph, never summed. */
   skip?: (node: EstimateNode) => boolean,
+  /** The app's exposed text inputs: an exposed speech text is a ceiling, not the placeholder. */
+  speechTextCaps?: ExposedTextCaps,
 ): AppListingEstimate {
   // The preview part is the whole graph at its saved settings — never only
   // the run up to each Preview: a flag-off app run executes all of it, with
   // the fee (see AppListingEstimate). Revisit when production turns the flag on.
-  const preview = sumEstimatedNodes(nodes, edges, prices, (n) => !skip?.(n))
+  const preview = sumEstimatedNodes(nodes, edges, prices, (n) => !skip?.(n), speechTextCaps)
   // A component runs inside its caller's run and never stops at a Preview.
   if (publishType === "component") return { preview, final: 0 }
   const gateNodes = listingGateNodes(nodes)
@@ -3762,7 +3791,7 @@ function listingEstimate(
   for (const renderId of previewStopsForListing(gateNodes, gateEdges).previewRenderIds) {
     const runSet = renderFinalRunSet(renderId, gateNodes, gateEdges)
     const atFinal = nodes.map((n) => (n.id === renderId ? { ...n, data: { ...(n.data ?? {}), quality: "final" } } : n))
-    final += sumEstimatedNodes(atFinal, edges, prices, (n) => !!n.id && runSet.has(n.id) && !frozen(n) && !skip?.(n))
+    final += sumEstimatedNodes(atFinal, edges, prices, (n) => !!n.id && runSet.has(n.id) && !frozen(n) && !skip?.(n), speechTextCaps)
   }
   return { preview, final }
 }
@@ -4122,8 +4151,12 @@ function getNodeModelIdentifier(
 export function estimateWorkflowCredits(
   nodes: ReadonlyArray<EstimateNode>,
   edges?: ReadonlyArray<EstimateEdge>,
+  /** A surface that describes an app's inputs BEFORE the user types passes the
+   *  exposed text inputs (`speechTextCaps`); a run whose inputs are already
+   *  merged onto the nodes passes nothing. */
+  options?: WorkflowEstimateOptions,
 ): Promise<number> {
-  return CreditsService.estimateWorkflowCredits(nodes, edges)
+  return CreditsService.estimateWorkflowCredits(nodes, edges, options)
 }
 
 /**
@@ -4233,11 +4266,17 @@ export async function checkRunSetCredits(
 export async function estimateWorkflowListingCredits(
   nodes: ReadonlyArray<EstimateNode>,
   edges: ReadonlyArray<EstimateEdge> | undefined,
-  options: { readonly publishType: ListingPublishType },
+  options: {
+    readonly publishType: ListingPublishType
+    /** The app's exposed text inputs (`speechTextCaps`) — a publish path prices
+     *  the graph BEFORE the app user's inputs exist, so an exposed speech text
+     *  is a ceiling, not the author's placeholder. */
+    readonly speechTextCaps?: ExposedTextCaps
+  },
 ): Promise<AppListingEstimate> {
   const prices = hasCredits() ? await getChargedPriceTable() : STATIC_BASE_PRICES
   // The UGC part is priced through its seam, in the preview part (it is the app run's).
   const ugc = await ugcPartOf(nodes, edges)
-  const split = listingEstimate(nodes, edges ?? [], prices, options.publishType, ugc?.skip)
+  const split = listingEstimate(nodes, edges ?? [], prices, options.publishType, ugc?.skip, options.speechTextCaps)
   return { preview: split.preview + (ugc?.credits ?? 0), final: split.final }
 }

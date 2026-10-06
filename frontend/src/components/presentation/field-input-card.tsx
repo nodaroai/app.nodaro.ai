@@ -20,6 +20,9 @@ interface FieldInputCardProps {
   value: unknown
   onChange: (value: unknown) => void
   allowedValues?: Array<string | number | boolean>
+  /** A text input's character limit (the publisher's, on the item): the
+   *  textarea takes no more, and a counter shows the count against it. */
+  maxLength?: number
   readOnly?: boolean
   /** Override the field label with a custom title */
   customLabel?: string
@@ -163,6 +166,7 @@ function TextField({
   field,
   value,
   onChange,
+  maxLength,
   readOnly,
 }: Omit<FieldInputCardProps, "allowedValues">) {
   const t = useT()
@@ -176,11 +180,20 @@ function TextField({
         onChange={(e) => onChange(e.target.value)}
         placeholder={t("present.enterFieldPlaceholder", { label: field.label.toLowerCase() })}
         readOnly={readOnly}
+        maxLength={maxLength}
         className={cn(
           "min-h-[72px] resize-none",
           readOnly && "opacity-70 cursor-default",
         )}
       />
+      {maxLength !== undefined && (
+        <p
+          data-testid="field-char-count"
+          className={cn("mt-1 text-end font-mono text-[10px]", strValue.length >= maxLength ? "text-amber-500" : "text-muted-foreground")}
+        >
+          {strValue.length}/{maxLength}
+        </p>
+      )}
     </GlassCard>
   )
 }

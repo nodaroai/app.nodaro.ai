@@ -101,19 +101,19 @@ describe("pricing each item", () => {
   it("the frame check prices the collage at its explicit 2K row", async () => {
     const q = await quote([item("image_collage", { resolution: "2K", layout: "grid" })])
     expect(q.lines[0]!.credits).toBe(20)
-    expect(pricingFor("image_collage", {}, { clipCount: 1 })).toEqual({ id: "image-collage:4K" })
+    expect(await pricingFor("image_collage", {}, { clipCount: 1 })).toEqual({ id: "image-collage:4K" })
   })
   it("caption segments price at the kinetic row, whatever their styles", async () => {
     const q = await quote([item("add_captions", { segments: [{ style: "subtitle" }, { style: "word-highlight" }] })])
     expect(q.lines[0]!.credits).toBe(50)
   })
   it("transcribe prices at the engine the verb sends, never the route's default", async () => {
-    expect(pricingFor("transcribe", {}, { clipCount: 1 })).toEqual({ id: "elevenlabs-stt" })
+    expect(await pricingFor("transcribe", {}, { clipCount: 1 })).toEqual({ id: "elevenlabs-stt" })
     expect((await quote([item("transcribe")])).lines[0]!.credits).toBe(22)
   })
   it("the join prices the combine estimate for its clip count, marked up like the guard marks it", async () => {
-    expect(pricingFor("combine_videos", { transition: "cut", audio_mode: "keep", smart_cut: false }, { clipCount: 2 })).toEqual({ id: "combine-videos", base: 40 })
-    expect(pricingFor("combine_videos", { transition: "cut" }, { clipCount: 3 })).toEqual({ id: "combine-videos", base: 60 })
+    expect(await pricingFor("combine_videos", { transition: "cut", audio_mode: "keep", smart_cut: false }, { clipCount: 2 })).toEqual({ id: "combine-videos", base: 40 })
+    expect(await pricingFor("combine_videos", { transition: "cut" }, { clipCount: 3 })).toEqual({ id: "combine-videos", base: 60 })
     h.markup = 50
     expect((await quote([item("combine_videos", { transition: "cut" })], [], 2)).lines[0]!.credits).toBe(60)
   })
@@ -136,9 +136,9 @@ describe("pricing each item", () => {
 })
 
 describe("the lane's two job tools are priced by their own ids", () => {
-  it("ugc_split_speech and ugc_finish_clips are flat ids", () => {
-    expect(pricingFor("ugc_split_speech", {}, { clipCount: 1 })).toEqual({ id: "ugc-segments" })
-    expect(pricingFor("ugc_finish_clips", { segments: [{}] }, { clipCount: 3 })).toEqual({ id: "ugc-finish" })
+  it("ugc_split_speech and ugc_finish_clips are flat ids", async () => {
+    expect(await pricingFor("ugc_split_speech", {}, { clipCount: 1 })).toEqual({ id: "ugc-segments" })
+    expect(await pricingFor("ugc_finish_clips", { segments: [{}] }, { clipCount: 3 })).toEqual({ id: "ugc-finish" })
   })
   it("an id the plugin has not registered a price for is a quote error, never a zero", async () => {
     await expect(buildUgcQuote({ items: [{ label: "Split the speech", tool: "ugc_split_speech", args: {}, count: 1 }], clipCount: 1, spentJobIds: [], userId: "u1" })).rejects.toThrow(/could not price/)
@@ -211,9 +211,9 @@ describe("the free-tier model blocklist", () => {
     h.prices["veo3.1"] = 150
     h.prices["gemini-omni-video:4k:8"] = 400
   })
-  it("the quoted ids are the blocklisted ones", () => {
-    expect(pricingFor(veo.tool, veo.args, { clipCount: 1 })).toEqual({ id: "veo3.1" })
-    expect(pricingFor(omni4k.tool, omni4k.args, { clipCount: 1 })).toEqual({ id: "gemini-omni-video:4k:8" })
+  it("the quoted ids are the blocklisted ones", async () => {
+    expect(await pricingFor(veo.tool, veo.args, { clipCount: 1 })).toEqual({ id: "veo3.1" })
+    expect(await pricingFor(omni4k.tool, omni4k.args, { clipCount: 1 })).toEqual({ id: "gemini-omni-video:4k:8" })
   })
   it("a free account → could not price <label>", async () => {
     await expect(quote([item("extract_frame"), veo])).rejects.toThrow("could not price Clip 1")

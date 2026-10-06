@@ -50,7 +50,7 @@ import {
 import { EXECUTABLE_TYPES, isExecutableNode } from "@/components/editor/workflow-editor/types"
 import { useLiveRunEstimate } from "@/hooks/use-live-run-estimate"
 import { getModelIdentifier } from "@/components/editor/config-panels/helpers"
-import { getCachedCredits, prefetchModelCredits } from "@/ee/hooks/use-model-credits"
+import { getCachedCredits, prefetchModelCredits, isModelUnpriced } from "@/ee/hooks/use-model-credits"
 import { isExpandedClone, calculateMonetizedCost, getItemSortId } from "@nodaro/shared"
 import type { PresentationItem, ExposableField } from "@nodaro/shared"
 import { shareWorkflow } from "@/lib/api"
@@ -371,7 +371,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   // figure; the app's monetization markup is applied below.
   const dynamicEstimatedCost = useLiveRunEstimate(
     { nodes, edges, inputValues, enabled: hasCredits() },
-    { getCachedCredits, prefetchModelCredits },
+    { getCachedCredits, prefetchModelCredits, isModelUnpriced },
   )
   // Mirror the live base figure into the presentation store so other consumers
   // see it (it was seeded with the server's static figure at load).
@@ -1000,7 +1000,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   }, [settings.cardMeta])
 
   // Render helpers for input/output cards
-  const renderInputCard = useCallback((node: WorkflowNode, variant?: "composer") => {
+  const renderInputCard = useCallback((node: WorkflowNode, variant?: "composer", maxLength?: number) => {
     const meta = settings.cardMeta?.[node.id]
     return (
       <InputCard
@@ -1018,6 +1018,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
         display={getMergedDisplay(node)}
         inputMode={meta?.inputMode}
         minLines={meta?.minLines}
+        maxLength={maxLength}
       />
     )
   }, [nodes, edges, isFullscreen, getInputSliceMap, getMergedDisplay, presUpdateInput, inputsReadOnly, isShareReadOnly, isRunning, isTerminal, handleOpenMedia, inputRefMaps, settings.cardMeta])
@@ -1339,7 +1340,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
         case "node": {
           const node = nodeMap.get(item.nodeId)
           if (!node) return null
-          return renderInputCard(node)
+          return renderInputCard(node, undefined, item.maxLength)
         }
         case "field": {
           const node = nodeMap.get(item.nodeId)
@@ -1366,6 +1367,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                 }
               }}
               allowedValues={item.allowedValues}
+              maxLength={item.maxLength}
               readOnly={inputsReadOnly ?? (isShareReadOnly || isRunning || isTerminal)}
               customLabel={customTitle}
             />

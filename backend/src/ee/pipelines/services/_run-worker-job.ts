@@ -41,6 +41,11 @@ export interface RunPipelineWorkerJobArgs {
    *  / `buildLipSyncCreditId()` for variable-priced models, or a static string
    *  like "extract-frame" / "combine-videos" for fixed-price ones. */
   modelIdentifier: string
+  /** A computed amount the reservation takes instead of `modelIdentifier`'s
+   *  row — what the speech services pass while length pricing is on
+   *  (`speechChargeOverride`, lib/speech-estimate.ts: the one override for
+   *  every seam that holds a payload). Undefined = the row, as always. */
+  creditOverride?: number
   /** Asset type written by the worker's `createAssetFromJob` call. Used to
    *  scope the `pollForAssetId` lookup. */
   assetType: "image" | "video" | "audio"
@@ -86,6 +91,7 @@ export async function runPipelineWorkerJob(
     jobName,
     buildPayload,
     modelIdentifier,
+    creditOverride,
     assetType,
     pickOutputUrl,
     missingOutputError,
@@ -124,7 +130,9 @@ export async function runPipelineWorkerJob(
   const jobId = job.id as string
 
   // 2. Reserve credits via the canonical service. Worker commits/refunds the
-  //    real cost on its own — we don't double-commit here.
+  //    real cost on its own — we don't double-commit here. A computed override
+  //    rides the options only when a wrapper passes one (the options are
+  //    otherwise exactly what they always were).
   const { CreditsService } = await import("../../billing/credits.js")
   const reservation = await CreditsService.reserveCredits(
     userId,
@@ -132,7 +140,7 @@ export async function runPipelineWorkerJob(
     modelIdentifier,
     0,
     0,
-    { isAppRun: false, billingContext },
+    { isAppRun: false, billingContext, ...(creditOverride !== undefined ? { creditOverride } : {}) },
   )
 
   // 3. Enqueue with the flat payload shape the worker handler destructures.

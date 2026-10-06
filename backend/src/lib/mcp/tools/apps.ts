@@ -133,7 +133,7 @@ export function registerApps({ server, session, fastify }: RegisterAppsOpts): vo
       {
         title: "Get App Inputs",
         description:
-          "Return the typed input schema for an app. Each entry has a `key`, `label`, `type` (image / video / audio / text / select / number / boolean / list), `required`, and optional `options` for selects. Pass these `key`s to `run_app({ slug, inputs })`.",
+          "Return the typed input schema for an app. Each entry has a `key`, `label`, `type` (image / video / audio / text / select / number / boolean / list), `required`, optional `options` for selects, and optional `maxLength` for a text input the publisher capped (a longer value is refused). Pass these `key`s to `run_app({ slug, inputs })`.",
         inputSchema: {
           slug: z.string().min(1).describe("App slug, e.g. 'photo-restoration'"),
         },

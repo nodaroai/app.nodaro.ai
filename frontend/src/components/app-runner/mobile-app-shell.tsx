@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button"
 import { useAuth, refreshAuth, setAuthFromTokens } from "@/hooks/use-auth"
 import { useAppRunnerStore } from "@/hooks/use-app-runner-store"
 import { usePresentationStore } from "@/hooks/use-presentation-store"
-import { useUserCredits, getCachedCredits, prefetchModelCredits } from "@/ee/hooks/queries/use-credits-queries"
+import { useUserCredits, getCachedCredits, prefetchModelCredits, isModelUnpriced } from "@/ee/hooks/queries/use-credits-queries"
 import { useLiveRunEstimate } from "@/hooks/use-live-run-estimate"
 import { hasCredits } from "@/lib/edition"
 import { formatCreditUnits } from "@/lib/credit-units"
@@ -169,7 +169,7 @@ export function MobileAppShell({
   // one is already marked up, so it is used as-is until the first compute.
   const liveBaseEstimate = useLiveRunEstimate(
     { nodes: presNodes, edges: presEdges, inputValues: presInputValues, enabled: hasCredits() },
-    { getCachedCredits, prefetchModelCredits },
+    { getCachedCredits, prefetchModelCredits, isModelUnpriced },
   )
   const estimatedCost = useMemo(() => {
     if (liveBaseEstimate <= 0) return presEstimatedCost
@@ -455,6 +455,7 @@ export function MobileAppShell({
               onOpenMedia={handleOpenMedia}
               onOpenConfig={setConfigNode}
               display={getMergedDisplay(node)}
+              maxLength={item.maxLength}
             />
           )
         }
@@ -477,6 +478,7 @@ export function MobileAppShell({
               nodeData={mergedNodeData}
               onChange={(v) => presUpdateInput(item.nodeId, dataKey, v)}
               allowedValues={item.allowedValues}
+              maxLength={item.maxLength}
               readOnly={inputsReadOnly || isRunning}
               customLabel={customTitle}
             />

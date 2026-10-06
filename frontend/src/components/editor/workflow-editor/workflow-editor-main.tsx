@@ -71,7 +71,8 @@ import { queryClient } from "@/lib/query-client";
 import { hasCredits } from "@/lib/edition";
 import { creditUnits, creditUnitLabel } from "@/lib/credit-units";
 import { useBillingSurface } from "@/hooks/use-billing-surface";
-import { getCachedCredits, prefetchModelCredits } from "@/ee/hooks/use-model-credits";
+import { getCachedCredits, prefetchModelCredits, isModelUnpriced } from "@/ee/hooks/use-model-credits";
+import { speechUnitIdsFor } from "@/lib/speech-estimate";
 import { getModelIdentifier } from "@/components/editor/config-panels/helpers";
 import { useStats } from "@/hooks/queries/use-stats-queries";
 import { InsufficientCreditsModal } from "@/ee/components/credits/InsufficientCreditsModal";
@@ -524,9 +525,16 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       setWorkflowCreditEstimateVersion(useWorkflowStore.getState().loadedVersion);
     };
 
-    // Collect model identifiers and check which need fetching
-    const modelIds = [...new Set(executableNodes.map((n) => getModelIdentifier(n, storeEdges, storeNodes, rerunIds)).filter(Boolean))];
-    const uncached = modelIds.filter((m) => getCachedCredits(m) === undefined);
+    // Collect model identifiers and check which need fetching. A speech node's
+    // unit row is asked for too: until it is cached, getModelIdentifier quotes
+    // the flat row, so without this a node scrolled off-canvas (no pill mounted)
+    // could never learn that the server prices speech by length. An id the
+    // server has reported priced nowhere (length pricing off) is not asked again.
+    const modelIds = [...new Set([
+      ...executableNodes.map((n) => getModelIdentifier(n, storeEdges, storeNodes, rerunIds)),
+      ...speechUnitIdsFor(executableNodes, storeNodes, storeEdges),
+    ].filter(Boolean))];
+    const uncached = modelIds.filter((m) => getCachedCredits(m) === undefined && !isModelUnpriced(m));
 
     if (uncached.length > 0) {
       // Wait for real costs before showing estimate

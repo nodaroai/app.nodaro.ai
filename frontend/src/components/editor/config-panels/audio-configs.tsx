@@ -84,6 +84,10 @@ import { ConnectedAudioSources } from "./connected-audio-sources"
 import { FinalAudioPromptPreview } from "./final-audio-prompt-preview"
 import { LIP_SYNC_MODELS, TTS_MODELS, DIALOGUE_MODELS, SUNO_MODELS } from "./model-options"
 import { PromptLengthCounter } from "./prompt-length-counter"
+// The speech price as the run reserves it (flat, or by length when the server
+// serves the unit row) — an `ee/` hook; allowlisted in tools/check-ee-imports.mjs
+// like the sibling config panels' credit hooks.
+import { useSpeechPricing, type SpeechPricing } from "@/ee/hooks/use-speech-pricing"
 import { SUNO_FIELD_EDIT_META, SunoFieldEditor, type SunoEditField } from "./suno-field-editor"
 import { SunoFieldAiButton, isSunoAiField } from "@/components/nodes/suno-field-ai-button"
 import { InjectedReferenceList } from "./injected-reference-list"
@@ -139,10 +143,30 @@ const SUNO_FIELD_LABEL_KEYS: Record<SunoEditField, MessageKey> = {
   negativeStyle: "audiocfg.negativeStyleOptional",
 }
 
+/**
+ * One line under a speech node's text: what the run will reserve while the
+ * server prices speech by length — exact for a literal text (credits ·
+ * characters · units × unit), a range for a text that arrives at run time.
+ * Nothing on the flat path (the pill already says the row).
+ */
+function SpeechPriceLine({ price }: { price: SpeechPricing }) {
+  const t = useT()
+  const q = price.quote
+  if (!q) return null
+  return (
+    <p className="text-[10px] text-muted-foreground" data-testid="speech-price-line">
+      {q.exact
+        ? t("audiocfg.speechPriceExact", { credits: q.credits, chars: q.chars, units: q.units, unit: q.unit })
+        : t("audiocfg.speechPriceRange", { min: q.range?.min ?? q.credits, max: q.credits })}
+    </p>
+  )
+}
+
 export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<TextToSpeechData> & { nodeId?: string }) {
   const localizeOption = useLocalizeOptionLabel()
   const t = useT()
   const textSource = data.textSource || "connected"
+  const price = useSpeechPricing(nodeId, "text-to-speech", data as unknown as Record<string, unknown>)
   // The model the dropdown, the description hint and the length counter show: a node
   // with no model runs on DEFAULT_TTS_PROVIDER up to that model's cap (every run lane's
   // omitted-provider rule; text over the cap runs on turbo, which this display does not
@@ -225,6 +249,7 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
           )}
         </MappableField>
       )}
+      <SpeechPriceLine price={price} />
       <div>
         <Label>{t("field.voice")}</Label>
         <VoiceBrowser
@@ -2036,6 +2061,8 @@ export function TextToDialogueConfig({ data, onUpdate, sources, nodeRefs, refMap
   const maxChars = getDialogueCapabilities(data.provider).maxChars
   // Probed ElevenLabs hard limit: an 11th unique voice → 400 max_voices_exceeded.
   const uniqueVoices = new Set(dialogue.filter((l) => l.voice).map((l) => l.voice)).size
+  // The script is on the node (no graph context needed): exact for literal lines.
+  const price = useSpeechPricing(undefined, "text-to-dialogue", data as unknown as Record<string, unknown>)
 
   const scriptSource = sources.find(
     (s) => s.type === "generate-script" && s.sourceHandle === "dialogue"
@@ -2119,6 +2146,7 @@ export function TextToDialogueConfig({ data, onUpdate, sources, nodeRefs, refMap
         </div>
       </div>
       <p className="text-[10px] text-muted-foreground -mt-2">{t("audiocfg.hintDialogueRecommended")}</p>
+      <SpeechPriceLine price={price} />
 
       {scriptDialogue.length > 0 && (
         <Button

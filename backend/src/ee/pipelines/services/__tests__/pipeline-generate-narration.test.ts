@@ -23,10 +23,16 @@ vi.mock("../../../billing/credits.js", () => ({
 vi.mock("../../../../providers/video/ffmpeg-utils.js", () => ({
   getVideoDuration: vi.fn().mockResolvedValue(12.5),
 }))
+// Seam 3 — the one job override (lib/speech-estimate.ts). Undefined is the
+// flag-off answer (the flat row reserves); a number is what the job reserves.
+vi.mock("../../../../lib/speech-estimate.js", () => ({
+  speechChargeOverride: vi.fn().mockResolvedValue(undefined),
+}))
 
 import { videoQueue } from "../../../../lib/queue.js"
 import { CreditsService } from "../../../billing/credits.js"
 import { getVideoDuration } from "../../../../providers/video/ffmpeg-utils.js"
+import { speechChargeOverride } from "../../../../lib/speech-estimate.js"
 import { pipelineGenerateNarration } from "../pipeline-generate-narration.js"
 
 beforeEach(() => {
@@ -178,6 +184,23 @@ describe("pipelineGenerateNarration", () => {
       "u1", "narr-job-1", "elevenlabs-v4", 0, 0, { isAppRun: false, billingContext: { payer: "user", userId: "u1" } },
     )
     expect(videoQueue.add).toHaveBeenCalledWith("text-to-speech", expect.objectContaining({ provider: "elevenlabs-v4" }))
+  })
+
+  // Seam 3 (decided 2026-10-06): the override is computed on the model the
+  // payload sends — here the omitted-provider rule's turbo — and reserved.
+  it("reserves the length-based override on the model it runs as (turbo for an omitted model over the default's cap)", async () => {
+    vi.mocked(speechChargeOverride).mockResolvedValueOnce(264)
+    const supabase = makeSupabaseMock({
+      jobStates: [{ status: "completed", output_data: { audioUrl: "https://r2/narration.mp3" }, credits_actual: 264 }],
+      assetRow: { id: "asset-narr-1" },
+    })
+    const text = "a".repeat(12000)
+    await runUntilSettled(pipelineGenerateNarration({ supabase, pipelineId: "p1", userId: "u1", text }))
+    expect(speechChargeOverride).toHaveBeenCalledWith("text-to-speech", { provider: "elevenlabs-turbo", text }, "elevenlabs-turbo")
+    expect(CreditsService.reserveCredits).toHaveBeenCalledWith(
+      "u1", "narr-job-1", "elevenlabs-turbo", 0, 0,
+      { isAppRun: false, billingContext: { payer: "user", userId: "u1" }, creditOverride: 264 },
+    )
   })
 
   it("never applies the length rule to an explicit model", async () => {

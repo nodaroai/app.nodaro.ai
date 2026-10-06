@@ -15,9 +15,11 @@ interface TextInputCardProps {
   inputMode?: InputMode
   minLines?: number
   promptHelper?: PromptContext
+  /** The exposed input's character limit (the app item's `maxLength`). */
+  maxLength?: number
 }
 
-export function TextInputCard({ label, value, placeholder, onChange, readOnly, refMap, presentationReadOnly, inputMode, minLines, promptHelper }: TextInputCardProps) {
+export function TextInputCard({ label, value, placeholder, onChange, readOnly, refMap, presentationReadOnly, inputMode, minLines, promptHelper, maxLength }: TextInputCardProps) {
   if (presentationReadOnly && refMap) {
     return (
       <GlassCard>
@@ -39,6 +41,7 @@ export function TextInputCard({ label, value, placeholder, onChange, readOnly, r
       mode={inputMode ?? "prompt"}
       minLines={minLines}
       promptHelper={promptHelper}
+      maxLength={maxLength}
     />
   )
 }

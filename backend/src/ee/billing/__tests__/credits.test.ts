@@ -58,6 +58,9 @@ vi.mock("@/lib/config.js", () => ({
   isCommunity: () => false,
   isBusiness: () => false,
   hasAdmin: () => true,
+  // Length-based speech pricing OFF: the estimate's speech branch is inert and
+  // every speech node here prices its flat row — today's arithmetic.
+  speechLengthPricingEnabled: () => false,
 }))
 
 // ---------------------------------------------------------------------------

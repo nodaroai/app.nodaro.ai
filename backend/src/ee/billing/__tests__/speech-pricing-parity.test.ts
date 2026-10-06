@@ -33,22 +33,19 @@ vi.mock("@/ee/billing/credits.js", () => ({
   getModelCreditBaseCost: vi.fn(async (id: string) => ({ creditCost: ROWS[id] ?? 999, isEnabled: true, tierRestriction: null })),
 }))
 
-import { speechCredits, speechUnitCreditId } from "@nodaro/shared"
+import { getDialogueCapabilities, speechCredits, speechUnitCreditId } from "@nodaro/shared"
 import { applyServiceMarkup } from "../service-margin.js"
 import { billableSpeechChars, billableDialogueChars, speechBaseCredits, dialogueBaseCredits, speechRunsAs } from "../../../lib/speech-credits.js"
+import { speechChargeOverride } from "../../../lib/speech-estimate.js"
+import { voicedAddonBaseCredits, voicedAddonCreditId } from "../../../lib/voiced-dialogue-lines.js"
 import { computeSpeechCreditOverride } from "../../../services/workflow-engine/node-executor.js"
 import { buildPayload } from "../../../services/workflow-engine/payload-builder.js"
 import { resolveTextToSpeechGuardProvider } from "../../../routes/text-to-speech.js"
+import { SPEECH_PARITY_CASES } from "../../../lib/__tests__/speech-parity-cases.js"
 
 const SETTINGS = { cost_markup_percent: 10, service_margin_percent: { "elevenlabs-v3": 25, "elevenlabs-turbo": 40 } }
-const CASES: Array<[provider: string | undefined, text: string]> = [
-  ["elevenlabs-v4", ""], ["elevenlabs-v4", "a"], ["elevenlabs-v4", "a".repeat(100)], ["elevenlabs-v4", "a".repeat(101)],
-  ["elevenlabs-v4", "a".repeat(800)], ["elevenlabs-v4", "a".repeat(801)], ["elevenlabs-v4", "a".repeat(10000)],
-  ["elevenlabs-v3", "a".repeat(5000)], ["elevenlabs-v3", "[laughs] " + "a".repeat(700)],
-  ["elevenlabs-turbo", "[whispers] [laughs] " + "a".repeat(1000)], ["elevenlabs-turbo", "a".repeat(40000)],
-  ["elevenlabs-multilingual", "😀".repeat(50)], ["elevenlabs", "a".repeat(1000)],
-  [undefined, "a".repeat(100)], [undefined, "a".repeat(12000)],
-]
+// ONE table for every parity suite (the workflow estimate and the UGC quote read it too).
+const CASES = SPEECH_PARITY_CASES
 
 beforeEach(() => { flag.on = true; mockGetAppSettings.mockResolvedValue(SETTINGS) })
 
@@ -67,7 +64,28 @@ describe("speech pricing — the seams agree (flag on)", () => {
       // per-service margin on turbo reaches both (SETTINGS carries one) — same number, whichever seam.
       expect(speechRunsAs(built.modelIdentifier)).toBe(speechRunsAs(guardProvider))
       expect(await computeSpeechCreditOverride(built.jobName, built.payload, built.modelIdentifier)).toBe(expectedCharge)
+      // Seam 3 reads the lifted override directly (the pipeline services): the same function, the same number.
+      expect(await speechChargeOverride(built.jobName, built.payload, built.modelIdentifier)).toBe(expectedCharge)
     }
+    // PR 1B: a sole character voice on this model voices the line as its own text-to-speech
+    // request (joined, unclamped, tags stripped where the model does not perform them) — the
+    // guard's base for the same text. The planner drops a line over the dialogue total cap; a
+    // voice that names NO model is sent to the fallback model (its own rule), not the REST
+    // route's omitted-provider rule, so the omitted rows are not compared here.
+    if (provider !== undefined && text.length <= getDialogueCapabilities("elevenlabs-dialogue").maxChars) {
+      const body = { dialogue: [{ speaker: "Anna", line: text }], characterVoices: [{ voiceId: "v", ttsProvider: provider, speaker: "Anna" }] }
+      expect(voicedAddonCreditId(body)).toBe(speechRunsAs(guardProvider))
+      expect(await voicedAddonBaseCredits(body)).toBe(expectedBase)
+    }
+  })
+
+  it("the voiced add-on for a multi-voice cast is the dialogue script's base on the cast's dialogue model", async () => {
+    const lines = [{ speaker: "Anna", line: "a".repeat(1234) }, { speaker: "Ben", line: "[laughs] " + "b".repeat(900) }]
+    const voices = [{ voiceId: "va", ttsProvider: "elevenlabs-v4", speaker: "Anna" }, { voiceId: "vb", ttsProvider: "elevenlabs-v4", speaker: "Ben" }]
+    const body = { dialogue: lines, characterVoices: voices }
+    // Every voice on v4 → the v4 dialogue model; its script is the sum of the lines.
+    expect(voicedAddonCreditId(body)).toBe("elevenlabs-dialogue-v4")
+    expect(await voicedAddonBaseCredits(body)).toBe(await dialogueBaseCredits(lines.map((l) => ({ text: l.line, voice: l.speaker })), "elevenlabs-dialogue-v4"))
   })
 
   it("the REST route prices the clamped text: 6,000 characters on v3 reserve what 5,000 do", async () => {
@@ -96,7 +114,16 @@ describe("speech pricing — flag off is today", () => {
     flag.on = false
     for (const [provider, text] of CASES) {
       expect(await computeSpeechCreditOverride("text-to-speech", { provider, text }, provider ?? "elevenlabs-v4")).toBeUndefined()
+      expect(await speechChargeOverride("text-to-speech", { provider, text }, provider ?? "elevenlabs-v4")).toBeUndefined()
     }
+  })
+
+  it("the voiced add-on is the cast's dialogue model's flat row, whatever the text", async () => {
+    flag.on = false
+    const sole = { dialogue: [{ speaker: "Anna", line: "a".repeat(3000) }], characterVoices: [{ voiceId: "v", ttsProvider: "elevenlabs-turbo", speaker: "Anna" }] }
+    expect(await voicedAddonBaseCredits(sole)).toBe(ROWS["elevenlabs-dialogue"])
+    const v4Cast = { dialogue: [{ speaker: "A", line: "x" }, { speaker: "B", line: "y" }], characterVoices: [{ voiceId: "a", ttsProvider: "elevenlabs-v4", speaker: "A" }, { voiceId: "b", ttsProvider: "elevenlabs-v4", speaker: "B" }] }
+    expect(await voicedAddonBaseCredits(v4Cast)).toBe(ROWS["elevenlabs-dialogue-v4"])
   })
   // The route side of "flag off" is pinned in routes/__tests__/speech-length-pricing-routes.test.ts
   // (no computeCredits is passed at registration).
