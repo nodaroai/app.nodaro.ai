@@ -5521,7 +5521,7 @@ request methods return `{ jobId }` (`EditJobResult`) — poll with
 | `audioSync(input)` | `POST /v1/audio-sync` | Keyless: measure how far apart 2–6 recordings' clocks are, from their sound. |
 | `applyEdl(input)` | `POST /v1/apply-edl` | Render an edit decision list (EDL) into a video or audio cut. |
 | `cameraSwitch(input)` | `POST /v1/camera-switch` | Multicam: put each cut of an EDL on the camera of whoever is speaking (Cloud; flat price). |
-| `editPlan(input)` | `POST /v1/edit-plan` | Transcript-driven planner (tighten / clips / chapters). On a self-hosted install it relays to nodaro.ai (`503 nodaro_connection_required` when not connected). |
+| `editPlan(input)` | `POST /v1/edit-plan` | Transcript-driven planner (tighten / clips / chapters / trailer). On a self-hosted install it relays to nodaro.ai (`503 nodaro_connection_required` when not connected). |
 | `remapTranscript(edl, transcript)` | — (local) | PURE client-side transform — remaps a transcript through an EDL. **No request.** |
 
 #### `silenceDetect(input)`
@@ -5632,7 +5632,7 @@ editPlan(input: EditPlanInput): Promise<EditJobResult>
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `mode` | `EditPlanMode` | yes | `"tighten"` \| `"clips"` \| `"chapters"`. |
+| `mode` | `EditPlanMode` | yes | `"tighten"` \| `"clips"` \| `"chapters"` \| `"trailer"`. A trailer plan's `output_data` is one `Edl`, like tighten. |
 | `planTier` | `EditPlanTier` | yes | `"economy"` \| `"standard"` \| `"premium"` — affects quality and the credit bucket. |
 | `transcript` | `Transcript` | yes | The timed transcript driving the plan. |
 | `sources` | `EditPlanSource[]` | yes | 1–6 media sources. Each: `{ id, url, kind: "video" \| "audio", role?, speakers?, offsetMs? }`. A source's own `offsetMs` wins over a measured one. |
@@ -5673,7 +5673,7 @@ const { jobId } = await client.edit.editPlan({
 ```
 
 Read the finished job's `output_data` with `unwrapEditPlanOutput` — it returns
-an `Edl` (`tighten`), a bare `Edl[]` (`clips`, unwrapped from `EdlClipSet`), or a
+an `Edl` (`tighten`, `trailer`), a bare `Edl[]` (`clips`, unwrapped from `EdlClipSet`), or a
 `ChapterSet` (`chapters`), stripping the relay's `viaNodaroCloud` marker.
 
 ```ts

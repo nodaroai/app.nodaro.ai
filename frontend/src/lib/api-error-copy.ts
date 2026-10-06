@@ -71,6 +71,8 @@ const REASON_KEY_BY_CODE: Readonly<Record<string, MessageKey>> = {
   edition_required: "apiErr.reason.unavailableHere",
   not_available: "apiErr.reason.unavailableHere",
   feature_disabled: "apiErr.reason.unavailableHere",
+  // POST /v1/edit-plan: an unknown mode, or one this server does not plan yet.
+  mode_not_available: "apiErr.reason.editPlanModeUnavailable",
   billing_unavailable: "apiErr.reason.billingUnavailable",
   conflict: "apiErr.reason.changedElsewhere",
   concurrent_modification: "apiErr.reason.changedElsewhere",

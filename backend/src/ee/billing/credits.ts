@@ -168,12 +168,16 @@ for (const analysisProvided of [true, false]) {
 }
 
 // ── Edit Plan (podcast editing, edit-plan node) — per-source-minute × tier
-// duration-bucketed reserve holds, plus a flat component on `clips` only.
+// duration-bucketed reserve holds, plus a flat component on `clips` and
+// `trailer` (trailer reuses the clips flat, decided 2026-09-23).
 // Cloud-EXCLUSIVE + relayed: billing happens on the connected cloud account, so
 // these are the DB-down fallback (a seeded model_pricing row wins at runtime —
 // migration 432). The scheme MUST match the plugin's `editPlanStaticCreditCosts()`
-// exactly (id shape `edit-plan:<mode>:<tier>:<bucket>m`, 3 modes × 3 tiers × 6
-// buckets = 54 composites + the bare `edit-plan` = the MAX of the whole table).
+// exactly (id shape `edit-plan:<mode>:<tier>:<bucket>m`, 4 modes × 3 tiers × 6
+// buckets = 72 composites + the bare `edit-plan` = the MAX of the whole table).
+// The 18 trailer composites (migration 465) equal their clips twins row for row,
+// so the bare MAX stays 1480 — an `ON CONFLICT DO NOTHING` seed could not raise
+// the live bare row anyway.
 //
 // PRICING STATUS — FINALIZED. The staging cost probe is DONE: an edit-plan pass
 // (LLM only) costs a negligible amount even for a full-length episode, so these
@@ -191,15 +195,18 @@ const EDIT_PLAN_CREDITS_PER_MINUTE_BY_TIER: Readonly<Record<EditPlanTierT, numbe
   premium: 8,
 }
 // Finalized launch default (admin-retunable): flat component added to `clips`
-// only (the per-clip scoring/hook pass); tighten and chapters have no flat term.
+// and `trailer` (the scoring/hook pass over the whole transcript); tighten and
+// chapters have no flat term.
 const EDIT_PLAN_CLIPS_FLAT_BY_TIER: Readonly<Record<EditPlanTierT, number>> = {
   economy: 10,
   standard: 20,
   premium: 40,
 }
+/** The modes that carry the flat term: clips, and trailer at the clips flat. */
+const EDIT_PLAN_FLAT_MODES: ReadonlySet<string> = new Set(["clips", "trailer"])
 function editPlanCredits(mode: string, tier: EditPlanTierT, bucketMinutes: number): number {
   const perMinute = EDIT_PLAN_CREDITS_PER_MINUTE_BY_TIER[tier] * bucketMinutes
-  const flat = mode === "clips" ? EDIT_PLAN_CLIPS_FLAT_BY_TIER[tier] : 0
+  const flat = EDIT_PLAN_FLAT_MODES.has(mode) ? EDIT_PLAN_CLIPS_FLAT_BY_TIER[tier] : 0
   return Math.max(1, Math.ceil(perMinute + flat))
 }
 const EDIT_PLAN_STATIC: Record<string, number> = {}
@@ -211,7 +218,7 @@ for (const mode of EDIT_PLAN_MODES) {
     }
   }
 }
-// Bare fallback = the MAX of the whole table (= premium clips 180m = 1480): the
+// Bare fallback = the MAX of the whole table (= premium clips or trailer 180m = 1480): the
 // unknown-mode-AND-unknown-duration id feeds a pre-run balance gate, so it must
 // bound every row (mirrors the video-analysis bare-id rationale + the plugin).
 EDIT_PLAN_STATIC["edit-plan"] = Math.max(...Object.values(EDIT_PLAN_STATIC))
@@ -481,8 +488,9 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   // model_pricing by migration 302.
   ...VIDEO_AUDIT_STATIC,
   // ── Edit Plan (podcast editing) — FINALIZED (see the
-  // EDIT_PLAN_STATIC block above). Bare `edit-plan` + all 54 composites, written
-  // to model_pricing by migration 432; the DB rows win at runtime.
+  // EDIT_PLAN_STATIC block above). Bare `edit-plan` + all 72 composites, written
+  // to model_pricing by migrations 432 (tighten/clips/chapters) and 465
+  // (trailer); the DB rows win at runtime.
   ...EDIT_PLAN_STATIC,
   // ── Camera Switch (podcast B5) — FLAT per run (decided 2026-10-03):
   // deterministic code plus a length probe per camera, no model. A clips

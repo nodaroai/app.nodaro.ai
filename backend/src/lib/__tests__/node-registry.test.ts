@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { NODE_REGISTRY } from "../node-registry.js"
 import { STATIC_CREDIT_COSTS } from "../../ee/billing/credits.js"
-import { VIDEO_ANALYSIS_BUCKET_CREDITS, VIDEO_AUDIT_BUCKET_CREDITS } from "@nodaro/shared"
+import { EDIT_PLAN_MODES, VIDEO_ANALYSIS_BUCKET_CREDITS, VIDEO_AUDIT_BUCKET_CREDITS } from "@nodaro/shared"
 
 describe("NODE_REGISTRY: reduce", () => {
   it("has a 'reduce' entry with label, category=control, outputType=text", () => {
@@ -117,5 +117,13 @@ describe("NODE_REGISTRY: edit-plan", () => {
     const fields = NODE_REGISTRY.find((n) => n.type === "edit-plan")?.inputSchema?.fields ?? []
     expect(fields.find((f) => f.key === "sources")).toMatchObject({ type: "array", required: true })
     expect(fields.find((f) => f.key === "offsets")).toBeUndefined()
+  })
+
+  // GET /v1/nodes serves the description verbatim. The mode options derive from
+  // EDIT_PLAN_MODES, so the prose must name every mode they offer or an agent
+  // reading discovery never learns a mode exists.
+  it("describes every mode its mode field offers", () => {
+    const description = NODE_REGISTRY.find((n) => n.type === "edit-plan")?.description.toLowerCase() ?? ""
+    for (const mode of EDIT_PLAN_MODES) expect(description).toContain(mode)
   })
 })

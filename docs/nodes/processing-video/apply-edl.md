@@ -129,6 +129,7 @@ The cost on the node, the **Run** button and the run-confirm dialog is an **esti
 
 - **Tighten** is priced at the **episode's full length** (the longer of the master source and the transcribed media). A tightened cut is normally shorter, so this over-quotes. With no recorded length it prices the 180-minute ceiling — see [Edit Plan](./edit-plan.md#what-the-estimate-shows-before-you-run).
 - **Clips** is priced **per clip at twice the clip-length setting** (the setting is a target the planner aims near, not a limit; with no setting, 90 seconds is assumed), never more than the episode, multiplied by the **clip count** (8 when unset, at most 50). Every node fed from the render with an *each* edge — such as Add Captions — is counted per clip too. A planner that returns much longer clips than the target can cost more than the estimate.
+- **Trailer** is priced at **twice the longest teaser the mode plans** (40 seconds), so 2 minutes, never more than the episode. A trailer's length is fixed at 20–40 seconds (see [Trailer length](./edit-plan.md#trailer-length)), so the estimate always covers it.
 - **An EDL from any other node that re-runs** prices the 180-minute ceiling.
 
 The balance check before a run compares against this estimate. You are **charged for the length of the cut that is rendered** — computed from its EDL — never for the estimate.

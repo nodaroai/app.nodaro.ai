@@ -136,6 +136,27 @@ describe("wired from Edit Plan (clips): ONE clip — the fan-out multiplier coun
   })
 })
 
+describe("wired from Edit Plan (trailer): one short teaser", () => {
+  const trailer = (planData: Record<string, unknown> = {}, masterSec = 60 * 60) => {
+    const master = node("m", "upload-audio", { metadata: { durationSeconds: masterSec } })
+    const plan = node("ep", "edit-plan", { mode: "trailer", ...planData })
+    const ae = node("ae", "apply-edl", {})
+    return { ae, nodes: [master, plan, ae], edges: [edge("m", "ep", "sources"), edge("ep", "ae", "edl")] }
+  }
+  it("re-planning: twice the longest teaser (40 s), not the whole episode", () => {
+    const g = trailer()
+    expect(resolveApplyEdlEstimateMinutes(g.ae, g.nodes, g.edges, reruns("ep"))).toBe(2)
+  })
+  it("a teaser is never priced longer than the episode it is cut from", () => {
+    const g = trailer({}, 50) // a 50-second master
+    expect(resolveApplyEdlEstimateMinutes(g.ae, g.nodes, g.edges, reruns("ep"))).toBe(1)
+  })
+  it("NOT re-planning: the persisted teaser, exactly", () => {
+    const g = trailer({ generatedJson: edlOf(seg(0, 35_000)) })
+    expect(resolveApplyEdlEstimateMinutes(g.ae, g.nodes, g.edges, NONE)).toBe(1)
+  })
+})
+
 describe("any other producer", () => {
   const jp = (data: Record<string, unknown>) => node("jp", "json-process", data)
   const ae = node("ae", "apply-edl", {})

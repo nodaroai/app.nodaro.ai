@@ -5,7 +5,7 @@ import { nodaroClient } from "@/lib/nodaro-client"
 import type { SubWorkflowRouteSnapshot, SocialConnection, CharacterVoice, JobErrorHint } from "@/types/nodes"
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
 import { FLUX_LORA_CHARACTER_MODEL_ID } from "@nodaro/shared"
-import type { ExpandedVideoOverlayRequest } from "@nodaro/shared"
+import type { ExpandedVideoOverlayRequest, EditPlanMode } from "@nodaro/shared"
 import type { Pro3DRenderQuote, Pro3DRenderSource, ReduceMeta, ImageCriticMode, WorkflowExport, WorkflowImportReport, ReferenceSheet, TtsProvider, SheetType, SheetSkin, SheetFlavour, EntityKind, CharacterAttachColumn, ObjectAttachColumn, CreatureAttachColumn, LocationAttachColumn, CommunityCard, CommunitySort } from "@nodaro/shared"
 import type { WardrobeValue, PersonValue } from "@nodaro/prompts"
 export type { CommunityCard } from "@nodaro/shared"
@@ -3353,12 +3353,14 @@ export async function applyEdl(params: {
 
 /**
  * edit-plan (podcast editing): turn a timed transcript into an EDL plan
- * (tighten / clips / chapters). Cloud-EXCLUSIVE + relayed — on a self-host the
+ * (tighten / clips / chapters / trailer). Cloud-EXCLUSIVE + relayed — on a self-host the
  * route relays to nodaro.ai. `transcript` is sent as an OBJECT (the plugin
  * coerces an object, never a string); `sources` carries {id,url,kind,role,…}.
  */
 export async function editPlan(params: {
-  mode: "tighten" | "clips" | "chapters"
+  /** A known mode, or a saved one this app does not know — sent as is, so the
+   *  server refuses it (it is never planned as tighten). */
+  mode: EditPlanMode | (string & {})
   planTier?: "economy" | "standard" | "premium"
   transcript: unknown
   silence?: unknown

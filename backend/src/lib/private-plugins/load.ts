@@ -9,6 +9,7 @@ import type {
   PluginEngines,
   PluginHandlerFn,
   PluginServices,
+  PluginSupports,
   PluginToolkit,
   PrivatePluginsModule,
   PromptTable,
@@ -86,6 +87,15 @@ export interface LoadPrivatePluginsResult {
    */
   recipes: RecipeTable
   /**
+   * Merged from each loaded plugin's `supports()` — what the plugin's own
+   * handlers can do (plugin → host). Read by the worker that runs those
+   * handlers (`video-worker.ts` gates edit-plan modes on it). Also published
+   * to `getPluginSupports()` (a leaf registry), which the API server's
+   * `GET /v1/edit-plan/capabilities` reads at request time. Empty after a
+   * failed load and on community/business: no plugin, nothing declared.
+   */
+  supports: PluginSupports
+  /**
    * Present only when `opts.daemons` asked for it: every plugin's daemons,
    * in plugin order, already validated as a hostable list (unique, well-formed
    * names). Absent after a failed load — the host reads that as none.
@@ -106,6 +116,8 @@ export { getPluginEngines } from "./engine-registry.js"
 import { setPluginEngines } from "./engine-registry.js"
 export { getPluginRecipes } from "./recipe-registry.js"
 import { setPluginRecipes } from "./recipe-registry.js"
+export { getPluginSupports } from "./supports-registry.js"
+import { setPluginSupports } from "./supports-registry.js"
 
 /**
  * The private plugins' service surface, or `{}` when no plugin provided one
@@ -138,11 +150,12 @@ function emptyResult(): LoadPrivatePluginsResult {
   pluginServices = {}
   setPluginEngines({})
   setPluginRecipes({})
+  setPluginSupports({})
   // Fresh object per call — loadPrivatePlugins() is called from more than
   // one boot path (app.ts + video-worker.ts, Task 10), and callers merge
   // into `handlers` (e.g. Object.assign(allHandlers, handlers)). Sharing one
   // mutable object across calls would alias that merge across processes.
-  return { handlers: {}, loaded: [], engines: {}, prompts: {}, services: {}, recipes: {} }
+  return { handlers: {}, loaded: [], engines: {}, prompts: {}, services: {}, recipes: {}, supports: {} }
 }
 
 function isOptionalMode(): boolean {
@@ -262,6 +275,7 @@ export async function loadPrivatePlugins(
   const prompts: PromptTable = {}
   const services: PluginServices = {}
   const recipes: RecipeTable = {}
+  const supports: PluginSupports = {}
   let daemons: readonly PluginDaemon[] = []
 
   for (const plugin of plugins) {
@@ -293,6 +307,9 @@ export async function loadPrivatePlugins(
       if (plugin.recipes) {
         Object.assign(recipes, plugin.recipes())
       }
+      if (plugin.supports) {
+        Object.assign(supports, plugin.supports())
+      }
       if (plugin.prompts) {
         const pluginPrompts = plugin.prompts()
         Object.assign(prompts, pluginPrompts)
@@ -316,6 +333,7 @@ export async function loadPrivatePlugins(
   pluginServices = services
   setPluginEngines(engines)
   setPluginRecipes(recipes)
+  setPluginSupports(supports)
   return {
     handlers,
     loaded,
@@ -323,6 +341,7 @@ export async function loadPrivatePlugins(
     prompts,
     services,
     recipes,
+    supports,
     ...(opts.daemons ? { daemons: [...daemons] } : {}),
   }
 }

@@ -194,6 +194,7 @@ export interface EditPlanInput {
    *   - `"clips"`    → an {@link EdlClipSet} (`{ version, clips: Edl[] }`);
    *                    `unwrapEditPlanOutput` returns the bare `Edl[]`.
    *   - `"chapters"` → a {@link ChapterSet} (`{ version, chapters: [...] }`).
+   *   - `"trailer"`  → an `Edl` (one short teaser cut from the strongest moments).
    */
   mode: EditPlanMode
   /** Reasoning tier — affects plan quality AND the credit bucket. */
@@ -234,7 +235,7 @@ export interface EditPlanInput {
   count?: number
   /** `"clips"` mode only: target duration per clip, in seconds. */
   targetDurationSec?: number
-  /** Target aspect for cut clips. */
+  /** Target aspect for cut clips (`"clips"`) or the teaser (`"trailer"`). */
   targetAspect?: "16:9" | "9:16" | "1:1" | "4:5"
   /** Target platform hint (e.g. a social platform name). */
   platform?: string
@@ -351,8 +352,8 @@ export class EditResource {
    * Plan a transcript-driven cut (`POST /v1/edit-plan`). Reads a timed
    * transcript (plus optional silence ranges) and the media sources, and plans
    * the edit. The finished job's `output_data` holds the plan: an `Edl`
-   * (`"tighten"`), an {@link EdlClipSet} (`"clips"`), or a {@link ChapterSet}
-   * (`"chapters"`) — normalize it with {@link unwrapEditPlanOutput}.
+   * (`"tighten"` or `"trailer"`), an {@link EdlClipSet} (`"clips"`), or a
+   * {@link ChapterSet} (`"chapters"`) — normalize it with {@link unwrapEditPlanOutput}.
    *
    * On a self-hosted install the request relays to nodaro.ai and needs the
    * install connected (a 503 `code: "nodaro_connection_required"` otherwise);

@@ -1,7 +1,7 @@
 ---
 node_type: edit-plan
-generated_at: 2026-10-05T15:27:08.173Z
-generated_from: 605638ce8
+generated_at: 2026-10-06T00:55:56.887Z
+generated_from: b3bda1615
 ---
 
 # Edit Plan
@@ -20,7 +20,7 @@ generated_from: 605638ce8
 **Optional data fields:**
 - `promptPrefix?: string`
 - `promptSuffix?: string`
-- `mode?: "tighten" | "clips" | "chapters"`
+- `mode?: "tighten" | "clips" | "chapters" | "trailer"`
 - `planTier?: "economy" | "standard" | "premium"`
 - `sourceConfig?: Record<string, EditPlanSourceConfig>`
 - `sourceOrder?: string[]`

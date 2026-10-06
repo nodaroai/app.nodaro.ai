@@ -15,13 +15,15 @@ import { EDL_VERSION } from "./edl.js"
 //  is shared. Mirrors the plugin's own (D13-local) pricing.ts scheme.
 // ─────────────────────────────────────────────────────────────────────────
 
-export type EditPlanMode = "tighten" | "clips" | "chapters"
+/** `trailer` (Track D1): one short teaser EDL built from the strongest moments,
+ *  priced like `clips` (the per-minute rate plus the clips flat). */
+export type EditPlanMode = "tighten" | "clips" | "chapters" | "trailer"
 export type EditPlanTier = "economy" | "standard" | "premium"
-export const EDIT_PLAN_MODES: readonly EditPlanMode[] = ["tighten", "clips", "chapters"]
+export const EDIT_PLAN_MODES: readonly EditPlanMode[] = ["tighten", "clips", "chapters", "trailer"]
 export const EDIT_PLAN_TIERS: readonly EditPlanTier[] = ["economy", "standard", "premium"]
 /** The coarse duration ladder (MINUTES) a probed source duration rounds UP to;
- *  the composite credit id carries the bucket. 3 modes × 3 tiers × 6 buckets =
- *  54 composites (+ the bare `edit-plan`). */
+ *  the composite credit id carries the bucket. 4 modes × 3 tiers × 6 buckets =
+ *  72 composites (+ the bare `edit-plan`). */
 export const EDIT_PLAN_BUCKET_MINUTES: readonly number[] = [15, 30, 60, 90, 120, 180]
 /** Hard duration cap (design §7.4). */
 export const EDIT_PLAN_MAX_MINUTES = 180
@@ -57,9 +59,18 @@ export function buildEditPlanCreditId(mode: EditPlanMode, tier: EditPlanTier, du
   return `edit-plan:${mode}:${tier}:${editPlanBucketMinutes(durationSec)}m`
 }
 
-/** Narrow an arbitrary value to a known edit-plan mode, defaulting to "tighten". */
+/** Narrow an arbitrary value to a known edit-plan mode, defaulting to "tighten".
+ *  For display and estimates only: anything that DISPATCHES a plan must use
+ *  {@link parseEditPlanMode} and refuse an unknown mode, or that mode is planned
+ *  (and charged) as tighten. */
 export function asEditPlanMode(v: unknown): EditPlanMode {
-  return v === "clips" || v === "chapters" ? v : "tighten"
+  return parseEditPlanMode(v) ?? "tighten"
+}
+
+/** The strict sibling of {@link asEditPlanMode}: the mode when `v` is exactly a
+ *  known edit-plan mode, otherwise `undefined` — never a substitute. */
+export function parseEditPlanMode(v: unknown): EditPlanMode | undefined {
+  return typeof v === "string" && (EDIT_PLAN_MODES as readonly string[]).includes(v) ? (v as EditPlanMode) : undefined
 }
 
 /** Narrow an arbitrary value to a known edit-plan tier, defaulting to "standard". */
@@ -70,13 +81,13 @@ export function asEditPlanTier(v: unknown): EditPlanTier {
 /**
  * Unwrap an `edit-plan` job's `output_data` into the value stored on the node's
  * `data.generatedJson`, which every output extractor then reads. This is the ONE
- * place the three modes are normalized (the same rule on both engines and every
+ * place the modes are normalized (the same rule on both engines and every
  * result-application site, so audit-dag parity can't drift):
  *   - `clips`    → the BARE `Edl[]` (T5: the `list` fan-out reads `Array.isArray`
  *                  on `generatedJson`; each element becomes one JSON-stringified
  *                  item a downstream `edl` input `normalizeEdl`-parses).
  *   - `chapters` → the `{ version, chapters }` object.
- *   - `tighten`  → the `Edl` object at top level.
+ *   - `tighten` / `trailer` → the `Edl` object at top level.
  *
  * The cloud relay object-spreads `output_data` and adds `viaNodaroCloud: true`;
  * that key (and any other bookkeeping) is stripped here. The unwrap lives HERE —
@@ -90,7 +101,7 @@ export function unwrapEditPlanOutput(outputData: unknown): unknown {
   if (Array.isArray(o.clips)) return o.clips
   // chapters: { version, chapters: [...] } → the object, minus bookkeeping.
   if (Array.isArray(o.chapters)) return { version: EDL_VERSION, chapters: o.chapters }
-  // tighten: the Edl object at top level → drop the relay's viaNodaroCloud.
+  // tighten / trailer: the Edl object at top level → drop the relay's viaNodaroCloud.
   const { viaNodaroCloud: _viaNodaroCloud, ...rest } = o
   return rest
 }

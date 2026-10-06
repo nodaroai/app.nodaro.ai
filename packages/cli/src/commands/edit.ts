@@ -1,9 +1,14 @@
 import { Command } from "commander"
 import { readFileSync } from "node:fs"
+import { EDIT_PLAN_MODES, type EditPlanMode } from "@nodaro/shared"
 import type { Edl, Transcript, EditPlanSource, EditPlanInput, SilenceRanges, AudioSyncSource, CameraSwitchInput } from "@nodaro/sdk"
 import { buildClient, handleError } from "../client.js"
 import { warn, type OutputOpts } from "../output.js"
 import { reportQueuedJob, collectVariadic } from "../util.js"
+
+function isEditPlanMode(v: string): v is EditPlanMode {
+  return (EDIT_PLAN_MODES as readonly string[]).includes(v)
+}
 
 interface GlobalOpts extends OutputOpts {
   profile?: string
@@ -223,8 +228,8 @@ export function editCommand(): Command {
   // ── plan (edit-plan) ──────────────────────────────────────────────────────
   cmd
     .command("plan")
-    .description("plan a transcript-driven cut / clips / chapters (Cloud edition)")
-    .requiredOption("--mode <mode>", "tighten | clips | chapters")
+    .description("plan a transcript-driven cut / clips / chapters / trailer (Cloud edition)")
+    .requiredOption("--mode <mode>", EDIT_PLAN_MODES.join(" | "))
     .requiredOption("--plan-tier <tier>", "economy | standard | premium")
     .requiredOption("--transcript <file>", "path to a timed transcript JSON file")
     .option("--silence <file>", "optional silence JSON — the silence-detect job's output_data.json ({ version, ranges, durationMs })")
@@ -243,7 +248,7 @@ export function editCommand(): Command {
     .option("--style-guide <text>", "style guide applied to the plan")
     .option("--count <n>", "clips mode: how many clips to cut", (v) => parseInt(v, 10))
     .option("--target-duration-sec <n>", "clips mode: target duration per clip (seconds)", (v) => parseInt(v, 10))
-    .option("--target-aspect <ratio>", "clips aspect: 16:9 | 9:16 | 1:1 | 4:5")
+    .option("--target-aspect <ratio>", "clips / trailer aspect: 16:9 | 9:16 | 1:1 | 4:5")
     .option("--platform <name>", "target platform hint")
     .option("--watch", "poll the job until it finishes")
     .option("--poll-interval <ms>", "poll interval with --watch", (v) => parseInt(v, 10))
@@ -269,8 +274,10 @@ export function editCommand(): Command {
             platform?: string
           },
       ) => {
-        if (opts.mode !== "tighten" && opts.mode !== "clips" && opts.mode !== "chapters") {
-          warn(`--mode must be "tighten", "clips" or "chapters" (got "${opts.mode}")`)
+        // The shared list is the single source of truth, so a mode the SDK and
+        // MCP accept is never refused here.
+        if (!isEditPlanMode(opts.mode)) {
+          warn(`--mode must be one of ${EDIT_PLAN_MODES.join(", ")} (got "${opts.mode}")`)
           process.exit(1)
         }
         if (opts.planTier !== "economy" && opts.planTier !== "standard" && opts.planTier !== "premium") {

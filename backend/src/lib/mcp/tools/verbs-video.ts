@@ -33,6 +33,8 @@ import { normalizeVideoInput } from "../normalize.js"
 import { buildEffectiveEdl, validateEffectiveEdl } from "../../apply-edl-plan.js"
 import { APPLY_EDL_CLIP_KEY_PATTERN } from "../../apply-edl-output.js"
 import { hasCredits } from "../../config.js"
+import { editPlanModeRefusal, editPlanModeVerdict } from "../../private-plugins/edit-plan-mode-gate.js"
+import { plannableEditPlanModes } from "../../private-plugins/plannable-edit-plan-modes.js"
 import { getUserMcpPreferences } from "../user-preferences.js"
 import { resolvePreset } from "../../presets/resolve-preset.js"
 import { mcpInject } from "../internal-request.js"
@@ -3255,15 +3257,22 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         description:
           "Turn a timed transcript into an edit-decision-list (EDL) plan for a recording. " +
           "`mode`: `tighten` (remove silence/filler/false-starts → one tightened EDL), " +
-          "`clips` (find N short shareable clips → one EDL per clip), or `chapters` " +
-          "(mark chapter boundaries with titles). Reads the transcript, never pixels. " +
+          "`clips` (find N short shareable clips → one EDL per clip), `chapters` " +
+          "(mark chapter boundaries with titles), or `trailer` (one short teaser EDL from the " +
+          "strongest moments; `trailer` is refused, before any charge, until this server can plan it). " +
+          "Reads the transcript, never pixels. " +
           "Pass the timed `transcript` (word-level, from a transcribe step) and the media " +
           "`sources` (1–6). Multicam: give each source the `id` you gave `audio_sync` and pass " +
           "its result as `offsets`; refused before any charge if a source was not measured or " +
           "matched weakly (set its `offset_ms`). Returns a job_id — poll `get_job`; the EDL plan " +
           "is in the job's `output_data`.",
         inputSchema: {
-          mode: z.enum(EDIT_PLAN_MODES as unknown as [string, ...string[]]).describe("tighten | clips | chapters."),
+          // An unknown mode is refused in the words every lane uses (decided
+          // 2026-10-06), not the schema's stock message; the enum stays, so
+          // the tool's published schema still lists the modes.
+          mode: z.enum(EDIT_PLAN_MODES as unknown as [string, ...string[]], {
+            error: (iss) => editPlanModeRefusal(iss.input, new Set(EDIT_PLAN_MODES)) ?? undefined,
+          }).describe("tighten | clips | chapters | trailer."),
           plan_tier: z.enum(EDIT_PLAN_TIERS as unknown as [string, ...string[]]).optional()
             .describe("Reasoning tier: economy | standard (default) | premium."),
           transcript: z.record(z.string(), z.unknown()).describe("The timed word-level transcript object (from a transcribe step)."),
@@ -3293,6 +3302,25 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         _meta: uiMeta(WIDGET_URI.jobAuto),
       },
       async (args) => {
+        // The same capability check the editor (GET /v1/edit-plan/capabilities)
+        // and the video worker read — decided 2026-10-06; one helper since round 6.
+        // Read at CALL time: the tool is registered before the plugins load.
+        // Refused before dispatch, so nothing is charged and the agent reads
+        // why, not a raw 400.
+        // Round 7 (decided 2026-10-06): on a connected self-host that can't
+        // reach nodaro.ai, a known mode is dispatched — the job's worker gate
+        // retries "could not reach nodaro.ai"; nodaro.ai's answer refuses.
+        const plannable = await plannableEditPlanModes()
+        const verdict = editPlanModeVerdict(args.mode, plannable)
+        if (verdict.kind === "refuse") {
+          return {
+            content: [{
+              type: "text" as const,
+              text: `plan_edit: ${verdict.message} Modes this server plans: ${[...plannable.modes].join(", ")}.`,
+            }],
+            isError: true as const,
+          }
+        }
         const sources = args.sources.map((s) => ({
           ...(s.id ? { id: s.id } : {}),
           url: s.url,

@@ -2313,6 +2313,29 @@ export interface PluginCapabilities {
   readonly mixAudioDuck?: boolean
 }
 
+/**
+ * What a plugin's OWN handlers can do, declared to the host — direction
+ * plugin → host. The other capability group, `PluginCapabilities`
+ * (`tk.capabilities`), points the opposite way (host → plugin: what this
+ * host's toolkit can do). The host reads a member's ABSENCE as "the
+ * behaviour every plugin had before the member existed", never as "all", so a
+ * newer host on an older plugin degrades cleanly. Grows one optional member at
+ * a time (additive-only, no CONTRACT_VERSION bump); merged by the loader with
+ * `Object.assign`, last write wins per member.
+ */
+export interface PluginSupports {
+  /**
+   * The `edit-plan` modes the plugin's handler plans for BEYOND the three
+   * Phase-1 modes (`tighten`, `clips`, `chapters`), which are always planned;
+   * listing those too is harmless. Absent ⇒ only the Phase-1 three. An older handler coerces a
+   * mode it does not know to `tighten`, while the workflow run already reserved
+   * that mode's price — so the video worker refuses (and refunds) a job in a
+   * mode not listed here before the handler runs
+   * (`lib/private-plugins/edit-plan-mode-gate.ts`).
+   */
+  readonly editPlanModes?: readonly string[]
+}
+
 export interface PluginDeploymentToolkit {
   /** `appBaseUrl()` — the install's public origin, no trailing slash. */
   publicUrl: string
@@ -3022,6 +3045,11 @@ export interface NodaroPrivatePlugin {
    * toolkit, the one whose `accountSecrets` can decrypt.
    */
   daemons?(tk: PluginToolkit): PluginDaemon[]
+  /**
+   * Additive: what this plugin's own handlers can do, as DATA (see
+   * `PluginSupports` — plugin → host, the reverse of `tk.capabilities`).
+   */
+  supports?(): PluginSupports
 }
 
 export interface PrivatePluginsModule {

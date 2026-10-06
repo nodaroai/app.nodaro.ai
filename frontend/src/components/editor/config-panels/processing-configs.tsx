@@ -66,6 +66,12 @@ import { formatNumber } from "@/lib/i18n/format"
 import { EdlValidityBadge } from "@/components/inspector/edl-validity-badge"
 import { useApplyEdlRenders } from "@/hooks/use-apply-edl-renders"
 import { applyEdlRenderSettings } from "@/lib/apply-edl-render-input"
+import {
+  editPlanModeUnavailableReason,
+  refreshEditPlanModesIfStale,
+  useEditPlanModes,
+  type EditPlanModeUnavailableReason,
+} from "@/lib/edit-plan-modes"
 
 // Lazy — pulls @remotion/player + remotion (~63KB gz) out of the editor chunk;
 // only fetched when an Add Captions node's config panel is opened.
@@ -943,9 +949,32 @@ function EditPlanOffsetInput({ offsetMs, onCommit, ariaLabel, placeholder }: {
   )
 }
 
+/** Why Trailer is greyed out (round 7, decided 2026-10-06): nodaro.ai needs a
+ *  plugin update; a connected self-host waits on nodaro.ai, or could not reach it. */
+const TRAILER_UNAVAILABLE_LABEL = {
+  "plugin-update": "proccfg.editPlanModeNeedsPluginUpdate",
+  "nodaro-unsupported": "proccfg.editPlanModeAvailableOnceNodaro",
+  "nodaro-unreachable": "proccfg.editPlanModeNodaroUnreachable",
+} as const satisfies Record<EditPlanModeUnavailableReason, string>
+
+/** The notice under a node saved in trailer mode. A self-host's notice is its
+ *  reason, as is: neither case is a plugin this install could update. */
+const TRAILER_UNAVAILABLE_NOTICE = {
+  "plugin-update": "proccfg.editPlanTrailerUnavailable",
+  "nodaro-unsupported": "proccfg.editPlanModeAvailableOnceNodaro",
+  "nodaro-unreachable": "proccfg.editPlanModeNodaroUnreachable",
+} as const satisfies Record<EditPlanModeUnavailableReason, string>
+
 export function EditPlanConfig({ data, onUpdate, sources }: ConfigProps<EditPlanNodeData>) {
   const t = useT()
   const mode = data.mode ?? "tighten"
+  useEditPlanModes()
+  // The answer can change mid-session (a connected self-host follows nodaro.ai's).
+  useEffect(() => {
+    void refreshEditPlanModesIfStale()
+  }, [])
+  const trailerUnavailable = editPlanModeUnavailableReason("trailer")
+  const trailerSupported = trailerUnavailable === null
   const sourceConfig = data.sourceConfig ?? {}
   // Only the media wired into the `sources` handle (not the transcript/silence
   // json edges) belongs in the source table.
@@ -990,8 +1019,22 @@ export function EditPlanConfig({ data, onUpdate, sources }: ConfigProps<EditPlan
             <SelectItem value="tighten">{t("proccfg.editPlanModeTighten")}</SelectItem>
             <SelectItem value="clips">{t("proccfg.editPlanModeClips")}</SelectItem>
             <SelectItem value="chapters">{t("proccfg.editPlanModeChapters")}</SelectItem>
+            {/* Greyed out, with the reason, until the server's plugin plans
+                trailers (GET /v1/edit-plan/capabilities; decided 2026-10-06).
+                A saved trailer node keeps its mode — the notice below says
+                why its run may be refused (on nodaro.ai it is; a self-hosted
+                install relays it to nodaro.ai, which may plan it). */}
+            <SelectItem value="trailer" disabled={!trailerSupported}>
+              {t("proccfg.editPlanModeTrailer")}
+              {trailerUnavailable && ` (${t(TRAILER_UNAVAILABLE_LABEL[trailerUnavailable])})`}
+            </SelectItem>
           </SelectContent>
         </Select>
+        {mode === "trailer" && trailerUnavailable && (
+          <p role="status" className="mt-1 text-[11px] text-amber-600 dark:text-amber-400">
+            {t(TRAILER_UNAVAILABLE_NOTICE[trailerUnavailable])}
+          </p>
+        )}
       </div>
 
       <div>
@@ -1054,20 +1097,25 @@ export function EditPlanConfig({ data, onUpdate, sources }: ConfigProps<EditPlan
               onChange={(e) => onUpdate({ targetDurationSec: e.target.value ? Math.max(5, Math.min(180, parseInt(e.target.value) || 5)) : undefined })}
             />
           </div>
-          <div>
-            <Label>{t("proccfg.editPlanTargetAspect")}</Label>
-            <Select value={data.targetAspect ?? "none"} onValueChange={(v) => onUpdate({ targetAspect: v === "none" ? undefined : (v as EditPlanNodeData["targetAspect"]) })}>
-              <SelectTrigger aria-label={t("proccfg.editPlanTargetAspectAria")}><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">{t("proccfg.editPlanTargetAspectAny")}</SelectItem>
-                <SelectItem value="16:9">16:9</SelectItem>
-                <SelectItem value="9:16">9:16</SelectItem>
-                <SelectItem value="1:1">1:1</SelectItem>
-                <SelectItem value="4:5">4:5</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
         </>
+      )}
+
+      {/* Clips and trailer both write the delivery aspect into the EDL
+          (`meta.targetAspect`); count and clip length are clips-only. */}
+      {(mode === "clips" || mode === "trailer") && (
+        <div>
+          <Label>{t("proccfg.editPlanTargetAspect")}</Label>
+          <Select value={data.targetAspect ?? "none"} onValueChange={(v) => onUpdate({ targetAspect: v === "none" ? undefined : (v as EditPlanNodeData["targetAspect"]) })}>
+            <SelectTrigger aria-label={t("proccfg.editPlanTargetAspectAria")}><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">{t("proccfg.editPlanTargetAspectAny")}</SelectItem>
+              <SelectItem value="16:9">16:9</SelectItem>
+              <SelectItem value="9:16">9:16</SelectItem>
+              <SelectItem value="1:1">1:1</SelectItem>
+              <SelectItem value="4:5">4:5</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       )}
 
       <div className="flex flex-col gap-1.5">

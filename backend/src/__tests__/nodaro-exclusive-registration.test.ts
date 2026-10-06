@@ -25,7 +25,9 @@ describe("nodaro-exclusive registration stays edition-gated", () => {
     const src = read("src/workers/video-worker.ts")
     const gate = src.indexOf("if (!hasCredits()) {")
     const relayImport = src.indexOf("nodaro-exclusive-relay.js")
-    const relayMerge = src.indexOf("Object.assign(allHandlers, nodaroExclusiveRelayHandlers)")
+    // The relay map is merged through the edit-plan mode gate (decided
+    // 2026-10-06), so this matches the merge with or without a wrapper, as below.
+    const relayMerge = src.search(/Object\.assign\(allHandlers, (?:[A-Za-z0-9_]+\()*nodaroExclusiveRelayHandlers/)
     // The plugin map is merged bare today (liveness is applied at the dispatch
     // site, not to the map), but a wrapper around it would be legitimate —
     // what this pin owns is the ORDER of the two merges, not the shape of the

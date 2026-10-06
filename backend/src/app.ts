@@ -187,6 +187,8 @@ import { loadAvailabilityOverrides } from "./lib/availability-override.js"
 import { configureDeploymentPayer, deploymentPayerActive, payerWebFreeConflict } from "./lib/deployment-payer.js"
 import { deploymentBillingRoutes } from "./ee/routes/deployment-billing.js"
 import { surfaceAvailabilityRoutes } from "./routes/surface-availability.js"
+import { editPlanCapabilitiesRoutes } from "./routes/edit-plan-capabilities.js"
+import { registerEditPlanModeGuard } from "./routes/edit-plan-mode-guard.js"
 import { userSettingsRoutes } from "./routes/user-settings.js"
 import { meRoutes } from "./routes/me.js"
 import { adminGalleryReportsRoutes } from "./ee/routes/admin-gallery-reports.js"
@@ -503,6 +505,10 @@ export async function buildApp() {
   // P14: the per-request payer resolve point. MUST follow the orgs-context
   // hook — rung 2 reads the req.workspaceId it validates.
   registerBillingContextHook(app)
+  // POST /v1/edit-plan refuses an unknown or undeclared Edit Plan mode before
+  // the credit guard (decided 2026-10-06). An onRoute hook, so it must precede
+  // every route: it reaches the plugin's route and the self-host shim alike.
+  registerEditPlanModeGuard(app)
 
   await app.register(healthRoutes)
   await app.register(projectRoutes)
@@ -707,6 +713,9 @@ export async function buildApp() {
   await app.register(shotsRoutes)
   await app.register(modelsRoutes)
   await app.register(surfaceAvailabilityRoutes)
+  // Which Edit Plan modes the loaded plugin plans (read per request — the
+  // plugins load further down).
+  await app.register(editPlanCapabilitiesRoutes)
   await app.register(voicesRoutes)
   await app.register(heygenCatalogRoutes)
   await app.register(voiceCloneRoutes)

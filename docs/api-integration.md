@@ -1313,6 +1313,63 @@ doctrine exists — gate "vendor doctrine" badges on it; never overclaim).
 | `family` | string | Vendor / lab name, e.g. `Google`, `Bytedance`. |
 | `featuredOnly` | boolean | Featured models only. |
 
+### Edit Plan modes
+
+`GET /v1/edit-plan/capabilities` — the [Edit Plan](./nodes/processing-video/edit-plan.md)
+modes this server can plan. Authenticated; `Cache-Control: private, no-store`
+(a server update can change the answer).
+
+```json
+{ "modes": ["tighten", "clips", "chapters", "trailer"], "source": "server" }
+```
+
+`tighten`, `clips` and `chapters` are always listed. `trailer` is listed only
+when the server can plan a trailer; until then the editor greys the Trailer
+option out, with a reason that depends on `source`, which says who answered:
+
+| `source` | Who answered | Reason the editor shows |
+|---|---|---|
+| `server` | This server: nodaro.ai, or a self-hosted install that is not connected | "needs a plugin update" |
+| `nodaro.ai` | A self-hosted install connected to nodaro.ai, with nodaro.ai's answer | "Available once nodaro.ai supports it" |
+| `nodaro.ai-unreachable` | A self-hosted install connected to nodaro.ai that can't reach it | "Couldn't reach nodaro.ai — try again later" |
+
+A mode the server does not list, and a
+mode that is not one of the four, is refused before anything is charged, on
+every lane, except Trailer on a self-hosted install connected to nodaro.ai that
+can't reach it, where the job is retried instead (see below). Every refusal
+carries one message (for Trailer: *Trailer mode is not available on
+this server yet. Choose another mode, or try again after the next update. You
+were not charged.*):
+
+- `POST /v1/edit-plan` answers `400` with
+  `{ "error": { "code": "mode_not_available", "message": "…" } }` before any
+  credits are reserved. The check applies to a `mode` the request sends.
+- A workflow or app run fails the Edit Plan node. An unknown mode fails before
+  any credits are reserved. On nodaro.ai, a run in Trailer mode is refused
+  until the server plans trailers, and any reservation is refunded.
+- The MCP `plan_edit` tool refuses before dispatch and names the modes the
+  server plans.
+
+On a self-hosted install (Community, Business) connected to nodaro.ai, Edit
+Plan runs on nodaro.ai and is charged to the connected nodaro.ai account, so
+the install answers with the modes nodaro.ai plans: it asks nodaro.ai's
+`GET /v1/edit-plan/capabilities` over its existing connection and reuses the
+answer for up to a minute. `trailer` is listed there as soon as nodaro.ai plans
+trailers, and Trailer is refused there only when nodaro.ai answers that it
+does not plan trailers yet. When nodaro.ai can't be reached, the install lists
+only `tighten`, `clips` and `chapters` (`source: "nodaro.ai-unreachable"`), but
+it does not refuse a run in Trailer mode: the outage is temporary. `POST
+/v1/edit-plan` and MCP `plan_edit` create the job, and the job is retried under
+the usual job retry policy, failing with *could not reach nodaro.ai* only when
+nodaro.ai still can't be reached on the last attempt. Nothing is relayed to
+nodaro.ai until the install has asked it which modes it plans, so nothing is
+charged to the connected nodaro.ai account for a failed attempt. An unknown
+mode is still refused at once. An install that is not connected lists the same three modes,
+and cannot run Edit Plan at all until it connects.
+The editor asks this route again when an Edit Plan node's settings open or the
+browser tab regains focus, at most once a minute, so a change in the answer
+shows up without a page reload.
+
 ### Seedance 2 video capabilities
 
 The video routes (`/v1/text-to-video`, `/v1/generate-video`) accept these on
@@ -3115,7 +3172,7 @@ for the formula). Off Cloud, the three `voice-changer-pro*` routes are absent (4
 | `POST` | `/v1/add-captions` | Burn captions into a video (`{ videoUrl, text? \| captions?[] \| transcript? \| auto_transcribe?, transcribe_provider?: incredibly-fast-whisper\|elevenlabs-stt\|whisper, style?: subtitle\|word-highlight\|karaoke\|tiktok-words\|word-pop\|bouncy, position?, positionY?, fontSize?, color?, backgroundColor?, look?: outline\|clean, fontFamily?, fontWeight?, strokeColor?, strokeWidth?, uppercase?, maxWordsPerLine?, highlightColor?, animate?, wordLevel?, segments?[] }`) → job. Caption-source precedence: `captions[]` > `transcript` > `text` on `subtitle` > auto-transcription. On a top-level `subtitle` (no `segments`) `text` is burned as-is as ONE static block for the whole video — never transcribed over, with or without styling levers; omit it to caption the speech. On a kinetic style `text` is only the fallback (used when transcription returns nothing or `auto_transcribe` is `false`, spread evenly across the video). An unset `look` is `outline` on the kinetic styles and `clean` on `subtitle`. `maxWordsPerLine` (integer 1–20, optional) caps the words on one caption line — or one `tiktok-words` page — **on top of** the frame-width budget, sentence ends and ≥0.5 s pauses (`1`–`2` = the punchy CapCut read, unset = fit the width); it counts words, not caption entries (a phrase-level entry holding more than N words is split into sub-phrases of at most N words; on a `text` subtitle it only sets the line breaks of the one static block); it exists top-level and per `segments[]` entry (a segment inherits the top-level value) and is inert on `word-pop`. `word-highlight`, `karaoke` and `bouncy` show one held line at a time. `highlightColor` and `animate` are kinetic-only (`400` on `subtitle`); every other lever, `maxWordsPerLine` included, also styles a `subtitle`. A kinetic style needs a `transcribe_provider` that returns word timings (`incredibly-fast-whisper`, the default, or `elevenlabs-stt`) — `whisper` is a `400` on `transcribe_provider` there when transcription is the render's only caption source; `subtitle` needs phrase timing only and works with any engine. A bare plain-text `subtitle` is the cheap FFmpeg burn; a kinetic style, any styling lever, timed captions, auto-transcription or `segments` renders via Remotion, bills at the kinetic price and keeps the source frame rate (whole number, 15–60 fps; a variable-frame-rate or very long source renders at 30 fps). Full reference: [Add Captions](./nodes/processing-video/add-captions.md). |
 | `POST` | `/v1/silence-detect` | Detect silent spans in an audio or video source, local FFmpeg, **10 credits**, keyless (`{ audioUrl, thresholdDb?: -35, minSilenceMs?: 700, padMs?: 120 }`; `output_data.json` = `{ version, ranges: [{ startMs, endMs }], durationMs }`) → job. |
 | `POST` | `/v1/audio-sync` | Measure how far apart the clocks of 2–6 recordings of one conversation are, from their sound, local FFmpeg + correlation, **10 × (sources − 1) credits** (2 → 10, 4 → 30, 6 → 50), keyless (`{ sources: [{ id, url }] (2–6, unique ids, audio or video), reference?: <one of the ids, default the first> }`; a repeated id or a `reference` that is not one of the ids is a `400 validation_error` naming it; `output_data.json` = `{ version, reference, offsets: [{ sourceId, offsetMs, confidence, driftMsPerHour }], notes }` with `referenceMs = sourceMs + offsetMs`; drift is measured and warned in `notes` past 33 ms over the shared stretch, never corrected). Full reference: [Audio Sync](./nodes/processing-audio/audio-sync.md). → job. |
-| `POST` | `/v1/edit-plan` | Plan a transcript-driven edit of a recording, no media output (`{ mode: tighten\|clips\|chapters, planTier: economy\|standard\|premium, transcript, sources: [{ id, url, kind, role?, speakers?, offsetMs? }] (1–6), silence?, instructions?, styleGuide?, count?, targetDurationSec?, targetAspect?, platform? }`; `output_data` = an EDL for `tighten`, `{ version, clips: Edl[] }` for `clips`, `{ version, chapters }` for `chapters`). Priced per source-minute × tier on a length bucket, plus a flat term in `clips` mode: `per_minute(tier) × bucket_minutes + (clips ? clips_flat(tier) : 0)` — full formula and worked examples on [Edit Plan](./nodes/processing-video/edit-plan.md#credit-cost). Runs on nodaro.ai; a self-hosted install relays it once connected and otherwise answers `503 nodaro_connection_required`. Multicam offsets are applied by the caller before this request (the SDK's `editPlan({ offsets })` and MCP `plan_edit` do it for you). → job. |
+| `POST` | `/v1/edit-plan` | Plan a transcript-driven edit of a recording, no media output (`{ mode: tighten\|clips\|chapters\|trailer, planTier: economy\|standard\|premium, transcript, sources: [{ id, url, kind, role?, speakers?, offsetMs? }] (1–6), silence?, instructions?, styleGuide?, count?, targetDurationSec?, targetAspect?, platform? }`; `output_data` = an EDL for `tighten`, `{ version, clips: Edl[] }` for `clips`, `{ version, chapters }` for `chapters`, an EDL for `trailer`). A mode the server does not plan ([Edit Plan modes](#edit-plan-modes)) or does not know answers `400 mode_not_available` before anything is charged. Priced per source-minute × tier on a length bucket, plus a flat term in `clips` and `trailer` modes: `per_minute(tier) × bucket_minutes + (clips or trailer ? clips_flat(tier) : 0)` — full formula and worked examples on [Edit Plan](./nodes/processing-video/edit-plan.md#credit-cost). Runs on nodaro.ai; a self-hosted install relays it once connected and otherwise answers `503 nodaro_connection_required`. Multicam offsets are applied by the caller before this request (the SDK's `editPlan({ offsets })` and MCP `plan_edit` do it for you). → job. |
 | `POST` | `/v1/camera-switch` | Put each cut of an edit on the camera of whoever is speaking — the sound never changes (`{ edl, transcript (with speaker labels), speakerMap?, speakerNames?, minShotMs?, leadMs?, maxShotMs?, wideEvery?, layoutHints? }`; `output_data.json` = the switched EDL for `/v1/apply-edl`, `output_data.transcript` = the transcript with `speakerNames` applied). **10 credits** flat per run. Refused before anything is created: `400 invalid_edl` when `edl` is not one master-clock edit (a clip set, a chapters plan), `422 no_speakers` when the transcript has no speaker labels. Runs on nodaro.ai; a self-hosted install relays it once connected and otherwise answers `503 nodaro_connection_required`. Full reference: [Camera Switch](./nodes/processing-video/camera-switch.md). → job. |
 | `POST` | `/v1/apply-edl` | Render an edit decision list into one video or audio file, local FFmpeg, keyless (`{ edl, sources?: [url] (positional overrides of edl.sources[i].url), transcript?, output?: video\|audio, quality?: final\|proxy, crossfadeMs?: 0–5000, clipKey?: "<first inMs>-<last outMs>" }`; `output_data` = `videoUrl` + `thumbnailUrl` or `audioUrl`, `quality`, `clipKey` when sent, and `json` = the transcript remapped through the cut when one was sent). Priced per minute of rendered output: **10 credits × ceil(output_seconds ÷ 60)** at `final`, **1 credit × ceil(output_seconds ÷ 60)** for a `proxy` Preview (minimum one minute; a Preview is always private). An EDL the renderer cannot render, or one over 180 minutes of output, is a `400 invalid_edl` naming the segment and rule before any credits are reserved. Full reference: [Apply EDL](./nodes/processing-video/apply-edl.md). → job. |
 | `POST` | `/v1/still-to-video` | One still image + one audio track → MP4, local FFmpeg, **0 credits** (`{ imageUrl, audioUrl, motion?, intensity?, resolution?, aspectRatio?, fps?, fit?, padColor? }`; output duration = the audio's duration, no duration field) → job. |

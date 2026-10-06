@@ -702,6 +702,97 @@
         "fanOut": null
       }
     },
+    "trailer": {
+      "status": "applied",
+      "plan": {
+        "id": "trailer-plan",
+        "type": "edit-plan",
+        "data": {
+          "label": "Trailer Plan",
+          "mode": "trailer",
+          "generatedJson": {
+            "version": 1,
+            "clock": "master",
+            "sources": [
+              {
+                "id": "cam",
+                "kind": "video",
+                "url": "https://media.test/episode.mp4",
+                "role": "master-audio"
+              }
+            ],
+            "segments": [
+              {
+                "id": "seg-0",
+                "inMs": 0,
+                "outMs": 4000,
+                "video": "cam"
+              },
+              {
+                "id": "seg-1",
+                "inMs": 6000,
+                "outMs": 9000,
+                "video": "cam"
+              },
+              {
+                "id": "seg-2",
+                "inMs": 12000,
+                "outMs": 20000,
+                "video": "cam"
+              }
+            ],
+            "dropped": [
+              {
+                "inMs": 4000,
+                "outMs": 6000,
+                "reason": "silence"
+              },
+              {
+                "inMs": 9000,
+                "outMs": 12000,
+                "reason": "filler"
+              }
+            ],
+            "meta": {
+              "title": "Episode 12"
+            }
+          },
+          "editedEdl": {
+            "v": 1,
+            "kind": "edl",
+            "basis": "e989e54bbb646546",
+            "edl": {
+              "segments": [
+                {
+                  "id": "seg-0",
+                  "inMs": 0,
+                  "outMs": 9000,
+                  "video": "cam"
+                },
+                {
+                  "id": "seg-2",
+                  "inMs": 12000,
+                  "outMs": 20000,
+                  "video": "cam"
+                }
+              ],
+              "dropped": [
+                {
+                  "inMs": 9000,
+                  "outMs": 12000,
+                  "reason": "filler"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expected": {
+        "scalar": "{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"cam\",\"kind\":\"video\",\"url\":\"https://media.test/episode.mp4\",\"role\":\"master-audio\"}],\"segments\":[{\"id\":\"seg-0\",\"inMs\":0,\"outMs\":9000,\"video\":\"cam\"},{\"id\":\"seg-2\",\"inMs\":12000,\"outMs\":20000,\"video\":\"cam\"}],\"dropped\":[{\"inMs\":9000,\"outMs\":12000,\"reason\":\"filler\"}],\"meta\":{\"title\":\"Episode 12\"}}",
+        "list": null,
+        "fanOut": null
+      }
+    },
     "tightenMalformed": {
       "status": "applied",
       "plan": {

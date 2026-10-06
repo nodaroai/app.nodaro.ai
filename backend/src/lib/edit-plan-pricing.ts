@@ -1,4 +1,4 @@
-import { buildEditPlanCreditId, asEditPlanMode, asEditPlanTier } from "@nodaro/shared"
+import { buildEditPlanCreditId, parseEditPlanMode, asEditPlanTier } from "@nodaro/shared"
 import { probeMediaDuration } from "../providers/video/ffmpeg-utils.js"
 
 /**
@@ -39,6 +39,10 @@ export async function computeEditPlanReserveId(
   payload: Record<string, unknown>,
 ): Promise<string | undefined> {
   if (jobName !== "edit-plan") return undefined
+  // An unknown mode is never re-priced as tighten (buildPayload refuses it
+  // first; decided 2026-10-06). An absent one is the node default, tighten.
+  const mode = payload.mode === undefined ? "tighten" : parseEditPlanMode(payload.mode)
+  if (!mode) return undefined
   const sources = Array.isArray(payload.sources)
     ? (payload.sources as Array<Record<string, unknown>>)
     : []
@@ -58,7 +62,7 @@ export async function computeEditPlanReserveId(
   }
   if (!Number.isFinite(probedSec) || probedSec <= 0) return undefined
   const creditId = buildEditPlanCreditId(
-    asEditPlanMode(payload.mode),
+    mode,
     asEditPlanTier(payload.planTier),
     probedSec,
   )

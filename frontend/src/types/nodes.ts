@@ -5777,16 +5777,17 @@ export type EditPlanSourceConfig = {
   kind?: "video" | "audio"
 }
 
-/** edit-plan — a transcript-driven cut / clip / chapter PLANNER (podcast
- *  editing). Cloud-EXCLUSIVE + relayed. Reads a timed transcript (+ optional
- *  silence ranges) and the wired media sources, and emits an EDL plan on the
- *  single `edl` (json) output: `tighten` → one Edl; `clips` → a bare Edl[] that
- *  fans out one downstream render per clip; `chapters` → a { version, chapters }.
+/** edit-plan — a transcript-driven cut / clip / chapter / trailer PLANNER
+ *  (podcast editing). Cloud-EXCLUSIVE + relayed. Reads a timed transcript (+
+ *  optional silence ranges) and the wired media sources, and emits an EDL plan
+ *  on the single `edl` (json) output: `tighten` → one Edl; `clips` → a bare
+ *  Edl[] that fans out one downstream render per clip; `chapters` → a
+ *  { version, chapters }; `trailer` → one short teaser Edl.
  *  `instructions` is the affix-capable prompt (PromptAffixFields). */
 export type EditPlanNodeData = PromptAffixFields & {
   [key: string]: unknown
   label: string
-  mode?: "tighten" | "clips" | "chapters"
+  mode?: "tighten" | "clips" | "chapters" | "trailer"
   /** Reasoning tier — affects quality AND the credit bucket. */
   planTier?: "economy" | "standard" | "premium"
   /** Per-source annotations keyed by SOURCE NODE ID (see EditPlanSourceConfig). */
@@ -5800,6 +5801,7 @@ export type EditPlanNodeData = PromptAffixFields & {
   // clips-only levers.
   count?: number
   targetDurationSec?: number
+  /** Clips and trailer: the delivery aspect, written into the EDL as a hint. */
   targetAspect?: "16:9" | "9:16" | "1:1" | "4:5"
   platform?: string
   /** Optional inline transcript / silence (durable config, used when nothing is
@@ -5811,8 +5813,9 @@ export type EditPlanNodeData = PromptAffixFields & {
   errorMessage?: string
   currentJobId?: string
   currentJobProgress?: number
-  /** The EDL plan (already unwrapped by the extractors): an Edl for tighten, a
-   *  bare Edl[] for clips (fans out), or a { version, chapters } for chapters. */
+  /** The EDL plan (already unwrapped by the extractors): an Edl for tighten or
+   *  trailer, a bare Edl[] for clips (fans out), or a { version, chapters } for
+   *  chapters. */
   generatedJson?: unknown
   /** A person's review of `generatedJson` (TA13): a Tighten cut, or a keep /
    *  hook decision per clip, fingerprinted with the plan it was made on. Run

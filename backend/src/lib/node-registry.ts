@@ -602,12 +602,14 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     category: "processing",
     // outputType: data — emits an edit-decision-list (EDL) plan via the `edl` (json)
     // handle. tighten → one Edl (tightened timeline); clips → a bare Edl[] that fans
-    // out one downstream render per clip; chapters → a { version, chapters } list.
+    // out one downstream render per clip; chapters → a { version, chapters } list;
+    // trailer → one Edl (a short teaser from the strongest moments).
     // Cloud-EXCLUSIVE (relayed). Duration-bucketed per-source-minute pricing × tier
-    // (+ a flat component on clips); PROVISIONAL placeholders finalized by a probe.
-    // See backend/src/ee/billing/credits.ts (EDIT_PLAN_STATIC) + migration 432.
+    // (+ a flat component on clips and trailer); PROVISIONAL placeholders finalized
+    // by a probe. See backend/src/ee/billing/credits.ts (EDIT_PLAN_STATIC) +
+    // migrations 432 and 462.
     description:
-      "Turn a transcript into an edit-decision-list plan: tighten a recording, find short clips, or mark chapters. Reads the transcript, never pixels; emits an EDL that Apply Edit renders.",
+      "Turn a transcript into an edit-decision-list plan: tighten a recording, find short clips, mark chapters, or cut a short trailer. Reads the transcript, never pixels; emits an EDL that Apply Edit renders.",
     outputType: "data",
     creditCost: creditBandFor("edit-plan"),
     inputSchema: {

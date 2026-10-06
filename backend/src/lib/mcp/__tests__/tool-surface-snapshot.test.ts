@@ -568,6 +568,11 @@ const GET_APP_RUN_OUTCOME_BYTES = 1_072 // measured: 393_485 total − 392_413 b
 // base = 275 B (build_ugc_cards 1_140 -> 1_415, far under the 8_192 B per-tool
 // budget).
 const UGC_CARDS_CAPTION_STYLE_BYTES = 275
+// RAISED by one enum value and nothing else: plan_edit's `mode` takes `trailer`
+// (podcast Track D1), with its one-line description in the tool text. No tool
+// was added, so the fixture does NOT move. measured by this suite: 392_535
+// total − 392_454 base = 81 B.
+const PLAN_EDIT_TRAILER_MODE_BYTES = 81
 // RAISED 2026-10-06 by the three collection tools and nothing else —
 // list_collections, read_collection and add_collection_record (where a
 // workflow's records live: the Collections page's API over MCP). The routes
@@ -584,6 +589,12 @@ const COLLECTION_TOOLS_BYTES = 3_420
 // the SDK already took it). No tool was added, so the fixture does NOT move.
 // measured by this suite: 392_662 total − 392_454 base = 208 B.
 const APPLY_EDL_CLIP_KEY_BYTES = 208
+// RAISED by one clause and nothing else: plan_edit's description says `trailer`
+// is refused, before any charge, until this server can plan it (the tool now
+// reads the same capability check as the editor and the worker, decided
+// 2026-10-06). No tool or argument was added, so the fixture does NOT move.
+// measured by this suite: 397_307 total − 397_235 base = 72 B.
+const PLAN_EDIT_TRAILER_GATE_BYTES = 72
 // RAISED by two arguments and one sentence on `generate_speech` and nothing else:
 // `previous_text` / `next_text` (the neighbouring clips' lines, context for
 // continuous intonation across clips — models that stitch use them) and the
@@ -673,7 +684,9 @@ export const TOOL_WIRE_BUDGET = {
     GET_APP_RUN_OUTCOME_BYTES +
     UGC_CARDS_CAPTION_STYLE_BYTES +
     COLLECTION_TOOLS_BYTES +
+    PLAN_EDIT_TRAILER_MODE_BYTES +
     APPLY_EDL_CLIP_KEY_BYTES +
+    PLAN_EDIT_TRAILER_GATE_BYTES +
     TTS_NEIGHBOUR_TEXT_ARGS_BYTES +
     VOICE_CHANGER_PRO_V4_ENGINE_BYTES +
     CHARACTER_REFERENCES_BYTES,

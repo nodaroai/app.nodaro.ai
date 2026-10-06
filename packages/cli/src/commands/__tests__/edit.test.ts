@@ -210,6 +210,18 @@ describe("edit plan", () => {
     expect(mocks.editPlan).not.toHaveBeenCalled()
   })
 
+  it("accepts every shared edit-plan mode, trailer included", async () => {
+    mocks.editPlan.mockResolvedValueOnce({ jobId: "j-trailer" })
+    const tPath = fixture("t.json", TRANSCRIPT)
+    await runCmd(
+      "edit", "plan", "--mode", "trailer", "--plan-tier", "standard", "--transcript", tPath,
+      "--source", "https://x/m.mp4", "--target-aspect", "9:16", "--json",
+    )
+    expect(mocks.editPlan).toHaveBeenCalledWith(
+      expect.objectContaining({ mode: "trailer", planTier: "standard", targetAspect: "9:16" }),
+    )
+  })
+
   it("errors on an unknown --mode", async () => {
     const tPath = fixture("t.json", TRANSCRIPT)
     await expect(

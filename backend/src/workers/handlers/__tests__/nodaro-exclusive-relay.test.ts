@@ -72,6 +72,13 @@ import {
   isNodaroExclusiveJobType,
   finalizeExclusiveCloudOutput,
 } from "../nodaro-exclusive-relay.js"
+import { editPlanModeRefusalMessage, editPlanModesOf, withEditPlanModeGate } from "../../../lib/private-plugins/edit-plan-mode-gate.js"
+import {
+  plannableEditPlanModes,
+  _resetPlannableEditPlanModesForTests,
+  type PlannableEditPlanModesDeps,
+} from "../../../lib/private-plugins/plannable-edit-plan-modes.js"
+import { isDeterministicJobError } from "../../../lib/deterministic-job-error.js"
 
 const EXCLUSIVES = [
   "voice-changer-pro",
@@ -112,6 +119,107 @@ describe("handler registry", () => {
     for (const t of EXCLUSIVES) expect(isNodaroExclusiveJobType(t)).toBe(true)
     expect(isNodaroExclusiveJobType("generate-image")).toBe(false)
     expect(isNodaroExclusiveJobType("generative-pipeline")).toBe(false)
+  })
+})
+
+// Round 4 (decided 2026-10-06): the video worker merges the relay handlers
+// through the edit-plan mode gate (pinned by video-worker-edit-plan-gate-wiring).
+// An unknown or unplannable mode is refused BEFORE anything reaches nodaro.ai,
+// so the connected account is never charged for it. Here: nodaro.ai does not
+// plan trailer yet (the three original modes).
+describe("edit-plan relay: the mode gate a self-host runs it through", () => {
+  const relayed = withEditPlanModeGate(nodaroExclusiveRelayHandlers, async () => ({
+    modes: editPlanModesOf({}),
+    source: "nodaro.ai" as const,
+  }))
+  const plan = (mode: unknown) =>
+    bullJob({ jobId: "job-ep", mode, transcript: { version: 1, words: [] }, sources: [{ url: "https://a/ep.mp4" }] })
+
+  it("refuses trailer (undeclared) and an unknown mode without creating a cloud job", async () => {
+    for (const [mode, shown] of [["trailer", "trailer"], ["montage", "montage"], [3, "3"]] as const) {
+      const err = await relayed["edit-plan"]!(plan(mode), ctx).then(() => null, (e: unknown) => e)
+      expect(isDeterministicJobError(err), String(mode)).toBe(true)
+      expect((err as Error).message).toBe(editPlanModeRefusalMessage(shown))
+    }
+    expect(mocks.createCloudJob).not.toHaveBeenCalled()
+  })
+
+  it("relays a Phase-1 mode verbatim, and an absent mode for nodaro.ai's default", async () => {
+    mocks.waitForCloudJob.mockResolvedValue({ id: "cloud-ep", status: "completed", output_data: { version: 1, segments: [] } })
+    await relayed["edit-plan"]!(plan("clips"), ctx)
+    expect(mocks.createCloudJob).toHaveBeenLastCalledWith("/v1/edit-plan", expect.objectContaining({ mode: "clips" }))
+    await relayed["edit-plan"]!(plan(undefined), ctx)
+    expect(mocks.createCloudJob).toHaveBeenCalledTimes(2)
+    expect(mocks.createCloudJob.mock.calls[1]![1]).not.toHaveProperty("mode")
+  })
+
+  it("leaves every other exclusive type's handler as it was", () => {
+    for (const t of EXCLUSIVES.filter((t) => t !== "edit-plan")) {
+      expect(relayed[t]).toBe(nodaroExclusiveRelayHandlers[t])
+    }
+  })
+})
+
+// Round 6 (decided 2026-10-06): a CONNECTED self-host plans what nodaro.ai
+// plans — the relay's gate reads `plannableEditPlanModes()`, which asks
+// nodaro.ai's GET /v1/edit-plan/capabilities over the relay's connection.
+describe("edit-plan relay: modes come from nodaro.ai on a connected self-host", () => {
+  const PHASE1 = ["tighten", "clips", "chapters"]
+  const selfHost = (over: Partial<PlannableEditPlanModesDeps>): PlannableEditPlanModesDeps => ({
+    hasCredits: () => false,
+    getPluginSupports: () => ({}),
+    isNodaroConnected: async () => true,
+    cloudFetch: async () => new Response(JSON.stringify({ modes: [...PHASE1, "trailer"] }), { status: 200 }),
+    now: () => 0,
+    ...over,
+  })
+  const gate = (deps: PlannableEditPlanModesDeps) =>
+    withEditPlanModeGate(nodaroExclusiveRelayHandlers, () => plannableEditPlanModes(deps))
+  const plan = (mode: unknown) =>
+    bullJob({ jobId: "job-ep6", mode, transcript: { version: 1, words: [] }, sources: [{ url: "https://a/ep.mp4" }] })
+
+  beforeEach(() => _resetPlannableEditPlanModesForTests())
+
+  it("relays trailer to nodaro.ai once nodaro.ai plans it", async () => {
+    mocks.waitForCloudJob.mockResolvedValue({ id: "cloud-ep6", status: "completed", output_data: { version: 1, segments: [] } })
+    await gate(selfHost({}))["edit-plan"]!(plan("trailer"), ctx)
+    expect(mocks.createCloudJob).toHaveBeenLastCalledWith("/v1/edit-plan", expect.objectContaining({ mode: "trailer" }))
+  })
+
+  // Round 7 (decided 2026-10-06): an outage is TEMPORARY — the job takes the
+  // retryable path (the queue retries it under its own policy), not a
+  // permanent refusal. Nothing reaches nodaro.ai on this attempt.
+  it("fails trailer RETRYABLY, before relaying, when nodaro.ai can't be reached", async () => {
+    const relayed = gate(selfHost({ cloudFetch: async () => { throw new Error("ECONNREFUSED") } }))
+    const err = await relayed["edit-plan"]!(plan("trailer"), ctx).then(() => null, (e: unknown) => e)
+    expect(isDeterministicJobError(err)).toBe(false)
+    expect((err as Error).message).toBe("could not reach nodaro.ai")
+    expect(mocks.createCloudJob).not.toHaveBeenCalled()
+  })
+
+  it("refuses trailer permanently when nodaro.ai answers that it does not plan it", async () => {
+    const relayed = gate(selfHost({
+      cloudFetch: async () => new Response(JSON.stringify({ modes: PHASE1 }), { status: 200 }),
+    }))
+    const err = await relayed["edit-plan"]!(plan("trailer"), ctx).then(() => null, (e: unknown) => e)
+    expect(isDeterministicJobError(err)).toBe(true)
+    expect((err as Error).message).toBe(editPlanModeRefusalMessage("trailer"))
+    expect(mocks.createCloudJob).not.toHaveBeenCalled()
+  })
+
+  it("an unconnected self-host is unchanged: trailer is refused and nodaro.ai is never asked", async () => {
+    let asked = false
+    const relayed = gate(selfHost({
+      isNodaroConnected: async () => false,
+      cloudFetch: async () => {
+        asked = true
+        return new Response("{}", { status: 200 })
+      },
+    }))
+    const err = await relayed["edit-plan"]!(plan("trailer"), ctx).then(() => null, (e: unknown) => e)
+    expect((err as Error).message).toBe(editPlanModeRefusalMessage("trailer"))
+    expect(asked).toBe(false)
+    expect(mocks.createCloudJob).not.toHaveBeenCalled()
   })
 })
 

@@ -100,11 +100,11 @@ describe("the fixture says what was decided", () => {
     }
   })
 
-  it("one of four kept, none kept and both Tighten edits are applied; a stale edit is not", () => {
+  it("one of four kept, none kept, both Tighten edits and a Trailer edit are applied; a stale edit is not", () => {
     const status = Object.fromEntries(Object.entries(FIXTURE.cases).map(([k, c]) => [k, c.status]))
     expect(status).toEqual({
       oneKept: "applied", twoKept: "applied", noneKept: "applied", stale: "stale",
-      tighten: "applied", tightenMalformed: "applied",
+      tighten: "applied", trailer: "applied", tightenMalformed: "applied",
     })
     expect(FIXTURE.cases.oneKept!.expected.fanOut).toBeNull()
     expect(FIXTURE.cases.noneKept!.expected.scalar).toBeNull()

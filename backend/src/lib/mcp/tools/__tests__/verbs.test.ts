@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
 import { registerVerbs } from "../verbs.js"
 import {
@@ -17,6 +17,8 @@ import { newSession } from "../../session.js"
 import { _resetRegistry } from "../../tasks.js"
 import type { Scope } from "../../../scopes.js"
 import { buildServer, callTool, listTools, executeSession, stubRoute } from "./_helpers.js"
+import { setPluginSupports } from "../../../private-plugins/supports-registry.js"
+import { editPlanModeRefusalMessage } from "../../../private-plugins/edit-plan-mode-gate.js"
 import { TTS_NEIGHBOUR_TEXT_MAX_CHARS } from "../../../../providers/elevenlabs/neighbour-text.js"
 
 const audio = vi.hoisted(() => ({ measured: vi.fn() }))
@@ -1769,6 +1771,79 @@ describe("plan_edit verb — audio_sync offsets", () => {
     registerVerbs({ server, session: executeSession(), fastify })
     await callTool(server, "plan_edit", { mode: "tighten", transcript, sources: [{ url: "https://a/ep.mp4" }] })
     expect(received.body?.sources).toEqual([{ url: "https://a/ep.mp4" }])
+  })
+})
+
+// Round 3 (decided 2026-10-06): plan_edit gates `trailer` on the SAME check the
+// editor (GET /v1/edit-plan/capabilities) and the video worker use —
+// editPlanModesOf(getPluginSupports()). Until the loaded plugin plans a
+// trailer, the tool refuses with a clear message before dispatch, instead of
+// relaying the plugin route's raw 400.
+describe("plan_edit verb — trailer mode gate", () => {
+  const transcript = { version: 1, words: [{ text: "hi", startMs: 0, endMs: 500 }] }
+  const sources = [{ url: "https://a/ep.mp4" }]
+
+  afterEach(() => setPluginSupports({}))
+
+  it("refuses trailer before dispatch while the plugin does not plan it — nothing is charged", async () => {
+    setPluginSupports({})
+    const { fastify, received } = stubRoute("POST", "/v1/edit-plan", { jobId: "never" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "plan_edit", { mode: "trailer", transcript, sources })
+    expect(result.isError).toBe(true)
+    const text = (result.content[0] as { text: string }).text
+    expect(text).toBe(
+      "plan_edit: Trailer mode is not available on this server yet. Choose another mode, or try again after the next update. You were not charged. " +
+        "Modes this server plans: tighten, clips, chapters.",
+    )
+    expect(received.body).toBeUndefined()
+  })
+
+  it("reads the plugin's supports at CALL time, not when the tool was registered", async () => {
+    setPluginSupports({})
+    const { fastify, received } = stubRoute("POST", "/v1/edit-plan", { jobId: "j-tr" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    setPluginSupports({ editPlanModes: ["trailer"] })
+    const result = await callTool(server, "plan_edit", { mode: "trailer", transcript, sources })
+    expect(result.isError).toBeUndefined()
+    expect(received.body?.mode).toBe("trailer")
+  })
+
+  it("dispatches the Phase-1 modes on a plugin that declares nothing", async () => {
+    setPluginSupports({})
+    for (const mode of ["tighten", "clips", "chapters"]) {
+      const { fastify, received } = stubRoute("POST", "/v1/edit-plan", { jobId: `j-${mode}` })
+      const server = buildServer()
+      registerVerbs({ server, session: executeSession(), fastify })
+      const result = await callTool(server, "plan_edit", { mode, transcript, sources })
+      expect(result.isError, mode).toBeUndefined()
+      expect(received.body?.mode).toBe(mode)
+    }
+  })
+
+  // Round 4 (decided 2026-10-06): an UNKNOWN mode gets the same words as an
+  // undeclared one, not a schema error and never a tighten plan.
+  it("refuses an unknown mode with the shared message, before dispatch", async () => {
+    setPluginSupports({ editPlanModes: ["montage"] })
+    const { fastify, received } = stubRoute("POST", "/v1/edit-plan", { jobId: "never" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    for (const mode of ["montage", "Tighten"]) {
+      const result = await callTool(server, "plan_edit", { mode, transcript, sources })
+      expect(result.isError, mode).toBe(true)
+      const text = (result.content[0] as { text: string }).text
+      expect(text).toContain(editPlanModeRefusalMessage(mode))
+    }
+    expect(received.body).toBeUndefined()
+  })
+
+  it("says in its description that trailer is refused until this server plans it", async () => {
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify: Fastify() })
+    const tool = (await listTools(server)).find((t) => t.name === "plan_edit")
+    expect(tool?.description).toMatch(/`trailer` is refused, before any charge, until this server can plan it/)
   })
 })
 

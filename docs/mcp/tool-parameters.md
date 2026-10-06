@@ -2015,7 +2015,7 @@ Needs `workflows:execute` · Nodaro Cloud only.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `mode` | string | yes | tighten \| clips \| chapters. One of `tighten`, `clips`, `chapters`. |
+| `mode` | string | yes | tighten \| clips \| chapters \| trailer. One of `tighten`, `clips`, `chapters`, `trailer`. |
 | `plan_tier` | string |  | Reasoning tier: economy \| standard (default) \| premium. One of `economy`, `standard`, `premium`. |
 | `transcript` | object (map of any) | yes | The timed word-level transcript object (from a transcribe step). |
 | `silence` | object (map of any) |  | Optional silence ranges object (from a silence-detect step). |

@@ -1199,7 +1199,7 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     icon: <ListTree className="h-4 w-4" />,
     category: "Processing",
     group: "video-cut-assemble",
-    keywords: ["edit plan", "edl", "tighten", "clips", "chapters", "podcast", "transcript", "cut", "plan", "shorts"],
+    keywords: ["edit plan", "edl", "tighten", "clips", "chapters", "trailer", "teaser", "podcast", "transcript", "cut", "plan", "shorts"],
   },
   {
     type: "camera-switch",
