@@ -71,6 +71,23 @@ describe("computeEmptyInputSkipIds", () => {
     expect(computeEmptyInputSkipIds({ level: [graph[1]!], nodes: graph, edges: wires, nodeStates: { feed: completed("post 1") }, deadIds: new Set() }).size).toBe(0)
   })
 
+  it("a Generate Image whose prompt source produced nothing is skipped even while a picker keeps a wire live — no paid picture of nothing", () => {
+    const graph: SimpleNode[] = [
+      node("writer", "llm-chat"),
+      node("look", "setting", { setting: "neon-city" }),
+      node("cover", "generate-image", { prompt: "" }),
+    ]
+    const wires: SimpleEdge[] = [edge("writer", "cover", "text", "prompt"), edge("look", "cover", "out", "look")]
+    const states: Record<string, NodeExecutionState> = { writer: { status: "skipped" }, look: seeded("neon city") }
+    expect([...computeEmptyInputSkipIds({ level: [graph[2]!], nodes: graph, edges: wires, nodeStates: states, deadIds: new Set() })]).toEqual(["cover"])
+    // A typed prompt is a request of its own: the picture is made.
+    const typed: SimpleNode[] = [graph[0]!, graph[1]!, node("cover", "generate-image", { prompt: "a city at dusk" })]
+    expect(computeEmptyInputSkipIds({ level: [typed[2]!], nodes: typed, edges: wires, nodeStates: states, deadIds: new Set() }).size).toBe(0)
+    // Nothing wired into the prompt at all (references only): not this rule's business.
+    const refsOnly: SimpleEdge[] = [edge("look", "cover", "out", "look")]
+    expect(computeEmptyInputSkipIds({ level: [graph[2]!], nodes: graph, edges: refsOnly, nodeStates: states, deadIds: new Set() }).size).toBe(0)
+  })
+
   it("a typed prompt still runs on an empty wire; a node with no wire at all is left to fail loudly", () => {
     const nodeStates = { feed: completed(""), feed2: completed(""), combine: completed("") }
     const skipped = computeEmptyInputSkipIds({ level: level("typed", "lonely"), nodes, edges, nodeStates, deadIds: new Set() })
@@ -89,10 +106,11 @@ describe("computeEmptyInputSkipIds", () => {
     expect(skipped.size).toBe(0)
   })
 
-  it("never an image node — an empty prompt is a legal request there", () => {
+  it("an image node whose prompt source produced nothing this run is skipped too — a paid picture of nothing is not a legal request", () => {
+    // (Decided 2026-10-06 after the series review; the typed-prompt and references-only cases live in the Generate Image test above.)
     const nodeStates = { feed: completed(""), feed2: completed(""), combine: completed("") }
     const skipped = computeEmptyInputSkipIds({ level: level("gen"), nodes, edges, nodeStates, deadIds: new Set() })
-    expect(skipped.size).toBe(0)
+    expect([...skipped]).toEqual(["gen"])
   })
 
   it("a node behind a gated or run-time skipped source is starved too; a node already dead is not re-judged", () => {

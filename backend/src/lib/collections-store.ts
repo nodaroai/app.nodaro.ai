@@ -1,5 +1,6 @@
 import type { FastifyRequest } from "fastify"
 import {
+  COLLECTION_EVICT_MAX_PER_WRITE,
   COLLECTION_RECORD_TEXT_MAX,
   COLLECTION_RECORD_TITLE_MAX,
   clampChars,
@@ -194,17 +195,32 @@ export async function evictPastCap(req: FastifyRequest, collectionId: string, us
     .maybeSingle()
   const edge = boundary.data as { created_at: string; id: string } | null
   if (boundary.error || !edge) return 0
+  // The oldest records past the boundary, at most COLLECTION_EVICT_MAX_PER_WRITE
+  // of them: a cap that fell at once (a lapsed plan) trims a little per write
+  // rather than deleting most of a collection in one go. The list is bounded,
+  // so an id list is fine here; the boundary itself is still one row.
+  const victims = await supabase
+    .from("collection_records")
+    .select("id")
+    .eq("collection_id", collectionId)
+    .eq("user_id", userId)
+    .or(`created_at.lt.${edge.created_at},and(created_at.eq.${edge.created_at},id.lt.${edge.id})`)
+    .order("created_at", { ascending: true })
+    .order("id", { ascending: true })
+    .limit(COLLECTION_EVICT_MAX_PER_WRITE)
+  const ids = ((victims.data ?? []) as Array<{ id: string }>).map((r) => r.id)
+  if (victims.error || ids.length === 0) return 0
   const deleted = await supabase
     .from("collection_records")
     .delete({ count: "exact" })
     .eq("collection_id", collectionId)
     .eq("user_id", userId)
-    .or(`created_at.lt.${edge.created_at},and(created_at.eq.${edge.created_at},id.lt.${edge.id})`)
+    .in("id", ids)
   if (deleted.error) {
     req.log.warn({ err: deleted.error, collectionId }, "collection eviction failed")
     return 0
   }
-  return deleted.count ?? count - cap
+  return deleted.count ?? ids.length
 }
 
 /** Words for an ilike filter, with every PostgREST / LIKE special character removed. */
@@ -285,15 +301,33 @@ export interface PreparedRecord {
  * else is the text it is.
  */
 export function itemFromWire(item: unknown): unknown {
-  if (typeof item !== "string") return item
-  const trimmed = item.trim()
-  if (!trimmed.startsWith("{")) return item
+  if (typeof item !== "string") return unwrapSingleObject(item) ?? item
+  // A model answering in a ```json fence is still JSON.
+  const trimmed = stripCodeFence(item.trim())
+  if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return item
   try {
-    const parsed: unknown = JSON.parse(trimmed)
-    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? parsed : item
+    return unwrapSingleObject(JSON.parse(trimmed)) ?? item
   } catch {
     return item
   }
+}
+
+const asRecord = (v: unknown): Record<string, unknown> | undefined =>
+  typeof v === "object" && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>) : undefined
+
+/**
+ * An object is the item; a list of exactly ONE object is that object — an
+ * "each" wire that held a single post never fanned out (a list fans out from
+ * two values), so the node received the whole list as its item. A longer list
+ * stays text: one record per item needs an "each" wire.
+ */
+function unwrapSingleObject(v: unknown): Record<string, unknown> | undefined {
+  return asRecord(v) ?? (Array.isArray(v) && v.length === 1 ? asRecord(v[0]) : undefined)
+}
+
+function stripCodeFence(s: string): string {
+  const fenced = s.match(/^```[a-z]*[ \t]*\r?\n([\s\S]*?)\r?\n?```$/i)
+  return fenced ? fenced[1]!.trim() : s
 }
 
 /** Explicit fields win over what the item maps to; null when the record would hold nothing. */

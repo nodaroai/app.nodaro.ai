@@ -228,6 +228,13 @@ export function normalizeDedupeKey(raw: unknown): string | null {
 // A boolean wrapper: the type guard would narrow the string to `never` in the else branch.
 const looksLikeLink = (s: string): boolean => isCollectionUrl(s)
 
+/**
+ * How many records one write may evict past the cap. A cap that drops at once
+ * (a lapsed subscription, billing briefly reading "free") then trims a big
+ * collection a little per write instead of deleting most of it in one go.
+ */
+export const COLLECTION_EVICT_MAX_PER_WRITE = 100
+
 function canonicalUrl(url: string): string {
   try {
     return new URL(url).href

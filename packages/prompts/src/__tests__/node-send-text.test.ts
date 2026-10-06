@@ -13,7 +13,8 @@ describe("computeNodeSendText", () => {
     for (const type of TEXT_REQUIRED_NODE_TYPES) {
       expect(typeof computeNodeSendText(type, {}, { refMap: none }), type).toBe("string")
     }
-    expect(computeNodeSendText("generate-image", {}, { refMap: none })).toBeUndefined()
+    // Video nodes and social posts stay out: an empty prompt on an image-to-video is a legal request, an empty caption the author's choice.
+    expect(computeNodeSendText("image-to-video", {}, { refMap: none })).toBeUndefined()
     expect(computeNodeSendText("combine-text", { text: "x" }, { refMap: none })).toBeUndefined()
     expect(computeNodeSendText("telegram-post", {}, { refMap: none })).toBeUndefined()
   })
@@ -61,6 +62,24 @@ describe("computeNodeSendText", () => {
     expect(computeNodeSendText("collection-write", { link: "https://news.example.test/daily" }, { wired: "", refMap })).toBe("https://news.example.test/daily")
     expect(computeNodeSendText("collection-write", { title: "Daily" }, { wired: "the wire", refMap })).toBe("the wire")
     expect(computeNodeSendText("collection-write", {}, { override: "row 3", wired: "the wire", refMap })).toBe("row 3")
+  })
+
+  it("prompt pre/post text never counts as something to send: an empty core with a prefix is nothing", () => {
+    const refMap = new Map<string, string>()
+    const affixed = { userInput: "", promptPrefix: "Write a news item about:", promptSuffix: "Keep it short." }
+    expect(computeNodeSendText("llm-chat", affixed, { wired: "", refMap })).toBe("")
+    expect(computeNodeSendText("generate-script", { prompt: "", promptPrefix: "Topic:" }, { wired: "", refMap })).toBe("")
+    expect(computeNodeSendText("text-to-speech", { promptPrefix: "Say:" }, { wired: "", refMap })).toBe("")
+    // With a core, the decision is on the core — non-empty either way.
+    expect(computeNodeSendText("llm-chat", affixed, { wired: "the posts", refMap })).not.toBe("")
+  })
+
+  it("generate-image: the prompt it would send (a fan-out row, else the wire, else the typed prompt); nothing of those is nothing", () => {
+    const refMap = new Map<string, string>()
+    expect(computeNodeSendText("generate-image", { prompt: "" }, { wired: "", refMap })).toBe("")
+    expect(computeNodeSendText("generate-image", { prompt: "a city at dusk" }, { wired: "", refMap })).toBe("a city at dusk")
+    expect(computeNodeSendText("generate-image", { prompt: "" }, { wired: "a cover for the story", refMap })).toBe("a cover for the story")
+    expect(computeNodeSendText("generate-image", { prompt: "", promptPrefix: "Photo of" }, { wired: "", refMap })).toBe("")
   })
 
   it("text-to-speech / text-to-audio: the wired text passes through; nothing wired and nothing typed is nothing", () => {

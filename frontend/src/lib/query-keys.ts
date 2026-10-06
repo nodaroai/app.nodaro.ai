@@ -9,7 +9,8 @@ export const queryKeys = {
   // Credits
   // Telegram Channel Feed: the node's route-owned position (node_cursors).
   telegramFeed: {
-    cursor: (workflowId: string, nodeId: string) => ["telegram-feed", "cursor", workflowId, nodeId] as const,
+    // The position is per node AND channel (changing the channel starts fresh).
+    cursor: (workflowId: string, nodeId: string, channel = "") => ["telegram-feed", "cursor", workflowId, nodeId, channel] as const,
   },
 
   credits: {

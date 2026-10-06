@@ -19,7 +19,19 @@ export const TEXT_REQUIRED_NODE_TYPES: ReadonlySet<string> = new Set([
   // Save to Collection refuses an empty record ("nothing to save"): a feed
   // with nothing new wired straight into it must skip it, not fail the run.
   "collection-write",
+  // Generate Image: an empty prompt is a legal request in general (references
+  // alone), but when the text it was WIRED produced nothing this run — the skip
+  // rule's precondition — an empty prompt is a paid picture of nothing.
+  "generate-image",
 ])
+
+/**
+ * The node's data without its prompt pre/post text: the skip decision is about
+ * the CORE text. A prefix alone ("Write a news item about:") is not something
+ * to send — with the affixes applied, an empty core read as non-empty and an
+ * idle tick paid for a model call on the prefix.
+ */
+const withoutAffixes = (data: Record<string, unknown>): Record<string, unknown> => ({ ...data, promptPrefix: undefined, promptSuffix: undefined })
 
 export interface NodeSendTextArgs {
   /** A list fan-out item (highest precedence). */
@@ -58,26 +70,28 @@ export function computeNodeSendText(
   data: Record<string, unknown>,
   args: NodeSendTextArgs,
 ): string | undefined {
+  const bare = withoutAffixes(data)
   switch (nodeType) {
     case "llm-chat":
-      return computeLlmChatFields(data, {
+      return computeLlmChatFields(bare, {
         override: args.override,
         wiredUserInput: args.wired,
         wiredSystemPrompt: args.wiredSystemPrompt,
         refMap: args.refMap,
       }).userInput
     case "ai-writer":
-      return computeAiWriterInput(data, args)
+      return computeAiWriterInput(bare, args)
     case "generate-script":
-      return computeScriptTopic(data, { override: args.override, wired: args.wired, refMap: args.refMap })
+      return computeScriptTopic(bare, { override: args.override, wired: args.wired, refMap: args.refMap })
     case "generate-music": {
       // A music node sings typed lyrics with no prompt; only both empty is nothing to send.
-      const prompt = computeNodePrompt(nodeType, data, { override: args.override, wired: args.wired, refMap: args.refMap })
+      const prompt = computeNodePrompt(nodeType, bare, { override: args.override, wired: args.wired, refMap: args.refMap })
       return present(prompt) ? prompt : present(data.lyrics as string | undefined) ? (data.lyrics as string) : ""
     }
     case "text-to-speech":
     case "text-to-audio":
-      return computeNodePrompt(nodeType, data, { override: args.override, wired: args.wired, refMap: args.refMap })
+    case "generate-image":
+      return computeNodePrompt(nodeType, bare, { override: args.override, wired: args.wired, refMap: args.refMap })
     case "collection-write": {
       // The record's content: the item (a fan-out row, else what reached `in`),
       // else a title, text or link typed on the node. A picture alone is a

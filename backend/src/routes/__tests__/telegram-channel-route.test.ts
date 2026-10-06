@@ -77,9 +77,23 @@ const fetchChannelPosts = vi.fn(async (channel: string, opts: { after?: number }
   if (opts.after === undefined) return sorted.slice(-20)
   return sorted.filter((p) => p.id > opts.after!).slice(0, 20)
 })
+/** The highest id the fetched page rendered (unreadable posts included); undefined = the last post returned. */
+const pageMaxId = { value: undefined as number | undefined }
 vi.mock("../../services/social/telegram-channel.js", () => ({
   fetchChannelPosts: (channel: string, opts?: { after?: number }) => fetchChannelPosts(channel, opts),
+  fetchChannelPage: async (channel: string, opts?: { after?: number }) => {
+    const posts = await fetchChannelPosts(channel, opts)
+    return { posts, maxSeenId: pageMaxId.value ?? (posts.length > 0 ? posts[posts.length - 1]!.id : undefined) }
+  },
   normalizeChannel: (c: string) => (c.startsWith("@") || /^[a-z0-9_]+$/i.test(c) ? c.replace("@", "") : null),
+}))
+
+/** The workflow's owner (the position's row) and who is calling. */
+const owner = { id: "user-1" as string | undefined }
+const caller = { id: "user-1", authKind: "jwt" }
+vi.mock("../../services/social/telegram-feed-position.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../services/social/telegram-feed-position.js")>()),
+  workflowOwnerId: async () => owner.id,
 }))
 
 import { telegramChannelRoutes } from "../telegram-channel.js"
@@ -98,9 +112,14 @@ beforeEach(async () => {
   writeNodeCursor.mockClear()
   resetNodeCursor.mockClear()
   fetchChannelPosts.mockClear()
+  pageMaxId.value = undefined
+  owner.id = "user-1"
+  caller.id = "user-1"
+  caller.authKind = "jwt"
   app = Fastify({ logger: false })
   app.addHook("onRequest", async (req) => {
-    ;(req as { userId?: string }).userId = "user-1"
+    ;(req as { userId?: string }).userId = caller.id
+    ;(req as { authKind?: string }).authKind = caller.authKind
   })
   await app.register(telegramChannelRoutes)
   await app.ready()
@@ -151,7 +170,8 @@ describe("POST /v1/telegram-channel/fetch", () => {
     channelPosts = range(100, 130)
     const res = await fetch({ channel: "acme", limit: 5, workflowId: WF, nodeId: "feed-1" })
     expect(res.json().posts.map((p: Post) => p.id)).toEqual([126, 127, 128, 129, 130])
-    expect(writeNodeCursor).toHaveBeenCalledWith(WF, "feed-1", "user-1", "telegram-channel-feed", 130)
+    // Under the owner's row, keyed by node AND channel.
+    expect(writeNodeCursor).toHaveBeenCalledWith(WF, "feed-1#acme", "user-1", "telegram-channel-feed", 130)
     expect(res.json().cursor).toEqual({ lastSeenId: 130, advanced: true, mode: "poll", stateful: true })
     expect(completion()!.cursor).toEqual(res.json().cursor)
   })
@@ -162,7 +182,10 @@ describe("POST /v1/telegram-channel/fetch", () => {
     const res = await fetch({ channel: "acme", limit: 5, workflowId: WF, nodeId: "feed-1", sinceId: 125 })
     expect(fetchCalls[0]).toEqual({ channel: "acme", after: 110 })
     expect(res.json().posts.map((p: Post) => p.id)).toEqual([111, 112, 113, 114, 115])
-    expect(writeNodeCursor).toHaveBeenCalledWith(WF, "feed-1", "user-1", "telegram-channel-feed", 115)
+    // The stored position was written before channels keyed them: it is carried over to the channel's key, then moved.
+    expect(writeNodeCursor).toHaveBeenCalledWith(WF, "feed-1#acme", "user-1", "telegram-channel-feed", 110)
+    expect(writeNodeCursor).toHaveBeenCalledWith(WF, "feed-1#acme", "user-1", "telegram-channel-feed", 115)
+    expect(resetNodeCursor).toHaveBeenCalledWith(WF, "feed-1", "user-1")
     expect(res.json().cursor).toMatchObject({ lastSeenId: 115, advanced: true })
     // The next run continues where this one stopped.
     const next = await fetch({ channel: "acme", limit: 5, workflowId: WF, nodeId: "feed-1" })
@@ -180,7 +203,7 @@ describe("POST /v1/telegram-channel/fetch", () => {
 
   it("nothing new: an empty page, count 0, the position stays, the reservation is refunded and nothing is committed", async () => {
     channelPosts = range(100, 110)
-    cursors = { [cursorKey(WF, "feed-1", "user-1")]: { value: 110, updatedAt: "x" } }
+    cursors = { [cursorKey(WF, "feed-1#acme", "user-1")]: { value: 110, updatedAt: "x" } }
     const res = await fetch({ channel: "acme", limit: 5, workflowId: WF, nodeId: "feed-1" })
     expect(res.statusCode).toBe(200)
     expect(res.json()).toMatchObject({ count: 0, text: "", latestId: 110, cursor: { lastSeenId: 110, advanced: false } })
@@ -243,7 +266,71 @@ describe("POST /v1/telegram-channel/fetch", () => {
   })
 })
 
+describe("whose position a fetch reads and moves", () => {
+  it("a collaborator's editor Run reads the feed statelessly — the owner's position is neither read nor moved", async () => {
+    channelPosts = range(100, 130)
+    cursors = { [cursorKey(WF, "feed-1#acme", "user-1")]: { value: 110, updatedAt: "x" } }
+    caller.id = "user-2"
+    const res = await fetch({ channel: "acme", limit: 5, workflowId: WF, nodeId: "feed-1" })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().posts.map((p: Post) => p.id)).toEqual([126, 127, 128, 129, 130])
+    expect(writeNodeCursor).not.toHaveBeenCalled()
+    expect(res.json().cursor).toMatchObject({ stateful: false, lastSeenId: null })
+    expect(cursors[cursorKey(WF, "feed-1#acme", "user-1")]?.value).toBe(110)
+  })
+
+  it("the orchestrator's call moves the OWNER's position whoever runs the workflow (a published app's runner)", async () => {
+    channelPosts = range(100, 130)
+    cursors = { [cursorKey(WF, "feed-1#acme", "user-1")]: { value: 110, updatedAt: "x" } }
+    caller.id = "runner-7"
+    caller.authKind = "internal"
+    const res = await fetch({ channel: "acme", limit: 5, workflowId: WF, nodeId: "feed-1" })
+    expect(res.json().posts.map((p: Post) => p.id)).toEqual([111, 112, 113, 114, 115])
+    expect(writeNodeCursor).toHaveBeenCalledWith(WF, "feed-1#acme", "user-1", "telegram-channel-feed", 115)
+  })
+
+  it("the position is per channel: another channel on the same node starts fresh, and the first channel's stays", async () => {
+    channelPosts = range(100, 130)
+    cursors = { [cursorKey(WF, "feed-1#acme", "user-1")]: { value: 110, updatedAt: "x" } }
+    await fetch({ channel: "other", limit: 5, workflowId: WF, nodeId: "feed-1" })
+    expect(fetchCalls[0]).toEqual({ channel: "other" })
+    expect(writeNodeCursor).toHaveBeenCalledWith(WF, "feed-1#other", "user-1", "telegram-channel-feed", 130)
+    expect(cursors[cursorKey(WF, "feed-1#acme", "user-1")]?.value).toBe(110)
+  })
+
+  it("posts with nothing to read above the position move it past them — uncharged, and the next tick is not stuck on them", async () => {
+    channelPosts = range(100, 110)
+    pageMaxId.value = 130
+    cursors = { [cursorKey(WF, "feed-1#acme", "user-1")]: { value: 110, updatedAt: "x" } }
+    const res = await fetch({ channel: "acme", limit: 5, workflowId: WF, nodeId: "feed-1" })
+    expect(res.json().count).toBe(0)
+    expect(writeNodeCursor).toHaveBeenCalledWith(WF, "feed-1#acme", "user-1", "telegram-channel-feed", 130)
+    expect(refundReservedCreditsForJob).toHaveBeenCalled()
+  })
+})
+
 describe("the position routes (UI only)", () => {
+  it("GET /cursor with the channel reads the channel's position, else the one from before channels keyed positions", async () => {
+    cursors = {
+      [cursorKey(WF, "feed-1", "user-1")]: { value: 90, updatedAt: "legacy" },
+      [cursorKey(WF, "feed-1#acme", "user-1")]: { value: 130, updatedAt: "keyed" },
+    }
+    const keyed = await app.inject({ method: "GET", url: `/v1/telegram-channel/cursor?workflowId=${WF}&nodeId=feed-1&channel=acme` })
+    expect(keyed.json()).toEqual({ data: { lastSeenId: 130, updatedAt: "keyed" } })
+    const other = await app.inject({ method: "GET", url: `/v1/telegram-channel/cursor?workflowId=${WF}&nodeId=feed-1&channel=other` })
+    expect(other.json()).toEqual({ data: { lastSeenId: 90, updatedAt: "legacy" } })
+  })
+
+  it("POST /cursor/reset with the channel forgets that channel's position and the legacy one", async () => {
+    cursors = {
+      [cursorKey(WF, "feed-1", "user-1")]: { value: 90, updatedAt: "x" },
+      [cursorKey(WF, "feed-1#acme", "user-1")]: { value: 130, updatedAt: "x" },
+    }
+    const res = await app.inject({ method: "POST", url: "/v1/telegram-channel/cursor/reset", payload: { workflowId: WF, nodeId: "feed-1", channel: "acme" } })
+    expect(res.json()).toEqual({ data: { ok: true, deleted: true } })
+    expect(cursors).toEqual({})
+  })
+
   it("GET /cursor returns the user's stored position, or null", async () => {
     const none = await app.inject({ method: "GET", url: `/v1/telegram-channel/cursor?workflowId=${WF}&nodeId=feed-1` })
     expect(none.json()).toEqual({ data: { lastSeenId: null, updatedAt: null } })

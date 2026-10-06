@@ -5,7 +5,7 @@ vi.mock("../../../lib/safe-fetch.js", () => ({
   safeFetch: (...args: unknown[]) => safeFetchMock(...args),
 }))
 
-import { parseChannelHtml, normalizeChannel, fetchChannelPosts } from "../telegram-channel.js"
+import { parseChannelHtml, parseChannelPage, normalizeChannel, fetchChannelPosts, fetchChannelPage } from "../telegram-channel.js"
 
 // Mirrors the real t.me/s/ preview DOM. The text, photo, video, footer (views +
 // date) and the SVG-less wrapper shape below were captured live from
@@ -131,6 +131,47 @@ describe("parseChannelHtml", () => {
 
   it("returns posts ascending by id", () => {
     expect(posts.map((p) => p.id)).toEqual([10, 11, 13, 14, 15, 16, 17])
+  })
+})
+
+describe("entities a post can carry", () => {
+  const wrap = (id: number, text: string) =>
+    `<div class="tgme_widget_message js-widget_message" data-post="acme/${id}"><div class="tgme_widget_message_text js-message_text" dir="auto">${text}</div>${FOOTER(id, "2026-07-18T10:00:00+00:00", "1")}</div>`
+
+  it("an out-of-range numeric entity stays as written instead of failing the whole page (one such post failed every tick)", () => {
+    const posts = parseChannelHtml(wrap(20, "Score &#9999999; and &#x110000; today &#128512;"), "acme")
+    expect(posts).toHaveLength(1)
+    expect(posts[0]!.text).toBe("Score &#9999999; and &#x110000; today 😀")
+  })
+
+  it("&amp; is decoded last, so an escaped entity reads as the text the author wrote", () => {
+    const posts = parseChannelHtml(wrap(21, "Type &amp;lt; for less-than, &amp;amp; for an ampersand"), "acme")
+    expect(posts[0]!.text).toBe("Type &lt; for less-than, &amp; for an ampersand")
+  })
+})
+
+describe("parseChannelPage / fetchChannelPage — the highest id the page rendered", () => {
+  it("counts posts with nothing to read (the service message), so the position can move past them", () => {
+    const page = parseChannelPage(FIXTURE, "acme")
+    expect(page.posts.map((p) => p.id)).toEqual([10, 11, 13, 14, 15, 16, 17])
+    expect(page.maxSeenId).toBe(17)
+    const onlyUnreadable = parseChannelPage(
+      `<div class="tgme_channel_info">...</div><div class="tgme_widget_message js-widget_message" data-post="acme/30"><div class="tgme_widget_message_service">joined</div></div><div class="tgme_widget_message js-widget_message" data-post="acme/31"><div class="tgme_widget_message_service">pinned</div></div>`,
+      "acme",
+    )
+    expect(onlyUnreadable.posts).toEqual([])
+    expect(onlyUnreadable.maxSeenId).toBe(31)
+  })
+
+  it("paging after a post: only ids above it count, for the posts and for the page's highest id", async () => {
+    safeFetchMock.mockResolvedValueOnce({ ok: true, status: 200, text: async () => FIXTURE })
+    const page = await fetchChannelPage("acme", { after: 14 })
+    expect(page.posts.map((p) => p.id)).toEqual([15, 16, 17])
+    expect(page.maxSeenId).toBe(17)
+    safeFetchMock.mockResolvedValueOnce({ ok: true, status: 200, text: async () => FIXTURE })
+    const past = await fetchChannelPage("acme", { after: 17 })
+    expect(past.posts).toEqual([])
+    expect(past.maxSeenId).toBeUndefined()
   })
 })
 

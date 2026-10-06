@@ -37,6 +37,20 @@ describe("planFeedEmission", () => {
     expect(empty.latestId).toBe(50)
   })
 
+  it("a page of posts with nothing to read above the position moves the position past them — the feed never re-reads the same unreadable page", () => {
+    // Twenty voice notes (ids 51..70) rendered above position 50, none readable.
+    const plan = planFeedEmission([], 50, 5, 70)
+    expect(plan.emitted).toEqual([])
+    expect(plan.latestId).toBe(70)
+    // Readable posts win: the position is the highest EMITTED post, whatever the page went up to.
+    const mixed = planFeedEmission(ids(60, 62), 50, 5, 70)
+    expect(mixed.emitted.map((p) => p.id)).toEqual([60, 61, 62])
+    expect(mixed.latestId).toBe(62)
+    // A page max at or below the position changes nothing.
+    expect(planFeedEmission([], 50, 5, 50).latestId).toBe(50)
+    expect(planFeedEmission([], 50, 5, 40).latestId).toBe(50)
+  })
+
   it("an empty channel on the first run has no position", () => {
     expect(planFeedEmission([], undefined, 5)).toEqual({ emitted: [], latestId: undefined })
   })

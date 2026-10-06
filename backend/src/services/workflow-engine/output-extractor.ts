@@ -797,7 +797,10 @@ export function getPrimaryOutput(
   // Extract Field and List read state.output.json directly); `text`, the
   // legacy `out`, or no handle → their digest.
   if (sourceType === "telegram-channel-feed") {
-    if (sourceHandle === "json") return output.json === undefined ? undefined : JSON.stringify(output.json)
+    // An idle tick is NOTHING on the json pip too — the route writes `json: []`,
+    // and "[]" would run a paid model on two brackets, save a junk record and
+    // publish a reply to nothing (the canvas returns undefined here as well).
+    if (sourceHandle === "json") return Array.isArray(output.json) && output.json.length > 0 ? JSON.stringify(output.json) : undefined
     return output.text
   }
 

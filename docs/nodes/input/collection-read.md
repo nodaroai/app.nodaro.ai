@@ -47,10 +47,10 @@ Free — reading a collection costs 0 credits.
 
 ```
 Telegram Channel Feed ──► Combine Text ──► Generate Text (pick stories) ──► ...
-Read Collection ("articles", last 48 hours, headlines) ──┘  (mapped into the picker's prompt)
+Read Collection ("articles", last 48 hours, headlines) ──┘  (wired into the picker's System prompt input)
 ```
 
-The picker's prompt says: "Here is what was already covered in the last two days: {Read Collection}. Drop any story on that list." With [Save to Collection](../output/collection-write.md) at the end of the pipeline, every scheduled run knows what the earlier runs produced.
+Wire the posts into the picker's **Prompt** input and leave its Prompt field empty, so a tick with nothing new skips the picker. Wire Read Collection into the picker's **System prompt** input and refer to it from the typed system prompt: "Here is what was already covered in the last two days: {Read Collection}. Drop any story on that list." (Typed text in the Prompt field would win over the wired posts, and a second wire into Prompt would replace them.) With [Save to Collection](../output/collection-write.md) at the end of the pipeline, every scheduled run knows what the earlier runs produced. Set **Max records** high enough for the window — two days of a 2-hour schedule at a dozen stories each is well over the default 50.
 
 ## Tips
 

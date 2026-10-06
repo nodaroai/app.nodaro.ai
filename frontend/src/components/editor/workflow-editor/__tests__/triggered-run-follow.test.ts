@@ -122,6 +122,11 @@ describe("paintableStates", () => {
     expect(Object.keys(paintableStates(nodes, states, { id: "r1", completedAt: "2026-10-03T10:00:20Z", active: false }))).toEqual(["llm"])
   })
 
+  it("a node the run SKIPPED is painted too — a scheduled 'nothing new' run leaves its chip on the canvas", () => {
+    const skipped = { ...states, llm: { status: "skipped", skipReason: "empty_input", completedAt: "2026-10-03T10:00:05Z" } }
+    expect(Object.keys(paintableStates(nodes, skipped, { id: "r1", completedAt: "2026-10-03T10:00:20Z", active: false }))).toEqual(["llm"])
+  })
+
   it("while the run is going, also the nodes it is about to run", () => {
     expect(Object.keys(paintableStates(nodes, states, { id: "r1", active: true })).sort()).toEqual(["llm", "va"])
   })

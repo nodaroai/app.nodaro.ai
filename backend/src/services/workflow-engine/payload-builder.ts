@@ -1925,7 +1925,9 @@ export function buildNodeRefMap(
         output = state.output.videoUrl
       } else if (state?.output?.audioUrl) {
         output = state.output.audioUrl
-      } else if (state?.output?.json !== undefined && state.output.json !== null) {
+      } else if (state?.output?.json !== undefined && state.output.json !== null && !(Array.isArray(state.output.json) && state.output.json.length === 0)) {
+        // (An empty list is nothing to reference — a feed or a collection read
+        // with no posts this run must not resolve `{Feed}` to "[]".)
         // Structured producers (web-scrape, video-analysis / video-audit) carry
         // their result on `json` only. Stringified so {Label} in a prompt gets
         // the data — the same text getPrimaryOutput hands a wired consumer.

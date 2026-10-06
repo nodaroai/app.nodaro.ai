@@ -8288,18 +8288,19 @@ export async function collectionWriteApi(params: {
 }
 
 /** The feed's stored position for a node of a saved workflow (null when it has none). */
-export async function getTelegramFeedCursor(workflowId: string, nodeId: string): Promise<{ lastSeenId: number | null; updatedAt: string | null }> {
+export async function getTelegramFeedCursor(workflowId: string, nodeId: string, channel?: string): Promise<{ lastSeenId: number | null; updatedAt: string | null }> {
+  const query = new URLSearchParams({ workflowId, nodeId, ...(channel?.trim() ? { channel: channel.trim() } : {}) })
   const res = await apiRequest<{ data: { lastSeenId: number | null; updatedAt: string | null } }>(
-    `/v1/telegram-channel/cursor?workflowId=${encodeURIComponent(workflowId)}&nodeId=${encodeURIComponent(nodeId)}`,
+    `/v1/telegram-channel/cursor?${query.toString()}`,
     "apiErr.loadFeedCursor",
   )
   return res.data
 }
 
-/** Forget the feed's position: the next run reads the newest posts again. */
-export async function resetTelegramFeedCursor(workflowId: string, nodeId: string): Promise<{ ok: boolean; deleted: boolean }> {
+/** Forget the feed's position (for this channel): the next run reads the newest posts again. */
+export async function resetTelegramFeedCursor(workflowId: string, nodeId: string, channel?: string): Promise<{ ok: boolean; deleted: boolean }> {
   const res = await apiJson<{ data: { ok: boolean; deleted: boolean } }>("/v1/telegram-channel/cursor/reset", {
-    body: { workflowId, nodeId },
+    body: { workflowId, nodeId, ...(channel?.trim() ? { channel: channel.trim() } : {}) },
     label: "apiErr.resetFeedCursor",
   })
   return res.data

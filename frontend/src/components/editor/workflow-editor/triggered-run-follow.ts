@@ -36,8 +36,10 @@ const EDITOR_LANES: ReadonlySet<string> = new Set(["manual", "single-node"])
 const ACTIVE: ReadonlySet<string> = new Set(["pending", "running", "stopping"])
 /** Ended with something to show. A run stopped on purpose (cancelled, discarded) is not painted. */
 const ENDED: ReadonlySet<string> = new Set(["completed", "failed", "timed_out"])
-/** The node states an ended run paints: a node still "running" in an ended run was orphaned, not running. */
-const NODE_ENDED: ReadonlySet<string> = new Set(["completed", "failed"])
+/** The node states an ended run paints: a node still "running" in an ended run was orphaned, not running.
+ *  A node the run SKIPPED (router gate, nothing to work on) is painted too — that is the
+ *  "Skipped · no input" chip a scheduled "nothing new" run leaves on the canvas. */
+const NODE_ENDED: ReadonlySet<string> = new Set(["completed", "failed", "skipped"])
 
 /**
  * On a node: the id of the run whose results it shows (registered in

@@ -39,7 +39,9 @@ under the same **idempotency key** and gets `outcome: "replayed"` back.
 
 Past the records cap, the **oldest records are removed as new ones arrive** —
 a scheduled pipeline is never stopped by a full collection, and the page shows
-how full each one is. Creating a collection past the collections cap is
+how full each one is. One write removes at most 100 records, so a cap that
+drops at once (a plan that lapsed) trims a large collection a little per write
+rather than emptying it in one go. Creating a collection past the collections cap is
 refused (`403 collection_limit_reached`). A self-hosted server has no caps
 unless the operator sets `COLLECTIONS_MAX_PER_USER` /
 `COLLECTIONS_MAX_RECORDS_PER_COLLECTION` (see [deployment](../deployment.md)).

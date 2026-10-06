@@ -9,9 +9,9 @@ The Telegram Channel Feed node reads a public channel's posts via its web previe
 ## How it works
 
 - Set the **Channel** — a public channel by `@name`, `t.me/name`, or bare id. It must have its web preview enabled (most public channels do).
-- The node keeps a **position**: the id of the last post it emitted, stored on the server per node of the saved workflow (the editor's single-node Run and a scheduled run move the same position).
+- The node keeps a **position**: the id of the last post it emitted, stored on the server per node of the saved workflow **and per channel** — changing the channel starts fresh, changing back resumes where that channel stood. The position belongs to the workflow: a scheduled run, a published app's run and the owner's single-node Run move the same one; another person's editor Run reads the feed without touching it.
 - **First run** (or the first after a Reset): the newest **Max posts per run** posts, and the position jumps to the newest post — older posts are never revisited.
-- **Every run after that**: the oldest posts above the position, up to **Max posts per run**, and the position moves to the highest post emitted. When posts pile up faster than the schedule reads them, each run takes the next batch — a backlog drains at your pace and nothing is skipped.
+- **Every run after that**: the oldest posts above the position, up to **Max posts per run**, and the position moves to the highest post emitted. When posts pile up faster than the schedule reads them, each run takes the next batch — a backlog drains at your pace and nothing is skipped. Posts with nothing to read (a poll, a voice note, a document with no caption) are passed over and the position moves past them. The position moves when the posts are fetched: a run that fails later does not read that batch again (**Re-fetch** shows it without moving the position).
 - **Nothing new**: the run emits no post, is not charged, and the nodes behind the feed that would have worked on its text are skipped — the run ends `completed` with `outcome: "nothing_new"` (see [Runs that find nothing new](../../api-integration.md#runs-that-find-nothing-new)).
 
 ## Configuration

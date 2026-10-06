@@ -34,7 +34,7 @@ function TelegramChannelFeedNodeComponent({ id, data, selected }: NodeProps) {
   const workflowId = useWorkflowStore((s) => s.workflowId)
   const status = nodeData.executionStatus ?? "idle"
   const credits = useModelCredits("telegram-channel-feed", 10)
-  const { data: cursor } = useTelegramFeedCursor(workflowId, id)
+  const { data: cursor } = useTelegramFeedCursor(workflowId, id, nodeData.channel)
   const posts = telegramPostsFrom(nodeData.generatedJson)
   const newest = posts[posts.length - 1]
 
@@ -56,8 +56,10 @@ function TelegramChannelFeedNodeComponent({ id, data, selected }: NodeProps) {
         hideHeader
         topToolbarContent={<RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />}
         handles={[
-          { id: "json", type: "source", position: Position.Right, customStyle: { top: "24px", right: "-29px" }, external: true },
-          { id: "text", type: "source", position: Position.Right, customStyle: { top: "52px", right: "-29px" }, external: true },
+          // `text` sits first: an edge with no source handle is drawn from the
+          // first pip, and both engines read such an edge as the text output.
+          { id: "text", type: "source", position: Position.Right, customStyle: { top: "24px", right: "-29px" }, external: true },
+          { id: "json", type: "source", position: Position.Right, customStyle: { top: "52px", right: "-29px" }, external: true },
         ]}
       >
         <div className="p-3 space-y-1.5">
@@ -93,8 +95,8 @@ function TelegramChannelFeedNodeComponent({ id, data, selected }: NodeProps) {
           )}
         </div>
       </BaseNode>
-      <HandleWithPopover nodeId={id} nodeType="telegram-channel-feed" handleId="json" type="source" position={Position.Right} label="JSON" color={DATA_HANDLE_COLORS.json} icon={<Braces />} side="right" top="24px" />
-      <HandleWithPopover nodeId={id} nodeType="telegram-channel-feed" handleId="text" type="source" position={Position.Right} label="Posts" color={TEXT_HANDLE_COLOR} icon={<Type />} side="right" top="52px" />
+      <HandleWithPopover nodeId={id} nodeType="telegram-channel-feed" handleId="text" type="source" position={Position.Right} label="Posts" color={TEXT_HANDLE_COLOR} icon={<Type />} side="right" top="24px" />
+      <HandleWithPopover nodeId={id} nodeType="telegram-channel-feed" handleId="json" type="source" position={Position.Right} label="JSON" color={DATA_HANDLE_COLORS.json} icon={<Braces />} side="right" top="52px" />
     </div>
   )
 }

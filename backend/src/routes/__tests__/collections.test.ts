@@ -485,15 +485,17 @@ describe("POST /v1/collections/:id/records", () => {
     expect(res.json()).toMatchObject({ outcome: "inserted", evicted: 0, record: { id: REC } })
   })
 
-  it("evicts everything older than the cap-th newest record in ONE range delete, scoped to the collection and the caller", async () => {
+  it("evicts the oldest records past the cap-th newest — a bounded id list per write, scoped to the collection and the caller", async () => {
     edition.credits = false
     edition.maxRecords = 5
     const count = makeQB({ count: 7 })
     const boundary = makeQB({ data: { created_at: "2026-10-06T07:00:00.000+00:00", id: "00000000-0000-4000-8000-0000000000a5" } })
+    const victimIds = ["00000000-0000-4000-8000-0000000000a1", "00000000-0000-4000-8000-0000000000a2"]
+    const victims = makeQB({ data: victimIds.map((id) => ({ id })) })
     const remove = makeQB({ count: 2 })
     tables({
       collections: [owned()],
-      collection_records: [makeQB({ data: recordRow() }), count, boundary, remove],
+      collection_records: [makeQB({ data: recordRow() }), count, boundary, victims, remove],
     })
     const app = await buildApp()
     const res = await app.inject({ method: "POST", url: `/v1/collections/${COLL}/records`, payload: { title: "Seventh" } })
@@ -504,13 +506,18 @@ describe("POST /v1/collections/:id/records", () => {
     expect(count.eq).toHaveBeenCalledWith("user_id", USER)
     expect(boundary.order).toHaveBeenCalledWith("created_at", { ascending: false })
     expect(boundary.range).toHaveBeenCalledWith(4, 4)
+    // The victims: everything older than the boundary, oldest first, at most COLLECTION_EVICT_MAX_PER_WRITE.
+    expect(victims.or).toHaveBeenCalledWith(
+      "created_at.lt.2026-10-06T07:00:00.000+00:00,and(created_at.eq.2026-10-06T07:00:00.000+00:00,id.lt.00000000-0000-4000-8000-0000000000a5)",
+    )
+    expect(victims.order).toHaveBeenCalledWith("created_at", { ascending: true })
+    expect(victims.limit).toHaveBeenCalledWith(100)
+    expect(victims.eq).toHaveBeenCalledWith("user_id", USER)
     expect(remove.delete).toHaveBeenCalledWith({ count: "exact" })
     expect(remove.eq).toHaveBeenCalledWith("collection_id", COLL)
     expect(remove.eq).toHaveBeenCalledWith("user_id", USER)
-    expect(remove.or).toHaveBeenCalledWith(
-      "created_at.lt.2026-10-06T07:00:00.000+00:00,and(created_at.eq.2026-10-06T07:00:00.000+00:00,id.lt.00000000-0000-4000-8000-0000000000a5)",
-    )
-    expect(remove.in).not.toHaveBeenCalled()
+    expect(remove.in).toHaveBeenCalledWith("id", victimIds)
+    expect(remove.or).not.toHaveBeenCalled()
   })
 
   it("evicts nothing when the collection is at or under its cap, or when it has no cap", async () => {

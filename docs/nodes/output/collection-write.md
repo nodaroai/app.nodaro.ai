@@ -55,7 +55,7 @@ Generate Text (one article per story, as JSON) ──► Save to Collection ("ar
 Generate Image (one cover per story) ────────────┘ (Image)
 ```
 
-The writer emits one JSON object per article (`{ "headline", "body", "slug", "primarySource" }`) on a fan-out; the image node fans out beside it. Save to Collection pairs them row by row: the article's `headline` and `body` become the record's title and text, `slug` is the duplicate key, the cover rides along as a media link. A [Read Collection](../input/collection-read.md) node at the top of the next run reads the last 48 hours of "articles" into the story picker's prompt, so a story is never written twice.
+The writer emits one JSON object per article (`{ "headline", "body", "slug", "primarySource" }`) on a fan-out; the image node fans out beside it. Save to Collection pairs them row by row: the article's `headline` and `body` become the record's title and text, `slug` is the duplicate key, the cover rides along as a media link. For the pairing to hold, set **both** wires into Save to Collection (Item and Image) to **Each**, and build the image prompts as an Each fan-out over the writer's items so the two lists have the same number of rows — lists of different lengths wrap around, and the fifth article would get the first cover. A cover that failed leaves its record without a picture; the article is still saved. A [Read Collection](../input/collection-read.md) node at the top of the next run reads the last 48 hours of "articles" into the story picker's prompt, so a story is never written twice.
 
 ## Tips
 

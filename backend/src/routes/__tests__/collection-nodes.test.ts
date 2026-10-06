@@ -191,6 +191,8 @@ describe("POST /v1/collection-write (Save to Collection)", () => {
         makeQB({ data: recordRow() }),
         makeQB({ count: 7 }),
         makeQB({ data: { created_at: "2026-10-06T07:00:00.000+00:00", id: "00000000-0000-4000-8000-0000000000a5" } }),
+        // The oldest records past the boundary (a bounded id list), then their deletion.
+        makeQB({ data: [{ id: "00000000-0000-4000-8000-0000000000a1" }, { id: "00000000-0000-4000-8000-0000000000a2" }] }),
         makeQB({ count: 2 }),
       ],
       jobs: [makeQB()],

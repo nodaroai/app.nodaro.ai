@@ -24,6 +24,19 @@ describe("itemFromWire — what a node receives on its `in` wire", () => {
     expect(itemFromWire("Just a headline")).toBe("Just a headline")
   })
 
+  it("a list of exactly ONE object is that object — an each wire that held a single post never fanned out", () => {
+    expect(itemFromWire('[{"postUrl":"https://t.me/x/9","text":"only one"}]')).toEqual({ postUrl: "https://t.me/x/9", text: "only one" })
+    expect(itemFromWire([{ title: "T" }])).toEqual({ title: "T" })
+    expect(itemFromWire('["just a string"]')).toBe('["just a string"]')
+    expect(itemFromWire("[]")).toBe("[]")
+  })
+
+  it("JSON a model wrapped in a ```json fence is still JSON", () => {
+    expect(itemFromWire('```json\n{"headline":"Markets rally","slug":"markets-rally"}\n```')).toEqual({ headline: "Markets rally", slug: "markets-rally" })
+    expect(itemFromWire("```\n{\"a\":1}\n```")).toEqual({ a: 1 })
+    expect(itemFromWire("```json\nnot json\n```")).toBe("```json\nnot json\n```")
+  })
+
   it("passes a real object or list through untouched", () => {
     const obj = { title: "T" }
     expect(itemFromWire(obj)).toBe(obj)

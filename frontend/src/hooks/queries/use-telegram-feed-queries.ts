@@ -7,21 +7,22 @@ import { getTelegramFeedCursor, resetTelegramFeedCursor } from "@/lib/api"
  * route): what the card and the panel show as "Last seen #N", and what Reset
  * forgets. Keyed by workflow + node; an unsaved canvas has no position to read.
  */
-export function useTelegramFeedCursor(workflowId: string | null | undefined, nodeId: string) {
+/** The feed's position for this node AND channel (a position is per channel; changing it starts fresh). */
+export function useTelegramFeedCursor(workflowId: string | null | undefined, nodeId: string, channel?: string) {
   return useQuery({
-    queryKey: queryKeys.telegramFeed.cursor(workflowId ?? "", nodeId),
-    queryFn: () => getTelegramFeedCursor(workflowId as string, nodeId),
+    queryKey: queryKeys.telegramFeed.cursor(workflowId ?? "", nodeId, channel ?? ""),
+    queryFn: () => getTelegramFeedCursor(workflowId as string, nodeId, channel),
     enabled: !!workflowId,
     staleTime: 15_000,
   })
 }
 
-export function useResetTelegramFeedCursorMutation(workflowId: string | null | undefined, nodeId: string) {
+export function useResetTelegramFeedCursorMutation(workflowId: string | null | undefined, nodeId: string, channel?: string) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: () => resetTelegramFeedCursor(workflowId as string, nodeId),
+    mutationFn: () => resetTelegramFeedCursor(workflowId as string, nodeId, channel),
     onSuccess: () => {
-      if (workflowId) void qc.invalidateQueries({ queryKey: queryKeys.telegramFeed.cursor(workflowId, nodeId) })
+      if (workflowId) void qc.invalidateQueries({ queryKey: queryKeys.telegramFeed.cursor(workflowId, nodeId, channel ?? "") })
     },
   })
 }

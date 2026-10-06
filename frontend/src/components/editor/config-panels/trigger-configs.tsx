@@ -319,8 +319,8 @@ export function TelegramChannelFeedConfig({ data, onUpdate, nodeId }: ConfigProp
   const d = data as TelegramChannelFeedData
   const workflowId = useWorkflowStore((s) => s.workflowId)
   const tracked = !!workflowId && !!nodeId
-  const { data: cursor } = useTelegramFeedCursor(tracked ? workflowId : null, nodeId ?? "")
-  const resetCursor = useResetTelegramFeedCursorMutation(workflowId, nodeId ?? "")
+  const { data: cursor } = useTelegramFeedCursor(tracked ? workflowId : null, nodeId ?? "", d.channel)
+  const resetCursor = useResetTelegramFeedCursorMutation(workflowId, nodeId ?? "", d.channel)
   const [confirmReset, setConfirmReset] = useState(false)
   const [peeking, setPeeking] = useState(false)
   const limit = d.limit ?? 5

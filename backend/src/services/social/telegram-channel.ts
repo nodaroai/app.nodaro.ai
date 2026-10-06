@@ -33,17 +33,23 @@ export function normalizeChannel(input: string): string | null {
   return CHANNEL_RE.test(s) ? s : null
 }
 
+/** A code point the text can hold, else the entity as written — one `&#9999999;` in a post must not fail every tick. */
+const codePointOrLiteral = (n: number, literal: string): string =>
+  Number.isInteger(n) && n >= 0 && n <= 0x10ffff && !(n >= 0xd800 && n <= 0xdfff) ? String.fromCodePoint(n) : literal
+
 function decodeEntities(s: string): string {
   return s
     .replace(/<br\s*\/?>/gi, "\n")
     .replace(/<[^>]+>/g, "")
     .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
+    // Numeric entities first, range-checked.
+    .replace(/&#(\d+);/g, (m, n) => codePointOrLiteral(Number(n), m))
+    .replace(/&#x([0-9a-f]+);/gi, (m, n) => codePointOrLiteral(parseInt(n, 16), m))
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
-    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
-    .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16)))
+    // `&amp;` LAST: "&amp;lt;" is the literal "&lt;" the author wrote, not "<".
+    .replace(/&amp;/g, "&")
     .replace(/[ \t]+\n/g, "\n")
     .trim()
 }
@@ -91,13 +97,31 @@ function parseDate(chunk: string): string | undefined {
  * Exported for the guard test.
  */
 export function parseChannelHtml(html: string, channel: string): TelegramChannelPost[] {
+  return parseChannelPage(html, channel).posts
+}
+
+export interface ChannelPage {
+  readonly posts: TelegramChannelPost[]
+  /**
+   * The highest message id the page rendered, posts with nothing to read
+   * (polls, voice notes, documents without a caption) included. The feed's
+   * position moves past them; without it, twenty such posts in a row would
+   * have the feed read the same unreadable page every tick for ever.
+   */
+  readonly maxSeenId: number | undefined
+}
+
+/** Parse the preview HTML into posts (oldest→newest) and the highest id it rendered. */
+export function parseChannelPage(html: string, channel: string): ChannelPage {
   const posts: TelegramChannelPost[] = []
+  let maxSeenId: number | undefined
   // Each post is a .tgme_widget_message wrapper carrying data-post="chan/<id>".
   const wrappers = html.split(/<div class="tgme_widget_message[ "]/).slice(1)
   for (const chunk of wrappers) {
     const idMatch = chunk.match(/data-post="[^"/]+\/(\d+)"/)
     if (!idMatch) continue
     const id = Number(idMatch[1])
+    if (Number.isFinite(id) && (maxSeenId === undefined || id > maxSeenId)) maxSeenId = id
 
     const text = parseText(chunk)
     const media = parseMedia(chunk)
@@ -123,7 +147,7 @@ export function parseChannelHtml(html: string, channel: string): TelegramChannel
   }
   // De-dup by id (the page can repeat a pinned post) and sort ascending.
   const byId = new Map(posts.map((p) => [p.id, p]))
-  return [...byId.values()].sort((a, b) => a.id - b.id)
+  return { posts: [...byId.values()].sort((a, b) => a.id - b.id), maxSeenId }
 }
 
 export interface FetchChannelPostsOptions {
@@ -134,6 +158,11 @@ export interface FetchChannelPostsOptions {
 /** Fetch + parse a public channel's posts — the newest page, or the page after `after`. Throws with a clear message
  *  on a private/nonexistent channel or preview-disabled channel; an empty page past the newest post is not an error. */
 export async function fetchChannelPosts(channelInput: string, opts: FetchChannelPostsOptions = {}): Promise<TelegramChannelPost[]> {
+  return (await fetchChannelPage(channelInput, opts)).posts
+}
+
+/** The page's posts AND the highest id it rendered (see `ChannelPage`). */
+export async function fetchChannelPage(channelInput: string, opts: FetchChannelPostsOptions = {}): Promise<ChannelPage> {
   const channel = normalizeChannel(channelInput)
   if (!channel) throw new Error(`"${channelInput}" is not a valid Telegram channel name`)
 
@@ -146,8 +175,8 @@ export async function fetchChannelPosts(channelInput: string, opts: FetchChannel
     throw new Error(`Could not read t.me/s/${channel} (HTTP ${res.status})`)
   }
   const html = await res.text()
-  const posts = parseChannelHtml(html, channel)
-  if (posts.length === 0) {
+  const page = parseChannelPage(html, channel)
+  if (page.posts.length === 0) {
     // The page loads but renders no posts → private, empty, or preview disabled.
     // (A page past the newest post is empty too, but still carries the channel's markup.)
     if (!/tgme_channel_info|tgme_widget_message/.test(html)) {
@@ -155,5 +184,9 @@ export async function fetchChannelPosts(channelInput: string, opts: FetchChannel
     }
   }
   // The page may render the anchor post itself; only what lies above it counts.
-  return after === undefined ? posts : posts.filter((p) => p.id > after)
+  if (after === undefined) return page
+  return {
+    posts: page.posts.filter((p) => p.id > after),
+    maxSeenId: page.maxSeenId !== undefined && page.maxSeenId > after ? page.maxSeenId : undefined,
+  }
 }

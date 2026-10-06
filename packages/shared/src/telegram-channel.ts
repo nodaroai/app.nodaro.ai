@@ -116,6 +116,13 @@ export function planFeedEmission<P extends { readonly id: number }>(
   posts: ReadonlyArray<P>,
   since: number | undefined,
   limit: number,
+  /**
+   * The highest message id the fetched page(s) rendered above `since`, posts
+   * with nothing to read included. When nothing readable lies above the
+   * position but the page went further, the position moves past the unreadable
+   * posts — else the feed reads the same page every tick for ever.
+   */
+  pageMaxId?: number,
 ): FeedEmissionPlan<P> {
   const cap = Math.max(1, Math.min(TELEGRAM_FEED_LIMIT_MAX, Math.floor(Number.isFinite(limit) ? limit : TELEGRAM_FEED_DEFAULT_LIMIT) || 1))
   const byId = new Map<number, P>()
@@ -127,5 +134,7 @@ export function planFeedEmission<P extends { readonly id: number }>(
   }
   const fresh = sorted.filter((p) => p.id > since)
   const emitted = fresh.slice(0, cap)
-  return { emitted, latestId: emitted.length > 0 ? emitted[emitted.length - 1]!.id : since }
+  if (emitted.length > 0) return { emitted, latestId: emitted[emitted.length - 1]!.id }
+  const pastUnreadable = pageMaxId !== undefined && Number.isFinite(pageMaxId) && pageMaxId > since
+  return { emitted, latestId: pastUnreadable ? pageMaxId : since }
 }

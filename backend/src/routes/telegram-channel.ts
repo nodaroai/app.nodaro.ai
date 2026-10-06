@@ -9,8 +9,9 @@ import {
   telegramFeedDigest,
   type TelegramChannelPost,
 } from "@nodaro/shared"
-import { fetchChannelPosts, normalizeChannel } from "../services/social/telegram-channel.js"
-import { readNodeCursor, readNodeCursorRow, resetNodeCursor, writeNodeCursor } from "../services/workflow-engine/node-cursor.js"
+import { fetchChannelPage, fetchChannelPosts, normalizeChannel, type ChannelPage } from "../services/social/telegram-channel.js"
+import { FEED_CURSOR_KIND, feedPositionKey, feedPositionUser, readFeedPosition, workflowOwnerId } from "../services/social/telegram-feed-position.js"
+import { readNodeCursorRow, resetNodeCursor, writeNodeCursor } from "../services/workflow-engine/node-cursor.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { insertJob } from "../lib/insert-job.js"
 import { supabase } from "../lib/supabase.js"
@@ -60,14 +61,18 @@ const fetchSchema = z.object({
 const cursorQuerySchema = z.object({
   workflowId: z.string().uuid(),
   nodeId: z.string().min(1).max(200),
+  /** The channel the node reads — a position is per node AND channel. Absent: the position written before channels keyed it. */
+  channel: z.string().min(1).max(200).optional(),
 })
 
-/** The posts above `since`: one page, and a second one when the first was full and short of `limit` (two pages at most). */
-async function fetchFreshPosts(channel: string, since: number, limit: number): Promise<TelegramChannelPost[]> {
-  const first = await fetchChannelPosts(channel, { after: since })
-  if (first.length < TELEGRAM_FEED_PAGE_SIZE || first.length >= limit) return first
-  const second = await fetchChannelPosts(channel, { after: first[first.length - 1]!.id })
-  return [...first, ...second]
+/** The posts above `since`: one page, and a second one when the first was full and short of `limit` (two pages at most).
+ *  `maxSeenId` is the highest id the pages rendered above `since`, unreadable posts included (the position moves past them). */
+async function fetchFreshPosts(channel: string, since: number, limit: number): Promise<ChannelPage> {
+  const first = await fetchChannelPage(channel, { after: since })
+  if (first.posts.length < TELEGRAM_FEED_PAGE_SIZE || first.posts.length >= limit) return first
+  const second = await fetchChannelPage(channel, { after: first.posts[first.posts.length - 1]!.id })
+  const maxSeenId = [first.maxSeenId, second.maxSeenId].filter((n): n is number => n !== undefined)
+  return { posts: [...first.posts, ...second.posts], maxSeenId: maxSeenId.length > 0 ? Math.max(...maxSeenId) : undefined }
 }
 
 export async function telegramChannelRoutes(app: FastifyInstance): Promise<void> {
@@ -89,8 +94,12 @@ export async function telegramChannelRoutes(app: FastifyInstance): Promise<void>
     const { channel, sinceId } = parsed.data
     const limit = parsed.data.limit ?? TELEGRAM_FEED_DEFAULT_LIMIT
     const mode = parsed.data.mode ?? "poll"
-    // Stateful when the request says which node of which workflow is asking.
-    const stateful = !!workflowId && !!nodeId
+    // The position belongs to the WORKFLOW — its owner's row, one per feed node
+    // per channel. It is read and moved when the orchestrator calls (any run of
+    // the workflow) or the owner runs the node; anyone else reads statelessly.
+    const ownerId = workflowId && nodeId ? await workflowOwnerId(workflowId) : undefined
+    const positionUser = feedPositionUser(req, userId, ownerId)
+    const tracked = workflowId && nodeId && positionUser ? { workflowId, nodeId, userId: positionUser } : undefined
 
     if (!normalizeChannel(channel)) {
       return reply.status(400).send({
@@ -123,7 +132,7 @@ export async function telegramChannelRoutes(app: FastifyInstance): Promise<void>
       // editor's legacy seed; a peek stands nowhere.
       let since: number | undefined
       if (mode === "poll") {
-        const stored = stateful ? await readNodeCursor(workflowId, nodeId, userId) : undefined
+        const stored = tracked ? await readFeedPosition(tracked.workflowId, tracked.nodeId, channel, tracked.userId) : undefined
         since = stored ?? sinceId
       }
 
@@ -140,26 +149,27 @@ export async function telegramChannelRoutes(app: FastifyInstance): Promise<void>
         latestId = plan.latestId
       } else {
         const fresh = await fetchFreshPosts(channel, since, limit)
-        const plan = planFeedEmission(fresh, since, limit)
+        const plan = planFeedEmission(fresh.posts, since, limit, fresh.maxSeenId)
         emitted = plan.emitted
         latestId = plan.latestId
       }
 
       const advanced = mode === "poll" && latestId !== undefined && latestId !== since
-      if (stateful && mode === "poll" && latestId !== undefined && advanced) {
+      if (tracked && mode === "poll" && latestId !== undefined && advanced) {
         // Best-effort by design (node-cursor.ts): a failed write means the next
-        // run re-emits, never a failed run.
-        await writeNodeCursor(workflowId, nodeId, userId, "telegram-channel-feed", latestId)
+        // run re-emits, never a failed run. The owner's row, keyed by channel.
+        await writeNodeCursor(tracked.workflowId, feedPositionKey(tracked.nodeId, channel), tracked.userId, FEED_CURSOR_KIND, latestId)
       }
 
       const text = telegramFeedDigest(emitted)
       const position = mode === "poll" ? (latestId ?? since ?? null) : null
       const cursor = {
         /** The position after this call — null for a peek, a stateless call with nothing stored, or an empty channel. */
-        lastSeenId: stateful && mode === "poll" ? position : null,
+        lastSeenId: tracked && mode === "poll" ? position : null,
         advanced,
         mode,
-        stateful,
+        /** Whether THIS call read and moved the workflow's position (the owner's, or a run of the workflow). */
+        stateful: tracked !== undefined,
       }
       const outputData = {
         json: emitted,
@@ -225,7 +235,10 @@ export async function telegramChannelRoutes(app: FastifyInstance): Promise<void>
     if (!parsed.success) {
       return reply.status(400).send({ error: { code: "validation_error", message: parsed.error.message } })
     }
-    const row = await readNodeCursorRow(parsed.data.workflowId, parsed.data.nodeId, userId)
+    const { workflowId, nodeId, channel } = parsed.data
+    // The channel's position, else the one written before channels keyed positions.
+    const keyed = channel ? await readNodeCursorRow(workflowId, feedPositionKey(nodeId, channel), userId) : undefined
+    const row = keyed ?? (await readNodeCursorRow(workflowId, nodeId, userId))
     return { data: { lastSeenId: row?.value ?? null, updatedAt: row?.updatedAt ?? null } }
   })
 
@@ -241,8 +254,11 @@ export async function telegramChannelRoutes(app: FastifyInstance): Promise<void>
         return reply.status(400).send({ error: { code: "validation_error", message: parsed.error.message } })
       }
       try {
-        const deleted = await resetNodeCursor(parsed.data.workflowId, parsed.data.nodeId, userId)
-        return { data: { ok: true, deleted } }
+        const { workflowId, nodeId, channel } = parsed.data
+        // Forget the channel's position and any position from before channels keyed them.
+        const deletedKeyed = channel ? await resetNodeCursor(workflowId, feedPositionKey(nodeId, channel), userId) : false
+        const deletedLegacy = await resetNodeCursor(workflowId, nodeId, userId)
+        return { data: { ok: true, deleted: deletedKeyed || deletedLegacy } }
       } catch (err) {
         return sendInternalError(reply, req, err, "Failed to reset the feed position")
       }
