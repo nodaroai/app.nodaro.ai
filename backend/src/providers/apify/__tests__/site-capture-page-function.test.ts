@@ -71,6 +71,7 @@ function oneSectionStubs() {
     getBoundingClientRect(): { left: number; top: number; right: number; bottom: number; width: number; height: number }
     closest(selector: string): null
     contains(other: unknown): boolean
+    parentElement: StubEl | null
   }
   const PROPS: Record<string, string> = { display: "display", visibility: "visibility", "overflow-y": "overflowY" }
   function make(tagName: string, box: Box, opts: { text?: string; attrs?: Record<string, string>; computed?: Record<string, string>; children?: StubEl[] } = {}): StubEl {
@@ -91,16 +92,24 @@ function oneSectionStubs() {
       getBoundingClientRect: () => ({ left: box.x, top: box.y, right: box.x + box.width, bottom: box.y + box.height, width: box.width, height: box.height }),
       closest: (_selector: string) => null,
       contains: (other) => other === el || children.some((c) => c.contains(other)),
+      parentElement: null,
     }
+    for (const c of children) c.parentElement = el
     return el
   }
   const h2 = make("H2", { x: 16, y: 140, width: 380, height: 40 }, { text: "Pricing plans", computed: { fontSize: "32px", fontWeight: "700" } })
   const p = make("P", { x: 16, y: 200, width: 380, height: 60 }, { text: "Simple plans for every team" })
   const img = make("IMG", { x: 16, y: 280, width: 380, height: 200 })
   const button = make("BUTTON", { x: 16, y: 500, width: 200, height: 48 }, { text: "Start free" })
-  const section = make("SECTION", { x: 0, y: 100, width: 412, height: 600 }, { children: [h2, p, img, button] })
+  // A scroll-linked story beat: its line is a 24 px / 500 paragraph (1.5 × the 16 px body, medium weight)
+  // inside a wrapper the page fades out until the visitor scrolls to it. Two decoys sit beside it.
+  const storyLine = make("P", { x: 16, y: 560, width: 380, height: 30 }, { text: "One prompt. Every model.", computed: { fontSize: "24px", fontWeight: "500" } })
+  const beat = make("DIV", { x: 0, y: 540, width: 412, height: 80 }, { computed: { opacity: "0" }, children: [storyLine] })
+  const subtitle = make("P", { x: 16, y: 630, width: 380, height: 24 }, { text: "A medium subtitle line", computed: { fontSize: "20px", fontWeight: "500" } })
+  const lightLine = make("P", { x: 16, y: 660, width: 380, height: 30 }, { text: "A large but light line", computed: { fontSize: "24px", fontWeight: "400" } })
+  const section = make("SECTION", { x: 0, y: 100, width: 412, height: 600 }, { children: [h2, p, img, button, beat, subtitle, lightLine] })
   const banner = make("DIV", { x: 0, y: 615, width: 412, height: 300 }, { text: "We use cookies to improve your visit", computed: { position: "fixed" } })
-  const all = [section, h2, p, img, button, banner]
+  const all = [section, h2, p, img, button, beat, storyLine, subtitle, lightLine, banner]
   const html = make("HTML", { x: 0, y: 0, width: 412, height: 1800 }, { attrs: { lang: "en" } })
   const body = { ...make("BODY", { x: 0, y: 0, width: 412, height: 1800 }, { children: [section, banner] }), querySelectorAll: (sel: string) => (sel === "*" ? all : []) }
   const document = {
@@ -189,7 +198,12 @@ describe("self-containment — every stringified function runs in an empty vm co
     const ctx = vm.createContext(globals)
     const summary = vm.runInContext(`(${collectPageSummary.toString()})({ status: 200, finalUrl: "https://example.com/" })`, ctx) as PageSummary
     expect(summary.blocks).toEqual([{ tag: "section", role: null, rect: { x: 0, y: 100, width: 412, height: 600 } }])
-    expect(summary.anchors).toEqual([{ text: "Pricing plans", rect: { x: 16, y: 140, width: 380, height: 40 }, fontSize: 32, inChrome: false, landmarks: [0] }])
+    // 24 px / 500 is a heading (1.5 × body, medium weight); 20 px / 500 and 24 px / 400 are not. The line
+    // inside the faded wrapper is flagged: a clip of it at rest would be blank.
+    expect(summary.anchors).toEqual([
+      { text: "Pricing plans", rect: { x: 16, y: 140, width: 380, height: 40 }, fontSize: 32, inChrome: false, landmarks: [0], hidden: false },
+      { text: "One prompt. Every model.", rect: { x: 16, y: 560, width: 380, height: 30 }, fontSize: 24, inChrome: false, landmarks: [0], hidden: true },
+    ])
     expect([...new Set(summary.leaves.map((l) => l.kind))].sort()).toEqual(["button", "image", "text"])
     expect(summary.leaves.find((l) => l.kind === "button")?.text).toBe("Start free")
     expect(summary).toMatchObject({ title: "Acme pricing", lang: "en", dir: "ltr", pageHeight: 1800, challenge: { markerCount: 0, coverage: 0 } })

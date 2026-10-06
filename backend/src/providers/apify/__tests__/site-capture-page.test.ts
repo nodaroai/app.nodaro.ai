@@ -61,6 +61,83 @@ describe("planSections — finding the sections", () => {
   })
 })
 
+describe("planSections — a scroll-linked story and a row of plan cards (probe 2026-10-06, T1)", () => {
+  // The nodaro.ai mobile story: one 5,800 px block whose eight chapters are laid out in the page,
+  // each faded out until the visitor scrolls to it. Every heading is its own section; none is a still.
+  const chapter = (title: string, i: number): SectionSpec => ({ title, y: 1400 + i * 550, height: 550, words: 30, font: 24, landmark: false, hidden: true })
+  const CHAPTERS = ["A closer look at AI.", "One prompt. Every model.", "One prompt. Endless directions.", "Same character. Every shot.", "Edit. Enhance. Publish."].map(chapter)
+  const story = (): PageSummary => summaryOf([{ ...HERO, height: 1400 }, ...CHAPTERS, { title: "Open your terminal", y: 4300, height: 700, words: 30 }])
+
+  it("every chapter heading of a tall block is its own section", () => {
+    const plan = planSections(story(), OPTS)
+    expect(plan.sections.map((s) => s.label)).toEqual(["Ship videos faster", ...CHAPTERS.map((c) => c.title), "Open your terminal"])
+  })
+
+  it("a chapter that is faded out at rest keeps its place in the map but never gets a still", () => {
+    const plan = planSections(story(), OPTS)
+    const chapters = plan.sections.filter((s) => CHAPTERS.some((c) => c.title === s.label))
+    expect(chapters).toHaveLength(5)
+    for (const c of chapters) expect(c.stillIndex).toBeNull()
+    expect(plan.stills.map((s) => s.label)).toEqual(["Ship videos faster", "Open your terminal"])
+  })
+
+  it("a faded-out chapter does not use up the still budget", () => {
+    const plan = planSections(summaryOf([HERO, ...CHAPTERS, ...LANDING.slice(2, 4).map((s) => ({ ...s, y: s.y + 4000 }))]), { ...OPTS, maxStills: 3 })
+    expect(plan.stills.map((s) => s.category)).toEqual(["hero", "pricing", "proof"])
+  })
+
+  // Plan cards: the heading is large, each card's name is smaller and the same size as its siblings.
+  const CARD = (title: string, i: number): SectionSpec => ({ title, y: 1300 + i * 560, height: 550, font: 22, landmark: false, text: "$24 per month, billed yearly" })
+  const PLANS = ["Basic", "Standard", "Pro", "Business"].map(CARD)
+  const pricingPage = (cards: readonly SectionSpec[]) =>
+    summaryOf([HERO, { title: "Simple, credit-based pricing", y: 1000, height: 300, font: 36, landmark: false, text: "Pay for what you use. Pricing for every team." }, ...cards])
+
+  it("a row of plan cards under one pricing heading is one pricing section", () => {
+    const plan = planSections(pricingPage(PLANS), OPTS)
+    expect(plan.sections.map((s) => [s.label, s.category])).toEqual([["Ship videos faster", "hero"], ["Simple, credit-based pricing", "pricing"]])
+    expect(plan.sections[1]!.rect).toMatchObject({ y: 1040, height: 1300 + 3 * 560 + 550 - 1040 })
+  })
+
+  it("the folded pricing section takes one still, so the budget goes to distinct sections", () => {
+    const plan = planSections(summaryOf([HERO, { title: "Simple pricing", y: 1000, height: 300, font: 36, landmark: false, text: "Pricing for every team" }, ...PLANS, { title: "Loved by creators", y: 3700, height: 500, text: "Rated 4.8/5 from 2,000 reviews" }]), OPTS)
+    expect(plan.stills.map((s) => s.category)).toEqual(["hero", "pricing", "proof"])
+  })
+
+  it("two cards are enough when a larger heading leads them", () => {
+    expect(planSections(pricingPage(PLANS.slice(0, 2)), OPTS).sections.map((s) => s.label)).toEqual(["Ship videos faster", "Simple, credit-based pricing"])
+  })
+
+  it("three equal cards with no heading above them still fold into the first", () => {
+    const plan = planSections(summaryOf([HERO, ...PLANS.slice(0, 3)]), OPTS)
+    expect(plan.sections.map((s) => s.label)).toEqual(["Ship videos faster", "Basic"])
+    expect(plan.sections[1]).toMatchObject({ category: "pricing" })
+  })
+
+  it("two pricing sections whose second heading is larger are separate sections", () => {
+    const plan = planSections(
+      summaryOf([
+        HERO,
+        { title: "Notice: new limits from June", y: 1000, height: 300, font: 22, landmark: false, text: "Plans from $10 per month" },
+        { title: "All the tools for your business", y: 1300, height: 600, font: 32, landmark: false, text: "Plans from $10 per month" },
+      ]),
+      OPTS,
+    )
+    expect(plan.sections.map((s) => s.label)).toEqual(["Ship videos faster", "Notice: new limits from June", "All the tools for your business"])
+  })
+
+  it("pricing sections with a gap between them are separate sections", () => {
+    const plan = planSections(
+      summaryOf([HERO, { title: "Pricing", y: 1000, height: 300, font: 36, text: "Plans" }, { title: "Plan A", y: 1700, height: 300, font: 22, text: "$5 /mo" }, { title: "Plan B", y: 2100, height: 300, font: 22, text: "$9 /mo" }]),
+      OPTS,
+    )
+    expect(plan.sections.map((s) => s.label)).toEqual(["Ship videos faster", "Pricing", "Plan A", "Plan B"])
+  })
+
+  it("a lone pricing section is untouched", () => {
+    expect(planSections(summaryOf(LANDING), OPTS).sections.map((s) => s.label)).toEqual(["Ship videos faster", "Make it yours", "Simple pricing", "Loved by creators", "Questions", "Start today"])
+  })
+})
+
 describe("planSections — categories", () => {
   const categoryOf = (spec: Omit<SectionSpec, "y" | "height">) =>
     planSections(summaryOf([HERO, { y: 1000, height: 600, ...spec }]), OPTS).sections[1]!.category
@@ -158,5 +235,36 @@ describe("planSections — our own site (a summary captured during the spike)", 
     expect(plan.stills.length).toBeGreaterThanOrEqual(3)
     expect(plan.stills.length).toBeLessThanOrEqual(8)
     for (const s of plan.sections) expect(s.label.trim().length).toBeGreaterThan(0)
+  })
+})
+
+describe("planSections — our own site after probe 1 (a summary captured locally on 2026-10-06, tuning round 1)", () => {
+  const summary = JSON.parse(readFileSync(new URL("./fixtures/nodaro-ai-summary-r2.json", import.meta.url), "utf8")) as PageSummary
+  // The twelve headings frozen in the probe registration (site-capture-probe.md, "Ground truth"), T1 = 10 of 12.
+  const TRUTH = [
+    "Every AI model. One canvas.", "A closer look at AI.", "One prompt. Every model.", "One prompt. Endless directions.",
+    "Same character. Every shot.", "Edit. Enhance. Publish.", "Turn any workflow into an app.", "Open source. Your way.",
+    "From idea to everything.", "$ git clone nodaroai/app.nodaro.ai", "Simple, credit-based pricing", "Now shoot yours.",
+  ]
+  const norm = (t: string): string => t.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, "").replace(/\s+/g, " ").trim()
+  const plan = planSections(summary, OPTS)
+
+  it("returns at least 10 of the 12 frozen headings in the section map", () => {
+    const labels = plan.sections.map((s) => norm(s.label))
+    const found = TRUTH.filter((t) => labels.some((l) => l === norm(t) || l.includes(norm(t))))
+    expect(found.length).toBeGreaterThanOrEqual(10)
+  })
+
+  it("the four plan cards are one pricing section, not four", () => {
+    expect(plan.sections.filter((s) => s.category === "pricing").map((s) => s.label)).toEqual(["Simple, credit-based pricing"])
+    for (const card of ["Basic", "Standard", "Pro", "Business"]) expect(plan.sections.map((s) => s.label)).not.toContain(card)
+  })
+
+  it("no still is a faded-out chapter, and there are still at least three", () => {
+    expect(plan.stills.length).toBeGreaterThanOrEqual(3)
+    expect(plan.stills.length).toBeLessThanOrEqual(8)
+    const hidden = summary.anchors.filter((a) => a.hidden === true).map((a) => a.text)
+    expect(hidden.length).toBeGreaterThanOrEqual(7)
+    for (const still of plan.stills) expect(hidden).not.toContain(still.label)
   })
 })

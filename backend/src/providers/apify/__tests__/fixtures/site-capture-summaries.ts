@@ -24,6 +24,8 @@ export interface SectionSpec {
   inChrome?: boolean
   /** false = no landmark element around the section, so the band rule applies. */
   landmark?: boolean
+  /** true = the heading is laid out but faded out at rest (a scroll-linked story beat). */
+  hidden?: boolean
 }
 
 function leaf(
@@ -46,6 +48,7 @@ export function summaryOf(sections: readonly SectionSpec[], over: Partial<PageSu
     fontSize: s.font ?? 28,
     inChrome: s.inChrome ?? false,
     landmarks: s.landmark === false ? [] : [withBlock.indexOf(s)],
+    ...(s.hidden ? { hidden: true } : {}),
   }))
   const leaves: PageLeaf[] = sections.flatMap((s) => [
     leaf("text", s.title, s.y + 40, 32),

@@ -34,6 +34,12 @@ export interface PageAnchor {
   inChrome: boolean
   /** Indexes into `blocks` of the landmark elements that contain it, nearest first. */
   landmarks: number[]
+  /**
+   * Laid out in the page but faded out at rest: the product of its own and its ancestors' opacity is under
+   * half. A scroll-linked story fades each chapter in as the visitor reaches it, so a clip of that heading
+   * taken at rest is blank. The section stays in the map; it is never chosen for a still.
+   */
+  hidden?: boolean
 }
 
 /** A landmark element: section, article, [role=region], or a child of main. */
@@ -180,22 +186,47 @@ export function planSections(summary: PageSummary, opts: PlanOptions): SectionPl
     .reduce<PageAnchor | null>((best, a) => (best === null || a.fontSize > best.fontSize ? a : best), null)
   const heroStats = statsOf(0, heroBottom)
 
-  // 6. Categories.
-  type Draft = { label: string; category: SectionCategory; rect: Rect; text: string; anchorTop: number }
+  // 6. Categories. A draft remembers its heading's size and whether the heading is faded out at rest.
+  type Draft = { label: string; category: SectionCategory; rect: Rect; text: string; anchorTop: number; font: number; hidden: boolean }
   const hero: Draft[] =
     heroStats.text.length > 0 || heroStats.images > 0
-      ? [{ label: clip(heroAnchor ? heroAnchor.text : summary.title, 60), category: "hero", rect: { x: 0, y: 0, width: vw, height: heroBottom }, text: heroStats.text, anchorTop: 0 }]
+      ? [{ label: clip(heroAnchor ? heroAnchor.text : summary.title, 60), category: "hero", rect: { x: 0, y: 0, width: vw, height: heroBottom }, text: heroStats.text, anchorTop: 0, font: 0, hidden: false }]
       : []
-  const drafts: Draft[] = [
+  const found: Draft[] = [
     ...hero,
     ...merged
       .filter((c) => c.anchor.rect.y >= heroBottom)
       .map((c): Draft => {
         const s = statsOf(c.y, c.height)
         const label = clip(c.anchor.text, 60)
-        return { label, category: categoryOf(s, label), rect: { x: 0, y: c.y, width: vw, height: c.height }, text: s.text, anchorTop: c.anchor.rect.y }
+        return { label, category: categoryOf(s, label), rect: { x: 0, y: c.y, width: vw, height: c.height }, text: s.text, anchorTop: c.anchor.rect.y, font: c.anchor.fontSize, hidden: c.anchor.hidden === true }
       }),
-  ].slice(0, 30)
+  ]
+
+  // 6b. A row of plan cards is one pricing section. A pricing section followed, without a gap, by at least two
+  // more pricing sections whose headings are no larger than its own and match each other (a plan name per card,
+  // each card under two viewports) swallows them: the cards belong to the heading above them. Page order is
+  // kept, and the folded section keeps the leader's label and runs to the end of the last card.
+  const adjacent = (a: Draft, b: Draft): boolean => b.rect.y - (a.rect.y + a.rect.height) <= 40
+  const cardOf = (lead: Draft, first: Draft | undefined, prev: Draft, d: Draft): boolean =>
+    d.category === "pricing" && d.font > 0 && d.font <= lead.font * 1.1 && d.rect.height <= 2 * vh && adjacent(prev, d) &&
+    (first === undefined || Math.abs(d.font - first.font) <= first.font * 0.1)
+  const folded = found.reduce<{ out: Draft[]; skipUntil: number }>(
+    (acc, d, i) => {
+      if (i < acc.skipUntil) return acc
+      if (d.category !== "pricing" || d.font <= 0) return { out: [...acc.out, d], skipUntil: acc.skipUntil }
+      const cards = found.slice(i + 1).reduce<Draft[]>((run, c, k) => {
+        const prev = k === 0 ? d : found[i + k]!
+        return run.length === k && cardOf(d, run[0], prev, c) ? [...run, c] : run
+      }, [])
+      const last = cards[cards.length - 1]
+      if (cards.length < 2 || last === undefined) return { out: [...acc.out, d], skipUntil: acc.skipUntil }
+      const rect = { x: 0, y: d.rect.y, width: vw, height: last.rect.y + last.rect.height - d.rect.y }
+      return { out: [...acc.out, { ...d, rect, text: statsOf(rect.y, rect.height).text }], skipUntil: i + 1 + cards.length }
+    },
+    { out: [], skipUntil: 0 },
+  )
+  const drafts: Draft[] = folded.out.slice(0, 30)
 
   // 7. The still rectangle: full width, a phone-card shape, from just above the heading.
   const stillHeight = Math.min(pageHeight, Math.round(vw / opts.stillAspect))
@@ -205,10 +236,11 @@ export function planSections(summary: PageSummary, opts: PlanOptions): SectionPl
   }
 
   // 8. Key sections first, then filler (non-FAQ first) up to three; never two stills overlapping by > 40 %.
+  //    A section whose heading is faded out at rest keeps its place in the map and is never a still: the clip would be blank.
   const pick = (order: readonly number[], chosen: readonly number[], limit: number): number[] =>
     order.reduce<number[]>((acc, i) => {
       const d = drafts[i]
-      if (!d || acc.length >= limit || acc.includes(i)) return acc
+      if (!d || d.hidden || acc.length >= limit || acc.includes(i)) return acc
       const r = stillRect(d)
       return acc.some((j) => { const o = drafts[j]; return o !== undefined && overlap(stillRect(o), r) > 0.4 }) ? acc : [...acc, i]
     }, [...chosen])
@@ -291,13 +323,21 @@ export function collectPageSummary(args: { status: number | null; finalUrl: stri
   const blockEls = Array.from(document.querySelectorAll("section, article, [role=region], main > *")).filter(visible).slice(0, 400)
   const blocks = blockEls.map((el) => ({ tag: el.tagName.toLowerCase(), role: el.getAttribute("role"), rect: rectOf(el) }))
 
+  // Sites style divs and paragraphs as headings. Display type is often set in a medium weight at a hair under
+  // 1.5 × the body (nodaro.ai's story chapters: 23.9 px, weight 500, on a 16 px body), so the typographic test is
+  // 1.4 × body and weight 500 — the 1.5 × / 600 it was registered with missed every one of them.
   const isAnchor = (el: Element): boolean => {
     const tag = el.tagName
     if (tag === "H1" || tag === "H2" || tag === "H3") return true
     if (el.getAttribute("role") === "heading" && Number(el.getAttribute("aria-level") || "2") <= 3) return true
     const cs = window.getComputedStyle(el)
     const text = collapse((el as HTMLElement).innerText || "")
-    return parseFloat(cs.fontSize) >= 1.5 * bodyFont && (parseInt(cs.fontWeight, 10) || 400) >= 600 && text.length >= 2 && text.length <= 80
+    return parseFloat(cs.fontSize) >= 1.4 * bodyFont && (parseInt(cs.fontWeight, 10) || 400) >= 500 && text.length >= 2 && text.length <= 80
+  }
+  const opacityOf = (el: Element): number => {
+    let product = 1
+    for (let node: Element | null = el; node && node !== html; node = node.parentElement) product *= Number(window.getComputedStyle(node).opacity)
+    return product
   }
   const anchorEls = all.filter((el) => visible(el) && isAnchor(el))
   const outermost = anchorEls.filter((el) => !anchorEls.some((other) => other !== el && other.contains(el)))
@@ -306,6 +346,7 @@ export function collectPageSummary(args: { status: number | null; finalUrl: stri
     rect: rectOf(el),
     fontSize: parseFloat(window.getComputedStyle(el).fontSize) || bodyFont,
     inChrome: el.closest(CHROME) !== null,
+    hidden: opacityOf(el) < 0.5,
     landmarks: blockEls
       .map((b, i) => (b.contains(el) ? i : -1))
       .filter((i) => i >= 0)
