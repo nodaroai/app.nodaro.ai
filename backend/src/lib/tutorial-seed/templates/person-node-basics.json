@@ -399,7 +399,7 @@
       "source": "node_2",
       "target": "node_1",
       "sourceHandle": "out",
-      "targetHandle": "cinematography"
+      "targetHandle": "elements"
     },
     {
       "id": "edge_1778351629021",
@@ -407,7 +407,7 @@
       "source": "node_3",
       "target": "node_4",
       "sourceHandle": "out",
-      "targetHandle": "cinematography"
+      "targetHandle": "elements"
     },
     {
       "id": "edge_1778352174156",
@@ -415,7 +415,7 @@
       "source": "node_6",
       "target": "node_5",
       "sourceHandle": "out",
-      "targetHandle": "cinematography"
+      "targetHandle": "look"
     },
     {
       "id": "edge_1778352265809",
@@ -423,7 +423,7 @@
       "source": "node_7",
       "target": "node_5",
       "sourceHandle": "out",
-      "targetHandle": "cinematography"
+      "targetHandle": "look"
     },
     {
       "id": "edge_1778353183652",
@@ -431,7 +431,7 @@
       "source": "node_8",
       "target": "node_5",
       "sourceHandle": "out",
-      "targetHandle": "cinematography"
+      "targetHandle": "look"
     },
     {
       "id": "edge_1778353639186",
@@ -439,7 +439,7 @@
       "source": "node_9",
       "target": "node_5",
       "sourceHandle": "out",
-      "targetHandle": "cinematography"
+      "targetHandle": "elements"
     }
   ],
   "settings": {

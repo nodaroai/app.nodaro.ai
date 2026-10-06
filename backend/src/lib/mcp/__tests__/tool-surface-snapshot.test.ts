@@ -548,6 +548,10 @@ const ELEVENLABS_V4_DEFAULT_WORDING_BYTES = 70
 // the same through every job reader (decided 2026-10-06). No tool was added.
 // measured by this suite: 386_849 total − 386_820 before the field = 29 B.
 const GET_ASSET_PREVIEW_FLAG_BYTES = 29
+// RE-MEASURED on dev b3bda1615 (2026-10-06, PR #1879 found dev red): this suite totals 392_455 B
+// against a 392_441 B budget — the 29 B above were measured on an older tree, and the live
+// delta of the `preview` field is 43 B. Carried as its own line so the correction stays visible.
+const GET_ASSET_PREVIEW_FLAG_CORRECTION_BYTES = 14
 // RAISED by ONE argument and nothing else: `caption_style` on `build_ugc_cards`
 // (how the captions after the opening line look — word by word, karaoke, plain
 // subtitles or none; the builder takes it as `captionStyle`). No tool was added,
@@ -611,6 +615,7 @@ export const TOOL_WIRE_BUDGET = {
     TEXT_TO_AUDIO_PER_SECOND_PRICING_BYTES +
     ELEVENLABS_V4_DEFAULT_WORDING_BYTES +
     GET_ASSET_PREVIEW_FLAG_BYTES +
+    GET_ASSET_PREVIEW_FLAG_CORRECTION_BYTES +
     UGC_CARDS_CAPTION_STYLE_BYTES,
 }
 

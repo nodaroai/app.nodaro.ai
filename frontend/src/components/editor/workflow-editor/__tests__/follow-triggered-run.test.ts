@@ -78,6 +78,32 @@ describe("paintEndedTriggeredRun", () => {
     act(() => paintEndedTriggeredRun(ENDED))
     expect(dataOf("llm").generatedText).toBe("my own edit")
   })
+
+  it("an MCP run's `inputs` override on a source node is never saved as its config", () => {
+    // The orchestrator merges an override into the node before seeding, so the
+    // seeded state carries the overridden text; only the nodes that RAN paint.
+    const seeded = {
+      ...STATES,
+      brand: { status: "completed", fromSavedData: true, output: { text: "We sell coffee (override)." } },
+    }
+    act(() => paintEndedTriggeredRun({ ...ENDED, id: "run-mcp", triggerType: "mcp", nodeStates: seeded }))
+    expect(dataOf("brand").text).toBe("We sell matcha. Edited since.")
+    expect(dataOf("brand").generatedText).toBeUndefined()
+    expect(dataOf("llm")).toMatchObject({ generatedText: "Three ideas for this video", resultsRunId: "run-mcp" })
+  })
+
+  it("a completed single-node run that settled a node after this run keeps that newer result", () => {
+    const laterSingle = {
+      id: "single-1",
+      status: "completed",
+      triggerType: "single-node",
+      completedAt: "2026-10-03T10:00:30Z",
+      nodeStates: { llm: { nodeId: "llm", status: "completed", completedAt: "2026-10-03T10:00:30Z", output: { text: "newer" } } },
+    }
+    act(() => paintEndedTriggeredRun(ENDED, [ENDED, laterSingle]))
+    expect(dataOf("llm").generatedText).toBe("an older answer")
+    expect(dataOf("llm").resultsRunId).toBeUndefined()
+  })
 })
 
 describe("followTriggeredRun", () => {

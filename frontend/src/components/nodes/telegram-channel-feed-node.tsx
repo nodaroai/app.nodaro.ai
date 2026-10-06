@@ -40,7 +40,7 @@ function TelegramChannelFeedNodeComponent({ id, data, selected }: NodeProps) {
         hideHeader
         topToolbarContent={<RunNodeButton nodeId={id} credits={credits} isRunning={status === "running"} onRun={(nid) => runSingleNode?.(nid)} />}
         handles={[
-          { id: "out", type: "source", position: Position.Right, customStyle: { top: "24px", right: "-29px" }, external: true },
+          { id: "text", type: "source", position: Position.Right, customStyle: { top: "24px", right: "-29px" }, external: true },
         ]}
       >
         <div className="p-3">
@@ -57,7 +57,7 @@ function TelegramChannelFeedNodeComponent({ id, data, selected }: NodeProps) {
           )}
         </div>
       </BaseNode>
-      <HandleWithPopover nodeId={id} nodeType="telegram-channel-feed" handleId="out" type="source" position={Position.Right} label="Posts" color={TEXT_HANDLE_COLOR} icon={<Rss />} side="right" top="24px" />
+      <HandleWithPopover nodeId={id} nodeType="telegram-channel-feed" handleId="text" type="source" position={Position.Right} label="Posts" color={TEXT_HANDLE_COLOR} icon={<Rss />} side="right" top="24px" />
     </div>
   )
 }

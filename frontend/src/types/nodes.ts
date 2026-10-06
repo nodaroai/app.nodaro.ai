@@ -7765,7 +7765,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "ai",
     creditCost: 2,
     inputs: ["image", "mask", "cinematography"],
-    outputs: ["out"],
+    outputs: ["image"],
     width: 260,
     defaultData: {
       label: "Modify Image",
@@ -7785,7 +7785,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "ai",
     creditCost: 1,
     inputs: ["image"],
-    outputs: ["out"],
+    outputs: ["image"],
     width: 220,
     defaultData: {
       label: "Upscale Image",
@@ -7808,7 +7808,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "ai",
     creditCost: 1,
     inputs: ["image"],
-    outputs: ["out"],
+    outputs: ["image"],
     width: 220,
     defaultData: {
       label: "Remove Background",
@@ -8298,7 +8298,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "ai",
     creditCost: 2,
     inputs: ["audio"],
-    outputs: ["audio"],
+    outputs: ["instrumental", "vocals"],
     defaultData: { label: "Suno Separate", type: "separate_vocal", taskId: "", audioId: "", fieldMappings: {} } as SunoSeparateData,
   },
   {
@@ -8883,7 +8883,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "processing",
     creditCost: 2,
     inputs: ["video", "audio"],
-    outputs: ["video-out", "audio-out"],
+    outputs: ["video", "audio"],
     defaultData: { label: "Split into Chunks", chunkDuration: 10, audioFormat: "mp3", fieldMappings: {} },
   },
   {
@@ -9009,7 +9009,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "After Effects",
     category: "processing",
     creditCost: 2,
-    inputs: ["in"],
+    inputs: ["video"],
     outputs: ["composition"],
     defaultData: {
       label: "After Effects",
@@ -9025,7 +9025,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Lottie Overlay",
     category: "processing",
     creditCost: 2,
-    inputs: ["in", "lottie"],
+    inputs: ["video", "lottie"],
     outputs: ["composition"],
     defaultData: {
       label: "Lottie Overlay",
@@ -9130,7 +9130,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Motion Graphics",
     category: "ai",
     creditCost: 5,
-    inputs: ["in"],
+    inputs: ["video"],
     // `lottie` is emitted only by the lottie engine (the authored Lottie JSON's
     // R2 URL); the node-component renders that source handle when engine="lottie".
     outputs: ["composition", "lottie"],
@@ -9175,7 +9175,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     // priced at 1.5x or 2.5x this (`renderVideoCreditId`); the live per-plan
     // figure comes from the model-cost API, which the node badge reads.
     creditCost: 50,
-    inputs: ["in"],
+    inputs: ["composition"],
     outputs: ["video"],
     defaultData: {
       label: "Render Video",
@@ -9194,7 +9194,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Adjust Speed",
     category: "processing",
     creditCost: 0,
-    inputs: ["in"],
+    inputs: ["video"],
     outputs: ["video"],
     defaultData: { label: "Adjust Speed", speed: 1.0, reverse: false, audioMode: "pitch-preserve", quality: "fast", fieldMappings: {} },
   },
@@ -9221,7 +9221,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Fade In/Out",
     category: "processing",
     creditCost: 0,
-    inputs: ["in"],
+    inputs: ["video"],
     outputs: ["video"],
     defaultData: { label: "Fade In/Out", fadeIn: true, fadeInDuration: 0.5, fadeOut: true, fadeOutDuration: 0.5, color: "black", fieldMappings: {} },
   },
@@ -9230,7 +9230,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Transcode Video",
     category: "processing",
     creditCost: 0,
-    inputs: ["in"],
+    inputs: ["video"],
     outputs: ["video"],
     defaultData: { label: "Transcode Video", codec: "h264", crf: 23, resolution: "original", audioBitrate: "128k", fieldMappings: {} },
   },
@@ -9391,7 +9391,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "ai",
     creditCost: 30,
     inputs: ["image", "video", "prompt", "negative", "assets"],
-    outputs: ["out"],
+    outputs: ["video"],
     defaultData: {
       label: "Motion Transfer",
       prompt: "",
@@ -9456,7 +9456,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "ai",
     creditCost: 16,
     inputs: ["face", "video"],
-    outputs: ["out"],
+    outputs: ["video"],
     defaultData: {
       label: "Face Swap",
       provider: "roop",
@@ -9800,7 +9800,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "utility",
     creditCost: 0,
     inputs: ["text"],
-    outputs: ["out"],
+    outputs: ["text"],
     autoExecute: true,
     defaultData: {
       label: "Split Text",
@@ -10252,7 +10252,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "input",
     creditCost: 0,
     inputs: [],
-    outputs: ["text", "imageUrl", "videoUrl", "audioUrl", "chatId", "messageId"],
+    outputs: ["out"],
     defaultData: {
       label: "Telegram Trigger",
       messageTypeFilters: ["text", "photo", "video", "audio", "document"],

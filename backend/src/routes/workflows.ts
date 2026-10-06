@@ -43,6 +43,7 @@ import {
 } from "../lib/workflow-assets.js"
 import type { CreatedAssetMap } from "../lib/workflow-assets.js"
 import { migrateGenerateImageHandles } from "../lib/generate-image-handle-migration.js"
+import { normalizeWorkflowEdges, type EdgeAdjustment } from "../lib/workflow-edge-normalization.js"
 import { findUnroutableMedia, rehostForeignMedia } from "../lib/media-portability.js"
 import {
   clientAppVisibilityFilter,
@@ -1553,6 +1554,55 @@ export async function workflowRoutes(app: FastifyInstance) {
           if (uses.length > 0) return sendCredentialUnbound(reply, uses)
         }
       }
+      // Edges: the normalizer every MCP write runs (lib/workflow-edge-
+      // normalization.ts — a recorded legacy handle name rewired, a
+      // structurally broken edge refused) needs the node types at both ends,
+      // so a delta that carries edges pays one read of the stored graph.
+      // Access is judged on that read BEFORE any content-dependent answer: a
+      // 400 naming a node id the caller cannot see would be an existence
+      // oracle. Below `edit` the delta reaches the RPC as sent and gets its
+      // 404, exactly as before.
+      let deltaUpsertEdges = body.delta.upsertEdges
+      let edgeReport: { adjustments: EdgeAdjustment[]; warnings: string[] } | null = null
+      if (deltaUpsertEdges && deltaUpsertEdges.length > 0) {
+        const { data: graphRow } = await supabase
+          // tenant-scope-ignore: access is judged on the row before it is used, and only the delta's own edges are normalised against it — nothing of it reaches the response.
+          .from("workflows")
+          .select("id, user_id, workspace_id, visibility, share_token, is_presentation_enabled, nodes, version, updated_at")
+          .eq("id", params.id)
+          .maybeSingle()
+        const mayEditGraph =
+          !!graphRow &&
+          accessAtLeast(await workflowAccessFromRow(userId, toAccessRow(graphRow as unknown as Record<string, unknown>)), "edit")
+        // A base the row has moved past is the RPC's 409 — answered here, so a
+        // delta naming a node another writer just deleted gets "refetch and
+        // retry", never a 400 that reads as its own mistake.
+        if (mayEditGraph && typeof graphRow.version === "number" && graphRow.version !== body.delta.baseVersion) {
+          return reply.status(409).send({
+            error: {
+              code: "workflow_conflict",
+              message: "Workflow was updated by another writer",
+              currentVersion: graphRow.version,
+              currentUpdatedAt: graphRow.updated_at ?? null,
+            },
+          })
+        }
+        if (mayEditGraph) {
+          const deletedIds = new Set(body.delta.deleteNodeIds ?? [])
+          const upsertedIds = new Set(upsertNodeIds)
+          const storedNodes = (Array.isArray(graphRow.nodes) ? graphRow.nodes : []) as ReadonlyArray<{ id?: unknown; type?: unknown }>
+          const prospectiveNodes = [
+            ...storedNodes.filter((n) => typeof n.id === "string" && !deletedIds.has(n.id) && !upsertedIds.has(n.id)),
+            ...((body.delta.upsertNodes ?? []) as ReadonlyArray<{ id?: unknown; type?: unknown }>),
+          ]
+          const normalized = normalizeWorkflowEdges(prospectiveNodes, deltaUpsertEdges)
+          if (normalized.errors.length > 0) {
+            return validationError(reply, `Edge problems: ${normalized.errors.join("; ")}`)
+          }
+          deltaUpsertEdges = normalized.edges
+          edgeReport = { adjustments: normalized.adjustments, warnings: [...normalized.warnings, ...normalized.dropped] }
+        }
+      }
       // Video Overlay (D10): a delta that touches Video Overlay — an upserted
       // video-overlay node, or an edge into a layer handle — is normalised
       // against the edge set it leaves behind, and a STORED video-overlay node
@@ -1572,7 +1622,7 @@ export async function workflowRoutes(app: FastifyInstance) {
         deltaUpsertNodes = videoOverlayDeltaUpserts(
           body.delta as unknown as VideoOverlayDeltaInput,
           storedGraph?.nodes,
-          mergeDeltaEdges(storedGraph?.edges, body.delta.upsertEdges, body.delta.deleteEdgeIds),
+          mergeDeltaEdges(storedGraph?.edges, deltaUpsertEdges, body.delta.deleteEdgeIds),
         )
       }
       const { data: rpcData, error: rpcError } = await supabase.rpc("apply_workflow_delta", {
@@ -1584,7 +1634,7 @@ export async function workflowRoutes(app: FastifyInstance) {
           deltaUpsertNodes as unknown as Array<{ data?: Record<string, unknown> }>,
         ),
         p_delete_node_ids: body.delta.deleteNodeIds ?? [],
-        p_upsert_edges: body.delta.upsertEdges ?? [],
+        p_upsert_edges: deltaUpsertEdges ?? [],
         p_delete_edge_ids: body.delta.deleteEdgeIds ?? [],
         p_set: body.delta.set ?? null,
         p_user_id: userId,
@@ -1622,7 +1672,15 @@ export async function workflowRoutes(app: FastifyInstance) {
           .maybeSingle()
         if (storedAfterDelta) await syncTriggersForSavedWorkflow(req, params.id, storedAfterDelta as Record<string, unknown>)
       }
-      return { data: { id: params.id, version: row.version, updatedAt: row.updated_at } }
+      return {
+        data: {
+          id: params.id,
+          version: row.version,
+          updatedAt: row.updated_at,
+          ...(edgeReport && edgeReport.adjustments.length > 0 ? { edgeAdjustments: edgeReport.adjustments } : {}),
+          ...(edgeReport && edgeReport.warnings.length > 0 ? { edgeWarnings: edgeReport.warnings } : {}),
+        },
+      }
     }
 
     if (body.nodes && !checkSubWorkflowShape(reply, body.nodes)) return

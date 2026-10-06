@@ -23,7 +23,7 @@ The Telegram Channel Feed node reads a public channel's recent posts via its web
 
 **Inputs:** Optionally a text input to override the channel at runtime.
 
-**Outputs:** `Posts` — the fresh posts' text, newest content joined with `---` separators (wire into an LLM / prompt / caption).
+**Outputs:** `Posts` (handle id `text`) — the fresh posts' text, newest content joined with `---` separators (wire into an LLM / prompt / caption).
 
 ## Pricing
 

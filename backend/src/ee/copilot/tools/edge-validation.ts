@@ -11,7 +11,7 @@
  *   (`connection-validation.ts`); porting them is a later item, and blocking
  *   on a partial copy would refuse graphs the editor accepts.
  */
-import { AUDIO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES, VIDEO_PRODUCER_TYPES } from "@nodaro/shared"
+import { AUDIO_PRODUCER_TYPES, DYNAMIC_HANDLE_NODE_TYPES, DYNAMIC_PRODUCER_TYPES, RENDERED_OUTPUT_HANDLES, VIDEO_PRODUCER_TYPES } from "@nodaro/shared"
 import { NODE_HANDLES } from "../../../lib/mcp/generated/node-handles.js"
 
 export interface EdgeLike {
@@ -34,20 +34,6 @@ export interface EdgeValidation {
   warnings: string[]
 }
 
-/** Types whose handles are created at run time and cannot be checked against the static map. */
-const DYNAMIC_HANDLE_TYPES: ReadonlySet<string> = new Set([
-  "list",
-  "loop",
-  "group",
-  "collect",
-  "router",
-  "component",
-  "sub-workflow",
-  "sub-workflow-input",
-  "sub-workflow-output",
-  "selector",
-])
-
 /** Target handles that expect a specific media class. */
 const MEDIA_TARGET_HANDLES: Readonly<Record<string, "video" | "audio">> = {
   video: "video",
@@ -57,11 +43,21 @@ const MEDIA_TARGET_HANDLES: Readonly<Record<string, "video" | "audio">> = {
   soundtrack: "audio",
 }
 
+/**
+ * The output pips an edge may leave from: the declared outputs plus the pips a
+ * component renders beyond its definition (the burn-down table the normalizer
+ * writes onto — warning about `video-out` right after it was written there
+ * would send the model chasing its own tail).
+ */
+function publishedOutputs(type: string): string[] {
+  return [...new Set([...(NODE_HANDLES[type]?.outputs ?? []), ...(RENDERED_OUTPUT_HANDLES[type] ?? [])])]
+}
+
 function handleKnown(type: string, handle: string, side: "inputs" | "outputs"): boolean {
-  if (DYNAMIC_HANDLE_TYPES.has(type)) return true
+  if (DYNAMIC_HANDLE_NODE_TYPES.has(type)) return true
   const spec = NODE_HANDLES[type]
   if (!spec) return true // unknown type is reported by the type check, not here
-  return spec[side].includes(handle)
+  return side === "outputs" ? publishedOutputs(type).includes(handle) : spec.inputs.includes(handle)
 }
 
 export function validateWorkflowEdges(nodes: ReadonlyArray<NodeLike>, edges: ReadonlyArray<EdgeLike>): EdgeValidation {
@@ -102,7 +98,7 @@ export function validateWorkflowEdges(nodes: ReadonlyArray<NodeLike>, edges: Rea
 
     if (sourceHandle && !handleKnown(sourceType, sourceHandle, "outputs")) {
       warnings.push(
-        `edge "${where}": "${sourceHandle}" is not a published output of ${sourceType} (known: ${(NODE_HANDLES[sourceType]?.outputs ?? []).join(", ") || "none"})`,
+        `edge "${where}": "${sourceHandle}" is not a published output of ${sourceType} (known: ${publishedOutputs(sourceType).join(", ") || "none"})`,
       )
     }
     if (targetHandle && !handleKnown(targetType, targetHandle, "inputs")) {

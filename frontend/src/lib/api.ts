@@ -7277,6 +7277,8 @@ export async function importWorkflow(
 
 export interface WorkflowExecution {
   id: string
+  /** An orchestrator run, or a single-node job listed beside the runs. Absent on an older cached row (= a run). */
+  kind?: 'execution' | 'job'
   workflowId: string
   status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'timed_out' | 'stopping' | 'discarded'
   triggerType: 'manual' | 'webhook' | 'schedule' | 'telegram' | 'telegram_account' | 'api' | 'single-node' | 'app_run' | 'mcp'

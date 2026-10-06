@@ -1,3 +1,5 @@
+import { IMAGE_PRODUCER_TYPES } from "@nodaro/shared"
+
 interface WorkflowNodeLike {
   readonly id: string
   readonly type?: string
@@ -18,15 +20,6 @@ const TEXT_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   "combine-text",
   "image-to-text",
   "split-text",
-])
-const IMAGE_PRODUCER_TYPES: ReadonlySet<string> = new Set([
-  "upload-image",
-  "generate-image",
-  "edit-image",
-  "image-to-image",
-  "modify-image",
-  "upscale-image",
-  "remove-background",
 ])
 const IDENTITY_TYPES: ReadonlySet<string> = new Set(["character", "location", "object", "face"])
 

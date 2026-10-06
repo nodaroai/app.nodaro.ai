@@ -61,6 +61,23 @@ describe("validateWorkflowEdges", () => {
     expect(result.warnings).toEqual([])
   })
 
+  it("the dynamic set is the shared one: a webhook payload handle and an image-overlay layer handle pass", () => {
+    const withDynamic = [...nodes, { id: "wh", type: "webhook-trigger" }, { id: "io", type: "image-overlay" }]
+    const result = validateWorkflowEdges(withDynamic, [
+      { id: "e1", source: "wh", sourceHandle: "payload.title", target: "img", targetHandle: "prompt" },
+      { id: "e2", source: "io", sourceHandle: "variant:abc", target: "img", targetHandle: "references" },
+    ])
+    expect(result.warnings).toEqual([])
+  })
+
+  it("a pip the component renders beyond its definition (the burn-down table) is published: trim-video's `video-out` passes, and the known list names it", () => {
+    const withTrim = [...nodes, { id: "trim", type: "trim-video" }, { id: "merge", type: "merge-video-audio" }]
+    const rendered = validateWorkflowEdges(withTrim, [{ id: "e1", source: "trim", sourceHandle: "video-out", target: "merge", targetHandle: "in" }])
+    expect(rendered.warnings).toEqual([])
+    const odd = validateWorkflowEdges(withTrim, [{ id: "e2", source: "trim", sourceHandle: "clip", target: "merge", targetHandle: "in" }])
+    expect(odd.warnings.join(" ")).toContain("(known: video, video-out)")
+  })
+
   it("warns when a non-video source feeds a video input", () => {
     const withMerge = [...nodes, { id: "merge", type: "merge-video-audio" }]
     const result = validateWorkflowEdges(withMerge, [

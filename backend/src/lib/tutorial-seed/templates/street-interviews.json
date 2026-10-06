@@ -1302,7 +1302,7 @@
       "id": "e-split-ideas",
       "source": "split",
       "target": "ideas",
-      "sourceHandle": "out",
+      "sourceHandle": "text",
       "targetHandle": "col_default_in"
     },
     {
@@ -1379,14 +1379,14 @@
       "id": "e-qmerge1-qcap1",
       "source": "qmerge1",
       "target": "qcap1",
-      "sourceHandle": "video",
+      "sourceHandle": "video-out",
       "targetHandle": "in"
     },
     {
       "id": "e-qmerge1-qframe1",
       "source": "qmerge1",
       "target": "qframe1",
-      "sourceHandle": "video",
+      "sourceHandle": "video-out",
       "targetHandle": "in"
     },
     {
@@ -1421,14 +1421,14 @@
       "id": "e-qcap1-combine1",
       "source": "qcap1",
       "target": "combine1",
-      "sourceHandle": "video",
+      "sourceHandle": "video-out",
       "targetHandle": "in"
     },
     {
       "id": "e-acap1-combine1",
       "source": "acap1",
       "target": "combine1",
-      "sourceHandle": "video",
+      "sourceHandle": "video-out",
       "targetHandle": "in"
     },
     {
@@ -1505,14 +1505,14 @@
       "id": "e-qmerge2-qcap2",
       "source": "qmerge2",
       "target": "qcap2",
-      "sourceHandle": "video",
+      "sourceHandle": "video-out",
       "targetHandle": "in"
     },
     {
       "id": "e-qmerge2-qframe2",
       "source": "qmerge2",
       "target": "qframe2",
-      "sourceHandle": "video",
+      "sourceHandle": "video-out",
       "targetHandle": "in"
     },
     {
@@ -1547,14 +1547,14 @@
       "id": "e-qcap2-combine2",
       "source": "qcap2",
       "target": "combine2",
-      "sourceHandle": "video",
+      "sourceHandle": "video-out",
       "targetHandle": "in"
     },
     {
       "id": "e-acap2-combine2",
       "source": "acap2",
       "target": "combine2",
-      "sourceHandle": "video",
+      "sourceHandle": "video-out",
       "targetHandle": "in"
     },
     {
@@ -1631,14 +1631,14 @@
       "id": "e-qmerge3-qcap3",
       "source": "qmerge3",
       "target": "qcap3",
-      "sourceHandle": "video",
+      "sourceHandle": "video-out",
       "targetHandle": "in"
     },
     {
       "id": "e-qmerge3-qframe3",
       "source": "qmerge3",
       "target": "qframe3",
-      "sourceHandle": "video",
+      "sourceHandle": "video-out",
       "targetHandle": "in"
     },
     {
@@ -1673,14 +1673,14 @@
       "id": "e-qcap3-combine3",
       "source": "qcap3",
       "target": "combine3",
-      "sourceHandle": "video",
+      "sourceHandle": "video-out",
       "targetHandle": "in"
     },
     {
       "id": "e-acap3-combine3",
       "source": "acap3",
       "target": "combine3",
-      "sourceHandle": "video",
+      "sourceHandle": "video-out",
       "targetHandle": "in"
     },
     {

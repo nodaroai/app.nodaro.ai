@@ -285,6 +285,19 @@ graph or leave it empty.
 
 **Response:** Returns the new workflow's `id` and `name` in structured content.
 
+**Edges are normalized on every write** (`create_workflow`, `update_workflow_json`,
+`import_workflow`): a recorded legacy handle name is rewired to the node's current
+handle (for example `out` → `text` on `telegram-channel-feed`), a legacy `in` is
+placed by the other node's type (on `llm-chat`: `references` for an image source,
+`prompt` for everything else), an edge without an `id` is given one, and every change
+is listed in the reply and in `structuredContent.edgeAdjustments`. A handle the node
+does not declare is stored as sent and reported in `edgeWarnings` — the canvas draws an
+edge only on a handle the node renders, so read a node's handle ids from
+`get_node_skill`. An edge naming a node that does not exist, a self-loop, an edge with
+a missing endpoint, or the same connection sent twice without an `id` is dropped and
+reported in `edgeWarnings` (the orchestrator never ran it). Two edges with the same
+`id` refuse the whole write; nothing is stored.
+
 ---
 
 ### `delete_workflow`
@@ -357,6 +370,12 @@ text wrapped around that node's prompt at run time (settings-only; see
 | `expected_updated_at` | string (ISO 8601) | Optional; enables optimistic concurrency |
 | `expected_version` | integer | Optional; integer CAS from `get_workflow_json` (preferred over `expected_updated_at`) |
 | `delta` | object | Optional; id-keyed partial update applied atomically against `delta.base_version` (from `get_workflow_json`): `upsert_nodes`, `delete_node_ids`, `upsert_edges`, `delete_edge_ids`, `set: { name?, settings? }`. Mutually exclusive with every other content field. Prefer it over re-sending the graph. |
+
+**Edges:** normalized exactly as in `create_workflow` — legacy names rewired, missing
+ids given, `edgeAdjustments` / `edgeWarnings` in the response. The `delta` form too:
+its `upsert_edges` (each with its own `id` — the delta protocol matches by id) are
+judged against the graph the delta leaves behind (the stored nodes, minus the deleted
+ones, plus the upserted ones).
 
 **Studio productions:** a workflow whose stored `settings.studio` exists is a
 Studio production (its shots, results and plan live there). A `settings`
@@ -469,7 +488,9 @@ copies.
 plus `importReport` — `{ rehosted, unreachable[], skipped[], assetIdMap?,
 assetsSkipped? }` — saying which media was copied, which points at a private
 host this instance cannot reach (left as-is), and which was skipped with the
-reason. The text reply repeats the same, naming the affected nodes.
+reason. The text reply repeats the same, naming the affected nodes. The bundle's
+edges are normalized exactly as in `create_workflow` (`edgeAdjustments` /
+`edgeWarnings` beside `importReport`).
 
 Bundled entities (characters, objects, creatures, locations) are re-created
 under the caller, and both the entity nodes and every `@`-chip — in the graph or
@@ -510,6 +531,11 @@ holding such a render is refused with `preview_render_nested`. See
 [API integration](../api-integration.md#runs-that-would-stop-for-a-review)
 (rolled out under the `PREVIEW_STOP_RULE_ENABLED` flag; where it is off,
 nothing is refused).
+
+The run's results land on the workflow's canvas the way an editor-started run's
+do: live while the flow is open in the editor (it looks for such runs about every
+10 seconds), and on the next open otherwise — unless something was run in the
+editor since. The run is also listed in the **Executions** tab.
 
 ---
 

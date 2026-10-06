@@ -5638,7 +5638,7 @@ not two.
 ### Executions
 
 - `WorkflowExecution` — full execution record with per-node state map
-- `WorkflowExecutionSummary` — list-row shape
+- `WorkflowExecutionSummary` — list-row shape. Both carry `kind`: `"execution"` for an orchestrator run, `"job"` for a single-node job listed beside the runs (whose `triggerType` is the lane that started it — `"mcp"` for an MCP client's one-node job)
 - `NodeExecutionState` — per-node entry inside `nodeStates`; `output` is present for a `completed` node AND for a `failed` one whose run retained a result
 - `NodeExecutionStatus` — per-NODE status: `"pending" | "running" | "completed" | "failed" | "skipped"`
 - `OUTPUT_BEARING_NODE_STATUSES` / `nodeStateMayCarryOutput(status)` — the two statuses whose node state may carry `output`

@@ -17,6 +17,10 @@ export type ExecutionTriggerType =
   | "schedule"
   | "app_run"
   | "single-node"
+  | "telegram"
+  | "telegram_account"
+  | "api"
+  | "mcp"
 
 /**
  * Per-node state inside an execution's `nodeStates` map. Keys are node IDs.
@@ -40,6 +44,12 @@ export { OUTPUT_BEARING_NODE_STATUSES, nodeStateMayCarryOutput } from "@nodaro/s
  */
 export interface WorkflowExecution {
   id: string
+  /**
+   * `"execution"` for an orchestrator run; `"job"` for a single-node job the
+   * list shows beside the runs (its `triggerType` is the lane that started it,
+   * `"mcp"` for an MCP client's one-node job). Absent on an older server.
+   */
+  kind?: "execution" | "job"
   workflowId: string | null
   userId: string
   status: ExecutionStatus
@@ -60,6 +70,8 @@ export interface WorkflowExecution {
 /** Summary returned by `listForWorkflow()`. Excludes per-row `triggerData`/`updatedAt`. */
 export interface WorkflowExecutionSummary {
   id: string
+  /** See {@link WorkflowExecution.kind}. */
+  kind?: "execution" | "job"
   status: ExecutionStatus
   triggerType: ExecutionTriggerType
   nodeStates: Record<string, NodeExecutionState>

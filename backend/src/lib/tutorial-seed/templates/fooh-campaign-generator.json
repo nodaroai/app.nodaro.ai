@@ -1090,35 +1090,35 @@
       "id": "e-split_img-node_29",
       "source": "split_img",
       "target": "node_29",
-      "sourceHandle": "out",
+      "sourceHandle": "text",
       "targetHandle": "in"
     },
     {
       "id": "e-split_img-node_30",
       "source": "split_img",
       "target": "node_30",
-      "sourceHandle": "out",
+      "sourceHandle": "text",
       "targetHandle": "in"
     },
     {
       "id": "e-split_img-node_31",
       "source": "split_img",
       "target": "node_31",
-      "sourceHandle": "out",
+      "sourceHandle": "text",
       "targetHandle": "in"
     },
     {
       "id": "e-split_img-node_32",
       "source": "split_img",
       "target": "node_32",
-      "sourceHandle": "out",
+      "sourceHandle": "text",
       "targetHandle": "in"
     },
     {
       "id": "e-split_img-node_33",
       "source": "split_img",
       "target": "node_33",
-      "sourceHandle": "out",
+      "sourceHandle": "text",
       "targetHandle": "in"
     },
     {
@@ -1132,35 +1132,35 @@
       "id": "e-split_vid-node_35",
       "source": "split_vid",
       "target": "node_35",
-      "sourceHandle": "out",
+      "sourceHandle": "text",
       "targetHandle": "in"
     },
     {
       "id": "e-split_vid-node_36",
       "source": "split_vid",
       "target": "node_36",
-      "sourceHandle": "out",
+      "sourceHandle": "text",
       "targetHandle": "in"
     },
     {
       "id": "e-split_vid-node_37",
       "source": "split_vid",
       "target": "node_37",
-      "sourceHandle": "out",
+      "sourceHandle": "text",
       "targetHandle": "in"
     },
     {
       "id": "e-split_vid-node_38",
       "source": "split_vid",
       "target": "node_38",
-      "sourceHandle": "out",
+      "sourceHandle": "text",
       "targetHandle": "in"
     },
     {
       "id": "e-split_vid-node_39",
       "source": "split_vid",
       "target": "node_39",
-      "sourceHandle": "out",
+      "sourceHandle": "text",
       "targetHandle": "in"
     },
     {

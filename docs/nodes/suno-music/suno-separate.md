@@ -16,7 +16,7 @@ Suno Separate offers two modes of audio separation. Vocal separation isolates vo
 ## Inputs & Outputs
 
 - **Inputs:** `audio` -- Suno task ID and audio ID from an upstream Suno node
-- **Outputs:** `audio` -- separated audio URL(s)
+- **Outputs:** `vocals` -- the isolated vocal track; `instrumental` -- the isolated instrumental track (one handle per stem)
 
 ### Output Details
 

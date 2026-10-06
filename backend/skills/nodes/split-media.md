@@ -1,7 +1,7 @@
 ---
 node_type: split-media
-generated_at: 2026-09-27T12:51:24.107Z
-generated_from: c607aa02c
+generated_at: 2026-10-05T21:37:07.170Z
+generated_from: 066cc1460
 ---
 
 # Split Media
@@ -11,7 +11,7 @@ generated_from: c607aa02c
 **Category:** processing
 **Credit cost:** `20` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
 **Inputs (target handles):** `video`, `audio`
-**Outputs (source handles):** `video-out`, `audio-out`
+**Outputs (source handles):** `video`, `audio`
 
 **Required data fields:**
 - `label: string`

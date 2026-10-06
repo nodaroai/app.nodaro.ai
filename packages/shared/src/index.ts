@@ -1390,6 +1390,7 @@ export {
   VIDEO_PRODUCER_TYPES,
   AUDIO_PRODUCER_TYPES,
   DYNAMIC_PRODUCER_TYPES,
+  IMAGE_PRODUCER_TYPES,
   FAN_OUT_EACH_TYPES,
   FAN_OUT_EACH_HANDLES,
   OWN_LIST_NODE_TYPES,
@@ -1595,3 +1596,5 @@ export * from "./render-output.js"
 export * from "./edit-plan-review.js"
 
 export { VIDEO_DURATION_AUTO, isAutoVideoDuration } from "./video-duration-auto.js"
+// Legacy handle ids → the canonical id every reader rewires them to (editor load, MCP writes, Copilot).
+export * from "./handle-aliases.js"

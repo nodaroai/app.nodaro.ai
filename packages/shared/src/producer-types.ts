@@ -208,6 +208,44 @@ export const AUDIO_PRODUCER_TYPES: ReadonlySet<string> = new Set([
 ])
 
 /**
+ * Source node types whose output is an IMAGE URL — what feeds a References
+ * input. ONE set for the canvas validators (`frontend/src/lib/
+ * generate-image-handles.ts` re-exports it), the backend's Generate Image
+ * handle migration and the MCP edge normalizer (`llm-chat`'s legacy `in`):
+ * they used to keep separate copies, and the backend's lagged by eight types.
+ */
+export const IMAGE_PRODUCER_TYPES: ReadonlySet<string> = new Set([
+  "upload-image", "generate-image", "edit-image", "image-to-image", "modify-image", "upscale-image", "remove-background",
+  // extract-frame produces a single still image extracted from a video source.
+  "extract-frame",
+  // generate-mask emits the source image AND a mask PNG; its `image` source
+  // pip is the passthrough (the same image as the input).
+  "generate-mask",
+  // paint-mask emits the hand-painted mask PNG (a plain image at runtime).
+  // Membership is what makes mask targets accept it — mask is an advisory
+  // color, not a gated type.
+  "paint-mask",
+  // reference-sheet's `sheet` is one composited image and `panels` carries
+  // clean reference images; both resolve to image URLs at runtime.
+  "reference-sheet",
+  // reference-board's `image` pip emits a real generated board image.
+  "reference-board",
+  // image-collage composites N images → ONE image.
+  "image-collage",
+  // image-overlay places layers on a base → ONE image.
+  "image-overlay",
+  // 3D Render Pro's `stills` handle carries one PNG per shot of the exported
+  // composition (spread into referenceImageUrls like reference-sheet
+  // `panels`). A validator sees only the source NODE type, so this also makes
+  // its `video` pip droppable on an image input — the handle-blind trade
+  // reference-sheet and split-media already make; the input resolvers route
+  // by handle, so only `stills` becomes an image at runtime. Deliberately NOT
+  // in IMAGE_SOURCE_TYPES on either engine: that set types the node's PRIMARY
+  // asset, and 3D Render Pro's is the MP4.
+  "pro-3d-render",
+])
+
+/**
  * Source node types whose primary output is a LIST that, by default, fans out
  * one downstream execution per element when an edge leaves them WITHOUT an
  * explicit `outputMode` (all other edges default to "last"). `selector` is

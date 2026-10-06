@@ -1,8 +1,9 @@
 /**
- * The editor's watch for Telegram-started runs: it follows the newest one
- * still going when nothing else is followed, paints the newest that ended
- * unseen, never hands the same run over twice, holds while the editor is
- * busy, and does not look at all without a Telegram trigger.
+ * The editor's watch for runs it did not start: it follows the newest
+ * live-lane run still going when nothing else is followed, paints the newest
+ * that ended unseen (with the listing it came from), never hands the same run
+ * over twice, holds while the editor is busy, and does not look at all while
+ * disabled (a read-only flow, a workflow still loading).
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { act, renderHook, waitFor } from "@testing-library/react"
@@ -23,7 +24,7 @@ import { useTriggeredRunFollow } from "../use-triggered-run-follow"
 const run = (id: string, status: string, triggerType = "telegram_account") => ({ id, status, triggerType, nodeStates: {} })
 const key = ["workflow-executions", "wf-1", undefined]
 
-function setup(initial: { listening?: boolean; busy?: boolean; cachedPage?: unknown[] } = {}) {
+function setup(initial: { enabled?: boolean; busy?: boolean; cachedPage?: unknown[] } = {}) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   // Cached a minute before this editor opened, as a page from an earlier visit would be.
   if (initial.cachedPage) qc.setQueryData(key, { data: initial.cachedPage }, { updatedAt: Date.now() - 60_000 })
@@ -31,8 +32,8 @@ function setup(initial: { listening?: boolean; busy?: boolean; cachedPage?: unkn
   const paintEnded = vi.fn()
   const wrapper = ({ children }: { children: React.ReactNode }) => <QueryClientProvider client={qc}>{children}</QueryClientProvider>
   const hook = renderHook(
-    ({ listening, busy }: { listening: boolean; busy: boolean }) => useTriggeredRunFollow("wf-1", listening, busy, { follow, paintEnded }),
-    { wrapper, initialProps: { listening: initial.listening ?? true, busy: initial.busy ?? false } },
+    ({ enabled, busy }: { enabled: boolean; busy: boolean }) => useTriggeredRunFollow("wf-1", enabled, busy, { follow, paintEnded }),
+    { wrapper, initialProps: { enabled: initial.enabled ?? true, busy: initial.busy ?? false } },
   )
   const looked = async (n: number) => {
     await waitFor(() => expect(qc.getQueryState(key)?.dataUpdateCount).toBe(n))
@@ -71,6 +72,8 @@ describe("useTriggeredRunFollow", () => {
     await looked(1)
     expect(paintEnded).toHaveBeenCalledTimes(1)
     expect(paintEnded.mock.calls[0]![0]).toMatchObject({ id: "done" })
+    // …with the listing it came from, for the newer-run holds.
+    expect(paintEnded.mock.calls[0]![1]).toEqual([expect.objectContaining({ id: "done" })])
     await poll()
     expect(paintEnded).toHaveBeenCalledTimes(1)
     expect(follow).not.toHaveBeenCalled()
@@ -81,22 +84,31 @@ describe("useTriggeredRunFollow", () => {
     const { follow, hook, looked } = setup({ busy: true })
     await looked(1)
     expect(follow).not.toHaveBeenCalled()
-    hook.rerender({ listening: true, busy: false })
+    hook.rerender({ enabled: true, busy: false })
     await act(async () => {})
     expect(follow).toHaveBeenCalledTimes(1)
   })
 
-  it("leaves a run on another lane alone", async () => {
+  it("never follows a schedule or a webhook run; paints the one that ended", async () => {
     api.pages = [[run("s", "running", "schedule"), run("w", "completed", "webhook")]]
+    const { follow, paintEnded, looked } = setup()
+    await looked(1)
+    expect(follow).not.toHaveBeenCalled()
+    expect(paintEnded).toHaveBeenCalledTimes(1)
+    expect(paintEnded.mock.calls[0]![0]).toMatchObject({ id: "w" })
+  })
+
+  it("leaves an app run alone", async () => {
+    api.pages = [[run("a", "running", "app_run"), run("b", "completed", "app_run")]]
     const { follow, paintEnded, looked } = setup()
     await looked(1)
     expect(follow).not.toHaveBeenCalled()
     expect(paintEnded).not.toHaveBeenCalled()
   })
 
-  it("does not look at all without a Telegram trigger", async () => {
+  it("does not look at all while disabled (read-only, or the workflow still loading)", async () => {
     api.pages = [[run("new", "running")]]
-    setup({ listening: false })
+    setup({ enabled: false })
     await new Promise((resolve) => setTimeout(resolve, 50))
     expect(api.calls).toBe(0)
   })
@@ -123,7 +135,7 @@ describe("useTriggeredRunFollow — review round 2", () => {
     const { follow, hook, looked } = setup({ busy: true })
     act(() => hook.result.current.markHandled("attached"))
     await looked(1)
-    hook.rerender({ listening: true, busy: false })
+    hook.rerender({ enabled: true, busy: false })
     await act(async () => {})
     expect(follow).not.toHaveBeenCalled()
   })

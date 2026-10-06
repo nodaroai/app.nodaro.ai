@@ -13,7 +13,7 @@ For non-prompt utility operations (pure upscaling, background removal) use [Upsc
 - Connect a source image to the `image` input (from Upload Image, Generate Image, or any image-producing node).
 - Pick a provider and write a transformation prompt describing the change.
 - Optionally pick a style preset (or enter custom style text), add a negative prompt, set aspect ratio, seed, and a reference image — exactly which controls apply depends on the selected provider.
-- The node returns the transformed image on the `out` handle.
+- The node returns the transformed image on the `image` handle.
 
 ## Inputs & Outputs
 
@@ -22,7 +22,7 @@ For non-prompt utility operations (pure upscaling, background removal) use [Upsc
 - `mask` — *optional* inpainting mask (white = edit, black = preserve). Forwarded to providers that support masks. Wire one from a [Generate Mask](./generate-mask.md) or [Paint Mask](./paint-mask.md) node, or paint in place: an interactive Mask Painter is available when the **Ideogram Edit** provider is selected.
 
 **Outputs:**
-- `out` — the modified image URL.
+- `image` — the modified image URL.
 
 ## Supported Providers
 

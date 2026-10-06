@@ -50,7 +50,7 @@ import { buildVariantResults } from "./variant-results";
 // The restore poller shares the canvas loops' one flag writer. No cycle:
 // poll-job.ts imports nothing from this file.
 import { getJobStatusLeanForNode } from "./poll-job";
-import { FOLLOWED_LANES, resultsRunMark } from "./triggered-run-follow";
+import { CANVAS_RUN_LANES, resultsRunMark } from "./triggered-run-follow";
 import { recoverAuditReportsOnCanvas } from "./audit-report-canvas";
 import { beginTriggeredRunPaint } from "./triggered-run-paint";
 import { sunoVariantFields } from "@/lib/suno-ids";
@@ -1544,11 +1544,12 @@ export function isStreaming(executionId: string, owner?: (v: boolean) => void): 
 
 /**
  * The server answered a Run with "already running" and named the run. A run
- * a Telegram message started belongs to the workflow's owner, so this is what
- * a Run pressed while one goes gets. Already streaming it: keep that stream
- * and take back this click's optimistic marks. A Telegram run: follow it
- * through its paint rules, never the plain stream (that would write the
- * message onto the trigger card and paint nodes it only passed through).
+ * the editor did not start (a Telegram message, an MCP client, the API, a
+ * schedule, a webhook) belongs to the workflow's owner, so this is what a Run
+ * pressed while one goes gets. Already streaming it: keep that stream and
+ * take back this click's optimistic marks. A run on a canvas lane: follow it
+ * through its paint rules, never the plain stream (that would write a
+ * trigger's message onto its card and paint nodes it only passed through).
  * Anything else, as before.
  */
 export async function attachToRunningExecution(
@@ -1571,7 +1572,7 @@ export async function attachToRunningExecution(
     undoOptimistic();
     return;
   }
-  if (lane !== undefined && FOLLOWED_LANES.has(lane)) {
+  if (lane !== undefined && CANVAS_RUN_LANES.has(lane)) {
     undoOptimistic();
     streamBackendExecution(executionId, ctx, setIsRunning, onExecutionEnded, {
       isRestore: true,
