@@ -49,7 +49,7 @@ import {
   workflowExportSchema,
 } from "../../workflow-assets.js"
 import type { CreatedAssetMap } from "../../workflow-assets.js"
-import { migrateGenerateImageHandles } from "../../generate-image-handle-migration.js"
+import { describeEdgeAdjustments, normalizeWorkflowEdges, type EdgeAdjustment } from "../../workflow-edge-normalization.js"
 import { findUnroutableMedia, rehostForeignMedia } from "../../media-portability.js"
 
 
@@ -86,6 +86,40 @@ function ok(text: string, structuredContent?: Record<string, unknown>) {
   return structuredContent
     ? { content: [{ type: "text" as const, text }], structuredContent }
     : { content: [{ type: "text" as const, text }] }
+}
+
+/** The reply lines for edge corrections and warnings — the edge twin of the node `healNote`. */
+function edgeNote(adjustments: ReadonlyArray<EdgeAdjustment>, warnings: ReadonlyArray<string>): string {
+  const parts: string[] = []
+  if (adjustments.length > 0) {
+    parts.push(
+      `\n\nAdjusted ${adjustments.length} edge field(s) so the canvas draws every edge:\n` +
+        describeEdgeAdjustments(adjustments).map((l) => `  - ${l}`).join("\n"),
+    )
+  }
+  if (warnings.length > 0) {
+    parts.push(
+      `\n\nEdge warnings:\n` +
+        warnings.map((l) => `  - ${l}`).join("\n") +
+        `\n\nHandle ids per node: get_node_skill(<type>).`,
+    )
+  }
+  return parts.join("")
+}
+
+function edgeStructured(adjustments: ReadonlyArray<EdgeAdjustment>, warnings: ReadonlyArray<string>): Record<string, unknown> {
+  return {
+    ...(adjustments.length > 0 ? { edgeAdjustments: adjustments } : {}),
+    ...(warnings.length > 0 ? { edgeWarnings: warnings } : {}),
+  }
+}
+
+/** A duplicate edge id refuses the whole write — nothing is stored. */
+function edgeProblems(errors: ReadonlyArray<string>): string {
+  return (
+    `Edge problems — nothing was written:\n${errors.map((l) => `  - ${l}`).join("\n")}` +
+    `\n\nTwo edges cannot share an id; give each its own, or leave the id out and the server assigns one.`
+  )
 }
 
 /**
@@ -347,6 +381,16 @@ export function registerWorkflows({
         const cloudOnlyErr = await cloudOnlyGuard(args.nodes, session.userId)
         if (cloudOnlyErr) return err(cloudOnlyErr)
 
+        // Edges first: legacy handle names rewired (the editor's own load-time
+        // rules), missing ids given, a broken edge dropped with a warning, a
+        // handle the node does not declare kept and warned about, a duplicate
+        // id refused before anything is written.
+        const edgeResult = normalizeWorkflowEdges(
+          (args.nodes ?? []) as Array<{ id?: unknown; type?: unknown }>,
+          args.edges ?? [],
+        )
+        if (edgeResult.errors.length > 0) return err(edgeProblems(edgeResult.errors))
+        const createEdgeWarnings = [...edgeResult.warnings, ...edgeResult.dropped]
         // Heal impossible provider/parameter pairs at the write boundary —
         // same reason as update_workflow_json: an agent-authored node never
         // renders the config panel, so nothing else ever snaps its values.
@@ -356,7 +400,7 @@ export function registerWorkflows({
           normalizeNodeModelParams(
             (args.nodes ?? []) as Array<{ id?: unknown; type?: unknown; data?: unknown }>,
           ).nodes,
-          args.edges,
+          edgeResult.edges,
         )
         const { data, error } = await supabase
           .from("workflows")
@@ -366,7 +410,7 @@ export function registerWorkflows({
             name: args.name,
             description: args.description ?? null,
             nodes: storedNodes,
-            edges: args.edges ?? [],
+            edges: edgeResult.edges,
             settings: args.settings ?? {},
           })
           .select("id, name, created_at, updated_at")
@@ -375,8 +419,8 @@ export function registerWorkflows({
         const row = data as Record<string, unknown>
         await projectTriggers(row.id as string, session.userId, session.userId, storedNodes)
         return ok(
-          `Created workflow "${row.name as string}" (id ${row.id as string}) in the mcp project.`,
-          { id: row.id, name: row.name },
+          `Created workflow "${row.name as string}" (id ${row.id as string}) in the mcp project.${edgeNote(edgeResult.adjustments, createEdgeWarnings)}`,
+          { id: row.id, name: row.name, ...edgeStructured(edgeResult.adjustments, createEdgeWarnings) },
         )
       },
     )
@@ -543,12 +587,17 @@ export function registerWorkflows({
             )
           }
           if (res.statusCode >= 400) return err(mcpRouteError(res.statusCode, res.body))
-          let out: { id?: string; version?: number; updatedAt?: string } = {}
+          let out: { id?: string; version?: number; updatedAt?: string; edgeAdjustments?: EdgeAdjustment[]; edgeWarnings?: string[] } = {}
           try { out = (JSON.parse(res.body) as { data?: typeof out }).data ?? {} } catch { /* opaque */ }
-          return ok(`Applied delta to workflow ${args.workflow_id} (version ${out.version ?? "?"}).`, {
+          // The route normalised the delta's edges exactly as the full-body
+          // form does here; what it changed or doubted is relayed the same way.
+          const deltaAdjustments = out.edgeAdjustments ?? []
+          const deltaWarnings = out.edgeWarnings ?? []
+          return ok(`Applied delta to workflow ${args.workflow_id} (version ${out.version ?? "?"}).${edgeNote(deltaAdjustments, deltaWarnings)}`, {
             id: args.workflow_id,
             ...(out.version !== undefined ? { version: out.version } : {}),
             ...(out.updatedAt !== undefined ? { updated_at: out.updatedAt } : {}),
+            ...edgeStructured(deltaAdjustments, deltaWarnings),
           })
         }
 
@@ -628,11 +677,20 @@ export function registerWorkflows({
           updated_at: new Date().toISOString(),
         }
         let nodeAdjustments: ReturnType<typeof normalizeNodeModelParams>["adjustments"] = []
+        let edgeAdjustments: EdgeAdjustment[] = []
+        let edgeWarnings: string[] = []
         if (hasNodes) {
-          const migratedEdges = migrateGenerateImageHandles(
-            args.nodes as Array<{ id: string; type?: string }>,
-            args.edges as Array<{ id: string; source: string; target: string; sourceHandle: string | null; targetHandle: string | null }>,
+          // Edges first: legacy handle names rewired, missing ids given, a
+          // broken edge dropped with a warning, a duplicate id refused before
+          // anything is written.
+          const edgeResult = normalizeWorkflowEdges(
+            args.nodes as Array<{ id?: unknown; type?: unknown }>,
+            args.edges ?? [],
           )
+          if (edgeResult.errors.length > 0) return err(edgeProblems(edgeResult.errors))
+          const migratedEdges = edgeResult.edges
+          edgeAdjustments = edgeResult.adjustments
+          edgeWarnings = [...edgeResult.warnings, ...edgeResult.dropped]
           // Server-side strip of transient run-state (status/jobId/progress) —
           // agent-authored graphs must never seed phantom "running" state.
           const stripped = stripTransientRuntimeData(args.nodes as Array<{ data?: Record<string, unknown> }>)
@@ -712,13 +770,14 @@ export function registerWorkflows({
               describeNodeAdjustments(nodeAdjustments).map((l) => `  - ${l}`).join("\n")
             : ""
         return ok(
-          `Updated workflow ${args.workflow_id} (${changed.join(", ")}).${healNote}`,
+          `Updated workflow ${args.workflow_id} (${changed.join(", ")}).${healNote}${edgeNote(edgeAdjustments, edgeWarnings)}`,
           {
             id: updated.id,
             name: updated.name,
             updated_at: updated.updated_at,
             version: updated.version,
             ...(nodeAdjustments.length > 0 ? { adjustments: nodeAdjustments } : {}),
+            ...edgeStructured(edgeAdjustments, edgeWarnings),
           },
         )
       },
@@ -795,10 +854,13 @@ export function registerWorkflows({
           importReport.assetIdMap = assetIdMapForReport(assetIdMap)
         }
 
-        const migratedEdges = migrateGenerateImageHandles(
-          remappedNodes as Array<{ id: string; type?: string }>,
-          (wf.edges ?? []) as Array<{ id: string; source: string; target: string; sourceHandle: string | null; targetHandle: string | null }>,
+        const importEdgeResult = normalizeWorkflowEdges(
+          remappedNodes as Array<{ id?: unknown; type?: unknown }>,
+          (wf.edges ?? []) as Array<{ id?: string; source?: string; target?: string; sourceHandle?: string | null; targetHandle?: string | null }>,
         )
+        if (importEdgeResult.errors.length > 0) return err(edgeProblems(importEdgeResult.errors))
+        const migratedEdges = importEdgeResult.edges
+        const importEdgeWarnings = [...importEdgeResult.warnings, ...importEdgeResult.dropped]
         // Video Overlay: presets expanded; a wired layer keeps no `imageUrl`.
         const importedNodes = normalizeVideoOverlayNodes(remappedNodes, migratedEdges)
 
@@ -834,8 +896,9 @@ export function registerWorkflows({
           ...(importReport.notes ?? []),
         ].filter(Boolean)
         return ok(
-          [`Imported workflow "${row.name as string}" (id ${row.id as string}) into the mcp project.`, ...mediaNotes].join(" "),
-          { id: row.id, name: row.name, importReport },
+          [`Imported workflow "${row.name as string}" (id ${row.id as string}) into the mcp project.`, ...mediaNotes].join(" ") +
+            edgeNote(importEdgeResult.adjustments, importEdgeWarnings),
+          { id: row.id, name: row.name, importReport, ...edgeStructured(importEdgeResult.adjustments, importEdgeWarnings) },
         )
       },
     )
@@ -925,7 +988,12 @@ export function registerWorkflows({
           content: [
             {
               type: "text" as const,
-              text: `Started workflow execution ${executionId}.`,
+              text:
+                `Started workflow execution ${executionId}. ` +
+                `Read it with get_app_run(execution_id) — this is an EXECUTION id, not a job id (get_job will not find it): ` +
+                `it lists every node's status, text and media, and the run's outcome once it completes ` +
+                `("nothing_new" when the nodes had nothing to work on — a feed with no new posts — and nothing failed). ` +
+                `While the flow is open in the editor the run shows on the canvas live; otherwise its results land on the next open.`,
             },
           ],
           structuredContent: { executionId, name: workflowName },

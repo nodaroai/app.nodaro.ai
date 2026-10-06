@@ -38,6 +38,7 @@ walkthrough-style introduction, see the [SDK Quickstart](./sdk-quickstart.md).
   - [`client.library`](#clientlibrary)
   - [`client.presets`](#clientpresets)
   - [`client.savedPosts`](#clientsavedposts)
+  - [`client.collections`](#clientcollections)
   - [`client.competitors`](#clientcompetitors)
   - [`client.pickerCatalogs`](#clientpickercatalogs)
   - [`client.shots`](#clientshots)
@@ -1488,6 +1489,26 @@ nodeStateMayCarryOutput(node.status) // "completed" | "failed" → true
 
 `OUTPUT_BEARING_NODE_STATUSES` (the same two statuses, as a `Set`) and the
 `NodeExecutionStatus` union are exported beside it.
+
+**`outcome` and `skipReason`.** A run that found nothing new ends `completed`,
+not `failed` (see [Runs that find nothing new](./api-integration.md#runs-that-find-nothing-new)):
+a text-requiring node whose wired text came from a node that produced nothing
+in this run is skipped with `nodeStates[id].skipReason === "empty_input"`, and
+the run carries `outcome: "nothing_new"` once it completes (`"succeeded"`
+otherwise; absent until then, and on an older server). The rule the server
+derives it with is exported, for a row you already hold:
+
+```ts
+import { executionOutcome, countEmptyInputSkips } from "@nodaro/sdk"
+
+const { data } = await client.executions.get(executionId)
+if (data.outcome === "nothing_new") {
+  console.log(`nothing new — ${countEmptyInputSkips(data.nodeStates)} node(s) had nothing to work on`)
+}
+executionOutcome(data.status, data.nodeStates) // the same answer, derived client-side
+```
+
+`WorkflowExecutionSummary` (from `listForWorkflow`) carries the same `outcome`.
 
 #### `listForWorkflow(workflowId, params?)`
 
@@ -4816,6 +4837,106 @@ remove the save and its copied still.
 
 ---
 
+### `client.collections`
+
+Where a workflow's records live: named sets of records a workflow saves to and
+reads back (see [Collections](./features/collections.md)). A record holds a
+title, a text, a link, media links, up to 50 scalar `fields` and a `source` —
+text and links only, never files. The same link saved twice is one record;
+past the plan's cap the oldest records are evicted after a write. OAuth app
+tokens need `assets:read` for the reads and `assets:write` for the writes
+(no-op for user/API-key auth).
+
+#### `list()` / `get(id)`
+
+```ts
+list(): Promise<ListCollectionsResult>
+get(id: string): Promise<Collection>
+```
+
+`GET /v1/collections` → your collections with their `recordCount`, plus
+`available` (false on a server whose database has no collections yet) and your
+`caps` (`{ collections, records }`, `null` = no limit). `get` reads one.
+
+#### `create(input)` / `update(id, input)` / `delete(id)`
+
+```ts
+create(input: { name: string; description?: string }): Promise<Collection>
+update(id: string, input: { name?: string; description?: string }): Promise<Collection>
+delete(id: string): Promise<void>
+```
+
+`POST` / `PATCH` / `DELETE /v1/collections[/:id]`. Creating one past your cap
+throws `ForbiddenError` (`collection_limit_reached`); a name you already use
+throws `ConflictError` (`name_taken`). Deleting a collection deletes its records.
+
+#### `records(id, params?)`
+
+```ts
+records(id: string, params?: { q?: string; since?: string; cursor?: string; limit?: number }): Promise<ListCollectionRecordsResult>
+```
+
+`GET /v1/collections/:id/records` → the records, newest first. `q` finds words
+in the title, text or link; `since` (ISO) keeps only records saved at or after
+it; page with `cursor` (the previous page's `nextCursor`) and `limit` (1-100,
+default 50).
+
+```ts
+const since = new Date(Date.now() - 48 * 3_600_000).toISOString()
+let page = await client.collections.records(newsId, { since })
+for (const record of page.data) console.log(record.title, record.url)
+while (page.nextCursor) page = await client.collections.records(newsId, { since, cursor: page.nextCursor })
+```
+
+#### `addRecord(id, input, opts?)`
+
+```ts
+addRecord(
+  id: string,
+  input: { title?; text?; url?; media?; fields?; dedupeKey?; source?; item?: unknown },
+  opts?: { idempotencyKey?: string },
+): Promise<AddCollectionRecordResult>
+```
+
+`POST /v1/collections/:id/records` → save one record. Give the fields, or
+`item` — any JSON (a feed post, a search result, an article object) the server
+maps to a record (title ← `title` / `headline` / `name`, text ← `text` / `body`
+/ `caption` / `description`, link ← `url` / `postUrl` / `link`, media, the rest
+as `fields`); explicit fields win. The answer's `outcome` is `inserted`,
+`duplicate` (the same link or dedupe key was already there — the existing
+record comes back) or `replayed` (a write with the same `idempotencyKey`
+already happened); `evicted` says how many of the oldest records went past
+your cap.
+
+```ts
+// `posts` — any JSON items: a feed's posts, a search's results, articles an LLM wrote
+for (const post of posts) {
+  const { outcome, evicted } = await client.collections.addRecord(
+    newsId,
+    { item: post, fields: { topic: "tech" } },
+    // One key per item, stable across retries: the item's own id or link, never a counter.
+    { idempotencyKey: `telegram-${post.channel}-${post.id}` },
+  )
+  console.log(outcome, evicted) // "inserted" 0 · "duplicate" 0 · "replayed" 0
+}
+```
+
+#### `deleteRecord(id, recordId)` / `export(id, params?)`
+
+```ts
+deleteRecord(id: string, recordId: string): Promise<void>
+export(id: string, params?: { format?: "csv" | "json"; since?: string; q?: string }): Promise<string>
+```
+
+`DELETE /v1/collections/:id/records/:recordId` removes one record.
+`GET /v1/collections/:id/export` returns the whole collection as CSV (the
+default) or JSON text, newest first, narrowed by `since` and `q`. The text is
+read whole under the client's request timeout (`timeoutMs`, 60 s by default):
+for a collection of many thousands of records, give the client a longer
+timeout or narrow the export with `since`.
+
+---
+
 ### `client.competitors`
 
 Brands you track (competitors, or your own), their scans and the action
@@ -5638,7 +5759,7 @@ not two.
 ### Executions
 
 - `WorkflowExecution` — full execution record with per-node state map
-- `WorkflowExecutionSummary` — list-row shape
+- `WorkflowExecutionSummary` — list-row shape. Both carry `kind`: `"execution"` for an orchestrator run, `"job"` for a single-node job listed beside the runs (whose `triggerType` is the lane that started it — `"mcp"` for an MCP client's one-node job)
 - `NodeExecutionState` — per-node entry inside `nodeStates`; `output` is present for a `completed` node AND for a `failed` one whose run retained a result
 - `NodeExecutionStatus` — per-NODE status: `"pending" | "running" | "completed" | "failed" | "skipped"`
 - `OUTPUT_BEARING_NODE_STATUSES` / `nodeStateMayCarryOutput(status)` — the two statuses whose node state may carry `output`

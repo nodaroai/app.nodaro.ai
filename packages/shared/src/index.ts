@@ -944,6 +944,54 @@ export {
 } from "./saved-posts.js"
 
 export {
+  COLLECTION_NAME_MAX,
+  COLLECTION_DESCRIPTION_MAX,
+  COLLECTION_RECORD_TITLE_MAX,
+  COLLECTION_RECORD_TEXT_MAX,
+  COLLECTION_RECORD_URL_MAX,
+  COLLECTION_RECORD_MEDIA_MAX,
+  COLLECTION_RECORD_FIELDS_MAX,
+  COLLECTION_RECORD_FIELDS_BYTES_MAX,
+  COLLECTION_DEDUPE_KEY_MAX,
+  COLLECTION_IDEMPOTENCY_KEY_MAX,
+  COLLECTIONS_PAGE_MAX,
+  COLLECTIONS_PAGE_DEFAULT,
+  COLLECTION_HEADLINE_MAX,
+  COLLECTION_MEDIA_TYPES,
+  COLLECTION_TIER_CAPS,
+  COLLECTION_DIGEST_SEPARATOR,
+  collectionCapsForTier,
+  clampChars,
+  normalizeDedupeKey,
+  isCollectionUrl,
+  isCollectionMedia,
+  normalizeCollectionMedia,
+  normalizeCollectionFields,
+  collectionRecordHeadline,
+  collectionRecordsDigest,
+  ingestRecordFromJson,
+  type CollectionMediaType,
+  type CollectionMedia,
+  type CollectionCaps,
+  type CollectionLimits,
+  type Collection,
+  type CollectionRecordSource,
+  type CollectionFieldValue,
+  type CollectionRecord,
+  type ListCollectionsResult,
+  type CreateCollectionInput,
+  type UpdateCollectionInput,
+  type ListCollectionRecordsParams,
+  type ListCollectionRecordsResult,
+  type AddCollectionRecordInput,
+  type CollectionWriteOutcome,
+  type AddCollectionRecordResult,
+  type CollectionExportFormat,
+  type CollectionDigestFormat,
+  type IngestedRecord,
+} from "./collections.js"
+
+export {
   COMPETITOR_ACCOUNT_KEYS,
   COMPETITOR_ABOUT_PLATFORMS,
   COMPETITOR_DEFAULT_ABOUT_PLATFORMS,
@@ -1390,6 +1438,7 @@ export {
   VIDEO_PRODUCER_TYPES,
   AUDIO_PRODUCER_TYPES,
   DYNAMIC_PRODUCER_TYPES,
+  IMAGE_PRODUCER_TYPES,
   FAN_OUT_EACH_TYPES,
   FAN_OUT_EACH_HANDLES,
   OWN_LIST_NODE_TYPES,
@@ -1438,7 +1487,10 @@ export {
 export type {
   NodeExecutionStatus,
   NodeExecutionStateWire,
+  NodeSkipReason,
 } from "./node-execution-state.js"
+export { executionOutcome, countEmptyInputSkips } from "./execution-outcome.js"
+export type { ExecutionOutcome } from "./execution-outcome.js"
 
 export {
   MODEL_PARAM_NODE_TYPES,
@@ -1595,3 +1647,7 @@ export * from "./render-output.js"
 export * from "./edit-plan-review.js"
 
 export { VIDEO_DURATION_AUTO, isAutoVideoDuration } from "./video-duration-auto.js"
+// Legacy handle ids → the canonical id every reader rewires them to (editor load, MCP writes, Copilot).
+export * from "./handle-aliases.js"
+// Telegram Channel Feed: the post shape, the digest, and the cursor rule (where the feed stands after a run).
+export * from "./telegram-channel.js"

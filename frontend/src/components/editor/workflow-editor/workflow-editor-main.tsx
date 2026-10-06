@@ -28,7 +28,6 @@ import { UnsavedChangesDialog } from "../unsaved-changes-dialog";
 import { NavigateWithGuardContext } from "@/hooks/use-navigate-with-guard";
 import { ExecutionsTab } from "../executions-tab";
 import { useTriggeredRunFollow } from "./use-triggered-run-follow";
-import { FOLLOWED_TRIGGER_NODE_TYPES } from "./triggered-run-follow";
 import { followTriggeredRun, paintEndedTriggeredRun } from "./follow-triggered-run";
 import { ExecutionStatusBar } from "../execution-status-bar";
 import { CostTab } from "../cost-tab";
@@ -158,11 +157,14 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   const [activeTab, setActiveTab] = useState<"editor" | "present" | "executions" | "cost">(
     "editor",
   );
-  // A run a Telegram message started is followed on the canvas (wired below, after ctx).
-  // onExecutionStarted (defined before that) reaches the watch through this ref.
+  // A run the editor did not start (Telegram, MCP, API, a schedule, a webhook)
+  // is followed on the canvas (wired below, after ctx). onExecutionStarted
+  // (defined before that) reaches the watch through this ref.
   const followHandledRef = useRef<(executionId: string) => void>(() => {});
   const followWorkflowId = useWorkflowStore((s) => s.workflowId);
-  const hasFollowedTrigger = useWorkflowStore((s) => s.nodes.some((n) => FOLLOWED_TRIGGER_NODE_TYPES.has(n.type ?? "")));
+  // Not before the nodes are in: `load()` sets the workflow id first, and a
+  // look at an empty canvas would paint nothing and lose the run's marks.
+  const isWorkflowLoading = useWorkflowStore((s) => s.isWorkflowLoading);
   const [sidebarVisible, setSidebarVisible] = useState(false);
   // Confirm dialog for the fallback single-node discard control. Holds the
   // action to run on confirm (or null when closed); mirrors run-node-button.tsx.
@@ -906,10 +908,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     queryClient.invalidateQueries({ queryKey: ["workflow-executions"] });
   }, []);
 
-  // A run a Telegram message started: followed live on the nodes like a Run
-  // (status bar, spinners, results), or painted at once when it ended unseen.
-  // Never while a Run is being confirmed, and never on a flow this person may only view.
-  const { markHandled: markFollowHandled } = useTriggeredRunFollow(followWorkflowId, hasFollowedTrigger && !isReadOnly, isRunning || isConfirming, {
+  // A run the editor did not start: followed live on the nodes like a Run
+  // (status bar, spinners, results) when a person started it (Telegram, MCP,
+  // the API), or painted at once when it ended unseen (those, and schedules
+  // and webhooks). Never while a Run is being confirmed, never while the
+  // workflow is still loading, and never on a flow this person may only view.
+  const { markHandled: markFollowHandled } = useTriggeredRunFollow(followWorkflowId, !isReadOnly && !isWorkflowLoading, isRunning || isConfirming, {
     follow: (run) => {
       setActiveExecutionId(run.id);
       followTriggeredRun(run, ctx, setIsRunning, onExecutionEnded);

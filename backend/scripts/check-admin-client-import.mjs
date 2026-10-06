@@ -205,6 +205,16 @@ const ALLOWED_PATHS = [
   // route (and its tenant-scope lint entry) is the only way in.
   /^src\/routes\/saved-posts\.ts$/,
 
+  // Collections (migration 462): per-user CRUD over `collections` and their
+  // `collection_records`, same shape as saved-posts. Every handler derives
+  // `userId = req.userId` (401 if absent), every query on both tables chains
+  // `.eq("user_id", userId)` (records also `.eq("collection_id", id)` after an
+  // ownership read), inserts carry `user_id: userId`. Both tables grant nothing
+  // to client roles, so this route (and its tenant-scope lint entries) is the
+  // only way in. The one other table it reads is the caller's own `profiles`
+  // row, for the tier the caps come from.
+  /^src\/routes\/collections\.ts$/,
+
   // Embeds / og-tags: fetch public-facing metadata by id, not user-scoped.
   /^src\/routes\/embed\.ts$/,
   /^src\/routes\/og-tags\.ts$/,

@@ -2,8 +2,9 @@
  * Video Overlay emits a video, but these hand-kept lists are not derived from
  * `VIDEO_PRODUCER_TYPES` — each names its video sources by hand. A new
  * video-producing node that misses one is invisible there: no Connected Media
- * row, no Manual Edit source, no Lip Sync source, no legacy-edge
- * classification, no LLM video reference, no display name. This pins
+ * row, no Manual Edit source, no Lip Sync source, no LLM video reference, no
+ * display name. (The legacy-edge classifier list used to be one of them; it
+ * now reads VIDEO_PRODUCER_TYPES itself — @nodaro/shared handle-aliases.ts.) This pins
  * `video-overlay` into every one of them, and pins that each anchor still
  * finds the list that names `fade-video` (so a rename fails loudly here
  * instead of passing on the wrong text).
@@ -21,7 +22,6 @@ const SITES: ReadonlyArray<readonly [file: string, anchor: string]> = [
   ["components/editor/workflow-editor/workflow-editor-main.tsx", "const VIDEO_TYPES = new Set(["],
   ["components/nodes/manual-edit-node.tsx", "const VIDEO_TYPES = new Set(["],
   ["components/nodes/lip-sync-node.tsx", "const VIDEO_OUTPUT_TYPES = ["],
-  ["hooks/use-workflow-store.ts", "const VIDEO_SOURCE_TYPES_FOR_CLASSIFIER"],
   ["components/editor/workflow-editor/node-input-resolver.ts", "const LLM_REF_VIDEO_NODE_TYPES"],
 ]
 

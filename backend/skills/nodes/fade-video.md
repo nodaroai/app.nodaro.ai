@@ -1,7 +1,7 @@
 ---
 node_type: fade-video
-generated_at: 2026-09-27T12:51:24.539Z
-generated_from: c607aa02c
+generated_at: 2026-10-05T21:37:07.528Z
+generated_from: 066cc1460
 ---
 
 # Fade In/Out
@@ -10,7 +10,7 @@ generated_from: c607aa02c
 **Type:** `fade-video`
 **Category:** processing
 **Credit cost:** `10` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
-**Inputs (target handles):** `in`
+**Inputs (target handles):** `video`
 **Outputs (source handles):** `video`
 
 **Required data fields:**

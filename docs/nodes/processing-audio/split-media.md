@@ -29,8 +29,8 @@ The Split into Chunks node divides a video or audio file into a series of fixed-
 At least one input is required. Connecting both will split the audio from the video and the video independently.
 
 **Outputs:**
-- `video-out` — the selected video chunk (when a video input is connected)
-- `audio-out` — the selected audio chunk
+- `video` — the selected video chunk (when a video input is connected)
+- `audio` — the selected audio chunk
 
 After execution, a chunk selector appears in the config panel so you can choose which chunk flows to downstream nodes.
 
@@ -47,5 +47,5 @@ After execution, a chunk selector appears in the config panel so you can choose 
 ## Tips
 
 - Use a List node driven by chunk count to iterate all chunks automatically.
-- The chunk selector in the config panel only affects which chunk is passed when you wire `video-out` or `audio-out` to a downstream node; all chunks are still available in the result panel for download.
+- The chunk selector in the config panel only affects which chunk is passed when you wire `video` or `audio` to a downstream node; all chunks are still available in the result panel for download.
 - WAV output preserves lossless quality; use AAC for smaller files on mobile delivery pipelines.

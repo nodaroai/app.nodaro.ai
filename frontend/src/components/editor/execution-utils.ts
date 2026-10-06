@@ -150,6 +150,28 @@ export interface NodeState {
   /** Resolved inputs fed to this node (for debugging). */
   inputs?: Record<string, unknown>
   error?: string
+  /** Why the RUN skipped this node (`empty_input`); absent on a router-gated one. */
+  skipReason?: string
   startedAt?: string
   completedAt?: string
+}
+
+/**
+ * The node rows a run's history shows: what actually ran, plus a node the RUN
+ * skipped for a reason (`skipReason` — "nothing new" is a verdict worth a
+ * row). Router-gated skips and pre-completed source nodes stay out, as before.
+ */
+export function isExecutedNodeEntry(state: Pick<NodeState, "status" | "startedAt" | "skipReason">): boolean {
+  if (state.status === "skipped") return !!state.skipReason
+  return !(state.status === "completed" && !state.startedAt)
+}
+
+const SKIP_REASON_KEYS: Record<string, MessageKey> = {
+  empty_input: "exec.skipReasonEmptyInput",
+}
+
+/** A skip reason's caption; an unknown reason passes through. */
+export function skipReasonLabel(reason: string): string {
+  const key = SKIP_REASON_KEYS[reason]
+  return key ? tx(key) : reason
 }

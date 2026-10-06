@@ -3,7 +3,8 @@ import { Eye } from "lucide-react"
 import { toast } from "sonner"
 import { useT, tx, type MessageKey } from "@/lib/i18n"
 
-export type OutputStatus = "idle" | "waiting" | "running" | "completed" | "failed"
+/** `skipped`: the run skipped the node for want of input — "nothing new this run", not a failure. */
+export type OutputStatus = "idle" | "waiting" | "running" | "completed" | "failed" | "skipped"
 
 export interface GalleryOutputProps {
   results: string[]
@@ -38,6 +39,7 @@ const STATUS_COLORS: Record<string, string> = {
   running: "bg-blue-500/10 text-blue-500 border border-blue-500/20",
   completed: "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20",
   failed: "bg-red-500/10 text-red-500 border border-red-500/20",
+  skipped: "bg-slate-500/10 text-slate-400 border border-slate-500/20",
 }
 
 const STATUS_LABELS: Record<Exclude<OutputStatus, "idle">, MessageKey> = {
@@ -45,6 +47,7 @@ const STATUS_LABELS: Record<Exclude<OutputStatus, "idle">, MessageKey> = {
   running: "present.statusRunning",
   completed: "present.statusCompleted",
   failed: "present.statusFailed",
+  skipped: "present.statusNothingNew",
 }
 
 export function StatusBadge({ status }: { status: OutputStatus }) {

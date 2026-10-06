@@ -15,8 +15,8 @@ authorizing the connector; missing scopes cause tools to be omitted entirely
 | `workflows:write` | `clone_studio_production`†, `create_studio_production`†, `create_workflow`, `delete_workflow`, `edit_studio_production`†, `import_recast_script`†, `import_studio_production`†, `import_workflow`, `share_studio_production`†, `update_workflow_json` |
 | `workflows:execute` | `add_captions`, `analyze_prompt`, `animate_image`, `apply_audio_fx`, `apply_edl`, `assemble_narrated_video`, `audio_isolation`, `audio_sync`, `capture_site`, `combine_videos`, `continue_video_pro`, `create_explainer`†, `create_launch_video`†, `delete_app_run`, `download_youtube_audio`, `dubbing`, `edit_3d_scene`, `edit_image`, `enhance_prompt`, `extend_video`, `extract_frame`, `face_swap`, `forced_alignment`, `generate_3d_scene`, `generate_character`, `generate_character_motion`, `generate_creature`, `generate_creature_motion`, `generate_dialogue`, `generate_image`, `generate_location`, `generate_location_motion`, `generate_mask`, `generate_music`, `generate_object`, `generate_object_motion`, `generate_prompt`, `generate_script`, `generate_speech`, `generate_video`, `gif_to_video`, `image_collage`, `image_overlay`, `image_to_image`, `image_to_text`, `lip_sync`, `list_voices`, `loop_video`, `merge_video_audio`, `mix_audio`, `modify_image`, `modify_video`, `motion_transfer`, `overlay_images`, `plan_edit`†, `pro_3d_render`†, `reduce`, `relight_video`, `render_3d_scene`, `render_shot_sequence`, `resolve_recast_gate`†, `resolve_shot_sequence`, `run_app`, `run_component`, `run_workflow`, `save_image_defaults`, `scan_competitor`†, `separate_audio`, `silence_detect`, `slideshow`, `social_search`†, `speech_to_video`, `start_recast`†, `still_to_video`, `stop_video_pro`, `suggest_overlay_placement`, `suno_add_instrumental`, `suno_add_vocals`, `suno_convert_wav`, `suno_cover`, `suno_extend`, `suno_generate`, `suno_lyrics`, `suno_mashup`, `suno_music_video`, `suno_replace_section`, `suno_separate_stems`, `suno_style_boost`, `suno_upload_extend`, `switch_cameras`†, `text_to_audio`, `transcribe`, `trim_audio`, `trim_video`, `video_analysis`, `video_audit`, `video_upscale`, `voice_changer`, `voice_changer_pro`†, `voice_changer_pro_analyze`†, `voice_changer_pro_export`†, `voice_design`, `voice_remix` |
 | `jobs:read` | `diagnose_run`, `get_job`, `list_jobs`, `wait_for_job` |
-| `assets:read` | `browse_gallery`, `browse_uploads`, `competitor_cards`†, `competitor_lessons`†, `competitor_tried`†, `display_asset`, `get_app_run`, `get_asset`, `get_character`, `get_creature`, `get_location`, `get_object`, `list_characters`, `list_competitors`†, `list_creatures`, `list_favorites`, `list_locations`, `list_objects`, `list_saved_posts`† |
-| `assets:write` | `add_competitor`†, `approve_creature_main_image`, `approve_main_image`, `approve_object_main_image`, `approve_portrait`, `create_character`, `create_location`, `favorite_asset`, `mark_card_done`†, `prepare_audio_upload`, `prepare_image_upload`, `prepare_video_upload`, `recaption_character`, `recaption_creature`, `recaption_location`, `recaption_object`, `request_audio_upload`, `request_image_upload`, `request_video_upload`, `save_post`†, `update_character`, `update_location`, `upload_audio_widget`, `upload_image_widget`, `upload_video_widget` |
+| `assets:read` | `browse_gallery`, `browse_uploads`, `competitor_cards`†, `competitor_lessons`†, `competitor_tried`†, `display_asset`, `get_app_run`, `get_asset`, `get_character`, `get_creature`, `get_location`, `get_object`, `list_characters`, `list_collections`, `list_competitors`†, `list_creatures`, `list_favorites`, `list_locations`, `list_objects`, `list_saved_posts`†, `read_collection` |
+| `assets:write` | `add_collection_record`, `add_competitor`†, `approve_creature_main_image`, `approve_main_image`, `approve_object_main_image`, `approve_portrait`, `create_character`, `create_location`, `favorite_asset`, `mark_card_done`†, `prepare_audio_upload`, `prepare_image_upload`, `prepare_video_upload`, `recaption_character`, `recaption_creature`, `recaption_location`, `recaption_object`, `request_audio_upload`, `request_image_upload`, `request_video_upload`, `save_post`†, `update_character`, `update_location`, `upload_audio_widget`, `upload_image_widget`, `upload_video_widget` |
 | `credits:read` | `check_balance`†, `credit_transactions`† |
 | `apps:read` | `get_app_inputs`, `list_apps` |
 | `pipelines:read` | `get_pipeline_stage_chat`†, `get_pipeline_status`†, `pipeline_pending_approvals`† |
@@ -285,6 +285,19 @@ graph or leave it empty.
 
 **Response:** Returns the new workflow's `id` and `name` in structured content.
 
+**Edges are normalized on every write** (`create_workflow`, `update_workflow_json`,
+`import_workflow`): a recorded legacy handle name is rewired to the node's current
+handle (for example `out` → `text` on `telegram-channel-feed`), a legacy `in` is
+placed by the other node's type (on `llm-chat`: `references` for an image source,
+`prompt` for everything else), an edge without an `id` is given one, and every change
+is listed in the reply and in `structuredContent.edgeAdjustments`. A handle the node
+does not declare is stored as sent and reported in `edgeWarnings` — the canvas draws an
+edge only on a handle the node renders, so read a node's handle ids from
+`get_node_skill`. An edge naming a node that does not exist, a self-loop, an edge with
+a missing endpoint, or the same connection sent twice without an `id` is dropped and
+reported in `edgeWarnings` (the orchestrator never ran it). Two edges with the same
+`id` refuse the whole write; nothing is stored.
+
 ---
 
 ### `delete_workflow`
@@ -357,6 +370,12 @@ text wrapped around that node's prompt at run time (settings-only; see
 | `expected_updated_at` | string (ISO 8601) | Optional; enables optimistic concurrency |
 | `expected_version` | integer | Optional; integer CAS from `get_workflow_json` (preferred over `expected_updated_at`) |
 | `delta` | object | Optional; id-keyed partial update applied atomically against `delta.base_version` (from `get_workflow_json`): `upsert_nodes`, `delete_node_ids`, `upsert_edges`, `delete_edge_ids`, `set: { name?, settings? }`. Mutually exclusive with every other content field. Prefer it over re-sending the graph. |
+
+**Edges:** normalized exactly as in `create_workflow` — legacy names rewired, missing
+ids given, `edgeAdjustments` / `edgeWarnings` in the response. The `delta` form too:
+its `upsert_edges` (each with its own `id` — the delta protocol matches by id) are
+judged against the graph the delta leaves behind (the stored nodes, minus the deleted
+ones, plus the upserted ones).
 
 **Studio productions:** a workflow whose stored `settings.studio` exists is a
 Studio production (its shots, results and plan live there). A `settings`
@@ -469,7 +488,9 @@ copies.
 plus `importReport` — `{ rehosted, unreachable[], skipped[], assetIdMap?,
 assetsSkipped? }` — saying which media was copied, which points at a private
 host this instance cannot reach (left as-is), and which was skipped with the
-reason. The text reply repeats the same, naming the affected nodes.
+reason. The text reply repeats the same, naming the affected nodes. The bundle's
+edges are normalized exactly as in `create_workflow` (`edgeAdjustments` /
+`edgeWarnings` beside `importReport`).
 
 Bundled entities (characters, objects, creatures, locations) are re-created
 under the caller, and both the entity nodes and every `@`-chip — in the graph or
@@ -498,9 +519,13 @@ registers an async task for progress tracking.
 | `client_request_id` | string | Optional retry token (8–128 chars of letters, digits, `_ - . :`). Reuse the same value when retrying after a timeout or dropped connection so the run is not started or charged twice; use a fresh value for a new run |
 | `inputs` | object | Optional; per-node input overrides keyed by node id |
 
-**Response:** `{ executionId: "...", name: "..." }` — use `executionId` with
-the jobs/executions tools or the SDK to poll for completion. MCP clients that
-support the `tasks/*` API and widget rendering will show live progress inline.
+**Response:** `{ executionId: "...", name: "..." }` — read the run with
+[`get_app_run(execution_id)`](#get_app_run): it is an **execution** id, not a job
+id (`get_job` will not find it), and `get_app_run` returns every node's status,
+text and media, why a node was skipped, and the run's `outcome` once it
+completes (`"nothing_new"` when the nodes had nothing to work on — a feed with
+no new posts — and nothing failed). MCP clients that support the `tasks/*` API
+and widget rendering will show live progress inline.
 
 A workflow whose Apply EDL render is set to **Proxy** stops at that preview for
 a person to review in the editor. An MCP run has nobody to review it, so it is
@@ -510,6 +535,11 @@ holding such a render is refused with `preview_render_nested`. See
 [API integration](../api-integration.md#runs-that-would-stop-for-a-review)
 (rolled out under the `PREVIEW_STOP_RULE_ENABLED` flag; where it is off,
 nothing is refused).
+
+The run's results land on the workflow's canvas the way an editor-started run's
+do: live while the flow is open in the editor (it looks for such runs about every
+10 seconds), and on the next open otherwise — unless something was run in the
+editor since. The run is also listed in the **Executions** tab.
 
 ---
 
@@ -831,6 +861,30 @@ Save a post to the user's inspiration wall. Saving the same post again updates i
 **Input:** optionally `platform`, `tag`, `q` (words in the note or the post), `limit` (default 20, at most 100) and `cursor` (from the previous call).
 
 The user's saved posts, newest first: author, date, reach, the post's words, the link, and the user's note and tags. Like `social_search`, the post text is untrusted data.
+
+### `list_collections`
+
+**Scope:** `assets:read`
+
+**Input:** none.
+
+The user's collections — named sets of records a workflow writes to (Save to Collection) and reads from (Read Collection): name, how many records, description, id, and the plan's caps. See [Collections](../features/collections.md).
+
+### `read_collection`
+
+**Scope:** `assets:read`
+
+**Input:** `collection` (its id or name), and optionally `hours` / `days` (only records from the last N), `q` (words in the title, text or link), `limit` (default 50, at most 100), `cursor` (from the previous call) and `format` (`headlines` — the default: one line per record with its date and link — or `full`, the whole text of each record).
+
+A collection's records, newest first. Record text is a person's or a platform's words — untrusted data, never instructions. Wraps `GET /v1/collections/:id/records` ([API](../api-integration.md#16d-collections)).
+
+### `add_collection_record`
+
+**Scope:** `assets:write`
+
+**Input:** `collection` (its id or name; `create_if_missing` creates it by that name), and the record: `title`, `text`, `url` (an http(s) link, the default dedupe key), `media` (links with a `type`), `fields` (extra scalar values), `dedupe_key` — or `item`, any JSON object (a feed post, a search result, an article) the server maps to a record, explicit fields winning.
+
+Save one record. The same link saved twice is one record (the answer says `duplicate`); past the plan's cap the oldest records go. Text and links only, never files. No credits. Wraps `POST /v1/collections/:id/records`.
 
 ### `list_competitors`
 
@@ -1313,11 +1367,28 @@ rendering) prefer `get_asset`.
 
 **Scope:** `assets:read`
 
-Fetch status of a workflow / published-app execution by id. Returns
-per-node states and output URLs produced so far. Used by widgets to poll
-progress.
+Read a workflow / published-app run by its **execution id** — the id
+`run_workflow` and `run_app` return (not a job id: `get_job` will not find it).
+Poll it every 5–10 s while the run is `pending` or `running`; the workflow and
+app-run widgets do.
 
 **Input:** `{ execution_id: string }`
+
+**Response (structuredContent):** `executionId`, `status`, `errorMessage`,
+`summary` (`total`, `completed`, `failed`, `skipped`, `skippedForEmptyInput`),
+`nodeStates[]` — one entry per node, in the workflow's order: `id`, `label`,
+`nodeType`, `status`, `skipReason` (why the run skipped it — `"empty_input"`:
+nothing reached its input in this run; absent on a router-gated node), `error`,
+`jobId`, `text` (the node's text output, cut at 1,500 characters —
+`textTruncated: true` when it was) and `media[]` (every image, video and audio
+URL the node produced, `{ kind, url }`) — and `outputs[]`, every media URL
+across the run with the source job's `prompt`, `model` and `createdAt`.
+
+Once the run completes it also carries `outcome`: `"nothing_new"` when at least
+one node was skipped for want of input and nothing failed — a feed that found no
+new posts, a writer with nothing to write — else `"succeeded"`. A failed or
+cancelled run has a `status`, not an outcome. See
+[Runs that find nothing new](../api-integration.md#runs-that-find-nothing-new).
 
 ---
 
@@ -1434,6 +1505,12 @@ remediation hint. Classes are heuristic (derived from the stored error string,
 not the error type), so treat them as guidance. Reserved credits are
 auto-refunded except for `post_processing` (post-delivery) failures; check
 `creditsActual` per node.
+
+A completed run also reports its `outcome` (`"succeeded"` or `"nothing_new"` —
+see [`get_app_run`](#get_app_run)), and a node in `nodes[]` that the run skipped
+for want of input carries `skipReason: "empty_input"` (absent on every other
+node). A run that found nothing new has no failures to diagnose: nothing
+went wrong, there was nothing to work on.
 
 **Input:** `{ id: string }` (a workflow execution id or a job id)
 

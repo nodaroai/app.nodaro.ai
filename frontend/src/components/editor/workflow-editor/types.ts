@@ -8,7 +8,7 @@ import { extendVideoPricingUnits } from "@/lib/extend-video-estimate";
 import { videoRetakePricingUnits } from "@/lib/video-retake-estimate";
 import { audioSyncCreditId, audioSyncWiredSourceCount } from "@/lib/audio-sync";
 import { wiredSocialPostsVideoSec } from "@/lib/video-analysis-handles";
-import { buildMotionCreditModelIdentifier, isDefaultSelectorConfig, selectListItems, type SelectorFields, getEffectiveRepeatCount, buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, bucketSecondsFromCreditId, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAuditCreditId, VIDEO_AUDIT_BUCKET_CREDITS, FAN_OUT_EACH_TYPES, FAN_OUT_EACH_HANDLES, defaultEdgeOutputMode, listResultsServeHandle, EDIT_PLAN_DEFAULT_CLIP_COUNT, EDIT_PLAN_MAX_CLIP_COUNT, buildVideoCreditModelIdentifier, SEEDANCE_2_CONTINUATION_REF_SEC, isSeedance2Provider, isMinimaxH3Provider, maxSegmentSecFor, normalizeMinimaxH3Resolution, PRO3D_RENDER_CREDIT_ID, withWiredSettings, FAN_IN_TARGETS, contentRecipeCreditId, contentIdeasCreditId, clampContentIdeasCount, SOCIAL_SEARCH_CREDIT_COSTS, socialSearchCreditIdFromNode, socialPostsFrom, socialSearchPickTop, isSocialSearchPickFrozen, applyEdlCreditId, compactWithRows } from "@nodaro/shared"
+import { buildMotionCreditModelIdentifier, isDefaultSelectorConfig, selectListItems, type SelectorFields, getEffectiveRepeatCount, buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, bucketSecondsFromCreditId, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAuditCreditId, VIDEO_AUDIT_BUCKET_CREDITS, FAN_OUT_EACH_TYPES, FAN_OUT_EACH_HANDLES, defaultEdgeOutputMode, listResultsServeHandle, EDIT_PLAN_DEFAULT_CLIP_COUNT, EDIT_PLAN_MAX_CLIP_COUNT, buildVideoCreditModelIdentifier, SEEDANCE_2_CONTINUATION_REF_SEC, isSeedance2Provider, isMinimaxH3Provider, maxSegmentSecFor, normalizeMinimaxH3Resolution, PRO3D_RENDER_CREDIT_ID, withWiredSettings, FAN_IN_TARGETS, contentRecipeCreditId, contentIdeasCreditId, clampContentIdeasCount, SOCIAL_SEARCH_CREDIT_COSTS, socialSearchCreditIdFromNode, socialPostsFrom, socialSearchPickTop, isSocialSearchPickFrozen, applyEdlCreditId, compactWithRows, telegramPostsFrom, TELEGRAM_FEED_LIMIT_MAX, TELEGRAM_FEED_DEFAULT_LIMIT } from "@nodaro/shared"
 // getCachedCredits reads the live React-Query model-cost cache (an `ee/`
 // concern — credits are enterprise-only). Allowlisted in
 // tools/check-ee-imports.mjs (same coupling as ./run-handlers.ts).
@@ -1021,10 +1021,19 @@ export const PRODUCER_FAN_OUT: Readonly<
  * by default) whose wire, once set to Each, runs the next node once per item
  * they emit. Sized the same way as PRODUCER_FAN_OUT.
  */
+/** Telegram Channel Feed on an "each" wire: one run per post the node holds, else per post its limit allows. */
+function telegramFeedFanOut(data: Record<string, unknown>, reruns: boolean, selector?: SelectorFields): number {
+  const held = telegramPostsFrom(data.generatedJson).length;
+  const posts = !reruns && held > 0 ? held : Math.max(1, Math.min(TELEGRAM_FEED_LIMIT_MAX, Number(data.limit) || TELEGRAM_FEED_DEFAULT_LIMIT));
+  const kept = fanOutCount(Array.from({ length: posts }, (_, i) => String(i + 1)), selector);
+  return kept > 0 ? kept : 1;
+}
+
 export const EACH_WIRE_FAN_OUT: Readonly<
   Record<string, (data: Record<string, unknown>, reruns: boolean, selector?: SelectorFields) => number>
 > = {
   "social-search": socialSearchFanOut,
+  "telegram-channel-feed": telegramFeedFanOut,
 };
 
 /**

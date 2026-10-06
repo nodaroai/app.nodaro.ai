@@ -702,7 +702,7 @@
       "id": "e-mix-captions",
       "source": "mix",
       "target": "captions",
-      "sourceHandle": "video",
+      "sourceHandle": "video-out",
       "targetHandle": "in"
     },
     {

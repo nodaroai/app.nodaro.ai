@@ -41,6 +41,8 @@ export interface RunSlot {
   nodeStates: Record<string, RunSlotNodeState>
   executionId: string | null
   executionStatus: "idle" | "running" | "completed" | "failed"
+  /** How a completed run ended ("nothing_new" when a node was skipped for want of input). */
+  outcome?: "succeeded" | "nothing_new"
   completedNodes: number
   totalNodes: number
   creditsUsed: number

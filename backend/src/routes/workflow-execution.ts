@@ -1,3 +1,4 @@
+import { executionOutcome } from "@nodaro/shared"
 /**
  * Workflow execution routes.
  * POST /v1/workflows/:id/run — Create execution (trigger_type: manual)
@@ -1195,9 +1196,12 @@ function stripNodeStateInputs(nodeStates: unknown): unknown {
 function toExecutionResponse(row: Record<string, unknown>) {
   return {
     id: row.id,
+    kind: "execution" as const,
     workflowId: row.workflow_id,
     userId: row.user_id,
     status: row.status,
+    // How a completed run ended — derived here, never a column (execution-outcome.ts).
+    outcome: executionOutcome(row.status, row.node_states as Record<string, { status?: unknown; skipReason?: unknown }> | null),
     triggerType: row.trigger_type,
     mcpClient: (row.mcp_client as string | null | undefined) ?? null,
     // `triggerData` (top-level) is debug-only and not read by any poll
@@ -1220,7 +1224,9 @@ function toExecutionResponse(row: Record<string, unknown>) {
 export function toExecutionSummary(row: Record<string, unknown>) {
   return {
     id: row.id,
+    kind: "execution" as const,
     status: row.status,
+    outcome: executionOutcome(row.status, row.node_states as Record<string, { status?: unknown; skipReason?: unknown }> | null),
     triggerType: row.trigger_type,
     mcpClient: (row.mcp_client as string | null | undefined) ?? null,
     // Strip the per-node `inputs` blob (resolved upstream inputs — large,
@@ -1285,6 +1291,10 @@ export function jobToExecutionSummary(row: Record<string, unknown>) {
 
   return {
     id: row.id,
+    // A single-node job listed beside the runs — never an orchestrator run the
+    // canvas could follow, whatever lane started it (an MCP client's one-node
+    // job says "mcp" below, like a run would).
+    kind: "job" as const,
     status: mappedStatus,
     // Single-node jobs triggered via MCP show the "via Claude/Cursor/..." badge
     triggerType: mcpClient ? "mcp" : "single-node",

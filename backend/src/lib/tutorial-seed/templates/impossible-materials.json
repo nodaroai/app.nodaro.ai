@@ -764,7 +764,7 @@
     {
       "id": "e-split-m1",
       "source": "split_materials",
-      "sourceHandle": "out",
+      "sourceHandle": "text",
       "target": "pick_m1",
       "targetHandle": "in"
     },
@@ -792,7 +792,7 @@
     {
       "id": "e-splitm-t1",
       "source": "split_morphs",
-      "sourceHandle": "out",
+      "sourceHandle": "text",
       "target": "pick_t1",
       "targetHandle": "in"
     },
@@ -820,7 +820,7 @@
     {
       "id": "e-split-m2",
       "source": "split_materials",
-      "sourceHandle": "out",
+      "sourceHandle": "text",
       "target": "pick_m2",
       "targetHandle": "in"
     },
@@ -848,7 +848,7 @@
     {
       "id": "e-splitm-t2",
       "source": "split_morphs",
-      "sourceHandle": "out",
+      "sourceHandle": "text",
       "target": "pick_t2",
       "targetHandle": "in"
     },
@@ -876,7 +876,7 @@
     {
       "id": "e-split-m3",
       "source": "split_materials",
-      "sourceHandle": "out",
+      "sourceHandle": "text",
       "target": "pick_m3",
       "targetHandle": "in"
     },
@@ -904,7 +904,7 @@
     {
       "id": "e-splitm-t3",
       "source": "split_morphs",
-      "sourceHandle": "out",
+      "sourceHandle": "text",
       "target": "pick_t3",
       "targetHandle": "in"
     },
@@ -932,7 +932,7 @@
     {
       "id": "e-split-m4",
       "source": "split_materials",
-      "sourceHandle": "out",
+      "sourceHandle": "text",
       "target": "pick_m4",
       "targetHandle": "in"
     },
@@ -960,7 +960,7 @@
     {
       "id": "e-splitm-t4",
       "source": "split_morphs",
-      "sourceHandle": "out",
+      "sourceHandle": "text",
       "target": "pick_t4",
       "targetHandle": "in"
     },
@@ -988,7 +988,7 @@
     {
       "id": "e-split-m5",
       "source": "split_materials",
-      "sourceHandle": "out",
+      "sourceHandle": "text",
       "target": "pick_m5",
       "targetHandle": "in"
     },
@@ -1016,7 +1016,7 @@
     {
       "id": "e-splitm-t5",
       "source": "split_morphs",
-      "sourceHandle": "out",
+      "sourceHandle": "text",
       "target": "pick_t5",
       "targetHandle": "in"
     },
@@ -1044,7 +1044,7 @@
     {
       "id": "e-split-m6",
       "source": "split_materials",
-      "sourceHandle": "out",
+      "sourceHandle": "text",
       "target": "pick_m6",
       "targetHandle": "in"
     },
@@ -1072,7 +1072,7 @@
     {
       "id": "e-splitm-t6",
       "source": "split_morphs",
-      "sourceHandle": "out",
+      "sourceHandle": "text",
       "target": "pick_t6",
       "targetHandle": "in"
     },

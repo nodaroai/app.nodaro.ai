@@ -562,6 +562,12 @@ export function ExecutionDetailModal({ job, open, onClose, onDeleted, showDollar
                           <Clock className="w-8 h-8 text-blue-400 mb-3" />
                           <p className="text-sm text-gray-500 dark:text-[#94A3B8]">{t("exec.waitingToStart")}</p>
                         </div>
+                      ) : state.status === "skipped" ? (
+                        <div className="flex flex-col items-center justify-center h-64 rounded-lg bg-gray-100 dark:bg-[#0D0D0D] border border-gray-200 dark:border-[#2D2D2D]">
+                          <p className="text-sm text-gray-400 dark:text-[#64748B]">
+                            {t(state.skipReason === "empty_input" ? "exec.nodeSkippedEmptyInput" : "exec.statusSkipped")}
+                          </p>
+                        </div>
                       ) : state.status === "cancelled" ? (
                         <div className="flex flex-col items-center justify-center h-64 rounded-lg bg-gray-100 dark:bg-[#0D0D0D] border border-gray-200 dark:border-[#2D2D2D]">
                           <p className="text-sm text-gray-400 dark:text-[#64748B]">{t("exec.nodeCancelled")}</p>

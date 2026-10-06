@@ -39,6 +39,7 @@ import { isJsonRunResultType, jobRunOutput, jsonRunResultPatch } from "@/lib/jso
 import { isSeededState } from "@/lib/seeded-node-state"
 import { videoOverlayListRowFields, videoOverlayRunOutputFields } from "@/lib/video-overlay-run-output"
 import type { NodeExecutionStatus as SharedNodeExecutionStatus, NodeExecutionStateWire, RenderQuality, RunResultRowStamp } from "@nodaro/shared"
+import { toastBackendRunCompleted } from "./run-ended-toast";
 import { collapseExpandedClones } from "./execution-graph";
 import { shouldAbandonNode } from "./abandon-guard";
 import { getListFanOutForNode } from "./node-input-resolver";
@@ -50,7 +51,7 @@ import { buildVariantResults } from "./variant-results";
 // The restore poller shares the canvas loops' one flag writer. No cycle:
 // poll-job.ts imports nothing from this file.
 import { getJobStatusLeanForNode } from "./poll-job";
-import { FOLLOWED_LANES, resultsRunMark } from "./triggered-run-follow";
+import { CANVAS_RUN_LANES, resultsRunMark } from "./triggered-run-follow";
 import { recoverAuditReportsOnCanvas } from "./audit-report-canvas";
 import { beginTriggeredRunPaint } from "./triggered-run-paint";
 import { sunoVariantFields } from "@/lib/suno-ids";
@@ -1326,13 +1327,14 @@ export function streamBackendExecution(
         // bare end. The fetched row says which end it was.
         let status = "completed";
         let errorMessage: string | undefined;
+        let finalStates: Record<string, NodeExecutionState> | undefined;
         try {
           const exec = await getWorkflowExecution(executionId);
           if (finished) return;
           if (exec.status === "discarded") { onDiscarded(); return; }
           status = exec.status;
           errorMessage = exec.errorMessage;
-          const finalStates = (exec.nodeStates ?? {}) as Record<string, NodeExecutionState>;
+          finalStates = (exec.nodeStates ?? {}) as Record<string, NodeExecutionState>;
           applyStates(finalStates);
         } catch {
           // Non-critical — SSE already applied what it had.
@@ -1343,7 +1345,7 @@ export function streamBackendExecution(
         if (status === "failed") toast.error(tx("run.backendFailed"), { description: executionErrorText(errorMessage) });
         else if (status === "cancelled") toast.info(tx("run.backendCancelled"));
         else if (status === "timed_out") toast.error(tx("run.backendTimedOut"));
-        else toast.success(tx("run.backendCompleted"));
+        else toastBackendRunCompleted(finalStates);
       },
       onFailed: (data) => {
         if (finished) return;
@@ -1414,7 +1416,7 @@ export function streamBackendExecution(
         if (exec.status !== "completed") revertActiveNodesToIdle();
         cleanup();
         if (exec.status === "completed") {
-          toast.success(tx("run.backendCompleted"));
+          toastBackendRunCompleted(nodeStates);
         } else if (exec.status === "failed") {
           toast.error(tx("run.backendFailed"), {
             description: executionErrorText(exec.errorMessage),
@@ -1464,7 +1466,7 @@ export function streamBackendExecution(
           applyStates(finalStates);
           if (finalExec.status === "completed") {
             cleanup();
-            toast.success(tx("run.backendCompleted"));
+            toastBackendRunCompleted(finalStates);
             return;
           }
           if (finalExec.status === "failed") {
@@ -1544,11 +1546,12 @@ export function isStreaming(executionId: string, owner?: (v: boolean) => void): 
 
 /**
  * The server answered a Run with "already running" and named the run. A run
- * a Telegram message started belongs to the workflow's owner, so this is what
- * a Run pressed while one goes gets. Already streaming it: keep that stream
- * and take back this click's optimistic marks. A Telegram run: follow it
- * through its paint rules, never the plain stream (that would write the
- * message onto the trigger card and paint nodes it only passed through).
+ * the editor did not start (a Telegram message, an MCP client, the API, a
+ * schedule, a webhook) belongs to the workflow's owner, so this is what a Run
+ * pressed while one goes gets. Already streaming it: keep that stream and
+ * take back this click's optimistic marks. A run on a canvas lane: follow it
+ * through its paint rules, never the plain stream (that would write a
+ * trigger's message onto its card and paint nodes it only passed through).
  * Anything else, as before.
  */
 export async function attachToRunningExecution(
@@ -1571,7 +1574,7 @@ export async function attachToRunningExecution(
     undoOptimistic();
     return;
   }
-  if (lane !== undefined && FOLLOWED_LANES.has(lane)) {
+  if (lane !== undefined && CANVAS_RUN_LANES.has(lane)) {
     undoOptimistic();
     streamBackendExecution(executionId, ctx, setIsRunning, onExecutionEnded, {
       isRestore: true,
@@ -1605,6 +1608,8 @@ export interface NodeExecutionState {
   /** The shared union (`@nodaro/shared`), so the editor, the orchestrator and
    *  the SDK partition node status against ONE list. */
   status: SharedNodeExecutionStatus;
+  /** Why the RUN skipped this node (`empty_input`); absent on a router-gated one. Mirrors the shared wire contract. */
+  skipReason?: string;
   /**
    * What the node produced.
    *
@@ -1820,11 +1825,20 @@ function syncNodeStatesToStore(
         // replace the planner's output with whatever the seed carried. Only
         // the status settles: Run marks every executable node pending,
         // Skip-frozen ones included, and nothing else would end their spinner.
-        if (currentStatus !== "completed") patchMap.set(node.id, { executionStatus: "completed" });
+        // …and a chip from an earlier run goes: the node is settled, not skipped.
+        const seeded = {
+          ...(currentStatus !== "completed" ? { executionStatus: "completed" } : {}),
+          ...(data.__runSkipReason !== undefined ? { __runSkipReason: undefined } : {}),
+        };
+        if (Object.keys(seeded).length > 0) patchMap.set(node.id, seeded);
         continue;
       }
       const updates: Record<string, unknown> = {
         executionStatus: "completed",
+        // The chip of a run that skipped this node goes when it runs again
+        // (written only when there is one: a key the canvas run never writes
+        // must not appear on a node that never wore the chip).
+        ...(data.__runSkipReason !== undefined ? { __runSkipReason: undefined } : {}),
         // Terminal — clear the hold flag. Required even though the overlay is
         // ALSO gated on `executionStatus === "running"`: both guards ship,
         // because approve goes pending_review -> completed with no tick in
@@ -2072,6 +2086,8 @@ function syncNodeStatesToStore(
       // this patch only mirrors the orchestrator's state onto the node — a run
       // reset here would wipe the very keys the branches below are setting.
       const runPatch: Record<string, unknown> = { executionStatus: "running" } // run-start-reset-ok: mid-run status tick
+      // The chip of a run that skipped this node goes the moment it runs again.
+      if (data.__runSkipReason !== undefined) runPatch.__runSkipReason = undefined
       if (typeof state.progress === "number") {
         runPatch.currentJobProgress = state.progress
       }
@@ -2098,7 +2114,8 @@ function syncNodeStatesToStore(
         currentStatus !== "running" ||
         runPatch.currentJobProgress !== undefined ||
         runPatch.jobAwaitingReview !== undefined ||
-        "sceneJobBaseRevisionId" in runPatch
+        "sceneJobBaseRevisionId" in runPatch ||
+        "__runSkipReason" in runPatch
       ) {
         patchMap.set(node.id, runPatch)
       }
@@ -2108,7 +2125,7 @@ function syncNodeStatesToStore(
       currentStatus !== "running" &&
       currentStatus !== "completed"
     ) {
-      patchMap.set(node.id, { executionStatus: "pending" });
+      patchMap.set(node.id, { executionStatus: "pending", ...(data.__runSkipReason !== undefined ? { __runSkipReason: undefined } : {}) });
     } else if (state.status === "failed" && currentStatus !== "failed") {
       // A FAILED node can still have RETAINED what it produced. The orchestrator
       // now carries that on `NodeExecutionState.output` (shared contract:
@@ -2131,11 +2148,18 @@ function syncNodeStatesToStore(
         errorMessage: state.error ?? "Node failed",
         errorHint: state.errorHint,
         jobAwaitingReview: undefined,
+        ...(data.__runSkipReason !== undefined ? { __runSkipReason: undefined } : {}),
         ...endedMark(state),
       });
-    } else if (state.status === "skipped" && currentStatus !== "completed") {
-      // Router-gated node: mark as idle (not stuck in "pending")
-      patchMap.set(node.id, { executionStatus: "idle", jobAwaitingReview: undefined });
+    } else if (state.status === "skipped") {
+      // A gated node settles idle (not stuck in "pending") unless it still
+      // shows a completed result. A node the RUN skipped for want of input
+      // also wears the reason as a chip — `__runSkipReason`, transient (never
+      // saved), cleared the moment the node runs again (the branches above).
+      const settle = currentStatus !== "completed" && currentStatus !== "idle" ? { executionStatus: "idle", jobAwaitingReview: undefined } : {};
+      const reason = state.skipReason && data.__runSkipReason !== state.skipReason ? { __runSkipReason: state.skipReason } : {};
+      const patch = { ...settle, ...reason };
+      if (Object.keys(patch).length > 0) patchMap.set(node.id, patch);
     }
   }
 

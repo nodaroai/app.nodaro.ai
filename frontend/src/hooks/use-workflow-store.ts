@@ -14,7 +14,7 @@ import { NODE_DEFINITIONS, NODE_DEF_MAP, TELEPORTER_CHANNEL_COLORS, LOOP_COL_ADD
 import { HANDLE_OUTPUT_TYPES } from "@/lib/handle-output-types"
 import type { WorkflowSnapshot } from "./use-undo-redo-store"
 import { setSkipUndoCapture } from "./undo-flags"
-import { filterCloneNodes, EXECUTION_DATA_KEYS, TRANSIENT_RUNTIME_KEYS, migrateToItems, validateNoNestedGroups, cleanOrphanedItems, isCollectInEdge, overlayVariantIdFromHandle, isTelegramAccountTriggerNamedHandle, telegramAccountTriggerOutputs, TELEGRAM_ACCOUNT_TRIGGER_NODE_TYPE } from "@nodaro/shared"
+import { LEGACY_SOURCE_HANDLE_ALIASES, LEGACY_TARGET_HANDLE_ALIASES, classifyLegacyTargetHandle, renderedSourceHandle, filterCloneNodes, EXECUTION_DATA_KEYS, TRANSIENT_RUNTIME_KEYS, migrateToItems, validateNoNestedGroups, cleanOrphanedItems, isCollectInEdge, overlayVariantIdFromHandle, isTelegramAccountTriggerNamedHandle, telegramAccountTriggerOutputs, TELEGRAM_ACCOUNT_TRIGGER_NODE_TYPE } from "@nodaro/shared"
 import type { PresentationItem, PipelineStatus } from "@nodaro/shared"
 import type { VariableDisplayMode } from "@/components/editor/config-panels/types"
 import type { NodeDoubleClickAction } from "@/lib/node-double-click-action"
@@ -2422,170 +2422,11 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
     // already handles them via the ffmpeg migration block (if any). Do
     // NOT add entries for them — would silently double-rewrite.
     {
-      const SOURCE_REWRITES_BY_TYPE: Record<string, Record<string, string>> = {
-        // Batch 1
-        "generate-music": { "audio-out": "audio" },
-        // Batch 2 — Suno output id normalization
-        "suno-add-instrumental": { "audio-out": "audio" },
-        "suno-add-vocals":       { "audio-out": "audio" },
-        "suno-convert-wav":      { "audio-out": "audio" },
-        "suno-mashup":           { "audio-out": "audio" },
-        "suno-replace-section":  { "audio-out": "audio" },
-        "suno-upload-extend":    { "audio-out": "audio" },
-        "suno-music-video":      { "video-out": "video" },
-        "suno-style-boost":      { "text-out":  "text"  },
-        "suno-separate":         { "vocal-out": "vocals", "instrumental-out": "instrumental" },
-        // Batch 4 — Processing output id normalization (non-ffmpeg ones only)
-        "split-text":            { "out": "text" },
-        // split-media produces dual-typed outputs; map each leg of the
-        // legacy `*-out` pair to the new single-word form.
-        "split-media":           { "audio-out": "audio", "video-out": "video" },
-        // Phase 20 — Image-producer output id normalization. Pre-migration
-        // these nodes shipped a single generic `out` source handle; after
-        // the typed-handle migration their source pip is the canonical
-        // type name (matching IMAGE_PRODUCER_TYPES / VIDEO_PRODUCER_TYPES
-        // identity). generate-mask already used `image` + `mask`; image-to-
-        // text already used `text` — no entries needed for those.
-        "edit-image":        { "out": "image" },
-        "modify-image":      { "out": "image" },
-        "image-to-image":    { "out": "image" },
-        "upscale-image":     { "out": "image" },
-        "remove-background": { "out": "image" },
-        "face-swap":         { "out": "video" },
-        // Phase 21 — Video-producer output id normalization. Only
-        // motion-transfer used legacy `out`; the others (video-to-video,
-        // video-upscale, extend-video, lip-sync, speech-to-video) already
-        // shipped with `video` as the source handle id.
-        "motion-transfer":   { "out": "video" },
-        // Phase 22 — Upload/source-node output id normalization.
-        // upload-image/upload-video/upload-audio already shipped with the
-        // canonical type ids (image/video/audio); only reference-audio
-        // needs the `audio-out` → `audio` rewrite. youtube-video already
-        // uses `video`.
-        "reference-audio":   { "audio-out": "audio" },
-        // Phase 24c — Compositing-stragglers output id normalization. The
-        // 4 ffmpeg-overlapping nodes (speed-ramp, fade-video, transcode-
-        // video, manual-edit) shipped with `video-out` source ids; rewrite
-        // to `video`. social-media-format had `media-out` + `text-out` —
-        // map each to the canonical single-word ids.
-        "speed-ramp":          { "video-out": "video" },
-        "fade-video":          { "video-out": "video" },
-        "transcode-video":     { "video-out": "video" },
-        "manual-edit":         { "video-out": "video" },
-        "social-media-format": { "media-out": "media", "text-out": "text" },
-      }
-      const TARGET_REWRITES: Record<string, Record<string, string>> = {
-        // Batch 1
-        "text-to-speech":   { "in": "prompt" },
-        "text-to-audio":    { "in": "prompt" },
-        "generate-music":   { "in": "prompt" },
-        "audio-isolation":  { "in": "audio" },
-        "text-to-dialogue": { "in": "prompt" },
-        "voice-changer":    { "in": "audio" },
-        "dubbing":          { "in": "audio" },
-        // voice-remix / voice-design keep the legacy `audio-style` target id
-        // intact — that name is hard-coded in the runtime hint composers
-        // (`audio-style-hints.ts`, `sound-aggregator.ts`,
-        // `connected-audio-sources.tsx`). Only the legacy `in` migrates.
-        "voice-remix":      { "in": "audio" },
-        "voice-design":     { "in": "prompt" },
-        "forced-alignment": { "in": "audio" },
-        // Batch 2 — Suno target id normalization
-        "suno-generate":    { "in": "prompt" },
-        "suno-lyrics":      { "in": "prompt" },
-        "suno-style-boost": { "text": "prompt" },
-        // Batch 3 — Script & Text target id normalization
-        "generate-script":  { "in": "prompt" },
-        "transcribe":       { "in": "audio" },
-        // Batch 4 — Processing target id normalization (non-ffmpeg only)
-        "combine-text":     { "in": "text" },
-        "split-text":       { "in": "text" },
-        // split-media: rename legacy `video-in`/`audio-in` → `video`/`audio`.
-        "split-media":      { "video-in": "video", "audio-in": "audio" },
-        // Phase 20 — Image-producer target id normalization. Only face-swap
-        // had a legacy `in` target id needing migration (its video input
-        // pip). The others (edit-image, modify-image, image-to-image,
-        // generate-mask, upscale-image, remove-background, image-to-text)
-        // already used `image` / `mask` / `cinematography` / `face` from
-        // pre-migration.
-        "face-swap":        { "in": "video" },
-        // Phase 21 — Video-producer target id normalization. video-to-
-        // video / video-upscale / extend-video / motion-transfer all shipped
-        // with a single generic `in` target id. lip-sync used `videoIn`
-        // for its video-input slot (image + audio were already the canonical
-        // names). speech-to-video shipped with all four typed ids already
-        // (cinematography / image / audio / prompt) so no entry needed.
-        "video-to-video":   { "in": "video" },
-        "video-upscale":    { "in": "video" },
-        "extend-video":     { "in": "video" },
-        "motion-transfer":  { "in": "video" },
-        "lip-sync":         { "videoIn": "video" },
-        // Phase 24c — Compositing-stragglers target id normalization.
-        // after-effects / motion-graphics / lottie-overlay / video-composer
-        // all shipped with a generic `in` target; rewrite to `video` (these
-        // nodes apply effects/overlays onto a video source). render-video's
-        // `in` target receives the composition plan from the four CompositePlan
-        // emitters, so its rename is `in` → `composition`. speed-ramp / fade-
-        // video / transcode-video / manual-edit also use `in` → `video`.
-        // social-media-format used `media-in` + `text-in`; rename to canonical
-        // single-word ids (`media` / `text`).
-        "after-effects":       { "in": "video" },
-        "motion-graphics":     { "in": "video" },
-        "lottie-overlay":      { "in": "video" },
-        "video-composer":      { "in": "video" },
-        "render-video":        { "in": "composition" },
-        "speed-ramp":          { "in": "video" },
-        "fade-video":          { "in": "video" },
-        "transcode-video":     { "in": "video" },
-        // (manual-edit keeps `in` as a multi-asset target — see node file.)
-        "social-media-format": { "media-in": "media", "text-in": "text" },
-      }
-      // Source-type-driven classifier for legacy `in` handles on Suno nodes
-      // whose new typed shape splits `in` into `audio` + `prompt`.
-      const SUNO_IN_CLASSIFIER_TARGETS: ReadonlySet<string> = new Set([
-        "suno-cover", "suno-extend", "suno-replace-section", "suno-upload-extend",
-      ])
-      // motion-transfer's legacy `in` accepted multi-type connections
-      // (image character, video source, optional text prompt). The Phase-21
-      // blanket rewrite to `video` loses image+prompt edges, so re-classify
-      // by source type here.
-      const IMAGE_SOURCE_TYPES_FOR_CLASSIFIER: ReadonlySet<string> = new Set([
-        "generate-image", "upload-image", "edit-image", "image-to-image",
-        "modify-image", "upscale-image", "remove-background", "generate-mask",
-        "face-swap", "scene",
-      ])
-      // Identity entities route to the `assets` typed handle (mirrors
-      // generate-video's assets handle for character/face/object/creature/location).
-      const IDENTITY_TYPES_FOR_CLASSIFIER: ReadonlySet<string> = new Set([
-        "character", "face", "object", "creature", "location",
-      ])
-      const VIDEO_SOURCE_TYPES_FOR_CLASSIFIER: ReadonlySet<string> = new Set([
-        "image-to-video", "text-to-video", "generate-video", "video-to-video",
-        "upload-video", "lip-sync", "speech-to-video", "motion-transfer",
-        "video-upscale", "extend-video", "video-retake", "suno-music-video",
-        "combine-videos", "merge-video-audio", "add-captions", "resize-video",
-        "social-media-format", "trim-video", "render-video", "speed-ramp",
-        "loop-video", "fade-video", "transcode-video", "manual-edit", "video-sfx",
-        "video-overlay",
-      ])
-      // Suno nodes that have a typed `voice` target — used to route legacy
-      // suno-voice → suno-* edges to the right slot. Matches the set of
-      // resolvers that wire personaId in input-resolver.ts (excludes
-      // suno-upload-extend whose payload-builder doesn't accept personaId).
-      const SUNO_VOICE_CAPABLE_TARGETS: ReadonlySet<string> = new Set([
-        "suno-generate", "suno-cover", "suno-extend",
-      ])
-      const AUDIO_SOURCE_TYPES_FOR_CLASSIFIER: ReadonlySet<string> = new Set([
-        // Mirrors AUDIO_PRODUCER_TYPES — kept local to avoid circular import
-        // from `@nodaro/shared` into the store (which is loaded very early).
-        "text-to-speech", "text-to-audio", "generate-music", "upload-audio",
-        "suno-generate", "suno-cover", "suno-extend", "suno-separate", "suno-mashup",
-        "suno-replace-section", "suno-add-instrumental", "suno-add-vocals",
-        "suno-convert-wav", "suno-upload-extend", "trim-audio", "mix-audio",
-        "combine-audio", "adjust-volume", "reference-audio", "audio-isolation",
-        "text-to-dialogue", "voice-changer", "dubbing", "voice-remix", "voice-design",
-        "youtube-video", // backend treats as audio-extractable per input-resolver
-      ])
+      // The two alias tables AND the classifiers that follow them live in
+      // @nodaro/shared (handle-aliases.ts): the server rewires an MCP-written
+      // edge with the SAME rules, so the two readers cannot drift.
+      const SOURCE_REWRITES_BY_TYPE = LEGACY_SOURCE_HANDLE_ALIASES
+      const TARGET_REWRITES = LEGACY_TARGET_HANDLE_ALIASES
       const nodeTypeById = new Map(migratedNodes.map((n) => [n.id, n.type ?? ""]))
       migratedEdges = migratedEdges.map((e) => {
         let next = e
@@ -2596,6 +2437,11 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
           const newSh = sourceRewrites[sh]
           if (newSh) next = { ...next, sourceHandle: newSh }
         }
+        // A declared-only id on a node whose component still renders another
+        // pip (the burn-down table, RENDERED_OUTPUT_HANDLES): the pip that
+        // draws — the same move the server makes when it writes such an edge.
+        const renderedPip = renderedSourceHandle(sourceType, next.sourceHandle, NODE_DEF_MAP.get(sourceType)?.outputs)
+        if (renderedPip) next = { ...next, sourceHandle: renderedPip }
         const targetType = nodeTypeById.get(e.target) ?? ""
         const targetRewrites = TARGET_REWRITES[targetType]
         if (targetRewrites) {
@@ -2603,44 +2449,12 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
           const newTh = targetRewrites[th]
           if (newTh) next = { ...next, targetHandle: newTh }
         }
-        // Classifier: when the source is suno-voice and the target has a
-        // typed `voice` handle (suno-generate / suno-cover / suno-extend),
-        // route the persona ref to that handle. Runs after TARGET_REWRITES
-        // so even if `in` was already rewritten to `prompt`, we re-route to
-        // `voice` for the suno-voice case.
-        if (
-          sourceType === "suno-voice" &&
-          SUNO_VOICE_CAPABLE_TARGETS.has(targetType) &&
-          (next.targetHandle === "in" || next.targetHandle === "prompt" || next.targetHandle == null)
-        ) {
-          next = { ...next, targetHandle: "voice" }
-        } else if (SUNO_IN_CLASSIFIER_TARGETS.has(targetType) && (next.targetHandle === "in" || next.targetHandle == null)) {
-          // Legacy `in` on suno-cover / suno-extend / suno-replace /
-          // suno-upload-extend → `audio` (if source emits audio) else
-          // `prompt`. Doesn't fire for suno-voice (handled above).
-          const newTh = AUDIO_SOURCE_TYPES_FOR_CLASSIFIER.has(sourceType) ? "audio" : "prompt"
-          next = { ...next, targetHandle: newTh }
-        } else if (targetType === "motion-transfer" && next.targetHandle === "video") {
-          // Phase 21's blanket `in` → `video` rewrite for motion-transfer
-          // dropped its multi-type input shape. Re-classify by source so
-          // image / assets / prompt edges land on their correct typed handles.
-          if (IDENTITY_TYPES_FOR_CLASSIFIER.has(sourceType)) {
-            next = { ...next, targetHandle: "assets" }
-          } else if (IMAGE_SOURCE_TYPES_FOR_CLASSIFIER.has(sourceType)) {
-            next = { ...next, targetHandle: "image" }
-          } else if (!VIDEO_SOURCE_TYPES_FOR_CLASSIFIER.has(sourceType)) {
-            next = { ...next, targetHandle: "prompt" }
-          }
-        } else if (
-          (targetType === "video-to-video" || targetType === "extend-video") &&
-          next.targetHandle === "video" &&
-          !VIDEO_SOURCE_TYPES_FOR_CLASSIFIER.has(sourceType)
-        ) {
-          // Phase 21's `in` → `video` rewrite for video-to-video / extend-video
-          // dropped legacy text-source edges (the pre-migration `in` handle
-          // accepted prompt input). Re-route non-video sources to `prompt`.
-          next = { ...next, targetHandle: "prompt" }
-        }
+        // The classifiers that follow the table — suno-voice → `voice`, a Suno
+        // continuation node's `in` → audio / prompt, motion-transfer /
+        // video-to-video / extend-video `video` by source type, a dual-mode
+        // revoice node's `in` by source lane — from the shared rule.
+        const classified = classifyLegacyTargetHandle(targetType, next.targetHandle, sourceType, e.targetHandle)
+        if (classified !== next.targetHandle) next = { ...next, targetHandle: classified }
         return next
       })
     }

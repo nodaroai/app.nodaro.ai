@@ -46,7 +46,7 @@ A trigger that is **wired to something** runs only the branch behind it — the 
 
 **Inputs:** None (this is a trigger node).
 
-**Outputs:** The incoming message — `text`, `chatId`, `messageId`, `messageType`, plus `imageUrl` / `videoUrl` / `audioUrl` when the message carries media.
+**Outputs:** one handle, `out` — the message's text, or its media URL when the message carries a photo, video or audio file. The node after it takes what its input accepts: a text input gets the text, a media input gets the file. The chat id, message id and message type are part of the run's record (the **Executions** tab), not separate handles.
 
 ## Pricing
 

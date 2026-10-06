@@ -240,8 +240,11 @@ function refreshFrontmatterIfChanged(
   sha: string,
 ): string {
   if (existing === null) return ensureFrontmatter(candidate, type, sha)
-  const candidateBody = stripFrontmatter(candidate)
-  const existingBody = stripFrontmatter(existing)
+  // Compared without carriage returns for the same reason: on a Windows
+  // checkout every committed file reads back as CRLF, and an LF rendering
+  // would otherwise re-stamp all ~200 of them on each run (2026-10-05).
+  const candidateBody = stripFrontmatter(candidate).replace(/\r/g, "")
+  const existingBody = stripFrontmatter(existing).replace(/\r/g, "")
   if (candidateBody === existingBody) {
     return existing
   }

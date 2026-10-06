@@ -1,4 +1,4 @@
-import { editPlanResultPatch, unwrapEditPlanOutput } from "@nodaro/shared"
+import { editPlanResultPatch, telegramPostsFrom, unwrapEditPlanOutput } from "@nodaro/shared"
 
 /**
  * A finished node's JSON result, under the fields its card and its output
@@ -58,6 +58,8 @@ export const JSON_RUN_RESULT_TYPES: ReadonlySet<string> = new Set([
   "describe-to-picker",
   "json-process",
   "extract-field",
+  // Telegram Channel Feed: the posts on generatedJson, their digest on generatedText.
+  "telegram-channel-feed",
 ])
 
 /**
@@ -209,6 +211,12 @@ export function jsonRunResultPatch(
   if (nodeType === "transcribe") return transcribePatch(output, take)
   if (nodeType === "extract-field") return extractFieldPatch(output)
   if (nodeType === "json-process") return jsonProcessPatch(output)
+  if (nodeType === "telegram-channel-feed") {
+    // The posts beside their digest — exactly what the canvas run writes (execute-node.ts).
+    const posts = telegramPostsFrom(output.json)
+    if (posts.length === 0) return undefined
+    return { generatedJson: posts, ...(typeof output.text === "string" ? { generatedText: output.text } : {}) }
+  }
   if (!isObject(output.json)) return undefined
   if (nodeType === "describe-to-picker") {
     // The run's gaps never reach the job row or the node output (the route

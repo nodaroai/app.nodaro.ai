@@ -24,7 +24,7 @@ export interface OutputCardProps {
   nodeType?: string
   label: string
   outputType: string
-  status: "idle" | "waiting" | "running" | "completed" | "failed"
+  status: "idle" | "waiting" | "running" | "completed" | "failed" | "skipped"
   url?: string
   text?: string
   onOpenMedia?: (nodeId: string) => void
@@ -81,6 +81,23 @@ function OutputCardImpl({
       ))}
     </div>
   ) : null
+
+  // The run skipped this node for want of input (a feed with no new posts):
+  // a quiet "nothing new" card, never an empty media frame or a failure.
+  if (status === "skipped") {
+    return (
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-medium text-foreground">{label}</span>
+          <StatusBadge status={status} />
+        </div>
+        <div className="rounded-lg border border-dashed border-border/60 px-3 py-6 text-center text-xs text-muted-foreground">
+          {t("present.nothingNewCard")}
+        </div>
+        {badgeRow}
+      </div>
+    )
+  }
 
   // Gallery mode: multiple results in a single card
   if (listResults && listResults.length > 1 && displayMode === "gallery") {

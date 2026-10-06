@@ -7,6 +7,7 @@ import { createAppRun, updateAppRunInputs, getAppRuns, deleteAppRun } from "@/li
 import type { NewRunAction, RunSlot, RunSlotNodeState } from "./types"
 import { ORIGINAL_SLOT_ID, makeEmptyInputs, makeSnapshotInputs, makeSnapshotNodeStates, toSlotStatus, dbStatusToSlotStatus } from "./types"
 import { isMediaUrl } from "./types"
+import { executionOutcome } from "@nodaro/shared"
 
 /** Reset presentation store to idle state with given inputs */
 function resetPresentationToIdle(inputValues: Record<string, Record<string, unknown>>) {
@@ -234,6 +235,8 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
         nodeStates: (run.nodeStates ?? {}) as Record<string, RunSlotNodeState>,
         executionId: run.executionId ?? null,
         executionStatus: dbStatusToSlotStatus(run.status),
+        // How a completed run ended, derived from its states (the one shared rule).
+        outcome: executionOutcome(run.status, run.nodeStates as Record<string, { status?: unknown; skipReason?: unknown }> | null | undefined),
         completedNodes: run.completedNodes ?? 0,
         totalNodes: run.totalNodes ?? 0,
         creditsUsed: run.creditsUsed ?? 0,
@@ -296,6 +299,7 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
       if (
         slot.nodeStates === rt.nodeStates &&
         slot.executionStatus === mapped &&
+        slot.outcome === rt.outcome &&
         slot.completedNodes === rt.completedNodes &&
         slot.totalNodes === rt.totalNodes &&
         slot.executionId === execId &&
@@ -305,6 +309,7 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
         ...slot,
         nodeStates: rt.nodeStates as Record<string, RunSlotNodeState>,
         executionStatus: mapped,
+        outcome: rt.outcome,
         completedNodes: rt.completedNodes,
         totalNodes: rt.totalNodes,
         executionId: execId,

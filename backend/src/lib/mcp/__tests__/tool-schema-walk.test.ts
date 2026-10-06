@@ -171,6 +171,10 @@ const TOOLS_WITHOUT_INPUTS: ReadonlySet<string> = new Set<string>([
   // the same way. No pagination or filter to offer. See competitors.ts.
   "competitor_cards",
   "list_competitors",
+  // A person has at most a few hundred collections (COLLECTION_TIER_CAPS tops
+  // out at 300), so the list returns all of them with their counts and the
+  // plan's caps — no pagination or filter to offer. See collections.ts.
+  "list_collections",
   // Pure content-delivery tool — returns the generated recast authoring guide
   // verbatim. No knobs, no per-call variation. See recast.ts.
   "get_recast_authoring_skill",

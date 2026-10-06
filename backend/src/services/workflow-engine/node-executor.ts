@@ -30,14 +30,13 @@ import { assertNodeAvailableForUser, viewerForNode } from "../../lib/availabilit
 import { ensureWorkflowSheetPanels } from "./reference-sheet-stage-a.js"
 import { buildNodeOutputFromJobData } from "./output-extractor.js"
 import { retainedOutputOfFailedJob } from "./failed-node-output.js"
-import { readNodeCursor, writeNodeCursor } from "./node-cursor.js"
 import { resolveFieldMappings, NODE_MAPPABLE_FIELDS } from "./resolve-field-mappings.js"
 import { videoAnalysisPostDuration } from "./video-analysis-post-probe.js"
 
 import { executeCombineText, executeSplitText, executeComposite, executeWebhookOutput, executePreview, executeTeleporterPassthrough, executeRouter, executeExtractField, executeJsonProcess, executeFilterList, executeDeduplicateList, executeMergeLists, executeSortList, executeSelector } from "./inline-executor.js"
 import { executeSubWorkflow } from "./sub-workflow-handler.js"
 import { mergeExposedSettings, applyHandleInputOverride, isHandleInputWired, resolveNodeRefs, SOCIAL_POST_NODE_TYPES, isSeedance2Provider, pricedOutputDurationSec, isMinimaxH3Provider, readPromptAffixes, WORKSPACE_HEADER_LOWER, metaAdsScrapeWireSources, splitInstagramTargets, instagramScrapeMode } from "@nodaro/shared"
-import { computeLlmChatFields, computeNodePrompt, pickerFanoutTargets, applyPromptAffixes } from "@nodaro/prompts"
+import { computeAiWriterInput, computeLlmChatFields, computeNodePrompt, pickerFanoutTargets, applyPromptAffixes } from "@nodaro/prompts"
 import type { ComponentMetadata } from "@nodaro/shared"
 import { getAppSettings } from "../../lib/app-settings.js"
 import { videoUtilityBaseCredits } from "../../lib/video-utility-credits.js"
@@ -638,15 +637,11 @@ async function executeSyncHttpNode(
       }, userPromptTemplate)
     : buildSyncHttpBody(node, resolvedInputs, ctx, userPromptTemplate, refMap, downstreamPickerTypes)
 
-  // Polling sources resume from the DURABLE cursor, not from the node's saved
-  // data. Only the editor can persist back into node data (updateNodeData +
-  // autosave); a scheduled run has no editor, so without this every tick
-  // restarted from the same point and reprocessed the same items. Reading here
-  // rather than inside buildSyncHttpBody because that builder is synchronous.
-  if (node.type === "telegram-channel-feed") {
-    const cursor = await readNodeCursor(ctx.workflowId, node.id)
-    if (cursor !== undefined) body.sinceId = cursor
-  }
+  // Polling sources (Telegram Channel Feed): the ROUTE owns the durable cursor
+  // (node_cursors) since PR 2 — it reads and advances the position itself from
+  // the workflowId / nodeId the body carries (buildSyncHttpBody), so the
+  // editor's single-node Run and a scheduled run move the SAME position and
+  // the engine keeps no second copy of the rule.
 
   // Scrapers copy the featured item's video into the library only when its
   // `video` output is actually wired — videos are the expensive bytes, and an
@@ -730,14 +725,6 @@ async function executeSyncHttpNode(
   }
 
   const result = await response.json() as Record<string, unknown>
-
-  // Advance the durable cursor BEFORE branching: the jobId path returns early
-  // into pollJobToCompletion, and `latestId` only exists on this HTTP body.
-  // Best-effort — a failed write degrades to "reprocess next tick", which is
-  // the old behavior, never a reason to fail the run.
-  if (node.type === "telegram-channel-feed" && typeof result.latestId === "number") {
-    await writeNodeCursor(ctx.workflowId, node.id, ctx.userId, "telegram-channel-feed", result.latestId)
-  }
 
   if (result.jobId) {
     // Stamp `node_id` on the jobs row so the reconcile cron's Path-2 can
@@ -836,7 +823,8 @@ export function buildSyncHttpBody(
     case "ai-writer":
       return withUserPrompt({
         systemPrompt: data.systemPrompt || data.template,
-        userInput: resolvedInputs.prompt || data.userInput || data.prompt,
+        // The one rule (@nodaro/prompts): the orchestrator's empty-input skip asks the same function.
+        userInput: computeAiWriterInput(data as Record<string, unknown>, { wired: resolvedInputs.prompt }),
         userId: ctx.userId,
         ...llmNodeParams(data),
         temperature: data.temperature ?? 0.7,
@@ -1093,7 +1081,13 @@ export function buildSyncHttpBody(
     case "telegram-channel-feed":
       return withUserPrompt({
         channel: (data.channel as string) || resolvedInputs.prompt || "",
-        // Cursor: only emit posts newer than the last run's highest id.
+        // The route owns the position: it reads node_cursors for this
+        // workflow + node and advances it to the highest post emitted. The
+        // editor's legacy cursor (data.lastSeenId) rides as a one-shot seed for
+        // a node that never ran statefully.
+        mode: "poll",
+        workflowId: ctx.workflowId,
+        nodeId: node.id,
         sinceId: typeof data.lastSeenId === "number" ? data.lastSeenId : undefined,
         limit: typeof data.limit === "number" ? data.limit : undefined,
         userId: ctx.userId,

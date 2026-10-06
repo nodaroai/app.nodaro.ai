@@ -239,7 +239,32 @@ describe("diagnose_run tool", () => {
     registerDiagnose({ server, session: diagnoseSession(), fastify: Fastify() })
     const out = parse(await callTool(server, "diagnose_run", { id: "exec-ok" }))
     expect(out.status).toBe("completed")
+    expect(out.outcome).toBe("succeeded")
     expect(out.failures).toHaveLength(0)
+  })
+
+  it("a completed run that skipped a node for want of input reads nothing_new, and names the reason on the node", async () => {
+    mockSupabase({
+      execution: {
+        id: "exec-idle",
+        status: "completed",
+        node_states: {
+          feed: { status: "completed", nodeType: "telegram-channel-feed" },
+          llm: { status: "skipped", nodeType: "llm-chat", skipReason: "empty_input" },
+          gated: { status: "skipped", nodeType: "generate-image" },
+        },
+        error_message: null,
+      },
+    })
+    const server = buildServer()
+    registerDiagnose({ server, session: diagnoseSession(), fastify: Fastify() })
+    const out = parse(await callTool(server, "diagnose_run", { id: "exec-idle" }))
+    expect(out.status).toBe("completed")
+    expect(out.outcome).toBe("nothing_new")
+    expect(out.failures).toHaveLength(0)
+    const nodes = out.nodes as Array<{ nodeId: string; skipReason?: string }>
+    expect(nodes.find((n) => n.nodeId === "llm")?.skipReason).toBe("empty_input")
+    expect(nodes.find((n) => n.nodeId === "gated")?.skipReason).toBeUndefined()
   })
 
   it("lists EVERY node's dispatched job id — the only execution→job mapping surface (2026-08-03)", async () => {

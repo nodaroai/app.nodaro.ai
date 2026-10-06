@@ -1,0 +1,81 @@
+import { computeLlmChatFields, computeNodePrompt, computeScriptTopic } from "./resolve-prompt.js"
+
+/**
+ * Node types that send TEXT to a model or a voice and fail on an empty one —
+ * `userInput: Too small` (llm-chat), "no text found" (text-to-speech) — so a
+ * run with nothing upstream can skip them instead of failing. Never an image
+ * or video node (an empty prompt is a legal request there) and never a social
+ * post (an empty caption is the author's choice). ONE list, read by the
+ * orchestrator's skip rule (`empty-input-skips.ts`); the engine never names a
+ * type on its own.
+ */
+export const TEXT_REQUIRED_NODE_TYPES: ReadonlySet<string> = new Set([
+  "llm-chat",
+  "ai-writer",
+  "generate-script",
+  "text-to-speech",
+  "generate-music",
+  "text-to-audio",
+])
+
+export interface NodeSendTextArgs {
+  /** A list fan-out item (highest precedence). */
+  override?: string
+  /** The text wired into the node's main text input. */
+  wired?: string
+  /** llm-chat only: the text wired into `system-prompt`. */
+  wiredSystemPrompt?: string
+  refMap: ReadonlyMap<string, string>
+}
+
+const present = (s?: string): s is string => typeof s === "string" && s.trim().length > 0
+
+/**
+ * ai-writer's user input — the rule its sync-HTTP body applies: a fan-out
+ * item, else the wired text, else the typed `userInput`, else the legacy
+ * `prompt`. (ai-writer is renamed to llm-chat on load; saved graphs that
+ * never reloaded still run it.)
+ */
+export function computeAiWriterInput(
+  data: Record<string, unknown>,
+  { override, wired }: Pick<NodeSendTextArgs, "override" | "wired">,
+): string {
+  return [override, wired, data.userInput as string | undefined, data.prompt as string | undefined].find(present) ?? ""
+}
+
+/**
+ * The text a text-requiring node would send, by the SAME rule its executor
+ * uses (`computeLlmChatFields`, `computeScriptTopic`, `computeNodePrompt`,
+ * `computeAiWriterInput`) — so "would this node run on nothing?" is answered
+ * by the function that decides what it sends, not by a second reading of it.
+ * Undefined for any other node type.
+ */
+export function computeNodeSendText(
+  nodeType: string,
+  data: Record<string, unknown>,
+  args: NodeSendTextArgs,
+): string | undefined {
+  switch (nodeType) {
+    case "llm-chat":
+      return computeLlmChatFields(data, {
+        override: args.override,
+        wiredUserInput: args.wired,
+        wiredSystemPrompt: args.wiredSystemPrompt,
+        refMap: args.refMap,
+      }).userInput
+    case "ai-writer":
+      return computeAiWriterInput(data, args)
+    case "generate-script":
+      return computeScriptTopic(data, { override: args.override, wired: args.wired, refMap: args.refMap })
+    case "generate-music": {
+      // A music node sings typed lyrics with no prompt; only both empty is nothing to send.
+      const prompt = computeNodePrompt(nodeType, data, { override: args.override, wired: args.wired, refMap: args.refMap })
+      return present(prompt) ? prompt : present(data.lyrics as string | undefined) ? (data.lyrics as string) : ""
+    }
+    case "text-to-speech":
+    case "text-to-audio":
+      return computeNodePrompt(nodeType, data, { override: args.override, wired: args.wired, refMap: args.refMap })
+    default:
+      return undefined
+  }
+}

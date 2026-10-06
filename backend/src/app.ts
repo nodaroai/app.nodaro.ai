@@ -135,6 +135,7 @@ import { generateCreatureMotionRoutes } from "./routes/generate-creature-motion.
 import { locationRoutes } from "./routes/locations.js"
 import { nodePresetRoutes } from "./routes/node-presets.js"
 import { savedPostRoutes } from "./routes/saved-posts.js"
+import { collectionRoutes } from "./routes/collections.js"
 import { nodePresetGroupRoutes } from "./routes/node-preset-groups.js"
 import { promptSnippetRoutes } from "./routes/prompt-snippets.js"
 import { locationRestoreRoutes } from "./routes/location-restore.js"
@@ -586,6 +587,9 @@ export async function buildApp() {
   await app.register(locationRoutes)
   await app.register(nodePresetRoutes)
   await app.register(savedPostRoutes)
+  // Collections (migration 462): every edition — the caps come from the tier on
+  // Nodaro Cloud and from two env ceilings elsewhere.
+  await app.register(collectionRoutes)
   await app.register(nodePresetGroupRoutes)
   await app.register(promptSnippetRoutes)
   await app.register(locationRestoreRoutes)

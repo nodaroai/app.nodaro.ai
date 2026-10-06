@@ -317,6 +317,15 @@ export const envSchema = z.object({
   JOB_HOLD_TTL_HOURS: z.string().default(""),
   /** Max nodes a single workflow execution can run concurrently (default 3). Prevents one large workflow from starving other users. */
   MAX_CONCURRENT_NODES_PER_EXECUTION: z.coerce.number().int().min(1).max(20).default(6),
+  /**
+   * Collections (migration 462) off Nodaro Cloud: how many collections one
+   * account may have, and how many records one collection may hold — past the
+   * records ceiling the OLDEST records are evicted after each write. Unset =
+   * no ceiling. On Nodaro Cloud the caps come from the account's tier
+   * (`COLLECTION_TIER_CAPS` in @nodaro/shared) and these are ignored.
+   */
+  COLLECTIONS_MAX_PER_USER: z.coerce.number().int().min(1).optional(),
+  COLLECTIONS_MAX_RECORDS_PER_COLLECTION: z.coerce.number().int().min(1).optional(),
   /** BullMQ concurrency for the video worker (default 50). Safe to set high — work is I/O-bound (external API calls). */
   VIDEO_WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(200).default(50),
   /** BullMQ concurrency for the orchestrator worker (default 20). I/O-bound — just DB polling and job dispatching. */

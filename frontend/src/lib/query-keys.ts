@@ -7,6 +7,11 @@ export const queryKeys = {
   },
 
   // Credits
+  // Telegram Channel Feed: the node's route-owned position (node_cursors).
+  telegramFeed: {
+    cursor: (workflowId: string, nodeId: string) => ["telegram-feed", "cursor", workflowId, nodeId] as const,
+  },
+
   credits: {
     all: ["credits"] as const,
     balance: (userId: string) => ["credits", "balance", userId] as const,
@@ -44,6 +49,15 @@ export const queryKeys = {
     list: (filters: { platform?: string; tag?: string; q?: string }) =>
       ["savedPosts", "list", filters.platform ?? "", filters.tag ?? "", filters.q ?? ""] as const,
     lookup: (postIds: readonly string[]) => ["savedPosts", "lookup", postIds.join("|")] as const,
+  },
+
+  // Collections (per-user): the records a workflow saves and reads back
+  collections: {
+    all: ["collections"] as const,
+    list: () => ["collections", "list"] as const,
+    detail: (id: string) => ["collections", "detail", id] as const,
+    records: (id: string, filters: { q?: string; since?: string }) =>
+      ["collections", "records", id, filters.q ?? "", filters.since ?? ""] as const,
   },
 
   // Competitors (Cloud; per-user)

@@ -305,5 +305,28 @@
       "{\"title\":\"Page A\"}",
       "{\"title\":\"Page B\"}"
     ]
+  },
+  "telegram-channel-feed": {
+    "text": "post 10\n\n---\n\npost 11",
+    "json": [
+      {
+        "id": 10,
+        "channel": "acme",
+        "postUrl": "https://t.me/acme/10",
+        "text": "post 10",
+        "media": []
+      },
+      {
+        "id": 11,
+        "channel": "acme",
+        "postUrl": "https://t.me/acme/11",
+        "text": "post 11",
+        "media": []
+      }
+    ],
+    "listResults": [
+      "{\"id\":10,\"channel\":\"acme\",\"postUrl\":\"https://t.me/acme/10\",\"text\":\"post 10\",\"media\":[]}",
+      "{\"id\":11,\"channel\":\"acme\",\"postUrl\":\"https://t.me/acme/11\",\"text\":\"post 11\",\"media\":[]}"
+    ]
   }
 }

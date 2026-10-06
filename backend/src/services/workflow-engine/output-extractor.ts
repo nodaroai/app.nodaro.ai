@@ -1,3 +1,4 @@
+import { telegramFeedDigest, telegramPostsFrom } from "@nodaro/shared"
 /**
  * Extract output from completed node execution or source node data.
  * Backend equivalent of frontend extractNodeOutput().
@@ -792,6 +793,14 @@ export function getPrimaryOutput(
     return undefined
   }
 
+  // Telegram Channel Feed: `json` → the posts (stringified for text consumers;
+  // Extract Field and List read state.output.json directly); `text`, the
+  // legacy `out`, or no handle → their digest.
+  if (sourceType === "telegram-channel-feed") {
+    if (sourceHandle === "json") return output.json === undefined ? undefined : JSON.stringify(output.json)
+    return output.text
+  }
+
   // Social Search: `json` → the posts the node passes on (stringified for text
   // consumers; Extract Field and List read state.output.json directly), `text`
   // → the same posts as a digest. Unknown handles return nothing.
@@ -1548,6 +1557,19 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
     return { json, ...featuredInstagramOutputs(json, data.featuredIndex) }
   }
 
+  // Telegram Channel Feed → the posts its last run saved (data.generatedJson),
+  // their digest and one item per post — what a skipped / "Run from here" node
+  // passes on without fetching again. A node saved before the json pip existed
+  // carries only the digest text.
+  if (type === "telegram-channel-feed") {
+    const posts = telegramPostsFrom(data.generatedJson)
+    if (posts.length > 0) {
+      return { json: posts, text: telegramFeedDigest(posts), listResults: posts.map((p) => JSON.stringify(p)) }
+    }
+    const text = data.generatedText
+    return typeof text === "string" && text.trim() ? { text } : undefined
+  }
+
   // Social Search → the posts the editor saved as the node's choice
   // (data.generatedJson: a person's picks, else the first few), their digest,
   // and one item per post. This is what a skipped node, and a node keeping its
@@ -1873,6 +1895,17 @@ export function buildNodeOutputFromJobData(
   // every path that rebuilds the output from the job row (live, adopted after
   // a cancel race, a resumed fan-out) agrees. `listResults` carries one post
   // per item for an "each" wire.
+  // Telegram Channel Feed: the route writes the posts on `json` and one item
+  // per post on `listResults`; both ride onto the node output as written (the
+  // digest comes through generatedText below).
+  if (nodeType === "telegram-channel-feed") {
+    const posts = telegramPostsFrom(outputData.json)
+    if (posts.length > 0) {
+      output.json = posts
+      output.listResults = posts.map((p) => JSON.stringify(p))
+    }
+  }
+
   if (nodeType === "social-search") {
     const pickedIds = Array.isArray(outputData.pickedIds)
       ? (outputData.pickedIds as unknown[]).filter((id): id is string => typeof id === "string")

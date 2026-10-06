@@ -316,7 +316,9 @@ export function renderScopesBlock(cloud: ToolSurface, community: ToolSurface): s
  * and a tool with no entry, each fail the generation.
  */
 export function toolsDocProblems(toolsDoc: string, cloud: ToolSurface): string[] {
-  const lines = toolsDoc.split("\n")
+  // A Windows checkout (core.autocrlf) hands this file over with CRLF; the
+  // `$`-anchored table test below would then see no table at all.
+  const lines = toolsDoc.split(/\r?\n/)
   const entries = new Set<string>()
   for (let i = 0; i < lines.length; i++) {
     const heading = lines[i]!.match(/^#{2,4} `([a-z0-9_]+)`/)

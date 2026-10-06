@@ -4722,6 +4722,83 @@ export async function deleteSavedPost(id: string): Promise<void> {
   await apiJson(`/v1/saved-posts/${encodeURIComponent(id)}`, { method: "DELETE", label: "apiErr.deleteSavedPost" })
 }
 
+// ---- Collections (where a workflow's records live) ----
+
+type Collection = import("@nodaro/shared").Collection
+
+export async function listCollections(): Promise<import("@nodaro/shared").ListCollectionsResult> {
+  return apiJson("/v1/collections", { method: "GET", label: "apiErr.loadCollections" })
+}
+
+export async function getCollection(id: string): Promise<Collection> {
+  return apiJson(`/v1/collections/${encodeURIComponent(id)}`, { method: "GET", label: "apiErr.loadCollections" })
+}
+
+export async function createCollection(input: import("@nodaro/shared").CreateCollectionInput): Promise<Collection> {
+  return apiJson("/v1/collections", { body: { ...input }, label: "apiErr.createCollection" })
+}
+
+export async function updateCollection(id: string, input: import("@nodaro/shared").UpdateCollectionInput): Promise<Collection> {
+  return apiJson(`/v1/collections/${encodeURIComponent(id)}`, { method: "PATCH", body: { ...input }, label: "apiErr.updateCollection" })
+}
+
+export async function deleteCollection(id: string): Promise<void> {
+  await apiJson(`/v1/collections/${encodeURIComponent(id)}`, { method: "DELETE", label: "apiErr.deleteCollection" })
+}
+
+export async function listCollectionRecords(
+  id: string,
+  params: import("@nodaro/shared").ListCollectionRecordsParams = {},
+): Promise<import("@nodaro/shared").ListCollectionRecordsResult> {
+  const qs = new URLSearchParams()
+  if (params.q) qs.set("q", params.q)
+  if (params.since) qs.set("since", params.since)
+  if (params.cursor) qs.set("cursor", params.cursor)
+  if (params.limit) qs.set("limit", String(params.limit))
+  const query = qs.toString()
+  return apiJson(`/v1/collections/${encodeURIComponent(id)}/records${query ? `?${query}` : ""}`, { method: "GET", label: "apiErr.loadCollectionRecords" })
+}
+
+export async function addCollectionRecord(
+  id: string,
+  input: import("@nodaro/shared").AddCollectionRecordInput,
+): Promise<import("@nodaro/shared").AddCollectionRecordResult> {
+  return apiJson(`/v1/collections/${encodeURIComponent(id)}/records`, { body: { ...input, source: { via: "ui", ...input.source } }, label: "apiErr.addCollectionRecord" })
+}
+
+export async function deleteCollectionRecord(id: string, recordId: string): Promise<void> {
+  await apiJson(`/v1/collections/${encodeURIComponent(id)}/records/${encodeURIComponent(recordId)}`, { method: "DELETE", label: "apiErr.deleteCollectionRecord" })
+}
+
+/** The whole collection as a file (CSV or JSON), with the server's file name. */
+export async function exportCollection(
+  id: string,
+  format: import("@nodaro/shared").CollectionExportFormat,
+): Promise<{ blob: Blob; filename: string }> {
+  const headers = await getAuthHeaders()
+  const res = await fetch(`${API_BASE_URL}/v1/collections/${encodeURIComponent(id)}/export?format=${format}`, { headers })
+  if (!res.ok) {
+    const payload = (await res.json().catch(() => null)) as Record<string, unknown> | null
+    throwApiError(payload, "apiErr.exportCollection")
+  }
+  const blob = await res.blob()
+  return { blob, filename: exportFilenameOf(res.headers.get("Content-Disposition"), `collection.${format}`) }
+}
+
+/** The file name a `Content-Disposition` carries: the collection's own name (`filename*`, RFC 6266) when given, else the ASCII one. */
+export function exportFilenameOf(disposition: string | null, fallback: string): string {
+  const own = /filename\*=UTF-8''([^;]+)/i.exec(disposition ?? "")
+  if (own?.[1]) {
+    try {
+      return decodeURIComponent(own[1])
+    } catch {
+      // A malformed encoding: the ASCII name below.
+    }
+  }
+  const ascii = /filename="?([^";]+)"?/.exec(disposition ?? "")
+  return ascii?.[1] ?? fallback
+}
+
 // ---- Competitors (Cloud: tracked brands, scans, action cards) ----
 
 type TrackedCompetitor = import("@nodaro/shared").TrackedCompetitor
@@ -7277,8 +7354,17 @@ export async function importWorkflow(
 
 export interface WorkflowExecution {
   id: string
+  /** An orchestrator run, or a single-node job listed beside the runs. Absent on an older cached row (= a run). */
+  kind?: 'execution' | 'job'
   workflowId: string
   status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'timed_out' | 'stopping' | 'discarded'
+  /**
+   * How a completed run ended: "nothing_new" when a node was skipped for want
+   * of input (its nodeStates entry carries skipReason "empty_input"),
+   * "succeeded" otherwise; absent until it completes. Derived by the server
+   * (executionOutcome, @nodaro/shared) — never stored.
+   */
+  outcome?: 'succeeded' | 'nothing_new'
   triggerType: 'manual' | 'webhook' | 'schedule' | 'telegram' | 'telegram_account' | 'api' | 'single-node' | 'app_run' | 'mcp'
   /** MCP client name (e.g. "Claude", "Cursor") when the execution was triggered via the MCP server. */
   mcpClient?: string | null
@@ -7910,6 +7996,8 @@ export async function getSharedExecutionStatus(
   failed_nodes: number
   total_credits_used: number
   error_message: string | null
+  /** See WorkflowExecution.outcome. */
+  outcome?: 'succeeded' | 'nothing_new'
 }> {
   return apiRequest(
     `/v1/present/${encodeURIComponent(token)}/status/${encodeURIComponent(execId)}`,
@@ -8118,16 +8206,53 @@ export interface TelegramChannelPost {
   url: string
 }
 
-/** Read recent posts from a public Telegram channel (Channel Feed node). */
+/** Where the feed stands after a fetch (the route owns it — node_cursors). */
+export interface TelegramFeedCursor {
+  /** The position now; null for a peek, a call with no saved workflow, or an empty channel. */
+  lastSeenId: number | null
+  advanced: boolean
+  mode: "poll" | "peek"
+  stateful: boolean
+}
+
+/**
+ * Read a public Telegram channel's new posts (Channel Feed node). With a saved
+ * workflow (`workflowId: true`) and a `nodeId` the fetch is stateful: the route
+ * reads the node's position and advances it to the highest post emitted.
+ * `mode: "peek"` reads the newest posts without moving the position.
+ */
 export async function telegramChannelFetchApi(params: {
   channel: string
+  /** The editor's legacy cursor — a one-shot seed for a node that never ran statefully. */
   sinceId?: number
   limit?: number
-}): Promise<{ posts: TelegramChannelPost[]; latestId: number; text: string; count: number }> {
+  mode?: "poll" | "peek"
+  nodeId?: string
+}): Promise<{ jobId: string; posts: TelegramChannelPost[]; latestId: number | null; text: string; generatedText: string; count: number; cursor: TelegramFeedCursor }> {
   const body: Record<string, unknown> = { channel: params.channel }
   if (params.sinceId !== undefined) body.sinceId = params.sinceId
   if (params.limit !== undefined) body.limit = params.limit
-  return apiJson("/v1/telegram-channel/fetch", { body, label: "apiErr.readTelegramChannel" })
+  if (params.mode) body.mode = params.mode
+  if (params.nodeId) body.nodeId = params.nodeId
+  return apiJson("/v1/telegram-channel/fetch", { body, workflowId: true, label: "apiErr.readTelegramChannel" })
+}
+
+/** The feed's stored position for a node of a saved workflow (null when it has none). */
+export async function getTelegramFeedCursor(workflowId: string, nodeId: string): Promise<{ lastSeenId: number | null; updatedAt: string | null }> {
+  const res = await apiRequest<{ data: { lastSeenId: number | null; updatedAt: string | null } }>(
+    `/v1/telegram-channel/cursor?workflowId=${encodeURIComponent(workflowId)}&nodeId=${encodeURIComponent(nodeId)}`,
+    "apiErr.loadFeedCursor",
+  )
+  return res.data
+}
+
+/** Forget the feed's position: the next run reads the newest posts again. */
+export async function resetTelegramFeedCursor(workflowId: string, nodeId: string): Promise<{ ok: boolean; deleted: boolean }> {
+  const res = await apiJson<{ data: { ok: boolean; deleted: boolean } }>("/v1/telegram-channel/cursor/reset", {
+    body: { workflowId, nodeId },
+    label: "apiErr.resetFeedCursor",
+  })
+  return res.data
 }
 
 export async function socialPublishApi(params: {
@@ -8380,6 +8505,8 @@ export interface AppRun {
   // Nested execution from detail endpoint
   execution?: {
     status: string
+    /** See WorkflowExecution.outcome. */
+    outcome?: 'succeeded' | 'nothing_new'
     nodeStates: Record<string, unknown>
     totalNodes: number
     completedNodes: number
@@ -8746,6 +8873,8 @@ export async function getAppExecutionStatus(execId: string): Promise<{
   completed_nodes: number
   failed_nodes: number
   error_message: string | null
+  /** See WorkflowExecution.outcome. */
+  outcome?: 'succeeded' | 'nothing_new'
 }> {
   const res = await apiRequest<{ data: Record<string, unknown> }>(
     `/v1/workflow-executions/${encodeURIComponent(execId)}`,
@@ -8759,6 +8888,7 @@ export async function getAppExecutionStatus(execId: string): Promise<{
     completed_nodes: (d.completedNodes ?? 0) as number,
     failed_nodes: (d.failedNodes ?? 0) as number,
     error_message: (d.errorMessage ?? null) as string | null,
+    outcome: d.outcome as 'succeeded' | 'nothing_new' | undefined,
   }
 }
 

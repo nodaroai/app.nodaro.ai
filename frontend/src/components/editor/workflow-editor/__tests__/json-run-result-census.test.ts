@@ -34,6 +34,7 @@ type Lane = "live" | "reopen-running" | "reopen-ended"
 const MARK = "editor-json-census"
 const JSON_OBJECT = { version: 1, marker: MARK, words: [{ text: MARK, startMs: 0, endMs: 1 }] }
 const POST = { id: MARK, url: `https://media.example.test/${MARK}`, text: MARK, platform: "tiktok", author: { handle: MARK, name: MARK }, metrics: {}, media: {}, hashtags: [], extra: {} }
+const FEED_POST = { id: 1, channel: MARK, postUrl: `https://t.me/${MARK}/1`, text: MARK, media: [] }
 
 /**
  * What a server run of the type hands the editor (the backend's node output for
@@ -49,6 +50,8 @@ const RUN_OUTPUT: Record<string, Data> = {
   "content-ideas": { json: [JSON_OBJECT], text: MARK, listResults: [MARK] },
   // Every post found, and the ones passed on (json).
   "social-search": { json: [POST], searchResults: [POST], text: MARK, listResults: [JSON.stringify(POST)] },
+  // The feed's posts need a numeric id and a text to count as posts (telegramPostsFrom).
+  "telegram-channel-feed": { json: [FEED_POST], text: MARK, listResults: [JSON.stringify(FEED_POST)] },
   // A scrape's json is the list of pages / ads / posts; an empty or non-list one is "no results".
   "web-scrape": { json: [JSON_OBJECT] },
   "meta-ads-scrape": { json: [JSON_OBJECT] },

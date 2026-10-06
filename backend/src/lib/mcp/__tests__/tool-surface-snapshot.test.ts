@@ -548,6 +548,12 @@ const ELEVENLABS_V4_DEFAULT_WORDING_BYTES = 70
 // the same through every job reader (decided 2026-10-06). No tool was added.
 // measured by this suite: 386_849 total − 386_820 before the field = 29 B.
 const GET_ASSET_PREVIEW_FLAG_BYTES = 29
+// RE-MEASURED on dev b3bda1615 (2026-10-06, PR #1879 found dev red): this suite totals 392_455 B
+// against a 392_441 B budget — the 29 B above were measured on an older tree, and the live
+// delta of the `preview` field is 43 B. Carried as its own line so the correction stays visible.
+const GET_ASSET_PREVIEW_FLAG_CORRECTION_BYTES = 14
+// get_app_run reads the whole run: outcome, error, summary, per-node text / media / skipReason (1b).
+const GET_APP_RUN_OUTCOME_BYTES = 1_072 // measured: 393_485 total − 392_413 before (outcome, errorMessage, summary, per-node text / media / skipReason)
 // RAISED by ONE argument and nothing else: `caption_style` on `build_ugc_cards`
 // (how the captions after the opening line look — word by word, karaoke, plain
 // subtitles or none; the builder takes it as `captionStyle`). No tool was added,
@@ -555,6 +561,15 @@ const GET_ASSET_PREVIEW_FLAG_BYTES = 29
 // base = 275 B (build_ugc_cards 1_140 -> 1_415, far under the 8_192 B per-tool
 // budget).
 const UGC_CARDS_CAPTION_STYLE_BYTES = 275
+// RAISED 2026-10-06 by the three collection tools and nothing else —
+// list_collections, read_collection and add_collection_record (where a
+// workflow's records live: the Collections page's API over MCP). The routes
+// are core, so the tools register on every edition, gated by assets:read /
+// assets:write: cloud/all AND community/all name them, the scope-less sets do
+// not. measured by this suite: 395_875 total − 392_455 base = 3_420 B (432 +
+// 1_158 + 1_830), each far under the 8_192 B per-tool budget, and the list
+// keeps the headroom it had.
+const COLLECTION_TOOLS_BYTES = 3_420
 
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192,
@@ -611,7 +626,10 @@ export const TOOL_WIRE_BUDGET = {
     TEXT_TO_AUDIO_PER_SECOND_PRICING_BYTES +
     ELEVENLABS_V4_DEFAULT_WORDING_BYTES +
     GET_ASSET_PREVIEW_FLAG_BYTES +
-    UGC_CARDS_CAPTION_STYLE_BYTES,
+    GET_ASSET_PREVIEW_FLAG_CORRECTION_BYTES +
+    GET_APP_RUN_OUTCOME_BYTES +
+    UGC_CARDS_CAPTION_STYLE_BYTES +
+    COLLECTION_TOOLS_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

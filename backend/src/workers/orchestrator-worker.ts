@@ -38,10 +38,11 @@ import {
   triggerRunScope,
   getEffectivelySkippedIds,
   getUploadDescendantIds,
-  computeRouterGatedIds,
+  computeGatedIds,
   isSourceNode,
   isSkipNode,
 } from "../services/workflow-engine/execution-graph.js"
+import { computeEmptyInputSkipIds } from "../services/workflow-engine/empty-input-skips.js"
 import { resolveNodeInputs, getListInputForNode, getListFanOutForNode } from "../services/workflow-engine/input-resolver.js"
 import { normalizeLegacyNodeTypes } from "../services/workflow-engine/normalize-node-types.js"
 import { migrateGenerateImageHandles } from "../lib/generate-image-handle-migration.js"
@@ -1039,6 +1040,9 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     //     pending first, every such node would count once and the progress
     //     would overshoot its total.
     let totalExecutions = executableNodes.length
+    // What the pre-scan counted per node, so a node that ends up skipped gives
+    // its iterations back and the progress bar can still reach its total.
+    const preCount = new Map<string, number>()
     for (const node of executableNodes) {
       const listItems = getListInputForNode(
         node,
@@ -1063,11 +1067,14 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
       if (listItems && listItems.length > 1) {
         const expandedCount = listItems.length * repeatCount
         totalExecutions += expandedCount - 1
+        preCount.set(node.id, expandedCount)
       } else if (providerCount > 1) {
         const expandedCount = providerCount * repeatCount
         totalExecutions += expandedCount - 1
+        preCount.set(node.id, expandedCount)
       } else if (repeatCount > 1) {
         totalExecutions += repeatCount - 1
+        preCount.set(node.id, repeatCount)
       }
     }
 
@@ -1175,23 +1182,48 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
         return
       }
 
-      // Recompute router-gated nodes before each level (dynamic — depends on
-      // which router nodes have completed and their active/inactive routes).
-      const routerGatedIds = computeRouterGatedIds(nodes, edges, nodeStates)
+      // Recompute the gated nodes before each level (dynamic — a router's
+      // routes, and a node skipped at run time, are known only once it ran):
+      // a node every one of whose wires comes from an inactive route or a
+      // run-time skipped node is gated, carrying the reason of what starved it.
+      const gated = computeGatedIds(nodes, edges, nodeStates)
+      // …and this level's text-requiring nodes with nothing to send (decided
+      // 2026-10-05, empty-input-skips.ts): a feed that found no new posts must
+      // not fail the writer behind it — the run ends "nothing new" instead.
+      const emptyInputIds = computeEmptyInputSkipIds({ level, nodes, edges, nodeStates, triggerData, deadIds: new Set(gated.keys()) })
 
-      // Mark router-gated nodes as "skipped" so the UI reflects they were gated.
-      // Also count them as completed so the progress bar stays accurate.
+      // Mark them "skipped" so the UI reflects it, count them as done so the
+      // progress bar stays accurate, and give back the fan-out iterations the
+      // pre-scan counted for a node that now runs zero times.
+      let stamped = 0
       for (const node of level) {
+        const gateReason = gated.get(node.id)
+        if (gateReason === undefined && !emptyInputIds.has(node.id)) continue
+        if (nodeStates[node.id]?.status === "completed") continue
         // A preview-gated node is already `skipped` and was never counted.
-        if (routerGatedIds.has(node.id) && nodeStates[node.id]?.status !== "completed" && !previewGated.has(node.id)) {
-          nodeStates[node.id] = {
-            status: "skipped",
-            nodeType: node.type,
-            completedAt: new Date().toISOString(),
-          }
-          completedCount++
+        if (previewGated.has(node.id)) continue
+        const skipReason = gateReason === "empty_input" || emptyInputIds.has(node.id) ? "empty_input" : undefined
+        nodeStates[node.id] = {
+          status: "skipped",
+          nodeType: node.type,
+          completedAt: new Date().toISOString(),
+          ...(skipReason ? { skipReason } : {}),
         }
+        completedCount++
+        stamped++
+        const counted = preCount.get(node.id) ?? 1
+        if (counted > 1) totalExecutions -= counted - 1
+        emitExecutionEvent({
+          type: "node:updated",
+          executionId,
+          nodeStates: { ...nodeStates },
+          nodeId: node.id,
+          totalNodes: totalExecutions,
+          completedNodes: completedCount,
+          failedNodes: failedCount,
+        })
       }
+      const deadIds = new Set([...gated.keys(), ...emptyInputIds])
 
       // Filter to executable nodes (not source, not parameter picker, not
       // skipped, not gated, not already done)
@@ -1200,13 +1232,20 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
         if (node.type && PARAMETER_NODE_TYPES.has(node.type)) return false
         if (skippedIds.has(node.id)) return false
         if (isSkipNode(node.type)) return false
-        if (routerGatedIds.has(node.id)) return false
+        if (deadIds.has(node.id)) return false
         if (previewGated.has(node.id)) return false
         if (nodeStates[node.id]?.status === "completed") return false
         return true
       })
 
-      if (executableNodes.length === 0) continue
+      if (executableNodes.length === 0) {
+        // A level with nothing left to run still persists what it stamped —
+        // the level-end write below is never reached for it.
+        if (stamped > 0) {
+          await updateExecution(executionId, { node_states: nodeStates, total_nodes: totalExecutions, completed_nodes: completedCount })
+        }
+        continue
+      }
 
       // Execute nodes in this level with concurrency cap to prevent starving other users
       const tasks = executableNodes.map((node) => async () => {
@@ -1478,6 +1517,8 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     await updateExecution(executionId, {
       status: "completed",
       node_states: nodeStates,
+      // Re-stated: a node skipped at run time gave its pre-counted iterations back.
+      total_nodes: totalExecutions,
       completed_nodes: completedCount,
       failed_nodes: 0,
       total_credits_used: totalCredits,

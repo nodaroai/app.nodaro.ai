@@ -12,11 +12,11 @@ import type { RunSlot } from "./types"
 import { ORIGINAL_SLOT_ID, isMediaUrl } from "./types"
 import { formatDateTime, formatTime } from "@/lib/i18n/format"
 
-/** Localized name of a slot's execution status. */
-function statusLabel(status: RunSlot["executionStatus"], t: TFunction): string {
+/** Localized name of a slot's execution status — a completed run that found nothing new says so. */
+function statusLabel(status: RunSlot["executionStatus"], t: TFunction, outcome?: RunSlot["outcome"]): string {
   switch (status) {
     case "running": return t("runner.statusRunning")
-    case "completed": return t("runner.statusCompleted")
+    case "completed": return outcome === "nothing_new" ? t("runner.statusNothingNew") : t("runner.statusCompleted")
     case "failed": return t("runner.statusFailed")
     default: return t("runner.statusIdle")
   }
@@ -32,12 +32,15 @@ function StatusDot({ status }: { status: RunSlot["executionStatus"] }) {
   return <span className={`w-2 h-2 rounded-full shrink-0 ${colors[status] ?? colors.idle}`} />
 }
 
-export function SlotStatusBadge({ status }: { status: RunSlot["executionStatus"] }) {
+export function SlotStatusBadge({ status, outcome }: { status: RunSlot["executionStatus"]; outcome?: RunSlot["outcome"] }) {
   const t = useT()
   const config: Record<string, { label: string; className: string }> = {
     idle: { label: t("runner.statusDraft"), className: "bg-muted text-muted-foreground" },
     running: { label: t("runner.statusRunning"), className: "bg-blue-500/10 text-blue-500" },
-    completed: { label: t("runner.statusDone"), className: "bg-emerald-500/10 text-emerald-500" },
+    completed:
+      outcome === "nothing_new"
+        ? { label: t("runner.statusNothingNew"), className: "bg-slate-500/10 text-slate-500" }
+        : { label: t("runner.statusDone"), className: "bg-emerald-500/10 text-emerald-500" },
     failed: { label: t("runner.statusFailed"), className: "bg-red-500/10 text-red-500" },
   }
   const c = config[status] ?? config.idle
@@ -93,7 +96,7 @@ export function CompactSlotItem({
       </TooltipTrigger>
       <TooltipContent side="right" className="text-xs">
         <div>{slot.name ?? formatTime(slot.createdAt)}</div>
-        <div className="text-muted-foreground first-letter:uppercase">{slot.executionStatus === "idle" ? t("runner.statusDraft") : statusLabel(slot.executionStatus, t)}</div>
+        <div className="text-muted-foreground first-letter:uppercase">{slot.executionStatus === "idle" ? t("runner.statusDraft") : statusLabel(slot.executionStatus, t, slot.outcome)}</div>
       </TooltipContent>
     </Tooltip>
   )
@@ -209,7 +212,7 @@ export function RunSlotItem({
                 </>
               )}
             </div>
-            <SlotStatusBadge status={slot.executionStatus} />
+            <SlotStatusBadge status={slot.executionStatus} outcome={slot.outcome} />
           </div>
 
           {/* Row 2: Time (when name exists) + actions */}

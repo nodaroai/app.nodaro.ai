@@ -1,3 +1,4 @@
+import { executionOutcome } from "@nodaro/shared"
 /**
  * Presentation mode routes.
  * POST   /v1/workflows/:id/share     — Generate share token, enable presentation
@@ -419,6 +420,9 @@ export async function presentationRoutes(app: FastifyInstance) {
       })
     }
 
-    return reply.send(execution)
+    return reply.send({
+      ...execution,
+      outcome: executionOutcome(execution.status, execution.node_states as Record<string, { status?: unknown; skipReason?: unknown }> | null),
+    })
   })
 }

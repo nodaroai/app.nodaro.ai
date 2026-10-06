@@ -18,7 +18,7 @@ import {
   type AppRun,
   batchExecutionEstimates,
 } from "@/lib/api"
-import { buildProgressSegments, calculateCombinedProgress, type ProgressSegment, CATEGORY_DURATION_DEFAULTS, getOutputNodes } from "@nodaro/shared"
+import { buildProgressSegments, calculateCombinedProgress, executionOutcome, type ExecutionOutcome, type ProgressSegment, CATEGORY_DURATION_DEFAULTS, getOutputNodes } from "@nodaro/shared"
 import { migrateListLoopNodes } from "@/lib/list-loop-migration"
 import { composeLottieSlotOverrides, collectSlotExposedNodeIds } from "@/lib/lottie-slot-overrides"
 import { resolveInputItems } from "@/components/presentation/helpers"
@@ -30,6 +30,8 @@ interface NodeState {
   status: "pending" | "running" | "completed" | "failed" | "skipped"
   output?: Record<string, unknown>
   error?: string
+  /** Why the RUN skipped the node (`empty_input`); absent on a router-gated one. */
+  skipReason?: string
 }
 
 /**
@@ -42,6 +44,8 @@ interface NodeState {
 export interface RunRuntime {
   executionId: string | null
   status: AppRunnerStatus
+  /** How a completed run ended ("nothing_new" when a node was skipped for want of input); absent until then. */
+  outcome?: ExecutionOutcome
   nodeStates: Record<string, NodeState>
   completedNodes: number
   totalNodes: number
@@ -239,6 +243,7 @@ export const useAppRunnerStore = create<AppRunnerState>((set, get) => ({
     patchRuntime(set, get, runId, {
       executionId: run.executionId,
       status,
+      outcome: executionOutcome(run.execution.status, nodeStates),
       nodeStates,
       completedNodes: run.execution.completedNodes,
       totalNodes: run.execution.totalNodes,
@@ -511,7 +516,7 @@ function startPolling(
       }
 
       if (status.status === "completed") {
-        patchRuntime(set, get, runId, { status: "completed" })
+        patchRuntime(set, get, runId, { status: "completed", outcome: executionOutcome("completed", nodeStates) })
         clearPoller(executionId)
         const { slug } = get()
         if (slug) {

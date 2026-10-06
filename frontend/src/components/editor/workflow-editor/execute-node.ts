@@ -5413,15 +5413,24 @@ function executeNodeCore(
       return Promise.reject(new Error(msg));
     }
     updateNodeData(node.id, { ...RUN_START_RESET });
+    const workflowId = useWorkflowStore.getState().workflowId;
     return import("@/lib/api").then(({ telegramChannelFetchApi }) =>
-      telegramChannelFetchApi({ channel, sinceId: d.lastSeenId, limit: d.limit })
+      // The route owns the position (node_cursors): it reads and advances it
+      // from the workflow + node ids this call carries. The editor's old
+      // cursor rides as a one-shot seed until the node first runs statefully.
+      telegramChannelFetchApi({ channel, sinceId: d.lastSeenId, limit: d.limit, mode: "poll", nodeId: node.id })
         .then((res) => {
           updateNodeData(node.id, {
             executionStatus: "completed",
             generatedText: res.text,
-            // Advance the cursor so the next run only emits newer posts.
-            lastSeenId: res.latestId,
+            generatedJson: res.posts,
+            lastSeenId: res.cursor.stateful ? undefined : (res.latestId ?? undefined),
           });
+          if (workflowId) {
+            void Promise.all([import("@/lib/query-client"), import("@/lib/query-keys")]).then(([{ queryClient }, { queryKeys }]) =>
+              queryClient.invalidateQueries?.({ queryKey: queryKeys.telegramFeed.cursor(workflowId, node.id) }),
+            );
+          }
           guardedToast.success(res.count > 0 ? tx("nodeRun.readNewPostS", { count: res.count }) : tx("nodeRun.noNewPosts"));
           return res.text ?? "";
         })

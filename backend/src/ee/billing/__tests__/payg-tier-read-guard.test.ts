@@ -36,6 +36,8 @@ const EFFECTIVE_SITES: Array<{ file: string; mustContain: string[] }> = [
   { file: "ee/pipelines/create-pipeline.ts", mustContain: ["resolveEffectiveTier", "lifetime_topup_credits"] },
   { file: "ee/pipelines/engine.ts", mustContain: ["resolveEffectiveTier", "lifetime_topup_credits"] },
   { file: "routes/video-director.ts", mustContain: ["resolveEffectiveTier", "lifetime_topup_credits"] },
+  // Collections: the caps a collection is held to come from the effective tier.
+  { file: "routes/collections.ts", mustContain: ["resolveEffectiveTier", "lifetime_topup_credits"] },
   { file: "utils/file-validation.ts", mustContain: ["resolveEffectiveTier", "lifetime_topup_credits"] },
   { file: "workers/orchestrator-worker.ts", mustContain: ["resolveEffectiveTier", "lifetime_topup_credits"] },
   { file: "workers/render-worker.ts", mustContain: ["resolveEffectiveTier", "lifetime_topup_credits"] },

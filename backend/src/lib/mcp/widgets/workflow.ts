@@ -191,7 +191,7 @@ ${uiProtocolShim()}
       // and 'timed_out' are real terminal execution statuses (migration 182) —
       // without them a discarded run polls until the 10-min cap (stuck spinner).
       if (sc.status === 'completed') {
-        progressEl.textContent = 'Done';
+        progressEl.textContent = sc.outcome === 'nothing_new' ? 'Done — nothing new' : 'Done';
         stopPolling();
       } else if (
         sc.status === 'failed' ||

@@ -172,6 +172,17 @@ nodaro saved-posts save --file <post.json|-> [--index <n>] [--note <text>] [--ta
 nodaro saved-posts update <id> [--note <text>] [--tag <t>]... [--clear-tags] [--json]
 nodaro saved-posts delete <id>                         # also removes the copied still
 
+# Collections — where a workflow's records live (text and links only, never files)
+nodaro collections list [--json]                            # your collections, record counts, your caps
+nodaro collections create <name> [--description <text>] [--json]
+nodaro collections show <id> [--json] | update <id> [--name <n>] [--description <d>] | delete <id>
+nodaro collections records <id> [--q <words>] [--since <iso>] [--limit <n>] [--cursor <c>] [--json]
+nodaro collections add <id> [--title <t>] [--text <t>] [--url <link>] [--file <item.json|->] [--index <n>] [--dedupe-key <k>] [--idempotency-key <k>] [--json]
+#   --file holds any JSON item (a feed post, a search result) the server maps to a record; explicit flags win
+#   the same link twice is one record ("already there"); the same --idempotency-key twice saves once
+nodaro collections remove <id> <recordId>
+nodaro collections export <id> [--format csv|json] [--since <iso>] [--q <words>] [--out <path>]   # to stdout or a file
+
 # Competitors — tracked brands, their scans and action cards (Nodaro Cloud)
 nodaro competitors list [--json]
 nodaro competitors add [--brand <name>] [--website <url>] [--tiktok <h>] [--instagram <h>] [--youtube <c>] [--x <h>] [--linkedin <page>] [--meta-ads <name>] [--about <platforms>] [--schedule off|weekly|daily] [--own] [--json]

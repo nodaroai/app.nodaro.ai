@@ -26,6 +26,7 @@ const REASON_KEY_BY_CODE: Readonly<Record<string, MessageKey>> = {
   unauthorized: "apiErr.reason.signIn",
   access_blocked: "apiErr.reason.accessBlocked",
   forbidden: "apiErr.reason.forbidden",
+  collection_limit_reached: "apiErr.reason.collectionLimitReached",
   not_found: "apiErr.reason.notFound",
   internal_error: "apiErr.reason.server",
   internal: "apiErr.reason.server",

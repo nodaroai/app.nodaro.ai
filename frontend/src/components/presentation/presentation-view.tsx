@@ -734,7 +734,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
 
   // Node execution status
   const getNodeStatus = useCallback(
-    (nodeId: string): "idle" | "waiting" | "running" | "completed" | "failed" => {
+    (nodeId: string): "idle" | "waiting" | "running" | "completed" | "failed" | "skipped" => {
       if (isFullscreen) {
         const state = presNodeStates[nodeId]
         if (!state) return "idle"
@@ -742,6 +742,8 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
         if (state.status === "completed") return "completed"
         if (state.status === "failed") return "failed"
         if (state.status === "pending") return "waiting"
+        // The run skipped it for want of input: "nothing new this run" — a router-gated skip stays idle.
+        if (state.status === "skipped" && state.skipReason) return "skipped"
         return "idle"
       }
       const node = nodeMap.get(nodeId)

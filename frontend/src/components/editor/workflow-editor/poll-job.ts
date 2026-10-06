@@ -179,6 +179,8 @@ export const RUN_START_RESET = {
   jobAwaitingReview: undefined,
   // Nor the previous run's "Reconnecting…" badge.
   jobConnectionLost: undefined,
+  // Nor the chip of a run that skipped this node for want of input.
+  __runSkipReason: undefined,
 } as const;
 
 export function pollJobToCompletion(

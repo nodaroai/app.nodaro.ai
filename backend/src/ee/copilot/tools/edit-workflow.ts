@@ -25,6 +25,7 @@ import {
 import { supabase } from "../../../lib/supabase.js"
 import { EditRejected } from "./edit-rejected.js"
 import { migrateGenerateImageHandles } from "../../../lib/generate-image-handle-migration.js"
+import { describeEdgeAdjustments, normalizeWorkflowEdges } from "../../../lib/workflow-edge-normalization.js"
 import { GRAPH_CAPS, LAYOUT, MAX_WORKFLOW_NAME_CHARS, NODE_ID_RE } from "../constants.js"
 import { changedLockedUrlFields, isDeniedNodeType } from "./deny-lists.js"
 import { assertEntitiesAreTheirs } from "./entity-ownership.js"
@@ -143,6 +144,26 @@ function edgeId(edge: EdgeLike): string {
   return `e-${parts.join("-")}`
 }
 
+function hasOwnId(edge: EdgeLike): boolean {
+  return typeof edge.id === "string" && edge.id.length > 0
+}
+
+/**
+ * The stored edges, one per id. A stored edge WITHOUT an id (an MCP write from
+ * before ids were given) beside the id-bearing twin a later edit appended is
+ * one connection twice; the RPC cannot address the id-less one, so it is
+ * judged once here and never blocks an edit as a "duplicate edge id".
+ */
+function dedupeByEdgeId(edges: ReadonlyArray<EdgeLike>): EdgeLike[] {
+  const seen = new Set<string>()
+  return edges.filter((e) => {
+    const id = edgeId(e)
+    if (seen.has(id)) return false
+    seen.add(id)
+    return true
+  })
+}
+
 /** Longest-path depth per node, so new nodes land in a readable left-to-right layout. */
 function layoutPositions(nodes: GenericNode[], edges: EdgeLike[]): Map<string, { x: number; y: number }> {
   const incoming = new Map<string, string[]>()
@@ -223,6 +244,7 @@ function prepare(
   userLinks: ReadonlySet<string>,
 ): Prepared {
   const existingById = new Map(stored.nodes.map((n) => [n.id, n]))
+  const storedEdges = dedupeByEdgeId(stored.edges)
   const deleteNodeIds = [...new Set(args.deleteNodeIds ?? [])]
   const deleteSet = new Set(deleteNodeIds)
   const upserts: GenericNode[] = []
@@ -306,17 +328,54 @@ function prepare(
   const fullNodes = [...survivingNodes, ...upserts]
 
   const explicitEdgeDeletes = new Set(args.deleteEdgeIds ?? [])
-  const upsertEdges = (args.upsertEdges ?? []).map((e) => ({ ...e, id: edgeId(e) }))
+  // The UPSERTED edges are normalised first — legacy handle names rewired,
+  // the Generate Image migration and the source-type classifiers applied (the
+  // editor's own load-time rules, from @nodaro/shared), a broken edge dropped
+  // with a warning, a duplicate id refused — BEFORE any id is given, so an
+  // edge sent without one gets its id from the handles as STORED, and a
+  // re-send of the same connection lands on the stored edge (its id adopted)
+  // instead of beside it. Stored edges the model did not send are left
+  // exactly as stored: a heal the editor applies on load is the editor's. A
+  // generated id never collides with a stored edge's (the reserved ids).
+  const normalizedUpserts = normalizeWorkflowEdges(fullNodes, (args.upsertEdges ?? []) as EdgeLike[], {
+    reservedIds: storedEdges.map(edgeId),
+  })
+  // The model is told, not worked around: an edge it sends that names no node,
+  // loops on itself or repeats a connection is refused here (the MCP writes
+  // drop such an edge with a warning — a round trip of a stored graph must not
+  // fail on one), so the normalizer's "— dropped" is not what happened.
+  const edgeProblems = [...normalizedUpserts.errors, ...normalizedUpserts.dropped.map((m) => m.replace(/ — dropped$/u, ""))]
+  if (edgeProblems.length > 0) throw new EditRejected(`Edge problems: ${edgeProblems.join("; ")}`)
+  const generatedEdgeIds = new Set(normalizedUpserts.adjustments.filter((a) => a.field === "id").map((a) => a.edgeId))
+  const sameConnection = (a: EdgeLike, b: EdgeLike): boolean =>
+    a.source === b.source && a.target === b.target && (a.sourceHandle ?? null) === (b.sourceHandle ?? null) && (a.targetHandle ?? null) === (b.targetHandle ?? null)
+  const adopted = new Map<string, string>()
+  const upsertEdges: EdgeLike[] = normalizedUpserts.edges.map((e) => {
+    if (!generatedEdgeIds.has(e.id as string)) return e
+    const twin = storedEdges.find((s) => {
+      const normalizedStored = normalizeWorkflowEdges(fullNodes, [s]).edges[0]
+      return normalizedStored !== undefined && sameConnection(normalizedStored, e)
+    })
+    if (!twin) return e
+    adopted.set(e.id as string, edgeId(twin))
+    return { ...e, id: edgeId(twin) }
+  })
+  // The report names each edge as STORED — the twin's id once adopted.
+  const edgeAdjustments = normalizedUpserts.adjustments.map((a) => {
+    const finalId = adopted.get(a.edgeId)
+    if (finalId === undefined) return a
+    return a.field === "id" ? { ...a, edgeId: finalId, to: finalId } : { ...a, edgeId: finalId }
+  })
   const upsertEdgeIds = new Set(upsertEdges.map((e) => e.id as string))
   // Edges incident to a deleted node go with it — the RPC would otherwise
   // leave the graph with dangling endpoints the editor cannot render.
-  const orphanedEdgeIds = stored.edges
+  const orphanedEdgeIds = storedEdges
     .filter((e) => deleteSet.has(String(e.source)) || deleteSet.has(String(e.target)))
     .map((e) => edgeId(e))
   const deleteEdgeIds = [...new Set([...explicitEdgeDeletes, ...orphanedEdgeIds])].filter((id) => !upsertEdgeIds.has(id))
   const deletedEdgeSet = new Set(deleteEdgeIds)
   const fullEdges = [
-    ...stored.edges.filter((e) => !deletedEdgeSet.has(edgeId(e)) && !upsertEdgeIds.has(edgeId(e))),
+    ...storedEdges.filter((e) => !deletedEdgeSet.has(edgeId(e)) && !upsertEdgeIds.has(edgeId(e))),
     ...upsertEdges,
   ]
 
@@ -445,19 +504,31 @@ function prepare(
     }
   }
 
-  // Handle migration can rewrite EXISTING edges too; anything it changed has
-  // to travel in the delta or the stored copy stays stale. Every edge carries
-  // an id by construction (`edgeId` fills one in), which is what the migration
-  // helper's element type requires.
+  // The Generate Image migration can rewrite EXISTING edges too; anything it
+  // changed has to travel in the delta or the stored copy stays stale. Every
+  // edge carries an id by construction (`edgeId` fills one in), which is what
+  // the migration helper's element type requires. A stored edge travels only
+  // when the migration CHANGED it, compared with the id filled in on BOTH
+  // sides — compared against the bare stored edge, every id-less stored edge
+  // read as changed and was re-sent, and the RPC, which matches by id,
+  // appended a copy beside each (the next edit then met a "duplicate edge
+  // id"). A stored edge WITHOUT an id is never re-sent at all: the RPC cannot
+  // replace what it cannot address, and the editor applies the same migration
+  // when it loads the graph.
   const identified = fullEdges.map((e) => ({ ...e, id: edgeId(e) })) as Array<EdgeLike & { id: string; source: string; target: string }>
   const migratedEdges: EdgeLike[] = migrateGenerateImageHandles(fullNodes, identified)
-  const byIdBefore = new Map(fullEdges.map((e) => [edgeId(e), e]))
+  const byIdBefore = new Map(identified.map((e) => [e.id, e]))
+  const storedWithoutId = new Set(fullEdges.filter((e) => !hasOwnId(e)).map((e) => edgeId(e)))
   const finalUpsertEdges: EdgeLike[] = []
   for (const edge of migratedEdges) {
     const id = edgeId(edge)
+    if (upsertEdgeIds.has(id)) {
+      finalUpsertEdges.push({ ...edge, id })
+      continue
+    }
+    if (storedWithoutId.has(id)) continue
     const before = byIdBefore.get(id)
-    const changed = !before || JSON.stringify(before) !== JSON.stringify(edge)
-    if (changed || upsertEdgeIds.has(id)) finalUpsertEdges.push({ ...edge, id })
+    if (!before || JSON.stringify(before) !== JSON.stringify(edge)) finalUpsertEdges.push({ ...edge, id })
   }
 
   // Measured on the POST-stamp graph: a wired file adds a url per node, and a
@@ -480,7 +551,7 @@ function prepare(
     wiredAssets: wired.wiredAssets,
     fullNodes,
     fullEdges: migratedEdges,
-    adjustments: describeNodeAdjustments(normalized.adjustments),
+    adjustments: [...describeNodeAdjustments(normalized.adjustments), ...describeEdgeAdjustments(edgeAdjustments)],
     warnings: edgeCheck.warnings,
   }
 }

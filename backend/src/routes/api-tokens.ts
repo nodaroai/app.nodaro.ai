@@ -1,3 +1,5 @@
+import { formatExecutionResult } from "../lib/execution-result.js"
+import { executionOutcome } from "@nodaro/shared"
 /**
  * API token management + public workflow API routes.
  *
@@ -895,7 +897,7 @@ export async function apiTokenRoutes(app: FastifyInstance) {
 
       const { data: execution, error } = await supabase
         .from("workflow_executions")
-        .select("id, status, total_nodes, completed_nodes, failed_nodes, total_credits_used, error_message, created_at, completed_at")
+        .select("id, status, node_states, total_nodes, completed_nodes, failed_nodes, total_credits_used, error_message, created_at, completed_at")
         .eq("id", parsed.data.execId)
         .eq("user_id", resolved.userId)
         .single()
@@ -906,9 +908,11 @@ export async function apiTokenRoutes(app: FastifyInstance) {
         })
       }
 
+      const outcome = executionOutcome(execution.status, execution.node_states as Record<string, { status?: unknown; skipReason?: unknown }> | null)
       return reply.send({
         executionId: execution.id,
         status: execution.status,
+        ...(outcome ? { outcome } : {}),
         totalNodes: execution.total_nodes,
         completedNodes: execution.completed_nodes,
         failedNodes: execution.failed_nodes,
@@ -991,59 +995,7 @@ function formatToken(row: Record<string, unknown>) {
   }
 }
 
-function formatExecutionResult(
-  executionId: string,
-  execution: Record<string, unknown>,
-  workflowNodes: GenericNode[],
-) {
-  const nodeStates = (execution.node_states ?? {}) as Record<string, NodeExecutionState>
-
-  // Extract outputs from completed output nodes. Normalize legacy node types
-  // (incl. loop→list) defensively so this formatter classifies outputs
-  // correctly regardless of whether the caller already normalized. Idempotent.
-  const edges: GenericEdge[] = []
-  const outputNodes = getOutputNodes(normalizeLegacyNodeTypes(workflowNodes), edges, false)
-  const outputs: Array<{
-    nodeId: string
-    label: string
-    type: string
-    url?: string
-    text?: string
-  }> = []
-
-  for (const node of outputNodes) {
-    const state = nodeStates[node.id]
-    if (!state || state.status !== "completed") continue
-
-    const output = state.output
-    if (!output) continue
-
-    const url = output.imageUrl ?? output.videoUrl ?? output.audioUrl
-    const text = (output.text ?? output.script) as string | undefined
-
-    outputs.push({
-      nodeId: node.id,
-      label: getNodeLabel(node),
-      type: getOutputType(node.type),
-      url: url ?? undefined,
-      text: text ?? undefined,
-    })
-  }
-
-  const durationMs = execution.completed_at && execution.created_at
-    ? new Date(execution.completed_at as string).getTime() -
-      new Date(execution.created_at as string).getTime()
-    : undefined
-
-  return {
-    executionId,
-    status: execution.status,
-    creditsUsed: execution.total_credits_used ?? 0,
-    durationMs,
-    errorMessage: execution.error_message,
-    outputs,
-  }
-}
+// The result shape lives in lib/execution-result.ts (shared with MCP get_app_run / diagnose_run).
 
 function sortByOrder(nodes: GenericNode[], order: string[]): GenericNode[] {
   const orderMap = new Map(order.map((id, i) => [id, i]))

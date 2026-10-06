@@ -68,6 +68,25 @@ export type { GenericNode, GenericEdge, WorkflowExport, WorkflowExportCharacter,
   ListSavedPostsParams,
   ListSavedPostsResult,
   SavedPostsLookupResult,
+  // Collections (`client.collections`): where a workflow's records live.
+  Collection,
+  CollectionRecord,
+  CollectionMedia,
+  CollectionMediaType,
+  CollectionRecordSource,
+  CollectionFieldValue,
+  CollectionCaps,
+  CollectionLimits,
+  ListCollectionsResult,
+  CreateCollectionInput,
+  UpdateCollectionInput,
+  ListCollectionRecordsParams,
+  ListCollectionRecordsResult,
+  AddCollectionRecordInput,
+  AddCollectionRecordResult,
+  CollectionWriteOutcome,
+  CollectionExportFormat,
+  CollectionDigestFormat,
   // Competitors (`client.competitors`): tracked brands, scans and action cards.
   TrackedCompetitor,
   CompetitorDetail,
@@ -147,6 +166,7 @@ export { UploadsResource } from "./resources/uploads.js"
 export { LibraryResource } from "./resources/library.js"
 export { PresetsResource } from "./resources/node-presets.js"
 export { SavedPostsResource } from "./resources/saved-posts.js"
+export { CollectionsResource } from "./resources/collections.js"
 export { CompetitorsResource } from "./resources/competitors.js"
 export { CommunityResource } from "./resources/community.js"
 export { PickerCatalogsResource } from "./resources/picker-catalogs.js"

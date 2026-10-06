@@ -1,6 +1,6 @@
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { proShotStills } from "@/lib/scene3d/pro-media-result";
-import { collectAncestorRefs as sharedCollectAncestorRefs, isExpandedClone, PARAMETER_NODE_TYPES, aggregateByType, buildChildrenByParent, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member, ASPECT_RATIO_DIMENSIONS, overlayVariantIdFromHandle, featuredMetaAdOutputs, featuredInstagramOutputs, resolveVideoLinkOutput, isTelegramAccountTriggerNamedHandle, telegramAccountTriggerOutputs, type Transcript, isSocialSearchPickFrozen, socialPostsFrom, socialPostsDigest, savedRenderOutput } from "@nodaro/shared";
+import { collectAncestorRefs as sharedCollectAncestorRefs, isExpandedClone, PARAMETER_NODE_TYPES, aggregateByType, buildChildrenByParent, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member, ASPECT_RATIO_DIMENSIONS, overlayVariantIdFromHandle, featuredMetaAdOutputs, featuredInstagramOutputs, resolveVideoLinkOutput, isTelegramAccountTriggerNamedHandle, telegramAccountTriggerOutputs, type Transcript, isSocialSearchPickFrozen, socialPostsFrom, socialPostsDigest, savedRenderOutput, telegramPostsFrom } from "@nodaro/shared";
 import { getParameterPromptHint } from "@nodaro/prompts"
 import type {
   WorkflowNode,
@@ -488,6 +488,13 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
   // so downstream prompts, {Label} refs, and FieldMappings all came up empty in
   // every client-side run mode, even though the edge connected fine.
   if (type === "telegram-channel-feed") {
+    // `json` → the posts of the last run (stringified for text consumers;
+    // Extract Field / List read generatedJson directly), `text` / no handle →
+    // their digest. Mirrors the backend getPrimaryOutput branch.
+    if (sourceHandle === "json") {
+      const posts = telegramPostsFrom(data.generatedJson);
+      return posts.length > 0 ? JSON.stringify(posts) : undefined;
+    }
     return data.generatedText as string | undefined;
   }
   if (type === "transcribe") {
