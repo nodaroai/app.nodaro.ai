@@ -507,7 +507,7 @@ export async function executeNode(
 
   // Inline nodes
   if (INLINE_NODES.has(node.type)) {
-    return executeInlineNode(node, resolvedInputs, edges, allNodes, nodeStates, ctx)
+    return executeInlineNode(node, resolvedInputs, edges, allNodes, nodeStates, ctx, listRow)
   }
 
   // Sync HTTP nodes. Exception: motion-graphics with the lottie engine runs
@@ -544,6 +544,9 @@ async function executeInlineNode(
   allNodes: SimpleNode[],
   nodeStates: Record<string, NodeExecutionState>,
   ctx: OrchestratorContext,
+  // The fan-out row this iteration reads (`plan.rows[k]`) — a Webhook Output
+  // run once per item posts that row's values. Undefined when not fanned out.
+  listRow?: number,
 ): Promise<ExecuteNodeResult> {
   let output: NodeOutput
 
@@ -579,7 +582,7 @@ async function executeInlineNode(
       output = executeComposite(node, edges, allNodes, nodeStates)
       break
     case "webhook-output":
-      output = await executeWebhookOutput(node, edges, allNodes, nodeStates, ctx)
+      output = await executeWebhookOutput(node, edges, allNodes, nodeStates, ctx, listRow)
       break
     case "preview":
       output = executePreview(node, edges, allNodes, nodeStates)

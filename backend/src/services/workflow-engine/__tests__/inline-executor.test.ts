@@ -658,6 +658,58 @@ describe("executeWebhookOutput", () => {
 })
 
 // ---------------------------------------------------------------------------
+// executeWebhookOutput — one request per row of an "each" wire.
+//
+// Run once per item (a Filter List of articles, the images made for them), the
+// node used to read the whole upstream state in every iteration and POST the
+// same payload N times. Each wire now reads its value AT THE ROW, the rule
+// resolveNodeInputs applies to every other node (2026-10-06).
+// ---------------------------------------------------------------------------
+describe("executeWebhookOutput — one request per row", () => {
+  const ctx = { userId: "u1", executionId: "exec-1" } as unknown as Parameters<typeof executeWebhookOutput>[4]
+  const hook = () =>
+    node("w", "webhook-output", {
+      url: "https://example.com/hook",
+      params: [
+        { id: "article", name: "article", type: "text" },
+        { id: "image", name: "image", type: "imageUrl" },
+      ],
+    })
+  const articles = node("a", "filter-list")
+  const images = node("g", "generate-image")
+  const wires = [edge("a", "w", "out", "article"), edge("g", "w", "image", "image")]
+  const states = (imageList: string[]): Record<string, NodeExecutionState> => ({
+    a: { status: "completed", output: { text: "a1", listResults: ["a1", "a2", "a3"] } },
+    g: { status: "completed", output: { imageUrl: imageList[0], listResults: imageList } },
+  })
+  const posted = () => (insertInternalJobMock.mock.calls[0] as unknown as [string, { input_data: { payload: unknown } }])[1].input_data.payload
+
+  beforeEach(() => {
+    insertInternalJobMock.mockClear()
+    safeFetchMock.mockClear()
+    insertInternalJobMock.mockResolvedValue({ data: { id: "job-1" }, error: null })
+  })
+
+  it("row 1 posts the second article with the second image", async () => {
+    await executeWebhookOutput(hook(), wires, [articles, images, hook()], states(["i1", "i2", "i3"]), ctx, 1)
+    expect(posted()).toEqual({ article: "a2", image: "i2" })
+  })
+
+  it("without a row the primary values post, as before", async () => {
+    await executeWebhookOutput(hook(), wires, [articles, images, hook()], states(["i1", "i2", "i3"]), ctx)
+    expect(posted()).toEqual({ article: "a1", image: "i1" })
+  })
+
+  it("a shorter list starts over from its first row; an empty cell contributes nothing", async () => {
+    await executeWebhookOutput(hook(), wires, [articles, images, hook()], states(["i1", ""]), ctx, 1)
+    expect(posted()).toEqual({ article: "a2" })
+    insertInternalJobMock.mockClear()
+    await executeWebhookOutput(hook(), wires, [articles, images, hook()], states(["i1", ""]), ctx, 2)
+    expect(posted()).toEqual({ article: "a3", image: "i1" })
+  })
+})
+
+// ---------------------------------------------------------------------------
 // executeWebhookOutput — a stored credential (plan D6 / D7 / D10).
 // ---------------------------------------------------------------------------
 describe("executeWebhookOutput — stored credential", () => {
