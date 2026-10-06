@@ -259,6 +259,24 @@ describe("Update preview", () => {
     expect(info.estimatedCredits).toBe(RUN_CONFIRM_CREDITS + 1)
   })
 
+  // Decided 2026-10-06: what a second render still set to Preview holds back
+  // is named on its own line, as in the Render final confirm.
+  it("with a second Preview render after this one, the confirm names what waits for its own Render final apart from what waits for this one", async () => {
+    const CUT2 = n("cut2", "apply-edl", { label: "Render Clips", quality: "proxy" })
+    const PACK = n("pack", "edit-plan", { label: "Clip Pack" })
+    mockNodes = [PLAN, CUT, CAP, CUT2, PACK]
+    mockEdges = [...EDGES, { id: "c", source: "cap", target: "cut2", targetHandle: "sources" }, { id: "d", source: "cut2", target: "pack" }]
+    mockEstimateRunCreditLines.mockImplementation((exec: TestNode[]) =>
+      exec.filter((x) => x.id === "cut").map((x) => ({ nodeId: x.id, label: x.data.label, quantity: { fanOut: 1, units: 1, unitKind: null }, credits: RUN_CONFIRM_CREDITS + 1 })))
+    const confirmRun = vi.fn().mockResolvedValue(true)
+    await run("proxy", makeCtx({ confirmRun }))
+    const info = confirmRun.mock.calls[0]![0]
+    expect(info.trigger).toBe("update-preview")
+    expect(info.lines.map((l: { nodeId: string }) => l.nodeId)).toEqual(["cut"])
+    expect(info.gated).toEqual(["cap", "Render Clips"])
+    expect(info.waits).toEqual(["Clip Pack"])
+  })
+
   it("never asks 'nothing changed' (that is Render final's question)", async () => {
     const askConfirm = vi.fn().mockResolvedValue(true)
     mockUnchanged.mockResolvedValue(true)

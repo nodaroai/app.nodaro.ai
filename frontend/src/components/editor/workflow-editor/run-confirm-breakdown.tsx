@@ -12,9 +12,10 @@
  * the canvas header shows them (a rename passes through), and "Kept as is"
  * groups its repeats only after translating.
  *
- * What a Render final holds back behind ANOTHER render still set to Preview
- * gets its own line, "Waits for its own Render final" (round 2, decided
- * 2026-10-06), never a row: it does not run and is not billed now.
+ * What a Render final or an Update preview holds back behind ANOTHER render
+ * still set to Preview gets its own line, "Waits for its own Render final"
+ * (round 2, decided 2026-10-06; Update preview decided 2026-10-06), never a
+ * row: it does not run and is not billed now.
  *
  * The total stays in credits (round 2, decided 2026-10-06): it is
  * `sumRunCreditLines` — the whole-credit sum the run is gated and billed on —

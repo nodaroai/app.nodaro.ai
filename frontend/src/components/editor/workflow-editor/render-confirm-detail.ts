@@ -12,20 +12,26 @@
  *    them and only then groups the repeats ("Transcribe ×3"), since a grouped
  *    string would miss the label tables;
  *  - `gated`: Update preview only — the nodes of the run set the preview
- *    leaves for Render final (the stop rule), which are not billed now;
- *  - `waits`: Render final only (round 2, decided 2026-10-06) — the nodes of
- *    the run set behind ANOTHER render still set to Preview. Render final
- *    overrides only its own render, so the stop rule still holds at the second
- *    one: those nodes get no line and wait for that render's own Render final.
- *    They are the run set less the lines, as `gated` is for Update preview.
+ *    leaves for THIS render's Render final (the stop rule), not billed now;
+ *  - `waits`: the nodes of the run set behind ANOTHER render still set to
+ *    Preview (round 2, decided 2026-10-06; Update preview too, decided
+ *    2026-10-06). Render final overrides only its own render, so the stop rule
+ *    still holds at the second one: those nodes get no line and wait for that
+ *    render's own Render final. In a Render final they are the run set less
+ *    the lines. In an Update preview they are what the run would still hold
+ *    back with this render at Final — the stop rule on the graph a Render
+ *    final runs (`renderRunOverrides`) — and `gated` is the rest of what the
+ *    preview holds back.
  *
  * "Feeds" is the stop rule's own definition (`buildFeedMaps`), as for the run
  * set itself (`render-final-set.ts`).
  */
-import { buildFeedMaps, isRenderNodeType, type FeedEdge, type FeedNode } from "@nodaro/shared"
+import { buildFeedMaps, isRenderNodeType, withRunOverrides, type FeedEdge, type FeedNode } from "@nodaro/shared"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 import { isExecutableNode, type RunConfirmInfo, type RunConfirmLine, type RunCreditLine } from "./types"
 import { runNodeLabel } from "./estimate-run-credits"
+import { previewRunnable } from "./preview-gate"
+import { renderRunOverrides } from "./render-final-set"
 
 export interface RenderConfirmDetail {
   readonly lines: RunConfirmLine[]
@@ -119,15 +125,36 @@ export function renderConfirmDetail(
     .sort((a, b) => byOrder(a.id, b.id))
     .map(runNodeLabel)
 
-  // What the run set holds that the run does not execute (the stop rule). In an
-  // Update preview that is this render's own tail; in a Render final it can only
-  // be what a second Preview render downstream holds back.
-  const held = executable.filter((n) => !runs.has(n.id)).sort((a, b) => byOrder(a.id, b.id)).map(runNodeLabel)
+  // What the run set holds that the run does not execute (the stop rule). In a
+  // Render final it can only be what a second Preview render holds back.
+  const held = executable.filter((n) => !runs.has(n.id)).sort((a, b) => byOrder(a.id, b.id))
+  if (trigger === "render-final") return { lines: shown, kept, gated: [], waits: held.map(runNodeLabel) }
 
+  // An Update preview also holds back this render's own tail. What a Render
+  // final of this render would still hold back waits for another render's own.
+  const waitsOwn = heldAtFinal(renderId, executable, inRun, allNodes, edges)
   return {
     lines: shown,
     kept,
-    gated: trigger === "update-preview" ? held : [],
-    waits: trigger === "render-final" ? held : [],
+    gated: held.filter((n) => !waitsOwn.has(n.id)).map(runNodeLabel),
+    waits: held.filter((n) => waitsOwn.has(n.id)).map(runNodeLabel),
   }
+}
+
+/**
+ * The run set's nodes a Render final of `renderId` would not execute: the stop
+ * rule on the graph that run executes (this render at Final, every other
+ * render at its own quality). A render that does not run keeps its saved
+ * output either way, so its graph is left as is.
+ */
+function heldAtFinal(
+  renderId: string,
+  executable: readonly WorkflowNode[],
+  inRun: ReadonlySet<string>,
+  allNodes: readonly WorkflowNode[],
+  edges: readonly WorkflowEdge[],
+): Set<string> {
+  const asFinal = inRun.has(renderId) ? withRunOverrides(allNodes, renderRunOverrides(renderId, "final", inRun)) : allNodes
+  const runsAtFinal = new Set(previewRunnable(executable, asFinal, edges).map((n) => n.id))
+  return new Set(executable.filter((n) => !runsAtFinal.has(n.id)).map((n) => n.id))
 }

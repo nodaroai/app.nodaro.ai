@@ -16,7 +16,8 @@
  *  4. the run's confirm, priced on the overridden graph — never the canvas,
  *     where the render still reads Preview (it would gate the tail and quote
  *     less than the run bills). It itemises the run per node, names what is
- *     kept as is and (Update preview) what waits for Render final (U1).
+ *     kept as is, (Update preview) what waits for this Render final and what
+ *     waits for another Preview render's own (U1).
  *
  * Then the SAVE, which must succeed: the server runs from the saved workflow,
  * so an unsaved review would render the unedited plan.

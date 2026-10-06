@@ -153,6 +153,17 @@ describe("RunConfirmBreakdown", () => {
     expect(screen.queryByText("Clip Pack")).toBeNull() // no row of its own
   })
 
+  it("Update preview names both: what waits for this Render final, and what waits for another render's own", () => {
+    const preview = line("cut", "Apply Cut", 48, { quantity: { fanOut: 1, units: 48, unitKind: "minute" }, renderQuality: "proxy" })
+    render(
+      <RunConfirmBreakdown
+        info={info({ trigger: "update-preview", alwaysConfirm: false, lines: [preview], estimatedCredits: 48, kept: [], gated: ["Add Captions", "Render Clips"], waits: ["Clip Pack"] })}
+      />,
+    )
+    expect(screen.getByText("After Render final, not billed now: Add Captions, Render Clips")).toBeTruthy()
+    expect(screen.getByText("Waits for its own Render final: Clip Pack")).toBeTruthy()
+  })
+
   it("the waits line shows in a non-credit edition too, and its names translate", () => {
     useLocaleStore.setState({ locale: "he" })
     const he = LABELS_HE.node

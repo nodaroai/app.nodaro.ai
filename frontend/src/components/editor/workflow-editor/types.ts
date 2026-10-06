@@ -1300,12 +1300,13 @@ export interface RunConfirmInfo {
    * translating them.
    */
   readonly kept?: readonly string[];
-  /** Update preview only: the labels of the nodes the preview leaves for Render final (not billed now). */
+  /** Update preview only: the labels of the nodes the preview leaves for this render's Render final (not billed now). */
   readonly gated?: readonly string[];
   /**
-   * Render final only (round 2, decided 2026-10-06): the labels of the nodes
-   * behind another render still set to Preview after this one. They do not run
-   * in this Render final and wait for that render's own (not billed now).
+   * Render final (round 2, decided 2026-10-06) and Update preview (decided
+   * 2026-10-06): the labels of the nodes behind another render still set to
+   * Preview. They do not run in this run, and a Render final of this render
+   * would not run them either: they wait for that render's own (not billed now).
    */
   readonly waits?: readonly string[];
 }

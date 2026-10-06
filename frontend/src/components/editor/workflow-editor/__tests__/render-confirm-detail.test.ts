@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, beforeEach, afterEach } from "vitest"
 import { renderConfirmDetail, groupedLabels } from "../render-confirm-detail"
 import type { RunCreditLine } from "../types"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
@@ -9,6 +9,14 @@ import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
  * that keep their saved output ("Kept as is"), the nodes an Update preview
  * leaves for Render final, and which lines re-run before the render.
  */
+// The stop rule is rolled out under a flag; every case here is with it on.
+beforeEach(() => {
+  window.__NODARO_RUNTIME__ = { previewStopRule: true }
+})
+afterEach(() => {
+  delete window.__NODARO_RUNTIME__
+})
+
 const node = (id: string, type: string, data: Record<string, unknown> = {}): WorkflowNode =>
   ({ id, type, position: { x: 0, y: 0 }, data: { label: id, ...data } }) as WorkflowNode
 const wire = (source: string, target: string, targetHandle?: string): WorkflowEdge =>
@@ -114,10 +122,30 @@ describe("renderConfirmDetail — another Preview render after this one", () => 
     expect(d.waits).toEqual([])
   })
 
-  it("Update preview keeps its own line: everything it leaves out waits for this render's Render final", () => {
+  // Decided 2026-10-06: Update preview names them on the same separate line.
+  // A Render final of this render would run up to the second render (it runs
+  // as a Preview), so those wait for THIS Render final; what the second render
+  // holds back waits for its own.
+  it("Update preview: what only this render's Render final runs is gated; what the second Preview render holds back waits for its own", () => {
     const d = renderConfirmDetail("cut", "update-preview", exec, [line(CUT, 48)], nodes, edges)
+    expect(d.gated).toEqual(["Add Captions", "Render Clips"])
+    expect(d.waits).toEqual(["Clip Pack", "Caption Clips"])
+  })
+
+  it("Update preview: a second render set to Final holds nothing back, so everything waits for this Render final", () => {
+    const final2 = node("cut2", "apply-edl", { label: "Render Clips", quality: "final" })
+    const all = nodes.map((n) => (n.id === "cut2" ? final2 : n))
+    const d = renderConfirmDetail("cut", "update-preview", [CUT, CAP, final2, PACK, POST], [line(CUT, 48)], all, edges)
     expect(d.waits).toEqual([])
     expect(d.gated).toEqual(["Add Captions", "Render Clips", "Clip Pack", "Caption Clips"])
+  })
+
+  it("Update preview with no second render: nothing waits for another render", () => {
+    const proxy = node("cut", "apply-edl", { label: "Apply Cut", quality: "proxy" })
+    const all = TIGHTEN.nodes.map((n) => (n.id === "cut" ? proxy : n))
+    const d = renderConfirmDetail("cut", "update-preview", [proxy, CAP], [line(proxy, 48)], all, TIGHTEN.edges)
+    expect(d.gated).toEqual(["Add Captions"])
+    expect(d.waits).toEqual([])
   })
 })
 
