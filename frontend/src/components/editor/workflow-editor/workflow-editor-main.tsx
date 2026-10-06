@@ -107,6 +107,7 @@ import { handleCreateNodesFromWriter as createNodesFromWriter, handleRunAllWrite
 import { resolveManualEdit } from "./execute-node";
 import { extractNodeOutput } from "./execution-graph";
 import { orderNodesParentFirst } from "./group-coords";
+import { unloadNeedsPrompt, unloadSaveRequest } from "./unload-save";
 import { FreeCutImportPicker } from "../freecut-import-picker";
 import { studioWorkflowUrl } from "@/lib/studio";
 import { hasSavableChanges, isSaveRefused } from "@/hooks/workflow-save-refusal";
@@ -664,65 +665,14 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
   useEffect(() => {
     function handleBeforeUnload() {
-      if (!projectId) return;
-      const state = useWorkflowStore.getState();
-      // Read-only (Studio) workflows must never be persisted from the editor.
-      // Auto-layout routes through the controlled onNodesChange and flips
-      // isDirty even for read-only workflows, so the isDirty check below is
-      // not enough on its own — bail before building/PATCHing the payload.
-      if (state.isReadOnly) return;
-      // A write this workflow already refused would be refused again.
-      if (isSaveRefused(state)) return;
-      if (!state.isDirty || state.nodes.length === 0) return;
-
-      const supabaseUrl = runtimeSupabaseUrl() || undefined;
-      const supabaseKey = runtimeSupabaseAnonKey() || undefined;
-      const wfId = state.workflowId;
-      const token = cachedAccessTokenRef.current;
-      if (!supabaseUrl || !supabaseKey || !wfId || !token) return;
-
-      const payload = {
-        nodes: structuredClone(orderNodesParentFirst(state.nodes)),
-        edges: structuredClone(state.edges),
-        settings: {
-          // MUST mirror the normal save in use-workflow-persistence.ts (~L534):
-          // PostgREST PATCH REPLACES the whole `settings` JSONB column, so any
-          // subfield omitted here is DESTROYED on unload. Omitting
-          // presentationSettings + viewport silently wiped all published-app I/O
-          // curation (inputItems/outputItems/cardMeta/view modes/share settings)
-          // and the saved viewport whenever a tab was closed mid-edit.
-          characterDefinitions: structuredClone(state.characterDefinitions),
-          flowPromptTemplates: structuredClone(state.flowPromptTemplates),
-          presentationSettings: structuredClone(state.presentationSettings),
-          viewport: state.savedViewport,
-        },
-      };
-
-      // Optimistic locking on the unload-flush: PostgREST treats each
-      // query-string `<col>=eq.<v>` filter as an AND'd predicate, so
-      // adding `&updated_at=eq.<loadedUpdatedAt>` mirrors the in-app
-      // `.eq("updated_at", ...)` chain. If another device wrote first
-      // the row no longer matches, the PATCH is a silent 0-row no-op
-      // (better than overwriting remote with stale fields the user
-      // never got a chance to merge). When loadedUpdatedAt is null we
-      // fall back to last-write-wins — a brand-new workflow that has
-      // never been saved has no version to lock against.
-      const lockedAt = state.loadedUpdatedAt;
-      const url = lockedAt
-        ? `${supabaseUrl}/rest/v1/workflows?id=eq.${wfId}&updated_at=eq.${encodeURIComponent(lockedAt)}`
-        : `${supabaseUrl}/rest/v1/workflows?id=eq.${wfId}`;
-
-      fetch(url, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: supabaseKey,
-          Authorization: `Bearer ${token}`,
-          Prefer: "return=minimal",
-        },
-        body: JSON.stringify(payload),
-        keepalive: true,
-      }).catch(() => {});
+      // Writes the review inspector's pending edit first, then reads the store.
+      const request = unloadSaveRequest({
+        projectId,
+        supabaseUrl: runtimeSupabaseUrl() || undefined,
+        supabaseKey: runtimeSupabaseAnonKey() || undefined,
+        token: cachedAccessTokenRef.current,
+      });
+      if (request) fetch(request.url, request.init).catch(() => {});
     }
 
     window.addEventListener("beforeunload", handleBeforeUnload);
@@ -1195,11 +1145,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
   useEffect(() => {
     function handleBeforeUnload(e: BeforeUnloadEvent) {
-      // Plain `isDirty`, refused saves included: the browser's own prompt
-      // offers nothing it cannot honour, and an accidental close is the one
-      // way to lose results that Clone & Remix could still have kept.
-      const isDirty = useWorkflowStore.getState().isDirty;
-      if (!isDirty) return;
+      // Plain `isDirty` with the pending review written (unload-save.ts).
+      if (!unloadNeedsPrompt()) return;
       e.preventDefault();
     }
     window.addEventListener("beforeunload", handleBeforeUnload);

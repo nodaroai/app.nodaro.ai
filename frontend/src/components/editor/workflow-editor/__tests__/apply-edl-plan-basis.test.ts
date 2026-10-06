@@ -24,7 +24,7 @@ vi.mock("@/hooks/use-workflow-store", () => ({
 }))
 
 import { getListFanOutForNode } from "../node-input-resolver"
-import { browserRenderPlanBasis } from "../apply-edl-stamps"
+import { browserRenderPlanBasis, currentRenderPlanBasis } from "../apply-edl-stamps"
 import fixture from "../../../../../../backend/src/services/workflow-engine/__tests__/fixtures/apply-edl-clip-key.json"
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -81,6 +81,26 @@ describe("the plan basis of a render the browser runs", () => {
       renderReadBasis({ ...tighten, segments: [tighten.segments[1]], dropped: [] }),
     )
   })
+})
+
+describe("the plan basis a render would stamp now (A3-2: the review's freshness check)", () => {
+  // The inspector asks what a run of the render WITH its pass-through nodes
+  // (Render final, Update preview) would cut: the plan's current value, also
+  // behind Camera Switch. A take whose planBasis equals it is fresh.
+  for (const c of fixture.cases) {
+    it(`${c.name}: the clip its key names`, () => {
+      const render = asNode(fixture.render)
+      const nodes = [asNode(planOf(c)), ...c.nodes.map(asNode), render]
+      const edges = c.edges as any[]
+      storeNodes = nodes
+      storeEdges = edges
+      const plan = planFanOut(getListFanOutForNode(render, nodes, edges), render.type, render.data)
+      const rows: Array<number | undefined> = plan ? plan.rows : [undefined]
+      rows.forEach((row, k) => {
+        expect(currentRenderPlanBasis(render.id, nodes, edges, row)).toBe(renderReadBasis(planClipOf(plan ? c.expected[k] : c.expected[0])))
+      })
+    })
+  }
 })
 
 describe("execute-node stamps through the helper, on the list row only", () => {

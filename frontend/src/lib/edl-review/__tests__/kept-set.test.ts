@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { normalizeEdl } from "@nodaro/shared"
-import { cutRange, keptSetOf, restoredOf, snapToWords } from "../kept-set"
+import { cutRange, cutReason, keptSetOf, reasonSpans, restoredOf, snapToWords } from "../kept-set"
 import { keepReason, keepSpan } from "./review-fixtures"
 
 const iv = (inMs: number, outMs: number) => ({ inMs, outMs })
@@ -117,5 +117,34 @@ describe("restoredOf: derived from K, never stored", () => {
     const words = [word("um", 1000, 1300)]
     const k = cutRange(keepSpan(K0, plan.dropped![0]), iv(1000, 1300), words)
     expect(restoredOf(plan, k)).toEqual([])
+  })
+})
+
+describe("cutReason: the reasons box's cut (A3-2)", () => {
+  it("cuts every span the plan dropped for the reason, wherever K keeps it again", () => {
+    const k = keepReason(K0, plan, "tangent")
+    expect(cutReason(k, plan, "tangent")).toEqual(K0)
+  })
+
+  it("cuts only that reason: a silence restored inside a cut tangent stays as K has it", () => {
+    const k = keepReason(keepReason(K0, plan, "tangent"), plan, "filler")
+    expect(cutReason(k, plan, "filler")).toEqual(keepReason(K0, plan, "tangent"))
+  })
+
+  it("is idempotent, and a reason nothing was dropped for changes nothing", () => {
+    const k = keepReason(K0, plan, "silence")
+    const once = cutReason(k, plan, "silence")
+    expect(cutReason(once, plan, "silence")).toEqual(once)
+    expect(cutReason(k, plan, "breath")).toEqual(k)
+  })
+
+  it("never cuts time the plan kept: the reviewer's own cuts (manual) have no plan spans to cut again", () => {
+    // K keeps no history, so a manual cut once restored is the plan's kept time.
+    expect(cutReason(K0, plan, "manual")).toEqual(K0)
+  })
+
+  it("reasonSpans lives beside it: the plan's spans of a reason, and for manual the plan's kept time too", () => {
+    expect(reasonSpans(plan, "tangent")).toEqual([iv(3000, 6000)])
+    expect(reasonSpans(plan, "manual")).toEqual(K0)
   })
 })

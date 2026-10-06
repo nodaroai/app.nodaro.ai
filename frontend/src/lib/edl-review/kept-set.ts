@@ -11,7 +11,7 @@
  * K holds no history: a span restored and then cut again is simply cut, and
  * shows the plan's reason again. Every operation returns a new canonical set
  * (intervals.ts) and is idempotent — applying it twice is applying it once.
- * Cuts live here; restores live in restore.ts, because a restore the render
+ * Cuts live here (`cutRange`, `cutReason`); restores live in restore.ts, because a restore the render
  * rule would refuse is locked (decided 2026-10-05) and a cut never is.
  */
 import type { Edl, EdlDropped } from "@nodaro/shared"
@@ -82,6 +82,28 @@ export function snapToWords(range: Interval, words: readonly TimedUnit[], offset
 export function cutRange(kept: KeptSet, range: Interval, words: readonly TimedUnit[], offsetMs = 0): KeptSet {
   const cut = snapToWords(range, words, offsetMs)
   return cut ? subtractIntervals(kept, [cut]) : kept
+}
+
+/** The time `reason` dropped, as canonical spans: the plan's spans of that
+ *  reason, or for "manual" the plan's kept time (the reviewer's own cuts are
+ *  the part of it K no longer keeps). */
+export function reasonSpans(base: Edl, reason: string): readonly Interval[] {
+  const spans: Interval[] = (base.dropped ?? []).filter((d) => d.reason === reason)
+  if (reason === MANUAL_REASON) spans.push(...keptSetOf(base))
+  return toIntervalSet(spans)
+}
+
+/**
+ * Cut every span the plan dropped for `reason` again: the reasons box's cut,
+ * the partner of `restoreReason` (restore.ts). It cuts only the plan's own
+ * spans of that reason, never time the plan kept, so for "manual" (the
+ * reviewer's own cuts) it changes nothing: K keeps no history, and a manual
+ * cut once restored is the plan's kept time again. Cuts are never locked, and
+ * like every operation it is idempotent.
+ */
+export function cutReason(kept: KeptSet, base: Edl, reason: string): KeptSet {
+  const spans = toIntervalSet((base.dropped ?? []).filter((d) => d.reason === reason))
+  return spans.length === 0 ? kept : subtractIntervals(kept, spans)
 }
 
 /** What the plan dropped that K keeps again: for each of the plan's dropped

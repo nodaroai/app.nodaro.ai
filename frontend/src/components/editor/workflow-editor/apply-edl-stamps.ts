@@ -13,11 +13,21 @@
  * Camera Switch never is: the switch did not run with it, and its saved EDL can
  * come from an older plan (the same-run rule, R1 a). Such a take reads as
  * unknown, never as current.
+ *
+ * `currentRenderPlanBasis` is the same rule with the pass-through nodes in the
+ * run: the basis Render final or Update preview would stamp now, which the
+ * review inspector compares a take with (A3-2).
  */
 import { renderPlanBasis, type RenderGraphEdge, type RenderGraphNode } from "@nodaro/shared"
 import type { WorkflowNode } from "@/types/nodes"
 import { editPlanOutputOf } from "@/lib/edit-plan-saved-output"
 import { extractNodeOutputAsList } from "./node-input-resolver"
+
+/** The plan value a render iteration reads, as the canvas holds the plan. */
+const planOutputOf = (planNode: RenderGraphNode): unknown => {
+  const node = planNode as WorkflowNode
+  return extractNodeOutputAsList(node, "edl") ?? editPlanOutputOf(node.data as Readonly<Record<string, unknown>>)?.json
+}
 
 export function browserRenderPlanBasis(
   renderId: string,
@@ -29,11 +39,24 @@ export function browserRenderPlanBasis(
     renderId,
     nodes,
     edges,
-    (planNode) => {
-      const node = planNode as WorkflowNode
-      return extractNodeOutputAsList(node, "edl") ?? editPlanOutputOf(node.data as Readonly<Record<string, unknown>>)?.json
-    },
+    planOutputOf,
     row,
     new Set([renderId]),
   )
+}
+
+/**
+ * The plan basis a run of the render WITH its pass-through nodes would stamp
+ * now (Render final, Update preview: Camera Switch re-runs first) — the plan's
+ * current value, read as the browser lane reads it. The review inspector
+ * compares a take's `planBasis` with it (A3-2): equal means the take was cut
+ * from the plan as it stands, also behind Camera Switch.
+ */
+export function currentRenderPlanBasis(
+  renderId: string,
+  nodes: readonly RenderGraphNode[],
+  edges: readonly RenderGraphEdge[],
+  row: number | undefined,
+): string | undefined {
+  return renderPlanBasis(renderId, nodes, edges, planOutputOf, row, new Set(nodes.map((n) => n.id)))
 }

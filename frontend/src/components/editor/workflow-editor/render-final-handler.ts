@@ -10,7 +10,7 @@
  *
  *  1. Apply EDL's rule on what the render would send (TA1 a);
  *  2. a newer run the canvas does not show (TA3 c): the final would otherwise
- *     bill an older plan;
+ *     bill an older plan (newer-run-check.ts, the review inspector's check too);
  *  3. Render final only: nothing changed since the last final (TA15 a), which
  *     asks first rather than refuses;
  *  4. the run's confirm, priced on the overridden graph — never the canvas,
@@ -29,12 +29,11 @@
 import { PREVIEW_RENDER_NODE_TYPES, withRunOverrides } from "@nodaro/shared"
 import { toast } from "sonner"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { getJobStatus, listWorkflowExecutions, runWorkflow, WorkflowAlreadyRunningError, withDedupRaceRetry } from "@/lib/api"
+import { getJobStatus, runWorkflow, WorkflowAlreadyRunningError, withDedupRaceRetry } from "@/lib/api"
 import { generateIdempotencyKey } from "@/lib/idempotency-key"
 import { tx } from "@/lib/i18n"
 import { NO_EDL } from "@/lib/edl-validity"
 import { runtimePreviewStopRule } from "@/lib/runtime-config"
-import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 import type { ExecutionContext } from "./types"
 import { collapseExpandedClones } from "./execution-graph"
 import { rejectAllManualEdits } from "./execute-node"
@@ -42,8 +41,8 @@ import { ensureVideoLinksBeforeRun } from "./video-link-run-gate"
 import { previewRunnable } from "./preview-gate"
 import { liveExecutable } from "./run-from-here-set"
 import { renderFinalRunSet, renderRunOverrides } from "./render-final-set"
-import { finalIsUnchanged, newerRunPatches, renderRuleVerdict } from "./render-final-checks"
-import type { ListedRun } from "./newer-run-review"
+import { finalIsUnchanged, renderRuleVerdict } from "./render-final-checks"
+import { newerRunOnServer, refuseForNewerRun } from "./newer-run-check"
 import {
   attachToRunningExecution,
   clearConnectedListRows,
@@ -66,43 +65,6 @@ function ruleRefusalText(issues: readonly string[]): string {
   if (issues.length === 1 && issues[0] === NO_EDL) return tx("renderFinal.noEdl")
   const shown = issues.slice(0, ISSUES_SHOWN).join("; ")
   return tx("renderFinal.ruleRefusal", { issues: issues.length > ISSUES_SHOWN ? `${shown}; …` : shown })
-}
-
-/**
- * Has a run ended that this canvas does not show? Asked of the newest ended
- * editor run, exactly as reopening loads it. A listing that fails answers
- * "no": a check that cannot be made never stops a run.
- */
-async function newerRunOnServer(
-  workflowId: string,
-  nodes: readonly WorkflowNode[],
-  edges: readonly WorkflowEdge[],
-): Promise<Record<string, WorkflowNode["data"]> | null> {
-  try {
-    // Loaded on demand: the persistence hook is a heavy module this click path
-    // should not drag into every editor surface that imports the run handlers.
-    const { TERMINAL_RESTORABLE_STATUSES, restoreEndedEditorRun } = await import("@/hooks/use-workflow-persistence")
-    const { data } = await listWorkflowExecutions(workflowId, { limit: 10, status: TERMINAL_RESTORABLE_STATUSES, source: "editor" })
-    const patches = newerRunPatches(nodes, edges, data as unknown as readonly ListedRun[], restoreEndedEditorRun)
-    return Object.keys(patches).length > 0 ? patches : null
-  } catch {
-    return null
-  }
-}
-
-/** Tell the person a newer run exists, with the one click that loads it. */
-function refuseForNewerRun(patches: Record<string, WorkflowNode["data"]>): void {
-  toast.error(tx("renderFinal.newerRun"), {
-    duration: 12_000,
-    action: {
-      label: tx("renderFinal.loadNewerRun"),
-      onClick: () => {
-        const { updateNodeData } = useWorkflowStore.getState()
-        for (const [id, data] of Object.entries(patches)) updateNodeData(id, data as Record<string, unknown>)
-        toast.success(tx("renderFinal.newerRunLoaded"))
-      },
-    },
-  })
 }
 
 /** A save that came back refused (`SaveResult`), as opposed to one that did not say. */

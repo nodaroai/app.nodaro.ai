@@ -27,8 +27,10 @@ import { buildEffectiveEdl, findEffectiveEdlIssues, type ApplyEdlIssue, type App
 import type { Edl } from "@nodaro/shared"
 import type { ApplyEdlRenderContext } from "@/lib/edl-validity"
 import { buildEdited } from "./build-edited"
-import { spanMinus, toIntervalSet, unionIntervals, type Interval } from "./intervals"
-import { keptSetOf, MANUAL_REASON, type KeptSet } from "./kept-set"
+import { spanMinus, toIntervalSet, unionIntervals, type Interval, type IntervalSet } from "./intervals"
+import { keptSetOf, reasonSpans, type KeptSet } from "./kept-set"
+
+export { reasonSpans }
 
 /** The render the review is for: the Apply EDL node's settings and its wired
  *  `sources`, as its panel badge judges them. */
@@ -87,12 +89,37 @@ const problemOf = (issue: ApplyEdlIssue): string => ("sourceId" in issue ? `${is
 
 const problemsOf = (issues: readonly ApplyEdlIssue[]): ReadonlySet<string> => new Set(issues.map(problemOf))
 
-/** The judge of one plan's restores: its own problems are found once. */
-function restoreJudge(base: Edl, render: ReviewRenderContext): (kept: KeptSet, span: Interval) => RestoreVerdict {
-  const planProblems = problemsOf(planIssues(base, render))
-  return (kept, span) => {
-    if (keepsAll(kept, span)) return { ok: true }
-    const after = renderFindings(base, unionIntervals(kept, toIntervalSet([span])), render)
+/**
+ * The plan's own problems for a render, found once per plan object and render
+ * settings: every judgement of a review compares against them, and finding
+ * them is a full run of the rule (half of a judgement on a 3-hour plan). Keyed
+ * by the plan OBJECT, which is never mutated in place (the inspector holds one
+ * normalized plan per basis).
+ */
+const planProblemsByBase = new WeakMap<Edl, Map<string, ReadonlySet<string>>>()
+
+function planProblemsOf(base: Edl, render: ReviewRenderContext): ReadonlySet<string> {
+  const key = JSON.stringify([render.output, render.crossfadeMs, render.sources])
+  let byRender = planProblemsByBase.get(base)
+  if (!byRender) {
+    byRender = new Map()
+    planProblemsByBase.set(base, byRender)
+  }
+  let problems = byRender.get(key)
+  if (!problems) {
+    problems = problemsOf(planIssues(base, render))
+    byRender.set(key, problems)
+  }
+  return problems
+}
+
+/** The judge of one plan's restores. It judges a set of spans restored
+ *  together; one span is a set of one. */
+function restoreJudge(base: Edl, render: ReviewRenderContext): (kept: KeptSet, spans: IntervalSet) => RestoreVerdict {
+  const planProblems = planProblemsOf(base, render)
+  return (kept, spans) => {
+    if (spans.every((span) => keepsAll(kept, span))) return { ok: true }
+    const after = renderFindings(base, unionIntervals(kept, spans), render)
     if (after.every((issue) => planProblems.has(problemOf(issue)))) return { ok: true }
     const had = problemsOf(renderFindings(base, kept, render))
     const added = after.find((issue) => !planProblems.has(problemOf(issue)) && !had.has(problemOf(issue)))
@@ -109,7 +136,7 @@ function restoreJudge(base: Edl, render: ReviewRenderContext): (kept: KeptSet, s
  * check's code as the reason.
  */
 export function canRestore(base: Edl, kept: KeptSet, span: Interval, render: ReviewRenderContext): RestoreVerdict {
-  return restoreJudge(base, render)(kept, span)
+  return restoreJudge(base, render)(kept, toIntervalSet([span]))
 }
 
 /** Keep a dropped span's time again: one of the plan's dropped spans, or a
@@ -122,15 +149,6 @@ export function restoreSpan(kept: KeptSet, base: Edl, span: Interval, render: Re
   return { kept: keepsAll(kept, span) ? kept : unionIntervals(kept, toIntervalSet([span])) }
 }
 
-/** The time `reason` dropped, as canonical spans: the plan's spans of that
- *  reason, or for "manual" the plan's kept time (the reviewer's own cuts are
- *  the part of it K no longer keeps). */
-export function reasonSpans(base: Edl, reason: string): readonly Interval[] {
-  const spans: Interval[] = (base.dropped ?? []).filter((d) => d.reason === reason)
-  if (reason === MANUAL_REASON) spans.push(...keptSetOf(base))
-  return toIntervalSet(spans)
-}
-
 /**
  * Keep every span dropped for `reason`, except those whose restore is locked.
  * For the plan's reasons these are its spans of that reason (two that overlap
@@ -138,15 +156,24 @@ export function reasonSpans(base: Edl, reason: string): readonly Interval[] {
  * restoring the reason undoes them. A reason nothing was dropped for changes
  * nothing.
  *
- * Whether a span may be restored depends on what else is kept (a neighbour's
- * restore can move the segment its time joins), so the spans are tried in time
- * order, again and again, until a pass restores nothing more. Every span left
- * was refused against the K returned, so restoring the reason again changes
- * nothing: the operation stays idempotent.
+ * THE FAST PATH. The whole span set is judged first, in one judgement: when
+ * restoring all of it adds no problem the plan or K lacks, that is the answer
+ * (restoring all 844 fillers of a 3-hour episode is one judgement, not 844).
+ * It never restores less than the per-span loop: when that loop locks nothing,
+ * each of its steps added no new problem, so neither does the whole set.
+ *
+ * Otherwise, the per-span loop. Whether a span may be restored depends on what
+ * else is kept (a neighbour's restore can move the segment its time joins), so
+ * the spans are tried in time order, again and again, until a pass restores
+ * nothing more. Every span left was refused against the K returned, so
+ * restoring the reason again changes nothing: the operation stays idempotent.
  */
 export function restoreReason(kept: KeptSet, base: Edl, reason: string, render: ReviewRenderContext): RestoreReasonResult {
   const spans = reasonSpans(base, reason)
+  const pending = spans.filter((span) => !keepsAll(kept, span))
+  if (pending.length === 0) return { kept, locked: [] }
   const judge = restoreJudge(base, render)
+  if (judge(kept, pending).ok) return { kept: unionIntervals(kept, pending), locked: [] }
   let current = kept
   let locked: LockedSpan[] = []
   for (let restored = true; restored; ) {
@@ -154,7 +181,7 @@ export function restoreReason(kept: KeptSet, base: Edl, reason: string, render: 
     locked = []
     for (const span of spans) {
       if (keepsAll(current, span)) continue
-      const verdict = judge(current, span)
+      const verdict = judge(current, [span])
       if (verdict.ok) {
         current = unionIntervals(current, toIntervalSet([span]))
         restored = true
@@ -165,4 +192,3 @@ export function restoreReason(kept: KeptSet, base: Edl, reason: string, render: 
   }
   return { kept: current, locked }
 }
-

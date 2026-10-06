@@ -18,7 +18,8 @@
  *  - only the reader module calls the shared `editPlanSavedOutput`;
  *  - the reviewed sites (§6 item 11 of the review design) call the reader;
  *  - a plan landing clears the review only when it is a different plan, and
- *    only through `editPlanResultPatch` (decided 2026-10-05).
+ *    only through `editPlanResultPatch` (decided 2026-10-05); the one other
+ *    clearing write is the inspector's `clearReview` (R7 a, decided 2026-10-06).
  *
  * What it cannot see: a generic read (no Edit Plan branch) that an Edit Plan
  * reaches. The engines' own test (edit-plan-review-engines.test.ts) covers the
@@ -285,7 +286,7 @@ describe("a plan landing keeps the review made on it (decided 2026-10-05)", () =
     ]) expect(CLEARS_REVIEW.test(line), line).toBe(false)
   })
 
-  it("no writer in the editor, the server or @nodaro/shared clears the review outside editPlanResultPatch", () => {
+  it("no writer in the editor, the server or @nodaro/shared clears the review outside editPlanResultPatch and clearReview", () => {
     const files = [
       ...FILES.map((f) => ({ ...f, where: `frontend/src/${f.where}` })),
       ...packageSources("backend", "src"),
@@ -299,9 +300,20 @@ describe("a plan landing keeps the review made on it (decided 2026-10-05)", () =
         .filter((line) => CLEARS_REVIEW.test(line))
         .map((line) => `${where}: ${line.trim()}`),
     )
-    expect(offenders.filter((o) => !o.startsWith("packages/shared/src/edit-plan-review.ts:")), "land a plan through editPlanResultPatch").toEqual([])
-    // The helper itself is the one clearing write.
-    expect(offenders.length).toBe(1)
+    // Exactly two clearing sites (R7 a, decided 2026-10-06): a plan landing
+    // (`editPlanResultPatch`) and the inspector's `clearReview` — "Reset to
+    // plan", K back at the plan's, discarding an edit made on an earlier plan.
+    const SITES = ["packages/shared/src/edit-plan-review.ts:", "frontend/src/lib/edl-review/write-review.ts:"]
+    expect(offenders.filter((o) => !SITES.some((site) => o.startsWith(site))), "land a plan through editPlanResultPatch").toEqual([])
+    expect(offenders.map((o) => o.slice(0, o.indexOf(":") + 1)).sort()).toEqual([...SITES].sort())
+  })
+
+  it("the inspector's clearing write is clearReview, and only it", () => {
+    const text = FILES.find(({ where }) => where === "lib/edl-review/write-review.ts")!.text
+    const body = text.slice(text.indexOf("export function clearReview("))
+    const clearing = text.split("\n").filter((line) => CLEARS_REVIEW.test(line))
+    expect(clearing).toHaveLength(1)
+    expect(body.slice(0, body.indexOf("\n}") + 2)).toContain(clearing[0]!.trim())
   })
 
   it("every place a plan lands goes through editPlanResultPatch", () => {

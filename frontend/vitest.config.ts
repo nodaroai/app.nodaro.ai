@@ -1,11 +1,16 @@
 import { defineConfig, configDefaults } from "vitest/config"
 import path from "path"
+import { coverageRequested, TIMING_UNDER_COVERAGE } from "./src/test/coverage-flag"
 
 export default defineConfig({
   test: {
     environment: "jsdom",
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
+    // Coverage slows timed code several-fold on any machine; the latency
+    // budgets scale for it (three-hour-fixture.ts `budgetMs`). Omitted, not
+    // "0", when off so a developer's own export is left alone.
+    env: coverageRequested(process.argv) ? { [TIMING_UNDER_COVERAGE]: "1" } : {},
     // The picker-ui workspace package must be processed by vite (not
     // externalized to Node ESM): externalized it resolves react from ITS OWN
     // node_modules — a second React copy that crashes every hook ("null
