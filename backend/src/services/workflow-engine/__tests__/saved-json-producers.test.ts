@@ -80,7 +80,9 @@ const SAVED: Record<string, unknown> = {
   vocalUrl: url("mp3"),
 }
 /** A json result is an object for most producers and an array for a few (Content Ideas, Social Search, a Clips plan). */
-const JSON_SHAPES: readonly unknown[] = [{ marker: MARK }, [POST]]
+/** A Telegram Channel Feed post: a numeric id and a text are what telegramPostsFrom needs to count it. */
+const FEED_POST = { id: 1, channel: MARK, postUrl: `https://t.me/${MARK}/1`, text: MARK, media: [] }
+const JSON_SHAPES: readonly unknown[] = [{ marker: MARK }, [POST], [FEED_POST]]
 
 const unmarked = (value: unknown): unknown => JSON.parse(JSON.stringify(value).split(MARK).join(PLAIN))
 const handsOnMarkedJson = (type: string, data: Record<string, unknown>): boolean => {

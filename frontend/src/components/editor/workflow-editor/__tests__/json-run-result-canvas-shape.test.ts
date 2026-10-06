@@ -24,6 +24,13 @@ vi.mock("@/lib/supabase", () => ({ createClient: () => ({}) }))
 const job = vi.hoisted(() => ({ row: undefined as unknown }))
 const startJob = vi.hoisted(() => () => Promise.resolve({ jobId: "c0ffee00-0000-4000-8000-0000000000bb" }))
 const describeResult = vi.hoisted(() => ({ value: undefined as unknown }))
+/** What the feed's route answers a canvas run (the posts, their digest, the position). */
+const feedRun = vi.hoisted(() => {
+  const post = (id: number) => ({ id, channel: "acme", postUrl: `https://t.me/acme/${id}`, text: `post ${id}`, media: [] })
+  const posts = [post(10), post(11)]
+  const text = "post 10\n\n---\n\npost 11"
+  return { jobId: "c0ffee00-0000-4000-8000-0000000000fe", posts, latestId: 11, text, generatedText: text, count: 2, cursor: { lastSeenId: 11, advanced: true, mode: "poll" as const, stateful: true } }
+})
 
 vi.mock("@/lib/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/api")>()),
@@ -34,6 +41,7 @@ vi.mock("@/lib/api", async (importOriginal) => ({
   editPlan: vi.fn(startJob),
   silenceDetectApi: vi.fn(startJob),
   audioSyncApi: vi.fn(startJob),
+  telegramChannelFetchApi: vi.fn(() => Promise.resolve(feedRun)),
 }))
 vi.mock("../poll-job", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../poll-job")>()),
@@ -114,6 +122,8 @@ const SCENARIOS: Record<string, Scenario> = {
   "extract-field:url-list": { data: { field: "url", outputType: "list" }, upstream: true },
   "extract-field:json": { data: { field: "meta", outputType: "json" }, upstream: true },
   "json-process": { data: { mode: "visual", inputPath: "", filters: [], projections: ["title"] }, upstream: true },
+  // The feed answers from its route directly (no job to poll); its posts land on generatedJson, the digest on generatedText.
+  "telegram-channel-feed": { data: { channel: "acme", limit: 5 } },
 }
 
 const typeOf = (key: string) => key.split(":")[0]!

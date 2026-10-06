@@ -533,7 +533,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "telegram-trigger": return <TelegramTriggerConfig {...configProps} />
     // Keyed by node: a draft typed for one trigger never lands on another.
     case "telegram-account-trigger": return <TelegramAccountTriggerConfig key={selectedNodeId ?? ""} {...configProps} onUpdate={updateAccountTrigger} />
-    case "telegram-channel-feed": return <TelegramChannelFeedConfig {...configProps} />
+    case "telegram-channel-feed": return <TelegramChannelFeedConfig {...configProps} nodeId={selectedNodeId} />
     case "sub-workflow-input": return <SubWorkflowInputConfig {...configProps} />
     case "sub-workflow-output": return <SubWorkflowOutputConfig {...configProps} />
     case "sub-workflow": return <SubWorkflowConfig {...configProps} />

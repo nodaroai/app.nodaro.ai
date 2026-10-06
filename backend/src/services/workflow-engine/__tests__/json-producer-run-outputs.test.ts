@@ -39,6 +39,10 @@ const PAGES = [
 ]
 const ADS = [{ adArchiveId: "ad-1", pageName: "Brand", body: "Ad one" }, { adArchiveId: "ad-2", pageName: "Brand", body: "Ad two" }]
 const IG_POSTS = [{ id: "ig-1", caption: "First", displayUrl: "https://media.example.test/ig-1.jpg" }]
+/** A Telegram Channel Feed post as the feed's route writes it (TelegramChannelPost). */
+const feedPost = (id: number) => ({ id, channel: "acme", postUrl: `https://t.me/acme/${id}`, text: `post ${id}`, media: [] })
+const FEED_POSTS = [feedPost(10), feedPost(11)]
+const FEED_TEXT = "post 10\n\n---\n\npost 11"
 /** A job-backed node's output, from the job row its job wrote (pinned input). */
 const fromJobRow = (type: keyof typeof jobRows) => buildNodeOutputFromJobData(jobRows[type] as Record<string, unknown>, type)
 
@@ -61,6 +65,11 @@ function computeOutputs(): Record<string, unknown> {
       "instagram-scrape": buildNodeOutputFromJobData({ json: IG_POSTS }, "instagram-scrape"),
       // Every post found comes back; the node passes on the first `pickTop`.
       "social-search": buildNodeOutputFromJobData({ json: [post("p1"), post("p2"), post("p3")], pickTop: 2 }, "social-search"),
+      // The feed's route writes the posts on json, one per listResults item, and the digest on text / generatedText.
+      "telegram-channel-feed": buildNodeOutputFromJobData(
+        { json: FEED_POSTS, listResults: FEED_POSTS.map((p) => JSON.stringify(p)), text: FEED_TEXT, generatedText: FEED_TEXT, count: 2, latestId: 11 },
+        "telegram-channel-feed",
+      ),
       // The job row the route writes: the floored picker json, the pickers it filled, usage.
       "describe-to-picker": fromJobRow("describe-to-picker"),
       // The job-backed json producers, from the rows their jobs write.

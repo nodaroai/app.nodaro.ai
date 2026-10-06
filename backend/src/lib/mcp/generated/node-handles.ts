@@ -170,7 +170,7 @@ export const NODE_HANDLES: Readonly<Record<string, NodeHandleSpec>> = {
   "switchx": { inputs: ["video", "image", "mask", "mask-video", "prompt"], outputs: ["video"] },
   "telegram-account-send": { inputs: ["in"], outputs: [] },
   "telegram-account-trigger": { inputs: [], outputs: ["out", "videoLink", "postText", "postLink"] },
-  "telegram-channel-feed": { inputs: [], outputs: ["text"] },
+  "telegram-channel-feed": { inputs: [], outputs: ["json", "text"] },
   "telegram-post": { inputs: ["in"], outputs: [] },
   "telegram-trigger": { inputs: [], outputs: ["out"] },
   "teleport-receive": { inputs: ["in"], outputs: ["out"] },

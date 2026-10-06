@@ -1601,3 +1601,5 @@ export * from "./edit-plan-review.js"
 export { VIDEO_DURATION_AUTO, isAutoVideoDuration } from "./video-duration-auto.js"
 // Legacy handle ids → the canonical id every reader rewires them to (editor load, MCP writes, Copilot).
 export * from "./handle-aliases.js"
+// Telegram Channel Feed: the post shape, the digest, and the cursor rule (where the feed stands after a run).
+export * from "./telegram-channel.js"

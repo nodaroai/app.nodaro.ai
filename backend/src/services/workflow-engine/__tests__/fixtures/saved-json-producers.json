@@ -12,6 +12,7 @@
   "meta-ads-scrape": "generatedJson",
   "silence-detect": "generatedJson",
   "social-search": "generatedJson",
+  "telegram-channel-feed": "generatedJson",
   "transcribe": "generatedJson",
   "video-analysis": "generatedJson",
   "video-audit": "generatedJson",

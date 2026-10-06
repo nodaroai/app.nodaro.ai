@@ -2,14 +2,15 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
 
 /**
- * The contract this pins: a sync-HTTP route that returns a `jobId` sends the
- * orchestrator down its job-POLLING branch, where the node's output is rebuilt
- * from the jobs row via `buildNodeOutputFromJobData` — NOT from the HTTP body.
- *
- * So the text has to live in `output_data`. When this route started returning a
- * jobId (for credit accounting) while writing only `{ latestId, count }`,
- * scheduled runs silently emitted an EMPTY output even though the HTTP response
- * still looked correct to the editor. Nothing threw.
+ * The feed route owns the position (PR 2, decided 2026-10-05). These pin:
+ *   - the output_data contract — a sync-HTTP route that returns a `jobId` sends
+ *     the orchestrator down its job-POLLING branch, where the node's output is
+ *     rebuilt from the jobs row, so the posts (json / listResults) and the
+ *     digest (text / generatedText) must live in `output_data`;
+ *   - the cursor rule end to end: a stateless call, the editor's legacy seed,
+ *     the first stateful run (bootstrap), a drain, a peek that never writes,
+ *     a second page, and the user-scoped reset;
+ *   - nothing new is not charged; posts are.
  */
 
 /** Every `.update()` payload written to `jobs`, in order. */
@@ -22,7 +23,6 @@ vi.mock("../../lib/supabase.js", () => ({
       update: (patch: Record<string, unknown>) => {
         jobUpdates = [...jobUpdates, patch]
         const chain = { eq: () => chain, then: undefined }
-        // Awaited by the route; resolve after the eq() chain.
         return Object.assign(Promise.resolve({ error: null }), chain)
       },
     }),
@@ -41,12 +41,44 @@ vi.mock("../../lib/credits-job-lifecycle.js", () => ({
   refundReservedCreditsForJob: (jobId: string) => refundReservedCreditsForJob(jobId),
 }))
 
-const fetchChannelPosts = vi.fn(async (): Promise<Array<{ id: number; text: string }>> => [
-  { id: 10, text: "first post" },
-  { id: 11, text: "second post" },
-])
+/** The mocked `node_cursors` store, keyed workflow:node:user. */
+let cursors: Record<string, { value: number; updatedAt: string }> = {}
+const cursorKey = (wf: string | undefined, node: string, user: string) => `${wf}:${node}:${user}`
+const readNodeCursor = vi.fn(async (wf: string | undefined, node: string, user: string) => cursors[cursorKey(wf, node, user)]?.value)
+const readNodeCursorRow = vi.fn(async (wf: string | undefined, node: string, user: string) => cursors[cursorKey(wf, node, user)])
+const writeNodeCursor = vi.fn(async (wf: string | undefined, node: string, user: string, _kind: string, value: number) => {
+  cursors = { ...cursors, [cursorKey(wf, node, user)]: { value, updatedAt: "2026-10-06T12:00:00Z" } }
+})
+const resetNodeCursor = vi.fn(async (wf: string, node: string, user: string) => {
+  const key = cursorKey(wf, node, user)
+  const had = key in cursors
+  const next = { ...cursors }
+  delete next[key]
+  cursors = next
+  return had
+})
+vi.mock("../../services/workflow-engine/node-cursor.js", () => ({
+  readNodeCursor: (...a: [string | undefined, string, string]) => readNodeCursor(...a),
+  readNodeCursorRow: (...a: [string | undefined, string, string]) => readNodeCursorRow(...a),
+  writeNodeCursor: (...a: [string | undefined, string, string, string, number]) => writeNodeCursor(...a),
+  resetNodeCursor: (...a: [string, string, string]) => resetNodeCursor(...a),
+}))
+
+type Post = { id: number; channel: string; postUrl: string; text: string; media: unknown[] }
+const post = (id: number, text = `post ${id}`): Post => ({ id, channel: "acme", postUrl: `https://t.me/acme/${id}`, text, media: [] })
+const range = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, i) => post(from + i))
+
+/** What the channel holds (ids ascending); `fetchChannelPosts(channel, { after })` pages over it like t.me/s does (20 per page). */
+let channelPosts: Post[] = [post(10, "first post"), post(11, "second post")]
+const fetchCalls: Array<{ channel: string; after?: number }> = []
+const fetchChannelPosts = vi.fn(async (channel: string, opts: { after?: number } = {}) => {
+  fetchCalls.push({ channel, ...(opts.after !== undefined ? { after: opts.after } : {}) })
+  const sorted = [...channelPosts].sort((a, b) => a.id - b.id)
+  if (opts.after === undefined) return sorted.slice(-20)
+  return sorted.filter((p) => p.id > opts.after!).slice(0, 20)
+})
 vi.mock("../../services/social/telegram-channel.js", () => ({
-  fetchChannelPosts: () => fetchChannelPosts(),
+  fetchChannelPosts: (channel: string, opts?: { after?: number }) => fetchChannelPosts(channel, opts),
   normalizeChannel: (c: string) => (c.startsWith("@") || /^[a-z0-9_]+$/i.test(c) ? c.replace("@", "") : null),
 }))
 
@@ -54,11 +86,18 @@ import { telegramChannelRoutes } from "../telegram-channel.js"
 import { clearJobPolicies, registerJobPolicy } from "../../lib/job-policy.js"
 
 let app: FastifyInstance
+const WF = "11111111-1111-4111-8111-111111111111"
 
 beforeEach(async () => {
   jobUpdates = []
+  cursors = {}
+  channelPosts = [post(10, "first post"), post(11, "second post")]
+  fetchCalls.length = 0
   commitReservedCreditsForJob.mockClear()
   refundReservedCreditsForJob.mockClear()
+  writeNodeCursor.mockClear()
+  resetNodeCursor.mockClear()
+  fetchChannelPosts.mockClear()
   app = Fastify({ logger: false })
   app.addHook("onRequest", async (req) => {
     ;(req as { userId?: string }).userId = "user-1"
@@ -71,96 +110,156 @@ afterEach(async () => {
   await app.close()
 })
 
+const fetch = (payload: Record<string, unknown>) => app.inject({ method: "POST", url: "/v1/telegram-channel/fetch", payload })
+const completion = () => jobUpdates.find((u) => u.status === "completed")?.output_data as Record<string, unknown> | undefined
+
 describe("POST /v1/telegram-channel/fetch", () => {
-  it("writes the post text into output_data, not just the cursor", async () => {
-    const r = await app.inject({
-      method: "POST",
-      url: "/v1/telegram-channel/fetch",
-      payload: { channel: "@somechannel" },
-    })
-
-    expect(r.statusCode).toBe(200)
-
-    const completed = jobUpdates.find((u) => u.status === "completed")
-    expect(completed, "job was never marked completed").toBeTruthy()
-
-    const output = completed!.output_data as Record<string, unknown>
-    // buildNodeOutputFromJobData normalizes generatedText -> text; without it
-    // the orchestrator's poll branch produces an empty node output.
-    expect(output.generatedText, "output_data must carry the text for the poll branch").toContain("first post")
-    expect(output.text).toContain("second post")
-    expect(output.latestId).toBe(11)
+  it("writes the posts, their digest and one item per post into output_data, and returns a jobId (the poll branch)", async () => {
+    const res = await fetch({ channel: "@somechannel", limit: 5 })
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body.jobId).toBe("job-1")
+    expect(body.count).toBe(2)
+    const out = completion()
+    expect(out).toBeDefined()
+    expect(out!.text).toBe("first post\n\n---\n\nsecond post")
+    expect(out!.generatedText).toBe(out!.text)
+    expect(out!.json).toEqual([post(10, "first post"), post(11, "second post")])
+    expect(out!.listResults).toEqual([JSON.stringify(post(10, "first post")), JSON.stringify(post(11, "second post"))])
+    expect(out!.count).toBe(2)
   })
 
-  it("a fetch that found nothing new is not charged: the reservation is refunded, the row still completes with count 0", async () => {
-    fetchChannelPosts.mockResolvedValueOnce([])
-    const res = await app.inject({
-      method: "POST",
-      url: "/v1/telegram-channel/fetch",
-      payload: { channel: "@somechannel", limit: 5 },
-    })
+  it("a stateless call (no workflowId / nodeId): the newest N, nothing stored, the editor keeps its own seed", async () => {
+    channelPosts = range(100, 130)
+    const res = await fetch({ channel: "acme", limit: 5 })
+    const body = res.json()
+    expect(body.posts.map((p: Post) => p.id)).toEqual([126, 127, 128, 129, 130])
+    expect(body.latestId).toBe(130)
+    expect(body.cursor).toEqual({ lastSeenId: null, advanced: true, mode: "poll", stateful: false })
+    expect(writeNodeCursor).not.toHaveBeenCalled()
+  })
+
+  it("a stateless call with the editor's legacy seed pages forward from it", async () => {
+    channelPosts = range(100, 130)
+    const res = await fetch({ channel: "acme", limit: 5, sinceId: 120 })
+    expect(fetchCalls).toEqual([{ channel: "acme", after: 120 }])
+    expect(res.json().posts.map((p: Post) => p.id)).toEqual([121, 122, 123, 124, 125])
+    expect(res.json().latestId).toBe(125)
+  })
+
+  it("first stateful run (nothing stored): the newest N, and the position jumps to the newest post", async () => {
+    channelPosts = range(100, 130)
+    const res = await fetch({ channel: "acme", limit: 5, workflowId: WF, nodeId: "feed-1" })
+    expect(res.json().posts.map((p: Post) => p.id)).toEqual([126, 127, 128, 129, 130])
+    expect(writeNodeCursor).toHaveBeenCalledWith(WF, "feed-1", "user-1", "telegram-channel-feed", 130)
+    expect(res.json().cursor).toEqual({ lastSeenId: 130, advanced: true, mode: "poll", stateful: true })
+    expect(completion()!.cursor).toEqual(res.json().cursor)
+  })
+
+  it("a stored position wins over the body's seed: the OLDEST N above it, and the position is the highest post emitted (a backlog drains N per run)", async () => {
+    channelPosts = range(100, 130)
+    cursors = { [cursorKey(WF, "feed-1", "user-1")]: { value: 110, updatedAt: "2026-10-06T10:00:00Z" } }
+    const res = await fetch({ channel: "acme", limit: 5, workflowId: WF, nodeId: "feed-1", sinceId: 125 })
+    expect(fetchCalls[0]).toEqual({ channel: "acme", after: 110 })
+    expect(res.json().posts.map((p: Post) => p.id)).toEqual([111, 112, 113, 114, 115])
+    expect(writeNodeCursor).toHaveBeenCalledWith(WF, "feed-1", "user-1", "telegram-channel-feed", 115)
+    expect(res.json().cursor).toMatchObject({ lastSeenId: 115, advanced: true })
+    // The next run continues where this one stopped.
+    const next = await fetch({ channel: "acme", limit: 5, workflowId: WF, nodeId: "feed-1" })
+    expect(next.json().posts.map((p: Post) => p.id)).toEqual([116, 117, 118, 119, 120])
+  })
+
+  it("a full first page short of the limit fetches a second page — two pages at most", async () => {
+    channelPosts = range(100, 160)
+    cursors = { [cursorKey(WF, "feed-1", "user-1")]: { value: 100, updatedAt: "x" } }
+    const res = await fetch({ channel: "acme", limit: 25, workflowId: WF, nodeId: "feed-1" })
+    expect(fetchCalls).toEqual([{ channel: "acme", after: 100 }, { channel: "acme", after: 120 }])
+    expect(res.json().count).toBe(25)
+    expect(res.json().latestId).toBe(125)
+  })
+
+  it("nothing new: an empty page, count 0, the position stays, the reservation is refunded and nothing is committed", async () => {
+    channelPosts = range(100, 110)
+    cursors = { [cursorKey(WF, "feed-1", "user-1")]: { value: 110, updatedAt: "x" } }
+    const res = await fetch({ channel: "acme", limit: 5, workflowId: WF, nodeId: "feed-1" })
     expect(res.statusCode).toBe(200)
-    const completion = jobUpdates.find((u) => u.status === "completed")
-    expect(completion?.output_data).toMatchObject({ count: 0, text: "" })
+    expect(res.json()).toMatchObject({ count: 0, text: "", latestId: 110, cursor: { lastSeenId: 110, advanced: false } })
+    expect(completion()).toMatchObject({ count: 0, text: "", json: [] })
+    expect(writeNodeCursor).not.toHaveBeenCalled()
     expect(refundReservedCreditsForJob).toHaveBeenCalledWith("job-1")
     expect(commitReservedCreditsForJob).not.toHaveBeenCalled()
   })
 
   it("a fetch with posts commits the reservation", async () => {
-    await app.inject({ method: "POST", url: "/v1/telegram-channel/fetch", payload: { channel: "@somechannel", limit: 5 } })
+    await fetch({ channel: "@somechannel", limit: 5 })
     expect(commitReservedCreditsForJob).toHaveBeenCalledWith("job-1")
     expect(refundReservedCreditsForJob).not.toHaveBeenCalled()
   })
 
-  it("returns a jobId, the response shape that selects the poll branch", async () => {
-    const r = await app.inject({
-      method: "POST",
-      url: "/v1/telegram-channel/fetch",
-      payload: { channel: "@somechannel" },
-    })
-
-    const body = r.json() as Record<string, unknown>
-    expect(body.jobId).toBe("job-1")
-    // The two must stay consistent: returning a jobId is what makes the
-    // output_data assertion above load-bearing.
-    expect(body.generatedText).toContain("first post")
+  it("peek: the newest N, never reads or moves the position, still charged", async () => {
+    channelPosts = range(100, 130)
+    cursors = { [cursorKey(WF, "feed-1", "user-1")]: { value: 110, updatedAt: "x" } }
+    const res = await fetch({ channel: "acme", limit: 3, mode: "peek", workflowId: WF, nodeId: "feed-1" })
+    expect(fetchCalls).toEqual([{ channel: "acme" }])
+    expect(res.json().posts.map((p: Post) => p.id)).toEqual([128, 129, 130])
+    expect(res.json().cursor).toEqual({ lastSeenId: null, advanced: false, mode: "peek", stateful: true })
+    expect(res.json().latestId).toBeNull()
+    expect(writeNodeCursor).not.toHaveBeenCalled()
+    expect(cursors[cursorKey(WF, "feed-1", "user-1")]!.value).toBe(110)
+    expect(commitReservedCreditsForJob).toHaveBeenCalledWith("job-1")
   })
 
-  it("rejects an invalid channel before creating a job", async () => {
-    const r = await app.inject({
-      method: "POST",
-      url: "/v1/telegram-channel/fetch",
-      payload: { channel: "https://evil.example/x" },
-    })
-
-    expect(r.statusCode).toBe(400)
+  it("rejects an invalid channel before creating a job, and a limit above the cap", async () => {
+    const bad = await fetch({ channel: "bad name!" })
+    expect(bad.statusCode).toBe(400)
     expect(jobUpdates).toHaveLength(0)
+    expect(fetchChannelPosts).not.toHaveBeenCalled()
+    const tooMany = await fetch({ channel: "acme", limit: 31 })
+    expect(tooMany.statusCode).toBe(400)
   })
-})
 
-/** F10 — the documented 422 `job_blocked`, not a 500 the SDK retries with
- *  backoff. This file already imports `sendInternalError` for its other error
- *  paths; the insert error arm just never used it. */
-describe("POST /v1/telegram-channel/fetch — request-gate block (F10)", () => {
-  afterEach(() => clearJobPolicies())
+  it("a channel error is a 400 with the scraper's message, the job fails and the reservation is refunded", async () => {
+    fetchChannelPosts.mockRejectedValueOnce(new Error('Channel "acme" is private, doesn\'t exist, or has its web preview disabled'))
+    const res = await fetch({ channel: "acme" })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("channel_error")
+    expect(jobUpdates.find((u) => u.status === "failed")).toBeDefined()
+    expect(refundReservedCreditsForJob).toHaveBeenCalledWith("job-1")
+  })
 
   it("answers 422 job_blocked and never fetches the channel", async () => {
     registerJobPolicy({
       id: "test-deny-all",
       checkRequest: () => ({ verdict: "block", reason: "test:denied", userMessage: "Not allowed here" }),
     })
+    try {
+      const res = await fetch({ channel: "@somechannel" })
+      expect(res.statusCode).toBe(422)
+      expect(res.json()).toEqual({ error: { code: "job_blocked", message: "Not allowed here" } })
+      expect(fetchChannelPosts).not.toHaveBeenCalled()
+    } finally {
+      clearJobPolicies()
+    }
+  })
+})
 
-    // This suite's mocks are module-level and not reset between cases.
-    fetchChannelPosts.mockClear()
+describe("the position routes (UI only)", () => {
+  it("GET /cursor returns the user's stored position, or null", async () => {
+    const none = await app.inject({ method: "GET", url: `/v1/telegram-channel/cursor?workflowId=${WF}&nodeId=feed-1` })
+    expect(none.json()).toEqual({ data: { lastSeenId: null, updatedAt: null } })
+    cursors = { [cursorKey(WF, "feed-1", "user-1")]: { value: 130, updatedAt: "2026-10-06T10:00:00Z" } }
+    const some = await app.inject({ method: "GET", url: `/v1/telegram-channel/cursor?workflowId=${WF}&nodeId=feed-1` })
+    expect(some.json()).toEqual({ data: { lastSeenId: 130, updatedAt: "2026-10-06T10:00:00Z" } })
+    const bad = await app.inject({ method: "GET", url: `/v1/telegram-channel/cursor?workflowId=not-a-uuid&nodeId=feed-1` })
+    expect(bad.statusCode).toBe(400)
+  })
 
-    const res = await app.inject({
-      method: "POST",
-      url: "/v1/telegram-channel/fetch",
-      payload: { channel: "@somechannel" },
-    })
-
-    expect(res.statusCode).toBe(422)
-    expect(res.json()).toEqual({ error: { code: "job_blocked", message: "Not allowed here" } })
-    expect(fetchChannelPosts).not.toHaveBeenCalled()
+  it("POST /cursor/reset forgets the user's own position and says whether there was one", async () => {
+    cursors = { [cursorKey(WF, "feed-1", "user-1")]: { value: 130, updatedAt: "x" } }
+    const res = await app.inject({ method: "POST", url: "/v1/telegram-channel/cursor/reset", payload: { workflowId: WF, nodeId: "feed-1" } })
+    expect(res.json()).toEqual({ data: { ok: true, deleted: true } })
+    expect(resetNodeCursor).toHaveBeenCalledWith(WF, "feed-1", "user-1")
+    const again = await app.inject({ method: "POST", url: "/v1/telegram-channel/cursor/reset", payload: { workflowId: WF, nodeId: "feed-1" } })
+    expect(again.json()).toEqual({ data: { ok: true, deleted: false } })
   })
 })

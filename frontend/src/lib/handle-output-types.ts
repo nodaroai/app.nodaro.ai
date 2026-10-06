@@ -140,7 +140,7 @@ export const HANDLE_OUTPUT_TYPES: Record<string, Partial<Record<string, HandleCo
   // The Posts handle emits the recent channel posts' text. Its id is the
   // platform's text id (the definition's `text`); saved `out` edges are
   // rewired on load through LEGACY_SOURCE_HANDLE_ALIASES.
-  "telegram-channel-feed": { text: "text" },
+  "telegram-channel-feed": { json: "look", text: "text" },
   "text-to-audio": { audio: "audio" },
   "text-to-dialogue": { audio: "audio" },
   "text-to-speech": { audio: "audio" },

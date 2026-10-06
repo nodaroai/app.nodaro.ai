@@ -1,3 +1,4 @@
+import type { TelegramChannelPost } from "@nodaro/shared"
 import type { Node, Edge } from "@xyflow/react"
 import { MODIFY_IMAGE_PROVIDERS, OVERLAY_ANCHORS } from "@nodaro/shared"
 import { MUSIC_GENRE_DEFAULT_DATA, MUSIC_MOOD_DEFAULT_DATA, INSTRUMENTATION_DEFAULT_DATA, VOICE_CHARACTER_DEFAULT_DATA, VOICE_DELIVERY_DEFAULT_DATA } from "@nodaro/prompts"
@@ -6589,13 +6590,21 @@ export type TelegramChannelFeedData = {
   label: string
   /** Public channel to read (@name, t.me/name, or bare id). */
   channel: string
-  /** Max posts to emit per run (1–20). */
+  /** Max posts to emit per run (1–30). A backlog drains this many per run. */
   limit?: number
-  /** Cursor — highest post id seen last run; only newer posts are emitted. */
+  /**
+   * @deprecated The feed's position lives on the server (`node_cursors`): the
+   * route reads and advances it from the workflow + node ids the run sends. A
+   * value an older editor saved here is a one-shot seed the route accepts
+   * until the node first runs with a saved workflow; the run then clears it.
+   */
   lastSeenId?: number
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
+  /** The `text` handle: the posts' digest. */
   generatedText?: string
+  /** The `json` handle: the posts the last run emitted, as the route returned them. */
+  generatedJson?: TelegramChannelPost[]
   currentJobProgress?: number
 }
 
@@ -10281,9 +10290,9 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "telegram-channel-feed",
     label: "Telegram Channel Feed",
     category: "input",
-    creditCost: 1,
+    creditCost: 10,
     inputs: [],
-    outputs: ["text"],
+    outputs: ["json", "text"],
     defaultData: {
       label: "Telegram Channel Feed",
       channel: "",

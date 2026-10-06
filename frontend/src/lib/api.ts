@@ -8129,16 +8129,53 @@ export interface TelegramChannelPost {
   url: string
 }
 
-/** Read recent posts from a public Telegram channel (Channel Feed node). */
+/** Where the feed stands after a fetch (the route owns it — node_cursors). */
+export interface TelegramFeedCursor {
+  /** The position now; null for a peek, a call with no saved workflow, or an empty channel. */
+  lastSeenId: number | null
+  advanced: boolean
+  mode: "poll" | "peek"
+  stateful: boolean
+}
+
+/**
+ * Read a public Telegram channel's new posts (Channel Feed node). With a saved
+ * workflow (`workflowId: true`) and a `nodeId` the fetch is stateful: the route
+ * reads the node's position and advances it to the highest post emitted.
+ * `mode: "peek"` reads the newest posts without moving the position.
+ */
 export async function telegramChannelFetchApi(params: {
   channel: string
+  /** The editor's legacy cursor — a one-shot seed for a node that never ran statefully. */
   sinceId?: number
   limit?: number
-}): Promise<{ posts: TelegramChannelPost[]; latestId: number; text: string; count: number }> {
+  mode?: "poll" | "peek"
+  nodeId?: string
+}): Promise<{ jobId: string; posts: TelegramChannelPost[]; latestId: number | null; text: string; generatedText: string; count: number; cursor: TelegramFeedCursor }> {
   const body: Record<string, unknown> = { channel: params.channel }
   if (params.sinceId !== undefined) body.sinceId = params.sinceId
   if (params.limit !== undefined) body.limit = params.limit
-  return apiJson("/v1/telegram-channel/fetch", { body, label: "apiErr.readTelegramChannel" })
+  if (params.mode) body.mode = params.mode
+  if (params.nodeId) body.nodeId = params.nodeId
+  return apiJson("/v1/telegram-channel/fetch", { body, workflowId: true, label: "apiErr.readTelegramChannel" })
+}
+
+/** The feed's stored position for a node of a saved workflow (null when it has none). */
+export async function getTelegramFeedCursor(workflowId: string, nodeId: string): Promise<{ lastSeenId: number | null; updatedAt: string | null }> {
+  const res = await apiRequest<{ data: { lastSeenId: number | null; updatedAt: string | null } }>(
+    `/v1/telegram-channel/cursor?workflowId=${encodeURIComponent(workflowId)}&nodeId=${encodeURIComponent(nodeId)}`,
+    "apiErr.loadFeedCursor",
+  )
+  return res.data
+}
+
+/** Forget the feed's position: the next run reads the newest posts again. */
+export async function resetTelegramFeedCursor(workflowId: string, nodeId: string): Promise<{ ok: boolean; deleted: boolean }> {
+  const res = await apiJson<{ data: { ok: boolean; deleted: boolean } }>("/v1/telegram-channel/cursor/reset", {
+    body: { workflowId, nodeId },
+    label: "apiErr.resetFeedCursor",
+  })
+  return res.data
 }
 
 export async function socialPublishApi(params: {

@@ -15,7 +15,14 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useT, tx } from "@/lib/i18n"
+import { formatDateTime } from "@/lib/i18n/format"
 import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
+import { toast } from "sonner"
+import { TELEGRAM_FEED_LIMIT_MAX, TELEGRAM_FEED_PEEK_MAX } from "@nodaro/shared"
+import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { useResetTelegramFeedCursorMutation, useTelegramFeedCursor } from "@/hooks/queries/use-telegram-feed-queries"
+import { telegramChannelFetchApi } from "@/lib/api"
+import { withRunInFlight } from "@/hooks/run-in-flight"
 import type { WebhookParam, TelegramTriggerData, TelegramChannelFeedData } from "@/types/nodes"
 import type { ConfigProps } from "./types"
 import { useSocialConnections } from "./social-configs"
@@ -306,10 +313,39 @@ export function TelegramTriggerConfig({ data, onUpdate }: ConfigProps<TelegramTr
   )
 }
 
-export function TelegramChannelFeedConfig({ data, onUpdate }: ConfigProps<TelegramChannelFeedData>) {
+export function TelegramChannelFeedConfig({ data, onUpdate, nodeId }: ConfigProps<TelegramChannelFeedData> & { nodeId?: string }) {
   const t = useT()
   const localizeNode = useLocalizeNodeLabel()
   const d = data as TelegramChannelFeedData
+  const workflowId = useWorkflowStore((s) => s.workflowId)
+  const tracked = !!workflowId && !!nodeId
+  const { data: cursor } = useTelegramFeedCursor(tracked ? workflowId : null, nodeId ?? "")
+  const resetCursor = useResetTelegramFeedCursorMutation(workflowId, nodeId ?? "")
+  const [confirmReset, setConfirmReset] = useState(false)
+  const [peeking, setPeeking] = useState(false)
+  const limit = d.limit ?? 5
+  const peekCount = Math.min(limit, TELEGRAM_FEED_PEEK_MAX)
+  const peek = async () => {
+    const channel = (d.channel || "").trim()
+    if (!channel || peeking || !nodeId) return
+    setPeeking(true)
+    try {
+      // A paid fetch whose posts land on the node: the node shows a run in
+      // flight from before the request until the posts are written (T100), so
+      // a read-only answer reaching the canvas meanwhile cannot drop them.
+      const res = await withRunInFlight(nodeId, async () => {
+        const fetched = await telegramChannelFetchApi({ channel, limit: peekCount, mode: "peek" })
+        onUpdate({ generatedJson: fetched.posts, generatedText: fetched.text, executionStatus: "completed", errorMessage: undefined })
+        return fetched
+      })
+      if (!res) return
+      toast.success(res.count > 0 ? tx("nodeRun.readNewPostS", { count: res.count }) : tx("nodeRun.noNewPosts"))
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : tx("nodeRun.failedToReadChannel"))
+    } finally {
+      setPeeking(false)
+    }
+  }
   return (
     <div className="space-y-4">
       <div>
@@ -332,17 +368,69 @@ export function TelegramChannelFeedConfig({ data, onUpdate }: ConfigProps<Telegr
         <Input
           type="number"
           min={1}
-          max={20}
+          max={TELEGRAM_FEED_LIMIT_MAX}
           value={d.limit ?? 5}
           onChange={(e) => {
             const n = parseInt(e.target.value, 10)
-            onUpdate({ limit: Number.isFinite(n) ? Math.max(1, Math.min(20, n)) : 5 })
+            onUpdate({ limit: Number.isFinite(n) ? Math.max(1, Math.min(TELEGRAM_FEED_LIMIT_MAX, n)) : 5 })
           }}
           className="mt-1.5"
         />
         <p className="text-[10px] text-muted-foreground mt-1">
+          {t("cfgext.feedMaxPostsHint")}
+        </p>
+        <p className="text-[10px] text-muted-foreground mt-1">
           {t("cfgext.trigPairWithSchedule", { node: localizeNode("Schedule Trigger") })}
         </p>
+      </div>
+
+      <div>
+        <Label className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">{t("cfgext.feedPosition")}</Label>
+        <p className="text-xs text-muted-foreground mt-1.5">
+          {!tracked
+            ? t("cfgext.feedSaveFirst")
+            : cursor?.lastSeenId != null
+              ? t("cfgext.feedLastSeen", { id: cursor.lastSeenId, when: cursor.updatedAt ? formatDateTime(cursor.updatedAt) : "" })
+              : t("cfgext.feedNotStarted")}
+        </p>
+        <div className="flex flex-wrap gap-2 mt-2">
+          {confirmReset ? (
+            <>
+              <Button
+                size="sm"
+                variant="destructive"
+                disabled={resetCursor.isPending}
+                onClick={() =>
+                  resetCursor.mutate(undefined, {
+                    onSuccess: () => {
+                      toast.success(tx("cfgext.feedResetDone"))
+                      setConfirmReset(false)
+                    },
+                    onError: (err) => toast.error(err instanceof Error ? err.message : tx("apiErr.resetFeedCursor")),
+                  })
+                }
+              >
+                {t("cfgext.feedResetConfirm", { n: limit })}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setConfirmReset(false)}>
+                {t("common.cancel")}
+              </Button>
+            </>
+          ) : (
+            <Button size="sm" variant="outline" disabled={!tracked || cursor?.lastSeenId == null} onClick={() => setConfirmReset(true)}>
+              {t("cfgext.feedReset")}
+            </Button>
+          )}
+          <Button size="sm" variant="outline" disabled={peeking || !d.channel} onClick={() => void peek()}>
+            {t("cfgext.feedPeek", { n: peekCount })}
+          </Button>
+        </div>
+        <p className="text-[10px] text-muted-foreground mt-1">{t("cfgext.feedPeekHint")}</p>
+      </div>
+
+      <div className="space-y-1">
+        <p className="text-[10px] text-muted-foreground">{t("cfgext.feedOutputsHint")}</p>
+        <p className="text-[10px] text-muted-foreground">{t("cfgext.feedMediaExpiry")}</p>
       </div>
 
       {d.executionStatus === "failed" && d.errorMessage && (

@@ -39,6 +39,8 @@ export const LIST_PRODUCER_TYPES: ReadonlySet<string> = new Set<string>([
   "ai-writer", "llm-chat", "generate-script",
   // Content Ideas: one brief per idea, fanned out per idea (FAN_OUT_EACH_TYPES).
   "content-ideas",
+  // Telegram Channel Feed: one post per `listResults` item (an "each" wire).
+  "telegram-channel-feed",
 ])
 
 /**
@@ -72,6 +74,8 @@ export const ACCEPTS_JSON = (sourceType: string): boolean =>
  *  extract-field has a `json` outputType, etc. */
 export const JSON_PRODUCER_TYPES: ReadonlySet<string> = new Set<string>([
   ...SCRAPE_NODE_TYPES, "extract-field", "silence-detect",
+  // Telegram Channel Feed's `json` handle carries the posts (TelegramChannelPost[]).
+  "telegram-channel-feed",
   // audio-sync's `json` handle carries { version, reference, offsets, notes }.
   "audio-sync",
   "list", "filter-list",
