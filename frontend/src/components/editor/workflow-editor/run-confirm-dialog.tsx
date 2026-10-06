@@ -14,7 +14,8 @@ import {
 } from "@/components/ui/alert-dialog"
 import type { AskConfirmInfo, RunConfirmInfo } from "./types"
 import { creditUnits } from "@/lib/credit-units"
-import { useT } from "@/lib/i18n"
+import { useT, type TFunction } from "@/lib/i18n"
+import { RunConfirmBreakdown } from "./run-confirm-breakdown"
 
 interface UseRunConfirm {
   /** Resolves true to run, false to abort. Single-flight: a second call while a
@@ -25,6 +26,40 @@ interface UseRunConfirm {
   /** True while a confirm dialog is open — bind to the run button's `disabled`. */
   readonly isConfirming: boolean
   readonly dialog: ReactNode
+}
+
+/**
+ * The run confirm's title, description and action label. Render final and
+ * Update preview title with the mockups' "action · ≈credits" (round 2, decided
+ * 2026-10-06): the button's own words, then the figure written exactly as the
+ * breakdown's total row writes it (`renderFinal.lineTotalCredits`).
+ */
+export function runConfirmText(
+  info: RunConfirmInfo | null,
+  t: TFunction,
+): { readonly title: string; readonly body: string; readonly action: string } {
+  const credits = info?.estimatedCredits ?? null
+  const nodeLabel = info
+    ? info.nodeCount === 1
+      ? t("editor.runConfirmNodeOne", { n: info.nodeCount })
+      : t("editor.runConfirmNodes", { n: info.nodeCount })
+    : ""
+  const isRenderFinal = info?.trigger === "render-final"
+  const title = isRenderFinal
+    ? credits != null
+      ? t("renderFinal.confirmTitleCredits", { credits: creditUnits(credits) })
+      : t("renderFinal.confirmTitle")
+    : info?.trigger === "update-preview" && credits != null
+      ? t("renderFinal.previewConfirmTitleCredits", { credits: creditUnits(credits) })
+    : info?.alwaysConfirm
+      ? t("editor.runConfirmEntireTitle")
+      : t("editor.runConfirmCreditsTitle", { credits: creditUnits(credits ?? 0) })
+  const body = !isRenderFinal && info?.alwaysConfirm && credits != null ? t("editor.runConfirmEstimated", { nodes: nodeLabel, credits: creditUnits(credits) }) : nodeLabel
+  const action =
+    info?.trigger === "render-final" ? t("renderFinal.action")
+      : info?.trigger === "update-preview" ? t("renderFinal.updatePreview")
+        : t("common.run")
+  return { title, body, action }
 }
 
 /**
@@ -71,25 +106,7 @@ export function useRunConfirm(): UseRunConfirm {
   }, [])
 
   const open = info !== null
-  const credits = info?.estimatedCredits ?? null
-  const nodeLabel = info
-    ? info.nodeCount === 1
-      ? t("editor.runConfirmNodeOne", { n: info.nodeCount })
-      : t("editor.runConfirmNodes", { n: info.nodeCount })
-    : ""
-  const isRenderFinal = info?.trigger === "render-final"
-  const title = isRenderFinal
-    ? credits != null
-      ? t("renderFinal.confirmTitleCredits", { credits: creditUnits(credits) })
-      : t("renderFinal.confirmTitle")
-    : info?.alwaysConfirm
-      ? t("editor.runConfirmEntireTitle")
-      : t("editor.runConfirmCreditsTitle", { credits: creditUnits(credits ?? 0) })
-  const body = !isRenderFinal && info?.alwaysConfirm && credits != null ? t("editor.runConfirmEstimated", { nodes: nodeLabel, credits: creditUnits(credits) }) : nodeLabel
-  const action =
-    info?.trigger === "render-final" ? t("renderFinal.action")
-      : info?.trigger === "update-preview" ? t("renderFinal.updatePreview")
-        : t("common.run")
+  const { title, body, action } = runConfirmText(info, t)
 
   const dialog = (
     <AlertDialog open={open} onOpenChange={(o) => { if (!o) settle(false) }}>
@@ -98,6 +115,7 @@ export function useRunConfirm(): UseRunConfirm {
           <AlertDialogTitle>{title}</AlertDialogTitle>
           <AlertDialogDescription>{body}</AlertDialogDescription>
         </AlertDialogHeader>
+        {info && <RunConfirmBreakdown info={info} />}
         <AlertDialogFooter>
           <AlertDialogCancel autoFocus onClick={() => settle(false)}>{t("common.cancel")}</AlertDialogCancel>
           <AlertDialogAction

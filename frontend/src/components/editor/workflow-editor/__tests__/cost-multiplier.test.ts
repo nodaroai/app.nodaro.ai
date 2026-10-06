@@ -16,7 +16,7 @@ vi.mock("@/components/editor/config-panels/helpers", () => ({
 
 import { FAN_OUT_EACH_TYPES } from "@nodaro/shared"
 import { EACH_WIRE_FAN_OUT, getCostMultiplier, getFanOutMultiplier, getPricingUnits, NO_RERUNS, PRODUCER_FAN_OUT } from "../types"
-import { estimateRunCredits } from "../estimate-run-credits"
+import { estimateRunCreditLines, estimateRunCredits, sumRunCreditLines } from "../estimate-run-credits"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 
 const n = (id: string, type: string, data: Record<string, unknown> = {}): WorkflowNode =>
@@ -265,6 +265,44 @@ describe("estimateRunCredits — the shipped podcast template shapes", () => {
     ]
     // apply-edl: 10/min × 2 min × 5 clips = 100; add-captions: 20 × 5 = 100.
     expect(estimateRunCredits([tr, plan, ae, cap], nodes, edges, cachedCost)).toBe(10 + 240 + 100 + 100)
+  })
+})
+
+// U1 (R16 a, decided 2026-10-06): the confirms itemise the run per node. The
+// total and the breakdown are ONE computation, so they can never disagree.
+describe("estimateRunCreditLines — the lines sum to the total, on the template shapes", () => {
+  const master = n("m", "upload-audio", { metadata: { durationSeconds: 45 * 60 } })
+  const tr = n("tr", "transcribe")
+  const plan = n("ep", "edit-plan", { mode: "clips", count: 5, targetDurationSec: 60 })
+  const ae = n("ae", "apply-edl")
+  const cap = n("cap", "add-captions")
+  const nodes = [master, tr, plan, ae, cap]
+  const edges = [
+    e("m", "tr", "audio"), e("m", "ep", "sources"), e("tr", "ep", "transcript"),
+    e("ep", "ae", "edl"), e("ae", "cap", "in", "each"),
+  ]
+  const tighten = n("tp", "edit-plan", { mode: "tighten", generatedJson: edlOf(20) })
+  const cut = n("cut", "apply-edl")
+  const steal = JSON.parse(readFileSync(resolve(__dirname, "../../../../../../backend/src/lib/tutorial-seed/templates/steal-the-format.json"), "utf8")) as { nodes: WorkflowNode[]; edges: WorkflowEdge[] }
+
+  it.each([
+    ["Clip Pack, whole run", [tr, plan, ae, cap], nodes, edges],
+    ["Clip Pack, render onward", [ae, cap], nodes, edges],
+    ["Tighten, render only", [cut], [master, tighten, cut], [e("m", "tp", "sources"), e("tp", "cut", "edl")]],
+    ["Steal the Format, whole run", steal.nodes.filter((x) => x.type !== "sticky-note"), steal.nodes, steal.edges],
+  ] as const)("%s", (_, exec, all, wires) => {
+    const lines = estimateRunCreditLines([...exec], [...all], [...wires], cachedCost)
+    expect(sumRunCreditLines(lines)).toBe(estimateRunCredits([...exec], [...all], [...wires], cachedCost))
+  })
+
+  it("the render's line carries its minutes and its clips: 2 min × 5 clips at 10 = 100", () => {
+    const line = estimateRunCreditLines([tr, plan, ae, cap], nodes, edges, cachedCost).find((l) => l.nodeId === "ae")!
+    expect(line).toEqual({ nodeId: "ae", label: "ae", quantity: { fanOut: 5, units: 2, unitKind: "minute" }, credits: 100 })
+  })
+
+  it("a node priced per run (not per minute) has no unit kind", () => {
+    const line = estimateRunCreditLines([tr, plan, ae, cap], nodes, edges, cachedCost).find((l) => l.nodeId === "cap")!
+    expect(line.quantity).toEqual({ fanOut: 5, units: 1, unitKind: null })
   })
 })
 

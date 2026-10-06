@@ -50,6 +50,8 @@ const EXEMPT_SITES: Readonly<Record<string, string>> = {
   "components/editor/workflow-editor/run-from-here-set.ts":
     "liveExecutable / runFromHereExecutable: every consumer prices through estimateRunCredits or gates the set itself",
   "components/editor/workflow-editor/clear-run-results.ts": "classifies what Clear results clears, not what a run executes",
+  "components/editor/workflow-editor/render-confirm-detail.ts":
+    "names the render's ancestors a Render final keeps as is (outside the run); its lines come from estimateRunCreditLines, which is gated",
   "components/nodes/node-preview-gate-chip.tsx": "the chip: shown on a runnable node inside the rule's own closure",
   "components/editor/workflow-editor/sub-workflow-executor.ts":
     "a nested graph's progress count; a nested graph holding a Preview render is refused before it runs",

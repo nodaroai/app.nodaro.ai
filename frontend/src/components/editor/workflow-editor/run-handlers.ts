@@ -23,7 +23,8 @@ import {
   type RunConfirmInfo,
 } from "./types";
 import { connectionJustLost, jobGoneMessage, shouldStopPolling } from "./poll-connection";
-import { estimateRunCredits } from "./estimate-run-credits";
+import { estimateRunCreditLines, estimateRunCredits, sumRunCreditLines } from "./estimate-run-credits";
+import { renderConfirmDetail } from "./render-confirm-detail";
 import { liveExecutable, getDownstreamNodeIds, runFromHereExecutable } from "./run-from-here-set";
 import { wordTimingsPreflight } from "./add-captions-preflight";
 import { nestedRunPreflight } from "./sub-workflow-preflight";
@@ -339,6 +340,8 @@ export async function confirmRunOrAbort(
   trigger: RunConfirmInfo["trigger"],
   alwaysConfirm: boolean,
   skip?: boolean,
+  /** Render final / Update preview: the render whose run this is (the itemised confirm). */
+  renderId?: string,
 ): Promise<boolean> {
   try { assertCanvasExecutionAllowed(executable); }
   catch (error) {
@@ -401,6 +404,16 @@ export async function confirmRunOrAbort(
     }
   }
   if (skip || !ctx.confirmRun || executable.length === 0) return true;
+  // Render final / Update preview itemise the run per node (U1, decided
+  // 2026-10-06): the total is the sum of the very lines the dialog shows. A
+  // non-credit edition lists the same nodes with no numbers.
+  if (renderId && (trigger === "render-final" || trigger === "update-preview")) {
+    const lines = estimateRunCreditLines(executable, allNodes, edges, hasCredits() ? getCachedCredits : () => undefined);
+    const estimatedCredits = hasCredits() ? sumRunCreditLines(lines) : null;
+    if (!alwaysConfirm && (estimatedCredits === null || estimatedCredits <= RUN_CONFIRM_CREDITS)) return true;
+    const detail = renderConfirmDetail(renderId, trigger, executable, lines, allNodes, edges);
+    return ctx.confirmRun({ trigger, nodeCount: runs.length, estimatedCredits, alwaysConfirm, ...detail });
+  }
   const estimatedCredits = hasCredits() ? estimateRunCredits(executable, allNodes, edges, getCachedCredits) : null;
   if (!alwaysConfirm && (estimatedCredits === null || estimatedCredits <= RUN_CONFIRM_CREDITS)) return true;
   // "N nodes" counts what the run executes — the set less the stop rule's

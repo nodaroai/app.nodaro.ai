@@ -15,7 +15,8 @@
  *     asks first rather than refuses;
  *  4. the run's confirm, priced on the overridden graph — never the canvas,
  *     where the render still reads Preview (it would gate the tail and quote
- *     less than the run bills).
+ *     less than the run bills). It itemises the run per node, names what is
+ *     kept as is and (Update preview) what waits for Render final (U1).
  *
  * Then the SAVE, which must succeed: the server runs from the saved workflow,
  * so an unsaved review would render the unedited plan.
@@ -167,7 +168,7 @@ export async function handleRenderFinal(
           if (!proceed) return
         }
       }
-      if (!(await confirmRunOrAbort(ctx, exec, overridden, st.edges, kind === "final" ? "render-final" : "update-preview", kind === "final"))) return
+      if (!(await confirmRunOrAbort(ctx, exec, overridden, st.edges, kind === "final" ? "render-final" : "update-preview", kind === "final", false, renderId))) return
       if (!(await ensureVideoLinksBeforeRun(exec.map((n) => n.id), setIsRunning))) return
     }
     if (refuseWhileReadOnly()) return

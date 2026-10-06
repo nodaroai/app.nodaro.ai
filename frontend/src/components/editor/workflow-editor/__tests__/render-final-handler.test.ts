@@ -11,6 +11,7 @@ const mockRunWorkflow = vi.fn()
 const mockMarkNodesStatus = vi.fn()
 const mockCollapseExpandedClones = vi.fn()
 const mockEstimateRunCredits = vi.fn()
+const mockEstimateRunCreditLines = vi.fn()
 const mockFetchQuery = vi.fn()
 const mockRule = vi.fn()
 const mockNewerPatches = vi.fn()
@@ -60,7 +61,12 @@ vi.mock("@/lib/query-client", () => ({
 }))
 vi.mock("@/lib/query-keys", () => ({ queryKeys: { credits: { balance: (id: string) => ["credits", "balance", id] } } }))
 vi.mock("@/ee/hooks/use-model-credits", () => ({ getCachedCredits: vi.fn() }))
-vi.mock("../estimate-run-credits", () => ({ estimateRunCredits: (...a: unknown[]) => mockEstimateRunCredits(...a) }))
+vi.mock("../estimate-run-credits", () => ({
+  estimateRunCredits: (...a: unknown[]) => mockEstimateRunCredits(...a),
+  estimateRunCreditLines: (...a: unknown[]) => mockEstimateRunCreditLines(...a),
+  sumRunCreditLines: (lines: readonly { credits: number }[]) => lines.reduce((s, l) => s + l.credits, 0),
+  runNodeLabel: (n: { type?: string; data?: { label?: unknown } }) => (typeof n.data?.label === "string" ? n.data.label : n.type ?? ""),
+}))
 vi.mock("../types", () => ({
   WorkflowStaleError: class extends Error {},
   MAX_CONSECUTIVE_POLL_FAILURES: 5,
@@ -87,7 +93,7 @@ vi.mock("../render-final-checks", () => ({
 }))
 
 const { handleRenderFinal } = await import("../render-final-handler")
-const { detachActiveWorkflowStream } = await import("../run-handlers")
+const { detachActiveWorkflowStream, RUN_CONFIRM_CREDITS } = await import("../run-handlers")
 
 afterEach(() => {
   detachActiveWorkflowStream()
@@ -130,6 +136,14 @@ beforeEach(() => {
   mockRunWorkflow.mockResolvedValue({ executionId: "exec-1" })
   mockFetchQuery.mockResolvedValue({ total: 100_000, tier: "pro" })
   mockEstimateRunCredits.mockReturnValue(480)
+  // One line per node that runs: like the real estimate, a render at Preview
+  // leaves the node after it out (the stop rule).
+  mockEstimateRunCreditLines.mockImplementation((exec: TestNode[], all: TestNode[]) => {
+    const proxy = all.find((x) => x.id === "cut")?.data.quality === "proxy"
+    return exec
+      .filter((x) => !(proxy && x.id === "cap"))
+      .map((x) => ({ nodeId: x.id, label: x.data.label, quantity: { fanOut: 1, units: 1, unitKind: null }, credits: 240 }))
+  })
   mockRule.mockReturnValue({ ok: true })
   mockNewerPatches.mockReturnValue({})
   mockUnchanged.mockResolvedValue(false)
@@ -153,12 +167,48 @@ describe("Render final", () => {
     const confirmRun = vi.fn().mockResolvedValue(true)
     await run("final", makeCtx({ confirmRun }))
     expect(confirmRun).toHaveBeenCalledWith(expect.objectContaining({ trigger: "render-final", alwaysConfirm: true, nodeCount: 2 }))
-    const [executable, allNodes] = mockEstimateRunCredits.mock.calls[0]!
+    const [executable, allNodes] = mockEstimateRunCreditLines.mock.calls[0]!
     const cut = (allNodes as TestNode[]).find((x) => x.id === "cut")!
     expect(cut.data.quality).toBe("final")
     expect((executable as TestNode[]).find((x) => x.id === "cut")!.data.quality).toBe("final")
     // …and the canvas itself still reads Preview.
     expect(CUT.data.quality).toBe("proxy")
+  })
+
+  // U1 (R16 a, decided 2026-10-06): the confirm itemises the run per node.
+  it("the confirm lists each node's price, totals those same lines, and names what is kept as is", async () => {
+    const REC = n("rec", "upload-video", { label: "Recording" })
+    const TR = n("tr", "transcribe", { label: "Transcribe" })
+    mockNodes = [REC, TR, PLAN, CUT, CAP]
+    mockEdges = [{ id: "r", source: "rec", target: "tr" }, { id: "t", source: "tr", target: "plan" }, { id: "s", source: "rec", target: "cut", targetHandle: "sources" }, ...EDGES]
+    const confirmRun = vi.fn().mockResolvedValue(true)
+    await run("final", makeCtx({ confirmRun }))
+    const info = confirmRun.mock.calls[0]![0]
+    expect(info.lines.map((l: { nodeId: string }) => l.nodeId)).toEqual(["cut", "cap"])
+    expect(info.lines[0].renderQuality).toBe("final")
+    expect(info.estimatedCredits).toBe(480) // the sum of the lines
+    expect(info.kept).toEqual(["Transcribe", "plan"]) // the upload is not executable: not listed
+    expect(info.gated).toEqual([])
+    expect(info.waits).toEqual([])
+  })
+
+  // Round 2 (decided 2026-10-06): another render still set to Preview after this
+  // one stops the run there; the confirm names the nodes it holds back.
+  it("with a second Preview render after this one, the confirm names what waits for its own Render final", async () => {
+    const CUT2 = n("cut2", "apply-edl", { label: "Render Clips", quality: "proxy" })
+    const PACK = n("pack", "edit-plan", { label: "Clip Pack" })
+    mockNodes = [PLAN, CUT, CAP, CUT2, PACK]
+    mockEdges = [...EDGES, { id: "c", source: "cap", target: "cut2", targetHandle: "sources" }, { id: "d", source: "cut2", target: "pack" }]
+    // Like the real estimate: a render at Preview leaves what it feeds out.
+    mockEstimateRunCreditLines.mockImplementation((exec: TestNode[]) =>
+      exec.filter((x) => x.id !== "pack").map((x) => ({ nodeId: x.id, label: x.data.label, quantity: { fanOut: 1, units: 1, unitKind: null }, credits: 100 })))
+    const confirmRun = vi.fn().mockResolvedValue(true)
+    await run("final", makeCtx({ confirmRun }))
+    const info = confirmRun.mock.calls[0]![0]
+    expect(info.lines.map((l: { nodeId: string }) => l.nodeId)).toEqual(["cut", "cap", "cut2"])
+    expect(info.waits).toEqual(["Clip Pack"])
+    expect(info.gated).toEqual([])
+    expect(info.estimatedCredits).toBe(300)
   })
 
   it("a declined confirm starts nothing", async () => {
@@ -194,6 +244,19 @@ describe("Update preview", () => {
     expect(opts).toEqual({ inputOverrides: { cut: { quality: "proxy" } } })
     const pending = mockMarkNodesStatus.mock.calls.find(([, status]) => status === "pending")
     expect(pending![0]).toEqual(["cut"])
+  })
+
+  it("the confirm (above the threshold) names what waits for Render final, with no price for it", async () => {
+    mockEstimateRunCreditLines.mockImplementation((exec: TestNode[]) =>
+      exec.filter((x) => x.id !== "cap").map((x) => ({ nodeId: x.id, label: x.data.label, quantity: { fanOut: 1, units: 1, unitKind: null }, credits: RUN_CONFIRM_CREDITS + 1 })))
+    const confirmRun = vi.fn().mockResolvedValue(true)
+    await run("proxy", makeCtx({ confirmRun }))
+    const info = confirmRun.mock.calls[0]![0]
+    expect(info.trigger).toBe("update-preview")
+    expect(info.lines.map((l: { nodeId: string }) => l.nodeId)).toEqual(["cut"])
+    expect(info.lines[0].renderQuality).toBe("proxy")
+    expect(info.gated).toEqual(["cap"])
+    expect(info.estimatedCredits).toBe(RUN_CONFIRM_CREDITS + 1)
   })
 
   it("never asks 'nothing changed' (that is Render final's question)", async () => {

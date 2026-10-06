@@ -131,6 +131,7 @@ vi.mock("../types", () => ({
     return EXECUTABLE.has(n.type ?? "")
   },
   getCostMultiplier: () => 1,
+  getCostFactors: () => ({ fanOut: 1, units: 1, unitKind: null }),
 }))
 
 vi.mock("../execution-graph", () => ({

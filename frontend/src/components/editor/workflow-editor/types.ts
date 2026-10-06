@@ -923,9 +923,28 @@ export function getCostMultiplier(
   edges: WorkflowEdge[],
   rerunIds: ReadonlySet<string>,
 ): number {
-  return (
-    getFanOutMultiplier(node, allNodes, edges, rerunIds) * getPricingUnits(node, allNodes, edges, rerunIds)
-  );
+  const { fanOut, units } = getCostFactors(node, allNodes, edges, rerunIds);
+  return fanOut * units;
+}
+
+/**
+ * The two factors of {@link getCostMultiplier}, kept apart for a surface that
+ * SHOWS them (the Render final confirm's "final · ×6 · 12 min"). Price with
+ * BOTH: `fanOut × units` is the multiplier. `unitKind` names what a unit is
+ * when the confirm can say it ("minute" for an Apply EDL render); null for
+ * every other node, whose units (if any) are not shown.
+ */
+export function getCostFactors(
+  node: WorkflowNode,
+  allNodes: WorkflowNode[],
+  edges: WorkflowEdge[],
+  rerunIds: ReadonlySet<string>,
+): RunCreditQuantity {
+  return {
+    fanOut: getFanOutMultiplier(node, allNodes, edges, rerunIds),
+    units: getPricingUnits(node, allNodes, edges, rerunIds),
+    unitKind: node.type === "apply-edl" ? "minute" : null,
+  };
 }
 
 /**
@@ -1234,6 +1253,33 @@ export interface AskConfirmInfo {
   readonly confirmLabel: string;
 }
 
+/** How many times a node runs and how many units each run prices. */
+export interface RunCreditQuantity {
+  /** Runs of the node: list fan-out × repeat. */
+  readonly fanOut: number;
+  /** Units each run is priced for (output minutes of a render; 1 for most nodes). */
+  readonly units: number;
+  /** What a unit is, when a confirm can say it; null otherwise. */
+  readonly unitKind: "minute" | null;
+}
+
+/** One node's share of a run's estimate (`estimateRunCreditLines`). */
+export interface RunCreditLine {
+  readonly nodeId: string;
+  readonly label: string;
+  readonly quantity: RunCreditQuantity;
+  /** cost × fanOut × units: exactly what the run's total adds for this node. */
+  readonly credits: number;
+}
+
+/** A line as the Render final / Update preview confirm shows it. */
+export interface RunConfirmLine extends RunCreditLine {
+  /** Runs before the render (Camera Switch between the plan and the render). */
+  readonly rerunsFirst?: boolean;
+  /** An Apply EDL render's quality in this run. */
+  readonly renderQuality?: "final" | "proxy";
+}
+
 /** Payload for the run-confirmation dialog (Execute-All always; any run >100cr). */
 export interface RunConfirmInfo {
   /** "render-final" / "update-preview": a run of a review's render set (`handleRenderFinal`). */
@@ -1243,6 +1289,25 @@ export interface RunConfirmInfo {
   readonly estimatedCredits: number | null;
   /** True for Execute-All (confirm regardless of cost). */
   readonly alwaysConfirm: boolean;
+  /**
+   * Render final / Update preview only (U1, decided 2026-10-06): one line per
+   * node the run executes, in graph order. `estimatedCredits` is their sum.
+   */
+  readonly lines?: readonly RunConfirmLine[];
+  /**
+   * The labels of the render's executable ancestors outside the run, one per
+   * node: they keep their saved output. The dialog groups repeats after
+   * translating them.
+   */
+  readonly kept?: readonly string[];
+  /** Update preview only: the labels of the nodes the preview leaves for Render final (not billed now). */
+  readonly gated?: readonly string[];
+  /**
+   * Render final only (round 2, decided 2026-10-06): the labels of the nodes
+   * behind another render still set to Preview after this one. They do not run
+   * in this Render final and wait for that render's own (not billed now).
+   */
+  readonly waits?: readonly string[];
 }
 
 export interface ExecutionContext {
