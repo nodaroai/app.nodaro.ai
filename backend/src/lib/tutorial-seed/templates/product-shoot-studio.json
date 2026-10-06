@@ -14,7 +14,7 @@
     "art-director"
   ],
   "complexity": "intermediate",
-  "estimatedCredits": 63,
+  "estimatedCredits": 53,
   "nodeTypesUsed": [
     "upload-image",
     "text-prompt",

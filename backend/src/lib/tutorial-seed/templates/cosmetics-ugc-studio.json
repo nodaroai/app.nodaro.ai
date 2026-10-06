@@ -15,7 +15,7 @@
     "9:16"
   ],
   "complexity": "beginner",
-  "estimatedCredits": 120,
+  "estimatedCredits": 122,
   "nodeTypesUsed": [
     "upload-image",
     "camera-format",

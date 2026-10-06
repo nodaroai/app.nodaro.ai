@@ -16,7 +16,7 @@
     "loop"
   ],
   "complexity": "intermediate",
-  "estimatedCredits": 219,
+  "estimatedCredits": 149,
   "nodeTypesUsed": [
     "upload-image",
     "text-prompt",

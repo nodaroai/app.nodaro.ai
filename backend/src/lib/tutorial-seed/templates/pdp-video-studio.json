@@ -16,7 +16,7 @@
     "model"
   ],
   "complexity": "intermediate",
-  "estimatedCredits": 170,
+  "estimatedCredits": 227,
   "nodeTypesUsed": [
     "upload-image",
     "person",

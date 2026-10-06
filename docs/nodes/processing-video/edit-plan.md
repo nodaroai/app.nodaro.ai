@@ -77,6 +77,8 @@ The cost on the node, the **Run** button and the run-confirm dialog is an **esti
 
 The estimate never borrows a length from the wired transcript: a transcript on the canvas is from the *previous* run, and after you swap in a longer episode it would under-quote the new one. When the length is unknown the estimate deliberately over-quotes instead — it is what the balance check before a run compares against, so a run is refused up front rather than failing partway after earlier nodes were charged. Whatever the estimate showed, what you are **charged is always checked against the recording's real duration**: the server measures the master itself before it reserves, and a run whose master cannot be measured is refused and refunded rather than charged on a guess.
 
+The listed price of a published template or app has no recording to read, so it counts Edit Plan at the node's own mode and tier at the 180-minute bucket.
+
 ## Multicam: recordings on different clocks
 
 When a conversation is recorded on several devices — a mic recorder plus one or more cameras — each file starts at a different moment. Wire every recording into both an [Audio Sync](../processing-audio/audio-sync.md) node and Edit Plan's **Sources**, and Audio Sync's **Offsets** output into Edit Plan's **Offsets** input. Use the **same upstream nodes** in both: offsets are matched to sources by node.

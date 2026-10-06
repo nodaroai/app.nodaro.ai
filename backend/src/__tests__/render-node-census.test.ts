@@ -72,6 +72,8 @@ const ALLOWLIST: readonly Entry[] = [
   ["backend/src/lib/tutorial-seed/templates/podcast-clip-pack.json", `"type": "apply-edl"`, "template"],
   ["backend/src/lib/tutorial-seed/templates/podcast-tighten-episode.json", `"apply-edl"`, "template"],
   ["backend/src/lib/tutorial-seed/templates/podcast-tighten-episode.json", `"type": "apply-edl"`, "template"],
+  ["backend/src/lib/tutorial-seed/templates/podcast-multicam-cut.json", `"apply-edl"`, "template"],
+  ["backend/src/lib/tutorial-seed/templates/podcast-multicam-cut.json", `"type": "apply-edl"`, "template"],
   ["backend/src/providers/video/edl-timeline.ts", `export const APPLY_EDL_LABEL = "apply-edl"`, "the timeline's default label: Apply EDL's work dir, log and checkpoint prefix"],
   ["backend/src/routes/apply-edl.ts", `force_private: extractForcePrivate(req.body) || isPreviewRender("apply-edl"`, "the node's own route"],
   ["backend/src/routes/apply-edl.ts", `"apply-edl"`, "the node's own route (credit guard job)"],

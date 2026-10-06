@@ -18,7 +18,7 @@
     "video-ads"
   ],
   "complexity": "advanced",
-  "estimatedCredits": 176,
+  "estimatedCredits": 146,
   "nodeTypesUsed": [
     "upload-image",
     "text-prompt",

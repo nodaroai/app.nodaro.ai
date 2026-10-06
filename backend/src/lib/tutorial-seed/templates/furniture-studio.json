@@ -15,7 +15,7 @@
     "material-variants"
   ],
   "complexity": "intermediate",
-  "estimatedCredits": 150,
+  "estimatedCredits": 122,
   "nodeTypesUsed": [
     "upload-image",
     "lighting",

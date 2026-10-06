@@ -1,0 +1,410 @@
+{
+  "slug": "podcast-multicam-cut",
+  "name": "Multicam Cut",
+  "description": "Edit a podcast filmed on several cameras: line the recordings up, tighten the episode, then cut to whoever is talking — the sound stays on the master track throughout.",
+  "markdownDescription": null,
+  "category": "automations",
+  "outputTypes": [
+    "video"
+  ],
+  "tags": [
+    "podcast",
+    "multicam",
+    "editing",
+    "video"
+  ],
+  "complexity": "intermediate",
+  "previewMediaUrl": null,
+  "previewMediaType": null,
+  "listedIn": [
+    "marketplace"
+  ],
+  "tutorialCategorySlug": "workflows",
+  "tutorialSortOrder": 2,
+  "estimatedCredits": 792,
+  "nodeTypesUsed": [
+    "upload-audio",
+    "upload-video",
+    "audio-sync",
+    "transcribe",
+    "edit-plan",
+    "camera-switch",
+    "apply-edl",
+    "sticky-note"
+  ],
+  "providersUsed": [
+    "elevenlabs-stt"
+  ],
+  "nodes": [
+    {
+      "id": "multicam-note-intro",
+      "type": "sticky-note",
+      "zIndex": -1,
+      "position": {
+        "x": -100,
+        "y": -760
+      },
+      "data": {
+        "bold": false,
+        "text": "Multicam Cut\n\nUpload the recordings of one conversation: a camera per speaker, a wide shot and the master audio (the mixer or recorder track). Audio Sync lines their clocks up, Transcribe reads the master with speaker labels, the Tighten Plan node (Cloud) trims the episode, Camera Switch (Cloud) puts each stretch on the camera of whoever is talking, and Apply Cut renders it. The sound always comes from the master; only the picture switches.\n\nDrop a file on each recording node, then Run down the chain.",
+        "color": "#2d2d44",
+        "label": "Sticky Note",
+        "width": 500,
+        "height": 340,
+        "italic": false,
+        "fontSize": "base",
+        "alignment": "left",
+        "textColor": "#ffffff"
+      },
+      "measured": {
+        "width": 500,
+        "height": 340
+      }
+    },
+    {
+      "id": "multicam-master",
+      "type": "upload-audio",
+      "position": {
+        "x": 0,
+        "y": -320
+      },
+      "data": {
+        "label": "Master Audio",
+        "assetId": "",
+        "url": ""
+      }
+    },
+    {
+      "id": "multicam-cam-a",
+      "type": "upload-video",
+      "position": {
+        "x": 0,
+        "y": -60
+      },
+      "data": {
+        "label": "Camera 1",
+        "assetId": "",
+        "url": ""
+      }
+    },
+    {
+      "id": "multicam-cam-b",
+      "type": "upload-video",
+      "position": {
+        "x": 0,
+        "y": 260
+      },
+      "data": {
+        "label": "Camera 2",
+        "assetId": "",
+        "url": ""
+      }
+    },
+    {
+      "id": "multicam-wide",
+      "type": "upload-video",
+      "position": {
+        "x": 0,
+        "y": 580
+      },
+      "data": {
+        "label": "Wide Camera",
+        "assetId": "",
+        "url": ""
+      }
+    },
+    {
+      "id": "multicam-note-sources",
+      "type": "sticky-note",
+      "zIndex": -1,
+      "position": {
+        "x": -580,
+        "y": -60
+      },
+      "data": {
+        "bold": false,
+        "text": "The recordings\n\nMaster Audio is the clock and the soundtrack: Tighten Plan marks it as master audio, and Audio Sync measures every camera against it. Camera 1 and Camera 2 are the close-ups; Wide Camera is marked Wide, so Camera Switch cuts to it now and then and falls back to it when a speaker has no camera.\n\nMore cameras (2 to 6 recordings in all): add an Upload Video node and wire it into both Audio Sync's and Tighten Plan's Sources. Fewer: delete the node. Every recording node needs a file before you run.",
+        "color": "#2d2d44",
+        "label": "Sticky Note",
+        "width": 440,
+        "height": 380,
+        "italic": false,
+        "fontSize": "base",
+        "alignment": "left",
+        "textColor": "#ffffff"
+      },
+      "measured": {
+        "width": 440,
+        "height": 380
+      }
+    },
+    {
+      "id": "multicam-sync",
+      "type": "audio-sync",
+      "position": {
+        "x": 460,
+        "y": 380
+      },
+      "data": {
+        "label": "Audio Sync",
+        "reference": "multicam-master",
+        "sourceOrder": [
+          "multicam-master",
+          "multicam-cam-a",
+          "multicam-cam-b",
+          "multicam-wide"
+        ],
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "multicam-transcribe",
+      "type": "transcribe",
+      "position": {
+        "x": 460,
+        "y": -320
+      },
+      "data": {
+        "label": "Transcribe",
+        "provider": "elevenlabs-stt",
+        "language": "auto",
+        "diarize": true,
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "multicam-plan",
+      "type": "edit-plan",
+      "position": {
+        "x": 920,
+        "y": 20
+      },
+      "data": {
+        "label": "Tighten Plan",
+        "mode": "tighten",
+        "planTier": "standard",
+        "instructions": "",
+        "sourceOrder": [
+          "multicam-master",
+          "multicam-cam-a",
+          "multicam-cam-b",
+          "multicam-wide"
+        ],
+        "sourceConfig": {
+          "multicam-master": {
+            "role": "master-audio"
+          },
+          "multicam-cam-a": {
+            "role": "camera"
+          },
+          "multicam-cam-b": {
+            "role": "camera"
+          },
+          "multicam-wide": {
+            "role": "wide"
+          }
+        },
+        "fieldMappings": {},
+        "executionStatus": "idle"
+      }
+    },
+    {
+      "id": "multicam-switch",
+      "type": "camera-switch",
+      "position": {
+        "x": 1380,
+        "y": 20
+      },
+      "data": {
+        "label": "Camera Switch",
+        "layoutHints": false,
+        "fieldMappings": {},
+        "executionStatus": "idle"
+      }
+    },
+    {
+      "id": "multicam-note-switch",
+      "type": "sticky-note",
+      "zIndex": -1,
+      "position": {
+        "x": 1360,
+        "y": -400
+      },
+      "data": {
+        "bold": false,
+        "text": "Who is on screen\n\nCamera Switch gives speaker 1 Camera 1 and speaker 2 Camera 2 by default; open its settings to name the speakers or change their cameras. A turn shorter than the shortest shot (2.5 s) never causes a cut.\n\nLayout hints are OFF, so the edit stays cut-only: when two people talk over each other, the picture stays on the active speaker's camera, which Apply Cut renders. Turn them on only if you render through Speaker View instead.",
+        "color": "#2d2d44",
+        "label": "Sticky Note",
+        "width": 440,
+        "height": 340,
+        "italic": false,
+        "fontSize": "base",
+        "alignment": "left",
+        "textColor": "#ffffff"
+      },
+      "measured": {
+        "width": 440,
+        "height": 340
+      }
+    },
+    {
+      "id": "multicam-apply",
+      "type": "apply-edl",
+      "position": {
+        "x": 1840,
+        "y": 20
+      },
+      "data": {
+        "label": "Apply Cut",
+        "output": "video",
+        "quality": "final",
+        "crossfadeMs": 0,
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "multicam-note-render",
+      "type": "sticky-note",
+      "zIndex": -1,
+      "position": {
+        "x": 1820,
+        "y": -360
+      },
+      "data": {
+        "bold": false,
+        "text": "The render\n\nApply Cut reads each camera at the right moment from the switched edit itself, so the cameras are not wired into it. Its Transcript output is the named transcript remapped onto the cut: wire it into an Add Captions node to caption the episode.",
+        "color": "#2d2d44",
+        "label": "Sticky Note",
+        "width": 400,
+        "height": 260,
+        "italic": false,
+        "fontSize": "base",
+        "alignment": "left",
+        "textColor": "#ffffff"
+      },
+      "measured": {
+        "width": 400,
+        "height": 260
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "multicam-e-master-transcribe",
+      "source": "multicam-master",
+      "target": "multicam-transcribe",
+      "sourceHandle": "audio",
+      "targetHandle": "audio"
+    },
+    {
+      "id": "multicam-e-master-sync",
+      "source": "multicam-master",
+      "target": "multicam-sync",
+      "sourceHandle": "audio",
+      "targetHandle": "sources"
+    },
+    {
+      "id": "multicam-e-cam-a-sync",
+      "source": "multicam-cam-a",
+      "target": "multicam-sync",
+      "sourceHandle": "video",
+      "targetHandle": "sources"
+    },
+    {
+      "id": "multicam-e-cam-b-sync",
+      "source": "multicam-cam-b",
+      "target": "multicam-sync",
+      "sourceHandle": "video",
+      "targetHandle": "sources"
+    },
+    {
+      "id": "multicam-e-wide-sync",
+      "source": "multicam-wide",
+      "target": "multicam-sync",
+      "sourceHandle": "video",
+      "targetHandle": "sources"
+    },
+    {
+      "id": "multicam-e-master-plan",
+      "source": "multicam-master",
+      "target": "multicam-plan",
+      "sourceHandle": "audio",
+      "targetHandle": "sources"
+    },
+    {
+      "id": "multicam-e-cam-a-plan",
+      "source": "multicam-cam-a",
+      "target": "multicam-plan",
+      "sourceHandle": "video",
+      "targetHandle": "sources"
+    },
+    {
+      "id": "multicam-e-cam-b-plan",
+      "source": "multicam-cam-b",
+      "target": "multicam-plan",
+      "sourceHandle": "video",
+      "targetHandle": "sources"
+    },
+    {
+      "id": "multicam-e-wide-plan",
+      "source": "multicam-wide",
+      "target": "multicam-plan",
+      "sourceHandle": "video",
+      "targetHandle": "sources"
+    },
+    {
+      "id": "multicam-e-sync-plan",
+      "source": "multicam-sync",
+      "target": "multicam-plan",
+      "sourceHandle": "json",
+      "targetHandle": "offsets"
+    },
+    {
+      "id": "multicam-e-transcribe-plan",
+      "source": "multicam-transcribe",
+      "target": "multicam-plan",
+      "sourceHandle": "json",
+      "targetHandle": "transcript"
+    },
+    {
+      "id": "multicam-e-plan-switch",
+      "source": "multicam-plan",
+      "target": "multicam-switch",
+      "sourceHandle": "edl",
+      "targetHandle": "edl"
+    },
+    {
+      "id": "multicam-e-transcribe-switch",
+      "source": "multicam-transcribe",
+      "target": "multicam-switch",
+      "sourceHandle": "json",
+      "targetHandle": "transcript"
+    },
+    {
+      "id": "multicam-e-switch-apply",
+      "source": "multicam-switch",
+      "target": "multicam-apply",
+      "sourceHandle": "edl",
+      "targetHandle": "edl"
+    },
+    {
+      "id": "multicam-e-switch-apply-transcript",
+      "source": "multicam-switch",
+      "target": "multicam-apply",
+      "sourceHandle": "transcript",
+      "targetHandle": "transcript"
+    }
+  ],
+  "settings": {
+    "viewport": {
+      "x": 160,
+      "y": 420,
+      "zoom": 0.5
+    },
+    "flowPromptTemplates": {},
+    "characterDefinitions": [],
+    "presentationSettings": {
+      "runTarget": "workflow"
+    }
+  }
+}

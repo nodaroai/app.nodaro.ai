@@ -17,7 +17,7 @@
     "web-research"
   ],
   "complexity": "advanced",
-  "estimatedCredits": 1065,
+  "estimatedCredits": 974,
   "nodeTypesUsed": [
     "upload-image",
     "text-prompt",
