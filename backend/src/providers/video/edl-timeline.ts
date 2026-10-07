@@ -312,9 +312,12 @@ export function sliceArgv(
 
 /** The slice's predicted peak memory — its canvas and segments at the thread
  *  counts it runs with (the explicit ones, or the ones ffmpeg picks when none
- *  are placed); undefined for a sound-only slice (the launcher's default). */
+ *  are placed), plus the zoom's term when its picture declared one
+ *  (`memoryHint`); undefined for a sound-only slice (the launcher's default). */
 export function slicePeakMemoryMiB(cmd: SliceCommand, threads: FfmpegThreads | undefined): number | undefined {
-  return cmd.memoryBasis ? canvasPeakMemoryMiB(cmd.memoryBasis, cmd.memoryBasis.segments, threads ?? ffmpegEffectiveThreads()) : undefined
+  const basis = cmd.memoryBasis
+  if (!basis) return undefined
+  return canvasPeakMemoryMiB(basis, basis.segments, threads ?? ffmpegEffectiveThreads(), basis.zoom ? { zoom: true } : undefined)
 }
 
 /** Run a built slice (`sliceArgv`): write the graph file, render `outPath`. */

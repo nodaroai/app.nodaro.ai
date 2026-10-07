@@ -698,8 +698,23 @@ export interface PluginEdlPictureContext {
  * `amovie=` source or a `sendcmd` command file (pass the commands inline,
  * `c=`) is refused as deterministic; other file-reading filters are not
  * checked, and must not be used either.
+ *
+ * `memoryHint` (ADDITIVE-OPTIONAL, decided 2026-10-07; no contract bump): what
+ * the fragment draws that costs memory beyond its canvas. `zoom: true` on
+ * every segment drawn with a zoom's window (its tween, its rest, and a later
+ * segment carried on that window) makes the slice reserve the host's zoom
+ * term (`zoomPeakMemoryMiB`, `providers/video/ffmpeg-memory-model.ts`) once,
+ * sized from the launch's own thread counts — so name the effect, never a
+ * figure. Without it the slice reserves what it always has. A malformed hint
+ * (not an object, or a non-boolean `zoom`) is refused as deterministic;
+ * unknown keys are ignored for forward compatibility, so a misspelled key
+ * (`zooms`, `Zoom`) reads as no hint and the slice reserves no zoom term. Not
+ * part of the graph, so not part of the checkpoint key. An older host ignores
+ * the field (its slice reserves the no-zoom prediction).
  */
-export type PluginEdlPictureFragment = { readonly chain: string } | { readonly graph: string }
+export type PluginEdlPictureFragment = ({ readonly chain: string } | { readonly graph: string }) & {
+  readonly memoryHint?: { readonly zoom?: boolean }
+}
 
 /** Mirrors `EdlTimelineOptions` (`providers/video/edl-timeline.ts`). */
 export interface PluginEdlTimelineOptions {

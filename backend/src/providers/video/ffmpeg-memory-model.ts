@@ -45,6 +45,38 @@
  * ExtractAudio makes) peaks at ~39 MiB RSS at 1, 8 and the default thread counts
  * alike — the figure sits far above it, by design.
  *
+ * A ZOOM (decided 2026-10-07) adds a term of its own (`zoomPeakMemoryMiB`): a
+ * Speaker View zoom crops its camera to the start box and scales that window
+ * (about 1.56× the canvas) on every frame of the segment, the tween's and the
+ * rest's, so its slice holds more than the canvas model predicts. The picture
+ * builder says which segments draw one (`EdlPictureFragment.memoryHint`);
+ * without the hint the prediction is exactly the one above.
+ *
+ * MEASURED by the Speaker View plugin's probes (F4b / F4c): a one-segment
+ * 1080p slice, launched with the host's thread counts and encoder, ffmpeg's
+ * own peak RSS, the zoom slice against the static slice of the same framing:
+ *   2 threads (pinned n8.1.2, the 2-vCPU CI runner)  +103 to +118 MiB, flat in
+ *     the box (0.40 down to 0.03 of the frame width);
+ *   16 / 32 / 48 threads (macOS, ffmpeg 9.0.2)      about +330 / +260 / +350
+ *     MiB (worst pairings 339 / 271 / 362), the 48-thread row indicative only.
+ * At 16 threads the zoom slice (945 MiB) passed the no-zoom prediction (924);
+ * at production's 32 (1,425 MiB) it passed it (1,291) by 134 MiB.
+ *
+ * The term is fitted like the canvas model, per canvas megapixel and per
+ * thread, least squares over the four thread counts' worst pairings:
+ *   zoom ≈ MP·(82.65 + 2.0·T) MiB,
+ * T = the graph's side of the counts (decode / filter): the zoom adds crops,
+ * scales, a split and pads — filter-graph work — and leaves the encoder as it
+ * was. Every measured row had equal counts, so the split is by mechanism, not
+ * measured. So is the scaling with the canvas: every row is 1080p (one 9:16),
+ * and the term follows the megapixels because its windows are canvas-sized.
+ * The fit misses the 16-thread row by 101 MiB, so a flat 110 is added — the
+ * smallest multiple of 10 that puts the TERM alone at or above every measured
+ * zoom term, so it never leans on the canvas model's own margin
+ * (`ffmpeg-memory-zoom.test.ts` holds the table). It is charged ONCE per
+ * slice, however many of its segments zoom: every measured slice held one
+ * zoom segment; a slice with several was not measured.
+ *
  * Pure.
  */
 import type { FfmpegThreads } from "./ffmpeg-threads.js"
@@ -57,6 +89,19 @@ const PER_MEGAPIXEL_SEGMENT_MIB = 8.85
 const PER_MEGAPIXEL_ENCODE_THREAD_MIB = 8.15
 const PER_MEGAPIXEL_DECODE_THREAD_MIB = 2.9
 
+/** The zoom's terms (MiB): flat margin, per canvas megapixel, per
+ *  megapixel-thread (the graph's side). */
+const ZOOM_MARGIN_MIB = 110
+const ZOOM_PER_MEGAPIXEL_MIB = 82.65
+const ZOOM_PER_MEGAPIXEL_THREAD_MIB = 2.0
+
+/** What a slice draws beyond its canvas and segments, as its picture builder
+ *  declares it (`EdlPictureFragment.memoryHint`). Absent: nothing. */
+export interface PictureMemoryExtras {
+  /** Some segment of the slice draws a zoom. */
+  readonly zoom?: boolean
+}
+
 /** 4K: the picture size assumed when a launch cannot say what it will process. */
 export const UHD_CANVAS = { width: 3840, height: 2160 } as const
 
@@ -68,11 +113,13 @@ const DEFAULT_PER_THREAD_MIB = 22.9
  *  same pipeline stage count in every probe, so the larger of the two stands. */
 const decodeSide = (threads: FfmpegThreads): number => Math.max(threads.decode, threads.filter)
 
-/** One picture launch's predicted peak memory in MiB, rounded up. */
+/** One picture launch's predicted peak memory in MiB, rounded up — with the
+ *  zoom's term when `extras.zoom` says the slice draws one. */
 export function canvasPeakMemoryMiB(
   canvas: { readonly width: number; readonly height: number },
   segments: number,
   threads: FfmpegThreads,
+  extras?: PictureMemoryExtras,
 ): number {
   const megapixels = (canvas.width * canvas.height) / 1e6
   const perMegapixel =
@@ -80,7 +127,16 @@ export function canvasPeakMemoryMiB(
     PER_MEGAPIXEL_SEGMENT_MIB * Math.max(1, segments) +
     PER_MEGAPIXEL_ENCODE_THREAD_MIB * threads.encode +
     PER_MEGAPIXEL_DECODE_THREAD_MIB * decodeSide(threads)
-  return Math.ceil(BASE_MIB + megapixels * perMegapixel)
+  const zoom = extras?.zoom === true ? zoomPeakMemoryMiB(canvas, threads) : 0
+  return Math.ceil(BASE_MIB + megapixels * perMegapixel + zoom)
+}
+
+/** The zoom's own term in MiB, unrounded: 110 + MP·(82.65 + 2.0·T), T the
+ *  graph's side of the launch's counts. Charged once per slice that draws a
+ *  zoom (`canvasPeakMemoryMiB` with `{ zoom: true }`). */
+export function zoomPeakMemoryMiB(canvas: { readonly width: number; readonly height: number }, threads: FfmpegThreads): number {
+  const megapixels = (canvas.width * canvas.height) / 1e6
+  return ZOOM_MARGIN_MIB + megapixels * (ZOOM_PER_MEGAPIXEL_MIB + ZOOM_PER_MEGAPIXEL_THREAD_MIB * decodeSide(threads))
 }
 
 /** What a launch that predicts nothing reserves, in MiB: 393 + 22.9·T at the
