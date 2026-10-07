@@ -767,6 +767,14 @@ export {
   type RenderJsonKind,
 } from "./render-nodes.js"
 export {
+  jsonOutputKind,
+  jsonInputKind,
+  jsonKindMismatch,
+  jsonKindMismatchMessage,
+  type JsonKind,
+  type JsonKindMismatch,
+} from "./json-kinds.js"
+export {
   PREVIEW_RENDER_NODE_TYPES,
   PREVIEW_REVIEW_REQUIRED,
   PREVIEW_RENDER_NESTED,

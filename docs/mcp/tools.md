@@ -296,7 +296,11 @@ does not declare is stored as sent and reported in `edgeWarnings` — the canvas
 edge only on a handle the node renders, so read a node's handle ids from
 `get_node_skill`. An edge naming a node that does not exist, a self-loop, an edge with
 a missing endpoint, or the same connection sent twice without an `id` is dropped and
-reported in `edgeWarnings` (the orchestrator never ran it). Two edges with the same
+reported in `edgeWarnings` (the orchestrator never ran it). An edit-list (EDL) output
+wired into a Transcript input (Edit Plan's or Camera Switch's `edl` into Add Captions'
+`transcript`, for example) is dropped the same way, with the reason in the warning: an
+EDL is not a transcript, and the canvas refuses that connection too. So is the reverse, a
+transcript output (Transcribe's `json`, Camera Switch's `transcript`) wired into an `edl` input. Two edges with the same
 `id` refuse the whole write; nothing is stored.
 
 ---
