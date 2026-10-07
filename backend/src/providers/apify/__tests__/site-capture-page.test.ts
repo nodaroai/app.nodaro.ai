@@ -149,6 +149,18 @@ describe("planSections — categories", () => {
   ])("pricing from a %s amount", (_c, text) => {
     expect(categoryOf({ title: "Our offer", text })).toBe("pricing")
   })
+  // The word "plan" alone is not a price: it is also a verb ("Plan and navigate", "Planning and monitoring").
+  it("a section about planning, with no price anywhere, is a feature", () => {
+    const text = "Plan and navigate from idea to launch. Align your team with product initiatives, strategic roadmaps, and clear, up-to-date PRDs."
+    expect(categoryOf({ title: "Planning and monitoring", text, words: 22 })).toBe("feature")
+  })
+  it.each([
+    ["a free plan", "Start on the free plan and upgrade when your team grows."],
+    ["the word pricing", "Pricing for every team"],
+    ["a period", "Billed per seat, per month"],
+  ])("pricing from %s", (_c, text) => {
+    expect(categoryOf({ title: "Our offer", text })).toBe("pricing")
+  })
   it("proof from a rating", () => expect(categoryOf({ title: "What people say", text: "4.8 stars on average" })).toBe("proof"))
   it("proof from a blockquote", () => expect(categoryOf({ title: "What people say", text: "lorem ipsum dolor", blockquote: true })).toBe("proof"))
   it("a logo wall is other", () => expect(categoryOf({ title: "Trusted by teams", words: 3, images: 6 })).toBe("other"))
