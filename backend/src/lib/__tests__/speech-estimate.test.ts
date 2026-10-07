@@ -24,7 +24,7 @@ vi.mock("@/lib/app-settings.js", () => ({ getAppSettings: vi.fn() }))
 
 import { getMaxTtsChars, getDialogueCapabilities, SPEECH_FLOOR_UNITS } from "@nodaro/shared"
 import { billableSpeechChars } from "../speech-credits.js"
-import { speechEstimate, speechEstimateChars, speechLineEstimate, upstreamSpeechText } from "../speech-estimate.js"
+import { llmScriptChars, speechEstimate, speechEstimateChars, speechLineEstimate, upstreamSpeechText } from "../speech-estimate.js"
 
 const tts = (data: Record<string, unknown>) => ({ textSource: "direct", provider: "elevenlabs-v4", ...data })
 
@@ -77,7 +77,12 @@ describe("speechEstimateChars — text-to-speech", () => {
     // exposed, no limit: the stored text is the author's placeholder — unknown, the cap
     expect(upstreamSpeechText(tts1, [tts1, text], [edge("s")], { "s:text": null })).toEqual({ wireUnknown: true })
     expect(upstreamSpeechText(tts1, [tts1, { ...text, data: { text: "{Topic} intro" } }], [edge("s")], {})).toEqual({ wireUnknown: true })
-    expect(upstreamSpeechText(tts1, [tts1, llm], [edge("l")], {})).toEqual({ wireUnknown: true })
+    // an LLM node's text is unknown too (the price reads the cap), and carries how many tokens it can write (the listing's length bound)
+    expect(upstreamSpeechText(tts1, [tts1, llm], [edge("l")], {})).toEqual({ wireUnknown: true, llmOutputTokens: 8192 })
+    expect(upstreamSpeechText(tts1, [tts1, { ...llm, data: { llmModel: "claude-sonnet-4.6", maxTokens: 200 } }], [edge("l")], {})).toEqual({ wireUnknown: true, llmOutputTokens: 200 })
+    expect(speechEstimateChars("text-to-speech", tts({ textSource: "connected" }), { wireUnknown: true, llmOutputTokens: 200 })).toMatchObject({ exact: false, chars: 10000 })
+    // any other node is just unknown
+    expect(upstreamSpeechText(tts1, [tts1, { id: "l", type: "image-to-text", data: { maxTokens: 200 } }], [edge("l")], {})).toEqual({ wireUnknown: true })
     // a null handle counts as the prompt (the resolver's `inputs.prompt = output` fallback)
     expect(upstreamSpeechText(tts1, [tts1, text], [{ source: "s", target: "t", targetHandle: null }], {})).toEqual({ upstreamText: "a".repeat(500) })
     // an edge into another handle (a Character's voice) is not the text
@@ -139,5 +144,31 @@ describe("speechEstimate — the (row, units) pair", () => {
     expect(speechLineEstimate("elevenlabs", "a".repeat(1001))).toEqual({ id: "elevenlabs-turbo:per-100-chars", units: 11 })
     // an LLM-written `{` is text here
     expect(speechLineEstimate("elevenlabs-v4", "{" + "a".repeat(899) + "}")).toEqual({ id: "elevenlabs-v4:per-100-chars", units: 10 })
+  })
+})
+
+describe("llmScriptChars — the LLM script bound", () => {
+  const ctx = { wireUnknown: true, llmOutputTokens: 200 }
+
+  it("bounds an unknown connected script at the tokens x 8", () => {
+    expect(llmScriptChars("text-to-speech", tts({ textSource: "connected" }), ctx)).toBe(1600)
+  })
+
+  it("a direct text with a {Reference} is unbounded, wire or not: the run speaks that text, whatever it resolves to", () => {
+    expect(llmScriptChars("text-to-speech", tts({ textSource: "direct", directText: "{Script}" }), ctx)).toBeUndefined()
+    expect(llmScriptChars("text-to-speech", tts({ textSource: "direct", directText: "Read: {Script}" }), ctx)).toBeUndefined()
+  })
+
+  it("a connected node's own fallback text with a {Reference} is unbounded too (a blank LLM output falls back to it)", () => {
+    expect(llmScriptChars("text-to-speech", tts({ textSource: "connected", directText: "{Script}" }), ctx)).toBeUndefined()
+  })
+
+  it("a direct node with its own text ignores the wire: no LLM bound", () => {
+    expect(llmScriptChars("text-to-speech", tts({ textSource: "direct", directText: "hello" }), ctx)).toBeUndefined()
+  })
+
+  it("counts the own-text fallback as the run sends it, wrapped in the pre/post text (joined by a space)", () => {
+    const data = tts({ textSource: "connected", directText: "a".repeat(2000), promptSuffix: "b".repeat(500) })
+    expect(llmScriptChars("text-to-speech", data, ctx)).toBe(2501)
   })
 })

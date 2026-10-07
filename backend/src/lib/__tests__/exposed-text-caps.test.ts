@@ -78,4 +78,27 @@ describe("exposedTextCaps", () => {
     })
     expect("maxLength" in bad.fields[0]!).toBe(false)
   })
+
+  describe("an LLM node's exposed output budget (a generated voice's script is bounded by it)", () => {
+    const llmNodes = [
+      { id: "l", type: "llm-chat", data: { label: "Writer", maxTokens: 200, llmModel: "claude-sonnet-4.6" } },
+      { id: "w", type: "ai-writer", data: { label: "Writer 2" } },
+      { id: "i", type: "generate-image", data: { label: "Image", maxTokens: 5 } },
+    ]
+    const exposing = (...items: Array<Record<string, unknown>>) => ({ presentationSettings: { inputItems: items } })
+
+    it("a maxTokens slider is keyed with its largest value; model, effort and advanced mode are keyed null", () => {
+      const settings = exposing(
+        { type: "field", id: "a", nodeId: "l", field: "maxTokens" },
+        { type: "field", id: "b", nodeId: "l", field: "llmModel", allowedValues: ["claude-sonnet-4.6", "claude-opus-5"] },
+        { type: "field", id: "c", nodeId: "w", field: "reasoningEffort", allowedValues: ["low", "max"] },
+      )
+      expect(exposedTextCaps(settings, llmNodes)).toEqual({ "l:maxTokens": 16384, "l:llmModel": null, "w:reasoningEffort": null })
+    })
+
+    it("any other LLM field is not keyed", () => {
+      const settings = exposing({ type: "field", id: "b", nodeId: "l", field: "temperature" })
+      expect(exposedTextCaps(settings, llmNodes)).toEqual({})
+    })
+  })
 })

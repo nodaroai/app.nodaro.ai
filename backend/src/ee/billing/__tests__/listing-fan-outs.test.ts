@@ -169,11 +169,14 @@ describe("every \"never quotes less\" sentence names only Edit Plan's step and a
       // (decided 2026-10-07). listing-length-priced-utilities.test.ts pins both.
       expect(s, rel).toMatch(/other than the episode/)
       expect(s, rel).toMatch(/intro card/)
-      // The output of a step whose length the listing does not follow (Resize
-      // Video, for one) stays at the default length. Trim, Loop, Combine Videos
-      // and Video SFX pass theirs on (review round, decided 2026-10-07), so
-      // the exception is qualified, never "any other step's output".
-      expect(s, rel).toMatch(/output of another step whose length the listing does not follow/)
+      // Every step that delivers a video passes a length on (decided
+      // 2026-10-07; video-output-length.test.ts pins a rule for each), so the
+      // exception is only a video whose length is not known before the run,
+      // never "any other step's output" and no longer Resize Video or Lip Sync.
+      expect(s, rel).toMatch(/output of a step with no length before the run/)
+      expect(s, rel).not.toMatch(/Resize Video/)
+      expect(s, rel).not.toMatch(/Lip Sync/)
+      expect(s, rel).not.toMatch(/whose length the listing does not follow/)
       // A generated video lists at its configured duration (decided
       // 2026-10-07): no longer an exception.
       expect(s, rel).not.toMatch(/generated video/)

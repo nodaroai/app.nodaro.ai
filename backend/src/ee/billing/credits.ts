@@ -1,8 +1,16 @@
 import { usdToCredits, PARAMETER_NODE_TYPES, withWiredSettings, MUSIC_CREDIT_ID, TEXT_TO_AUDIO_SFX_CREDIT_IDS, textToAudioCreditId, CAMERA_SWITCH_CREDIT_ID, LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec, LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec, videoSfxCreditId, VIDEO_SFX_PRICING, VIDEO_UTIL_PRICING, applyEdlCreditId, UGC_NODE_TYPES, dialogueProviderOf, EDIT_PLAN_MAX_MINUTES, isRenderNodeType } from "@nodaro/shared"
 import { trySettleManagedJob } from "./managed-job-settlement.js"
-import { generatedVideoLengthSec } from "../../lib/generated-video-length.js"
+import {
+  generatedVoiceLength,
+  knownLength,
+  videoOutputLength,
+  wireKindOf,
+  type InputLength,
+  type WireInput,
+  type WireLength,
+} from "../../lib/video-output-length.js"
 import { previewStopsForListing, previewStopsWhenEnabled } from "../../lib/preview-stop-rule.js"
-import { inlineEdlMinutes, knownLength, LENGTH_PRICED_UTILITY_TYPES, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, runWireLengthSec, utilityOutputLength, videoSfxClipSec, type InputLength, type WireLength, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength } from "@nodaro/render-rules"
+import { inlineEdlMinutes, LENGTH_PRICED_UTILITY_TYPES, nodeFanOut, nodeProviders, renderFinalRunSet, resolveApplyEdlEstimateLength, runWireLengthSec, videoSfxClipSec, resolveApplyEdlEstimateMinutes, resolveEditPlanEpisodeSec, resolveEditPlanEstimateDurationSec, resolveGraphOrigin, mediaLengthSecOf, withoutMediaLength } from "@nodaro/render-rules"
 import { editPlanPerMinuteActive } from "../../lib/private-plugins/edit-plan-per-minute.js"
 import { supabase } from "../../lib/supabase.js"
 import { ReserveRpcError, reservePrefixOf } from "../../lib/reserve-errors.js"
@@ -33,7 +41,7 @@ import { AI_AVATAR_RATE_USD_PER_SEC, aiAvatarHoldCredits } from "../../lib/prici
 import { applyServiceMarkup } from "./service-margin.js"
 import { videoUtilityBaseCredits, videoUtilityEstimateBody } from "../../lib/video-utility-credits.js"
 import { speechUnitRowServed } from "../../lib/speech-credits.js"
-import { speechEstimate, upstreamSpeechText, type ExposedTextCaps } from "../../lib/speech-estimate.js"
+import { SPEECH_NODE_TYPES, llmScriptChars, speechEstimate, speechEstimateChars, speechScriptTraits, upstreamSpeechText, type ExposedTextCaps } from "../../lib/speech-estimate.js"
 import { exposedMediaNodeIds } from "../../lib/exposed-text-caps.js"
 import { getWelcomeOfferConfig } from "../lib/welcome-offer-config.js"
 import { ConsentRequiredError } from "../lib/consent-required.js"
@@ -3605,9 +3613,10 @@ export class CreditsService {
       readonly replaceableMediaNodeIds?: ReadonlySet<string>
       readonly exposedListNodeIds?: ReadonlySet<string>
       readonly editPlanPerMinute?: boolean
+      readonly speechTextCaps?: ExposedTextCaps
     },
   ): AppListingEstimate {
-    return listingEstimate(nodes, edges ?? [], staticBasePrices(options?.editPlanPerMinute), publishType, undefined, undefined, options?.replaceableMediaNodeIds, options?.exposedListNodeIds)
+    return listingEstimate(nodes, edges ?? [], staticBasePrices(options?.editPlanPerMinute), publishType, undefined, options?.speechTextCaps, options?.replaceableMediaNodeIds, options?.exposedListNodeIds)
   }
 }
 
@@ -3944,17 +3953,20 @@ function editPlanListingParts(prices: ChargedPriceTable, mode: string, tier: str
 // on any recording the user replaces it lists that last row, fixed). The
 // editor's and the run estimate's stand-in length is the 8-second fallback,
 // which a listing cannot use for a recording it does not know. Each also
-// passes a length on to the step after it (`utilityOutputLength`), so a chain
-// of them on the episode lists per minute of it too. The set, the lengths and
-// the pass-on rule live in `@nodaro/render-rules`, where the run estimates read them.
+// passes a length on to the step after it, as does every other video producer
+// (`VIDEO_OUTPUT_LENGTH_RULES`), so a chain of them on the episode lists per
+// minute of it too. The set of steps and their pass-on rule live in
+// `@nodaro/render-rules`, where the run estimates read them; the registry reads
+// the same rule.
 
-/** The recording node types a listing reads a length from (the uploads an app exposes). */
-const RECORDING_SOURCE_TYPES: ReadonlySet<string> = new Set(["upload-video", "upload-audio", "reference-audio"])
+/** The recording node types a listing reads a length from: the uploads an app exposes and the Video URL (YouTube or any link) node, which the user replaces the same way (decided 2026-10-07). */
+const RECORDING_SOURCE_TYPES: ReadonlySet<string> = new Set(["upload-video", "upload-audio", "reference-audio", "youtube-video"])
 
 /**
  * The replaced recordings that ARE the episode the per-minute figure counts:
  * those wired (through teleports) into an Edit Plan's sources or a Transcribe
- * node, else the only replaced recording. A second recording the user gives
+ * node, else the only replaced recording (a Video URL counts only when no
+ * upload or audio recording is replaced beside it). A second recording the user gives
  * (Trailer + Formats' intro card) is not the episode: the listing has no unit
  * for its length, so Trim, Loop and Combine Videos on it stay at the
  * estimators' fallback length, a documented exception (decided 2026-10-07).
@@ -3975,26 +3987,34 @@ function episodeRecordingIds(
     const origin = resolveGraphOrigin(gateNodes.find((n) => n.id === e.source), gateNodes, gateEdges)
     if (origin && replacedRecordings.includes(origin.id)) episode.add(origin.id)
   }
-  if (episode.size === 0 && replacedRecordings.length === 1) episode.add(replacedRecordings[0]!)
+  if (episode.size === 0) {
+    // The only replaced recording is the episode. A Video URL is a reference more
+    // often than a recording, so it never takes that slot from an upload or audio
+    // recording: the fallback counts those first, and a link is the episode on its
+    // own only when it is the one replaced recording (decided 2026-10-07).
+    const files = replacedRecordings.filter((id) => typeOf.get(id) !== "youtube-video")
+    const only = files.length > 0 ? files : replacedRecordings
+    if (only.length === 1) episode.add(only[0]!)
+  }
   return episode
 }
 
 /**
- * How long the video on a wire is, when a listing can say: the episode
- * recording the app user or the cloner replaces is 60 seconds per minute of
- * the episode; a recording the user cannot replace is its own known length; a
- * render's output is the render's own estimated length, per minute of the
- * episode when the render's is (`resolveApplyEdlEstimateLength`, the rule the
- * render itself is listed by, decided 2026-10-07); a generated video (Generate
- * Video, Image to Video, Text to Video) is the generation's configured
- * duration, never below the length the step after it is charged at nor the
- * length the generation renders (`generatedVideoLengthSec`, decided
- * 2026-10-07); the output of a Trim, Loop, Combine Videos or Video SFX
- * is the length that step passes on, from its own inputs'
- * (`utilityOutputLength`, review round decided 2026-10-07). A second recording
- * the user replaces is `"replaced-unknown"`. `undefined` otherwise (the output
- * of another step whose length the listing does not follow, Lip Sync or Resize
- * Video for two): the estimators' fallback length stands in, as in a run estimate.
+ * How long the video on a wire is, when a listing can say (decided 2026-10-07):
+ * the episode recording the app user or the cloner replaces is 60 seconds per
+ * minute of the episode; a recording the user cannot replace is its own known
+ * length; a render's output is the render's own estimated length, per minute of
+ * the episode when the render's is (`resolveApplyEdlEstimateLength`, the rule
+ * the render itself is listed by); and every other video producer is its
+ * length rule (`VIDEO_OUTPUT_LENGTH_RULES`, lib/video-output-length.ts): a
+ * generation its configured duration, a pass-through step its input's length,
+ * an extension its input plus what it adds, an audio-driven step the audio's
+ * capped at what its run accepts, each read by the functions its run prices
+ * with and never below the length the next step's run reads off the node.
+ * A second recording the user replaces, or a producer no rule can bound, is
+ * `"unknown"`: Trim, Loop and Combine Videos stand at the estimators' fallback
+ * length for it, Video SFX at its 300-second row. `undefined` for a node that
+ * is not media (or a cycle).
  */
 function wireInputLength(
   sourceId: string | undefined,
@@ -4003,31 +4023,49 @@ function wireInputLength(
   replacedMediaIds: ReadonlySet<string>,
   episodeIds: ReadonlySet<string>,
   rerunIds: ReadonlySet<string>,
+  /** An app's exposed text inputs: a generated voice's script is bounded by the limit of the input that feeds it. */
+  speechTextCaps: ExposedTextCaps | undefined,
   /** The steps already walked: a cycle stops at the fallback. */
   seen: ReadonlySet<string> = new Set(),
 ): WireLength {
   const gateNodes = listingGateNodes(nodes)
   const gateEdges = listingGateEdges(edges)
-  const origin = resolveGraphOrigin(gateNodes.find((n) => n.id === sourceId), gateNodes, gateEdges)
-  if (!origin) return undefined
+  const resolved = resolveGraphOrigin(gateNodes.find((n) => n.id === sourceId), gateNodes, gateEdges)
+  if (!resolved) return undefined
+  // A wired Settings input (Duration, Provider) is part of what the run generates and charges
+  // with, exactly as the node's own estimate reads it.
+  const origin = withWiredSettings(resolved, gateNodes, gateEdges)
   if (isRenderNodeType(origin.type)) {
     const render = resolveApplyEdlEstimateLength(origin, gateNodes, gateEdges, rerunIds)
     return { fixedSec: render.fixedMinutes * 60, perEpisodeSec: render.perEpisodeMinute * 60 }
   }
-  const generated = generatedVideoLengthSec(origin)
-  if (generated !== undefined) return { fixedSec: generated, perEpisodeSec: 0 }
-  if (LENGTH_PRICED_UTILITY_TYPES.has(origin.type ?? "")) {
-    if (seen.has(origin.id)) return undefined
-    const walked = new Set(seen).add(origin.id)
-    const inputs = gateEdges.filter((e) => e.target === origin.id)
-    const lengths = inputs.map((e) => wireInputLength(e.source, nodes, edges, replacedMediaIds, episodeIds, rerunIds, walked))
-    return utilityOutputLength(origin, inputs, lengths)
+  if (RECORDING_SOURCE_TYPES.has(origin.type ?? "")) {
+    if (episodeIds.has(origin.id)) return { fixedSec: 0, perEpisodeSec: 60 }
+    if (replacedMediaIds.has(origin.id)) return "unknown"
+    const known = mediaLengthSecOf(origin.data as Record<string, unknown> | undefined)
+    // A link the user cannot replace and that carries no length (it is read at download): no bound.
+    return known === undefined ? (origin.type === "youtube-video" ? "unknown" : undefined) : { fixedSec: known, perEpisodeSec: 0 }
   }
-  if (!RECORDING_SOURCE_TYPES.has(origin.type ?? "")) return undefined
-  if (episodeIds.has(origin.id)) return { fixedSec: 0, perEpisodeSec: 60 }
-  if (replacedMediaIds.has(origin.id)) return "replaced-unknown"
-  const known = mediaLengthSecOf(origin.data as Record<string, unknown> | undefined)
-  return known === undefined ? undefined : { fixedSec: known, perEpisodeSec: 0 }
+  // A generated voice: the length its script takes, when the listing can read the script.
+  if (SPEECH_NODE_TYPES.has(origin.type ?? "")) {
+    const ctx = upstreamSpeechText(origin, nodes, edges, speechTextCaps ?? {})
+    const script = speechEstimateChars(origin.type as string, origin.data ?? {}, ctx)
+    // A script an LLM node writes at run time: at most what that node can write (decided 2026-10-07).
+    const llmChars = script.exact ? undefined : llmScriptChars(origin.type as string, origin.data ?? {}, ctx)
+    return generatedVoiceLength({ ...script, ...(llmChars !== undefined ? { chars: llmChars, bounded: true } : {}), ...speechScriptTraits(origin.type as string, origin.data ?? {}, ctx) })
+  }
+  if (seen.has(origin.id)) return undefined
+  const walked = new Set(seen).add(origin.id)
+  const inputs: WireInput[] = gateEdges
+    .filter((e) => e.target === origin.id)
+    .map((e) => ({
+      sourceId: e.source,
+      handle: e.targetHandle,
+      kind: wireKindOf(resolveGraphOrigin(gateNodes.find((n) => n.id === e.source), gateNodes, gateEdges)?.type),
+      length: wireInputLength(e.source, nodes, edges, replacedMediaIds, episodeIds, rerunIds, speechTextCaps, walked),
+    }))
+  const length = videoOutputLength(origin, inputs)
+  return length === "no-rule" ? undefined : length
 }
 
 /**
@@ -4049,16 +4087,17 @@ function utilityListingParts(
   prices: ChargedPriceTable,
   replacedMediaIds: ReadonlySet<string>,
   rerunIds: ReadonlySet<string>,
+  speechTextCaps: ExposedTextCaps | undefined,
 ): ListingParts | undefined {
   const incoming = edges.filter((e) => e.target === node.id)
   const episodeIds = episodeRecordingIds(nodes, edges, replacedMediaIds)
-  const wires = incoming.map((e) => wireInputLength(e.source, nodes, edges, replacedMediaIds, episodeIds, rerunIds))
+  const wires = incoming.map((e) => wireInputLength(e.source, nodes, edges, replacedMediaIds, episodeIds, rerunIds, speechTextCaps))
   const videoWire = incoming.findIndex((e) => e.targetHandle === "video")
   const videoSfxWire = videoWire >= 0 ? wires[videoWire] : wires.find((l) => l !== undefined)
   // Video SFX refuses a clip over 300 s, so on a recording the user replaces —
   // the episode or any other — its 300-second row is the most any run is
   // charged: listed as that row, fixed (decided 2026-10-07).
-  if (node.type === "video-sfx" && (videoSfxWire === "replaced-unknown" || (knownLength(videoSfxWire)?.perEpisodeSec ?? 0) > 0)) {
+  if (node.type === "video-sfx" && (videoSfxWire === "unknown" || (knownLength(videoSfxWire)?.perEpisodeSec ?? 0) > 0)) {
     const maxId = videoSfxCreditId(VIDEO_SFX_PRICING.MAX_DURATION_SEC)
     const maxBase = prices.base(maxId)
     return maxBase === undefined ? undefined : { fixed: prices.charge(maxId, maxBase), perMinute: 0 }
@@ -4111,10 +4150,11 @@ function lengthDependentParts(
   prices: ChargedPriceTable,
   rerunIds: ReadonlySet<string>,
   replacedMediaIds: ReadonlySet<string> = new Set(),
+  speechTextCaps?: ExposedTextCaps,
 ): ListingParts | undefined {
   if (!node.id) return undefined
   const self = { id: node.id, type: node.type, data: node.data }
-  if (LENGTH_PRICED_UTILITY_TYPES.has(node.type)) return utilityListingParts(node, nodes, edges, prices, replacedMediaIds, rerunIds)
+  if (LENGTH_PRICED_UTILITY_TYPES.has(node.type)) return utilityListingParts(node, nodes, edges, prices, replacedMediaIds, rerunIds, speechTextCaps)
   if (node.type === "apply-edl") {
     const length = resolveApplyEdlEstimateLength(self, listingGateNodes(nodes), listingGateEdges(edges), rerunIds)
     if (length.perEpisodeMinute === 0) return undefined
@@ -4140,15 +4180,15 @@ function lengthDependentParts(
  *
  * A List the app's user fills lists a price per further item, and Trim /
  * Loop / Combine Videos / Video SFX on the episode recording, a render's
- * output or another of these steps' output list by its length
- * (`utilityListingParts`, `utilityOutputLength`), and on a generated video at
- * its configured duration (`generatedVideoLengthSec`). What still lists below
- * the charge is a length-priced step on a video other than the episode with no
- * length the listing knows: a second recording the user replaces, such as an
- * intro card (Video SFX on it excepted: the 300-second row), and the output of
- * another step whose length the listing does not follow (Resize Video, Lip
- * Sync). The public "never quotes less" sentences name them (pinned
- * by listing-fan-outs.test.ts and listing-length-priced-utilities.test.ts).
+ * output, or the output of ANY other video producer list by its length
+ * (`utilityListingParts`; each producer's own rule, `VIDEO_OUTPUT_LENGTH_RULES`
+ * in lib/video-output-length.ts, pinned by video-output-length.test.ts for every
+ * member of `VIDEO_PRODUCER_TYPES`). What still lists below the charge is a
+ * length-priced step on a video the listing cannot bound: a second recording
+ * the user replaces, such as an intro card, and the producers
+ * `UNBOUNDED_LENGTH_REASONS` names (Video SFX on any of them: the 300-second
+ * row). The public "never quotes less" sentences name them (pinned by
+ * listing-fan-outs.test.ts and listing-length-priced-utilities.test.ts).
  */
 function sumListingParts(
   nodes: ReadonlyArray<EstimateNode>,
@@ -4173,7 +4213,7 @@ function sumListingParts(
     const unitsOf = (n: EstimateNode) => graphPricingUnits(n, lengthNodes, edges, rerunIds)
     // Several providers on one node: each runs, at its own price (the run's
     // expansion), as the run estimate and the editor's estimate sum them.
-    const parts = lengthDependentParts(lengthNodes[i]!, lengthNodes, edges, prices, rerunIds, replacedMediaIds) ?? {
+    const parts = lengthDependentParts(lengthNodes[i]!, lengthNodes, edges, prices, rerunIds, replacedMediaIds, speechTextCaps) ?? {
       fixed: oneRunCredits(node, nodes, edges, prices, speechTextCaps, unitsOf, wireSec),
       perMinute: 0,
     }

@@ -82,7 +82,7 @@ the render do not run yet, and are not billed.
   Video, Image to Video or Text to Video) each of the four is listed at the
   generation's configured duration (8 seconds when none is set, as a run of
   the step after it counts it), or the length the model renders when that is
-  longer (its longest clip on auto). A list you fill is
+  longer (its longest clip on auto). On the output of any other step that delivers a video, each of the four is listed at the length that step passes on: a step that keeps its input whole its input's length, a lip sync or an avatar its audio's (at most what its model takes), an extension its input plus the seconds it adds. A voice made from a script the listing can read (a literal script, one fed from an input with a character limit, or one written by a Prompt or AI Writer node) is listed at the seconds that script takes to read, at 12 characters a second (slower for a slower voice speed, and for Chinese, Japanese and Korean text) and at most 300. A Prompt or AI Writer node's script is counted at 8 characters for each token the node can write: its Max Tokens (the node's default when it has none), raised to the model's own minimum when the model shares its output with its thinking, and at the most the node allows when an app exposes that setting or another node writes it. Because that script's language is not known in advance, it is read at the Latin-script rate (with the voice's speed), not the slower rate for Chinese, Japanese and Korean text. A voice whose own text holds a {Reference} is not bounded this way, since the reference can resolve to any length. A script from any other source is not bounded, so the step after it is listed as above. A video link (YouTube or any other) the user replaces counts as the episode, like an uploaded recording. A list you fill is
   listed at the items the creator saved plus a figure per further item, for
   example **82 + 14/min + 30/item**. The creator's flat fee is added once to
   the fixed figure, and the percentage to every figure. The listed price never quotes less than a run
@@ -90,10 +90,7 @@ the render do not run yet, and are not billed.
   Edit Plan's pass on a server that still charges it on the length step the
   recording rounds up to rather than per started minute (see
   [Edit Plan](nodes/processing-video/edit-plan.md#credit-cost)), and a step
-  priced by its input's length on a video other than the episode (the output
-  of another step whose length the listing does not follow, such as Resize
-  Video or Lip Sync, or a second recording such as an intro card), which is
-  listed at a default length;
+  priced by its input's length on a video other than the episode whose length is not known before the run (a second recording such as an intro card, or the output of a step with no length before the run: a YouTube or other video link the user cannot replace, a GIF to Video, the output of Render Video or Manual Edit, a VEO or Runway extension, a Suno music video, a narrated step whose audio is wired in or is a generated voice whose script comes from a source the listing cannot bound (not a literal text, an input with a character limit, or a Prompt or AI Writer node), or a list or sub-workflow), which is listed at a default length;
   where the deployment stops at previews, it can quote more, because a run
   leaves the nodes after the preview to the final, and a step after two
   previews runs only in the later final. It counts every run the editor's

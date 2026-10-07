@@ -11,7 +11,8 @@
 import type Anthropic from "@anthropic-ai/sdk"
 import { config } from "./config.js"
 import { describeEmptyCapability, type ProviderKeyName } from "../providers/provider-keys.js"
-import { getLlmModel, LLM_FEATURE_DEFAULTS, effectiveReasoningEffort, reasoningOutputFloor } from "@nodaro/shared"
+import { getLlmModel, LLM_FEATURE_DEFAULTS, effectiveReasoningEffort } from "@nodaro/shared"
+import { raiseToReasoningFloor } from "./llm-node-output-cap.js"
 import type { LlmModelDef, LlmFeature, LlmReasoningEffort } from "@nodaro/shared"
 import { calculateLlmCost, type LlmServingLane } from "./pricing/llm-cost.js"
 import { getAnthropicClient } from "./anthropic.js"
@@ -1064,9 +1065,7 @@ function deriveParams(model: LlmModelDef, req: LlmRequest): {
   // it rides every lane the model can be served on, and the Gemini flash KIE
   // endpoints are only known to take 8192. Issue #1588 is what a missing floor
   // costs — gemini-3.6-flash reasons by default and was sent a node's 1,100.
-  if (eff === "xhigh" || eff === "max" || model.thinkingDefaultOn) {
-    maxTokens = Math.max(maxTokens, reasoningOutputFloor(model))
-  }
+  maxTokens = raiseToReasoningFloor(model, eff, maxTokens)
   return { eff, temperature, topP, maxTokens }
 }
 

@@ -1,4 +1,5 @@
 import { highestCostPartitions } from "./video-pro-segment-reserve.js"
+import { generateVideoProCapSec } from "../../lib/generate-video-pro-length.js"
 import {
   MODEL_CATALOG,
   buildVideoCreditModelIdentifier,
@@ -690,7 +691,7 @@ export async function computeGenerateVideoProPricing(args: {
   const tailSec = clampContextTailSec(args.tailSec)
   const resolution = clampResolution(provider, args.resolution)
 
-  const cap = Number(process.env.GENERATE_VIDEO_PRO_MAX_DURATION || 120)
+  const cap = generateVideoProCapSec()
   const bounds = boundsFor(provider)
 
   // Money-side enforcement of the render-method gate, BEFORE any split work:

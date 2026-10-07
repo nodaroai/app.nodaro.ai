@@ -1,6 +1,7 @@
 import { projectDubbingCreditOverride, stampDubbingDuration } from "../../lib/dubbing-pricing.js"
 import { applyEdlCreditOverride } from "../../lib/apply-edl-plan.js"
 import { isPreviewRender } from "../../lib/preview-render.js"
+import { LLM_NODE_MAX_TOKENS_DEFAULTS } from "../../lib/llm-node-output-cap.js"
 import { assertCanvasExecutionAllowed, imageOverlayCredits, applySettingsInput, SETTINGS_INPUT_CONSUMERS, PREVIEW_RENDER_NESTED, PREVIEW_REVIEW_REQUIRED, isCollectionUrl, fitCollectionField } from "@nodaro/shared"
 import { PREVIEW_RENDER_NESTED_MESSAGE } from "./nested-preview-renders.js"
 import { PREVIEW_REVIEW_REQUIRED_MESSAGE } from "../../lib/preview-review-gate.js"
@@ -68,6 +69,7 @@ import { refundReservedCreditsForJob } from "../../lib/credits-job-lifecycle.js"
 import { isWorkerDraining, DrainAbortError } from "../../lib/worker-drain.js"
 import type { ErrorHint } from "../../lib/safety-block.js"
 import { noteSlotWaitColumnError, withSlotWaitColumn } from "../../lib/jobs-slot-wait-column.js"
+import { GENERATE_VIDEO_PRO_DEFAULT_DURATION_SEC } from "../../lib/generate-video-pro-length.js"
 
 // ---------------------------------------------------------------------------
 // Sync HTTP node types — called via internal fetch
@@ -887,7 +889,7 @@ export function buildSyncHttpBody(
         userId: ctx.userId,
         ...llmNodeParams(data),
         temperature: data.temperature ?? 0.7,
-        maxTokens: data.maxTokens ?? 4096,
+        maxTokens: data.maxTokens ?? LLM_NODE_MAX_TOKENS_DEFAULTS["ai-writer"],
       })
 
     case "llm-chat": {
@@ -908,7 +910,7 @@ export function buildSyncHttpBody(
         referenceAudioUrls: resolvedInputs.referenceAudioUrls,
         ...llmNodeParams(data),
         temperature: data.temperature ?? 0.7,
-        maxTokens: data.maxTokens ?? 8192,
+        maxTokens: data.maxTokens ?? LLM_NODE_MAX_TOKENS_DEFAULTS["llm-chat"],
         userId: ctx.userId,
       })
     }
@@ -1592,7 +1594,7 @@ export async function computeGenerateVideoProCreditOverride(
   const pricing = await computeGenerateVideoProPricing({
     provider: String(payload.provider ?? "seedance-2"),
     resolution: String(payload.resolution ?? "720p"),
-    durationSec: Number(payload.duration ?? 8),
+    durationSec: Number(payload.duration ?? GENERATE_VIDEO_PRO_DEFAULT_DURATION_SEC),
     // Context-tail override (helper clamps to [2,5]; undefined → default 2).
     ...(typeof payload.contextTailSec === "number" ? { tailSec: payload.contextTailSec } : {}),
     // Segment levers (2026-08-03): the DAG path must forward BOTH, or its

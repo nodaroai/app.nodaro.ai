@@ -34,6 +34,8 @@ import { applyPromptAffixes } from "@nodaro/prompts"
 import { getAppSettings } from "./app-settings.js"
 import { speechLengthPricingEnabled } from "./config.js"
 import { resolveOmittedTtsProvider } from "./omitted-tts-provider.js"
+import { LLM_MAX_TOKENS_LIMIT, LLM_TEXT_NODE_TYPES, llmNodeOutputTokenCap } from "./llm-node-output-cap.js"
+import { SLOWEST_VOICE_SPEED, slowScriptChars } from "./video-output-length.js"
 import { billableDialogueChars, billableSpeechChars, dialogueBaseCredits, speechBaseCredits, speechRunsAs } from "./speech-credits.js"
 
 export const SPEECH_NODE_TYPES: ReadonlySet<string> = new Set(["text-to-speech", "text-to-dialogue"])
@@ -65,7 +67,17 @@ export interface SpeechEstimateContext {
   upstreamText?: string
   /** An edge feeds `prompt` whose text cannot be read now (not a literal Text node, an exposed input with no limit, several edges, a {Reference}): it can be any length up to the cap, and it outranks any literal fallback on the node. */
   wireUnknown?: boolean
+  /**
+   * The most tokens the one LLM node (Prompt, AI Writer) feeding `prompt` can
+   * write (`llmNodeOutputTokenCap`; the model's own ceiling when its cap cannot be
+   * read now). A LENGTH bound only, for the listing (`llmScriptChars`): the text is
+   * still unknown (`wireUnknown`), so the node's own price does not read it.
+   */
+  llmOutputTokens?: number
 }
+
+/** Characters a token can be, at most (decided 2026-10-07): the safe upper bound an LLM-written script is counted at. */
+export const MAX_CHARS_PER_TOKEN = 8
 
 function mapped(data: Record<string, unknown>, field: string): boolean {
   const mappings = data.fieldMappings
@@ -137,6 +149,54 @@ export function speechEstimateChars(nodeType: string, data: Record<string, unkno
 }
 
 /**
+ * What changes how long a speech node's script takes to speak, beyond its
+ * character count (decided 2026-10-07): the node's speed, and how many of a
+ * literal text's characters are in a slow script (Chinese, Japanese, Korean).
+ * An unreadable speed (mapped to a wire, or not a number) is the slider's floor,
+ * the slowest the voice speaks, so a listing never quotes below the run. A
+ * dialogue has no speed.
+ */
+export function speechScriptTraits(nodeType: string, data: Record<string, unknown>, ctx: SpeechEstimateContext = {}): { speed: number; slowChars: number } {
+  if (nodeType === "text-to-dialogue") {
+    const lines = Array.isArray(data.dialogue) && !mapped(data, "dialogue") ? data.dialogue : []
+    const slowChars = lines.reduce((sum, l) => sum + (typeof (l as { text?: unknown } | null)?.text === "string" ? slowScriptChars((l as { text: string }).text) : 0), 0)
+    return { speed: 1, slowChars }
+  }
+  const raw = data.speed
+  const speed = mapped(data, "speed") || (raw !== undefined && (typeof raw !== "number" || !Number.isFinite(raw)))
+    ? SLOWEST_VOICE_SPEED
+    : Math.min(1.2, Math.max(SLOWEST_VOICE_SPEED, raw ?? 1))
+  const text = speechTextOf(data, ctx)
+  return { speed, slowChars: text === undefined ? 0 : slowScriptChars(text) }
+}
+
+/**
+ * How many characters a speech node's script can be when an LLM node writes it
+ * (decided 2026-10-07): the tokens that node can write x {@link MAX_CHARS_PER_TOKEN},
+ * as the run sends it (wrapped in the node's pre/post text); never less than the
+ * node's own literal text, which a blank LLM output falls back to (wrapped the
+ * same way). Undefined when no single LLM node writes the script, when the
+ * node's own text holds a {Reference} (it can resolve to any length), when the text is known (it is then
+ * counted by `speechEstimateChars`), or when a reference in a pre/post text makes
+ * the wrapper's length unknown. A length bound for the listing only: `speechEstimate`
+ * (the node's price) never reads it.
+ */
+export function llmScriptChars(nodeType: string, data: Record<string, unknown>, ctx: SpeechEstimateContext = {}): number | undefined {
+  if (nodeType !== "text-to-speech" || ctx.llmOutputTokens === undefined || ctx.exposed || mapped(data, "directText")) return undefined
+  if (speechTextOf(data, ctx) !== undefined) return undefined
+  const written = applyPromptAffixes("a".repeat(ctx.llmOutputTokens * MAX_CHARS_PER_TOKEN), readPromptAffixes(data), NO_REFS)
+  if (REFERENCE.test(written)) return undefined
+  const ownText = typeof data.directText === "string" && present(data.directText) ? data.directText : undefined
+  // A {Reference} in the node's own text resolves at run time to any length, and
+  // the node speaks that text in direct mode (the wire is ignored) or when the
+  // LLM's output is blank: the script is unknown, so no bound applies.
+  if (ownText !== undefined && REFERENCE.test(ownText)) return undefined
+  // The fallback is sent wrapped in the pre/post text, like the LLM's output.
+  const own = ownText === undefined ? 0 : applyPromptAffixes(ownText, readPromptAffixes(data), NO_REFS).length
+  return Math.max(written.length, own)
+}
+
+/**
  * The ceiling of an unknown text: the model's cap, or — under an input limit —
  * the longest text the limit admits AS THE RUN SENDS IT, i.e. wrapped in the
  * node's pre/post text (a plain-letter filler is the widest join), clamped and
@@ -178,6 +238,27 @@ type GraphEdge = { source?: string; target: string; targetHandle?: string | null
  */
 export type ExposedTextCaps = Readonly<Record<string, number | null>>
 
+/** The LLM node settings an app can expose (and a field mapping can write) that change how many tokens a run may write. */
+export const LLM_CAP_FIELDS = ["llmModel", "reasoningEffort", "advancedMode"] as const
+
+/**
+ * What an LLM node's run can write, in tokens, as far as the graph says: its
+ * `maxTokens` (the node's default when unset) raised to the reasoning floor of its
+ * model and effort (`llmNodeOutputTokenCap`, the one rule the request layer
+ * also follows). A setting a field mapping writes, or that an app exposes to its
+ * user (`exposedTextCaps`: a slider's largest value, or any model / effort /
+ * advanced-mode input), is read at the most it can be: the route's own ceiling.
+ */
+function llmOutputTokens(source: GraphNode, caps: ExposedTextCaps): number {
+  const data = source.data ?? {}
+  const id = source.id
+  const writable = (field: string): boolean => mapped(data, field) || (id !== undefined && Object.hasOwn(caps, `${id}:${field}`))
+  if (LLM_CAP_FIELDS.some(writable)) return LLM_MAX_TOKENS_LIMIT
+  const exposedMax = id === undefined ? undefined : caps[`${id}:maxTokens`]
+  if (mapped(data, "maxTokens") || (id !== undefined && Object.hasOwn(caps, `${id}:maxTokens`) && exposedMax === null)) return LLM_MAX_TOKENS_LIMIT
+  return llmNodeOutputTokenCap(source.type ?? "llm-chat", data, typeof exposedMax === "number" ? Math.max(exposedMax, 1) : undefined)
+}
+
 /**
  * The one-hop rule for the text a speech node is fed (the common published-app
  * shape is a Text node → Text to Speech, with the app input ON THE TEXT NODE):
@@ -195,7 +276,7 @@ export function upstreamSpeechText(node: GraphNode, nodes: ReadonlyArray<GraphNo
   if (!node.id) return {}
   // The limit of every source whose text is unknown now (null = no limit).
   const limits: Array<number | null> = []
-  const ctx: { exposed?: true; upstreamText?: string } = {}
+  const ctx: { exposed?: true; upstreamText?: string; llmOutputTokens?: number } = {}
   const into = edges.filter((e) => e.target === node.id && (e.targetHandle === "prompt" || e.targetHandle == null))
   let wireUnknown = false
   if (into.length > 0) {
@@ -205,6 +286,7 @@ export function upstreamSpeechText(node: GraphNode, nodes: ReadonlyArray<GraphNo
     if (!source || source.type !== "text-prompt") {
       wireUnknown = true
       limits.push(null)
+      if (source && LLM_TEXT_NODE_TYPES.has(source.type ?? "")) ctx.llmOutputTokens = llmOutputTokens(source, caps)
     } else if (Object.hasOwn(caps, `${source.id}:text`)) {
       wireUnknown = true
       limits.push(caps[`${source.id}:text`] ?? null)
