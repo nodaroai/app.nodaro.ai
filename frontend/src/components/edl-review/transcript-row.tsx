@@ -137,6 +137,7 @@ function ParagraphBody(props: TranscriptRowProps & { readonly row: ParagraphRow 
           <button
             type="button"
             aria-expanded
+            data-run-toggle={row.run}
             className="inline-flex items-center gap-0.5 rounded px-1 text-[10px] text-muted-foreground hover:bg-muted"
             onClick={() => onCollapse(row.run!)}
           >
@@ -161,6 +162,7 @@ function CollapsedBody({ row, canEdit, onExpand, onRestoreRun }: TranscriptRowPr
       <button
         type="button"
         aria-expanded={false}
+        data-run-toggle={row.run}
         aria-label={t("edlReview.expandRun")}
         title={t("edlReview.expandRun")}
         className={cn("inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium", dropReasonStyle(reason).chip)}

@@ -19,6 +19,7 @@ import {
 } from "../depends-on.js"
 import { emitDependentStaleEvents } from "../entity-approval.js"
 import { runImageCriticLoop } from "./_image-critic-loop.js"
+import { pipelineOwnedAssetUrlsById } from "../../../lib/pipeline-asset-ownership.js"
 import { settledWithLimit } from "../../../lib/settled-with-limit.js"
 
 /**
@@ -578,7 +579,7 @@ async function ensureLocationVariants(
   )
 
   // Resolve the main reference URL once — every variant uses the same image.
-  const mainUrl = await assetUrlForId(supabase, entity.main_asset_id)
+  const mainUrl = await assetUrlForId(supabase, pipelineId, entity.main_asset_id)
 
   for (const variant of variantsNeeded) {
     if (existingKeys.has(variant)) continue
@@ -621,7 +622,9 @@ async function ensureLocationVariants(
         pipelineEntityId: entity.id,
         userId,
         prompt,
-        referenceImageUrls: [mainUrl],
+        // No reference when the main image is not the owner's asset (or has no
+        // URL) rather than an empty one, as characters.ts does.
+        referenceImageUrls: mainUrl ? [mainUrl] : undefined,
         userOverride: imageOverride,
       })
       await supabase
@@ -659,7 +662,11 @@ async function ensureLocationVariants(
     .eq("id", entity.id)
 }
 
-async function assetUrlForId(supabase: SupabaseClient, assetId: string): Promise<string> {
-  const { data } = await supabase.from("assets").select("r2_url").eq("id", assetId).single()
-  return data?.r2_url ?? ""
+/**
+ * The entity's main image URL, only when the pipeline's owner made that asset
+ * (decided 2026-10-07): a pointer at another user's asset resolves to "".
+ */
+async function assetUrlForId(supabase: SupabaseClient, pipelineId: string, assetId: string): Promise<string> {
+  const owned = await pipelineOwnedAssetUrlsById(supabase, pipelineId, [assetId])
+  return owned.get(assetId) ?? ""
 }

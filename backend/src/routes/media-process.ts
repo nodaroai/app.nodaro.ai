@@ -7,6 +7,7 @@ import { supabase } from "../lib/supabase.js"
 import { uploadBufferToR2, deleteFromR2, r2KeyFromOurUrl } from "../lib/storage.js"
 import { updateStorageUsage } from "../utils/file-validation.js"
 import { isRelayOwnedObject } from "../lib/asset-delete.js"
+import { keysClaimedByOthers } from "../lib/key-ownership.js"
 import { jobOutputReferrerPaths } from "../lib/job-output-urls.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import {
@@ -129,9 +130,30 @@ export async function deleteSourceAfterProcess(sourceUrl: string, userId: string
     // on every deployment that never relays.
     const relayOwned = await isRelayOwnedObject(owned.job_id, sourceKey, owned.relay_job_id)
 
+    // Whose file (lib/key-ownership.ts; decided 2026-10-06, migration 480). The
+    // lookup above proves the caller owns a ROW naming the key, and before 480
+    // a browser could insert such a row for any key. A source another user's
+    // job made, or that sits in their upload namespace, is not the caller's:
+    // the row goes, the object stays, and nothing is refunded (the caller was
+    // never charged for it). If whose cannot be told, nothing is touched.
+    let notOwned = false
+    if (!relayOwned) {
+      try {
+        notOwned = (await keysClaimedByOthers(userId, [sourceKey])).size > 0
+      } catch (err) {
+        console.warn(`[media-process] deleteSource skipped for ${sourceKey}: ownership lookup failed:`, err)
+        return
+      }
+    }
+
     if (relayOwned) {
       console.warn(
         `[media-process] deleteSource kept R2 object ${sourceKey}: created by our relay target ` +
+          "— row removed, bytes and quota left alone",
+      )
+    } else if (notOwned) {
+      console.warn(
+        `[media-process] deleteSource kept R2 object ${sourceKey}: another user made or owns it ` +
           "— row removed, bytes and quota left alone",
       )
     } else {
@@ -192,7 +214,7 @@ export async function deleteSourceAfterProcess(sourceUrl: string, userId: string
     // EITHER direction: `uploadToR2`'s passthrough returns above trackStorage,
     // so no increment ever happened and a decrement here walks
     // storage_used_bytes down toward migration 022's GREATEST(0,…) floor.
-    const sizeBytes = relayOwned ? 0 : owned.size_bytes ?? 0
+    const sizeBytes = relayOwned || notOwned ? 0 : owned.size_bytes ?? 0
     if (sizeBytes > 0) {
       await updateStorageUsage(userId, -sizeBytes).catch((err) => {
         console.warn("[media-process] deleteSource storage decrement failed:", err)

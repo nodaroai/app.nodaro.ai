@@ -321,6 +321,8 @@ describe("DELETE /v1/library/:id", () => {
     vi.mocked(supabase.from).mockImplementation(() => {
       const chain: Record<string, unknown> = {}
       chain.select = vi.fn().mockReturnValue(chain)
+      // Whose library holds the key (lib/key-ownership.ts `libraryHolders`): only this user's.
+      chain.in = vi.fn().mockResolvedValue({ data: [], error: null })
       // Jobs referrer-count queries end in .eq("output_data->>…", url) → resolve a
       // count; every other .eq() (id, user_id, r2_key) chains. (Not reached here:
       // an asset referrer short-circuits the jobs check.)
@@ -367,6 +369,8 @@ describe("DELETE /v1/library/:id", () => {
     vi.mocked(supabase.from).mockImplementation(() => {
       const chain: Record<string, unknown> = {}
       chain.select = vi.fn().mockReturnValue(chain)
+      // Whose library holds the key (lib/key-ownership.ts `libraryHolders`): only this user's.
+      chain.in = vi.fn().mockResolvedValue({ data: [], error: null })
       // A jobs row owned by this user references the object via output_data; the
       // per-key jobs query ends in .eq("output_data->>…", publicUrl) (value passed
       // as an arg so supabase-js encodes the URL safely — no .or() string parsing).
@@ -411,6 +415,8 @@ describe("DELETE /v1/library/:id", () => {
     vi.mocked(supabase.from).mockImplementation(() => {
       const chain: Record<string, unknown> = {}
       chain.select = vi.fn().mockReturnValue(chain)
+      // Whose library holds the key (lib/key-ownership.ts `libraryHolders`): only this user's.
+      chain.in = vi.fn().mockResolvedValue({ data: [], error: null })
       // Jobs check errors → we can't prove there's no referrer → fail safe.
       chain.eq = vi.fn().mockImplementation((col: string) =>
         typeof col === "string" && col.startsWith("output_data->>")
@@ -444,6 +450,8 @@ describe("DELETE /v1/library/:id", () => {
     vi.mocked(supabase.from).mockImplementation(() => {
       const chain: Record<string, unknown> = {}
       chain.select = vi.fn().mockReturnValue(chain)
+      // Whose library holds the key (lib/key-ownership.ts `libraryHolders`): only this user's.
+      chain.in = vi.fn().mockResolvedValue({ data: [], error: null })
       // No job references it either → per-key output_data .eq() returns 0.
       chain.eq = vi.fn().mockImplementation((col: string) =>
         typeof col === "string" && col.startsWith("output_data->>")

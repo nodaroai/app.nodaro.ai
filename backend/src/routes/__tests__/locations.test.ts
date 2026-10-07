@@ -831,6 +831,15 @@ describe("DELETE /v1/locations/:id?permanent=true", () => {
     return { select: vi.fn().mockReturnValue(chain) }
   }
 
+  /**
+   * The content-addressed ownership read (lib/key-ownership.ts
+   * `libraryHolders`): `assets.select("r2_key, user_id").in("r2_key", keys)`.
+   * Empty: no other user's library holds any of the keys.
+   */
+  function holdersChain(rows: Array<{ r2_key: string; user_id: string }> = []) {
+    return { select: vi.fn().mockReturnValue({ in: vi.fn().mockResolvedValue({ data: rows, error: null }) }) }
+  }
+
   function hardDeleteChain(result: { error: unknown }) {
     const chain: Record<string, unknown> = {
       eq: vi.fn().mockReturnThis(),
@@ -886,6 +895,98 @@ describe("DELETE /v1/locations/:id?permanent=true", () => {
     expect(batchDeleteFromR2).not.toHaveBeenCalled()
   })
 
+  /**
+   * Whose file (decided 2026-10-06; migration 480). The row is the caller's,
+   * and before 480 a browser could write its url columns directly; the API
+   * still stores urls the caller names. A url naming a file another user's job
+   * made is not the caller's to delete — the row goes, that file stays.
+   */
+  it("attacker: a url naming another user's file does not get that file deleted", async () => {
+    const VICTIM_JOB = "22222222-2222-4222-8222-222222222222"
+    const VICTIM_KEY = `videos/${VICTIM_JOB}.mp4`
+    const { mockSelect: ownerSelect } = ownershipChain({
+      data: {
+        id: TEST_LOCATION_ID,
+        deleted_at: "2026-05-01T00:00:00Z",
+        source_image_url: `https://r2.example.com/${VICTIM_KEY}`,
+        reference_photos: [{ url: "https://r2.example.com/locations/own/ref.jpg" }],
+      },
+      error: null,
+    })
+    // Who made which key: `jobs.select("id, user_id").in("id", …)`.
+    const makerIn = vi.fn().mockResolvedValue({
+      data: [{ id: VICTIM_JOB, user_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" }],
+      error: null,
+    })
+    const makerSelect = vi.fn().mockReturnValue({ in: makerIn })
+    const { mockDelete } = hardDeleteChain({ error: null })
+
+    vi.mocked(supabase.from)
+      .mockReturnValueOnce({ select: ownerSelect } as never) // ownership + R2 keys
+      .mockReturnValueOnce({ select: makerSelect } as never) // who made the keys
+      .mockReturnValueOnce(holdersChain() as never) // whose library holds them
+      .mockReturnValueOnce({ delete: mockDelete } as never) // hard-delete
+
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/v1/locations/${TEST_LOCATION_ID}?permanent=true`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(makerSelect).toHaveBeenCalledWith("id, user_id")
+    const deleted = vi.mocked(batchDeleteFromR2).mock.calls.flatMap((c) => c[0] as string[])
+    expect(deleted).not.toContain(VICTIM_KEY)
+    expect(deleted).toEqual(["locations/own/ref.jpg"])
+    expect(mockDelete).toHaveBeenCalled()
+  })
+
+  /**
+   * Content-addressed claim (review round, decided 2026-10-07). A plain upload
+   * key (`POST /v1/upload` writes `uploads/images/<uuid>.png`) carries no maker
+   * in its name; the victim's own `assets` row is what says it is theirs. The
+   * attacker copies that public url into their own location, archives it, and
+   * permanently deletes it: the row goes, the victim's upload stays.
+   */
+  it("attacker: a url naming another user's plain upload does not get that upload deleted", async () => {
+    const VICTIM = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+    const VICTIM_UPLOAD = "uploads/images/44444444-4444-4444-8444-444444444444.png"
+    const { mockSelect: ownerSelect } = ownershipChain({
+      data: {
+        id: TEST_LOCATION_ID,
+        deleted_at: "2026-05-01T00:00:00Z",
+        source_image_url: `https://r2.example.com/${VICTIM_UPLOAD}`,
+        reference_photos: [{ url: "https://r2.example.com/locations/own/ref.jpg" }],
+      },
+      error: null,
+    })
+    // No job wrote either key.
+    const makerSelect = vi.fn().mockReturnValue({ in: vi.fn().mockResolvedValue({ data: [], error: null }) })
+    // The victim's library row holds the upload.
+    const holderIn = vi.fn().mockResolvedValue({ data: [{ r2_key: VICTIM_UPLOAD, user_id: VICTIM }], error: null })
+    const holderSelect = vi.fn().mockReturnValue({ in: holderIn })
+    const { mockDelete } = hardDeleteChain({ error: null })
+
+    vi.mocked(supabase.from)
+      .mockReturnValueOnce({ select: ownerSelect } as never) // ownership + R2 keys
+      .mockReturnValueOnce({ select: makerSelect } as never) // who made the keys
+      .mockReturnValueOnce({ select: holderSelect } as never) // whose library holds them
+      .mockReturnValueOnce({ delete: mockDelete } as never) // hard-delete
+
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/v1/locations/${TEST_LOCATION_ID}?permanent=true`,
+      headers: { "x-user-id": TEST_USER_ID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(holderSelect).toHaveBeenCalledWith("r2_key, user_id")
+    const deleted = vi.mocked(batchDeleteFromR2).mock.calls.flatMap((c) => c[0] as string[])
+    expect(deleted).not.toContain(VICTIM_UPLOAD)
+    expect(deleted).toEqual(["locations/own/ref.jpg"])
+    expect(mockDelete).toHaveBeenCalled()
+  })
+
   it("hard-deletes an archived row + batch-deletes only R2-hosted asset keys", async () => {
     // Archived row + a mix of R2-hosted and external CDN URLs across every
     // JSONB column we scan. The handler must extract keys for the R2 URLs
@@ -914,6 +1015,7 @@ describe("DELETE /v1/locations/:id?permanent=true", () => {
 
     vi.mocked(supabase.from)
       .mockReturnValueOnce({ select: ownerSelect } as never) // ownership + R2 keys
+      .mockReturnValueOnce(holdersChain() as never) // whose library holds them
       .mockReturnValueOnce({ delete: mockDelete } as never) // hard-delete
 
     const res = await app.inject({
@@ -977,6 +1079,7 @@ describe("DELETE /v1/locations/:id?permanent=true", () => {
 
     vi.mocked(supabase.from)
       .mockReturnValueOnce({ select: ownerSelect } as never)
+      .mockReturnValueOnce(holdersChain() as never) // whose library holds them
       .mockReturnValueOnce(relayChain([{ r2_key: FAR_KEY, relay_job_id: "cloud-9" }]) as never)
       // The key-stem probe behind the marker, asked only about what the marker
       // did not settle (`locations/forest/main.png` — one of ours).

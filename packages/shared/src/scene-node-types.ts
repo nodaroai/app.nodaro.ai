@@ -21,6 +21,16 @@ export const TransitionTypeSchema = z.enum([
 export type TransitionType = z.infer<typeof TransitionTypeSchema>
 
 /**
+ * Tags a ShotSpec field that only a render or the user writes — measured
+ * audio, the Editor LLM's cut, the dialogue no-cut zone, an accepted
+ * match-cut break — and never the plan. Fields named for a url or an asset id
+ * need no tag (their name already says so). A custom registry, not `.meta()`,
+ * so the tag never appears in a JSON schema rendered from ShotSpecSchema.
+ */
+export const sceneRenderStateRegistry = z.registry<{ render_state: true }>()
+const RENDER_STATE = { render_state: true } as const
+
+/**
  * ShotSpec — one shot inside a SceneNodeData.
  * Mirrors Architecture §6.9.1 + v4.1 Method-2/3/5/7/8/10 field additions.
  */
@@ -130,7 +140,7 @@ export const ShotSpecSchema = z.object({
   // Phase 1D.1 Method 7 — set true when the user accepts a MatchCutCritic
   // 'break' verdict for this shot's pair. Stage 6 reads this to know the
   // break is resolved and the scene can advance to Stage 7.
-  accepted_match_cut_break: z.boolean().optional(),
+  accepted_match_cut_break: z.boolean().optional().register(sceneRenderStateRegistry, RENDER_STATE),
 
   // ─── Phase 1C.2 — dialogue + editor cut metadata ───────────────────────────
   // All optional; planning-time ShotSpec carries none of these. Populated by
@@ -139,12 +149,12 @@ export const ShotSpecSchema = z.object({
   // True when `dialogue_line` is non-null AND the speech generator produced
   // an audio track. The Editor LLM uses this to gate cut-in / cut-out into
   // the dialogue_no_cut_zone (Method 5.13.1 — never trim a syllable).
-  has_dialogue: z.boolean().default(false),
+  has_dialogue: z.boolean().default(false).register(sceneRenderStateRegistry, RENDER_STATE),
 
   // Measured length of the per-shot speech audio (Stage 7 step 4 writes this).
   // Separate from `duration_seconds` (the planning intent) — the actual
   // recording can run longer/shorter than the spec.
-  actual_audio_duration_sec: z.number().optional(),
+  actual_audio_duration_sec: z.number().optional().register(sceneRenderStateRegistry, RENDER_STATE),
 
   // Inclusive [start, end] window (seconds, relative to the shot's video clip)
   // during which the Editor LLM MUST NOT cut. Computed from
@@ -153,7 +163,8 @@ export const ShotSpecSchema = z.object({
   dialogue_no_cut_zone: z
     .object({ start: z.number(), end: z.number() })
     .nullable()
-    .optional(),
+    .optional()
+    .register(sceneRenderStateRegistry, RENDER_STATE),
 
   // Editor LLM output (Phase 1C.2). Populated by the Editor LLM stage; the
   // silent-cut-preview sub-gate may patch it via user-applied overrides.
@@ -166,7 +177,8 @@ export const ShotSpecSchema = z.object({
       transition_duration_sec: z.number().min(0).max(2).optional(),
       beat_snap_seconds: z.number().nullable().optional(),
     })
-    .optional(),
+    .optional()
+    .register(sceneRenderStateRegistry, RENDER_STATE),
 })
 export type ShotSpec = z.infer<typeof ShotSpecSchema>
 

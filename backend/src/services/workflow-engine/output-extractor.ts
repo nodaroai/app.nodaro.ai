@@ -1,4 +1,4 @@
-import { collectionRecordHeadline, collectionRecordsDigest, telegramFeedDigest, telegramPostsFrom } from "@nodaro/shared"
+import { collectionRecordHeadline, collectionRecordsDigest, telegramFeedDigest, telegramPostsFrom, SOCIAL_POST_NODE_TYPES } from "@nodaro/shared"
 /**
  * Extract output from completed node execution or source node data.
  * Backend equivalent of frontend extractNodeOutput().
@@ -1954,6 +1954,22 @@ export function buildNodeOutputFromJobData(
     if (plan !== undefined) {
       output.json = plan
       if (Array.isArray(plan)) output.listResults = plan.map((c) => JSON.stringify(c))
+    }
+  }
+
+  // A social post (telegram-post, instagram-post, …, publish-social): the
+  // publish worker writes { platformPostId, platformPostUrl, scheduledPostId }
+  // — none a DIRECT key above, so the live DAG read an EMPTY output, threw
+  // "completed but produced no output" and failed the run AFTER the post had
+  // gone out (Telegram message 4 in a test channel, 2026-10-07). The post's
+  // address is its output: the URL when the platform gives one, else the
+  // platform's own id; both ride on `json` for a consumer that wants them.
+  if (SOCIAL_POST_NODE_TYPES.has(nodeType)) {
+    const postId = typeof outputData.platformPostId === "string" && outputData.platformPostId ? outputData.platformPostId : undefined
+    const postUrl = typeof outputData.platformPostUrl === "string" && outputData.platformPostUrl ? outputData.platformPostUrl : undefined
+    if (postUrl !== undefined || postId !== undefined) {
+      output.text = postUrl ?? postId
+      output.json = { platformPostId: postId ?? null, platformPostUrl: postUrl ?? null }
     }
   }
 

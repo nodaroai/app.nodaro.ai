@@ -66,9 +66,21 @@ export function billableDialogueChars(lines: unknown, provider?: unknown): numbe
   return Math.min(total, getDialogueCapabilities(provider).maxChars)
 }
 
+/**
+ * BASE (pre-markup) credits of ONE unit on the model `provider` runs as — for a
+ * caller that already holds a character count and prices it with
+ * `speechCredits(chars, unit)`: Voice Changer Pro's Re-speak slots, whose count
+ * is the text the engine sends per speaker, never one request body to clamp
+ * or strip. A request with its text in hand reads `speechBaseCredits`, which
+ * counts it the way the worker sends it.
+ */
+export async function speechUnitBaseCredits(provider: unknown): Promise<number> {
+  return baseCreditCostFor(speechUnitCreditId(speechRunsAs(provider)))
+}
+
 /** BASE (pre-markup) credits a text-to-speech request on `provider` reserves. */
 export async function speechBaseCredits(provider: unknown, text: unknown): Promise<number> {
-  const perUnit = await baseCreditCostFor(speechUnitCreditId(speechRunsAs(provider)))
+  const perUnit = await speechUnitBaseCredits(provider)
   return speechCredits(billableSpeechChars(provider, text), perUnit)
 }
 

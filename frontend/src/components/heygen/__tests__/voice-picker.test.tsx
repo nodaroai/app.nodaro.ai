@@ -31,11 +31,15 @@ vi.mock("@/lib/api", () => ({
 // Stub @tanstack/react-virtual so jsdom renders all items without real layout.
 // The stub produces virtual items for every row so VoiceRow components mount.
 // ---------------------------------------------------------------------------
+const virtualizerOptions: { observeElementOffset?: unknown }[] = []
 vi.mock("@tanstack/react-virtual", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@tanstack/react-virtual")>()
   return {
     ...actual,
-    useVirtualizer: ({ count }: { count: number }) => ({
+    useVirtualizer: (options: { count: number; observeElementOffset?: unknown }) => {
+      virtualizerOptions.push(options)
+      const { count } = options
+      return {
       getTotalSize: () => count * 52,
       getVirtualItems: () =>
         Array.from({ length: count }, (_, i) => ({
@@ -44,7 +48,8 @@ vi.mock("@tanstack/react-virtual", async (importOriginal) => {
           start: i * 52,
           size: 52,
         })),
-    }),
+      }
+    },
   }
 })
 
@@ -115,6 +120,7 @@ function renderWithQuery(ui: React.ReactNode) {
 
 // SUT imported AFTER mocks.
 import { VoicePicker } from "../voice-picker"
+import { observeScrollOffset } from "@/lib/virtual/observe-scroll-offset"
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -186,6 +192,15 @@ describe("filterVoices()", () => {
 // Component integration tests
 // ===========================================================================
 describe("VoicePicker component", () => {
+  it("observes its scroll through the shared observer", async () => {
+    mockGetHeygenVoices.mockResolvedValue(VOICES)
+    virtualizerOptions.length = 0
+    renderWithQuery(<VoicePicker value={undefined} onSelect={() => {}} />)
+    await waitFor(() => screen.getByRole("radio", { name: /Adam/i }))
+    expect(virtualizerOptions.length).toBeGreaterThan(0)
+    for (const options of virtualizerOptions) expect(options.observeElementOffset).toBe(observeScrollOffset)
+  })
+
   it("renders voice rows after data loads", async () => {
     mockGetHeygenVoices.mockResolvedValue(VOICES)
     renderWithQuery(<VoicePicker value={undefined} onSelect={() => {}} />)

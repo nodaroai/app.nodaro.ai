@@ -1,0 +1,65 @@
+name: Review Cut Budget
+
+# The review inspector's cut budget (§2.4 of the inspectors design), measured
+# in a real browser on a production build: frontend/playwright/perf/. Decided
+# 2026-10-07: it runs on every PR that touches the inspector or its model, in
+# Playwright's bundled Chromium, asserting TWICE the 16 ms budget (32 ms,
+# PERF_BUDGET_ALLOWANCE=2). That is a regression tripwire for a shared runner,
+# not the budget itself; a manual `npm run test:perf` asserts 16 ms.
+#
+# NOT a required check, which is why it can use a workflow-level `paths:`
+# filter (ci.yml explains why a required check must not). Guarded by
+# tools/__tests__/review-cut-budget-ci.test.mjs.
+on:
+  pull_request:
+    branches: [main, dev]
+    paths:
+      - "frontend/src/components/edl-review/**"
+      - "frontend/src/lib/edl-review/**"
+      - "frontend/src/hooks/use-review-*"
+      - "frontend/playwright/perf/**"
+      - "frontend/playwright.perf.config.ts"
+      - ".github/workflows/review-cut-budget.yml"
+
+concurrency:
+  group: review-cut-budget-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # As in ci.yml: nothing here runs youtube-dl, and its CDN flakes `npm ci`.
+  YOUTUBE_DL_SKIP_DOWNLOAD: "1"
+  # As in ci.yml: onnxruntime-node fetches CUDA libraries on linux/x64 unless skipped.
+  ONNXRUNTIME_NODE_INSTALL: "skip"
+
+jobs:
+  cut-budget:
+    name: Review cut budget (Chromium)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Pin npm 11
+        run: corepack enable npm && corepack prepare npm@11.12.1 --activate
+      - name: Install workspace dependencies
+        run: npm ci
+      # The perf page imports @nodaro/shared and @nodaro/render-rules from their builds.
+      - name: Build shared packages
+        run: npm run build:packages
+      - name: Install Playwright's Chromium
+        run: npx playwright install --with-deps chromium
+        working-directory: frontend
+      - name: Cut budget (2x allowance)
+        run: npm run test:perf
+        working-directory: frontend
+        env:
+          PERF_BUDGET_ALLOWANCE: "2"

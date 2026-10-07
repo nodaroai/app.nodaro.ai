@@ -6,6 +6,7 @@ import { hasCredits } from "../lib/config.js"
 import { paygSurfaceSpendHook } from "../middleware/credit-guard.js"
 import { requireScope, type Scope } from "../lib/scopes.js"
 import { supabase } from "../lib/supabase.js"
+import { ownedSceneNodeData } from "../lib/pipeline-asset-ownership.js"
 
 /**
  * Scene-Context helper routes — Phase 1B.3.
@@ -94,10 +95,21 @@ async function loadHelperContext(
   const plan = (scriptRes.data?.output as { plan?: ShowrunnerPlan } | undefined)?.plan
   if (!plan) return { ok: false, status: 409, code: "showrunner_plan_missing" }
 
+  // Every helper is handed the owner-checked copy (decided 2026-10-07;
+  // migration 482): the vision helpers send keyframes and last frames to a
+  // critic and to image regeneration, so a url on our storage another user
+  // made or holds is dropped here. No helper writes the scene back.
+  let ownedScene: SceneNodeData
+  try {
+    ownedScene = await ownedSceneNodeData(supabase, userId, sceneNodeData)
+  } catch {
+    return { ok: false, status: 503, code: "scene_url_ownership_unavailable" }
+  }
+
   return {
     ok: true,
     plan,
-    scene: sceneNodeData,
+    scene: ownedScene,
     pipelineEntityId: entity.id,
     stageId: (entity.stage_id as string | undefined) ?? "",
   }

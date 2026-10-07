@@ -74,6 +74,8 @@ function makeSupabase(opts: {
   pipelineId?: string
   pipelineRow?: Record<string, unknown>
   plan?: unknown
+  /** Asset ids another user owns; the owner-filtered assets read skips them. */
+  foreignAssets?: string[]
 } = {}) {
   const pipelineId = opts.pipelineId ?? "p1"
   // Per-test plan override — used by the parallelism + error-isolation tests
@@ -114,6 +116,8 @@ function makeSupabase(opts: {
           select: () => ({
             eq: () => ({
               single: async () => ({ data: pipelineRow, error: null }),
+              // pipelineOwnerId (the main image is read as the owner's asset).
+              maybeSingle: async () => ({ data: pipelineRow, error: null }),
             }),
           }),
           update: (patch: Record<string, unknown>) => {
@@ -247,7 +251,17 @@ function makeSupabase(opts: {
       }
       if (table === "assets") {
         return {
+          // assetUrlForId → ownedAssetUrlsById: `.in("id", ids).eq("user_id", owner)`;
+          // every asset here is the pipeline owner's.
           select: () => ({
+            in: (_col: string, ids: string[]) => ({
+              eq: async () => ({
+                data: ids
+                  .filter((id) => !(opts.foreignAssets ?? []).includes(id))
+                  .map((id) => ({ id, r2_url: "https://r2/main.png" })),
+                error: null,
+              }),
+            }),
             eq: () => ({
               single: async () => ({ data: { r2_url: "https://r2/main.png" } }),
             }),
@@ -339,6 +353,21 @@ describe("runLocationsStage", () => {
     expect(variants).toHaveLength(2)
     expect(variants[0]?.variant_kind).toBe("time_of_day") // "sunrise"
     expect(variants[1]?.variant_kind).toBe("time_of_day") // "night"
+  })
+
+  it("attacker: a main_asset_id naming another user's asset is not used as the variants' reference (decided 2026-10-07)", async () => {
+    ;(pipelineGenerateImage as ReturnType<typeof vi.fn>).mockResolvedValue({
+      jobId: "v1", assetId: "av1", assetUrl: "https://r2/v1.png", creditsSpent: 2,
+    })
+    // The entity's main_asset_id ("main-asset") is another user's asset.
+    const supabase = makeSupabase({ entityState: "approved", foreignAssets: ["main-asset"] })
+    await runLocationsStage({ supabase, pipelineId: "p1", userId: "u1", userTier: "pro" })
+    const refs = (pipelineGenerateImage as ReturnType<typeof vi.fn>).mock.calls.map(
+      ([args]) => (args as { referenceImageUrls?: string[] }).referenceImageUrls,
+    )
+    expect(refs.length).toBeGreaterThan(0)
+    for (const r of refs) expect(r ?? []).not.toContain("https://r2/main.png")
+    for (const r of refs) expect(r ?? []).not.toContain("")
   })
 
   it("retries a variant left 'pending' by a partial run instead of skipping it (regression: stuck-reconciler orphan)", async () => {

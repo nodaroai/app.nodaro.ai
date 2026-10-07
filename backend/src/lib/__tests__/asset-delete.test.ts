@@ -410,6 +410,11 @@ describe("permanentlyDeleteAsset — the save-to-storage referrer", () => {
       }
       if (table === "assets" && has(calls, "delete")) return { data: [{ id: "asset-1" }], error: null }
       if (table === "assets") return { count: 0, error: null }
+      // Whose file (lib/key-ownership.ts): one read of who made the key, asked
+      // before the referrer probes and not one of them. The near job is ours.
+      if (table === "jobs" && calls.some((c) => c.method === "select" && c.args[0] === "id, user_id")) {
+        return { data: [{ id: NEAR_JOB, user_id: USER }], error: null }
+      }
       if (table === "jobs") {
         const probed = calls.find((c) => c.method === "eq" && String(c.args[0]).startsWith("output_data"))
         const path = String(probed?.args[0] ?? "")

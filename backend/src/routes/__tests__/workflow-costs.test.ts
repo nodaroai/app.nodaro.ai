@@ -147,4 +147,24 @@ describe("POST /v1/jobs/cost-summary", () => {
     expect("total_cost_usd" in d).toBe(false)
     expect(d.unavailable).toBe(1)
   })
+
+  it("attacker: the billing provider is asked only about the caller's own jobs", async () => {
+    // Another user's job id in the request: the owner-scoped read drops it,
+    // and the metering authority must not be asked to price it either.
+    from.mockReturnValue({ select: () => ({ in: () => ({ eq: () => Promise.resolve({
+      data: [{ id: "mine", status: "completed", input_data: { type: "generate-image", provider: "x" } }], error: null }) }) }) })
+    const asked: string[][] = []
+    const p: BillingProvider = {
+      id: "nodaro-cloud", displayUnit: "credits",
+      async report(jobIds) {
+        asked.push([...jobIds])
+        return new Map()
+      },
+      async account() { return null },
+    }
+    setBillingProvider(p)
+    const app = build()
+    await app.inject({ method: "POST", url: "/v1/jobs/cost-summary", payload: { jobIds: ["mine", "someone-elses"] } })
+    expect(asked).toEqual([["mine"]])
+  })
 })

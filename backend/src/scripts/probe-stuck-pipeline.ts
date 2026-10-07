@@ -122,6 +122,8 @@ async function main() {
     .from("jobs")
     .select("id, model_identifier, status, provider, started_at, completed_at, error_message, created_at")
     .eq("pipeline_id", pipelineId)
+    // The pipeline owner's jobs only: a job's pipeline_id is a pointer.
+    .eq("user_id", p.user_id)
     .order("created_at", { ascending: false })
     .limit(30)
   console.log(`\n=== jobs (${jobs?.length ?? 0}, latest 30) ===`)

@@ -75,7 +75,9 @@ export async function workflowCostRoutes(app: FastifyInstance) {
     const rows = (jobs ?? []) as readonly JobRow[]
 
     // Money from the metering authority — null stays null (never a fabricated 0).
-    const charges: Map<string, Charge> | null = await getBillingProvider().report(jobIds)
+    // Asked only about the caller's own rows (decided 2026-10-06): the
+    // request names ids, and the owner-scoped read above is what proves them.
+    const charges: Map<string, Charge> | null = await getBillingProvider().report(rows.map((r) => r.id))
 
     const groups = new Map<string, BreakdownEntry>()
     // Track "known" so a total is null ONLY when zero jobs had a known value —

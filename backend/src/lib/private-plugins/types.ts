@@ -698,8 +698,23 @@ export interface PluginEdlPictureContext {
  * `amovie=` source or a `sendcmd` command file (pass the commands inline,
  * `c=`) is refused as deterministic; other file-reading filters are not
  * checked, and must not be used either.
+ *
+ * `memoryHint` (ADDITIVE-OPTIONAL, decided 2026-10-07; no contract bump): what
+ * the fragment draws that costs memory beyond its canvas. `zoom: true` on
+ * every segment drawn with a zoom's window (its tween, its rest, and a later
+ * segment carried on that window) makes the slice reserve the host's zoom
+ * term (`zoomPeakMemoryMiB`, `providers/video/ffmpeg-memory-model.ts`) once,
+ * sized from the launch's own thread counts — so name the effect, never a
+ * figure. Without it the slice reserves what it always has. A malformed hint
+ * (not an object, or a non-boolean `zoom`) is refused as deterministic;
+ * unknown keys are ignored for forward compatibility, so a misspelled key
+ * (`zooms`, `Zoom`) reads as no hint and the slice reserves no zoom term. Not
+ * part of the graph, so not part of the checkpoint key. An older host ignores
+ * the field (its slice reserves the no-zoom prediction).
  */
-export type PluginEdlPictureFragment = { readonly chain: string } | { readonly graph: string }
+export type PluginEdlPictureFragment = ({ readonly chain: string } | { readonly graph: string }) & {
+  readonly memoryHint?: { readonly zoom?: boolean }
+}
 
 /** Mirrors `EdlTimelineOptions` (`providers/video/edl-timeline.ts`). */
 export interface PluginEdlTimelineOptions {
@@ -793,14 +808,43 @@ export interface PluginMergeVideoAudioOptions {
  * doc comment for why this differs from the plugin repo's structural
  * `string` copy.
  */
-export interface PluginAudioFxOptions {
-  readonly audioUrl: string
+export type PluginAudioFxOptions = (
+  | { readonly audioUrl: string; readonly inputPath?: undefined }
+  /**
+   * LOCAL input in place of `audioUrl` (exactly one of the two): an absolute
+   * path to an existing file inside the host temp directory (a `createWorkDir`
+   * path). Nothing is downloaded. ADDITIVE-OPTIONAL — gate on
+   * `tk.capabilities?.audioFxLossless === true`.
+   */
+  | { readonly inputPath: string; readonly audioUrl?: undefined }
+) & {
   readonly preset: AudioFxPreset
   readonly mix?: number
   readonly delayMs?: number
   readonly decay?: number
   readonly eqLow?: number
   readonly eqHigh?: number
+  /**
+   * ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump) — gate on
+   * `tk.capabilities?.audioFxLossless === true`: an older host ignores
+   * `format` / `inputPath` / `outputPath` silently (and would then fail on a
+   * missing `audioUrl`, or hand back an mp3).
+   *
+   * Output format. Default `"mp3"` (byte-identical to before). `"wav"` = 16-bit
+   * PCM, no resample/remix: a non-reverb preset keeps the input's sample rate
+   * and channels; the reverb presets render at 48 kHz (their impulse-response
+   * rate) with the input's channel count.
+   */
+  readonly format?: "mp3" | "wav"
+  /**
+   * Write the result at this absolute path inside the host temp directory,
+   * ending `.mp3` / `.wav` to match `format`. The function then removes all its
+   * own scratch (also on failure, plus any partial output) — only this file
+   * remains, no R2 upload involved. Omitted: the output lands in a fresh work
+   * dir the caller removes (`dirname(outputPath)`), as before. Gate on
+   * `audioFxLossless`.
+   */
+  readonly outputPath?: string
 }
 
 /** Mirrors `ProxySpan` (`services/media-proxy-span-map.ts`): ms on the source's own clock. */
@@ -1639,6 +1683,12 @@ export interface PluginSafeFetchInit {
  * the per-minute speech-to-speech unit and the per-1K Re-speak unit are read
  * from `model_pricing` (static seed as fallback), each slot priced as
  * `max(floor, ceil(unit × stemSec / 60))` / `max(floor, ceil(chars/1000) × per1K)`.
+ * On a host that prices speech by length (SPEECH_LENGTH_PRICING_ENABLED), a
+ * Re-speak slot is instead priced exactly as the Text to Speech node prices
+ * the same text on the slot's engine model (v3 → `elevenlabs-v3`, v4 →
+ * `elevenlabs-v4`): per started 100 characters with the speech floor;
+ * `respeakCredits` carries the result, `respeakPer1K` still reports the flat
+ * row. The speech-to-speech slots and `floor` are the same either way.
  */
 export interface VoiceChangerProPricing {
   unitPerMinute: number
@@ -1827,8 +1877,14 @@ export interface PluginHttpToolkit {
     /** Stem seconds per speech-to-speech slot (prorated per second, rounded up
      *  to the next credit); null/0 = unknown → one minute. */
     stsSlotSeconds: ReadonlyArray<number | null | undefined>
-    /** Re-spoken chars per v3 slot; null/0 = unknown → one 1K bucket. */
+    /** Re-spoken chars per Re-speak slot; null/0 = unknown → one 1K bucket. */
     respeakChars: ReadonlyArray<number | null | undefined>
+    /** The engine of each Re-speak slot, index-aligned with `respeakChars`
+     *  (`"v3"` | `"v4"`); absent, shorter, null or unknown → v3. Picks the
+     *  text-to-speech row the slot is priced on where the host prices speech
+     *  by length; ignored otherwise. Additive-optional (no contract bump):
+     *  a plugin that omits it prices every Re-speak slot as v3. */
+    respeakEngines?: ReadonlyArray<string | null | undefined>
   }): Promise<VoiceChangerProPricing>
   /**
    * The translate step's reservation ceiling from the host's `model_pricing`
@@ -2511,6 +2567,12 @@ export interface PluginFeatures {
 export interface PluginCapabilities {
   /** `tk.media.mixAudio` honours `PluginMixAudioOptions.duck`; an older host ignores it silently. */
   readonly mixAudioDuck?: boolean
+  /**
+   * `tk.media.applyAudioFx` honours `format: "wav"` (lossless), a local
+   * `inputPath` and a caller-chosen `outputPath` (see `PluginAudioFxOptions`);
+   * an older host ignores them silently.
+   */
+  readonly audioFxLossless?: boolean
 }
 
 /**

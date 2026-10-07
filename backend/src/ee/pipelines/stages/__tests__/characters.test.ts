@@ -82,6 +82,8 @@ function makeSupabase(opts: {
           select: () => ({
             eq: () => ({
               single: async () => ({ data: pipelineRow, error: null }),
+              // pipelineOwnerId (the main image is read as the owner's asset).
+              maybeSingle: async () => ({ data: pipelineRow, error: null }),
             }),
           }),
           update: (patch: Record<string, unknown>) => {
@@ -224,7 +226,12 @@ function makeSupabase(opts: {
         return {
           update: () => ({ eq: async () => ({ data: null, error: null }) }),
           // assetUrlForId() reads `r2_url` (the actual column) via select+eq+single.
+          // assetUrlForId → ownedAssetUrlsById: `.in("id", ids).eq("user_id", owner)`;
+          // every asset here is the pipeline owner's.
           select: () => ({
+            in: (_col: string, ids: string[]) => ({
+              eq: async () => ({ data: ids.map((id) => ({ id, r2_url: "https://r2/main.png" })), error: null }),
+            }),
             eq: () => ({
               single: async () => ({
                 data: { r2_url: "https://r2/main.png" },

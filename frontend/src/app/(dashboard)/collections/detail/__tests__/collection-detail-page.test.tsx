@@ -9,7 +9,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import type { Collection, CollectionRecord } from "@nodaro/shared"
 import { en } from "@/lib/i18n/en"
-import { linkHost, recordStill } from "@/components/collections/collection-record-card"
+import { recordStill } from "@/lib/collection-record-view"
 
 const api = vi.hoisted(() => ({
   listCollections: vi.fn(),
@@ -78,24 +78,21 @@ beforeEach(() => {
 })
 
 describe("record card helpers", () => {
-  it("the still is the first image, else a video's poster; the host drops www", () => {
+  it("the still is the first image, else a video's poster", () => {
     expect(recordStill(record("a", { media: [{ type: "video", url: "https://cdn.example.com/v.mp4", posterUrl: "https://cdn.example.com/p.jpg" }] }))).toBe(
       "https://cdn.example.com/p.jpg",
     )
     expect(recordStill(record("a"))).toBeUndefined()
-    expect(linkHost("https://www.example.com/x")).toBe("example.com")
-    expect(linkHost("not a url")).toBeUndefined()
-    expect(linkHost(null)).toBeUndefined()
   })
 })
 
 describe("Collection detail page", () => {
-  it("shows the collection, how full it is, and each record's headline, host and fields", async () => {
+  it("shows the collection, how full it is, and each record's headline, where its link opens, and fields", async () => {
     renderPage()
     expect(await screen.findByRole("heading", { level: 1, name: "News" })).toBeInTheDocument()
     expect(screen.getByText("2 of 500 records")).toBeInTheDocument()
     expect(screen.getByRole("link", { name: "Story a" })).toHaveAttribute("href", "https://www.example.com/stories/a")
-    expect(screen.getByText("example.com")).toBeInTheDocument()
+    expect(screen.getByRole("link", { name: "Open in example.com" })).toHaveAttribute("href", "https://www.example.com/stories/a")
     expect(screen.getByText("First line is the headline")).toBeInTheDocument()
     expect(screen.getByText("channel: telegram")).toBeInTheDocument()
     expect(screen.getByText("+1 more")).toBeInTheDocument()

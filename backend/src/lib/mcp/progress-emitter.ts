@@ -197,14 +197,19 @@ async function runPollCycle(server: McpServer): Promise<void> {
   const taskIds = _activeTaskIds()
   if (taskIds.length === 0) return
 
+  // The registry is process-wide and spans every session's user, so no single
+  // `user_id` filter fits: select it and keep only the row of the user the
+  // task was registered for (decided 2026-10-06). A job id names a row; it
+  // does not prove whose job it is.
   const { data, error } = await supabase
     .from("jobs")
-    .select("id, status, progress")
+    .select("id, user_id, status, progress")
     .in("id", taskIds)
 
   if (error || !data) return
 
-  for (const row of data as Array<{ id: string; status: string; progress: number | null }>) {
+  for (const row of data as Array<{ id: string; user_id: string | null; status: string; progress: number | null }>) {
+    if (row.user_id === null || getTask(row.id)?.userId !== row.user_id) continue
     const lastSent = lastProgressByTask.get(row.id) ?? -1
     const isTerminal =
       row.status === "completed" ||

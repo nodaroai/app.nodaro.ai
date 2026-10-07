@@ -5,6 +5,7 @@ import { isOwnedObjectKey, objectKeyJobIdCandidates } from "./job-policy-outputs
 import { jobOutputReferrerPaths } from "./job-output-urls.js"
 import { relayPossible } from "./relay-possible.js"
 import { updateStorageUsage } from "../utils/file-validation.js"
+import { keysClaimedByOthers } from "./key-ownership.js"
 
 /**
  * THE RELAY DELETE RULE — the instance that CREATED an object deletes it; the
@@ -405,8 +406,29 @@ export async function permanentlyDeleteAsset(opts: {
     )
   }
 
+  // Whose file (lib/key-ownership.ts; decided 2026-10-06, migration 480). The
+  // caller owns the ROW, which proves nothing about the object it names: before
+  // 480 a browser could insert an assets row with any key, and a gallery save
+  // stores another user's key on purpose. An object another user's job made,
+  // or that sits in their upload namespace, is never deleted here, and its
+  // size is not refunded — this user was never charged for it (a planted row's
+  // size is whatever the row says). A failed lookup keeps the object.
+  let notOwned = false
+  let ownershipUnknown = false
+  if (asset.r2_key && !relayOwned) {
+    try {
+      notOwned = (await keysClaimedByOthers(userId, [asset.r2_key])).size > 0
+    } catch (err) {
+      ownershipUnknown = true
+      console.warn(`[asset-delete] Keeping R2 object ${asset.r2_key}: ownership lookup failed:`, err)
+    }
+    if (notOwned) {
+      console.log(`[asset-delete] Keeping R2 object ${asset.r2_key}: another user made or owns it — row only`)
+    }
+  }
+
   try {
-    if (asset.r2_key && !relayOwned) {
+    if (asset.r2_key && !relayOwned && !notOwned && !ownershipUnknown) {
       // Content-addressed safety: another row may reference the SAME R2 object,
       // so deleting it would turn that row into a permanent broken link (R2
       // objects are unrecoverable). Checked across ALL users — this is also the
@@ -498,7 +520,7 @@ export async function permanentlyDeleteAsset(opts: {
     // would drive storage_used_bytes negative one object at a time — the
     // mirror image of the `size_bytes: 0` ratchet workers/shared.ts guards
     // against. Spec §9.3, invariant 10a.
-    const sizeBytes = relayOwned ? 0 : asset.size_bytes ?? 0
+    const sizeBytes = relayOwned || notOwned ? 0 : asset.size_bytes ?? 0
     if (sizeBytes > 0 && (deletedRows?.length ?? 0) > 0) {
       await updateStorageUsage(userId, -sizeBytes)
     }

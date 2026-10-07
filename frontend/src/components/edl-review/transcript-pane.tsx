@@ -8,36 +8,39 @@
  * It owns the transcript's own layers and hands the inspector two entry
  * points (`TranscriptPaneHandle`):
  *  - `closeLayer()`: Escape's innermost custom layer (escape-layers.ts) — the
- *    selection toolbar, then the find bar, then the run the reviewer expanded
- *    last (find's own expansions are not layers). The span popover is a Radix
- *    layer and closes on its own first.
+ *    selection toolbar, then the find bar, then the expanded run that has
+ *    focus (decided 2026-10-06). The span popover is a Radix layer and closes
+ *    on its own first.
  *  - `handleKey()`: ⌘F find; with a selection, ⌘C copies its words (from the
  *    model, never the DOM), Del cuts it and R restores it.
  * The selection is by word index (`use-word-drag.ts`), so it survives its
- * anchor row unmounting mid-drag; pressing a word moves focus to the
- * transcript, so Del and R reach it even from the find box. Expanded runs are
+ * anchor row unmounting mid-drag; pressing a word moves focus to its row, so
+ * Del and R reach it even from the find box, and Escape knows the run the
+ * reviewer is in. Expanding a run moves focus to its "Hide these words"
+ * control, and collapsing one moves it back to the run's chip. Expanded runs are
  * kept by word range and follow the edit (`trackExpandedRuns`), and the
  * virtualizer caches each row's height by the row's key, so expanding a run
  * never hands one row's height to another. With no transcript (R5 a) the pane lists
  * the kept segments and dropped spans by time (Cuts-only).
  *
+ * Find marks the runs it expands to show a match; closing find (Escape or its
+ * ✕) collapses those again, leaves the runs the reviewer opened open, and
+ * returns focus to where it was before find opened (decided 2026-10-07),
+ * scrolling back to that row first when find scrolled it out of the DOM.
+ * Below `sm` the pane stays mounted behind another tab (`active` false): it
+ * then has no Escape layers and takes no keys. ⌘F there switches to the
+ * transcript and opens find (`openFindFromTab`, decided 2026-10-07).
+ *
  * Seeking the player on a kept word arrives with the player (A3-4); until then
  * a click on a kept word does nothing.
  */
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type KeyboardEvent } from "react"
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
 import { useVirtualizer } from "@tanstack/react-virtual"
 import type { ReviewEdits } from "@/hooks/use-review-edits"
 import type { ReviewModel } from "@/hooks/use-review-model"
-import {
-  collapseLastRun,
-  collapseRun,
-  expandRun,
-  hasReviewerRun,
-  innermostLayer,
-  trackExpandedRuns,
-  type ExpandedRun,
-} from "@/lib/edl-review/escape-layers"
-import { collapsedRunOfWord, expandedRuns, rowOfWord, runSpan, type CollapsedRow } from "@/lib/edl-review/review-rows"
+import { observeScrollOffset } from "@/lib/virtual/observe-scroll-offset"
+import { collapseFindRuns, collapseRun, expandRun, focusedRun, innermostLayer, trackExpandedRuns, type ExpandedRun } from "@/lib/edl-review/escape-layers"
+import { collapsedRunOfWord, expandedRuns, rowOfWord, runSpan, type CollapsedRow, type ReviewRow, type WordSpan } from "@/lib/edl-review/review-rows"
 import {
   selectedWords,
   selectionCutMs,
@@ -64,17 +67,74 @@ export interface TranscriptPaneHandle {
   /** Close the innermost open layer; false when none is open (the dialog closes). */
   readonly closeLayer: () => boolean
   readonly handleKey: (event: KeyboardEvent<HTMLElement>) => void
+  /** The transcript has words to find in (not Cuts-only), whether or not it is showing. */
+  readonly canFind: boolean
+  /**
+   * Open find for a ⌘F pressed on another tab, once this pane is showing
+   * again (review-body.tsx). Closing it returns focus to the transcript, never
+   * to the tab it came from: focusing that tab would open it again.
+   */
+  readonly openFindFromTab: () => void
 }
 
 export interface TranscriptPaneProps {
   readonly model: ReviewModel
   readonly edits: ReviewEdits
+  /**
+   * The pane is showing (default). Below `sm` it stays mounted behind another
+   * tab; there it has no Escape layers and takes no keys.
+   */
+  readonly active?: boolean
 }
 
 const isTextField = (target: EventTarget | null): boolean =>
   target instanceof HTMLElement && (target.isContentEditable || target.tagName === "INPUT" || target.tagName === "TEXTAREA")
 
-export const TranscriptPane = forwardRef<TranscriptPaneHandle, TranscriptPaneProps>(function TranscriptPane({ model, edits }, ref) {
+/** The expanded run the focused row of the transcript belongs to (escape-layers.ts). */
+function focusedRunOf(scroller: HTMLElement | null, rows: readonly ReviewRow[]): { readonly run: string; readonly span: WordSpan } | undefined {
+  const active = document.activeElement
+  const row = scroller && active instanceof Element && scroller.contains(active) ? active.closest<HTMLElement>("[data-review-row]") : null
+  const index = row ? Number(row.dataset.index) : -1
+  const span = focusedRun(rows, index)
+  const run = rows[index]
+  return span && run?.kind === "paragraph" && run.run ? { run: run.run, span } : undefined
+}
+
+/**
+ * Where focus was when find opened, to return it there when find closes
+ * (decided 2026-10-07). The element itself while it is still in the page;
+ * otherwise its stand-in, when it was a run's toggle, a row or the find button
+ * (the virtualizer and the run toggles swap those elements, and the find
+ * button unmounts while find is open). A toggle or a row also names the row it
+ * lives in, so when find scrolled that row out of the DOM the transcript
+ * scrolls back to it and focuses it once it renders.
+ */
+interface FocusMark {
+  readonly el: HTMLElement
+  readonly selector?: string
+  /** The transcript row the stand-in lives in: by its key, or by its run's id (a toggle). */
+  readonly row?: { readonly key: string } | { readonly run: string }
+}
+
+function focusMarkOf(active: Element | null): FocusMark | null {
+  if (!(active instanceof HTMLElement)) return null
+  const toggle = active.dataset.runToggle
+  if (toggle !== undefined) return { el: active, selector: `[data-run-toggle="${CSS.escape(toggle)}"]`, row: { run: toggle } }
+  if (active.hasAttribute("data-find-open")) return { el: active, selector: "[data-find-open]" }
+  const row = active.closest<HTMLElement>("[data-row-key]")
+  if (row) return { el: active, selector: `[data-row-key="${CSS.escape(row.dataset.rowKey!)}"]`, row: { key: row.dataset.rowKey! } }
+  return { el: active }
+}
+
+/** The index in `rows` of the row a focus mark lives in; -1 when it is gone. */
+function rowIndexOf(mark: FocusMark, rows: readonly ReviewRow[]): number {
+  const row = mark.row
+  if (!row) return -1
+  // A run's toggle is on its collapsed row, or on its first paragraph once expanded.
+  return "key" in row ? rows.findIndex((r) => r.key === row.key) : rows.findIndex((r) => r.run === row.run)
+}
+
+export const TranscriptPane = forwardRef<TranscriptPaneHandle, TranscriptPaneProps>(function TranscriptPane({ model, edits, active = true }, ref) {
   const t = useT()
   const [expanded, setExpanded] = useState<readonly ExpandedRun[]>([])
   const view = useTranscriptView(model, edits, expanded)
@@ -82,12 +142,20 @@ export const TranscriptPane = forwardRef<TranscriptPaneHandle, TranscriptPanePro
   const marks = wordIndex?.marks ?? []
   const canEdit = edits.canEdit
 
+  const rootRef = useRef<HTMLDivElement | null>(null)
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const findInputRef = useRef<HTMLInputElement | null>(null)
+  // Where focus was before find opened, and a request to return it there.
+  const beforeFind = useRef<FocusMark | null>(null)
+  const [refocus, setRefocus] = useState(0)
+  // The stand-in to focus once the virtualizer renders it (find scrolled it away).
+  const [pendingFocus, setPendingFocus] = useState<FocusMark | null>(null)
   const [selection, setSelection] = useState<WordSelection | null>(null)
   const [target, setTarget] = useState<SpanTarget | null>(null)
   const [find, setFind] = useState<FindState>(CLOSED_FIND)
   const [scrollToWord, setScrollToWord] = useState<number | null>(null)
+  // A run's toggle to move focus to once the rows show it (expanded or collapsed).
+  const [focusToggle, setFocusToggle] = useState<string | null>(null)
   const matches = useFindMatches(findIndex, find)
   const match = find.current >= 0 ? matches[find.current] : undefined
 
@@ -106,6 +174,8 @@ export const TranscriptPane = forwardRef<TranscriptPaneHandle, TranscriptPanePro
       return rows[i]?.key ?? i
     },
     overscan: TRANSCRIPT_OVERSCAN,
+    // The library's observer leaves its is-scrolling reset timer running after unmount.
+    observeElementOffset: observeScrollOffset,
   })
   const items = virtualizer.getVirtualItems()
 
@@ -130,12 +200,24 @@ export const TranscriptPane = forwardRef<TranscriptPaneHandle, TranscriptPanePro
 
   const onExpand = useCallback((run: string) => {
     const span = runSpan(rows, run)
-    if (span) setExpanded((runs) => expandRun(runs, span, true))
+    if (!span) return
+    setExpanded((runs) => expandRun(runs, span))
+    setFocusToggle(run)
   }, [rows])
   const onCollapse = useCallback((run: string) => {
     const span = runSpan(rows, run)
-    if (span) setExpanded((runs) => collapseRun(runs, span))
+    if (!span) return
+    setExpanded((runs) => collapseRun(runs, span))
+    setFocusToggle(run)
   }, [rows])
+  // The toggle the reviewer pressed unmounts: its partner takes focus, so the
+  // run just expanded is the one Escape collapses.
+  useEffect(() => {
+    if (focusToggle === null) return
+    const toggle = scrollRef.current?.querySelector<HTMLElement>(`[data-run-toggle="${focusToggle}"]`)
+    ;(toggle ?? scrollRef.current)?.focus({ preventScroll: true })
+    setFocusToggle(null)
+  }, [focusToggle, rows])
 
   // The open runs follow the edit: a restore or a cut that moves a run's first
   // paragraph keeps it open under its new id, and a run that is gone is
@@ -160,8 +242,9 @@ export const TranscriptPane = forwardRef<TranscriptPaneHandle, TranscriptPanePro
     const run = collapsedRunOfWord(rows, scrollToWord)
     const span = run ? runSpan(rows, run) : undefined
     if (span) {
-      // Opened for the reviewer to see the match, not by them: not an Escape layer.
-      setExpanded((runs) => expandRun(runs, span, false))
+      // Opened for the reviewer to see the match; focus stays in the find box.
+      // Marked as find's, so it collapses again when find closes.
+      setExpanded((runs) => expandRun(runs, span, "find"))
       return
     }
     virtualizer.scrollToIndex(rowOfWord(rows, scrollToWord), { align: "center" })
@@ -174,12 +257,69 @@ export const TranscriptPane = forwardRef<TranscriptPaneHandle, TranscriptPanePro
   }, [virtualizer, rows])
 
   const openFind = useCallback(() => {
+    if (!find.open) {
+      beforeFind.current = focusMarkOf(document.activeElement)
+      setPendingFocus(null)
+    }
     setFind((f) => ({ ...f, open: true }))
     findInputRef.current?.focus()
-  }, [])
+  }, [find.open])
   useEffect(() => {
     if (find.open) findInputRef.current?.focus()
   }, [find.open])
+
+  // Closing find, by Escape or its ✕ (decided 2026-10-07): the runs only find
+  // opened collapse again, and focus goes back to where it was before find
+  // opened (in the same commit, so keys never fall to <body> in between).
+  const closeFind = useCallback(() => {
+    setFind((f) => ({ ...f, open: false, current: -1 }))
+    setExpanded(collapseFindRuns)
+    setRefocus((n) => n + 1)
+  }, [])
+  // The rows of this render (after find's runs collapse), for the refocus below.
+  const rowsRef = useRef(rows)
+  rowsRef.current = rows
+  useLayoutEffect(() => {
+    if (refocus === 0) return
+    const mark = beforeFind.current
+    beforeFind.current = null
+    setPendingFocus(null)
+    const dialog = rootRef.current?.closest("[role='dialog']")
+    const stillThere = mark !== null && mark.el.isConnected && (!dialog || dialog.contains(mark.el))
+    const standIn = !stillThere && mark?.selector ? rootRef.current?.querySelector<HTMLElement>(mark.selector) : null
+    const target = stillThere ? mark.el : standIn
+    if (target) {
+      target.focus()
+      return
+    }
+    // Its row is out of the DOM (find scrolled away from it): scroll back and
+    // focus it once it renders. The scroller holds focus meanwhile.
+    scrollRef.current?.focus({ preventScroll: true })
+    const index = mark ? rowIndexOf(mark, rowsRef.current) : -1
+    if (mark && index >= 0) {
+      virtualizer.scrollToIndex(index, { align: "auto" })
+      setPendingFocus(mark)
+    }
+  }, [refocus, virtualizer])
+  useEffect(() => {
+    if (!pendingFocus?.selector) return
+    const el = rootRef.current?.querySelector<HTMLElement>(pendingFocus.selector)
+    if (el) {
+      // Only while the reviewer has not moved focus elsewhere in the meantime.
+      if (document.activeElement === scrollRef.current) el.focus({ preventScroll: true })
+      setPendingFocus(null)
+    } else if (rowIndexOf(pendingFocus, rows) < 0) setPendingFocus(null)
+  }, [pendingFocus, items, rows])
+  const onFindChange = useCallback((next: FindState) => {
+    if (find.open && !next.open) closeFind()
+    else {
+      if (!find.open && next.open) {
+        beforeFind.current = focusMarkOf(document.activeElement)
+        setPendingFocus(null)
+      }
+      setFind(next)
+    }
+  }, [find.open, closeFind])
 
   const cutSelection = useCallback(() => {
     if (!selection) return
@@ -199,17 +339,20 @@ export const TranscriptPane = forwardRef<TranscriptPaneHandle, TranscriptPanePro
 
   useImperativeHandle(ref, () => ({
     closeLayer: () => {
+      if (!active) return false
       const open = trackExpandedRuns(expanded, expandedRuns(rows))
-      const layer = innermostLayer({ selection: selection !== null, find: find.open, expanded: hasReviewerRun(open) })
+      const focused = focusedRunOf(scrollRef.current, rows)
+      const layer = innermostLayer({ selection: selection !== null, find: find.open, expanded: focused !== undefined })
       if (layer === "selection") setSelection(null)
-      else if (layer === "find") {
-        setFind((f) => ({ ...f, open: false, current: -1 }))
-        // Focus would fall to <body> with the input gone, out of the dialog's keys.
-        scrollRef.current?.focus()
-      } else if (layer === "expanded") setExpanded(collapseLastRun(open))
+      else if (layer === "find") closeFind()
+      else if (focused) {
+        setExpanded(collapseRun(open, focused.span))
+        setFocusToggle(focused.run)
+      }
       return layer !== null
     },
     handleKey: (e) => {
+      if (!active) return
       const mod = e.metaKey || e.ctrlKey
       const key = e.key.toLowerCase()
       if (mod && key === "f" && !cutsOnly && findIndex) {
@@ -232,7 +375,17 @@ export const TranscriptPane = forwardRef<TranscriptPaneHandle, TranscriptPanePro
         restoreSelection()
       }
     },
-  }), [selection, find.open, expanded, rows, cutsOnly, findIndex, openFind, drag.dragging, words, t, canEdit, cutSelection, touchesCut, restoreSelection])
+    canFind: !cutsOnly && !!findIndex,
+    openFindFromTab: () => {
+      if (!active || cutsOnly || !findIndex) return
+      if (!find.open) {
+        beforeFind.current = scrollRef.current ? { el: scrollRef.current } : null
+        setPendingFocus(null)
+      }
+      setFind((f) => ({ ...f, open: true }))
+      findInputRef.current?.focus()
+    },
+  }), [active, selection, find.open, closeFind, expanded, rows, cutsOnly, findIndex, openFind, drag.dragging, words, t, canEdit, cutSelection, touchesCut, restoreSelection])
 
   const sel = selection ? selectedWords(selection) : null
   const selectionMs = useMemo(() => {
@@ -250,10 +403,10 @@ export const TranscriptPane = forwardRef<TranscriptPaneHandle, TranscriptPanePro
   if (!shown) return null
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div ref={rootRef} className="flex min-h-0 flex-1 flex-col">
       {!cutsOnly && findIndex && (
         <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-1.5">
-          <FindBar find={find} matches={matches} inputRef={findInputRef} fromWord={firstWordOnScreen} onChange={setFind} />
+          <FindBar find={find} matches={matches} inputRef={findInputRef} fromWord={firstWordOnScreen} onChange={onFindChange} />
         </div>
       )}
       <div
@@ -279,7 +432,7 @@ export const TranscriptPane = forwardRef<TranscriptPaneHandle, TranscriptPanePro
             const inMatch = match && match.first < row.end && match.last >= row.first
             const prev = rows[item.index - 1]
             return (
-              <div key={row.key} data-index={item.index} data-review-row ref={virtualizer.measureElement} className="absolute inset-x-0 top-0" style={{ transform: `translateY(${item.start}px)` }}>
+              <div key={row.key} data-index={item.index} data-review-row data-row-key={row.key} tabIndex={-1} ref={virtualizer.measureElement} className="absolute inset-x-0 top-0 outline-none" style={{ transform: `translateY(${item.start}px)` }}>
                 <TranscriptRow
                   row={row}
                   words={words}

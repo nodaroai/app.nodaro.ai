@@ -11,6 +11,7 @@ import { formatZodError } from "../lib/zod-error.js"
 import { requireAppScope } from "../lib/scope-prehandler.js"
 import { batchDeleteFromR2 } from "../lib/storage.js"
 import { deletableKeys } from "../lib/asset-delete.js"
+import { ownKeysOnly } from "../lib/key-ownership.js"
 import { config } from "../lib/config.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { decodeKeysetCursor, keysetFilter, sliceKeysetPage } from "../lib/keyset-cursor.js"
@@ -663,7 +664,13 @@ export async function creatureRoutes(app: FastifyInstance) {
       // and it matches nothing at all on a deployment that never relays, so
       // this is behaviourally identical to the previous line off a relay.
       // Skipped entirely when nothing was collected.
-      const keys = await deletableKeys(collectCreatureR2Keys(row as Record<string, unknown>))
+      // Whose file first (lib/key-ownership.ts; decided 2026-10-06): a url in
+      // this row may name an object another user's job made — before
+      // migration 480 a browser could write these columns directly, and the
+      // API stores urls the caller names. Those objects stay; the row goes.
+      const keys = await deletableKeys(
+        await ownKeysOnly(userId, collectCreatureR2Keys(row as Record<string, unknown>), "creature permanent delete"),
+      )
 
       // Step 3: Best-effort batch-delete from R2. `batchDeleteFromR2` already
       // swallows per-key errors and returns counts; we never block DB delete

@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import type { EntityType } from "@nodaro/shared"
 import { pipelineEvents } from "./events.js"
 import { transitionEntityNodeAndEmit } from "./depends-on.js"
+import { pipelineOwnedAssetUrlsById } from "../../lib/pipeline-asset-ownership.js"
 
 /**
  * Phase 1B.4 (C1): after a `pipeline_entities.main_asset_id` update succeeds,
@@ -243,20 +244,21 @@ async function materializeForApprovedEntity(
     .eq("id", entityId)
     .single()
   if (!full) return
+  // The pipeline owner's asset only (decided 2026-10-07): a main_asset_id
+  // naming another user's asset counts as no asset, so its URL never lands
+  // on the canvas.
+  const ownedMain = full.main_asset_id
+    ? await pipelineOwnedAssetUrlsById(supabase, pipelineId, [full.main_asset_id as string])
+    : new Map<string, string | null>()
+  const mainAssetId = full.main_asset_id && ownedMain.has(full.main_asset_id as string)
+    ? (full.main_asset_id as string)
+    : null
   // Character/object/location require an asset before materializing (Phase 1B.1
   // invariant — the node renders the asset URL). Scenes are planning-only at
   // approval time and intentionally have no asset.
-  if (entityType !== "scene" && !full.main_asset_id) return
+  if (entityType !== "scene" && !mainAssetId) return
 
-  const assetUrl = full.main_asset_id
-    ? (
-        await supabase
-          .from("assets")
-          .select("r2_url")
-          .eq("id", full.main_asset_id)
-          .single()
-      ).data?.r2_url as string | undefined ?? ""
-    : ""
+  const assetUrl = mainAssetId ? (ownedMain.get(mainAssetId) ?? "") : ""
 
   const meta = (full.metadata ?? {}) as Record<string, unknown>
   const entityName = String(meta.name ?? meta.scene_id ?? full.entity_key)
@@ -271,8 +273,8 @@ async function materializeForApprovedEntity(
     entityKey: full.entity_key as string,
     entityName,
     visualDescription,
-    mainAssetId: (full.main_asset_id as string | null) ?? null,
-    mainAssetUrl: full.main_asset_id ? assetUrl : null,
+    mainAssetId,
+    mainAssetUrl: mainAssetId ? assetUrl : null,
     position: computeCanvasPosition(entityType),
     metadata: meta,
   })

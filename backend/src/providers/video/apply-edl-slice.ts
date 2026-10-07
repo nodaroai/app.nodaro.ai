@@ -265,9 +265,11 @@ export interface SliceCommand {
   /** What the slice's predicted peak memory is computed from — its canvas and
    *  segment count (`canvasPeakMemoryMiB`, with the thread counts the launch
    *  runs with: only `runSlice` knows them); undefined for a sound-only slice,
-   *  which reserves the launcher's default estimate. Not part of the resume
-   *  key — it changes when ffmpeg runs, not what it renders. */
-  readonly memoryBasis: { readonly width: number; readonly height: number; readonly segments: number } | undefined
+   *  which reserves the launcher's default estimate. `zoom` is present (true)
+   *  only when a drawn segment's fragment declared one (`memoryHint`), so an
+   *  unhinted slice's basis is exactly what it always was. Not part of the
+   *  resume key — it changes when ffmpeg runs, not what it renders. */
+  readonly memoryBasis: { readonly width: number; readonly height: number; readonly segments: number; readonly zoom?: true } | undefined
 }
 
 /**
@@ -298,6 +300,9 @@ export function buildSliceCommand(edl: Edl, segs: readonly PlanSegment[], opts: 
   const filters: string[] = []
   const plans: SegPlan[] = []
   let needsSilence = false
+  // Some drawn segment's fragment declared a zoom (`memoryHint`): the slice
+  // reserves the zoom's term once (`canvasPeakMemoryMiB`).
+  let zoomDrawn = false
 
   // A/V DRIFT (Track 0.14): the video timeline is laid on ONE cumulative frame
   // grid so it tracks the sample-exact audio. `fps=${fps}` on EACH segment
@@ -553,6 +558,7 @@ export function buildSliceCommand(edl: Edl, segs: readonly PlanSegment[], opts: 
     }
     const problem = pictureFragmentError(fragment, ctx)
     if (problem) throw new DeterministicJobError(`picture for segment "${seg.id}": ${problem}`)
+    if (fragment.memoryHint?.zoom === true) zoomDrawn = true
     if ("chain" in fragment) {
       filters.push(`${reads[0]!.read},${fragment.chain},${conform}${vLabel}`)
       return
@@ -745,7 +751,12 @@ export function buildSliceCommand(edl: Edl, segs: readonly PlanSegment[], opts: 
     // Every slot is its own decoded branch of the graph (#1860's model counts
     // branches): one per segment for Apply EDL.
     memoryBasis: wantVideo
-      ? { width: target.width, height: target.height, segments: segs.reduce((n, seg) => n + Math.max(1, slotsOf(seg).length), 0) }
+      ? {
+          width: target.width,
+          height: target.height,
+          segments: segs.reduce((n, seg) => n + Math.max(1, slotsOf(seg).length), 0),
+          ...(zoomDrawn ? { zoom: true as const } : {}),
+        }
       : undefined,
   }
 }

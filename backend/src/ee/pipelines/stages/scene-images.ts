@@ -7,6 +7,7 @@ import { pipelineGenerateImage } from "../services/pipeline-generate-image.js"
 import { allocateReferenceSlots } from "../continuity.js"
 import { transitionStageEntityNodesAndEmit } from "../depends-on.js"
 import { settledWithLimit } from "../../../lib/settled-with-limit.js"
+import { pipelineOwnedAssetUrlsById, withOwnedSceneRows } from "../../../lib/pipeline-asset-ownership.js"
 import { runMatchCutOrchestrator } from "../match-cut-orchestrator.js"
 import { runStoryboardCohesionCritic } from "../llms/storyboard-cohesion-critic.js"
 
@@ -57,9 +58,13 @@ const KEYFRAME_REF_BUDGET = 4
  * (front / angle / expression) the Cast stage generated. Used to strengthen
  * the keyframe identity lock: a single portrait drifts across new scenes;
  * multiple views give the image model far more to lock the same face onto.
+ *
+ * Only the pipeline owner's assets (decided 2026-10-07; migration 480): a
+ * variant naming another user's asset, written before 480, adds no reference.
  */
 async function fetchApprovedVariantUrls(
   supabase: SupabaseClient,
+  pipelineId: string,
   entityId: string,
 ): Promise<string[]> {
   const { data: variants } = await supabase
@@ -71,12 +76,9 @@ async function fetchApprovedVariantUrls(
     .map((v) => v.asset_id as string | null)
     .filter((id): id is string => !!id)
   if (assetIds.length === 0) return []
-  const { data: assets } = await supabase
-    .from("assets")
-    .select("r2_url")
-    .in("id", assetIds)
-  return (assets ?? [])
-    .map((a) => a.r2_url as string | null)
+  const urlById = await pipelineOwnedAssetUrlsById(supabase, pipelineId, assetIds)
+  return assetIds
+    .map((id) => urlById.get(id) ?? null)
     .filter((u): u is string => !!u)
 }
 
@@ -255,7 +257,27 @@ export async function runSceneImagesStage(args: RunSceneImagesStageArgs): Promis
     .eq("entity_type", "scene")
     .order("entity_key", { ascending: true })
 
-  for (const sceneEntity of scenesWithKeyframes ?? []) {
+  // Both critics below are SENT the keyframes: they read the owner-checked
+  // copy (decided 2026-10-07; migration 482), so a keyframe on our storage
+  // another user made or holds reaches neither. A failed lookup fails the
+  // stage rather than sending keyframes nobody judged.
+  let ownedScenes: Array<{ id: string; entity_key: string; metadata: Record<string, unknown> | null }>
+  try {
+    ownedScenes = await withOwnedSceneRows(
+      supabase,
+      userId,
+      (scenesWithKeyframes ?? []) as Array<{ id: string; entity_key: string; metadata: Record<string, unknown> | null }>,
+    )
+  } catch (err) {
+    await failStage(
+      supabase,
+      stageId,
+      `scene_url_ownership_unavailable: ${err instanceof Error ? err.message : String(err)}`,
+    )
+    return
+  }
+
+  for (const sceneEntity of ownedScenes) {
     const sceneNodeData = (
       (sceneEntity.metadata as Record<string, unknown> | null)?.scene_node_data
     ) as SceneNodeData | undefined
@@ -336,7 +358,7 @@ export async function runSceneImagesStage(args: RunSceneImagesStageArgs): Promis
   // (partial retry mid-flight or persist-failure), skip the critic — it
   // needs the full keyframe sequence to make sense of cross-scene drift.
   try {
-    const cohesionInputs = loadStoryboardCohesionInputs(scenesWithKeyframes ?? [])
+    const cohesionInputs = loadStoryboardCohesionInputs(ownedScenes)
     if (cohesionInputs.length > 0) {
       const cohesionResult = await runStoryboardCohesionCritic({
         supabase,
@@ -586,6 +608,7 @@ async function generateKeyframesForScene(
       if (primaryCharSlot?.sourceId) {
         const variantUrls = await fetchApprovedVariantUrls(
           supabase,
+          pipelineId,
           primaryCharSlot.sourceId,
         )
         if (variantUrls.length > 0) {

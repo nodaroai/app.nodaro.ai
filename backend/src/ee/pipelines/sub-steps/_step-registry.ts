@@ -4,6 +4,7 @@ import type { MusicTimelineResult } from "../music-timeline.js"
 import type { EditorCutDecision, EditorShotInput } from "../llms/editor.js"
 import type { FinalMergeSceneInput } from "../services/pipeline-final-merge.js"
 import { reduceTimeline } from "../_freecut-timeline.js"
+import { withOwnedSceneRows } from "../../../lib/pipeline-asset-ownership.js"
 
 /**
  * Phase 1C.3 Task A1 — Table-driven sub-step loop for Stage 7
@@ -416,7 +417,18 @@ async function runRealignmentStep(
  * early-return for the empty-shots case.
  */
 async function runEditorStep(ctx: SubStepContext): Promise<SubStepResult> {
-  const shotInputs = collectAllShotsFromScenes(ctx.scenes)
+  // The Editor LLM is shown every shot's keyframe: it reads the owner-checked
+  // copy (decided 2026-10-07; migration 482), so a keyframe on our storage
+  // another user made or holds is not sent. The cut decisions are persisted
+  // onto `ctx.scenes`, the stored rows, never onto this copy.
+  let ownedScenes: SubStepSceneRow[]
+  try {
+    ownedScenes = await withOwnedSceneRows(ctx.supabase, ctx.userId, ctx.scenes)
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    return { kind: "terminal_fail", reason: `scene_url_ownership_unavailable: ${msg}` }
+  }
+  const shotInputs = collectAllShotsFromScenes(ownedScenes)
   if (shotInputs.length === 0) return { kind: "continue" }
 
   const plan = await loadShowrunnerPlan(ctx.supabase, ctx.pipelineId)
@@ -466,7 +478,17 @@ async function runEditorStep(ctx: SubStepContext): Promise<SubStepResult> {
 async function runFinalMergeStep(
   ctx: SubStepContext,
 ): Promise<SubStepResult> {
-  const mergeScenes = loadScenesWithCutDecisions(ctx.scenes)
+  // The merge downloads every scene composite (and the FreeCut exports name
+  // them): only the owner's, from the owner-checked copy (decided 2026-10-07;
+  // migration 482).
+  let ownedScenes: SubStepSceneRow[]
+  try {
+    ownedScenes = await withOwnedSceneRows(ctx.supabase, ctx.userId, ctx.scenes)
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    return { kind: "terminal_fail", reason: `scene_url_ownership_unavailable: ${msg}` }
+  }
+  const mergeScenes = loadScenesWithCutDecisions(ownedScenes)
   if (mergeScenes.length === 0) {
     return { kind: "terminal_fail", reason: "no_scene_composites_for_final_merge" }
   }

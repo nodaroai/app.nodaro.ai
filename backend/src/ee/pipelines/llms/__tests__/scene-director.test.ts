@@ -5,6 +5,8 @@ vi.mock("../call-llm.js", () => ({ callLLM: vi.fn() }))
 import { callLLM } from "../call-llm.js"
 import { runSceneDirector } from "../scene-director.js"
 import { getPipelinePrompt, PIPELINE_PROMPT_KEYS } from "../prompt-registry.js"
+import { SceneDirectorPlanSchema } from "../scene-director-plan.js"
+import { z } from "zod"
 
 beforeEach(() => vi.clearAllMocks())
 
@@ -172,6 +174,33 @@ describe("runSceneDirector", () => {
     expect(call.userPrompt).toContain("Hero")
     expect(call.userPrompt).toContain("first_frame")
     expect(call.userPrompt).toContain("kling")
+  })
+
+  it("the model is given the plan-only schema: no url field and no asset id to fill (decided 2026-10-07)", async () => {
+    ;(callLLM as ReturnType<typeof vi.fn>).mockResolvedValue({
+      output: fakeSceneNodeData,
+      llmCallId: "x",
+      costUsd: 0.08,
+      inputTokens: 1200,
+      outputTokens: 800,
+    })
+
+    await runSceneDirector({
+      supabase: {} as never,
+      pipelineId: "p1",
+      stageId: "s5",
+      userId: "u1",
+      sceneId: "scene-entity-1",
+      plan: fakePlan,
+      sceneIndex: 1,
+      shotInputMode: "first_frame",
+    })
+
+    const call = (callLLM as ReturnType<typeof vi.fn>).mock.calls[0][0]
+    expect(call.schema).toBe(SceneDirectorPlanSchema)
+    const shown = JSON.stringify(z.toJSONSchema(call.schema, { target: "draft-7", unrepresentable: "any", io: "input" }))
+    expect(shown).not.toMatch(/"[a-z_]*(url|urls|asset_id)"\s*:/)
+    expect(shown).not.toContain('"format":"uri"')
   })
 
   it("rejects video_model not in eligibleVideoModels", async () => {

@@ -1,3 +1,4 @@
+import { LLM_ROUTE_REQUEST_TIMEOUT_MS } from "../lib/llm-route-timeout.js"
 import type { FastifyInstance } from "fastify"
 import { maybeProxyLlmRouteToCloud, maybeProxyLlmStreamToCloud } from "../lib/cloud-llm-proxy.js"
 import { z } from "zod"
@@ -43,7 +44,7 @@ export async function aiWriterRoutes(app: FastifyInstance) {
     "/v1/ai-writer/generate",
     {
       preHandler: creditGuard((req) => resolveLlmCreditId("ai-writer", req.body)),
-      config: { requestTimeout: 120000 } as Record<string, unknown>,
+      config: { requestTimeout: LLM_ROUTE_REQUEST_TIMEOUT_MS } as Record<string, unknown>,
     },
     async (req, reply) => {
       // Keyless install with a live connection: the cloud runs the same
@@ -175,7 +176,7 @@ export async function aiWriterRoutes(app: FastifyInstance) {
     "/v1/ai-writer/generate-stream",
     {
       preHandler: creditGuard((req) => resolveLlmCreditId("ai-writer", req.body)),
-      config: { requestTimeout: 120000 } as Record<string, unknown>,
+      config: { requestTimeout: LLM_ROUTE_REQUEST_TIMEOUT_MS } as Record<string, unknown>,
     },
     async (req, reply) => {
       // Keyless install with a live connection: the cloud runs the same

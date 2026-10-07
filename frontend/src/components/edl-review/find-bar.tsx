@@ -9,7 +9,9 @@
  *
  * Closed, it is a button that opens it. Open, Escape closes it — after the
  * span popover and the selection toolbar, before a run the reviewer expanded
- * (§2.4). The runs find itself expanded stay open and are not Escape layers.
+ * (§2.4). The runs find itself expanded are not Escape layers; closing find
+ * (Escape or ✕) collapses them again and returns focus to where it was before
+ * find opened (decided 2026-10-07, transcript-pane.tsx).
  */
 import { useDeferredValue, useEffect, useMemo, useState, type RefObject } from "react"
 import { ChevronDown, ChevronUp, Search, X } from "lucide-react"
@@ -54,7 +56,10 @@ export function FindBar({ find, matches, inputRef, fromWord, onChange }: FindBar
     return (
       <button
         type="button"
+        data-find-open
         className="inline-flex items-center gap-1.5 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+        // A click keeps focus where it was, so closing find can return it there.
+        onMouseDown={(e) => e.preventDefault()}
         onClick={() => onChange({ open: true, query: find.query, current: -1 })}
       >
         <Search className="h-3.5 w-3.5" />

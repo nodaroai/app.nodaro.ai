@@ -6,6 +6,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest"
+import { OWNER_ID, VICTIM_JOB_ID, ownerUrl, useStorageHost, victimUrl, withStorageOwnerTables } from "../../../test/storage-owner-tables.js"
 
 // ---------------------------------------------------------------------------
 // Hoist mocks before any module import
@@ -18,9 +19,31 @@ vi.mock("../queue.js", () => ({
 import { branchPipeline, BranchPipelineError } from "../branch-pipeline.js"
 import { enqueuePipelineRun } from "../queue.js"
 
+/**
+ * A fixture asset id: `assets.id` is a uuid column, and the ownership lookup
+ * only asks about uuid-shaped ids, so a named fixture asset maps to a stable
+ * uuid (one per name, in first-use order).
+ */
+const fixtureAssetIds = new Map<string, string>()
+function aid(name: string): string {
+  let id = fixtureAssetIds.get(name)
+  if (!id) {
+    id = `00000000-0000-4000-8000-${String(fixtureAssetIds.size + 1).padStart(12, "0")}`
+    fixtureAssetIds.set(name, id)
+  }
+  return id
+}
+
 // ---------------------------------------------------------------------------
 // In-memory Supabase mock
 // ---------------------------------------------------------------------------
+
+/**
+ * The gateway refuses a request line past its URL limit; an `.in("id", …)` of
+ * a few hundred uuids is ~39 bytes each in the query string. The mock refuses
+ * a list longer than this, as the gateway would refuse the request.
+ */
+const ASSET_IN_LIST_LIMIT = 150
 
 interface Pipeline {
   id: string
@@ -70,6 +93,9 @@ function makeSupabaseMock(
   pipeline: Pipeline | null,
   stages: Stage[] = [],
   entities: Entity[] = [],
+  /** asset id → its owner. An asset not listed is the pipeline owner's. */
+  assetOwners: Record<string, string> = {},
+  assetsReadFails = false,
 ): { client: unknown; fixture: Fixture } {
   const fixture: Fixture = {
     pipelinesInserted: [],
@@ -141,6 +167,21 @@ function makeSupabaseMock(
             fixture.stagesInserted.push(...arr)
             return { error: null }
           },
+        }
+      }
+      if (table === "assets") {
+        // ownedAssetUrlsById: `.select("id, r2_url").in("id", ids).eq("user_id", owner)`.
+        return {
+          select: (_cols: string) => ({
+            in: (_col: string, ids: string[]) => ({
+              eq: async (_col2: string, owner: string) => assetsReadFails || ids.length > ASSET_IN_LIST_LIMIT ? { data: null, error: { message: "timeout" } } : ({
+                data: ids
+                  .filter((id) => (assetOwners[id] ?? pipeline?.user_id) === owner)
+                  .map((id) => ({ id, r2_url: `https://r2/${id}.png` })),
+                error: null,
+              }),
+            }),
+          }),
         }
       }
       if (table === "pipeline_entities") {
@@ -367,6 +408,307 @@ describe("branchPipeline", () => {
       expect(e.status).toBe("approved")
       expect(e.pipeline_id).toBe("new-pipeline-id")
     }
+  })
+
+  it("attacker: a pointer at another user's asset is not carried into the branch (decided 2026-10-07)", async () => {
+    // Written before migration 480: the hero's main image and its last
+    // critic attempt name the victim's assets. The branch's insert would
+    // carry them into a new row (and 480's trigger refuses that insert).
+    const entities: Entity[] = [
+      {
+        entity_type: "character",
+        entity_key: "hero",
+        status: "approved",
+        main_asset_id: aid("foreign"),
+        metadata: { name: "Hero", last_attempted_asset_id: aid("foreign-2") },
+      },
+      {
+        entity_type: "character",
+        entity_key: "rival",
+        status: "approved",
+        main_asset_id: aid("own"),
+        metadata: { name: "Rival", last_attempted_asset_id: aid("own") },
+      },
+    ]
+    const { client, fixture } = makeSupabaseMock(makePipeline(), makeStagesUpTo(5), entities, {
+      [aid("foreign")]: "victim",
+      [aid("foreign-2")]: "victim",
+    })
+
+    await branchPipeline({
+      supabase: client as never,
+      originalPipelineId: "orig-pipeline-id",
+      fromStage: "scene_images",
+      userId: "user-1",
+    })
+
+    const byKey = new Map(fixture.entitiesInserted.map((e) => [e.entity_key, e]))
+    expect(byKey.get("hero")).toMatchObject({ main_asset_id: null, metadata: { name: "Hero" } })
+    expect((byKey.get("hero")?.metadata as Record<string, unknown>).last_attempted_asset_id).toBeUndefined()
+    expect(byKey.get("rival")).toMatchObject({
+      main_asset_id: aid("own"),
+      metadata: { name: "Rival", last_attempted_asset_id: aid("own") },
+    })
+  })
+
+  it("attacker: a last_frame_asset_id naming another user's asset is not carried into the branch (decided 2026-10-07)", async () => {
+    // Written before migration 480: the hero's last frame names the victim's
+    // asset. Copied as is, 480's trigger refuses the clone insert and the
+    // whole branch fails; the owner's own last frame carries over.
+    const entities: Entity[] = [
+      {
+        entity_type: "character",
+        entity_key: "hero",
+        status: "approved",
+        main_asset_id: aid("own"),
+        last_frame_asset_id: aid("foreign"),
+        metadata: { name: "Hero" },
+      },
+      {
+        entity_type: "character",
+        entity_key: "rival",
+        status: "approved",
+        main_asset_id: aid("own"),
+        last_frame_asset_id: aid("own-frame"),
+        metadata: { name: "Rival" },
+      },
+    ]
+    const { client, fixture } = makeSupabaseMock(makePipeline(), makeStagesUpTo(5), entities, {
+      [aid("foreign")]: "victim",
+    })
+
+    await branchPipeline({
+      supabase: client as never,
+      originalPipelineId: "orig-pipeline-id",
+      fromStage: "scene_images",
+      userId: "user-1",
+    })
+
+    const byKey = new Map(fixture.entitiesInserted.map((e) => [e.entity_key, e]))
+    expect(byKey.get("hero")).toMatchObject({ main_asset_id: aid("own"), last_frame_asset_id: null })
+    expect(byKey.get("rival")).toMatchObject({ last_frame_asset_id: aid("own-frame") })
+  })
+
+  it("a non-uuid last_attempted_asset_id is stripped as naming no asset, and the branch still succeeds", async () => {
+    // metadata is free-form jsonb; a pre-480 row may hold a non-uuid string.
+    // Sent to `.in("id", …)` it would 22P02 the whole lookup and, under
+    // throwOnError, make the pipeline impossible to branch.
+    const entities: Entity[] = [
+      {
+        entity_type: "character",
+        entity_key: "hero",
+        status: "approved",
+        main_asset_id: aid("own"),
+        metadata: { name: "Hero", last_attempted_asset_id: "not-a-uuid" },
+      },
+    ]
+    const { client, fixture } = makeSupabaseMock(makePipeline(), makeStagesUpTo(5), entities)
+
+    await branchPipeline({
+      supabase: client as never,
+      originalPipelineId: "orig-pipeline-id",
+      fromStage: "scene_images",
+      userId: "user-1",
+    })
+
+    const hero = fixture.entitiesInserted.find((e) => e.entity_key === "hero")
+    expect(hero).toMatchObject({ main_asset_id: aid("own"), metadata: { name: "Hero" } })
+    expect((hero?.metadata as Record<string, unknown>).last_attempted_asset_id).toBeUndefined()
+  })
+
+  it("attacker: a scene's shot and asset-ref ids naming another user's asset are not carried into the branch (decided 2026-10-07)", async () => {
+    // Written before 480's round 3: the scene's first shot keyframe and one of
+    // its generated clips name the victim's assets. Copied as is, the trigger
+    // judges every id of an inserted row and refuses the clone, failing the
+    // whole branch. The owner's own ids and a value that is not a uuid (names
+    // no asset) carry over unchanged; a dropped id takes its matching url with
+    // it, and an asset ref goes whole (decided 2026-10-07).
+    const sceneNodeData = {
+      scene_index: 1,
+      shots: [
+        {
+          shot_id: "s1",
+          keyframe_asset_id: aid("foreign"),
+          keyframe_url: "https://r2/victim-keyframe.png",
+          video_asset_id: aid("own-clip"),
+          video_url: "https://r2/own-clip.mp4",
+        },
+        { shot_id: "s2", keyframe_asset_id: "pending", lipsynced_asset_id: aid("own-lipsync") },
+      ],
+      generated_clips: [
+        { asset_id: aid("own-clip"), url: "https://r2/own-clip.mp4" },
+        { asset_id: aid("foreign-2"), url: "https://r2/victim-clip.mp4" },
+      ],
+      composite_video_asset_id: aid("foreign-2"),
+    }
+    const entities: Entity[] = [
+      {
+        entity_type: "scene",
+        entity_key: "scene_01",
+        status: "approved",
+        main_asset_id: null,
+        metadata: { entity_type: "scene", scene_node_data: sceneNodeData },
+      },
+    ]
+    const { client, fixture } = makeSupabaseMock(makePipeline(), makeStagesUpTo(5), entities, {
+      [aid("foreign")]: "victim",
+      [aid("foreign-2")]: "victim",
+    })
+
+    await branchPipeline({
+      supabase: client as never,
+      originalPipelineId: "orig-pipeline-id",
+      fromStage: "scene_images",
+      userId: "user-1",
+    })
+
+    const scene = fixture.entitiesInserted.find((e) => e.entity_key === "scene_01")
+    const snd = (scene?.metadata as { scene_node_data: typeof sceneNodeData }).scene_node_data
+    expect(snd.shots[0]).toEqual({
+      shot_id: "s1",
+      video_asset_id: aid("own-clip"),
+      video_url: "https://r2/own-clip.mp4",
+    })
+    expect(snd.shots[1]).toEqual({ shot_id: "s2", keyframe_asset_id: "pending", lipsynced_asset_id: aid("own-lipsync") })
+    expect(snd.generated_clips).toEqual([{ asset_id: aid("own-clip"), url: "https://r2/own-clip.mp4" }])
+    expect("composite_video_asset_id" in snd).toBe(false)
+    // The source row is not mutated.
+    expect(sceneNodeData.shots[0]?.keyframe_asset_id).toBe(aid("foreign"))
+  })
+
+  it("attacker: a scene url naming another user's object is not carried into the branch, nor its id (decided 2026-10-07)", async () => {
+    // Written before migration 482: the first shot's keyframe url is the
+    // victim's generated image. 482's trigger judges every url of an inserted
+    // row, so copied as is it would refuse the clone and fail the branch.
+    const restoreHost = useStorageHost()
+    try {
+      const sceneNodeData = {
+        scene_index: 1,
+        shots: [
+          { shot_id: "s1", keyframe_url: victimUrl(), video_url: ownerUrl("video", "mp4") },
+          { shot_id: "s2", interpolation_keyframe_urls: [ownerUrl(), victimUrl()], keyframe_url: "https://provider.example/k.png" },
+        ],
+        composite_video_url: ownerUrl("video", "mp4", "-composite"),
+      }
+      const entities: Entity[] = [
+        {
+          entity_type: "scene",
+          entity_key: "scene_01",
+          status: "approved",
+          main_asset_id: null,
+          metadata: { entity_type: "scene", scene_node_data: sceneNodeData },
+        },
+      ]
+      const { client, fixture } = makeSupabaseMock(makePipeline({ user_id: OWNER_ID }), makeStagesUpTo(5), entities, {})
+
+      await branchPipeline({
+        supabase: withStorageOwnerTables(client as object) as never,
+        originalPipelineId: "orig-pipeline-id",
+        fromStage: "scene_images",
+        userId: OWNER_ID,
+      })
+
+      const scene = fixture.entitiesInserted.find((e) => e.entity_key === "scene_01")
+      const snd = (scene?.metadata as { scene_node_data: typeof sceneNodeData }).scene_node_data
+      expect(snd.shots[0]).toEqual({ shot_id: "s1", video_url: ownerUrl("video", "mp4") })
+      expect(snd.shots[1]).toEqual({ shot_id: "s2", keyframe_url: "https://provider.example/k.png" })
+      expect(snd.composite_video_url).toBe(ownerUrl("video", "mp4", "-composite"))
+      expect(sceneNodeData.shots[0]?.keyframe_url).toBe(victimUrl())
+    } finally {
+      restoreHost()
+    }
+  })
+
+  it("attacker: a url 482's trigger would refuse (another user's job on any host, or through a proxy) is dropped, not left to fail the branch (review round, decided 2026-10-07)", async () => {
+    const restoreHost = useStorageHost()
+    try {
+      const elsewhere = `https://example.com/x/${VICTIM_JOB_ID}.png`
+      const proxied = `https://api.example/v1/download?url=${encodeURIComponent(victimUrl())}`
+      const sceneNodeData = {
+        scene_index: 1,
+        shots: [
+          { shot_id: "s1", keyframe_url: elsewhere, video_url: ownerUrl("video", "mp4") },
+          { shot_id: "s2", keyframe_url: proxied, last_frame_url: "https://provider.example/l.png" },
+        ],
+      }
+      const entities: Entity[] = [
+        {
+          entity_type: "scene",
+          entity_key: "scene_01",
+          status: "approved",
+          main_asset_id: null,
+          metadata: { entity_type: "scene", scene_node_data: sceneNodeData },
+        },
+      ]
+      const { client, fixture } = makeSupabaseMock(makePipeline({ user_id: OWNER_ID }), makeStagesUpTo(5), entities, {})
+      await branchPipeline({
+        supabase: withStorageOwnerTables(client as object) as never,
+        originalPipelineId: "orig-pipeline-id",
+        fromStage: "scene_images",
+        userId: OWNER_ID,
+      })
+      const scene = fixture.entitiesInserted.find((e) => e.entity_key === "scene_01")
+      const snd = (scene?.metadata as { scene_node_data: typeof sceneNodeData }).scene_node_data
+      expect(snd.shots[0]).toEqual({ shot_id: "s1", video_url: ownerUrl("video", "mp4") })
+      expect(snd.shots[1]).toEqual({ shot_id: "s2", last_frame_url: "https://provider.example/l.png" })
+    } finally {
+      restoreHost()
+    }
+  })
+
+  it("a maximal finished pipeline (20 scenes x 8 shots x 5 asset ids) branches: the owner lookup is chunked (decided 2026-10-07)", async () => {
+    // Every id is the owner's. One `.in()` with all ~820 of them is a request
+    // the gateway refuses, which used to fail the whole branch.
+    const SHOT_ID_KEYS = ["keyframe_asset_id", "video_asset_id", "last_frame_asset_id", "audio_asset_id", "lipsynced_asset_id"]
+    const entities: Entity[] = Array.from({ length: 20 }, (_, sc) => ({
+      entity_type: "scene",
+      entity_key: `scene_${String(sc + 1).padStart(2, "0")}`,
+      status: "approved",
+      main_asset_id: null,
+      metadata: {
+        entity_type: "scene",
+        scene_node_data: {
+          scene_index: sc + 1,
+          shots: Array.from({ length: 8 }, (_, sh) => ({
+            shot_id: `s${sh + 1}`,
+            ...Object.fromEntries(SHOT_ID_KEYS.map((k) => [k, aid(`max-${sc}-${sh}-${k}`)])),
+          })),
+          composite_video_asset_id: aid(`max-${sc}-composite`),
+        },
+      },
+    }))
+    const { client, fixture } = makeSupabaseMock(makePipeline(), makeStagesUpTo(5), entities)
+
+    await branchPipeline({
+      supabase: client as never,
+      originalPipelineId: "orig-pipeline-id",
+      fromStage: "scene_images",
+      userId: "user-1",
+    })
+
+    expect(fixture.entitiesInserted).toHaveLength(20)
+    const last = fixture.entitiesInserted.find((e) => e.entity_key === "scene_20")
+    const snd = (last?.metadata as { scene_node_data: { shots: Array<Record<string, unknown>>; composite_video_asset_id?: string } })
+      .scene_node_data
+    expect(snd.shots[7]?.lipsynced_asset_id).toBe(aid("max-19-7-lipsynced_asset_id"))
+    expect(snd.composite_video_asset_id).toBe(aid("max-19-composite"))
+  })
+
+  it("a failed owner lookup fails the branch instead of cloning entities with their images stripped", async () => {
+    const entities: Entity[] = [
+      { entity_type: "character", entity_key: "hero", status: "approved", main_asset_id: aid("own") },
+    ]
+    const { client, fixture } = makeSupabaseMock(makePipeline(), makeStagesUpTo(5), entities, {}, true)
+
+    await expect(
+      branchPipeline({
+        supabase: client as never,
+        originalPipelineId: "orig-pipeline-id",
+        fromStage: "scene_images",
+        userId: "user-1",
+      }),
+    ).rejects.toMatchObject({ code: "entities_fetch_failed" })
+    expect(fixture.entitiesInserted).toHaveLength(0)
   })
 
   it("enqueues a pipeline-run job with reason='branched' for the new pipeline", async () => {

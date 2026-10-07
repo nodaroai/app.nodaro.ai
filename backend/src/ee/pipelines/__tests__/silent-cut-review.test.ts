@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
 vi.mock("../services/pipeline-combine-videos.js", () => ({
   pipelineCombineVideos: vi.fn(),
@@ -6,6 +6,7 @@ vi.mock("../services/pipeline-combine-videos.js", () => ({
 
 import { pipelineCombineVideos } from "../services/pipeline-combine-videos.js"
 import { runSilentCutReview } from "../sub-steps/silent-cut-review.js"
+import { OWNER_ID, ownerUrl, useStorageHost, victimUrl, withStorageOwnerTables } from "../../../test/storage-owner-tables.js"
 
 beforeEach(() => vi.clearAllMocks())
 
@@ -167,5 +168,43 @@ describe("runSilentCutReview", () => {
       from: { mock: { calls: unknown[][] } }
     }).from.mock.calls.map((c) => c[0])
     expect(fromCalls).not.toContain("pipeline_stages")
+  })
+})
+
+/**
+ * Whose composites (decided 2026-10-07; migration 482): a scene composite
+ * another user made, planted before 482, is never concatenated into the
+ * owner's preview reel.
+ */
+describe("runSilentCutReview — another user's composite is not concatenated", () => {
+  let restoreHost: () => void
+  beforeEach(() => {
+    restoreHost = useStorageHost()
+  })
+  afterEach(() => restoreHost())
+
+  it("drops the foreign composite and concatenates only the owner's", async () => {
+    ;(pipelineCombineVideos as ReturnType<typeof vi.fn>).mockResolvedValue({
+      jobId: "cv-1",
+      assetId: "asset-cv-1",
+      assetUrl: "https://r2/silent-cut.mp4",
+      creditsSpent: 0,
+    })
+    const { supabase } = makeSupabaseMock({
+      scenes: [
+        { entity_key: "scene_01", composite_video_url: ownerUrl("video", "mp4", "-a") },
+        { entity_key: "scene_02", composite_video_url: victimUrl("video", "mp4") },
+        { entity_key: "scene_03", composite_video_url: ownerUrl("video", "mp4", "-b") },
+      ],
+    })
+    const result = await runSilentCutReview({
+      supabase: withStorageOwnerTables(supabase as object) as never,
+      pipelineId: "p1",
+      userId: OWNER_ID,
+      mode: "manual",
+    })
+    expect(result.ok).toBe(true)
+    const args = (pipelineCombineVideos as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as { videoUrls: string[] }
+    expect(args.videoUrls).toEqual([ownerUrl("video", "mp4", "-a"), ownerUrl("video", "mp4", "-b")])
   })
 })

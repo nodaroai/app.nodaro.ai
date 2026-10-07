@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
 // ---------------------------------------------------------------------------
 // Mocks — hoisted before any route import. Mirrors scene-images-auto-mode.test.ts.
@@ -45,6 +45,7 @@ import { runMatchCutOrchestrator } from "../../match-cut-orchestrator.js"
 import { runStoryboardCohesionCritic } from "../../llms/storyboard-cohesion-critic.js"
 import { enqueuePipelineRun } from "../../queue.js"
 import { runSceneImagesStage } from "../scene-images.js"
+import { OWNER_ID, ownerUrl, useStorageHost, victimUrl, withStorageOwnerTables } from "../../../../test/storage-owner-tables.js"
 
 beforeEach(() => vi.clearAllMocks())
 
@@ -712,5 +713,46 @@ describe("Stage 6 storyboard-cohesion-critic integration (Phase 1D.2c-b-i §4)",
     expect(failStage).not.toHaveBeenCalled()
     // Orchestrator was re-enqueued for Stage 7.
     expect(enqueuePipelineRun).toHaveBeenCalledTimes(1)
+  })
+})
+
+/**
+ * Whose keyframes the critics see (decided 2026-10-07; migration 482). The
+ * match-cut and cohesion critics are sent the stored keyframe urls; a url on
+ * our storage another user made never reaches them.
+ */
+describe("Stage 6 critics — another user's keyframe is never sent", () => {
+  let restoreHost: () => void
+  beforeEach(() => {
+    restoreHost = useStorageHost()
+  })
+  afterEach(() => restoreHost())
+
+  it("the match-cut critic gets the scene without it and the cohesion critic skips the incomplete storyboard", async () => {
+    let call = 0
+    ;(pipelineGenerateImage as ReturnType<typeof vi.fn>).mockImplementation(async () => {
+      call += 1
+      return { jobId: `j${call}`, assetId: `a${call}`, assetUrl: call === 1 ? ownerUrl() : victimUrl(), creditsSpent: 2 }
+    })
+    ;(runMatchCutOrchestrator as ReturnType<typeof vi.fn>).mockResolvedValue({ verdicts: {}, pendingBreaks: [] })
+
+    const supabase = withStorageOwnerTables(
+      makeSupabase({
+        scenes: [
+          { id: "scene-1", entity_key: "scene_01", scene_node_data: makeSceneNodeData(1, [makeShot("s1")]) },
+          { id: "scene-2", entity_key: "scene_02", scene_node_data: makeSceneNodeData(2, [makeShot("s2")]) },
+        ],
+      }) as object,
+    ) as never
+    await runSceneImagesStage({ supabase, pipelineId: "p1-owner", userId: OWNER_ID, userTier: "pro", mode: "manual" })
+
+    const scenesSent = (runMatchCutOrchestrator as ReturnType<typeof vi.fn>).mock.calls.map(
+      (c) => (c[0] as { scene: { shots: Array<{ keyframe_url?: string }> } }).scene.shots[0]?.keyframe_url,
+    )
+    expect(scenesSent).toEqual([ownerUrl(), undefined])
+    expect(runStoryboardCohesionCritic).not.toHaveBeenCalled()
+    // The stored scene keeps what was written (only the reads drop it).
+    const stored = (supabase as unknown as { _entities: Map<string, { metadata: { scene_node_data: { shots: Array<{ keyframe_url?: string }> } } }> })._entities
+    expect(stored.get("scene-2")?.metadata.scene_node_data.shots[0]?.keyframe_url).toBe(victimUrl())
   })
 })

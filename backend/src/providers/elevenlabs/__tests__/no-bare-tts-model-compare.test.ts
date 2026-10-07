@@ -54,6 +54,7 @@ const ROOTS = [
 /** The files that may name either id, and why. Add one only when the file must; the reason is what a reviewer reads. */
 const MAY_NAME_THE_IDS: Readonly<Record<string, string>> = {
   "backend/src/ee/billing/credits.ts": "STATIC_CREDIT_COSTS — the price table",
+  "backend/src/ee/billing/voice-changer-pro-credits.ts": "RESPEAK_ENGINE_MODELS — the Re-speak engine → text-to-speech model table (which model's unit row prices each Re-speak engine; its default is the ENGINE v3, the plugin's contract, not the speech default model)",
   "backend/src/lib/mcp/tools/verbs-audio.ts": "generate_speech's tool copy describes each model (its default is DEFAULT_TTS_PROVIDER)",
   "backend/src/providers/elevenlabs/dialogue-models.ts": "the dialogue wire-model table: each dialogue model's text-to-speech twin",
   "backend/src/lib/pricing/elevenlabs-speech-cost.ts": "ELEVENLABS_SPEECH_USD_PER_1K_CHARS — the per-model rate table the :per-100-chars rows are re-derived from",

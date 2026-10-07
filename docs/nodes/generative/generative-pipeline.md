@@ -495,7 +495,7 @@ for on-demand re-validation after a regen.
 
 - **`MatchCutVerdictSchema`** (`@nodaro/shared`) — `{ shot_pair: [string, string], match_strength: "strong" | "moderate" | "weak" | "break", suggested_adjustments: string[], checked_at: string }`
 - **`SubGateName`** extended: `'match_cut_break_pending'` added to `SubGateNameSchema`
-- **`ShotSpec.accepted_match_cut_break`** — `boolean?` — survives stage re-runs
+- **`ShotSpec.accepted_match_cut_break`** — `boolean?` — survives Stage 6 re-runs. Only the user sets it: the Scene Director cannot, and re-planning a scene (Stage 5) clears it along with the shot's other render state (`has_dialogue`, `actual_audio_duration_sec`, `dialogue_no_cut_zone`, `cut_decision`)
 
 ### Stage 6 output shape (Phase 1D.1)
 

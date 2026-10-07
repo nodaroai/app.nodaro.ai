@@ -53,7 +53,9 @@ unless the operator sets `COLLECTIONS_MAX_PER_USER` /
   you, whatever its case) and a description. The menu on a card renames or
   deletes a collection; deleting one deletes its records, after asking.
 - **A collection**: its records newest first. Type words to search titles,
-  texts and links; a record's headline opens its link; the bin on a record
+  texts and links; a record's headline and its **Open in Instagram** link (or
+  X, Telegram, … — any other site by its name) open its link, the original
+  post; the bin on a record
   removes it (after asking). **Export** downloads the whole collection as CSV
   or JSON, newest first. Cells that a spreadsheet would read as a formula are
   written as text.

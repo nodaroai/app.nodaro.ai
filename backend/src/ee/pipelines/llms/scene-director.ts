@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { PIPELINE_PINNABLE_IMAGE_MODELS, SceneNodeDataSchema, type SceneNodeData, modelsForInputMode, VIDEO_MODEL_CAPS, type SceneInputMode, type ShowrunnerPlan } from "@nodaro/shared"
+import { PIPELINE_PINNABLE_IMAGE_MODELS, modelsForInputMode, VIDEO_MODEL_CAPS, type SceneInputMode, type ShowrunnerPlan } from "@nodaro/shared"
 import { callLLM } from "./call-llm.js"
+import { SceneDirectorPlanSchema, type SceneDirectorPlan } from "./scene-director-plan.js"
 import { pipelineEvents } from "../events.js"
 import { getPipelinePrompt, PIPELINE_PROMPT_KEYS } from "./prompt-registry.js"
 
@@ -34,7 +35,12 @@ export interface RunSceneDirectorArgs {
   videoModelOverride?: string
 }
 
-export async function runSceneDirector(args: RunSceneDirectorArgs): Promise<SceneNodeData> {
+/**
+ * Plans one scene. The output is a plan only (decided 2026-10-07): no url
+ * field and no asset id; Stage 5 merges it into the stored scene, whose urls
+ * and ids come only from the pipeline's own outputs.
+ */
+export async function runSceneDirector(args: RunSceneDirectorArgs): Promise<SceneDirectorPlan> {
   const scene = args.plan.scenes.find((s) => s.scene_index === args.sceneIndex)
   if (!scene) {
     throw new Error(`Scene ${args.sceneIndex} not found in Showrunner plan`)
@@ -181,7 +187,7 @@ Return a SceneNodeData via the emit tool.`
     temperature: 0.5,
     systemPrompt,
     userPrompt,
-    schema: SceneNodeDataSchema,
+    schema: SceneDirectorPlanSchema,
     maxRetries: 1,
   })
 

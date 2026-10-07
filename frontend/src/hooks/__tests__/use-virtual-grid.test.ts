@@ -17,6 +17,7 @@ interface CapturedOptions {
   scrollMargin?: number
   enabled?: boolean
   getScrollElement?: () => HTMLElement | null
+  observeElementOffset?: unknown
 }
 
 let lastWindowOptions: CapturedOptions | null = null
@@ -54,6 +55,7 @@ import {
   GRID_BREAKPOINTS,
   type GridBreakpoint,
 } from "../use-virtual-grid"
+import { observeScrollOffset, observeWindowScrollOffset } from "@/lib/virtual/observe-scroll-offset"
 
 const GALLERY_BPS: readonly GridBreakpoint[] = GRID_BREAKPOINTS.gallery
 
@@ -154,6 +156,12 @@ describe("useVirtualGrid", () => {
     )
     return { ...result, fetchNextPage }
   }
+
+  it("observes both scroll contexts through the shared observers", () => {
+    renderGrid()
+    expect(lastWindowOptions?.observeElementOffset).toBe(observeWindowScrollOffset)
+    expect(lastElementOptions?.observeElementOffset).toBe(observeScrollOffset)
+  })
 
   it("derives column count from the viewport width", () => {
     setViewportWidth(1024)

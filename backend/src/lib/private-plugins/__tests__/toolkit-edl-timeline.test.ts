@@ -31,9 +31,9 @@ vi.mock("node:fs", async (importOriginal) => {
 
 import { buildToolkit } from "../toolkit.js"
 import { isDeterministicJobError } from "../../deterministic-job-error.js"
-import { CONTRACT_VERSION, type PluginEdlPictureContext, type PluginEdlPictureSlot, type PluginEdlTimelineOptions, type PluginFfmpegToolkit } from "../types.js"
+import { CONTRACT_VERSION, type PluginEdlPictureContext, type PluginEdlPictureFragment, type PluginEdlPictureSlot, type PluginEdlTimelineOptions, type PluginFfmpegToolkit } from "../types.js"
 import type { EdlTimelineOptions } from "../../../providers/video/edl-timeline.js"
-import type { EdlPictureContext, EdlPictureSlot } from "../../../providers/video/edl-picture.js"
+import type { EdlPictureContext, EdlPictureFragment, EdlPictureSlot } from "../../../providers/video/edl-picture.js"
 
 const EDL = { version: 1, clock: "master", sources: [{ id: "A", url: "https://f.test/a.mp4", kind: "video" }], segments: [{ id: "s0", inMs: 0, outMs: 1000, video: "A" }] } as never
 
@@ -129,6 +129,11 @@ describe("tk.ffmpeg.renderEdlTimeline", () => {
     expectTypeOf<keyof PluginEdlPictureContext>().toEqualTypeOf<keyof EdlPictureContext>()
     expectTypeOf<keyof PluginEdlPictureSlot>().toEqualTypeOf<keyof EdlPictureSlot>()
     expectTypeOf<PluginEdlPictureSlot["sourceSpan"]>().toEqualTypeOf<EdlPictureSlot["sourceSpan"]>()
+    // The fragment is mirrored whole, its optional memory hint included
+    // (decided 2026-10-07): a hint the mirror lacked would be one a plugin
+    // could never send, and its zoom slices would reserve too little.
+    expectTypeOf<PluginEdlPictureFragment>().toEqualTypeOf<EdlPictureFragment>()
+    expectTypeOf<NonNullable<PluginEdlPictureFragment["memoryHint"]>>().toEqualTypeOf<{ readonly zoom?: boolean }>()
     // Required for a plugin (decided 2026-10-06); only core's own caller may
     // lean on the timeline's Apply EDL default.
     expectTypeOf<PluginEdlTimelineOptions["label"]>().toEqualTypeOf<string>()

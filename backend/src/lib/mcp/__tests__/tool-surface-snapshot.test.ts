@@ -654,6 +654,12 @@ const UGC_JOB_TOOLS_BYTES = 2_906
 // description line each). No tool was added, so the fixture does NOT move. measured by this
 // suite: 404_925 total - 404_519 base = 406 B, which keeps the 14 B of headroom the list had.
 const COMBINE_VIDEOS_TRIM_ARGS_BYTES = 406
+// RAISED by the sentence `ugc_finish_clips` gained about the room sound the Hebrew
+// (segmented) lane puts under each clip (reverb by setting, -16 LUFS, room tone, dry with a
+// warning on failure) and nothing else. No tool was added, so the fixture does NOT move.
+// measured by this suite: the sentence is exactly 303 B in `tools/list`, and the budget rises by
+// exactly that, keeping whatever headroom the list had.
+const UGC_FINISH_ROOM_SOUND_BYTES = 303
 
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES,
@@ -725,7 +731,8 @@ export const TOOL_WIRE_BUDGET = {
     CHARACTER_REFERENCES_BYTES +
     RENDER_FINAL_TOOL_BYTES +
     SPEECH_LENGTH_PRICING_WORDING_BYTES +
-    COMBINE_VIDEOS_TRIM_ARGS_BYTES,
+    COMBINE_VIDEOS_TRIM_ARGS_BYTES +
+    UGC_FINISH_ROOM_SOUND_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

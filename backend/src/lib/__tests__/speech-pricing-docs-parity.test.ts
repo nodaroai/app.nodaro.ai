@@ -12,6 +12,8 @@ const DOCS = join(__dirname, "..", "..", "..", "..", "docs/nodes")
 const tts = readFileSync(join(DOCS, "ai-audio/text-to-speech.md"), "utf8")
 const dialogue = readFileSync(join(DOCS, "ai-audio/text-to-dialogue.md"), "utf8")
 const generateVideo = readFileSync(join(DOCS, "ai-video/generate-video.md"), "utf8")
+const voiceChangerPro = readFileSync(join(DOCS, "ai-audio/voice-changer-pro.md"), "utf8")
+const sdkReference = readFileSync(join(DOCS, "..", "sdk-reference.md"), "utf8")
 
 describe("text-to-speech.md Credits", () => {
   it.each([
@@ -47,6 +49,35 @@ describe("text-to-dialogue.md Credits", () => {
       expect(dialogue).toContain(sentence)
     },
   )
+})
+
+describe("voice-changer-pro.md Credit Pricing — a Re-speak voice on the engine's speech unit row (D-VCP)", () => {
+  it.each([
+    [340, 32, "| 1 Re-speak voice of 340 characters (either engine) | 8 × 4 = 32 (the minimum) |"],
+    [1000, 40, "| 1 Re-speak voice of 1,000 characters | 10 × 4 = 40 |"],
+    [1001, 44, "| 1 Re-speak voice of 1,001 characters | 11 × 4 = 44 |"],
+    [5000, 200, "| 1 Re-speak voice of 5,000 characters | 50 × 4 = 200 |"],
+    [1500, 60, "| 2 speech-to-speech voices at 60 s + 1 Re-speak voice of 1,500 characters | 40 + 40 + 60 = 140 |"],
+  ])("%i characters → %i", (chars, credits, sentence) => {
+    expect(speechCredits(chars, 4)).toBe(credits)
+    expect(voiceChangerPro).toContain(sentence)
+  })
+
+  it("states the Text to Speech parity, the minimum, the formula, the rolling-out note with today's flat price, and the blind-caller ceiling", () => {
+    expect(voiceChangerPro).toContain("costs **exactly what the same\ntext costs on the [Text to Speech](./text-to-speech.md) node for the same\nmodel**")
+    expect(voiceChangerPro).toContain(`minimum of ${SPEECH_FLOOR_UNITS}\nunits per voice`)
+    expect(voiceChangerPro).toContain("re-speak voice = max(8, ceil(chars / 100)) × 4")
+    expect(voiceChangerPro).toContain("**Rolling out.**")
+    expect(voiceChangerPro).toContain("`max(4, ceil(chars / 1000) × 30)` — 340 characters cost 30, 1,500 cost 60")
+    expect(voiceChangerPro).toContain("1,000 characters per Re-speak voice")
+    // The flag-off numbers the note quotes are today's formula: max(4, ceil(chars / 1000) × 30).
+    expect(Math.max(4, Math.ceil(340 / 1000) * 30)).toBe(30)
+    expect(Math.max(4, Math.ceil(1500 / 1000) * 30)).toBe(60)
+    // The sentence that priced both engines per started 1K as the only rule is gone from the config table and the SDK reference.
+    expect(voiceChangerPro).not.toContain("Both Re-speak engines are priced the same")
+    expect(sdkReference).not.toContain("Both Re-speak engines are priced the same")
+    expect(sdkReference).toContain("on its engine's Text to Speech rate (per started 100")
+  })
 })
 
 describe("generate-video.md Credit pricing (character voice) — the audio_driven add-on row", () => {

@@ -1,0 +1,23 @@
+-- 481 — an index on `assets.r2_key`, alone in its own file.
+--
+-- Every storage deleter now asks whose object a key is before deleting it
+-- (backend/src/lib/key-ownership.ts, decided 2026-10-07): besides the job and
+-- namespace rules, an `assets` row of another user naming the key claims it.
+-- That is `assets WHERE r2_key IN (<up to 100 keys>)`, issued by the nightly
+-- reapers once per batch, by the soft-deleted location sweep once per row,
+-- and by every interactive permanent delete. The only index naming the column
+-- is 384's partial one (`WHERE relay_job_id IS NOT NULL`), which is empty on
+-- a deployment that never relays, so each of those reads would scan the whole
+-- table. The pre-existing content-addressed referrer counts
+-- (`permanentlyDeleteAsset`, `POST /v1/media/delete`, media-process:
+-- `.eq('r2_key', …)` across all users) get the same index for free.
+--
+-- WHY ITS OWN FILE, and NOT `CONCURRENTLY` — the profile 379 documents:
+-- `supabase db push` wraps every file in a transaction, so CONCURRENTLY
+-- cannot run, and inside 480 the build would scan the heap while 480 already
+-- holds ACCESS EXCLUSIVE on `assets` (its DROP POLICY statements), blocking
+-- every read of the table for the build. Alone here the build takes SHARE on
+-- `assets` only: concurrent INSERT/UPDATE/DELETE wait for it, reads do not.
+-- Apply off-peak. `IF NOT EXISTS` makes it safe to retry.
+CREATE INDEX IF NOT EXISTS idx_assets_r2_key
+  ON public.assets (r2_key) WHERE r2_key IS NOT NULL;

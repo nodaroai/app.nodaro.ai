@@ -8,6 +8,7 @@ import { jobBlockedBody } from "../lib/job-policy.js"
 import { requireScope, type Scope } from "../lib/scopes.js"
 import { RESERVE_STATUS_BY_CODE } from "../lib/reserve-errors.js"
 import { createSSEStream } from "../lib/sse.js"
+import { ownedAssetUrlsById, ownedSceneNodeData } from "../lib/pipeline-asset-ownership.js"
 import { supabase } from "../lib/supabase.js"
 import { creditGuard, paygSurfaceSpendHook, reserveCreditsForJob } from "../middleware/credit-guard.js"
 
@@ -1571,16 +1572,14 @@ export async function pipelinesRoutes(app: FastifyInstance) {
             .filter(Boolean) as string[]),
         ]),
       ]
-      const { data: assets } = assetIds.length
-        ? await supabase
-            .from("assets")
-            .select("id, r2_url")
-            .in("id", assetIds)
-        : { data: [] as Array<{ id: string; r2_url: string }> }
-      const urlById = new Map((assets ?? []).map((a) => [a.id, a.r2_url]))
+      // The pipeline owner's assets only (decided 2026-10-07): a main image
+      // or variant pointer naming another user's asset shows no id and no
+      // image.
+      const urlById = await ownedAssetUrlsById(supabase, assetIds, userId)
 
       const result = (entities ?? []).map((e) => ({
         ...e,
+        main_asset_id: e.main_asset_id && urlById.has(e.main_asset_id) ? e.main_asset_id : null,
         main_asset_url: e.main_asset_id
           ? (urlById.get(e.main_asset_id) ?? null)
           : null,
@@ -1588,7 +1587,7 @@ export async function pipelinesRoutes(app: FastifyInstance) {
           .filter((v) => v.entity_id === e.id)
           .map((v) => ({
             variant_key: v.variant_key,
-            asset_id: v.asset_id,
+            asset_id: v.asset_id && urlById.has(v.asset_id) ? v.asset_id : null,
             asset_url: v.asset_id ? (urlById.get(v.asset_id) ?? null) : null,
             status: v.status,
           })),
@@ -1664,6 +1663,9 @@ export async function pipelinesRoutes(app: FastifyInstance) {
         .from("jobs")
         .select("status, progress")
         .eq("pipeline_id", req.params.id)
+        // The pipeline owner's jobs only (decided 2026-10-06): before 474 a
+        // client could insert its own job naming any pipeline.
+        .eq("user_id", userId)
         .eq("job_type", "image-to-video")
       const vj = (videoJobs ?? []) as Array<{ status: string; progress: number | null }>
       const shotsDone = vj.filter((j) => j.status === "completed").length
@@ -2032,8 +2034,23 @@ export async function pipelinesRoutes(app: FastifyInstance) {
         return reply.status(404).send({ error: { code: "shot_not_found" } })
       }
       const shot = shots[idx] as Record<string, unknown>
-      const startFrameUrl = (shot.keyframe_url as string | undefined) ?? null
+      if (!shot.keyframe_url) {
+        return reply.status(409).send({ error: { code: "shot_missing_keyframe" } })
+      }
+      // What goes to the video model comes from the owner-checked copy
+      // (decided 2026-10-07; migration 482): a keyframe on our storage another
+      // user made or holds is no start frame. The write below merges onto the
+      // stored shot, so the stored scene is not rewritten from the copy.
+      let ownedSnd: typeof snd
+      try {
+        ownedSnd = await ownedSceneNodeData(supabase, userId, snd)
+      } catch {
+        return reply.status(503).send({ error: { code: "scene_url_ownership_unavailable" } })
+      }
+      const ownedShot = (ownedSnd.shots?.[idx] ?? {}) as Record<string, unknown>
+      const startFrameUrl = (ownedShot.keyframe_url as string | undefined) ?? null
       if (!startFrameUrl) {
+        // The stored keyframe is another user's object: there is none to use.
         return reply.status(409).send({ error: { code: "shot_missing_keyframe" } })
       }
 
@@ -2044,14 +2061,14 @@ export async function pipelinesRoutes(app: FastifyInstance) {
 
       // Per-shot video model wins over the scene default for this re-animate.
       const sndForAnimate = {
-        ...snd,
+        ...ownedSnd,
         video_model: (shot.video_model as string | undefined) ?? snd.video_model,
       }
       const refs = await allocateReferenceSlots({
         supabase,
         pipelineId: req.params.id,
         scene: { id: req.params.scene_id },
-        shot: shot as never,
+        shot: ownedShot as never,
         sceneNodeData: sndForAnimate as never,
         priorLastFrame: null,
       })
@@ -2063,7 +2080,7 @@ export async function pipelinesRoutes(app: FastifyInstance) {
           pipelineId: req.params.id,
           pipelineEntityId: req.params.scene_id,
           userId,
-          shot: shot as never,
+          shot: ownedShot as never,
           sceneNodeData: sndForAnimate as never,
           startFrameUrl,
           referenceUrls: refs.map((r) => r.url),
@@ -2393,12 +2410,24 @@ export async function pipelinesRoutes(app: FastifyInstance) {
         typeof metadata.last_attempted_asset_id === "string"
           ? (metadata.last_attempted_asset_id as string)
           : null
-      let mainAssetId: string | null = lastAttemptedAssetId
+      // The pointer names an asset, not whose (decided 2026-10-07): it is
+      // adopted only when the pipeline's owner made that asset. Otherwise the
+      // owner's own latest asset for the entity is the fallback, as for a
+      // failure recorded before the pointer existed.
+      let mainAssetId: string | null =
+        lastAttemptedAssetId &&
+        (await ownedAssetUrlsById(supabase, [lastAttemptedAssetId], userId)).has(lastAttemptedAssetId)
+          ? lastAttemptedAssetId
+          : null
       if (!mainAssetId) {
         const { data: latestAsset } = await supabase
           .from("assets")
           .select("id")
           .eq("pipeline_entity_id", req.params.entity_id)
+          // The pipeline owner's assets only (decided 2026-10-06): before
+          // migration 480 a browser could insert an asset row naming any
+          // entity, and this one becomes the entity's main image.
+          .eq("user_id", userId)
           .order("created_at", { ascending: false })
           .limit(1)
           .maybeSingle()

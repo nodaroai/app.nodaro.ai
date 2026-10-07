@@ -16,11 +16,12 @@ const EDGES = [
   { id: "b", source: "cut", target: "cap" },
 ]
 const renderFinal = vi.fn()
+const store = { renderCheck: null as { renderId: string; kind: "final" | "proxy" } | null }
 const priced: Array<{ ids: string[]; cutQuality: unknown }> = []
 
 vi.mock("@/hooks/use-workflow-store", () => ({
   useWorkflowStore: Object.assign(
-    (selector: (s: unknown) => unknown) => selector({ nodes: [PLAN, CUT, CAP], edges: EDGES }),
+    (selector: (s: unknown) => unknown) => selector({ nodes: [PLAN, CUT, CAP], edges: EDGES, renderCheck: store.renderCheck }),
     { getState: () => ({ renderFinal }) },
   ),
 }))
@@ -39,6 +40,7 @@ import { useRenderFinal } from "../use-render-final"
 beforeEach(() => {
   priced.length = 0
   renderFinal.mockClear()
+  store.renderCheck = null
   window.__NODARO_RUNTIME__ = { previewStopRule: true }
 })
 afterEach(() => {
@@ -74,5 +76,19 @@ describe("useRenderFinal", () => {
     result.current.renderFinal()
     result.current.updatePreview()
     expect(renderFinal.mock.calls).toEqual([["cut", "final"], ["cut", "proxy"]])
+  })
+
+  // The editor holds one run click at a time, so any render's newer-run check
+  // holds this render's buttons; only this render's own check is `checking`.
+  it.each([
+    [null, false, null],
+    [{ renderId: "cut", kind: "final" }, true, "final"],
+    [{ renderId: "cut", kind: "proxy" }, true, "proxy"],
+    [{ renderId: "other", kind: "final" }, true, null],
+  ] as const)("a newer-run check %j: pending %s, checking %s", (check, pending, checking) => {
+    store.renderCheck = check
+    const { result } = renderHook(() => useRenderFinal("cut"))
+    expect(result.current.checkPending).toBe(pending)
+    expect(result.current.checking).toBe(checking)
   })
 })

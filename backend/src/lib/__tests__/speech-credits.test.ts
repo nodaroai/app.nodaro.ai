@@ -23,10 +23,10 @@ vi.mock("@/ee/billing/credits.js", () => ({
   })),
 }))
 
-import { getMaxTtsChars, SPEECH_FLOOR_UNITS } from "@nodaro/shared"
+import { getMaxTtsChars, SPEECH_FLOOR_UNITS, speechCredits } from "@nodaro/shared"
 import { stripAudioTags } from "../../providers/elevenlabs/audio-tags.js"
 import {
-  speechRunsAs, billableSpeechChars, billableDialogueChars, speechBaseCredits, dialogueBaseCredits,
+  speechRunsAs, billableSpeechChars, billableDialogueChars, speechBaseCredits, dialogueBaseCredits, speechUnitBaseCredits,
 } from "../speech-credits.js"
 
 describe("speechRunsAs", () => {
@@ -104,6 +104,18 @@ describe("base credits — the formula on the model's :per-100-chars row", () =>
   it("a non-string text is the floor on the model's row", async () => {
     expect(await speechBaseCredits("elevenlabs-v4", 42)).toBe(SPEECH_FLOOR_UNITS * 4)
     expect(await speechBaseCredits("elevenlabs-turbo", undefined)).toBe(SPEECH_FLOOR_UNITS * 2)
+  })
+
+  it("speechUnitBaseCredits is the per-unit amount of the run-as model's row (a measured count's reader — Voice Changer Pro Re-speak): no clamp, no strip", async () => {
+    const { getModelCreditBaseCost } = await import("../../ee/billing/credits.js")
+    expect(await speechUnitBaseCredits("elevenlabs-v4")).toBe(4)
+    expect(getModelCreditBaseCost).toHaveBeenLastCalledWith("elevenlabs-v4:per-100-chars")
+    expect(await speechUnitBaseCredits("elevenlabs-v3")).toBe(4)
+    expect(getModelCreditBaseCost).toHaveBeenLastCalledWith("elevenlabs-v3:per-100-chars")
+    expect(await speechUnitBaseCredits("elevenlabs")).toBe(2) // alias → turbo's row, like every seam
+    expect(getModelCreditBaseCost).toHaveBeenLastCalledWith("elevenlabs-turbo:per-100-chars")
+    // The same row speechBaseCredits prices on: a caller holding N characters computes the same number.
+    expect(speechCredits(5000, await speechUnitBaseCredits("elevenlabs-v3"))).toBe(await speechBaseCredits("elevenlabs-v3", "a".repeat(5000)))
   })
 
   it("dialogue prices the sum of its lines on the dialogue unit row", async () => {

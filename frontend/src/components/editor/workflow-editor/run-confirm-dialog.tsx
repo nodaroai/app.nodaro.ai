@@ -16,6 +16,7 @@ import type { AskConfirmInfo, RunConfirmInfo } from "./types"
 import { creditUnits } from "@/lib/credit-units"
 import { useT, type TFunction } from "@/lib/i18n"
 import { RunConfirmBreakdown } from "./run-confirm-breakdown"
+import { INSPECTOR_CHILD_DIALOG_Z } from "@/components/inspector/inspector-shell"
 
 interface UseRunConfirm {
   /** Resolves true to run, false to abort. Single-flight: a second call while a
@@ -65,6 +66,9 @@ export function runConfirmText(
 /**
  * Run-confirmation gate dialog. The editor wires `confirmRun` onto the
  * `ExecutionContext`; the run handlers `await` it before any side effect.
+ *
+ * Both dialogs stack above an open inspector (`INSPECTOR_CHILD_DIALOG_Z`):
+ * the review inspector's Render final and Update preview open them over it.
  */
 export function useRunConfirm(): UseRunConfirm {
   const t = useT()
@@ -110,7 +114,7 @@ export function useRunConfirm(): UseRunConfirm {
 
   const dialog = (
     <AlertDialog open={open} onOpenChange={(o) => { if (!o) settle(false) }}>
-      <AlertDialogContent>
+      <AlertDialogContent className={INSPECTOR_CHILD_DIALOG_Z} overlayClassName={INSPECTOR_CHILD_DIALOG_Z}>
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>
           <AlertDialogDescription>{body}</AlertDialogDescription>
@@ -131,7 +135,7 @@ export function useRunConfirm(): UseRunConfirm {
 
   const askDialog = (
     <AlertDialog open={ask !== null} onOpenChange={(o) => { if (!o) settleAsk(false) }}>
-      <AlertDialogContent>
+      <AlertDialogContent className={INSPECTOR_CHILD_DIALOG_Z} overlayClassName={INSPECTOR_CHILD_DIALOG_Z}>
         <AlertDialogHeader>
           <AlertDialogTitle>{ask?.title}</AlertDialogTitle>
           <AlertDialogDescription>{ask?.body}</AlertDialogDescription>

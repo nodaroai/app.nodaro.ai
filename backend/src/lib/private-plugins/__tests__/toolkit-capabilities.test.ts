@@ -17,6 +17,12 @@ describe("tk.capabilities", () => {
     expect(buildToolkit().capabilities?.mixAudioDuck).toBe(true)
   })
 
+  it("advertises the lossless/local applyAudioFx output options", () => {
+    // An older host ignores `format: "wav"` silently and hands back an mp3, so
+    // a plugin must read this flag before relying on it.
+    expect(buildToolkit().capabilities?.audioFxLossless).toBe(true)
+  })
+
   it("is a stable, frozen snapshot, not a per-call mutable object", () => {
     const caps = buildToolkit().capabilities
     expect(caps).toBeDefined()

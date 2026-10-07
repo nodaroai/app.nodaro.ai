@@ -153,7 +153,7 @@ describe("collectAppR2Keys", () => {
     vi.mocked(supabase.from).mockImplementation(
       recordingSupabase(
         {
-          published_apps: [{ icon_url: "https://r2.example.com/images/icon.png", preview_media_url: null, snapshot_nodes: null }],
+          published_apps: [{ creator_id: "00000000-0000-4000-8000-0000000000c1", icon_url: "https://r2.example.com/images/icon.png", preview_media_url: null, snapshot_nodes: null }],
           app_runs: [
             {
               id: "00000000-0000-4000-8000-000000000010",
@@ -167,7 +167,7 @@ describe("collectAppR2Keys", () => {
             {
               id: "00000000-0000-4000-8000-000000000020",
               user_id: "00000000-0000-4000-8000-0000000000a1",
-              node_states: { "gen-1": { url: "https://r2.example.com/images/generated.png" } },
+              node_states: { "gen-1": { url: "https://r2.example.com/images/00000000-0000-4000-8000-000000000030-gen.png" } },
             },
           ],
           jobs: [
@@ -190,7 +190,7 @@ describe("collectAppR2Keys", () => {
         "images/icon.png",
         "uploads/runner-photo.png",
         "images/edited.png",
-        "images/generated.png",
+        "images/00000000-0000-4000-8000-000000000030-gen.png",
         "videos/00000000-0000-4000-8000-000000000030.mp4",
       ].sort(),
     )
@@ -224,9 +224,11 @@ describe("collectAppR2Keys — objects the app does not own", () => {
   // A job's output key is in its own key family (`<prefix>/<jobId>…`), or the
   // job-ownership fence drops it before the library check runs.
   const JOB_KEY = `videos/${APP_JOB}.mp4`
+  // A node state's url counts only in the family of one of the app's own jobs.
+  const APP_NODE_OUTPUT = `images/${APP_JOB}-gen.png`
 
   const fixture = (assets: unknown[]) => ({
-    published_apps: [{ icon_url: null, preview_media_url: null, snapshot_nodes: null }],
+    published_apps: [{ creator_id: "00000000-0000-4000-8000-0000000000c1", icon_url: null, preview_media_url: null, snapshot_nodes: null }],
     app_runs: [
       {
         id: "00000000-0000-4000-8000-000000000010",
@@ -240,7 +242,7 @@ describe("collectAppR2Keys — objects the app does not own", () => {
       },
     ],
     workflow_executions: [
-      { id: EXECUTION, user_id: RUNNER, node_states: { "gen-1": { url: "https://r2.example.com/images/generated.png" } } },
+      { id: EXECUTION, user_id: RUNNER, node_states: { "gen-1": { url: `https://r2.example.com/${APP_NODE_OUTPUT}` } } },
     ],
     jobs: [{ id: APP_JOB, user_id: RUNNER, workflow_execution_id: EXECUTION, output_data: { url: `https://r2.example.com/${JOB_KEY}` } }],
     assets,
@@ -264,7 +266,7 @@ describe("collectAppR2Keys — objects the app does not own", () => {
     expect(keys).not.toContain("images/other-user-old.png")
     // The app's own objects are still erased.
     expect(keys).toContain(JOB_KEY)
-    expect(keys).toContain("images/generated.png")
+    expect(keys).toContain(APP_NODE_OUTPUT)
 
     const missing = touched.filter(({ table, column }) => !migrationColumnsOf(table).has(column))
     expect(missing.map(({ table, column, via }) => `${table}.${column} (${via})`)).toEqual([])
@@ -299,7 +301,7 @@ describe("collectAppR2Keys — objects the app does not own", () => {
     const keys = await collectAppR2Keys(APP_ID)
 
     expect(keys).not.toContain(JOB_KEY)
-    expect(keys).toContain("images/generated.png")
+    expect(keys).toContain(APP_NODE_OUTPUT)
   })
 
   it("counts only the execution owner's jobs as the app's, so a planted job cannot vouch for a key", async () => {

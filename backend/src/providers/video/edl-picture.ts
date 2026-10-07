@@ -93,8 +93,27 @@ export interface EdlPictureContext {
  *  - `graph` — filter-graph statements (`;`-joined) that read every slot's
  *    `label` and write `ctx.output`. Intermediate labels start with
  *    `[${ctx.scope}`.
+ *
+ * Either may carry a `memoryHint` (decided 2026-10-07): what the fragment
+ * draws that costs memory beyond its canvas — `zoom: true` for a zoom (the
+ * tween, or a segment drawn from a zoom's window), which adds the zoom's
+ * term to the slice's reservation (`zoomPeakMemoryMiB`, once per slice). It
+ * names the effect, not a figure: the host sizes it from the launch's own
+ * thread counts. Optional — a fragment without one reserves exactly what it
+ * always has. A malformed hint (not an object, or a non-boolean `zoom`) is
+ * refused; unknown keys are ignored for forward compatibility, so a misspelled
+ * key reads as no hint. Not part of the graph, so not part of the checkpoint
+ * key.
  */
-export type EdlPictureFragment = { readonly chain: string } | { readonly graph: string }
+export type EdlPictureFragment = ({ readonly chain: string } | { readonly graph: string }) & {
+  readonly memoryHint?: EdlPictureMemoryHint
+}
+
+/** What a picture fragment draws that costs memory beyond its canvas. */
+export interface EdlPictureMemoryHint {
+  /** The segment draws a zoom (Speaker View): its slice reserves the zoom's term. */
+  readonly zoom?: boolean
+}
 
 /** Called once per segment of every picture slice, synchronously, while the
  *  slice's command is built (before anything runs), so the fragment is part of
@@ -164,13 +183,28 @@ function splitUnquoted(text: string, seps: string): string[] {
   return parts
 }
 
+/** A malformed `memoryHint`, named: one that is not an object, or whose
+ *  `zoom` is not a boolean, is refused. Unknown keys are ignored for forward
+ *  compatibility (a newer plugin may send a hint this host does not know), so
+ *  a misspelled key (`zooms`, `Zoom`) reads as no hint and reserves no zoom
+ *  term — the fragment's type is what catches that, not this check. */
+function memoryHintError(hint: unknown): string | undefined {
+  if (hint === undefined) return undefined
+  if (!hint || typeof hint !== "object" || Array.isArray(hint)) return "a fragment's memoryHint is an object, e.g. { zoom: true }"
+  const zoom = (hint as { zoom?: unknown }).zoom
+  if (zoom !== undefined && typeof zoom !== "boolean") return "a fragment's memoryHint.zoom is true or false"
+  return undefined
+}
+
 /** A fragment the timeline can place, or an Error naming what is wrong. Kept
  *  shallow on purpose: ffmpeg rejects a malformed graph with its own message;
  *  this only stops a fragment from breaking the graph AROUND it, or from
  *  reading a movie or command file the checkpoint key cannot see. */
 export function pictureFragmentError(fragment: unknown, ctx: EdlPictureContext): string | undefined {
   if (!fragment || typeof fragment !== "object") return "the picture builder returned no fragment"
-  const f = fragment as { chain?: unknown; graph?: unknown }
+  const f = fragment as { chain?: unknown; graph?: unknown; memoryHint?: unknown }
+  const hint = memoryHintError(f.memoryHint)
+  if (hint) return hint
   const read = fileReadOf(typeof f.chain === "string" ? f.chain : typeof f.graph === "string" ? f.graph : "")
   if (read) return `the fragment reads a file (${read}): a picture is written whole into its fragment, which the checkpoint key hashes`
   if (typeof f.chain === "string") {
