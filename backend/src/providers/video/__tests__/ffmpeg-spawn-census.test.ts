@@ -129,6 +129,13 @@ describe("ffmpeg admission census", () => {
     },
     "providers/video/youtube-video.ts": { how: "muxSectionStreams: withFfmpegSlot (copy video, aac audio: the default estimate)" },
     "providers/audio/audio-sync.ts": { how: "withFfmpegSlot around the spawn" },
+    "services/face-detect/detect-faces.ts": {
+      how:
+        "detectFacesInMedia: ONE withFfmpegSlot hold around a window's decode child AND its onnxruntime " +
+        "inference, reserving faceDetectPeakMemoryMiB (the decode's canvas prediction + the session's working set)",
+      // streamBgrFrames only spawns the decode; its one caller holds the slot around it.
+      heldBy: { streamBgrFrames: "detectFacesInMedia" },
+    },
   }
 
   /** Launches that deliberately do NOT reserve, and why — keyed by file, then by

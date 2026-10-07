@@ -1397,6 +1397,62 @@ run `node --test tools/__tests__/managed-supabase-proxy.test.mjs`.
 - [API Integration](./api-integration.md) — once you're up, talk to
   your instance from your own server
 
+## The face detector's native runtime (`onnxruntime-node`)
+
+The backend depends on `onnxruntime-node` (pinned at exactly `1.30.0`) for an
+in-process face detector: YuNet, from OpenCV Zoo (MIT, © 2020 Shiqi Yu). The
+model file lives in `backend/src/services/face-detect/model/` with its licence,
+the unmodified upstream file and the script that made the shipped copy. The
+module is imported lazily, so a process that never detects a face never loads
+it. Nothing in the Community edition calls it, but it is on disk in every
+image.
+
+**Skip the GPU download.** On linux/x64, the package's `postinstall` downloads
+the CUDA 12 and TensorRT libraries from NuGet unless it is told to skip them.
+The detector only uses the CPU runtime bundled in the package, so every install
+skips the download. The skip is the environment variable
+`ONNXRUNTIME_NODE_INSTALL=skip`, and each place that installs dependencies sets
+it:
+
+- the Dockerfile sets `ENV ONNXRUNTIME_NODE_INSTALL=skip` in every stage that
+  installs dependencies;
+- the CI workflows that run `npm ci` set it in their top-level `env`;
+- `backend/scripts/characterize-in-image.sh` exports it before its `npm ci`.
+
+The repository has no `.npmrc` setting for it, so a development install on
+linux/x64 must export the variable itself, before `npm install` or `npm ci`.
+Put the line in your shell profile:
+
+```bash
+export ONNXRUNTIME_NODE_INSTALL=skip
+```
+
+macOS, Windows and linux/arm64 installs never download the GPU libraries, so
+they don't need the variable. If you install the backend some other way (your
+own Dockerfile, a different package manager), set the variable in that
+environment too. Without it, an x64 install depends on nuget.org and pulls in
+GPU libraries that are never loaded.
+
+**Pruning other platforms.** One `onnxruntime-node` package carries the runtime
+for every platform (about 300 MB unpacked). After `npm ci --omit=dev`, the
+image's `prod-deps` stage deletes every `bin/napi-v6` directory except
+`linux/<arch>`, where the arch comes from the build's `TARGETARCH` (or the base
+image's own arch when `TARGETARCH` is unset). Only the linux runtime for that
+architecture remains, about 44 MB on amd64. The build fails if the prune leaves
+no runtime.
+
+**Build-time smoke.** The same stage then loads the pinned model into an
+onnxruntime session and runs one blank 960×544 frame
+(`backend/scripts/face-detect-smoke.mjs`). A native-library or ABI mismatch with
+the base image therefore fails the image build instead of the first job that
+needs the detector. Only linux/amd64 is the measured platform; linux/arm64
+(for example a local build on Apple silicon) runs, with no parity claim.
+
+**Model integrity.** At load, the detector hashes the model file and refuses to
+run when the sha256 is not the pinned one, or when the file or the native
+module is missing. Those refusals are deterministic: the job fails once and is
+not retried.
+
 ## CI build preparation
 
 The CI workflow builds shared workspace packages once per run and compiles the

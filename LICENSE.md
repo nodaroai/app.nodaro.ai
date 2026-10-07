@@ -103,7 +103,7 @@ Yes — Apache 2.0 explicitly permits commercial use, modification, and redistri
 
 ### Q: Does the Nodaro license cover third-party components like Remotion?
 
-No. Third-party components keep their own licenses. In particular, `packages/remotion/` builds on Remotion, which has its own company license — free for individuals and companies of up to 3 employees, paid above that. Self-hosters are responsible for their own compliance with third-party licenses.
+No. Third-party components keep their own licenses. In particular, `packages/remotion/` builds on Remotion, which has its own company license — free for individuals and companies of up to 3 employees, paid above that. The backend's face detector runs the YuNet model from OpenCV Zoo (MIT, © 2020 Shiqi Yu; its licence ships beside the model in `backend/src/services/face-detect/model/`) on `onnxruntime-node` (MIT, © Microsoft Corporation). Self-hosters are responsible for their own compliance with third-party licenses.
 
 ## Branches
 

@@ -143,6 +143,11 @@ const EXCEPTIONS = [
     ruleId: "personal-identity",
     why: "GitHub noreply identities — public by design, and the gate needs them literal",
   },
+  {
+    path: "backend/src/services/face-detect/model/LICENSE.yunet.txt",
+    ruleId: "personal-identity",
+    why: "the upstream YuNet model's MIT licence, verbatim — its copyright line (with the author's address) must ship unaltered",
+  },
 ]
 
 function trackedFiles() {

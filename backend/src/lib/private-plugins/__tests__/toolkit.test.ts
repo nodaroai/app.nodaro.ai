@@ -38,6 +38,7 @@ import { safeFetch } from "../../safe-fetch.js"
 import { applyImageWatermark } from "../../../utils/watermark.js"
 import { ensureMediaProxy } from "../../../services/media-proxy.js"
 import { proxyFrameToSourceMs } from "../../../services/media-proxy-span-map.js"
+import { detectFaces } from "../../../services/face-detect/detect-faces.js"
 
 describe("buildToolkit", () => {
   let tk: PluginToolkit
@@ -84,6 +85,12 @@ describe("buildToolkit", () => {
     // same function that built the map, never a copy of it.
     expect(tk.media.ensureMediaProxy).toBe(ensureMediaProxy)
     expect(tk.media.proxyFrameToSourceMs).toBe(proxyFrameToSourceMs)
+  })
+
+  it("media: the face detector is the real core function (P3.3; optional in the contract, answered here)", () => {
+    // Core owns the decode, the session, the admission and the clock; the
+    // plugin passes only the window and its score floor.
+    expect(tk.media.detectFaces).toBe(detectFaces)
   })
 
   it("storage: every member is a function", () => {

@@ -15,6 +15,11 @@ RUN corepack enable npm && corepack prepare npm@11.12.1 --activate
 
 ENV YOUTUBE_DL_SKIP_PYTHON_CHECK=1
 ENV YOUTUBE_DL_SKIP_DOWNLOAD=1
+# onnxruntime-node (the face detector's runtime) downloads the CUDA 12 and
+# TensorRT libraries from NuGet in its postinstall on linux/x64 unless told to
+# skip. Only its bundled CPU binaries are ever loaded, so every stage that
+# installs it skips the download (this one AND prod-deps).
+ENV ONNXRUNTIME_NODE_INSTALL=skip
 
 # npm gives up on a slow registry far too early for a container build: the
 # default is 2 retries with a 60s ceiling, and one transient stall then
@@ -283,6 +288,8 @@ RUN corepack enable npm && corepack prepare npm@11.12.1 --activate
 
 ENV YOUTUBE_DL_SKIP_PYTHON_CHECK=1
 ENV YOUTUBE_DL_SKIP_DOWNLOAD=1
+# See the deps stage: no CUDA download from NuGet for onnxruntime-node.
+ENV ONNXRUNTIME_NODE_INSTALL=skip
 
 WORKDIR /app
 
@@ -296,7 +303,40 @@ COPY packages/render-rules/package.json ./packages/render-rules/
 COPY backend/package.json ./backend/
 COPY frontend/package.json ./frontend/
 
-RUN npm ci --omit=dev
+# onnxruntime-node ships every platform's native runtime in one package (about
+# 300 MB unpacked): linux x64 and arm64, darwin, win32. Only this image's
+# linux/<arch> one is ever loaded, so the rest is pruned in the same layer,
+# keeping the face detector's growth to its own binary (~44 MB on amd64). The
+# arch comes from the build's TARGETARCH (never hardcoded: a local arm64 build
+# must keep its arm64 binary), falling back to the base image's own arch.
+ARG TARGETARCH
+RUN set -eu; \
+    npm ci --omit=dev; \
+    arch="${TARGETARCH:-$(dpkg --print-architecture)}"; \
+    case "$arch" in \
+      amd64) ort_arch=x64 ;; \
+      arm64) ort_arch=arm64 ;; \
+      *) echo "onnxruntime-node: no binary for arch $arch" >&2; exit 1 ;; \
+    esac; \
+    found=0; \
+    for root in node_modules backend/node_modules; do \
+      [ -d "$root" ] || continue; \
+      for bin in $(find "$root" -type d -path '*/onnxruntime-node/bin/napi-v6'); do \
+        found=1; \
+        find "$bin" -mindepth 1 -maxdepth 1 ! -name linux -exec rm -rf {} +; \
+        find "$bin/linux" -mindepth 1 -maxdepth 1 ! -name "$ort_arch" -exec rm -rf {} +; \
+        [ -f "$bin/linux/$ort_arch/libonnxruntime.so.1" ] || { echo "onnxruntime-node: the prune left no linux/$ort_arch runtime in $bin" >&2; exit 1; }; \
+      done; \
+    done; \
+    [ "$found" = 1 ] || { echo "onnxruntime-node is not installed" >&2; exit 1; }
+
+# The face detector's build-time smoke: create an onnxruntime session on the
+# pinned YuNet model and run one zero 960x544 frame, here, on the runner's glibc
+# and after the prune — a native-ABI mismatch or an over-eager prune fails the
+# build, not the first Speaker Frames job. Nothing it copies is shipped.
+COPY backend/scripts/face-detect-smoke.mjs backend/src/services/face-detect/model/face_detection_yunet_2023mar-dyn.onnx ./.face-detect-smoke/
+RUN node .face-detect-smoke/face-detect-smoke.mjs .face-detect-smoke/face_detection_yunet_2023mar-dyn.onnx \
+    && rm -rf .face-detect-smoke
 
 # Ensure backend/node_modules exists even if all backend deps got hoisted
 # to the root (avoids COPY failures in the runner stage).

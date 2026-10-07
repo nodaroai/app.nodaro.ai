@@ -24,6 +24,10 @@ permissions:
 # intermittently 504s — failing `npm ci` and forcing fully-billed reruns.
 env:
   YOUTUBE_DL_SKIP_DOWNLOAD: "1"
+  # onnxruntime-node's postinstall fetches the CUDA 12 / TensorRT libraries from
+  # NuGet on linux/x64 unless told to skip. The face detector runs on the CPU
+  # binaries the package already carries, so every install skips it.
+  ONNXRUNTIME_NODE_INSTALL: skip
 
 jobs:
   # Classifies the PR's changed paths so the two expensive suites only run

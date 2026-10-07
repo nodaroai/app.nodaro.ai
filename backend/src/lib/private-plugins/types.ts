@@ -845,6 +845,57 @@ export interface PluginVideoProxy {
   readonly frameCount: number
 }
 
+/** Mirrors `DetectFacesInput` (`services/face-detect/detect-faces.ts`): one
+ * window of a detection proxy. */
+export interface PluginDetectFacesInput {
+  /** `PluginVideoProxy.url` — a proxy this platform stored; any other URL is refused. */
+  readonly proxyUrl: string
+  /** `PluginVideoProxy.fps`. */
+  readonly fps: number
+  /** `PluginVideoProxy.spanMap`: the only clock a detection goes through. */
+  readonly spanMap: readonly PluginProxySpanMapRow[]
+  /** First proxy frame, inclusive. */
+  readonly fromFrame: number
+  /** Last proxy frame, exclusive; at most 1,200 frames after `fromFrame`. */
+  readonly toFrame: number
+  /** Keep faces scoring at least this, in (0, 1]. The threshold is the caller's. */
+  readonly minScore: number
+  /** Also return a 16×9 RGB thumbnail per frame (base64): the camera-setup signature input. */
+  readonly thumb?: boolean
+}
+
+/** Mirrors `YunetFace` (`services/face-detect/yunet-decode.ts`). */
+export interface PluginDetectedFace {
+  /** Top-left corner and size, fractions of the proxy frame; not clipped to it. */
+  readonly x: number
+  readonly y: number
+  readonly w: number
+  readonly h: number
+  readonly score: number
+  /** Right eye, left eye, nose tip, right and left mouth corners: [x, y] fractions. */
+  readonly landmarks: ReadonlyArray<readonly [number, number]>
+}
+
+/** Mirrors `DetectFacesResult` (`services/face-detect/detect-faces.ts`). */
+export interface PluginDetectFacesResult {
+  /** What a track set records as its detector, e.g. `yunet:2023mar-dyn@57acd732`. */
+  readonly detector: { readonly id: string; readonly version: string }
+  readonly frame: { readonly w: number; readonly h: number }
+  /** The window's frames a span-map row holds, in order, each on the SOURCE clock. */
+  readonly frames: ReadonlyArray<{
+    readonly frame: number
+    readonly sourceMs: number
+    readonly boxes: readonly PluginDetectedFace[]
+    readonly thumb?: string
+  }>
+  /** Frames held by no span-map row: dropped, never given a time. */
+  readonly dropped: number
+  readonly boxCount: number
+  /** The Node process's CPU while the call held its admission slot, ms (not
+   *  the wait for the slot, not the decode child's). */
+  readonly cpuMs: number
+}
+
 export interface PluginMediaToolkit {
   /** Authorize the source first. Public-only bounded video download and local
    * still extraction; no jobs, storage credentials or automatic media spend. */
@@ -862,6 +913,17 @@ export interface PluginMediaToolkit {
    * count it). The only conversion a detection may go through.
    */
   proxyFrameToSourceMs?(spanMap: readonly PluginProxySpanMapRow[], fps: number, frame: number): number | undefined
+  /**
+   * Mirrors `detectFaces` (`services/face-detect/detect-faces.ts`) — YuNet
+   * (the pinned model, onnxruntime-node) over one window of a detection proxy
+   * (P3.3). Core owns the decode, the session, the admission hold and the
+   * clock: boxes come back on the SOURCE clock through the span map.
+   * Additive-optional: feature-detect and refuse before any reserve when
+   * absent. Rejects with a deterministic error when the host cannot detect (no
+   * model, no native binary, a model whose hash is not the pin) or when a
+   * window would pass the speaker-track caps.
+   */
+  detectFaces?(input: PluginDetectFacesInput): Promise<PluginDetectFacesResult>
   /** Mirrors `extractAudio` (`providers/video/extract-audio.ts`). */
   extractAudio(options: { readonly videoUrl: string }): Promise<{ readonly audioPath: string }>
   /** Mirrors `mixAudio` (`providers/video/mix-audio.ts`). */
