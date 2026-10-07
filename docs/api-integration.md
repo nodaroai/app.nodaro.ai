@@ -3342,7 +3342,7 @@ const exec = await client.workflows.run(workflowId, {
   inputs: { "text-prompt-1": { text: "a cat at sunset" } },
 })
 
-// Or sync — wait up to 120s.
+// Or sync — the server holds the request for up to 10 minutes.
 const result = await client.workflows.runAndWait(workflowId, {
   inputs: { "text-prompt-1": { text: "a cat at sunset" } },
   timeoutSeconds: 120,
