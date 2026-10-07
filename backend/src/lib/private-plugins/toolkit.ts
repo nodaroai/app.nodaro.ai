@@ -1513,6 +1513,15 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
         )
         return computePricing(args)
       },
+      computeVoiceChangerProTranslatePricing: async (args) => {
+        if (!hasCredits()) {
+          throw new Error("computeVoiceChangerProTranslatePricing requires a Cloud-edition build")
+        }
+        const { computeVoiceChangerProTranslatePricing: computePricing } = await import(
+          "../../ee/billing/voice-changer-pro-credits.js"
+        )
+        return computePricing(args)
+      },
       // Dynamic import keeps the core/ee boundary: this file (core) may not
       // statically import `ee/` (tools/check-ee-imports.mjs). Gated on
       // hasCredits() so the import is never even attempted outside Cloud —

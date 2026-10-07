@@ -96,3 +96,67 @@ export async function computeVoiceChangerProPricing(args: VoiceChangerProPricing
   ])
   return priceVoiceChangerPro(minute.creditCost, respeak.creditCost, args)
 }
+
+// ---------------------------------------------------------------------------
+// The translate step ("Re-speak in another language", decided 2026-10-06).
+//
+// The plugin translates the detected transcript into one target language
+// with a metered LLM call, then the normal recast re-speaks the translation
+// with a v4 voice. The translate step is RESERVED at a ceiling sized from
+// its SOURCE characters and COMMITTED at the model's measured usage — the
+// recast's own count-metered shape (`commitJobCredits`'s count branch never
+// collects above the reservation). The row `voice-changer-pro-translate` is
+// the FLOOR of that commit, read here so an admin retune in /admin/models
+// reaches the plugin without a redeploy; the per-tier ceilings are
+// reservation BOUNDS, not prices, so they live in code beside the formula.
+// The plugin keeps a twin of these constants as its fallback for a host that
+// predates this member (the `computeVoiceChangerProPricing` pattern).
+// ---------------------------------------------------------------------------
+
+/** The metered translate step's FLOOR row (born-private; seeded by the plugin too). */
+export const VOICE_CHANGER_PRO_TRANSLATE_MODEL = "voice-changer-pro-translate"
+export type VcpTranslateTier = "economy" | "standard" | "premium"
+/** Reservation ceiling in BASE credits per started 1K SOURCE characters, by
+ *  translation tier. A ceiling, not a price: the worker commits the metered
+ *  actual, never above it. */
+export const TRANSLATE_CEILING_PER_1K: Readonly<Record<VcpTranslateTier, number>> = {
+  economy: 5,
+  standard: 10,
+  premium: 50,
+}
+export const TRANSLATE_CHARS_PER_UNIT = 1000
+
+export interface VoiceChangerProTranslatePricing {
+  /** BASE floor — the `voice-changer-pro-translate` row (admin-tunable). */
+  floor: number
+  /** BASE reservation ceiling per started 1K source characters for the tier. */
+  ceilingPer1K: number
+  /** max(floor, ceil(sourceChars / 1000) × ceilingPer1K) — pre-markup. */
+  reserveBase: number
+}
+
+/** BASE reservation ceiling for `sourceChars` characters of source text. A
+ *  hostile count (NaN, ≤ 0, Infinity — the route prices a pre-Zod body)
+ *  reserves the floor rather than throwing. */
+export function translateReserveBase(floor: number, ceilingPer1K: number, sourceChars: number): number {
+  if (!Number.isFinite(sourceChars) || sourceChars <= 0) return floor
+  return Math.max(floor, Math.ceil(sourceChars / TRANSLATE_CHARS_PER_UNIT) * ceilingPer1K)
+}
+
+/** Pure core, for callers that already hold the floor (tests, previews). */
+export function priceTranslate(floor: number, tier: VcpTranslateTier, sourceChars: number): VoiceChangerProTranslatePricing {
+  const ceilingPer1K = TRANSLATE_CEILING_PER_1K[tier]
+  return { floor, ceilingPer1K, reserveBase: translateReserveBase(floor, ceilingPer1K, sourceChars) }
+}
+
+/**
+ * Reads the floor through `getModelCreditBaseCost` (a `model_pricing` row wins
+ * over the static seed; a missing identifier throws `PriceNotConfiguredError`
+ * — there is no silent free path).
+ */
+export async function computeVoiceChangerProTranslatePricing(
+  args: { sourceChars: number; tier: VcpTranslateTier },
+): Promise<VoiceChangerProTranslatePricing> {
+  const floor = await getModelCreditBaseCost(VOICE_CHANGER_PRO_TRANSLATE_MODEL)
+  return priceTranslate(floor.creditCost, args.tier, args.sourceChars)
+}

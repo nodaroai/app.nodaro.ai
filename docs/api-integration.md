@@ -3202,10 +3202,12 @@ The id to use everywhere a voice is accepted is the clone's
 | `POST` | `/v1/voice-changer-pro` | Multi-speaker recast (**Cloud; self-host runs it through the [nodaro.ai connection](./community-cloud-connect.md)**): `orderedVoices` maps detected speaker N to entry N (string id, per-voice settings object, or `null` keep-slot). `output: "video"` (default) renders the finished result; `output: "stems"` returns dry per-track stems for an interactive mix. Pass a prior `analysis` to skip re-detection. → job. |
 | `POST` | `/v1/voice-changer-pro/analyze` | Detect the speakers WITHOUT recasting (**Cloud only** — the interactive analyze/mix/export flow is not relayed to self-host yet): separates voice from music once and diarizes, returning `speakers` (id, segments, first-appearance, word count, snippet), detected language, and the persisted stem urls. `suggestTitle: true` adds an LLM title. → job. |
 | `POST` | `/v1/voice-changer-pro/export` | Render the final video from a mixed track set (**Cloud only**): `{ videoUrl, tracks: [{ url, gain 0–200, muted, kind?: "voice"\|"background" }] (≤16), voiceFx? }`. The video stream is copied, never re-encoded; at least one track must be un-muted. → job. |
+| `POST` | `/v1/voice-changer-pro/translate` | Translate the detected transcript into one target language, per segment, with a per-utterance length budget so the re-spoken line fits its slot (**Cloud only**): `{ speakers, targetLanguage, sourceLanguage?, tier?: economy\|standard\|premium }` → job. `output_data.speakers` keeps every speaker, segment and timing with the translated `text` (the original as `sourceText`) plus `untranslated` (utterance ids left in the source language). Quote them back as the recast's `analysis.speakers` with `engine: "v4", languageCode: "<target>"` on each re-spoken voice — `languageCode` is accepted on `"v4"` only (`400` on `"sts"`/`"v3"`, or for a language the model does not offer). Metered on the model's usage, floor 2 credits, ceiling per started 1K source characters by tier (5 / 10 / 50). |
 
 Credits: recast charges per **mapped** speaker; analyze and export are
-flat-priced (see the [Voice Changer Pro node page](./nodes/ai-audio/voice-changer-pro.md)
-for the formula). Off Cloud, the three `voice-changer-pro*` routes are absent (404).
+flat-priced; translate is metered on the translation model's usage with a
+2-credit floor under a per-tier ceiling (see the [Voice Changer Pro node page](./nodes/ai-audio/voice-changer-pro.md)
+for the formulas). Off Cloud, the four `voice-changer-pro*` routes are absent (404).
 
 ### Media ingestion
 
@@ -3282,6 +3284,15 @@ JOB=$(curl -s -X POST $BASE/v1/voice-changer-pro/analyze -H "$AUTH" -H 'Content-
 # poll until completed, then keep the whole output_data as the analysis fast-path
 ANALYSIS=$(curl -s "$BASE/v1/jobs/$JOB/status" -H "$AUTH" | jq .data.output_data)
 echo $ANALYSIS | jq '.speakers[] | {id, firstStartSec, wordCount, snippet}'   # pick voices per speaker
+
+# 1b. (Optional) Translate the transcript to re-speak the video in another language
+#     — metered on the translation model's usage (2-credit floor, per-tier ceiling)
+JOB=$(curl -s -X POST $BASE/v1/voice-changer-pro/translate -H "$AUTH" -H 'Content-Type: application/json' \
+  -d "{\"speakers\":$(echo $ANALYSIS | jq .speakers),\"targetLanguage\":\"es\",\"tier\":\"economy\"}" | jq -r .jobId)
+TRANSLATED=$(curl -s "$BASE/v1/jobs/$JOB/status" -H "$AUTH" | jq .data.output_data)   # review/edit .speakers[].segments[].text
+ANALYSIS=$(echo $ANALYSIS | jq --argjson s "$(echo $TRANSLATED | jq .speakers)" '.speakers = $s')
+# each re-spoken voice then carries engine "v4" + languageCode "es" (the target), e.g.
+#   "orderedVoices":[{"voiceId":"Rachel","engine":"v4","languageCode":"es"},null,"Aria"]
 
 # 2. Recast to dry stems, reusing the analysis (no re-detection, re-recast as often as needed)
 JOB=$(curl -s -X POST $BASE/v1/voice-changer-pro -H "$AUTH" -H 'Content-Type: application/json' \

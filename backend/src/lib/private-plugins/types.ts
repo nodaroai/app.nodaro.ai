@@ -1650,6 +1650,23 @@ export interface VoiceChangerProPricing {
 }
 
 /**
+ * Mirrors the return shape of `computeVoiceChangerProTranslatePricing`
+ * (`ee/billing/voice-changer-pro-credits.ts`) — the translate step of
+ * "Re-speak in another language". BASE (pre-markup) credits: the floor is
+ * the `voice-changer-pro-translate` row, the reservation is a CEILING per
+ * started 1K source characters for the tier; the worker commits the metered
+ * actual under it.
+ */
+export interface VoiceChangerProTranslatePricing {
+  /** BASE floor — the `voice-changer-pro-translate` row (admin-tunable). */
+  floor: number
+  /** BASE reservation ceiling per started 1K source characters for the tier. */
+  ceilingPer1K: number
+  /** max(floor, ceil(sourceChars / 1000) × ceilingPer1K) — pre-markup. */
+  reserveBase: number
+}
+
+/**
  * Mirrors the return shape of `computeGenerateVideoProPricing`
  * (`ee/billing/generate-video-pro-credits.ts`) — the pro split/pricing
  * formula's single source of truth, shared by the route's credit-guard
@@ -1813,6 +1830,17 @@ export interface PluginHttpToolkit {
     /** Re-spoken chars per v3 slot; null/0 = unknown → one 1K bucket. */
     respeakChars: ReadonlyArray<number | null | undefined>
   }): Promise<VoiceChangerProPricing>
+  /**
+   * The translate step's reservation ceiling from the host's `model_pricing`
+   * floor — see `VoiceChangerProTranslatePricing`. Same dynamic-import gate
+   * as `computeVoiceChangerProPricing` above. ADDITIVE-OPTIONAL (no contract
+   * bump): `?.`-guard it; an older host prices at the plugin's constants.
+   */
+  computeVoiceChangerProTranslatePricing?(args: {
+    /** Characters of SOURCE text the translation is asked for. */
+    sourceChars: number
+    tier: "economy" | "standard" | "premium"
+  }): Promise<VoiceChangerProTranslatePricing>
   /**
    * Mirrors `computeGenerateVideoProPricing`
    * (`ee/billing/generate-video-pro-credits.ts`) — see `GenerateVideoProPricing`.

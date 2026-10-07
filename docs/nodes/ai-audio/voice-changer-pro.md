@@ -42,7 +42,7 @@ Each entry in **Ordered Voices** may be an object that pins per-speaker ElevenLa
 | Field | Type | Range | Default | Description |
 |-------|------|-------|---------|-------------|
 | `voiceId` | `string` | — | *(required)* | Target voice — premade name (`Rachel`, `Aria`, …) or an ElevenLabs UUID for a custom clone. |
-| `engine` | `"sts" \| "v3" \| "v4"` | — | `"sts"` | Which lane converts this speaker. `"sts"` is the classic speech-to-speech recast. `"v3"` is **Re-speak**: the performance is regenerated from the transcript with eleven_v3 (`[audio tags]` supported) — the original delivery is replaced, and lips won't match on video. For `"v3"`, stability accepts exactly 0 / 0.5 / 1, and `similarityBoost`/`style`/`useSpeakerBoost` are ignored. `"v4"` is **Re-speak** with eleven_v4: the same transcript-driven regeneration, with any stability from 0 to 1 and `similarityBoost` honoured (`style`/`useSpeakerBoost` ignored); each line is generated with its neighbouring lines as context for smoother joins. A Re-speak speaker (either engine) needs transcript text (the analysis carries per-segment `text`, editable before conversion); without an analysis the engine re-speaks from its own transcription. Both Re-speak engines are priced the same: per started 1K characters of the re-spoken text (see Credit Pricing). |
+| `engine` | `"sts" \| "v3" \| "v4"` | — | `"sts"` | Which lane converts this speaker. `"sts"` is the classic speech-to-speech recast. `"v3"` is **Re-speak**: the performance is regenerated from the transcript with eleven_v3 (`[audio tags]` supported) — the original delivery is replaced, and lips won't match on video. For `"v3"`, stability accepts exactly 0 / 0.5 / 1, and `similarityBoost`/`style`/`useSpeakerBoost` are ignored. `"v4"` is **Re-speak** with eleven_v4: the same transcript-driven regeneration, with any stability from 0 to 1 and `similarityBoost` honoured (`style`/`useSpeakerBoost` ignored); each line is generated with its neighbouring lines as context for smoother joins. A Re-speak speaker (either engine) needs transcript text (the analysis carries per-segment `text`, editable before conversion); without an analysis the engine re-speaks from its own transcription. Both Re-speak engines are priced the same: per started 1K characters of the re-spoken text (see Credit Pricing). A `"v4"` voice may also carry `languageCode` — the **target** language it should speak (ISO 639-1); sent instead of the clip's detected language. Accepted on `"v4"` only (v3 keeps the source accent; Recast speaks the original audio) and only for a language the model offers — a `languageCode` on any other engine, or one the model does not offer, is a `400`. Pair it with `POST /v1/voice-changer-pro/translate` to re-speak a video in another language (see the interactive flow below). |
 | `stability` | `number` | 0–1 | model default | Higher = steadier and more consistent; lower = more expressive and variable. |
 | `similarityBoost` | `number` | 0–1 | model default | How closely the output hugs the target voice's timbre. |
 | `style` | `number` | 0–1 | `0` | Style exaggeration. `>0` amplifies delivery at the cost of latency / stability. |
@@ -120,6 +120,18 @@ step (`voice-changer-pro-export`, 1 credit) are flat.
 > analysis reserves one minute per speech-to-speech voice (and one 1K bucket
 > per Re-speak voice) and settles under that ceiling.
 
+> **Translate step** (`POST /v1/voice-changer-pro/translate`, credit
+> identifier `voice-changer-pro-translate`): charged on the translation
+> model's **measured usage**, never below a floor of **2 credits**. The
+> request reserves a ceiling of **5 / 10 / 50 credits per started 1,000
+> source characters** for the `economy` / `standard` / `premium` tier and
+> settles the measured amount under it (`ceiling = max(2, ceil(sourceChars / 1000) × tierRate)`).
+> A 1,500-character transcript on `economy` reserves 10 and typically settles
+> for 2–6; on `premium` it reserves 100. A transcript with no text reserves
+> the floor. The translated text then prices the Re-speak voices by *its*
+> length (per started 1,000 characters, as above) — a translation into a
+> wordier language re-speaks more characters than the source did.
+
 > **Note (workflow execution):** When running via the workflow orchestrator
 > (server-side), the orchestrator reserves the flat `voice-changer-pro` unit
 > (one minute of one voice) at job creation time, and the charge is capped
@@ -155,6 +167,22 @@ recast, and mix the result before rendering:
    returning the speaker list (`id`, time `segments`, first-appearance, word
    count, a transcript snippet), the detected language, and the persisted stem
    URLs. Flat-priced — no recast committed yet.
+
+   **1b. Translate (optional)** — `POST /v1/voice-changer-pro/translate` with
+   the analyze result's `speakers`, a `targetLanguage` (ISO 639-1, one per
+   conversion; a 3-letter code such as `heb` is normalised to `he`), the
+   optional `sourceLanguage`, and an optional `tier` (`economy` default,
+   `standard`, `premium` — better translation for more credits). The job's
+   `output_data.speakers` carries the translated `text` (and the original as
+   `sourceText`) per segment — same speakers, same segments, same timings —
+   plus `untranslated`: the utterance ids left in the source language when the
+   model's answer did not fit (edit them, or run the step again). Review and
+   edit the translation, then quote the speakers back as the recast's
+   `analysis.speakers` with `engine: "v4", languageCode: "<target>"` on each
+   re-spoken voice; a Recast (speech-to-speech) slot keeps speaking the
+   original audio. Metered on the model's usage (see Credit Pricing).
+   Translated speech never matches the original lips — run the result through
+   [lip sync](../ai-video/lip-sync.md) (`POST /v1/lip-sync`) as the next step.
 2. **Recast to stems** — the normal recast call with `output: "stems"` and the
    analyze result passed back as `analysis` (skips re-detection, so you can
    re-recast with different voice assignments without paying detection again).
