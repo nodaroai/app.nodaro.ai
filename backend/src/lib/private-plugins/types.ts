@@ -808,14 +808,43 @@ export interface PluginMergeVideoAudioOptions {
  * doc comment for why this differs from the plugin repo's structural
  * `string` copy.
  */
-export interface PluginAudioFxOptions {
-  readonly audioUrl: string
+export type PluginAudioFxOptions = (
+  | { readonly audioUrl: string; readonly inputPath?: undefined }
+  /**
+   * LOCAL input in place of `audioUrl` (exactly one of the two): an absolute
+   * path to an existing file inside the host temp directory (a `createWorkDir`
+   * path). Nothing is downloaded. ADDITIVE-OPTIONAL — gate on
+   * `tk.capabilities?.audioFxLossless === true`.
+   */
+  | { readonly inputPath: string; readonly audioUrl?: undefined }
+) & {
   readonly preset: AudioFxPreset
   readonly mix?: number
   readonly delayMs?: number
   readonly decay?: number
   readonly eqLow?: number
   readonly eqHigh?: number
+  /**
+   * ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump) — gate on
+   * `tk.capabilities?.audioFxLossless === true`: an older host ignores
+   * `format` / `inputPath` / `outputPath` silently (and would then fail on a
+   * missing `audioUrl`, or hand back an mp3).
+   *
+   * Output format. Default `"mp3"` (byte-identical to before). `"wav"` = 16-bit
+   * PCM, no resample/remix: a non-reverb preset keeps the input's sample rate
+   * and channels; the reverb presets render at 48 kHz (their impulse-response
+   * rate) with the input's channel count.
+   */
+  readonly format?: "mp3" | "wav"
+  /**
+   * Write the result at this absolute path inside the host temp directory,
+   * ending `.mp3` / `.wav` to match `format`. The function then removes all its
+   * own scratch (also on failure, plus any partial output) — only this file
+   * remains, no R2 upload involved. Omitted: the output lands in a fresh work
+   * dir the caller removes (`dirname(outputPath)`), as before. Gate on
+   * `audioFxLossless`.
+   */
+  readonly outputPath?: string
 }
 
 /** Mirrors `ProxySpan` (`services/media-proxy-span-map.ts`): ms on the source's own clock. */
@@ -2538,6 +2567,12 @@ export interface PluginFeatures {
 export interface PluginCapabilities {
   /** `tk.media.mixAudio` honours `PluginMixAudioOptions.duck`; an older host ignores it silently. */
   readonly mixAudioDuck?: boolean
+  /**
+   * `tk.media.applyAudioFx` honours `format: "wav"` (lossless), a local
+   * `inputPath` and a caller-chosen `outputPath` (see `PluginAudioFxOptions`);
+   * an older host ignores them silently.
+   */
+  readonly audioFxLossless?: boolean
 }
 
 /**

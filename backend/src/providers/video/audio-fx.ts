@@ -1,10 +1,23 @@
 import { promises as fs } from "node:fs"
-import { join } from "node:path"
+import { tmpdir } from "node:os"
+import { basename, dirname, extname, isAbsolute, join, resolve, sep } from "node:path"
 import { downloadFile, runFfmpeg, createWorkDir, cleanupWorkDir } from "./ffmpeg-utils.js"
 import { AUDIO_FX_REVERB_PRESETS, type AudioFxPreset } from "@nodaro/shared"
 
-export interface AudioFxOptions {
-  readonly audioUrl: string
+/** What `applyAudioFx` writes. `"mp3"` (the default, and the only format before
+ *  the option existed) or `"wav"` — lossless 16-bit PCM (`pcm_s16le`). */
+export type AudioFxFormat = "mp3" | "wav"
+
+/**
+ * Where the voice comes from: a remote `audioUrl` (downloaded, SSRF-guarded) OR
+ * a LOCAL `inputPath` — exactly one. A local path must sit inside the host temp
+ * directory (where every `createWorkDir` lives); see `assertTempPath`.
+ */
+export type AudioFxSource =
+  | { readonly audioUrl: string; readonly inputPath?: undefined }
+  | { readonly inputPath: string; readonly audioUrl?: undefined }
+
+export type AudioFxOptions = AudioFxSource & {
   readonly preset: AudioFxPreset
   /** Wet/dry mix 0–100 (reverb presets). Defaults to the preset's tuned value. */
   readonly mix?: number
@@ -16,6 +29,27 @@ export interface AudioFxOptions {
   readonly eqLow?: number
   /** Custom: high-shelf gain dB. */
   readonly eqHigh?: number
+  /**
+   * Output container/codec. Default `"mp3"` — a caller that omits this is
+   * byte-identical to before the option existed.
+   *
+   * `"wav"` is 16-bit PCM and adds NO resample/remix: a non-reverb preset keeps
+   * the input's own sample rate and channel count. The reverb presets render at
+   * the IR rate (`IR_SAMPLE_RATE`, 48 kHz) regardless of format — their graph
+   * `aresample`s the voice so `afir`'s inputs agree — so a reverb WAV is 48 kHz
+   * with the input's channel count.
+   */
+  readonly format?: AudioFxFormat
+  /**
+   * Write the result HERE (a local path inside the host temp directory, ending
+   * in `.mp3` / `.wav` to match `format`) instead of in a fresh work dir. When
+   * set, `applyAudioFx` owns its own scratch space completely: the scratch dir
+   * (downloaded input, reverb IR) is removed on success AND failure, and a
+   * partial output is removed on failure — nothing is left behind but the
+   * finished file. When omitted, the output lands in a new work dir the CALLER
+   * removes (`dirname(outputPath)`), exactly as before.
+   */
+  readonly outputPath?: string
 }
 
 interface ReverbParams {
@@ -551,6 +585,11 @@ export interface AudioFxPaths {
  */
 export function buildAudioFxArgs(opts: AudioFxOptions, paths: AudioFxPaths, afirGain = 1): string[] {
   const p = opts.preset
+  // Empty for the default (mp3) so the vector is byte-identical to before the
+  // `format` option; ffmpeg picks the muxer from the output extension, so the
+  // only thing a WAV needs is the PCM codec pinned (its default for .wav is
+  // already pcm_s16le — pinned anyway so a future ffmpeg default can't move it).
+  const codec = opts.format === "wav" ? ["-c:a", "pcm_s16le"] : []
 
   if (AUDIO_FX_REVERB_PRESETS.has(p)) {
     const r = REVERB[p] ?? REVERB.room
@@ -583,11 +622,12 @@ export function buildAudioFxArgs(opts: AudioFxOptions, paths: AudioFxPaths, afir
       "-f", "f32le", "-ar", String(IR_SAMPLE_RATE), "-ac", "1", "-i", paths.irPath,
       "-filter_complex", complex,
       "-map", "[out]",
+      ...codec,
       paths.outputPath,
     ]
   }
 
-  return ["-y", "-i", paths.inputPath, "-af", buildAudioFxChain(opts), paths.outputPath]
+  return ["-y", "-i", paths.inputPath, "-af", buildAudioFxChain(opts), ...codec, paths.outputPath]
 }
 
 /** The non-reverb presets: plain single-input `-af` chains. Unchanged. */
@@ -619,17 +659,78 @@ function buildAudioFxChain(opts: AudioFxOptions): string {
 }
 
 /**
- * Apply a preset audio effect to `audioUrl` via FFmpeg. Returns the local output
- * path; the caller (worker) uploads it then cleans up the work dir (mirrors
- * `adjustVolume`). Cleans up itself only on failure.
+ * A caller-supplied LOCAL path must live inside the host temp directory — where
+ * every `createWorkDir` is — after resolving symlinks. Plugins are trusted code,
+ * but this is a media function that reads and `-y`-overwrites files: pinning it
+ * to the work area means a bad path (or a symlink planted in a work dir) cannot
+ * read an arbitrary host file into a render or clobber one. For an output that
+ * does not exist yet, its parent directory is what is resolved and the leaf
+ * itself must not be a symlink (`-y` would write through it).
+ */
+async function assertTempPath(label: string, p: string, kind: "file" | "new-file"): Promise<string> {
+  if (!isAbsolute(p)) throw new Error(`applyAudioFx: ${label} must be an absolute path`)
+  const root = await fs.realpath(tmpdir())
+  let real: string
+  try {
+    real = kind === "file"
+      ? await fs.realpath(p)
+      : join(await fs.realpath(dirname(resolve(p))), basename(p))
+  } catch {
+    throw new Error(`applyAudioFx: ${label} does not exist: ${p}`)
+  }
+  if (real !== root && !real.startsWith(root + sep)) {
+    throw new Error(`applyAudioFx: ${label} must be inside the temp directory (got ${p})`)
+  }
+  if (kind === "new-file") {
+    // The parent is resolved above, the leaf is not — and ffmpeg's `-y` writes THROUGH a symlink at the leaf, so a link planted at the
+    // output path (even one that stays inside the temp dir, or dangles) would redirect the write. The leaf is never followed: refused.
+    const leaf = await fs.lstat(join(dirname(real), basename(p))).catch(() => null)
+    if (leaf?.isSymbolicLink()) throw new Error(`applyAudioFx: ${label} must not be a symlink: ${p}`)
+  }
+  if (kind === "file" && !(await fs.stat(real)).isFile()) {
+    throw new Error(`applyAudioFx: ${label} is not a file: ${p}`)
+  }
+  return real
+}
+
+/**
+ * Apply a preset audio effect via FFmpeg, from a remote `audioUrl` or a local
+ * `inputPath`, to mp3 (default) or lossless wav. Returns the local output path.
+ *
+ * Without `outputPath` the output is in a fresh work dir the caller (worker)
+ * uploads from and removes — mirrors `adjustVolume`; this function cleans up
+ * only on failure. With `outputPath` the output is exactly there and this
+ * function removes everything else it made (see `AudioFxOptions.outputPath`).
  */
 export async function applyAudioFx(opts: AudioFxOptions): Promise<{ outputPath: string }> {
+  if ((opts.audioUrl === undefined) === (opts.inputPath === undefined)) {
+    throw new Error("applyAudioFx: pass exactly one of audioUrl or inputPath")
+  }
+  const format = opts.format ?? "mp3"
+  if (format !== "mp3" && format !== "wav") {
+    throw new Error(`applyAudioFx: unknown format "${String(format)}" (expected "mp3" or "wav")`)
+  }
+  let localInput: string | undefined
+  let callerOutput: string | undefined
+  if (opts.inputPath !== undefined) localInput = await assertTempPath("inputPath", opts.inputPath, "file")
+  if (opts.outputPath !== undefined) {
+    if (extname(opts.outputPath).toLowerCase() !== `.${format}`) {
+      throw new Error(`applyAudioFx: outputPath must end in .${format} for format "${format}"`)
+    }
+    callerOutput = await assertTempPath("outputPath", opts.outputPath, "new-file")
+    if (callerOutput === localInput) {
+      throw new Error("applyAudioFx: outputPath and inputPath are the same file")
+    }
+  }
+
   const workDir = await createWorkDir("audio-fx")
   try {
-    const inputPath = join(workDir, "input.mp3")
-    const outputPath = join(workDir, "output.mp3")
-    console.log(`[applyAudioFx] Downloading audio (preset: ${opts.preset})`)
-    await downloadFile(opts.audioUrl, inputPath)
+    const inputPath = localInput ?? join(workDir, "input.mp3")
+    const outputPath = callerOutput ?? join(workDir, `output.${format}`)
+    if (localInput === undefined) {
+      console.log(`[applyAudioFx] Downloading audio (preset: ${opts.preset})`)
+      await downloadFile(opts.audioUrl!, inputPath)
+    }
 
     let irPath: string | undefined
     let afirGain = 1
@@ -642,9 +743,12 @@ export async function applyAudioFx(opts: AudioFxOptions): Promise<{ outputPath: 
     await runFfmpeg(buildAudioFxArgs(opts, { inputPath, outputPath, irPath }, afirGain))
 
     console.log(`[applyAudioFx] Output: ${outputPath}`)
-    return { outputPath }
+    if (callerOutput !== undefined) await cleanupWorkDir(workDir)
+    // The caller's own spelling, not the symlink-resolved one ffmpeg wrote to.
+    return { outputPath: opts.outputPath ?? outputPath }
   } catch (err) {
     await cleanupWorkDir(workDir)
+    if (callerOutput !== undefined) await fs.rm(callerOutput, { force: true }).catch(() => {})
     throw err
   }
 }

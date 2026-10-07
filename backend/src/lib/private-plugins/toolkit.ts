@@ -1235,6 +1235,7 @@ function assertNotLeaseKey(key: string): void {
  */
 const HOST_CAPABILITIES: PluginCapabilities = Object.freeze({
   mixAudioDuck: true,
+  audioFxLossless: true,
 })
 
 export interface BuildToolkitOptions {

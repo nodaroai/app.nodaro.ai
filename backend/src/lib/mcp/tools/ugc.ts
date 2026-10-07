@@ -370,7 +370,10 @@ export function registerUgcTools({ server, session, fastify }: RegisterUgcToolsO
       title: "Finish UGC Clips",
       description:
         "Check every rendered clip against the audio it was given, put that original audio on each clip, and trim the " +
-        "dead air between words, then return the finished clips in order, ready to join. Pass the `segments` from " +
+        "dead air between words, then return the finished clips in order, ready to join. On the Hebrew (segmented) lane " +
+        "it also gives each clip the sound of its setting: reverb matched to the setting, levelled to -16 LUFS, with " +
+        "room tone underneath (outdoor, car and hall settings get the reverb and level but no room tone). If that " +
+        "step fails the clips still come back, dry, with a warning. Pass the `segments` from " +
         "ugc_split_speech and one entry per clip: its video (video_url or video_asset_id) and, when it was rendered " +
         "again, the new render as reroll_video_url / reroll_video_asset_id. If a clip does not match its audio the job " +
         "answers which clips to render again and changes nothing. Returns a job id. Charges a flat fee per call. " +
