@@ -112,6 +112,8 @@ Worked examples:
 
 Characters are counted as the text's length (an emoji or other character outside the Basic Multilingual Plane counts as 2). A request that names no model is priced on the model the length rule picks (above). In a workflow, text longer than the named model's cap is refused before anything is charged, with the number of characters and the cap; over the API the text is cut at the cap and priced as cut. The editor's price badge, the workflow estimate and a published app's advertised price read the same rows: a node whose text arrives from another node shows a range — from the minimum up to the model's cap — and a published app with such a node is priced at its text input's character limit when the app sets one, else at the cap.
 
+The node's own **Text** (the text it speaks when **Text Source** is Direct) can be exposed as an input of a published app: in the app's Inputs list, expand the node, tick **Text** and, if you want a limit, fill **Maximum characters** beside it. The app then refuses a longer text before anything runs (a `400` with the code `input_too_long`), the input shows a counter against the limit, and the app's advertised price is the price of that many characters rather than the model's cap. Leave the box empty for no limit; the app is then priced at the model's cap. With **Text Source** set to Connected the exposed Text is used only when the connected text is blank.
+
 ## Inputs & Outputs
 
 - **Input**: `in` -- text string (from Text Prompt, Generate Text, Combine Text, or any text-producing node)

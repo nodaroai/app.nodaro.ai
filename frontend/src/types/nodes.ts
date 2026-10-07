@@ -8274,6 +8274,8 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       },
       { key: "stability", label: "Stability", type: "slider" as const, min: 0, max: 1, step: 0.05, defaultValue: TTS_VOICE_SETTING_DEFAULTS.stability },
       { key: "similarityBoost", label: "Similarity", type: "slider" as const, min: 0, max: 1, step: 0.05, defaultValue: TTS_VOICE_SETTING_DEFAULTS.similarityBoost },
+      // The text the node speaks when its Text Source is "direct". An app creator may expose it with a character limit (the `maxLength` on the field item): the limit caps both the app's advertised price and what a run may send. With the source on "connected" it is only the fallback for a blank wire.
+      { key: "directText", label: "Text", type: "text" as const },
       // Continuity across clips (context, not spoken). A card the app creator may expose; dead on a model that does not stitch — the docs say which.
       { key: "previousText", label: "Previous text", type: "text" as const },
       { key: "nextText", label: "Next text", type: "text" as const },
