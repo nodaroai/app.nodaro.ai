@@ -131,6 +131,7 @@ const METERED: ReadonlyMap<string, string> = new Map([
 const EXECUTOR_FILES: ReadonlyMap<string, string> = new Map([
   ["components/editor/workflow-editor/execute-node.ts", "the per-type executors, run by a node's Run"],
   ["components/editor/workflow-editor/node-executors.ts", "executors through `pollJobWithNodeUpdate`, which writes the run-start reset first"],
+  ["components/editor/workflow-editor/speaker-view-executor.ts", "Speaker View's run, through `pollJobWithNodeUpdate`, which writes the run-start reset first"],
   ["components/editor/workflow-editor/asset-executors.ts", "entity generation (the run-start reset) and the variant loops (their own `*Status` key)"],
   ["components/editor/workflow-editor/scene-story-handlers.ts", "a script scene's image, marked by its own `imageStatus`"],
   ["components/editor/workflow-editor/run-handlers.ts", "a whole-workflow run, its nodes flipped to `pending` first"],

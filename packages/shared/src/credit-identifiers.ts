@@ -675,6 +675,17 @@ export function applyEdlCreditId(quality: unknown): "apply-edl" | "apply-edl:pro
 }
 
 /**
+ * The credit id of a Speaker View render (decided 2026-09-23, F4): a Preview
+ * (`quality` "proxy") reserves on `speaker-view:proxy`, anything else on
+ * `speaker-view`. The job is always named `speaker-view`; only its credit id
+ * follows the quality, as Apply EDL's does. Ids only — no price is published
+ * here, and none is set yet.
+ */
+export function speakerViewCreditId(quality: unknown): "speaker-view" | "speaker-view:proxy" {
+  return quality === "proxy" ? "speaker-view:proxy" : "speaker-view"
+}
+
+/**
  * OUR Nodaro credit key for a Suno operation, given the model version and the
  * operation (which is also the node type and the BullMQ job name).
  *

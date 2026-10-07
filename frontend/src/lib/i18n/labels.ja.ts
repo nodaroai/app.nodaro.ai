@@ -150,6 +150,7 @@ const NODE_LABELS_JA: Record<string, string> = {
   "Apply EDL": "EDL 適用",
   "Edit Plan": "編集プラン",
   "Camera Switch": "カメラ切り替え",
+  "Speaker View": "話者ビュー",
   "Remove Audio": "オーディオを削除",
   "Mix Audio": "オーディオをミックス",
   "Combine Audio": "オーディオを結合",

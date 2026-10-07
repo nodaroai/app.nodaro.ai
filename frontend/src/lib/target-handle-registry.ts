@@ -379,6 +379,12 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
     { handleId: "transcript", label: "Transcript", accepts: ACCEPTS_JSON },
     { handleId: "sources", label: "Sources", accepts: ACCEPTS_MEDIA },
   ],
+  // speaker-view: the edit (an EDL) and the diarized transcript, both json. No
+  // `sources` handle: media resolves from the EDL's own URLs (SV15).
+  "speaker-view":       [
+    { handleId: "edl", label: "EDL", accepts: ACCEPTS_JSON },
+    { handleId: "transcript", label: "Transcript", accepts: ACCEPTS_JSON },
+  ],
   // edit-plan: a required Transcript (json), optional silence ranges (json),
   // optional audio-sync offsets (json) and the wired media sources.
   "edit-plan":          [

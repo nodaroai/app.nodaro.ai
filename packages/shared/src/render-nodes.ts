@@ -15,7 +15,7 @@
  * (by quality or otherwise — only its credit id changes), so the same key
  * answers for `node.type` and for `jobs.job_type`.
  */
-import { applyEdlCreditId } from "./credit-identifiers.js"
+import { applyEdlCreditId, speakerViewCreditId } from "./credit-identifiers.js"
 import type { RenderMedium } from "./render-output.js"
 
 /** Where a render's player maps the output clock back to the master clock
@@ -59,6 +59,17 @@ export const RENDER_NODE_TYPES: Readonly<Record<string, RenderNodeDescriptor>> =
     ownerOnlyListing: true,
     latestBatch: true,
     jsonKind: "transcript",
+  }),
+  // Speaker View (C3.2): video only; its `json` is the EDL as it drew it (the
+  // turns split, the layouts written), so a player maps the output clock
+  // through THAT, and Add Captions never takes it for a Transcript.
+  "speaker-view": descriptor({
+    mediumOf: () => "video",
+    creditId: (quality) => speakerViewCreditId(quality),
+    clockMapFrom: "output-json",
+    ownerOnlyListing: true,
+    latestBatch: true,
+    jsonKind: "edl",
   }),
 })
 

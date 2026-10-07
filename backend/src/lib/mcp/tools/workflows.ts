@@ -1,3 +1,4 @@
+import { normalizeSpeakerViewNodes } from "../../normalize-speaker-view-nodes.js"
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { hasCredits } from "../../config.js"
 import { findCloudOnlyNodeTypes, cloudOnlyRejectionMessage } from "../../cloud-only-nodes.js"
@@ -396,11 +397,13 @@ export function registerWorkflows({
         // renders the config panel, so nothing else ever snaps its values.
         // Then the Video Overlay pass: presets expanded, and a layer whose
         // `overlay<i>` handle these edges wire keeps no stored `imageUrl`.
-        const storedNodes = normalizeVideoOverlayNodes(
-          normalizeNodeModelParams(
-            (args.nodes ?? []) as Array<{ id?: unknown; type?: unknown; data?: unknown }>,
-          ).nodes,
-          edgeResult.edges,
+        const storedNodes = normalizeSpeakerViewNodes(
+          normalizeVideoOverlayNodes(
+            normalizeNodeModelParams(
+              (args.nodes ?? []) as Array<{ id?: unknown; type?: unknown; data?: unknown }>,
+            ).nodes,
+            edgeResult.edges,
+          ),
         )
         const { data, error } = await supabase
           .from("workflows")
@@ -702,7 +705,8 @@ export function registerWorkflows({
           const healed = normalizeNodeModelParams(stripped as Array<{ id?: unknown; type?: unknown; data?: unknown }>)
           nodeAdjustments = healed.adjustments
           // Video Overlay: presets expanded; a wired layer keeps no `imageUrl`.
-          updates.nodes = normalizeVideoOverlayNodes(healed.nodes, migratedEdges)
+          // Speaker View: an unknown id falls back and a layout the aspect rules out snaps.
+          updates.nodes = normalizeSpeakerViewNodes(normalizeVideoOverlayNodes(healed.nodes, migratedEdges))
           updates.edges = migratedEdges
         }
         if (args.settings !== undefined) updates.settings = args.settings
@@ -862,7 +866,7 @@ export function registerWorkflows({
         const migratedEdges = importEdgeResult.edges
         const importEdgeWarnings = [...importEdgeResult.warnings, ...importEdgeResult.dropped]
         // Video Overlay: presets expanded; a wired layer keeps no `imageUrl`.
-        const importedNodes = normalizeVideoOverlayNodes(remappedNodes, migratedEdges)
+        const importedNodes = normalizeSpeakerViewNodes(normalizeVideoOverlayNodes(remappedNodes, migratedEdges))
 
         const { data: newWorkflow, error: wfError } = await supabase
           .from("workflows")

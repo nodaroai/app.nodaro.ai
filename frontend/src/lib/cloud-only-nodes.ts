@@ -33,6 +33,8 @@ export const NODARO_EXCLUSIVE_NODE_TYPES: ReadonlySet<string> = new Set([
   // cut / clip / chapter planner runs in the private cloud plugin.
   "edit-plan",
   "camera-switch",
+  // Speaker View (C3.2): the plugin's renderer; relayed from a self-host.
+  "speaker-view",
 ])
 
 /**

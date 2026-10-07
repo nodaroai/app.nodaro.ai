@@ -1763,6 +1763,22 @@ function routeOutput(
     }
   }
 
+  // --- speaker-view inputs (C3.2): the edit (`edl`) and the diarized
+  // `transcript`, both stringified json — the same two lanes as camera-switch,
+  // routed by targetHandle before any source-type branch. The EDL lane is NOT a
+  // Transcript wherever a render's `json` is concerned (`jsonKind: "edl"`).
+  // Mirrors the frontend resolver. ---
+  if (targetType === "speaker-view") {
+    if (edge.targetHandle === "edl") {
+      inputs.edl = output
+      return
+    }
+    if (edge.targetHandle === "transcript") {
+      inputs.transcript = output
+      return
+    }
+  }
+
   if (targetType === "apply-edl") {
     if (edge.targetHandle === "edl") {
       inputs.edl = output

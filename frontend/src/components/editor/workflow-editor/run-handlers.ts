@@ -28,6 +28,7 @@ import { renderConfirmDetail } from "./render-confirm-detail";
 import { liveExecutable, getDownstreamNodeIds, runFromHereExecutable } from "./run-from-here-set";
 import { wordTimingsPreflight } from "./add-captions-preflight";
 import { nestedRunPreflight } from "./sub-workflow-preflight";
+import { speakerViewPricePreflight } from "./speaker-view-price-preflight";
 import { previewRunnable, previewSingleRunRefusal } from "./preview-gate";
 import { renderOwnRunRefusal, replanEditLosses, replanLossBody } from "./render-review-guards";
 import { COMPOSER_PLAN_MAP, CREDIT_BASE_USD, planFanOut, TRANSIENT_RUNTIME_KEYS, isExpandedClone, withWiredSettings } from "@nodaro/shared"
@@ -373,7 +374,7 @@ export async function confirmRunOrAbort(
   const runs = previewRunnable(executable, allNodes, edges);
   {
     const blocked =
-      wordTimingsPreflight(runs, edges) ?? (await nestedRunPreflight(runs));
+      wordTimingsPreflight(runs, edges) ?? speakerViewPricePreflight(runs) ?? (await nestedRunPreflight(runs));
     if (blocked) { toast.error(blocked); return false; }
   }
   // A single-node ▶ inside a Preview render's closure would consume the

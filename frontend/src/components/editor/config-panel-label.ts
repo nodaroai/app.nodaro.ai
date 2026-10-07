@@ -118,6 +118,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "apply-edl": "Apply EDL",
   "edit-plan": "Edit Plan",
   "camera-switch": "Camera Switch",
+  "speaker-view": "Speaker View",
   "content-recipe": "Content Recipe",
   "content-ideas": "Content Ideas",
   "assemble-narrated-video": "Assemble Narrated Video",

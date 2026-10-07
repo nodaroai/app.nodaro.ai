@@ -1,3 +1,4 @@
+import { buildSpeakerViewPayload } from "./speaker-view-payload.js"
 import { dubbingModelIdentifier } from "../../lib/dubbing-model.js"
 import { imageCollageCreditModelIdentifier } from "../../lib/image-collage-credit-id.js"
 import {
@@ -6028,6 +6029,27 @@ export function buildPayload(
         upstreamDurations,
         usageLogId,
       })
+    }
+
+    // Speaker View (C3.2): the edit, the transcript and the node's settings to
+    // the cloud plugin's renderer. Refused here — the rule's words, and "not
+    // priced yet" until C4 — before a render is paid for. The case is thin:
+    // `buildSpeakerViewPayload` holds the logic (and the rule it shares with
+    // the editor's badge).
+    case "speaker-view": {
+      const clipKey = applyEdlClipKey(node, buildCtx)
+      const planBasis = applyEdlPlanBasis(node, buildCtx)
+      const built = buildSpeakerViewPayload({
+        nodeId: node.id,
+        jobId,
+        usageLogId,
+        data: data as Record<string, unknown>,
+        edl: resolvedInputs.edl ?? (data.edl as unknown),
+        transcript: resolvedInputs.transcript ?? (data.transcript as unknown),
+        clipKey,
+        planBasis,
+      })
+      return simpleResult("speaker-view", built.creditId, built.payload)
     }
 
     case "apply-edl": {

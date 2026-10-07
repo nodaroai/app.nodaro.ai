@@ -150,6 +150,7 @@ const NODE_LABELS_KO: Record<string, string> = {
   "Apply EDL": "EDL 적용",
   "Edit Plan": "편집 계획",
   "Camera Switch": "카메라 전환",
+  "Speaker View": "화자 뷰",
   "Remove Audio": "오디오 제거",
   "Mix Audio": "오디오 믹스",
   "Combine Audio": "오디오 합치기",

@@ -2,7 +2,7 @@
 
 import { tx, useT, type MessageKey } from "@/lib/i18n"
 import { useLocalizeOptionLabel } from "@/lib/i18n/labels"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import type { LucideIcon } from "lucide-react"
 import { Sparkles, Languages, Image as ImageIcon, LayoutGrid, Palette, Ratio, Maximize2, Clock, Wand2, Hash, Music2, Mic, Volume2, Gauge, Layers } from "lucide-react"
 import {
@@ -13,8 +13,10 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover"
+import { speakerViewQuickConfigs } from "./speaker-view-quick-configs"
 import { ClampedNumberInput } from "@/components/ui/clamped-number-input"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 import {
   MODIFY_IMAGE_MODELS,
   UPSCALE_IMAGE_MODELS,
@@ -67,6 +69,14 @@ export interface QuickConfigOption {
   readonly description?: string
 }
 
+/** What an options function may read besides the node's own data (SV10):
+ *  the graph it sits in. Additive — existing options functions ignore it. */
+export interface QuickConfigContext {
+  readonly nodeId: string
+  readonly nodes: ReadonlyArray<WorkflowNode>
+  readonly edges: ReadonlyArray<WorkflowEdge>
+}
+
 export interface QuickConfigControl {
   /** Node data field this dropdown writes. */
   readonly field: string
@@ -81,7 +91,17 @@ export interface QuickConfigControl {
    *  (model-options.ts) so the two can't drift. */
   readonly options:
     | ReadonlyArray<QuickConfigOption>
-    | ((data: Record<string, unknown>) => ReadonlyArray<QuickConfigOption>)
+    | ((data: Record<string, unknown>, ctx?: QuickConfigContext) => ReadonlyArray<QuickConfigOption>)
+  /** The option list reads the GRAPH around the node (SV10: Speaker View's valid
+   *  layouts depend on the edit wired into it). Set it so the strip hands the
+   *  options function a {@link QuickConfigContext}; without it the strip does
+   *  not subscribe to the graph at all. */
+  readonly needsGraph?: boolean
+  /** Which option a stale stored value snaps to. Default: the first option. A
+   *  control whose valid set has a better answer than "first" (Speaker View's
+   *  layout twin: side by side → stacked) names it here. Must return one of the
+   *  options' values. */
+  readonly snap?: (value: string, data: Record<string, unknown>, ctx?: QuickConfigContext) => string
   /** Write the chosen value as a number (option values are strings). */
   readonly numeric?: boolean
   /** Additional node-data fields to set to `undefined` whenever this control's
@@ -144,8 +164,9 @@ export function readQuickConfigValue(control: QuickConfigControl, data: Record<s
 function resolveOptions(
   control: QuickConfigControl,
   data: Record<string, unknown>,
+  ctx?: QuickConfigContext,
 ): ReadonlyArray<QuickConfigOption> {
-  return typeof control.options === "function" ? control.options(data) : control.options
+  return typeof control.options === "function" ? control.options(data, ctx) : control.options
 }
 
 /** Coerce a dropdown's chosen string value to the node-data value, honoring the
@@ -476,6 +497,8 @@ export const SHEET_SKIN_LABEL_KEYS: Readonly<Record<SheetSkin, MessageKey>> = {
 /** A getter, not a module constant: option labels resolve through the live locale. */
 export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<QuickConfigControl>>> {
   return {
+  // ── Speaker View: layout + switch, filtered by the wired edit (SV10) ──
+  "speaker-view": speakerViewQuickConfigs(),
   // ── Generate Image (bespoke toolbar — model / aspect / resolution) ──
   "generate-image": [
     {
@@ -920,6 +943,9 @@ export function getQuickConfigs(nodeType: string | undefined): ReadonlyArray<Qui
   return (nodeType && NODE_QUICK_CONFIGS()[nodeType]) || []
 }
 
+const NO_NODES: ReadonlyArray<WorkflowNode> = []
+const NO_EDGES: ReadonlyArray<WorkflowEdge> = []
+
 const ghostTriggerClass =
   "!h-6 !px-1.5 !gap-1 !border-0 !bg-transparent text-[10px] " +
   "text-neutral-900/85 hover:!bg-black/10 dark:text-white/85 dark:hover:!bg-white/10 " +
@@ -967,7 +993,15 @@ export function QuickConfigSelect({
     onOpenChange?.(next)
   }
   const Icon = control.icon
-  const options = resolveOptions(control, data)
+  // The graph is read only by a control that asks for it (Speaker View's
+  // layouts); every other strip stays off the nodes/edges subscription.
+  const graphNodes = useWorkflowStore((s) => (control.needsGraph ? s.nodes : NO_NODES))
+  const graphEdges = useWorkflowStore((s) => (control.needsGraph ? s.edges : NO_EDGES))
+  const ctx = useMemo<QuickConfigContext | undefined>(
+    () => (control.needsGraph ? { nodeId, nodes: graphNodes, edges: graphEdges } : undefined),
+    [control.needsGraph, nodeId, graphNodes, graphEdges],
+  )
+  const options = useMemo(() => resolveOptions(control, data, ctx), [control, data, ctx])
   const range = control.customRange
   const inRange = (v: string): boolean => {
     if (!range) return false
@@ -995,11 +1029,12 @@ export function QuickConfigSelect({
         updateNodeData(nodeId, { [control.field]: undefined })
       }
     } else if (!options.some((o) => o.value === value) && !inRange(value)) {
-      const next = options[0].value
+      const snapped = control.snap?.(value, data, ctx)
+      const next = snapped !== undefined && options.some((o) => o.value === snapped) ? snapped : options[0].value
       updateNodeData(nodeId, control.write ? control.write(next) : { [control.field]: coerceQuickConfigValue(control, next) })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value, options, nodeId, control, updateNodeData, wiredFrom])
+  }, [value, options, nodeId, control, updateNodeData, wiredFrom, data, ctx])
 
   // No lever for the current provider → render nothing (matches the panel,
   // which hides provider-irrelevant controls).

@@ -54,6 +54,9 @@ export const VIDEO_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   // doesn't reject face-swap → video-consumer edges that the orchestrator
   // would happily route at runtime.
   "face-swap",
+  // Speaker View (C3.2): an EDL rendered with its speakers framed — one VIDEO
+  // out (no audio-only render). Registered in RENDER_NODE_TYPES as well.
+  "speaker-view",
   "video-retake",
   // video-sfx: adds an SFX track to a video → emits a video URL. Belongs here so
   // canvas handle validation accepts video-sfx → video-consumer edges and the

@@ -150,6 +150,7 @@ const NODE_LABELS_PT_BR: Record<string, string> = {
   "Apply EDL": "Aplicar EDL",
   "Edit Plan": "Plano de edição",
   "Camera Switch": "Troca de câmeras",
+  "Speaker View": "Visão de falantes",
   "Remove Audio": "Remover áudio",
   "Mix Audio": "Mixar áudio",
   "Combine Audio": "Combinar áudio",

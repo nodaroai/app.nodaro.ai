@@ -24,6 +24,7 @@ import {
   VIDEO_UTIL_PRICING,
   clampCinematicDuration,
   estimateScriptDurationSec,
+  RENDER_NODE_TYPE_IDS,
   isRenderNodeType,
   getLipSyncMaxAudioSeconds,
   ltxExtendDurationSec,
@@ -69,6 +70,19 @@ describe("every video producer has a length rule", () => {
 
   it("the dynamic steps the registry lists are the dynamic producers the platform has", () => {
     for (const type of DYNAMIC_VIDEO_OUTPUT_TYPES) expect(DYNAMIC_PRODUCER_TYPES.has(type) || VIDEO_PRODUCER_TYPES.has(type), type).toBe(true)
+  })
+})
+
+describe("a render's length is the EDL's, for every render the registry holds", () => {
+  it.each(RENDER_NODE_TYPE_IDS)("%s is read off the render's own estimate, and is not an unbounded producer", (type) => {
+    expect(VIDEO_OUTPUT_LENGTH_RULES[type]?.via, `${type} must be via "render" (the EDL length, or its per-minute episode rule)`).toBe("render")
+    expect(UNBOUNDED_LENGTH_REASONS[type], `${type} is a render: its length is bounded`).toBeUndefined()
+  })
+
+  it("Speaker View (C3.2) has the very rule Apply EDL has, so a render added to the registry cannot drift from it", () => {
+    expect(VIDEO_OUTPUT_LENGTH_RULES["speaker-view"]).toEqual(VIDEO_OUTPUT_LENGTH_RULES["apply-edl"])
+    expect(VIDEO_PRODUCER_TYPES.has("speaker-view")).toBe(true)
+    expect(DYNAMIC_VIDEO_OUTPUT_TYPES).toContain("speaker-view")
   })
 })
 

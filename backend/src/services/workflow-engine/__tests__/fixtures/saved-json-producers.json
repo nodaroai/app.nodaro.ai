@@ -15,6 +15,7 @@
   "json-process": "processedResult",
   "meta-ads-scrape": "generatedJson",
   "silence-detect": "generatedJson",
+  "speaker-view": "generatedJson",
   "social-search": "generatedJson",
   "telegram-channel-feed": "generatedJson",
   "text-to-dialogue": "generatedJson",

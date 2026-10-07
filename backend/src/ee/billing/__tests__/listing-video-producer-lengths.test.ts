@@ -196,6 +196,50 @@ describe("steps with a length of their own", () => {
   })
 })
 
+describe("a render lists the length of its EDL: Speaker View as Apply EDL", () => {
+  const RENDERS = ["apply-edl", "speaker-view"] as const
+  const edlOf = (minutes: number) => ({ version: 1, segments: [{ sourceId: "a", inMs: 0, outMs: minutes * 60_000 }] })
+
+  it.each(RENDERS)("%s with an inline 3-minute EDL: a step after it is never listed below the charge at 3 minutes", (type) => {
+    const render: N = { id: "step", type, data: { edl: edlOf(3) } }
+    const d = stepDelta([render], [], combine, "step", [])
+    expect(d.at(0), type).toBeGreaterThanOrEqual(combineCharge([180]))
+    expect(d.perMinute, type).toBe(0)
+  })
+
+  it("Speaker View lists the same step charge as Apply EDL on an inline EDL", () => {
+    const inline = (type: string) => stepDelta([{ id: "step", type, data: { edl: edlOf(7) } }], [], combine, "step", [])
+    expect(inline("speaker-view").fixed).toBe(inline("apply-edl").fixed)
+    expect(inline("speaker-view").perMinute).toBe(inline("apply-edl").perMinute)
+    expect(inline("speaker-view").fixed).toBeGreaterThanOrEqual(combineCharge([7 * 60]))
+  })
+
+  // The per-minute episode rule: an Edit Plan on the episode recording wired
+  // into the render's `edl`, then a length-priced step after the render.
+  it.each(["trim", "combine"] as const)("Speaker View lists the same %s charge as Apply EDL on an Edit Plan wired from the episode recording", (which) => {
+    const op: N = which === "combine" ? combine : { id: "op", type: "trim-video", data: { trimMode: "seconds", trimStartSeconds: 1 } }
+    const after = (type: (typeof RENDERS)[number]) => {
+      const graph: N[] = [rec, { id: "plan", type: "edit-plan", data: { mode: "tighten", planTier: "standard" } }, { id: "step", type, data: {} }]
+      const wires: E[] = [
+        { source: "rec", target: "plan", sourceHandle: "video", targetHandle: "sources" },
+        { source: "plan", target: "step", sourceHandle: "edl", targetHandle: "edl" },
+      ]
+      const out = type === "speaker-view" ? "video" : "media"
+      const withOp = listingOf([...graph, op], [...wires, { source: "step", target: "op", sourceHandle: out, targetHandle: "in" }])
+      const without = listingOf(graph, wires)
+      return { fixed: withOp.preview - without.preview, perMinute: withOp.previewPerMinute - without.previewPerMinute }
+    }
+    const speaker = after("speaker-view")
+    expect(speaker.perMinute).toBeGreaterThan(0)
+    expect(speaker).toEqual(after("apply-edl"))
+  })
+
+  it("Video SFX after Speaker View lists no lower than after Apply EDL (a render is capped like any other)", () => {
+    const after = (type: string) => stepDelta([{ id: "step", type, data: { edl: edlOf(2) } }], [], sfx, "step", [])
+    expect(after("speaker-view").fixed).toBe(after("apply-edl").fixed)
+  })
+})
+
 describe("a producer whose length the listing cannot bound lists at the run's own stand-in", () => {
   it("Video SFX on it: the 300-second row, the most a run accepts", () => {
     for (const type of ["gif-to-video", "render-video", "manual-edit", "suno-music-video"]) {

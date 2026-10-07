@@ -2,6 +2,7 @@ import { toast } from "sonner";
 import { DEFAULT_OVERLAY_LAYER, OVERLAY_MAX_LAYERS } from "@/types/nodes";
 import { captionPlanPassThrough, styleCaptionPlan, combineVideosPassThrough, videoOverlayPassThrough, assertCanvasExecutionAllowed, scene3DInputAssetsForEngine, overlayVariantIdFromHandle, readScriptSettings, applySettingsInput, SETTINGS_INPUT_CONSUMERS, resolveMusicProvider, resolveEditPlanSources, describeAudioSyncOffsetIssue, type AudioSyncOffsetSource, transcriptSpeakerLabels, cameraSwitchEdlProblem, cameraSwitchSettingsPayload, renderPlanClipKey, collectionRecordHeadline, isCollectionUrl } from "@nodaro/shared";
 import { browserRenderPlanBasis } from "./apply-edl-stamps";
+import { executeSpeakerView } from "./speaker-view-executor";
 import { findUpstreamSunoIds } from "@/lib/suno-ids";
 import { contentRunResultPatch } from "@/lib/content-run-output";
 import { sourceJsonOf } from "@/lib/edit-plan-saved-output";
@@ -7197,6 +7198,13 @@ function executeNodeCore(
       clampSmartCutWindow(combineData.smartCutFramesNext),
       combineData.smartCutMode,
     );
+  }
+
+  // Speaker View (C3.2): refused here before anything is sent — the plugin's own
+  // refusals from the shared rule, and "not priced yet" until C4 (the executor).
+  if (node.type === "speaker-view") {
+    setUserPromptTemplate(undefined);
+    return executeSpeakerView(node, inputs, ctx, listRowIndex);
   }
 
   if (node.type === "apply-edl") {

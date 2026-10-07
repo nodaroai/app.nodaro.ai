@@ -229,6 +229,8 @@ describe("editor reads of an Edit Plan's saved output", () => {
       "lib/apply-edl-estimate.ts": 1,
       // the node's badge, clip count and tree
       "components/nodes/edit-plan-node.tsx": 1,
+      // Speaker View's panel, strip and badge: the edit(s) wired into its `edl` handle
+      "lib/speaker-view-context.ts": 1,
       // the reader itself (its cache), and sourceJsonOf (Extract Field and
       // JSON Process read a source's JSON through it)
       "lib/edit-plan-saved-output.ts": 2,

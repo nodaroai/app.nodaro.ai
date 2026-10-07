@@ -11,6 +11,7 @@
  * id-keyed, so rebasing is a re-merge, not a guess. A second conflict is
  * returned to the model, which must re-read with get_graph.
  */
+import { normalizeSpeakerViewNodes } from "../../../lib/normalize-speaker-view-nodes.js"
 import {
   describeNodeAdjustments,
   EXECUTION_DATA_KEYS,
@@ -485,7 +486,8 @@ function prepare(
   // edge list wires keeps no stored `imageUrl`. A stored node that an
   // edge-only edit wires is not among the upserts — it joins them, or its
   // stale `imageUrl` would stay in the database.
-  const overlaid = normalizeVideoOverlayNodes(normalized.nodes, fullEdges)
+  // Speaker View: an unknown id falls back and a layout the aspect rules out snaps.
+  const overlaid = normalizeSpeakerViewNodes(normalizeVideoOverlayNodes(normalized.nodes, fullEdges))
   const storedOverlays = survivingNodes.filter((n) => n.type === "video-overlay")
   const healedStored = normalizeVideoOverlayNodes(storedOverlays, fullEdges)
   const pulledIn = healedStored.filter((n, i) => n !== storedOverlays[i])

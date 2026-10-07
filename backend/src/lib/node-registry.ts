@@ -1493,6 +1493,33 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     { key: "crossfadeMs", type: "number" },
   ] } },
   {
+    type: "speaker-view",
+    label: "Speaker View",
+    category: "processing",
+    // outputType: video — the rendered cut on the default handle; its `json`
+    // handle is the EDL as it drew it (turns split, layouts written), NOT a
+    // Transcript. Nodaro-EXCLUSIVE (relayed). NOT PRICED YET (C4): every run is
+    // refused with "Speaker View is not priced yet" before anything is reserved.
+    description:
+      "Render an edit with its speakers on screen: a layout (single, side by side, stacked, grid, picture-in-picture, or Camera Switch's hints), a switch at each speaker change (cut, pan, zoom, crossfade) and an emphasis on who is speaking (scale, border, dim). Wire an EDL (Edit Plan's or Camera Switch's) and a diarized transcript; emits the video and the EDL as drawn on `json`. Not priced yet: runs are refused until its price is set.",
+    outputType: "video",
+    inputSchema: {
+      fields: [
+        { key: "edl", type: "json", required: true },
+        { key: "transcript", type: "json" },
+        { key: "targetAspect", type: "select", options: ["16:9", "9:16", "1:1", "4:5"] },
+        { key: "layout", type: "select", options: ["auto", "single", "side-by-side", "stacked", "grid", "pip"] },
+        { key: "switchType", type: "string" },
+        { key: "switchDurationMs", type: "number" },
+        { key: "emphasisStyle", type: "string" },
+        { key: "emphasisDurationMs", type: "number" },
+        { key: "accentColor", type: "string" },
+        { key: "speakerRegions", type: "object" },
+        { key: "quality", type: "select", options: ["proxy", "final"] },
+      ],
+    },
+  },
+  {
     type: "assemble-narrated-video",
     label: "Assemble Narrated Video",
     category: "processing",

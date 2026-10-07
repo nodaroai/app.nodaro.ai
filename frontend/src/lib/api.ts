@@ -1,3 +1,4 @@
+import type { SpeakerViewWireSettings } from "@nodaro/render-rules"
 import { createClient } from "@/lib/supabase"
 import { WORKSPACE_HEADER, DEFAULT_SUNO_MODEL, isKineticCaptionStyle, KINETIC_ONLY_CAPTION_LEVER_KEYS } from "@nodaro/shared"
 import { clearActiveWorkspaceAfterRefusal, getActiveWorkspaceId } from "@/lib/workspace-context"
@@ -3348,6 +3349,41 @@ export async function applyEdl(params: {
     body,
     workflowId: true,
     label: "apiErr.startEDLRender",
+  })
+}
+
+/**
+ * speaker-view (Track C): render an EDL with its speakers framed — a layout, a
+ * switch at each speaker change and an emphasis on who is speaking. Nodaro-
+ * EXCLUSIVE: the cloud plugin renders it, and a self-host's route relays it.
+ * `edl` and `transcript` go as OBJECTS (the plugin coerces an object, never a
+ * string); the settings are the route's wire shape (`SpeakerViewWireSettings`),
+ * already normalized by the caller. Refused before anything is reserved while
+ * Speaker View has no price.
+ */
+export async function speakerView(params: {
+  edl: unknown
+  transcript?: unknown
+  quality?: "proxy" | "final"
+  settings?: SpeakerViewWireSettings
+  /** The plan clip this render cuts, and the plan value it cuts, stamped on the result. */
+  clipKey?: string
+  planBasis?: string
+  /** The render's own settings and sources, stamped on the result. */
+  renderBasis?: string
+  userId?: string
+}): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { edl: params.edl, ...(params.settings ?? {}) }
+  if (params.transcript !== undefined) body.transcript = params.transcript
+  if (params.quality) body.quality = params.quality
+  if (params.clipKey) body.clipKey = params.clipKey
+  if (params.planBasis) body.planBasis = params.planBasis
+  if (params.renderBasis) body.renderBasis = params.renderBasis
+  if (params.userId) body.userId = params.userId
+  return apiJson("/v1/speaker-view", {
+    body,
+    workflowId: true,
+    label: "apiErr.startSpeakerView",
   })
 }
 

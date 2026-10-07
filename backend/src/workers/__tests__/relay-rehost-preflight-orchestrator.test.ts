@@ -112,6 +112,14 @@ vi.mock("@/providers/nodaro/client.js", async (importOriginal) => ({
   rehostByteSize: mocks.rehostByteSize,
 }))
 
+// These cases are about the re-host cap on a Speaker View that WOULD run, so it
+// stands as priced: while it is not, the run-start refusal for an unpriced node
+// (speaker-view-unpriced-preflight-orchestrator.test.ts) fires first.
+vi.mock("@nodaro/render-rules", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@nodaro/render-rules")>()
+  return { ...actual, SPEAKER_VIEW_PRICED: true }
+})
+
 import { processWorkflowExecution } from "../orchestrator-worker.js"
 
 // ---------------------------------------------------------------------------

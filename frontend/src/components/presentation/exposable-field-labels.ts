@@ -15,6 +15,7 @@ import type { MessageKey, TFunction } from "@/lib/i18n"
 export const EXPOSABLE_FIELD_LABEL_KEYS: Readonly<Record<string, MessageKey>> = {
   "Model": "field.model",
   "Aspect Ratio": "field.aspectRatio",
+  "Layout": "speakerView.field.layout",
   "Quality": "field.quality",
   "Negative Prompt": "field.negativePrompt",
   "Style": "field.style",

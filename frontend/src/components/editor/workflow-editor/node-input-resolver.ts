@@ -1895,6 +1895,19 @@ export function resolveNodeInputs(
       }
     }
 
+    // speaker-view inputs (C3.2): the same two json lanes as camera-switch's,
+    // `edl` and the diarized `transcript`. Mirror of the backend resolver.
+    if (node.type === "speaker-view") {
+      if (srcEdge.targetHandle === "edl") {
+        inputs.edl = output;
+        continue;
+      }
+      if (srcEdge.targetHandle === "transcript") {
+        inputs.transcript = output;
+        continue;
+      }
+    }
+
     if (node.type === "apply-edl") {
       if (srcEdge.targetHandle === "edl") {
         inputs.edl = output;

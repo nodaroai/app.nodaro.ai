@@ -60,6 +60,7 @@ import { previewStopRuleEnabled } from "../lib/preview-stop-rule-flag.js"
 import { pinExecutionInputOverrides } from "../lib/execution-input-overrides.js"
 import { nestedPreviewRenders, nestedPreviewRenderLocation } from "../services/workflow-engine/nested-preview-renders.js"
 import { seededFromSavedData } from "../services/workflow-engine/saved-data.js"
+import { speakerViewRunPreflight } from "../services/workflow-engine/speaker-view-run-preflight.js"
 import { findRelayRehostRefusals, nestedRelayRehostRefusals } from "../services/workflow-engine/relay-rehost-preflight.js"
 import { applyEdlRowSentStamps } from "../services/workflow-engine/payload-builder.js"
 import { executeNode, loadCompletedFanOutIterations, type ExecuteNodeResult } from "../services/workflow-engine/node-executor.js"
@@ -809,6 +810,14 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     {
       // A node the stop rule gates never runs, so nothing nested behind it does.
       const runNodes = (nodeSubset ? nodes.filter((n) => nodeSubset.has(n.id)) : nodes).filter((n) => !previewGated.has(n.id))
+      // Speaker View has no price until C4 and refuses at its own dispatch, after
+      // every paid node upstream of it has run. Refused here, in the top graph.
+      const unpricedSpeakerView = speakerViewRunPreflight(runNodes)
+      if (unpricedSpeakerView) {
+        console.warn(`[speaker-view-preflight] execution ${executionId} REFUSED — ${unpricedSpeakerView}`)
+        await failExecution(executionId, unpricedSpeakerView)
+        return
+      }
       const wordless = findWordlessTranscriptFeeds(runNodes, edges)
       if (wordless.length > 0) {
         console.warn(
@@ -837,6 +846,12 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
       // parent, add-captions in the child, or the reverse) — no single graph
       // holds that edge pair.
       const nestedGraphs = await loadNestedRunGraphs(runNodes, subWorkflowOwnerId(ctx))
+      const unpricedNested = speakerViewRunPreflight([], nestedGraphs)
+      if (unpricedNested) {
+        console.warn(`[speaker-view-preflight] execution ${executionId} REFUSED — ${unpricedNested}`)
+        await failExecution(executionId, unpricedNested)
+        return
+      }
       const nested = nestedWordlessTranscriptFeeds(nestedGraphs)
       if (nested.length > 0) {
         console.warn(

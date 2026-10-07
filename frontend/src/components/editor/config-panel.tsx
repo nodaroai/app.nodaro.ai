@@ -1,5 +1,6 @@
 "use client"
 
+import { SPEAKER_VIEW_PRICED } from "@nodaro/render-rules"
 import { useMemo, useCallback, useState, useRef, useEffect, Suspense, type TouchEvent as ReactTouchEvent } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
@@ -160,6 +161,7 @@ import {
   ApplyEdlConfig,
   EditPlanConfig,
   CameraSwitchConfig,
+  SpeakerViewConfig,
   ContentRecipeConfig,
   ContentIdeasConfig,
   AssembleNarratedVideoConfig,
@@ -466,6 +468,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "apply-edl": return <ApplyEdlConfig {...configProps} nodeId={selectedNodeId} />
     case "edit-plan": return <EditPlanConfig {...configProps} />
     case "camera-switch": return <CameraSwitchConfig {...configProps} nodeId={selectedNodeId} />
+    case "speaker-view": return <SpeakerViewConfig {...configProps} nodeId={selectedNodeId} />
     case "content-recipe": return <ContentRecipeConfig {...configProps} />
     case "content-ideas": return <ContentIdeasConfig {...configProps} />
     case "assemble-narrated-video": return <AssembleNarratedVideoConfig {...configProps} />
@@ -1157,11 +1160,14 @@ export function ConfigPanel() {
                     userId={userId ?? ""}
                     label={t("configPanel.runThisNode")}
                     isRunning={nodeData.executionStatus === "running"}
-                    disabled={imageGateBlocked}
+                    // Speaker View has no price yet (C4): the button says so and does not run.
+                    disabled={imageGateBlocked || (nodeType === "speaker-view" && !SPEAKER_VIEW_PRICED)}
                     disabledReason={
                       imageGateBlocked
                         ? t("node.imageRequiredHint", { model: (nodeData.provider as string | undefined) ?? "" })
-                        : undefined
+                        : nodeType === "speaker-view" && !SPEAKER_VIEW_PRICED
+                          ? t("speakerView.notPriced")
+                          : undefined
                     }
                     creditOverride={
                       nodeType === "component"

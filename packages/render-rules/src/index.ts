@@ -69,6 +69,70 @@ export {
 } from "./node-fan-out"
 export { TYPICAL_EPISODE_MINUTES, typicalEpisodeCredits } from "./typical-episode"
 export {
+  MULTI_SLOT_LAYOUTS,
+  SPEAKER_VIEW_ACCENT_PATTERN,
+  SPEAKER_VIEW_ASPECTS,
+  SPEAKER_VIEW_DEFAULTS,
+  SPEAKER_VIEW_DEFAULT_ASPECT,
+  SPEAKER_VIEW_EMPHASIS_ATOMS,
+  SPEAKER_VIEW_LAYOUT_SETTINGS,
+  SPEAKER_VIEW_MAX_OUTPUT_MS,
+  SPEAKER_VIEW_MIN_REGION,
+  SPEAKER_VIEW_NOT_PRICED_MESSAGE,
+  SPEAKER_VIEW_PRICED,
+  isSpeakerViewAspect,
+  speakerViewRunRefusal,
+  type SpeakerViewRunRefusal,
+} from "./speaker-view-settings"
+export {
+  SPEAKER_VIEW_MAX_TWEEN_MS,
+  isSpeakerViewSwitchDrawn,
+  speakerViewSettingProblems,
+  type SpeakerViewSettingProblem,
+  type SpeakerViewSettings,
+} from "./speaker-view-settings-check"
+export {
+  layOutSpeakerView,
+  snapLayout,
+  speakerOrder,
+  speakerSources,
+  speakerViewSlotSet,
+  type SpeakerViewLayoutRequest,
+  type SpeakerViewLayoutResult,
+} from "./speaker-view-layout"
+export {
+  coerceSpeakerViewEdl,
+  findSpeakerViewIssues,
+  resolveSpeakerViewAspect,
+  validateSpeakerView,
+  type SpeakerViewIssue,
+  type SpeakerViewIssueCode,
+  type SpeakerViewRefusal,
+  type SpeakerViewRuleInput,
+  type SpeakerViewVerdict,
+} from "./speaker-view-rule"
+export { speakerViewContext, type SpeakerViewClip, type SpeakerViewContext } from "./speaker-view-context"
+export {
+  SPEAKER_VIEW_BASIC_SWITCHES,
+  normalizeSpeakerViewData,
+  speakerViewAspectOf,
+  speakerViewDefaultsFor,
+  validSpeakerEmphasis,
+  validSpeakerLayouts,
+  validSpeakerSwitches,
+  type SpeakerViewNodeSettings,
+  type SpeakerViewNormalizeNote,
+  type SpeakerViewOption,
+  type SpeakerViewReason,
+  type SpeakerViewReasonCode,
+} from "./speaker-view-options"
+export {
+  defaultSpeakerRegions,
+  speakerViewRenderBasis,
+  speakerViewWireSettings,
+  type SpeakerViewWireSettings,
+} from "./speaker-view-wire"
+export {
   knownLength,
   LENGTH_PRICED_UTILITY_TYPES,
   runWireLengthSec,

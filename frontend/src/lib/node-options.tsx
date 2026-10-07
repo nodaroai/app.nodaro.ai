@@ -1232,6 +1232,14 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     keywords: ["camera switch", "multicam", "multi-camera", "speaker", "who is talking", "podcast", "edl", "angles", "cut"],
   },
   {
+    type: "speaker-view",
+    label: "Speaker View",
+    icon: <Users className="h-4 w-4" />,
+    category: "Processing",
+    group: "video-cut-assemble",
+    keywords: ["speaker view", "speakers", "layout", "side by side", "split screen", "grid", "picture in picture", "pip", "podcast", "multicam", "reframe", "vertical", "emphasis", "active speaker"],
+  },
+  {
     type: "assemble-narrated-video",
     label: "Assemble Narrated Video",
     icon: <Merge className="h-4 w-4" />,
