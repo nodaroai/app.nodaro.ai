@@ -1,7 +1,7 @@
 import { projectDubbingCreditOverride, stampDubbingDuration } from "../../lib/dubbing-pricing.js"
 import { applyEdlCreditOverride } from "../../lib/apply-edl-plan.js"
 import { isPreviewRender } from "../../lib/preview-render.js"
-import { assertCanvasExecutionAllowed, imageOverlayCredits, applySettingsInput, SETTINGS_INPUT_CONSUMERS, PREVIEW_RENDER_NESTED, PREVIEW_REVIEW_REQUIRED, isCollectionUrl } from "@nodaro/shared"
+import { assertCanvasExecutionAllowed, imageOverlayCredits, applySettingsInput, SETTINGS_INPUT_CONSUMERS, PREVIEW_RENDER_NESTED, PREVIEW_REVIEW_REQUIRED, isCollectionUrl, fitCollectionField } from "@nodaro/shared"
 import { PREVIEW_RENDER_NESTED_MESSAGE } from "./nested-preview-renders.js"
 import { PREVIEW_REVIEW_REQUIRED_MESSAGE } from "../../lib/preview-review-gate.js"
 /**
@@ -648,8 +648,18 @@ async function executeSyncHttpNode(
   // empty-map default (buildSyncHttpBody defaults `refMap = new Map()`).
   // Empty when the graph context isn't threaded (direct unit-test entry) —
   // resolvePrompt then skips ref substitution.
+  // Save to Collection resolves `{Node}` refs typed into its title / text /
+  // link / dedupe key (#1890), so it needs the map only when one of them
+  // holds a `{` (it runs once per item of a fan-out).
+  const collectionRefs =
+    node.type === "collection-write" &&
+    (["title", "text", "link", "dedupeKey"] as const).some((key) => {
+      const typed = (authoredData ?? node.data)[key]
+      return typeof typed === "string" && typed.includes("{")
+    })
   const needsRefMap =
-    node.type === "llm-chat" || node.type === "lottie-overlay" || SOCIAL_POST_NODE_TYPES.has(node.type)
+    node.type === "llm-chat" || node.type === "lottie-overlay" || collectionRefs ||
+    SOCIAL_POST_NODE_TYPES.has(node.type)
   const refMap = needsRefMap
     ? buildNodeRefMap(node.id, { nodes: allNodes, edges, nodeStates })
     : new Map<string, string>()
@@ -669,7 +679,7 @@ async function executeSyncHttpNode(
         nodes: allNodes, edges, nodeStates, authoredData,
         viewer: await viewerForNode(node.type, ctx.userId),
       }, userPromptTemplate)
-    : buildSyncHttpBody(node, resolvedInputs, ctx, userPromptTemplate, refMap, downstreamPickerTypes)
+    : buildSyncHttpBody(node, resolvedInputs, ctx, userPromptTemplate, refMap, downstreamPickerTypes, authoredData)
 
   // Polling sources (Telegram Channel Feed): the ROUTE owns the durable cursor
   // (node_cursors) since PR 2 — it reads and advances the position itself from
@@ -689,6 +699,10 @@ async function executeSyncHttpNode(
     // Authenticate to the auth hook with the shared orchestrator secret — NOT req.ip,
     // which is always 127.0.0.1 behind the Caddy reverse proxy.
     "X-Internal-Orchestrator-Secret": config.INTERNAL_ORCHESTRATOR_SECRET,
+    // The user this call acts for, for the rate limiter (it runs before the
+    // body is read). The auth hook still takes the user from the body. Without
+    // it every run on an instance shared one bucket on a limited route (#1888).
+    "X-Internal-User-Id": ctx.userId,
   }
   // Propagate app-run context so the route's credit reservation applies the
   // free-tier app allowance gate (and avoids crediting allowance on app runs).
@@ -845,6 +859,9 @@ export function buildSyncHttpBody(
   userPromptTemplate?: string,
   refMap: ReadonlyMap<string, string> = new Map(),
   downstreamPickerTypes: ReadonlyArray<string> = [],
+  // `node.data` as the author left it, before field mappings wrote into it.
+  // Defaults to `node.data` for a direct caller that applied no mappings.
+  authoredData?: Record<string, unknown>,
 ): Record<string, unknown> {
   const data = node.data
   // UNRESOLVED user-typed prompt template — passed through to the internal
@@ -1057,13 +1074,30 @@ export function buildSyncHttpBody(
       if (isCollectionUrl(resolvedInputs.imageUrl)) media.push({ type: "image", url: resolvedInputs.imageUrl })
       if (isCollectionUrl(resolvedInputs.videoUrl)) media.push({ type: "video", url: resolvedInputs.videoUrl })
       const str = (v: unknown) => (typeof v === "string" && v.trim() ? v : undefined)
+      // A `{Node}` reference TYPED into one of the four fields resolves to that
+      // node's output, as in a caption: `{name || fallback}` gives the fallback
+      // when the node has nothing, and an unknown name stays as typed. A value a
+      // field mapping wrote is upstream DATA, so a `{` in it is sent untouched:
+      // only a field still equal to what the author typed is resolved (#1890).
+      // Mirror of the editor's collection-write block (execute-node.ts).
+      // Resolved even when no upstream node produced anything (an empty map),
+      // so `{name || fallback}` still gives its fallback. A resolved value can
+      // be far longer than what was typed, so it is held to the route's limit
+      // (fitCollectionField, the rule the editor applies too).
+      const authored = authoredData ?? data
+      const typedField = (key: "title" | "text" | "link" | "dedupeKey") => {
+        const value = str(data[key])
+        if (value === undefined || authored[key] !== data[key]) return value
+        const resolved = str(resolveNodeRefs(value, refMap))
+        return resolved === undefined || resolved === value ? resolved : fitCollectionField(key, resolved)
+      }
       return {
         collectionId: data.collectionId,
         item: resolvedInputs.overridePrompt ?? resolvedInputs.prompt,
-        title: str(data.title),
-        text: str(data.text),
-        link: str(data.link),
-        dedupeKey: str(data.dedupeKey),
+        title: typedField("title"),
+        text: typedField("text"),
+        link: typedField("link"),
+        dedupeKey: typedField("dedupeKey"),
         ...(media.length > 0 ? { media } : {}),
         executionId: ctx.executionId,
         workflowId: ctx.workflowId,
@@ -2500,6 +2534,8 @@ async function executeComponentNode(
       headers: {
         "Content-Type": "application/json",
         "X-Internal-Orchestrator-Secret": config.INTERNAL_ORCHESTRATOR_SECRET,
+        // The rate limiter's key; the body's userId stays the identity (#1888).
+        "X-Internal-User-Id": ctx.userId,
       },
       body: JSON.stringify({
         appSlug,

@@ -147,6 +147,39 @@ describe("check-only creditGuard routes (P14 scope rule)", () => {
   })
 })
 
+/**
+ * `skipStorageCheck: true` lets a route past the MEDIA storage quota (#1890).
+ * Only a route that stores no media may carry it: the two collection nodes
+ * write and read text records. A new user is a new decision, made here. Every
+ * install in the file carries it, so a media route added to the same file
+ * cannot inherit the skip by accident.
+ */
+const SKIP_STORAGE_ROUTES = ["collection-nodes.ts"]
+
+describe("creditGuard routes that skip the storage quota (#1890)", () => {
+  it("the skipping set is exactly the pinned list", () => {
+    const found: string[] = []
+    for (const dir of ROUTE_DIRS) {
+      for (const file of readdirSync(dir)) {
+        if (!file.endsWith(".ts")) continue
+        if (readFileSync(join(dir, file), "utf8").includes("skipStorageCheck")) found.push(file)
+      }
+    }
+    expect(found.sort()).toEqual(SKIP_STORAGE_ROUTES)
+  })
+
+  it("every creditGuard install in a skipping route skips, and only a check-only route skips", () => {
+    for (const dir of ROUTE_DIRS) {
+      for (const file of readdirSync(dir)) {
+        if (!SKIP_STORAGE_ROUTES.includes(file)) continue
+        const source = readFileSync(join(dir, file), "utf8")
+        expect(CHECK_ONLY_ROUTES, file).toContain(file)
+        expect(countOf(source, "skipStorageCheck: true"), file).toBe(countOf(source, "creditGuard("))
+      }
+    }
+  })
+})
+
 // ---------------------------------------------------------------------------
 // Half 3 — behavioral, both shapes
 // ---------------------------------------------------------------------------

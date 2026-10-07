@@ -25,7 +25,7 @@ It has two modes:
   - `vocals`, `instrumental` (Vocal/Instrumental mode)
   - `vocals`, `drums`, `bass`, `other`, `guitar`, `piano` (Full stems mode)
 
-Outputs not produced by the chosen mode/model are inactive. The primary audio output defaults to the vocal track.
+Outputs not produced by the chosen mode/model are inactive. Wire each stem from its own output. The node no longer has a single `audio` output: a wire saved on that name is left as it is, because it could mean any stem, so reconnect it to the stem you want.
 
 ## Credits
 

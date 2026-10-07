@@ -141,7 +141,9 @@ export function planSections(summary: PageSummary, opts: PlanOptions): SectionPl
   }
   const categoryOf = (s: { text: string; words: number; images: number; button: boolean; details: boolean; blockquote: boolean }, label: string): SectionCategory => {
     const all = `${label} ${s.text}`
-    if (/[$€£¥₪]\s?\d|\d(?:[.,]\d+)?\s?[$€£₪]|\bper (month|year|user|seat)\b|\/\s?(mo|month|yr)\b|\bpricing\b|\bplans?\b|מחיר/i.test(all)) return "pricing"
+    // Pricing needs price evidence: an amount, a billing period, "pricing" or a free plan. The bare word "plan" is
+    // not one ("Plan and navigate from idea to launch").
+    if (/[$€£¥₪]\s?\d|\d(?:[.,]\d+)?\s?[$€£₪]|\bper (month|year|user|seat)\b|\/\s?(mo|month|yr)\b|\bpricing\b|\bfree plans?\b|מחיר|לחודש|בחודש|לשנה/i.test(all)) return "pricing"
     if (/\b(trusted by|used by|loved by)\b/i.test(all) && s.words < 40 && s.images >= 3) return "other"
     if (s.blockquote || /\b[0-5](?:[.,]\d)?\s?(?:\/\s?5|stars?|out of 5)\b|★|\b\d[\d,.]*\s?[kKmM]?\+?\s(?:reviews?|ratings?|customers?|users?|teams?|companies)\b/i.test(all)) return "proof"
     if (s.details || /\bFAQs?\b|frequently asked|\bquestions\b|שאלות/i.test(all)) return "faq"

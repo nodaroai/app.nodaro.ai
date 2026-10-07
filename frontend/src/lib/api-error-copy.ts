@@ -42,6 +42,10 @@ const REASON_KEY_BY_CODE: Readonly<Record<string, MessageKey>> = {
   save_generated_failed: "apiErr.reason.server",
   read_failed: "apiErr.reason.server",
   redact_failed: "apiErr.reason.server",
+  // DELETE /v1/admin/apps/:appId/expunge: reading, then erasing, the runs'
+  // executions and jobs.
+  targets_failed: "apiErr.reason.server",
+  linked_redact_failed: "apiErr.reason.server",
   connect_failed: "apiErr.reason.server",
   caption_failed: "apiErr.reason.server",
   r2_upload_failed: "apiErr.reason.server",

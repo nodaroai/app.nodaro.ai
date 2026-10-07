@@ -121,7 +121,7 @@ import { scrapeResultPatch } from "@/components/nodes/scrape-result-recovery";
 import { applyMetaAdsScrapeFailure, applyMetaAdsScrapeResult, metaAdsScrapeRunStartPatch } from "@/components/nodes/meta-ads-scrape-run-state";
 import { applyInstagramScrapeFailure, applyInstagramScrapeResult, instagramScrapeRunStartPatch } from "@/components/nodes/instagram-scrape-run-state";
 import { applySocialSearchFailure, applySocialSearchResult, socialSearchRunStartPatch } from "@/components/nodes/social-search-run-state";
-import { metaAdsAdvertisersFrom, metaAdsNodeMode, metaAdsScrapeWireSources, splitMetaAdsAdvertiserNames, splitInstagramTargets, instagramScrapeMode, socialSearchRequestFromNode } from "@nodaro/shared";
+import { metaAdsAdvertisersFrom, metaAdsNodeMode, metaAdsScrapeWireSources, splitMetaAdsAdvertiserNames, splitInstagramTargets, instagramScrapeMode, socialSearchRequestFromNode, resolveNodeRefs, fitCollectionField } from "@nodaro/shared";
 import { clampContentIdeasCount, CONTENT_IDEAS_MAX_RECIPE_INPUTS } from "@nodaro/shared";
 import { ttsSupportsStitching, normalizeTtsNeighbourText } from "@nodaro/shared";
 import { tx } from "@/lib/i18n";
@@ -5529,15 +5529,31 @@ function executeNodeCore(
       media.push({ type: /\.(mp4|mov|webm)(\?|$)/i.test(overrideMediaUrl) ? "video" : "image", url: overrideMediaUrl });
     }
     const field = (v: unknown) => (typeof v === "string" && v.trim() ? v : undefined);
+    // A `{Node}` reference TYPED into one of the four fields resolves to that
+    // node's output, as in a caption: `{name || fallback}` gives the fallback
+    // when the node has nothing, and an unknown name stays as typed. A value a
+    // field mapping wrote is upstream data and is sent untouched: only a field
+    // still equal to what the author typed is resolved (#1890). The shared
+    // resolver runs even when no upstream node produced anything, so the
+    // fallback still applies (resolveTextRefs would skip an empty map). Mirror
+    // of the server's body builder (node-executor.ts, collection-write).
+    // A resolved value can be far longer than what was typed, so it is held to
+    // the route's limit (fitCollectionField, the rule the server applies too).
+    const typedField = (key: "title" | "text" | "link" | "dedupeKey") => {
+      const value = field(d[key]);
+      if (value === undefined || authoredData[key] !== d[key]) return value;
+      const resolved = field(resolveNodeRefs(value, refMap));
+      return resolved === undefined || resolved === value ? resolved : fitCollectionField(key, resolved);
+    };
     updateNodeData(node.id, { ...RUN_START_RESET });
     return import("@/lib/api").then(({ collectionWriteApi }) =>
       collectionWriteApi({
         collectionId: d.collectionId,
         item,
-        title: field(d.title),
-        text: field(d.text),
-        link: field(d.link),
-        dedupeKey: field(d.dedupeKey),
+        title: typedField("title"),
+        text: typedField("text"),
+        link: typedField("link"),
+        dedupeKey: typedField("dedupeKey"),
         media,
         nodeId: node.id,
       })

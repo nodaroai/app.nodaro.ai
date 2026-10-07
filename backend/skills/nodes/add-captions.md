@@ -1,7 +1,7 @@
 ---
 node_type: add-captions
-generated_at: 2026-10-06T06:58:00.834Z
-generated_from: 4c2a25d1c
+generated_at: 2026-10-07T08:51:50.347Z
+generated_from: 6878253f5
 ---
 
 # Add Captions
@@ -11,7 +11,7 @@ generated_from: 4c2a25d1c
 **Category:** processing
 **Credit cost:** `30-50` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
 **Inputs (target handles):** `in`, `transcript`, `captionPlan`
-**Outputs (source handles):** `video`
+**Outputs (source handles):** `video-out`
 
 **Required data fields:**
 - `label: string`

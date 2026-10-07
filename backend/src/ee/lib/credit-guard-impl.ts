@@ -199,8 +199,9 @@ export function creditGuardImpl(
     // Step 1: storage limit — SKIPPED under a deployment payer: media lives
     // in the deployment's own bucket (their space, their business), and the
     // profile in hand carries the PAYER's storage columns, which would gate
-    // every requester on one account's counter.
-    if (dep) {
+    // every requester on one account's counter. Also skipped on a route that
+    // stores no media (`skipStorageCheck`): text records are not media.
+    if (dep || opts?.skipStorageCheck) {
       // fallthrough to the credit check with no storage snapshot
     } else try {
       const storageCheck = CreditsService.checkStorageLimitWithProfile(profile as StorageProfile)

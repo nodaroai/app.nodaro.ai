@@ -36,11 +36,67 @@ import { appRenderFinalStampOf, finalExecutionIdOf, selectWithFinalExecution } f
  * delete. Only jobs that pass the owner check above count as this app's jobs
  * there, so a key must clear both fences to be deleted.
  *
- * Pages app_runs in batches of 500 to bound memory.
+ * `scope` narrows and widens the walk for the expunge (decided 2026-10-06):
+ * a run in `skipRunIds` is still in flight and is left whole — and while any
+ * run is skipped the app row stays, so its own media does too; each of
+ * `extraExecutions` (an execution no run pointer names — an earlier execution
+ * of a re-run run, a component's inner run — found by the expunge's
+ * owner-checked walk, `lib/app-expunge-targets.ts`) is harvested with its
+ * owner's jobs, when it is that owner's.
+ *
+ * Pages app_runs in batches of 500, and every jobs read by id, to bound memory
+ * and stay under the PostgREST row cap.
  */
-export async function collectAppR2Keys(appId: string): Promise<string[]> {
+export interface AppR2KeyScope {
+  readonly skipRunIds?: ReadonlySet<string>
+  readonly extraExecutions?: ReadonlyArray<{ readonly id: string; readonly owner: string }>
+}
+
+const JOB_PAGE = 500
+const EXECUTION_CHUNK = 100
+
+interface JobRow {
+  readonly id: unknown
+  readonly user_id: unknown
+  readonly workflow_execution_id: unknown
+  readonly output_data: unknown
+}
+
+/**
+ * Every job of `executionIds` (optionally only `owner`'s), keyed-paged on id: a
+ * read with no limit stops at the PostgREST row cap (1000) without an error.
+ */
+async function jobsOfExecutions(
+  executionIds: readonly string[],
+  owner: string | null,
+): Promise<JobRow[]> {
+  const out: JobRow[] = []
+  for (let i = 0; i < executionIds.length; i += EXECUTION_CHUNK) {
+    const chunk = executionIds.slice(i, i + EXECUTION_CHUNK)
+    let cursor: string | null = null
+    while (true) {
+      let q = owner
+        ? supabase.from("jobs").select("id, user_id, workflow_execution_id, output_data").eq("user_id", owner).in("workflow_execution_id", chunk)
+        : supabase.from("jobs").select("id, user_id, workflow_execution_id, output_data").in("workflow_execution_id", chunk)
+      q = q.order("id", { ascending: true }).limit(JOB_PAGE)
+      if (cursor) q = q.gt("id", cursor)
+      const { data, error } = await q
+      if (error) throw new Error(`collectAppR2Keys failed at jobs: ${error.message}`)
+      const rows = (data ?? []) as JobRow[]
+      out.push(...rows)
+      if (rows.length < JOB_PAGE) break
+      const last = rows[rows.length - 1]!.id
+      if (typeof last !== "string") break
+      cursor = last
+    }
+  }
+  return out
+}
+
+export async function collectAppR2Keys(appId: string, scope: AppR2KeyScope = {}): Promise<string[]> {
   const seen = new Set<string>()
   const appJobIds = new Set<string>()
+  const skipRunIds = scope.skipRunIds ?? new Set<string>()
 
   const harvest = (val: unknown, keep: (key: string) => boolean = () => true) => {
     if (typeof val === "string") {
@@ -53,11 +109,11 @@ export async function collectAppR2Keys(appId: string): Promise<string[]> {
     }
   }
 
-  const { data: appRow } = await supabase
-    .from("published_apps")
-    .select("icon_url, preview_media_url, snapshot_nodes")
-    .eq("id", appId)
-    .single()
+  // The app's own media goes with the app row, which stays while a run is skipped.
+  const { data: appRow } =
+    skipRunIds.size === 0
+      ? await supabase.from("published_apps").select("icon_url, preview_media_url, snapshot_nodes").eq("id", appId).single()
+      : { data: null }
   if (appRow) {
     harvest(appRow.icon_url)
     harvest(appRow.preview_media_url)
@@ -82,8 +138,10 @@ export async function collectAppR2Keys(appId: string): Promise<string[]> {
     const { data, error } = await selectWithFinalExecution(["id", "runner_id", "execution_id", ...APP_RUN_USER_CONTENT_COLUMNS].join(", "), page)
     if (error) throw new Error(`collectAppR2Keys failed at runs page: ${error.message}`)
     // The select is built from a list, so the client cannot type the rows.
-    const rows = (data ?? []) as unknown as Array<Record<string, unknown>>
-    if (rows.length === 0) break
+    const page_ = (data ?? []) as unknown as Array<Record<string, unknown>>
+    if (page_.length === 0) break
+    // A skipped run is still in flight: nothing of it is harvested.
+    const rows = page_.filter((r) => !(typeof r.id === "string" && skipRunIds.has(r.id)))
 
     for (const row of rows) {
       for (const column of APP_RUN_USER_CONTENT_COLUMNS) harvest(row[column])
@@ -128,16 +186,11 @@ export async function collectAppR2Keys(appId: string): Promise<string[]> {
       }
       for (const e of owned) harvest(e.node_states)
       if (owned.length > 0) {
-        // execution id → its owner (the runner it was harvested for).
+        // execution id → its owner (the runner it was harvested for). Many
+        // runners' executions in one read, so no single user filter fits:
+        // `user_id` is compared row by row against the execution owner.
         const ownerOf = new Map(owned.map((e) => [e.id, e.user_id] as const))
-        // Many runners' executions in one read, so no single user filter fits:
-        // `user_id` is compared below, row by row, against the execution owner.
-        const jobsRes = await supabase
-          .from("jobs")
-          .select("id, user_id, workflow_execution_id, output_data")
-          .in("workflow_execution_id", [...ownerOf.keys()])
-        if (jobsRes.error) throw new Error(`collectAppR2Keys failed at jobs: ${jobsRes.error.message}`)
-        for (const j of jobsRes.data ?? []) {
+        for (const j of await jobsOfExecutions([...ownerOf.keys()], null)) {
           const owner = ownerOf.get(j.workflow_execution_id as string)
           if (owner === undefined || j.user_id !== owner || typeof j.id !== "string") continue
           const jobId = j.id
@@ -149,10 +202,28 @@ export async function collectAppR2Keys(appId: string): Promise<string[]> {
       }
     }
 
-    if (rows.length < 500) break
-    const lastId = rows[rows.length - 1]!.id
+    if (page_.length < 500) break
+    const lastId = page_[page_.length - 1]!.id
     if (typeof lastId !== "string") break
     cursor = lastId
+  }
+
+  // The executions no run pointer names, each only when it is its owner's.
+  const byOwner = new Map<string, string[]>()
+  for (const { id, owner } of scope.extraExecutions ?? []) byOwner.set(owner, [...(byOwner.get(owner) ?? []), id])
+  for (const [owner, ids] of byOwner) {
+    for (let i = 0; i < ids.length; i += EXECUTION_CHUNK) {
+      const chunk = ids.slice(i, i + EXECUTION_CHUNK)
+      const { data, error } = await supabase.from("workflow_executions").select("id, node_states").eq("user_id", owner).in("id", chunk)
+      if (error) throw new Error(`collectAppR2Keys failed at executions: ${error.message}`)
+      for (const e of (data ?? []) as Array<{ node_states: unknown }>) harvest(e.node_states)
+    }
+    for (const j of await jobsOfExecutions(ids, owner)) {
+      if (typeof j.id !== "string" || j.user_id !== owner) continue
+      const jobId = j.id
+      appJobIds.add(jobId)
+      harvest(j.output_data, (key) => isOwnedObjectKey(jobId, key))
+    }
   }
 
   return appOwnedKeys(Array.from(seen), appJobIds)

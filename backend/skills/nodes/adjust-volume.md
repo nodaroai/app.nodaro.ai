@@ -1,7 +1,7 @@
 ---
 node_type: adjust-volume
-generated_at: 2026-09-27T12:51:24.254Z
-generated_from: c607aa02c
+generated_at: 2026-10-06T17:44:08.127Z
+generated_from: cf92127ce
 ---
 
 # Adjust Volume
@@ -11,7 +11,7 @@ generated_from: c607aa02c
 **Category:** processing
 **Credit cost:** `10` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
 **Inputs (target handles):** `in`
-**Outputs (source handles):** `audio`
+**Outputs (source handles):** `audio-out`, `video-out`
 
 **Required data fields:**
 - `label: string`

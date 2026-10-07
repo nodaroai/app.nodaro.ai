@@ -1,7 +1,7 @@
 ---
 node_type: audio-separation
-generated_at: 2026-09-27T12:51:23.701Z
-generated_from: c607aa02c
+generated_at: 2026-10-06T17:44:06.890Z
+generated_from: cf92127ce
 ---
 
 # Audio Separation
@@ -11,7 +11,7 @@ generated_from: c607aa02c
 **Category:** ai
 **Credit cost:** `30-80` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
 **Inputs (target handles):** `audio`
-**Outputs (source handles):** `audio`
+**Outputs (source handles):** `vocals`, `instrumental`, `drums`, `bass`, `guitar`, `piano`, `other`
 
 **Required data fields:**
 - `label: string`

@@ -27,7 +27,8 @@ vi.mock("../supabase.js", () => {
       limit: (n: number) => ((limit = n), builder),
       single: () => ((single = true), builder),
       then: (resolve: (v: unknown) => unknown, reject?: (e: unknown) => unknown) => {
-        const rows = (tables.current[table] ?? []).filter((r) => filters.every((f) => f(r))).slice(0, limit)
+        // PostgREST's row cap: at most 1000 rows a read, without an error.
+        const rows = (tables.current[table] ?? []).filter((r) => filters.every((f) => f(r))).slice(0, Math.min(limit, 1000))
         return Promise.resolve(single ? { data: rows[0] ?? null, error: null } : { data: rows, error: null }).then(resolve, reject)
       },
     }
@@ -104,6 +105,65 @@ describe("collectAppR2Keys", () => {
   it("never harvests an execution (or its jobs) that is not the run's runner's own", async () => {
     const keys = await collectAppR2Keys("app")
     expect(keys.filter((k) => k.startsWith("bob"))).toEqual([])
+  })
+})
+
+// The expunge skips a run with anything still in flight (decided 2026-10-06):
+// its files stay, and so does the app's own media while the app row is kept.
+describe("collectAppR2Keys — skipped runs", () => {
+  it("harvests nothing of a skipped run, nor the app's own media", async () => {
+    const keys = await collectAppR2Keys("app", { skipRunIds: new Set(["r1"]) })
+    expect(keys.filter((k) => k.startsWith("alice") || k === "icon")).toEqual([])
+  })
+
+  it("still harvests the finished runs", async () => {
+    tables.current.app_runs!.push({
+      id: "r4", app_id: "app", runner_id: "carol", input_values: { a: url("carol-input") }, node_states: null, execution_id: "e-carol", final_execution_id: null,
+    })
+    tables.current.workflow_executions!.push({ id: "e-carol", user_id: "carol", node_states: { c: { output: { url: url("carol-run") } } } })
+    const keys = await collectAppR2Keys("app", { skipRunIds: new Set(["r1"]) })
+    expect(keys).toEqual(expect.arrayContaining(["carol-input", "carol-run"]))
+  })
+})
+
+// Executions no run pointer names — an earlier execution of a re-run run, a
+// component's inner run — come from the expunge's own walk, with their owner.
+describe("collectAppR2Keys — executions beyond the runs' pointers", () => {
+  beforeEach(() => {
+    tables.current.workflow_executions!.push(
+      { id: "e-alice-first", user_id: "alice", node_states: { a: { output: { url: url("alice-first-run") } } } },
+      { id: "e-bob-other", user_id: "bob", node_states: { b: { output: { url: url("bob-other") } } } },
+    )
+    tables.current.jobs!.push(
+      { id: "j1", user_id: "alice", workflow_execution_id: "e-alice-first", output_data: { url: url("j1") } },
+      // Someone else's job naming Alice's execution (its key is its own family,
+      // so only the owner check keeps it out).
+      { id: "j2", user_id: "bob", workflow_execution_id: "e-alice-first", output_data: { url: url("j2") } },
+    )
+  })
+
+  it("harvests their node states and their owner's jobs", async () => {
+    const keys = await collectAppR2Keys("app", { extraExecutions: [{ id: "e-alice-first", owner: "alice" }] })
+    expect(keys).toEqual(expect.arrayContaining(["alice-first-run", "j1"]))
+    expect(keys).not.toContain("j2")
+  })
+
+  it("leaves an execution whose owner is not the one named", async () => {
+    const keys = await collectAppR2Keys("app", { extraExecutions: [{ id: "e-bob-other", owner: "alice" }] })
+    expect(keys).not.toContain("bob-other")
+  })
+})
+
+describe("collectAppR2Keys — paging", () => {
+  // An execution with more jobs than one read returns: the jobs past the
+  // PostgREST row cap carry files too.
+  it("reads every page of a run's jobs", async () => {
+    const id = (i: number) => `job-${String(i).padStart(5, "0")}`
+    for (let i = 0; i < 1200; i++) {
+      tables.current.jobs!.push({ id: id(i), user_id: "alice", workflow_execution_id: "e-alice", output_data: { url: url(id(i)) } })
+    }
+    const keys = await collectAppR2Keys("app")
+    expect(keys).toContain(id(1199))
   })
 })
 

@@ -25,7 +25,7 @@ The Combine Audio node joins connected audio tracks sequentially — they play o
 
 **Inputs:** 1+ audio tracks (connected via the input handle).
 
-**Outputs:** A single combined audio file.
+**Outputs:** `audio-out` — a single combined audio file.
 
 ## Pricing
 

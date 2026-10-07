@@ -26,22 +26,10 @@ import { HANDLE_OUTPUT_TYPES } from "../handle-output-types"
  * (the rendered pips there, the declared ids below), and fixing a node fails
  * this test until its entry is removed from both — so the list only shrinks.
  */
-const DECLARED_WHILE_DRIFTING: Readonly<Record<string, readonly string[]>> = {
-  "add-captions": ["video"],
-  "adjust-volume": ["audio"],
-  "audio-fx": ["audio"],
-  "combine-audio": ["audio"],
-  "loop-video": ["video"],
-  "merge-video-audio": ["video"],
-  "mix-audio": ["audio"],
-  "resize-video": ["video"],
-  "trim-video": ["video"],
-  "save-to-storage": ["asset"],
-  "sub-workflow-output": [],
-  "webhook-output": [],
-  "audio-separation": ["audio"],
-  "voice-changer": ["audio"],
-}
+// Burned down to empty (#1877): every definition now declares the pips its
+// component renders. A drift found later is recorded here AND in the shared
+// table, or this test fails.
+const DECLARED_WHILE_DRIFTING: Readonly<Record<string, readonly string[]>> = {}
 
 /**
  * Pips created at run time that the color registry cannot list: a `media`

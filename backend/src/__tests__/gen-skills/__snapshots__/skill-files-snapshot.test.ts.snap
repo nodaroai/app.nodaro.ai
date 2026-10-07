@@ -1113,7 +1113,7 @@ exports[`per-node skill file snapshots > trim-video.md auto-gen blocks match sna
 **Category:** processing
 **Credit cost:** \`10\` at list price — the price a run is charged is \`GET /v1/credits/model-cost?model=<model id>\` (MCP: \`list_models\`); \`GET /v1/nodes\` gives this node's charged figure.
 **Inputs (target handles):** \`in\`
-**Outputs (source handles):** \`video\`
+**Outputs (source handles):** \`video-out\`
 
 **Required data fields:**
 - \`label: string\`

@@ -384,44 +384,50 @@ export async function writeCollectionRecord(
   const prepared = prepareRecord(opts.input)
   if (!prepared) return { kind: "empty" }
 
-  const inserted = await supabase
-    .from("collection_records")
-    .insert({
-      collection_id: collectionId,
-      user_id: userId,
-      dedupe_key: prepared.dedupeKey,
-      idempotency_key: opts.idempotencyKey,
-      title: prepared.title,
-      text: prepared.text,
-      url: prepared.url,
-      media: prepared.media,
-      fields: prepared.fields,
-      source: opts.source,
-    })
-    .select(RECORD_COLUMNS)
-    .single()
-  if (!inserted.error) {
-    const caps = await limitsFor(req, userId)
-    const evicted = await evictPastCap(req, collectionId, userId, caps.records)
-    return { kind: "inserted", record: toRecord(inserted.data as unknown as RecordRow), evicted, collection }
-  }
-  if (isMissingTableError(inserted.error)) return { kind: "missing_table" }
-  if (inserted.error.code !== "23505") return { kind: "error", error: inserted.error }
-
-  // The same story, or the same write, is already there: answer with it.
-  const rule = violatedRule(inserted.error.message)
-  const lookups: Array<{ kind: "replayed" | "duplicate"; column: string; value: string }> = []
-  if (opts.idempotencyKey && rule !== "dedupe") lookups.push({ kind: "replayed", column: "idempotency_key", value: opts.idempotencyKey })
-  if (prepared.dedupeKey && rule !== "idempotency") lookups.push({ kind: "duplicate", column: "dedupe_key", value: prepared.dedupeKey })
-  for (const lookup of lookups) {
-    const existing = await supabase
+  // Two tries at most. A unique violation whose colliding row is gone by the
+  // lookup (an eviction past the cap, or a delete, in between) has nothing to
+  // answer with, and the slot it held is free again: insert once more rather
+  // than fail the write with a conflict (#1890). A second miss is a conflict.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const inserted = await supabase
       .from("collection_records")
+      .insert({
+        collection_id: collectionId,
+        user_id: userId,
+        dedupe_key: prepared.dedupeKey,
+        idempotency_key: opts.idempotencyKey,
+        title: prepared.title,
+        text: prepared.text,
+        url: prepared.url,
+        media: prepared.media,
+        fields: prepared.fields,
+        source: opts.source,
+      })
       .select(RECORD_COLUMNS)
-      .eq("collection_id", collectionId)
-      .eq("user_id", userId)
-      .eq(lookup.column, lookup.value)
-      .maybeSingle()
-    if (existing.data) return { kind: lookup.kind, record: toRecord(existing.data as unknown as RecordRow), collection }
+      .single()
+    if (!inserted.error) {
+      const caps = await limitsFor(req, userId)
+      const evicted = await evictPastCap(req, collectionId, userId, caps.records)
+      return { kind: "inserted", record: toRecord(inserted.data as unknown as RecordRow), evicted, collection }
+    }
+    if (isMissingTableError(inserted.error)) return { kind: "missing_table" }
+    if (inserted.error.code !== "23505") return { kind: "error", error: inserted.error }
+
+    // The same story, or the same write, is already there: answer with it.
+    const rule = violatedRule(inserted.error.message)
+    const lookups: Array<{ kind: "replayed" | "duplicate"; column: string; value: string }> = []
+    if (opts.idempotencyKey && rule !== "dedupe") lookups.push({ kind: "replayed", column: "idempotency_key", value: opts.idempotencyKey })
+    if (prepared.dedupeKey && rule !== "idempotency") lookups.push({ kind: "duplicate", column: "dedupe_key", value: prepared.dedupeKey })
+    for (const lookup of lookups) {
+      const existing = await supabase
+        .from("collection_records")
+        .select(RECORD_COLUMNS)
+        .eq("collection_id", collectionId)
+        .eq("user_id", userId)
+        .eq(lookup.column, lookup.value)
+        .maybeSingle()
+      if (existing.data) return { kind: lookup.kind, record: toRecord(existing.data as unknown as RecordRow), collection }
+    }
   }
   return { kind: "conflict" }
 }

@@ -13,6 +13,11 @@ The Save to Collection node is where a workflow's output lives after the run: ar
 - Pick the **Collection** (or make one from the node's settings).
 - Wire what to save into **Item**: a JSON object (from Generate Text, Extract Field, a feed, a scrape) fills the record by itself — the title from `title | headline | name | subject`, the text from `text | body | caption | description | content | summary | dek`, the link from `url | postUrl | link | href | permalink`, pictures and videos from `media[]` / `imageUrl` / `thumbnailUrl` / `videoUrl` / `audioUrl`, and every other text, number or true/false value into `fields`. Plain text becomes the record's text; a plain link (a row of a list of addresses) becomes the record's link.
 - **Title**, **Text**, **Link** and **Duplicate key** set in the node (typed, or mapped from another node) **win** over what the item carries.
+- A `{Node}` reference typed into one of those four fields is replaced with that node's output, as in a caption: `Breaking: {Feed}`. The node must be upstream of Save to Collection.
+  - A name that matches no node is saved as typed, and so is a node that produced nothing, unless you give a fallback: `{Feed || untitled}` (or `{Feed || }` for nothing).
+  - When the wired item is empty (a feed with nothing new) and the fields come out empty too, the node is skipped, not failed.
+  - A title, text or duplicate key whose references fill in more than the field allows is cut to fit. A link that comes out longer than 2,000 characters is not used, and the item's own link counts instead.
+  - A value mapped from another node is saved as it arrives, braces included.
 - A picture wired into **Image** and a video wired into **Video** are saved as **links** beside the record, together with the item's own media (`media`).
 - **Duplicates:** the record's duplicate key is the **Duplicate key** field, else its link, else the item's `slug`, `postId`, `externalId` or a named `id` (a numeric id is not a key — each run numbers its items from 1). A record whose key is already in the collection is not saved again — the node reports `duplicate`, nothing fails, and the run goes on.
 - **Re-runs:** when the same run re-picks the node (a retry after a crash, a resumed run) the write is recognised and answered with the existing record (`replayed`) — per fan-out iteration, inside sub-workflows too. A new run, an editor Run or "Run from here" is a new write; the duplicate key is what keeps those from saving the same story twice.
@@ -47,6 +52,10 @@ The Save to Collection node is where a workflow's output lives after the run: ar
 ## Credits
 
 Free — saving a record costs 0 credits.
+
+A record is text, not media, so it does not count against your media storage space. You can keep saving records even when your storage is full.
+
+Workflow runs, from the editor or on the server, are not rate-limited here, so a long list can save every item. A direct API call with an API token or an app token is limited to 120 records a minute per token, the same as the Collections API.
 
 ## Example: an article pipeline that remembers
 

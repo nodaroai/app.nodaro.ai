@@ -1,7 +1,7 @@
 ---
 node_type: merge-video-audio
-generated_at: 2026-09-27T12:51:24.001Z
-generated_from: c607aa02c
+generated_at: 2026-10-06T17:44:07.672Z
+generated_from: cf92127ce
 ---
 
 # merge-video-audio
@@ -11,7 +11,7 @@ generated_from: c607aa02c
 **Category:** processing
 **Credit cost:** `20` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
 **Inputs (target handles):** `in`
-**Outputs (source handles):** `video`
+**Outputs (source handles):** `video-out`
 
 **Required data fields:**
 - `label: string`

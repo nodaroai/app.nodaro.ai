@@ -15,6 +15,7 @@ vi.mock("../../lib/orchestration-queue.js", () => ({ orchestrationQueue: { add: 
 vi.mock("../../lib/supabase.js", () => ({ supabase: { from: mocks.from } }))
 
 const { executeAppRun } = await import("../app-execution.js")
+const { appRunStampOf } = await import("../../lib/app-run-stamp.js")
 
 function chain(result: unknown) {
   const c: Record<string, unknown> = {}
@@ -82,3 +83,22 @@ describe("executeAppRun — previewStopRule", () => {
     expect("previewStopRule" in (mocks.queueAdd.mock.calls[0]?.[1] as object)).toBe(false)
   })
 })
+
+// Every execution of an app run is stamped with the run, so the admin expunge
+// finds it after a re-run moves `app_runs.execution_id` on (decided 2026-10-06).
+describe("executeAppRun — the run stamp", () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it("stamps the execution with the run's id, picked before either row is written", async () => {
+    mocks.insertWithIdempotencyKey.mockResolvedValue({ row: { id: "exec-5" }, created: true })
+    const runChain = chain({ data: { id: "run-5" }, error: null })
+    mocks.from.mockReturnValue(runChain)
+    await executeAppRun({ appVersionId: "app-v", workflowId: "wf-1", userId: "u1", appId: "app-1" })
+
+    const execRow = mocks.insertWithIdempotencyKey.mock.calls[0]?.[1] as { trigger_data?: unknown }
+    const runRow = (runChain.insert as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as { id?: unknown }
+    expect(typeof runRow.id).toBe("string")
+    expect(appRunStampOf(execRow.trigger_data)).toBe(runRow.id)
+  })
+})
+

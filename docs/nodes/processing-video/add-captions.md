@@ -256,7 +256,7 @@ Add Captions has a **Caption plan** input for captions that are already timed: t
 ## Inputs & Outputs
 
 **Inputs:** Video with audio (required); an optional Transcript (JSON) on the `transcript` handle
-**Outputs:** Video with burned-in captions
+**Outputs:** `video-out` — video with burned-in captions
 ## Best Practices
 
 - Use "subtitle" style for professional content

@@ -319,6 +319,7 @@ import { registerOrgsContextHook } from "./lib/orgs-context.js"
 import { registerBillingContextHook } from "./lib/billing-context.js"
 import { registerMcpHostFilter } from "./middleware/mcp-host-filter.js"
 import { rateLimitAddressKey } from "./lib/client-address.js"
+import { internalRequestUser } from "./lib/internal-caller.js"
 import rateLimit from "@fastify/rate-limit"
 import formbody from "@fastify/formbody"
 import { installTolerantJsonParser } from "./lib/tolerant-json-parser.js"
@@ -345,6 +346,14 @@ export function rateLimitKeyGenerator(req: {
   ip?: string
   socket?: { remoteAddress?: string | undefined } | null
 }): string {
+  // An internal request (an MCP tool, the orchestrator) acts for the user it
+  // names: one bucket per user. It carries no credential, so it used to key
+  // on the loopback address: ONE bucket per instance, where one user's MCP
+  // fan-out 429'd every other user's (#1888). Checked first, as the auth hook
+  // checks the secret first. A forged secret names no user here, so it falls
+  // through to the address key and cannot mint a fresh bucket per request.
+  const internalUser = internalRequestUser(req.headers)
+  if (internalUser) return "user:" + internalUser
   const auth = req.headers["authorization"]
   if (typeof auth === "string" && auth.length > 0) {
     return "cred:" + createHash("sha256").update(auth).digest("hex")

@@ -17,7 +17,7 @@ No additional configuration required. Connect video and audio inputs.
 - Audio (required) — one or more audio tracks
 
 **Outputs:**
-- Video with merged audio
+- `video-out` — video with merged audio
 
 > Both inputs must carry real media. If a connection or a field mapping feeds this node something that is not a media URL (a text output wired into the video input, for example), the run is refused **before any credits are reserved**, and the message names the node and quotes the value it got — it no longer fails mid-run as "Invalid URL". The same check covers every media node in a workflow run.
 ## Best Practices

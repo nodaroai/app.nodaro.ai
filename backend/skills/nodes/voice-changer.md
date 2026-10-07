@@ -1,7 +1,7 @@
 ---
 node_type: voice-changer
-generated_at: 2026-09-27T12:51:23.732Z
-generated_from: c607aa02c
+generated_at: 2026-10-06T17:44:06.973Z
+generated_from: cf92127ce
 ---
 
 # Voice Changer
@@ -11,7 +11,7 @@ generated_from: c607aa02c
 **Category:** ai
 **Credit cost:** `40` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
 **Inputs (target handles):** `audio`, `video`
-**Outputs (source handles):** `audio`
+**Outputs (source handles):** `audio`, `video`
 
 **Required data fields:**
 - `label: string`

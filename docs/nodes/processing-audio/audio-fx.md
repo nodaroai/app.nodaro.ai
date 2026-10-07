@@ -38,7 +38,7 @@ It pairs naturally with **Text to Speech → Audio FX (Room) → Merge Video & A
 ## Inputs & Outputs
 
 - **Input**: `in` — any audio (a generated voice, an uploaded clip, or a separated stem).
-- **Output**: `audio` — the processed audio (URL), connectable to any audio input (Merge Video & Audio, Voice Changer, Mix Audio, etc.).
+- **Output**: `audio-out` — the processed audio (URL), connectable to any audio input (Merge Video & Audio, Voice Changer, Mix Audio, etc.).
 
 ## Credits
 

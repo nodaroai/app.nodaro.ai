@@ -1713,10 +1713,15 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   // The plugin's own seeds (staticCreditCosts(), registered over these on
   // load) — repeated here at the same values so migration 427's rows are not
   // ghosts and ee/billing/voice-changer-pro-credits.ts prices without the
-  // plugin loaded (tests, previews). Keep the three pairs equal.
+  // plugin loaded (tests, previews). Keep the four pairs equal.
   "voice-changer-pro-analyze": 10,   // flat: one separation + one diarization
   "voice-changer-pro-export": 1,     // flat: a stream-copy remux
   "voice-changer-pro-respeak": 30,   // per started 1K re-spoken chars (elevenlabs-v3 parity)
+  // The FLOOR of the metered translate step ("Re-speak in another language"):
+  // the step reserves a per-tier ceiling from its source characters and
+  // commits the translation model's measured usage, never below this row.
+  // The per-tier ceilings live in ee/billing/voice-changer-pro-credits.ts.
+  "voice-changer-pro-translate": 2,
   "generate-video-pro": 100,       // multi-segment stitch fee-base (flat, on top of per-second segment cost — see ee/billing/generate-video-pro-credits.ts)
   "edit-video-pro": 100,           // replace-span bridge fee-base (flat, on top of per-second ref-rate segment cost — see ee/billing/edit-video-pro-credits.ts)
   "dubbing": 80,

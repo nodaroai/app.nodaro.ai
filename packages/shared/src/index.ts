@@ -1020,6 +1020,7 @@ export {
   collectionReadSince,
   collectionCapsForTier,
   clampChars,
+  fitCollectionField,
   normalizeDedupeKey,
   isCollectionUrl,
   isCollectionMedia,

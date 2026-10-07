@@ -26,15 +26,21 @@ import type { McpSession } from "./session.js"
  * off everywhere), so the header is absent and the call is byte-identical to
  * the one it replaces.
  *
+ * The user travels the same way: every injected request names the session's
+ * user in `x-internal-user-id`. The auth hook reads it only when the body
+ * carries no `userId` (body wins), and the rate limiter keys an internal
+ * request on it, so one MCP user's burst cannot 429 every other MCP user on
+ * the instance (#1888).
+ *
  * `headers` is spread FIRST on purpose: a caller adds what its route needs
- * (`x-internal-user-id`, say) and cannot override the two this function owns.
+ * and cannot override the three this function owns.
  */
 export interface McpInjectOptions {
   method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE"
   url: string
   payload?: string | object | Buffer
   query?: Record<string, string>
-  /** Extra headers this route needs. Cannot override the secret or workspace. */
+  /** Extra headers this route needs. Cannot override the secret, the user or the workspace. */
   headers?: Record<string, string>
 }
 
@@ -46,6 +52,7 @@ export function mcpInject(fastify: FastifyInstance, session: McpSession, opts: M
     headers: {
       ...opts.headers,
       "x-internal-orchestrator-secret": config.INTERNAL_ORCHESTRATOR_SECRET,
+      "x-internal-user-id": session.userId,
       ...(session.workspaceId ? { [WORKSPACE_HEADER_LOWER]: session.workspaceId } : {}),
     },
     ...(opts.payload !== undefined ? { payload: opts.payload } : {}),
