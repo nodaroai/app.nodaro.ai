@@ -19,17 +19,16 @@
  * buttons stack.
  */
 import { useDeferredValue, useMemo, useState } from "react"
-import { ChevronDown, Film, Loader2, Redo2, RefreshCw, Undo2 } from "lucide-react"
+import { ChevronDown, Loader2, Redo2, Undo2 } from "lucide-react"
 import type { ReviewEdits } from "@/hooks/use-review-edits"
 import type { ReviewModel } from "@/hooks/use-review-model"
 import type { ReviewRuns } from "@/hooks/use-review-runs"
-import { creditUnits } from "@/lib/credit-units"
-import { hasCredits } from "@/lib/edition"
 import { reviewLengths } from "@/lib/edl-review/review-stats"
 import { positionOf } from "@/lib/edl-review/review-time"
 import type { ReviewGateHold } from "@/lib/edl-review/review-gate"
 import { useT, type TFunction } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
+import { ReviewRunButtons } from "./review-run-buttons"
 
 export interface ReviewFooterProps {
   readonly model: ReviewModel
@@ -38,12 +37,7 @@ export interface ReviewFooterProps {
   readonly compact: boolean
 }
 
-const BUTTON =
-  "inline-flex items-center justify-center gap-1 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
 const ICON = "rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
-
-/** " · {credits}" on a credit edition with a price to show. */
-export const priceOf = (credits: number): string => (hasCredits() && credits > 0 ? ` · ${creditUnits(credits)}` : "")
 
 function holdText(hold: ReviewGateHold, t: TFunction): string {
   switch (hold.kind) {
@@ -72,7 +66,6 @@ export function ReviewFooter({ model, edits, runs, compact }: ReviewFooterProps)
   const lengthText = !lengths ? "" : compact
     ? t("edlReview.lengthsShort", { cut: cutText, removed: positionOf(lengths.removedMs) })
     : t("edlReview.lengths", { cut: cutText, source: positionOf(lengths.sourceMs), removed: positionOf(lengths.removedMs) })
-  const held = gate.hold !== null
   const hold = gate.hold ? holdText(gate.hold, t) : ""
   const issues = gate.hold?.kind === "issues" ? gate.hold.issues : null
 
@@ -101,30 +94,7 @@ export function ReviewFooter({ model, edits, runs, compact }: ReviewFooterProps)
               <span className="text-xs text-muted-foreground">{hold}</span>
             )
           )}
-          {gate.mode === "ready" && runs.canUpdatePreview && (
-            <button
-              type="button"
-              className={cn(BUTTON, "border-border bg-background hover:bg-accent")}
-              disabled={held || runs.checkPending}
-              aria-busy={runs.checking === "proxy" || undefined}
-              onClick={runs.updatePreview}
-            >
-              {runs.checking === "proxy" ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> : <RefreshCw className="h-3 w-3" aria-hidden />}
-              {t("renderFinal.updatePreview")}{priceOf(runs.previewCredits)}
-            </button>
-          )}
-          {gate.mode === "ready" && (
-            <button
-              type="button"
-              className={cn(BUTTON, "border-[#ff0073]/60 bg-[#ff0073] text-white hover:bg-[#ff0073]/90")}
-              disabled={held || runs.checkPending}
-              aria-busy={runs.checking === "final" || undefined}
-              onClick={runs.renderFinal}
-            >
-              {runs.checking === "final" ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> : <Film className="h-3 w-3" aria-hidden />}
-              {t("renderFinal.action")}{priceOf(runs.finalCredits)}
-            </button>
-          )}
+          <ReviewRunButtons runs={runs} />
         </div>
       </div>
       {gate.mode === "ready" && gate.warning === "newer-unchecked" && (

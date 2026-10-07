@@ -10,6 +10,7 @@
  */
 import { buildEffectiveEdl } from "@nodaro/render-rules"
 import { normalizeEdl, outputMsToMasterMs, remapMsThroughEdl, type Edl } from "@nodaro/shared"
+import type { Interval } from "./intervals"
 import type { ReviewRenderContext } from "./restore"
 import type { TimedUnit } from "./kept-set"
 
@@ -48,4 +49,27 @@ export function previewSeekOfWord(clockMap: Edl | null, word: TimedUnit, offsetM
     if (seg.outMs > s && seg.inMs < e && (first === null || seg.inMs < first)) first = seg.inMs
   }
   return first === null ? null : remapMsThroughEdl(clockMap, first)
+}
+
+/** What Play on a selection plays of the take: the kept time inside `range`
+ *  (master clock), from its first kept instant to its last, on the take's own
+ *  clock. The cut between is not on the take, so it is not played. Null when
+ *  none of the range is kept. */
+export function previewSpanOfRange(clockMap: Edl | null, range: Interval): Interval | null {
+  if (!clockMap) return null
+  let from: number | null = null
+  let to: number | null = null
+  for (const seg of clockMap.segments) {
+    const inMs = Math.max(seg.inMs, range.inMs)
+    const outMs = Math.min(seg.outMs, range.outMs)
+    if (outMs <= inMs) continue
+    // The last instant kept, so the end is measured on the segment that holds it.
+    const last = Math.max(inMs, outMs - 1)
+    const start = remapMsThroughEdl(clockMap, inMs)
+    const end = remapMsThroughEdl(clockMap, last)
+    if (start === null || end === null) continue
+    from = from === null ? start : Math.min(from, start)
+    to = to === null ? end + (outMs - last) : Math.max(to, end + (outMs - last))
+  }
+  return from === null || to === null ? null : { inMs: from, outMs: to }
 }

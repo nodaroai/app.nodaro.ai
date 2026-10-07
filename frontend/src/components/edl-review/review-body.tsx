@@ -12,18 +12,20 @@
  *    (`active`): from another tab, Escape closes the dialog and Del cuts
  *    nothing. ⌘F there switches to Transcript and opens find (decided
  *    2026-10-07), unless there is no transcript to find in (Cuts-only).
- * The player and the minimap (A3-4) take their places above the reasons and
- * above the tabs.
+ * The player (A3-4) sits above the reasons from `sm` up, and above the banners
+ * and the tabs below it; the minimap sits above the transcript (in its pane).
  */
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type KeyboardEvent } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { ReviewChecks } from "@/hooks/use-review-checks"
 import type { ReviewEdits } from "@/hooks/use-review-edits"
 import type { ReviewModel } from "@/hooks/use-review-model"
+import type { ReviewPlayback } from "@/hooks/use-review-playback"
 import type { ReviewRuns } from "@/hooks/use-review-runs"
 import { useT } from "@/lib/i18n"
 import { ReasonsPanel, ReviewIssues } from "./reasons-panel"
 import { ReviewBanners } from "./review-banners"
+import { ReviewPlayer } from "./review-player"
 import { TranscriptPane, type TranscriptPaneHandle } from "./transcript-pane"
 
 export interface ReviewBodyProps {
@@ -31,6 +33,7 @@ export interface ReviewBodyProps {
   readonly edits: ReviewEdits
   readonly checks: ReviewChecks
   readonly runs: ReviewRuns
+  readonly playback: ReviewPlayback
   /** From `sm` up: the panes side by side; below it, tabs. */
   readonly wide: boolean
 }
@@ -48,7 +51,7 @@ const kept = (open: boolean) => ({ forceMount: true as const, hidden: false, ine
 // position and the virtualizer's row heights), invisible, over the open tab.
 const TAB_CONTENT = "mt-0 flex min-h-0 flex-1 flex-col data-[state=inactive]:invisible data-[state=inactive]:absolute data-[state=inactive]:inset-0"
 
-export const ReviewBody = forwardRef<ReviewBodyHandle, ReviewBodyProps>(function ReviewBody({ model, edits, checks, runs, wide }, ref) {
+export const ReviewBody = forwardRef<ReviewBodyHandle, ReviewBodyProps>(function ReviewBody({ model, edits, checks, runs, playback, wide }, ref) {
   const t = useT()
   const [tab, setTab] = useState<ReviewTab>("transcript")
   const pane = useRef<TranscriptPaneHandle | null>(null)
@@ -73,16 +76,18 @@ export const ReviewBody = forwardRef<ReviewBodyHandle, ReviewBodyProps>(function
     if (findOnShow > 0) pane.current?.openFindFromTab()
   }, [findOnShow])
   const banners = <ReviewBanners model={model} edits={edits} checks={checks} runs={runs} />
+  const player = <ReviewPlayer model={model} playback={playback} runs={runs} />
 
   if (wide) {
     return (
       <div className="flex min-h-0 flex-1">
-        <aside className="w-72 shrink-0 overflow-auto border-e border-border p-3">
+        <aside className="flex w-80 shrink-0 flex-col gap-4 overflow-auto border-e border-border p-3">
+          {player}
           <ReasonsPanel model={model} edits={edits} withIssues />
         </aside>
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           {banners}
-          <TranscriptPane ref={pane} model={model} edits={edits} />
+          <TranscriptPane ref={pane} model={model} edits={edits} playback={playback} />
         </div>
       </div>
     )
@@ -90,6 +95,7 @@ export const ReviewBody = forwardRef<ReviewBodyHandle, ReviewBodyProps>(function
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      <div className="shrink-0 px-3 pt-2">{player}</div>
       {banners}
       <Tabs value={tab} onValueChange={(v) => setTab(v as ReviewTab)} className="flex min-h-0 flex-1 flex-col gap-0">
         <TabsList aria-label={t("edlReview.sections")} className="mx-3 my-2 shrink-0">
@@ -99,7 +105,7 @@ export const ReviewBody = forwardRef<ReviewBodyHandle, ReviewBodyProps>(function
         </TabsList>
         <div className="relative flex min-h-0 flex-1 flex-col">
           <TabsContent value="transcript" {...kept(tab === "transcript")} className={TAB_CONTENT}>
-            <TranscriptPane ref={pane} model={model} edits={edits} active={tab === "transcript"} />
+            <TranscriptPane ref={pane} model={model} edits={edits} active={tab === "transcript"} playback={playback} />
           </TabsContent>
           <TabsContent value="cuts" {...kept(tab === "cuts")} className={`${TAB_CONTENT} overflow-auto p-3`}>
             <ReasonsPanel model={model} edits={edits} withIssues={false} />

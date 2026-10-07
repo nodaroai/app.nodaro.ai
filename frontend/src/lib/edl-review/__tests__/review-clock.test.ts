@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { normalizeEdl, remapMsThroughEdl } from "@nodaro/shared"
-import { clockMapOf, masterOfPreviewTime, previewSeekOfWord, previewTimeOfMaster } from "../review-clock"
+import { clockMapOf, masterOfPreviewTime, previewSeekOfWord, previewSpanOfRange, previewTimeOfMaster } from "../review-clock"
 
 const VIDEO = { output: "video", crossfadeMs: 0, sources: [] } as const
 const edl = normalizeEdl({
@@ -37,5 +37,17 @@ describe("the preview's clock (A3-1's clocks, as the player reads them)", () => 
     expect(previewSeekOfWord(map, { startMs: 1200, endMs: 1400 })).toBeNull()
     // The transcript's own clock: master = source + offset.
     expect(previewSeekOfWord(map, { startMs: 1700, endMs: 1900 }, 500)).toBe(1200)
+  })
+
+  it("plays a selection from its first kept instant to its last: the cut between is not on the take", () => {
+    const map = clockMapOf(edl, VIDEO)
+    // 200–500 ms is kept (0–1000), 1000–2000 is cut, 2000–2400 is kept (the take's 1000–1400).
+    expect(previewSpanOfRange(map, { inMs: 200, outMs: 500 })).toEqual({ inMs: 200, outMs: 500 })
+    expect(previewSpanOfRange(map, { inMs: 800, outMs: 2400 })).toEqual({ inMs: 800, outMs: 1400 })
+    // Starting in the cut: from where it is kept again.
+    expect(previewSpanOfRange(map, { inMs: 1200, outMs: 2300 })).toEqual({ inMs: 1000, outMs: 1300 })
+    // The transcript's own clock is the caller's: this is master time.
+    expect(previewSpanOfRange(map, { inMs: 1200, outMs: 1800 })).toBeNull()
+    expect(previewSpanOfRange(null, { inMs: 0, outMs: 100 })).toBeNull()
   })
 })

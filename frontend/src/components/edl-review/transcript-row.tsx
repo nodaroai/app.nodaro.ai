@@ -6,7 +6,8 @@
  *
  *  - A PARAGRAPH: the source-time gutter (m:ss), the speaker, and its words as
  *    `<span data-w>` — struck in their reason's colour when cut, shaded when
- *    partly cut (▒). A reason chip sits at a dropped span's first word, and a
+ *    partly cut (▒), outlined while it plays (follow playback). A reason
+ *    chip sits at a dropped span's first word, and a
  *    ⟨⏸ 2.4 s⟩ chip marks a dropped pause that holds no word. Both open the
  *    span popover.
  *  - A COLLAPSED run (R11): one chip "[Tangent · 2:14 · 312 words ▸]" that
@@ -37,6 +38,8 @@ export interface TranscriptRowProps {
   /** The current find match's words, or -1 when none. */
   readonly matchFirst: number
   readonly matchLast: number
+  /** The word playing (follow playback) when it is in this row, or -1. */
+  readonly activeWord: number
   /** The row starts an expanded run: it carries the run's collapse control. */
   readonly runStart: boolean
   readonly canEdit: boolean
@@ -90,7 +93,7 @@ function ReasonChip({ drop, reason, onOpenDrop }: { readonly drop: number; reado
 }
 
 function ParagraphBody(props: TranscriptRowProps & { readonly row: ParagraphRow }) {
-  const { row, words, marks, dropped, selFirst, selLast, matchFirst, matchLast, runStart, onOpenDrop, onCollapse } = props
+  const { row, words, marks, dropped, selFirst, selLast, matchFirst, matchLast, activeWord, runStart, onOpenDrop, onCollapse } = props
   const t = useT()
   const gapsBefore = new Map<number, WordGap[]>()
   for (const gap of row.gaps) {
@@ -113,6 +116,8 @@ function ParagraphBody(props: TranscriptRowProps & { readonly row: ParagraphRow 
         key={i}
         data-w={i}
         data-state={mark.state}
+        data-active={i === activeWord || undefined}
+        aria-current={i === activeWord || undefined}
         className={cn(
           "rounded-sm",
           struck && "cursor-pointer text-muted-foreground",
@@ -120,6 +125,7 @@ function ParagraphBody(props: TranscriptRowProps & { readonly row: ParagraphRow 
           mark.state === "partial" && "bg-muted",
           i >= selFirst && i <= selLast && selFirst >= 0 && "bg-primary/25 text-foreground",
           i >= matchFirst && i <= matchLast && matchFirst >= 0 && "bg-amber-300/60 text-foreground dark:bg-amber-400/40",
+          i === activeWord && "outline outline-2 outline-offset-1 outline-primary/60",
         )}
       >
         {words[i]?.text}

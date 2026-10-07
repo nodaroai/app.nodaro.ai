@@ -25,7 +25,7 @@ import type { ReviewModel } from "@/hooks/use-review-model"
 import type { ReviewRuns } from "@/hooks/use-review-runs"
 import { useT } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
-import { priceOf } from "./review-footer"
+import { priceOf } from "./review-run-buttons"
 
 export interface ReviewBannersProps {
   readonly model: ReviewModel

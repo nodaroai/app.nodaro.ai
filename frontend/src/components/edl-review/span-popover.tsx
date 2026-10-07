@@ -8,12 +8,14 @@
  *    "Can't restore: {label}" with the rule's own messages (left to right);
  *    the lock is judged once, when the popover opens (`canRestore`);
  *  - Restore all {n} of the reason, which leaves the locked spans cut and says
- *    how many.
+ *    how many;
+ *  - ▶ Hear it (original): the span ± 1.5 s from the original file (TA19 a,
+ *    R6 a), always, locked or not: playback is never locked (R9 a).
  * While edits are locked (R9 a) or the plan cannot be edited here, it only
- * names the span. A Radix layer: Escape closes it before anything else.
+ * names the span and plays it. A Radix layer: Escape closes it before anything else.
  */
 import { useEffect, useMemo, useRef } from "react"
-import { Lock, RotateCcw } from "lucide-react"
+import { Lock, Play, RotateCcw } from "lucide-react"
 import { toast } from "sonner"
 import type { Edl, EdlDropped } from "@nodaro/shared"
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover"
@@ -53,6 +55,8 @@ export interface SpanPopoverProps {
   readonly canEdit: boolean
   readonly onRestore: (span: Interval) => RestoreLock | undefined
   readonly onRestoreReason: (reason: string) => readonly LockedSpan[]
+  /** Play the span from the original (Hear it); absent with no player. */
+  readonly onHear?: (span: Interval) => void
 }
 
 /** Tell the reviewer how many spans of a reason stayed cut, and why (the first one's lock). */
@@ -86,11 +90,13 @@ function LockNote({ lock }: { readonly lock: RestoreLock }) {
   )
 }
 
+const ACTION = "inline-flex w-fit items-center gap-1 rounded bg-muted px-2 py-1 text-xs hover:bg-muted/80"
+
 /** `span` as the shown edit still drops it, or undefined once it is gone. */
 const findSpan = (shown: Edl, span: EdlDropped): EdlDropped | undefined =>
   shown.dropped?.find((d) => d.inMs === span.inMs && d.outMs === span.outMs && d.reason === span.reason)
 
-function SpanBody({ target, onClose, shown, base, kept, render, canEdit, onRestore, onRestoreReason }: SpanPopoverProps & { readonly target: SpanTarget }) {
+function SpanBody({ target, onClose, shown, base, kept, render, canEdit, onRestore, onRestoreReason, onHear }: SpanPopoverProps & { readonly target: SpanTarget }) {
   const t = useT()
   const format = useReviewFormat()
   const span = findSpan(shown, target.span)
@@ -117,20 +123,29 @@ function SpanBody({ target, onClose, shown, base, kept, render, canEdit, onResto
           })}
         </span>
       </div>
-      {editable && (lock ? <LockNote lock={lock} /> : (
-        <button
-          type="button"
-          className="inline-flex w-fit items-center gap-1 rounded bg-muted px-2 py-1 text-xs hover:bg-muted/80"
-          onClick={() => {
-            const refused = onRestore(span)
-            if (refused) toastRestoreLock(refused)
-            onClose()
-          }}
-        >
-          <RotateCcw className="h-3 w-3" />
-          {t("edlReview.restore")}
-        </button>
-      ))}
+      <div className="flex flex-wrap items-center gap-2">
+        {onHear && (
+          <button type="button" className={ACTION} onClick={() => onHear(span)}>
+            <Play className="h-3 w-3" />
+            {t("edlReview.hearIt")}
+          </button>
+        )}
+        {editable && !lock && (
+          <button
+            type="button"
+            className={ACTION}
+            onClick={() => {
+              const refused = onRestore(span)
+              if (refused) toastRestoreLock(refused)
+              onClose()
+            }}
+          >
+            <RotateCcw className="h-3 w-3" />
+            {t("edlReview.restore")}
+          </button>
+        )}
+      </div>
+      {editable && lock && <LockNote lock={lock} />}
       {editable && (
         <button
           type="button"

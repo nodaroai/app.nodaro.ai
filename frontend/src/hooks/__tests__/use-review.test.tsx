@@ -333,6 +333,19 @@ describe("useReviewChecks: the gate and the take's freshness over the pending ed
     expect(result.current.checks.clockMap).toBeNull()
   })
 
+  it("the newest Preview beside a Final on display gets its own freshness and clock map (A3-4's second tab)", () => {
+    const final = { url: "https://cdn.test/final.mp4", quality: "final" }
+    load({ cut: { generatedResults: [final, stampedTake(PLAN)], activeResultIndex: 0 } })
+    const { result } = renderHook(() => useReview())
+    expect(result.current.model.previewTake?.url).toBe("https://cdn.test/preview.mp4")
+    // The Final carries no stamp: unknown, with no map. The Preview is fresh.
+    expect(result.current.checks.clockMap).toBeNull()
+    expect(result.current.checks.previewClockMap?.segments).toHaveLength(2)
+    act(() => result.current.edits.cutRange(SO))
+    act(() => vi.advanceTimersByTime(REVIEW_CHECK_DEBOUNCE_MS))
+    expect(result.current.checks.previewClockMap).toBeNull()
+  })
+
   it("a change to the render's own settings makes the take stale too (R19 a)", () => {
     load({ cut: { crossfadeMs: 300, generatedResults: [stampedTake(PLAN)], activeResultIndex: 0 } })
     const { result } = renderHook(() => useReview())

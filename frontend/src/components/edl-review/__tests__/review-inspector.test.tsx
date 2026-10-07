@@ -38,7 +38,8 @@ describe("the frame", () => {
     loadCanvas({ cut: { generatedResults: [{ url: "https://cdn.test/p.mp4", quality: "proxy" }] } })
     mountInspector()
     expect(screen.getByRole("dialog", { name: "Review cut · Tighten Plan → Apply Cut" })).toBeTruthy()
-    expect(within(dialog()).getByText("Preview")).toBeTruthy()
+    // The header's badge (the player's Preview | Original switch says "Preview" too).
+    expect(within(dialog()).getByTitle("A 720p preview, kept private").textContent).toBe("Preview")
     expect(within(dialog()).getByTestId("edl-validity-badge").dataset.ok).toBe("true")
   })
 

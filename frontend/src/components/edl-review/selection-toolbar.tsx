@@ -3,6 +3,9 @@
 /**
  * The selection toolbar (M4 of the inspectors design; R10 a): it floats over a
  * finished drag or shift-click selection.
+ *  - ▶ Play selection: through the take's clock when the take is fresh, else
+ *    the Original ± 1.5 s (decided 2026-10-07; the player's `playRange`). The
+ *    selection stays. Offered when the review has a player.
  *  - ✂ Cut selection · {the kept time it removes}: the whole words it touches
  *    (`cutRange`, word-snapped). Del does the same.
  *  - ↺ Restore selection · {the cut time it brings back}: shown when the
@@ -12,7 +15,7 @@
  * Not shown while edits are locked (R9 a): the selection then only copies (⌘C).
  */
 import type { CSSProperties } from "react"
-import { RotateCcw, Scissors, X } from "lucide-react"
+import { Play, RotateCcw, Scissors, X } from "lucide-react"
 import { useT } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 import { useReviewFormat } from "./use-review-format"
@@ -23,6 +26,8 @@ export interface SelectionToolbarProps {
   /** The selection's cut time, in ms; shown only when it touches a struck word. */
   readonly restoreMs: number
   readonly touchesCut: boolean
+  /** Play the selection; absent with no player. */
+  readonly onPlay?: () => void
   readonly onCut: () => void
   readonly onRestore: () => void
   readonly onClear: () => void
@@ -32,7 +37,7 @@ export interface SelectionToolbarProps {
 
 const BUTTON = "inline-flex items-center gap-1 rounded px-2 py-1 text-xs hover:bg-muted"
 
-export function SelectionToolbar({ cutMs, restoreMs, touchesCut, onCut, onRestore, onClear, className, style }: SelectionToolbarProps) {
+export function SelectionToolbar({ cutMs, restoreMs, touchesCut, onPlay, onCut, onRestore, onClear, className, style }: SelectionToolbarProps) {
   const t = useT()
   const format = useReviewFormat()
   return (
@@ -44,6 +49,12 @@ export function SelectionToolbar({ cutMs, restoreMs, touchesCut, onCut, onRestor
       style={style}
       className={cn("flex w-fit items-center gap-0.5 rounded-md border border-border bg-popover p-0.5 shadow-md", className)}
     >
+      {onPlay && (
+        <button type="button" className={BUTTON} onClick={onPlay}>
+          <Play className="h-3 w-3" />
+          {t("edlReview.playSelection")}
+        </button>
+      )}
       {cutMs > 0 && (
         <button type="button" className={BUTTON} onClick={onCut}>
           <Scissors className="h-3 w-3" />
