@@ -211,6 +211,26 @@ export function clampChars(text: string, max: number): string {
 }
 
 /**
+ * A Save to Collection field held to the record route's limit — the ONE rule
+ * both engines apply to a field whose `{Node}` references resolved to more
+ * than was typed: a title, text or duplicate key is cut to whole characters
+ * (as the store cuts an item's), and a link over the limit is not sent at all
+ * (a cut link is a wrong link; the item's own link then wins).
+ */
+export function fitCollectionField(key: "title" | "text" | "link" | "dedupeKey", value: string): string | undefined {
+  switch (key) {
+    case "title":
+      return clampChars(value, COLLECTION_RECORD_TITLE_MAX)
+    case "text":
+      return clampChars(value, COLLECTION_RECORD_TEXT_MAX)
+    case "dedupeKey":
+      return clampChars(value, COLLECTION_DEDUPE_KEY_MAX)
+    case "link":
+      return value.length <= COLLECTION_RECORD_URL_MAX ? value : undefined
+  }
+}
+
+/**
  * The key a collection deduplicates on: trimmed, inner whitespace collapsed,
  * lower-cased, at most 300 characters; null when there is nothing to key on.
  */

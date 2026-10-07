@@ -64,6 +64,15 @@ describe("computeNodeSendText", () => {
     expect(computeNodeSendText("collection-write", {}, { override: "row 3", wired: "the wire", refMap })).toBe("row 3")
   })
 
+  it("collection-write: a typed field counts with its {Node} references resolved, as the engines send it (#1890)", () => {
+    const empty = new Map<string, string>()
+    // A feed with nothing new: an empty fallback is nothing to save, so the node skips.
+    expect(computeNodeSendText("collection-write", { title: "{Feed || }" }, { wired: "", refMap: empty })).toBe("")
+    expect(computeNodeSendText("collection-write", { title: "{Feed || untitled}" }, { wired: "", refMap: empty })).toBe("untitled")
+    expect(computeNodeSendText("collection-write", { title: "Breaking: {Feed}" }, { wired: "", refMap: new Map([["feed", "Telegram turns ten"]]) }))
+      .toBe("Breaking: Telegram turns ten")
+  })
+
   it("prompt pre/post text never counts as something to send: an empty core with a prefix is nothing", () => {
     const refMap = new Map<string, string>()
     const affixed = { userInput: "", promptPrefix: "Write a news item about:", promptSuffix: "Keep it short." }

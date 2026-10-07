@@ -1,4 +1,4 @@
-import { SOCIAL_POST_NODE_TYPES } from "@nodaro/shared"
+import { resolveNodeRefs, SOCIAL_POST_NODE_TYPES } from "@nodaro/shared"
 import { computeLlmChatFields, computeNodePrompt, computeScriptTopic } from "./resolve-prompt.js"
 
 /**
@@ -111,7 +111,12 @@ export function computeNodeSendText(
       // else a title, text or link typed on the node. A picture alone is a
       // record too, but it never starves the node: only a wired TEXT input that
       // produced nothing can (the skip rule's precondition).
-      const typed = [data.title, data.text, data.link].find((v): v is string => present(v as string | undefined))
+      // A typed field counts as the engines send it, its `{Node}` references
+      // resolved: `{Feed || }` over a feed with nothing new is empty, so the
+      // node skips instead of failing with an empty record (#1890).
+      const typed = [data.title, data.text, data.link]
+        .map((v) => (typeof v === "string" ? resolveNodeRefs(v, args.refMap) : v))
+        .find((v): v is string => present(v as string | undefined))
       return [args.override, args.wired, typed].find(present) ?? ""
     }
     default:

@@ -131,6 +131,76 @@ describe("Save to Collection through the orchestrator", () => {
     expect(posted()[0]!.headers["Idempotency-Key"]).toBe(`wf-execution-1-sub-node-2-${node.id}`)
   })
 
+  // `{Node}` references typed into the node's own fields (#1890).
+  // A Text node is a source: its output is its own typed text.
+  const feedWith = (text: string): SimpleNode => ({ id: "feed-node", type: "text-prompt", data: { label: "Feed", text } })
+  const statesFor = (n: SimpleNode) => ({ [n.id]: { status: "completed" as const, output: { text: n.data.text as string } } })
+  const feed = feedWith("Telegram turns ten")
+  const feedStates = statesFor(feed)
+  const fromFeed = (target: string) => [{ id: `e-${target}`, source: feed.id, target, sourceHandle: "text", targetHandle: "in" }]
+
+  it("resolves a {Node} reference typed into title / text / link / duplicate key to that node's output", async () => {
+    const slug: SimpleNode = { id: "slug-node", type: "text-prompt", data: { label: "Slug", text: "telegram-turns-ten" } }
+    const node: SimpleNode = {
+      id: "save-node", type: "collection-write",
+      data: { collectionId: COLLECTION_ID, title: "Breaking: {Feed}", text: "{Feed}", link: "https://news.example.test/{Slug}", dedupeKey: "key-{Slug}" },
+    }
+    const edges = [...fromFeed(node.id), { id: "e-slug", source: slug.id, target: node.id, sourceHandle: "text", targetHandle: "in" }]
+    await executeNode(node, { prompt: "the item" }, edges, [feed, slug, node], { ...feedStates, ...statesFor(slug) }, context())
+    const [run] = posted()
+    expect(run.body).toMatchObject({
+      title: "Breaking: Telegram turns ten",
+      text: "Telegram turns ten",
+      link: "https://news.example.test/telegram-turns-ten",
+      dedupeKey: "key-telegram-turns-ten",
+    })
+    expect(collectionWriteBody.safeParse(run.body).success).toBe(true)
+  })
+
+  it("a resolved value is held to the route's limits: title / text / key cut to whole characters, an over-long link not sent", async () => {
+    const long = feedWith("x".repeat(2_100))
+    const node: SimpleNode = {
+      id: "save-node", type: "collection-write",
+      data: { collectionId: COLLECTION_ID, title: "{Feed}", text: "{Feed}", link: "https://news.example.test/{Feed}", dedupeKey: "{Feed}" },
+    }
+    await executeNode(node, { prompt: "the item" }, fromFeed(node.id), [long, node], statesFor(long), context())
+    const [run] = posted()
+    expect((run.body.title as string).length).toBe(500)
+    expect((run.body.text as string).length).toBe(2_100)
+    expect((run.body.dedupeKey as string).length).toBe(300)
+    expect(run.body).not.toHaveProperty("link")
+    // The route's own schema accepts what the node sends: no 400 for a long upstream.
+    expect(collectionWriteBody.safeParse(run.body).success).toBe(true)
+  })
+
+  it("{name || fallback} gives the fallback when the node produced nothing; an unknown name is sent as typed", async () => {
+    const node: SimpleNode = {
+      id: "save-node", type: "collection-write",
+      data: { collectionId: COLLECTION_ID, title: "{Feed || untitled}", text: "{Nobody} stays" },
+    }
+    const empty = feedWith("")
+    await executeNode(node, { prompt: "the item" }, fromFeed(node.id), [empty, node], statesFor(empty), context())
+    const [run] = posted()
+    expect(run.body.title).toBe("untitled")
+    expect(run.body.text).toBe("{Nobody} stays")
+  })
+
+  it("a field a mapping wrote is upstream data: its braces are sent untouched", async () => {
+    const node: SimpleNode = {
+      id: "save-node", type: "collection-write",
+      data: {
+        collectionId: COLLECTION_ID,
+        title: "",
+        fieldMappings: { title: { sourceNodeId: feed.id } },
+      },
+    }
+    const braced = feedWith('{"Feed":1} and {Feed}')
+    await executeNode(node, { prompt: "the item" }, fromFeed(node.id), [braced, node], statesFor(braced), context())
+    const [run] = posted()
+    // Mapped in by resolveFieldMappings (not typed), so not resolved again.
+    expect(run.body.title).toBe('{"Feed":1} and {Feed}')
+  })
+
   it("only a real address rides along as a medium — a fan-out guess that put text into imageUrl is not a 400 for the item", async () => {
     const node: SimpleNode = { id: "save-node", type: "collection-write", data: { collectionId: COLLECTION_ID } }
     await executeNode(node, { prompt: "the item", imageUrl: '{"title":"a post","imageUrl":"https://cdn.example.test/a.jpg?t=1"}' }, [], [node], {}, context())
