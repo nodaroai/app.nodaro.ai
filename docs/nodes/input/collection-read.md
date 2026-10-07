@@ -16,6 +16,16 @@ The Read Collection node reads the records a [collection](../../features/collect
 - **Nothing in the window**: the run emits nothing on either output; the nodes behind it that needed that text — a Generate Text, a Save to Collection — are skipped, and the run ends `completed` with `outcome: "nothing_new"` (see [Runs that find nothing new](../../api-integration.md#runs-that-find-nothing-new)).
 - Records come from [Save to Collection](../output/collection-write.md), the Collections page, the API, the SDK, the CLI or MCP — the node reads them all the same.
 
+## On the canvas
+
+After a run, the card shows the records it read the way the [Telegram Channel Feed](telegram-channel-feed.md) shows posts:
+
+- The first record, in the run's **Order**, is featured: its picture (the first image, else a video's poster), its title (else who posted it, when the item carried a handle or an author), its text, the views it carried, and its date.
+- The date is the post's own when the item said when it went out — `publishedAt`, `date` or `timestamp` among its fields, written as an ISO date (`2026-10-06` or `2026-10-06T09:00:00Z`); otherwise the card says when the record was saved.
+- **Open in Instagram** (or X, TikTok, YouTube, Telegram, … — any other site by its name, such as `nytimes.com`) opens the record's link, the original post. Only an `http(s)` link opens.
+- The arrows and the thumbnail strip page through the rest; **View all** lists every record with its own link, and **Copy JSON** copies the run's records.
+- The header says how many records the run read. An empty window says "No records in this window".
+
 ## Configuration
 
 | Field | Type | Default | Description |

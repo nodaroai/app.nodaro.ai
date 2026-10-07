@@ -1,6 +1,6 @@
 import { telegramPostsFrom, type TelegramChannelPost } from "@nodaro/shared"
 import type { TelegramChannelFeedData } from "@/types/nodes"
-import { formatDate } from "@/lib/i18n/format"
+import { initialOf, postDateLabel } from "@/lib/post-display"
 
 /**
  * What the Telegram Channel Feed card shows, read off the node's data the way
@@ -42,14 +42,12 @@ export function telegramPostVideo(post: TelegramChannelPost): { readonly url: st
 
 /** The channel's initial, for a tile with no picture. */
 export function telegramPostInitial(post: TelegramChannelPost): string {
-  const c = (post.channel ?? "").trim()
-  return c ? c.charAt(0).toUpperCase() : "?"
+  return initialOf(post.channel ?? "")
 }
 
 /** "Oct 6, 08:45" in the interface language; empty when the post carries no date. */
 export function telegramPostDateLabel(post: TelegramChannelPost): string {
-  const t = typeof post.date === "string" ? Date.parse(post.date) : NaN
-  return Number.isNaN(t) ? "" : formatDate(t, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+  return postDateLabel(post.date)
 }
 
 export function deriveTelegramFeedCardState(d: TelegramChannelFeedData): TelegramFeedCardState {

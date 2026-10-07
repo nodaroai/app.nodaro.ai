@@ -1,47 +1,38 @@
-import { ExternalLink, Link2, Trash2 } from "lucide-react"
+import { ExternalLink, Trash2 } from "lucide-react"
 import { collectionRecordHeadline, type CollectionRecord } from "@nodaro/shared"
 import { Button } from "@/components/ui/button"
+import { MetaAdMedia } from "@/components/nodes/meta-ad-media"
 import { useT } from "@/lib/i18n"
 import { formatDateTime } from "@/lib/i18n/format"
+import { recordAuthor, recordStill } from "@/lib/collection-record-view"
+import { initialOf } from "@/lib/post-display"
+import { httpLink, linkSiteName } from "@/lib/post-site"
 
 const FIELDS_SHOWN = 4
 
-/** The picture a record shows: its first image, else its first video's poster. */
-export function recordStill(record: CollectionRecord): string | undefined {
-  const image = record.media.find((m) => m.type === "image")
-  if (image) return image.url
-  return record.media.find((m) => m.type === "video" && m.posterUrl)?.posterUrl
-}
-
-/** The link's host, as the small grey line under a headline. */
-export function linkHost(url: string | null): string | undefined {
-  if (!url) return undefined
-  try {
-    return new URL(url).host.replace(/^www\./, "")
-  } catch {
-    return undefined
-  }
-}
-
-/** One record: headline (a link when it has one), when it was saved, its text, its picture, its fields, a delete. */
+/**
+ * One record: headline (a link when it has one), when it was saved, "Open in
+ * <site>" for its link, its text, its picture, its fields, a delete. The
+ * picture goes through the image proxy (an Instagram CDN link refuses a
+ * direct load) and keeps a letter tile when the link has expired.
+ */
 export function CollectionRecordCard({ record, busy, onDelete }: { readonly record: CollectionRecord; readonly busy?: boolean; readonly onDelete: () => void }) {
   const t = useT()
   const headline = collectionRecordHeadline(record)
   const still = recordStill(record)
-  const host = linkHost(record.url)
+  const link = httpLink(record.url)
+  const site = linkSiteName(link)
   const fieldEntries = Object.entries(record.fields)
   const body = record.text.trim() && record.text.trim() !== headline ? record.text.trim() : ""
 
   return (
     <article className="flex gap-3 rounded-lg border bg-card p-3" aria-busy={busy || undefined}>
-      {still && (
-        <img src={still} alt="" loading="lazy" className="h-16 w-16 shrink-0 rounded-md object-cover" />
-      )}
+      {still && <MetaAdMedia src={still} initial={initialOf(recordAuthor(record).label || headline)} className="h-16 w-16 shrink-0 rounded-md" initialClassName="text-[15px]" />}
       <div className="min-w-0 flex-1">
         <div className="flex items-start gap-2">
           <h3 className="min-w-0 flex-1 text-sm font-medium leading-snug" dir="auto">
-            {record.url ? (
-              <a href={record.url} target="_blank" rel="noopener noreferrer" className="hover:underline" title={t("collections.openLink")}>
+            {link ? (
+              <a href={link} target="_blank" rel="noopener noreferrer" className="hover:underline" title={t("collections.openLink")}>
                 {headline}
               </a>
             ) : (
@@ -62,10 +53,10 @@ export function CollectionRecordCard({ record, busy, onDelete }: { readonly reco
         </div>
         <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px] text-muted-foreground">
           <span>{t("collections.savedOn", { date: formatDateTime(record.createdAt) })}</span>
-          {host && (
-            <a href={record.url ?? undefined} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 hover:underline" dir="ltr">
-              {record.url ? <ExternalLink className="h-3 w-3" /> : <Link2 className="h-3 w-3" />}
-              {host}
+          {link && site && (
+            <a href={link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-medium text-[#FF0073] hover:underline">
+              {t("post.openIn", { site })}
+              <ExternalLink className="h-3 w-3" />
             </a>
           )}
         </p>
