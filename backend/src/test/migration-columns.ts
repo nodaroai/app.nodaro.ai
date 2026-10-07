@@ -39,9 +39,31 @@ function migrationStatements(): string[] {
 
 const IDENT = `"?([a-z_][a-z0-9_]*)"?`
 const NOT_A_COLUMN = /^(constraint|primary|unique|foreign|check|like|exclude)$/i
+// `NOT NULL` as a column constraint, not the `IS NOT NULL` of a CHECK.
+const NOT_NULL = /(?<!\bIS\s+)\bNOT\s+NULL\b|\bPRIMARY\s+KEY\b/i
 
-export function migrationColumnsOf(table: string): Set<string> {
-  const columns = new Set<string>()
+/** Split on the commas at paren depth 0 — a column list, or an ALTER's clauses. */
+function topLevelParts(text: string): string[] {
+  let depth = 0
+  let current = ""
+  const parts: string[] = []
+  for (const ch of text) {
+    if (ch === "(") depth++
+    if (ch === ")") depth--
+    if (ch === "," && depth === 0) {
+      parts.push(current)
+      current = ""
+    } else {
+      current += ch
+    }
+  }
+  parts.push(current)
+  return parts
+}
+
+/** Each column the migrations leave on `table`, and whether it is NOT NULL. */
+function migrationSchemaOf(table: string): Map<string, { notNull: boolean }> {
+  const columns = new Map<string, { notNull: boolean }>()
   const name = `(?:public\\.)?"?${table}"?`
   const createRe = new RegExp(`CREATE TABLE(?:\\s+IF NOT EXISTS)?\\s+${name}\\s*\\(`, "i")
   const alterRe = new RegExp(`ALTER TABLE\\s+(?:IF EXISTS\\s+)?(?:ONLY\\s+)?${name}\\s`, "i")
@@ -49,40 +71,70 @@ export function migrationColumnsOf(table: string): Set<string> {
   for (const statement of migrationStatements()) {
     const create = createRe.exec(statement)
     if (create) {
+      // The body ends at the paren that closes the column list.
       const body = statement.slice(create.index + create[0].length)
       let depth = 1
-      let current = ""
-      const parts: string[] = []
-      for (const ch of body) {
-        if (ch === "(") depth++
-        if (ch === ")") depth--
-        if (depth === 0) break
-        if (ch === "," && depth === 1) {
-          parts.push(current)
-          current = ""
-        } else {
-          current += ch
+      let end = body.length
+      for (let i = 0; i < body.length; i++) {
+        if (body[i] === "(") depth++
+        if (body[i] === ")") depth--
+        if (depth === 0) {
+          end = i
+          break
         }
       }
-      parts.push(current)
-      for (const part of parts) {
+      for (const part of topLevelParts(body.slice(0, end))) {
         const match = new RegExp(`^\\s*${IDENT}\\s+[a-zA-Z]`, "i").exec(part)
-        if (match && !NOT_A_COLUMN.test(match[1]!)) columns.add(match[1]!.toLowerCase())
+        if (match && !NOT_A_COLUMN.test(match[1]!)) {
+          columns.set(match[1]!.toLowerCase(), { notNull: NOT_NULL.test(part) })
+        }
       }
     }
-    if (alterRe.test(statement)) {
+    const alter = alterRe.exec(statement)
+    if (alter) {
       // One ALTER can carry many clauses, across as many lines as it likes.
-      for (const m of statement.matchAll(new RegExp(`ADD COLUMN(?:\\s+IF NOT EXISTS)?\\s+${IDENT}`, "gi"))) {
-        columns.add(m[1]!.toLowerCase())
-      }
-      for (const m of statement.matchAll(new RegExp(`DROP COLUMN(?:\\s+IF EXISTS)?\\s+${IDENT}`, "gi"))) {
-        columns.delete(m[1]!.toLowerCase())
-      }
-      for (const m of statement.matchAll(new RegExp(`RENAME COLUMN\\s+${IDENT}\\s+TO\\s+${IDENT}`, "gi"))) {
-        columns.delete(m[1]!.toLowerCase())
-        columns.add(m[2]!.toLowerCase())
+      for (const clause of topLevelParts(statement.slice(alter.index + alter[0].length))) {
+        const add = new RegExp(`ADD COLUMN(?:\\s+IF NOT EXISTS)?\\s+${IDENT}`, "i").exec(clause)
+        if (add) {
+          columns.set(add[1]!.toLowerCase(), { notNull: NOT_NULL.test(clause.slice(add.index + add[0].length)) })
+          continue
+        }
+        const drop = new RegExp(`DROP COLUMN(?:\\s+IF EXISTS)?\\s+${IDENT}`, "i").exec(clause)
+        if (drop) {
+          columns.delete(drop[1]!.toLowerCase())
+          continue
+        }
+        const rename = new RegExp(`RENAME COLUMN\\s+${IDENT}\\s+TO\\s+${IDENT}`, "i").exec(clause)
+        if (rename) {
+          const from = rename[1]!.toLowerCase()
+          const was = columns.get(from) ?? { notNull: false }
+          columns.delete(from)
+          columns.set(rename[2]!.toLowerCase(), was)
+          continue
+        }
+        const nullability = new RegExp(`ALTER COLUMN\\s+${IDENT}\\s+(SET|DROP)\\s+NOT\\s+NULL`, "i").exec(clause)
+        if (nullability) {
+          const column = nullability[1]!.toLowerCase()
+          if (columns.has(column)) columns.set(column, { notNull: nullability[2]!.toUpperCase() === "SET" })
+        }
       }
     }
   }
   return columns
+}
+
+export function migrationColumnsOf(table: string): Set<string> {
+  return new Set(migrationSchemaOf(table).keys())
+}
+
+/**
+ * The columns of `table` the migrations leave NOT NULL (an inline `NOT NULL`
+ * or `PRIMARY KEY`, then `ALTER COLUMN ... SET / DROP NOT NULL`). For tests
+ * that pin a value the code WRITES: clearing a NOT NULL column to null fails
+ * only against the real database.
+ */
+export function migrationNotNullColumnsOf(table: string): Set<string> {
+  const notNull = new Set<string>()
+  for (const [column, { notNull: required }] of migrationSchemaOf(table)) if (required) notNull.add(column)
+  return notNull
 }

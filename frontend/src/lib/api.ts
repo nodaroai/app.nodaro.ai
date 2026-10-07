@@ -8733,6 +8733,26 @@ export async function expungeApp(appId: string, reason: string): Promise<{
   r2KeysCollected: number
   r2KeysDeleted: number
   r2Errors: number
+  /** The app's own runs' workflow executions whose content was erased. */
+  executionsRedacted: number
+  /** Those executions' jobs whose content was erased. */
+  jobsRedacted: number
+  /** Component inner runs' own app runs (on the component's app) whose content was erased. */
+  innerRunsRedacted: number
+  /** Diagnostic reports filed for those executions and jobs whose title and payload were cleared (the rows stay). */
+  reportsRedacted: number
+  /** The runs whose content was erased. */
+  runsErased: number
+  /** The runs left as they were because something of theirs is still in flight. */
+  runsSkipped: number
+  /** False while runs were skipped: the app stays soft-deleted for another expunge. */
+  appDeleted: boolean
+  /**
+   * Erased runs whose own execution predates run tagging: an earlier execution
+   * of such a run, if it was re-run back then, was not found and keeps its
+   * content. A lower bound.
+   */
+  runsBeforeRunTag: number
   auditWarning?: string
 }> {
   return apiRequest(

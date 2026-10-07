@@ -8,6 +8,8 @@ import { orchestrationQueue } from "../lib/orchestration-queue.js"
 import { payloadBillingContext, type BillingContext } from "../lib/billing-context.js"
 import { billingPairColumns } from "../lib/insert-job.js"
 import { insertWithIdempotencyKey } from "../lib/idempotent-insert.js"
+import { randomUUID } from "node:crypto"
+import { appRunStamp } from "../lib/app-run-stamp.js"
 import type { WorkflowExecutionJob } from "./workflow-engine/types.js"
 
 // ---------------------------------------------------------------------------
@@ -98,6 +100,11 @@ export async function executeAppRun(
     reviewerPresent,
   } = params
 
+  // The run's id, picked now so the execution can be stamped with it
+  // (`lib/app-run-stamp.ts`): a re-run moves `app_runs.execution_id` on, and
+  // the stamp is how this execution is still found as the run's.
+  const appRunId = randomUUID()
+
   // 1. Create workflow_execution record — through the idempotent insert
   //    (a plain INSERT when no key), so a client retry of the same run does
   //    not start and charge the work twice (audit 2026-09-06, D-2/A-15/B-3).
@@ -111,6 +118,7 @@ export async function executeAppRun(
         user_id: userId,
         status: "pending",
         trigger_type: "app_run",
+        trigger_data: appRunStamp(appRunId),
         ...(isComponentExecution ? { is_component_execution: true } : {}),
         // P14/W7: the carried payer's pair rides the row (personal adds nothing).
         ...billingPairColumns(billingContext),
@@ -141,6 +149,7 @@ export async function executeAppRun(
   const { data: appRun, error: runError } = await supabase
     .from("app_runs")
     .insert({
+      id: appRunId,
       app_id: appId,
       execution_id: execution.id,
       runner_id: userId,

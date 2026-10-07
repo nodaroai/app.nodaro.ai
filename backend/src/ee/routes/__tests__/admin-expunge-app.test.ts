@@ -39,6 +39,49 @@ vi.mock("@/lib/collect-app-r2-keys.js", () => ({
   collectAppR2Keys: vi.fn().mockResolvedValue(["key1", "key2", "key3"]),
 }))
 
+/**
+ * The linked executions and jobs (lib/app-expunge-targets.ts, tested on its
+ * own against the migrations and for ownership). Here: the route's use of
+ * them — read before anything changes, skip the runs still in flight, erase
+ * before the app row goes.
+ */
+const RUN_DONE = "00000000-0000-4000-8000-000000000101"
+const RUN_BUSY = "00000000-0000-4000-8000-000000000102"
+const DEFAULT_TARGETS = {
+  runIds: [RUN_DONE],
+  skippedRunIds: [] as string[],
+  levels: [
+    {
+      executionIds: ["00000000-0000-4000-8000-000000000201"],
+      jobIds: ["00000000-0000-4000-8000-000000000301", "00000000-0000-4000-8000-000000000302"],
+      appRunIds: [] as string[],
+    },
+    // A component's inner run, and its own app run on the component's app.
+    {
+      executionIds: ["00000000-0000-4000-8000-000000000202"],
+      jobIds: [] as string[],
+      appRunIds: ["00000000-0000-4000-8000-000000000901"],
+    },
+  ],
+  unpointedExecutions: [] as Array<{ id: string; owner: string }>,
+  runsBeforeRunTag: 1,
+}
+type Levels = { levels: Array<{ executionIds: string[]; jobIds: string[]; appRunIds?: string[] }> }
+const counted = (t: Levels) => ({
+  executions: t.levels.reduce((n, l) => n + l.executionIds.length, 0),
+  jobs: t.levels.reduce((n, l) => n + l.jobIds.length, 0),
+  innerRuns: t.levels.reduce((n, l) => n + (l.appRunIds?.length ?? 0), 0),
+  // The reports filed for the erased jobs and executions (decided 2026-10-07):
+  // here, one per execution.
+  reports: t.levels.reduce((n, l) => n + l.executionIds.length, 0),
+})
+const mockCollectTargets = vi.hoisted(() => vi.fn())
+const mockRedactTargets = vi.hoisted(() => vi.fn())
+vi.mock("@/lib/app-expunge-targets.js", () => ({
+  collectAppExpungeTargets: mockCollectTargets,
+  redactAppExpungeTargets: mockRedactTargets,
+}))
+
 vi.mock("@/lib/storage.js", () => ({
   batchDeleteFromR2: vi.fn().mockResolvedValue({ deleted: 3, errors: 0 }),
 }))
@@ -74,16 +117,21 @@ const TEST_USER_ID = "00000000-0000-4000-8000-000000000001"
 const TEST_APP_ID = "00000000-0000-4000-8000-000000000099"
 const TEST_REASON = "GDPR right-to-erasure request from user 12345"
 
+const TEST_WORKFLOW_ID = "00000000-0000-4000-8000-0000000000f1"
+
 const fakeApp = {
   id: TEST_APP_ID,
   slug: "my-test-app",
   deleted_at: "2026-05-01T10:00:00.000Z",
+  workflow_id: TEST_WORKFLOW_ID,
 }
 
 let app: FastifyInstance
 
 beforeEach(async () => {
   vi.clearAllMocks()
+  mockCollectTargets.mockResolvedValue({ ...DEFAULT_TARGETS })
+  mockRedactTargets.mockImplementation(async (t: Levels) => counted(t))
 
   // Reset requireAdmin to passthrough for most tests
   vi.mocked(requireAdmin).mockImplementation(async () => {})
@@ -250,8 +298,8 @@ describe("DELETE /v1/admin/apps/:appId/expunge", () => {
     // Verify RPC called with correct args
     expect(supabase.rpc).toHaveBeenCalledWith("expunge_app_snapshots", { p_app_id: TEST_APP_ID })
 
-    // Verify collectAppR2Keys called with appId
-    expect(collectAppR2Keys).toHaveBeenCalledWith(TEST_APP_ID)
+    // Verify collectAppR2Keys called with appId: nothing skipped, nothing beyond the pointers
+    expect(collectAppR2Keys).toHaveBeenCalledWith(TEST_APP_ID, { skipRunIds: new Set(), extraExecutions: [] })
 
     // Verify batchDeleteFromR2 called with the collected keys
     expect(batchDeleteFromR2).toHaveBeenCalledWith(["key1", "key2", "key3"])
@@ -268,6 +316,23 @@ describe("DELETE /v1/admin/apps/:appId/expunge", () => {
     expect(runRedactUpdate).toHaveBeenCalledWith({ input_values: null, node_states: null, name: null })
     expect(runRedactEq).toHaveBeenCalledWith("app_id", TEST_APP_ID)
 
+    // The app's own runs' executions and jobs are found by the app and its
+    // workflow, and erased.
+    expect(mockCollectTargets).toHaveBeenCalledWith(TEST_APP_ID, TEST_WORKFLOW_ID)
+    expect(mockRedactTargets).toHaveBeenCalledWith(expect.objectContaining({ levels: DEFAULT_TARGETS.levels }))
+    expect(body.executionsRedacted).toBe(2)
+    expect(body.jobsRedacted).toBe(2)
+    expect(body.runsErased).toBe(1)
+    expect(body.runsSkipped).toBe(0)
+    expect(body.appDeleted).toBe(true)
+    // Decided 2026-10-07: the component inner runs' own app runs, and the
+    // runs from before the run tag (whose earlier executions are not found).
+    expect(body.innerRunsRedacted).toBe(1)
+    expect(body.runsBeforeRunTag).toBe(1)
+    // Decided 2026-10-07: the reports filed for those jobs and executions lose
+    // their title and payload; the response counts them.
+    expect(body.reportsRedacted).toBe(2)
+
     // Verify audit log insert was called with the correct payload
     expect(auditInsertMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -276,7 +341,17 @@ describe("DELETE /v1/admin/apps/:appId/expunge", () => {
         target_type: "published_app",
         target_id: TEST_APP_ID,
         reason: TEST_REASON,
-        payload: expect.objectContaining({ slug: fakeApp.slug }),
+        payload: expect.objectContaining({
+          slug: fakeApp.slug,
+          executions_redacted: 2,
+          jobs_redacted: 2,
+          inner_runs_redacted: 1,
+          reports_redacted: 2,
+          runs_erased: 1,
+          runs_skipped: 0,
+          runs_before_run_tag: 1,
+          app_deleted: true,
+        }),
       }),
     )
   })
@@ -386,5 +461,211 @@ describe("DELETE /v1/admin/apps/:appId/expunge — the schema it writes", () => 
     expect(writes.some((w) => w.table === "app_runs")).toBe(true)
     const missing = writes.filter(({ table, column }) => !migrationColumnsOf(table).has(column))
     expect(missing.map(({ table, column }) => `${table}.${column}`)).toEqual([])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// The linked executions and jobs (decided 2026-10-06).
+// ---------------------------------------------------------------------------
+
+/** A supabase whose every step is logged in order: `<table>.<op>`. */
+function orderedSupabase(
+  steps: string[],
+  selected: Array<{ table: string; column: string }> = [],
+  runFilters: Array<[string, string, unknown]> = [],
+) {
+  let sawSelect = false
+  vi.mocked(supabase.from).mockImplementation((table: string) => {
+    if (table === "published_apps") {
+      if (!sawSelect) {
+        sawSelect = true
+        return {
+          select: (cols: string) => {
+            for (const c of cols.split(",")) selected.push({ table, column: c.trim() })
+            return {
+              eq: () => ({
+                single: async () => {
+                  steps.push("published_apps.select")
+                  return { data: fakeApp, error: null }
+                },
+              }),
+            }
+          },
+        } as never
+      }
+      return {
+        delete: () => ({
+          eq: async () => {
+            steps.push("published_apps.delete")
+            return { error: null }
+          },
+        }),
+      } as never
+    }
+    if (table === "app_runs") {
+      return {
+        update: () => {
+          const chain = {
+            eq: (column: string, value: unknown) => (runFilters.push(["eq", column, value]), chain),
+            in: (column: string, value: unknown) => (runFilters.push(["in", column, value]), chain),
+            then: (ok: (v: unknown) => unknown, bad?: (e: unknown) => unknown) => {
+              steps.push("app_runs.update")
+              return Promise.resolve({ error: null }).then(ok, bad)
+            },
+          }
+          return chain
+        },
+      } as never
+    }
+    if (table === "admin_actions") {
+      return {
+        insert: async (row: Record<string, unknown>) => {
+          steps.push("admin_actions.insert")
+          audits.push(row)
+          return { error: null }
+        },
+      } as never
+    }
+    return {} as never
+  })
+  vi.mocked(supabase.rpc).mockImplementation((async () => {
+    steps.push("rpc.expunge_app_snapshots")
+    return { data: null, error: null }
+  }) as never)
+  mockCollectTargets.mockImplementation(async () => {
+    steps.push("targets.collect")
+    return { ...DEFAULT_TARGETS }
+  })
+  mockRedactTargets.mockImplementation(async (t: Levels) => {
+    steps.push("targets.redact")
+    return counted(t)
+  })
+  vi.mocked(batchDeleteFromR2).mockImplementation(async () => {
+    steps.push("r2.delete")
+    return { deleted: 3, errors: 0 }
+  })
+}
+
+const audits: Array<Record<string, unknown>> = []
+beforeEach(() => {
+  audits.length = 0
+})
+
+const expunge = () =>
+  app.inject({
+    method: "DELETE",
+    url: `/v1/admin/apps/${TEST_APP_ID}/expunge`,
+    headers: { "x-user-id": TEST_USER_ID },
+    payload: { reason: TEST_REASON },
+  })
+
+describe("DELETE /v1/admin/apps/:appId/expunge — the linked executions and jobs", () => {
+  it("reads the targets before any change and erases them before the app row goes", async () => {
+    const steps: string[] = []
+    orderedSupabase(steps)
+
+    const res = await expunge()
+
+    expect(res.statusCode).toBe(200)
+    expect(steps).toEqual([
+      "published_apps.select",
+      "targets.collect",
+      "rpc.expunge_app_snapshots",
+      "app_runs.update",
+      "targets.redact",
+      "published_apps.delete",
+      "r2.delete",
+      "admin_actions.insert",
+    ])
+  })
+
+  it("selects the app's workflow from a column that exists", async () => {
+    const steps: string[] = []
+    const selected: Array<{ table: string; column: string }> = []
+    orderedSupabase(steps, selected)
+
+    await expunge()
+
+    expect(selected.map((s) => s.column)).toContain("workflow_id")
+    const missing = selected.filter(({ table, column }) => !migrationColumnsOf(table).has(column))
+    expect(missing.map(({ table, column }) => `${table}.${column}`)).toEqual([])
+  })
+
+  // Decided 2026-10-06: the finished runs are erased now; a run with anything
+  // still in flight is left whole, counted, and the app row stays so the admin
+  // can expunge again once it has finished.
+  it("erases the finished runs, skips the ones in flight, and keeps the app row for another pass", async () => {
+    const steps: string[] = []
+    const runFilters: Array<[string, string, unknown]> = []
+    orderedSupabase(steps, [], runFilters)
+    const extra = [{ id: "00000000-0000-4000-8000-000000000209", owner: TEST_USER_ID }]
+    mockCollectTargets.mockImplementation(async () => {
+      steps.push("targets.collect")
+      return { ...DEFAULT_TARGETS, skippedRunIds: [RUN_BUSY], unpointedExecutions: extra }
+    })
+
+    const res = await expunge()
+
+    expect(res.statusCode).toBe(200)
+    expect(steps).toEqual([
+      "published_apps.select",
+      "targets.collect",
+      "rpc.expunge_app_snapshots",
+      "app_runs.update",
+      "targets.redact",
+      "r2.delete",
+      "admin_actions.insert",
+    ])
+    // Only the finished runs lose their content.
+    expect(runFilters).toContainEqual(["in", "id", [RUN_DONE]])
+    expect(runFilters).toContainEqual(["eq", "app_id", TEST_APP_ID])
+    // The skipped run's files stay; the extra executions' go.
+    expect(collectAppR2Keys).toHaveBeenCalledWith(TEST_APP_ID, { skipRunIds: new Set([RUN_BUSY]), extraExecutions: extra })
+    const body = res.json()
+    expect(body).toMatchObject({ success: true, runsErased: 1, runsSkipped: 1, appDeleted: false })
+    expect(audits[0]?.payload).toMatchObject({ runs_erased: 1, runs_skipped: 1, app_deleted: false })
+  })
+
+  it("erases nothing of the runs when every run is in flight, and keeps the app", async () => {
+    const steps: string[] = []
+    const runFilters: Array<[string, string, unknown]> = []
+    orderedSupabase(steps, [], runFilters)
+    mockCollectTargets.mockImplementation(async () => ({ runIds: [], skippedRunIds: [RUN_BUSY], levels: [], unpointedExecutions: [], runsBeforeRunTag: 0 }))
+
+    const res = await expunge()
+
+    expect(res.statusCode).toBe(200)
+    expect(steps).not.toContain("app_runs.update")
+    expect(steps).not.toContain("published_apps.delete")
+    expect(res.json()).toMatchObject({ runsErased: 0, runsSkipped: 1, appDeleted: false })
+  })
+
+  it("answers 500, changing nothing, when the targets cannot be read", async () => {
+    const steps: string[] = []
+    orderedSupabase(steps)
+    mockCollectTargets.mockRejectedValue(new Error("collectAppExpungeTargets failed at jobs: timeout"))
+
+    const res = await expunge()
+
+    expect(res.statusCode).toBe(500)
+    expect(res.json().error.code).toBe("targets_failed")
+    expect(steps).toEqual(["published_apps.select"])
+  })
+
+  it("answers 500 and keeps the app row and its files when the erase fails", async () => {
+    // The app row stays, so the admin can run the expunge again: the runs
+    // still point at their executions, and the executions' jobs at them.
+    // (Storage keys named only in columns already cleared are not harvested
+    // again — the files they name stay in R2.)
+    const steps: string[] = []
+    orderedSupabase(steps)
+    mockRedactTargets.mockRejectedValue(new Error("redactAppExpungeTargets failed at jobs: timeout"))
+
+    const res = await expunge()
+
+    expect(res.statusCode).toBe(500)
+    expect(res.json().error.code).toBe("linked_redact_failed")
+    expect(steps).not.toContain("published_apps.delete")
+    expect(steps).not.toContain("r2.delete")
   })
 })

@@ -1,16 +1,12 @@
 import { useState } from "react"
 import { Link } from "react-router-dom"
 import { Loader2, ExternalLink, Copy, Check, AppWindow, Star } from "lucide-react"
-import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useAdminApps, type AdminApp } from "@/ee/hooks/queries/use-admin-queries"
 import { useAppSettings, useUpdateSettingMutation } from "@/hooks/queries/use-app-settings-queries"
-import { expungeApp } from "@/lib/api"
+import { ExpungeModal } from "./expunge-modal"
 
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime()
@@ -37,92 +33,6 @@ function CopyButton({ text }: { text: string }) {
     >
       {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
     </button>
-  )
-}
-
-function ExpungeModal({ app, onClose }: { app: AdminApp; onClose: () => void }) {
-  const [reason, setReason] = useState("")
-  const [typedSlug, setTypedSlug] = useState("")
-  const qc = useQueryClient()
-
-  const mut = useMutation({
-    mutationFn: () => expungeApp(app.id, reason),
-    onSuccess: (data) => {
-      const summary = `App expunged. ${data.r2KeysDeleted} R2 files removed (${data.r2Errors} errors).`
-      toast.success(data.auditWarning ? `${summary}\n\n${data.auditWarning}` : summary)
-      qc.invalidateQueries({ queryKey: ["admin", "apps"] })
-      onClose()
-    },
-    onError: (err: Error) => toast.error(`Expunge failed: ${err.message}`),
-  })
-
-  const canSubmit = reason.length >= 10 && typedSlug === app.slug && !mut.isPending
-
-  return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Permanently expunge {app.name}?</DialogTitle>
-          <DialogDescription>This action cannot be undone.</DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-3 mt-2 text-sm">
-          <div>
-            <p className="font-medium mb-1">What will be deleted:</p>
-            <ul className="space-y-0.5 ml-5 list-disc text-muted-foreground">
-              <li>The MiniApp&apos;s metadata (name, description, snapshot, icon)</li>
-              <li>Other users&apos; bookmarks of this MiniApp</li>
-              <li>All run history&apos;s user inputs and generated outputs</li>
-              <li>Generated media files in storage</li>
-            </ul>
-          </div>
-          <div>
-            <p className="font-medium mb-1">What will be preserved (legal/audit obligation):</p>
-            <ul className="space-y-0.5 ml-5 list-disc text-muted-foreground">
-              <li>Earnings records (with snapshotted MiniApp name + creator)</li>
-              <li>Run records&apos; financial fields (credits, timestamps)</li>
-              <li>This admin action and your reason are logged</li>
-            </ul>
-          </div>
-
-          <div className="space-y-1.5 pt-2">
-            <label htmlFor="expunge-reason" className="font-medium">Reason</label>
-            <Textarea
-              id="expunge-reason"
-              placeholder="GDPR Article 17 request, court order #..., TOS violation, etc."
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              rows={3}
-              minLength={10}
-              maxLength={2000}
-            />
-            <p className="text-xs text-muted-foreground">{reason.length}/2000 (min 10)</p>
-          </div>
-
-          <div className="space-y-1.5">
-            <label htmlFor="expunge-slug" className="font-medium">
-              Type the MiniApp slug{" "}
-              <code className="text-xs px-1 py-0.5 bg-muted rounded">{app.slug}</code>{" "}
-              to confirm:
-            </label>
-            <Input
-              id="expunge-slug"
-              className="font-mono"
-              value={typedSlug}
-              onChange={(e) => setTypedSlug(e.target.value)}
-              placeholder={app.slug}
-            />
-          </div>
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button variant="destructive" disabled={!canSubmit} onClick={() => mut.mutate()}>
-            {mut.isPending ? "Expunging…" : "Permanently expunge"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   )
 }
 

@@ -1,6 +1,13 @@
 import cron from "node-cron"
 import { supabase } from "./supabase.js"
 import { insertAppReport } from "./app-reports.js"
+import {
+  EXECUTION_REPORT_SOURCE_COLUMNS,
+  JOB_REPORT_SOURCE_COLUMNS,
+  appReportContentRedaction,
+  executionReportSourceErased,
+  jobReportSourceErased,
+} from "./app-run-content.js"
 import { isContentRejection, rejectionClassOf } from "./mcp/tools/_job-error.js"
 
 /**
@@ -38,12 +45,19 @@ import { isContentRejection, rejectionClassOf } from "./mcp/tools/_job-error.js"
  * the partial UNIQUE (kind, job_id) and (kind, execution_id) indexes as the
  * race-proof net (insertAppReport treats 23505 as a no-op). The 48h lookback
  * overlaps successive runs on purpose.
+ *
+ * An admin app expunge can erase a job or execution between this sweep's read
+ * and its insert; the report filed from the stale read would keep the erased
+ * content for good, since the dedup never re-files it. Each sweep therefore
+ * re-reads the sources of the reports it just filed and clears the ones whose
+ * source is erased now — see `clearReportsOfErasedSources`.
  */
 
 const LOOKBACK_HOURS = 48
 const SCAN_LIMIT = 500
 const PROMPT_EXCERPT_MAX = 1000
 const ERROR_EXCERPT_MAX = 500
+const ID_CHUNK = 100
 
 interface FailedJobRow {
   id: string
@@ -272,6 +286,7 @@ export async function sweepFailedJobs(): Promise<{ scanned: number; reported: nu
   const seen = new Set(((existing ?? []) as Array<{ job_id: string }>).map((r) => r.job_id))
 
   let reported = 0
+  const filed: FiledReport[] = []
   for (const job of rows) {
     if (seen.has(job.id)) continue
     // ORDER IS THE POINT: the structured hint wins over the message sniff.
@@ -281,8 +296,12 @@ export async function sweepFailedJobs(): Promise<{ scanned: number; reported: nu
         : isContentRejection(job.error_message)
           ? rejectionReportFor(job)
           : failureReportFor(job)
-    if (await insertAppReport(report)) reported++
+    if (await insertAppReport(report)) {
+      reported++
+      filed.push({ kind: report.kind, source: job as unknown as SourceRow })
+    }
   }
+  await clearReportsOfErasedSources(filed, JOB_SOURCES)
   return { scanned: rows.length, reported }
 }
 
@@ -358,11 +377,109 @@ export async function sweepFailedExecutions(): Promise<{ scanned: number; report
   const seen = new Set(((existing ?? []) as Array<{ execution_id: string }>).map((r) => r.execution_id))
 
   let reported = 0
+  const filed: FiledReport[] = []
   for (const execution of candidates) {
     if (seen.has(execution.id)) continue
-    if (await insertAppReport(executionFailureReportFor(execution))) reported++
+    const report = executionFailureReportFor(execution)
+    if (await insertAppReport(report)) {
+      reported++
+      filed.push({ kind: report.kind, source: execution as unknown as SourceRow })
+    }
   }
+  await clearReportsOfErasedSources(filed, EXECUTION_SOURCES)
   return { scanned: rows.length, reported }
+}
+
+type SourceRow = Record<string, unknown> & { id: string }
+
+/** A report this sweep run inserted, with the source row it was built from. */
+interface FiledReport {
+  kind: string
+  source: SourceRow
+}
+
+/** Where a sweep's reports come from, and what "erased" means there. */
+interface ReportSources {
+  table: "jobs" | "workflow_executions"
+  /** The `app_reports` column that names the source row. */
+  pointer: "job_id" | "execution_id"
+  columns: readonly string[]
+  erased: (row: Readonly<Record<string, unknown>>) => boolean
+}
+
+const JOB_SOURCES: ReportSources = {
+  table: "jobs",
+  pointer: "job_id",
+  columns: JOB_REPORT_SOURCE_COLUMNS,
+  erased: jobReportSourceErased,
+}
+
+const EXECUTION_SOURCES: ReportSources = {
+  table: "workflow_executions",
+  pointer: "execution_id",
+  columns: EXECUTION_REPORT_SOURCE_COLUMNS,
+  erased: executionReportSourceErased,
+}
+
+/**
+ * Clear the reports this run just filed whose source row an admin app expunge
+ * erased after the sweep read it (decided 2026-10-07), with the expunge's own
+ * patch (`appReportContentRedaction`). The rows stay, like the expunge's.
+ *
+ * Why this closes the race without a lock: the expunge clears the job, then
+ * the reports naming it, each a statement of its own; the sweep inserts the
+ * report, then re-reads the job, here. If the job's clear committed before
+ * this re-read began, the re-read sees it erased and the report is cleared
+ * here. If it committed later, the expunge's report clear began after this
+ * re-read, so after the insert committed, and found the report itself. The
+ * same holds for executions.
+ *
+ * Only a source that was intact when read and is erased now: a report built
+ * from an already-erased row carries nothing of it. A source row that is gone
+ * altogether is left alone. Best-effort, like every report write: a failed
+ * read or write is logged and the sweep carries on.
+ */
+async function clearReportsOfErasedSources(filed: readonly FiledReport[], sources: ReportSources): Promise<void> {
+  const kindsOf = new Map<string, Set<string>>()
+  for (const { kind, source } of filed) {
+    if (sources.erased(source)) continue
+    const kinds = kindsOf.get(source.id) ?? new Set<string>()
+    kinds.add(kind)
+    kindsOf.set(source.id, kinds)
+  }
+  const ids = [...kindsOf.keys()]
+  try {
+    const erasedByKind = new Map<string, string[]>()
+    for (let i = 0; i < ids.length; i += ID_CHUNK) {
+      const chunk = ids.slice(i, i + ID_CHUNK)
+      const { data, error } = await (supabase.from(sources.table) as any)
+        .select(["id", ...sources.columns].join(", "))
+        .in("id", chunk)
+      if (error) {
+        console.warn(`[app-reports] re-read of ${sources.table} after the sweep failed: ${error.message}`)
+        return
+      }
+      for (const row of (data ?? []) as Array<Record<string, unknown>>) {
+        if (typeof row.id !== "string" || !sources.erased(row)) continue
+        for (const kind of kindsOf.get(row.id) ?? []) {
+          const list = erasedByKind.get(kind) ?? []
+          list.push(row.id)
+          erasedByKind.set(kind, list)
+        }
+      }
+    }
+    for (const [kind, erasedIds] of erasedByKind) {
+      for (let i = 0; i < erasedIds.length; i += ID_CHUNK) {
+        const { error } = await (supabase.from("app_reports" as "assets") as any)
+          .update(appReportContentRedaction())
+          .eq("kind", kind)
+          .in(sources.pointer, erasedIds.slice(i, i + ID_CHUNK))
+        if (error) console.warn(`[app-reports] clearing reports of erased ${sources.table} failed: ${error.message}`)
+      }
+    }
+  } catch (err) {
+    console.warn(`[app-reports] clearing reports of erased ${sources.table} failed:`, err)
+  }
 }
 
 /** Every 15 minutes; same env gating as the reconcile cron (production, or

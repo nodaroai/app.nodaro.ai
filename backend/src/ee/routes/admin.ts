@@ -4,6 +4,7 @@ import { supabase } from "../../lib/supabase.js"
 import { requireAdmin } from "../middleware/require-admin.js"
 import { requirePlatformOperator } from "../middleware/require-platform-operator.js"
 import { collectAppR2Keys } from "../../lib/collect-app-r2-keys.js"
+import { collectAppExpungeTargets, redactAppExpungeTargets, type AppExpungeTargets } from "../../lib/app-expunge-targets.js"
 import { appRunContentRedaction } from "../../lib/app-run-content.js"
 import { deletableKeys } from "../../lib/asset-delete.js"
 import { batchDeleteFromR2 } from "../../lib/storage.js"
@@ -527,12 +528,29 @@ export async function adminRoutes(app: FastifyInstance) {
   // DELETE /v1/admin/apps/:appId/expunge — Hard-delete a soft-deleted app
   // for legal compliance (GDPR right-to-erasure, takedown requests). Two-
   // step gate: app must be soft-deleted first. Earnings + run records are
-  // preserved with snapshot columns; user content (each run's
-  // APP_RUN_USER_CONTENT_COLUMNS — the runner's inputs, edited results and
-  // run label — plus the R2 files the app owns) is erased. Objects a runner's
-  // input points at but the app never made (their uploads, pasted library
-  // urls) are kept: collectAppR2Keys leaves out every key a library row ties
-  // to something other than this app's own jobs.
+  // preserved with snapshot columns; user content is erased: each run's
+  // APP_RUN_USER_CONTENT_COLUMNS (the runner's inputs, edited results and run
+  // label), every execution of the run (its own, its re-runs' and finals' by
+  // their stamps, its components' inner runs) — node states and input
+  // overrides — and those executions' owner's jobs' inputs and outputs
+  // (lib/app-run-content.ts, lib/app-expunge-targets.ts; decided 2026-10-06),
+  // the jobs' error messages and each execution's own error message too, and
+  // each component inner run's own app run on the component's app (decided
+  // 2026-10-07), the title and payload of the `app_reports` rows filed for
+  // those executions and jobs, the rows kept (decided 2026-10-07), plus the R2
+  // files the app owns.
+  // Executions from before runs were tagged are found only through the run's
+  // pointers: an earlier execution of a run re-run back then keeps its
+  // content — no fallback guesses at it (decided 2026-10-07). The response and
+  // the audit row count the erased runs that started before tagging. Objects a runner's input points at but the
+  // app never made (their uploads, pasted library urls) are kept, with their
+  // `assets` rows: collectAppR2Keys leaves out every key a library row ties to
+  // something other than this app's own jobs.
+  //
+  // A run with anything still in flight is skipped (decided 2026-10-06): it is
+  // left whole, counted in the response and the audit row, and the app row is
+  // kept — still soft-deleted — so the admin can expunge again once it has
+  // finished. The app's own media goes with the app row.
   app.delete("/v1/admin/apps/:appId/expunge", { preHandler: requireAdmin }, async (req, reply) => {
     if (!req.userId) return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
     const userId = req.userId
@@ -550,7 +568,7 @@ export async function adminRoutes(app: FastifyInstance) {
 
     const { data: existing, error: fetchError } = await supabase
       .from("published_apps")
-      .select("id, deleted_at, slug")
+      .select("id, deleted_at, slug, workflow_id")
       .eq("id", appId)
       .single()
     if (fetchError || !existing) {
@@ -575,7 +593,29 @@ export async function adminRoutes(app: FastifyInstance) {
     // still pointing at them. `deletableKeys` is inert without a relay target
     // (it issues no query at all) and this route registers under hasAdmin(),
     // i.e. business self-hosts too — exactly where a relay lives.
-    const r2Keys = await deletableKeys(await collectAppR2Keys(appId))
+    // The app's own runs' executions and their owner's jobs, and which runs
+    // are still in flight — read, like the keys, before anything is changed.
+    let targets: AppExpungeTargets
+    try {
+      targets = await collectAppExpungeTargets(appId, (existing.workflow_id as string | null) ?? null)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      console.error(`[admin-expunge] target read failed for ${appId}:`, message)
+      return reply.status(500).send({ error: { code: "targets_failed", message } })
+    }
+    // A running execution's node states are the orchestrator's live state, and
+    // a held job's output waits on a reviewer: erasing under either is undone
+    // by the next write. Those runs are skipped — nothing of theirs is erased
+    // or deleted, the app row stays for the next pass.
+    const skipped = targets.skippedRunIds.length
+    const appDeleted = skipped === 0
+
+    const r2Keys = await deletableKeys(
+      await collectAppR2Keys(appId, {
+        skipRunIds: new Set(targets.skippedRunIds),
+        extraExecutions: targets.unpointedExecutions,
+      }),
+    )
 
     const { error: snapshotError } = await supabase.rpc("expunge_app_snapshots", { p_app_id: appId })
     if (snapshotError) {
@@ -583,19 +623,36 @@ export async function adminRoutes(app: FastifyInstance) {
       return reply.status(500).send({ error: { code: "snapshot_failed", message: snapshotError.message } })
     }
 
-    const { error: redactError } = await supabase
-      .from("app_runs")
-      .update(appRunContentRedaction())
-      .eq("app_id", appId)
-    if (redactError) {
-      console.error(`[admin-expunge] run redact failed for ${appId}:`, redactError.message)
-      return reply.status(500).send({ error: { code: "redact_failed", message: redactError.message } })
+    // Nothing skipped: every run of the app, in one write. Otherwise the
+    // finished runs only, by id.
+    const runWrites = appDeleted
+      ? [() => supabase.from("app_runs").update(appRunContentRedaction()).eq("app_id", appId)]
+      : chunked(targets.runIds).map(
+          (ids) => () => supabase.from("app_runs").update(appRunContentRedaction()).eq("app_id", appId).in("id", ids),
+        )
+    for (const write of runWrites) {
+      const { error: redactError } = await write()
+      if (redactError) {
+        console.error(`[admin-expunge] run redact failed for ${appId}:`, redactError.message)
+        return reply.status(500).send({ error: { code: "redact_failed", message: redactError.message } })
+      }
     }
 
-    const { error: deleteError } = await supabase.from("published_apps").delete().eq("id", appId)
-    if (deleteError) {
-      console.error(`[admin-expunge] delete failed for ${appId}:`, deleteError.message)
-      return reply.status(500).send({ error: { code: "delete_failed", message: deleteError.message } })
+    let redacted: { executions: number; jobs: number; innerRuns: number; reports: number }
+    try {
+      redacted = await redactAppExpungeTargets(targets)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      console.error(`[admin-expunge] linked redact failed for ${appId}:`, message)
+      return reply.status(500).send({ error: { code: "linked_redact_failed", message } })
+    }
+
+    if (appDeleted) {
+      const { error: deleteError } = await supabase.from("published_apps").delete().eq("id", appId)
+      if (deleteError) {
+        console.error(`[admin-expunge] delete failed for ${appId}:`, deleteError.message)
+        return reply.status(500).send({ error: { code: "delete_failed", message: deleteError.message } })
+      }
     }
 
     let r2Result = { deleted: 0, errors: 0 }
@@ -618,6 +675,14 @@ export async function adminRoutes(app: FastifyInstance) {
         r2_keys_count: r2Keys.length,
         r2_deleted: r2Result.deleted,
         r2_errors: r2Result.errors,
+        executions_redacted: redacted.executions,
+        jobs_redacted: redacted.jobs,
+        inner_runs_redacted: redacted.innerRuns,
+        reports_redacted: redacted.reports,
+        runs_erased: targets.runIds.length,
+        runs_skipped: skipped,
+        runs_before_run_tag: targets.runsBeforeRunTag,
+        app_deleted: appDeleted,
       },
     })
     if (auditError) {
@@ -628,6 +693,14 @@ export async function adminRoutes(app: FastifyInstance) {
         r2KeysCollected: r2Keys.length,
         r2KeysDeleted: r2Result.deleted,
         r2Errors: r2Result.errors,
+        executionsRedacted: redacted.executions,
+        jobsRedacted: redacted.jobs,
+        innerRunsRedacted: redacted.innerRuns,
+        reportsRedacted: redacted.reports,
+        runsErased: targets.runIds.length,
+        runsSkipped: skipped,
+        runsBeforeRunTag: targets.runsBeforeRunTag,
+        appDeleted,
         auditWarning: "Audit log insert failed — record manually in admin_actions.",
       })
     }
@@ -638,6 +711,21 @@ export async function adminRoutes(app: FastifyInstance) {
       r2KeysCollected: r2Keys.length,
       r2KeysDeleted: r2Result.deleted,
       r2Errors: r2Result.errors,
+      executionsRedacted: redacted.executions,
+      jobsRedacted: redacted.jobs,
+      innerRunsRedacted: redacted.innerRuns,
+      reportsRedacted: redacted.reports,
+      runsErased: targets.runIds.length,
+      runsSkipped: skipped,
+      runsBeforeRunTag: targets.runsBeforeRunTag,
+      appDeleted,
     })
   })
+}
+
+/** `ids` in lists of at most 100, the size every `.in()` filter here keeps to. */
+function chunked(ids: readonly string[]): string[][] {
+  const out: string[][] = []
+  for (let i = 0; i < ids.length; i += 100) out.push(ids.slice(i, i + 100))
+  return out
 }

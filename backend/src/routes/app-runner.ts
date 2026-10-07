@@ -24,6 +24,7 @@ import { CreditsService } from "../ee/billing/credits.js"
 import { findRestrictedPickerValue, flattenItems } from "@nodaro/shared"
 import type { PickerCardRestrictions, PresentationItem } from "@nodaro/shared"
 import { executeAppRun } from "../services/app-execution.js"
+import { appRunStamp } from "../lib/app-run-stamp.js"
 import { shouldRefuseDegradedRunFor, personalPayer } from "../lib/billing-context.js"
 import { billingPairColumns } from "../lib/insert-job.js"
 import { extractAppInputSchema, flatInputsToOverrides, mergeInputOverrides } from "../lib/mcp/extract-app-inputs.js"
@@ -549,6 +550,9 @@ export async function appRunnerRoutes(app: FastifyInstance) {
           user_id: req.userId,
           status: "pending",
           trigger_type: "manual",
+          // The run it re-runs (lib/app-run-stamp.ts): the run's pointer moves
+          // to this execution, and the stamp keeps the earlier one findable.
+          trigger_data: appRunStamp(runId),
           // P14/W7: the hook-resolved payer's pair (personal adds nothing).
           ...billingPairColumns(req.billingContext),
         })

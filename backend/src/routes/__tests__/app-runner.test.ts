@@ -61,6 +61,7 @@ vi.mock("@/services/app-execution.js", async (importOriginal) => {
 import { appRunnerRoutes, invalidateAppCache } from "../app-runner.js"
 import { supabase } from "../../lib/supabase.js"
 import { orchestrationQueue } from "../../lib/orchestration-queue.js"
+import { appRunStampOf } from "../../lib/app-run-stamp.js"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1117,6 +1118,18 @@ describe("the draft lane writes an execution only onto a run of this app", () =>
     expect(res.statusCode).toBe(202)
     expect(executionInserts).toHaveLength(1)
     expect(runs.get(TEST_RUN_ID)).toMatchObject({ execution_id: TEST_EXECUTION_ID, status: "running" })
+  })
+
+  it("a re-run's execution is stamped with the run, so an expunge still finds the one it replaced", async () => {
+    const { executionInserts } = setupDraftLane(
+      runRow({ status: "completed", execution_id: "00000000-0000-4000-8000-0000000000e4" }),
+    )
+
+    const res = await post()
+
+    expect(res.statusCode).toBe(202)
+    expect(executionInserts).toHaveLength(1)
+    expect(appRunStampOf((executionInserts[0] as { trigger_data?: unknown }).trigger_data)).toBe(TEST_RUN_ID)
   })
 
   it("someone else's run answers 404 and starts no execution", async () => {

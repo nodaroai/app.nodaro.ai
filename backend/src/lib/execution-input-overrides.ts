@@ -47,6 +47,16 @@ export function pinnedInputOverridesOf(row: Readonly<Record<string, unknown>> | 
 }
 
 /**
+ * The pin cleared, for a write that erases it (the admin app expunge): `{
+ * input_overrides: null }`, or nothing once the column is known missing. A
+ * caller whose write then fails with `noteInputOverridesColumnError` retries
+ * with a fresh patch, which no longer names the column.
+ */
+export function inputOverridesCleared(): { readonly [COLUMN]?: null } {
+  return absent ? {} : { [COLUMN]: null }
+}
+
+/**
  * Pin the overrides a run applies on its execution. Called once per run, when
  * it starts, by the orchestrator — the one place every lane's overrides are
  * applied (`applyInputOverridesToNodes`), after a continuation merged its

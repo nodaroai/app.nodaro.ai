@@ -26,6 +26,11 @@ describe("apiErrorReasonKey", () => {
     expect(apiErrorReasonKey("too_many_actions")).toBe("apiErr.reason.tooManyMarks")
   })
 
+  it("maps the admin expunge's two internal failures", () => {
+    expect(apiErrorReasonKey("targets_failed")).toBe("apiErr.reason.server")
+    expect(apiErrorReasonKey("linked_redact_failed")).toBe("apiErr.reason.server")
+  })
+
   it("does not read inherited object keys as codes", () => {
     expect(apiErrorReasonKey("constructor")).toBeUndefined()
     expect(apiErrorReasonKey("toString")).toBeUndefined()
