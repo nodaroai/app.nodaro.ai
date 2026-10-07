@@ -212,6 +212,8 @@ const NODE_LABELS_HE: Record<string, string> = {
   "Telegram Channel Feed": "פיד ערוץ טלגרם",
   "Save to Collection": "שמירה לאוסף",
   "Read Collection": "קריאה מאוסף",
+  "Read Inspiration": "קריאה מההשראה",
+  "Read Competitor": "קריאת מתחרה",
   "Telegram Trigger": "טריגר טלגרם",
   "Telegram Account Trigger": "טריגר חשבון טלגרם",
   "Telegram Reply": "תשובה בטלגרם",

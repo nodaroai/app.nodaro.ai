@@ -127,6 +127,8 @@ import {
   ZoomIn,
   Megaphone,
   Database,
+  Bookmark,
+  Radar,
 } from "lucide-react"
 import { hasCredits } from "@/lib/edition"
 import { CLOUD_ONLY_NODE_TYPES } from "@/lib/cloud-only-nodes"
@@ -237,6 +239,26 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     group: "automate-get-content",
     keywords: ["collection", "records", "read", "history", "covered", "dedupe", "storage", "database"],
     // Preview: admins check the two collection nodes before they open to everyone.
+    adminOnly: true,
+  },
+  {
+    type: "inspiration-read",
+    label: "Read Inspiration",
+    icon: <Bookmark className="h-4 w-4" />,
+    category: "Input",
+    group: "automate-get-content",
+    keywords: ["inspiration", "saved", "posts", "bookmarks", "library", "instagram", "x", "twitter", "tiktok", "read"],
+    // Preview: admins check the post readers before they open to everyone (the Inspiration page is admin-only too).
+    adminOnly: true,
+  },
+  {
+    type: "competitor-read",
+    label: "Read Competitor",
+    icon: <Radar className="h-4 w-4" />,
+    category: "Input",
+    group: "automate-get-content",
+    keywords: ["competitor", "competitors", "brand", "rival", "posts", "scan", "instagram", "x", "twitter", "tiktok", "read"],
+    // Preview: admins check the post readers before they open to everyone (the Competitors page is admin-only too).
     adminOnly: true,
   },
   {

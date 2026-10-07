@@ -23,6 +23,8 @@ import {
   listResultsServeHandle,
   REPEATABLE_NODE_TYPES,
   selectListItems,
+  SOCIAL_READ_DEFAULT_LIMIT,
+  SOCIAL_READ_LIMIT_MAX,
   socialPostsFrom,
   socialSearchPickTop,
   TELEGRAM_FEED_DEFAULT_LIMIT,
@@ -94,6 +96,13 @@ function collectionReadFanOut(data: Record<string, unknown>, reruns: boolean, se
   return keptOrOne(records, selector)
 }
 
+/** A post reader (Read Inspiration, Read Competitor) on an Each wire: the posts it holds, else its limit. */
+function socialReaderFanOut(data: Record<string, unknown>, reruns: boolean, selector?: SelectorFields): number {
+  const held = Array.isArray(data.generatedJson) ? data.generatedJson.length : 0
+  const posts = !reruns && held > 0 ? held : Math.max(1, Math.min(SOCIAL_READ_LIMIT_MAX, Number(data.limit) || SOCIAL_READ_DEFAULT_LIMIT))
+  return keptOrOne(posts, selector)
+}
+
 /**
  * Fan-out producers in FAN_OUT_EACH_TYPES that are not list operations: one
  * downstream run per item they emit. A producer missing here is estimated as
@@ -114,6 +123,8 @@ export const EACH_WIRE_FAN_OUT: Readonly<Record<string, ProducerFanOut>> = {
   "social-search": socialSearchFanOut,
   "telegram-channel-feed": telegramFeedFanOut,
   "collection-read": collectionReadFanOut,
+  "inspiration-read": socialReaderFanOut,
+  "competitor-read": socialReaderFanOut,
 }
 
 const producerOf = (type: string | null | undefined): ProducerFanOut | undefined =>

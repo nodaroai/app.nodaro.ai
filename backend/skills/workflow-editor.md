@@ -1,6 +1,6 @@
 ---
-generated_at: 2026-10-06T04:15:33.455Z
-generated_from: 491960e9f
+generated_at: 2026-10-07T12:47:42.360Z
+generated_from: 1e55f1483
 ---
 
 # Nodaro Workflow Editor — General Patterns
@@ -105,6 +105,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `combine-audio` — Combine Audio
 - `combine-text` — Combine Text
 - `combine-videos` — Combine Videos
+- `competitor-read` — Read Competitor
 - `component` — Component
 - `composite` — Composite
 - `composition-effects` — Composition Effects
@@ -148,6 +149,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `image-overlay` — Image Overlay
 - `image-to-text` — Describe Image
 - `image-to-video` — Image to Video
+- `inspiration-read` — Read Inspiration
 - `instagram-post` — Instagram Post
 - `instagram-scrape` — Instagram
 - `instrumentation` — Instrumentation

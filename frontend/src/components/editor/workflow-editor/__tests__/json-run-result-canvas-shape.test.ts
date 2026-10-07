@@ -39,6 +39,11 @@ const collectionRecord = vi.hoisted(() => (id: string) => ({
 const collectionReadRun = vi.hoisted(() => ({
   jobId: "c0ffee00-0000-4000-8000-0000000000c1", records: [collectionRecord("r1"), collectionRecord("r2")], text: "- Story r1\n- Story r2", count: 2, since: "2026-10-05T08:00:00.000Z", collection: { id: "c1", name: "articles" },
 }))
+/** What a post reader's route answers: the posts (the Social Search shape), their digest, the range read. */
+const readerRun = vi.hoisted(() => {
+  const post = (id: string) => ({ id, url: `https://media.example.test/post/${id}`, text: `post ${id}`, platform: "tiktok", author: { handle: `@${id}`, name: `Author ${id}` }, metrics: { likes: 1 }, media: {}, hashtags: [], extra: {} })
+  return { jobId: "c0ffee00-0000-4000-8000-0000000000c3", posts: [post("p1"), post("p2")], text: "post p1\n\npost p2", count: 2, from: "2026-09-30T09:00:00.000Z", to: "2026-10-07T09:00:00.000Z" }
+})
 const collectionWriteRun = vi.hoisted(() => ({
   jobId: "c0ffee00-0000-4000-8000-0000000000c2", record: collectionRecord("r1"), outcome: "inserted" as const, evicted: 0, collection: { id: "c1", name: "articles" },
 }))
@@ -62,6 +67,8 @@ vi.mock("@/lib/api", async (importOriginal) => ({
   telegramChannelFetchApi: vi.fn(() => Promise.resolve(feedRun)),
   collectionReadApi: vi.fn(() => Promise.resolve(collectionReadRun)),
   collectionWriteApi: vi.fn(() => Promise.resolve(collectionWriteRun)),
+  inspirationReadApi: vi.fn(() => Promise.resolve(readerRun)),
+  competitorReadApi: vi.fn(() => Promise.resolve(readerRun)),
 }))
 vi.mock("../poll-job", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../poll-job")>()),
@@ -149,6 +156,9 @@ const SCENARIOS: Record<string, Scenario> = {
   // Both collection nodes answer from their route directly: the records / the record on generatedJson, the digest / headline on generatedText.
   "collection-read": { data: { collectionId: "c1", windowAmount: 24, windowUnit: "hours", limit: 50, order: "newest", textFormat: "headlines" } },
   "collection-write": { data: { collectionId: "c1" }, inputs: { prompt: JSON.stringify({ title: "Story r1", url: "https://news.example.test/r1" }) } },
+  // The post readers answer from their route directly: the posts on generatedJson, the digest on generatedText.
+  "inspiration-read": { data: { platform: "all", tag: "", period: "window", windowAmount: 7, windowUnit: "days", limit: 20, order: "newest" } },
+  "competitor-read": { data: { competitorId: "b1", platform: "all", role: "all", period: "window", windowAmount: 7, windowUnit: "days", limit: 20, order: "newest" } },
 }
 
 const typeOf = (key: string) => key.split(":")[0]!

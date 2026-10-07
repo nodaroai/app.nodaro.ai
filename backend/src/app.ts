@@ -137,6 +137,7 @@ import { nodePresetRoutes } from "./routes/node-presets.js"
 import { savedPostRoutes } from "./routes/saved-posts.js"
 import { collectionRoutes } from "./routes/collections.js"
 import { collectionNodeRoutes } from "./routes/collection-nodes.js"
+import { socialPostReadRoutes } from "./routes/social-post-reads.js"
 import { nodePresetGroupRoutes } from "./routes/node-preset-groups.js"
 import { promptSnippetRoutes } from "./routes/prompt-snippets.js"
 import { locationRestoreRoutes } from "./routes/location-restore.js"
@@ -611,6 +612,7 @@ export async function buildApp() {
   await app.register(collectionRoutes)
   // The two collection nodes (Save to Collection, Read Collection): sync-HTTP routes over the same store.
   await app.register(collectionNodeRoutes)
+  await app.register(socialPostReadRoutes)
   await app.register(nodePresetGroupRoutes)
   await app.register(promptSnippetRoutes)
   await app.register(locationRestoreRoutes)

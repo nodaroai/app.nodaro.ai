@@ -206,6 +206,8 @@ const NODE_LABELS_JA: Record<string, string> = {
   "Telegram Channel Feed": "Telegram チャンネルフィード",
   "Save to Collection": "コレクションに保存",
   "Read Collection": "コレクションを読み込む",
+  "Read Inspiration": "インスピレーションを読み込む",
+  "Read Competitor": "競合を読み込む",
   "Telegram Trigger": "Telegram トリガー",
   "Telegram Account Trigger": "Telegram アカウントトリガー",
   "Telegram Reply": "Telegram 返信",

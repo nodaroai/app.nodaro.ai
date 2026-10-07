@@ -206,6 +206,8 @@ const NODE_LABELS_PT_BR: Record<string, string> = {
   "Telegram Channel Feed": "Feed de canal do Telegram",
   "Save to Collection": "Salvar na coleção",
   "Read Collection": "Ler coleção",
+  "Read Inspiration": "Ler inspiração",
+  "Read Competitor": "Ler concorrente",
   "Telegram Trigger": "Gatilho do Telegram",
   "Telegram Account Trigger": "Gatilho de conta do Telegram",
   "Telegram Reply": "Resposta no Telegram",

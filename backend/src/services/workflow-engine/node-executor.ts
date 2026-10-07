@@ -108,6 +108,8 @@ export const SYNC_HTTP_NODES = new Set([
   "reduce",
   "collection-write",
   "collection-read",
+  "inspiration-read",
+  "competitor-read",
 ])
 
 /**
@@ -141,6 +143,8 @@ export const SYNC_HTTP_ROUTES: Record<string, string> = {
   "save-to-storage": "/v1/save-to-storage",
   "collection-write": "/v1/collection-write",
   "collection-read": "/v1/collection-read",
+  "inspiration-read": "/v1/inspiration-read",
+  "competitor-read": "/v1/competitor-read",
   "web-scrape": "/v1/web-scrape",
   "meta-ads-scrape": "/v1/meta-ads-scrape",
   "instagram-scrape": "/v1/instagram-scrape",
@@ -1116,6 +1120,24 @@ export function buildSyncHttpBody(
         limit: data.limit,
         order: data.order,
         textFormat: data.textFormat,
+        workflowId: ctx.workflowId,
+        nodeId: node.id,
+        userId: ctx.userId,
+      }
+
+    case "inspiration-read":
+    case "competitor-read":
+      // Reads by the node's own settings; nothing is wired in. A day is sent
+      // only in day mode, with the timezone the editor stored when it was picked.
+      return {
+        ...(node.type === "competitor-read" ? { competitorId: data.competitorId, role: data.role } : { tag: data.tag }),
+        platform: data.platform,
+        period: data.period,
+        windowAmount: data.windowAmount,
+        windowUnit: data.windowUnit,
+        ...(data.period === "day" ? { day: data.day, timezone: data.timezone } : {}),
+        limit: data.limit,
+        order: data.order,
         workflowId: ctx.workflowId,
         nodeId: node.id,
         userId: ctx.userId,

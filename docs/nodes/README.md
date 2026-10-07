@@ -169,6 +169,8 @@ Provide data to your workflow: text, images, video, audio, or external triggers.
 | [Telegram Account Trigger](./input/telegram-account-trigger.md) | Trigger workflow when a message arrives in a chosen chat of your connected Telegram account (Cloud, preview) | React to posts in the channels and groups you follow, private ones included |
 | [Telegram Channel Feed](./input/telegram-channel-feed.md) | Read recent posts from a public Telegram channel | Follow channels, pull posts, rewrite and repost |
 | [Read Collection](./input/collection-read.md) | Read what a collection holds from the last hours or days | Know what a pipeline already covered; feed saved records into a prompt |
+| [Read Inspiration](./input/inspiration-read.md) | Read the posts saved to your Inspiration library, by platform, tag and period | Feed the posts you collected into a prompt |
+| [Read Competitor](./input/competitor-read.md) | Read a tracked competitor's posts, by platform and period, as its scans found them | Learn from what a brand published this week |
 
 ---
 

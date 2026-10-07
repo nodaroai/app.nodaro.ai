@@ -47,6 +47,8 @@ const NODE_TYPE_TO_ROUTE_FILE: Record<string, string> = {
   "reduce": "backend/src/routes/reduce.ts",
   "collection-write": "backend/src/routes/collection-nodes.ts",
   "collection-read": "backend/src/routes/collection-nodes.ts",
+  "inspiration-read": "backend/src/routes/social-post-reads.ts",
+  "competitor-read": "backend/src/routes/social-post-reads.ts",
 }
 
 const REPO_ROOT = join(__dirname, "..", "..", "..", "..", "..")

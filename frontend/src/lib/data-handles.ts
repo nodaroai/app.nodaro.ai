@@ -43,6 +43,9 @@ export const LIST_PRODUCER_TYPES: ReadonlySet<string> = new Set<string>([
   "telegram-channel-feed",
   // Read Collection: one record per `listResults` item (an "each" wire).
   "collection-read",
+  // The post readers: one post per `listResults` item.
+  "inspiration-read",
+  "competitor-read",
 ])
 
 /**
@@ -81,6 +84,9 @@ export const JSON_PRODUCER_TYPES: ReadonlySet<string> = new Set<string>([
   // Collections: Read Collection's `json` carries the records (CollectionRecord[]), Save to Collection's the saved record.
   "collection-read",
   "collection-write",
+  // The post readers: `json` carries the posts (the Social Search shape).
+  "inspiration-read",
+  "competitor-read",
   // audio-sync's `json` handle carries { version, reference, offsets, notes }.
   "audio-sync",
   "list", "filter-list",

@@ -127,6 +127,9 @@ export const TEXT_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   // collection-read emits its records' digest (generatedText); collection-write the saved record's headline.
   "collection-read",
   "collection-write",
+  // The post readers emit their posts' digest (generatedText).
+  "inspiration-read",
+  "competitor-read",
   // Content Recipe's `text` handle is the readable recipe; Content Ideas emits
   // one creative brief per idea (and the digest of all of them) — text either
   // way, so both feed prompt/text inputs (Generate Script's topic above all).

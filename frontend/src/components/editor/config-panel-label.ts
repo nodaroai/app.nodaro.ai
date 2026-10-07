@@ -192,6 +192,8 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "publish-social": "Publish to Social",
   "telegram-channel-feed": "Telegram Channel Feed",
   "collection-read": "Read Collection",
+  "inspiration-read": "Read Inspiration",
+  "competitor-read": "Read Competitor",
   "collection-write": "Save to Collection",
   "telegram-trigger": "Telegram Trigger",
   "telegram-account-trigger": "Telegram Account Trigger",

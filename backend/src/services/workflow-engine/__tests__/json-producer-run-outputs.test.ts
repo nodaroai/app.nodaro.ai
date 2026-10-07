@@ -15,6 +15,7 @@
  * fails here first, and the editor's mapping is re-checked against the new shape.
  */
 import { describe, expect, it } from "vitest"
+import { socialPostsDigest } from "@nodaro/shared"
 import { executeExtractField, executeJsonProcess } from "../inline-executor.js"
 import { buildNodeOutputFromJobData } from "../output-extractor.js"
 import type { NodeExecutionState, SimpleEdge, SimpleNode } from "../types.js"
@@ -58,6 +59,9 @@ const collectionRecord = (id: string) => ({
 const RECORDS = [collectionRecord("r1"), collectionRecord("r2")]
 const RECORDS_DIGEST = "- Story r1 · 2026-10-06 · https://news.example.test/r1\n- Story r2 · 2026-10-06 · https://news.example.test/r2"
 const FEED_TEXT = "post 10\n\n---\n\npost 11"
+/** The post readers emit Social Search posts: a saved one carries when it was saved, a competitor's its role. */
+const SAVED_POSTS = [{ ...post("s1"), savedAt: "2026-10-06T09:00:00.000Z" }, { ...post("s2"), savedAt: "2026-10-05T09:00:00.000Z" }]
+const BRAND_POSTS = [{ ...post("b1"), role: "own" }, { ...post("b2"), role: "about" }]
 /** A job-backed node's output, from the job row its job wrote (pinned input). */
 const fromJobRow = (type: keyof typeof jobRows) => buildNodeOutputFromJobData(jobRows[type] as Record<string, unknown>, type)
 
@@ -90,6 +94,15 @@ function computeOutputs(): Record<string, unknown> {
       "collection-write": buildNodeOutputFromJobData(
         { json: collectionRecord("r1"), text: "Story r1", generatedText: "Story r1", recordId: "r1", outcome: "inserted", evicted: 0, collectionName: "News" },
         "collection-write",
+      ),
+      // The post readers write the posts on json (one listResults item each, derived) and the digest on text / generatedText.
+      "inspiration-read": buildNodeOutputFromJobData(
+        { json: SAVED_POSTS, text: socialPostsDigest(SAVED_POSTS as never), generatedText: socialPostsDigest(SAVED_POSTS as never), count: 2, from: "2026-09-30T09:00:00.000Z", to: "2026-10-07T09:00:00.000Z" },
+        "inspiration-read",
+      ),
+      "competitor-read": buildNodeOutputFromJobData(
+        { json: BRAND_POSTS, text: socialPostsDigest(BRAND_POSTS as never), generatedText: socialPostsDigest(BRAND_POSTS as never), count: 2, from: "2026-09-30T09:00:00.000Z", to: "2026-10-07T09:00:00.000Z" },
+        "competitor-read",
       ),
       "telegram-channel-feed": buildNodeOutputFromJobData(
         { json: FEED_POSTS, listResults: FEED_POSTS.map((p) => JSON.stringify(p)), text: FEED_TEXT, generatedText: FEED_TEXT, count: 2, latestId: 11 },

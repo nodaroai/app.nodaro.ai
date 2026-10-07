@@ -37,6 +37,8 @@ export const RUN_BUTTON_TYPES = new Set([
   // Same reasoning for the two collection nodes: free, and worth one try on
   // their own before a schedule relies on them.
   "collection-write", "collection-read",
+  // And for the two post readers: free reads of what the account holds.
+  "inspiration-read", "competitor-read",
 ])
 
 // Node types that produce media results (excludes text-only nodes like combine-text, split-text, extract-field, sub-workflow, social posts)
@@ -55,5 +57,7 @@ export const RESULT_PRODUCING_TYPES: ReadonlySet<string> = new Set([
   // button but nothing for a results gallery to show.
   t !== "webhook-output" &&
   // A collection write/read produces records (json + text), not media.
-  t !== "collection-write" && t !== "collection-read"
+  t !== "collection-write" && t !== "collection-read" &&
+  // A post reader produces posts (json + text), not media.
+  t !== "inspiration-read" && t !== "competitor-read"
 ))

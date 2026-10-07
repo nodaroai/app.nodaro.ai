@@ -26,6 +26,7 @@ export { SubWorkflowInputConfig, SubWorkflowOutputConfig, SubWorkflowConfig } fr
 export { ComponentConfig } from "./component-config"
 export { WebhookTriggerConfig, TelegramTriggerConfig, TelegramChannelFeedConfig } from "./trigger-configs"
 export { CollectionReadConfig, CollectionWriteConfig } from "./collection-configs"
+export { InspirationReadConfig, CompetitorReadConfig } from "./social-read-configs"
 export { TelegramAccountTriggerConfig } from "./telegram-account-trigger-config"
 export { TelegramAccountSendConfig } from "./telegram-account-send-config"
 export { ScheduleTriggerConfig } from "./schedule-trigger-config"

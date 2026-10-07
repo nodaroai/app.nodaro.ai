@@ -376,6 +376,12 @@ async function syncNodeResultsFromDB(nodes: WorkflowNode[]): Promise<{ nodes: Wo
             if (Array.isArray(outputData.json)) newData.generatedJson = outputData.json
             if (typeof outputData.generatedText === "string") newData.generatedText = outputData.generatedText
             break
+          case "inspiration-read":
+          case "competitor-read":
+            // The route writes the posts on json and their digest on text / generatedText.
+            if (Array.isArray(outputData.json)) newData.generatedJson = outputData.json
+            if (typeof outputData.generatedText === "string") newData.generatedText = outputData.generatedText
+            break
           case "collection-write":
             // The route writes the saved record on json, its headline on generatedText, and the outcome.
             if (outputData.json && typeof outputData.json === "object") newData.generatedJson = outputData.json

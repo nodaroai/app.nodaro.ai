@@ -64,6 +64,9 @@ export const JSON_RUN_RESULT_TYPES: ReadonlySet<string> = new Set([
   // Save to Collection's saved record on generatedJson, its headline on generatedText.
   "collection-read",
   "collection-write",
+  // The post readers: the posts on generatedJson, their digest on generatedText.
+  "inspiration-read",
+  "competitor-read",
   // Text to Dialogue: the audio AND, on a model that returns timings, the
   // Transcript (its `json` handle) — on generatedJson and on the take, as the
   // canvas run writes them (execute-node.ts).
@@ -271,6 +274,12 @@ export function jsonRunResultPatch(
   }
   if (nodeType === "collection-read") {
     // The records beside their digest — what the canvas run writes (execute-node.ts).
+    if (!Array.isArray(output.json)) return undefined
+    return { generatedJson: output.json, ...(typeof output.text === "string" ? { generatedText: output.text } : {}) }
+  }
+  if (nodeType === "inspiration-read" || nodeType === "competitor-read") {
+    // The posts beside their digest — what the canvas run writes (execute-node.ts).
+    // An empty read writes [] too, so the card says "no posts" instead of keeping the last run's.
     if (!Array.isArray(output.json)) return undefined
     return { generatedJson: output.json, ...(typeof output.text === "string" ? { generatedText: output.text } : {}) }
   }

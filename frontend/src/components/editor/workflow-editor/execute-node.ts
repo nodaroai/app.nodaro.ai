@@ -264,6 +264,8 @@ import type {
   SocialSearchNodeData,
   TelegramChannelFeedData,
   CollectionReadData,
+  InspirationReadData,
+  CompetitorReadData,
   CollectionWriteData,
   ExtractFieldNodeData,
   JsonProcessNodeData,
@@ -5503,6 +5505,55 @@ function executeNodeCore(
         .catch((err: Error) => {
           updateNodeData(node.id, { executionStatus: "failed", errorMessage: err.message || tx("nodeRun.collectionReadFailed") });
           guardedToast.error(err.message || tx("nodeRun.collectionReadFailed"));
+          throw err;
+        }),
+    );
+  }
+
+  if (node.type === "inspiration-read" || node.type === "competitor-read") {
+    const isCompetitor = node.type === "competitor-read";
+    const d = node.data as InspirationReadData | CompetitorReadData;
+    const { updateNodeData } = useWorkflowStore.getState();
+    const competitorId = isCompetitor ? (d as CompetitorReadData).competitorId : "";
+    if (isCompetitor && !competitorId) {
+      const msg = nodeRunError(d.label, "nodeRun.competitorPickOne");
+      updateNodeData(node.id, { executionStatus: "failed", errorMessage: msg });
+      guardedToast.error(msg);
+      return Promise.reject(new Error(msg));
+    }
+    updateNodeData(node.id, { ...RUN_START_RESET });
+    const period = {
+      period: d.period,
+      windowAmount: d.windowAmount,
+      windowUnit: d.windowUnit,
+      day: d.day,
+      timezone: d.timezone,
+      limit: d.limit,
+      order: d.order,
+      platform: d.platform,
+      nodeId: node.id,
+    };
+    return import("@/lib/api").then(({ inspirationReadApi, competitorReadApi }) =>
+      (isCompetitor
+        ? competitorReadApi({ ...period, competitorId, role: (d as CompetitorReadData).role })
+        : inspirationReadApi({ ...period, tag: (d as InspirationReadData).tag }))
+        .then((res) => {
+          // An empty read writes [] — the card says "no posts" instead of keeping the last run's.
+          // A read that did not complete answers with the job alone: nothing to show.
+          const posts = Array.isArray(res.posts) ? res.posts : [];
+          updateNodeData(node.id, {
+            executionStatus: "completed",
+            generatedJson: posts,
+            generatedText: res.text ?? "",
+          });
+          guardedToast.success(
+            posts.length === 0 ? tx("nodeRun.readerNone") : posts.length === 1 ? tx("nodeRun.readerReadOne") : tx("nodeRun.readerRead", { count: posts.length }),
+          );
+          return res.text ?? "";
+        })
+        .catch((err: Error) => {
+          updateNodeData(node.id, { executionStatus: "failed", errorMessage: err.message || tx("nodeRun.readerReadFailed") });
+          guardedToast.error(err.message || tx("nodeRun.readerReadFailed"));
           throw err;
         }),
     );

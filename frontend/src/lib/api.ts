@@ -8299,6 +8299,60 @@ export async function collectionReadApi(params: {
   return apiJson("/v1/collection-read", { body, workflowId: true, label: "apiErr.collectionRead" })
 }
 
+/**
+ * What a post reader's route answers: the posts of the period (the Social
+ * Search shape), their digest, the range read — or the job alone when the
+ * read did not complete (cancelled, or held by a result policy).
+ */
+export interface SocialReadResponse {
+  readonly jobId: string
+  readonly posts?: import("@nodaro/shared").SocialPost[]
+  readonly text?: string
+  readonly count?: number
+  readonly from?: string
+  readonly to?: string
+}
+
+/** The period fields both post readers send; a day only in day mode, with the timezone it was picked in. */
+function socialReadPeriodBody(params: {
+  period?: import("@nodaro/shared").SocialReadPeriod
+  windowAmount?: number
+  windowUnit?: import("@nodaro/shared").CollectionReadWindowUnit
+  day?: string
+  timezone?: string
+  limit?: number
+  order?: import("@nodaro/shared").CollectionReadOrder
+  platform?: string
+  nodeId?: string
+}): Record<string, unknown> {
+  const body: Record<string, unknown> = {}
+  if (params.period) body.period = params.period
+  if (params.windowAmount !== undefined) body.windowAmount = params.windowAmount
+  if (params.windowUnit) body.windowUnit = params.windowUnit
+  if (params.period === "day") {
+    if (params.day) body.day = params.day
+    if (params.timezone) body.timezone = params.timezone
+  }
+  if (params.limit !== undefined) body.limit = params.limit
+  if (params.order) body.order = params.order
+  if (params.platform) body.platform = params.platform
+  if (params.nodeId) body.nodeId = params.nodeId
+  return body
+}
+
+/** Read Inspiration: the person's saved posts of the period, optionally one platform and one tag. */
+export async function inspirationReadApi(params: Parameters<typeof socialReadPeriodBody>[0] & { tag?: string }): Promise<SocialReadResponse> {
+  const body = socialReadPeriodBody(params)
+  if (params.tag && params.tag.trim()) body.tag = params.tag.trim()
+  return apiJson("/v1/inspiration-read", { body, workflowId: true, label: "apiErr.inspirationRead" })
+}
+
+/** Read Competitor: a tracked brand's posts of the period as its scans found them. */
+export async function competitorReadApi(params: Parameters<typeof socialReadPeriodBody>[0] & { competitorId: string; role?: import("@nodaro/shared").CompetitorReadRole }): Promise<SocialReadResponse> {
+  const body = { ...socialReadPeriodBody(params), competitorId: params.competitorId, ...(params.role ? { role: params.role } : {}) }
+  return apiJson("/v1/competitor-read", { body, workflowId: true, label: "apiErr.competitorRead" })
+}
+
 /** What the Save to Collection node's route answers: the record saved (or already there), the outcome, the collection. */
 export async function collectionWriteApi(params: {
   collectionId: string

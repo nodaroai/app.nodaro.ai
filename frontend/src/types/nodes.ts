@@ -9,6 +9,7 @@ import { IMAGE_STYLE_PRESETS, GVP_PROVIDERS, getAspectRatiosForVideoModel, getVi
 import type { FrameFit, FrameDelivery } from "@nodaro/shared"
 import type { EditedEdl, PassThroughWarning } from "@nodaro/shared"
 import type { ScheduleRule } from "@nodaro/shared"
+import type { SocialPlatform, SocialPost, SocialReadPeriod, CompetitorReadRole } from "@nodaro/shared"
 import type { VideoOverlayFit, VideoOverlayLayerInput, VideoOverlayOutputAspect, VideoOverlayWarning } from "@nodaro/shared"
 
 export type NodeCategory = "input" | "parameter" | "ai" | "processing" | "output" | "scene" | "character" | "face" | "object" | "creature" | "location" | "utility"
@@ -6691,6 +6692,66 @@ export type CollectionReadData = {
   generatedText?: string
 }
 
+/**
+ * Read Inspiration — the posts saved to the person's Inspiration library in a
+ * period (by the day each was saved), optionally one platform and one tag.
+ * Emits them the way Social Search does: `json` the posts, `text` their digest.
+ */
+export type InspirationReadData = {
+  [key: string]: unknown
+  label: string
+  /** One platform, or "all". */
+  platform: SocialPlatform | "all"
+  /** Only saves carrying this tag; "" for any. */
+  tag: string
+  /** `window`: the last N hours or days. `day`: one calendar day. */
+  period: SocialReadPeriod
+  windowAmount: number
+  windowUnit: CollectionReadWindowUnit
+  /** The calendar day in day mode (YYYY-MM-DD). */
+  day?: string
+  /** The browser's timezone when the day was picked (IANA); the server reads the day in it. */
+  timezone?: string
+  limit: number
+  order: CollectionReadOrder
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  currentJobId?: string
+  currentJobProgress?: number
+  /** The posts the last run read (the `json` handle). */
+  generatedJson?: SocialPost[]
+  /** Their digest (the `text` handle). */
+  generatedText?: string
+}
+
+/**
+ * Read Competitor — a tracked brand's posts as its scans found them, by the
+ * day each was published; optionally one platform and the brand's own posts
+ * or the posts about it. Nodaro Cloud.
+ */
+export type CompetitorReadData = {
+  [key: string]: unknown
+  label: string
+  competitorId: string
+  /** Shown before the brand list arrives; the name is looked up live by id. */
+  competitorName?: string
+  platform: SocialPlatform | "all"
+  role: CompetitorReadRole
+  period: SocialReadPeriod
+  windowAmount: number
+  windowUnit: CollectionReadWindowUnit
+  day?: string
+  timezone?: string
+  limit: number
+  order: CollectionReadOrder
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  currentJobId?: string
+  currentJobProgress?: number
+  generatedJson?: SocialPost[]
+  generatedText?: string
+}
+
 export interface GenerativePipelineNodeData {
   [key: string]: unknown
   label?: string
@@ -6964,6 +7025,8 @@ export type SceneNodeData =
   | TelegramChannelFeedData
   | CollectionWriteData
   | CollectionReadData
+  | InspirationReadData
+  | CompetitorReadData
   | SocialPostData
   | MusicGenreData
   | MusicMoodData
@@ -7174,6 +7237,8 @@ export type SceneNodeType =
   | "telegram-channel-feed"
   | "collection-write"
   | "collection-read"
+  | "inspiration-read"
+  | "competitor-read"
   | "component"
   | "music-genre"
   | "music-mood"
@@ -10412,6 +10477,43 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       order: "newest",
       textFormat: "headlines",
     } as CollectionReadData,
+  },
+  {
+    type: "inspiration-read",
+    label: "Read Inspiration",
+    category: "input",
+    creditCost: 0,
+    inputs: [],
+    outputs: ["json", "text"],
+    defaultData: {
+      label: "Read Inspiration",
+      platform: "all",
+      tag: "",
+      period: "window",
+      windowAmount: 7,
+      windowUnit: "days",
+      limit: 20,
+      order: "newest",
+    } as InspirationReadData,
+  },
+  {
+    type: "competitor-read",
+    label: "Read Competitor",
+    category: "input",
+    creditCost: 0,
+    inputs: [],
+    outputs: ["json", "text"],
+    defaultData: {
+      label: "Read Competitor",
+      competitorId: "",
+      platform: "all",
+      role: "all",
+      period: "window",
+      windowAmount: 7,
+      windowUnit: "days",
+      limit: 20,
+      order: "newest",
+    } as CompetitorReadData,
   },
   {
     type: "collection-write",

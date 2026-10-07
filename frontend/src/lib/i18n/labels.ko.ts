@@ -206,6 +206,8 @@ const NODE_LABELS_KO: Record<string, string> = {
   "Telegram Channel Feed": "Telegram 채널 피드",
   "Save to Collection": "컬렉션에 저장",
   "Read Collection": "컬렉션 읽기",
+  "Read Inspiration": "영감 읽기",
+  "Read Competitor": "경쟁사 읽기",
   "Telegram Trigger": "Telegram 트리거",
   "Telegram Account Trigger": "Telegram 계정 트리거",
   "Telegram Reply": "Telegram 답장",

@@ -234,6 +234,8 @@ import {
   TelegramAccountSendConfig,
   TelegramChannelFeedConfig,
   CollectionReadConfig,
+  InspirationReadConfig,
+  CompetitorReadConfig,
   CollectionWriteConfig,
   InstagramPostConfig,
   TiktokPostConfig,
@@ -537,6 +539,8 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "telegram-account-trigger": return <TelegramAccountTriggerConfig key={selectedNodeId ?? ""} {...configProps} onUpdate={updateAccountTrigger} />
     case "telegram-channel-feed": return <TelegramChannelFeedConfig {...configProps} nodeId={selectedNodeId} />
     case "collection-read": return <CollectionReadConfig {...configProps} />
+    case "inspiration-read": return <InspirationReadConfig {...configProps} />
+    case "competitor-read": return <CompetitorReadConfig {...configProps} />
     case "collection-write": return <CollectionWriteConfig {...configProps} />
     case "sub-workflow-input": return <SubWorkflowInputConfig {...configProps} />
     case "sub-workflow-output": return <SubWorkflowOutputConfig {...configProps} />

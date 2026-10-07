@@ -166,6 +166,8 @@ export const NODE_CREDIT_COSTS: Record<string, number> = {
   "telegram-channel-feed": 10,
   "collection-read": 0,
   "collection-write": 0,
+  "inspiration-read": 0,
+  "competitor-read": 0,
   "save-to-storage": 0,
   "qa-check": 20,
   "image-critic": 20,
@@ -771,6 +773,9 @@ export const EXECUTABLE_TYPES = new Set([
   // Collections: both answer from their route directly (no job to poll).
   "collection-read",
   "collection-write",
+  // The post readers answer from their route directly too.
+  "inspiration-read",
+  "competitor-read",
   "qa-check",
   "image-critic",
   "web-scrape",

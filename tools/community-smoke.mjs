@@ -953,6 +953,20 @@ await check("Camera Switch is a Nodaro-exclusive: omitted from discovery, run re
   return "camera-switch absent from discovery + POST refused 503 nodaro_connection_required"
 })
 
+await check("Read Competitor is Cloud-only: a run is refused 503 not_available, never a 404 or a hang", async () => {
+  // Competitors are served by the Cloud plugin, which a community install does
+  // not load; discovery already omits the node (the cloud-only list above). The
+  // route itself is core, so a direct call must say the feature is not here.
+  const run = await api("/v1/competitor-read", {
+    method: "POST",
+    token: ctx.token,
+    body: { competitorId: "00000000-0000-4000-8000-000000000001" },
+  })
+  assert(run.status === 503, `POST /v1/competitor-read expected 503, got ${run.status}: ${run.text.slice(0, 300)}`)
+  assert(run.json?.error?.code === "not_available", `expected error.code "not_available", got ${JSON.stringify(run.json?.error?.code)}: ${run.text.slice(0, 300)}`)
+  return "503 not_available"
+})
+
 await check("the Basic 3D scene nodes stay available on community", async () => {
   // Basic is NOT engine-gated: it is LLM authoring plus the platform's own
   // Three.js renderer, so a keyless install still lists it and refuses it later

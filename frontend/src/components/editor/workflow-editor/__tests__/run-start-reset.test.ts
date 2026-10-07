@@ -112,8 +112,9 @@ describe("run-start patches reset the whole run state", () => {
     // guard above pass vacuously.
     const expected: Record<string, number> = {
       // +1 audio-sync (podcast B3); +2 content-recipe / content-ideas; +1
-      // camera-switch (podcast B5); +2 collection-read / collection-write.
-      "workflow-editor/execute-node.ts": 35,
+      // camera-switch (podcast B5); +2 collection-read / collection-write;
+      // +1 the post readers (inspiration-read / competitor-read share one block).
+      "workflow-editor/execute-node.ts": 36,
       "workflow-editor/asset-executors.ts": 5,
       "workflow-editor/component-executor.ts": 1,
       "workflow-editor/list-execution.ts": 1,

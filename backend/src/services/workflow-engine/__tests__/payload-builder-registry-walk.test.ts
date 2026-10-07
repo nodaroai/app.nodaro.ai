@@ -108,6 +108,10 @@ const NON_BUILDPAYLOAD_NODES: ReadonlySet<string> = new Set([
   // iteration; buildPayload is never asked for them.
   "collection-read",
   "collection-write",
+  // The post readers answer from their route (POST /v1/inspiration-read,
+  // /v1/competitor-read) the same way.
+  "inspiration-read",
+  "competitor-read",
   "qa-check",
   "save-to-storage",
   "web-scrape",

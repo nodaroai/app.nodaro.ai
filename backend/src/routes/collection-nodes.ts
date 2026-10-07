@@ -25,6 +25,7 @@ import { markJobCompleted } from "../workers/shared.js"
 import { creditGuard } from "../middleware/credit-guard.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { extractNodeId, extractWorkflowId } from "../lib/request-helpers.js"
+import { machineCredentialLimit } from "../lib/machine-credential-limit.js"
 import { findCollection, readRecordsPage, toRecord, writeCollectionRecord } from "../lib/collections-store.js"
 
 /**
@@ -135,26 +136,6 @@ async function failJob(jobId: string, message: string) {
   await markJobFailed(jobId, { error_message: message })
 }
 
-/**
- * The per-minute limit on the two node routes (#1890). They are run lanes:
- * the editor's Run (a person's session) and the orchestrator (the internal
- * secret) call them once per item of a fan-out, so a cap there would fail a
- * long run halfway. A direct caller with an API token or an app token, the
- * credentials the Collections API limits, gets that API's record rate per
- * credential, so these routes are not a way around it. The limiter runs
- * before auth, so it reads the credential's shape. A forged `ndr_` token is
- * limited and then refused, and any other forged header is refused by auth.
- */
-const MACHINE_CREDENTIAL = /^Bearer ndr_/
-function machineCredentialLimit(max: number) {
-  return {
-    rateLimit: {
-      max,
-      timeWindow: "1 minute",
-      allowList: (req: FastifyRequest) => !MACHINE_CREDENTIAL.test(req.headers.authorization ?? ""),
-    },
-  }
-}
 
 export async function collectionNodeRoutes(app: FastifyInstance): Promise<void> {
   // Save to Collection — 0 credits; the guard keeps the account gates and reserves nothing.

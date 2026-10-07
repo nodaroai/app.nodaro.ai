@@ -393,6 +393,8 @@ function getMiniMapNodeColor(node: { type?: string }): string {
       nodeType === 'upload-audio' ||
       nodeType === 'rss-feed' ||
       nodeType === 'collection-read' ||
+      nodeType === 'inspiration-read' ||
+      nodeType === 'competitor-read' ||
       nodeType === 'reference-audio') return '#38BDF8'
   // Parameter nodes - modern indigo
   if (nodeType === 'image-provider' ||

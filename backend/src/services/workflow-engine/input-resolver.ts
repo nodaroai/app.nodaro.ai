@@ -1227,6 +1227,9 @@ const TEXT_SOURCE_NODE_TYPES = new Set([
   // Collections — Read Collection's digest, Save to Collection's headline.
   "collection-read",
   "collection-write",
+  // Read Inspiration / Read Competitor — the posts' digest (or the posts as JSON).
+  "inspiration-read",
+  "competitor-read",
   // Content Recipe (the readable recipe) and Content Ideas (one brief per idea,
   // or the digest) — text is the primary output of both.
   "content-recipe",

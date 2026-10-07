@@ -106,6 +106,17 @@ describe("computeEmptyInputSkipIds", () => {
     expect(busy.size).toBe(0)
   })
 
+  it("a Read Inspiration / Read Competitor whose period held nothing starves the writer behind it", () => {
+    for (const type of ["inspiration-read", "competitor-read"]) {
+      const graph: SimpleNode[] = [node("reader", type, { period: "window", windowAmount: 1, windowUnit: "days" }), node("writer", "llm-chat")]
+      const wires: SimpleEdge[] = [edge("reader", "writer", "text", "prompt")]
+      const idle = computeEmptyInputSkipIds({ level: [graph[1]!], nodes: graph, edges: wires, nodeStates: { reader: completed("") }, deadIds: new Set() })
+      expect([...idle]).toEqual(["writer"])
+      const busy = computeEmptyInputSkipIds({ level: [graph[1]!], nodes: graph, edges: wires, nodeStates: { reader: completed("post p1") }, deadIds: new Set() })
+      expect(busy.size).toBe(0)
+    }
+  })
+
   it("a Save to Collection straight after a feed with nothing new is skipped — a typed title or link keeps it running", () => {
     const graph: SimpleNode[] = [node("feed", "telegram-channel-feed", { channel: "acme" }), node("save", "collection-write", { collectionId: "c1" })]
     const wires: SimpleEdge[] = [edge("feed", "save", "text", "in")]

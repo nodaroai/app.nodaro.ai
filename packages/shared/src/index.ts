@@ -999,6 +999,23 @@ export {
   type SavedPostsLookupResult,
 } from "./saved-posts.js"
 
+// Read Inspiration / Read Competitor: the post readers (emit posts the way Social Search does).
+export {
+  INSPIRATION_READ_NODE_TYPE,
+  COMPETITOR_READ_NODE_TYPE,
+  SOCIAL_POST_READER_NODE_TYPES,
+  isSocialPostReaderNodeType,
+  SOCIAL_READ_LIMIT_MAX,
+  SOCIAL_READ_DEFAULT_LIMIT,
+  SOCIAL_READ_WINDOW_HOURS_MAX,
+  SOCIAL_READ_WINDOW_DAYS_MAX,
+  SOCIAL_READ_PERIODS,
+  COMPETITOR_READ_ROLES,
+  SOCIAL_READ_DAY_PATTERN,
+  type SocialReadPeriod,
+  type CompetitorReadRole,
+} from "./social-post-readers.js"
+
 export {
   COLLECTION_NAME_MAX,
   COLLECTION_DESCRIPTION_MAX,

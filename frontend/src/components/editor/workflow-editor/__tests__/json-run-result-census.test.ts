@@ -57,6 +57,9 @@ const RUN_OUTPUT: Record<string, Data> = {
   // Read Collection's json is the LIST of records (an object is not a result); Save to Collection's is the one record.
   "collection-read": { json: [JSON_OBJECT], text: MARK, listResults: [JSON.stringify(JSON_OBJECT)] },
   "collection-write": { json: JSON_OBJECT, text: MARK },
+  // The post readers' json is the LIST of posts (the Social Search shape).
+  "inspiration-read": { json: [POST], text: MARK, listResults: [JSON.stringify(POST)] },
+  "competitor-read": { json: [POST], text: MARK, listResults: [JSON.stringify(POST)] },
   // A scrape's json is the list of pages / ads / posts; an empty or non-list one is "no results".
   "web-scrape": { json: [JSON_OBJECT] },
   "meta-ads-scrape": { json: [JSON_OBJECT] },

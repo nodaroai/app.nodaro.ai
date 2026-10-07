@@ -57,6 +57,9 @@ export const CLOUD_ONLY_NODE_TYPES: ReadonlySet<string> = new Set([
   "content-ideas",
   // Social Search: the search runs in a private plugin and no relay fronts it.
   "social-search",
+  // Read Competitor: a tracked brand's scans are served by a private plugin;
+  // no relay fronts them.
+  "competitor-read",
   // Telegram Reply: sends through an account held by a private plugin daemon
   // on the cloud (or the owner's bot, chosen there); no relay fronts it.
   "telegram-account-send",

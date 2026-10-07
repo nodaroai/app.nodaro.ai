@@ -96,7 +96,10 @@ const ROUTE_DIRS = [
 // - collection-nodes.ts: the two free collection nodes (Save to Collection,
 //   Read Collection) — the plan's caps bound them, not credits; the guard keeps
 //   the account gates and reserves nothing.
-const CHECK_ONLY_ROUTES = ["nodaro-exclusive.ts", "save-to-storage.ts", "collection-nodes.ts"].sort()
+// - social-post-reads.ts: the two free post readers (Read Inspiration, Read
+//   Competitor) — they read posts the account already holds and call no
+//   provider; the guard keeps the account gates and reserves nothing.
+const CHECK_ONLY_ROUTES = ["nodaro-exclusive.ts", "save-to-storage.ts", "collection-nodes.ts", "social-post-reads.ts"].sort()
 
 /**
  * Markers whose presence means the route DOES reserve in-request. The
@@ -150,11 +153,12 @@ describe("check-only creditGuard routes (P14 scope rule)", () => {
 /**
  * `skipStorageCheck: true` lets a route past the MEDIA storage quota (#1890).
  * Only a route that stores no media may carry it: the two collection nodes
- * write and read text records. A new user is a new decision, made here. Every
- * install in the file carries it, so a media route added to the same file
- * cannot inherit the skip by accident.
+ * write and read text records, and the two post readers only read posts (a
+ * saved post's still was copied when it was saved). A new user is a new
+ * decision, made here. Every install in the file carries it, so a media route
+ * added to the same file cannot inherit the skip by accident.
  */
-const SKIP_STORAGE_ROUTES = ["collection-nodes.ts"]
+const SKIP_STORAGE_ROUTES = ["collection-nodes.ts", "social-post-reads.ts"].sort()
 
 describe("creditGuard routes that skip the storage quota (#1890)", () => {
   it("the skipping set is exactly the pinned list", () => {

@@ -17,7 +17,7 @@ import {
   TEXT_SOURCE_TYPES,
 } from "./execution-graph.js"
 import {
-  pro3DRenderShotStills, COMPOSER_PLAN_MAP, COMPOSER_PLAN_FIELDS, extractAllGeneratedResults, splitGeneratedItems, aggregateByType, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member, overlayVariantIdFromHandle, featuredMetaAdOutputs, featuredInstagramOutputs, unwrapEditPlanOutput, editPlanSavedOutput, resolveVideoLinkOutput, telegramAccountTriggerOutputs, isTelegramAccountTriggerNamedHandle, pickSocialPosts, socialPostsFrom, socialPostsDigest, FAN_OUT_EACH_HANDLES } from "@nodaro/shared"
+  pro3DRenderShotStills, COMPOSER_PLAN_MAP, COMPOSER_PLAN_FIELDS, extractAllGeneratedResults, splitGeneratedItems, aggregateByType, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member, overlayVariantIdFromHandle, featuredMetaAdOutputs, featuredInstagramOutputs, unwrapEditPlanOutput, editPlanSavedOutput, resolveVideoLinkOutput, telegramAccountTriggerOutputs, isTelegramAccountTriggerNamedHandle, pickSocialPosts, socialPostsFrom, socialPostsDigest, FAN_OUT_EACH_HANDLES, isSocialPostReaderNodeType } from "@nodaro/shared"
 import type { SceneData, Transcript } from "@nodaro/shared"
 import { isRenderNodeType, renderResultStamp, savedRenderOutput } from "@nodaro/shared"
 import { buildScenePrompt } from "@nodaro/prompts"
@@ -816,6 +816,13 @@ export function getPrimaryOutput(
   }
   if (sourceType === "collection-write") {
     if (sourceHandle === "json" || !sourceHandle) return output.json === undefined ? output.text : JSON.stringify(output.json)
+    return output.text
+  }
+  // Read Inspiration / Read Competitor: `json` → the posts (stringified for
+  // text consumers), `text` or no handle → their digest. An empty read is
+  // NOTHING on both pips, as for Read Collection.
+  if (isSocialPostReaderNodeType(sourceType)) {
+    if (sourceHandle === "json") return Array.isArray(output.json) && output.json.length > 0 ? JSON.stringify(output.json) : undefined
     return output.text
   }
 
@@ -1625,6 +1632,14 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
     const text = data.generatedText
     return typeof text === "string" && text.trim() ? { text } : undefined
   }
+  // Read Inspiration / Read Competitor → the posts their last run read
+  // (data.generatedJson), their digest and one item per post — what a skipped
+  // / "Run from here" node passes on without reading again.
+  if (isSocialPostReaderNodeType(type)) {
+    const posts = socialPostsFrom(data.generatedJson)
+    if (posts.length === 0) return undefined
+    return { json: posts, text: socialPostsDigest(posts), listResults: posts.map((p) => JSON.stringify(p)) }
+  }
   if (type === "collection-write") {
     const record = data.generatedJson
     if (record && typeof record === "object" && !Array.isArray(record)) {
@@ -2002,6 +2017,13 @@ export function buildNodeOutputFromJobData(
   if (nodeType === "collection-read" && Array.isArray(outputData.json)) {
     output.json = outputData.json
     output.listResults = (outputData.json as unknown[]).map((r) => JSON.stringify(r))
+  }
+  // Read Inspiration / Read Competitor: the routes write the posts on `json`
+  // (one `listResults` item each, derived here as for Read Collection) and the
+  // digest on text / generatedText.
+  if (isSocialPostReaderNodeType(nodeType) && Array.isArray(outputData.json)) {
+    output.json = outputData.json
+    output.listResults = (outputData.json as unknown[]).map((p) => JSON.stringify(p))
   }
   if (nodeType === "collection-write" && outputData.json && typeof outputData.json === "object" && !Array.isArray(outputData.json)) {
     output.json = outputData.json
