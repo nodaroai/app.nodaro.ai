@@ -1,5 +1,18 @@
 # @nodaro/prompts
 
+## 1.32.0
+
+### Minor Changes
+
+- 23c76ca: `stripAudioTags(text)` — removes inline `[audio tags]` from speech text, for a model that does not perform them. Moved here from the backend so a client's speech estimate counts exactly the characters the server sends.
+- 9a8dfa9: `WIRED_OUTPUT_NODE_TYPES`: the output nodes that send exactly what is wired into them (Webhook Output and the social post nodes). The orchestrator skips one with `skipReason: "empty_input"` when every wire into it carried nothing in this run, instead of posting an empty payload or failing the run.
+
+### Patch Changes
+
+- Updated dependencies [95bf99c]
+- Updated dependencies [23c76ca]
+  - @nodaro/shared@3.23.0
+
 ## 1.31.0
 
 ### Minor Changes

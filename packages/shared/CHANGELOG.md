@@ -1,5 +1,14 @@
 # @nodaro/shared
 
+## 3.23.0
+
+### Minor Changes
+
+- 95bf99c: Add `renderPlanRowClipKeys`: the clip key of every iteration of a render's fan-out, row-aligned with its batch, under the same-run rule (`ranIds`: behind a pass-through node that did not run in the run, no row is keyed). Add `renderSentRowStamps` and `renderRunQuality`, so both engines stamp each batch row (a failed one too) with the quality and the clip it was sent for. `RunResultRowStamp` gains an optional `cancelled` (a row that never ran). `EXECUTION_DATA_KEYS` gains `__listResultStamps`, a render's row stamps on the node.
+- 23c76ca: Each speech model's catalog `pricing` gains a second row, `<model>:per-100-chars`, with the per-started-100-characters credit price and the note `SPEECH_UNIT_PRICE_NOTE` (exported); the two notes that said `per 1K chars` for a flat per-request price are removed. Served by `GET /v1/models` and `list_models` only on an instance that prices speech by length — a client that sees the row quotes `speechCredits(characters, row)`, else the flat row.
+
+  A `field` presentation item, and a `node` item for a Text node exposed whole, may carry `maxLength` — for a text input, the most characters the app user may enter. It is enforced when the app runs (400 `input_too_long`), served by `get_app_inputs`, and caps the price a speech node fed by that input is advertised at.
+
 ## 3.22.0
 
 ### Minor Changes
