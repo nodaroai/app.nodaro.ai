@@ -75,6 +75,10 @@ const EXPECTED: Record<string, { count: number; why: string }> = {
   },
   "services/workflow-engine/scene3d-reference-scoping.ts": { count: 1, why: "calls: layout references, behind savedDataAllowed" },
   "workers/orchestrator-worker.ts": { count: 2, why: "calls: seeding a frozen / outside-the-subset node's state (seededFromSavedData)" },
+  "services/workflow-engine/relay-rehost-preflight.ts": {
+    count: 1,
+    why: "calls: the up-front re-host size scan seeds a NESTED graph's frozen nodes from their saved data, as the run's own seeds do — a scan-only state for a node the nested run does not execute, read before that run exists",
+  },
 }
 
 function sourceFiles(dir: string): string[] {

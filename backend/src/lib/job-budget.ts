@@ -51,7 +51,9 @@
  * handler, which cannot carry `livenessBudgetMs`, so the video worker's
  * dispatch site falls back to this registry (`declaredJobBudgetMs(job.name,
  * job.data)`) for any handler that declares none. Its leaf runs the EDL
- * timeline's formula at the worst-case slot count the payload allows
+ * timeline's formula at the worst-case slot count the payload allows, and —
+ * when the transcript can split the edit at its turns after dispatch (C2.4) —
+ * an upper bound over every split the turn rules allow
  * (`providers/video/speaker-view-budget.ts`). Until the Speaker View node
  * exists (C3.2) only the worker reads it; the node's dispatch fixture joins
  * `node-executor-budget-ceilings.test.ts` then.

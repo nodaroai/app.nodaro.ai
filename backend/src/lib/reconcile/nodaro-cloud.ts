@@ -16,6 +16,7 @@ import { markJobFailed } from "../job-failure.js"
 import { redactProviderDetail } from "../provider-error-detail.js"
 import { finalizeExclusiveCloudOutput } from "../../workers/handlers/nodaro-exclusive-relay.js"
 import type { CloudJob } from "../../providers/nodaro/client.js"
+import type { FinalizeClaimant } from "../job-finalize.js"
 import { bumpAttemptsOrExhaust } from "./bump-attempts.js"
 import { refundReservedCreditsForJob } from "../credits-job-lifecycle.js"
 
@@ -46,7 +47,10 @@ interface NodaroCloudJobRow {
   readonly job_type: string | null
 }
 
-export async function reconcileNodaroCloudJob(row: NodaroCloudJobRow): Promise<void> {
+export async function reconcileNodaroCloudJob(
+  row: NodaroCloudJobRow,
+  opts?: { claimant?: FinalizeClaimant },
+): Promise<void> {
   if (!row.provider_task_id || !row.job_type) {
     await bumpAttemptsOrExhaust(row.id, "nodaro-cloud row missing provider_task_id/job_type")
     return
@@ -95,6 +99,9 @@ export async function reconcileNodaroCloudJob(row: NodaroCloudJobRow): Promise<v
         cloudJob,
         jobUserId: rowMeta?.user_id,
         shouldWatermark: rowMeta?.should_watermark === true,
+        // The finalize claim's owner: the cron, unless a stall re-pick recovers
+        // inline (as the worker, so it re-takes its crashed predecessor's claim).
+        claimant: opts?.claimant ?? "cron",
       })
     } catch (err) {
       await bumpAttemptsOrExhaust(row.id, err instanceof Error ? err.message : String(err))

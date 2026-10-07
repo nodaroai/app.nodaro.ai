@@ -16,9 +16,12 @@ import { Agent } from "undici"
 import { providerFetch } from "../egress.js"
 import { nodaroCloudFetch, getNodaroCredential, nodaroCloudBase } from "../../lib/nodaro-connect.js"
 import { config } from "../../lib/config.js"
-import { r2KeyFromOurUrl, readR2Object } from "../../lib/storage.js"
+import { getR2ObjectSize, r2KeyFromOurUrl, readR2Object } from "../../lib/storage.js"
 import { isUnroutableMediaUrl } from "../../lib/media-portability.js"
 import type { ProgressCallback } from "../provider.interface.js"
+import { MAX_REHOST_BYTES } from "./rehost-limit.js"
+
+export { MAX_REHOST_BYTES }
 
 /** Poll every 2s for the first few attempts, then 4s (spec: 2-4s interval). */
 const POLL_FAST_MS = 2_000
@@ -342,8 +345,6 @@ function isOurMediaUrl(url: string): boolean {
 // "can the cloud fetch this?" and the workflow export/import checks, #866).
 const isCloudUnreachableUrl = isUnroutableMediaUrl
 
-/** Ceiling for re-hosted media, matched to the cloud upload route's own cap. */
-const MAX_REHOST_BYTES = 500 * 1_000_000
 
 const MIME_TO_UPLOAD_NAME: Record<string, string> = {
   "image/png": "frame.png",
@@ -369,10 +370,49 @@ function uploadNameFor(mime: string): string {
   return kind === "video" ? "clip.mp4" : kind === "audio" ? "audio.mp3" : "frame.png"
 }
 
-const tooLarge = (bytes: number): NodaroCloudError =>
-  new NodaroCloudError(
-    `nodaro.ai: media is too large to send to the cloud (${Math.round(bytes / 1_000_000)} MB; limit ${MAX_REHOST_BYTES / 1_000_000} MB)`,
-  )
+/** A media file over `MAX_REHOST_BYTES`. Carries its size (and the code
+ *  `media_too_large`) so a caller that knows WHICH file it was can name it —
+ *  the relay names the EDL source (SV12, decided 2026-10-06). */
+export class MediaTooLargeError extends NodaroCloudError {
+  readonly bytes: number
+  constructor(bytes: number) {
+    super(
+      `nodaro.ai: media is too large to send to the cloud (${Math.round(bytes / 1_000_000)} MB; limit ${MAX_REHOST_BYTES / 1_000_000} MB)`,
+      undefined,
+      "media_too_large",
+    )
+    this.name = "MediaTooLargeError"
+    this.bytes = bytes
+  }
+}
+
+const tooLarge = (bytes: number): NodaroCloudError => new MediaTooLargeError(bytes)
+
+/**
+ * The size of a media URL the re-host WOULD read, learned without reading it:
+ * our own object's size from the store, else a HEAD of our own URL. The same
+ * narrowing as `ensureCloudReachableMediaUrl` — a URL nodaro.ai can fetch
+ * itself, or a private host this install does not own, is never re-hosted and
+ * so never sized (`undefined`). A size neither can tell is `undefined` too:
+ * a preflight refuses only on a real hit, and the in-rehost cap stays the
+ * backstop.
+ */
+export async function rehostByteSize(url: string): Promise<number | undefined> {
+  if (!url || !isCloudUnreachableUrl(url) || !isOurMediaUrl(url)) return undefined
+  try {
+    const key = r2KeyFromOurUrl(url)
+    if (key) {
+      const stored = await getR2ObjectSize(key).catch(() => 0)
+      if (stored > 0) return stored
+    }
+    const head = await fetch(url, { method: "HEAD", signal: AbortSignal.timeout(10_000) }) // egress-allow: local self-probe
+    if (!head.ok) return undefined
+    const declared = Number(head.headers.get("content-length") ?? "")
+    return Number.isFinite(declared) && declared > 0 ? declared : undefined
+  } catch {
+    return undefined
+  }
+}
 
 /**
  * The bytes of one of OUR media urls, for the re-host upload.

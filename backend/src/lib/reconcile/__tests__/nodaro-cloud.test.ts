@@ -81,9 +81,19 @@ describe("reconcileNodaroCloudJob", () => {
       cloudJob,
       jobUserId: "user-1",
       shouldWatermark: true,
+      claimant: "cron",
     })
     expect(mocks.update).not.toHaveBeenCalled()
     expect(mocks.refund).not.toHaveBeenCalled()
+  })
+
+  it("finalizes as the claimant it was given — a stall re-pick recovers as the worker, the cron as the cron", async () => {
+    // The claimant is what the finalize claim is taken under: a Speaker View
+    // copy runs for up to an hour, and the cron's hasFreshFinalizeClaim must
+    // see that claim, or every tick starts its own copy of the same render.
+    mocks.cloudFetch.mockResolvedValue(okPoll({ id: "cloud-9", status: "completed", output_data: {} }))
+    await reconcileNodaroCloudJob(row({ job_type: "speaker-view" }), { claimant: "worker" })
+    expect(mocks.finalize.mock.calls[0]![0].claimant).toBe("worker")
   })
 
   it("hands the finalize the far end's `credits` verbatim — recovery writes the same relay provenance as the live path", async () => {

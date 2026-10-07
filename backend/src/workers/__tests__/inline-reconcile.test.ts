@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   reconcileReplicateJob: vi.fn().mockResolvedValue(undefined),
   reconcileElevenLabsJob: vi.fn().mockResolvedValue(undefined),
   reconcileFalJob: vi.fn().mockResolvedValue(undefined),
+  reconcileNodaroCloudJob: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock("../../lib/reconcile/kie.js", () => ({
@@ -21,6 +22,10 @@ vi.mock("../../lib/reconcile/elevenlabs.js", () => ({
 
 vi.mock("../../lib/reconcile/fal.js", () => ({
   reconcileFalJob: mocks.reconcileFalJob,
+}))
+
+vi.mock("../../lib/reconcile/nodaro-cloud.js", () => ({
+  reconcileNodaroCloudJob: mocks.reconcileNodaroCloudJob,
 }))
 
 import { tryInlineReconcile } from "../inline-reconcile.js"
@@ -120,6 +125,20 @@ describe("tryInlineReconcile", () => {
     )
     expect(mocks.reconcileKieJob).not.toHaveBeenCalled()
     expect(mocks.reconcileReplicateJob).not.toHaveBeenCalled()
+  })
+
+  it("dispatches nodaro-cloud to reconcileNodaroCloudJob as claimant 'worker' — a stall re-pick re-takes its own finalize claim", async () => {
+    await tryInlineReconcile({
+      id: "j-sv",
+      provider_kind: "nodaro-cloud",
+      provider_task_id: "cloud-sv",
+      reconcile_attempts: 0,
+      job_type: "speaker-view",
+    })
+    expect(mocks.reconcileNodaroCloudJob).toHaveBeenCalledWith(
+      { id: "j-sv", provider_task_id: "cloud-sv", reconcile_attempts: 0, job_type: "speaker-view" },
+      { claimant: "worker" },
+    )
   })
 
   it("no-op when provider_kind is null (cron handles legacy rows)", async () => {

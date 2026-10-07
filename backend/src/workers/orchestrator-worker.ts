@@ -60,6 +60,7 @@ import { previewStopRuleEnabled } from "../lib/preview-stop-rule-flag.js"
 import { pinExecutionInputOverrides } from "../lib/execution-input-overrides.js"
 import { nestedPreviewRenders, nestedPreviewRenderLocation } from "../services/workflow-engine/nested-preview-renders.js"
 import { seededFromSavedData } from "../services/workflow-engine/saved-data.js"
+import { findRelayRehostRefusals, nestedRelayRehostRefusals } from "../services/workflow-engine/relay-rehost-preflight.js"
 import { applyEdlRowSentStamps } from "../services/workflow-engine/payload-builder.js"
 import { executeNode, loadCompletedFanOutIterations, type ExecuteNodeResult } from "../services/workflow-engine/node-executor.js"
 import { labelRefHintContext } from "../services/workflow-engine/label-ref-hint-context.js"
@@ -858,6 +859,23 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
         await failExecution(executionId, PREVIEW_RENDER_NESTED)
         return
       }
+
+      // The re-host size scan (SV12) of the nested graphs: a Speaker View in a
+      // sub-workflow relays like any other on a self-host, and the parent's
+      // relayed nodes upstream would otherwise charge the connected cloud
+      // account before it failed. The top-level graph is scanned below, after
+      // its seeds; a nested graph's seeds are its own (relay-rehost-preflight.ts).
+      if (!hasCredits()) {
+        const nestedOversize = await nestedRelayRehostRefusals(nestedGraphs)
+        if (nestedOversize.length > 0) {
+          console.warn(
+            `[rehost-preflight] execution ${executionId} REFUSED — ${nestedOversize.length} nested relayed node(s) hold a source over the re-host cap: ` +
+              nestedOversize.map((r) => r.nodeId).join(", "),
+          )
+          await failExecution(executionId, nestedOversize.map((r) => r.message).join(" "))
+          return
+        }
+      }
     }
 
     if (nodes.length === 0) {
@@ -1056,6 +1074,27 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     for (const node of nodes) {
       if (!previewGated.has(node.id) || nodeStates[node.id]) continue
       nodeStates[node.id] = { status: "skipped", nodeType: node.type, completedAt: new Date().toISOString() }
+    }
+
+    // THE RE-HOST SIZE SCAN (SV12, decided 2026-10-06). On a self-host,
+    // Speaker View runs on nodaro.ai and the relay re-hosts each private
+    // source of its edit (500 MB cap). An edit the run can already read (saved,
+    // outside the subset, written on the node) with a source over the cap
+    // refuses the run HERE — after the seeds above, before any node dispatches
+    // — because a relayed node upstream is billed on the connected cloud
+    // account and would otherwise charge before Speaker View failed. Inert on
+    // the cloud, where nothing is relayed. `relay-rehost-preflight.ts` says
+    // what it cannot see (an edit made during the run; the relay checks those).
+    if (!hasCredits()) {
+      const oversize = await findRelayRehostRefusals(nodes, edges, nodeStates)
+      if (oversize.length > 0) {
+        console.warn(
+          `[rehost-preflight] execution ${executionId} REFUSED — ${oversize.length} relayed node(s) hold a source over the re-host cap: ` +
+            oversize.map((r) => r.nodeId).join(", "),
+        )
+        await failExecution(executionId, oversize.map((r) => r.message).join(" "))
+        return
+      }
     }
 
     // 4. Build execution levels (topological sort)
