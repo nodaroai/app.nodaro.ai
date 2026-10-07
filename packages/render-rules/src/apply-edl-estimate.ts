@@ -235,6 +235,16 @@ function edlMinutes(value: unknown): number | undefined {
   }
 }
 
+/**
+ * The minutes of a render's own inline EDL (`data.edl`), measured as
+ * {@link edlMinutes} measures it; `undefined` when it holds none. For a caller
+ * that does not know the render's wiring: with no inline EDL the render may be
+ * wired to any edit, so it prices the ceiling, never the one-minute floor.
+ */
+export function inlineEdlMinutes(data: Readonly<Record<string, unknown>> | undefined): number | undefined {
+  return edlMinutes(data?.edl)
+}
+
 /** Nodes whose output EDL is their input EDL re-cut by camera, never longer
  *  or shorter: the estimate reads through them to the edit that feeds them.
  *  Each holds `{ edl, transcript }` on `generatedJson`. */

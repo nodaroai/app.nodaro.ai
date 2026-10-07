@@ -17,6 +17,7 @@ import { filterCloneNodes, isRenderNodeType, stripTransientRuntimeData } from "@
 import type { RenderQuality, RunResultRowStamp } from "@nodaro/shared"
 import { buildWorkflowDelta, applyDeltaToGraph, findContestedNodes } from "@/lib/workflow-delta"
 import { orderNodesParentFirst } from "@/components/editor/workflow-editor/group-coords"
+import { savedProviderIds } from "@/components/editor/workflow-editor/estimate-run-credits"
 import { isStudioWorkflowSettings } from "@/lib/studio"
 import { isValidUuid } from "@/lib/uuid"
 import { collectRestorableSingleNodeJobs, applySingleNodeJobRestore } from "@/lib/single-node-restore"
@@ -1713,12 +1714,10 @@ export function useWorkflowPersistence(projectId?: string) {
           refreshEntityNodes(nodes)
         }
 
-        // Prefetch model credit costs for all nodes in one batch request
-        const modelIds = [...new Set(
-          nodes
-            .map((n) => (n.data as Record<string, unknown>).provider as string | undefined)
-            .filter(Boolean) as string[],
-        )]
+        // Prefetch model credit costs for all nodes in one batch request —
+        // each of several providers on a node too, or a cold cache prices the
+        // second at the coarse node-type row.
+        const modelIds = savedProviderIds(nodes)
         if (modelIds.length > 0) {
           prefetchModelCredits(modelIds).catch(() => {})
         }

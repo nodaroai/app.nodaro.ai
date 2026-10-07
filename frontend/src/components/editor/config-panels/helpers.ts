@@ -7,7 +7,7 @@ import { resolveEditPlanEstimateDurationSec } from "@/lib/edit-plan-estimate"
 import { editPlanPerMinuteReported } from "@/lib/edit-plan-modes"
 import { audioSyncCreditId, audioSyncWiredSourceCount } from "@/lib/audio-sync"
 import { wiredSocialPostsVideoSec } from "@/lib/video-analysis-handles"
-import { upstreamVideoDurationSec } from "@/lib/upstream-video-duration"
+import { videoSfxQuotedSec } from "@/lib/video-utility-estimate"
 import { speechQuote, upstreamSpeechText } from "@/lib/speech-estimate"
 // The core price cache (the same one `getCachedCredits` under @/ee re-exports):
 // a speech unit row cached there means the server prices speech by length.
@@ -626,12 +626,15 @@ export function getModelIdentifier(
   // `!provider` bail so a provider-less node is quoted on the default engine.
   if (nodeType === "text-to-audio") return textToAudioCreditId(data.provider as string | undefined, data.duration)
 
-  // Video SFX: the price row for the clip's length — the upstream video's
-  // reported duration through the rule the run charges by (videoSfxCreditId;
-  // the run itself measures the real file). Unknown → the 8s row, as the
+  // Video SFX: the price row for the clip's length through the rule the run
+  // charges by (videoSfxCreditId; the run itself measures the real file). A
+  // clip whose length the graph tells (a render's output, a chain of
+  // length-priced steps) is quoted at that length, at most 300 seconds, as the
+  // listing and the server's run estimate quote it (decided 2026-10-07); else
+  // the upstream video's reported duration. Unknown → the 8s row, as the
   // node's own Run button quotes.
   if (nodeType === "video-sfx") {
-    return videoSfxCreditId(upstreamVideoDurationSec(node.id, "video", nodes ?? [], edges ?? []))
+    return videoSfxCreditId(videoSfxQuotedSec(node, nodes ?? [], edges ?? [], reruns))
   }
 
   // Text to Speech / Text to Dialogue by length (decided 2026-10-06): when the

@@ -49,6 +49,19 @@ describe("useRunFromHereCredits", () => {
     expect(fetched.flat().some((id) => id.includes("gemini-3-flash"))).toBe(true)
   })
 
+  it("fetches each of several providers' prices, and prices both", async () => {
+    useWorkflowStore.setState({
+      nodes: [
+        node("t", "text-prompt", { text: "a cat" }),
+        node("img", "generate-image", { provider: "gpt-image-2", providers: ["gpt-image-2", "nano-banana-pro"] }),
+      ],
+      edges: [edge("t", "img", "prompt")],
+    } as never)
+    const { result } = renderHook(() => useRunFromHereCredits("t"))
+    await waitFor(() => expect(result.current).toBe(11 + 11))
+    expect(fetched.flat()).toEqual(expect.arrayContaining(["gpt-image-2", "nano-banana-pro"]))
+  })
+
   it("quotes nothing when nothing executable is downstream", () => {
     useWorkflowStore.setState({ nodes: [node("t", "text-prompt")], edges: [] } as never)
     const { result } = renderHook(() => useRunFromHereCredits("t"))

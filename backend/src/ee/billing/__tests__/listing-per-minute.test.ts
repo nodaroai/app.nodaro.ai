@@ -174,8 +174,9 @@ describe("the clip count fans out the render and the captions after it", () => {
     g.edges.push({ source: "render", target: "cap", sourceHandle: "media", targetHandle: "in", data: { outputMode: "each" } })
     return g
   }
-  // One caption run, as the run estimate prices it in this graph.
-  const captions = CreditsService.estimateWorkflowBaseCredits(clipPack(5).nodes, clipPack(5).edges, { runNodeIds: new Set(["cap"]) })
+  // One caption run, as the run estimate prices it in this graph: the run
+  // estimate counts the 5 clip runs too (decided 2026-10-07).
+  const captions = CreditsService.estimateWorkflowBaseCredits(clipPack(5).nodes, clipPack(5).edges, { runNodeIds: new Set(["cap"]) }) / 5
 
   it("5 clips: 5 renders of 2 minutes and 5 captions", () => {
     expect(listing(clipPack(5))).toEqual({

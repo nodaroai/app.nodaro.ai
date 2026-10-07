@@ -13,7 +13,9 @@ vi.mock("../types", async (importOriginal) => {
   }
 })
 
-import { estimateRunCreditLines, estimateRunCredits, runNodeLabel, sumRunCreditLines } from "../estimate-run-credits"
+import { estimateRunCreditLines, estimateRunCredits, runNodeLabel, savedProviderIds, sumRunCreditLines } from "../estimate-run-credits"
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
 import { NODE_DEF_MAP, type WorkflowNode } from "@/types/nodes"
 
 function n(id: string, type: string, data: Record<string, unknown> = { label: id }): WorkflowNode {
@@ -28,6 +30,13 @@ describe("estimateRunCredits", () => {
     const nodes = [n("n1", "generate-image"), n("n2", "totally-unknown-type")]
     // n1: cached 5 × 2 = 10; n2: unknown → fallback 1 × 2 = 2 → 12
     expect(estimateRunCredits(nodes, nodes, [], cachedCost)).toBe(12)
+  })
+
+  it("a cold cache prices a node as the node's own estimate does, not the coarse type row", () => {
+    // A Component carries its published price; the badge and the live app
+    // estimate always read it — the confirm and precheck must read the same.
+    const comp = n("c", "component", { label: "c", estimatedCredits: 40 })
+    expect(estimateRunCredits([comp], [comp], [], () => undefined)).toBe(40 * 2)
   })
 
   it("returns 0 for an empty executable set", () => {
@@ -82,5 +91,23 @@ describe("estimateRunCreditLines — another Preview render after this one", () 
     const lines = estimateRunCreditLines(nodes, nodes, edges, cachedCost)
     expect(lines.map((l) => l.nodeId)).toEqual(["cut", "cap", "cut2"])
     expect(estimateRunCredits(nodes, nodes, edges, cachedCost)).toBe(sumRunCreditLines(lines))
+  })
+})
+
+// Every surface that fetches prices asks for each of several providers' own,
+// or a cold cache prices the second at the coarse generate-image row.
+describe("savedProviderIds — what a workflow load prefetches", () => {
+  it("names each of several providers on a node, once", () => {
+    const img = n("img", "generate-image", { label: "img", provider: "gpt-image-2", providers: ["gpt-image-2", "nano-banana-pro"] })
+    const vid = n("vid", "generate-video", { label: "vid", provider: "kling-3" })
+    expect(savedProviderIds([img, vid]).sort()).toEqual(["gpt-image-2", "kling-3", "nano-banana-pro"])
+  })
+})
+
+describe("the Execute-workflow badge is the run's own estimate", () => {
+  it("computes through estimateWholeRun, never a loop of its own", () => {
+    const src = readFileSync(join(__dirname, "../workflow-editor-main.tsx"), "utf8")
+    expect(src).toContain("estimateWholeRun(")
+    expect(src).not.toMatch(/getCostMultiplier\(/)
   })
 })

@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { RunNodeButton } from "./run-node-button"
 import { PromptEditButton } from "./prompt-edit-button"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { useUpstreamVideoDuration } from "@/hooks/use-upstream-video-duration"
+import { useVideoSfxClipSec } from "@/hooks/use-video-sfx-clip-sec"
 import { videoSfxCreditId } from "@nodaro/shared"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { NODE_VISUAL_SCALE_FLOOR } from "@/lib/zoom-floor"
@@ -33,8 +33,10 @@ interface VideoSfxQuickToolbarProps {
  * `versions` (1-4 takes per run); everything else (prompt, negative,
  * CFG, steps, seed) lives in the full config panel.
  *
- * Credit display is duration-dependent: we walk the upstream video edge,
- * read the producer's reported duration, map it to its price row
+ * Credit display is duration-dependent: we read the length the graph gives
+ * the video wire (`useVideoSfxClipSec`: a render's output at its estimated
+ * minutes, a chain of length-priced steps, else the producer's reported
+ * duration), map it to its price row
  * (`replicate-mmaudio:8s` … `replicate-mmaudio:300s` — `videoSfxCreditId`,
  * the rule the route and the workflow run charge by; an unknown length is the
  * 8s row, a floor), look up its credits via `useModelCredits()`, and multiply
@@ -54,12 +56,12 @@ export function VideoSfxQuickToolbar({
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
 
-  // Walk to the upstream video producer (handle "video") and derive the
-  // bucket key. `useUpstreamVideoDuration` returns null when no edge,
-  // no source node, or no recognised duration field — in which case the
-  // bucket key falls back to `:8s` and the Run button shows the floor cost.
-  const upstreamDuration = useUpstreamVideoDuration(nodeId, "video")
-  const creditModelId = videoSfxCreditId(upstreamDuration)
+  // The clip length the graph gives the video (a render's output, a chain of
+  // length-priced steps), else the upstream node's own reported length —
+  // null when neither is known, in which case the bucket key falls back to
+  // `:8s` and the Run button shows the floor cost.
+  const clipSec = useVideoSfxClipSec(nodeId)
+  const creditModelId = videoSfxCreditId(clipSec)
   const baseCredits = useModelCredits(creditModelId, 1)
   const versions = Math.min(Math.max(1, data.versions ?? 1), 4)
   const credits = baseCredits * versions

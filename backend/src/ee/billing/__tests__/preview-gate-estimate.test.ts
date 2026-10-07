@@ -64,8 +64,10 @@ describe("the workflow estimate under the preview stop rule", () => {
 })
 
 describe("the listing estimate (stored at publish) ignores the stop rule", () => {
-  const whole = () => CreditsService.estimateWorkflowBaseCredits(nodes("proxy"))
+  // The whole graph: the render and the tail it gates. (Not the estimate with
+  // edges omitted: unknown wiring quotes a render at the 180-minute ceiling.)
   const render = () => CreditsService.estimateWorkflowBaseCredits([nodes("proxy")[0]], [])
+  const whole = () => render() + STATIC_CREDIT_COSTS["nano-banana"]!
 
   it("with the flag on, the listing's preview part counts the gated tail", async () => {
     const { preview } = await estimateWorkflowListingCredits(nodes("proxy"), edges, { publishType: "app" })
@@ -121,7 +123,7 @@ describe("the app listing estimate: the whole graph at Preview plus each Render 
   it("a Final render: no final part — the whole graph is the preview part", async () => {
     const { preview, final } = await split(nodes("final"), edges)
     expect(final).toBe(0)
-    expect(preview).toBe(CreditsService.estimateWorkflowBaseCredits(nodes("final")))
+    expect(preview).toBe(CreditsService.estimateWorkflowBaseCredits(nodes("final"), edges))
   })
 
   it("a template lists with the same function and the same figure", async () => {
@@ -131,7 +133,7 @@ describe("the app listing estimate: the whole graph at Preview plus each Render 
   it("a component never stops at a Preview: its final part is 0, its preview part the whole graph", async () => {
     const { preview, final } = await estimateWorkflowListingCredits(nodes("proxy"), edges, { publishType: "component" })
     expect(final).toBe(0)
-    expect(preview).toBe(CreditsService.estimateWorkflowBaseCredits(nodes("proxy")))
+    expect(preview).toBe(CreditsService.estimateWorkflowBaseCredits(nodes("proxy"), edges, { scope: "whole-graph" }))
   })
 
   it("the base-price listing (what a built-in template pins) is the same split", async () => {
@@ -233,7 +235,7 @@ describe("PREVIEW_STOP_RULE_ENABLED off (production until Render final): dev bef
     const quoted = CreditsService.estimateWorkflowBaseCredits(nodes("proxy"), edges)
     const render = CreditsService.estimateWorkflowBaseCredits([nodes("proxy")[0]], [])
     expect(quoted - render).toBe(STATIC_CREDIT_COSTS["nano-banana"])
-    expect(quoted).toBe(CreditsService.estimateWorkflowBaseCredits(nodes("proxy")))
+    expect(quoted).toBe(CreditsService.estimateWorkflowBaseCredits(nodes("proxy"), edges, { scope: "whole-graph" }))
   })
 })
 

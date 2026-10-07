@@ -30,7 +30,7 @@ import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-di
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { videoNodeSizing } from "./video-node-defaults"
-import { useUpstreamVideoDuration } from "@/hooks/use-upstream-video-duration"
+import { useVideoSfxClipSec } from "@/hooks/use-video-sfx-clip-sec"
 import { videoSfxCreditId } from "@nodaro/shared"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { isValidVideoSfxConnection } from "@/lib/video-sfx-handles"
@@ -83,14 +83,13 @@ function VideoSfxNodeComponent({ id, data, selected }: NodeProps) {
   const shouldPlay = videoAutoplay && playState === "loop"
   const videoRef = useRef<HTMLVideoElement>(null)
 
-  // Credit display — the price row for the upstream clip's reported length
+  // Credit display — the price row for the clip's length (the graph's, else the upstream clip's reported one)
   // (`videoSfxCreditId`, the rule the route and the workflow run charge by)
   // × versions. Best-effort: the run ffprobes the real file and prices THAT.
   // BaseNode header is hidden so this number isn't user-visible in the body
   // (the quick toolbar shows it via RunNodeButton), but we still compute
   // and pass it for forward-compat with any future header reveal.
-  const upstreamDuration = useUpstreamVideoDuration(id, "video")
-  const baseCredits = useModelCredits(videoSfxCreditId(upstreamDuration), 1)
+  const baseCredits = useModelCredits(videoSfxCreditId(useVideoSfxClipSec(id)), 1)
   const versions = Math.min(Math.max(1, nodeData.versions ?? 1), 4)
   const credits = baseCredits * versions
 

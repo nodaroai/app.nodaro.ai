@@ -40,7 +40,9 @@ const GATED = /previewRunnable\(|estimateRunCredits\(/
 const GATED_SITES = new Set([
   "components/editor/workflow-editor/run-handlers.ts", // Run / from-here / selected: pending flip, reset, precheck, confirm
   "components/editor/workflow-editor/workflow-editor-main.tsx", // the editor badge; the Copilot card and run
-  "hooks/use-live-run-estimate.ts", // the live estimate that gates presentation and mobile runs
+  // estimateWholeRun: the editor badge and the live estimate that gates
+  // presentation and mobile runs (use-live-run-estimate.ts prices through it)
+  "components/editor/workflow-editor/estimate-run-credits.ts",
   "components/presentation/views/chat-view-helpers.ts", // buildStepChips
 ])
 

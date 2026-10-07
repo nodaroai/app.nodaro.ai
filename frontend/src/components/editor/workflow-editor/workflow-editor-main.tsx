@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, useMemo, Suspense } from "rea
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry";
 import { RUN_BUTTON_GLASS_CLASS } from "@/lib/run-button-style";
 import { useNavigate } from "react-router-dom";
-import { isExpandedClone, filterCloneNodes, getOutputType } from "@nodaro/shared"
+import { filterCloneNodes, getOutputType } from "@nodaro/shared"
 import { ReactFlowProvider } from "@xyflow/react";
 import {
   Play,
@@ -72,22 +72,18 @@ import { hasCredits } from "@/lib/edition";
 import { creditUnits, creditUnitLabel } from "@/lib/credit-units";
 import { useBillingSurface } from "@/hooks/use-billing-surface";
 import { getCachedCredits, prefetchModelCredits, isModelUnpriced } from "@/ee/hooks/use-model-credits";
-import { speechUnitIdsFor } from "@/lib/speech-estimate";
-import { getModelIdentifier } from "@/components/editor/config-panels/helpers";
 import { useStats } from "@/hooks/queries/use-stats-queries";
 import { InsufficientCreditsModal } from "@/ee/components/credits/InsufficientCreditsModal";
 import { StorageExceededModal } from "@/ee/components/credits/StorageExceededModal";
 import { SubscriptionRequiredModal } from "@/ee/components/credits/SubscriptionRequiredModal";
 import { useRunConfirm } from "./run-confirm-dialog";
 import { handleRenderFinal } from "./render-final-handler";
-import { previewRunnable, previewSingleRunRefusal } from "./preview-gate";
+import { previewSingleRunRefusal } from "./preview-gate";
+import { estimateRunCredits, estimateWholeRun } from "./estimate-run-credits";
 import { PromptQuickEditModal } from "@/components/nodes/prompt-quick-edit-modal";
 import {
   NODE_CREDIT_COSTS,
-  estimateNodeCredits,
   isExecutableNode,
-  getCostMultiplier,
-  NO_RERUNS,
   SERVER_RUN_ONLY_TYPES,
   type ExecutionContext,
 } from "./types";
@@ -500,58 +496,39 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   }, [closeImageEdit]);
 
   // ---------------------------------------------------------------------------
-  // Credit estimate (accounts for fan-out from list/loop nodes)
+  // Credit estimate: the run's own (`estimateWholeRun` — the confirm and the
+  // precheck price the same graph through the same function), so the badge
+  // counts fan-out, output minutes and each of several providers as they do.
   // ---------------------------------------------------------------------------
   useEffect(() => {
     if (!hasCredits()) return;
-    const allExecutable = storeNodes.filter((n) => isExecutableNode(n) && !isExpandedClone(n));
-    // The whole-workflow badge: every executable node re-runs, planners included.
-    const rerunIds = new Set(allExecutable.map((n) => n.id));
-    // …except what a Preview render gates: it runs only after Render final.
-    const executableNodes = previewRunnable(allExecutable, storeNodes, storeEdges);
-
-    // Use composite model identifiers (e.g. "gpt-image:high") for accurate per-model lookup
-    const computeEstimate = () => {
-      const total = executableNodes.reduce((sum, node) => {
-        const modelId = getModelIdentifier(node, storeEdges, storeNodes, rerunIds);
-        const cached = getCachedCredits(modelId);
-        const cost = cached !== undefined ? cached : estimateNodeCredits({ id: node.id, type: node.type, data: node.data as Record<string, unknown> }, storeEdges, storeNodes, rerunIds);
-        const multiplier = getCostMultiplier(node, storeNodes, storeEdges, rerunIds);
-        return sum + cost * multiplier;
-      }, 0);
+    const publish = (total: number) => {
       setWorkflowCreditEstimate(total);
       // Stamp it with the graph it describes. A consumer that must not spend
       // against a stale price compares versions rather than racing a boolean.
       setWorkflowCreditEstimateVersion(useWorkflowStore.getState().loadedVersion);
     };
 
-    // Collect model identifiers and check which need fetching. A speech node's
-    // unit row is asked for too: until it is cached, getModelIdentifier quotes
-    // the flat row, so without this a node scrolled off-canvas (no pill mounted)
-    // could never learn that the server prices speech by length. An id the
-    // server has reported priced nowhere (length pricing off) is not asked again.
-    const modelIds = [...new Set([
-      ...executableNodes.map((n) => getModelIdentifier(n, storeEdges, storeNodes, rerunIds)),
-      ...speechUnitIdsFor(executableNodes, storeNodes, storeEdges),
-    ].filter(Boolean))];
-    const uncached = modelIds.filter((m) => getCachedCredits(m) === undefined && !isModelUnpriced(m));
+    // The ids still to fetch: every provider's own and a speech node's unit
+    // row (`runModelIds`); one the server reported priced nowhere is not asked again.
+    const first = estimateWholeRun(storeNodes, storeEdges, getCachedCredits, isModelUnpriced);
 
-    if (uncached.length > 0) {
+    if (first.uncachedModelIds.length > 0) {
       // Wait for real costs before showing estimate
       setEstimateLoading(true);
       let cancelled = false;
-      prefetchModelCredits(uncached).then(() => {
+      prefetchModelCredits(first.uncachedModelIds).then(() => {
         if (!cancelled) {
-          computeEstimate();
+          publish(estimateWholeRun(storeNodes, storeEdges, getCachedCredits).total);
           setEstimateLoading(false);
         }
       });
       return () => { cancelled = true; };
     }
 
-    // All costs cached — compute immediately
+    // All costs cached — publish immediately
     setEstimateLoading(false);
-    computeEstimate();
+    publish(first.total);
   }, [storeNodes, storeEdges]);
 
   // Only poll /v1/stats while there is local activity worth watching: a
@@ -968,9 +945,10 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   }
 
   /**
-   * What running ONE node would cost — the same arithmetic the whole-graph
-   * badge uses, scoped to one node, so the Copilot's single-node card cannot
-   * quote a number computed for a different set of nodes.
+   * What running ONE node would cost — the single run's own confirm estimate
+   * (`estimateRunCredits` over that one node, each of several providers at its
+   * own price), so the Copilot's single-node card cannot quote a number
+   * computed for a different set of nodes or providers.
    */
   function estimateNodeForCopilot(nodeId: string): number | null {
     const { nodes: storeNodes, edges: storeEdges } = useWorkflowStore.getState();
@@ -978,12 +956,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     if (!node || !isExecutableNode(node)) return null;
     // Gated by a Preview render: a single run of it is refused, so it has no price.
     if (previewSingleRunRefusal(nodeId, storeNodes, storeEdges)) return null;
-    const cached = getCachedCredits(getModelIdentifier(node, storeEdges, storeNodes));
-    const cost = cached !== undefined
-      ? cached
-      : estimateNodeCredits({ id: node.id, type: node.type, data: node.data as Record<string, unknown> }, storeEdges, storeNodes);
     // One node's own cost: nothing upstream re-runs, so its inputs are what they are.
-    return cost * getCostMultiplier(node, storeNodes, storeEdges, NO_RERUNS);
+    return estimateRunCredits([node], storeNodes, storeEdges, getCachedCredits);
   }
 
   // Stop, from the Copilot's run card. `handleExecutionDiscarded` is only the

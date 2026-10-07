@@ -1015,7 +1015,7 @@ export interface RunCreditLine {
   readonly nodeId: string;
   readonly label: string;
   readonly quantity: RunCreditQuantity;
-  /** cost × fanOut × units: exactly what the run's total adds for this node. */
+  /** cost × fanOut × units (cost: each of several providers at its own price, summed): exactly what the run's total adds for this node. */
   readonly credits: number;
 }
 

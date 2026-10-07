@@ -11,11 +11,10 @@
  * The listing lists a render whose length follows the episode PER MINUTE of
  * it (decided 2026-10-07); at the 180-minute cap that is the editor's figure.
  *
- * One gap it pins rather than closes, pending a decision: the server's RUN
- * estimate (`estimateWorkflowCredits`: the app-runner and API prechecks, MCP,
- * the Render final quote) still prices every render at one minute through
- * `estimatePricingUnits` and counts a Clips render once — a second rule,
- * pinned in the last block below.
+ * The server's RUN estimate (`estimateWorkflowCredits`: the app runner's
+ * seeded quote, the API and MCP quotes, `/v1/credits/estimate-workflow`, and
+ * the Render final quote and balance check) reads the same rules (decided
+ * 2026-10-07), pinned in the last block below.
  *
  * `template-listing-prices.test.ts` pins each stored price to the listing
  * function, so a listing that priced a render at any other length would move
@@ -26,7 +25,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { nodeFanOut, resolveApplyEdlEstimateLength } from "@nodaro/render-rules"
-import { CreditsService, listingPricingUnits } from "../../../ee/billing/credits.js"
+import { CreditsService, graphPricingUnits } from "../../../ee/billing/credits.js"
 import { APPLY_EDL_CREDITS_PER_OUTPUT_MINUTE } from "../../apply-edl-plan.js"
 import { videoUtilityBaseCredits, videoUtilityEstimateBody } from "../../video-utility-credits.js"
 import type { TutorialTemplateDoc } from "../types.js"
@@ -61,7 +60,7 @@ describe("template render minutes — the listing reads the shared fixture", () 
     // A listing prices the whole graph: every node runs, so a plan re-plans.
     const everyNode = new Set(nodes.map((n) => n.id))
     for (const render of nodes.filter((n) => n.type === "apply-edl")) {
-      expect(listingPricingUnits(render, nodes, edges, everyNode), `${slug} / ${render.id}`).toBe(expected[slug])
+      expect(graphPricingUnits(render, nodes, edges, everyNode), `${slug} / ${render.id}`).toBe(expected[slug])
       // Listed per minute of the episode when the render follows it; the rest fixed.
       const length = resolveApplyEdlEstimateLength(render, nodes, edges, everyNode)
       expect(length.perEpisodeMinute, `${slug} / ${render.id} per episode minute`).toBe(fixture.perEpisodeMinute[slug] ?? 0)
@@ -73,10 +72,8 @@ describe("template render minutes — the listing reads the shared fixture", () 
 
 // One rule, no copies: the render-length assumptions are declared only in
 // @nodaro/render-rules. A second declaration in either app is a second rule
-// that can drift from the one the listing and the editor share. The server's
-// run estimate is the one known exception (its own one-minute rule, pending a
-// decision); the block at the end of this file pins it so it cannot pass
-// unnoticed.
+// that can drift from the one the listing, the editor and the server's run
+// estimate share.
 describe("the render-length rule has one home", () => {
   const REPO = join(here, "..", "..", "..", "..", "..")
   const DECLARES = /\b(?:const|let|var|function)\s+(?:TRAILER_MAX_SEC|CLIP_LENGTH_HEADROOM|ASSUMED_CLIP_TARGET_SEC|resolveApplyEdlEstimateMinutes|editPlanRenderEstimateMinutes)\b/
@@ -140,48 +137,19 @@ describe("a listing's Render final prices the render per minute of the user's ep
   })
 })
 
-// KNOWN SECOND RULE, pending a decision: the server's run estimate
-// (`estimateWorkflowCredits`, here at base prices) prices every Apply EDL
-// render at ONE minute and counts it once, not at the shared rule's minutes
-// times the clip count, and counts a node an Each wire fans out per clip
-// once. So, for each built-in template, the listing at the 180-minute cap
-// (fixed + 180 × per minute) is above the run estimate by exactly each
-// render's (fan-out × minutes − 1) × its rate plus each other fanned-out
-// node's (fan-out − 1) × its price, plus each Combine Videos on a render's
-// output priced at the render's minutes rather than the fallback length the
-// run estimate stands in (decided 2026-10-07). When the run estimate is routed
-// through the shared rules this gap becomes 0 and this test is meant to be
-// flipped to assert equality.
-describe("the server's run estimate still prices a render at one minute, once (pending a decision)", () => {
+// The server's run estimate (`estimateWorkflowCredits`, here at base prices)
+// reads the same rules (decided 2026-10-07): each render at the shared rule's
+// minutes, every node times the runs it makes. So, for each built-in
+// template, the listing at the 180-minute cap (fixed + 180 × per minute) IS
+// the run estimate. The three-way parity, the editor included, is
+// run-estimate-parity.test.ts.
+describe("the server's run estimate prices a render as the listing does", () => {
   it.each(rendering.map((t) => [t.slug, t] as const))("%s", (slug, t) => {
     const nodes = t.nodes as Node[]
     const edges = t.edges as Edge[]
-    const everyNode = new Set(nodes.map((n) => n.id))
-    // Every built-in render is at Final, so the per-minute rate is the final one.
-    for (const r of nodes.filter((n) => n.type === "apply-edl")) expect(r.data?.quality, `${slug} / ${r.id}`).toBe("final")
     const run = CreditsService.estimateWorkflowBaseCredits(nodes, edges, { scope: "whole-graph" })
     const l = CreditsService.estimateWorkflowBaseListing(nodes, edges, "template")
     const atCap = l.preview + l.final + 180 * (l.previewPerMinute + l.finalPerMinute)
-    const typeOf = new Map(nodes.map((n) => [n.id, n.type]))
-    const gap = nodes.reduce((sum, n) => {
-      const runs = nodeFanOut(n, nodes, edges, everyNode)
-      if (n.type === "apply-edl") return sum + (runs * expected[slug] - 1) * APPLY_EDL_CREDITS_PER_OUTPUT_MINUTE
-      const inputs = edges.filter((e) => e.target === n.id)
-      const fromRender = inputs.map((e) => typeOf.get(e.source) === "apply-edl")
-      if (LENGTH_PRICED.has(n.type) && fromRender.some(Boolean)) {
-        // Only Combine Videos takes a render's output in a built-in template;
-        // another length-priced step on one needs its own term here.
-        expect(n.type, `${slug} / ${n.id}`).toBe("combine-videos")
-        expect(runs, `${slug} / ${n.id}`).toBe(1)
-        const body = videoUtilityEstimateBody(n, edges)!
-        const listed = videoUtilityBaseCredits(n.type, { ...body, upstreamDurations: fromRender.map((r) => (r ? expected[slug] * 60 : undefined)) })!
-        const once = CreditsService.estimateWorkflowBaseCredits(nodes, edges, { runNodeIds: new Set([n.id]) })
-        return sum + listed - once
-      }
-      if (runs === 1) return sum
-      const once = CreditsService.estimateWorkflowBaseCredits(nodes, edges, { runNodeIds: new Set([n.id]) })
-      return sum + (runs - 1) * once
-    }, 0)
-    expect(atCap - run, slug).toBe(gap)
+    expect(atCap - run, slug).toBe(0)
   })
 })

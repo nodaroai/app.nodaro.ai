@@ -20,8 +20,8 @@ import { editPlanOutputOf } from "@/lib/edit-plan-saved-output"
 
 export { EDL_LENGTH_PRESERVING_TYPES }
 
-/** The editor's Edit Plan reader, handed to the shared rule. */
-const readPlan = (data: Readonly<Record<string, unknown>>) => editPlanOutputOf(data)
+/** The editor's Edit Plan reader, handed to the shared rules (the render's minutes, a step's input length). */
+export const readPlan = (data: Readonly<Record<string, unknown>>) => editPlanOutputOf(data)
 
 /**
  * The EDL a producer holds on the canvas — what its `edl` output would deliver

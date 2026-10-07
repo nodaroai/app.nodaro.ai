@@ -50,7 +50,27 @@ describe("the workflow estimate quotes the row of the node's quality", () => {
     { name: "a final", data: { quality: "final" }, id: "apply-edl" },
     { name: "no quality (the final)", data: {}, id: "apply-edl" },
   ])("$name → $id", ({ data, id }) => {
-    expect(CreditsService.estimateWorkflowBaseCredits([{ type: "apply-edl", data }])).toBe(STATIC_CREDIT_COSTS[id])
+    // Nothing wired into it (edges given, none to it): no EDL to render, the one-minute floor.
+    expect(CreditsService.estimateWorkflowBaseCredits([{ id: "r", type: "apply-edl", data }], [])).toBe(STATIC_CREDIT_COSTS[id])
+  })
+
+  it("a render with no id cannot be placed in its graph: the 180-minute ceiling, never under-quote", () => {
+    expect(CreditsService.estimateWorkflowBaseCredits([{ type: "apply-edl", data: {} }])).toBe(180 * STATIC_CREDIT_COSTS["apply-edl"]!)
+  })
+
+  // A caller that sends no `edges` says nothing about the wiring: the render
+  // may be wired to an episode-long edit, so it is quoted at the 180-minute
+  // ceiling (the route's "omitted ⇒ can only over-state" contract), unless its
+  // own inline EDL gives a length. `[]` says "nothing is wired": the floor.
+  it("edges omitted: the 180-minute ceiling, never the one-minute floor", () => {
+    expect(CreditsService.estimateWorkflowBaseCredits([{ id: "r", type: "apply-edl", data: {} }])).toBe(180 * STATIC_CREDIT_COSTS["apply-edl"]!)
+  })
+  it("edges given and none wired: the one-minute floor", () => {
+    expect(CreditsService.estimateWorkflowBaseCredits([{ id: "r", type: "apply-edl", data: {} }], [])).toBe(STATIC_CREDIT_COSTS["apply-edl"]!)
+  })
+  it("edges omitted with an inline EDL: that EDL's length", () => {
+    const edl = { version: 1, segments: [{ sourceId: "a", inMs: 0, outMs: 150_000 }] }
+    expect(CreditsService.estimateWorkflowBaseCredits([{ id: "r", type: "apply-edl", data: { edl } }])).toBe(3 * STATIC_CREDIT_COSTS["apply-edl"]!)
   })
 })
 

@@ -5,9 +5,10 @@
  *
  * It matters because this number GATES the run: the runner refuses to start
  * when the spendable balance is below it. The mobile shell used to gate on the
- * store's seeded figure alone — the server's static, edge-less
- * `estimateWorkflowCredits`, which prices a per-output-minute render (Apply
- * EDL) as ONE minute and knows nothing about fan-out — while only the desktop
+ * store's seeded figure alone — the server's `estimateWorkflowCredits`, which
+ * then priced a per-output-minute render (Apply EDL) as ONE minute and knew
+ * nothing about fan-out (it reads the shared rules since decided 2026-10-07,
+ * but knows nothing of the user's inputs) — while only the desktop
  * `PresentationView` ever computed the live figure. A podcast app on a phone
  * passed the precheck, charged Transcribe and Edit Plan, then had its render
  * reserve refused.
@@ -16,9 +17,11 @@
  * through `mergeNodeInputOverrides` (a swapped media input also drops the
  * saved media-bound `metadata`, so a publisher's recorded length can't price a
  * caller's file); every executable node re-runs, so `rerunIds` is the whole
- * set and any upstream planner re-plans; each node costs its live model price
- * (or the static fallback) × `getCostMultiplier` (fan-out × repeat × output
- * minutes). Uncached model prices are prefetched, then the total recomputes.
+ * set and any upstream planner re-plans; the graph is then priced by the
+ * editor's own whole-run estimate (`estimateWholeRun`): each node — each of
+ * several providers at its own price — at its live model price (or the
+ * cold-cache fallback) × fan-out × repeat × output minutes. Uncached model
+ * prices (every provider's) are prefetched, then the total recomputes.
  *
  * Returns the BASE figure (0 until the first compute). Callers apply the app's
  * monetization markup — and fall back to the seeded server figure, which is
@@ -29,11 +32,8 @@
  * pattern) — the already-allowlisted callers pass them in.
  */
 import { useEffect, useRef, useState } from "react"
-import { EDIT_PLAN_MAX_MINUTES, isExpandedClone, mergeNodeInputOverrides } from "@nodaro/shared"
-import { estimateNodeCredits, isExecutableNode, getCostMultiplier } from "@/components/editor/workflow-editor/types"
-import { getModelIdentifier } from "@/components/editor/config-panels/helpers"
-import { previewRunnable } from "@/components/editor/workflow-editor/preview-gate"
-import { speechUnitIdsFor } from "@/lib/speech-estimate"
+import { EDIT_PLAN_MAX_MINUTES, mergeNodeInputOverrides } from "@nodaro/shared"
+import { estimateWholeRun } from "@/components/editor/workflow-editor/estimate-run-credits"
 import { chosenRecordingUrl } from "@/lib/run-price"
 import { withoutMediaLength } from "@nodaro/render-rules"
 import { useEditPlanModes } from "@/lib/edit-plan-modes"
@@ -105,36 +105,20 @@ export function applyRunInputValues(
   })
 }
 
-/** One synchronous pass over the graph with whatever prices are cached. */
+/**
+ * One synchronous pass over the graph with whatever prices are cached: the
+ * run-time inputs merged in, then the editor's own whole-run estimate
+ * (`estimateWholeRun` — the Execute-workflow badge, the run's confirm and
+ * precheck), so the runner prices each of several providers, each run and
+ * each output minute exactly as they do, and asks for every provider's price.
+ */
 export function computeLiveRunEstimate(
   args: Omit<LiveRunEstimateArgs, "enabled">,
   getCachedCredits: LiveRunEstimateDeps["getCachedCredits"],
   isModelUnpriced: NonNullable<LiveRunEstimateDeps["isModelUnpriced"]> = () => false,
 ): { total: number; uncachedModelIds: string[] } {
   const effectiveNodes = applyRunInputValues(args.nodes, args.inputValues, args.mediaLengths)
-  const allExecutable = effectiveNodes.filter((n) => isExecutableNode(n) && !isExpandedClone(n))
-  // A presented run executes every node, so any upstream planner re-plans.
-  const rerunIds = new Set(allExecutable.map((n) => n.id))
-  // …except what a Preview render gates: it runs only after Render final.
-  const executable = previewRunnable(allExecutable, effectiveNodes, args.edges)
-  // A speech node's unit row is asked for beside the flat ids: until it is
-  // cached, getModelIdentifier quotes the flat row, so the runner could never
-  // learn that the server prices speech by length. One the server has reported
-  // priced nowhere (length pricing off) is not asked again.
-  const modelIds = [...new Set([
-    ...executable.map((n) => getModelIdentifier(n, args.edges, effectiveNodes, rerunIds)),
-    ...speechUnitIdsFor(executable, effectiveNodes, args.edges),
-  ].filter(Boolean))]
-  const uncachedModelIds = modelIds.filter((m) => getCachedCredits(m) === undefined && !isModelUnpriced(m))
-  const total = executable.reduce((sum, node) => {
-    const cached = getCachedCredits(getModelIdentifier(node, args.edges, effectiveNodes, rerunIds))
-    const cost =
-      cached !== undefined
-        ? cached
-        : estimateNodeCredits({ id: node.id, type: node.type, data: node.data as Record<string, unknown> }, args.edges, effectiveNodes, rerunIds)
-    return sum + cost * getCostMultiplier(node, effectiveNodes, args.edges, rerunIds)
-  }, 0)
-  return { total, uncachedModelIds }
+  return estimateWholeRun(effectiveNodes, args.edges, getCachedCredits, isModelUnpriced)
 }
 
 export function useLiveRunEstimate(args: LiveRunEstimateArgs, deps: LiveRunEstimateDeps): number {

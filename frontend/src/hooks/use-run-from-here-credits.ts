@@ -14,8 +14,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { getCachedModelCredits, prefetchModelCreditCosts } from "@/hooks/use-model-credit-cost"
-import { getModelIdentifier } from "@/components/editor/config-panels/helpers"
-import { estimateRunCredits } from "@/components/editor/workflow-editor/estimate-run-credits"
+import { estimateRunCredits, runModelIds } from "@/components/editor/workflow-editor/estimate-run-credits"
 import { runFromHereExecutable } from "@/components/editor/workflow-editor/run-from-here-set"
 import { hasCredits } from "@/lib/edition"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
@@ -36,8 +35,8 @@ export function useRunSetCredits(
 
   useEffect(() => {
     if (!hasCredits() || executable.length === 0) return
-    const rerunIds = new Set(executable.map((n) => n.id))
-    const ids = [...new Set(executable.map((n) => getModelIdentifier(n, edges, nodes, rerunIds)).filter(Boolean))]
+    // Every id the run is priced at: each of several providers' own too.
+    const ids = runModelIds(executable, nodes, edges)
     const missing = ids.filter((id) => getCachedModelCredits(id) === undefined)
     if (missing.length === 0) return
     let cancelled = false

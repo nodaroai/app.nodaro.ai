@@ -97,8 +97,9 @@ describe("the podcast templates per minute", () => {
 
   it("podcast-clip-pack.json at the cap is its old price plus 4 more clips (render + captions)", () => {
     const t = load("podcast-clip-pack.json")
-    const captions = CreditsService.estimateWorkflowBaseCredits(t.nodes as Node[], t.edges as Edge[], { runNodeIds: new Set(["clips-captions"]) })
-    const render = CreditsService.estimateWorkflowBaseCredits(t.nodes as Node[], t.edges as Edge[], { runNodeIds: new Set(["clips-apply"]) }) * 2
-    expect(atCap("podcast-clip-pack.json")).toBe(832 + 4 * (render + captions))
+    // One clip's render (2 minutes) and caption run: the run estimate of each
+    // node counts all 5 clips, as the listing does (decided 2026-10-07).
+    const perClip = (id: string) => CreditsService.estimateWorkflowBaseCredits(t.nodes as Node[], t.edges as Edge[], { runNodeIds: new Set([id]) }) / 5
+    expect(atCap("podcast-clip-pack.json")).toBe(832 + 4 * (perClip("clips-apply") + perClip("clips-captions")))
   })
 })

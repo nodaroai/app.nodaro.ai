@@ -37,6 +37,7 @@ export {
   editPlanRenderEstimateMinutes,
   mediaLengthSecOf,
   persistedEdlPlan,
+  inlineEdlMinutes,
   renderLengthCeilingMinutes,
   resolveApplyEdlEstimateLength,
   resolveApplyEdlEstimateMinutes,
@@ -67,3 +68,13 @@ export {
   type ProducerFanOut,
 } from "./node-fan-out"
 export { TYPICAL_EPISODE_MINUTES, typicalEpisodeCredits } from "./typical-episode"
+export {
+  knownLength,
+  LENGTH_PRICED_UTILITY_TYPES,
+  runWireLengthSec,
+  utilityOutputLength,
+  videoSfxClipSec,
+  type InputLength,
+  type RunWireLengthOptions,
+  type WireLength,
+} from "./utility-wire-length"

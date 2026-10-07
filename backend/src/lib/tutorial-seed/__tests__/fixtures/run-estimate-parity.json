@@ -1,0 +1,163 @@
+{
+  "about": "One figure for one graph (decided 2026-10-07): the template listing at the 180-minute cap, the server's run estimate (estimateWorkflowCredits) and the editor's run estimate (estimateRunCreditLines) all quote these base totals. Read by backend/src/lib/tutorial-seed/__tests__/run-estimate-parity.test.ts and frontend/src/lib/__tests__/run-estimate-parity.test.ts.",
+  "aboutPrices": "The base price of every credit id the cases read; the backend half checks each against STATIC_CREDIT_COSTS, the editor half prices from this table alone.",
+  "prices": {
+    "add-captions:kinetic": 50,
+    "apply-edl": 10,
+    "audio-sync:4src": 30,
+    "camera-switch": 10,
+    "combine-videos": 10,
+    "edit-plan:clips:standard:180m": 740,
+    "edit-plan:tighten:standard:180m": 720,
+    "edit-plan:trailer:standard:180m": 740,
+    "elevenlabs-stt": 22,
+    "gpt-image-2": 15,
+    "nano-banana-pro": 45,
+    "replicate-mmaudio:120s": 50,
+    "replicate-mmaudio:300s": 110,
+    "replicate-mmaudio:30s": 20,
+    "replicate-mmaudio:8s": 10,
+    "silence-detect": 10,
+    "social-media-format": 20
+  },
+  "templates": {
+    "podcast-clip-pack": 1112,
+    "podcast-multicam-cut": 2582,
+    "podcast-tighten-episode": 2602,
+    "podcast-trailer-formats": 1102
+  },
+  "graphs": {
+    "several providers, repeated": {
+      "nodes": [
+        {
+          "id": "img",
+          "type": "generate-image",
+          "data": {
+            "provider": "gpt-image-2",
+            "providers": [
+              "gpt-image-2",
+              "nano-banana-pro"
+            ],
+            "repeatCount": 2
+          }
+        }
+      ],
+      "edges": [],
+      "credits": 120
+    },
+    "video sfx on a trailer render (its 2 minutes: the 120-second row)": {
+      "nodes": [
+        {
+          "id": "rec",
+          "type": "upload-video",
+          "data": {}
+        },
+        {
+          "id": "plan",
+          "type": "edit-plan",
+          "data": {
+            "mode": "trailer",
+            "planTier": "standard"
+          }
+        },
+        {
+          "id": "render",
+          "type": "apply-edl",
+          "data": {
+            "quality": "final"
+          }
+        },
+        {
+          "id": "sfx",
+          "type": "video-sfx",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "id": "e1",
+          "source": "rec",
+          "target": "plan",
+          "targetHandle": "sources"
+        },
+        {
+          "id": "e2",
+          "source": "rec",
+          "target": "render",
+          "targetHandle": "sources"
+        },
+        {
+          "id": "e3",
+          "source": "plan",
+          "target": "render",
+          "sourceHandle": "edl",
+          "targetHandle": "edl"
+        },
+        {
+          "id": "e4",
+          "source": "render",
+          "target": "sfx",
+          "targetHandle": "video"
+        }
+      ],
+      "credits": 810
+    },
+    "video sfx on a tighten render (the episode, capped: the 300-second row)": {
+      "nodes": [
+        {
+          "id": "rec",
+          "type": "upload-video",
+          "data": {}
+        },
+        {
+          "id": "plan",
+          "type": "edit-plan",
+          "data": {
+            "mode": "tighten",
+            "planTier": "standard"
+          }
+        },
+        {
+          "id": "render",
+          "type": "apply-edl",
+          "data": {
+            "quality": "final"
+          }
+        },
+        {
+          "id": "sfx",
+          "type": "video-sfx",
+          "data": {}
+        }
+      ],
+      "edges": [
+        {
+          "id": "e1",
+          "source": "rec",
+          "target": "plan",
+          "targetHandle": "sources"
+        },
+        {
+          "id": "e2",
+          "source": "rec",
+          "target": "render",
+          "targetHandle": "sources"
+        },
+        {
+          "id": "e3",
+          "source": "plan",
+          "target": "render",
+          "sourceHandle": "edl",
+          "targetHandle": "edl"
+        },
+        {
+          "id": "e4",
+          "source": "render",
+          "target": "sfx",
+          "targetHandle": "video"
+        }
+      ],
+      "credits": 2630
+    }
+  }
+}
