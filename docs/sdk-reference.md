@@ -3781,8 +3781,9 @@ type VoiceChangerProVoice =
                                   // generated with its neighbouring lines as context. A Re-speak speaker
                                   // needs transcript text: pass an analysis whose segments[].text carries
                                   // it, or omit analysis and the engine re-speaks from its own
-                                  // transcription. Both Re-speak engines are priced the same, per started
-                                  // 1,000 characters.
+                                  // transcription. A Re-speak speaker is priced by the characters it
+                                  // re-speaks — on its engine's Text to Speech rate (per started 100
+                                  // characters) where length pricing is on, else per started 1,000.
       stability?: number          // 0–1
       similarityBoost?: number    // 0–1
       style?: number              // 0–1, default 0

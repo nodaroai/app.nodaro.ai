@@ -42,7 +42,7 @@ Each entry in **Ordered Voices** may be an object that pins per-speaker ElevenLa
 | Field | Type | Range | Default | Description |
 |-------|------|-------|---------|-------------|
 | `voiceId` | `string` | — | *(required)* | Target voice — premade name (`Rachel`, `Aria`, …) or an ElevenLabs UUID for a custom clone. |
-| `engine` | `"sts" \| "v3" \| "v4"` | — | `"sts"` | Which lane converts this speaker. `"sts"` is the classic speech-to-speech recast. `"v3"` is **Re-speak**: the performance is regenerated from the transcript with eleven_v3 (`[audio tags]` supported) — the original delivery is replaced, and lips won't match on video. For `"v3"`, stability accepts exactly 0 / 0.5 / 1, and `similarityBoost`/`style`/`useSpeakerBoost` are ignored. `"v4"` is **Re-speak** with eleven_v4: the same transcript-driven regeneration, with any stability from 0 to 1 and `similarityBoost` honoured (`style`/`useSpeakerBoost` ignored); each line is generated with its neighbouring lines as context for smoother joins. A Re-speak speaker (either engine) needs transcript text (the analysis carries per-segment `text`, editable before conversion); without an analysis the engine re-speaks from its own transcription. Both Re-speak engines are priced the same: per started 1K characters of the re-spoken text (see Credit Pricing). A `"v4"` voice may also carry `languageCode` — the **target** language it should speak (ISO 639-1); sent instead of the clip's detected language. Accepted on `"v4"` only (v3 keeps the source accent; Recast speaks the original audio) and only for a language the model offers — a `languageCode` on any other engine, or one the model does not offer, is a `400`. Pair it with `POST /v1/voice-changer-pro/translate` to re-speak a video in another language (see the interactive flow below). |
+| `engine` | `"sts" \| "v3" \| "v4"` | — | `"sts"` | Which lane converts this speaker. `"sts"` is the classic speech-to-speech recast. `"v3"` is **Re-speak**: the performance is regenerated from the transcript with eleven_v3 (`[audio tags]` supported) — the original delivery is replaced, and lips won't match on video. For `"v3"`, stability accepts exactly 0 / 0.5 / 1, and `similarityBoost`/`style`/`useSpeakerBoost` are ignored. `"v4"` is **Re-speak** with eleven_v4: the same transcript-driven regeneration, with any stability from 0 to 1 and `similarityBoost` honoured (`style`/`useSpeakerBoost` ignored); each line is generated with its neighbouring lines as context for smoother joins. A Re-speak speaker (either engine) needs transcript text (the analysis carries per-segment `text`, editable before conversion); without an analysis the engine re-speaks from its own transcription. A Re-speak voice is priced by the characters of the re-spoken text, on its engine's Text to Speech rate where length pricing is on (see Credit Pricing). | A `"v4"` voice may also carry `languageCode` — the **target** language it should speak (ISO 639-1); sent instead of the clip's detected language. Accepted on `"v4"` only (v3 keeps the source accent; Recast speaks the original audio) and only for a language the model offers — a `languageCode` on any other engine, or one the model does not offer, is a `400`. Pair it with `POST /v1/voice-changer-pro/translate` to re-speak a video in another language (see the interactive flow below). |
 | `stability` | `number` | 0–1 | model default | Higher = steadier and more consistent; lower = more expressive and variable. |
 | `similarityBoost` | `number` | 0–1 | model default | How closely the output hugs the target voice's timbre. |
 | `style` | `number` | 0–1 | `0` | Style exaggeration. `>0` amplifies delivery at the cost of latency / stability. |
@@ -85,16 +85,24 @@ Each **recast** (non-null) entry in your Ordered Voices list is priced by the
 audio it converts. A speech-to-speech voice is billed **by the length of its
 stem** — the stem runs from the start of the clip to that speaker's last
 line — at the `voice-changer-pro` rate (40 credits per minute, prorated per
-second and rounded up to the next credit). A Re-speak
-(`engine: "v3"` or `"v4"`) voice is billed **per started 1,000 characters** of
-the text it re-speaks at the `voice-changer-pro-respeak` rate (30 credits per
-1K) — the same rate for both Re-speak engines.
-Every voice has a floor of 4 credits (six billable seconds), and so does the
-run as a whole.
+second and rounded up to the next credit). Every speech-to-speech voice has a
+floor of 4 credits (six billable seconds), and so does the run as a whole.
+
+A Re-speak (`engine: "v3"` or `"v4"`) voice is billed by the **characters of
+the text it re-speaks**:
+
+> **Rolling out.** Length-based speech pricing is being turned on one environment at a time (it is on at `next.nodaro.ai` first). Until it reaches the instance you use, a Re-speak voice is billed **per started 1,000 characters** at the `voice-changer-pro-respeak` rate (30 credits per 1K, the same for both engines) with the same 4-credit floor as a speech-to-speech voice: `max(4, ceil(chars / 1000) × 30)` — 340 characters cost 30, 1,500 cost 60.
+
+Where length pricing is on, a Re-speak voice costs **exactly what the same
+text costs on the [Text to Speech](./text-to-speech.md) node for the same
+model** — `"v3"` is priced on ElevenLabs v3's row and `"v4"` on v4's — in
+**units of 100 characters, every started unit counting, with a minimum of 8
+units per voice** (both rows are 4 credits per started 100 characters today,
+so a Re-speak voice costs at least 32 credits):
 
 ```
 sts voice      = max(4, ceil(40 × stemSeconds / 60))
-re-speak voice = max(4, ceil(chars / 1000) × 30)
+re-speak voice = max(8, ceil(chars / 100)) × 4
 total          = max(4, sum of every recast voice)
 ```
 
@@ -104,21 +112,29 @@ total          = max(4, sum of every recast voice)
 | 1 speech-to-speech voice, 60 s stem | 40 |
 | 1 speech-to-speech voice, 61 s stem | 41 |
 | 1 speech-to-speech voice, 3 s stem | 4 (floor) |
-| 2 speech-to-speech voices at 60 s + 1 Re-speak voice of 1,500 chars | 40 + 40 + 60 = 140 |
+| 1 Re-speak voice of 340 characters (either engine) | 8 × 4 = 32 (the minimum) |
+| 1 Re-speak voice of 1,000 characters | 10 × 4 = 40 |
+| 1 Re-speak voice of 1,001 characters | 11 × 4 = 44 |
+| 1 Re-speak voice of 5,000 characters | 50 × 4 = 200 |
+| 2 speech-to-speech voices at 60 s + 1 Re-speak voice of 1,500 characters | 40 + 40 + 60 = 140 |
 
 Unmapped speakers (those beyond the length of your Ordered Voices list) and
 keep-slots (`null` entries) are passed through without charge — credits count
-only the **recast** entries. The per-minute and per-1K rates are the credit
-identifiers `voice-changer-pro` and `voice-changer-pro-respeak`; the
-`analyze` step (`voice-changer-pro-analyze`, 10 credits) and the `export`
-step (`voice-changer-pro-export`, 1 credit) are flat.
+only the **recast** entries. The per-minute rate is the credit identifier
+`voice-changer-pro`; the Re-speak rates are the Text to Speech node's
+per-100-characters rows for v3 and v4 (and, until length pricing reaches
+your instance, the flat `voice-changer-pro-respeak` row); the `analyze`
+step (`voice-changer-pro-analyze`, 10 credits) and the `export` step
+(`voice-changer-pro-export`, 1 credit) are flat.
 
 > **Reservation vs. charge:** the reservation is sized from the `analysis`
 > you send (each speaker's last segment end, each Re-speak speaker's text).
-> The worker measures the stems it actually converted and commits that
-> amount, never more than the reservation. A recast sent **without** an
-> analysis reserves one minute per speech-to-speech voice (and one 1K bucket
-> per Re-speak voice) and settles under that ceiling.
+> The worker measures the stems it actually converted and the characters it
+> actually re-spoke and commits that amount, never more than the
+> reservation. A recast sent **without** an analysis reserves one minute per
+> speech-to-speech voice and 1,000 characters per Re-speak voice (priced by
+> whichever Re-speak formula your instance is on) and settles under that
+> ceiling.
 
 > **Translate step** (`POST /v1/voice-changer-pro/translate`, credit
 > identifier `voice-changer-pro-translate`): charged on the translation

@@ -1639,6 +1639,12 @@ export interface PluginSafeFetchInit {
  * the per-minute speech-to-speech unit and the per-1K Re-speak unit are read
  * from `model_pricing` (static seed as fallback), each slot priced as
  * `max(floor, ceil(unit × stemSec / 60))` / `max(floor, ceil(chars/1000) × per1K)`.
+ * On a host that prices speech by length (SPEECH_LENGTH_PRICING_ENABLED), a
+ * Re-speak slot is instead priced exactly as the Text to Speech node prices
+ * the same text on the slot's engine model (v3 → `elevenlabs-v3`, v4 →
+ * `elevenlabs-v4`): per started 100 characters with the speech floor;
+ * `respeakCredits` carries the result, `respeakPer1K` still reports the flat
+ * row. The speech-to-speech slots and `floor` are the same either way.
  */
 export interface VoiceChangerProPricing {
   unitPerMinute: number
@@ -1827,8 +1833,14 @@ export interface PluginHttpToolkit {
     /** Stem seconds per speech-to-speech slot (prorated per second, rounded up
      *  to the next credit); null/0 = unknown → one minute. */
     stsSlotSeconds: ReadonlyArray<number | null | undefined>
-    /** Re-spoken chars per v3 slot; null/0 = unknown → one 1K bucket. */
+    /** Re-spoken chars per Re-speak slot; null/0 = unknown → one 1K bucket. */
     respeakChars: ReadonlyArray<number | null | undefined>
+    /** The engine of each Re-speak slot, index-aligned with `respeakChars`
+     *  (`"v3"` | `"v4"`); absent, shorter, null or unknown → v3. Picks the
+     *  text-to-speech row the slot is priced on where the host prices speech
+     *  by length; ignored otherwise. Additive-optional (no contract bump):
+     *  a plugin that omits it prices every Re-speak slot as v3. */
+    respeakEngines?: ReadonlyArray<string | null | undefined>
   }): Promise<VoiceChangerProPricing>
   /**
    * The translate step's reservation ceiling from the host's `model_pricing`
