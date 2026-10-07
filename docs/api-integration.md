@@ -605,10 +605,15 @@ For those the correction targets the band the provider will actually produce, so
 the price still matches the render. Each such model declares this in the catalog
 via `unlistedResolutionRendersAs`, which is what `GET /v1/models` reflects.
 
-`duration` is passed through as you send it, with one exception: the LTX 2.3
-models are priced on a fixed ladder of seeded durations per resolution band, so
-a duration between rungs is moved to the nearest one and reported in
-`adjustments`.
+**Duration is billed for the length the model renders.** A video request that
+sends no `duration` renders — and is charged for — the model's own default
+length, `defaultDuration` in `GET /v1/models` (Seedance 2 / Fast / Mini and
+Seedance 2.5 8 s, Grok Imagine 6 s on `grok-i2v` and 8 s on 1.5, Hailuo 6 s,
+Kling 5 s, LTX 6 s), never a flat 5 s; that length is sent to the provider, so
+what you are charged for is what is rendered. A `duration` the model does not
+offer is moved to the nearest length it does (a tie goes to the shorter one) and
+reported in `adjustments`: a 7 s request on Kling renders and bills 5 s, a 7 s
+request on an LTX 2.3 model renders and bills 6 s.
 
 `duration: -1` means **Auto** on the models that support it (the Seedance 2
 family — `autoDuration: true` in `GET /v1/models`): the model picks the clip

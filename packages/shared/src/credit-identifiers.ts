@@ -16,6 +16,7 @@ import {
   VEO_RESOLUTION_TIERED_PROVIDERS,
   VIDEO_DURATION_TIERS,
   pricedOutputDurationSec,
+  snapToNearestDuration,
   PRICING_DEFAULT_RESOLUTION,
   MOTION_DURATION_TIERS,
   T2I_TO_I2I_VARIANT,
@@ -251,13 +252,6 @@ const T2V_CREDIT_OVERRIDES: Record<string, string> = {
  * @param resolution - Output resolution (used by Seedance 2 for 480p/720p pricing)
  * @param hasVideoRef - Whether a reference video is connected (Seedance 2 uses a lower per-second rate when true)
  */
-/** Gemini Omni duration tiers (seconds). Mirrors the `durations` of BOTH
- *  `MODEL_CATALOG["gemini-omni-video"]` and `MODEL_CATALOG["gemini-omni-flash"]`
- *  (and their `KIE_VIDEO_MODELS[*].allowedDurations`) — the family shares one
- *  ladder. Hoisted to module scope so the nearest-tier snap below doesn't
- *  reallocate on every (hot-path) call. */
-const GEMINI_OMNI_DURATIONS = [4, 6, 8, 10]
-
 /**
  * LTX 2.3 (Lightricks via Replicate) credit tiers: priced by
  * (resolution-band × duration-seconds). Keys mirror STATIC_CREDIT_COSTS /
@@ -292,9 +286,9 @@ function ltxPricedTier(
   if (!bands) return undefined
   const band = bands[String(resolution)] ? String(resolution) : "1080p"
   const allowed = bands[band]!
-  const raw = typeof duration === "string" ? parseInt(duration, 10) : (duration ?? allowed[0]!)
-  const want = Number.isNaN(raw) ? allowed[0]! : raw
-  const dur = allowed.reduce((b, a) => (Math.abs(a - want) < Math.abs(b - want) ? a : b))
+  // The model's own default (catalog `defaultDuration`) when unset, then the
+  // nearest rung of THIS band's ladder — the length LTX renders.
+  const dur = snapToNearestDuration(pricedOutputDurationSec(provider, duration), allowed)
   return { band, duration: dur }
 }
 
@@ -343,10 +337,9 @@ export function buildVideoCreditModelIdentifier(
     if (hasVideoRef) {
       return resolution === "4k" ? `${effectiveProvider}:4k:vref` : `${effectiveProvider}:vref`
     }
-    // Snap to nearest allowed tier (NOT a min/max clamp) so off-tier durations
-    // map to a SEEDED composite; default 8 when unset.
-    const raw = parseInt(String(duration ?? 8), 10)
-    const d = Number.isNaN(raw) ? 8 : GEMINI_OMNI_DURATIONS.reduce((b, a) => (Math.abs(a - raw) < Math.abs(b - raw) ? a : b))
+    // The rendered length through the catalog funnel (nearest legal tier, the
+    // model's own default when unset) so the composite is always a SEEDED one.
+    const d = pricedOutputDurationSec(effectiveProvider, duration)
     return resolution === "4k" ? `${effectiveProvider}:4k:${d}` : `${effectiveProvider}:${d}`
   }
 
@@ -501,12 +494,13 @@ export interface PricedVideoSelection {
    *  it": either the caller supplied one, or the provider's real default is not
    *  known to be the band the identifier assumes. */
   resolution?: string
-  /** The seeded duration tier the reservation is priced at (LTX only — the one
-   *  family whose duration ladder is per-band and case-sensitively seeded).
-   *  `undefined` for every other provider: their duration passes through. */
+  /** The length the reservation is priced at and the wire carries, for a
+   *  provider whose price follows the clip length (LTX's seeded tier, the KIE
+   *  ladders, Gemini Omni). `undefined` for every other provider, and for Auto:
+   *  their duration passes through. */
   duration?: number
-  /** Non-empty only for a lever the caller ASKED for and did not get (an LTX
-   *  7s snapped to the 6s tier). Filling an omitted lever is a disclosure of
+  /** Non-empty only for a lever the caller ASKED for and did not get (a 7s
+   *  request snapped to the 6s tier). Filling an omitted lever is a disclosure of
    *  the price already being charged, not a correction, so it reports nothing. */
   adjustments: ModelInputAdjustment[]
 }
@@ -535,17 +529,14 @@ export interface PricedVideoSelection {
  *     the render to match a price we already know is wrong. That mismatch is a
  *     pre-existing identifier bug and is fixed by seeding the row, not here.
  *
- *  2. **LTX duration.** The LTX ladder is seeded per (band × seconds), so the
- *     identifier snaps 7s onto the 6s tier. Sending 7s bills six and renders
- *     seven. Most other providers' durations pass through untouched: their
- *     legality is a flat catalog list the caller already sees, and their tiers
- *     are ranges (`durationSec <= maxSeconds`), not seeded points. Gemini Omni
- *     is the one other seeded ladder — `GEMINI_OMNI_DURATIONS` ([4, 6, 8, 10])
- *     is nearest-snapped by `buildVideoCreditModelIdentifier`, the same shape
- *     as LTX — but this function does not carry it yet: a 7s request prices
- *     `:6` while 7s is still what gets sent. Pre-existing, out of scope here,
- *     and ticketed as a follow-up (`geminiOmniPricedTier`, mirroring
- *     `ltxPricedTier`).
+ *  2. **Duration.** Every provider whose price follows the clip length is
+ *     charged at the length it RENDERS: its own default when the request named
+ *     none (catalog `defaultDuration`), the nearest length it offers otherwise
+ *     (`pricedOutputDurationSec` — the runners' own snap rule). The LTX ladder is
+ *     seeded per (band × seconds), so a 7s request snaps onto the 6s tier;
+ *     sending 7s would bill six and render seven. The same value is returned for
+ *     the other length-priced providers (the KIE ladders, Gemini Omni), so what
+ *     is priced is what is sent. Auto (-1) is the model's call and is untouched.
  *
  * Pure, and IDEMPOTENT against the identifier: feeding its output back in
  * cannot move the reserved tier. `video-request-normalize.test.ts` proves that
@@ -564,18 +555,27 @@ export function pricedVideoSelection(opts: {
   const resolution = opts.resolution
     ?? (ltx ? ltx.band : PRICING_DEFAULT_RESOLUTION[opts.provider])
 
-  if (!ltx) return { resolution, adjustments }
-
   const requested = typeof opts.duration === "string" ? parseInt(opts.duration, 10) : opts.duration
-  if (requested !== undefined && !Number.isNaN(requested) && requested !== ltx.duration) {
+  const asked = requested !== undefined && !Number.isNaN(requested)
+
+  // Every provider whose price follows the clip length sends the length it is
+  // CHARGED at (the catalog funnel: its own default when unset, the nearest
+  // legal length otherwise). Auto (-1) is the model's call and is left alone.
+  const lengthPriced = !!ltx || DURATION_PRICED_PROVIDERS.has(opts.provider) || isGeminiOmniProvider(opts.provider)
+  if (!lengthPriced || (!ltx && asked && requested! <= 0)) return { resolution, adjustments }
+
+  const duration = ltx ? ltx.duration : pricedOutputDurationSec(opts.provider, opts.duration)
+  if (asked && requested !== duration) {
     adjustments.push({
       field: "duration",
-      from: requested,
-      to: ltx.duration,
-      reason: `LTX renders ${ltx.band} in ${ltx.duration}s steps — using ${ltx.duration}s instead of ${requested}s.`,
+      from: requested!,
+      to: duration,
+      reason: ltx
+        ? `LTX renders ${ltx.band} in ${ltx.duration}s steps — using ${ltx.duration}s instead of ${requested}s.`
+        : `${opts.provider} renders ${duration}s clips at the nearest length it offers — using ${duration}s instead of ${requested}s.`,
     })
   }
-  return { resolution, duration: ltx.duration, adjustments }
+  return { resolution, duration, adjustments }
 }
 
 /**

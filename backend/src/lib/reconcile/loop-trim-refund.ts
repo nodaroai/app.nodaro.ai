@@ -1,4 +1,4 @@
-import { estimateLoopTrimAddonCredits, isAutoVideoDuration, pricedOutputDurationSec } from "@nodaro/shared"
+import { loopTrimAddonCreditsFor } from "../loop-trim-addon.js"
 
 /**
  * Compute the loop-trim add-on credits a reconcile recovery must take OFF the
@@ -29,11 +29,9 @@ export function loopTrimAddonForReconcile(
     | { enabled?: boolean; framesToTest?: number }
     | undefined
   if (!loopTrim?.enabled) return 0
-  // Same sizing as the route's reservation and the worker's refund: Auto (-1)
-  // has no seconds of its own, the add-on was reserved at the model's ceiling.
+  // The one sizing funnel the route's reservation and the worker's refund
+  // read: the seconds the model renders (its default when unset, the nearest
+  // legal length, its ceiling for Auto).
   const provider = typeof inputData.provider === "string" ? inputData.provider : ""
-  const duration = isAutoVideoDuration(inputData.duration)
-    ? pricedOutputDurationSec(provider, inputData.duration as number)
-    : typeof inputData.duration === "number" ? inputData.duration : 8
-  return estimateLoopTrimAddonCredits(loopTrim, duration)
+  return loopTrimAddonCreditsFor(loopTrim, provider, inputData.duration as number | string | undefined)
 }

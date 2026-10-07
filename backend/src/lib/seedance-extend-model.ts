@@ -64,12 +64,13 @@ export function buildSeedanceExtendCreditIdentifier(
   duration: number | undefined,
   resolution: string | undefined,
 ): string {
-  const durationSec = duration ?? 8
+  // An unset duration is charged at the generation model's own catalog default
+  // (8s for both), through the one funnel inside the identifier builder.
   const res = resolution ?? "720p"
   if (seedanceExtendGenerationModel() === "seedance-2-5") {
     return buildVideoCreditModelIdentifier(
       "seedance-2-5",
-      durationSec,
+      duration,
       undefined,
       undefined,
       undefined,
@@ -79,7 +80,7 @@ export function buildSeedanceExtendCreditIdentifier(
   }
   return buildVideoCreditModelIdentifier(
     "seedance-2-extend",
-    durationSec,
+    duration,
     undefined,
     undefined,
     undefined,

@@ -24,8 +24,9 @@ support is **corrected** rather than rejected, and you are billed for the
 corrected value because it is also the value sent to the provider: off-list
 values snap to the nearest supported option (never the cheapest, and never
 landscape from a portrait request), an omitted resolution is sent at the band it
-is priced at, `4K` canonicalises to `4k`, and LTX 2.3 durations move to the
-nearest seeded rung. The route returns the corrections in an `adjustments` array.
+is priced at, `4K` canonicalises to `4k`, an omitted duration is the model's
+default render length, and a duration the model does not offer moves to the
+nearest one it does (LTX 2.3 moves to its nearest seeded rung). The route returns the corrections in an `adjustments` array.
 See [Resolution, aspect ratio and duration corrections](./generate-video.md#resolution-aspect-ratio-and-duration-corrections)
 and the API reference on [Parameter corrections](../../api-integration.md#4d-parameter-corrections-adjustments).
 

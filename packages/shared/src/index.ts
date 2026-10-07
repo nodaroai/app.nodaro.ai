@@ -186,6 +186,8 @@ export {
   applyDefaultVideoSelection,
   PRICING_DEFAULT_DURATION_SEC,
   pricedOutputDurationSec,
+  snapToNearestDuration,
+  videoDefaultDurationSec,
   supportsAutoVideoDuration,
   maxVideoDurationSec,
   PRICING_DEFAULT_RESOLUTION,

@@ -27,7 +27,8 @@ import {
   runLtxRetake,
 } from "../../providers/replicate/ltx-video.js"
 import { config } from "../../lib/config.js"
-import { FAL_LIP_SYNC_PROVIDERS, isAutoVideoDuration, ltxExtendDurationSec, ltxRetakeDurationSec, pricedOutputDurationSec, REPLICATE_LIP_SYNC_PROVIDERS, SEEDANCE_2_EXTEND_STITCH, SEEDANCE_2_R2V_MIN_REF_VIDEO_SEC, SEEDANCE_LIP_SYNC_PROVIDERS, estimateLoopTrimAddonCredits, getDialogueCapabilities, dialogueProviderOf, ttsSupportsAudioTags, isVeoProvider, getVideoAudioCapability } from "@nodaro/shared"
+import { loopTrimAddonCreditsFor } from "../../lib/loop-trim-addon.js"
+import { FAL_LIP_SYNC_PROVIDERS, ltxExtendDurationSec, ltxRetakeDurationSec, pricedOutputDurationSec, REPLICATE_LIP_SYNC_PROVIDERS, SEEDANCE_2_EXTEND_STITCH, SEEDANCE_2_R2V_MIN_REF_VIDEO_SEC, SEEDANCE_LIP_SYNC_PROVIDERS, getDialogueCapabilities, dialogueProviderOf, ttsSupportsAudioTags, isVeoProvider, getVideoAudioCapability } from "@nodaro/shared"
 import type { CharacterVoiceSpec, DialogueLine, ResolvedDialogueVoiceLine, VideoCharacterReference } from "@nodaro/shared"
 import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
 import { combineVideos } from "../../providers/video/combine-videos.js"
@@ -412,10 +413,7 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
   let loopTrimAddonToRefund = 0
   if (loopTrim?.enabled) {
     // Same sizing as the route's reservation — Auto is priced at the model's ceiling.
-    const addonCredits = estimateLoopTrimAddonCredits(
-      loopTrim,
-      isAutoVideoDuration(duration) ? pricedOutputDurationSec(resolvedI2vProvider, duration) : (duration ?? 8),
-    )
+    const addonCredits = loopTrimAddonCreditsFor(loopTrim, resolvedI2vProvider, duration)
     try {
       console.log(
         `[worker] image-to-video ${ctx.jobId} smart-loop-cut ` +
@@ -1216,10 +1214,13 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
     // the SAME lever (lib/seedance-extend-model.ts), so reserve and generation
     // can't diverge.
     const genModel = seedanceExtendGenerationModel()
-    // Snap into the chosen model's native window (2.0: 4–15s, 2.5: 4–30s); the
-    // 8s default mirrors the credit reservation's default tier.
+    // Snap into the chosen model's native window (2.0: 4–15s, 2.5: 4–30s); an
+    // unset duration is the catalog default the credit reservation prices.
     const genWindow = seedanceExtendDurationWindow(genModel)
-    const extSeconds = Math.min(genWindow.max, Math.max(genWindow.min, Math.round(duration ?? 8)))
+    const extSeconds = Math.min(
+      genWindow.max,
+      Math.max(genWindow.min, Math.round(pricedOutputDurationSec(genModel === "seedance-2-5" ? "seedance-2-5" : "seedance-2-extend", duration))),
+    )
 
     // The extension must match the SOURCE's shape or the stitch letterboxes.
     // seedance-2 natively accepts aspect_ratio "adaptive" (adopts the

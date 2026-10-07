@@ -59,6 +59,8 @@ export function projectModel(m: ModelCatalogEntry, prices: ChargedPrices): Recor
   if (m.resolutions?.length) out.resolutions = m.resolutions
   if (m.qualities?.length) out.qualities = m.qualities
   if (m.durations?.length) out.durations = m.durations
+  // What an unset `duration` renders AND is charged at (the catalog funnel).
+  if (m.defaultDuration !== undefined) out.defaultDuration = m.defaultDuration
   if (m.autoDuration) out.autoDuration = true
   const promptTips = getPromptTips(m.id)
   if (promptTips.length) out.promptTips = promptTips

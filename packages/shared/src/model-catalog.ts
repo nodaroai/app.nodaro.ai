@@ -221,6 +221,14 @@ export interface ModelCatalogEntry {
   qualities?: readonly string[]
   durations?: readonly number[]
   /**
+   * The length (seconds) this model renders when the request names no duration
+   * — a capability fact, and the length an unset duration is CHARGED at
+   * (`pricedOutputDurationSec`). A member of `durations`. REQUIRED on every
+   * video model priced by length (`pricing-default-duration-sync.test.ts`), and
+   * where the KIE config pins `extraParams.duration` it must equal that pin.
+   */
+  defaultDuration?: number
+  /**
    * The model accepts an AUTO duration (`duration: -1`, see
    * `VIDEO_DURATION_AUTO`): it picks the clip length itself — the source clip's
    * length on a video edit, a length within `durations` otherwise. A capability,
@@ -1201,6 +1209,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     useCases: ["realistic", "motion", "narrative"],
     features: ["end-frame"],
     durations: [5],
+    defaultDuration: 5,
     pricing: [{ identifier: "minimax", credits: 143, note: "5s, 1080p" }],
   },
   // MiniMax Hailuo 3 (KIE "minimax-h3") — t2v / i2v (first and/or last frame) /
@@ -1226,6 +1235,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     features: ["end-frame", "audio", "reference-image", "video-reference"],
     aspectRatios: VIDEO_RATIOS_SEEDANCE_2,
     durations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    defaultDuration: 6,
     // First entry = default (the UI dropdown + fail-safe snap use opts[0], and
     // 2K is the KIE-side default). Uppercase values are the exact KIE wire enum.
     resolutions: ["2K", "768P"],
@@ -1251,6 +1261,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     description: "Hailuo 2.3 Pro — newer Hailuo with 768P / 1080P resolutions.",
     useCases: ["realistic", "motion"],
     durations: [6, 10],
+    defaultDuration: 6,
     resolutions: ["768P", "1080P"],
     pricing: [
       { identifier: "hailuo-2.3-pro", credits: 200, note: "10s default" },
@@ -1270,6 +1281,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     description: "Cheaper Hailuo 2.3 tier — good baseline quality.",
     useCases: ["realistic", "cheap"],
     durations: [6, 10],
+    defaultDuration: 6,
     pricing: [
       { identifier: "hailuo-2.3", credits: 75, note: "6s default" },
       { identifier: "hailuo-2.3:6s", credits: 80, note: "6s" },
@@ -1287,6 +1299,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     useCases: ["cheap", "motion"],
     features: ["end-frame"],
     durations: [6, 10],
+    defaultDuration: 6,
     resolutions: ["512P", "768P"],
     pricing: [
       { identifier: "hailuo-standard", credits: 75, note: "6s default" },
@@ -1315,6 +1328,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     // `veo3_lite` DO serve it and keep the flag.
     features: ["end-frame", "audio"],
     durations: [4, 6, 8],
+    defaultDuration: 8,
     aspectRatios: VIDEO_RATIOS_HV,
     // 720p (default) + 1080p inline. 4K generates the base at 1080p then chains
     // KIE's /api/v1/veo/get-4k-video endpoint (worker handleImageToVideo / handleTextToVideo).
@@ -1336,6 +1350,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     useCases: ["cinematic", "fast", "general"],
     features: ["end-frame", "audio", "reference-image"],
     durations: [4, 6, 8],
+    defaultDuration: 8,
     aspectRatios: VIDEO_RATIOS_HV,
     resolutions: ["720p", "1080p", "4k"],
     pricing: [
@@ -1356,6 +1371,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     useCases: ["cinematic", "cheap", "high-volume"],
     features: ["end-frame", "audio", "reference-image"],
     durations: [4, 6, 8],
+    defaultDuration: 8,
     aspectRatios: VIDEO_RATIOS_HV,
     resolutions: ["720p", "1080p", "4k"],
     pricing: [
@@ -1378,6 +1394,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     aspectRatios: VIDEO_RATIOS_HV,
     resolutions: ["720p", "1080p", "4k"],
     durations: [4, 6, 8, 10],
+    defaultDuration: 8,
     pricing: [
       { identifier: "gemini-omni-video", credits: 315, note: "default — 720p/1080p 4s" },
       { identifier: "gemini-omni-video:4", credits: 230, note: "720p/1080p 4s" },
@@ -1413,6 +1430,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     aspectRatios: VIDEO_RATIOS_HV,
     resolutions: ["720p", "1080p", "4k"],
     durations: [4, 6, 8, 10],
+    defaultDuration: 8,
     pricing: [
       { identifier: "gemini-omni-flash", credits: 270, note: "default — 8s 720p/1080p (the credit builder's duration fallback)" },
       { identifier: "gemini-omni-flash:4", credits: 160, note: "720p/1080p 4s" },
@@ -1441,6 +1459,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     features: ["audio"],
     aspectRatios: VIDEO_RATIOS_HVS,
     durations: [5, 10],
+    defaultDuration: 5,
     pricing: [
       { identifier: "kling", credits: 280, note: "10s no audio default" },
       { identifier: "kling:5s", credits: 138, note: "5s no audio" },
@@ -1460,6 +1479,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     useCases: ["fast", "motion", "cheap"],
     features: ["end-frame"],
     durations: [5, 10],
+    defaultDuration: 5,
     pricing: [
       { identifier: "kling-turbo", credits: 125, note: "5s default" },
       { identifier: "kling-turbo:5s", credits: 110 },
@@ -1477,6 +1497,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     useCases: ["premium", "narrative", "cinematic"],
     features: ["end-frame", "audio"],
     durations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    defaultDuration: 5,
     resolutions: ["720P", "1080P"],
     pricing: [
       { identifier: "kling-3.0", credits: 500, note: "5s 1080p with audio" },
@@ -1499,6 +1520,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     description: "Master tier I2V — strong cinematic quality.",
     useCases: ["cinematic", "premium"],
     durations: [5, 10],
+    defaultDuration: 5,
     pricing: [
       { identifier: "kling-master", credits: 400, note: "5s default" },
       { identifier: "kling-master:5s", credits: 400 },
@@ -1516,6 +1538,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     useCases: ["motion", "cinematic", "reference"],
     features: ["end-frame", "reference-image"],
     durations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    defaultDuration: 5,
     resolutions: ["720p", "1080p"],
     aspectRatios: VIDEO_RATIOS_HVS,
     pricing: [
@@ -1538,6 +1561,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     description: "Grok image-to-video — stylized motion. Up to 15s.",
     useCases: ["stylized", "motion"],
     durations: [6, 10],
+    defaultDuration: 6,
     resolutions: ["480p", "720p"],
     pricing: [
       { identifier: "grok-i2v", credits: 150, note: "6s default" },
@@ -1566,6 +1590,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     useCases: ["stylized", "motion"],
     aspectRatios: ["16:9", "9:16", "1:1", "4:3", "3:4"],
     durations: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    defaultDuration: 8,
     resolutions: ["480p", "720p"],
     pricing: [
       { identifier: "grok-imagine-video-1.5", credits: 295, note: "default 8s 480p — see :Ns:res variants" },
@@ -1588,6 +1613,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     useCases: ["motion", "narrative"],
     features: ["end-frame"],
     durations: [4, 8, 12],
+    defaultDuration: 8,
     resolutions: ["480p", "720p", "1080p"],
     pricing: [
       { identifier: "seedance", credits: 250, note: "8s default" },
@@ -1609,6 +1635,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     features: ["end-frame", "audio", "reference-image", "video-reference"],
     aspectRatios: VIDEO_RATIOS_SEEDANCE_2,
     durations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    defaultDuration: 8,
     autoDuration: true,
     resolutions: ["480p", "720p", "1080p", "4k"],
     pricing: [
@@ -1635,6 +1662,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     features: ["end-frame", "audio", "reference-image", "video-reference"],
     aspectRatios: VIDEO_RATIOS_SEEDANCE_2,
     durations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    defaultDuration: 8,
     autoDuration: true,
     resolutions: ["480p", "720p"],
     pricing: [
@@ -1657,6 +1685,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     features: ["end-frame", "audio", "reference-image", "video-reference"],
     aspectRatios: VIDEO_RATIOS_SEEDANCE_2,
     durations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    defaultDuration: 8,
     autoDuration: true,
     resolutions: ["480p", "720p"],
     pricing: [
@@ -1685,6 +1714,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     features: ["end-frame", "audio", "reference-image", "video-reference"],
     aspectRatios: VIDEO_RATIOS_SEEDANCE_2,
     durations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
+    defaultDuration: 8,
     autoDuration: true,
     resolutions: ["480p", "720p", "1080p"],
     pricing: [
@@ -1727,6 +1757,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     features: ["end-frame", "audio", "reference-image"],
     aspectRatios: VIDEO_RATIOS_WAN_3,
     durations: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
+    defaultDuration: 5,
     resolutions: ["480p", "720p", "1080p"],
     pricing: [
       { identifier: "wan-3", credits: 200, note: "default 5s 720p — see :Ns:res variants for exact" },
@@ -1752,6 +1783,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     features: ["end-frame", "audio", "reference-image"],
     aspectRatios: VIDEO_RATIOS_WAN_3,
     durations: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
+    defaultDuration: 5,
     resolutions: ["480p", "720p", "1080p"],
     pricing: [
       { identifier: "wan-3-prime", credits: 320, note: "default 5s 720p — see :Ns:res variants for exact" },
@@ -1774,6 +1806,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     description: "Wan 2.6 image-to-video — 5/10/15s at 720p/1080p.",
     useCases: ["motion", "narrative"],
     durations: [5, 10, 15],
+    defaultDuration: 5,
     resolutions: ["720p", "1080p"],
     pricing: [
       { identifier: "wan-i2v", credits: 175, note: "5s 720p default" },
@@ -1793,6 +1826,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     useCases: ["cheap", "fast"],
     aspectRatios: VIDEO_RATIOS_HVS,
     durations: [5],
+    defaultDuration: 5,
     resolutions: ["480p", "720p"],
     // Different KIE endpoints (i2v vs t2v) → different costs under
     // composite ids. Route picks endpoint based on whether image was supplied.
@@ -1813,6 +1847,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     description: "Wan 2.6 — text-to-video and video-to-video under a single id.",
     useCases: ["v2v", "t2v", "restyle"],
     durations: [5],
+    defaultDuration: 5,
     resolutions: ["720p", "1080p"],
     pricing: [
       { identifier: "wan", credits: 175, note: "v2v 5s 720p" },
@@ -1888,6 +1923,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     description: "Wan 2.7 image-to-video — 2–15s at 720p/1080p, supports start+end frame.",
     useCases: ["motion", "narrative"],
     durations: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    defaultDuration: 5,
     resolutions: ["720p", "1080p"],
     features: ["end-frame"],
     pricing: [
@@ -1905,6 +1941,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     useCases: ["motion", "narrative"],
     aspectRatios: VIDEO_RATIOS_HVS345,
     durations: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    defaultDuration: 5,
     resolutions: ["720p", "1080p"],
     pricing: [
       { identifier: "wan-2.7-t2v", credits: 188, note: "5s 720p default" },
@@ -1931,6 +1968,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     aspectRatios: ["16:9", "9:16"] as const,
     resolutions: ["1080p", "2k", "4k"] as const,
     durations: [6, 8, 10],
+    defaultDuration: 6,
     pricing: [
       { identifier: "ltx-2.3-pro", credits: 240, note: "default 1080p 6s" },
       { identifier: "ltx-2.3-pro:1080p:6s", credits: 240 },
@@ -1962,6 +2000,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     // in credit-identifiers.ts is the per-band authority and snaps a 2k/4k
     // request back onto 6/8/10s, so the reservation is always a real tier).
     durations: [6, 8, 10, 12, 14, 16, 18, 20],
+    defaultDuration: 6,
     pricing: [
       { identifier: "ltx-2.3-fast", credits: 180, note: "default 1080p 6s" },
       { identifier: "ltx-2.3-fast:1080p:6s", credits: 180 },
@@ -1993,6 +2032,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     useCases: ["motion", "creative"],
     aspectRatios: VIDEO_RATIOS_HAPPYHORSE_11,
     durations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    defaultDuration: 5,
     resolutions: ["720p", "1080p"],
     pricing: [
       { identifier: "happyhorse", credits: 282, note: "5s 720p default — per-second: ~5.7 cr/s @720p, ~7.3 cr/s @1080p" },
@@ -2008,6 +2048,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     description: "HappyHorse 1.1 image-to-video — 3–15s at 720p/1080p, aspect ratio inferred from input image, per-second pricing.",
     useCases: ["motion", "creative"],
     durations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    defaultDuration: 5,
     resolutions: ["720p", "1080p"],
     pricing: [
       { identifier: "happyhorse-i2v", credits: 282, note: "5s 720p default — per-second: ~5.7 cr/s @720p, ~7.3 cr/s @1080p" },
@@ -2024,6 +2065,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     useCases: ["motion", "reference"],
     aspectRatios: VIDEO_RATIOS_HAPPYHORSE_11,
     durations: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    defaultDuration: 5,
     resolutions: ["720p", "1080p"],
     features: ["reference-image"],
     pricing: [
@@ -2057,6 +2099,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     features: ["end-frame"],
     aspectRatios: VIDEO_RATIOS_HVS,
     durations: [5, 10],
+    defaultDuration: 5,
     resolutions: ["480p", "720p", "1080p"],
     pricing: [{ identifier: "bytedance-lite", credits: 57 }],
   },
@@ -2071,6 +2114,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     useCases: ["motion", "narrative"],
     aspectRatios: VIDEO_RATIOS_HVS,
     durations: [5, 10],
+    defaultDuration: 5,
     resolutions: ["480p", "720p", "1080p"],
     pricing: [{ identifier: "bytedance-pro", credits: 175 }],
   },
@@ -2084,6 +2128,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     description: "Faster Bytedance Pro variant.",
     useCases: ["fast", "motion"],
     durations: [5, 10],
+    defaultDuration: 5,
     resolutions: ["720p", "1080p"],
     pricing: [{ identifier: "bytedance-pro-fast", credits: 90 }],
   },
@@ -2105,6 +2150,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     description: "Runway Gen-3 routed through KIE. 5/10s at 720p/1080p.",
     useCases: ["motion", "narrative"],
     durations: [5, 10],
+    defaultDuration: 5,
     resolutions: ["720p", "1080p"],
     pricing: [{ identifier: "runway-kie", credits: 30, note: "5s 720p" }],
   },
@@ -2156,6 +2202,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     description: "Extend ANY video: generates the continuation (audio included) and trim-stitches it into one seamless clip.",
     useCases: ["extend"],
     durations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    defaultDuration: 8,
     resolutions: ["480p", "720p", "1080p"],
     pricing: [
       { identifier: "seedance-2-extend", credits: 530, note: "default 8s 720p (ref-mode 50 + 3 stitch) — see :NsR variants" },
