@@ -23,6 +23,21 @@ import {
 import { pipelineEvents } from "../events.js"
 import { pipelineExtractFrame } from "../services/pipeline-extract-frame.js"
 
+/**
+ * A fixture asset id: `assets.id` is a uuid column, and the ownership lookup
+ * only asks about uuid-shaped ids, so a named fixture asset maps to a stable
+ * uuid (one per name, in first-use order).
+ */
+const fixtureAssetIds = new Map<string, string>()
+function aid(name: string): string {
+  let id = fixtureAssetIds.get(name)
+  if (!id) {
+    id = `00000000-0000-4000-8000-${String(fixtureAssetIds.size + 1).padStart(12, "0")}`
+    fixtureAssetIds.set(name, id)
+  }
+  return id
+}
+
 beforeEach(() => vi.clearAllMocks())
 
 function makeShot(overrides: Partial<ShotSpec> = {}): ShotSpec {
@@ -72,7 +87,13 @@ function makeScene(overrides: Partial<SceneNodeData> = {}): SceneNodeData {
   } as SceneNodeData
 }
 
-/** Build a supabase mock returning the supplied entity + asset rows. */
+const PIPELINE_OWNER = "owner-1"
+
+/**
+ * Build a supabase mock returning the supplied entity + asset rows. Every
+ * pipeline is PIPELINE_OWNER's; an asset is too unless `assetOwners` says
+ * otherwise, and the assets read honours its `user_id` filter.
+ */
 function makeSupabaseMock(opts: {
   entities?: Array<{
     id: string
@@ -81,6 +102,7 @@ function makeSupabaseMock(opts: {
     main_asset_id: string | null
   }>
   assetUrls?: Record<string, string>
+  assetOwners?: Record<string, string>
 }) {
   const supabase = {
     from: vi.fn().mockImplementation((table: string) => {
@@ -93,15 +115,26 @@ function makeSupabaseMock(opts: {
           }),
         }
       }
+      if (table === "pipelines") {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({ data: { user_id: PIPELINE_OWNER }, error: null }),
+            }),
+          }),
+        }
+      }
       if (table === "assets") {
         return {
           select: () => ({
-            in: async () => ({
-              data: Object.entries(opts.assetUrls ?? {}).map(([id, url]) => ({
-                id,
-                r2_url: url,
-              })),
-              error: null,
+            in: (_col: string, ids: string[]) => ({
+              eq: async (col: string, owner: string) => ({
+                data: Object.entries(opts.assetUrls ?? {})
+                  .filter(([id]) => ids.includes(id))
+                  .filter(([id]) => col !== "user_id" || (opts.assetOwners?.[id] ?? PIPELINE_OWNER) === owner)
+                  .map(([id, url]) => ({ id, r2_url: url })),
+                error: null,
+              }),
             }),
           }),
         }
@@ -116,16 +149,16 @@ describe("allocateReferenceSlots", () => {
   it("Kling 3 Omni (7-ref): allocates continuity anchor + primary char + location + extras", async () => {
     const supabase = makeSupabaseMock({
       entities: [
-        { id: "char-hero", entity_type: "character", entity_key: "hero", main_asset_id: "asset-hero" },
-        { id: "char-rival", entity_type: "character", entity_key: "rival", main_asset_id: "asset-rival" },
-        { id: "loc-hall", entity_type: "location", entity_key: "hallway", main_asset_id: "asset-hall" },
-        { id: "obj-bf", entity_type: "object", entity_key: "briefcase", main_asset_id: "asset-bf" },
+        { id: "char-hero", entity_type: "character", entity_key: "hero", main_asset_id: aid("hero") },
+        { id: "char-rival", entity_type: "character", entity_key: "rival", main_asset_id: aid("rival") },
+        { id: "loc-hall", entity_type: "location", entity_key: "hallway", main_asset_id: aid("hall") },
+        { id: "obj-bf", entity_type: "object", entity_key: "briefcase", main_asset_id: aid("bf") },
       ],
       assetUrls: {
-        "asset-hero": "https://r2/hero.png",
-        "asset-rival": "https://r2/rival.png",
-        "asset-hall": "https://r2/hall.png",
-        "asset-bf": "https://r2/bf.png",
+        [aid("hero")]: "https://r2/hero.png",
+        [aid("rival")]: "https://r2/rival.png",
+        [aid("hall")]: "https://r2/hall.png",
+        [aid("bf")]: "https://r2/bf.png",
       },
     })
     const slots = await allocateReferenceSlots({
@@ -134,7 +167,7 @@ describe("allocateReferenceSlots", () => {
       scene: { id: "scene-1" },
       shot: makeShot(),
       sceneNodeData: makeScene({ video_model: "kling-3-omni" }),
-      priorLastFrame: { assetId: "asset-prior", url: "https://r2/prior.png" },
+      priorLastFrame: { assetId: aid("prior"), url: "https://r2/prior.png" },
     })
 
     expect(slots.length).toBe(5) // anchor + hero + hall + rival + briefcase
@@ -149,12 +182,12 @@ describe("allocateReferenceSlots", () => {
   it("Hailuo Standard (1-ref): drops all but the continuity anchor + emits warning", async () => {
     const supabase = makeSupabaseMock({
       entities: [
-        { id: "char-hero", entity_type: "character", entity_key: "hero", main_asset_id: "asset-hero" },
-        { id: "loc-hall", entity_type: "location", entity_key: "hallway", main_asset_id: "asset-hall" },
+        { id: "char-hero", entity_type: "character", entity_key: "hero", main_asset_id: aid("hero") },
+        { id: "loc-hall", entity_type: "location", entity_key: "hallway", main_asset_id: aid("hall") },
       ],
       assetUrls: {
-        "asset-hero": "https://r2/hero.png",
-        "asset-hall": "https://r2/hall.png",
+        [aid("hero")]: "https://r2/hero.png",
+        [aid("hall")]: "https://r2/hall.png",
       },
     })
     const slots = await allocateReferenceSlots({
@@ -170,7 +203,7 @@ describe("allocateReferenceSlots", () => {
         },
       }),
       sceneNodeData: makeScene({ video_model: "hailuo-standard", cast_keys: ["hero"], object_keys: [] }),
-      priorLastFrame: { assetId: "asset-prior", url: "https://r2/prior.png" },
+      priorLastFrame: { assetId: aid("prior"), url: "https://r2/prior.png" },
     })
 
     expect(slots.length).toBe(1)
@@ -186,12 +219,12 @@ describe("allocateReferenceSlots", () => {
   it("Hailuo Standard (1-ref): no prior frame → uses character ref + warns", async () => {
     const supabase = makeSupabaseMock({
       entities: [
-        { id: "char-hero", entity_type: "character", entity_key: "hero", main_asset_id: "asset-hero" },
-        { id: "loc-hall", entity_type: "location", entity_key: "hallway", main_asset_id: "asset-hall" },
+        { id: "char-hero", entity_type: "character", entity_key: "hero", main_asset_id: aid("hero") },
+        { id: "loc-hall", entity_type: "location", entity_key: "hallway", main_asset_id: aid("hall") },
       ],
       assetUrls: {
-        "asset-hero": "https://r2/hero.png",
-        "asset-hall": "https://r2/hall.png",
+        [aid("hero")]: "https://r2/hero.png",
+        [aid("hall")]: "https://r2/hall.png",
       },
     })
     const slots = await allocateReferenceSlots({
@@ -208,6 +241,38 @@ describe("allocateReferenceSlots", () => {
     expect(pipelineEvents.publish).toHaveBeenCalledWith(
       expect.objectContaining({ code: "ref_slots_degraded_to_one" }),
     )
+  })
+
+  it("attacker: an entity whose main_asset_id names another user's asset gets no reference (decided 2026-10-07)", async () => {
+    const supabase = makeSupabaseMock({
+      entities: [
+        { id: "char-hero", entity_type: "character", entity_key: "hero", main_asset_id: aid("hero") },
+        // A pointer at another user's private asset, written before migration 480.
+        { id: "char-rival", entity_type: "character", entity_key: "rival", main_asset_id: aid("foreign") },
+      ],
+      assetUrls: {
+        [aid("hero")]: "https://r2/hero.png",
+        [aid("foreign")]: "https://r2/someone-elses.png",
+      },
+      assetOwners: { [aid("foreign")]: "victim" },
+    })
+    const slots = await allocateReferenceSlots({
+      supabase,
+      pipelineId: "p1",
+      scene: { id: "scene-1" },
+      shot: makeShot(),
+      sceneNodeData: makeScene({ video_model: "kling-3-omni", location_key: "", object_keys: [] }),
+      priorLastFrame: null,
+    })
+    expect(slots.map((s) => s.url)).toEqual(["https://r2/hero.png"])
+
+    const ctx = await prepareSceneRefContext(
+      supabase,
+      "p1",
+      makeScene({ location_key: "", object_keys: [] }),
+    )
+    expect(ctx.entitiesByTypeKey.get("character:hero")?.main_asset_url).toBe("https://r2/hero.png")
+    expect(ctx.entitiesByTypeKey.get("character:rival")?.main_asset_url).toBeNull()
   })
 
   it("Returns empty list when no candidates available", async () => {
@@ -250,7 +315,7 @@ describe("allocateReferenceSlots", () => {
       scene: { id: "scene-1" },
       shot: makeShot(),
       sceneNodeData: makeScene({ video_model: "kling-3-omni", cast_keys: ["hero"], object_keys: [] }),
-      priorLastFrame: { assetId: "asset-prior", url: "https://r2/prior.png" },
+      priorLastFrame: { assetId: aid("prior"), url: "https://r2/prior.png" },
       sceneContext: prebuiltContext,
     })
 

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { VIDEO_MODEL_CAPS, type SceneNodeData, type ShotSpec, type VideoCriticFrameMode } from "@nodaro/shared"
+import { pipelineOwnedAssetUrlsById } from "../../lib/pipeline-asset-ownership.js"
 import { pipelineExtractFrame } from "./services/pipeline-extract-frame.js"
 import { pipelineEvents } from "./events.js"
 
@@ -155,17 +156,13 @@ export async function prepareSceneRefContext(
       entity_key: string
       main_asset_id: string | null
     }>
-    const assetIds = entities.map((e) => e.main_asset_id).filter((id): id is string => !!id)
-    const urlByAssetId = new Map<string, string>()
-    if (assetIds.length > 0) {
-      const { data: assetRows } = await supabase
-        .from("assets")
-        .select("id, r2_url")
-        .in("id", assetIds)
-      for (const a of (assetRows ?? []) as Array<{ id: string; r2_url: string | null }>) {
-        if (a.r2_url) urlByAssetId.set(a.id, a.r2_url)
-      }
-    }
+    // The pipeline owner's assets only (decided 2026-10-07): a pointer at
+    // another user's asset gives the entity no reference image.
+    const urlByAssetId = await pipelineOwnedAssetUrlsById(
+      supabase,
+      pipelineId,
+      entities.map((e) => e.main_asset_id),
+    )
     for (const e of entities) {
       const url = e.main_asset_id ? urlByAssetId.get(e.main_asset_id) ?? null : null
       entitiesByTypeKey.set(`${e.entity_type}:${e.entity_key}`, {
@@ -275,17 +272,12 @@ export async function allocateReferenceSlots(
         entity_key: string
         main_asset_id: string | null
       }>
-      const assetIds = entities.map((e) => e.main_asset_id).filter((id): id is string => !!id)
-      const urlByAssetId = new Map<string, string>()
-      if (assetIds.length > 0) {
-        const { data: assetRows } = await supabase
-          .from("assets")
-          .select("id, r2_url")
-          .in("id", assetIds)
-        for (const a of (assetRows ?? []) as Array<{ id: string; r2_url: string | null }>) {
-          if (a.r2_url) urlByAssetId.set(a.id, a.r2_url)
-        }
-      }
+      // The pipeline owner's assets only (decided 2026-10-07).
+      const urlByAssetId = await pipelineOwnedAssetUrlsById(
+        supabase,
+        pipelineId,
+        entities.map((e) => e.main_asset_id),
+      )
       for (const e of entities) {
         const url = e.main_asset_id ? urlByAssetId.get(e.main_asset_id) ?? null : null
         entitiesByTypeKey.set(`${e.entity_type}:${e.entity_key}`, {

@@ -1196,6 +1196,16 @@ calling user.
 | `DELETE` | `/v1/objects/:id` | Soft-delete (archive). Restorable. |
 | `DELETE` | `/v1/objects/:id?permanent=true` | Permanent destroy. Row must already be archived (400 `not_archived` otherwise). |
 
+**What a permanent delete removes from storage.** A permanent delete of an
+object, creature, location or library item removes the row, and deletes the
+stored files it names only when they are yours: a file another user's
+generation made, one in another user's upload folder, or one another user's
+library still holds, stays in storage. The row is still removed, and its size is not credited back to your storage
+quota, because it was never counted against it. Storage retention cleanup
+follows the same rule. These four kinds of rows, and characters, are written
+only through the API: a direct database write from a signed-in browser session
+is refused.
+
 The upsert body is documented in `backend/src/routes/objects.ts`. On
 UPDATE, only the fields you supply are written; omitted keys are left alone
 so partial saves don't clobber asset arrays a worker is concurrently

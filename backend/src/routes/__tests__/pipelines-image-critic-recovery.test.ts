@@ -95,6 +95,7 @@ interface MockPipelineEntity {
 
 interface MockAsset {
   id: string
+  user_id: string
   pipeline_entity_id: string
   r2_url: string
   created_at: string
@@ -248,17 +249,30 @@ vi.mock("../../lib/supabase.js", () => {
     if (table === "assets") {
       return {
         select: (_cols: string) => ({
+          // ownedAssetUrlsById: `.in("id", ids).eq("user_id", owner)`.
+          in: (col: string, vals: string[]) => ({
+            eq: async (col2: string, val2: string) => ({
+              data:
+                col === "id" && col2 === "user_id"
+                  ? _state.assets.filter((a) => vals.includes(a.id) && a.user_id === val2)
+                  : [],
+              error: null,
+            }),
+          }),
           eq: (col: string, val: string) => ({
-            order: () => ({
-              limit: () => ({
-                maybeSingle: async () => {
-                  // Filter by pipeline_entity_id, sort by created_at desc, return first.
-                  if (col !== "pipeline_entity_id") return { data: null, error: null }
-                  const rows = _state.assets
-                    .filter((a) => a.pipeline_entity_id === val)
-                    .sort((a, b) => b.created_at.localeCompare(a.created_at))
-                  return { data: rows[0] ?? null, error: null }
-                },
+            // The read is the pipeline owner's assets only (decided 2026-10-06).
+            eq: (col2: string, val2: string) => ({
+              order: () => ({
+                limit: () => ({
+                  maybeSingle: async () => {
+                    // Filter by pipeline_entity_id + user_id, sort by created_at desc, return first.
+                    if (col !== "pipeline_entity_id" || col2 !== "user_id") return { data: null, error: null }
+                    const rows = _state.assets
+                      .filter((a) => a.pipeline_entity_id === val && a.user_id === val2)
+                      .sort((a, b) => b.created_at.localeCompare(a.created_at))
+                    return { data: rows[0] ?? null, error: null }
+                  },
+                }),
               }),
             }),
           }),
@@ -325,9 +339,11 @@ function seedAssetForEntity(
   assetId: string,
   r2Url: string,
   createdAt: string,
+  userId: string = TEST_USER_ID,
 ) {
   _state.assets.push({
     id: assetId,
+    user_id: userId,
     pipeline_entity_id: entityId,
     r2_url: r2Url,
     created_at: createdAt,
@@ -509,6 +525,57 @@ describe("POST /v1/pipelines/:id/entities/:entity_id/force-approve-image-critic-
     expect(res.statusCode).toBe(200)
     const row = _state.pipelineEntities.get(ENTITY_ID)
     expect(row?.main_asset_id).toBe(ASSET_ID_OLD)
+    await app.close()
+  })
+
+  it("attacker: a last_attempted_asset_id naming another user's asset is not adopted (decided 2026-10-07)", async () => {
+    // The pointer names user-2's asset (written before migration 480, or by
+    // any writer the trigger did not yet cover). The owner's own latest asset
+    // for the entity is adopted instead.
+    const FOREIGN_ASSET_ID = "00000000-0000-0000-0000-000000000f0e"
+    seedCriticFailedEntity({
+      metadata: {
+        name: "Alice",
+        last_error: "image_critic_unresolvable",
+        last_attempted_asset_id: FOREIGN_ASSET_ID,
+        image_critic_retry_count: 3,
+        critic_findings: [],
+      },
+    })
+    seedAssetForEntity(ENTITY_ID, FOREIGN_ASSET_ID, "https://r2/other-users.png", "2026-05-21T11:00:00Z", OTHER_USER_ID)
+    seedAssetForEntity(ENTITY_ID, ASSET_ID, "https://r2/alice-own.png", "2026-05-21T10:00:00Z")
+    const app = await makeApp()
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/pipelines/${PIPELINE_ID}/entities/${ENTITY_ID}/force-approve-image-critic-failure`,
+      payload: {},
+    })
+    expect(res.statusCode).toBe(200)
+    expect(_state.pipelineEntities.get(ENTITY_ID)?.main_asset_id).toBe(ASSET_ID)
+    await app.close()
+  })
+
+  it("attacker: with only another user's asset to point at, nothing is adopted", async () => {
+    const FOREIGN_ASSET_ID = "00000000-0000-0000-0000-000000000f0e"
+    seedCriticFailedEntity({
+      metadata: {
+        name: "Alice",
+        last_error: "image_critic_unresolvable",
+        last_attempted_asset_id: FOREIGN_ASSET_ID,
+        image_critic_retry_count: 3,
+        critic_findings: [],
+      },
+    })
+    seedAssetForEntity(ENTITY_ID, FOREIGN_ASSET_ID, "https://r2/other-users.png", "2026-05-21T11:00:00Z", OTHER_USER_ID)
+    const app = await makeApp()
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/pipelines/${PIPELINE_ID}/entities/${ENTITY_ID}/force-approve-image-critic-failure`,
+      payload: {},
+    })
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error.code).toBe("no_asset_to_approve")
+    expect(_state.pipelineEntities.get(ENTITY_ID)?.main_asset_id).toBeNull()
     await app.close()
   })
 })

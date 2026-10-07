@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { pipelineCombineVideos } from "../services/pipeline-combine-videos.js"
+import { withOwnedSceneRows } from "../../../lib/pipeline-asset-ownership.js"
 
 /**
  * Phase 1C.2 sub-step 7e' — Silent-cut review.
@@ -67,8 +68,19 @@ export async function runSilentCutReview(
     return { ok: false, awaitingApproval: false }
   }
 
+  // Whose composites (decided 2026-10-07; migration 482): the reel downloads
+  // every composite, so it reads the owner-checked copy — a composite on our
+  // storage another user made or holds is left out. A failed lookup fails the
+  // preview rather than concatenating composites nobody judged.
+  let ownedScenes: typeof scenes
+  try {
+    ownedScenes = await withOwnedSceneRows(supabase, userId, scenes)
+  } catch {
+    return { ok: false, awaitingApproval: false }
+  }
+
   const sceneUrls: string[] = []
-  for (const scene of scenes) {
+  for (const scene of ownedScenes) {
     const meta = (scene.metadata as Record<string, unknown> | null) ?? {}
     const sceneNodeData = meta.scene_node_data as
       | { composite_video_url?: string }

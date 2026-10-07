@@ -17,6 +17,13 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type { BillingContext } from "../../lib/billing-context.js"
+import {
+  ownedAssetUrlsById,
+  sceneNodeDataAssetIds,
+  sceneNodeDataUrls,
+  withoutForeignSceneRefs,
+  foreignSceneUrls,
+} from "../../lib/pipeline-asset-ownership.js"
 import { stampPipelineConfig } from "./pipeline-payer.js"
 import { PIPELINE_STAGE_NAMES, type PipelineStageName } from "@nodaro/shared"
 
@@ -309,17 +316,75 @@ export async function branchPipeline(
         throw new BranchPipelineError("entities_fetch_failed", entitiesErr.message)
       }
       if (origEntities && origEntities.length > 0) {
+        // Only the owner's own assets carry over (decided 2026-10-07): a
+        // pointer at another user's asset (main image, last frame, last
+        // critic attempt, or an asset id inside a scene's scene_node_data),
+        // written before migration 480, is dropped rather than copied into a
+        // new row (480's trigger would refuse that row, and the branch with
+        // it). An id whose asset is gone is dropped the same way. A dropped
+        // scene id takes its matching url with it, and a scene url naming an
+        // object on our storage another user made or holds is dropped with
+        // its id (decided 2026-10-07; 482's trigger refuses it the same way).
+        const attemptOf = (meta: unknown): string | null => {
+          const v = (meta as Record<string, unknown> | null)?.last_attempted_asset_id
+          return typeof v === "string" ? v : null
+        }
+        const sceneDataOf = (meta: unknown): unknown =>
+          (meta as Record<string, unknown> | null)?.scene_node_data
+        let owned: Map<string, string | null>
+        let foreignUrls: Set<string>
+        try {
+          foreignUrls = await foreignSceneUrls(
+            supabase,
+            userId,
+            origEntities.flatMap((e) => sceneNodeDataUrls(sceneDataOf(e.metadata))),
+            // The copies are written to new rows: judged as 482's trigger
+            // judges (every host), so a url it would refuse is dropped here.
+            { forWrite: true },
+          )
+          owned = await ownedAssetUrlsById(
+            supabase,
+            origEntities.flatMap((e) => [
+              e.main_asset_id as string | null,
+              e.last_frame_asset_id as string | null,
+              attemptOf(e.metadata),
+              ...sceneNodeDataAssetIds(sceneDataOf(e.metadata)),
+            ]),
+            userId,
+            { throwOnError: true },
+          )
+        } catch (err) {
+          throw new BranchPipelineError(
+            "entities_fetch_failed",
+            err instanceof Error ? err.message : String(err),
+          )
+        }
         const { error: entitiesInsErr } = await supabase.from("pipeline_entities").insert(
-          origEntities.map((e) => ({
-            pipeline_id: newPipelineId,
-            entity_type: e.entity_type,
-            entity_key: e.entity_key,
-            // Carry over approved status — the entities are already blessed
-            status: "approved",
-            main_asset_id: e.main_asset_id ?? null,
-            last_frame_asset_id: e.last_frame_asset_id ?? null,
-            metadata: e.metadata ?? null,
-          })),
+          origEntities.map((e) => {
+            const attempt = attemptOf(e.metadata)
+            let metadata = (e.metadata ?? null) as Record<string, unknown> | null
+            if (metadata && attempt && !owned.has(attempt)) {
+              const { last_attempted_asset_id: _foreign, ...rest } = metadata
+              metadata = rest
+            }
+            if (metadata && metadata.scene_node_data !== undefined) {
+              metadata = {
+                ...metadata,
+                scene_node_data: withoutForeignSceneRefs(metadata.scene_node_data, { ownedIds: owned, foreignUrls }),
+              }
+            }
+            return {
+              pipeline_id: newPipelineId,
+              entity_type: e.entity_type,
+              entity_key: e.entity_key,
+              // Carry over approved status — the entities are already blessed
+              status: "approved",
+              main_asset_id: e.main_asset_id && owned.has(e.main_asset_id) ? e.main_asset_id : null,
+              last_frame_asset_id:
+                e.last_frame_asset_id && owned.has(e.last_frame_asset_id) ? e.last_frame_asset_id : null,
+              metadata,
+            }
+          }),
         )
         if (entitiesInsErr) {
           throw new BranchPipelineError(

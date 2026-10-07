@@ -15,12 +15,28 @@ vi.mock("../../stage-utils.js", async () => {
 vi.mock("../../queue.js", () => ({
   enqueuePipelineRun: vi.fn(async () => undefined),
 }))
+// Stage 7's services, for the re-planned scene it renders (the Stage 7
+// composite reuse case below). Stage 5 itself imports none of them.
+vi.mock("../../services/pipeline-animate-shot.js", () => ({ pipelineAnimateShot: vi.fn() }))
+vi.mock("../../services/pipeline-generate-speech.js", () => ({ pipelineGenerateSpeech: vi.fn() }))
+vi.mock("../../services/pipeline-lip-sync.js", () => ({ pipelineLipSync: vi.fn() }))
+vi.mock("../../services/pipeline-voice-change.js", () => ({ pipelineVoiceChange: vi.fn() }))
+vi.mock("../../services/pipeline-combine-videos.js", () => ({ pipelineCombineVideos: vi.fn() }))
+vi.mock("../../continuity.js", () => ({
+  extractLastFrame: vi.fn(),
+  allocateReferenceSlots: vi.fn().mockResolvedValue([]),
+  prepareSceneRefContext: vi.fn().mockResolvedValue({ entitiesByTypeKey: new Map() }),
+}))
+vi.mock("../../llms/image-critic.js", () => ({ runImageCritic: vi.fn() }))
 
 import { runSceneDirector } from "../../llms/scene-director.js"
 import { runShotListCritic } from "../../llms/shot-list-critic.js"
 import { enqueuePipelineRun } from "../../queue.js"
 import { pipelineEvents } from "../../events.js"
 import { runShotListStage } from "../shot-list.js"
+import { runSceneInternalPipeline } from "../../scene-internal-pipeline.js"
+import { pipelineAnimateShot } from "../../services/pipeline-animate-shot.js"
+import { OWNER_ID, VICTIM_JOB_ID, ownerUrl, useStorageHost, victimUrl, withStorageOwnerTables } from "../../../../test/storage-owner-tables.js"
 
 beforeEach(() => vi.clearAllMocks())
 
@@ -139,6 +155,11 @@ function makeSupabase(
     initialEntities?: Array<Record<string, unknown>>
     /** Pipeline config row returned for the auto-sequential check. */
     pipelineConfig?: Record<string, unknown>
+    /**
+     * Refuse a `pipeline_entities` update (as migration 480's trigger, or any
+     * other write failure, would): return the error for a patch to refuse.
+     */
+    refuseEntityUpdate?: (patch: Record<string, unknown>) => { code: string; message: string } | null
   } = {},
 ) {
   const entities = new Map<string, Record<string, unknown>>()
@@ -203,6 +224,8 @@ function makeSupabase(
         } => {
           const filters: Record<string, unknown> = {}
           const applyPatchAndResolve = () => {
+            const refusal = opts.refuseEntityUpdate?.(patch) ?? null
+            if (refusal) return { data: null, error: refusal }
             const matches = Array.from(entities.values()).filter((row) =>
               Object.entries(filters).every(([k, v]) => {
                 if (k === "id") return row.id === v
@@ -601,6 +624,329 @@ describe("runShotListStage", () => {
       expect(e.status).toBe("failed")
     }
     expect(runShotListCritic).not.toHaveBeenCalled()
+  })
+
+  describe("the Director plans; it never names an asset (round 3 review, decided 2026-10-07)", () => {
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    /** Migration 480's trigger: a scene_node_data asset id the owner does not own (here: any) is refused. */
+    const namesAnAsset = (node: unknown): boolean =>
+      Array.isArray(node)
+        ? node.some(namesAnAsset)
+        : node !== null && typeof node === "object"
+          ? Object.entries(node as Record<string, unknown>).some(
+              ([k, v]) => (/(^|_)asset_id$/.test(k) && typeof v === "string" && UUID_RE.test(v)) || namesAnAsset(v),
+            )
+          : false
+    const trigger480 = (patch: Record<string, unknown>) =>
+      namesAnAsset((patch.metadata as Record<string, unknown> | undefined)?.scene_node_data)
+        ? { code: "42501", message: "scene_node_data names an asset the pipeline owner does not own" }
+        : null
+    const passVerdict = {
+      verdict: "pass" as const,
+      issues: [],
+      duration_analysis: { target_seconds: 20, actual_sum_seconds: 20, deviation_percent: 0, within_tolerance: true },
+    }
+    const madeUp = "d1000000-0000-4000-8000-000000000001"
+
+    it("the Director's urls and asset ids never land: the scene persists with none of them (decided 2026-10-07)", async () => {
+      const withIds = (idx: number) => {
+        const base = fakeSceneNodeData(idx)
+        return {
+          ...base,
+          shots: [{ ...base.shots[0], keyframe_asset_id: madeUp, keyframe_url: "https://r2/k.png", audio_asset_id: "pending" }],
+          generated_clips: [{ asset_id: madeUp, url: "https://r2/c.mp4" }],
+          composite_video_asset_id: madeUp,
+          composite_video_url: "https://r2/c.mp4",
+        }
+      }
+      ;(runSceneDirector as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce(withIds(1))
+        .mockResolvedValueOnce(withIds(2))
+        .mockResolvedValueOnce(withIds(3))
+      ;(runShotListCritic as ReturnType<typeof vi.fn>).mockResolvedValue(passVerdict)
+
+      const supabase = withStorageOwnerTables(makeSupabase({ refuseEntityUpdate: trigger480 }) as object) as never
+      await runShotListStage({ supabase, pipelineId: "p1", userId: "u1", userTier: "pro" })
+
+      const entities = (supabase as never as { _entities: Map<string, Record<string, unknown>> })._entities
+      for (const e of entities.values()) {
+        expect(e.status).toBe("awaiting_approval")
+        const snd = (e.metadata as { scene_node_data: ReturnType<typeof withIds> }).scene_node_data
+        expect(namesAnAsset(snd)).toBe(false)
+        expect(JSON.stringify(snd)).not.toContain("https://r2/")
+        // The plan stays; every url and id key is gone, whatever its value.
+        expect(snd.shots[0]).toMatchObject({ shot_id: "shot_01", visual_keyframe_prompt: "x" })
+        expect(Object.keys(snd.shots[0]!).filter((k) => /(^|_)(urls?|asset_id)$/.test(k))).toEqual([])
+        expect(snd.generated_clips).toEqual([])
+        expect("composite_video_asset_id" in snd).toBe(false)
+        expect("composite_video_url" in snd).toBe(false)
+      }
+      // The critic judged the same scene that was persisted.
+      const judged = (runShotListCritic as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as { sceneNodeData: unknown }
+      expect(JSON.stringify(judged.sceneNodeData)).not.toContain("https://r2/")
+      expect(namesAnAsset(judged.sceneNodeData)).toBe(false)
+    })
+
+    /** One scene, already planned once and now re-planned (not approved), holding `stored`. */
+    const storedScene = (stored: Record<string, unknown>) => ({
+      id: "e-scene_01",
+      pipeline_id: "p1",
+      entity_type: "scene",
+      entity_key: "scene_01",
+      status: "generating",
+      metadata: { entity_type: "scene", scene_id: "scene_01", scene_index: 1, shot_ids: ["shot_01"], scene_node_data: stored },
+    })
+    const planOneScene = { ...fakePlan, scenes: [fakePlan.scenes[0]] }
+
+    /** Every url / asset-id key at any depth of `node` (the rule 480/482 judge scene_node_data by). */
+    const executionKeysDeep = (node: unknown): string[] =>
+      Array.isArray(node)
+        ? node.flatMap(executionKeysDeep)
+        : node !== null && typeof node === "object"
+          ? Object.entries(node as Record<string, unknown>).flatMap(([k, v]) => [
+              ...(/(^|_)(urls?|asset_id)$/.test(k) ? [k] : []),
+              ...executionKeysDeep(v),
+            ])
+          : []
+    /** A scene that already rendered: the owner's own outputs in every url / id slot. */
+    const renderedScene = () => {
+      const base = fakeSceneNodeData(1)
+      return {
+        ...base,
+        description: "old plan",
+        shots: [
+          {
+            ...base.shots[0],
+            action: "old",
+            keyframe_url: ownerUrl("image", "png", "-kf"),
+            keyframe_asset_id: madeUp,
+            video_url: ownerUrl("video", "mp4", "-clip"),
+            video_asset_id: madeUp,
+            last_frame_url: ownerUrl("image", "png", "-last"),
+            last_frame_asset_id: madeUp,
+            audio_url: ownerUrl("audio", "mp3"),
+            audio_asset_id: madeUp,
+            lipsynced_url: ownerUrl("video", "mp4", "-lips"),
+            lipsynced_asset_id: madeUp,
+            bridged_frame_url: ownerUrl("image", "png", "-bridge"),
+            interpolation_keyframes: [{ timestamp_sec: 1, prompt: "a sub keyframe prompt" }],
+            interpolation_keyframe_urls: [ownerUrl("image", "png", "-sub")],
+          },
+        ],
+        scene_anchor_keyframe: { asset_id: madeUp, url: ownerUrl("image", "png", "-anchor") },
+        generated_keyframes: [{ asset_id: madeUp, url: ownerUrl("image", "png", "-kf") }],
+        generated_clips: [{ asset_id: madeUp, url: ownerUrl("video", "mp4", "-clip") }],
+        composite_video: { asset_id: madeUp, url: ownerUrl("video", "mp4", "-composite") },
+        last_frame: { asset_id: madeUp, url: ownerUrl("image", "png", "-last") },
+        scene_audio_track: { asset_id: madeUp, url: ownerUrl("audio", "mp3", "-track") },
+        composite_video_asset_id: madeUp,
+        composite_video_url: ownerUrl("video", "mp4", "-composite"),
+      }
+    }
+    const replannedRow = (supabase: unknown) =>
+      (supabase as { _entities: Map<string, Record<string, unknown>> })._entities.get("e-scene_01")!
+
+    it("a re-planned scene renders fresh: every stored url, asset id and asset ref is cleared, and the model's never land (decided 2026-10-07)", async () => {
+      const restoreHost = useStorageHost()
+      try {
+        const base = fakeSceneNodeData(1)
+        ;(runSceneDirector as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+          ...base,
+          description: "new plan",
+          shots: [{ ...base.shots[0], action: "new", keyframe_url: victimUrl(), video_url: ownerUrl("video", "mp4", "-model") }],
+          scene_anchor_keyframe: { asset_id: madeUp, url: victimUrl() },
+          composite_video_url: ownerUrl("video", "mp4", "-model"),
+        })
+        ;(runShotListCritic as ReturnType<typeof vi.fn>).mockResolvedValue(passVerdict)
+
+        const supabase = withStorageOwnerTables(
+          makeSupabase({ planOverride: planOneScene, initialEntities: [storedScene(renderedScene())] }) as object,
+        ) as never
+        await runShotListStage({ supabase, pipelineId: "p1", userId: OWNER_ID, userTier: "pro" })
+
+        const e = replannedRow(supabase)
+        expect(e.status).toBe("awaiting_approval")
+        const snd = (e.metadata as { scene_node_data: ReturnType<typeof renderedScene> }).scene_node_data
+        // The new plan, with nothing the previous render (or the model) produced.
+        expect(snd.description).toBe("new plan")
+        expect(snd.shots[0]).toMatchObject({ shot_id: "shot_01", action: "new", visual_keyframe_prompt: "x" })
+        expect(executionKeysDeep(snd)).toEqual([])
+        expect(JSON.stringify(snd)).not.toContain(OWNER_ID.slice(-4))
+        expect(JSON.stringify(snd)).not.toContain("media.test")
+        expect(JSON.stringify(snd)).not.toContain(madeUp)
+        // Asset refs are back at the scene schema's empty defaults.
+        expect(snd).toMatchObject({
+          scene_anchor_keyframe: null,
+          generated_keyframes: [],
+          generated_clips: [],
+          composite_video: null,
+          last_frame: null,
+          scene_audio_track: null,
+        })
+        // The critic judged the same clean scene that was persisted.
+        const judged = (runShotListCritic as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as { sceneNodeData: unknown }
+        expect(judged.sceneNodeData).toEqual(snd)
+      } finally {
+        restoreHost()
+      }
+    })
+
+    it("a re-plan clears what 482's trigger would refuse too, so the write is never refused for a stale url", async () => {
+      const restoreHost = useStorageHost()
+      try {
+        const elsewhere = `https://example.com/x/${VICTIM_JOB_ID}.png`
+        const tabbed = victimUrl().replace(VICTIM_JOB_ID, `${VICTIM_JOB_ID.slice(0, 8)}\t${VICTIM_JOB_ID.slice(8)}`)
+        const base = fakeSceneNodeData(1)
+        const stored = {
+          ...base,
+          shots: [{ ...base.shots[0], keyframe_url: elsewhere, last_frame_url: tabbed, video_url: ownerUrl("video", "mp4") }],
+        }
+        ;(runSceneDirector as ReturnType<typeof vi.fn>).mockResolvedValueOnce(fakeSceneNodeData(1))
+        ;(runShotListCritic as ReturnType<typeof vi.fn>).mockResolvedValue(passVerdict)
+        // 482's trigger, as the scene write would meet it.
+        const trigger482 = (patch: Record<string, unknown>) =>
+          JSON.stringify(patch.metadata ?? {}).includes(VICTIM_JOB_ID.slice(8))
+            ? { code: "42501", message: "scene_node_data must name only storage urls of the pipeline's owner" }
+            : null
+        const supabase = withStorageOwnerTables(
+          makeSupabase({ planOverride: planOneScene, initialEntities: [storedScene(stored)], refuseEntityUpdate: trigger482 }) as object,
+        ) as never
+        await runShotListStage({ supabase, pipelineId: "p1", userId: OWNER_ID, userTier: "pro" })
+
+        const e = replannedRow(supabase)
+        expect(e.status).toBe("awaiting_approval")
+        expect(executionKeysDeep((e.metadata as { scene_node_data: unknown }).scene_node_data)).toEqual([])
+      } finally {
+        restoreHost()
+      }
+    })
+
+    it("a re-plan needs no ownership lookup: nothing stored is reused, so a lookup outage does not fail the scene", async () => {
+      const restoreHost = useStorageHost()
+      try {
+        ;(runSceneDirector as ReturnType<typeof vi.fn>).mockResolvedValueOnce(fakeSceneNodeData(1))
+        ;(runShotListCritic as ReturnType<typeof vi.fn>).mockResolvedValue(passVerdict)
+        const inner = makeSupabase({ planOverride: planOneScene, initialEntities: [storedScene(renderedScene())] }) as unknown as {
+          from: (t: string) => unknown
+        }
+        const lookups: string[] = []
+        const failing = {
+          select: () => failing,
+          eq: () => failing,
+          in: () => failing,
+          then: (resolve: (v: unknown) => void) => resolve({ data: null, error: { message: "lookup down" } }),
+        }
+        const supabase = new Proxy(inner, {
+          get(target, prop, receiver) {
+            if (prop === "from")
+              return (t: string) => {
+                if (t === "jobs" || t === "assets") {
+                  lookups.push(t)
+                  return failing
+                }
+                return target.from(t)
+              }
+            return Reflect.get(target, prop, receiver)
+          },
+        }) as never
+        await runShotListStage({ supabase, pipelineId: "p1", userId: OWNER_ID, userTier: "pro" })
+
+        const e = replannedRow(supabase)
+        expect(e.status).toBe("awaiting_approval")
+        expect(lookups).toEqual([])
+        expect(executionKeysDeep((e.metadata as { scene_node_data: unknown }).scene_node_data)).toEqual([])
+      } finally {
+        restoreHost()
+      }
+    })
+
+    it("Stage 7 renders a re-planned scene again: the old composite is not reused and the old keyframe is not the start frame", async () => {
+      const restoreHost = useStorageHost()
+      try {
+        ;(runSceneDirector as ReturnType<typeof vi.fn>).mockResolvedValueOnce(fakeSceneNodeData(1))
+        ;(runShotListCritic as ReturnType<typeof vi.fn>).mockResolvedValue(passVerdict)
+        const supabase = withStorageOwnerTables(
+          makeSupabase({ planOverride: planOneScene, initialEntities: [storedScene(renderedScene())] }) as object,
+        ) as never
+        await runShotListStage({ supabase, pipelineId: "p1", userId: OWNER_ID, userTier: "pro" })
+        const replanned = replannedRow(supabase)
+        expect(replanned.status).toBe("awaiting_approval")
+
+        ;(pipelineAnimateShot as ReturnType<typeof vi.fn>).mockResolvedValue({
+          jobId: "job-new",
+          assetId: "vid-asset-new",
+          assetUrl: "https://r2/new-clip.mp4",
+          creditsSpent: 0,
+          videoModel: "kling",
+        })
+        const result = await runSceneInternalPipeline(
+          { supabase, pipelineId: "p1", userId: OWNER_ID },
+          { id: replanned.id as string, metadata: replanned.metadata as Record<string, unknown> },
+          { mode: "parallel", lipSyncEnabled: false, runImageCritic: false },
+        )
+
+        expect(result.ok).toBe(true)
+        expect(pipelineAnimateShot).toHaveBeenCalledTimes(1)
+        expect(result.composite_video_url).not.toBe(ownerUrl("video", "mp4", "-composite"))
+        expect(result.composite_video_url).toBe("https://r2/new-clip.mp4")
+        const animated = (pipelineAnimateShot as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as {
+          startFrameUrl: string | null
+        }
+        expect(animated.startFrameUrl).not.toBe(ownerUrl("image", "png", "-kf"))
+      } finally {
+        restoreHost()
+      }
+    })
+
+    it("approved and awaiting-approval scenes are not re-planned: their stored outputs stay untouched", async () => {
+      const approved = { ...storedScene(renderedScene()), status: "approved" }
+      const awaiting = {
+        ...storedScene(renderedScene()),
+        id: "e-scene_02",
+        entity_key: "scene_02",
+        status: "awaiting_approval",
+        metadata: { ...storedScene(renderedScene()).metadata, scene_id: "scene_02", scene_index: 2 },
+      }
+      const before = JSON.parse(JSON.stringify([approved, awaiting]))
+      const supabase = makeSupabase({
+        planOverride: { ...fakePlan, scenes: [fakePlan.scenes[0], fakePlan.scenes[1]] },
+        initialEntities: [approved, awaiting],
+      })
+      await runShotListStage({ supabase, pipelineId: "p1", userId: OWNER_ID, userTier: "pro" })
+
+      expect(runSceneDirector).not.toHaveBeenCalled()
+      const entities = (supabase as never as { _entities: Map<string, Record<string, unknown>> })._entities
+      expect(entities.get("e-scene_01")!.metadata).toEqual(before[0].metadata)
+      expect(entities.get("e-scene_02")!.metadata).toEqual(before[1].metadata)
+    })
+
+    it("a refused scene write marks the scene failed instead of leaving it stuck in 'generating'", async () => {
+      ;(runSceneDirector as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce(fakeSceneNodeData(1))
+        .mockResolvedValueOnce(fakeSceneNodeData(2))
+        .mockResolvedValueOnce(fakeSceneNodeData(3))
+      ;(runShotListCritic as ReturnType<typeof vi.fn>).mockResolvedValue(passVerdict)
+
+      const supabase = makeSupabase({
+        refuseEntityUpdate: (patch) =>
+          patch.status === "awaiting_approval" ? { code: "42501", message: "refused" } : null,
+      })
+      const events: Array<Record<string, unknown>> = []
+      const unsub = pipelineEvents.subscribe("p1-refused", (e) => events.push(e as unknown as Record<string, unknown>))
+      const errSpy = vi.spyOn(console, "error").mockImplementation(() => undefined)
+      try {
+        await runShotListStage({ supabase, pipelineId: "p1-refused", userId: "u1", userTier: "pro" })
+      } finally {
+        unsub()
+        errSpy.mockRestore()
+      }
+
+      const entities = (supabase as never as { _entities: Map<string, Record<string, unknown>> })._entities
+      for (const e of entities.values()) expect(e.status).toBe("failed")
+      const sceneStatuses = events.filter((e) => e.type === "scene:status").map((e) => e.status)
+      expect(sceneStatuses).toHaveLength(3)
+      expect(sceneStatuses.every((s) => s === "failed")).toBe(true)
+    })
   })
 
   // ──────────────────────────────────────────────────────────────────────────

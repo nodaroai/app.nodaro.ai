@@ -49,7 +49,7 @@ const url = (key: string) => `https://r2.test/${key}`
 beforeEach(() => {
   resetFinalExecutionColumnForTests()
   tables.current = {
-    published_apps: [{ id: "app", icon_url: url("icon"), preview_media_url: null, snapshot_nodes: [] }],
+    published_apps: [{ id: "app", creator_id: "creator", icon_url: url("icon"), preview_media_url: null, snapshot_nodes: [] }],
     app_runs: [
       { id: "r1", app_id: "app", runner_id: "alice", input_values: null, node_states: null, execution_id: "e-alice", final_execution_id: "f-alice" },
       // Mallory points her run (and its final) at Bob's executions.
@@ -57,18 +57,18 @@ beforeEach(() => {
       { id: "r3", app_id: "app", runner_id: "mallory", input_values: null, node_states: null, execution_id: null, final_execution_id: "f-mallory" },
     ],
     workflow_executions: [
-      { id: "e-alice", user_id: "alice", node_states: { a: { output: { url: url("alice-run") } } } },
+      { id: "e-alice", user_id: "alice", node_states: { a: { output: { url: url("nodes/alice-run-job.png") } } } },
       {
         id: "f-alice",
         user_id: "alice",
-        node_states: { a: { output: { url: url("alice-final") } } },
+        node_states: { a: { output: { url: url("nodes/alice-final-job.png") } } },
         trigger_data: { appRenderFinal: { appRunId: "r1", appVersionId: "app", continuedFrom: "f0-alice" } },
       },
       // Alice's first final of a chain (decided 2026-10-06): the run links only the newest.
       {
         id: "f0-alice",
         user_id: "alice",
-        node_states: { a: { output: { url: url("alice-first-final") } } },
+        node_states: { a: { output: { url: url("nodes/alice-first-final-job.png") } } },
         trigger_data: { appRenderFinal: { appRunId: "r1", appVersionId: "app", continuedFrom: "e-alice" } },
       },
       { id: "e-bob", user_id: "bob", node_states: { b: { output: { url: url("bob-run") } } } },
@@ -81,8 +81,10 @@ beforeEach(() => {
         trigger_data: { appRenderFinal: { appRunId: "r3", appVersionId: "app", continuedFrom: "e-bob" } },
       },
     ],
-    // Each job's key is its own key family (`<jobId>`), as a worker writes it.
+    // Each job's key is its own key family (`<jobId>`), as a worker writes it; a
+    // node state's url is collected only in the family of one of these jobs.
     jobs: [
+      { id: "alice-run-job", user_id: "alice", workflow_execution_id: "e-alice", output_data: { url: url("alice-run-job") } },
       { id: "alice-final-job", user_id: "alice", workflow_execution_id: "f-alice", output_data: { url: url("alice-final-job") } },
       { id: "alice-first-final-job", user_id: "alice", workflow_execution_id: "f0-alice", output_data: { url: url("alice-first-final-job") } },
       { id: "bob-run-job", user_id: "bob", workflow_execution_id: "e-bob", output_data: { url: url("bob-run-job") } },
@@ -94,12 +96,12 @@ beforeEach(() => {
 describe("collectAppR2Keys", () => {
   it("harvests a run's own execution and its final, with their jobs", async () => {
     const keys = await collectAppR2Keys("app")
-    expect(keys).toEqual(expect.arrayContaining(["icon", "alice-run", "alice-final", "alice-final-job"]))
+    expect(keys).toEqual(expect.arrayContaining(["icon", "nodes/alice-run-job.png", "nodes/alice-final-job.png", "alice-final-job"]))
   })
 
   it("harvests the earlier finals of a chain too, by their stamps", async () => {
     const keys = await collectAppR2Keys("app")
-    expect(keys).toEqual(expect.arrayContaining(["alice-first-final", "alice-first-final-job"]))
+    expect(keys).toEqual(expect.arrayContaining(["nodes/alice-first-final-job.png", "alice-first-final-job"]))
   })
 
   it("never harvests an execution (or its jobs) that is not the run's runner's own", async () => {
@@ -120,9 +122,12 @@ describe("collectAppR2Keys — skipped runs", () => {
     tables.current.app_runs!.push({
       id: "r4", app_id: "app", runner_id: "carol", input_values: { a: url("carol-input") }, node_states: null, execution_id: "e-carol", final_execution_id: null,
     })
-    tables.current.workflow_executions!.push({ id: "e-carol", user_id: "carol", node_states: { c: { output: { url: url("carol-run") } } } })
+    // A node state's url is collected in the family of one of the run's own
+    // jobs (decided 2026-10-06), so Carol's run carries the job that made it.
+    tables.current.workflow_executions!.push({ id: "e-carol", user_id: "carol", node_states: { c: { output: { url: url("nodes/carol-job.png") } } } })
+    tables.current.jobs!.push({ id: "carol-job", user_id: "carol", workflow_execution_id: "e-carol", output_data: { url: url("carol-job") } })
     const keys = await collectAppR2Keys("app", { skipRunIds: new Set(["r1"]) })
-    expect(keys).toEqual(expect.arrayContaining(["carol-input", "carol-run"]))
+    expect(keys).toEqual(expect.arrayContaining(["carol-input", "nodes/carol-job.png", "carol-job"]))
   })
 })
 
@@ -131,7 +136,7 @@ describe("collectAppR2Keys — skipped runs", () => {
 describe("collectAppR2Keys — executions beyond the runs' pointers", () => {
   beforeEach(() => {
     tables.current.workflow_executions!.push(
-      { id: "e-alice-first", user_id: "alice", node_states: { a: { output: { url: url("alice-first-run") } } } },
+      { id: "e-alice-first", user_id: "alice", node_states: { a: { output: { url: url("nodes/j1.png") } } } },
       { id: "e-bob-other", user_id: "bob", node_states: { b: { output: { url: url("bob-other") } } } },
     )
     tables.current.jobs!.push(
@@ -144,7 +149,7 @@ describe("collectAppR2Keys — executions beyond the runs' pointers", () => {
 
   it("harvests their node states and their owner's jobs", async () => {
     const keys = await collectAppR2Keys("app", { extraExecutions: [{ id: "e-alice-first", owner: "alice" }] })
-    expect(keys).toEqual(expect.arrayContaining(["alice-first-run", "j1"]))
+    expect(keys).toEqual(expect.arrayContaining(["nodes/j1.png", "j1"]))
     expect(keys).not.toContain("j2")
   })
 
@@ -170,9 +175,9 @@ describe("collectAppR2Keys — paging", () => {
 describe("collectAppR2Keys — only the run's own rows", () => {
   beforeEach(() => {
     tables.current = {
-      published_apps: [{ id: "app-1", icon_url: null, preview_media_url: null, snapshot_nodes: null }],
+      published_apps: [{ id: "app-1", creator_id: "creator-1", icon_url: null, preview_media_url: null, snapshot_nodes: null }],
       app_runs: [{ id: "run-1", app_id: "app-1", runner_id: "runner-1", input_values: null, node_states: null, execution_id: "exec-1" }],
-      workflow_executions: [{ id: "exec-1", user_id: "runner-1", node_states: { n: { output: { imageUrl: url("runner/own-node.png") } } } }],
+      workflow_executions: [{ id: "exec-1", user_id: "runner-1", node_states: { n: { output: { imageUrl: url("nodes/job-1.png") } } } }],
       jobs: [
         {
           id: "job-1", user_id: "runner-1", workflow_execution_id: "exec-1",
@@ -183,7 +188,7 @@ describe("collectAppR2Keys — only the run's own rows", () => {
   })
 
   it("collects the run's execution and its owner's jobs", async () => {
-    expect((await collectAppR2Keys("app-1")).sort()).toEqual(["images/job-1.png", "runner/own-node.png", "thumbnails/job-1-v2.png"])
+    expect((await collectAppR2Keys("app-1")).sort()).toEqual(["images/job-1.png", "nodes/job-1.png", "thumbnails/job-1-v2.png"])
   })
 
   it("attacker: the run owner's own job, with another user's URL planted in its output, adds only its own key family", async () => {
@@ -222,5 +227,64 @@ describe("collectAppR2Keys — only the run's own rows", () => {
     tables.current.workflow_executions = [{ id: "exec-1", user_id: "victim", node_states: { n: { output: { imageUrl: url("victim/node.png") } } } }]
     tables.current.jobs = [{ id: "job-v", user_id: "victim", workflow_execution_id: "exec-1", output_data: { imageUrl: url("images/job-v.png") } }]
     expect(await collectAppR2Keys("app-1")).toEqual([])
+  })
+})
+
+/**
+ * Whose file (decided 2026-10-06; migration 480). What expunge collects is
+ * DELETED, so a url is collected only when the app or its runs can vouch for
+ * the object:
+ *   - a run's own columns (`input_values`, `node_states`) are the runner's to
+ *     write through the run PATCH (migration 469's allowlist), so a url there
+ *     naming a file another user's job made is not collected;
+ *   - an execution's `node_states` were the runner's to write before 474, so
+ *     they yield only keys in the key family of one of the app's own jobs;
+ *   - the app row's media yields its creator's objects, not another user's.
+ */
+describe("collectAppR2Keys — whose file", () => {
+  const VICTIM_JOB = "22222222-2222-4222-8222-222222222222"
+  const CREATOR_JOB = "33333333-3333-4333-8333-333333333333"
+  const victimKey = `videos/${VICTIM_JOB}.mp4`
+
+  beforeEach(() => {
+    tables.current = {
+      published_apps: [{ id: "app-1", creator_id: "creator-1", icon_url: null, preview_media_url: null, snapshot_nodes: null }],
+      app_runs: [{ id: "run-1", app_id: "app-1", runner_id: "runner-1", input_values: null, node_states: null, execution_id: "exec-1" }],
+      workflow_executions: [{ id: "exec-1", user_id: "runner-1", node_states: { n: { output: { imageUrl: url("nodes/job-1.png") } } } }],
+      jobs: [
+        { id: "job-1", user_id: "runner-1", workflow_execution_id: "exec-1", output_data: { imageUrl: url("images/job-1.png") } },
+        { id: VICTIM_JOB, user_id: "victim", workflow_execution_id: null, output_data: null },
+        { id: CREATOR_JOB, user_id: "creator-1", workflow_execution_id: null, output_data: null },
+      ],
+    }
+  })
+
+  it("attacker: a url the runner wrote into the run naming another user's file is not collected", async () => {
+    tables.current.app_runs![0]!.node_states = { n: { results: [{ url: url(victimKey) }] } }
+    tables.current.app_runs![0]!.input_values = { photo: { url: url("uploads/images/runner-upload.png") } }
+    const keys = await collectAppR2Keys("app-1")
+    expect(keys).not.toContain(victimKey)
+    // The runner's own content is still erased.
+    expect(keys).toContain("uploads/images/runner-upload.png")
+  })
+
+  it("attacker: an execution's node_states yield only the app's own job outputs", async () => {
+    tables.current.workflow_executions![0]!.node_states = {
+      a: { output: { imageUrl: url(victimKey) } },
+      b: { output: { imageUrl: url("victim/precious.png") } },
+      c: { output: { imageUrl: url("nodes/job-1.png") } },
+    }
+    const keys = await collectAppR2Keys("app-1")
+    expect(keys).not.toContain(victimKey)
+    expect(keys).not.toContain("victim/precious.png")
+    expect(keys).toContain("nodes/job-1.png")
+  })
+
+  it("the app's media: the creator's own object is erased, another user's is not", async () => {
+    tables.current.published_apps![0]!.icon_url = url(`images/${CREATOR_JOB}.png`)
+    tables.current.published_apps![0]!.preview_media_url = url(victimKey)
+    const keys = await collectAppR2Keys("app-1")
+    expect(keys).toContain(`images/${CREATOR_JOB}.png`)
+    expect(keys).not.toContain(victimKey)
   })
 })

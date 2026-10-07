@@ -16,6 +16,7 @@ import { runImageCritic } from "./llms/image-critic.js"
 import { runVideoCritic } from "./llms/video-critic.js"
 import { pipelineEvents } from "./events.js"
 import { settledWithLimit } from "../../lib/settled-with-limit.js"
+import { ownedSceneNodeData } from "../../lib/pipeline-asset-ownership.js"
 import { buildCriticFeedbackPrompt, runCriticRetryLoop } from "./_critic-retry.js"
 
 /**
@@ -102,6 +103,7 @@ export type SceneInternalPipelineFailure =
   | "continuity_break"
   | "animate_failed"
   | "combine_failed"
+  | "scene_url_ownership_unavailable"
 
 export interface SceneInternalPipelineResult {
   ok: boolean
@@ -165,6 +167,25 @@ export async function runSceneInternalPipeline(
     return { ok: false, reason: "shots_missing" }
   }
 
+  // Whose urls (decided 2026-10-07; migration 482). Everything this run
+  // DOWNLOADS or FORWARDS from the stored scene — the cached composite, each
+  // shot's keyframe as start frame and critic input, its interpolation
+  // keyframes — is read from the owner-checked copy: a url on our storage
+  // another user made or holds is dropped there. The persisted result below
+  // is built on the stored scene, so a url planted before 482 stays where it
+  // is (counted, not changed) and is dropped again at every read. A lookup
+  // that fails fails the scene rather than forwarding urls nobody judged.
+  let ownedData: SceneNodeData
+  try {
+    ownedData = await ownedSceneNodeData(ctx.supabase, ctx.userId, sceneData)
+  } catch (err) {
+    console.error(
+      `[scene-internal-pipeline] url ownership lookup failed for scene=${sceneEntity.id}:`,
+      err instanceof Error ? err.message : err,
+    )
+    return { ok: false, reason: "scene_url_ownership_unavailable" }
+  }
+
   // ─── Step 0: scene-level idempotency short-circuit ────────────────────────
   // animate-audio-edit.ts runs this per-scene loop unconditionally on every
   // drive (and the orchestrator re-drives after each ~90-min hard-timeout
@@ -186,12 +207,12 @@ export async function runSceneInternalPipeline(
   // scene the user asked to re-render does NOT carry the URL and correctly
   // re-animates. Skip (accept-bad-shot) intentionally keeps the URL — the
   // user accepted the existing composite, so skipping re-animation is correct.
-  const existingComposite = sceneData.composite_video_url
+  const existingComposite = ownedData.composite_video_url
   if (existingComposite) {
     return {
       ok: true,
       composite_video_url: existingComposite,
-      composite_video_asset_id: sceneData.composite_video_asset_id,
+      composite_video_asset_id: ownedData.composite_video_asset_id,
       updated_metadata: sceneEntity.metadata ?? {},
     }
   }
@@ -253,8 +274,8 @@ export async function runSceneInternalPipeline(
   // ─── Step 3: animate ──────────────────────────────────────────────────────
   const shotResultsResult =
     options.mode === "sequential"
-      ? await animateSequential(ctx, sceneEntity, sceneData, options, shotReferenceAudio)
-      : await animateParallel(ctx, sceneEntity, sceneData, shotReferenceAudio)
+      ? await animateSequential(ctx, sceneEntity, ownedData, options, shotReferenceAudio)
+      : await animateParallel(ctx, sceneEntity, ownedData, shotReferenceAudio)
   if (!shotResultsResult.ok) {
     return {
       ok: false,

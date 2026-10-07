@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type { BillingContext } from "../../lib/billing-context.js"
+import { foreignSceneUrls, ownedAssetUrlsById, sceneNodeDataAssetIds, sceneNodeDataUrls } from "../../lib/pipeline-asset-ownership.js"
 import {
   ShowrunnerPlanSchema,
   SceneNodeDataSchema,
@@ -126,6 +127,7 @@ export async function createSeededPipeline(
   // Key-resolution + scene-coverage guard. Pre-empts the engine's drift guard
   // (engine.ts:101 → canvas_drift), which would otherwise pause an unattended run.
   assertSeedConsistency(plan, scenes)
+  await assertSeedAssetsOwned(supabase, input.userId, scenes)
 
   // P14: one payer per pipeline — strip-then-stamp via the ONE rule.
   const { stampPipelineConfig } = await import("./pipeline-payer.js")
@@ -186,58 +188,114 @@ export async function createSeededPipeline(
     throw new SeedReservationError(reservation.reason, `Credit reservation failed: ${reservation.reason}`)
   }
 
-  // 3. Seed the pre-approved / pre-inserted stage rows.
-  const stageRows: Array<Record<string, unknown>> = [
-    { pipeline_id: pipelineId, stage_name: "script", stage_order: 1, status: "approved", output: { plan } },
-  ]
-  if (scenes) {
-    stageRows.push(
-      { pipeline_id: pipelineId, stage_name: "characters", stage_order: 2, status: "pending", output: null },
-      { pipeline_id: pipelineId, stage_name: "objects", stage_order: 3, status: "pending", output: null },
-      { pipeline_id: pipelineId, stage_name: "locations", stage_order: 4, status: "pending", output: null },
-      { pipeline_id: pipelineId, stage_name: "shot_list", stage_order: 5, status: "approved", output: null },
-    )
-  }
-  const { error: stagesErr } = await supabase.from("pipeline_stages").insert(stageRows)
-  if (stagesErr) {
-    throw new Error(`Failed to insert seeded stage rows: ${stagesErr.message}`)
-  }
-
-  // 4. Materialize one approved scene entity per scene — scene_images reads
-  //    metadata.scene_node_data. Metadata mirrors shot-list.ts's own shape.
-  if (scenes) {
-    const sceneEntities = scenes.map(({ sceneIndex, sceneNodeData }) => {
-      const sceneId = `scene_${String(sceneIndex).padStart(2, "0")}`
-      return {
-        pipeline_id: pipelineId,
-        entity_type: "scene",
-        entity_key: sceneId,
-        status: "approved",
-        metadata: {
-          entity_type: "scene",
-          scene_id: sceneId,
-          scene_index: sceneIndex,
-          shot_ids: [],
-          emotional_beat: sceneNodeData.emotional_beat,
-          scene_node_id: "",
-          exploded_to_workflow_id: null,
-          scene_node_data: sceneNodeData,
-        },
-      }
-    })
-    const { error: entitiesErr } = await supabase
-      .from("pipeline_entities")
-      .insert(sceneEntities)
-    if (entitiesErr) {
-      throw new Error(`Failed to insert seeded scene entities: ${entitiesErr.message}`)
+  // Steps 3-5 run AFTER the reservation. On ANY failure (a stage or entity
+  // insert refused — by a database fault or a trigger — or the enqueue
+  // throwing) release the reservation, then delete the pipeline row (its
+  // stages and entities cascade), and propagate (review round, decided
+  // 2026-10-07). Before this, such a failure left the credits held on a
+  // pipeline with no scenes that was never queued. The refund runs first: it
+  // reads the reservation link from the pipeline row.
+  try {
+    // 3. Seed the pre-approved / pre-inserted stage rows.
+    const stageRows: Array<Record<string, unknown>> = [
+      { pipeline_id: pipelineId, stage_name: "script", stage_order: 1, status: "approved", output: { plan } },
+    ]
+    if (scenes) {
+      stageRows.push(
+        { pipeline_id: pipelineId, stage_name: "characters", stage_order: 2, status: "pending", output: null },
+        { pipeline_id: pipelineId, stage_name: "objects", stage_order: 3, status: "pending", output: null },
+        { pipeline_id: pipelineId, stage_name: "locations", stage_order: 4, status: "pending", output: null },
+        { pipeline_id: pipelineId, stage_name: "shot_list", stage_order: 5, status: "approved", output: null },
+      )
     }
-  }
+    const { error: stagesErr } = await supabase.from("pipeline_stages").insert(stageRows)
+    if (stagesErr) {
+      throw new Error(`Failed to insert seeded stage rows: ${stagesErr.message}`)
+    }
 
-  // 5. Enqueue the orchestrator (object arg — queue.ts:30).
-  const { enqueuePipelineRun } = await import("./queue.js")
-  await enqueuePipelineRun({ pipelineId, userId: input.userId, reason: "initial" })
+    // 4. Materialize one approved scene entity per scene — scene_images reads
+    //    metadata.scene_node_data. Metadata mirrors shot-list.ts's own shape.
+    if (scenes) {
+      const sceneEntities = scenes.map(({ sceneIndex, sceneNodeData }) => {
+        const sceneId = `scene_${String(sceneIndex).padStart(2, "0")}`
+        return {
+          pipeline_id: pipelineId,
+          entity_type: "scene",
+          entity_key: sceneId,
+          status: "approved",
+          metadata: {
+            entity_type: "scene",
+            scene_id: sceneId,
+            scene_index: sceneIndex,
+            shot_ids: [],
+            emotional_beat: sceneNodeData.emotional_beat,
+            scene_node_id: "",
+            exploded_to_workflow_id: null,
+            scene_node_data: sceneNodeData,
+          },
+        }
+      })
+      const { error: entitiesErr } = await supabase
+        .from("pipeline_entities")
+        .insert(sceneEntities)
+      if (entitiesErr) {
+        throw new Error(`Failed to insert seeded scene entities: ${entitiesErr.message}`)
+      }
+    }
+
+    // 5. Enqueue the orchestrator (object arg — queue.ts:30).
+    const { enqueuePipelineRun } = await import("./queue.js")
+    await enqueuePipelineRun({ pipelineId, userId: input.userId, reason: "initial" })
+  } catch (err) {
+    const { refundPipelineCredits } = await import("./credits.js")
+    await refundPipelineCredits({ supabase, userId: input.userId, pipelineId, reason: "seed_setup_failed" })
+    await supabase.from("pipelines").delete().eq("id", pipelineId)
+    throw err
+  }
 
   return { pipelineId, reservedCredits: estimate }
+}
+
+/**
+ * A seeded scene names only the caller's assets (decided 2026-10-07). The
+ * scene data is the caller's, and SceneNodeDataSchema accepts a shot's
+ * `keyframe_asset_id` and the other execution-state ids; migration 480's
+ * trigger refuses an entity whose `scene_node_data` names another user's asset.
+ * Checked here, before the pipeline row and the credit reservation, so such a
+ * seed is a refusal rather than a failed insert after credits are held. A
+ * failed lookup throws a plain error (a fault, not a refusal).
+ *
+ * Its storage urls likewise (decided 2026-10-07; migration 482): a url
+ * another user made or (no maker known) claimed first is refused here, before
+ * any row, judged exactly as 482's trigger judges the scene insert — the path
+ * of every url, whatever its host, and the urls its `url` parameters carry
+ * (review round, decided 2026-10-07). A url this lets through is one the
+ * trigger accepts, so a seed never fails after its reservation.
+ */
+async function assertSeedAssetsOwned(
+  supabase: SupabaseClient,
+  userId: string,
+  scenes?: Array<{ sceneIndex: number; sceneNodeData: SceneNodeData }>,
+): Promise<void> {
+  const ids = (scenes ?? []).flatMap((s) => sceneNodeDataAssetIds(s.sceneNodeData))
+  if (ids.length > 0) {
+    const owned = await ownedAssetUrlsById(supabase, ids, userId, { throwOnError: true })
+    const foreign = [...new Set(ids.filter((id) => !owned.has(id.toLowerCase())))]
+    if (foreign.length > 0) {
+      throw new SeedConsistencyError(
+        `Seeded scenes name assets that are not the caller's: ${foreign.join(", ")}`,
+      )
+    }
+  }
+  const urls = (scenes ?? []).flatMap((s) => sceneNodeDataUrls(s.sceneNodeData))
+  if (urls.length > 0) {
+    const foreignUrls = await foreignSceneUrls(supabase, userId, urls, { forWrite: true })
+    if (foreignUrls.size > 0) {
+      throw new SeedConsistencyError(
+        `Seeded scenes name storage urls that are not the caller's: ${[...foreignUrls].join(", ")}`,
+      )
+    }
+  }
 }
 
 /**

@@ -44,6 +44,7 @@ vi.mock("@/lib/storage.js", () => ({
 }))
 
 import { adminLocationRoutes } from "../admin-locations.js"
+import { batchDeleteFromR2 } from "../../../lib/storage.js"
 
 function supabaseChain(result: { data: unknown; error: unknown }): Record<string, ReturnType<typeof vi.fn>> {
   const chain: Record<string, ReturnType<typeof vi.fn>> = {}
@@ -54,6 +55,7 @@ function supabaseChain(result: { data: unknown; error: unknown }): Record<string
   chain.update = vi.fn().mockReturnValue(self())
   chain.delete = vi.fn().mockReturnValue(self())
   chain.eq = vi.fn().mockReturnValue(self())
+  chain.in = vi.fn().mockReturnValue(self())
   chain.is = vi.fn().mockReturnValue(self())
   chain.not = vi.fn().mockReturnValue(self())
   chain.lt = vi.fn().mockReturnValue(self())
@@ -186,6 +188,42 @@ describe("admin-locations routes", () => {
     })
     expect(res.statusCode).toBe(200)
     expect(res.json()).toEqual({ success: true, permanent: true })
+  })
+
+  it("attacker: an admin's permanent delete never removes a file another user made through the owner's row", async () => {
+    // The location's owner wrote another user's file into its url columns
+    // (before migration 480 a browser could). The object is that other user's.
+    const OWNER = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+    const VICTIM_JOB = "22222222-2222-4222-8222-222222222222"
+    const victimKey = `videos/${VICTIM_JOB}.mp4`
+    const base = "https://r2.example.com"
+    mockFrom
+      .mockReturnValueOnce(
+        supabaseChain({
+          data: {
+            id: LOCATION_UUID,
+            user_id: OWNER,
+            source_image_url: `${base}/${victimKey}`,
+            reference_photos: [{ url: `${base}/locations/own/ref.jpg` }],
+          },
+          error: null,
+        }),
+      )
+      .mockReturnValueOnce(
+        supabaseChain({ data: [{ id: VICTIM_JOB, user_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" }], error: null }),
+      )
+      // Whose library holds the keys (lib/key-ownership.ts `libraryHolders`): nobody else's.
+      .mockReturnValueOnce(supabaseChain({ data: [], error: null }))
+      .mockReturnValueOnce(supabaseChain({ data: null, error: null }))
+    const res = await app.inject({
+      method: "DELETE",
+      url: `/v1/admin/locations/${LOCATION_UUID}?permanent=true`,
+      headers: { "x-user-id": ADMIN_UUID },
+    })
+    expect(res.statusCode).toBe(200)
+    const deleted = vi.mocked(batchDeleteFromR2).mock.calls.flatMap((c) => c[0] as string[])
+    expect(deleted).not.toContain(victimKey)
+    expect(deleted).toEqual(["locations/own/ref.jpg"])
   })
 
   it("DELETE /v1/admin/locations/:id?permanent=true returns 404 when row missing", async () => {

@@ -26,6 +26,11 @@
  *
  *   deletableKeys, on any entity permanent delete                — 0 queries
  *
+ * PLUS, outside the relay rule and on purpose: the whose-object lookup
+ * (lib/key-ownership.ts, decided 2026-10-06) adds ONE `jobs` read by id when
+ * the key's stem is job-id-shaped. It is a security check every deployment
+ * needs, so it is pinned here as an addition rather than hidden.
+ *
  * The gate is driven directly (`relayPossible` mocked false), NOT by leaving
  * `R2_SHARED_WITH_RELAY_TARGET` unset: that flag also selects
  * `jobOutputReferrerPaths()`, so a future change that armed the rule from
@@ -133,6 +138,13 @@ describe("mainline query profile — permanentlyDeleteAsset", () => {
       blockOnOwnJobReferrers: true,
     })
     expect(tables).toEqual([
+      // Whose object (lib/key-ownership.ts, decided 2026-10-06): one `jobs`
+      // read by the key's job-id stem, issued only for a job-id-shaped key,
+      // then one `assets` read of every library holding the key (review
+      // round, decided 2026-10-07). Not part of the relay rule — deliberate
+      // security lookups.
+      "jobs",
+      "assets",
       "assets",
       "jobs[output_data->>imageUrl]",
       "jobs[output_data->>videoUrl]",
@@ -151,6 +163,8 @@ describe("mainline query profile — permanentlyDeleteAsset", () => {
       blockOnOwnJobReferrers: true,
     })
     expect(tables).toEqual([
+      // Whose object: no job-id stem, so only the library-holder read.
+      "assets",
       "assets",
       "jobs[output_data->>imageUrl]",
       "jobs[output_data->>videoUrl]",
@@ -169,6 +183,13 @@ describe("mainline query profile — permanentlyDeleteAsset", () => {
       blockOnOwnJobReferrers: true,
     })
     expect(tables).toEqual([
+      // Whose object (lib/key-ownership.ts, decided 2026-10-06): one `jobs`
+      // read by the key's job-id stem, issued only for a job-id-shaped key,
+      // then one `assets` read of every library holding the key (review
+      // round, decided 2026-10-07). Not part of the relay rule — deliberate
+      // security lookups.
+      "jobs",
+      "assets",
       "assets",
       "jobs[output_data->>imageUrl]",
       "jobs[output_data->>videoUrl]",
@@ -223,7 +244,10 @@ describe("mainline query profile — POST /v1/media/delete, proof (b)", () => {
     const res = await deleteOwnedMediaByUrls(USER, [`https://cdn.test/images/${NEAR_JOB}.png`])
 
     expect(res.deleted).toHaveLength(1)
-    expect(tables).toEqual(["assets", "jobs[output_data->>imageUrl]", "assets"])
+    // The third and fourth reads are whose object it is (lib/key-ownership.ts,
+    // decided 2026-10-06; the library-holder read decided 2026-10-07):
+    // deliberate security lookups, not part of the relay rule.
+    expect(tables).toEqual(["assets", "jobs[output_data->>imageUrl]", "jobs", "assets", "assets"])
   })
 })
 

@@ -4,6 +4,7 @@ import { supabase } from "../../lib/supabase.js"
 import { requireAdmin } from "../middleware/require-admin.js"
 import { batchDeleteFromR2 } from "../../lib/storage.js"
 import { deletableKeys } from "../../lib/asset-delete.js"
+import { ownKeysOnly } from "../../lib/key-ownership.js"
 import { config } from "../../lib/config.js"
 import { formatZodError } from "../../lib/zod-error.js"
 
@@ -274,7 +275,7 @@ export async function adminLocationRoutes(app: FastifyInstance) {
       const { data: row, error: fetchErr } = await supabase
         .from("locations")
         .select(
-          "id, source_image_url, time_of_day, weather, seasons, angles, lighting, atmosphere_motions, reference_photos",
+          "id, user_id, source_image_url, time_of_day, weather, seasons, angles, lighting, atmosphere_motions, reference_photos",
         )
         .eq("id", id)
         .maybeSingle()
@@ -299,7 +300,13 @@ export async function adminLocationRoutes(app: FastifyInstance) {
       // and it matches nothing at all on a deployment that never relays, so
       // this is behaviourally identical to the previous line off a relay.
       // Skipped entirely when nothing was collected.
-      const keys = await deletableKeys(collectLocationR2Keys(row as Record<string, unknown>))
+      // Whose file first (lib/key-ownership.ts; decided 2026-10-06): a url in
+      // this row may name an object another user's job made — before
+      // migration 480 a browser could write these columns directly, and the
+      // API stores urls the caller names. Those objects stay; the row goes.
+      const keys = await deletableKeys(
+        await ownKeysOnly(String(row.user_id ?? ""), collectLocationR2Keys(row as Record<string, unknown>), "admin location permanent delete"),
+      )
       if (keys.length > 0) {
         try {
           await batchDeleteFromR2(keys)

@@ -169,10 +169,21 @@ WITH u AS (UPDATE workflows SET name = 'U1 wf plain (renamed)' WHERE id = 'd0000
   SELECT pg_temp.assert_eq('U1 can rename their own workflow', (SELECT count(*)::text FROM u), '1');
 WITH u AS (UPDATE workflows SET name = 'hijack' WHERE id = 'd0000000-0000-4000-8000-000000000201' RETURNING 1)
   SELECT pg_temp.assert_eq('U1 cannot touch U2''s workflow (0 rows, no error)', (SELECT count(*)::text FROM u), '0');
-WITH u AS (UPDATE locations SET name = 'U1 loc no project (renamed)' WHERE id = 'e1000000-0000-4000-8000-000000000102' RETURNING 1)
-  SELECT pg_temp.assert_eq('U1 can edit their project-less location', (SELECT count(*)::text FROM u), '1');
-WITH d AS (DELETE FROM objects WHERE id = 'e2000000-0000-4000-8000-000000000102' RETURNING 1)
-  SELECT pg_temp.assert_eq('U1 can delete their project-less object', (SELECT count(*)::text FROM d), '1');
+-- [480] Locations, creatures and objects are written by the server only (their
+-- url columns name storage keys the reapers delete), so even the owner's own
+-- row refuses a browser write. Reads are unchanged.
+DO $$ BEGIN
+  UPDATE locations SET name = 'U1 loc no project (renamed)' WHERE id = 'e1000000-0000-4000-8000-000000000102';
+  RAISE EXCEPTION 'ASSERT FAIL: a browser edited its own location';
+EXCEPTION WHEN insufficient_privilege THEN
+  RAISE NOTICE 'ok  U1 cannot edit their own location from a client (480: server-written)';
+END $$;
+DO $$ BEGIN
+  DELETE FROM objects WHERE id = 'e2000000-0000-4000-8000-000000000102';
+  RAISE EXCEPTION 'ASSERT FAIL: a browser deleted its own object';
+EXCEPTION WHEN insufficient_privilege THEN
+  RAISE NOTICE 'ok  U1 cannot delete their own object from a client (480: server-written)';
+END $$;
 RESET ROLE;
 
 -- ----------------------------------------------------- U2: the other owner
@@ -231,9 +242,11 @@ SELECT pg_temp.assert_eq('deleting an account with no content succeeds',
 -- assets is personal-only and no organizations migration may touch it. Pinned
 -- as LITERAL text captured from the catalog, compared exactly — a snapshot
 -- taken in the same transaction could only ever equal itself.
-SELECT pg_temp.assert_eq('assets still has exactly its four policies',
+-- [480] The three write policies are gone with the browser's write grants (the
+-- server writes every assets row); the read policy is the one left.
+SELECT pg_temp.assert_eq('assets still has exactly its read policy',
   (SELECT array_agg(policyname ORDER BY policyname)::text FROM pg_policies WHERE tablename = 'assets'),
-  '{"Users can delete own assets or admins can delete library","Users can insert assets with restrictions","Users can update own assets or admins can update library","Users can view own and shared assets"}');
+  '{"Users can view own and shared assets"}');
 SELECT pg_temp.assert_eq('the assets SELECT predicate is unchanged',
   (SELECT qual FROM pg_policies WHERE tablename = 'assets' AND cmd = 'SELECT'),
   '((user_id = ( SELECT auth.uid() AS uid)) OR (is_shared = true) OR (is_library_item = true) OR is_admin())');
@@ -418,15 +431,17 @@ SELECT pg_temp.assert_eq('workflows has exactly its four new policies',
 SELECT pg_temp.assert_eq('projects has exactly its four new policies',
   (SELECT array_agg(policyname ORDER BY policyname)::text FROM pg_policies WHERE tablename = 'projects'),
   '{projects_delete,projects_insert,projects_select,projects_update}');
-SELECT pg_temp.assert_eq('locations has exactly its four new policies',
+-- [480] locations, objects and creatures keep only their SELECT policy: the
+-- server writes every row (their url columns name storage keys).
+SELECT pg_temp.assert_eq('locations has exactly its read policy (480 took the writes)',
   (SELECT array_agg(policyname ORDER BY policyname)::text FROM pg_policies WHERE tablename = 'locations'),
-  '{locations_delete,locations_insert,locations_select,locations_update}');
-SELECT pg_temp.assert_eq('objects has exactly its four new policies',
+  '{locations_select}');
+SELECT pg_temp.assert_eq('objects has exactly its read policy (480 took the writes)',
   (SELECT array_agg(policyname ORDER BY policyname)::text FROM pg_policies WHERE tablename = 'objects'),
-  '{objects_delete,objects_insert,objects_select,objects_update}');
-SELECT pg_temp.assert_eq('creatures has exactly its four new policies',
+  '{objects_select}');
+SELECT pg_temp.assert_eq('creatures has exactly its read policy (480 took the writes)',
   (SELECT array_agg(policyname ORDER BY policyname)::text FROM pg_policies WHERE tablename = 'creatures'),
-  '{creatures_delete,creatures_insert,creatures_select,creatures_update}');
+  '{creatures_select}');
 
 -- This block needs a LIVING grantee and a living second project: part b's
 -- positive half deleted U2 and U4, and both the viewer grant (cascade on
@@ -471,6 +486,9 @@ SET LOCAL request.jwt.claim.sub = '00000000-0000-4000-8000-000000000101';
 -- Targeting a deleted project would pass this assertion vacuously: the WITH
 -- CHECK fails on a missing project too, proving nothing about the cross-user
 -- rule. It is an RLS refusal, so it raises rather than affecting zero rows.
+-- [480] Since 480 the browser holds no INSERT on locations at all, so this is
+-- now refused at the grant, before any policy is asked: still the
+-- same SQLSTATE, and the stronger rule (no client writes the table).
 DO $$
 DECLARE v_blocked boolean := false;
 BEGIN
@@ -553,9 +571,13 @@ WITH d AS (DELETE FROM workflows WHERE id = 'd0000000-0000-4000-8000-00000000010
 WITH u AS (UPDATE projects SET name = 'admin edit'
             WHERE id = 'c0000000-0000-4000-8000-000000000101' RETURNING 1)
   SELECT pg_temp.assert_eq('the platform admin cannot UPDATE a project from a client', (SELECT count(*)::text FROM u), '0');
-WITH u AS (UPDATE locations SET name = 'admin edit'
-            WHERE id = 'e1000000-0000-4000-8000-000000000101' RETURNING 1)
-  SELECT pg_temp.assert_eq('the platform admin cannot UPDATE a location from a client', (SELECT count(*)::text FROM u), '0');
+-- [480] No client role writes locations at all now: refused, not 0 rows.
+DO $$ BEGIN
+  UPDATE locations SET name = 'admin edit' WHERE id = 'e1000000-0000-4000-8000-000000000101';
+  RAISE EXCEPTION 'ASSERT FAIL: the platform admin updated a location from a client';
+EXCEPTION WHEN insufficient_privilege THEN
+  RAISE NOTICE 'ok  the platform admin cannot UPDATE a location from a client';
+END $$;
 SELECT pg_temp.assert_eq('the platform admin cannot autosave into someone else''s workflow',
   (SELECT ok::text FROM apply_workflow_delta(
      'd0000000-0000-4000-8000-000000000101',

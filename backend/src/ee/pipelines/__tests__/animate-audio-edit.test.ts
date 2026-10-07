@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import type { SceneNodeData } from "@nodaro/shared"
 
 // Mock every sub-step module + helpers BEFORE importing the SUT.
@@ -53,6 +53,7 @@ import { runShotRealignment } from "../sub-steps/shot-realignment.js"
 import { runMusicTimeline } from "../music-timeline.js"
 import { runEditor } from "../llms/editor.js"
 import { runAnimateAudioEditStage } from "../stages/animate-audio-edit.js"
+import { OWNER_ID, ownerUrl, useStorageHost, victimUrl, withStorageOwnerTables } from "../../../test/storage-owner-tables.js"
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -1128,5 +1129,62 @@ describe("runAnimateAudioEditStage — Phase 1C.2 sub-step chain", () => {
       "editor",
       "final_merge",
     ])
+  })
+})
+
+/**
+ * Whose urls reach the Editor and the final merge (decided 2026-10-07;
+ * migration 482). The Editor LLM is shown every shot's keyframe and the merge
+ * downloads every scene composite; a url on our storage another user made,
+ * planted before 482, reaches neither — and the stored scene keeps it.
+ */
+describe("runAnimateAudioEditStage — another user's urls reach neither the Editor nor the merge", () => {
+  let restoreHost: () => void
+  beforeEach(() => {
+    restoreHost = useStorageHost()
+  })
+  afterEach(() => restoreHost())
+
+  it("the Editor sees no foreign keyframe and the merge downloads no foreign composite", async () => {
+    const withKeyframes = (idx: number, keyframe: string): SceneNodeData => {
+      const data = makeSceneNodeData(idx, 1)
+      return { ...data, shots: [{ ...data.shots[0]!, keyframe_url: keyframe }] }
+    }
+    ;(runSceneInternalPipeline as ReturnType<typeof vi.fn>).mockImplementation(
+      async (_ctx: unknown, scene: { id: string }) => {
+        const own = scene.id === "scene-1"
+        const composite = own ? ownerUrl("video", "mp4", "-scene-1") : victimUrl("video", "mp4")
+        return {
+          ok: true,
+          composite_video_url: composite,
+          per_shot_results: [],
+          updated_metadata: buildUpdatedMetadata(withKeyframes(own ? 1 : 2, own ? ownerUrl() : victimUrl()), composite),
+        }
+      },
+    )
+    const supabase = withStorageOwnerTables(
+      makeSupabase({
+        scenes: [
+          { id: "scene-1", entity_key: "scene_01", scene_node_data: makeSceneNodeData(1, 1) },
+          { id: "scene-2", entity_key: "scene_02", scene_node_data: makeSceneNodeData(2, 1) },
+        ],
+        pipelineMode: "auto",
+      }) as object,
+    ) as never
+
+    await runAnimateAudioEditStage({ supabase, pipelineId: "p1", userId: OWNER_ID, userTier: "pro" })
+
+    expect(runEditor).toHaveBeenCalledTimes(1)
+    const editorShots = (runEditor as ReturnType<typeof vi.fn>).mock.calls[0]?.[0].shots as Array<{
+      scene_id: string
+      keyframe_url: string | null
+    }>
+    expect(editorShots.find((s) => s.scene_id === "scene_01")?.keyframe_url).toBe(ownerUrl())
+    expect(editorShots.find((s) => s.scene_id === "scene_02")?.keyframe_url).toBeNull()
+    expect(pipelineFinalMerge).toHaveBeenCalledTimes(1)
+    const mergeScenes = (pipelineFinalMerge as ReturnType<typeof vi.fn>).mock.calls[0]?.[0].scenes as Array<{
+      compositeUrl: string
+    }>
+    expect(mergeScenes.map((s) => s.compositeUrl)).toEqual([ownerUrl("video", "mp4", "-scene-1")])
   })
 })

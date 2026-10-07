@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import type { SceneNodeData, ShotSpec } from "@nodaro/shared"
 
 // Mock service wrappers + Image Critic before importing the SUT. Paths are
@@ -42,6 +42,14 @@ import { pipelineVoiceChange } from "../services/pipeline-voice-change.js"
 import { pipelineCombineVideos } from "../services/pipeline-combine-videos.js"
 import { allocateReferenceSlots, extractLastFrame } from "../continuity.js"
 import { runImageCritic } from "../llms/image-critic.js"
+import {
+  OWNER_ID,
+  VICTIM_JOB_ID,
+  ownerUrl,
+  useStorageHost,
+  victimUrl,
+  withStorageOwnerTables,
+} from "../../../test/storage-owner-tables.js"
 
 beforeEach(() => vi.clearAllMocks())
 
@@ -1154,5 +1162,86 @@ describe("runSceneInternalPipeline", () => {
       expect(pipelineAnimateShot).toHaveBeenCalledTimes(2)
       expect(pipelineCombineVideos).toHaveBeenCalledTimes(1)
     })
+  })
+})
+
+/**
+ * A scene's storage urls name only the owner's objects (decided 2026-10-07;
+ * migration 482). A url another user made, planted before 482, is neither the
+ * start frame sent to the video model nor the cached composite — and the
+ * persisted scene keeps it (counted, not changed).
+ */
+describe("runSceneInternalPipeline — another user's urls are never forwarded", () => {
+  let restoreHost: () => void
+  beforeEach(() => {
+    restoreHost = useStorageHost()
+  })
+  afterEach(() => restoreHost())
+
+  const ownerCtx = () => ({
+    supabase: withStorageOwnerTables({}) as never,
+    pipelineId: "p1",
+    userId: OWNER_ID,
+  })
+
+  it("a keyframe url another user made is not the start frame, and stays in the persisted scene", async () => {
+    ;(pipelineAnimateShot as ReturnType<typeof vi.fn>).mockImplementation(
+      async (args: { shot: ShotSpec }) => defaultAnimateSuccess(args.shot.shot_id),
+    )
+    ;(pipelineCombineVideos as ReturnType<typeof vi.fn>).mockResolvedValue({
+      jobId: "combine-1",
+      assetId: "composite-asset",
+      assetUrl: ownerUrl("video", "mp4", "-composite"),
+      creditsSpent: 0,
+    })
+    const sceneData = makeSceneNodeData(2)
+    sceneData.shots[0] = { ...sceneData.shots[0]!, keyframe_url: victimUrl() }
+    sceneData.shots[1] = { ...sceneData.shots[1]!, keyframe_url: ownerUrl() }
+
+    const result = await runSceneInternalPipeline(
+      ownerCtx(),
+      makeSceneEntity({ scene_node_data: sceneData }),
+      { mode: "parallel", lipSyncEnabled: false, runImageCritic: false },
+    )
+
+    expect(result.ok).toBe(true)
+    const calls = (pipelineAnimateShot as ReturnType<typeof vi.fn>).mock.calls.map(
+      (c) => c[0] as { shot: ShotSpec; startFrameUrl: string | null; sceneNodeData: SceneNodeData },
+    )
+    const first = calls.find((c) => c.shot.shot_id === "shot_01")!
+    const second = calls.find((c) => c.shot.shot_id === "shot_02")!
+    expect(first.startFrameUrl).toBeNull()
+    expect(first.shot.keyframe_url).toBeUndefined()
+    expect(JSON.stringify(first.sceneNodeData)).not.toContain(VICTIM_JOB_ID)
+    expect(second.startFrameUrl).toBe(ownerUrl())
+    const persisted = (result.updated_metadata as { scene_node_data: SceneNodeData }).scene_node_data
+    expect(persisted.shots[0]?.keyframe_url).toBe(victimUrl())
+  })
+
+  it("a composite another user made does not short-circuit the scene: it is rendered again", async () => {
+    ;(pipelineAnimateShot as ReturnType<typeof vi.fn>).mockImplementation(
+      async (args: { shot: ShotSpec }) => defaultAnimateSuccess(args.shot.shot_id),
+    )
+    const sceneData = makeSceneNodeData(1, { composite_video_url: victimUrl("video", "mp4") })
+
+    const result = await runSceneInternalPipeline(
+      ownerCtx(),
+      makeSceneEntity({ scene_node_data: sceneData }),
+      { mode: "parallel", lipSyncEnabled: false, runImageCritic: false },
+    )
+
+    expect(pipelineAnimateShot).toHaveBeenCalledTimes(1)
+    expect(result.composite_video_url).toBe("https://r2/vid-shot_01.mp4")
+  })
+
+  it("the owner's own composite still short-circuits", async () => {
+    const sceneData = makeSceneNodeData(1, { composite_video_url: ownerUrl("video", "mp4") })
+    const result = await runSceneInternalPipeline(
+      ownerCtx(),
+      makeSceneEntity({ scene_node_data: sceneData }),
+      { mode: "parallel", lipSyncEnabled: false, runImageCritic: false },
+    )
+    expect(pipelineAnimateShot).not.toHaveBeenCalled()
+    expect(result.composite_video_url).toBe(ownerUrl("video", "mp4"))
   })
 })

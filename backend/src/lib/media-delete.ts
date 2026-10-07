@@ -4,6 +4,7 @@ import { permanentlyDeleteAsset, isRelayOwnedObject } from "./asset-delete.js"
 import { isOwnedObjectKey } from "./job-policy-outputs.js"
 import { JOB_OUTPUT_URL_PATHS } from "./job-output-urls.js"
 import { relayPossible } from "./relay-possible.js"
+import { keysClaimedByOthers } from "./key-ownership.js"
 
 /**
  * Best-effort, strictly-owned bulk media deletion for `POST /v1/media/delete`
@@ -241,6 +242,20 @@ async function deleteOwnedMediaByUrl(
   const proof = await jobOutputOwnershipProof(userId, url)
   if (proof.status !== "proven") {
     return { status: "skipped", reason: proof.status === "error" ? "error" : "not-owned" }
+  }
+
+  // 3b. Whose file (lib/key-ownership.ts; decided 2026-10-06). The proof says
+  //     the caller's job NAMES the url, not that it made the object: before 474
+  //     a client could insert its own job with any output. An object another
+  //     user's job made, or that sits in their upload namespace, is not the
+  //     caller's to delete. A failed lookup keeps it.
+  try {
+    if ((await keysClaimedByOthers(userId, [r2Key])).size > 0) {
+      return { status: "skipped", reason: "not-owned" }
+    }
+  } catch (err) {
+    console.warn(`[media-delete] ownership lookup failed for ${r2Key}:`, err)
+    return { status: "skipped", reason: "error" }
   }
 
   // 3a. The relay rule: these bytes are the far end's. Report deleted, delete

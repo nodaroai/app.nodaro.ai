@@ -16,7 +16,8 @@
  *   - An in-memory Supabase mock captures .insert()/.delete() payloads by table.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
+import { OWNER_ID, VICTIM_JOB_ID, ownerUrl, useStorageHost, victimUrl, withStorageOwnerTables } from "../../../test/storage-owner-tables.js"
 
 // ---------------------------------------------------------------------------
 // Hoisted mocks (credits + queue)
@@ -27,11 +28,13 @@ const mocks = vi.hoisted(() => ({
   reservePipelineCredits:
     vi.fn<(args: unknown) => Promise<{ ok: true; usageLogId: string } | { ok: false; reason: string }>>(),
   enqueuePipelineRun: vi.fn<(data: unknown) => Promise<void>>(),
+  refundPipelineCredits: vi.fn<(args: unknown) => Promise<void>>(),
 }))
 
 vi.mock("../credits.js", () => ({
   estimateUpfrontCredits: mocks.estimateUpfrontCredits,
   reservePipelineCredits: mocks.reservePipelineCredits,
+  refundPipelineCredits: mocks.refundPipelineCredits,
 }))
 
 vi.mock("../queue.js", () => ({
@@ -60,6 +63,9 @@ function makeSupabaseMock(opts: {
   pipelineInsertError?: { message: string }
   stagesInsertError?: { message: string }
   entitiesInsertError?: { message: string }
+  /** asset id → its owner, for the up-front owner check of scene asset ids. */
+  assetOwners?: Record<string, string>
+  assetsReadFails?: boolean
 } = {}): { client: never; fixture: Fixture } {
   const fixture: Fixture = {
     pipelinesInserted: [],
@@ -108,6 +114,24 @@ function makeSupabaseMock(opts: {
             fixture.entitiesInserted.push(...arr)
             return Promise.resolve({ error: opts.entitiesInsertError ?? null })
           },
+        }
+      }
+      if (table === "assets") {
+        // ownedAssetUrlsById: `.select("id, r2_url").in("id", ids).eq("user_id", owner)`.
+        return {
+          select: (_cols: string) => ({
+            in: (_col: string, ids: string[]) => ({
+              eq: async (_col2: string, owner: string) =>
+                opts.assetsReadFails
+                  ? { data: null, error: { message: "timeout" } }
+                  : {
+                      data: ids
+                        .filter((id) => opts.assetOwners?.[id] === owner)
+                        .map((id) => ({ id, r2_url: `https://r2/${id}.png` })),
+                      error: null,
+                    },
+            }),
+          }),
         }
       }
       throw new Error(`Unmocked table: ${table}`)
@@ -238,6 +262,7 @@ beforeEach(() => {
   mocks.estimateUpfrontCredits.mockReturnValue(42)
   mocks.reservePipelineCredits.mockResolvedValue({ ok: true, usageLogId: "usage-1" })
   mocks.enqueuePipelineRun.mockResolvedValue(undefined)
+  mocks.refundPipelineCredits.mockResolvedValue(undefined)
 })
 
 describe("createSeededPipeline", () => {
@@ -390,6 +415,121 @@ describe("createSeededPipeline", () => {
     expect(fixture.stagesInserted).toHaveLength(0)
   })
 
+  describe("a seeded scene names only the caller's assets (decided 2026-10-07)", () => {
+    const OWN = "a5000000-0000-4000-8000-000000000001"
+    const FOREIGN = "a5000000-0000-4000-8000-000000000002"
+    function scenesWith(shotFields: Record<string, unknown>) {
+      return [1, 2, 3].map((i) => {
+        const snd = makeSceneNodeData(i) as { shots: Array<Record<string, unknown>> }
+        return {
+          sceneIndex: i,
+          sceneNodeData: i === 2 ? { ...snd, shots: [{ ...snd.shots[0], ...shotFields }] } : snd,
+        }
+      })
+    }
+
+    it("attacker: a shot keyframe naming another user's asset is refused before any row or reservation", async () => {
+      // The scene would otherwise be inserted after the credits are reserved,
+      // where migration 480's trigger refuses it and leaves the reservation held.
+      const { client, fixture } = makeSupabaseMock({ assetOwners: { [FOREIGN]: "victim", [OWN]: "user-1" } })
+
+      await expect(
+        createSeededPipeline(client, makeInput({ scenes: scenesWith({ keyframe_asset_id: FOREIGN }) })),
+      ).rejects.toThrow(SeedConsistencyError)
+
+      expect(fixture.pipelinesInserted).toHaveLength(0)
+      expect(fixture.entitiesInserted).toHaveLength(0)
+      expect(mocks.reservePipelineCredits).not.toHaveBeenCalled()
+    })
+
+    it("the caller's own asset ids pass", async () => {
+      const { client, fixture } = makeSupabaseMock({ assetOwners: { [OWN]: "user-1" } })
+
+      await createSeededPipeline(
+        client,
+        makeInput({ scenes: scenesWith({ keyframe_asset_id: OWN, keyframe_url: "https://r2/own.png" }) }),
+      )
+
+      const scene2 = fixture.entitiesInserted.find((e) => e.entity_key === "scene_02")
+      expect(
+        (scene2?.metadata as { scene_node_data: { shots: Array<Record<string, unknown>> } }).scene_node_data.shots[0]
+          ?.keyframe_asset_id,
+      ).toBe(OWN)
+    })
+
+    it("a failed owner lookup fails the seed before any row is written (it is not a refusal)", async () => {
+      const { client, fixture } = makeSupabaseMock({ assetsReadFails: true })
+
+      const err = await createSeededPipeline(
+        client,
+        makeInput({ scenes: scenesWith({ keyframe_asset_id: OWN }) }),
+      ).catch((e: unknown) => e)
+      expect(err).toBeInstanceOf(Error)
+      expect(err).not.toBeInstanceOf(SeedConsistencyError)
+      expect(fixture.pipelinesInserted).toHaveLength(0)
+      expect(mocks.reservePipelineCredits).not.toHaveBeenCalled()
+    })
+  })
+
+  describe("a seeded scene names only the caller's storage urls (decided 2026-10-07; migration 482)", () => {
+    let restoreHost: () => void
+    beforeEach(() => {
+      restoreHost = useStorageHost()
+    })
+    afterEach(() => restoreHost())
+
+    function scenesWith(shotFields: Record<string, unknown>) {
+      return [1, 2, 3].map((i) => {
+        const snd = makeSceneNodeData(i) as { shots: Array<Record<string, unknown>> }
+        return {
+          sceneIndex: i,
+          sceneNodeData: i === 2 ? { ...snd, shots: [{ ...snd.shots[0], ...shotFields }] } : snd,
+        }
+      })
+    }
+
+    it("attacker: a keyframe url another user made is refused before any row or reservation", async () => {
+      const { client, fixture } = makeSupabaseMock()
+      await expect(
+        createSeededPipeline(
+          withStorageOwnerTables(client as object) as never,
+          makeInput({ userId: OWNER_ID, scenes: scenesWith({ keyframe_url: victimUrl() }) }),
+        ),
+      ).rejects.toThrow(SeedConsistencyError)
+      expect(fixture.pipelinesInserted).toHaveLength(0)
+      expect(fixture.entitiesInserted).toHaveLength(0)
+      expect(mocks.reservePipelineCredits).not.toHaveBeenCalled()
+    })
+
+    it("attacker: a url on any host whose path names another user's job is refused before any row (482 judges every host)", async () => {
+      const { client, fixture } = makeSupabaseMock()
+      await expect(
+        createSeededPipeline(
+          withStorageOwnerTables(client as object) as never,
+          makeInput({ userId: OWNER_ID, scenes: scenesWith({ keyframe_url: `https://example.com/x/${VICTIM_JOB_ID}.png` }) }),
+        ),
+      ).rejects.toThrow(SeedConsistencyError)
+      expect(fixture.pipelinesInserted).toHaveLength(0)
+      expect(mocks.reservePipelineCredits).not.toHaveBeenCalled()
+    })
+
+    it("the caller's own urls and external urls pass", async () => {
+      const { client, fixture } = makeSupabaseMock()
+      await createSeededPipeline(
+        withStorageOwnerTables(client as object) as never,
+        makeInput({
+          userId: OWNER_ID,
+          scenes: scenesWith({ keyframe_url: ownerUrl(), video_url: "https://provider.example/clip.mp4" }),
+        }),
+      )
+      const scene2 = fixture.entitiesInserted.find((e) => e.entity_key === "scene_02")
+      expect(
+        (scene2?.metadata as { scene_node_data: { shots: Array<Record<string, unknown>> } }).scene_node_data.shots[0]
+          ?.keyframe_url,
+      ).toBe(ownerUrl())
+    })
+  })
+
   it("deletes the pipelines row and propagates when the credit reservation fails", async () => {
     const { client, fixture } = makeSupabaseMock()
     mocks.reservePipelineCredits.mockResolvedValueOnce({ ok: false, reason: "insufficient_credits" })
@@ -403,6 +543,46 @@ describe("createSeededPipeline", () => {
     expect(fixture.stagesInserted).toHaveLength(0)
     expect(fixture.entitiesInserted).toHaveLength(0)
     expect(mocks.enqueuePipelineRun).not.toHaveBeenCalled()
+  })
+
+  // Review round (decided 2026-10-07): a failure AFTER the reservation used to
+  // leave the credits held on a pipeline with no scenes that was never queued.
+  for (const [what, opts] of [
+    ["the scene entity insert", { entitiesInsertError: { message: "refused by trigger" } }],
+    ["the stage rows insert", { stagesInsertError: { message: "boom" } }],
+  ] as const) {
+    it(`refunds the reservation, then deletes the pipelines row, when ${what} fails`, async () => {
+      const { client, fixture } = makeSupabaseMock(opts)
+      const order: string[] = []
+      mocks.refundPipelineCredits.mockImplementationOnce(async () => {
+        order.push(`refund:${fixture.pipelinesDeleted.length}`)
+      })
+      await expect(
+        createSeededPipeline(client, makeInput({ scenes: [1, 2, 3].map((i) => ({ sceneIndex: i, sceneNodeData: makeSceneNodeData(i) })) })),
+      ).rejects.toThrow()
+      expect(mocks.refundPipelineCredits).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: "user-1", pipelineId: "seeded-pipeline-id" }),
+      )
+      // Refund first: it reads the reservation link from the pipelines row.
+      expect(order).toEqual(["refund:0"])
+      expect(fixture.pipelinesDeleted).toEqual([{ column: "id", value: "seeded-pipeline-id" }])
+      expect(mocks.enqueuePipelineRun).not.toHaveBeenCalled()
+    })
+  }
+
+  it("refunds and deletes when the enqueue fails", async () => {
+    const { client, fixture } = makeSupabaseMock()
+    mocks.enqueuePipelineRun.mockRejectedValueOnce(new Error("redis down"))
+    await expect(createSeededPipeline(client, makeInput())).rejects.toThrow(/redis down/)
+    expect(mocks.refundPipelineCredits).toHaveBeenCalledTimes(1)
+    expect(fixture.pipelinesDeleted).toEqual([{ column: "id", value: "seeded-pipeline-id" }])
+  })
+
+  it("does not refund when the reservation itself failed (nothing was held)", async () => {
+    const { client } = makeSupabaseMock()
+    mocks.reservePipelineCredits.mockResolvedValueOnce({ ok: false, reason: "insufficient_credits" })
+    await expect(createSeededPipeline(client, makeInput())).rejects.toThrow()
+    expect(mocks.refundPipelineCredits).not.toHaveBeenCalled()
   })
 
   it("generates and stores a root_node_id when none is supplied", async () => {

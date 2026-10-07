@@ -20,6 +20,7 @@ import {
 } from "../depends-on.js"
 import { emitDependentStaleEvents } from "../entity-approval.js"
 import { runImageCriticLoop } from "./_image-critic-loop.js"
+import { pipelineOwnedAssetUrlsById } from "../../../lib/pipeline-asset-ownership.js"
 import { settledWithLimit } from "../../../lib/settled-with-limit.js"
 
 /**
@@ -712,7 +713,7 @@ async function ensureCharacterVariants(
 
     // Resolve the main reference URL once — every variant uses the same image.
     const mainUrl = entity.main_asset_id
-      ? await assetUrlForId(supabase, entity.main_asset_id)
+      ? await assetUrlForId(supabase, pipelineId, entity.main_asset_id)
       : ""
 
     // Per-variant outcome tracking — the post-loop metadata write surfaces
@@ -838,7 +839,11 @@ function stripVariantFailureKeys(
   return next
 }
 
-async function assetUrlForId(supabase: SupabaseClient, assetId: string): Promise<string> {
-  const { data } = await supabase.from("assets").select("r2_url").eq("id", assetId).single()
-  return data?.r2_url ?? ""
+/**
+ * The entity's main image URL, only when the pipeline's owner made that asset
+ * (decided 2026-10-07): a pointer at another user's asset resolves to "".
+ */
+async function assetUrlForId(supabase: SupabaseClient, pipelineId: string, assetId: string): Promise<string> {
+  const owned = await pipelineOwnedAssetUrlsById(supabase, pipelineId, [assetId])
+  return owned.get(assetId) ?? ""
 }

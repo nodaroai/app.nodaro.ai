@@ -10,7 +10,7 @@ import { executionEvents } from "../../execution-events.js"
 // path is the same one tasks.ts and progress-emitter.ts use ("../supabase.js"
 // relative to those files = "../../supabase.js" relative to this test).
 const mockJobsRow = vi.hoisted(() => ({
-  rows: [] as Array<{ id: string; status: string; progress: number | null }>,
+  rows: [] as Array<{ id: string; user_id?: string; status: string; progress: number | null }>,
 }))
 
 vi.mock("../../supabase.js", () => {
@@ -53,7 +53,7 @@ describe("progress emitter", () => {
 
   it("emits a notifications/progress event when a tracked job's progress advances", async () => {
     registerTask({ taskId: "j-1", userId: "u-1", kind: "image" })
-    mockJobsRow.rows = [{ id: "j-1", status: "processing", progress: 50 }]
+    mockJobsRow.rows = [{ user_id: "u-1", id: "j-1", status: "processing", progress: 50 }]
 
     const { server, calls } = makeServer()
     startProgressEmitter(server as never)
@@ -71,9 +71,23 @@ describe("progress emitter", () => {
     })
   })
 
+  it("attacker: a job row of another user is not reported to the task's session", async () => {
+    // The registry is process-wide; the row must be the registered user's own
+    // job (decided 2026-10-06) — a job id is not proof of whose job it is.
+    registerTask({ taskId: "j-foreign", userId: "u-1", kind: "image" })
+    mockJobsRow.rows = [{ user_id: "u-2", id: "j-foreign", status: "processing", progress: 40 }]
+
+    const { server, calls } = makeServer()
+    startProgressEmitter(server as never)
+
+    await vi.advanceTimersByTimeAsync(1100)
+
+    expect(calls).toEqual([])
+  })
+
   it("emits a single notification per progress value (no spam at unchanged %)", async () => {
     registerTask({ taskId: "j-2", userId: "u-1", kind: "video" })
-    mockJobsRow.rows = [{ id: "j-2", status: "processing", progress: 25 }]
+    mockJobsRow.rows = [{ user_id: "u-1", id: "j-2", status: "processing", progress: 25 }]
 
     const { server, calls } = makeServer()
     startProgressEmitter(server as never)
@@ -89,7 +103,7 @@ describe("progress emitter", () => {
 
   it("emits a final 100% notification on terminal status and removes the task", async () => {
     registerTask({ taskId: "j-3", userId: "u-1", kind: "audio" })
-    mockJobsRow.rows = [{ id: "j-3", status: "completed", progress: 100 }]
+    mockJobsRow.rows = [{ user_id: "u-1", id: "j-3", status: "completed", progress: 100 }]
 
     const { server, calls } = makeServer()
     startProgressEmitter(server as never)
@@ -115,7 +129,7 @@ describe("progress emitter", () => {
    */
   it("sends exactly one 'Awaiting review' message on the hold, then stops emitting", async () => {
     registerTask({ taskId: "j-held", userId: "u-1", kind: "image" })
-    mockJobsRow.rows = [{ id: "j-held", status: "pending_review", progress: 100 }]
+    mockJobsRow.rows = [{ user_id: "u-1", id: "j-held", status: "pending_review", progress: 100 }]
 
     const { server, calls } = makeServer()
     startProgressEmitter(server as never)
@@ -139,14 +153,14 @@ describe("progress emitter", () => {
 
   it("resumes emitting when the review resolves the job", async () => {
     registerTask({ taskId: "j-held-2", userId: "u-1", kind: "image" })
-    mockJobsRow.rows = [{ id: "j-held-2", status: "pending_review", progress: 100 }]
+    mockJobsRow.rows = [{ user_id: "u-1", id: "j-held-2", status: "pending_review", progress: 100 }]
 
     const { server, calls } = makeServer()
     startProgressEmitter(server as never)
     await vi.advanceTimersByTimeAsync(1100)
     expect(calls).toHaveLength(1)
 
-    mockJobsRow.rows = [{ id: "j-held-2", status: "completed", progress: 100 }]
+    mockJobsRow.rows = [{ user_id: "u-1", id: "j-held-2", status: "completed", progress: 100 }]
     await vi.advanceTimersByTimeAsync(1100)
 
     expect(calls).toHaveLength(2)

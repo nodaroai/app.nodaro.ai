@@ -6,6 +6,8 @@ import { pipelineEvents } from "../events.js"
 import { runSceneDirector } from "../llms/scene-director.js"
 import { runShotListCritic, type ShotListCriticVerdict } from "../llms/shot-list-critic.js"
 import { settledWithLimit } from "../../../lib/settled-with-limit.js"
+import { ownedSceneNodeData } from "../../../lib/pipeline-asset-ownership.js"
+import { sceneFromDirectorPlan } from "../llms/scene-director-plan.js"
 import {
   resolveEntityKeysToIds,
   setEntityDepends,
@@ -276,7 +278,13 @@ async function runOneScene(args: RunOneSceneArgs): Promise<void> {
 
   while (retries <= MAX_CRITIC_RETRIES_PER_SCENE) {
     try {
-      sceneNodeData = await runSceneDirector({
+      // The Director plans a scene; it never produces an asset. Its output
+      // schema is plan-only (decided 2026-10-07): it carries no url field and
+      // no asset id. A re-planned scene renders fresh (decided 2026-10-07):
+      // the stored scene's urls, ids and asset refs from an earlier render are
+      // cleared, not carried over, so Stage 6/7 regenerate rather than reuse
+      // a composite, keyframe or clip made for the previous plan.
+      const directorPlan = await runSceneDirector({
         supabase,
         pipelineId,
         stageId,
@@ -292,6 +300,16 @@ async function runOneScene(args: RunOneSceneArgs): Promise<void> {
         imageModelOverride,
         videoModelOverride,
       })
+      // The fresh scene carries no url, so the owner check below has nothing
+      // to judge today; it stays so a url that ever reaches this write is
+      // judged as 482's trigger judges it (a lookup that fails fails the
+      // scene: fail closed, decided 2026-10-07).
+      sceneNodeData = await ownedSceneNodeData(
+        supabase,
+        userId,
+        sceneFromDirectorPlan(directorPlan),
+        { forWrite: true },
+      )
     } catch (err) {
       await supabase
         .from("pipeline_entities")
@@ -349,8 +367,10 @@ async function runOneScene(args: RunOneSceneArgs): Promise<void> {
   const depIds = await resolveEntityKeysToIds(supabase, pipelineId, depKeys)
   await setEntityDepends(supabase, entity.id, depIds)
 
-  // Persist scene_node_data + transition to awaiting_approval.
-  await supabase
+  // Persist scene_node_data + transition to awaiting_approval. A refused write
+  // fails the scene, as a Director throw does; ignored, it would leave the row
+  // in 'generating' while the canvas is told the scene awaits approval.
+  const { error: persistErr } = await supabase
     .from("pipeline_entities")
     .update({
       status: "awaiting_approval",
@@ -362,6 +382,21 @@ async function runOneScene(args: RunOneSceneArgs): Promise<void> {
       },
     })
     .eq("id", entity.id)
+  if (persistErr) {
+    await supabase
+      .from("pipeline_entities")
+      .update({ status: "failed" })
+      .eq("id", entity.id)
+    pipelineEvents.publish({
+      type: "scene:status",
+      pipelineId,
+      sceneEntityId: entity.id,
+      sceneIndex,
+      status: "failed",
+    })
+    console.error(`[shot-list] Persisting scene ${entity.entity_key} failed:`, persistErr)
+    return
+  }
 
   // Phase 1B.4 (D1): SceneNode → awaiting_approval. No-op when no canvas node
   // exists yet (Phase 1B.1: SceneNodes materialize on user approve).

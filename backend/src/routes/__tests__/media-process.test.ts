@@ -146,6 +146,7 @@ function ownedFlowResults(): ChainResult[] {
   return [
     { data: { id: "new-output-asset" }, error: null }, // insert of the processed output's asset row
     { data: OWNED_SOURCE_ASSET, error: null },         // ownership lookup (r2_key + user_id)
+    { data: [], error: null },                         // whose library holds the key (key-ownership.ts)
     { count: 0, error: null },                         // other assets rows referencing the key
     { count: 0, error: null },                         // jobs output_data->>imageUrl
     { count: 0, error: null },                         // jobs output_data->>videoUrl
@@ -236,10 +237,11 @@ describe("POST /v1/media/process — deleteSource", () => {
     expect(vi.mocked(deleteFromR2).mock.invocationCallOrder[0]).toBeGreaterThan(
       vi.mocked(uploadBufferToR2).mock.invocationCallOrder[0],
     )
-    // insert, ownership, asset-refs, jobs×3, row delete — the origin/dev
-    // sequence exactly: with no relay target the rule issues nothing.
+    // insert, ownership, library holders (whose object — key-ownership.ts,
+    // decided 2026-10-07), asset-refs, jobs×3, row delete. With no relay
+    // target the relay rule issues nothing.
     expect(vi.mocked(supabase.from).mock.calls.map((c) => c[0])).toEqual([
-      "assets", "assets", "assets", "jobs", "jobs", "jobs", "assets",
+      "assets", "assets", "assets", "assets", "jobs", "jobs", "jobs", "assets",
     ])
     expect(updateStorageUsage).toHaveBeenCalledExactlyOnceWith(
       TEST_USER_ID,
@@ -270,10 +272,34 @@ describe("POST /v1/media/process — deleteSource", () => {
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("deleteSource skipped"))
   })
 
+  /**
+   * Whose file (decided 2026-10-06; migration 480). The ownership lookup
+   * proves the caller owns a ROW naming the key; before 480 a browser could
+   * insert such a row for any key. A source another user's job made is not
+   * the caller's to delete, and its size was never charged to them.
+   */
+  it("attacker: a library row naming another user's file → no R2 delete, no refund, row removed", async () => {
+    const VICTIM_JOB = "22222222-2222-4222-8222-222222222222"
+    const victimKey = `audios/${VICTIM_JOB}.mp3`
+    queueSupabaseResults(
+      { data: { id: "new-output-asset" }, error: null },
+      { data: { ...OWNED_SOURCE_ASSET, r2_key: victimKey, job_id: null, size_bytes: 5_000_000_000 }, error: null },
+      { data: [{ id: VICTIM_JOB, user_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" }], error: null }, // who made it
+      { data: [], error: null }, // whose library holds it
+      { error: null }, // delete of the caller's row
+    )
+
+    const res = await post({ sourceUrl: `${R2_PREFIX}${victimKey}`, deleteSource: true })
+    expect(res.statusCode).toBe(200)
+    expect(deleteFromR2).not.toHaveBeenCalled()
+    expect(updateStorageUsage).not.toHaveBeenCalled()
+  })
+
   it("another referrer holds the object → R2 delete skipped, the user's row still removed", async () => {
     queueSupabaseResults(
       { data: { id: "new-output-asset" }, error: null },
       { data: OWNED_SOURCE_ASSET, error: null },
+      { data: [], error: null }, // whose library holds it: only this user's
       { count: 1, error: null }, // another assets row references the same r2_key
       { error: null },           // delete of the source asset row
     )

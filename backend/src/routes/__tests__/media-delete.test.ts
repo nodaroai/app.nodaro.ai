@@ -100,6 +100,9 @@ const eqVal = (calls: Recorded[], col: string) =>
 const has = (calls: Recorded[], method: string) => calls.some((c) => c.method === method)
 const eqOutputKey = (calls: Recorded[]) =>
   calls.find((c) => c.method === "eq" && String(c.args[0]).startsWith("output_data->>"))
+/** Whose library holds the key (lib/key-ownership.ts `libraryHolders`). */
+const isHolderLookup = (table: string, calls: Recorded[]) =>
+  table === "assets" && calls.some((c) => c.method === "select" && c.args[0] === "r2_key, user_id")
 
 // ---------------------------------------------------------------------------
 // Test app setup
@@ -263,6 +266,7 @@ describe("POST /v1/media/delete — assets path", () => {
         // Cross-user referrer count inside the shared core: no other rows.
         return { count: 0, error: null }
       }
+      if (isHolderLookup(table, calls)) return { data: [{ r2_key: OWNED_KEY, user_id: TEST_USER_ID }], error: null }
       if (table === "jobs") {
         // Only REFERRER probes count here — a jobs read carrying an
         // `output_data` filter. The relay rule's stem probe (`relay_job_id in
@@ -380,6 +384,7 @@ describe("POST /v1/media/delete — job-output path", () => {
         assetDeletes++
         return { data: [], error: null }
       }
+      if (isHolderLookup(table, calls)) return { data: [], error: null }
       if (table === "assets") {
         // Path (b) referrer safety: bare r2_key count across ALL users.
         bareAssetRefChecks++

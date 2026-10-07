@@ -1567,10 +1567,6 @@ export type Database = {
             Returns: string
           }
       reset_daily_spent: { Args: { p_user_id: string }; Returns: undefined }
-      share_workflow_assets: {
-        Args: { p_workflow_id: string }
-        Returns: undefined
-      }
     }
     Enums: {
       [_ in never]: never

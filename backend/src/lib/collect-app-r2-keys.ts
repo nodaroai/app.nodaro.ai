@@ -1,6 +1,7 @@
 import { supabase } from "./supabase.js"
 import { r2KeyFromUrl } from "../ee/billing/cleanup-service.js"
-import { isOwnedObjectKey } from "./job-policy-outputs.js"
+import { isOwnedObjectKey, objectKeyJobIdCandidates } from "./job-policy-outputs.js"
+import { familyJobOwners, keyNamespaceOwner } from "./key-ownership.js"
 import { APP_RUN_USER_CONTENT_COLUMNS } from "./app-run-content.js"
 import { appRenderFinalStampOf, finalExecutionIdOf, selectWithFinalExecution } from "./app-run-final-column.js"
 
@@ -30,6 +31,13 @@ import { appRenderFinalStampOf, finalExecutionIdOf, selectWithFinalExecution } f
  * as 'completed' with any output, so owning the row does not vouch for the
  * URLs in it. A job's output that names another object (an upload, a relayed
  * far-end file) is left alone.
+ *
+ * Whose file (decided 2026-10-06; migration 480): a url a person wrote — the
+ * creator's app media, a runner's run columns (client-writable through the run
+ * PATCH) — yields only objects that person made or that nobody's job made;
+ * an execution's `node_states` (client-writable before 474) yield only keys in
+ * the family of one of the app's own jobs. See `writtenOwnObjects` and
+ * `inAppJobFamily`.
  *
  * Returns only the keys this app owns — see `appOwnedKeys`. A runner's inputs
  * can point at objects the app never made, and those are not expunge's to
@@ -94,30 +102,42 @@ async function jobsOfExecutions(
 }
 
 export async function collectAppR2Keys(appId: string, scope: AppR2KeyScope = {}): Promise<string[]> {
-  const seen = new Set<string>()
+  /** Keys in the key family of one of this app's own jobs (already fenced). */
+  const jobKeys = new Set<string>()
+  /** Keys found in the app's executions' node_states — fenced at the end. */
+  const nodeStateKeys = new Set<string>()
+  /** Keys a user wrote (the creator's app media, a runner's run columns) →
+   *  the users who wrote them. Fenced at the end by whose object it is. */
+  const writtenBy = new Map<string, Set<string>>()
   const appJobIds = new Set<string>()
   const skipRunIds = scope.skipRunIds ?? new Set<string>()
 
-  const harvest = (val: unknown, keep: (key: string) => boolean = () => true) => {
+  const walk = (val: unknown, visit: (key: string) => void): void => {
     if (typeof val === "string") {
       const key = r2KeyFromUrl(val)
-      if (key && keep(key)) seen.add(key)
+      if (key) visit(key)
     } else if (Array.isArray(val)) {
-      for (const v of val) harvest(v, keep)
+      for (const v of val) walk(v, visit)
     } else if (val && typeof val === "object") {
-      for (const v of Object.values(val)) harvest(v, keep)
+      for (const v of Object.values(val)) walk(v, visit)
     }
+  }
+  const writtenByUser = (userId: unknown) => (key: string) => {
+    const writers = writtenBy.get(key) ?? new Set<string>()
+    if (typeof userId === "string") writers.add(userId)
+    writtenBy.set(key, writers)
   }
 
   // The app's own media goes with the app row, which stays while a run is skipped.
   const { data: appRow } =
     skipRunIds.size === 0
-      ? await supabase.from("published_apps").select("icon_url, preview_media_url, snapshot_nodes").eq("id", appId).single()
+      ? await supabase.from("published_apps").select("creator_id, icon_url, preview_media_url, snapshot_nodes").eq("id", appId).single()
       : { data: null }
   if (appRow) {
-    harvest(appRow.icon_url)
-    harvest(appRow.preview_media_url)
-    harvest(appRow.snapshot_nodes)
+    const byCreator = writtenByUser(appRow.creator_id)
+    walk(appRow.icon_url, byCreator)
+    walk(appRow.preview_media_url, byCreator)
+    walk(appRow.snapshot_nodes, byCreator)
   }
 
   let cursor: string | null = null
@@ -144,7 +164,8 @@ export async function collectAppR2Keys(appId: string, scope: AppR2KeyScope = {})
     const rows = page_.filter((r) => !(typeof r.id === "string" && skipRunIds.has(r.id)))
 
     for (const row of rows) {
-      for (const column of APP_RUN_USER_CONTENT_COLUMNS) harvest(row[column])
+      const byRunner = writtenByUser(row.runner_id)
+      for (const column of APP_RUN_USER_CONTENT_COLUMNS) walk(row[column], byRunner)
     }
 
     // Each execution id with the runner of every run that names it.
@@ -184,7 +205,7 @@ export async function collectAppR2Keys(appId: string, scope: AppR2KeyScope = {})
         }
         batch = [...next]
       }
-      for (const e of owned) harvest(e.node_states)
+      for (const e of owned) walk(e.node_states, (key) => nodeStateKeys.add(key))
       if (owned.length > 0) {
         // execution id → its owner (the runner it was harvested for). Many
         // runners' executions in one read, so no single user filter fits:
@@ -197,7 +218,9 @@ export async function collectAppR2Keys(appId: string, scope: AppR2KeyScope = {})
           // Only an owned job is one of this app's jobs for `appOwnedKeys`: a
           // planted job's library row must not make a key deletable.
           appJobIds.add(jobId)
-          harvest(j.output_data, (key) => isOwnedObjectKey(jobId, key))
+          walk(j.output_data, (key) => {
+            if (isOwnedObjectKey(jobId, key)) jobKeys.add(key)
+          })
         }
       }
     }
@@ -216,17 +239,64 @@ export async function collectAppR2Keys(appId: string, scope: AppR2KeyScope = {})
       const chunk = ids.slice(i, i + EXECUTION_CHUNK)
       const { data, error } = await supabase.from("workflow_executions").select("id, node_states").eq("user_id", owner).in("id", chunk)
       if (error) throw new Error(`collectAppR2Keys failed at executions: ${error.message}`)
-      for (const e of (data ?? []) as Array<{ node_states: unknown }>) harvest(e.node_states)
+      for (const e of (data ?? []) as Array<{ node_states: unknown }>) walk(e.node_states, (key) => nodeStateKeys.add(key))
     }
     for (const j of await jobsOfExecutions(ids, owner)) {
       if (typeof j.id !== "string" || j.user_id !== owner) continue
       const jobId = j.id
       appJobIds.add(jobId)
-      harvest(j.output_data, (key) => isOwnedObjectKey(jobId, key))
+      walk(j.output_data, (key) => {
+        if (isOwnedObjectKey(jobId, key)) jobKeys.add(key)
+      })
     }
   }
 
+  // Fenced only now, once every page has added its jobs: a node state on page
+  // one can name a job read on page three.
+  const seen = new Set(jobKeys)
+  for (const key of nodeStateKeys) {
+    if (inAppJobFamily(key, appJobIds)) seen.add(key)
+  }
+  for (const key of await writtenOwnObjects(writtenBy, appJobIds)) seen.add(key)
+
   return appOwnedKeys(Array.from(seen), appJobIds)
+}
+
+/**
+ * An execution's `node_states` were the runner's to write until migration 474,
+ * so a url in them proves nothing about whose object it names. Only a key in
+ * the key family of one of this app's own jobs (owner-checked above) is
+ * collected from them (decided 2026-10-06). A node output with no job behind
+ * it is left in place — kept storage, never someone else's file deleted.
+ */
+function inAppJobFamily(key: string, appJobIds: ReadonlySet<string>): boolean {
+  return objectKeyJobIdCandidates(key).some((id) => appJobIds.has(id) && isOwnedObjectKey(id, key))
+}
+
+/**
+ * The keys a user wrote (the creator's app media, a runner's run columns —
+ * the latter client-writable through the run PATCH, migration 469) minus
+ * every object someone else made: a key whose job, or upload namespace,
+ * belongs to a user other than the one who wrote the url
+ * (lib/key-ownership.ts; decided 2026-10-06). An app job's output is the
+ * runner's own and passes. Throws when the lookup fails — the expunge route
+ * runs this before it changes anything.
+ */
+async function writtenOwnObjects(
+  writtenBy: ReadonlyMap<string, ReadonlySet<string>>,
+  appJobIds: ReadonlySet<string>,
+): Promise<string[]> {
+  const keys = [...writtenBy.keys()]
+  if (keys.length === 0) return []
+  const makers = await familyJobOwners(keys)
+  return keys.filter((key) => {
+    const writers = writtenBy.get(key) ?? new Set<string>()
+    const namespace = keyNamespaceOwner(key)
+    if (namespace !== null && ![...writers].some((w) => w.toLowerCase() === namespace)) return false
+    const maker = makers.get(key)
+    if (maker === undefined || appJobIds.has(maker.jobId)) return true
+    return maker.userId !== null && writers.has(maker.userId)
+  })
 }
 
 const LIBRARY_LOOKUP_CHUNK = 100

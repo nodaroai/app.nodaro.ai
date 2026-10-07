@@ -28,6 +28,7 @@ export const EDIT_PLAN_TMP_PREFIX = "edit-plan-tmp"
 import { updateStorageUsage } from "../../utils/file-validation.js"
 import { relayOwnedKeys, deletableKeys } from "../../lib/asset-delete.js"
 import { isOwnedObjectKey } from "../../lib/job-policy-outputs.js"
+import { claimedByOthers, keysClaimedByOthers } from "../../lib/key-ownership.js"
 import { TIER_STORAGE_LIMITS, TIER_CREDITS } from "./stripe-config.js"
 import { invalidateBalanceCache } from "../routes/credits.js"
 import { CreditsService } from "./credits.js"
@@ -128,6 +129,36 @@ function ownedJobOutputKeys(jobId: string, output: Record<string, unknown>): { k
     else heldBack++
   }
   return { keys, heldBack }
+}
+
+/**
+ * WHOSE FILE (decided 2026-10-06; migration 480). A row says where a file is,
+ * not whose it is: before 480 a browser could insert an `assets` row or write
+ * a location naming ANY key, and an API path can still store a url the caller
+ * names (a gallery save). So every key a reaper collects for a user goes
+ * through `lib/key-ownership.ts` first, and a key another user's job made, or
+ * that sits in another user's upload namespace, is never deleted on this
+ * user's behalf. Throws when the lookup fails — the reapers then stop the
+ * batch rather than delete unproven keys or null rows they did not reap.
+ */
+async function assetsClaimedByOthers(
+  rows: ReadonlyArray<{ id: string; user_id?: string | null; r2_key: string | null }>,
+  ownerFallback?: string,
+): Promise<Set<string>> {
+  const withKeys = rows.filter((r) => !!r.r2_key && !!(r.user_id ?? ownerFallback))
+  const verdicts = await claimedByOthers(
+    withKeys.map((r) => ({ owner: (r.user_id ?? ownerFallback) as string, key: r.r2_key as string })),
+  )
+  return new Set(withKeys.filter((_, i) => verdicts[i]).map((r) => r.id))
+}
+
+/** A user's location keys minus those another user has a claim on. Throws on a
+ *  failed lookup (see `assetsClaimedByOthers`). */
+async function ownLocationKeys(userId: string, keys: string[]): Promise<{ keys: string[]; kept: number }> {
+  if (keys.length === 0) return { keys, kept: 0 }
+  const foreign = await keysClaimedByOthers(userId, keys)
+  const own = keys.filter((k) => !foreign.has(k))
+  return { keys: own, kept: keys.length - own.length }
 }
 
 /**
@@ -244,6 +275,7 @@ export async function cleanupFreeUserMedia(): Promise<CleanupResult> {
   let bytesFreed = 0
   let errors = 0
   let keysHeldBack = 0
+  let keysNotOwned = 0
 
   const cutoffDate = new Date()
   cutoffDate.setDate(cutoffDate.getDate() - MEDIA_RETENTION_DAYS)
@@ -331,9 +363,24 @@ export async function cleanupFreeUserMedia(): Promise<CleanupResult> {
       break
     }
 
+    // Whose file (see `assetsClaimedByOthers`): a row naming another user's
+    // object loses its key below like every reaped row, but the object stays.
+    let foreignRows: Set<string>
+    try {
+      foreignRows = await assetsClaimedByOthers(assets)
+    } catch (err) {
+      console.error("[cleanup] Free-user asset ownership lookup failed:", err)
+      errors++
+      break
+    }
+    keysNotOwned += foreignRows.size
+
     // Collect R2 keys and batch delete — minus anything our relay target
     // created (see the relay-delete note above).
-    const r2Keys = assets.map(a => a.r2_key).filter((k): k is string => !!k)
+    const r2Keys = assets
+      .filter(a => !foreignRows.has(a.id))
+      .map(a => a.r2_key)
+      .filter((k): k is string => !!k)
     const relayKept = await relayOwnedKeys(r2Keys)
     const batchResult = await batchDeleteFromR2(r2Keys.filter(k => !relayKept.has(k)))
     filesDeleted += batchResult.deleted
@@ -360,6 +407,9 @@ export async function cleanupFreeUserMedia(): Promise<CleanupResult> {
     const deltasByUser = new Map<string, number>()
     for (const asset of assets) {
       if (!asset.r2_key) continue
+      // Another user's object: its bytes were not freed, and this user was
+      // never charged for them (a planted row's size is whatever it says).
+      if (foreignRows.has(asset.id)) continue
       // Invariant 10a: the passthrough never incremented for a relay-owned
       // object, so decrementing here drives storage_used_bytes toward zero one
       // reaped row at a time. Its bytes are not freed either — they are still
@@ -469,15 +519,25 @@ export async function cleanupFreeUserMedia(): Promise<CleanupResult> {
   // Pass `cutoff` so ONLY locations past the 60-day retention grace are reaped —
   // matching Phase A1/A2 and protecting active free users' in-use media.
   for (const userId of freeUserIds) {
-    // Same relay fence the interactive twin (routes/locations.ts) already runs.
-    const locationKeys = await deletableKeys(await collectLocationR2Keys(userId, cutoff))
+    // Whose file first (a location's urls are the user's to write), then the
+    // same relay fence the interactive twin (routes/locations.ts) runs.
+    let owned: { keys: string[]; kept: number }
+    try {
+      owned = await ownLocationKeys(userId, await collectLocationR2Keys(userId, cutoff))
+    } catch (err) {
+      console.error(`[cleanup] Location ownership lookup failed for ${userId}:`, err)
+      errors++
+      continue
+    }
+    keysNotOwned += owned.kept
+    const locationKeys = await deletableKeys(owned.keys)
     if (locationKeys.length === 0) continue
     const batchResult = await batchDeleteFromR2(locationKeys)
     filesDeleted += batchResult.deleted
     errors += batchResult.errors
   }
 
-  console.log(`[cleanup] Deleted ${filesDeleted} files for free users (${bytesFreed} bytes freed, ${errors} errors, ${keysHeldBack} job-output keys outside their job's family kept)`)
+  console.log(`[cleanup] Deleted ${filesDeleted} files for free users (${bytesFreed} bytes freed, ${errors} errors, ${keysHeldBack} job-output keys outside their job's family kept, ${keysNotOwned} keys another user owns kept)`)
   return { filesDeleted, bytesFreed, errors }
 }
 
@@ -490,6 +550,7 @@ export async function cleanupCanceledUserMedia(): Promise<CleanupResult> {
   let bytesFreed = 0
   let errors = 0
   let keysHeldBack = 0
+  let keysNotOwned = 0
 
   const cutoffDate = new Date()
   cutoffDate.setDate(cutoffDate.getDate() - MEDIA_RETENTION_DAYS)
@@ -557,6 +618,9 @@ export async function cleanupCanceledUserMedia(): Promise<CleanupResult> {
 
     let userFilesDeleted = 0
     let userBytesFreed = 0
+    // Set when whose-file could not be answered: this user's wipe is then
+    // incomplete, so the downgrade below waits for the next run.
+    let ownershipFailed = false
 
     // Delete all user's R2 assets (batch)
     let hasMore = true
@@ -573,7 +637,22 @@ export async function cleanupCanceledUserMedia(): Promise<CleanupResult> {
         break
       }
 
-      const r2Keys = assets.map(a => a.r2_key).filter((k): k is string => !!k)
+      // Whose file (see `assetsClaimedByOthers`).
+      let foreignRows: Set<string>
+      try {
+        foreignRows = await assetsClaimedByOthers(assets, user.id)
+      } catch (err) {
+        console.error(`[cleanup] Asset ownership lookup failed for canceled user ${user.id}:`, err)
+        errors++
+        ownershipFailed = true
+        break
+      }
+      keysNotOwned += foreignRows.size
+
+      const r2Keys = assets
+        .filter(a => !foreignRows.has(a.id))
+        .map(a => a.r2_key)
+        .filter((k): k is string => !!k)
       const relayKept = await relayOwnedKeys(r2Keys)
       const batchResult = await batchDeleteFromR2(r2Keys.filter(k => !relayKept.has(k)))
       userFilesDeleted += batchResult.deleted
@@ -599,6 +678,7 @@ export async function cleanupCanceledUserMedia(): Promise<CleanupResult> {
         // either way, so only the reported figure is at stake — and it must not
         // claim bytes that are still in the bucket.
         if (asset.r2_key && relayKept.has(asset.r2_key)) continue
+        if (foreignRows.has(asset.id)) continue
         userBytesFreed += asset.size_bytes ?? 0
       }
 
@@ -667,7 +747,25 @@ export async function cleanupCanceledUserMedia(): Promise<CleanupResult> {
 
     // Locations sweep — same rationale as Phase A3 in cleanupFreeUserMedia.
     // Soft-deleted rows are skipped by collectLocationR2Keys.
-    const locationKeys = await deletableKeys(await collectLocationR2Keys(user.id))
+    let ownedLocationKeys: string[] = []
+    if (!ownershipFailed) {
+      try {
+        const owned = await ownLocationKeys(user.id, await collectLocationR2Keys(user.id))
+        ownedLocationKeys = owned.keys
+        keysNotOwned += owned.kept
+      } catch (err) {
+        console.error(`[cleanup] Location ownership lookup failed for canceled user ${user.id}:`, err)
+        errors++
+        ownershipFailed = true
+      }
+    }
+    if (ownershipFailed) {
+      // Not downgraded: the user still matches next run, which finishes the wipe.
+      filesDeleted += userFilesDeleted
+      bytesFreed += userBytesFreed
+      continue
+    }
+    const locationKeys = await deletableKeys(ownedLocationKeys)
     if (locationKeys.length > 0) {
       const batchResult = await batchDeleteFromR2(locationKeys)
       userFilesDeleted += batchResult.deleted
@@ -691,7 +789,7 @@ export async function cleanupCanceledUserMedia(): Promise<CleanupResult> {
     console.log(`[cleanup] Cleaned up canceled user ${user.id} -- ${userFilesDeleted} files deleted, downgraded to free`)
   }
 
-  console.log(`[cleanup] Canceled user cleanup: ${filesDeleted} files, ${bytesFreed} bytes freed across ${users.length} users (${errors} errors, ${keysHeldBack} job-output keys outside their job's family kept)`)
+  console.log(`[cleanup] Canceled user cleanup: ${filesDeleted} files, ${bytesFreed} bytes freed across ${users.length} users (${errors} errors, ${keysHeldBack} job-output keys outside their job's family kept, ${keysNotOwned} keys another user owns kept)`)
   return { filesDeleted, bytesFreed, errors }
 }
 
@@ -1003,7 +1101,7 @@ export async function sweepSoftDeletedLocationAssets(): Promise<LocationR2SweepR
   const { data: rows, error: queryErr } = await supabase
     .from("locations")
     .select(
-      "id, source_image_url, time_of_day, weather, seasons, angles, lighting, atmosphere_motions, reference_photos",
+      "id, user_id, source_image_url, time_of_day, weather, seasons, angles, lighting, atmosphere_motions, reference_photos",
     )
     .not("deleted_at", "is", null)
     .is("r2_assets_purged_at", null)
@@ -1054,10 +1152,21 @@ export async function sweepSoftDeletedLocationAssets(): Promise<LocationR2SweepR
       }
     }
 
+    // Whose file first: the row's urls are its owner's to write, so a url
+    // naming another user's object is never deleted for this row.
+    let owned: { keys: string[]; kept: number }
+    try {
+      owned = await ownLocationKeys(String(row.user_id ?? ""), keys)
+    } catch (err) {
+      console.error(`[cleanup] Location ownership lookup failed for location ${row.id}:`, err)
+      result.errors++
+      continue
+    }
+
     // The interactive twin (routes/locations.ts) already runs this fence; this
     // sweep harvests the identical columns and must not be the one path that
     // reaches a far-end object.
-    const deletable = await deletableKeys(keys)
+    const deletable = await deletableKeys(owned.keys)
     if (deletable.length > 0) {
       try {
         await batchDeleteFromR2(deletable)
