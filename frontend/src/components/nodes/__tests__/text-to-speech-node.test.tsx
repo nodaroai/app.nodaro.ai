@@ -21,12 +21,13 @@ vi.mock("@xyflow/react", () => ({
 }))
 
 vi.mock("../base-node", () => ({
-  BaseNode: ({ children, label, category, credits, id, isRunning, handles }: any) => (
+  BaseNode: ({ children, label, category, credits, creditsRange, id, isRunning, handles }: any) => (
     <div
       data-testid="base-node"
       data-label={label}
       data-category={category}
       data-credits={credits}
+      data-credits-range={creditsRange ? `${creditsRange.min}-${creditsRange.max}` : undefined}
       data-id={id}
       data-is-running={isRunning}
     >
@@ -76,14 +77,20 @@ vi.mock("@/hooks/use-workflow-store", () => ({
   ),
 }))
 
-// Records the model id the card prices, so a test can check it is the model the node runs as.
+// Records the flat row the node prices (the real `speechFlatId` over the data
+// the node hands the hook), so a test can check it is the model the node runs
+// as; a connected text answers a range, the way the hook does under length pricing.
 const pricedModel = vi.hoisted(() => ({ ids: [] as string[] }))
-vi.mock("@/ee/hooks/use-model-credits", () => ({
-  useModelCredits: (id: string) => {
-    pricedModel.ids.push(id)
-    return 1
-  },
-}))
+vi.mock("@/ee/hooks/use-speech-pricing", async () => {
+  const { speechFlatId } = await import("@/lib/speech-estimate")
+  return {
+    useSpeechPricing: (_id: string, type: string, data: Record<string, unknown>) => {
+      pricedModel.ids.push(speechFlatId(type, data))
+      if (data.textSource === "connected") return { credits: 400, exact: false, range: { min: 32, max: 400 } }
+      return { credits: 1, exact: true }
+    },
+  }
+})
 
 vi.mock("@/lib/tts-voices", () => ({
   getVoiceName: vi.fn(() => "Rachel"),
@@ -148,6 +155,22 @@ describe("TextToSpeechNode", () => {
     pricedModel.ids = []
     renderNode({ data: { label: "Text to Speech", provider: "elevenlabs-turbo" } })
     expect(new Set(pricedModel.ids)).toEqual(new Set(["elevenlabs-turbo"]))
+  })
+
+  // Speech by length (decided 2026-10-06): a text that arrives at run time is a
+  // RANGE on the pill (floor … ceiling), shown instead of one number.
+  it("a connected text shows the range chip instead of a number", () => {
+    renderNode({ data: { label: "Text to Speech", textSource: "connected", provider: "elevenlabs-v4" } })
+    const baseNode = screen.getByTestId("base-node")
+    expect(baseNode).toHaveAttribute("data-credits-range", "32-400")
+    expect(baseNode.getAttribute("data-credits")).toBeNull()
+  })
+
+  it("a literal text shows one number and no range", () => {
+    renderNode({ data: { label: "Text to Speech", textSource: "direct", directText: "hello" } })
+    const baseNode = screen.getByTestId("base-node")
+    expect(baseNode).toHaveAttribute("data-credits", "1")
+    expect(baseNode.getAttribute("data-credits-range")).toBeNull()
   })
 
   it("renders with empty data and shows placeholder mic icon", () => {

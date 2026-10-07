@@ -41,10 +41,16 @@ import { retainedOutputOfFailedJob } from "../../services/workflow-engine/failed
  * Only touches node_states entries whose current status is "running" or
  * "pending". Leaves everything else alone — no false positives on
  * actively-processing jobs.
+ *
+ * Both paths read only the execution owner's jobs (`ownerId`, decided
+ * 2026-10-06; migration 474). A job id in node_states and a job row naming the
+ * execution are pointers, not proof: what this function reads becomes the
+ * node's status and output, which the owner then sees.
  */
 export async function reconcileNodeStatesFromJobs(
   states: Record<string, NodeExecutionState>,
-  executionId?: string,
+  executionId: string,
+  ownerId: string,
 ): Promise<{ next: Record<string, NodeExecutionState>; changed: boolean }> {
   const stillActive = new Set<string>()
   const jobIdToNodeId = new Map<string, string>()
@@ -111,6 +117,7 @@ export async function reconcileNodeStatesFromJobs(
       .from("jobs")
       .select("id, status, error_message, output_data")
       .in("id", jobIds)
+      .eq("user_id", ownerId)
     if (jobs) {
       for (const job of jobs) {
         const nodeId = jobIdToNodeId.get(job.id as string)
@@ -140,6 +147,7 @@ export async function reconcileNodeStatesFromJobs(
       .from("jobs")
       .select("id, status, error_message, output_data, node_id:input_data->>node_id")
       .eq("workflow_execution_id", executionId)
+      .eq("user_id", ownerId)
       .in("status", ["completed", "failed", "cancelled"])
     if (scopedJobs && scopedJobs.length > 0) {
       for (const job of scopedJobs) {

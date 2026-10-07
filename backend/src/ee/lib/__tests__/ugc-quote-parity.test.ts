@@ -10,6 +10,14 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
  * injected default, or a route that changes its reservation id, fails here.
  */
 const guard = vi.hoisted(() => ({ id: undefined as string | undefined, base: undefined as number | undefined }))
+// SPEECH_LENGTH_PRICING_ENABLED: the text-to-speech route reads it at
+// REGISTRATION (its guard gets computeCredits only while on), the quote rule at
+// call time. Off for the main table; a second route instance is registered on.
+const flag = vi.hoisted(() => ({ on: false }))
+vi.mock("@/lib/config.js", async (importOriginal) => {
+  const orig = await importOriginal<typeof import("@/lib/config.js")>()
+  return { ...orig, speechLengthPricingEnabled: () => flag.on }
+})
 
 vi.mock("@/middleware/credit-guard.js", () => ({
   creditGuard:
@@ -47,6 +55,8 @@ vi.mock("@/lib/supabase.js", () => ({
 
 const { pricingFor } = await import("../ugc-quote.js")
 const { STATIC_CREDIT_COSTS } = await import("@/ee/billing/credits.js")
+const { SPEECH_PARITY_CASES } = await import("@/lib/__tests__/speech-parity-cases.js")
+const { getMaxTtsChars, canonicalTtsProvider } = await import("@nodaro/shared")
 const { registerVerbs } = await import("@/lib/mcp/tools/verbs.js")
 const { buildServer, callTool, executeSession } = await import("@/lib/mcp/tools/__tests__/_helpers.js")
 const { textToVideoRoutes } = await import("@/routes/text-to-video.js")
@@ -60,6 +70,8 @@ const { transcribeRoutes } = await import("@/routes/transcribe.js")
 const { videoOverlayRoutes } = await import("@/routes/video-overlay.js")
 const { addCaptionsRoutes } = await import("@/routes/add-captions.js")
 const { silenceDetectRoutes } = await import("@/routes/silence-detect.js")
+const { generateImageRoutes } = await import("@/routes/generate-image.js")
+const { imageToImageRoutes } = await import("@/routes/image-to-image.js")
 
 const URLS: Record<string, string> = {
   generate_video: "/v1/text-to-video",
@@ -73,6 +85,8 @@ const URLS: Record<string, string> = {
   overlay_images: "/v1/video-overlay",
   add_captions: "/v1/add-captions",
   silence_detect: "/v1/silence-detect",
+  generate_image: "/v1/generate-image",
+  image_to_image: "/v1/image-to-image",
 }
 
 const VIDEO = "https://cdn.example/clip.mp4"
@@ -87,6 +101,7 @@ const IMAGE = "https://cdn.example/still.png"
 const CASES: Array<{ tool: string; quoted: Record<string, unknown>; added: Record<string, unknown>; clipCount?: number; computed?: boolean }> = [
   { tool: "generate_video", computed: true, quoted: { prompt: "a person talks", model: "seedance-2-5", aspect_ratio: "16:9", duration: 8, resolution: "720p", reference_image_urls: [IMAGE, "https://cdn.example/b.png"] }, added: {} },
   { tool: "generate_video", computed: true, quoted: { prompt: "a person talks", model: "seedance-2-5", aspect_ratio: "16:9", duration: 5, resolution: "720p", reference_image_urls: [IMAGE] }, added: { reference_audio_urls: ["https://cdn.example/sound.mp3"] } },
+  { tool: "generate_video", computed: true, quoted: { prompt: "a person talks", model: "minimax-h3", aspect_ratio: "9:16", duration: 7, resolution: "768P", reference_image_urls: [IMAGE] }, added: { reference_audio_urls: ["https://cdn.example/segment.mp3"] } },
   { tool: "extract_frame", quoted: { mode: "timestamp", time_seconds: 2 }, added: { video_url: VIDEO } },
   { tool: "image_collage", quoted: { resolution: "2K", layout: "grid" }, added: { images: [{ url: IMAGE }, { url: IMAGE }, { url: IMAGE }] } },
   { tool: "image_to_text", quoted: { custom_prompt: "Answer yes or no." }, added: { image_url: IMAGE } },
@@ -98,6 +113,12 @@ const CASES: Array<{ tool: string; quoted: Record<string, unknown>; added: Recor
   { tool: "add_captions", quoted: { segments: [{ style: "subtitle" }, { style: "word-highlight" }] }, added: { video_url: VIDEO } },
   { tool: "generate_speech", quoted: { text: "hello there", model: "elevenlabs-v3" }, added: { voice_id: "Rachel" } },
   { tool: "silence_detect", quoted: {}, added: { audio_url: VIDEO } },
+  // The creator image and the realism pass: the quote rule maps the call with ugcCallToRouteBody and asks the route's own id function.
+  { tool: "generate_image", quoted: { prompt: "a person", model: "nano-banana-pro", aspect_ratio: "3:4", resolution: "1K" }, added: {} },
+  { tool: "generate_image", quoted: { prompt: "a person", model: "gpt-image-2", aspect_ratio: "3:4", resolution: "2K" }, added: {} },
+  { tool: "generate_image", quoted: { prompt: "a person", model: "qwen", aspect_ratio: "3:4" }, added: {} },
+  { tool: "image_to_image", quoted: { prompt: "make it real", model: "gpt-image-2", resolution: "2K" }, added: { image_url: IMAGE } },
+  { tool: "image_to_image", quoted: { prompt: "make it real", model: "qwen-i2i" }, added: { image_url: IMAGE } },
 ]
 
 /** The verb receives `segments` WITH times (the real call's); the quote item carries them without. */
@@ -110,6 +131,8 @@ function verbArgs(c: (typeof CASES)[number]): Record<string, unknown> {
 let captured: { url?: string; body?: Record<string, unknown> }
 let verbsFastify: FastifyInstance
 let routes: FastifyInstance
+/** The text-to-speech route registered with length pricing ON. */
+let speechRoutesOn: FastifyInstance
 
 beforeAll(async () => {
   verbsFastify = Fastify()
@@ -120,10 +143,15 @@ beforeAll(async () => {
     })
   }
   routes = Fastify({ logger: false })
-  for (const plugin of [textToVideoRoutes, textToSpeechRoutes, extractFrameRoutes, imageCollageRoutes, imageToTextRoutes, combineVideosRoutes, forcedAlignmentRoutes, transcribeRoutes, videoOverlayRoutes, addCaptionsRoutes, silenceDetectRoutes]) {
+  for (const plugin of [textToVideoRoutes, textToSpeechRoutes, extractFrameRoutes, imageCollageRoutes, imageToTextRoutes, combineVideosRoutes, forcedAlignmentRoutes, transcribeRoutes, videoOverlayRoutes, addCaptionsRoutes, silenceDetectRoutes, generateImageRoutes, imageToImageRoutes]) {
     await routes.register(plugin)
   }
   await routes.ready()
+  flag.on = true
+  speechRoutesOn = Fastify({ logger: false })
+  await speechRoutesOn.register(textToSpeechRoutes)
+  await speechRoutesOn.ready()
+  flag.on = false
 })
 
 beforeEach(() => {
@@ -143,12 +171,82 @@ describe("the UGC quote reserves what each route reserves", () => {
     const res = await routes.inject({ method: "POST", url: URLS[c.tool]!, payload: captured.body })
     expect(res.statusCode, res.body).toBe(299)
 
-    const quoted = pricingFor(c.tool, c.quoted, { clipCount: c.clipCount ?? 1 })
+    const quoted = await pricingFor(c.tool, c.quoted, { clipCount: c.clipCount ?? 1 })
     expect(quoted?.id).toBe(guard.id)
     if (c.computed) expect(typeof guard.base, "a computed route must yield a base").toBe("number")
     // A quote-side computed base must equal the route's; a route that computes
     // while the quote reads the row must compute exactly that row's base.
     if (quoted?.base !== undefined) expect(guard.base).toBe(quoted.base)
     else if (guard.base !== undefined) expect(guard.base).toBe(STATIC_CREDIT_COSTS[quoted!.id])
+  })
+})
+
+// Length-based speech pricing (decided 2026-10-06): while the flag is on, the
+// route's guard computes a BASE for the text it is sent (started hundreds × the
+// model's unit row, at least 8 units) and the quote must compute the same number
+// from the same text; while off, neither computes anything (the row is read).
+describe("generate_speech by length — the quote's base is the route guard's base", () => {
+  const speech = { text: "a".repeat(1000), model: "elevenlabs-v3" }
+
+  it("flag on: a 1,000-character v3 request is 10 × 4 on both sides", async () => {
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify: verbsFastify })
+    const result = await callTool(server, "generate_speech", { ...speech, voice_id: "Rachel" })
+    expect(result.isError, JSON.stringify(result.content)).toBeUndefined()
+
+    const res = await speechRoutesOn.inject({ method: "POST", url: "/v1/text-to-speech", payload: captured.body })
+    expect(res.statusCode, res.body).toBe(299)
+    expect(guard.id).toBe("elevenlabs-v3")
+    expect(guard.base).toBe(40)
+
+    flag.on = true
+    try {
+      expect(await pricingFor("generate_speech", speech, { clipCount: 1 })).toEqual({ id: "elevenlabs-v3", base: 40 })
+    } finally {
+      flag.on = false
+    }
+  })
+
+  // The one parity table (lib/__tests__/speech-parity-cases.ts), through the verb
+  // and the flag-on route: every case the verb accepts (a named model, text within
+  // its cap and the tool's 10,000-character schema cap) quotes the guard's base.
+  const verbCases = SPEECH_PARITY_CASES.filter(([provider, text]) => provider !== undefined && text.length > 0 && text.length <= 10_000 && text.length <= getMaxTtsChars(canonicalTtsProvider(provider)))
+  it.each(verbCases)("flag on, %j: the quote's base is the guard's base for the text the verb sends", async (provider, text) => {
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify: verbsFastify })
+    const result = await callTool(server, "generate_speech", { text, model: provider, voice_id: "Rachel" })
+    expect(result.isError, JSON.stringify(result.content)).toBeUndefined()
+    const res = await speechRoutesOn.inject({ method: "POST", url: "/v1/text-to-speech", payload: captured.body })
+    expect(res.statusCode, res.body).toBe(299)
+    expect(typeof guard.base).toBe("number")
+    flag.on = true
+    try {
+      const quoted = await pricingFor("generate_speech", { text, model: provider }, { clipCount: 1 })
+      expect(quoted?.id).toBe(guard.id)
+      expect(quoted?.base).toBe(guard.base)
+    } finally {
+      flag.on = false
+    }
+  })
+
+  it("flag off: the quote carries no base and the route's guard computes none — the row is read on both sides", async () => {
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify: verbsFastify })
+    await callTool(server, "generate_speech", { ...speech, voice_id: "Rachel" })
+    const res = await routes.inject({ method: "POST", url: "/v1/text-to-speech", payload: captured.body })
+    expect(res.statusCode, res.body).toBe(299)
+    expect(guard.base).toBeUndefined()
+    expect(await pricingFor("generate_speech", speech, { clipCount: 1 })).toEqual({ id: "elevenlabs-v3" })
+  })
+})
+
+describe("the lane's clip request keeps its wire values through the verb", () => {
+  it("minimax-h3 / 7 s / 768P is priced as the 768P composite, and a lower-case resolution is not what the verb sends", async () => {
+    const quoted = await pricingFor("generate_video", { prompt: "p", model: "minimax-h3", aspect_ratio: "9:16", duration: 7, resolution: "768P", reference_image_urls: [IMAGE] }, { clipCount: 1 })
+    expect(quoted?.id).toBe("minimax-h3:7s:768p")
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify: verbsFastify })
+    await callTool(server, "generate_video", { prompt: "p", model: "minimax-h3", aspect_ratio: "9:16", duration: 7, resolution: "768P", reference_image_urls: [IMAGE], reference_audio_urls: ["https://cdn.example/segment.mp3"] })
+    expect(captured.body).toMatchObject({ provider: "minimax-h3", resolution: "768P", duration: 7, aspectRatio: "9:16", referenceAudioUrls: ["https://cdn.example/segment.mp3"] })
   })
 })

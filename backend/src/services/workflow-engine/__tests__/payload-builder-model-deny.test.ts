@@ -93,6 +93,33 @@ describe("buildPayload — MODEL deny checks the EFFECTIVE dispatched provider (
     expect(result.payload.provider).toBe("elevenlabs-turbo")
   })
 
+  it("a text-to-dialogue node is denied on the model it RUNS as: an unset or unknown provider dispatches v3 dialogue, so denying v3 dialogue refuses it", () => {
+    // The dialogue case dispatches and bills `dialogueProviderOf(data.provider)`;
+    // the deny check must read the same resolved id, or a node that simply
+    // omits `provider` (every node saved before the field existed) runs and
+    // bills a model the deployment declared unavailable.
+    process.env.NODARO_SURFACE_PROFILE = JSON.stringify({ models: { deny: ["elevenlabs-dialogue"] } })
+    __resetSurfaceProfileCacheForTests()
+    for (const provider of [undefined, "nope", "constructor"]) {
+      const n: SimpleNode = { id: "dlg-1", type: "text-to-dialogue", data: { dialogue: [{ id: "1", text: "Hi", voice: "Rachel" }], provider } }
+      try {
+        buildPayload(n, "job-dlg-deny-1", {}, undefined, ctx(n))
+        expect.unreachable(`buildPayload should have thrown for provider ${String(provider)}`)
+      } catch (e) {
+        expect((e as { code?: string }).code, String(provider)).toBe("model_not_available")
+        expect((e as Error).message, String(provider)).toMatch(/elevenlabs-dialogue/)
+      }
+    }
+  })
+
+  it("does NOT deny a text-to-dialogue node when only a text-to-speech model is denied", () => {
+    process.env.NODARO_SURFACE_PROFILE = JSON.stringify({ models: { deny: ["elevenlabs-v3"] } })
+    __resetSurfaceProfileCacheForTests()
+    const n: SimpleNode = { id: "dlg-2", type: "text-to-dialogue", data: { dialogue: [{ id: "1", text: "Hi", voice: "Rachel" }] } }
+    const result = buildPayload(n, "job-dlg-allow-1", {}, undefined, ctx(n))
+    expect(result.modelIdentifier).toBe("elevenlabs-dialogue")
+  })
+
   it("does NOT falsely deny a NON-TTS node that merely carries an unrelated resolvedInputs.provider (no over-reach)", () => {
     // generate-image dispatches on data.provider ONLY. A stray (denied)
     // resolvedInputs.provider must not gate it — the helper deliberately reads

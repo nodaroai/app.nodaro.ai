@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import Fastify from "fastify"
 import { newSession } from "../../session.js"
@@ -199,6 +201,67 @@ describe("browse_uploads tool", () => {
     expect(items[0]?.assetUrl).toBe("https://cdn/cat.jpg")
     expect(items[0]?.thumbnailUrl).toBe("https://cdn/thumb-cat.jpg")
     expect(sc?.loadMoreTool).toBe("browse_uploads")
+  })
+
+  it("labels a render made at proxy quality as a Preview (A1b), from the asset's own record", async () => {
+    ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
+      makeChainable([
+        { id: "a-prev", type: "video", filename: "cut.mp4", mime_type: "video/mp4", size_bytes: 1, r2_url: "https://cdn/cut.mp4", metadata: { thumbnail_url: "https://cdn/t.jpg", quality: "proxy" }, created_at: "2026-10-05T10:00:00Z" },
+        { id: "a-final", type: "video", filename: "final.mp4", mime_type: "video/mp4", size_bytes: 1, r2_url: "https://cdn/final.mp4", metadata: { quality: "final" }, created_at: "2026-10-05T09:00:00Z" },
+      ]),
+    )
+    const server = buildServer()
+    registerGallery({ server, session: readSession(), fastify: Fastify() })
+    const result = await callTool(server, "browse_uploads", { limit: 10 })
+    const items = (result as { structuredContent?: { items?: Array<Record<string, unknown>> } }).structuredContent?.items ?? []
+    expect(items[0]?.preview).toBe(true)
+    expect(items[1]?.preview).toBeUndefined()
+    expect(result.content[0]?.text).toContain("- video (preview) a-prev")
+    expect(result.content[0]?.text).toContain("- video a-final")
+  })
+
+  describe("a render recorded before its label was stored (decided 2026-10-05)", () => {
+    function seedTables(assets: unknown[], jobs: unknown[]) {
+      const jobSelects: string[] = []
+      ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockImplementation((table: string) => {
+        if (table === "jobs") return makeChainable(jobs, jobSelects)
+        return makeChainable(assets)
+      })
+      return jobSelects
+    }
+    const upload = (over: Record<string, unknown>) => ({
+      id: "a", type: "video", filename: "cut.mp4", mime_type: "video/mp4", size_bytes: 1, r2_url: "https://cdn/cut.mp4",
+      metadata: { thumbnail_url: "https://cdn/t.jpg" }, created_at: "2026-10-05T10:00:00Z", job_id: "j1", ...over,
+    })
+
+    it("takes the label from the job that made the file, with one lookup", async () => {
+      const jobSelects = seedTables(
+        [upload({ id: "a-old", job_id: "j1" }), upload({ id: "a-old-final", job_id: "j2" })],
+        [
+          { id: "j1", job_type: "apply-edl", input_quality: "proxy", out_quality: null },
+          { id: "j2", job_type: "apply-edl", input_quality: "final", out_quality: null },
+        ],
+      )
+      const server = buildServer()
+      registerGallery({ server, session: readSession(), fastify: Fastify() })
+      const result = await callTool(server, "browse_uploads", { limit: 10 })
+      const items = (result as { structuredContent?: { items?: Array<Record<string, unknown>> } }).structuredContent?.items ?? []
+      expect(items[0]?.preview).toBe(true)
+      expect(items[1]?.preview).toBeUndefined()
+      expect(result.content[0]?.text).toContain("- video (preview) a-old")
+      expect(jobSelects).toHaveLength(1)
+    })
+
+    it("makes no jobs lookup when every file carries its label", async () => {
+      const jobSelects = seedTables(
+        [upload({ id: "a1", metadata: { quality: "proxy" } }), upload({ id: "a2", metadata: { quality: "final" } })],
+        [],
+      )
+      const server = buildServer()
+      registerGallery({ server, session: readSession(), fastify: Fastify() })
+      await callTool(server, "browse_uploads", { limit: 10 })
+      expect(jobSelects).toHaveLength(0)
+    })
   })
 
   it("hands a loadMoreTool hint to the gallery widget", async () => {
@@ -667,6 +730,101 @@ describe("get_app_run tool", () => {
     expect(result.content[0]?.text).not.toMatch(/invalid input syntax/)
     expect(supabase.from).not.toHaveBeenCalled()
   })
+
+  it("reads the whole run: outcome, every node's text / media / skip reason, the labels from the workflow, and the output URLs", async () => {
+    const execution = {
+      id: JOB_UUID,
+      status: "completed",
+      workflow_id: JOB_UUID_2,
+      error_message: null,
+      user_id: "u1",
+      node_states: {
+        feed: { status: "completed", nodeType: "telegram-channel-feed", output: { text: "" } },
+        llm: { status: "skipped", nodeType: "llm-chat", skipReason: "empty_input" },
+        img: { status: "completed", nodeType: "generate-image", jobId: "job-img", output: { imageUrl: "https://cdn.test/a.png", imageUrls: ["https://cdn.test/a.png", "https://cdn.test/b.png"] } },
+      },
+    }
+    const workflow = { nodes: [{ id: "feed", type: "telegram-channel-feed", data: { label: "Tech news" } }, { id: "llm", type: "llm-chat", data: { label: "Writer" } }, { id: "img", type: "generate-image", data: { label: "Cover" } }] }
+    ;(supabase.from as unknown as ReturnType<typeof vi.fn>)
+      .mockReturnValueOnce(makeChainableSingle(execution))
+      .mockReturnValueOnce(makeChainableSingle(workflow))
+      .mockReturnValueOnce(makeChainable([{ id: "job-img", input_data: { prompt: "a cover", provider: "gpt-image-2" }, provider: "gpt-image-2", completed_at: "2026-10-06T10:00:00Z", created_at: "2026-10-06T09:59:00Z" }]))
+    const server = buildServer()
+    registerGallery({ server, session: readSession(), fastify: Fastify() })
+    const result = await callTool(server, "get_app_run", { execution_id: JOB_UUID })
+    expect(result.isError).toBeUndefined()
+    const sc = result.structuredContent as {
+      status: string
+      outcome?: string
+      errorMessage: string | null
+      summary: { total: number; completed: number; skipped: number; skippedForEmptyInput: number }
+      nodeStates: Array<{ id: string; label?: string; status: string; skipReason?: string; media?: Array<{ kind: string; url: string }> }>
+      outputs: Array<{ kind: string; url: string; prompt?: string; model?: string }>
+    }
+    expect(sc.status).toBe("completed")
+    expect(sc.outcome).toBe("nothing_new")
+    expect(sc.errorMessage).toBeNull()
+    expect(sc.summary).toMatchObject({ total: 3, completed: 2, skipped: 1, skippedForEmptyInput: 1 })
+    expect(sc.nodeStates.map((n) => [n.id, n.label, n.status])).toEqual([
+      ["feed", "Tech news", "completed"],
+      ["llm", "Writer", "skipped"],
+      ["img", "Cover", "completed"],
+    ])
+    expect(sc.nodeStates[1]?.skipReason).toBe("empty_input")
+    expect(sc.nodeStates[2]?.media).toEqual([
+      { kind: "image", url: "https://cdn.test/a.png" },
+      { kind: "image", url: "https://cdn.test/b.png" },
+    ])
+    // Every media URL is an output, enriched from its job.
+    expect(sc.outputs.map((o) => o.url)).toEqual(["https://cdn.test/a.png", "https://cdn.test/b.png"])
+    expect(sc.outputs[0]).toMatchObject({ kind: "image", prompt: "a cover", model: "gpt-image-2" })
+    // The text reply carries the same reading.
+    expect(result.content[0]?.text).toContain('"outcome": "nothing_new"')
+  })
+
+  it("attacker: a node_states jobId naming another user's job adds none of its prompt or model", async () => {
+    // node_states was client-writable before 474, so a jobId in it is a
+    // pointer: the enrichment reads the caller's own jobs only.
+    const execution = {
+      id: JOB_UUID,
+      status: "completed",
+      workflow_id: JOB_UUID_2,
+      created_at: "2026-10-06T09:00:00Z",
+      completed_at: "2026-10-06T10:00:00Z",
+      error_message: null,
+      user_id: "u1",
+      node_states: {
+        img: { status: "completed", nodeType: "generate-image", jobId: "job-planted", output: { imageUrl: "https://cdn.test/mine.png" } },
+      },
+    }
+    const jobFilters: Array<Record<string, unknown>> = []
+    const victimJob = { id: "job-planted", user_id: "victim", input_data: { prompt: "victim's private prompt" }, provider: "victim-model", completed_at: "2026-10-01T10:00:00Z", created_at: "2026-10-01T09:00:00Z" }
+    const jobsChain = () => {
+      const filters: Record<string, unknown> = {}
+      const q: Record<string, unknown> = {}
+      q.select = () => q
+      q.in = () => q
+      q.eq = (col: string, v: unknown) => { filters[col] = v; return q }
+      q.then = (res: (v: unknown) => unknown, rej?: (e: unknown) => unknown) => {
+        jobFilters.push({ ...filters })
+        const rows = [victimJob].filter((r) => filters.user_id === undefined || r.user_id === filters.user_id)
+        return Promise.resolve({ data: rows, error: null }).then(res, rej)
+      }
+      return q
+    }
+    ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockImplementation((table: string) =>
+      table === "jobs" ? jobsChain() : makeChainableSingle(table === "workflow_executions" ? execution : null))
+    const server = buildServer()
+    registerGallery({ server, session: readSession(), fastify: Fastify() })
+    const result = await callTool(server, "get_app_run", { execution_id: JOB_UUID })
+    expect(result.isError).toBeUndefined()
+    expect(jobFilters).toEqual([{ user_id: "u1" }])
+    const sc = result.structuredContent as { outputs: Array<{ url: string; prompt?: string; model?: string }> }
+    expect(sc.outputs.map((o) => o.url)).toEqual(["https://cdn.test/mine.png"])
+    expect(sc.outputs[0]?.prompt).toBeUndefined()
+    expect(sc.outputs[0]?.model).toBeUndefined()
+    expect(JSON.stringify(result)).not.toContain("victim")
+  })
 })
 
 describe("favorite_asset tool", () => {
@@ -746,5 +904,236 @@ describe("favorite_asset tool", () => {
     })
     const tools = await listTools(server)
     expect(tools.map((t) => t.name)).not.toContain("favorite_asset")
+  })
+})
+
+// ── The Preview label on an old render (round 2 review, decided 2026-10-06) ──
+// get_asset and display_asset read the same job get_job reads, so they must
+// agree about it: the label an old render lacks is filled from the order, and a
+// Preview is marked `preview: true`.
+describe("get_asset and display_asset agree with get_job about a Preview render", () => {
+  const render = (over: Record<string, unknown> = {}) => ({
+    id: "edl1",
+    user_id: "u1",
+    status: "completed",
+    job_type: "apply-edl",
+    progress: 100,
+    input_data: { quality: "proxy" },
+    output_data: { videoUrl: "https://r2/cut.mp4" },
+    error_message: null,
+    ...over,
+  })
+  const use = (row: unknown) =>
+    (supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValue(makeChainableSingle(row))
+
+  it("get_asset: an old render ordered at proxy reads back as a Preview, label filled in the text and the envelope", async () => {
+    use(render())
+    const server = buildServer()
+    registerGallery({ server, session: readSession(), fastify: Fastify() })
+    const result = await callTool(server, "get_asset", { job_id: JOB_UUID })
+    const sc = (result as { structuredContent?: { outputData?: Record<string, unknown>; preview?: boolean } }).structuredContent
+    expect(sc?.outputData?.quality).toBe("proxy")
+    expect(sc?.preview).toBe(true)
+    const text = JSON.parse(result.content[0]?.text as string) as { data: { output_data: Record<string, unknown> } }
+    expect(text.data.output_data.quality).toBe("proxy")
+  })
+
+  it("get_asset: the final is labelled final and never a Preview; a stored label wins; another job type is left alone", async () => {
+    const server = buildServer()
+    registerGallery({ server, session: readSession(), fastify: Fastify() })
+    type Sc = { outputData?: Record<string, unknown>; preview?: boolean }
+    const read = async () =>
+      ((await callTool(server, "get_asset", { job_id: JOB_UUID })) as { structuredContent?: Sc }).structuredContent
+
+    use(render({ input_data: { quality: "final" } }))
+    const final = await read()
+    expect(final?.outputData?.quality).toBe("final")
+    expect(final?.preview).toBeUndefined()
+
+    use(render({ input_data: { quality: "final" }, output_data: { videoUrl: "https://r2/cut.mp4", quality: "proxy" } }))
+    expect((await read())?.preview).toBe(true)
+
+    use(render({ job_type: "generate-video" }))
+    const other = await read()
+    expect(other?.outputData).not.toHaveProperty("quality")
+    expect(other?.preview).toBeUndefined()
+  })
+
+  it("get_asset declares `preview` in its outputSchema", async () => {
+    const server = buildServer()
+    registerGallery({ server, session: readSession(), fastify: Fastify() })
+    const tool = (await listTools(server)).find((t) => t.name === "get_asset")
+    const schema = (tool as { outputSchema?: { properties?: Record<string, unknown> } } | undefined)?.outputSchema
+    expect(schema?.properties).toHaveProperty("preview")
+  })
+
+  it("display_asset: an old render ordered at proxy is marked a Preview; the final and other jobs are not", async () => {
+    const server = buildServer()
+    registerGallery({ server, session: readSession(), fastify: Fastify() })
+    const show = async (row: unknown) => {
+      use(row)
+      return ((await callTool(server, "display_asset", { job_id: JOB_UUID })) as { structuredContent?: { preview?: boolean } }).structuredContent
+    }
+    expect((await show(render()))?.preview).toBe(true)
+    expect((await show(render({ input_data: { quality: "final" } })))?.preview).toBeUndefined()
+    expect((await show(render({ job_type: "generate-video" })))?.preview).toBeUndefined()
+  })
+})
+
+// ── Apply EDL renders in the owner's own gallery views (round 3, decided 2026-10-06) ──
+// browse_gallery scope=mine and list_favorites list a render (a Preview marked);
+// the public scope never does — a Preview is private and a public final would be
+// exposure nobody decided. A render's kind is its output's medium, per job.
+describe("Apply EDL renders in the gallery tools", () => {
+  interface Call { method: string; args: unknown[] }
+
+  /** Like makeChainable, but records every call so a test can say what was asked for. */
+  function recording(rows: unknown[]) {
+    const calls: Call[] = []
+    const result = { data: rows, error: null, count: rows.length }
+    const chain: unknown = new Proxy(function () {}, {
+      get(_t, prop) {
+        if (prop === "then") return (resolve: (v: unknown) => void) => resolve(result)
+        return (...args: unknown[]) => {
+          calls.push({ method: String(prop), args })
+          return chain
+        }
+      },
+      apply() {
+        return chain
+      },
+    })
+    ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockReturnValue(chain)
+    return calls
+  }
+  const asked = (calls: Call[]) => JSON.stringify(calls.filter((c) => c.method === "in" || c.method === "or").map((c) => c.args))
+
+  const edl = (id: string, over: Record<string, unknown> = {}) => ({
+    id,
+    user_id: "u1",
+    job_type: "apply-edl",
+    input_data: { quality: "proxy", output: "video" },
+    output_data: { videoUrl: `https://r2/${id}.mp4`, thumbnailUrl: `https://r2/${id}.jpg` },
+    completed_at: "2026-10-06T10:00:00Z",
+    created_at: "2026-10-06T10:00:00Z",
+    provider: null,
+    status: "completed",
+    ...over,
+  })
+  const mix = (id: string) =>
+    edl(id, { input_data: { quality: "final", output: "audio" }, output_data: { audioUrl: `https://r2/${id}.m4a` } })
+  const generated = {
+    id: "g1",
+    user_id: "u1",
+    job_type: "generate-image",
+    input_data: { prompt: "knight" },
+    output_data: { imageUrl: "https://r2/g1.png" },
+    completed_at: "2026-10-06T09:00:00Z",
+    created_at: "2026-10-06T09:00:00Z",
+    provider: "nano-banana",
+    status: "completed",
+  }
+  const browse = async (args: Record<string, unknown>) => {
+    const server = buildServer()
+    registerGallery({ server, session: readSession(), fastify: Fastify() })
+    const result = await callTool(server, "browse_gallery", args)
+    const sc = (result as { structuredContent?: { items?: Array<Record<string, any>> } }).structuredContent
+    return { text: result.content[0]?.text as string, items: sc?.items ?? [] }
+  }
+
+  describe("browse_gallery scope=mine", () => {
+    it("asks for them under the video and audio kinds, never the image kind", async () => {
+      for (const [kinds, expected] of [[["video"], true], [["audio"], true], [["image"], false], [["image", "video", "audio"], true]] as const) {
+        const calls = recording([])
+        await browse({ scope: "mine", kinds })
+        expect(asked(calls).includes("apply-edl"), JSON.stringify(kinds)).toBe(expected)
+      }
+    })
+
+    it("lists a cut as a video and a mix as audio, a proxy render marked a Preview, in the items and the text", async () => {
+      recording([edl("prev"), edl("fin", { input_data: { quality: "final", output: "video" } }), mix("mx"), generated])
+      const { text, items } = await browse({ scope: "mine", kinds: ["image", "video", "audio"] })
+      expect(items.map((i) => [i.jobId, i.kind, i.preview ?? false])).toEqual([
+        ["prev", "video", true],
+        ["fin", "video", false],
+        ["mx", "audio", false],
+        ["g1", "image", false],
+      ])
+      expect(items[0]).toMatchObject({ assetUrl: "https://r2/prev.mp4", thumbnailUrl: "https://r2/prev.jpg" })
+      expect(text).toContain("prev: video (preview)")
+      expect(text).toContain("fin: video —")
+      expect(text).toContain("mx: audio —")
+    })
+
+    it("the kind filter keeps the right medium: a mix is not listed under video, a cut not under audio", async () => {
+      recording([edl("cut"), mix("mx")])
+      expect((await browse({ scope: "mine", kinds: ["video"] })).items.map((i) => i.jobId)).toEqual(["cut"])
+      recording([edl("cut"), mix("mx")])
+      expect((await browse({ scope: "mine", kinds: ["audio"] })).items.map((i) => i.jobId)).toEqual(["mx"])
+    })
+
+    it("fills the marker of an old render from its order", async () => {
+      recording([edl("old", { output_data: { videoUrl: "https://r2/old.mp4" } })])
+      expect((await browse({ scope: "mine" })).items[0]?.preview).toBe(true)
+    })
+  })
+
+  describe("browse_gallery scope=public never lists an Apply EDL render", () => {
+    it("does not ask for them under any kind", async () => {
+      for (const kinds of [["video"], ["audio"], ["image", "video", "audio"]]) {
+        const calls = recording([])
+        await browse({ scope: "public", kinds })
+        expect(asked(calls), JSON.stringify(kinds)).not.toContain("apply-edl")
+      }
+    })
+
+    it("and drops one a row hands it anyway — a Preview, a final, a mix", async () => {
+      const theirs = { user_id: "someone-else" }
+      recording([edl("p", theirs), edl("f", { ...theirs, input_data: { quality: "final", output: "video" } }), { ...mix("m"), ...theirs }, { ...generated, ...theirs }])
+      const { text, items } = await browse({ scope: "public", kinds: ["image", "video", "audio"] })
+      expect(items.map((i) => i.jobId)).toEqual(["g1"])
+      expect(text).not.toContain("apply-edl")
+      expect(text).not.toMatch(/\b(p|f|m): /)
+    })
+
+    it("even the caller's own render does not appear in the public scope", async () => {
+      recording([edl("mine-p")])
+      expect((await browse({ scope: "public" })).items).toEqual([])
+    })
+  })
+
+  describe("list_favorites", () => {
+    async function favorites(jobs: unknown[]) {
+      const favRows = (jobs as Array<{ id: string }>).map((j) => ({ job_id: j.id, created_at: "2026-10-06T10:00:00Z" }))
+      ;(supabase.from as unknown as ReturnType<typeof vi.fn>).mockImplementation((table: string) =>
+        makeChainable(table === "gallery_favorites" ? favRows : jobs),
+      )
+      const server = buildServer()
+      registerGallery({ server, session: readSession(), fastify: Fastify() })
+      const result = await callTool(server, "list_favorites", {})
+      return ((result as { structuredContent?: { items?: Array<Record<string, any>> } }).structuredContent?.items ?? [])
+    }
+
+    it("lists the caller's own favorited render, a Preview marked; a favorited mix as audio", async () => {
+      const items = await favorites([edl("prev"), edl("fin", { input_data: { quality: "final", output: "video" } }), mix("mx")])
+      expect(items.map((i) => [i.jobId, i.kind, i.preview ?? false, i.favorited])).toEqual([
+        ["prev", "video", true, true],
+        ["fin", "video", false, true],
+        ["mx", "audio", false, true],
+      ])
+    })
+
+    it("never lists someone else's render a favorite points at, even when it is public", async () => {
+      // The hydration admits other users' PUBLIC rows; an Apply EDL final of a
+      // user with public outputs is one — listing it would be new exposure.
+      const theirs = { user_id: "someone-else" }
+      const items = await favorites([edl("p", theirs), edl("f", { ...theirs, input_data: { quality: "final", output: "video" } }), { ...mix("m"), ...theirs }])
+      expect(items).toEqual([])
+    })
+  })
+
+  it("the item shape carries `preview`", async () => {
+    const src = readFileSync(join(__dirname, "..", "..", "widgets", "gallery.ts"), "utf8")
+    expect(src.slice(src.indexOf("export interface GalleryItem"), src.indexOf("export interface GalleryInitData"))).toMatch(/preview\?: boolean/)
   })
 })

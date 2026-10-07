@@ -22,7 +22,10 @@
  * a render sets it to that render's, and CLEARS it when the render was cut with
  * no transcript wired. The landed take keeps the same value on its result, so a
  * later pick restores it with no job read (lib/apply-edl-take-transcript.ts).
+ *
+ * Every render in RENDER_NODE_TYPES lands its cut this way (Apply EDL today).
  */
+import { isRenderNodeType } from "@nodaro/shared"
 
 export type ApplyEdlMedium = "video" | "audio"
 
@@ -33,12 +36,6 @@ export const APPLY_EDL_MEDIA_FIELD = {
 } as const satisfies Record<ApplyEdlMedium, string>
 
 const OTHER: Record<ApplyEdlMedium, ApplyEdlMedium> = { video: "audio", audio: "video" }
-
-/** The medium the node renders: its `output` field, video when absent (the
- *  node's default). */
-export function applyEdlMedium(data: Readonly<Record<string, unknown>>): ApplyEdlMedium {
-  return data.output === "audio" ? "audio" : "video"
-}
 
 /** The node-data fields that make `url` the node's one cut, as `medium`. */
 export function applyEdlCutFields(medium: ApplyEdlMedium, url: string): Record<string, string | undefined> {
@@ -79,7 +76,7 @@ export function applyEdlRunCutFields(
   nodeType: string | null | undefined,
   output: ApplyEdlRunOutput | null | undefined,
 ): Record<string, unknown> | undefined {
-  if (nodeType !== "apply-edl") return undefined
+  if (!isRenderNodeType(nodeType)) return undefined
   const cut = renderedCut(output)
   if (!cut) return undefined
   return { [APPLY_EDL_MEDIA_FIELD[OTHER[cut.medium]]]: undefined, generatedJson: output?.json ?? undefined }
@@ -100,7 +97,7 @@ export function applyEdlTakeTranscriptField(
   output: ApplyEdlRunOutput | null | undefined,
   url: string | null | undefined,
 ): { readonly generatedJson: unknown } | undefined {
-  if (nodeType !== "apply-edl") return undefined
+  if (!isRenderNodeType(nodeType)) return undefined
   const cut = renderedCut(output)
   if (!cut || cut.url !== url) return undefined
   return { generatedJson: output?.json ?? undefined }

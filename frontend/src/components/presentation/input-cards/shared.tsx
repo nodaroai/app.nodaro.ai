@@ -237,10 +237,12 @@ interface PresentationTextInputProps {
   minLines?: number
   icon?: React.ReactNode
   promptHelper?: PromptContext
+  /** The most characters the app user may enter (the exposed input's limit): the box takes no more and a counter shows against it. */
+  maxLength?: number
 }
 
 /** Shared text/parameter input supporting prompt, multiline, oneline, and inline modes */
-export function PresentationTextInput({ label, value, placeholder, onChange, readOnly, mode, minLines, icon, promptHelper }: PresentationTextInputProps) {
+export function PresentationTextInput({ label, value, placeholder, onChange, readOnly, mode, minLines, icon, promptHelper, maxLength }: PresentationTextInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
@@ -269,6 +271,15 @@ export function PresentationTextInput({ label, value, placeholder, onChange, rea
     />
   )
 
+  const counter = maxLength !== undefined && (
+    <p
+      data-testid="field-char-count"
+      className={cn("mt-1 text-end font-mono text-[10px]", value.length >= maxLength ? "text-amber-500" : "text-muted-foreground")}
+    >
+      {value.length}/{maxLength}
+    </p>
+  )
+
   if (mode === "inline") {
     return (
       <GlassCard>
@@ -280,10 +291,12 @@ export function PresentationTextInput({ label, value, placeholder, onChange, rea
             onChange={(e) => onChange(e.target.value)}
             placeholder={placeholder}
             readOnly={readOnly}
+            maxLength={maxLength}
             className={cn(INPUT_CLS, "flex-1", readOnly && "opacity-70 cursor-default")}
           />
           {helperBtn}
         </div>
+        {counter}
       </GlassCard>
     )
   }
@@ -301,8 +314,10 @@ export function PresentationTextInput({ label, value, placeholder, onChange, rea
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
           readOnly={readOnly}
+          maxLength={maxLength}
           className={cn(INPUT_CLS, readOnly && "opacity-70 cursor-default")}
         />
+        {counter}
       </GlassCard>
     )
   }
@@ -320,9 +335,11 @@ export function PresentationTextInput({ label, value, placeholder, onChange, rea
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         readOnly={readOnly}
+        maxLength={maxLength}
         style={{ minHeight: `${minH}px` }}
         className={cn(INPUT_CLS, "max-h-[40vh] overflow-y-auto resize-none", readOnly && "opacity-70 cursor-default")}
       />
+      {counter}
     </GlassCard>
   )
 }

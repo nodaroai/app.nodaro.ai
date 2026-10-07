@@ -5,7 +5,7 @@ import { nodaroClient } from "@/lib/nodaro-client"
 import type { SubWorkflowRouteSnapshot, SocialConnection, CharacterVoice, JobErrorHint } from "@/types/nodes"
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
 import { FLUX_LORA_CHARACTER_MODEL_ID } from "@nodaro/shared"
-import type { ExpandedVideoOverlayRequest } from "@nodaro/shared"
+import type { ExpandedVideoOverlayRequest, EditPlanMode } from "@nodaro/shared"
 import type { Pro3DRenderQuote, Pro3DRenderSource, ReduceMeta, ImageCriticMode, WorkflowExport, WorkflowImportReport, ReferenceSheet, TtsProvider, SheetType, SheetSkin, SheetFlavour, EntityKind, CharacterAttachColumn, ObjectAttachColumn, CreatureAttachColumn, LocationAttachColumn, CommunityCard, CommunitySort } from "@nodaro/shared"
 import type { WardrobeValue, PersonValue } from "@nodaro/prompts"
 export type { CommunityCard } from "@nodaro/shared"
@@ -3218,6 +3218,9 @@ export async function textToSpeech(
     speed?: number
     languageCode?: string
     voiceType?: "premade" | "custom" | "library"
+    /** Continuity across clips: the lines spoken just before / after this one (context, not spoken). */
+    previousText?: string
+    nextText?: string
   }
 ): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { text, voice, provider }
@@ -3228,6 +3231,8 @@ export async function textToSpeech(
   if (options?.speed != null) body.speed = options.speed
   if (options?.languageCode) body.languageCode = options.languageCode
   if (options?.voiceType) body.voiceType = options.voiceType
+  if (options?.previousText) body.previousText = options.previousText
+  if (options?.nextText) body.nextText = options.nextText
   return apiJson("/v1/text-to-speech", {
     body,
     workflowId: true,
@@ -3323,6 +3328,11 @@ export async function applyEdl(params: {
   crossfadeMs?: number
   sources?: string[]
   transcript?: unknown
+  /** The plan clip this render cuts (`edlSpanKey`), stamped on the result. */
+  clipKey?: string
+  /** The plan value this render cuts (`renderReadBasis`), stamped on the result
+   *  as `planBasis`. The route stamps the render's own `renderBasis`. */
+  planBasis?: string
   userId?: string
 }): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { edl: params.edl }
@@ -3331,6 +3341,8 @@ export async function applyEdl(params: {
   if (typeof params.crossfadeMs === "number") body.crossfadeMs = params.crossfadeMs
   if (params.sources && params.sources.length > 0) body.sources = params.sources
   if (params.transcript !== undefined) body.transcript = params.transcript
+  if (params.clipKey) body.clipKey = params.clipKey
+  if (params.planBasis) body.planBasis = params.planBasis
   if (params.userId) body.userId = params.userId
   return apiJson("/v1/apply-edl", {
     body,
@@ -3341,12 +3353,14 @@ export async function applyEdl(params: {
 
 /**
  * edit-plan (podcast editing): turn a timed transcript into an EDL plan
- * (tighten / clips / chapters). Cloud-EXCLUSIVE + relayed — on a self-host the
+ * (tighten / clips / chapters / trailer). Cloud-EXCLUSIVE + relayed — on a self-host the
  * route relays to nodaro.ai. `transcript` is sent as an OBJECT (the plugin
  * coerces an object, never a string); `sources` carries {id,url,kind,role,…}.
  */
 export async function editPlan(params: {
-  mode: "tighten" | "clips" | "chapters"
+  /** A known mode, or a saved one this app does not know — sent as is, so the
+   *  server refuses it (it is never planned as tighten). */
+  mode: EditPlanMode | (string & {})
   planTier?: "economy" | "standard" | "premium"
   transcript: unknown
   silence?: unknown
@@ -3964,7 +3978,15 @@ export async function addCaptionsApi(videoUrl: string, text: string, style?: str
   // style; only highlightColor + animate are kinetic-only (see the strip below).
   look?: string; fontFamily?: string; fontWeight?: number; strokeColor?: string; strokeWidth?: number; highlightColor?: string; uppercase?: boolean; positionY?: number; animate?: boolean;
   maxWordsPerLine?: number;
+  /** Timed segments built from a wired caption plan (styleCaptionPlan). When set the request
+   *  is exactly { videoUrl, segments, userId } — no text, style or lever may ride along. */
+  segments?: Record<string, unknown>[];
 }): Promise<{ jobId: string }> {
+  if (opts?.segments) {
+    const planBody: Record<string, unknown> = { videoUrl, segments: opts.segments }
+    if (userId) planBody.userId = userId
+    return apiJson("/v1/add-captions", { body: planBody, workflowId: true, label: "apiErr.startAddCaptions" })
+  }
   // text is OMITTED when empty — the route's schema is `min(1).optional()`,
   // so sending `text: ""` fails validation even though absent-text is the
   // normal auto-transcribe request (#759's second half: with the guard fixed,
@@ -4028,10 +4050,19 @@ export async function addCaptionsApi(videoUrl: string, text: string, style?: str
   })
 }
 
-export async function mixAudioApi(audioUrls: string[], trackVolumes?: number[], userId?: string): Promise<{ jobId: string }> {
+export async function mixAudioApi(
+  audioUrls: string[],
+  trackVolumes?: number[],
+  userId?: string,
+  /** Duck every other track under track `under` (an index into `audioUrls`). */
+  duck?: { under: number; amount?: number },
+): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { audioUrls }
   if (trackVolumes?.length) {
     body.trackVolumes = trackVolumes
+  }
+  if (duck) {
+    body.duck = duck
   }
   if (userId) {
     body.userId = userId
@@ -4277,10 +4308,16 @@ export async function textToDialogueApi(
   languageCode?: string,
   seed?: number,
   applyTextNormalization?: "auto" | "on" | "off",
+  /** The dialogue model (`DIALOGUE_PROVIDERS`); omitted = the route's default (v3 dialogue). */
+  provider?: string,
+  /** 0–1; the funnel sends it only to a model that honours similarity (v4 dialogue). */
+  similarityBoost?: number,
 ): Promise<{ jobId: string }> {
   const body: Record<string, unknown> = { dialogue }
+  if (provider) body.provider = provider
   if (userId) body.userId = userId
   if (stability != null) body.stability = stability
+  if (similarityBoost != null) body.similarityBoost = similarityBoost
   if (languageCode) body.languageCode = languageCode
   if (seed != null) body.seed = seed
   if (applyTextNormalization) body.applyTextNormalization = applyTextNormalization
@@ -4316,8 +4353,10 @@ export async function voiceChangerProApi(
   // orderedVoices keep-slot contract) — forwarded positionally as-is.
   orderedVoices: Array<{
     voiceId: string
-    /** "sts" (default recast) | "v3" (Re-speak — regenerate from transcript). */
-    engine?: "sts" | "v3"
+    /** "sts" (default recast) | "v3" | "v4" (Re-speak — regenerate from the
+     *  transcript; v3 takes stability 0/0.5/1 only, v4 any 0–1 plus
+     *  similarityBoost). */
+    engine?: "sts" | "v3" | "v4"
     stability?: number
     similarityBoost?: number
     style?: number
@@ -4710,6 +4749,83 @@ export async function deleteSavedPost(id: string): Promise<void> {
   await apiJson(`/v1/saved-posts/${encodeURIComponent(id)}`, { method: "DELETE", label: "apiErr.deleteSavedPost" })
 }
 
+// ---- Collections (where a workflow's records live) ----
+
+type Collection = import("@nodaro/shared").Collection
+
+export async function listCollections(): Promise<import("@nodaro/shared").ListCollectionsResult> {
+  return apiJson("/v1/collections", { method: "GET", label: "apiErr.loadCollections" })
+}
+
+export async function getCollection(id: string): Promise<Collection> {
+  return apiJson(`/v1/collections/${encodeURIComponent(id)}`, { method: "GET", label: "apiErr.loadCollections" })
+}
+
+export async function createCollection(input: import("@nodaro/shared").CreateCollectionInput): Promise<Collection> {
+  return apiJson("/v1/collections", { body: { ...input }, label: "apiErr.createCollection" })
+}
+
+export async function updateCollection(id: string, input: import("@nodaro/shared").UpdateCollectionInput): Promise<Collection> {
+  return apiJson(`/v1/collections/${encodeURIComponent(id)}`, { method: "PATCH", body: { ...input }, label: "apiErr.updateCollection" })
+}
+
+export async function deleteCollection(id: string): Promise<void> {
+  await apiJson(`/v1/collections/${encodeURIComponent(id)}`, { method: "DELETE", label: "apiErr.deleteCollection" })
+}
+
+export async function listCollectionRecords(
+  id: string,
+  params: import("@nodaro/shared").ListCollectionRecordsParams = {},
+): Promise<import("@nodaro/shared").ListCollectionRecordsResult> {
+  const qs = new URLSearchParams()
+  if (params.q) qs.set("q", params.q)
+  if (params.since) qs.set("since", params.since)
+  if (params.cursor) qs.set("cursor", params.cursor)
+  if (params.limit) qs.set("limit", String(params.limit))
+  const query = qs.toString()
+  return apiJson(`/v1/collections/${encodeURIComponent(id)}/records${query ? `?${query}` : ""}`, { method: "GET", label: "apiErr.loadCollectionRecords" })
+}
+
+export async function addCollectionRecord(
+  id: string,
+  input: import("@nodaro/shared").AddCollectionRecordInput,
+): Promise<import("@nodaro/shared").AddCollectionRecordResult> {
+  return apiJson(`/v1/collections/${encodeURIComponent(id)}/records`, { body: { ...input, source: { via: "ui", ...input.source } }, label: "apiErr.addCollectionRecord" })
+}
+
+export async function deleteCollectionRecord(id: string, recordId: string): Promise<void> {
+  await apiJson(`/v1/collections/${encodeURIComponent(id)}/records/${encodeURIComponent(recordId)}`, { method: "DELETE", label: "apiErr.deleteCollectionRecord" })
+}
+
+/** The whole collection as a file (CSV or JSON), with the server's file name. */
+export async function exportCollection(
+  id: string,
+  format: import("@nodaro/shared").CollectionExportFormat,
+): Promise<{ blob: Blob; filename: string }> {
+  const headers = await getAuthHeaders()
+  const res = await fetch(`${API_BASE_URL}/v1/collections/${encodeURIComponent(id)}/export?format=${format}`, { headers })
+  if (!res.ok) {
+    const payload = (await res.json().catch(() => null)) as Record<string, unknown> | null
+    throwApiError(payload, "apiErr.exportCollection")
+  }
+  const blob = await res.blob()
+  return { blob, filename: exportFilenameOf(res.headers.get("Content-Disposition"), `collection.${format}`) }
+}
+
+/** The file name a `Content-Disposition` carries: the collection's own name (`filename*`, RFC 6266) when given, else the ASCII one. */
+export function exportFilenameOf(disposition: string | null, fallback: string): string {
+  const own = /filename\*=UTF-8''([^;]+)/i.exec(disposition ?? "")
+  if (own?.[1]) {
+    try {
+      return decodeURIComponent(own[1])
+    } catch {
+      // A malformed encoding: the ASCII name below.
+    }
+  }
+  const ascii = /filename="?([^";]+)"?/.exec(disposition ?? "")
+  return ascii?.[1] ?? fallback
+}
+
 // ---- Competitors (Cloud: tracked brands, scans, action cards) ----
 
 type TrackedCompetitor = import("@nodaro/shared").TrackedCompetitor
@@ -4719,8 +4835,28 @@ export async function listCompetitors(): Promise<TrackedCompetitor[]> {
   return res.data
 }
 
-export async function getCompetitor(id: string): Promise<import("@nodaro/shared").CompetitorDetail> {
-  return apiJson(`/v1/competitors/${encodeURIComponent(id)}`, { method: "GET", label: "apiErr.loadCompetitors" })
+/** The brand as of its latest scan, or of the scan asked for. */
+export async function getCompetitor(id: string, scanId?: string): Promise<import("@nodaro/shared").CompetitorDetail> {
+  const query = scanId ? `?scan=${encodeURIComponent(scanId)}` : ""
+  return apiJson(`/v1/competitors/${encodeURIComponent(id)}${query}`, { method: "GET", label: "apiErr.loadCompetitors" })
+}
+
+/** The list with how many months of scans the plan keeps. */
+export async function competitorList(): Promise<import("@nodaro/shared").CompetitorListResult> {
+  return apiJson("/v1/competitors", { method: "GET", label: "apiErr.loadCompetitors" })
+}
+
+export async function competitorHistory(id: string): Promise<import("@nodaro/shared").CompetitorHistory> {
+  return apiJson(`/v1/competitors/${encodeURIComponent(id)}/history`, { method: "GET", label: "apiErr.loadCompetitorHistory" })
+}
+
+export async function competitorCompare(id: string, input: import("@nodaro/shared").CompetitorCompareInput): Promise<import("@nodaro/shared").CompetitorCompareResult> {
+  const params = new URLSearchParams({ from: input.from, to: input.to })
+  if (input.vsFrom !== undefined && input.vsTo !== undefined) {
+    params.set("vsFrom", input.vsFrom)
+    params.set("vsTo", input.vsTo)
+  }
+  return apiJson(`/v1/competitors/${encodeURIComponent(id)}/compare?${params.toString()}`, { method: "GET", label: "apiErr.loadCompetitorCompare" })
 }
 
 export async function createCompetitor(input: import("@nodaro/shared").CreateCompetitorInput): Promise<TrackedCompetitor> {
@@ -6652,7 +6788,20 @@ export async function getModelCreditCost(model: string): Promise<{ data: { model
   return res.json()
 }
 
+export interface BatchModelCreditCosts {
+  /** The charged price of every id the server prices. */
+  data: Record<string, number>
+  /** Ids priced nowhere on this instance — a speech model's unit row while
+   *  length pricing is off, an unseeded admin row. A client that sees an id
+   *  here quotes without it (the flat row) and need not ask again. */
+  missing: string[]
+}
+
 export async function getBatchModelCreditCosts(models: string[]): Promise<Record<string, number>> {
+  return (await fetchBatchModelCreditCosts(models)).data
+}
+
+export async function fetchBatchModelCreditCosts(models: string[]): Promise<BatchModelCreditCosts> {
   const res = await fetch(`${API_BASE_URL}/v1/credits/model-costs`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -6682,7 +6831,7 @@ export async function getBatchModelCreditCosts(models: string[]): Promise<Record
       `[credits] model-costs: lookup failed for ${body.errors.length} identifier(s): ${body.errors.join(", ")}`,
     )
   }
-  return body.data
+  return { data: body.data, missing: body.missing ?? [] }
 }
 
 // ============================================================
@@ -7245,8 +7394,17 @@ export async function importWorkflow(
 
 export interface WorkflowExecution {
   id: string
+  /** An orchestrator run, or a single-node job listed beside the runs. Absent on an older cached row (= a run). */
+  kind?: 'execution' | 'job'
   workflowId: string
   status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'timed_out' | 'stopping' | 'discarded'
+  /**
+   * How a completed run ended: "nothing_new" when a node was skipped for want
+   * of input (its nodeStates entry carries skipReason "empty_input"),
+   * "succeeded" otherwise; absent until it completes. Derived by the server
+   * (executionOutcome, @nodaro/shared) — never stored.
+   */
+  outcome?: 'succeeded' | 'nothing_new'
   triggerType: 'manual' | 'webhook' | 'schedule' | 'telegram' | 'telegram_account' | 'api' | 'single-node' | 'app_run' | 'mcp'
   /** MCP client name (e.g. "Claude", "Cursor") when the execution was triggered via the MCP server. */
   mcpClient?: string | null
@@ -7317,13 +7475,23 @@ export async function runWorkflow(
    *  into one execution. A new key on the next click creates a new
    *  execution (intentional re-run). */
   idempotencyKey?: string,
+  /** Per-node field overrides the server merges over the saved graph for this
+   *  run only (nested `{ nodeId: { field: value } }`; the server clears the
+   *  overridden node's saved results). Render final sends
+   *  `{ [renderId]: { quality: "final" } }`. */
+  opts?: { readonly inputOverrides?: Readonly<Record<string, Readonly<Record<string, unknown>>>> },
 ): Promise<{ executionId: string }> {
-  let headers: Record<string, string> = { ...(await getAuthHeaders()) }
-  let body: string | undefined
-  if (nodeIds) {
-    headers["Content-Type"] = "application/json"
-    body = JSON.stringify({ nodeIds })
-  }
+  let headers: Record<string, string> = { ...(await getAuthHeaders()), "Content-Type": "application/json" }
+  // `reviewer: "editor"` marks this as the editor's run: a person is here to
+  // review a Preview render and press Render final. The server refuses a
+  // Preview run without it (a session JWT alone is not a reviewer — the SDK
+  // and the thin product clients send one too).
+  const inputOverrides = opts?.inputOverrides && Object.keys(opts.inputOverrides).length > 0 ? opts.inputOverrides : undefined
+  const body = JSON.stringify({
+    ...(nodeIds ? { nodeIds } : {}),
+    ...(inputOverrides ? { inputOverrides } : {}),
+    reviewer: "editor",
+  })
   headers = withIdempotencyHeader(headers, idempotencyKey)
   const res = await fetch(`${API_BASE_URL}/v1/workflows/${encodeURIComponent(workflowId)}/run`, {
     method: "POST",
@@ -7868,6 +8036,8 @@ export async function getSharedExecutionStatus(
   failed_nodes: number
   total_credits_used: number
   error_message: string | null
+  /** See WorkflowExecution.outcome. */
+  outcome?: 'succeeded' | 'nothing_new'
 }> {
   return apiRequest(
     `/v1/present/${encodeURIComponent(token)}/status/${encodeURIComponent(execId)}`,
@@ -8076,16 +8246,104 @@ export interface TelegramChannelPost {
   url: string
 }
 
-/** Read recent posts from a public Telegram channel (Channel Feed node). */
+/** Where the feed stands after a fetch (the route owns it — node_cursors). */
+export interface TelegramFeedCursor {
+  /** The position now; null for a peek, a call with no saved workflow, or an empty channel. */
+  lastSeenId: number | null
+  advanced: boolean
+  mode: "poll" | "peek"
+  stateful: boolean
+}
+
+/**
+ * Read a public Telegram channel's new posts (Channel Feed node). With a saved
+ * workflow (`workflowId: true`) and a `nodeId` the fetch is stateful: the route
+ * reads the node's position and advances it to the highest post emitted.
+ * `mode: "peek"` reads the newest posts without moving the position.
+ */
 export async function telegramChannelFetchApi(params: {
   channel: string
+  /** The editor's legacy cursor — a one-shot seed for a node that never ran statefully. */
   sinceId?: number
   limit?: number
-}): Promise<{ posts: TelegramChannelPost[]; latestId: number; text: string; count: number }> {
+  mode?: "poll" | "peek"
+  nodeId?: string
+}): Promise<{ jobId: string; posts: TelegramChannelPost[]; latestId: number | null; text: string; generatedText: string; count: number; cursor: TelegramFeedCursor }> {
   const body: Record<string, unknown> = { channel: params.channel }
   if (params.sinceId !== undefined) body.sinceId = params.sinceId
   if (params.limit !== undefined) body.limit = params.limit
-  return apiJson("/v1/telegram-channel/fetch", { body, label: "apiErr.readTelegramChannel" })
+  if (params.mode) body.mode = params.mode
+  if (params.nodeId) body.nodeId = params.nodeId
+  return apiJson("/v1/telegram-channel/fetch", { body, workflowId: true, label: "apiErr.readTelegramChannel" })
+}
+
+// ---- Collection nodes (Read Collection / Save to Collection) ----
+
+/** What the Read Collection node's route answers: the window's records, their digest, the collection. */
+export async function collectionReadApi(params: {
+  collectionId: string
+  windowAmount?: number
+  windowUnit?: import("@nodaro/shared").CollectionReadWindowUnit
+  limit?: number
+  order?: import("@nodaro/shared").CollectionReadOrder
+  textFormat?: import("@nodaro/shared").CollectionDigestFormat
+  nodeId?: string
+}): Promise<{ jobId: string; records: import("@nodaro/shared").CollectionRecord[]; text: string; count: number; since: string; collection: { id: string; name: string } }> {
+  const body: Record<string, unknown> = { collectionId: params.collectionId }
+  if (params.windowAmount !== undefined) body.windowAmount = params.windowAmount
+  if (params.windowUnit) body.windowUnit = params.windowUnit
+  if (params.limit !== undefined) body.limit = params.limit
+  if (params.order) body.order = params.order
+  if (params.textFormat) body.textFormat = params.textFormat
+  if (params.nodeId) body.nodeId = params.nodeId
+  return apiJson("/v1/collection-read", { body, workflowId: true, label: "apiErr.collectionRead" })
+}
+
+/** What the Save to Collection node's route answers: the record saved (or already there), the outcome, the collection. */
+export async function collectionWriteApi(params: {
+  collectionId: string
+  item?: unknown
+  title?: string
+  text?: string
+  link?: string
+  dedupeKey?: string
+  media?: ReadonlyArray<{ type: "image" | "video"; url: string }>
+  nodeId?: string
+}): Promise<{
+  jobId: string
+  record: import("@nodaro/shared").CollectionRecord
+  outcome: import("@nodaro/shared").CollectionWriteOutcome
+  evicted: number
+  collection: { id: string; name: string }
+}> {
+  const body: Record<string, unknown> = { collectionId: params.collectionId }
+  if (params.item !== undefined) body.item = params.item
+  if (params.title) body.title = params.title
+  if (params.text) body.text = params.text
+  if (params.link) body.link = params.link
+  if (params.dedupeKey) body.dedupeKey = params.dedupeKey
+  if (params.media && params.media.length > 0) body.media = params.media
+  if (params.nodeId) body.nodeId = params.nodeId
+  return apiJson("/v1/collection-write", { body, workflowId: true, label: "apiErr.collectionWrite" })
+}
+
+/** The feed's stored position for a node of a saved workflow (null when it has none). */
+export async function getTelegramFeedCursor(workflowId: string, nodeId: string, channel?: string): Promise<{ lastSeenId: number | null; updatedAt: string | null }> {
+  const query = new URLSearchParams({ workflowId, nodeId, ...(channel?.trim() ? { channel: channel.trim() } : {}) })
+  const res = await apiRequest<{ data: { lastSeenId: number | null; updatedAt: string | null } }>(
+    `/v1/telegram-channel/cursor?${query.toString()}`,
+    "apiErr.loadFeedCursor",
+  )
+  return res.data
+}
+
+/** Forget the feed's position (for this channel): the next run reads the newest posts again. */
+export async function resetTelegramFeedCursor(workflowId: string, nodeId: string, channel?: string): Promise<{ ok: boolean; deleted: boolean }> {
+  const res = await apiJson<{ data: { ok: boolean; deleted: boolean } }>("/v1/telegram-channel/cursor/reset", {
+    body: { workflowId, nodeId, ...(channel?.trim() ? { channel: channel.trim() } : {}) },
+    label: "apiErr.resetFeedCursor",
+  })
+  return res.data
 }
 
 export async function socialPublishApi(params: {
@@ -8272,7 +8530,10 @@ export interface PublishedApp {
   isEmbeddable: boolean
   allowedOrigins: string[]
   estimatedCredits: number
+  /** The part of the price the creator's fee applies to: the app run (its preview). */
   baseEstimatedCredits?: number
+  /** The Render finals' part of the price: never marked up by the creator's fee (decided 2026-10-06). */
+  finalEstimatedCredits?: number
   thumbnailNodeId: string | null
   category: string
   outputTypes: string[]
@@ -8317,6 +8578,17 @@ export interface AppBrowseCard {
   componentMetadata?: Record<string, unknown> | null
 }
 
+/** An app run's Render final, as the run views carry it. */
+export interface AppRunFinalExecution {
+  id: string
+  status: string
+  completedNodes: number | null
+  totalNodes: number | null
+  errorMessage: string | null
+  completedAt: string | null
+  creditsUsed: number | null
+}
+
 export interface AppRun {
   id: string
   appId: string
@@ -8335,9 +8607,15 @@ export interface AppRun {
   totalNodes?: number
   completedAt?: string | null
   hiddenNodes?: string[] | null
+  /** The runner's own edits alone (`app_runs.node_states`) — what a PATCH of `nodeStates` replaces. */
+  nodeStateEdits?: Record<string, unknown> | null
+  /** The run's Render final: a continuation outside the run (its results are merged into the node states). */
+  finalExecution?: AppRunFinalExecution | null
   // Nested execution from detail endpoint
   execution?: {
     status: string
+    /** See WorkflowExecution.outcome. */
+    outcome?: 'succeeded' | 'nothing_new'
     nodeStates: Record<string, unknown>
     totalNodes: number
     completedNodes: number
@@ -8536,8 +8814,38 @@ export async function runPublishedApp(
   return apiRequest(
     `/v1/app/${encodeURIComponent(slug)}/run`,
     "apiErr.runApp",
-    { method: "POST", body: { inputOverrides, runId, version, headless } },
+    {
+      method: "POST",
+      // `reviewer: "app"` marks the app runner's own run: a person is here to
+      // review a Preview render and press Render final on its card. A headless
+      // call has nobody there, so it never carries the mark.
+      body: { inputOverrides, runId, version, headless, ...(headless ? {} : { reviewer: "app" }) },
+    },
   )
+}
+
+/**
+ * Render final of an app run whose render made a Preview: the render at
+ * Final and the nodes after it, as a continuation outside the run (charged to
+ * the runner, no creator markup). The server decides what runs.
+ */
+export async function renderAppRunFinal(
+  slug: string,
+  runId: string,
+  renderNodeId: string,
+  /** One key per click: a retry of the same click starts one final. */
+  idempotencyKey?: string,
+): Promise<{ executionId: string; runId: string; status: string }> {
+  const headers = withIdempotencyHeader({ ...(await getAuthHeaders()), "Content-Type": "application/json" }, idempotencyKey)
+  const res = await fetch(
+    `${API_BASE_URL}/v1/app/${encodeURIComponent(slug)}/runs/${encodeURIComponent(runId)}/render-final`,
+    { method: "POST", headers, body: JSON.stringify({ renderNodeId, reviewer: "app" }) },
+  )
+  const json = (await res.json().catch(() => null)) as Record<string, unknown> | null
+  // A final of this run already rendering: follow it.
+  if (res.status === 409 && typeof json?.executionId === "string") throw new WorkflowAlreadyRunningError(json.executionId)
+  if (!res.ok) throwApiError(json, "apiErr.renderFinal")
+  return json as { executionId: string; runId: string; status: string }
 }
 
 /** Execute a component node — creates a wrapper job and runs the inner workflow. */
@@ -8704,6 +9012,8 @@ export async function getAppExecutionStatus(execId: string): Promise<{
   completed_nodes: number
   failed_nodes: number
   error_message: string | null
+  /** See WorkflowExecution.outcome. */
+  outcome?: 'succeeded' | 'nothing_new'
 }> {
   const res = await apiRequest<{ data: Record<string, unknown> }>(
     `/v1/workflow-executions/${encodeURIComponent(execId)}`,
@@ -8717,6 +9027,7 @@ export async function getAppExecutionStatus(execId: string): Promise<{
     completed_nodes: (d.completedNodes ?? 0) as number,
     failed_nodes: (d.failedNodes ?? 0) as number,
     error_message: (d.errorMessage ?? null) as string | null,
+    outcome: d.outcome as 'succeeded' | 'nothing_new' | undefined,
   }
 }
 

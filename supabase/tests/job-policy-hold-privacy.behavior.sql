@@ -111,12 +111,11 @@ EXCEPTION WHEN insufficient_privilege OR check_violation THEN
   RAISE NOTICE 'ok  a user cannot UPDATE a job into pending_review (refused)';
 END $$;
 
--- 4. The tightening is SURGICAL: this is a status filter, not a write ban.
---    347 deliberately left the INSERT grant alone and narrowing it is a
---    separate change with its own blast radius, so the grant is unchanged and
---    every other status a browser could already write still passes.
-SELECT pg_temp.assert_eq('the table-level INSERT grant on jobs is unchanged (347:54-56 stands)',
-  has_table_privilege('authenticated', 'public.jobs', 'INSERT')::text, 'true');
+-- 4. 377's status clause was surgical and left the INSERT grant alone; 474
+--    then took every write on jobs from the browser roles (the change 347 and
+--    377 deferred). The hole above stays closed either way.
+SELECT pg_temp.assert_eq('the browser holds no INSERT grant on jobs (474)',
+  has_table_privilege('authenticated', 'public.jobs', 'INSERT')::text, 'false');
 
 -- 5. The withheld payload stays unreadable regardless: 347 granted back four
 --    columns and `held_*` is on neither list, so even the owner of a parked row

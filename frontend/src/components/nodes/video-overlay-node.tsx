@@ -2,14 +2,16 @@
 
 import { memo, useCallback, useEffect, useMemo, useState } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
-import { AlertCircle, Film, Image as ImageIcon, Layers, LayoutGrid, Loader2, Plus } from "lucide-react"
+import { AlertCircle, Braces, Film, Image as ImageIcon, Layers, LayoutGrid, Loader2, Plus } from "lucide-react"
 import {
   VIDEO_OVERLAY_DEFAULT_BACKGROUND,
   VIDEO_OVERLAY_HANDLE_IDS,
   assembleVideoOverlayRequest,
   expandVideoOverlayLayer,
+  parseVideoOverlayLayerPlan,
   validateVideoOverlayRequest,
   videoOverlayCanvas,
+  videoOverlayPassThrough,
   videoOverlayCompositionKey,
   videoOverlaySlotSources,
 } from "@nodaro/shared"
@@ -22,6 +24,7 @@ import { useVideoOverlayUpstream } from "@/hooks/use-video-overlay-upstream"
 import { useVideoOverlayLayers } from "@/hooks/use-video-overlay-layers"
 import { useVideoOverlaySelection } from "@/hooks/use-video-overlay-selection"
 import { isValidVideoOverlayConnection } from "@/lib/image-producer-handles"
+import { DATA_HANDLE_COLORS } from "@/lib/data-handles"
 import { FFMPEG_COLORS } from "@/lib/ffmpeg-handles"
 import { videoOverlayResultFresh } from "@/lib/video-overlay-composition"
 import { videoOverlayIssueText } from "@/lib/video-overlay-i18n"
@@ -37,11 +40,12 @@ import { NodeQuickStrip } from "./node-quick-strip"
 import { ResultsThumbnailsPanel } from "./results-thumbnails-panel"
 import { VideoResultOverlay } from "./video-result-overlay"
 import { videoNodeSizing } from "./video-node-defaults"
-import { OVERLAY_BASE_HANDLE_TOP, overlayAddButtonTop, overlayHandleTop } from "./image-overlay-layout"
+import { OVERLAY_BASE_HANDLE_TOP, overlayAddButtonTop, overlayHandleTop, overlayPlanHandleTop } from "./image-overlay-layout"
 import { VideoOverlayPreview } from "./video-overlay-preview"
 
 const BASE_TOP = `${OVERLAY_BASE_HANDLE_TOP}px`
 const HANDLE_TOP = (i: number) => `${overlayHandleTop(i)}px`
+const PLAN_HANDLE_TOP = (count: number) => `${overlayPlanHandleTop(count)}px`
 
 function VideoOverlayNodeComponent({ id, data, selected }: NodeProps) {
   const t = useT()
@@ -73,11 +77,19 @@ function VideoOverlayNodeComponent({ id, data, selected }: NodeProps) {
   const [selectedLayer, setSelectedLayer] = useVideoOverlaySelection(id)
   const sources = useMemo(() => videoOverlaySlotSources(layers, upstream.layers), [layers, upstream.layers])
   const expanded = useMemo(() => sources.map((_, i) => expandVideoOverlayLayer(layers[i])), [sources, layers])
+  // The wired plan's layers, drawn read-only under the handle layers. The same
+  // parse + expansion the assembly runs; an unreadable plan draws nothing (the
+  // Run button's verdict says why).
+  const planLayers = useMemo(() => {
+    if (upstream.plan === undefined) return []
+    const parsed = parseVideoOverlayLayerPlan(upstream.plan)
+    return "error" in parsed ? [] : parsed.layers.map((l) => expandVideoOverlayLayer(l))
+  }, [upstream.plan])
 
   // Preview ⇄ Result (UX-8): automatic until the user picks; a composition
   // change resets to automatic, and only a result stamped with the current
   // composition counts as fresh (no size fallback — audit U10).
-  const compositionKey = videoOverlayCompositionKey({ baseUrl: upstream.base, sources, data: nodeData })
+  const compositionKey = videoOverlayCompositionKey({ baseUrl: upstream.base, sources, data: nodeData, planLayers: upstream.plan })
   const [view, setView] = useState<"preview" | "result" | null>(null)
   const [seenComposition, setSeenComposition] = useState(compositionKey)
   useEffect(() => {
@@ -99,7 +111,10 @@ function VideoOverlayNodeComponent({ id, data, selected }: NodeProps) {
   const sizingAspect = showPreview ? (outputAspect ?? sourceAspect) : (resultAspect ?? outputAspect ?? sourceAspect)
 
   // The strip's Run button: sugar over the real refusal in execute-node (C-4).
-  const verdict = validateVideoOverlayRequest(assembleVideoOverlayRequest({ videoUrl: upstream.base ?? "", data: nodeData, wiredImageUrls: upstream.layers }))
+  // An empty wired plan with no other layer is not a refusal: Run passes the base through, free (R14).
+  const request = assembleVideoOverlayRequest({ videoUrl: upstream.base ?? "", data: nodeData, wiredImageUrls: upstream.layers, planLayers: upstream.plan })
+  const passesThrough = !request.planError && !!videoOverlayPassThrough({ videoUrl: upstream.base, planWired: upstream.plan !== undefined, layerCount: request.layers.length })
+  const verdict = passesThrough ? ({ ok: true } as const) : validateVideoOverlayRequest(request)
   const disabledReason = !upstream.base ? t("node.videoOverlayNoBase") : verdict.ok ? undefined : videoOverlayIssueText(verdict, t)
 
   const [previewOpen, setPreviewOpen] = useState(false)
@@ -148,6 +163,7 @@ function VideoOverlayNodeComponent({ id, data, selected }: NodeProps) {
             customStyle: { top: HANDLE_TOP(i), left: "-29px" },
             external: true,
           })),
+          { id: "layerPlan", type: "target", position: Position.Left, customStyle: { top: PLAN_HANDLE_TOP(handleCount), left: "-29px" }, external: true },
           { id: "video-out", type: "source", position: Position.Right, customStyle: { top: "24px", right: "-29px" }, external: true },
         ]}
       >
@@ -184,6 +200,7 @@ function VideoOverlayNodeComponent({ id, data, selected }: NodeProps) {
                 baseUrl={upstream.base}
                 sources={sources}
                 layers={expanded}
+                planLayers={planLayers}
                 outputAspect={nodeData.outputAspect}
                 baseFit={nodeData.baseFit ?? "cover"}
                 backgroundColor={nodeData.backgroundColor ?? VIDEO_OVERLAY_DEFAULT_BACKGROUND}
@@ -282,6 +299,7 @@ function VideoOverlayNodeComponent({ id, data, selected }: NodeProps) {
           <Plus className="w-3 h-3" />
         </button>
       )}
+      <HandleWithPopover nodeId={id} nodeType="video-overlay" handleId="layerPlan" type="target" position={Position.Left} label="Layer plan" color={DATA_HANDLE_COLORS.json} icon={<Braces />} side="left" top={PLAN_HANDLE_TOP(handleCount)} accepts={(s) => isValidVideoOverlayConnection("layerPlan", s)} />
       <HandleWithPopover nodeId={id} nodeType="video-overlay" handleId="video-out" type="source" position={Position.Right} label="Video" color={FFMPEG_COLORS.video} icon={<Film />} side="right" top="24px" />
 
       {activeUrl && <MediaPreviewModal isOpen={previewOpen} onClose={() => setPreviewOpen(false)} type="video" url={activeUrl} results={results} initialIndex={activeIndex} />}

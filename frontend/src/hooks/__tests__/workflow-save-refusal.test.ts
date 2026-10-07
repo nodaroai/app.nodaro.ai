@@ -107,16 +107,24 @@ describe("workflow-editor-main honours a refused save", () => {
     expect(guard).toMatch(/if \(!hasSavableChanges\(useWorkflowStore\.getState\(\)\)\)/)
   })
 
+  // Both beforeunload handlers live in unload-save.ts (so a test can run them);
+  // unload-save.test.tsx pins that the component calls them.
+  const unload = readFileSync(
+    join(__dirname, "..", "..", "components", "editor", "workflow-editor", "unload-save.ts"),
+    "utf8",
+  )
+
   it("keeps the browser's tab-close prompt on plain isDirty — the last guard on results a copy could keep", () => {
-    const start = source.indexOf("function handleBeforeUnload(e: BeforeUnloadEvent)")
-    const prompt = source.slice(start, source.indexOf("e.preventDefault()", start))
+    const start = unload.indexOf("export function unloadNeedsPrompt")
+    const prompt = unload.slice(start)
     expect(prompt).toMatch(/useWorkflowStore\.getState\(\)\.isDirty/)
     expect(prompt).not.toMatch(/hasSavableChanges\(/)
   })
 
   it("skips the unload flush — a keepalive PATCH that would only be refused again", () => {
-    const flush = source.slice(source.indexOf("// Flush save on page unload"), source.indexOf("keepalive: true"))
-    expect(flush).toMatch(/if \(isSaveRefused\(state\)\) return/)
+    const start = unload.indexOf("export function unloadSaveRequest")
+    const flush = unload.slice(start, unload.indexOf("keepalive: true", start))
+    expect(flush).toMatch(/if \(isSaveRefused\(state\)\) return null/)
   })
 
   it("offers Clone & Remix beside Run", () => {

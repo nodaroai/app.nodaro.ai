@@ -172,6 +172,17 @@ nodaro saved-posts save --file <post.json|-> [--index <n>] [--note <text>] [--ta
 nodaro saved-posts update <id> [--note <text>] [--tag <t>]... [--clear-tags] [--json]
 nodaro saved-posts delete <id>                         # also removes the copied still
 
+# Collections — where a workflow's records live (text and links only, never files)
+nodaro collections list [--json]                            # your collections, record counts, your caps
+nodaro collections create <name> [--description <text>] [--json]
+nodaro collections show <id> [--json] | update <id> [--name <n>] [--description <d>] | delete <id>
+nodaro collections records <id> [--q <words>] [--since <iso>] [--limit <n>] [--cursor <c>] [--json]
+nodaro collections add <id> [--title <t>] [--text <t>] [--url <link>] [--file <item.json|->] [--index <n>] [--dedupe-key <k>] [--idempotency-key <k>] [--json]
+#   --file holds any JSON item (a feed post, a search result) the server maps to a record; explicit flags win
+#   the same link twice is one record ("already there"); the same --idempotency-key twice saves once
+nodaro collections remove <id> <recordId>
+nodaro collections export <id> [--format csv|json] [--since <iso>] [--q <words>] [--out <path>]   # to stdout or a file
+
 # Competitors — tracked brands, their scans and action cards (Nodaro Cloud)
 nodaro competitors list [--json]
 nodaro competitors add [--brand <name>] [--website <url>] [--tiktok <h>] [--instagram <h>] [--youtube <c>] [--x <h>] [--linkedin <page>] [--meta-ads <name>] [--about <platforms>] [--schedule off|weekly|daily] [--own] [--json]
@@ -180,6 +191,8 @@ nodaro competitors discover <website> [--json]              # free
 nodaro competitors scan <id> [--watch] [--json]             # one Social Search page per search
 nodaro competitors cards [--json]                           # what to do now (shows the id to mark a card done)
 nodaro competitors lessons <id> [--json]                    # what works for a brand (free)
+nodaro competitors history <id> [--json]                    # its scans oldest first: posts, followers, usual reach per platform (free)
+nodaro competitors compare <id> --from <iso> --to <iso> [--vs-from <iso> --vs-to <iso>] [--json]   # one period, or two side by side (free)
 nodaro competitors done <card-id> [--link <url>] [--json]   # "I did this", with your post's full link (free)
 nodaro competitors tried [--json]                           # did it work? each mark, how it went, and your record
 nodaro competitors link <mark-id> <url> | link <mark-id> --remove
@@ -366,7 +379,7 @@ nodaro media save <url> [--filename <name>] [--type image|video|audio] [--watch]
 nodaro audio separate --audio <url> [--mode vocal_instrumental|stems] [--quality auto|fast|best] [--watch] [--poll-interval <ms>] [--json]
 nodaro audio isolate --audio <url> [--watch] [--poll-interval <ms>] [--json]
 nodaro audio fx --audio <url> [--preset <preset>] [--mix <0-100>] [--delay <20-2000>] [--decay <0-1>] [--eq-low <db>] [--eq-high <db>] [--watch] [--poll-interval <ms>] [--json]
-nodaro audio mix --audio <url> --audio <url> ... [--volumes <csv>] [--watch] [--poll-interval <ms>] [--json]
+nodaro audio mix --audio <url> --audio <url> ... [--volumes <csv>] [--duck-under <index> [--duck-amount <0-100>]] [--watch] [--poll-interval <ms>] [--json]
 nodaro audio adjust-volume --audio <url>|--video <url> [--volume <0-200>] [--normalize] [--fade-in <sec>] [--fade-out <sec>] [--watch] [--poll-interval <ms>] [--json]
 nodaro audio combine --segment <url[@a-b]> --segment ... [--watch] [--poll-interval <ms>] [--json]
 nodaro audio transcribe --audio <url> [--provider elevenlabs-stt|incredibly-fast-whisper|whisper] [--language <code>] [--diarize] [--tag-audio-events] [--word-timestamps] [--watch] [--poll-interval <ms>] [--json]
@@ -386,16 +399,21 @@ nodaro edit audio-sync (--source <[id=]url> ... | --sources-file <file.json>) [-
                                                          # 2-6 recordings (audio or video); ids default to source-1, source-2, …
                                                          # output_data.json = { reference, offsets: [{ sourceId, offsetMs, confidence,
                                                          # driftMsPerHour }], notes } with referenceMs = sourceMs + offsetMs.
-nodaro edit apply-edl --edl <file.json> [--transcript <file.json>] [--source <url> ...] [--output video|audio] [--quality proxy|final] [--crossfade-ms <ms>] [--watch] [--poll-interval <ms>] [--json]
-nodaro edit plan --mode tighten|clips|chapters --plan-tier economy|standard|premium --transcript <file.json> (--source <[id=]url[@audio|@video]> ... | --sources-file <file.json>) [--silence <file.json>] [--offsets <file.json>] [--transcript-source <id>] [--instructions <text>] [--style-guide <text>] [--count <n>] [--target-duration-sec <n>] [--target-aspect 16:9|9:16|1:1|4:5] [--platform <name>] [--watch] [--poll-interval <ms>] [--json]
+nodaro edit apply-edl --edl <file.json> [--transcript <file.json>] [--source <url> ...] [--output video|audio] [--quality proxy|final] [--crossfade-ms <ms>] [--clip-key <inMs-outMs>] [--watch] [--poll-interval <ms>] [--json]
+                                                         # --quality proxy = a Preview to review (private, lower rate); final = the delivery.
+                                                         # --clip-key = "<first inMs>-<last outMs>" of the clips-mode plan clip this render cuts;
+                                                         # the result carries it back as output_data.clipKey, beside output_data.quality.
+nodaro edit plan --mode tighten|clips|chapters|trailer --plan-tier economy|standard|premium --transcript <file.json> (--source <[id=]url[@audio|@video]> ... | --sources-file <file.json>) [--silence <file.json>] [--offsets <file.json>] [--transcript-source <id>] [--instructions <text>] [--style-guide <text>] [--count <n>] [--target-duration-sec <n>] [--target-aspect 16:9|9:16|1:1|4:5] [--platform <name>] [--watch] [--poll-interval <ms>] [--json]
                                                          # multicam: --offsets = an audio-sync job's output_data.json over the SAME
                                                          # source ids (both commands default to source-1, source-2, …); each source's
                                                          # offset is applied before the request — refused if one was not measured or
                                                          # matched weakly (set its offsetMs in --sources-file).
-
-# Organizations — only on instances that have them
 nodaro edit switch-cameras --edl <file.json> --transcript <file.json> [--speaker-map <file.json>] [--speaker-names <file.json>] [--min-shot-ms <ms>] [--lead-ms <ms>] [--max-shot-ms <ms>] [--wide-every <n>] [--layout-hints] [--watch] [--poll-interval <ms>] [--json]
                                                          # multicam: each cut on the speaker's camera; the transcript needs speaker labels.
+                                                         # Multicam end to end: audio transcribe --provider elevenlabs-stt --diarize → edit audio-sync
+                                                         # → edit plan --offsets → edit switch-cameras → edit apply-edl --quality proxy (review) → --quality final.
+
+# Organizations — only on instances that have them
 nodaro org list [--json]
 nodaro org get <id> [--json]
 nodaro org create --name <name> --kind school|team [--slug <slug>] [--accept-terms] [--json]

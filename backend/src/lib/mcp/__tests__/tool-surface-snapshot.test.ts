@@ -389,6 +389,13 @@ const VIDEO_OVERLAY_TOOL_BYTES = 3_805
 // size; well under the 8_192 B per-tool budget, and the list keeps exactly the
 // headroom it had before.
 const AUDIO_SYNC_TOOL_BYTES = 2_200
+// RAISED 2026-10-05 by mix_audio (podcast Track D2) and nothing else — one NEW
+// core, execute-scoped tool (the Mix Audio node's verb, with its duck), UNGATED
+// like silence_detect and audio_sync, so BOTH the cloud/all AND the
+// community/all membership fixtures move (each names it). Measured by this
+// suite: 389_788 total − 386_820 base = 2_968 B, the tool's full serialized
+// size; well under the 8_192 B per-tool budget.
+const MIX_AUDIO_TOOL_BYTES = 2_968
 // RAISED by the three UGC video builders (build_ugc_creator / build_ugc_clips /
 // build_ugc_cards) and nothing else — three NEW cloud-only tools, registered
 // inside the hasCredits() block and ungated by scope, so cloud/all, cloud/jobs
@@ -479,6 +486,15 @@ const COMPETITOR_LESSONS_TOOL_BYTES = 841
 // 386_689 total − 385_491 base = 1_198 B (503 + 695), far under the 8_192 B
 // per-tool budget, and the list keeps the 45 B of headroom it had.
 const CARD_MARK_TOOLS_BYTES = 1_198
+// raised by capture_site and nothing else — one new core tool (POST /v1/site-capture),
+// gated by workflows:execute and registered on every edition, so cloud/all and
+// community/all name it and the scope-less sets do not. measured by this suite:
+// 2_318 B, under the 8_192 B per-tool budget; the list keeps the headroom it had.
+const SITE_CAPTURE_TOOL_BYTES = 2_318
+// create_launch_video's url wording now points at capture_site where capture is offered,
+// and nothing else. no tool was added, so the fixture does not move. measured by this
+// suite: 31 B; the list keeps the headroom it had.
+const LAUNCH_VIDEO_CAPTURE_POINTER_BYTES = 31
 // RAISED 2026-10-04 by two `apply_edl` sentences and nothing else: a `proxy`
 // render (the 720p preview) is priced on its own, lower per-minute row
 // (`apply-edl:proxy`), so the description and the `quality` describe say so.
@@ -495,6 +511,19 @@ const APPLY_EDL_PREVIEW_RATE_WORDING_BYTES = 84
 // 4_191 B, far under the 8_192 B per-tool budget, and the only tool that names
 // v4), which keeps the 19 B of headroom the list had before.
 const ELEVENLABS_V4_SPEECH_BYTES = 196
+// RAISED 2026-10-06 by generate_dialogue's ElevenLabs v4 wording and nothing else
+// — a `model` argument (the DIALOGUE_PROVIDERS enum), `stability` widened from a
+// literal union to a 0–1 number with a per-model sentence, a `similarity_boost`
+// argument, and the description naming v3 / v4 (generate_dialogue is now the
+// second tool that names v4). No tool was added, so the fixture does NOT move.
+// measured by this suite: 397_581 total − 397_155 base = 426 B.
+const ELEVENLABS_V4_DIALOGUE_BYTES = 426
+// RAISED 2026-10-06 by one generate_dialogue sentence and nothing else — the job
+// output carries `transcript` (per-word timings + per-line speakers) on a
+// model that returns them, to feed add_captions. No tool or argument was
+// added, so the fixture does NOT move. measured by this suite:
+// 397_860 total − 397_581 base = 279 B.
+const DIALOGUE_TRANSCRIPT_WORDING_BYTES = 279
 // LOWERED 2026-10-05 by the video_analysis tool's one analysis quality and
 // nothing else — a refund, by the same rule as CAPTION_DOCTRINE_TO_SKILL_BYTES:
 // the budget moves by exactly what the change costs. The tool always runs the
@@ -527,8 +556,107 @@ const TEXT_TO_AUDIO_PER_SECOND_PRICING_BYTES = 54
 // wording = 70 B, which keeps the 13 B of headroom the list had before.
 const ELEVENLABS_V4_DEFAULT_WORDING_BYTES = 70
 
+// RAISED by one field: get_asset's outputSchema now declares `preview` (a boolean),
+// as get_job's and wait_for_job's envelope already does, so a Preview render reads
+// the same through every job reader (decided 2026-10-06). No tool was added.
+// measured by this suite: 386_849 total − 386_820 before the field = 29 B.
+const GET_ASSET_PREVIEW_FLAG_BYTES = 29
+// RE-MEASURED on dev b3bda1615 (2026-10-06, PR #1879 found dev red): this suite totals 392_455 B
+// against a 392_441 B budget — the 29 B above were measured on an older tree, and the live
+// delta of the `preview` field is 43 B. Carried as its own line so the correction stays visible.
+const GET_ASSET_PREVIEW_FLAG_CORRECTION_BYTES = 14
+// get_app_run reads the whole run: outcome, error, summary, per-node text / media / skipReason (1b).
+const GET_APP_RUN_OUTCOME_BYTES = 1_072 // measured: 393_485 total − 392_413 before (outcome, errorMessage, summary, per-node text / media / skipReason)
+// RAISED by ONE argument and nothing else: `caption_style` on `build_ugc_cards`
+// (how the captions after the opening line look — word by word, karaoke, plain
+// subtitles or none; the builder takes it as `captionStyle`). No tool was added,
+// so the fixture does NOT move. measured by this suite: 387_082 total − 386_807
+// base = 275 B (build_ugc_cards 1_140 -> 1_415, far under the 8_192 B per-tool
+// budget).
+const UGC_CARDS_CAPTION_STYLE_BYTES = 275
+// RAISED by one enum value and nothing else: plan_edit's `mode` takes `trailer`
+// (podcast Track D1), with its one-line description in the tool text. No tool
+// was added, so the fixture does NOT move. measured by this suite: 392_535
+// total − 392_454 base = 81 B.
+const PLAN_EDIT_TRAILER_MODE_BYTES = 81
+// RAISED 2026-10-06 by the three collection tools and nothing else —
+// list_collections, read_collection and add_collection_record (where a
+// workflow's records live: the Collections page's API over MCP). The routes
+// are core, so the tools register on every edition, gated by assets:read /
+// assets:write: cloud/all AND community/all name them, the scope-less sets do
+// not. measured by this suite: 395_875 total − 392_455 base = 3_420 B (432 +
+// 1_158 + 1_830), each far under the 8_192 B per-tool budget, and the list
+// keeps the headroom it had.
+const COLLECTION_TOOLS_BYTES = 3_420
+
+
+// RAISED by ONE argument and nothing else: `clip_key` on `apply_edl` (the plan
+// clip a render cuts, stamped back as `output_data.clipKey`; the REST route and
+// the SDK already took it). No tool was added, so the fixture does NOT move.
+// measured by this suite: 392_662 total − 392_454 base = 208 B.
+const APPLY_EDL_CLIP_KEY_BYTES = 208
+// RAISED by one clause and nothing else: plan_edit's description says `trailer`
+// is refused, before any charge, until this server can plan it (the tool now
+// reads the same capability check as the editor and the worker, decided
+// 2026-10-06). No tool or argument was added, so the fixture does NOT move.
+// measured by this suite: 397_307 total − 397_235 base = 72 B.
+const PLAN_EDIT_TRAILER_GATE_BYTES = 72
+// RAISED by two arguments and one sentence on `generate_speech` and nothing else:
+// `previous_text` / `next_text` (the neighbouring clips' lines, context for
+// continuous intonation across clips — models that stitch use them) and the
+// sentence that says when to pass them. No tool was added, so the fixture does
+// NOT move. measured by this suite: 397_877 total − 397_154 base = 723 B
+// (generate_speech 4_261 -> 4_984 B, far under the 8_192 B per-tool budget),
+// which keeps the 1 B of headroom the list had before.
+const TTS_NEIGHBOUR_TEXT_ARGS_BYTES = 723
+// RAISED 2026-10-06 by ONE enum value and its wording, and nothing else:
+// `voice_changer_pro`'s per-voice `engine` now also takes `"v4"` (Re-speak on
+// the newer model — any stability 0–1, similarity honoured, each line
+// generated with its neighbours as context), and the `ordered_voices` /
+// `analysis` descriptions say so. No tool was added, so the fixture does NOT
+// move. measured by this suite: 397_365 total − 397_154 base = 211 B, which
+// keeps the 1 B of headroom the list had before.
+const VOICE_CHANGER_PRO_V4_ENGINE_BYTES = 211
+// RAISED 2026-10-06 by ONE tool and nothing else: `render_final` (an agent's
+// Render final, decided 2026-10-06: quote without `confirm`, run with it; the
+// server derives the run set). Gated by workflows:execute on every edition, so
+// cloud/all AND community/all name it. measured by this suite: 399_983 total −
+// 397_792 base = 2_191 B, far under the 8_192 B per-tool budget.
+const RENDER_FINAL_TOOL_BYTES = 2_191
+// RAISED by PR #1916 (character references on Gemini Omni) and nothing else:
+// `character_references` on `generate_video` (items of image_url, body_image_url,
+// description, name, voice_preset; one short description line each, pointing to
+// the docs page) PLUS the restored guidance. An earlier revision of #1916 trimmed
+// the cost guidance, the Seedance storyboard paragraph and several parameter
+// descriptions of `generate_video` to stay inside the old cap; that text is back
+// exactly as on dev, so the cost is paid by the budget instead. No tool was
+// added, so the fixture does NOT move. measured by this suite: `generate_video`
+// 8_182 -> 8_671 B = 489 B, which is the whole movement of the total (397_365 ->
+// 397_854). The per-tool cap rises by the same 489 B (8_192 -> 8_681), keeping the
+// 10 B of headroom `generate_video` had on dev; no other tool is near it.
+const CHARACTER_REFERENCES_BYTES = 489
+// RAISED 2026-10-06 by length-based speech pricing's wording and nothing else:
+// `generate_speech` and `generate_dialogue` each gain ONE sentence (where length
+// pricing is on, the charge is per started 100 characters of the text sent, at
+// least 8 units; `list_models` shows the per-100-characters row when it
+// applies) and `get_app_inputs` names the optional `maxLength` a publisher may
+// put on a text input. No tool was added, so the fixture does NOT move.
+// measured by this suite: 399_845 total − 399_436 budget = 409 B.
+const SPEECH_LENGTH_PRICING_WORDING_BYTES = 409
+
+// RAISED by the two UGC job tools and one argument: `ugc_split_speech` and `ugc_finish_clips`
+// (cloud-only, ungated like the builders: every cloud set names them) and `segments` on
+// `build_ugc_clips`. measured by this suite: 404_519 total − 401_613 base = 2_906 B, each tool
+// far under the 8_192 B per-tool budget.
+const UGC_JOB_TOOLS_BYTES = 2_906
+// RAISED by two arguments on `combine_videos` and nothing else: `trim_start_frames` /
+// `trim_end_frames` (the join trims the route already takes, integers 0-120; one short
+// description line each). No tool was added, so the fixture does NOT move. measured by this
+// suite: 404_925 total - 404_519 base = 406 B, which keeps the 14 B of headroom the list had.
+const COMBINE_VIDEOS_TRIM_ARGS_BYTES = 406
+
 export const TOOL_WIRE_BUDGET = {
-  perToolBytes: 8_192,
+  perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES,
   totalBytes:
     337_638 +
     IMAGE_OVERLAY_TOOL_BYTES +
@@ -560,7 +688,9 @@ export const TOOL_WIRE_BUDGET = {
     JOB_ENVELOPE_INPUT_BYTES +
     VIDEO_OVERLAY_TOOL_BYTES +
     AUDIO_SYNC_TOOL_BYTES +
+    MIX_AUDIO_TOOL_BYTES +
     UGC_BUILDER_TOOL_BYTES +
+    UGC_JOB_TOOLS_BYTES +
     GET_RECIPE_UGC_SENTENCE_BYTES +
     GENERATE_SCRIPT_STYLE_GUIDE_BYTES +
     GENERATE_MUSIC_REFERENCE_BYTES +
@@ -571,13 +701,31 @@ export const TOOL_WIRE_BUDGET = {
     COMPETITOR_TOOLS_BYTES +
     SWITCH_CAMERAS_TOOL_BYTES +
     COMPETITOR_LESSONS_TOOL_BYTES +
+    SITE_CAPTURE_TOOL_BYTES +
+    LAUNCH_VIDEO_CAPTURE_POINTER_BYTES +
     CARD_MARK_TOOLS_BYTES +
     APPLY_EDL_PREVIEW_RATE_WORDING_BYTES +
     ELEVENLABS_V4_SPEECH_BYTES +
+    ELEVENLABS_V4_DIALOGUE_BYTES +
+    DIALOGUE_TRANSCRIPT_WORDING_BYTES +
     LIP_SYNC_AUDIO_LENGTH_BYTES +
     VIDEO_ANALYSIS_SMART_ONLY_BYTES +
     TEXT_TO_AUDIO_PER_SECOND_PRICING_BYTES +
-    ELEVENLABS_V4_DEFAULT_WORDING_BYTES,
+    ELEVENLABS_V4_DEFAULT_WORDING_BYTES +
+    GET_ASSET_PREVIEW_FLAG_BYTES +
+    GET_ASSET_PREVIEW_FLAG_CORRECTION_BYTES +
+    GET_APP_RUN_OUTCOME_BYTES +
+    UGC_CARDS_CAPTION_STYLE_BYTES +
+    COLLECTION_TOOLS_BYTES +
+    PLAN_EDIT_TRAILER_MODE_BYTES +
+    APPLY_EDL_CLIP_KEY_BYTES +
+    PLAN_EDIT_TRAILER_GATE_BYTES +
+    TTS_NEIGHBOUR_TEXT_ARGS_BYTES +
+    VOICE_CHANGER_PRO_V4_ENGINE_BYTES +
+    CHARACTER_REFERENCES_BYTES +
+    RENDER_FINAL_TOOL_BYTES +
+    SPEECH_LENGTH_PRICING_WORDING_BYTES +
+    COMBINE_VIDEOS_TRIM_ARGS_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

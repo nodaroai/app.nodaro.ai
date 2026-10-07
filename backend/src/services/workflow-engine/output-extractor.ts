@@ -1,3 +1,4 @@
+import { collectionRecordHeadline, collectionRecordsDigest, telegramFeedDigest, telegramPostsFrom } from "@nodaro/shared"
 /**
  * Extract output from completed node execution or source node data.
  * Backend equivalent of frontend extractNodeOutput().
@@ -16,8 +17,9 @@ import {
   TEXT_SOURCE_TYPES,
 } from "./execution-graph.js"
 import {
-  pro3DRenderShotStills, COMPOSER_PLAN_MAP, COMPOSER_PLAN_FIELDS, extractAllGeneratedResults, splitGeneratedItems, aggregateByType, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member, overlayVariantIdFromHandle, featuredMetaAdOutputs, featuredInstagramOutputs, unwrapEditPlanOutput, resolveVideoLinkOutput, telegramAccountTriggerOutputs, isTelegramAccountTriggerNamedHandle, pickSocialPosts, socialPostsFrom, socialPostsDigest, FAN_OUT_EACH_HANDLES } from "@nodaro/shared"
+  pro3DRenderShotStills, COMPOSER_PLAN_MAP, COMPOSER_PLAN_FIELDS, extractAllGeneratedResults, splitGeneratedItems, aggregateByType, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member, overlayVariantIdFromHandle, featuredMetaAdOutputs, featuredInstagramOutputs, unwrapEditPlanOutput, editPlanSavedOutput, resolveVideoLinkOutput, telegramAccountTriggerOutputs, isTelegramAccountTriggerNamedHandle, pickSocialPosts, socialPostsFrom, socialPostsDigest, FAN_OUT_EACH_HANDLES } from "@nodaro/shared"
 import type { SceneData, Transcript } from "@nodaro/shared"
+import { isRenderNodeType, renderResultStamp, savedRenderOutput } from "@nodaro/shared"
 import { buildScenePrompt } from "@nodaro/prompts"
 export { extractVideoDurationFromNode } from "@nodaro/shared"
 export { extractAllGeneratedResults }
@@ -791,6 +793,32 @@ export function getPrimaryOutput(
     return undefined
   }
 
+  // Telegram Channel Feed: `json` → the posts (stringified for text consumers;
+  // Extract Field and List read state.output.json directly); `text`, the
+  // legacy `out`, or no handle → their digest.
+  if (sourceType === "telegram-channel-feed") {
+    // An idle tick is NOTHING on the json pip too — the route writes `json: []`,
+    // and "[]" would run a paid model on two brackets, save a junk record and
+    // publish a reply to nothing (the canvas returns undefined here as well).
+    if (sourceHandle === "json") return Array.isArray(output.json) && output.json.length > 0 ? JSON.stringify(output.json) : undefined
+    return output.text
+  }
+
+  // Collections: Read Collection's `json` → the records (stringified for text
+  // consumers; Extract Field and List read state.output.json directly), `text`
+  // or no handle → their digest. Save to Collection's one handle `json` → the
+  // saved record; a text consumer gets its headline.
+  if (sourceType === "collection-read") {
+    // An empty window is NOTHING on both pips — "[]" would run a paid model on
+    // two brackets and save a junk record (the canvas returns undefined too).
+    if (sourceHandle === "json") return Array.isArray(output.json) && output.json.length > 0 ? JSON.stringify(output.json) : undefined
+    return output.text
+  }
+  if (sourceType === "collection-write") {
+    if (sourceHandle === "json" || !sourceHandle) return output.json === undefined ? output.text : JSON.stringify(output.json)
+    return output.text
+  }
+
   // Social Search: `json` → the posts the node passes on (stringified for text
   // consumers; Extract Field and List read state.output.json directly), `text`
   // → the same posts as a digest. Unknown handles return nothing.
@@ -823,7 +851,9 @@ export function getPrimaryOutput(
   // set, or an explicit "last"/first edge. It must NEVER stringify the ARRAY — a
   // downstream `edl` input's normalizeEdl would treat `[edl]` as an EDL with no
   // sources/segments → validateEdl 400. Emit the FIRST clip (one valid EDL), or
-  // nothing for an empty set. Mirrors the frontend extractNodeOutput branch.
+  // nothing for an empty set. A saved plan's `json` is already the person's
+  // review (`editPlanSavedOutput`, TA13): the kept clips only, so this is the
+  // first KEPT clip. Mirrors the frontend extractNodeOutput branch.
   // Camera Switch (B5): output.json is the pair { edl, transcript } — the
   // `transcript` handle carries the renamed transcript, the `edl` handle (and
   // the default) the switched edit. Mirrors the frontend extractNodeOutput.
@@ -862,6 +892,14 @@ export function getPrimaryOutput(
   // resolving the plain transcript exactly as before. Mirrors web-scrape's json
   // branch and the frontend execution-graph.ts transcribe branch.
   if (sourceType === "transcribe" && sourceHandle === "json") {
+    return output.json === undefined ? undefined : JSON.stringify(output.json)
+  }
+
+  // Text to Dialogue: dual output. `json` → the Transcript the model's timings
+  // built (stringified for generic consumers; Extract Field reads
+  // state.output.json directly); `audio` / no handle fall through to the audio
+  // set below and return output.audioUrl UNCHANGED. Mirrors transcribe.
+  if (sourceType === "text-to-dialogue" && sourceHandle === "json") {
     return output.json === undefined ? undefined : JSON.stringify(output.json)
   }
 
@@ -953,13 +991,14 @@ export function getPrimaryOutput(
     return output.videoUrl || output.audioUrl
   }
 
-  // apply-edl: dual-handle. The `json` handle carries the remapped Transcript
+  // A render (RENDER_NODE_TYPES; apply-edl): dual-handle. The `json` handle
+  // carries its json output — Apply EDL's is the remapped Transcript
   // (stringify for generic consumers; Extract Field reads state.output.json
   // directly). The DEFAULT (media) handle is the rendered cut — video OR audio
   // per the node's `output` setting. Without this branch the json edge resolves
   // to the video URL via the generic tail (the C4 audit-dag parity break).
   // Mirrors the frontend extractNodeOutput apply-edl branch.
-  if (sourceType === "apply-edl") {
+  if (isRenderNodeType(sourceType)) {
     if (sourceHandle === "json") {
       return output.json === undefined ? undefined : JSON.stringify(output.json)
     }
@@ -1317,6 +1356,19 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
     return out.videoUrl || out.audioUrl ? out : undefined
   }
 
+  // Text to Dialogue: the ACTIVE result's url plus its transcript (the json
+  // handle), stored per result like transcribe's; `generatedJson` is the bare
+  // active-result field every json consumer reads. Above the generic audio
+  // set, which would answer `{ audioUrl }` alone.
+  if (type === "text-to-dialogue") {
+    const audioUrl = getActiveResultUrl(data) ?? (data.generatedAudioUrl as string | undefined)
+    if (!audioUrl) return undefined
+    const results = (data.generatedResults as Array<{ transcript?: Transcript }> | undefined) ?? []
+    const activeIndex = (data.activeResultIndex as number | undefined) ?? 0
+    const transcript = results[activeIndex]?.transcript ?? (data.generatedJson as Transcript | undefined)
+    return transcript !== undefined ? { audioUrl, json: transcript } : { audioUrl }
+  }
+
   // Dubbing is dual-mode (voice-changer pattern): prefer the video result so
   // "Run from here" hydrates downstream video consumers; expose the dubbed
   // audio sidecar for the audio handle.
@@ -1333,21 +1385,27 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
     return audioUrl ? { audioUrl } : undefined
   }
 
-  // apply-edl (dual-handle): expose the rendered media (video OR audio per the
+  // A render (RENDER_NODE_TYPES; apply-edl), dual-handle: expose the rendered media (video OR audio per the
   // node's `output` setting) AND the remapped Transcript (data.generatedJson)
   // so a skipped / "Run from here" apply-edl hydrates BOTH handles from saved
   // node data without re-running. getPrimaryOutput then routes the media on the
   // default handle and the transcript on `json`. Mirrors the frontend
   // extractNodeOutput apply-edl branch and the live getPrimaryOutput branch.
-  if (type === "apply-edl") {
+  if (isRenderNodeType(type)) {
+    // The SELECTED take, as the node's medium, with its stamps — the one reader
+    // the editor uses too (`savedRenderOutput`). It used to take
+    // `generatedVideoUrl` first, so a picked older take reached the canvas but
+    // never a workflow run, and a pick saved before #1804 kept them apart.
     const out: NodeOutput = {}
-    const videoUrl = data.generatedVideoUrl as string | undefined
-    const audioUrl = data.generatedAudioUrl as string | undefined
-    if (videoUrl) out.videoUrl = videoUrl
-    else if (audioUrl) out.audioUrl = audioUrl
-    else {
-      const fallback = getActiveResultUrl(data)
-      if (fallback) out.videoUrl = fallback
+    const saved = savedRenderOutput(data)
+    if (saved) {
+      if (saved.medium === "audio") out.audioUrl = saved.url
+      else out.videoUrl = saved.url
+      if (saved.thumbnailUrl) out.thumbnailUrl = saved.thumbnailUrl
+      if (saved.quality) out.quality = saved.quality
+      if (saved.clipKey) out.clipKey = saved.clipKey
+      if (saved.planBasis) out.planBasis = saved.planBasis
+      if (saved.renderBasis) out.renderBasis = saved.renderBasis
     }
     const json = data.generatedJson
     if (json !== undefined) out.json = json
@@ -1541,6 +1599,41 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
     return { json, ...featuredInstagramOutputs(json, data.featuredIndex) }
   }
 
+  // Telegram Channel Feed → the posts its last run saved (data.generatedJson),
+  // their digest and one item per post — what a skipped / "Run from here" node
+  // passes on without fetching again. A node saved before the json pip existed
+  // carries only the digest text.
+  if (type === "telegram-channel-feed") {
+    const posts = telegramPostsFrom(data.generatedJson)
+    if (posts.length > 0) {
+      return { json: posts, text: telegramFeedDigest(posts), listResults: posts.map((p) => JSON.stringify(p)) }
+    }
+    const text = data.generatedText
+    return typeof text === "string" && text.trim() ? { text } : undefined
+  }
+
+  // Read Collection → the records its last run saved (data.generatedJson),
+  // their digest (data.generatedText, in the format the node was set to) and
+  // one item per record — what a skipped / "Run from here" node passes on
+  // without reading again. Save to Collection → the record its last run saved.
+  if (type === "collection-read") {
+    const records = Array.isArray(data.generatedJson) ? (data.generatedJson as unknown[]) : []
+    if (records.length > 0) {
+      const text = typeof data.generatedText === "string" ? data.generatedText : collectionRecordsDigest(records as never)
+      return { json: records, text, listResults: records.map((r) => JSON.stringify(r)) }
+    }
+    const text = data.generatedText
+    return typeof text === "string" && text.trim() ? { text } : undefined
+  }
+  if (type === "collection-write") {
+    const record = data.generatedJson
+    if (record && typeof record === "object" && !Array.isArray(record)) {
+      const text = typeof data.generatedText === "string" ? data.generatedText : collectionRecordHeadline(record as never)
+      return { json: record, text }
+    }
+    return undefined
+  }
+
   // Social Search → the posts the editor saved as the node's choice
   // (data.generatedJson: a person's picks, else the first few), their digest,
   // and one item per post. This is what a skipped node, and a node keeping its
@@ -1566,22 +1659,34 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
 
   // Edit Plan: the EDL plan is persisted (already unwrapped) on
   // data.generatedJson — the `Edl` for tighten, the bare `Edl[]` for clips, the
-  // `{version, chapters}` for chapters. Expose it on the `json` output so a
-  // skipped / "Run from here" node hydrates the `edl` handle without re-running;
-  // for the clips array, ALSO expose listResults so the fan-out has its per-item
-  // list off saved state. Mirrors the analysis json branch + the live
-  // buildNodeOutputFromJobData path.
+  // `{version, chapters}` for chapters — with a person's review of it beside
+  // it (`editedEdl`). Expose the resolved plan on the `json` output so a
+  // skipped / "Run from here" node hydrates the `edl` handle without
+  // re-running; for a clip set, ALSO expose listResults so the fan-out has its
+  // per-item list off saved state. Mirrors the analysis json branch + the live
+  // buildNodeOutputFromJobData path (a plan this run made carries no review).
   // Camera Switch: data.generatedJson is the { edl, transcript } pair.
   if (type === "camera-switch") {
     const json = data.generatedJson
     return json === undefined ? undefined : { json }
   }
 
+  // The person's review wins (`editedEdl`, TA13): `editPlanSavedOutput` is the
+  // one read of a saved plan on both engines. With no edit it is the plan as
+  // planned. A clip set keeps the PLAN's rows, with "" at every dropped clip
+  // (TA16), so a fan-out skips them and the scalar read (`getPrimaryOutput`,
+  // the first item of `json`) is the first kept clip.
+  // When the review applies, `json` is no longer the plan as planned, so the
+  // state also carries the plan (`plannedJson`): a run continued from this
+  // execution judges a newer review against it (run-continuation.ts). The
+  // resolver hands the plan object back unchanged when no review applies; were
+  // it ever to copy it, `plannedJson` would only be set needlessly, never wrong.
   if (type === "edit-plan") {
-    const json = data.generatedJson
-    if (json === undefined) return undefined
-    const out: NodeOutput = { json }
-    if (Array.isArray(json)) out.listResults = json.map((c) => JSON.stringify(c))
+    const saved = editPlanSavedOutput(data)
+    if (!saved) return undefined
+    const out: NodeOutput = { json: saved.json }
+    if (saved.listResults) out.listResults = saved.listResults
+    if (saved.json !== data.generatedJson) out.plannedJson = data.generatedJson
     return out
   }
 
@@ -1835,6 +1940,15 @@ export function buildNodeOutputFromJobData(
     if (edl !== undefined) output.json = { edl, ...(transcript !== undefined ? { transcript } : {}) }
   }
 
+  // Text to Dialogue: the worker writes the timings as `transcript` (the public
+  // job-output key); the node's json handle reads output.json.
+  if (nodeType === "text-to-dialogue" && outputData.transcript !== undefined) output.json = outputData.transcript
+
+  // A render (RENDER_NODE_TYPES; Apply EDL): its identity — its quality ("proxy" is a Preview) and
+  // the plan clip it cut — read only off a render's output (another node's
+  // `quality` is something else entirely).
+  if (isRenderNodeType(nodeType)) Object.assign(output, renderResultStamp(outputData))
+
   if (nodeType === "edit-plan") {
     const plan = unwrapEditPlanOutput(outputData)
     if (plan !== undefined) {
@@ -1855,6 +1969,28 @@ export function buildNodeOutputFromJobData(
   // every path that rebuilds the output from the job row (live, adopted after
   // a cancel race, a resumed fan-out) agrees. `listResults` carries one post
   // per item for an "each" wire.
+  // Telegram Channel Feed: the route writes the posts on `json` and one item
+  // per post on `listResults`; both ride onto the node output as written (the
+  // digest comes through generatedText below).
+  if (nodeType === "telegram-channel-feed") {
+    const posts = telegramPostsFrom(outputData.json)
+    if (posts.length > 0) {
+      output.json = posts
+      output.listResults = posts.map((p) => JSON.stringify(p))
+    }
+  }
+
+  // Collections: the routes write the records on `json` (one per `listResults`
+  // item for Read Collection; the one record for Save to Collection) and the
+  // digest / headline on text / generatedText (through the generic branch below).
+  if (nodeType === "collection-read" && Array.isArray(outputData.json)) {
+    output.json = outputData.json
+    output.listResults = (outputData.json as unknown[]).map((r) => JSON.stringify(r))
+  }
+  if (nodeType === "collection-write" && outputData.json && typeof outputData.json === "object" && !Array.isArray(outputData.json)) {
+    output.json = outputData.json
+  }
+
   if (nodeType === "social-search") {
     const pickedIds = Array.isArray(outputData.pickedIds)
       ? (outputData.pickedIds as unknown[]).filter((id): id is string => typeof id === "string")

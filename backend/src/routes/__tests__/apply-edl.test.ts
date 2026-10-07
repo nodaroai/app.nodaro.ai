@@ -13,6 +13,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
+import { renderSettingsBasis } from "@nodaro/shared"
 
 const m = vi.hoisted(() => ({
   guardMode: "pass" as "pass" | "insufficient",
@@ -112,5 +113,69 @@ describe("POST /v1/apply-edl — the 3-hour output cap", () => {
     expect((res.json() as { error: { message: string } }).error.message).toMatch(
       /^EDL failed validation: .*segment\[0\] "s0" has no video source/,
     )
+  })
+})
+
+describe("POST /v1/apply-edl — a preview is private and carries its clip's identity (A1b)", () => {
+  it("a proxy render's job is inserted force_private; a final keeps the caller's choice", async () => {
+    const app = await makeApp()
+    await app.inject({ method: "POST", url: "/v1/apply-edl", payload: { edl: edlOf(MINUTE), quality: "proxy" } })
+    expect(m.insertJob.mock.calls[0][1]).toMatchObject({ force_private: true })
+    m.insertJob.mockClear()
+    await app.inject({ method: "POST", url: "/v1/apply-edl", payload: { edl: edlOf(MINUTE), quality: "final" } })
+    expect(m.insertJob.mock.calls[0][1].force_private).toBeUndefined()
+  })
+
+  it("forwards the plan clip's key to the worker and the stored input", async () => {
+    const app = await makeApp()
+    const res = await app.inject({ method: "POST", url: "/v1/apply-edl", payload: { edl: edlOf(MINUTE), quality: "proxy", clipKey: "1200-61200" } })
+    expect(res.statusCode).toBe(200)
+    expect(m.queueAdd).toHaveBeenCalledWith("apply-edl", expect.objectContaining({ clipKey: "1200-61200", quality: "proxy" }))
+    expect(m.insertJob.mock.calls[0][1].input_data).toMatchObject({ clipKey: "1200-61200" })
+  })
+
+  it("forwards the plan basis it is given to the worker and the stored input (A3-1)", async () => {
+    const app = await makeApp()
+    const res = await app.inject({ method: "POST", url: "/v1/apply-edl", payload: { edl: edlOf(MINUTE), planBasis: "0123456789abcdef" } })
+    expect(res.statusCode).toBe(200)
+    expect(m.queueAdd).toHaveBeenCalledWith("apply-edl", expect.objectContaining({ planBasis: "0123456789abcdef" }))
+    expect(m.insertJob.mock.calls[0][1].input_data).toMatchObject({ planBasis: "0123456789abcdef" })
+  })
+
+  it("refuses a plan basis that is not 16 lowercase hex digits", async () => {
+    const app = await makeApp()
+    for (const planBasis of ["0123456789ABCDEF", "0123", "0123456789abcdefg"]) {
+      const res = await app.inject({ method: "POST", url: "/v1/apply-edl", payload: { edl: edlOf(MINUTE), planBasis } })
+      expect(res.statusCode, planBasis).toBe(400)
+    }
+    expect(m.insertJob).not.toHaveBeenCalled()
+  })
+
+  it("stamps the render basis itself, from what it renders: the settings and the effective sources (R19 a)", async () => {
+    const app = await makeApp()
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/apply-edl",
+      payload: { edl: edlOf(MINUTE), output: "audio", crossfadeMs: 250, sources: ["https://media.test/override.mp4"], renderBasis: "ffffffffffffffff" },
+    })
+    expect(res.statusCode).toBe(200)
+    const expected = renderSettingsBasis({ output: "audio", crossfadeMs: 250 }, ["https://media.test/override.mp4"])
+    // A caller's own renderBasis is never trusted: the route says what it renders.
+    expect(m.queueAdd).toHaveBeenCalledWith("apply-edl", expect.objectContaining({ renderBasis: expected }))
+    expect(m.insertJob.mock.calls[0][1].input_data).toMatchObject({ renderBasis: expected })
+  })
+
+  it("with no source override, the render basis names the EDL's own sources", async () => {
+    const app = await makeApp()
+    await app.inject({ method: "POST", url: "/v1/apply-edl", payload: { edl: edlOf(MINUTE) } })
+    const expected = renderSettingsBasis({ output: "video", crossfadeMs: 0 }, ["https://media.test/episode.mp4"])
+    expect(m.queueAdd).toHaveBeenCalledWith("apply-edl", expect.objectContaining({ renderBasis: expected }))
+  })
+
+  it("refuses a clip key that is not a span", async () => {
+    const app = await makeApp()
+    const res = await app.inject({ method: "POST", url: "/v1/apply-edl", payload: { edl: edlOf(MINUTE), clipKey: "seg-0" } })
+    expect(res.statusCode).toBe(400)
+    expect(m.insertJob).not.toHaveBeenCalled()
   })
 })

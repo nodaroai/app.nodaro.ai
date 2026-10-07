@@ -5,7 +5,7 @@ const map: LocaleCatalogMap = {
   "auto": { label: "Automático", description: "Deixe o modelo escolher o movimento de câmera apropriado" },
   "static": { label: "Estática", description: "Câmera fixa, sem movimento" },
   "handheld": { label: "Câmera na mão", description: "Tremor natural de câmera na mão" },
-  "steadicam": { description: "Caminhada estabilizada e suave" },
+  "steadicam": { label: "Steadicam", description: "Caminhada estabilizada e suave" },
 
   // Pan
   "pan-left": { label: "Pan para a esquerda", description: "Gire a câmera horizontalmente para a esquerda" },
@@ -18,15 +18,15 @@ const map: LocaleCatalogMap = {
   "tilt-down": { label: "Tilt para baixo", description: "Incline a câmera para baixo" },
 
   // Zoom
-  "zoom-in": { description: "Zoom de lente em direção ao sujeito" },
-  "zoom-out": { description: "Zoom de lente afastando do sujeito" },
-  "crash-zoom-in": { description: "Zoom in rápido e brusco, como um whip pan" },
-  "crash-zoom-out": { description: "Zoom out rápido e brusco, como um whip pan" },
+  "zoom-in": { label: "Zoom de aproximação", description: "Zoom de lente em direção ao sujeito" },
+  "zoom-out": { label: "Zoom de afastamento", description: "Zoom de lente afastando do sujeito" },
+  "crash-zoom-in": { label: "Zoom brusco de aproximação", description: "Zoom in rápido e brusco, como um whip pan" },
+  "crash-zoom-out": { label: "Zoom brusco de afastamento", description: "Zoom out rápido e brusco, como um whip pan" },
 
   // Dolly
-  "dolly-in": { description: "Empurra a câmera em direção ao sujeito (com paralaxe)" },
-  "dolly-out": { description: "Afasta a câmera (com paralaxe)" },
-  "dolly-zoom": { description: "Efeito vertigo: dolly oposto ao zoom" },
+  "dolly-in": { label: "Travelling de aproximação", description: "Empurra a câmera em direção ao sujeito (com paralaxe)" },
+  "dolly-out": { label: "Travelling de afastamento", description: "Afasta a câmera (com paralaxe)" },
+  "dolly-zoom": { label: "Efeito vertigo", description: "Efeito vertigo: dolly oposto ao zoom" },
   "push-in": { label: "Aproximação rápida", description: "Aproximação rápida e enérgica em direção ao sujeito" },
   "pull-out": { label: "Afastamento rápido", description: "Afastamento rápido e enérgico do sujeito" },
   "breathing": { label: "Câmera que respira", description: "Oscilação contínua e sutil de aproximação e afastamento" },
@@ -72,23 +72,23 @@ const map: LocaleCatalogMap = {
   "serpentine": { label: "Trajetória serpenteante", description: "A câmera serpenteia entre obstáculos em curvas em S, avançando por um caminho sinuoso" },
 
   // Special angles / rigs
-  "pov": { description: "Ponto de vista em primeira pessoa" },
+  "pov": { label: "Câmera subjetiva", description: "Ponto de vista em primeira pessoa" },
   "over-the-shoulder": { label: "Por cima do ombro", description: "Enquadrar por cima do ombro de um personagem" },
   "birds-eye": { label: "Plano zenital", description: "Visão direta de cima para baixo" },
   "worms-eye": { label: "Contra-plongée extremo", description: "Ângulo extremamente baixo olhando para cima" },
   "aerial": { label: "Aérea", description: "Tomada aérea estilo drone em grande altitude" },
   "helicopter": { label: "Helicóptero", description: "Aérea ampla e panorâmica em grande altitude" },
   "fly-over": { label: "Sobrevoo", description: "Passagem aérea baixa e veloz sobre a cena" },
-  "flythrough": { description: "Câmera atravessa o espaço voando" },
+  "flythrough": { label: "Atravessar voando", description: "Câmera atravessa o espaço voando" },
   "reveal": { label: "Revelação", description: "Revelar gradualmente a cena mais ampla" },
-  "snorricam": { description: "Câmera presa ao corpo (sujeito travado no quadro)" },
-  "rack-focus": { description: "Mudança de foco entre primeiro plano e fundo" },
+  "snorricam": { label: "Snorricam", description: "Câmera presa ao corpo (sujeito travado no quadro)" },
+  "rack-focus": { label: "Mudança de foco", description: "Mudança de foco entre primeiro plano e fundo" },
 
   // Modern / social-video
   "handheld-vlog": { label: "Vlog com câmera na mão", description: "Câmera na mão estilo vlog descontraído" },
   "pov-walk": { label: "Caminhada em POV", description: "POV de caminhada em primeira pessoa" },
-  "velocity-edit": { description: "Ritmo com speed ramp estilo TikTok" },
-  "match-cut-zoom": { description: "Zoom rápido com corte seco para uma forma correspondente" },
+  "velocity-edit": { label: "Rampa de velocidade", description: "Ritmo com speed ramp estilo TikTok" },
+  "match-cut-zoom": { label: "Zoom com corte de raccord", description: "Zoom rápido com corte seco para uma forma correspondente" },
   "screen-tap": { label: "Toque na tela", description: "Transição com toque na tela" },
   "phone-flip": { label: "Troca de câmera", description: "Troca entre câmera frontal e traseira" },
   // Location-studio extension (PR #2505 follow-up)

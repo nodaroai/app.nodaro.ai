@@ -6,6 +6,10 @@ import {
   NotFoundError,
   NodaroError,
   WorkflowConflictError,
+  InsufficientCreditsError,
+  type RunWorkflowParams,
+  type RenderFinalParams,
+  type RenderFinalQuote,
 } from "../../index.js"
 
 function mockOk<T>(body: T) {
@@ -80,6 +84,96 @@ describe("workflows resource", () => {
     expect(JSON.parse(init.body as string)).toMatchObject({
       expectedUpdatedAt: "2026-07-27T09:00:00Z",
     })
+  })
+
+  it("run sends typed per-node inputOverrides — Render final is { [renderId]: { quality: \"final\" } }", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ executionId: "ex-1", status: "pending" }))
+    const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    await c.workflows.run("wf-1", { nodeIds: ["cut", "cap"], inputOverrides: { cut: { quality: "final" } } })
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/workflows/wf-1/run")
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      nodeIds: ["cut", "cap"],
+      inputOverrides: { cut: { quality: "final" } },
+    })
+  })
+
+  it("run continues from an earlier execution: the nodes not named hand on that execution's output", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ executionId: "ex-2", status: "pending" }))
+    const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    const params = {
+      nodeIds: ["cut", "cap"],
+      inputOverrides: { cut: { quality: "final" } },
+      continueFromExecutionId: "ex-1",
+    } satisfies RunWorkflowParams
+    await c.workflows.run("wf-1", params)
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual(params)
+  })
+
+  it("a refused continuation: not found is a NotFoundError, the rest carry their stable code", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockReturnValueOnce(
+        mockErr(404, { error: { code: "continuation_not_found", message: "The execution to continue from was not found." } }),
+      )
+      .mockReturnValueOnce(
+        mockErr(400, { error: { code: "continuation_version_mismatch", message: "another version" } }),
+      )
+    const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    const missing = await c.workflows.run("wf-1", { nodeIds: ["cut"], continueFromExecutionId: "ex-x" }).catch((e: unknown) => e)
+    expect(missing).toBeInstanceOf(NotFoundError)
+    const mismatch = await c.workflows.run("wf-1", { nodeIds: ["cut"], continueFromExecutionId: "ex-app" }).catch((e: unknown) => e)
+    expect(mismatch).toBeInstanceOf(NodaroError)
+    expect((mismatch as NodaroError).code).toBe("continuation_version_mismatch")
+  })
+
+  it("renderFinal asks the server for the Render final: it derives the nodes and the Final override", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ executionId: "ex-3", status: "pending" }))
+    const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    const params = { renderNodeId: "cut", continueFromExecutionId: "ex-1" } satisfies RenderFinalParams
+    const result = await c.workflows.renderFinal("wf-1", params)
+    expect(result.executionId).toBe("ex-3")
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/workflows/wf-1/run")
+    expect(fetchMock.mock.calls[0][1].method).toBe("POST")
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      renderFinal: { renderNodeId: "cut" },
+      continueFromExecutionId: "ex-1",
+    })
+  })
+
+  it("estimateRenderFinal quotes it: the nodes it runs and its credits, nothing created", async () => {
+    const quote = {
+      renderNodeId: "cut",
+      nodeIds: ["cut", "cap"],
+      inputOverrides: { cut: { quality: "final" } },
+      estimatedCredits: 530,
+      sufficient: false,
+      available: 50,
+    } satisfies RenderFinalQuote
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ data: quote }))
+    const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    const { data } = await c.workflows.estimateRenderFinal("wf-1", { renderNodeId: "cut", continueFromExecutionId: "ex-1" })
+    expect(data).toEqual(quote)
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/workflows/wf-1/render-final/estimate")
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ renderNodeId: "cut", continueFromExecutionId: "ex-1" })
+  })
+
+  it("a refused Render final carries its stable code; a 402 is InsufficientCreditsError", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockReturnValueOnce(mockErr(400, { error: { code: "render_final_not_a_render", message: "not a render" } }))
+      .mockReturnValueOnce(
+        mockErr(402, {
+          error: { code: "insufficient_credits", message: "Insufficient credits. Required: 530, Available: 50", required: 530, available: 50 },
+        }),
+      )
+    const c = createClient({ baseUrl: "https://api.example.com", auth: new StaticTokenAuth("t"), fetch: fetchMock })
+    const params = { renderNodeId: "cap", continueFromExecutionId: "ex-1" }
+    const refused = await c.workflows.renderFinal("wf-1", params).catch((e: unknown) => e)
+    expect((refused as NodaroError).code).toBe("render_final_not_a_render")
+    const poor = await c.workflows.renderFinal("wf-1", params).catch((e: unknown) => e)
+    expect(poor).toBeInstanceOf(InsufficientCreditsError)
+    expect((poor as InsufficientCreditsError).required).toBe(530)
+    expect((poor as InsufficientCreditsError).available).toBe(50)
   })
 
   it("get throws NotFoundError on 404", async () => {

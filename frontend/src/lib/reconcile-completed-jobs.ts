@@ -53,6 +53,7 @@ import { settledBeforeClear } from "@/lib/results-cleared"
 import { videoOverlayRunOutputFields } from "@/lib/video-overlay-run-output"
 import { contentRunResultPatch, isContentNodeType } from "@/lib/content-run-output"
 import { applyEdlRunCutFields, applyEdlTakeTranscriptField } from "@/lib/apply-edl-cut"
+import { runResultIdentity } from "@/lib/run-result-identity"
 import { holdsJsonRunResult, isJsonRunResultType, jobRunOutput, jsonRunResultPatch } from "@/lib/json-run-result"
 import type { GeneratedResult, Scene3DRevisionEntry, WorkflowNode } from "@/types/nodes"
 
@@ -413,7 +414,7 @@ export function buildCompletedResultPatch(
   // result — the same mapping every other lane writes (lib/video-overlay-run-output).
   const overlayRun = nodeType === "video-overlay" ? videoOverlayRunOutputFields(output) : undefined
   const result: GeneratedResult = {
-    url, thumbnailUrl, timestamp, jobId, ...(overlayRun ?? {}),
+    url, thumbnailUrl, timestamp, jobId, ...runResultIdentity(nodeType, output), ...(overlayRun ?? {}),
     // Apply EDL: the take keeps the Transcript its render was cut with.
     ...applyEdlTakeTranscriptField(nodeType, output, url),
   }

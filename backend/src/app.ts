@@ -3,7 +3,7 @@ import { requestLogSerializer } from "./lib/log-redaction.js"
 import { createHash } from "node:crypto"
 import cors from "@fastify/cors"
 import { isOriginAllowedDynamic } from "./lib/dynamic-origins.js"
-import { config, hasAdmin, hasCredits, isCloud, isMultiUser } from "./lib/config.js"
+import { config, hasAdmin, hasCredits, isCloud, isMultiUser, siteCaptureEnabled } from "./lib/config.js"
 import { registerNodaroCloudBillingProvider } from "./lib/billing-provider.js"
 import { loadOverlay } from "./lib/overlay/load.js"
 import { registerMainlinePromptPolicies } from "./lib/prompt-policies/index.js"
@@ -135,6 +135,8 @@ import { generateCreatureMotionRoutes } from "./routes/generate-creature-motion.
 import { locationRoutes } from "./routes/locations.js"
 import { nodePresetRoutes } from "./routes/node-presets.js"
 import { savedPostRoutes } from "./routes/saved-posts.js"
+import { collectionRoutes } from "./routes/collections.js"
+import { collectionNodeRoutes } from "./routes/collection-nodes.js"
 import { nodePresetGroupRoutes } from "./routes/node-preset-groups.js"
 import { promptSnippetRoutes } from "./routes/prompt-snippets.js"
 import { locationRestoreRoutes } from "./routes/location-restore.js"
@@ -154,6 +156,7 @@ import { generateMaskRoutes } from "./routes/generate-mask.js"
 import { statsRoutes } from "./routes/stats.js"
 import { cancelJobsRoutes } from "./routes/cancel-jobs.js"
 import { creditsRoutes } from "./ee/routes/credits.js"
+import { ugcQuoteRoutes } from "./ee/routes/ugc-quote.js"
 import { registerCreditsBalanceRoutes } from "./ee/routes/credits-balance.js"
 import { registerCopilotRoutes } from "./ee/routes/copilot.js"
 import { claimSignupGrantRoutes } from "./ee/routes/claim-signup-grant.js"
@@ -185,6 +188,8 @@ import { loadAvailabilityOverrides } from "./lib/availability-override.js"
 import { configureDeploymentPayer, deploymentPayerActive, payerWebFreeConflict } from "./lib/deployment-payer.js"
 import { deploymentBillingRoutes } from "./ee/routes/deployment-billing.js"
 import { surfaceAvailabilityRoutes } from "./routes/surface-availability.js"
+import { editPlanCapabilitiesRoutes } from "./routes/edit-plan-capabilities.js"
+import { registerEditPlanModeGuard } from "./routes/edit-plan-mode-guard.js"
 import { userSettingsRoutes } from "./routes/user-settings.js"
 import { meRoutes } from "./routes/me.js"
 import { adminGalleryReportsRoutes } from "./ee/routes/admin-gallery-reports.js"
@@ -208,6 +213,7 @@ import { characterPortraitApprovalRoutes } from "./routes/character-portrait-app
 import { characterTrainingRoutes } from "./routes/character-training.js"
 import { replicateTrainingWebhookRoutes } from "./routes/replicate-training-webhook.js"
 import { webScrapeRoutes } from "./routes/web-scrape.js"
+import { siteCaptureRoutes } from "./routes/site-capture.js"
 import { metaAdsScrapeRoutes } from "./routes/meta-ads-scrape.js"
 import { instagramScrapeRoutes } from "./routes/instagram-scrape.js"
 import { reduceRoutes } from "./routes/reduce.js"
@@ -245,6 +251,7 @@ import { shotSequenceRoutes } from "./routes/shot-sequence.js"
 import { videoDirectorRoutes } from "./routes/video-director.js"
 import { subWorkflowRoutes } from "./routes/sub-workflows.js"
 import { workflowExecutionRoutes } from "./routes/workflow-execution.js"
+import { workflowRenderFinalRoutes } from "./routes/workflow-render-final.js"
 import { webhookTriggerRoutes } from "./routes/webhook-triggers.js"
 import { pipelinesRoutes } from "./routes/pipelines.js"
 import { sceneHelpersRoutes } from "./routes/scene-helpers.js"
@@ -269,6 +276,7 @@ import { telegramChannelRoutes } from "./routes/telegram-channel.js"
 import { publishedAppsRoutes } from "./routes/published-apps.js"
 import { workflowTemplatesRoutes } from "./routes/workflow-templates.js"
 import { appRunnerRoutes } from "./routes/app-runner.js"
+import { appRenderFinalRoutes } from "./routes/app-render-final.js"
 import { componentExecuteRoutes } from "./routes/component-execute.js"
 import { ogTagsRoutes } from "./routes/og-tags.js"
 import { appAnalyticsRoutes } from "./routes/app-analytics.js"
@@ -500,6 +508,10 @@ export async function buildApp() {
   // P14: the per-request payer resolve point. MUST follow the orgs-context
   // hook — rung 2 reads the req.workspaceId it validates.
   registerBillingContextHook(app)
+  // POST /v1/edit-plan refuses an unknown or undeclared Edit Plan mode before
+  // the credit guard (decided 2026-10-06). An onRoute hook, so it must precede
+  // every route: it reaches the plugin's route and the self-host shim alike.
+  registerEditPlanModeGuard(app)
 
   await app.register(healthRoutes)
   await app.register(projectRoutes)
@@ -585,6 +597,11 @@ export async function buildApp() {
   await app.register(locationRoutes)
   await app.register(nodePresetRoutes)
   await app.register(savedPostRoutes)
+  // Collections (migration 462): every edition — the caps come from the tier on
+  // Nodaro Cloud and from two env ceilings elsewhere.
+  await app.register(collectionRoutes)
+  // The two collection nodes (Save to Collection, Read Collection): sync-HTTP routes over the same store.
+  await app.register(collectionNodeRoutes)
   await app.register(nodePresetGroupRoutes)
   await app.register(promptSnippetRoutes)
   await app.register(locationRestoreRoutes)
@@ -604,6 +621,7 @@ export async function buildApp() {
   await app.register(executionStatsRoutes)
   await app.register(cancelJobsRoutes)
   if (hasCredits()) await app.register(creditsRoutes)
+  if (hasCredits()) await app.register(ugcQuoteRoutes)
   if (hasCredits()) await registerCreditsBalanceRoutes(app)
   if (hasCredits()) await registerCopilotRoutes(app)
   if (hasCredits()) await app.register(claimSignupGrantRoutes)
@@ -673,6 +691,7 @@ export async function buildApp() {
   if (hasCredits()) await app.register(characterTrainingRoutes)
   if (hasCredits()) await app.register(replicateTrainingWebhookRoutes)
   await app.register(webScrapeRoutes)
+  if (siteCaptureEnabled()) await app.register(siteCaptureRoutes)
   await app.register(metaAdsScrapeRoutes)
   await app.register(instagramScrapeRoutes)
   await app.register(reduceRoutes)
@@ -698,6 +717,9 @@ export async function buildApp() {
   await app.register(shotsRoutes)
   await app.register(modelsRoutes)
   await app.register(surfaceAvailabilityRoutes)
+  // Which Edit Plan modes the loaded plugin plans (read per request — the
+  // plugins load further down).
+  await app.register(editPlanCapabilitiesRoutes)
   await app.register(voicesRoutes)
   await app.register(heygenCatalogRoutes)
   await app.register(voiceCloneRoutes)
@@ -710,6 +732,7 @@ export async function buildApp() {
   await app.register(videoDirectorRoutes)
   await app.register(subWorkflowRoutes)
   await app.register(workflowExecutionRoutes)
+  await app.register(workflowRenderFinalRoutes)
   await app.register(webhookTriggerRoutes)
   await app.register(pipelinesRoutes)
   await app.register(sceneHelpersRoutes)
@@ -738,6 +761,7 @@ export async function buildApp() {
   await app.register(publishedAppsRoutes)
   await app.register(workflowTemplatesRoutes)
   await app.register(appRunnerRoutes)
+  await app.register(appRenderFinalRoutes)
   await app.register(componentExecuteRoutes)
   await app.register(ogTagsRoutes)
   await app.register(appAnalyticsRoutes)

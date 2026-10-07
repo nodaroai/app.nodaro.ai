@@ -19,6 +19,7 @@ import { getPersonSwatch } from "./color-swatches"
 import { MultiPickBadge } from "./multi-pick-ui"
 import { CharacterArtTile, characterArtGridClass } from "./character-art-tile"
 import { characterArtShape, characterArtUrl, type CharacterArtShape } from "../icons/character-art"
+import { usePickerFieldRestriction } from "../lib/field-restrictions"
 import {
   FacialHairIcon,
   FaceShapeIcon,
@@ -504,9 +505,14 @@ export function PersonDimensionGrid({
   const isSearching = Boolean(query)
 
   const minor = isMinorAge(value)
+  // An app card may restrict this dimension to a subset. Applied before the
+  // search so a query never widens the list back out to the whole dimension.
+  const restrict = usePickerFieldRestriction(field)
   const entries = useMemo(
-    () => (getRegisteredPeople() as readonly Person[]).filter((p) => p.dimension === dimension && !(minor && p.adultOnly) && matches(p.id, p.label, p.description, query)),
-    [dimension, matches, query, minor],
+    () =>
+      restrict((getRegisteredPeople() as readonly Person[]).filter((p) => p.dimension === dimension && !(minor && p.adultOnly)))
+        .filter((p) => matches(p.id, p.label, p.description, query)),
+    [dimension, matches, query, minor, restrict],
   )
 
   const checked = enabled ?? true

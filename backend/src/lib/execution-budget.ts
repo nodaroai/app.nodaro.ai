@@ -59,9 +59,16 @@ function jobIdsOf(nodeStates: Record<string, unknown> | null | undefined): strin
  * component nodes' inner executions. Best-effort: a failed read counts as 0
  * for that part, which leaves the caller on its default (today's) limit.
  * `nodeStates` skips the row read when the caller already holds them.
+ *
+ * Everything read is `ownerId`'s — the execution, its jobs, its component
+ * wrappers and their inner runs (decided 2026-10-06; migration 474). A job
+ * row naming the execution, a job id in its node states and a wrapper's
+ * `_executionId` are pointers, not proof, and another user's rows must not
+ * stretch this run's clock.
  */
 export async function executionBudgetExcessMs(
   executionId: string,
+  ownerId: string,
   nodeStates?: Record<string, unknown> | null,
   depth = 0,
   visited: Set<string> = new Set(),
@@ -75,6 +82,7 @@ export async function executionBudgetExcessMs(
       .from("jobs")
       .select("job_type, input_data")
       .eq("workflow_execution_id", executionId)
+      .eq("user_id", ownerId)
       .in("job_type", [...BUDGETED_JOB_NAMES])
     for (const row of (jobs ?? []) as Array<{ job_type?: unknown; input_data?: unknown }>) {
       if (typeof row.job_type !== "string") continue
@@ -91,6 +99,7 @@ export async function executionBudgetExcessMs(
         .from("workflow_executions")
         .select("node_states")
         .eq("id", executionId)
+        .eq("user_id", ownerId)
         .maybeSingle()
       states = (exec?.node_states as Record<string, unknown> | null | undefined) ?? null
     }
@@ -101,9 +110,10 @@ export async function executionBudgetExcessMs(
         .select("input_data")
         .in("id", ids)
         .eq("provider", "component")
+        .eq("user_id", ownerId)
       for (const w of (wrappers ?? []) as Array<{ input_data?: Record<string, unknown> | null }>) {
         const inner = w.input_data?._executionId
-        if (typeof inner === "string") total += await executionBudgetExcessMs(inner, undefined, depth + 1, visited)
+        if (typeof inner === "string") total += await executionBudgetExcessMs(inner, ownerId, undefined, depth + 1, visited)
       }
     }
   } catch {
@@ -147,9 +157,13 @@ interface NodeStateRow extends NodeStateJobRefs {
  * its wrapper yet (its inner run does not exist, and its app is not resolved
  * here), and a budgeted node inside an inline sub-workflow (not a top-level
  * node state).
+ *
+ * Like `executionBudgetExcessMs`, it reads only `ownerId`'s rows: another
+ * user's execution answers as missing (`false`).
  */
 export async function executionMayDispatchBudgetedJob(
   executionId: string,
+  ownerId: string,
   depth = 0,
   visited: Set<string> = new Set(),
 ): Promise<boolean> {
@@ -160,6 +174,7 @@ export async function executionMayDispatchBudgetedJob(
       .from("workflow_executions")
       .select("status, node_states")
       .eq("id", executionId)
+      .eq("user_id", ownerId)
       .maybeSingle()
     if (error) return true
     if (!exec) return false
@@ -182,10 +197,11 @@ export async function executionMayDispatchBudgetedJob(
       .select("input_data")
       .in("id", ids)
       .eq("provider", "component")
+      .eq("user_id", ownerId)
     if (wrapErr) return true
     for (const w of (wrappers ?? []) as Array<{ input_data?: Record<string, unknown> | null }>) {
       const inner = w.input_data?._executionId
-      if (typeof inner === "string" && (await executionMayDispatchBudgetedJob(inner, depth + 1, visited))) return true
+      if (typeof inner === "string" && (await executionMayDispatchBudgetedJob(inner, ownerId, depth + 1, visited))) return true
     }
     return false
   } catch {

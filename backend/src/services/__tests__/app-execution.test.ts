@@ -59,3 +59,26 @@ describe("executeAppRun — idempotency key", () => {
     expect(mocks.queueAdd).toHaveBeenCalledTimes(1)
   })
 })
+
+// The preview stop rule's answer for a component's inner run is the PARENT's
+// (decided 2026-10-05): the inner run is a new job, so the answer rides it.
+describe("executeAppRun — previewStopRule", () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it.each([[true], [false]])("stamps previewStopRule %s on the job when given", async (rule) => {
+    mocks.insertWithIdempotencyKey.mockResolvedValue({ row: { id: "exec-3" }, created: true })
+    mocks.from.mockReturnValue(chain({ data: { id: "run-3" }, error: null }))
+    await executeAppRun({
+      appVersionId: "app-v", workflowId: "wf-1", userId: "u1", appId: "app-1",
+      isComponentExecution: true, previewStopRule: rule,
+    })
+    expect(mocks.queueAdd.mock.calls[0]?.[1]).toMatchObject({ reviewerPresent: false, previewStopRule: rule })
+  })
+
+  it("leaves the field off when not given (the rule's default applies)", async () => {
+    mocks.insertWithIdempotencyKey.mockResolvedValue({ row: { id: "exec-4" }, created: true })
+    mocks.from.mockReturnValue(chain({ data: { id: "run-4" }, error: null }))
+    await executeAppRun({ appVersionId: "app-v", workflowId: "wf-1", userId: "u1", appId: "app-1" })
+    expect("previewStopRule" in (mocks.queueAdd.mock.calls[0]?.[1] as object)).toBe(false)
+  })
+})

@@ -2,7 +2,7 @@ import type { LocaleCatalogMap } from "./types.js"
 
 const map: LocaleCatalogMap = {
   // ── Standard ──
-  "auto": { label: "Auto", description: "Deixar o modelo escolher" },
+  "auto": { label: "Automático", description: "Deixar o modelo escolher" },
   "none": { label: "Corte seco", description: "Troca instantânea, sem transição" },
   "cross-dissolve": { label: "Dissolução cruzada", description: "Mistura gradual entre cenas" },
   "fade-to-black": { label: "Fade para preto", description: "Escurece ao preto, segunda cena emerge" },
@@ -15,11 +15,11 @@ const map: LocaleCatalogMap = {
   "roll-transition": { label: "Giro", description: "Quadro gira 90–180° e a segunda cena termina endireitada" },
   "seamless-match": { label: "Corte invisível", description: "Corte oculto disfarçado por movimento e cor" },
   "whip-pan": { label: "Chicote de câmera", description: "Câmera varre de lado com borrão, a próxima cena segue a mesma direção" },
-  "jump-cut": { label: "Jump cut", description: "Mesmo enquadramento, o tempo salta adiante" },
+  "jump-cut": { label: "Corte descontínuo", description: "Mesmo enquadramento, o tempo salta adiante" },
 
   // ── Time ──
-  "fast-forward-day-night": { label: "Dia → noite (time-lapse)", description: "Time-lapse do dia para a noite na mesma cena" },
-  "fast-forward-night-day": { label: "Noite → dia (time-lapse)", description: "Time-lapse da noite para o amanhecer" },
+  "fast-forward-day-night": { label: "Dia → noite (acelerado)", description: "Tempo acelerado do dia para a noite na mesma cena" },
+  "fast-forward-night-day": { label: "Noite → dia (acelerado)", description: "Tempo acelerado da noite para o amanhecer na mesma cena" },
   "seasonal-shift": { label: "Mudança de estação", description: "Mesma cena pelas quatro estações" },
   "aging": { label: "Envelhecimento", description: "O sujeito envelhece visivelmente" },
   "rewind": { label: "Rebobinar", description: "Tempo reverte, movimento ao contrário" },
@@ -44,25 +44,25 @@ const map: LocaleCatalogMap = {
   "powder-burst": { label: "Explosão de pó colorido", description: "Pó colorido explode e se dissipa, nova cena emerge" },
 
   // ── Morph ──
-  "liquid-morph": { label: "Morphing líquido", description: "Sujeito derrete e se recompõe como um novo sujeito" },
+  "liquid-morph": { label: "Metamorfose líquida", description: "Sujeito derrete e se recompõe como um novo sujeito" },
   "pixelate-reform": { label: "Pixelizar e recompor", description: "Pixeliza, se dispersa e se recompõe como novo" },
   "shatter-glass": { label: "Estilhaçar e recompor", description: "Sujeito se estilhaça como vidro e se recompõe" },
   "origami-fold": { label: "Dobra de origami", description: "Sujeito se dobra como papel e vira um novo sujeito" },
   "vortex-swirl": { label: "Redemoinho em vórtice", description: "Sujeito gira num vórtice e se desenrola como um novo sujeito" },
   "dream-ripple": { label: "Ondulação de sonho", description: "Onda na superfície revela nova cena" },
-  "wireframe-morph": { label: "Morphing em wireframe", description: "Sujeito vira wireframe e se recompõe como um novo sujeito" },
+  "wireframe-morph": { label: "Metamorfose em wireframe", description: "Sujeito vira wireframe e se recompõe como um novo sujeito" },
   "polygon-shatter": { label: "Fragmentação poligonal", description: "Sujeito se fragmenta em polígonos e se remonta" },
   "melt-down": { label: "Derretimento", description: "Sujeito derrete em poça, surge como novo" },
 
   // ── Portal ──
-  "zoom-into-eye": { label: "Zoom no olho", description: "Câmera entra na pupila, novo mundo lá dentro" },
-  "zoom-into-mirror": { label: "Zoom no espelho", description: "Câmera entra no espelho, cena dentro do reflexo" },
-  "zoom-into-screen": { label: "Zoom na tela", description: "Câmera entra na tela de TV/celular" },
-  "zoom-into-book": { label: "Zoom no livro", description: "Câmera entra na ilustração da página do livro" },
+  "zoom-into-eye": { label: "Entrar no olho", description: "Câmera entra na pupila, novo mundo lá dentro" },
+  "zoom-into-mirror": { label: "Entrar no espelho", description: "Câmera entra no espelho, cena dentro do reflexo" },
+  "zoom-into-screen": { label: "Entrar na tela", description: "Câmera entra na tela de TV/celular" },
+  "zoom-into-book": { label: "Entrar no livro", description: "Câmera entra na ilustração da página do livro" },
   "walk-through-door": { label: "Atravessar a porta", description: "Pela porta para nova cena" },
   "fall-into-hole": { label: "Queda no buraco", description: "Câmera cai pela abertura" },
   "pull-out-reveal": { label: "Recuo revelador", description: "Revela que a cena era uma imagem em contexto maior" },
-  "zoom-into-mouth": { label: "Zoom na boca", description: "Câmera entra na boca aberta e surge num novo mundo lá dentro" },
+  "zoom-into-mouth": { label: "Entrar na boca", description: "Câmera entra na boca aberta e surge num novo mundo lá dentro" },
   "push-through-glass": { label: "Atravessar o vidro", description: "Câmera atravessa vidro com refração para nova cena" },
   "soul-jump": { label: "Salto de alma", description: "Alma translúcida sai do corpo, entra em novo corpo" },
   "mask-transition": { label: "Transição de máscara", description: "Objeto em primeiro plano cobre o quadro, câmera atravessa o escuro" },
@@ -81,10 +81,10 @@ const map: LocaleCatalogMap = {
   "action-relay": { label: "Corte na ação", description: "Sujeito sai de quadro numa ação e continua o movimento na nova cena" },
 
   // ── Light ──
-  "white-flash": { label: "Flash branco", description: "Quadro clareia ao branco" },
+  "white-flash": { label: "Clarão branco", description: "Quadro clareia ao branco" },
   "lens-flare-swipe": { label: "Varredura de lens flare", description: "Flare anamórfico varre o quadro" },
   "light-streak": { label: "Rastro de luz", description: "Rastro de luz varre o quadro" },
-  "color-invert": { label: "Flash de inversão", description: "Cores invertem brevemente" },
+  "color-invert": { label: "Lampejo de inversão", description: "Cores invertem brevemente" },
   "sun-glare": { label: "Clarão solar", description: "Clarão solar lava o quadro" },
   "lens-crack": { label: "Rachadura na lente", description: "Lente racha, cena vista pelo vidro fraturado" },
   "dirty-lens-wipe": { label: "Limpeza de lente suja", description: "Sujeira da lente é limpa, cena muda" },

@@ -42,6 +42,11 @@ export function buildRuntimeConfig(env) {
     defaultLocale: pick(env.RUNTIME_DEFAULT_LOCALE),
     surface: passThroughSurface(env.RUNTIME_SURFACE_PROFILE),
     moderation: env.RUNTIME_UPLOAD_MODERATION === "true" ? { uploadImage: true } : undefined,
+    // The preview stop rule's rollout flag (decided 2026-10-05): start.sh
+    // passes the backend's own PREVIEW_STOP_RULE_ENABLED, parsed the same
+    // strict way as config.ts. Off → no key, so the editor keeps the rule off.
+    previewStopRule:
+      env.RUNTIME_PREVIEW_STOP_RULE === "true" || env.RUNTIME_PREVIEW_STOP_RULE === "1" ? true : undefined,
   }
   for (const k of Object.keys(cfg)) if (cfg[k] === undefined) delete cfg[k]
   return cfg

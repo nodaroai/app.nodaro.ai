@@ -233,6 +233,8 @@ import {
   TelegramAccountTriggerConfig,
   TelegramAccountSendConfig,
   TelegramChannelFeedConfig,
+  CollectionReadConfig,
+  CollectionWriteConfig,
   InstagramPostConfig,
   TiktokPostConfig,
   YoutubeUploadConfig,
@@ -469,7 +471,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "image-overlay": return <ImageOverlayConfig {...configProps} nodeId={selectedNodeId} />
     case "video-overlay": return <VideoOverlayConfig {...configProps} nodeId={selectedNodeId} />
     case "merge-video-audio": return <MergeVideoAudioConfig {...configProps} />
-    case "add-captions": return <AddCaptionsConfig {...configProps} />
+    case "add-captions": return <AddCaptionsConfig {...configProps} nodeId={selectedNodeId} />
     case "resize-video": return <ResizeVideoConfig {...configProps} />
     case "social-media-format": return <SocialMediaFormatConfig {...configProps} />
     case "trim-audio": return <TrimAudioConfig {...configProps} />
@@ -533,7 +535,9 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "telegram-trigger": return <TelegramTriggerConfig {...configProps} />
     // Keyed by node: a draft typed for one trigger never lands on another.
     case "telegram-account-trigger": return <TelegramAccountTriggerConfig key={selectedNodeId ?? ""} {...configProps} onUpdate={updateAccountTrigger} />
-    case "telegram-channel-feed": return <TelegramChannelFeedConfig {...configProps} />
+    case "telegram-channel-feed": return <TelegramChannelFeedConfig {...configProps} nodeId={selectedNodeId} />
+    case "collection-read": return <CollectionReadConfig {...configProps} />
+    case "collection-write": return <CollectionWriteConfig {...configProps} />
     case "sub-workflow-input": return <SubWorkflowInputConfig {...configProps} />
     case "sub-workflow-output": return <SubWorkflowOutputConfig {...configProps} />
     case "sub-workflow": return <SubWorkflowConfig {...configProps} />

@@ -1,7 +1,7 @@
 ---
 node_type: text-to-speech
-generated_at: 2026-10-05T10:55:37.632Z
-generated_from: 36ded98bd
+generated_at: 2026-10-06T09:25:55.626Z
+generated_from: 092785bc3
 ---
 
 # Text to Speech
@@ -34,6 +34,8 @@ generated_from: 36ded98bd
 - `promptSuffix?: string`
 - `currentJobProgress?: number`
 - `voiceLabel?: string`
+- `previousText?: string`
+- `nextText?: string`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`
 - `generatedAudioUrl?: string`
@@ -56,6 +58,8 @@ generated_from: 36ded98bd
   "languageCode": "",
   "textSource": "connected",
   "directText": "",
+  "previousText": "",
+  "nextText": "",
   "fieldMappings": {}
 }
 ```
@@ -79,6 +83,8 @@ generated_from: 36ded98bd
 - `style`
 - `speed`
 - `language_code`
+- `previous_text`
+- `next_text`
 <!-- AUTO-GEN:END mcp-call -->
 
 ## Common gotchas
@@ -110,6 +116,8 @@ generated_from: 36ded98bd
     "languageCode": "",
     "textSource": "connected",
     "directText": "",
+    "previousText": "",
+    "nextText": "",
     "fieldMappings": {}
   }
 }

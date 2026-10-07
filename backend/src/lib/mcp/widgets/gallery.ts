@@ -1241,6 +1241,8 @@ export interface GalleryItem {
    * at-a-glance. Empty array if the job had no inputs (text-to-image).
    */
   references?: string[]
+  /** A private 720p Preview render (Apply EDL at proxy quality). Present only when true. */
+  preview?: boolean
 }
 
 export interface GalleryInitData {

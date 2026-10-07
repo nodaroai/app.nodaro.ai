@@ -1,10 +1,11 @@
-import { IMAGE_GEN_PROVIDERS, IMAGE_TO_VIDEO_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, LIP_SYNC_PROVIDERS, VOICE_CHANGER_MODEL_IDS, GVP_SUPPORTED_PROVIDERS, SEEDANCE_2_PROVIDERS, VIDEO_ANALYSIS_TIER_ORDER, MUSIC_PROVIDERS, TRANSCRIBE_PROVIDERS, MODIFY_IMAGE_PROVIDERS, UPSCALE_IMAGE_PROVIDERS, REFERENCE_BOARD_PROVIDERS, TTS_PROVIDERS, TEXT_TO_AUDIO_PROVIDERS, MOTION_TRANSFER_PROVIDERS, buildMotionCreditModelIdentifier, hasContiguousSegmentDurations, isMinimaxH3Provider, MODEL_CATALOG, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY, OVERLAY_PLATFORM_IDS, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, VIDEO_OVERLAY_OUTPUT_ASPECTS, VIDEO_OVERLAY_FITS } from "@nodaro/shared"
+import { IMAGE_GEN_PROVIDERS, IMAGE_TO_VIDEO_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, LIP_SYNC_PROVIDERS, VOICE_CHANGER_MODEL_IDS, GVP_SUPPORTED_PROVIDERS, SEEDANCE_2_PROVIDERS, VIDEO_ANALYSIS_TIER_ORDER, MUSIC_PROVIDERS, TRANSCRIBE_PROVIDERS, MODIFY_IMAGE_PROVIDERS, UPSCALE_IMAGE_PROVIDERS, REFERENCE_BOARD_PROVIDERS, TTS_PROVIDERS, DIALOGUE_PROVIDERS, TEXT_TO_AUDIO_PROVIDERS, MOTION_TRANSFER_PROVIDERS, SPEECH_UNIT_CREDIT_SUFFIX, buildMotionCreditModelIdentifier, hasContiguousSegmentDurations, isMinimaxH3Provider, MODEL_CATALOG, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY, OVERLAY_PLATFORM_IDS, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, VIDEO_OVERLAY_OUTPUT_ASPECTS, VIDEO_OVERLAY_FITS } from "@nodaro/shared"
 import type { OutputType } from "@nodaro/shared"
 import { nodeSupportsPromptAffixes } from "@nodaro/prompts"
 import { SCRAPER_ACTOR_LABELS, type ScraperActorId } from "@nodaro/shared"
 import { STATIC_CREDIT_COSTS } from "../ee/billing/credits.js"
-import { hasCredits } from "./config.js"
+import { hasCredits, speechLengthPricingEnabled } from "./config.js"
 import type { ChargedPrices } from "./pricing/charged-prices.js"
+import { SPEECH_FLOOR_UNITS, getDialogueCapabilities, getMaxTtsChars, speechPriceUnits, speechUnitCreditId } from "@nodaro/shared"
 
 // ===========================================================================
 // Credit bands — DERIVED from the price table, never hand-typed
@@ -100,6 +101,13 @@ export interface CreditBandSource {
    * row); everything else leaves it at the implicit `[1, 1]`.
    */
   span?: readonly [number, number]
+  /**
+   * A band `ids × span` cannot express — a rate row whose unit count differs
+   * per model (speech: 8 units up to each model's own cap). Consulted first
+   * with the price lookup in force (the static table at module load, the
+   * charged table for `GET /v1/nodes`); undefined falls through to `ids`.
+   */
+  band?: (credits: (id: string, units?: number) => number | undefined) => readonly [low: number, high: number] | undefined
   /** Why this id set, when the answer is not "the node's provider enum". */
   note?: string
 }
@@ -147,12 +155,24 @@ export const CREDIT_BAND_SOURCES: Readonly<Record<string, CreditBandSource>> = {
   "face-swap": { ids: familyIds("roop-face-swap") },
   // ── Audio ──
   "text-to-speech": {
-    ids: familyIds(...TTS_PROVIDERS),
+    // The `<model>:per-100-chars` rows are a RATE (one started 100 characters,
+    // read only while SPEECH_LENGTH_PRICING_ENABLED is on), not a whole charge:
+    // folding them into `ids` would advertise "2-30" for a run that is never
+    // below 16. With the flag off the band is the flat per-request rows (what a
+    // run then costs); with it on, `band` states the length rule's own range —
+    // the cheapest model's floor up to the priciest model's cap.
+    ids: familyIds(...TTS_PROVIDERS).filter((id) => !id.endsWith(SPEECH_UNIT_CREDIT_SUFFIX)),
+    band: speechLengthBand(TTS_CATALOG_PROVIDERS, getMaxTtsChars),
     note: "Reserves on the ElevenLabs model row, not a node-type row (the legacy `elevenlabs` alias prices as turbo).",
   },
   "text-to-audio": {
     ids: familyIds(...TEXT_TO_AUDIO_PROVIDERS),
     note: "Priced per whole second of audio asked for (`elevenlabs-sfx:<n>s`, 1–30 s, rounded up); a request with no duration is billed as 5 s.",
+  },
+  "text-to-dialogue": {
+    ids: [...DIALOGUE_PROVIDERS],
+    band: speechLengthBand(DIALOGUE_PROVIDERS, (model) => getDialogueCapabilities(model).maxChars),
+    note: "Reserves on the dialogue model's row (elevenlabs-dialogue, …) — never the node-type row. Flat per request with length pricing off; by length (its :per-100-chars row) with it on.",
   },
   "audio-separation": { ids: familyIds("audio-separation") },
   "audio-fx": { ids: familyIds("audio-fx") },
@@ -232,6 +252,8 @@ export const CREDIT_BAND_SOURCES: Readonly<Record<string, CreditBandSource>> = {
 function creditBandFor(type: string): number | string {
   const source = CREDIT_BAND_SOURCES[type]
   if (!source) throw new Error(`node-registry: no credit-band source declared for "${type}"`)
+  const computed = source.band?.(staticCredits)
+  if (computed) return formatBand(computed[0], computed[1])
   const [minUnits, maxUnits] = source.span ?? [1, 1]
   const prices = source.ids
     .map((id) => STATIC_CREDIT_COSTS[id])
@@ -239,9 +261,42 @@ function creditBandFor(type: string): number | string {
   if (prices.length === 0) {
     throw new Error(`node-registry: credit-band source for "${type}" names no priced identifier`)
   }
-  const min = Math.min(...prices) * minUnits
-  const max = Math.max(...prices) * maxUnits
+  return formatBand(Math.min(...prices) * minUnits, Math.max(...prices) * maxUnits)
+}
+
+function formatBand(min: number, max: number): number | string {
   return min === max ? min : `${min}-${max}`
+}
+
+/** `STATIC_CREDIT_COSTS` as the price lookup a `band` computer takes: the base price × units, rounded up like a charge. */
+function staticCredits(id: string, units = 1): number | undefined {
+  const base = STATIC_CREDIT_COSTS[id]
+  return typeof base === "number" ? Math.ceil(base * units) : undefined
+}
+
+/**
+ * The speech band where length pricing is on (decided 2026-10-06): from the
+ * cheapest model's floor (8 units of its `:per-100-chars` row) up to the
+ * priciest model's cap (its per-request cap, in started hundreds, on its row).
+ * `span` cannot say this — one [min, max] unit pair would price every model at
+ * the same unit count, and v4's row at turbo's 400 units is a ceiling no v4 run
+ * can reach. Undefined while the flag is off: the flat per-request rows.
+ */
+function speechLengthBand(models: readonly string[], capOf: (model: string) => number): CreditBandSource["band"] {
+  return (credits) => {
+    if (!speechLengthPricingEnabled()) return undefined
+    const lows: number[] = []
+    const highs: number[] = []
+    for (const model of models) {
+      const unitId = speechUnitCreditId(model)
+      const low = credits(unitId, SPEECH_FLOOR_UNITS)
+      const high = credits(unitId, speechPriceUnits(capOf(model)))
+      if (low !== undefined) lows.push(low)
+      if (high !== undefined) highs.push(high)
+    }
+    if (lows.length === 0 || highs.length === 0) return undefined
+    return [Math.min(...lows), Math.max(...highs)]
+  }
 }
 
 /** How Web Scrape's description names each source. A Record over the actor
@@ -592,12 +647,14 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     category: "processing",
     // outputType: data — emits an edit-decision-list (EDL) plan via the `edl` (json)
     // handle. tighten → one Edl (tightened timeline); clips → a bare Edl[] that fans
-    // out one downstream render per clip; chapters → a { version, chapters } list.
+    // out one downstream render per clip; chapters → a { version, chapters } list;
+    // trailer → one Edl (a short teaser from the strongest moments).
     // Cloud-EXCLUSIVE (relayed). Duration-bucketed per-source-minute pricing × tier
-    // (+ a flat component on clips); PROVISIONAL placeholders finalized by a probe.
-    // See backend/src/ee/billing/credits.ts (EDIT_PLAN_STATIC) + migration 432.
+    // (+ a flat component on clips and trailer); PROVISIONAL placeholders finalized
+    // by a probe. See backend/src/ee/billing/credits.ts (EDIT_PLAN_STATIC) +
+    // migrations 432 and 462.
     description:
-      "Turn a transcript into an edit-decision-list plan: tighten a recording, find short clips, or mark chapters. Reads the transcript, never pixels; emits an EDL that Apply Edit renders.",
+      "Turn a transcript into an edit-decision-list plan: tighten a recording, find short clips, mark chapters, or cut a short trailer. Reads the transcript, never pixels; emits an EDL that Apply Edit renders.",
     outputType: "data",
     creditCost: creditBandFor("edit-plan"),
     inputSchema: {
@@ -875,7 +932,8 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     type: "text-to-speech",
     label: "Text to Speech",
     category: "ai-audio",
-    description: "Synthesize speech from text using ElevenLabs.",
+    description:
+      "Synthesize speech from text using ElevenLabs. Where length pricing is on, priced per started 100 characters of the text sent, at least 8 units (32 credits on v4, v3 and Multilingual v2; 16 on Turbo v2.5); otherwise the flat per-request row.",
     outputType: "audio",
     creditCost: creditBandFor("text-to-speech"),
     // The ids the route takes (`provider` on /v1/text-to-speech) and the model
@@ -888,6 +946,9 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
         { key: "text", type: "text", required: true },
         { key: "voiceId", type: "text" },
         { key: "provider", type: "select", options: TTS_CATALOG_PROVIDERS },
+        // Continuity across clips: the lines spoken just before / after this one (context, not spoken).
+        { key: "previousText", type: "text" },
+        { key: "nextText", type: "text" },
       ],
     },
   },
@@ -920,12 +981,15 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     type: "text-to-dialogue",
     label: "Text to Dialogue",
     category: "ai-audio",
-    description: "Generate multi-speaker dialogue audio where each line is spoken by a different voice (ElevenLabs Dialogue v3, direct API — any voice: premade, library, or cloned).",
+    description: "Generate multi-speaker dialogue audio where each line is spoken by a different voice (ElevenLabs Dialogue v3 by default or Dialogue v4 via `provider`, direct API — any voice: premade, library, or cloned). `stability` is 0–1: v3 takes exactly 0, 0.5 or 1, v4 any value; `similarityBoost` (0–1) is v4 only. Priced under the chosen model's identifier: where length pricing is on, per started 100 characters of the script, at least 8 units (32 credits on either dialogue model); otherwise flat per request. Its `json` output carries the timings (one segment per line, per-word timings) on both models.",
     outputType: "audio",
+    creditCost: creditBandFor("text-to-dialogue"),
     inputSchema: {
       fields: [
         { key: "dialogue", type: "json", required: true },
-        { key: "stability", type: "select", options: ["0", "0.5", "1"] },
+        { key: "provider", type: "select", options: [...DIALOGUE_PROVIDERS] },
+        { key: "stability", type: "number" },
+        { key: "similarityBoost", type: "number" },
         { key: "languageCode", type: "text" },
         { key: "seed", type: "number" },
         { key: "applyTextNormalization", type: "select", options: ["auto", "on", "off"] },
@@ -971,7 +1035,7 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     type: "voice-changer-pro",
     label: "Voice Changer Pro",
     category: "ai-audio",
-    description: "Detect each speaker in a multi-speaker recording and replace each one's voice independently, preserving words, timing and lip-sync. Provide an ordered list of target voices — voice N recasts the N-th speaker to talk; a null entry is a keep-slot (that speaker keeps their original voice). Per-voice engine: \"sts\" (default recast) or \"v3\" (Re-speak — regenerates the performance from the transcript with eleven_v3). Cloud edition only.",
+    description: "Detect each speaker in a multi-speaker recording and replace each one's voice independently, preserving words, timing and lip-sync. Provide an ordered list of target voices — voice N recasts the N-th speaker to talk; a null entry is a keep-slot (that speaker keeps their original voice). Per-voice engine: \"sts\" (default recast), \"v3\" (Re-speak — regenerates the performance from the transcript with eleven_v3) or \"v4\" (Re-speak with eleven_v4 — any stability 0–1, similarity honoured, each line generated with its neighbours as context). Cloud edition only.",
     outputType: "audio",
     // Per started minute of one speech-to-speech voice's stem; Re-speak voices
     // are priced per started 1K characters. See docs/nodes/ai-audio/voice-changer-pro.md.
@@ -1599,6 +1663,9 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
   // none is written in node data — the chat of a reply comes from the run.
   { type: "telegram-account-send", label: "Telegram Reply", category: "output", description: "Send the text wired in back to yourself on Telegram (Cloud, preview): as your connected account — under the post that started the run (Telegram Account Trigger runs), or to your Saved Messages — or from your own connected bot, as a private message. Never to anyone else. Whatever is wired in arrives as one message per run (up to 3 parts). 10 credits per message.", outputType: "none" },
   { type: "telegram-channel-feed", label: "Telegram Channel Feed", category: "input", description: "Read recent posts from a PUBLIC Telegram channel (t.me/s/<channel>) — emits their text for rewrite/repost workflows. Pair with a Schedule Trigger to poll; dedupes via a per-node cursor so each post is processed once.", outputType: "text" },
+  // ---- Collections (migration 462): where a workflow's records live. Free; the plan's caps apply. ----
+  { type: "collection-read", label: "Read Collection", category: "input", description: "Read a collection's records saved in the last N hours or days — newest or oldest first, up to a limit — as structured records (json), one item per record for an each-wire, and as text (headlines, or the full text). A window with nothing in it emits empty text, so a text node behind it is skipped and the run ends nothing-new. Free.", outputType: "data", creditCost: 0 },
+  { type: "collection-write", label: "Save to Collection", category: "output", description: "Save what is wired in as one record of a collection: the item (a feed post, a search result, an article object, or plain text) mapped to title / text / link / media / fields, with the node's own title, text, link and dedupe key winning; the picture and video wired in ride along as links. The same link twice is one record (duplicate); a re-run of the same step writes once (replayed); past the plan's cap the oldest records are evicted. Emits the saved record. Free.", outputType: "data", creditCost: 0 },
 
   { type: "list", label: "List", category: "control", description: "Static list of items for fan-out.", outputType: "data" },
   { type: "group", label: "Group", category: "utility", description: "Visual container that groups child nodes via React Flow parentId — emits members as a structured list to downstream consumers (Loop, Merge Lists, sub-workflow).", outputType: "data" },
@@ -1798,6 +1865,8 @@ function chargedCreditCost(desc: NodeDescriptor, prices: ChargedPrices): number 
   if (desc.creditCost === undefined) return undefined
   const source = CREDIT_BAND_SOURCES[desc.type]
   if (source) {
+    const computed = source.band?.((id, units) => prices.credits(id, units))
+    if (computed) return formatBand(computed[0], computed[1])
     const [minUnits, maxUnits] = source.span ?? [1, 1]
     const lows: number[] = []
     const highs: number[] = []

@@ -26,6 +26,13 @@ describe("modelToNodeTarget", () => {
   it("returns a provider preset for an enum video model (gemini-omni-video is enum-valid)", () => {
     expect(modelToNodeTarget("gemini-omni-video")).toEqual({ nodeType: "generate-video", field: "provider", value: "gemini-omni-video" })
   })
+  // A dialogue id IS a provider-enum value (DIALOGUE_PROVIDERS), so picking a
+  // dialogue model in the Models tab creates a node preset to THAT model — a
+  // bare node would run as the default (v3 dialogue) whatever was picked.
+  it("a dialogue model creates a Text to Dialogue node preset to that model", () => {
+    expect(modelToNodeTarget("elevenlabs-dialogue-v4")).toEqual({ nodeType: "text-to-dialogue", field: "provider", value: "elevenlabs-dialogue-v4" })
+    expect(modelToNodeTarget("elevenlabs-dialogue")).toEqual({ nodeType: "text-to-dialogue", field: "provider", value: "elevenlabs-dialogue" })
+  })
   it("returns null when there is no node (video-audit) or unknown id", () => {
     expect(modelToNodeTarget("video-audit")).toBeNull()
     expect(modelToNodeTarget("totally-unknown")).toBeNull()

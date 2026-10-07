@@ -195,3 +195,39 @@ describe("VideoOverlayPreview — a stored partial box", () => {
     expect(screen.queryByRole("img", { name: "Layer 1" })).toBeNull()
   })
 })
+
+describe("VideoOverlayPreview — a wired layer plan", () => {
+  const planLayer = expandVideoOverlayLayer({ imageUrl: "https://x/plan.png", start: 0, anchor: "top", x: 0, y: 12, width: 78, height: 52, fit: "contain" })
+  function renderWithPlan(planLayers: VideoOverlayLayer[]) {
+    render(
+      <VideoOverlayPreview
+        baseUrl="https://x/base.mp4"
+        sources={sources}
+        layers={layers}
+        planLayers={planLayers}
+        baseFit="cover"
+        backgroundColor="#000000"
+        fallbackDisplay={{ width: 1080, height: 1920 }}
+        selected={null}
+        onSelect={vi.fn()}
+        onLayerChange={vi.fn()}
+        onReorder={vi.fn()}
+        onRemove={vi.fn()}
+      />,
+    )
+  }
+
+  it("draws a live plan layer read-only (the hint, no handles) beneath the slot layers", () => {
+    renderWithPlan([planLayer])
+    const plan = screen.getByRole("img", { name: "From the layer plan" })
+    const slot = screen.getByRole("img", { name: "Layer 1" })
+    expect(plan).toHaveAttribute("title", "From the layer plan")
+    expect(plan.className).not.toContain("cursor-")
+    expect(Number(plan.style.zIndex)).toBeLessThan(Number(slot.style.zIndex))
+  })
+  it("a plan layer outside its window or without an image is not drawn", () => {
+    renderWithPlan([{ ...planLayer, start: 5 }, { ...planLayer, imageUrl: undefined }])
+    expect(screen.queryByRole("img", { name: "From the layer plan" })).toBeNull()
+  })
+})
+

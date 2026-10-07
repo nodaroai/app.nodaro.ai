@@ -186,6 +186,22 @@ const tier1: CharacterizedOperation[] = [
     },
   },
   {
+    // The duck graph: a 5 s noise bed sidechain-compressed under a 1.2 s tone
+    // "voice" (index 1). The voice is deliberately SHORTER than the bed — the
+    // `apad` on the sidechain is what keeps the bed alive after the key ends
+    // (sidechaincompress ends its output with its sidechain), and the
+    // brickwall limiter on the summed path is what keeps the voice at level.
+    name: "mix-audio-duck",
+    tier: 1,
+    run: async (f) => {
+      const outputPath = await mixAudio({
+        audioUrls: [fixtureUrl(f.noiseWav), fixtureUrl(f.toneShortWav)],
+        duck: { under: 1 },
+      })
+      return single(outputPath, "audio")
+    },
+  },
+  {
     name: "merge-video-audio-basic",
     tier: 1,
     run: async (f) => {

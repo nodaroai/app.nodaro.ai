@@ -48,6 +48,33 @@ describe("buildPayload — text-to-dialogue", () => {
     expect(result.payload.applyTextNormalization).toBe("on")
   })
 
+  it("dispatches and reserves under the node's dialogue model, forwarding similarity", () => {
+    const n = node("d1", "text-to-dialogue", { dialogue: [{ id: "1", text: "Hi", voice: "Rachel" }], provider: "elevenlabs-dialogue", similarityBoost: 0.6 })
+    const result = buildPayload(n, "job1", {}, "usage1")
+    expect(result.modelIdentifier).toBe("elevenlabs-dialogue")
+    expect(result.payload.provider).toBe("elevenlabs-dialogue")
+    expect(result.payload.similarityBoost).toBe(0.6)
+  })
+
+  it.each([undefined, "nope", "elevenlabs-v4", "constructor", ["elevenlabs-dialogue"]])("a node whose provider is %j runs and is billed as v3 dialogue", (provider) => {
+    const n = node("d1", "text-to-dialogue", { dialogue: [{ id: "1", text: "Hi", voice: "Rachel" }], provider })
+    const result = buildPayload(n, "job1", {}, "usage1")
+    expect(result.modelIdentifier).toBe("elevenlabs-dialogue")
+    expect(result.payload.provider).toBe("elevenlabs-dialogue")
+  })
+
+  it("fails honestly before dispatch when the lines exceed the model's total cap (the route's Zod cannot see this path)", () => {
+    const n = node("d1", "text-to-dialogue", {
+      dialogue: [{ id: "1", text: "a".repeat(3000), voice: "Rachel" }, { id: "2", text: "b".repeat(2001), voice: "Sarah" }],
+    })
+    expect(() => buildPayload(n, "job1", {}, "usage1")).toThrow(/5001 characters of dialogue; this model takes at most 5000/)
+  })
+
+  it("exactly at the cap still dispatches", () => {
+    const n = node("d1", "text-to-dialogue", { dialogue: [{ id: "1", text: "a".repeat(5000), voice: "Rachel" }] })
+    expect(() => buildPayload(n, "job1", {}, "usage1")).not.toThrow()
+  })
+
   it("filters empty lines (matches the frontend engine)", () => {
     const n = node("d1", "text-to-dialogue", {
       dialogue: [

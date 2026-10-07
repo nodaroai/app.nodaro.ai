@@ -189,6 +189,64 @@ describe("executeCombineText", () => {
     const result = executeCombineText(target, edges, allNodes, states)
     expect(result.text).toBe("from data")
   })
+
+  // A feed, a collection, a social search: `json` rows beside a per-item
+  // `listResults` (the fan-out view) and a `text` digest. A wire on the TEXT
+  // pip wants the digest — expanding the list handed Combine Text one raw JSON
+  // post per row off the Telegram feed's `text` pip (2026-10-06).
+  describe("a structured source (json + per-item listResults)", () => {
+    const posts = [
+      { id: 1, channel: "news", text: "first post" },
+      { id: 2, channel: "news", text: "second post" },
+    ]
+    const feedState: NodeExecutionState = {
+      status: "completed",
+      output: { json: posts, text: "first post\n\n---\n\nsecond post", listResults: posts.map((p) => JSON.stringify(p)) },
+    }
+
+    it("the `text` pip gives the digest, never one JSON row per item", () => {
+      const target = node("combine", "combine-text", { separator: "comma" })
+      const allNodes = [node("feed", "telegram-channel-feed"), target]
+      const result = executeCombineText(target, [edge("feed", "combine", "text")], allNodes, { feed: feedState })
+      expect(result.text).toBe("first post\n\n---\n\nsecond post")
+    })
+
+    it("the feed's legacy `out` spelling is its text pip", () => {
+      const target = node("combine", "combine-text", { separator: "comma" })
+      const allNodes = [node("feed", "telegram-channel-feed"), target]
+      const result = executeCombineText(target, [edge("feed", "combine", "out")], allNodes, { feed: feedState })
+      expect(result.text).toBe("first post\n\n---\n\nsecond post")
+    })
+
+    it("the `json` pip still expands to one item per row", () => {
+      const target = node("combine", "combine-text", { separator: "comma" })
+      const allNodes = [node("feed", "telegram-channel-feed"), target]
+      const result = executeCombineText(target, [edge("feed", "combine", "json")], allNodes, { feed: feedState })
+      expect(result.text).toBe(posts.map((p) => JSON.stringify(p)).join(", "))
+    })
+
+    it("a fan-out of a json-producing node on a `text` wire still expands every iteration", () => {
+      // The orchestrator spreads iteration 0's output (its json included) beside
+      // one value per iteration — that list is not the node's per-item view.
+      const target = node("combine", "combine-text", { separator: "comma" })
+      const allNodes = [node("fan", "social-search"), target]
+      const states: Record<string, NodeExecutionState> = {
+        fan: { status: "completed", output: { json: [{ id: 1, text: "a" }], text: "digest a", listResults: ["digest a", "digest b"] } },
+      }
+      const result = executeCombineText(target, [edge("fan", "combine", "text")], allNodes, states)
+      expect(result.text).toBe("digest a, digest b")
+    })
+
+    it("a fan-out result (no json) on a `text` wire still expands every iteration", () => {
+      const target = node("combine", "combine-text", { separator: "comma" })
+      const allNodes = [node("fan", "llm-chat"), target]
+      const states: Record<string, NodeExecutionState> = {
+        fan: { status: "completed", output: { text: "third", listResults: ["first", "second", "third"] } },
+      }
+      const result = executeCombineText(target, [edge("fan", "combine", "text")], allNodes, states)
+      expect(result.text).toBe("first, second, third")
+    })
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -596,6 +654,58 @@ describe("executeWebhookOutput", () => {
     insertInternalJobMock.mockResolvedValue({ data: null, error: { message: "db down" } })
     await executeWebhookOutput(webhookNode(), [], [], {}, ctx)
     expect(safeFetchMock).toHaveBeenCalledTimes(1)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// executeWebhookOutput — one request per row of an "each" wire.
+//
+// Run once per item (a Filter List of articles, the images made for them), the
+// node used to read the whole upstream state in every iteration and POST the
+// same payload N times. Each wire now reads its value AT THE ROW, the rule
+// resolveNodeInputs applies to every other node (2026-10-06).
+// ---------------------------------------------------------------------------
+describe("executeWebhookOutput — one request per row", () => {
+  const ctx = { userId: "u1", executionId: "exec-1" } as unknown as Parameters<typeof executeWebhookOutput>[4]
+  const hook = () =>
+    node("w", "webhook-output", {
+      url: "https://example.com/hook",
+      params: [
+        { id: "article", name: "article", type: "text" },
+        { id: "image", name: "image", type: "imageUrl" },
+      ],
+    })
+  const articles = node("a", "filter-list")
+  const images = node("g", "generate-image")
+  const wires = [edge("a", "w", "out", "article"), edge("g", "w", "image", "image")]
+  const states = (imageList: string[]): Record<string, NodeExecutionState> => ({
+    a: { status: "completed", output: { text: "a1", listResults: ["a1", "a2", "a3"] } },
+    g: { status: "completed", output: { imageUrl: imageList[0], listResults: imageList } },
+  })
+  const posted = () => (insertInternalJobMock.mock.calls[0] as unknown as [string, { input_data: { payload: unknown } }])[1].input_data.payload
+
+  beforeEach(() => {
+    insertInternalJobMock.mockClear()
+    safeFetchMock.mockClear()
+    insertInternalJobMock.mockResolvedValue({ data: { id: "job-1" }, error: null })
+  })
+
+  it("row 1 posts the second article with the second image", async () => {
+    await executeWebhookOutput(hook(), wires, [articles, images, hook()], states(["i1", "i2", "i3"]), ctx, 1)
+    expect(posted()).toEqual({ article: "a2", image: "i2" })
+  })
+
+  it("without a row the primary values post, as before", async () => {
+    await executeWebhookOutput(hook(), wires, [articles, images, hook()], states(["i1", "i2", "i3"]), ctx)
+    expect(posted()).toEqual({ article: "a1", image: "i1" })
+  })
+
+  it("a shorter list starts over from its first row; an empty cell contributes nothing", async () => {
+    await executeWebhookOutput(hook(), wires, [articles, images, hook()], states(["i1", ""]), ctx, 1)
+    expect(posted()).toEqual({ article: "a2" })
+    insertInternalJobMock.mockClear()
+    await executeWebhookOutput(hook(), wires, [articles, images, hook()], states(["i1", ""]), ctx, 2)
+    expect(posted()).toEqual({ article: "a3", image: "i1" })
   })
 })
 

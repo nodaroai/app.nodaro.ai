@@ -21,7 +21,7 @@ The Deduplicate node takes an upstream list and removes duplicates, preserving t
 
 ## Inputs & Outputs
 
-**Inputs:** A list from an upstream node.
+**Inputs:** A list from an upstream node. Deduplicate always works on the whole list it is wired to: it runs once, never once per item, whatever the wire's mode says.
 
 **Outputs:** The deduplicated list.
 

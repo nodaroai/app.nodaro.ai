@@ -19,7 +19,7 @@
     "shorts"
   ],
   "complexity": "intermediate",
-  "estimatedCredits": 249,
+  "estimatedCredits": 1075,
   "nodeTypesUsed": [
     "youtube-video",
     "text-prompt",

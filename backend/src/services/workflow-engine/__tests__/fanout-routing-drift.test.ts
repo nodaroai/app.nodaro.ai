@@ -100,3 +100,36 @@ describe("input-resolver — list-transform fan-out (DEFAULT_EACH_TYPES drift gu
     expect(items).toBeUndefined()
   })
 })
+
+// A list operator READS the whole list wired into it; run once per item it
+// would see the same whole list every time and answer with its first match —
+// a Filter List fed 11 stories by a Split Text handed 11 copies of story one
+// downstream (2026-10-06). The planner never fans one out, whatever the wire.
+describe("input-resolver — list operators are never fanned out (fan-in targets)", () => {
+  const sources: Array<[string, NodeExecutionState]> = [
+    ["split-text", { status: "completed", output: { text: "a", splitResults: ["a", "b", "c"], listResults: ["a", "b", "c"] } }],
+    ["filter-list", { status: "completed", output: { text: "a", listResults: ["a", "b", "c"] } }],
+    ["llm-chat", { status: "completed", output: { text: "c", listResults: ["a", "b", "c"] } }],
+  ]
+  for (const type of ["filter-list", "deduplicate", "merge-lists", "sort-list", "selector"]) {
+    for (const [srcType, srcState] of sources) {
+      it(`${srcType} (each) → ${type}: one run over the whole list`, () => {
+        const target = node("t", type)
+        const src = node("s", srcType)
+        const states: Record<string, NodeExecutionState> = { s: srcState }
+        const items = getListInputForNode(target, [edge("s", "t", null, "in", { outputMode: "each" })], states, [src, target])
+        expect(items).toBeUndefined()
+      })
+    }
+  }
+
+  it("the same each wire into a generating node still fans it out", () => {
+    const target = node("g", "generate-image")
+    const src = node("s", "split-text")
+    const states: Record<string, NodeExecutionState> = {
+      s: { status: "completed", output: { text: "a", splitResults: ["a", "b", "c"], listResults: ["a", "b", "c"] } },
+    }
+    const items = getListInputForNode(target, [edge("s", "g", null, "prompt", { outputMode: "each" })], states, [src, target])
+    expect(items).toEqual(["a", "b", "c"])
+  })
+})

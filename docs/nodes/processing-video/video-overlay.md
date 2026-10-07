@@ -73,6 +73,16 @@ Layers are index-aligned with the handles: **Layer 1** is what is wired into `ov
 **Outputs:**
 - **Video** — the composited MP4.
 
+## Layer plan input
+
+Besides its twelve layer handles, Video Overlay has a **Layer plan** input. Wire into it a JSON list of layers in the node's own layer shape (`imageUrl`, `start`, `end`, and the box fields `anchor`, `x`, `y`, `width`, `height`, `fit`), for example from a node that times screenshot cards to a voice-over.
+
+- Plan layers are drawn **under** the handle layers, so a logo badge on a handle stays on top.
+- Each plan layer must carry its own `imageUrl`. It is never filled from a handle; a plan layer without an image fails with "Plan layer <n>: no image — set imageUrl on this layer in the plan."
+- Plan layers and handle layers count together toward the 20-layer limit.
+- The preview shows plan layers read-only ("From the layer plan").
+- **An empty plan passes the video through**: with a layer plan wired and no layer to draw, the node outputs its video unchanged, at no cost.
+
 ## Limits
 
 - 1–20 layers per run: 12 handles on the canvas; layers 13 and up come from the API, MCP or a template via an image URL. A node written with more than 20 layers that have an image is refused before the run starts (`At most 20 layers (got 24)`; on the canvas the Run button says so, and the settings list every stored layer). Removing any layers brings it back to 20; the layers that remain keep their numbers (remove Layers 1–4 of 24 and Layers 5–24 run). No layer is dropped silently and nothing is charged.

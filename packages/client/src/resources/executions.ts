@@ -1,5 +1,5 @@
 import type { NodaroClient } from "../client.js"
-import type { NodeExecutionStateWire } from "@nodaro/shared"
+import type { ExecutionOutcome, NodeExecutionStateWire } from "@nodaro/shared"
 
 export type ExecutionStatus =
   | "pending"
@@ -17,6 +17,10 @@ export type ExecutionTriggerType =
   | "schedule"
   | "app_run"
   | "single-node"
+  | "telegram"
+  | "telegram_account"
+  | "api"
+  | "mcp"
 
 /**
  * Per-node state inside an execution's `nodeStates` map. Keys are node IDs.
@@ -31,8 +35,8 @@ export interface NodeExecutionState extends NodeExecutionStateWire {
   [key: string]: unknown
 }
 
-export type { NodeExecutionStatus } from "@nodaro/shared"
-export { OUTPUT_BEARING_NODE_STATUSES, nodeStateMayCarryOutput } from "@nodaro/shared"
+export type { NodeExecutionStatus, NodeSkipReason, ExecutionOutcome } from "@nodaro/shared"
+export { OUTPUT_BEARING_NODE_STATUSES, nodeStateMayCarryOutput, executionOutcome, countEmptyInputSkips } from "@nodaro/shared"
 
 /**
  * Workflow execution record. Returned by `get()` and `cancel()` (the cancel
@@ -40,9 +44,23 @@ export { OUTPUT_BEARING_NODE_STATUSES, nodeStateMayCarryOutput } from "@nodaro/s
  */
 export interface WorkflowExecution {
   id: string
+  /**
+   * `"execution"` for an orchestrator run; `"job"` for a single-node job the
+   * list shows beside the runs (its `triggerType` is the lane that started it,
+   * `"mcp"` for an MCP client's one-node job). Absent on an older server.
+   */
+  kind?: "execution" | "job"
   workflowId: string | null
   userId: string
   status: ExecutionStatus
+  /**
+   * How a `completed` run ended: `"nothing_new"` when at least one node was
+   * skipped for want of input (its `nodeStates` entry carries
+   * `skipReason: "empty_input"` — a feed that found no new posts, a writer with
+   * nothing to write), `"succeeded"` otherwise. Absent until the run completes
+   * and on an older server. Derived by `executionOutcome()` (exported).
+   */
+  outcome?: ExecutionOutcome
   triggerType: ExecutionTriggerType
   triggerData?: unknown
   nodeStates: Record<string, NodeExecutionState>
@@ -60,7 +78,11 @@ export interface WorkflowExecution {
 /** Summary returned by `listForWorkflow()`. Excludes per-row `triggerData`/`updatedAt`. */
 export interface WorkflowExecutionSummary {
   id: string
+  /** See {@link WorkflowExecution.kind}. */
+  kind?: "execution" | "job"
   status: ExecutionStatus
+  /** See {@link WorkflowExecution.outcome}. */
+  outcome?: ExecutionOutcome
   triggerType: ExecutionTriggerType
   nodeStates: Record<string, NodeExecutionState>
   totalNodes: number

@@ -10,7 +10,11 @@ import { Label } from "@/components/ui/label"
 import { TagTextarea } from "./tag-textarea"
 import { getLanguagesForModel, ALL_LANGUAGES } from "@/lib/audio-tags"
 import { TtsVoiceSettings } from "./tts-voice-settings"
+import { TtsContinuitySection } from "./tts-continuity-section"
+import { VcpVoiceSettings } from "./vcp-voice-settings"
 import { ttsModelSwitchPatch } from "@/lib/tts-model-switch"
+import { DialogueVoiceSettings } from "./dialogue-voice-settings"
+import { dialogueModelSwitchPatch } from "@/lib/dialogue-model-switch"
 import { SUNO_SUGGESTION_ITEMS, SUNO_LYRICS_SUGGESTION_ITEMS, SUNO_STYLE_SUGGESTION_ITEMS } from "@/lib/suno-tags"
 import { SUNO_SLIDER_META, SUNO_SLIDER_LABEL_KEYS, SUNO_SLIDER_DESC_KEYS } from "@/lib/suno-sliders"
 import { Button } from "@/components/ui/button"
@@ -61,7 +65,7 @@ import type {
   ForcedAlignmentData,
   GeneratedScript,
 } from "@/types/nodes"
-import { VOICE_CHANGER_MODELS, DEFAULT_VOICE_CHANGER_MODEL, AUDIO_FX_PRESETS, AUDIO_FX_REVERB_PRESETS, REPLICATE_LIP_SYNC_PROVIDERS, FAL_LIP_SYNC_PROVIDERS, VIDEO_INPUT_LIP_SYNC_PROVIDERS, isPerSecondLipSyncProvider, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, sunoModelHonoursDuration, SUNO_HARD_CEILING, SUNO_TITLE_MAX, getMaxSunoPromptChars, getMaxSunoStyleChars, getMaxTtsChars, sunoCreditType, DEFAULT_TEXT_TO_AUDIO_PROVIDER, DEFAULT_TTS_PROVIDER } from "@nodaro/shared"
+import { VOICE_CHANGER_MODELS, DEFAULT_VOICE_CHANGER_MODEL, AUDIO_FX_PRESETS, AUDIO_FX_REVERB_PRESETS, REPLICATE_LIP_SYNC_PROVIDERS, FAL_LIP_SYNC_PROVIDERS, VIDEO_INPUT_LIP_SYNC_PROVIDERS, isPerSecondLipSyncProvider, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, sunoModelHonoursDuration, SUNO_HARD_CEILING, SUNO_TITLE_MAX, getMaxSunoPromptChars, getMaxSunoStyleChars, getMaxTtsChars, sunoCreditType, DEFAULT_TEXT_TO_AUDIO_PROVIDER, DEFAULT_TTS_PROVIDER, dialogueProviderOf, getDialogueCapabilities } from "@nodaro/shared"
 import type { AudioFxPreset } from "@nodaro/shared"
 import { getEffectiveSunoCustomMode } from "@nodaro/prompts"
 import { MappableField } from "./mappable-field"
@@ -78,8 +82,12 @@ import { ModelDescriptionHint } from "./model-description-hint"
 import { ProviderAudioTagWarning } from "./provider-audio-tag-warning"
 import { ConnectedAudioSources } from "./connected-audio-sources"
 import { FinalAudioPromptPreview } from "./final-audio-prompt-preview"
-import { LIP_SYNC_MODELS, TTS_MODELS, SUNO_MODELS } from "./model-options"
+import { LIP_SYNC_MODELS, TTS_MODELS, DIALOGUE_MODELS, SUNO_MODELS } from "./model-options"
 import { PromptLengthCounter } from "./prompt-length-counter"
+// The speech price as the run reserves it (flat, or by length when the server
+// serves the unit row) — an `ee/` hook; allowlisted in tools/check-ee-imports.mjs
+// like the sibling config panels' credit hooks.
+import { useSpeechPricing, type SpeechPricing } from "@/ee/hooks/use-speech-pricing"
 import { SUNO_FIELD_EDIT_META, SunoFieldEditor, type SunoEditField } from "./suno-field-editor"
 import { SunoFieldAiButton, isSunoAiField } from "@/components/nodes/suno-field-ai-button"
 import { InjectedReferenceList } from "./injected-reference-list"
@@ -135,10 +143,30 @@ const SUNO_FIELD_LABEL_KEYS: Record<SunoEditField, MessageKey> = {
   negativeStyle: "audiocfg.negativeStyleOptional",
 }
 
+/**
+ * One line under a speech node's text: what the run will reserve while the
+ * server prices speech by length — exact for a literal text (credits ·
+ * characters · units × unit), a range for a text that arrives at run time.
+ * Nothing on the flat path (the pill already says the row).
+ */
+function SpeechPriceLine({ price }: { price: SpeechPricing }) {
+  const t = useT()
+  const q = price.quote
+  if (!q) return null
+  return (
+    <p className="text-[10px] text-muted-foreground" data-testid="speech-price-line">
+      {q.exact
+        ? t("audiocfg.speechPriceExact", { credits: q.credits, chars: q.chars, units: q.units, unit: q.unit })
+        : t("audiocfg.speechPriceRange", { min: q.range?.min ?? q.credits, max: q.credits })}
+    </p>
+  )
+}
+
 export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onMapField, nodes, edges, nodeRefs, refMap, variableDisplayMode, nodeId }: ConfigProps<TextToSpeechData> & { nodeId?: string }) {
   const localizeOption = useLocalizeOptionLabel()
   const t = useT()
   const textSource = data.textSource || "connected"
+  const price = useSpeechPricing(nodeId, "text-to-speech", data as unknown as Record<string, unknown>)
   // The model the dropdown, the description hint and the length counter show: a node
   // with no model runs on DEFAULT_TTS_PROVIDER up to that model's cap (every run lane's
   // omitted-provider rule; text over the cap runs on turbo, which this display does not
@@ -221,6 +249,7 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
           )}
         </MappableField>
       )}
+      <SpeechPriceLine price={price} />
       <div>
         <Label>{t("field.voice")}</Label>
         <VoiceBrowser
@@ -266,6 +295,8 @@ export function TextToSpeechConfig({ data, onUpdate, sources, fieldMappings, onM
         </Select>
       </div>
       <TtsVoiceSettings provider={data.provider} data={data} onUpdate={onUpdate} />
+      {/* `shownModel`, not `data.provider`: a node storing no model runs on the default speech model, and the section shows for what the node shows and runs as. */}
+      <TtsContinuitySection provider={shownModel} data={data} onUpdate={onUpdate} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} />
     </div>
   )
 }
@@ -2022,11 +2053,16 @@ export function TextToDialogueConfig({ data, onUpdate, sources, nodeRefs, refMap
   const t = useT()
   const dialogue = data.dialogue ?? [{ id: "1", text: "", voice: DEFAULT_DIALOGUE_VOICE }]
   const totalChars = dialogue.reduce((sum, l) => sum + l.text.length, 0)
-  // Shared cap — the same getter the route's Zod refine reads, so the counter
-  // can't drift from what the backend accepts (three copies drifted before).
-  const maxChars = getMaxTtsChars("elevenlabs-dialogue")
+  // The chosen model's cap, from its capability sheet — the same getter the
+  // route's Zod refine and the MCP verb read, so the counter can't drift from
+  // what the backend accepts (three copies drifted before). An unset provider
+  // reads as v3 dialogue, which is what the node runs as.
+  const shownModel = dialogueProviderOf(data.provider)
+  const maxChars = getDialogueCapabilities(data.provider).maxChars
   // Probed ElevenLabs hard limit: an 11th unique voice → 400 max_voices_exceeded.
   const uniqueVoices = new Set(dialogue.filter((l) => l.voice).map((l) => l.voice)).size
+  // The script is on the node (no graph context needed): exact for literal lines.
+  const price = useSpeechPricing(undefined, "text-to-dialogue", data as unknown as Record<string, unknown>)
 
   const scriptSource = sources.find(
     (s) => s.type === "generate-script" && s.sourceHandle === "dialogue"
@@ -2080,6 +2116,24 @@ export function TextToDialogueConfig({ data, onUpdate, sources, nodeRefs, refMap
 
   return (
     <div className="flex flex-col gap-3">
+      <div>
+        <Label>{t("field.model")}</Label>
+        <Select
+          value={shownModel}
+          // The snap / clear rides on the USER's pick only — never an effect on
+          // `data.provider` (one panel instance is reused across dialogue nodes).
+          onValueChange={(v) => onUpdate({ provider: v as TextToDialogueData["provider"], ...dialogueModelSwitchPatch(v, data) })}
+        >
+          <SelectTrigger aria-label={t("field.model")}><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {DIALOGUE_MODELS.map((m) => (
+              <ModelSelectOption key={m.value} value={m.value} label={m.label} desc={m.desc} />
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <ModelDescriptionHint modelId={shownModel} />
+
       <div className="flex items-center justify-between">
         <Label>{t("audiocfg.dialogueLines")}</Label>
         <div className="flex items-center gap-2">
@@ -2092,6 +2146,7 @@ export function TextToDialogueConfig({ data, onUpdate, sources, nodeRefs, refMap
         </div>
       </div>
       <p className="text-[10px] text-muted-foreground -mt-2">{t("audiocfg.hintDialogueRecommended")}</p>
+      <SpeechPriceLine price={price} />
 
       {scriptDialogue.length > 0 && (
         <Button
@@ -2141,20 +2196,7 @@ export function TextToDialogueConfig({ data, onUpdate, sources, nodeRefs, refMap
         <Plus className="h-3 w-3 me-1" /> {t("audiocfg.addLine")}
       </Button>
 
-      <div>
-        <Label>{t("field.stability")}</Label>
-        <Select
-          value={String(data.stability ?? 0.5)}
-          onValueChange={(v) => onUpdate({ stability: parseFloat(v) })}
-        >
-          <SelectTrigger aria-label={t("field.stability")}><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="0">{t("audiocfg.mostVariable")}</SelectItem>
-            <SelectItem value="0.5">{t("audiocfg.balanced05")}</SelectItem>
-            <SelectItem value="1">{t("audiocfg.mostStable")}</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+      <DialogueVoiceSettings provider={data.provider} data={data} onUpdate={onUpdate} />
 
       <div>
         <Label>{t("field.language")}</Label>
@@ -2707,78 +2749,10 @@ export function VoiceChangerProConfig({ data, onUpdate }: ConfigProps<VoiceChang
             <details className="border-t px-2 py-1">
               <summary className="cursor-pointer text-[11px] text-muted-foreground select-none">{t("audiocfg.voiceSettings")}</summary>
               <div className="flex flex-col gap-2 pt-2">
-                <div>
-                  <Label>{t("audiocfg.vcpEngine")}</Label>
-                  <div className="grid grid-cols-2 gap-1" role="radiogroup" aria-label={t("audiocfg.vcpEngine")}>
-                    <button
-                      type="button"
-                      role="radio"
-                      aria-checked={(v.engine ?? "sts") === "sts"}
-                      className={`h-7 rounded-md border text-xs ${(v.engine ?? "sts") === "sts" ? "border-[#ff0073] text-foreground" : "border-border text-muted-foreground"}`}
-                      onClick={() => updateVoice(i, { engine: undefined })}
-                    >
-                      {t("audiocfg.engineRecast")}
-                    </button>
-                    <button
-                      type="button"
-                      role="radio"
-                      aria-checked={v.engine === "v3"}
-                      className={`h-7 rounded-md border text-xs ${v.engine === "v3" ? "border-[#ff0073] text-foreground" : "border-border text-muted-foreground"}`}
-                      onClick={() => updateVoice(i, { engine: "v3", stability: v.stability === 0 || v.stability === 0.5 || v.stability === 1 ? v.stability : 0.5 })}
-                    >
-                      {t("audiocfg.engineRespeak")}
-                    </button>
-                  </div>
-                  {v.engine === "v3" && (
-                    <p className="text-[10px] text-amber-600 mt-1">{t("audiocfg.hintRespeakWarning")}</p>
-                  )}
-                </div>
-                {v.engine === "v3" ? (
-                  <div>
-                    <Label>{t("field.stability")}</Label>
-                    <Select
-                      value={String(v.stability ?? 0.5)}
-                      onValueChange={(val) => updateVoice(i, { stability: parseFloat(val) })}
-                    >
-                      <SelectTrigger aria-label={t("field.stability")}><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="0">{t("audiocfg.mostVariable")}</SelectItem>
-                        <SelectItem value="0.5">{t("audiocfg.balanced05")}</SelectItem>
-                        <SelectItem value="1">{t("audiocfg.mostStable")}</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                ) : (
-                <div>
-                  <Label htmlFor={`stability-${i}`}>{t("field.stability")} ({v.stability ?? 0.5})</Label>
-                  <Input id={`stability-${i}`} type="range" min={0} max={1} step={0.05} value={v.stability ?? 0.5} onChange={(e) => updateVoice(i, { stability: parseFloat(e.target.value) })} className="h-2" />
-                  <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5"><span>{t("audiocfg.variable")}</span><span>{t("audiocfg.stable")}</span></div>
-                </div>
-                )}
-                {/* STS-only levers — the v3 re-speak lane ignores all three
-                    (documented in the wire contract), so hide them rather
-                    than render dead controls. */}
-                {(v.engine ?? "sts") === "sts" && (<>
-                <div>
-                  <Label htmlFor={`similarity-${i}`}>{t("audiocfg.similarity")} ({v.similarityBoost ?? 0.75})</Label>
-                  <Input id={`similarity-${i}`} type="range" min={0} max={1} step={0.05} value={v.similarityBoost ?? 0.75} onChange={(e) => updateVoice(i, { similarityBoost: parseFloat(e.target.value) })} className="h-2" />
-                  <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5"><span>{t("audiocfg.low")}</span><span>{t("audiocfg.high")}</span></div>
-                </div>
-                <div>
-                  <Label htmlFor={`style-${i}`}>{t("audiocfg.styleExaggeration")} ({v.style ?? 0})</Label>
-                  <Input id={`style-${i}`} type="range" min={0} max={1} step={0.05} value={v.style ?? 0} onChange={(e) => updateVoice(i, { style: parseFloat(e.target.value) })} className="h-2" />
-                  <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5"><span>{t("audiocfg.none")}</span><span>{t("audiocfg.exaggerated")}</span></div>
-                </div>
-                <div>
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor={`speaker-boost-${i}`}>{t("field.speakerBoost")}</Label>
-                    <Switch id={`speaker-boost-${i}`} checked={v.useSpeakerBoost ?? true} onCheckedChange={(c) => updateVoice(i, { useSpeakerBoost: c })} />
-                  </div>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">
-                    {t("audiocfg.hintSpeakerBoostRecast")}
-                  </p>
-                </div>
-                </>)}
+                {/* Engine radio (Recast / Re-speak v3 / Re-speak v4) and the
+                    levers each engine honours — its own file so the
+                    per-engine rules live in one place. */}
+                <VcpVoiceSettings index={i} voice={v} updateVoice={updateVoice} />
                 <div>
                   <Label htmlFor={`volume-mode-${i}`}>{t("field.volume")}</Label>
                   <Select

@@ -26,6 +26,10 @@ const bodySchema = z.object({
   workflowId: z.string().uuid().optional(),
   componentDepth: z.number().int().min(0).max(5).optional(),
   executingComponentIds: z.array(z.string()).optional(),
+  /** The parent execution's answer to "does the preview stop rule apply?",
+   *  forwarded by the orchestrator's component dispatch. Honored ONLY on the
+   *  internal lane: from any other caller it would switch the gate off. */
+  previewStopRule: z.boolean().optional(),
   /** P14 — the parent execution's resolved payer, forwarded by the
    *  orchestrator's component dispatch. Honored ONLY on the internal lane
    *  (see below); shape-guarded, never trusted from the type alone. */
@@ -73,6 +77,10 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
         ? parsed.data.billingContext
         : undefined
     const runBillingContext = forwardedCtx ?? req.billingContext
+    // The parent's preview stop rule answer: internal lane only (a JWT / MCP
+    // caller sending `false` would switch the gate off for its own run).
+    const forwardedPreviewStopRule =
+      req.authKind === "internal" ? parsed.data.previewStopRule : undefined
 
     // Look up published app by slug. snapshot_nodes + snapshot_edges are
     // needed for compound output handles (sub-workflow-output ports) — they
@@ -198,6 +206,7 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
           executingComponentIds,
           webFreeMode: req.webFreeMode === true,
           billingContext: runBillingContext,
+          ...(forwardedPreviewStopRule !== undefined ? { previewStopRule: forwardedPreviewStopRule } : {}),
         })
 
         // Stamp the nested execution id on the wrapper IMMEDIATELY (it was
@@ -216,7 +225,7 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
         // the excess of any long render it dispatches, so this wait must too.
         // Looked up only once the base is spent: a component with nothing
         // budgeted inside times out exactly as before.
-        const deadline = new BudgetedDeadline(POLL_ABSOLUTE_TIMEOUT_MS, () => executionBudgetExcessMs(result.executionId))
+        const deadline = new BudgetedDeadline(POLL_ABSOLUTE_TIMEOUT_MS, () => executionBudgetExcessMs(result.executionId, req.userId!))
         const startTime = Date.now()
         while (!(await deadline.reached(Date.now() - startTime))) {
           // Poll status + progress counts to propagate progress to wrapper job
@@ -321,7 +330,7 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
       return reply.status(404).send({ error: { code: "not_found", message: "Component not found" } })
     }
 
-    const nodes = (app.snapshot_nodes ?? []) as Array<{ id?: string; type?: string; data?: Record<string, unknown> }>
+    const nodes = (app.snapshot_nodes ?? []) as Array<{ id?: string; type?: string; data?: Record<string, unknown>; parentId?: string | null }>
     const edges = (app.snapshot_edges ?? []) as EstimateEdge[]
     const overrides = exposedSettings ?? {}
 
@@ -337,7 +346,7 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
         if (sep < 0) continue
         if (key.slice(0, sep) === nodeId) data[key.slice(sep + 1)] = value
       }
-      return { id: nodeId, type: node.type ?? "", data }
+      return { id: nodeId, type: node.type ?? "", data, parentId: node.parentId }
     })
 
     return reply.send({ estimatedCredits: await estimateWorkflowCredits(priced, edges) })
@@ -370,7 +379,7 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: { code: "validation_error", message: "jobId must be a UUID" } })
     }
     const isAdmin = req.userRole === "admin" || req.userRole === "super_admin"
-    let query = supabase.from("jobs").select("provider, input_data").eq("id", params.data.jobId)
+    let query = supabase.from("jobs").select("user_id, provider, input_data").eq("id", params.data.jobId)
     if (!isAdmin) query = query.eq("user_id", req.userId)
     const { data: wrapper } = await query.maybeSingle()
     // Only a component WRAPPER has an inner execution; any other job (or one
@@ -378,15 +387,34 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
     if (!wrapper || wrapper.provider !== "component") {
       return reply.status(404).send({ error: { code: "not_found", message: "Component run not found" } })
     }
-    const inner = (wrapper.input_data as Record<string, unknown> | null)?._executionId
+    // `_executionId` sits in job input written before clients lost their
+    // jobs writes (474), so it is only a pointer to check: the inner run counts
+    // only when the wrapper's owner owns it. Anyone else's execution reads as
+    // "no inner run" — its budget is never looked at.
+    const stamped = (wrapper.input_data as Record<string, unknown> | null)?._executionId
+    let inner: string | null = null
+    if (typeof stamped === "string") {
+      const { data: innerRow } = await supabase
+        .from("workflow_executions")
+        .select("id")
+        .eq("id", stamped)
+        .eq("user_id", wrapper.user_id as string)
+        .maybeSingle()
+      if (innerRow) inner = stamped
+    }
     // `pendingBudgetedNodes`: the run may STILL dispatch a long render (one is
     // in its graph and has not settled). The excess only counts renders
     // already dispatched, so without this a client asking while the run is
     // still in its early steps would read "nothing budgeted" and give up on a
     // run the server keeps waiting on. No inner run stamped → false (a wrapper
     // with no inner run has nothing to wait for).
-    const [budgetExcessMs, pendingBudgetedNodes] = typeof inner === "string"
-      ? await Promise.all([executionBudgetExcessMs(inner), executionMayDispatchBudgetedJob(inner)])
+    const [budgetExcessMs, pendingBudgetedNodes] = inner !== null
+      // The readers are owner-scoped too (a second fence behind the lookup
+      // above): another user's execution reads as missing.
+      ? await Promise.all([
+        executionBudgetExcessMs(inner, wrapper.user_id as string),
+        executionMayDispatchBudgetedJob(inner, wrapper.user_id as string),
+      ])
       : [0, false]
     return reply.send({
       data: { budgetExcessMs, waitLimitMs: POLL_ABSOLUTE_TIMEOUT_MS + budgetExcessMs, pendingBudgetedNodes },

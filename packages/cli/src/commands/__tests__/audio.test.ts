@@ -140,6 +140,40 @@ describe("audio mix", () => {
   })
 })
 
+describe("audio mix --duck-under", () => {
+  const two = ["--audio", "https://x/voice.mp3", "--audio", "https://x/bed.mp3"]
+
+  it("sends the duck with the key track's 0-based index and the amount", async () => {
+    mocks.mix.mockResolvedValueOnce({ jobId: "j4d" })
+    await runCmd("audio", "mix", ...two, "--duck-under", "0", "--duck-amount", "80", "--json")
+    expect(mocks.mix).toHaveBeenCalledWith({
+      audioUrls: ["https://x/voice.mp3", "https://x/bed.mp3"],
+      duck: { under: 0, amount: 80 },
+    })
+  })
+
+  it("leaves the amount to the server default when only --duck-under is given", async () => {
+    mocks.mix.mockResolvedValueOnce({ jobId: "j4e" })
+    await runCmd("audio", "mix", ...two, "--duck-under", "1", "--json")
+    expect(mocks.mix).toHaveBeenCalledWith({
+      audioUrls: ["https://x/voice.mp3", "https://x/bed.mp3"],
+      duck: { under: 1 },
+    })
+  })
+
+  it("errors when --duck-under is not one of the tracks", async () => {
+    await expect(runCmd("audio", "mix", ...two, "--duck-under", "2")).rejects.toThrow("process.exit(1)")
+    expect(vi.mocked(warn)).toHaveBeenCalledWith(expect.stringContaining("--duck-under"))
+    expect(mocks.mix).not.toHaveBeenCalled()
+  })
+
+  it("errors when --duck-amount is given without --duck-under", async () => {
+    await expect(runCmd("audio", "mix", ...two, "--duck-amount", "50")).rejects.toThrow("process.exit(1)")
+    expect(vi.mocked(warn)).toHaveBeenCalledWith(expect.stringContaining("--duck-under"))
+    expect(mocks.mix).not.toHaveBeenCalled()
+  })
+})
+
 describe("audio adjust-volume", () => {
   it("maps the level + fades", async () => {
     mocks.adjustVolume.mockResolvedValueOnce({ jobId: "j5" })

@@ -245,6 +245,11 @@ export function createSanitizedError(
     // case before control reaches this group.
     lowerMsg.includes("safety system") ||
     lowerMsg.includes("flagged by the safety") ||
+    // Prod 2026-10-06 (gemini-omni-flash, jobs 01deaa71 / a5c8658d): KIE relays
+    // Google's own wording — "[400] Request blocked: The uploaded audio was
+    // flagged by Google safety review." Neither phrase above matches it, so the
+    // 400 fell to the status branch and read as "rejected these settings".
+    lowerMsg.includes("safety review") ||
     lowerMsg.includes("flagged as sensitive") ||
     // M-19a: the weak signal carries the SAME parameter guard the classifier
     // uses. Relying on the `invalid`/`validation` branch above is not enough —
@@ -374,10 +379,13 @@ const LIKENESS_RE = /public.?figure|celebrit|real.?person|likeness/i
  *     not "safety filter" (4 rows).
  *   - `flagged.?as.?sensitive` — `sensitive.?content` required the word
  *     "content" to FOLLOW "sensitive", which this phrasing never does (5 rows).
+ *   - `safety.?review` / `flagged.?by.?google.?safety` — Google's own phrasing,
+ *     relayed by KIE for Gemini Omni ("The uploaded audio was flagged by Google
+ *     safety review", prod 2026-10-06, 2 jobs).
  * `flagged.?by.?the.?safety` is belt-and-braces for the first group; keeping
  * both means a provider that drops the noun still classifies.
  */
-const SAFETY_RE = /content.?polic|prohibited.?content|sensitive.?content|safety.?(?:filter|policy|system)|flagged.?by.?the.?safety|flagged.?as.?sensitive|moderat|nsfw|inappropriate|\bunsafe\b/i
+const SAFETY_RE = /content.?polic|prohibited.?content|sensitive.?content|safety.?(?:filter|policy|system|review)|flagged.?by.?(?:the|google).?safety|flagged.?as.?sensitive|moderat|nsfw|inappropriate|\bunsafe\b/i
 
 /**
  * The one WEAK signal from the log pull (1 row): "Your input was rejected."

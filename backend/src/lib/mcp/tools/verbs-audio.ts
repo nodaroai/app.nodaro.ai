@@ -4,6 +4,8 @@ import { hasCredits } from "../../config.js"
 import { supabase } from "../../supabase.js"
 import { resolveAssetId } from "../asset-resolver.js"
 import { resolveSpeechSourceUrl } from "./_speech-source.js"
+import { creditHint } from "./_credit-hint.js"
+import { DUCK_DEFAULT_AMOUNT, DUCK_DEFAULTS } from "../../mix-audio-duck.js"
 import type { RegisterOpts } from "./verbs-image.js"
 import {
   parseJobId,
@@ -15,7 +17,7 @@ import {
   uiMeta,
 } from "./_verb-helpers.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
-import { SUNO_MODELS, SUNO_LEGACY_MODELS, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, SUNO_TITLE_MAX, SUNO_TEXT_MAX, AUDIO_FX_PRESETS, readPromptAffixes, MODEL_CATALOG, DEFAULT_TEXT_TO_AUDIO_PROVIDER, TTS_PROVIDERS, DEFAULT_TTS_PROVIDER, canonicalTtsProvider, getMaxTtsChars, type TranscribeProvider } from "@nodaro/shared"
+import { SUNO_MODELS, SUNO_LEGACY_MODELS, SUNO_ADD_TRACK_MODELS, DEFAULT_SUNO_MODEL, SUNO_TITLE_MAX, SUNO_TEXT_MAX, AUDIO_FX_PRESETS, readPromptAffixes, MODEL_CATALOG, DEFAULT_TEXT_TO_AUDIO_PROVIDER, TTS_PROVIDERS, DEFAULT_TTS_PROVIDER, canonicalTtsProvider, getMaxTtsChars, DIALOGUE_PROVIDERS, dialogueProviderOf, dialogueStabilityAccepted, getDialogueCapabilities, type TranscribeProvider } from "@nodaro/shared"
 
 /** The engine the MCP `transcribe` tool runs on. Typed against the ENABLED
  *  provider enum, so disabling this lane in @nodaro/shared fails the build here
@@ -50,6 +52,8 @@ const sunoWidgetModel = (version: string | undefined): string => SUNO_CATALOG_ID
 import { applyPromptAffixes } from "@nodaro/prompts"
 import { resolvePreset } from "../../presets/resolve-preset.js"
 import { mcpInject } from "../internal-request.js"
+import { TTS_NEIGHBOUR_TEXT_MAX_CHARS, normalizeTtsNeighbourText } from "../../../providers/elevenlabs/neighbour-text.js"
+import { VOICE_CHANGER_PRO_ENGINES } from "./voice-changer-pro-engines.js"
 
 /**
  * Look up the Suno task / track ids stored on a completed Nodaro job's
@@ -378,9 +382,15 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         "third-party wrapper known to garble some languages (Hebrew observed) " +
         "— only pick it when a specific library voice is verified for v2 " +
         "only. `text` is capped per model (10,000 chars on v4, 5,000 on v3) — " +
-        "split longer scripts into several calls. Never switch away from v4 for " +
+        "split longer scripts into several calls. " +
+        "For clips that follow one another, pass the neighbouring lines as " +
+        "`previous_text` / `next_text` so the intonation stays continuous across " +
+        "clips (v4 uses them; other models ignore them). " +
+        "Never switch away from v4 for " +
         "language reasons alone. Call `list_models { kind: \"audio\", mode: \"tts\" }` " +
-        "for the full sheet.\n\n" +
+        "for the full sheet. Where length pricing is on, the charge is per started 100 " +
+        "characters of the text sent, at least 8 units; `list_models` shows the " +
+        "per-100-characters row when it applies.\n\n" +
         "**Presets/templates**: call list_node_presets { nodeType: \"text-to-speech\" } " +
         "to browse built-in delivery styles (e.g. Calm Narrator, Commercial Read, " +
         "Audiobook) + your saved presets, get_node_preset to read one's config, or " +
@@ -446,6 +456,24 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         style: z.number().min(0).max(1).optional(),
         speed: z.number().min(0.7).max(1.2).optional(),
         language_code: z.string().optional(),
+        previous_text: z
+          .string()
+          .max(TTS_NEIGHBOUR_TEXT_MAX_CHARS)
+          .optional()
+          .describe(
+            "The line spoken just BEFORE this one in the finished piece (the previous " +
+            "clip's text) — context for continuous intonation across clips; up to 1,000 " +
+            "characters, the end of a longer passage. Used by models that stitch; " +
+            "others ignore it. Not spoken.",
+          ),
+        next_text: z
+          .string()
+          .max(TTS_NEIGHBOUR_TEXT_MAX_CHARS)
+          .optional()
+          .describe(
+            "The line spoken just AFTER this one (the next clip's text) — the start of a " +
+            "longer passage; up to 1,000 characters. Same continuity rule as previous_text.",
+          ),
       },
               outputSchema: {
           jobId: z.string(),
@@ -504,6 +532,12 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         if (d.style !== undefined) presetParams.style = d.style
         if (d.speed !== undefined) presetParams.speed = d.speed
         if (d.languageCode !== undefined) presetParams.language_code = d.languageCode
+        // A preset is node data: its neighbour text was never held to the tool schema's cap above (the panel
+        // has none), so it goes through the same rule the provider exits apply — trimmed, shortened to the cap
+        // — rather than reaching the route over-length for a caller who passed nothing.
+        const presetNeighbours = normalizeTtsNeighbourText(d)
+        if (presetNeighbours.previousText !== undefined) presetParams.previous_text = presetNeighbours.previousText
+        if (presetNeighbours.nextText !== undefined) presetParams.next_text = presetNeighbours.nextText
         const callerProvided = Object.fromEntries(
           Object.entries(args).filter(([, v]) => v !== undefined),
         )
@@ -551,6 +585,8 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         style: effective.style as number | undefined,
         speed: effective.speed as number | undefined,
         languageCode: effective.language_code as string | undefined,
+        previousText: effective.previous_text as string | undefined,
+        nextText: effective.next_text as string | undefined,
         mcp_client: session.clientName,
         userId: session.userId,
       }
@@ -574,17 +610,30 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       title: "Generate Dialogue",
       description:
         "Generate a multi-speaker dialogue as ONE audio file via ElevenLabs " +
-        "Dialogue v3 (direct API). Give it a script — an ordered list of " +
-        "{ text, voice_id } lines — and each line is spoken by its voice, " +
-        "combined into a single track. Returns a job_id.\n\n" +
+        "dialogue (direct API) — v3 by default, v4 on request. Give it a script " +
+        "— an ordered list of { text, voice_id } lines — and each line is spoken " +
+        "by its voice, combined into a single track. Returns a job_id.\n\n" +
         "Use this (never generate_speech per line + stitching) for " +
         "conversations, interviews, podcast-style exchanges, and scenes: the " +
         "model voices the exchange with natural turn-taking. Supports " +
         "`[audio tags]` like `[laughs]`, `[whispers]` inside line text, and " +
         "ANY voice — premade names, cloned/library UUIDs, mixed casts.\n\n" +
-        "Limits: 5,000 characters total across lines (≤2,000 recommended " +
-        "for best quality), at most 10 unique voices per generation.",
+        "Limits: 5,000 characters total across lines on either model (≤2,000 " +
+        "recommended for best quality), at most 10 unique voices per generation. " +
+        "Where length pricing is on, the charge is per started 100 characters of the " +
+        "script, at least 8 units; `list_models` shows the per-100-characters row when it applies.\n\n" +
+        "The finished job's output_data carries `audioUrl` and, on both " +
+        "models (timings cost no extra credits), `transcript`: per-word timings and one " +
+        "segment per line with the line's voice as `speaker` — pass `words` as " +
+        "add_captions `captions` with `auto_transcribe: false`.",
       inputSchema: {
+        model: z
+          .enum(DIALOGUE_PROVIDERS)
+          .optional()
+          .describe(
+            "Dialogue model. Default `elevenlabs-dialogue` (v3). `elevenlabs-dialogue-v4` is newer: " +
+            "the same [audio tags], any stability from 0 to 1, and a similarity setting.",
+          ),
         dialogue: z
           .array(
             z.object({
@@ -606,9 +655,17 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
           .max(200)
           .describe("The script, in speaking order. Reuse voice_ids across lines for the same character."),
         stability: z
-          .union([z.literal(0), z.literal(0.5), z.literal(1)])
+          .number()
+          .min(0)
+          .max(1)
           .optional()
-          .describe("v3 stability: 0 = most variable, 0.5 = balanced, 1 = most stable."),
+          .describe("v3 (default): exactly 0, 0.5 or 1 (0 = most variable, 1 = most stable). v4: any value 0–1."),
+        similarity_boost: z
+          .number()
+          .min(0)
+          .max(1)
+          .optional()
+          .describe("v4 only (v3 ignores it): how closely each line keeps its voice's character."),
         language_code: z.string().max(10).optional().describe("ISO 639-1 hint (e.g. \"en\", \"he\"). Omit for auto-detect."),
         seed: z.number().int().min(0).max(4294967295).optional().describe("Deterministic sampling. Omit for random."),
         apply_text_normalization: z
@@ -624,9 +681,30 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
       },
     },
     async (args) => {
+      // Refuse with the NUMBERS before the route, so nothing is reserved: a
+      // stability the chosen model does not take (v3's steps are the route's
+      // contract, read from the model's sheet), or a script over its total cap.
+      const provider = dialogueProviderOf(args.model)
+      const sheet = getDialogueCapabilities(provider)
+      if (args.stability !== undefined && !dialogueStabilityAccepted(provider, args.stability)) {
+        const steps = sheet.stabilitySteps
+        return {
+          content: [{ type: "text" as const, text: `${provider} takes stability ${steps ? steps.join(", ").replace(/, (?=[^,]*$)/, " or ") : "from 0 to 1"}; got ${args.stability}.` }],
+          isError: true as const,
+        }
+      }
+      const total = args.dialogue.reduce((sum, l) => sum + l.text.length, 0)
+      if (total > sheet.maxChars) {
+        return {
+          content: [{ type: "text" as const, text: `The script is ${total} characters in total; ${provider} takes at most ${sheet.maxChars}. Split it across several calls.` }],
+          isError: true as const,
+        }
+      }
       const payload = {
         dialogue: args.dialogue.map((l) => ({ text: l.text, voice: l.voice_id })),
+        provider,
         stability: args.stability,
+        similarityBoost: args.similarity_boost,
         languageCode: args.language_code,
         seed: args.seed,
         applyTextNormalization: args.apply_text_normalization,
@@ -640,7 +718,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         widgetKind: "audio",
         widgetData: {
           prompt: args.dialogue.map((l) => l.text).join("\n"),
-          model: "elevenlabs-dialogue",
+          model: provider,
         },
       })
     },
@@ -842,7 +920,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         "in first-appearance order: speaker 1 → voices[0], speaker 2 → voices[1], and so on. A null " +
         "entry keeps that speaker's own voice while later speakers are still recast (at least one entry " +
         "must be non-null). Each entry is a bare voice id or an object with per-voice settings " +
-        "(engine sts|v3, stability, similarityBoost, style, useSpeakerBoost, seed, volumeMode, volume).\n\n" +
+        "(engine sts|v3|v4, stability, similarityBoost, style, useSpeakerBoost, seed, volumeMode, volume).\n\n" +
         "Provide ONE source: audio_url / audio_asset_id (audio → audio), OR video_url / video_asset_id " +
         "(recasts the voices inside the clip). Voice and music are always separated first; " +
         "preserve_background mixes the bed back in and music_volume_mode sets its level; voice_fx " +
@@ -871,14 +949,17 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
               z.string().min(1),
               z.object({
                 voiceId: z.string().min(1),
-                // "sts" (default — speech-to-speech recast) | "v3" (RE-SPEAK:
-                // the performance is regenerated from the transcript with
-                // eleven_v3; supports [audio tags]; stability 0/0.5/1 only;
-                // similarityBoost/style/useSpeakerBoost are ignored). A v3
-                // speaker needs transcript text: send `analysis` with
-                // segments[].text, or omit `analysis` and the engine
-                // re-speaks from its own transcription.
-                engine: z.enum(["sts", "v3"]).optional(),
+                // "sts" (default — speech-to-speech recast) | "v3" (RE-SPEAK
+                // with eleven_v3: supports [audio tags]; stability 0/0.5/1
+                // only; similarityBoost/style/useSpeakerBoost ignored) | "v4"
+                // (RE-SPEAK with eleven_v4: [audio tags]; any stability 0–1;
+                // similarityBoost honoured; style/useSpeakerBoost ignored;
+                // each line is generated with its neighbouring lines as
+                // context). A Re-speak speaker needs transcript text: send
+                // `analysis` with segments[].text, or omit `analysis` and the
+                // engine re-speaks from its own transcription. The enum is the
+                // plugin route's — see voice-changer-pro-engines.ts.
+                engine: z.enum(VOICE_CHANGER_PRO_ENGINES).optional(),
                 stability: z.number().min(0).max(1).optional(),
                 similarityBoost: z.number().min(0).max(1).optional(),
                 style: z.number().min(0).max(1).optional(),
@@ -900,10 +981,13 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
           .describe(
             "Ordered list of target voices — speaker 1 → voices[0], speaker 2 → voices[1], etc. " +
               "Each entry is either a bare voice id (premade name or ElevenLabs UUID), an object " +
-              "{ voiceId, stability, similarityBoost, style, useSpeakerBoost, seed, volumeMode, volume } " +
-              "with per-voice speech-to-speech settings, or null — a keep-slot that keeps that " +
+              "{ voiceId, engine, stability, similarityBoost, style, useSpeakerBoost, seed, volumeMode, volume } " +
+              "with per-voice settings, or null — a keep-slot that keeps that " +
               "speaker's original voice while later speakers are still recast. At least one entry " +
-              "must be non-null. `seed` (0–4294967295) makes that speaker's recast reproducible.",
+              "must be non-null. `engine`: \"sts\" (default, speech-to-speech recast), \"v3\" or \"v4\" " +
+              "(Re-speak — the performance is regenerated from the transcript; v3 takes stability " +
+              "0/0.5/1 only, v4 any 0–1 plus similarityBoost). `seed` (0–4294967295) makes that " +
+              "speaker's recast reproducible.",
           ),
         voice_fx: z
           .object({
@@ -932,8 +1016,8 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
                         start: z.number().min(0),
                         end: z.number().min(0),
                         // What was said in the range — REQUIRED for a speaker
-                        // recast with engine "v3" (re-speak regenerates the
-                        // performance from it); ignored by the STS lane.
+                        // recast with engine "v3" or "v4" (Re-speak regenerates
+                        // the performance from it); ignored by the STS lane.
                         text: z.string().max(5000).optional(),
                       }),
                     )
@@ -951,7 +1035,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
               "output_data): the recast then works from the EXACT speaker list you mapped " +
               "ordered_voices against, instead of re-detecting (which can produce a different " +
               "list). Each speaker's segments[].text carries the transcript — required input " +
-              "for a speaker with engine \"v3\". This param existed in the wire contract " +
+              "for a speaker with engine \"v3\" or \"v4\". This param existed in the wire contract " +
               "before it existed here (the tool description referenced it — now it is real).",
           ),
         model: z.string().optional().describe("Voice model override."),
@@ -2141,6 +2225,105 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         label: "audio fx",
         widgetKind: "audio",
         widgetData: { prompt: "(audio fx)", model: "audio-fx" },
+      })
+    },
+  )
+
+  // ── mix_audio ──
+  // Layer 2–20 audio tracks into one, optionally ducking the others under a
+  // key track (a music bed under speech). Mirrors the Mix Audio node and
+  // POST /v1/mix-audio; the route's credit guard reserves the (flat) price, so
+  // the verb adds no credit logic of its own. CORE and ungated, like
+  // silence_detect: ducking is one ffmpeg pass that every install has.
+  server.registerTool(
+    "mix_audio",
+    {
+      title: "Mix Audio",
+      description:
+        "Layer 2-20 audio tracks into one file, each at its own volume. `tracks` is a list of " +
+        "`{ audio_url | audio_asset_id, volume? }` (volume 0-200 %, default 100). Set `duck` to " +
+        "put a music bed under speech: every track EXCEPT `duck.under` (the 0-based index of the " +
+        "voice track) dips while that track is loud and rises back in its pauses (sidechain " +
+        `compression). \`duck.amount\` 0-100 (default ${DUCK_DEFAULT_AMOUNT}) is how hard; \`threshold_db\`, \`ratio\`, ` +
+        "`attack_ms` and `release_ms` are optional fine controls (`ratio` overrides `amount`). " +
+        `A ducked mix sums the tracks instead of averaging them, so the voice keeps its level. Price: ${creditHint("mix-audio")}, ` +
+        "flat, with or without a duck. Returns a job_id - poll `get_job` for the mixed audio.",
+      inputSchema: {
+        tracks: z
+          .array(
+            z.object({
+              audio_url: z.string().url().optional(),
+              audio_asset_id: z.string().optional().describe("Nodaro audio or video job id."),
+              volume: z.number().min(0).max(200).optional().describe("Track level in percent (default 100)."),
+            }),
+          )
+          .min(2)
+          .max(20)
+          .describe("2-20 tracks, in mix order. Each needs audio_url or audio_asset_id."),
+        duck: z
+          .object({
+            under: z.number().int().min(0).max(19).describe("0-based index in `tracks` of the key track (the voice) the others duck under."),
+            amount: z.number().min(0).max(100).optional().describe(`How hard the others dip, 0-100. Default ${DUCK_DEFAULT_AMOUNT}.`),
+            threshold_db: z.number().min(-60).max(0).optional().describe(`dBFS the key track must exceed to start the dip. Default ${DUCK_DEFAULTS.thresholdDb}.`),
+            ratio: z.number().min(1).max(20).optional().describe("Compressor ratio 1-20. Overrides amount."),
+            attack_ms: z.number().min(1).max(2000).optional().describe(`How fast the dip starts, ms. Default ${DUCK_DEFAULTS.attackMs}.`),
+            release_ms: z.number().min(10).max(9000).optional().describe(`How slowly the others return, ms. Default ${DUCK_DEFAULTS.releaseMs}.`),
+          })
+          .optional()
+          .describe("Duck every other track under one key track. Omit for a plain mix."),
+      },
+      outputSchema: JOB_OUTPUT_SCHEMA,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      _meta: uiMeta(WIDGET_URI.jobAudio),
+    },
+    async (args) => {
+      if (args.duck && args.duck.under >= args.tracks.length) {
+        return {
+          content: [{
+            type: "text" as const,
+            text: `mix_audio: duck.under (${args.duck.under}) must be the index of one of the ${args.tracks.length} tracks (0-${args.tracks.length - 1}).`,
+          }],
+          isError: true as const,
+        }
+      }
+      const audioUrls: string[] = []
+      for (const track of args.tracks) {
+        const url =
+          track.audio_url ??
+          (track.audio_asset_id ? await resolveSpeechSourceUrl(track.audio_asset_id, session.userId) : null)
+        if (!url) {
+          return {
+            content: [{ type: "text" as const, text: "mix_audio: each track needs an audio_url or an audio_asset_id." }],
+            isError: true as const,
+          }
+        }
+        audioUrls.push(url)
+      }
+      const d = args.duck
+      const payload: Record<string, unknown> = {
+        audioUrls,
+        ...(args.tracks.some((t) => t.volume !== undefined) ? { trackVolumes: args.tracks.map((t) => t.volume ?? 100) } : {}),
+        ...(d
+          ? {
+              duck: {
+                under: d.under,
+                ...(d.amount !== undefined ? { amount: d.amount } : {}),
+                ...(d.threshold_db !== undefined ? { thresholdDb: d.threshold_db } : {}),
+                ...(d.ratio !== undefined ? { ratio: d.ratio } : {}),
+                ...(d.attack_ms !== undefined ? { attackMs: d.attack_ms } : {}),
+                ...(d.release_ms !== undefined ? { releaseMs: d.release_ms } : {}),
+              },
+            }
+          : {}),
+        mcp_client: session.clientName,
+        userId: session.userId,
+      }
+      return dispatchJob(fastify, session, {
+        url: "/v1/mix-audio",
+        payload,
+        label: "mix audio",
+        widgetKind: "audio",
+        widgetData: { prompt: `(mix ${audioUrls.length} tracks${d ? ", ducked" : ""})`, model: "mix-audio" },
       })
     },
   )

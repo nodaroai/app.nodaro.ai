@@ -24,7 +24,7 @@ import type { AppBrowseCard, PublishedApp } from "@/lib/api"
 import { hasCredits } from "@/lib/edition"
 import { creditUnits, creditUnitLabel } from "@/lib/credit-units"
 import { CreditCost } from "@/components/ui/credit-cost"
-import { calculateMonetizedCost } from "@nodaro/shared"
+import { listedAppCredits } from "@/lib/app-listing-price"
 import type { ComponentMetadata } from "@nodaro/shared"
 import { OUTPUT_TYPE_COLORS, APP_CATEGORIES, OUTPUT_TYPES, OUTPUT_TYPE_ICON, categoryLabel } from "@/lib/app-categories"
 import { AppMarketplaceCard, AppMarketplaceCardSkeleton } from "@/components/apps/app-marketplace-card"
@@ -865,10 +865,13 @@ function ComponentEditDialog({
     }
   }, [monetizationFlatFee, monetizationPercent])
 
-  const baseCredits = comp?.baseEstimatedCredits ?? 0
-  const calculatedCredits = monetizationEnabled
-    ? calculateMonetizedCost(baseCredits, monetizationFlatFee, monetizationPercent)
-    : baseCredits
+  // A component never stops at a Preview, so it has no final part; the one
+  // price rule still reads it (decided 2026-10-06).
+  const baseCredits = (comp?.baseEstimatedCredits ?? 0) + (comp?.finalEstimatedCredits ?? 0)
+  const calculatedCredits = listedAppCredits(
+    { base: comp?.baseEstimatedCredits ?? 0, final: comp?.finalEstimatedCredits ?? 0 },
+    { enabled: monetizationEnabled, flatFee: monetizationFlatFee, percent: monetizationPercent },
+  )
 
   const handleSave = useCallback(() => {
     if (!comp || !name.trim()) return

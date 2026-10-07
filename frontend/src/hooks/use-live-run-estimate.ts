@@ -32,6 +32,8 @@ import { useEffect, useRef, useState } from "react"
 import { isExpandedClone, mergeNodeInputOverrides } from "@nodaro/shared"
 import { estimateNodeCredits, isExecutableNode, getCostMultiplier } from "@/components/editor/workflow-editor/types"
 import { getModelIdentifier } from "@/components/editor/config-panels/helpers"
+import { previewRunnable } from "@/components/editor/workflow-editor/preview-gate"
+import { speechUnitIdsFor } from "@/lib/speech-estimate"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 
 export interface LiveRunEstimateDeps {
@@ -39,6 +41,8 @@ export interface LiveRunEstimateDeps {
   readonly getCachedCredits: (modelId: string) => number | undefined
   /** Fetch the live prices for these identifiers into the cache. */
   readonly prefetchModelCredits: (modelIds: string[]) => Promise<void>
+  /** The server has reported this id priced nowhere (not asked again). Absent = never. */
+  readonly isModelUnpriced?: (modelId: string) => boolean
 }
 
 export interface LiveRunEstimateArgs {
@@ -76,13 +80,23 @@ export function applyRunInputValues(
 export function computeLiveRunEstimate(
   args: Omit<LiveRunEstimateArgs, "enabled">,
   getCachedCredits: LiveRunEstimateDeps["getCachedCredits"],
+  isModelUnpriced: NonNullable<LiveRunEstimateDeps["isModelUnpriced"]> = () => false,
 ): { total: number; uncachedModelIds: string[] } {
   const effectiveNodes = applyRunInputValues(args.nodes, args.inputValues)
-  const executable = effectiveNodes.filter((n) => isExecutableNode(n) && !isExpandedClone(n))
+  const allExecutable = effectiveNodes.filter((n) => isExecutableNode(n) && !isExpandedClone(n))
   // A presented run executes every node, so any upstream planner re-plans.
-  const rerunIds = new Set(executable.map((n) => n.id))
-  const modelIds = [...new Set(executable.map((n) => getModelIdentifier(n, args.edges, effectiveNodes, rerunIds)).filter(Boolean))]
-  const uncachedModelIds = modelIds.filter((m) => getCachedCredits(m) === undefined)
+  const rerunIds = new Set(allExecutable.map((n) => n.id))
+  // …except what a Preview render gates: it runs only after Render final.
+  const executable = previewRunnable(allExecutable, effectiveNodes, args.edges)
+  // A speech node's unit row is asked for beside the flat ids: until it is
+  // cached, getModelIdentifier quotes the flat row, so the runner could never
+  // learn that the server prices speech by length. One the server has reported
+  // priced nowhere (length pricing off) is not asked again.
+  const modelIds = [...new Set([
+    ...executable.map((n) => getModelIdentifier(n, args.edges, effectiveNodes, rerunIds)),
+    ...speechUnitIdsFor(executable, effectiveNodes, args.edges),
+  ].filter(Boolean))]
+  const uncachedModelIds = modelIds.filter((m) => getCachedCredits(m) === undefined && !isModelUnpriced(m))
   const total = executable.reduce((sum, node) => {
     const cached = getCachedCredits(getModelIdentifier(node, args.edges, effectiveNodes, rerunIds))
     const cost =
@@ -108,8 +122,8 @@ export function useLiveRunEstimate(args: LiveRunEstimateArgs, deps: LiveRunEstim
     let cancelled = false
 
     const compute = () => {
-      const { getCachedCredits, prefetchModelCredits } = depsRef.current
-      const first = computeLiveRunEstimate({ nodes, edges, inputValues }, getCachedCredits)
+      const { getCachedCredits, prefetchModelCredits, isModelUnpriced } = depsRef.current
+      const first = computeLiveRunEstimate({ nodes, edges, inputValues }, getCachedCredits, isModelUnpriced)
       if (first.uncachedModelIds.length === 0) {
         setEstimate(first.total)
         return
@@ -118,7 +132,7 @@ export function useLiveRunEstimate(args: LiveRunEstimateArgs, deps: LiveRunEstim
       setEstimate(first.total)
       prefetchModelCredits(first.uncachedModelIds).then(() => {
         if (cancelled) return
-        setEstimate(computeLiveRunEstimate({ nodes, edges, inputValues }, getCachedCredits).total)
+        setEstimate(computeLiveRunEstimate({ nodes, edges, inputValues }, getCachedCredits, isModelUnpriced).total)
       })
     }
 

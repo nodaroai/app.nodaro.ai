@@ -23,7 +23,7 @@ The Telegram Post node publishes content to Telegram via a connected bot. It aut
 
 ## Inputs & Outputs
 
-**Inputs:** Optional image, video, or text from an upstream node.
+**Inputs:** Optional image, video, or text from an upstream node. When every wire into the node carried nothing in this run (a filter that kept no item, a skipped source), the node posts nothing and shows **Skipped · no input**; a typed caption with no wire still posts.
 
 **Outputs:** None. This is a terminal output node.
 

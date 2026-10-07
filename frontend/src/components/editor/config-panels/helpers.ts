@@ -1,12 +1,16 @@
 import type { WorkflowNode, WorkflowEdge, FieldMappings, ProbedVideoInfo } from "@/types/nodes"
 import type { SourceNodeInfo } from "./types"
-import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, buildCreditModelIdentifier as sharedBuildCreditModelIdentifier, buildVideoCreditModelIdentifier, isSeedanceVideoEditProvider, seedanceVideoEditCreditId, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS, motionGraphicsFeature, buildScraperCreditId, isScraperActor, metaAdsScrapeCreditIdFromNode, instagramScrapeCreditIdFromNode, captionRoutesToRemotion, resolveAiAvatarCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, buildVideoAuditCreditId, buildEditPlanCreditId, asEditPlanMode, asEditPlanTier, sunoCreditType, speedRampCreditId, applyEdlCreditId, resolveTopazUpscale, applyDefaultVideoSelection, withWiredSettings, MUSIC_CREDIT_ID, contentRecipeCreditId, contentIdeasCreditId, socialSearchCreditIdFromNode, videoSfxCreditId, textToAudioCreditId, LTX_EXTEND_PER_SECOND_CREDIT_ID, LTX_RETAKE_PER_SECOND_CREDIT_ID } from "@nodaro/shared"
+import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, buildCreditModelIdentifier as sharedBuildCreditModelIdentifier, buildVideoCreditModelIdentifier, isSeedanceVideoEditProvider, seedanceVideoEditCreditId, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS, motionGraphicsFeature, buildScraperCreditId, isScraperActor, metaAdsScrapeCreditIdFromNode, instagramScrapeCreditIdFromNode, captionRoutesToRemotion, resolveAiAvatarCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, buildVideoAuditCreditId, buildEditPlanCreditId, asEditPlanMode, asEditPlanTier, sunoCreditType, speedRampCreditId, applyEdlCreditId, resolveTopazUpscale, applyDefaultVideoSelection, withWiredSettings, MUSIC_CREDIT_ID, contentRecipeCreditId, contentIdeasCreditId, socialSearchCreditIdFromNode, videoSfxCreditId, textToAudioCreditId, LTX_EXTEND_PER_SECOND_CREDIT_ID, LTX_RETAKE_PER_SECOND_CREDIT_ID, dialogueProviderOf } from "@nodaro/shared"
 import { videoAuditAnalysisWired } from "@/components/editor/workflow-editor/types"
 import { renderVideoCreditIdForNode } from "@/lib/render-video-plan"
 import { resolveEditPlanEstimateDurationSec } from "@/lib/edit-plan-estimate"
 import { audioSyncCreditId, audioSyncWiredSourceCount } from "@/lib/audio-sync"
 import { wiredSocialPostsVideoSec } from "@/lib/video-analysis-handles"
 import { upstreamVideoDurationSec } from "@/lib/upstream-video-duration"
+import { speechQuote, upstreamSpeechText } from "@/lib/speech-estimate"
+// The core price cache (the same one `getCachedCredits` under @/ee re-exports):
+// a speech unit row cached there means the server prices speech by length.
+import { getCachedModelCredits } from "@/hooks/use-model-credit-cost"
 import type { LlmFeature } from "@nodaro/shared"
 /** Every node type whose output is prose/text. Used to build the compatible
  *  source list for any text-shaped field so the MappableField dropdown is
@@ -90,6 +94,8 @@ export const FIELD_COMPATIBLE_TYPES: Readonly<Record<string, ReadonlyArray<strin
   caption: TEXT_SOURCE_TYPES,
   transcript: TEXT_SOURCE_TYPES,
   directText: TEXT_SOURCE_TYPES,
+  previousText: TEXT_SOURCE_TYPES,
+  nextText: TEXT_SOURCE_TYPES,
   characterName: TEXT_SOURCE_TYPES,
   faceName: TEXT_SOURCE_TYPES,
   objectName: TEXT_SOURCE_TYPES,
@@ -623,6 +629,24 @@ export function getModelIdentifier(
   if (nodeType === "video-sfx") {
     return videoSfxCreditId(upstreamVideoDurationSec(node.id, "video", nodes ?? [], edges ?? []))
   }
+
+  // Text to Speech / Text to Dialogue by length (decided 2026-10-06): when the
+  // server serves the model's per-100-characters unit row (length pricing on — the
+  // row is in the price cache), the estimate prices on it; the units come from
+  // the SAME call in PRICING_UNIT_ESTIMATORS (workflow-editor/types.ts), so the
+  // id and the units can never flip apart. A row not served (flag off, or a
+  // cold cache) falls through to today's flat rows below.
+  if (nodeType === "text-to-speech" || nodeType === "text-to-dialogue") {
+    const speech = speechQuote(nodeType, data, upstreamSpeechText(node, nodes ?? [], edges ?? [], {}), getCachedModelCredits)
+    if (speech) return speech.id
+  }
+
+  // Text to Dialogue reserves on its dialogue model's own row — the route's
+  // guard and the orchestrator both call dialogueProviderOf, so a node with no
+  // (or an unknown) provider is quoted as the v3 dialogue it runs as. ABOVE the
+  // `!provider` bail, which quoted the node-type row. Mirror of the backend
+  // estimator's branch (ee/billing/credits.ts).
+  if (nodeType === "text-to-dialogue") return dialogueProviderOf(data.provider)
 
   const provider = data.provider as string | undefined
   if (!provider) return nodeType

@@ -47,6 +47,13 @@ const ADMIN_IMPORT_RE = /^\s*import\b[\s\S]*?from\s+["']([^"']*\/lib\/supabase)(
 // ---------------------------------------------------------------------------
 
 const ALLOWED_PATHS = [
+  // Render final quote (#1922): reads the workflow and a prior execution's node
+  // states for the caller, the same reads POST /v1/workflows/:id/run makes (that
+  // route is in the legacy baseline). Ownership is checked explicitly before any
+  // read is used: workflowAccessFromRow(req.userId, …) and continuationRefusal
+  // ({ userId }) answer 404 for anything not the caller's.
+  /^src\/routes\/workflow-render-final\.ts$/,
+
   // Admin routes: authorize on req.userRole, legitimately operate across
   // users.
   /^src\/routes\/admin.*\.ts$/,
@@ -108,6 +115,12 @@ const ALLOWED_PATHS = [
   /^src\/routes\/shots\.ts$/,
   /^src\/routes\/download\.ts$/,
   /^src\/routes\/app-runner\.ts$/,
+  // Render final of an app run (A6.3): reads the published version (any
+  // creator's — the app runtime) and the caller's own run, executions and
+  // finals. Every run read and write scopes `runner_id = req.userId`, every
+  // execution read `user_id = req.userId` and the app's workflow, and
+  // continuationRefusal ({ userId, workflowId }) answers 404 otherwise.
+  /^src\/routes\/app-render-final\.ts$/,
   /^src\/routes\/component-execute\.ts$/,
   /^src\/routes\/app-analytics\.ts$/,
   /^src\/routes\/published-apps\.ts$/,
@@ -204,6 +217,16 @@ const ALLOWED_PATHS = [
   // `user_id: userId`. saved_posts grants nothing to client roles, so this
   // route (and its tenant-scope lint entry) is the only way in.
   /^src\/routes\/saved-posts\.ts$/,
+
+  // Collections (migration 462): per-user CRUD over `collections` and their
+  // `collection_records`, same shape as saved-posts. Every handler derives
+  // `userId = req.userId` (401 if absent), every query on both tables chains
+  // `.eq("user_id", userId)` (records also `.eq("collection_id", id)` after an
+  // ownership read), inserts carry `user_id: userId`. Both tables grant nothing
+  // to client roles, so this route (and its tenant-scope lint entries) is the
+  // only way in. The one other table it reads is the caller's own `profiles`
+  // row, for the tier the caps come from.
+  /^src\/routes\/collections\.ts$/,
 
   // Embeds / og-tags: fetch public-facing metadata by id, not user-scoped.
   /^src\/routes\/embed\.ts$/,

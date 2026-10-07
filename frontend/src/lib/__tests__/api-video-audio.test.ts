@@ -318,6 +318,31 @@ describe("textToSpeech", () => {
     const headers = mock.mock.calls[0][1].headers
     expect(headers.Authorization).toBe("Bearer tok-tts")
   })
+
+  it("sends previousText / nextText when given", async () => {
+    noSession()
+    const mock = mockFetchJson({ jobId: "j4" })
+    vi.stubGlobal("fetch", mock)
+
+    await textToSpeech("Middle.", "Rachel", "elevenlabs-v4", undefined, { previousText: "Before.", nextText: "After." })
+
+    const body = JSON.parse(mock.mock.calls[0][1].body as string)
+    expect(body.previousText).toBe("Before.")
+    expect(body.nextText).toBe("After.")
+  })
+
+  it("sends no neighbour key for an empty or missing value", async () => {
+    noSession()
+    const mock = mockFetchJson({ jobId: "j5" })
+    vi.stubGlobal("fetch", mock)
+
+    await textToSpeech("Middle.", "Rachel", "elevenlabs-v4", undefined, { previousText: "", stability: 0.5 })
+
+    const body = JSON.parse(mock.mock.calls[0][1].body as string)
+    expect(body).not.toHaveProperty("previousText")
+    expect(body).not.toHaveProperty("nextText")
+    expect(body.stability).toBe(0.5)
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -894,6 +919,17 @@ describe("adjustVolumeApi", () => {
 // ---------------------------------------------------------------------------
 
 describe("addCaptionsApi", () => {
+  it("with opts.segments the body is exactly videoUrl, segments and userId — no text, style or lever", async () => {
+    noSession()
+    const mock = mockFetchJson({ jobId: "jp" })
+    vi.stubGlobal("fetch", mock)
+    const segments = [{ startMs: 0, endMs: 1400, text: "Sample hook" }]
+
+    await addCaptionsApi("http://vid.mp4", "ignored", "karaoke", "top", 40, "#fff", "#000", "u1", { segments, look: "outline", positionY: 20 })
+
+    expect(JSON.parse(mock.mock.calls[0][1].body as string)).toEqual({ videoUrl: "http://vid.mp4", segments, userId: "u1" })
+  })
+
   it("sends correct URL and body with videoUrl and text", async () => {
     noSession()
     const mock = mockFetchJson({ jobId: "j1" })

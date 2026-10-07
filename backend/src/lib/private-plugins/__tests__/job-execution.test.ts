@@ -43,7 +43,7 @@ import { readJobExecution } from "../job-execution.js"
 import { buildToolkit } from "../toolkit.js"
 
 const JOB = { id: "job-1", user_id: "runner-1", workflow_execution_id: "exec-1", input_data: { type: "x", node_id: "node-9" } }
-const RUN = { id: "exec-1", workflow_id: "wf-1", trigger_type: "telegram_account", trigger_data: { chatId: "-1001" } }
+const RUN = { id: "exec-1", user_id: "runner-1", workflow_id: "wf-1", trigger_type: "telegram_account", trigger_data: { chatId: "-1001" } }
 const AS_RUNNER = { runnerId: "runner-1" }
 
 beforeEach(() => {
@@ -53,6 +53,13 @@ beforeEach(() => {
 })
 
 describe("readJobExecution", () => {
+  it("a job naming another user's run reads as no run at all", async () => {
+    db.rows.workflow_executions = { ...RUN, user_id: "victim" }
+    expect(await readJobExecution("job-1", AS_RUNNER)).toBeNull()
+    const runRead = db.reads.find((r) => r.table === "workflow_executions")
+    expect(runRead?.filters).toContainEqual(["user_id", "runner-1"])
+  })
+
   it("reads the runner, run and node from the job, and the owner from the workflow", async () => {
     expect(await readJobExecution("job-1", AS_RUNNER)).toEqual({
       jobId: "job-1",
@@ -64,7 +71,7 @@ describe("readJobExecution", () => {
     })
     expect(db.reads.map((r) => [r.table, r.filters])).toEqual([
       ["jobs", [["id", "job-1"], ["user_id", "runner-1"]]],
-      ["workflow_executions", [["id", "exec-1"]]],
+      ["workflow_executions", [["id", "exec-1"], ["user_id", "runner-1"]]],
       ["workflows", [["id", "wf-1"]]],
     ])
   })

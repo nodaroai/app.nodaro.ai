@@ -6,6 +6,7 @@ import { registerVerbs } from "./tools/verbs.js"
 import { registerJobs } from "./tools/jobs.js"
 import { registerDiagnose } from "./tools/diagnose.js"
 import { registerWorkflows } from "./tools/workflows.js"
+import { registerRenderFinal } from "./tools/render-final.js"
 import { registerProjectTools } from "./tools/projects.js"
 import { registerComponents } from "./tools/components.js"
 import { registerApps } from "./tools/apps.js"
@@ -30,6 +31,7 @@ import { registerReduce } from "./tools/reduce.js"
 import { registerPromptHelper } from "./tools/prompt-helper.js"
 import { registerPickerCatalogs } from "./tools/picker-catalogs.js"
 import { registerPresets } from "./tools/node-presets.js"
+import { registerCollectionTools } from "./tools/collections.js"
 // v3.0: dynamic per-user app_<slug> / component_<slug> tools dropped in
 // favor of the pure-discovery model (list_* / get_*_inputs / run_*).
 // They didn't scale past ~15 saved apps and the prefer-verbs nudge in
@@ -178,6 +180,7 @@ export async function buildMcpServer(opts: BuildOpts): Promise<McpServer> {
   registerJobs({ server, session, fastify: opts.fastify })
   registerDiagnose({ server, session, fastify: opts.fastify })
   registerWorkflows({ server, session, fastify: opts.fastify })
+  registerRenderFinal({ server, session, fastify: opts.fastify })
   registerProjectTools(server, session)
   registerComponents({ server, session, fastify: opts.fastify })
   registerApps({ server, session, fastify: opts.fastify })
@@ -226,6 +229,10 @@ export async function buildMcpServer(opts: BuildOpts): Promise<McpServer> {
   registerReduce({ server, session, fastify: opts.fastify })
   registerPromptHelper({ server, session, fastify: opts.fastify })
   registerPresets({ server, session, fastify: opts.fastify })
+  // Collections (list / read / add a record): every edition — the
+  // `/v1/collections*` routes are core and the caps come from the plan on
+  // Nodaro Cloud; gated by assets:read / assets:write like the saved posts.
+  registerCollectionTools({ server, session, fastify: opts.fastify })
 
   // v3.0: dynamic per-user tools dropped — see import comment above.
 

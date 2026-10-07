@@ -25,6 +25,11 @@ export function overlayQrHandleTop(handleCount: number): number {
   return overlayHandleTop(Math.min(handleCount + 1, OVERLAY_MAX_LAYERS))
 }
 
+/** The layer-plan (JSON) handle of Video Overlay sits where the QR link handle
+ *  does on Image Overlay: one pitch under the "+" button, or in its place once
+ *  every layer slot is shown. */
+export const overlayPlanHandleTop = overlayQrHandleTop
+
 /** Right column: the composite at 24, the mask at 56, then one source
  *  handle per "export also for" platform at the layer pitch. */
 export const OVERLAY_FIRST_VARIANT_TOP = 88

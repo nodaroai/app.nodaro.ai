@@ -280,7 +280,12 @@ export function edlDurationMs(edl: Edl): number {
 /** The output-clock start time of each segment (index-aligned to
  *  `edl.segments`), accounting for D17 overlap: the transition INTO segment k
  *  pulls its duration back from the boundary. `outputStart(0) = 0`;
- *  `outputStart(n) + dur(n) === edlDurationMs`. */
+ *  `outputStart(n) + dur(n) === edlDurationMs`. The one output clock every
+ *  remap reads — a player seeking a rendered cut reads it too. */
+export function edlSegmentOutputStarts(edl: Edl): number[] {
+  return segmentOutputStarts(edl)
+}
+
 function segmentOutputStarts(edl: Edl): number[] {
   const starts: number[] = []
   let cursor = 0
@@ -469,6 +474,27 @@ export function remapMsThroughEdl(edl: Edl, sourceMs: number, sourceId?: string)
     if (masterMs >= seg.inMs && masterMs < seg.outMs) {
       return Math.round(starts[i] + (masterMs - seg.inMs))
     }
+  }
+  return null
+}
+
+/**
+ * The inverse of `remapMsThroughEdl`: the master-clock instant the rendered
+ * output plays at `outputMs`, or `null` before the start, at or past the end,
+ * and for a non-finite time. Inside a crossfade both segments play; the
+ * INCOMING one (the later segment) is the one named, since the cut has moved
+ * to it. On an EDL that never revisits master time (a Tighten cut),
+ * `remapMsThroughEdl(edl, outputMsToMasterMs(edl, t)) === t` for every output
+ * instant `t`; an EDL that re-reads a span maps two output instants to one
+ * master instant, and the remap names the first.
+ */
+export function outputMsToMasterMs(edl: Edl, outputMs: number): number | null {
+  if (!Number.isFinite(outputMs) || outputMs < 0) return null
+  const starts = segmentOutputStarts(edl)
+  for (let i = edl.segments.length - 1; i >= 0; i--) {
+    const seg = edl.segments[i]
+    const dur = Math.max(0, seg.outMs - seg.inMs)
+    if (outputMs >= starts[i] && outputMs < starts[i] + dur) return Math.round(seg.inMs + (outputMs - starts[i]))
   }
   return null
 }

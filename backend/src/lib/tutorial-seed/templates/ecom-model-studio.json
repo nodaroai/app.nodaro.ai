@@ -15,7 +15,7 @@
     "references"
   ],
   "complexity": "intermediate",
-  "estimatedCredits": 78,
+  "estimatedCredits": 77,
   "nodeTypesUsed": [
     "upload-image",
     "person",

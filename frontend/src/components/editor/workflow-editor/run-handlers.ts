@@ -1,6 +1,7 @@
 import type { MutableRefObject } from "react";
+import { executionErrorText } from "@/lib/execution-error-text";
 import { toast } from "sonner";
-import { assertCanvasExecutionAllowed, isProjectedTriggerNodeType, SequenceExecutionRequiredError } from "@nodaro/shared";
+import { assertCanvasExecutionAllowed, isProjectedTriggerNodeType, isRenderNodeType, SequenceExecutionRequiredError } from "@nodaro/shared";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { getJobStatusLean, getUserCredits, getWorkflowExecution, runWorkflow, streamWorkflowExecution, WorkflowAlreadyRunningError, withDedupRaceRetry , NodaroConnectionRequiredError } from "@/lib/api";
 import { generateIdempotencyKey } from "@/lib/idempotency-key";
@@ -22,19 +23,24 @@ import {
   type RunConfirmInfo,
 } from "./types";
 import { connectionJustLost, jobGoneMessage, shouldStopPolling } from "./poll-connection";
-import { estimateRunCredits } from "./estimate-run-credits";
+import { estimateRunCreditLines, estimateRunCredits, sumRunCreditLines } from "./estimate-run-credits";
+import { renderConfirmDetail } from "./render-confirm-detail";
 import { liveExecutable, getDownstreamNodeIds, runFromHereExecutable } from "./run-from-here-set";
 import { wordTimingsPreflight } from "./add-captions-preflight";
-import { nestedWordTimingsPreflight } from "./sub-workflow-preflight";
+import { nestedRunPreflight } from "./sub-workflow-preflight";
+import { previewRunnable, previewSingleRunRefusal } from "./preview-gate";
+import { renderOwnRunRefusal, replanEditLosses, replanLossBody } from "./render-review-guards";
 import { COMPOSER_PLAN_MAP, CREDIT_BASE_USD, planFanOut, TRANSIENT_RUNTIME_KEYS, isExpandedClone, withWiredSettings } from "@nodaro/shared"
 import { clearedConnectedListRows } from "./clear-run-results"
 import { namedRunOutputFields, reduceRunOutputFields } from "@/lib/named-run-outputs"
 import { perHandleRunFields } from "@/lib/per-handle-batch"
 import { applyEdlRunCutFields, applyEdlTakeTranscriptField } from "@/lib/apply-edl-cut"
+import { runResultIdentity, runResultRowIdentity } from "@/lib/run-result-identity"
 import { isJsonRunResultType, jobRunOutput, jsonRunResultPatch } from "@/lib/json-run-result"
 import { isSeededState } from "@/lib/seeded-node-state"
 import { videoOverlayListRowFields, videoOverlayRunOutputFields } from "@/lib/video-overlay-run-output"
-import type { NodeExecutionStatus as SharedNodeExecutionStatus, NodeExecutionStateWire } from "@nodaro/shared"
+import type { NodeExecutionStatus as SharedNodeExecutionStatus, NodeExecutionStateWire, RenderQuality, RunResultRowStamp } from "@nodaro/shared"
+import { toastBackendRunCompleted } from "./run-ended-toast";
 import { collapseExpandedClones } from "./execution-graph";
 import { shouldAbandonNode } from "./abandon-guard";
 import { getListFanOutForNode } from "./node-input-resolver";
@@ -46,7 +52,7 @@ import { buildVariantResults } from "./variant-results";
 // The restore poller shares the canvas loops' one flag writer. No cycle:
 // poll-job.ts imports nothing from this file.
 import { getJobStatusLeanForNode } from "./poll-job";
-import { FOLLOWED_LANES, resultsRunMark } from "./triggered-run-follow";
+import { CANVAS_RUN_LANES, resultsRunMark } from "./triggered-run-follow";
 import { recoverAuditReportsOnCanvas } from "./audit-report-canvas";
 import { beginTriggeredRunPaint } from "./triggered-run-paint";
 import { sunoVariantFields } from "@/lib/suno-ids";
@@ -119,7 +125,7 @@ function refuseWhileStreaming(): boolean {
  * runs and paints, and a run started there holds the freeze with its own marks
  * until its result lands.
  */
-function refuseWhileReadOnly(): boolean {
+export function refuseWhileReadOnly(): boolean {
   const { isReadOnly, readOnlyReason } = useWorkflowStore.getState();
   if (!isReadOnly) return false;
   if (readOnlyReason) toast.error(readOnlyReason);
@@ -157,7 +163,7 @@ function deploymentPayerInstance(): boolean {
   }
 }
 
-function warnUnderMinRows(nodes: WorkflowNode[]): void {
+export function warnUnderMinRows(nodes: WorkflowNode[]): void {
   const underMin = nodes.filter((n) => {
     if (n.type !== "list") return false
     const data = n.data as Record<string, unknown>
@@ -216,9 +222,13 @@ const HISTORY_FIELDS: ReadonlyArray<string> = [
 const LIST_STATE_FIELDS: ReadonlyArray<string> = [
   "__listResults",
   "__alignedListResults",
+  // A render's row stamps (the clip each row was sent for): the batch's own.
+  "__listResultStamps",
   "__listTotal",
   "__listCompleted",
   "__listInputs",
+  // UGC Clip's per-row notes: a later single run must not read a fan-out run's rows.
+  "__listResultMeta",
   "listResults",
   // Selector dual-channel outputs — clear pre-run so stale picked/rest from a
   // previous run don't survive upstream-input changes or run-from-here. The
@@ -251,13 +261,16 @@ const ACCUMULATION_FIELDS_TO_CLEAR: ReadonlyArray<string> = [
  * intact — used by single-node re-runs so the node's own history browser
  * accumulates new takes instead of wiping prior results. Transient list-state
  * fields are still cleared to avoid stale list badges.
+ *
+ * Returns an `undo` that restores what this call cleared.
  */
 export function resetNodeAccumulation(
   nodes: ReadonlyArray<WorkflowNode>,
   options: { preserveHistory?: boolean } = {},
-): void {
+): () => void {
   const { updateNodeData } = useWorkflowStore.getState()
   const fields = options.preserveHistory ? LIST_STATE_FIELDS : ACCUMULATION_FIELDS_TO_CLEAR
+  const undo: Array<[string, Record<string, unknown>]> = []
   for (const node of nodes) {
     if (!isExecutableNode(node)) continue
     const data = node.data as Record<string, unknown>
@@ -275,8 +288,17 @@ export function resetNodeAccumulation(
       }
     }
     if (Object.keys(patch).length > 0) {
+      const previous: Record<string, unknown> = {}
+      for (const key of Object.keys(patch)) previous[key] = data[key]
+      undo.push([node.id, previous])
       updateNodeData(node.id, patch)
     }
+  }
+  // Puts back exactly what this call cleared, for a caller that then aborts
+  // without running anything (a refused save).
+  return () => {
+    const { updateNodeData: restore } = useWorkflowStore.getState()
+    for (const [id, previous] of undo) restore(id, previous)
   }
 }
 
@@ -314,7 +336,7 @@ export const RUN_CONFIRM_CREDITS = Math.round(RUN_CONFIRM_USD / CREDIT_BASE_USD)
  * (e.g. "Run instead", which already confirmed via its discard dialog). A no-op
  * (proceed) when there's no `confirmRun` provider or nothing executable.
  */
-async function confirmRunOrAbort(
+export async function confirmRunOrAbort(
   ctx: ExecutionContext,
   executable: WorkflowNode[],
   allNodes: WorkflowNode[],
@@ -322,6 +344,8 @@ async function confirmRunOrAbort(
   trigger: RunConfirmInfo["trigger"],
   alwaysConfirm: boolean,
   skip?: boolean,
+  /** Render final / Update preview: the render whose run this is (the itemised confirm). */
+  renderId?: string,
 ): Promise<boolean> {
   try { assertCanvasExecutionAllowed(executable); }
   catch (error) {
@@ -337,15 +361,66 @@ async function confirmRunOrAbort(
   // workflow used to pass every gate and be refused mid-run, once the parent's
   // upstream nodes had executed and billed. The nested pass loads the referenced
   // routes (one round-trip per sub-workflow node in the run, and only then).
+  //
+  // A sub-workflow holding a Preview render is refused in the same nested walk
+  // (one load per referenced route): it would hand a preview to this graph,
+  // where nothing can Render final.
+  //
+  // Both scans see only what the run EXECUTES — the set less the stop rule's
+  // closure, exactly as the orchestrator scans it. A node a Preview render
+  // gates never runs, so nothing wired or nested behind it can refuse the run
+  // (and no route is loaded for a gated sub-workflow).
+  const runs = previewRunnable(executable, allNodes, edges);
   {
     const blocked =
-      wordTimingsPreflight(executable, edges) ?? (await nestedWordTimingsPreflight(executable));
+      wordTimingsPreflight(runs, edges) ?? (await nestedRunPreflight(runs));
     if (blocked) { toast.error(blocked); return false; }
   }
+  // A single-node ▶ inside a Preview render's closure would consume the
+  // preview: refused here, above the skip-confirm shortcut, so "Run instead"
+  // cannot bypass it. Run / Run from here / Run selected are never refused —
+  // the server skips the closure (the stop rule); the render's own run stays
+  // allowed.
+  // A render's own ▶ behind Camera Switch would preview the unedited cut: it
+  // refuses once the plan holds edits (TA19 a; with the stop-rule flag on). So
+  // does Run from here / Run selected on a render whose Camera Switch is NOT in
+  // the run (the server seeds it from its saved output) — one rule, every door.
+  if (trigger === "single") {
+    const refusal =
+      executable.map((n) => previewSingleRunRefusal(n.id, allNodes, edges)).find(Boolean) ??
+      executable.map((n) => renderOwnRunRefusal(n.id, allNodes, edges)).find(Boolean);
+    if (refusal) { toast.error(refusal); return false; }
+  } else if (trigger === "from-here" || trigger === "selected") {
+    const ids = new Set(executable.map((n) => n.id));
+    const refusal = executable.map((n) => renderOwnRunRefusal(n.id, allNodes, edges, ids)).find(Boolean);
+    if (refusal) { toast.error(refusal); return false; }
+  }
+  // A run that re-executes an Edit Plan holding a review replaces it (TA2
+  // item 3). Asked above the skip-confirm shortcut: "Run instead" confirmed a
+  // discard, not the loss of these edits.
+  {
+    const losses = replanEditLosses(runs);
+    if (losses.length > 0 && ctx.askConfirm) {
+      const body = losses.map(replanLossBody).join(" ");
+      if (!(await ctx.askConfirm({ title: tx("renderFinal.replanTitle"), body, confirmLabel: tx("renderFinal.replanConfirm") }))) return false;
+    }
+  }
   if (skip || !ctx.confirmRun || executable.length === 0) return true;
+  // Render final / Update preview itemise the run per node (U1, decided
+  // 2026-10-06): the total is the sum of the very lines the dialog shows. A
+  // non-credit edition lists the same nodes with no numbers.
+  if (renderId && (trigger === "render-final" || trigger === "update-preview")) {
+    const lines = estimateRunCreditLines(executable, allNodes, edges, hasCredits() ? getCachedCredits : () => undefined);
+    const estimatedCredits = hasCredits() ? sumRunCreditLines(lines) : null;
+    if (!alwaysConfirm && (estimatedCredits === null || estimatedCredits <= RUN_CONFIRM_CREDITS)) return true;
+    const detail = renderConfirmDetail(renderId, trigger, executable, lines, allNodes, edges);
+    return ctx.confirmRun({ trigger, nodeCount: runs.length, estimatedCredits, alwaysConfirm, ...detail });
+  }
   const estimatedCredits = hasCredits() ? estimateRunCredits(executable, allNodes, edges, getCachedCredits) : null;
   if (!alwaysConfirm && (estimatedCredits === null || estimatedCredits <= RUN_CONFIRM_CREDITS)) return true;
-  return ctx.confirmRun({ trigger, nodeCount: executable.length, estimatedCredits, alwaysConfirm });
+  // "N nodes" counts what the run executes — the set less the stop rule's
+  // closure, like the estimate above and the "N nodes to run" toast.
+  return ctx.confirmRun({ trigger, nodeCount: runs.length, estimatedCredits, alwaysConfirm });
 }
 
 // ---------------------------------------------------------------------------
@@ -406,11 +481,13 @@ export async function handleRun(
   warnUnderMinRows(nodes);
   clearConnectedListRows(nodes);
 
-  const executableNodes = nodes.filter(isExecutableNode);
-  if (executableNodes.length === 0) {
+  if (!nodes.some(isExecutableNode)) {
     toast.error(tx("run.noExecutableNodes"));
     return;
   }
+  // What this run executes: the stop rule's closure never runs, so it is never
+  // flipped to pending, reset, or priced in the precheck.
+  const executableNodes = previewRunnable(nodes.filter(isExecutableNode), nodes, useWorkflowStore.getState().edges);
 
   if (!workflowId) {
     toast.error(tx("run.saveBeforeRunning"));
@@ -724,13 +801,15 @@ export async function handleRunFromHere(
 
   warnUnderMinRows(nodes.filter((n) => downstream.has(n.id)));
 
-  const executableNodes = nodes.filter(
+  const downstreamExecutable = nodes.filter(
     (n) => downstream.has(n.id) && isExecutableNode(n),
   );
-  if (executableNodes.length === 0) {
+  if (downstreamExecutable.length === 0) {
     toast.error(tx("run.noExecutableDownstream"));
     return;
   }
+  // The stop rule's closure never runs: never reset, flipped or counted.
+  const executableNodes = previewRunnable(downstreamExecutable, nodes, edges);
 
   // Capture dirtiness BEFORE the per-run resets / optimistic flip so a clean
   // editor skips the pre-Run save round-trip (see FIX 4).
@@ -821,11 +900,13 @@ export async function handleRunSelected(
     return;
   }
 
-  const executableNodes = selectedNodes.filter(isExecutableNode);
-  if (executableNodes.length === 0) {
+  const selectedExecutable = selectedNodes.filter(isExecutableNode);
+  if (selectedExecutable.length === 0) {
     toast.error(tx("run.noExecutableInSelection"));
     return;
   }
+  // The stop rule's closure never runs: never reset, flipped or counted.
+  const executableNodes = previewRunnable(selectedExecutable, nodes, useWorkflowStore.getState().edges);
   warnUnderMinRows(selectedNodes);
 
   const selectedIds = selectedNodes.map((n) => n.id);
@@ -1109,6 +1190,7 @@ export function applyRestoredJobCompletion(
     url: (outputUrl as string) ?? "",
     timestamp: new Date().toISOString(),
     jobId,
+    ...runResultIdentity(nodeType, job.output_data),
     ...(overlayRun ?? {}),
     // Apply EDL: the take keeps the Transcript its render was cut with.
     ...applyEdlTakeTranscriptField(nodeType, job.output_data, outputUrl),
@@ -1260,13 +1342,14 @@ export function streamBackendExecution(
         // bare end. The fetched row says which end it was.
         let status = "completed";
         let errorMessage: string | undefined;
+        let finalStates: Record<string, NodeExecutionState> | undefined;
         try {
           const exec = await getWorkflowExecution(executionId);
           if (finished) return;
           if (exec.status === "discarded") { onDiscarded(); return; }
           status = exec.status;
           errorMessage = exec.errorMessage;
-          const finalStates = (exec.nodeStates ?? {}) as Record<string, NodeExecutionState>;
+          finalStates = (exec.nodeStates ?? {}) as Record<string, NodeExecutionState>;
           applyStates(finalStates);
         } catch {
           // Non-critical — SSE already applied what it had.
@@ -1274,10 +1357,10 @@ export function streamBackendExecution(
         if (finished) return;
         if (status === "failed" || status === "cancelled" || status === "timed_out") revertActiveNodesToIdle();
         cleanup();
-        if (status === "failed") toast.error(tx("run.backendFailed"), { description: errorMessage });
+        if (status === "failed") toast.error(tx("run.backendFailed"), { description: executionErrorText(errorMessage) });
         else if (status === "cancelled") toast.info(tx("run.backendCancelled"));
         else if (status === "timed_out") toast.error(tx("run.backendTimedOut"));
-        else toast.success(tx("run.backendCompleted"));
+        else toastBackendRunCompleted(finalStates);
       },
       onFailed: (data) => {
         if (finished) return;
@@ -1288,7 +1371,7 @@ export function streamBackendExecution(
         revertActiveNodesToIdle();
         cleanup();
         toast.error(tx("run.backendFailed"), {
-          description: (data.errorMessage as string) ?? undefined,
+          description: executionErrorText(data.errorMessage as string | undefined),
         });
       },
       onCancelled: () => {
@@ -1348,10 +1431,10 @@ export function streamBackendExecution(
         if (exec.status !== "completed") revertActiveNodesToIdle();
         cleanup();
         if (exec.status === "completed") {
-          toast.success(tx("run.backendCompleted"));
+          toastBackendRunCompleted(nodeStates);
         } else if (exec.status === "failed") {
           toast.error(tx("run.backendFailed"), {
-            description: exec.errorMessage,
+            description: executionErrorText(exec.errorMessage),
           });
         } else if (exec.status === "cancelled") {
           toast.info(tx("run.backendCancelled"));
@@ -1398,13 +1481,13 @@ export function streamBackendExecution(
           applyStates(finalStates);
           if (finalExec.status === "completed") {
             cleanup();
-            toast.success(tx("run.backendCompleted"));
+            toastBackendRunCompleted(finalStates);
             return;
           }
           if (finalExec.status === "failed") {
             revertActiveNodesToIdle();
             cleanup();
-            toast.error(tx("run.backendFailed"), { description: finalExec.errorMessage });
+            toast.error(tx("run.backendFailed"), { description: executionErrorText(finalExec.errorMessage) });
             return;
           }
           if (finalExec.status === "cancelled") {
@@ -1478,11 +1561,12 @@ export function isStreaming(executionId: string, owner?: (v: boolean) => void): 
 
 /**
  * The server answered a Run with "already running" and named the run. A run
- * a Telegram message started belongs to the workflow's owner, so this is what
- * a Run pressed while one goes gets. Already streaming it: keep that stream
- * and take back this click's optimistic marks. A Telegram run: follow it
- * through its paint rules, never the plain stream (that would write the
- * message onto the trigger card and paint nodes it only passed through).
+ * the editor did not start (a Telegram message, an MCP client, the API, a
+ * schedule, a webhook) belongs to the workflow's owner, so this is what a Run
+ * pressed while one goes gets. Already streaming it: keep that stream and
+ * take back this click's optimistic marks. A run on a canvas lane: follow it
+ * through its paint rules, never the plain stream (that would write a
+ * trigger's message onto its card and paint nodes it only passed through).
  * Anything else, as before.
  */
 export async function attachToRunningExecution(
@@ -1505,7 +1589,7 @@ export async function attachToRunningExecution(
     undoOptimistic();
     return;
   }
-  if (lane !== undefined && FOLLOWED_LANES.has(lane)) {
+  if (lane !== undefined && CANVAS_RUN_LANES.has(lane)) {
     undoOptimistic();
     streamBackendExecution(executionId, ctx, setIsRunning, onExecutionEnded, {
       isRestore: true,
@@ -1539,6 +1623,8 @@ export interface NodeExecutionState {
   /** The shared union (`@nodaro/shared`), so the editor, the orchestrator and
    *  the SDK partition node status against ONE list. */
   status: SharedNodeExecutionStatus;
+  /** Why the RUN skipped this node (`empty_input`); absent on a router-gated one. Mirrors the shared wire contract. */
+  skipReason?: string;
   /**
    * What the node produced.
    *
@@ -1605,6 +1691,14 @@ export interface NodeExecutionState {
     resultCompositionKey?: string;
     /** Video Overlay list fan-out: each row's own freshness key, row-aligned with listResults. */
     listResultCompositionKeys?: string[];
+    /** Each fan-out row's own job, thumbnail and render stamps, row-aligned with listResults. Mirrors backend NodeOutput. */
+    listResultStamps?: RunResultRowStamp[];
+    /** Apply EDL: the quality the render was made at, the plan clip it cut, the
+     *  plan value it cut and its own settings. */
+    quality?: RenderQuality;
+    clipKey?: string;
+    planBasis?: string;
+    renderBasis?: string;
   };
   error?: string;
   /** Stable billing-refusal code (backend reserve-errors.ts) — branch on this, never on text. */
@@ -1749,11 +1843,20 @@ function syncNodeStatesToStore(
         // replace the planner's output with whatever the seed carried. Only
         // the status settles: Run marks every executable node pending,
         // Skip-frozen ones included, and nothing else would end their spinner.
-        if (currentStatus !== "completed") patchMap.set(node.id, { executionStatus: "completed" });
+        // …and a chip from an earlier run goes: the node is settled, not skipped.
+        const seeded = {
+          ...(currentStatus !== "completed" ? { executionStatus: "completed" } : {}),
+          ...(data.__runSkipReason !== undefined ? { __runSkipReason: undefined } : {}),
+        };
+        if (Object.keys(seeded).length > 0) patchMap.set(node.id, seeded);
         continue;
       }
       const updates: Record<string, unknown> = {
         executionStatus: "completed",
+        // The chip of a run that skipped this node goes when it runs again
+        // (written only when there is one: a key the canvas run never writes
+        // must not appear on a node that never wore the chip).
+        ...(data.__runSkipReason !== undefined ? { __runSkipReason: undefined } : {}),
         // Terminal — clear the hold flag. Required even though the overlay is
         // ALSO gated on `executionStatus === "running"`: both guards ship,
         // because approve goes pending_review -> completed with no tick in
@@ -1898,6 +2001,10 @@ function syncNodeStatesToStore(
         // server-side run pairs by row exactly like that run did. Always written
         // (undefined clears a stale one from an earlier run).
         updates.__alignedListResults = state.output.alignedListResults;
+        // A render's row stamps: every row names the clip it was sent for, a
+        // failed one too, so the clip cards match rows by key (decided
+        // 2026-10-06). Always written (undefined clears an earlier batch's).
+        updates.__listResultStamps = isRenderNodeType(nodeType) ? state.output.listResultStamps : undefined;
         // Selector dual-channel mirror — orchestrator state carries
         // pickedResults/restResults but the SelectorNode UI reads from
         // node.data (`__pickedResults`/`__restResults` + the snapshot
@@ -1929,14 +2036,21 @@ function syncNodeStatesToStore(
           const rowFields = videoOverlayListRowFields(nodeType, state.output);
           const newResults = listResultUrls
             .filter((url) => !existingUrls.has(url))
-            .map((url, i) => ({
-              url,
-              timestamp: state.completedAt ?? new Date().toISOString(),
-              jobId: state.jobIds?.[i] ?? `exec-${node.id}-${i}`,
-              ...rowFields(url),
-              // Apply EDL: only the render the output describes keeps its Transcript.
-              ...applyEdlTakeTranscriptField(nodeType, state.output, url),
-            }));
+            .map((url, i) => {
+              // The row's OWN job, thumbnail and stamps (listResultStamps) —
+              // never `jobIds[i]`: that list is in settle order, without the
+              // rows that failed, so position paired a row with a sibling's job.
+              const { jobId: rowJobId, ...rowIdentity } = runResultRowIdentity(nodeType, state.output, url);
+              return {
+                url,
+                timestamp: state.completedAt ?? new Date().toISOString(),
+                jobId: rowJobId ?? `exec-${node.id}-${i}`,
+                ...rowIdentity,
+                ...rowFields(url),
+                // Apply EDL: only the render the output describes keeps its Transcript.
+                ...applyEdlTakeTranscriptField(nodeType, state.output, url),
+              };
+            });
           if (newResults.length > 0) {
             updates.generatedResults = [...newResults, ...prev];
             updates.activeResultIndex = 0;
@@ -1972,6 +2086,7 @@ function syncNodeStatesToStore(
                   url: outputUrl,
                   timestamp: state.completedAt ?? new Date().toISOString(),
                   jobId: state.jobId ?? `exec-${node.id}`,
+                  ...runResultIdentity(nodeType, state.output),
                   ...(overlayRun ?? {}),
                   // Apply EDL: the take keeps the Transcript its render was cut with.
                   ...applyEdlTakeTranscriptField(nodeType, state.output, outputUrl),
@@ -1993,6 +2108,8 @@ function syncNodeStatesToStore(
       // this patch only mirrors the orchestrator's state onto the node — a run
       // reset here would wipe the very keys the branches below are setting.
       const runPatch: Record<string, unknown> = { executionStatus: "running" } // run-start-reset-ok: mid-run status tick
+      // The chip of a run that skipped this node goes the moment it runs again.
+      if (data.__runSkipReason !== undefined) runPatch.__runSkipReason = undefined
       if (typeof state.progress === "number") {
         runPatch.currentJobProgress = state.progress
       }
@@ -2019,7 +2136,8 @@ function syncNodeStatesToStore(
         currentStatus !== "running" ||
         runPatch.currentJobProgress !== undefined ||
         runPatch.jobAwaitingReview !== undefined ||
-        "sceneJobBaseRevisionId" in runPatch
+        "sceneJobBaseRevisionId" in runPatch ||
+        "__runSkipReason" in runPatch
       ) {
         patchMap.set(node.id, runPatch)
       }
@@ -2029,7 +2147,7 @@ function syncNodeStatesToStore(
       currentStatus !== "running" &&
       currentStatus !== "completed"
     ) {
-      patchMap.set(node.id, { executionStatus: "pending" });
+      patchMap.set(node.id, { executionStatus: "pending", ...(data.__runSkipReason !== undefined ? { __runSkipReason: undefined } : {}) });
     } else if (state.status === "failed" && currentStatus !== "failed") {
       // A FAILED node can still have RETAINED what it produced. The orchestrator
       // now carries that on `NodeExecutionState.output` (shared contract:
@@ -2052,11 +2170,18 @@ function syncNodeStatesToStore(
         errorMessage: state.error ?? "Node failed",
         errorHint: state.errorHint,
         jobAwaitingReview: undefined,
+        ...(data.__runSkipReason !== undefined ? { __runSkipReason: undefined } : {}),
         ...endedMark(state),
       });
-    } else if (state.status === "skipped" && currentStatus !== "completed") {
-      // Router-gated node: mark as idle (not stuck in "pending")
-      patchMap.set(node.id, { executionStatus: "idle", jobAwaitingReview: undefined });
+    } else if (state.status === "skipped") {
+      // A gated node settles idle (not stuck in "pending") unless it still
+      // shows a completed result. A node the RUN skipped for want of input
+      // also wears the reason as a chip — `__runSkipReason`, transient (never
+      // saved), cleared the moment the node runs again (the branches above).
+      const settle = currentStatus !== "completed" && currentStatus !== "idle" ? { executionStatus: "idle", jobAwaitingReview: undefined } : {};
+      const reason = state.skipReason && data.__runSkipReason !== state.skipReason ? { __runSkipReason: state.skipReason } : {};
+      const patch = { ...settle, ...reason };
+      if (Object.keys(patch).length > 0) patchMap.set(node.id, patch);
     }
   }
 

@@ -11,7 +11,20 @@ import { isUuid } from "./_id-guard.js"
 import { failureGuidance } from "./_job-error.js"
 import { redactPrivateJobData } from "../../public-job-data.js"
 import { escapeLikeArgument } from "./_like-escape.js"
+import { fillAssetRenderQuality, fillJobRenderQuality } from "../../render-label-fill.js"
+import { isPreviewRender } from "../../preview-render.js"
+import { OWNER_ONLY_RENDER_JOBS, isPreviewListing, renderListingMedium } from "../../render-listing.js"
 import { bannedGalleryUsersFilter, galleryHides, loadGalleryModeration } from "../../gallery-moderation.js"
+import { countEmptyInputSkips, executionOutcome, isRenderNodeType, type GenericNode } from "@nodaro/shared"
+import { summarizeNodeStates } from "../../execution-result.js"
+import type { NodeExecutionState } from "../../../services/workflow-engine/types.js"
+
+/** The run's workflow nodes, for labels — or undefined: a run of a deleted (or another creator's app) workflow still reads. */
+async function loadWorkflowNodes(workflowId: string | null | undefined, userId: string): Promise<GenericNode[] | undefined> {
+  if (!workflowId) return undefined
+  const { data } = await supabase.from("workflows").select("nodes").eq("id", workflowId).eq("user_id", userId).maybeSingle()
+  return Array.isArray(data?.nodes) ? (data.nodes as GenericNode[]) : undefined
+}
 
 const readGate: ToolGate = { required: ["assets:read"] }
 const writeGate: ToolGate = { required: ["assets:write"] }
@@ -82,21 +95,28 @@ const AUDIO_JOBS = new Set([
  *  decides audio vs video, so the static sets alone mis-kind their video rows. */
 const DUAL_MODE_JOBS = new Set(["voice-changer", "voice-changer-pro", "dubbing"])
 
-function getKind(jobType: string | null): "image" | "video" | "audio" | null {
+/** Apply EDL renders list in the OWNER's own views only (decided 2026-10-06; see
+ *  lib/render-listing.ts): a Preview is private, and a public final would be
+ *  exposure nobody decided. Their kind is their output's medium, per row. */
+const OWNER_ONLY_JOBS: ReadonlySet<string> = OWNER_ONLY_RENDER_JOBS
+
+function getKind(jobType: string | null, row?: Pick<GalleryRow, "input_data" | "output_data">): "image" | "video" | "audio" | null {
   if (!jobType) return null
+  const renderMedium = renderListingMedium(jobType, row?.input_data, row?.output_data)
+  if (renderMedium) return renderMedium
   if (IMAGE_JOBS.has(jobType)) return "image"
   if (VIDEO_JOBS.has(jobType)) return "video"
   if (AUDIO_JOBS.has(jobType)) return "audio"
   return null
 }
 
-function jobNamesForKind(kind: "image" | "video" | "audio"): string[] {
+function jobNamesForKind(kind: "image" | "video" | "audio", ownerView: boolean): string[] {
   if (kind === "image") return [...IMAGE_JOBS]
   // Dual-mode rows can be the requested kind either way — include them in the
   // video filter too (they already sit in the audio set); the per-row display
   // reads what the run actually produced.
-  if (kind === "video") return [...VIDEO_JOBS, ...DUAL_MODE_JOBS]
-  return [...AUDIO_JOBS]
+  if (kind === "video") return [...VIDEO_JOBS, ...DUAL_MODE_JOBS, ...(ownerView ? OWNER_ONLY_JOBS : [])]
+  return [...AUDIO_JOBS, ...(ownerView ? OWNER_ONLY_JOBS : [])]
 }
 
 function formatRow(row: GalleryRow): string {
@@ -104,12 +124,13 @@ function formatRow(row: GalleryRow): string {
   const kind =
     row.job_type && DUAL_MODE_JOBS.has(row.job_type)
       ? (typeof outputData.videoUrl === "string" && outputData.videoUrl ? "video" : "audio")
-      : getKind(row.job_type) ?? "unknown"
+      : getKind(row.job_type, row) ?? "unknown"
   const prompt = (row.input_data?.prompt as string | undefined) ?? ""
   const truncated = prompt.length > 80 ? `${prompt.slice(0, 77)}...` : prompt
   const model = (row.input_data?.provider as string | undefined) ?? row.provider ?? "?"
   const date = (row.completed_at ?? "").split("T")[0]
-  return `${row.id}: ${kind} — "${truncated}" (${model}, ${date})`
+  const preview = isPreviewListing(row) ? " (preview)" : ""
+  return `${row.id}: ${kind}${preview} — "${truncated}" (${model}, ${date})`
 }
 
 /**
@@ -175,7 +196,10 @@ function extractReferences(input: Record<string, unknown> | null): string[] {
  * model from `input_data`.
  */
 function rowToGalleryItem(row: GalleryRow, viewerUserId: string): GalleryItem | null {
-  const kind = getKind(row.job_type)
+  // An owner-only job is the viewer's own or nothing: `list_favorites` hydrates
+  // other people's PUBLIC rows too, and an Apply EDL final can be one.
+  if (row.job_type && OWNER_ONLY_JOBS.has(row.job_type) && row.user_id !== viewerUserId) return null
+  const kind = getKind(row.job_type, row)
   if (!kind) return null
   const out = row.output_data ?? {}
   const assetUrl =
@@ -199,7 +223,7 @@ function rowToGalleryItem(row: GalleryRow, viewerUserId: string): GalleryItem | 
     jobId: row.id,
     kind,
     prompt: (input.prompt as string | undefined) ?? "",
-    model: (input.provider as string | undefined) ?? row.provider ?? "?",
+    model: (input.provider as string | undefined) ?? row.provider ?? (isRenderNodeType(row.job_type) ? row.job_type : "?"),
     thumbnailUrl,
     assetUrl,
     createdAt: row.completed_at ?? "",
@@ -212,6 +236,8 @@ function rowToGalleryItem(row: GalleryRow, viewerUserId: string): GalleryItem | 
     // row carries it. Decided per ROW rather than per scope, so a third
     // caller cannot reintroduce the leak by forgetting to pass a scope.
     references: row.user_id === viewerUserId ? extractReferences(row.input_data) : [],
+    // A render made at proxy quality is a private 720p Preview (F1).
+    ...(isPreviewListing(row) ? { preview: true } : {}),
   }
 }
 
@@ -315,7 +341,8 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
             : args.kind
               ? [args.kind]
               : ["image", "video"]
-        const allowedJobTypes = kinds.flatMap((k) => jobNamesForKind(k))
+        // Apply EDL renders list in the caller's own view only — never the public scope.
+        const allowedJobTypes = kinds.flatMap((k) => jobNamesForKind(k, scope === "mine"))
 
         // Chain filters first, then order, then limit — keeps the test
         // mock chain readable and matches Supabase's typical pattern.
@@ -365,6 +392,14 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
         }
         const rows = (data ?? []) as GalleryRow[]
         const last = rows[rows.length - 1]
+        // What the query was not asked for is not shown either: a row of an
+        // owner-only job outside the caller's own scope is dropped, and one of
+        // the wrong medium for the kinds asked is too (a render has one).
+        const listable = (row: GalleryRow): boolean => {
+          if (!row.job_type || !OWNER_ONLY_JOBS.has(row.job_type)) return true
+          const medium = getKind(row.job_type, row)
+          return scope === "mine" && row.user_id === session.userId && !!medium && kinds.includes(medium)
+        }
         // Cursor matches the column we ordered by (created_at for mine,
         // completed_at for public). For "mine" some rows may not yet
         // have completed_at (still processing) so we explicitly fall back.
@@ -376,9 +411,10 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
           rows.length === limit && lastCursorVal ? lastCursorVal : null
         // The cursor above follows every row READ, so paging goes on past a
         // stretch the moderation hides; only what is shown is filtered.
-        const shown = moderation
+        const shown = (moderation
           ? rows.filter((row) => !galleryHides(moderation, { userId: row.user_id, inputData: row.input_data, outputData: row.output_data }))
           : rows
+        ).filter(listable)
         const lines = shown.map(formatRow)
         const cursorLine = nextCursor
           ? `\n(next_cursor: ${nextCursor} — call browse_gallery again with this cursor)`
@@ -515,7 +551,7 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
         let query = supabase
           .from("assets")
           .select(
-            "id, type, filename, mime_type, size_bytes, r2_url, metadata, created_at",
+            "id, type, filename, mime_type, size_bytes, r2_url, metadata, created_at, job_id",
           )
           .eq("user_id", session.userId)
           .order("created_at", { ascending: false })
@@ -534,8 +570,12 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
         }
         const rows = data ?? []
         const hasMore = rows.length > limit
-        const pageRows = hasMore ? rows.slice(0, limit) : rows
-        const nextCursor = hasMore ? (pageRows[pageRows.length - 1]?.id as string | undefined) ?? null : null
+        const storedRows = hasMore ? rows.slice(0, limit) : rows
+        const nextCursor = hasMore ? (storedRows[storedRows.length - 1]?.id as string | undefined) ?? null : null
+        // A render made before its Preview label was stored takes it from the
+        // job that made it (one batched lookup per page, none when no file needs
+        // one) — the same read-time fill /v1/library applies (decided 2026-10-05).
+        const pageRows = await fillAssetRenderQuality(storedRows)
 
         // Total count on first page only (matches /v1/library's behaviour).
         let totalCount: number | null = null
@@ -566,12 +606,15 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
             assetUrl: a.r2_url as string,
             createdAt: a.created_at as string,
             favorited: false,
+            // A render made at proxy quality is a private 720p Preview (F1):
+            // labelled from the asset's own record, as My Library labels it.
+            ...(meta.quality === "proxy" ? { preview: true } : {}),
           }
         })
 
         const lines = items.length > 0
           ? items
-              .map((it) => `- ${it.kind} ${it.jobId} ${it.prompt ? `(${it.prompt})` : ""}`)
+              .map((it) => `- ${it.kind}${"preview" in it ? " (preview)" : ""} ${it.jobId} ${it.prompt ? `(${it.prompt})` : ""}`)
               .join("\n")
           : "(no uploads)"
         const cursorLine = nextCursor
@@ -699,6 +742,8 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
           errorMessage: z.string().nullable().optional(),
           retryable: z.boolean().optional(),
           outputData: z.record(z.string(), z.unknown()).optional(),
+          /** A Preview render (Apply EDL at proxy quality) — the same flag get_job carries. */
+          preview: z.boolean().optional(),
         },
         annotations: { readOnlyHint: true },
       },
@@ -747,12 +792,18 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
           }
         }
 
-        const data = redactPrivateJobData(rawData)
+        // An old render carries no stored Preview label: fill it from the order by
+        // the rule get_job uses, so both readers say the same of one job (response
+        // only; decided 2026-10-06).
+        const data = redactPrivateJobData(fillJobRenderQuality(rawData))
 
         // Extract the public asset URL from output_data (varies by job_type:
         // imageUrl / videoUrl / audioUrl / outputUrl). The widget polls this
         // tool every 2s and reads structuredContent to update its preview.
         const out = (data.output_data ?? {}) as Record<string, unknown>
+        const previewField = isPreviewRender(data.job_type as string | null | undefined, out.quality)
+          ? { preview: true as const }
+          : {}
         // Shared with get_job / wait_for_job (audit 2026-09-06 fix #2): one
         // resolver for the per-type output keys, one asset-kind rule.
         const outputUrl = resolveOutputUrl(out)
@@ -812,6 +863,7 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
               errorMessage: null,
               retryable: false,
               outputData: out,
+              ...previewField,
             },
           }
         }
@@ -846,6 +898,7 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
               retryable,
               ...(suggestedProvider ? { suggestedProvider } : {}),
               outputData: out,
+              ...previewField,
             },
           }
         }
@@ -868,6 +921,7 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
             // URL field names. Do not remove or trim without bumping the
             // widget URIs. Guarded by __tests__/job-auto-bindings.test.ts.
             outputData: out,
+            ...previewField,
           },
         }
       },
@@ -954,7 +1008,9 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
           }
         }
 
-        const out = (data.output_data ?? {}) as Record<string, unknown>
+        // Same fill as get_asset / get_job: an old render's label comes from the order.
+        const filled = fillJobRenderQuality(data)
+        const out = (filled.output_data ?? {}) as Record<string, unknown>
         const input = (data.input_data ?? {}) as Record<string, unknown>
         const outputUrl =
           (out.imageUrl as string | undefined) ??
@@ -1011,6 +1067,7 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
             outputUrl,
             assetKind,
             imageActions: assetKind === "image",
+            ...(isPreviewRender(data.job_type as string | null | undefined, out.quality) ? { preview: true } : {}),
           },
         }
       },
@@ -1027,22 +1084,36 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
       {
         title: "Get App Run",
         description:
-          "Fetch status of a workflow / published-app execution by id. " +
-          "Returns the execution's status, per-node states, and any output " +
-          "URLs (with prompt/model/jobId metadata) the run has produced so " +
-          "far. Used by the workflow + app-run widgets to poll progress.",
+          "Read a workflow / published-app run by its EXECUTION id — what run_workflow and run_app return; not a job id (get_job will not find it). " +
+          "Returns the run's status and, once it completes, its outcome (\"nothing_new\" when a node was skipped for want of input — a feed with no new posts — and nothing failed), " +
+          "every node's status, text (cut at 1,500 characters), media URLs, why it was skipped (skipReason) and its error, " +
+          "plus the output URLs with prompt/model/jobId metadata. Poll every 5–10 s while the run is pending or running.",
         inputSchema: {
           execution_id: z.string().min(1),
         },
         outputSchema: {
           executionId: z.string(),
           status: z.string(),
+          // How a completed run ended (execution-outcome.ts): "nothing_new" when a
+          // node was skipped for want of input and nothing failed; absent until it completes.
+          outcome: z.enum(["succeeded", "nothing_new"]).optional(),
+          errorMessage: z.string().nullable().optional(),
+          summary: z
+            .object({ total: z.number(), completed: z.number(), failed: z.number(), skipped: z.number(), skippedForEmptyInput: z.number() })
+            .optional(),
           nodeStates: z
             .array(
               z.object({
                 id: z.string(),
                 label: z.string().optional(),
                 status: z.string(),
+                nodeType: z.string().nullable().optional(),
+                skipReason: z.string().optional(),
+                error: z.string().optional(),
+                jobId: z.string().optional(),
+                text: z.string().optional(),
+                textTruncated: z.boolean().optional(),
+                media: z.array(z.object({ kind: z.string(), url: z.string() })).optional(),
               }),
             )
             .optional(),
@@ -1077,7 +1148,7 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
         }
         const { data, error } = await supabase
           .from("workflow_executions")
-          .select("id, status, node_states, created_at, completed_at, user_id")
+          .select("id, status, node_states, created_at, completed_at, user_id, workflow_id, error_message")
           .eq("id", args.execution_id)
           .eq("user_id", session.userId)
           .maybeSingle()
@@ -1094,45 +1165,28 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
           }
         }
 
-        // node_states is JSONB keyed by node id with at least
-        // `{ status, jobId?, output?: { imageUrl?|videoUrl?|audioUrl? }, nodeType? }`.
-        // We flatten into the widget-friendly shapes — { id, label, status }
-        // for the pill list, plus an enriched { kind, url, jobId?, prompt?,
-        // model?, createdAt? } array for gallery-style grid rendering.
-        const ns = (data.node_states ?? {}) as Record<
-          string,
-          {
-            status?: string
-            jobId?: string
-            output?: { imageUrl?: string; videoUrl?: string; audioUrl?: string; outputUrl?: string }
-            nodeType?: string
-          }
-        >
-        const nodeStates: Array<{ id: string; label?: string; status: string }> = []
+        // node_states is JSONB keyed by node id. ONE reading for every machine
+        // client (lib/execution-result.ts — the API token's result and
+        // diagnose_run read the same): each node's label, status, why it was
+        // skipped, its text (cut at 1,500 chars) and EVERY media URL. The
+        // widgets keep reading `{ id, label, status }` + `outputs`.
+        const ns = (data.node_states ?? {}) as Record<string, NodeExecutionState>
+        const workflowNodes = await loadWorkflowNodes(data.workflow_id as string | null | undefined, session.userId)
+        const summaries = summarizeNodeStates(ns, workflowNodes)
+        const nodeStates = summaries.map((s) => ({
+          id: s.nodeId,
+          label: s.label,
+          status: s.status,
+          nodeType: s.nodeType,
+          ...(s.skipReason ? { skipReason: s.skipReason } : {}),
+          ...(s.error ? { error: s.error } : {}),
+          ...(s.jobId ? { jobId: s.jobId } : {}),
+          ...(s.text !== undefined ? { text: s.text } : {}),
+          ...(s.textTruncated ? { textTruncated: true } : {}),
+          media: s.media,
+        }))
         type RawOutput = { kind: string; url: string; jobId?: string }
-        const rawOutputs: RawOutput[] = []
-        for (const [nodeId, state] of Object.entries(ns)) {
-          nodeStates.push({
-            id: nodeId,
-            label: state.nodeType ?? nodeId,
-            status: state.status ?? "queued",
-          })
-          if (state.output) {
-            const url =
-              state.output.imageUrl ??
-              state.output.videoUrl ??
-              state.output.audioUrl ??
-              state.output.outputUrl
-            const kind = state.output.imageUrl
-              ? "image"
-              : state.output.videoUrl
-                ? "video"
-                : state.output.audioUrl
-                  ? "audio"
-                  : null
-            if (url && kind) rawOutputs.push({ kind, url, jobId: state.jobId })
-          }
-        }
+        const rawOutputs: RawOutput[] = summaries.flatMap((s) => s.media.map((m) => ({ kind: m.kind, url: m.url, jobId: s.jobId })))
 
         // Batch-fetch the source jobs for prompt/model/createdAt enrichment.
         // Skip cleanly if no jobIds (e.g. inline-only nodes produced the
@@ -1145,10 +1199,13 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
           { prompt?: string; provider?: string; createdAt?: string }
         >()
         if (jobIds.length) {
+          // The ids come from node_states, so they are pointers: read only
+          // the caller's own jobs (the execution is theirs, checked above).
           const { data: jobs } = await supabase
             .from("jobs")
             .select("id, input_data, provider, completed_at, created_at")
             .in("id", jobIds)
+            .eq("user_id", session.userId)
           for (const j of jobs ?? []) {
             const input = (j.input_data ?? {}) as Record<string, unknown>
             jobMeta.set(j.id as string, {
@@ -1176,14 +1233,28 @@ export function registerGallery({ server, session, fastify }: RegisterGalleryOpt
           }
         })
 
+        // How the run ended — derived here from the states, never a column.
+        const outcome = executionOutcome(data.status, ns)
+        const summary = {
+          total: summaries.length,
+          completed: summaries.filter((s) => s.status === "completed").length,
+          failed: summaries.filter((s) => s.status === "failed").length,
+          skipped: summaries.filter((s) => s.status === "skipped").length,
+          skippedForEmptyInput: countEmptyInputSkips(ns),
+        }
+        const errorMessage = (data.error_message as string | null | undefined) ?? null
+        const run = {
+          executionId: data.id,
+          status: data.status,
+          ...(outcome ? { outcome } : {}),
+          errorMessage,
+          summary,
+          nodeStates,
+          outputs,
+        }
         return {
-          content: [{ type: "text", text: JSON.stringify({ data: { id: data.id, status: data.status, nodeStates, outputs } }, null, 2) }],
-          structuredContent: {
-            executionId: data.id,
-            status: data.status,
-            nodeStates,
-            outputs,
-          },
+          content: [{ type: "text", text: JSON.stringify({ data: { id: data.id, ...run } }, null, 2) }],
+          structuredContent: run,
         }
       },
     )

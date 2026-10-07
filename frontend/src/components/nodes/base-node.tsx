@@ -18,6 +18,7 @@ import { InlineGluedStripContext } from "./inline-glued-strip-context"
 import { NodeTopToolbar } from "./node-top-toolbar"
 import { NodePolicyOverlay } from "./node-policy-overlay"
 import { NodeConnectionBadge } from "./node-connection-badge"
+import { NodePreviewGateChip } from "./node-preview-gate-chip"
 import { computeFittedNodeBox } from "./video-node-defaults"
 import { InlineNodePrompt } from "./inline-node-prompt/inline-node-prompt"
 import { useInlinePromptActive } from "./inline-node-prompt/use-inline-prompt-active"
@@ -46,11 +47,22 @@ interface BaseNodeProps {
   readonly icon: ReactNode
   readonly category: "input" | "parameter" | "ai" | "processing" | "output" | "scene" | "character" | "face" | "object" | "creature" | "location" | "script" | "i2v" | "component"
   readonly credits?: number
+  /** A price that is a RANGE — a speech node whose text arrives at run time:
+   *  from the floor up to the ceiling it runs at. Shown instead of `credits`
+   *  (pass `credits` undefined with it). */
+  readonly creditsRange?: { readonly min: number; readonly max: number }
   readonly handles: ReadonlyArray<HandleConfig>
   readonly children?: ReactNode
   readonly selected?: boolean
   readonly minWidth?: number
   readonly minHeight?: number
+  /**
+   * A content-driven card (a feed, a scrape): its height is its content's.
+   * A stored height — the size of an older, shorter card, or a resize made
+   * then — would clip the content behind the overflow-hidden body, so it is
+   * dropped; the width a person chose stays, and resize is width-only.
+   */
+  readonly fitContent?: boolean
   readonly isRunning?: boolean
   readonly listCount?: number
   readonly listProgress?: string
@@ -158,11 +170,13 @@ function BaseNodeComponent({
   icon,
   category,
   credits,
+  creditsRange,
   handles,
   children,
   selected,
   minWidth = 200,
   minHeight = 100,
+  fitContent = false,
   isRunning = false,
   listCount,
   listProgress,
@@ -248,7 +262,7 @@ function BaseNodeComponent({
   // applyNodeChanges / onNodesChange). Subscribing to it lets the floor-clamp
   // effect re-fire once RF completes the first measurement of a new node,
   // instead of prematurely pinning the node before measurement arrives.
-  const { zoom, visualW, visualH, measuredH, isSkipped, isPending, quickStripPinned, hasActivePreset, nodeType } = useWorkflowStore(
+  const { zoom, visualW, visualH, measuredH, isSkipped, isPending, quickStripPinned, hasActivePreset, nodeType, runSkipReason } = useWorkflowStore(
     useShallow((s) => {
       const node = s.nodes.find((n) => n.id === id)
       const data = node?.data as Record<string, unknown> | undefined
@@ -260,6 +274,8 @@ function BaseNodeComponent({
         visualH: node?.height,
         measuredH: node?.measured?.height,
         isSkipped: !!data?.skipped,
+        // Why the last server run skipped this node (a chip; cleared when it runs again).
+        runSkipReason: typeof data?.__runSkipReason === "string" ? (data.__runSkipReason as string) : undefined,
         isPending: data?.executionStatus === "pending",
         quickStripPinned: s.quickStripPinnedNodeId === id,
         // A node with a preset applied keeps its preset pill visible (not just on hover)
@@ -314,8 +330,22 @@ function BaseNodeComponent({
   // PREVIEW floor (`minHeight`) so chrome is added exactly once.
   const effectiveMinHeight = Math.max(minHeight + chromeHeight, handleMinHeight)
   // With in-body chrome, height is width-derived (sizing effect) so resize is
-  // width-only; without chrome, keep the aspect-locked 2-corner resize.
-  const resizeDirection = chromeHeight > 0 ? "horizontal" : undefined
+  // width-only; without chrome, keep the aspect-locked 2-corner resize. A
+  // content-driven card is width-only too: its height is never a choice.
+  const resizeDirection = chromeHeight > 0 || fitContent ? "horizontal" : undefined
+
+  // A content-driven card drops any stored height (see `fitContent`): React
+  // Flow applies `node.height` to the node wrapper, and the body clips behind
+  // it. `visualH` re-fires this whenever something writes a height back.
+  useLayoutEffect(() => {
+    if (!fitContent || !id) return
+    const state = useWorkflowStore.getState()
+    const node = state.nodes.find((n) => n.id === id)
+    if (!node || typeof node.height !== "number") return
+    useWorkflowStore.setState({
+      nodes: state.nodes.map((n) => (n.id === id ? { ...n, height: undefined } : n)),
+    })
+  }, [fitContent, id, visualH])
 
   // Lift the measured chrome height to the node component — used for bottom-
   // anchored handle pips, which render as BaseNode siblings (no context reach).
@@ -436,6 +466,9 @@ function BaseNodeComponent({
     // chromeHeight. Loop-safe: the `currentHeight >= effectiveMinHeight` guard
     // below early-returns once the height already satisfies the floor.
     if (hasExplicitResize && chromeHeight === 0) return
+    // A content-driven card never gets a height written back: the DOM
+    // `minHeight` floor below is enough, and a stored height would clip it.
+    if (fitContent) return
     // Guard: if neither an explicit height nor a RF-measured height exists yet,
     // the node just mounted and React Flow's ResizeObserver hasn't fired. Skip
     // now — `measuredH` in the dep array will re-trigger the effect once RF
@@ -451,7 +484,7 @@ function BaseNodeComponent({
         n.id === id ? { ...n, height: effectiveMinHeight } : n
       ),
     })
-  }, [imageAspectRatio, id, visualW, visualH, measuredH, effectiveMinHeight, minWidth, inlineChromePending])
+  }, [imageAspectRatio, id, visualW, visualH, measuredH, effectiveMinHeight, minWidth, inlineChromePending, fitContent])
 
   // After any size change above, re-measure handle bounds. Needed for nodes
   // whose handles use `top: calc(100% - Npx)` (typed-pip stacks anchored to
@@ -733,7 +766,10 @@ function BaseNodeComponent({
       {/* "Reconnecting…" while this node's job cannot be read. Mounted here
           for the same reason as the overlay above: every card, no prop. */}
       <NodeConnectionBadge nodeId={id} />
-      {(!hideHeader || isSkipped) && (
+      {/* "After Render final" on a node a Preview render gates: every card,
+          no prop, derived from the graph. */}
+      <NodePreviewGateChip nodeId={id} />
+      {(!hideHeader || isSkipped || !!runSkipReason) && (
         <div
           className={cn(
             "flex items-center gap-2 px-3 py-1.5 rounded-t-md font-sans text-[11px]",
@@ -798,9 +834,31 @@ function BaseNodeComponent({
                 : "text-[#64748B] dark:text-[#ff0073]"
             )}>{credits}cr</span>
           )}
+          {/* A ranged price (speech priced by length, text arriving at run
+              time): from the floor up to the ceiling the run reserves. */}
+          {hasCredits() && credits === undefined && creditsRange && (
+            <span
+              data-testid="node-credits-range"
+              title={t("node.creditsRangeTitle", { min: creditsRange.min, max: creditsRange.max })}
+              className={cn(
+                "font-mono text-[10px]",
+                (category === "ai" || category === "scene" || category === "script" || category === "i2v")
+                  ? "text-white/70 dark:text-[#ff0073]"
+                  : "text-[#64748B] dark:text-[#ff0073]"
+              )}
+            >{t("node.creditsRange", { min: creditsRange.min, max: creditsRange.max })}</span>
+          )}
           {isSkipped && (
             <span className="font-mono text-[9px] font-bold px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-300 border border-orange-500/30">
               {t("node.skipBadge")}
+            </span>
+          )}
+          {runSkipReason === "empty_input" && (
+            <span
+              title={t("node.skippedEmptyInputTitle")}
+              className="font-mono text-[9px] px-1.5 py-0.5 rounded bg-slate-500/15 text-slate-400 border border-slate-500/25"
+            >
+              {t("node.skippedEmptyInputChip")}
             </span>
           )}
         </div>

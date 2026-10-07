@@ -111,10 +111,12 @@ export function isValidFfmpegConnection(
 
     // Add Captions: a video on `in`, plus an optional Transcript (json) on
     // `transcript` — the word-timed caption source (transcribe / apply-edl
-    // json), burned in as timed captions.
+    // json), burned in as timed captions; or a caption plan on `captionPlan`
+    // (json) — the opening line in Hook Plate, the rest in this node's style.
     case "add-captions":
       if (targetHandle === "in") return ACCEPTS_VIDEO(sourceType)
       if (targetHandle === "transcript") return ACCEPTS_JSON(sourceType)
+      if (targetHandle === "captionPlan") return ACCEPTS_JSON(sourceType)
       return false
 
     // Pure audio-input nodes: trim-audio / combine-audio / mix-audio.

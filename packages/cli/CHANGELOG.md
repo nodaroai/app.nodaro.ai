@@ -1,5 +1,79 @@
 # @nodaro/cli
 
+## 1.26.0
+
+### Minor Changes
+
+- 1a11a27: `nodaro edit plan --mode` accepts `trailer`. The check now reads `EDIT_PLAN_MODES` from `@nodaro/shared`, so the CLI accepts exactly the modes the SDK and MCP accept, and the `--mode` help lists them from the same source.
+- 9d492ee: Collections — where a workflow's records live. A collection is a named set of records (a title, a text, a link, media links, extra fields, provenance) that a workflow writes to and reads back; text and links only, never files. The same link saved twice is one record; past the plan's cap the oldest records are evicted after a write.
+
+  - `@nodaro/shared`: `Collection`, `CollectionRecord`, `CollectionMedia`, `CollectionRecordSource`, the caps by tier (`COLLECTION_TIER_CAPS`, `collectionCapsForTier`), the wire shapes (`ListCollectionsResult` with `available` and `caps`, `ListCollectionRecordsResult`, `AddCollectionRecordInput` / `AddCollectionRecordResult` with `outcome: "inserted" | "duplicate" | "replayed"` and `evicted`), and the one rule every surface renders records with: `collectionRecordHeadline`, `collectionRecordsDigest(records, "headlines" | "full")`, `ingestRecordFromJson(item)` (any JSON item — a feed post, a search result, an article object — mapped to a record), `normalizeDedupeKey`, `normalizeCollectionMedia`, `normalizeCollectionFields`, `isCollectionUrl`.
+  - `@nodaro/sdk`: `client.collections` — `list`, `get`, `create`, `update`, `delete`, `records`, `addRecord` (with an `idempotencyKey`), `deleteRecord`, `export` (CSV or JSON text).
+  - `@nodaro/cli`: `nodaro collections list | create | show | update | delete | records | add | remove | export`.
+
+- 023327b: Competitors over time. Scans are kept for a window that follows the plan (`CompetitorListResult.historyMonths` on the list; `client.competitors.listWithPlan()`), every platform tally carries the account's `followers`, `client.competitors.get(id, { scan })` opens a brand as of one scan, `history(id)` (`CompetitorHistory`) is the brand's scans oldest first with what each found and read per platform, and `compare(id, { from, to, vsFrom?, vsTo? })` (`CompetitorCompareResult`) answers one or two periods: posts by publish date, usual reach, followers and their change, what worked, the best posts. The CLI gains `competitors history <id>` and `competitors compare <id> --from --to [--vs-from --vs-to]`.
+- 68f8146: `nodaro edit apply-edl` takes `--clip-key <key>`: the plan clip a render cuts (`"<first inMs>-<last outMs>"` of a clips-mode plan clip), passed as `clipKey` and stamped back on the job's result, as `edit.applyEdl` already allowed. The SDK's `edit` resource documentation now describes the multicam flow (`audioSync` → `editPlan` → `cameraSwitch` → a Preview, then the final) and that `cameraSwitch` relays from a connected self-hosted install like `editPlan`. Additive.
+- ceca5b3: `audio.mix` accepts an optional `duck`: every track except `duck.under` (the voice) dips while that track is loud and rises back in its pauses, so a music bed sits under speech. `amount` (0-100) sets how hard; `thresholdDb`, `ratio`, `attackMs` and `releaseMs` are optional fine controls. The CLI gains `nodaro audio mix --duck-under <index> [--duck-amount <0-100>]`. Additive; a mix without `duck` is unchanged.
+- fd20c51: `voices.textToDialogue` and `nodaro voice dialogue` can choose the dialogue model (`elevenlabs-dialogue`, the default, or `elevenlabs-dialogue-v4`) and send similarity; stability is any 0–1 value on v4 and 0, 0.5 or 1 on v3. The SDK's `stability` type widens from `0 | 0.5 | 1` to `number` (source-compatible for existing callers).
+- 63fade1: `nodaro voice recast` takes `--v4 <indexes>` beside `--v3`: the named 1-based speakers are re-spoken on the newer Re-speak engine (any stability 0–1, `similarityBoost` honoured, each line generated with its neighbours as context). The same range and keep-slot checks as `--v3` apply, and an index named in both flags is refused. `--v3` is unchanged.
+
+### Patch Changes
+
+- 7dd35ec: `nodes.run("text-to-speech", …)` and `runAndWait` are typed (`TextToSpeechParams`) and take `previousText` / `nextText` — the lines spoken just before and after the clip, so a model that stitches (ElevenLabs v4, Turbo v2.5 and Multilingual v2; not v3) keeps one continuous intonation across clips produced separately. Up to 1,000 characters each. The CLI's `nodes run` help shows the two parameters.
+- Updated dependencies [9cb2a0d]
+- Updated dependencies [a451774]
+- Updated dependencies [c48a85e]
+- Updated dependencies [9cb2a0d]
+- Updated dependencies [9cb2a0d]
+- Updated dependencies [0be3860]
+- Updated dependencies [3bec25f]
+- Updated dependencies [9d492ee]
+- Updated dependencies [023327b]
+- Updated dependencies [9cb2a0d]
+- Updated dependencies [86df84c]
+- Updated dependencies [68f8146]
+- Updated dependencies [8777f7b]
+- Updated dependencies [1a11a27]
+- Updated dependencies [8777f7b]
+- Updated dependencies [1a11a27]
+- Updated dependencies [fd20c51]
+- Updated dependencies [94c1fbf]
+- Updated dependencies [835c6d3]
+- Updated dependencies [9cb2a0d]
+- Updated dependencies [1d106aa]
+- Updated dependencies [835c6d3]
+- Updated dependencies [3b4e26c]
+- Updated dependencies [ceca5b3]
+- Updated dependencies [c91946b]
+- Updated dependencies [9cb2a0d]
+- Updated dependencies [9cb2a0d]
+- Updated dependencies [9c2120c]
+- Updated dependencies [1e1ef73]
+- Updated dependencies [989c285]
+- Updated dependencies [829dc76]
+- Updated dependencies [c48a85e]
+- Updated dependencies [c48a85e]
+- Updated dependencies [a451774]
+- Updated dependencies [2047248]
+- Updated dependencies [fd20c51]
+- Updated dependencies [ff32a3f]
+- Updated dependencies [1a11a27]
+- Updated dependencies [9c2120c]
+- Updated dependencies [7dd35ec]
+- Updated dependencies [7603c20]
+- Updated dependencies [747151b]
+- Updated dependencies [ff32a3f]
+- Updated dependencies [d81639f]
+- Updated dependencies [7dd35ec]
+- Updated dependencies [9cb2a0d]
+- Updated dependencies [9cb2a0d]
+- Updated dependencies [9cb2a0d]
+- Updated dependencies [63fade1]
+- Updated dependencies [9cb2a0d]
+  - @nodaro/shared@3.22.0
+  - @nodaro/sdk@2.20.0
+  - @nodaro/prompts@1.31.0
+
 ## 1.25.1
 
 ### Patch Changes

@@ -152,7 +152,7 @@ describe("the liveness rule is the reconcile cron's own", () => {
 describe("orchestrator resume — a budgeted render whose worker is still heartbeating", () => {
   it("is ADOPTED on its original clocks: no cancel, no refund, the same budget", async () => {
     stage([renderRow()])
-    const { cancelled, adoptable } = await cancelInFlightChildJobs("exec-1", RESUME)
+    const { cancelled, adoptable } = await cancelInFlightChildJobs("exec-1", "owner-1", RESUME)
 
     expect(cancelled).toBe(0)
     expect(db.casFilters).toHaveLength(0)
@@ -171,7 +171,7 @@ describe("orchestrator resume — a budgeted render whose worker is still heartb
   // reads the row once — so the row's earlier slot wait rides on the clocks.
   it("carries the row's ffmpeg-slot wait on the adopted clocks", async () => {
     stage([renderRow({ slot_wait_ms: 60 * MINUTE })])
-    const { adoptable } = await cancelInFlightChildJobs("exec-1", RESUME)
+    const { adoptable } = await cancelInFlightChildJobs("exec-1", "owner-1", RESUME)
     expect(adoptable.get("cut")?.clocks?.slotWaitMs).toBe(60 * MINUTE)
   })
 
@@ -179,7 +179,7 @@ describe("orchestrator resume — a budgeted render whose worker is still heartb
     db.slotWaitColumnMissing = true
     try {
       stage([renderRow()])
-      const { adoptable, cancelled } = await cancelInFlightChildJobs("exec-1", RESUME)
+      const { adoptable, cancelled } = await cancelInFlightChildJobs("exec-1", "owner-1", RESUME)
       expect(cancelled).toBe(0)
       expect(adoptable.get("cut")?.clocks?.slotWaitMs).toBe(0)
     } finally {
@@ -190,10 +190,10 @@ describe("orchestrator resume — a budgeted render whose worker is still heartb
 
   it("a stamp one tick short of the threshold is still live; AT the threshold it is not", async () => {
     stage([renderRow({ provider_call_started_at: iso(LIVE_PRE_TASK_STAMP_MS - 1000) })])
-    expect((await cancelInFlightChildJobs("exec-1", RESUME)).adoptable.has("cut")).toBe(true)
+    expect((await cancelInFlightChildJobs("exec-1", "owner-1", RESUME)).adoptable.has("cut")).toBe(true)
 
     stage([renderRow({ provider_call_started_at: iso(LIVE_PRE_TASK_STAMP_MS) })])
-    const r = await cancelInFlightChildJobs("exec-1", RESUME)
+    const r = await cancelInFlightChildJobs("exec-1", "owner-1", RESUME)
     expect(r.adoptable.has("cut")).toBe(false)
     expect(r.cancelled).toBe(1)
   })
@@ -211,7 +211,7 @@ describe("anything that is not a live budgeted render keeps today's cancel + ref
   for (const [label, row] of cases) {
     it(`${label} → cancelled + refunded, node re-dispatched`, async () => {
       stage([row])
-      const { cancelled, adoptable } = await cancelInFlightChildJobs("exec-1", RESUME)
+      const { cancelled, adoptable } = await cancelInFlightChildJobs("exec-1", "owner-1", RESUME)
       expect(adoptable.size).toBe(0)
       expect(cancelled).toBe(1)
       expect(db.refunds).toEqual(["j-render"])
@@ -221,13 +221,13 @@ describe("anything that is not a live budgeted render keeps today's cancel + ref
 
   it("an unbudgeted row's cancel is NOT pinned to its stamp (byte-identical CAS)", async () => {
     stage([renderRow({ job_type: "combine-videos", input_data: { node_id: "cut", type: "combine-videos" } })])
-    await cancelInFlightChildJobs("exec-1", RESUME)
+    await cancelInFlightChildJobs("exec-1", "owner-1", RESUME)
     expect(Object.keys(db.casFilters[0]!).sort()).toEqual(["eq:id", "in:status"])
   })
 
   it("WITHOUT the resume option (the component-timeout cleanup) a live render is cancelled — the parent gave up", async () => {
     stage([renderRow()])
-    const { cancelled, adoptable } = await cancelInFlightChildJobs("exec-1")
+    const { cancelled, adoptable } = await cancelInFlightChildJobs("exec-1", "owner-1")
     expect(adoptable.size).toBe(0)
     expect(cancelled).toBe(1)
     expect(db.refunds).toEqual(["j-render"])
@@ -235,7 +235,7 @@ describe("anything that is not a live budgeted render keeps today's cancel + ref
 
   it("a provider-task row is still class 2 — adopted on today's clocks (no `clocks`)", async () => {
     stage([renderRow({ provider_task_id: "task-1" })])
-    const { adoptable } = await cancelInFlightChildJobs("exec-1", RESUME)
+    const { adoptable } = await cancelInFlightChildJobs("exec-1", "owner-1", RESUME)
     expect(adoptable.get("cut")?.clocks).toBeUndefined()
     expect(adoptable.get("cut")?.budgetMs).toBe(BUDGET)
   })
@@ -246,7 +246,7 @@ describe("the supersede-cancel never races a render that came alive (no double d
     const read = renderRow({ provider_call_started_at: iso(40 * MINUTE) })
     stage([read], [renderRow({ provider_call_started_at: iso(0) })])
 
-    const { cancelled, adoptable } = await cancelInFlightChildJobs("exec-1", RESUME)
+    const { cancelled, adoptable } = await cancelInFlightChildJobs("exec-1", "owner-1", RESUME)
 
     expect(db.casFilters[0]).toMatchObject({ "eq:provider_call_started_at": read.provider_call_started_at })
     expect(cancelled).toBe(0)
@@ -259,7 +259,7 @@ describe("the supersede-cancel never races a render that came alive (no double d
   // absolute clock is checked before it ever reads the row.
   it("the re-read carries the row's ffmpeg-slot wait onto the adopted clocks", async () => {
     stage([renderRow({ provider_call_started_at: iso(40 * MINUTE) })], [renderRow({ provider_call_started_at: iso(0), slot_wait_ms: 60 * MINUTE })])
-    const { adoptable } = await cancelInFlightChildJobs("exec-1", RESUME)
+    const { adoptable } = await cancelInFlightChildJobs("exec-1", "owner-1", RESUME)
     expect(adoptable.get("cut")?.clocks?.slotWaitMs).toBe(60 * MINUTE)
   })
 
@@ -267,7 +267,7 @@ describe("the supersede-cancel never races a render that came alive (no double d
     db.slotWaitColumnMissing = true
     try {
       stage([renderRow({ provider_call_started_at: iso(40 * MINUTE) })], [renderRow({ provider_call_started_at: iso(0) })])
-      const { adoptable, cancelled } = await cancelInFlightChildJobs("exec-1", RESUME)
+      const { adoptable, cancelled } = await cancelInFlightChildJobs("exec-1", "owner-1", RESUME)
       expect(cancelled).toBe(0)
       expect(adoptable.get("cut")?.clocks?.slotWaitMs).toBe(0)
     } finally {
@@ -280,7 +280,7 @@ describe("the supersede-cancel never races a render that came alive (no double d
     const read = renderRow({ status: "pending", provider_kind: null, provider_call_started_at: null, started_at: null })
     stage([read], [renderRow({ provider_call_started_at: iso(0), started_at: iso(0) })])
 
-    const { cancelled, adoptable } = await cancelInFlightChildJobs("exec-1", RESUME)
+    const { cancelled, adoptable } = await cancelInFlightChildJobs("exec-1", "owner-1", RESUME)
 
     expect(db.casFilters[0]).toMatchObject({ "is:provider_call_started_at": null })
     expect(cancelled).toBe(0)
@@ -290,14 +290,14 @@ describe("the supersede-cancel never races a render that came alive (no double d
 
   it("a CAS miss on a row that is NOT live (it just finished) adopts nothing and cancels nothing", async () => {
     stage([renderRow({ provider_call_started_at: iso(40 * MINUTE) })], [renderRow({ status: "completed" })])
-    const { cancelled, adoptable } = await cancelInFlightChildJobs("exec-1", RESUME)
+    const { cancelled, adoptable } = await cancelInFlightChildJobs("exec-1", "owner-1", RESUME)
     expect(cancelled).toBe(0)
     expect(adoptable.size).toBe(0)
   })
 
   it("first live row per node wins; a second one for the same node is cancelled", async () => {
     stage([renderRow(), renderRow({ id: "j-dup" })])
-    const { cancelled, adoptable } = await cancelInFlightChildJobs("exec-1", RESUME)
+    const { cancelled, adoptable } = await cancelInFlightChildJobs("exec-1", "owner-1", RESUME)
     expect(adoptable.get("cut")?.jobId).toBe("j-render")
     expect(cancelled).toBe(1)
     expect(db.refunds).toEqual(["j-dup"])

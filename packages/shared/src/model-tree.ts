@@ -10,7 +10,7 @@ import {
   IMAGE_GEN_PROVIDERS, VIDEO_GEN_PROVIDERS, IMAGE_TO_VIDEO_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS,
   UPSCALE_IMAGE_PROVIDERS, VIDEO_UPSCALE_PROVIDERS, MODIFY_IMAGE_PROVIDERS, IMAGE_EDIT_PROVIDERS,
   VIDEO_TO_VIDEO_PROVIDERS, EXTEND_VIDEO_PROVIDERS, MOTION_TRANSFER_PROVIDERS, LIP_SYNC_PROVIDERS,
-  FACE_SWAP_PROVIDERS, TTS_PROVIDERS, TEXT_TO_AUDIO_PROVIDERS, TRANSCRIBE_PROVIDERS, MUSIC_PROVIDERS,
+  FACE_SWAP_PROVIDERS, TTS_PROVIDERS, DIALOGUE_PROVIDERS, TEXT_TO_AUDIO_PROVIDERS, TRANSCRIBE_PROVIDERS, MUSIC_PROVIDERS,
 } from "./model-constants.js"
 
 export interface ModelNodeTarget {
@@ -46,6 +46,10 @@ const ENUM_TARGETS: ReadonlyArray<readonly [readonly string[], string]> = [
   [LIP_SYNC_PROVIDERS, "lip-sync"],
   [FACE_SWAP_PROVIDERS, "face-swap"],
   [TTS_PROVIDERS, "text-to-speech"],
+  // A dialogue model's id is the node's `provider`: without this row the Models
+  // tab would create a BARE dialogue node, which runs as the default (v3) whatever
+  // the user picked.
+  [DIALOGUE_PROVIDERS, "text-to-dialogue"],
   [TEXT_TO_AUDIO_PROVIDERS, "text-to-audio"],
   [TRANSCRIBE_PROVIDERS, "transcribe"],
   [MUSIC_PROVIDERS, "suno-generate"],

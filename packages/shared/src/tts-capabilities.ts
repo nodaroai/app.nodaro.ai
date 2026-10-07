@@ -3,15 +3,15 @@
  *
  * Every "does this model do X" decision on that lane reads the model's `tts`
  * sheet in `MODEL_CATALOG` through these helpers — tag stripping, which voice
- * settings are sent and shown, the language picker. Declare the sheet honestly
+ * settings are sent and shown, the language picker, whether neighbouring text
+ * is sent. Declare the sheet honestly
  * on the catalog entry and a new model is covered everywhere; do not compare a
  * provider id by hand.
  *
  * "The text-to-speech lane" means the models that list the `tts` mode. The
- * dialogue model carries a sheet too, but a text-to-speech request that names it
- * runs as the fallback model, so these helpers answer for the fallback there.
- * (Today only the dialogue sheet's `maxChars` and `languages` are read, by
- * `MAX_TTS_CHARS_BY_PROVIDER` and the language picker.)
+ * dialogue models carry a sheet too, read by `dialogue-capabilities.ts`; a
+ * text-to-speech request that names one runs as the fallback model, so these
+ * helpers answer for the fallback there.
  */
 import { MODEL_CATALOG, type TtsCapabilities, type TtsSettingLever } from "./model-catalog.js"
 
@@ -64,9 +64,23 @@ export function ttsSupportsSsmlBreaks(provider: string | undefined): boolean {
   return getTtsCapabilities(provider).ssmlBreaks
 }
 
+/**
+ * The model conditions on neighbouring text (`previous_text` / `next_text`).
+ * false ⇒ the provider funnel never puts the fields on the wire, whatever the
+ * request carries — the model would reject them.
+ */
+export function ttsSupportsStitching(provider: string | undefined): boolean {
+  return getTtsCapabilities(provider).stitching
+}
+
 /** The model honours this voice-setting lever. */
 export function ttsHasLever(provider: string | undefined, lever: TtsSettingLever): boolean {
   return getTtsCapabilities(provider).levers.includes(lever)
+}
+
+/** The model answers `/v1/text-to-speech/{voice}/with-timestamps` (character timings). */
+export function ttsSupportsTimestamps(provider: string | undefined): boolean {
+  return getTtsCapabilities(provider).timestamps
 }
 
 /** Language codes offered for the model, in catalog order. */

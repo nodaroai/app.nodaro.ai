@@ -2,13 +2,14 @@ import { randomUUID } from "node:crypto"
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
-import { estimateWorkflowCredits, type EstimateNode, type EstimateEdge } from "../ee/billing/credits.js"
+import { estimateWorkflowListingCredits, type EstimateNode, type EstimateEdge } from "../ee/billing/credits.js"
 import {
   DEFAULT_TEMPLATE_CATEGORY,
   TEMPLATE_CATEGORIES,
   getNodeResult,
   getOutputType,
   normalizeTemplateCategory,
+  stripUgcRunState,
   templateCategoryStoredValues,
 } from "@nodaro/shared"
 import { sanitizeSlugBase, generateSlug, getCreatorDisplayName } from "../lib/marketplace-helpers.js"
@@ -22,6 +23,8 @@ import { accessAtLeast, workflowAccessFromRow } from "../lib/workflow-access.js"
 import { toAccessRow } from "../lib/workflow-route-access.js"
 import { findUnpublishableNodeTypes, unpublishableNodesMessage } from "../lib/surface-deny.js"
 import { VALID_OUTPUT_TYPES, publishBodySchema } from "../lib/template-publish-schema.js"
+import { resolveCanvasResultIds } from "../lib/canvas-result-ids.js"
+import { exposedTextCaps } from "../lib/exposed-text-caps.js"
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -456,7 +459,9 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
       return reply.status(403).send({ error: { code: "forbidden", message: "Not your workflow" } })
     }
 
-    const nodes = (workflow.nodes || []) as Array<Record<string, unknown>>
+    // A template snapshot keeps the canvas's results: their saved ids are
+    // resolved first (canvas-result-ids.ts), as every read hands them.
+    const nodes = (await resolveCanvasResultIds(workflow.nodes || [], workflow.user_id, { settings: workflow.settings })) as Array<Record<string, unknown>>
     const edges = (workflow.edges || []) as Array<Record<string, unknown>>
     // What is published is run by its USERS, so it must be runnable by them —
     // asked as the users' view even when the publisher is an admin who can run
@@ -473,8 +478,19 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
     const providersUsed = extractProviders(nodes)
     const nodeCount = nodes.length
     const complexity = calculateComplexity(nodes, edges)
-    const estimatedCredits = await estimateWorkflowCredits(nodes as unknown as EstimateNode[], edges as unknown as EstimateEdge[])
-    const snapshotNodes = nodes
+    // The listed price is an app's (decided 2026-10-06): the whole graph at
+    // Preview plus each Render final, preview stop rule or not. A template has
+    // no creator fee. An exposed speech text is priced at its input's character
+    // limit, or the model's cap — never the author's placeholder
+    // (lib/exposed-text-caps.ts).
+    const speechTextCaps = exposedTextCaps(workflow.settings as Record<string, unknown> | null, nodes as unknown as EstimateNode[])
+    const listing = await estimateWorkflowListingCredits(nodes as unknown as EstimateNode[], edges as unknown as EstimateEdge[], {
+      publishType: "template",
+      speechTextCaps,
+    })
+    const estimatedCredits = listing.preview + listing.final
+    // Whoever clones this template gets the snapshot: UGC run state (a kept creator, the last plan, clip tickets) never ships.
+    const snapshotNodes = stripUgcRunState(nodes)
 
     // Resolve the source URL for the template preview with priority:
     //   1. explicit previewMediaUrl from request body

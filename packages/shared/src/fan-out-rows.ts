@@ -17,6 +17,7 @@
  */
 import { evaluateJsonPath, stringifyPathResults } from "./json-path.js"
 import { expandItemsWithRepeat } from "./repeat-types.js"
+import { isDefaultSelectorConfig, resolveIndex, selectListItems, type SelectorFields } from "./selector.js"
 
 /**
  * The text LANES the input resolvers route somewhere OTHER than the prompt slot
@@ -45,6 +46,8 @@ export const NON_PROMPT_TEXT_LANES: Readonly<Record<string, "*" | readonly strin
   silence: ["edit-plan"],
   offsets: ["edit-plan"],
   qrText: ["image-overlay"],
+  layerPlan: ["video-overlay"],
+  captionPlan: ["add-captions"],
   transition: ["slideshow"],
   // Content Recipe's `link` carries the post's address (inputs.sourceLink), not
   // the material it analyzes — a list of links fanned through it must not be
@@ -75,6 +78,48 @@ export function compactWithRows(aligned: readonly string[]): { items: string[]; 
     rowIndices.push(row)
   })
   return { items, rowIndices }
+}
+
+/** What a wire reads off a list with holes when it reads ONE value (`pickHeldRow`). */
+export type HeldRowPick =
+  /** This read is not one the holes change: the engine's own rule stands. */
+  | { readonly kind: "unaffected" }
+  /** The wire carries this value. */
+  | { readonly kind: "value"; readonly value: string }
+  /** The wire carries nothing (no scalar fallback). */
+  | { readonly kind: "none" }
+
+/**
+ * One value off a ROW-ALIGNED list whose empty rows mean "nothing here" (an
+ * Edit Plan's clips as a person's review leaves them: the plan's rows, "" at
+ * every dropped clip), for a wire that does not iterate it.
+ *
+ * Without this, both engines fall back to the source's scalar output (the
+ * FIRST kept row of the whole list) whenever the wire's own pick is empty, so
+ * a wire could carry a row it never selected:
+ *   - an Each wire with a range / list selector, outside its fan-out (the
+ *     selection holds one kept row, or none, so nothing fans out): the first
+ *     kept row OF THE SELECTION, or nothing when it holds none;
+ *   - an item pick (`item` / `item:N`), in a fan-out or not: the picked row, or
+ *     nothing when it is empty.
+ * Every other read is `unaffected`: a default Each wire (its scalar IS the
+ * first kept row), Selected (`last`), Bundle (`all`), an Each wire inside its
+ * fan-out (the iteration reads its own row, and an empty row runs nothing),
+ * and an empty list. Both engines call this, so they cannot disagree.
+ */
+export function pickHeldRow(
+  rows: readonly string[],
+  edge: (SelectorFields & { outputMode?: string; itemIndex?: string }) | undefined,
+  iterating: boolean,
+): HeldRowPick {
+  if (rows.length === 0) return { kind: "unaffected" }
+  const mode = edge?.outputMode ?? "each"
+  const held = (row: string | undefined): HeldRowPick => (isBlank(row) ? { kind: "none" } : { kind: "value", value: row! })
+  if (mode === "item") return held(rows[resolveIndex(edge?.itemIndex ?? "1", rows.length)])
+  if (mode.startsWith("item:")) return held(rows[parseInt(mode.slice(5), 10)])
+  if (mode !== "each" || iterating || isDefaultSelectorConfig(edge)) return { kind: "unaffected" }
+  const kept = compactWithRows(selectListItems([...rows], edge)).items
+  return kept.length > 0 ? { kind: "value", value: kept[0]! } : { kind: "none" }
 }
 
 /**
@@ -126,7 +171,7 @@ export function resolveListFanOut<C extends FanOutCandidate>(
   const held = (c: C) => compactWithRows(c.aligned).items.length
   const primary = candidates.reduce((best, c) => (held(c) > held(best) ? c : best))
   const space = candidates.filter((c) => c.aligned.length === primary.aligned.length)
-  const feedsPrompt = (c: C) => fanOutTextFeedsPrompt(nodeType, c.targetHandle) && isTextList(c.aligned)
+  const feedsPrompt = (c: C) => fanOutTextFeedsPrompt(nodeType, c.targetHandle) && isTextList(c.aligned, nodeType, c.targetHandle)
   const driver = feedsPrompt(primary) ? primary : (space.find(feedsPrompt) ?? primary)
   const rowIndices: number[] = []
   for (let row = 0; row < primary.aligned.length; row++) {
@@ -145,14 +190,38 @@ export function resolveListFanOut<C extends FanOutCandidate>(
  * the backend worker and the in-browser executor cannot disagree on it.
  */
 export function isFanOutUrlItem(item: string): boolean {
-  return item.startsWith("http") || /\.(png|jpg|jpeg|webp|gif|mp4|mov|webm|mp3|wav|ogg)(\?|$)/i.test(item)
+  const s = item.trim()
+  // A media link is ONE address. JSON (`{…}` / `[…]`) and a sentence that merely
+  // contains an image address are text: a scraped post's JSON with a
+  // `.jpg?token=` inside it used to be read as a picture and dropped from the
+  // prompt (review finding H3, 2026-10-06).
+  if (s.length === 0 || /\s/.test(s) || s.startsWith("{") || s.startsWith("[")) return false
+  return s.startsWith("http") || /\.(png|jpg|jpeg|webp|gif|mp4|mov|webm|mp3|wav|ogg)(\?|$)/i.test(s)
 }
 
-/** A media list never supplies a prompt override, whatever handle it is wired to.
+/**
+ * Lanes where an item that LOOKS like a media link is still the item itself —
+ * a record's link is what a Save to Collection stores, not a picture to show
+ * it. Data-driven so a new consumer declares its lane here, never a name check
+ * in either engine.
+ */
+const URL_ITEM_IS_TEXT_LANES: Readonly<Record<string, readonly string[]>> = {
+  "collection-write": ["in"],
+}
+
+/** Does a fan-out item that looks like a link stay TEXT on this lane (the item, not a media input)? */
+export function fanOutUrlItemIsText(nodeType: string | null | undefined, targetHandle: string | null | undefined): boolean {
+  const lanes = URL_ITEM_IS_TEXT_LANES[nodeType ?? ""]
+  return lanes !== undefined && lanes.includes(targetHandle ?? "")
+}
+
+/** A media list never supplies a prompt override, whatever handle it is wired to —
+ *  except on a lane where a link IS the item (`fanOutUrlItemIsText`).
  *  The FIRST value decides — a column is one kind of thing; this is not a scan. */
-function isTextList(aligned: readonly string[]): boolean {
+function isTextList(aligned: readonly string[], nodeType?: string | null, targetHandle?: string | null): boolean {
   const first = aligned.find((v) => !isBlank(v))
-  return first !== undefined && !isFanOutUrlItem(first)
+  if (first === undefined) return false
+  return !isFanOutUrlItem(first) || fanOutUrlItemIsText(nodeType, targetHandle)
 }
 
 /** What a fan-out source resolved to. */

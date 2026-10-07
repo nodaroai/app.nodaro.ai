@@ -7,6 +7,7 @@ import { CachedImage } from "@/components/ui/cached-image"
 import { WaveformAudioPlayer } from "@/components/audio-player"
 import { useT } from "@/lib/i18n"
 import { useAppDir } from "@/lib/locale-store"
+import { PreviewBadge, isPreviewQuality } from "@/components/render/preview-badge"
 import { cn } from "@/lib/utils"
 
 interface MediaPreviewModalProps {
@@ -14,6 +15,10 @@ interface MediaPreviewModalProps {
   readonly onClose: () => void
   readonly type: "image" | "video" | "audio" | "text"
   readonly url: string
+  /** What the take on show was rendered at ("proxy" is a Preview, labelled).
+   *  Only a render has one: a caller that shows an Apply EDL take passes the
+   *  take's own stamped quality; a list caller (a node's own results) passes none. */
+  readonly quality?: string
   /** All results for internal prev/next navigation (overrides currentIndex/totalCount/onPrev/onNext) */
   readonly results?: ReadonlyArray<{ url?: string; text?: string; type?: "image" | "video" | "audio" | "text" }>
   /** Starting index into results (default 0) */
@@ -42,7 +47,7 @@ function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`
 }
 
-export function MediaPreviewModal({ isOpen, onClose, type, url, results, initialIndex, onIndexChange, currentIndex, totalCount, onPrev, onNext, onVideoStateChange, initialVideoPlayState, initialPausedAtTime }: MediaPreviewModalProps) {
+export function MediaPreviewModal({ isOpen, onClose, type, url, quality, results, initialIndex, onIndexChange, currentIndex, totalCount, onPrev, onNext, onVideoStateChange, initialVideoPlayState, initialPausedAtTime }: MediaPreviewModalProps) {
   const t = useT()
   const isRtl = useAppDir() === "rtl"
   // Internal navigation state when results array is provided
@@ -248,6 +253,11 @@ export function MediaPreviewModal({ isOpen, onClose, type, url, results, initial
         >
           <X className="w-7 h-7" />
         </button>
+
+        {/* A render made at proxy quality: a private 720p Preview. */}
+        {isPreviewQuality({ quality }) && (
+          <PreviewBadge className="absolute -top-9 start-0 z-20 px-2 py-1 text-[11px]" />
+        )}
 
         {/* Counter — bottom center */}
         {hasNav && (

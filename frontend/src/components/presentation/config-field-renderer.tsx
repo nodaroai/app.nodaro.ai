@@ -42,6 +42,8 @@ interface ConfigFieldRendererProps {
   nodeData: Record<string, unknown>
   onChange: (value: unknown) => void
   allowedValues?: Array<string | number | boolean>
+  /** A text input's character limit, as the publisher set it on the item. */
+  maxLength?: number
   readOnly?: boolean
   customLabel?: string
 }
@@ -735,7 +737,7 @@ function renderEditVideoPro(
 // ---------------------------------------------------------------------------
 
 function FallbackField(props: ConfigFieldRendererProps): React.ReactNode | null {
-  const { nodeType, field, value, nodeData, onChange, allowedValues, readOnly, customLabel } = props
+  const { nodeType, field, value, nodeData, onChange, allowedValues, maxLength, readOnly, customLabel } = props
   // Static NODE_DEFINITIONS fields, plus dynamic lottie slot fields derived from
   // a motion-graphics plan — resolved through the shared single source of truth.
   const fieldDef = findExposableField(
@@ -750,6 +752,7 @@ function FallbackField(props: ConfigFieldRendererProps): React.ReactNode | null 
       value={value}
       onChange={onChange}
       allowedValues={allowedValues}
+      maxLength={maxLength}
       readOnly={readOnly}
       customLabel={customLabel}
     />

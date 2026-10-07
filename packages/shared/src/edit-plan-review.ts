@@ -161,13 +161,30 @@ function fnv1a64(text: string): string {
 }
 
 /**
+ * The basis of every plan object already hashed. Hashing walks the whole plan
+ * (about 20 ms on a large one), and both engines read the same saved plan
+ * object many times: each review edit is a new `editedEdl` object over an
+ * unchanged plan, and a run reads a seeded plan at every wire. Keyed by the
+ * plan OBJECT, so it relies on a plan never being mutated in place: the editor
+ * never mutates node data (a new plan is a new object), and the server reads
+ * `generatedJson` as stored. A copy of a plan is another object and is hashed
+ * on its own.
+ */
+const basisByPlan = new WeakMap<object, string>()
+
+/**
  * The fingerprint of an Edit Plan's stored output (`data.generatedJson`, as
  * unwrapped): FNV-1a-64 of the UTF-8 bytes of its key-sorted JSON, as 16
  * lowercase hex digits. Equal for any key order, so a JSONB round trip keeps
  * it; any change to a value, or to array order, changes it.
  */
 export function editPlanBasis(plan: unknown): string {
-  return fnv1a64(canonicalJson(plan) ?? "")
+  if (typeof plan !== "object" || plan === null) return fnv1a64(canonicalJson(plan) ?? "")
+  const cached = basisByPlan.get(plan)
+  if (cached !== undefined) return cached
+  const basis = fnv1a64(canonicalJson(plan) ?? "")
+  basisByPlan.set(plan, basis)
+  return basis
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -304,6 +321,28 @@ export function editPlanSavedOutput(data: Readonly<Record<string, unknown>>): Ed
   if (plan === undefined) return undefined
   const { status: _status, ...output } = resolveEditPlanOutput(plan, data.editedEdl)
   return output
+}
+
+/**
+ * What a result writer writes when a plan lands on an Edit Plan node: the plan
+ * itself, and `editedEdl: undefined` ONLY when the plan is not the one the
+ * person's review was made on (its `editPlanBasis` differs from
+ * `editedEdl.basis`; an edit that names no plan counts as different). The same
+ * plan landing again, for example a reopen while the run is still live after
+ * the plan finished, keeps the review (decided 2026-10-05). On a keep the patch
+ * does not name `editedEdl` at all, so a merging write leaves the review as it
+ * is. Pass the review the node holds now.
+ *
+ * The one place a review is cleared: `frontend/src/lib/__tests__/
+ * edit-plan-saved-output-sites.test.ts` fails on a clearing write anywhere else.
+ */
+export function editPlanResultPatch(
+  plan: unknown,
+  editedEdl: unknown,
+): { readonly generatedJson: unknown; readonly editedEdl?: undefined } {
+  const basis = isRecord(editedEdl) ? editedEdl.basis : undefined
+  const madeOnThisPlan = typeof basis === "string" && basis.length > 0 && basis === editPlanBasis(plan)
+  return madeOnThisPlan ? { generatedJson: plan } : { generatedJson: plan, editedEdl: undefined }
 }
 
 /**

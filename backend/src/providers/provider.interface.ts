@@ -1,4 +1,4 @@
-import type { FrameFit, FrameDelivery } from "@nodaro/shared"
+import type { FrameFit, FrameDelivery, VideoCharacterReference } from "@nodaro/shared"
 
 // Result types
 export interface ProviderResult {
@@ -115,6 +115,10 @@ export interface ProviderOptions {
   referenceImageUrls?: string[] // Reference images (VEO 3 ref2v 3, Seedance 2 9, Wan 3 10, Gemini Omni 7)
   referenceVideoUrls?: string[] // Reference videos (Seedance 2 3, Wan 3 5, Gemini Omni V2V 1)
   referenceAudioUrls?: string[] // Reference audio tracks (Seedance 2 3, Wan 3 5)
+  // Identity inputs for models that take a dedicated character channel (data:
+  // a positive `characters` cap in VIDEO_REF_LIMITS_BY_PROVIDER — Gemini Omni 3).
+  // The provider mints/caches whatever upstream ids it needs; never loose images.
+  characterReferences?: VideoCharacterReference[]
   // Start/end FRAME handling, applied once at dispatch (lib/video-frame-dispatch.ts),
   // never inside a provider. `frameFit` reshapes the frame to the model's MEASURED
   // output canvas, because a frame that is not already that size gets reshaped by
@@ -313,6 +317,9 @@ export interface TextToSpeechOptions {
   style?: number           // 0-1
   speed?: number           // 0.7-1.2
   languageCode?: string    // e.g. "en", "he", "es"
+  /** The lines spoken just before / after this clip (continuity across clips). Models that stitch use them; trimmed at every exit (elevenlabs/neighbour-text.ts). */
+  previousText?: string
+  nextText?: string
 }
 
 export interface TextToSpeechProvider {

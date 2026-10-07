@@ -10,6 +10,8 @@ A podcast or interview recorded on several cameras ends up as one edit (an [Edit
 
 A typical multicam chain: **Audio Sync** (lines the recordings up) → **Transcribe** with speaker detection → **Edit Plan** (with Audio Sync's offsets) → **Camera Switch** → **Apply EDL**.
 
+The **Multicam Cut** template in the template marketplace is this chain, ready to fill: two close-up cameras, a wide camera and a master audio track (marked *master audio* in Edit Plan, and the reference Audio Sync measures against), with Layout hints **off** so the edit stays cut-only and Apply EDL renders it. Add or delete camera nodes for 2–6 recordings in all, wiring each into both Audio Sync's and Edit Plan's Sources.
+
 ## Inputs
 
 | Handle | Type | Required | Description |

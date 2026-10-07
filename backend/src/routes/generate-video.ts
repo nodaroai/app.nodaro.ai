@@ -11,17 +11,21 @@ import { resolveVideoRequestNorm } from "../lib/video-request-norm.js"
 import { probeMediaDuration } from "../providers/video/ffmpeg-utils.js"
 import { probeAndCheckRefVideoDurations, probeRefVideoDurations } from "../lib/ref-video-probe.js"
 import { getModelCreditBaseCost } from "../ee/billing/credits.js"
+import { voicedAddonBaseCredits } from "../lib/voiced-dialogue-lines.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { insertJobIdempotent } from "../lib/insert-job.js"
+import { voicedDialogueProvider } from "../lib/voiced-dialogue-model.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
-import { VIDEO_GEN_PROVIDERS, VIDEO_DURATION_AUTO, isAutoVideoDuration, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, PROMPT_HARD_CEILING, isSeedance2Provider, pricedOutputDurationSec, isMinimaxH3Provider, isVeoProvider, estimateLoopTrimAddonCredits, seedance2AudioLimitSec, findSeedance2AudioOverLimit, videoModelCanSpeakDialogue, getVideoAudioCapability, TTS_PROVIDERS, buildVideoCreditModelIdentifier, applyDefaultVideoSelection, VIDEO_REF_LIMITS_BY_PROVIDER, videoProviderRequiresImage, videoProviderFoldsLoneEndFrame, type ConnectedReference, type DescribedReference } from "@nodaro/shared"
+import { VIDEO_GEN_PROVIDERS, VIDEO_DURATION_AUTO, isAutoVideoDuration, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, PROMPT_HARD_CEILING, isSeedance2Provider, pricedOutputDurationSec, isMinimaxH3Provider, isVeoProvider, estimateLoopTrimAddonCredits, seedance2AudioLimitSec, findSeedance2AudioOverLimit, videoModelCanSpeakDialogue, getVideoAudioCapability, TTS_PROVIDERS, buildVideoCreditModelIdentifier, applyDefaultVideoSelection, VIDEO_REF_LIMITS_BY_PROVIDER, videoProviderRequiresImage, videoProviderFoldsLoneEndFrame, videoCharacterRefProblem, type ConnectedReference, type DescribedReference } from "@nodaro/shared"
 import { imageRequiredError } from "../lib/video-image-required.js"
 import { resolveVideoReferenceCore, resolveReferenceTokens, resolveRefIdTokens, composeVideoPromptText, appendReferenceLines, renderDescribedReferenceLines, renderReferenceCaptionLines, type VideoExtraRef, type CharacterMeta } from "@nodaro/prompts"
 import { connectedReferenceSchema, describedReferenceSchema, referenceCaptionSchema, DESCRIBED_REFERENCE_LIMIT } from "../lib/connected-reference-schema.js"
 import { directionSchema } from "../lib/direction-schema.js"
+import { characterReferencesSchema } from "../lib/character-reference-schema.js"
+import { applyPromptPoliciesToCharacterReferences } from "../lib/character-reference-policy.js"
 import { subjectSchema } from "../lib/subject-schema.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { backendHybridRoles } from "../lib/reference-format.js"
@@ -77,6 +81,13 @@ export const generateVideoBody = z.object({
   referenceImageUrls: z.array(safeUrlSchema).max(SEEDANCE_2_5_REF_LIMITS.images).optional(),
   referenceVideoUrls: z.array(safeUrlSchema).max(SEEDANCE_2_5_REF_LIMITS.videos).optional(),
   referenceAudioUrls: z.array(safeUrlSchema).max(SEEDANCE_2_5_REF_LIMITS.audio).optional(),
+  // Identity inputs for models with a dedicated character channel (Gemini Omni:
+  // a portrait + description per person, up to 3). Distinct from
+  // `referenceImageUrls`, which a multimodal model treats as loose context —
+  // this is the input that keeps a real person's face. Which models take it is
+  // data (`characters` in VIDEO_REF_LIMITS_BY_PROVIDER), enforced in the
+  // handler by `videoCharacterRefProblem`; any other model → 400.
+  characterReferences: characterReferencesSchema.optional(),
   // Structured references (parity with generate-image). When present, the route
   // assembles them server-side via the shared video resolver — auto-attaching
   // unmentioned wired-ref URLs to `referenceImageUrls`, emitting per-ref
@@ -476,14 +487,36 @@ function dispatchesVoicedVideo(b: Record<string, unknown>): boolean {
 
 /**
  * Credit id for the voiced-video audio step: audio_driven (Seedance 2)
- * synthesises a Dialogue v3 track; native_speech (VEO) revoices the baked audio
- * via the voice-changer. Single source for both the reservation (here) and the
- * worker's commit (forwarded through the queue as `voicedAudioAddon`).
+ * synthesises a dialogue track on the cast's dialogue model (v3 dialogue unless
+ * every voice names a speech model with one shared dialogue twin —
+ * `voicedDialogueProvider`); native_speech (VEO) revoices the baked audio via
+ * the voice-changer. The audio_driven id is the FLAT row, read only while
+ * length-based speech pricing is off — see `voicedAudioAddonAmount`.
  */
-function voicedAudioAddonId(provider: string | undefined): "elevenlabs-dialogue" | "elevenlabs-voice-changer" {
+function voicedAudioAddonId(provider: string | undefined, characterVoices: unknown): string {
   return getVideoAudioCapability(provider).mode === "audio_driven"
-    ? "elevenlabs-dialogue"
+    ? voicedDialogueProvider(Array.isArray(characterVoices) ? characterVoices : undefined)
     : "elevenlabs-voice-changer"
+}
+
+/**
+ * Base (pre-markup) credits of the voiced-video audio step on `provider`, for a
+ * request already known to be voiced. ONE amount for the reservation
+ * (`voicedAudioAddonCredits`) and for the number the handler forwards on the
+ * queue as `voicedAudioAddon` (the worker commits it when the audio step runs
+ * and refunds it when it does not), so the two can never disagree.
+ *
+ * audio_driven (a synthesised dialogue track): by length on the row of the
+ * model actually synthesised while SPEECH_LENGTH_PRICING_ENABLED is on — the
+ * dialogue model for a multi-voice cast, the sole voice's own model otherwise
+ * (decided 2026-10-06, Q-VOICED); the flat dialogue row while it is off.
+ * native_speech (a speech-to-speech revoice, billed per minute by the vendor)
+ * is unchanged.
+ */
+async function voicedAudioAddonAmount(provider: string | undefined, b: Record<string, unknown>): Promise<number> {
+  if (getVideoAudioCapability(provider).mode === "audio_driven") return voicedAddonBaseCredits(b)
+  const { creditCost } = await getModelCreditBaseCost(voicedAudioAddonId(provider, b.characterVoices))
+  return creditCost
 }
 
 /**
@@ -495,8 +528,7 @@ function voicedAudioAddonId(provider: string | undefined): "elevenlabs-dialogue"
 async function voicedAudioAddonCredits(b: Record<string, unknown>): Promise<number> {
   const provider = b.provider as string | undefined
   if (!voiceSpecPresent(b) || !videoModelCanSpeakDialogue(provider)) return 0
-  const { creditCost } = await getModelCreditBaseCost(voicedAudioAddonId(provider))
-  return creditCost
+  return voicedAudioAddonAmount(provider, b)
 }
 
 /**
@@ -1055,11 +1087,34 @@ export async function generateVideoRoutes(app: FastifyInstance) {
     // taken the frame happily, so callers duplicated the same picture into
     // referenceImageUrls just to pass the gate (studio.nodaro.ai#475).
     const refCaps = VIDEO_REF_LIMITS_BY_PROVIDER[provider]
+    // Character references: provider support, the start-frame exclusion and the
+    // shared input budget are ONE shared rule (`videoCharacterRefProblem`),
+    // measured on the ASSEMBLED image list (after connectedReferences expansion)
+    // and BEFORE the imageUrl gate below, so an unsupported model answers
+    // "not supported" rather than a misleading "imageUrl is required".
+    const characterProblem = videoCharacterRefProblem({
+      provider,
+      characterReferences: parsed.data.characterReferences,
+      imageCount: referenceImageUrls?.length ?? 0,
+      videoCount: referenceVideoUrls?.length ?? 0,
+      hasStartFrame: imageUrl !== undefined,
+      hasEndFrame: endFrameUrl !== undefined,
+    })
+    if (characterProblem) {
+      return reply.status(400).send({ error: { code: characterProblem.code, message: characterProblem.message } })
+    }
+    // The description is subject text the prompt policies never see (it does not
+    // join `prompt`): police it here and mirror into parsed.data so the queued
+    // payload and the recorded input_data carry the policed text.
+    const characterReferences = applyPromptPoliciesToCharacterReferences(parsed.data.characterReferences)
+    if (characterReferences) parsed.data.characterReferences = characterReferences
     const foldsLoneEndFrame = endFrameUrl !== undefined && videoProviderFoldsLoneEndFrame(provider)
     const hasMultimodalRef =
       ((refCaps?.images ?? 0) > 0 && ((referenceImageUrls?.length ?? 0) > 0 || foldsLoneEndFrame)) ||
       ((refCaps?.videos ?? 0) > 0 && (referenceVideoUrls?.length ?? 0) > 0) ||
-      ((refCaps?.audio ?? 0) > 0 && (referenceAudioUrls?.length ?? 0) > 0)
+      ((refCaps?.audio ?? 0) > 0 && (referenceAudioUrls?.length ?? 0) > 0) ||
+      // Validated above: reaching here with characters means the provider takes them.
+      (characterReferences?.length ?? 0) > 0
 
     // VEO picks its REFERENCE_2_VIDEO wire mode from an explicit generationType
     // (the kie/video.ts i2v branch otherwise falls back to `[imageUrl!]`, which
@@ -1182,9 +1237,10 @@ export async function generateVideoRoutes(app: FastifyInstance) {
     const isVoiced = dispatchesVoicedVideo(parsed.data)
     // Credit addon the worker commits on top of the video provider cost (mirrors
     // loop-trim's extraNonProviderCredits). Computed here so the route owns all
-    // billing math; the worker forwards it verbatim to finalize.
+    // billing math — the SAME amount the guard reserved, from the same function
+    // — and the worker forwards it verbatim to finalize.
     const voicedAudioAddon = isVoiced
-      ? (await getModelCreditBaseCost(voicedAudioAddonId(provider))).creditCost
+      ? await voicedAudioAddonAmount(provider, parsed.data as Record<string, unknown>)
       : 0
 
     await videoQueue.add(isVoiced ? "voiced-video" : "image-to-video", {
@@ -1213,6 +1269,7 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       referenceImageUrls,
       referenceVideoUrls,
       referenceAudioUrls,
+      characterReferences,
       refVideoDurationsSec: req.refVideoDurationsSec,
       webSearch,
       nsfwChecker,
@@ -1223,7 +1280,10 @@ export async function generateVideoRoutes(app: FastifyInstance) {
       enableTranslation,
       videoTrimStart,
       videoTrimEnd,
-      ...(isVoiced ? { characterVoices, dialogue, voicedAudioAddon } : {}),
+      // `dialogueProvider`: the model the multi-speaker track renders on —
+      // chosen HERE (the reservation above named its row) and passed through,
+      // so the worker never re-derives what it was billed for.
+      ...(isVoiced ? { characterVoices, dialogue, voicedAudioAddon, dialogueProvider: voicedDialogueProvider(characterVoices) } : {}),
       usageLogId,
     })
 

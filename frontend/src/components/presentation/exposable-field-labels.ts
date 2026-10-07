@@ -30,6 +30,8 @@ export const EXPOSABLE_FIELD_LABEL_KEYS: Readonly<Record<string, MessageKey>> = 
   "Motion": "field.motion",
   "Stability": "field.stability",
   "Similarity": "audiocfg.similarity",
+  "Previous text": "audiocfg.previousText",
+  "Next text": "audiocfg.nextText",
   "Instrumental": "audiocfg.instrumental",
   "Loudness": "audiocfg.loudness",
   "Engine": "node.engine",

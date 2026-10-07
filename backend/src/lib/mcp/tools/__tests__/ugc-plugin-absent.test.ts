@@ -48,6 +48,8 @@ describe("on cloud, with the plugin's routes not installed", () => {
       ["build_ugc_creator", { source: "sampled", gender: "woman", product_category: "saas" }],
       ["build_ugc_clips", { plan: {}, gender: "woman", identity_images: ["https://cdn.example/a.png"] }],
       ["build_ugc_cards", { plan: {}, alignment: [] }],
+      ["ugc_split_speech", { plan: {}, audio_url: "https://cdn.example/s.mp3", alignment: [{ word: "a", start: 0, end: 1 }] }],
+      ["ugc_finish_clips", { segments: [{}], clips: [{ clip: 1, video_url: "https://cdn.example/1.mp4" }] }],
     ]
     expect(calls.map(([name]) => name).sort()).toEqual(FAMILY)
     for (const [name, args] of calls) {

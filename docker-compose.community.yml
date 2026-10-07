@@ -250,6 +250,10 @@ services:
       # "de"). A user's own saved choice always wins; an unset/blank/unknown
       # value falls back to the visitor's browser language. Restart to apply.
       DEFAULT_LOCALE: ${DEFAULT_LOCALE:-}
+      # The preview stop rule (a run stops at an Apply EDL render set to Proxy
+      # until Render final). Off by default while it rolls out; "true" turns
+      # it on for both the API and the editor. Restart to apply.
+      PREVIEW_STOP_RULE_ENABLED: ${PREVIEW_STOP_RULE_ENABLED:-}
       # Deployment surface profile (B1) — inline JSON or @/path/to/profile.json.
       # Narrows the UI: hide nav/tabs, deny nodes/models, set brand/siblings/auth,
       # force outputs private. BUSINESS+ ONLY — this community edition ignores it

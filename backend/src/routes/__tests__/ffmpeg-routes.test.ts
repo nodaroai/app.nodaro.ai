@@ -515,3 +515,70 @@ describe("POST /v1/combine-videos — transitions[] + edgeFades", () => {
     expect(enqueued.edgeFades).toBeUndefined()
   })
 })
+
+// ---------------------------------------------------------------------------
+// mix-audio: the optional `duck` (sidechain compression of every other track
+// under one key track). Optional, so a plain mix is untouched; the route is
+// where a key track that is not one of the inputs, or a lever outside what the
+// compressor accepts, has to be turned away.
+// ---------------------------------------------------------------------------
+
+describe("POST /v1/mix-audio — duck", () => {
+  const baseline = {
+    userId: VALID_UUID,
+    audioUrls: [EXAMPLE_AUDIO_URL, "https://example.com/audio2.mp3"],
+  }
+
+  it("forwards a valid duck to the queue", async () => {
+    mockJobInsert({ data: { id: "job-1" }, error: null })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/mix-audio",
+      payload: { ...baseline, duck: { under: 0, amount: 80, releaseMs: 700 } },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(videoQueue.add).toHaveBeenCalledWith(
+      "mix-audio",
+      expect.objectContaining({ duck: { under: 0, amount: 80, releaseMs: 700 } }),
+    )
+  })
+
+  it("stays optional — a plain mix enqueues without one", async () => {
+    mockJobInsert({ data: { id: "job-1" }, error: null })
+
+    const res = await app.inject({ method: "POST", url: "/v1/mix-audio", payload: baseline })
+
+    expect(res.statusCode).toBe(200)
+    const enqueued = vi.mocked(videoQueue.add).mock.calls[0][1] as Record<string, unknown>
+    expect(enqueued.duck).toBeUndefined()
+  })
+
+  it("rejects a key track index that is not one of the audioUrls", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/mix-audio",
+      payload: { ...baseline, duck: { under: 2 } },
+    })
+
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+    expect(JSON.stringify(res.json())).toContain("duck")
+    expect(videoQueue.add).not.toHaveBeenCalled()
+  })
+
+  it("rejects levers outside what the compressor accepts", async () => {
+    for (const duck of [
+      { under: 0, amount: 101 },
+      { under: 0, ratio: 0.5 },
+      { under: 0, thresholdDb: 3 },
+      { under: 0, attackMs: 0 },
+      { under: 0, releaseMs: 99_999 },
+      { amount: 50 },
+    ]) {
+      const res = await app.inject({ method: "POST", url: "/v1/mix-audio", payload: { ...baseline, duck } })
+      expect(res.statusCode, JSON.stringify(duck)).toBe(400)
+    }
+  })
+})

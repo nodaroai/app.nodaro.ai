@@ -2,6 +2,7 @@ import { getParameterValue } from "@nodaro/shared"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import { ORIGINAL_SLOT_ID, type RunSlot, type RunSlotNodeState } from "@/components/app-runner/types"
 import { isExecutableNode } from "@/components/editor/workflow-editor/types"
+import { previewRunnable } from "@/components/editor/workflow-editor/preview-gate"
 import { getNodeLabel } from "@/lib/presentation-utils"
 import { isMultiColumnList } from "@/lib/list-loop-migration"
 import { deriveSingleColumnListItems } from "../helpers"
@@ -136,10 +137,13 @@ export function buildStepChips(
     for (const p of parents.get(id) ?? []) stack.push(p)
   }
 
-  // Keep only nodes that exist and are executable (drops inputs/parameter pickers).
+  // Keep only nodes that exist and are executable (drops inputs/parameter
+  // pickers), and that the run executes: a node a Preview render gates runs
+  // only after Render final, so it is no step of this run.
+  const runs = new Set(previewRunnable(nodes.filter(isExecutableNode), nodes, edges).map((n) => n.id))
   const stepIds = [...inSet].filter((id) => {
     const n = byId.get(id)
-    return !!n && isExecutableNode(n)
+    return !!n && isExecutableNode(n) && runs.has(id)
   })
   const stepSet = new Set(stepIds)
 

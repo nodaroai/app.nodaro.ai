@@ -18,7 +18,7 @@
  * boundary so they're hermetic.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
 // ---------------------------------------------------------------------------
 // Hoisted mocks
@@ -92,6 +92,17 @@ vi.mock("../ffmpeg-threads.js", async (importOriginal) => ({
   ffmpegThreads: () => undefined,
 }))
 
+// The box's ffmpeg memory budget (`ffmpeg-memory.ts`): ample by default so the
+// slot-count tests below see only the slot count; the memory-admission tests
+// set the measured runner's 5,022 MiB.
+const memoryBox = vi.hoisted(() => ({ budgetMiB: 1_000_000, defaultPeakMiB: 512 }))
+vi.mock("../ffmpeg-memory.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../ffmpeg-memory.js")>()),
+  ffmpegMemoryBudgetOnThisBox: () => ({
+    budgetMiB: memoryBox.budgetMiB, limitMiB: 0, limitSource: "configured", reserveMiB: 2048, headroom: 0.9, defaultPeakMiB: memoryBox.defaultPeakMiB,
+  }),
+}))
+
 vi.mock("node:fs", () => ({
   createWriteStream: mocks.createWriteStream,
   promises: {
@@ -153,6 +164,8 @@ import {
   BIG_MEDIA_DOWNLOAD_LIMITS,
   downloadFile,
   runFfmpeg,
+  runFfmpegCapture,
+  runFfmpegWithProgress,
   withFfmpegSlot,
   runFfprobe,
   getVideoDuration,
@@ -175,6 +188,7 @@ import {
   parsePacketLine,
   parseStreamListing,
   probeStreamEnds,
+  probeVideoFramePtsMs,
 } from "../ffmpeg-utils.js"
 
 beforeEach(() => {
@@ -617,6 +631,111 @@ describe("ffmpegFailureMessage", () => {
     expect(work).toHaveBeenCalledOnce()
     expect(waiterLedger.waitedMs()).toBe(45_000) // the wait ended at its grant
     expect(holderLedger.waitedMs()).toBe(0) // an immediate grant never waits
+  })
+})
+
+// Memory-weighted admission (decided 2026-10-05, fixing the 4K OOM): every
+// launch reserves its predicted peak from the box's budget before it starts.
+describe("ffmpeg memory admission through the launchers", () => {
+  const flush = async () => { for (let i = 0; i < 20; i++) await Promise.resolve() }
+  beforeEach(() => { memoryBox.budgetMiB = 5022 })
+  afterEach(() => { memoryBox.budgetMiB = 1_000_000 })
+
+  it("two predicted 3.6 GiB runFfmpeg launches on the measured runner run one at a time", async () => {
+    const callbacks: Array<() => void> = []
+    mocks.execFile.mockImplementation((_cmd, _args, _opts, cb) => { callbacks.push(() => cb(null, "", "")) })
+    const a = runFfmpeg(["-i", "a", "a.mp4"], 60_000, { peakMemoryMiB: 3686 })
+    const b = runFfmpeg(["-i", "b", "b.mp4"], 60_000, { peakMemoryMiB: 3686 })
+    await flush()
+    expect(mocks.execFile).toHaveBeenCalledTimes(1) // a slot is free; the memory is not
+    callbacks.shift()!()
+    await a
+    await flush()
+    expect(mocks.execFile).toHaveBeenCalledTimes(2)
+    callbacks.shift()!()
+    await b
+  })
+
+  it("light launches with no prediction still fill the slots", async () => {
+    const callbacks: Array<() => void> = []
+    mocks.execFile.mockImplementation((_cmd, _args, _opts, cb) => { callbacks.push(() => cb(null, "", "")) })
+    const calls = [1, 2, 3].map((i) => runFfmpeg(["-i", String(i), `${i}.mp4`]))
+    await flush()
+    expect(mocks.execFile).toHaveBeenCalledTimes(2) // FFMPEG_CONCURRENCY is 2 here
+    while (callbacks.length > 0) { callbacks.shift()!(); await flush() }
+    await Promise.all(calls)
+  })
+
+  it("every launcher takes the prediction: runFfmpegCapture, runFfmpegWithProgress, withFfmpegSlot", async () => {
+    const releases: Array<() => void> = []
+    const hold = () => new Promise<void>((resolve) => releases.push(resolve))
+    const heavy = withFfmpegSlot(hold, { timeoutMs: 60_000, peakMemoryMiB: 3686 })
+    await flush()
+    const capture = runFfmpegCapture(["-i", "x", "-f", "null", "-"], 60_000, { peakMemoryMiB: 3686 })
+    const progress = runFfmpegWithProgress(["-i", "x", "y.mp4"], undefined, 60_000, { peakMemoryMiB: 3686 })
+    await flush()
+    expect(mocks.execFile).not.toHaveBeenCalled()
+    expect(mocks.spawn).not.toHaveBeenCalled()
+    releases.shift()!()
+    await heavy
+    await capture
+    await flush()
+    expect(mocks.spawn).toHaveBeenCalledTimes(1) // the progress run waited for the capture's memory
+    await progress
+  })
+
+  it("the kill budget starts when ffmpeg starts, not while the launch waits for memory", async () => {
+    vi.useFakeTimers()
+    try {
+      const releases: Array<() => void> = []
+      const heavy = withFfmpegSlot(() => new Promise<void>((resolve) => releases.push(resolve)), { timeoutMs: 60 * 60_000, peakMemoryMiB: 3686 })
+      await vi.advanceTimersByTimeAsync(0)
+      let finish: (() => void) | undefined
+      mocks.execFile.mockImplementationOnce((_cmd, _args, _opts, cb) => { finish = () => cb(null, "done", "") })
+      const chunk = runFfmpeg(["-i", "x", "chunk-0.mp4"], 120_000, { peakMemoryMiB: 3686 })
+      // It waits far longer than its own budget (and the slot backstop) for memory.
+      await vi.advanceTimersByTimeAsync(30 * 60_000)
+      expect(mocks.execFile).not.toHaveBeenCalled()
+      releases.shift()!()
+      await heavy
+      await vi.advanceTimersByTimeAsync(0)
+      expect(mocks.execFile).toHaveBeenCalledTimes(1)
+      expect((mocks.execFile.mock.calls[0]![2] as { timeout: number }).timeout).toBe(120_000)
+      // Well inside its own budget once started: it completes, never "held its slot past".
+      await vi.advanceTimersByTimeAsync(100_000)
+      finish!()
+      await expect(chunk).resolves.toBe("done")
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("a launch whose ffmpeg fails releases its memory to the waiter behind it", async () => {
+    execFileOnce("", new Error("boom") as NodeJS.ErrnoException, "fail")
+    execFileOnce("ok2")
+    const a = runFfmpeg(["-i", "a", "a.mp4"], 60_000, { peakMemoryMiB: 3686 })
+    const b = runFfmpeg(["-i", "b", "b.mp4"], 60_000, { peakMemoryMiB: 3686 })
+    await expect(a).rejects.toThrow()
+    await expect(b).resolves.toBe("ok2")
+  })
+
+  it("a memory wait counts in the job's slot-wait ledger with a slot free", async () => {
+    const { SlotWaitLedger, runWithSlotWaitLedger } = await import("../../../lib/ffmpeg-slot-wait.js")
+    let t = 0
+    const ledger = new SlotWaitLedger(() => t)
+    const releases: Array<() => void> = []
+    const heavy = withFfmpegSlot(() => new Promise<void>((resolve) => releases.push(resolve)), { timeoutMs: 60_000, peakMemoryMiB: 3686 })
+    await flush()
+    const work = vi.fn(async () => {})
+    const waiting = runWithSlotWaitLedger(ledger, () => withFfmpegSlot(work, { timeoutMs: 60_000, peakMemoryMiB: 3686 }))
+    await flush()
+    t += 90_000
+    expect(work).not.toHaveBeenCalled()
+    expect(ledger.waitedMs()).toBe(90_000)
+    releases.shift()!()
+    await Promise.all([heavy, waiting])
+    t += 10_000
+    expect(ledger.waitedMs()).toBe(90_000)
   })
 })
 
@@ -1676,5 +1795,34 @@ describe("runFfmpeg / runFfprobe — the watchdog flags", () => {
   it("runFfprobe carries the same flags", async () => {
     execFileOnce("", Object.assign(new Error("Command failed"), { killed: true }) as NodeJS.ErrnoException, "")
     await expect(runFfprobe(["x"])).rejects.toMatchObject({ killed: true, timedOut: true })
+  })
+})
+
+// probeVideoFramePtsMs — one line per frame, so a long proxy at a high fps is
+// megabytes of csv: it must be STREAMED, never read through runFfprobe's buffer.
+describe("probeVideoFramePtsMs", () => {
+  it("streams the first video track's packet times through spawn (not runFfprobe's 5 MiB buffer), sorted, in ms", async () => {
+    // Decode order with B-frame reordering, plus a packet with no pts.
+    mocks.spawnScripts.push({ stdout: "0.000000\n1.000000\n0.500000\nN/A\n1.500000\n" })
+    const pts = await probeVideoFramePtsMs("/tmp/proxy.mp4")
+    expect(pts).toEqual([0, 500, 1000, 1500])
+    expect(mocks.execFile).not.toHaveBeenCalled()
+    expect(mocks.spawn).toHaveBeenCalledTimes(1)
+    const [cmd, args] = mocks.spawn.mock.calls[0]!
+    expect(cmd).toBe("ffprobe")
+    expect(args).toEqual(expect.arrayContaining(["-select_streams", "v:0", "-show_entries", "packet=pts_time", "-of", "csv=p=0", "/tmp/proxy.mp4"]))
+  })
+
+  it("holds more frame lines than runFfprobe's buffer could (a 2 h proxy at 60 fps)", async () => {
+    const frames = 450_000 // ~5.1 MiB of csv at ~11.4 bytes a line
+    mocks.spawnScripts.push({ stdout: Array.from({ length: frames }, (_, k) => (k / 60).toFixed(6)).join("\n") + "\n" })
+    const pts = await probeVideoFramePtsMs("/tmp/long.mp4")
+    expect(pts).toHaveLength(frames)
+    expect(pts[frames - 1]).toBeCloseTo(((frames - 1) / 60) * 1000, 3)
+  })
+
+  it("a failed probe rejects with ffprobe's stderr", async () => {
+    mocks.spawnScripts.push({ stdout: "", code: 1, stderr: "moov atom not found" })
+    await expect(probeVideoFramePtsMs("/tmp/bad.mp4")).rejects.toThrow(/moov atom not found/)
   })
 })

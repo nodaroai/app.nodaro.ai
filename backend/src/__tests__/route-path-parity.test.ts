@@ -266,6 +266,8 @@ const KNOWN_FRONTEND_ARTIFACTS: ReadonlySet<string> = new Set<string>([
   "/v1/competitors/:p",
   "/v1/competitors/cards",
   "/v1/competitors/:p/lessons",
+  "/v1/competitors/:p/history",
+  "/v1/competitors/:p/compare",
   "/v1/competitors/actions",
   "/v1/competitors/actions/:p",
   "/v1/competitor-scan",

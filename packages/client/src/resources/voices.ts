@@ -1,4 +1,4 @@
-import type { Voice, VoiceClone, VoiceLibraryParams, VoiceLibraryResponse, AudioFxPreset } from "@nodaro/shared"
+import type { Voice, VoiceClone, VoiceLibraryParams, VoiceLibraryResponse, AudioFxPreset, DialogueProvider } from "@nodaro/shared"
 export type { Voice, SharedVoice, VoiceClone, VoiceLibraryParams, VoiceLibraryResponse, AudioFxPreset } from "@nodaro/shared"
 import type { NodaroClient } from "../client.js"
 
@@ -201,18 +201,29 @@ export class VoicesResource {
 
   /**
    * Voice a multi-speaker script as ONE audio file
-   * (`POST /v1/text-to-dialogue`, ElevenLabs Dialogue v3). Each `dialogue`
-   * line is `{ text, voice }` in speaking order — `voice` is a premade voice
-   * name or an ElevenLabs voice UUID (cloned/library voices work too; mixed
-   * casts are fine). At most 5,000 characters total across lines (≤2,000
-   * recommended for best quality) and 10 unique voices. Line text may carry
-   * `[audio tags]` like `[laughs]`. Costs credits and runs async — poll
-   * `jobs.get(jobId)` for `output_data.audioUrl`.
+   * (`POST /v1/text-to-dialogue`) on ElevenLabs Dialogue v3 — the default — or
+   * Dialogue v4 (`provider: "elevenlabs-dialogue-v4"`). Each `dialogue` line is
+   * `{ text, voice }` in speaking order — `voice` is a premade voice name or an
+   * ElevenLabs voice UUID (cloned/library voices work too; mixed casts are
+   * fine). At most 5,000 characters total across lines on either model
+   * (≤2,000 recommended for best quality) and 10 unique voices. Line text may
+   * carry `[audio tags]` like `[laughs]`. Costs credits and runs async — poll
+   * `jobs.get(jobId)` for `output_data.audioUrl` and — on every dialogue model,
+   * since both return timings at no extra credits — `output_data.transcript`, a
+   * `Transcript` (`@nodaro/shared`): `words[]` with `startMs` / `endMs` /
+   * `speaker` and one `segments[]` entry per line, `speaker` being the line's
+   * `voice` as you sent it. Pass `transcript.words` to
+   * `addCaptions({ captions, autoTranscribe: false })` to caption the dialogue
+   * without a second transcription.
    */
   textToDialogue(input: {
     dialogue: Array<{ text: string; voice: string }>
-    /** v3 stability: 0 (most variable) | 0.5 (balanced) | 1 (most stable). */
-    stability?: 0 | 0.5 | 1
+    /** Dialogue model: `"elevenlabs-dialogue"` (v3, the default) or `"elevenlabs-dialogue-v4"`. */
+    provider?: DialogueProvider
+    /** v3: exactly 0, 0.5 or 1 (0 = most variable, 1 = most stable). v4: any value 0–1. */
+    stability?: number
+    /** v4 only (v3 ignores it): how closely each line keeps its voice's character, 0–1. */
+    similarityBoost?: number
     /** ISO 639-1 language hint (e.g. "en"); auto-detected when omitted. */
     languageCode?: string
     /** Deterministic sampling seed (integer 0–4294967295). Omit for random. */
@@ -262,16 +273,21 @@ export type VoiceChangerProVoice =
       voiceId: string
       /**
        * Which lane converts this speaker. `"sts"` (default) is the classic
-       * speech-to-speech recast; `"v3"` is RE-SPEAK — the performance is
-       * REGENERATED from the transcript with eleven_v3 (supports `[audio
+       * speech-to-speech recast; `"v3"` and `"v4"` are RE-SPEAK — the
+       * performance is REGENERATED from the transcript (supports `[audio
        * tags]`; original delivery is replaced, and lips won't match on video).
-       * A v3 speaker needs transcript text: pass an `analysis` whose
+       * A Re-speak speaker needs transcript text: pass an `analysis` whose
        * `segments[].text` carries it (analyze now emits this), or omit
        * `analysis` and the engine re-speaks from its own transcription. For
-       * `"v3"`, `stability` accepts exactly 0 / 0.5 / 1, and
-       * `similarityBoost` / `style` / `useSpeakerBoost` are ignored.
+       * `"v3"` (eleven_v3), `stability` accepts exactly 0 / 0.5 / 1, and
+       * `similarityBoost` / `style` / `useSpeakerBoost` are ignored. For
+       * `"v4"` (eleven_v4), `stability` takes any value 0–1 and
+       * `similarityBoost` is honoured (`style` / `useSpeakerBoost` ignored);
+       * each line is generated with its neighbouring lines as context for
+       * smoother joins. Both Re-speak engines are priced the same, per started
+       * 1,000 characters.
        */
-      engine?: "sts" | "v3"
+      engine?: "sts" | "v3" | "v4"
       /** ElevenLabs stability (0–1). Higher = steadier, lower = more expressive. */
       stability?: number
       /** ElevenLabs similarity boost (0–1) — how closely the output hugs the target voice's timbre. */
@@ -377,8 +393,8 @@ export interface VcpAnalysisSpeaker {
   /** Stable speaker id (first-appearance order). */
   id: string
   /** The speaker's spoken time ranges (seconds). `text` is what was said in
-   *  the range — the paid input for a speaker recast with `engine: "v3"`
-   *  (editable before conversion); the STS lane ignores it. */
+   *  the range — the paid input for a Re-speak speaker (`engine: "v3"` or
+   *  `"v4"`; editable before conversion); the STS lane ignores it. */
   segments: Array<{ start: number; end: number; text?: string }>
   /** When the speaker first speaks (seconds). */
   firstStartSec?: number

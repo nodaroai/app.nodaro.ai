@@ -119,6 +119,14 @@ export interface MultiDimParameterPickerMeta extends BaseParameterPickerMeta {
   readonly catalogId: I18nCatalogId
   /** Catalog entries — used to resolve ids into labels for the summary chip. */
   readonly catalogEntries: ReadonlyArray<{ readonly id: string; readonly label: string }>
+  /**
+   * True when the picker's tiles honour an app card's per-field allowed values
+   * (`PickerFieldRestrictionsProvider`). The restrict dialog offers per-field
+   * restrictions only for these: a restriction a card cannot show would let the
+   * runner pick a tile the server then refuses. The server checks every
+   * restriction regardless.
+   */
+  readonly honoursFieldRestrictions?: true
   /** The full multi-dim picker component. */
   readonly Picker: ComponentType<{
     value: MultiDimValue
@@ -520,6 +528,7 @@ export const MULTI_PICKERS: ReadonlyArray<MultiDimParameterPickerMeta> = [
     fields: PERSON_FIELDS,
     catalogId: "person",
     catalogEntries: flatCat(PEOPLE),
+    honoursFieldRestrictions: true,
     Picker: erase(PersonPicker),
   },
   {

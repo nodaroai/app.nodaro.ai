@@ -27,6 +27,28 @@ function tokenize(text: string): string[] {
     .filter((t) => t.length > 0)
 }
 
+/**
+ * A speech job's `output_data.transcript` (a `@nodaro/shared` Transcript, ms)
+ * as the word list `alignCues` takes (seconds) — the same shape the
+ * forced-alignment provider returns, so the baker cannot tell them apart.
+ * Empty for anything that is not a transcript with timed words; the caller
+ * then falls back to a forced-alignment job.
+ */
+export function alignmentWordsFromTranscript(transcript: unknown): AlignmentWord[] {
+  if (!transcript || typeof transcript !== "object") return []
+  const words = (transcript as { words?: unknown }).words
+  if (!Array.isArray(words)) return []
+  const out: AlignmentWord[] = []
+  for (const raw of words) {
+    if (!raw || typeof raw !== "object") continue
+    const w = raw as { text?: unknown; startMs?: unknown; endMs?: unknown }
+    if (typeof w.text !== "string" || typeof w.startMs !== "number" || typeof w.endMs !== "number") continue
+    if (!Number.isFinite(w.startMs) || !Number.isFinite(w.endMs)) continue
+    out.push({ word: w.text.trim(), start: w.startMs / 1000, end: w.endMs / 1000 })
+  }
+  return out
+}
+
 interface NormWord {
   norm: string
   startMs: number

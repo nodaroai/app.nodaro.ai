@@ -9,6 +9,7 @@ import { runWithJobCancellation, JobCancelledError } from "../lib/job-cancellati
 // the test harness mocks shared.js wholesale and would undefine them.
 import { isPostProcessingError } from "../lib/post-processing-error.js"
 import { isDeterministicJobError } from "../lib/deterministic-job-error.js"
+import { declaredJobBudgetMs } from "../lib/job-budget.js"
 import { providerDetailOf } from "../lib/provider-error-detail.js"
 import { userFacingMessage } from "../lib/user-facing-error.js"
 import { markJobFailed } from "../lib/job-failure.js"
@@ -21,6 +22,7 @@ import {
   fallbackLabelOf,
 } from "../lib/safety-block.js"
 import { resolveIsPublicOutput, mcpClientForcesPrivate } from "./output-visibility.js"
+import { isPreviewRender } from "../lib/preview-render.js"
 import { isPromptBlocked } from "../config/content-filter.js"
 import { refundJobCredits, createAssetFromJob, isFinalJobAttempt, type HandlerFn, type JobContext } from "./shared.js"
 import { imageAIHandlers } from "./handlers/image-ai.js"
@@ -38,6 +40,8 @@ import { scene3dHandlers } from "./handlers/scene3d.js"
 import { buildStatsKey, upsertExecutionStats } from "../services/execution-stats.js"
 import { tryInlineReconcile } from "./inline-reconcile.js"
 import { loadPrivatePlugins } from "../lib/private-plugins/load.js"
+import { withEditPlanModeGate } from "../lib/private-plugins/edit-plan-mode-gate.js"
+import { plannableEditPlanModes } from "../lib/private-plugins/plannable-edit-plan-modes.js"
 import { withPreTaskHeartbeat } from "./pre-task-heartbeat.js"
 import { signScene3DDeliveryUrlsForProvider } from "../services/scene3d-artifacts/delivery-provider-access.js"
 import { noteSlotWaitColumnError, withSlotWaitColumn } from "../lib/jobs-slot-wait-column.js"
@@ -79,17 +83,31 @@ const allHandlers: Record<string, HandlerFn> = {
 // (module-load-time construction is no longer possible — see
 // `handlers/surround.ts`'s header comment), so it's built here rather than
 // alongside the other static `...xHandlers` spreads above.
+// Loads first: it records the plugins' `supports()` declaration, which
+// `plannableEditPlanModes` reads on nodaro.ai.
+const { handlers: privatePluginHandlers, engines } = await loadPrivatePlugins({})
 // 4b: the exclusive-node RELAY handlers, self-hosted editions only. Merged
 // BEFORE privatePluginHandlers so that on cloud (where the loader returns
 // real handlers) the plugin implementations win the keys unconditionally —
 // on community the plugin map is empty and the relay serves every exclusive type.
+// Through the edit-plan mode gate (decided 2026-10-06): the relay refuses an
+// unknown mode, or one nodaro.ai does not plan, before anything reaches
+// nodaro.ai. Round 6: a connected self-host plans what nodaro.ai plans
+// (`plannableEditPlanModes` asks it per job, cached briefly); an unconnected one
+// plans the three original modes. Round 7 (decided 2026-10-06): when nodaro.ai
+// can't be reached, a job in a mode outside the three fails RETRYABLY with
+// "could not reach nodaro.ai" (`NodaroUnreachableError`), under the queue's
+// retry policy; only nodaro.ai's own answer refuses a mode permanently.
+// The same helper answers GET /v1/edit-plan/capabilities on this install.
 if (!hasCredits()) {
   const { nodaroExclusiveRelayHandlers } = await import("./handlers/nodaro-exclusive-relay.js")
-  Object.assign(allHandlers, nodaroExclusiveRelayHandlers)
+  Object.assign(allHandlers, withEditPlanModeGate(nodaroExclusiveRelayHandlers, plannableEditPlanModes))
 }
-const { handlers: privatePluginHandlers, engines } = await loadPrivatePlugins({})
 Object.assign(allHandlers, createSurroundHandlers(engines.surround))
-Object.assign(allHandlers, privatePluginHandlers)
+// The plugin's edit-plan handler refuses (and the worker refunds) a mode the
+// loaded plugin has not declared — an older one plans it as tighten after the
+// run reserved the new mode's price (lib/private-plugins/edit-plan-mode-gate.ts).
+Object.assign(allHandlers, withEditPlanModeGate(privatePluginHandlers, plannableEditPlanModes))
 // Liveness is applied where a handler is RUN, not where the map is built — see
 // the dispatch site in the processor below (`withPreTaskHeartbeat`), so no
 // merge order and no later `Object.assign` can leave a job type out.
@@ -187,6 +205,9 @@ export function createVideoWorker() {
         // was always false and leaked direct-MCP output to the public gallery.
         mcpClient: mcpClientForcesPrivate(jobRecord?.mcp_client),
         workflowExecutionId: null,
+        // An Apply EDL preview (proxy) is private on every lane (F1) — also
+        // inserted force_private by the route and the workflow run.
+        previewRender: isPreviewRender(job.name, jobData.quality),
       })
       // Workflow / app run: the parent workflow_execution carries `mcp_client`;
       // per-node child jobs don't (the orchestrator's internal per-node calls
@@ -338,12 +359,17 @@ export function createVideoWorker() {
         // A short handler never beats (the first tick is a minute out); one that
         // replaced or cleared the sentinel is a CAS no-op; beats stop at a cap
         // so a hung handler still ages into the sweep. The cap is the
-        // orchestrator's per-node ceiling unless the handler declares its own
-        // budget (`livenessBudgetMs` — apply-edl sums the kill budgets of its
-        // bounded steps), so "hung" means one thing to the heartbeat and to
-        // those steps.
+        // orchestrator's per-node ceiling unless the job declares its own
+        // budget: the handler's (`livenessBudgetMs` — apply-edl sums the kill
+        // budgets of its bounded steps), else the registry's for this job name
+        // and payload (`declaredJobBudgetMs` — the same number the orchestrator
+        // sizes the node from). The fallback is what reaches a PLUGIN handler,
+        // which cannot carry `livenessBudgetMs` (core-only): a long plugin
+        // render (Speaker View) would otherwise stop beating at the default
+        // and be swept while still rendering. "Hung" means one thing to the
+        // heartbeat and to those steps.
         const handler = withPreTaskHeartbeat(found, {
-          maxMs: found.livenessBudgetMs?.(job),
+          maxMs: found.livenessBudgetMs?.(job) ?? declaredJobBudgetMs(job.name, job.data),
           // An earlier attempt's ffmpeg-slot wait (a re-pick): this one adds to it.
           slotWaitBaseMs: Number((pickedRows[0] as { slot_wait_ms?: unknown }).slot_wait_ms ?? 0) || 0,
         })

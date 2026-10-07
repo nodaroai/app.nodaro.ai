@@ -208,6 +208,44 @@ export const AUDIO_PRODUCER_TYPES: ReadonlySet<string> = new Set([
 ])
 
 /**
+ * Source node types whose output is an IMAGE URL — what feeds a References
+ * input. ONE set for the canvas validators (`frontend/src/lib/
+ * generate-image-handles.ts` re-exports it), the backend's Generate Image
+ * handle migration and the MCP edge normalizer (`llm-chat`'s legacy `in`):
+ * they used to keep separate copies, and the backend's lagged by eight types.
+ */
+export const IMAGE_PRODUCER_TYPES: ReadonlySet<string> = new Set([
+  "upload-image", "generate-image", "edit-image", "image-to-image", "modify-image", "upscale-image", "remove-background",
+  // extract-frame produces a single still image extracted from a video source.
+  "extract-frame",
+  // generate-mask emits the source image AND a mask PNG; its `image` source
+  // pip is the passthrough (the same image as the input).
+  "generate-mask",
+  // paint-mask emits the hand-painted mask PNG (a plain image at runtime).
+  // Membership is what makes mask targets accept it — mask is an advisory
+  // color, not a gated type.
+  "paint-mask",
+  // reference-sheet's `sheet` is one composited image and `panels` carries
+  // clean reference images; both resolve to image URLs at runtime.
+  "reference-sheet",
+  // reference-board's `image` pip emits a real generated board image.
+  "reference-board",
+  // image-collage composites N images → ONE image.
+  "image-collage",
+  // image-overlay places layers on a base → ONE image.
+  "image-overlay",
+  // 3D Render Pro's `stills` handle carries one PNG per shot of the exported
+  // composition (spread into referenceImageUrls like reference-sheet
+  // `panels`). A validator sees only the source NODE type, so this also makes
+  // its `video` pip droppable on an image input — the handle-blind trade
+  // reference-sheet and split-media already make; the input resolvers route
+  // by handle, so only `stills` becomes an image at runtime. Deliberately NOT
+  // in IMAGE_SOURCE_TYPES on either engine: that set types the node's PRIMARY
+  // asset, and 3D Render Pro's is the MP4.
+  "pro-3d-render",
+])
+
+/**
  * Source node types whose primary output is a LIST that, by default, fans out
  * one downstream execution per element when an edge leaves them WITHOUT an
  * explicit `outputMode` (all other edges default to "last"). `selector` is
@@ -263,6 +301,14 @@ export const FAN_OUT_EACH_HANDLES: Readonly<Record<string, { readonly each: read
   // (decided 2026-10-04).
   "camera-switch": { each: ["edl"], primary: "edl" },
 }
+
+/**
+ * Fan-out nodes whose iterations must ALL succeed: one failed item fails the
+ * node (today's rule tolerates a partial list). UGC Clip — a missing clip
+ * silently drops a beat from the script (spec R17). Already-started items
+ * finish and settle; their jobs are reused on the next run.
+ */
+export const FAN_OUT_ALL_OR_NOTHING_TYPES: ReadonlySet<string> = new Set(["ugc-clip"])
 
 /**
  * Nodes whose saved list is the list their last run PRODUCED — `__listResults`
@@ -325,6 +371,18 @@ export const FAN_IN_TARGETS: Readonly<Record<string, "*" | readonly string[]>> =
   // input: a list (or a writer that ran once per item) arrives as one
   // message, never as a burst of sends to the owner's chat.
   "telegram-account-send": ["in"],
+  // The list operators — they READ the whole list wired into them (their
+  // executors collect every upstream item themselves) and emit a list. Run
+  // once per item by an "each" wire (a Split Text, a List, a node that ran per
+  // item), every iteration saw the same whole list and answered with its
+  // first match: a Filter List fed 11 stories handed 11 copies of story one
+  // downstream, and every paid stage after it ran 11 times on it
+  // (2026-10-06). A list operator is never fanned out, on any wire.
+  "filter-list": "*",
+  deduplicate: "*",
+  "merge-lists": "*",
+  "sort-list": "*",
+  selector: "*",
 }
 
 export function isFanInNodeType(nodeType: string | undefined | null): boolean {

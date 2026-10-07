@@ -87,6 +87,8 @@ export {
   MOTION_TRANSFER_PROVIDERS,
   TTS_PROVIDERS,
   DEFAULT_TTS_PROVIDER,
+  DIALOGUE_PROVIDERS,
+  DEFAULT_DIALOGUE_PROVIDER,
   TEXT_TO_AUDIO_PROVIDERS,
   DEFAULT_TEXT_TO_AUDIO_PROVIDER,
   MUSIC_PROVIDERS,
@@ -222,6 +224,7 @@ export type {
   LipSyncProvider,
   MotionTransferProviderType,
   TtsProvider,
+  DialogueProvider,
   TextToAudioProvider,
   MusicProvider,
   TranscribeProvider,
@@ -247,6 +250,25 @@ export type {
   RefVideoDurationLimit,
 } from "./model-constants.js"
 
+
+export {
+  VIDEO_CHARACTER_REFS_WIRE_MAX,
+  VIDEO_CHARACTER_DESCRIPTION_MAX,
+  VIDEO_CHARACTER_NAME_MAX,
+  videoCharacterRefCap,
+  videoCharacterRefProviders,
+  videoCharacterRefUnits,
+  videoCharacterRefProblem,
+  videoCharacterVoiceCap,
+  videoCharacterVoiceKey,
+  videoCharacterDistinctVoices,
+  videoCharacterVoiceProblem,
+  VIDEO_CHARACTER_VOICE_DESCRIPTION_MAX,
+  VIDEO_CHARACTER_VOICE_EXAMPLE_MAX,
+} from "./video-character-refs.js"
+export type { VideoCharacterReference, VideoCharacterVoice, VideoCharacterRefProblem } from "./video-character-refs.js"
+export { GEMINI_OMNI_VOICE_PRESETS, GEMINI_OMNI_VOICE_PRESET_IDS } from "./gemini-omni-voices.js"
+export type { GeminiOmniVoicePreset, GeminiOmniVoicePresetId } from "./gemini-omni-voices.js"
 
 export { describeMaskRegion } from "./inpaint-region.js"
 export type { MaskRegionDescriptor, PixelBox } from "./inpaint-region.js"
@@ -308,6 +330,8 @@ export {
   getNodeResult,
   getNodeLabel,
   getInputFieldSchema,
+  INPUT_FIELD_EXTRA_KEYS,
+  getInputFieldExtraKeys,
   mergeNodeInputOverrides,
   flattenItems,
   migrateToItems,
@@ -323,6 +347,8 @@ export {
   canonicalExposedFieldKey,
   canonicalizeOverrideKeys,
 } from "./exposed-field-keys.js"
+
+export { findRestrictedPickerValue, type PickerCardRestrictions } from "./picker-restrictions.js"
 
 export {
   ITER_CLONE_PATTERN,
@@ -462,14 +488,16 @@ export { REPEATABLE_NODE_TYPES, REPEAT_PLACEHOLDER, PROVIDER_PLACEHOLDER_PREFIX,
 export {
   NON_PROMPT_TEXT_LANES,
   fanOutTextFeedsPrompt,
+  fanOutUrlItemIsText,
   isFanOutUrlItem,
   compactWithRows,
+  pickHeldRow,
   liveRowColumn,
   resolveListFanOut,
   planFanOut,
   alignedFieldList,
 } from "./fan-out-rows.js"
-export type { FanOutCandidate, ListFanOut, FanOutPlan } from "./fan-out-rows.js"
+export type { FanOutCandidate, ListFanOut, FanOutPlan, HeldRowPick } from "./fan-out-rows.js"
 
 export { settledWithLimit } from "./settled-with-limit.js"
 
@@ -723,6 +751,52 @@ export {
 } from "./telegram-account-send.js"
 
 export { buildFeedMaps, nodeFeedsAnything, type FeedNode, type FeedEdge, type FeedMaps } from "./trigger-feeds.js"
+export {
+  RENDER_NODE_TYPES,
+  RENDER_NODE_TYPE_IDS,
+  OWNER_ONLY_LISTING_RENDER_TYPES,
+  renderNodeOf,
+  isRenderNodeType,
+  rendersLatestBatch,
+  rendersTranscriptJson,
+  type RenderNodeDescriptor,
+  type RenderClockSource,
+  type RenderJsonKind,
+} from "./render-nodes.js"
+export {
+  PREVIEW_RENDER_NODE_TYPES,
+  PREVIEW_REVIEW_REQUIRED,
+  PREVIEW_RENDER_NESTED,
+  RUN_OVERRIDE_CLEARED_FIELDS,
+  SAVED_RENDER_STAMPS,
+  NO_SAVED_RENDER_STAMPS,
+  rendersAsPreview,
+  previewStops,
+  previewGatedNodeIds,
+  holdsPreviewRender,
+  withRunOverrides,
+  type PreviewGateNode,
+  type PreviewGateEdge,
+  type PreviewGateRun,
+  type PreviewStops,
+  type SavedRenderQualityStamp,
+  type SavedRenderStampReader,
+} from "./preview-gate.js"
+export {
+  CONTINUATION_NOT_FOUND,
+  CONTINUATION_WORKFLOW_MISMATCH,
+  CONTINUATION_VERSION_MISMATCH,
+  CONTINUATION_NOT_COMPLETED,
+  CONTINUATION_SUBSET_REQUIRED,
+  RUN_CONTINUATION_CODES,
+  type RunContinuationCode,
+} from "./run-continuation.js"
+export {
+  RENDER_FINAL_NODE_NOT_FOUND,
+  RENDER_FINAL_NOT_A_RENDER,
+  RENDER_FINAL_CODES,
+  type RenderFinalCode,
+} from "./render-final.js"
 
 export {
   SCHEDULE_RULE_KINDS,
@@ -924,6 +998,60 @@ export {
 } from "./saved-posts.js"
 
 export {
+  COLLECTION_NAME_MAX,
+  COLLECTION_DESCRIPTION_MAX,
+  COLLECTION_RECORD_TITLE_MAX,
+  COLLECTION_RECORD_TEXT_MAX,
+  COLLECTION_RECORD_URL_MAX,
+  COLLECTION_RECORD_MEDIA_MAX,
+  COLLECTION_RECORD_FIELDS_MAX,
+  COLLECTION_RECORD_FIELDS_BYTES_MAX,
+  COLLECTION_DEDUPE_KEY_MAX,
+  COLLECTION_EVICT_MAX_PER_WRITE,
+  COLLECTION_IDEMPOTENCY_KEY_MAX,
+  COLLECTIONS_PAGE_MAX,
+  COLLECTIONS_PAGE_DEFAULT,
+  COLLECTION_HEADLINE_MAX,
+  COLLECTION_MEDIA_TYPES,
+  COLLECTION_TIER_CAPS,
+  COLLECTION_DIGEST_SEPARATOR,
+  COLLECTION_READ_WINDOW_HOURS_MAX,
+  COLLECTION_READ_LIMIT_MAX,
+  collectionReadSince,
+  collectionCapsForTier,
+  clampChars,
+  normalizeDedupeKey,
+  isCollectionUrl,
+  isCollectionMedia,
+  normalizeCollectionMedia,
+  normalizeCollectionFields,
+  collectionRecordHeadline,
+  collectionRecordsDigest,
+  ingestRecordFromJson,
+  type CollectionMediaType,
+  type CollectionMedia,
+  type CollectionCaps,
+  type CollectionLimits,
+  type Collection,
+  type CollectionRecordSource,
+  type CollectionFieldValue,
+  type CollectionRecord,
+  type ListCollectionsResult,
+  type CreateCollectionInput,
+  type UpdateCollectionInput,
+  type ListCollectionRecordsParams,
+  type ListCollectionRecordsResult,
+  type AddCollectionRecordInput,
+  type CollectionWriteOutcome,
+  type AddCollectionRecordResult,
+  type CollectionExportFormat,
+  type CollectionDigestFormat,
+  type CollectionReadWindowUnit,
+  type CollectionReadOrder,
+  type IngestedRecord,
+} from "./collections.js"
+
+export {
   COMPETITOR_ACCOUNT_KEYS,
   COMPETITOR_ABOUT_PLATFORMS,
   COMPETITOR_DEFAULT_ABOUT_PLATFORMS,
@@ -970,6 +1098,15 @@ export {
   type CompetitorScanSummary,
   type CompetitorScan,
   type CompetitorDetail,
+  type CompetitorListResult,
+  type CompetitorHistory,
+  type CompetitorHistoryPoint,
+  type CompetitorHistoryPlatform,
+  type CompetitorPeriod,
+  type CompetitorPeriodPlatform,
+  type CompetitorPeriodFollowers,
+  type CompetitorCompareInput,
+  type CompetitorCompareResult,
   type CompetitorCardsResult,
   type CompetitorLessonsResult,
   type BrandLesson,
@@ -1091,6 +1228,7 @@ export { pickIds, togglePick } from "./multi-pick.js"
 export {
   MODEL_CATALOG,
   MODEL_RECOMMENDATIONS,
+  SPEECH_UNIT_PRICE_NOTE,
   listModels,
   groupByFamily,
   groupByKindAndFamily,
@@ -1142,9 +1280,26 @@ export {
   getTtsCapabilities,
   ttsSupportsAudioTags,
   ttsSupportsSsmlBreaks,
+  ttsSupportsStitching,
   ttsHasLever,
   ttsLanguageCodes,
+  ttsSupportsTimestamps,
 } from "./tts-capabilities.js"
+
+// The neighbour-text rule (cap + normaliser) every Text to Speech sender and exit shares.
+export { TTS_NEIGHBOUR_TEXT_MAX_CHARS, normalizeTtsNeighbourText } from "./tts-neighbour-text.js"
+export type { TtsNeighbourText } from "./tts-neighbour-text.js"
+
+// The dialogue lane's lookups: answer only for dialogue models; an unknown id
+// runs as DEFAULT_DIALOGUE_PROVIDER (v3 dialogue).
+export {
+  findDialogueCapabilities,
+  dialogueProviderOf,
+  getDialogueCapabilities,
+  dialogueHasLever,
+  dialogueStabilityAccepted,
+  dialogueSupportsTimestamps,
+} from "./dialogue-capabilities.js"
 
 // Per-model safety-filter retry/fallback policy (derives from
 // `ModelCatalogEntry.safetyFilter` above).
@@ -1172,6 +1327,10 @@ export {
 } from "./caption-styles.js"
 export type { StaticCaptionStyle, KineticCaptionStyle, CaptionStyle, CaptionLookId, CaptionLookLevers, KineticOnlyCaptionLeverKey } from "./caption-styles.js"
 export type { CaptionPlan, CaptionWordTiming } from "./caption-plan.js"
+export { parseCaptionPlan } from "./caption-plan.js"
+export * from "./caption-segment-schema.js"
+export * from "./add-captions-plan.js"
+export * from "./node-pass-through.js"
 
 export {
   transcribeWordTimestampsRefusal,
@@ -1361,8 +1520,10 @@ export {
   VIDEO_PRODUCER_TYPES,
   AUDIO_PRODUCER_TYPES,
   DYNAMIC_PRODUCER_TYPES,
+  IMAGE_PRODUCER_TYPES,
   FAN_OUT_EACH_TYPES,
   FAN_OUT_EACH_HANDLES,
+  FAN_OUT_ALL_OR_NOTHING_TYPES,
   OWN_LIST_NODE_TYPES,
   ownsItsList,
   defaultEdgeOutputMode,
@@ -1371,6 +1532,8 @@ export {
   isFanInNodeType,
   isFanInEdge,
 } from "./producer-types.js"
+
+export * from "./fan-out-meta.js"
 
 export { SUNO_TRACK_SOURCE_TYPES } from "./suno-track-sources.js"
 
@@ -1409,7 +1572,10 @@ export {
 export type {
   NodeExecutionStatus,
   NodeExecutionStateWire,
+  NodeSkipReason,
 } from "./node-execution-state.js"
+export { executionOutcome, countEmptyInputSkips } from "./execution-outcome.js"
+export type { ExecutionOutcome } from "./execution-outcome.js"
 
 export {
   MODEL_PARAM_NODE_TYPES,
@@ -1558,9 +1724,21 @@ export type { CharacterMotionMetadata } from "./character-motion-metadata.js"
 export * from "./edl.js"
 export * from "./speaker-layouts.js"
 export * from "./edl-multicam.js"
+// Speaker tracks: the face-tracking result (box body + the node's descriptor) and its validators.
+export * from "./speaker-tracks.js"
 export * from "./camera-switch-contract.js"
 export * from "./edit-plan-contract.js"
+// A render's saved output (one reader for both engines) and its result stamps.
+export * from "./render-output.js"
 // A person's review of an Edit Plan (`editedEdl`) and the one resolver that applies it.
 export * from "./edit-plan-review.js"
 
 export { VIDEO_DURATION_AUTO, isAutoVideoDuration } from "./video-duration-auto.js"
+// Legacy handle ids → the canonical id every reader rewires them to (editor load, MCP writes, Copilot).
+export * from "./handle-aliases.js"
+// Telegram Channel Feed: the post shape, the digest, and the cursor rule (where the feed stands after a run).
+export * from "./telegram-channel.js"
+// UGC run state: which node-data keys are a run's state (stripped on publish) and which a runner may override.
+export * from "./ugc-run-state.js"
+// UGC builder call → the REST body of the public route it dispatches to (the canvas and the app run the builder's calls through it).
+export * from "./ugc-call-body.js"

@@ -1,3 +1,4 @@
+import { FAN_OUT_ALL_OR_NOTHING_TYPES, fanOutItemMeta, type FanOutItemMeta, type RunResultRowStamp } from "@nodaro/shared"
 import type { NodeOutput } from "../services/workflow-engine/types.js"
 import type { ExecuteNodeResult } from "../services/workflow-engine/node-executor.js"
 import { DrainAbortError } from "../lib/worker-drain.js"
@@ -30,6 +31,19 @@ function isCancellationReason(reason: unknown): boolean {
   return msg === "Cancelled" || msg === "Execution cancelled"
 }
 
+/** One iteration's identity: its job, its thumbnail, and what a render stamped. */
+function rowStampOf(result: ExecuteNodeResult): RunResultRowStamp {
+  const o = result.output
+  return {
+    ...(result.jobId ? { jobId: result.jobId } : {}),
+    ...(typeof o.thumbnailUrl === "string" && o.thumbnailUrl ? { thumbnailUrl: o.thumbnailUrl } : {}),
+    ...(o.quality ? { quality: o.quality } : {}),
+    ...(o.clipKey ? { clipKey: o.clipKey } : {}),
+    ...(o.planBasis ? { planBasis: o.planBasis } : {}),
+    ...(o.renderBasis ? { renderBasis: o.renderBasis } : {}),
+  }
+}
+
 /**
  * Assemble a fan-out node's per-iteration settled results into a single
  * ExecuteNodeResult, applying failure-propagation semantics.
@@ -56,17 +70,42 @@ function isCancellationReason(reason: unknown): boolean {
  *     keep the successful results, set genuineFailure for the caller to log,
  *     and hydrate the primary output from the first successful iteration so a
  *     failed/cancelled index 0 doesn't blank it.
+ *   - an ALL-OR-NOTHING node type (`FAN_OUT_ALL_OR_NOTHING_TYPES`, UGC Clip)
+ *     with ANY genuine failure                              -> THROW the first
+ *     one; nothing partial reaches a Bundle edge (spec R17). Cancellation-only
+ *     rejections are not failures. Already-started items finished and settled;
+ *     their jobs are reused on the next run.
+ *
+ * `rowSent` (a render's fan-out, `applyEdlRowSentStamps`): what each row was
+ * sent for — the run's quality and the clip — stamped on EVERY row, a failed
+ * or cancelled one too, so a reader matches the batch's rows (one per run, not
+ * one per plan clip) to clips by key, never by position (decided 2026-10-06).
+ * A landed take's own stamp wins. A row that never ran (a Stop, or the
+ * fail-fast after another row failed) is also marked `cancelled`, so it reads
+ * as not rendered, never as a failure.
  */
 export function assembleFanOutResult(
   settled: PromiseSettledResult<FanOutIterationValue>[],
   itemCount: number,
+  nodeType?: string,
+  rowSent?: ReadonlyArray<RunResultRowStamp | undefined>,
 ): FanOutAssembly {
+  const allOrNothing = nodeType !== undefined && FAN_OUT_ALL_OR_NOTHING_TYPES.has(nodeType)
   const allResults: string[] = new Array(itemCount).fill("")
   // Each row's own freshness key (Video Overlay: every list item is its own
   // composition) — row-aligned with allResults, "" where the row has none.
   const allCompositionKeys: string[] = new Array(itemCount).fill("")
   let anyCompositionKey = false
+  // Each row's identity (job, thumbnail, a render's quality + clip) —
+  // row-aligned with allResults. A row that produced nothing keeps only what
+  // it was sent for (`rowSent`), else `{}`. The editor stamps each result row
+  // from it; `allJobIds` below is compacted in settle order and cannot be
+  // paired with the rows by position.
+  const allStamps: RunResultRowStamp[] = Array.from({ length: itemCount }, (_, i) => ({ ...rowSent?.[i] }))
   const allJobIds: string[] = []
+  // Each row's notes (warnings + real length) — row-aligned with allResults.
+  // Filled only for all-or-nothing types (UGC Clip); nothing else reads it.
+  const allMeta: (FanOutItemMeta | null)[] = new Array(itemCount).fill(null)
   let firstOutput: NodeOutput | undefined            // iteration 0's output (preferred primary)
   let firstSuccessfulOutput: NodeOutput | undefined  // first fulfilled output (fallback primary)
   let succeededCount = 0
@@ -75,7 +114,7 @@ export function assembleFanOutResult(
   let lastJobId: string | undefined
   let lastUsageLogId: string | undefined
 
-  for (const entry of settled) {
+  for (const [slot, entry] of settled.entries()) {
     if (entry.status === "fulfilled") {
       const { index, result, resultValue } = entry.value
       allResults[index] = resultValue
@@ -84,6 +123,8 @@ export function assembleFanOutResult(
         allCompositionKeys[index] = key
         anyCompositionKey = true
       }
+      allStamps[index] = { ...allStamps[index], ...rowStampOf(result) }
+      if (allOrNothing) allMeta[index] = fanOutItemMeta(result.output)
       succeededCount++
       if (index === 0) firstOutput = result.output
       if (!firstSuccessfulOutput) firstSuccessfulOutput = result.output
@@ -104,9 +145,17 @@ export function assembleFanOutResult(
       // abort. Rethrow with its identity intact so the whole execution is
       // requeued untouched instead.
       throw entry.reason
-    } else if (!isCancellationReason(entry.reason) && genuineFailure === undefined) {
+    } else if (isCancellationReason(entry.reason)) {
+      // `settled` is task-aligned (settledWithLimit): slot i is iteration i.
+      if (rowSent && slot < itemCount) allStamps[slot] = { ...allStamps[slot], cancelled: true }
+    } else if (genuineFailure === undefined) {
       genuineFailure = entry.reason
     }
+  }
+
+  // All-or-nothing (spec R17): one genuine failure fails the node; nothing partial reaches a Bundle edge.
+  if (genuineFailure !== undefined && allOrNothing) {
+    throw genuineFailure instanceof Error ? genuineFailure : new Error(String(genuineFailure))
   }
 
   if (succeededCount === 0 && genuineFailure !== undefined) {
@@ -124,6 +173,10 @@ export function assembleFanOutResult(
     listResults: allResults,
     // The primary's `resultCompositionKey` is iteration 0's; the rows carry their own.
     ...(anyCompositionKey ? { listResultCompositionKeys: allCompositionKeys } : {}),
+    listResultStamps: allStamps,
+    ...(allMeta.some(Boolean)
+      ? { listResultMeta: allMeta.map((m): FanOutItemMeta => m ?? { warnings: [], durationSec: null }) }
+      : {}),
   }
 
   return {

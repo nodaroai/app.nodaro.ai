@@ -27,8 +27,8 @@ import {
   runLtxRetake,
 } from "../../providers/replicate/ltx-video.js"
 import { config } from "../../lib/config.js"
-import { FAL_LIP_SYNC_PROVIDERS, isAutoVideoDuration, ltxExtendDurationSec, ltxRetakeDurationSec, pricedOutputDurationSec, REPLICATE_LIP_SYNC_PROVIDERS, SEEDANCE_2_EXTEND_STITCH, SEEDANCE_2_R2V_MIN_REF_VIDEO_SEC, SEEDANCE_LIP_SYNC_PROVIDERS, estimateLoopTrimAddonCredits, getMaxTtsChars, ttsSupportsAudioTags, isVeoProvider, getVideoAudioCapability, parseAttributedDialogue, resolveDialogueVoices } from "@nodaro/shared"
-import type { CharacterVoiceSpec, DialogueLine, ResolvedDialogueVoiceLine } from "@nodaro/shared"
+import { FAL_LIP_SYNC_PROVIDERS, isAutoVideoDuration, ltxExtendDurationSec, ltxRetakeDurationSec, pricedOutputDurationSec, REPLICATE_LIP_SYNC_PROVIDERS, SEEDANCE_2_EXTEND_STITCH, SEEDANCE_2_R2V_MIN_REF_VIDEO_SEC, SEEDANCE_LIP_SYNC_PROVIDERS, estimateLoopTrimAddonCredits, getDialogueCapabilities, dialogueProviderOf, ttsSupportsAudioTags, isVeoProvider, getVideoAudioCapability } from "@nodaro/shared"
+import type { CharacterVoiceSpec, DialogueLine, ResolvedDialogueVoiceLine, VideoCharacterReference } from "@nodaro/shared"
 import { mergeVideoAudio } from "../../providers/video/merge-video-audio.js"
 import { combineVideos } from "../../providers/video/combine-videos.js"
 import { extractTailToFile } from "../../providers/video/extract-tail.js"
@@ -55,6 +55,7 @@ import { probeVideoSource } from "../../providers/video/ffmpeg-utils.js"
 import { directVoiceChanger } from "../../providers/elevenlabs/voice-changer.js"
 import { directElevenLabsTTS, stripAudioTags } from "../../providers/elevenlabs/direct-tts.js"
 import { directElevenLabsDialogue } from "../../providers/elevenlabs/direct-dialogue.js"
+import { planVoicedDialogue } from "../../lib/voiced-dialogue-lines.js"
 
 /**
  * VEO3 / VEO3.1 always produce a video with background audio per KIE's
@@ -264,7 +265,7 @@ async function chainVeoBaseTo4k(
 }
 
 const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx) {
-  const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, generationType, loopTrim, frameFit, frameDelivery, enableTranslation, videoTrimStart, videoTrimEnd, refVideoDurationsSec } = job.data as {
+  const { imageUrl, endFrameUrl, audioUrl, prompt, provider, generateAudio, duration, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShot, shots, elements, resolution, grokMode, videoSize, seed, cameraFixed, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, webSearch, nsfwChecker, generationType, loopTrim, frameFit, frameDelivery, enableTranslation, videoTrimStart, videoTrimEnd, refVideoDurationsSec } = job.data as {
     jobId: string
     imageUrl?: string
     endFrameUrl?: string
@@ -290,6 +291,8 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
     referenceImageUrls?: string[]
     referenceVideoUrls?: string[]
     referenceAudioUrls?: string[]
+    /** Identity inputs (Gemini Omni `character_ids` after the provider mints them). */
+    characterReferences?: VideoCharacterReference[]
     /** Start/end frame handling; absent = platform defaults. */
     frameFit?: FrameFit
     frameDelivery?: FrameDelivery
@@ -354,7 +357,7 @@ const handleImageToVideo: HandlerFn = async function handleImageToVideo(job, ctx
   const baseResolution = wantsVeo4k ? VEO_4K_BASE_RESOLUTION : resolution
   let result
   try {
-    result = await imageToVideo(imageUrl, resolvedI2vProvider, prompt, duration, endFrameUrl, { onProgress, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShots: multiShot, multiPrompt, klingElements, resolution: baseResolution, grokMode, seed, cameraFixed, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, generationType, frameFit, frameDelivery, enableTranslation, videoTrimStart, videoTrimEnd }, { onTaskCreated })
+    result = await imageToVideo(imageUrl, resolvedI2vProvider, prompt, duration, endFrameUrl, { onProgress, mode, sound, negativePrompt, motionPrompt, cfgScale, aspectRatio, multiShots: multiShot, multiPrompt, klingElements, resolution: baseResolution, grokMode, seed, cameraFixed, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, webSearch, nsfwChecker, generationType, frameFit, frameDelivery, enableTranslation, videoTrimStart, videoTrimEnd }, { onTaskCreated })
   } finally {
     ramp.stop()
   }
@@ -566,7 +569,7 @@ const handleVideoToVideo: HandlerFn = async function handleVideoToVideo(job, ctx
 }
 
 const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) {
-  const { prompt, provider, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, removeWatermark, seed, characterIdList, resolution, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, enableTranslation, refVideoDurationsSec } = job.data as {
+  const { prompt, provider, duration, mode, sound, negativePrompt, cfgScale, aspectRatio, multiShot, shots, elements, removeWatermark, seed, characterIdList, resolution, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, webSearch, nsfwChecker, enableTranslation, refVideoDurationsSec } = job.data as {
     jobId: string
     prompt: string
     provider?: string
@@ -587,6 +590,8 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
     referenceImageUrls?: string[]
     referenceVideoUrls?: string[]
     referenceAudioUrls?: string[]
+    /** See the image-to-video payload above. */
+    characterReferences?: VideoCharacterReference[]
     /** See the image-to-video payload above. */
     refVideoDurationsSec?: Array<number | null>
     webSearch?: boolean
@@ -626,7 +631,7 @@ const handleTextToVideo: HandlerFn = async function handleTextToVideo(job, ctx) 
   // Extracted to a const so the content-policy retry below resubmits with
   // byte-identical options — only the prompt text differs between the two
   // textToVideo calls.
-  const t2vOpts = { mode, sound, negativePrompt, cfgScale, multiShots: multiShot, multiPrompt, klingElements, seed, resolution: baseResolution, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, webSearch, nsfwChecker, enableTranslation }
+  const t2vOpts = { mode, sound, negativePrompt, cfgScale, multiShots: multiShot, multiPrompt, klingElements, seed, resolution: baseResolution, generateAudio, referenceImageUrls, referenceVideoUrls, referenceAudioUrls, characterReferences, webSearch, nsfwChecker, enableTranslation }
   let result
   // Content-policy rewrite-once (Task A2, 2026-08-03): a `contentPolicy`-
   // classified KieError (see classifyContentPolicy in providers/kie/client.ts)
@@ -1583,8 +1588,8 @@ const handleGenerateMask: HandlerFn = async function handleGenerateMask(job, ctx
 // One job, one combined reservation. Two modes, chosen by the model's audio
 // capability (the route already gated this via videoModelCanSpeakDialogue):
 //   audio_driven (Seedance 2) -> synthesise the dialogue track (direct ElevenLabs
-//     TTS for a single voice; direct Dialogue v3 for multi-speaker, any voice
-//     mix), feed it as reference audio, model lip-syncs.
+//     TTS for a single voice; direct dialogue on the cast's dialogue model for
+//     multi-speaker, any voice mix), feed it as reference audio, model lip-syncs.
 //   native_speech (VEO)       -> bake the line during generation, then revoice the
 //     baked audio to the primary character voice (keeps the music/SFX bed).
 // The voice chain NEVER hard-fails the clip: a synth / revoice failure degrades to
@@ -1598,26 +1603,13 @@ const handleGenerateMask: HandlerFn = async function handleGenerateMask(job, ctx
 // job_type via the worker CAS, but finalize/asset both key off the passed
 // jobType + output_data, so the deliverable is always handled as a video.
 
-// Total-text cap for synthesis (Dialogue v3 / direct TTS) — the SAME shared
-// constant the route and panel read, never a third hand-kept copy (this
-// literal used to be one and drifted).
-const maxDialogueChars = () => getMaxTtsChars("elevenlabs-dialogue")
-
-/** Trim resolved lines to the synthesis char budget; logs any drop (no silent cap). */
-function capDialogueLines(lines: ResolvedDialogueVoiceLine[], jobId: string): ResolvedDialogueVoiceLine[] {
-  const cap = maxDialogueChars()
-  let total = 0
-  const out: ResolvedDialogueVoiceLine[] = []
-  for (const l of lines) {
-    if (total + l.text.length > cap) break
-    total += l.text.length
-    out.push(l)
-  }
-  if (out.length < lines.length) {
-    console.warn(`[worker] voiced-video ${jobId}: dropped ${lines.length - out.length} dialogue line(s) over the ${cap}-char Dialogue v3 cap`)
-  }
-  return out
-}
+// Which lines are voiced, and the total-text cap that trims them (the chosen
+// dialogue model's capability sheet), come from `planVoicedDialogue`
+// (lib/voiced-dialogue-lines.ts) — the SAME reading the generate-video route
+// priced the audio add-on from, never a worker-local copy (a hand-kept cap
+// literal here once drifted from the route's). The model is the one the route
+// forwarded (`dialogueProvider`), passed back in as given; an unset or unknown
+// one reads as v3 dialogue.
 
 /** Revoice a generated clip to `voiceId` (extract -> speech-to-speech -> remux), keeping the bed. */
 async function revoiceClipToR2(
@@ -1672,25 +1664,32 @@ async function mergeVoiceTrackToR2(
 /**
  * Synthesise the resolved dialogue into ONE reference-audio track (R2 URL) for the
  * audio_driven (Seedance) path. Genuine multi-speaker goes through the direct
- * ElevenLabs Dialogue v3 API in ONE call — per-line voice resolution means ANY
+ * ElevenLabs dialogue API in ONE call, on the cast's dialogue model — the one the
+ * route chose and reserved (`dialogueProvider`: v3 dialogue unless every voice
+ * names a speech model with one shared dialogue twin; a job enqueued before the
+ * model travelled with it runs v3 dialogue). Per-line voice resolution means ANY
  * voice mix works (premade names, library UUIDs, clones); the old KIE proxy's
  * premade-names-only limit (and its degrade-to-primary-voice fallback) is gone
  * with the proxy itself. A single voice stays on direct TTS: it honours the
- * voice's `ttsProvider` (turbo/multilingual/v3), which dialogue — always
- * eleven_v3 — could not.
+ * voice's own `ttsProvider` (turbo/multilingual/v3/v4).
  */
 async function synthesizeDialogueTrack(
   ctx: Parameters<HandlerFn>[1],
   resolved: ResolvedDialogueVoiceLine[],
   voices: readonly CharacterVoiceSpec[],
   languageCode: string | undefined,
+  dialogueProvider: string | undefined,
 ): Promise<string> {
   const distinctVoices = new Set(resolved.map((r) => r.voice))
   if (distinctVoices.size > 1) {
-    // Genuine multi-speaker, any voice mix → direct Dialogue v3 (one call).
-    const buf = await directElevenLabsDialogue(
+    // Genuine multi-speaker, any voice mix → direct dialogue (one call) on the
+    // model the route reserved; `dialogueProviderOf` is the funnel's own
+    // default rule, spelled here so the egress key and the bill agree.
+    // Audio only: the per-shot split by the model's timings is its own later
+    // design (spec phase 4); the transcript is not read here.
+    const { audio: buf } = await directElevenLabsDialogue(
       resolved.map((r) => ({ text: r.text, voice: r.voice })),
-      languageCode ? { languageCode } : undefined,
+      { provider: dialogueProviderOf(dialogueProvider), ...(languageCode ? { languageCode } : {}) },
     )
     return runPostProcessing(() =>
       uploadBufferToR2(buf, mediaObjectKey(ctx.jobId, "audio", "mp3"), "audio/mpeg", ctx.jobUserId),
@@ -1735,15 +1734,21 @@ const handleVoicedVideo: HandlerFn = async function handleVoicedVideo(job, ctx) 
     characterVoices?: CharacterVoiceSpec[]
     dialogue?: DialogueLine[]
     voicedAudioAddon?: number
+    /** The dialogue model the route reserved for a multi-speaker track (`DIALOGUE_PROVIDERS`); absent on jobs enqueued before it travelled → v3 dialogue. */
+    dialogueProvider?: string
   }
   const provider = d.provider ?? "minimax"
   const audioAddon = d.voicedAudioAddon ?? 0
   const mode = getVideoAudioCapability(provider).mode
 
-  const lines = d.dialogue && d.dialogue.length > 0 ? d.dialogue : parseAttributedDialogue(d.prompt ?? "")
+  const dialogueModel = dialogueProviderOf(d.dialogueProvider)
+  const plan = planVoicedDialogue({ ...d, dialogueProvider: dialogueModel })
   const voices = d.characterVoices ?? []
   const primaryVoiceId = voices[0]?.voiceId
-  const resolved = capDialogueLines(resolveDialogueVoices(lines, voices, primaryVoiceId), ctx.jobId)
+  const resolved = plan.lines
+  if (plan.dropped > 0) {
+    console.warn(`[worker] voiced-video ${ctx.jobId}: dropped ${plan.dropped} dialogue line(s) over the ${getDialogueCapabilities(dialogueModel).maxChars}-char dialogue cap`)
+  }
 
   console.log(`[worker] voiced-video ${ctx.jobId} (provider: ${provider}, mode: ${mode}, lines: ${resolved.length})`)
   await setJobProgress(job, ctx.jobId, 5)
@@ -1759,7 +1764,7 @@ const handleVoicedVideo: HandlerFn = async function handleVoicedVideo(job, ctx) 
     // hard-failing the job (the Studio-reported contract violation).
     try {
       const trackUrl = await withProgressRamp(job, ctx.jobId, { start: 5, cap: 30 },
-        () => synthesizeDialogueTrack(ctx, resolved, voices, d.languageCode))
+        () => synthesizeDialogueTrack(ctx, resolved, voices, d.languageCode, d.dialogueProvider))
       result = await withProgressRamp(job, ctx.jobId, { start: 30, cap: 85 },
         () => imageToVideo(d.imageUrl, provider, d.prompt, d.duration, undefined,
           { referenceAudioUrls: [trackUrl], generateAudio: false, resolution: d.resolution, aspectRatio: d.aspectRatio, seed: d.seed, negativePrompt: d.negativePrompt, referenceImageUrls: d.referenceImageUrls, referenceVideoUrls: d.referenceVideoUrls }))

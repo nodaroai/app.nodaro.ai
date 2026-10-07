@@ -83,6 +83,60 @@ describe("recipe catalog", () => {
     expect(body!).toContain("references")
   })
 
+  it("podcast-editing walks multicam → Preview → review → Render final, and names the stop-rule flag", () => {
+    const body = loadRecipe("podcast-editing")
+    expect(body).toBeTruthy()
+    // The multicam chain, in the verbs that run it.
+    for (const verb of ["transcribe", "audio_sync", "plan_edit", "switch_cameras", "apply_edl"]) {
+      expect(body!, verb).toContain(`\`${verb}\``)
+    }
+    expect(body!).toContain("diarize: true")
+    expect(body!).toContain("offsets")
+    // A speaker left out of speaker_map goes first to the source whose
+    // `speakers` list names them — Camera Switch's own order.
+    expect(body!.replace(/\s+/g, " ")).toContain("goes to the source whose `speakers` list names them, else the `wide` camera")
+    // Review on a Preview, then the final render.
+    expect(body!).toContain('quality: "proxy"')
+    expect(body!).toContain('quality: "final"')
+    expect(body!).toContain("Render final")
+    // A workflow run that holds a Preview render is refused off the editor
+    // only where the flag is on — the recipe must say both halves.
+    expect(body!).toContain("PREVIEW_STOP_RULE_ENABLED")
+    expect(body!).toContain("preview_review_required")
+  })
+
+  /** The backticked tokens in `body` that are neither a known field name nor
+   *  a registered tool. Single-word tokens count: `transcribe` is a verb too. */
+  function unknownVerbs(body: string): string[] {
+    const surface = JSON.parse(
+      readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../../__tests__/fixtures/tool-surface.json"), "utf8"),
+    ) as Record<string, string[]>
+    const known = new Set(surface["cloud/all"])
+    const fields = new Set([
+      "word_timestamps", "threshold_db", "min_silence_ms", "pad_ms", "target_duration_sec", "target_aspect",
+      "output_data", "plan_tier", "clip_key", "crossfade_ms", "speaker_map", "speaker_names", "transcript_source_id",
+      "offset_ms", "layout_hints", "error_message", "job_id", "preview_review_required", "preview_render_nested",
+      // Single-word field names, values and EDL vocabulary the recipe names.
+      "audio", "chapters", "clips", "clock", "count", "crossfade", "cut", "edl", "emphasis", "filler", "id",
+      "layout", "meta", "mic", "mode", "notes", "offsets", "pan", "ranges", "reason", "reference", "segments",
+      "silence", "sources", "speakers", "tighten", "transcript", "transition", "video", "wide", "xfade", "zoom",
+    ])
+    const tokens = [...body.matchAll(/`([a-z]+(?:_[a-z]+)*)`/g)].map((m) => m[1]!)
+    return [...new Set(tokens)].filter((t) => !fields.has(t) && !known.has(t))
+  }
+
+  it("podcast-editing names only verbs that exist", () => {
+    // Every backticked lower-case token that is not a known field name must be
+    // a registered tool — a renamed or imagined verb fails here.
+    expect(unknownVerbs(loadRecipe("podcast-editing")!)).toEqual([])
+  })
+
+  it("the verb guard catches a single-word verb that is not registered", () => {
+    // A renamed `transcribe` must not slip past: one-word tokens are checked too.
+    expect(unknownVerbs("Call `transcriber`, then `plan_edit`.")).toEqual(["transcriber"])
+    expect(unknownVerbs("Call `transcribe`, then `plan_edit`.")).toEqual([])
+  })
+
   it("product-photoshoot teaches the ownership fork", () => {
     const body = loadRecipe("product-photoshoot")
     expect(body).toBeTruthy()

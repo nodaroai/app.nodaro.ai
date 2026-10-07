@@ -3,9 +3,13 @@ import type {
   CardActionResult,
   CompetitorActionsResult,
   CompetitorCardsResult,
+  CompetitorCompareInput,
+  CompetitorCompareResult,
   CompetitorDetail,
   CompetitorDiscovery,
+  CompetitorHistory,
   CompetitorLessonsResult,
+  CompetitorListResult,
   CreateCompetitorInput,
   TrackedCompetitor,
   UpdateCompetitorInput,
@@ -24,13 +28,41 @@ export class CompetitorsResource {
 
   /** `GET /v1/competitors` → every tracked brand. */
   async list(): Promise<TrackedCompetitor[]> {
-    const res = await this.client.request<{ data: TrackedCompetitor[] }>("GET", "/v1/competitors")
-    return res.data
+    const res = await this.listWithPlan()
+    return [...res.data]
   }
 
-  /** `GET /v1/competitors/:id` → one brand with its latest scan (posts and cards) and its scan history. */
-  get(id: string): Promise<CompetitorDetail> {
-    return this.client.request<CompetitorDetail>("GET", `/v1/competitors/${encodeURIComponent(id)}`)
+  /** `GET /v1/competitors` → every tracked brand, with how many months of scans your plan keeps. */
+  listWithPlan(): Promise<CompetitorListResult> {
+    return this.client.request<CompetitorListResult>("GET", "/v1/competitors")
+  }
+
+  /**
+   * `GET /v1/competitors/:id` → one brand with its latest scan (posts and
+   * cards) and its scan history; with `scan`, the brand as of that scan.
+   */
+  get(id: string, options: { readonly scan?: string } = {}): Promise<CompetitorDetail> {
+    const query = options.scan ? `?scan=${encodeURIComponent(options.scan)}` : ""
+    return this.client.request<CompetitorDetail>("GET", `/v1/competitors/${encodeURIComponent(id)}${query}`)
+  }
+
+  /** `GET /v1/competitors/:id/history` → the brand's scans oldest first, per platform what each found and read (free). */
+  history(id: string): Promise<CompetitorHistory> {
+    return this.client.request<CompetitorHistory>("GET", `/v1/competitors/${encodeURIComponent(id)}/history`)
+  }
+
+  /**
+   * `GET /v1/competitors/:id/compare` → the brand over a period, and over a
+   * second one to compare with (free). A post belongs to a period by its
+   * publish date; a period is at most a year.
+   */
+  compare(id: string, input: CompetitorCompareInput): Promise<CompetitorCompareResult> {
+    const params = new URLSearchParams({ from: input.from, to: input.to })
+    if (input.vsFrom !== undefined && input.vsTo !== undefined) {
+      params.set("vsFrom", input.vsFrom)
+      params.set("vsTo", input.vsTo)
+    }
+    return this.client.request<CompetitorCompareResult>("GET", `/v1/competitors/${encodeURIComponent(id)}/compare?${params.toString()}`)
   }
 
   /** `POST /v1/competitors` → track a brand. Accounts take handles or links. */

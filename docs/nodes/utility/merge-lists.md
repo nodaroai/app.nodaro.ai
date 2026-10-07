@@ -24,7 +24,7 @@ The Merge Lists node takes lists from multiple upstream connections and merges t
 
 ## Inputs & Outputs
 
-**Inputs:** Two or more lists from upstream nodes.
+**Inputs:** Two or more lists from upstream nodes. Merge Lists always works on the whole lists it is wired to: it runs once, never once per item, whatever a wire's mode says.
 
 **Outputs:** The merged list.
 

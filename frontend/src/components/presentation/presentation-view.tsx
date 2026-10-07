@@ -50,7 +50,7 @@ import {
 import { EXECUTABLE_TYPES, isExecutableNode } from "@/components/editor/workflow-editor/types"
 import { useLiveRunEstimate } from "@/hooks/use-live-run-estimate"
 import { getModelIdentifier } from "@/components/editor/config-panels/helpers"
-import { getCachedCredits, prefetchModelCredits } from "@/ee/hooks/use-model-credits"
+import { getCachedCredits, prefetchModelCredits, isModelUnpriced } from "@/ee/hooks/use-model-credits"
 import { isExpandedClone, calculateMonetizedCost, getItemSortId } from "@nodaro/shared"
 import type { PresentationItem, ExposableField } from "@nodaro/shared"
 import { shareWorkflow } from "@/lib/api"
@@ -82,6 +82,8 @@ import { ViewModeSelector } from "./view-mode-selector"
 import { resolveAllowedModes, resolveViewMode } from "./resolve-view-mode"
 import { InputCard } from "./input-card"
 import { OutputCard, type FieldBadgeEntry } from "./output-card"
+import { anyOutputIsPreview, outputIsPreview } from "./render-preview"
+import { useAppRunGatedIds } from "@/components/render/app-render-review"
 import { ConfigFieldRenderer } from "./config-field-renderer"
 import { RichtextBlock } from "./richtext-block"
 import { RichtextEditor } from "./richtext-editor"
@@ -369,7 +371,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   // figure; the app's monetization markup is applied below.
   const dynamicEstimatedCost = useLiveRunEstimate(
     { nodes, edges, inputValues, enabled: hasCredits() },
-    { getCachedCredits, prefetchModelCredits },
+    { getCachedCredits, prefetchModelCredits, isModelUnpriced },
   )
   // Mirror the live base figure into the presentation store so other consumers
   // see it (it was seeded with the server's static figure at load).
@@ -733,7 +735,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
 
   // Node execution status
   const getNodeStatus = useCallback(
-    (nodeId: string): "idle" | "waiting" | "running" | "completed" | "failed" => {
+    (nodeId: string): "idle" | "waiting" | "running" | "completed" | "failed" | "skipped" => {
       if (isFullscreen) {
         const state = presNodeStates[nodeId]
         if (!state) return "idle"
@@ -741,6 +743,8 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
         if (state.status === "completed") return "completed"
         if (state.status === "failed") return "failed"
         if (state.status === "pending") return "waiting"
+        // The run skipped it for want of input: "nothing new this run" — a router-gated skip stays idle.
+        if (state.status === "skipped" && state.skipReason) return "skipped"
         return "idle"
       }
       const node = nodeMap.get(nodeId)
@@ -755,8 +759,13 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
     [isFullscreen, presNodeStates, nodeMap],
   )
 
+  // The app runner's run on show: nodes that waited for Render final. Their
+  // cards say so (OutputCard) and never fall back to the snapshot's output.
+  const gatedNodeIds = useAppRunGatedIds()
+
   const getFullscreenResult = useCallback(
     (nodeId: string) => {
+      if (gatedNodeIds?.has(nodeId)) return { url: undefined, text: undefined }
       // Check execution state first (from a recent run)
       const state = presNodeStates[nodeId]
       if (state?.output) {
@@ -789,7 +798,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
       if (!node) return { url: undefined, text: undefined }
       return getNodeResultWithInputFallback(node)
     },
-    [presNodeStates, presInputValues, nodeMap, suppressOutputFallback, inputNodeIdSet],
+    [presNodeStates, presInputValues, nodeMap, suppressOutputFallback, inputNodeIdSet, gatedNodeIds],
   )
 
   const getResult = useCallback(
@@ -899,16 +908,20 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   const [lightboxNodeId, setLightboxNodeId] = useState<string | null>(null)
 
   const mediaItems = useMemo(() => {
-    const items: { nodeId: string; type: "image" | "video"; url: string }[] = []
+    const items: { nodeId: string; type: "image" | "video"; url: string; quality?: "proxy" }[] = []
     for (const node of [...orderedInputNodes, ...visibleOutputNodes]) {
       const outputType = getOutputType(node.type)
       if (outputType !== "image" && outputType !== "video") continue
       const result = getResult(node.id)
       if (!result.url) continue
-      items.push({ nodeId: node.id, type: outputType, url: result.url })
+      // A render's take says it is a Preview: the same read the output card
+      // makes, by the url on show (render-preview.ts).
+      const runOutput = isFullscreen ? (presNodeStates[node.id]?.output as Record<string, unknown> | undefined) : undefined
+      const preview = outputIsPreview(node.type, node.data as Record<string, unknown>, runOutput, result.url)
+      items.push({ nodeId: node.id, type: outputType, url: result.url, ...(preview ? { quality: "proxy" as const } : {}) })
     }
     return items
-  }, [orderedInputNodes, visibleOutputNodes, getResult])
+  }, [orderedInputNodes, visibleOutputNodes, getResult, isFullscreen, presNodeStates])
 
   const lightboxIndex = lightboxNodeId ? mediaItems.findIndex((m) => m.nodeId === lightboxNodeId) : -1
   const lightboxItem = lightboxIndex >= 0 ? mediaItems[lightboxIndex] : null
@@ -987,7 +1000,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   }, [settings.cardMeta])
 
   // Render helpers for input/output cards
-  const renderInputCard = useCallback((node: WorkflowNode, variant?: "composer") => {
+  const renderInputCard = useCallback((node: WorkflowNode, variant?: "composer", maxLength?: number) => {
     const meta = settings.cardMeta?.[node.id]
     return (
       <InputCard
@@ -1005,6 +1018,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
         display={getMergedDisplay(node)}
         inputMode={meta?.inputMode}
         minLines={meta?.minLines}
+        maxLength={maxLength}
       />
     )
   }, [nodes, edges, isFullscreen, getInputSliceMap, getMergedDisplay, presUpdateInput, inputsReadOnly, isShareReadOnly, isRunning, isTerminal, handleOpenMedia, inputRefMaps, settings.cardMeta])
@@ -1234,6 +1248,10 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
     const progress = combinedProgress[node.id]
     const displayMode = settings.outputDisplayModes?.[node.id] ?? "individual"
     const { listResults, iterationTotal, iterationCompleted } = getListResults(node)
+    // A render's take says it is a Preview (F1): from the run on show, else the
+    // node's saved take (render-preview.ts).
+    const nodeData = node.data as Record<string, unknown>
+    const runOutput = isFullscreen ? (presNodeStates[node.id]?.output as Record<string, unknown> | undefined) : undefined
 
     // Gallery mode: single card with all results
     if (listResults && listResults.length > 1 && displayMode === "gallery") {
@@ -1254,6 +1272,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
           elementSize={elementSize}
           fieldBadges={fieldBadges}
           actions={nodeActions}
+          preview={anyOutputIsPreview(node.type, nodeData, runOutput, listResults)}
         />
       )
     }
@@ -1287,6 +1306,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                 elementSize={elementSize}
                 fieldBadges={i === 0 ? fieldBadges : undefined}
                 actions={resultActions}
+                preview={outputIsPreview(node.type, nodeData, runOutput, resultUrl)}
               />
             )
           })}
@@ -1308,6 +1328,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
         elementSize={elementSize}
         fieldBadges={fieldBadges}
         actions={nodeActions}
+        preview={outputIsPreview(node.type, nodeData, runOutput)}
       />
     )
   }, [getNodeStatus, getResult, getCardTitle, handleOpenMedia, combinedProgress, settings.outputDisplayModes, getListResults, isFullscreen, presNodeStates, settings.cardMeta, fieldBadgesByNode, hiddenResultKeys, isRevealingHidden, getNodeActions, getResultActions, t])
@@ -1319,7 +1340,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
         case "node": {
           const node = nodeMap.get(item.nodeId)
           if (!node) return null
-          return renderInputCard(node)
+          return renderInputCard(node, undefined, item.maxLength)
         }
         case "field": {
           const node = nodeMap.get(item.nodeId)
@@ -1346,6 +1367,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
                 }
               }}
               allowedValues={item.allowedValues}
+              maxLength={item.maxLength}
               readOnly={inputsReadOnly ?? (isShareReadOnly || isRunning || isTerminal)}
               customLabel={customTitle}
             />
@@ -1550,6 +1572,18 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
     [orderedInputNodes, visibleOutputNodes],
   )
 
+  // Whether the take a view shows is a Preview (F1): the same read the output
+  // cards make, from the run on show, else the node's saved take.
+  const isPreview = useCallback(
+    (nodeId: string, url?: string) => {
+      const node = nodeMap.get(nodeId)
+      if (!node) return false
+      const runOutput = isFullscreen ? (presNodeStates[nodeId]?.output as Record<string, unknown> | undefined) : undefined
+      return outputIsPreview(node.type, node.data as Record<string, unknown>, runOutput, url)
+    },
+    [nodeMap, isFullscreen, presNodeStates],
+  )
+
   // Shared props for all views
   const viewProps = {
     orderedInputNodes,
@@ -1557,6 +1591,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
     getNodeStatus,
     getResult,
     getCardTitle,
+    isPreview,
     onOpenMedia: handleOpenMedia,
     onOpenConfig: setConfigNode,
   }
@@ -1970,6 +2005,7 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
           onClose={() => setLightboxNodeId(null)}
           type={lightboxItem.type}
           url={lightboxItem.url}
+          quality={lightboxItem.quality}
           currentIndex={lightboxIndex}
           totalCount={mediaItems.length}
           onPrev={lightboxIndex > 0 ? handleLightboxPrev : undefined}

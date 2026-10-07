@@ -1,3 +1,4 @@
+import { executionOutcome } from "@nodaro/shared"
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
 import { z } from "zod"
 import type { FastifyInstance } from "fastify"
@@ -167,10 +168,13 @@ export function registerDiagnose({ server, session }: RegisterDiagnoseOpts): voi
 
         const jobMap = new Map<string, JobRow>()
         if (jobIds.length > 0) {
+          // The ids come from node_states, so they are pointers: read only
+          // the caller's own jobs (the execution is theirs, checked above).
           const { data: jobs } = await supabase
             .from("jobs")
             .select("id, error_message, input_data, credits_actual")
             .in("id", jobIds)
+            .eq("user_id", session.userId)
           for (const j of (jobs ?? []) as JobRow[]) {
             if (j.id) jobMap.set(j.id, j)
           }
@@ -203,8 +207,12 @@ export function registerDiagnose({ server, session }: RegisterDiagnoseOpts): voi
           nodeId,
           nodeType: s.nodeType ?? null,
           status: s.status ?? null,
+          // Why the run skipped it (`empty_input`); absent on a router-gated node.
+          ...((s as { skipReason?: string }).skipReason ? { skipReason: (s as { skipReason?: string }).skipReason } : {}),
           jobId: s.jobId ?? null,
         }))
+        // How a completed run ended: "nothing_new" when a node was skipped for want of input.
+        const outcome = executionOutcome(execution.status, nodeStates as Record<string, { status?: unknown; skipReason?: unknown }>) ?? null
         return {
           content: [
             {
@@ -214,6 +222,7 @@ export function registerDiagnose({ server, session }: RegisterDiagnoseOpts): voi
                   id: execution.id,
                   kind: "execution",
                   status: execution.status,
+                  outcome,
                   summary,
                   executionError: execution.error_message ?? null,
                   nodes,

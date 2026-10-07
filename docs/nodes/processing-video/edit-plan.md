@@ -1,6 +1,6 @@
 # Edit Plan
 
-> Turn a timed transcript into an edit decision list (EDL) plan: tighten a recording, find short clips, or mark chapters.
+> Turn a timed transcript into an edit decision list (EDL) plan: tighten a recording, find short clips, mark chapters, or cut a short trailer.
 
 **Cloud feature.** Edit Plan runs on Nodaro Cloud. On a self-hosted install, connect your instance to nodaro.ai (Integrations → nodaro.ai, or paste an API key) and the node relays to the cloud; without a connection the node saves on the canvas but cannot run.
 
@@ -8,11 +8,28 @@
 
 The Edit Plan node reads a **timed transcript** of a recording and produces an **edit decision list (EDL)** — a compact, JSON description of an edit that the [Apply EDL](./apply-edl.md) node renders into a finished cut. Edit Plan reads the transcript (and optional silence ranges), never the pixels, so it plans quickly and cheaply and hands the actual rendering to a downstream node.
 
-It has three modes:
+It has four modes:
 
 - **Tighten** — remove silence, filler words and false starts, and emit **one** EDL that is a cleaned-up version of the whole recording.
 - **Clips** — find the strongest short, shareable moments and emit **one EDL per clip**. The node's output fans out, so each clip becomes its own downstream render (wire the output into an Apply EDL node and every clip renders in parallel).
 - **Chapters** — mark chapter boundaries with titles and emit a `{ startMs, title }` list.
+- **Trailer** — build **one** short teaser EDL from the recording's strongest moments, in timeline order, joined with crossfades. The **Target aspect** setting is written into the EDL as a framing hint for the formats that follow (Apply EDL itself does not read it).
+
+### Trailer length
+
+A trailer's length is **fixed at 20–40 seconds**. There is no length setting: the Clips **count** and **target length** do not apply to a trailer. When the recording has fewer than 20 seconds of strong moments, the trailer still ships, shorter than 20 seconds, with a note in the EDL's `meta.notes` saying so (for example *"Only 14 s of strong moments were found; the trailer is shorter than 20 s."*). When no usable moment is found at all, the run fails and is refunded.
+
+### When Trailer is greyed out
+
+Trailer needs a server that can plan it. The editor asks the server which modes it plans ([`GET /v1/edit-plan/capabilities`](../../api-integration.md#edit-plan-modes)) and, until the server lists `trailer`, shows the Trailer option greyed out with the reason: **needs a plugin update** on nodaro.ai, and on a self-hosted install connected to nodaro.ai **Available once nodaro.ai supports it** or, when the install can't reach nodaro.ai, **Couldn't reach nodaro.ai — try again later**. A node already saved in Trailer mode (imported, or written into the workflow by an agent or the API) keeps its mode and shows a notice with the reason: on nodaro.ai, that it needs a plugin update and cannot plan a trailer yet; on a connected self-hosted install, **Available once nodaro.ai supports it** or **Couldn't reach nodaro.ai — try again later**. Its run is refused before anything is charged, however it starts (the canvas Run, a workflow or app run, the REST API, or the MCP `plan_edit` tool), except on a self-hosted install connected to nodaro.ai that can't reach it, where the job is retried instead (see below). Every refusal carries the same message: *Trailer mode is not available on this server yet. Choose another mode, or try again after the next update. You were not charged.*
+
+- **On nodaro.ai**, Trailer is refused until the server plans trailers. A workflow or app run that has already reserved credits has the reservation refunded. The MCP `plan_edit` tool also names the modes the server plans.
+- **On a self-hosted install (Community, Business) connected to nodaro.ai**, Edit Plan runs on nodaro.ai and is charged to the connected nodaro.ai account, so the install offers the modes nodaro.ai plans: Trailer becomes available as soon as nodaro.ai plans trailers. The install asks nodaro.ai which modes it plans and reuses the answer for up to a minute. The editor asks the install again when you open an Edit Plan node's settings or come back to the browser tab, at most once a minute, so a change shows up without reloading the page. Trailer is refused there only when nodaro.ai answers that it does not plan trailers yet; nodaro.ai's own check refuses the run. When nodaro.ai can't be reached, the editor offers only Tighten, Clips and Chapters, but a run in Trailer mode is not refused: the outage is temporary, so the job is retried under the usual job retry policy, and fails with *could not reach nodaro.ai* only when nodaro.ai still can't be reached on the last attempt. Nothing is relayed to nodaro.ai until the install has asked it which modes it plans, so nothing is charged to the connected nodaro.ai account for a failed attempt.
+- **On a self-hosted install that is not connected**, Edit Plan cannot run at all (see **Cloud feature** above), and the Trailer option stays greyed out.
+
+### An unknown mode
+
+A mode that is not one of the four above (for example a misspelt `"Clips"`, or a mode written by a newer tool) is refused in the same places and in the same words, naming the mode it got. It is never planned as Tighten.
 
 Because the plan is just data, an agent or you can decide *what* the edit is; the render happens downstream.
 
@@ -29,7 +46,7 @@ Because the plan is just data, an agent or you can decide *what* the edit is; th
 
 | Handle | Type | Description |
 |--------|------|-------------|
-| EDL | json | The edit plan. **Tighten** → one EDL object; **Clips** → a list of EDLs that fans out one downstream render per clip; **Chapters** → a `{ version, chapters }` object. Wire it into Apply EDL to render. |
+| EDL | json | The edit plan. **Tighten** and **Trailer** → one EDL object; **Clips** → a list of EDLs that fans out one downstream render per clip; **Chapters** → a `{ version, chapters }` object. Wire it into Apply EDL to render. |
 
 Once the node has a plan, it shows a badge: **Well-formed EDL**, or the number of issues. A Clips plan is checked clip by clip. Click the badge to see each issue and warning, in the validator's own words. The badge checks the plan's structure only. Apply EDL can still refuse a well-formed plan it cannot draw, for example one with a layout or one over 180 minutes; the Apply EDL node's own badge shows that before you run (see [The render check in the panel](./apply-edl.md#the-render-check-in-the-panel)). Warnings never make a plan fail the check: they flag values a newer version may accept, such as an unknown layout id.
 
@@ -39,13 +56,13 @@ The plan a workflow run makes (Run, Run from here) lands on the node like one fr
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| Mode | Select | tighten | `tighten` (clean up the whole recording), `clips` (find N short clips), or `chapters` (mark chapters). |
+| Mode | Select | tighten | `tighten` (clean up the whole recording), `clips` (find N short clips), `chapters` (mark chapters), or `trailer` (one 20–40 s teaser; greyed out until the server can plan it — see [When Trailer is greyed out](#when-trailer-is-greyed-out)). |
 | Tier | Select | standard | Reasoning tier: `economy` (fastest, cheapest), `standard`, or `premium` (highest fidelity). Affects both quality and credit cost. |
 | Instructions | Text | -- | Free-text steer for the plan (e.g. "keep the intro tight, drop the sponsor read"). |
 | Style guide | Text | -- | Longer editorial guidance the plan should follow. |
-| Clips: count | Number | -- | **Clips mode only.** How many clips to find (1–50). |
-| Clips: target length (s) | Number | -- | **Clips mode only.** Target clip length in seconds (5–180). |
-| Target aspect | Select | -- | Intended delivery aspect (`16:9`, `9:16`, `1:1`, `4:5`) — informs clip framing. |
+| Clips: count | Number | -- | **Clips mode only.** How many clips to find (1–50). Not used by Trailer. |
+| Clips: target length (s) | Number | -- | **Clips mode only.** Target clip length in seconds (5–180). Not used by Trailer, whose length is fixed at 20–40 s. |
+| Target aspect | Select | -- | **Clips and Trailer modes.** Intended delivery aspect (`16:9`, `9:16`, `1:1`, `4:5`) — informs framing, and is written into the EDL as a hint. |
 | Platform | Text | -- | Intended platform hint (informs pacing and length). |
 | Sources: role | Select (per source) | auto | `master audio`, `camera`, `wide`, `screen`. The plan follows the **master's clock**: the source marked *master audio*, otherwise the first source in the list. |
 | Sources: offset (s) | Number (per source) | -- | Seconds this recording started **after** the master (negative = before). Leave empty to use Audio Sync's measurement when its Offsets are connected (otherwise 0). A value you type always wins over a measured one. The master's own offset must be 0. |
@@ -53,17 +70,21 @@ The plan a workflow run makes (Run, Run from here) lands on the node like one fr
 
 ## Credit Cost
 
-Edit Plan is priced **per source-minute × tier**, plus a flat component for the extra per-clip work in Clips mode. The source duration is rounded up to a bucket (15 / 30 / 60 / 90 / 120 / 180 minutes) — the credit id carries that bucket.
+Edit Plan is priced **per source-minute × tier**, plus a flat component for the extra scoring work in Clips and Trailer modes. The source duration is rounded up to a bucket (15 / 30 / 60 / 90 / 120 / 180 minutes) — the credit id carries that bucket (`edit-plan:<mode>:<tier>:<bucket>m`).
 
 - **Per source-minute (by tier):** economy `2`, standard `4`, premium `8` credits per minute.
-- **Clips flat (by tier, added once in Clips mode only):** economy `10`, standard `20`, premium `40` credits.
-- **Formula:** `credits = per_minute(tier) × bucket_minutes + (mode === "clips" ? clips_flat(tier) : 0)`
+- **Flat (by tier, added once in Clips and Trailer modes):** economy `10`, standard `20`, premium `40` credits. Trailer uses the same flat as Clips, so a Trailer plan costs the same as a Clips plan of the same recording and tier.
+- **Formula:** `credits = per_minute(tier) × bucket_minutes + (mode is "clips" or "trailer" ? flat(tier) : 0)`
 
 | Example | Bucket | Formula | Credits |
 |---------|--------|---------|---------|
 | Tighten · standard · 45-min episode | 60 min | `4 × 60` | 240 |
 | Chapters · economy · 20-min episode | 30 min | `2 × 30` | 60 |
 | Clips · premium · 90-min episode | 90 min | `8 × 90 + 40` | 760 |
+| Trailer · standard · 60-min episode | 60 min | `4 × 60 + 20` | 260 |
+| Trailer · economy · 25-min episode | 30 min | `2 × 30 + 10` | 70 |
+
+The price shown when neither the mode nor the length is known is the largest in the table, **1,480** (premium Clips or Trailer at 180 minutes).
 
 The reserve is taken from the recording's own duration; on Nodaro Cloud the exact amount is settled against your account.
 
@@ -76,6 +97,8 @@ The cost on the node, the **Run** button and the run-confirm dialog is an **esti
 - **A source with no recorded length** — a direct audio link, or a Reference Audio node extracted before lengths were recorded — estimates at the **largest bucket (180 minutes)**. Re-extracting a YouTube source records its length.
 
 The estimate never borrows a length from the wired transcript: a transcript on the canvas is from the *previous* run, and after you swap in a longer episode it would under-quote the new one. When the length is unknown the estimate deliberately over-quotes instead — it is what the balance check before a run compares against, so a run is refused up front rather than failing partway after earlier nodes were charged. Whatever the estimate showed, what you are **charged is always checked against the recording's real duration**: the server measures the master itself before it reserves, and a run whose master cannot be measured is refused and refunded rather than charged on a guess.
+
+The listed price of a published template or app has no recording to read, so it counts Edit Plan at the node's own mode and tier at the 180-minute bucket.
 
 ## Multicam: recordings on different clocks
 
@@ -100,6 +123,8 @@ A hand-set offset always wins, so it is the fix for any single source audio coul
 
 ## API
 
+`GET /v1/edit-plan/capabilities` lists the modes this server plans and who answered (`{ modes: [...], source }`; see [Trailer greyed out](#when-trailer-is-greyed-out) and [Edit Plan modes](../../api-integration.md#edit-plan-modes)).
+
 `POST /v1/edit-plan` with `{ mode, planTier, transcript, sources: [{ id?, url, kind?, role?, speakers?, offsetMs? }], … }` — source ids up to 200 characters. Each source carries its own `offsetMs`: apply an Audio Sync result to the sources first. The [SDK](../../sdk-reference.md) (`client.edit.editPlan({ offsets })`), the [CLI](../../cli.md) (`nodaro edit plan --offsets`) and MCP (`plan_edit` with `offsets`) do that for you, with the checks above. The route itself refuses, before measuring or charging, a raw `offsets` field (`422 offsets_not_applied`) and an offset on the master or on the transcript's own source (`422 master_offset`).
 
 ## Common Use Cases
@@ -107,6 +132,7 @@ A hand-set offset always wins, so it is the fix for any single source audio coul
 - Tighten a long podcast or interview recording into a clean cut before rendering.
 - Auto-find shareable short clips from an episode and render each one in parallel.
 - Generate chapter markers with titles for a long-form upload.
+- Cut a short teaser trailer of an episode for social media.
 
 ## Tips
 

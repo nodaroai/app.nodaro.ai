@@ -13,7 +13,10 @@ export function registerSequenceExecutionGuard(app: FastifyInstance): void {
     const nodeId = extractNodeId(req.body)
     if (!workflowId || !nodeId) return
     const loaded = await loadWorkflowFor(req, reply, req.userId, workflowId, "view",
-      "id,user_id,workspace_id,visibility,nodes", "Failed to validate workflow execution")
+      "id,user_id,workspace_id,visibility,nodes", "Failed to validate workflow execution",
+      // Judges one node and hands nothing out: a preHandler on every canvas
+      // single-node POST must not pay a jobs lookup it throws away.
+      { resolveResultIds: false })
     if (!loaded.ok) return reply
     const nodes = Array.isArray(loaded.row.nodes) ? loaded.row.nodes as Array<{ id: string; data?: unknown }> : []
     const node = nodes.find((node) => node.id === nodeId)

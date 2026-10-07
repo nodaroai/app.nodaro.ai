@@ -86,6 +86,7 @@ export * from "./image-reference-doctrine.js"
 export * from "./scene3d-reference-doctrine.js"
 export * from "./prompt-wizard-categories.js"
 export * from "./resolve-prompt.js"
+export { stripAudioTags } from "./audio-tags.js"
 export * from "./node-prompt-fields.js"
 export * from "./factory-presets.js"
 export * from "./caption-treatments.js"
@@ -104,3 +105,6 @@ export * from "./ad-creative-analysis.js"
 
 // --- Picker art: option pictures + topic icons (editor and API) ---
 export * from "./picker-art/index.js"
+
+// --- What a text-requiring node would send (the orchestrator's empty-input skip reads it) ---
+export * from "./node-send-text.js"

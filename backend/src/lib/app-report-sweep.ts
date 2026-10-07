@@ -334,12 +334,18 @@ export async function sweepFailedExecutions(): Promise<{ scanned: number; report
 
   // Executions whose failure already produced a failed job are covered by the
   // job sweep — reporting them again would double every provider failure.
+  // Only the execution owner's job covers it (decided 2026-10-06; migration
+  // 474): these executions span many users, so `user_id` is compared here, row
+  // by row, rather than filtered — a row naming the execution is a pointer.
+  const ownerOf = new Map(rows.map((e) => [e.id, e.user_id]))
   const { data: failedJobs } = await (supabase.from("jobs") as any)
-    .select("workflow_execution_id")
+    .select("user_id, workflow_execution_id")
     .eq("status", "failed")
     .in("workflow_execution_id", rows.map((e) => e.id))
   const coveredByJob = new Set(
-    ((failedJobs ?? []) as Array<{ workflow_execution_id: string | null }>).map((j) => j.workflow_execution_id),
+    ((failedJobs ?? []) as Array<{ user_id: string | null; workflow_execution_id: string | null }>)
+      .filter((j) => j.workflow_execution_id !== null && j.user_id === ownerOf.get(j.workflow_execution_id))
+      .map((j) => j.workflow_execution_id),
   )
 
   const candidates = rows.filter((e) => !coveredByJob.has(e.id))

@@ -65,6 +65,8 @@ vi.mock("@/lib/config.js", () => ({
   isCommunity: () => false,
   isBusiness: () => false,
   hasAdmin: () => true,
+  // Flag off: the voiced add-on reads the flat dialogue row (the mocked 4), as today.
+  speechLengthPricingEnabled: () => false,
 }))
 
 vi.mock("@/lib/url-validator.js", async () => {

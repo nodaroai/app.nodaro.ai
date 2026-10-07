@@ -41,6 +41,7 @@ vi.mock("@/lib/admin-check.js", () => ({
 
 vi.mock("@/ee/billing/credits.js", () => ({
   estimateWorkflowCredits: vi.fn().mockReturnValue(10),
+  estimateWorkflowListingCredits: vi.fn().mockResolvedValue({ preview: 10, final: 0 }),
 }))
 
 // ---------------------------------------------------------------------------
@@ -49,6 +50,7 @@ vi.mock("@/ee/billing/credits.js", () => ({
 
 import { publishedAppsRoutes } from "../published-apps.js"
 import { supabase } from "../../lib/supabase.js"
+import { estimateWorkflowListingCredits } from "../../ee/billing/credits.js"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -290,6 +292,69 @@ describe("POST /v1/apps/publish", () => {
     expect(body.name).toBe("My App")
     expect(body.workflowId).toBe(TEST_WORKFLOW_ID)
     expect(body.creatorId).toBe(TEST_USER_ID)
+  })
+
+  // Length-based speech pricing (decided 2026-10-06): the stored price is
+  // computed BEFORE the app user's inputs exist, so every exposed text input
+  // reaches the estimator — "<nodeId>:<field>" → its character limit, or null
+  // when it has none (the author's stored text is a placeholder, never priced).
+  it("prices the listing with every exposed text input's limit (null = exposed, no limit)", async () => {
+    const workflow = {
+      ...DB_WORKFLOW,
+      nodes: [
+        { id: "s", type: "text-prompt", data: { text: "a".repeat(500) } },
+        { id: "t", type: "text-to-speech", data: { textSource: "direct", directText: "hello" } },
+      ],
+      edges: [{ source: "s", target: "t", targetHandle: "prompt" }],
+      settings: {
+        presentationSettings: {
+          inputItems: [
+            { type: "node", nodeId: "s" },
+            { type: "field", id: "f1", nodeId: "t", field: "directText", maxLength: 1200 },
+          ],
+        },
+      },
+    }
+    let workflowCallCount = 0
+    let appsCallCount = 0
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === "workflows") {
+        workflowCallCount++
+        if (workflowCallCount === 1) {
+          const mockSingle = vi.fn().mockResolvedValue({ data: workflow, error: null })
+          const mockEq = vi.fn().mockReturnValue({ single: mockSingle, maybeSingle: mockSingle })
+          return { select: vi.fn().mockReturnValue({ eq: mockEq }) } as never
+        }
+        return { update: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) }) } as never
+      }
+      if (table === "profiles") return mockProfilesQuery()
+      if (table === "published_apps") {
+        appsCallCount++
+        if (appsCallCount === 1) {
+          const mockLimit = vi.fn().mockResolvedValue({ data: [], error: null })
+          const mockOrder = vi.fn().mockReturnValue({ limit: mockLimit })
+          const mockIs = vi.fn().mockReturnValue({ order: mockOrder })
+          const mockEq = vi.fn().mockReturnValue({ is: mockIs })
+          return { select: vi.fn().mockReturnValue({ eq: mockEq }) } as never
+        }
+        const mockSingle = vi.fn().mockResolvedValue({ data: DB_PUBLISHED_APP, error: null })
+        return { insert: vi.fn().mockReturnValue({ select: vi.fn().mockReturnValue({ single: mockSingle, maybeSingle: mockSingle }) }) } as never
+      }
+      return {} as never
+    })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/apps/publish",
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { workflowId: TEST_WORKFLOW_ID, name: "My App" },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(estimateWorkflowListingCredits).toHaveBeenCalledWith(
+      expect.any(Array),
+      workflow.edges,
+      { publishType: "app", speechTextCaps: { "s:text": null, "t:directText": 1200 } },
+    )
   })
 
   it("returns 200 with version increment on re-publish", async () => {

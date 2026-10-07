@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from "vitest"
 import { buildLlmCreditIdentifier } from "@nodaro/shared"
+
+const flag = vi.hoisted(() => ({ on: false }))
+vi.mock("@/lib/config.js", async (importOriginal) => {
+  const orig = await importOriginal<typeof import("@/lib/config.js")>()
+  return { ...orig, speechLengthPricingEnabled: () => flag.on }
+})
 import { deploymentPriceDefinitions, resolveDeploymentPrices } from "../deployment-pricing.js"
 
 describe("deployment pricing identifiers", () => {
@@ -25,3 +31,25 @@ describe("deployment pricing identifiers", () => {
     for (const row of resolved.prices.values()) expect(row.status).toBe("rejected")
   })
 })
+
+describe("deployment pricing of a speech model", () => {
+  const SPEECH = ["elevenlabs-v3", "elevenlabs-v4", "elevenlabs-turbo", "elevenlabs-multilingual", "elevenlabs-dialogue", "elevenlabs-dialogue-v4"]
+
+  it("lists no per-100-characters row while length pricing is off: the price list is today's, with no price_not_configured entry", () => {
+    flag.on = false
+    for (const id of SPEECH) {
+      const identifiers = deploymentPriceDefinitions(id).variants.map((v) => v.identifier)
+      expect(identifiers, id).toEqual([id])
+    }
+  })
+
+  it("lists the row while it is on", () => {
+    flag.on = true
+    for (const id of SPEECH) {
+      const identifiers = deploymentPriceDefinitions(id).variants.map((v) => v.identifier)
+      expect(identifiers, id).toEqual([id, `${id}:per-100-chars`])
+    }
+    flag.on = false
+  })
+})
+

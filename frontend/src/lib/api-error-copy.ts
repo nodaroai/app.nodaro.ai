@@ -26,6 +26,7 @@ const REASON_KEY_BY_CODE: Readonly<Record<string, MessageKey>> = {
   unauthorized: "apiErr.reason.signIn",
   access_blocked: "apiErr.reason.accessBlocked",
   forbidden: "apiErr.reason.forbidden",
+  collection_limit_reached: "apiErr.reason.collectionLimitReached",
   not_found: "apiErr.reason.notFound",
   internal_error: "apiErr.reason.server",
   internal: "apiErr.reason.server",
@@ -70,7 +71,13 @@ const REASON_KEY_BY_CODE: Readonly<Record<string, MessageKey>> = {
   edition_required: "apiErr.reason.unavailableHere",
   not_available: "apiErr.reason.unavailableHere",
   feature_disabled: "apiErr.reason.unavailableHere",
+  // POST /v1/edit-plan: an unknown mode, or one this server does not plan yet.
+  mode_not_available: "apiErr.reason.editPlanModeUnavailable",
   billing_unavailable: "apiErr.reason.billingUnavailable",
+  // An app run's Render final (the app runner).
+  render_final_not_preview: "apiErr.reason.renderFinalNotPreview",
+  // Its run's earlier finals could not be read (transient): try again.
+  run_finals_unavailable: "apiErr.reason.server",
   conflict: "apiErr.reason.changedElsewhere",
   concurrent_modification: "apiErr.reason.changedElsewhere",
   revision_conflict: "apiErr.reason.changedElsewhere",
@@ -85,6 +92,8 @@ const REASON_KEY_BY_CODE: Readonly<Record<string, MessageKey>> = {
   // Competitors (the cloud plugin's routes). `invalid_account` stays out: its
   // message names the accounts that could not be read.
   scan_running: "apiErr.reason.scanRunning",
+  // DELETE /v1/app/:slug/runs/:runId/permanent on a run that has not settled.
+  run_in_progress: "apiErr.reason.runInProgress",
   already_tracked: "apiErr.reason.alreadyTracked",
   too_many_competitors: "apiErr.reason.tooManyBrands",
   nothing_to_scan: "apiErr.reason.nothingToScan",

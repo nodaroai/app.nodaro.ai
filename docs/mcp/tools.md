@@ -13,10 +13,10 @@ authorizing the connector; missing scopes cause tools to be omitted entirely
 |-------|-------|
 | `workflows:read` | `export_workflow`, `get_component_inputs`, `get_project`, `get_recast_status`†, `get_studio_production`†, `get_workflow`, `get_workflow_json`, `list_components`, `list_projects`, `list_studio_productions`†, `list_workflows`, `plan_studio_export`†, `validate_studio_plan`† |
 | `workflows:write` | `clone_studio_production`†, `create_studio_production`†, `create_workflow`, `delete_workflow`, `edit_studio_production`†, `import_recast_script`†, `import_studio_production`†, `import_workflow`, `share_studio_production`†, `update_workflow_json` |
-| `workflows:execute` | `add_captions`, `analyze_prompt`, `animate_image`, `apply_audio_fx`, `apply_edl`, `assemble_narrated_video`, `audio_isolation`, `audio_sync`, `combine_videos`, `continue_video_pro`, `create_explainer`†, `create_launch_video`†, `delete_app_run`, `download_youtube_audio`, `dubbing`, `edit_3d_scene`, `edit_image`, `enhance_prompt`, `extend_video`, `extract_frame`, `face_swap`, `forced_alignment`, `generate_3d_scene`, `generate_character`, `generate_character_motion`, `generate_creature`, `generate_creature_motion`, `generate_dialogue`, `generate_image`, `generate_location`, `generate_location_motion`, `generate_mask`, `generate_music`, `generate_object`, `generate_object_motion`, `generate_prompt`, `generate_script`, `generate_speech`, `generate_video`, `gif_to_video`, `image_collage`, `image_overlay`, `image_to_image`, `image_to_text`, `lip_sync`, `list_voices`, `loop_video`, `merge_video_audio`, `modify_image`, `modify_video`, `motion_transfer`, `overlay_images`, `plan_edit`†, `pro_3d_render`†, `reduce`, `relight_video`, `render_3d_scene`, `render_shot_sequence`, `resolve_recast_gate`†, `resolve_shot_sequence`, `run_app`, `run_component`, `run_workflow`, `save_image_defaults`, `scan_competitor`†, `separate_audio`, `silence_detect`, `slideshow`, `social_search`†, `speech_to_video`, `start_recast`†, `still_to_video`, `stop_video_pro`, `suggest_overlay_placement`, `suno_add_instrumental`, `suno_add_vocals`, `suno_convert_wav`, `suno_cover`, `suno_extend`, `suno_generate`, `suno_lyrics`, `suno_mashup`, `suno_music_video`, `suno_replace_section`, `suno_separate_stems`, `suno_style_boost`, `suno_upload_extend`, `switch_cameras`†, `text_to_audio`, `transcribe`, `trim_audio`, `trim_video`, `video_analysis`, `video_audit`, `video_upscale`, `voice_changer`, `voice_changer_pro`†, `voice_changer_pro_analyze`†, `voice_changer_pro_export`†, `voice_design`, `voice_remix` |
+| `workflows:execute` | `add_captions`, `analyze_prompt`, `animate_image`, `apply_audio_fx`, `apply_edl`, `assemble_narrated_video`, `audio_isolation`, `audio_sync`, `capture_site`, `combine_videos`, `continue_video_pro`, `create_explainer`†, `create_launch_video`†, `delete_app_run`, `download_youtube_audio`, `dubbing`, `edit_3d_scene`, `edit_image`, `enhance_prompt`, `extend_video`, `extract_frame`, `face_swap`, `forced_alignment`, `generate_3d_scene`, `generate_character`, `generate_character_motion`, `generate_creature`, `generate_creature_motion`, `generate_dialogue`, `generate_image`, `generate_location`, `generate_location_motion`, `generate_mask`, `generate_music`, `generate_object`, `generate_object_motion`, `generate_prompt`, `generate_script`, `generate_speech`, `generate_video`, `gif_to_video`, `image_collage`, `image_overlay`, `image_to_image`, `image_to_text`, `lip_sync`, `list_voices`, `loop_video`, `merge_video_audio`, `mix_audio`, `modify_image`, `modify_video`, `motion_transfer`, `overlay_images`, `plan_edit`†, `pro_3d_render`†, `reduce`, `relight_video`, `render_3d_scene`, `render_final`, `render_shot_sequence`, `resolve_recast_gate`†, `resolve_shot_sequence`, `run_app`, `run_component`, `run_workflow`, `save_image_defaults`, `scan_competitor`†, `separate_audio`, `silence_detect`, `slideshow`, `social_search`†, `speech_to_video`, `start_recast`†, `still_to_video`, `stop_video_pro`, `suggest_overlay_placement`, `suno_add_instrumental`, `suno_add_vocals`, `suno_convert_wav`, `suno_cover`, `suno_extend`, `suno_generate`, `suno_lyrics`, `suno_mashup`, `suno_music_video`, `suno_replace_section`, `suno_separate_stems`, `suno_style_boost`, `suno_upload_extend`, `switch_cameras`†, `text_to_audio`, `transcribe`, `trim_audio`, `trim_video`, `video_analysis`, `video_audit`, `video_upscale`, `voice_changer`, `voice_changer_pro`†, `voice_changer_pro_analyze`†, `voice_changer_pro_export`†, `voice_design`, `voice_remix` |
 | `jobs:read` | `diagnose_run`, `get_job`, `list_jobs`, `wait_for_job` |
-| `assets:read` | `browse_gallery`, `browse_uploads`, `competitor_cards`†, `competitor_lessons`†, `competitor_tried`†, `display_asset`, `get_app_run`, `get_asset`, `get_character`, `get_creature`, `get_location`, `get_object`, `list_characters`, `list_competitors`†, `list_creatures`, `list_favorites`, `list_locations`, `list_objects`, `list_saved_posts`† |
-| `assets:write` | `add_competitor`†, `approve_creature_main_image`, `approve_main_image`, `approve_object_main_image`, `approve_portrait`, `create_character`, `create_location`, `favorite_asset`, `mark_card_done`†, `prepare_audio_upload`, `prepare_image_upload`, `prepare_video_upload`, `recaption_character`, `recaption_creature`, `recaption_location`, `recaption_object`, `request_audio_upload`, `request_image_upload`, `request_video_upload`, `save_post`†, `update_character`, `update_location`, `upload_audio_widget`, `upload_image_widget`, `upload_video_widget` |
+| `assets:read` | `browse_gallery`, `browse_uploads`, `competitor_cards`†, `competitor_lessons`†, `competitor_tried`†, `display_asset`, `get_app_run`, `get_asset`, `get_character`, `get_creature`, `get_location`, `get_object`, `list_characters`, `list_collections`, `list_competitors`†, `list_creatures`, `list_favorites`, `list_locations`, `list_objects`, `list_saved_posts`†, `read_collection` |
+| `assets:write` | `add_collection_record`, `add_competitor`†, `approve_creature_main_image`, `approve_main_image`, `approve_object_main_image`, `approve_portrait`, `create_character`, `create_location`, `favorite_asset`, `mark_card_done`†, `prepare_audio_upload`, `prepare_image_upload`, `prepare_video_upload`, `recaption_character`, `recaption_creature`, `recaption_location`, `recaption_object`, `request_audio_upload`, `request_image_upload`, `request_video_upload`, `save_post`†, `update_character`, `update_location`, `upload_audio_widget`, `upload_image_widget`, `upload_video_widget` |
 | `credits:read` | `check_balance`†, `credit_transactions`† |
 | `apps:read` | `get_app_inputs`, `list_apps` |
 | `pipelines:read` | `get_pipeline_stage_chat`†, `get_pipeline_status`†, `pipeline_pending_approvals`† |
@@ -27,7 +27,7 @@ authorizing the connector; missing scopes cause tools to be omitted entirely
 | `workspaces:write` | `select_workspace`† |
 | `workflows:write` + `workflows:execute` | `describe_studio_production`†, `generate_studio_clip`†, `generate_studio_keyframe`†, `generate_studio_still`†, `new_studio_shot_from_frame`†, `revoice_studio_clip`†, `score_studio_production`†, `voice_studio_shot`† |
 
-**Always visible (no scope):** `build_ugc_cards`†, `build_ugc_clips`†, `build_ugc_creator`†, `get_node_skill`, `get_picker_catalog`, `get_recast_authoring_skill`†, `get_recipe`, `get_shot_shape`, `get_studio_production_skill`†, `list_brand_presets`, `list_models`, `list_shot_shapes`, `ping`, `start_film_director`†, `start_video_director`, `start_workflow_editor`, `validate_recast_script`†
+**Always visible (no scope):** `build_ugc_cards`†, `build_ugc_clips`†, `build_ugc_creator`†, `get_node_skill`, `get_picker_catalog`, `get_recast_authoring_skill`†, `get_recipe`, `get_shot_shape`, `get_studio_production_skill`†, `list_brand_presets`, `list_models`, `list_shot_shapes`, `ping`, `start_film_director`†, `start_video_director`, `start_workflow_editor`, `ugc_finish_clips`†, `ugc_split_speech`†, `validate_recast_script`†
 
 † Nodaro Cloud only: self-hosted Community and Business installs do not offer this tool.
 
@@ -145,6 +145,7 @@ agents do not need to set it up.
 | `create_workflow`, `delete_workflow`, `update_workflow_json`, `import_workflow` | Only touches the mcp project |
 | `export_workflow` | Can read **any** of your workflows (use it to pull work from a personal project into the mcp project via export → import) |
 | `run_workflow` | Only runs workflows in the mcp project |
+| `render_final` | Only runs workflows in the mcp project |
 
 This isolation keeps agent-managed workflows out of your personal projects.
 
@@ -285,6 +286,19 @@ graph or leave it empty.
 
 **Response:** Returns the new workflow's `id` and `name` in structured content.
 
+**Edges are normalized on every write** (`create_workflow`, `update_workflow_json`,
+`import_workflow`): a recorded legacy handle name is rewired to the node's current
+handle (for example `out` → `text` on `telegram-channel-feed`), a legacy `in` is
+placed by the other node's type (on `llm-chat`: `references` for an image source,
+`prompt` for everything else), an edge without an `id` is given one, and every change
+is listed in the reply and in `structuredContent.edgeAdjustments`. A handle the node
+does not declare is stored as sent and reported in `edgeWarnings` — the canvas draws an
+edge only on a handle the node renders, so read a node's handle ids from
+`get_node_skill`. An edge naming a node that does not exist, a self-loop, an edge with
+a missing endpoint, or the same connection sent twice without an `id` is dropped and
+reported in `edgeWarnings` (the orchestrator never ran it). Two edges with the same
+`id` refuse the whole write; nothing is stored.
+
 ---
 
 ### `delete_workflow`
@@ -357,6 +371,12 @@ text wrapped around that node's prompt at run time (settings-only; see
 | `expected_updated_at` | string (ISO 8601) | Optional; enables optimistic concurrency |
 | `expected_version` | integer | Optional; integer CAS from `get_workflow_json` (preferred over `expected_updated_at`) |
 | `delta` | object | Optional; id-keyed partial update applied atomically against `delta.base_version` (from `get_workflow_json`): `upsert_nodes`, `delete_node_ids`, `upsert_edges`, `delete_edge_ids`, `set: { name?, settings? }`. Mutually exclusive with every other content field. Prefer it over re-sending the graph. |
+
+**Edges:** normalized exactly as in `create_workflow` — legacy names rewired, missing
+ids given, `edgeAdjustments` / `edgeWarnings` in the response. The `delta` form too:
+its `upsert_edges` (each with its own `id` — the delta protocol matches by id) are
+judged against the graph the delta leaves behind (the stored nodes, minus the deleted
+ones, plus the upserted ones).
 
 **Studio productions:** a workflow whose stored `settings.studio` exists is a
 Studio production (its shots, results and plan live there). A `settings`
@@ -469,7 +489,9 @@ copies.
 plus `importReport` — `{ rehosted, unreachable[], skipped[], assetIdMap?,
 assetsSkipped? }` — saying which media was copied, which points at a private
 host this instance cannot reach (left as-is), and which was skipped with the
-reason. The text reply repeats the same, naming the affected nodes.
+reason. The text reply repeats the same, naming the affected nodes. The bundle's
+edges are normalized exactly as in `create_workflow` (`edgeAdjustments` /
+`edgeWarnings` beside `importReport`).
 
 Bundled entities (characters, objects, creatures, locations) are re-created
 under the caller, and both the entity nodes and every `@`-chip — in the graph or
@@ -498,9 +520,76 @@ registers an async task for progress tracking.
 | `client_request_id` | string | Optional retry token (8–128 chars of letters, digits, `_ - . :`). Reuse the same value when retrying after a timeout or dropped connection so the run is not started or charged twice; use a fresh value for a new run |
 | `inputs` | object | Optional; per-node input overrides keyed by node id |
 
-**Response:** `{ executionId: "...", name: "..." }` — use `executionId` with
-the jobs/executions tools or the SDK to poll for completion. MCP clients that
-support the `tasks/*` API and widget rendering will show live progress inline.
+**Response:** `{ executionId: "...", name: "..." }` — read the run with
+[`get_app_run(execution_id)`](#get_app_run): it is an **execution** id, not a job
+id (`get_job` will not find it), and `get_app_run` returns every node's status,
+text and media, why a node was skipped, and the run's `outcome` once it
+completes (`"nothing_new"` when the nodes had nothing to work on — a feed with
+no new posts — and nothing failed). MCP clients that support the `tasks/*` API
+and widget rendering will show live progress inline.
+
+A workflow whose Apply EDL render is set to **Proxy** stops at that preview for
+a person to review in the editor. An MCP run has nobody to review it, so it is
+refused with `preview_review_required` unless `inputs` sets the render to Final
+for this run: `{ "<render node id>": { "quality": "final" } }`. A sub-workflow
+holding such a render is refused with `preview_render_nested`. See
+[API integration](../api-integration.md#runs-that-would-stop-for-a-review)
+(rolled out under the `PREVIEW_STOP_RULE_ENABLED` flag; where it is off,
+nothing is refused).
+
+The run's results land on the workflow's canvas the way an editor-started run's
+do: live while the flow is open in the editor (it looks for such runs about every
+10 seconds), and on the next open otherwise — unless something was run in the
+editor since. The run is also listed in the **Executions** tab.
+
+### `render_final`
+
+Renders the final of an [Apply EDL](../nodes/processing-video/apply-edl.md#render-final)
+render whose run stopped at its Preview, once the user has reviewed it — the
+same **Render final** the editor's button runs: the render at **Final** for this
+run only (the node keeps its own Quality), and every node after it; with Camera
+Switch between the Edit Plan and the render, Camera Switch runs again first. The
+server works out which nodes run, by the editor's own rule; the Edit Plan is not
+run again (the render reads its plan with the user's review applied). It
+continues the execution that stopped at the preview
+([continuing a run](../api-integration.md#continuing-a-run)): every node it does
+not run hands on what that execution produced.
+
+**Scope:** `workflows:execute`
+
+**Input:**
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `workflow_id` | UUID string | Must be in the mcp project |
+| `render_node_id` | string | The Apply EDL render node to finalize |
+| `execution_id` | UUID string | The execution that stopped at the preview: your own `completed` run of this workflow |
+| `confirm` | boolean | Omit to get the price quote only. `true` runs it — only after the user accepted the quoted credits |
+| `client_request_id` | string | Optional retry token, as on `run_workflow` |
+
+**Without `confirm`** it returns the quote and runs nothing: `{ renderNodeId,
+nodeIds, inputOverrides, estimatedCredits, sufficient, available, confirmed: false }`
+— the nodes the run executes, the override it runs with (`{ "<render node id>":
+{ "quality": "final" } }`), the credits it is estimated at, whether the user's
+credits cover them and their spendable credits (`available` is `null` when a
+workspace budget or a deployment's operator pays; all three are `null` in an
+edition without credits). When they cannot cover it, the tool says so instead of
+asking for confirmation. **With `confirm: true`** it starts the run: `{ executionId, nodeIds,
+estimatedCredits, confirmed: true }`; read it with
+[`get_app_run(execution_id)`](#get_app_run).
+
+Refusals come back as tool errors with their code:
+insufficient credits (the run is checked against the user's credits on the
+quoted figure before any execution exists),
+`render_final_node_not_found` (the workflow has no such node),
+`render_final_not_a_render` (the node is not an Apply EDL render), the
+[continuation codes](../api-integration.md#continuing-a-run)
+(`continuation_not_found`, `continuation_workflow_mismatch`,
+`continuation_version_mismatch`, `continuation_not_completed`), and
+`preview_review_required` when another render after this one still reads Proxy
+(rolled out under the `PREVIEW_STOP_RULE_ENABLED` flag; where it is off, that is
+not refused).
+Writing the review (the Edit Plan's edits) is not part of this tool.
 
 ---
 
@@ -598,13 +687,14 @@ prompt with no questions round-trip.
 | `modify_video` | Video-to-video transformation — apply a style or prompt transformation to an existing clip. Accepts `video_url`/`video_asset_id`, `prompt`, `model`, `resolution`, `seed` plus per-model levers (`duration`, `aspect_ratio`, `audio`, `multi_shots`, `reference_image_url`). **`seedance-2-5`** is a whole-clip EDIT: your prompt is sent as `edit @video_1 as follows: …`, the result keeps the source clip's length and aspect ratio (clip must be 4–30 s), and `reference_image_urls` (up to 30) attaches images you cite positionally as `{image:1}`, `{image:2}` in the prompt. It is billed like a Generate Video Seedance 2.5 reference-video run — input + output seconds on the `-ref` ladder, reserved for the longest clip and settled to the delivered length (see [Video to Video](../nodes/ai-video/video-to-video.md#seedance-25-edit--credits)). |
 | `relight_video` | Relight & switch/composite a clip from its own pixels (Beeble SwitchX). Accepts `video_url`/`video_asset_id` + `prompt` and/or `reference_image_url`, `alpha_mode` (auto/fill/select/custom), `mask_url`, `alpha_keyframe_index`, `max_resolution` (720/1080), `seed`. |
 | `trim_video` | Trim a video (`video_url` or `video_asset_id`) by time — `start_time` / `end_time`, in seconds — or by frames — `trim_start_frames` / `trim_end_frames`, which win over the times. `smart_loop_cut` instead cuts at the trailing frame closest to the first one, for a seamless loop (`smart_loop_cut_lookback` sets how many frames it searches); `silent` strips the audio. |
-| `combine_videos` | Concatenate 2 or more clips (`videos[]`, each a `url` or an `asset_id`) with an optional `transition` and `transition_duration`. `audio_mode` keeps, crossfades or removes the soundtracks (`audio_crossfade_duration`, `audio_crossfade_curve` — the sound only; the picture is untouched). On Nodaro Cloud, `smart_cut` finds the best cut point between continuation clips (`smart_cut_mode`, `smart_cut_frames_prev` / `smart_cut_frames_next`). |
+| `combine_videos` | Concatenate 2 or more clips (`videos[]`, each a `url` or an `asset_id`) with an optional `transition` and `transition_duration`. `audio_mode` keeps, crossfades or removes the soundtracks (`audio_crossfade_duration`, `audio_crossfade_curve` — the sound only; the picture is untouched). `trim_start_frames` / `trim_end_frames` (0–120, default 1 and 2) are the frames cut at each join — pass them to pin a frame-exact cut; they are also the `smart_cut` fallback. On Nodaro Cloud, `smart_cut` finds the best cut point between continuation clips (`smart_cut_mode`, `smart_cut_frames_prev` / `smart_cut_frames_next`). |
 | `assemble_narrated_video` | Fit N ordered (clip, voice) blocks into one narrated MP4 — a shorter voice is centered over its clip with silence padding, a longer voice slows the clip to fit (capped, holding the last frame beyond the cap); audio is never cropped. Accepts `blocks[]` (1–60, each `video_url`/`video_asset_id` + optional `audio_url`/`audio_asset_id`), `voice_volume` (default 100), `clip_audio_volume` (default 40), `max_slowdown` (default 1.5), `trim_start_frames`, `trim_end_frames`. |
 | `merge_video_audio` | Merge a video track and an audio track into a single output file. |
 | `still_to_video` | One still image + one audio track → MP4 (local FFmpeg, zero credits). The output length is the audio's length — no duration parameter. Optional `motion` (zoom / pan / ken-burns) + `intensity`, `resolution`, `aspect_ratio`, `fps`, `fit`/`pad_color`. |
 | `gif_to_video` | Animated GIF → H.264 MP4 (local FFmpeg, zero credits). Bridges a GIF into the video pipeline as a motion reference for models that reject GIF input (e.g. Seedance). Accepts `gif_url`/`gif_asset_id`; optional `loop_to_minimum` + `target_duration` (seam-aware looping), `interpolate`, `alpha_background`. |
 | `slideshow` | 2–100 images + one optional audio track → MP4 slideshow (local FFmpeg, zero credits). Audio-anchored timing (equal split / `image_durations` pins with disclosed proportional scaling); silent without audio. `transition` + `transition_duration`, `motion` incl. `alternate`, resolution/aspect/fps/fit levers. |
 | `overlay_images` | Place 1–20 timed image layers over a video (`video_url` or `video_asset_id` — a video job id, e.g. a `combine_videos` result, or an upload id) — local, deterministic, no AI; the base audio is kept untouched. Each `layers[]` item: `url` or `asset_id` (an image job or upload — an `image_overlay` result works), `start` and optional `end` in seconds (no `end` = to the end of the video), and a placement — `preset` `card` / `corner-badge` (+ `corner`, default bottom-right) / `full-frame`, or a box in `image_overlay`'s percent units (`anchor`, `x`, `y`, `width`, `height`, `fit` contain / cover); an explicit box field overrides the preset, and a layer with neither is a corner badge (bottom-right, or the `corner` it names) — plus `opacity`, `animate` (fade + slight scale, default on) and `z_index`. Optional `output_aspect` (16:9 / 9:16 / 1:1 / 4:5) with `base_fit` and `background_color`. Layers past the end are clipped or skipped and an animated image renders its first frame — reported in the job output's `warnings[]`. An unresolvable id is refused before anything runs, naming its position (`layers[1]: …`). 20 credits per run on Nodaro Cloud; self-hosted installs run it with zero keys. The result's job id chains into `add_captions` as `video_asset_id`. |
+| `capture_site` | Captures a web page as real phone-width screenshots: a full-page image plus up to 8 section stills (`max_stills`, 3–8) cut to a phone-card shape, a section map (heading, position, short text per section) and the exact figures from the page text. Consent pop-ups are hidden, never accepted. A page that blocks automated visitors or comes back empty fails and is refunded; one whose robots.txt disallows it is refused before anything runs. Returns a job id; read `outputData.stills` (`assetId` and `url` each) from `wait_for_job`. The stills are stored in your media (hidden from the picker until saved) and count toward storage. 10 credits per capture on Nodaro Cloud; self-hosted installs need an Apify token or a nodaro.ai connection. Listed only where capture is enabled on the install (`SITE_CAPTURE_ENABLED`, on by default). |
 | `add_captions` | Burn subtitles/captions onto a video. Accepts `video_url` and caption style options. On `subtitle` (the default style) `text` is burned as-is as ONE static block for the whole video — never transcribed over, with or without styling levers; omit `text` to caption the speech instead. On a kinetic style `text` is only the fallback, used when transcription returns nothing or `auto_transcribe` is `false`. Kinetic styles (`word-highlight`, `karaoke`, `tiktok-words`, `word-pop`, `bouncy`) take a `look` preset — `outline` (Montserrat 900, UPPERCASE, black outline, yellow spoken word — the TikTok read) or `clean` — where on the kinetic styles an UNSET look renders as `outline` (on `subtitle` an unset look is `clean`). The styling levers `font_family`, `font_weight`, `stroke_color`/`stroke_width`, `uppercase`, `position_y`, `max_words_per_line` and `look` **also apply to the static `subtitle` style** (a styled `subtitle` renders via Remotion and bills at the kinetic price; a bare plain-text subtitle stays on the cheap FFmpeg path). Only `highlight_color` (the spoken-word colour) and `animate` stay kinetic-only and are rejected on `subtitle`. `animate` (default `true`): set `false` to freeze the per-word motion while keeping grouping, line-holding and the highlight colour (set `highlight_color`=`color` too for a fully static line). `max_words_per_line` (integer 1–20, optional, no extra credits on the kinetic styles) caps the words on one caption line — or one `tiktok-words` page — **on top of** the ~85 % frame-width budget, sentence ends and ≥0.5 s pauses: `1`–`2` gives the punchy CapCut read, unset fits the width; it applies to `word-highlight`, `karaoke`, `bouncy`, `tiktok-words` and `subtitle`, and is inert on `word-pop`. It counts WORDS, not caption entries, so it holds for any input — a phrase-level entry holding more than N words is split into sub-phrases of at most N words — and on a `text` subtitle it only sets the line breaks of the one static block. `word-highlight`, `karaoke` and `bouncy` all show ONE held line at a time (`karaoke`/`bouncy` no longer draw the whole transcript as one block); `word-pop` keeps a word up until the next one starts and a `tiktok-words` page never spans a sentence end or a pause (both hold at most 1.5 s). `transcribe_provider` picks the auto-transcribe engine — `incredibly-fast-whisper` (default), `elevenlabs-stt` or `whisper`: a kinetic style needs word timings, so `whisper` is refused there when transcription is the render's only caption source, while `subtitle` needs phrase timing only and works with any engine. A Remotion render keeps the source frame rate (whole number, 15–60 fps; a variable-frame-rate or very long source renders at 30 fps). `segments[]` applies different treatments to non-overlapping time ranges in one call (a segment that names its own `look` does not inherit the top-level explicit levers; `max_words_per_line` is inherited from the top level unless the segment sets its own). Full rules: [Add Captions](../nodes/processing-video/add-captions.md). |
 | `extract_frame` | Extract a single frame from a video at a given timestamp. Returns an image URL. |
 | `lip_sync` | Drive lip-sync on a video or portrait image from an audio track. Accepts `video_url` / `image_url` + `audio_url`, plus `model` (kling-avatar, kling-avatar-pro, infinitalk, omnihuman-1-5, seedance-2(-fast), minimax-h3, latentsync, wav2lip, video-retalking, sadtalker), `prompt`, `resolution`, and (omnihuman-1-5) `seed` / `fast_mode`. `audio_duration_sec` is the audio's length: models billed by the second reserve and charge by it, and the audio is measured first when it is left out. |
@@ -618,9 +708,9 @@ prompt with no questions round-trip.
 | `video_audit` | Re-watch a video against its analysis and fix what's wrong — a fix-and-disclose pass: corrections are applied under guards and every one is reported, nothing is silently rewritten. Pass `analysis` from a prior `video_analysis`/`video_audit` call to re-verify it, or omit it to auto-run a fast analysis first. See [`video_audit`](#video_audit) below. |
 | `silence_detect` | Detect the silent ranges in a recording — one ffmpeg pass over the source's audio, no transcript and no pixels. `audio_url` accepts an audio OR a video source. Tune `threshold_db` (dBFS, at or below 0), `min_silence_ms`, `pad_ms`. Returns a job id — the silence result is the job's `output_data.json` (`{ ranges, durationMs }`); pass THAT object (not the whole `output_data`) as `plan_edit`'s `silence`, or read `ranges` for a hand-cut EDL. |
 | `audio_sync` | Measure how far apart the clocks of 2–6 recordings of one conversation are (camera files and/or a master mic), by cross-correlating their audio. `sources` is a list of `{ id, url }` (audio OR video URLs, unique ids); `reference` (one of the ids, default the first) is the clock every offset is measured against. Returns a job id — the result is the job's `output_data.json` (`{ reference, offsets: [{ sourceId, offsetMs, confidence, driftMsPerHour }], notes }`, with referenceMs = sourceMs + offsetMs). Low confidence and clock drift are reported in `notes`, never corrected. To cut the recordings together, pass the result to `plan_edit` as `offsets`, with the same source ids. Credits: 10 × (sources − 1). |
-| `apply_edl` | Render an edit-decision list (EDL) into a finished cut. Pass `edl` (object or JSON string) — the plan from a `plan_edit` step, or hand-written to the `@nodaro/shared` `Edl` contract (integer-ms `segments` on a `master` clock, each naming a `sources[].id`; a video render needs a `video` source on every segment). Media resolves from each source's `url`; `sources` optionally overrides those URLs positionally. `output`: `video` (default) or `audio`; `quality`: `final` (default) or `proxy` (a 720p preview); optional `transcript` is remapped through the cut. A malformed EDL — or one longer than 180 minutes of output, the per-render limit — is rejected up front naming the offending segment and rule (or the length and the limit). Returns a job id — the rendered file is the job result. Priced per rendered minute at the rate of its `quality`: a `proxy` preview (video or audio) has its own, lower rate. |
-| `plan_edit` | (Cloud only) Turn a timed `transcript` into an edit-decision-list (EDL) plan for a recording — `mode`: `tighten` (clean up the whole recording), `clips` (find N short clips), or `chapters` (mark chapters with titles). Reads the transcript, never pixels; pass 1–6 media `sources`. Multicam: give each source the `id` you gave `audio_sync` and pass its result (`output_data.json`) as `offsets` — each source's measured offset is written onto it, on the master's clock (the `master-audio` source, else the first); a source's own `offset_ms` wins. Refused before any charge when a source was not measured or matched weakly (confidence < 0.5), the master was not measured, the master has a non-zero `offset_ms`, `transcript_source_id` names a source off the master's clock, or `offsets` is given while a source has no `id`. Each cut goes on the first camera with picture for it; what no camera filmed is dropped as `no-picture`. Returns a job id — the EDL plan is in the job's `output_data`, ready to feed an Apply EDL render. |
-| `switch_cameras` | (Cloud only) Choose which camera shows each cut of an edit by who is speaking (multicam). Pass `edl` (one `plan_edit` result) and the diarized `transcript` (transcribe with speaker detection); `speaker_map` maps a speaker label to the EDL source id of their camera (`""` = no camera of their own; a speaker left out or set to `""` gets the `wide` source, else any camera with picture), `speaker_names` renames speakers. The sound never changes; a new speaker on the same camera still gets their own named segment. Refused before any charge when the transcript has no speaker labels, or when `edl` is not one master-clock edit (a clip set, a chapters plan, a rendered output's EDL) — pass one clip's EDL per call. Returns a job id — `output_data.json` is the switched EDL for `apply_edl`, `output_data.transcript` the named transcript. Flat 10 credits per run. |
+| `apply_edl` | Render an edit-decision list (EDL) into a finished cut. Pass `edl` (object or JSON string) — the plan from a `plan_edit` step, or hand-written to the `@nodaro/shared` `Edl` contract (integer-ms `segments` on a `master` clock, each naming a `sources[].id`; a video render needs a `video` source on every segment). Media resolves from each source's `url`; `sources` optionally overrides those URLs positionally. `output`: `video` (default) or `audio`; `quality`: `final` (default) or `proxy` (a 720p preview — always private, labelled Preview); optional `transcript` is remapped through the cut; optional `clip_key` (`"<first inMs>-<last outMs>"` of the clips-mode `plan_edit` clip this render cuts) is stamped back on the result as `output_data.clipKey`, so the renders of a clip pack can be matched to their clips. A malformed EDL — or one longer than 180 minutes of output, the per-render limit — is rejected up front naming the offending segment and rule (or the length and the limit). Returns a job id — the rendered file is the job result, whose `output_data.quality` says which it is. Priced per rendered minute at the rate of its `quality`: a `proxy` preview (video or audio) has its own, lower rate. |
+| `plan_edit` | (Cloud only) Turn a timed `transcript` into an edit-decision-list (EDL) plan for a recording — `mode`: `tighten` (clean up the whole recording), `clips` (find N short clips), `chapters` (mark chapters with titles), or `trailer` (one short teaser from the strongest moments). `trailer` is refused before any charge, with a message naming the modes the server plans, until the server can plan a trailer — the same check as the editor's greyed-out option ([`GET /v1/edit-plan/capabilities`](../api-integration.md#edit-plan-modes)). Reads the transcript, never pixels; pass 1–6 media `sources`. Multicam: give each source the `id` you gave `audio_sync` and pass its result (`output_data.json`) as `offsets` — each source's measured offset is written onto it, on the master's clock (the `master-audio` source, else the first); a source's own `offset_ms` wins. Refused before any charge when a source was not measured or matched weakly (confidence < 0.5), the master was not measured, the master has a non-zero `offset_ms`, `transcript_source_id` names a source off the master's clock, or `offsets` is given while a source has no `id`. Each cut goes on the first camera with picture for it; what no camera filmed is dropped as `no-picture`. Returns a job id — the EDL plan is in the job's `output_data`, ready to feed an Apply EDL render. |
+| `switch_cameras` | (Cloud only) Choose which camera shows each cut of an edit by who is speaking (multicam). Pass `edl` (one `plan_edit` result) and the diarized `transcript` (transcribe with speaker detection); `speaker_map` maps a speaker label to the EDL source id of their camera (`""` = no camera of their own; a speaker left out goes to the source whose `speakers` list names them, else the `wide` source, else any camera with picture — one set to `""` skips the `speakers` list), `speaker_names` renames speakers. The sound never changes; a new speaker on the same camera still gets their own named segment. Refused before any charge when the transcript has no speaker labels, or when `edl` is not one master-clock edit (a clip set, a chapters plan, a rendered output's EDL) — pass one clip's EDL per call. Returns a job id — `output_data.json` is the switched EDL for `apply_edl`, `output_data.transcript` the named transcript. Flat 10 credits per run. |
 | `get_recast_authoring_skill` | (Cloud only) The authoring guide for writing a movie as JSON — the preferred lane for end-to-end "make me a video of X" requests. Generated from the platform's own planner doctrine. Ungated. See [Recast authoring](./recast-authoring.md). |
 | `validate_recast_script` | (Cloud only) FREE validation of an authored script; returns `{ valid, errors (path+hint), warnings }` for the repair loop. Ungated, never charges. |
 | `import_recast_script` | (Cloud only) Turn a validated script into a real recast project (visible at recast.nodaro.ai). Free. Requires `rights_attested: true`, which must reflect the **user's own** confirmation of ownership — authored recasts render Faithful, exactly as written. `workflows:write`. |
@@ -647,7 +737,9 @@ prompt with no questions round-trip.
 | `score_studio_production` | (Cloud only) Write the film a soundtrack from a `prompt` describing the music — one track for the whole production, not per scene. Spends credits and returns a job id; the track reaches the production only on your next `get_studio_production` (`get_job` / `wait_for_job` land nothing). Needs both `workflows:write` and `workflows:execute`. |
 | `build_ugc_creator` | (Cloud only) Prepares the creator for a UGC-style video — newly sampled, a saved Character, or the caller's own photo — and returns the arguments for the next generation call. Ungated and free; using a saved Character needs `assets:read`. Used by the ugc-website recipe (get_recipe). |
 | `build_ugc_clips` | (Cloud only) Checks a UGC video script — every problem at once, each with a fix — and returns one `generate_video` call per clip, the call that joins them, and a credit quote for the rest of the video. Ungated, free. Used by the ugc-website recipe (get_recipe). |
-| `build_ugc_cards` | (Cloud only) Times the screenshot cards and captions from word timings (`forced_alignment` or `transcribe`) and returns the `overlay_images` layers and the `add_captions` segments. Ungated, free. Used by the ugc-website recipe (get_recipe). |
+| `build_ugc_cards` | (Cloud only) Times the screenshot cards and captions from word timings (`forced_alignment` or `transcribe`) and returns the `overlay_images` layers and the `add_captions` segments. Optional `caption_style` sets how the captions after the opening line look: `body-captions` (word by word, the default), `karaoke`, `clean-subtitles`, or `none`. Ungated, free. Used by the ugc-website recipe (get_recipe). |
+| `ugc_split_speech` | (Cloud only) Cuts a UGC video's recorded speech into segments at its own pauses, each saved as an audio file with a short silence either side. Takes the speech, its word timings and the script; returns a job whose output lists the segments for `build_ugc_clips`. Charges a flat fee per call. |
+| `ugc_finish_clips` | (Cloud only) Checks each rendered clip against the audio it was given, puts that original audio on each clip, trims the dead air between words and returns the finished clips in order. If a clip does not match its audio it names the clips to render again and changes nothing. Charges a flat fee per call. |
 
 **Seedance 2 (`model: "seedance-2"`)** accepts `resolution: "4k"` and `aspect_ratio: "adaptive"` (plus `"21:9"`) on `generate_video` / `animate_image` — both fields are free strings, forwarded to the route unaltered. The other variants are resolution-capped: `seedance-2-fast` and `seedance-2-mini` are **480p / 720p only** (no 1080p, no 4K), while `seedance-2-5` spans **480p / 720p / 1080p** (no 4K; 1080p added 2026-08-17). **`seedance-2-5`** also trades 4K for length — up to **30s in one call** vs 15s — and accepts 30 image / 10 video / 10 audio references. Frame inputs and references coexist — when any reference (image / video / audio) is wired alongside `image_url` / `end_frame_url`, the frames become **prompt-directed `Image N` references** rather than pinned endpoints; the resolver decides the mode, so there is no toggle. Reference **videos** are billed `unit × (input + output)` duration — the per-second `-ref` rate (see the [Generate Video node pricing](../nodes/ai-video/generate-video.md)) is scaled by the probed input-video duration plus the output duration, so longer source clips reserve more.
 
@@ -655,7 +747,9 @@ prompt with no questions round-trip.
 
 **Wan 3.0 (`model: "wan-3"` / `"wan-3-prime"`)** takes `reference_image_urls` (≤ 10), `reference_video_urls` (≤ 5) and `reference_audio_urls` (≤ 5) on `generate_video` / `animate_image`, each reference video and audio clip 1–15 s with a ≤ 15 s combined cap per type. Its references are mutually exclusive with `image_url` / `end_frame_url` **on the provider's wire**, so — exactly as on Seedance 2 and Hailuo 3 — the platform folds instead of failing: with any reference wired, a start/end frame is appended to `reference_image_urls` after your own images (their ordinals unchanged) and named in the prompt as the opening/closing frame. The pair is never sent together, and the call is not rejected. `duration` is a whole number of seconds from **2 to 30** (default 5); with a reference video wired, input duration + output duration must be ≤ 30 s. `resolution` is `"480p"` / `"720p"` / `"1080p"` — send the lowercase display value (the platform normalizes to the provider's uppercase enum), and an omitted or unsupported value renders and bills at 720p. `aspect_ratio` defaults to `"adaptive"`; the model's set is `adaptive` / `16:9` / `4:3` / `1:1` / `3:4` / `9:16` (no `21:9`). Audio is on by default and can be switched off. Reference-video runs bill output seconds only — no input-duration surcharge. `wan-3-prime` is the high-speed SKU: faster, priced above `wan-3`, identical schema.
 
-**Gemini Omni Flash (`model: "gemini-omni-flash"`)** is the cheaper, faster sibling of `gemini-omni-video` on an identical request shape: the same `image_urls` reference surface under a 7-unit quota (each image 1 unit, a source video 2), the same video-edit mode through the same handle, `duration` one of `"4"` / `"6"` / `"8"` / `"10"` (an omitted duration renders and bills as 8 s), `aspect_ratio` restricted to `"16:9"` or `"9:16"`, and `resolution` `"720p"` / `"1080p"` / `"4k"` (4K is not available on the free tier). Like the Pro SKU it forwards no `audio_ids`: the model still generates its own audio track (steer it in the prompt), but there is no platform-managed voice on this path, so both SKUs are excluded from character voice.
+**Gemini Omni Flash (`model: "gemini-omni-flash"`)** is the cheaper, faster sibling of `gemini-omni-video` on an identical request shape: the same `image_urls` reference surface under a 7-unit quota (each image 1 unit, a source video 2), the same video-edit mode through the same handle, `duration` one of `"4"` / `"6"` / `"8"` / `"10"` (an omitted duration renders and bills as 8 s), `aspect_ratio` restricted to `"16:9"` or `"9:16"`, and `resolution` `"720p"` / `"1080p"` / `"4k"` (4K is not available on the free tier). Like the Pro SKU it forwards `audio_ids` only for a character's pinned voice (below): otherwise the model generates its own audio track (steer it in the prompt) and there is no platform-managed voice on this path, so both SKUs are excluded from the saved-character voice pipeline.
+
+**Keeping a person's face (`character_references`).** To hold a real person's face on either Gemini Omni SKU, pass `character_references` to `generate_video` — up to 3 entries of `{ image_url, description, body_image_url?, name?, voice_preset? }` (a portrait URL and a description of the person). It is the model's dedicated identity input, so it holds the face where `reference_image_urls` only steers the clip. Other models answer an error rather than running without it; it cannot be combined with a start frame, and it shares the 7-unit input budget with reference images (1 unit each) and a source video (2 units) — a character counts 1 unit, 2 with a `body_image_url`. `voice_preset` (one of the 30 Gemini voice ids, e.g. `kore`) pins one voice to that character across clips; the voice description and example line are API / SDK levers (`voice` on `characterReferences`), and the preset list is in [Pinning a voice](../nodes/ai-video/generate-video.md#pinning-a-voice-to-a-character-reference). It adds no credit charge. See [Character references (Gemini Omni)](../nodes/ai-video/generate-video.md#character-references-gemini-omni).
 
 ### `video_analysis`
 
@@ -753,13 +847,13 @@ hand-maintained; if the two ever disagree, the tool description is right.
 | Tool | Description |
 |------|-------------|
 | `generate_music` | Text-to-music generation. Accepts `prompt`, `genre`, `mood`, `duration`, `instrumental`, `lyrics`, `title`, `model` — `suno-v6` (default; greater musical expression, more natural vocals, richer details), `suno-v6_wild` (bolder, more distinctive, less predictable), `suno-v6_mini` (lightweight and fast), `suno-v5_5` (alias `suno-v5-5`), `suno-v5`, `suno`; `minimax` (MiniMax Music) follows a reference song, voice or instrumental and needs `reference_audio_url` or `reference_audio_asset_id` (a Nodaro audio job id) — without one the tool asks for it instead of starting a job. Also accepts `presetId` (from `list_node_presets { nodeType: "generate-music" }`) to apply a built-in or saved preset's config server-side; any explicit field above overrides the preset, and `prompt` may be omitted when the preset supplies one. A preset's `promptPrefix` / `promptSuffix` wrap your `prompt`. |
-| `generate_speech` | Text-to-speech. Accepts `text`, `voice_id` (with `voice_type`: `premade`, `custom` or `library`), `model` — `elevenlabs-v4` (default: stability + similarity only, up to 10,000 characters), `elevenlabs-v3` (the previous model: stability only, up to 5,000 characters), `elevenlabs-turbo` or `elevenlabs-multilingual` (v2) — and the delivery levers `stability`, `similarity_boost`, `style`, `speed` and `language_code`. Also accepts `presetId` (from `list_node_presets { nodeType: "text-to-speech" }`) to apply a built-in delivery preset (speed/stability/style) server-side; explicit fields override it, and `text` is always required (presets tune delivery; a preset's `promptPrefix` / `promptSuffix` wrap your `text`). |
-| `generate_dialogue` | Multi-speaker dialogue as ONE audio file (ElevenLabs Dialogue v3, direct API). Accepts `dialogue` — an ordered array of `{ text, voice_id }` lines (premade names or cloned/library UUIDs, mixed casts fine; `[audio tags]` allowed in line text) — plus optional `stability` (0 / 0.5 / 1), `language_code`, `seed`, `apply_text_normalization`. Limits: 5,000 chars total across lines, 10 unique voices. Use it instead of stitching per-line `generate_speech` calls. |
+| `generate_speech` | Text-to-speech. Accepts `text`, `voice_id` (with `voice_type`: `premade`, `custom` or `library`), `model` — `elevenlabs-v4` (default: stability + similarity only, up to 10,000 characters), `elevenlabs-v3` (the previous model: stability only, up to 5,000 characters), `elevenlabs-turbo` or `elevenlabs-multilingual` (v2) — and the delivery levers `stability`, `similarity_boost`, `style`, `speed` and `language_code`. Also accepts `presetId` (from `list_node_presets { nodeType: "text-to-speech" }`) to apply a built-in delivery preset (speed/stability/style) server-side; explicit fields override it, and `text` is always required (presets tune delivery; a preset's `promptPrefix` / `promptSuffix` wrap your `text`). `previous_text` / `next_text` carry the neighbouring clips' lines (up to 1,000 characters each) for continuous intonation across clips on models that stitch (v4, Turbo v2.5, Multilingual v2; not v3). |
+| `generate_dialogue` | Multi-speaker dialogue as ONE audio file (ElevenLabs dialogue, direct API — v3 by default, v4 with `model: "elevenlabs-dialogue-v4"`). Accepts `dialogue` — an ordered array of `{ text, voice_id }` lines (premade names or cloned/library UUIDs, mixed casts fine; `[audio tags]` allowed in line text) — plus optional `model`, `stability` (v3: exactly 0 / 0.5 / 1; v4: any 0–1), `similarity_boost` (v4 only), `language_code`, `seed`, `apply_text_normalization`. A stability the chosen model does not take, or a script over its total cap, is refused with the numbers before anything is reserved. Limits: 5,000 chars total across lines on either model, 10 unique voices. Use it instead of stitching per-line `generate_speech` calls. The finished job's `output_data` carries `audioUrl` and, on both models (timings cost no extra credits), `transcript` — per-word timings and one segment per line with the line's voice as `speaker` — to pass its `words` to `add_captions` as `captions` with `auto_transcribe: false` instead of transcribing the track again. |
 | `text_to_audio` | Text-to-sound-effect (ElevenLabs SFX). Accepts `prompt` and optional `duration`, `loop` (a seamlessly looping effect) and `prompt_influence` (0–1, how closely it follows the prompt). Also accepts `presetId` (from `list_node_presets { nodeType: "text-to-audio" }`) to apply a built-in or saved preset's config server-side; any explicit field overrides the preset, and `prompt` may be omitted when the preset supplies one. A preset's `promptPrefix` / `promptSuffix` wrap your `prompt`. |
 | `list_voices` | List the available premade voices (id + name, plus any gender/accent/description metadata) so you can pick a `voice_id` for `generate_speech`, `voice_changer`, or `voice_changer_pro` — all of which require a voice id. Read-only; returns the catalog as JSON. |
 | `voice_design` | Design a new synthetic voice from text descriptors (ElevenLabs `/v1/text-to-voice/design`). Accepts `text`, `voice_description`, `model` (default `eleven_ttv_v3`; `eleven_multilingual_ttv_v2` is the legacy model), `loudness`, `guidance_scale`, `seed`, `quality`, `should_enhance`. Returns a `voice_id`. |
 | `voice_changer` | Transform the speaker identity in an audio clip — or a whole talking video — to a target voice. Accepts `audio_url`/`audio_asset_id` or `video_url`/`video_asset_id` (video is demuxed, revoiced, remuxed), `voice_id` (premade name or clone UUID; required), `model`, `stability`, `similarity_boost`, `style`, `remove_background_noise`. |
-| `voice_changer_pro` | Detect each speaker in a multi-speaker clip and convert each to a chosen voice, preserving words and timing (Cloud only). Accepts `audio_url`/`audio_asset_id` or `video_url`/`video_asset_id`; `ordered_voices` (required, positional: speaker N → entry N; each entry a voice id, a per-voice settings object with `engine` (`"sts"` default recast / `"v3"` Re-speak — regenerates the performance from the transcript with eleven_v3, `[audio tags]` supported, stability 0/0.5/1 only), `stability`/`similarity_boost`/`style`/`use_speaker_boost`/`seed`/`volume_mode`/`volume`, or `null`); `analysis` (a prior analyze run's output_data — the recast works from the exact speaker list you mapped against; its `segments[].text` is the required transcript for a `"v3"` speaker, and omitting `analysis` re-speaks from the engine's own transcription); `voice_fx` (preset + `wet_dry_mix`/`delay_ms`/`decay`); `model`; `preserve_background`; `separation_quality` (`fast`/`best`); `music_volume_mode` (`match`/`normalize`/`manual`) + `music_volume`; `remove_background_noise`; `output` (`video` default / `stems`). A `null` entry in `ordered_voices` is a keep-slot — that speaker keeps their original voice while later speakers are still recast. `output: "stems"` returns the dry per-track stems for interactive mixing instead of a finished video. |
+| `voice_changer_pro` | Detect each speaker in a multi-speaker clip and convert each to a chosen voice, preserving words and timing (Cloud only). Accepts `audio_url`/`audio_asset_id` or `video_url`/`video_asset_id`; `ordered_voices` (required, positional: speaker N → entry N; each entry a voice id, a per-voice settings object with `engine` (`"sts"` default recast / `"v3"` or `"v4"` Re-speak — regenerates the performance from the transcript, `[audio tags]` supported; v3 takes stability 0/0.5/1 only, v4 any 0–1 plus `similarity_boost`), `stability`/`similarity_boost`/`style`/`use_speaker_boost`/`seed`/`volume_mode`/`volume`, or `null`); `analysis` (a prior analyze run's output_data — the recast works from the exact speaker list you mapped against; its `segments[].text` is the required transcript for a Re-speak speaker, and omitting `analysis` re-speaks from the engine's own transcription); `voice_fx` (preset + `wet_dry_mix`/`delay_ms`/`decay`); `model`; `preserve_background`; `separation_quality` (`fast`/`best`); `music_volume_mode` (`match`/`normalize`/`manual`) + `music_volume`; `remove_background_noise`; `output` (`video` default / `stems`). A `null` entry in `ordered_voices` is a keep-slot — that speaker keeps their original voice while later speakers are still recast. `output: "stems"` returns the dry per-track stems for interactive mixing instead of a finished video. |
 | `voice_changer_pro_analyze` | Detect the speakers in a clip WITHOUT recasting (Cloud only) — the first step of the interactive flow. Accepts `audio_url`/`audio_asset_id` or `video_url`/`video_asset_id`, `separation_quality`, `suggest_title`. The job output carries the separated stems + the detected speaker list (id, segments, first-appearance, word count, snippet) + language — inspect it to choose each speaker's voice (and spot non-person "speakers" like applause) before committing to a recast. |
 | `voice_changer_pro_export` | Render a finished video from a mixed set of stems (Cloud only) — the last step of the interactive flow. Accepts `video_url`/`video_asset_id` (the source video) + `tracks` (stem url, `gain` 0–200, `muted`, `kind` `voice`/`background`; ≤16, at least one un-muted) + optional `voice_fx`, which lands on the voice tracks at render time. Stream-copied (never re-encoded). |
 | `voice_remix` | Speak `text` in a voice described in words (`voice_description`, e.g. "a warm, mid-40s British woman with a calm news-anchor tone") instead of a `voice_id` — a one-off voice with no cloning. |
@@ -768,6 +862,7 @@ hand-maintained; if the two ever disagree, the tool description is right.
 | `audio_isolation` | Isolate and clean the primary voice from a mixed clip (removes background music/noise). Returns one clean voice track. Source: `audio_url`, or `audio_asset_id` — the id of an audio **or video** job. |
 | `separate_audio` | Separate ANY audio into vocals + instrumental, or full stems (drums/bass/other/guitar/piano), via Demucs. Works on non-Suno audio. |
 | `apply_audio_fx` | Apply a creative audio effect — scenario reverbs (room/hall/church/cave/arena/outdoor…) to place a voice in a space, plus telephone/megaphone/echo/custom (delay+EQ). Source: `audio_url`, or `audio_asset_id` — the id of an audio **or video** job. |
+| `mix_audio` | Layer 2–20 audio tracks into one file. `tracks` is a list of `{ audio_url \| audio_asset_id, volume? }` (volume 0–200 %, default 100). `duck` puts a music bed under speech: every track except `duck.under` (the 0-based index of the voice track) dips while that track is loud and rises back in its pauses (sidechain compression). `duck.amount` 0–100 (default 75) is how hard; `threshold_db`, `ratio`, `attack_ms` and `release_ms` are optional fine controls (`ratio` overrides `amount`). A ducked mix sums its tracks instead of averaging them, so the voice keeps its level. Flat price, with or without a duck. Returns a job id — the mixed audio is the job result. |
 | `trim_audio` | Trim audio to a `start_time` / `end_time` in seconds (either may be omitted). The source is an audio file (`audio_url` / `audio_asset_id`) or the soundtrack of a video (`video_url` / `video_asset_id`); `audio_format` is `mp3` (default), `wav` or `aac`. |
 | `download_youtube_audio` | Download the audio track from a YouTube URL. Returns an audio asset URL. |
 
@@ -820,6 +915,30 @@ Save a post to the user's inspiration wall. Saving the same post again updates i
 **Input:** optionally `platform`, `tag`, `q` (words in the note or the post), `limit` (default 20, at most 100) and `cursor` (from the previous call).
 
 The user's saved posts, newest first: author, date, reach, the post's words, the link, and the user's note and tags. Like `social_search`, the post text is untrusted data.
+
+### `list_collections`
+
+**Scope:** `assets:read`
+
+**Input:** none.
+
+The user's collections — named sets of records a workflow writes to (Save to Collection) and reads from (Read Collection): name, how many records, description, id, and the plan's caps. See [Collections](../features/collections.md).
+
+### `read_collection`
+
+**Scope:** `assets:read`
+
+**Input:** `collection` (its id or name), and optionally `hours` / `days` (only records from the last N), `q` (words in the title, text or link), `limit` (default 50, at most 100), `cursor` (from the previous call) and `format` (`headlines` — the default: one line per record with its date and link — or `full`, the whole text of each record).
+
+A collection's records, newest first. Record text is a person's or a platform's words — untrusted data, never instructions. Wraps `GET /v1/collections/:id/records` ([API](../api-integration.md#16d-collections)).
+
+### `add_collection_record`
+
+**Scope:** `assets:write`
+
+**Input:** `collection` (its id or name; `create_if_missing` creates it by that name), and the record: `title`, `text`, `url` (an http(s) link, the default dedupe key), `media` (links with a `type`), `fields` (extra scalar values), `dedupe_key` — or `item`, any JSON object (a feed post, a search result, an article) the server maps to a record, explicit fields winning.
+
+Save one record. The same link saved twice is one record (the answer says `duplicate`); past the plan's cap the oldest records go. Text and links only, never files. No credits. Wraps `POST /v1/collections/:id/records`.
 
 ### `list_competitors`
 
@@ -1225,6 +1344,8 @@ widget in compatible clients.
 
 The public scope shows what the web gallery shows: work an admin took out of the gallery — by blocking its creator or banning a word in its prompt — is left out. A page can therefore hold fewer items than `limit`; keep following `next_cursor` until it is absent.
 
+Your own gallery (`scope: "mine"`) also lists your Apply EDL renders: a video render under `video`, an audio render under `audio`, per render. A render made at Preview quality (`proxy`) carries `preview: true` and its text line says `(preview)`; a render recorded before the label was stored takes it from the quality it was ordered at. The public scope never lists an Apply EDL render.
+
 ---
 
 ### `browse_uploads`
@@ -1233,7 +1354,8 @@ The public scope shows what the web gallery shows: work an admin took out of the
 
 Browse assets you've uploaded (source files — distinct from generated
 outputs). Use to retrieve existing upload URLs to feed into generation
-tools.
+tools. An item that is an Apply EDL preview (a render at `proxy` quality)
+carries `preview: true`, and its text line says `(preview)`. A render stored before the label existed takes it from the job that made it.
 
 **Input:** `kind`, `limit`, `cursor`
 
@@ -1243,7 +1365,7 @@ tools.
 
 **Scope:** `assets:read`
 
-List your favorited gallery items, most recent first.
+List your favorited gallery items, most recent first. A favorited Apply EDL render of yours is listed too (`preview: true` on a Preview); another person's is not.
 
 **Input:** `limit`, `cursor`
 
@@ -1299,11 +1421,28 @@ rendering) prefer `get_asset`.
 
 **Scope:** `assets:read`
 
-Fetch status of a workflow / published-app execution by id. Returns
-per-node states and output URLs produced so far. Used by widgets to poll
-progress.
+Read a workflow / published-app run by its **execution id** — the id
+`run_workflow` and `run_app` return (not a job id: `get_job` will not find it).
+Poll it every 5–10 s while the run is `pending` or `running`; the workflow and
+app-run widgets do.
 
 **Input:** `{ execution_id: string }`
+
+**Response (structuredContent):** `executionId`, `status`, `errorMessage`,
+`summary` (`total`, `completed`, `failed`, `skipped`, `skippedForEmptyInput`),
+`nodeStates[]` — one entry per node, in the workflow's order: `id`, `label`,
+`nodeType`, `status`, `skipReason` (why the run skipped it — `"empty_input"`:
+nothing reached its input in this run; absent on a router-gated node), `error`,
+`jobId`, `text` (the node's text output, cut at 1,500 characters —
+`textTruncated: true` when it was) and `media[]` (every image, video and audio
+URL the node produced, `{ kind, url }`) — and `outputs[]`, every media URL
+across the run with the source job's `prompt`, `model` and `createdAt`.
+
+Once the run completes it also carries `outcome`: `"nothing_new"` when at least
+one node was skipped for want of input and nothing failed — a feed that found no
+new posts, a writer with nothing to write — else `"succeeded"`. A failed or
+cancelled run has a `status`, not an outcome. See
+[Runs that find nothing new](../api-integration.md#runs-that-find-nothing-new).
 
 ---
 
@@ -1329,6 +1468,8 @@ cursor pagination.
 **Input:** `scope` (`"mine"` default / `"public"`), `limit`, `cursor`, `status` (your own jobs), `kinds[]` (default image and video)
 
 The public scope lists what the public gallery shows, with the same moderation as `browse_gallery`, and never carries another creator's id. A page can hold fewer jobs than `limit`.
+
+Your own jobs (`scope: "mine"`) include your Apply EDL renders: a render is listed under the kind its output is — `video` for a cut, `audio` for a mix (a render still running, under the kind its order asks for) — and the public scope never lists one. A Preview (`output_data.quality` is `"proxy"`) carries `preview: true`.
 
 ---
 
@@ -1367,6 +1508,15 @@ policy reason if the review rejects it.
 `retryable`, `guidance` and `suggestedProvider` on a failed, cancelled or held
 job. `get_asset` and `wait_for_job` return the same envelope (`get_asset` without
 `input`).
+
+An Apply EDL render made at Preview quality (`outputData.quality` is `"proxy"`:
+the private 720p cut to review, not the final) also carries `preview: true`. A
+render recorded before `quality` was stored reads back with the quality it was
+ordered at filled into `outputData.quality` (`"proxy"` is a Preview, anything
+else the final) by `get_job`, `wait_for_job`, `get_asset` and `display_asset`
+(`display_asset` carries only the `preview` flag); nothing is rewritten.
+`list_jobs` reads the label the same way for the Apply EDL renders it lists (your
+own jobs only; see `list_jobs` above), and marks a Preview with `preview: true`.
 
 `input` is a safe subset of what the job was submitted with, or null — enough
 to check what the model was actually sent: `prompt` (the prompt as rendered,
@@ -1409,6 +1559,12 @@ remediation hint. Classes are heuristic (derived from the stored error string,
 not the error type), so treat them as guidance. Reserved credits are
 auto-refunded except for `post_processing` (post-delivery) failures; check
 `creditsActual` per node.
+
+A completed run also reports its `outcome` (`"succeeded"` or `"nothing_new"` —
+see [`get_app_run`](#get_app_run)), and a node in `nodes[]` that the run skipped
+for want of input carries `skipReason: "empty_input"` (absent on every other
+node). A run that found nothing new has no failures to diagnose: nothing
+went wrong, there was nothing to work on.
 
 **Input:** `{ id: string }` (a workflow execution id or a job id)
 
@@ -1470,7 +1626,8 @@ refused with `400 locked_field`.
 **Scope:** `workflows:execute`
 
 Soft-delete (archive) a published-app run. The run can be restored or
-permanently deleted from the Nodaro web UI at `/archived-runs`.
+permanently deleted from the Nodaro web UI at `/archived-runs` (permanent
+deletion waits until the run has finished or been stopped).
 
 **Input:** `{ slug: string, runId: uuid }`
 

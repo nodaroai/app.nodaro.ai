@@ -45,6 +45,14 @@ export const BUILD_ASSETS = Object.freeze([
     dir: "assets/fonts",
     match: /\.ttf$/i,
   },
+  {
+    // The pinned YuNet face-detector model — read (and hash-checked) by
+    // src/services/face-detect/yunet-model.ts — and its MIT licence, which
+    // ships beside it. The upstream original and the patch script stay in
+    // src/ for provenance only.
+    dir: "services/face-detect/model",
+    match: /^(?:face_detection_yunet_2023mar-dyn\.onnx|LICENSE\.yunet\.txt)$/,
+  },
 ])
 
 /**

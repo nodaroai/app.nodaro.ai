@@ -10,7 +10,9 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { applyEdlCreditId } from "@nodaro/shared"
-import { buildEffectiveEdl, validateEffectiveEdl, applyEdlReserveMinutes } from "../lib/apply-edl-plan.js"
+import { buildEffectiveEdl, effectiveRenderBasis, validateEffectiveEdl, applyEdlReserveMinutes } from "../lib/apply-edl-plan.js"
+import { isPreviewRender } from "../lib/preview-render.js"
+import { APPLY_EDL_CLIP_KEY_PATTERN } from "../lib/apply-edl-output.js"
 
 /** An SDK/MCP caller may send the EDL as a JSON string on the `edl` field;
  *  parse it before `buildEffectiveEdl` so this ingress behaves identically to
@@ -76,6 +78,17 @@ const applyEdlBody = z.object({
   /** Default crossfade (ms) on boundaries with no explicit transition;
    *  per-boundary clamped to the ffmpeg-xfade limit. 0 = hard cuts. */
   crossfadeMs: z.number().min(0).max(5000).optional().default(0),
+  /** The plan clip this render cuts (`edlSpanKey` of the Edit Plan's clip,
+   *  `${min inMs}-${max outMs}`), stamped on the result as `clipKey` so a
+   *  render's results can be matched to the clips they came from. The editor
+   *  sends it for a clip-pack render; omit it for anything else. */
+  clipKey: z.string().regex(APPLY_EDL_CLIP_KEY_PATTERN).optional(),
+  /** The plan value this render cuts (`renderReadBasis` of the Edit Plan's
+   *  resolved Tighten EDL, or of its clip), stamped on the result as
+   *  `planBasis` so a review can tell a take cut from the plan's current value
+   *  from one that predates it. Send it only when the render reads the plan's
+   *  own value (`renderPlanBasis`'s same-run rule); omit it otherwise. */
+  planBasis: z.string().regex(/^[0-9a-f]{16}$/).optional(),
   userId: z.string().uuid().optional(),
 })
 
@@ -129,7 +142,7 @@ export async function applyEdlRoutes(app: FastifyInstance) {
       })
     }
 
-    const { edl, sources, transcript, output, quality, crossfadeMs } = parsed.data
+    const { edl, sources, transcript, output, quality, crossfadeMs, clipKey, planBasis } = parsed.data
     const userId = req.userId
     if (!userId) {
       return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
@@ -144,16 +157,21 @@ export async function applyEdlRoutes(app: FastifyInstance) {
     if (!validation.ok) {
       return reply.status(400).send(invalidEdlBody(validation.issues))
     }
+    // The render's own settings and the sources of the cut it renders: stamped
+    // from what THIS route renders, never taken from the caller.
+    const renderBasis = effectiveRenderBasis(effectiveEdl, { output, crossfadeMs })
+    const stamps = { ...(clipKey ? { clipKey } : {}), ...(planBasis ? { planBasis } : {}), renderBasis }
 
     const mcpClient = extractMcpClient(req.body)
     const { data: job, error } = await insertJob(req, {
       workflow_id: extractWorkflowId(req.body),
       node_id: extractNodeId(req.body),
-      force_private: extractForcePrivate(req.body) || undefined,
+      // A preview (proxy) is private on every lane (F1).
+      force_private: extractForcePrivate(req.body) || isPreviewRender("apply-edl", quality) || undefined,
       user_id: userId,
       status: "pending",
       input_data: buildJobInputData(
-        { edl: effectiveEdl, transcript, output, quality, crossfadeMs },
+        { edl: effectiveEdl, transcript, output, quality, crossfadeMs, ...stamps },
         "apply-edl",
       ),
       ...(mcpClient ? { mcp_client: mcpClient } : {}),
@@ -173,6 +191,7 @@ export async function applyEdlRoutes(app: FastifyInstance) {
       transcript,
       output,
       quality,
+      ...stamps,
       usageLogId,
     })
 

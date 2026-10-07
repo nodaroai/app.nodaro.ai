@@ -10,7 +10,7 @@ afterEach(() => {
 describe("resolveIsPublicOutput — surface outputs.allowPublic switch", () => {
   it("keeps the user's public preference when the surface allows public (default)", () => {
     expect(
-      resolveIsPublicOutput({ publicOutputs: true, forcePrivate: false, mcpClient: false, workflowExecutionId: null }),
+      resolveIsPublicOutput({ publicOutputs: true, forcePrivate: false, mcpClient: false, workflowExecutionId: null, previewRender: false }),
     ).toBe(true)
   })
 
@@ -18,23 +18,45 @@ describe("resolveIsPublicOutput — surface outputs.allowPublic switch", () => {
     process.env.NODARO_SURFACE_PROFILE = JSON.stringify({ outputs: { allowPublic: false } })
     __resetSurfaceProfileCacheForTests()
     expect(
-      resolveIsPublicOutput({ publicOutputs: true, forcePrivate: false, mcpClient: false, workflowExecutionId: null }),
+      resolveIsPublicOutput({ publicOutputs: true, forcePrivate: false, mcpClient: false, workflowExecutionId: null, previewRender: false }),
     ).toBe(false)
   })
 
   it("keeps every existing private-forcing condition (force_private / mcp / execution id)", () => {
     expect(
-      resolveIsPublicOutput({ publicOutputs: true, forcePrivate: true, mcpClient: false, workflowExecutionId: null }),
+      resolveIsPublicOutput({ publicOutputs: true, forcePrivate: true, mcpClient: false, workflowExecutionId: null, previewRender: false }),
     ).toBe(false)
     expect(
-      resolveIsPublicOutput({ publicOutputs: true, forcePrivate: false, mcpClient: true, workflowExecutionId: null }),
+      resolveIsPublicOutput({ publicOutputs: true, forcePrivate: false, mcpClient: true, workflowExecutionId: null, previewRender: false }),
     ).toBe(false)
     expect(
-      resolveIsPublicOutput({ publicOutputs: false, forcePrivate: false, mcpClient: false, workflowExecutionId: null }),
+      resolveIsPublicOutput({ publicOutputs: false, forcePrivate: false, mcpClient: false, workflowExecutionId: null, previewRender: false }),
     ).toBe(false)
     expect(
-      resolveIsPublicOutput({ publicOutputs: true, forcePrivate: false, mcpClient: false, workflowExecutionId: "exec-1" }),
+      resolveIsPublicOutput({ publicOutputs: true, forcePrivate: false, mcpClient: false, workflowExecutionId: "exec-1", previewRender: false }),
     ).toBe(false)
+  })
+})
+
+// F1: a preview render (Apply EDL at proxy) is private on every lane, whatever
+// the owner's public-outputs preference.
+describe("resolveIsPublicOutput — a preview render", () => {
+  it("is never public", () => {
+    expect(
+      resolveIsPublicOutput({ publicOutputs: true, forcePrivate: false, mcpClient: false, workflowExecutionId: null, previewRender: true }),
+    ).toBe(false)
+  })
+
+  it("both media workers pass previewRender explicitly (it is a required input)", async () => {
+    const { readFileSync } = await import("node:fs")
+    const { join, dirname } = await import("node:path")
+    const { fileURLToPath } = await import("node:url")
+    const here = dirname(fileURLToPath(import.meta.url))
+    for (const file of ["video-worker.ts", "render-worker.ts"]) {
+      const src = readFileSync(join(here, "..", file), "utf8")
+      const call = src.slice(src.indexOf("resolveIsPublicOutput({"))
+      expect(call.slice(0, call.indexOf("})")), file).toMatch(/previewRender:/)
+    }
   })
 })
 
@@ -64,6 +86,7 @@ describe("mcpClientForcesPrivate — the worker call-site coercion", () => {
       forcePrivate: false,
       mcpClient: mcpClientForcesPrivate(jobRecord.mcp_client),
       workflowExecutionId: null,
+      previewRender: false,
     })
     expect(isPublic).toBe(false)
   })

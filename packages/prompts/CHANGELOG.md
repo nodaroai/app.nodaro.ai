@@ -1,5 +1,80 @@
 # @nodaro/prompts
 
+## 1.32.0
+
+### Minor Changes
+
+- 23c76ca: `stripAudioTags(text)` — removes inline `[audio tags]` from speech text, for a model that does not perform them. Moved here from the backend so a client's speech estimate counts exactly the characters the server sends.
+- 9a8dfa9: `WIRED_OUTPUT_NODE_TYPES`: the output nodes that send exactly what is wired into them (Webhook Output and the social post nodes). The orchestrator skips one with `skipReason: "empty_input"` when every wire into it carried nothing in this run, instead of posting an empty payload or failing the run.
+
+### Patch Changes
+
+- Updated dependencies [95bf99c]
+- Updated dependencies [23c76ca]
+  - @nodaro/shared@3.23.0
+
+## 1.31.0
+
+### Minor Changes
+
+- 3bec25f: Collections, the two workflow nodes (Save to Collection / Read Collection):
+
+  - `@nodaro/shared`: `fanOutUrlItemIsText(nodeType, targetHandle)` — lanes where a fan-out item that looks like a link stays the item (Save to Collection's `in`); `isFanOutUrlItem` now treats JSON and sentences as text (only one bare address is a media link); `normalizeDedupeKey` keeps a link's path case (scheme and host fold); `ingestRecordFromJson` no longer takes a numeric `id` as the dedupe key; `collectionRecordHeadline` / `collectionRecordsDigest` tolerate a partial record; `COLLECTION_READ_WINDOW_HOURS_MAX`, `COLLECTION_READ_LIMIT_MAX`, `collectionReadSince` and the read window / order types; `lastOutcome` and `lastEvicted` join `EXECUTION_DATA_KEYS`.
+  - `@nodaro/prompts`: `TEXT_REQUIRED_NODE_TYPES` includes `collection-write`, and `computeNodeSendText` answers for it (the item, else a typed title / text / link), so a feed with nothing new wired straight into Save to Collection skips it instead of failing the run.
+
+- 94c1fbf: Runs that find nothing new end `completed` with `outcome: "nothing_new"` instead of failing. A text-requiring node (`llm-chat`, `generate-script`, `text-to-speech`, `generate-music`, `text-to-audio`, the legacy `ai-writer`) whose wired text came from a node that produced nothing in this run is skipped with `skipReason: "empty_input"` on its node state, and the nodes behind it are skipped with it.
+
+  - `@nodaro/shared`: `NodeSkipReason`, `skipReason` on `NodeExecutionStateWire`, `ExecutionOutcome` + `executionOutcome(status, nodeStates)` + `countEmptyInputSkips(nodeStates)` (the one rule every surface derives the outcome with — never a stored column), `__runSkipReason` among the transient runtime keys.
+  - `@nodaro/sdk`: `WorkflowExecution` / `WorkflowExecutionSummary` gain `outcome?: "succeeded" | "nothing_new"`; `nodeStates[id].skipReason`; `executionOutcome`, `countEmptyInputSkips`, `NodeSkipReason` and `ExecutionOutcome` re-exported.
+  - `@nodaro/prompts`: `TEXT_REQUIRED_NODE_TYPES`, `computeNodeSendText(type, data, args)` and `computeAiWriterInput(data, args)` — what a text-requiring node would send, by its executor's own rule.
+
+- c91946b: Review fixes for the Telegram feed and Collections series:
+
+  - `@nodaro/shared`: `planFeedEmission(posts, since, limit, pageMaxId?)` — when nothing readable lies above the position but the page rendered further (posts with neither text nor media), the position moves past them instead of re-reading the same page every tick; `COLLECTION_EVICT_MAX_PER_WRITE` (100) bounds how many records one write past the cap may evict.
+  - `@nodaro/prompts`: the empty-input skip rule decides on a node's CORE text — prompt pre/post text alone is not something to send — and `generate-image` joins `TEXT_REQUIRED_NODE_TYPES`: when the text it was wired produced nothing this run, an empty prompt is skipped rather than drawn.
+
+### Patch Changes
+
+- Updated dependencies [9cb2a0d]
+- Updated dependencies [9cb2a0d]
+- Updated dependencies [9cb2a0d]
+- Updated dependencies [3bec25f]
+- Updated dependencies [9d492ee]
+- Updated dependencies [023327b]
+- Updated dependencies [9cb2a0d]
+- Updated dependencies [86df84c]
+- Updated dependencies [8777f7b]
+- Updated dependencies [1a11a27]
+- Updated dependencies [8777f7b]
+- Updated dependencies [1a11a27]
+- Updated dependencies [fd20c51]
+- Updated dependencies [94c1fbf]
+- Updated dependencies [9cb2a0d]
+- Updated dependencies [1d106aa]
+- Updated dependencies [835c6d3]
+- Updated dependencies [3b4e26c]
+- Updated dependencies [c91946b]
+- Updated dependencies [9cb2a0d]
+- Updated dependencies [9cb2a0d]
+- Updated dependencies [9c2120c]
+- Updated dependencies [1e1ef73]
+- Updated dependencies [989c285]
+- Updated dependencies [829dc76]
+- Updated dependencies [c48a85e]
+- Updated dependencies [c48a85e]
+- Updated dependencies [a451774]
+- Updated dependencies [2047248]
+- Updated dependencies [7603c20]
+- Updated dependencies [747151b]
+- Updated dependencies [ff32a3f]
+- Updated dependencies [d81639f]
+- Updated dependencies [7dd35ec]
+- Updated dependencies [9cb2a0d]
+- Updated dependencies [9cb2a0d]
+- Updated dependencies [9cb2a0d]
+- Updated dependencies [9cb2a0d]
+  - @nodaro/shared@3.22.0
+
 ## 1.30.0
 
 ### Minor Changes

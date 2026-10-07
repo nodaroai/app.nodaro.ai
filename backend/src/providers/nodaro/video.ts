@@ -73,6 +73,7 @@ function sharedVideoBody(options?: ProviderOptions): Record<string, unknown> {
     ...(options.referenceImageUrls?.length ? { referenceImageUrls: options.referenceImageUrls } : {}),
     ...(options.referenceVideoUrls?.length ? { referenceVideoUrls: options.referenceVideoUrls } : {}),
     ...(options.referenceAudioUrls?.length ? { referenceAudioUrls: options.referenceAudioUrls } : {}),
+    ...(options.characterReferences?.length ? { characterReferences: options.characterReferences } : {}),
     ...(options.webSearch !== undefined ? { webSearch: options.webSearch } : {}),
     ...(options.nsfwChecker !== undefined ? { nsfwChecker: options.nsfwChecker } : {}),
     ...(options.enableTranslation !== undefined ? { enableTranslation: options.enableTranslation } : {}),

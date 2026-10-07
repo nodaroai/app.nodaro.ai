@@ -11,6 +11,7 @@ import { type RunSlot, type RunSlotNodeState } from "@/components/app-runner/typ
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import type { OutputStatus } from "../output-cards/shared"
 import { OutputCard } from "../output-card"
+import { outputIsPreview } from "../render-preview"
 import {
   buildStepChips,
   getThreadMessages,
@@ -206,6 +207,11 @@ export function ChatView({
           getResult={() => ({})}
           getCardTitle={getNodeLabel}
           resolveResult={(nodeId) => resolveSlotResult(viewer.slot, nodeId)}
+          isPreview={(nodeId, url) => {
+            const node = [...orderedInputNodes, ...orderedOutputNodes].find((n) => n.id === nodeId)
+            const out = viewer.slot.nodeStates[nodeId]?.output as Record<string, unknown> | undefined
+            return outputIsPreview(node?.type, undefined, out, url)
+          }}
           initialNodeId={viewer.nodeId}
           onRunChange={handleViewerRunChange}
           onBack={() => setViewer(null)}
@@ -338,7 +344,7 @@ function ChatMessage({
               return (
                 <OutputCard
                   key={node.id}
-                  nodeId={node.id} nodeType={node.type}
+                  nodeId={node.id} nodeType={node.type} runId={slot.id}
                   label={getNodeLabel(node)}
                   outputType={getOutputType(node.type)}
                   status={toOutputStatus(st?.status, slot.executionStatus)}
@@ -346,6 +352,7 @@ function ChatMessage({
                   text={out?.text as string | undefined}
                   onOpenMedia={u ? openResult : undefined}
                   progress={isRunning ? combinedProgress[node.id] : undefined}
+                  preview={outputIsPreview(node.type, undefined, out as Record<string, unknown> | undefined)}
                 />
               )
             })}
@@ -394,13 +401,14 @@ function ChatMessage({
                 return (
                   <OutputCard
                     key={c.nodeId}
-                    nodeId={c.nodeId} nodeType={node?.type}
+                    nodeId={c.nodeId} nodeType={node?.type} runId={slot.id}
                     label={c.label}
                     outputType={node ? getOutputType(node.type) : "text"}
                     status={toOutputStatus(c.status, slot.executionStatus)}
                     url={u}
                     text={out?.text as string | undefined}
                     onOpenMedia={u ? openResult : undefined}
+                    preview={outputIsPreview(node?.type, undefined, out as Record<string, unknown> | undefined)}
                   />
                 )
               })}

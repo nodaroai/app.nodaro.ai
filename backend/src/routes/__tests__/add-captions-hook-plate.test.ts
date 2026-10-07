@@ -20,7 +20,7 @@ vi.mock("@/lib/url-validator.js", async () => {
   return { safeUrlSchema: z.string().url() }
 })
 
-import { captionRoutesToRemotion, type CaptionPlan } from "@nodaro/shared"
+import { CAPTION_SEGMENT_SCHEMA_KEYS, captionRoutesToRemotion, type CaptionPlan } from "@nodaro/shared"
 import { CAPTION_SEGMENT_LEVER_KEYS, getFactoryPresets, hookPlateCaptionSegments } from "@nodaro/prompts"
 import { addCaptionsBody, addCaptionsRoutes } from "../add-captions.js"
 import { reserveCreditsForJob } from "../../middleware/credit-guard.js"
@@ -58,9 +58,8 @@ describe("hookPlateCaptionSegments output against the add-captions route", () =>
   })
 
   it("CAPTION_SEGMENT_LEVER_KEYS equals the route's segment keys without times and words", () => {
-    const segmentShape = addCaptionsBody.shape.segments.unwrap().element.shape
-    const routeKeys = Object.keys(segmentShape).filter((k) => !["startMs", "endMs", "text", "captions"].includes(k))
-    expect([...CAPTION_SEGMENT_LEVER_KEYS].sort()).toEqual(routeKeys.sort())
+    const leverKeys = CAPTION_SEGMENT_SCHEMA_KEYS.filter((k) => !["startMs", "endMs", "text", "captions"].includes(k))
+    expect([...CAPTION_SEGMENT_LEVER_KEYS].sort()).toEqual([...leverKeys].sort())
   })
 })
 

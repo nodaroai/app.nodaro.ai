@@ -29,6 +29,9 @@ import { accessAtLeast, canRunWorkflow, workflowAccessFromRow } from "../lib/wor
 import { resolveBillingContext, shouldRefuseDegradedRunFor } from "../lib/billing-context.js"
 import { billingPairColumns } from "../lib/insert-job.js"
 import { recordTriggerFireRefusal } from "../lib/trigger-fire-refusal.js"
+import { refusePreviewFire } from "../lib/preview-fire-refusal.js"
+import { PREVIEW_REVIEW_REQUIRED_MESSAGE } from "../lib/preview-review-gate.js"
+import { PREVIEW_REVIEW_REQUIRED } from "@nodaro/shared"
 import { toAccessRow } from "../lib/workflow-route-access.js"
 import { isMissingColumnError } from "../lib/postgrest-errors.js"
 import { applyTriggerConfigPatch } from "../lib/workflow-trigger-sync.js"
@@ -224,6 +227,25 @@ export async function webhookTriggerRoutes(app: FastifyInstance) {
       })
     }
 
+    // The branch this fire runs stops at a Preview render, and a webhook
+    // caller cannot review it: refuse before anything is created or billed
+    // (one deduped failed row for the owner). The token already proved itself
+    // above, so the reason is no oracle.
+    const fireNodeId = (trigger.config as Record<string, unknown> | null)?.nodeId
+    if (
+      await refusePreviewFire({
+        workflowId: trigger.workflow_id as string,
+        userId: trigger.user_id as string,
+        triggerType: "webhook",
+        triggerId: trigger.id as string,
+        triggerNodeId: typeof fireNodeId === "string" ? fireNodeId : null,
+      })
+    ) {
+      return reply.status(400).send({
+        error: { code: PREVIEW_REVIEW_REQUIRED, message: PREVIEW_REVIEW_REQUIRED_MESSAGE },
+      })
+    }
+
     // Check for an execution this trigger's owner already has running. Scoped
     // to them: before sharing, "an active execution of this workflow" and "an
     // active execution of MINE" were the same set, and widening the run path
@@ -329,6 +351,8 @@ export async function webhookTriggerRoutes(app: FastifyInstance) {
       ...(typeof triggerNodeId === "string" ? { triggerNodeId } : {}),
       triggerData,
       billingContext,
+      // A webhook caller cannot review a Preview render.
+      reviewerPresent: false,
     }
 
     await orchestrationQueue.add("workflow-execution", jobData, {

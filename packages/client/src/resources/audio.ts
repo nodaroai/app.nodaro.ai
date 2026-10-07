@@ -82,9 +82,27 @@ export class AudioResource {
   /**
    * Layer multiple audio tracks into one (`POST /v1/mix-audio`). `audioUrls`
    * (2–20) are summed; optional `trackVolumes` (0–200% each, positionally) set
-   * per-track level.
+   * per-track level. `duck` puts a music bed under speech: every track EXCEPT
+   * `duck.under` (the 0-based index of the voice track) dips while that track
+   * is loud and rises back in its pauses (sidechain compression). `amount`
+   * (0–100, default 75) is how hard; `thresholdDb` (-60–0, default -30),
+   * `ratio` (1–20, overrides `amount`), `attackMs` (1–2000, default 20) and
+   * `releaseMs` (10–9000, default 500) are optional fine controls. A ducked mix
+   * sums its tracks rather than averaging them, so the voice keeps its level;
+   * the price is the same with or without a duck.
    */
-  mix(input: { audioUrls: string[]; trackVolumes?: number[] }): Promise<{ jobId: string }> {
+  mix(input: {
+    audioUrls: string[]
+    trackVolumes?: number[]
+    duck?: {
+      under: number
+      amount?: number
+      thresholdDb?: number
+      ratio?: number
+      attackMs?: number
+      releaseMs?: number
+    }
+  }): Promise<{ jobId: string }> {
     return this.client.request<{ jobId: string }>("POST", "/v1/mix-audio", { body: input })
   }
 

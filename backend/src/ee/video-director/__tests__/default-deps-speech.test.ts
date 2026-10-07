@@ -11,7 +11,7 @@ vi.mock("@/services/shot-sequence/baker.js", () => ({ bakeShotSequence: vi.fn() 
 import { defaultDirectorDeps } from "../orchestrate.js"
 
 describe("defaultDirectorDeps().createSpeechJob", () => {
-  it("asks the text-to-speech route for the default speech model (ElevenLabs v4)", async () => {
+  it("asks the text-to-speech route for the default speech model (ElevenLabs v4), with timings", async () => {
     const inject = vi.fn().mockResolvedValue({ statusCode: 200, body: JSON.stringify({ jobId: "tts-1" }) })
     const deps = defaultDirectorDeps({ inject } as never)
 
@@ -22,7 +22,7 @@ describe("defaultDirectorDeps().createSpeechJob", () => {
       expect.objectContaining({
         method: "POST",
         url: "/v1/text-to-speech",
-        payload: { text: "Voice-over line.", provider: DEFAULT_TTS_PROVIDER, userId: "user-1" },
+        payload: { text: "Voice-over line.", provider: DEFAULT_TTS_PROVIDER, userId: "user-1", withTimestamps: true },
       }),
     )
   })

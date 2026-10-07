@@ -15,17 +15,21 @@
  * week's recipe to Content Ideas, an old scrape to a digest) with no sign
  * anything is wrong.
  *
- * Every state the run builds FROM saved data goes through `seededFromSavedData`;
- * a read of saved node data asks `savedDataAllowed` or goes through one of the
- * readers below (or `savedOutputFor` in output-extractor.ts).
+ * Every state the run builds FROM saved data goes through `seededFromSavedData`
+ * — or, in a run continued from an earlier execution, is that execution's
+ * own saved-data seed of a node it did not run, carried over as it was
+ * (`continuationSeeds`, run-continuation.ts); a read of saved node data asks
+ * `savedDataAllowed` or goes through one of the readers below (or
+ * `savedOutputFor` in output-extractor.ts).
  * `__tests__/saved-data-fallback-sites.test.ts` counts, per file, every call of
  * a saved-data reader and every read of a `SAVED_RESULT_FIELDS` field off a
  * node's data in the engine, so a new one fails the build until it is gated
  * and listed. A count cannot tell a gated site swapped for an ungated one in
  * the same file; the reasons in that test are the record of what was checked.
  */
-import { extractAllGeneratedResults, extractGeneratedJsonAsList, FAN_OUT_EACH_HANDLES, ownsItsList } from "@nodaro/shared"
+import { extractAllGeneratedResults, extractGeneratedJsonAsList, FAN_OUT_EACH_HANDLES, ownsItsList, rendersLatestBatch, savedRenderBatchUrls } from "@nodaro/shared"
 import type { NodeExecutionState, NodeOutput, SimpleNode } from "./types.js"
+import { editPlanSavedOutput } from "@nodaro/shared"
 
 /**
  * The fields a run writes onto a node's data as its RESULTS. Reading one off a
@@ -52,6 +56,8 @@ export const SAVED_RESULT_FIELDS: ReadonlySet<string> = new Set([
   "processedResult",
   "ideaBriefs",
   "splitResults",
+  // Edit Plan's review (TA13/TA14): read only through editPlanSavedOutput.
+  "editedEdl",
 ])
 
 /** A state this run builds from the node's saved data (or its own config), not from running it. */
@@ -68,12 +74,20 @@ export function savedDataAllowed(state: NodeExecutionState | undefined): boolean
 export function savedListFor(node: SimpleNode, state: NodeExecutionState | undefined): string[] | undefined {
   if (!savedDataAllowed(state)) return undefined
   const data = node.data as Record<string, unknown>
+  // An Edit Plan lists its clips as the person's review leaves them (TA13): the
+  // PLAN's rows, "" at every dropped clip (TA16). Never the raw plan, and never
+  // a `__listResults` an older server run persisted.
+  if (node.type === "edit-plan") return editPlanSavedOutput(data)?.listResults
   // A node that runs once per upstream item (Camera Switch per clip) lists its
   // LAST batch — its accumulated history holds earlier runs' items too.
   if (Object.prototype.hasOwnProperty.call(FAN_OUT_EACH_HANDLES, node.type)) {
     const batch = data.__listResults
     return Array.isArray(batch) && batch.length > 0 ? (batch as string[]) : undefined
   }
+  // A render whose descriptor says so (Apply EDL) lists its LATEST batch too —
+  // the one reader both engines share (TA6). None after a single run: the edge
+  // reads its one result.
+  if (rendersLatestBatch(node.type)) return savedRenderBatchUrls(data)
   // Extract Field / JSON Process: the list their run produced (Extract Field's
   // JSON value), or none — never a history in generatedResults, which no run
   // of theirs writes (an earlier build's server runs left one).

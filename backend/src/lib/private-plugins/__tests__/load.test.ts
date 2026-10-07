@@ -49,7 +49,7 @@ vi.mock("@/ee/pipelines/llms/prompt-registry.js", () => ({
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
-import { getPluginEngines, getPluginRecipes, getPluginServices, loadPrivatePlugins } from "../load.js"
+import { getPluginEngines, getPluginRecipes, getPluginServices, getPluginSupports, loadPrivatePlugins } from "../load.js"
 import type { NodaroPrivatePlugin, PluginToolkit } from "../types.js"
 
 // ---------------------------------------------------------------------------
@@ -91,7 +91,7 @@ describe("loadPrivatePlugins", () => {
 
     const result = await loadPrivatePlugins({ importer, exit })
 
-    expect(result).toEqual({ handlers: {}, loaded: [], engines: {}, prompts: {}, services: {}, recipes: {} })
+    expect(result).toEqual({ handlers: {}, loaded: [], engines: {}, prompts: {}, services: {}, recipes: {}, supports: {} })
     expect(importer).not.toHaveBeenCalled()
     expect(exit).not.toHaveBeenCalled()
   })
@@ -105,7 +105,7 @@ describe("loadPrivatePlugins", () => {
 
     expect(exit).toHaveBeenCalledWith(1)
     expect(errorSpy).toHaveBeenCalled()
-    expect(result).toEqual({ handlers: {}, loaded: [], engines: {}, prompts: {}, services: {}, recipes: {} })
+    expect(result).toEqual({ handlers: {}, loaded: [], engines: {}, prompts: {}, services: {}, recipes: {}, supports: {} })
 
     errorSpy.mockRestore()
   })
@@ -120,7 +120,7 @@ describe("loadPrivatePlugins", () => {
 
     expect(exit).not.toHaveBeenCalled()
     expect(warnSpy).toHaveBeenCalled()
-    expect(result).toEqual({ handlers: {}, loaded: [], engines: {}, prompts: {}, services: {}, recipes: {} })
+    expect(result).toEqual({ handlers: {}, loaded: [], engines: {}, prompts: {}, services: {}, recipes: {}, supports: {} })
 
     warnSpy.mockRestore()
   })
@@ -134,7 +134,7 @@ describe("loadPrivatePlugins", () => {
 
     expect(exit).toHaveBeenCalledWith(1)
     expect(errorSpy).toHaveBeenCalled()
-    expect(result).toEqual({ handlers: {}, loaded: [], engines: {}, prompts: {}, services: {}, recipes: {} })
+    expect(result).toEqual({ handlers: {}, loaded: [], engines: {}, prompts: {}, services: {}, recipes: {}, supports: {} })
 
     errorSpy.mockRestore()
   })
@@ -149,7 +149,7 @@ describe("loadPrivatePlugins", () => {
 
     expect(exit).not.toHaveBeenCalled()
     expect(warnSpy).toHaveBeenCalled()
-    expect(result).toEqual({ handlers: {}, loaded: [], engines: {}, prompts: {}, services: {}, recipes: {} })
+    expect(result).toEqual({ handlers: {}, loaded: [], engines: {}, prompts: {}, services: {}, recipes: {}, supports: {} })
 
     warnSpy.mockRestore()
   })
@@ -258,7 +258,7 @@ describe("loadPrivatePlugins", () => {
     const result = await loadPrivatePlugins({ app: fakeApp, importer, exit })
 
     expect(exit).not.toHaveBeenCalled()
-    expect(result).toEqual({ handlers: {}, loaded: [], engines: {}, prompts: {}, services: {}, recipes: {} })
+    expect(result).toEqual({ handlers: {}, loaded: [], engines: {}, prompts: {}, services: {}, recipes: {}, supports: {} })
   })
 })
 
@@ -444,5 +444,68 @@ describe("recipes — plugin-provided get_recipe content", () => {
     await loadPrivatePlugins({ importer: async () => { throw new Error("nope") } })
     expect(getPluginRecipes()).toEqual({})
     warnSpy.mockRestore()
+  })
+})
+
+describe("supports — what a plugin's own handlers can do (plugin → host)", () => {
+  beforeEach(() => {
+    mockHasCreditsRef.value = true
+  })
+
+  it("merges every plugin's declaration, last write wins per member", async () => {
+    const result = await loadPrivatePlugins({
+      importer: async () => ({
+        contractVersion: 1,
+        plugins: [
+          makePlugin({ name: "a", supports: () => ({ editPlanModes: ["tighten"] }) }),
+          makePlugin({ name: "edit-plan", supports: () => ({ editPlanModes: ["tighten", "clips", "chapters", "trailer"] }) }),
+        ],
+      }),
+      toolkit: fakeToolkit,
+    })
+    expect(result.supports.editPlanModes).toEqual(["tighten", "clips", "chapters", "trailer"])
+  })
+
+  it("is an empty object when no plugin declares anything (an older plugin)", async () => {
+    const result = await loadPrivatePlugins({
+      importer: async () => ({ contractVersion: 1, plugins: [makePlugin({ name: "a" })] }),
+      toolkit: fakeToolkit,
+    })
+    expect(result.supports).toEqual({})
+  })
+
+  // The API server reads the declaration at request time (GET
+  // /v1/edit-plan/capabilities), with no path back to this result — so it is
+  // published, like services/engines/recipes, and cleared by every outcome
+  // that loads no plugin.
+  it("is published to getPluginSupports() after a successful load", async () => {
+    await loadPrivatePlugins({
+      importer: async () => ({
+        contractVersion: 1,
+        plugins: [makePlugin({ name: "edit-plan", supports: () => ({ editPlanModes: ["trailer"] }) })],
+      }),
+      toolkit: fakeToolkit,
+    })
+    expect(getPluginSupports()).toEqual({ editPlanModes: ["trailer"] })
+  })
+
+  it("is cleared from getPluginSupports() when a later load fails or loads nothing", async () => {
+    const declaring = async () => ({
+      contractVersion: 1,
+      plugins: [makePlugin({ name: "edit-plan", supports: () => ({ editPlanModes: ["trailer"] }) })],
+    })
+    const exit = vi.fn() as unknown as (code: number) => never
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+
+    await loadPrivatePlugins({ importer: declaring, toolkit: fakeToolkit })
+    await loadPrivatePlugins({ importer: async () => { throw new Error("boom") }, exit })
+    expect(getPluginSupports()).toEqual({})
+
+    await loadPrivatePlugins({ importer: declaring, toolkit: fakeToolkit })
+    mockHasCreditsRef.value = false
+    await loadPrivatePlugins({})
+    expect(getPluginSupports()).toEqual({})
+
+    errorSpy.mockRestore()
   })
 })

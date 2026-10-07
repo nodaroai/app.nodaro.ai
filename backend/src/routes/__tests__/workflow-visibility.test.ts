@@ -78,6 +78,7 @@ vi.mock("@/lib/execution-events.js", () => ({
 vi.mock("@/ee/billing/credits.js", () => ({
   CreditsService: { refundCredits: vi.fn() },
   estimateWorkflowCredits: vi.fn().mockReturnValue(10),
+  estimateWorkflowListingCredits: vi.fn().mockResolvedValue({ preview: 10, final: 0 }),
 }))
 
 vi.mock("@/ee/routes/credits.js", () => ({ invalidateBalanceCache: vi.fn() }))

@@ -8,6 +8,7 @@ import { SOCIAL_PLATFORM_META } from "@/components/research/social-platforms"
 import { useT, type MessageKey } from "@/lib/i18n"
 import { interpolateNodes } from "@/lib/i18n/interpolate-nodes"
 import { cn } from "@/lib/utils"
+import { compactNumber } from "./action-card-text"
 import { allFailed, readsOf } from "./brand-platforms"
 import { peopleSay } from "./card-facts"
 import { sayText } from "./say-text"
@@ -104,6 +105,9 @@ function PlatformCard({ tally, isOwn, on, onSelect }: { readonly tally: Competit
             <span className="text-[12px] text-muted-foreground">
               {about && usual ? t("competitors.cardSubUsual", { about, usual }) : (about ?? t("competitors.usuallyOnly", { usual: usual ?? "" }))}
             </span>
+          )}
+          {typeof tally.followers === "number" && (
+            <span className="text-[12px] text-muted-foreground">{tally.followers === 1 ? t("competitors.followersCountOne") : t("competitors.followersCount", { n: compactNumber(tally.followers) })}</span>
           )}
           <SplitBar own={tally.own} about={tally.about} />
         </>

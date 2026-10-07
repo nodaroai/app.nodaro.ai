@@ -39,6 +39,7 @@ import { redis } from "./queue.js"
 import { getRuntimeEnv } from "./runtime-env.js"
 import { canRunWorkflow } from "./workflow-access.js"
 import { recordTriggerFireRefusal } from "./trigger-fire-refusal.js"
+import { refusePreviewFire } from "./preview-fire-refusal.js"
 import { resolveBillingContext, shouldRefuseDegradedRunFor } from "./billing-context.js"
 import { billingPairColumns } from "./insert-job.js"
 import { orchestrationQueue } from "./orchestration-queue.js"
@@ -225,6 +226,11 @@ export async function firePluginTrigger(input: PluginTriggerFireInput): Promise<
     await recordTriggerFireRefusal({ workflowId, userId, triggerType: lane, triggerId: row.id })
     return { fired: false, reason: "refused" }
   }
+  // The branch this event runs stops at a Preview render nobody is there to
+  // review: refused before anything is created or billed (one deduped row).
+  if (await refusePreviewFire({ workflowId, userId, triggerType: lane, triggerId: row.id, triggerNodeId })) {
+    return { fired: false, reason: "refused" }
+  }
 
   const billingContext = await resolveBillingContext({ userId, workflowId })
   if (await shouldRefuseDegradedRunFor(billingContext, workflowId)) return { fired: false, reason: "degraded" }
@@ -257,6 +263,8 @@ export async function firePluginTrigger(input: PluginTriggerFireInput): Promise<
     triggerNodeId,
     triggerData: input.triggerData,
     billingContext,
+    // An account event cannot review a Preview render.
+    reviewerPresent: false,
   }
   await orchestrationQueue.add("workflow-execution", jobData, { jobId: execution.id })
   // Best effort, like the webhook lane: what the trigger list shows as "last fired".

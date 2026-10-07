@@ -78,9 +78,11 @@ import { SettingPicker } from "@/lib/picker-ui"
 import { LoopSubjectPicker } from "@/lib/picker-ui"
 import { PersonPicker } from "@/lib/picker-ui"
 import { MOODS as BASE_MOODS, POSES as BASE_POSES, buildFramingHints, getLensPromptHint, getCameraFormatPromptHint, buildLightingHints, getColorLookPromptHint, buildAtmosphereHints, buildActionFxHints, getStylePromptHint, getSettingPromptHint, getLoopSubjectPromptHint, buildMoodHints, buildPoseHints, buildStylingHints, buildTemporalHints, buildMaterialHints, getPhotoGenrePromptHint, getBackdropPromptHint, buildHeldPropHints, buildPhotographerHints, buildAestheticHints, getEraPromptHint, buildExposureHints, getRenderQualityPromptHint, getCompositionEffectPromptHint, buildPostProcessHints, buildPersonHints, CHARACTER_FX_POSITIONS, CHARACTER_FX_DURATIONS, CHARACTER_FX_INTENSITIES, CHARACTER_MOTION_POSITIONS, CHARACTER_MOTION_PACES, CHARACTER_MOTION_MAX_PICKS } from "@nodaro/prompts"
-import { getAnimal, getVehicle, getWeapon, getFurniture, pickIds } from "@nodaro/shared"
-import { getTransitionLabel, getTransitionOptions, type TransitionOption } from "@nodaro/prompts"
+import { getAnimal, getVehicle, getWeapon, getFurniture } from "@nodaro/shared"
 import { transitionLeverValue, transitionLevers, transitionPickKind, transitionPickPatch, type TransitionLeverField, type TransitionPickKind } from "./transition-levers"
+import { TransitionOptionSelects } from "./transition-option-selects"
+import { useColorLookPickerCopy, useLightingPickerCopy, useLoopSubjectPickerCopy, useTransitionPickerCopy } from "./picker-copy"
+import { useLocalizeOptionLabel } from "@/lib/i18n/labels"
 import { LookArt, MoodEmoji, useShowsLookRenders } from "@/lib/picker-ui"
 import { LookPreviewStyleSwitch } from "@/components/nodes/look-preview-style"
 import { DimensionTileGrid } from "@/lib/picker-ui"
@@ -422,6 +424,8 @@ export function CameraFormatConfig({ data, onUpdate }: ConfigProps<CameraFormatD
 export function LightingConfig({ data, onUpdate }: ConfigProps<LightingData>) {
   const t = useT()
   const dir = usePickerDir()
+  const localizeOption = useLocalizeOptionLabel()
+  const pickerCopy = useLightingPickerCopy()
   const maxItemsPerRow = data.maxItemsPerRow ?? 2
   return (
     <div className="flex flex-col gap-3" dir={dir}>
@@ -448,6 +452,8 @@ export function LightingConfig({ data, onUpdate }: ConfigProps<LightingData>) {
           colorTemperature: data.colorTemperature,
         }}
         onChange={(patch) => onUpdate(patch)}
+        localizeLabel={localizeOption}
+        copy={pickerCopy}
       />
       <div className="flex items-center justify-between gap-2 pt-1">
         <Label htmlFor="lighting-max-items-per-row" className="text-xs text-muted-foreground">
@@ -475,6 +481,8 @@ export function LightingConfig({ data, onUpdate }: ConfigProps<LightingData>) {
 export function ColorLookConfig({ data, onUpdate }: ConfigProps<ColorLookData>) {
   const t = useT()
   const dir = usePickerDir()
+  const localizeOption = useLocalizeOptionLabel()
+  const pickerCopy = useColorLookPickerCopy()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
@@ -494,6 +502,8 @@ export function ColorLookConfig({ data, onUpdate }: ConfigProps<ColorLookData>) 
       <ColorLookPicker
         value={data.colorLook || "warm"}
         onValueChange={(v) => onUpdate({ colorLook: v })}
+        localizeLabel={localizeOption}
+        copy={pickerCopy}
       />
     </div>
   )
@@ -606,6 +616,8 @@ export function SettingConfig({ data, onUpdate }: ConfigProps<SettingData>) {
 export function LoopSubjectConfig({ data, onUpdate }: ConfigProps<LoopSubjectData>) {
   const t = useT()
   const dir = usePickerDir()
+  const localizeOption = useLocalizeOptionLabel()
+  const pickerCopy = useLoopSubjectPickerCopy()
   return (
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
@@ -622,6 +634,8 @@ export function LoopSubjectConfig({ data, onUpdate }: ConfigProps<LoopSubjectDat
       <LoopSubjectPicker
         value={data.loopSubject || "tunnel"}
         onValueChange={(v) => onUpdate({ loopSubject: v })}
+        localizeLabel={localizeOption}
+        copy={pickerCopy}
       />
       <p className="text-[10px] text-muted-foreground leading-snug">
         {t("paramcfg.wireThisNodeSOutputInto")}
@@ -1419,6 +1433,8 @@ function CHARACTER_MOTION_TIMING_SELECTS() {
 export function TransitionConfig({ data, onUpdate }: ConfigProps<TransitionData>) {
   const t = useT()
   const dir = usePickerDir()
+  const localizeOption = useLocalizeOptionLabel()
+  const pickerCopy = useTransitionPickerCopy()
   const composed = composeTransitionHintForNode(data)
   // A cut offers fewer levers (no Intensity, no `full`, Duration only as a
   // blend on a blendable cut) — see `transition-levers.ts`.
@@ -1442,6 +1458,8 @@ export function TransitionConfig({ data, onUpdate }: ConfigProps<TransitionData>
         value={data.transition}
         onValueChange={(v) => onUpdate(transitionPickPatch(data.transition, v as string | string[] | undefined, data.duration))}
         maxSelected={2}
+        localizeLabel={localizeOption}
+        copy={pickerCopy}
       />
 
       <div className={`grid ${TIMING_GRID_COLS[timingSelects.length]} gap-2`}>
@@ -1468,66 +1486,9 @@ export function TransitionConfig({ data, onUpdate }: ConfigProps<TransitionData>
         ))}
       </div>
 
-      {/* The picked rows' OWN options (a wipe's direction) — declared by the
-          catalog row, so the control appears only beside a transition it
-          changes. `auto` stores nothing. */}
-      {transitionOptionsFor(data.transition).map((option) => (
-        <div key={option.field} className="flex flex-col gap-1">
-          <Label className="text-[10px] uppercase">{option.label}</Label>
-          <Select
-            value={typeof data[option.field] === "string" && data[option.field] ? (data[option.field] as string) : "auto"}
-            onValueChange={(v) => onUpdate({ [option.field]: v === "auto" ? undefined : v })}
-          >
-            <SelectTrigger className="h-8 text-xs" aria-label={option.label}><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {option.choices.map((choice) => (
-                <SelectItem key={choice.id} value={choice.id} title={choice.description}>
-                  {choice.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      ))}
+      <TransitionOptionSelects data={data} onUpdate={onUpdate} />
     </div>
   )
-}
-
-/**
- * The per-row options of every picked transition (a wipe's direction, a row's
- * Style), each FIELD once, in pick order — see `Transition.options`.
- *
- * A field is one node-data key, so a two-pick of two rows that both declare it
- * (two styled rows) gets ONE control: its rows are the first row's, then the
- * second's own choices named after their row ("Garden Bloom · Hedge doors"),
- * and the shared `auto` entry reads "Default look" (it is each row's default).
- * Choice ids carry their row's id, so the one stored value styles the row it
- * belongs to and the other row keeps its default look.
- */
-function transitionOptionsFor(value: string | string[] | undefined): ReadonlyArray<TransitionOption> {
-  const byField = new Map<string, TransitionOption>()
-  for (const id of pickIds(value)) {
-    for (const option of getTransitionOptions(id)) {
-      const seen = byField.get(option.field)
-      if (!seen) {
-        byField.set(option.field, option)
-        continue
-      }
-      const known = new Set(seen.choices.map((c) => c.id))
-      const extra = option.choices
-        .filter((c) => !known.has(c.id))
-        .map((c) => ({ ...c, label: `${getTransitionLabel(id)} · ${c.label}` }))
-      // The one `auto` entry now stands for EACH row's default look, so it is
-      // named neutrally rather than after the first row's look.
-      const choices = seen.choices.map((c) =>
-        c.id === "auto"
-          ? { ...c, label: tx("paramcfg.transitionDefaultLook"), description: tx("paramcfg.transitionDefaultLookHint") }
-          : c,
-      )
-      byField.set(option.field, { ...seen, choices: [...choices, ...extra] })
-    }
-  }
-  return [...byField.values()]
 }
 
 export function CharacterFxConfig({ data, onUpdate }: ConfigProps<CharacterFxData>) {

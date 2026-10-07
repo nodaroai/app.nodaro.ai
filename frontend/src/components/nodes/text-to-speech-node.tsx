@@ -15,8 +15,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import { getVoiceName } from "@/lib/tts-voices"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
-import { useModelCredits } from "@/ee/hooks/use-model-credits"
-import { DEFAULT_TTS_PROVIDER } from "@nodaro/shared"
+import { useSpeechPricing } from "@/ee/hooks/use-speech-pricing"
 import { AudioResultOverlay } from "./audio-result-overlay"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import type { TextToSpeechData } from "@/types/nodes"
@@ -37,8 +36,11 @@ function TextToSpeechNodeComponent({ id, data, selected }: NodeProps) {
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [showThumbnails, setShowThumbnails] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
-  // A node with no stored model runs, and is billed, as the default speech model.
-  const credits = useModelCredits(nodeData.provider || DEFAULT_TTS_PROVIDER, 4)
+  // Priced as the run reserves: the flat row of the model the node runs as (the
+  // default when none is stored), or — when the server serves that model's
+  // per-100-characters row — by the length of the text the node will send. A
+  // text that arrives at run time shows a range and runs at its ceiling.
+  const price = useSpeechPricing(id, "text-to-speech", nodeData as unknown as Record<string, unknown>)
 
   function handleDeleteResult(indexToDelete: number) {
     updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedAudioUrl"))
@@ -57,12 +59,13 @@ function TextToSpeechNodeComponent({ id, data, selected }: NodeProps) {
       label={nodeData.label}
       icon={<Mic className="h-4 w-4" />}
       category="ai"
-      credits={credits}
+      credits={price.range ? undefined : price.credits}
+      creditsRange={price.range}
       selected={selected}
       isRunning={status === "running"}
       hideHeader
       topToolbarContent={
-                  <NodeQuickStrip nodeId={id} credits={credits} isRunning={status === "running"} />
+                  <NodeQuickStrip nodeId={id} credits={price.range?.max ?? price.credits} isRunning={status === "running"} />
       }
       bottomToolbarContent={
         showThumbnails && results.length > 1 ? (

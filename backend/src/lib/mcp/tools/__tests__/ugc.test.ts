@@ -82,6 +82,88 @@ describe("registration", () => {
   })
 })
 
+describe("the lane's two job tools", () => {
+  function jobBuilder(answers: Partial<Record<"segments" | "finish", Answer>>) {
+    const fastify = Fastify()
+    const received: Record<string, Record<string, unknown>> = {}
+    for (const name of ["segments", "finish"] as const) {
+      fastify.post(`/v1/ugc/${name}`, async (req, reply) => {
+        received[name] = req.body as Record<string, unknown>
+        const [status, body] = answers[name] ?? [200, { jobId: "00000000-0000-4000-8000-0000000000a1" }]
+        return reply.status(status).send(body)
+      })
+    }
+    return { fastify, received }
+  }
+  it("are registered, are not read-only, and carry no outputSchema", async () => {
+    const tools = await listTools(serverWith(Fastify(), []))
+    for (const name of ["ugc_split_speech", "ugc_finish_clips"]) {
+      const t = tools.find((x) => x.name === name)!
+      expect(t, name).toBeDefined()
+      expect((t as unknown as { annotations?: { readOnlyHint?: boolean } }).annotations?.readOnlyHint, name).toBe(false)
+      expect(t).not.toHaveProperty("outputSchema")
+      expect(t.description).toContain("Used by the ugc-website recipe (get_recipe).")
+      expect(t.description).not.toMatch(/\d+\s*(cr|credits?)\b/i)
+    }
+  })
+  it("ugc_split_speech forwards the plan, the audio url and the word timings under the route's own names", async () => {
+    const { fastify, received } = jobBuilder({})
+    const alignment = [{ word: "a", start: 0.1, end: 0.4 }]
+    const res = await callTool(serverWith(fastify), "ugc_split_speech", { plan: { marker: 1 }, audio_url: "https://cdn.example/s.mp3", alignment })
+    expect(res.isError).toBeUndefined()
+    expect(received.segments).toMatchObject({ userId: USER, plan: { marker: 1 }, audioUrl: "https://cdn.example/s.mp3", alignment })
+  })
+  it("ugc_split_speech with no audio is refused before any call", async () => {
+    const { fastify, received } = jobBuilder({})
+    const res = await callTool(serverWith(fastify), "ugc_split_speech", { plan: {}, alignment: [{ word: "a", start: 0, end: 1 }] })
+    expect(res.isError).toBe(true)
+    expect(text(res)).toBe("Pass audio_url or audio_asset_id — the speech to split.")
+    expect(received.segments).toBeUndefined()
+  })
+  it("ugc_finish_clips sends one roll list per clip: the first render, then its re-render when there is one", async () => {
+    const { fastify, received } = jobBuilder({})
+    const res = await callTool(serverWith(fastify), "ugc_finish_clips", {
+      segments: [{ index: 1 }, { index: 2 }],
+      clips: [{ clip: 1, video_url: "https://cdn.example/1.mp4" }, { clip: 2, video_url: "https://cdn.example/2.mp4", reroll_video_url: "https://cdn.example/2b.mp4" }],
+    })
+    expect(res.isError).toBeUndefined()
+    expect(received.finish).toMatchObject({
+      userId: USER,
+      segments: [{ index: 1 }, { index: 2 }],
+      clips: [{ clip: 1, rolls: ["https://cdn.example/1.mp4"] }, { clip: 2, rolls: ["https://cdn.example/2.mp4", "https://cdn.example/2b.mp4"] }],
+    })
+  })
+  it("a router 404 (the plugin is not served) is not_available, like the builders", async () => {
+    const res = await callTool(serverWith(Fastify()), "ugc_split_speech", { plan: {}, audio_url: "https://cdn.example/s.mp3", alignment: [{ word: "a", start: 0, end: 1 }] })
+    expect(res.isError).toBe(true)
+    expect(text(res)).toContain("not_available")
+  })
+})
+
+describe("build_ugc_clips on a two-phase answer", () => {
+  it("forwards `segments`, and prices the ceiling, the estimate and the worst case from the plugin's own clip counts", async () => {
+    const item = (label: string) => [{ label, tool: "generate_video", args: {}, count: 1 }]
+    const { fastify, received } = builder({ clips: [200, { errors: [], quoteItems: item("c"), estimateQuoteItems: item("e"), worstCaseQuoteItems: item("w"), clipCount: 4, estimateClipCount: 3, worstCaseClipCount: 4 }] })
+    h.quote.mockResolvedValueOnce({ spent: [], lines: [], total: 9, skipped: [] }).mockResolvedValueOnce({ spent: [], lines: [], total: 5, skipped: [] }).mockResolvedValueOnce({ spent: [], lines: [], total: 14, skipped: [] })
+    const res = await callTool(serverWith(fastify), "build_ugc_clips", { plan: {}, gender: "woman", identity_images: ["https://cdn.example/a.png"], segments: [{ index: 1 }] })
+    expect(received.clips!.body).toMatchObject({ segments: [{ index: 1 }] })
+    expect(h.quote.mock.calls.map((c) => (c[0] as { clipCount: number }).clipCount)).toEqual([4, 3, 4])
+    const body = JSON.parse(text(res))
+    expect(body.quote.total).toBe(9)
+    expect(body.estimate.total).toBe(5)
+    expect(body.worstCase.total).toBe(14)
+  })
+  it("an answer with none of the new fields is priced exactly as before (no `estimate`, one quote call)", async () => {
+    const { fastify } = builder({ clips: [200, { errors: [], quoteItems: [{ label: "c", tool: "generate_video", args: {}, count: 1 }], clips: [{}, {}] }] })
+    h.quote.mockResolvedValueOnce({ spent: [], lines: [], total: 7, skipped: [] })
+    const res = await callTool(serverWith(fastify), "build_ugc_clips", { plan: {}, gender: "woman", identity_images: ["https://cdn.example/a.png"] })
+    expect(h.quote).toHaveBeenCalledTimes(1)
+    expect(h.quote.mock.calls[0]![0]).toMatchObject({ clipCount: 2 })
+    expect(JSON.parse(text(res))).not.toHaveProperty("estimate")
+    expect(JSON.parse(text(res))).not.toHaveProperty("worstCase")
+  })
+})
+
 describe("build_ugc_creator", () => {
   it("sampled: forwards every key explicitly, as the builder's own names, with the caller's identity", async () => {
     const { fastify, received } = builder({ creator: [200, { kind: "sampled" }] })
@@ -293,6 +375,15 @@ describe("build_ugc_cards", () => {
     expect(received.cards!.body).toEqual({ userId: USER, plan: { p: 1 }, words: [{ text: "hi", startMs: 0, endMs: 300 }], videoDurationMs: 5000 })
     await callTool(serverWith(fastify), "build_ugc_cards", { plan: { p: 1 }, alignment: [{ word: "hi", start: 0, end: 0.3 }] })
     expect(received.cards!.body).toEqual({ userId: USER, plan: { p: 1 }, alignment: [{ word: "hi", start: 0, end: 0.3 }] })
+  })
+  it("forwards caption_style as captionStyle, and refuses an unknown style before the builder", async () => {
+    const { fastify, received } = builder({ cards: [200, { layers: [] }] })
+    await callTool(serverWith(fastify), "build_ugc_cards", { plan: { p: 1 }, alignment: [{ word: "hi", start: 0, end: 0.3 }], caption_style: "karaoke" })
+    expect(received.cards!.body).toEqual({ userId: USER, plan: { p: 1 }, alignment: [{ word: "hi", start: 0, end: 0.3 }], captionStyle: "karaoke" })
+    const fresh = builder({ cards: [200, { layers: [] }] })
+    const res = await callTool(serverWith(fresh.fastify), "build_ugc_cards", { plan: { p: 1 }, alignment: [{ word: "hi", start: 0, end: 0.3 }], caption_style: "loud" })
+    expect(res.isError).toBe(true)
+    expect(fresh.received.cards).toBeUndefined()
   })
 })
 

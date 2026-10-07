@@ -34,6 +34,9 @@ export const RUN_BUTTON_TYPES = new Set([
   // to fire once on its own before trusting a whole run to it. It costs no
   // credits, so it belongs on this list rather than with the generate buttons.
   "webhook-output",
+  // Same reasoning for the two collection nodes: free, and worth one try on
+  // their own before a schedule relies on them.
+  "collection-write", "collection-read",
 ])
 
 // Node types that produce media results (excludes text-only nodes like combine-text, split-text, extract-field, sub-workflow, social posts)
@@ -50,5 +53,7 @@ export const RESULT_PRODUCING_TYPES: ReadonlySet<string> = new Set([
   t !== "describe-to-picker" &&
   // A webhook delivery produces a status code, not media — it has a Run
   // button but nothing for a results gallery to show.
-  t !== "webhook-output"
+  t !== "webhook-output" &&
+  // A collection write/read produces records (json + text), not media.
+  t !== "collection-write" && t !== "collection-read"
 ))

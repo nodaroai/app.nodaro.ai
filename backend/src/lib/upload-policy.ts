@@ -17,11 +17,12 @@
  * deployment preferring availability over enforcement catches inside its own
  * `check` and returns `{ allow: true }` itself.
  *
- * COVERAGE (the totality half lives in upload-policy-totality.test.ts):
+ * COVERAGE (the totality half lives in __tests__/upload-policy.test.ts):
  * every lane where upload bytes flow THROUGH this backend — the multipart
  * routes (/v1/upload, /v1/upload/image, /v1/upload/audio, /v1/upload-json),
- * the token-authed proxy PUT (/v1/upload-proxy/:token), and the browser
- * handoff POST (/v1/upload-handoff/:token). The MCP prepare_*_upload verbs
+ * the token-authed proxy PUT (/v1/upload-proxy/:token), the browser
+ * handoff POST (/v1/upload-handoff/:token), and Site Capture's stored
+ * screenshots (lane "site-capture"). The MCP prepare_*_upload verbs
  * mint DIRECT presigned R2 PUTs whose bytes never pass through us — so when
  * any upload policy is registered they mint proxy-lane URLs instead (same
  * PUT contract for the caller, policed bytes for the deployment).
@@ -44,6 +45,10 @@ export type UploadLane =
   // disk rather than buffering, so the policy sees metadata (not a full buffer)
   // until a streaming-policy variant exists.
   | "media-import"
+  // Site Capture's screenshots of a web page, stored as the user's assets
+  // (lib/site-capture-store.ts) — a capture run's records, or a relayed
+  // capture's images downloaded from the connected cloud.
+  | "site-capture"
 
 export interface UploadCheckInput {
   readonly kind: UploadKind

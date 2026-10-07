@@ -35,6 +35,11 @@ on:
 
 permissions: {}
 
+# onnxruntime-node's postinstall fetches CUDA libraries from NuGet on
+# linux/x64 unless told to skip; nothing here runs the GPU path.
+env:
+  ONNXRUNTIME_NODE_INSTALL: skip
+
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false

@@ -1,0 +1,933 @@
+{
+  "description": "Edit Plan nodes holding a person's review (`editedEdl`, A5.1) beside the planner's output. Both engines read them through the shared editPlanSavedOutput (A5.2; TA13, TA16, TA17): a clip set stays on the PLAN's indices with \"\" at every dropped clip, a scalar read is the first kept clip, and a Tighten edit replaces the cut. `tightenMalformed` matches its basis but holds a cut that is not well-formed: it is applied, and the render refuses it (decided 2026-10-05). `stale` was made on another plan and is ignored. The clip cases also hold a `__listResults` an older server run persisted (the planner's clips): neither engine may read it. The backend test (edit-plan-review-engines.test.ts, beside this folder) runs the orchestrator's saved-data path; the frontend test (frontend/src/components/editor/workflow-editor/__tests__/edit-plan-review-engines.test.ts) runs the canvas readers.",
+  "cases": {
+    "oneKept": {
+      "status": "applied",
+      "plan": {
+        "id": "find-clips",
+        "type": "edit-plan",
+        "data": {
+          "label": "Find Clips",
+          "mode": "clips",
+          "generatedJson": [
+            {
+              "version": 1,
+              "clock": "master",
+              "sources": [
+                {
+                  "id": "cam",
+                  "kind": "video",
+                  "url": "https://media.test/episode.mp4",
+                  "role": "master-audio"
+                }
+              ],
+              "segments": [
+                {
+                  "id": "seg-0",
+                  "inMs": 1000,
+                  "outMs": 60000,
+                  "video": "cam"
+                }
+              ],
+              "dropped": [],
+              "meta": {
+                "title": "Why remote teams fail",
+                "hook": "Nobody tells you this"
+              }
+            },
+            {
+              "version": 1,
+              "clock": "master",
+              "sources": [
+                {
+                  "id": "cam",
+                  "kind": "video",
+                  "url": "https://media.test/episode.mp4",
+                  "role": "master-audio"
+                }
+              ],
+              "segments": [
+                {
+                  "id": "seg-0",
+                  "inMs": 70000,
+                  "outMs": 128000,
+                  "video": "cam"
+                }
+              ],
+              "dropped": [],
+              "meta": {
+                "title": "The pricing myth",
+                "hook": "We charged half"
+              }
+            },
+            {
+              "version": 1,
+              "clock": "master",
+              "sources": [
+                {
+                  "id": "cam",
+                  "kind": "video",
+                  "url": "https://media.test/episode.mp4",
+                  "role": "master-audio"
+                }
+              ],
+              "segments": [
+                {
+                  "id": "seg-0",
+                  "inMs": 130000,
+                  "outMs": 221000,
+                  "video": "cam"
+                }
+              ],
+              "dropped": [],
+              "meta": {
+                "title": "Our first hire",
+                "hook": "We hired wrong"
+              }
+            },
+            {
+              "version": 1,
+              "clock": "master",
+              "sources": [
+                {
+                  "id": "cam",
+                  "kind": "video",
+                  "url": "https://media.test/episode.mp4",
+                  "role": "master-audio"
+                }
+              ],
+              "segments": [
+                {
+                  "id": "seg-0",
+                  "inMs": 240000,
+                  "outMs": 300000,
+                  "video": "cam"
+                }
+              ],
+              "dropped": [],
+              "meta": {
+                "title": "The pivot",
+                "hook": "We almost quit"
+              }
+            }
+          ],
+          "editedEdl": {
+            "v": 1,
+            "kind": "clips",
+            "basis": "60cffdfcd6dfe5c7",
+            "clips": [
+              {
+                "keep": false
+              },
+              {
+                "keep": true,
+                "hook": "Half price, double trouble"
+              },
+              {
+                "keep": false
+              },
+              {
+                "keep": false
+              }
+            ]
+          },
+          "__listResults": [
+            "{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"cam\",\"kind\":\"video\",\"url\":\"https://media.test/episode.mp4\",\"role\":\"master-audio\"}],\"segments\":[{\"id\":\"seg-0\",\"inMs\":1000,\"outMs\":60000,\"video\":\"cam\"}],\"dropped\":[],\"meta\":{\"title\":\"Why remote teams fail\",\"hook\":\"Nobody tells you this\"}}",
+            "{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"cam\",\"kind\":\"video\",\"url\":\"https://media.test/episode.mp4\",\"role\":\"master-audio\"}],\"segments\":[{\"id\":\"seg-0\",\"inMs\":70000,\"outMs\":128000,\"video\":\"cam\"}],\"dropped\":[],\"meta\":{\"title\":\"The pricing myth\",\"hook\":\"We charged half\"}}",
+            "{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"cam\",\"kind\":\"video\",\"url\":\"https://media.test/episode.mp4\",\"role\":\"master-audio\"}],\"segments\":[{\"id\":\"seg-0\",\"inMs\":130000,\"outMs\":221000,\"video\":\"cam\"}],\"dropped\":[],\"meta\":{\"title\":\"Our first hire\",\"hook\":\"We hired wrong\"}}",
+            "{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"cam\",\"kind\":\"video\",\"url\":\"https://media.test/episode.mp4\",\"role\":\"master-audio\"}],\"segments\":[{\"id\":\"seg-0\",\"inMs\":240000,\"outMs\":300000,\"video\":\"cam\"}],\"dropped\":[],\"meta\":{\"title\":\"The pivot\",\"hook\":\"We almost quit\"}}"
+          ]
+        }
+      },
+      "expected": {
+        "scalar": "{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"cam\",\"kind\":\"video\",\"url\":\"https://media.test/episode.mp4\",\"role\":\"master-audio\"}],\"segments\":[{\"id\":\"seg-0\",\"inMs\":70000,\"outMs\":128000,\"video\":\"cam\"}],\"dropped\":[],\"meta\":{\"title\":\"The pricing myth\",\"hook\":\"Half price, double trouble\"}}",
+        "list": [
+          "",
+          "{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"cam\",\"kind\":\"video\",\"url\":\"https://media.test/episode.mp4\",\"role\":\"master-audio\"}],\"segments\":[{\"id\":\"seg-0\",\"inMs\":70000,\"outMs\":128000,\"video\":\"cam\"}],\"dropped\":[],\"meta\":{\"title\":\"The pricing myth\",\"hook\":\"Half price, double trouble\"}}",
+          "",
+          ""
+        ],
+        "fanOut": null
+      }
+    },
+    "twoKept": {
+      "status": "applied",
+      "plan": {
+        "id": "find-clips",
+        "type": "edit-plan",
+        "data": {
+          "label": "Find Clips",
+          "mode": "clips",
+          "generatedJson": [
+            {
+              "version": 1,
+              "clock": "master",
+              "sources": [
+                {
+                  "id": "cam",
+                  "kind": "video",
+                  "url": "https://media.test/episode.mp4",
+                  "role": "master-audio"
+                }
+              ],
+              "segments": [
+                {
+                  "id": "seg-0",
+                  "inMs": 1000,
+                  "outMs": 60000,
+                  "video": "cam"
+                }
+              ],
+              "dropped": [],
+              "meta": {
+                "title": "Why remote teams fail",
+                "hook": "Nobody tells you this"
+              }
+            },
+            {
+              "version": 1,
+              "clock": "master",
+              "sources": [
+                {
+                  "id": "cam",
+                  "kind": "video",
+                  "url": "https://media.test/episode.mp4",
+                  "role": "master-audio"
+                }
+              ],
+              "segments": [
+                {
+                  "id": "seg-0",
+                  "inMs": 70000,
+                  "outMs": 128000,
+                  "video": "cam"
+                }
+              ],
+              "dropped": [],
+              "meta": {
+                "title": "The pricing myth",
+                "hook": "We charged half"
+              }
+            },
+            {
+              "version": 1,
+              "clock": "master",
+              "sources": [
+                {
+                  "id": "cam",
+                  "kind": "video",
+                  "url": "https://media.test/episode.mp4",
+                  "role": "master-audio"
+                }
+              ],
+              "segments": [
+                {
+                  "id": "seg-0",
+                  "inMs": 130000,
+                  "outMs": 221000,
+                  "video": "cam"
+                }
+              ],
+              "dropped": [],
+              "meta": {
+                "title": "Our first hire",
+                "hook": "We hired wrong"
+              }
+            },
+            {
+              "version": 1,
+              "clock": "master",
+              "sources": [
+                {
+                  "id": "cam",
+                  "kind": "video",
+                  "url": "https://media.test/episode.mp4",
+                  "role": "master-audio"
+                }
+              ],
+              "segments": [
+                {
+                  "id": "seg-0",
+                  "inMs": 240000,
+                  "outMs": 300000,
+                  "video": "cam"
+                }
+              ],
+              "dropped": [],
+              "meta": {
+                "title": "The pivot",
+                "hook": "We almost quit"
+              }
+            }
+          ],
+          "editedEdl": {
+            "v": 1,
+            "kind": "clips",
+            "basis": "60cffdfcd6dfe5c7",
+            "clips": [
+              {
+                "keep": true
+              },
+              {
+                "keep": false
+              },
+              {
+                "keep": false
+              },
+              {
+                "keep": true,
+                "hook": "We nearly quit, then pivoted"
+              }
+            ]
+          },
+          "__listResults": [
+            "{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"cam\",\"kind\":\"video\",\"url\":\"https://media.test/episode.mp4\",\"role\":\"master-audio\"}],\"segments\":[{\"id\":\"seg-0\",\"inMs\":1000,\"outMs\":60000,\"video\":\"cam\"}],\"dropped\":[],\"meta\":{\"title\":\"Why remote teams fail\",\"hook\":\"Nobody tells you this\"}}",
+            "{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"cam\",\"kind\":\"video\",\"url\":\"https://media.test/episode.mp4\",\"role\":\"master-audio\"}],\"segments\":[{\"id\":\"seg-0\",\"inMs\":70000,\"outMs\":128000,\"video\":\"cam\"}],\"dropped\":[],\"meta\":{\"title\":\"The pricing myth\",\"hook\":\"We charged half\"}}",
+            "{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"cam\",\"kind\":\"video\",\"url\":\"https://media.test/episode.mp4\",\"role\":\"master-audio\"}],\"segments\":[{\"id\":\"seg-0\",\"inMs\":130000,\"outMs\":221000,\"video\":\"cam\"}],\"dropped\":[],\"meta\":{\"title\":\"Our first hire\",\"hook\":\"We hired wrong\"}}",
+            "{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"cam\",\"kind\":\"video\",\"url\":\"https://media.test/episode.mp4\",\"role\":\"master-audio\"}],\"segments\":[{\"id\":\"seg-0\",\"inMs\":240000,\"outMs\":300000,\"video\":\"cam\"}],\"dropped\":[],\"meta\":{\"title\":\"The pivot\",\"hook\":\"We almost quit\"}}"
+          ]
+        }
+      },
+      "expected": {
+        "scalar": "{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"cam\",\"kind\":\"video\",\"url\":\"https://media.test/episode.mp4\",\"role\":\"master-audio\"}],\"segments\":[{\"id\":\"seg-0\",\"inMs\":1000,\"outMs\":60000,\"video\":\"cam\"}],\"dropped\":[],\"meta\":{\"title\":\"Why remote teams fail\",\"hook\":\"Nobody tells you this\"}}",
+        "list": [
+          "{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"cam\",\"kind\":\"video\",\"url\":\"https://media.test/episode.mp4\",\"role\":\"master-audio\"}],\"segments\":[{\"id\":\"seg-0\",\"inMs\":1000,\"outMs\":60000,\"video\":\"cam\"}],\"dropped\":[],\"meta\":{\"title\":\"Why remote teams fail\",\"hook\":\"Nobody tells you this\"}}",
+          "",
+          "",
+          "{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"cam\",\"kind\":\"video\",\"url\":\"https://media.test/episode.mp4\",\"role\":\"master-audio\"}],\"segments\":[{\"id\":\"seg-0\",\"inMs\":240000,\"outMs\":300000,\"video\":\"cam\"}],\"dropped\":[],\"meta\":{\"title\":\"The pivot\",\"hook\":\"We nearly quit, then pivoted\"}}"
+        ],
+        "fanOut": {
+          "items": [
+            "{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"cam\",\"kind\":\"video\",\"url\":\"https://media.test/episode.mp4\",\"role\":\"master-audio\"}],\"segments\":[{\"id\":\"seg-0\",\"inMs\":1000,\"outMs\":60000,\"video\":\"cam\"}],\"dropped\":[],\"meta\":{\"title\":\"Why remote teams fail\",\"hook\":\"Nobody tells you this\"}}",
+            "{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"cam\",\"kind\":\"video\",\"url\":\"https://media.test/episode.mp4\",\"role\":\"master-audio\"}],\"segments\":[{\"id\":\"seg-0\",\"inMs\":240000,\"outMs\":300000,\"video\":\"cam\"}],\"dropped\":[],\"meta\":{\"title\":\"The pivot\",\"hook\":\"We nearly quit, then pivoted\"}}"
+          ],
+          "rowIndices": [
+            0,
+            3
+          ]
+        }
+      }
+    },
+    "noneKept": {
+      "status": "applied",
+      "plan": {
+        "id": "find-clips",
+        "type": "edit-plan",
+        "data": {
+          "label": "Find Clips",
+          "mode": "clips",
+          "generatedJson": [
+            {
+              "version": 1,
+              "clock": "master",
+              "sources": [
+                {
+                  "id": "cam",
+                  "kind": "video",
+                  "url": "https://media.test/episode.mp4",
+                  "role": "master-audio"
+                }
+              ],
+              "segments": [
+                {
+                  "id": "seg-0",
+                  "inMs": 1000,
+                  "outMs": 60000,
+                  "video": "cam"
+                }
+              ],
+              "dropped": [],
+              "meta": {
+                "title": "Why remote teams fail",
+                "hook": "Nobody tells you this"
+              }
+            },
+            {
+              "version": 1,
+              "clock": "master",
+              "sources": [
+                {
+                  "id": "cam",
+                  "kind": "video",
+                  "url": "https://media.test/episode.mp4",
+                  "role": "master-audio"
+                }
+              ],
+              "segments": [
+                {
+                  "id": "seg-0",
+                  "inMs": 70000,
+                  "outMs": 128000,
+                  "video": "cam"
+                }
+              ],
+              "dropped": [],
+              "meta": {
+                "title": "The pricing myth",
+                "hook": "We charged half"
+              }
+            },
+            {
+              "version": 1,
+              "clock": "master",
+              "sources": [
+                {
+                  "id": "cam",
+                  "kind": "video",
+                  "url": "https://media.test/episode.mp4",
+                  "role": "master-audio"
+                }
+              ],
+              "segments": [
+                {
+                  "id": "seg-0",
+                  "inMs": 130000,
+                  "outMs": 221000,
+                  "video": "cam"
+                }
+              ],
+              "dropped": [],
+              "meta": {
+                "title": "Our first hire",
+                "hook": "We hired wrong"
+              }
+            },
+            {
+              "version": 1,
+              "clock": "master",
+              "sources": [
+                {
+                  "id": "cam",
+                  "kind": "video",
+                  "url": "https://media.test/episode.mp4",
+                  "role": "master-audio"
+                }
+              ],
+              "segments": [
+                {
+                  "id": "seg-0",
+                  "inMs": 240000,
+                  "outMs": 300000,
+                  "video": "cam"
+                }
+              ],
+              "dropped": [],
+              "meta": {
+                "title": "The pivot",
+                "hook": "We almost quit"
+              }
+            }
+          ],
+          "editedEdl": {
+            "v": 1,
+            "kind": "clips",
+            "basis": "60cffdfcd6dfe5c7",
+            "clips": [
+              {
+                "keep": false
+              },
+              {
+                "keep": false
+              },
+              {
+                "keep": false
+              },
+              {
+                "keep": false
+              }
+            ]
+          },
+          "__listResults": [
+            "{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"cam\",\"kind\":\"video\",\"url\":\"https://media.test/episode.mp4\",\"role\":\"master-audio\"}],\"segments\":[{\"id\":\"seg-0\",\"inMs\":1000,\"outMs\":60000,\"video\":\"cam\"}],\"dropped\":[],\"meta\":{\"title\":\"Why remote teams fail\",\"hook\":\"Nobody tells you this\"}}",
+            "{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"cam\",\"kind\":\"video\",\"url\":\"https://media.test/episode.mp4\",\"role\":\"master-audio\"}],\"segments\":[{\"id\":\"seg-0\",\"inMs\":70000,\"outMs\":128000,\"video\":\"cam\"}],\"dropped\":[],\"meta\":{\"title\":\"The pricing myth\",\"hook\":\"We charged half\"}}",
+            "{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"cam\",\"kind\":\"video\",\"url\":\"https://media.test/episode.mp4\",\"role\":\"master-audio\"}],\"segments\":[{\"id\":\"seg-0\",\"inMs\":130000,\"outMs\":221000,\"video\":\"cam\"}],\"dropped\":[],\"meta\":{\"title\":\"Our first hire\",\"hook\":\"We hired wrong\"}}",
+            "{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"cam\",\"kind\":\"video\",\"url\":\"https://media.test/episode.mp4\",\"role\":\"master-audio\"}],\"segments\":[{\"id\":\"seg-0\",\"inMs\":240000,\"outMs\":300000,\"video\":\"cam\"}],\"dropped\":[],\"meta\":{\"title\":\"The pivot\",\"hook\":\"We almost quit\"}}"
+          ]
+        }
+      },
+      "expected": {
+        "scalar": null,
+        "list": [
+          "",
+          "",
+          "",
+          ""
+        ],
+        "fanOut": null
+      }
+    },
+    "stale": {
+      "status": "stale",
+      "plan": {
+        "id": "find-clips",
+        "type": "edit-plan",
+        "data": {
+          "label": "Find Clips",
+          "mode": "clips",
+          "generatedJson": [
+            {
+              "version": 1,
+              "clock": "master",
+              "sources": [
+                {
+                  "id": "cam",
+                  "kind": "video",
+                  "url": "https://media.test/episode.mp4",
+                  "role": "master-audio"
+                }
+              ],
+              "segments": [
+                {
+                  "id": "seg-0",
+                  "inMs": 1000,
+                  "outMs": 60000,
+                  "video": "cam"
+                }
+              ],
+              "dropped": [],
+              "meta": {
+                "title": "Why remote teams fail",
+                "hook": "Nobody tells you this"
+              }
+            },
+            {
+              "version": 1,
+              "clock": "master",
+              "sources": [
+                {
+                  "id": "cam",
+                  "kind": "video",
+                  "url": "https://media.test/episode.mp4",
+                  "role": "master-audio"
+                }
+              ],
+              "segments": [
+                {
+                  "id": "seg-0",
+                  "inMs": 70000,
+                  "outMs": 128000,
+                  "video": "cam"
+                }
+              ],
+              "dropped": [],
+              "meta": {
+                "title": "The pricing myth",
+                "hook": "We charged half"
+              }
+            },
+            {
+              "version": 1,
+              "clock": "master",
+              "sources": [
+                {
+                  "id": "cam",
+                  "kind": "video",
+                  "url": "https://media.test/episode.mp4",
+                  "role": "master-audio"
+                }
+              ],
+              "segments": [
+                {
+                  "id": "seg-0",
+                  "inMs": 130000,
+                  "outMs": 221000,
+                  "video": "cam"
+                }
+              ],
+              "dropped": [],
+              "meta": {
+                "title": "Our first hire",
+                "hook": "We hired wrong"
+              }
+            },
+            {
+              "version": 1,
+              "clock": "master",
+              "sources": [
+                {
+                  "id": "cam",
+                  "kind": "video",
+                  "url": "https://media.test/episode.mp4",
+                  "role": "master-audio"
+                }
+              ],
+              "segments": [
+                {
+                  "id": "seg-0",
+                  "inMs": 240000,
+                  "outMs": 300000,
+                  "video": "cam"
+                }
+              ],
+              "dropped": [],
+              "meta": {
+                "title": "The pivot",
+                "hook": "We almost quit"
+              }
+            }
+          ],
+          "editedEdl": {
+            "v": 1,
+            "kind": "clips",
+            "basis": "0000000000000000",
+            "clips": [
+              {
+                "keep": false
+              },
+              {
+                "keep": true
+              },
+              {
+                "keep": false
+              },
+              {
+                "keep": false
+              }
+            ]
+          }
+        }
+      },
+      "expected": {
+        "scalar": "{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"cam\",\"kind\":\"video\",\"url\":\"https://media.test/episode.mp4\",\"role\":\"master-audio\"}],\"segments\":[{\"id\":\"seg-0\",\"inMs\":1000,\"outMs\":60000,\"video\":\"cam\"}],\"dropped\":[],\"meta\":{\"title\":\"Why remote teams fail\",\"hook\":\"Nobody tells you this\"}}",
+        "list": [
+          "{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"cam\",\"kind\":\"video\",\"url\":\"https://media.test/episode.mp4\",\"role\":\"master-audio\"}],\"segments\":[{\"id\":\"seg-0\",\"inMs\":1000,\"outMs\":60000,\"video\":\"cam\"}],\"dropped\":[],\"meta\":{\"title\":\"Why remote teams fail\",\"hook\":\"Nobody tells you this\"}}",
+          "{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"cam\",\"kind\":\"video\",\"url\":\"https://media.test/episode.mp4\",\"role\":\"master-audio\"}],\"segments\":[{\"id\":\"seg-0\",\"inMs\":70000,\"outMs\":128000,\"video\":\"cam\"}],\"dropped\":[],\"meta\":{\"title\":\"The pricing myth\",\"hook\":\"We charged half\"}}",
+          "{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"cam\",\"kind\":\"video\",\"url\":\"https://media.test/episode.mp4\",\"role\":\"master-audio\"}],\"segments\":[{\"id\":\"seg-0\",\"inMs\":130000,\"outMs\":221000,\"video\":\"cam\"}],\"dropped\":[],\"meta\":{\"title\":\"Our first hire\",\"hook\":\"We hired wrong\"}}",
+          "{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"cam\",\"kind\":\"video\",\"url\":\"https://media.test/episode.mp4\",\"role\":\"master-audio\"}],\"segments\":[{\"id\":\"seg-0\",\"inMs\":240000,\"outMs\":300000,\"video\":\"cam\"}],\"dropped\":[],\"meta\":{\"title\":\"The pivot\",\"hook\":\"We almost quit\"}}"
+        ],
+        "fanOut": {
+          "items": [
+            "{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"cam\",\"kind\":\"video\",\"url\":\"https://media.test/episode.mp4\",\"role\":\"master-audio\"}],\"segments\":[{\"id\":\"seg-0\",\"inMs\":1000,\"outMs\":60000,\"video\":\"cam\"}],\"dropped\":[],\"meta\":{\"title\":\"Why remote teams fail\",\"hook\":\"Nobody tells you this\"}}",
+            "{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"cam\",\"kind\":\"video\",\"url\":\"https://media.test/episode.mp4\",\"role\":\"master-audio\"}],\"segments\":[{\"id\":\"seg-0\",\"inMs\":70000,\"outMs\":128000,\"video\":\"cam\"}],\"dropped\":[],\"meta\":{\"title\":\"The pricing myth\",\"hook\":\"We charged half\"}}",
+            "{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"cam\",\"kind\":\"video\",\"url\":\"https://media.test/episode.mp4\",\"role\":\"master-audio\"}],\"segments\":[{\"id\":\"seg-0\",\"inMs\":130000,\"outMs\":221000,\"video\":\"cam\"}],\"dropped\":[],\"meta\":{\"title\":\"Our first hire\",\"hook\":\"We hired wrong\"}}",
+            "{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"cam\",\"kind\":\"video\",\"url\":\"https://media.test/episode.mp4\",\"role\":\"master-audio\"}],\"segments\":[{\"id\":\"seg-0\",\"inMs\":240000,\"outMs\":300000,\"video\":\"cam\"}],\"dropped\":[],\"meta\":{\"title\":\"The pivot\",\"hook\":\"We almost quit\"}}"
+          ],
+          "rowIndices": [
+            0,
+            1,
+            2,
+            3
+          ]
+        }
+      }
+    },
+    "tighten": {
+      "status": "applied",
+      "plan": {
+        "id": "tighten-plan",
+        "type": "edit-plan",
+        "data": {
+          "label": "Find Clips",
+          "mode": "tighten",
+          "generatedJson": {
+            "version": 1,
+            "clock": "master",
+            "sources": [
+              {
+                "id": "cam",
+                "kind": "video",
+                "url": "https://media.test/episode.mp4",
+                "role": "master-audio"
+              }
+            ],
+            "segments": [
+              {
+                "id": "seg-0",
+                "inMs": 0,
+                "outMs": 4000,
+                "video": "cam"
+              },
+              {
+                "id": "seg-1",
+                "inMs": 6000,
+                "outMs": 9000,
+                "video": "cam"
+              },
+              {
+                "id": "seg-2",
+                "inMs": 12000,
+                "outMs": 20000,
+                "video": "cam"
+              }
+            ],
+            "dropped": [
+              {
+                "inMs": 4000,
+                "outMs": 6000,
+                "reason": "silence"
+              },
+              {
+                "inMs": 9000,
+                "outMs": 12000,
+                "reason": "filler"
+              }
+            ],
+            "meta": {
+              "title": "Episode 12"
+            }
+          },
+          "editedEdl": {
+            "v": 1,
+            "kind": "edl",
+            "basis": "e989e54bbb646546",
+            "edl": {
+              "segments": [
+                {
+                  "id": "seg-0",
+                  "inMs": 0,
+                  "outMs": 9000,
+                  "video": "cam"
+                },
+                {
+                  "id": "seg-2",
+                  "inMs": 12000,
+                  "outMs": 20000,
+                  "video": "cam"
+                }
+              ],
+              "dropped": [
+                {
+                  "inMs": 9000,
+                  "outMs": 12000,
+                  "reason": "filler"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expected": {
+        "scalar": "{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"cam\",\"kind\":\"video\",\"url\":\"https://media.test/episode.mp4\",\"role\":\"master-audio\"}],\"segments\":[{\"id\":\"seg-0\",\"inMs\":0,\"outMs\":9000,\"video\":\"cam\"},{\"id\":\"seg-2\",\"inMs\":12000,\"outMs\":20000,\"video\":\"cam\"}],\"dropped\":[{\"inMs\":9000,\"outMs\":12000,\"reason\":\"filler\"}],\"meta\":{\"title\":\"Episode 12\"}}",
+        "list": null,
+        "fanOut": null
+      }
+    },
+    "trailer": {
+      "status": "applied",
+      "plan": {
+        "id": "trailer-plan",
+        "type": "edit-plan",
+        "data": {
+          "label": "Trailer Plan",
+          "mode": "trailer",
+          "generatedJson": {
+            "version": 1,
+            "clock": "master",
+            "sources": [
+              {
+                "id": "cam",
+                "kind": "video",
+                "url": "https://media.test/episode.mp4",
+                "role": "master-audio"
+              }
+            ],
+            "segments": [
+              {
+                "id": "seg-0",
+                "inMs": 0,
+                "outMs": 4000,
+                "video": "cam"
+              },
+              {
+                "id": "seg-1",
+                "inMs": 6000,
+                "outMs": 9000,
+                "video": "cam"
+              },
+              {
+                "id": "seg-2",
+                "inMs": 12000,
+                "outMs": 20000,
+                "video": "cam"
+              }
+            ],
+            "dropped": [
+              {
+                "inMs": 4000,
+                "outMs": 6000,
+                "reason": "silence"
+              },
+              {
+                "inMs": 9000,
+                "outMs": 12000,
+                "reason": "filler"
+              }
+            ],
+            "meta": {
+              "title": "Episode 12"
+            }
+          },
+          "editedEdl": {
+            "v": 1,
+            "kind": "edl",
+            "basis": "e989e54bbb646546",
+            "edl": {
+              "segments": [
+                {
+                  "id": "seg-0",
+                  "inMs": 0,
+                  "outMs": 9000,
+                  "video": "cam"
+                },
+                {
+                  "id": "seg-2",
+                  "inMs": 12000,
+                  "outMs": 20000,
+                  "video": "cam"
+                }
+              ],
+              "dropped": [
+                {
+                  "inMs": 9000,
+                  "outMs": 12000,
+                  "reason": "filler"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expected": {
+        "scalar": "{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"cam\",\"kind\":\"video\",\"url\":\"https://media.test/episode.mp4\",\"role\":\"master-audio\"}],\"segments\":[{\"id\":\"seg-0\",\"inMs\":0,\"outMs\":9000,\"video\":\"cam\"},{\"id\":\"seg-2\",\"inMs\":12000,\"outMs\":20000,\"video\":\"cam\"}],\"dropped\":[{\"inMs\":9000,\"outMs\":12000,\"reason\":\"filler\"}],\"meta\":{\"title\":\"Episode 12\"}}",
+        "list": null,
+        "fanOut": null
+      }
+    },
+    "tightenMalformed": {
+      "status": "applied",
+      "plan": {
+        "id": "tighten-plan",
+        "type": "edit-plan",
+        "data": {
+          "label": "Find Clips",
+          "mode": "tighten",
+          "generatedJson": {
+            "version": 1,
+            "clock": "master",
+            "sources": [
+              {
+                "id": "cam",
+                "kind": "video",
+                "url": "https://media.test/episode.mp4",
+                "role": "master-audio"
+              }
+            ],
+            "segments": [
+              {
+                "id": "seg-0",
+                "inMs": 0,
+                "outMs": 4000,
+                "video": "cam"
+              },
+              {
+                "id": "seg-1",
+                "inMs": 6000,
+                "outMs": 9000,
+                "video": "cam"
+              },
+              {
+                "id": "seg-2",
+                "inMs": 12000,
+                "outMs": 20000,
+                "video": "cam"
+              }
+            ],
+            "dropped": [
+              {
+                "inMs": 4000,
+                "outMs": 6000,
+                "reason": "silence"
+              },
+              {
+                "inMs": 9000,
+                "outMs": 12000,
+                "reason": "filler"
+              }
+            ],
+            "meta": {
+              "title": "Episode 12"
+            }
+          },
+          "editedEdl": {
+            "v": 1,
+            "kind": "edl",
+            "basis": "e989e54bbb646546",
+            "edl": {
+              "segments": [
+                {
+                  "id": "seg-0",
+                  "inMs": 9000,
+                  "outMs": 3000,
+                  "video": "cam"
+                }
+              ],
+              "dropped": []
+            }
+          }
+        }
+      },
+      "expected": {
+        "scalar": "{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"cam\",\"kind\":\"video\",\"url\":\"https://media.test/episode.mp4\",\"role\":\"master-audio\"}],\"segments\":[{\"id\":\"seg-0\",\"inMs\":9000,\"outMs\":3000,\"video\":\"cam\"}],\"dropped\":[],\"meta\":{\"title\":\"Episode 12\"}}",
+        "list": null,
+        "fanOut": null
+      }
+    }
+  },
+  "consumers": {
+    "description": "A JSON consumer wired to the twoKept plan reads the plan as the review leaves it: the kept clips only, with the edited hook (TA20: the hook travels as meta.hook for Extract Field). Both engines run these nodes; neither may read the raw plan.",
+    "case": "twoKept",
+    "extractField": {
+      "field": "meta.hook",
+      "text": "Nobody tells you this\nWe nearly quit, then pivoted"
+    },
+    "jsonProcess": {
+      "expression": ".[] | .meta.hook",
+      "processedResult": [
+        "Nobody tells you this",
+        "We nearly quit, then pivoted"
+      ]
+    }
+  },
+  "picks": {
+    "description": "An edge that picks rows of the twoKept plan (kept: clips 1 and 4) and does not fan out. It reads the kept clip it selects, or nothing; never the plan's first kept clip when the selection does not hold it (TA16). `runs` is the estimate's count for an Each edge.",
+    "case": "twoKept",
+    "edges": [
+      {
+        "name": "list 2,4 (one kept clip selected)",
+        "edge": {
+          "selectorMode": "list",
+          "listExpression": "2,4"
+        },
+        "edl": "{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"cam\",\"kind\":\"video\",\"url\":\"https://media.test/episode.mp4\",\"role\":\"master-audio\"}],\"segments\":[{\"id\":\"seg-0\",\"inMs\":240000,\"outMs\":300000,\"video\":\"cam\"}],\"dropped\":[],\"meta\":{\"title\":\"The pivot\",\"hook\":\"We nearly quit, then pivoted\"}}",
+        "runs": 1
+      },
+      {
+        "name": "list 2,3 (only dropped clips selected)",
+        "edge": {
+          "selectorMode": "list",
+          "listExpression": "2,3"
+        },
+        "edl": null,
+        "runs": 0
+      },
+      {
+        "name": "item 2 (a dropped clip)",
+        "edge": {
+          "outputMode": "item",
+          "itemIndex": "2"
+        },
+        "edl": null,
+        "runs": null
+      },
+      {
+        "name": "item 4 (a kept clip)",
+        "edge": {
+          "outputMode": "item",
+          "itemIndex": "4"
+        },
+        "edl": "{\"version\":1,\"clock\":\"master\",\"sources\":[{\"id\":\"cam\",\"kind\":\"video\",\"url\":\"https://media.test/episode.mp4\",\"role\":\"master-audio\"}],\"segments\":[{\"id\":\"seg-0\",\"inMs\":240000,\"outMs\":300000,\"video\":\"cam\"}],\"dropped\":[],\"meta\":{\"title\":\"The pivot\",\"hook\":\"We nearly quit, then pivoted\"}}",
+        "runs": null
+      }
+    ]
+  }
+}

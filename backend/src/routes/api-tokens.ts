@@ -1,3 +1,5 @@
+import { formatExecutionResult } from "../lib/execution-result.js"
+import { executionOutcome } from "@nodaro/shared"
 /**
  * API token management + public workflow API routes.
  *
@@ -29,6 +31,8 @@ import { personalPayer } from "../lib/billing-context.js"
 import { deploymentPayerActive, deploymentPayerId } from "../lib/deployment-payer.js"
 import { billingPairColumns } from "../lib/insert-job.js"
 import { estimateWorkflowCredits, type EstimateNode } from "../ee/billing/credits.js"
+import { exposedTextCaps } from "../lib/exposed-text-caps.js"
+import { previewReviewRefusal } from "../lib/preview-review-gate.js"
 import type { WorkflowExecutionJob, NodeExecutionState } from "../services/workflow-engine/types.js"
 import { normalizeLegacyNodeTypes } from "../services/workflow-engine/normalize-node-types.js"
 import { getInputNodes, getOutputNodes, getOutputType, getNodeLabel, getInputFieldSchema, flattenItems, migrateToItems } from "@nodaro/shared"
@@ -683,7 +687,12 @@ export async function apiTokenRoutes(app: FastifyInstance) {
         ? sortByOrder(outputNodes, outputNodeIds)
         : outputNodes
 
-      const estimatedCredits = await estimateWorkflowCredits(nodes as EstimateNode[], edges)
+      // Described BEFORE the caller's inputs exist: an exposed speech text is
+      // priced at its input's character limit (or the model's cap), never at
+      // the author's placeholder (lib/exposed-text-caps.ts).
+      const estimatedCredits = await estimateWorkflowCredits(nodes as EstimateNode[], edges, {
+        speechTextCaps: exposedTextCaps(settings, nodes as EstimateNode[]),
+      })
 
       const inputs = sortedInputs.map((node) => {
         const fieldSchema = getInputFieldSchema(node.type ?? "")
@@ -744,7 +753,7 @@ export async function apiTokenRoutes(app: FastifyInstance) {
       // Load workflow
       const { data: workflow, error: wfError } = await supabase
         .from("workflows")
-        .select("id, nodes")
+        .select("id, nodes, edges")
         .eq("id", workflowId)
         .eq("user_id", resolved.userId)
         // P9 doctrine, now enforced at RUN time too (bind + list always had
@@ -774,6 +783,16 @@ export async function apiTokenRoutes(app: FastifyInstance) {
           error: { code: "locked_field", message: describeLockedOverrides(lockedOverrides) },
         })
       }
+
+      // A token caller cannot review a Preview render: refused before any row
+      // exists unless its inputs set every such render to Final
+      // (`{ "<render>": { "quality": "final" } }`).
+      const previewRefusal = previewReviewRefusal(
+        nodes as ReadonlyArray<{ id: string; type?: string; data?: Record<string, unknown> }>,
+        ((workflow as { edges?: unknown }).edges as ReadonlyArray<{ source: string; target: string }> | null) ?? [],
+        { triggerType: "api", inputOverrides },
+      )
+      if (previewRefusal) return reply.status(400).send({ error: previewRefusal })
 
       // Create execution
       const { data: execution, error: execError } = await supabase
@@ -805,6 +824,8 @@ export async function apiTokenRoutes(app: FastifyInstance) {
         // P14: the token's authenticated context — resolved once by the
         // billing hook (a workspace-BOUND token acts as an implicit header).
         billingContext: req.billingContext ?? personalPayer(resolved.userId),
+        // A token caller cannot review a Preview render.
+        reviewerPresent: false,
       }
 
       await orchestrationQueue.add("workflow-execution", jobData, {
@@ -882,7 +903,7 @@ export async function apiTokenRoutes(app: FastifyInstance) {
 
       const { data: execution, error } = await supabase
         .from("workflow_executions")
-        .select("id, status, total_nodes, completed_nodes, failed_nodes, total_credits_used, error_message, created_at, completed_at")
+        .select("id, status, node_states, total_nodes, completed_nodes, failed_nodes, total_credits_used, error_message, created_at, completed_at")
         .eq("id", parsed.data.execId)
         .eq("user_id", resolved.userId)
         .single()
@@ -893,9 +914,11 @@ export async function apiTokenRoutes(app: FastifyInstance) {
         })
       }
 
+      const outcome = executionOutcome(execution.status, execution.node_states as Record<string, { status?: unknown; skipReason?: unknown }> | null)
       return reply.send({
         executionId: execution.id,
         status: execution.status,
+        ...(outcome ? { outcome } : {}),
         totalNodes: execution.total_nodes,
         completedNodes: execution.completed_nodes,
         failedNodes: execution.failed_nodes,
@@ -978,59 +1001,7 @@ function formatToken(row: Record<string, unknown>) {
   }
 }
 
-function formatExecutionResult(
-  executionId: string,
-  execution: Record<string, unknown>,
-  workflowNodes: GenericNode[],
-) {
-  const nodeStates = (execution.node_states ?? {}) as Record<string, NodeExecutionState>
-
-  // Extract outputs from completed output nodes. Normalize legacy node types
-  // (incl. loop→list) defensively so this formatter classifies outputs
-  // correctly regardless of whether the caller already normalized. Idempotent.
-  const edges: GenericEdge[] = []
-  const outputNodes = getOutputNodes(normalizeLegacyNodeTypes(workflowNodes), edges, false)
-  const outputs: Array<{
-    nodeId: string
-    label: string
-    type: string
-    url?: string
-    text?: string
-  }> = []
-
-  for (const node of outputNodes) {
-    const state = nodeStates[node.id]
-    if (!state || state.status !== "completed") continue
-
-    const output = state.output
-    if (!output) continue
-
-    const url = output.imageUrl ?? output.videoUrl ?? output.audioUrl
-    const text = (output.text ?? output.script) as string | undefined
-
-    outputs.push({
-      nodeId: node.id,
-      label: getNodeLabel(node),
-      type: getOutputType(node.type),
-      url: url ?? undefined,
-      text: text ?? undefined,
-    })
-  }
-
-  const durationMs = execution.completed_at && execution.created_at
-    ? new Date(execution.completed_at as string).getTime() -
-      new Date(execution.created_at as string).getTime()
-    : undefined
-
-  return {
-    executionId,
-    status: execution.status,
-    creditsUsed: execution.total_credits_used ?? 0,
-    durationMs,
-    errorMessage: execution.error_message,
-    outputs,
-  }
-}
+// The result shape lives in lib/execution-result.ts (shared with MCP get_app_run / diagnose_run).
 
 function sortByOrder(nodes: GenericNode[], order: string[]): GenericNode[] {
   const orderMap = new Map(order.map((id, i) => [id, i]))

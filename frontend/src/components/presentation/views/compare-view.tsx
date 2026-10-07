@@ -15,6 +15,7 @@ import { getOutputType, type OutputType } from "@/lib/presentation-utils"
 import { isVideoUrl, isImageUrl, isAudioUrl } from "@/lib/media-type"
 import { GlassCard } from "../output-cards/shared"
 import { useT } from "@/lib/i18n"
+import { PreviewBadge } from "@/components/render/preview-badge"
 import type { ViewProps } from "./types"
 
 /** Resolve output type from node type, falling back to URL-based detection for data types (e.g. loop nodes) */
@@ -34,6 +35,8 @@ interface CompareItem {
   outputType: OutputType
   url?: string
   text?: string
+  /** The take on show is a Preview (a render at proxy quality) — labelled so (F1). */
+  preview?: boolean
 }
 
 interface CompareViewProps extends ViewProps {
@@ -47,6 +50,7 @@ export function CompareView({
   orderedOutputNodes,
   getResult,
   getCardTitle,
+  isPreview,
   initialLeft,
   initialRight,
   onSelectionChange,
@@ -110,6 +114,7 @@ export function CompareView({
           outputType: resolveOutputType(node.type, r.url),
           url: r.url,
           text: r.text,
+          preview: Boolean(r.url) && isPreview?.(node.id, r.url) === true,
         })
       }
     }
@@ -123,11 +128,12 @@ export function CompareView({
           outputType: getOutputType(node.type),
           url: r.url,
           text: r.text,
+          preview: Boolean(r.url) && isPreview?.(node.id, r.url) === true,
         })
       }
     }
     return result
-  }, [orderedInputNodes, orderedOutputNodes, getResult, getCardTitle])
+  }, [orderedInputNodes, orderedOutputNodes, getResult, getCardTitle, isPreview])
 
   const leftItem = items.find((i) => i.id === leftId)
   const rightItem = items.find((i) => i.id === rightId)
@@ -238,16 +244,18 @@ export function CompareView({
         ) : bothAudio ? (
           <div className="space-y-4 max-w-2xl mx-auto">
             <GlassCard>
-              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider block mb-2">
+              <span className="flex items-center gap-1.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-2">
                 {leftItem.title}
+                {leftItem.preview && <PreviewBadge />}
               </span>
               {leftItem.url && (
                 <WaveformAudioPlayer url={leftItem.url} variant="compact" className="w-full" />
               )}
             </GlassCard>
             <GlassCard>
-              <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider block mb-2">
+              <span className="flex items-center gap-1.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-2">
                 {rightItem.title}
+                {rightItem.preview && <PreviewBadge />}
               </span>
               {rightItem.url && (
                 <WaveformAudioPlayer url={rightItem.url} variant="compact" className="w-full" />
@@ -456,11 +464,13 @@ function VisualSlider({ leftItem, rightItem, fullscreen }: { leftItem: CompareIt
       </div>
 
       {/* Labels */}
-      <div className="absolute top-2 left-2 bg-black/50 text-white text-[10px] px-2 py-0.5 rounded-full z-10">
-        {leftItem.title}
+      <div className="absolute top-2 left-2 flex items-center gap-1.5 z-10">
+        <span className="bg-black/50 text-white text-[10px] px-2 py-0.5 rounded-full">{leftItem.title}</span>
+        {leftItem.preview && <PreviewBadge />}
       </div>
-      <div className="absolute top-2 right-2 bg-black/50 text-white text-[10px] px-2 py-0.5 rounded-full z-10">
-        {rightItem.title}
+      <div className="absolute top-2 right-2 flex items-center gap-1.5 z-10">
+        {rightItem.preview && <PreviewBadge />}
+        <span className="bg-black/50 text-white text-[10px] px-2 py-0.5 rounded-full">{rightItem.title}</span>
       </div>
     </div>
   )
@@ -470,8 +480,9 @@ function CompareItemDisplay({ item }: { item: CompareItem }) {
   const t = useT()
   return (
     <GlassCard>
-      <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider block mb-2">
+      <span className="flex items-center gap-1.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-2">
         {item.title}
+        {item.preview && <PreviewBadge />}
       </span>
       {item.outputType === "image" && item.url ? (
         <CachedImage src={item.url} alt={item.title} className="w-full rounded-lg" thumbnail thumbnailWidth={480} />

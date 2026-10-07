@@ -1,7 +1,7 @@
 ---
 node_type: telegram-trigger
-generated_at: 2026-09-27T12:51:25.659Z
-generated_from: c607aa02c
+generated_at: 2026-10-05T21:37:08.610Z
+generated_from: 066cc1460
 ---
 
 # Telegram Trigger
@@ -11,7 +11,7 @@ generated_from: c607aa02c
 **Category:** input
 **Credit cost:** none declared — an input / parameter / trigger node runs no job; otherwise the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`).
 **Inputs (target handles):** (none)
-**Outputs (source handles):** `text`, `imageUrl`, `videoUrl`, `audioUrl`, `chatId`, `messageId`
+**Outputs (source handles):** `out`
 
 **Required data fields:**
 - `label: string`

@@ -2,7 +2,7 @@ import type { GenerateScene3DParams, EditScene3DParams, RenderScene3DParams, Sce
 import type { NodaroClient } from "../client.js"
 import type { JobStatusResult } from "./jobs.js"
 import { JobAbortedError, JobFailedError, JobHeldError, JobTimeoutError } from "../errors.js"
-import type { ConnectedReference, DescribedReference, ModelInputAdjustment, SocialPost, SocialPlatform, SocialSearchMode, SocialSearchParams } from "@nodaro/shared"
+import type { ConnectedReference, DescribedReference, VideoCharacterReference, ModelInputAdjustment, SocialPost, SocialPlatform, SocialSearchMode, SocialSearchParams } from "@nodaro/shared"
 import type { DirectionFields, SubjectFields } from "@nodaro/prompts"
 
 export type NodeCategory =
@@ -135,6 +135,33 @@ export interface ReferenceCaptionParams {
 }
 
 /**
+ * Typed request body for `nodes.run("text-to-speech", …)` / `runAndWait`.
+ * Common fields are typed; any other route field passes through.
+ */
+export interface TextToSpeechParams {
+  text: string
+  /** A premade voice NAME (Rachel, George, …) or a library / custom voice id. */
+  voice?: string
+  voiceType?: "premade" | "custom" | "library"
+  /** `elevenlabs-v4` (the default), `elevenlabs-v3`, `elevenlabs-turbo`, `elevenlabs-multilingual`. */
+  provider?: string
+  stability?: number
+  similarityBoost?: number
+  style?: number
+  speed?: number
+  languageCode?: string
+  /**
+   * Continuity across clips: the line spoken just BEFORE this one in the finished piece
+   * (the previous clip's text). Context, not spoken — a model that stitches (v4, Turbo, Multilingual; not v3) carries the
+   * intonation across the cut; others ignore it. Up to 1,000 characters (a 400 above, on a model that stitches).
+   */
+  previousText?: string
+  /** The line spoken just AFTER this one. Same rule as `previousText`. */
+  nextText?: string
+  [k: string]: unknown
+}
+
+/**
  * Typed request body for `nodes.run("generate-image", …)` / `runAndWait`.
  * Common fields are typed; any other route field passes through via the index
  * signature (the route Zod-validates the full body).
@@ -162,6 +189,18 @@ export interface GenerateVideoParams extends StructuredReferenceParams, Referenc
   referenceImageUrls?: string[]
   referenceVideoUrls?: string[]
   referenceAudioUrls?: string[]
+  /**
+   * Identity inputs that keep a real person's face — a portrait + description
+   * per person, up to 3. Only models with a dedicated character channel take
+   * them (Gemini Omni: `gemini-omni-video`, `gemini-omni-flash`); any other
+   * model answers `400`. Distinct from `referenceImageUrls`, which a multimodal
+   * model treats as loose context. Cannot be combined with a start frame
+   * (`imageUrl`); each character uses 1 of the model's 7 input units (2 with a
+   * `bodyImageUrl`). Adds no credit charge. Give a character a `voice` to pin one
+   * voice persona (a Gemini preset + optional description / example line) across
+   * clips — up to 3 distinct voices a request.
+   */
+  characterReferences?: VideoCharacterReference[]
   /** How a start/end frame is reshaped before the model sees it. Default
    *  `"resolution"`: resize it to the pixel size that model actually renders,
    *  which is what stops the provider reshaping it mid-clip. `"ratio"` corrects
@@ -199,6 +238,8 @@ export interface TextToVideoParams extends StructuredReferenceParams, ReferenceC
   referenceImageUrls?: string[]
   referenceVideoUrls?: string[]
   referenceAudioUrls?: string[]
+  /** Identity inputs that keep a real person's face — see {@link GenerateVideoParams.characterReferences}. */
+  characterReferences?: VideoCharacterReference[]
   /** Cinematic direction as catalog IDS — the route renders the wording. */
   direction?: DirectionFields
   /** SUBJECT ids (who is in the shot), folded ahead of the direction clauses. */
@@ -226,7 +267,9 @@ export interface AssembleNarratedVideoParams {
  * `jobs.output_data` on completion — `generate-image` → `imageUrl`,
  * `generate-video` / `combine-videos` / `merge-video-audio` / `video-upscale`
  * → `videoUrl` (+ `thumbnailUrl`), `text-to-speech` / `generate-music` →
- * `audioUrl`. Resolved by {@link NodesResource.runAndWait}. Extra fields may be
+ * `audioUrl` (a `text-to-speech` run with `withTimestamps: true` on a model
+ * that returns timings, and every `text-to-dialogue` run on one, also carries
+ * `transcript`). Resolved by {@link NodesResource.runAndWait}. Extra fields may be
  * present, so the index signature is open.
  */
 /**
@@ -380,6 +423,7 @@ export class NodesResource {
   run(type: "render-video", params: RenderScene3DParams): Promise<RunNodeResult>
   run(type: "pro-3d-render", params: Pro3DRenderRunParams, options?: RunNodeOptions): Promise<RunNodeResult>
   run(type: "generate-image", params?: GenerateImageParams): Promise<RunNodeResult>
+  run(type: "text-to-speech", params: TextToSpeechParams): Promise<RunNodeResult>
   run(type: "generate-video", params?: GenerateVideoParams): Promise<RunNodeResult>
   run(type: "text-to-video", params: TextToVideoParams): Promise<RunNodeResult>
   run(type: "assemble-narrated-video", params?: AssembleNarratedVideoParams): Promise<RunNodeResult>
@@ -434,6 +478,7 @@ export class NodesResource {
   runAndWait(type: "render-video", params: RenderScene3DParams, options?: RunAndWaitOptions): Promise<NodeJobOutput>
   runAndWait(type: "pro-3d-render", params: Pro3DRenderRunParams, options?: RunAndWaitOptions): Promise<Pro3DRenderJobOutput>
   runAndWait(type: "generate-image", params?: GenerateImageParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
+  runAndWait(type: "text-to-speech", params: TextToSpeechParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
   runAndWait(type: "generate-video", params?: GenerateVideoParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
   runAndWait(type: "text-to-video", params: TextToVideoParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>
   runAndWait(type: "assemble-narrated-video", params?: AssembleNarratedVideoParams, opts?: RunAndWaitOptions): Promise<NodeJobOutput>

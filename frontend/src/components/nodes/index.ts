@@ -193,6 +193,8 @@ import { TelegramTriggerNode } from "./telegram-trigger-node";
 import { TelegramAccountTriggerNode } from "./telegram-account-trigger-node";
 import { TelegramAccountSendNode } from "./telegram-account-send-node";
 import { TelegramChannelFeedNode } from "./telegram-channel-feed-node";
+import { CollectionReadNode } from "./collection-read-node";
+import { CollectionWriteNode } from "./collection-write-node";
 import { GenerativePipelineNode } from "./generative-pipeline-node";
 import { GroupNode } from "./group-node";
 import { CollectNode } from "./collect-node";
@@ -427,6 +429,8 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "telegram-account-send": TelegramAccountSendNode,
   "publish-social": SocialNode,
   "telegram-channel-feed": TelegramChannelFeedNode,
+  "collection-read": CollectionReadNode,
+  "collection-write": CollectionWriteNode,
   "telegram-trigger": TelegramTriggerNode,
   "telegram-account-trigger": TelegramAccountTriggerNode,
   // Generative Pipeline

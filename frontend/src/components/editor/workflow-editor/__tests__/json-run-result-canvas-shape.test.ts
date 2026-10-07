@@ -24,6 +24,24 @@ vi.mock("@/lib/supabase", () => ({ createClient: () => ({}) }))
 const job = vi.hoisted(() => ({ row: undefined as unknown }))
 const startJob = vi.hoisted(() => () => Promise.resolve({ jobId: "c0ffee00-0000-4000-8000-0000000000bb" }))
 const describeResult = vi.hoisted(() => ({ value: undefined as unknown }))
+/** What the feed's route answers a canvas run (the posts, their digest, the position). */
+const feedRun = vi.hoisted(() => {
+  const post = (id: number) => ({ id, channel: "acme", postUrl: `https://t.me/acme/${id}`, text: `post ${id}`, media: [] })
+  const posts = [post(10), post(11)]
+  const text = "post 10\n\n---\n\npost 11"
+  return { jobId: "c0ffee00-0000-4000-8000-0000000000fe", posts, latestId: 11, text, generatedText: text, count: 2, cursor: { lastSeenId: 11, advanced: true, mode: "poll" as const, stateful: true } }
+})
+/** What the collection routes answer a canvas run: the records read / the record saved, beside the collection. */
+const collectionRecord = vi.hoisted(() => (id: string) => ({
+  id, collectionId: "c1", userId: "u1", dedupeKey: `https://news.example.test/${id}`, idempotencyKey: null,
+  title: `Story ${id}`, text: `Body ${id}`, url: `https://news.example.test/${id}`, media: [], fields: {}, source: { via: "node" as const }, createdAt: "2026-10-06T08:00:00.000Z",
+}))
+const collectionReadRun = vi.hoisted(() => ({
+  jobId: "c0ffee00-0000-4000-8000-0000000000c1", records: [collectionRecord("r1"), collectionRecord("r2")], text: "- Story r1\n- Story r2", count: 2, since: "2026-10-05T08:00:00.000Z", collection: { id: "c1", name: "articles" },
+}))
+const collectionWriteRun = vi.hoisted(() => ({
+  jobId: "c0ffee00-0000-4000-8000-0000000000c2", record: collectionRecord("r1"), outcome: "inserted" as const, evicted: 0, collection: { id: "c1", name: "articles" },
+}))
 
 vi.mock("@/lib/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/api")>()),
@@ -31,9 +49,19 @@ vi.mock("@/lib/api", async (importOriginal) => ({
   startVideoAnalysis: vi.fn(startJob),
   runVideoAudit: vi.fn(startJob),
   transcribeApi: vi.fn(startJob),
+  textToDialogueApi: vi.fn(startJob),
+  // The generic poll (pollJobWithNodeUpdate, Text to Dialogue) reads the row
+  // through poll-job's OWN import of getJobStatusLean — the poll-job mock below
+  // only reaches executors that import getJobStatusLeanForNode themselves — and
+  // fetches a progress estimate before its first tick. Neither is under test.
+  getJobStatusLean: vi.fn(() => Promise.resolve({ status: "completed", output_data: job.row })),
+  getExecutionEstimate: vi.fn(() => Promise.resolve({ estimatedMs: 1_000 })),
   editPlan: vi.fn(startJob),
   silenceDetectApi: vi.fn(startJob),
   audioSyncApi: vi.fn(startJob),
+  telegramChannelFetchApi: vi.fn(() => Promise.resolve(feedRun)),
+  collectionReadApi: vi.fn(() => Promise.resolve(collectionReadRun)),
+  collectionWriteApi: vi.fn(() => Promise.resolve(collectionWriteRun)),
 }))
 vi.mock("../poll-job", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../poll-job")>()),
@@ -103,6 +131,8 @@ const SCENARIOS: Record<string, Scenario> = {
     },
   },
   transcribe: { inputs: { audioUrl: "https://media.example.test/rec.m4a" } },
+  // Text to Dialogue: its lines are its own data; the job row carries the audio and the model's timings.
+  "text-to-dialogue": { data: { dialogue: [{ id: "1", text: "Hi", voice: "Rachel" }, { id: "2", text: "Hello.", voice: "George" }], stability: 0.5, languageCode: "" } },
   "silence-detect": { inputs: { audioUrl: "https://media.example.test/rec.m4a" } },
   "audio-sync": {
     inputs: { audioSyncSources: [{ nodeId: "cam-a", url: MEDIA }, { nodeId: "cam-b", url: "https://media.example.test/b.mp4" }] },
@@ -114,6 +144,11 @@ const SCENARIOS: Record<string, Scenario> = {
   "extract-field:url-list": { data: { field: "url", outputType: "list" }, upstream: true },
   "extract-field:json": { data: { field: "meta", outputType: "json" }, upstream: true },
   "json-process": { data: { mode: "visual", inputPath: "", filters: [], projections: ["title"] }, upstream: true },
+  // The feed answers from its route directly (no job to poll); its posts land on generatedJson, the digest on generatedText.
+  "telegram-channel-feed": { data: { channel: "acme", limit: 5 } },
+  // Both collection nodes answer from their route directly: the records / the record on generatedJson, the digest / headline on generatedText.
+  "collection-read": { data: { collectionId: "c1", windowAmount: 24, windowUnit: "hours", limit: 50, order: "newest", textFormat: "headlines" } },
+  "collection-write": { data: { collectionId: "c1" }, inputs: { prompt: JSON.stringify({ title: "Story r1", url: "https://news.example.test/r1" }) } },
 }
 
 const typeOf = (key: string) => key.split(":")[0]!

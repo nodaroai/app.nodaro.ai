@@ -1,4 +1,5 @@
-import { assertCanvasExecutionAllowed, findWordlessTranscriptFeeds, type WordlessTranscriptFeed } from "@nodaro/shared"
+import { assertCanvasExecutionAllowed, findWordlessTranscriptFeeds, PREVIEW_RENDER_NESTED, type WordlessTranscriptFeed } from "@nodaro/shared"
+import { previewRendersIn, PREVIEW_RENDER_NESTED_MESSAGE } from "./nested-preview-renders.js"
 /**
  * Sub-workflow handler — executes a referenced workflow recursively.
  * Ported from frontend sub-workflow-executor.ts.
@@ -16,10 +17,12 @@ import { DrainAbortError } from "../../lib/worker-drain.js"
 import { supabase } from "../../lib/supabase.js"
 import {
   buildExecutionLevels,
+  computeGatedIds,
   getEffectivelySkippedIds,
   isSourceNode,
   isSkipNode,
 } from "./execution-graph.js"
+import { computeEmptyInputSkipIds } from "./empty-input-skips.js"
 import { resolveNodeInputs } from "./input-resolver.js"
 import { normalizeLegacyNodeTypes } from "./normalize-node-types.js"
 import { extractSourceNodeOutput, getPrimaryOutput } from "./output-extractor.js"
@@ -35,6 +38,7 @@ import type {
   ResolvedInputs,
 } from "./types.js"
 import { MAX_SUB_WORKFLOW_DEPTH } from "./types.js"
+import { resolveCanvasResultIds } from "../../lib/canvas-result-ids.js"
 
 /**
  * Result of executing a sub-workflow node.
@@ -129,7 +133,10 @@ export async function loadSubWorkflowGraph(
   // Migrate legacy node types before processing, via the shared helper (single
   // source of truth). Re-threads parentId so group children flow into the
   // sub-workflow execution graph — see prepareSubWorkflowNodes.
-  let subNodes: SimpleNode[] = prepareSubWorkflowNodes((workflow.nodes as SimpleNode[]) ?? [])
+  // Saved result ids resolved by the owner's jobs (canvas-result-ids.ts), as
+  // the parent graph's are: a child render the run skips hands its saved take on.
+  const savedNodes = await resolveCanvasResultIds(workflow.nodes, ownerId)
+  let subNodes: SimpleNode[] = prepareSubWorkflowNodes((savedNodes as SimpleNode[]) ?? [])
   let subEdges: SimpleEdge[] = (workflow.edges as SimpleEdge[]) ?? []
 
   // Filter to reachable nodes for the selected route (if route filtering is configured)
@@ -171,41 +178,44 @@ export function nestedWordlessFeedMessage(feed: NestedWordlessTranscriptFeed): s
   )
 }
 
+/** A graph a `sub-workflow` node in the run will execute, as the run will load
+ *  it, with the sub-workflow node ids that lead to it (outermost first). */
+export interface NestedRunGraph {
+  readonly nodes: SimpleNode[]
+  readonly edges: SimpleEdge[]
+  readonly subWorkflowPath: readonly string[]
+}
+
 /**
- * The same word-timings question `findWordlessTranscriptFeeds` asks of the run
- * graph, asked of every graph a `sub-workflow` node in it will run — before any
- * node runs, so a nested whisper→captions chain is refused up front instead of
+ * Every graph a `sub-workflow` node in the run will execute, loaded ONCE for
+ * all the orchestrator's up-front checks (word timings, preview renders) —
+ * before any node runs, so a nested problem is refused up front instead of
  * mid-run, after upstream parent nodes executed and billed.
  *
- * Descends only (the caller has already asked about its own nodes), loads each
- * referenced graph through `loadSubWorkflowGraph` (so it sees exactly the nodes
- * the run would execute), and mirrors `executeSubWorkflow`'s limits: the same
- * `MAX_SUB_WORKFLOW_DEPTH` ceiling and the same `workflowId:routeId` cycle key,
- * carried down the path so a self-referencing graph is loaded once and not
- * walked again.
+ * Descends only (the caller asks its own questions of its own nodes), loads
+ * each referenced graph through `loadSubWorkflowGraph` (so it sees exactly the
+ * nodes the run would execute), and mirrors `executeSubWorkflow`'s limits: the
+ * same `MAX_SUB_WORKFLOW_DEPTH` ceiling and the same `workflowId:routeId` cycle
+ * key, carried down the path so a self-referencing graph is loaded once and not
+ * walked again. Depth-first: a graph comes before the graphs nested in it.
  *
- * A reference that cannot be loaded is NOT the preflight's problem: it answers
- * "no hit" and the run raises its own not-found error at that node. A load that
- * THROWS is swallowed the same way — this check may only ever refuse for a real
- * word-timings hit, never for an unreachable database.
- *
- * NOT covered, by construction: a chain that CROSSES a sub-workflow boundary
- * (transcribe in the parent, add-captions in the child, or the reverse). No
- * single graph holds that edge pair, so no graph-local check can see it.
+ * A reference that cannot be loaded is NOT a preflight's problem: it yields no
+ * graph and the run raises its own not-found error at that node. A load that
+ * THROWS is swallowed the same way — a preflight may only ever refuse for a
+ * real hit, never for an unreachable database.
  */
-export async function findNestedWordlessTranscriptFeeds(
+export async function loadNestedRunGraphs(
   nodes: ReadonlyArray<SimpleNode>,
-  edges: ReadonlyArray<SimpleEdge>,
   ownerId: string,
   depth: number = 0,
   visitedRouteKeys: ReadonlySet<string> = new Set(),
   path: ReadonlyArray<string> = [],
-): Promise<NestedWordlessTranscriptFeed[]> {
+): Promise<NestedRunGraph[]> {
   // Mirrors executeSubWorkflow's ceiling: a node at this depth throws instead of
   // running, so there is nothing below it to check.
   if (depth >= MAX_SUB_WORKFLOW_DEPTH) return []
 
-  const out: NestedWordlessTranscriptFeed[] = []
+  const out: NestedRunGraph[] = []
 
   for (const node of nodes) {
     if (node.type !== "sub-workflow" || node.data?.skipped === true) continue
@@ -217,7 +227,7 @@ export async function findNestedWordlessTranscriptFeeds(
       loaded = await loadSubWorkflowGraph(node, ownerId)
     } catch (err) {
       console.warn(
-        `[transcribe-preflight] could not load the graph behind sub-workflow node ${node.id}` +
+        `[nested-preflight] could not load the graph behind sub-workflow node ${node.id}` +
           ` — leaving it to the run: ${err instanceof Error ? err.message : String(err)}`,
       )
       continue
@@ -225,22 +235,36 @@ export async function findNestedWordlessTranscriptFeeds(
     if (!loaded) continue
 
     const nextPath = [...path, node.id]
-    for (const feed of findWordlessTranscriptFeeds(loaded.nodes, loaded.edges)) {
-      out.push({ ...feed, subWorkflowPath: nextPath })
-    }
+    out.push({ nodes: loaded.nodes, edges: loaded.edges, subWorkflowPath: nextPath })
     out.push(
-      ...(await findNestedWordlessTranscriptFeeds(
-        loaded.nodes,
-        loaded.edges,
-        ownerId,
-        depth + 1,
-        new Set([...visitedRouteKeys, routeKey]),
-        nextPath,
-      )),
+      ...(await loadNestedRunGraphs(loaded.nodes, ownerId, depth + 1, new Set([...visitedRouteKeys, routeKey]), nextPath)),
     )
   }
 
   return out
+}
+
+/** The word-timings question `findWordlessTranscriptFeeds` asks of the run
+ *  graph, asked of every nested graph (`loadNestedRunGraphs`). NOT covered, by
+ *  construction: a chain that CROSSES a sub-workflow boundary (transcribe in
+ *  the parent, add-captions in the child, or the reverse) — no single graph
+ *  holds that edge pair. */
+export function nestedWordlessTranscriptFeeds(graphs: readonly NestedRunGraph[]): NestedWordlessTranscriptFeed[] {
+  return graphs.flatMap((graph) =>
+    findWordlessTranscriptFeeds(graph.nodes, graph.edges).map((feed) => ({ ...feed, subWorkflowPath: graph.subWorkflowPath })),
+  )
+}
+
+/** `nestedWordlessTranscriptFeeds` over the graphs `loadNestedRunGraphs` loads. */
+export async function findNestedWordlessTranscriptFeeds(
+  nodes: ReadonlyArray<SimpleNode>,
+  _edges: ReadonlyArray<SimpleEdge>,
+  ownerId: string,
+  depth: number = 0,
+  visitedRouteKeys: ReadonlySet<string> = new Set(),
+  path: ReadonlyArray<string> = [],
+): Promise<NestedWordlessTranscriptFeed[]> {
+  return nestedWordlessTranscriptFeeds(await loadNestedRunGraphs(nodes, ownerId, depth, visitedRouteKeys, path))
 }
 
 /**
@@ -258,6 +282,9 @@ export async function executeSubWorkflow(
   ctx: OrchestratorContext,
   depth: number = 0,
   executingRouteKeys: Set<string> = new Set(),
+  // The sub-workflow nodes above this one (each with the fan-out iteration
+  // that entered it): the Idempotency-Key scope of every node inside.
+  idempotencyScope: readonly string[] = [],
 ): Promise<SubWorkflowResult> {
   // Check depth limit
   if (depth >= MAX_SUB_WORKFLOW_DEPTH) {
@@ -341,6 +368,23 @@ export async function executeSubWorkflow(
     }
   }
 
+  // A Preview render in a nested graph would hand a preview to the parent,
+  // where nothing can Render final. The orchestrator refuses that up front
+  // (its nested scan); this is the backstop for a graph that reaches here —
+  // only on a run the stop rule applies to (`ctx.previewStopRule`).
+  if (ctx.previewStopRule === true) {
+    const previews = previewRendersIn(subNodes, subEdges)
+    if (previews.length > 0) {
+      const err = new Error(`${PREVIEW_RENDER_NESTED_MESSAGE} (render ${previews.join(", ")})`) as Error & {
+        code?: string
+        errorCode?: string
+      }
+      err.code = PREVIEW_RENDER_NESTED
+      err.errorCode = PREVIEW_RENDER_NESTED
+      throw err
+    }
+  }
+
   // Initialize node states for the sub-workflow
   const nodeStates: Record<string, NodeExecutionState> = {}
 
@@ -397,12 +441,27 @@ export async function executeSubWorkflow(
   for (const level of levels) {
     if (ctx.cancelled) throw new Error("Execution cancelled")
 
+    // The same two gates the main orchestrator applies per level (a router's
+    // inactive routes, a node the run skipped) and the empty-input skip —
+    // without them an inner "no new posts" failed the whole sub-workflow.
+    const gated = computeGatedIds(subNodes, subEdges, nodeStates)
+    const emptyInputIds = computeEmptyInputSkipIds({ level, nodes: subNodes, edges: subEdges, nodeStates, deadIds: new Set(gated.keys()) })
+    for (const n of level) {
+      const gateReason = gated.get(n.id)
+      if (gateReason === undefined && !emptyInputIds.has(n.id)) continue
+      if (nodeStates[n.id]?.status === "completed") continue
+      const skipReason = gateReason === "empty_input" || emptyInputIds.has(n.id) ? "empty_input" : undefined
+      nodeStates[n.id] = { status: "skipped", nodeType: n.type, completedAt: new Date().toISOString(), ...(skipReason ? { skipReason } : {}) }
+    }
+    const deadIds = new Set([...gated.keys(), ...emptyInputIds])
+
     const executableNodes = level.filter((n) => {
       if (isSourceNode(n.type)) return false
       if (skippedIds.has(n.id)) return false
       if (isSkipNode(n.type)) return false
       // Parameter pickers are pre-completed above and have no job handler.
       if (n.type && PARAMETER_NODE_TYPES.has(n.type)) return false
+      if (deadIds.has(n.id)) return false
       if (nodeStates[n.id]?.status === "completed") return false
       // Recursive sub-workflow nodes are handled specially
       if (n.type === "sub-workflow") return true
@@ -428,6 +487,7 @@ export async function executeSubWorkflow(
             ctx,
             depth + 1,
             newRouteKeys,
+            [...idempotencyScope, subNode.id],
           )
         } else {
           result = await executeNode(
@@ -437,6 +497,9 @@ export async function executeSubWorkflow(
             subNodes,
             nodeStates,
             ctx,
+            undefined,
+            undefined,
+            idempotencyScope,
           )
         }
 

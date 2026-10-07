@@ -19,7 +19,7 @@ import {
   uiMeta,
 } from "./_verb-helpers.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
-import { modelIdsByKindMode, VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, ALL_CAPTION_STYLES, CAPTION_LOOK_IDS, SUPPORTED_FONT_NAMES, COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, MOTION_TRANSFER_PROVIDERS, type VideoAnalysisTier, VIDEO_ANALYSIS_TIER_LABELS, resolveVideoAnalysisModel, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_MAX_SCENE_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoAuditCreditId, readPromptAffixes, LIP_SYNC_PROVIDERS, isPerSecondLipSyncProvider, VIDEO_TO_VIDEO_NODE_PROVIDERS, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDL_SOURCE_ROLES, resolveEditPlanSources, describeAudioSyncOffsetIssue, transcriptSpeakerLabels, cameraSwitchEdlProblem, cleanSpeakerNames, CAMERA_SWITCH_BOUNDS, TRANSCRIBE_LANES, CAPTION_MAX_WORDS_PER_LINE_MIN, CAPTION_MAX_WORDS_PER_LINE_MAX } from "@nodaro/shared"
+import { modelIdsByKindMode, VIDEO_REF_LIMITS_BY_PROVIDER, SEEDANCE_2_REF_LIMITS, ALL_CAPTION_STYLES, CAPTION_LOOK_IDS, SUPPORTED_FONT_NAMES, COMBINE_TRANSITION_IDS, AUDIO_CROSSFADE_CURVE_IDS, MOTION_TRANSFER_PROVIDERS, type VideoAnalysisTier, VIDEO_ANALYSIS_TIER_LABELS, resolveVideoAnalysisModel, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_MAX_SCENE_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoAuditCreditId, readPromptAffixes, LIP_SYNC_PROVIDERS, isPerSecondLipSyncProvider, VIDEO_TO_VIDEO_NODE_PROVIDERS, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, VIDEO_CHARACTER_REFS_WIRE_MAX, videoCharacterRefProviders, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDL_SOURCE_ROLES, resolveEditPlanSources, describeAudioSyncOffsetIssue, transcriptSpeakerLabels, cameraSwitchEdlProblem, cleanSpeakerNames, CAMERA_SWITCH_BOUNDS, TRANSCRIBE_LANES, CAPTION_MAX_WORDS_PER_LINE_MIN, CAPTION_MAX_WORDS_PER_LINE_MAX } from "@nodaro/shared"
 import { applyPromptAffixes, buildSeedanceVideoEditPrompt } from "@nodaro/prompts"
 
 // Map list_models catalog/display ids → /v1/motion-transfer route providers.
@@ -31,7 +31,10 @@ const MOTION_TRANSFER_PROVIDER_ALIASES: Record<string, string> = {
 }
 import { normalizeVideoInput } from "../normalize.js"
 import { buildEffectiveEdl, validateEffectiveEdl } from "../../apply-edl-plan.js"
+import { APPLY_EDL_CLIP_KEY_PATTERN } from "../../apply-edl-output.js"
 import { hasCredits } from "../../config.js"
+import { editPlanModeRefusal, editPlanModeVerdict } from "../../private-plugins/edit-plan-mode-gate.js"
+import { plannableEditPlanModes } from "../../private-plugins/plannable-edit-plan-modes.js"
 import { getUserMcpPreferences } from "../user-preferences.js"
 import { resolvePreset } from "../../presets/resolve-preset.js"
 import { mcpInject } from "../internal-request.js"
@@ -198,6 +201,19 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
             "Wan 3.0 takes each clip at 1-15s and ≤15s combined. Dropped on models without " +
             "audio-reference support.",
           ),
+        character_references: z
+          .array(z.object({
+            image_url: z.string(),
+            body_image_url: z.string().optional(),
+            description: z.string(),
+            name: z.string().optional(),
+            voice_preset: z.string().optional().describe("Gemini voice id (e.g. kore): pins this character's voice."),
+          }))
+          .max(VIDEO_CHARACTER_REFS_WIRE_MAX)
+          .optional()
+          .describe(
+            `Keeps a person's face (${videoCharacterRefProviders().join(" / ")} only); see docs/nodes/ai-video/generate-video.md.`,
+          ),
       },
               outputSchema: {
           jobId: z.string(),
@@ -356,6 +372,21 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         ...(t2vRefVideos.length ? { referenceVideoUrls: t2vRefVideos } : {}),
         ...(t2vRefVideos.length && t2vRefCaptions ? { referenceVideoCaptions: t2vRefCaptions } : {}),
         ...(t2vRefAudio.length ? { referenceAudioUrls: t2vRefAudio } : {}),
+        // Forwarded verbatim: the route is the gate. An unsupported model 400s
+        // with a friendly message rather than silently running without the face.
+        ...(args.character_references?.length
+          ? {
+              characterReferences: args.character_references.map((c) => ({
+                imageUrl: c.image_url,
+                ...(c.body_image_url ? { bodyImageUrl: c.body_image_url } : {}),
+                description: c.description,
+                ...(c.name ? { name: c.name } : {}),
+                // Preset only: the full voice object (description, example line) does
+                // not fit the per-tool wire budget — it is an SDK / REST lever.
+                ...(c.voice_preset ? { voice: { preset: c.voice_preset } } : {}),
+              })),
+            }
+          : {}),
         mcp_client: session.clientName,
         userId: session.userId,
       }
@@ -822,6 +853,10 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
           .describe("Smart-cut search window at each clip's END (frames, default 8)"),
         smart_cut_frames_next: z.number().int().min(1).max(24).optional()
           .describe("Smart-cut search window at each clip's START (frames, default 8)"),
+        trim_start_frames: z.number().int().min(0).max(120).optional()
+          .describe("Frames trimmed from the START of each non-first clip (default 1). Pin it for frame-exact cuts; also the smart-cut fallback."),
+        trim_end_frames: z.number().int().min(0).max(120).optional()
+          .describe("Frames trimmed from the END of each non-final clip (default 2). Pin it for frame-exact cuts; also the smart-cut fallback."),
       },
               outputSchema: {
           jobId: z.string(),
@@ -881,6 +916,8 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         smartCutMode: args.smart_cut_mode,
         smartCutFramesPrev: args.smart_cut_frames_prev,
         smartCutFramesNext: args.smart_cut_frames_next,
+        ...(args.trim_start_frames !== undefined ? { trimStartFrames: args.trim_start_frames } : {}),
+        ...(args.trim_end_frames !== undefined ? { trimEndFrames: args.trim_end_frames } : {}),
         mcp_client: session.clientName,
         userId: session.userId,
       }
@@ -3150,6 +3187,8 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         output: z.enum(["video", "audio"]).optional().describe("Render a video (default) or an audio-only cut."),
         quality: z.enum(["proxy", "final"]).optional().describe("proxy (a fast 720p preview, at its own lower per-minute rate) or final (default)."),
         crossfade_ms: z.number().min(0).max(5000).optional().describe("Default crossfade on boundaries with no explicit transition, in ms. 0 = hard cuts (default)."),
+        clip_key: z.string().regex(APPLY_EDL_CLIP_KEY_PATTERN).optional()
+          .describe("clips-mode plan_edit clip this render cuts, \"<first inMs>-<last outMs>\" of the plan's clip; returned as clipKey on the result."),
       },
       outputSchema: JOB_OUTPUT_SCHEMA,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
@@ -3196,6 +3235,7 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         ...(args.output ? { output: args.output } : {}),
         ...(args.quality ? { quality: args.quality } : {}),
         ...(args.crossfade_ms !== undefined ? { crossfadeMs: args.crossfade_ms } : {}),
+        ...(args.clip_key ? { clipKey: args.clip_key } : {}),
         mcp_client: session.clientName,
         userId: session.userId,
       }
@@ -3223,15 +3263,22 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         description:
           "Turn a timed transcript into an edit-decision-list (EDL) plan for a recording. " +
           "`mode`: `tighten` (remove silence/filler/false-starts → one tightened EDL), " +
-          "`clips` (find N short shareable clips → one EDL per clip), or `chapters` " +
-          "(mark chapter boundaries with titles). Reads the transcript, never pixels. " +
+          "`clips` (find N short shareable clips → one EDL per clip), `chapters` " +
+          "(mark chapter boundaries with titles), or `trailer` (one short teaser EDL from the " +
+          "strongest moments; `trailer` is refused, before any charge, until this server can plan it). " +
+          "Reads the transcript, never pixels. " +
           "Pass the timed `transcript` (word-level, from a transcribe step) and the media " +
           "`sources` (1–6). Multicam: give each source the `id` you gave `audio_sync` and pass " +
           "its result as `offsets`; refused before any charge if a source was not measured or " +
           "matched weakly (set its `offset_ms`). Returns a job_id — poll `get_job`; the EDL plan " +
           "is in the job's `output_data`.",
         inputSchema: {
-          mode: z.enum(EDIT_PLAN_MODES as unknown as [string, ...string[]]).describe("tighten | clips | chapters."),
+          // An unknown mode is refused in the words every lane uses (decided
+          // 2026-10-06), not the schema's stock message; the enum stays, so
+          // the tool's published schema still lists the modes.
+          mode: z.enum(EDIT_PLAN_MODES as unknown as [string, ...string[]], {
+            error: (iss) => editPlanModeRefusal(iss.input, new Set(EDIT_PLAN_MODES)) ?? undefined,
+          }).describe("tighten | clips | chapters | trailer."),
           plan_tier: z.enum(EDIT_PLAN_TIERS as unknown as [string, ...string[]]).optional()
             .describe("Reasoning tier: economy | standard (default) | premium."),
           transcript: z.record(z.string(), z.unknown()).describe("The timed word-level transcript object (from a transcribe step)."),
@@ -3261,6 +3308,25 @@ export function registerVideoVerbs({ server, session, fastify }: RegisterOpts): 
         _meta: uiMeta(WIDGET_URI.jobAuto),
       },
       async (args) => {
+        // The same capability check the editor (GET /v1/edit-plan/capabilities)
+        // and the video worker read — decided 2026-10-06; one helper since round 6.
+        // Read at CALL time: the tool is registered before the plugins load.
+        // Refused before dispatch, so nothing is charged and the agent reads
+        // why, not a raw 400.
+        // Round 7 (decided 2026-10-06): on a connected self-host that can't
+        // reach nodaro.ai, a known mode is dispatched — the job's worker gate
+        // retries "could not reach nodaro.ai"; nodaro.ai's answer refuses.
+        const plannable = await plannableEditPlanModes()
+        const verdict = editPlanModeVerdict(args.mode, plannable)
+        if (verdict.kind === "refuse") {
+          return {
+            content: [{
+              type: "text" as const,
+              text: `plan_edit: ${verdict.message} Modes this server plans: ${[...plannable.modes].join(", ")}.`,
+            }],
+            isError: true as const,
+          }
+        }
         const sources = args.sources.map((s) => ({
           ...(s.id ? { id: s.id } : {}),
           url: s.url,

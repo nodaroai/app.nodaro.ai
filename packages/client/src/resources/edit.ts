@@ -139,6 +139,24 @@ export interface ApplyEdlInput {
    * cuts. Per-boundary clamped to the ffmpeg-xfade limit server-side. Default 0.
    */
   crossfadeMs?: number
+  /**
+   * The plan clip this render cuts — `edlSpanKey(clip)` from `@nodaro/shared`
+   * (`"<first inMs>-<last outMs>"`). The job's result carries it back as
+   * `output_data.clipKey`, so renders of a clip set can be matched to their
+   * clips. Omit for a render of no plan clip.
+   */
+  clipKey?: string
+  /**
+   * The plan value this render cuts — `renderReadBasis(value)` from
+   * `@nodaro/shared` (16 lowercase hex digits), where `value` is the Edit
+   * Plan's Tighten EDL with any review applied, or the clip this render cuts.
+   * The job's result carries it back as `output_data.planBasis`, so a take can
+   * be told apart from one cut from an earlier plan. Send it only when the EDL
+   * you send IS that value (not one an intermediate step re-cut from an older
+   * plan); omit it otherwise. The result's `output_data.renderBasis` (the
+   * render's own settings and sources) is stamped by the server.
+   */
+  planBasis?: string
   /** Optionally associate this run with a workflow execution (display only). */
   workflowId?: string
 }
@@ -176,6 +194,7 @@ export interface EditPlanInput {
    *   - `"clips"`    → an {@link EdlClipSet} (`{ version, clips: Edl[] }`);
    *                    `unwrapEditPlanOutput` returns the bare `Edl[]`.
    *   - `"chapters"` → a {@link ChapterSet} (`{ version, chapters: [...] }`).
+   *   - `"trailer"`  → an `Edl` (one short teaser cut from the strongest moments).
    */
   mode: EditPlanMode
   /** Reasoning tier — affects plan quality AND the credit bucket. */
@@ -216,7 +235,7 @@ export interface EditPlanInput {
   count?: number
   /** `"clips"` mode only: target duration per clip, in seconds. */
   targetDurationSec?: number
-  /** Target aspect for cut clips. */
+  /** Target aspect for cut clips (`"clips"`) or the teaser (`"trailer"`). */
   targetAspect?: "16:9" | "9:16" | "1:1" | "4:5"
   /** Target platform hint (e.g. a social platform name). */
   platform?: string
@@ -251,11 +270,17 @@ export interface CameraSwitchInput {
 }
 
 /**
- * Phase-1 editorial primitives for podcast / long-form video editing.
+ * Editorial primitives for podcast / long-form video editing, single-camera
+ * and multicam: measure the cameras' offsets ({@link audioSync}), plan the cut
+ * ({@link editPlan}), put each cut on the speaker's camera
+ * ({@link cameraSwitch}), render a Preview to review (`applyEdl` with
+ * `quality: "proxy"`), then the final (`quality: "final"`).
  *
  * - {@link silenceDetect}, {@link audioSync} and {@link applyEdl} are core nodes
  *   available on every edition.
- * - {@link editPlan} is a Cloud-edition transcript-driven planner.
+ * - {@link editPlan} and {@link cameraSwitch} run on nodaro.ai; a self-hosted
+ *   install relays them once it is connected (a 503
+ *   `code: "nodaro_connection_required"` otherwise).
  * - {@link remapTranscript} is a PURE local transform (no request) — the same
  *   remap `applyEdl` performs on its `transcript`, exposed for callers that hold
  *   an EDL and a transcript and only want the re-timed transcript.
@@ -316,6 +341,8 @@ export class EditResource {
         ...(input.output !== undefined ? { output: input.output } : {}),
         ...(input.quality !== undefined ? { quality: input.quality } : {}),
         ...(input.crossfadeMs !== undefined ? { crossfadeMs: input.crossfadeMs } : {}),
+        ...(input.clipKey !== undefined ? { clipKey: input.clipKey } : {}),
+        ...(input.planBasis !== undefined ? { planBasis: input.planBasis } : {}),
         ...(input.workflowId !== undefined ? { workflowId: input.workflowId } : {}),
       },
     })
@@ -325,8 +352,8 @@ export class EditResource {
    * Plan a transcript-driven cut (`POST /v1/edit-plan`). Reads a timed
    * transcript (plus optional silence ranges) and the media sources, and plans
    * the edit. The finished job's `output_data` holds the plan: an `Edl`
-   * (`"tighten"`), an {@link EdlClipSet} (`"clips"`), or a {@link ChapterSet}
-   * (`"chapters"`) — normalize it with {@link unwrapEditPlanOutput}.
+   * (`"tighten"` or `"trailer"`), an {@link EdlClipSet} (`"clips"`), or a
+   * {@link ChapterSet} (`"chapters"`) — normalize it with {@link unwrapEditPlanOutput}.
    *
    * On a self-hosted install the request relays to nodaro.ai and needs the
    * install connected (a 503 `code: "nodaro_connection_required"` otherwise);

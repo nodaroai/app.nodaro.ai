@@ -176,7 +176,7 @@ nodaro audio combine --segment <url> --segment "<url>@12-95" --watch
 #   prompt      — the prompt wizard (analyze / generate / wizard)
 #   presets     — node presets (factory + your own)
 #   saved-posts — the inspiration wall: posts saved from Social Search
-#   competitors — tracked brands, their scans, action cards, and did it work? (Cloud)
+#   competitors — tracked brands, their scans, action cards, history and compare, did it work? (Cloud)
 #   community   — shared characters/locations/objects: browse, clone, favorites
 ```
 

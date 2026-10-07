@@ -13,7 +13,7 @@ import { probeRefVideoDurations } from "../lib/ref-video-probe.js"
 import { insertJobIdempotent } from "../lib/insert-job.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
-import { TEXT_TO_VIDEO_PROVIDERS, VIDEO_DURATION_AUTO, SEEDANCE_2_5_REF_LIMITS, PROMPT_HARD_CEILING, videoProviderRequiresImage, isSeedance2Provider, pricedOutputDurationSec, isMinimaxH3Provider, applyDefaultVideoSelection, buildVideoCreditModelIdentifier, type ConnectedReference, type DescribedReference } from "@nodaro/shared"
+import { TEXT_TO_VIDEO_PROVIDERS, VIDEO_DURATION_AUTO, SEEDANCE_2_5_REF_LIMITS, PROMPT_HARD_CEILING, videoProviderRequiresImage, isSeedance2Provider, pricedOutputDurationSec, isMinimaxH3Provider, applyDefaultVideoSelection, buildVideoCreditModelIdentifier, videoCharacterRefProblem, type ConnectedReference, type DescribedReference } from "@nodaro/shared"
 import { imageRequiredError } from "../lib/video-image-required.js"
 import { composeVideoPromptText, resolveReferenceTokens } from "@nodaro/prompts"
 
@@ -21,6 +21,8 @@ import { composeVideoPromptText, resolveReferenceTokens } from "@nodaro/prompts"
 const REFERENCE_TOKEN_PROBE = /\{(?:image|video|audio):\d+/i
 import { connectedReferenceSchema, describedReferenceSchema, referenceCaptionSchema, DESCRIBED_REFERENCE_LIMIT } from "../lib/connected-reference-schema.js"
 import { directionSchema } from "../lib/direction-schema.js"
+import { characterReferencesSchema } from "../lib/character-reference-schema.js"
+import { applyPromptPoliciesToCharacterReferences } from "../lib/character-reference-policy.js"
 import { subjectSchema } from "../lib/subject-schema.js"
 import { assembleVideoConnectedReferences, hasVideoReferenceChannels, validateRefVideoDurationPreHandler } from "./generate-video.js"
 import { formatZodError } from "../lib/zod-error.js"
@@ -49,6 +51,11 @@ export const textToVideoBody = z.object({
   referenceImageUrls: z.array(safeUrlSchema).max(SEEDANCE_2_5_REF_LIMITS.images).optional(),
   referenceVideoUrls: z.array(safeUrlSchema).max(SEEDANCE_2_5_REF_LIMITS.videos).optional(),
   referenceAudioUrls: z.array(safeUrlSchema).max(SEEDANCE_2_5_REF_LIMITS.audio).optional(),
+  // Identity inputs (parity with /v1/generate-video, same shared schema): a
+  // portrait + description per person on models with a dedicated character
+  // channel. Model support and the shared input budget are enforced in the
+  // handler by `videoCharacterRefProblem`; any other model → 400.
+  characterReferences: characterReferencesSchema.optional(),
   // Structured references (parity with generate-video). When present, the route
   // assembles them server-side via the shared video resolver — auto-attaching
   // unmentioned wired refs to referenceImageUrls, emitting per-ref directives, and
@@ -356,6 +363,24 @@ export async function textToVideoRoutes(app: FastifyInstance) {
       parsed.data.prompt = prompt
     }
 
+    // Character references — support, budget (assembled image count) and the
+    // shared rule, identical to /v1/generate-video. This lane has no start frame.
+    const characterProblem = videoCharacterRefProblem({
+      provider,
+      characterReferences: parsed.data.characterReferences,
+      imageCount: referenceImageUrls?.length ?? 0,
+      videoCount: referenceVideoUrls?.length ?? 0,
+      hasStartFrame: false,
+    })
+    if (characterProblem) {
+      return reply.status(400).send({ error: { code: characterProblem.code, message: characterProblem.message } })
+    }
+    // The description is subject text the prompt policies never see (it does not
+    // join `prompt`): police it here and mirror into parsed.data so the queued
+    // payload and the recorded input_data carry the policed text.
+    const characterReferences = applyPromptPoliciesToCharacterReferences(parsed.data.characterReferences)
+    if (characterReferences) parsed.data.characterReferences = characterReferences
+
     // Truncation warning on the ASSEMBLED prompt — the string the shed budgeted
     // for and the one the clamp will cut. Reaching here means the overflow was
     // UNSHEDABLE (prose or bindings alone clear the ceiling). Mirrors
@@ -461,6 +486,7 @@ export async function textToVideoRoutes(app: FastifyInstance) {
       referenceImageUrls,
       referenceVideoUrls,
       referenceAudioUrls,
+      characterReferences,
       refVideoDurationsSec: req.refVideoDurationsSec,
       webSearch,
       nsfwChecker,

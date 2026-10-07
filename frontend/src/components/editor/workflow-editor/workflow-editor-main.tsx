@@ -28,7 +28,6 @@ import { UnsavedChangesDialog } from "../unsaved-changes-dialog";
 import { NavigateWithGuardContext } from "@/hooks/use-navigate-with-guard";
 import { ExecutionsTab } from "../executions-tab";
 import { useTriggeredRunFollow } from "./use-triggered-run-follow";
-import { FOLLOWED_TRIGGER_NODE_TYPES } from "./triggered-run-follow";
 import { followTriggeredRun, paintEndedTriggeredRun } from "./follow-triggered-run";
 import { ExecutionStatusBar } from "../execution-status-bar";
 import { CostTab } from "../cost-tab";
@@ -72,13 +71,16 @@ import { queryClient } from "@/lib/query-client";
 import { hasCredits } from "@/lib/edition";
 import { creditUnits, creditUnitLabel } from "@/lib/credit-units";
 import { useBillingSurface } from "@/hooks/use-billing-surface";
-import { getCachedCredits, prefetchModelCredits } from "@/ee/hooks/use-model-credits";
+import { getCachedCredits, prefetchModelCredits, isModelUnpriced } from "@/ee/hooks/use-model-credits";
+import { speechUnitIdsFor } from "@/lib/speech-estimate";
 import { getModelIdentifier } from "@/components/editor/config-panels/helpers";
 import { useStats } from "@/hooks/queries/use-stats-queries";
 import { InsufficientCreditsModal } from "@/ee/components/credits/InsufficientCreditsModal";
 import { StorageExceededModal } from "@/ee/components/credits/StorageExceededModal";
 import { SubscriptionRequiredModal } from "@/ee/components/credits/SubscriptionRequiredModal";
 import { useRunConfirm } from "./run-confirm-dialog";
+import { handleRenderFinal } from "./render-final-handler";
+import { previewRunnable, previewSingleRunRefusal } from "./preview-gate";
 import { PromptQuickEditModal } from "@/components/nodes/prompt-quick-edit-modal";
 import {
   NODE_CREDIT_COSTS,
@@ -106,6 +108,7 @@ import { handleCreateNodesFromWriter as createNodesFromWriter, handleRunAllWrite
 import { resolveManualEdit } from "./execute-node";
 import { extractNodeOutput } from "./execution-graph";
 import { orderNodesParentFirst } from "./group-coords";
+import { unloadNeedsPrompt, unloadSaveRequest } from "./unload-save";
 import { FreeCutImportPicker } from "../freecut-import-picker";
 import { studioWorkflowUrl } from "@/lib/studio";
 import { hasSavableChanges, isSaveRefused } from "@/hooks/workflow-save-refusal";
@@ -156,11 +159,14 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   const [activeTab, setActiveTab] = useState<"editor" | "present" | "executions" | "cost">(
     "editor",
   );
-  // A run a Telegram message started is followed on the canvas (wired below, after ctx).
-  // onExecutionStarted (defined before that) reaches the watch through this ref.
+  // A run the editor did not start (Telegram, MCP, API, a schedule, a webhook)
+  // is followed on the canvas (wired below, after ctx). onExecutionStarted
+  // (defined before that) reaches the watch through this ref.
   const followHandledRef = useRef<(executionId: string) => void>(() => {});
   const followWorkflowId = useWorkflowStore((s) => s.workflowId);
-  const hasFollowedTrigger = useWorkflowStore((s) => s.nodes.some((n) => FOLLOWED_TRIGGER_NODE_TYPES.has(n.type ?? "")));
+  // Not before the nodes are in: `load()` sets the workflow id first, and a
+  // look at an empty canvas would paint nothing and lose the run's marks.
+  const isWorkflowLoading = useWorkflowStore((s) => s.isWorkflowLoading);
   const [sidebarVisible, setSidebarVisible] = useState(false);
   // Confirm dialog for the fallback single-node discard control. Holds the
   // action to run on confirm (or null when closed); mirrors run-node-button.tsx.
@@ -498,9 +504,11 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   // ---------------------------------------------------------------------------
   useEffect(() => {
     if (!hasCredits()) return;
-    const executableNodes = storeNodes.filter((n) => isExecutableNode(n) && !isExpandedClone(n));
+    const allExecutable = storeNodes.filter((n) => isExecutableNode(n) && !isExpandedClone(n));
     // The whole-workflow badge: every executable node re-runs, planners included.
-    const rerunIds = new Set(executableNodes.map((n) => n.id));
+    const rerunIds = new Set(allExecutable.map((n) => n.id));
+    // …except what a Preview render gates: it runs only after Render final.
+    const executableNodes = previewRunnable(allExecutable, storeNodes, storeEdges);
 
     // Use composite model identifiers (e.g. "gpt-image:high") for accurate per-model lookup
     const computeEstimate = () => {
@@ -517,9 +525,16 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       setWorkflowCreditEstimateVersion(useWorkflowStore.getState().loadedVersion);
     };
 
-    // Collect model identifiers and check which need fetching
-    const modelIds = [...new Set(executableNodes.map((n) => getModelIdentifier(n, storeEdges, storeNodes, rerunIds)).filter(Boolean))];
-    const uncached = modelIds.filter((m) => getCachedCredits(m) === undefined);
+    // Collect model identifiers and check which need fetching. A speech node's
+    // unit row is asked for too: until it is cached, getModelIdentifier quotes
+    // the flat row, so without this a node scrolled off-canvas (no pill mounted)
+    // could never learn that the server prices speech by length. An id the
+    // server has reported priced nowhere (length pricing off) is not asked again.
+    const modelIds = [...new Set([
+      ...executableNodes.map((n) => getModelIdentifier(n, storeEdges, storeNodes, rerunIds)),
+      ...speechUnitIdsFor(executableNodes, storeNodes, storeEdges),
+    ].filter(Boolean))];
+    const uncached = modelIds.filter((m) => getCachedCredits(m) === undefined && !isModelUnpriced(m));
 
     if (uncached.length > 0) {
       // Wait for real costs before showing estimate
@@ -658,65 +673,14 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
   useEffect(() => {
     function handleBeforeUnload() {
-      if (!projectId) return;
-      const state = useWorkflowStore.getState();
-      // Read-only (Studio) workflows must never be persisted from the editor.
-      // Auto-layout routes through the controlled onNodesChange and flips
-      // isDirty even for read-only workflows, so the isDirty check below is
-      // not enough on its own — bail before building/PATCHing the payload.
-      if (state.isReadOnly) return;
-      // A write this workflow already refused would be refused again.
-      if (isSaveRefused(state)) return;
-      if (!state.isDirty || state.nodes.length === 0) return;
-
-      const supabaseUrl = runtimeSupabaseUrl() || undefined;
-      const supabaseKey = runtimeSupabaseAnonKey() || undefined;
-      const wfId = state.workflowId;
-      const token = cachedAccessTokenRef.current;
-      if (!supabaseUrl || !supabaseKey || !wfId || !token) return;
-
-      const payload = {
-        nodes: structuredClone(orderNodesParentFirst(state.nodes)),
-        edges: structuredClone(state.edges),
-        settings: {
-          // MUST mirror the normal save in use-workflow-persistence.ts (~L534):
-          // PostgREST PATCH REPLACES the whole `settings` JSONB column, so any
-          // subfield omitted here is DESTROYED on unload. Omitting
-          // presentationSettings + viewport silently wiped all published-app I/O
-          // curation (inputItems/outputItems/cardMeta/view modes/share settings)
-          // and the saved viewport whenever a tab was closed mid-edit.
-          characterDefinitions: structuredClone(state.characterDefinitions),
-          flowPromptTemplates: structuredClone(state.flowPromptTemplates),
-          presentationSettings: structuredClone(state.presentationSettings),
-          viewport: state.savedViewport,
-        },
-      };
-
-      // Optimistic locking on the unload-flush: PostgREST treats each
-      // query-string `<col>=eq.<v>` filter as an AND'd predicate, so
-      // adding `&updated_at=eq.<loadedUpdatedAt>` mirrors the in-app
-      // `.eq("updated_at", ...)` chain. If another device wrote first
-      // the row no longer matches, the PATCH is a silent 0-row no-op
-      // (better than overwriting remote with stale fields the user
-      // never got a chance to merge). When loadedUpdatedAt is null we
-      // fall back to last-write-wins — a brand-new workflow that has
-      // never been saved has no version to lock against.
-      const lockedAt = state.loadedUpdatedAt;
-      const url = lockedAt
-        ? `${supabaseUrl}/rest/v1/workflows?id=eq.${wfId}&updated_at=eq.${encodeURIComponent(lockedAt)}`
-        : `${supabaseUrl}/rest/v1/workflows?id=eq.${wfId}`;
-
-      fetch(url, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: supabaseKey,
-          Authorization: `Bearer ${token}`,
-          Prefer: "return=minimal",
-        },
-        body: JSON.stringify(payload),
-        keepalive: true,
-      }).catch(() => {});
+      // Writes the review inspector's pending edit first, then reads the store.
+      const request = unloadSaveRequest({
+        projectId,
+        supabaseUrl: runtimeSupabaseUrl() || undefined,
+        supabaseKey: runtimeSupabaseAnonKey() || undefined,
+        token: cachedAccessTokenRef.current,
+      });
+      if (request) fetch(request.url, request.init).catch(() => {});
     }
 
     window.addEventListener("beforeunload", handleBeforeUnload);
@@ -865,7 +829,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     return err instanceof StorageExceededError;
   }
 
-  const { confirmRun, isConfirming, dialog: runConfirmDialog } = useRunConfirm();
+  const { confirmRun, askConfirm, isConfirming, dialog: runConfirmDialog } = useRunConfirm();
 
   const ctx: ExecutionContext = {
     userId: user?.id,
@@ -882,6 +846,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     setInsufficientCreditsData,
     setShowSubscriptionRequired,
     confirmRun,
+    askConfirm,
   };
 
   // ---------------------------------------------------------------------------
@@ -901,10 +866,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     queryClient.invalidateQueries({ queryKey: ["workflow-executions"] });
   }, []);
 
-  // A run a Telegram message started: followed live on the nodes like a Run
-  // (status bar, spinners, results), or painted at once when it ended unseen.
-  // Never while a Run is being confirmed, and never on a flow this person may only view.
-  const { markHandled: markFollowHandled } = useTriggeredRunFollow(followWorkflowId, hasFollowedTrigger && !isReadOnly, isRunning || isConfirming, {
+  // A run the editor did not start: followed live on the nodes like a Run
+  // (status bar, spinners, results) when a person started it (Telegram, MCP,
+  // the API), or painted at once when it ended unseen (those, and schedules
+  // and webhooks). Never while a Run is being confirmed, never while the
+  // workflow is still loading, and never on a flow this person may only view.
+  const { markHandled: markFollowHandled } = useTriggeredRunFollow(followWorkflowId, !isReadOnly && !isWorkflowLoading, isRunning || isConfirming, {
     follow: (run) => {
       setActiveExecutionId(run.id);
       followTriggeredRun(run, ctx, setIsRunning, onExecutionEnded);
@@ -992,6 +959,10 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     // A server-only node (one that sends as the person) is never run on the
     // Copilot's say-so; the person runs it from the canvas.
     if (!node || !isExecutableNode(node) || SERVER_RUN_ONLY_TYPES.has(node.type ?? "")) return { started: false };
+    // A node a Preview render gates runs only after Render final: the run
+    // would be refused, so the panel must not wait for it.
+    const { nodes: graphNodes, edges: graphEdges } = useWorkflowStore.getState();
+    if (previewSingleRunRefusal(nodeId, graphNodes, graphEdges)) return { started: false };
     await handleRunSingleNode(nodeId, ctx, projectId, save, setIsRunning, pollIntervalsRef, opts);
     return { started: true };
   }
@@ -1005,6 +976,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
     const { nodes: storeNodes, edges: storeEdges } = useWorkflowStore.getState();
     const node = storeNodes.find((n) => n.id === nodeId);
     if (!node || !isExecutableNode(node)) return null;
+    // Gated by a Preview render: a single run of it is refused, so it has no price.
+    if (previewSingleRunRefusal(nodeId, storeNodes, storeEdges)) return null;
     const cached = getCachedCredits(getModelIdentifier(node, storeEdges, storeNodes));
     const cost = cached !== undefined
       ? cached
@@ -1100,6 +1073,13 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   });
 
   useEffect(() => {
+    useWorkflowStore.getState().setRenderFinal(
+      isReadOnly ? null : (renderId: string, kind: "final" | "proxy") => handleRenderFinal(renderId, kind, ctx, projectId, save, setIsRunning, onExecutionStarted, onExecutionEnded),
+    );
+    return () => useWorkflowStore.getState().setRenderFinal(null);
+  });
+
+  useEffect(() => {
     useWorkflowStore.getState().setRunSelected(
       isReadOnly ? null : () => handleRunSelected(ctx, projectId, save, setIsRunning, onExecutionStarted, onExecutionEnded),
     );
@@ -1173,11 +1153,8 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
   useEffect(() => {
     function handleBeforeUnload(e: BeforeUnloadEvent) {
-      // Plain `isDirty`, refused saves included: the browser's own prompt
-      // offers nothing it cannot honour, and an accidental close is the one
-      // way to lose results that Clone & Remix could still have kept.
-      const isDirty = useWorkflowStore.getState().isDirty;
-      if (!isDirty) return;
+      // Plain `isDirty` with the pending review written (unload-save.ts).
+      if (!unloadNeedsPrompt()) return;
       e.preventDefault();
     }
     window.addEventListener("beforeunload", handleBeforeUnload);

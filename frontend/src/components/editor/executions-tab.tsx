@@ -1,9 +1,11 @@
 import React, { useState } from "react"
+import { executionErrorText } from "@/lib/execution-error-text"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { RefreshCw, ChevronLeft, ChevronRight, Loader2, AlertCircle, XCircle, ChevronDown, ChevronRight as ChevronRightIcon, Coins, Activity } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cancelWorkflowExecution, stopWorkflowExecution, getJobs, getJobStatus, type WorkflowExecution, type Job } from "@/lib/api"
 import { hasCredits } from "@/lib/edition"
+import { executionOutcome } from "@nodaro/shared"
 import { toast } from "sonner"
 import { useT, tx } from "@/lib/i18n"
 import { useAppDir } from "@/lib/locale-store"
@@ -17,6 +19,8 @@ import {
 import { ExecutionDetailModal } from "./execution-detail-modal"
 import { TriggerBadge } from "@/components/library/triggers/TriggerBadge"
 import {
+  isExecutedNodeEntry,
+  skipReasonLabel,
   STATUS_COLORS,
   statusLabel,
   NODE_STATUS_DOT,
@@ -240,10 +244,8 @@ export function ExecutionsTab({ className = "", workflowId }: ExecutionsTabProps
                 executions.map((exec) => {
                   const isExpanded = expandedId === exec.id
                   const nodeStates = (exec.nodeStates ?? {}) as Record<string, NodeState>
-                  // Only show nodes that actually executed (not source/skipped pre-completed nodes)
-                  const nodeEntries = Object.entries(nodeStates).filter(
-                    ([, s]) => s.status !== "skipped" && !(s.status === "completed" && !s.startedAt),
-                  )
+                  // The nodes that actually executed, plus one the run skipped for a reason (execution-utils.ts).
+                  const nodeEntries = Object.entries(nodeStates).filter(([, s]) => isExecutedNodeEntry(s))
                   const isActive = exec.status === "pending" || exec.status === "running" || exec.status === "stopping"
 
                   return (
@@ -504,6 +506,11 @@ function ExecutionRow({
           <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${STATUS_COLORS[exec.status] || "bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400"}`}>
             {statusLabel(exec.status)}
           </span>
+          {executionOutcome(exec.status, exec.nodeStates as Record<string, { status?: unknown; skipReason?: unknown }> | undefined) === "nothing_new" && (
+            <span className="ms-1.5 inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-slate-100 text-slate-600 dark:bg-slate-500/20 dark:text-slate-300">
+              {tx("exec.outcomeNothingNew")}
+            </span>
+          )}
           {exec.errorMessage && exec.status === "failed" && (
             <TooltipProvider>
               <Tooltip>
@@ -511,7 +518,7 @@ function ExecutionRow({
                   <AlertCircle className="w-3.5 h-3.5 text-red-400 ms-1.5 inline" />
                 </TooltipTrigger>
                 <TooltipContent side="right" className="max-w-xs">
-                  <p className="text-xs">{exec.errorMessage}</p>
+                  <p className="text-xs">{executionErrorText(exec.errorMessage)}</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -669,6 +676,11 @@ function ExecutionRow({
                             }`}>
                               {state.status}
                             </span>
+                            {state.status === "skipped" && state.skipReason && (
+                              <span className="ms-1 text-[10px] text-slate-400" title={tx("exec.nodeSkippedEmptyInput")}>
+                                {skipReasonLabel(state.skipReason)}
+                              </span>
+                            )}
                             {state.error && (
                               <TooltipProvider>
                                 <Tooltip>

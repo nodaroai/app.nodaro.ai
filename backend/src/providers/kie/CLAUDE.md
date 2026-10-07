@@ -85,6 +85,7 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
 | `wan-3` | `wan/3-0-video` (bespoke `runWan3`) | [wan 3.0](https://docs.kie.ai/market/wan/3-0-video.md) |
 | `wan-3-prime` | `wan/3-0-video-prime` (bespoke `runWan3`) | [wan 3.0 prime](https://docs.kie.ai/market/wan/3-0-video-prime.md) |
 | `gemini-omni-flash` | `google/gemini-omni-flash-1-1` (via `runGeminiOmni`; the pro sibling's id is the bare `gemini-omni-video`) | [gemini omni flash](https://docs.kie.ai/market/google/gemini-omni-flash-1-1.md) |
+| `gemini-omni-video` | `gemini-omni-video` (via `runGeminiOmni`; the pro sibling of flash) | [gemini omni video](https://docs.kie.ai/market/gemini-omni-video.md) |
 | `wan-i2v` | `wan/2-6-image-to-video` | [wan 2.6 i2v](https://docs.kie.ai/market/wan/2-6-image-to-video.md) |
 | `wan-turbo` | `wan/2-2-a14b-image-to-video-turbo` | [wan turbo i2v](https://docs.kie.ai/market/wan/2-2-a14b-image-to-video-turbo.md) |
 | `hailuo-2.3-pro` | `hailuo/2-3-image-to-video-pro` | [hailuo 2.3 pro](https://docs.kie.ai/market/hailuo/2-3-image-to-video-pro.md) |
@@ -112,6 +113,7 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
 | `wan-3` | `wan/3-0-video` (ONE KIE id serves both modes) | [wan 3.0](https://docs.kie.ai/market/wan/3-0-video.md) |
 | `wan-3-prime` | `wan/3-0-video-prime` (ONE KIE id serves both modes) | [wan 3.0 prime](https://docs.kie.ai/market/wan/3-0-video-prime.md) |
 | `gemini-omni-flash` | `google/gemini-omni-flash-1-1` (ONE KIE id serves both modes) | [gemini omni flash](https://docs.kie.ai/market/google/gemini-omni-flash-1-1.md) |
+| `gemini-omni-video` | `gemini-omni-video` (ONE KIE id serves both modes) | [gemini omni video](https://docs.kie.ai/market/gemini-omni-video.md) |
 | `wan` | `wan/2-6-text-to-video` | [wan 2.6 t2v](https://docs.kie.ai/market/wan/2-6-text-to-video.md) |
 | `sora2` | `sora-2-text-to-video` | [sora2 t2v](https://docs.kie.ai/market/sora2/sora-2-text-to-video.md) |
 | `hailuo-standard` | `hailuo/02-text-to-video-standard` | [hailuo std t2v](https://docs.kie.ai/market/hailuo/02-text-to-video-standard.md) |
@@ -216,6 +218,60 @@ An unmeasurable delivery commits the reservation.
 `gemini-omni-flash` shares the pro sibling's request shape through
 `runGeminiOmni`, with one difference: its schema marks `duration` **required**,
 so the emitted body always carries it (`requiresDuration` on the model config).
+
+**Gemini Omni character references (`characterReferences` → `character_ids`).**
+`image_urls` is, per KIE, loose "reference images for characters, scenes, styles,
+or storyboard guidance" and does NOT hold a face; the dedicated identity input is
+`character_ids` (max 3, drawn from the SAME 7-unit quota: images + videos×2 +
+character_ids ≤ 7). Ids come from a **non-task, synchronous** endpoint,
+`POST /api/v1/omni/character/create` (`omni-character.ts`, own module so the
+mocked `client.ts` can never hide a character failure): body `{ descriptions,
+image_urls: [portrait, body?], character_name? }` → `data.characterId`. No price
+and no validity period are documented, so: no credit charge is added; ids are
+cached 24h in Redis (`kie:omni-character:<sha256 of imageUrl|bodyImageUrl|
+description|name>`, in-process LRU if Redis is down), and a CACHED id that KIE
+rejects (`isInvalidOmniCharacterError`, matched on `internalDetails` — the
+sanitized message never carries KIE's words) is forgotten, recreated ONCE and the
+task resubmitted. A create failure fails the job — never a fallback to
+`image_urls`. The create call goes through `providerFetch` (egress seam,
+`operation: "omni.character.create"`, OUR model key threaded); the video task
+reports the count as the `characterRefs` egress dimension. Public API:
+`characterReferences` (provider-neutral; KIE ids never leave this module), gated
+by the data-driven `characters` cap in `VIDEO_REF_LIMITS_BY_PROVIDER`.
+**Unverified against the live API** (no probe has been run): KIE's schema says
+`descriptions` while its JSON example says `description` (flip the single
+`DESCRIPTION_FIELD` constant if a live create disagrees), its note says
+`image_urls` takes "only 1 image" while the schema allows 2 (a `bodyImageUrl`
+request may fail if the note is the real rule), and the stale-id wording is a
+guess. Nodaro does not send `first_frame_url` for Gemini (the start frame rides
+`image_urls[0]`), so the route's start-frame 400 is OUR limit, not a KIE
+exclusivity. `gemini-omni-audio` (`audio_ids`) takes preset voice names only —
+it cannot carry a real speaker's recording; a real voice goes through
+`video_list` (a black video carrying it).
+
+**Pinned voice persona (`characterReferences[].voice`).** To keep ONE voice across
+clips, a reference may carry `voice: { preset, description?, exampleLine? }`.
+`omni-character.ts` mints a persona via the synchronous
+`POST /api/v1/omni/audio/create` (`{ audio_id: <one of 30 presets>, name,
+voice_description?, example_dialogue? }` → `data.audioId` (live; the doc example
+shows `kieAudioId`, accepted second; no id at all = deterministic, non-retryable
+failure). The doc example shows envelope `code: 0` while the character endpoint shows `200` — BOTH are
+accepted, any other code fails; `operation: "omni.audio.create"` through
+`providerFetch`, OUR model key). The id rides TWICE: the character create's
+`audio_ids` and the video task's `audio_ids` (de-duplicated, max 3 =
+`voices` cap in `VIDEO_REF_LIMITS_BY_PROVIDER`; NOT part of the 7-unit quota).
+Cache: `kie:omni-audio:<sha256 of preset|description|exampleLine|name>` 24h, same
+Redis + in-process fallback as characters; the CHARACTER key gains the voice
+dimension only when a voice is present (an unvoiced reference keeps its old key,
+and a voiced and an unvoiced character never share an id). The audio persona is
+resolved for every voiced reference even on a character cache hit — the video
+request needs the id. A stale-id retry forgets both entries
+(`isInvalidOmniAudioError`, narrow, on `internalDetails`). The voice
+`description` goes through the character-reference policy funnel
+(`character-reference-policy.ts`); the `exampleLine` and `name` do not. A voice
+create failure fails the job — never a silent unvoiced fallback. **Unverified
+live:** whether a pinned persona actually holds one voice across clips, and the
+envelope code on the audio endpoint (0 per its doc).
 
 
 ---

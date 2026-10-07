@@ -1,76 +1,79 @@
 ---
 name: podcast-editing
-description: Transcript-driven editing of a long recording on Nodaro — tighten a whole episode, or fan a recording out into a pack of short clips, via an EDL you can hand-tune before rendering
-triggers: ["edit my podcast", "tighten my podcast", "clean up this recording", "remove the silences and filler", "cut the dead air", "make clips from my recording", "clip pack", "find shareable clips", "turn my episode into shorts", "podcast editing", "edit this interview"]
-version: 1
+description: Transcript-driven editing of a long recording on Nodaro — tighten a whole episode, fan it out into a pack of short clips, or cut a multicam recording to whoever is speaking, via an EDL you review as a Preview before rendering the final
+triggers: ["edit my podcast", "tighten my podcast", "clean up this recording", "remove the silences and filler", "cut the dead air", "make clips from my recording", "clip pack", "find shareable clips", "turn my episode into shorts", "podcast editing", "edit this interview", "multicam podcast", "cut between the cameras", "switch to whoever is speaking", "sync my cameras"]
+version: 2
 ---
 
 # Podcast Editing
 
-You are editing ONE long recording (a podcast episode, an interview, a webinar) by
+You are editing ONE recorded conversation (a podcast episode, an interview, a webinar) by
 READING ITS TRANSCRIPT, not its pixels. The whole method rests on one data shape: an
 **edit decision list (EDL)** — a plain, timed list of which spans of which source play, in
 what order. An analysis step writes an EDL; a render step consumes one. Because the EDL is
-just data, you (or the user) can open it, hand-tune it, and only then render — nothing is
-baked until `apply_edl` runs.
+just data, you (or the user) can open it, review it, adjust it, and only then render the
+final — nothing is delivered until `apply_edl` runs with `quality: "final"`.
 
-This recipe covers the two phase-1 components:
+This recipe covers:
 
-- **Component 1 — Tighten episode:** turn the raw recording into one clean cut with the
-  silence, filler, and false starts removed.
-- **Component 2 — Clip pack:** fan the same recording out into N short, self-contained
-  clips ready for social.
+- **Tighten episode:** the raw recording as one clean cut with the silence, filler and
+  false starts removed.
+- **Clip pack:** the same recording fanned out into N short, self-contained clips.
+- **Multicam:** a conversation filmed on several cameras (plus, usually, one mic recorder),
+  lined up by sound and cut to the camera of whoever is speaking.
+
+Each of them ends the same way: **render a Preview, review it with the user, then render
+the final.**
 
 ## The tools (and where each one runs)
 
 | Verb | Role | Availability |
 |------|------|--------------|
-| `transcribe` | Speech to a timed, word-level transcript | everywhere (needs a speech-provider key on a self-host) |
+| `transcribe` | Speech to a timed, word-level transcript; `diarize: true` labels the speakers | everywhere (needs a speech-provider key on a self-host) |
 | `silence_detect` | Detect the silent ranges (one local ffmpeg pass, no transcript) | everywhere (CORE, keyless) |
-| `plan_edit` | Read the transcript and WRITE an EDL — `mode`: `tighten` / `clips` / `chapters` | **Cloud only** |
-| `apply_edl` | RENDER an EDL into a finished video or audio cut | everywhere (CORE) |
+| `audio_sync` | Measure how far apart the clocks of 2–6 recordings of one conversation are, from their sound | everywhere (CORE, keyless) |
+| `plan_edit` | Read the transcript and WRITE an EDL — `mode`: `tighten` / `clips` / `chapters`; multicam `offsets` from `audio_sync` | **Cloud only** |
+| `switch_cameras` | Put each cut of an EDL on the camera of whoever is speaking; the sound never changes | **Cloud only** |
+| `apply_edl` | RENDER an EDL into a video or audio file — `quality: "proxy"` for a Preview, `quality: "final"` for the delivery | everywhere (CORE) |
+| `mix_audio` | Layer tracks into one file; with `duck: { under: <voice track index> }` a music bed dips under speech and rises in the pauses — run it on an `apply_edl` audio render plus the bed | everywhere (CORE) |
 
-**Read the asymmetry before you start.** `silence_detect` and `apply_edl` are core verbs —
-they register on every install. `plan_edit` is the editorial planner and is **Cloud only**.
-On a self-host without it you do not lose the pipeline: author the EDL by hand (or with any
-planner you like) to the contract below, then render it with `apply_edl`. `plan_edit`
-writes the EDL for you; it is not required to render one.
+**Read the asymmetry before you start.** `silence_detect`, `audio_sync` and `apply_edl` are
+core verbs — they register on every install. `plan_edit` and `switch_cameras` are Cloud
+only. On a self-host without them you do not lose the pipeline: author the EDL by hand (or
+with any planner you like) to the contract below, put each segment's `video` on the camera
+you want, and render it with `apply_edl`.
 
-Each of these verbs returns a `job_id` — poll `get_job`. `plan_edit`'s EDL is in the job's
-`output_data`; `apply_edl`'s rendered file is the job result. **The `transcribe` and
-`silence_detect` payloads you hand to `plan_edit` are nested under `output_data.json` — pass
-that inner object, never the whole `output_data` (see the steps below; getting this wrong
-silently drops the data with no error).**
+Each of these verbs returns a `job_id` — poll `get_job`. **The payloads you hand from one
+step to the next are nested under `output_data.json` — pass that inner object, never the
+whole `output_data`** (see the steps below; getting this wrong silently drops the data with
+no error). `plan_edit`'s plan is the job's `output_data`; `apply_edl`'s rendered file is the
+job result.
 
 ---
 
-## Component 1 — Tighten episode
+## Tighten episode
 
-1. **Transcribe the master audio.** Call `transcribe` with `word_timestamps: true` (and
-   `diarize: true` for a multi-speaker recording) so the transcript carries per-word
-   `startMs` / `endMs` and speaker labels — `plan_edit` reads word timings, so a transcript
-   without them cannot drive a tighten. When the job completes, pass its
+1. **Transcribe the master audio.** Call `transcribe` (word timings are always on; add
+   `diarize: true` for a multi-speaker recording). When the job completes, pass its
    **`output_data.json`** (the normalized Transcript, word timings in milliseconds) as
-   `plan_edit`'s `transcript`. Do NOT pass the whole `output_data` — its top-level
-   `segments` are in SECONDS, and only `output_data.json` is the ms-timed Transcript the
-   planner expects.
+   `plan_edit`'s `transcript`. Do NOT pass the whole `output_data` — only `output_data.json`
+   is the ms-timed Transcript the planner expects.
 2. **Optional — detect silence.** Call `silence_detect` on the same source. Pass its
    **`output_data.json`** (the `{ version, ranges, durationMs }` object) as `plan_edit`'s
-   `silence` to sharpen where the cuts land — pass that inner object, NOT the whole
-   `output_data`, or the planner finds no `ranges` and the silence is silently ignored (the
-   paid step does nothing). Tune `threshold_db` (a lower, more-negative dBFS floor is
-   stricter), `min_silence_ms`, and `pad_ms` (speech kept around each range) if the default
-   cut is too aggressive or too loose.
+   `silence` to sharpen where the cuts land — NOT the whole `output_data`, or the planner
+   finds no `ranges` and the silence is silently ignored (the paid step does nothing). Tune
+   `threshold_db` (a lower, more-negative dBFS floor is stricter), `min_silence_ms`, and
+   `pad_ms` (speech kept around each range) if the default cut is too aggressive or too
+   loose.
 3. **Plan the tighten.** Call `plan_edit` with `mode: "tighten"`, the `transcript`, the
    optional `silence`, and the media `sources` (1–6). It returns one `Edl`: the kept spans
    are in `segments`, and everything it removed is recorded in `dropped[]` with a `reason`
-   (`silence` / `filler` / `false-start` / …). Nothing is discarded silently — the dropped
-   list is auditable.
-4. **Review, then render.** Read the EDL. Hand-tune it if you want (see *Hand-editing an
-   EDL* below), then call `apply_edl` with the EDL to produce the tightened cut. Use
-   `output: "audio"` for an audio-only episode, `output: "video"` for a camera recording.
+   (`silence` / `filler` / `false-start` / …). Nothing is discarded silently.
+4. **Preview, review, render final** — see *Review: Preview first, then the final* below.
+   Use `output: "audio"` for an audio-only episode, `output: "video"` for a camera
+   recording.
 
-## Component 2 — Clip pack
+## Clip pack
 
 1. **Transcribe** the recording the same way (step 1 above).
 2. **Plan the clips.** Call `plan_edit` with `mode: "clips"`, the `transcript`, the
@@ -78,13 +81,95 @@ silently drops the data with no error).**
    `target_aspect` (e.g. `"9:16"` for vertical social). The `output_data` is an
    **`EdlClipSet`** — `{ version: 1, clips: Edl[] }` — one `Edl` per clip, each with its own
    `meta.title` / `meta.hook`.
-3. **Render each clip.** Call `apply_edl` ONCE PER CLIP, passing that clip's `Edl`. A clip
-   pack of N clips is N `apply_edl` calls (they can run in parallel). Deliver the rendered
-   files, titled from each clip's `meta`.
+3. **Render each clip** — one `apply_edl` call PER CLIP, passing that clip's `Edl` (they can
+   run in parallel). Pass `clip_key` — the clip's span on the master clock,
+   `"<earliest inMs>-<latest outMs>"` of that clip's segments in the PLAN (also when the
+   render is of a camera-switched clip: switching can move the edges inward) — and each
+   render's result carries it back as `output_data.clipKey`, so you can match every file to
+   its clip. Preview the pack first
+   (below), drop the clips the user does not want, then render the kept ones at final.
+   Deliver the files, titled from each clip's `meta`.
 
 `chapters` mode is available too: it returns `{ version: 1, chapters: [{ startMs, title }] }`
 — chapter markers with titles, not a cut. There is nothing to render; hand the chapters to
 the user (or a description field) as-is.
+
+## Multicam (several cameras, one conversation)
+
+Each device started recording at a different moment, so the files are on different
+clocks. The plan is always timed on ONE clock — the **master**: the source with
+`role: "master-audio"` (usually the mic recorder), else the first source.
+
+1. **Name the recordings once.** Give every recording an id (e.g. `mic`, `cam-a`, `cam-b`)
+   and use the SAME ids in `audio_sync`, in `plan_edit`'s `sources`, and in
+   `switch_cameras`' `speaker_map`. Offsets are matched to sources by id.
+2. **Line them up.** Call `audio_sync` with `sources: [{ id, url }]` for every recording and
+   `reference` set to the master's id. Its `output_data.json` is
+   `{ reference, offsets: [{ sourceId, offsetMs, confidence, driftMsPerHour }], notes }`.
+   Read `notes` to the user: low confidence and clock drift are reported there, never
+   corrected.
+3. **Transcribe the master** with `diarize: true` — `switch_cameras` needs speaker labels,
+   and the transcript must be on the master's clock (transcribe the master recording, not a
+   camera). Pass the master's id as `plan_edit`'s `transcript_source_id`.
+4. **Plan with the offsets.** Call `plan_edit` with the sources — the master as
+   `kind: "audio"`, `role: "master-audio"`; each camera as `kind: "video"`,
+   `role: "camera"` (or `"wide"` for a wide shot) — and the `audio_sync` result as
+   `offsets`. Each measured offset is written onto its source before the request. It is
+   **refused before any charge** when a source was not measured or matched weakly
+   (confidence below 0.5 — set that source's `offset_ms` by hand, `0` if it started with
+   the master), or the master was not measured. Each cut goes on the first camera with
+   picture for it; a stretch no camera filmed is dropped with the reason `no-picture`.
+5. **Switch cameras.** Call `switch_cameras` with the plan's `edl` (one EDL — for a clip
+   pack, one call per clip), the diarized `transcript`, and `speaker_map` (speaker label →
+   the id of that speaker's camera; a speaker left out of `speaker_map` goes to the source
+   whose `speakers` list names them, else the `wide` camera, else any camera with picture;
+   one mapped to `""` skips the `speakers` list). `speaker_names` renames the speakers on the segments and in the
+   returned transcript. Leave `layout_hints` off: `apply_edl` renders cut-only edits and
+   refuses a layout-hinted one. Its `output_data.json` is the switched EDL for `apply_edl`;
+   `output_data.transcript` is the named transcript (wire it to captions).
+6. **Preview, review, render final** — below. The sound never switches: every cut keeps
+   the master's sound, whichever camera it shows.
+
+---
+
+## Review: Preview first, then the final
+
+A final render is billed per output minute at the final rate; a Preview at its own, lower
+rate. So the order is always: **Preview → review → Render final.**
+
+1. **Render a Preview.** Call `apply_edl` with the EDL and `quality: "proxy"`. A Preview
+   is the same edit on the same frames — at most 720p, lighter mono sound — always private
+   (never in the public gallery) and labelled Preview (`preview: true` from `get_job`).
+2. **Review it with the user.** Show the Preview, and from the EDL tell them what was cut
+   and why: each `dropped[]` entry has a `reason` and a span. Ask what to restore, what else
+   to drop, which clips to keep.
+3. **Apply their decisions to the PLAN's EDL** (the `plan_edit` result), never re-planning:
+   restore a dropped span by removing its `dropped[]` entry and adding a segment for it (a
+   new `id`, the same `video` / `audio` sources as its neighbours) in time order; drop a
+   span by shrinking or removing its segment and recording it in `dropped[]`; drop a clip by
+   not rendering it. Keep the invariants under *Hand-editing an EDL*. A re-run of
+   `plan_edit` is billed again and plans afresh — the user's review would be lost.
+   **Multicam:** keep the edits on the plan and run `switch_cameras` again on the edited
+   plan (billed again, flat), the same rule the editor follows — the camera choice is
+   re-made for the new cut. You can preview the new cut before the final.
+4. **Render final.** Call `apply_edl` with the reviewed EDL (for multicam: the new
+   switched EDL) and `quality: "final"`. For a clip pack, one final per kept clip, each
+   with its `clip_key`. Every result's `output_data.quality` says which it is.
+
+**In a workflow (the editor's Tighten Episode / Clip Pack templates).** There the Apply
+EDL node's **Quality** set to **Proxy** renders a Preview, and its **Render final** button
+renders the final from the saved plan without re-running it. A deployment can turn on the
+**preview stop rule** with `PREVIEW_STOP_RULE_ENABLED` (off by default; where it is off,
+nothing below applies): a run then stops at a render set to Proxy — nothing after it runs
+or is billed until Render final — and a run started anywhere but the editor (including
+`run_workflow`) that would execute such a render is refused with
+`preview_review_required`, because nobody is there to review it. To run it anyway from
+MCP, override the render for that run: `inputs: { "<render node id>": { "quality": "final" } }`.
+Once the user has reviewed a preview their editor run stopped at, `render_final(workflow_id,
+render_node_id, execution_id)` runs the editor's Render final for them — the render at Final
+and every node after it, continuing that run; the server picks the nodes. Call it once for
+the price, and again with `confirm: true` once the user accepts it.
+A sub-workflow or component holding a Proxy render is refused with `preview_render_nested`.
 
 ---
 
@@ -207,9 +292,9 @@ credits are refunded.
 ## Notes
 
 - **Media ids come from the user, never from prose.** This recipe teaches structure; wire
-  the user's own recording and assets into the verbs.
+  the user's own recordings and assets into the verbs.
 - **Cost posture:** `silence_detect` is a lightweight ffmpeg step (a small flat charge);
-  `plan_edit` is a metered Cloud step priced by mode, reasoning tier, and recording length;
-  `apply_edl` is priced per rendered minute. Quote the plan step to the user before running
-  long recordings.
-- **`sync_audio` (multicam alignment) is not part of phase 1** — do not reach for it here.
+  `audio_sync` is a small charge per extra recording; `plan_edit` is a metered Cloud step
+  priced by mode, reasoning tier and recording length; `switch_cameras` is a flat charge per
+  run; `apply_edl` is priced per rendered minute, a Preview at its own lower rate. Quote the
+  plan step to the user before running long recordings, and preview before the final.

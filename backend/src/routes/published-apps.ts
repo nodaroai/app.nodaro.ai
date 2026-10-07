@@ -1,9 +1,13 @@
+import { PREVIEW_RENDER_NESTED, stripUgcRunState } from "@nodaro/shared"
+import { previewRendersIn } from "../services/workflow-engine/nested-preview-renders.js"
+import type { SimpleEdge, SimpleNode } from "../services/workflow-engine/types.js"
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
-import { estimateWorkflowCredits, type EstimateNode, type EstimateEdge } from "../ee/billing/credits.js"
+import { estimateWorkflowListingCredits, type EstimateNode, type EstimateEdge } from "../ee/billing/credits.js"
 import { invalidateAppCache } from "./app-runner.js"
-import { getNodeResult, getOutputType, parseHandleId, calculateMonetizationMarkup, calculateMonetizedCost } from "@nodaro/shared"
+import { getNodeResult, getOutputType, parseHandleId } from "@nodaro/shared"
+import { appListingPrice, storedListingFinalCredits, type StoredAppListing } from "../lib/app-listing-price.js"
 import { sanitizeSlugBase, generateSlug, getCreatorDisplayName } from "../lib/marketplace-helpers.js"
 import { bareOriginSchema } from "../lib/url-validator.js"
 import { sendInternalError } from "../lib/http-errors.js"
@@ -11,6 +15,8 @@ import { accessAtLeast, workflowAccessFromRow } from "../lib/workflow-access.js"
 import { toAccessRow } from "../lib/workflow-route-access.js"
 import { findUnpublishableNodeTypes, unpublishableNodesMessage } from "../lib/surface-deny.js"
 import { sendCredentialUnbound, unboundCredentialUsesFor } from "../lib/credential-gate.js"
+import { resolveCanvasResultIds } from "../lib/canvas-result-ids.js"
+import { exposedTextCaps } from "../lib/exposed-text-caps.js"
 
 const VALID_CATEGORIES = [
   "image-generation", "video-production", "audio-music", "content-writing",
@@ -69,6 +75,8 @@ function toCamelCase(row: Record<string, unknown>) {
     allowedOrigins: row.allowed_origins,
     estimatedCredits: row.estimated_credits,
     baseEstimatedCredits: row.base_estimated_credits ?? 0,
+    // The Render finals' part of the listed price, which the creator's fee never marks up.
+    finalEstimatedCredits: storedListingFinalCredits(row as StoredAppListing),
     thumbnailNodeId: row.thumbnail_node_id ?? null,
     category: row.category ?? "other",
     outputTypes: row.output_types ?? [],
@@ -137,6 +145,8 @@ const componentMetadataSchema = z.object({
     allowedValues: z.array(z.unknown()).optional(),
     options: z.array(z.object({ value: z.string(), label: z.string() })).optional(),
     defaultValue: z.unknown(),
+    /** A text setting's character limit (decided 2026-10-06). */
+    maxLength: z.number().int().positive().optional(),
   })),
 })
 
@@ -483,6 +493,25 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
       })
     }
 
+    // A component runs inside its caller's run, with no Render final path: one
+    // that holds a Preview render is refused here, permanently (the
+    // orchestrator also refuses the inner run of a version published before
+    // this check).
+    if (publishType === "component") {
+      const previews = previewRendersIn(
+        (workflow.nodes ?? []) as SimpleNode[],
+        ((workflow as { edges?: unknown }).edges ?? []) as SimpleEdge[],
+      )
+      if (previews.length > 0) {
+        return reply.status(400).send({
+          error: {
+            code: PREVIEW_RENDER_NESTED,
+            message: "A component cannot stop for a review: set its render to Final before publishing it.",
+          },
+        })
+      }
+    }
+
     // Validate component handles and exposed settings against snapshot nodes
     if (publishType === "component" && componentMetadata) {
       const snapshotNodes = (workflow.nodes || []) as Array<Record<string, unknown>>
@@ -579,8 +608,10 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
     const prevWasListed = prevVersion?.is_listed ?? false
     const effectiveIsListed = isListed ?? prevWasListed
 
-    // Estimate credits
-    const nodes = workflow.nodes || []
+    // Estimate credits. The snapshot keeps the canvas's results, so their saved
+    // ids are resolved first (canvas-result-ids.ts): a published version is
+    // immutable and is never resolved again on an app open.
+    const nodes = await resolveCanvasResultIds(workflow.nodes || [], workflow.user_id, { settings: workflow.settings })
     const edges = workflow.edges || []
 
     // A published app runs this snapshot for strangers: every Webhook Output
@@ -594,7 +625,17 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
     )
     if (unboundUses.length > 0) return sendCredentialUnbound(reply, unboundUses)
 
-    const baseEstimatedCredits = await estimateWorkflowCredits(nodes as EstimateNode[], edges as EstimateEdge[])
+    // The listed price is never the run estimate the preview stop rule
+    // shortens (decided 2026-10-05). It is the whole graph at Preview with
+    // the creator's fee, plus each Render final without it (decided
+    // 2026-10-06; a component's final part is 0): the listing estimator's two
+    // parts, priced below once the fee is known. It is computed BEFORE any app
+    // user's input exists, so every exposed text input reaches the estimator
+    // with its character limit (or none): an exposed speech text is priced at
+    // that ceiling, never at the author's placeholder (decided 2026-10-06;
+    // lib/exposed-text-caps.ts).
+    const speechTextCaps = exposedTextCaps(workflow.settings as Record<string, unknown> | null, nodes as EstimateNode[])
+    const listingSplit = await estimateWorkflowListingCredits(nodes as EstimateNode[], edges as EstimateEdge[], { publishType, speechTextCaps })
 
     // Inherit monetization from previous version, then user defaults, then zeros
     let inheritedMonetizationEnabled = false
@@ -622,11 +663,12 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
       }
     }
 
-    // Calculate estimated_credits including monetization markup
-    let estimatedCredits = baseEstimatedCredits
-    if (inheritedMonetizationEnabled && baseEstimatedCredits > 0) {
-      estimatedCredits = calculateMonetizedCost(baseEstimatedCredits, inheritedMonetizationFlatFee, inheritedMonetizationPercent)
-    }
+    // The fee's base is the preview part (the whole graph at Preview); the listed price adds each final, unmarked.
+    const { base: baseEstimatedCredits, estimated: estimatedCredits } = appListingPrice(listingSplit, {
+      enabled: inheritedMonetizationEnabled,
+      flatFee: inheritedMonetizationFlatFee,
+      percent: inheritedMonetizationPercent,
+    })
 
     // Auto-derive preview media from snapshot nodes if not provided
     let effectivePreviewUrl = previewMediaUrl ?? null
@@ -669,7 +711,8 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
           slug,
           icon_url: iconUrl || null,
           version,
-          snapshot_nodes: nodes,
+          // A runner reads this snapshot: UGC run state (a kept creator, the last plan, clip tickets) never ships.
+          snapshot_nodes: stripUgcRunState(nodes as Array<{ type?: unknown; data?: unknown }>),
           snapshot_edges: edges,
           snapshot_settings: workflow.settings || {},
           base_estimated_credits: baseEstimatedCredits,
@@ -764,6 +807,8 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
       allowedOrigins: app.allowed_origins,
       estimatedCredits: app.estimated_credits,
       baseEstimatedCredits: app.base_estimated_credits ?? 0,
+      // The Render finals' part of the listed price, which the creator's fee never marks up.
+      finalEstimatedCredits: storedListingFinalCredits(app),
       monetizationEnabled: app.monetization_enabled ?? false,
       monetizationFlatFee: app.monetization_flat_fee ?? 0,
       monetizationPercent: app.monetization_percent ?? 0,
@@ -829,7 +874,7 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
     // Verify ownership (include monetization fields to avoid a second SELECT)
     const { data: existing, error: fetchError } = await supabase
       .from("published_apps")
-      .select("id, creator_id, base_estimated_credits, monetization_enabled, monetization_flat_fee, monetization_percent, slug, workflow_id")
+      .select("id, creator_id, base_estimated_credits, estimated_credits, monetization_enabled, monetization_flat_fee, monetization_percent, slug, workflow_id")
       .eq("id", appId)
       .single()
 
@@ -869,11 +914,10 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
       const flat = body.monetizationFlatFee ?? existing.monetization_flat_fee ?? 0
       const pct = body.monetizationPercent ?? existing.monetization_percent ?? 0
 
-      if (enabled && base > 0) {
-        updates.estimated_credits = calculateMonetizedCost(base, flat, pct)
-      } else {
-        updates.estimated_credits = base
-      }
+      // The fee applies to the preview run (the stored base); each Render
+      // final, held in the stored price, stays unmarked (decided 2026-10-06).
+      const final = storedListingFinalCredits(existing)
+      updates.estimated_credits = appListingPrice({ preview: base, final }, { enabled: !!enabled, flatFee: flat, percent: pct }).estimated
 
       invalidateAppCache(existing.slug)
 

@@ -141,6 +141,21 @@ describe("POST /v1/component/execute — the forwarded payer (P14)", () => {
     expect(params.billingContext).not.toEqual(WS_CTX)
   })
 
+  it("INTERNAL lane: the parent's preview stop rule answer reaches the child execution", async () => {
+    authKind = "internal"
+    const res = await postExecute({ appSlug: "comp", previewStopRule: false })
+    expect(res.statusCode).toBe(202)
+    expect(mockExecuteAppRun.mock.calls[0]?.[0]).toMatchObject({ previewStopRule: false })
+  })
+
+  it("JWT lane: a body previewStopRule is IGNORED — a caller cannot switch the gate off", async () => {
+    authKind = "jwt"
+    const res = await postExecute({ appSlug: "comp", previewStopRule: false })
+    expect(res.statusCode).toBe(202)
+    const params = mockExecuteAppRun.mock.calls[0]?.[0] as { previewStopRule?: boolean }
+    expect(params.previewStopRule).toBeUndefined()
+  })
+
   it("INTERNAL lane: a MALFORMED body context degrades to the request's own — never a trusted cast", async () => {
     authKind = "internal"
     const res = await postExecute({

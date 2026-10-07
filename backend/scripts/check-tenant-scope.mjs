@@ -98,8 +98,13 @@ const TENANT_TABLES = new Set([
   "api_tokens",
   "assets",
   "published_apps",
+  // Per-node polling positions (migration 267): read, advanced and reset by the
+  // Telegram Channel Feed route, always for the user whose run it is.
+  "node_cursors",
   "folders",
   "saved_posts",
+  "collections",
+  "collection_records",
   // Organizations (second tenancy axis). Scoped by org_id / workspace_id and
   // the require* helpers rather than user_id; the routes PR teaches this
   // scanner those forms before any route under ee/routes/orgs lands.

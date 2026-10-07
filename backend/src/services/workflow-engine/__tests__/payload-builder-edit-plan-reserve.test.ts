@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { buildPayload } from "../payload-builder.js"
+import { editPlanModeRefusalMessage } from "../../../lib/private-plugins/edit-plan-mode-gate.js"
 
 // Mirrors payload-builder-ltx-credit-id.test.ts's harness: buildPayload is a
 // pure function of (node, jobId, resolvedInputs, usageLogId, ctx) — no mocks.
@@ -117,5 +118,48 @@ describe("edit-plan orchestrated payload — clip count is clamped like the requ
   it("never sends a count outside clips mode", () => {
     const out = build({ mode: "tighten", count: 5 }, { transcript: transcript59m, editPlanSources: [urlSourceRow] })
     expect((out.payload as { count?: number }).count).toBeUndefined()
+  })
+})
+
+// Track D1: trailer mode reserves its own composite (priced like clips) and
+// carries the delivery aspect, but none of the clips-only levers.
+describe("edit-plan orchestrated payload — trailer mode", () => {
+  const trailer = (data: Record<string, unknown>) =>
+    build({ mode: "trailer", ...data }, { transcript: transcript59m, editPlanSources: [urlSourceRow] })
+
+  it("reserves the trailer composite for the master's bucket", () => {
+    const out = trailer({})
+    expect(out.modelIdentifier).toBe("edit-plan:trailer:standard:60m")
+    const payload = out.payload as { mode?: string; reservedCreditId?: string }
+    expect(payload.mode).toBe("trailer")
+    expect(payload.reservedCreditId).toBe("edit-plan:trailer:standard:60m")
+  })
+
+  it("passes the target aspect and drops the clips-only count and target length", () => {
+    const payload = trailer({ count: 5, targetDurationSec: 30, targetAspect: "9:16" }).payload as Record<string, unknown>
+    expect(payload.targetAspect).toBe("9:16")
+    expect(payload.count).toBeUndefined()
+    expect(payload.targetDurationSec).toBeUndefined()
+  })
+})
+
+// Round 4 (decided 2026-10-06): an UNKNOWN mode fails the node before the
+// reservation, with the message every lane uses — never planned (and charged)
+// as tighten. The orchestrator loads no plugin, so a known but undeclared mode
+// (trailer on a plugin that predates it) is the worker gate's to refuse.
+describe("edit-plan orchestrated payload — unknown mode", () => {
+  const withMode = (mode: unknown) => () =>
+    build({ mode }, { transcript: transcript59m, editPlanSources: [urlSourceRow] })
+
+  it("refuses an unknown mode with the shared message instead of reserving tighten", () => {
+    expect(withMode("montage")).toThrow(editPlanModeRefusalMessage("montage"))
+    expect(withMode("Clips")).toThrow(editPlanModeRefusalMessage("Clips"))
+    expect(withMode(3)).toThrow(editPlanModeRefusalMessage("3"))
+  })
+
+  it("an absent mode is the node's default, tighten", () => {
+    const out = withMode(undefined)()
+    expect(out.modelIdentifier).toBe("edit-plan:tighten:standard:60m")
+    expect((out.payload as { mode?: string }).mode).toBe("tighten")
   })
 })

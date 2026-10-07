@@ -58,9 +58,21 @@ npm --version     # ships with Node
 git clone https://github.com/nodaroai/app.nodaro.ai
 cd app.nodaro.ai
 
+# linux/x64 only — skips onnxruntime-node's CUDA download (see below)
+export ONNXRUNTIME_NODE_INSTALL=skip
+
 # Single command — installs every workspace
 npm install
 ```
+
+On linux/x64, run the `export` line before you install. Without it, the
+`onnxruntime-node` postinstall (the face detector's runtime) downloads the
+CUDA 12 and TensorRT libraries from NuGet. The detector never loads them, and
+a later install with the variable set does not remove them. Put the line in
+your shell profile so every later install skips the download too. macOS,
+Windows and linux/arm64 never download them, so they don't need the variable.
+See
+[the face detector's native runtime](./deployment.md#the-face-detectors-native-runtime-onnxruntime-node).
 
 ### Configure secrets
 
@@ -166,6 +178,21 @@ When opening a PR:
   Registration checklist (see section 6 below).
 - If the change touches `@nodaro/shared` or `@nodaro/sdk`, run
   `npx changeset` and commit the generated file (see section 8).
+- If the change adds a database migration, name it
+  `supabase/migrations/NNN_description.sql` with the next free number
+  — one above the highest on `dev` **and** in every open PR — and set
+  `supabase/migrations/.sequence` to it. The **Migration Number Guard**
+  check reads the latest `dev` (not your PR's merge ref) and fails when
+  `dev` already holds your number under another filename; its message
+  names the number to rename to. It also warns when your number is free
+  but below the highest on `dev`: if that higher migration reaches `main`
+  first, yours would sort before an applied migration and the production
+  migrate step refuses it, so take the number it suggests. Whenever `dev` moves, the guard re-runs
+  on every open PR into `dev` that adds a migration (best-effort), so a
+  number someone else just took turns your PR red before it merges.
+  Run it locally with
+  `GITHUB_REPOSITORY=<owner>/<repo> PR_NUMBER=<n> BASE_REF=dev node tools/check-migration-numbers.mjs check`
+  (needs `gh`).
 
 ## 5. Testing
 

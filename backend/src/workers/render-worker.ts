@@ -885,6 +885,8 @@ export function createRenderWorker() {
         // `=== true` was always false and leaked direct-MCP output to the gallery.
         mcpClient: mcpClientForcesPrivate(jobMcpClient),
         workflowExecutionId: null,
+        // No preview render runs on this queue: Apply EDL is a video-queue job.
+        previewRender: false,
       })
       if (isPublic && jobWfExecId) {
         const { data: parent } = await supabase

@@ -109,7 +109,9 @@ export function localizeOptionLabel(label: string, locale: LocaleId): string {
   if (!tables) return label
   const whole = tables.option[label]
   if (whole) return whole
-  // "<token> (<Qualifier>)" — translate the qualifier, keep the token.
+  // "<token> (<Qualifier>)" — translate the qualifier. The token stays as
+  // written ("16:9", "2K") unless it is itself a whole option label: the
+  // transition styles name their default look "Full cover (default)".
   const m = /^(.*?)\s*\(([^()]+)\)$/.exec(label)
   if (m) {
     // Case-insensitive on the qualifier: the catalog writes "(fast)",
@@ -117,7 +119,7 @@ export function localizeOptionLabel(label: string, locale: LocaleId): string {
     const raw = m[2]
     const q = tables.optionQualifier[raw] ?? tables.optionQualifier[raw.charAt(0).toUpperCase() + raw.slice(1)]
     // The parentheses belong to the locale: Japanese sets 16:9（横長）.
-    if (q) return translate(locale, "common.qualified", { token: m[1], qualifier: q })
+    if (q) return translate(locale, "common.qualified", { token: tables.option[m[1]] ?? m[1], qualifier: q })
   }
   return label
 }

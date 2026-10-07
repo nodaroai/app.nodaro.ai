@@ -35,5 +35,20 @@
   "video-audit": {
     "json": { "version": 1, "summary": "A host at a desk.", "scenes": [{ "startMs": 0, "endMs": 5000, "description": "A host speaks to camera." }] },
     "report": { "changes": [{ "field": "scenes[0].description", "reason": "The host faces the camera." }] }
+  },
+  "text-to-dialogue": {
+    "audioUrl": "https://media.example.test/dialogue.mp3",
+    "transcript": {
+      "version": 1,
+      "language": "en",
+      "words": [
+        { "text": "Hi", "startMs": 0, "endMs": 200, "speaker": "Rachel" },
+        { "text": "Hello.", "startMs": 300, "endMs": 900, "speaker": "George" }
+      ],
+      "segments": [
+        { "startMs": 0, "endMs": 200, "text": "Hi", "speaker": "Rachel" },
+        { "startMs": 300, "endMs": 900, "text": "Hello.", "speaker": "George" }
+      ]
+    }
   }
 }

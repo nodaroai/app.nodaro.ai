@@ -1,0 +1,14 @@
+{
+  "name": "nodaro-site-capture",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Captures one web page the way a phone shows it. Built for Nodaro.",
+  "type": "module",
+  "main": "src/main.mjs",
+  "scripts": { "start": "node src/main.mjs" },
+  "engines": { "node": ">=22" },
+  "dependencies": {
+    "apify": "3.7.2",
+    "playwright": "1.63.0"
+  }
+}

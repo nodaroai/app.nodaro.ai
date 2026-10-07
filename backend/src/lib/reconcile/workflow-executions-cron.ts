@@ -166,6 +166,8 @@ export function stopWorkflowExecutionsReconcileCron(): void {
  */
 async function executionLivenessEvidence(
   executionId: string,
+  /** The execution's owner: only their jobs are this run's (decided 2026-10-06; migration 474). */
+  ownerId: string,
   states: Record<string, NodeExecutionState>,
   now: number,
 ): Promise<string | null> {
@@ -187,6 +189,7 @@ async function executionLivenessEvidence(
     .from("jobs")
     .select("id, status")
     .eq("workflow_execution_id", executionId)
+    .eq("user_id", ownerId)
     .in("status", [...IN_FLIGHT_JOB_STATUSES])
   if (scoped && scoped.length > 0) {
     return `${scoped.length} child job(s) still in flight`
@@ -208,6 +211,7 @@ async function executionLivenessEvidence(
     .from("jobs")
     .select("id, status")
     .in("id", Array.from(jobIds))
+    .eq("user_id", ownerId)
   const live = (byId ?? []).filter((j) =>
     (IN_FLIGHT_JOB_STATUSES as readonly string[]).includes(j.status as string),
   )
@@ -222,7 +226,7 @@ export async function reconcileWorkflowExecutionsTick(): Promise<void> {
 
   const scan = supabase
     .from("workflow_executions")
-    .select("id, started_at, node_states")
+    .select("id, user_id, started_at, node_states")
     .in("status", ["running", "stopping"])
     .lt("started_at", backoffCutoff)
 
@@ -289,7 +293,7 @@ export async function reconcileWorkflowExecutionsTick(): Promise<void> {
   for (const row of rows) {
     scanned++
     const rawStates = (row.node_states ?? {}) as Record<string, NodeExecutionState>
-    const { next: states, changed } = await reconcileNodeStatesFromJobs(rawStates, row.id)
+    const { next: states, changed } = await reconcileNodeStatesFromJobs(rawStates, row.id, row.user_id as string)
 
     const statuses = Object.values(states).map((s) => s?.status)
     const allCompleted = statuses.length > 0 && statuses.every((s) => s === "completed" || s === "skipped")
@@ -348,7 +352,7 @@ export async function reconcileWorkflowExecutionsTick(): Promise<void> {
     const isAbandonable =
       startedAt === 0 ||
       (startedAt > 0 && now - startedAt > STALE_EXECUTION_THRESHOLD_MS &&
-        now - startedAt > staleExecutionThresholdMs(await executionBudgetExcessMs(row.id, states)))
+        now - startedAt > staleExecutionThresholdMs(await executionBudgetExcessMs(row.id, row.user_id as string, states)))
 
     if (isAbandonable) {
       await tryTerminalWrite(
@@ -431,7 +435,7 @@ export async function reconcileWorkflowExecutionsTick(): Promise<void> {
     // LAST GATE BEFORE A DESTRUCTIVE VERDICT. "No job in my queue" is not
     // evidence that the orchestrator is gone — only that it isn't in THIS
     // process's Redis. Ask the shared database before killing a user's run.
-    const alive = await executionLivenessEvidence(row.id, states, Date.now())
+    const alive = await executionLivenessEvidence(row.id, row.user_id as string, states, Date.now())
     if (alive) {
       vetoed++
       console.warn(

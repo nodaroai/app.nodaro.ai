@@ -168,7 +168,7 @@ describe("runAudioSyncOnFiles (e2e, real ffmpeg)", () => {
     ])
     const audioStart = Number((await runFfprobe(["-v", "error", "-select_streams", "a:0", "-show_entries", "stream=start_time", "-of", "csv=p=0", p("late.mp4")])).trim().split(",")[0])
     expect(audioStart, "the fixture's audio really starts late").toBeGreaterThan(0.4)
-    await runFfmpeg(buildProxyArgs("audio", p("late.mp4"), p("late-proxy.m4a"), 15))
+    await runFfmpeg(buildProxyArgs("audio", p("late.mp4"), p("late-proxy.m4a")))
     const r = await runAudioSyncOnFiles([
       { id: "master", path: p("master.wav") },
       { id: "late", path: p("late-proxy.m4a") },

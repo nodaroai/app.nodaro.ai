@@ -193,6 +193,33 @@ describe("reconcileCompletedSingleNodeJobs", () => {
   })
 })
 
+describe("the completed-job check restores an old render's Preview label (decided 2026-10-05)", () => {
+  // The job read fills `output_data.quality` from the order for a render recorded
+  // before it was stored (backend render-label-fill.ts); the lane only has to
+  // carry what the read says onto the restored result, never onto the node.
+  const restored = async (output: Record<string, unknown>) => {
+    const updateNodeData = vi.fn()
+    await reconcileCompletedSingleNodeJobs("wf-1", [node("r1", "apply-edl", { output: "video", quality: "final" })], updateNodeData, {
+      listCompleted: async () => ({ data: [completedItem("j1", "r1")] }),
+      fetchOutput: async () => ({ status: "completed", output_data: output }),
+      nowIso: NOW,
+    })
+    expect(updateNodeData).toHaveBeenCalledTimes(1)
+    return updateNodeData.mock.calls[0]![1] as Record<string, unknown>
+  }
+
+  it("lands a Preview's quality on the restored result, not on the node's own setting", async () => {
+    const data = await restored({ videoUrl: "https://r2/cut.mp4", quality: "proxy" })
+    expect((data.generatedResults as Array<Record<string, unknown>>)[0]).toMatchObject({ url: "https://r2/cut.mp4", jobId: "j1", quality: "proxy" })
+    expect(data.quality).toBeUndefined()
+  })
+
+  it("lands no label when the read carries none", async () => {
+    const data = await restored({ videoUrl: "https://r2/cut.mp4" })
+    expect((data.generatedResults as Array<Record<string, unknown>>)[0]!.quality).toBeUndefined()
+  })
+})
+
 describe("video-analysis result recovery", () => {
   /** A completed analysis lands in `output_data.json` — NOT a media URL — so it
    *  used to fall through every recovery layer: the node stayed empty after any

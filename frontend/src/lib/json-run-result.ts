@@ -1,4 +1,4 @@
-import { unwrapEditPlanOutput } from "@nodaro/shared"
+import { editPlanResultPatch, telegramPostsFrom, unwrapEditPlanOutput } from "@nodaro/shared"
 
 /**
  * A finished node's JSON result, under the fields its card and its output
@@ -58,6 +58,16 @@ export const JSON_RUN_RESULT_TYPES: ReadonlySet<string> = new Set([
   "describe-to-picker",
   "json-process",
   "extract-field",
+  // Telegram Channel Feed: the posts on generatedJson, their digest on generatedText.
+  "telegram-channel-feed",
+  // Collections: Read Collection's records on generatedJson, their digest on generatedText;
+  // Save to Collection's saved record on generatedJson, its headline on generatedText.
+  "collection-read",
+  "collection-write",
+  // Text to Dialogue: the audio AND, on a model that returns timings, the
+  // Transcript (its `json` handle) — on generatedJson and on the take, as the
+  // canvas run writes them (execute-node.ts).
+  "text-to-dialogue",
 ])
 
 /**
@@ -82,6 +92,8 @@ export interface JsonRunOutput {
   readonly json?: unknown
   /** Transcribe: the plain transcript. */
   readonly text?: unknown
+  /** Text to Dialogue: the rendered audio (its json is the model's timings). */
+  readonly audioUrl?: unknown
   /** Transcribe: the detected language (a job row carries it; a node output
    *  does not, and the transcript json does). */
   readonly language?: unknown
@@ -120,6 +132,9 @@ export function jobRunOutput(nodeType: string | null | undefined, outputData: un
   if (!outputData || typeof outputData !== "object") return {}
   const o = outputData as Record<string, unknown>
   if (nodeType === "edit-plan") return { json: unwrapEditPlanOutput(o) }
+  // Text to Dialogue: the worker writes the timings as `transcript` (the public
+  // job-output key) — the backend's buildNodeOutputFromJobData reads it as json.
+  if (nodeType === "text-to-dialogue") return { json: o.transcript, audioUrl: o.audioUrl }
   return { json: o.json, text: o.text, language: o.language, report: o.report }
 }
 
@@ -170,6 +185,44 @@ function transcribePatch(output: JsonRunOutput, take: JsonRunTake): Record<strin
   return { generatedResults: prev.map((r, i) => (i === already ? { ...r, transcript } : r)) }
 }
 
+/** A Text to Dialogue take, as the canvas run writes it (poll-job's result plus its own `transcript`). */
+interface DialogueTake {
+  readonly url: string
+  readonly jobId: string
+  readonly timestamp: string
+  readonly transcript?: unknown
+}
+
+/**
+ * Text to Dialogue's result: the audio, the Transcript its model returned (or
+ * none — a model without timings), and a TAKE carrying both. `generatedJson`
+ * is ALWAYS written when the audio landed, so a run without timings clears an
+ * earlier run's transcript (both engines read the ACTIVE take's `transcript`
+ * first, then the bare field — a stale bare field would time captions by
+ * another render). An output with no audio is a census probe: the json alone.
+ */
+function dialoguePatch(output: JsonRunOutput, take: JsonRunTake): Record<string, unknown> | undefined {
+  const transcript = isObject(output.json) ? output.json : undefined
+  const url = typeof output.audioUrl === "string" && output.audioUrl ? output.audioUrl : undefined
+  if (!url) return transcript ? { generatedJson: transcript } : undefined
+  const prev = Array.isArray(take.data?.generatedResults) ? (take.data.generatedResults as DialogueTake[]) : []
+  const jobId = take.jobId ?? ""
+  const already = prev.findIndex((r) => (jobId ? r.jobId === jobId : r.url === url))
+  if (already >= 0) {
+    // This run landed before (a second look at the same run): only a transcript
+    // an older landing left off its take is added.
+    if (!transcript || prev[already]!.transcript !== undefined) return undefined
+    return { generatedResults: prev.map((r, i) => (i === already ? { ...r, transcript } : r)) }
+  }
+  const landed: DialogueTake = {
+    url,
+    timestamp: take.timestamp ?? new Date().toISOString(),
+    jobId,
+    ...(transcript ? { transcript } : {}),
+  }
+  return { generatedAudioUrl: url, generatedJson: transcript, generatedResults: [landed, ...prev], activeResultIndex: 0 }
+}
+
 const stringList = (value: unknown): string[] | undefined =>
   Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : undefined
 
@@ -207,8 +260,25 @@ export function jsonRunResultPatch(
 ): Record<string, unknown> | undefined {
   if (!output || !isJsonRunResultType(nodeType)) return undefined
   if (nodeType === "transcribe") return transcribePatch(output, take)
+  if (nodeType === "text-to-dialogue") return dialoguePatch(output, take)
   if (nodeType === "extract-field") return extractFieldPatch(output)
   if (nodeType === "json-process") return jsonProcessPatch(output)
+  if (nodeType === "telegram-channel-feed") {
+    // The posts beside their digest — exactly what the canvas run writes (execute-node.ts).
+    const posts = telegramPostsFrom(output.json)
+    if (posts.length === 0) return undefined
+    return { generatedJson: posts, ...(typeof output.text === "string" ? { generatedText: output.text } : {}) }
+  }
+  if (nodeType === "collection-read") {
+    // The records beside their digest — what the canvas run writes (execute-node.ts).
+    if (!Array.isArray(output.json)) return undefined
+    return { generatedJson: output.json, ...(typeof output.text === "string" ? { generatedText: output.text } : {}) }
+  }
+  if (nodeType === "collection-write") {
+    // The one record saved, beside its headline.
+    if (!isObject(output.json)) return undefined
+    return { generatedJson: output.json, ...(typeof output.text === "string" ? { generatedText: output.text } : {}) }
+  }
   if (!isObject(output.json)) return undefined
   if (nodeType === "describe-to-picker") {
     // The run's gaps never reach the job row or the node output (the route
@@ -223,6 +293,10 @@ export function jsonRunResultPatch(
     // lanes read it back off the job row (lib/audit-report-recovery.ts).
     return { generatedJson: output.json, lastAuditReport: isObject(output.report) ? output.report : undefined }
   }
+  // Edit Plan: a different plan clears the person's review of the old one; the
+  // same plan landing again keeps it (decided 2026-10-05). `take.data` is the
+  // node's data now, the review included.
+  if (nodeType === "edit-plan") return { ...editPlanResultPatch(output.json, take.data?.editedEdl) }
   return { generatedJson: output.json }
 }
 
@@ -233,7 +307,13 @@ export function jsonRunResultPatch(
 export function holdsJsonRunResult(nodeType: string | null | undefined, data: Readonly<Record<string, unknown>>): boolean {
   const field = (typeof nodeType === "string" && RESULT_FIELD[nodeType]) || "generatedJson"
   if (data[field] !== undefined) return true
+  const takes = Array.isArray(data.generatedResults) && data.generatedResults.length > 0
+  if (nodeType === "text-to-dialogue") {
+    // A run on a model without timings holds its audio and no json.
+    const url = data.generatedAudioUrl
+    return (typeof url === "string" && url !== "") || takes
+  }
   if (nodeType !== "transcribe") return false
   const text = data.generatedText
-  return (typeof text === "string" && text.trim() !== "") || (Array.isArray(data.generatedResults) && data.generatedResults.length > 0)
+  return (typeof text === "string" && text.trim() !== "") || takes
 }

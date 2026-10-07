@@ -13,7 +13,9 @@ import { CHAT_STAGES, CHAT_TURN_CAPS, TIER_MAX_PIPELINE_COST_CREDITS, Showrunner
 // statically importing ee/**). Direct precedent: scene-helper-credits.ts
 // (same directory) statically imports this same module for the same reason —
 // per-model credit lookup by identifier.
-import { getModelCreditCostFromDB } from "../billing/credits.js"
+import { chargedCredits, getChargedPriceTable, getModelCreditCostFromDB } from "../billing/credits.js"
+import { speechLengthPricingEnabled } from "../../lib/config.js"
+import { speechLineEstimate } from "../../lib/speech-estimate.js"
 // Type-only — erased at compile time, so this can't form a runtime import
 // cycle with seed-pipeline.ts's own (dynamic, function-body) import of this
 // file's `estimateUpfrontCredits`/`reservePipelineCredits`.
@@ -487,8 +489,10 @@ export async function estimateSceneAnimationCredits(
  *     `buildVideoCreditModelIdentifier` snaps that duration to the model's
  *     nearest priced tier, exactly like the real per-shot animate call does
  *     (services/pipeline-animate-shot.ts).
- *   - `speech` — one TTS credit (`elevenlabs-turbo`) per planned dialogue
- *     line (`plan.scenes[].dialogue.length` summed).
+ *   - `speech` — one TTS job (`elevenlabs-turbo`) per planned dialogue line
+ *     (`plan.scenes[].dialogue.length` summed): the flat row per line, or —
+ *     while length pricing is on — each line's own price on the model's unit
+ *     row (`speechLineEstimate`), summed.
  *   - `music` — one Suno credit (the default version's key) when `config.music_enabled` is
  *     not `false`, else 0.
  *
@@ -565,8 +569,24 @@ export async function estimateSeededPipelineCredits(
 
   let speech = 0
   if (dialogueLineCount > 0) {
-    const speechPricing = await getModelCreditCostFromDB(DIALOGUE_TTS_CREDIT_IDENTIFIER)
-    speech = dialogueLineCount * speechPricing.creditCost
+    if (speechLengthPricingEnabled()) {
+      // One text-to-speech job per line (scene-internal-pipeline.ts), each at
+      // its own floor — so the estimate is the SUM of per-line prices on the
+      // model's unit row, never the price of the joined text (decided
+      // 2026-10-06). A LITERAL line as its own job through `speechLineEstimate`,
+      // never the node-shaped estimator: an LLM-written `{` is text here.
+      const prices = await getChargedPriceTable()
+      for (const scene of plan.scenes) {
+        for (const d of scene.dialogue) {
+          const { id, units } = speechLineEstimate(DIALOGUE_TTS_CREDIT_IDENTIFIER, d.line)
+          speech += chargedCredits(prices, id, units) ?? 0
+        }
+      }
+    } else {
+      // Flag off: the flat row per line, today's arithmetic byte for byte.
+      const speechPricing = await getModelCreditCostFromDB(DIALOGUE_TTS_CREDIT_IDENTIFIER)
+      speech = dialogueLineCount * speechPricing.creditCost
+    }
   }
 
   let music = 0

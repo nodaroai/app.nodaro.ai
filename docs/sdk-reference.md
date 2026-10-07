@@ -38,6 +38,7 @@ walkthrough-style introduction, see the [SDK Quickstart](./sdk-quickstart.md).
   - [`client.library`](#clientlibrary)
   - [`client.presets`](#clientpresets)
   - [`client.savedPosts`](#clientsavedposts)
+  - [`client.collections`](#clientcollections)
   - [`client.competitors`](#clientcompetitors)
   - [`client.pickerCatalogs`](#clientpickercatalogs)
   - [`client.shots`](#clientshots)
@@ -584,13 +585,100 @@ run(id: string, params?: RunWorkflowParams): Promise<RunWorkflowResult>
 ```
 
 Starts an execution and returns immediately with `{ executionId, status }`.
-Optionally restrict to a subset of node IDs.
+Optionally restrict to a subset of node IDs, and pass `inputOverrides` —
+nested `{ nodeId: { field: value } }` node data for THIS run, shallow-merged
+over each node's saved data (the overridden node's saved results are not
+used; a destination on an outbound node is refused with `400 locked_field`).
 
 ```ts
 const { executionId } = await client.workflows.run(id, { nodeIds: ["node-1"] })
 ```
 
+A workflow whose Apply EDL render is set to **Proxy** stops at that preview
+for a person to review in the editor; a run through the SDK has nobody to
+review it, whichever auth it uses (an API key or `supabaseAuth`), so it is refused with `400 preview_review_required` unless the run
+sets the render to Final
+([details](./api-integration.md#runs-that-would-stop-for-a-review); rolled out under the
+`PREVIEW_STOP_RULE_ENABLED` flag, and where it is off nothing is refused):
+
+```ts
+await client.workflows.run(id, { inputOverrides: { [renderNodeId]: { quality: "final" } } })
+```
+
+`continueFromExecutionId` continues an earlier execution of the workflow — your
+own, `completed`, of the workflow itself — instead of starting over: the run
+executes `nodeIds` only (required with it), and every other node hands on what
+that execution produced, never the workflow's saved results in their place (a
+node that execution did not run either hands on the saved results it handed on
+there; an Edit Plan hands on its plan with your current review applied).
+The `inputOverrides` the earlier run applied are recorded on its execution and
+applied again, with the continuation's own `inputOverrides` over them, field by
+field (an execution that started before they were recorded has none: only the
+ones you pass apply).
+Render final after a run that stopped at its preview:
+
+```ts
+await client.workflows.run(id, {
+  nodeIds: [renderNodeId, ...nodesAfterIt],
+  inputOverrides: { [renderNodeId]: { quality: "final" } },
+  continueFromExecutionId: previewRunId,
+})
+```
+
+A refused continuation throws before any execution exists: `NotFoundError`
+(`continuation_not_found`), or a `NodaroError` whose `code` is
+`continuation_subset_required`, `continuation_workflow_mismatch`,
+`continuation_version_mismatch` or `continuation_not_completed`
+([details](./api-integration.md#continuing-a-run)).
+
 Throws `InsufficientCreditsError` if the user can't cover the worst-case cost.
+Requires `workflows:execute` scope when called via OAuth.
+
+#### `renderFinal(id, params)` / `estimateRenderFinal(id, params)`
+
+```ts
+renderFinal(id: string, params: RenderFinalParams): Promise<RunWorkflowResult>
+estimateRenderFinal(id: string, params: RenderFinalParams): Promise<{ data: RenderFinalQuote }>
+```
+
+Renders the final of an [Apply EDL](./nodes/processing-video/apply-edl.md#render-final)
+render whose run stopped at its preview, once it has been reviewed — what the
+editor's **Render final** button runs: the render at **Final** for this run only
+(the node keeps its own Quality), and every node after it; with Camera Switch
+between the Edit Plan and the render, Camera Switch runs again first. The server
+works out which nodes run, by the editor's own rule, so you send only the render
+and the execution that stopped at the preview (`continueFromExecutionId`, your
+own `completed` run of the workflow): it continues that execution, and every node
+it does not run hands on what that execution produced, the Edit Plan its plan
+with the review applied.
+
+`estimateRenderFinal` quotes it first and creates nothing: the nodes it will run,
+the override it runs with, its estimated credits, whether the payer can cover
+them (`sufficient`) and the payer's spendable credits (`available`, `null` when a
+workspace budget or a deployment's operator pays). The figures are `null` in an
+edition without credits.
+
+```ts
+const { data: quote } = await client.workflows.estimateRenderFinal(id, {
+  renderNodeId,
+  continueFromExecutionId: previewRunId,
+})
+// quote → { renderNodeId, nodeIds: ["cam", "cut", "captions"], inputOverrides: { cut: { quality: "final" } },
+//           estimatedCredits: 530, sufficient: true, available: 4200 }
+const { executionId } = await client.workflows.renderFinal(id, {
+  renderNodeId,
+  continueFromExecutionId: previewRunId,
+})
+```
+
+Both are refused before anything exists with `render_final_node_not_found` (no
+such node), `render_final_not_a_render` (not an Apply EDL render) or a
+[continuation code](./api-integration.md#continuing-a-run). `renderFinal` is
+otherwise refused as `run` is — `preview_review_required` when another render after
+this one still reads Proxy (under the `PREVIEW_STOP_RULE_ENABLED` flag; where it is off,
+that is not refused). A run its payer cannot cover — checked on the quoted
+figure, before any execution exists — throws `InsufficientCreditsError` (`402`),
+with `required` and, unless a deployment's operator pays, `available`.
 Requires `workflows:execute` scope when called via OAuth.
 
 #### `export(workflowId, opts?)`
@@ -1475,6 +1563,26 @@ nodeStateMayCarryOutput(node.status) // "completed" | "failed" → true
 `OUTPUT_BEARING_NODE_STATUSES` (the same two statuses, as a `Set`) and the
 `NodeExecutionStatus` union are exported beside it.
 
+**`outcome` and `skipReason`.** A run that found nothing new ends `completed`,
+not `failed` (see [Runs that find nothing new](./api-integration.md#runs-that-find-nothing-new)):
+a text-requiring node whose wired text came from a node that produced nothing
+in this run is skipped with `nodeStates[id].skipReason === "empty_input"`, and
+the run carries `outcome: "nothing_new"` once it completes (`"succeeded"`
+otherwise; absent until then, and on an older server). The rule the server
+derives it with is exported, for a row you already hold:
+
+```ts
+import { executionOutcome, countEmptyInputSkips } from "@nodaro/sdk"
+
+const { data } = await client.executions.get(executionId)
+if (data.outcome === "nothing_new") {
+  console.log(`nothing new — ${countEmptyInputSkips(data.nodeStates)} node(s) had nothing to work on`)
+}
+executionOutcome(data.status, data.nodeStates) // the same answer, derived client-side
+```
+
+`WorkflowExecutionSummary` (from `listForWorkflow`) carries the same `outcome`.
+
 #### `listForWorkflow(workflowId, params?)`
 
 ```ts
@@ -1689,6 +1797,11 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > was the default before v4. A request that omits `provider` and sends 5,001 to
 > 10,000 characters now runs, and is billed, on v4 instead of turbo.
 
+> **Continuity across clips.** `run("text-to-speech", { text, previousText, nextText, … })`
+> passes the lines spoken just before and after the clip; a model that stitches
+> (ElevenLabs v4, Turbo v2.5 and Multilingual v2; not v3) keeps one intonation across clips produced separately. Up to 1,000
+> characters each; context is not spoken. See the Text to Speech node docs.
+
 > **Typed structured references.**
 > `run("generate-image" | "generate-video" | "text-to-video", …)` (and the same
 > three on `runAndWait`) have typed overloads — `GenerateImageParams` /
@@ -1729,6 +1842,18 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > `referenceAudioUrls`, rendered as `@video_N: <caption>.` / `@audio_N:
 > <caption>.` and bounded by the number of rail references that actually ship.
 > A blank entry is a hole in the alignment, not a line.
+
+> **Keeping a person's face (Gemini Omni).** `GenerateVideoParams` and
+> `TextToVideoParams` take `characterReferences` — up to 3
+> `VideoCharacterReference`s (`{ imageUrl, description, bodyImageUrl?, name?, voice? }`;
+> `voice` is `{ preset, description?, exampleLine? }` — `preset` is one of the
+> `GEMINI_OMNI_VOICE_PRESETS` ids exported by `@nodaro/shared`, and pins one voice
+> to that character across clips).
+> Only `gemini-omni-video` / `gemini-omni-flash` accept them (any other model
+> answers `400`), they cannot be combined with a start frame (`imageUrl`), and
+> they share the model's 7-unit input budget with reference images and a source
+> video (a character is 1 unit, 2 with a `bodyImageUrl`). They add no credit
+> charge. Prefer them over `referenceImageUrls` whenever the face must hold.
 
 > **Naming an image reference in the prompt.** On
 > `run("generate-image", …)`, a media reference (`source: "wired-image"` or
@@ -3648,12 +3773,16 @@ type VoiceChangerProVoice =
   | string
   | {
       voiceId: string
-      engine?: "sts" | "v3"       // "sts" (default) = speech-to-speech recast; "v3" = Re-speak —
-                                  // the performance is REGENERATED from the transcript with eleven_v3
-                                  // ([audio tags] supported; stability 0/0.5/1 only; similarityBoost/
-                                  // style/useSpeakerBoost ignored). A v3 speaker needs transcript text:
-                                  // pass an analysis whose segments[].text carries it, or omit analysis
-                                  // and the engine re-speaks from its own transcription.
+      engine?: "sts" | "v3" | "v4" // "sts" (default) = speech-to-speech recast; "v3" / "v4" = Re-speak —
+                                  // the performance is REGENERATED from the transcript ([audio tags]
+                                  // supported). v3 (eleven_v3): stability 0/0.5/1 only; similarityBoost/
+                                  // style/useSpeakerBoost ignored. v4 (eleven_v4): any stability 0–1,
+                                  // similarityBoost honoured (style/useSpeakerBoost ignored), each line
+                                  // generated with its neighbouring lines as context. A Re-speak speaker
+                                  // needs transcript text: pass an analysis whose segments[].text carries
+                                  // it, or omit analysis and the engine re-speaks from its own
+                                  // transcription. Both Re-speak engines are priced the same, per started
+                                  // 1,000 characters.
       stability?: number          // 0–1
       similarityBoost?: number    // 0–1
       style?: number              // 0–1, default 0
@@ -3903,20 +4032,30 @@ sources.
 ```ts
 textToDialogue(input: {
   dialogue: Array<{ text: string; voice: string }>  // in speaking order
-  stability?: 0 | 0.5 | 1
+  provider?: "elevenlabs-dialogue" | "elevenlabs-dialogue-v4"  // v3 (default) or v4
+  stability?: number                                 // v3: exactly 0, 0.5 or 1; v4: any 0–1
+  similarityBoost?: number                           // v4 only (v3 ignores it), 0–1
   languageCode?: string                              // ISO 639-1 hint, auto-detected when omitted
   seed?: number                                      // 0–4294967295; omit for random
   applyTextNormalization?: "auto" | "on" | "off"
 }): Promise<{ jobId: string }>
 ```
 
-Voice a multi-speaker script as ONE audio file (`POST /v1/text-to-dialogue`,
-ElevenLabs Dialogue v3). Each line's `voice` is a premade voice name or an
+Voice a multi-speaker script as ONE audio file (`POST /v1/text-to-dialogue`)
+on ElevenLabs Dialogue v3 — the default — or Dialogue v4
+(`provider: "elevenlabs-dialogue-v4"`, which also takes any 0–1 `stability`
+and a `similarityBoost`). Each line's `voice` is a premade voice name or an
 ElevenLabs voice UUID — cloned and Voice Library voices work, mixed casts are
 fine, and line text may carry `[audio tags]` like `[laughs]`. At most 5,000
-characters total across lines (under 2,000 recommended for best quality) and
-10 unique voices per generation. Poll `jobs.get(jobId)` for
-`output_data.audioUrl`.
+characters total across lines on either model (under 2,000 recommended for
+best quality) and 10 unique voices per generation. Flat credits per request
+under the chosen model's identifier. Poll `jobs.get(jobId)` for
+`output_data.audioUrl` and — on every dialogue model, since both return timings
+at no extra credits — `output_data.transcript`, a `Transcript`
+(`@nodaro/shared`): `words[]` with `startMs` / `endMs` / `speaker` and one
+`segments[]` entry per line, `speaker` being the line's `voice` as you sent it.
+Pass `transcript.words` to `addCaptions({ captions, autoTranscribe: false })` to
+caption the dialogue without a second transcription.
 
 ---
 
@@ -4482,12 +4621,40 @@ is the reverb wet/dry; `delayMs` + `decay` drive `echo`/`custom`;
 #### `mix(input)`
 
 ```ts
-mix(input: { audioUrls: string[]; trackVolumes?: number[] }): Promise<{ jobId: string }>
+mix(input: {
+  audioUrls: string[]
+  trackVolumes?: number[]
+  duck?: {
+    under: number
+    amount?: number
+    thresholdDb?: number
+    ratio?: number
+    attackMs?: number
+    releaseMs?: number
+  }
+}): Promise<{ jobId: string }>
 ```
 
 Layer multiple audio tracks into one (`POST /v1/mix-audio`). `audioUrls`
 (2–20) are summed; optional `trackVolumes` (0–200% each, positionally) set
 per-track level.
+
+`duck` puts a music bed under speech: every track except `audioUrls[under]`
+(the voice) dips while that track is loud and rises back in its pauses
+(sidechain compression). `amount` (0–100, default 75) is how hard;
+`thresholdDb` (-60–0, default -30), `attackMs` (1–2000, default 20),
+`releaseMs` (10–9000, default 500) and `ratio` (1–20, overrides `amount`) are
+optional fine controls. A ducked mix sums its tracks rather than averaging
+them, so the voice keeps its level. The price is the same with or without a
+duck.
+
+```ts
+await client.audio.mix({
+  audioUrls: [voiceUrl, musicUrl],
+  trackVolumes: [100, 60],
+  duck: { under: 0, amount: 80 },
+})
+```
 
 #### `adjustVolume(input)`
 
@@ -4604,7 +4771,10 @@ modelCosts(ids: string[]): Promise<ModelCostsResult>
 `POST /v1/credits/model-costs` → batch credit cost lookup for editor cost
 previews. Capped at the first 50 identifiers. Preserves fault-isolation:
 identifiers with no pricing row land in `missing`; lookup failures in `errors`,
-instead of failing the whole batch.
+instead of failing the whole batch. A speech model's per-100-characters row
+(`<model>:per-100-chars`) is a valid identifier: it is priced on an instance
+that prices speech by length and lands in `missing` where that is off — which
+is how a client learns which rule the server charges by.
 
 **`ModelCostsResult`:**
 
@@ -4774,6 +4944,106 @@ remove the save and its copied still.
 
 ---
 
+### `client.collections`
+
+Where a workflow's records live: named sets of records a workflow saves to and
+reads back (see [Collections](./features/collections.md)). A record holds a
+title, a text, a link, media links, up to 50 scalar `fields` and a `source` —
+text and links only, never files. The same link saved twice is one record;
+past the plan's cap the oldest records are evicted after a write. OAuth app
+tokens need `assets:read` for the reads and `assets:write` for the writes
+(no-op for user/API-key auth).
+
+#### `list()` / `get(id)`
+
+```ts
+list(): Promise<ListCollectionsResult>
+get(id: string): Promise<Collection>
+```
+
+`GET /v1/collections` → your collections with their `recordCount`, plus
+`available` (false on a server whose database has no collections yet) and your
+`caps` (`{ collections, records }`, `null` = no limit). `get` reads one.
+
+#### `create(input)` / `update(id, input)` / `delete(id)`
+
+```ts
+create(input: { name: string; description?: string }): Promise<Collection>
+update(id: string, input: { name?: string; description?: string }): Promise<Collection>
+delete(id: string): Promise<void>
+```
+
+`POST` / `PATCH` / `DELETE /v1/collections[/:id]`. Creating one past your cap
+throws `ForbiddenError` (`collection_limit_reached`); a name you already use
+throws `ConflictError` (`name_taken`). Deleting a collection deletes its records.
+
+#### `records(id, params?)`
+
+```ts
+records(id: string, params?: { q?: string; since?: string; cursor?: string; limit?: number }): Promise<ListCollectionRecordsResult>
+```
+
+`GET /v1/collections/:id/records` → the records, newest first. `q` finds words
+in the title, text or link; `since` (ISO) keeps only records saved at or after
+it; page with `cursor` (the previous page's `nextCursor`) and `limit` (1-100,
+default 50).
+
+```ts
+const since = new Date(Date.now() - 48 * 3_600_000).toISOString()
+let page = await client.collections.records(newsId, { since })
+for (const record of page.data) console.log(record.title, record.url)
+while (page.nextCursor) page = await client.collections.records(newsId, { since, cursor: page.nextCursor })
+```
+
+#### `addRecord(id, input, opts?)`
+
+```ts
+addRecord(
+  id: string,
+  input: { title?; text?; url?; media?; fields?; dedupeKey?; source?; item?: unknown },
+  opts?: { idempotencyKey?: string },
+): Promise<AddCollectionRecordResult>
+```
+
+`POST /v1/collections/:id/records` → save one record. Give the fields, or
+`item` — any JSON (a feed post, a search result, an article object) the server
+maps to a record (title ← `title` / `headline` / `name`, text ← `text` / `body`
+/ `caption` / `description`, link ← `url` / `postUrl` / `link`, media, the rest
+as `fields`); explicit fields win. The answer's `outcome` is `inserted`,
+`duplicate` (the same link or dedupe key was already there — the existing
+record comes back) or `replayed` (a write with the same `idempotencyKey`
+already happened); `evicted` says how many of the oldest records went past
+your cap.
+
+```ts
+// `posts` — any JSON items: a feed's posts, a search's results, articles an LLM wrote
+for (const post of posts) {
+  const { outcome, evicted } = await client.collections.addRecord(
+    newsId,
+    { item: post, fields: { topic: "tech" } },
+    // One key per item, stable across retries: the item's own id or link, never a counter.
+    { idempotencyKey: `telegram-${post.channel}-${post.id}` },
+  )
+  console.log(outcome, evicted) // "inserted" 0 · "duplicate" 0 · "replayed" 0
+}
+```
+
+#### `deleteRecord(id, recordId)` / `export(id, params?)`
+
+```ts
+deleteRecord(id: string, recordId: string): Promise<void>
+export(id: string, params?: { format?: "csv" | "json"; since?: string; q?: string }): Promise<string>
+```
+
+`DELETE /v1/collections/:id/records/:recordId` removes one record.
+`GET /v1/collections/:id/export` returns the whole collection as CSV (the
+default) or JSON text, newest first, narrowed by `since` and `q`. The text is
+read whole under the client's request timeout (`timeoutMs`, 60 s by default):
+for a collection of many thousands of records, give the client a longer
+timeout or narrow the export with `since`.
+
+---
+
 ### `client.competitors`
 
 Brands you track (competitors, or your own), their scans and the action
@@ -4786,7 +5056,10 @@ OAuth app tokens need `assets:read` / `assets:write`; a scan also needs a
 | Method | Route | Returns |
 |---|---|---|
 | `list()` | `GET /v1/competitors` | `TrackedCompetitor[]` |
-| `get(id)` | `GET /v1/competitors/:id` | `CompetitorDetail` (latest scan with posts and cards, that scan per platform in `platforms`, scan history) |
+| `listWithPlan()` | `GET /v1/competitors` | `CompetitorListResult` (`{ data, historyMonths }`: the brands, and how many months of scans your plan keeps) |
+| `get(id, { scan? })` | `GET /v1/competitors/:id` | `CompetitorDetail` (latest scan with posts and cards, that scan per platform in `platforms`, scan history; with `scan`, the brand as of that scan) |
+| `history(id)` | `GET /v1/competitors/:id/history` | `CompetitorHistory` (`{ scans }`: the brand's scans oldest first, per platform what each found and read; free) |
+| `compare(id, { from, to, vsFrom?, vsTo? })` | `GET /v1/competitors/:id/compare` | `CompetitorCompareResult` (`{ periods, posts }`: one or two periods — posts by publish date, usual reach, followers and their change, what worked, the best posts; free) |
 | `create(input)` | `POST /v1/competitors` | `TrackedCompetitor` |
 | `update(id, input)` | `PATCH /v1/competitors/:id` | `TrackedCompetitor` (`accounts` replaces the whole set; `409 scan_running` for a change to what a running scan was priced on) |
 | `delete(id)` | `DELETE /v1/competitors/:id` | `void` |
@@ -5303,7 +5576,7 @@ request methods return `{ jobId }` (`EditJobResult`) — poll with
 | `audioSync(input)` | `POST /v1/audio-sync` | Keyless: measure how far apart 2–6 recordings' clocks are, from their sound. |
 | `applyEdl(input)` | `POST /v1/apply-edl` | Render an edit decision list (EDL) into a video or audio cut. |
 | `cameraSwitch(input)` | `POST /v1/camera-switch` | Multicam: put each cut of an EDL on the camera of whoever is speaking (Cloud; flat price). |
-| `editPlan(input)` | `POST /v1/edit-plan` | Transcript-driven planner (tighten / clips / chapters). On a self-hosted install it relays to nodaro.ai (`503 nodaro_connection_required` when not connected). |
+| `editPlan(input)` | `POST /v1/edit-plan` | Transcript-driven planner (tighten / clips / chapters / trailer). On a self-hosted install it relays to nodaro.ai (`503 nodaro_connection_required` when not connected). |
 | `remapTranscript(edl, transcript)` | — (local) | PURE client-side transform — remaps a transcript through an EDL. **No request.** |
 
 #### `silenceDetect(input)`
@@ -5390,7 +5663,11 @@ applyEdl(input: ApplyEdlInput): Promise<EditJobResult>
 | `output` | `"video" \| "audio"` | no | Default `"video"`. |
 | `quality` | `"proxy" \| "final"` | no | Default `"final"`. `"proxy"` is a 720p preview (lighter mono sound on an audio cut), billed per output minute at its own, lower rate — see [Apply EDL](nodes/processing-video/apply-edl.md#credit-cost). |
 | `crossfadeMs` | `number` | no | Default crossfade on boundaries without an explicit transition; `0` = hard cuts. Default `0`. |
+| `clipKey` | `string` | no | The plan clip this render cuts — `edlSpanKey(clip)` from `@nodaro/shared` (`"<first inMs>-<last outMs>"`). Returned on the job's `output_data.clipKey`. |
+| `planBasis` | `string` | no | The plan value this render cuts — `renderReadBasis(value)` from `@nodaro/shared`, 16 lowercase hex digits, where `value` is the Edit Plan's Tighten EDL with any review applied, or the clip this render cuts. A hook edit does not change it. Returned on the job's `output_data.planBasis`. Send it only when the EDL you send is that value itself, not one a later step re-cut from an older plan. Anything other than 16 lowercase hex digits is a `400`. |
 | `workflowId` | `string` | no | Execution-history display. |
+
+The finished job's `output_data` carries the cut (`videoUrl` + `thumbnailUrl`, or `audioUrl`), the remapped transcript on `json` when one was sent, `quality` (`"proxy"` or `"final"`), `renderBasis` and, when given, `clipKey` and `planBasis`. `renderBasis` is stamped by the server from what it renders: the fingerprint (`renderSettingsBasis` in `@nodaro/shared`) of the render's `output`, its `crossfadeMs` and the URL of each source of the cut, with `sources` applied. Two renders of the same plan value with the same `planBasis` and `renderBasis` cut the same edit. A `proxy` render is a **preview**: always private, never in the public gallery (see [Apply EDL](nodes/processing-video/apply-edl.md#previews)). A job recorded before `quality` was written reads back with the quality it was ordered at filled in (`"proxy"` is a preview, anything else the final) by `jobs.get`, `jobs.getStatus` and `jobs.list`; the stored job is unchanged.
 
 The EDL is validated at ingress — an unresolvable source, a picture-less
 segment on a video edit, or an edit longer than **180 minutes of output**
@@ -5410,7 +5687,7 @@ editPlan(input: EditPlanInput): Promise<EditJobResult>
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `mode` | `EditPlanMode` | yes | `"tighten"` \| `"clips"` \| `"chapters"`. |
+| `mode` | `EditPlanMode` | yes | `"tighten"` \| `"clips"` \| `"chapters"` \| `"trailer"`. A trailer plan's `output_data` is one `Edl`, like tighten. |
 | `planTier` | `EditPlanTier` | yes | `"economy"` \| `"standard"` \| `"premium"` — affects quality and the credit bucket. |
 | `transcript` | `Transcript` | yes | The timed transcript driving the plan. |
 | `sources` | `EditPlanSource[]` | yes | 1–6 media sources. Each: `{ id, url, kind: "video" \| "audio", role?, speakers?, offsetMs? }`. A source's own `offsetMs` wins over a measured one. |
@@ -5451,7 +5728,7 @@ const { jobId } = await client.edit.editPlan({
 ```
 
 Read the finished job's `output_data` with `unwrapEditPlanOutput` — it returns
-an `Edl` (`tighten`), a bare `Edl[]` (`clips`, unwrapped from `EdlClipSet`), or a
+an `Edl` (`tighten`, `trailer`), a bare `Edl[]` (`clips`, unwrapped from `EdlClipSet`), or a
 `ChapterSet` (`chapters`), stripping the relay's `viaNodaroCloud` marker.
 
 ```ts
@@ -5561,7 +5838,7 @@ not two.
 - `ListWorkflowsParams` — `{ projectId }`
 - `CreateWorkflowInput` — `{ projectId, name, ... }`
 - `UpdateWorkflowInput` — partial workflow fields
-- `RunWorkflowParams` — `{ nodeIds? }`
+- `RunWorkflowParams` — `{ nodeIds?, inputOverrides?, continueFromExecutionId? }`
 - `RunWorkflowResult` — `{ executionId, status }`
 
 ### Projects
@@ -5590,7 +5867,7 @@ not two.
 ### Executions
 
 - `WorkflowExecution` — full execution record with per-node state map
-- `WorkflowExecutionSummary` — list-row shape
+- `WorkflowExecutionSummary` — list-row shape. Both carry `kind`: `"execution"` for an orchestrator run, `"job"` for a single-node job listed beside the runs (whose `triggerType` is the lane that started it — `"mcp"` for an MCP client's one-node job)
 - `NodeExecutionState` — per-node entry inside `nodeStates`; `output` is present for a `completed` node AND for a `failed` one whose run retained a result
 - `NodeExecutionStatus` — per-NODE status: `"pending" | "running" | "completed" | "failed" | "skipped"`
 - `OUTPUT_BEARING_NODE_STATUSES` / `nodeStateMayCarryOutput(status)` — the two statuses whose node state may carry `output`

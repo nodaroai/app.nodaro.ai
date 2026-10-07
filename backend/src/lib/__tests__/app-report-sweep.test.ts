@@ -218,13 +218,23 @@ describe("sweepFailedExecutions", () => {
 
   it("skips executions whose failure is already covered by a failed job", async () => {
     const execChain = chain({ data: [FAILED_EXECUTION] })
-    const jobsChain = chain({ data: [{ workflow_execution_id: "exec-1" }] })
+    const jobsChain = chain({ data: [{ user_id: "u1", workflow_execution_id: "exec-1" }] })
     const reportsChain = chain({ data: [] })
     dispatch(execChain, jobsChain, reportsChain)
 
     const { reported } = await sweepFailedExecutions()
     expect(reported).toBe(0)
     expect(reportsChain.insert).not.toHaveBeenCalled()
+  })
+
+  it("attacker: a failed job another user pointed at the execution does not hide its failure", async () => {
+    const execChain = chain({ data: [FAILED_EXECUTION] })
+    const jobsChain = chain({ data: [{ user_id: "attacker", workflow_execution_id: "exec-1" }] })
+    const reportsChain = chain({ data: [] })
+    dispatch(execChain, jobsChain, reportsChain)
+
+    const { reported } = await sweepFailedExecutions()
+    expect(reported).toBe(1)
   })
 
   it("skips executions already reported", async () => {

@@ -10,6 +10,11 @@ describe("isSeededState", () => {
     expect(isSeededState({ status: "completed" })).toBe(true)
   })
 
+  it("a continued run's state built from the earlier execution is seeded, whatever else it carries", () => {
+    expect(isSeededState({ status: "completed", seededFromExecution: "exec-0" })).toBe(true)
+    expect(isSeededState({ status: "completed", seededFromExecution: "exec-0", startedAt: "2026-10-04T10:00:00.000Z" })).toBe(true)
+  })
+
   it("a state that started, or that names its job, ran in this run", () => {
     expect(isSeededState({ status: "completed", startedAt: "2026-10-04T10:00:00.000Z" })).toBe(false)
     expect(isSeededState({ status: "completed", jobId: "job-1" })).toBe(false)

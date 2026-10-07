@@ -16,6 +16,8 @@ import { useModelCredits } from "@/hooks/use-model-credit-cost"
 import { useApplyEdlEstimateMinutes } from "@/hooks/use-apply-edl-estimate-minutes"
 import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { videoNodeSizing } from "./video-node-defaults"
+import { PreviewBadge, isPreviewQuality } from "@/components/render/preview-badge"
+import { RenderReviewBar } from "@/components/render/render-review-bar"
 import { useT } from "@/lib/i18n"
 import type { ApplyEdlData } from "@/types/nodes"
 
@@ -36,6 +38,9 @@ function ApplyEdlNodeComponent({ id, data, selected }: NodeProps) {
   const activeIndex = nodeData.activeResultIndex ?? 0
   const activeResult = results[activeIndex]
   const activeUrl = activeResult?.url ?? nodeData.generatedVideoUrl ?? nodeData.generatedAudioUrl
+  // The take on show is a Preview (a private 720p render) — from what the take
+  // IS, never from the node's Quality setting.
+  const showsPreview = isPreviewQuality(activeResult)
   const [mediaError, setMediaError] = useState(false)
 
   useEffect(() => { setMediaError(false) }, [activeUrl])
@@ -67,7 +72,8 @@ function ApplyEdlNodeComponent({ id, data, selected }: NodeProps) {
           { id: "json",       type: "source", position: Position.Right, customStyle: { top: "24px",              right: "-29px" }, external: true },
         ]}
       >
-        <div className="flex flex-col gap-1 p-2 h-full" style={{ minHeight: 120 }}>
+        <div className="relative flex flex-col gap-1 p-2 h-full" style={{ minHeight: 120 }}>
+          {hasResult && showsPreview && <PreviewBadge className="absolute start-3 top-3 z-10 pointer-events-none" />}
           {status === "running" && (
             <div className="flex flex-col items-center justify-center gap-2 flex-1 rounded-md bg-muted/30">
               <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
@@ -94,6 +100,12 @@ function ApplyEdlNodeComponent({ id, data, selected }: NodeProps) {
             </div>
           )}
 
+          {/* Render final / Update preview, while the take on show is a Preview.
+              "pending" is the runtime-only queued state (markNodesStatus), not in the narrower data type. */}
+          {hasResult && showsPreview && (
+            <RenderReviewBar renderId={id} busy={(status as string) === "pending"} />
+          )}
+
           {status === "failed" && !activeUrl && (
             <div className="flex flex-col items-center justify-center gap-1 flex-1 rounded-md bg-red-500/5 text-red-500 p-2">
               <div className="flex items-center gap-1.5"><AlertCircle className="w-4 h-4 shrink-0" /><span className="font-medium">{t("node.failed")}</span></div>
@@ -117,11 +129,14 @@ function ApplyEdlNodeComponent({ id, data, selected }: NodeProps) {
         </div>
       </BaseNode>
 
-      <HandleWithPopover nodeId={id} nodeType="apply-edl" handleId="edl"        type="target" position={Position.Left}  label="EDL"        color={DATA_HANDLE_COLORS.json}  icon={<Braces />}     side="left"  top="24px"              accepts={ACCEPTS_JSON} />
-      <HandleWithPopover nodeId={id} nodeType="apply-edl" handleId="transcript" type="target" position={Position.Left}  label="Transcript" color={DATA_HANDLE_COLORS.json}  icon={<Braces />}     side="left"  top="52px"              accepts={ACCEPTS_JSON} />
-      <HandleWithPopover nodeId={id} nodeType="apply-edl" handleId="sources"    type="target" position={Position.Left}  label="Sources"    color={HANDLE_COLORS.video}      icon={<Film />}       side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_MEDIA} orderMatters />
-      <HandleWithPopover nodeId={id} nodeType="apply-edl" handleId="media"      type="source" position={Position.Right} label={output === "audio" ? "Audio" : "Video"} color={output === "audio" ? HANDLE_COLORS.audio : HANDLE_COLORS.video} icon={output === "audio" ? <AudioLines /> : <Film />} side="right" top="calc(100% - 24px)" />
-      <HandleWithPopover nodeId={id} nodeType="apply-edl" handleId="json"       type="source" position={Position.Right} label="Transcript" color={DATA_HANDLE_COLORS.json}  icon={<Braces />}     side="right" top="24px" />
+      {/* Labels from the dictionary, not English literals: the pip looks an English
+          label up in its locale table, but its connection popover shows the
+          label as passed. */}
+      <HandleWithPopover nodeId={id} nodeType="apply-edl" handleId="edl"        type="target" position={Position.Left}  label={t("node.applyEdlEdlIn")} color={DATA_HANDLE_COLORS.json}  icon={<Braces />}     side="left"  top="24px"              accepts={ACCEPTS_JSON} />
+      <HandleWithPopover nodeId={id} nodeType="apply-edl" handleId="transcript" type="target" position={Position.Left}  label={t("node.transcript")} color={DATA_HANDLE_COLORS.json}  icon={<Braces />}     side="left"  top="52px"              accepts={ACCEPTS_JSON} />
+      <HandleWithPopover nodeId={id} nodeType="apply-edl" handleId="sources"    type="target" position={Position.Left}  label={t("node.sources")} color={HANDLE_COLORS.video}      icon={<Film />}       side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_MEDIA} orderMatters />
+      <HandleWithPopover nodeId={id} nodeType="apply-edl" handleId="media"      type="source" position={Position.Right} label={t(output === "audio" ? "node.applyEdlAudioOut" : "node.applyEdlVideoOut")} color={output === "audio" ? HANDLE_COLORS.audio : HANDLE_COLORS.video} icon={output === "audio" ? <AudioLines /> : <Film />} side="right" top="calc(100% - 24px)" />
+      <HandleWithPopover nodeId={id} nodeType="apply-edl" handleId="json"       type="source" position={Position.Right} label={t("node.transcript")} color={DATA_HANDLE_COLORS.json}  icon={<Braces />}     side="right" top="24px" />
     </div>
   )
 }

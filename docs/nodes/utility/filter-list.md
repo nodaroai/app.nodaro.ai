@@ -8,7 +8,7 @@ The Filter List node filters an upstream list down to the items that satisfy a s
 
 ## How it works
 
-- Connect a list-producing node upstream (List, Split Text, JSON Process, a web-scrape source, etc.).
+- Connect a list-producing node upstream (List, Split Text, JSON Process, a web-scrape source, etc.). A Generate Text node wired by its `items` pip hands over one item per `===NEXT===` block of its answer; its `text` pip is one item, the whole answer.
 - Add one or more conditions. For each: choose a field (detected from the upstream schema or a custom dot-path), an operator, and a value.
 - Choose whether conditions are combined with **AND** (all must match) or **OR** (any must match).
 - The node returns only the items that pass.
@@ -26,7 +26,7 @@ The Filter List node filters an upstream list down to the items that satisfy a s
 
 ## Inputs & Outputs
 
-**Inputs:** A list from an upstream node.
+**Inputs:** A list from an upstream node. Filter List always works on the whole list it is wired to: it runs once, never once per item, whatever the wire's mode says.
 
 **Outputs:** The filtered list (items that passed the conditions).
 

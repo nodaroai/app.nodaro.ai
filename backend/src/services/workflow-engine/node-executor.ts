@@ -1,6 +1,9 @@
 import { projectDubbingCreditOverride, stampDubbingDuration } from "../../lib/dubbing-pricing.js"
 import { applyEdlCreditOverride } from "../../lib/apply-edl-plan.js"
-import { assertCanvasExecutionAllowed, imageOverlayCredits, applySettingsInput, SETTINGS_INPUT_CONSUMERS } from "@nodaro/shared"
+import { isPreviewRender } from "../../lib/preview-render.js"
+import { assertCanvasExecutionAllowed, imageOverlayCredits, applySettingsInput, SETTINGS_INPUT_CONSUMERS, PREVIEW_RENDER_NESTED, PREVIEW_REVIEW_REQUIRED, isCollectionUrl } from "@nodaro/shared"
+import { PREVIEW_RENDER_NESTED_MESSAGE } from "./nested-preview-renders.js"
+import { PREVIEW_REVIEW_REQUIRED_MESSAGE } from "../../lib/preview-review-gate.js"
 /**
  * Node executor — dispatches node execution based on type category.
  *
@@ -17,6 +20,7 @@ import { insertInternalJob, JobBlockedError } from "../../lib/insert-job.js"
 import { videoQueue } from "../../lib/queue.js"
 import { renderQueue } from "../../lib/render-queue.js"
 import { hasCredits, config } from "../../lib/config.js"
+import { speechChargeOverride } from "../../lib/speech-estimate.js"
 import { mapReserveError } from "../../lib/reserve-errors.js"
 import { CreditsService } from "../../ee/billing/credits.js"
 import { refundJobCredits } from "../../workers/shared.js"
@@ -24,17 +28,18 @@ import { buildScene3DHttpBody, isScene3DAuthoringType } from "./scene3d-http.js"
 import { loopbackFetch } from "./loopback-fetch.js"
 import { buildPayload, buildNodeRefMap, type WorkflowSettings } from "./payload-builder.js"
 import { assertNodeAvailableForUser, viewerForNode } from "../../lib/availability-viewer.js"
+import { passThroughFor } from "./pass-through.js"
 import { ensureWorkflowSheetPanels } from "./reference-sheet-stage-a.js"
 import { buildNodeOutputFromJobData } from "./output-extractor.js"
 import { retainedOutputOfFailedJob } from "./failed-node-output.js"
-import { readNodeCursor, writeNodeCursor } from "./node-cursor.js"
 import { resolveFieldMappings, NODE_MAPPABLE_FIELDS } from "./resolve-field-mappings.js"
 import { videoAnalysisPostDuration } from "./video-analysis-post-probe.js"
 
 import { executeCombineText, executeSplitText, executeComposite, executeWebhookOutput, executePreview, executeTeleporterPassthrough, executeRouter, executeExtractField, executeJsonProcess, executeFilterList, executeDeduplicateList, executeMergeLists, executeSortList, executeSelector } from "./inline-executor.js"
 import { executeSubWorkflow } from "./sub-workflow-handler.js"
+import { idempotencyScopeSegment, syncHttpIdempotencyKey } from "./idempotency-key.js"
 import { mergeExposedSettings, applyHandleInputOverride, isHandleInputWired, resolveNodeRefs, SOCIAL_POST_NODE_TYPES, isSeedance2Provider, pricedOutputDurationSec, isMinimaxH3Provider, readPromptAffixes, WORKSPACE_HEADER_LOWER, metaAdsScrapeWireSources, splitInstagramTargets, instagramScrapeMode } from "@nodaro/shared"
-import { computeLlmChatFields, computeNodePrompt, pickerFanoutTargets, applyPromptAffixes } from "@nodaro/prompts"
+import { computeAiWriterInput, computeLlmChatFields, computeNodePrompt, pickerFanoutTargets, applyPromptAffixes } from "@nodaro/prompts"
 import type { ComponentMetadata } from "@nodaro/shared"
 import { getAppSettings } from "../../lib/app-settings.js"
 import { videoUtilityBaseCredits } from "../../lib/video-utility-credits.js"
@@ -67,7 +72,10 @@ import { noteSlotWaitColumnError, withSlotWaitColumn } from "../../lib/jobs-slot
 // Sync HTTP node types — called via internal fetch
 // ---------------------------------------------------------------------------
 
-const SYNC_HTTP_NODES = new Set([
+// Exported for the parity guard: this set and SYNC_HTTP_ROUTES must name the
+// same node types, or a node falls through to the worker-queued path and
+// buildPayload throws "Unknown node type" mid-run.
+export const SYNC_HTTP_NODES = new Set([
   "generate-3d-scene",
   "edit-3d-scene",
   "pro-3d-render",
@@ -97,7 +105,16 @@ const SYNC_HTTP_NODES = new Set([
   "meta-ads-scrape",
   "instagram-scrape",
   "reduce",
+  "collection-write",
+  "collection-read",
 ])
+
+/**
+ * Sync-HTTP nodes whose route takes an `Idempotency-Key`: the orchestrator sends
+ * `wf-<executionId>-<nodeId>[-<iteration>]`, so a re-pick of the node buys /
+ * writes once. Exported for the dispatch test.
+ */
+export const IDEMPOTENT_SYNC_HTTP_NODES: ReadonlySet<string> = new Set(["pro-3d-render", "collection-write"])
 
 // Maps node type to internal route path.
 // NOTE: these must exactly match the paths registered in each route file.
@@ -121,6 +138,8 @@ export const SYNC_HTTP_ROUTES: Record<string, string> = {
   "qa-check": "/v1/qa-check",
   "image-critic": "/v1/image-critic",
   "save-to-storage": "/v1/save-to-storage",
+  "collection-write": "/v1/collection-write",
+  "collection-read": "/v1/collection-read",
   "web-scrape": "/v1/web-scrape",
   "meta-ads-scrape": "/v1/meta-ads-scrape",
   "instagram-scrape": "/v1/instagram-scrape",
@@ -357,6 +376,13 @@ export async function executeNode(
   // re-running + re-charging it (loadCompletedFanOutIterations). Undefined for
   // single (non-fan-out) executions.
   iterationIndex?: number,
+  // The ROW that iteration reads its inputs on (`plan.rows[i]`) — a render
+  // stamps the plan clip of that row on its result. Undefined when not fanned out.
+  listRow?: number,
+  // The sub-workflow nodes this node sits under, each with the fan-out
+  // iteration that entered it — the scope of its Idempotency-Key
+  // (`syncHttpIdempotencyKey`). Empty for a top-level node.
+  idempotencyScope?: readonly string[],
 ): Promise<ExecuteNodeResult> {
   assertCanvasExecutionAllowed([node])
   // Source nodes — should already have output set
@@ -444,7 +470,10 @@ export async function executeNode(
   // (rolled up recursively for nested sub-workflows) so it contributes to the
   // parent execution's total + monetization base.
   if (node.type === "sub-workflow") {
-    const result = await executeSubWorkflow(node, resolvedInputs, ctx)
+    // The inner nodes' idempotency keys carry THIS node and the iteration that
+    // entered it: a fan-out into a sub-workflow writes once per iteration.
+    const scope = [...(idempotencyScope ?? []), idempotencyScopeSegment(node.id, iterationIndex)]
+    const result = await executeSubWorkflow(node, resolvedInputs, ctx, 0, new Set(), scope)
     return { output: result.output, creditsUsed: result.creditsUsed }
   }
 
@@ -477,9 +506,15 @@ export async function executeNode(
     return { output: {} }
   }
 
+  // Nothing to do → the input, unchanged: no job, no reservation (spec R14).
+  const passThrough = passThroughFor(node, resolvedInputs)
+  if (passThrough) {
+    return { output: { videoUrl: passThrough.videoUrl, passThroughWarning: passThrough.warning } }
+  }
+
   // Inline nodes
   if (INLINE_NODES.has(node.type)) {
-    return executeInlineNode(node, resolvedInputs, edges, allNodes, nodeStates, ctx)
+    return executeInlineNode(node, resolvedInputs, edges, allNodes, nodeStates, ctx, listRow)
   }
 
   // Sync HTTP nodes. Exception: motion-graphics with the lottie engine runs
@@ -487,7 +522,7 @@ export async function executeNode(
   const isLottieMotionGraphics =
     node.type === "motion-graphics" && (node.data.engine as string | undefined) === "lottie"
   if (SYNC_HTTP_NODES.has(node.type) && !isLottieMotionGraphics) {
-    return executeSyncHttpNode(node, resolvedInputs, ctx, userPromptTemplate, edges, allNodes, nodeStates, authoredData, iterationIndex)
+    return executeSyncHttpNode(node, resolvedInputs, ctx, userPromptTemplate, edges, allNodes, nodeStates, authoredData, iterationIndex, idempotencyScope)
   }
 
   // Reference Sheet — run Stage A (generate the panels the chosen type needs but
@@ -498,11 +533,11 @@ export async function executeNode(
   // worker-queued compose, which re-fetches the entity and finds the new panels.
   if (node.type === "reference-sheet") {
     await ensureWorkflowSheetPanels(node, ctx, { nodes: allNodes, edges, nodeStates })
-    return executeWorkerNode(node, resolvedInputs, ctx, edges, allNodes, nodeStates, userPromptTemplate, iterationIndex, authoredData)
+    return executeWorkerNode(node, resolvedInputs, ctx, edges, allNodes, nodeStates, userPromptTemplate, iterationIndex, authoredData, listRow)
   }
 
   // Worker-queued nodes (default)
-  return executeWorkerNode(node, resolvedInputs, ctx, edges, allNodes, nodeStates, userPromptTemplate, iterationIndex, authoredData)
+  return executeWorkerNode(node, resolvedInputs, ctx, edges, allNodes, nodeStates, userPromptTemplate, iterationIndex, authoredData, listRow)
 }
 
 // ---------------------------------------------------------------------------
@@ -516,6 +551,9 @@ async function executeInlineNode(
   allNodes: SimpleNode[],
   nodeStates: Record<string, NodeExecutionState>,
   ctx: OrchestratorContext,
+  // The fan-out row this iteration reads (`plan.rows[k]`) — a Webhook Output
+  // run once per item posts that row's values. Undefined when not fanned out.
+  listRow?: number,
 ): Promise<ExecuteNodeResult> {
   let output: NodeOutput
 
@@ -551,7 +589,7 @@ async function executeInlineNode(
       output = executeComposite(node, edges, allNodes, nodeStates)
       break
     case "webhook-output":
-      output = await executeWebhookOutput(node, edges, allNodes, nodeStates, ctx)
+      output = await executeWebhookOutput(node, edges, allNodes, nodeStates, ctx, listRow)
       break
     case "preview":
       output = executePreview(node, edges, allNodes, nodeStates)
@@ -584,6 +622,7 @@ async function executeSyncHttpNode(
   nodeStates?: Record<string, NodeExecutionState>,
   authoredData?: Record<string, unknown>,
   iterationIndex?: number,
+  idempotencyScope?: readonly string[],
 ): Promise<ExecuteNodeResult> {
   const isScene3D = isScene3DAuthoringType(node.type)
   const adopted = isScene3D && iterationIndex === undefined ? ctx.adoptableJobs?.get(node.id) : undefined
@@ -632,15 +671,11 @@ async function executeSyncHttpNode(
       }, userPromptTemplate)
     : buildSyncHttpBody(node, resolvedInputs, ctx, userPromptTemplate, refMap, downstreamPickerTypes)
 
-  // Polling sources resume from the DURABLE cursor, not from the node's saved
-  // data. Only the editor can persist back into node data (updateNodeData +
-  // autosave); a scheduled run has no editor, so without this every tick
-  // restarted from the same point and reprocessed the same items. Reading here
-  // rather than inside buildSyncHttpBody because that builder is synchronous.
-  if (node.type === "telegram-channel-feed") {
-    const cursor = await readNodeCursor(ctx.workflowId, node.id)
-    if (cursor !== undefined) body.sinceId = cursor
-  }
+  // Polling sources (Telegram Channel Feed): the ROUTE owns the durable cursor
+  // (node_cursors) since PR 2 — it reads and advances the position itself from
+  // the workflowId / nodeId the body carries (buildSyncHttpBody), so the
+  // editor's single-node Run and a scheduled run move the SAME position and
+  // the engine keeps no second copy of the rule.
 
   // Scrapers copy the featured item's video into the library only when its
   // `video` output is actually wired — videos are the expensive bytes, and an
@@ -703,8 +738,11 @@ async function executeSyncHttpNode(
       throw new Error(`3D Render Pro quote returned no quoteId`)
     }
     body.quoteId = quote.quoteId
-    headers["Idempotency-Key"] =
-      `wf-${ctx.executionId}-${node.id}${iterationIndex === undefined ? "" : `-${iterationIndex}`}`
+  }
+  // A re-pick of the same node (and fan-out iteration) must resolve to the same
+  // write, not a second one: the route keys the request on this header.
+  if (IDEMPOTENT_SYNC_HTTP_NODES.has(node.type)) {
+    headers["Idempotency-Key"] = syncHttpIdempotencyKey(ctx.executionId, node.id, iterationIndex, idempotencyScope)
   }
 
   const response = await loopbackFetch(
@@ -724,14 +762,6 @@ async function executeSyncHttpNode(
   }
 
   const result = await response.json() as Record<string, unknown>
-
-  // Advance the durable cursor BEFORE branching: the jobId path returns early
-  // into pollJobToCompletion, and `latestId` only exists on this HTTP body.
-  // Best-effort — a failed write degrades to "reprocess next tick", which is
-  // the old behavior, never a reason to fail the run.
-  if (node.type === "telegram-channel-feed" && typeof result.latestId === "number") {
-    await writeNodeCursor(ctx.workflowId, node.id, ctx.userId, "telegram-channel-feed", result.latestId)
-  }
 
   if (result.jobId) {
     // Stamp `node_id` on the jobs row so the reconcile cron's Path-2 can
@@ -830,7 +860,8 @@ export function buildSyncHttpBody(
     case "ai-writer":
       return withUserPrompt({
         systemPrompt: data.systemPrompt || data.template,
-        userInput: resolvedInputs.prompt || data.userInput || data.prompt,
+        // The one rule (@nodaro/prompts): the orchestrator's empty-input skip asks the same function.
+        userInput: computeAiWriterInput(data as Record<string, unknown>, { wired: resolvedInputs.prompt }),
         userId: ctx.userId,
         ...llmNodeParams(data),
         temperature: data.temperature ?? 0.7,
@@ -1014,6 +1045,47 @@ export function buildSyncHttpBody(
         userId: ctx.userId,
       })
 
+    case "collection-write": {
+      // One record per call: the item the node received on `in` (JSON text
+      // from a json wire, or plain text), the mapped title / text / link /
+      // dedupe key, the picture and the video wired in. The link field is
+      // `link` on the node (the Copilot deny-list locks node-data keys ending
+      // in url); the route takes it as `link` too.
+      // Only a real address rides along as a medium: a fan-out guess that put
+      // something else into imageUrl must not become a 400 for the whole item.
+      const media: Array<{ type: "image" | "video"; url: string }> = []
+      if (isCollectionUrl(resolvedInputs.imageUrl)) media.push({ type: "image", url: resolvedInputs.imageUrl })
+      if (isCollectionUrl(resolvedInputs.videoUrl)) media.push({ type: "video", url: resolvedInputs.videoUrl })
+      const str = (v: unknown) => (typeof v === "string" && v.trim() ? v : undefined)
+      return {
+        collectionId: data.collectionId,
+        item: resolvedInputs.overridePrompt ?? resolvedInputs.prompt,
+        title: str(data.title),
+        text: str(data.text),
+        link: str(data.link),
+        dedupeKey: str(data.dedupeKey),
+        ...(media.length > 0 ? { media } : {}),
+        executionId: ctx.executionId,
+        workflowId: ctx.workflowId,
+        nodeId: node.id,
+        userId: ctx.userId,
+      }
+    }
+
+    case "collection-read":
+      // Reads by the node's own settings; nothing is wired in.
+      return {
+        collectionId: data.collectionId,
+        windowAmount: data.windowAmount,
+        windowUnit: data.windowUnit,
+        limit: data.limit,
+        order: data.order,
+        textFormat: data.textFormat,
+        workflowId: ctx.workflowId,
+        nodeId: node.id,
+        userId: ctx.userId,
+      }
+
     case "save-to-storage":
       // No user-typed prompt — operates on upstream URLs only.
       return {
@@ -1087,7 +1159,13 @@ export function buildSyncHttpBody(
     case "telegram-channel-feed":
       return withUserPrompt({
         channel: (data.channel as string) || resolvedInputs.prompt || "",
-        // Cursor: only emit posts newer than the last run's highest id.
+        // The route owns the position: it reads node_cursors for this
+        // workflow + node and advances it to the highest post emitted. The
+        // editor's legacy cursor (data.lastSeenId) rides as a one-shot seed for
+        // a node that never ran statefully.
+        mode: "poll",
+        workflowId: ctx.workflowId,
+        nodeId: node.id,
         sinceId: typeof data.lastSeenId === "number" ? data.lastSeenId : undefined,
         limit: typeof data.limit === "number" ? data.limit : undefined,
         userId: ctx.userId,
@@ -1300,6 +1378,26 @@ export async function computeLtxRetakeCreditOverride(
   const base = await ltxRetakeBaseCredits(payload.retake_duration)
   const { applyServiceMarkup } = await import("../../ee/billing/service-margin.js")
   return applyServiceMarkup(base, await getAppSettings(), modelIdentifier)
+}
+
+/**
+ * Text to Speech / Text to Dialogue are priced by length (decided 2026-10-06):
+ * the model's per-100-characters row × started hundreds of the text this payload
+ * sends, at least 8 units — exactly what the route's guard charges for the same
+ * request (lib/speech-credits.ts is the one counter and reader), marked up once
+ * at the MODEL id's margin. Undefined for every other job, and for every speech
+ * job while SPEECH_LENGTH_PRICING_ENABLED is off: the flat DB row then reserves
+ * as it always has. Gated on the explicit jobName, not a payload heuristic; the
+ * flag is consulted only for a speech job, so no other job's reservation reads it.
+ */
+export async function computeSpeechCreditOverride(
+  jobName: string,
+  payload: Record<string, unknown>,
+  modelIdentifier: string,
+): Promise<number | undefined> {
+  // One function for every seam that holds a payload — this orchestrator and
+  // the pipeline services: lib/speech-estimate.ts :: speechChargeOverride.
+  return speechChargeOverride(jobName, payload, modelIdentifier)
 }
 
 async function computeSeedance2RefVideoCreditOverride(
@@ -1558,6 +1656,7 @@ async function executeWorkerNode(
   // `executeNode`. Handed to buildPayload as `PayloadBuildContext.authoredData`
   // so its §4.6 settle pass can tell an authored prompt field from a mapped one.
   authoredData?: Record<string, unknown>,
+  listRow?: number,
 ): Promise<ExecuteNodeResult> {
   // 0. Adoption: a prior orchestrator attempt's in-flight job for THIS node
   // that must not be re-run — its provider call already went out (audit A2:
@@ -1610,7 +1709,9 @@ async function executeWorkerNode(
     status: "pending",
     input_data: { type: node.type, node_id: node.id, ...(iterationIndex !== undefined ? { iterationIndex } : {}) },
     job_type: node.type,
-    ...(isUploadDescendant && { force_private: true }),
+    // An Apply EDL preview (proxy) is private on every lane (F1). The node's
+    // data already carries this run's overrides (merged before seeding).
+    ...((isUploadDescendant || isPreviewRender(node.type, node.data.quality)) && { force_private: true }),
   }, { billingContext: ctx.billingContext })
 
   // A registered job policy refused this generation at the REQUEST gate (spec
@@ -1658,6 +1759,7 @@ async function executeWorkerNode(
         nodeStates,
         authoredData,
         viewer,
+        listRow,
       },
     )
   } catch (err) {
@@ -1826,6 +1928,7 @@ async function executeWorkerNode(
         await applyEdlCreditOverride(jobName, payload) ??
         await projectDubbingCreditOverride(jobName, payload) ??
         computeImageOverlayCreditOverride(payload) ??
+        (await computeSpeechCreditOverride(jobName, payload, modelIdentifier)) ??
         (await computeVideoUtilityCreditOverride(jobName, payload, modelIdentifier)) ??
         (await computeLtxExtendCreditOverride(jobName, payload, modelIdentifier)) ??
         (await computeLtxRetakeCreditOverride(jobName, payload, modelIdentifier)) ??
@@ -1967,9 +2070,14 @@ function completedJobResult(
  * (immutable, already-completed) upstream, so index i maps to the same item
  * across the original run and the re-run. On a FIRST run no prior completed
  * iteration jobs exist yet, so this returns an empty map (no behaviour change).
+ *
+ * Only the execution owner's jobs (`ownerId`): a job row naming this execution
+ * is not proof it belongs to it (decided 2026-10-06; migration 474), and a
+ * reused iteration's output flows straight into the run.
  */
 export async function loadCompletedFanOutIterations(
   executionId: string,
+  ownerId: string,
   nodeId: string,
   nodeType: string,
 ): Promise<Map<number, ExecuteNodeResult>> {
@@ -1978,6 +2086,7 @@ export async function loadCompletedFanOutIterations(
     .from("jobs")
     .select("id, output_data, credits_actual, credits, input_data")
     .eq("workflow_execution_id", executionId)
+    .eq("user_id", ownerId)
     .eq("status", "completed")
   if (error || !jobs) return byIndex
   for (const j of jobs) {
@@ -2314,6 +2423,13 @@ const COMPONENT_POLL_INTERVAL_MS = 3_000 // 3 seconds
 // run's own clocks grew (`BudgetedDeadline` below).
 const COMPONENT_TIMEOUT_MS = POLL_ABSOLUTE_TIMEOUT_MS
 
+/** Stable refusal codes a component's inner run records as its error_message,
+ *  and the copy (en) its canvas node shows for each. */
+const COMPONENT_REFUSAL_COPY: Readonly<Record<string, string>> = {
+  [PREVIEW_RENDER_NESTED]: PREVIEW_RENDER_NESTED_MESSAGE,
+  [PREVIEW_REVIEW_REQUIRED]: PREVIEW_REVIEW_REQUIRED_MESSAGE,
+}
+
 /** The inner execution a component wrapper job runs — stamped on the wrapper's
  *  `input_data._executionId` by the component route right after it starts it. */
 async function componentInnerExecutionId(wrapperJobId: string): Promise<string | undefined> {
@@ -2392,6 +2508,10 @@ async function executeComponentNode(
         componentDepth: depth + 1,
         executingComponentIds: [...ancestorIds, appSlug],
         userId: ctx.userId,
+        // The inner run is a NEW job: without this a parent the preview stop
+        // rule does not apply to (queued before the deploy) would still have
+        // its component refused. The route honors it on the internal lane only.
+        previewStopRule: ctx.previewStopRule === true,
         // P14: the component route replies 202 and starts a SEPARATE execution
         // in the background — a header would die with this wrapper request, so
         // the parent's resolved payer rides the BODY into the child execution's
@@ -2419,7 +2539,7 @@ async function executeComponentNode(
   // abandoned (and its inner run cancelled) at minute 90.
   const deadline = new BudgetedDeadline(COMPONENT_TIMEOUT_MS, async () => {
     const innerId = await componentInnerExecutionId(jobId)
-    return innerId ? executionBudgetExcessMs(innerId) : 0
+    return innerId ? executionBudgetExcessMs(innerId, ctx.userId) : 0
   })
   const startTime = Date.now()
   while (!(await deadline.reached(Date.now() - startTime))) {
@@ -2440,7 +2560,7 @@ async function executeComponentNode(
       const innerId = (job.output_data as Record<string, unknown> | null)?._executionId
       addBudgetExcess(
         ctx,
-        Math.max(deadline.excessMs, typeof innerId === "string" ? await executionBudgetExcessMs(innerId) : 0),
+        Math.max(deadline.excessMs, typeof innerId === "string" ? await executionBudgetExcessMs(innerId, ctx.userId) : 0),
       )
       // credits_actual on the wrapper job = the inner execution's
       // total_credits_used (set by component-execute.ts on completion). This is
@@ -2456,6 +2576,15 @@ async function executeComponentNode(
     }
 
     if (job.status === "failed") {
+      // A refusal the inner run recorded as a STABLE CODE (the preview stop
+      // rule) reads as its copy on the canvas node; the code rides `errorCode`
+      // for clients that branch on it, as the sub-workflow backstop does.
+      const copy = job.error_message ? COMPONENT_REFUSAL_COPY[job.error_message] : undefined
+      if (copy) {
+        const err = new Error(copy) as Error & { errorCode?: string }
+        err.errorCode = job.error_message!
+        throw err
+      }
       throw new Error(job.error_message ?? "Component execution failed")
     }
 
@@ -2484,7 +2613,7 @@ async function executeComponentNode(
       // No `adoptLiveBudgetedRenders`: the parent has given up, so an inner
       // render that is still running is cancelled (it stops at its next chunk
       // boundary), not kept alive for a resume that will never come.
-      await cancelInFlightChildJobs(innerExecutionId)
+      await cancelInFlightChildJobs(innerExecutionId, ctx.userId)
       await supabase
         .from("workflow_executions")
         .update({
@@ -2493,6 +2622,8 @@ async function executeComponentNode(
           completed_at: new Date().toISOString(),
         })
         .eq("id", innerExecutionId)
+        // The inner run is this run's owner's (component-execute creates it for them).
+        .eq("user_id", ctx.userId)
         .in("status", ["pending", "running", "stopping"])
     }
     const { data: failedWrapper } = await supabase

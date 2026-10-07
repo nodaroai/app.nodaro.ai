@@ -7,6 +7,7 @@ import { ActionBar } from "./action-bar"
 import { shareMedia } from "./share-utils"
 import { ELEMENT_SIZES } from "@/lib/presentation-display"
 import { useT } from "@/lib/i18n"
+import { PreviewBadge } from "@/components/render/preview-badge"
 
 /** Heights for the 7-bar loading waveform */
 const LOADING_WAVEFORM_HEIGHTS = [14, 18, 12, 20, 16, 22, 14]
@@ -23,16 +24,18 @@ interface AudioOutputCardProps {
   nodeId?: string
   elementSize?: "sm" | "md" | "lg"
   actions?: OutputCardActions
+  /** The take is a Preview (a render at proxy quality) — labelled so (F1). */
+  preview?: boolean
 }
 
-function AudioOutputCardImpl({ label, status, url, nodeId, elementSize, actions }: AudioOutputCardProps) {
+function AudioOutputCardImpl({ label, status, url, nodeId, elementSize, actions, preview }: AudioOutputCardProps) {
   const t = useT()
   const heightClass = ELEMENT_SIZES.audioOutput[elementSize ?? "md"]
   const bound = resolveCardActions(actions, nodeId, "audio", url)
   return (
     <GlassCard>
       <div className="flex items-center justify-between mb-3">
-        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{label}</span>
+        <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wider">{label}{preview && <PreviewBadge />}</span>
         <div className="flex items-center gap-2">
           <StatusBadge status={status} />
           {url && (

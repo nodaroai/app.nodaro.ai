@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from "react"
+import { executionErrorText } from "@/lib/execution-error-text"
 import { Link } from "react-router-dom"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import {
@@ -29,6 +30,7 @@ import {
 } from "@/components/ui/tooltip"
 import { useAuth } from "@/hooks/use-auth"
 import { hasCredits } from "@/lib/edition"
+import { executionOutcome } from "@nodaro/shared"
 import { useT, type MessageKey, type TFunction } from "@/lib/i18n"
 import { useAppDir } from "@/lib/locale-store"
 import { cn } from "@/lib/utils"
@@ -40,6 +42,8 @@ import {
   formatRelativeTime,
   formatDuration,
   formatNodeType,
+  isExecutedNodeEntry,
+  skipReasonLabel,
   type NodeState,
 } from "@/components/editor/execution-utils"
 import { TriggerBadge } from "@/components/library/triggers/TriggerBadge"
@@ -307,9 +311,7 @@ export default function ExecutionsPage() {
               ) : (
                 executions.map((exec) => {
                   const nodeStates = (exec.nodeStates ?? {}) as Record<string, NodeState>
-                  const nodeEntries = Object.entries(nodeStates).filter(
-                    ([, s]) => s.status !== "skipped" && !(s.status === "completed" && !s.startedAt),
-                  )
+                  const nodeEntries = Object.entries(nodeStates).filter(([, s]) => isExecutedNodeEntry(s))
                   return (
                     <GlobalExecutionRow
                       key={exec.id}
@@ -393,6 +395,11 @@ function GlobalExecutionRow({
           >
             {statusLabel(exec.status, t)}
           </span>
+          {executionOutcome(exec.status, exec.nodeStates as Record<string, { status?: unknown; skipReason?: unknown }> | undefined) === "nothing_new" && (
+            <span className="ms-1.5 inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-slate-100 text-slate-600 dark:bg-slate-500/20 dark:text-slate-300">
+              {t("exec.outcomeNothingNew")}
+            </span>
+          )}
           {exec.errorMessage && exec.status === "failed" && (
             <TooltipProvider>
               <Tooltip>
@@ -400,7 +407,7 @@ function GlobalExecutionRow({
                   <AlertCircle className="w-3.5 h-3.5 text-red-400 ms-1.5 inline" />
                 </TooltipTrigger>
                 <TooltipContent side="right" className="max-w-xs">
-                  <p className="text-xs">{exec.errorMessage}</p>
+                  <p className="text-xs">{executionErrorText(exec.errorMessage)}</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -525,6 +532,11 @@ function GlobalExecutionRow({
                             }`}>
                               {statusLabel(state.status, t)}
                             </span>
+                            {state.status === "skipped" && state.skipReason && (
+                              <span className="ms-1 text-[10px] text-slate-400" title={t("exec.nodeSkippedEmptyInput")}>
+                                {skipReasonLabel(state.skipReason)}
+                              </span>
+                            )}
                             {state.error && (
                               <TooltipProvider>
                                 <Tooltip>

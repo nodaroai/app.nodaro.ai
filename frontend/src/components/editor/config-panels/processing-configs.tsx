@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { AspectRatioSelector } from "./aspect-ratio-selector"
+import { MIX_DUCK_DEFAULT_AMOUNT } from "@/lib/mix-audio-duck"
 import { COMPOSITION_RATIOS, COLLAGE_ASPECT_RATIOS } from "./model-options"
 import { CombineTransitionPicker } from "@/lib/picker-ui"
 import { AUDIO_CROSSFADE_CURVES, DEFAULT_AUDIO_CROSSFADE_CURVE_ID, clampSmartCutWindow, SMART_CUT_WINDOW_MIN, SMART_CUT_WINDOW_MAX, SMART_CUT_WINDOW_DEFAULT, CAPTION_LOOK_IDS, DEFAULT_CAPTION_LOOK, CAPTION_MAX_WORDS_PER_LINE_MIN, CAPTION_MAX_WORDS_PER_LINE_MAX, CAPTION_LEVER_BOUNDS, SUPPORTED_FONT_NAMES, type CaptionLookId, type CaptionLookLevers, type SupportedFontName, speedRampCreditId } from "@nodaro/shared"
@@ -65,6 +66,12 @@ import { formatNumber } from "@/lib/i18n/format"
 import { EdlValidityBadge } from "@/components/inspector/edl-validity-badge"
 import { useApplyEdlRenders } from "@/hooks/use-apply-edl-renders"
 import { applyEdlRenderSettings } from "@/lib/apply-edl-render-input"
+import {
+  editPlanModeUnavailableReason,
+  refreshEditPlanModesIfStale,
+  useEditPlanModes,
+  type EditPlanModeUnavailableReason,
+} from "@/lib/edit-plan-modes"
 
 // Lazy — pulls @remotion/player + remotion (~63KB gz) out of the editor chunk;
 // only fetched when an Add Captions node's config panel is opened.
@@ -428,8 +435,10 @@ export const CAPTION_STROKE_WIDTH_MAX = 40
 // no onValueChange, so without this the user couldn't switch back to plain).
 const LOOK_NONE = "__none"
 
-export function AddCaptionsConfig({ data, onUpdate }: ConfigProps<AddCaptionsData>) {
+export function AddCaptionsConfig({ data, onUpdate, nodeId }: ConfigProps<AddCaptionsData> & { readonly nodeId?: string }) {
   const t = useT()
+  // A wired caption plan styles the opening line with Hook Plate and the rest with this node's style.
+  const planWired = useWorkflowStore((s) => nodeId !== undefined && s.edges.some((e) => e.target === nodeId && e.targetHandle === "captionPlan"))
   const localizeHandle = useLocalizeHandleLabel()
   const isKinetic = data.style !== "subtitle"
   // Every current style honours the pure styling levers (look / font / uppercase
@@ -470,6 +479,7 @@ export function AddCaptionsConfig({ data, onUpdate }: ConfigProps<AddCaptionsDat
 
   return (
     <div className="flex flex-col gap-3">
+      {planWired && <p className="text-xs text-muted-foreground">{t("addCaptions.captionPlanNote")}</p>}
       <div>
         <Label>{t("field.style")}</Label>
         <Select
@@ -942,9 +952,32 @@ function EditPlanOffsetInput({ offsetMs, onCommit, ariaLabel, placeholder }: {
   )
 }
 
+/** Why Trailer is greyed out (round 7, decided 2026-10-06): nodaro.ai needs a
+ *  plugin update; a connected self-host waits on nodaro.ai, or could not reach it. */
+const TRAILER_UNAVAILABLE_LABEL = {
+  "plugin-update": "proccfg.editPlanModeNeedsPluginUpdate",
+  "nodaro-unsupported": "proccfg.editPlanModeAvailableOnceNodaro",
+  "nodaro-unreachable": "proccfg.editPlanModeNodaroUnreachable",
+} as const satisfies Record<EditPlanModeUnavailableReason, string>
+
+/** The notice under a node saved in trailer mode. A self-host's notice is its
+ *  reason, as is: neither case is a plugin this install could update. */
+const TRAILER_UNAVAILABLE_NOTICE = {
+  "plugin-update": "proccfg.editPlanTrailerUnavailable",
+  "nodaro-unsupported": "proccfg.editPlanModeAvailableOnceNodaro",
+  "nodaro-unreachable": "proccfg.editPlanModeNodaroUnreachable",
+} as const satisfies Record<EditPlanModeUnavailableReason, string>
+
 export function EditPlanConfig({ data, onUpdate, sources }: ConfigProps<EditPlanNodeData>) {
   const t = useT()
   const mode = data.mode ?? "tighten"
+  useEditPlanModes()
+  // The answer can change mid-session (a connected self-host follows nodaro.ai's).
+  useEffect(() => {
+    void refreshEditPlanModesIfStale()
+  }, [])
+  const trailerUnavailable = editPlanModeUnavailableReason("trailer")
+  const trailerSupported = trailerUnavailable === null
   const sourceConfig = data.sourceConfig ?? {}
   // Only the media wired into the `sources` handle (not the transcript/silence
   // json edges) belongs in the source table.
@@ -989,8 +1022,22 @@ export function EditPlanConfig({ data, onUpdate, sources }: ConfigProps<EditPlan
             <SelectItem value="tighten">{t("proccfg.editPlanModeTighten")}</SelectItem>
             <SelectItem value="clips">{t("proccfg.editPlanModeClips")}</SelectItem>
             <SelectItem value="chapters">{t("proccfg.editPlanModeChapters")}</SelectItem>
+            {/* Greyed out, with the reason, until the server's plugin plans
+                trailers (GET /v1/edit-plan/capabilities; decided 2026-10-06).
+                A saved trailer node keeps its mode — the notice below says
+                why its run may be refused (on nodaro.ai it is; a self-hosted
+                install relays it to nodaro.ai, which may plan it). */}
+            <SelectItem value="trailer" disabled={!trailerSupported}>
+              {t("proccfg.editPlanModeTrailer")}
+              {trailerUnavailable && ` (${t(TRAILER_UNAVAILABLE_LABEL[trailerUnavailable])})`}
+            </SelectItem>
           </SelectContent>
         </Select>
+        {mode === "trailer" && trailerUnavailable && (
+          <p role="status" className="mt-1 text-[11px] text-amber-600 dark:text-amber-400">
+            {t(TRAILER_UNAVAILABLE_NOTICE[trailerUnavailable])}
+          </p>
+        )}
       </div>
 
       <div>
@@ -1053,20 +1100,25 @@ export function EditPlanConfig({ data, onUpdate, sources }: ConfigProps<EditPlan
               onChange={(e) => onUpdate({ targetDurationSec: e.target.value ? Math.max(5, Math.min(180, parseInt(e.target.value) || 5)) : undefined })}
             />
           </div>
-          <div>
-            <Label>{t("proccfg.editPlanTargetAspect")}</Label>
-            <Select value={data.targetAspect ?? "none"} onValueChange={(v) => onUpdate({ targetAspect: v === "none" ? undefined : (v as EditPlanNodeData["targetAspect"]) })}>
-              <SelectTrigger aria-label={t("proccfg.editPlanTargetAspectAria")}><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">{t("proccfg.editPlanTargetAspectAny")}</SelectItem>
-                <SelectItem value="16:9">16:9</SelectItem>
-                <SelectItem value="9:16">9:16</SelectItem>
-                <SelectItem value="1:1">1:1</SelectItem>
-                <SelectItem value="4:5">4:5</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
         </>
+      )}
+
+      {/* Clips and trailer both write the delivery aspect into the EDL
+          (`meta.targetAspect`); count and clip length are clips-only. */}
+      {(mode === "clips" || mode === "trailer") && (
+        <div>
+          <Label>{t("proccfg.editPlanTargetAspect")}</Label>
+          <Select value={data.targetAspect ?? "none"} onValueChange={(v) => onUpdate({ targetAspect: v === "none" ? undefined : (v as EditPlanNodeData["targetAspect"]) })}>
+            <SelectTrigger aria-label={t("proccfg.editPlanTargetAspectAria")}><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">{t("proccfg.editPlanTargetAspectAny")}</SelectItem>
+              <SelectItem value="16:9">16:9</SelectItem>
+              <SelectItem value="9:16">9:16</SelectItem>
+              <SelectItem value="1:1">1:1</SelectItem>
+              <SelectItem value="4:5">4:5</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       )}
 
       <div className="flex flex-col gap-1.5">
@@ -1283,6 +1335,12 @@ export function MixAudioConfig({ data, onUpdate, nodes, sources }: ConfigProps<M
 
   const trackVolumes = data.trackVolumes ?? {}
 
+  // The key track is stored by node id, so reordering the tracks cannot
+  // re-point it. One that is no longer connected reads as Off (the run sends
+  // no duck for it either).
+  const duckKey = orderedNodes.some((n) => n.id === data.duckUnder) ? data.duckUnder : undefined
+  const duckAmount = data.duckAmount ?? MIX_DUCK_DEFAULT_AMOUNT
+
   return (
     <div className="flex flex-col gap-3">
       {connectedNodes.length === 0 && (
@@ -1321,6 +1379,54 @@ export function MixAudioConfig({ data, onUpdate, nodes, sources }: ConfigProps<M
           )
         })}
       </div>
+      {orderedNodes.length >= 2 && (
+        <div className="flex flex-col gap-2 border-t border-border pt-3">
+          <div>
+            <Label>{t("proccfg.mixDuckUnder")}</Label>
+            <Select
+              value={duckKey ?? "off"}
+              onValueChange={(v) =>
+                onUpdate(
+                  v === "off"
+                    ? { duckUnder: undefined, duckAmount: undefined }
+                    : { duckUnder: v, duckAmount }
+                )
+              }
+            >
+              <SelectTrigger aria-label={t("proccfg.mixDuckUnderAria")}><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="off">{t("proccfg.mixDuckOff")}</SelectItem>
+                {orderedNodes.map((node) => (
+                  <SelectItem key={node.id} value={node.id}>
+                    {((node.data as Record<string, unknown>)?.label as string) ?? node.type ?? node.id}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {duckKey && (
+            <>
+              <p className="text-xs text-muted-foreground">{t("proccfg.mixDuckHint")}</p>
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <Label htmlFor="mix-duck-amount" className="text-xs">{t("proccfg.mixDuckAmount")}</Label>
+                  <span className="text-xs text-muted-foreground ms-2 tabular-nums">{duckAmount}%</span>
+                </div>
+                <Input
+                  id="mix-duck-amount"
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={duckAmount}
+                  onChange={(e) => onUpdate({ duckAmount: parseInt(e.target.value, 10) })}
+                  className="w-full h-2 accent-[#ff0073]"
+                />
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </div>
   )
 }

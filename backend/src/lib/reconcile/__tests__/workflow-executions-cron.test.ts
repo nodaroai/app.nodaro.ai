@@ -4,12 +4,16 @@ interface JobRow {
   id: string
   status: string
   error_message: string | null
+  /** Absent = the execution owner's ("owner-1"). */
+  user_id?: string
   workflow_execution_id?: string | null
   input_data?: Record<string, unknown> | null
 }
 
 interface ExecutionRow {
   id: string
+  /** Absent = "owner-1". */
+  user_id?: string
   started_at: string | null
   node_states: Record<
     string,
@@ -63,7 +67,7 @@ vi.mock("../../supabase.js", () => {
               // its arguments (it just returns the predetermined dataset).
               const terminal = (rows: ExecutionRow[]) => ({
                 order: () => ({
-                  limit: () => Promise.resolve({ data: rows, error: null }),
+                  limit: () => Promise.resolve({ data: rows.map((r) => ({ user_id: "owner-1", ...r })), error: null }),
                 }),
               })
               // The scan is scoped to this environment's rows (lib/runtime-env.ts).
@@ -125,30 +129,17 @@ vi.mock("../../supabase.js", () => {
         error_message: j.error_message,
         node_id: (j.input_data as Record<string, unknown> | null | undefined)?.node_id ?? null,
       })
-      return {
-        select: () => ({
-          // Path-1 query: .select("id, status, error_message").in("id", [...])
-          in: (_col: string, ids: string[]) =>
-            Promise.resolve({
-              data: mocks.jobs.filter((j) => ids.includes(j.id)).map(project),
-              error: null,
-            }),
-          // Path-2 query: .select(...).eq("workflow_execution_id", X).in("status", [...])
-          eq: (eqCol: string, eqVal: string) => ({
-            in: (inCol: string, inVals: string[]) =>
-              Promise.resolve({
-                data: mocks.jobs
-                  .filter((j) => {
-                    if (eqCol === "workflow_execution_id" && j.workflow_execution_id !== eqVal) return false
-                    if (inCol === "status" && !inVals.includes(j.status)) return false
-                    return true
-                  })
-                  .map(project),
-                error: null,
-              }),
-          }),
-        }),
-      }
+      // Every `.eq` / `.in` is APPLIED (a row with no user_id is the owner's),
+      // so a jobs read that leaves a filter out sees rows it should not.
+      const value = (j: JobRow, col: string): unknown =>
+        col === "user_id" ? (j.user_id ?? "owner-1") : (j as unknown as Record<string, unknown>)[col]
+      const chain = (rows: JobRow[]): Record<string, unknown> => ({
+        eq: (col: string, v: unknown) => chain(rows.filter((j) => value(j, col) === v)),
+        in: (col: string, vals: unknown[]) => chain(rows.filter((j) => vals.includes(value(j, col)))),
+        then: (res: (v: unknown) => unknown, rej?: (e: unknown) => unknown) =>
+          Promise.resolve({ data: rows.map(project), error: null }).then(res, rej),
+      })
+      return { select: () => chain(mocks.jobs) }
     }
     throw new Error(`Unexpected table: ${table}`)
   }
@@ -798,6 +789,31 @@ describe("reconcileWorkflowExecutionsTick", () => {
   // The orphan branch therefore now demands corroboration from the SHARED
   // database — the one place every deployment writes to — before it writes.
   // -------------------------------------------------------------------------
+
+  it("attacker: an in-flight job another user pointed at a dead execution does not keep it alive", async () => {
+    // Before 474 a browser could insert a `processing` job row naming any
+    // execution. Liveness counts only the execution owner's jobs.
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
+    try {
+      mocks.executions.push({
+        id: "exec-dead",
+        started_at: new Date(Date.now() - 10 * 60_000).toISOString(),
+        node_states: { n1: { status: "running", jobId: "planted-by-id" } },
+      })
+      mocks.jobs.push(
+        { id: "planted", user_id: "attacker", status: "processing", error_message: null, workflow_execution_id: "exec-dead", input_data: { node_id: "n1" } },
+        { id: "planted-by-id", user_id: "attacker", status: "processing", error_message: null, workflow_execution_id: null, input_data: {} },
+      )
+      mocks.orchJob.set("exec-dead", undefined)
+
+      await reconcileWorkflowExecutionsTick()
+
+      expect(mocks.updates.map((u) => u.id)).toEqual(["exec-dead"])
+      expect(mocks.updates[0]!.updates.status).toBe("failed")
+    } finally {
+      warnSpy.mockRestore()
+    }
+  })
 
   it("refuses to orphan an execution whose child jobs are still in flight, whatever this Redis says", async () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})

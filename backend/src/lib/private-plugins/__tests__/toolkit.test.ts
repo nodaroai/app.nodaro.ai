@@ -36,6 +36,9 @@ import { buildToolkit } from "../toolkit.js"
 import type { PluginToolkit } from "../types.js"
 import { safeFetch } from "../../safe-fetch.js"
 import { applyImageWatermark } from "../../../utils/watermark.js"
+import { ensureMediaProxy } from "../../../services/media-proxy.js"
+import { proxyFrameToSourceMs } from "../../../services/media-proxy-span-map.js"
+import { detectFaces } from "../../../services/face-detect/detect-faces.js"
 
 describe("buildToolkit", () => {
   let tk: PluginToolkit
@@ -52,6 +55,9 @@ describe("buildToolkit", () => {
 
   it("providers: every member is a function", () => {
     expect(typeof tk.providers.directVoiceChanger).toBe("function")
+    // Optional in the contract, but THIS host answers it — a dropped wiring
+    // line would silently send every plugin to its fallback table.
+    expect(typeof tk.providers.ttsCapabilities).toBe("function")
     expect(typeof tk.providers.separateAudio).toBe("function")
   })
 
@@ -72,6 +78,19 @@ describe("buildToolkit", () => {
     expect(typeof tk.media.mergeVideoAudio).toBe("function")
     expect(typeof tk.media.applyAudioFx).toBe("function")
     expect(typeof tk.media.applyImageWatermark).toBe("function")
+  })
+
+  it("media: the detection proxy and its clock are the real core functions (P3.2; optional in the contract, answered here)", () => {
+    // One clock: the plugin converts a detector's frame index through the
+    // same function that built the map, never a copy of it.
+    expect(tk.media.ensureMediaProxy).toBe(ensureMediaProxy)
+    expect(tk.media.proxyFrameToSourceMs).toBe(proxyFrameToSourceMs)
+  })
+
+  it("media: the face detector is the real core function (P3.3; optional in the contract, answered here)", () => {
+    // Core owns the decode, the session, the admission and the clock; the
+    // plugin passes only the window and its score floor.
+    expect(tk.media.detectFaces).toBe(detectFaces)
   })
 
   it("storage: every member is a function", () => {

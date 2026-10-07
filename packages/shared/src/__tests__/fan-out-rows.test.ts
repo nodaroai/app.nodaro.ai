@@ -7,6 +7,7 @@ import {
   planFanOut,
   alignedFieldList,
   liveRowColumn,
+  pickHeldRow,
   type FanOutCandidate,
 } from "../fan-out-rows.js"
 import { REPEAT_PLACEHOLDER, encodeProviderItem } from "../repeat-types.js"
@@ -204,5 +205,40 @@ describe("alignedFieldList", () => {
 
   it("has no answer when NO element carries the field (an all-blank list is not a list)", () => {
     expect(alignedFieldList([{ a: 1 }, { b: 2 }], "missing")).toBeUndefined()
+  })
+})
+
+describe("pickHeldRow — one value off a list with holes, outside its fan-out", () => {
+  // An Edit Plan's clips as a person's review leaves them: the PLAN's rows,
+  // "" at every dropped clip. Clips 1 and 4 are kept.
+  const rows = ["c1", "", "", "c4"]
+
+  it("a selector that leaves one kept clip reads that clip, never the plan's first kept one", () => {
+    expect(pickHeldRow(rows, { selectorMode: "list", listExpression: "2,4" }, false)).toEqual({ kind: "value", value: "c4" })
+    expect(pickHeldRow(rows, { outputMode: "each", rangeFrom: "3", rangeTo: "last" }, false)).toEqual({ kind: "value", value: "c4" })
+  })
+
+  it("a selector that leaves no kept clip reads nothing", () => {
+    expect(pickHeldRow(rows, { selectorMode: "list", listExpression: "2,3" }, false)).toEqual({ kind: "none" })
+  })
+
+  it("a selector that leaves several reads the first kept clip OF THE SELECTION", () => {
+    expect(pickHeldRow(["", "c2", "c3", "c4"], { selectorMode: "list", listExpression: "4,3" }, false)).toEqual({ kind: "value", value: "c4" })
+  })
+
+  it("an item pick on a dropped clip reads nothing; on a kept clip, that clip", () => {
+    expect(pickHeldRow(rows, { outputMode: "item", itemIndex: "2" }, false)).toEqual({ kind: "none" })
+    expect(pickHeldRow(rows, { outputMode: "item", itemIndex: "last" }, false)).toEqual({ kind: "value", value: "c4" })
+    expect(pickHeldRow(rows, { outputMode: "item:1" }, false)).toEqual({ kind: "none" })
+    expect(pickHeldRow(rows, { outputMode: "item:0" }, true)).toEqual({ kind: "value", value: "c1" })
+  })
+
+  it("leaves every other read alone: a default each edge, Selected, Bundle, and an each edge inside its fan-out", () => {
+    expect(pickHeldRow(rows, undefined, false)).toEqual({ kind: "unaffected" })
+    expect(pickHeldRow(rows, { outputMode: "each" }, false)).toEqual({ kind: "unaffected" })
+    expect(pickHeldRow(rows, { outputMode: "last", selectorMode: "list", listExpression: "2" }, false)).toEqual({ kind: "unaffected" })
+    expect(pickHeldRow(rows, { outputMode: "all", selectorMode: "list", listExpression: "2" }, false)).toEqual({ kind: "unaffected" })
+    expect(pickHeldRow(rows, { selectorMode: "list", listExpression: "2,4" }, true)).toEqual({ kind: "unaffected" })
+    expect(pickHeldRow([], { outputMode: "item", itemIndex: "2" }, false)).toEqual({ kind: "unaffected" })
   })
 })

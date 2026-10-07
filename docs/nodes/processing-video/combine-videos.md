@@ -116,6 +116,8 @@ default 8. The run proceeds; it is never rejected for this.
 **Inputs:** 2+ video clips (connected via input handles)
 **Outputs:** Single combined video
 
+**One input passes through.** In a workflow, when only one video reaches Combine Videos, the node outputs that video unchanged, at no cost. Calling the API directly still needs at least two videos.
+
 ## Credit Cost
 
 Combine Videos is **dynamically priced** based on output length and input count:

@@ -646,3 +646,70 @@ describe("extractAppInputSchema — a field published under its older key", () =
     expect(schema.keyMap["narration_similarityboost"]).toEqual({ nodeId: "tts1", fieldKey: "similarityBoost", type: "number" })
   })
 })
+
+describe("extractAppInputSchema — UGC Creator's extra keys (spec §6.6)", () => {
+  const creatorApp = (label = "Creator") => ({
+    snapshotSettings: { presentationSettings: { inputItems: [{ type: "node" as const, nodeId: "creator" }] } },
+    snapshotNodes: [{ id: "creator", type: "ugc-creator", data: { label } }],
+  })
+
+  it("one creator card surfaces source, gender and the photo as three fields", () => {
+    const schema = extractAppInputSchema(creatorApp())
+    expect(schema.fields.map((f) => [f.key, f.type])).toEqual([
+      ["creator", "select"],
+      ["creator_gender", "select"],
+      ["creator_photo_url", "image"],
+    ])
+    expect(schema.keyMap).toEqual({
+      creator: { nodeId: "creator", fieldKey: "source" },
+      creator_gender: { nodeId: "creator", fieldKey: "gender" },
+      creator_photo_url: { nodeId: "creator", fieldKey: "photoUrl" },
+    })
+  })
+
+  it("gives source and gender their option lists, and marks only the primary field required", () => {
+    const [source, gender, photo] = extractAppInputSchema(creatorApp()).fields
+    expect(source!.options).toEqual(["sampled", "photo"])
+    expect(gender!.options).toEqual(["woman", "man"])
+    expect(photo!.options).toBeUndefined()
+    expect([source!.required, gender!.required, photo!.required]).toEqual([true, false, false])
+  })
+
+  it("keeps the extra keys collision-safe when another field already has the slug", () => {
+    const schema = extractAppInputSchema({
+      snapshotSettings: {
+        presentationSettings: {
+          inputItems: [
+            { type: "node", nodeId: "t" },
+            { type: "node", nodeId: "creator" },
+          ],
+        },
+      },
+      snapshotNodes: [
+        { id: "t", type: "text-prompt", data: { label: "creator_gender" } },
+        { id: "creator", type: "ugc-creator", data: { label: "Creator" } },
+      ],
+    })
+    const keys = schema.fields.map((f) => f.key)
+    expect(new Set(keys).size).toBe(keys.length)
+    expect(schema.keyMap[keys[2]!]).toEqual({ nodeId: "creator", fieldKey: "gender" })
+  })
+
+  it("a flat run request lands each value on its own node field", () => {
+    const schema = extractAppInputSchema(creatorApp())
+    expect(
+      flatInputsToOverrides(
+        { creator: "photo", creator_gender: "man", creator_photo_url: "https://cdn.example/p.png" },
+        schema.keyMap,
+      ),
+    ).toEqual({ creator: { source: "photo", gender: "man", photoUrl: "https://cdn.example/p.png" } })
+  })
+
+  it("a node type with no extra keys is unchanged", () => {
+    const schema = extractAppInputSchema({
+      snapshotSettings: { presentationSettings: { inputItems: [{ type: "node", nodeId: "n1" }] } },
+      snapshotNodes: [{ id: "n1", type: "tone", data: { label: "Tone" } }],
+    })
+    expect(schema.fields).toHaveLength(1)
+  })
+})

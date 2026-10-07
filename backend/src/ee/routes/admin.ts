@@ -4,6 +4,7 @@ import { supabase } from "../../lib/supabase.js"
 import { requireAdmin } from "../middleware/require-admin.js"
 import { requirePlatformOperator } from "../middleware/require-platform-operator.js"
 import { collectAppR2Keys } from "../../lib/collect-app-r2-keys.js"
+import { appRunContentRedaction } from "../../lib/app-run-content.js"
 import { deletableKeys } from "../../lib/asset-delete.js"
 import { batchDeleteFromR2 } from "../../lib/storage.js"
 import { formatZodError } from "../../lib/zod-error.js"
@@ -526,8 +527,12 @@ export async function adminRoutes(app: FastifyInstance) {
   // DELETE /v1/admin/apps/:appId/expunge — Hard-delete a soft-deleted app
   // for legal compliance (GDPR right-to-erasure, takedown requests). Two-
   // step gate: app must be soft-deleted first. Earnings + run records are
-  // preserved with snapshot columns; user content (run inputs/outputs +
-  // R2 files) is erased.
+  // preserved with snapshot columns; user content (each run's
+  // APP_RUN_USER_CONTENT_COLUMNS — the runner's inputs, edited results and
+  // run label — plus the R2 files the app owns) is erased. Objects a runner's
+  // input points at but the app never made (their uploads, pasted library
+  // urls) are kept: collectAppR2Keys leaves out every key a library row ties
+  // to something other than this app's own jobs.
   app.delete("/v1/admin/apps/:appId/expunge", { preHandler: requireAdmin }, async (req, reply) => {
     if (!req.userId) return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
     const userId = req.userId
@@ -580,7 +585,7 @@ export async function adminRoutes(app: FastifyInstance) {
 
     const { error: redactError } = await supabase
       .from("app_runs")
-      .update({ input_data: null, output_data: null })
+      .update(appRunContentRedaction())
       .eq("app_id", appId)
     if (redactError) {
       console.error(`[admin-expunge] run redact failed for ${appId}:`, redactError.message)

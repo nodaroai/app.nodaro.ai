@@ -50,6 +50,8 @@ export interface VideoOverlayGraphLayer {
   /** 0-based index in the request's layers[] (messages / warnings). */
   readonly index: number
   readonly slot?: number
+  /** 1-based layer-plan entry (instead of `slot`); orders the plan under the slot layers. */
+  readonly planLayer?: number
   /** The pre-fitted PNG. */
   readonly path: string
   /** What the pre-fit actually wrote — must equal `drawn`. */

@@ -7,9 +7,9 @@ import {
 import { assembleVideoOverlayRequest, formatVideoOverlayError, validateVideoOverlayRequest, videoOverlayCompositionKey, videoOverlaySlotSources, type VideoOverlayNodeFields } from "@nodaro/shared"
 import { effectiveContentModel, contentRecipeCreditId, contentIdeasCreditId, clampContentIdeasCount, CONTENT_RECIPE_SOURCE_MAX, CONTENT_IDEAS_MAX_RECIPE_INPUTS, CONTENT_IDEAS_BRAND_MAX, CONTENT_IDEAS_LANGUAGE_MAX } from "@nodaro/shared"
 import { TELEGRAM_ACCOUNT_SEND_NODE_TYPE, telegramSendAsOf, telegramSendDestinationOf } from "@nodaro/shared"
-import { DEFAULT_TEXT_TO_AUDIO_PROVIDER } from "@nodaro/shared"
+import { DEFAULT_TEXT_TO_AUDIO_PROVIDER, dialogueProviderOf, getDialogueCapabilities } from "@nodaro/shared"
 import { LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec, LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec, textToAudioCreditId } from "@nodaro/shared"
-import { applyEdlCreditId } from "@nodaro/shared"
+import { applyEdlCreditId, isRenderNodeType, renderPlanBasis, renderPlanClipKey, renderPlanRowClipKeys, renderRunQuality, renderSentRowStamps, type RunResultRowStamp } from "@nodaro/shared"
 import type { Scene3DReference } from "@nodaro/shared"
 import { scene3DInputAssetsForEngine, type Scene3DInputAsset } from "@nodaro/shared"
 import { socialSearchRequestFromNode, socialSearchCreditId, socialSearchPickTop } from "@nodaro/shared"
@@ -23,8 +23,8 @@ import { normalizeCollageLabels } from "../../providers/image/collage-badges.js"
 
 // Shared logic from packages/shared — single source of truth
 import { resolveVideoRequestNorm } from "../../lib/video-request-norm.js"
-import { resolveSlideshowTransition, collectAncestorRefs as sharedCollectAncestorRefs, applyDefaultVideoSelection, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionableAssetArrays, buildCreditModelIdentifier, sunoCreditType, resolveImageGenCreditIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, applyVideoNegativePrompt, resolveVideoProviderForMode, resolveVideoModeForInputs, videoProviderRequiresImage, isVeoProvider, buildLipSyncCreditId, isPerSecondLipSyncProvider, resolveAiAvatarCreditId, resolveSwitchXCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, buildVideoAuditCreditId, resolveVideoAnalysisModel, extractReferencedLabels, combineSameLabelRefs, refHandleCategory, canonicalVarName, validateAiAvatarPayload, validateCinematicAvatarPayload, resolveNodeRefs, readScriptSettings, speedRampCreditId, resolveEffectiveSourceType, PARAMETER_NODE_TYPES, characterMentionSlug, expandExtraRefsToConnectedReferences, PLATFORM_SPECS, isSeedance2Provider, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, seedanceVideoEditCreditId, isMinimaxH3Provider, isWan3Provider, isGeminiOmniProvider, PRICING_DEFAULT_RESOLUTION, supportsExtendRender, MODEL_CATALOG, hasFeature, referenceModalityForHandle, countRefModalityEdges as countRefModalityEdgesCore, type ReferenceModality, COMPOSER_PLAN_MAP, ASPECT_RATIO_DIMENSIONS, buildLlmCreditIdentifier, motionGraphicsFeature, FLUX_LORA_CHARACTER_MODEL_ID, extractCharacterLoraFields, clampSmartCutWindow, resolveGvpAnchorWire, normalizeModelInput, readPromptAffixes, findImageMentionTokens, knownImageSlugsFromRefs, findEntityMentionTokens, knownEntitySlugsFromRefs, uiAspectRatioFill, uiResolutionFill, resolveTopazUpscale, unresolvedRefTokens, classifyRefToken, parseNodeRef, NODE_REF_PATTERN, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY, newScene3DRevisionId, resolveScene3DAuthoringEngine, scene3DPlanSchema, PRO3D_RENDER_CREDIT_ID, PRO3D_RENDER_DEFAULT_ENGINE, buildPro3DRenderSource, pro3DRenderTimingOverrides, renderVideoCreditId, VIDEO_ONLY_PARAMETER_NODE_TYPES, EXECUTION_GRAPH_COMPOSED_PARAMETER_TYPES, normalizeTranscript, captionRoutesToRemotion, normalizeCaptionNumericLevers, buildEditPlanCreditId, asEditPlanMode, asEditPlanTier, transcriptDurationSec, DEFAULT_TRANSCRIBE_NODE_PROVIDER, transcribeLaneSupportsWordTimestamps, transcribeWordTimestampsRefusal, resolveMusicProvider, MUSIC_CREDIT_ID, isSettingsHintEdge, type Scene3DPlan } from "@nodaro/shared"
-import { composeNegative, resolveTemplate, applyTemplate, computeNodePrompt, appendPromptHints, joinSentences, computeScriptTopic, assembleImageInput, readDirectionFields, readStructuredFields, readSubjectFields, buildImagePrompt, buildScenePrompt, collectIdentityLockClause as sharedCollectIdentityLockClause, getParameterPromptHint, characterLockToRefLock, buildCharacterPrompt, buildObjectPrompt, buildCreaturePrompt, buildLocationPrompt, buildFaceTemplateInputs, appendMusicMeta, composeSoundHintFromConnections, truncateForField, appendField, assembleSunoInput, type SoundConsumerType, type SoundComposition, resolveVideoReferenceCore, buildSeedanceVideoEditPrompt, applyPromptAffixes, composeVideoPromptText, ownMotionHint, isMinorAge, containsMinorAgeHint, type DirectionFields, type StructuredPromptFields, type SubjectFields, NODE_PROMPT_CANDIDATE_FIELDS } from "@nodaro/prompts"
+import { resolveSlideshowTransition, collectAncestorRefs as sharedCollectAncestorRefs, applyDefaultVideoSelection, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionableAssetArrays, buildCreditModelIdentifier, sunoCreditType, resolveImageGenCreditIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, applyVideoNegativePrompt, resolveVideoProviderForMode, resolveVideoModeForInputs, videoProviderRequiresImage, isVeoProvider, buildLipSyncCreditId, isPerSecondLipSyncProvider, resolveAiAvatarCreditId, resolveSwitchXCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, buildVideoAuditCreditId, resolveVideoAnalysisModel, extractReferencedLabels, combineSameLabelRefs, refHandleCategory, canonicalVarName, validateAiAvatarPayload, validateCinematicAvatarPayload, resolveNodeRefs, readScriptSettings, speedRampCreditId, resolveEffectiveSourceType, PARAMETER_NODE_TYPES, characterMentionSlug, expandExtraRefsToConnectedReferences, PLATFORM_SPECS, isSeedance2Provider, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, seedanceVideoEditCreditId, isMinimaxH3Provider, isWan3Provider, isGeminiOmniProvider, PRICING_DEFAULT_RESOLUTION, supportsExtendRender, MODEL_CATALOG, hasFeature, referenceModalityForHandle, countRefModalityEdges as countRefModalityEdgesCore, type ReferenceModality, COMPOSER_PLAN_MAP, ASPECT_RATIO_DIMENSIONS, buildLlmCreditIdentifier, motionGraphicsFeature, FLUX_LORA_CHARACTER_MODEL_ID, extractCharacterLoraFields, clampSmartCutWindow, resolveGvpAnchorWire, normalizeModelInput, readPromptAffixes, findImageMentionTokens, knownImageSlugsFromRefs, findEntityMentionTokens, knownEntitySlugsFromRefs, uiAspectRatioFill, uiResolutionFill, resolveTopazUpscale, unresolvedRefTokens, classifyRefToken, parseNodeRef, NODE_REF_PATTERN, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY, newScene3DRevisionId, resolveScene3DAuthoringEngine, scene3DPlanSchema, PRO3D_RENDER_CREDIT_ID, PRO3D_RENDER_DEFAULT_ENGINE, buildPro3DRenderSource, pro3DRenderTimingOverrides, renderVideoCreditId, VIDEO_ONLY_PARAMETER_NODE_TYPES, EXECUTION_GRAPH_COMPOSED_PARAMETER_TYPES, normalizeTranscript, captionRoutesToRemotion, normalizeCaptionNumericLevers, buildEditPlanCreditId, parseEditPlanMode, EDIT_PLAN_MODES, asEditPlanTier, transcriptDurationSec, DEFAULT_TRANSCRIBE_NODE_PROVIDER, transcribeLaneSupportsWordTimestamps, transcribeWordTimestampsRefusal, resolveMusicProvider, MUSIC_CREDIT_ID, isSettingsHintEdge, type Scene3DPlan, styleCaptionPlan } from "@nodaro/shared"
+import { composeNegative, resolveTemplate, applyTemplate, computeNodePrompt, appendPromptHints, joinSentences, computeScriptTopic, assembleImageInput, readDirectionFields, readStructuredFields, readSubjectFields, buildImagePrompt, buildScenePrompt, collectIdentityLockClause as sharedCollectIdentityLockClause, getParameterPromptHint, characterLockToRefLock, buildCharacterPrompt, buildObjectPrompt, buildCreaturePrompt, buildLocationPrompt, buildFaceTemplateInputs, appendMusicMeta, composeSoundHintFromConnections, truncateForField, appendField, assembleSunoInput, type SoundConsumerType, type SoundComposition, resolveVideoReferenceCore, buildSeedanceVideoEditPrompt, applyPromptAffixes, composeVideoPromptText, ownMotionHint, isMinorAge, containsMinorAgeHint, type DirectionFields, type StructuredPromptFields, type SubjectFields, NODE_PROMPT_CANDIDATE_FIELDS, hookPlateCaptionSegments, CAPTION_SEGMENT_LEVER_KEYS } from "@nodaro/prompts"
 import { labelRefHintContext } from "./label-ref-hint-context.js"
 import type { CharacterDef, ConnectedReference, SceneData, ExtraRefInput, ExtraRefCharacterContext } from "@nodaro/shared"
 import type { CharacterMeta } from "@nodaro/prompts"
@@ -41,14 +41,16 @@ import { mergeScene3DReferences } from "../scene3d/scene3d-references.js"
 import { imageRequiredMessage } from "../../lib/video-image-required.js"
 import { isVoiceGenderAllowed, premadeVoiceGender } from "../../lib/voice-policy.js"
 import { resolveOmittedTtsProvider } from "../../lib/omitted-tts-provider.js"
+import { getMaxTtsChars } from "@nodaro/shared"
+import { speechRunsAs } from "../../lib/speech-credits.js"
 import { applyPromptPolicies } from "../../lib/prompt-policy.js"
 import { ltxCameraMotionFromUpstream } from "../../lib/ltx-camera-motion.js"
 import { buildSeedanceExtendCreditIdentifier } from "../../lib/seedance-extend-model.js"
-import { buildEffectiveEdl, validateEffectiveEdl } from "../../lib/apply-edl-plan.js"
+import { buildEffectiveEdl, effectiveRenderBasis, validateEffectiveEdl } from "../../lib/apply-edl-plan.js"
 import { audioSyncCreditId } from "../../lib/audio-sync-credit-id.js"
 import { AUDIO_SYNC_MAX_SOURCES, AUDIO_SYNC_MIN_SOURCES } from "../../providers/audio/audio-sync-budget.js"
 import { extractSavedNodeOutput, extractSourceNodeOutput, getPrimaryOutput, savedOutputFor } from "./output-extractor.js"
-import { savedDataAllowed } from "./saved-data.js"
+import { savedDataAllowed, listFor } from "./saved-data.js"
 import {
   appendScene3DStillScopingLines,
   collectScene3DLayoutReferences,
@@ -60,6 +62,11 @@ import { IMAGE_SOURCE_TYPES, VIDEO_SOURCE_TYPES, AUDIO_SOURCE_TYPES, isSourceNod
 import { OVERLAY_MAX_LAYERS } from "../../providers/image/overlay-contract.js"
 import { dropNullCaptionLevers } from "../../providers/video/caption-segments.js"
 import type { FrameFit, FrameDelivery } from "@nodaro/shared"
+import { editPlanModeRefusal } from "../../lib/private-plugins/edit-plan-mode-gate.js"
+
+/** Every Edit Plan mode this app knows — the orchestrator's plannable set,
+ *  since it loads no plugin to read a declaration from. */
+const KNOWN_EDIT_PLAN_MODES: ReadonlySet<string> = new Set(EDIT_PLAN_MODES)
 
 // ---------------------------------------------------------------------------
 // Character definitions + prompt template types (from workflow settings)
@@ -100,6 +107,10 @@ export interface PayloadBuildContext {
    *  `viewerForNode` because this builder is synchronous. ABSENT = a user:
    *  a caller that does not say who is asking never gets the admin's view. */
   viewer?: AvailabilityViewer
+  /** The list ROW a fan-out iteration reads (`plan.rows[i]`), absent for a node
+   *  run once and for a Repeat xN copy nothing list-drives. A render reads its
+   *  plan clip's identity from it. */
+  listRow?: number
 }
 
 // ---------------------------------------------------------------------------
@@ -1921,7 +1932,9 @@ export function buildNodeRefMap(
         output = state.output.videoUrl
       } else if (state?.output?.audioUrl) {
         output = state.output.audioUrl
-      } else if (state?.output?.json !== undefined && state.output.json !== null) {
+      } else if (state?.output?.json !== undefined && state.output.json !== null && !(Array.isArray(state.output.json) && state.output.json.length === 0)) {
+        // (An empty list is nothing to reference — a feed or a collection read
+        // with no posts this run must not resolve `{Feed}` to "[]".)
         // Structured producers (web-scrape, video-analysis / video-audit) carry
         // their result on `json` only. Stringified so {Label} in a prompt gets
         // the data — the same text getPrimaryOutput hands a wired consumer.
@@ -2314,6 +2327,11 @@ function scene3DWarningsField(args: {
  * a denied model reaches dispatch through an UNSET `data.provider`. The surface
  * MODEL-deny backstop must consult this same value or that path bypasses it.
  *
+ * A text-to-dialogue node dispatches and bills `dialogueProviderOf(data.provider)`
+ * — an unset, unknown or non-string provider RUNS as v3 dialogue — so the deny
+ * check reads that same resolved id: a node that merely omits `provider` (every
+ * node saved before the field existed) cannot run a model the deployment denied.
+ *
  * Every OTHER node type dispatches on `data.provider` alone — this deliberately
  * does NOT read `resolvedInputs.provider` for them, so a node that merely carries
  * an unrelated `resolvedInputs.provider` is never falsely denied. Uses `||` to
@@ -2334,7 +2352,90 @@ export function effectiveDispatchProvider(
   if (nodeType === "text-to-speech") {
     return resolvedInputs?.provider || dataProvider
   }
+  if (nodeType === "text-to-dialogue") {
+    return dialogueProviderOf(dataProvider)
+  }
   return dataProvider
+}
+
+/** The clip key an Apply EDL iteration stamps: the clip its list row reads of
+ *  the Edit Plan behind its `edl` input (through teleports and Camera Switch,
+ *  picked by every wire's selector on the way — `renderPlanClipKey`, the rule
+ *  the editor calls too), read as the run holds that plan: this run's clips,
+ *  or its saved ones when the run passed it through (`listFor`). */
+function applyEdlClipKey(node: SimpleNode, buildCtx: PayloadBuildContext | undefined): string | undefined {
+  const nodes = buildCtx?.nodes
+  const edges = buildCtx?.edges
+  if (!nodes || !edges) return undefined
+  return renderPlanClipKey(
+    node.id,
+    nodes,
+    edges,
+    (planNode) => listFor(planNode as SimpleNode, buildCtx?.nodeStates?.[planNode.id]),
+    buildCtx?.listRow,
+  )
+}
+
+/** What EVERY row of a render's fan-out is stamped with before it runs,
+ *  row-aligned with its batch (`renderSentRowStamps`, the rule the editor's
+ *  list execution calls too): the quality the run renders at, and the clip
+ *  each iteration's list row (`rows[k]`, never `k`) is sent for — the key
+ *  `applyEdlClipKey` gives it, read from the plan as the run holds it when the
+ *  fan-out begins (`renderPlanRowClipKeys`). Behind a Camera Switch that did
+ *  not run in this run no row is keyed (the same-run rule: the render iterates
+ *  the switch's SAVED batch, which an older review can have made). The
+ *  orchestrator stamps it on every batch row, a failed one included, so a
+ *  reader matches a row to its clip by key (decided 2026-10-06). `undefined`
+ *  for a node that is not a render. */
+export function applyEdlRowSentStamps(
+  node: SimpleNode,
+  nodes: readonly SimpleNode[],
+  edges: readonly SimpleEdge[],
+  nodeStates: Readonly<Record<string, NodeExecutionState>>,
+  rows: ReadonlyArray<number | undefined>,
+): RunResultRowStamp[] | undefined {
+  if (!isRenderNodeType(node.type)) return undefined
+  const keys = renderPlanRowClipKeys(
+    node.id,
+    nodes,
+    edges,
+    (planNode) => listFor(planNode as SimpleNode, nodeStates[planNode.id]),
+    rows,
+    ranNodeIds(nodeStates),
+  )
+  return renderSentRowStamps(renderRunQuality(node.data as Record<string, unknown> | undefined), keys)
+}
+
+/** The nodes executed in this run: their state is the run's own
+ *  (`savedDataAllowed` is false) and completed. */
+function ranNodeIds(states: Readonly<Record<string, NodeExecutionState>>): Set<string> {
+  return new Set(
+    Object.entries(states)
+      .filter(([, state]) => !savedDataAllowed(state) && state.status === "completed")
+      .map(([id]) => id),
+  )
+}
+
+/** The plan basis an Apply EDL iteration stamps (`renderPlanBasis`, the rule
+ *  the editor calls too): the plan value its row reads, as the run holds the
+ *  plan — this run's output, or its seeded saved one (the review applied) —
+ *  and only when every Camera Switch between them ran in this run. A node ran
+ *  in this run when its state is this run's own (`savedDataAllowed` is false)
+ *  and completed. */
+function applyEdlPlanBasis(node: SimpleNode, buildCtx: PayloadBuildContext | undefined): string | undefined {
+  const nodes = buildCtx?.nodes
+  const edges = buildCtx?.edges
+  if (!nodes || !edges) return undefined
+  const states = buildCtx?.nodeStates ?? {}
+  const ranIds = ranNodeIds(states)
+  return renderPlanBasis(
+    node.id,
+    nodes,
+    edges,
+    (planNode) => listFor(planNode as SimpleNode, states[planNode.id]) ?? states[planNode.id]?.output?.json,
+    buildCtx?.listRow,
+    ranIds,
+  )
 }
 
 export function buildPayload(
@@ -4198,7 +4299,14 @@ export function buildPayload(
     // the reserved bucket), so an unknown duration here takes the ceiling bucket —
     // the safe over-reserve direction.
     case "edit-plan": {
-      const mode = asEditPlanMode(data.mode)
+      // An unknown mode fails the node BEFORE the reservation, in the words
+      // every lane uses (decided 2026-10-06) — never planned as tighten. This
+      // process loads no plugin, so it checks only that the mode is KNOWN; a
+      // known mode the plugin has not declared is refused (and refunded) by the
+      // worker's gate, and on a self-host by the relay's.
+      const modeRefusal = editPlanModeRefusal(data.mode, KNOWN_EDIT_PLAN_MODES)
+      if (modeRefusal) throw new Error(modeRefusal)
+      const mode = parseEditPlanMode(data.mode) ?? "tighten"
       const tier = asEditPlanTier(data.planTier)
       // The plugin's coerceTranscript/coerceSilence read OBJECTS. Parse the
       // stringified json that arrives on the `transcript`/`silence` json handles
@@ -5064,6 +5172,22 @@ export function buildPayload(
       // turbo above it, measured on the text this node sends. It is also what the node
       // is billed as (modelIdentifier below), so the model billed is the model run.
       const provider = effectiveDispatchProvider(type, data, resolvedInputs) || resolveOmittedTtsProvider(ttsText)
+      // Over the cap of the model this text will RUN on: refuse before any
+      // reservation, with the numbers (decided 2026-10-06, Q-OVERCAP). The REST
+      // route truncates instead (warn-don't-block, its documented contract); on
+      // this lane nothing clamps, so the alternative was sending it unclamped
+      // and paying for a mid-run vendor reject. The alias and an unknown id are
+      // judged by the cap of the model they run as (turbo), never the 5,000
+      // default `getMaxTtsChars` answers for an id with no sheet.
+      const speechRunsAsId = speechRunsAs(provider)
+      const speechCap = getMaxTtsChars(speechRunsAsId)
+      if (ttsText.length > speechCap) {
+        const err = new Error(
+          `text is ${ttsText.length} characters; ${speechRunsAsId} takes at most ${speechCap} per request. Split the script into several calls, or pick a model with a larger cap.`,
+        ) as Error & { errorCode?: string }
+        err.errorCode = "text_too_long"
+        throw err
+      }
       // The EFFECTIVE voice + type this node will DISPATCH — computed once with
       // the same precedence the payload below uses, so the value we vet is byte-
       // identical to the value we send.
@@ -5102,6 +5226,10 @@ export function buildPayload(
           style: data.style,
           speed: data.speed,
           languageCode: data.languageCode,
+          // Continuity across clips — forwarded as the node (or a field mapping) wrote them; the
+          // exit normalises (neighbour-text.ts) and the sheet decides whether they are sent.
+          previousText: data.previousText,
+          nextText: data.nextText,
           usageLogId,
         },
       }
@@ -5239,10 +5367,27 @@ export function buildPayload(
           throw err
         }
       }
-      return simpleResult("text-to-dialogue", "elevenlabs-dialogue", {
+      // The model the node runs on: `effectiveDispatchProvider` is what the
+      // deployment model-deny check above read, so deny and dispatch agree; an
+      // unknown id runs (and is billed) as v3 dialogue.
+      const dialogueProvider = dialogueProviderOf(effectiveDispatchProvider(type, data, resolvedInputs))
+      // Fail HONESTLY before dispatch when the script exceeds the model's total
+      // cap — the route's Zod cannot see this path, and the provider would
+      // refuse it mid-run after credits reserve. Refused unconditionally, before
+      // any reservation, with a stable code (length pricing never prices over-cap text).
+      const dialogueCap = getDialogueCapabilities(dialogueProvider).maxChars
+      const dialogueTotal = filteredDialogue.reduce((sum, l) => sum + l.text.length, 0)
+      if (dialogueTotal > dialogueCap) {
+        const err = new Error(`Text to Dialogue has ${dialogueTotal} characters of dialogue; this model takes at most ${dialogueCap} characters in total — shorten the lines or split them across two nodes`) as Error & { errorCode?: string }
+        err.errorCode = "text_too_long"
+        throw err
+      }
+      return simpleResult("text-to-dialogue", dialogueProvider, {
         jobId,
+        provider: dialogueProvider,
         dialogue: filteredDialogue,
         stability: data.stability,
+        similarityBoost: data.similarityBoost,
         languageCode: data.languageCode,
         seed: data.seed,
         applyTextNormalization: data.applyTextNormalization,
@@ -5877,7 +6022,7 @@ export function buildPayload(
       const rawEdlInput = resolvedInputs.edl ?? (data.edl as unknown)
       const rawEdl = typeof rawEdlInput === "string" ? parseJsonOrUndefined(rawEdlInput) : rawEdlInput
       const output = data.output === "audio" ? "audio" : "video"
-      const quality = data.quality === "proxy" ? "proxy" : "final"
+      const quality = renderRunQuality(data as Record<string, unknown>)
       const crossfadeMs = typeof data.crossfadeMs === "number" ? data.crossfadeMs : 0
       const effectiveEdl = buildEffectiveEdl(rawEdl, { crossfadeMs, sourceOverrides: resolvedInputs.sources })
       const validation = validateEffectiveEdl(effectiveEdl, output)
@@ -5887,6 +6032,14 @@ export function buildPayload(
         throw new Error(`apply-edl: invalid EDL — ${shown.join("; ")}${more > 0 ? ` (+${more} more)` : ""}`)
       }
       const transcript = resolvedInputs.transcript ?? (typeof data.transcript === "string" ? data.transcript : undefined)
+      // The plan clip this iteration cuts (A1b): taken from the Edit Plan ROW
+      // the iteration reads, never from the EDL rendered here — Camera Switch
+      // can move a clip's outer span inward. Stamped on the result as given.
+      const clipKey = applyEdlClipKey(node, buildCtx)
+      // The plan value it cuts (A3-1) — only when it reads the plan's own value
+      // (the same-run rule) — and its own settings with the effective sources.
+      const planBasis = applyEdlPlanBasis(node, buildCtx)
+      const renderBasis = effectiveRenderBasis(effectiveEdl, { output, crossfadeMs })
       // The job is always `apply-edl`; the run reserves on the row of its
       // quality (a preview on `apply-edl:proxy`) — the id the route reserves
       // on, and the one applyEdlCreditOverride prices from `payload.quality`.
@@ -5898,6 +6051,9 @@ export function buildPayload(
           transcript,
           output,
           quality,
+          ...(clipKey ? { clipKey } : {}),
+          ...(planBasis ? { planBasis } : {}),
+          renderBasis,
           usageLogId,
         },
         applyEdlCreditId(quality),
@@ -6334,6 +6490,7 @@ export function buildPayload(
         videoUrl: resolvedInputs.videoUrl ?? "",
         data: overlayData,
         wiredImageUrls,
+        planLayers: resolvedInputs.layerPlan,
       })
       const verdict = validateVideoOverlayRequest(request)
       if (!verdict.ok) throw new Error(`Video Overlay: ${formatVideoOverlayError(verdict)}`)
@@ -6346,6 +6503,7 @@ export function buildPayload(
         baseUrl: resolvedInputs.videoUrl,
         sources: videoOverlaySlotSources(overlayData.layers, wiredImageUrls),
         data: overlayData,
+        planLayers: resolvedInputs.layerPlan,
       })
       return ffmpegResult("video-overlay", { jobId, ...request, resultCompositionKey, usageLogId })
     }
@@ -6431,6 +6589,22 @@ export function buildPayload(
       })
 
     case "add-captions": {
+      // A wired caption plan (spec §6.2): the plate is Hook Plate, the body this
+      // node's style — styled by the ONE shared composition, checked against the
+      // route's segment schema here (before the reservation). With a plan the
+      // request carries ONLY videoUrl, segments and usageLogId: no top-level
+      // lever may leak into the plate by segment inheritance.
+      if (resolvedInputs.captionPlan !== undefined) {
+        const styled = styleCaptionPlan(resolvedInputs.captionPlan, data, { segmentsFor: hookPlateCaptionSegments, leverKeys: CAPTION_SEGMENT_LEVER_KEYS })
+        if ("error" in styled) throw new Error(`add-captions: ${styled.error}`)
+        // segments: [] never reaches here — pass-through.ts outputs the video first.
+        return ffmpegResult("add-captions", {
+          jobId,
+          videoUrl: resolvedInputs.videoUrl || data.videoUrl,
+          segments: styled.segments,
+          usageLogId,
+        }, captionRoutesToRemotion({ segments: styled.segments }) ? "add-captions:kinetic" : "add-captions")
+      }
       // COERCE the numeric levers first (root CLAUDE.md pitfall 5b): node data
       // written by an agent / import / template never passed the route Zod, and an
       // out-of-range fontSize / strokeWidth / positionY / fontWeight / maxWordsPerLine
@@ -6567,10 +6741,25 @@ export function buildPayload(
         trackVolumes = data.volumes as number[]
       }
 
+      // Ducking: the node names its key track by node id (like trackVolumes);
+      // the worker wants its index in the final order. A key that is no longer
+      // connected simply means no duck — never a failed run.
+      const duckUnder = typeof data.duckUnder === "string" ? data.duckUnder : undefined
+      const duckIndex = duckUnder && orderedEntries.length > 0
+        ? orderedEntries.findIndex((e) => e.nodeId === duckUnder)
+        : -1
+      const duckAmount = typeof data.duckAmount === "number" && Number.isFinite(data.duckAmount)
+        ? Math.min(100, Math.max(0, data.duckAmount))
+        : undefined
+      const duck = duckIndex >= 0
+        ? { under: duckIndex, ...(duckAmount !== undefined ? { amount: duckAmount } : {}) }
+        : undefined
+
       return ffmpegResult("mix-audio", {
         jobId,
         audioUrls: mixAudioUrls,
         trackVolumes,
+        ...(duck ? { duck } : {}),
         usageLogId,
       })
     }

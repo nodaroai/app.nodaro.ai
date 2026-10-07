@@ -85,6 +85,8 @@ cd /work/repo
 # yt-dlp binary; neither is wanted (or present) in this measurement container.
 export YOUTUBE_DL_SKIP_DOWNLOAD=1
 export YOUTUBE_DL_SKIP_PYTHON_CHECK=1
+# onnxruntime-node's postinstall would fetch CUDA libraries from NuGet on x64.
+export ONNXRUNTIME_NODE_INSTALL=skip
 # The lockfile is written by npm 11; node:22-slim ships npm 10. Pin the same
 # npm CI uses (ci.yml "Pin npm version" step) or npm ci rejects the lockfile.
 corepack enable npm

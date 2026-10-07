@@ -23,6 +23,10 @@ export interface ViewProps {
   getNodeStatus: (nodeId: string) => OutputStatus
   getResult: (nodeId: string) => { url?: string; text?: string }
   getCardTitle: (node: WorkflowNode) => string
+  /** Whether the take on show (`url`, else the node's one take) is a Preview — a
+   *  render at proxy quality — so the view labels it (F1). The host reads it
+   *  from the take itself (render-preview.ts); a view told nothing shows none. */
+  isPreview?: (nodeId: string, url?: string) => boolean
   /** Open a shared media lightbox navigable across all items */
   onOpenMedia?: (nodeId: string) => void
   /** Open config modal for config-type nodes */

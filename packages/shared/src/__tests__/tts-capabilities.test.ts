@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { MODEL_CATALOG } from "../model-catalog.js"
+import { MODEL_CATALOG, SPEECH_UNIT_PRICE_NOTE } from "../model-catalog.js"
 import { TTS_PROVIDERS, MAX_TTS_CHARS_BY_PROVIDER, getMaxTtsChars, TTS_TEXT_MAX } from "../model-constants.js"
 import {
   TTS_PROVIDER_ALIASES,
@@ -9,8 +9,10 @@ import {
   getTtsCapabilities,
   ttsSupportsAudioTags,
   ttsSupportsSsmlBreaks,
+  ttsSupportsStitching,
   ttsHasLever,
   ttsLanguageCodes,
+  ttsSupportsTimestamps,
 } from "../tts-capabilities.js"
 
 describe("speech-model capability sheets — totality", () => {
@@ -53,6 +55,24 @@ describe("speech-model capability sheets — totality", () => {
       // The `features` flag other packages already read must agree with the sheet.
       expect(m.features?.includes("audio-tags") ?? false, `${m.id} audio-tags feature`).toBe(m.tts.audioTags)
     }
+  })
+
+  it("every sheet says whether the model returns timings, and all six speech models do", () => {
+    const yes = Object.values(MODEL_CATALOG).filter((m) => m.tts?.timestamps === true).map((m) => m.id).sort()
+    for (const m of Object.values(MODEL_CATALOG)) {
+      if (!m.tts) continue
+      expect(typeof m.tts.timestamps, `${m.id} timestamps`).toBe("boolean")
+    }
+    // Measured 2026-10-04 (v4) and 2026-10-06 (the rest): /with-timestamps answers 200 on every
+    // speech model at the same character cost. A new model joins this list only once it is measured.
+    expect(yes).toEqual([
+      "elevenlabs-dialogue",
+      "elevenlabs-dialogue-v4",
+      "elevenlabs-multilingual",
+      "elevenlabs-turbo",
+      "elevenlabs-v3",
+      "elevenlabs-v4",
+    ])
   })
 })
 
@@ -224,15 +244,72 @@ describe("elevenlabs-v4 — added beside v3", () => {
     expect(getMaxTtsChars("elevenlabs-v3")).toBe(5000)
   })
 
-  it("costs a flat 30 credits with no per-length note — the same as v3 — and, as the default, is the featured model", () => {
+  it("its flat row is 30 credits with no note — the same as v3 — beside its per-100-characters row; as the default, it is the featured model", () => {
     const v4 = MODEL_CATALOG["elevenlabs-v4"]!
-    expect(v4.pricing).toEqual([{ identifier: "elevenlabs-v4", credits: 30 }])
-    expect(MODEL_CATALOG["elevenlabs-v3"]!.pricing).toEqual([{ identifier: "elevenlabs-v3", credits: 30 }])
+    expect(v4.pricing).toEqual([
+      { identifier: "elevenlabs-v4", credits: 30 },
+      { identifier: "elevenlabs-v4:per-100-chars", credits: 4, note: SPEECH_UNIT_PRICE_NOTE },
+    ])
+    expect(MODEL_CATALOG["elevenlabs-v3"]!.pricing).toEqual([
+      { identifier: "elevenlabs-v3", credits: 30 },
+      { identifier: "elevenlabs-v3:per-100-chars", credits: 4, note: SPEECH_UNIT_PRICE_NOTE },
+    ])
     expect(v4.featured).toBe(true)
     expect(MODEL_CATALOG["elevenlabs-v3"]!.featured).toBeUndefined()
   })
 
   it("does not call v3 the latest model any more", () => {
     expect(MODEL_CATALOG["elevenlabs-v3"]!.description).not.toMatch(/latest/i)
+  })
+})
+
+describe("ttsSupportsTimestamps", () => {
+  it("answers for the model the request runs as", () => {
+    expect(ttsSupportsTimestamps("elevenlabs-v4")).toBe(true)
+    expect(ttsSupportsTimestamps("elevenlabs-v3")).toBe(true)
+    expect(ttsSupportsTimestamps("elevenlabs-turbo")).toBe(true)
+    expect(ttsSupportsTimestamps("elevenlabs-multilingual")).toBe(true)
+    // Unknown / missing / legacy alias run as turbo, which answers timings too.
+    expect(ttsSupportsTimestamps(undefined)).toBe(true)
+    expect(ttsSupportsTimestamps("elevenlabs")).toBe(true)
+    expect(ttsSupportsTimestamps("not-a-model")).toBe(true)
+    // A dialogue id is not a text-to-speech model: it runs as the fallback here (turbo).
+    expect(ttsSupportsTimestamps("elevenlabs-dialogue-v4")).toBe(true)
+  })
+})
+
+describe("stitching — conditioning on neighbouring text (previous_text / next_text)", () => {
+  it("every speech sheet declares it (a boolean, never undefined)", () => {
+    for (const m of Object.values(MODEL_CATALOG)) {
+      if (!m.tts) continue
+      expect(typeof m.tts.stitching, `${m.id} stitching`).toBe("boolean")
+    }
+  })
+
+  it("v4, Turbo and Multilingual condition on neighbouring text (probed 200 each); v3 rejects the fields (probed 400); the dialogue sheet says no (its lane does not read it)", () => {
+    expect(getTtsCapabilities("elevenlabs-v4").stitching).toBe(true)
+    expect(getTtsCapabilities("elevenlabs-turbo").stitching).toBe(true)
+    expect(getTtsCapabilities("elevenlabs-multilingual").stitching).toBe(true)
+    expect(getTtsCapabilities("elevenlabs-v3").stitching).toBe(false)
+    expect(MODEL_CATALOG["elevenlabs-dialogue"]!.tts!.stitching).toBe(false)
+  })
+
+  it("the reader answers from the sheet of the model the request runs as", () => {
+    expect(ttsSupportsStitching("elevenlabs-v4")).toBe(true)
+    expect(ttsSupportsStitching("elevenlabs-v3")).toBe(false)
+    expect(ttsSupportsStitching("elevenlabs-multilingual")).toBe(true)
+    const turbo = ttsSupportsStitching("elevenlabs-turbo")
+    expect(turbo).toBe(getTtsCapabilities("elevenlabs-turbo").stitching)
+    // The alias, a missing id, an unknown id, an inherited-member name and a non-string all run as turbo.
+    for (const id of ["elevenlabs", undefined, "not-a-model", "constructor", "elevenlabs-dialogue", ["elevenlabs-v4"] as unknown as string]) {
+      expect(ttsSupportsStitching(id), JSON.stringify(id)).toBe(turbo)
+    }
+  })
+})
+
+describe("field mappings — the neighbour text fields are mappable", () => {
+  it("text-to-speech maps directText and both neighbour fields, in that order", async () => {
+    const { NODE_MAPPABLE_FIELDS } = await import("../node-mappable-fields.js")
+    expect(NODE_MAPPABLE_FIELDS["text-to-speech"]).toEqual(["directText", "previousText", "nextText"])
   })
 })

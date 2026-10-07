@@ -126,6 +126,23 @@ describe("text-to-speech panel — selecting another node rewrites nothing", () 
     expect(dataOf("B").languageCode).toBe("he")
     expect(useWorkflowStore.getState().isDirty).toBe(false)
   })
+
+  it("a v4 node with continuity text, then another: the text stays and the workflow stays clean", async () => {
+    useWorkflowStore.setState({ nodes: [ttsNode("A", { provider: "elevenlabs-v4", previousText: "Before." }), ttsNode("B", { provider: "elevenlabs-v3", previousText: "Old." })], edges: [], selectedNodeId: "A", isDirty: false, isReadOnly: false } as never)
+    mountPanel()
+    await tick()
+    expect(screen.getByTestId("tts-continuity-toggle")).toBeTruthy()
+    useWorkflowStore.setState({ isDirty: false } as never)
+
+    await select("B")
+    await tick()
+
+    // B is on v3: the section is hidden, but merely selecting B rewrote nothing.
+    expect(screen.queryByTestId("tts-continuity-toggle")).toBeNull()
+    expect(dataOf("B").previousText).toBe("Old.")
+    expect(dataOf("A").previousText).toBe("Before.")
+    expect(useWorkflowStore.getState().isDirty).toBe(false)
+  })
 })
 
 describe("text-to-speech panel — the model it shows", () => {
@@ -185,6 +202,24 @@ describe("text-to-speech panel — a model the user picks", () => {
 
     expect(dataOf("A").provider).toBe("elevenlabs-turbo")
     expect(dataOf("A").languageCode).toBe("")
+  })
+
+  it("to a model that does not stitch: the continuity text is emptied in the same write as the levers", async () => {
+    useWorkflowStore.setState({
+      nodes: [ttsNode("A", { provider: "elevenlabs-v4", stability: 0.4, similarityBoost: 0.8, previousText: "Before.", nextText: "After." })],
+      edges: [], selectedNodeId: "A", isDirty: false, isReadOnly: false,
+    } as never)
+    mountPanel()
+    await tick()
+
+    await pickModel(/^ElevenLabs v3/)
+
+    const data = dataOf("A")
+    expect(data.provider).toBe("elevenlabs-v3")
+    expect(data.similarityBoost).toBeUndefined()
+    expect(data.previousText).toBe("")
+    expect(data.nextText).toBe("")
+    expect(screen.queryByTestId("tts-continuity-toggle")).toBeNull()
   })
 })
 

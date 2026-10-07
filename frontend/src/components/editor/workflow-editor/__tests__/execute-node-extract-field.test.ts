@@ -204,6 +204,7 @@ vi.mock("../types", () => ({
 // ---------------------------------------------------------------------------
 
 import { executeNode } from "../execute-node"
+import fixture from "../../../../../../backend/src/services/workflow-engine/__tests__/fixtures/edit-plan-review.json"
 
 function makeCtx(overrides: any = {}) {
   return {
@@ -305,5 +306,32 @@ describe("executeNode: a fan-out iteration resolves its inputs on its ROW", () =
     mockResolveNodeInputs.mockReturnValue({})
     await executeNode(node as any, makeCtx(), undefined, undefined, 5)
     expect(mockResolveNodeInputs).toHaveBeenCalledWith(node, mockNodes, mockEdges, 5)
+  })
+})
+
+describe("executeNode: a JSON consumer of a reviewed Edit Plan reads what the server reads", () => {
+  // The twoKept plan (kept: clips 1 and 4, clip 4's hook rewritten). The server
+  // half of this check is backend edit-plan-review-engines.test.ts, on the same
+  // fixture block.
+  const { consumers } = fixture
+  const plan = { ...(fixture.cases as Record<string, { plan: { id: string } }>)[consumers.case]!.plan, position: { x: 0, y: 0 } }
+  const runConsumer = (type: string, data: Record<string, unknown>) => {
+    const node = { id: "consumer", type, position: { x: 0, y: 0 }, data: { label: type, ...data } }
+    mockNodes = [plan, node]
+    mockEdges = [{ id: "e-in", source: plan.id, sourceHandle: "edl", target: node.id, targetHandle: "in" }]
+    mockResolveNodeInputs.mockReturnValue({})
+    return executeNode(node as any, makeCtx())
+  }
+  const patchOf = () => mockUpdateNodeData.mock.calls.filter((c) => c[0] === "consumer").at(-1)?.[1] as Record<string, unknown>
+
+  it("Extract Field: the kept clips' hooks, the edited one included", async () => {
+    const out = await runConsumer("extract-field", { field: consumers.extractField.field, outputType: "text" })
+    expect(out).toBe(consumers.extractField.text)
+    expect(patchOf().extractedText).toBe(consumers.extractField.text)
+  })
+
+  it("JSON Process: the kept clips, the edited hook included", async () => {
+    await runConsumer("json-process", { mode: "advanced", expression: consumers.jsonProcess.expression })
+    expect(patchOf().processedResult).toEqual(consumers.jsonProcess.processedResult)
   })
 })

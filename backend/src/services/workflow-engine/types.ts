@@ -6,7 +6,7 @@ import type { MediaItem } from "../social/platforms/index.js"
 import type { BillingContext } from "../../lib/billing-context.js"
 import type { Caption } from "@remotion/captions"
 import type { ErrorHint } from "../../lib/safety-block.js"
-import type { NodeExecutionStatus, NodeExecutionStateWire, VideoOverlayWarning } from "@nodaro/shared"
+import type { NodeExecutionStatus, NodeExecutionStateWire, NodeSkipReason, VideoOverlayWarning, RenderQuality, RunResultRowStamp } from "@nodaro/shared"
 
 // ---------------------------------------------------------------------------
 // Node execution state (stored in workflow_executions.node_states JSONB)
@@ -36,6 +36,13 @@ export interface NodeOutput {
   reduceMeta?: Record<string, unknown>
   /** JSON output for web-scrape and future JSON-emitting nodes. */
   json?: unknown
+  /** An Edit Plan state whose `json` is NOT the plan as planned — a seed (from
+   *  saved data, or from an earlier execution) with the person's review
+   *  applied — carries the plan as planned here, so a later continuation
+   *  judges a newer review against the plan it was made on. Absent: `json` IS
+   *  the plan as planned (the plan ran, or no review applied). See
+   *  `run-continuation.ts`. */
+  plannedJson?: unknown
   /** Extract Field node output — newline-joined list of extracted values. */
   extractedText?: string
   /** Generate Text (llm-chat) second output — the result split on `===NEXT===`
@@ -92,6 +99,27 @@ export interface NodeOutput {
    * iteration carried a key. The canvas stamps each result row with it.
    */
   listResultCompositionKeys?: string[]
+  /**
+   * Each row's identity — its job, thumbnail and, for a render, `quality`,
+   * `clipKey`, `planBasis` and `renderBasis` — ROW-ALIGNED with `listResults` (`{}` where the row has none).
+   * The editor stamps each result row with it; pairing rows with `jobIds` by
+   * position mis-paired once a row failed or finished out of order.
+   */
+  listResultStamps?: RunResultRowStamp[]
+  /**
+   * Each row's notes (warnings + real length), ROW-ALIGNED with `listResults`.
+   * Written only for all-or-nothing fan-out types (UGC Clip); UGC Cards'
+   * `notes` input reads it (spec §6.4.3).
+   */
+  listResultMeta?: import("@nodaro/shared").FanOutItemMeta[]
+  /** apply-edl: the quality the render was made at ("proxy" is a Preview). */
+  quality?: RenderQuality
+  /** apply-edl: the plan clip the render cut (`edlSpanKey`), as its payload gave it. */
+  clipKey?: string
+  /** apply-edl: the plan value the render cut (`renderReadBasis`), when it read the plan's own value. */
+  planBasis?: string
+  /** apply-edl: the render's own settings and effective sources (`effectiveRenderBasis`). */
+  renderBasis?: string
   /** Selector node `picked` output channel (selected items). */
   pickedResults?: string[]
   /** Selector node `rest` output channel (items NOT picked). */
@@ -153,8 +181,12 @@ export interface NodeOutput {
   width?: number
   height?: number
   durationSec?: number
+  /** UGC Clip: the clip's own warnings. `warnings` stays Video Overlay's typed list. */
+  clipWarnings?: readonly string[]
   /** Video Overlay: the freshness key the DAG payload stamped (`videoOverlayCompositionKey`). */
   resultCompositionKey?: string
+  /** A public video node that had nothing to do and passed its input through (R14). */
+  passThroughWarning?: import("@nodaro/shared").PassThroughWarning
 }
 
 /**
@@ -214,6 +246,16 @@ export interface NodeExecutionState {
    *  Skip, a node outside a partial run's subset. Only then may a reader fall
    *  back to the node's saved results — see `saved-data.ts`. */
   fromSavedData?: true
+  /** A continued run (`WorkflowExecutionJob.continueFromExecutionId`) built
+   *  this state from that EARLIER execution's state of the node, not by
+   *  running it: the id of that execution. Saved data only where that
+   *  execution's own state was (`fromSavedData`: a frozen node, or one outside
+   *  its subset — a source, parameter or Edit Plan only in a continuation of
+   *  an app run whose own overrides do not name it); otherwise no reader
+   *  falls back to the node's saved results — see `run-continuation.ts`. */
+  seededFromExecution?: string
+  /** Why the RUN skipped this node (`empty-input-skips.ts`); a router-gated node carries none. */
+  skipReason?: NodeSkipReason
 }
 
 /**
@@ -238,6 +280,22 @@ export interface WorkflowExecutionJob {
   triggerData?: Record<string, unknown>
   /** Optional subset of node IDs to execute (for "run from here" / "run selected"). */
   nodeIds?: string[]
+  /**
+   * Continue from an earlier execution of this workflow (Render final after a
+   * run that stopped at a preview): the run executes `nodeIds` only, and every
+   * other node hands on what THAT execution produced (its `node_states`, an
+   * Edit Plan with the person's review applied), never the workflow's saved
+   * results. The execution must be the caller's own, of this workflow and
+   * this version of its graph (`appVersionId`, or the live workflow on both
+   * sides), and ended `completed`; the worker refuses otherwise, with the
+   * stable codes in `@nodaro/shared` run-continuation. The run re-applies
+   * the input overrides that execution applied — pinned on it when it started
+   * (`lib/execution-input-overrides.ts`); an execution from before the pin
+   * falls back to an app run's `app_runs.input_values` — and `inputOverrides`
+   * here win over them, field by field. See
+   * `services/workflow-engine/run-continuation.ts`.
+   */
+  continueFromExecutionId?: string
   /**
    * For a triggered run: the trigger node that fired (the trigger row's
    * `config.nodeId`). The worker runs the branch behind it — see
@@ -270,6 +328,33 @@ export interface WorkflowExecutionJob {
    * re-resolve; they read this.
    */
   billingContext: BillingContext
+  /**
+   * A person who can review a Preview render is at this run: true only for
+   * the editor's own run (a browser session on /run). Every other lane — a
+   * trigger, an API / SDK / MCP call, a present link, an app run — has nobody
+   * to press Render final, so a run of a Preview render there is refused
+   * before any node runs unless it overrides the render to Final (decided
+   * 2026-10-04). Decided at ENQUEUE, like `ownerInitiated` and
+   * `billingContext`, and REQUIRED so a new producer is compile-forced to
+   * answer it. Absent on the wire (a job queued before the deploy) means the
+   * stop rule does not apply to that run at all: no gate, no refusal, the
+   * whole graph runs (decided 2026-10-05).
+   */
+  reviewerPresent: boolean
+  /**
+   * A component's inner run is a NEW job, so it would otherwise always carry
+   * `reviewerPresent` and fall under the stop rule even when its parent does
+   * not (a parent queued before the deploy). The parent's answer
+   * (`OrchestratorContext.previewStopRule`) rides the internal
+   * `/v1/component/execute` hop and lands here; `false` exempts this run from
+   * the rule exactly as its parent is exempt (decided 2026-10-05). Absent =
+   * the rule's own answer (flag on + `reviewerPresent` present). Honored only
+   * on the internal lane, so no API caller can set it.
+   */
+  previewStopRule?: boolean
+  /** Marks a component's inner execution (`executeAppRun({isComponentExecution})`):
+   *  a nested graph with no Render final path. */
+  isComponentExecution?: boolean
   /** Current component nesting depth (limit 5, like sub-workflows) */
   componentDepth?: number
   /** Slugs of ancestor components in the execution chain — used for cycle detection */
@@ -352,8 +437,12 @@ export interface ResolvedInputs {
    *  data.layers[i] by index. */
   overlayImageUrls?: (string | undefined)[]
   /** Video Overlay's reserved JSON layer-plan input (VIDEO_OVERLAY_LAYER_PLAN_HANDLE).
-   *  Routed, never read in v1 — no pip renders for it yet. */
+   *  Read by the assembly (plan layers first). */
   layerPlan?: string
+  /** Add Captions: a wired CaptionPlan (string). Wins over text, segments and transcript. */
+  captionPlan?: string
+  /** UGC Cards' `notes` input: each clip's warnings and real length (A7). */
+  clipNotes?: import("@nodaro/shared").ClipNote[]
   /** Text wired into an image-overlay node's "qrText" handle (fills its fromInput QR layers). */
   overlayQrText?: string
 
@@ -609,6 +698,15 @@ export interface OrchestratorContext {
   workflowOwnerId?: string
   /** Copied from the job at pickup — see WorkflowExecutionJob.ownerInitiated. */
   ownerInitiated?: boolean
+  /** Does the preview stop rule apply to this run? Set once at pickup: the
+   *  rollout flag (`PREVIEW_STOP_RULE_ENABLED`) is on AND the job carries
+   *  `reviewerPresent` (one queued before the deploy does not, and runs as it
+   *  would have then) AND the job does not carry `previewStopRule: false`.
+   *  Absent = it does not apply. Inline sub-workflows share this context, so
+   *  their backstop follows the same answer; a component's inner run is a new
+   *  job, so the component dispatch sends this answer across the HTTP hop
+   *  (`WorkflowExecutionJob.previewStopRule`). */
+  previewStopRule?: boolean
 }
 
 // ---------------------------------------------------------------------------

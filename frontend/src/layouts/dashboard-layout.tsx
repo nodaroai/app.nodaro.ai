@@ -12,6 +12,7 @@ import { useAuth } from "@/hooks/use-auth"
 import { useEmbedSessionHandoff, isEmbedded } from "@/hooks/use-embed-session-handoff"
 import { loadSurfaceAvailability, resetSurfaceAvailability } from "@/lib/surface-availability"
 import { loadScene3DProAvailability } from "@/lib/scene3d-pro-availability"
+import { watchEditPlanModes } from "@/lib/edit-plan-modes"
 import { getAuthHeaders } from "@/lib/api"
 
 export default function DashboardLayout() {
@@ -63,6 +64,15 @@ export default function DashboardLayout() {
   // availability fetch above.
   useEffect(() => {
     if (!authLoading && user) void loadScene3DProAvailability(getAuthHeaders)
+  }, [authLoading, user])
+
+  // Which Edit Plan modes the server plans — the panel greys out Trailer until
+  // the answer says so. Unlike the fetches above, this answer can change
+  // mid-session (a connected self-host follows nodaro.ai's), so the watcher
+  // also refreshes a stale answer when the window regains focus.
+  useEffect(() => {
+    if (authLoading || !user) return
+    return watchEditPlanModes(getAuthHeaders)
   }, [authLoading, user])
 
   // After OAuth login, check for a pending plan selection and redirect to pricing

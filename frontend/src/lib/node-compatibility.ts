@@ -212,6 +212,10 @@ export const TYPED_HANDLE_IDS: ReadonlySet<string> = new Set([
   // Image Overlay layer handles (the base rides the `image` id above) and its
   // QR link text handle (shown only while a QR layer reads its link from the workflow).
   ...OVERLAY_HANDLE_IDS, "qrText",
+  // Video Overlay's layer-plan (JSON) handle — a list of layers drawn under its handle layers.
+  "layerPlan",
+  // Add Captions' caption-plan (JSON) handle — the opening line in Hook Plate, the rest in the node's style.
+  "captionPlan",
   // Identity-node handles (Phase 23). `in` already covered above; `type`
   // is object-node-specific (accepts identity-type pickers); `assets` is the
   // character node's element/asset-injection input (text producers + pickers).

@@ -51,6 +51,8 @@ Workflows that contain `sub-workflow-input` or `sub-workflow-output` boundary no
 
 Violations are rejected with `400 invalid_sub_workflow` and a structured `details` array listing each error.
 
+**A sub-workflow cannot stop for a review.** A run stops at an [Apply EDL](../processing-video/apply-edl.md) render set to **Proxy** (a Preview), but a referenced workflow hands its outputs straight to the parent, where there is no Render final. So a run whose sub-workflow holds a render set to Proxy is refused before any node runs (code `preview_render_nested`). Set that render's **Quality** to **Final**. (Rolled out under a flag, `PREVIEW_STOP_RULE_ENABLED`; where it is off, nothing is refused. See [Apply EDL](../processing-video/apply-edl.md#a-run-stops-at-a-preview).)
+
 ## Best Practices
 
 - Keep sub-workflow nesting shallow. The maximum depth is 5 levels; deeply nested workflows are harder to debug.

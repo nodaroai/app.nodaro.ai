@@ -18,6 +18,8 @@ const h = vi.hoisted(() => ({
   budgetReads: [] as string[],
   pendingExecutions: new Set<string>(),
   pendingReads: [] as string[],
+  /** The owner each budget read was scoped to, in call order. */
+  readOwners: [] as string[],
   userRole: undefined as string | undefined,
   appScopes: undefined as string[] | undefined,
 }))
@@ -30,12 +32,14 @@ vi.mock("@/lib/execution-budget.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../lib/execution-budget.js")>()
   return {
     ...actual,
-    executionBudgetExcessMs: async (id: string) => {
+    executionBudgetExcessMs: async (id: string, ownerId: string) => {
       h.budgetReads.push(id)
+      h.readOwners.push(ownerId)
       return h.excessByExecution.get(id) ?? 0
     },
-    executionMayDispatchBudgetedJob: async (id: string) => {
+    executionMayDispatchBudgetedJob: async (id: string, ownerId: string) => {
       h.pendingReads.push(id)
+      h.readOwners.push(ownerId)
       return h.pendingExecutions.has(id)
     },
   }
@@ -70,12 +74,15 @@ beforeEach(async () => {
   h.rows = new Map([
     [WRAPPER, { user_id: "user-1", provider: "component", input_data: { _executionId: "exec-inner" } }],
     [OTHER, { user_id: "user-1", provider: "kie", input_data: {} }],
+    // The inner execution the wrapper names — the wrapper owner's own.
+    ["exec-inner", { user_id: "user-1" }],
   ])
   h.filters = []
   h.excessByExecution = new Map()
   h.budgetReads = []
   h.pendingExecutions = new Set()
   h.pendingReads = []
+  h.readOwners = []
   h.userRole = undefined
   h.appScopes = undefined
   app = Fastify()
@@ -134,6 +141,46 @@ describe("GET /v1/component/execute/:jobId/wait-limit", () => {
     expect(h.filters[0]).toMatchObject({ id: WRAPPER, user_id: "user-1" })
     expect(h.budgetReads).toEqual([])
     expect(h.pendingReads).toEqual([])
+  })
+
+  it("reads the inner run as the WRAPPER OWNER's — another user's execution named in it reads as missing", async () => {
+    // `_executionId` is a pointer: both reads are scoped to the wrapper's
+    // owner, so an execution of anyone else contributes nothing (the readers
+    // themselves are pinned in lib/__tests__/execution-budget.test.ts).
+    await get(WRAPPER)
+    expect(h.readOwners).toEqual(["user-1", "user-1"])
+    h.readOwners = []
+    h.userRole = "admin"
+    h.rows.set(WRAPPER, { user_id: "someone-else", provider: "component", input_data: { _executionId: "exec-theirs" } })
+    h.rows.set("exec-theirs", { user_id: "someone-else" })
+    await get(WRAPPER)
+    expect(h.readOwners).toEqual(["someone-else", "someone-else"])
+  })
+
+  it("attacker: a self-inserted wrapper naming another user's execution reads nothing of it", async () => {
+    // A wrapper inserted by a client before 474 revoked jobs writes can name
+    // any execution, so `input_data._executionId` is only a pointer.
+    h.rows.set(WRAPPER, { user_id: "user-1", provider: "component", input_data: { _executionId: "exec-victim" } })
+    h.rows.set("exec-victim", { user_id: "victim" })
+    h.excessByExecution.set("exec-victim", 150 * MIN)
+    h.pendingExecutions.add("exec-victim")
+    const res = await get(WRAPPER)
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({
+      data: { budgetExcessMs: 0, waitLimitMs: POLL_ABSOLUTE_TIMEOUT_MS, pendingBudgetedNodes: false },
+    })
+    expect(h.budgetReads).toEqual([])
+    expect(h.pendingReads).toEqual([])
+  })
+
+  it("an admin reading someone's wrapper gets that wrapper owner's inner execution", async () => {
+    h.userRole = "admin"
+    h.rows.set(WRAPPER, { user_id: "someone-else", provider: "component", input_data: { _executionId: "exec-theirs" } })
+    h.rows.set("exec-theirs", { user_id: "someone-else" })
+    h.excessByExecution.set("exec-theirs", 10 * MIN)
+    const res = await get(WRAPPER)
+    expect(res.json().data.budgetExcessMs).toBe(10 * MIN)
+    expect(h.budgetReads).toEqual(["exec-theirs"])
   })
 
   it("only a component wrapper answers", async () => {

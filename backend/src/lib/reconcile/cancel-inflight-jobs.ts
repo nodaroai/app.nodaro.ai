@@ -188,6 +188,8 @@ function adoptedRender(row: InFlightRow, budgetMs: number): AdoptableChildJob {
  */
 export async function cancelInFlightChildJobs(
   executionId: string,
+  /** The execution's owner: only their jobs are this run's (decided 2026-10-06; migration 474). */
+  ownerId: string,
   opts: CancelInFlightOptions = {},
 ): Promise<NeutralizeResult> {
   const result: NeutralizeResult = { cancelled: 0, adoptable: new Map() }
@@ -197,6 +199,9 @@ export async function cancelInFlightChildJobs(
       .from("jobs")
       .select(columns)
       .eq("workflow_execution_id", executionId)
+      // A row naming this execution is not proof it is this run's: adopting
+      // one would make its result the node's output.
+      .eq("user_id", ownerId)
       .in("status", ["pending", "processing"]),
   )
 

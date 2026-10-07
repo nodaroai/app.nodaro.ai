@@ -36,6 +36,10 @@ export type { GenericNode, GenericEdge, WorkflowExport, WorkflowExportCharacter,
   // A reference the caller can NAME and DESCRIBE but has no media for — used by
   // `StructuredReferenceParams.describedReferences` on both media lanes.
   DescribedReference,
+  // A character (identity) reference for `characterReferences` on the video lanes.
+  VideoCharacterReference,
+  VideoCharacterVoice,
+  GeminiOmniVoicePresetId,
   // Node-data prompt affix fields (promptPrefix / promptSuffix) — set them via
   // workflow JSON or `apps.run(..., { inputOverrides })`.
   PromptAffixFields,
@@ -68,9 +72,37 @@ export type { GenericNode, GenericEdge, WorkflowExport, WorkflowExportCharacter,
   ListSavedPostsParams,
   ListSavedPostsResult,
   SavedPostsLookupResult,
+  // Collections (`client.collections`): where a workflow's records live.
+  Collection,
+  CollectionRecord,
+  CollectionMedia,
+  CollectionMediaType,
+  CollectionRecordSource,
+  CollectionFieldValue,
+  CollectionCaps,
+  CollectionLimits,
+  ListCollectionsResult,
+  CreateCollectionInput,
+  UpdateCollectionInput,
+  ListCollectionRecordsParams,
+  ListCollectionRecordsResult,
+  AddCollectionRecordInput,
+  AddCollectionRecordResult,
+  CollectionWriteOutcome,
+  CollectionExportFormat,
+  CollectionDigestFormat,
   // Competitors (`client.competitors`): tracked brands, scans and action cards.
   TrackedCompetitor,
   CompetitorDetail,
+  CompetitorListResult,
+  CompetitorHistory,
+  CompetitorHistoryPoint,
+  CompetitorHistoryPlatform,
+  CompetitorPeriod,
+  CompetitorPeriodPlatform,
+  CompetitorPeriodFollowers,
+  CompetitorCompareInput,
+  CompetitorCompareResult,
   CompetitorScan,
   CompetitorScanSummary,
   CompetitorScanCounts,
@@ -138,6 +170,7 @@ export { UploadsResource } from "./resources/uploads.js"
 export { LibraryResource } from "./resources/library.js"
 export { PresetsResource } from "./resources/node-presets.js"
 export { SavedPostsResource } from "./resources/saved-posts.js"
+export { CollectionsResource } from "./resources/collections.js"
 export { CompetitorsResource } from "./resources/competitors.js"
 export { CommunityResource } from "./resources/community.js"
 export { PickerCatalogsResource } from "./resources/picker-catalogs.js"
@@ -242,6 +275,8 @@ export type {
   UpdateWorkflowInput,
   RunWorkflowParams,
   RunWorkflowResult,
+  RenderFinalParams,
+  RenderFinalQuote,
 } from "./resources/workflows.js"
 
 export type {
@@ -279,6 +314,8 @@ export type {
   WorkflowExecutionSummary,
   NodeExecutionState,
   NodeExecutionStatus,
+  NodeSkipReason,
+  ExecutionOutcome,
   ExecutionStatus,
   ExecutionTriggerType,
   ListExecutionsForWorkflowParams,
@@ -334,6 +371,7 @@ export type {
   RunManyResult,
   StructuredReferenceParams,
   GenerateImageParams,
+  TextToSpeechParams,
   GenerateVideoParams,
   TextToVideoParams,
 } from "./resources/nodes.js"

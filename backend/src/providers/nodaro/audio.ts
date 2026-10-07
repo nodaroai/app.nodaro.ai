@@ -20,6 +20,7 @@ import type {
 import { createCloudJob, waitForCloudJob, NodaroCloudError, type CloudJob } from "./client.js"
 import { relayResultFields } from "./relay-cost.js"
 import { normalizeTtsVoiceSettings } from "../elevenlabs/voice-settings.js"
+import { normalizeTtsNeighbourText } from "../elevenlabs/neighbour-text.js"
 
 /** Read the finalized audio URL out of a completed cloud job. */
 function extractAudioResult(
@@ -57,6 +58,7 @@ export class NodaroCloudAudioProvider implements TextToSpeechProvider {
     // ignore. Normalise the same way here, so a keyless self-host relaying to
     // the cloud behaves exactly like a keyed one. See elevenlabs/voice-settings.ts.
     const settings = normalizeTtsVoiceSettings(options)
+    const neighbours = normalizeTtsNeighbourText(options)
     const body: Record<string, unknown> = {
       text,
       ...(voice !== undefined ? { voice } : {}),
@@ -68,6 +70,10 @@ export class NodaroCloudAudioProvider implements TextToSpeechProvider {
       ...(settings.style !== undefined ? { style: settings.style } : {}),
       ...(settings.speed !== undefined ? { speed: settings.speed } : {}),
       ...(options?.languageCode !== undefined ? { languageCode: options.languageCode } : {}),
+      // Trimmed HERE: the cloud's route rejects (400) a neighbour text over its cap, which a
+      // keyed install's funnel would trim — so a keyless self-host behaves exactly like a keyed one.
+      ...(neighbours.previousText !== undefined ? { previousText: neighbours.previousText } : {}),
+      ...(neighbours.nextText !== undefined ? { nextText: neighbours.nextText } : {}),
     }
     const jobId = await createCloudJob("/v1/text-to-speech", body)
     return extractAudioResult(await waitForCloudJob(jobId), jobId)

@@ -27,6 +27,14 @@ describe("video-overlay i18n (audit U7 — the canvas never shows the validator'
     expect(videoOverlayIssueText(request, tEn)).toBe("Connect an image to a layer handle")
   })
 
+  it("a plan layer without an image says so in the plan's terms, in every locale that has the key", () => {
+    const planIssue = validateVideoOverlayRequest({ layers: [{ start: 0, planLayer: 2 }] }) as VideoOverlayIssue
+    expect(videoOverlayIssueText(planIssue, tEn)).toBe("Plan layer 2: No image — set imageUrl on this layer in the plan")
+    expect(videoOverlayIssueText(planIssue, tHe)).toBe("שכבת תוכנית 2: אין תמונה — הגדירו imageUrl לשכבה הזו בתוכנית")
+    const handleIssue = validateVideoOverlayRequest({ layers: [{ start: 0, slot: 3 }] }) as VideoOverlayIssue
+    expect(videoOverlayIssueText(handleIssue, tEn)).toBe("Layer 3: No image — connect one to this layer's handle")
+  })
+
   it("renders the worker's warnings by slot, and the render-wide one without a layer", () => {
     expect(videoOverlayWarningText({ layer: 0, slot: 3, code: "clipped", detail: "…" }, tEn)).toBe("layer 3 clipped to the video end")
     expect(videoOverlayWarningText({ code: "audio_reencoded", detail: "…" }, tEn)).toBe("the audio was re-encoded to AAC")

@@ -19,7 +19,20 @@ describe("direct canvas request guard", () => {
       expect(response.statusCode).toBe(400)
       expect(response.json().error.code).toBe("sequence_execution_required")
       expect(paidHandler).not.toHaveBeenCalled()
-      expect(h.load).toHaveBeenCalledWith(expect.anything(), expect.anything(), "owner", "workflow", "view", expect.any(String), expect.any(String))
+      expect(h.load).toHaveBeenCalledWith(expect.anything(), expect.anything(), "owner", "workflow", "view", expect.any(String), expect.any(String), { resolveResultIds: false })
+    } finally { await app.close() }
+  })
+  it("never resolves saved result ids: it judges one node and hands nothing out", async () => {
+    // A preHandler on every canvas single-node POST: a jobs lookup here would
+    // be paid on every Run click and its answer thrown away.
+    const app = Fastify()
+    app.addHook("onRequest", async (req) => { req.userId = "owner" })
+    h.load.mockResolvedValue({ ok: true, row: { nodes: [{ id: "ordinary", data: {} }] } })
+    registerSequenceExecutionGuard(app)
+    app.post("/v1/generate-image", async () => ({ jobId: "allowed" }))
+    try {
+      await app.inject({ method: "POST", url: "/v1/generate-image", payload: { workflowId: "workflow", nodeId: "ordinary" } })
+      expect(h.load.mock.calls.at(-1)?.[7]).toEqual({ resolveResultIds: false })
     } finally { await app.close() }
   })
   it("allows ordinary nodes and reviewed production requests without canvas node IDs", async () => {

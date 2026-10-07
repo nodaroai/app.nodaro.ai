@@ -19,3 +19,18 @@
 # staging deploys. This entry pins the squash commit; the line itself also carries an inline
 # `gitleaks:allow`, which is content-keyed and survives any future rewrite.
 a89437509185b59cef6498046b3d560ccf0884ca:tools/__tests__/scene3d-acceptance-receipt.test.mjs:generic-api-key:93
+
+# backend/src/providers/apify/site-capture-actor.ts: the Apify actor id (a public-style
+# identifier, not a credential) trips generic-api-key on entropy. This pins the commit that
+# introduced it on the PR branch; the line now also carries an inline `gitleaks:allow`, which is
+# content-keyed and survives the squash merge that mints a new SHA.
+42800d5397b73743489ddd4ba22f55030dfafb3b:backend/src/providers/apify/site-capture-actor.ts:generic-api-key:34
+
+# backend/src/providers/elevenlabs/__tests__/egress-elevenlabs.test.ts: a test TITLE put the
+# word "k-e-y" (spelled out here on purpose) right before our public dialogue model id, and
+# generic-api-key read the pair as a credential. The id is a catalog entry, not a secret. The
+# first entry pins the PR-branch commit that introduced the title (since reworded so no later
+# commit or squash repeats the match); the second pins this file's own first attempt at this
+# note, which quoted the title verbatim and tripped the same rule.
+dc25afa28adcf22735f01b16e8bc9fad4fd5a9da:backend/src/providers/elevenlabs/__tests__/egress-elevenlabs.test.ts:generic-api-key:93
+880ce22081e535a16e458218c4e6543379b8041c:.gitleaksignore:generic-api-key:30

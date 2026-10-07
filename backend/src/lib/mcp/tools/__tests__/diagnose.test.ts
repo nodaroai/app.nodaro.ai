@@ -11,8 +11,11 @@ vi.mock("../../../supabase.js", () => ({
 const { registerDiagnose, classifyFailure } = await import("../diagnose.js")
 const { supabase } = await import("../../../supabase.js")
 
+let batchFilters: Array<Record<string, unknown>> = []
+
 beforeEach(() => {
   vi.clearAllMocks()
+  batchFilters = []
 })
 
 /**
@@ -48,8 +51,24 @@ function mockSupabase(opts: {
                   Promise.resolve({ data: opts.jobSingle ?? null, error: null }),
               }),
             }),
-            in: () =>
-              Promise.resolve({ data: opts.jobsBatch ?? [], error: null }),
+            // The batch chain may narrow by owner: rows carrying a `user_id`
+            // must match it (fixtures without one stand for the caller's).
+            in: () => {
+              const filters: Record<string, unknown> = {}
+              const q = {
+                eq: (col: string, v: unknown) => { filters[col] = v; return q },
+                then: (res: (v: unknown) => unknown, rej?: (e: unknown) => unknown) => {
+                  batchFilters.push({ ...filters })
+                  const rows = (opts.jobsBatch ?? []).filter((r) =>
+                    Object.entries(filters).every(([k, v]) => {
+                      const row = r as Record<string, unknown>
+                      return !(k in row) || row[k] === v
+                    }))
+                  return Promise.resolve({ data: rows, error: null }).then(res, rej)
+                },
+              }
+              return q
+            },
           }),
         }
       }
@@ -193,6 +212,38 @@ describe("diagnose_run tool", () => {
     expect(out.summary).toContain("2")
   })
 
+  it("attacker: a node_states jobId naming another user's job yields no facts of it", async () => {
+    // node_states was client-writable before 474, so a jobId in it is a
+    // pointer: the batch read is the caller's own jobs only.
+    mockSupabase({
+      execution: {
+        id: "exec1",
+        status: "failed",
+        node_states: { n1: { status: "failed", nodeType: "generate-image", jobId: "job-planted" } },
+        error_message: "Execution failed",
+      },
+      jobsBatch: [
+        {
+          id: "job-planted",
+          user_id: "victim",
+          error_message: "victim's private error",
+          input_data: { provider: "victim-provider" },
+          credits_actual: 99,
+        },
+      ],
+    })
+    const server = buildServer()
+    registerDiagnose({ server, session: diagnoseSession(), fastify: Fastify() })
+    const out = parse(await callTool(server, "diagnose_run", { id: "exec1" }))
+
+    expect(batchFilters).toEqual([{ user_id: "u1" }])
+    expect(out.failures).toHaveLength(1)
+    expect(out.failures[0].error).toBeNull()
+    expect(out.failures[0].provider).toBeNull()
+    expect(out.failures[0].creditsActual).toBeNull()
+    expect(JSON.stringify(out)).not.toContain("victim")
+  })
+
   it("falls back to single-job diagnosis when the id is a job id", async () => {
     mockSupabase({
       execution: null,
@@ -239,7 +290,32 @@ describe("diagnose_run tool", () => {
     registerDiagnose({ server, session: diagnoseSession(), fastify: Fastify() })
     const out = parse(await callTool(server, "diagnose_run", { id: "exec-ok" }))
     expect(out.status).toBe("completed")
+    expect(out.outcome).toBe("succeeded")
     expect(out.failures).toHaveLength(0)
+  })
+
+  it("a completed run that skipped a node for want of input reads nothing_new, and names the reason on the node", async () => {
+    mockSupabase({
+      execution: {
+        id: "exec-idle",
+        status: "completed",
+        node_states: {
+          feed: { status: "completed", nodeType: "telegram-channel-feed" },
+          llm: { status: "skipped", nodeType: "llm-chat", skipReason: "empty_input" },
+          gated: { status: "skipped", nodeType: "generate-image" },
+        },
+        error_message: null,
+      },
+    })
+    const server = buildServer()
+    registerDiagnose({ server, session: diagnoseSession(), fastify: Fastify() })
+    const out = parse(await callTool(server, "diagnose_run", { id: "exec-idle" }))
+    expect(out.status).toBe("completed")
+    expect(out.outcome).toBe("nothing_new")
+    expect(out.failures).toHaveLength(0)
+    const nodes = out.nodes as Array<{ nodeId: string; skipReason?: string }>
+    expect(nodes.find((n) => n.nodeId === "llm")?.skipReason).toBe("empty_input")
+    expect(nodes.find((n) => n.nodeId === "gated")?.skipReason).toBeUndefined()
   })
 
   it("lists EVERY node's dispatched job id — the only execution→job mapping surface (2026-08-03)", async () => {

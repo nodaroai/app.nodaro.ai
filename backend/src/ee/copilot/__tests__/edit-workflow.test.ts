@@ -236,6 +236,93 @@ describe("edit_workflow — guards", () => {
   })
 })
 
+describe("edit_workflow — the edges the model sends, and the ones it does not", () => {
+  const nodes = [
+    { id: "img", type: "upload-image", position: { x: 0, y: 0 }, data: { label: "Photo", url: "https://r2.test/a.png" } },
+    { id: "mt", type: "motion-transfer", position: { x: 300, y: 0 }, data: { label: "Move", prompt: "dance" } },
+  ]
+  const rpcEdges = () => (rpcMock.mock.calls.at(-1)![1] as { p_upsert_edges: Array<Record<string, unknown>> }).p_upsert_edges
+
+  it("a stored legacy edge the model did not send stays exactly as stored — a heal the editor applies on load is the editor's", async () => {
+    graphState.nodes = nodes
+    graphState.edges = [{ id: "e-legacy", source: "img", sourceHandle: "image", target: "mt", targetHandle: "in" }]
+    const result = await runEditWorkflow(ctx, { note: "rename", patchNodes: [{ id: "mt", data: { label: "Motion" } }] })
+    expect(rpcEdges()).toEqual([])
+    expect(result.adjustments.join("\n")).not.toContain("e-legacy")
+  })
+
+  it("an edge the model SENDS is rewired by the editor's own load-time rules — the alias, then the classifier — and the change is reported", async () => {
+    graphState.nodes = nodes
+    const result = await runEditWorkflow(ctx, {
+      note: "wire",
+      upsertEdges: [{ source: "img", sourceHandle: "image", target: "mt", targetHandle: "in" }],
+    })
+    // `in` → `video` (the table) → `image` (an image source); the id is built from the handles as stored.
+    expect(rpcEdges()).toEqual([{ id: "e-img-image-mt-image", source: "img", sourceHandle: "image", target: "mt", targetHandle: "image" }])
+    expect(result.adjustments.join("\n")).toContain('targetHandle "video" → "image"')
+  })
+
+  it("re-sending a connection that is already stored under another id lands on the stored edge, never beside it — and the report names that id", async () => {
+    graphState.nodes = nodes
+    graphState.edges = [{ id: "e-old", source: "img", sourceHandle: "image", target: "mt", targetHandle: "image" }]
+    const result = await runEditWorkflow(ctx, {
+      note: "wire again",
+      upsertEdges: [{ source: "img", sourceHandle: "image", target: "mt", targetHandle: "in" }],
+    })
+    expect(rpcEdges().map((e) => e.id)).toEqual(["e-old"])
+    expect(result.adjustments.join("\n")).toContain("edge e-old:")
+    expect(result.adjustments.join("\n")).not.toContain("e-img-image-mt-image")
+  })
+
+  it("a stored edge WITHOUT an id is never re-sent: the RPC matches by id and appended a copy beside it on every edit", async () => {
+    graphState.nodes = nodes
+    graphState.edges = [{ source: "img", sourceHandle: "image", target: "mt", targetHandle: "image" }]
+    const result = await runEditWorkflow(ctx, { note: "rename", patchNodes: [{ id: "mt", data: { label: "Motion" } }] })
+    expect(rpcEdges()).toEqual([])
+    expect(result.edgeCount).toBe(1)
+  })
+
+  it("a stored id-less edge beside the id-bearing copy an earlier edit appended is one connection, not a duplicate id — the edit goes through", async () => {
+    graphState.nodes = nodes
+    graphState.edges = [
+      { source: "img", sourceHandle: "image", target: "mt", targetHandle: "image" },
+      { id: "e-img-image-mt-image", source: "img", sourceHandle: "image", target: "mt", targetHandle: "image" },
+    ]
+    const result = await runEditWorkflow(ctx, { note: "rename", patchNodes: [{ id: "mt", data: { label: "Motion" } }] })
+    expect(rpcEdges()).toEqual([])
+    expect(result.edgeCount).toBe(1)
+  })
+
+  it("a stored edge WITH an id that the Generate Image migration changes still travels in the delta", async () => {
+    graphState.nodes = [...nodes, { id: "txt", type: "text-prompt", position: { x: 0, y: 0 }, data: { label: "Text", prompt: "a cat" } }, { id: "gen", type: "generate-image", position: { x: 300, y: 300 }, data: { label: "Gen" } }]
+    graphState.edges = [{ id: "e-gi", source: "txt", sourceHandle: "prompt", target: "gen", targetHandle: "cinematography" }]
+    await runEditWorkflow(ctx, { note: "rename", patchNodes: [{ id: "mt", data: { label: "Motion" } }] })
+    expect(rpcEdges()).toEqual([{ id: "e-gi", source: "txt", sourceHandle: "prompt", target: "gen", targetHandle: "look" }])
+  })
+
+  it("the same connection sent twice without an id is refused — the model is told", async () => {
+    graphState.nodes = nodes
+    await expect(
+      runEditWorkflow(ctx, {
+        note: "wire",
+        upsertEdges: [
+          { source: "img", sourceHandle: "image", target: "mt", targetHandle: "in" },
+          { source: "img", sourceHandle: "image", target: "mt", targetHandle: "image" },
+        ],
+      }),
+    ).rejects.toThrow(/the same connection as edge "e-img-image-mt-image", sent again without an id$/)
+    expect(rpcMock).not.toHaveBeenCalled()
+  })
+
+  it("a sent edge naming no node is refused — the model is told, not worked around", async () => {
+    graphState.nodes = nodes
+    await expect(
+      runEditWorkflow(ctx, { note: "wire", upsertEdges: [{ source: "img", sourceHandle: "image", target: "nope", targetHandle: "in" }] }),
+    ).rejects.toThrow(/does not exist/)
+    expect(rpcMock).not.toHaveBeenCalled()
+  })
+})
+
 describe("edit_workflow — write pipeline", () => {
   it("strips run state, adds a position, and reports what changed", async () => {
     const result = await runEditWorkflow(ctx, {

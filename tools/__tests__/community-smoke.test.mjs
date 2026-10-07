@@ -39,6 +39,9 @@ const OVERLAY_RENDER = "Video Overlay renders on a keyless install — no key, n
 const OVERLAY_REFUSAL = "Video Overlay refuses end ≤ start with a renderable 400"
 const OVERLAY_UNREACHABLE = "a Video Overlay job whose image cannot be fetched fails with a renderable message"
 
+/** The Site Capture contract name, spelled exactly as the probe records it. */
+const CAPTURE = "a keyless Site Capture answers with a job id, then fails honestly"
+
 /** What a keyless community install answers. Each test overrides one slice. */
 function communityShape() {
   return {
@@ -92,6 +95,8 @@ function communityShape() {
       },
       media: { status: 200, type: "video/mp4", bytes: 4096 },
     },
+    // Site Capture: the route answers job-id-first; the job then fails with the keyless message.
+    capture: { status: 200, body: { jobId: "job_capture", status: "pending" } },
   }
 }
 
@@ -148,6 +153,7 @@ function stubServer(shape) {
           const videoUrl = out?.videoUrl ? new URL(out.videoUrl, `http://${req.headers.host}`).href : undefined
           return send(200, { data: { ...overlayJob, ...(out ? { output_data: { ...out, videoUrl } } : {}) } })
         }
+        if (jobId === "job_capture" && shape.captureJob) return send(200, { data: shape.captureJob })
         return send(200, { data: { status: "failed", error_message: keylessMessage } })
       }
       if (path === "/v1/voices") {
@@ -199,6 +205,8 @@ function stubServer(shape) {
         res.writeHead(shape.overlay.media.status, { "content-type": shape.overlay.media.type })
         return res.end(Buffer.alloc(shape.overlay.media.bytes))
       }
+
+      if (path === "/v1/site-capture" && req.method === "POST") return send(shape.capture.status, shape.capture.body)
 
       // ── the Scene3D slice ─────────────────────────────────────────────────
       if (path === "/v1/nodes") return send(200, { data: shape.nodes })
@@ -399,4 +407,30 @@ test("an unfetchable image rendered anyway fails the unreachable-image contract"
     shape.overlay.jobs.job_overlay_unreachable = { status: "completed", output_data: { videoUrl: "/media/overlay.mp4" } }
   })
   assertContract(out, OVERLAY_UNREACHABLE, "FAIL")
+})
+
+test("the keyless community shape passes the Site Capture contract", async () => {
+  const { out } = await probeWith()
+  assertContract(out, CAPTURE, "PASS")
+})
+
+test("a held capture answer (no pending status) fails the Site Capture contract", async () => {
+  const { out } = await probeWith((shape) => {
+    shape.capture = { status: 200, body: { jobId: "job_capture", stills: [] } }
+  })
+  assertContract(out, CAPTURE, "FAIL")
+})
+
+test("a 500 from the route fails the Site Capture contract", async () => {
+  const { out } = await probeWith((shape) => {
+    shape.capture = { status: 500, body: { error: { code: "internal_error", message: "boom" } } }
+  })
+  assertContract(out, CAPTURE, "FAIL")
+})
+
+test("a raw vendor error in the failed capture job fails the Site Capture contract", async () => {
+  const { out } = await probeWith((shape) => {
+    shape.captureJob = { status: "failed", error_message: "ApifyClientError: 401 Unauthorized" }
+  })
+  assertContract(out, CAPTURE, "FAIL")
 })

@@ -9,6 +9,7 @@ import { cn } from "../lib/cn"
 import { useLocalizedCatalog } from "../i18n"
 import type { DimensionEntry } from "./dimension-modal-browser"
 import { MultiPickBadge, useMultiPick, type MultiPickValue } from "./multi-pick-ui"
+import { usePickerFieldRestriction } from "../lib/field-restrictions"
 import { estimateGridCols, isArrowKey, nextNavIndex } from "./config-keyboard-nav"
 
 /** Multi-pick value: undefined / single id / array of ids (1..maxSelected). */
@@ -47,6 +48,7 @@ export function DimensionTileGrid({
   catalog,
   maxSelected = 1,
   iconClassName = "size-14",
+  field,
 }: {
   readonly entries: ReadonlyArray<DimensionEntry>
   readonly value: DimensionPickValue
@@ -65,8 +67,13 @@ export function DimensionTileGrid({
   /** Size of the icon box — a fixed 56px by default; a rendered look preview
    *  reads better filling the tile (`w-full aspect-square`). */
   readonly iconClassName?: string
+  /** The data field these entries are options of. When an app card restricts
+   *  that field (PickerFieldRestrictionsProvider), only the allowed entries show. */
+  readonly field?: string
 }) {
   const [query, setQuery] = useState("")
+  const restrict = usePickerFieldRestriction(field ?? "")
+  const allowedEntries = useMemo(() => restrict(entries), [restrict, entries])
   const i18n = useLocalizedCatalog(catalog ?? ("__noop__" as I18nCatalogId))
 
   const { selectedIds, isMulti, handlePick, activateMulti, demoteToSingle } =
@@ -150,16 +157,16 @@ export function DimensionTileGrid({
 
   const filtered = useMemo<ReadonlyArray<DimensionEntry>>(() => {
     const q = query.trim().toLowerCase()
-    if (!q) return entries
+    if (!q) return allowedEntries
     if (catalog) {
-      return entries.filter((e) => i18n.matches(e.id, e.label, e.description, query))
+      return allowedEntries.filter((e) => i18n.matches(e.id, e.label, e.description, query))
     }
-    return entries.filter(
+    return allowedEntries.filter(
       (e) =>
         e.label.toLowerCase().includes(q) ||
         e.description.toLowerCase().includes(q),
     )
-  }, [query, entries, catalog, i18n])
+  }, [query, allowedEntries, catalog, i18n])
 
   return (
     <div className={cn("flex flex-col gap-3", className)}>

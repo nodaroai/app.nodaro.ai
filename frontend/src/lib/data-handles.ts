@@ -39,6 +39,10 @@ export const LIST_PRODUCER_TYPES: ReadonlySet<string> = new Set<string>([
   "ai-writer", "llm-chat", "generate-script",
   // Content Ideas: one brief per idea, fanned out per idea (FAN_OUT_EACH_TYPES).
   "content-ideas",
+  // Telegram Channel Feed: one post per `listResults` item (an "each" wire).
+  "telegram-channel-feed",
+  // Read Collection: one record per `listResults` item (an "each" wire).
+  "collection-read",
 ])
 
 /**
@@ -72,6 +76,11 @@ export const ACCEPTS_JSON = (sourceType: string): boolean =>
  *  extract-field has a `json` outputType, etc. */
 export const JSON_PRODUCER_TYPES: ReadonlySet<string> = new Set<string>([
   ...SCRAPE_NODE_TYPES, "extract-field", "silence-detect",
+  // Telegram Channel Feed's `json` handle carries the posts (TelegramChannelPost[]).
+  "telegram-channel-feed",
+  // Collections: Read Collection's `json` carries the records (CollectionRecord[]), Save to Collection's the saved record.
+  "collection-read",
+  "collection-write",
   // audio-sync's `json` handle carries { version, reference, offsets, notes }.
   "audio-sync",
   "list", "filter-list",
@@ -82,6 +91,10 @@ export const JSON_PRODUCER_TYPES: ReadonlySet<string> = new Set<string>([
   // handle keeps it in DATA_TEXT_PRODUCER_TYPES). Dual producer, like the
   // analysis pair.
   "transcribe",
+  // Text to Dialogue's `json` handle emits the Transcript built from the model's
+  // timings (its `audio` handle is the audio producer, @nodaro/shared
+  // AUDIO_PRODUCER_TYPES). Dual producer, like transcribe.
+  "text-to-dialogue",
   ...ANALYSIS_PRODUCER_TYPES,
   // apply-edl's `json` output handle carries the remapped Transcript. Its OTHER
   // (default) output handle is dynamic media (video|audio), declared in

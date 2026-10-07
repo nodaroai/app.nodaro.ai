@@ -10,6 +10,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { NODE_DEFINITIONS } from "@/types/nodes"
 import { extractNodeOutput } from "./execution-graph"
 import { executeNode } from "./execute-node"
+import { editorPreviewGatedIds } from "./preview-gate"
 import type { ExecutionContext } from "./types"
 import type { WorkflowNode } from "@/types/nodes"
 
@@ -55,6 +56,9 @@ export function autoExecuteNode(nodeId: string, visited = new Set<string>()): vo
 
   const data = node.data as Record<string, unknown>
   if (data.executionStatus === "running") return
+  // A node a Preview render gates runs only after Render final: a preview
+  // landing upstream must not run it (silently — nothing was asked to run).
+  if (editorPreviewGatedIds(nodes, edges).has(nodeId)) return
 
   const inEdges = edges.filter((e) => e.target === nodeId)
   if (inEdges.length === 0) return

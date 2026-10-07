@@ -135,6 +135,9 @@ here for each one anyway.
 | `PORT` / `HOST` | `8000` / `0.0.0.0` | Where the API listens (in the image the API sits on 9000 behind Caddy on 3000) |
 | `NODE_ENV` | `development` | `production` in every image |
 | `REDIS_URL` | `redis://localhost:6379` | BullMQ queues + caches (bundled: `redis://redis:6379`) |
+| `PREVIEW_STOP_RULE_ENABLED` | off | Turns on the preview stop rule: a run [stops at an Apply EDL render set to **Proxy**](nodes/processing-video/apply-edl.md#a-run-stops-at-a-preview), and nothing downstream of it runs until the render is set to **Final**; a run nobody can review (a trigger, an API or MCP call, a present link, an app) that would run such a render is refused with `preview_review_required`. Only `true` or `1` enables it. The API reads it, and the same value is written into `/config.js` at boot for the editor, so one variable drives both and no rebuild is needed. Off, every surface behaves as it did before the rule: nothing is gated, refused or left out of an estimate. On or off, the price stored when an app, component or template is published is not shortened by the rule: it counts the whole workflow at its saved settings (with an app's creator fee) plus each Render final and the nodes after it (without the fee; none for a component) — see [app view modes](app-view-modes.md#render-final). It never quotes less than a run is charged with the flag off, and can quote more with it on. With the flag off, an app's Render final route re-renders at Final, and its page offers Render final on a preview, as the editor does. Restart to apply |
+| `COLLECTIONS_MAX_PER_USER` | unset (no ceiling) | Community / Business: how many [collections](features/collections.md) one account may have. On Nodaro Cloud the caps come from the plan and this is ignored. Restart to apply |
+| `COLLECTIONS_MAX_RECORDS_PER_COLLECTION` | unset (no ceiling) | Community / Business: how many records one collection may hold; past it the oldest records are removed after each write. On Nodaro Cloud the caps come from the plan and this is ignored. Restart to apply |
 | `SCENE3D_ADVANCED_ENABLED` | disabled | Enables an installed Advanced scene-authoring engine in Cloud, and with it the [3D Render Pro](nodes/composition/pro-3d-render.md) node. Only `true` or `1` enables it; an absent engine — or one that does not implement the Pro operation — remains unavailable regardless. Community and Business have no engine to enable, so the flag changes nothing there: `GET /v1/nodes` omits `pro-3d-render`, `GET /v1/3d-scene/capabilities` reports `advanced: null` and `pro.available: false`, and a request sent anyway is refused with `503 SCENE_CAPABILITY_UNAVAILABLE` rather than quietly served by the Basic lane. The Basic 3D nodes are unaffected on every edition. 3D Render Pro additionally requires a configured credit price for `pro-3d-render`; without one the route answers `503 price_not_configured` before reserving anything. |
 | `SCENE3D_LOCAL_ENABLED` | disabled | Allows an installed local scene-authoring engine when Advanced is also enabled. Does not expose a desktop port. While it is off, `blender-local` never appears in the capabilities document, so no client can offer it. |
 | `SCENE3D_STAGE_REDIS_URL` | unset | Dedicated storage for durable scene stages. Requires persistent disk, `appendonly yes`, `appendfsync always`, `no-appendfsync-on-rewrite no`, and `maxmemory-policy noeviction`. The host verifies these settings before journal operations and never falls back to the shared queue. |
@@ -181,6 +184,12 @@ here for each one anyway.
 | `RENDER_WORKER_CONCURRENCY` | `2` (max 10) | Remotion renders in parallel — each is a headless Chrome |
 | `REMOTION_CONCURRENCY` | `2` for 3D scenes; Remotion default (50 % of cores) for other compositions | Browser tabs per render. An explicit value overrides both paths. Keep this low when running multiple 3D jobs: each WebGL tab uses additional threads and counts toward the container process limit. |
 | `FFMPEG_CONCURRENCY` | `4` (max 32) | Concurrent ffmpeg processes across every ffmpeg node. Every ffmpeg the backend runs is given the container's CPU quota (cgroup `cpu.max`, rounded up) as its decoder, filter and encoder thread counts: left to itself, ffmpeg counts every core of the host, and under a quota that multiplies the video encoder's memory. With no quota below the host's core count, ffmpeg picks its own counts as before |
+| `FFMPEG_MEMORY_RESERVE_MIB` | `2048` | Memory kept back from ffmpeg for the backend's own processes and the rest of the container. Every ffmpeg reserves its predicted peak memory from a budget of (memory limit − this) × `FFMPEG_MEMORY_HEADROOM` before it starts, and gives it back when it ends; a launch that does not fit waits for one that does (it never fails), and one larger than the whole budget runs alone. The prediction follows the picture size, the segment count and the thread counts the ffmpeg runs with. The memory limit is the container's (cgroup `memory.max`). A container runs several backend processes (API, worker, render worker, orchestrator) under one limit, so they spend ONE budget between them — see `FFMPEG_MEMORY_LEDGER`. The default covers an idle container's measured memory use (1.66 to 1.9 GB, page cache included). On a 7,629 MiB container the defaults give 5,022 MiB, and on a 32,000,000,000-byte one 25,622 MiB — two dense 4K Apply EDL chunks on the small box then run one after the other instead of together. The slot count above still applies, per process |
+| `FFMPEG_MEMORY_HEADROOM` | `0.9` | Share, in (0, 1], of (memory limit − reserve) that running ffmpeg processes may reserve together |
+| `FFMPEG_MEMORY_LIMIT_MIB` | unset (the host's memory) | The memory limit to assume when the container has none (cgroup `memory.max` is `max`, or unreadable). Never treated as unlimited: unset, the host's total memory is used |
+| `FFMPEG_DEFAULT_PEAK_MIB` | unset (393 + 22.9 × threads MiB) | One fixed figure, in MiB, for an ffmpeg launch that does not predict its own peak. Unset, such a launch reserves 393 + 22.9 × the thread count it runs with (1,126 MiB at 32 threads). Apply EDL predicts each picture slice, and the post-download re-encode predicts itself, from picture size, segment count and threads; everything else uses this. A yt-dlp download that may re-encode (a section cut at keyframes, an audio conversion to mp3) holds one slot for as long as it runs and reserves like a launch that predicts itself: yt-dlp starts its own ffmpeg, which is given the same thread counts as every other ffmpeg, and the reservation follows the requested format's resolution (4K when none is requested; a small fixed figure for an audio-only conversion). Plain downloads (merge into mp4, thumbnail) are not held. Time spent waiting for a slot or for memory never counts against an import's own time limit |
+| `FFMPEG_MEMORY_LEDGER` | `redis` | Where the ffmpeg memory budget is spent. `redis`: ONE budget shared by every backend process of the container through the Redis the queues already use (keys `ffmpeg:mem:{<container id>}:…`; the container id is `RAILWAY_REPLICA_ID`, else the hostname, so other replicas and containers never share it). Each reservation is a lease that its process renews while ffmpeg runs and that expires within 30 s if the process dies. `local`: this process spends the whole budget alone — for a deployment that runs one backend process per container |
+| `FFMPEG_MEMORY_LOCAL_SHARE` | `0.5` | Share, in (0, 1], of the ffmpeg memory budget ONE process may spend while the shared ledger is unreachable (Redis down or not answering within 2 s). The process logs once per outage and keeps working inside that share; it never waits on a dead Redis. Half, because the heavy renders run in two of a container's processes (the video worker and the render worker), so half each never sums past the whole; the API process's lighter in-process launches are the residual |
 | `MCP_PUBLIC_URL` | `""` = the Nodaro Cloud host | Public base of the MCP host when it differs from `PUBLIC_URL`; self-hosters serving MCP on their main host set it equal to `PUBLIC_URL` |
 | `MCP_DYNAMIC_REGISTRATION` · `MCP_DCR_ALLOWLIST` | `allowlist` · 14 known clients (Claude, Claude Code, Cursor, Cline, Continue, Goose, ChatGPT, OpenAI, Lovable, Gemini, Gemini CLI, Codex, MCP Inspector, mcp-inspector) | RFC 7591 dynamic client registration for MCP clients (`allowlist` · `open` · `off`), and the `client_name` allowlist consulted in `allowlist` mode — see §10 |
 | `FIGMA_PLUGIN_OAUTH_CLIENT_ID` | `""` = plugin connect off | client_id of the developer app the Figma plugin connects through; the app must list `<PUBLIC_URL>/v1/oauth/plugin/callback` in its redirect URIs and request `jobs:read`, `assets:read`, `assets:write`, `credits:read` — see the [plugin connect handshake](./oauth-flow.md#plugin-connect-handshake-figma) |
@@ -195,7 +204,9 @@ here for each one anyway.
 | `AUTO_RECHARGE_ENABLED` | off | Cloud only — auto-recharge kill switch: it guards the trigger + charge path only, while webhook provisioning stays on so in-flight payments still settle |
 | `ORGS_ENABLED` | off | Cloud only — multi-tenant organizations (schools / teams) rollout gate. Ships dark; the schema migrations run in every edition regardless |
 | `MCP_ENABLED` | off | Serve the MCP endpoint (§10) |
+| `SPEECH_LENGTH_PRICING_ENABLED` | off | Cloud only — price Text to Speech and Text to Dialogue by length (every started 100 characters, with a minimum per request) instead of a flat amount per request. Rolling out: on for `next.nodaro.ai` first. See the Credits section of each node's page |
 | `COPILOT_ENABLED` | off | Cloud only — the in-app [Workflow Copilot](./features/workflow-copilot.md). Needs `ANTHROPIC_API_KEY`; admins can also pause it at runtime from Settings |
+| `SITE_CAPTURE_ENABLED` | on | Optional. Set it to `false` to turn off `POST /v1/site-capture` and the `capture_site` MCP tool on this install |
 | `CHARACTER_LORA_ROUTING_ENABLED` | on | Route generations that mention a trained character through its LoRA; off = plain reference-image injection |
 | `JOB_HOLD_TTL_HOURS` | `""` (holds never expire) | Only matters on a deployment that registers a **job policy** (see "Job policy" under Surface profile). Hours a job may wait in `pending_review` before the platform **auto-rejects** it: the reservation is refunded, the withheld output is deleted, and the decision is recorded with `policy_id = "platform"`, `reason = "hold-expired"`. The message the owner is left with is checked against what the refund actually moved — if nothing was still reserved it says so rather than promising credits back, and an operator report is filed. Unset = a held job waits for a human indefinitely, with its credits reserved the whole time. This is the one sweep allowed to touch a `pending_review` row. Auto-approve is deliberately not an option — it would publish exactly the output a human declined to look at |
 | `META_APP_ID` … `DISCORD_CLIENT_SECRET` | `""` | Social network OAuth apps — see 2b-2 |
@@ -1385,6 +1396,62 @@ run `node --test tools/__tests__/managed-supabase-proxy.test.mjs`.
 - [Edge modes](./edge-modes.md) — request flow, auth, edition gates
 - [API Integration](./api-integration.md) — once you're up, talk to
   your instance from your own server
+
+## The face detector's native runtime (`onnxruntime-node`)
+
+The backend depends on `onnxruntime-node` (pinned at exactly `1.30.0`) for an
+in-process face detector: YuNet, from OpenCV Zoo (MIT, © 2020 Shiqi Yu). The
+model file lives in `backend/src/services/face-detect/model/` with its licence,
+the unmodified upstream file and the script that made the shipped copy. The
+module is imported lazily, so a process that never detects a face never loads
+it. Nothing in the Community edition calls it, but it is on disk in every
+image.
+
+**Skip the GPU download.** On linux/x64, the package's `postinstall` downloads
+the CUDA 12 and TensorRT libraries from NuGet unless it is told to skip them.
+The detector only uses the CPU runtime bundled in the package, so every install
+skips the download. The skip is the environment variable
+`ONNXRUNTIME_NODE_INSTALL=skip`, and each place that installs dependencies sets
+it:
+
+- the Dockerfile sets `ENV ONNXRUNTIME_NODE_INSTALL=skip` in every stage that
+  installs dependencies;
+- the CI workflows that run `npm ci` set it in their top-level `env`;
+- `backend/scripts/characterize-in-image.sh` exports it before its `npm ci`.
+
+The repository has no `.npmrc` setting for it, so a development install on
+linux/x64 must export the variable itself, before `npm install` or `npm ci`.
+Put the line in your shell profile:
+
+```bash
+export ONNXRUNTIME_NODE_INSTALL=skip
+```
+
+macOS, Windows and linux/arm64 installs never download the GPU libraries, so
+they don't need the variable. If you install the backend some other way (your
+own Dockerfile, a different package manager), set the variable in that
+environment too. Without it, an x64 install depends on nuget.org and pulls in
+GPU libraries that are never loaded.
+
+**Pruning other platforms.** One `onnxruntime-node` package carries the runtime
+for every platform (about 300 MB unpacked). After `npm ci --omit=dev`, the
+image's `prod-deps` stage deletes every `bin/napi-v6` directory except
+`linux/<arch>`, where the arch comes from the build's `TARGETARCH` (or the base
+image's own arch when `TARGETARCH` is unset). Only the linux runtime for that
+architecture remains, about 44 MB on amd64. The build fails if the prune leaves
+no runtime.
+
+**Build-time smoke.** The same stage then loads the pinned model into an
+onnxruntime session and runs one blank 960×544 frame
+(`backend/scripts/face-detect-smoke.mjs`). A native-library or ABI mismatch with
+the base image therefore fails the image build instead of the first job that
+needs the detector. Only linux/amd64 is the measured platform; linux/arm64
+(for example a local build on Apple silicon) runs, with no parity claim.
+
+**Model integrity.** At load, the detector hashes the model file and refuses to
+run when the sha256 is not the pinned one, or when the file or the native
+module is missing. Those refusals are deterministic: the job fails once and is
+not retried.
 
 ## CI build preparation
 

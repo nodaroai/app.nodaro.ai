@@ -4,10 +4,14 @@ import {
   captionRoutesToRemotion,
   estimateCombineVideosCredits,
   resolveLlmCreditId,
+  ugcCallToRouteBody,
 } from "@nodaro/shared"
+import type { FastifyRequest } from "fastify"
 import { z } from "zod"
 import { getAppSettings } from "../../lib/app-settings.js"
 import type { BillingContext } from "../../lib/billing-context.js"
+import { speechLengthPricingEnabled } from "../../lib/config.js"
+import { speechBaseCredits } from "../../lib/speech-credits.js"
 import { imageCollageCreditModelIdentifier } from "../../lib/image-collage-credit-id.js"
 import { normalizeVideoInput } from "../../lib/mcp/normalize.js"
 import { isUuid } from "../../lib/mcp/tools/_id-guard.js"
@@ -15,10 +19,13 @@ import { llmPayloadFields, type LlmMcpArgs } from "../../lib/mcp/tools/_llm-fiel
 import { MCP_TRANSCRIBE_PROVIDER } from "../../lib/mcp/tools/verbs-audio.js"
 import { supabase } from "../../lib/supabase.js"
 import { resolveVideoRequestNorm } from "../../lib/video-request-norm.js"
+import { resolveImageCreditIdentifier } from "../../routes/generate-image.js"
+import { resolveImageToImageCreditIdentifier } from "../../routes/image-to-image.js"
 import { getModelCreditCostFromDB, type ModelPricing } from "../billing/credits.js"
 import {
   modelAvailabilityNeedsGates,
   modelAvailabilityRefusal,
+  TIER_ORDER,
   type ModelAvailabilityGates,
 } from "../billing/model-availability.js"
 import { effectiveTierOf, payerProfileId, spendGates } from "../billing/org-entitlements.js"
@@ -96,9 +103,11 @@ const num = (v: unknown): number | undefined => (typeof v === "number" && Number
 
 /**
  * The credit decision each quoted tool's route makes for the payload its MCP
- * verb dispatches. `null` = this tool cannot be priced from these args.
+ * verb dispatches. `null` = this tool cannot be priced from these args. A rule
+ * may be async when the route's guard computes its base from a priced row
+ * (speech by length reads the model's unit row).
  */
-const PRICING: Record<string, (args: Readonly<Record<string, unknown>>, ctx: QuoteContext) => UgcPricing | null> = {
+const PRICING: Record<string, (args: Readonly<Record<string, unknown>>, ctx: QuoteContext) => UgcPricing | null | Promise<UgcPricing | null>> = {
   // generate_video → POST /v1/text-to-video (creditGuard in routes/text-to-video.ts).
   generate_video: (args) => {
     const model = str(args.model)
@@ -115,11 +124,17 @@ const PRICING: Record<string, (args: Readonly<Record<string, unknown>>, ctx: Quo
     const sound = typeof args.sound === "boolean" ? args.sound : undefined
     return { id: buildVideoCreditModelIdentifier(sel.provider, norm.duration ?? sel.duration, sound, "text-to-video", undefined, norm.resolution, false) }
   },
-  // generate_speech → POST /v1/text-to-speech: the provider, with the legacy alias mapped.
-  generate_speech: (args) => {
+  // generate_speech → POST /v1/text-to-speech: the provider as the route bills it
+  // (the legacy alias mapped) and — while length pricing is on (decided
+  // 2026-10-06) — the guard's own BASE for the text sent: the one counter and
+  // reader (lib/speech-credits.ts), so the quote and the reservation agree to
+  // the credit. The quote prices `text` as the item carries it; a preset's
+  // pre/post text the verb folds in at call time is not resolvable here.
+  generate_speech: async (args) => {
     const model = str(args.model)
     if (!model) return null
-    return { id: model === "elevenlabs" ? "elevenlabs-turbo" : model }
+    const id = model === "elevenlabs" ? "elevenlabs-turbo" : model
+    return speechLengthPricingEnabled() ? { id, base: await speechBaseCredits(id, args.text) } : { id }
   },
   // extract_frame → POST /v1/extract-frame: one flat id.
   extract_frame: () => ({ id: "extract-frame" }),
@@ -127,6 +142,16 @@ const PRICING: Record<string, (args: Readonly<Record<string, unknown>>, ctx: Quo
   image_collage: (args) => ({ id: imageCollageCreditModelIdentifier(args.resolution) }),
   // image_to_text → POST /v1/image-to-text/describe: the LLM tier from the verb's own LLM fields.
   image_to_text: (args) => ({ id: resolveLlmCreditId("image-to-text", llmPayloadFields(args as LlmMcpArgs)) }),
+  // generate_image → POST /v1/generate-image: the route's own id function over the body the mapper builds.
+  generate_image: (args) => {
+    const mapped = ugcCallToRouteBody({ tool: "generate_image", args })
+    return mapped && "body" in mapped ? { id: resolveImageCreditIdentifier({ body: mapped.body } as FastifyRequest) } : null
+  },
+  // image_to_image → POST /v1/image-to-image (a realism pass); the image does not change the price.
+  image_to_image: (args) => {
+    const mapped = ugcCallToRouteBody({ tool: "image_to_image", args, imageArg: "image_url" }, { image: "https://price.invalid/x.png" })
+    return mapped && "body" in mapped ? { id: resolveImageToImageCreditIdentifier({ body: mapped.body } as FastifyRequest) } : null
+  },
   // combine_videos → POST /v1/combine-videos: a COMPUTED base (the verb sends no upstream durations).
   combine_videos: (args, ctx) => {
     if (ctx.clipCount < 2) return null
@@ -142,6 +167,11 @@ const PRICING: Record<string, (args: Readonly<Record<string, unknown>>, ctx: Quo
   forced_alignment: () => ({ id: "elevenlabs-forced-alignment" }),
   // silence_detect → POST /v1/silence-detect: one flat id (the route's inline literal).
   silence_detect: () => ({ id: "silence-detect" }),
+  // ugc_split_speech / ugc_finish_clips → the private plugin's job routes: one flat id each. The price
+  // row is the plugin's (`staticCreditCosts`, or an admin pricing row); with none registered the quote
+  // fails as "could not price", never as a zero.
+  ugc_split_speech: () => ({ id: "ugc-segments" }),
+  ugc_finish_clips: () => ({ id: "ugc-finish" }),
   // transcribe → POST /v1/transcribe: the engine the verb always sends.
   transcribe: () => ({ id: MCP_TRANSCRIBE_PROVIDER }),
   // overlay_images → POST /v1/video-overlay: one flat id.
@@ -168,7 +198,7 @@ const PRICING: Record<string, (args: Readonly<Record<string, unknown>>, ctx: Quo
 }
 
 /** The credit decision for one quote item, or null when it cannot be priced. Exported for the parity test. */
-export function pricingFor(tool: string, args: Readonly<Record<string, unknown>>, ctx: QuoteContext): UgcPricing | null {
+export async function pricingFor(tool: string, args: Readonly<Record<string, unknown>>, ctx: QuoteContext): Promise<UgcPricing | null> {
   const rule = Object.prototype.hasOwnProperty.call(PRICING, tool) ? PRICING[tool] : undefined
   return rule ? rule(args, ctx) : null
 }
@@ -228,7 +258,7 @@ function parseItem(raw: unknown): UgcQuoteItem {
 
 async function priceItem(raw: unknown, ctx: QuoteContext, callerGates: CallerGates): Promise<UgcQuoteLine> {
   const item = parseItem(raw)
-  const pricing = pricingFor(item.tool, item.args, ctx)
+  const pricing = await pricingFor(item.tool, item.args, ctx)
   if (!pricing) throw new UgcQuoteError(item.label)
   // The row the guard checks, even for a computed amount: an admin disabling a model still wins.
   let row: ModelPricing
@@ -315,4 +345,35 @@ export async function buildUgcQuote(input: {
   const { spent, skipped } = await spentLines(input.spentJobIds.slice(0, 30), input.userId)
   const total = [...spent, ...lines].reduce((sum, l) => sum + l.credits, 0)
   return { spent, lines, total, skipped }
+}
+
+/** No payer: a planning figure (publish, editor, API-token and template estimates), never a reservation. */
+export const ESTIMATE_CALLER = Object.freeze({ kind: "estimate" as const })
+export type UgcPriceCaller = { userId: string; billingContext?: BillingContext } | typeof ESTIMATE_CALLER
+
+/** Identity, not shape: only the frozen constant is an estimate, so a payer object can never opt out of its gates. */
+const isEstimate = (caller: UgcPriceCaller): caller is typeof ESTIMATE_CALLER => caller === ESTIMATE_CALLER
+
+/** The top tier, never free semantics: an estimate is the price of a runnable model, not a refusal. */
+const ESTIMATE_GATES: ModelAvailabilityGates = { tierForGates: TIER_ORDER[TIER_ORDER.length - 1]!, freeSemantics: false }
+
+/**
+ * The charge-time price of each builder call, in order — the pricer behind the
+ * plugin's `tk.http.priceUgcCalls` (the UGC Clip ceiling) and the canvas quote.
+ * Same rows, same gates as `buildUgcQuote`; an unpriceable call throws
+ * `UgcQuoteError`, never 0. A user caller is priced under the gates the credit
+ * guard will use for that payer; `ESTIMATE_CALLER` reads no profile and is
+ * priced under the top tier's gates (a disabled model still throws).
+ */
+export async function priceUgcCalls(
+  caller: UgcPriceCaller,
+  calls: ReadonlyArray<{ tool: string; args: Readonly<Record<string, unknown>> }>,
+): Promise<number[]> {
+  const callerGates: CallerGates = isEstimate(caller) ? async () => ESTIMATE_GATES : callerGatesOf(caller.userId, caller.billingContext)
+  const out: number[] = []
+  for (const [i, c] of calls.entries()) {
+    const line = await priceItem({ label: `${c.tool} #${i + 1}`, tool: c.tool, args: c.args, count: 1 }, { clipCount: 1 }, callerGates)
+    out.push(line.credits)
+  }
+  return out
 }

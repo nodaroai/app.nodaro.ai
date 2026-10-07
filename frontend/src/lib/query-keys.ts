@@ -7,6 +7,12 @@ export const queryKeys = {
   },
 
   // Credits
+  // Telegram Channel Feed: the node's route-owned position (node_cursors).
+  telegramFeed: {
+    // The position is per node AND channel (changing the channel starts fresh).
+    cursor: (workflowId: string, nodeId: string, channel = "") => ["telegram-feed", "cursor", workflowId, nodeId, channel] as const,
+  },
+
   credits: {
     all: ["credits"] as const,
     balance: (userId: string) => ["credits", "balance", userId] as const,
@@ -46,13 +52,25 @@ export const queryKeys = {
     lookup: (postIds: readonly string[]) => ["savedPosts", "lookup", postIds.join("|")] as const,
   },
 
+  // Collections (per-user): the records a workflow saves and reads back
+  collections: {
+    all: ["collections"] as const,
+    list: () => ["collections", "list"] as const,
+    detail: (id: string) => ["collections", "detail", id] as const,
+    records: (id: string, filters: { q?: string; since?: string }) =>
+      ["collections", "records", id, filters.q ?? "", filters.since ?? ""] as const,
+  },
+
   // Competitors (Cloud; per-user)
   competitors: {
     all: ["competitors"] as const,
     list: () => ["competitors", "list"] as const,
-    detail: (id: string) => ["competitors", "detail", id] as const,
+    detail: (id: string, scanId: string | null = null) => ["competitors", "detail", id, scanId] as const,
     cards: () => ["competitors", "cards"] as const,
     lessons: (id: string) => ["competitors", "lessons", id] as const,
+    history: (id: string) => ["competitors", "history", id] as const,
+    compare: (id: string, key: string) => ["competitors", "compare", id, key] as const,
+    historyMonths: () => ["competitors", "historyMonths"] as const,
     marks: () => ["competitors", "marks"] as const,
   },
 

@@ -7,12 +7,15 @@ import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
-import { TTS_PROVIDERS, getMaxTtsChars } from "@nodaro/shared"
+import { TTS_PROVIDERS, getMaxTtsChars, ttsSupportsStitching } from "@nodaro/shared"
 import { resolveOmittedTtsProvider } from "../lib/omitted-tts-provider.js"
+import { speechLengthPricingEnabled } from "../lib/config.js"
+import { speechBaseCredits } from "../lib/speech-credits.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { isVoiceGenderAllowed, premadeVoiceGender } from "../lib/voice-policy.js"
 import { TTS_VOICE_SETTING_RANGES, type TtsVoiceSettingKey } from "../providers/elevenlabs/voice-settings.js"
+import { TTS_NEIGHBOUR_TEXT_MAX_CHARS } from "../providers/elevenlabs/neighbour-text.js"
 
 /**
  * A voice setting, validated with the range the provider funnel clamps into (one source of truth, so the route and
@@ -28,6 +31,15 @@ const voiceSetting = (key: TtsVoiceSettingKey) =>
 // truncated by the default model's clamp below. The workflow engine, the narration pipeline and the
 // worker read the same function, so every lane picks the same model for the same text.
 
+/**
+ * The model a request runs as: the legacy `elevenlabs` id maps to turbo, an omitted provider resolves length-aware
+ * to the default speech model. The schema's neighbour-text check and the handler both read this one function, so
+ * they cannot disagree about which model's sheet applies.
+ */
+function resolveRequestProvider(provider: string | undefined, text: string): string {
+  return provider === "elevenlabs" ? "elevenlabs-turbo" : (provider ?? resolveOmittedTtsProvider(text))
+}
+
 export const textToSpeechBody = z.object({
   // Generous ceiling (eleven_turbo_v2.5 accepts 40000); the per-model cap is
   // clamped in the handler and the editor warns first (warn-don't-block).
@@ -42,20 +54,78 @@ export const textToSpeechBody = z.object({
   style: voiceSetting("style"),
   speed: voiceSetting("speed"),
   languageCode: z.string().optional(),
+  // Ask for per-word timings (`output_data.transcript`). Every speech model returns them
+  // (measured 2026-10-06), through the model's sheet (`timestamps`); without the flag the
+  // request is exactly the plain one. No price change.
+  withTimestamps: z.boolean().optional(),
+  // What is spoken just before / after this clip in the finished piece — context a stitching
+  // model (v4) uses for one continuous intonation across clips; the funnel sends it only to a
+  // model whose sheet takes it. Checked in the refinement below, because whether a value can
+  // matter depends on the model the request runs as.
+  previousText: z.unknown().optional(),
+  nextText: z.unknown().optional(),
 })
+  // The route REJECTS an unusable value (a REST caller gets a 400, not a silently shortened
+  // request) — but ONLY for a model whose sheet stitches: on any other model the fields are
+  // never sent, so they cannot fail the request (it behaved that way before the fields existed:
+  // an unknown key was stripped). The cap is measured on the TRIMMED text, as the funnel does.
+  // The orchestrator path, which skips this Zod, is trimmed at the exit (neighbour-text.ts).
+  .superRefine((body, ctx) => {
+    if (!ttsSupportsStitching(resolveRequestProvider(body.provider, body.text))) return
+    for (const key of ["previousText", "nextText"] as const) {
+      const value = body[key]
+      if (value === undefined) continue
+      if (typeof value !== "string") {
+        ctx.addIssue({ code: "custom", path: [key], message: `${key} must be a string` })
+      } else if (value.trim().length > TTS_NEIGHBOUR_TEXT_MAX_CHARS) {
+        ctx.addIssue({ code: "custom", path: [key], message: `${key} must be at most ${TTS_NEIGHBOUR_TEXT_MAX_CHARS} characters` })
+      }
+    }
+  })
+  // Past validation a value is a string or absent — what the queue payload and the job row carry.
+  .transform((body) => ({
+    ...body,
+    previousText: typeof body.previousText === "string" ? body.previousText : undefined,
+    nextText: typeof body.nextText === "string" ? body.nextText : undefined,
+  }))
+
+/**
+ * The model the credit guard bills a RAW (pre-Zod) body as — and, while
+ * length pricing is on, prices it on. An omitted provider runs on the default
+ * speech model up to its own cap and on turbo above it (one shared function,
+ * also read by the handler, the workflow engine and the worker), so a long
+ * request is never priced for one model then truncated by that model's clamp;
+ * the legacy "elevenlabs" alias intentionally stays on turbo. Exported for the
+ * route tests and for the seam-parity test.
+ */
+export function resolveTextToSpeechGuardProvider(body: Record<string, unknown> | undefined): string {
+  const provider = (body?.provider as string) ?? resolveOmittedTtsProvider((body?.text as string) ?? "")
+  // Map legacy "elevenlabs" to "elevenlabs-turbo" for credit lookup
+  return provider === "elevenlabs" ? "elevenlabs-turbo" : provider
+}
 
 export async function textToSpeechRoutes(app: FastifyInstance) {
   app.post("/v1/text-to-speech", {
-    preHandler: creditGuard((req) => {
-      const body = req.body as Record<string, unknown>
-      // An omitted provider runs on the default speech model; the legacy "elevenlabs"
-      // alias intentionally stays on turbo. Length-aware: an omitted provider resolves
-      // to turbo once the text exceeds the default model's cap, so a long request is
-      // never priced for one model then truncated by that model's clamp.
-      const provider = (body?.provider as string) ?? resolveOmittedTtsProvider((body?.text as string) ?? "")
-      // Map legacy "elevenlabs" to "elevenlabs-turbo" for credit lookup
-      return provider === "elevenlabs" ? "elevenlabs-turbo" : provider
-    }),
+    preHandler: creditGuard(
+      (req) => resolveTextToSpeechGuardProvider(req.body as Record<string, unknown>),
+      // `denyResolvedModel`: the id priced above is the model that runs, so the
+      // surface deny reads it too.
+      // Length-based pricing (decided 2026-10-06), attached only while the flag
+      // is on so the flag-off guard is the one that runs today, byte for byte.
+      // BASE credits of the text as it will be SENT — the handler's clamp (below)
+      // and the worker's tag strip are both folded into the count, so the guard
+      // never reserves for 40,000 characters of a 5,000-character run. The guard
+      // marks it up once and carries it to reserveCreditsForJob.
+      speechLengthPricingEnabled()
+        ? {
+            denyResolvedModel: true,
+            computeCredits: (body) => {
+              const b = body as Record<string, unknown> | undefined
+              return speechBaseCredits(resolveTextToSpeechGuardProvider(b), b?.text)
+            },
+          }
+        : { denyResolvedModel: true },
+    ),
   }, async (req, reply) => {
     const parsed = textToSpeechBody.safeParse(req.body)
     if (!parsed.success) {
@@ -88,10 +158,7 @@ export async function textToSpeechRoutes(app: FastifyInstance) {
     // Map legacy "elevenlabs" to "elevenlabs-turbo" for credit check; an omitted
     // provider runs on the default speech model. Same length-aware resolution as the creditGuard resolver above — kept
     // in the one shared helper so the two seams can't drift.
-    const resolvedProvider =
-      parsed.data.provider === "elevenlabs"
-        ? "elevenlabs-turbo"
-        : (parsed.data.provider ?? resolveOmittedTtsProvider(parsed.data.text))
+    const resolvedProvider = resolveRequestProvider(parsed.data.provider, parsed.data.text)
     const modelIdentifier = resolvedProvider
 
     // Clamp to the model's verified per-request character cap (turbo 40000 /
@@ -101,7 +168,7 @@ export async function textToSpeechRoutes(app: FastifyInstance) {
     // the destructured `text`) see the clamped value.
     parsed.data.text = parsed.data.text.slice(0, getMaxTtsChars(resolvedProvider))
 
-    const { text, voice, voiceType, stability, similarityBoost, style, speed, languageCode } = parsed.data
+    const { text, voice, voiceType, stability, similarityBoost, style, speed, languageCode, previousText, nextText, withTimestamps } = parsed.data
 
     const mcpClient = extractMcpClient(req.body)
     const { data: job, error } = await insertJob(req, {
@@ -135,6 +202,10 @@ export async function textToSpeechRoutes(app: FastifyInstance) {
       style,
       speed,
       languageCode,
+      // Only when asked: an absent key keeps the payload byte-identical.
+      ...(withTimestamps ? { withTimestamps } : {}),
+      previousText,
+      nextText,
       // LLM-originated (MCP) requests may carry a hallucinated voice id —
       // only they get the Rachel voice_not_found fallback. User-picked
       // voices fail loudly (see directElevenLabsTTS).

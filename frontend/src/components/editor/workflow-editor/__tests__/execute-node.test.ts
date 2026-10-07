@@ -2049,6 +2049,36 @@ describe("text-to-speech", () => {
   })
 })
 
+describe("text-to-speech neighbour text (continuity)", () => {
+  const run = async (data: Record<string, unknown>) => {
+    mockResolveNodeInputs.mockReturnValue({})
+    mockRunTextToSpeechGeneration.mockResolvedValue(undefined)
+    await executeNode(makeNode("text-to-speech", { textSource: "direct", directText: "hello", ...data }), makeCtx())
+    return mockRunTextToSpeechGeneration.mock.calls[0][5] as Record<string, unknown> | undefined
+  }
+
+  it("sends the trimmed pair to a model that stitches", async () => {
+    const options = await run({ provider: "elevenlabs-v4", previousText: "  Before. ", nextText: "After.\n" })
+    expect(options).toMatchObject({ previousText: "Before.", nextText: "After." })
+  })
+
+  it("trims what is over the cap the way the backend does (previous keeps its end, next its start), so the route never answers 400", async () => {
+    const options = await run({ provider: "elevenlabs-v4", previousText: `${"a".repeat(300)}${"b".repeat(1000)}`, nextText: `${"c".repeat(1000)}${"d".repeat(300)}` })
+    expect(options?.previousText).toBe("b".repeat(1000))
+    expect(options?.nextText).toBe("c".repeat(1000))
+  })
+
+  it("sends nothing on a model that does not stitch, even if the node still carries a (mapped) value", async () => {
+    const options = await run({ provider: "elevenlabs-v3", previousText: "x".repeat(5000), nextText: "After." })
+    expect(options).toEqual({ voiceType: "premade" })
+  })
+
+  it("a blank value is not sent", async () => {
+    const options = await run({ provider: "elevenlabs-v4", previousText: "   ", nextText: "" })
+    expect(options).toEqual({ voiceType: "premade" })
+  })
+})
+
 // ---------------------------------------------------------------------------
 // generate-music
 // ---------------------------------------------------------------------------
@@ -2526,8 +2556,8 @@ describe("video-composer", () => {
 // ---------------------------------------------------------------------------
 
 describe("combine-videos", () => {
-  it("rejects when fewer than 2 videos", async () => {
-    mockResolveNodeInputs.mockReturnValue({ videoUrls: ["http://a.mp4"] })
+  it("rejects when there is no video", async () => {
+    mockResolveNodeInputs.mockReturnValue({ videoUrls: [] })
     const promise = executeNode(
       makeNode("combine-videos", {}),
       makeCtx(),
@@ -2535,6 +2565,17 @@ describe("combine-videos", () => {
     promise.catch(() => {})
     await expect(promise).rejects.toThrow("Need at least 2 videos")
     expect(mockToastError).toHaveBeenCalled()
+  })
+
+  it("passes a single resolved video through: result written, no combine call (R14)", async () => {
+    mockResolveNodeInputs.mockReturnValue({ videoUrls: ["http://a.mp4"] })
+    await expect(executeNode(makeNode("combine-videos", {}), makeCtx())).resolves.toBe("http://a.mp4")
+    expect(mockRunCombineVideos).not.toHaveBeenCalled()
+    expect(mockToastError).not.toHaveBeenCalled()
+    expect(mockUpdateNodeData).toHaveBeenCalledWith(
+      "n1",
+      expect.objectContaining({ generatedVideoUrl: "http://a.mp4", passThroughWarning: "single_input", executionStatus: "completed" }),
+    )
   })
 
   it("calls runCombineVideos with urls and options", async () => {
@@ -2738,8 +2779,43 @@ describe("text-to-dialogue", () => {
       "generatedAudioUrl",
       "Text to Dialogue",
       expect.anything(),
+      expect.any(Function),
       undefined,
+      { resultFields: expect.any(Function) },
     )
+  })
+
+  it("sends the node's model and similarity with the lines", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    mockTextToDialogueApi.mockResolvedValue({ jobId: "j-dlg" })
+    await executeNode(
+      makeNode("text-to-dialogue", {
+        dialogue: [{ voice: "Rachel", text: "Hello" }],
+        provider: "elevenlabs-dialogue-v4",
+        stability: 0.3,
+        similarityBoost: 0.8,
+      }),
+      makeCtx(),
+    )
+    const start = mockPollJobWithNodeUpdate.mock.calls.at(-1)![1] as () => Promise<unknown>
+    await start()
+    const args = mockTextToDialogueApi.mock.calls.at(-1)!
+    expect(args[0]).toEqual([{ text: "Hello", voice: "Rachel" }])
+    expect(args[2]).toBe(0.3)
+    expect(args[6]).toBe("elevenlabs-dialogue-v4")
+    expect(args[7]).toBe(0.8)
+  })
+
+  it("a node saved before the model field existed sends no provider (the route runs v3 dialogue)", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    mockPollJobWithNodeUpdate.mockResolvedValue(undefined)
+    mockTextToDialogueApi.mockResolvedValue({ jobId: "j-dlg" })
+    await executeNode(makeNode("text-to-dialogue", { dialogue: [{ voice: "Rachel", text: "Hello" }] }), makeCtx())
+    const start = mockPollJobWithNodeUpdate.mock.calls.at(-1)![1] as () => Promise<unknown>
+    await start()
+    expect(mockTextToDialogueApi.mock.calls.at(-1)![6]).toBeUndefined()
+    expect(mockTextToDialogueApi.mock.calls.at(-1)![7]).toBeUndefined()
   })
 })
 

@@ -18,6 +18,13 @@ describe("localizeOptionLabel", () => {
     expect(localizeOptionLabel("From image", "he")).toBe("מתמונה")
     expect(localizeOptionLabel("Wired Audio", "he")).toBe("אודיו מחובר")
   })
+  it("translates the token too when it is itself a whole-label entry", () => {
+    // The transition styles name their default look "<choice> (default)".
+    expect(localizeOptionLabel("Full cover (default)", "he")).toBe("כיסוי מלא (ברירת מחדל)")
+    expect(localizeOptionLabel("Full cover (default)", "ja")).toBe("全面を覆う（デフォルト）")
+    expect(localizeOptionLabel("Full cover (default)", "pt-BR")).toBe("Cobertura total (Padrão)")
+    expect(localizeOptionLabel("Full cover (default)", "en")).toBe("Full cover (default)")
+  })
   it("passes tokens, brand names and unknown copy through", () => {
     expect(localizeOptionLabel("1080p", "he")).toBe("1080p")
     expect(localizeOptionLabel("Nano Banana Pro", "he")).toBe("Nano Banana Pro")

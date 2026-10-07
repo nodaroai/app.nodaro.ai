@@ -32,6 +32,7 @@ import {
   hasCharacterArt,
   useCatalogPacksVersion,
   LookPreviewStyleProvider,
+  PickerFieldRestrictionsProvider,
   readLookPreviewStyle,
   useShowsLookRenders,
   type MultiDimParameterPickerMeta,
@@ -55,6 +56,8 @@ interface PickerInputCardProps {
   displayMode?: PickerDisplayMode
   /** Subset of catalog entry ids the user is allowed to pick (single-dim only). */
   allowedValues?: ReadonlyArray<string>
+  /** Allowed ids per data field (multi-dim only). A field with no entry is unrestricted. */
+  allowedValuesByField?: Readonly<Record<string, ReadonlyArray<string>>>
 }
 
 /**
@@ -117,7 +120,10 @@ function SinglePickerCard({
     : data[field]
   // Canvas may store multi-pick as string[] — presentation mode is single-pick.
   const currentValue = pickIds(rawValue)[0] ?? meta.defaultValue
-  const isCleared = !rawValue || (Array.isArray(rawValue) && rawValue.length === 0)
+  // In the app runner the thing to clear is the viewer's own pick (the submitted
+  // override); the card's data value is only what shows until they choose.
+  const clearable = isFullscreen ? inputValues[nodeId]?.[field] : rawValue
+  const isCleared = !clearable || (Array.isArray(clearable) && clearable.length === 0)
 
   const filteredEntries = useMemo(() => {
     if (!allowedValues || allowedValues.length === 0) return meta.entries
@@ -137,7 +143,11 @@ function SinglePickerCard({
 
   const handleClear = () => {
     if (isCleared) return
-    writeValue(meta.defaultValue)
+    // A submitted pick is withdrawn, never replaced by the catalog default: the
+    // card may be restricted to a subset that excludes the default, and the
+    // runner refuses a value outside it. The node then runs on its own value.
+    if (isFullscreen) onUpdateInput(nodeId, field, undefined)
+    else writeValue(meta.defaultValue)
   }
 
   // A picker may have no icon at all, or only for some options (a rendered
@@ -348,6 +358,7 @@ function MultiPickerCard({
   onUpdateInput,
   readOnly,
   displayMode = "inline",
+  allowedValuesByField,
   meta,
 }: PickerInputCardProps & { meta: MultiDimParameterPickerMeta }) {
   const dir = usePickerDir()
@@ -385,7 +396,14 @@ function MultiPickerCard({
     }
   }
 
-  const Picker = meta.Picker
+  const PickerComponent = meta.Picker
+  // Every render of the picker below sits under the card's per-field
+  // restrictions; a field with no entry (or an empty one) offers everything.
+  const picker = (
+    <PickerFieldRestrictionsProvider allowedByField={allowedValuesByField}>
+      <PickerComponent value={value} onChange={handlePatch} />
+    </PickerFieldRestrictionsProvider>
+  )
 
   // Summary (modal preview chip): list of resolved labels for non-empty dims.
   const summaryParts = useMemo(() => {
@@ -443,7 +461,7 @@ function MultiPickerCard({
             <DialogHeader>
               <DialogTitle>{t("present.configureLabel", { label: pickerLabel })}</DialogTitle>
             </DialogHeader>
-            <Picker value={value} onChange={handlePatch} />
+            {picker}
           </DialogContent>
         </Dialog>
       </GlassCard>
@@ -496,7 +514,7 @@ function MultiPickerCard({
             <DialogHeader>
               <DialogTitle>{t("present.configureLabel", { label: pickerLabel })}</DialogTitle>
             </DialogHeader>
-            <Picker value={value} onChange={handlePatch} />
+            {picker}
           </DialogContent>
         </Dialog>
       </GlassCard>
@@ -514,7 +532,7 @@ function MultiPickerCard({
         className={cn(readOnly && "opacity-70 pointer-events-none")}
         dir={dir}
       >
-        <Picker value={value} onChange={handlePatch} />
+        {picker}
       </div>
     </GlassCard>
   )

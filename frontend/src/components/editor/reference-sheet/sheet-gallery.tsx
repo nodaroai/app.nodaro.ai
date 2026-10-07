@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
 import { useT, tx } from "@/lib/i18n"
+import { useLocalizeOptionLabel } from "@/lib/i18n/labels"
 import { Copy } from "lucide-react"
 import { PRESET_LABELS, type ReferenceSheet, type SheetPresetId } from "@nodaro/shared"
 import { MultiImageLightbox } from "@/components/ui/multi-image-lightbox"
@@ -12,7 +13,11 @@ interface SheetGalleryProps {
   readonly accent: string
 }
 
-/** Label a sheet by its preset, falling back to `type · skin` (legacy/non-preset). */
+/**
+ * Label a sheet by its preset, falling back to `type · skin` (legacy/non-preset).
+ * English on purpose: it is also saved as the entity's `defaultAssetName`. The
+ * gallery shows it through the option-label tables.
+ */
 export function sheetLabel(sheet: Pick<ReferenceSheet, "type" | "skin" | "flavour">): string {
   const pid = sheet.flavour?.presetId as SheetPresetId | undefined
   if (pid && PRESET_LABELS[pid]) return PRESET_LABELS[pid]
@@ -36,16 +41,17 @@ async function copyUrl(url: string): Promise<void> {
  */
 export function SheetGallery({ result, sheets, onSetThumbnail, accent }: SheetGalleryProps) {
   const t = useT()
+  const localizeOption = useLocalizeOptionLabel()
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
 
   const items = useMemo(() => {
     const list: { url: string; alt?: string; kind?: "image" | "video" }[] = []
     if (result) list.push({ url: result.url, alt: result.label, kind: "image" })
     for (const s of sheets) {
-      list.push({ url: s.url, alt: sheetLabel(s), kind: s.flavour?.outputFormat === "motion" ? "video" : "image" })
+      list.push({ url: s.url, alt: localizeOption(sheetLabel(s)), kind: s.flavour?.outputFormat === "motion" ? "video" : "image" })
     }
     return list
-  }, [result, sheets])
+  }, [result, sheets, localizeOption])
 
   const btn = "text-[11px] px-3 py-1 rounded bg-[#1a1d27] hover:bg-[#1e293b] border border-[#1e293b] text-slate-300"
 
@@ -82,6 +88,7 @@ export function SheetGallery({ result, sheets, onSetThumbnail, accent }: SheetGa
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
             {sheets.map((sheet, idx) => {
               const label = sheetLabel(sheet)
+              const shownLabel = localizeOption(label)
               const lbIdx = result ? idx + 1 : idx
               return (
                 <div key={`${sheet.url}-${idx}`} className="relative group border border-[#1e293b] rounded overflow-hidden bg-[#0e1117]">
@@ -91,9 +98,9 @@ export function SheetGallery({ result, sheets, onSetThumbnail, accent }: SheetGa
                     className="block w-full cursor-zoom-in"
                     aria-label={t("entity.openFullScreen")}
                   >
-                    <img src={sheet.url} alt={label} loading="lazy" className="w-full h-full object-cover aspect-video" />
+                    <img src={sheet.url} alt={shownLabel} loading="lazy" className="w-full h-full object-cover aspect-video" />
                   </button>
-                  <div className="absolute inset-x-0 bottom-0 bg-black/60 text-white text-[10px] px-1.5 py-0.5 pointer-events-none">{label}</div>
+                  <div className="absolute inset-x-0 bottom-0 bg-black/60 text-white text-[10px] px-1.5 py-0.5 pointer-events-none">{shownLabel}</div>
                   <div className="absolute inset-x-0 top-0 flex justify-end gap-1 p-1 opacity-0 group-hover:opacity-100">
                     <a href={sheet.url} download target="_blank" rel="noreferrer" className="px-1.5 py-0.5 text-[10px] rounded bg-black/60 text-white hover:bg-black/80" title={t("common.download")}>↓</a>
                     <button type="button" onClick={() => void copyUrl(sheet.url)} className="px-1.5 py-0.5 text-[10px] rounded bg-black/60 text-white hover:bg-black/80" title={t("cfgshared.copyUrl")}>⧉</button>

@@ -3,6 +3,7 @@ import { supabase } from "./supabase.js"
 import { sendInternalError } from "./http-errors.js"
 import { accessAtLeast, workflowAccessFromRow, type AccessLevel } from "./workflow-access.js"
 import type { WorkflowAccessRow } from "./private-plugins/types.js"
+import { withResolvedResultIds } from "./canvas-result-ids.js"
 
 /**
  * Turning a workflow row a route already loaded into the facts the access rule
@@ -101,18 +102,31 @@ export async function loadWorkflowFor(
   min: Exclude<AccessLevel, "none">,
   cols: string,
   failureMessage: string,
+  opts: LoadWorkflowOptions = {},
 ): Promise<LoadedWorkflow> {
-  return loadWorkflowSnapshot(req, reply, userId, workflowId, min, cols, failureMessage, false)
+  return loadWorkflowSnapshot(req, reply, userId, workflowId, min, cols, failureMessage, false, opts)
+}
+
+export interface LoadWorkflowOptions {
+  /**
+   * Resolve the row's saved result ids on the way out (`canvas-result-ids.ts`:
+   * placeholder `exec-…` ids, unlabelled Apply EDL takes). On by default, so
+   * every route that hands a loaded graph to a client hands it resolved; a
+   * route that resolves what it writes and answers instead opts out, and is
+   * listed in `__tests__/canvas-result-ids-sites.test.ts`.
+   */
+  readonly resolveResultIds?: boolean
 }
 
 /** Public sharing permits copying only through this dedicated read. It never
  * changes the access granted to ordinary reads, edits or job submissions. */
-export const loadStudioEditableCopySource: typeof loadWorkflowFor = (req, reply, userId, workflowId, min, cols, failureMessage) =>
-  loadWorkflowSnapshot(req, reply, userId, workflowId, min, cols, failureMessage, true)
+export const loadStudioEditableCopySource: typeof loadWorkflowFor = (req, reply, userId, workflowId, min, cols, failureMessage, opts = {}) =>
+  loadWorkflowSnapshot(req, reply, userId, workflowId, min, cols, failureMessage, true, opts)
 
 async function loadWorkflowSnapshot(
   req: FastifyRequest, reply: FastifyReply, userId: string, workflowId: string,
   min: Exclude<AccessLevel, "none">, cols: string, failureMessage: string, editableCopy: boolean,
+  opts: LoadWorkflowOptions,
 ): Promise<LoadedWorkflow> {
   const { data, error } = await supabase
     // The read IS the access question: it fetches the row in order to decide
@@ -147,5 +161,9 @@ async function loadWorkflowSnapshot(
     })
     return { ok: false }
   }
-  return { ok: true, row, access }
+  // Judged first, resolved after: a caller who may not reach the workflow
+  // never costs a jobs lookup. Nothing is written — the editor's next save
+  // persists what this read hands it.
+  const resolved = opts.resolveResultIds === false ? row : await withResolvedResultIds(row)
+  return { ok: true, row: resolved, access }
 }

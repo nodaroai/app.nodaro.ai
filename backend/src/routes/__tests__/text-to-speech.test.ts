@@ -27,12 +27,17 @@ vi.mock("@/lib/queue.js", () => ({
   redis: {},
 }))
 
-// The credit guard is a no-op here, but the resolver the route hands it is kept so
-// a test can ask it which model it would bill (it must be the model the run uses).
-const guard = vi.hoisted(() => ({ resolver: undefined as undefined | ((req: { body: unknown }) => string) }))
+// The credit guard is a no-op here, but the resolver and the options the route
+// hands it are kept so a test can ask which model it would bill and what it
+// would compute for the body (the length-pricing hook, when the flag is on).
+const guard = vi.hoisted(() => ({
+  resolver: undefined as undefined | ((req: { body: unknown }) => string),
+  opts: undefined as undefined | { computeCredits?: (body: unknown, req: unknown) => number | Promise<number> },
+}))
 vi.mock("@/middleware/credit-guard.js", () => ({
-  creditGuard: (resolver: (req: { body: unknown }) => string) => {
+  creditGuard: (resolver: (req: { body: unknown }) => string, opts?: { computeCredits?: (body: unknown, req: unknown) => number | Promise<number> }) => {
     guard.resolver = resolver
+    guard.opts = opts
     return async () => {}
   },
   reserveCreditsForJob: vi.fn().mockResolvedValue({
@@ -58,6 +63,7 @@ vi.mock("@/lib/config.js", () => ({
   isCommunity: () => false,
   isBusiness: () => false,
   hasAdmin: () => true,
+  speechLengthPricingEnabled: () => false,
 }))
 
 vi.mock("@/lib/url-validator.js", async () => {
@@ -76,6 +82,7 @@ import { videoQueue } from "../../lib/queue.js"
 import { reserveCreditsForJob } from "@/middleware/credit-guard.js"
 import { getMaxTtsChars, DEFAULT_TTS_PROVIDER } from "@nodaro/shared"
 import { __resetSurfaceProfileCacheForTests } from "../../lib/surface-profile.js"
+import { TTS_NEIGHBOUR_TEXT_MAX_CHARS } from "../../providers/elevenlabs/neighbour-text.js"
 
 // ---------------------------------------------------------------------------
 // Test app setup
@@ -126,6 +133,78 @@ function mockJobInsert(result: { data: unknown; error: unknown }) {
 // ---------------------------------------------------------------------------
 
 describe("POST /v1/text-to-speech", () => {
+  describe("neighbour text (previousText / nextText)", () => {
+    const USER = "00000000-0000-4000-8000-000000000001"
+
+    it("forwards both to the queue and stores them on the job's input_data", async () => {
+      const { mockInsert } = mockJobInsert({ data: { id: "job-n1" }, error: null })
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/text-to-speech",
+        payload: { text: "Middle.", provider: "elevenlabs-v4", previousText: "Before.", nextText: "After.", userId: USER },
+      })
+      expect(res.statusCode).toBe(200)
+      expect(vi.mocked(videoQueue.add)).toHaveBeenCalledWith("text-to-speech", expect.objectContaining({ previousText: "Before.", nextText: "After." }))
+      expect(mockInsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          input_data: expect.objectContaining({ previousText: "Before.", nextText: "After.", type: "text-to-speech" }),
+        }),
+      )
+    })
+
+    it("accepts them on a model that does not stitch — the funnel decides whether they are sent", async () => {
+      mockJobInsert({ data: { id: "job-n2" }, error: null })
+      const res = await app.inject({ method: "POST", url: "/v1/text-to-speech", payload: { text: "Hi.", provider: "elevenlabs-v3", previousText: "Before.", userId: USER } })
+      expect(res.statusCode).toBe(200)
+      expect(vi.mocked(videoQueue.add)).toHaveBeenCalledWith("text-to-speech", expect.objectContaining({ previousText: "Before." }))
+    })
+
+    it("rejects a neighbour text over the cap with a 400 before any reservation (REST callers get told, not trimmed)", async () => {
+      mockJobInsert({ data: { id: "job-n3" }, error: null })
+      const res = await app.inject({ method: "POST", url: "/v1/text-to-speech", payload: { text: "Hi.", previousText: "x".repeat(TTS_NEIGHBOUR_TEXT_MAX_CHARS + 1), userId: USER } })
+      expect(res.statusCode).toBe(400)
+      expect(res.json().error.code).toBe("validation_error")
+      expect(reserveCreditsForJob).not.toHaveBeenCalled()
+    })
+
+    it("a model that does not stitch never sees the cap or the type check: the fields are not sent there, so they cannot fail the request", async () => {
+      mockJobInsert({ data: { id: "job-n6" }, error: null })
+      const long = "x".repeat(TTS_NEIGHBOUR_TEXT_MAX_CHARS * 3)
+      const res = await app.inject({ method: "POST", url: "/v1/text-to-speech", payload: { text: "Hi.", provider: "elevenlabs-v3", previousText: long, nextText: null, userId: USER } })
+      expect(res.statusCode).toBe(200)
+      const queued = vi.mocked(videoQueue.add).mock.calls[0]![1] as Record<string, unknown>
+      expect(queued.previousText).toBe(long) // carried as given; the funnel drops it for this model
+      expect(queued.nextText).toBeUndefined() // not a string, so absent
+    })
+
+    it("the cap is measured on the trimmed text, like the funnel: padding does not push a valid value over it", async () => {
+      mockJobInsert({ data: { id: "job-n7" }, error: null })
+      const padded = ` ${"x".repeat(TTS_NEIGHBOUR_TEXT_MAX_CHARS)}${" ".repeat(100)}`
+      const res = await app.inject({ method: "POST", url: "/v1/text-to-speech", payload: { text: "Hi.", provider: "elevenlabs-v4", previousText: padded, userId: USER } })
+      expect(res.statusCode).toBe(200)
+    })
+
+    it("a stitching model still rejects a value over the cap once trimmed", async () => {
+      mockJobInsert({ data: { id: "job-n8" }, error: null })
+      const res = await app.inject({ method: "POST", url: "/v1/text-to-speech", payload: { text: "Hi.", provider: "elevenlabs-v4", nextText: ` ${"x".repeat(TTS_NEIGHBOUR_TEXT_MAX_CHARS + 1)} `, userId: USER } })
+      expect(res.statusCode).toBe(400)
+    })
+
+    it("rejects a non-string neighbour text with a 400", async () => {
+      mockJobInsert({ data: { id: "job-n4" }, error: null })
+      const res = await app.inject({ method: "POST", url: "/v1/text-to-speech", payload: { text: "Hi.", nextText: ["After."], userId: USER } })
+      expect(res.statusCode).toBe(400)
+    })
+
+    it("a request without them is unchanged: no neighbour key on the queue payload", async () => {
+      mockJobInsert({ data: { id: "job-n5" }, error: null })
+      await app.inject({ method: "POST", url: "/v1/text-to-speech", payload: { text: "Hi.", userId: USER } })
+      const payload = vi.mocked(videoQueue.add).mock.calls[0]![1] as Record<string, unknown>
+      expect(payload.previousText).toBeUndefined()
+      expect(payload.nextText).toBeUndefined()
+    })
+  })
+
   it("returns 400 when text is missing", async () => {
     const res = await app.inject({
       method: "POST",
@@ -426,6 +505,20 @@ describe("POST /v1/text-to-speech", () => {
 
   describe("elevenlabs-v4", () => {
     const userId = "00000000-0000-4000-8000-000000000001"
+
+    it("withTimestamps rides to the queue as a boolean; omitted stays omitted; a non-boolean is a 400", async () => {
+      mockJobInsert({ data: { id: "job-1" }, error: null })
+      await app.inject({ method: "POST", url: "/v1/text-to-speech", payload: { text: "Hi", provider: "elevenlabs-v4", userId, withTimestamps: true } })
+      expect(videoQueue.add).toHaveBeenLastCalledWith("text-to-speech", expect.objectContaining({ withTimestamps: true }))
+
+      mockJobInsert({ data: { id: "job-2" }, error: null })
+      await app.inject({ method: "POST", url: "/v1/text-to-speech", payload: { text: "Hi", provider: "elevenlabs-v4", userId } })
+      const payload = vi.mocked(videoQueue.add).mock.lastCall![1] as Record<string, unknown>
+      expect("withTimestamps" in payload).toBe(false)
+
+      const bad = await app.inject({ method: "POST", url: "/v1/text-to-speech", payload: { text: "Hi", provider: "elevenlabs-v4", userId, withTimestamps: "yes" } })
+      expect(bad.statusCode).toBe(400)
+    })
 
     it("is accepted, reserved under its own credit id, and queued as itself", async () => {
       mockJobInsert({ data: { id: "job-1" }, error: null })

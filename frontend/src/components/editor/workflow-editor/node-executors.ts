@@ -33,6 +33,7 @@ import {
 } from "./types";
 import { jobGoneMessage, shouldStopPolling } from "./poll-connection";
 import { pollJobWithNodeUpdate, guardedToast, getJobStatusLeanForNode, RUN_START_RESET } from "./poll-job";
+import { runResultIdentity } from "@/lib/run-result-identity";
 import { shouldAbandonNode } from "./abandon-guard";
 import { tx } from "@/lib/i18n";
 
@@ -810,7 +811,7 @@ export function runCombineVideos(
  */
 export function runApplyEdl(
   nodeId: string,
-  params: { edl: unknown; output?: "video" | "audio"; quality?: "proxy" | "final"; crossfadeMs?: number; sources?: string[]; transcript?: unknown },
+  params: { edl: unknown; output?: "video" | "audio"; quality?: "proxy" | "final"; crossfadeMs?: number; sources?: string[]; transcript?: unknown; clipKey?: string; planBasis?: string },
   ctx: ExecutionContext,
 ): Promise<string> {
   return pollJobWithNodeUpdate(
@@ -820,5 +821,11 @@ export function runApplyEdl(
     "Apply EDL",
     ctx,
     (od) => ({ generatedJson: od.json ?? undefined }),
+    undefined,
+    // The take's identity — its quality ("proxy" is a Preview), plan clip,
+    // planBasis and renderBasis (lib/run-result-identity.ts) —
+    // goes on the RESULT only, never the node: `quality` there is the node's
+    // own setting, which a one-shot Render final must not flip.
+    { resultFields: (od) => runResultIdentity("apply-edl", od) },
   );
 }

@@ -5,8 +5,8 @@ import { randomUUID } from "node:crypto"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { promises as fs } from "node:fs"
-import youtubedl from "youtube-dl-exec"
 import { ytProxyOption } from "../providers/video/yt-proxy.js"
+import { runYtDlpOptions } from "../providers/video/ytdlp-options-run.js"
 import { uploadFileWithKeyToR2, uploadBufferToR2 } from "../lib/storage.js"
 import { formatZodError } from "../lib/zod-error.js"
 
@@ -36,7 +36,7 @@ export async function youtubeAudioRoutes(app: FastifyInstance) {
     try {
       console.log(`[youtube-audio] Downloading audio from: ${url}`)
 
-      await youtubedl(url, {
+      const ytDlpOptions: Record<string, unknown> = {
         extractAudio: true,
         audioFormat: "mp3",
         audioQuality: 0,
@@ -55,7 +55,10 @@ export async function youtubeAudioRoutes(app: FastifyInstance) {
           "referer:youtube.com",
           "user-agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         ],
-      } as Record<string, unknown>)
+      }
+      // `-x --audio-format mp3` runs yt-dlp's own ffmpeg to ENCODE: admitted like any ffmpeg, and stopped
+      // with its whole process group at the hold.
+      await runYtDlpOptions(url, ytDlpOptions)
 
       // Find the actual audio file - yt-dlp may use different naming
       let actualPath = expectedPath

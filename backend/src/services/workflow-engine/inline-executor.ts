@@ -3,7 +3,7 @@
  * These run synchronously in the orchestrator process.
  */
 
-import { ASPECT_RATIO_DIMENSIONS, resolveSeparator, evaluateJsonPath, stringifyPathResults, alignedFieldList, evaluateJsonExpression, buildExpressionFromVisual, jsonResultToList, type JsonFilter, tryParseJson, evaluateCondition, evaluateConditionGroup, resolveConditionValue, type FilterListCondition, type RouterConditionGroup, sortListItems, type SortType, type SortDirection, runSelector, resolveSelectorRefs, type SelectorConfig, spreadJsonArrayIfSingleton, zipMergeLists, resolveSourceThroughConnectedList, buildConditionVariables, VARIABLES_HANDLE_ID } from "@nodaro/shared"
+import { ASPECT_RATIO_DIMENSIONS, resolveSeparator, evaluateJsonPath, stringifyPathResults, alignedFieldList, evaluateJsonExpression, buildExpressionFromVisual, jsonResultToList, type JsonFilter, tryParseJson, evaluateCondition, evaluateConditionGroup, resolveConditionValue, type FilterListCondition, type RouterConditionGroup, sortListItems, type SortType, type SortDirection, runSelector, resolveSelectorRefs, type SelectorConfig, spreadJsonArrayIfSingleton, zipMergeLists, resolveSourceThroughConnectedList, buildConditionVariables, VARIABLES_HANDLE_ID, LEGACY_SOURCE_HANDLE_ALIASES, listResultsServeHandle } from "@nodaro/shared"
 
 // Re-export for tests and downstream consumers.
 export type { FilterListCondition }
@@ -18,6 +18,27 @@ import { JobBlockedError } from "../../lib/job-policy.js"
 import { safeFetch } from "../../lib/safe-fetch.js"
 import { HttpCredentialError, resolveHttpAuthHeaders, type ResolvedHttpAuth } from "../../lib/http-credentials.js"
 import { safeUrlSchema } from "../../lib/url-validator.js"
+
+/**
+ * A wire on a source's TEXT pip asks for the text the node makes of its
+ * structured result — a feed's digest, a collection's headlines — never one
+ * JSON row per item. Those nodes carry `json` beside a per-item `listResults`
+ * (the fan-out view), and expanding the list here handed Combine Text raw JSON
+ * posts off a `text` wire (the Telegram news flow, 2026-10-06). A fan-out's
+ * per-iteration values are not that view, so they still expand. The legacy spelling of the
+ * pip (`out` on the feed) is read through the same alias table as the canvas.
+ */
+function wantsTextOfStructuredOutput(output: NodeOutput, sourceType: string, sourceHandle: string | null | undefined): boolean {
+  if (!sourceHandle || !Array.isArray(output.json)) return false
+  const handle = LEGACY_SOURCE_HANDLE_ALIASES[sourceType]?.[sourceHandle] ?? sourceHandle
+  if (handle !== "text") return false
+  // Only the node's OWN per-item view of its rows. A fan-out spreads iteration
+  // 0's output (its json included) beside one value PER ITERATION — those must
+  // still expand, so the list has to be exactly the rows, stringified.
+  const rows = output.json
+  const list = output.listResults
+  return list !== undefined && list.length === rows.length && list.every((item, i) => item === JSON.stringify(rows[i]))
+}
 
 /**
  * Collect text outputs from all upstream nodes connected to a target node.
@@ -41,7 +62,7 @@ function collectUpstreamTexts(
     if (!srcNode) continue
     const state = nodeStates[srcNode.id]
     if (state?.output) {
-      if (includeListResults) {
+      if (includeListResults && !wantsTextOfStructuredOutput(state.output, srcNode.type, edge.sourceHandle)) {
         const listResults = state.output.listResults
         if (listResults && listResults.length > 0) {
           for (const item of listResults) {
@@ -326,6 +347,18 @@ function collectItemsForEdge(
   if (listResults && listResults.length > 0) {
     for (const item of listResults) {
       if (item != null) items.push(item)
+    }
+    return items
+  }
+
+  // Generate Text's `items` pip: the ===NEXT=== split the extractor derives
+  // (`output.items`, the same split the fan-out planner reads). Only the
+  // `items` wire reads it — the `text` wire stays one value. Without this the
+  // edge fell through to getPrimaryOutput and a list operator got ONE item,
+  // the whole text (#1920); the editor's collector splits it.
+  if (resolvedEdge.sourceHandle === "items" && Array.isArray(output.items) && output.items.length > 0) {
+    for (const item of output.items) {
+      if (typeof item === "string" && item.trim()) items.push(item)
     }
     return items
   }
@@ -866,12 +899,37 @@ function resolveRouterInputValue(
  * (`/v1/webhook-output/send`). Without this, orchestrated runs left no audit
  * trail for webhook deliveries.
  */
+/**
+ * A wire's value for ONE fan-out row (`plan.rows[k]`): the row-aligned twin
+ * when the source publishes one (Extract Field), else its list; a list shorter
+ * than the run starts over from its first row; an empty cell contributes
+ * nothing. The same rule `resolveNodeInputs` applies on an "each" wire. With no
+ * row — the node ran once — the wire's primary output, as before.
+ */
+export function webhookValueAtRow(
+  output: NodeOutput,
+  sourceType: string,
+  sourceHandle: string | null | undefined,
+  row: number | undefined,
+): string | undefined {
+  if (row !== undefined && listResultsServeHandle(sourceType, sourceHandle)) {
+    const list = output.alignedListResults ?? output.listResults
+    if (list && list.length > 0) {
+      const picked = list[row % list.length]
+      return typeof picked === "string" && picked.trim().length > 0 ? picked : undefined
+    }
+  }
+  return getPrimaryOutput(output, sourceType, sourceHandle)
+}
+
 export async function executeWebhookOutput(
   node: SimpleNode,
   edges: SimpleEdge[],
   allNodes: SimpleNode[],
   nodeStates: Record<string, NodeExecutionState>,
   ctx?: OrchestratorContext,
+  // The fan-out row this iteration reads (`plan.rows[k]`); undefined when the node runs once.
+  row?: number,
 ): Promise<NodeOutput> {
   const url = (node.data.url as string)?.trim()
   if (!url) {
@@ -892,32 +950,37 @@ export async function executeWebhookOutput(
 
   const payload: Record<string, unknown> = {}
 
+  // One request per item: run once per row of an "each" wire (a Filter List of
+  // articles, the images made for them), every wire reads its value AT THAT
+  // ROW — the rule resolveNodeInputs applies to every other node. Without a
+  // row a wire reads its primary output. The node used to read the whole
+  // upstream state in every iteration and POST the same payload N times.
+  const valueOf = (edge: SimpleEdge): string | undefined => {
+    const srcNode = nodeById.get(edge.source)
+    if (!srcNode) return undefined
+    const state = nodeStates[srcNode.id]
+    if (state?.output) return webhookValueAtRow(state.output, srcNode.type, edge.sourceHandle, row)
+    if (isSourceNode(srcNode.type)) {
+      const srcOutput = extractSourceNodeOutput(srcNode)
+      if (srcOutput) return getPrimaryOutput(srcOutput, srcNode.type, edge.sourceHandle)
+    }
+    return undefined
+  }
+
   if (params.length > 0) {
     // Param-based: match each param to its connected edge by targetHandle
     for (const param of params) {
       const edge = incomingEdges.find((e) => e.targetHandle === param.id)
       if (!edge) continue
-      const srcNode = nodeById.get(edge.source)
-      if (!srcNode) continue
-
-      let value: string | undefined
-      const state = nodeStates[srcNode.id]
-      if (state?.output) {
-        value = getPrimaryOutput(state.output, srcNode.type, edge.sourceHandle)
-      } else if (isSourceNode(srcNode.type)) {
-        const srcOutput = extractSourceNodeOutput(srcNode)
-        if (srcOutput) value = getPrimaryOutput(srcOutput, srcNode.type, edge.sourceHandle)
-      }
+      const value = valueOf(edge)
       if (value) payload[param.name] = value
     }
   } else {
     // No params — collect all upstream data
     for (const edge of incomingEdges) {
       const srcNode = nodeById.get(edge.source)
-      if (!srcNode) continue
-      const state = nodeStates[srcNode.id]
-      if (!state?.output) continue
-      const value = getPrimaryOutput(state.output, srcNode.type, edge.sourceHandle)
+      if (!srcNode || !nodeStates[srcNode.id]?.output) continue
+      const value = valueOf(edge)
       if (value) payload[srcNode.type] = value
     }
   }

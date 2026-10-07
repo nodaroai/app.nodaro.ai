@@ -846,9 +846,8 @@ describe("getListInputForNode", () => {
   })
 
   it("ignores edges on the 'variables' target handle (no fan-out from a variable source)", () => {
-    // A 3-item list connected to filter-list's main `in` would normally
-    // fan out. On the `variables` handle it must not — that handle feeds
-    // condition refs only.
+    // The `variables` handle feeds condition refs only — never a fan-out,
+    // whatever the target node is.
     const listNode = makeNode("l1", "list", {
       columns: [{ handleId: "col-0", name: "Col", type: "text" }],
       rows: [["a"], ["b"], ["c"]],
@@ -858,6 +857,26 @@ describe("getListInputForNode", () => {
 
     const result = getListInputForNode(target, [listNode, target], edges)
     expect(result).toBeUndefined()
+  })
+
+  // A list operator reads the whole list wired into it and emits a list; run
+  // once per item it would see the same whole list every time and answer with
+  // its first match (the orchestrator did exactly that to a Filter List fed by
+  // a Split Text, 2026-10-06). FAN_IN_TARGETS in @nodaro/shared is the one rule
+  // both planners read.
+  it("a list wired into a list operator's main input does not fan it out — it works the whole list", () => {
+    const listNode = makeNode("l1", "list", {
+      columns: [{ handleId: "col-0", name: "Col", type: "text" }],
+      rows: [["a"], ["b"], ["c"]],
+    })
+    for (const type of ["filter-list", "deduplicate", "merge-lists", "sort-list", "selector"]) {
+      const target = makeNode("t1", type)
+      const edges = [makeEdge("l1", "t1", "col-0", "in")]
+      expect(getListInputForNode(target, [listNode, target], edges)).toBeUndefined()
+    }
+    // …while the same list fans a generating node out.
+    const image = makeNode("g1", "generate-image")
+    expect(getListInputForNode(image, [listNode, image], [makeEdge("l1", "g1", "col-0", "prompt")])).toEqual(["a", "b", "c"])
   })
 })
 

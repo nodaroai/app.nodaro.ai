@@ -66,6 +66,10 @@ export const ENTRY_BY_LINK: readonly string[] = [
   // The inspiration wall (saved posts). Its sidebar entry is admin-only while
   // Social Search is in preview; no surface NavKey hides it.
   "/inspiration",
+  // Collections (where a workflow's records live). Admin-only sidebar entry
+  // until the two collection nodes have been checked; no surface NavKey hides it.
+  "/collections",
+  "/collections/:id",
   // Competitor tracking (Cloud). Admin-only sidebar entry while Social Search
   // is in preview; no surface NavKey hides it.
   "/competitors",

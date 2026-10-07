@@ -42,6 +42,7 @@ import type { ZodError, ZodType } from "zod"
 import type { AudioFxPreset, PresetSettings, SurroundDirection } from "@nodaro/shared"
 import type { PluginScene3DEngine, PluginStageToolkit } from "./scene3d-contract.js"
 import type { FrameFit, FrameDelivery } from "@nodaro/shared"
+import type { Edl, EdlRegion, EdlSegment } from "@nodaro/shared"
 import type {
   PluginAccountSecretsToolkit,
   PluginDaemon,
@@ -243,6 +244,24 @@ export interface PluginMusicGenResult {
   taskId?: string
 }
 
+/**
+ * Mirrors the speech-model capability sheet `ModelCatalogEntry.tts` in the
+ * HOST's `@nodaro/shared` (app `packages/shared/src/model-catalog.ts`),
+ * narrowed to what a plugin reads. The host answers from ITS copy of the
+ * catalog — the plugin package's own `@nodaro/shared` pin lags the app's by
+ * whole releases, so a plugin must never read model capability from it.
+ */
+export interface PluginTtsCapabilities {
+  /** Per-request character cap. */
+  maxChars: number
+  /** Voice-setting levers the model honours ("stability", "similarity", "style", "speed", "speakerBoost"). */
+  levers: readonly string[]
+  /** ISO 639-1 codes offered for the model (`fil` has no two-letter code). A curated list. */
+  languages: readonly string[]
+  /** The model performs inline `[audio tags]`. */
+  audioTags: boolean
+}
+
 export interface PluginProvidersToolkit {
   /** Mirrors `directVoiceChanger` (`providers/elevenlabs/voice-changer.ts`). */
   directVoiceChanger(
@@ -250,6 +269,34 @@ export interface PluginProvidersToolkit {
     voiceId: string,
     options?: PluginVoiceChangerOptions,
   ): Promise<Buffer>
+  /**
+   * ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump) — `?.`-guard it.
+   * Voices `text` with one ElevenLabs voice and returns the stored file and its
+   * measured length. Mirrors the text-to-speech worker's direct ElevenLabs call
+   * (`workers/handlers/audio-ai.ts`), stored under the job's key (`jobId`) and
+   * counted to the user's storage quota (`userId`). Never enables the
+   * default-voice fallback: a missing voice fails the step, and no other voice
+   * is tried. `voiceType` is accepted for the contract and not forwarded.
+   */
+  textToSpeech?(
+    text: string,
+    opts: {
+      model: string
+      voiceId: string
+      voiceType?: string
+      languageCode?: string
+      jobId: string
+      userId: string
+    },
+  ): Promise<{ audioUrl: string; durationSec: number }>
+  /**
+   * The HOST's capability sheet for a text-to-speech model id (e.g.
+   * "elevenlabs-v4"), or `undefined` when the id is not a text-to-speech model.
+   * Read from the app's own `@nodaro/shared` — see `PluginTtsCapabilities`.
+   * ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump) — `?.`-guard it; an older host
+   * has no such member and the caller falls back to its own table.
+   */
+  ttsCapabilities?(providerId: string): PluginTtsCapabilities | undefined
   /**
    * Mirrors `ReplicateAudioSeparationProvider#separateAudio`
    * (`providers/replicate/audio-separation.ts`), exposed as a plain
@@ -559,6 +606,145 @@ export interface PluginFfmpegToolkit {
    * of the input container into an mp4 at `outputPath`.
    */
   remuxToMp4(inputPath: string, outputPath: string): Promise<void>
+  /**
+   * The EDL timeline (`providers/video/edl-timeline.ts`) — Apply EDL's
+   * renderer, lent to a plugin that draws its OWN picture on it (Speaker View,
+   * SV1 b, decided 2026-10-06). Core keeps everything that makes the cut
+   * correct and long renders survivable: the cumulative frame grid, chunks
+   * split at hard cuts, per-input seeks, the one lossless sound pass with a
+   * single AAC encode, fingerprinted R2 checkpoints, the per-chunk kill
+   * budgets and each launch's memory reservation. The plugin supplies only
+   * `picture(ctx)`: per segment, the filter-graph fragment that draws its
+   * slots onto the canvas. Slots come from the EDL (`layout.slots`, D20 via
+   * `resolveEdlSegmentSlots` with `speakerRegions`), so write the layouts
+   * into `edl` before calling. An `xfade:<id>` layout switch joins with that
+   * combine-videos transition and blends the sound like a crossfade,
+   * consuming the overlap (D17; SV21 c — write one only where master time is
+   * discontinuous).
+   *
+   * Uploads the render PLAIN under `jobId` (tracked to `jobUserId`'s storage),
+   * plus a thumbnail for video, exactly as core Apply EDL does, and removes
+   * its local files. Runs inside the worker's cancellation context: a cancel
+   * stops it at the next chunk boundary with the host's `JobCancelledError`.
+   * The plugin passes its OWN `label` (e.g. `"speaker-view"`, required) so
+   * its checkpoints and logs never mix with Apply EDL's `apply-edl-cache/`.
+   * A refusal that depends only on the inputs (a missing or invalid label, a
+   * segment past its media, an unknown `xfade:` id) is a deterministic error
+   * the worker fails without retrying. The handler still owns its heartbeat budget: the host sizes it
+   * from `DECLARED_JOB_BUDGETS[job.name]` at dispatch.
+   *
+   * ADDITIVE-OPTIONAL: absent on an older host. A plugin feature-detects it
+   * (`typeof tk.ffmpeg.renderEdlTimeline === "function"`) and refuses BEFORE
+   * any credit is reserved when it is missing.
+   */
+  renderEdlTimeline?(opts: PluginEdlTimelineOptions): Promise<PluginEdlTimelineResult>
+}
+
+/** Mirrors `EdlPictureSlot` (`providers/video/edl-picture.ts`). */
+export interface PluginEdlPictureSlot {
+  readonly source: string
+  /** Crop on the source, fractions of its frame (D20); full frame when none was set. */
+  readonly region: EdlRegion
+  readonly regionFrom: "slot" | "segment" | "resolver" | "speaker" | "source" | "full"
+  readonly speaker?: string
+  readonly weight?: number
+  /** The slot stream's graph label (e.g. `[p3s0]`), read by a `graph`
+   *  fragment (one slot included); a `chain` ignores it. Held past the source's end, trimmed to
+   *  the segment's read window, timestamps from 0 at `leadSec` before the
+   *  segment's own start, a few frames past its end. */
+  readonly label?: string
+  /** The slot stream's read window on its SOURCE's own clock, whole ms
+   *  (`masterMs − offsetMs`, D19) — the clock face tracks are kept on.
+   *  `startMs` is the stream's t = 0 (a split tail's: its whole segment's
+   *  start, `leadSec` earlier); `endMs` the segment's own end. */
+  readonly sourceSpan: { readonly startMs: number; readonly endMs: number }
+}
+
+/** Mirrors `EdlPictureContext` (`providers/video/edl-picture.ts`). */
+export interface PluginEdlPictureContext {
+  readonly segment: EdlSegment
+  readonly index: number
+  readonly slots: readonly PluginEdlPictureSlot[]
+  readonly canvas: { readonly width: number; readonly height: number }
+  readonly fps: number
+  readonly quality: "proxy" | "final"
+  readonly durationSec: number
+  readonly leadSec: number
+  /** Frames this segment holds on the output grid; the host keeps exactly these. */
+  readonly frames: number
+  /** Its first frame on the GLOBAL output grid (`frameAtMs`). */
+  readonly startFrame: number
+  /** The output frame grid on the slot streams: kept output frame k
+   *  (0 ≤ k < `frames`) is the canvas-rate frame at stream time
+   *  `(leadFrames + k) / fps`, i.e. at
+   *  `slots[j].sourceSpan.startMs + 1000·(leadFrames + k)/fps` ms on slot j's
+   *  source clock (to within one source frame) — where a glide samples its
+   *  face track. Non-zero only on a split tail (its head rendered those). */
+  readonly leadFrames: number
+  /** The label a `graph` fragment must write: one canvas-sized stream. */
+  readonly output: string
+  /** Prefix for every intermediate label a `graph` fragment defines. */
+  readonly scope: string
+}
+
+/**
+ * Mirrors `EdlPictureFragment`: `{ chain }` — a linear filter chain (no
+ * labels, no `;`) applied to a ONE-slot segment's stream; `{ graph }` —
+ * statements that read every slot's `label` and write `ctx.output`. The host
+ * conforms the result to the canvas rate and the segment's exact frame count.
+ * The builder is called synchronously while each slice is planned and its
+ * fragment is part of the checkpoint key, so it must be pure and
+ * self-contained — the key hashes a file's path, not its content. A `movie=` /
+ * `amovie=` source or a `sendcmd` command file (pass the commands inline,
+ * `c=`) is refused as deterministic; other file-reading filters are not
+ * checked, and must not be used either.
+ */
+export type PluginEdlPictureFragment = { readonly chain: string } | { readonly graph: string }
+
+/** Mirrors `EdlTimelineOptions` (`providers/video/edl-timeline.ts`). */
+export interface PluginEdlTimelineOptions {
+  readonly edl: Edl
+  /** Default `"video"`. */
+  readonly output?: "video" | "audio"
+  readonly quality: "proxy" | "final"
+  /** Keys the checkpoints (a retry of the same job resumes them) and the upload. */
+  readonly jobId: string
+  readonly jobUserId?: string
+  /** Default: the full-frame picture (Apply EDL's). */
+  readonly picture?: (ctx: PluginEdlPictureContext) => PluginEdlPictureFragment
+  /** D20's per-(source, speaker) framing (`ResolveEdlSlotsOptions.speakerRegions`). */
+  readonly speakerRegions?: ReadonlyArray<{ readonly source: string; readonly speaker: string; readonly region: EdlRegion }>
+  /** D20's resolver rung (`ResolveEdlSlotsOptions.regionFor`, Speaker View
+   *  v3): a per-(segment, slot) region — the tracked framing — below an
+   *  explicit slot/segment region and above `speakerRegions`. Asked about the
+   *  EDL's own segment, never a chunk's split half. Pure, like `picture`: its
+   *  regions reach the fragments the checkpoint key hashes. Additive-optional:
+   *  a host older than this field ignores it (as it lacks `sourceSpan` and
+   *  `leadFrames`), so a plugin that relies on them ships after the host does. */
+  readonly regionFor?: (q: { readonly segment: EdlSegment; readonly source: string; readonly speaker?: string }) => EdlRegion | undefined
+  /** A fixed canvas (even-rounded) for every quality — the plugin sizes it
+   *  (SV7). Default: the most common source resolution, 720p-capped for a proxy. */
+  readonly canvas?: { readonly width: number; readonly height: number }
+  /** REQUIRED (decided 2026-10-06): the plugin's own render name, e.g.
+   *  `"speaker-view"` — it names the renderer in refusals and logs, its work
+   *  directory and its checkpoint prefix (`<label>-cache/`), so a plugin's
+   *  checkpoints never mix with Apply EDL's `apply-edl-cache/`. A short slug:
+   *  lowercase letters and digits in words joined by single hyphens, a letter
+   *  first, at most 40 characters; never `"apply-edl"`. No default — a
+   *  missing or invalid label is refused as a deterministic error (failed now,
+   *  never retried) before anything is downloaded or rendered. */
+  readonly label: string
+  /** 0..1 render progress. */
+  readonly onProgress?: (fraction: number) => void
+}
+
+export interface PluginEdlTimelineResult {
+  /** The render, uploaded plain (no watermark, no transcode). */
+  readonly url: string
+  /** Video only; null when the thumbnail could not be made. */
+  readonly thumbnailUrl: string | null
+  /** The rendered length — `edlDurationMs(edl)` by construction. */
+  readonly durationMs: number
 }
 
 // ============================================================================
@@ -571,6 +757,15 @@ export interface PluginMixAudioOptions {
   readonly audioUrls: readonly string[]
   readonly trackVolumes?: readonly number[]
   readonly sumTracks?: boolean
+  /** Ducking (`MixAudioDuck`, `lib/mix-audio-duck.ts`): every track except `under` dips while track `under` is loud. */
+  readonly duck?: {
+    readonly under: number
+    readonly amount?: number
+    readonly thresholdDb?: number
+    readonly ratio?: number
+    readonly attackMs?: number
+    readonly releaseMs?: number
+  }
 }
 
 /** Mirrors the inline `AudioTrack` type (`providers/video/merge-video-audio.ts`). */
@@ -608,10 +803,127 @@ export interface PluginAudioFxOptions {
   readonly eqHigh?: number
 }
 
+/** Mirrors `ProxySpan` (`services/media-proxy-span-map.ts`): ms on the source's own clock. */
+export interface PluginProxySpan {
+  readonly startMs: number
+  readonly endMs: number
+}
+
+/** Mirrors `ProxySpanMapRow` (`services/media-proxy-span-map.ts`). Frame
+ * `firstFrame + k` of the proxy shows the source at
+ * `sourceStartMs + k × 1000 / fps`; proxy time is half-open
+ * `[proxyStartMs, proxyEndMs)`. */
+export interface PluginProxySpanMapRow {
+  readonly proxyStartMs: number
+  readonly proxyEndMs: number
+  readonly sourceStartMs: number
+  readonly firstFrame: number
+  readonly frameCount: number
+}
+
+/** Mirrors `MediaProxyOptions` (`services/media-proxy.ts`), video side. */
+export interface PluginVideoProxyOptions {
+  readonly fps?: number
+  /** Even px, at most 2160; a shorter source is never upscaled. Default 360. */
+  readonly height?: number
+  /** Omitted = the whole source. Padding (the 2 s detection margin) is the caller's. */
+  readonly spans?: readonly PluginProxySpan[]
+  readonly timeoutMs?: number
+}
+
+/** Mirrors `VideoProxyResult` (`services/media-proxy.ts`). */
+export interface PluginVideoProxy {
+  readonly url: string
+  readonly key: string
+  readonly kind: "video"
+  readonly cached: boolean
+  readonly fps: number
+  /** The proxy's only clock: built from the frames actually written. */
+  readonly spanMap: readonly PluginProxySpanMapRow[]
+  /** Display-oriented, square-pixel frame size; box fractions refer to it. */
+  readonly frame: { readonly w: number; readonly h: number }
+  readonly frameCount: number
+}
+
+/** Mirrors `DetectFacesInput` (`services/face-detect/detect-faces.ts`): one
+ * window of a detection proxy. */
+export interface PluginDetectFacesInput {
+  /** `PluginVideoProxy.url` — a proxy this platform stored; any other URL is refused. */
+  readonly proxyUrl: string
+  /** `PluginVideoProxy.fps`. */
+  readonly fps: number
+  /** `PluginVideoProxy.spanMap`: the only clock a detection goes through. */
+  readonly spanMap: readonly PluginProxySpanMapRow[]
+  /** First proxy frame, inclusive. */
+  readonly fromFrame: number
+  /** Last proxy frame, exclusive; at most 1,200 frames after `fromFrame`. */
+  readonly toFrame: number
+  /** Keep faces scoring at least this, in (0, 1]. The threshold is the caller's. */
+  readonly minScore: number
+  /** Also return a 16×9 RGB thumbnail per frame (base64): the camera-setup signature input. */
+  readonly thumb?: boolean
+}
+
+/** Mirrors `YunetFace` (`services/face-detect/yunet-decode.ts`). */
+export interface PluginDetectedFace {
+  /** Top-left corner and size, fractions of the proxy frame; not clipped to it. */
+  readonly x: number
+  readonly y: number
+  readonly w: number
+  readonly h: number
+  readonly score: number
+  /** Right eye, left eye, nose tip, right and left mouth corners: [x, y] fractions. */
+  readonly landmarks: ReadonlyArray<readonly [number, number]>
+}
+
+/** Mirrors `DetectFacesResult` (`services/face-detect/detect-faces.ts`). */
+export interface PluginDetectFacesResult {
+  /** What a track set records as its detector, e.g. `yunet:2023mar-dyn@57acd732`. */
+  readonly detector: { readonly id: string; readonly version: string }
+  readonly frame: { readonly w: number; readonly h: number }
+  /** The window's frames a span-map row holds, in order, each on the SOURCE clock. */
+  readonly frames: ReadonlyArray<{
+    readonly frame: number
+    readonly sourceMs: number
+    readonly boxes: readonly PluginDetectedFace[]
+    readonly thumb?: string
+  }>
+  /** Frames held by no span-map row: dropped, never given a time. */
+  readonly dropped: number
+  readonly boxCount: number
+  /** The Node process's CPU while the call held its admission slot, ms (not
+   *  the wait for the slot, not the decode child's). */
+  readonly cpuMs: number
+}
+
 export interface PluginMediaToolkit {
   /** Authorize the source first. Public-only bounded video download and local
    * still extraction; no jobs, storage credentials or automatic media spend. */
   readPublicVideoFrame?(input: { videoUrl: string; timeSec: number }): Promise<Buffer>
+  /**
+   * Mirrors `ensureMediaProxy(url, "video", opts)` (`services/media-proxy.ts`)
+   * — the cached detection/review proxy (P3.2), span-scoped and height-keyed,
+   * with its span map. Additive-optional: feature-detect and refuse before any
+   * reserve when absent.
+   */
+  ensureMediaProxy?(sourceUrl: string, kind: "video", opts?: PluginVideoProxyOptions): Promise<PluginVideoProxy>
+  /**
+   * Mirrors `proxyFrameToSourceMs` (`services/media-proxy-span-map.ts`): a proxy
+   * frame index → source-clock ms, undefined when no row holds it (drop and
+   * count it). The only conversion a detection may go through.
+   */
+  proxyFrameToSourceMs?(spanMap: readonly PluginProxySpanMapRow[], fps: number, frame: number): number | undefined
+  /**
+   * Mirrors `detectFaces` (`services/face-detect/detect-faces.ts`) — YuNet
+   * (the pinned model, onnxruntime-node) over one window of a detection proxy
+   * (P3.3). Core owns the decode, the session, the admission hold and the
+   * clock: boxes come back on the SOURCE clock through the span map.
+   * Additive-optional: feature-detect and refuse before any reserve when
+   * absent. Rejects with a deterministic error when the host cannot detect (no
+   * model, no native binary, a model whose hash is not the pin) or when a
+   * window would pass the speaker-track caps.
+   */
+  detectFaces?(input: PluginDetectFacesInput): Promise<PluginDetectFacesResult>
   /** Mirrors `extractAudio` (`providers/video/extract-audio.ts`). */
   extractAudio(options: { readonly videoUrl: string }): Promise<{ readonly audioPath: string }>
   /** Mirrors `mixAudio` (`providers/video/mix-audio.ts`). */
@@ -1414,6 +1726,17 @@ export interface PluginHttpToolkit {
   /** Applies the same configured service/global markup used by creditGuard to
    *  a dynamic pre-markup total, without checking balance or reserving it. */
   applyCreditMarkup(modelIdentifier: string, baseCredits: number): Promise<number>
+  /**
+   * ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump) — `?.`-guard it.
+   * The charge-time price of each UGC builder call (`{ tool, args }`, MCP
+   * argument names), one number per call, in order — the same rows and the same
+   * gates the credit guard uses for that payer. An unpriceable call rejects;
+   * it is never priced 0. Nodaro Cloud only: rejects on any other edition.
+   */
+  priceUgcCalls?(
+    caller: { userId: string; billingContext?: PluginBillingContext },
+    calls: ReadonlyArray<{ tool: string; args: Readonly<Record<string, unknown>> }>,
+  ): Promise<number[]>
   /** Mirrors `supabase` (`lib/supabase.ts`), shaped to VCP route usage. */
   supabase: PluginSupabaseClient
   /** Mirrors `videoQueue` (`lib/queue.ts`), narrowed to the one method used. */
@@ -2024,6 +2347,12 @@ export interface PluginToolkit {
    */
   features: PluginFeatures
   /**
+   * Host capability markers (see `PluginCapabilities`). ADDITIVE-OPTIONAL for
+   * plugins (no CONTRACT_VERSION bump) — `?.`-guard it; an older host has no
+   * such member, and absence means "not supported".
+   */
+  capabilities?: PluginCapabilities
+  /**
    * Where this install lives, for links a plugin puts in front of people
    * (an invitation email, a share link). The public origin is decided in
    * exactly one place on the app side (`lib/deployment-urls.ts`, with its
@@ -2138,6 +2467,45 @@ export interface PluginFeatures {
   organizations: boolean
   scene3dAdvanced?: boolean
   scene3dLocal?: boolean
+}
+
+/**
+ * What THIS host's toolkit can do, one named boolean per additive capability.
+ * Distinct from `PluginFeatures` (edition / env gates a plugin must mirror):
+ * a capability is a code-level fact a plugin cannot infer from
+ * `CONTRACT_VERSION`, which is an exact-match integer that only moves for a
+ * breaking change. Always present on this side; the plugin side declares the
+ * group OPTIONAL and reads absence as off, so a plugin built for a newer
+ * host degrades cleanly on an older one:
+ * `if (tk.capabilities?.mixAudioDuck === true) { ...pass duck... }`.
+ * Grows one optional member at a time (additive-only, no CONTRACT_VERSION bump).
+ */
+export interface PluginCapabilities {
+  /** `tk.media.mixAudio` honours `PluginMixAudioOptions.duck`; an older host ignores it silently. */
+  readonly mixAudioDuck?: boolean
+}
+
+/**
+ * What a plugin's OWN handlers can do, declared to the host — direction
+ * plugin → host. The other capability group, `PluginCapabilities`
+ * (`tk.capabilities`), points the opposite way (host → plugin: what this
+ * host's toolkit can do). The host reads a member's ABSENCE as "the
+ * behaviour every plugin had before the member existed", never as "all", so a
+ * newer host on an older plugin degrades cleanly. Grows one optional member at
+ * a time (additive-only, no CONTRACT_VERSION bump); merged by the loader with
+ * `Object.assign`, last write wins per member.
+ */
+export interface PluginSupports {
+  /**
+   * The `edit-plan` modes the plugin's handler plans for BEYOND the three
+   * Phase-1 modes (`tighten`, `clips`, `chapters`), which are always planned;
+   * listing those too is harmless. Absent ⇒ only the Phase-1 three. An older handler coerces a
+   * mode it does not know to `tighten`, while the workflow run already reserved
+   * that mode's price — so the video worker refuses (and refunds) a job in a
+   * mode not listed here before the handler runs
+   * (`lib/private-plugins/edit-plan-mode-gate.ts`).
+   */
+  readonly editPlanModes?: readonly string[]
 }
 
 export interface PluginDeploymentToolkit {
@@ -2266,6 +2634,13 @@ export interface PluginWorkflowsToolkit {
    * they can already see it but need more than they have.
    *
    * Additive-optional with its group (no CONTRACT_VERSION bump).
+   *
+   * The row comes back AS STORED: saved result ids (placeholder `exec-…` job
+   * ids, unlabelled Apply EDL takes) are resolved only when the plugin asks,
+   * with `opts.resolveResultIds: true` and `settings` among `cols` — a plugin
+   * that hands a canvas's nodes to a client asks; one that only judges or
+   * rewrites the row does not pay the jobs lookup. `opts` is additive-optional:
+   * an older host ignores it.
    */
   loadWorkflowFor(
     req: FastifyRequest,
@@ -2275,6 +2650,7 @@ export interface PluginWorkflowsToolkit {
     min: Exclude<WorkflowAccessLevel, "none">,
     cols: string,
     failureMessage: string,
+    opts?: { readonly resolveResultIds?: boolean },
   ): Promise<PluginLoadedWorkflow>
   /**
    * Mirrors `canChangeWorkflowVisibility` (`lib/workflow-access.ts`) — may
@@ -2680,6 +3056,30 @@ export interface PluginBillingService {
   headroom?(workspaceId: string, userId: string): Promise<{ headroomCredits: number; workspaceLabel?: string } | null>
 }
 
+/** What a UGC video's planned length and inputs ask the plugin to plan (spec §5.4). */
+export interface PluginUgcEstimateInput {
+  readonly targetDurationSec: number
+  readonly screenshotCount: number
+  readonly source: "sampled" | "photo"
+}
+
+/**
+ * The calls a UGC video will make, as the plugin plans them: `tickets` are the
+ * builder's per-clip tickets (opaque to the host), `creatorImage` the creator's
+ * image call (null for a photo creator) and `creatorChecks` the additive slot
+ * for the gender reading on a sampled creator and the photo reading on `photo`.
+ */
+export interface PluginUgcEstimate {
+  readonly tickets: unknown[]
+  readonly creatorImage: { tool: string; args: Record<string, unknown> } | null
+  readonly creatorChecks?: ReadonlyArray<{ tool: string; args: Record<string, unknown> }>
+}
+
+/** UGC planning, provided by the plugin (the host prices what it returns with `http.priceUgcCalls`). */
+export interface PluginUgcService {
+  estimate(input: PluginUgcEstimateInput): PluginUgcEstimate
+}
+
 export interface PluginServices {
   /** Public read projection for extension documents. Called only after the
    * host's share-by-link authorization. Null means unsupported; never return
@@ -2694,6 +3094,11 @@ export interface PluginServices {
    * member here: an older plugin build simply has no workspace payers.
    */
   billing?: PluginBillingService
+  /**
+   * ADDITIVE-OPTIONAL (no CONTRACT_VERSION bump) — `?.`-guard it.
+   * UGC video planning (spec §5.4).
+   */
+  ugc?: PluginUgcService
   /** Model-policy enforcement — narrowed when the policy seam lands. */
   policy?: unknown
   /** Live-document writer — narrowed when the collaboration seam lands. */
@@ -2841,6 +3246,11 @@ export interface NodaroPrivatePlugin {
    * toolkit, the one whose `accountSecrets` can decrypt.
    */
   daemons?(tk: PluginToolkit): PluginDaemon[]
+  /**
+   * Additive: what this plugin's own handlers can do, as DATA (see
+   * `PluginSupports` — plugin → host, the reverse of `tk.capabilities`).
+   */
+  supports?(): PluginSupports
 }
 
 export interface PrivatePluginsModule {

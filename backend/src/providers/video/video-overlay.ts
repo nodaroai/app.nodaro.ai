@@ -75,7 +75,7 @@ export function clampVideoOverlayLayers(
   const kept: KeptVideoOverlayLayer[] = []
   const warnings: VideoOverlayWarning[] = []
   layers.forEach((layer, index) => {
-    const ref = { layer: index, ...(layer.slot !== undefined ? { slot: layer.slot } : {}) }
+    const ref = { layer: index, ...(layer.slot !== undefined ? { slot: layer.slot } : {}), ...(layer.planLayer !== undefined ? { planLayer: layer.planLayer } : {}) }
     if (layer.start >= durationSec) {
       warnings.push({ ...ref, code: "skipped", detail: `starts at ${layer.start} s, after the video ends (${d} s)` })
       return
@@ -105,7 +105,7 @@ async function prefitVideoOverlayLayerOrRefuse(
   dest: string,
   size: { readonly width: number; readonly height: number },
   fit: VideoOverlayFit,
-  ref: { readonly layer: number; readonly slot?: number },
+  ref: { readonly layer: number; readonly slot?: number; readonly planLayer?: number },
 ): Promise<{ width: number; height: number }> {
   try {
     return await prefitVideoOverlayLayer(src, dest, size, fit)
@@ -134,12 +134,12 @@ export async function renderVideoOverlay(payload: VideoOverlayJobPayload, workDi
   let totals: VideoOverlayImageTotals = { bytes: 0, pixels: 0 }
   const images: Array<{
     readonly kept: KeptVideoOverlayLayer
-    readonly ref: { readonly layer: number; readonly slot?: number }
+    readonly ref: { readonly layer: number; readonly slot?: number; readonly planLayer?: number }
     readonly path: string
     readonly aspect: number
   }> = []
   for (const k of kept) {
-    const ref = { layer: k.index, ...(k.layer.slot !== undefined ? { slot: k.layer.slot } : {}) }
+    const ref = { layer: k.index, ...(k.layer.slot !== undefined ? { slot: k.layer.slot } : {}), ...(k.layer.planLayer !== undefined ? { planLayer: k.layer.planLayer } : {}) }
     const path = join(workDir, `image-${k.index}`)
     await fetchVideoOverlayImage(k.layer.imageUrl!, path, ref)
     const gate = gateVideoOverlayImage(await inspectVideoOverlayImage(path), totals, ref)
@@ -161,6 +161,7 @@ export async function renderVideoOverlay(payload: VideoOverlayJobPayload, workDi
       out.push({
         index: img.kept.index,
         ...(layer.slot !== undefined ? { slot: layer.slot } : {}),
+        ...(layer.planLayer !== undefined ? { planLayer: layer.planLayer } : {}),
         path,
         prefit,
         start: layer.start,

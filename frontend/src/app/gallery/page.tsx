@@ -25,6 +25,7 @@ import { useT, tx, type MessageKey } from "@/lib/i18n"
 import { useAppDir } from "@/lib/locale-store"
 import { GalleryGridCard } from "@/components/gallery/gallery-grid-card"
 import { TypeBadge, formatGalleryDate } from "@/components/gallery/gallery-media"
+import { PreviewBadge } from "@/components/render/preview-badge"
 import { GallerySelectButton, GallerySelectionBar } from "@/components/gallery/gallery-admin-bar"
 import { GalleryBlockCreatorButton } from "@/components/gallery/gallery-block-creator-button"
 
@@ -532,6 +533,7 @@ export default function GalleryPage() {
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <TypeBadge type={selectedItem.type} />
+                    {selectedItem.preview && <PreviewBadge />}
                     {selectedItem.model && (
                       <span className="text-xs text-muted-foreground bg-zinc-100 dark:bg-zinc-800 rounded px-2 py-0.5">
                         {selectedItem.model}

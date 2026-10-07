@@ -1,7 +1,7 @@
 ---
 node_type: voice-changer-pro
-generated_at: 2026-09-27T12:51:23.744Z
-generated_from: c607aa02c
+generated_at: 2026-10-06T09:34:21.777Z
+generated_from: 1aedac403
 ---
 
 # Voice Changer Pro
@@ -22,8 +22,11 @@ generated_from: c607aa02c
     /** Which lane converts this speaker: "sts" (default — speech-to-speech
      *  recast) | "v3" (Re-speak: the performance is regenerated from the
      *  transcript with eleven_v3; stability 0/0.5/1 only;
-     *  similarityBoost/style/useSpeakerBoost are ignored). */
-    engine?: "sts" | "v3"
+     *  similarityBoost/style/useSpeakerBoost are ignored) | "v4" (Re-speak
+     *  with eleven_v4: any stability 0–1, similarityBoost honoured,
+     *  style/useSpeakerBoost ignored; each line is generated with its
+     *  neighbouring lines as context). */
+    engine?: "sts" | "v3" | "v4"
     stability?: number
     similarityBoost?: number
     style?: number

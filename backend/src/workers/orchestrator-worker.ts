@@ -1,4 +1,4 @@
-import { assertCanvasExecutionAllowed, findWordlessTranscriptFeeds } from "@nodaro/shared"
+import { assertCanvasExecutionAllowed, findWordlessTranscriptFeeds, PREVIEW_REVIEW_REQUIRED, PREVIEW_RENDER_NESTED, PREVIEW_RENDER_NODE_TYPES, CONTINUATION_SUBSET_REQUIRED, type SavedRenderStampReader } from "@nodaro/shared"
 /**
  * Orchestrator worker — processes workflow executions.
  * Loads workflow graph, topological sort, executes nodes level-by-level.
@@ -38,19 +38,34 @@ import {
   triggerRunScope,
   getEffectivelySkippedIds,
   getUploadDescendantIds,
-  computeRouterGatedIds,
+  computeGatedIds,
   isSourceNode,
   isSkipNode,
 } from "../services/workflow-engine/execution-graph.js"
+import { computeEmptyInputSkipIds } from "../services/workflow-engine/empty-input-skips.js"
 import { resolveNodeInputs, getListInputForNode, getListFanOutForNode } from "../services/workflow-engine/input-resolver.js"
 import { normalizeLegacyNodeTypes } from "../services/workflow-engine/normalize-node-types.js"
 import { migrateGenerateImageHandles } from "../lib/generate-image-handle-migration.js"
 import { extractSourceNodeOutput, extractSavedNodeOutput, fanOutIterationValue } from "../services/workflow-engine/output-extractor.js"
+import { runPreviewStops, runHoldsPreview } from "../lib/preview-review-gate.js"
+import {
+  continuationInputOverrides,
+  continuationRefusal,
+  continuationRenderStamps,
+  continuationSeeds,
+  loadContinuationSource,
+  type ContinuationSource,
+} from "../services/workflow-engine/run-continuation.js"
+import { previewStopRuleEnabled } from "../lib/preview-stop-rule-flag.js"
+import { pinExecutionInputOverrides } from "../lib/execution-input-overrides.js"
+import { nestedPreviewRenders, nestedPreviewRenderLocation } from "../services/workflow-engine/nested-preview-renders.js"
 import { seededFromSavedData } from "../services/workflow-engine/saved-data.js"
+import { applyEdlRowSentStamps } from "../services/workflow-engine/payload-builder.js"
 import { executeNode, loadCompletedFanOutIterations, type ExecuteNodeResult } from "../services/workflow-engine/node-executor.js"
 import { labelRefHintContext } from "../services/workflow-engine/label-ref-hint-context.js"
 import {
-  findNestedWordlessTranscriptFeeds,
+  loadNestedRunGraphs,
+  nestedWordlessTranscriptFeeds,
   nestedWordlessFeedMessage,
   subWorkflowOwnerId,
 } from "../services/workflow-engine/sub-workflow-handler.js"
@@ -73,6 +88,8 @@ import { settledWithLimit } from "../lib/settled-with-limit.js"
 import { assembleFanOutResult } from "./fan-out-result.js"
 import { resolveFanOutIterationInputs } from "./fan-out-inputs.js"
 import { hydrateEntityNodes } from "../lib/entity-hydration.js"
+import { withResolvedResultIds } from "../lib/canvas-result-ids.js"
+import { settleAppRunFinalEdits } from "../lib/app-run-final-column.js"
 
 /** Env-var ceiling — tier limits are capped by this. */
 const MAX_CONCURRENT_NODES_CEILING = config.MAX_CONCURRENT_NODES_PER_EXECUTION
@@ -120,7 +137,7 @@ const STARTUP_RECONCILE_BATCH_LIMIT = 100
 export async function cleanupStaleExecutions(): Promise<void> {
   const scan = supabase
     .from("workflow_executions")
-    .select("id, started_at, node_states")
+    .select("id, user_id, started_at, node_states")
     .in("status", ["running", "stopping"])
 
   // Only THIS environment's rows. Staging and production share one Supabase
@@ -231,7 +248,7 @@ export async function cleanupStaleExecutions(): Promise<void> {
     // If the previous orchestrator died after the worker marked a child
     // job completed but before it could write node_states[X]="completed",
     // this catches that case and lets us close out the execution cleanly.
-    const { next: states, changed } = await reconcileNodeStatesFromJobs(rawStates, row.id)
+    const { next: states, changed } = await reconcileNodeStatesFromJobs(rawStates, row.id, row.user_id as string)
 
     const nodeStatuses = Object.values(states).map((s) => s?.status)
     const allCompleted = nodeStatuses.length > 0 && nodeStatuses.every((s) => s === "completed" || s === "skipped")
@@ -280,7 +297,7 @@ export async function cleanupStaleExecutions(): Promise<void> {
     const isAbandonable =
       startedAt === 0 ||
       (startedAt > 0 && now - startedAt > STALE_EXECUTION_THRESHOLD_MS &&
-        now - startedAt > staleExecutionThresholdMs(await executionBudgetExcessMs(row.id, states)))
+        now - startedAt > staleExecutionThresholdMs(await executionBudgetExcessMs(row.id, row.user_id as string, states)))
 
     if (isAbandonable) {
       await tryTerminalWrite(
@@ -487,7 +504,11 @@ function isFrozenLottieOverride(
  * the module's public surface — production callers use `createOrchestratorWorker`.
  */
 export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): Promise<void> {
-  const { executionId, workflowId, userId, triggerType, triggerData, nodeIds, inputOverrides, appVersionId } = job.data
+  const { executionId, workflowId, userId, triggerType, triggerData, nodeIds, appVersionId } = job.data
+  // The overrides this run applies: the job's own, or — for a continuation —
+  // the earlier run's stored ones with the job's over them (set below, before
+  // the one merge every reader after it sees).
+  let inputOverrides = job.data.inputOverrides
   // An explicit subset ("run from here" / "run selected") wins; a triggered
   // run is scoped to the branch behind its trigger once the graph is loaded
   // (`runScope`, below).
@@ -509,6 +530,16 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     billingContext: payloadBillingContext(job.data),
     componentDepth: job.data.componentDepth ?? 0,
     executingComponentIds: job.data.executingComponentIds ?? [],
+    // The preview stop rule applies to this run only when the rollout flag is
+    // on AND the job carries `reviewerPresent` (decided 2026-10-05): a job
+    // queued before the deploy has no answer and gets the pre-deploy
+    // behaviour — no gate, the whole graph runs. Every new producer sets it.
+    // A component's inner run (a new job) inherits its parent's answer: a
+    // parent the rule does not apply to sends `previewStopRule: false`.
+    previewStopRule:
+      previewStopRuleEnabled() &&
+      typeof job.data.reviewerPresent === "boolean" &&
+      job.data.previewStopRule !== false,
   }
 
   try {
@@ -517,11 +548,14 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     //    `ctx.workflowOwnerId` scopes sub-workflow resolution so a shared/app viewer
     //    can run the owner's sub-flows without re-opening the IDOR path.
     let workflowData: { nodes: unknown; edges: unknown; settings: unknown } | null = null
+    // A component's inner run: flagged by its producer, or known by the
+    // published version's type (a version published before the flag existed).
+    let isComponentRun = job.data.isComponentExecution === true
 
     if (appVersionId) {
       const { data: appVersion, error: appError } = await supabase
         .from("published_apps")
-        .select("snapshot_nodes, snapshot_edges, snapshot_settings, creator_id")
+        .select("snapshot_nodes, snapshot_edges, snapshot_settings, creator_id, publish_type")
         .eq("id", appVersionId)
         .is("deleted_at", null)
         .single()
@@ -541,6 +575,7 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
         settings: appVersion.snapshot_settings,
       }
       ctx.workflowOwnerId = (appVersion.creator_id as string | null) ?? undefined
+      isComponentRun = isComponentRun || appVersion.publish_type === "component"
     }
 
     if (!workflowData) {
@@ -554,7 +589,9 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
         await failExecution(executionId, `Workflow ${workflowId} not found`)
         return
       }
-      workflowData = workflow
+      // Saved result ids resolved by the owner's jobs (canvas-result-ids.ts):
+      // a render the run skips hands its saved take downstream, label included.
+      workflowData = await withResolvedResultIds(workflow)
       ctx.workflowOwnerId = (workflow.user_id as string | null) ?? undefined
     }
 
@@ -566,12 +603,12 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     // cancel and refund the ones no provider has been paid for, as a resume
     // would, rather than leave them running for a run that is over.
     if (await isUserBlocked(userId)) {
-      await cancelInFlightChildJobs(executionId)
+      await cancelInFlightChildJobs(executionId, userId)
       await failExecution(executionId, "This account is blocked.")
       return
     }
     if (ctx.workflowOwnerId && ctx.workflowOwnerId !== userId && (await isUserBlocked(ctx.workflowOwnerId))) {
-      await cancelInFlightChildJobs(executionId)
+      await cancelInFlightChildJobs(executionId, userId)
       await failExecution(executionId, "This workflow is unavailable.")
       return
     }
@@ -656,6 +693,36 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
       ...(userProfile?.prompt_templates ? { userPromptTemplates: userProfile.prompt_templates } : {}),
     }
 
+    // A CONTINUED run (`continueFromExecutionId`: Render final after a run
+    // that stopped at its preview, an app's Render final). Asked here, before
+    // the override merge and before any node runs: the earlier execution must
+    // be the caller's own completed run of this workflow and this version of
+    // its graph. The run re-applies the input overrides that execution
+    // applied — its pin (written below when it started; round 3), or for an
+    // execution from before the pin an app run's `app_runs.input_values` —
+    // with the job's own over them (round 2, decided 2026-10-06) — ONE merge below, so
+    // every reader after it (the catalog guard, the stop rule, the seeds, the
+    // lottie freeze) sees the same graph. Every node the run does not execute
+    // is then seeded from THAT execution's states — never from the workflow's
+    // saved results — and the stop rule reads a render it does not run by its
+    // seed (run-continuation.ts).
+    let continuationSource: ContinuationSource | null = null
+    if (job.data.continueFromExecutionId) {
+      const typeOf = new Map(nodes.map((n) => [n.id, n.type]))
+      const source = await loadContinuationSource(job.data.continueFromExecutionId, {
+        withStates: true,
+        isRenderNode: (id) => PREVIEW_RENDER_NODE_TYPES.has(typeOf.get(id) ?? ""),
+      })
+      const refusal = continuationRefusal(source, { userId, workflowId, appVersionId, nodeIds: job.data.nodeIds })
+      if (refusal || !source || !nodeSubset) {
+        console.warn(`[continuation] execution ${executionId} REFUSED — ${refusal} (from ${job.data.continueFromExecutionId})`)
+        await failExecution(executionId, refusal ?? CONTINUATION_SUBSET_REQUIRED)
+        return
+      }
+      continuationSource = source
+      inputOverrides = continuationInputOverrides(source, job.data.inputOverrides)
+    }
+
     // Apply presentation / published-app input overrides to source node data.
     // SHALLOW merge per node — a top-level override key replaces the snapshot's
     // value wholesale (this is what makes the lottie full-plan `motionPlan`
@@ -683,6 +750,49 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
       }
     }
 
+    // THE PREVIEW STOP RULE (decided 2026-10-04). Asked here, after the
+    // override merge (a Final override on a render lifts it) and before any
+    // node runs or reserves a credit. A render this run executes at Preview
+    // quality — or a saved Preview the run would hand on — stops the run:
+    // everything forward of it is seeded `skipped` below and never runs, is
+    // never counted and never billed. Two cases refuse the whole run instead,
+    // because there is nobody to press Render final:
+    //   - a component's inner run (a nested graph; permanent);
+    //   - a run with no reviewer present (`reviewerPresent: false`, decided
+    //     at enqueue — a trigger, an API / SDK / MCP call, a present link, an
+    //     app run).
+    // None of it applies while the rollout flag is off, nor to a job queued
+    // before the deploy (`ctx.previewStopRule`): that run is the run dev
+    // executed before the rule existed.
+    // A continued run's seeds (checked and loaded above), built AFTER the
+    // override merge: an Edit Plan's seed applies the review its data holds
+    // (an override may carry one), and the render stamps key on the merged
+    // `node.data` objects the stop rule reads.
+    let continuation: Map<string, NodeExecutionState> | null = null
+    let continuationRenders: SavedRenderStampReader | undefined
+    if (continuationSource && nodeSubset) {
+      continuation = continuationSeeds(nodes, continuationSource, nodeSubset, job.data.inputOverrides)
+      continuationRenders = continuationRenderStamps(nodes, continuation)
+    }
+
+    const previewStopsForRun = ctx.previewStopRule
+      ? runPreviewStops(nodes, edges, { nodeSubset, ...(continuationRenders ? { savedRenders: continuationRenders } : {}) })
+      : { previewRenderIds: [], savedPreviewRenderIds: [], gatedNodeIds: new Set<string>() }
+    if (runHoldsPreview(previewStopsForRun)) {
+      const renders = [...previewStopsForRun.previewRenderIds, ...previewStopsForRun.savedPreviewRenderIds]
+      if (isComponentRun) {
+        console.warn(`[preview-gate] execution ${executionId} REFUSED — a component run holds Preview render(s): ${renders.join(", ")}`)
+        await failExecution(executionId, PREVIEW_RENDER_NESTED)
+        return
+      }
+      if (job.data.reviewerPresent !== true) {
+        console.warn(`[preview-gate] execution ${executionId} REFUSED — nobody to review Preview render(s): ${renders.join(", ")}`)
+        await failExecution(executionId, PREVIEW_REVIEW_REQUIRED)
+        return
+      }
+    }
+    const previewGated = previewStopsForRun.gatedNodeIds
+
     // A transcription lane that cannot return per-word timings still RUNS and
     // BILLS — it hands back phrase segments with `words: []`. Wire that json
     // output into an add-captions `transcript` input and the run can only end
@@ -696,7 +806,8 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     // payload-builder's own transcript check instead). Skipped nodes are
     // ignored by the helper on both ends.
     {
-      const runNodes = nodeSubset ? nodes.filter((n) => nodeSubset.has(n.id)) : nodes
+      // A node the stop rule gates never runs, so nothing nested behind it does.
+      const runNodes = (nodeSubset ? nodes.filter((n) => nodeSubset.has(n.id)) : nodes).filter((n) => !previewGated.has(n.id))
       const wordless = findWordlessTranscriptFeeds(runNodes, edges)
       if (wordless.length > 0) {
         console.warn(
@@ -724,13 +835,27 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
       // construction: a chain that CROSSES the boundary (transcribe in the
       // parent, add-captions in the child, or the reverse) — no single graph
       // holds that edge pair.
-      const nested = await findNestedWordlessTranscriptFeeds(runNodes, edges, subWorkflowOwnerId(ctx))
+      const nestedGraphs = await loadNestedRunGraphs(runNodes, subWorkflowOwnerId(ctx))
+      const nested = nestedWordlessTranscriptFeeds(nestedGraphs)
       if (nested.length > 0) {
         console.warn(
           `[transcribe-preflight] execution ${executionId} REFUSED — ${nested.length} nested transcribe node(s) feed captions with no word timings: ` +
             nested.map((w) => `${w.subWorkflowPath.join("/")}:${w.transcribeNodeId}(${w.provider})->${w.consumerNodeId}`).join(", "),
         )
         await failExecution(executionId, nested.map(nestedWordlessFeedMessage).join(" "))
+        return
+      }
+
+      // A sub-workflow that holds a Preview render: its outputs would reach a
+      // parent node with no Render final path anywhere. Refused permanently,
+      // whoever runs it (the sub-workflow handler asks again as a backstop).
+      const nestedPreviews = ctx.previewStopRule ? nestedPreviewRenders(nestedGraphs) : []
+      if (nestedPreviews.length > 0) {
+        console.warn(
+          `[preview-gate] execution ${executionId} REFUSED — a sub-workflow holds Preview render(s): ` +
+            nestedPreviews.map(nestedPreviewRenderLocation).join("; "),
+        )
+        await failExecution(executionId, PREVIEW_RENDER_NESTED)
         return
       }
     }
@@ -787,11 +912,14 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
       // node is running/pending (fresh first pick), so always calling it is free
       // on the common path. Carry forward only TERMINAL-DONE states; genuinely
       // in-flight or failed nodes are not carried and re-attempt on resume.
-      const { next } = await reconcileNodeStatesFromJobs(persisted, executionId)
+      const { next } = await reconcileNodeStatesFromJobs(persisted, executionId, userId)
       for (const [id, st] of Object.entries(next)) {
         if (st?.status === "completed" || st?.status === "skipped") {
           nodeStates[id] = st
-          resumedNodeCount++
+          // A node the stop rule gates was seeded `skipped` by the first pick;
+          // it is never counted (out of totalExecutions too), so carrying it
+          // into the count would push completed past total on a re-pick.
+          if (!previewGated.has(id)) resumedNodeCount++
         }
       }
       if (resumedNodeCount > 0) {
@@ -812,7 +940,7 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     // would make reconcile map these to "skipped" and carry their nodes
     // forward as done). No-op on a first pick. See cancelInFlightChildJobs for
     // the residual-race note.
-    const { adoptable } = await cancelInFlightChildJobs(executionId, { adoptLiveBudgetedRenders: true })
+    const { adoptable } = await cancelInFlightChildJobs(executionId, userId, { adoptLiveBudgetedRenders: true })
     if (adoptable.size > 0) ctx.adoptableJobs = adoptable
     // Jobs → owning node. Fan-out creates one job per iteration, so the
     // scalar nodeStates[node].jobId field would only remember the last one
@@ -875,7 +1003,12 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     const skippedIds = getEffectivelySkippedIds(nodes, edges)
 
     for (const node of nodes) {
-      if (isFrozenLottieOverride(node, inputOverrides)) {
+      const seed = continuation?.get(node.id)
+      if (seed) {
+        // A continued run: the node hands on the EARLIER execution's output
+        // (seeded above) — never its saved data, whatever kind of node it is.
+        nodeStates[node.id] = seed
+      } else if (isFrozenLottieOverride(node, inputOverrides)) {
         // Freeze-on-exposure (design F16): an app/presentation run that carries a
         // lottie motionPlan override means the creator exposed slot fields — the
         // end-user edits the PUBLISHED animation rather than re-rolling it. Seed the
@@ -917,6 +1050,14 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
       }
     }
 
+    // The stop rule's closure: a node it gates is seeded `skipped` and never
+    // runs. Only nodes that would otherwise EXECUTE — one outside the subset,
+    // or frozen, already passes its saved data on and keeps that seed.
+    for (const node of nodes) {
+      if (!previewGated.has(node.id) || nodeStates[node.id]) continue
+      nodeStates[node.id] = { status: "skipped", nodeType: node.type, completedAt: new Date().toISOString() }
+    }
+
     // 4. Build execution levels (topological sort)
     //    Pass pre-resolved node IDs so their outgoing edges don't create
     //    execution-level barriers.  This lets downstream nodes whose only
@@ -945,6 +1086,8 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
       // (no phantom +1 the progress bar can never reach) and is never dispatched.
       if (isFrozenLottieOverride(n, inputOverrides)) return false
       if (nodeSubset && !nodeSubset.has(n.id)) return false
+      // Gated by the preview stop rule: never dispatched, never counted.
+      if (previewGated.has(n.id)) return false
       return true
     })
 
@@ -958,6 +1101,9 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     //     pending first, every such node would count once and the progress
     //     would overshoot its total.
     let totalExecutions = executableNodes.length
+    // What the pre-scan counted per node, so a node that ends up skipped gives
+    // its iterations back and the progress bar can still reach its total.
+    const preCount = new Map<string, number>()
     for (const node of executableNodes) {
       const listItems = getListInputForNode(
         node,
@@ -982,11 +1128,14 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
       if (listItems && listItems.length > 1) {
         const expandedCount = listItems.length * repeatCount
         totalExecutions += expandedCount - 1
+        preCount.set(node.id, expandedCount)
       } else if (providerCount > 1) {
         const expandedCount = providerCount * repeatCount
         totalExecutions += expandedCount - 1
+        preCount.set(node.id, expandedCount)
       } else if (repeatCount > 1) {
         totalExecutions += repeatCount - 1
+        preCount.set(node.id, repeatCount)
       }
     }
 
@@ -1013,6 +1162,15 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
         runtime_env: getRuntimeEnv(),
       })
       .eq("id", executionId)
+
+    // PIN the overrides this run applied (round 3, decided 2026-10-06), before
+    // any node runs: a later continuation of this execution re-applies exactly
+    // these, never what is stored elsewhere and edited since (an app run's
+    // `app_runs.input_values`). Every lane's overrides pass this one point —
+    // for a continuation, its earlier run's pin with its own over it. A write
+    // of its own, through the column guard, so the claim above never depends
+    // on a column the shared database may not have yet.
+    await pinExecutionInputOverrides(executionId, inputOverrides)
 
     emitExecutionEvent({
       type: "execution:started",
@@ -1094,22 +1252,48 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
         return
       }
 
-      // Recompute router-gated nodes before each level (dynamic — depends on
-      // which router nodes have completed and their active/inactive routes).
-      const routerGatedIds = computeRouterGatedIds(nodes, edges, nodeStates)
+      // Recompute the gated nodes before each level (dynamic — a router's
+      // routes, and a node skipped at run time, are known only once it ran):
+      // a node every one of whose wires comes from an inactive route or a
+      // run-time skipped node is gated, carrying the reason of what starved it.
+      const gated = computeGatedIds(nodes, edges, nodeStates)
+      // …and this level's text-requiring nodes with nothing to send (decided
+      // 2026-10-05, empty-input-skips.ts): a feed that found no new posts must
+      // not fail the writer behind it — the run ends "nothing new" instead.
+      const emptyInputIds = computeEmptyInputSkipIds({ level, nodes, edges, nodeStates, triggerData, deadIds: new Set(gated.keys()) })
 
-      // Mark router-gated nodes as "skipped" so the UI reflects they were gated.
-      // Also count them as completed so the progress bar stays accurate.
+      // Mark them "skipped" so the UI reflects it, count them as done so the
+      // progress bar stays accurate, and give back the fan-out iterations the
+      // pre-scan counted for a node that now runs zero times.
+      let stamped = 0
       for (const node of level) {
-        if (routerGatedIds.has(node.id) && nodeStates[node.id]?.status !== "completed") {
-          nodeStates[node.id] = {
-            status: "skipped",
-            nodeType: node.type,
-            completedAt: new Date().toISOString(),
-          }
-          completedCount++
+        const gateReason = gated.get(node.id)
+        if (gateReason === undefined && !emptyInputIds.has(node.id)) continue
+        if (nodeStates[node.id]?.status === "completed") continue
+        // A preview-gated node is already `skipped` and was never counted.
+        if (previewGated.has(node.id)) continue
+        const skipReason = gateReason === "empty_input" || emptyInputIds.has(node.id) ? "empty_input" : undefined
+        nodeStates[node.id] = {
+          status: "skipped",
+          nodeType: node.type,
+          completedAt: new Date().toISOString(),
+          ...(skipReason ? { skipReason } : {}),
         }
+        completedCount++
+        stamped++
+        const counted = preCount.get(node.id) ?? 1
+        if (counted > 1) totalExecutions -= counted - 1
+        emitExecutionEvent({
+          type: "node:updated",
+          executionId,
+          nodeStates: { ...nodeStates },
+          nodeId: node.id,
+          totalNodes: totalExecutions,
+          completedNodes: completedCount,
+          failedNodes: failedCount,
+        })
       }
+      const deadIds = new Set([...gated.keys(), ...emptyInputIds])
 
       // Filter to executable nodes (not source, not parameter picker, not
       // skipped, not gated, not already done)
@@ -1118,12 +1302,24 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
         if (node.type && PARAMETER_NODE_TYPES.has(node.type)) return false
         if (skippedIds.has(node.id)) return false
         if (isSkipNode(node.type)) return false
-        if (routerGatedIds.has(node.id)) return false
+        if (deadIds.has(node.id)) return false
+        if (previewGated.has(node.id)) return false
+        // A node outside the run's subset never runs, whatever its state: a
+        // continued run seeds one its earlier execution did not complete as
+        // `skipped`, and only a `completed` state kept such a node out here.
+        if (nodeSubset && !nodeSubset.has(node.id)) return false
         if (nodeStates[node.id]?.status === "completed") return false
         return true
       })
 
-      if (executableNodes.length === 0) continue
+      if (executableNodes.length === 0) {
+        // A level with nothing left to run still persists what it stamped —
+        // the level-end write below is never reached for it.
+        if (stamped > 0) {
+          await updateExecution(executionId, { node_states: nodeStates, total_nodes: totalExecutions, completed_nodes: completedCount })
+        }
+        continue
+      }
 
       // Execute nodes in this level with concurrency cap to prevent starving other users
       const tasks = executableNodes.map((node) => async () => {
@@ -1395,6 +1591,8 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     await updateExecution(executionId, {
       status: "completed",
       node_states: nodeStates,
+      // Re-stated: a node skipped at run time gave its pre-counted iterations back.
+      total_nodes: totalExecutions,
       completed_nodes: completedCount,
       failed_nodes: 0,
       total_credits_used: totalCredits,
@@ -1417,7 +1615,10 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     })
 
     // --- App monetization: credit creator earnings ---
-    if (ctx.isAppRun && appVersionId && hasCredits()) {
+    // Settled once per app run, on the execution `app_runs.execution_id`
+    // names. A CONTINUED run (an app's Render final) is outside the run and
+    // earns no markup — the final nor the nodes after it (decided 2026-10-04).
+    if (ctx.isAppRun && appVersionId && hasCredits() && !job.data.continueFromExecutionId) {
       try {
         const { data: appVersion } = await supabase
           .from("published_apps")
@@ -1437,11 +1638,13 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
           const percentFee = markup - flatFee
 
           if (markup > 0) {
-            // Look up the app_run row for this execution
+            // Look up the app_run row for this execution — the runner's own
+            // (lib/app-run-ownership.ts).
             const { data: appRun } = await supabase
               .from("app_runs")
               .select("id")
               .eq("execution_id", executionId)
+              .eq("runner_id", ctx.userId)
               .single()
 
             if (appRun) {
@@ -1477,6 +1680,12 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     const message = err instanceof Error ? err.message : String(err)
     console.error(`[orchestrator] Execution ${executionId} error:`, message)
     await failExecution(executionId, message)
+  } finally {
+    // An app's Render final (a continuation of an app run) has ended — however
+    // it ended: the runner's edits of what it replaced go now, not when it was
+    // asked for (decided 2026-10-06). Reads the row's status, so a drain
+    // (requeued, still running) settles nothing. Never throws.
+    if (ctx.isAppRun && job.data.continueFromExecutionId) await settleAppRunFinalEdits(executionId, userId)
   }
 }
 
@@ -1522,7 +1731,14 @@ async function executeNodeForList(
   // (reconcile leaves it "running"). Reuse the iterations that ALREADY completed
   // (+ committed) on the prior attempt instead of re-running them, so the re-run
   // doesn't double-charge or double-spend at the provider. Empty on a first run.
-  const priorIterations = await loadCompletedFanOutIterations(executionId, node.id, node.type ?? "")
+  const priorIterations = await loadCompletedFanOutIterations(executionId, ctx.userId, node.id, node.type ?? "")
+
+  // A render's batch has one row per run, not one per plan clip: every row is
+  // stamped with what it is sent for (its clip and the run's quality), up
+  // front, so a row that fails still names its clip (decided 2026-10-06). On
+  // the list rows, never `i` — the same rule each iteration's payload stamps
+  // (`applyEdlClipKey`).
+  const rowSent = applyEdlRowSentStamps(node, allNodes, edges, nodeStates, plan.rows)
 
   let iterationCompleted = 0
   const cancelRef = { cancelled: false }
@@ -1553,6 +1769,10 @@ async function executeNodeForList(
         nodeStates,
         ctx,
         i,
+        // The list row only — never the iteration number: a Repeat xN copy of
+        // a run nothing list-drives has no row (its inputs above still read
+        // `rows[i] ?? i`), and the render's clip key must not index the plan by it.
+        plan.rows[i],
       )
     }
 
@@ -1578,7 +1798,7 @@ async function executeNodeForList(
   // first genuine failure when NOTHING succeeded (so the orchestrator marks
   // this node failed and the run fail-fasts) instead of the old behavior of
   // always returning success with empty/partial output. See assembleFanOutResult.
-  const assembly = assembleFanOutResult(settled, items.length)
+  const assembly = assembleFanOutResult(settled, items.length, node.type, rowSent)
   // Report tolerated (non-fatal) iteration failures. assembleFanOutResult throws
   // when NOTHING succeeded, so reaching here means succeededCount >= 1 and the
   // fan-out NODE is marked completed. These failures count toward completed_nodes

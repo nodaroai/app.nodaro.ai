@@ -9,6 +9,7 @@ import { supabase } from "../../lib/supabase.js"
 import { cleanupWorkDir, createWorkDir, downloadFile, runFfmpeg, BROWSER_SAFE_VIDEO_ARGS, probeVideoSource } from "../../providers/video/ffmpeg-utils.js"
 import { combineVideos } from "../../providers/video/combine-videos.js"
 import { applyEdl } from "../../providers/video/apply-edl.js"
+import { applyEdlOutputData } from "../../lib/apply-edl-output.js"
 import { declaredJobBudgetMs } from "../../lib/job-budget.js"
 import { assembleNarratedVideo } from "../../providers/video/assemble-narrated-video.js"
 import { createImageCollage } from "../../providers/image/collage.js"
@@ -27,6 +28,7 @@ import { adjustVolume } from "../../providers/video/adjust-volume.js"
 import { applyAudioFx } from "../../providers/video/audio-fx.js"
 import { addCaptions } from "../../providers/video/add-captions.js"
 import { mixAudio } from "../../providers/video/mix-audio.js"
+import type { MixAudioDuck } from "../../lib/mix-audio-duck.js"
 import { combineAudio } from "../../providers/video/combine-audio.js"
 import { speedRamp } from "../../providers/video/speed-ramp.js"
 import { loopVideo } from "../../providers/video/loop-video.js"
@@ -160,7 +162,7 @@ function safeParseJson(s: string): unknown {
  * output modes.
  */
 const handleApplyEdl: HandlerFn = async function handleApplyEdl(job, ctx) {
-  const { edl, transcript, output, quality } = job.data as {
+  const { edl, transcript, output, quality, clipKey, planBasis, renderBasis } = job.data as {
     jobId: string
     edl: Edl
     /** Optional upstream Transcript (JSON string OR object) to remap through
@@ -168,6 +170,11 @@ const handleApplyEdl: HandlerFn = async function handleApplyEdl(job, ctx) {
     transcript?: unknown
     output?: "video" | "audio"
     quality?: "proxy" | "final"
+    /** The plan clip this render cuts, stamped on the result as given. */
+    clipKey?: string
+    /** The plan value this render cuts and its own settings, stamped as given. */
+    planBasis?: string
+    renderBasis?: string
   }
   const outputKind = output === "audio" ? "audio" : "video"
   console.log(`[worker] apply-edl ${ctx.jobId}: ${edl.segments.length} segments, output=${outputKind}, quality=${quality ?? "final"}`)
@@ -202,10 +209,18 @@ const handleApplyEdl: HandlerFn = async function handleApplyEdl(job, ctx) {
 
   if (!await shouldSaveJobResult(ctx.jobId)) return
 
-  const output_data: Record<string, unknown> = outputKind === "video"
-    ? { videoUrl: mediaUrl, ...(thumbUrl ? { thumbnailUrl: thumbUrl } : {}) }
-    : { audioUrl: mediaUrl }
-  if (remapped) output_data.json = remapped
+  // The cut, its Transcript, and the render's identity (quality, clip, bases):
+  // lib/apply-edl-output.ts.
+  const output_data = applyEdlOutputData({
+    medium: outputKind,
+    mediaUrl,
+    thumbnailUrl: thumbUrl ?? undefined,
+    quality,
+    clipKey,
+    planBasis,
+    renderBasis,
+    json: remapped,
+  })
 
   const ok = await markJobCompleted(ctx.jobId, { output_data })
   if (!ok) return
@@ -1062,9 +1077,11 @@ const handleCombineAudio: HandlerFn = async function handleCombineAudio(job, ctx
 }
 
 const handleMixAudio: HandlerFn = async function handleMixAudio(job, ctx) {
-  const { audioUrls, trackVolumes } = job.data as { jobId: string; audioUrls: string[]; trackVolumes?: number[] }
-  console.log(`[worker] mix-audio ${ctx.jobId}: ${audioUrls.length} tracks`)
-  const outputPath = await mixAudio({ audioUrls, trackVolumes })
+  const { audioUrls, trackVolumes, duck } = job.data as {
+    jobId: string; audioUrls: string[]; trackVolumes?: number[]; duck?: MixAudioDuck
+  }
+  console.log(`[worker] mix-audio ${ctx.jobId}: ${audioUrls.length} tracks${duck ? ` (ducked under track ${duck.under})` : ""}`)
+  const outputPath = await mixAudio({ audioUrls, trackVolumes, duck })
   await setJobProgress(job, ctx.jobId, 80)
   await completeFfmpegAudioJob(outputPath, ctx)
 }

@@ -2,16 +2,18 @@ import type { WorkflowNode, WorkflowEdge, GenerateVideoProNodeData, EditVideoPro
 import { StorageExceededError, SubscriptionRequiredError } from "@/lib/api";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { resolveApplyEdlEstimateMinutes } from "@/lib/apply-edl-estimate";
+import { editPlanOutputOf } from "@/lib/edit-plan-saved-output";
 import { videoUtilityPricingUnits } from "@/lib/video-utility-estimate";
 import { extendVideoPricingUnits } from "@/lib/extend-video-estimate";
 import { videoRetakePricingUnits } from "@/lib/video-retake-estimate";
 import { audioSyncCreditId, audioSyncWiredSourceCount } from "@/lib/audio-sync";
 import { wiredSocialPostsVideoSec } from "@/lib/video-analysis-handles";
-import { buildMotionCreditModelIdentifier, isDefaultSelectorConfig, selectListItems, type SelectorFields, getEffectiveRepeatCount, buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, bucketSecondsFromCreditId, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAuditCreditId, VIDEO_AUDIT_BUCKET_CREDITS, FAN_OUT_EACH_TYPES, FAN_OUT_EACH_HANDLES, defaultEdgeOutputMode, listResultsServeHandle, EDIT_PLAN_DEFAULT_CLIP_COUNT, EDIT_PLAN_MAX_CLIP_COUNT, buildVideoCreditModelIdentifier, SEEDANCE_2_CONTINUATION_REF_SEC, isSeedance2Provider, isMinimaxH3Provider, maxSegmentSecFor, normalizeMinimaxH3Resolution, PRO3D_RENDER_CREDIT_ID, withWiredSettings, FAN_IN_TARGETS, contentRecipeCreditId, contentIdeasCreditId, clampContentIdeasCount, SOCIAL_SEARCH_CREDIT_COSTS, socialSearchCreditIdFromNode, socialPostsFrom, socialSearchPickTop, isSocialSearchPickFrozen, applyEdlCreditId } from "@nodaro/shared"
+import { buildMotionCreditModelIdentifier, isDefaultSelectorConfig, selectListItems, type SelectorFields, getEffectiveRepeatCount, buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, bucketSecondsFromCreditId, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAuditCreditId, VIDEO_AUDIT_BUCKET_CREDITS, FAN_OUT_EACH_TYPES, FAN_OUT_EACH_HANDLES, defaultEdgeOutputMode, listResultsServeHandle, EDIT_PLAN_DEFAULT_CLIP_COUNT, EDIT_PLAN_MAX_CLIP_COUNT, buildVideoCreditModelIdentifier, SEEDANCE_2_CONTINUATION_REF_SEC, isSeedance2Provider, isMinimaxH3Provider, maxSegmentSecFor, normalizeMinimaxH3Resolution, PRO3D_RENDER_CREDIT_ID, withWiredSettings, FAN_IN_TARGETS, contentRecipeCreditId, contentIdeasCreditId, clampContentIdeasCount, SOCIAL_SEARCH_CREDIT_COSTS, socialSearchCreditIdFromNode, socialPostsFrom, socialSearchPickTop, isSocialSearchPickFrozen, applyEdlCreditId, compactWithRows, telegramPostsFrom, TELEGRAM_FEED_LIMIT_MAX, COLLECTION_READ_LIMIT_MAX, TELEGRAM_FEED_DEFAULT_LIMIT } from "@nodaro/shared"
 // getCachedCredits reads the live React-Query model-cost cache (an `ee/`
 // concern — credits are enterprise-only). Allowlisted in
 // tools/check-ee-imports.mjs (same coupling as ./run-handlers.ts).
 import { getCachedCredits, getCachedVideoProCredits } from "@/ee/hooks/use-model-credits"
+import { speechQuote, upstreamSpeechText } from "@/lib/speech-estimate"
 
 /** Sentinel error thrown when a polling callback detects that the active
  *  workflow has changed. Callers should catch this silently (no error toast). */
@@ -142,7 +144,7 @@ export const NODE_CREDIT_COSTS: Record<string, number> = {
   "audio-isolation": 80,
   "image-to-text": 3,
   "describe-to-picker": 10,
-  "text-to-dialogue": 40,
+  "text-to-dialogue": 25,
   "transcode-video": 10,
   "sub-workflow": 0,
   "filter-list": 0,
@@ -161,6 +163,8 @@ export const NODE_CREDIT_COSTS: Record<string, number> = {
   "publish-social": 10,
   "telegram-account-send": 10,
   "telegram-channel-feed": 10,
+  "collection-read": 0,
+  "collection-write": 0,
   "save-to-storage": 0,
   "qa-check": 20,
   "image-critic": 20,
@@ -763,6 +767,9 @@ export const EXECUTABLE_TYPES = new Set([
   "telegram-account-send",
   "telegram-channel-feed",
   "save-to-storage",
+  // Collections: both answer from their route directly (no job to poll).
+  "collection-read",
+  "collection-write",
   "qa-check",
   "image-critic",
   "web-scrape",
@@ -883,7 +890,22 @@ const PRICING_UNIT_ESTIMATORS: Readonly<
   "assemble-narrated-video": videoUtilityPricingUnits,
   "extend-video": extendVideoPricingUnits,
   "video-retake": videoRetakePricingUnits,
+  "text-to-speech": speechPricingUnits,
+  "text-to-dialogue": speechPricingUnits,
 };
+
+/**
+ * Speech by length (decided 2026-10-06): the started hundreds of the text the
+ * node will send, at least 8, when the server serves the model's
+ * per-100-characters unit row — from the SAME call `getModelIdentifier` (helpers.ts)
+ * reads, so the id and the units flip together; 1 when the row is not served
+ * (flag off, or a cold cache): the flat row, today's number.
+ */
+function speechPricingUnits(node: WorkflowNode, allNodes: WorkflowNode[], edges: WorkflowEdge[]): number {
+  // Priced as it runs — the same wired view getModelIdentifier reads, so the two never disagree.
+  const wired = withWiredSettings(node, allNodes, edges)
+  return speechQuote(wired.type ?? "", wired.data as Record<string, unknown>, upstreamSpeechText(wired, allNodes, edges, {}), getCachedCredits)?.units ?? 1
+}
 
 /** Units a per-unit node's estimate prices; 1 for every other node. */
 export function getPricingUnits(
@@ -917,9 +939,28 @@ export function getCostMultiplier(
   edges: WorkflowEdge[],
   rerunIds: ReadonlySet<string>,
 ): number {
-  return (
-    getFanOutMultiplier(node, allNodes, edges, rerunIds) * getPricingUnits(node, allNodes, edges, rerunIds)
-  );
+  const { fanOut, units } = getCostFactors(node, allNodes, edges, rerunIds);
+  return fanOut * units;
+}
+
+/**
+ * The two factors of {@link getCostMultiplier}, kept apart for a surface that
+ * SHOWS them (the Render final confirm's "final · ×6 · 12 min"). Price with
+ * BOTH: `fanOut × units` is the multiplier. `unitKind` names what a unit is
+ * when the confirm can say it ("minute" for an Apply EDL render); null for
+ * every other node, whose units (if any) are not shown.
+ */
+export function getCostFactors(
+  node: WorkflowNode,
+  allNodes: WorkflowNode[],
+  edges: WorkflowEdge[],
+  rerunIds: ReadonlySet<string>,
+): RunCreditQuantity {
+  return {
+    fanOut: getFanOutMultiplier(node, allNodes, edges, rerunIds),
+    units: getPricingUnits(node, allNodes, edges, rerunIds),
+    unitKind: node.type === "apply-edl" ? "minute" : null,
+  };
 }
 
 /**
@@ -927,6 +968,8 @@ export function getCostMultiplier(
  * mode. When the planner is NOT re-running, its persisted plan is what iterates —
  * exact. When it re-plans, it returns UP TO `count` clips, so the setting is the
  * figure; a persisted plan holding more is still honoured, never under-counted.
+ * A persisted clip set counts its KEPT clips the edge selects: 0 when it
+ * selects none, since nothing renders.
  */
 function editPlanClipFanOut(
   data: Record<string, unknown>,
@@ -935,20 +978,27 @@ function editPlanClipFanOut(
 ): number {
   const plan = data.generatedJson;
   const persisted = Array.isArray(plan) ? plan.length : 0;
-  let clips: number;
   if (!replans && plan !== undefined && plan !== null) {
     // Both engines fan out on the SHAPE of the persisted plan, not on the node's
     // current `mode` — the user may have switched mode without re-running. An
     // array iterates; an object (tighten / chapters) runs once.
     if (persisted === 0) return 1;
-    clips = persisted;
-  } else {
-    // Re-planning — or no plan yet (a fresh template): what the settings ask for,
-    // the same fallback the minutes resolver takes in that state.
-    if (data.mode !== "clips") return 1;
-    const raw = typeof data.count === "number" && data.count > 0 ? Math.floor(data.count) : EDIT_PLAN_DEFAULT_CLIP_COUNT;
-    clips = Math.max(Math.min(EDIT_PLAN_MAX_CLIP_COUNT, Math.max(1, raw)), persisted);
+    // The clips as the person's review leaves them: the PLAN's rows, "" at
+    // every dropped clip (TA13, TA16). The edge's range / list selector picks
+    // rows of the plan, and only the kept clips among them run — what both
+    // engines' fan-out does with the same list. None kept (by the review or by
+    // the selection) is 0: the wire carries no clip, so nothing renders
+    // (`pickHeldRow` in @nodaro/shared, on both engines).
+    const rows = editPlanOutputOf(data)?.listResults ?? [];
+    const picked = isDefaultSelectorConfig(selector) ? rows : selectListItems(rows, selector);
+    return compactWithRows(picked).items.length;
   }
+  // Re-planning — or no plan yet (a fresh template): what the settings ask for,
+  // the same fallback the minutes resolver takes in that state. A re-plan
+  // replaces any review, so the count is the planner's.
+  if (data.mode !== "clips") return 1;
+  const raw = typeof data.count === "number" && data.count > 0 ? Math.floor(data.count) : EDIT_PLAN_DEFAULT_CLIP_COUNT;
+  const clips = Math.max(Math.min(EDIT_PLAN_MAX_CLIP_COUNT, Math.max(1, raw)), persisted);
   // The edge may carry a range / list selector ("first 3 clips") that both
   // engines honour — count what it keeps, exactly as the `list` branches do.
   const kept = fanOutCount(Array.from({ length: clips }, (_, i) => String(i + 1)), selector);
@@ -1011,10 +1061,28 @@ export const PRODUCER_FAN_OUT: Readonly<
  * by default) whose wire, once set to Each, runs the next node once per item
  * they emit. Sized the same way as PRODUCER_FAN_OUT.
  */
+/** Telegram Channel Feed on an "each" wire: one run per post the node holds, else per post its limit allows. */
+function telegramFeedFanOut(data: Record<string, unknown>, reruns: boolean, selector?: SelectorFields): number {
+  const held = telegramPostsFrom(data.generatedJson).length;
+  const posts = !reruns && held > 0 ? held : Math.max(1, Math.min(TELEGRAM_FEED_LIMIT_MAX, Number(data.limit) || TELEGRAM_FEED_DEFAULT_LIMIT));
+  const kept = fanOutCount(Array.from({ length: posts }, (_, i) => String(i + 1)), selector);
+  return kept > 0 ? kept : 1;
+}
+
+/** Read Collection on an "each" wire: the records it holds, else its limit. */
+function collectionReadFanOut(data: Record<string, unknown>, reruns: boolean, selector?: SelectorFields): number {
+  const held = Array.isArray(data.generatedJson) ? data.generatedJson.length : 0;
+  const records = !reruns && held > 0 ? held : Math.max(1, Math.min(COLLECTION_READ_LIMIT_MAX, Number(data.limit) || 50));
+  const kept = fanOutCount(Array.from({ length: records }, (_, i) => String(i + 1)), selector);
+  return kept > 0 ? kept : 1;
+}
+
 export const EACH_WIRE_FAN_OUT: Readonly<
   Record<string, (data: Record<string, unknown>, reruns: boolean, selector?: SelectorFields) => number>
 > = {
   "social-search": socialSearchFanOut,
+  "telegram-channel-feed": telegramFeedFanOut,
+  "collection-read": collectionReadFanOut,
 };
 
 /**
@@ -1055,7 +1123,8 @@ function inheritedClipFanOut(
         rerunIds.has(upstream.id),
         edge.data as SelectorFields | undefined,
       );
-      if (n > 1) return n;
+      // 0: no kept clip reaches this chain, so nothing after it runs.
+      if (n !== 1) return n;
       continue;
     }
     if ((explicit ?? defaultEdgeOutputMode(upstream.type, edge.sourceHandle)) !== "each") continue;
@@ -1064,9 +1133,29 @@ function inheritedClipFanOut(
     const held = heldBatchFanOut(upstream, rerunIds);
     if (held > 1) return held;
     const n = inheritedClipFanOut(upstream, allNodes, edges, rerunIds, visited);
-    if (n > 1) return n;
+    if (n !== 1) return n;
   }
   return 1;
+}
+
+/** An Each wire whose producer emits nothing on it: 0 runs, read the way
+ *  `getBaseFanOut` reads the same wire (a fan-out producer, else a clips chain
+ *  it inherits). */
+function eachWireCarriesNothing(
+  edge: WorkflowEdge,
+  allNodes: WorkflowNode[],
+  edges: WorkflowEdge[],
+  rerunIds: ReadonlySet<string>,
+): boolean {
+  const sourceNode = allNodes.find((n) => n.id === edge.source);
+  if (!sourceNode) return false;
+  const edgeData = edge.data as Record<string, unknown> | undefined;
+  const mode = (edgeData?.outputMode as string | undefined) ?? defaultEdgeOutputMode(sourceNode.type, edge.sourceHandle);
+  if (mode !== "each") return false;
+  const producer = PRODUCER_FAN_OUT[sourceNode.type ?? ""] ?? EACH_WIRE_FAN_OUT[sourceNode.type ?? ""];
+  if (producer) return producer(sourceNode.data as Record<string, unknown>, rerunIds.has(sourceNode.id), edgeData as SelectorFields | undefined) === 0;
+  if (!listResultsServeHandle(sourceNode.type, edge.sourceHandle) || heldBatchFanOut(sourceNode, rerunIds) > 1) return false;
+  return inheritedClipFanOut(sourceNode, allNodes, edges, rerunIds, new Set()) === 0;
 }
 
 function getBaseFanOut(
@@ -1076,6 +1165,12 @@ function getBaseFanOut(
   rerunIds: ReadonlySet<string>,
 ): number {
   const incomingEdges = edges.filter((e) => e.target === node.id);
+
+  // A wire that carries nothing (an Edit Plan whose review or selection keeps
+  // no clip) means the node does not run, whatever another wire lists. Checked
+  // over every wire BEFORE any count, so the answer never depends on the order
+  // the wires were drawn in.
+  if (incomingEdges.some((edge) => eachWireCarriesNothing(edge, allNodes, edges, rerunIds))) return 0;
 
   for (const edge of incomingEdges) {
     const sourceNode = allNodes.find((n) => n.id === edge.source);
@@ -1167,14 +1262,69 @@ function fanOutCount(items: string[], selector: SelectorFields | undefined): num
   return count > 1 ? count : 0;
 }
 
+/** A yes/no question a run asks before it goes on (the text is already translated). */
+export interface AskConfirmInfo {
+  readonly title: string;
+  readonly body: string;
+  readonly confirmLabel: string;
+}
+
+/** How many times a node runs and how many units each run prices. */
+export interface RunCreditQuantity {
+  /** Runs of the node: list fan-out × repeat. */
+  readonly fanOut: number;
+  /** Units each run is priced for (output minutes of a render; 1 for most nodes). */
+  readonly units: number;
+  /** What a unit is, when a confirm can say it; null otherwise. */
+  readonly unitKind: "minute" | null;
+}
+
+/** One node's share of a run's estimate (`estimateRunCreditLines`). */
+export interface RunCreditLine {
+  readonly nodeId: string;
+  readonly label: string;
+  readonly quantity: RunCreditQuantity;
+  /** cost × fanOut × units: exactly what the run's total adds for this node. */
+  readonly credits: number;
+}
+
+/** A line as the Render final / Update preview confirm shows it. */
+export interface RunConfirmLine extends RunCreditLine {
+  /** Runs before the render (Camera Switch between the plan and the render). */
+  readonly rerunsFirst?: boolean;
+  /** An Apply EDL render's quality in this run. */
+  readonly renderQuality?: "final" | "proxy";
+}
+
 /** Payload for the run-confirmation dialog (Execute-All always; any run >100cr). */
 export interface RunConfirmInfo {
-  readonly trigger: "all" | "selected" | "from-here" | "single";
+  /** "render-final" / "update-preview": a run of a review's render set (`handleRenderFinal`). */
+  readonly trigger: "all" | "selected" | "from-here" | "single" | "render-final" | "update-preview";
   readonly nodeCount: number;
   /** Estimated credits, or null in non-credit editions (cost line hidden). */
   readonly estimatedCredits: number | null;
   /** True for Execute-All (confirm regardless of cost). */
   readonly alwaysConfirm: boolean;
+  /**
+   * Render final / Update preview only (U1, decided 2026-10-06): one line per
+   * node the run executes, in graph order. `estimatedCredits` is their sum.
+   */
+  readonly lines?: readonly RunConfirmLine[];
+  /**
+   * The labels of the render's executable ancestors outside the run, one per
+   * node: they keep their saved output. The dialog groups repeats after
+   * translating them.
+   */
+  readonly kept?: readonly string[];
+  /** Update preview only: the labels of the nodes the preview leaves for this render's Render final (not billed now). */
+  readonly gated?: readonly string[];
+  /**
+   * Render final (round 2, decided 2026-10-06) and Update preview (decided
+   * 2026-10-06): the labels of the nodes behind another render still set to
+   * Preview. They do not run in this run, and a Render final of this render
+   * would not run them either: they wait for that render's own (not billed now).
+   */
+  readonly waits?: readonly string[];
 }
 
 export interface ExecutionContext {
@@ -1230,6 +1380,12 @@ export interface ExecutionContext {
    * callers (and tests) can omit it — handlers treat an absent gate as "proceed".
    */
   confirmRun?: (info: RunConfirmInfo) => Promise<boolean>;
+  /**
+   * A question a run asks that is not about its price (re-running replaces a
+   * review's edits; Render final with nothing changed since the last final).
+   * Same contract as `confirmRun`: absent means "proceed".
+   */
+  askConfirm?: (info: AskConfirmInfo) => Promise<boolean>;
 }
 
 // `iterationIdempotencyKey` lives in `frontend/src/lib/idempotency-key.ts`

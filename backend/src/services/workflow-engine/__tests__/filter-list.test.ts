@@ -44,6 +44,32 @@ function run(items: string[], condition: Cond): string[] {
   return executeFilterList(filter, edges, nodes, states).listResults ?? []
 }
 
+// Generate Text's `items` pip hands a list operator one item per ===NEXT===
+// block — the split the extractor derives (`output.items`). The collector
+// used to fall through to the primary output and the filter saw ONE item, the
+// whole text (#1920). The `text` wire is still one value.
+describe("executeFilterList — a Generate Text source", () => {
+  const text = "PUBLISH: yes\nstory one===NEXT===PUBLISH: no\nstory two===NEXT===PUBLISH: yes\nstory three"
+  const states: Record<string, NodeExecutionState> = {
+    g: { status: "completed", output: { text, items: ["PUBLISH: yes\nstory one", "PUBLISH: no\nstory two", "PUBLISH: yes\nstory three"] } },
+  }
+  const filter = makeNode("f", "filter-list", {
+    conditions: [{ id: "c0", field: "", operator: "contains", value: "PUBLISH: yes", valueType: "static" }],
+    conditionLogic: "AND",
+  })
+  const nodes = [makeNode("g", "llm-chat", {}), filter]
+
+  it("the `items` wire: one item per block, filtered", () => {
+    const edges = [{ id: "e1", source: "g", target: "f", sourceHandle: "items", targetHandle: "in" } as SimpleEdge]
+    expect(executeFilterList(filter, edges, nodes, states).listResults).toEqual(["PUBLISH: yes\nstory one", "PUBLISH: yes\nstory three"])
+  })
+
+  it("the `text` wire: the whole text is one item", () => {
+    const edges = [{ id: "e1", source: "g", target: "f", sourceHandle: "text", targetHandle: "in" } as SimpleEdge]
+    expect(executeFilterList(filter, edges, nodes, states).listResults).toEqual([text])
+  })
+})
+
 describe("executeFilterList — operator semantics", () => {
   describe("ordering: > < >= <=", () => {
     it("number field: 432 > 20000 is false, 50000 > 20000 is true (the user's bug)", () => {

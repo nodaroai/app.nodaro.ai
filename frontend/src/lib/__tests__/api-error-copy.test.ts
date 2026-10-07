@@ -46,6 +46,37 @@ describe("apiErrorMessage", () => {
     )
   })
 
+  // Round 4 (decided 2026-10-06): POST /v1/edit-plan refuses an unknown or
+  // undeclared mode as `mode_not_available`, in the server's English words.
+  it("an Edit Plan mode refusal: the server's words in English, a translated reason elsewhere", () => {
+    const serverMessage = "Trailer mode is not available on this server yet. Choose another mode, or try again after the next update. You were not charged."
+    expect(apiErrorMessage({ code: "mode_not_available", serverMessage, fallbackKey: "apiErr.startEditPlan" })).toBe(serverMessage)
+    for (const locale of ["he", "ja", "ko", "pt-BR"] as const) {
+      useLocaleStore.setState({ locale })
+      const reason = translate(locale, "apiErr.reason.editPlanModeUnavailable")
+      expect(reason, locale).not.toBe(translate("en", "apiErr.reason.editPlanModeUnavailable"))
+      expect(apiErrorMessage({ code: "mode_not_available", serverMessage, fallbackKey: "apiErr.startEditPlan" })).toBe(
+        translate(locale, "apiErr.withReason", { context: translate(locale, "apiErr.startEditPlan"), reason }),
+      )
+    }
+  })
+
+  // Decided 2026-10-06: a run's permanent delete waits until the run settles,
+  // and the archive page shows why (409 `run_in_progress`).
+  it("a run still in progress: the server's words in English, a translated reason elsewhere", () => {
+    const serverMessage = "This run is still running. Stop it or wait for it to finish, then delete it."
+    expect(apiErrorMessage({ code: "run_in_progress", serverMessage, fallbackKey: "apiErr.permanentlyDeleteRun" })).toBe(serverMessage)
+    expect(translate("en", "apiErr.reason.runInProgress")).toBe(serverMessage)
+    for (const locale of ["he", "ja", "ko", "pt-BR"] as const) {
+      useLocaleStore.setState({ locale })
+      const reason = translate(locale, "apiErr.reason.runInProgress")
+      expect(reason, locale).not.toBe(serverMessage)
+      expect(apiErrorMessage({ code: "run_in_progress", serverMessage, fallbackKey: "apiErr.permanentlyDeleteRun" })).toBe(
+        translate(locale, "apiErr.withReason", { context: translate(locale, "apiErr.permanentlyDeleteRun"), reason }),
+      )
+    }
+  })
+
   it("hides raw internal text behind the server reason", () => {
     useLocaleStore.setState({ locale: "he" })
     const message = apiErrorMessage({ code: "delete_failed", serverMessage: 'duplicate key value violates unique constraint "x"', fallbackKey: "apiErr.deleteFolder" })

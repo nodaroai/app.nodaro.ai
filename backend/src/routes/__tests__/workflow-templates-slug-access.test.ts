@@ -33,7 +33,10 @@ vi.mock("@/lib/admin-check.js", () => ({ checkIsAdmin: h.checkIsAdmin }))
 
 vi.mock("@/ee/middleware/require-admin.js", () => ({ requireAdmin: async () => undefined }))
 
-vi.mock("@/ee/billing/credits.js", () => ({ estimateWorkflowCredits: vi.fn().mockReturnValue(10) }))
+vi.mock("@/ee/billing/credits.js", () => ({
+  estimateWorkflowCredits: vi.fn().mockReturnValue(10),
+  estimateWorkflowListingCredits: vi.fn().mockResolvedValue({ preview: 10, final: 0 }),
+}))
 
 vi.mock("@/lib/marketplace-helpers.js", () => ({
   sanitizeSlugBase: (s: string) => s.toLowerCase(),

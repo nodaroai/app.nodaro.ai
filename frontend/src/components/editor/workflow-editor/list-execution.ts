@@ -9,8 +9,18 @@ import { TIER_PARALLELISM } from "@/lib/pricing-data";
 import { hasCredits } from "@/lib/edition";
 import { executeNode } from "./execute-node";
 import type { ExecutionContext } from "./types";
-import { REPEAT_PLACEHOLDER, decodeProviderItem, settledWithLimit, fanOutTextFeedsPrompt, isFanOutUrlItem, type FanOutPlan } from "@nodaro/shared"
+import { REPEAT_PLACEHOLDER, FAN_OUT_ALL_OR_NOTHING_TYPES, decodeProviderItem, isRenderNodeType, settledWithLimit, fanOutTextFeedsPrompt, fanOutUrlItemIsText, isFanOutUrlItem, type FanOutItemMeta, type FanOutPlan } from "@nodaro/shared"
 import { setSuppressToasts, RUN_START_RESET } from "./poll-job";
+import { browserRenderRowSentStamps } from "./apply-edl-stamps";
+import { fanOutRowStamps } from "./fan-out-row-stamps";
+
+/** An item that never ran: the per-item guard's "Cancelled" (a Stop, or the
+ *  batch cancelling the rest after a failure), or settledWithLimit's
+ *  "Execution cancelled" for an item it never started. Not a failure. */
+function isCancellation(reason: unknown): boolean {
+  const message = reason instanceof Error ? reason.message.trim() : "";
+  return message === "Cancelled" || message === "Execution cancelled";
+}
 
 /**
  * What one failed item says, for the node's summary: its error's own words.
@@ -19,7 +29,7 @@ import { setSuppressToasts, RUN_START_RESET } from "./poll-job";
  */
 function failureReason(reason: unknown): string | undefined {
   const message = reason instanceof Error ? reason.message.trim() : "";
-  return message && message !== "Cancelled" && message !== "Execution cancelled" ? message : undefined;
+  return message && !isCancellation(reason) ? message : undefined;
 }
 
 /**
@@ -46,6 +56,14 @@ export async function executeNodeForList(
 
   const { updateNodeData } = useWorkflowStore.getState();
   const runId = crypto.randomUUID();
+  // A render's batch has one row per run, not one per plan clip: every row is
+  // stamped with what it is sent for (its clip and the run's quality), read up
+  // front on the list rows (never the iteration number), so a row that fails
+  // still names its clip (decided 2026-10-06) — the server's orchestrator
+  // stamps the same.
+  const graph = useWorkflowStore.getState();
+  const rowSent = fanOut ? browserRenderRowSentStamps(node, graph.nodes, graph.edges, fanOut.rows) : undefined;
+  const stampsRows = isRenderNodeType(node.type);
 
   // Snapshot prior history before we clear it on the next line; re-appended
   // after the fan-out settles so prior runs aren't lost.
@@ -60,6 +78,10 @@ export async function executeNodeForList(
     __listTotal: items.length,
     __listCompleted: 0,
     __listResults: [],
+    // Each iteration writes its own row (`writeListResultMeta`); a new batch starts empty.
+    __listResultMeta: [],
+    // A render's row stamps are written with the batch; none from an earlier one.
+    __listResultStamps: undefined,
     __listInputs: [...items],
     __currentRunId: runId,
     // Signals the abandon-guard that N iterations share this node's single
@@ -85,7 +107,9 @@ export async function executeNodeForList(
     const providerOverride = decodeProviderItem(item);
     // An empty driving cell (a row another column keeps alive) overrides nothing.
     const isRepeat = providerOverride !== undefined || item === REPEAT_PLACEHOLDER || item.trim().length === 0;
-    const isUrl = !isRepeat && isFanOutUrlItem(item);
+    // A link driving a lane where the link IS the item (Save to Collection's
+    // `in`) stays the item — the same rule the server's override applies.
+    const isUrl = !isRepeat && isFanOutUrlItem(item) && !(fanOut && fanOutUrlItemIsText(node.type, fanOut.targetHandle));
     const isPrompt = !isRepeat && !isUrl && (!fanOut || fanOutTextFeedsPrompt(node.type, fanOut.targetHandle));
     const listRowIndex = fanOut?.rows[i];
 
@@ -127,11 +151,14 @@ export async function executeNodeForList(
     const results: string[] = new Array(items.length).fill("");
     // Toasts are muted for the batch, so the node's summary has to say why.
     let firstReason: string | undefined;
-    for (const entry of settled) {
+    // The items that never ran (`settled` is task-aligned: slot i is item i).
+    const cancelledRows = new Set<number>();
+    for (const [slot, entry] of settled.entries()) {
       if (entry.status === "fulfilled") {
         results[entry.value.index] = entry.value.value;
       } else {
         failedCount++;
+        if (isCancellation(entry.reason)) cancelledRows.add(slot);
         firstReason ??= failureReason(entry.reason);
         // Cancel remaining on first non-cancellation failure
         if (!cancelRef.cancelled) {
@@ -141,25 +168,42 @@ export async function executeNodeForList(
     }
 
     // poll-job.ts prepends each iteration in completion order during fan-out.
-    // The final write below overwrites that with list-index order.
+    // The final write below overwrites that with list-index order — keeping
+    // each iteration's OWN result as the poll landed it (its real job id,
+    // thumbnail and a render's stamps). The history was emptied when the batch
+    // started, so every entry there is this batch's. Only an iteration whose
+    // lane wrote no result (an inline node) gets a synthetic id.
     const batchTimestamp = new Date().toISOString();
+    const landed = new Map<string, GeneratedResult>();
+    const landedResults = (useWorkflowStore.getState().nodes.find((n) => n.id === node.id)?.data as Record<string, unknown> | undefined)
+      ?.generatedResults as readonly GeneratedResult[] | undefined;
+    for (const r of landedResults ?? []) if (r.url && !landed.has(r.url)) landed.set(r.url, r);
     const batchResults: GeneratedResult[] = results
       .map((url, i) =>
         url
           ? {
+              ...landed.get(url),
               url,
               timestamp: batchTimestamp,
-              jobId: `iter-${runId}-${i}`,
+              jobId: landed.get(url)?.jobId ?? `iter-${runId}-${i}`,
             }
           : null,
       )
       .filter((r): r is GeneratedResult => r !== null);
 
     useWorkflowStore.getState().updateNodeData(node.id, {
-      executionStatus: failedCount === items.length ? "failed" : "completed",
+      // An all-or-nothing type (UGC Clip) fails on ONE failed item (spec R17);
+      // every other type keeps the partial list unless every item failed.
+      executionStatus:
+        failedCount === items.length ||
+        (failedCount > 0 && FAN_OUT_ALL_OR_NOTHING_TYPES.has(node.type as string))
+          ? "failed"
+          : "completed",
       __listTotal: items.length,
       __listCompleted: completedCount + failedCount,
       __listResults: results,
+      // A render's row stamps, row-aligned with __listResults (`fanOutRowStamps`).
+      __listResultStamps: stampsRows ? fanOutRowStamps(node.type, results, landed, rowSent, cancelledRows) : undefined,
       __listInputs: [...items],
       generatedResults: [...batchResults, ...preBatchHistory],
       activeResultIndex: 0,
@@ -387,4 +431,14 @@ export function expandLoopResults(): void {
     edges: [...edges, ...newEdges],
     isDirty: true,
   });
+}
+
+/** One fan-out row's notes (UGC Clip), written by the iteration; reset at batch start. */
+export function writeListResultMeta(nodeId: string, index: number, meta: FanOutItemMeta): void {
+  const store = useWorkflowStore.getState()
+  const node = store.nodes.find((n) => n.id === nodeId)
+  const prev = ((node?.data as Record<string, unknown> | undefined)?.__listResultMeta as FanOutItemMeta[] | undefined) ?? []
+  const next = [...prev]
+  next[index] = meta
+  store.updateNodeData(nodeId, { __listResultMeta: next })
 }

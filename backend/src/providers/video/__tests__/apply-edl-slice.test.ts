@@ -400,3 +400,122 @@ describe("a split head wholly inside its dissolve", () => {
     expect(cmd({ omitAudio: true }, [chunk(5)[0], long]).filterGraph).toContain("xfade")
   })
 })
+
+// Track 0.18, fix F5 (decided 2026-10-06): a source whose sound is not at 48 kHz
+// is resampled sample-exactly. `atrim` on a 44.1 kHz stream rounds every cut to
+// its own sample grid and the resampler's output length rounds again, so an
+// unseeked graph lost ~0.7 samples per segment (−20 by segment 30) and a seek
+// off a whole second shifted every segment by a constant fraction of a sample.
+// F5: the input is seeked to a WHOLE second (an exact sample at any integer
+// rate), each segment is cut coarsely from a whole second ≥ 1 s before it (also
+// exact, and a lead-in for the resampler), resampled to 48 kHz, and then cut
+// EXACTLY at 48 kHz in samples — `end − start = dur·48` for every segment.
+describe("a non-48 kHz sound source is resampled sample-exactly (Track 0.18, F5)", () => {
+  const RATES = (r: number) => ({ audioSampleRate: new Map([["A", r], ["B", r], ["MIC", r]]) })
+  // The six 617 ms cuts at an odd position (off the 10 ms grid and off a second).
+  const odd = EDL.segments.map((s) => ({ ...s, inMs: s.inMs + 100_623, outMs: s.outMs + 100_623 }))
+  const late = EDL.segments.map((s) => ({ ...s, inMs: s.inMs + 100_000, outMs: s.outMs + 100_000 }))
+  const xf = [
+    { id: "x0", inMs: 0, outMs: 1000, video: "A" },
+    { id: "x1", inMs: 1000, outMs: 2000, video: "B", transition: { type: "crossfade", durationMs: 300 } },
+    { id: "x2", inMs: 2000, outMs: 3000, video: "A" },
+  ] as unknown as EdlSegment[]
+  const SHAPES: Array<[string, Partial<SliceOptions>, readonly EdlSegment[]]> = [
+    ["a cut chunk from 0", {}, EDL.segments],
+    ["a seeked chunk", {}, late],
+    ["a chunk at an odd ms", {}, odd],
+    ["a crossfade chunk", {}, xf],
+    ["a lossless audio slice", { output: "audio", audioCodec: "pcm" }, odd],
+    ["a proxy audio render", { output: "audio", quality: "proxy" }, odd],
+    ["a picture-only chunk", { omitAudio: true }, odd],
+  ]
+
+  for (const [name, over, segs] of SHAPES) {
+    it(`48 kHz, or a rate never measured, renders exactly the command it always did: ${name}`, () => {
+      const today = cmd(over, segs)
+      expect(cmd({ ...over, ...RATES(48_000) }, segs)).toEqual(today)
+      expect(cmd({ ...over, audioSampleRate: new Map() }, segs)).toEqual(today)
+      expect(sliceFingerprint(cmd({ ...over, ...RATES(48_000) }, segs), EDL, "v")).toBe(sliceFingerprint(today, EDL, "v"))
+    })
+  }
+
+  it("a picture-only chunk reads no sound, so a 44.1 kHz camera keeps its command and its resume key", () => {
+    const today = cmd({ omitAudio: true }, odd)
+    expect(cmd({ omitAudio: true, ...RATES(44_100) }, odd)).toEqual(today)
+    expect(sliceFingerprint(cmd({ omitAudio: true, ...RATES(44_100) }, odd), EDL, "v")).toBe(sliceFingerprint(today, EDL, "v"))
+  })
+
+  it("seeks a 44.1 kHz input to a whole second and cuts it at exact 48 kHz samples", () => {
+    const c = cmd({ audioSampleRate: new Map([["MIC", 44_100]]) }, odd)
+    // A and B keep their ms seek (no sound is read from them); the master's
+    // earliest read is 100.623 s → a whole-second seek at 98 s, not 98.623.
+    expect(c.inputIds).toEqual(["A", "MIC", "B"])
+    expect(c.inputSeekSec).toEqual([100.623 - INPUT_SEEK_MARGIN_SEC, 98, 101.24 - INPUT_SEEK_MARGIN_SEC])
+    // Segment 0 reads [2.623, 3.240) after the seek: coarse cut [1 s, 5 s) — a
+    // whole second of lead-in and lead-out — then [(2.623 − 1)·48000,
+    // + 0.617·48000) at 48 kHz.
+    expect(c.filterGraph).toContain(
+      "[1:a]apad,atrim=start=1:end=5,asetpts=PTS-1/TB,aresample=48000:first_pts=0:min_comp=0,apad," +
+        "atrim=start_sample=77904:end_sample=107520,asetpts=PTS-STARTPTS,aformat=sample_rates=48000:channel_layouts=stereo[a0]",
+    )
+    expect(c.filterGraph.match(/aresample=48000/g)).toHaveLength(6)
+  })
+
+  it("an unseeked input is cut from its own whole seconds (never before 0)", () => {
+    const c = cmd({ output: "audio", audioCodec: "pcm", audioSampleRate: new Map([["MIC", 44_100]]) })
+    expect(c.inputSeekSec).toEqual([0])
+    // Segment 0 is [0, 0.617) → coarse [0, 2); segment 2 is [1.234, 1.851) → [0, 3).
+    expect(c.filterGraph).toContain("[0:a]apad,atrim=start=0:end=2,asetpts=PTS-0/TB,aresample=48000:first_pts=0:min_comp=0,apad,atrim=start_sample=0:end_sample=29616,")
+    expect(c.filterGraph).toContain("atrim=start=0:end=3,asetpts=PTS-0/TB,aresample=48000:first_pts=0:min_comp=0,apad,atrim=start_sample=59232:end_sample=88848,")
+  })
+
+  it("a camera's own 44.1 kHz sound moves its picture reads onto the same whole-second seek", () => {
+    const own: Edl = { ...EDL, sources: EDL.sources.filter((s) => s.id !== "MIC") } as Edl
+    const c = buildSliceCommand(own, odd, { ...OPTS, masterAudioId: undefined, audioSampleRate: new Map([["A", 44_100]]) })
+    expect(c.inputIds).toEqual(["A", "B"])
+    expect(c.inputSeekSec).toEqual([98, 101.24 - INPUT_SEEK_MARGIN_SEC])
+    // A's first picture read rebases on 98 s: 100.623 − 98.
+    expect(c.filterGraph).toContain("[0:V]tpad=stop_mode=clone:stop=-1,trim=start=2.623000:")
+    expect(c.filterGraph).toContain("[0:a]apad,atrim=start=1:end=5,asetpts=PTS-1/TB,aresample=48000:first_pts=0:min_comp=0,")
+    // B (48 kHz, unmeasured here) is untouched.
+    expect(c.filterGraph).toContain("[1:a]apad,atrim=start=2.000000:end=2.617000,asetpts=PTS-STARTPTS,aformat=")
+  })
+
+  it("every segment is exactly dur·48 samples at any integer rate, wherever it sits", () => {
+    const rnd = mulberry32(4410)
+    for (const rate of [8_000, 11_025, 22_050, 32_000, 44_100, 88_200, 96_000]) {
+      for (let trial = 0; trial < 40; trial++) {
+        let t = Math.floor(rnd() * 3_600_000)
+        const segs = Array.from({ length: 1 + Math.floor(rnd() * 12) }, (_, k) => {
+          const len = 1 + Math.floor(rnd() * 5000)
+          const seg = { id: `q${k}`, inMs: t, outMs: t + len } as EdlSegment
+          t += len + Math.floor(rnd() * 3000)
+          return seg
+        })
+        const c = cmd({ output: "audio", audioCodec: "pcm", audioSampleRate: new Map([["MIC", rate]]) }, segs)
+        const seek = c.inputSeekSec[0]!
+        expect(Number.isInteger(seek)).toBe(true)
+        const cuts = [...c.filterGraph.matchAll(/atrim=start=(\d+):end=(\d+),asetpts=PTS-(\d+)\/TB,aresample=48000:first_pts=0:min_comp=0,apad,atrim=start_sample=(\d+):end_sample=(\d+),/g)]
+        expect(cuts).toHaveLength(segs.length)
+        cuts.forEach((m, k) => {
+          const coarse = Number(m[1]), coarseEnd = Number(m[2]), s = Number(m[4]), e = Number(m[5])
+          // Rebased on the WHOLE second the cut starts at, never on its first
+          // packet: a sound that starts after it is padded, not pulled early.
+          expect(Number(m[3])).toBe(coarse)
+          const startMs = segs[k]!.inMs - seek * 1000
+          const endMs = segs[k]!.outMs - seek * 1000
+          expect(coarseEnd).toBe(Math.ceil(endMs / 1000) + 1)
+          expect(e - s).toBe((segs[k]!.outMs - segs[k]!.inMs) * 48)
+          expect(s).toBe((startMs - coarse * 1000) * 48)
+          expect(coarse).toBe(Math.max(0, Math.floor(startMs / 1000) - 1))
+        })
+      }
+    }
+  })
+
+  it("the resume key moves for a slice whose sound is resampled, and only for it", () => {
+    const a = cmd({ output: "audio", audioCodec: "pcm" }, odd)
+    const b = cmd({ output: "audio", audioCodec: "pcm", audioSampleRate: new Map([["MIC", 44_100]]) }, odd)
+    expect(sliceFingerprint(b, EDL, "v")).not.toBe(sliceFingerprint(a, EDL, "v"))
+  })
+})

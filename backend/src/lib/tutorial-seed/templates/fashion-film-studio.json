@@ -16,7 +16,7 @@
     "campaign"
   ],
   "complexity": "intermediate",
-  "estimatedCredits": 200,
+  "estimatedCredits": 172,
   "nodeTypesUsed": [
     "upload-image",
     "text-prompt",

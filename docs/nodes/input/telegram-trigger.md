@@ -25,6 +25,8 @@ A trigger that is **wired to something** runs only the branch behind it — the 
 
 "Wired" is anything that feeds another node: a drawn connection, a node inside a Group (it feeds the group), or a field mapping. A Telegram Trigger set up in the editor names its own node, so each one runs its own branch: two Telegram Triggers on the same bot with different chat filters are two scoped runs per matching message, never two runs of the whole workflow. A trigger created directly through the API names no node, so its branch is found by type — with **one** Telegram Trigger on the canvas that branch runs; with **two** there is no honest answer, and the whole workflow runs.
 
+**A branch that stops for a review is refused.** When the branch a trigger runs holds an [Apply EDL](../processing-video/apply-edl.md) render set to **Proxy** (a Preview), nobody is there to review what it renders, so every fire is refused before anything runs or is billed. The workflow's run history shows one failed run with the code `preview_review_required` (repeated fires do not add more), and the trigger's card warns while it is switched on. Set the render's **Quality** to **Final** to let the trigger run. (Rolled out under a flag, `PREVIEW_STOP_RULE_ENABLED`; where it is off, nothing is refused. See [Apply EDL](../processing-video/apply-edl.md#a-run-stops-at-a-preview).)
+
 ## Seeing a run on the canvas
 
 - **While the flow is open:** a run a message starts shows on the nodes the way a run you start yourself does. The nodes it runs show their progress, and their results stay on them when it ends. The editor looks for these runs about every 10 seconds. **Stop** on the run bar cancels that run.
@@ -44,7 +46,7 @@ A trigger that is **wired to something** runs only the branch behind it — the 
 
 **Inputs:** None (this is a trigger node).
 
-**Outputs:** The incoming message — `text`, `chatId`, `messageId`, `messageType`, plus `imageUrl` / `videoUrl` / `audioUrl` when the message carries media.
+**Outputs:** one handle, `out` — the message's text, or its media URL when the message carries a photo, video or audio file. The node after it takes what its input accepts: a text input gets the text, a media input gets the file. The chat id, message id and message type are part of the run's record (the **Executions** tab), not separate handles.
 
 ## Pricing
 

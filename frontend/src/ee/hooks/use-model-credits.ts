@@ -6,7 +6,7 @@ import { estimateVideoProCredits, type VideoProEstimateInput } from "@/lib/api"
 import type { GenerateVideoProNodeData } from "@/types/nodes"
 import { useModelCreditCost } from "./queries/use-credits-queries"
 
-export { getCachedCredits, prefetchModelCredits } from "./queries/use-credits-queries"
+export { getCachedCredits, prefetchModelCredits, isModelUnpriced } from "./queries/use-credits-queries"
 export { useModelCreditCost } from "./queries/use-credits-queries"
 
 /**

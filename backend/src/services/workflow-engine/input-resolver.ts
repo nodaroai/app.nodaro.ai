@@ -12,10 +12,10 @@ import type {
 } from "./types.js"
 import { extractSourceNodeOutput, extractSourceNodeOutputAsList, extractSavedNodeOutput, extractAllGeneratedResults, extractVideoDurationFromNode, getPrimaryOutput, savedOutputFor, ANALYSIS_PRODUCER_TYPES, type ExtractContext } from "./output-extractor.js"
 import {
-  pro3DRenderShotStills, extractGeneratedJsonAsList, splitGeneratedItems, resolveNodeRefs, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, SOCIAL_POST_NODE_TYPES, PARAMETER_NODE_TYPES, getParameterValue, FAN_OUT_EACH_TYPES, FAN_OUT_EACH_HANDLES, defaultEdgeOutputMode, listResultsServeHandle, compactWithRows, liveRowColumn, resolveListFanOut, type FanOutCandidate, type ListFanOut, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES, editPlanSourceDurationSec, extractReferencedLabels, canonicalVarName, REFERENCE_HANDLE_MAP, parseGroupHandle, SUNO_TRACK_SOURCE_TYPES, isFanInEdge, isFanInNodeType, videoLinkPageUrl, socialSearchPostVideo, ownsItsList } from "@nodaro/shared"
+  pro3DRenderShotStills, extractGeneratedJsonAsList, splitGeneratedItems, resolveNodeRefs, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, SOCIAL_POST_NODE_TYPES, PARAMETER_NODE_TYPES, getParameterValue, FAN_OUT_EACH_TYPES, FAN_OUT_EACH_HANDLES, defaultEdgeOutputMode, listResultsServeHandle, compactWithRows, pickHeldRow, liveRowColumn, resolveListFanOut, type FanOutCandidate, type ListFanOut, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES, editPlanSourceDurationSec, extractReferencedLabels, canonicalVarName, REFERENCE_HANDLE_MAP, parseGroupHandle, SUNO_TRACK_SOURCE_TYPES, isFanInEdge, isFanInNodeType, videoLinkPageUrl, socialSearchPostVideo, ownsItsList } from "@nodaro/shared"
 import { isSourceNode } from "./execution-graph.js"
 import { overlayHandleIndex } from "../../providers/image/overlay-contract.js"
-import { VIDEO_OVERLAY_LAYER_PLAN_HANDLE, videoOverlaySlotOfHandle, isTelegramAccountTriggerNamedHandle, editPlanTranscriptOrigin } from "@nodaro/shared"
+import { VIDEO_OVERLAY_LAYER_PLAN_HANDLE, videoOverlaySlotOfHandle, isTelegramAccountTriggerNamedHandle, editPlanTranscriptOrigin, clipNotesFrom, fanOutItemMeta, isRenderNodeType, rendersLatestBatch } from "@nodaro/shared"
 import { buildNodeRefMap } from "./payload-builder.js"
 import { jsonArrayItems, listFor, savedDataAllowed, savedListFor } from "./saved-data.js"
 import { IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE } from "./inline-executor.js"
@@ -156,6 +156,14 @@ export function resolveNodeInputs(
     const edgeData = edge.data as Record<string, unknown> | undefined
     const edgeOutputMode = edgeData?.outputMode as string | undefined
 
+    // UGC Cards' notes: each clip's warnings and real length, from UGC Clip's
+    // per-item notes channel (fan-out) or its single output — never URLs (spec §6.4.3).
+    if (targetNode.type === "ugc-cards" && edge.targetHandle === "notes") {
+      const out = state?.output
+      inputs.clipNotes = clipNotesFrom(out?.listResultMeta, out ? fanOutItemMeta(out) : undefined)
+      continue
+    }
+
     // Generate Text (llm-chat) `items` handle MUST resolve via the current
     // ===NEXT=== split (resolveLlmChatItems below), NEVER via a stale
     // `data.generatedResults` snapshot persisted from a prior browser run. The
@@ -246,7 +254,19 @@ export function resolveNodeInputs(
       continue
     }
 
-    if (edgeOutputMode && effectiveListResults && effectiveListResults.length > 0) {
+    // An Edit Plan's clips as the person's review leaves them hold "" at every
+    // dropped clip (TA16). A wire that picks rows of them without iterating (a
+    // selector that leaves one kept clip or none, an item pick) reads the kept
+    // clip it selects, or nothing — never the scalar below, which is the plan's
+    // FIRST kept clip, one this wire may not have selected. Shared with the
+    // browser engine (`pickHeldRow`).
+    if (sourceNode.type === "edit-plan" && effectiveListResults && effectiveListResults.length > 0) {
+      const pick = pickHeldRow(effectiveListResults, edgeData as SelectorFields | undefined, listIterationIndex != null)
+      if (pick.kind === "none") continue
+      if (pick.kind === "value") output = pick.value
+    }
+
+    if (!output && edgeOutputMode && effectiveListResults && effectiveListResults.length > 0) {
       if (edgeOutputMode === "item") {
         // Structured item mode: use resolveIndex on itemIndex expression
         const itemIndex = edgeData?.itemIndex as string | undefined
@@ -948,11 +968,34 @@ export function getListFanOutForNode(
       continue
     }
 
+    // 3b. An Edit Plan: the clips it holds in this run, else its saved clips as
+    //     the person's review leaves them (`listFor` → `editPlanSavedOutput`):
+    //     the PLAN's rows, with "" at every dropped clip (TA13, TA16). Never the
+    //     generic fallbacks below, which re-read the raw plan and would run the
+    //     dropped clips too (one kept clip of four would fan out over all four).
+    if (sourceNode.type === "edit-plan") {
+      const items = listFor(sourceNode, state)
+      if (items && items.length > 1) consider(edge, selectListItems(items, selectorArg))
+      continue
+    }
+
     // 4a. A node that ran once per upstream item (Camera Switch per clip): its
     //     "each" handle lists THIS run's per-item results, else its last saved
     //     batch — never its accumulated history; its other handles never list.
     if (Object.prototype.hasOwnProperty.call(FAN_OUT_EACH_HANDLES, sourceNode.type)) {
       if (!listResultsServeHandle(sourceNode.type, edge.sourceHandle)) continue
+      const items = listFor(sourceNode, state)
+      if (items && items.length > 1) consider(edge, selectListItems(items, selectorArg))
+      continue
+    }
+
+    // 4b. A render whose descriptor reads its latest batch (Apply EDL) on its
+    //     media handle: THIS run's per-clip results, else its LATEST saved
+    //     batch only — never its accumulated history, which holds earlier runs'
+    //     clips too (TA6, decided 2026-10-04). A render that ran once lists
+    //     nothing: the edge reads its one result. Its `json` handle keeps the
+    //     generic path below.
+    if (rendersLatestBatch(sourceNode.type) && edge.sourceHandle !== "json") {
       const items = listFor(sourceNode, state)
       if (items && items.length > 1) consider(edge, selectListItems(items, selectorArg))
       continue
@@ -1181,6 +1224,9 @@ const TEXT_SOURCE_NODE_TYPES = new Set([
   "telegram-account-trigger",
   // Telegram Channel Feed — the recent posts' text.
   "telegram-channel-feed",
+  // Collections — Read Collection's digest, Save to Collection's headline.
+  "collection-read",
+  "collection-write",
   // Content Recipe (the readable recipe) and Content Ideas (one brief per idea,
   // or the digest) — text is the primary output of both.
   "content-recipe",
@@ -1392,8 +1438,8 @@ function routeOutput(
 
   // --- Video Overlay: routed by HANDLE like Image Overlay. "video" is the
   // base; "overlay".."overlay12" are the layer images, index-aligned with
-  // data.layers[]; the reserved JSON id "layerPlan" lands in inputs.layerPlan,
-  // which v1 does not read. A wire on an unknown / missing handle fills the
+  // data.layers[]; the JSON id "layerPlan" lands in inputs.layerPlan, read by
+  // the assembly (plan layers first). A wire on an unknown / missing handle fills the
   // base only while it is still empty (an API-authored edge still runs).
   if (targetType === "video-overlay") {
     const handle = edge.targetHandle ?? ""
@@ -1737,6 +1783,14 @@ function routeOutput(
   // Mirrors the frontend node-input-resolver add-captions branch. ---
   if (targetType === "add-captions" && edge.targetHandle === "transcript") {
     inputs.transcript = output
+    return
+  }
+  // --- add-captions `captionPlan` (json) input: a CaptionPlan from a creator
+  // node — the opening line is styled with Hook Plate, the rest with this node's
+  // caption style (styleCaptionPlan). Routed by handle before source-type
+  // routing, for the same reason as `transcript` above. ---
+  if (targetType === "add-captions" && edge.targetHandle === "captionPlan") {
+    inputs.captionPlan = output
     return
   }
 
@@ -2316,7 +2370,7 @@ function routeOutput(
     return
   }
 
-  // --- apply-edl → the DEFAULT (media) handle carries video OR audio, decided
+  // --- a render (RENDER_NODE_TYPES: apply-edl) → the DEFAULT (media) handle carries video OR audio, decided
   // at run time by the node's `output` setting. It is a DYNAMIC producer (not in
   // VIDEO/AUDIO_OUTPUT_NODE_TYPES), so without this branch its media output falls
   // through to the `prompt` fallback on server DAG runs — the exact drift its own
@@ -2325,7 +2379,7 @@ function routeOutput(
   // handle (the remapped Transcript) is NOT handled here — it was already caught
   // by the apply-edl / add-captions target interceptor, or falls through to the
   // generic json/text routing. Mirrors the frontend node-input-resolver. ---
-  if (srcType === "apply-edl" && edge.sourceHandle !== "json") {
+  if (isRenderNodeType(srcType) && edge.sourceHandle !== "json") {
     const producedVideo = producedVideoIn(src, nodeStates)
     if (producedVideo) {
       routeVideoOutput(inputs, output, targetType, src.id)

@@ -112,7 +112,7 @@ vi.mock("@/hooks/use-workflow-store", () => {
 // ---------------------------------------------------------------------------
 
 import { videoOverlayResultFresh } from "@/lib/video-overlay-composition"
-import { stripStudioDraftWorkflow } from "@nodaro/shared"
+import { stripStudioDraftWorkflow, editPlanBasis, EDITED_EDL_VERSION } from "@nodaro/shared"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useWorkflowPersistence, TERMINAL_RESTORABLE_STATUSES, executionSettledAt, applyCompletedExecutionResults, applyBackendExecutionState } from "../use-workflow-persistence"
 import { deriveInstagramScrapeCardState } from "@/components/nodes/instagram-scrape-run-state"
@@ -2462,5 +2462,32 @@ describe("Scrapers — both load-time lanes paint the posts, not the featured im
     const webNodes = [{ id: "web", type: "web-scrape", position: { x: 0, y: 0 }, data: { label: "Web Scrape" } }] as unknown as Parameters<typeof applyCompletedExecutionResults>[0]
     const [web] = applyCompletedExecutionResults(webNodes, { web: { status: "completed", jobId: "job-w", output: { json: [{ title: "t" }] } } }, null)
     expect(web!.data).toMatchObject({ generatedJson: [{ title: "t" }], lastAppliedJobId: "job-w" })
+  })
+})
+
+// Decided 2026-10-05: an Edit Plan's review survives the SAME plan landing again
+// (a reopen while the run is live, after the plan finished; the newer-run load
+// of a run that planned the same), and is cleared when a different plan lands.
+describe("an Edit Plan's review when a server run's plan lands on it", () => {
+  const PLAN = { version: 1, segments: [{ id: "seg-0", inMs: 0, outMs: 4000, video: "cam" }, { id: "seg-1", inMs: 6000, outMs: 9000, video: "cam" }], dropped: [] }
+  const EDIT = { v: EDITED_EDL_VERSION, kind: "edl", basis: editPlanBasis(PLAN), edl: { segments: [PLAN.segments[0]], dropped: [{ inMs: 4000, outMs: 9000, reason: "manual" }] } }
+  const planNode = (data: Record<string, unknown>) =>
+    [{ id: "plan", type: "edit-plan", position: { x: 0, y: 0 }, data: { label: "Plan", executionStatus: "running", ...data } }] as unknown as Parameters<typeof applyBackendExecutionState>[0]
+  const ran = (json: unknown) => ({ plan: { status: "completed" as const, startedAt: RAN_AT, completedAt: "2026-10-04T10:02:00.000Z", output: { json } } })
+
+  it("the same plan landing keeps the edit (a reopen mid-run, after the plan finished)", () => {
+    // The plan comes back from the execution row as a new object, keys reordered.
+    const [out] = applyBackendExecutionState(planNode({ generatedJson: PLAN, editedEdl: EDIT }), ran({ dropped: [], segments: PLAN.segments, version: 1 }))
+    const data = out!.data as Record<string, unknown>
+    expect(data.executionStatus).toBe("completed")
+    expect(data.editedEdl).toEqual(EDIT)
+  })
+
+  it("a different plan landing clears the edit", () => {
+    const replanned = { ...PLAN, segments: [PLAN.segments[1]] }
+    const [out] = applyBackendExecutionState(planNode({ generatedJson: PLAN, editedEdl: EDIT }), ran(replanned))
+    const data = out!.data as Record<string, unknown>
+    expect(data.generatedJson).toEqual(replanned)
+    expect(data.editedEdl).toBeUndefined()
   })
 })

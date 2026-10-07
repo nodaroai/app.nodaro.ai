@@ -15,6 +15,10 @@
  * is already this refusal, nothing is written. The tombstone stays current
  * and the table stays clean.
  *
+ * The same tombstone records a fire refused because the branch it would run
+ * stops at a Preview render nobody is there to review (`code:
+ * PREVIEW_REVIEW_REQUIRED`, `preview-fire-refusal.ts`), deduped the same way.
+ *
  * Never silently personal: the fire lanes refuse BEFORE any resolve or
  * enqueue, so an ex-member's standing automation cannot fall back to billing
  * their own pocket for class work.
@@ -39,7 +43,11 @@ export async function recordTriggerFireRefusal(args: {
   /** Which trigger died — dedupe stays per (workflow, owner, lane), but the
    *  owner deserves to know which URL/schedule this was. */
   triggerId?: string
+  /** The stable refusal code the row carries (and dedupes on). Default: the
+   *  creator lost the right to run the workflow. */
+  code?: string
 }): Promise<void> {
+  const code = args.code ?? RUN_REQUIRES_AUTHENTICATED_MEMBER
   try {
     const { data: latest } = await supabase
       .from("workflow_executions")
@@ -51,7 +59,7 @@ export async function recordTriggerFireRefusal(args: {
       .limit(1)
       .maybeSingle()
 
-    if (latest?.status === "failed" && latest.error_message === RUN_REQUIRES_AUTHENTICATED_MEMBER) {
+    if (latest?.status === "failed" && latest.error_message === code) {
       return // the tombstone is already the latest word — don't spam the history
     }
 
@@ -60,7 +68,7 @@ export async function recordTriggerFireRefusal(args: {
       user_id: args.userId,
       status: "failed",
       trigger_type: args.triggerType,
-      error_message: RUN_REQUIRES_AUTHENTICATED_MEMBER,
+      error_message: code,
       ...(args.triggerId ? { trigger_data: { triggerId: args.triggerId } } : {}),
       completed_at: new Date().toISOString(),
     })

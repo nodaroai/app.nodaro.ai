@@ -12,6 +12,12 @@ The Webhook Output node sends the upstream media result and any configured param
 | Params | WebhookParam[] | `[]` | List of parameters to include in the payload. Each parameter has a name and type. |
 | Credential | string (id) | none | A stored HTTP credential to send with (`credentialId`). Saved once under **Integrations → Credentials**: a header name (for example `Authorization`) and its secret value. The node holds only the id — the secret never enters the workflow, an export, a template or a preset. |
 
+### Sending once per item
+
+Wired to a list on an **Each** wire (a Filter List of articles, a node that ran once per item), the node sends ONE request per item. A second list wired into another parameter pairs by row — item 3 goes out with item 3; a list shorter than the run starts over from its first item; an empty cell sends nothing for that parameter in that request.
+
+When every wire into the node carried nothing in this run (a Filter List that kept no item, a source that was itself skipped), the node sends nothing and shows **Skipped · no input** — no empty request reaches your endpoint, and the run still ends `completed`.
+
 ### Sending with a credential
 
 Many webhook targets accept a delivery only with a key in a header (Zapier and

@@ -143,15 +143,18 @@ Example:
     .description("layer multiple audio tracks into one (tracks are summed)")
     .option("--audio <url>", "audio track URL — repeat the flag for each track (2-20)", collectVariadic)
     .option("--volumes <csv>", 'per-track level %, positionally (0-200 each), e.g. "100,80"')
+    .option("--duck-under <index>", "duck every OTHER track under this track (0-based index of the voice) — a music bed that dips under speech", (v) => parseInt(v, 10))
+    .option("--duck-amount <n>", "how hard the others dip, 0-100 (default 75); needs --duck-under", parseFloat)
     .option("--watch", "poll until the job completes")
     .option("--poll-interval <ms>", "watch poll interval in ms", (v) => parseInt(v, 10), 2000)
     .option("--profile <name>")
     .option("--json")
     .addHelpText("after", `
 Example:
-  $ nodaro audio mix --audio https://.../voice.mp3 --audio https://.../bed.mp3 --volumes 100,60 --watch`)
+  $ nodaro audio mix --audio https://.../voice.mp3 --audio https://.../bed.mp3 --volumes 100,60 --watch
+  $ nodaro audio mix --audio https://.../voice.mp3 --audio https://.../bed.mp3 --duck-under 0 --duck-amount 80 --watch`)
     .action(
-      async (opts: { audio?: string[]; volumes?: string } & WatchOpts) => {
+      async (opts: { audio?: string[]; volumes?: string; duckUnder?: number; duckAmount?: number } & WatchOpts) => {
         try {
           const urls = opts.audio ?? []
           if (urls.length < 2) {
@@ -166,10 +169,21 @@ Example:
               process.exit(1)
             }
           }
+          if (opts.duckAmount !== undefined && opts.duckUnder === undefined) {
+            warn("--duck-amount needs --duck-under <index> (the track the others duck under)")
+            process.exit(1)
+          }
+          if (opts.duckUnder !== undefined && (!Number.isInteger(opts.duckUnder) || opts.duckUnder < 0 || opts.duckUnder >= urls.length)) {
+            warn(`--duck-under must be the 0-based index of one of the ${urls.length} --audio tracks (0-${urls.length - 1})`)
+            process.exit(1)
+          }
           const client = buildClient(opts.profile)
           const result = await client.audio.mix({
             audioUrls: urls,
             ...(trackVolumes ? { trackVolumes } : {}),
+            ...(opts.duckUnder !== undefined
+              ? { duck: { under: opts.duckUnder, ...(opts.duckAmount !== undefined ? { amount: opts.duckAmount } : {}) } }
+              : {}),
           })
           await reportQueuedJob(result, () => client.jobs.get(result.jobId), { ...opts, note: `${urls.length} tracks` })
         } catch (err) {

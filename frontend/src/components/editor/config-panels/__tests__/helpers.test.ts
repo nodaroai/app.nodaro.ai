@@ -339,6 +339,13 @@ describe("getModelIdentifier", () => {
     expect(getModelIdentifier(editPlan, edges, [editPlan, audio])).toBe("edit-plan:clips:premium:60m")
   })
 
+  it("edit-plan trailer mode prices its own composite (Track D1)", () => {
+    const editPlan = makeNode({ id: "ep", type: "edit-plan", data: { label: "EP", mode: "trailer", planTier: "standard" } as any })
+    const audio = makeNode({ id: "a1", type: "upload-audio", data: { label: "A", metadata: { durationSeconds: 45 * 60 } } as any })
+    const edges: WorkflowEdge[] = [{ id: "e1", source: "a1", target: "ep", targetHandle: "sources" } as WorkflowEdge]
+    expect(getModelIdentifier(editPlan, edges, [editPlan, audio])).toBe("edit-plan:trailer:standard:60m")
+  })
+
   it("edit-plan with no wired source falls to the tier's ceiling bucket, never the bare id", () => {
     const editPlan = makeNode({ id: "ep", type: "edit-plan", data: { label: "EP", mode: "tighten", planTier: "standard" } as any })
     expect(getModelIdentifier(editPlan, [], [editPlan])).toBe("edit-plan:tighten:standard:180m")

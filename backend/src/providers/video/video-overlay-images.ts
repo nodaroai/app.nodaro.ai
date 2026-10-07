@@ -24,6 +24,7 @@ export interface VideoOverlayLayerRef {
   /** 0-based index in the request's layers[]. */
   readonly layer: number
   readonly slot?: number
+  readonly planLayer?: number
 }
 
 /**
@@ -117,7 +118,7 @@ export function gateVideoOverlayImage(
   }
   const warning: VideoOverlayWarning | undefined =
     facts.pages !== undefined && facts.pages > 1
-      ? { layer: ref.layer, ...(ref.slot !== undefined ? { slot: ref.slot } : {}), code: "animated_first_frame", detail: `animated image (${facts.pages} frames): its first frame is used` }
+      ? { layer: ref.layer, ...(ref.slot !== undefined ? { slot: ref.slot } : {}), ...(ref.planLayer !== undefined ? { planLayer: ref.planLayer } : {}), code: "animated_first_frame", detail: `animated image (${facts.pages} frames): its first frame is used` }
       : undefined
   return { aspect: dims.w / dims.h, ...(warning ? { warning } : {}), totals: { bytes, pixels } }
 }

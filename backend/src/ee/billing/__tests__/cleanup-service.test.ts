@@ -467,7 +467,7 @@ describe("cleanup-service", () => {
             {
               id: "job-1",
               output_data: {
-                videoUrl: "https://cdn.example.com/videos/out.mp4",
+                videoUrl: "https://cdn.example.com/videos/job-1.mp4",
               },
             },
           ],
@@ -848,8 +848,8 @@ describe("cleanup-service", () => {
               id: "job-1",
               user_id: "free-user-1",
               output_data: {
-                imageUrl: "https://cdn.example.com/images/out.png",
-                videoUrl: "https://cdn.example.com/videos/out.mp4",
+                imageUrl: "https://cdn.example.com/images/job-1.png",
+                videoUrl: "https://cdn.example.com/videos/job-1.mp4",
               },
             },
           ],
@@ -862,8 +862,8 @@ describe("cleanup-service", () => {
               id: "job-1",
               user_id: "free-user-1",
               output_data: {
-                imageUrl: "https://cdn.example.com/images/out.png",
-                videoUrl: "https://cdn.example.com/videos/out.mp4",
+                imageUrl: "https://cdn.example.com/images/job-1.png",
+                videoUrl: "https://cdn.example.com/videos/job-1.mp4",
               },
             },
           ],

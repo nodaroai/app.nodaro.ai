@@ -3,6 +3,7 @@ import { toast } from "sonner"
 import { SHEET_PRESETS, ALA_CARTE_BOARDS, SHEET_SKINS, SHEET_ASPECTS, MAX_PANELS_PER_SHEET, estimateSheetCost, referenceSheetCreditId, type ReferenceSheet, type SheetAspect, type SheetFlavour, type SheetPresetId, type SheetPreset, type SheetSection, type SheetSkin } from "@nodaro/shared"
 import { generateReferenceSheet, getJobStatusLean } from "@/lib/api"
 import { useT, tx } from "@/lib/i18n"
+import { useLocalizeOptionLabel } from "@/lib/i18n/labels"
 import { hasCredits } from "@/lib/edition"
 import { creditUnits } from "@/lib/credit-units"
 import { useModelCredits } from "@/hooks/use-model-credit-cost"
@@ -34,6 +35,9 @@ interface Props {
 
 export function CharacterSheetPanel({ adapter, studio, jobs, accent }: Props) {
   const t = useT()
+  // Preset and board names come from the @nodaro/shared catalog in English;
+  // they are data, so they translate through the option-label tables.
+  const localizeOption = useLocalizeOptionLabel()
   const staged = adapter.getStaged(studio)
   const hc = hasCredits()
 
@@ -194,8 +198,8 @@ export function CharacterSheetPanel({ adapter, studio, jobs, accent }: Props) {
                 className="text-start p-3 rounded border transition-colors disabled:opacity-60"
                 style={{ borderColor: active ? accent : "#1e293b", backgroundColor: active ? `${accent}14` : "#0e1117" }}
               >
-                <div className="text-[12px] font-medium text-slate-200">{p.label}</div>
-                <div className="text-[11px] text-slate-400 mt-0.5">{p.description}</div>
+                <div className="text-[12px] font-medium text-slate-200">{localizeOption(p.label)}</div>
+                <div className="text-[11px] text-slate-400 mt-0.5">{localizeOption(p.description)}</div>
                 {bc && (
                   <div className="text-[10px] text-slate-500 mt-1.5">
                     {bc.present > 0
@@ -227,7 +231,7 @@ export function CharacterSheetPanel({ adapter, studio, jobs, accent }: Props) {
                 className={chip(active, disabled)}
                 style={chipStyle(active)}
               >
-                {b.label}{b.panelCount > 0 ? ` +${b.panelCount}` : ""}
+                {localizeOption(b.label)}{b.panelCount > 0 ? ` +${b.panelCount}` : ""}
               </button>
             )
           })}

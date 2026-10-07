@@ -1,5 +1,7 @@
-import { usdToCredits, PARAMETER_NODE_TYPES, withWiredSettings, MUSIC_CREDIT_ID, TEXT_TO_AUDIO_SFX_CREDIT_IDS, textToAudioCreditId, CAMERA_SWITCH_CREDIT_ID, LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec, LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec, videoSfxCreditId, applyEdlCreditId } from "@nodaro/shared"
+import { usdToCredits, PARAMETER_NODE_TYPES, withWiredSettings, MUSIC_CREDIT_ID, TEXT_TO_AUDIO_SFX_CREDIT_IDS, textToAudioCreditId, CAMERA_SWITCH_CREDIT_ID, LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec, LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec, videoSfxCreditId, applyEdlCreditId, UGC_NODE_TYPES, dialogueProviderOf } from "@nodaro/shared"
 import { trySettleManagedJob } from "./managed-job-settlement.js"
+import { previewStopsForListing, previewStopsWhenEnabled } from "../../lib/preview-stop-rule.js"
+import { renderFinalRunSet } from "@nodaro/render-rules"
 import { supabase } from "../../lib/supabase.js"
 import { ReserveRpcError, reservePrefixOf } from "../../lib/reserve-errors.js"
 import { refuseBlockedReservation } from "../../lib/access-blocks.js"
@@ -21,13 +23,15 @@ import { APPLY_EDL_CREDITS_PER_OUTPUT_MINUTE, APPLY_EDL_PROXY_CREDITS_PER_OUTPUT
 import { AUDIO_SYNC_CREDIT_COSTS, audioSyncCreditId } from "../../lib/audio-sync-credit-id.js"
 import { buildSeedanceExtendCreditIdentifier } from "../../lib/seedance-extend-model.js"
 import { FREE_TIER_RESTRICTIONS, TIER_STORAGE_LIMITS } from "./stripe-config.js"
-import { PIPELINE_PINNABLE_SCRIPT_LLMS, captionRoutesToRemotion, DEFAULT_TRANSCRIBE_NODE_PROVIDER, getLlmTier, buildCreditModelIdentifier, buildVideoCreditModelIdentifier, isSeedanceVideoEditProvider, seedanceVideoEditCreditId, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, FLUX2_RES_MP, type Flux2Model, AI_AVATAR_DURATION_BUCKETS, resolveAiAvatarCreditId, type AiAvatarEngine, type AiAvatarResolution, CINEMATIC_MIN_DURATION_SEC, CINEMATIC_MAX_DURATION_SEC, cinematicCreditId, resolveCinematicCreditId, type CinematicResolution, resolveSwitchXCreditId, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, DEFAULT_VIDEO_ANALYSIS_MODEL, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoAuditCreditId, resolveStoredTier, sunoCreditType, resolveTopazUpscale, imageOverlayCredits, renderVideoCreditId, scene3DRenderTierCredits, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, SOCIAL_SEARCH_CREDIT_COSTS, socialSearchCreditIdFromNode, COMPETITOR_SCAN_CREDIT_COSTS, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDIT_PLAN_BUCKET_MINUTES, buildEditPlanCreditId, type EditPlanTier, contentRecipeCreditId, contentIdeasCreditId } from "@nodaro/shared"
+import { PIPELINE_PINNABLE_SCRIPT_LLMS, captionRoutesToRemotion, DEFAULT_TRANSCRIBE_NODE_PROVIDER, getLlmTier, buildCreditModelIdentifier, buildVideoCreditModelIdentifier, isSeedanceVideoEditProvider, seedanceVideoEditCreditId, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, FLUX2_RES_MP, type Flux2Model, AI_AVATAR_DURATION_BUCKETS, resolveAiAvatarCreditId, type AiAvatarEngine, type AiAvatarResolution, CINEMATIC_MIN_DURATION_SEC, CINEMATIC_MAX_DURATION_SEC, cinematicCreditId, resolveCinematicCreditId, type CinematicResolution, resolveSwitchXCreditId, VIDEO_ANALYSIS_DURATION_BUCKETS, VIDEO_ANALYSIS_MAX_DURATION_SEC, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, DEFAULT_VIDEO_ANALYSIS_MODEL, VIDEO_AUDIT_BUCKET_CREDITS, buildVideoAuditCreditId, resolveStoredTier, sunoCreditType, resolveTopazUpscale, imageOverlayCredits, renderVideoCreditId, scene3DRenderTierCredits, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, SOCIAL_SEARCH_CREDIT_COSTS, socialSearchCreditIdFromNode, COMPETITOR_SCAN_CREDIT_COSTS, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDIT_PLAN_BUCKET_MINUTES, buildEditPlanCreditId, asEditPlanMode, asEditPlanTier, type EditPlanTier, contentRecipeCreditId, contentIdeasCreditId } from "@nodaro/shared"
 // Provider-$ cost formulas — CORE lib (not @nodaro/shared, an irrevocably
 // published Apache package). See the 2026-07-06 public-flip IP audit, S5.
 import { flux2BaseCredits } from "../../lib/pricing/flux2-cost.js"
 import { AI_AVATAR_RATE_USD_PER_SEC, aiAvatarHoldCredits } from "../../lib/pricing/ai-avatar-cost.js"
 import { applyServiceMarkup } from "./service-margin.js"
 import { videoUtilityBaseCredits, videoUtilityEstimateBody } from "../../lib/video-utility-credits.js"
+import { speechUnitRowServed } from "../../lib/speech-credits.js"
+import { speechEstimate, upstreamSpeechText, type ExposedTextCaps } from "../../lib/speech-estimate.js"
 import { getWelcomeOfferConfig } from "../lib/welcome-offer-config.js"
 import { ConsentRequiredError } from "../lib/consent-required.js"
 import { CINEMATIC_RATE_USD_PER_SEC, cinematicHoldCredits } from "../../lib/pricing/cinematic-avatar-cost.js"
@@ -167,12 +171,16 @@ for (const analysisProvided of [true, false]) {
 }
 
 // ── Edit Plan (podcast editing, edit-plan node) — per-source-minute × tier
-// duration-bucketed reserve holds, plus a flat component on `clips` only.
+// duration-bucketed reserve holds, plus a flat component on `clips` and
+// `trailer` (trailer reuses the clips flat, decided 2026-09-23).
 // Cloud-EXCLUSIVE + relayed: billing happens on the connected cloud account, so
 // these are the DB-down fallback (a seeded model_pricing row wins at runtime —
 // migration 432). The scheme MUST match the plugin's `editPlanStaticCreditCosts()`
-// exactly (id shape `edit-plan:<mode>:<tier>:<bucket>m`, 3 modes × 3 tiers × 6
-// buckets = 54 composites + the bare `edit-plan` = the MAX of the whole table).
+// exactly (id shape `edit-plan:<mode>:<tier>:<bucket>m`, 4 modes × 3 tiers × 6
+// buckets = 72 composites + the bare `edit-plan` = the MAX of the whole table).
+// The 18 trailer composites (migration 465) equal their clips twins row for row,
+// so the bare MAX stays 1480 — an `ON CONFLICT DO NOTHING` seed could not raise
+// the live bare row anyway.
 //
 // PRICING STATUS — FINALIZED. The staging cost probe is DONE: an edit-plan pass
 // (LLM only) costs a negligible amount even for a full-length episode, so these
@@ -190,15 +198,18 @@ const EDIT_PLAN_CREDITS_PER_MINUTE_BY_TIER: Readonly<Record<EditPlanTierT, numbe
   premium: 8,
 }
 // Finalized launch default (admin-retunable): flat component added to `clips`
-// only (the per-clip scoring/hook pass); tighten and chapters have no flat term.
+// and `trailer` (the scoring/hook pass over the whole transcript); tighten and
+// chapters have no flat term.
 const EDIT_PLAN_CLIPS_FLAT_BY_TIER: Readonly<Record<EditPlanTierT, number>> = {
   economy: 10,
   standard: 20,
   premium: 40,
 }
+/** The modes that carry the flat term: clips, and trailer at the clips flat. */
+const EDIT_PLAN_FLAT_MODES: ReadonlySet<string> = new Set(["clips", "trailer"])
 function editPlanCredits(mode: string, tier: EditPlanTierT, bucketMinutes: number): number {
   const perMinute = EDIT_PLAN_CREDITS_PER_MINUTE_BY_TIER[tier] * bucketMinutes
-  const flat = mode === "clips" ? EDIT_PLAN_CLIPS_FLAT_BY_TIER[tier] : 0
+  const flat = EDIT_PLAN_FLAT_MODES.has(mode) ? EDIT_PLAN_CLIPS_FLAT_BY_TIER[tier] : 0
   return Math.max(1, Math.ceil(perMinute + flat))
 }
 const EDIT_PLAN_STATIC: Record<string, number> = {}
@@ -210,7 +221,7 @@ for (const mode of EDIT_PLAN_MODES) {
     }
   }
 }
-// Bare fallback = the MAX of the whole table (= premium clips 180m = 1480): the
+// Bare fallback = the MAX of the whole table (= premium clips or trailer 180m = 1480): the
 // unknown-mode-AND-unknown-duration id feeds a pre-run balance gate, so it must
 // bound every row (mirrors the video-analysis bare-id rationale + the plugin).
 EDIT_PLAN_STATIC["edit-plan"] = Math.max(...Object.values(EDIT_PLAN_STATIC))
@@ -480,8 +491,9 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   // model_pricing by migration 302.
   ...VIDEO_AUDIT_STATIC,
   // ── Edit Plan (podcast editing) — FINALIZED (see the
-  // EDIT_PLAN_STATIC block above). Bare `edit-plan` + all 54 composites, written
-  // to model_pricing by migration 432; the DB rows win at runtime.
+  // EDIT_PLAN_STATIC block above). Bare `edit-plan` + all 72 composites, written
+  // to model_pricing by migrations 432 (tighten/clips/chapters) and 465
+  // (trailer); the DB rows win at runtime.
   ...EDIT_PLAN_STATIC,
   // ── Camera Switch (podcast B5) — FLAT per run (decided 2026-10-03):
   // deterministic code plus a length probe per camera, no model. A clips
@@ -1294,11 +1306,24 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "replicate-mmaudio:300s": 110,
   "hailuo-avatar": 190,           // estimated (not in KIE pricing data)
   // ── Audio / TTS / Music ──
-  "elevenlabs-v3": 30,             // direct ElevenLabs API
-  "elevenlabs-v4": 30,             // direct ElevenLabs API; the same flat price as v3, per request
-  "elevenlabs-turbo": 15,         // per 1K chars
-  "elevenlabs-multilingual": 30,  // per 1K chars
+  "elevenlabs-v3": 30,             // direct ElevenLabs API — flat per request; the price with length pricing off
+  "elevenlabs-v4": 30,             // same flat price as v3 (parity, decided 2026-10-05)
+  "elevenlabs-turbo": 15,         // flat per request (NOT per 1K chars — that scaling never existed)
+  "elevenlabs-multilingual": 30,  // flat per request (NOT per 1K chars)
   "elevenlabs": 15,               // alias for turbo
+  // Length-based speech pricing (decided 2026-10-06): the price of ONE started
+  // 100 characters, read by lib/speech-credits.ts while
+  // SPEECH_LENGTH_PRICING_ENABLED is on; a request is at least
+  // SPEECH_FLOOR_UNITS (8) units. The flat rows above stay as they are: they
+  // are what a run costs with the flag off and what every client that knows
+  // nothing of length pricing shows. Values are re-derived from
+  // lib/pricing/elevenlabs-speech-cost.ts by speech-unit-pricing.test.ts —
+  // never hand-edited alone. The legacy `elevenlabs` alias has no row: it
+  // prices on turbo's (speechUnitCreditId).
+  "elevenlabs-v3:per-100-chars": 4,
+  "elevenlabs-v4:per-100-chars": 4,
+  "elevenlabs-turbo:per-100-chars": 2,
+  "elevenlabs-multilingual:per-100-chars": 4,
   // Sound effects are priced by the length asked for: one row per whole second
   // (`elevenlabs-sfx:1s` … `:30s`, ELEVENLABS_SFX_PER_SECOND_ROWS below), picked
   // by `textToAudioCreditId` on every path. The bare row is the no-duration
@@ -1344,7 +1369,10 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "whisper": 40,                  // Replicate openai/whisper — no word timings (BASE price, = migration 288; the service markup is applied on top at read time)
   "incredibly-fast-whisper": 40,  // Replicate fast whisper — word timings on request (BASE price, = migration 288)
   "elevenlabs-stt": 22,           // avg (from audit)
-  "elevenlabs-dialogue": 25,     // per 1K chars
+  "elevenlabs-dialogue": 25,     // direct ElevenLabs API; flat per request, whatever the length (the price with length pricing off)
+  "elevenlabs-dialogue:per-100-chars": 4, // one started 100 characters across lines (decided 2026-10-06)
+  "elevenlabs-dialogue-v4": 25,  // direct ElevenLabs API; the same flat price as v3 dialogue, per request
+  "elevenlabs-dialogue-v4:per-100-chars": 4, // as v3 dialogue: one started 100 characters across lines (decided 2026-10-06)
   "elevenlabs-voice-changer": 40,  // ElevenLabs speech-to-speech
   // ElevenLabs dubbing (async) — PER MINUTE of the dubbed span (route
   // computeCredits: ceil(seconds/60) x this base, min 1 minute; 120s
@@ -1515,6 +1543,8 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "web-scrape:instagram": 10,
   "web-scrape:tiktok": 10,
   "web-scrape:rss": 10,
+  // ── Site Capture (POST /v1/site-capture, MCP capture_site): flat per capture ──
+  "site-capture": 10,
   // Meta Ads scraper: 1 credit per REQUESTED ad, rounded up to a tier of
   // count × sources, plus the optional per-ad analysis multiples and their
   // per-ad settlement rows (packages/shared/src/meta-ads-scrape.ts is the
@@ -1626,7 +1656,8 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "slideshow": 0,
   "transcode-video": 10,
   "audio-isolation": 80,          // alias for elevenlabs-isolation
-  "text-to-dialogue": 40,
+  // node-type fallback — reachable only when the dialogue model's own row is unpriced; equals the default dialogue model's flat row
+  "text-to-dialogue": 25,
   "image-to-text": 3,
   "image-to-text:economy": 1,
   "image-to-text:premium": 4,
@@ -1649,6 +1680,18 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "content-recipe:economy": 5,
   "content-recipe": 20,
   "content-recipe:premium": 35,
+  // UGC Script (Cloud only): one flat price per run, however many rewrites it takes; refunded when it fails.
+  "ugc-script": 20,
+  // UGC Clip (Cloud only): admitted with a computed ceiling (creditOverride) that replaces this row; the
+  // row exists only so the price read before the override never throws. Never charged, never shown
+  // (the estimate prices UGC through the plugin seam).
+  "ugc-clip": 0,
+  // UGC Creator / UGC Clips / UGC Cards (Cloud only): free nodes. Their paid steps run as their own jobs
+  // (images, readings, clips, alignment), each priced under its own row. These 0 rows match the editor's
+  // cold-cache fallbacks (NODE_CREDIT_COSTS, frontend-credit-fallback-parity.test.ts), as sub-workflow's does.
+  "ugc-creator": 0,
+  "ugc-clips": 0,
+  "ugc-cards": 0,
   // Content Ideas — charged per batch of up to five ideas (owner decision
   // 2026-10-02): 1–5 ideas bill the base id, 6–10 the `:10` id at two batches.
   // The count rule lives in @nodaro/shared content-recipe-ideas.ts.
@@ -1694,6 +1737,9 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   // 2026-10-02). Cloud-only: the private plugin sends it.
   "telegram-account-send": 10,
   "telegram-channel-feed": 10,
+  // Collections (migration 462 / pricing rows 463): free — the plan's caps, not credits, bound them.
+  "collection-write": 0,
+  "collection-read": 0,
   "save-to-storage": 0,
   "router": 0,
   "component": 0,               // Component node itself is free; inner nodes have their own costs
@@ -2102,7 +2148,9 @@ async function modelPricingRows(): Promise<ReadonlyMap<string, number>> {
 export async function getChargedPriceTable(): Promise<ChargedPriceTable> {
   const [rows, settings] = await Promise.all([modelPricingRows(), getAppSettings()])
   return {
-    base: (identifier) => rows.get(identifier) ?? STATIC_CREDIT_COSTS[identifier],
+    // A speech `:per-100-chars` row is served only while length pricing is on
+    // (lib/speech-credits.ts): its absence is how a client learns the flag.
+    base: (identifier) => (speechUnitRowServed(identifier) ? rows.get(identifier) ?? STATIC_CREDIT_COSTS[identifier] : undefined),
     charge: (identifier, baseCredits) => applyServiceMarkup(baseCredits, settings, identifier),
   }
 }
@@ -2435,9 +2483,7 @@ export class CreditsService {
 
     // Calculate total balance. In web-free mode the topup pool is excluded —
     // it never spends on a consumer surface.
-    const subscriptionCredits = profile.subscription_credits ?? 0
-    const topupCredits = webFree ? 0 : (profile.topup_credits ?? 0)
-    const totalBalance = subscriptionCredits + topupCredits
+    const { subscriptionCredits, topupCredits, totalBalance } = spendableBalance(profile, webFree)
 
     // Check if user has enough credits. BYPASSED for a workspace payer: the
     // personal pools are not what pays, and headroom is the reserve RPC's
@@ -3407,9 +3453,48 @@ export class CreditsService {
   }
 
   /**
-   * Get credit cost for a specific model
+   * Does the payer's spendable balance cover `credits`? The same pools the
+   * reservation reads: the payer's profile (a deployment payer's row, else the
+   * requester's), the subscription pool plus the top-up pool, the top-up pool
+   * excluded on a web surface for a pay-as-you-go account (`webFreeMode`).
+   * A workspace payer is never refused here: its personal pools are not what
+   * pays, and the headroom is the reserve RPC's atomic job. A profile that
+   * cannot be read passes (the per-node reservation refuses, as
+   * `checkAppRunEligibility` does). With credits disabled it passes.
+   */
+  static async checkBalanceCovers(
+    userId: string,
+    credits: number,
+    billingContext?: BillingContext,
+    webFreeMode?: boolean,
+  ): Promise<{ ok: true } | { ok: false; balance: number }> {
+    if (creditsDisabled()) return { ok: true }
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("tier, subscription_tier, lifetime_topup_credits, subscription_credits, topup_credits")
+      .eq("id", payerProfileId(userId, billingContext))
+      .single()
+    if (!profile) return { ok: true }
+
+    const gates = spendGates(
+      effectiveTierOf(profile as unknown as { tier: string | null; subscription_tier: string | null; lifetime_topup_credits: number }),
+      { webFreeMode, billingContext },
+    )
+    if (!gates.personalBalance) return { ok: true }
+
+    const balance = ((profile.subscription_credits as number | null) ?? 0) + (gates.webFree ? 0 : ((profile.topup_credits as number | null) ?? 0))
+    return balance >= credits ? { ok: true } : { ok: false, balance }
+  }
+
+  /**
+   * Get credit cost for a specific model — the single PUBLIC lookup
+   * (`GET /v1/credits/model-cost`). A speech `:per-100-chars` row is refused
+   * while length pricing is off, exactly as an id priced nowhere is: the
+   * reservation seams read `getModelCreditBaseCost` and are not affected.
    */
   static async getModelCreditCost(modelIdentifier: string): Promise<number> {
+    if (!speechUnitRowServed(modelIdentifier)) throw new PriceNotConfiguredError(modelIdentifier)
     const pricing = await getModelCreditCostFromDB(modelIdentifier)
     return pricing.creditCost
   }
@@ -3427,11 +3512,17 @@ export class CreditsService {
      *  fact (does an edge feed add-captions a timed caption source?). Without
      *  edges the estimator assumes the pricier answer — never under-quote. */
     edges?: ReadonlyArray<EstimateEdge>,
+    options?: WorkflowEstimateOptions,
   ): Promise<number> {
     // Without a credit system nothing is charged, so there is no price table
     // to read: the figure stays the static one these editions always showed.
     const prices = hasCredits() ? await getChargedPriceTable() : STATIC_BASE_PRICES
-    return sumWorkflowEstimate(nodes, edges, prices)
+    // UGC graphs (Cloud only): the clip model and length live in the plugin, so the UGC part is priced through
+    // its seam (spec 6.8). The UGC nodes, and the nodes downstream of UGC Clip that the seam's figure already
+    // counts as its fixed lines, stay out of the per-node sum; they stay IN the graph the sum reads, so the
+    // preview stop rule still sees every wire.
+    const ugc = await ugcPartOf(nodes, edges)
+    return sumWorkflowEstimate(nodes, edges, prices, options, ugc?.skip) + (ugc?.credits ?? 0)
   }
 
   /**
@@ -3442,10 +3533,75 @@ export class CreditsService {
   static estimateWorkflowBaseCredits(
     nodes: ReadonlyArray<EstimateNode>,
     edges?: ReadonlyArray<EstimateEdge>,
+    options?: WorkflowEstimateOptions,
   ): number {
-    return sumWorkflowEstimate(nodes, edges, STATIC_BASE_PRICES)
+    return sumWorkflowEstimate(nodes, edges, STATIC_BASE_PRICES, options)
+  }
+
+  /**
+   * The listing (`estimateWorkflowListingCredits`) at `STATIC_CREDIT_COSTS`'
+   * base prices, with no database read, no markup and no UGC seam: what a
+   * built-in template's stored price pins.
+   */
+  static estimateWorkflowBaseListing(
+    nodes: ReadonlyArray<EstimateNode>,
+    edges: ReadonlyArray<EstimateEdge> | undefined,
+    publishType: ListingPublishType,
+  ): AppListingEstimate {
+    return listingEstimate(nodes, edges ?? [], STATIC_BASE_PRICES, publishType)
   }
 }
+
+/**
+ * What a workflow estimate quotes. A RUN estimate (the default) quotes what
+ * one run executes, so the preview stop rule leaves out what a Preview render
+ * gates. A WHOLE-GRAPH estimate (`scope: "whole-graph"`) counts every node,
+ * whatever the stop rule's flag says (decided 2026-10-05): it is a listing's
+ * preview part (`estimateWorkflowListingCredits`, which stores the figure at
+ * publish).
+ */
+export type WorkflowEstimateOptions = {
+  scope?: "run" | "whole-graph"
+  /** EVERY exposed text input of a published app, "<nodeId>:<field>" → its
+   *  character limit, or null when it has none (built at publish from the
+   *  presentation items). A limit caps the ceiling an unknown speech text is
+   *  priced at; an exposed field without one makes a node's stored text UNKNOWN
+   *  (it is a placeholder the app user replaces); an absent key means the field
+   *  is not exposed and a literal text is priced exactly. Never shrinks a
+   *  literal, unexposed text. */
+  speechTextCaps?: ExposedTextCaps
+  /** A run of a SUBSET (Render final, a continued run): price only these
+   *  nodes. The rest of the graph is still the context a price reads (a
+   *  wired setting, a caption source, the stop rule's closure). */
+  runNodeIds?: ReadonlySet<string>
+}
+
+/**
+ * A listing in two parts (decided 2026-10-06), for an app, a component and a
+ * template alike:
+ *
+ * - PREVIEW — the WHOLE graph, every node at its saved settings (each render
+ *   set to Preview at Preview). The creator's fee applies to this part.
+ * - FINAL — each Render final: the render at Final and everything after it,
+ *   run outside the app run without the fee. A node after two Preview renders
+ *   is counted in each of their finals. An app with no Preview render has
+ *   none; a component never stops at a Preview, so its final part is 0.
+ *
+ * Never under-quote: with the preview stop rule off an app run executes the
+ * whole graph at Preview and the fee applies to all of it, and a final never
+ * stops at a later Preview; staging and production share one database, so
+ * the stored listing cannot follow the flag. With the flag on, a run leaves
+ * the tail for its final, and a final stops at a later Preview, so both parts
+ * can over-quote (accepted). Revisit when production turns the flag on.
+ * Stored and priced by `lib/app-listing-price.ts`.
+ */
+export interface AppListingEstimate {
+  readonly preview: number
+  readonly final: number
+}
+
+/** What is being listed: an app, a component (never stops at a Preview), or a template. */
+export type ListingPublishType = "app" | "component" | "template"
 
 /** `STATIC_CREDIT_COSTS` as a price table: the base prices, unmarked. */
 const STATIC_BASE_PRICES: ChargedPriceTable = {
@@ -3457,8 +3613,48 @@ function sumWorkflowEstimate(
   nodes: ReadonlyArray<EstimateNode>,
   edges: ReadonlyArray<EstimateEdge> | undefined,
   prices: ChargedPriceTable,
+  options: WorkflowEstimateOptions | undefined,
+  /** Nodes priced elsewhere (the UGC seam): read as part of the graph, never summed. */
+  skip?: (node: EstimateNode) => boolean,
+): number {
+  // A run stops at a Preview render: what it gates runs only after Render
+  // final, so the estimate of this run leaves it out (the stop rule, through
+  // its rollout flag — off, nothing is left out). Without edges the closure is
+  // unknown, and the estimate keeps every node — never under-quote. A listing
+  // estimate never asks the rule: it prices the whole graph.
+  const wholeGraph = options?.scope === "whole-graph"
+  const previewGated = edges && !wholeGraph
+    ? previewStopsWhenEnabled(
+        // Every feed the rule follows rides along: Group membership
+        // (`parentId`) on the nodes, and the wire's handle and mode on the
+        // edges — the same graph the editor's estimate hands it.
+        nodes.flatMap((n) => (n.id ? [{ id: n.id, type: n.type, data: n.data, parentId: n.parentId }] : [])),
+        edges.flatMap((e) =>
+          e.source
+            ? [{ source: e.source, target: e.target, sourceHandle: e.sourceHandle, targetHandle: e.targetHandle, data: e.data }]
+            : [],
+        ),
+      ).gatedNodeIds
+    : new Set<string>()
+  const runNodeIds = options?.runNodeIds
+  return sumEstimatedNodes(nodes, edges, prices, (node) => {
+    if (runNodeIds && !(node.id && runNodeIds.has(node.id))) return false
+    if (node.id && previewGated.has(node.id)) return false
+    return !skip?.(node)
+  }, options?.speechTextCaps)
+}
+
+/** The estimate of the nodes `include` keeps, each priced as a run of it would be. */
+function sumEstimatedNodes(
+  nodes: ReadonlyArray<EstimateNode>,
+  edges: ReadonlyArray<EstimateEdge> | undefined,
+  prices: ChargedPriceTable,
+  include: (node: EstimateNode) => boolean,
+  /** The app's exposed text inputs, when the caller has them (see `WorkflowEstimateOptions.speechTextCaps`). */
+  speechTextCaps?: ExposedTextCaps,
 ): number {
   return nodes.reduce((sum, node) => {
+    if (!include(node)) return sum
     // A parameter node (Provider, Duration, a picker) is read, never run: no
     // job, no charge. A Provider's data names a model ("veo3"), which the
     // lookups below would otherwise price as a run of that model. The editor's
@@ -3478,12 +3674,126 @@ function sumWorkflowEstimate(
       if (base !== undefined) return sum + prices.charge(node.type, base)
     }
     const priced = withWiredSettings(node, nodes, edges)
+    // Text to Speech / Text to Dialogue by length (decided 2026-10-06): the
+    // model's :per-100-chars row × started hundreds of the text the run will
+    // send, at least 8 units — the id and the units from ONE call, so they can
+    // never flip apart. A connected text follows the edge one hop (a literal
+    // Text node is exact; an exposed Text input's limit caps it). Undefined
+    // while the flag is off: the flat row below, byte for byte.
+    const speech = speechEstimate(priced.type, priced.data ?? {}, upstreamSpeechText(priced, nodes, edges ?? [], speechTextCaps ?? {}))
+    if (speech) return sum + (chargedCredits(prices, speech.id, speech.units) ?? chargedCredits(prices, node.type) ?? 0)
     const modelId = getNodeModelIdentifier(priced, {
       timedCaptionSourceWired: timedCaptionSourceWired(node, nodes, edges),
       audioSyncSourceCount: audioSyncWiredSourceCount(node, edges),
     })
     return sum + (chargedCredits(prices, modelId, estimatePricingUnits(priced)) ?? chargedCredits(prices, node.type) ?? 0)
   }, 0)
+}
+
+/**
+ * The UGC part of a graph that has a UGC Clip (Cloud only), with the nodes its
+ * figure already counts — every caller of the per-node sum skips them, the run
+ * estimate and the listing alike. `null` when there is none.
+ */
+async function ugcPartOf(
+  nodes: ReadonlyArray<EstimateNode>,
+  edges: ReadonlyArray<EstimateEdge> | undefined,
+): Promise<{ credits: number; skip: (node: EstimateNode) => boolean } | null> {
+  if (!hasCredits() || !nodes.some((n) => n.type === "ugc-clip")) return null
+  const ugc = await estimateUgcPart(nodes, edges)
+  return {
+    credits: ugc.credits,
+    skip: (n) => UGC_NODE_TYPES.has(n.type) || (n.id !== undefined && ugc.downstream.has(n.id)),
+  }
+}
+
+/** Nodes a UGC estimate already prices as its fixed lines, when they sit downstream of UGC Clip. */
+const UGC_DOWNSTREAM_TYPES: ReadonlySet<string> = new Set(["combine-videos", "video-overlay", "add-captions"])
+
+/**
+ * The UGC part of a graph, priced through the plugin seam with no payer
+ * (`ESTIMATE_CALLER`): the same figure for every caller of `estimateWorkflowCredits`.
+ * A node with no `id`, or a call with no edges, cannot be shown to be downstream
+ * and is counted by the per-node sum (over-quote, never under-quote).
+ */
+async function estimateUgcPart(
+  nodes: ReadonlyArray<EstimateNode>,
+  edges: ReadonlyArray<EstimateEdge> | undefined,
+): Promise<{ credits: number; downstream: ReadonlySet<string> }> {
+  const typeById = new Map(nodes.filter((n) => n.id !== undefined).map((n) => [n.id!, n.type] as const))
+  const reached = new Set<string>()
+  const queue = nodes.filter((n) => n.type === "ugc-clip" && n.id !== undefined).map((n) => n.id!)
+  while (queue.length > 0) {
+    const id = queue.shift()!
+    for (const e of edges ?? []) {
+      if (e.source !== id || reached.has(e.target)) continue
+      reached.add(e.target)
+      queue.push(e.target)
+    }
+  }
+  const downstream = new Set([...reached].filter((id) => UGC_DOWNSTREAM_TYPES.has(typeById.get(id) ?? "")))
+  try {
+    // ee -> ee, dynamic only so that this module's graph does not load the quote module on every import.
+    const { estimateUgcRun, ugcEstimateInputOf } = await import("../lib/ugc-estimate.js")
+    const { ESTIMATE_CALLER } = await import("../lib/ugc-quote.js")
+    const r = await estimateUgcRun(ESTIMATE_CALLER, ugcEstimateInputOf(nodes, edges))
+    return { credits: r.expected, downstream }
+  } catch (err) {
+    console.warn("[estimate] UGC estimate unavailable; UGC nodes counted as 0", err instanceof Error ? err.message : err)
+    return { credits: 0, downstream }
+  }
+}
+
+const listingGateNodes = (nodes: ReadonlyArray<EstimateNode>) =>
+  nodes.flatMap((n) => (n.id ? [{ id: n.id, type: n.type, data: n.data, parentId: n.parentId }] : []))
+const listingGateEdges = (edges: ReadonlyArray<EstimateEdge>) =>
+  edges.flatMap((e) =>
+    e.source ? [{ source: e.source, target: e.target, sourceHandle: e.sourceHandle, targetHandle: e.targetHandle, data: e.data }] : [],
+  )
+
+/**
+ * The listing's two parts (`AppListingEstimate`), an upper bound whatever the
+ * stop rule's flag says (the listing never asks it). The preview part is the
+ * whole graph at its saved settings. Each render the run executes at Preview
+ * has its Render final: the render's whole Render final set
+ * (`renderFinalRunSet`, what the app runner's Render final runs) with the
+ * render at Final and every other render at its saved settings — never cut
+ * short at a later render still at Preview. With the flag off a final does
+ * not stop there, and the runner's card offers Render final on every render
+ * whose take is a Preview, so a node after two Preview renders (in a chain,
+ * or fed by both) runs in each of their finals and is priced in each (review
+ * round 3, decided 2026-10-06). With the flag on a final stops at a later
+ * Preview and that node runs once; the listing then over-quotes by it
+ * (accepted; revisit when production turns the flag on).
+ */
+function listingEstimate(
+  nodes: ReadonlyArray<EstimateNode>,
+  edges: ReadonlyArray<EstimateEdge>,
+  prices: ChargedPriceTable,
+  publishType: ListingPublishType,
+  /** Nodes priced elsewhere (the UGC seam): read as part of the graph, never summed. */
+  skip?: (node: EstimateNode) => boolean,
+  /** The app's exposed text inputs: an exposed speech text is a ceiling, not the placeholder. */
+  speechTextCaps?: ExposedTextCaps,
+): AppListingEstimate {
+  // The preview part is the whole graph at its saved settings — never only
+  // the run up to each Preview: a flag-off app run executes all of it, with
+  // the fee (see AppListingEstimate). Revisit when production turns the flag on.
+  const preview = sumEstimatedNodes(nodes, edges, prices, (n) => !skip?.(n), speechTextCaps)
+  // A component runs inside its caller's run and never stops at a Preview.
+  if (publishType === "component") return { preview, final: 0 }
+  const gateNodes = listingGateNodes(nodes)
+  const gateEdges = listingGateEdges(edges)
+  const frozen = (n: EstimateNode) => (n.data as { skipped?: unknown } | undefined)?.skipped === true
+  let final = 0
+  // Every render the run executes at Preview (gated or not: with the flag off
+  // a run executes them all, and each take is offered its Render final).
+  for (const renderId of previewStopsForListing(gateNodes, gateEdges).previewRenderIds) {
+    const runSet = renderFinalRunSet(renderId, gateNodes, gateEdges)
+    const atFinal = nodes.map((n) => (n.id === renderId ? { ...n, data: { ...(n.data ?? {}), quality: "final" } } : n))
+    final += sumEstimatedNodes(atFinal, edges, prices, (n) => !!n.id && runSet.has(n.id) && !frozen(n) && !skip?.(n), speechTextCaps)
+  }
+  return { preview, final }
 }
 
 /**
@@ -3507,9 +3817,10 @@ function estimatePricingUnits(node: EstimateNode): number {
  *  passes the estimator's OWN type instead of re-declaring a structural copy at
  *  the call site — a copy cannot be widened (an `id`, an `edges` parameter)
  *  without someone noticing every place that still omits it. */
-export type EstimateNode = { id?: string; type: string; data?: Record<string, unknown> }
-/** Ditto for an edge. Only the three fields a price can depend on. */
-export type EstimateEdge = { source?: string; target: string; targetHandle?: string | null }
+export type EstimateNode = { id?: string; type: string; data?: Record<string, unknown>; parentId?: string | null }
+/** Ditto for an edge: the fields a price can depend on, and those the preview
+ *  stop rule follows (`sourceHandle`, `data.outputMode`). */
+export type EstimateEdge = { source?: string; target: string; sourceHandle?: string | null; targetHandle?: string | null; data?: unknown }
 
 /**
  * Does an edge feed this add-captions node a TIMED caption source — a Transcript
@@ -3560,6 +3871,16 @@ function getNodeModelIdentifier(
   // edges. No count (no graph context) → the 6-source ceiling. The same builder
   // the route and the payload builder reserve through.
   if (nodeType === "audio-sync") return audioSyncCreditId(graph.audioSyncSourceCount ?? Number.NaN)
+
+  // Edit Plan: mode × tier × duration bucket, the same id the run reserves
+  // (payload-builder). The node has no `provider`, so without this branch it fell
+  // through to the bare `edit-plan` id — the table MAXIMUM (premium clips, 180m)
+  // whatever it runs. No recording length is known here → the node's own
+  // mode × tier at the ceiling bucket: never under the reservation. Mirrors the
+  // editor's getModelIdentifier.
+  if (nodeType === "edit-plan") {
+    return buildEditPlanCreditId(asEditPlanMode(data.mode), asEditPlanTier(data.planTier))
+  }
 
   // AI Writer always uses "ai-writer"
   if (nodeType === "ai-writer") return "ai-writer"
@@ -3724,6 +4045,12 @@ function getNodeModelIdentifier(
   // workflow run reserve on. (Mirrors the frontend getModelIdentifier.)
   if (nodeType === "apply-edl") return applyEdlCreditId(data.quality)
 
+  // Text to Dialogue reserves on its dialogue model's own row — the route's
+  // guard and the payload builder both call dialogueProviderOf, so a node with
+  // no (or an unknown) provider is quoted as the v3 dialogue it runs as. ABOVE
+  // the `!provider` bail, which priced it at the node-type row.
+  if (nodeType === "text-to-dialogue") return dialogueProviderOf(data.provider)
+
   const provider = data.provider as string | undefined
   if (!provider) return nodeType
 
@@ -3824,6 +4151,132 @@ function getNodeModelIdentifier(
 export function estimateWorkflowCredits(
   nodes: ReadonlyArray<EstimateNode>,
   edges?: ReadonlyArray<EstimateEdge>,
+  /** A surface that describes an app's inputs BEFORE the user types passes the
+   *  exposed text inputs (`speechTextCaps`); a run whose inputs are already
+   *  merged onto the nodes passes nothing. */
+  options?: WorkflowEstimateOptions,
 ): Promise<number> {
-  return CreditsService.estimateWorkflowCredits(nodes, edges)
+  return CreditsService.estimateWorkflowCredits(nodes, edges, options)
+}
+
+/**
+ * What a run of a SUBSET of this workflow will be charged: the nodes in
+ * `runNodeIds`, priced on `nodes` (the graph the run executes, its overrides
+ * applied) — an agent's Render final quote (decided 2026-10-06).
+ */
+export function estimateRunSetCredits(
+  nodes: ReadonlyArray<EstimateNode>,
+  edges: ReadonlyArray<EstimateEdge>,
+  runNodeIds: ReadonlySet<string>,
+): Promise<number> {
+  return CreditsService.estimateWorkflowCredits(nodes, edges, { runNodeIds })
+}
+
+/**
+ * What a run can spend from a payer's personal pools. In web-free mode the
+ * topup pool is excluded — it never spends on a consumer surface. The ONE
+ * derivation both the per-model check (`checkCreditsWithProfile`) and the
+ * run-set check below read, so the two can never disagree about a balance.
+ */
+function spendableBalance(
+  profile: { subscription_credits?: number | null; topup_credits?: number | null },
+  webFree: boolean,
+): { subscriptionCredits: number; topupCredits: number; totalBalance: number } {
+  const subscriptionCredits = profile.subscription_credits ?? 0
+  const topupCredits = webFree ? 0 : (profile.topup_credits ?? 0)
+  return { subscriptionCredits, topupCredits, totalBalance: subscriptionCredits + topupCredits }
+}
+
+/** Whether a payer can cover a run set — see {@link checkRunSetCredits}. */
+export interface RunSetCreditsCheck {
+  sufficient: boolean
+  required: number
+  /**
+   * What the payer can spend, for the caller to see. `null` when it is not
+   * theirs to see (a deployment payer: the operator's pool stays private, as
+   * in the credit guard) or not what pays (a workspace budget, whose headroom
+   * is the reservation's to judge).
+   */
+  available: number | null
+  /** Why it is refused; only when `sufficient` is false. */
+  message?: string
+}
+
+/** The credit guard's own words for it (credit-guard-impl.ts): the operator is the fixer. */
+const DEPLOYMENT_OUT_OF_CREDITS = "This deployment is out of credits. Contact your administrator."
+
+/**
+ * Can the payer cover a run set priced at `required` credits? Asked BEFORE an
+ * execution row exists — an agent's Render final (decided 2026-10-06) — so a
+ * run that cannot finish is refused with a 402 rather than started, charged
+ * for its first node, and failed at the render's own reservation.
+ *
+ * Balance only, on the gates the reservation uses (`spendGates`, the payer's
+ * profile through `payerProfileId`). Model availability, daily caps and the
+ * allowance stay with each node's own preflight in the executor. A workspace
+ * payer passes: its budget's ceiling is the reserve RPC's atomic check, as in
+ * `checkCreditsWithProfile`. Throws when the payer's profile cannot be read —
+ * the caller refuses rather than run unchecked.
+ */
+export async function checkRunSetCredits(
+  userId: string,
+  required: number,
+  surface: CreditCheckSurface,
+): Promise<RunSetCreditsCheck> {
+  if (creditsDisabled()) return { sufficient: true, required, available: null }
+
+  const { data: profile, error } = await supabase
+    .from("profiles")
+    .select("tier, subscription_tier, lifetime_topup_credits, subscription_credits, topup_credits")
+    .eq("id", payerProfileId(userId, surface.billingContext))
+    .single()
+  if (error || !profile) throw new Error("The payer's credit profile could not be read")
+
+  const gates = spendGates(effectiveTierOf(profile as CreditProfile), surface)
+  if (!gates.personalBalance) return { sufficient: true, required, available: null }
+
+  const { totalBalance } = spendableBalance(profile as CreditProfile, gates.webFree)
+  const deployment = surface.billingContext?.payer === "deployment"
+  const available = deployment ? null : totalBalance
+  if (totalBalance >= required) return { sufficient: true, required, available }
+  return {
+    sufficient: false,
+    required,
+    available,
+    message: deployment
+      ? DEPLOYMENT_OUT_OF_CREDITS
+      : gates.webFree
+        ? `Your free credits can't cover this run (need ${required}, free pool has ${totalBalance}).`
+        : `Insufficient credits. Required: ${required}, Available: ${totalBalance}`,
+  }
+}
+
+/**
+ * The listing STORED at publish — a published app's, component's or
+ * template's listed price and an app's `base_estimated_credits`, on every
+ * publish and republish — in two parts (`AppListingEstimate`, decided
+ * 2026-10-06): the preview part, the whole graph at its saved settings, which
+ * the creator's fee applies to; and the final part, each Render final, which
+ * it does not (0 for a component). ONE function for every listing: the
+ * preview stop rule shapes run estimates only, never the listing (decided
+ * 2026-10-05). Every publish path calls this, never `estimateWorkflowCredits`
+ * — a guard test (`__tests__/listing-estimate-sites.test.ts`) fails the build
+ * otherwise.
+ */
+export async function estimateWorkflowListingCredits(
+  nodes: ReadonlyArray<EstimateNode>,
+  edges: ReadonlyArray<EstimateEdge> | undefined,
+  options: {
+    readonly publishType: ListingPublishType
+    /** The app's exposed text inputs (`speechTextCaps`) — a publish path prices
+     *  the graph BEFORE the app user's inputs exist, so an exposed speech text
+     *  is a ceiling, not the author's placeholder. */
+    readonly speechTextCaps?: ExposedTextCaps
+  },
+): Promise<AppListingEstimate> {
+  const prices = hasCredits() ? await getChargedPriceTable() : STATIC_BASE_PRICES
+  // The UGC part is priced through its seam, in the preview part (it is the app run's).
+  const ugc = await ugcPartOf(nodes, edges)
+  const split = listingEstimate(nodes, edges ?? [], prices, options.publishType, ugc?.skip, options.speechTextCaps)
+  return { preview: split.preview + (ugc?.credits ?? 0), final: split.final }
 }

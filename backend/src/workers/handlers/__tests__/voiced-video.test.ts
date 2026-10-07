@@ -101,7 +101,9 @@ vi.mock("../../shared.js", async (importOriginal) => {
 // Module under test (after mocks)
 // ---------------------------------------------------------------------------
 
+import { getMaxTtsChars } from "@nodaro/shared"
 import { videoAIHandlers } from "../video-ai.js"
+import { planVoicedDialogue } from "../../../lib/voiced-dialogue-lines.js"
 
 const handler = videoAIHandlers["voiced-video"]
 
@@ -115,7 +117,7 @@ const VIDEO_RESULT = { url: "https://r2.example.com/raw.mp4", providerUsed: "kie
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.mockImageToVideo.mockResolvedValue(VIDEO_RESULT)
-  mocks.mockDirectDialogue.mockResolvedValue(Buffer.from("dialogue-audio"))
+  mocks.mockDirectDialogue.mockResolvedValue({ audio: Buffer.from("dialogue-audio") })
   mocks.mockDirectTTS.mockResolvedValue(Buffer.from("tts-audio"))
   mocks.mockUploadToR2.mockResolvedValue("https://r2.example.com/dialogue.mp3")
   mocks.mockUploadBufferToR2.mockResolvedValue("https://r2.example.com/tts.mp3")
@@ -370,7 +372,7 @@ describe("voiced-video handler — audio_driven (Seedance 2)", () => {
         { text: "hi", voice: "Rachel" },
         { text: "hello", voice: "W3C2vBPukr5b5jvoXhPK" },
       ],
-      { languageCode: "en" },
+      { provider: "elevenlabs-dialogue", languageCode: "en" },
     )
     expect(mocks.mockDirectTTS).not.toHaveBeenCalled()
     // Bytes → R2 (the direct call returns a Buffer, not a URL to re-host).
@@ -380,6 +382,42 @@ describe("voiced-video handler — audio_driven (Seedance 2)", () => {
     expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(
       expect.objectContaining({ extraOutputData: expect.objectContaining({ voiceApplied: true }) }),
     )
+  })
+
+  it("a multi-speaker cast forwarded as v4 dialogue renders on v4 dialogue (the route chose it; the worker passes it through)", async () => {
+    await handler(
+      makeJob({
+        imageUrl: "https://x.png",
+        prompt: "two talk",
+        provider: "seedance-2",
+        duration: 8,
+        characterVoices: [
+          { voiceId: "Rachel", voiceType: "premade", speaker: "Anna", ttsProvider: "elevenlabs-v4" },
+          { voiceId: "George", voiceType: "premade", speaker: "Gordon", ttsProvider: "elevenlabs-v4" },
+        ],
+        dialogue: [{ speaker: "Anna", line: "hi" }, { speaker: "Gordon", line: "hello" }],
+        dialogueProvider: "elevenlabs-dialogue-v4",
+        voicedAudioAddon: 25,
+      }) as never,
+      ctx,
+    )
+    expect(mocks.mockDirectDialogue).toHaveBeenCalledWith(
+      [{ text: "hi", voice: "Rachel" }, { text: "hello", voice: "George" }],
+      { provider: "elevenlabs-dialogue-v4" },
+    )
+  })
+
+  it("a job enqueued before the model travelled with it (no dialogueProvider) still renders on v3 dialogue", async () => {
+    await handler(
+      makeJob({
+        imageUrl: "https://x.png", prompt: "two talk", provider: "seedance-2", duration: 8,
+        characterVoices: [{ voiceId: "Rachel", speaker: "Anna" }, { voiceId: "George", speaker: "Gordon" }],
+        dialogue: [{ speaker: "Anna", line: "hi" }, { speaker: "Gordon", line: "hello" }],
+        voicedAudioAddon: 25,
+      }) as never,
+      ctx,
+    )
+    expect(mocks.mockDirectDialogue).toHaveBeenCalledWith(expect.any(Array), { provider: "elevenlabs-dialogue" })
   })
 
   it("degrades to a silent clip (never hard-fails) when synthesis throws, and refunds the addon", async () => {
@@ -460,6 +498,49 @@ describe("voiced-video handler — native_speech (VEO)", () => {
         extraOutputData: expect.objectContaining({ voiceApplied: false, voiceWarning: "revoice_failed" }),
       }),
     )
+  })
+})
+
+/**
+ * The route priced the audio add-on from `planVoicedDialogue`; the worker voices
+ * exactly that plan — the same lines (the dialogue total cap trims the same
+ * ones) on the same model (direct Dialogue iff the plan is multi-speaker).
+ */
+describe("voiced-video handler — voices the plan the route priced", () => {
+  const CAST = [
+    { voiceId: "Rachel", voiceType: "premade", speaker: "Anna" },
+    { voiceId: "W3C2vBPukr5b5jvoXhPK", voiceType: "library", speaker: "Gordon" },
+  ]
+  const run = (dialogue: Array<{ speaker: string; line: string }>, characterVoices = CAST) =>
+    handler(
+      makeJob({ imageUrl: "https://x.png", prompt: "two talk", provider: "seedance-2", duration: 8, characterVoices, dialogue, voicedAudioAddon: 4 }) as never,
+      ctx,
+    )
+
+  it("direct Dialogue is called exactly when the plan says multi-speaker; a sole voice goes to direct TTS", async () => {
+    const two = [{ speaker: "Anna", line: "hi" }, { speaker: "Gordon", line: "hello" }]
+    expect(planVoicedDialogue({ dialogue: two, characterVoices: CAST }).multiSpeaker).toBe(true)
+    await run(two)
+    expect(mocks.mockDirectDialogue).toHaveBeenCalledTimes(1)
+    expect(mocks.mockDirectTTS).not.toHaveBeenCalled()
+
+    vi.clearAllMocks()
+    const one = [{ speaker: "Anna", line: "hi" }, { speaker: "Anna", line: "again" }]
+    expect(planVoicedDialogue({ dialogue: one, characterVoices: CAST }).multiSpeaker).toBe(false)
+    await run(one)
+    expect(mocks.mockDirectDialogue).not.toHaveBeenCalled()
+    expect(mocks.mockDirectTTS).toHaveBeenCalledTimes(1)
+  })
+
+  it("trims the lines the plan trims: the first line that crosses the dialogue total cap, and everything after, is not voiced", async () => {
+    const cap = getMaxTtsChars("elevenlabs-dialogue")
+    const dialogue = [{ speaker: "Anna", line: "a".repeat(cap - 10) }, { speaker: "Gordon", line: "b".repeat(20) }, { speaker: "Anna", line: "c" }]
+    const plan = planVoicedDialogue({ dialogue, characterVoices: CAST })
+    expect(plan.dropped).toBe(2)
+    await run(dialogue)
+    // Only Anna's line survived → a single voice → direct TTS with exactly the kept text.
+    expect(mocks.mockDirectDialogue).not.toHaveBeenCalled()
+    expect(mocks.mockDirectTTS).toHaveBeenCalledWith("a".repeat(cap - 10), "Rachel", undefined, expect.anything())
   })
 })
 

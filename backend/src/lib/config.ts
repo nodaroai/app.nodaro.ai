@@ -25,6 +25,11 @@ export function baseUrl(fallback: string) {
     })
 }
 
+/** SITE_CAPTURE_ENABLED: unset, empty, or anything but "false" means on. */
+export function parseSiteCaptureEnabled(value: string | undefined): boolean {
+  return (value ?? "").trim().toLowerCase() !== "false"
+}
+
 /** An http(s) URL that is ONLY an origin: no credentials, and no path, query or fragment beyond `/`. */
 function isBareHttpOrigin(value: string): boolean {
   try {
@@ -312,6 +317,15 @@ export const envSchema = z.object({
   JOB_HOLD_TTL_HOURS: z.string().default(""),
   /** Max nodes a single workflow execution can run concurrently (default 3). Prevents one large workflow from starving other users. */
   MAX_CONCURRENT_NODES_PER_EXECUTION: z.coerce.number().int().min(1).max(20).default(6),
+  /**
+   * Collections (migration 462) off Nodaro Cloud: how many collections one
+   * account may have, and how many records one collection may hold — past the
+   * records ceiling the OLDEST records are evicted after each write. Unset =
+   * no ceiling. On Nodaro Cloud the caps come from the account's tier
+   * (`COLLECTION_TIER_CAPS` in @nodaro/shared) and these are ignored.
+   */
+  COLLECTIONS_MAX_PER_USER: z.coerce.number().int().min(1).optional(),
+  COLLECTIONS_MAX_RECORDS_PER_COLLECTION: z.coerce.number().int().min(1).optional(),
   /** BullMQ concurrency for the video worker (default 50). Safe to set high — work is I/O-bound (external API calls). */
   VIDEO_WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(200).default(50),
   /** BullMQ concurrency for the orchestrator worker (default 20). I/O-bound — just DB polling and job dispatching. */
@@ -320,6 +334,18 @@ export const envSchema = z.object({
   RENDER_WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(10).default(2),
   /** Max concurrent ffmpeg child processes (default 4). FFmpeg is CPU-bound; too many parallel processes thrash the box. Applies across every ffmpeg node (resize, combine, social-format, etc.). */
   FFMPEG_CONCURRENCY: z.coerce.number().int().min(1).max(32).default(4),
+  /** ffmpeg memory admission (`providers/video/ffmpeg-memory.ts`, which owns the defaults): every ffmpeg reserves its predicted peak from (limit − reserve) × headroom before it starts. The limit is the container's cgroup memory limit; this is the limit to assume when it has none (default: the host's memory). */
+  FFMPEG_MEMORY_LIMIT_MIB: z.coerce.number().int().min(1).optional(),
+  /** Memory kept back from the ffmpeg budget for the Node processes and the rest of the container (default 2048 MiB). */
+  FFMPEG_MEMORY_RESERVE_MIB: z.coerce.number().int().min(0).optional(),
+  /** Share of (limit − reserve) the ffmpeg launches may reserve together, in (0, 1] (default 0.9). */
+  FFMPEG_MEMORY_HEADROOM: z.coerce.number().gt(0).max(1).optional(),
+  /** One fixed MiB figure for an ffmpeg launch that predicts nothing. Unset (default): the thread-scaled estimate, 393 + 22.9 × threads MiB. */
+  FFMPEG_DEFAULT_PEAK_MIB: z.coerce.number().int().min(1).optional(),
+  /** Where the ffmpeg memory budget is spent: `redis` (default) — ONE budget shared by every process of the container through a Redis ledger, keyed by RAILWAY_REPLICA_ID (else the hostname); `local` — this process spends the whole budget alone (one process per container, tests). */
+  FFMPEG_MEMORY_LEDGER: z.enum(["redis", "local"]).default("redis"),
+  /** The share of the ffmpeg memory budget ONE process may spend while the shared ledger is unreachable, in (0, 1] (default 0.5: the heavy renders run in the video worker and the render worker, so half each never sums past the whole; the server's lighter in-process launches are the residual). */
+  FFMPEG_MEMORY_LOCAL_SHARE: z.coerce.number().gt(0).max(1).optional(),
   /** Shared secret for authenticating internal orchestrator → API calls (replaces the unreliable `req.ip === 127.0.0.1` check). MUST be set to ≥32 random bytes hex. In Docker, start.sh auto-generates one if unset so all sibling processes inherit the same value. */
   INTERNAL_ORCHESTRATOR_SECRET: z.string().min(32, "INTERNAL_ORCHESTRATOR_SECRET must be at least 32 characters (use `openssl rand -hex 32`)"),
   /** Cloud: the plugin daemon host's internal listener (`dist/plugin-daemons.js`). `/health` answers openly; every other route requires the internal secret above. */
@@ -339,6 +365,17 @@ export const envSchema = z.object({
    *  guards the trigger+charge path only — webhook provisioning stays on so
    *  in-flight PaymentIntents settle. Strict parsing like MCP_ENABLED. */
   AUTO_RECHARGE_ENABLED: z
+    .string()
+    .optional()
+    .transform((v) => v === "true" || v === "1"),
+  /** Length-based speech pricing (decided 2026-10-06): Text to Speech and Text
+   *  to Dialogue reserve per started 100 characters instead of the flat row.
+   *  Default OFF — the two seams (route guards, orchestrator override) are
+   *  byte-identical to today while it is off. Boot-time, per environment:
+   *  staging runs `dev` code on the production database, so this is the one
+   *  switch that can be on there and off in production. Strict parsing like
+   *  MCP_ENABLED. Read through `speechLengthPricingEnabled()`. */
+  SPEECH_LENGTH_PRICING_ENABLED: z
     .string()
     .optional()
     .transform((v) => v === "true" || v === "1"),
@@ -378,6 +415,20 @@ export const envSchema = z.object({
    *  routes answer 503 feature_disabled. Strict parsing like MCP_ENABLED; the
    *  admin `copilot_enabled` app setting can additionally pause it at runtime. */
   COPILOT_ENABLED: z
+    .string()
+    .optional()
+    .transform((v) => v === "true" || v === "1"),
+  /** Site Capture (POST /v1/site-capture and the capture_site MCP tool). On by
+   *  default; "false" keeps the route unregistered and the tool unlisted on this
+   *  install. Read through siteCaptureEnabled(). */
+  SITE_CAPTURE_ENABLED: z.string().optional().transform(parseSiteCaptureEnabled),
+  /** The preview stop rule (a run stops at a render set to Preview; nothing
+   *  downstream runs until Render final). Rollout gate, decided 2026-10-05:
+   *  on in staging, off in production until Render final ships. Off = every
+   *  surface behaves as before the rule existed. start.sh hands the same
+   *  value to the editor through /config.js, so one variable drives both.
+   *  Strict parsing like MCP_ENABLED. Read through `previewStopRuleEnabled()`. */
+  PREVIEW_STOP_RULE_ENABLED: z
     .string()
     .optional()
     .transform((v) => v === "true" || v === "1"),
@@ -486,6 +537,16 @@ export function resolveScheduleTriggersEnabled(
  */
 export function scheduleTriggersEnabled(): boolean {
   return resolveScheduleTriggersEnabled(config.SCHEDULE_TRIGGERS_ENABLED, process.env.RAILWAY_ENVIRONMENT_NAME)
+}
+
+/** Site Capture is offered on this install (the SITE_CAPTURE_ENABLED switch; default on). */
+export function siteCaptureEnabled(): boolean {
+  return config.SITE_CAPTURE_ENABLED
+}
+
+/** Length-based speech pricing is on for this process (SPEECH_LENGTH_PRICING_ENABLED; default off). */
+export function speechLengthPricingEnabled(): boolean {
+  return config.SPEECH_LENGTH_PRICING_ENABLED
 }
 
 function loadConfig() {

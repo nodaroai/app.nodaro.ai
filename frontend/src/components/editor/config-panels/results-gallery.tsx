@@ -8,14 +8,23 @@ import { CachedImage } from "@/components/ui/cached-image"
 import { SaveToLibraryButton } from "@/components/editor/save-to-library-button"
 import { downloadFile } from "@/components/presentation/output-cards/shared"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { PreviewBadge, isPreviewQuality } from "@/components/render/preview-badge"
 import { restorePickedTakeTranscript } from "@/lib/apply-edl-take-transcript"
+import { isRenderNodeType } from "@nodaro/shared"
 import { cn } from "@/lib/utils"
 import { JobConfigDisplay } from "./job-config-display"
 import { resultsGalleryPickPatch, resultsGalleryPickRefusal, resultsGalleryTakeMedium } from "./results-gallery-media"
 
 const EXTENSION_MAP = { video: "mp4", audio: "mp3", image: "png" } as const
 
-const NO_RESULTS: ReadonlyArray<{ url?: string; jobId?: string }> = []
+type GalleryResult = { url?: string; jobId?: string; quality?: unknown }
+
+const NO_RESULTS: ReadonlyArray<GalleryResult> = []
+
+/** A take is a Preview by its OWN stamped quality — never the node's Quality
+ *  setting — and only on a render: another node's `quality` means something else. */
+const isPreviewTake = (nodeType: string, r: GalleryResult | undefined): boolean =>
+  isRenderNodeType(nodeType) && isPreviewQuality(r)
 
 /** Why a take of the other medium cannot be picked, by that take's medium
  *  (one whole sentence per medium, so no locale splices in a noun). */
@@ -42,7 +51,7 @@ export function ResultsGallery({
   nodeData,
   onUpdate,
 }: ResultsGalleryProps) {
-  const results = (nodeData.generatedResults as ReadonlyArray<{ url?: string; jobId?: string }> | undefined) ?? NO_RESULTS
+  const results = (nodeData.generatedResults as ReadonlyArray<GalleryResult> | undefined) ?? NO_RESULTS
   const activeIndex = (nodeData.activeResultIndex as number | undefined) ?? 0
   const t = useT()
   const setWorkflowThumbnail = useWorkflowStore((s) => s.setWorkflowThumbnail)
@@ -70,9 +79,10 @@ export function ResultsGallery({
     const patch = resultsGalleryPickPatch(nodeType, nodeData, result.url, idx)
     if (!patch) return
     onUpdate(patch)
-    // Apply EDL: a take that kept no Transcript had the node's cleared by the
-    // pick; read the take's own back from its job (once per pick).
-    if (nodeType === "apply-edl" && nodeId) void restorePickedTakeTranscript(nodeId, { ...result, url: result.url })
+    // A render (Apply EDL): a take that kept no json output (its Transcript)
+    // had the node's cleared by the pick; read the take's own back from its
+    // job (once per pick).
+    if (isRenderNodeType(nodeType) && nodeId) void restorePickedTakeTranscript(nodeId, { ...result, url: result.url })
   }, [results, nodeId, nodeType, nodeData, onUpdate])
 
   if (results.length === 0 || !activeUrl) return null
@@ -85,8 +95,10 @@ export function ResultsGallery({
 
   return (
     <div className="rounded-xl border border-gray-200 dark:border-[#2D2D2D] bg-white dark:bg-[#1E1E1E] p-3 shadow-sm">
-      <div className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B] mb-2">
+      <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-[#64748B]">
         {t("cfgshared.latestResults")}
+        {/* The take on show is a Preview: a private 720p cut (single takes have no tile). */}
+        {isPreviewTake(nodeType, results[activeIndex]) && <PreviewBadge />}
       </div>
 
       {/* Thumbnail grid */}
@@ -97,11 +109,14 @@ export function ResultsGallery({
             const tileMedium = resultsGalleryTakeMedium(nodeType, nodeData, r.url)
             const refusedMedium = resultsGalleryPickRefusal(nodeType, nodeData, r.url)
             const refusal = refusedMedium ? t(PICK_REFUSAL[refusedMedium]) : undefined
+            const tilePreview = isPreviewTake(nodeType, r)
             const tileName = t("cfgshared.resultN", { n: idx + 1 })
-            // The reason is part of the NAME, so assistive tech hears why the
-            // tile cannot be picked; aria-disabled (not `disabled`) keeps it
-            // focusable and its tooltip reachable.
-            const accessibleName = refusal ? `${tileName}${t("common.dashJoin")}${refusal}` : tileName
+            // A Preview is part of the NAME (a video or audio tile is only an
+            // icon); so is the reason a tile cannot be picked, so assistive tech
+            // hears why. aria-disabled (not `disabled`) keeps it focusable and
+            // its tooltip reachable.
+            const namedTile = tilePreview ? `${tileName}${t("common.fragmentGap")}${t("node.renderPreviewBadge")}` : tileName
+            const accessibleName = refusal ? `${namedTile}${t("common.dashJoin")}${refusal}` : namedTile
             return (
               <button
                 key={`${r.url}-${idx}`}
@@ -137,6 +152,9 @@ export function ResultsGallery({
                     thumbnail
                     thumbnailWidth={96}
                   />
+                )}
+                {tilePreview && (
+                  <PreviewBadge className="absolute inset-x-0 bottom-0 justify-center rounded-none bg-amber-500/90 px-0 py-px text-[8px] text-black dark:text-black" />
                 )}
               </button>
             )

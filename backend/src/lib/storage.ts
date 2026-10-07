@@ -314,7 +314,8 @@ const RECAST_COPY_EXT_TO_MIME: Record<string, string> = {
  *
  * Returns the fork public URL and the SOURCE object's byte size (HEAD the
  * source, which is known to exist, rather than the post-copy dest whose HEAD
- * can race) so the caller can reserve quota. Throws on a foreign source URL
+ * can race; the dest is HEAD-ed only when the source HEAD failed) so the caller
+ * can reserve quota. Throws on a foreign source URL
  * (a recast object is always ours — a foreign URL is a fork bug that would
  * leave the fork pointing at someone else's bytes) or an unknown extension.
  */
@@ -339,7 +340,16 @@ export async function copyRecastObject(
     })),
     storageTransferOptions(bytes),
   )
-  return { url: r2Url(destKey), bytes }
+  if (bytes > 0) return { url: r2Url(destKey), bytes }
+  // 0 = the source HEAD failed (getR2ObjectSize's contract) — never a real
+  // size here, because a stalled store now fails the HEAD instead of hanging it.
+  // The caller reserves quota from `bytes`, so read it from the destination
+  // rather than report a copy that happened as free; like copyR2ObjectToPrefix,
+  // that HEAD is not best-effort.
+  const head = await s3.send(
+    new HeadObjectCommand({ Bucket: config.R2_BUCKET_NAME, Key: destKey }),
+  )
+  return { url: r2Url(destKey), bytes: Number(head.ContentLength ?? 0) }
 }
 
 /**

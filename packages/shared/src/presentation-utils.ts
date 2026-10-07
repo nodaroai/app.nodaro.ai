@@ -7,6 +7,7 @@ import type { GenericNode, GenericEdge } from "./types.js"
 import type { PresentationItem } from "./presentation-types.js"
 import { AUDIO_PRODUCER_TYPES, VIDEO_PRODUCER_TYPES } from "./producer-types.js"
 import { canonicalizeOverrideKeys } from "./exposed-field-keys.js"
+import { RENDER_NODE_TYPE_IDS } from "./render-nodes.js"
 
 // ---------------------------------------------------------------------------
 // Node type sets
@@ -146,13 +147,14 @@ const VIDEO_OUTPUT_TYPES = new Set([
   "upload-video",
   "lip-sync", "motion-transfer", "video-upscale", "add-captions",
   "social-media-format",
-  // apply-edl renders an EDL into video OR audio. Its medium is decided at run
-  // time (DYNAMIC_PRODUCER_TYPES), so getOutputType would answer "data" and a
-  // published app would render the cut as a JSON blob. Declaring it here — as
-  // the voice-changer/dubbing precedent does for their default medium — makes
-  // the classifier answer "video" (the common case; an audio-only cut still
-  // plays in a video element). Asserted in producer-types.test.ts.
-  "apply-edl",
+  // A render (Apply EDL) renders an EDL into video OR audio. Its medium is
+  // decided at run time (DYNAMIC_PRODUCER_TYPES), so getOutputType would answer
+  // "data" and a published app would render the cut as a JSON blob. Declaring
+  // every render here — as the voice-changer/dubbing precedent does for their
+  // default medium — makes the classifier answer "video" (the common case; an
+  // audio-only cut still plays in a video element). Asserted in
+  // producer-types.test.ts.
+  ...RENDER_NODE_TYPE_IDS,
 ])
 
 const AUDIO_OUTPUT_TYPES = new Set([
@@ -394,6 +396,22 @@ export const INPUT_FIELD_MAP: Record<string, InputFieldSchema> = {
   "instrumentation": { key: "production", type: "select" },
   "voice-character": { key: "timbre", type: "select" },
   "voice-delivery": { key: "archetype", type: "select" },
+  // --- UGC (Cloud) ---
+  "ugc-creator": { key: "source", type: "select" },
+}
+
+/**
+ * Extra API-settable keys for node types whose card writes more than one field
+ * (INPUT_FIELD_MAP is one key per node type). Read by extract-app-inputs and the
+ * app runner; every key here must be in UGC_OVERRIDABLE_FIELDS for a UGC type.
+ */
+export const INPUT_FIELD_EXTRA_KEYS: Readonly<Record<string, readonly InputFieldSchema[]>> = {
+  "ugc-creator": [{ key: "gender", type: "select" }, { key: "photoUrl", type: "image-url" }],
+}
+
+/** The extra override fields of a node type (none for most types). */
+export function getInputFieldExtraKeys(nodeType: string): readonly InputFieldSchema[] {
+  return Object.hasOwn(INPUT_FIELD_EXTRA_KEYS, nodeType) ? INPUT_FIELD_EXTRA_KEYS[nodeType]! : []
 }
 
 /** Get the overridable field schema for an input node type. */

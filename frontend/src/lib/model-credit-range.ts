@@ -1,4 +1,5 @@
 import { MODEL_CATALOG } from "@nodaro/shared"
+import { isSpeechUnitRow } from "./speech-estimate"
 
 /** The cheapest and the priciest variant of one model, in credits. */
 export interface CreditRange {
@@ -7,10 +8,12 @@ export interface CreditRange {
 }
 
 /** Every catalog model whose price depends on its settings, with the
- *  identifiers its variants are priced by. */
+ *  identifiers its variants are priced by. A speech model's per-100-characters
+ *  row is a rate the speech estimator applies to the text, not a variant: it is
+ *  left out, so a speech model keeps its flat badge. */
 export const VARIABLE_PRICED_MODELS: ReadonlyArray<readonly [string, readonly string[]]> = Object.values(MODEL_CATALOG)
-  .filter((m) => m.pricing.length > 1)
-  .map((m) => [m.id, m.pricing.map((p) => p.identifier)] as const)
+  .map((m) => [m.id, m.pricing.map((p) => p.identifier).filter((id) => !isSpeechUnitRow(id))] as const)
+  .filter(([, ids]) => ids.length > 1)
 
 const VARIABLE_PRICED_IDS: ReadonlySet<string> = new Set(VARIABLE_PRICED_MODELS.map(([id]) => id))
 

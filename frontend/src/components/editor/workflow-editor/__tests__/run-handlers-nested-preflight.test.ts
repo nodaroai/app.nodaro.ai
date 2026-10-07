@@ -71,7 +71,7 @@ vi.mock("../list-execution", () => ({ executeNodeForList: vi.fn(), expandLoopRes
 // The nested walk itself is unit-tested in sub-workflow-preflight.test.ts; here
 // it stands in for "a referenced workflow the run must not start".
 vi.mock("../sub-workflow-preflight", () => ({
-  nestedWordTimingsPreflight: (...a: unknown[]) => mockNestedPreflight(...a),
+  nestedRunPreflight: (...a: unknown[]) => mockNestedPreflight(...a),
 }))
 
 const { handleRun, detachActiveWorkflowStream } = await import("../run-handlers")

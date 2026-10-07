@@ -1,6 +1,6 @@
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { proShotStills } from "@/lib/scene3d/pro-media-result";
-import { collectAncestorRefs as sharedCollectAncestorRefs, isExpandedClone, PARAMETER_NODE_TYPES, aggregateByType, buildChildrenByParent, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member, ASPECT_RATIO_DIMENSIONS, overlayVariantIdFromHandle, featuredMetaAdOutputs, featuredInstagramOutputs, resolveVideoLinkOutput, isTelegramAccountTriggerNamedHandle, telegramAccountTriggerOutputs, type Transcript, isSocialSearchPickFrozen, socialPostsFrom, socialPostsDigest } from "@nodaro/shared";
+import { collectAncestorRefs as sharedCollectAncestorRefs, isExpandedClone, PARAMETER_NODE_TYPES, aggregateByType, buildChildrenByParent, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member, ASPECT_RATIO_DIMENSIONS, overlayVariantIdFromHandle, featuredMetaAdOutputs, featuredInstagramOutputs, resolveVideoLinkOutput, isTelegramAccountTriggerNamedHandle, telegramAccountTriggerOutputs, type Transcript, isSocialSearchPickFrozen, socialPostsFrom, socialPostsDigest, savedRenderOutput, telegramPostsFrom, isRenderNodeType } from "@nodaro/shared";
 import { getParameterPromptHint } from "@nodaro/prompts"
 import type {
   WorkflowNode,
@@ -17,7 +17,9 @@ import type {
   VideoAuditNodeData,
   DescribeToPickerData,
   TranscribeData,
+  TextToDialogueData,
 } from "@/types/nodes";
+import { editPlanOutputOf } from "@/lib/edit-plan-saved-output";
 import { entityActiveImageUrl } from "@/lib/entity-output-url";
 
 export function buildExecutionLevels(
@@ -454,6 +456,16 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
       (data.generatedAudioUrl as string | undefined)
     );
   }
+  if (type === "text-to-dialogue" && sourceHandle === "json") {
+    // The Transcript of the ACTIVE result (per-result, falling back to the bare
+    // field), stringified for generic consumers — the transcribe rule. The
+    // audio handle falls through to the audio group below, unchanged.
+    const d = node.data as TextToDialogueData;
+    const results = d.generatedResults ?? [];
+    const active = d.activeResultIndex ?? 0;
+    const transcript = results[active]?.transcript ?? d.generatedJson;
+    return transcript === undefined ? undefined : JSON.stringify(transcript);
+  }
   if (
     type === "text-to-speech" ||
     type === "generate-music" ||
@@ -486,7 +498,32 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
   // fell through to `undefined`, and the input resolver drops falsy outputs —
   // so downstream prompts, {Label} refs, and FieldMappings all came up empty in
   // every client-side run mode, even though the edge connected fine.
+  if (type === "collection-read") {
+    // `json` → the records the last run read (stringified for text consumers;
+    // Extract Field / List read generatedJson directly), `text` / no handle →
+    // their digest. Mirrors the backend getPrimaryOutput branch.
+    if (sourceHandle === "json") {
+      const records = Array.isArray(data.generatedJson) ? data.generatedJson : [];
+      return records.length > 0 ? JSON.stringify(records) : undefined;
+    }
+    return data.generatedText as string | undefined;
+  }
+  if (type === "collection-write") {
+    // Its one handle `json` → the record the last run saved; a text consumer gets its headline.
+    const record = data.generatedJson;
+    if (sourceHandle === "json" || !sourceHandle) {
+      return record && typeof record === "object" ? JSON.stringify(record) : (data.generatedText as string | undefined);
+    }
+    return data.generatedText as string | undefined;
+  }
   if (type === "telegram-channel-feed") {
+    // `json` → the posts of the last run (stringified for text consumers;
+    // Extract Field / List read generatedJson directly), `text` / no handle →
+    // their digest. Mirrors the backend getPrimaryOutput branch.
+    if (sourceHandle === "json") {
+      const posts = telegramPostsFrom(data.generatedJson);
+      return posts.length > 0 ? JSON.stringify(posts) : undefined;
+    }
     return data.generatedText as string | undefined;
   }
   if (type === "transcribe") {
@@ -576,8 +613,9 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     if (sourceHandle === "audio" || sourceHandle === "audio-out") return audioUrls[0];
     return videoUrls[0] ?? audioUrls[0];
   }
-  if (type === "apply-edl") {
-    // Dual-handle: the `json` handle carries the remapped Transcript
+  if (isRenderNodeType(type)) {
+    // A render (RENDER_NODE_TYPES), dual-handle: the `json` handle carries its
+    // json output — Apply EDL's is the remapped Transcript
     // (data.generatedJson, stringified for generic consumers). Every other
     // handle — the default (`!sourceHandle`) and the `media` handle — is the
     // rendered cut (video OR audio per the node's `output` setting). Mirrors
@@ -587,13 +625,10 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
       const json = data.generatedJson;
       return json === undefined ? undefined : JSON.stringify(json);
     }
-    const results = (data.generatedResults as GeneratedResult[] | undefined) ?? [];
-    const activeIndex = (data.activeResultIndex as number | undefined) ?? 0;
-    return (
-      results[activeIndex]?.url ??
-      (data.generatedVideoUrl as string | undefined) ??
-      (data.generatedAudioUrl as string | undefined)
-    );
+    // The selected take — the one reader the server uses too (@nodaro/shared
+    // savedRenderOutput), so a pick reaches a workflow run exactly as it
+    // reaches the canvas.
+    return savedRenderOutput(data)?.url;
   }
   if (type === "trim-audio" || type === "mix-audio" || type === "combine-audio" || type === "extract-audio") {
     const results =
@@ -830,8 +865,10 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     return value === undefined || value === null ? undefined : JSON.stringify(value);
   }
   if (type === "edit-plan") {
-    const d = node.data as { generatedJson?: unknown };
-    const plan = d.generatedJson;
+    // The plan as the person's review leaves it (TA13): a clip set holds the
+    // KEPT clips only, so this is the first kept clip. Mirrors the server's
+    // saved seed (output-extractor.ts, editPlanSavedOutput).
+    const plan = editPlanOutputOf(node.data as Record<string, unknown>)?.json;
     if (plan === undefined || plan === null) return undefined;
     if (Array.isArray(plan)) return plan.length > 0 ? JSON.stringify(plan[0]) : undefined;
     return JSON.stringify(plan);
@@ -1201,6 +1238,9 @@ export function detectPreviewItemType(
   sourceHandle?: string,
 ): "image" | "video" | "audio" | "data" | "text" {
   if (nodeType === "voice-design" && sourceHandle === "voiceId") return "text"
+  // Text to Dialogue's `json` pip is its Transcript (data); its audio pip falls
+  // through to the audio set below. Must come before AUDIO_SOURCE_TYPES.
+  if (nodeType === "text-to-dialogue" && sourceHandle === "json") return "data"
   if (IMAGE_SOURCE_TYPES.has(nodeType)) return "image"
   if (VIDEO_SOURCE_TYPES_FOR_RENDER.has(nodeType)) return "video"
   if (AUDIO_SOURCE_TYPES.has(nodeType)) return "audio"
@@ -1223,9 +1263,9 @@ export function detectPreviewItemType(
   // and Content Ideas are readable text.
   if (nodeType === "content-recipe") return sourceHandle === "json" ? "data" : "text"
   if (nodeType === "content-ideas") return "text"
-  // apply-edl `json` handle = the remapped Transcript (data). Its media handle
-  // falls through to the URL regex below (mp4 → video, m4a → audio).
-  if (nodeType === "apply-edl" && sourceHandle === "json") return "data"
+  // A render's `json` handle (Apply EDL: the remapped Transcript) is data. Its
+  // media handle falls through to the URL regex below (mp4 → video, m4a → audio).
+  if (isRenderNodeType(nodeType) && sourceHandle === "json") return "data"
   if (value) {
     if (IMAGE_URL_RE.test(value)) return "image"
     if (VIDEO_URL_RE.test(value)) return "video"

@@ -10,6 +10,7 @@ import { AudioUploadCard } from "./input-cards/audio-upload-card"
 import { ParameterCard } from "./input-cards/parameter-card"
 import { ListInputCard } from "./input-cards/list-input-card"
 import { LoopInputCard } from "./input-cards/loop-input-card"
+import { CreatorSourceCard } from "./input-cards/creator-source-card"
 import { isParameterPickerNode } from "@/lib/parameter-picker-types"
 import { inferPromptContext } from "@/lib/prompt-context"
 import { hasCredits } from "@/lib/edition"
@@ -56,6 +57,8 @@ export interface InputCardProps {
   display?: PresentationDisplay
   inputMode?: InputMode
   minLines?: number
+  /** A Text node's character limit (its item's `maxLength`): the box takes no more and a counter shows against it. */
+  maxLength?: number
   nodes?: Array<{ id: string; type?: string; data: Record<string, unknown> }>
   edges?: Array<{ source: string; target: string }>
   /** "composer" renders compact card variants for the chat-mode bottom composer. */
@@ -75,6 +78,7 @@ function InputCardInner({
   display,
   inputMode,
   minLines,
+  maxLength,
   nodes,
   edges,
   variant,
@@ -111,6 +115,13 @@ function InputCardInner({
     )
   }
 
+  // UGC Creator: who talks (an AI creator or the runner's photo) and the gender.
+  // Compared as a string because the type joins `SceneNodeType` with the UGC
+  // node registration (Task C1), which turns this into a `case` below.
+  if ((node.type as string | undefined) === "ugc-creator") {
+    return <CreatorSourceCard nodeId={node.id} label={label} data={data} isFullscreen={isFullscreen} inputValues={inputValues} onUpdateInput={onUpdateInput} readOnly={readOnly} />
+  }
+
   switch (node.type) {
     case "text-prompt": {
       const textValue = isFullscreen ? (inputValues[node.id]?.text as string ?? data.text as string ?? "") : (data.text as string ?? "")
@@ -132,6 +143,7 @@ function InputCardInner({
           presentationReadOnly={isPresReadOnly}
           inputMode={inputMode}
           minLines={minLines}
+          maxLength={maxLength}
           promptHelper={isPresReadOnly ? undefined : promptHelperProp}
         />
       )
@@ -252,6 +264,7 @@ function InputCardInner({
               readOnly={readOnly}
               displayMode={variant === "composer" ? (cardMeta?.pickerMode === "modal" ? "modal" : "compact") : (cardMeta?.pickerMode ?? "inline")}
               allowedValues={cardMeta?.pickerAllowedValues}
+              allowedValuesByField={cardMeta?.pickerAllowedValuesByField}
             />
           </Suspense>
         )

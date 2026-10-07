@@ -50,8 +50,10 @@ export default function ArchivedRunsPage() {
       toast.success(t("archive.runDeleted"))
       setConfirmDelete(null)
     },
-    onError: () => {
-      toast.error(t("archive.failedDelete"))
+    // The server's reason, translated (a run still in progress cannot be
+    // deleted yet — lib/api-error-copy.ts), else the generic headline.
+    onError: (err) => {
+      toast.error(err instanceof Error && err.message ? err.message : t("archive.failedDelete"))
       setConfirmDelete(null)
     },
   })

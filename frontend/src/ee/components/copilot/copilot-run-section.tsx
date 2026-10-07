@@ -13,6 +13,7 @@
  * outlives the turn that proposed it by design.
  */
 import { useEffect } from "react"
+import { executionErrorText } from "@/lib/execution-error-text"
 import { useQuery } from "@tanstack/react-query"
 import { getWorkflowExecution } from "@/lib/api"
 import { executionStatusRefetchInterval } from "@/components/editor/execution-status-bar"
@@ -164,7 +165,7 @@ export function CopilotRunSection({ userId, nodeCount, onStopRun }: CopilotRunSe
       <RunFailedCard
         credits={execution?.totalCreditsUsed ?? 0}
         failedStep={execution?.completedNodes != null ? execution.completedNodes + 1 : null}
-        message={execution?.errorMessage ?? null}
+        message={executionErrorText(execution?.errorMessage)}
         onFix={askForFix}
         disabled={streaming}
       />

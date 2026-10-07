@@ -541,6 +541,46 @@ describe("generate_speech preset application", () => {
     expect((result.content[0] as { text: string }).text).toMatch(/text/i)
     expect(body).toBeUndefined()
   })
+
+  it("a custom preset's previousText / nextText apply like its other fields, and a caller's own value wins", async () => {
+    customPresetRow.value = {
+      id: "22222222-2222-2222-2222-222222222222",
+      node_type: "text-to-speech",
+      name: "Chapter voice",
+      description: null,
+      data: { provider: "elevenlabs-v4", previousText: "Preset before.", nextText: "Preset after." },
+    }
+    const { result, body } = await runGenerateSpeech({
+      presetId: "22222222-2222-2222-2222-222222222222",
+      text: "Middle.",
+      next_text: "Caller after.",
+    })
+    expect(result.isError).toBeUndefined()
+    expect(body?.provider).toBe("elevenlabs-v4")
+    expect(body?.previousText).toBe("Preset before.") // from the preset
+    expect(body?.nextText).toBe("Caller after.") // the caller's value wins
+  })
+
+  it("a preset's neighbour text over the cap is normalised like the funnel does (previous keeps its end, next its start), so the route never 400s a caller who passed nothing", async () => {
+    const long = `${"a".repeat(300)}${"b".repeat(1000)}`
+    customPresetRow.value = {
+      id: "33333333-3333-3333-3333-333333333333",
+      node_type: "text-to-speech",
+      name: "Long context",
+      description: null,
+      data: { provider: "elevenlabs-v4", previousText: `  ${long}  `, nextText: `${"c".repeat(1000)}${"d".repeat(300)}`, },
+    }
+    const { result, body } = await runGenerateSpeech({ presetId: "33333333-3333-3333-3333-333333333333", text: "Middle." })
+    expect(result.isError).toBeUndefined()
+    expect(body?.previousText).toBe("b".repeat(1000))
+    expect(body?.nextText).toBe("c".repeat(1000))
+  })
+
+  it("the factory presets carry no neighbour text, so none is sent", async () => {
+    const { body } = await runGenerateSpeech({ presetId: "text-to-speech/hype", text: "Hello" })
+    expect(body).not.toHaveProperty("previousText")
+    expect(body).not.toHaveProperty("nextText")
+  })
 })
 
 // ── text_to_audio → /v1/text-to-audio ────────────────────────────────────────

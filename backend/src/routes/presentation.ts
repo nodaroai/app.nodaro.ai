@@ -1,3 +1,4 @@
+import { executionOutcome } from "@nodaro/shared"
 /**
  * Presentation mode routes.
  * POST   /v1/workflows/:id/share     — Generate share token, enable presentation
@@ -18,9 +19,12 @@ import { describeLockedOverrides, findLockedOverrides } from "../lib/input-overr
 import { sendCredentialUnbound, unboundCredentialUsesFor } from "../lib/credential-gate.js"
 import { personalPayer, shouldRefuseDegradedRun } from "../lib/billing-context.js"
 import { billingPairColumns } from "../lib/insert-job.js"
+import { previewReviewRefusal } from "../lib/preview-review-gate.js"
 import type { WorkflowExecutionJob } from "../services/workflow-engine/types.js"
 import { ACTIVE_EXECUTION_STATUSES } from "../lib/request-helpers.js"
 import { estimateWorkflowCredits, type EstimateNode, type EstimateEdge } from "../ee/billing/credits.js"
+import { exposedTextCaps } from "../lib/exposed-text-caps.js"
+import { resolveCanvasResultIds } from "../lib/canvas-result-ids.js"
 
 const workflowIdParams = z.object({
   id: z.string().uuid(),
@@ -203,20 +207,28 @@ export async function presentationRoutes(app: FastifyInstance) {
     // isOwner only if user is authenticated and owns the workflow
     const isOwner = !!req.userId && workflow.user_id === req.userId
 
-    // Estimate credit cost from executable nodes
+    // Estimate credit cost from executable nodes. This describes the app
+    // BEFORE its user types, so an exposed speech text is priced at its input's
+    // character limit (or the model's cap), never the author's placeholder.
     const wfNodes = (workflow.nodes ?? []) as EstimateNode[]
     const wfEstimateEdges = (workflow.edges ?? []) as EstimateEdge[]
-    const estimatedCost = await estimateWorkflowCredits(wfNodes, wfEstimateEdges)
+    const estimatedCost = await estimateWorkflowCredits(wfNodes, wfEstimateEdges, {
+      speechTextCaps: exposedTextCaps(workflow.settings as Record<string, unknown> | null, wfNodes),
+    })
 
     // Extract presentation settings from workflow settings
     const settings = (workflow.settings ?? {}) as Record<string, unknown>
     const presentationSettings = settings.presentationSettings as { runTarget: string; subWorkflowNodeId?: string } | undefined
 
+    // Saved result ids resolved by the owner's jobs (canvas-result-ids.ts), so
+    // a viewer's output cards label an older Preview render as the editor does.
+    const nodes = await resolveCanvasResultIds(workflow.nodes, workflow.user_id, { settings: workflow.settings })
+
     return reply.send({
       workflowId: workflow.id,
       name: workflow.name,
       // A take's voice record is the owner's (studio ruling T42).
-      nodes: isOwner ? workflow.nodes : stripStudioTakeVoiceRecords(workflow.nodes),
+      nodes: isOwner ? nodes : stripStudioTakeVoiceRecords(nodes),
       edges: workflow.edges,
       isOwner,
       estimatedCost,
@@ -313,6 +325,32 @@ export async function presentationRoutes(app: FastifyInstance) {
         error: { code: "billing_unavailable", message: "Billing is temporarily unavailable for workspace runs. Try again shortly." },
       })
     }
+    // Compute nodeIds if targeting a specific sub-workflow node
+    let nodeIds: string[] | undefined
+    if (runTarget === "sub-workflow" && subWorkflowNodeId) {
+      nodeIds = [subWorkflowNodeId]
+    } else if (runTarget === "route" && selectedRouteId) {
+      const { getRouteReachableNodeIds } = await import("@nodaro/shared")
+      const wfNodes = (workflow.nodes ?? []) as Array<{ id: string; type?: string; data: Record<string, unknown> }>
+      const wfEdges = (workflow.edges ?? []) as Array<{ source: string; target: string }>
+      const reachable = getRouteReachableNodeIds(wfNodes, wfEdges, selectedRouteId)
+      if (reachable.size > 0) {
+        nodeIds = [...reachable]
+      }
+      // If empty (stale routeId), fall through with nodeIds=undefined → runs entire workflow
+    }
+
+    // A present-link viewer runs the owner's live graph with no Render final
+    // path: a run of a Preview render is refused before any row exists.
+    {
+      const refusal = previewReviewRefusal(
+        (workflow.nodes ?? []) as ReadonlyArray<{ id: string; type?: string; data?: Record<string, unknown> }>,
+        (workflow.edges ?? []) as ReadonlyArray<{ source: string; target: string }>,
+        { triggerType: "manual", nodeIds, inputOverrides },
+      )
+      if (refusal) return reply.status(400).send({ error: refusal })
+    }
+
     // Create execution under the VIEWER's userId (viewer pays credits)
     const { data: execution, error: execError } = await supabase
       .from("workflow_executions")
@@ -331,21 +369,6 @@ export async function presentationRoutes(app: FastifyInstance) {
       return sendInternalError(reply, req, execError, "Failed to create execution")
     }
 
-    // Compute nodeIds if targeting a specific sub-workflow node
-    let nodeIds: string[] | undefined
-    if (runTarget === "sub-workflow" && subWorkflowNodeId) {
-      nodeIds = [subWorkflowNodeId]
-    } else if (runTarget === "route" && selectedRouteId) {
-      const { getRouteReachableNodeIds } = await import("@nodaro/shared")
-      const wfNodes = (workflow.nodes ?? []) as Array<{ id: string; type?: string; data: Record<string, unknown> }>
-      const wfEdges = (workflow.edges ?? []) as Array<{ source: string; target: string }>
-      const reachable = getRouteReachableNodeIds(wfNodes, wfEdges, selectedRouteId)
-      if (reachable.size > 0) {
-        nodeIds = [...reachable]
-      }
-      // If empty (stale routeId), fall through with nodeIds=undefined → runs entire workflow
-    }
-
     // Enqueue orchestration job
     const jobData: WorkflowExecutionJob = {
       executionId: execution.id,
@@ -357,6 +380,8 @@ export async function presentationRoutes(app: FastifyInstance) {
       // P14: the viewer's authenticated context (a shared-workflow run —
       // the VIEWER pays; share-token runs have no member and stay personal).
       billingContext: req.billingContext ?? personalPayer(req.userId),
+      // A present-link viewer has no Render final path.
+      reviewerPresent: false,
     }
 
     await orchestrationQueue.add("workflow-execution", jobData, {
@@ -400,6 +425,9 @@ export async function presentationRoutes(app: FastifyInstance) {
       })
     }
 
-    return reply.send(execution)
+    return reply.send({
+      ...execution,
+      outcome: executionOutcome(execution.status, execution.node_states as Record<string, { status?: unknown; skipReason?: unknown }> | null),
+    })
   })
 }

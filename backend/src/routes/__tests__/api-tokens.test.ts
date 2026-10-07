@@ -43,6 +43,9 @@ vi.mock("@/lib/api-token-resolver.js", async (importOriginal) => {
   return { ...actual, resolveApiToken: mockResolveToken }
 })
 
+const previewFlag = vi.hoisted(() => ({ on: true }))
+vi.mock("@/lib/preview-stop-rule-flag.js", () => ({ previewStopRuleEnabled: () => previewFlag.on }))
+
 vi.mock("@/lib/admin-check.js", () => ({
   warmAdminCache: vi.fn(),
   checkIsAdmin: vi.fn().mockResolvedValue(false),
@@ -761,6 +764,73 @@ describe("POST /v1/api/run — the override lock (issue #1555)", () => {
     expect(byLabel.statusCode).toBe(400)
     expect(byLabel.json().error.code).toBe("locked_field")
     expect(mockOrchestrationQueueAdd).not.toHaveBeenCalled()
+  })
+
+  it("refuses an injected UGC run state — by node id — 400 locked_field, nothing enqueued", async () => {
+    mockTokenRunWithGraph([
+      { id: "ugc-1", type: "ugc-creator", data: { label: "Creator", source: "sampled", gender: "woman", keepResult: false } },
+    ])
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/api/run",
+      headers: { authorization: "Bearer ndr_test_token" },
+      payload: { workflowId: WORKFLOW_ID, inputs: { "ugc-1": { keepResult: true } } },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("locked_field")
+    expect(res.json().error.message).toContain('inputOverrides cannot set "keepResult" on a UGC node "ugc-1".')
+    expect(mockOrchestrationQueueAdd).not.toHaveBeenCalled()
+  })
+
+  it("refuses a run of a Preview render — 400 preview_review_required — unless inputs set it to Final", async () => {
+    mockTokenRunWithGraph([
+      { id: "cut", type: "apply-edl", data: { label: "Cut", quality: "proxy" } },
+    ])
+    const refused = await app.inject({
+      method: "POST",
+      url: "/v1/api/run",
+      headers: { authorization: "Bearer ndr_test_token" },
+      payload: { workflowId: WORKFLOW_ID },
+    })
+    expect(refused.statusCode).toBe(400)
+    expect(refused.json().error.code).toBe("preview_review_required")
+    expect(mockOrchestrationQueueAdd).not.toHaveBeenCalled()
+
+    // Keyed by label, as the token lane resolves inputs.
+    const allowed = await app.inject({
+      method: "POST",
+      url: "/v1/api/run",
+      headers: { authorization: "Bearer ndr_test_token" },
+      payload: { workflowId: WORKFLOW_ID, inputs: { Cut: { quality: "final" } } },
+    })
+    expect(allowed.statusCode).not.toBe(400)
+    expect(mockOrchestrationQueueAdd).toHaveBeenCalledWith(
+      "workflow-execution",
+      expect.objectContaining({ reviewerPresent: false, inputOverrides: { cut: { quality: "final" } } }),
+      expect.anything(),
+    )
+  })
+
+  it("with PREVIEW_STOP_RULE_ENABLED off, runs a Preview render as dev did before the rule", async () => {
+    previewFlag.on = false
+    try {
+      mockTokenRunWithGraph([{ id: "cut", type: "apply-edl", data: { label: "Cut", quality: "proxy" } }])
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/api/run",
+        headers: { authorization: "Bearer ndr_test_token" },
+        payload: { workflowId: WORKFLOW_ID },
+      })
+      expect(res.statusCode).not.toBe(400)
+      expect(mockOrchestrationQueueAdd).toHaveBeenCalledWith(
+        "workflow-execution",
+        expect.objectContaining({ reviewerPresent: false }),
+        expect.anything(),
+      )
+    } finally {
+      previewFlag.on = true
+    }
   })
 
   it("still accepts an ordinary input on an input node", async () => {

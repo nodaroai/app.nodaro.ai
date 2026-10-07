@@ -1,3 +1,4 @@
+import { executionOutcome } from "@nodaro/shared"
 /**
  * Workflow execution routes.
  * POST /v1/workflows/:id/run — Create execution (trigger_type: manual)
@@ -8,7 +9,7 @@
 
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
-import { assertCanvasExecutionAllowed, SequenceExecutionRequiredError } from "@nodaro/shared"
+import { assertCanvasExecutionAllowed, PREVIEW_RENDER_NODE_TYPES, SequenceExecutionRequiredError, type SavedRenderStampReader } from "@nodaro/shared"
 import { supabase } from "../lib/supabase.js"
 import { resolveWebSurfaceFlag } from "../middleware/credit-guard.js"
 import { tryRemoveFromQueue } from "../lib/queue.js"
@@ -16,7 +17,7 @@ import { orchestrationQueue } from "../lib/orchestration-queue.js"
 import { refuseIfConsentPending } from "../lib/consent-gate.js"
 import { createSSEStream } from "../lib/sse.js"
 import { executionEvents, type ExecutionEvent } from "../lib/execution-events.js"
-import type { WorkflowExecutionJob } from "../services/workflow-engine/types.js"
+import type { SimpleNode, WorkflowExecutionJob } from "../services/workflow-engine/types.js"
 import { resolveBillingContext, shouldRefuseDegradedRun } from "../lib/billing-context.js"
 import { billingPairColumns } from "../lib/insert-job.js"
 import { ACTIVE_EXECUTION_STATUSES } from "../lib/request-helpers.js"
@@ -24,6 +25,7 @@ import { IN_FLIGHT_JOB_STATUSES, isParkedJobStatus } from "../lib/job-status.js"
 import { cancelOwnedJob } from "../lib/cancel-job.js"
 import { getRuntimeEnv } from "../lib/runtime-env.js"
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
+import { previewReviewRefusal } from "../lib/preview-review-gate.js"
 import { checkIsAdmin } from "../lib/admin-check.js"
 import { CreditsService } from "../ee/billing/credits.js"
 import { invalidateBalanceCache } from "../ee/routes/credits.js"
@@ -37,6 +39,16 @@ import { describeLockedOverrides, findLockedOverrides } from "../lib/input-overr
 import { migrateLegacyNodeType } from "../services/workflow-engine/normalize-node-types.js"
 import { accessAtLeast, canRunWorkflow, workflowAccessFromRow } from "../lib/workflow-access.js"
 import { toAccessRow } from "../lib/workflow-route-access.js"
+import { deriveRenderFinalRun, isRenderFinalRefusal, parseRenderFinalBody, renderFinalCredits } from "../lib/render-final-run.js"
+import {
+  CONTINUATION_REFUSAL_MESSAGE,
+  CONTINUATION_REFUSAL_STATUS,
+  continuationRefusal,
+  continuationInputOverrides,
+  continuationRenderStamps,
+  continuationSeeds,
+  loadContinuationSource,
+} from "../services/workflow-engine/run-continuation.js"
 
 openApiRegistry.registerPath({
   method: "post",
@@ -56,6 +68,25 @@ openApiRegistry.registerPath({
                 .openapi({
                   description:
                     "Optional subset of node IDs to execute. If omitted, the full workflow is executed.",
+                }),
+              continueFromExecutionId: z
+                .string()
+                .uuid()
+                .optional()
+                .openapi({
+                  description:
+                    "Continue from an earlier execution: your own completed run of this workflow (not of a published app version). " +
+                    "Requires nodeIds; every node not named hands on that execution's output instead of the workflow's saved results.",
+                }),
+              renderFinal: z
+                .object({ renderNodeId: z.string() })
+                .optional()
+                .openapi({
+                  description:
+                    "Render final: run this Apply EDL render at Final for this run only, and every node after it. " +
+                    "The server derives nodeIds and the override (send neither); requires continueFromExecutionId. " +
+                    "Quote it first with POST /v1/workflows/{id}/render-final/estimate. A Render final its payer cannot cover " +
+                    "is refused with 402 insufficient_credits before any execution exists.",
                 }),
             })
             .openapi({
@@ -78,6 +109,21 @@ openApiRegistry.registerPath({
       },
     },
     401: { description: "Unauthorized" },
+    402: {
+      description: "A Render final its payer cannot cover (insufficient_credits): nothing was created",
+      content: {
+        "application/json": {
+          schema: z.object({
+            error: z.object({
+              code: z.literal("insufficient_credits"),
+              message: z.string(),
+              required: z.number(),
+              available: z.number().optional(),
+            }),
+          }),
+        },
+      },
+    },
     404: { description: "Workflow not found" },
     409: {
       description: "Workflow already has an active execution",
@@ -261,9 +307,22 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
 
     // Parse optional body (nodeIds for partial execution)
     const body = (req.body ?? {}) as Record<string, unknown>
-    const nodeIds = Array.isArray(body.nodeIds)
+    let nodeIds = Array.isArray(body.nodeIds)
       ? (body.nodeIds as string[]).filter((id) => typeof id === "string")
       : undefined
+
+    // Render final for agents (decided 2026-10-06): `renderFinal` names the
+    // render; the server derives the nodes and the render's Final override
+    // from the saved graph below, by the editor's own rule. Shape checked
+    // here, before any read.
+    let renderFinalNodeId: string | undefined
+    if (body.renderFinal !== undefined && body.renderFinal !== null) {
+      const asked = parseRenderFinalBody(body)
+      if (isRenderFinalRefusal(asked)) {
+        return reply.status(asked.status).send({ error: { code: asked.code, message: asked.message } })
+      }
+      renderFinalNodeId = asked.renderNodeId
+    }
 
     // Verify the workflow exists and that this caller may RUN it. We also load
     // `nodes` so we can resolve flat per-node overrides (MCP shape) to their
@@ -275,7 +334,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     const { data: workflow, error: wfError } = await supabase
       // tenant-scope-ignore: authorization follows immediately, below.
       .from("workflows")
-      .select("id, user_id, workspace_id, visibility, nodes")
+      .select("id, user_id, workspace_id, visibility, nodes, edges")
       .eq("id", workflowId)
       .maybeSingle()
 
@@ -308,6 +367,20 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       })
     }
 
+    let rawInputOverrides: unknown = body.inputOverrides
+    if (renderFinalNodeId !== undefined) {
+      const derived = deriveRenderFinalRun(
+        renderFinalNodeId,
+        (workflow.nodes as ReadonlyArray<{ id: string; type?: string; data?: unknown }> | null) ?? [],
+        (workflow.edges as ReadonlyArray<{ source: string; target: string }> | null) ?? [],
+      )
+      if (isRenderFinalRefusal(derived)) {
+        return reply.status(derived.status).send({ error: { code: derived.code, message: derived.message } })
+      }
+      nodeIds = derived.nodeIds
+      rawInputOverrides = derived.inputOverrides
+    }
+
     try {
       const candidates = (workflow.nodes ?? []) as Array<{ id: string; data?: unknown }>
       assertCanvasExecutionAllowed(nodeIds ? candidates.filter((node) => nodeIds.includes(node.id)) : candidates)
@@ -327,21 +400,102 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     // discards the rest. The old strict Zod schema rejected the flat shape and
     // dropped the ENTIRE map on any single mismatch.
     const inputOverrides = normalizeInputOverrides(
-      body.inputOverrides,
+      rawInputOverrides,
       (workflow.nodes as ReadonlyArray<{ id: string; type?: string; data?: Record<string, unknown> }>) ?? [],
     )
+
+    // A CONTINUED run (`continueFromExecutionId`): the nodes it does not run
+    // hand on what that earlier execution produced. Checked here so a refusal
+    // leaves no execution row; the orchestrator asks again (it is the wall
+    // every producer of the job field passes) and seeds from the execution.
+    // This route runs the live workflow, so an app run's execution is another
+    // version of the graph.
+    //
+    // The orchestrator applies the earlier execution's pinned overrides under
+    // the sent ones (`continuationInputOverrides`), so the checks below judge
+    // that same merged map (`effectiveOverrides`), read through the same column
+    // guard (`withPin`) — else they refuse a continuation the orchestrator
+    // would run (a pinned Final render), or let through one it would fail. The
+    // job still carries only the sent overrides: the orchestrator merges.
+    //
+    // A render the continuation does not run is read by its SEED — what the
+    // earlier execution rendered — as the orchestrator reads it
+    // (`continuationRenderStamps` over `continuationSeeds`). So when the
+    // Preview review is asked below (no reviewer), the states are read too,
+    // through the render registry, as the orchestrator reads them; else a
+    // seeded Preview would pass here and fail the run there.
+    //
+    // Who can review a Preview render: only a person in the editor. An API
+    // token, an OAuth app or an MCP client runs with nobody to press Render
+    // final, and so does a session JWT that is not the editor — the SDK's
+    // `supabaseAuth` and the thin product clients send one too. So the editor
+    // marks its own runs (`reviewer: "editor"` in the body); without that mark
+    // a run of a Preview render is refused below, before any row exists, unless
+    // its overrides set every such render to Final. Forging the mark only lets
+    // a caller stop their OWN run at a preview, so it needs no protection. The
+    // orchestrator asks again (the wall every lane passes).
+    const mcpClient = extractMcpClient(req.body)
+    const reviewerPresent = req.authKind === "jwt" && !mcpClient && body.reviewer === "editor"
+    let continueFromExecutionId: string | undefined
+    let effectiveOverrides = inputOverrides
+    let continuationRenders: ((nodes: readonly SimpleNode[]) => SavedRenderStampReader) | undefined
+    if (body.continueFromExecutionId !== undefined && body.continueFromExecutionId !== null) {
+      const parsedContinue = z.string().uuid().safeParse(body.continueFromExecutionId)
+      if (!parsedContinue.success) {
+        return reply.status(400).send({
+          error: { code: "validation_error", message: "continueFromExecutionId must be an execution id" },
+        })
+      }
+      const typeOf = new Map(
+        ((workflow.nodes as ReadonlyArray<{ id: string; type?: string }> | null) ?? []).map((node) => [node.id, node.type ?? ""]),
+      )
+      const source = await loadContinuationSource(
+        parsedContinue.data,
+        reviewerPresent
+          ? { withStates: false, withPin: true }
+          : { withStates: true, isRenderNode: (id) => PREVIEW_RENDER_NODE_TYPES.has(typeOf.get(id) ?? "") },
+      )
+      const refusal = continuationRefusal(source, { userId: req.userId, workflowId, nodeIds })
+      if (refusal) {
+        return reply.status(CONTINUATION_REFUSAL_STATUS[refusal]).send({
+          error: { code: refusal, message: CONTINUATION_REFUSAL_MESSAGE[refusal] },
+        })
+      }
+      continueFromExecutionId = parsedContinue.data
+      effectiveOverrides = continuationInputOverrides(source!, inputOverrides)
+      // Seeded from the SENT overrides, as the orchestrator seeds (`job.data.inputOverrides`).
+      const runNodeIds = new Set(nodeIds)
+      if (!reviewerPresent) {
+        continuationRenders = (nodes) => continuationRenderStamps(nodes, continuationSeeds(nodes, source!, runNodeIds, inputOverrides))
+      }
+    }
 
     // A run request may not re-point an outbound node (issue #1555). The merge
     // in the orchestrator refuses too; answering here spares the caller a
     // failed execution row.
     const lockedOverrides = findLockedOverrides(
       (workflow.nodes as ReadonlyArray<{ id: string; type?: string }> | null) ?? [],
-      inputOverrides,
+      effectiveOverrides,
     )
     if (lockedOverrides.length > 0) {
       return reply.status(400).send({
         error: { code: "locked_field", message: describeLockedOverrides(lockedOverrides) },
       })
+    }
+
+    // The Preview review (who may review: see above).
+    if (!reviewerPresent) {
+      const refusal = previewReviewRefusal(
+        (workflow.nodes as ReadonlyArray<{ id: string; type?: string; data?: Record<string, unknown> }> | null) ?? [],
+        (workflow.edges as ReadonlyArray<{ source: string; target: string }> | null) ?? [],
+        {
+          triggerType: "manual",
+          nodeIds,
+          inputOverrides: effectiveOverrides,
+          ...(continuationRenders ? { savedRenders: continuationRenders } : {}),
+        },
+      )
+      if (refusal) return reply.status(400).send({ error: refusal })
     }
 
     // Check for an execution THIS CALLER already has running (best-effort fast
@@ -383,7 +537,6 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     //
     // No header → undefined key → plain INSERT → no dedup. That's the
     // correct behavior: two distinct user clicks must produce two rows.
-    const mcpClient = extractMcpClient(req.body)
     const headerKeyRaw = req.headers["idempotency-key"]
     const headerKey = typeof headerKeyRaw === "string" ? headerKeyRaw.trim() : ""
     const idempotencyKey =
@@ -408,6 +561,42 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       return reply.status(503).send({
         error: { code: "billing_unavailable", message: "Billing is temporarily unavailable for workspace runs. Try again shortly." },
       })
+    }
+    const webFreeMode = await resolveWebSurfaceFlag(req)
+
+    // An agent's Render final is checked against its payer BEFORE the row
+    // exists, on the figure its quote showed (`renderFinalCredits` is the
+    // quote's funnel): the graph the orchestrator executes (`effectiveOverrides`,
+    // the earlier run's pin with the render's Final over it) and only the nodes
+    // it runs. Without this a run its payer cannot cover would start, charge
+    // its first node (Camera Switch, in multicam) and fail at the render's own
+    // reservation, with no final. Balance only: model availability, daily caps
+    // and allowances stay with each node's preflight.
+    if (renderFinalNodeId !== undefined && nodeIds) {
+      let credits: Awaited<ReturnType<typeof renderFinalCredits>>
+      try {
+        credits = await renderFinalCredits({
+          userId: req.userId,
+          nodes: (workflow.nodes as ReadonlyArray<{ id: string; type?: string; data?: unknown }> | null) ?? [],
+          edges: (workflow.edges as ReadonlyArray<{ source: string; target: string }> | null) ?? [],
+          runNodeIds: nodeIds,
+          overrides: effectiveOverrides,
+          surface: { billingContext, webFreeMode },
+        })
+      } catch (err) {
+        return sendInternalError(reply, req, err, "Failed to check credits for the Render final")
+      }
+      if (credits && !credits.sufficient) {
+        return reply.status(402).send({
+          error: {
+            code: "insufficient_credits",
+            message: credits.message ?? "Insufficient credits",
+            required: credits.estimatedCredits,
+            // Withheld when it is not the caller's to see (a deployment payer).
+            ...(credits.available !== null ? { available: credits.available } : {}),
+          },
+        })
+      }
     }
 
     let execution: { id: string }
@@ -463,9 +652,11 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
       // req.userId to the owner, so the token kind is part of the answer.
       ownerInitiated: req.authKind === "jwt" && req.userId === (workflow.user_id as string | null),
       nodeIds,
-      webFreeMode: await resolveWebSurfaceFlag(req),
+      webFreeMode,
       billingContext,
+      reviewerPresent,
       ...(inputOverrides ? { inputOverrides } : {}),
+      ...(continueFromExecutionId ? { continueFromExecutionId } : {}),
     }
 
     await orchestrationQueue.add("workflow-execution", jobData, {
@@ -810,6 +1001,9 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
           .from("jobs")
           .select("id")
           .eq("workflow_execution_id", parsed.data.id)
+          // The execution is the caller's (checked above); so are its jobs.
+          // Another user's row naming it is not cancelled or refunded here.
+          .eq("user_id", userId)
           .in("status", ["pending", "queued", "processing"])
 
         if (activeJobs && activeJobs.length > 0) {
@@ -1174,9 +1368,12 @@ function stripNodeStateInputs(nodeStates: unknown): unknown {
 function toExecutionResponse(row: Record<string, unknown>) {
   return {
     id: row.id,
+    kind: "execution" as const,
     workflowId: row.workflow_id,
     userId: row.user_id,
     status: row.status,
+    // How a completed run ended — derived here, never a column (execution-outcome.ts).
+    outcome: executionOutcome(row.status, row.node_states as Record<string, { status?: unknown; skipReason?: unknown }> | null),
     triggerType: row.trigger_type,
     mcpClient: (row.mcp_client as string | null | undefined) ?? null,
     // `triggerData` (top-level) is debug-only and not read by any poll
@@ -1199,7 +1396,9 @@ function toExecutionResponse(row: Record<string, unknown>) {
 export function toExecutionSummary(row: Record<string, unknown>) {
   return {
     id: row.id,
+    kind: "execution" as const,
     status: row.status,
+    outcome: executionOutcome(row.status, row.node_states as Record<string, { status?: unknown; skipReason?: unknown }> | null),
     triggerType: row.trigger_type,
     mcpClient: (row.mcp_client as string | null | undefined) ?? null,
     // Strip the per-node `inputs` blob (resolved upstream inputs — large,
@@ -1264,6 +1463,10 @@ export function jobToExecutionSummary(row: Record<string, unknown>) {
 
   return {
     id: row.id,
+    // A single-node job listed beside the runs — never an orchestrator run the
+    // canvas could follow, whatever lane started it (an MCP client's one-node
+    // job says "mcp" below, like a run would).
+    kind: "job" as const,
     status: mappedStatus,
     // Single-node jobs triggered via MCP show the "via Claude/Cursor/..." badge
     triggerType: mcpClient ? "mcp" : "single-node",

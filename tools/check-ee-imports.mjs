@@ -105,6 +105,8 @@ const ALLOWLIST = new Set([
   "frontend/src/components/editor/character-studio/generation-bar.tsx",
   "frontend/src/components/editor/character-studio/board-create-modal.tsx",
   "frontend/src/components/editor/config-panel.tsx",
+  // The speech price line reads useSpeechPricing (ee) — same deferred ee/ credit-hook coupling as image-configs (Phase 3.5/4.5)
+  "frontend/src/components/editor/config-panels/audio-configs.tsx",
   "frontend/src/components/editor/config-panels/entity-configs.tsx",
   "frontend/src/components/editor/config-panels/image-configs.tsx",
   "frontend/src/components/editor/config-panels/input-configs.tsx",

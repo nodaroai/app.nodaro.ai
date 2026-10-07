@@ -91,7 +91,7 @@ the foot of the list.
 | Family | Nodes |
 |---|---|
 | **Triggers** | Schedule Trigger · Webhook Trigger · Telegram Trigger |
-| **Get Content** | Web Scrape · Video URL · Telegram Channel Feed |
+| **Get Content** | Web Scrape · Video URL · Telegram Channel Feed · Read Collection |
 | **Text** | Text · Combine Text · Split Text · Prompt |
 | **Lists & Batching** | List · Collect · Selector · Filter List · Sort List · Remove Duplicates · Merge Lists · Choose Best |
 | **Logic & Data** | Router · Extract Field · QA Check |
@@ -104,7 +104,7 @@ the foot of the list.
 |---|---|
 | **One-Click** | Publish to Social |
 | **Platforms** | Instagram Post · TikTok Post · YouTube Upload · Facebook Post · X Post · LinkedIn Post · Telegram Post |
-| **Export** | Save to Storage · Webhook Output · Telegram Reply |
+| **Export** | Save to Storage · Save to Collection · Webhook Output · Telegram Reply |
 
 ### Creative Controls
 
@@ -168,6 +168,7 @@ Provide data to your workflow: text, images, video, audio, or external triggers.
 | [Telegram Trigger](./input/telegram-trigger.md) | Trigger workflow when a Telegram bot receives a message | Run pipelines from chat messages, photos, or videos sent to your bot |
 | [Telegram Account Trigger](./input/telegram-account-trigger.md) | Trigger workflow when a message arrives in a chosen chat of your connected Telegram account (Cloud, preview) | React to posts in the channels and groups you follow, private ones included |
 | [Telegram Channel Feed](./input/telegram-channel-feed.md) | Read recent posts from a public Telegram channel | Follow channels, pull posts, rewrite and repost |
+| [Read Collection](./input/collection-read.md) | Read what a collection holds from the last hours or days | Know what a pipeline already covered; feed saved records into a prompt |
 
 ---
 
@@ -341,7 +342,7 @@ Text-to-speech, voice processing, and audio generation using ElevenLabs and othe
 | [Text to Audio](./ai-audio/text-to-audio.md) | Generate ambient audio and sound effects | Create SFX, ambient sounds, or background audio from description |
 | [Voice Extractor](./ai-audio/audio-isolation.md) | Isolate voice from mixed audio | Remove background noise, extract clean vocal track |
 | [Audio Separation](./ai-audio/audio-separation.md) | Separate any audio into stems (Demucs) | Vocal/instrumental split or full stems on any (non-Suno) audio |
-| [Text to Dialogue](./ai-audio/text-to-dialogue.md) | Multi-speaker dialogue generation | Create conversations with different voices per speaker |
+| [Text to Dialogue](./ai-audio/text-to-dialogue.md) | Multi-speaker dialogue generation (ElevenLabs Dialogue v3, the default, or Dialogue v4) — with per-line timings for captions on both models | Create conversations with different voices per speaker |
 | [Voice Changer](./ai-audio/voice-changer.md) | Revoice audio or a talking video | Replace the voice in audio — or a whole video — preserving emotion and timing |
 | [Voice Changer Pro](./ai-audio/voice-changer-pro.md) | Replace each speaker's voice independently in multi-speaker audio or video | Re-voice multi-speaker recordings with per-speaker voice mapping (self-host: via your nodaro.ai connection) |
 | [Dubbing](./ai-audio/dubbing.md) | Translate audio preserving speaker identity | Translate spoken audio to another language |
@@ -383,7 +384,7 @@ FFmpeg-based video manipulation.
 |------|-------------|-------------|
 | [Combine Videos](./processing-video/combine-videos.md) | Concatenate videos with transitions | Join multiple clips with ~50 FFmpeg `xfade` transitions: cuts, fades, dips, wipes, slides, irises, slices, reveals, covers, blurs, and zooms |
 | [Apply EDL](./processing-video/apply-edl.md) | Render an edit decision list into one media file (per output minute: 10 CR final, 1 CR preview) | Turn a structured edit description (sources + ordered segments) into a finished video or audio cut; optionally emit a transcript remapped to match the cut |
-| [Edit Plan](./processing-video/edit-plan.md) | Plan an edit from a transcript — tighten, find clips, or mark chapters (Cloud; per source-minute × tier) | Turn a timed transcript into an EDL plan that Apply EDL renders; clips mode fans out one render per clip |
+| [Edit Plan](./processing-video/edit-plan.md) | Plan an edit from a transcript — tighten, find clips, mark chapters, or cut a trailer (Cloud; per source-minute × tier) | Turn a timed transcript into an EDL plan that Apply EDL renders; clips mode fans out one render per clip |
 | [Camera Switch](./processing-video/camera-switch.md) | Put each cut of an edit on the camera of whoever is speaking (Cloud; flat 10 credits per run) | Multicam podcasts and interviews: Edit Plan's EDL + a diarized transcript → a switched EDL for Apply EDL, sound unchanged |
 | [Assemble Narrated Video](./processing-video/assemble-narrated-video.md) | Fit N ordered (clip, voice) blocks into one MP4 | Audio-led narrated-video assembly: short voice centers over its clip with padding, long voice slows the clip (capped, then holds); audio is never cropped |
 | [Still to Video](./processing-video/still-to-video.md) | One still image + one audio track → MP4, zero credits | Animate a still with zoom / pan / Ken Burns (or none) for exactly the audio's length — narrated slides, visualizers, photo moments |
@@ -481,6 +482,7 @@ Deliver results to storage, webhooks, or social media platforms.
 |------|-------------|-------------|
 | [Save to Storage](./output/save-to-storage.md) | Export final asset to cloud storage | Persist generated content to R2 cloud storage |
 | [Webhook Output](./output/webhook-output.md) | Send result to external webhook URL | Deliver results to external systems or APIs |
+| [Save to Collection](./output/collection-write.md) | Keep each item a run produces as a record in a collection | Store articles, posts, leads; dedupe across runs; export later |
 | [Instagram Post](./output/instagram-post.md) | Publish to Instagram | Post images, reels, stories, or carousels |
 | [TikTok Post](./output/tiktok-post.md) | Publish to TikTok | Upload video content to TikTok |
 | [YouTube Upload](./output/youtube-upload.md) | Upload to YouTube | Publish videos or shorts with title, tags, privacy |

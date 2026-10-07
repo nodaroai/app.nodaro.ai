@@ -13,6 +13,12 @@ export interface OutputVisibilityInputs {
    * client is a private surface. A non-null value forces private.
    */
   workflowExecutionId: string | null
+  /**
+   * The job is a PREVIEW render (Apply EDL at `quality: "proxy"`,
+   * `isPreviewRender`): private on every lane (F1). REQUIRED, so a worker that
+   * decides visibility has to say whether its job can be one.
+   */
+  previewRender: boolean
 }
 
 /**
@@ -29,6 +35,7 @@ export function resolveIsPublicOutput(i: OutputVisibilityInputs): boolean {
   if (i.forcePrivate) return false
   if (i.mcpClient) return false
   if (i.workflowExecutionId) return false
+  if (i.previewRender) return false
   return true
 }
 

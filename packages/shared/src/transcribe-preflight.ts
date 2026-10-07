@@ -3,6 +3,7 @@ import {
   transcribeLaneSupportsWordTimestamps,
   transcribeProvidersWithWordTimestamps,
 } from "./model-constants.js"
+import { rendersTranscriptJson } from "./render-nodes.js"
 
 /**
  * Pre-run checks for the transcribe → captions chain.
@@ -46,7 +47,9 @@ export interface WordlessTranscriptFeed {
 // Handle ids (generated map: backend/src/lib/mcp/generated/node-handles.ts).
 const TRANSCRIBE_JSON_OUT = "json"
 const TRANSCRIPT_IN = "transcript"
-const APPLY_EDL_JSON_OUT = "json"
+/** A render's `json` output — handed on as a Transcript only by a render whose
+ *  `jsonKind` is `transcript` (Apply EDL's is; an EDL-emitting render's is not). */
+const RENDER_JSON_OUT = "json"
 
 /**
  * Every transcribe node on a word-INCAPABLE lane whose `json` output reaches an
@@ -74,7 +77,8 @@ export function findWordlessTranscriptFeeds(
     const refusal = transcribeWordTimestampsRefusal(provider)
     if (!refusal) continue
 
-    // Walk the transcript's path: transcribe.json → [apply-edl.transcript → apply-edl.json]* → add-captions.transcript
+    // Walk the transcript's path: transcribe.json → [render.transcript → render.json]* → add-captions.transcript,
+    // through every render whose json is a Transcript (RENDER_NODE_TYPES jsonKind)
     const seen = new Set<string>()
     const frontier: Array<{ id: string; outHandle: string }> = [{ id: node.id, outHandle: TRANSCRIBE_JSON_OUT }]
     while (frontier.length > 0) {
@@ -90,9 +94,9 @@ export function findWordlessTranscriptFeeds(
             provider,
             message: `Captions need word timings, but ${refusal}.`,
           })
-        } else if (target!.type === "apply-edl" && !seen.has(target!.id)) {
+        } else if (rendersTranscriptJson(target!.type) && !seen.has(target!.id)) {
           seen.add(target!.id)
-          frontier.push({ id: target!.id, outHandle: APPLY_EDL_JSON_OUT })
+          frontier.push({ id: target!.id, outHandle: RENDER_JSON_OUT })
         }
       }
     }

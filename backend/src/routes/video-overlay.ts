@@ -64,6 +64,8 @@ export const videoOverlayLayerSchema = z.object({
   animate: z.boolean().optional(),
   zIndex: z.number().int().min(B.zIndex[0]).max(B.zIndex[1]).optional(),
   slot: z.number().int().min(1).optional(),
+  // Pass-through, like `slot`: the 1-based layer-plan entry the canvas run's request carries.
+  planLayer: z.number().int().min(1).optional(),
 })
 
 /** An image URL whose PATH ends in .svg — the cheap early refusal; the worker's byte sniff is the invariant. */
@@ -109,7 +111,7 @@ export const videoOverlayBody = z
     }
     const svg = body.layers.findIndex((l) => hasSvgPath(l.imageUrl))
     if (svg >= 0) {
-      const label = videoOverlayLayerLabel({ layer: svg, slot: body.layers[svg]!.slot })
+      const label = videoOverlayLayerLabel({ layer: svg, slot: body.layers[svg]!.slot, planLayer: body.layers[svg]!.planLayer })
       ctx.addIssue({ code: "custom", path: [], message: `${label}: SVG images are not supported by Video Overlay yet — rasterise it with Image Overlay first` })
     }
   })

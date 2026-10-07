@@ -49,3 +49,14 @@ describe("the audio-sync budget leaf", () => {
     expect(registry.BUDGETED_JOB_NAMES).toContain("audio-sync")
   })
 })
+
+// Speaker View's renderer is the EDL timeline (`edl-timeline.ts`, which pulls
+// ffmpeg-utils): its budget must reach the registry through the pure leaf only.
+describe("the speaker-view budget leaf", () => {
+  it("the registry reaches speaker-view's budget without loading the timeline runtime", async () => {
+    const leaf = await import("../../providers/video/speaker-view-budget.js")
+    const registry = await import("../job-budget.js")
+    expect(typeof leaf.speakerViewJobBudgetMs).toBe("function")
+    expect(registry.BUDGETED_JOB_NAMES).toContain("speaker-view")
+  })
+})

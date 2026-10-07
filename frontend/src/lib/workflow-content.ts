@@ -1,3 +1,4 @@
+import { isRenderNodeType } from "@nodaro/shared"
 import { createClient } from "@/lib/supabase"
 import { getCurrentUserId, getWorkflowDocument, type WorkflowAccessLevel, type WorkflowDocument } from "@/lib/api"
 
@@ -101,6 +102,13 @@ export interface WorkflowContentRow {
 export interface WorkflowContent {
   readonly row: WorkflowContentRow
   readonly access: WorkflowContentAccess
+  /**
+   * The owner's nodes AS STORED, present only when `row` is the server's
+   * resolved answer taken in place of the stored row. What is saved differs
+   * from what the canvas holds by exactly the results the server resolved, so
+   * a save baseline seeded from it (`savedBaselineNodes`) writes them once.
+   */
+  readonly storedNodes?: unknown
 }
 
 /**
@@ -123,9 +131,82 @@ export async function readWorkflowContent(workflowId: string, projection: string
       .eq("user_id", me)
       .maybeSingle()
     if (error) throw new Error(error.message)
-    if (data) return { row: data as unknown as WorkflowContentRow, access: "own" }
+    if (data) {
+      const row = data as unknown as WorkflowContentRow
+      // Saved result ids the server resolves on read (decided 2026-10-05): a
+      // placeholder `exec-…` job id, or an Apply EDL take with no Preview
+      // label. The rule is the server's alone (backend lib/canvas-result-ids.ts,
+      // one jobs lookup), so a row that may hold one is read through the same
+      // door everyone else uses; the canvas then holds the real ids and its
+      // next ordinary save persists them. Nothing is written by the read, so
+      // the save cursor (`version`, `updated_at`) is the stored row's. Only an
+      // `own` answer is taken: a creator the server answers `view` (an archived
+      // workspace) would be handed the reader's projection, without the drafts
+      // their canvas saves back. Any other answer, or none, keeps the stored row.
+      if (mayHoldUnresolvedResultIds(row.nodes)) {
+        const served = await readWorkflowContentFromServer(workflowId).catch(() => null)
+        // Judged against the workflow asked for, not `row.id`: a projection
+        // that selected no `id` (duplicate's) would otherwise discard every
+        // answer it paid for.
+        if (served && served.access === "own" && served.row.id === workflowId) return { ...served, storedNodes: row.nodes }
+      }
+      return { row, access: "own" }
+    }
   }
   return readWorkflowContentFromServer(workflowId)
+}
+
+/**
+ * Whether a stored graph may hold a saved result id the server resolves on
+ * read: a placeholder job id (`exec-…`) or an Apply EDL take whose result
+ * carries no render quality. Deliberately WIDER than the server's exact rule —
+ * a miss keeps the owner's canvas on the stored ids for good, while a false hit
+ * costs one read that hands the same row back.
+ */
+export function mayHoldUnresolvedResultIds(nodes: unknown): boolean {
+  if (!Array.isArray(nodes)) return false
+  return nodes.some((node) => {
+    const n = (node && typeof node === "object" ? node : {}) as { type?: unknown; data?: { generatedResults?: unknown } }
+    const results = n.data?.generatedResults
+    if (!Array.isArray(results)) return false
+    return results.some((r) => {
+      const entry = (r && typeof r === "object" ? r : {}) as { jobId?: unknown; url?: unknown; quality?: unknown }
+      if (typeof entry.jobId !== "string" || typeof entry.url !== "string" || entry.url.length === 0) return false
+      if (entry.jobId.startsWith("exec-")) return true
+      return isRenderNodeType(n.type) && entry.quality !== "proxy" && entry.quality !== "final"
+    })
+  })
+}
+
+/**
+ * The save baseline a load should keep: `loadedNodes` (what the canvas was
+ * handed, its `lastSavedSnapshot.nodes`) with each node the server resolved on
+ * the way out replaced by its STORED copy — the SAME array when nothing was.
+ *
+ * Why: the delta save writes only nodes that differ from this baseline, so a
+ * baseline equal to the resolved copy would never write a resolved id the user
+ * did not otherwise touch, and every open would pay the server read again. The
+ * full save writes every node, so it needs nothing from this.
+ */
+export function savedBaselineNodes<N extends { readonly id: string }>(
+  loadedNodes: readonly N[],
+  content: { readonly row: Pick<WorkflowContentRow, "nodes">; readonly storedNodes?: unknown },
+): readonly N[] {
+  if (!Array.isArray(content.storedNodes) || content.storedNodes === content.row.nodes) return loadedNodes
+  const servedById = new Map<unknown, string>()
+  for (const n of Array.isArray(content.row.nodes) ? content.row.nodes : []) {
+    const id = (n as { id?: unknown } | null)?.id
+    if (typeof id === "string") servedById.set(id, JSON.stringify(n))
+  }
+  const storedChanged = new Map<string, N>()
+  for (const n of content.storedNodes) {
+    const id = (n as { id?: unknown } | null)?.id
+    if (typeof id !== "string") continue
+    const served = servedById.get(id)
+    if (served !== undefined && served !== JSON.stringify(n)) storedChanged.set(id, n as N)
+  }
+  if (storedChanged.size === 0) return loadedNodes
+  return loadedNodes.map((n) => storedChanged.get(n.id) ?? n)
 }
 
 /**

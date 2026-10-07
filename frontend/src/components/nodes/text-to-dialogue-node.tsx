@@ -3,18 +3,19 @@
 import { useT } from "@/lib/i18n"
 import { memo, useState } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
-import { Users, Loader2, AlertCircle, Volume2, Type, LayoutGrid } from "lucide-react"
+import { Users, Loader2, AlertCircle, Volume2, Type, LayoutGrid, Braces } from "lucide-react"
 import { BaseNode } from "./base-node"
 import { NodeJobProgress } from "./node-job-progress"
 import { NodeQuickStrip } from "./node-quick-strip"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { isValidTextToDialogueConnection } from "@/lib/audio-text-handles"
+import { DATA_HANDLE_COLORS } from "@/lib/data-handles"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { computeDeleteResultUpdates } from "@/lib/utils"
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog"
-import { useModelCredits } from "@/ee/hooks/use-model-credits"
+import { useSpeechPricing } from "@/ee/hooks/use-speech-pricing"
 import { AudioResultOverlay } from "./audio-result-overlay"
 import { MediaPreviewModal } from "@/components/editor/media-preview-modal"
 import type { TextToDialogueData } from "@/types/nodes"
@@ -35,14 +36,23 @@ function TextToDialogueNodeComponent({ id, data, selected }: NodeProps) {
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [showThumbnails, setShowThumbnails] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
-  const credits = useModelCredits("elevenlabs-dialogue", 4)
+  // The badge reads the row the run reserves on: the node's model (v3 dialogue
+  // when unset) — flat, or by the script's length when the server serves that
+  // model's per-100-characters row. A script that arrives at run time shows a
+  // range and runs at its ceiling.
+  const price = useSpeechPricing(id, "text-to-dialogue", nodeData as unknown as Record<string, unknown>)
 
   const dialogue = nodeData.dialogue ?? []
   const uniqueVoices = new Set(dialogue.map((l) => l.voice))
   const summary = `${t(dialogue.length === 1 ? "node.lineCountOne" : "node.lineCountMany", { n: dialogue.length })}${t("common.listComma")}${t(uniqueVoices.size === 1 ? "node.speakerCountOne" : "node.speakerCountMany", { n: uniqueVoices.size })}`
 
   function handleDeleteResult(indexToDelete: number) {
-    updateNodeData(id, computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedAudioUrl"))
+    const updates = computeDeleteResultUpdates(results, activeIndex, indexToDelete, "generatedAudioUrl")
+    // Keep the bare json field (the json handle's) in step with the new active result, as the url is.
+    const nextResults = updates.generatedResults as typeof results
+    const nextActive = updates.activeResultIndex as number
+    updates.generatedJson = nextResults[nextActive]?.transcript
+    updateNodeData(id, updates)
   }
 
   return (
@@ -58,12 +68,13 @@ function TextToDialogueNodeComponent({ id, data, selected }: NodeProps) {
       label={nodeData.label}
       icon={<Users className="h-4 w-4" />}
       category="ai"
-      credits={credits}
+      credits={price.range ? undefined : price.credits}
+      creditsRange={price.range}
       selected={selected}
       isRunning={status === "running"}
       hideHeader
       topToolbarContent={
-                  <NodeQuickStrip nodeId={id} credits={credits} isRunning={status === "running"} />
+                  <NodeQuickStrip nodeId={id} credits={price.range?.max ?? price.credits} isRunning={status === "running"} />
       }
       bottomToolbarContent={
         showThumbnails && results.length > 1 ? (
@@ -80,7 +91,7 @@ function TextToDialogueNodeComponent({ id, data, selected }: NodeProps) {
                 }`}
                 onClick={(e) => {
                   e.stopPropagation()
-                  updateNodeData(id, { activeResultIndex: i, generatedAudioUrl: r.url })
+                  updateNodeData(id, { activeResultIndex: i, generatedAudioUrl: r.url, generatedJson: r.transcript })
                 }}
               >
                 <Volume2 className="w-4 h-4 text-white" />
@@ -92,6 +103,7 @@ function TextToDialogueNodeComponent({ id, data, selected }: NodeProps) {
       handles={[
         { id: "prompt", type: "target", position: Position.Left,  customStyle: { top: 'calc(100% - 24px)', left: '-29px' }, external: true },
         { id: "audio",  type: "source", position: Position.Right, customStyle: { top: '24px',              right: '-29px' }, external: true },
+        { id: "json",   type: "source", position: Position.Right, customStyle: { top: '52px',              right: '-29px' }, external: true },
       ]}
     >
       <div className="flex flex-col gap-2 p-3" style={{ minHeight: 180 }}>
@@ -152,6 +164,7 @@ function TextToDialogueNodeComponent({ id, data, selected }: NodeProps) {
     </BaseNode>
     <HandleWithPopover nodeId={id} nodeType="text-to-dialogue" handleId="prompt" type="target" position={Position.Left}  label="Prompt" color={TEXT_HANDLE_COLOR} icon={<Type />}  side="left"  top="calc(100% - 24px)" accepts={ACCEPTS_PROMPT} />
     <HandleWithPopover nodeId={id} nodeType="text-to-dialogue" handleId="audio"  type="source" position={Position.Right} label="Audio"  color={HANDLE_COLORS.audio} icon={<Users />} side="right" top="24px" />
+    <HandleWithPopover nodeId={id} nodeType="text-to-dialogue" handleId="json"   type="source" position={Position.Right} label={t("audiocfg.transcript")} color={DATA_HANDLE_COLORS.json} icon={<Braces />} side="right" top="52px" />
     <DeleteConfirmationDialog
       isOpen={deleteConfirm !== null}
       onClose={() => setDeleteConfirm(null)}

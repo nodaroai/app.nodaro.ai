@@ -73,6 +73,10 @@ vi.mock("@/hooks/use-workflow-store", () => ({
 vi.mock("@/ee/hooks/use-model-credits", () => ({
   useModelCredits: () => 1,
 }))
+// The speech pills price through the one speech hook (flat row here, like the others).
+vi.mock("@/ee/hooks/use-speech-pricing", () => ({
+  useSpeechPricing: () => ({ credits: 1, exact: true }),
+}))
 
 // The video-utility pills read their one-unit price through the core shim.
 vi.mock("@/hooks/use-model-credit-cost", () => ({

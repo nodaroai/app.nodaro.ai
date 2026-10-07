@@ -34,6 +34,7 @@ vi.mock("@/lib/admin-check.js", () => ({ warmAdminCache: vi.fn(), checkIsAdmin: 
 vi.mock("@/lib/config.js", () => ({
   config: { EDITION: "cloud", SUPABASE_URL: "https://test.supabase.co", SUPABASE_SERVICE_ROLE_KEY: "test" },
   isCloud: () => true, hasCredits: () => true, isCommunity: () => false, isBusiness: () => false, hasAdmin: () => true,
+  speechLengthPricingEnabled: () => false,
 }))
 
 vi.mock("@/lib/url-validator.js", async (importOriginal) => {

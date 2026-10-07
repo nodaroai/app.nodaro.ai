@@ -82,19 +82,27 @@ export interface PriceVariant {
   note?: string
 }
 
+/**
+ * The note on every speech model's `<model>:per-100-chars` pricing row. The
+ * row is a rate: one started 100 characters of the text sent, at least 8 units
+ * per request (`credit-estimators/speech.ts`). An instance serves the row only
+ * while it prices speech by length; a client that does not see it quotes the
+ * flat row. (The ids are literals on the entries — this file cannot import
+ * the speech estimator without a cycle through tts-capabilities.ts; the
+ * pricing-coverage tests pin each literal to `speechUnitCreditId(id)`.)
+ */
+export const SPEECH_UNIT_PRICE_NOTE = "per started 100 characters, at least 8 units — where length pricing is on"
+
 /** A voice-setting lever a speech model honours. */
 export type TtsSettingLever = "stability" | "similarity" | "style" | "speed" | "speakerBoost"
 
 /**
  * What a speech model (text-to-speech or dialogue) accepts. The ONE source for
- * every "does this model do X" decision on the text-to-speech lane — tag
- * stripping, which voice settings are sent and shown, the language picker, the
- * per-request character cap. Never compare a provider id by hand; read the sheet
- * through the helpers in `tts-capabilities.ts`.
- *
- * The dialogue model carries a sheet for its own lane too, but until that lane
- * is moved onto it only `maxChars` and `languages` of that sheet are read:
- * editing its other fields changes no dialogue request.
+ * every "does this model do X" decision — tag stripping, which voice settings
+ * are sent and shown, the language picker, the per-request character cap. Never
+ * compare a provider id by hand; read the sheet through the helpers in
+ * `tts-capabilities.ts` (the text-to-speech lane) or `dialogue-capabilities.ts`
+ * (the dialogue lane). Each lane's helpers answer only for its own models.
  */
 export interface TtsCapabilities {
   /** Inline `[audio tags]` are performed. false ⇒ strip them before sending (the model reads them aloud). */
@@ -103,8 +111,31 @@ export interface TtsCapabilities {
   ssmlBreaks: boolean
   /** Voice settings the model honours. A lever not listed is never sent and never shown. */
   levers: readonly TtsSettingLever[]
+  /**
+   * The stability values THIS PLATFORM accepts for the model, when it offers
+   * steps instead of a 0–1 range (ascending). Absent ⇒ any value from 0 to 1.
+   * A product choice, not a vendor limit: ElevenLabs takes other values too on
+   * some models; the steps are what our routes validate and our pickers offer.
+   */
+  stabilitySteps?: readonly number[]
   /** The request may carry a language code. false ⇒ the field is omitted. */
   languageCode: boolean
+  /**
+   * The model answers the `/with-timestamps` form of its endpoint with
+   * character timings (and, for dialogue, per-line `voice_segments`). When true
+   * the platform ALWAYS renders dialogue through it and the job output carries a
+   * `transcript` (decided 2026-10-06); when false the plain endpoint is used
+   * and the request is byte-identical to before the field existed.
+   */
+  timestamps: boolean
+  /**
+   * The model conditions a request on the text spoken before and after it
+   * (`previous_text` / `next_text`), for continuous intonation across clips
+   * produced separately. false ⇒ the fields are never sent: a model that does
+   * not take them rejects the request (eleven_v3: 400), which would fail a paid
+   * job. Values from live calls, never assumed (phase 6 plan, Task 0).
+   */
+  stitching: boolean
   /**
    * Per-request character cap (the total across lines for a dialogue model).
    * `getMaxTtsChars` reads it by exact id and answers {@link TTS_TEXT_MAX}'s 5,000 for
@@ -2473,6 +2504,16 @@ const TTS_LANGS_V3 = [
 ] as const
 // Every lever the v2 families are sent today.
 const TTS_LEVERS_V2 = ["stability", "similarity", "style", "speed", "speakerBoost"] as const
+/**
+ * ElevenLabs Dialogue v4's total-character cap across lines — ONE constant, so
+ * the live probe's answer lands in one place. Rule (decided 2026-10-06): the
+ * largest of 2,500 / 5,000 that returned 200, voiced its last line and finished
+ * well inside the funnel's timeout in a live check of v4 dialogue above 2,000
+ * characters; never above 5,000 (parity with v3 dialogue) without a separate
+ * decision. Written at parity until that check reports; ElevenLabs recommends
+ * ≤ 2,000 for quality on either model.
+ */
+const DIALOGUE_V4_MAX_CHARS = 5000
 
 const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
   // ── ElevenLabs TTS ──
@@ -2486,12 +2527,18 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
     description: "Expressive ElevenLabs TTS — supports [audio tags] for emotion / pacing. Direct API.",
     useCases: ["tts", "voice-over", "narration", "expressive"],
     features: ["audio-tags", "voice-cloning"],
-    pricing: [{ identifier: "elevenlabs-v3", credits: 30 }],
+    pricing: [
+      { identifier: "elevenlabs-v3", credits: 30 },
+      { identifier: "elevenlabs-v3:per-100-chars", credits: 4, note: SPEECH_UNIT_PRICE_NOTE },
+    ],
     tts: {
       audioTags: true,
       ssmlBreaks: false,
       levers: ["stability"],
       languageCode: true,
+      timestamps: true, // measured 2026-10-06: /with-timestamps answers 200 at the same character cost
+      // Rejects previous_text / next_text with a 400 (probed 2026-10-04).
+      stitching: false,
       maxChars: 5000, // official cap (probed: 5,200 chars accepted; keep the clamp)
       languages: TTS_LANGS_V3,
     },
@@ -2506,7 +2553,10 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
     description: "Newest ElevenLabs TTS — [audio tags], stability and similarity control, up to 10,000 characters per request. Direct API.",
     useCases: ["tts", "voice-over", "narration", "expressive", "long-form"],
     features: ["audio-tags", "voice-cloning"],
-    pricing: [{ identifier: "elevenlabs-v4", credits: 30 }],
+    pricing: [
+      { identifier: "elevenlabs-v4", credits: 30 },
+      { identifier: "elevenlabs-v4:per-100-chars", credits: 4, note: SPEECH_UNIT_PRICE_NOTE },
+    ],
     // The default speech model (DEFAULT_TTS_PROVIDER) carries the star.
     featured: true,
     tts: {
@@ -2514,6 +2564,9 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
       ssmlBreaks: false,
       levers: ["stability", "similarity"],
       languageCode: true,
+      timestamps: true, // measured 2026-10-06: /with-timestamps answers 200 at the same character cost
+      // Accepts previous_text / next_text (probed 2026-10-04).
+      stitching: true,
       maxChars: 10000,
       // The curated picker, the same 46 as v3. The model itself lists 85
       // (it adds e.g. Cantonese, Maltese, Mongolian, Burmese, Uzbek); widening
@@ -2530,12 +2583,20 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
     series: "ElevenLabs",
     description: "Fast, cheap ElevenLabs TTS via the direct ElevenLabs API. Good for narration.",
     useCases: ["tts", "narration", "fast"],
-    pricing: [{ identifier: "elevenlabs-turbo", credits: 15, note: "per 1K chars" }],
+    // The flat row carries no note (a "per 1K chars" note once described a
+    // scaling that never existed; the minimum under length pricing is 8 units, 16).
+    pricing: [
+      { identifier: "elevenlabs-turbo", credits: 15 },
+      { identifier: "elevenlabs-turbo:per-100-chars", credits: 2, note: SPEECH_UNIT_PRICE_NOTE },
+    ],
     tts: {
       audioTags: false,
       ssmlBreaks: true,
       levers: TTS_LEVERS_V2,
       languageCode: true,
+      timestamps: true, // measured 2026-10-06: /with-timestamps answers 200 at the same character cost
+      // Measured 2026-10-06: the direct API accepts previous_text / next_text on this model (200).
+      stitching: true,
       maxChars: 40000, // == eleven_flash_v2_5 (functionally equivalent)
       languages: TTS_LANGS_FLASH_V25,
     },
@@ -2549,13 +2610,20 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
     series: "ElevenLabs",
     description: "Multi-language ElevenLabs TTS via the direct ElevenLabs API.",
     useCases: ["tts", "multilingual"],
-    pricing: [{ identifier: "elevenlabs-multilingual", credits: 30, note: "per 1K chars" }],
+    // The flat row carries no note (the old "per 1K chars" described a scaling that never existed).
+    pricing: [
+      { identifier: "elevenlabs-multilingual", credits: 30 },
+      { identifier: "elevenlabs-multilingual:per-100-chars", credits: 4, note: SPEECH_UNIT_PRICE_NOTE },
+    ],
     tts: {
       audioTags: false,
       ssmlBreaks: true,
       levers: TTS_LEVERS_V2,
       // The API reference: "This parameter is not supported for multilingual_v2 models."
       languageCode: false,
+      timestamps: true, // measured 2026-10-06: /with-timestamps answers 200 at the same character cost
+      // Measured 2026-10-06: the direct API accepts previous_text / next_text on this model (200).
+      stitching: true,
       maxChars: 10000,
       languages: TTS_LANGS_MULTILINGUAL_V2,
     },
@@ -2573,15 +2641,56 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
     description: "Multi-speaker dialogue via the direct ElevenLabs API — give it a script, it voices each role (any voice: premade, library, or cloned).",
     useCases: ["tts", "dialogue", "multi-speaker"],
     features: ["audio-tags", "voice-cloning"],
-    pricing: [{ identifier: "elevenlabs-dialogue", credits: 25, note: "per 1K chars" }],
+    // Flat per request, whatever the length (decided 2026-10-06: the old
+    // "per 1K chars" note described a scaling that never existed).
+    pricing: [
+      { identifier: "elevenlabs-dialogue", credits: 25 },
+      { identifier: "elevenlabs-dialogue:per-100-chars", credits: 4, note: SPEECH_UNIT_PRICE_NOTE },
+    ],
     tts: {
       audioTags: true,
       ssmlBreaks: false,
       levers: ["stability"],
+      // The dialogue route has offered exactly these three since it shipped
+      // (routes/text-to-dialogue.ts). Kept as the platform's v3 dialogue contract.
+      stabilitySteps: [0, 0.5, 1],
       languageCode: true,
+      timestamps: true, // measured 2026-10-06: /with-timestamps answers 200 at the same character cost
+      // The dialogue funnel does not read this field (its own lane; phase 2 declares
+      // the v4 dialogue model's value). v3 underneath.
+      stitching: false,
       // Total across lines. The documented 2,000 is a recommendation, not a
       // limit (2,500 and 5,000 both probed 200); capped like v3, the model underneath.
       maxChars: 5000,
+      languages: TTS_LANGS_V3,
+    },
+  },
+  "elevenlabs-dialogue-v4": {
+    id: "elevenlabs-dialogue-v4",
+    kind: "audio",
+    // Its own mode, never "tts" — the same reason as v3 dialogue above.
+    modes: ["dialogue"] as const,
+    family: "ElevenLabs",
+    label: "ElevenLabs Dialogue v4",
+    series: "ElevenLabs",
+    description: "Multi-speaker dialogue on ElevenLabs v4 — [audio tags], stability and similarity control. Direct API.",
+    useCases: ["tts", "dialogue", "multi-speaker"],
+    features: ["audio-tags", "voice-cloning"],
+    // Flat per request, the same as v3 dialogue (decided 2026-10-06).
+    pricing: [
+      { identifier: "elevenlabs-dialogue-v4", credits: 25 },
+      { identifier: "elevenlabs-dialogue-v4:per-100-chars", credits: 4, note: SPEECH_UNIT_PRICE_NOTE },
+    ],
+    tts: {
+      audioTags: true,
+      ssmlBreaks: false,
+      levers: ["stability", "similarity"],
+      languageCode: true,
+      timestamps: true, // measured 2026-10-06: /with-timestamps answers 200 at the same character cost
+      // Dialogue models never stitch neighbour text (the funnel does not read this).
+      stitching: false,
+      maxChars: DIALOGUE_V4_MAX_CHARS,
+      // The curated picker, v3's 46 (v4 lists 85; widening is its own change).
       languages: TTS_LANGS_V3,
     },
   },

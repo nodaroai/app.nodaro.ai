@@ -9,12 +9,13 @@ import { Readable, Transform } from "node:stream"
 import { pipeline } from "node:stream/promises"
 import { lookup as dnsLookup } from "node:dns/promises"
 import { isIP } from "node:net"
-import { config } from "../../lib/config.js"
 import { safeFetch, isPrivateOrReservedIP } from "../../lib/safe-fetch.js"
 import { csvFields } from "./ffprobe-csv.js"
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
 import { watchTransferBody, type TransferRateLimits, type TransferWatch } from "../../lib/transfer-watchdog.js"
 import { currentSlotWaitLedger } from "../../lib/ffmpeg-slot-wait.js"
+import { acquireFfmpegSlot as acquireFfmpegAdmission, ffmpegMemoryBudgetNow } from "./ffmpeg-admission-instance.js"
+import { describeFfmpegMemoryBudget } from "./ffmpeg-memory.js"
 import {
   DEFAULT_FFMPEG_TIMEOUT_MS,
   DOWNLOAD_FLOOR_BYTES_PER_SEC,
@@ -228,44 +229,36 @@ async function saveResponse(
   await (pipeline as (...s: unknown[]) => Promise<void>)(...stages)
 }
 
-// FIFO semaphore serializes ffmpeg spawns so fan-out doesn't launch N ffmpeg
-// processes on a 2-vCPU box. The worker runs at high concurrency for I/O work;
-// ffmpeg needs its own much lower cap. The time a job spends queued here is
-// recorded into its slot-wait ledger (`lib/ffmpeg-slot-wait.ts`, Track 0.13):
-// a wait is not a hang, so the heartbeat and the workflow engine leave it out.
-let ffmpegActive = 0
-const ffmpegQueue: Array<() => void> = []
-function acquireFfmpegSlot(signal?: AbortSignal): Promise<() => void> {
-  // Captured now: `grant` runs later, in the async context of whoever released.
-  const ledger = currentSlotWaitLedger()
-  return new Promise((resolve, reject) => {
-    let queued = false
-    const abort = () => {
-      const index = ffmpegQueue.indexOf(grant)
-      if (index >= 0) ffmpegQueue.splice(index, 1)
-      if (queued) { queued = false; ledger?.abandoned() }
-      reject(signal?.reason ?? new Error("FFmpeg wait cancelled"))
-    }
-    const grant = () => {
-      signal?.removeEventListener("abort", abort)
-      if (signal?.aborted) { abort(); ffmpegQueue.shift()?.(); return }
-      ffmpegActive++
-      ledger?.granted(queued)
-      queued = false
-      let released = false
-      resolve(() => {
-        if (released) return
-        released = true
-        ffmpegActive--
-        ledger?.released()
-        ffmpegQueue.shift()?.()
-      })
-    }
-    if (signal?.aborted) { abort(); return }
-    signal?.addEventListener("abort", abort, { once: true })
-    if (ffmpegActive < config.FFMPEG_CONCURRENCY) grant()
-    else { queued = true; ledger?.queued(); ffmpegQueue.push(grant) }
-  })
+// The ffmpeg admission (`ffmpeg-admission-instance.ts`): FFMPEG_CONCURRENCY
+// slots per process so fan-out doesn't launch N ffmpeg processes on a 2-vCPU box
+// (the worker runs at high concurrency for I/O work; ffmpeg needs its own much
+// lower cap), AND a memory budget every launch reserves its predicted peak from
+// before it starts, shared by all the container's processes (decided
+// 2026-10-05: two 4K chunks at once ran the box out of memory). The time a job
+// spends queued here — for a slot or for memory — is recorded into its
+// slot-wait ledger (`lib/ffmpeg-slot-wait.ts`, Track 0.13): a wait is not a
+// hang, so the heartbeat and the workflow engine leave it out.
+
+/** A deadline the admission wait does not count against (`FetchDeadline`). */
+export interface WaitExcusedDeadline {
+  /** The launch waited this many milliseconds for admission: move the deadline out by them. */
+  excuse(waitedMs: number): void
+}
+
+/** What one launch tells the admission. */
+export interface FfmpegLaunchOptions {
+  /** The launch's predicted peak memory in MiB. Omitted: the default estimate
+   *  (393 + 22.9 × its threads, or `FFMPEG_DEFAULT_PEAK_MIB`). A caller that
+   *  knows its peak passes it (`ffmpeg-memory-model.ts`) — every Apply EDL
+   *  picture slice and every re-encode does. */
+  readonly peakMemoryMiB?: number
+}
+
+export { ffmpegMemoryBudgetNow }
+
+function acquireFfmpegSlot(signal: AbortSignal | undefined, peakMemoryMiB: number | undefined): Promise<() => void> {
+  // Captured now: a grant runs later, in the async context of whoever released.
+  return acquireFfmpegAdmission(signal, peakMemoryMiB, currentSlotWaitLedger())
 }
 
 /** A timed-out ffmpeg gets SIGTERM, then SIGKILL this long after (Track 0.13). */
@@ -280,8 +273,23 @@ export const FFMPEG_SLOT_BACKSTOP_MS = 30_000
 /** Hold one slot for `work`, never longer than `limitMs` (+ the backstop): past
  *  that the slot is released and the call rejects, while `work` is left to
  *  settle on its own (its result discarded, its failure swallowed). */
-async function holdSlot<T>(work: () => Promise<T>, opts: { readonly limitMs: number; readonly signal?: AbortSignal; readonly label: string }): Promise<T> {
-  const release = await acquireFfmpegSlot(opts.signal)
+async function holdSlot<T>(
+  work: () => Promise<T>,
+  opts: {
+    readonly limitMs: number
+    readonly signal?: AbortSignal
+    readonly label: string
+    readonly peakMemoryMiB?: number
+    readonly deadline?: WaitExcusedDeadline
+  },
+): Promise<T> {
+  // Admitted first; the hold's clocks (the backstop here, the caller's kill
+  // budget inside `work`) start only once the launch may actually run.
+  const waitStartedAt = Date.now()
+  const release = await acquireFfmpegSlot(opts.signal, opts.peakMemoryMiB)
+  // The ONE rule for a caller held to a deadline (a fetch's, `FetchDeadline`): what
+  // the launch waited for its slot and its memory is not the caller's time.
+  opts.deadline?.excuse(Date.now() - waitStartedAt)
   let backstop: ReturnType<typeof setTimeout> | undefined
   try {
     const running = work()
@@ -342,9 +350,20 @@ function escalateKill(child: ReturnType<typeof execFile> | undefined, timeoutMs:
  */
 export async function withFfmpegSlot<T>(
   fn: () => Promise<T>,
-  opts: { readonly timeoutMs: number; readonly signal?: AbortSignal; readonly label?: string },
+  opts: {
+    readonly timeoutMs: number
+    readonly signal?: AbortSignal
+    readonly label?: string
+    /** The deadline of a caller that is held to one: the time this launch waits
+     *  for its slot or memory is excused from it, so a busy box never spends a
+     *  fetch's time. Read it inside `fn` — what is left once the launch is admitted. */
+    readonly deadline?: WaitExcusedDeadline
+  } & FfmpegLaunchOptions,
 ): Promise<T> {
-  return holdSlot(fn, { limitMs: opts.timeoutMs, signal: opts.signal, label: opts.label ?? "a slot-gated step" })
+  return holdSlot(fn, {
+    limitMs: opts.timeoutMs, signal: opts.signal, label: opts.label ?? "a slot-gated step", peakMemoryMiB: opts.peakMemoryMiB,
+    deadline: opts.deadline,
+  })
 }
 
 /**
@@ -412,7 +431,7 @@ function execFailureFlags(error: ExecFileException): { killed: boolean; timedOut
   return { killed, timedOut: killed && error.code !== "ERR_CHILD_PROCESS_STDIO_MAXBUFFER" }
 }
 
-export async function runFfmpeg(args: readonly string[], timeoutMs?: number): Promise<string> {
+export async function runFfmpeg(args: readonly string[], timeoutMs?: number, launch?: FfmpegLaunchOptions): Promise<string> {
   const limitMs = ffmpegLimitMs(timeoutMs)
   return holdSlot(() => new Promise<string>((resolve, reject) => {
     // Declared first: the callback may run before execFile returns.
@@ -429,7 +448,7 @@ export async function runFfmpeg(args: readonly string[], timeoutMs?: number): Pr
       }
     })
     stopEscalation = escalateKill(child, limitMs)
-  }), { limitMs, label: "ffmpeg" })
+  }), { limitMs, label: "ffmpeg", peakMemoryMiB: launch?.peakMemoryMiB })
 }
 
 /**
@@ -441,6 +460,7 @@ export async function runFfmpeg(args: readonly string[], timeoutMs?: number): Pr
 export async function runFfmpegCapture(
   args: readonly string[],
   timeoutMs?: number,
+  launch?: FfmpegLaunchOptions,
 ): Promise<{ stdout: string; stderr: string }> {
   const limitMs = ffmpegLimitMs(timeoutMs)
   return holdSlot(() => new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
@@ -467,7 +487,7 @@ export async function runFfmpegCapture(
         }
       })
       stopEscalation = escalateKill(child, limitMs)
-  }), { limitMs, label: "ffmpeg" })
+  }), { limitMs, label: "ffmpeg", peakMemoryMiB: launch?.peakMemoryMiB })
 }
 
 /**
@@ -488,6 +508,7 @@ export async function runFfmpegWithProgress(
   args: readonly string[],
   onFrame?: (frame: number) => void,
   timeoutMs?: number,
+  launch?: FfmpegLaunchOptions,
 ): Promise<void> {
   const limitMs = ffmpegLimitMs(timeoutMs)
   return holdSlot(() => new Promise<void>((resolve, reject) => {
@@ -533,7 +554,7 @@ export async function runFfmpegWithProgress(
           reject(new Error(ffmpegFailureMessage(stderrTail, `exit code ${code}`)))
         }
       })
-  }), { limitMs, label: "ffmpeg" })
+  }), { limitMs, label: "ffmpeg", peakMemoryMiB: launch?.peakMemoryMiB })
 }
 
 /**
@@ -583,6 +604,9 @@ export function logFfmpegVersion(tag: string): void {
       console.log(`[${tag}] ${stdout.split("\n", 1)[0]}`)
     }
   })
+  // The budget every launch reserves from, so the logs can answer "how much
+  // did this box let ffmpeg use?" when a render waits or a box runs short.
+  console.log(`[${tag}] ${describeFfmpegMemoryBudget(ffmpegMemoryBudgetNow())}`)
 }
 
 export function runFfprobe(args: readonly string[]): Promise<string> {
@@ -617,6 +641,24 @@ export async function hasAudioStream(filePath: string): Promise<boolean> {
     filePath,
   ])
   return output.trim().length > 0
+}
+
+/**
+ * The sample rate of a local media file's FIRST audio stream — the stream a
+ * filter graph's `[i:a]` binds — in Hz; undefined when the file has no audio
+ * stream or ffprobe reports no positive integer rate. Local paths only (no
+ * network, no SSRF surface).
+ */
+export async function probeAudioSampleRate(filePath: string): Promise<number | undefined> {
+  const output = await runFfprobe([
+    "-v", "error",
+    "-select_streams", "a:0",
+    "-show_entries", "stream=sample_rate",
+    "-of", "default=noprint_wrappers=1:nokey=1",
+    filePath,
+  ])
+  const rate = Number(output.trim().split("\n")[0])
+  return Number.isInteger(rate) && rate > 0 ? rate : undefined
 }
 
 /**
@@ -1217,6 +1259,57 @@ function scanPacketEnds(filePath: string, streamIndex: number): Promise<{ maxPts
         ...(maxDtsEnd !== undefined ? { maxDtsEnd } : {}),
         dtsSteps: lastDts === undefined ? "none" : dtsJumps ? "discontinuous" : "monotonic",
       })
+    })
+  })
+}
+
+/** Presentation times (ms) of a LOCAL file's first video track's frames,
+ *  sorted (packets come in decode order; B-frames reorder them). One csv line
+ *  per frame, so the packet list is STREAMED: a long proxy at a high fps is
+ *  megabytes of csv, past `runFfprobe`'s buffer (a 2 h proxy at 60 fps is
+ *  ~430k lines, over 5 MiB). Packets with no pts are skipped. */
+export function probeVideoFramePtsMs(filePath: string): Promise<number[]> {
+  return new Promise((resolve, reject) => {
+    const proc = spawn("ffprobe", [
+      "-v", "error",
+      "-select_streams", "v:0",
+      "-show_entries", "packet=pts_time",
+      "-of", "csv=p=0",
+      filePath,
+    ], { stdio: ["ignore", "pipe", "pipe"] })
+
+    let timedOut = false
+    const watchdog = setTimeout(() => {
+      timedOut = true
+      proc.kill("SIGKILL")
+    }, DEFAULT_FFMPEG_TIMEOUT_MS)
+
+    const ptsMs: number[] = []
+    let lineBuf = ""
+    const take = (line: string) => {
+      const sec = Number.parseFloat(line)
+      if (Number.isFinite(sec)) ptsMs.push(sec * 1000)
+    }
+    proc.stdout.on("data", (chunk: Buffer) => {
+      lineBuf += chunk.toString()
+      const lines = lineBuf.split("\n")
+      lineBuf = lines.pop() ?? ""
+      for (const line of lines) take(line)
+    })
+    let stderrTail = ""
+    proc.stderr.on("data", (chunk: Buffer) => {
+      stderrTail = (stderrTail + chunk.toString()).slice(-2048)
+    })
+    proc.on("error", (err) => {
+      clearTimeout(watchdog)
+      reject(new Error(`ffprobe failed to spawn: ${err.message}`))
+    })
+    proc.on("close", (code) => {
+      clearTimeout(watchdog)
+      if (lineBuf) take(lineBuf)
+      if (timedOut) reject(new Error(`probeVideoFramePtsMs: ffprobe timed out after ${DEFAULT_FFMPEG_TIMEOUT_MS}ms`))
+      else if (code !== 0) reject(new Error(`probeVideoFramePtsMs: ffprobe exit ${code}: ${stderrTail.trim() || "no output"}`))
+      else resolve(ptsMs.sort((a, b) => a - b))
     })
   })
 }

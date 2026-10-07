@@ -1,6 +1,7 @@
 import { join } from "node:path"
 import youtubedl from "youtube-dl-exec"
 import { ytProxyOption } from "./yt-proxy.js"
+import { withYtDlpOptionsAdmission } from "./ytdlp-admission.js"
 import { downloadFile, runFfmpeg, createWorkDir, cleanupWorkDir } from "./ffmpeg-utils.js"
 import { isAllowedSocialVideoUrl } from "../../lib/url-validator.js"
 import { VIDEO_FORMAT_SELECTOR } from "./video-format.js"
@@ -31,7 +32,7 @@ export async function trimAudio(options: TrimAudioOptions): Promise<TrimAudioRes
     if (isSocialMediaUrl(videoUrl)) {
       console.log("[trimAudio] Social media URL detected, using yt-dlp")
       try {
-        await youtubedl(videoUrl, {
+        const ytDlpOptions: Record<string, unknown> = {
           output: videoPath,
           // Shared with the download path — this function EXTRACTS AUDIO, so a
           // selector that can land on a video-only format is fatal here. The old
@@ -48,7 +49,10 @@ export async function trimAudio(options: TrimAudioOptions): Promise<TrimAudioRes
             "referer:youtube.com",
             "user-agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
           ],
-        } as Record<string, unknown>)
+        }
+        // Merge only (stream copy): classified exempt by its flags, so never held — but every yt-dlp run goes through
+        // the funnel, which refuses a library run that would encode (the library cannot stop yt-dlp's ffmpeg).
+        await withYtDlpOptionsAdmission(ytDlpOptions, () => youtubedl(videoUrl, ytDlpOptions))
       } catch (ytErr: unknown) {
         const stderr = (ytErr as { stderr?: string }).stderr ?? ""
         const msg = (ytErr as Error).message || stderr || "yt-dlp failed"

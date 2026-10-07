@@ -1,7 +1,7 @@
 ---
 node_type: upscale-image
-generated_at: 2026-09-27T12:51:23.167Z
-generated_from: c607aa02c
+generated_at: 2026-10-05T21:37:06.176Z
+generated_from: 066cc1460
 ---
 
 # Upscale Image
@@ -11,7 +11,7 @@ generated_from: c607aa02c
 **Category:** ai
 **Credit cost:** `2-100` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
 **Inputs (target handles):** `image`
-**Outputs (source handles):** `out`
+**Outputs (source handles):** `image`
 
 **Required data fields:**
 - `label: string`

@@ -177,12 +177,72 @@ such a node is refused outright. Ordinary fields on those nodes (a caption, a
 limit) and media `url` fields on input nodes (uploads, reference audio) stay
 overridable.
 
+<a id="runs-that-would-stop-for-a-review"></a>**Runs that would stop for a review.** *Rolled out under a flag* (`PREVIEW_STOP_RULE_ENABLED`, see [Apply EDL](./nodes/processing-video/apply-edl.md#a-run-stops-at-a-preview)): where it is off, none of these runs is refused. Studio, Voice and any other client besides the editor and an app's own page count as nobody to review, and get the message below as is. A workflow whose [Apply EDL](./nodes/processing-video/apply-edl.md#a-run-stops-at-a-preview) render is set to **Proxy** stops at that preview for a person to review, and only a person in the editor (whose runs send `"reviewer": "editor"`) or on a published app's page (whose runs send `"reviewer": "app"` to `/v1/app/:slug/run`, with a signed-in session token, not `headless`; see [Render final of an app run](#render-final-of-an-app-run)) can. Every other run path has nobody to review it, so a run that would execute a render set to Proxy is refused before anything runs or is billed: `/v1/workflows/:id/run` called with an API token, an OAuth app token, from MCP, or with a signed-in session token from anywhere but the editor (the SDK's `supabaseAuth`, for one), `/v1/api/run`, `/v1/present/:token/run` and `/v1/app/:slug/run` without the app page's mark (the SDK's `apps.run`, the CLI, MCP `run_app`) answer `400` with `{ "error": { "code": "preview_review_required", "message": "This workflow stops for a review: its render is set to Preview, and only a run started in the Nodaro editor or on an app's own page can stop for one. Open it there to run it, or set the render to Final (or send a Final quality override for it)." } }`. To run it anyway, override the render to Final for that run: `"inputOverrides": { "<render node id>": { "quality": "final" } }` on `/v1/workflows/:id/run`, or `"inputs": { "<render node id or label>": { "quality": "final" } }` on `/v1/api/run`. A webhook fire answers the same `400`; schedule and Telegram fires are skipped. Each trigger lane leaves one failed execution with `error_message: "preview_review_required"` in the workflow's history (repeated fires do not add more). A run whose sub-workflow or component holds a render set to Proxy is refused with `preview_render_nested` — a nested graph cannot stop for a review — and `POST /v1/apps/publish` refuses to publish such a component (`400 preview_render_nested`). When the server's own check refuses a run that was already accepted, the execution ends `failed` with the code as its `error_message`.
+
+<a id="continuing-a-run"></a>**Continuing a run (`continueFromExecutionId`).** `POST /v1/workflows/:id/run` can continue an earlier execution instead of starting over: send `"continueFromExecutionId": "<execution id>"` together with `nodeIds`. The run executes only `nodeIds`. Every other node hands on what that execution produced — its outputs as the execution recorded them — never the workflow's saved results in their place, so the inputs that run used (an upload, an app input) are used again, and nothing upstream runs or is billed again. A node that execution did not run either (one it was told to skip, or one outside its own `nodeIds`) handed on its saved results there, and hands on the same here: every saved result where a node reads a list. An [Edit Plan](./nodes/processing-video/edit-plan.md) hands on the plan that execution made, with your current review of it applied — also when that execution was itself a continuation or a partial run that applied an earlier review; a review made on another plan is ignored. A node the earlier execution did not complete hands on nothing, and does not run again: a node of the run that reads it gets no value from it, and a node whose every input comes from such nodes is skipped (with the nodes after it) instead of running on nothing. Render final after a run that stopped at its preview is one:
+
+```json
+{
+  "nodeIds": ["<render node id>", "<every node after it>"],
+  "inputOverrides": { "<render node id>": { "quality": "final" } },
+  "continueFromExecutionId": "<the run that stopped at the preview>"
+}
+```
+
+`inputOverrides` are meant for the nodes the run executes, such as the render's Final quality above. The `inputOverrides` the earlier execution ran with are recorded on it when it starts, and a continuation applies them again: a node the run executes reads the workflow as it is now, with the earlier run's `inputOverrides` and the ones you send over them — yours win, field by field (a field you do not send keeps the earlier run's value). They are the ones that run applied, so nothing changed since reaches the continuation. An execution that started before the server recorded them has none recorded: its continuation applies only the `inputOverrides` you send. A render the run does not execute is read by what the earlier execution rendered: when that was a Preview and a node the run executes would consume it, the [stop rule above](#runs-that-would-stop-for-a-review) applies — a run from the editor stops there, and any other run is refused with `preview_review_required` (checked once the run starts, so the execution ends `failed` with that code). The earlier execution must be one you started, of this workflow, of the workflow itself (not of a published app version), and it must have ended `completed`. Otherwise the request is refused before any execution exists:
+
+| Status | `error.code` | When |
+|---|---|---|
+| `400` | `continuation_subset_required` | `nodeIds` is missing or empty |
+| `404` | `continuation_not_found` | no such execution, or it is not yours |
+| `400` | `continuation_workflow_mismatch` | it ran another workflow |
+| `400` | `continuation_version_mismatch` | it ran a published app version of the workflow |
+| `409` | `continuation_not_completed` | it is still running, or it failed or was cancelled |
+
+<a id="render-final"></a>**Render final (`renderFinal`).** Instead of assembling a Render final yourself, name the render and let the server work it out: send `"renderFinal": { "renderNodeId": "<render node id>" }` with `continueFromExecutionId` (the run that stopped at the preview) on `POST /v1/workflows/:id/run`, and nothing else — no `nodeIds`, no `inputOverrides`. The server runs what the editor's [Render final](./nodes/processing-video/apply-edl.md#render-final) runs: the [Apply EDL](./nodes/processing-video/apply-edl.md) render at Final for this run only, and every node after it (directly, through a teleport, a Group or a field mapping); with Camera Switch between the Edit Plan and the render, Camera Switch runs again first. The Edit Plan does not run again. The run is then a continuation as above, with the same checks.
+
+```json
+{
+  "renderFinal": { "renderNodeId": "<render node id>" },
+  "continueFromExecutionId": "<the run that stopped at the preview>"
+}
+```
+
+Quote it first with `POST /v1/workflows/:id/render-final/estimate` and `{ "renderNodeId": "…", "continueFromExecutionId": "…" }`. It creates and charges nothing, and answers `200 { "data": { "renderNodeId", "nodeIds", "inputOverrides", "estimatedCredits", "sufficient", "available" } }`: the nodes the run executes, the override it runs with (`{ "<render node id>": { "quality": "final" } }`) and its estimated credits, priced on the graph the run executes (the earlier run's recorded `inputOverrides` with the render's Final over them); `sufficient` says whether the payer's credits cover them, and `available` is the payer's spendable credits (`null` when a workspace budget pays, or when a deployment's operator pays — that balance is not shown). All three figures are `null` in an edition without credits. It refuses with the continuation codes above, and both refuse:
+
+| Status | `error.code` | When |
+|---|---|---|
+| `400` | `render_final_node_not_found` | the workflow has no node with that id |
+| `400` | `render_final_not_a_render` | the node is not an Apply EDL render |
+| `400` | `validation_error` | `renderFinal` sent with `nodeIds` or `inputOverrides`, or without `continueFromExecutionId` |
+
+The run is checked against the payer's credits before it starts, on the figure the quote shows: one its payer cannot cover is refused with `402 { "error": { "code": "insufficient_credits", "message", "required", "available" } }` and no execution is created (`available` is left out when a deployment's operator pays). The check is the balance only; a model your plan cannot use, or a daily limit, is still refused by that node when the run reaches it. A workspace budget's headroom is checked as each node reserves.
+
+The run is the authority on every other refusal (`preview_review_required` when another render after this one still reads Proxy — under the `PREVIEW_STOP_RULE_ENABLED` flag, as [above](#runs-that-would-stop-for-a-review); a run already going).
+| `400` | `validation_error` | `continueFromExecutionId` is not an execution id |
+
+<a id="render-final-of-an-app-run"></a>**Render final of an app run.** *Rolled out under a flag* (`PREVIEW_STOP_RULE_ENABLED`): where it is off, apps run as before (no run stops at a preview), and this route re-renders the render you name at Final, then every node after it — on any render of a completed run, whatever its take, as the editor's Render final does with the flag off; the Preview-only refusals below do not apply. The app's page offers it on a render whose take is a Preview whatever the flag, as the editor's node does. A run of a published app started from the app's page (`"reviewer": "app"`, above) whose render is set to **Proxy** stops at the preview like an editor run: the render's take is a Preview, and the nodes after it are `skipped` and not billed. `POST /v1/app/:slug/runs/:runId/render-final` with `{ "renderNodeId": "<render node id>" }` renders that run's final: a continuation of the run's execution (as above) that runs the render at Final for that run only, then every node after it, once — the server decides which nodes run; nothing before the render runs or is billed again. It answers `202 { "executionId", "runId", "status": "pending" }`; an `Idempotency-Key` header of 8 characters or more makes a retry of the same request answer `200` with `"deduped": true` and start nothing. The final is charged to the runner at the nodes' own prices, as a second execution OUTSIDE the app run: the creator's fee on the app does not apply, it adds no row to the run history and does not count toward the app's daily run limit, and like an app run it draws on the runner's app credits. An Edit Plan review the runner stored on the run (`nodeStates: { "<plan id>": { "editedEdl": … } }` through `PATCH /v1/app/:slug/runs/:runId`) is applied to the final. Once the final has results, `GET /v1/app/:slug/runs/:runId` (and the run list) shows them in `execution.nodeStates` over the preview's — a node the final completed replaces the run's own state of it — and carries the final as `finalExecution: { id, status, completedNodes, totalNodes, errorMessage, completedAt, creditsUsed }` (`null` when none was asked for); the run's `creditsUsed` stays the app run's own. A second render set to **Proxy** further on stops the final at its own preview; that render has its own Render final, which continues from the run's NEWEST final (so nothing an earlier final rendered runs or is billed again), one at a time — the run then links the newest as `finalExecution`, and the views lay every final of the chain that completed over the run's states, oldest first. A final that failed or was cancelled is neither shown nor continued, even where it completed its render before a node after it failed: `finalExecution` reports it with its `status` and `errorMessage`, the views show the states under it (its render's Preview again), and the next Render final continues from the newest final that completed — or from the run's own execution when none did. Edits stored on the nodes a final completed are dropped once it has completed, since its results replaced theirs; until then, after a final that failed, and on any node it did not complete, they stay. A state the final completed carries `"fromRenderFinal": true`. Refused before anything is written or billed:
+
+| Status | `error.code` | When |
+|---|---|---|
+| `400` | `not_a_render` | `renderNodeId` is not a render node of the app |
+| `400` | `preview_render_nested` | the app is a component: a nested graph never stops for a review |
+| `404` | `not_found` | no such run of yours under this app |
+| `409` | `continuation_not_completed` | the run has no execution yet (a draft), or it has not completed |
+| `409` | `render_final_not_preview` | with the flag on: the render's take is not a Preview — in the run, or in its newest final (a render set to Final, or one a final already rendered, has no final to render) |
+| `409` | `already_running` | a final of this run is still rendering (its id is in `executionId`) |
+| `400` | `preview_review_required` | with the flag on: without the app page's mark, a final that would stop at another Preview further on |
+| `402` | `insufficient_app_credits` | the runner's app credits cannot cover a run |
+| `503` | `run_finals_unavailable` | the run's earlier finals could not be read just now: try again (nothing was started) |
+
+Run views carry the runner's own edits of the run's results as `nodeStateEdits`: the one map `PATCH /v1/app/:slug/runs/:runId` sets with `nodeStates`. The PATCH **replaces** that map, so send the whole map — the edits already stored with yours merged in — or the ones you leave out are lost.
+
 | Method | Path | Purpose |
 |---|---|---|
 | `GET`  | `/v1/api/workflows` | List workflows your token can run. Supports `?limit=` and `?cursor=` pagination. |
 | `GET`  | `/v1/api/schema?workflowId=…` | Inspect a workflow's input fields and output handles before running it. Includes `estimatedCredits`. |
 | `POST` | `/v1/api/run` | Execute a workflow. Optionally pass `inputs` to override input-node values. Supports `?wait=true&timeout=…` for sync mode. |
-| `GET`  | `/v1/api/status/:execId` | Poll a running execution. Returns `status`, progress counts, and credits used. |
+| `GET`  | `/v1/api/status/:execId` | Poll a running execution. Returns `status`, progress counts, credits used and, once completed, `outcome` (see [Runs that find nothing new](#runs-that-find-nothing-new)). |
 | `GET`  | `/v1/api/result/:execId` | Fetch the final outputs once `status` is `completed` or `failed`. |
 
 All responses use the same envelope: success returns the payload directly
@@ -336,6 +396,7 @@ A successful `result` response looks like:
 {
   "executionId": "…",
   "status": "completed",
+  "outcome": "succeeded",
   "creditsUsed": 4,
   "durationMs": 12450,
   "errorMessage": null,
@@ -579,6 +640,35 @@ POST /v1/api/run?wait=true&timeout=120
 Recommended cutoff: use sync for workflows you expect to finish in under
 a minute (text generation, light image work). For multi-step workflows
 that include video rendering or upscaling, use async.
+
+<a id="runs-that-find-nothing-new"></a>
+### Runs that find nothing new
+
+A scheduled run often has nothing to do: the feed it polls has no new posts, so
+the writer behind it would be asked to write about nothing. Such a run **ends
+`completed`, not `failed`.** A node that sends text to a model or a voice
+(Generate Text, Generate Script, Text to Speech, Generate Music, Text to Audio)
+is skipped when the text it would send is empty and that text came from a node
+which, in this run, produced nothing — and the nodes behind it are skipped with
+it. An output node that sends what is wired into it (Webhook Output, the social
+post nodes) is skipped when every one of its wires carried nothing in this run,
+so no empty request leaves the run. Nothing is billed for a skipped node.
+
+Where that shows:
+
+- `/v1/api/status/:execId` and `/v1/api/result/:execId` (and the
+  `?wait=true` answer) carry `"outcome": "nothing_new"` once the run completes;
+  every other completed run says `"succeeded"`. A failed or cancelled run has
+  no `outcome`, only its `status`. `errorMessage` stays `null` — nothing went
+  wrong.
+- In `GET /v1/workflow-executions/:id`, the skipped node's entry in
+  `nodeStates` reads `{ "status": "skipped", "skipReason": "empty_input" }`. A
+  node skipped by a Router's inactive route carries no `skipReason`, as before.
+- A Telegram Channel Feed that returns no new posts is not charged.
+
+A node with a typed prompt still runs on an empty wire (its prompt is the
+request), and a node with no wire at all still fails with the validation error
+it always had — only a wire that carried nothing in this run counts.
 
 Linked-frame canvas nodes require the Studio production generation API. The
 canvas workflow-run endpoint and direct media requests that identify a saved
@@ -1255,12 +1345,77 @@ per-variant credit `pricing` — the credits a run is charged, the price
 `doctrineCovered` truth flag (`true` only when a sourced per-family prompt
 doctrine exists — gate "vendor doctrine" badges on it; never overclaim).
 
+A speech model (`mode: tts`, and the dialogue models) lists a second
+`pricing` row, `<model>:per-100-chars`, on an instance that prices speech
+by length: the credits of one started 100 characters of the text sent. A
+client that sees it quotes `max(8, ceil(characters / 100)) × that row`;
+one that does not (the row is absent where length pricing is off) quotes
+the model's flat row, and the two never appear together with different
+meanings.
+
 | Query param | Values | Purpose |
 |---|---|---|
 | `kind` | `image` / `video` / `audio` | Filter to one media kind. |
 | `mode` | e.g. `t2i`, `i2v`, `t2v`, `tts`, `video-analysis` | Filter by operation. |
 | `family` | string | Vendor / lab name, e.g. `Google`, `Bytedance`. |
 | `featuredOnly` | boolean | Featured models only. |
+
+### Edit Plan modes
+
+`GET /v1/edit-plan/capabilities` — the [Edit Plan](./nodes/processing-video/edit-plan.md)
+modes this server can plan. Authenticated; `Cache-Control: private, no-store`
+(a server update can change the answer).
+
+```json
+{ "modes": ["tighten", "clips", "chapters", "trailer"], "source": "server" }
+```
+
+`tighten`, `clips` and `chapters` are always listed. `trailer` is listed only
+when the server can plan a trailer; until then the editor greys the Trailer
+option out, with a reason that depends on `source`, which says who answered:
+
+| `source` | Who answered | Reason the editor shows |
+|---|---|---|
+| `server` | This server: nodaro.ai, or a self-hosted install that is not connected | "needs a plugin update" |
+| `nodaro.ai` | A self-hosted install connected to nodaro.ai, with nodaro.ai's answer | "Available once nodaro.ai supports it" |
+| `nodaro.ai-unreachable` | A self-hosted install connected to nodaro.ai that can't reach it | "Couldn't reach nodaro.ai — try again later" |
+
+A mode the server does not list, and a
+mode that is not one of the four, is refused before anything is charged, on
+every lane, except Trailer on a self-hosted install connected to nodaro.ai that
+can't reach it, where the job is retried instead (see below). Every refusal
+carries one message (for Trailer: *Trailer mode is not available on
+this server yet. Choose another mode, or try again after the next update. You
+were not charged.*):
+
+- `POST /v1/edit-plan` answers `400` with
+  `{ "error": { "code": "mode_not_available", "message": "…" } }` before any
+  credits are reserved. The check applies to a `mode` the request sends.
+- A workflow or app run fails the Edit Plan node. An unknown mode fails before
+  any credits are reserved. On nodaro.ai, a run in Trailer mode is refused
+  until the server plans trailers, and any reservation is refunded.
+- The MCP `plan_edit` tool refuses before dispatch and names the modes the
+  server plans.
+
+On a self-hosted install (Community, Business) connected to nodaro.ai, Edit
+Plan runs on nodaro.ai and is charged to the connected nodaro.ai account, so
+the install answers with the modes nodaro.ai plans: it asks nodaro.ai's
+`GET /v1/edit-plan/capabilities` over its existing connection and reuses the
+answer for up to a minute. `trailer` is listed there as soon as nodaro.ai plans
+trailers, and Trailer is refused there only when nodaro.ai answers that it
+does not plan trailers yet. When nodaro.ai can't be reached, the install lists
+only `tighten`, `clips` and `chapters` (`source: "nodaro.ai-unreachable"`), but
+it does not refuse a run in Trailer mode: the outage is temporary. `POST
+/v1/edit-plan` and MCP `plan_edit` create the job, and the job is retried under
+the usual job retry policy, failing with *could not reach nodaro.ai* only when
+nodaro.ai still can't be reached on the last attempt. Nothing is relayed to
+nodaro.ai until the install has asked it which modes it plans, so nothing is
+charged to the connected nodaro.ai account for a failed attempt. An unknown
+mode is still refused at once. An install that is not connected lists the same three modes,
+and cannot run Edit Plan at all until it connects.
+The editor asks this route again when an Edit Plan node's settings open or the
+browser tab regains focus, at most once a minute, so a change in the answer
+shows up without a page reload.
 
 ### Seedance 2 video capabilities
 
@@ -1475,6 +1630,25 @@ IS, for this run only:
   `@audio_N: <caption>.`, and the list is bounded by the number of rail
   references that actually ship, so a caption can never bind a slot the payload
   dropped. Leave an entry blank to skip it without breaking the alignment.
+- **`characterReferences` (`POST /v1/generate-video` and `POST /v1/text-to-video`,
+  up to 3).** Identity inputs that keep a real person's face on models with a
+  dedicated character channel — today `gemini-omni-video` and
+  `gemini-omni-flash`. Each entry is `{ imageUrl, description, bodyImageUrl?,
+  name?, voice? }`: a portrait URL, a description of the person (appearance, clothing,
+  style; ≤ 2000 chars), an optional full-body image and an optional name (≤ 100
+  chars). Unlike `referenceImageUrls`, which a multimodal model treats as loose
+  context, this is the input that holds the face. Any other model answers `400`
+  `character_references_unsupported`; combining it with a start frame (`imageUrl`) or an end frame (`endFrameUrl`)
+  answers `400` `character_references_with_start_frame` /
+  `character_references_with_end_frame` (a current Nodaro limit); and the request must fit
+  the model's 7-unit input budget — `images + 2 × videos + characters ≤ 7`, a
+  character counting 1 unit (2 with a `bodyImageUrl`) — or it answers `400`
+  `character_references_quota`. It adds no credit charge. The references are
+  recorded on the job's input. `voice` — `{ preset, description?, exampleLine? }`, `preset` one of the 30
+  Gemini voice ids — pins one voice to that character across clips (up to 3
+  distinct voices a request, else `400` `character_voices_over_limit`; `description` ≤ 2000 chars, `exampleLine`
+  ≤ 120); see [Pinning a voice](nodes/ai-video/generate-video.md#pinning-a-voice-to-a-character-reference) for the presets. See [Character references
+  (Gemini Omni)](nodes/ai-video/generate-video.md#character-references-gemini-omni).
 
 ### Naming an image reference in the prompt (`@<name-slug>:<index>[:<role>]`)
 
@@ -2191,6 +2365,10 @@ The listing, plus two endpoints that poll multiple job statuses in a single roun
 | `GET` | `/v1/jobs/status?ids=a,b,c` | Comma-separated IDs, max 100. Returns `{ jobs: { id, status, output_data, error_message, error_hint, credit_status }[] }`. Cross-user / non-existent IDs are silently omitted — reconcile locally. |
 | `POST` | `/v1/jobs/batch-status` | Body `{ jobIds: string[] }`, max 100. Returns `{ data: { id, status, output_data, error_message, error_hint }[] }` (no `credit_status` on this route). |
 
+An Apply EDL job's `output_data` says what the render was cut from: `quality` (`"proxy"` is a preview), `clipKey` (the plan clip, when one was given), `planBasis` (the plan value, when one was given: `POST /v1/apply-edl` accepts an optional `planBasis` of 16 lowercase hex digits, `renderReadBasis` in `@nodaro/shared`) and `renderBasis` (always: the server's fingerprint of the render's `output`, `crossfadeMs` and the effective source URLs). See the SDK's [`applyEdl`](./sdk-reference.md#applyedlinput) for the full parameter list.
+
+An Apply EDL job recorded before `output_data.quality` was written reads back with the quality it was ordered at filled in on every job read above, plus `GET /v1/jobs/:id` and `GET /v1/jobs/:id/status` (`"proxy"` is a preview, anything else the final). The stored job is unchanged.
+
 All three require `jobs:read` scope when using an OAuth token; admin tokens may
 see cross-user jobs. These endpoints are public API — they are used by the
 editor but are equally suited to external polling clients. `input_data` and
@@ -2588,6 +2766,77 @@ curl -s "https://app.nodaro.ai/v1/saved-posts?platform=tiktok&tag=hooks" \
 The same routes are wrapped by the SDK (`client.savedPosts`), the MCP tools
 (`save_post` / `list_saved_posts`) and the CLI (`nodaro saved-posts`).
 
+## 16d. Collections
+
+Where a workflow's records live: named sets of records a workflow saves to and
+reads back (see [Collections](./features/collections.md)). A record holds a
+title, a text (up to 20,000 characters), a link, media links (as given — never
+fetched, never copied), up to 50 scalar `fields` and a `source`. Text and links
+only, never files. Available on every edition.
+
+| Method | Path | Query / Body | Purpose |
+|---|---|---|---|
+| `GET` | `/v1/collections` | none | Your collections, newest first, each with `recordCount`. Returns `{ data: Collection[], available, caps: { collections, records } }` — `available: false` on a server whose database does not have collections yet (then `data` is empty), `caps` are yours (`null` = no limit). |
+| `POST` | `/v1/collections` | body `{ name, description? }` | Create a collection. `201`; `409 name_taken` when you already have one by that name (case-insensitive); `403 collection_limit_reached` at your plan's cap. 30 a minute. |
+| `GET` | `/v1/collections/:id` | none | One collection. |
+| `PATCH` | `/v1/collections/:id` | body `{ name?, description? }` | Rename or re-describe (`409 name_taken` when the new name is already yours). |
+| `DELETE` | `/v1/collections/:id` | none | Remove a collection and every record in it. Returns `{ success: true }`. |
+| `GET` | `/v1/collections/:id/records` | `q`, `since` (an ISO date **and** time, e.g. `2026-10-06T00:00:00Z`), `cursor`, `limit` (1-100, default 50) | The records, newest first. Returns `{ data: CollectionRecord[], nextCursor }`. |
+| `POST` | `/v1/collections/:id/records` | body `{ title?, text?, url?, media?, fields?, dedupeKey?, source?, item? }`; header `Idempotency-Key` (optional, up to 200 characters) | Save one record. `201 { record, outcome: "inserted", evicted }`; `200` with `outcome: "duplicate"` (the same dedupe key is already there — the existing record comes back) or `"replayed"` (a write with the same `Idempotency-Key` already happened); `409 conflict` when a rule fired but that record was removed in the same instant (send it again). 120 a minute. |
+| `DELETE` | `/v1/collections/:id/records/:recordId` | none | Remove one record. |
+| `GET` | `/v1/collections/:id/export` | `format` (`csv`, the default, or `json`), `since`, `q` | The whole collection as a file, newest first (`Content-Disposition: attachment`). 10 a minute. |
+
+**Mapping an item.** Instead of (or besides) the explicit fields, send `item`:
+any JSON — a Telegram post, a Social Search result, an article object an LLM
+wrote — and the server maps it: title ← `title` / `headline` / `name`; text ←
+`text` / `body` / `caption` / `description`; link ← `url` / `postUrl` / `link`;
+media ← `media[]` and the `imageUrl` / `videoUrl` / `audioUrl` keys; every other
+scalar lands in `fields`. An explicit field wins over the mapping. A record with
+no title, text, link or medium is refused (`400 empty_record`).
+
+**One record per story.** The dedupe key is `dedupeKey` when given, else the
+link, else the item's `slug` / `id` / `postId`; it is trimmed, lower-cased and
+unique within the collection. Keys and idempotency keys are both optional — a
+record with neither is always inserted.
+
+**Caps.** Your plan's caps come back on the list (`caps`; pay-as-you-go
+accounts get Basic's). Past the records cap the oldest records are evicted
+after the write; `evicted` says how many. On a self-hosted server the caps are
+the operator's two env ceilings (unset = `null`, no limit). A cap the server
+cannot determine for a request (a failed plan lookup) is `null` for that
+request — nothing is ever evicted on a guess.
+
+`q` finds words in the title, the text and the link. `nextCursor` is an opaque
+token; pass it back as `?cursor=` (`null` on the last page); a cursor the list
+did not give out is refused with `400 invalid_cursor`. In the CSV export, a
+cell starting with `=`, `+`, `-` or `@` is prefixed with `'` so a spreadsheet
+opens it as text.
+
+OAuth app tokens need `assets:read` for the reads and `assets:write` for the
+writes (no-op for user / API-key auth). On a server that does not have
+collections yet, the list answers `available: false`, the other reads answer
+`404` and the writes answer `503 not_available`.
+
+```bash
+# Create a collection, then save one feed post into it
+curl -s -X POST https://app.nodaro.ai/v1/collections \
+  -H "Authorization: Bearer $NODARO_TOKEN" -H "Content-Type: application/json" \
+  -d '{"name":"News","description":"Articles the pipeline wrote"}' | jq -r .id
+
+curl -s -X POST "https://app.nodaro.ai/v1/collections/$COLLECTION_ID/records" \
+  -H "Authorization: Bearer $NODARO_TOKEN" -H "Content-Type: application/json" \
+  -H "Idempotency-Key: run-42-item-0" \
+  -d "$(jq -n --slurpfile p post.json '{item: $p[0], fields: {topic: "tech"}}')" | jq '{outcome, evicted, id: .record.id}'
+
+# What was saved in the last two days, as CSV
+curl -s "https://app.nodaro.ai/v1/collections/$COLLECTION_ID/export?since=$(date -u -d '2 days ago' +%FT%TZ)" \
+  -H "Authorization: Bearer $NODARO_TOKEN" -o news.csv
+```
+
+The same routes are wrapped by the SDK (`client.collections`), the MCP tools
+(`list_collections` / `read_collection` / `add_collection_record`) and the CLI
+(`nodaro collections`).
+
 ## 16c. Competitors (Nodaro Cloud)
 
 Track brands (your competitors, or your own) and get action cards: what
@@ -2597,9 +2846,11 @@ Search page per search; see [Competitors](./features/competitors.md).
 
 | Method | Path | Body | Purpose |
 |---|---|---|---|
-| `GET` | `/v1/competitors` | none | Every tracked brand: `{ data: TrackedCompetitor[] }`. Each lists in `searchPlan` what its next scan searches (`{ kind, platform }`: `own` for an account, `about` for the name searched on a platform). |
+| `GET` | `/v1/competitors` | none | Every tracked brand: `{ data: TrackedCompetitor[], historyMonths }`, where `historyMonths` is how many months of scans your plan keeps (see **Over time**). Each lists in `searchPlan` what its next scan searches (`{ kind, platform }`: `own` for an account, `about` for the name searched on a platform). |
 | `POST` | `/v1/competitors` | `{ brand, website?, accounts?, aboutPlatforms?, isOwn?, schedule? }` | Track a brand. `accounts` takes a handle or link per platform: `tiktok`, `instagram`, `youtube` (`@handle` or `youtube.com/channel/…`; an old `youtube.com/c/…` or `/user/…` link is refused), `x`, `linkedin` (a company page, or a person's profile `linkedin.com/in/…`), `meta_ads` (advertiser). An account that cannot be read answers `400 invalid_account`, naming it and what its field takes. A repeated `aboutPlatforms` entry counts once. `201` with the brand; `409 too_many_competitors` past 50 brands. |
-| `GET` | `/v1/competitors/:id` | none | One brand with its latest scan (posts and cards), that scan platform by platform (`platforms`, see **Who is where**; `null` before its first scan) and its scan history (counts only). |
+| `GET` | `/v1/competitors/:id` | `?scan=<id>` optional | One brand with its latest scan (posts and cards), that scan platform by platform (`platforms`, see **Who is where**; `null` before its first scan) and its scan history (counts only). With `scan`, the brand as of that scan (`404 scan_not_found` for a scan that is not this brand's). |
+| `GET` | `/v1/competitors/:id/history` | none | The brand's scans oldest first (free): `{ scans: [{ id, at, platforms: [{ platform, own, about, followers, usual, unit }] }] }` — per platform what each scan found and read; a scan stored before these were kept answers `null` for `own`, `about` and `followers`. |
+| `GET` | `/v1/competitors/:id/compare` | `?from&to[&vsFrom&vsTo]` (ISO datetimes) | The brand over a period, and a second one to compare with (free): `{ periods: [{ from, to, platforms: [{ platform, own, about, usual, unit, followers, change, lessons, best }] }], posts }`. See **Over time**. `400 validation_error` when a period ends before it starts, is longer than a year, or `vsFrom` comes without `vsTo`. |
 | `PATCH` | `/v1/competitors/:id` | any field of the above | Change it. `accounts` replaces the whole set: send every account to keep. A new `schedule` restarts its clock, so send it only to change it. While a scan of the brand runs, a change to `brand`, `accounts`, `aboutPlatforms` or `isOwn` answers `409 scan_running` (the scan was priced on them). |
 | `DELETE` | `/v1/competitors/:id` | none | Stop tracking it (its scans and cards go too). |
 | `GET` | `/v1/competitors/cards` | none | Every card from each brand's latest scan, most urgent first: `{ cards, posts, record, brands }`, where `posts` holds the posts the cards rest on, `record` is your track record (see **Did it work?**) and `brands` gives each brand's latest scan platform by platform (see **Who is where**). |
@@ -2634,7 +2885,9 @@ all your brands. Competitor scans do not produce `top_in_sources`. A scan's
 `about:reddit`); a post is new only against scans that could read its
 platform.
 
-**Who is where.** `brands` (on `/cards`, keyed by brand id: `{ scanId, at, platforms }`) and `platforms` (on `/:id`) list, per platform the latest scan searched or found posts on: `own` (the brand's own posts it kept there) and `about` (posts about the brand), `searched` (which of its searches ran there: `own` for the account, `about` for the name) and `failed` (which of those failed; `null` for a scan stored before failed searches were recorded by name that had failures, so it cannot say which), plus what works there: `usual` (the brand's typical reach there, in `unit`: `views`, `likes` or `points`), and `top` (its strongest lesson there, shaped as in `/lessons`). `usual`, `unit` and `top` are worked out when a brand is scanned, from the same scans `/lessons` reads, so they match `/lessons` until the next scan, and are `null` until a brand's first scan after they were added. `brands`, `platforms` and `searchPlan` are absent from a server older than them.
+**Who is where.** `brands` (on `/cards`, keyed by brand id: `{ scanId, at, platforms }`) and `platforms` (on `/:id`) list, per platform the latest scan searched or found posts on: `own` (the brand's own posts it kept there) and `about` (posts about the brand), `searched` (which of its searches ran there: `own` for the account, `about` for the name) and `failed` (which of those failed; `null` for a scan stored before failed searches were recorded by name that had failures, so it cannot say which), plus what works there: `usual` (the brand's typical reach there, in `unit`: `views`, `likes` or `points`), and `top` (its strongest lesson there, shaped as in `/lessons`). `usual`, `unit` and `top` are worked out when a brand is scanned, from the same scans `/lessons` reads, so they match `/lessons` until the next scan, and are `null` until a brand's first scan after they were added. Every tally also carries `followers` (the account's followers at that scan; `null` on YouTube and Reddit, which give none, or when no post of its own was read). `brands`, `platforms`, `searchPlan` and `followers` are absent from a server older than them.
+
+**Over time.** Scans are kept for a window that follows your plan (`historyMonths` on the list: Free, Pay as you go and Basic a month; Standard 3; Pro 6; Business 12); older scans are deleted when the brand is next scanned. `/history` is the series. `/compare` reads the stored scans for one period (`from`–`to`) or two (`vsFrom`–`vsTo` as well): a post belongs to a period by the day it was published (a scan reads a month back, so one post shows up in several scans and is counted once, with its newest numbers; a post the platform gave no date for counts on the day the first scan saw it). Per platform: `own` and `about` (posts in the period), `usual` (the median reach of its own posts, `null` below three), `followers` (`{ value, at }` from the newest scan inside the period, `null` when none read them) and `change` (against the newest scan before the period, `null` when either side is unknown), `lessons` (what worked there, shaped as in `/lessons`; they need eight posts) and `best` (up to four post ids, best first). `posts` holds every post named.
 
 **Did it work?** A mark keeps what the card said (`card`: its words,
 `params`, `priority`, brand, platform, evidence) and its `outcome`, judged
@@ -2966,9 +3219,13 @@ for the formula). Off Cloud, the three `voice-changer-pro*` routes are absent (4
 | `POST` | `/v1/add-captions` | Burn captions into a video (`{ videoUrl, text? \| captions?[] \| transcript? \| auto_transcribe?, transcribe_provider?: incredibly-fast-whisper\|elevenlabs-stt\|whisper, style?: subtitle\|word-highlight\|karaoke\|tiktok-words\|word-pop\|bouncy, position?, positionY?, fontSize?, color?, backgroundColor?, look?: outline\|clean, fontFamily?, fontWeight?, strokeColor?, strokeWidth?, uppercase?, maxWordsPerLine?, highlightColor?, animate?, wordLevel?, segments?[] }`) → job. Caption-source precedence: `captions[]` > `transcript` > `text` on `subtitle` > auto-transcription. On a top-level `subtitle` (no `segments`) `text` is burned as-is as ONE static block for the whole video — never transcribed over, with or without styling levers; omit it to caption the speech. On a kinetic style `text` is only the fallback (used when transcription returns nothing or `auto_transcribe` is `false`, spread evenly across the video). An unset `look` is `outline` on the kinetic styles and `clean` on `subtitle`. `maxWordsPerLine` (integer 1–20, optional) caps the words on one caption line — or one `tiktok-words` page — **on top of** the frame-width budget, sentence ends and ≥0.5 s pauses (`1`–`2` = the punchy CapCut read, unset = fit the width); it counts words, not caption entries (a phrase-level entry holding more than N words is split into sub-phrases of at most N words; on a `text` subtitle it only sets the line breaks of the one static block); it exists top-level and per `segments[]` entry (a segment inherits the top-level value) and is inert on `word-pop`. `word-highlight`, `karaoke` and `bouncy` show one held line at a time. `highlightColor` and `animate` are kinetic-only (`400` on `subtitle`); every other lever, `maxWordsPerLine` included, also styles a `subtitle`. A kinetic style needs a `transcribe_provider` that returns word timings (`incredibly-fast-whisper`, the default, or `elevenlabs-stt`) — `whisper` is a `400` on `transcribe_provider` there when transcription is the render's only caption source; `subtitle` needs phrase timing only and works with any engine. A bare plain-text `subtitle` is the cheap FFmpeg burn; a kinetic style, any styling lever, timed captions, auto-transcription or `segments` renders via Remotion, bills at the kinetic price and keeps the source frame rate (whole number, 15–60 fps; a variable-frame-rate or very long source renders at 30 fps). Full reference: [Add Captions](./nodes/processing-video/add-captions.md). |
 | `POST` | `/v1/silence-detect` | Detect silent spans in an audio or video source, local FFmpeg, **10 credits**, keyless (`{ audioUrl, thresholdDb?: -35, minSilenceMs?: 700, padMs?: 120 }`; `output_data.json` = `{ version, ranges: [{ startMs, endMs }], durationMs }`) → job. |
 | `POST` | `/v1/audio-sync` | Measure how far apart the clocks of 2–6 recordings of one conversation are, from their sound, local FFmpeg + correlation, **10 × (sources − 1) credits** (2 → 10, 4 → 30, 6 → 50), keyless (`{ sources: [{ id, url }] (2–6, unique ids, audio or video), reference?: <one of the ids, default the first> }`; a repeated id or a `reference` that is not one of the ids is a `400 validation_error` naming it; `output_data.json` = `{ version, reference, offsets: [{ sourceId, offsetMs, confidence, driftMsPerHour }], notes }` with `referenceMs = sourceMs + offsetMs`; drift is measured and warned in `notes` past 33 ms over the shared stretch, never corrected). Full reference: [Audio Sync](./nodes/processing-audio/audio-sync.md). → job. |
+| `POST` | `/v1/edit-plan` | Plan a transcript-driven edit of a recording, no media output (`{ mode: tighten\|clips\|chapters\|trailer, planTier: economy\|standard\|premium, transcript, sources: [{ id, url, kind, role?, speakers?, offsetMs? }] (1–6), silence?, instructions?, styleGuide?, count?, targetDurationSec?, targetAspect?, platform? }`; `output_data` = an EDL for `tighten`, `{ version, clips: Edl[] }` for `clips`, `{ version, chapters }` for `chapters`, an EDL for `trailer`). A mode the server does not plan ([Edit Plan modes](#edit-plan-modes)) or does not know answers `400 mode_not_available` before anything is charged. Priced per source-minute × tier on a length bucket, plus a flat term in `clips` and `trailer` modes: `per_minute(tier) × bucket_minutes + (clips or trailer ? clips_flat(tier) : 0)` — full formula and worked examples on [Edit Plan](./nodes/processing-video/edit-plan.md#credit-cost). Runs on nodaro.ai; a self-hosted install relays it once connected and otherwise answers `503 nodaro_connection_required`. Multicam offsets are applied by the caller before this request (the SDK's `editPlan({ offsets })` and MCP `plan_edit` do it for you). → job. |
+| `POST` | `/v1/camera-switch` | Put each cut of an edit on the camera of whoever is speaking — the sound never changes (`{ edl, transcript (with speaker labels), speakerMap?, speakerNames?, minShotMs?, leadMs?, maxShotMs?, wideEvery?, layoutHints? }`; `output_data.json` = the switched EDL for `/v1/apply-edl`, `output_data.transcript` = the transcript with `speakerNames` applied). **10 credits** flat per run. Refused before anything is created: `400 invalid_edl` when `edl` is not one master-clock edit (a clip set, a chapters plan), `422 no_speakers` when the transcript has no speaker labels. Runs on nodaro.ai; a self-hosted install relays it once connected and otherwise answers `503 nodaro_connection_required`. Full reference: [Camera Switch](./nodes/processing-video/camera-switch.md). → job. |
+| `POST` | `/v1/apply-edl` | Render an edit decision list into one video or audio file, local FFmpeg, keyless (`{ edl, sources?: [url] (positional overrides of edl.sources[i].url), transcript?, output?: video\|audio, quality?: final\|proxy, crossfadeMs?: 0–5000, clipKey?: "<first inMs>-<last outMs>" }`; `output_data` = `videoUrl` + `thumbnailUrl` or `audioUrl`, `quality`, `clipKey` when sent, and `json` = the transcript remapped through the cut when one was sent). Priced per minute of rendered output: **10 credits × ceil(output_seconds ÷ 60)** at `final`, **1 credit × ceil(output_seconds ÷ 60)** for a `proxy` Preview (minimum one minute; a Preview is always private). An EDL the renderer cannot render, or one over 180 minutes of output, is a `400 invalid_edl` naming the segment and rule before any credits are reserved. Full reference: [Apply EDL](./nodes/processing-video/apply-edl.md). → job. |
 | `POST` | `/v1/still-to-video` | One still image + one audio track → MP4, local FFmpeg, **0 credits** (`{ imageUrl, audioUrl, motion?, intensity?, resolution?, aspectRatio?, fps?, fit?, padColor? }`; output duration = the audio's duration, no duration field) → job. |
 | `POST` | `/v1/slideshow` | 2–100 images + one optional audio track → MP4 slideshow, local FFmpeg, **0 credits** (`{ imageUrls[], audioUrl?, imageDurations?[] (null=auto), perImageDuration?, transition?, transitionDuration?, motion?, intensity?, resolution?, aspectRatio?, fps?, fit?, padColor? }`; with audio the duration IS the audio's — pinned-row mismatches scale proportionally, disclosed in output) → job. |
 | `POST` | `/v1/video-overlay` | 1–20 timed image layers over a video, local FFmpeg, **20 credits** (`{ videoUrl, layers[]: { imageUrl, start, end?, preset?: card\|corner-badge\|full-frame, corner?, anchor?, x?, y?, width?, height?, fit?: contain\|cover, opacity?, animate?, zIndex? }, outputAspect?: 16:9\|9:16\|1:1\|4:5, baseFit?: cover\|contain, backgroundColor? }`; an explicit box field overrides the preset, neither = a corner badge (bottom-right, or the `corner` it names); `end` omitted = to the end of the video; base audio untouched; 30 requests / minute per user) → job; output `{ videoUrl, thumbnailUrl, width, height, durationSec, warnings[] }`. Full reference: [Video Overlay](./nodes/processing-video/video-overlay.md). |
+| `POST` | `/v1/site-capture` | A web page captured at phone width: full page + up to 8 section stills and a section map, **10 credits** (`{ url, maxStills?: 3–8 }`). Always answers `{ jobId, status: "pending" }` at once; poll `GET /v1/jobs/:id`. Blocked, empty, unreachable or failed captures are refunded; a site that answers 403 or 429, or shows only a bot challenge, counts as blocked. A still that renders as one flat colour is never returned: the next section takes its place (`still_blank_skipped:<section order>` in `warnings`). `facts[]` are whole figures on one line (a price with its period, a count with its noun, a percentage, a date). A robots.txt disallow, an unreadable robots.txt, an address that does not resolve, or missing media storage is a 422 before any charge. Output `{ pageUrl, finalUrl, title, lang, dir, fullPage, stills[], sections[], facts[], usableStills, warnings[] }`; a failed job carries `error.code`. Served only where capture is enabled on the install (`SITE_CAPTURE_ENABLED`, on by default); elsewhere the route answers 404. |
 | `POST` | `/v1/save-to-storage` | Server-side copy of an external URL into storage (`{ mediaUrl, filename?, mediaType? }`) → job. |
 
 ### Social connections & publishing
@@ -2998,7 +3255,7 @@ Connect flows are popup-based and meant for the web app; publishing is available
 | `POST` | `/v1/audio-separation` | Demucs stems (`{ audioUrl, mode?: vocal_instrumental\|stems, quality?: auto\|fast\|best }`) → job. |
 | `POST` | `/v1/audio-isolation` | Voice isolation / denoise (`{ audioUrl }`) → job. |
 | `POST` | `/v1/audio-fx` | Reverb/echo/telephone/megaphone (`{ audioUrl, preset?, mix?, delayMs?, decay?, eqLow?, eqHigh? }`) → job. |
-| `POST` | `/v1/mix-audio` | Sum 2–20 tracks (`{ audioUrls, trackVolumes? }`) → job. |
+| `POST` | `/v1/mix-audio` | Sum 2–20 tracks (`{ audioUrls, trackVolumes?, duck? }`) → job. `duck` = `{ under, amount?, thresholdDb?, ratio?, attackMs?, releaseMs? }` dips every track except `audioUrls[under]` while that track is loud (sidechain compression; `amount` 0–100 default 75, `thresholdDb` default -30, `attackMs` 20, `releaseMs` 500; `ratio` 1–20 overrides `amount`). A ducked mix sums instead of averaging. Same price with or without `duck`. |
 | `POST` | `/v1/adjust-volume` | Level/normalize/fade (`{ audioUrl? \| videoUrl?, volume?, normalize?, fadeIn?, fadeOut? }`) → job. |
 | `POST` | `/v1/combine-audio` | Concatenate segments (`{ segments: [{ url, startTime?, endTime? }] }`) → job. |
 | `POST` | `/v1/transcribe` | Speech → text (`{ audioUrl, provider?: elevenlabs-stt\|incredibly-fast-whisper\|whisper, language?, diarize?, tagAudioEvents?, wordTimestamps? }`) → job; `output_data` = `{ text, language?, words? (ms), json? (the normalized Transcript, ms), segments? (seconds, legacy lanes) }`. All three engines are accepted. Word timings: `elevenlabs-stt` always (and it is the lane that honours `diarize` / `tagAudioEvents`), `incredibly-fast-whisper` with `wordTimestamps: true`, `whisper` never — it returns phrase segments only, and `wordTimestamps: true` on it is a `400 validation_error` on `wordTimestamps`, before the job is created (nothing charged). Omitting `provider` still runs the legacy `whisper` lane, so name an engine whenever you need word timings. `words` is the `captions[]` shape `/v1/add-captions` takes. Full reference: [Transcribe](./nodes/ai-text/transcribe.md#word-timestamps-which-engine-can-do-it). |

@@ -16,7 +16,7 @@
     "product"
   ],
   "complexity": "advanced",
-  "estimatedCredits": 2291,
+  "estimatedCredits": 2098,
   "nodeTypesUsed": [
     "upload-image",
     "text-prompt",
@@ -702,7 +702,7 @@
       "id": "e-mix-captions",
       "source": "mix",
       "target": "captions",
-      "sourceHandle": "video",
+      "sourceHandle": "video-out",
       "targetHandle": "in"
     },
     {

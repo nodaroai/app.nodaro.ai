@@ -30,6 +30,8 @@ import {
   TRANSIENT_UPSTREAM_500_MESSAGES,
   PARAMETER_REJECT_MESSAGES,
 } from "./__fixtures__/log-pull-fail-messages.js"
+import { isContentRejection, isRetryableFailure } from "@/lib/mcp/tools/_job-error.js"
+import { safetyBlockOf } from "@/lib/safety-block.js"
 
 describe("KIE content-policy classification", () => {
   it("matches copyright/IP/policy failMsgs", () => {
@@ -289,6 +291,45 @@ describe("log-pull moderation texts (§11.3) — 10 rows that matched neither re
         .toBe(CONTENT_POLICY_MESSAGES.safety)
     },
   )
+})
+
+describe("Google safety review block (gemini-omni-flash, prod 2026-10-06)", () => {
+  const WIRE =
+    "task failed: [400] Request blocked: The uploaded audio was flagged by Google safety review."
+
+  beforeEach(() => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+  })
+
+  it("is an honest, non-retryable safety block, not a 'rejected these settings' 400", () => {
+    const err = createUpstreamFailureError(WIRE, "Generation", { upstreamStatus: "400" })
+    expect(err.contentPolicy).toBe(true)
+    expect(err.contentPolicyClass).toBe("safety")
+    expect(err.message).toBe(CONTENT_POLICY_MESSAGES.safety)
+    expect(err.message).not.toContain("rejected these settings")
+    expect(isContentRejection(err.message)).toBe(true)
+    expect(isRetryableFailure(err.message)).toBe(false)
+    expect(err.internalDetails).toContain("Google safety review")
+  })
+
+  it("the sanitizer alone (no classifier, 400 status) also reads it as a safety block", () => {
+    expect(createSanitizedError(WIRE, "Generation", true, false, { upstreamStatus: "400" }).message)
+      .toBe(CONTENT_POLICY_MESSAGES.safety)
+  })
+
+  it("gets one attempt on both Gemini Omni SKUs, so the worker never re-runs the blocked request", () => {
+    const err = createUpstreamFailureError(WIRE, "Generation", { upstreamStatus: "400" })
+    expect(safetyBlockOf(err, "gemini-omni-flash")).toEqual({ class: "safety", maxAttempts: 1 })
+    expect(safetyBlockOf(err, "gemini-omni-video")).toEqual({ class: "safety", maxAttempts: 1 })
+  })
+
+  it("a genuine settings 400 with the same 'Request blocked' prefix stays a settings error", () => {
+    const wire = "task failed: [400] Request blocked: unsupported audio format for this model."
+    expect(classifyContentPolicyClass(wire)).toBeNull()
+    const err = createUpstreamFailureError(wire, "Generation", { upstreamStatus: "400" })
+    expect(err.contentPolicy).toBe(false)
+    expect(err.message).toContain("rejected these settings")
+  })
 })
 
 describe("the widening does not over-reach", () => {

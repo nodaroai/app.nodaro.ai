@@ -69,7 +69,7 @@ The response is JSON. The fields you care about (others omitted for brevity):
   "description": "...",
   "iconUrl": "https://...",
   "version": 3,                        // latest version number
-  "estimatedCredits": 5,               // credits one run costs
+  "estimatedCredits": 5,               // the listed price: a run (with any Render final after it)
   "maxRunsPerUserPerDay": null,        // or a number
   "thumbnailNodeId": "node-abc",       // node whose output is the "hero" result
   "snapshotNodes": [                   // the workflow's nodes
@@ -93,7 +93,8 @@ The response is JSON. The fields you care about (others omitted for brevity):
           "id": "item-1",
           "nodeId": "node-abc",
           "field": "prompt",
-          "allowedValues": null         // or ["a","b","c"] if the field is restricted
+          "allowedValues": null,        // or ["a","b","c"] if the field is restricted
+          "maxLength": 1200             // text inputs only, when the publisher set a character limit
         },
         {
           "type": "field",
@@ -114,8 +115,8 @@ The response is JSON. The fields you care about (others omitted for brevity):
 
 | `type` | Render as |
 |---|---|
-| `field` | A form input. Read `nodeId`, `field`, optional `allowedValues`. |
-| `node` | The whole node's default UI block — you can usually skip this when building a custom form, OR treat as "render every field of this node". |
+| `field` | A form input. Read `nodeId`, `field`, optional `allowedValues`, optional `maxLength` (a text input's character limit). |
+| `node` | The whole node's default UI block — you can usually skip this when building a custom form, OR treat as "render every field of this node". A Text node exposed whole may carry `maxLength` too (its text's character limit); it is enforced and priced exactly like a `field` item's. |
 | `output` | A live output preview (ignore at form-build time; show after run). |
 | `richtext` | Static markdown the publisher wrote — render verbatim. |
 | `group` | Container with `items: PresentationItem[]`. Recurse. **No nested groups.** |
@@ -283,6 +284,8 @@ Key points your generated UI must respect:
 
 - **Form keys are `nodeId`, not field labels.** When the user submits, the body shape is `{ inputOverrides: { [nodeId]: { [field]: value } } }`.
 - **`allowedValues` is enforced server-side.** Submitting a value not in the list returns 400 `validation_error`.
+- **`maxLength` is enforced server-side.** It is read on `field` items and on a Text node exposed whole (`node` item). Submitting a text longer than the limit returns 400 `input_too_long`. Put `maxlength` on the textarea and show a counter — the limit is also what the app's advertised credit price assumes for a speech input.
+- **Picker restrictions are enforced server-side too.** A picker node (Setting, Mood, Person, ...) can be limited to a subset of its catalog in `snapshotSettings.presentationSettings.cardMeta[nodeId]`: `pickerAllowedValues` for a single-dimension picker, `pickerAllowedValuesByField` (`{ field: [ids] }`) for a multi-dimension one such as Person. A submitted value outside the list returns 400 `validation_error` (`Invalid value for <field>: <value>. Allowed: ...`), including on apps that were already published. To withdraw a pick, omit the key (or send an empty value); do not send the catalog default.
 - **Pre-fill defaults from `snapshotNodes[i].data`.** A user who submits without changing anything still gets a meaningful run.
 - **Show `estimatedCredits`** somewhere visible — users like knowing the cost.
 - **If `maxRunsPerUserPerDay` is set, surface it** (e.g. "You've used 2 of 5 today") to avoid surprise 429s.
@@ -363,6 +366,8 @@ Response shape:
 
 Show errors from `execution.errorMessage` on failure.
 
+**What a run's owner can change.** Only `name`, `inputValues`, `hiddenNodes` and `nodeStates` (the user's edits shown over the results), through `PATCH /v1/app/:slug/runs/:runId`. Every other field — `executionId`, the app, `status`, `creditsUsed`, the archive state — belongs to the server: a `PATCH` ignores them, and a `PATCH` that names nothing else answers `400 bad_request`. A run only ever shows its own execution: if a run's execution is not the run owner's run of that app, `GET /v1/app/:slug/runs/:runId` answers `404 not_found`, and the run lists leave the run out.
+
 ---
 
 ## 6. Step 5 — Extract and display the output
@@ -402,6 +407,7 @@ This is a **soft-delete**: the run is moved to the user's archive (hidden from t
 Why soft, not hard:
 - API / SDK / MCP `DELETE` calls cannot accidentally destroy a user's data. If an automation deletes the wrong run, the user can still recover it.
 - Restore (`POST /v1/app/:slug/runs/:runId/restore`) and permanent deletion (`DELETE /v1/app/:slug/runs/:runId/permanent`) are intentionally **only exposed through the Nodaro UI** at https://app.nodaro.ai/archived-runs. They are reachable via direct HTTPS for the UI's needs but are not advertised as integration endpoints — your integrations should not call them.
+- A run that is still running can be archived, but not permanently deleted: until it finishes (or is stopped) and none of its generations is still working, permanent deletion answers `409` with code `run_in_progress`.
 
 If you need confirmation flow in your UI, ask the user to delete in your app, then call DELETE — they can always recover from Nodaro's archive if needed.
 
@@ -480,12 +486,13 @@ All errors have shape `{ "error": { "code": "...", "message": "..." } }`.
 
 | HTTP | Code | Cause | Action |
 |---|---|---|---|
-| 400 | `validation_error` | Bad `inputOverrides` shape, value not in `allowedValues`, malformed slug | Fix the request body |
+| 400 | `validation_error` | Bad `inputOverrides` shape, value not in `allowedValues` or a picker card's allowed list, malformed slug | Fix the request body |
+| 400 | `input_too_long` | A text input longer than the field's `maxLength` | Shorten the text to the limit the item declares |
 | 400 | `locked_field` | An `inputOverrides` entry names a destination on an outbound node (a Webhook Output's `url`, a publisher's account, a scraper's target) | Remove it — where the app sends to or fetches from is decided by the app itself |
 | 401 | `unauthorized` | Missing/expired/revoked token | Re-mint or re-authorize |
 | 402 | `insufficient_app_credits` | Token's account is out of credits | Top up credits or switch plan |
 | 403 | `insufficient_scope` (with `missingScope` field) | OAuth token doesn't have required scope | Re-do `/oauth/authorize` with broader scopes |
-| 404 | `not_found` | Slug or runId doesn't exist (or app deactivated) | Check the slug; surface "App unavailable" |
+| 404 | `not_found` | Slug or runId doesn't exist (or app deactivated), or the run's execution is not the run owner's | Check the slug; surface "App unavailable" |
 | 429 | `rate_limit_exceeded` | Daily run cap (`maxRunsPerUserPerDay`) reached | Show "Daily limit reached" UI |
 | 500 | `internal_error` | Server fault | Retry once with backoff; alert if persistent |
 

@@ -13,7 +13,7 @@
  * truth, no copied logic to drift).
  */
 
-import { locationMentionSlug, mergeNodeInputOverrides } from "@nodaro/shared"
+import { locationMentionSlug, mergeNodeInputOverrides, RUN_OVERRIDE_CLEARED_FIELDS } from "@nodaro/shared"
 import { assertNoLockedOverrides } from "../lib/input-override-lock.js"
 import { coerceListItemsOverrideToRows } from "../services/workflow-engine/output-extractor.js"
 import { LOCATION_VARIANT_BUCKETS } from "../services/workflow-engine/payload-builder.js"
@@ -81,12 +81,9 @@ export function applyInputOverridesToNodes(
     // media-bound `metadata` when the override swaps the node's media, so a
     // publisher's recorded length can't describe a caller's different file.
     const cleaned = mergeNodeInputOverrides(node.type, node.data, overrides)
-    delete cleaned.generatedResults
-    delete cleaned.activeResultIndex
-    delete cleaned.generatedImageUrl
-    delete cleaned.generatedVideoUrl
-    delete cleaned.generatedAudioUrl
-    delete cleaned.generatedText
+    // The same fields `withRunOverrides` (@nodaro/shared) clears, so the
+    // editor's view of a run with overrides is the run the server executes.
+    for (const key of RUN_OVERRIDE_CLEARED_FIELDS) delete cleaned[key]
     if (node.type === "location") {
       applyLocationVariantOverride(cleaned)
     }

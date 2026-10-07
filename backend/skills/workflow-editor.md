@@ -1,6 +1,6 @@
 ---
-generated_at: 2026-10-03T19:13:21.926Z
-generated_from: 17d734b63
+generated_at: 2026-10-06T04:15:33.455Z
+generated_from: 491960e9f
 ---
 
 # Nodaro Workflow Editor — General Patterns
@@ -35,11 +35,12 @@ A workflow is a React Flow graph stored on a `workflows` row. The full shape:
 Every edge connects a SOURCE node's output handle to a TARGET node's input handle:
 
 ```json
-{ "id": "e1", "source": "n1", "sourceHandle": "image", "target": "n2", "targetHandle": "in" }
+{ "id": "e1", "source": "n1", "sourceHandle": "image", "target": "n2", "targetHandle": "references" }
 ```
 
-- **`sourceHandle`** — must match one of the source node's published output handles. Per-node skill content lists the canonical handles. Common shorthand: `generate-image` → `"image"`, `image-to-video` → `"video"`, `generate-music` → `"audio"`.
-- **`targetHandle`** — must match one of the target node's input handles. Most generation nodes accept `"in"` as the default input. Specialized handles: `image-to-video` exposes `"startFrame"`, `"endFrame"`, `"audio"`.
+- **`sourceHandle`** — one of the source node's output handles, as `get_node_skill(<type>)` lists them. Common ones: `generate-image` → `"image"`, `image-to-video` → `"video"`, `generate-music` → `"audio"`, `llm-chat` → `"text"`, `telegram-channel-feed` → `"text"`.
+- **`targetHandle`** — one of the target node's input handles. Handle ids are PER NODE — read them from `get_node_skill(<type>)` rather than guessing: `llm-chat` takes `"prompt"` / `"references"` / `"system-prompt"`, `generate-image` takes `"prompt"` / `"references"` / `"assets"` / `"look"` / `"elements"`, `combine-text` takes `"text"`, `image-to-video` exposes `"startFrame"`, `"endFrame"`, `"audio"`. A bare `"in"` is a legacy name on most nodes.
+- **What the server does with an edge you send** — a recorded legacy handle name is rewired to the node's current one, an edge without an `id` is given one, and every change is listed in the result (`edgeAdjustments`). A handle the node does not declare is stored as sent and reported as a warning (`edgeWarnings`) — the canvas draws an edge only on a handle the node renders, so fix it. An edge naming a node that does not exist, a self-loop, an edge with a missing endpoint, or the same connection sent twice without an `id` is dropped and reported in `edgeWarnings`; two edges with the same `id` refuse the whole write.
 - **List node columns** — a `list` node starts as a single text column and grows into a multi-column typed table as you connect more inputs. Each column exposes its own source handle named `col_<column_id>`. Wire `sourceHandle: "col_<id>"` to fan out a column's values into a downstream node. Omitting `sourceHandle` connects to the default output, which usually isn't what you want.
 <!-- /SECTION:edges -->
 
@@ -98,6 +99,8 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `character-motion` — Character Motion
 - `cinematic-avatar` — Cinematic Avatar
 - `collect` — Collect
+- `collection-read` — Read Collection
+- `collection-write` — Save to Collection
 - `color-look` — Color / Look
 - `combine-audio` — Combine Audio
 - `combine-text` — Combine Text

@@ -48,9 +48,16 @@ export const EXECUTION_DATA_KEYS: ReadonlySet<string> = new Set([
   // Row-aligned twin of __listResults (Extract Field, List output) — read only
   // by the fan-out so two lists cut from one array pair by row.
   "__alignedListResults",
+  // A render's fan-out row stamps, row-aligned with __listResults: each row's
+  // take identity, and the clip every row was sent for (a failed row too).
+  "__listResultStamps",
   // List fan-out window flag (abandon-guard exemption). Set/cleared by
   // executeNodeForList — purely execution-related, never user-edited.
   "__listRunning",
+  // Why the last server run skipped this node (`empty_input`): a chip on the
+  // card for the run that just ended, never a saved result — also in
+  // TRANSIENT_RUNTIME_KEYS below.
+  "__runSkipReason",
   // One token per paid run still out on this node that no executor mark
   // covers (the editor's `withRunInFlight`, around each paid call outside the
   // executors). Purely execution-related, never user-edited; also in
@@ -117,6 +124,12 @@ export const EXECUTION_DATA_KEYS: ReadonlySet<string> = new Set([
   "searchResults",
   "pickedIds",
   "searchWarnings",
+  // Save to Collection: how the last run ended for this node (inserted /
+  // duplicate / replayed) and how many old records the cap evicted. RESULTS of
+  // a run — Clear results wipes them, and a template, a preset or a run-only
+  // patch never carries them as configuration.
+  "lastOutcome",
+  "lastEvicted",
   // When the editor's "Clear results" last emptied this node (ISO time). Not a
   // result and not config: bookkeeping that tells the load-time recovery lanes
   // "this node is empty ON PURPOSE" — without it, every reload reads an empty
@@ -163,6 +176,7 @@ export const TRANSIENT_RUNTIME_KEYS: ReadonlySet<string> = new Set([
   "__listTotal",
   "__listCompleted",
   "__listRunning",
+  "__runSkipReason",
   // A paid run still out, held by the editor tab that started it. Never
   // saved, so a reload, which has no such run, starts without one.
   "__runsInFlight",

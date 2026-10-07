@@ -357,6 +357,64 @@ export function competitorsCommand(): Command {
       }
     })
 
+  cmd
+    .command("history <id>")
+    .description("the brand's scans oldest first: per platform what each found and read (free)")
+    .option("--profile <name>")
+    .option("--json")
+    .action(async (id: string, opts: GlobalOpts) => {
+      try {
+        const result = await buildClient(opts.profile).competitors.history(id)
+        if (opts.json) return emit(result, opts)
+        if (result.scans.length === 0) return info("no scans yet")
+        for (const scan of result.scans) {
+          info(`${scan.at.slice(0, 10)}  ${scan.id}`)
+          for (const p of scan.platforms) {
+            const parts = [`${p.own ?? "?"} own`, `${p.about ?? "?"} about`]
+            if (p.followers !== null) parts.push(`${p.followers} followers`)
+            if (p.usual !== null) parts.push(`usually ${Math.round(p.usual)} ${p.unit}`)
+            info(`   ${p.platform}: ${parts.join(", ")}`)
+          }
+        }
+      } catch (err) {
+        handleError(err)
+      }
+    })
+
+  cmd
+    .command("compare <id>")
+    .description("the brand over a period, and a second one to compare with (free; ISO datetimes, a period is at most a year)")
+    .requiredOption("--from <iso>")
+    .requiredOption("--to <iso>")
+    .option("--vs-from <iso>")
+    .option("--vs-to <iso>")
+    .option("--profile <name>")
+    .option("--json")
+    .action(async (id: string, opts: GlobalOpts & { from: string; to: string; vsFrom?: string; vsTo?: string }) => {
+      try {
+        if ((opts.vsFrom === undefined) !== (opts.vsTo === undefined)) throw new Error("--vs-from and --vs-to go together")
+        const result = await buildClient(opts.profile).competitors.compare(id, { from: opts.from, to: opts.to, ...(opts.vsFrom && opts.vsTo ? { vsFrom: opts.vsFrom, vsTo: opts.vsTo } : {}) })
+        if (opts.json) return emit(result, opts)
+        for (const period of result.periods) {
+          info(`${period.from.slice(0, 10)} – ${period.to.slice(0, 10)}`)
+          if (period.platforms.length === 0) info("   nothing was read in these days")
+          for (const p of period.platforms) {
+            const parts = [`${p.own} own`, `${p.about} about`]
+            if (p.usual !== null) parts.push(`usually ${Math.round(p.usual)} ${p.unit}`)
+            if (p.followers) parts.push(`${p.followers.value} followers${p.change === null ? "" : ` (${p.change >= 0 ? "+" : ""}${p.change})`}`)
+            info(`   ${p.platform}: ${parts.join(", ")}`)
+            for (const lesson of p.lessons) info(`      • ${lesson.text}`)
+            for (const postId of p.best) {
+              const url = result.posts[postId]?.url
+              if (url) info(`      ${url}`)
+            }
+          }
+        }
+      } catch (err) {
+        handleError(err)
+      }
+    })
+
   // ── Did it work? ──────────────────────────────────────────────────────────
 
   cmd

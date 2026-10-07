@@ -1,6 +1,6 @@
 import { ANALYZABLE_PICKER_TYPES } from "@nodaro/prompts"
 import { OVERLAY_HANDLE_IDS } from "@/types/nodes"
-import { VIDEO_OVERLAY_HANDLE_IDS, SETTINGS_INPUT_HANDLE } from "@nodaro/shared"
+import { VIDEO_OVERLAY_HANDLE_IDS, SETTINGS_INPUT_HANDLE, IMAGE_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES } from "@nodaro/shared"
 import { GENERATE_IMAGE_INPUT_HANDLES, IDENTITY_TYPES, isValidGenerateImageConnection } from "./generate-image-handles"
 import { GENERATE_VIDEO_INPUT_HANDLES, isValidGenerateVideoConnection } from "./generate-video-handles"
 import { GENERATE_VIDEO_PRO_INPUT_HANDLES, isValidGenerateVideoProConnection } from "./generate-video-pro-handles"
@@ -395,6 +395,7 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
   "add-captions":       [
     { handleId: "in", label: "Video", accepts: ACCEPTS_VIDEO },
     { handleId: "transcript", label: "Transcript", accepts: ACCEPTS_JSON },
+    { handleId: "captionPlan", label: "Caption plan", accepts: ACCEPTS_JSON },
   ],
   "extract-audio":      [{ handleId: "in", label: "Video", accepts: ACCEPTS_VIDEO }],
   "remove-audio":       [{ handleId: "in", label: "Video", accepts: ACCEPTS_VIDEO }],
@@ -613,6 +614,14 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
   "meta-ads-scrape": [
     { handleId: "in", label: "Keyword / Page URLs", accepts: (s) => isValidWebScrapeConnection("in", s) },
   ],
+  // Save to Collection: `in` takes the item — any data producer (text, a list
+  // row, json, a picker's fragment); a picture / video wired in is saved as a
+  // link beside the record.
+  "collection-write": [
+    { handleId: "in", label: "Item", accepts: (s) => isDataProducer(s, isVisualPickerType) || isValidGenerateImageConnection("prompt", s, isVisualPickerType) },
+    { handleId: "image", label: "Image", accepts: (s) => IMAGE_PRODUCER_TYPES.has(s) || DYNAMIC_PRODUCER_TYPES.has(s) },
+    { handleId: "video", label: "Video", accepts: ACCEPTS_VIDEO },
+  ],
   "instagram-scrape": [
     { handleId: "in", label: "Profiles / Hashtags / Links", accepts: (s) => isValidWebScrapeConnection("in", s) },
   ],
@@ -673,6 +682,7 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
   "video-overlay": [
     { handleId: "video", label: IMAGE_PRODUCER_HANDLE_LABELS["video-overlay"].video, accepts: (s) => isValidVideoOverlayConnection("video", s) },
     ...VIDEO_OVERLAY_HANDLE_IDS.map((h) => ({ handleId: h, label: IMAGE_PRODUCER_HANDLE_LABELS["video-overlay"][h], accepts: (s: string) => isValidVideoOverlayConnection(h, s) })),
+    { handleId: "layerPlan", label: IMAGE_PRODUCER_HANDLE_LABELS["video-overlay"].layerPlan, accepts: (s) => isValidVideoOverlayConnection("layerPlan", s) },
   ],
   "upscale-image": [
     { handleId: "image", label: IMAGE_PRODUCER_HANDLE_LABELS["upscale-image"].image, accepts: (s) => isValidUpscaleImageConnection("image", s) },

@@ -1,11 +1,13 @@
+import type { TelegramChannelPost, CollectionRecord, CollectionWriteOutcome, CollectionReadWindowUnit, CollectionReadOrder, CollectionDigestFormat } from "@nodaro/shared"
 import type { Node, Edge } from "@xyflow/react"
 import { MODIFY_IMAGE_PROVIDERS, OVERLAY_ANCHORS } from "@nodaro/shared"
 import { MUSIC_GENRE_DEFAULT_DATA, MUSIC_MOOD_DEFAULT_DATA, INSTRUMENTATION_DEFAULT_DATA, VOICE_CHARACTER_DEFAULT_DATA, VOICE_DELIVERY_DEFAULT_DATA } from "@nodaro/prompts"
-import type { ImageI2IProvider, ImageGenProvider, ImageEditProvider, ModifyImageProvider, UpscaleImageProvider, ImageToVideoProvider, TextToVideoProvider, VideoToVideoNodeProvider, VideoGenProvider, VideoUpscaleProvider, ExtendVideoProvider, FaceSwapProvider, TtsProvider, TextToAudioProvider, MusicProvider, TranscribeProvider, LipSyncProvider, ScriptProvider, QaCheckProvider, SunoModel, SunoAddTrackModel, VoiceDesignModel, VoiceChangerModel, CaptionStyle, CaptionLookId, SupportedFontName, ImageCriticMode, ReduceStrategyId, ReduceMeta, SelectorConfig, ScraperActorId, CharacterAspectRatio, AudioFxPreset, LocationReferencePhotoKind as SharedLocationReferencePhotoKind, PipelineFormat, PipelineMode, PipelinePinnableImageModel, PipelinePinnableScriptLlm, PipelinePinnableVideoModel, VideoCriticFrameMode, SceneNodeData as SharedSceneNodeData, PipelineState, ReferenceSheet, SheetType, SheetSkin, SheetFlavour, EntityKind, VideoAnalysisResult, ExposableField, ExposableOutput, ComponentMetadata, IdentityMeta, LlmReasoningEffort, Scene3DReference, OverlayLayerKind, OverlayTextStyle, OverlayQrStyle, OverlayShapeStyle, OverlayImageEffects, OverlayAnchor, Transcript } from "@nodaro/shared"
+import type { ImageI2IProvider, ImageGenProvider, ImageEditProvider, ModifyImageProvider, UpscaleImageProvider, ImageToVideoProvider, TextToVideoProvider, VideoToVideoNodeProvider, VideoGenProvider, VideoUpscaleProvider, ExtendVideoProvider, FaceSwapProvider, TtsProvider, DialogueProvider, TextToAudioProvider, MusicProvider, TranscribeProvider, LipSyncProvider, ScriptProvider, QaCheckProvider, SunoModel, SunoAddTrackModel, VoiceDesignModel, VoiceChangerModel, CaptionStyle, CaptionLookId, SupportedFontName, ImageCriticMode, ReduceStrategyId, ReduceMeta, SelectorConfig, ScraperActorId, CharacterAspectRatio, AudioFxPreset, LocationReferencePhotoKind as SharedLocationReferencePhotoKind, PipelineFormat, PipelineMode, PipelinePinnableImageModel, PipelinePinnableScriptLlm, PipelinePinnableVideoModel, VideoCriticFrameMode, SceneNodeData as SharedSceneNodeData, PipelineState, ReferenceSheet, SheetType, SheetSkin, SheetFlavour, EntityKind, VideoAnalysisResult, ExposableField, ExposableOutput, ComponentMetadata, IdentityMeta, LlmReasoningEffort, Scene3DReference, OverlayLayerKind, OverlayTextStyle, OverlayQrStyle, OverlayShapeStyle, OverlayImageEffects, OverlayAnchor, Transcript } from "@nodaro/shared"
 import type { WardrobeValue, TransitionPosition, TransitionDuration, TransitionIntensity, CharacterFxPosition, CharacterFxDuration, CharacterFxIntensity, CharacterMotionPosition, CharacterMotionPace, PersonValue, PickerApplyMode, PickerGaps, DirectionFields, StructuredPromptFields } from "@nodaro/prompts"
 import type { ReferencePhotoKind } from "@/lib/reference-photo-routing"
 import { IMAGE_STYLE_PRESETS, GVP_PROVIDERS, getAspectRatiosForVideoModel, getVideoResolutionOptions } from "@/components/editor/config-panels/model-options"
 import type { FrameFit, FrameDelivery } from "@nodaro/shared"
+import type { EditedEdl, PassThroughWarning } from "@nodaro/shared"
 import type { ScheduleRule } from "@nodaro/shared"
 import type { VideoOverlayFit, VideoOverlayLayerInput, VideoOverlayOutputAspect, VideoOverlayWarning } from "@nodaro/shared"
 
@@ -72,6 +74,16 @@ export interface GeneratedResult {
   // (grok-2-segment / grok-2-edit / grok-upscale) key off the ACTIVE result's
   // task id so region edits target the version the user is looking at.
   readonly kieTaskId?: string
+  // A render's (Apply EDL) identity, stamped by its worker and carried by every
+  // lane that lands the take (lib/run-result-identity.ts): the quality it was
+  // made at ("proxy" is a Preview — labelled so, and private) and the plan clip
+  // it cut (`edlSpanKey`). The node's own `quality` is its SETTING; this is
+  // what the take IS. A3-1: the plan value it cut (`planBasis`, only when that
+  // was the plan's own value) and its own settings (`renderBasis`).
+  readonly quality?: import("@nodaro/shared").RenderQuality
+  readonly clipKey?: string
+  readonly planBasis?: string
+  readonly renderBasis?: string
 }
 
 /**
@@ -1997,6 +2009,12 @@ export type TextToSpeechData = PromptAffixFields & {
   languageCode: string
   textSource: "connected" | "direct"
   directText: string
+  /**
+   * Continuity across clips: the lines spoken just before / after this one in the finished piece.
+   * Context, not spoken; sent only to a model whose sheet stitches (the funnel decides). Empty by default.
+   */
+  previousText?: string
+  nextText?: string
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
@@ -3287,7 +3305,11 @@ export type TextToDialogueData = {
   [key: string]: unknown
   label: string
   dialogue: DialogueLine[]
+  /** The dialogue model (`DIALOGUE_PROVIDERS`). Absent on nodes saved before it existed — they run as v3 dialogue. */
+  provider?: DialogueProvider
   stability: number
+  /** Similarity, 0–1. Sent only to a model whose sheet lists the `similarity` lever (v4 dialogue). */
+  similarityBoost?: number
   languageCode: string
   /** Deterministic sampling (0..4294967295); unset = random. */
   seed?: number
@@ -3297,7 +3319,10 @@ export type TextToDialogueData = {
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
   generatedAudioUrl?: string
-  generatedResults?: GeneratedResult[]
+  /** Each result's Transcript (the `json` output handle) rides WITH its audio, so switching the active result switches both. Absent on a model without timings. */
+  generatedResults?: Array<GeneratedResult & { readonly transcript?: Transcript }>
+  /** The ACTIVE result's Transcript — the bare field every json consumer reads (Extract Field / JSON Process), kept in sync with `activeResultIndex` like `generatedAudioUrl`. */
+  generatedJson?: Transcript
   activeResultIndex?: number
   currentJobId?: string
   currentJobProgress?: number
@@ -3360,8 +3385,11 @@ export type VoiceChangerProData = {
     /** Which lane converts this speaker: "sts" (default — speech-to-speech
      *  recast) | "v3" (Re-speak: the performance is regenerated from the
      *  transcript with eleven_v3; stability 0/0.5/1 only;
-     *  similarityBoost/style/useSpeakerBoost are ignored). */
-    engine?: "sts" | "v3"
+     *  similarityBoost/style/useSpeakerBoost are ignored) | "v4" (Re-speak
+     *  with eleven_v4: any stability 0–1, similarityBoost honoured,
+     *  style/useSpeakerBoost ignored; each line is generated with its
+     *  neighbouring lines as context). */
+    engine?: "sts" | "v3" | "v4"
     stability?: number
     similarityBoost?: number
     style?: number
@@ -3556,6 +3584,8 @@ export type DescribeToPickerData = {
 
 export type CombineVideosData = {
   currentJobProgress?: number
+  /** Set when the last run passed the input through unchanged — nothing to do, nothing charged. */
+  passThroughWarning?: PassThroughWarning
   [key: string]: unknown
   label: string
   /** Any id from `COMBINE_TRANSITIONS` (`@nodaro/shared`). The catalog
@@ -3801,6 +3831,8 @@ export type ProbedVideoInfo = {
  *  wired slot with no settings runs as DEFAULT_VIDEO_OVERLAY_LAYER. */
 export type VideoOverlayData = {
   currentJobProgress?: number
+  /** Set when the last run passed the input through unchanged — nothing to do, nothing charged. */
+  passThroughWarning?: PassThroughWarning
   [key: string]: unknown
   label: string
   layers: Array<VideoOverlayLayerInput | null>
@@ -3883,6 +3915,8 @@ export type MergeVideoAudioData = {
 
 export type AddCaptionsData = {
   currentJobProgress?: number
+  /** Set when the last run passed the input through unchanged — nothing to do, nothing charged. */
+  passThroughWarning?: PassThroughWarning
   [key: string]: unknown
   label: string
   style: CaptionStyle
@@ -4077,6 +4111,10 @@ export type MixAudioData = {
   trackCount: number
   trackVolumes: Record<string, number>
   trackOrder?: string[]
+  /** Node id of the track the others duck under (sidechain compression) — unset = a plain mix. */
+  duckUnder?: string
+  /** 0–100: how hard the other tracks dip under `duckUnder`. Unset = the server default. */
+  duckAmount?: number
   fieldMappings: FieldMappings
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
@@ -5748,16 +5786,17 @@ export type EditPlanSourceConfig = {
   kind?: "video" | "audio"
 }
 
-/** edit-plan — a transcript-driven cut / clip / chapter PLANNER (podcast
- *  editing). Cloud-EXCLUSIVE + relayed. Reads a timed transcript (+ optional
- *  silence ranges) and the wired media sources, and emits an EDL plan on the
- *  single `edl` (json) output: `tighten` → one Edl; `clips` → a bare Edl[] that
- *  fans out one downstream render per clip; `chapters` → a { version, chapters }.
+/** edit-plan — a transcript-driven cut / clip / chapter / trailer PLANNER
+ *  (podcast editing). Cloud-EXCLUSIVE + relayed. Reads a timed transcript (+
+ *  optional silence ranges) and the wired media sources, and emits an EDL plan
+ *  on the single `edl` (json) output: `tighten` → one Edl; `clips` → a bare
+ *  Edl[] that fans out one downstream render per clip; `chapters` → a
+ *  { version, chapters }; `trailer` → one short teaser Edl.
  *  `instructions` is the affix-capable prompt (PromptAffixFields). */
 export type EditPlanNodeData = PromptAffixFields & {
   [key: string]: unknown
   label: string
-  mode?: "tighten" | "clips" | "chapters"
+  mode?: "tighten" | "clips" | "chapters" | "trailer"
   /** Reasoning tier — affects quality AND the credit bucket. */
   planTier?: "economy" | "standard" | "premium"
   /** Per-source annotations keyed by SOURCE NODE ID (see EditPlanSourceConfig). */
@@ -5771,6 +5810,7 @@ export type EditPlanNodeData = PromptAffixFields & {
   // clips-only levers.
   count?: number
   targetDurationSec?: number
+  /** Clips and trailer: the delivery aspect, written into the EDL as a hint. */
   targetAspect?: "16:9" | "9:16" | "1:1" | "4:5"
   platform?: string
   /** Optional inline transcript / silence (durable config, used when nothing is
@@ -5782,9 +5822,16 @@ export type EditPlanNodeData = PromptAffixFields & {
   errorMessage?: string
   currentJobId?: string
   currentJobProgress?: number
-  /** The EDL plan (already unwrapped by the extractors): an Edl for tighten, a
-   *  bare Edl[] for clips (fans out), or a { version, chapters } for chapters. */
+  /** The EDL plan (already unwrapped by the extractors): an Edl for tighten or
+   *  trailer, a bare Edl[] for clips (fans out), or a { version, chapters } for
+   *  chapters. */
   generatedJson?: unknown
+  /** A person's review of `generatedJson` (TA13): a Tighten cut, or a keep /
+   *  hook decision per clip, fingerprinted with the plan it was made on. Run
+   *  result data (TA14). Read only through `editPlanOutputOf`, which applies
+   *  it; a different plan landing clears it, the same plan keeps it
+   *  (`editPlanResultPatch`, decided 2026-10-05). */
+  editedEdl?: EditedEdl
 }
 
 /** camera-switch (podcast B5, decided 2026-10-03) — WHO is on screen, from who
@@ -6571,14 +6618,77 @@ export type TelegramChannelFeedData = {
   label: string
   /** Public channel to read (@name, t.me/name, or bare id). */
   channel: string
-  /** Max posts to emit per run (1–20). */
+  /** Max posts to emit per run (1–30). A backlog drains this many per run. */
   limit?: number
-  /** Cursor — highest post id seen last run; only newer posts are emitted. */
+  /**
+   * @deprecated The feed's position lives on the server (`node_cursors`): the
+   * route reads and advances it from the workflow + node ids the run sends. A
+   * value an older editor saved here is a one-shot seed the route accepts
+   * until the node first runs with a saved workflow; the run then clears it.
+   */
   lastSeenId?: number
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
+  /** The `text` handle: the posts' digest. */
   generatedText?: string
+  /** The `json` handle: the posts the last run emitted, as the route returned them. */
+  generatedJson?: TelegramChannelPost[]
   currentJobProgress?: number
+}
+
+/**
+ * Save to Collection — one record per item that reaches `in`, into the
+ * collection the node names. The record's own fields are mappable from an
+ * upstream node or a `{Ref}`; left empty, they come from the item (a feed
+ * post's text and link, an article's headline, …). The link field is named
+ * `link`: node-data keys ending in `url` are locked by the Copilot's deny-list.
+ */
+export type CollectionWriteData = {
+  [key: string]: unknown
+  label: string
+  /** The collection to save into (its id — the truth). */
+  collectionId: string
+  /** The collection's name as last seen, for the card. */
+  collectionName?: string
+  title: string
+  text: string
+  link: string
+  dedupeKey: string
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  currentJobId?: string
+  /** The record the last run saved (the `json` handle). */
+  generatedJson?: CollectionRecord
+  /** Its headline (what a text consumer gets). */
+  generatedText?: string
+  lastOutcome?: CollectionWriteOutcome
+  lastEvicted?: number
+}
+
+/**
+ * Read Collection — the records a collection gained in the last N hours /
+ * days, newest or oldest first, up to a limit: `json` the records (one per
+ * list item on an "each" wire), `text` their digest.
+ */
+export type CollectionReadData = {
+  [key: string]: unknown
+  label: string
+  collectionId: string
+  collectionName?: string
+  windowAmount: number
+  windowUnit: CollectionReadWindowUnit
+  limit: number
+  order: CollectionReadOrder
+  textFormat: CollectionDigestFormat
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  currentJobId?: string
+  currentJobProgress?: number
+  /** The records the last run read (the `json` handle). */
+  generatedJson?: CollectionRecord[]
+  /** Their digest (the `text` handle), in the format the node was set to. */
+  generatedText?: string
 }
 
 export interface GenerativePipelineNodeData {
@@ -6852,6 +6962,8 @@ export type SceneNodeData =
   | TelegramAccountTriggerData
   | TelegramAccountSendData
   | TelegramChannelFeedData
+  | CollectionWriteData
+  | CollectionReadData
   | SocialPostData
   | MusicGenreData
   | MusicMoodData
@@ -7060,6 +7172,8 @@ export type SceneNodeType =
   | "telegram-account-trigger"
   | "telegram-account-send"
   | "telegram-channel-feed"
+  | "collection-write"
+  | "collection-read"
   | "component"
   | "music-genre"
   | "music-mood"
@@ -7747,7 +7861,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "ai",
     creditCost: 2,
     inputs: ["image", "mask", "cinematography"],
-    outputs: ["out"],
+    outputs: ["image"],
     width: 260,
     defaultData: {
       label: "Modify Image",
@@ -7767,7 +7881,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "ai",
     creditCost: 1,
     inputs: ["image"],
-    outputs: ["out"],
+    outputs: ["image"],
     width: 220,
     defaultData: {
       label: "Upscale Image",
@@ -7790,7 +7904,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "ai",
     creditCost: 1,
     inputs: ["image"],
-    outputs: ["out"],
+    outputs: ["image"],
     width: 220,
     defaultData: {
       label: "Remove Background",
@@ -8146,7 +8260,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     outputs: ["audio"],
     // `provider` is DEFAULT_TTS_PROVIDER (@nodaro/shared), spelled as a literal because the
     // gen:skills parser reads this statically; text-to-speech-default-model.test.ts links them.
-    defaultData: { label: "Text to Speech", provider: "elevenlabs-v4", voiceId: "Rachel", voiceType: "premade", voiceDisplayName: "Rachel", language: "en", ...TTS_VOICE_SETTING_DEFAULTS, languageCode: "", textSource: "connected", directText: "", fieldMappings: {} },
+    defaultData: { label: "Text to Speech", provider: "elevenlabs-v4", voiceId: "Rachel", voiceType: "premade", voiceDisplayName: "Rachel", language: "en", ...TTS_VOICE_SETTING_DEFAULTS, languageCode: "", textSource: "connected", directText: "", previousText: "", nextText: "", fieldMappings: {} },
     exposableOutputs: [{ key: "result", label: "Result", outputType: "audio" as const }],
     exposableFields: [
       {
@@ -8160,6 +8274,9 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       },
       { key: "stability", label: "Stability", type: "slider" as const, min: 0, max: 1, step: 0.05, defaultValue: TTS_VOICE_SETTING_DEFAULTS.stability },
       { key: "similarityBoost", label: "Similarity", type: "slider" as const, min: 0, max: 1, step: 0.05, defaultValue: TTS_VOICE_SETTING_DEFAULTS.similarityBoost },
+      // Continuity across clips (context, not spoken). A card the app creator may expose; dead on a model that does not stitch — the docs say which.
+      { key: "previousText", label: "Previous text", type: "text" as const },
+      { key: "nextText", label: "Next text", type: "text" as const },
     ],
   },
   {
@@ -8280,7 +8397,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "ai",
     creditCost: 2,
     inputs: ["audio"],
-    outputs: ["audio"],
+    outputs: ["instrumental", "vocals"],
     defaultData: { label: "Suno Separate", type: "separate_vocal", taskId: "", audioId: "", fieldMappings: {} } as SunoSeparateData,
   },
   {
@@ -8422,9 +8539,13 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "ai",
     creditCost: 4,
     inputs: ["prompt"],
-    outputs: ["audio"],
+    // json = the Transcript built from the model's timings (words + one segment per line); empty on a model without them.
+    outputs: ["audio", "json"],
     defaultData: {
       label: "Text to Dialogue",
+      // v3 dialogue stays the default (decided 2026-10-04); spelled here because
+      // gen:skills reads defaultData statically (see the text-to-speech entry).
+      provider: "elevenlabs-dialogue",
       dialogue: [{ id: "1", text: "", voice: "Sarah" }],
       stability: 0.5,
       languageCode: "",
@@ -8754,10 +8875,10 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     // Base video + the 12 layer handles, index-aligned with data.layers[]
     // (overlay → 0, overlay2 → 1, …). Literal on purpose (the gen-skills
     // parser reads this file as text) — must equal ["video",
-    // ...VIDEO_OVERLAY_HANDLE_IDS]; node-input-handles-completeness pins it.
-    // The reserved JSON id "layerPlan" is deliberately NOT an input: no pip
-    // renders for it in v1.
-    inputs: ["video", "overlay", "overlay2", "overlay3", "overlay4", "overlay5", "overlay6", "overlay7", "overlay8", "overlay9", "overlay10", "overlay11", "overlay12"],
+    // ...VIDEO_OVERLAY_HANDLE_IDS, VIDEO_OVERLAY_LAYER_PLAN_HANDLE]; node-input-handles-completeness pins it.
+    // The JSON id "layerPlan" takes a list of layers (a layer plan), drawn under
+    // the handle layers.
+    inputs: ["video", "overlay", "overlay2", "overlay3", "overlay4", "overlay5", "overlay6", "overlay7", "overlay8", "overlay9", "overlay10", "overlay11", "overlay12", "layerPlan"],
     outputs: ["video-out"],
     defaultData: {
       label: "Video Overlay",
@@ -8819,7 +8940,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Add Captions",
     category: "processing",
     creditCost: 2,
-    inputs: ["in", "transcript"],
+    inputs: ["in", "transcript", "captionPlan"],
     outputs: ["video"],
     defaultData: { label: "Add Captions", style: "subtitle", position: "bottom", fontSize: 32, color: "#ffffff", fieldMappings: {} },
   },
@@ -8865,7 +8986,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "processing",
     creditCost: 2,
     inputs: ["video", "audio"],
-    outputs: ["video-out", "audio-out"],
+    outputs: ["video", "audio"],
     defaultData: { label: "Split into Chunks", chunkDuration: 10, audioFormat: "mp3", fieldMappings: {} },
   },
   {
@@ -8991,7 +9112,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "After Effects",
     category: "processing",
     creditCost: 2,
-    inputs: ["in"],
+    inputs: ["video"],
     outputs: ["composition"],
     defaultData: {
       label: "After Effects",
@@ -9007,7 +9128,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Lottie Overlay",
     category: "processing",
     creditCost: 2,
-    inputs: ["in", "lottie"],
+    inputs: ["video", "lottie"],
     outputs: ["composition"],
     defaultData: {
       label: "Lottie Overlay",
@@ -9112,7 +9233,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Motion Graphics",
     category: "ai",
     creditCost: 5,
-    inputs: ["in"],
+    inputs: ["video"],
     // `lottie` is emitted only by the lottie engine (the authored Lottie JSON's
     // R2 URL); the node-component renders that source handle when engine="lottie".
     outputs: ["composition", "lottie"],
@@ -9157,7 +9278,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     // priced at 1.5x or 2.5x this (`renderVideoCreditId`); the live per-plan
     // figure comes from the model-cost API, which the node badge reads.
     creditCost: 50,
-    inputs: ["in"],
+    inputs: ["composition"],
     outputs: ["video"],
     defaultData: {
       label: "Render Video",
@@ -9176,7 +9297,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Adjust Speed",
     category: "processing",
     creditCost: 0,
-    inputs: ["in"],
+    inputs: ["video"],
     outputs: ["video"],
     defaultData: { label: "Adjust Speed", speed: 1.0, reverse: false, audioMode: "pitch-preserve", quality: "fast", fieldMappings: {} },
   },
@@ -9203,7 +9324,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Fade In/Out",
     category: "processing",
     creditCost: 0,
-    inputs: ["in"],
+    inputs: ["video"],
     outputs: ["video"],
     defaultData: { label: "Fade In/Out", fadeIn: true, fadeInDuration: 0.5, fadeOut: true, fadeOutDuration: 0.5, color: "black", fieldMappings: {} },
   },
@@ -9212,7 +9333,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     label: "Transcode Video",
     category: "processing",
     creditCost: 0,
-    inputs: ["in"],
+    inputs: ["video"],
     outputs: ["video"],
     defaultData: { label: "Transcode Video", codec: "h264", crf: 23, resolution: "original", audioBitrate: "128k", fieldMappings: {} },
   },
@@ -9373,7 +9494,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "ai",
     creditCost: 30,
     inputs: ["image", "video", "prompt", "negative", "assets"],
-    outputs: ["out"],
+    outputs: ["video"],
     defaultData: {
       label: "Motion Transfer",
       prompt: "",
@@ -9438,7 +9559,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "ai",
     creditCost: 16,
     inputs: ["face", "video"],
-    outputs: ["out"],
+    outputs: ["video"],
     defaultData: {
       label: "Face Swap",
       provider: "roop",
@@ -9782,7 +9903,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "utility",
     creditCost: 0,
     inputs: ["text"],
-    outputs: ["out"],
+    outputs: ["text"],
     autoExecute: true,
     defaultData: {
       label: "Split Text",
@@ -10234,7 +10355,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "input",
     creditCost: 0,
     inputs: [],
-    outputs: ["text", "imageUrl", "videoUrl", "audioUrl", "chatId", "messageId"],
+    outputs: ["out"],
     defaultData: {
       label: "Telegram Trigger",
       messageTypeFilters: ["text", "photo", "video", "audio", "document"],
@@ -10263,14 +10384,49 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     type: "telegram-channel-feed",
     label: "Telegram Channel Feed",
     category: "input",
-    creditCost: 1,
+    creditCost: 10,
     inputs: [],
-    outputs: ["text"],
+    outputs: ["json", "text"],
     defaultData: {
       label: "Telegram Channel Feed",
       channel: "",
       limit: 5,
     } as TelegramChannelFeedData,
+  },
+  // Collections (where a workflow's records live)
+  {
+    type: "collection-read",
+    label: "Read Collection",
+    category: "input",
+    creditCost: 0,
+    inputs: [],
+    outputs: ["json", "text"],
+    defaultData: {
+      label: "Read Collection",
+      collectionId: "",
+      windowAmount: 24,
+      windowUnit: "hours",
+      limit: 50,
+      order: "newest",
+      textFormat: "headlines",
+    } as CollectionReadData,
+  },
+  {
+    type: "collection-write",
+    label: "Save to Collection",
+    category: "output",
+    creditCost: 0,
+    inputs: ["in", "image", "video"],
+    outputs: ["json"],
+    defaultData: {
+      label: "Save to Collection",
+      collectionId: "",
+      title: "",
+      text: "",
+      link: "",
+      dedupeKey: "",
+      fieldMappings: {},
+    } as CollectionWriteData,
   },
   // Components
   {

@@ -280,7 +280,8 @@ exports[`per-node skill file snapshots > generate-video.md auto-gen blocks match
 - \`reference_image_urls\`
 - \`reference_video_urls\`
 - \`reference_video_captions\`
-- \`reference_audio_urls\`",
+- \`reference_audio_urls\`
+- \`character_references\`",
   "node-data-shape": "**Type:** \`generate-video\`
 **Category:** ai
 **Credit cost:** \`10-8550\` at list price — the price a run is charged is \`GET /v1/credits/model-cost?model=<model id>\` (MCP: \`list_models\`); \`GET /v1/nodes\` gives this node's charged figure.

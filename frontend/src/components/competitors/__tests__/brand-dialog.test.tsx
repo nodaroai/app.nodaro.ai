@@ -12,6 +12,9 @@ import { en } from "@/lib/i18n/en"
 const api = vi.hoisted(() => ({
   getCompetitor: vi.fn(),
   competitorLessons: vi.fn(),
+  competitorHistory: vi.fn(),
+  competitorCompare: vi.fn(),
+  competitorList: vi.fn(),
   competitorCardActions: vi.fn(),
   lookupSavedPosts: vi.fn(),
   savePost: vi.fn(),
@@ -131,6 +134,9 @@ beforeEach(() => {
   for (const fn of Object.values(api)) fn.mockReset()
   api.getCompetitor.mockResolvedValue(DETAIL)
   api.competitorLessons.mockResolvedValue(LESSONS)
+  api.competitorHistory.mockResolvedValue({ scans: [] })
+  api.competitorList.mockResolvedValue({ data: [ACME], historyMonths: 3 })
+  api.competitorCompare.mockResolvedValue({ periods: [], posts: {} })
   api.lookupSavedPosts.mockResolvedValue(new Map())
   api.competitorCardActions.mockRejectedValue(Object.assign(new Error("not available"), { code: "not_available" }))
   api.getModelCreditCost.mockImplementation(async (model: string) => ({ data: { model, creditCost: model === "competitor-scan:3" ? 23 : 1 } }))
@@ -223,5 +229,68 @@ describe("the brand window", () => {
     api.competitorLessons.mockRejectedValue(new Error("down"))
     renderDialog({ platform: "tiktok" })
     expect(await screen.findByText(en["apiErr.loadCompetitorLessons"])).toBeInTheDocument()
+  })
+})
+
+describe("the brand window over time", () => {
+  const point = (id: string, at: string, followers: number | null, own: number) => ({ id, at, platforms: [{ platform: "tiktok", own, about: 0, followers, usual: null, unit: "views" }] })
+
+  it("offers the scans to show and opens the brand as of the chosen one", async () => {
+    api.competitorHistory.mockResolvedValue({ scans: [point("00000000-0000-4000-8000-0000000000a1", "2026-09-24T10:00:00Z", 1000, 2), point("00000000-0000-4000-8000-0000000000a2", "2026-10-01T10:00:00Z", 1200, 3)] })
+    renderDialog()
+    const picker = await screen.findByLabelText(en["competitors.pickScan"])
+    // The dates are named in the machine's language, so the order and the ids are what is pinned: the latest, then newest first.
+    const options = within(picker).getAllByRole("option")
+    expect(options[0]!.textContent).toBe(en["competitors.viewLatest"])
+    expect(options.map((o) => (o as HTMLOptionElement).value)).toEqual(["", "00000000-0000-4000-8000-0000000000a2", "00000000-0000-4000-8000-0000000000a1"])
+    expect(options.slice(1).every((o) => o.textContent?.startsWith("Scan of "))).toBe(true)
+    fireEvent.change(picker, { target: { value: "00000000-0000-4000-8000-0000000000a1" } })
+    await waitFor(() => expect(api.getCompetitor).toHaveBeenCalledWith(ACME.id, "00000000-0000-4000-8000-0000000000a1"))
+  })
+
+  it("compares the last seven days with the seven before, platform by platform", async () => {
+    api.competitorCompare.mockResolvedValue({
+      periods: [
+        { from: "a", to: "a", platforms: [{ platform: "tiktok", own: 3, about: 1, usual: 600, unit: "views", followers: { value: 1200, at: "2026-10-04T00:00:00Z" }, change: 100, lessons: [lesson], best: ["t1"] }] },
+        { from: "b", to: "b", platforms: [{ platform: "tiktok", own: 1, about: 0, usual: null, unit: "views", followers: { value: 1100, at: "2026-09-27T00:00:00Z" }, change: null, lessons: [], best: [] }] },
+      ],
+      posts: { t1: DETAIL.latestScan!.posts[0]! },
+    })
+    renderDialog()
+    fireEvent.click(await screen.findByRole("button", { name: en["competitors.viewOverTime"] }))
+    expect(await screen.findByText(en["competitors.historyKept"].replace("{n}", "3"))).toBeInTheDocument()
+    const row = (await screen.findByRole("rowheader", { name: /TikTok/ })).closest("tr") as HTMLElement
+    const cells = within(row).getAllByRole("cell").map((c) => strip(c.textContent))
+    expect(cells.slice(0, 4)).toEqual(["3", "1", "600 views", "1.2K followers+100"])
+    expect(cells[4]).toMatch(/3\.1x the usual views/)
+    expect(cells.slice(6, 10)).toEqual(["1", "0", "—", "1.1K followers"])
+    const input = api.competitorCompare.mock.calls[0]![1] as { vsFrom?: string }
+    expect(input.vsFrom).toBeDefined()
+    expect(within(row).getAllByRole("button", { name: new RegExp(`^${en["social.readPost"]}:`) }).length).toBeGreaterThan(0)
+  })
+
+  it("a single day stands alone, and backwards custom dates are refused", async () => {
+    renderDialog()
+    fireEvent.click(await screen.findByRole("button", { name: en["competitors.viewOverTime"] }))
+    fireEvent.click(await screen.findByRole("button", { name: en["competitors.presetDay"] }))
+    await waitFor(() => expect(api.competitorCompare).toHaveBeenLastCalledWith(ACME.id, expect.not.objectContaining({ vsFrom: expect.anything() })))
+    fireEvent.click(screen.getByRole("button", { name: en["competitors.presetCustom"] }))
+    const calls = api.competitorCompare.mock.calls.length
+    const from = screen.getAllByLabelText(en["competitors.periodFrom"])[0] as HTMLInputElement
+    fireEvent.change(from, { target: { value: "2026-12-31" } })
+    expect(await screen.findByText(en["competitors.periodInvalid"])).toBeInTheDocument()
+    expect(api.competitorCompare.mock.calls.length).toBe(calls)
+  })
+
+  it("a point on the followers line opens that scan", async () => {
+    api.competitorHistory.mockResolvedValue({ scans: [point("00000000-0000-4000-8000-0000000000a1", "2026-09-24T10:00:00Z", 1000, 2), point("00000000-0000-4000-8000-0000000000a2", "2026-10-01T10:00:00Z", 1200, 3)] })
+    renderDialog()
+    fireEvent.click(await screen.findByRole("button", { name: en["competitors.viewOverTime"] }))
+    // Oldest first along the line: the first point is the September scan.
+    const dots = await screen.findAllByRole("button", { name: /Open the scan of/ })
+    expect(dots).toHaveLength(2)
+    fireEvent.click(dots[0]!)
+    await waitFor(() => expect(api.getCompetitor).toHaveBeenCalledWith(ACME.id, "00000000-0000-4000-8000-0000000000a1"))
+    expect(screen.getByRole("button", { name: en["competitors.viewLatest"] })).toHaveAttribute("aria-pressed", "true")
   })
 })

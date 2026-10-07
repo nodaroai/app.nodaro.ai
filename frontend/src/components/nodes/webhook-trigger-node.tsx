@@ -4,6 +4,7 @@ import { memo, useEffect, useMemo } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import { Webhook, Type } from "lucide-react"
 import { BaseNode } from "./base-node"
+import { TriggerPreviewWarning } from "./trigger-preview-warning"
 import { EditableNodeLabel } from "./editable-node-label"
 import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -84,6 +85,7 @@ function WebhookTriggerNodeComponent({ id, data, selected }: NodeProps) {
             </p>
           )}
         </div>
+        <TriggerPreviewWarning nodeId={id} armed={!!token} />
       </BaseNode>
       {/* A trigger starts the run; it takes nothing from the canvas (registry: inputs []). Its URL is given by the server, never connected. */}
       {handles.filter(h => h.type === "source").map((h) => (

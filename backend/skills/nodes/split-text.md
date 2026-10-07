@@ -1,7 +1,7 @@
 ---
 node_type: split-text
-generated_at: 2026-09-27T12:51:25.003Z
-generated_from: c607aa02c
+generated_at: 2026-10-05T21:37:07.951Z
+generated_from: 066cc1460
 ---
 
 # Split Text
@@ -11,7 +11,7 @@ generated_from: c607aa02c
 **Category:** utility
 **Credit cost:** `0` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
 **Inputs (target handles):** `text`
-**Outputs (source handles):** `out`
+**Outputs (source handles):** `text`
 
 **Required data fields:**
 - `label: string`

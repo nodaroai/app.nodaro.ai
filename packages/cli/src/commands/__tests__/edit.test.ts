@@ -135,6 +135,18 @@ describe("edit apply-edl", () => {
     })
   })
 
+  it("passes --clip-key through as clipKey", async () => {
+    mocks.applyEdl.mockResolvedValueOnce({ jobId: "j-ck" })
+    const edlPath = fixture("edl.json", EDL)
+    await runCmd("edit", "apply-edl", "--edl", edlPath, "--quality", "proxy", "--clip-key", "12000-98000", "--json")
+    expect(mocks.applyEdl).toHaveBeenCalledWith({
+      edl: EDL,
+      output: "video",
+      quality: "proxy",
+      clipKey: "12000-98000",
+    })
+  })
+
   it("errors on an unknown --output", async () => {
     const edlPath = fixture("edl.json", EDL)
     await expect(
@@ -196,6 +208,18 @@ describe("edit plan", () => {
     ).rejects.toThrow("process.exit(1)")
     expect(vi.mocked(warn)).toHaveBeenCalledWith(expect.stringContaining("--sources-file"))
     expect(mocks.editPlan).not.toHaveBeenCalled()
+  })
+
+  it("accepts every shared edit-plan mode, trailer included", async () => {
+    mocks.editPlan.mockResolvedValueOnce({ jobId: "j-trailer" })
+    const tPath = fixture("t.json", TRANSCRIPT)
+    await runCmd(
+      "edit", "plan", "--mode", "trailer", "--plan-tier", "standard", "--transcript", tPath,
+      "--source", "https://x/m.mp4", "--target-aspect", "9:16", "--json",
+    )
+    expect(mocks.editPlan).toHaveBeenCalledWith(
+      expect.objectContaining({ mode: "trailer", planTier: "standard", targetAspect: "9:16" }),
+    )
   })
 
   it("errors on an unknown --mode", async () => {

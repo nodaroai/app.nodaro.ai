@@ -21,6 +21,8 @@ const db = vi.hoisted(() => ({
   execStatus: new Map<string, string>(),
   /** The workflow_executions read answers an error. */
   failExec: false,
+  /** workflow_executions.user_id by id (default "owner"). */
+  execOwner: new Map<string, string>(),
 }))
 
 vi.mock("../supabase.js", () => {
@@ -33,11 +35,16 @@ vi.mock("../supabase.js", () => {
     b.in = (col: string, v: unknown) => { filters[`in:${col}`] = v; return b }
     const resolve = () => {
       db.queries.push(`${table}:${columns}`)
+      // A `user_id` filter is APPLIED (a row with none is "owner"'s), so a read
+      // that leaves it out sees another user's rows and the test catches it.
+      const ownerOk = (owner: unknown) => filters["eq:user_id"] === undefined || (owner ?? "owner") === filters["eq:user_id"]
       if (table === "workflow_executions") {
         const id = filters["eq:id"] as string
         if (db.failExec) return { data: null, error: { message: "db down" } }
         return {
-          data: db.nodeStates.has(id) ? { node_states: db.nodeStates.get(id), status: db.execStatus.get(id) ?? "running" } : null,
+          data: db.nodeStates.has(id) && ownerOk(db.execOwner.get(id))
+            ? { node_states: db.nodeStates.get(id), status: db.execStatus.get(id) ?? "running" }
+            : null,
           error: null,
         }
       }
@@ -46,11 +53,13 @@ vi.mock("../supabase.js", () => {
         const names = filters["in:job_type"] as string[]
         const rows = (db.childJobs.get(filters["eq:workflow_execution_id"] as string) ?? [])
           .filter((r) => names.includes(r.job_type as string))
+          .filter((r) => ownerOk(r.user_id))
         return { data: rows, error: null }
       }
       const ids = filters["in:id"] as string[]
       const rows = ids.map((id) => db.jobsById.get(id)).filter((r): r is Record<string, unknown> => !!r)
         .filter((r) => r.provider === filters["eq:provider"])
+        .filter((r) => ownerOk(r.user_id))
       return { data: rows, error: null }
     }
     b.maybeSingle = async () => resolve()
@@ -81,7 +90,7 @@ const excessOf = (row: ReturnType<typeof applyEdlRow>) => budgetExcessMs(declare
 
 beforeEach(() => {
   db.childJobs.clear(); db.nodeStates.clear(); db.jobsById.clear(); db.queries.length = 0; db.failJobs = false
-  db.execStatus.clear(); db.failExec = false
+  db.execStatus.clear(); db.failExec = false; db.execOwner.clear()
 })
 
 describe("executionBudgetExcessMs", () => {
@@ -91,7 +100,7 @@ describe("executionBudgetExcessMs", () => {
     const short = applyEdlRow(2, "audio") // one source, audio only: its budget (~86 min) fits inside 90
     db.childJobs.set("exec-1", [long, alsoLong, short, { job_type: "generate-image", input_data: {} }])
     db.nodeStates.set("exec-1", {})
-    const total = await executionBudgetExcessMs("exec-1")
+    const total = await executionBudgetExcessMs("exec-1", "owner")
     expect(excessOf(long)).toBeGreaterThan(0)
     expect(excessOf(alsoLong)).toBeGreaterThan(0)
     expect(excessOf(short)).toBe(0)
@@ -102,7 +111,7 @@ describe("executionBudgetExcessMs", () => {
     db.childJobs.set("exec-1", [{ job_type: "generate-image", input_data: {} }])
     db.nodeStates.set("exec-1", { a: { status: "running", jobId: "j-a" } })
     db.jobsById.set("j-a", { provider: "kie", input_data: {} })
-    expect(await executionBudgetExcessMs("exec-1")).toBe(0)
+    expect(await executionBudgetExcessMs("exec-1", "owner")).toBe(0)
   })
 
   it("adds a component node's INNER execution, recursively (the wrapper's _executionId)", async () => {
@@ -116,21 +125,47 @@ describe("executionBudgetExcessMs", () => {
     db.jobsById.set("wrap-2", { provider: "component", input_data: { _executionId: "deep" } })
     db.childJobs.set("deep", [deep])
     db.nodeStates.set("deep", {})
-    expect(await executionBudgetExcessMs("outer")).toBe(excessOf(inner) + excessOf(deep))
+    expect(await executionBudgetExcessMs("outer", "owner")).toBe(excessOf(inner) + excessOf(deep))
   })
 
   it("uses the caller's node_states when given (no row read) and survives a cycle", async () => {
     db.childJobs.set("a", [applyEdlRow(180)])
     db.jobsById.set("w", { provider: "component", input_data: { _executionId: "a" } })
-    const got = await executionBudgetExcessMs("a", { x: { jobId: "w" } })
+    const got = await executionBudgetExcessMs("a", "owner", { x: { jobId: "w" } })
     expect(got).toBe(excessOf(applyEdlRow(180)))
     expect(db.queries.some((q) => q.startsWith("workflow_executions"))).toBe(false)
+  })
+
+  it("attacker: budgeted jobs another user pointed at this execution do not stretch its clock", async () => {
+    // Before 474 a browser could insert its own `jobs` row naming any
+    // execution — with an EDL long enough to keep a dead run waiting for hours.
+    db.childJobs.set("exec-1", [{ ...applyEdlRow(600), user_id: "attacker" }])
+    db.nodeStates.set("exec-1", {})
+    expect(await executionBudgetExcessMs("exec-1", "owner")).toBe(0)
+  })
+
+  it("attacker: a wrapper id in node_states, or a wrapper's inner run, that is someone else's counts for nothing", async () => {
+    // node_states is the run owner's to write, and a wrapper's `_executionId`
+    // is a pointer: neither may lead this read into another user's run.
+    db.childJobs.set("outer", [])
+    db.nodeStates.set("outer", { a: { status: "running", jobId: "their-wrap" }, b: { status: "running", jobId: "my-wrap" } })
+    db.jobsById.set("their-wrap", { provider: "component", user_id: "victim", input_data: { _executionId: "their-inner" } })
+    db.jobsById.set("my-wrap", { provider: "component", input_data: { _executionId: "victim-run" } })
+    db.childJobs.set("their-inner", [{ ...applyEdlRow(200), user_id: "victim" }])
+    db.nodeStates.set("their-inner", {})
+    db.execOwner.set("their-inner", "victim")
+    db.childJobs.set("victim-run", [{ ...applyEdlRow(300), user_id: "victim" }])
+    db.nodeStates.set("victim-run", { cut: { status: "pending", nodeType: "apply-edl" } })
+    db.execOwner.set("victim-run", "victim")
+    expect(await executionBudgetExcessMs("outer", "owner")).toBe(0)
+    expect(await executionMayDispatchBudgetedJob("outer", "owner")).toBe(false)
+    expect(await executionMayDispatchBudgetedJob("victim-run", "owner")).toBe(false)
   })
 
   it("a failed read counts as 0 — the caller stays on its default limit", async () => {
     db.failJobs = true
     db.nodeStates.set("exec-1", {})
-    expect(await executionBudgetExcessMs("exec-1")).toBe(0)
+    expect(await executionBudgetExcessMs("exec-1", "owner")).toBe(0)
   })
 })
 
@@ -141,41 +176,41 @@ describe("executionBudgetExcessMs", () => {
 describe("executionMayDispatchBudgetedJob — a long render the run has not reached yet", () => {
   it("a budgeted node that has not settled, in a running execution → true (pending or dispatched)", async () => {
     db.nodeStates.set("e", { t: { status: "running", nodeType: "transcribe" }, cut: { status: "pending", nodeType: "apply-edl" } })
-    expect(await executionMayDispatchBudgetedJob("e")).toBe(true)
+    expect(await executionMayDispatchBudgetedJob("e", "owner")).toBe(true)
     db.nodeStates.set("e", { cut: { status: "running", nodeType: "apply-edl", jobId: "j" } })
-    expect(await executionMayDispatchBudgetedJob("e")).toBe(true)
+    expect(await executionMayDispatchBudgetedJob("e", "owner")).toBe(true)
   })
 
   it("every budgeted node settled (completed / failed / skipped) → false", async () => {
     for (const status of ["completed", "failed", "skipped"]) {
       db.nodeStates.set("e", { t: { status: "running", nodeType: "transcribe" }, cut: { status, nodeType: "apply-edl" } })
-      expect(await executionMayDispatchBudgetedJob("e"), status).toBe(false)
+      expect(await executionMayDispatchBudgetedJob("e", "owner"), status).toBe(false)
     }
   })
 
   it("nothing budgeted in the run → false", async () => {
     db.nodeStates.set("e", { a: { status: "pending", nodeType: "generate-image" }, b: { status: "running", nodeType: "llm-chat" } })
-    expect(await executionMayDispatchBudgetedJob("e")).toBe(false)
+    expect(await executionMayDispatchBudgetedJob("e", "owner")).toBe(false)
   })
 
   it("an execution that is over dispatches nothing, whatever its node states say → false", async () => {
     for (const status of ["completed", "failed", "cancelled", "timed_out", "stopping", "discarded"]) {
       db.nodeStates.set("e", { cut: { status: "pending", nodeType: "apply-edl" } })
       db.execStatus.set("e", status)
-      expect(await executionMayDispatchBudgetedJob("e"), status).toBe(false)
+      expect(await executionMayDispatchBudgetedJob("e", "owner"), status).toBe(false)
     }
   })
 
   it("not picked up yet (pending, no node states) → true: unknown is the upper bound", async () => {
     db.nodeStates.set("e", null as unknown as Record<string, unknown>)
     db.execStatus.set("e", "pending")
-    expect(await executionMayDispatchBudgetedJob("e")).toBe(true)
+    expect(await executionMayDispatchBudgetedJob("e", "owner")).toBe(true)
   })
 
   it("no execution row → false; a failed read → true (unknown)", async () => {
-    expect(await executionMayDispatchBudgetedJob("missing")).toBe(false)
+    expect(await executionMayDispatchBudgetedJob("missing", "owner")).toBe(false)
     db.failExec = true
-    expect(await executionMayDispatchBudgetedJob("e")).toBe(true)
+    expect(await executionMayDispatchBudgetedJob("e", "owner")).toBe(true)
   })
 
   it("follows an UNSETTLED component node into its inner execution, recursively", async () => {
@@ -184,16 +219,16 @@ describe("executionMayDispatchBudgetedJob — a long render the run has not reac
     db.nodeStates.set("inner", { comp2: { status: "running", nodeType: "Cut", jobIds: ["wrap-2"] } })
     db.jobsById.set("wrap-2", { provider: "component", input_data: { _executionId: "deep" } })
     db.nodeStates.set("deep", { cut: { status: "pending", nodeType: "apply-edl" } })
-    expect(await executionMayDispatchBudgetedJob("outer")).toBe(true)
+    expect(await executionMayDispatchBudgetedJob("outer", "owner")).toBe(true)
     // …and not into a settled one (it dispatches nothing more).
     db.nodeStates.set("outer", { comp: { status: "completed", nodeType: "Tighten", jobId: "wrap-1" } })
-    expect(await executionMayDispatchBudgetedJob("outer")).toBe(false)
+    expect(await executionMayDispatchBudgetedJob("outer", "owner")).toBe(false)
   })
 
   it("survives a cycle", async () => {
     db.nodeStates.set("a", { c: { status: "running", nodeType: "X", jobId: "w" } })
     db.jobsById.set("w", { provider: "component", input_data: { _executionId: "a" } })
-    expect(await executionMayDispatchBudgetedJob("a")).toBe(false)
+    expect(await executionMayDispatchBudgetedJob("a", "owner")).toBe(false)
   })
 })
 

@@ -229,7 +229,7 @@ describe("orchestrator resume — a live budgeted render is re-attached, not res
 
     await runOrchestratorJob(makeJob(), "tok")
 
-    expect(cancelInFlightChildJobs).toHaveBeenCalledWith("exec-1", { adoptLiveBudgetedRenders: true })
+    expect(cancelInFlightChildJobs).toHaveBeenCalledWith("exec-1", "owner-1", { adoptLiveBudgetedRenders: true })
     expect(seen?.get("cut")).toEqual(adopted)
   })
 })

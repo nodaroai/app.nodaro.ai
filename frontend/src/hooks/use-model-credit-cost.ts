@@ -1,8 +1,32 @@
 import { useQuery } from "@tanstack/react-query"
-import { getModelCreditCost, getBatchModelCreditCosts } from "@/lib/api"
+import { getModelCreditCost, fetchBatchModelCreditCosts } from "@/lib/api"
 import { hasCredits } from "@/lib/edition"
 import { queryClient } from "@/lib/query-client"
 import { queryKeys } from "@/lib/query-keys"
+
+/**
+ * Ids the server has answered are priced NOWHERE on this instance (the batch
+ * endpoint's `missing`): a speech model's per-100-characters unit row while length
+ * pricing is off, an unseeded admin row. Remembered for the session so an
+ * estimate that runs on every graph change does not ask for them again; a
+ * reader that finds no cached price quotes without it (the flat row).
+ */
+const unpricedModelIds = new Set<string>()
+
+/** The server reported `model` priced nowhere this session. */
+export function isModelUnpriced(model: string): boolean {
+  return unpricedModelIds.has(model)
+}
+
+/** Remember the ids a batch answer reported `missing`. */
+export function rememberUnpricedModels(models: readonly string[] | undefined): void {
+  for (const model of models ?? []) unpricedModelIds.add(model)
+}
+
+/** Tests only: forget every remembered unpriced id. */
+export function forgetUnpricedModels(): void {
+  unpricedModelIds.clear()
+}
 
 /** The one query both readers below share, so a price either of them fetched
  *  is already cached for the other. */
@@ -57,18 +81,19 @@ export function getCachedModelCredits(model: string): number | undefined {
 
 /**
  * Fetch these model ids' prices into that cache — one batch request, falling
- * back to one request per id. Ids already cached are skipped; a build without
- * credits fetches nothing.
+ * back to one request per id. Ids already cached, and ids the server has
+ * reported priced nowhere, are skipped; a build without credits fetches nothing.
  */
 export async function prefetchModelCreditCosts(models: readonly string[]): Promise<void> {
   if (!hasCredits() || models.length === 0) return
-  const uncached = models.filter((m) => queryClient.getQueryData(queryKeys.credits.modelCost(m)) === undefined)
+  const uncached = models.filter((m) => queryClient.getQueryData(queryKeys.credits.modelCost(m)) === undefined && !unpricedModelIds.has(m))
   if (uncached.length === 0) return
   try {
-    const costs = await getBatchModelCreditCosts(uncached)
+    const { data: costs, missing } = await fetchBatchModelCreditCosts(uncached)
     for (const [model, cost] of Object.entries(costs)) {
       queryClient.setQueryData(queryKeys.credits.modelCost(model), cost)
     }
+    rememberUnpricedModels(missing)
   } catch {
     await Promise.allSettled(uncached.map((model) => queryClient.prefetchQuery(modelCreditCostQuery(model))))
   }

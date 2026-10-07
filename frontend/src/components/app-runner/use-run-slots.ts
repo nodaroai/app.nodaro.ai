@@ -7,6 +7,7 @@ import { createAppRun, updateAppRunInputs, getAppRuns, deleteAppRun } from "@/li
 import type { NewRunAction, RunSlot, RunSlotNodeState } from "./types"
 import { ORIGINAL_SLOT_ID, makeEmptyInputs, makeSnapshotInputs, makeSnapshotNodeStates, toSlotStatus, dbStatusToSlotStatus } from "./types"
 import { isMediaUrl } from "./types"
+import { executionOutcome } from "@nodaro/shared"
 
 /** Reset presentation store to idle state with given inputs */
 function resetPresentationToIdle(inputValues: Record<string, Record<string, unknown>>) {
@@ -37,6 +38,11 @@ function applySlotToPresentation(slot: Pick<RunSlot, "inputValues" | "nodeStates
   } else {
     usePresentationStore.setState(base)
   }
+}
+
+/** Follow a run's Render final that is still rendering (a reload, or another tab asked for it). */
+function followSlotFinal(slot: Pick<RunSlot, "id" | "finalExecution" | "nodeStates">) {
+  if (slot.finalExecution) useAppRunnerStore.getState().followFinal(slot.id, slot.finalExecution, slot.nodeStates)
 }
 
 /** First completed-output media URL for a run's nodeStates (prefer thumbnailNodeId, else first media). */
@@ -234,6 +240,8 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
         nodeStates: (run.nodeStates ?? {}) as Record<string, RunSlotNodeState>,
         executionId: run.executionId ?? null,
         executionStatus: dbStatusToSlotStatus(run.status),
+        // How a completed run ended, derived from its states (the one shared rule).
+        outcome: executionOutcome(run.status, run.nodeStates as Record<string, { status?: unknown; skipReason?: unknown }> | null | undefined),
         completedNodes: run.completedNodes ?? 0,
         totalNodes: run.totalNodes ?? 0,
         creditsUsed: run.creditsUsed ?? 0,
@@ -241,8 +249,12 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
         version: run.version ?? null,
         thumbnailUrl: run.thumbnailUrl ?? null,
         hiddenNodes: run.hiddenNodes ?? undefined,
+        finalExecution: run.finalExecution ?? null,
+        nodeStateEdits: run.nodeStateEdits ?? null,
       }))
       setSlots(dbSlots)
+      // Every write of a run's edits sends the merged whole: seed what the server holds.
+      for (const slot of dbSlots) useAppRunnerStore.getState().seedRunEdits(slot.id, slot.nodeStateEdits)
 
       // If initialRunId targets a DB run that wasn't available during init, select it now
       if (initialRunId) {
@@ -259,6 +271,7 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
             totalNodes: target.totalNodes,
             errorMessage: null,
           })
+          followSlotFinal(target)
         }
       }
       setRunsFetchDone(true)
@@ -296,6 +309,7 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
       if (
         slot.nodeStates === rt.nodeStates &&
         slot.executionStatus === mapped &&
+        slot.outcome === rt.outcome &&
         slot.completedNodes === rt.completedNodes &&
         slot.totalNodes === rt.totalNodes &&
         slot.executionId === execId &&
@@ -305,6 +319,7 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
         ...slot,
         nodeStates: rt.nodeStates as Record<string, RunSlotNodeState>,
         executionStatus: mapped,
+        outcome: rt.outcome,
         completedNodes: rt.completedNodes,
         totalNodes: rt.totalNodes,
         executionId: execId,
@@ -525,6 +540,7 @@ export function useRunSlots({ slug, user, persistRuns, initialRunId, initialSide
         errorMessage: null,
       })
     }
+    followSlotFinal(slot)
 
     // Update URL for deep-linking (replaceState, no navigation)
     const url = new URL(window.location.href)

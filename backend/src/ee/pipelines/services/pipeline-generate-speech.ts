@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { speechChargeOverride } from "../../../lib/speech-estimate.js"
 import { probeAudioDuration } from "./_probe-audio.js"
 import { runPipelineWorkerJob } from "./_run-worker-job.js"
 
@@ -73,6 +74,12 @@ export async function pipelineGenerateSpeech(
   // the route's resolution logic in routes/text-to-speech.ts).
   const modelIdentifier = provider === "elevenlabs" ? "elevenlabs-turbo" : provider
 
+  // Seam 3 (decided 2026-10-06): while length pricing is on, this job reserves
+  // what the one override computes for the text it sends, on the model the
+  // payload names (`provider: modelIdentifier` below) — the route guard's own
+  // number for the same request. Undefined while the flag is off: the row.
+  const creditOverride = await speechChargeOverride("text-to-speech", { provider: modelIdentifier, text }, modelIdentifier)
+
   const base = await runPipelineWorkerJob({
     supabase,
     pipelineId,
@@ -109,6 +116,7 @@ export async function pipelineGenerateSpeech(
       allowDefaultVoiceFallback: true,
     }),
     modelIdentifier,
+    creditOverride,
     assetType: "audio",
     pickOutputUrl: (output) =>
       (output.audioUrl as string | undefined) ?? (output.url as string | undefined),

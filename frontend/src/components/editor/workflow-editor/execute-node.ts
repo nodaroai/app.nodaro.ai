@@ -1,8 +1,10 @@
 import { toast } from "sonner";
 import { DEFAULT_OVERLAY_LAYER, OVERLAY_MAX_LAYERS } from "@/types/nodes";
-import { assertCanvasExecutionAllowed, scene3DInputAssetsForEngine, overlayVariantIdFromHandle, readScriptSettings, applySettingsInput, SETTINGS_INPUT_CONSUMERS, resolveMusicProvider, resolveEditPlanSources, describeAudioSyncOffsetIssue, type AudioSyncOffsetSource, transcriptSpeakerLabels, cameraSwitchEdlProblem, cameraSwitchSettingsPayload } from "@nodaro/shared";
+import { captionPlanPassThrough, styleCaptionPlan, combineVideosPassThrough, videoOverlayPassThrough, assertCanvasExecutionAllowed, scene3DInputAssetsForEngine, overlayVariantIdFromHandle, readScriptSettings, applySettingsInput, SETTINGS_INPUT_CONSUMERS, resolveMusicProvider, resolveEditPlanSources, describeAudioSyncOffsetIssue, type AudioSyncOffsetSource, transcriptSpeakerLabels, cameraSwitchEdlProblem, cameraSwitchSettingsPayload, renderPlanClipKey, collectionRecordHeadline, isCollectionUrl } from "@nodaro/shared";
+import { browserRenderPlanBasis } from "./apply-edl-stamps";
 import { findUpstreamSunoIds } from "@/lib/suno-ids";
 import { contentRunResultPatch } from "@/lib/content-run-output";
+import { sourceJsonOf } from "@/lib/edit-plan-saved-output";
 import { llmAdvancedParams } from "@/lib/llm-advanced-params"
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { overlayCompositionKey } from "@/lib/image-overlay-platform";
@@ -121,11 +123,14 @@ import { applyInstagramScrapeFailure, applyInstagramScrapeResult, instagramScrap
 import { applySocialSearchFailure, applySocialSearchResult, socialSearchRunStartPatch } from "@/components/nodes/social-search-run-state";
 import { metaAdsAdvertisersFrom, metaAdsNodeMode, metaAdsScrapeWireSources, splitMetaAdsAdvertiserNames, splitInstagramTargets, instagramScrapeMode, socialSearchRequestFromNode } from "@nodaro/shared";
 import { clampContentIdeasCount, CONTENT_IDEAS_MAX_RECIPE_INPUTS } from "@nodaro/shared";
+import { ttsSupportsStitching, normalizeTtsNeighbourText } from "@nodaro/shared";
 import { tx } from "@/lib/i18n";
+import { previewSingleRunRefusal } from "./preview-gate";
+import { completeAsPassThrough } from "./pass-through";
 import { resolveTemplate, applyTemplate } from "@/lib/prompt-templates";
 import {
-  readPromptAffixes, unwrapEditPlanOutput, clampEditPlanClipCount, asEditPlanMode, asEditPlanTier, resolveSlideshowTransition, ASPECT_RATIO_DIMENSIONS, buildPro3DRenderSource, pro3DRenderTimingOverrides, resolveScene3DAuthoringEngine, COMPOSER_PLAN_MAP, VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, isSeedance2Provider, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, uiResolutionFill, supportsExtendRender, isMinimaxH3Provider, isVeoProvider, isGeminiOmniProvider, MODEL_CATALOG, splitGeneratedItems, LLM_FEATURE_DEFAULTS, resolveVideoProviderForMode, resolveVideoModeForInputs, VIDEO_REF_LIMITS_BY_PROVIDER, resolveEffectiveSourceType, sourceRefKey, hasFeature, countRefModalityEdges, type ReferenceModality, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionSlug, characterMentionableAssetArrays, selectLoraRoutingForMentions, expandExtraRefsToConnectedReferences, resolveSeparator, evaluateJsonPath, stringifyPathResults, alignedFieldList, spreadJsonArrayIfSingleton, zipMergeLists, evaluateJsonExpression, buildExpressionFromVisual, jsonResultToList, tryParseJson, evaluateCondition, evaluateConditionGroup, resolveConditionValue, sortListItems, runSelector, resolveSelectorRefs, buildConditionVariables, VARIABLES_HANDLE_ID, clampSmartCutWindow, resolveGvpAnchorWire, resolveTopazUpscale, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY, unresolvedRefTokens, classifyRefToken, canonicalVarName, parseNodeRef, NODE_REF_PATTERN, DEFAULT_TRANSCRIBE_NODE_PROVIDER, DEFAULT_TEXT_TO_AUDIO_PROVIDER, transcribeLaneSupportsWordTimestamps, transcribeWordTimestampsRefusal, normalizeCaptionNumericLevers } from "@nodaro/shared"
-import { applyPromptAffixes, appendPromptHints, ownMotionHint, buildSeedanceVideoEditPrompt, composeNegative, computeNodePrompt, computeScriptTopic, computeLlmChatFields, pickerFanoutTargets, buildImagePrompt, assembleImageInput, composeVideoPromptText, readDirectionFields, readStructuredFields, readSubjectFields, collectIdentityLockClause, characterLockToRefLock, assembleSunoInput, type AssembleSunoResult, NODE_PROMPT_CANDIDATE_FIELDS } from "@nodaro/prompts"
+  readPromptAffixes, unwrapEditPlanOutput, editPlanResultPatch, clampEditPlanClipCount, parseEditPlanMode, asEditPlanTier, resolveSlideshowTransition, ASPECT_RATIO_DIMENSIONS, buildPro3DRenderSource, pro3DRenderTimingOverrides, resolveScene3DAuthoringEngine, COMPOSER_PLAN_MAP, VIDEO_INPUT_LIP_SYNC_PROVIDERS, FLEXIBLE_INPUT_LIP_SYNC_PROVIDERS, isSeedance2Provider, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, uiResolutionFill, supportsExtendRender, isMinimaxH3Provider, isVeoProvider, isGeminiOmniProvider, MODEL_CATALOG, splitGeneratedItems, LLM_FEATURE_DEFAULTS, resolveVideoProviderForMode, resolveVideoModeForInputs, VIDEO_REF_LIMITS_BY_PROVIDER, resolveEffectiveSourceType, sourceRefKey, hasFeature, countRefModalityEdges, type ReferenceModality, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionSlug, characterMentionableAssetArrays, selectLoraRoutingForMentions, expandExtraRefsToConnectedReferences, resolveSeparator, evaluateJsonPath, stringifyPathResults, alignedFieldList, spreadJsonArrayIfSingleton, zipMergeLists, evaluateJsonExpression, buildExpressionFromVisual, jsonResultToList, tryParseJson, evaluateCondition, evaluateConditionGroup, resolveConditionValue, sortListItems, runSelector, resolveSelectorRefs, buildConditionVariables, VARIABLES_HANDLE_ID, clampSmartCutWindow, resolveGvpAnchorWire, resolveTopazUpscale, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY, unresolvedRefTokens, classifyRefToken, canonicalVarName, parseNodeRef, NODE_REF_PATTERN, DEFAULT_TRANSCRIBE_NODE_PROVIDER, DEFAULT_TEXT_TO_AUDIO_PROVIDER, transcribeLaneSupportsWordTimestamps, transcribeWordTimestampsRefusal, normalizeCaptionNumericLevers } from "@nodaro/shared"
+import { applyPromptAffixes, appendPromptHints, ownMotionHint, buildSeedanceVideoEditPrompt, composeNegative, computeNodePrompt, computeScriptTopic, computeLlmChatFields, pickerFanoutTargets, buildImagePrompt, assembleImageInput, composeVideoPromptText, readDirectionFields, readStructuredFields, readSubjectFields, collectIdentityLockClause, characterLockToRefLock, assembleSunoInput, type AssembleSunoResult, NODE_PROMPT_CANDIDATE_FIELDS, hookPlateCaptionSegments, CAPTION_SEGMENT_LEVER_KEYS } from "@nodaro/prompts"
 import {
   appendScene3DStillScopingLines,
   collectScene3DLayoutReferences,
@@ -258,6 +263,8 @@ import type {
   InstagramScrapeNodeData,
   SocialSearchNodeData,
   TelegramChannelFeedData,
+  CollectionReadData,
+  CollectionWriteData,
   ExtractFieldNodeData,
   JsonProcessNodeData,
   FilterListNodeData,
@@ -1159,6 +1166,17 @@ function executeNodeCore(
 ): Promise<string> {
   assertCanvasExecutionAllowed([node]);
   const { nodes, edges } = useWorkflowStore.getState();
+  // The backstop for every direct caller (auto-execute, a list iteration, the
+  // AI writer): a node a Preview render gates would consume the preview. The
+  // Run entry points refuse it first (confirmRunOrAbort).
+  {
+    const refusal = previewSingleRunRefusal(node.id, nodes, edges);
+    if (refusal) {
+      useWorkflowStore.getState().updateNodeData(node.id, { executionStatus: "failed", errorMessage: refusal });
+      toast.error(refusal);
+      return Promise.reject(new Error(refusal));
+    }
+  }
   // Inputs are resolved on the iteration's ROW (`listRowIndex`, from the fan-out
   // plan); `listIterationIndex` stays the iteration's identity — the idempotency
   // key below. They differ under Repeat xN and empty cells. Outside a list-
@@ -3329,6 +3347,10 @@ function executeNodeCore(
       ...(ttsData.style != null && { style: ttsData.style }),
       ...(ttsData.speed != null && { speed: ttsData.speed }),
       ...(ttsData.languageCode && { languageCode: ttsData.languageCode }),
+      // Continuity across clips — `node.data` is already field-mapping-resolved here, so a wired Text node's value is what is sent.
+      // Only for a model whose sheet stitches (a node switched away from one keeps a mapping the panel no longer shows), and
+      // through the one rule the server's exits apply — trimmed, shortened to the cap — so the route never answers 400.
+      ...(ttsSupportsStitching(ttsData.provider) ? normalizeTtsNeighbourText(ttsData) : {}),
       voiceType: (ttsData.voiceType as "premade" | "custom" | "library" | undefined) || "premade",
     };
     setUserPromptTemplate(ttsData.directText?.trim() || undefined);
@@ -3520,7 +3542,16 @@ function executeNodeCore(
       .join("\n")
       .trim();
     setUserPromptTemplate(dialogueTemplate || undefined);
-    return runProcessingNode(
+    // The run's timings (`output_data.transcript`, a model that returns them):
+    // on the node as the bare active-result field every json consumer reads —
+    // ALWAYS written, so a run without timings clears an earlier run's — and on
+    // the result as its own `transcript`, so switching results switches
+    // timings. (The node fields also ride onto the result in poll-job, so a
+    // canvas take carries `generatedJson` beside `transcript`; the server lanes
+    // write `transcript` alone — lib/json-run-result.ts. Both engines read
+    // `transcript` first, then the bare field.)
+    const transcriptOf = (od: Record<string, unknown>) => (od.transcript !== undefined ? { transcript: od.transcript } : {});
+    return pollJobWithNodeUpdate(
       node.id,
       () =>
         textToDialogueApi(
@@ -3530,10 +3561,15 @@ function executeNodeCore(
           d.languageCode || undefined,
           d.seed,
           d.applyTextNormalization,
+          d.provider,
+          d.similarityBoost,
         ),
       "generatedAudioUrl",
       "Text to Dialogue",
       ctx,
+      (od) => ({ generatedJson: od.transcript }),
+      undefined,
+      { resultFields: transcriptOf },
     );
   }
 
@@ -3658,6 +3694,7 @@ function executeNodeCore(
       if (v === null) return null;
       const entry: {
         voiceId: string;
+        engine?: "sts" | "v3" | "v4";
         stability?: number;
         similarityBoost?: number;
         style?: number;
@@ -3666,6 +3703,9 @@ function executeNodeCore(
         volume?: number;
         seed?: number;
       } = { voiceId: v.voiceId };
+      // Re-speak lane (v3/v4). Dropping it runs the voice on the default
+      // speech-to-speech lane at a different price, with no error.
+      if (v.engine != null) entry.engine = v.engine;
       if (v.stability != null) entry.stability = v.stability;
       if (v.similarityBoost != null) entry.similarityBoost = v.similarityBoost;
       if (v.style != null) entry.style = v.style;
@@ -5400,21 +5440,127 @@ function executeNodeCore(
       return Promise.reject(new Error(msg));
     }
     updateNodeData(node.id, { ...RUN_START_RESET });
+    const workflowId = useWorkflowStore.getState().workflowId;
     return import("@/lib/api").then(({ telegramChannelFetchApi }) =>
-      telegramChannelFetchApi({ channel, sinceId: d.lastSeenId, limit: d.limit })
+      // The route owns the position (node_cursors): it reads and advances it
+      // from the workflow + node ids this call carries. The editor's old
+      // cursor rides as a one-shot seed until the node first runs statefully.
+      telegramChannelFetchApi({ channel, sinceId: d.lastSeenId, limit: d.limit, mode: "poll", nodeId: node.id })
         .then((res) => {
           updateNodeData(node.id, {
             executionStatus: "completed",
             generatedText: res.text,
-            // Advance the cursor so the next run only emits newer posts.
-            lastSeenId: res.latestId,
+            generatedJson: res.posts,
+            lastSeenId: res.cursor.stateful ? undefined : (res.latestId ?? undefined),
           });
+          if (workflowId) {
+            void Promise.all([import("@/lib/query-client"), import("@/lib/query-keys")]).then(([{ queryClient }, { queryKeys }]) =>
+              queryClient.invalidateQueries?.({ queryKey: queryKeys.telegramFeed.cursor(workflowId, node.id) }),
+            );
+          }
           guardedToast.success(res.count > 0 ? tx("nodeRun.readNewPostS", { count: res.count }) : tx("nodeRun.noNewPosts"));
           return res.text ?? "";
         })
         .catch((err: Error) => {
           updateNodeData(node.id, { executionStatus: "failed", errorMessage: err.message || "Failed to read channel" });
           guardedToast.error(err.message || tx("nodeRun.failedToReadChannel"));
+          throw err;
+        }),
+    );
+  }
+
+  if (node.type === "collection-read") {
+    const d = node.data as CollectionReadData;
+    const { updateNodeData } = useWorkflowStore.getState();
+    if (!d.collectionId) {
+      const msg = nodeRunError(d.label, "nodeRun.collectionPickOne");
+      updateNodeData(node.id, { executionStatus: "failed", errorMessage: msg });
+      guardedToast.error(msg);
+      return Promise.reject(new Error(msg));
+    }
+    updateNodeData(node.id, { ...RUN_START_RESET });
+    return import("@/lib/api").then(({ collectionReadApi }) =>
+      collectionReadApi({
+        collectionId: d.collectionId,
+        windowAmount: d.windowAmount,
+        windowUnit: d.windowUnit,
+        limit: d.limit,
+        order: d.order,
+        textFormat: d.textFormat,
+        nodeId: node.id,
+      })
+        .then((res) => {
+          updateNodeData(node.id, {
+            executionStatus: "completed",
+            generatedJson: res.records,
+            generatedText: res.text,
+          });
+          guardedToast.success(
+            res.count === 0 ? tx("nodeRun.collectionNone") : res.count === 1 ? tx("nodeRun.collectionReadOne") : tx("nodeRun.collectionRead", { count: res.count }),
+          );
+          return res.text ?? "";
+        })
+        .catch((err: Error) => {
+          updateNodeData(node.id, { executionStatus: "failed", errorMessage: err.message || tx("nodeRun.collectionReadFailed") });
+          guardedToast.error(err.message || tx("nodeRun.collectionReadFailed"));
+          throw err;
+        }),
+    );
+  }
+
+  if (node.type === "collection-write") {
+    const d = node.data as CollectionWriteData;
+    const { updateNodeData } = useWorkflowStore.getState();
+    if (!d.collectionId) {
+      const msg = nodeRunError(d.label, "nodeRun.collectionPickOne");
+      updateNodeData(node.id, { executionStatus: "failed", errorMessage: msg });
+      guardedToast.error(msg);
+      return Promise.reject(new Error(msg));
+    }
+    // The item: what reached `in` (JSON text from a json wire, or plain text);
+    // the picture and the video wired in ride along as links.
+    const item = overridePrompt ?? inputs.prompt;
+    // Only a real address rides along as a medium — the wires, and a list row
+    // the fan-out read as a media link (mirrors the server's body builder).
+    const media: Array<{ type: "image" | "video"; url: string }> = [];
+    if (isCollectionUrl(inputs.imageUrl)) media.push({ type: "image", url: inputs.imageUrl });
+    if (isCollectionUrl(inputs.videoUrl)) media.push({ type: "video", url: inputs.videoUrl });
+    if (isCollectionUrl(overrideMediaUrl) && !media.some((m) => m.url === overrideMediaUrl)) {
+      media.push({ type: /\.(mp4|mov|webm)(\?|$)/i.test(overrideMediaUrl) ? "video" : "image", url: overrideMediaUrl });
+    }
+    const field = (v: unknown) => (typeof v === "string" && v.trim() ? v : undefined);
+    updateNodeData(node.id, { ...RUN_START_RESET });
+    return import("@/lib/api").then(({ collectionWriteApi }) =>
+      collectionWriteApi({
+        collectionId: d.collectionId,
+        item,
+        title: field(d.title),
+        text: field(d.text),
+        link: field(d.link),
+        dedupeKey: field(d.dedupeKey),
+        media,
+        nodeId: node.id,
+      })
+        .then((res) => {
+          const headline = collectionRecordHeadline(res.record);
+          updateNodeData(node.id, {
+            executionStatus: "completed",
+            generatedJson: res.record,
+            generatedText: headline,
+            lastOutcome: res.outcome,
+            lastEvicted: res.evicted,
+          });
+          // A replay IS the record saved (the same write answered twice); only a duplicate key is "not saved twice".
+          guardedToast.success(
+            res.outcome === "duplicate"
+              ? tx("nodeRun.collectionDuplicate", { name: res.collection.name })
+              : tx("nodeRun.collectionSaved", { name: res.collection.name }),
+          );
+          return JSON.stringify(res.record);
+        })
+        .catch((err: Error) => {
+          updateNodeData(node.id, { executionStatus: "failed", errorMessage: err.message || tx("nodeRun.collectionWriteFailed") });
+          guardedToast.error(err.message || tx("nodeRun.collectionWriteFailed"));
           throw err;
         }),
     );
@@ -6825,7 +6971,11 @@ function executeNodeCore(
     // the default corner badge (D2); empty slots dropped; `slot` stamped;
     // presets expanded. Mirrors backend payload-builder.ts case "video-overlay".
     const wired = inputs.overlayImageUrls ?? [];
-    const request = assembleVideoOverlayRequest({ videoUrl: baseUrl, data: d, wiredImageUrls: wired });
+    // A wired layer plan rides in `planLayers` (plan layers first, then the slot layers).
+    const request = assembleVideoOverlayRequest({ videoUrl: baseUrl, data: d, wiredImageUrls: wired, planLayers: inputs.layerPlan });
+    // An empty plan with no other layer outputs the base unchanged — free, no job (R14).
+    const pass = videoOverlayPassThrough({ videoUrl: baseUrl, planWired: inputs.layerPlan !== undefined, layerCount: request.layers.length });
+    if (pass && !request.planError) return Promise.resolve(completeAsPassThrough(node.id, pass));
     const verdict = validateVideoOverlayRequest(request);
 
     if (!verdict.ok) {
@@ -6838,7 +6988,7 @@ function executeNodeCore(
     // It also rides on the request (within the route's bound): the worker
     // echoes it into output_data, so a run that lands after a page reload
     // (restore / reconcile read the REST job) reads fresh as well.
-    const resultCompositionKey = videoOverlayCompositionKey({ baseUrl, sources: videoOverlaySlotSources(d.layers ?? [], wired), data: d });
+    const resultCompositionKey = videoOverlayCompositionKey({ baseUrl, sources: videoOverlaySlotSources(d.layers ?? [], wired), data: d, planLayers: inputs.layerPlan });
     const sentKey = resultCompositionKey.length <= VIDEO_OVERLAY_MAX_COMPOSITION_KEY_LENGTH ? { resultCompositionKey } : {};
     setUserPromptTemplate(undefined);
     return runProcessingNode(
@@ -6952,6 +7102,8 @@ function executeNodeCore(
       if (ordered.length >= 2) videoUrls = ordered;
     }
 
+    const single = combineVideosPassThrough(videoUrls);
+    if (single) return Promise.resolve(completeAsPassThrough(node.id, single));
     if (videoUrls.length < 2) {
       toast.error(
         nodeRunError(combineData.label, "nodeRun.needAtLeast2Video"),
@@ -6994,6 +7146,28 @@ function executeNodeCore(
     };
     const edl = parseMaybe(edlRaw);
     const transcript = inputs.transcript !== undefined ? parseMaybe(inputs.transcript) : undefined;
+    // The plan clip this iteration cuts (A1b): the clip its list row reads of
+    // the Edit Plan behind its `edl` wire, picked by every wire's selector on
+    // the way — never the EDL rendered here (Camera Switch can move a clip's
+    // outer span). The row only when a list drives it (`listRowIndex`), never
+    // the iteration number. The server calls the same rule (applyEdlClipKey);
+    // the worker stamps it on the result.
+    const { nodes: graphNodes, edges: graphEdges } = useWorkflowStore.getState();
+    const clipKey = renderPlanClipKey(
+      node.id,
+      graphNodes,
+      graphEdges,
+      (planNode) => extractNodeOutputAsList(planNode as WorkflowNode, "edl"),
+      listRowIndex,
+    );
+    // The plan value it cuts (A3-1), only when that is the plan's own value:
+    // a render behind Camera Switch is never stamped here (apply-edl-stamps.ts).
+    const planBasis = browserRenderPlanBasis(
+      node.id,
+      graphNodes,
+      graphEdges,
+      listRowIndex,
+    );
     setUserPromptTemplate(undefined);
     return runApplyEdl(
       node.id,
@@ -7004,6 +7178,8 @@ function executeNodeCore(
         crossfadeMs: aeData.crossfadeMs,
         sources: inputs.sources,
         transcript,
+        ...(clipKey ? { clipKey } : {}),
+        ...(planBasis ? { planBasis } : {}),
       },
       ctx,
     );
@@ -7063,13 +7239,17 @@ function executeNodeCore(
     const plannedTranscript = planned.transcriptSourceId && typeof transcript === "object"
       ? { ...(transcript as Record<string, unknown>), sourceId: planned.transcriptSourceId }
       : transcript;
-    const mode = asEditPlanMode(epData.mode);
+    // The mode AS SAVED, never coerced (decided 2026-10-06): POST /v1/edit-plan
+    // refuses an unknown or undeclared mode before anything is charged, in the
+    // message every lane uses. An absent mode is the node default, tighten.
+    const savedMode: unknown = epData.mode === undefined ? "tighten" : epData.mode;
+    const mode = parseEditPlanMode(savedMode);
     const { updateNodeData } = useWorkflowStore.getState();
     updateNodeData(node.id, { ...RUN_START_RESET, generatedJson: undefined, currentJobProgress: undefined });
     setUserPromptTemplate(epData.instructions?.trim() || undefined);
     return new Promise<string>((resolve, reject) => {
       editPlan({
-        mode,
+        mode: mode ?? (typeof savedMode === "string" ? savedMode : JSON.stringify(savedMode) ?? String(savedMode)),
         planTier: asEditPlanTier(epData.planTier),
         transcript: plannedTranscript,
         silence,
@@ -7112,9 +7292,13 @@ function executeNodeCore(
                   // Edl, chapters → { version, chapters }. ONE rule shared with the
                   // backend + reconcile (unwrapEditPlanOutput).
                   const plan = unwrapEditPlanOutput(job.output_data);
+                  // A different plan clears the person's review; the same plan
+                  // keeps it (decided 2026-10-05). The review the node holds NOW:
+                  // generatedJson was reset at run start, the review was not.
+                  const heldReview = useWorkflowStore.getState().nodes.find((n) => n.id === node.id)?.data as { editedEdl?: unknown } | undefined;
                   updateNodeData(node.id, {
                     executionStatus: "completed",
-                    generatedJson: plan,
+                    ...editPlanResultPatch(plan, heldReview?.editedEdl),
                     currentJobId: undefined,
                     currentJobProgress: undefined,
                   });
@@ -8224,6 +8408,27 @@ function executeNodeCore(
       return Promise.reject(new Error("No video"));
     }
     const d = node.data as AddCaptionsData;
+    // A wired caption plan (spec §6.2): the opening line is Hook Plate, the rest
+    // this node's style — the ONE shared composition the DAG engine runs, checked
+    // against the route's segment schema before the request. The request carries
+    // only videoUrl and segments (no lever can leak into the plate). Nothing
+    // timed → the video passes through, free.
+    if (inputs.captionPlan !== undefined) {
+      const styled = styleCaptionPlan(inputs.captionPlan, node.data as Record<string, unknown>, { segmentsFor: hookPlateCaptionSegments, leverKeys: CAPTION_SEGMENT_LEVER_KEYS });
+      if ("error" in styled) {
+        toast.error(nodeRunText(d.label, styled.error));
+        return Promise.reject(new Error(styled.error));
+      }
+      const pass = captionPlanPassThrough({ videoUrl, planWired: true, segmentCount: styled.segments.length });
+      if (pass) return Promise.resolve(completeAsPassThrough(node.id, pass));
+      return runProcessingNode(
+        node.id,
+        () => addCaptionsApi(videoUrl, "", undefined, undefined, undefined, undefined, undefined, ctx.userId, { segments: styled.segments }),
+        "generatedVideoUrl",
+        "Add Captions",
+        ctx,
+      );
+    }
     // Wired text first, then the node's OWN `text` — the same precedence the DAG
     // engine uses (payload-builder: `resolvedInputs.prompt || resolveRefs(data.text)`).
     // Reading only `inputs.prompt` dropped the authored text of every imported /
@@ -8315,9 +8520,24 @@ function executeNodeCore(
     const volumes = sourceEntries.map(
       (e) => mixData.trackVolumes?.[e.nodeId] ?? 100,
     );
+    // Ducking is keyed by node id on the node; the API wants the key track's
+    // index in the final order. A key that is no longer connected is no duck.
+    const duckIndex = mixData.duckUnder
+      ? sourceEntries.findIndex((e) => e.nodeId === mixData.duckUnder)
+      : -1;
+    const duck =
+      duckIndex >= 0
+        ? {
+            under: duckIndex,
+            ...(typeof mixData.duckAmount === "number" &&
+            Number.isFinite(mixData.duckAmount)
+              ? { amount: Math.min(100, Math.max(0, mixData.duckAmount)) }
+              : {}),
+          }
+        : undefined;
     return runProcessingNode(
       node.id,
-      () => mixAudioApi(audioUrls, volumes, ctx.userId),
+      () => mixAudioApi(audioUrls, volumes, ctx.userId, duck),
       "generatedAudioUrl",
       "Mix Audio",
       ctx,
@@ -9400,8 +9620,9 @@ function executeNodeCore(
       return Promise.resolve("");
     }
 
-    // Prefer structured json from the source node's data (web-scrape's generatedJson).
-    let value: unknown = (src.data as { generatedJson?: unknown }).generatedJson;
+    // Prefer structured json from the source node's data (web-scrape's
+    // generatedJson; an Edit Plan's plan as the person's review leaves it).
+    let value: unknown = sourceJsonOf(src);
 
     // When upstream is a list-producing node (filter-list / deduplicate /
     // merge-lists / split-text), iterate over the FULL list so the path
@@ -9477,7 +9698,7 @@ function executeNodeCore(
       return Promise.resolve("");
     }
 
-    let input: unknown = (src.data as { generatedJson?: unknown }).generatedJson;
+    let input: unknown = sourceJsonOf(src);
     if (input === undefined) {
       const text = extractNodeOutput(src, inEdge.sourceHandle ?? undefined);
       if (typeof text !== "string" || text.length === 0) {

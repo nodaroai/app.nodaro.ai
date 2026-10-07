@@ -70,6 +70,7 @@ describe("buildMcpServer full catalog (v1.1)", () => {
     expect(names.has("animate_image")).toBe(true)
     expect(names.has("extract_frame")).toBe(true)
     expect(names.has("combine_videos")).toBe(true)
+    expect(names.has("capture_site")).toBe(true)
     expect(names.has("add_captions")).toBe(true)
     expect(names.has("extend_video")).toBe(true)
     // audio: generate_music, generate_speech, download_youtube_audio

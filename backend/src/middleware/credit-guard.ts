@@ -107,6 +107,16 @@ export interface CreditGuardOpts {
    *  ee/lib/__tests__/check-only-credit-guard.test.ts, which fails when a
    *  new no-reserve route appears unclassified. */
   checkOnly?: boolean
+  /** The id `modelResolver` returns is the model the request RUNS on, so the
+   *  surface deny reads it too. Routes whose provider field is optional (an
+   *  omitted or unknown value runs on a default: text-to-speech,
+   *  text-to-dialogue) set this so a deployment that denies the default is not
+   *  bypassed by leaving the field out. The deny still checks the raw
+   *  `body.provider` first, so a route that sets this refuses everything it did
+   *  before. Leave it off where the resolver returns a PRICING id that differs
+   *  from the dispatch id (text-to-video's `grok` -> `grok-i2v`), or the deny
+   *  would match a model the caller never named. */
+  denyResolvedModel?: boolean
 }
 
 // FastifyRequest augmentation (userId, userRole, creditReservation, storageSnapshot)
@@ -170,6 +180,20 @@ export function creditGuard(
             message: deniedModelRejectionMessage([rawProvider]),
           },
         })
+      }
+      // The id the request actually runs on, for routes that opt in (see
+      // `CreditGuardOpts.denyResolvedModel`): the SAME function the credit row
+      // is priced from, so the model denied is the model billed and run.
+      if (opts?.denyResolvedModel) {
+        const resolved = modelResolver(req)
+        if (typeof resolved === "string" && resolved && resolved !== rawProvider && isModelDenied(resolved)) {
+          return reply.code(403).send({
+            error: {
+              code: "model_not_available",
+              message: deniedModelRejectionMessage([resolved]),
+            },
+          })
+        }
       }
       const nodeType = (req.routeOptions?.url ?? "").replace(/^\/v1\//, "")
       // Per USER, not per credential: the admin switch hides a node from users,

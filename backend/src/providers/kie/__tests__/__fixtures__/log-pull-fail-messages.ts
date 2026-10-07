@@ -27,6 +27,11 @@ export const UNCLASSIFIED_MODERATION_MESSAGES: readonly { readonly failMsg: stri
   { failMsg: "Content was flagged by the safety system. Try different prompts or inputs.", rows: 4 },
   { failMsg: "The input or output was flagged as sensitive. Please try again with different inputs.", rows: 5 },
   { failMsg: "Your input was rejected. Please try again or with a different input.", rows: 1 },
+  // Prod 2026-10-06, jobs 01deaa71 and a5c8658d (gemini-omni-flash video-edit
+  // with uploaded audio), from Railway: `task failed: [400] <this>`. Neither
+  // regex knew "Google safety review", so the 400 fell to the generic
+  // "rejected these settings" branch.
+  { failMsg: "Request blocked: The uploaded audio was flagged by Google safety review.", rows: 2 },
 ]
 
 /** Parameter rejects from the same pull (§11.3, routed to PR 5). Present here

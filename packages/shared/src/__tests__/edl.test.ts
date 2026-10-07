@@ -20,6 +20,9 @@ import {
   clampEditPlanClipCount,
   EDIT_PLAN_DEFAULT_CLIP_COUNT,
   EDIT_PLAN_MAX_CLIP_COUNT,
+  EDIT_PLAN_MODES,
+  asEditPlanMode,
+  parseEditPlanMode,
 } from "../edit-plan-contract.js"
 import { editPlanSourceDurationSec } from "../video-duration.js"
 
@@ -605,6 +608,37 @@ describe("edit-plan credit-id scheme", () => {
   it("builds `edit-plan:<mode>:<tier>:<bucket>m`", () => {
     expect(buildEditPlanCreditId("tighten", "standard", 45 * 60)).toBe("edit-plan:tighten:standard:60m")
     expect(buildEditPlanCreditId("clips", "premium", undefined)).toBe("edit-plan:clips:premium:180m")
+    expect(buildEditPlanCreditId("trailer", "standard", 45 * 60)).toBe("edit-plan:trailer:standard:60m")
+  })
+})
+
+describe("edit-plan modes — trailer (Track D1)", () => {
+  it("trailer is a known mode, after the three Phase-1 modes", () => {
+    expect(EDIT_PLAN_MODES).toEqual(["tighten", "clips", "chapters", "trailer"])
+  })
+
+  it("asEditPlanMode keeps every known mode and defaults anything else to tighten", () => {
+    for (const m of EDIT_PLAN_MODES) expect(asEditPlanMode(m)).toBe(m)
+    expect(asEditPlanMode("teaser")).toBe("tighten")
+    expect(asEditPlanMode(undefined)).toBe("tighten")
+  })
+
+  // Round 4 (decided 2026-10-06): the app refuses a mode it does not know
+  // instead of planning (and charging) it as tighten. asEditPlanMode is a
+  // published function, so its coercion stays; the strict sibling never
+  // substitutes a mode.
+  it("parseEditPlanMode returns every known mode and undefined for anything else", () => {
+    for (const m of EDIT_PLAN_MODES) expect(parseEditPlanMode(m)).toBe(m)
+    for (const v of ["teaser", "Tighten", "", " clips", undefined, null, 1, {}, ["clips"]]) {
+      expect(parseEditPlanMode(v), JSON.stringify(v)).toBeUndefined()
+    }
+  })
+
+  it("a trailer plan is one Edl at top level, unwrapped like tighten", () => {
+    const edl = tightenEdl()
+    const out = unwrapEditPlanOutput({ ...edl, viaNodaroCloud: true })
+    expect(out).toEqual(edl)
+    expect(Array.isArray(out)).toBe(false)
   })
 })
 

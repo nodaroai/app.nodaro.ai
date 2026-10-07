@@ -46,11 +46,21 @@
  * silence-detect joins with Track 0.19: its media proxy's source fetch now runs
  * under the big-media limits (up to an hour for a multi-gigabyte original),
  * which the 90-minute default no longer covers — a fixed ~2 h bound.
+ *
+ * speaker-view joins with Speaker View C2.0: its handler is a PRIVATE PLUGIN
+ * handler, which cannot carry `livenessBudgetMs`, so the video worker's
+ * dispatch site falls back to this registry (`declaredJobBudgetMs(job.name,
+ * job.data)`) for any handler that declares none. Its leaf runs the EDL
+ * timeline's formula at the worst-case slot count the payload allows
+ * (`providers/video/speaker-view-budget.ts`). Until the Speaker View node
+ * exists (C3.2) only the worker reads it; the node's dispatch fixture joins
+ * `node-executor-budget-ceilings.test.ts` then.
  * Pure: imports only the budget leaves and the engine's constants.
  */
 import { applyEdlJobBudgetMs } from "../providers/video/apply-edl-budget.js"
 import { audioSyncJobBudgetMs } from "../providers/audio/audio-sync-budget.js"
 import { silenceDetectJobBudgetMs } from "../providers/audio/silence-detect-budget.js"
+import { speakerViewJobBudgetMs } from "../providers/video/speaker-view-budget.js"
 import {
   NODE_TIMEOUT_MS,
   POLL_ABSOLUTE_TIMEOUT_MS,
@@ -64,6 +74,7 @@ const DECLARED_JOB_BUDGETS: Readonly<Record<string, JobBudgetFn>> = Object.freez
   "apply-edl": applyEdlJobBudgetMs,
   "audio-sync": audioSyncJobBudgetMs,
   "silence-detect": silenceDetectJobBudgetMs,
+  "speaker-view": speakerViewJobBudgetMs,
 })
 
 /** Every job name that can declare a budget — the `job_type` filter a row

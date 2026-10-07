@@ -1,0 +1,91 @@
+# Migration-number guard (decided 2026-10-06, after 459 and 464 were each
+# taken twice on dev within minutes and every PR's Backend Tests went red).
+#
+# `.sequence` was meant to turn a parallel allocation into a merge conflict,
+# but two PRs that bump it to the SAME number write the same line, git merges
+# identical hunks cleanly, and the lock never fires. Each PR's own CI is green
+# against its own (stale) merge ref, so this guard reads the LATEST base
+# branch over the API at run time — tools/check-migration-numbers.mjs.
+#
+# Two jobs:
+# - check: on every PR into dev. Fails when a new supabase/migrations/NNN_*.sql
+#   takes a number dev already holds under another filename, and names the
+#   free number: max(dev, open PRs) + 1. A new number BELOW dev's highest
+#   is flagged too (a warning for now): promoted after the higher one, it
+#   sorts before an applied migration and main's `supabase db push` refuses
+#   it. Renaming a dev migration under the same number is neither. Dev is
+#   read last, after the open PRs. A PR with no migration exits in one
+#   API call. No workflow-level `paths:` filter on purpose: a path-filtered
+#   check that is ever made required stays "Expected" forever on PRs it skips.
+# - recheck-open-prs: on every push to dev, re-runs `check` on each open PR
+#   into dev that adds a migration, so the PR whose number was just taken turns
+#   red before it merges. BEST-EFFORT, with this repo's own GITHUB_TOKEN
+#   (`actions: write`): a re-run the token is refused (e.g. a fork PR), or a
+#   PR whose head has never run this workflow is logged and skipped, never a
+#   failure of the dev push. A queued run reads dev when it starts and is left
+#   alone; a run already IN PROGRESS may have read dev from before this push,
+#   so it is waited out (up to 2 min in all, inside the 5-min timeout) and
+#   then re-run — past that it is a warning. A newer dev push cancels this job
+#   (concurrency) and its own recheck takes over. A re-run reuses the PR's
+#   original merge ref, which is fine — the script reads dev at run time.
+#
+# Fast by design: sparse checkout of the one script, no install.
+name: migration-number-guard
+on:
+  pull_request:
+    branches: [dev]
+  push:
+    branches: [dev]
+permissions: { contents: read }
+concurrency:
+  group: migration-number-guard-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  check:
+    name: Migration Number Guard
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+          sparse-checkout: tools/check-migration-numbers.mjs
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Check new migration numbers against the latest base branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_REF: ${{ github.base_ref }}
+        run: node tools/check-migration-numbers.mjs check
+
+  recheck-open-prs:
+    name: Recheck Open Migration PRs
+    if: github.event_name == 'push' && github.repository_owner == 'nodaroai'
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+          sparse-checkout: tools/check-migration-numbers.mjs
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Re-run the guard on open PRs that add a migration
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_REF: ${{ github.ref_name }}
+          GUARD_WORKFLOW: migration-number-guard.yml
+        run: node tools/check-migration-numbers.mjs recheck

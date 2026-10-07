@@ -36,7 +36,7 @@
  *     staleness, one field narrower.
  */
 
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { NODE_REGISTRY, CREDIT_BAND_SOURCES } from "../node-registry.js"
 import { STATIC_CREDIT_COSTS } from "../../ee/billing/credits.js"
 
@@ -51,9 +51,17 @@ const NON_BAND_CREDIT_STRINGS: Readonly<Record<string, string>> = {
   "apply-edl": "per-minute",
 }
 
+/** The static table as the lookup a source's `band` computer takes. */
+const staticCredits = (id: string, units = 1): number | undefined => {
+  const base = STATIC_CREDIT_COSTS[id]
+  return typeof base === "number" ? Math.ceil(base * units) : undefined
+}
+
 /** Recompute a band from the source data, independently of the registry. */
 function deriveBand(type: string): number | string {
   const source = CREDIT_BAND_SOURCES[type]!
+  const computed = source.band?.(staticCredits)
+  if (computed) return computed[0] === computed[1] ? computed[0] : `${computed[0]}-${computed[1]}`
   const [minUnits, maxUnits] = source.span ?? [1, 1]
   const prices = source.ids.map((id) => STATIC_CREDIT_COSTS[id]!)
   const min = Math.min(...prices) * minUnits
@@ -132,6 +140,9 @@ describe("node-registry credit bands are derived from the price table", () => {
   it("each band's ends are real prices from its own id set", () => {
     for (const descriptor of BANDED) {
       const source = CREDIT_BAND_SOURCES[descriptor.type]!
+      // A `band` computer in force states its own ends (the flag-on describe
+      // below pins them); with none in force the ids × span rule applies.
+      if (source.band?.(staticCredits)) continue
       const [minUnits, maxUnits] = source.span ?? [1, 1]
       const prices = source.ids.map((id) => STATIC_CREDIT_COSTS[id]!)
       const cost = descriptor.creditCost!
@@ -173,5 +184,62 @@ describe("node-registry credit bands are derived from the price table", () => {
       "these nodes advertise a credit cost their own price-table row contradicts — " +
         "drop the literal (enrichment fills it) or add the node to CREDIT_BAND_SOURCES",
     ).toEqual([])
+  })
+
+  it("a per-unit RATE row never widens a band: text-to-speech states the flat per-request rows, not its :per-100-chars rows", () => {
+    // `<model>:per-100-chars` (decided 2026-10-06) prices ONE started 100 characters
+    // and is read only while SPEECH_LENGTH_PRICING_ENABLED is on; `familyIds` would
+    // otherwise fold it in and advertise "2-30" for a run that is never below 16.
+    const ids = CREDIT_BAND_SOURCES["text-to-speech"]!.ids
+    expect(ids.length).toBeGreaterThan(0)
+    expect(ids.some((id) => id.endsWith(":per-100-chars"))).toBe(false)
+    expect(Object.keys(STATIC_CREDIT_COSTS).some((id) => id.endsWith(":per-100-chars"))).toBe(true)
+    expect(NODE_REGISTRY.find((d) => d.type === "text-to-speech")!.creditCost).toBe(deriveBand("text-to-speech"))
+    expect(deriveBand("text-to-speech")).toBe("15-30")
+    expect(deriveBand("text-to-dialogue")).toBe(25)
+  })
+})
+
+describe("with SPEECH_LENGTH_PRICING_ENABLED on, the speech bands state the length rule's own range", () => {
+  // A boot-time flag: the registry is built at module load, so the module is
+  // reloaded with the config mock on. `gen:skills` runs with the flag UNSET
+  // (CI's env has none), so the generated skill docs keep the flag-off band.
+  beforeEach(() => {
+    vi.resetModules()
+    vi.doMock("@/lib/config.js", async (importOriginal) => {
+      const orig = await importOriginal<typeof import("@/lib/config.js")>()
+      return { ...orig, speechLengthPricingEnabled: () => true }
+    })
+  })
+  afterEach(() => {
+    vi.doUnmock("@/lib/config.js")
+    vi.resetModules()
+  })
+
+  it("text-to-speech reads from turbo's floor to turbo's cap; text-to-dialogue from the floor to the dialogue cap", async () => {
+    const { NODE_REGISTRY: registry, CREDIT_BAND_SOURCES: sources } = await import("../node-registry.js")
+    const { STATIC_CREDIT_COSTS: table } = await import("../../ee/billing/credits.js")
+    const { getMaxTtsChars, getDialogueCapabilities, speechPriceUnits, speechUnitCreditId, SPEECH_FLOOR_UNITS, DIALOGUE_PROVIDERS } = await import("@nodaro/shared")
+    const tts = registry.find((d) => d.type === "text-to-speech")!
+    const dialogue = registry.find((d) => d.type === "text-to-dialogue")!
+    // 8 × 2 (turbo) … 400 units × 2 (turbo at 40,000 characters)
+    expect(tts.creditCost).toBe(`${SPEECH_FLOOR_UNITS * table["elevenlabs-turbo:per-100-chars"]!}-${speechPriceUnits(getMaxTtsChars("elevenlabs-turbo")) * table["elevenlabs-turbo:per-100-chars"]!}`)
+    expect(tts.creditCost).toBe("16-800")
+    const dialogueHigh = Math.max(...DIALOGUE_PROVIDERS.map((id) => speechPriceUnits(getDialogueCapabilities(id).maxChars) * table[speechUnitCreditId(id)]!))
+    expect(dialogue.creditCost).toBe(`${SPEECH_FLOOR_UNITS * 4}-${dialogueHigh}`)
+    expect(dialogue.creditCost).toBe("32-200")
+    // The flag-on computer is what `deriveBand` would read too — the sources agree with the registry.
+    const lookup = (id: string, units = 1) => (typeof table[id] === "number" ? Math.ceil(table[id]! * units) : undefined)
+    expect(sources["text-to-speech"]!.band!(lookup)).toEqual([16, 800])
+    expect(sources["text-to-dialogue"]!.band!(lookup)).toEqual([32, 200])
+  })
+
+  it("the charged descriptor (GET /v1/nodes) states the same range at the charged prices", async () => {
+    const { NODE_REGISTRY: registry, chargedDescriptor } = await import("../node-registry.js")
+    const { STATIC_CREDIT_COSTS: table } = await import("../../ee/billing/credits.js")
+    const tts = registry.find((d) => d.type === "text-to-speech")!
+    // A per-service margin of 10% on every row, the way the price table marks up.
+    const prices = { credits: (id: string, units = 1) => (typeof table[id] === "number" ? Math.ceil((Math.ceil(table[id]! * units) * 110) / 100) : undefined) }
+    expect(chargedDescriptor(tts, prices).creditCost).toBe("18-880")
   })
 })

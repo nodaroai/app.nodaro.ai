@@ -38,6 +38,7 @@ vi.mock("@/ee/middleware/require-admin.js", () => ({
 
 vi.mock("@/ee/billing/credits.js", () => ({
   estimateWorkflowCredits: vi.fn().mockReturnValue(10),
+  estimateWorkflowListingCredits: vi.fn().mockResolvedValue({ preview: 10, final: 0 }),
 }))
 
 vi.mock("@/lib/marketplace-helpers.js", () => ({

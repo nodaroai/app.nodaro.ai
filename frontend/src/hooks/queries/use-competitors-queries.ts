@@ -1,11 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import type { ActionCard, CardAction, CompetitorActionsResult, CreateCompetitorInput, UpdateCompetitorInput } from "@nodaro/shared"
+import type { ActionCard, CardAction, CompetitorActionsResult, CompetitorCompareInput, CreateCompetitorInput, UpdateCompetitorInput } from "@nodaro/shared"
 import { queryKeys } from "@/lib/query-keys"
 import { useAuth } from "@/hooks/use-auth"
 import {
   competitorCardActions,
   competitorCards,
+  competitorCompare,
+  competitorHistory,
   competitorLessons,
+  competitorList,
   createCompetitor,
   deleteCardMark,
   deleteCompetitor,
@@ -32,14 +35,50 @@ export function useCompetitors() {
   })
 }
 
-export function useCompetitorDetail(id: string | null) {
+/** The brand as of its latest scan, or as of the scan asked for. */
+export function useCompetitorDetail(id: string | null, scanId: string | null = null) {
   const { user } = useAuth()
   return useQuery({
-    queryKey: queryKeys.competitors.detail(id ?? ""),
-    queryFn: () => getCompetitor(id!),
+    queryKey: queryKeys.competitors.detail(id ?? "", scanId),
+    queryFn: () => getCompetitor(id!, scanId ?? undefined),
     enabled: !!user && !!id,
     staleTime: 30_000,
     refetchInterval: (query) => (query.state.data?.scanning ? SCANNING_REFRESH_MS : false),
+  })
+}
+
+/** The brand's scans as a series; read when the window's "over time" view opens. */
+export function useCompetitorHistory(id: string | null, enabled: boolean) {
+  const { user } = useAuth()
+  return useQuery({
+    queryKey: queryKeys.competitors.history(id ?? ""),
+    queryFn: () => competitorHistory(id!),
+    enabled: enabled && !!user && !!id,
+    staleTime: 60_000,
+  })
+}
+
+/** The brand over the periods asked for; none while there is nothing to ask. */
+export function useCompetitorCompare(id: string | null, input: CompetitorCompareInput | null) {
+  const { user } = useAuth()
+  const key = input ? [input.from, input.to, input.vsFrom ?? "", input.vsTo ?? ""].join("|") : ""
+  return useQuery({
+    queryKey: queryKeys.competitors.compare(id ?? "", key),
+    queryFn: () => competitorCompare(id!, input!),
+    enabled: !!user && !!id && input !== null,
+    staleTime: 60_000,
+  })
+}
+
+/** How many months of scans the plan keeps; null until known. */
+export function useCompetitorHistoryMonths(enabled: boolean) {
+  const { user } = useAuth()
+  return useQuery({
+    queryKey: queryKeys.competitors.historyMonths(),
+    queryFn: () => competitorList(),
+    select: (result) => result.historyMonths ?? null,
+    enabled: enabled && !!user,
+    staleTime: 5 * 60_000,
   })
 }
 

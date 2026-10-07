@@ -53,6 +53,16 @@ describe("computeEditPlanReserveId — probe-at-reserve buckets on the master's 
     expect(id).toBe("edit-plan:clips:premium:30m")
   })
 
+  // Round 4 (decided 2026-10-06): never re-price an unknown mode as tighten.
+  // buildPayload refuses one before this runs; this keeps the reserve honest anyway.
+  it("an unknown mode → undefined, no probe, payload untouched", async () => {
+    mocks.probe.mockResolvedValue(1800)
+    const payload: Record<string, unknown> = { mode: "montage", planTier: "standard", sources: [masterRow] }
+    expect(await computeEditPlanReserveId("edit-plan", payload)).toBeUndefined()
+    expect(mocks.probe).not.toHaveBeenCalled()
+    expect(payload.reservedCreditId).toBeUndefined()
+  })
+
   it("an unprobeable master → undefined (buildPayload's transcript/ceiling basis stands), payload untouched", async () => {
     mocks.probe.mockRejectedValue(new Error("ffprobe exited 1"))
     const payload: Record<string, unknown> = { mode: "tighten", planTier: "standard", sources: [masterRow], reservedCreditId: "edit-plan:tighten:standard:60m" }

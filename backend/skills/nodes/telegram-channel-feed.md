@@ -1,7 +1,7 @@
 ---
 node_type: telegram-channel-feed
-generated_at: 2026-09-27T12:51:25.683Z
-generated_from: c607aa02c
+generated_at: 2026-10-06T01:45:04.079Z
+generated_from: 556bea65a
 ---
 
 # Telegram Channel Feed
@@ -11,7 +11,7 @@ generated_from: c607aa02c
 **Category:** input
 **Credit cost:** `10` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
 **Inputs (target handles):** (none)
-**Outputs (source handles):** `text`
+**Outputs (source handles):** `json`, `text`
 
 **Required data fields:**
 - `label: string`
@@ -23,6 +23,7 @@ generated_from: c607aa02c
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`
 - `generatedText?: string`
+- `generatedJson?: TelegramChannelPost[]`
 - `currentJobProgress?: number`
 
 **Default data:**

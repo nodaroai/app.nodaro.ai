@@ -30,6 +30,8 @@
  *       and the transcribed media (the planner spans both);
  *     · Edit Plan, clips → per clip, twice the clip-length target, never more
  *       than the episode (the clip COUNT is the fan-out multiplier's job);
+ *     · Edit Plan, trailer → twice the longest teaser the mode plans (40 s),
+ *       never more than the episode;
  *     · Camera Switch → whatever feeds ITS edit: switching cameras never
  *       changes an edit's length;
  *     · anything else → the 180-minute ceiling.
@@ -42,6 +44,7 @@ import {
   type GraphEdge,
   type GraphNode,
 } from "@/lib/edit-plan-estimate"
+import { editPlanOutputOf } from "@/lib/edit-plan-saved-output"
 
 /** The clip length priced when the node sets no target. The planner is given no
  *  length in that case, so this is an assumption about typical clips, not a
@@ -49,6 +52,8 @@ import {
 const ASSUMED_CLIP_TARGET_SEC = 90
 /** The target is something the planner aims near, not a clamp: price double. */
 const CLIP_LENGTH_HEADROOM = 2
+/** Trailer mode plans one 20–40 s teaser; priced at double its longest. */
+const TRAILER_MAX_SEC = 40
 
 const minutesOf = (sec: number): number => Math.max(1, Math.ceil(sec / 60))
 
@@ -90,7 +95,8 @@ export const EDL_LENGTH_PRESERVING_TYPES: ReadonlySet<string> = new Set(["camera
 
 /**
  * The EDL a producer holds on the canvas — what its `edl` output would deliver
- * now: `generatedJson`, the field the `json`/`edl` output handles read. A clips
+ * now: `generatedJson`, the field the `json`/`edl` output handles read; for an
+ * Edit Plan, with the person's review applied (`editPlanOutputOf`). A clips
  * plan is a bare `Edl[]`. A length-preserving producer holds `{ edl, transcript }`
  * per run and, run once per clip, the whole batch on `__listResults`
  * (`generatedJson` is then only whichever clip finished last). The estimate's
@@ -99,6 +105,9 @@ export const EDL_LENGTH_PRESERVING_TYPES: ReadonlySet<string> = new Set(["camera
  */
 export function persistedEdlPlan(producer: GraphNode): unknown {
   const data = dataOf(producer)
+  // An Edit Plan holds its plan as the person's review leaves it (TA13): the
+  // edited cut, or the KEPT clips only — what the render will be handed.
+  if (producer.type === "edit-plan") return editPlanOutputOf(data)?.json
   const held = data.generatedJson
   if (!EDL_LENGTH_PRESERVING_TYPES.has(producer.type ?? "")) return held
   const batch = Array.isArray(data.__listResults) && data.__listResults.length > 0 ? (data.__listResults as unknown[]) : undefined
@@ -185,6 +194,10 @@ function wiredEdlMinutes(
       const perClip = minutesOf(target * CLIP_LENGTH_HEADROOM)
       // A clip is never longer than the episode it is cut from.
       return episodeSec !== undefined ? Math.min(perClip, minutesOf(episodeSec)) : perClip
+    }
+    if (plan.mode === "trailer") {
+      const teaser = minutesOf(TRAILER_MAX_SEC * CLIP_LENGTH_HEADROOM)
+      return episodeSec !== undefined ? Math.min(teaser, minutesOf(episodeSec)) : teaser
     }
     if (episodeSec !== undefined) return Math.min(EDIT_PLAN_MAX_MINUTES, minutesOf(episodeSec))
   }

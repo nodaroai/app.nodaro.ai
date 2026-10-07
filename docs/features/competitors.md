@@ -127,9 +127,47 @@ and the posts themselves (**Their posts** / **About them**; **Your posts** /
 search failed offers to scan the brand again: that scans every platform, at
 the brand's scan price.
 
-The newest twelve scans of each brand are kept. While a scan of a brand
-runs, its name, accounts and platforms cannot be changed (the scan was
-priced on them); its schedule can.
+## How long scans are kept
+
+Each brand's scans are kept for a window that follows your plan; older
+scans are deleted when the brand is next scanned (by you or by its
+schedule):
+
+| Plan | Scans kept |
+|---|---|
+| Free, Pay as you go, Basic | 1 month |
+| Standard | 3 months |
+| Pro | 6 months |
+| Business | 12 months |
+
+Moving up a plan starts keeping more from then on; moving down shortens the
+history at the next scan. While a scan of a brand runs, its name, accounts
+and platforms cannot be changed (the scan was priced on them); its schedule
+can.
+
+## Over time
+
+The brand's window has a second view, **Over time**. Pick what to compare:
+the last 7 days against the 7 before, the last 30 against the 30 before,
+this month against last month, one day, or any two ranges of dates. For
+each platform it shows, side by side: the brand's own posts in the period
+and the posts about it, its usual reach, its followers at the end of the
+period and how many it gained or lost since before it, what worked there
+(the strongest lesson of the period) and its best posts. A post belongs to
+a period by the day it was published, not by when it was scanned, so a post
+that several scans read is counted once, with its newest numbers.
+
+Below, a line per platform shows the account's followers scan after scan
+(or, where the platform gives no followers, the posts each scan found).
+Pressing a point opens the brand as it looked at that scan; the **Scan to
+show** list at the top of the window does the same for any scan.
+
+Followers come from TikTok, Instagram, X, LinkedIn and Meta Ads; YouTube and
+Reddit give none. Each platform card in the window shows the followers the
+latest scan read.
+
+How long the scans are kept follows your plan (see **How long scans are
+kept**); the window says so.
 
 ## What works
 

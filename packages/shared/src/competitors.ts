@@ -83,6 +83,8 @@ export interface CompetitorPlatformTally {
   readonly unit: "views" | "points" | "likes" | null
   /** What its best posts there share most strongly; null when nothing stands out, or until its next scan. */
   readonly top: BrandLesson | null
+  /** The account's followers at this scan; null when the platform gives none (YouTube, Reddit) or no post of its own was read. Absent from an older server. */
+  readonly followers?: number | null
 }
 
 /** A brand's latest scan, platform by platform. */
@@ -160,6 +162,81 @@ export interface CompetitorScan {
   readonly counts: CompetitorScanCounts
   readonly posts: readonly CompetitorPost[]
   readonly cards: readonly ActionCard[]
+}
+
+/** `GET /v1/competitors`. */
+export interface CompetitorListResult {
+  readonly data: readonly TrackedCompetitor[]
+  /** How many months of scans your plan keeps (older scans are deleted at a brand's next scan). Absent from an older server. */
+  readonly historyMonths?: number
+}
+
+/** One platform as one scan found and read it. Numbers a scan stored before they were kept answer null. */
+export interface CompetitorHistoryPlatform {
+  readonly platform: SocialPlatform
+  readonly own: number | null
+  readonly about: number | null
+  /** The account's followers at that scan; null when the platform gives none. */
+  readonly followers: number | null
+  /** The brand's usual reach there as learned at that scan, in `unit`. */
+  readonly usual: number | null
+  readonly unit: "views" | "points" | "likes" | null
+}
+
+export interface CompetitorHistoryPoint {
+  readonly id: string
+  readonly at: string
+  readonly platforms: readonly CompetitorHistoryPlatform[]
+}
+
+/** `GET /v1/competitors/:id/history`: the brand's scans, oldest first. */
+export interface CompetitorHistory {
+  readonly scans: readonly CompetitorHistoryPoint[]
+}
+
+/** The followers a scan read, and when. */
+export interface CompetitorPeriodFollowers {
+  readonly value: number
+  readonly at: string
+}
+
+/** A brand on one platform over a period. */
+export interface CompetitorPeriodPlatform {
+  readonly platform: SocialPlatform
+  /** The brand's own posts published in the period, and the posts about it. */
+  readonly own: number
+  readonly about: number
+  /** The median reach of its own posts in the period; null below three posts. */
+  readonly usual: number | null
+  readonly unit: "views" | "points" | "likes" | null
+  /** From the newest scan inside the period; null when no scan read them. */
+  readonly followers: CompetitorPeriodFollowers | null
+  /** Followers gained (or lost) since the newest scan before the period; null when either side is unknown. */
+  readonly change: number | null
+  /** What worked there in the period (the lessons need eight posts). */
+  readonly lessons: readonly BrandLesson[]
+  /** Its best posts of the period there, best first, at most four. */
+  readonly best: readonly string[]
+}
+
+export interface CompetitorPeriod {
+  readonly from: string
+  readonly to: string
+  readonly platforms: readonly CompetitorPeriodPlatform[]
+}
+
+/** `GET /v1/competitors/:id/compare`: ISO datetimes; a period is at most a year; `vsFrom` and `vsTo` go together. */
+export interface CompetitorCompareInput {
+  readonly from: string
+  readonly to: string
+  readonly vsFrom?: string
+  readonly vsTo?: string
+}
+
+/** One or two periods, and the posts they name. */
+export interface CompetitorCompareResult {
+  readonly periods: readonly CompetitorPeriod[]
+  readonly posts: Readonly<Record<string, CompetitorPost>>
 }
 
 /** `GET /v1/competitors/:id`. */

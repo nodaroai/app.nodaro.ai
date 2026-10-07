@@ -13,6 +13,11 @@
  * The box is read on every launch — a few small `/proc` and cgroup reads,
  * nothing next to starting ffmpeg. On a box with no quota below the cores
  * ffmpeg counts, the argv reaches ffmpeg exactly as the caller built it.
+ *
+ * WHEN a launch may start is decided before it reaches this file: the runners
+ * in ffmpeg-utils (and `withFfmpegSlot`) admit each one against the
+ * `FFMPEG_CONCURRENCY` slots AND the box's ffmpeg memory budget, reserving its
+ * predicted peak until it exits (`ffmpeg-admission.ts`, decided 2026-10-05).
  */
 import {
   execFile,

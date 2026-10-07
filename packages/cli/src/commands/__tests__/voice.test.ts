@@ -19,6 +19,7 @@ const mocks = {
   design: vi.fn(),
   remix: vi.fn(),
   dub: vi.fn(),
+  textToDialogue: vi.fn(),
   list: vi.fn(),
   listClones: vi.fn(),
   createClone: vi.fn(),
@@ -37,6 +38,7 @@ vi.mock("../../client.js", () => ({
       design: mocks.design,
       remix: mocks.remix,
       dub: mocks.dub,
+      textToDialogue: mocks.textToDialogue,
       list: mocks.list,
       listClones: mocks.listClones,
       createClone: mocks.createClone,
@@ -135,6 +137,60 @@ describe("voice recast command", () => {
       orderedVoices: [{ voiceId: "Rachel", stability: 0.6 }, null, "Aria"],
       audioUrl: "https://a/p.mp3",
     })
+  })
+
+  // --v3 / --v4 mark Re-speak speakers by 1-based --voices position. Both
+  // engines are Re-speak; a speaker runs on one or the other, never both.
+  it("--v3 marks the named speakers as Re-speak v3, keeping the rest as bare ids", async () => {
+    mocks.recast.mockResolvedValueOnce({ jobId: "j5" })
+    await runCmd("voice", "recast", "--audio", "https://a/p.mp3", "--voices", "Rachel,Aria", "--v3", "2", "--json")
+    expect(mocks.recast).toHaveBeenCalledWith({
+      orderedVoices: ["Rachel", { voiceId: "Aria", engine: "v3" }],
+      audioUrl: "https://a/p.mp3",
+    })
+  })
+
+  it("--v4 marks the named speakers as Re-speak v4, merging into a --voices-json settings object", async () => {
+    mocks.recast.mockResolvedValueOnce({ jobId: "j6" })
+    await runCmd(
+      "voice", "recast", "--audio", "https://a/p.mp3",
+      "--voices-json", '[{"voiceId":"Rachel","stability":0.37,"similarityBoost":0.8},"Aria"]',
+      "--v4", "1",
+      "--json",
+    )
+    expect(mocks.recast).toHaveBeenCalledWith({
+      orderedVoices: [{ voiceId: "Rachel", stability: 0.37, similarityBoost: 0.8, engine: "v4" }, "Aria"],
+      audioUrl: "https://a/p.mp3",
+    })
+  })
+
+  it("--v3 and --v4 together address different speakers", async () => {
+    mocks.recast.mockResolvedValueOnce({ jobId: "j7" })
+    await runCmd("voice", "recast", "--audio", "https://a/p.mp3", "--voices", "Rachel,keep,Aria", "--v3", "1", "--v4", "3", "--json")
+    expect(mocks.recast).toHaveBeenCalledWith({
+      orderedVoices: [{ voiceId: "Rachel", engine: "v3" }, null, { voiceId: "Aria", engine: "v4" }],
+      audioUrl: "https://a/p.mp3",
+    })
+  })
+
+  it("refuses an index named in both --v3 and --v4", async () => {
+    await expect(
+      runCmd("voice", "recast", "--audio", "https://a/p.mp3", "--voices", "Rachel,Aria", "--v3", "1,2", "--v4", "2"),
+    ).rejects.toThrow("process.exit(1)")
+    expect(vi.mocked(warn)).toHaveBeenCalledWith(expect.stringContaining("both --v3 and --v4"))
+    expect(mocks.recast).not.toHaveBeenCalled()
+  })
+
+  it("refuses a --v4 index out of range or on a keep-slot", async () => {
+    await expect(
+      runCmd("voice", "recast", "--audio", "https://a/p.mp3", "--voices", "Rachel", "--v4", "2"),
+    ).rejects.toThrow("process.exit(1)")
+    expect(vi.mocked(warn)).toHaveBeenCalledWith(expect.stringContaining("--v4 indexes must be 1..1"))
+    await expect(
+      runCmd("voice", "recast", "--audio", "https://a/p.mp3", "--voices", "keep,Rachel", "--v4", "1"),
+    ).rejects.toThrow("process.exit(1)")
+    expect(vi.mocked(warn)).toHaveBeenCalledWith(expect.stringContaining("--v4 index 1 is a keep-slot"))
+    expect(mocks.recast).not.toHaveBeenCalled()
   })
 
   it("works via the `pro` alias", async () => {
@@ -410,6 +466,37 @@ describe("voice export command", () => {
     ).rejects.toThrow("process.exit(1)")
     expect(vi.mocked(warn)).toHaveBeenCalledWith(expect.stringContaining("--voice-fx"))
     expect(mocks.exportMix).not.toHaveBeenCalled()
+  })
+})
+
+describe("voice dialogue command — the model", () => {
+  it("--model elevenlabs-dialogue-v4 sends provider, a stepless stability and similarity", async () => {
+    mocks.textToDialogue.mockResolvedValueOnce({ jobId: "dlg1" })
+    await runCmd(
+      "voice", "dialogue", "--model", "elevenlabs-dialogue-v4", "--stability", "0.3", "--similarity", "0.8",
+      "--line", "Rachel: hi", "--line", "George: hello", "--json",
+    )
+    expect(mocks.textToDialogue).toHaveBeenCalledWith({
+      dialogue: [{ voice: "Rachel", text: "hi" }, { voice: "George", text: "hello" }],
+      provider: "elevenlabs-dialogue-v4",
+      stability: 0.3,
+      similarityBoost: 0.8,
+    })
+  })
+
+  it("without --model sends no provider (the route runs v3 dialogue) and keeps v3's stability rule", async () => {
+    mocks.textToDialogue.mockResolvedValueOnce({ jobId: "dlg2" })
+    await runCmd("voice", "dialogue", "--stability", "0.5", "--line", "Rachel: hi", "--json")
+    expect(mocks.textToDialogue).toHaveBeenCalledWith({ dialogue: [{ voice: "Rachel", text: "hi" }], stability: 0.5 })
+    await expect(runCmd("voice", "dialogue", "--stability", "0.3", "--line", "Rachel: hi", "--json"))
+      .rejects.toThrow("--stability must be exactly 0, 0.5, or 1")
+    expect(mocks.textToDialogue).toHaveBeenCalledTimes(1)
+  })
+
+  it("an unknown --model is refused with the list of models", async () => {
+    await expect(runCmd("voice", "dialogue", "--model", "nope", "--line", "Rachel: hi", "--json"))
+      .rejects.toThrow(/--model must be one of elevenlabs-dialogue, elevenlabs-dialogue-v4/)
+    expect(mocks.textToDialogue).not.toHaveBeenCalled()
   })
 })
 

@@ -66,6 +66,25 @@ Needs `workflows:execute`.
 | `segments[].captions[].timestampMs` | number or null |  | At least 0. Default `null`. |
 | `segments[].captions[].confidence` | number or null |  | From 0 to 1. Default `null`. |
 
+## `add_collection_record`
+
+Needs `assets:write`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `collection` | string | yes | The collection's id or name. From 1 to 80 characters. |
+| `create_if_missing` | boolean |  | Create the collection by that name when it does not exist. |
+| `title` | string |  | At most 500 characters. |
+| `text` | string |  | At most 20000 characters. |
+| `url` | string |  | An http(s) link; the default dedupe key. At most 2000 characters. |
+| `media` | object[] |  | At most 20 items. |
+| `media[].type` | string | yes | One of `image`, `video`, `audio`, `link`. |
+| `media[].url` | string | yes | At most 2000 characters. |
+| `media[].posterUrl` | string |  | At most 2000 characters. |
+| `fields` | object (map of string or number or boolean) |  | Extra scalar fields. |
+| `dedupe_key` | string |  | Overrides the link as the dedupe key. At most 300 characters. |
+| `item` | object (map of any) |  | Any JSON object to map into the record; explicit fields win. |
+
 ## `add_competitor`
 
 Needs `assets:write` · Nodaro Cloud only.
@@ -194,6 +213,7 @@ Needs `workflows:execute`.
 | `output` | string |  | Render a video (default) or an audio-only cut. One of `video`, `audio`. |
 | `quality` | string |  | proxy (a fast 720p preview, at its own lower per-minute rate) or final (default). One of `proxy`, `final`. |
 | `crossfade_ms` | number |  | Default crossfade on boundaries with no explicit transition, in ms. 0 = hard cuts (default). From 0 to 5000. |
+| `clip_key` | string |  | clips-mode plan_edit clip this render cuts, "&lt;first inMs>-&lt;last outMs>" of the plan's clip; returned as clipKey on the result. |
 
 ## `approve_creature_main_image`
 
@@ -319,6 +339,7 @@ Always visible · Nodaro Cloud only.
 | `words[].startMs` | number | yes |  |
 | `words[].endMs` | number | yes |  |
 | `video_duration_ms` | number |  | At least 0. |
+| `caption_style` | string |  | How the captions after the opening line look: body-captions (word by word, the default), karaoke, clean-subtitles, or none. The opening line always keeps its plate. One of `body-captions`, `karaoke`, `clean-subtitles`, `none`. |
 
 ## `build_ugc_clips`
 
@@ -332,6 +353,7 @@ Always visible · Nodaro Cloud only.
 | `identity_images` | string[] | yes | From 1 to 2 items. |
 | `seed` | integer |  | From 0 to 2147483647. |
 | `spent_job_ids` | string[] |  | Job ids of the calls already made for this video; the quote lists them as already spent. At most 30 items. |
+| `segments` | object (map of any)[] |  | The segments from ugc_split_speech's output, when the answer to the first call asked for them. Leave out on the first call. At most 8 items. |
 
 ## `build_ugc_creator`
 
@@ -347,6 +369,16 @@ Always visible · Nodaro Cloud only.
 | `character_id` | string |  |  |
 | `photo_url` | string (URL) |  |  |
 | `seed` | integer |  | From 0 to 2147483647. |
+
+## `capture_site`
+
+Needs `workflows:execute`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `url` | string | yes | The page to capture. The scheme is optional (example.com works). From 1 to 2048 characters. |
+| `max_stills` | integer |  | How many section stills at most (3–8, default 8). From 3 to 8. |
+| `client_request_id` | string |  | Optional retry token (8–128 chars of letters, digits, `_ - . :`). If a call times out or the connection drops, reuse the same value when retrying so the run is not started or charged twice; use a fresh value for a genuinely new run. From 8 to 128 characters. |
 
 ## `chat_pipeline_stage`
 
@@ -391,6 +423,8 @@ Needs `workflows:execute`.
 | `smart_cut_mode` | string |  | Smart-cut cut-point algorithm. Default 'best-pair'. The preroll variants differ in which side of an overlap survives: 'preroll-keep-next' favors the incoming clip, 'preroll-keep-prev' the outgoing one. Same search windows and fixed-trims fallback in every mode. One of `best-pair`, `preroll-keep-prev`, `preroll-keep-next`. |
 | `smart_cut_frames_prev` | integer |  | Smart-cut search window at each clip's END (frames, default 8). From 1 to 24. |
 | `smart_cut_frames_next` | integer |  | Smart-cut search window at each clip's START (frames, default 8). From 1 to 24. |
+| `trim_start_frames` | integer |  | Frames trimmed from the START of each non-first clip (default 1). Pin it for frame-exact cuts; also the smart-cut fallback. From 0 to 120. |
+| `trim_end_frames` | integer |  | Frames trimmed from the END of each non-final clip (default 2). Pin it for frame-exact cuts; also the smart-cut fallback. From 0 to 120. |
 
 ## `competitor_cards`
 
@@ -870,10 +904,12 @@ Needs `workflows:execute`.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
+| `model` | string |  | Dialogue model. Default `elevenlabs-dialogue` (v3). `elevenlabs-dialogue-v4` is newer: the same [audio tags], any stability from 0 to 1, and a similarity setting. One of `elevenlabs-dialogue`, `elevenlabs-dialogue-v4`. |
 | `dialogue` | object[] | yes | The script, in speaking order. Reuse voice_ids across lines for the same character. From 1 to 200 items. |
 | `dialogue[].text` | string | yes | What this line says. `[audio tags]` allowed. At least 1 character. |
 | `dialogue[].voice_id` | string | yes | Voice for this line — a premade voice NAME (recommended; same naming as `generate_speech`: Rachel, Aria, Roger, Sarah, Laura, Charlie, George, Callum, River, Liam, Charlotte, Alice, Matilda, Will, Jessica, Eric, Chris, Brian, Daniel, Lily, Bill) or an ElevenLabs UUID of a voice the user has cloned/saved. DO NOT invent UUIDs. At least 1 character. |
-| `stability` | number |  | v3 stability: 0 = most variable, 0.5 = balanced, 1 = most stable. One of `0`, `0.5`, `1`. |
+| `stability` | number |  | v3 (default): exactly 0, 0.5 or 1 (0 = most variable, 1 = most stable). v4: any value 0–1. From 0 to 1. |
+| `similarity_boost` | number |  | v4 only (v3 ignores it): how closely each line keeps its voice's character. From 0 to 1. |
 | `language_code` | string |  | ISO 639-1 hint (e.g. "en", "he"). Omit for auto-detect. At most 10 characters. |
 | `seed` | integer |  | Deterministic sampling. Omit for random. From 0 to 4294967295. |
 | `apply_text_normalization` | string |  | Spell out numbers/dates/abbreviations. Default auto. One of `auto`, `on`, `off`. |
@@ -1106,6 +1142,8 @@ Needs `workflows:execute`.
 | `style` | number |  | From 0 to 1. |
 | `speed` | number |  | From 0.7 to 1.2. |
 | `language_code` | string |  |  |
+| `previous_text` | string |  | The line spoken just BEFORE this one in the finished piece (the previous clip's text) — context for continuous intonation across clips; up to 1,000 characters, the end of a longer passage. Used by models that stitch; others ignore it. Not spoken. At most 1000 characters. |
+| `next_text` | string |  | The line spoken just AFTER this one (the next clip's text) — the start of a longer passage; up to 1,000 characters. Same continuity rule as previous_text. At most 1000 characters. |
 
 ## `generate_studio_clip`
 
@@ -1226,6 +1264,12 @@ Needs `workflows:execute`.
 | `reference_video_urls` | string[] or string |  | Reference videos for style/motion transfer, capped at the model's own limit (seedance-2-5 10, seedance-2 family + minimax-h3 3, wan-3 / wan-3-prime 5, gemini-omni-video / gemini-omni-flash 1). Wan 3.0 takes each clip at 1-15s and ≤15s combined, and input video seconds + output duration must stay ≤30s. Dropped on models without video-reference support. |
 | `reference_video_captions` | string[] |  | Index-aligned with reference_video_urls: what each clip is FOR. Rendered `@video_N: <caption>.`. At most 10 items. |
 | `reference_audio_urls` | string[] or string |  | Reference audio for soundtrack-driven motion, capped at the model's own limit (seedance-2-5 10, seedance-2 family + minimax-h3 3, wan-3 / wan-3-prime 5). Wan 3.0 takes each clip at 1-15s and ≤15s combined. Dropped on models without audio-reference support. |
+| `character_references` | object[] |  | Keeps a person's face (gemini-omni-video / gemini-omni-flash only); see docs/nodes/ai-video/generate-video.md. At most 3 items. |
+| `character_references[].image_url` | string | yes |  |
+| `character_references[].body_image_url` | string |  |  |
+| `character_references[].description` | string | yes |  |
+| `character_references[].name` | string |  |  |
+| `character_references[].voice_preset` | string |  | Gemini voice id (e.g. kore): pins this character's voice. |
 
 ## `get_app_inputs`
 
@@ -1631,6 +1675,12 @@ Needs `assets:read`.
 | `search` | string |  | Case-insensitive substring of the character's name. Use this when the user named a character — do not page through the list hoping to find it. From 1 to 100 characters. |
 | `limit` | integer |  | Max characters to return (default 50, max 100). From 1 to 100. |
 
+## `list_collections`
+
+Needs `assets:read`.
+
+No parameters.
+
 ## `list_competitors`
 
 Needs `assets:read` · Nodaro Cloud only.
@@ -1812,6 +1862,24 @@ Needs `workflows:execute`.
 | `background_volume` | number |  | From 0 to 200. |
 | `keep_original_audio` | boolean |  |  |
 
+## `mix_audio`
+
+Needs `workflows:execute`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `tracks` | object[] | yes | 2-20 tracks, in mix order. Each needs audio_url or audio_asset_id. From 2 to 20 items. |
+| `tracks[].audio_url` | string (URL) |  |  |
+| `tracks[].audio_asset_id` | string |  | Nodaro audio or video job id. |
+| `tracks[].volume` | number |  | Track level in percent (default 100). From 0 to 200. |
+| `duck` | object |  | Duck every other track under one key track. Omit for a plain mix. |
+| `duck.under` | integer | yes | 0-based index in `tracks` of the key track (the voice) the others duck under. From 0 to 19. |
+| `duck.amount` | number |  | How hard the others dip, 0-100. Default 75. From 0 to 100. |
+| `duck.threshold_db` | number |  | dBFS the key track must exceed to start the dip. Default -30. From -60 to 0. |
+| `duck.ratio` | number |  | Compressor ratio 1-20. Overrides amount. From 1 to 20. |
+| `duck.attack_ms` | number |  | How fast the dip starts, ms. Default 20. From 1 to 2000. |
+| `duck.release_ms` | number |  | How slowly the others return, ms. Default 500. From 10 to 9000. |
+
 ## `modify_image`
 
 Needs `workflows:execute`.
@@ -1950,7 +2018,7 @@ Needs `workflows:execute` · Nodaro Cloud only.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `mode` | string | yes | tighten \| clips \| chapters. One of `tighten`, `clips`, `chapters`. |
+| `mode` | string | yes | tighten \| clips \| chapters \| trailer. One of `tighten`, `clips`, `chapters`, `trailer`. |
 | `plan_tier` | string |  | Reasoning tier: economy \| standard (default) \| premium. One of `economy`, `standard`, `premium`. |
 | `transcript` | object (map of any) | yes | The timed word-level transcript object (from a transcribe step). |
 | `silence` | object (map of any) |  | Optional silence ranges object (from a silence-detect step). |
@@ -2039,6 +2107,20 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | `max_repair_passes` | integer |  | Correction budget, 0-2. Each pass is paid work; default 2. From 0 to 2. |
 | `client_request_id` | string |  | Optional retry token (8–128 chars of letters, digits, `_ - . :`). If a call times out or the connection drops, reuse the same value when retrying so the run is not started or charged twice; use a fresh value for a genuinely new run. From 8 to 128 characters. |
 
+## `read_collection`
+
+Needs `assets:read`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `collection` | string | yes | The collection's id or name. From 1 to 80 characters. |
+| `hours` | integer |  | Only records from the last N hours. From 1 to 720. |
+| `days` | integer |  | Only records from the last N days. From 1 to 90. |
+| `q` | string |  | Words to find in the title, text or link. At most 200 characters. |
+| `limit` | integer |  | Default 50. From 1 to 100. |
+| `cursor` | string |  | next_cursor from the previous call. At most 200 characters. |
+| `format` | string |  | Default headlines. One of `headlines`, `full`. |
+
 ## `recaption_character`
 
 Needs `assets:write`.
@@ -2104,6 +2186,18 @@ Needs `workflows:execute`.
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `scene_plan` | object (map of any) | yes |  |
+
+## `render_final`
+
+Needs `workflows:execute`.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `workflow_id` | string | yes |  |
+| `render_node_id` | string | yes | The id of the Apply EDL render node to finalize (get_workflow_json). At least 1 character. |
+| `execution_id` | string | yes | The execution that stopped at the preview — your own completed run of this workflow. Its outputs feed every node the Render final does not run. |
+| `confirm` | boolean |  | true ONLY after the user accepted the quoted credits in this conversation. |
+| `client_request_id` | string |  | Optional retry token (8–128 chars of letters, digits, `_ - . :`). If a call times out or the connection drops, reuse the same value when retrying so the run is not started or charged twice; use a fresh value for a genuinely new run. From 8 to 128 characters. |
 
 ## `render_shot_sequence`
 
@@ -2654,6 +2748,34 @@ Needs `workflows:execute`.
 | `smart_loop_cut_lookback` | integer |  | How many trailing frames to evaluate as candidate cut points. Default 16, max 64. From 2 to 64. |
 | `silent` | boolean |  | Strip audio from the output. Default false. |
 
+## `ugc_finish_clips`
+
+Always visible · Nodaro Cloud only.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `segments` | object (map of any)[] | yes | From 1 to 8 items. |
+| `clips` | object[] | yes | From 1 to 8 items. |
+| `clips[].clip` | integer | yes | From 1 to 8. |
+| `clips[].video_url` | string (URL) |  |  |
+| `clips[].video_asset_id` | string |  |  |
+| `clips[].reroll_video_url` | string (URL) |  |  |
+| `clips[].reroll_video_asset_id` | string |  |  |
+
+## `ugc_split_speech`
+
+Always visible · Nodaro Cloud only.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `plan` | object (map of any) | yes |  |
+| `audio_url` | string (URL) |  |  |
+| `audio_asset_id` | string |  | Nodaro job id or upload asset id of the speech. |
+| `alignment` | object[] | yes | From 1 to 2000 items. |
+| `alignment[].word` | string | yes |  |
+| `alignment[].start` | number | yes |  |
+| `alignment[].end` | number | yes |  |
+
 ## `update_character`
 
 Needs `assets:write`.
@@ -2814,9 +2936,9 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | `audio_asset_id` | string |  |  |
 | `video_url` | string (URL) |  | Recast voices in a talking video — demux audio, run multi-speaker recast, remux. |
 | `video_asset_id` | string |  | A Nodaro video job id to recast (alternative to video_url). |
-| `ordered_voices` | (string or object or null)[] | yes | Ordered list of target voices — speaker 1 → voices[0], speaker 2 → voices[1], etc. Each entry is either a bare voice id (premade name or ElevenLabs UUID), an object { voiceId, stability, similarityBoost, style, useSpeakerBoost, seed, volumeMode, volume } with per-voice speech-to-speech settings, or null — a keep-slot that keeps that speaker's original voice while later speakers are still recast. At least one entry must be non-null. `seed` (0–4294967295) makes that speaker's recast reproducible. From 1 to 8 items. |
+| `ordered_voices` | (string or object or null)[] | yes | Ordered list of target voices — speaker 1 → voices[0], speaker 2 → voices[1], etc. Each entry is either a bare voice id (premade name or ElevenLabs UUID), an object { voiceId, engine, stability, similarityBoost, style, useSpeakerBoost, seed, volumeMode, volume } with per-voice settings, or null — a keep-slot that keeps that speaker's original voice while later speakers are still recast. At least one entry must be non-null. `engine`: "sts" (default, speech-to-speech recast), "v3" or "v4" (Re-speak — the performance is regenerated from the transcript; v3 takes stability 0/0.5/1 only, v4 any 0–1 plus similarityBoost). `seed` (0–4294967295) makes that speaker's recast reproducible. From 1 to 8 items. |
 | `ordered_voices[].voiceId` | string | yes | At least 1 character. |
-| `ordered_voices[].engine` | string |  | One of `sts`, `v3`. |
+| `ordered_voices[].engine` | string |  | One of `sts`, `v3`, `v4`. |
 | `ordered_voices[].stability` | number |  | From 0 to 1. |
 | `ordered_voices[].similarityBoost` | number |  | From 0 to 1. |
 | `ordered_voices[].style` | number |  | From 0 to 1. |
@@ -2829,7 +2951,7 @@ Needs `workflows:execute` · Nodaro Cloud only.
 | `voice_fx.wetDryMix` | number |  | From 0 to 100. |
 | `voice_fx.delayMs` | number |  | From 20 to 2000. |
 | `voice_fx.decay` | number |  | From 0 to 1. |
-| `analysis` | object |  | A pre-computed analysis from a prior voice_changer_pro analyze run (its job output_data): the recast then works from the EXACT speaker list you mapped ordered_voices against, instead of re-detecting (which can produce a different list). Each speaker's segments[].text carries the transcript — required input for a speaker with engine "v3". This param existed in the wire contract before it existed here (the tool description referenced it — now it is real). |
+| `analysis` | object |  | A pre-computed analysis from a prior voice_changer_pro analyze run (its job output_data): the recast then works from the EXACT speaker list you mapped ordered_voices against, instead of re-detecting (which can produce a different list). Each speaker's segments[].text carries the transcript — required input for a speaker with engine "v3" or "v4". This param existed in the wire contract before it existed here (the tool description referenced it — now it is real). |
 | `analysis.vocalsUrl` | string (URL) | yes |  |
 | `analysis.backgroundUrl` | string (URL) |  |  |
 | `analysis.speakers` | object[] | yes | From 1 to 64 items. |

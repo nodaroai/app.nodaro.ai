@@ -3,6 +3,7 @@ import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { getJobStatusLean, getExecutionEstimate, cancelJob } from "@/lib/api";
 import { calculateProgress } from "@nodaro/shared"
 import type { GeneratedResult } from "@/types/nodes";
+import type { RunResultIdentity } from "@/lib/run-result-identity";
 import { buildVariantResults } from "./variant-results";
 import { sunoVariantFields } from "@/lib/suno-ids";
 import { shouldAbandonNode } from "./abandon-guard";
@@ -178,6 +179,8 @@ export const RUN_START_RESET = {
   jobAwaitingReview: undefined,
   // Nor the previous run's "Reconnecting…" badge.
   jobConnectionLost: undefined,
+  // Nor the chip of a run that skipped this node for want of input.
+  __runSkipReason: undefined,
 } as const;
 
 export function pollJobToCompletion(
@@ -263,6 +266,7 @@ function handleJobCompleted(
   extraOutputFields: ((od: Record<string, unknown>) => Record<string, unknown>) | undefined,
   updateNodeData: ReturnType<typeof useWorkflowStore.getState>["updateNodeData"],
   resolve: (url: string) => void,
+  resultFields?: PollJobResultOptions["resultFields"],
 ): boolean {
   // Media-typed completion: the first listed key the job actually produced.
   const outputKey = outputKeyList(outputKeySpec).find(
@@ -290,6 +294,9 @@ function handleJobCompleted(
     extraOutputFields && job.output_data
       ? extraOutputFields(job.output_data as Record<string, unknown>)
       : {};
+  // On the result only (after the node fields, which also ride on the result).
+  const resultOnly = resultFields && job.output_data ? resultFields(job.output_data as Record<string, unknown>) : {};
+  const resultExtra = { ...extraFields, ...resultOnly };
 
   const urlsKey = OUTPUT_URLS_KEY[outputKey];
   const allUrlsRaw = urlsKey ? job.output_data?.[urlsKey] : undefined;
@@ -301,11 +308,11 @@ function handleJobCompleted(
     variantUrls.length > 1
       ? buildVariantResults(variantUrls, jobId, {
           thumbnailUrl,
-          extraFields,
+          extraFields: resultExtra,
           // Each Suno track carries its OWN id (#819).
           perVariantFields: sunoVariantFields(job.output_data as Record<string, unknown> | undefined),
         })
-      : [buildSingleResult(url as string, jobId, { thumbnailUrl, extraFields })];
+      : [buildSingleResult(url as string, jobId, { thumbnailUrl, extraFields: resultExtra })];
 
   updateNodeData(nodeId, {
     executionStatus: "completed",
@@ -325,6 +332,14 @@ function handleJobCompleted(
   return true;
 }
 
+/** What a landed take carries beyond the node's own fields. */
+export interface PollJobResultOptions {
+  /** Fields that go on the new RESULT only, never onto the node (a render's
+   *  `quality`, `clipKey`, `planBasis` and `renderBasis`: the node's
+   *  `quality` is its own setting). */
+  readonly resultFields?: (outputData: Record<string, unknown>) => Readonly<Record<string, unknown>> | RunResultIdentity
+}
+
 /**
  * Generic poll-based node executor. Starts an API call, polls until
  * completed/failed, and updates the node in the store.
@@ -339,6 +354,7 @@ export function pollJobWithNodeUpdate(
     outputData: Record<string, unknown>,
   ) => Record<string, unknown>,
   estimatedMs?: number,
+  opts: PollJobResultOptions = {},
 ): Promise<string> {
   const { updateNodeData } = useWorkflowStore.getState();
   updateNodeData(nodeId, {
@@ -433,7 +449,7 @@ export function pollJobWithNodeUpdate(
 
               if (job.status === "completed") {
                 ctx.untrackInterval(poll);
-                if (!handleJobCompleted(job, nodeId, jobId, outputKey, label, extraOutputFields, updateNodeData, resolve)) {
+                if (!handleJobCompleted(job, nodeId, jobId, outputKey, label, extraOutputFields, updateNodeData, resolve, opts.resultFields)) {
                   const errMsg = "No output URL returned from job";
                   updateNodeData(nodeId, {
                     executionStatus: "failed",
@@ -490,7 +506,7 @@ export function pollJobWithNodeUpdate(
                     return;
                   }
                   if (finalJob.status === "completed") {
-                    if (handleJobCompleted(finalJob, nodeId, jobId, outputKey, label, extraOutputFields, updateNodeData, resolve)) {
+                    if (handleJobCompleted(finalJob, nodeId, jobId, outputKey, label, extraOutputFields, updateNodeData, resolve, opts.resultFields)) {
                       return;
                     }
                   }

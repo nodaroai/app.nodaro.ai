@@ -20,7 +20,9 @@ vi.mock("../base-node", () => ({
   BaseNode: ({ children }: any) => <div data-testid="base-node">{children}</div>,
 }))
 vi.mock("../handle-with-popover", () => ({
-  HandleWithPopover: () => null,
+  // The pip's `label` is also the header of its connection popover, which shows
+  // it as passed (only the pip itself looks English labels up in a table).
+  HandleWithPopover: ({ handleId, type, label }: any) => <span data-testid={`pip-${type}-${handleId}`}>{label}</span>,
   HANDLE_COLORS: { video: "#000", audio: "#000" },
 }))
 vi.mock("../run-node-button", () => ({ RunNodeButton: () => null }))
@@ -86,5 +88,37 @@ describe("ApplyEdlNode empty-state copy comes from the dict", () => {
       expect(translate("he", key)).not.toBe(translate("en", key))
       expect(translate("en", key)).not.toBe(key)
     }
+  })
+})
+
+describe("ApplyEdlNode handle labels come from the dict", () => {
+  afterEach(() => {
+    cleanup()
+    act(() => useLocaleStore.getState().setLocale("en"))
+  })
+
+  const pip = (type: string, id: string) => screen.getByTestId(`pip-${type}-${id}`).textContent
+
+  it("passes every pip a localized label, so its connection popover's header is localized too", () => {
+    renderNode()
+    act(() => useLocaleStore.getState().setLocale("he"))
+    expect(pip("target", "edl")).toBe(translate("he", "node.applyEdlEdlIn"))
+    expect(pip("target", "transcript")).toBe(translate("he", "node.transcript"))
+    expect(pip("target", "sources")).toBe(translate("he", "node.sources"))
+    expect(pip("source", "media")).toBe(translate("he", "node.applyEdlVideoOut"))
+    expect(pip("source", "json")).toBe(translate("he", "node.transcript"))
+    for (const id of ["edl", "transcript", "sources"]) expect(pip("target", id)).toMatch(/[\u0590-\u05FF]/)
+  })
+
+  it("names the audio output pip when the output medium is audio", () => {
+    renderNode({ output: "audio" })
+    act(() => useLocaleStore.getState().setLocale("he"))
+    expect(pip("source", "media")).toBe(translate("he", "node.applyEdlAudioOut"))
+  })
+
+  it("keeps the English pip names in English", () => {
+    renderNode({ output: "audio" })
+    expect([pip("target", "edl"), pip("target", "transcript"), pip("target", "sources"), pip("source", "media"), pip("source", "json")])
+      .toEqual(["EDL", "Transcript", "Sources", "Audio", "Transcript"])
   })
 })

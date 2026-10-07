@@ -4,6 +4,7 @@ import { buildClient, handleError } from "../client.js"
 import { emit, success, dim, info, warn, table, type OutputOpts } from "../output.js"
 import { reportQueuedJob } from "../util.js"
 import type { VcpAnalysis, VcpExportInput, VcpExportTrack, VoiceChangerProInput } from "@nodaro/sdk"
+import { DIALOGUE_PROVIDERS, dialogueProviderOf, dialogueStabilityAccepted, getDialogueCapabilities, type DialogueProvider } from "@nodaro/shared"
 
 interface GlobalOpts extends OutputOpts {
   profile?: string
@@ -186,6 +187,10 @@ Examples:
       "--v3 <indexes>",
       "comma-separated 1-based speaker indexes converted with the Re-speak (eleven_v3) engine instead of the recast — the performance is regenerated from the transcript ([audio tags] supported; delivery replaced; lips won't match on video). With --analysis-file the analysis text is the script; without one the engine re-speaks from its own transcription",
     )
+    .option(
+      "--v4 <indexes>",
+      "comma-separated 1-based speaker indexes converted with the Re-speak (eleven_v4) engine — like --v3, but stability takes any value 0–1, similarityBoost is honoured, and each line is generated with its neighbouring lines as context. An index may appear in --v3 or --v4, not both",
+    )
     .option("--model <id>", "speech-to-speech model override")
     .option("--output <mode>", "output mode: video (default — merged, rendered result) or stems (dry per-track stems for an interactive mix; render later with `voice export`)")
     .option("--analysis-json <json>", "a completed `voice analyze` job's output_data, inline — skips re-detection (the interactive-flow fast-path)")
@@ -212,7 +217,9 @@ Examples:
       --voices-json '[{"voiceId":"Rachel","stability":0.6},null,"Aria"]' --no-preserve-background
   $ nodaro voice recast --video https://.../panel.mp4 --voices Rachel,Aria \\
       --analysis-file analysis.json --output stems --watch
-      # interactive flow: reuse a \`voice analyze\` result, get dry stems to mix, render with \`voice export\``)
+      # interactive flow: reuse a \`voice analyze\` result, get dry stems to mix, render with \`voice export\`
+  $ nodaro voice recast --audio https://.../podcast.mp3 --voices Rachel,Aria --v4 2 --watch
+      # speaker 2 is re-spoken from the transcript on the v4 Re-speak engine; speaker 1 is a recast`)
     .action(
       async (
         opts: {
@@ -221,6 +228,7 @@ Examples:
           voices?: string
           voicesJson?: string
           v3?: string
+          v4?: string
           model?: string
           output?: string
           analysisJson?: string
@@ -285,22 +293,36 @@ Examples:
             process.exit(1)
           }
 
-          // --v3: 1-based indexes into --voices, marking Re-speak speakers
-          // (index-addressed like dropSpeakerIndexes — a parallel list would
-          // drift out of sync with --voices length; an index cannot).
-          if (opts.v3) {
-            const idxs = opts.v3.split(",").map((s) => parseInt(s.trim(), 10))
+          // --v3 / --v4: 1-based indexes into --voices, marking Re-speak
+          // speakers and their engine (index-addressed like dropSpeakerIndexes
+          // — a parallel list would drift out of sync with --voices length; an
+          // index cannot). A speaker runs on one engine, so an index named in
+          // both flags is refused before either flag touches the list.
+          const respeakIndexes = (raw: string | undefined): number[] =>
+            raw === undefined ? [] : raw.split(",").map((s) => parseInt(s.trim(), 10))
+          const v3Idxs = respeakIndexes(opts.v3)
+          const v4Idxs = respeakIndexes(opts.v4)
+          const inBoth = v3Idxs.filter((n) => v4Idxs.includes(n))
+          if (inBoth.length > 0) {
+            warn(`speaker index ${inBoth.join(", ")} is named in both --v3 and --v4 — a speaker is re-spoken by one engine`)
+            process.exit(1)
+          }
+          for (const [flag, idxs, engine] of [
+            ["--v3", v3Idxs, "v3"],
+            ["--v4", v4Idxs, "v4"],
+          ] as const) {
+            if (idxs.length === 0) continue
             if (idxs.some((n) => !Number.isInteger(n) || n < 1 || n > orderedVoices.length)) {
-              warn(`--v3 indexes must be 1..${orderedVoices.length} (matching --voices positions)`)
+              warn(`${flag} indexes must be 1..${orderedVoices.length} (matching --voices positions)`)
               process.exit(1)
             }
             for (const n of idxs) {
               const v = orderedVoices[n - 1]
               if (v === null) {
-                warn(`--v3 index ${n} is a keep-slot — a kept speaker is not converted at all`)
+                warn(`${flag} index ${n} is a keep-slot — a kept speaker is not converted at all`)
                 process.exit(1)
               }
-              orderedVoices[n - 1] = typeof v === "string" ? { voiceId: v, engine: "v3" } : { ...v, engine: "v3" }
+              orderedVoices[n - 1] = typeof v === "string" ? { voiceId: v, engine } : { ...v, engine }
             }
           }
 
@@ -650,14 +672,16 @@ Examples:
 
   cmd
     .command("dialogue")
-    .description("voice a multi-speaker script as one audio file (ElevenLabs Dialogue v3) — each --line is \"Voice: text\"")
+    .description("voice a multi-speaker script as one audio file (ElevenLabs Dialogue v3 by default, v4 with --model) — each --line is \"Voice: text\"")
     .requiredOption(
       "--line <line>",
       'one script line as "Voice: text" (e.g. "Rachel: Hello there") — repeat in speaking order; the voice is a premade name or an ElevenLabs voice UUID',
       (v: string, prev: string[]) => [...prev, v],
       [] as string[],
     )
-    .option("--stability <n>", "0 (most variable) | 0.5 (balanced) | 1 (most stable)", (v) => parseFloat(v))
+    .option("--model <id>", `dialogue model: ${DIALOGUE_PROVIDERS.join(" | ")} (default elevenlabs-dialogue, v3)`)
+    .option("--stability <n>", "v3: 0 (most variable) | 0.5 (balanced) | 1 (most stable); v4: any value 0..1", (v) => parseFloat(v))
+    .option("--similarity <n>", "v4 only (v3 ignores it): how closely each line keeps its voice's character, 0..1", (v) => parseFloat(v))
     .option("--language <code>", 'ISO 639-1 language hint, e.g. "en" (auto-detected when omitted)')
     .option("--seed <n>", "deterministic sampling seed (0-4294967295); omit for random", (v) => parseInt(v, 10))
     .option("--text-normalization <mode>", "spell out numbers/dates: auto | on | off")
@@ -666,16 +690,19 @@ Examples:
     .option("--profile <name>")
     .option("--json")
     .addHelpText("after", `
-Limits: 5,000 characters total (under 2,000 recommended), up to 10 unique voices.
+Limits: 5,000 characters total on either model (under 2,000 recommended), up to 10 unique voices.
 Line text may carry [audio tags] like [laughs].
 
-Example:
-  $ nodaro voice dialogue --line "Rachel: [excited] We did it!" --line "Daniel: I never doubted us." --watch`)
+Examples:
+  $ nodaro voice dialogue --line "Rachel: [excited] We did it!" --line "Daniel: I never doubted us." --watch
+  $ nodaro voice dialogue --model elevenlabs-dialogue-v4 --stability 0.3 --similarity 0.8 --line "Rachel: Hello there"`)
     .action(
       async (
         opts: {
           line: string[]
+          model?: string
           stability?: number
+          similarity?: number
           language?: string
           seed?: number
           textNormalization?: string
@@ -696,8 +723,22 @@ Example:
             }
             return { voice: raw.slice(0, idx).trim(), text: raw.slice(idx + 1).trim() }
           })
-          if (opts.stability !== undefined && ![0, 0.5, 1].includes(opts.stability)) {
-            throw new Error("--stability must be exactly 0, 0.5, or 1")
+          // The model's own rule (its capability sheet in @nodaro/shared): v3
+          // dialogue takes three steps, v4 any 0..1 — never a hand-kept list.
+          if (opts.model !== undefined && !(DIALOGUE_PROVIDERS as readonly string[]).includes(opts.model)) {
+            throw new Error(`--model must be one of ${DIALOGUE_PROVIDERS.join(", ")}`)
+          }
+          const model = opts.model as DialogueProvider | undefined
+          if (opts.stability !== undefined && !dialogueStabilityAccepted(dialogueProviderOf(model), opts.stability)) {
+            const steps = getDialogueCapabilities(model).stabilitySteps
+            throw new Error(
+              steps
+                ? `--stability must be exactly ${steps.slice(0, -1).join(", ")}, or ${steps[steps.length - 1]}`
+                : "--stability must be between 0 and 1",
+            )
+          }
+          if (opts.similarity !== undefined && !(opts.similarity >= 0 && opts.similarity <= 1)) {
+            throw new Error("--similarity must be between 0 and 1")
           }
           if (opts.textNormalization !== undefined && !["auto", "on", "off"].includes(opts.textNormalization)) {
             throw new Error("--text-normalization must be auto, on, or off")
@@ -705,7 +746,9 @@ Example:
           const client = buildClient(opts.profile)
           const result = await client.voices.textToDialogue({
             dialogue,
-            ...(opts.stability !== undefined ? { stability: opts.stability as 0 | 0.5 | 1 } : {}),
+            ...(model !== undefined ? { provider: model } : {}),
+            ...(opts.stability !== undefined ? { stability: opts.stability } : {}),
+            ...(opts.similarity !== undefined ? { similarityBoost: opts.similarity } : {}),
             ...(opts.language ? { languageCode: opts.language } : {}),
             ...(opts.seed !== undefined ? { seed: opts.seed } : {}),
             ...(opts.textNormalization ? { applyTextNormalization: opts.textNormalization as "auto" | "on" | "off" } : {}),

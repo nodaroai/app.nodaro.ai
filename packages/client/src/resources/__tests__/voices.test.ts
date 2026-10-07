@@ -155,6 +155,25 @@ describe("voices resource", () => {
     expect((fetchMock.mock.calls[0][1] as { method: string }).method).toBe("POST")
   })
 
+  it("textToDialogue() POSTs /v1/text-to-dialogue with the model, a stepless stability and similarity, verbatim", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "j-dlg" }))
+    const c = make(fetchMock)
+    const dialogue = [{ text: "Hi.", voice: "Rachel" }, { text: "Hello.", voice: "George" }]
+    await c.voices.textToDialogue({ dialogue, provider: "elevenlabs-dialogue-v4", stability: 0.3, similarityBoost: 0.8 })
+    const init = fetchMock.mock.calls[0][1] as { method: string; body: string }
+    expect(fetchMock.mock.calls[0][0]).toBe("https://api.example.com/v1/text-to-dialogue")
+    expect(init.method).toBe("POST")
+    expect(JSON.parse(init.body)).toEqual({ dialogue, provider: "elevenlabs-dialogue-v4", stability: 0.3, similarityBoost: 0.8 })
+  })
+
+  it("textToDialogue() without a model sends none (the route runs v3 dialogue)", async () => {
+    const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "j-dlg" }))
+    const c = make(fetchMock)
+    await c.voices.textToDialogue({ dialogue: [{ text: "Hi.", voice: "Rachel" }], stability: 0.5 })
+    const init = fetchMock.mock.calls[0][1] as { body: string }
+    expect(JSON.parse(init.body)).toEqual({ dialogue: [{ text: "Hi.", voice: "Rachel" }], stability: 0.5 })
+  })
+
   it("dub() POSTs /v1/dubbing with the target language", async () => {
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk({ jobId: "j-dub" }))
     const c = make(fetchMock)

@@ -43,6 +43,7 @@ vi.mock("@/lib/supabase.js", () => {
     estimated_credits: 0,
     snapshot_nodes: [
       { id: "text-1", type: "text-prompt", data: { text: "hello" } },
+      { id: "ugc-1", type: "ugc-creator", data: { source: "sampled", gender: "woman", keepResult: false } },
       { id: "hook-1", type: "webhook-output", data: { url: "https://author.example/hook" } },
     ],
     snapshot_edges: [],
@@ -108,6 +109,20 @@ describe("POST /v1/component/execute — the override lock (issue #1555)", () =>
     expect(res.json().error.message).not.toContain("attacker")
     expect(mockInsertJob).not.toHaveBeenCalled()
     expect(mockInsertJobIdempotent).not.toHaveBeenCalled()
+    expect(mockExecuteAppRun).not.toHaveBeenCalled()
+  })
+
+  it("refuses an injected UGC run state — 400 locked_field, no wrapper job, no run", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/component/execute",
+      payload: { appSlug: "deliver", inputOverrides: { "ugc-1": { keepResult: true } } },
+    })
+
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("locked_field")
+    expect(res.json().error.message).toContain('inputOverrides cannot set "keepResult" on a UGC node "ugc-1".')
+    expect(mockInsertJob).not.toHaveBeenCalled()
     expect(mockExecuteAppRun).not.toHaveBeenCalled()
   })
 

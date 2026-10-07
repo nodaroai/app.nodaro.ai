@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
 import { registerVerbs } from "../verbs.js"
 import {
@@ -17,6 +17,9 @@ import { newSession } from "../../session.js"
 import { _resetRegistry } from "../../tasks.js"
 import type { Scope } from "../../../scopes.js"
 import { buildServer, callTool, listTools, executeSession, stubRoute } from "./_helpers.js"
+import { setPluginSupports } from "../../../private-plugins/supports-registry.js"
+import { editPlanModeRefusalMessage } from "../../../private-plugins/edit-plan-mode-gate.js"
+import { TTS_NEIGHBOUR_TEXT_MAX_CHARS } from "../../../../providers/elevenlabs/neighbour-text.js"
 
 const audio = vi.hoisted(() => ({ measured: vi.fn() }))
 vi.mock("../_audio-length.js", async (importOriginal) => ({
@@ -369,6 +372,64 @@ describe("combine_videos verb", () => {
     expect((received.body?.videoUrls as string[]).length).toBe(2)
   })
 
+  it("forwards trim_start_frames / trim_end_frames as trimStartFrames / trimEndFrames", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/combine-videos", { jobId: "j-cv-trim" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    const result = await callTool(server, "combine_videos", {
+      videos: [{ url: "https://a/v1.mp4" }, { url: "https://a/v2.mp4" }],
+      trim_start_frames: 1,
+      trim_end_frames: 2,
+    })
+
+    expect(result.isError).toBeUndefined()
+    expect(received.body?.trimStartFrames).toBe(1)
+    expect(received.body?.trimEndFrames).toBe(2)
+  })
+
+  it("forwards an explicit 0 trim (0 is a real value, not 'unset')", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/combine-videos", { jobId: "j-cv-zero" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    await callTool(server, "combine_videos", {
+      videos: [{ url: "https://a/v1.mp4" }, { url: "https://a/v2.mp4" }],
+      trim_start_frames: 0,
+      trim_end_frames: 0,
+    })
+
+    expect(received.body?.trimStartFrames).toBe(0)
+    expect(received.body?.trimEndFrames).toBe(0)
+  })
+
+  it("omits the trim fields when not given, so the route default stays in force", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/combine-videos", { jobId: "j-cv-omit" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    await callTool(server, "combine_videos", {
+      videos: [{ url: "https://a/v1.mp4" }, { url: "https://a/v2.mp4" }],
+    })
+
+    expect(received.body).not.toHaveProperty("trimStartFrames")
+    expect(received.body).not.toHaveProperty("trimEndFrames")
+  })
+
+  it("rejects an out-of-range trim (route bounds: integer 0..120)", async () => {
+    const { fastify } = stubRoute("POST", "/v1/combine-videos", { jobId: "j" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    for (const bad of [{ trim_start_frames: 121 }, { trim_end_frames: -1 }, { trim_end_frames: 1.5 }]) {
+      const result = await callTool(server, "combine_videos", {
+        videos: [{ url: "https://a/v1.mp4" }, { url: "https://a/v2.mp4" }],
+        ...bad,
+      })
+      expect(result.isError).toBe(true)
+    }
+  })
+
   it("returns isError if a video item lacks url and asset_id", async () => {
     const { fastify } = stubRoute("POST", "/v1/combine-videos", { jobId: "j" })
     const server = buildServer()
@@ -671,6 +732,34 @@ describe("generate_speech verb", () => {
     registerVerbs({ server, session: readOnlySession(), fastify })
     const tools = await listTools(server)
     expect(tools.map((t) => t.name)).not.toContain("generate_speech")
+  })
+
+  it("maps previous_text / next_text to the route's previousText / nextText", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/text-to-speech", { jobId: "j-tts-2" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "generate_speech", { text: "Middle.", previous_text: "Before.", next_text: "After." })
+    expect(result.isError).toBeUndefined()
+    expect(received.body?.previousText).toBe("Before.")
+    expect(received.body?.nextText).toBe("After.")
+  })
+
+  it("refuses a neighbour text over 1,000 characters at the schema", async () => {
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify: Fastify() })
+    const result = await callTool(server, "generate_speech", { text: "Hi.", previous_text: "x".repeat(1001) })
+    expect(result.isError).toBe(true)
+  })
+
+  it("declares both arguments with the funnel's cap", async () => {
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify: Fastify() })
+    const tool = (await listTools(server)).find((t) => t.name === "generate_speech")
+    const props = (tool?.inputSchema as { properties?: Record<string, { maxLength?: number; description?: string }> }).properties ?? {}
+    for (const key of ["previous_text", "next_text"]) {
+      expect(props[key]?.maxLength, key).toBe(TTS_NEIGHBOUR_TEXT_MAX_CHARS)
+      expect(props[key]?.description ?? "", key).toMatch(/continu/i)
+    }
   })
 })
 
@@ -1743,6 +1832,185 @@ describe("plan_edit verb — audio_sync offsets", () => {
   })
 })
 
+// Round 3 (decided 2026-10-06): plan_edit gates `trailer` on the SAME check the
+// editor (GET /v1/edit-plan/capabilities) and the video worker use —
+// editPlanModesOf(getPluginSupports()). Until the loaded plugin plans a
+// trailer, the tool refuses with a clear message before dispatch, instead of
+// relaying the plugin route's raw 400.
+describe("plan_edit verb — trailer mode gate", () => {
+  const transcript = { version: 1, words: [{ text: "hi", startMs: 0, endMs: 500 }] }
+  const sources = [{ url: "https://a/ep.mp4" }]
+
+  afterEach(() => setPluginSupports({}))
+
+  it("refuses trailer before dispatch while the plugin does not plan it — nothing is charged", async () => {
+    setPluginSupports({})
+    const { fastify, received } = stubRoute("POST", "/v1/edit-plan", { jobId: "never" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "plan_edit", { mode: "trailer", transcript, sources })
+    expect(result.isError).toBe(true)
+    const text = (result.content[0] as { text: string }).text
+    expect(text).toBe(
+      "plan_edit: Trailer mode is not available on this server yet. Choose another mode, or try again after the next update. You were not charged. " +
+        "Modes this server plans: tighten, clips, chapters.",
+    )
+    expect(received.body).toBeUndefined()
+  })
+
+  it("reads the plugin's supports at CALL time, not when the tool was registered", async () => {
+    setPluginSupports({})
+    const { fastify, received } = stubRoute("POST", "/v1/edit-plan", { jobId: "j-tr" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    setPluginSupports({ editPlanModes: ["trailer"] })
+    const result = await callTool(server, "plan_edit", { mode: "trailer", transcript, sources })
+    expect(result.isError).toBeUndefined()
+    expect(received.body?.mode).toBe("trailer")
+  })
+
+  it("dispatches the Phase-1 modes on a plugin that declares nothing", async () => {
+    setPluginSupports({})
+    for (const mode of ["tighten", "clips", "chapters"]) {
+      const { fastify, received } = stubRoute("POST", "/v1/edit-plan", { jobId: `j-${mode}` })
+      const server = buildServer()
+      registerVerbs({ server, session: executeSession(), fastify })
+      const result = await callTool(server, "plan_edit", { mode, transcript, sources })
+      expect(result.isError, mode).toBeUndefined()
+      expect(received.body?.mode).toBe(mode)
+    }
+  })
+
+  // Round 4 (decided 2026-10-06): an UNKNOWN mode gets the same words as an
+  // undeclared one, not a schema error and never a tighten plan.
+  it("refuses an unknown mode with the shared message, before dispatch", async () => {
+    setPluginSupports({ editPlanModes: ["montage"] })
+    const { fastify, received } = stubRoute("POST", "/v1/edit-plan", { jobId: "never" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    for (const mode of ["montage", "Tighten"]) {
+      const result = await callTool(server, "plan_edit", { mode, transcript, sources })
+      expect(result.isError, mode).toBe(true)
+      const text = (result.content[0] as { text: string }).text
+      expect(text).toContain(editPlanModeRefusalMessage(mode))
+    }
+    expect(received.body).toBeUndefined()
+  })
+
+  it("says in its description that trailer is refused until this server plans it", async () => {
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify: Fastify() })
+    const tool = (await listTools(server)).find((t) => t.name === "plan_edit")
+    expect(tool?.description).toMatch(/`trailer` is refused, before any charge, until this server can plan it/)
+  })
+})
+
+describe("mix_audio verb", () => {
+  const tracks = [{ audio_url: "https://a/voice.mp3" }, { audio_url: "https://a/bed.mp3" }]
+
+  it("calls /v1/mix-audio with the urls in track order", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/mix-audio", { jobId: "j-mix" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    const result = await callTool(server, "mix_audio", { tracks })
+
+    expect(result.isError).toBeUndefined()
+    expect((result.structuredContent as Record<string, unknown>)?.jobId).toBe("j-mix")
+    expect(received.body?.audioUrls).toEqual(["https://a/voice.mp3", "https://a/bed.mp3"])
+    expect(received.body?.mcp_client).toBe("Claude")
+    expect(received.body?.userId).toBe("u1")
+  })
+
+  it("sends neither trackVolumes nor duck when none is asked for (a plain mix)", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/mix-audio", { jobId: "j-plain" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    await callTool(server, "mix_audio", { tracks })
+    expect(received.body && "trackVolumes" in received.body).toBe(false)
+    expect(received.body && "duck" in received.body).toBe(false)
+  })
+
+  it("sends per-track volumes positionally, defaulting an unset one to 100", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/mix-audio", { jobId: "j-vol" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    await callTool(server, "mix_audio", {
+      tracks: [{ audio_url: "https://a/voice.mp3" }, { audio_url: "https://a/bed.mp3", volume: 40 }],
+    })
+    expect(received.body?.trackVolumes).toEqual([100, 40])
+  })
+
+  it("maps duck to the route's camelCase levers", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/mix-audio", { jobId: "j-duck" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    const result = await callTool(server, "mix_audio", {
+      tracks,
+      duck: { under: 0, amount: 80, threshold_db: -35, ratio: 6, attack_ms: 10, release_ms: 700 },
+    })
+
+    expect(result.isError).toBeUndefined()
+    expect(received.body?.duck).toEqual({ under: 0, amount: 80, thresholdDb: -35, ratio: 6, attackMs: 10, releaseMs: 700 })
+  })
+
+  it("sends only the levers that were given", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/mix-audio", { jobId: "j-duck2" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    await callTool(server, "mix_audio", { tracks, duck: { under: 0 } })
+    expect(received.body?.duck).toEqual({ under: 0 })
+  })
+
+  it("refuses a duck.under that is not one of the tracks, naming the range, without calling the route", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/mix-audio", { jobId: "j-bad" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    const result = await callTool(server, "mix_audio", { tracks, duck: { under: 2 } })
+
+    expect(result.isError).toBe(true)
+    expect((result.content[0] as { text: string }).text).toMatch(/duck\.under.*0.*1/)
+    expect(received.body).toBeUndefined()
+  })
+
+  it("returns isError if a track has neither audio_url nor audio_asset_id", async () => {
+    const { fastify } = stubRoute("POST", "/v1/mix-audio", { jobId: "j" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "mix_audio", { tracks: [{ audio_url: "https://a/a.mp3" }, {}] })
+    expect(result.isError).toBe(true)
+  })
+
+  it("rejects fewer than two tracks, and levers outside the compressor's range", async () => {
+    const { fastify } = stubRoute("POST", "/v1/mix-audio", { jobId: "j" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    expect((await callTool(server, "mix_audio", { tracks: [tracks[0]] })).isError).toBe(true)
+    expect((await callTool(server, "mix_audio", { tracks, duck: { under: 0, amount: 101 } })).isError).toBe(true)
+    expect((await callTool(server, "mix_audio", { tracks, duck: { under: 0, ratio: 25 } })).isError).toBe(true)
+  })
+
+  it("returns isError when /v1/mix-audio responds 402 (the credit guard's refusal reaches the caller)", async () => {
+    const fastify = Fastify()
+    fastify.post("/v1/mix-audio", async (_req, reply) =>
+      reply.status(402).send({ error: { code: "insufficient_credits", message: "Not enough credits" } }),
+    )
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    const result = await callTool(server, "mix_audio", { tracks })
+    expect(result.isError).toBe(true)
+  })
+
+  it("does NOT register without workflows:execute scope", async () => {
+    const server = buildServer()
+    registerVerbs({ server, session: readOnlySession(), fastify: Fastify() })
+    const tools = await listTools(server)
+    expect(tools.map((t) => t.name)).not.toContain("mix_audio")
+  })
+})
+
 describe("apply_edl verb", () => {
   const validEdl = {
     version: 1,
@@ -1769,6 +2037,30 @@ describe("apply_edl verb", () => {
     expect(received.body?.crossfadeMs).toBe(100)
     expect(received.body?.mcp_client).toBe("Claude")
     expect(received.body?.userId).toBe("u1")
+  })
+
+  it("passes quality and clip_key through as quality + clipKey (the render's result identity)", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/apply-edl", { jobId: "j-ae-ck" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    const result = await callTool(server, "apply_edl", { edl: validEdl, quality: "proxy", clip_key: "0-2000" })
+
+    expect(result.isError).toBeUndefined()
+    expect(received.body?.quality).toBe("proxy")
+    expect(received.body?.clipKey).toBe("0-2000")
+    expect(received.body).not.toHaveProperty("clip_key")
+  })
+
+  it("refuses a clip_key that is not '<first inMs>-<last outMs>', never dispatching", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/apply-edl", { jobId: "j-ae-bad-ck" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+
+    const result = await callTool(server, "apply_edl", { edl: validEdl, clip_key: "clip-1" })
+
+    expect(result.isError).toBe(true)
+    expect(received.body).toBeUndefined()
   })
 
   it("accepts a JSON-STRING EDL (client serialization slip) and dispatches", async () => {

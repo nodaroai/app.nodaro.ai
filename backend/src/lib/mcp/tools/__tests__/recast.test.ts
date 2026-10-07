@@ -161,6 +161,9 @@ describe("import_recast_script", () => {
     expect(typeof settings.rightsAttestedAt).toBe("string")
     // The SERVER's derived document is what seeds (C2), not the input.
     expect((settings.analysis as { blueprint: unknown }).blueprint).toEqual(DERIVED_DOC)
+    // The guided marker the app's own seed writes: an MCP-minted recast opens
+    // in the guided editor exactly like one minted in the app.
+    expect(settings.guided).toEqual({ v: 1 })
   })
 
   it("a failed import creates nothing (C3)", async () => {
@@ -294,6 +297,86 @@ describe("start_recast", () => {
     await callTool(server, "start_recast", { recast_id: WF_ID })
     const est = calls.find((c) => c.url === "/v1/recast/estimate")!
     expect("anchorMode" in (est.payload as Record<string, unknown>)).toBe(false)
+  })
+})
+
+describe("guided marker — minted at import, carried (never added) by later writes", () => {
+  const seededWith = (guided?: Record<string, unknown>, run?: Record<string, unknown>) => ({
+    id: WF_ID,
+    user_id: "u1",
+    settings: {
+      recast: {
+        version: 1,
+        fidelity: "faithful",
+        resolution: "720p",
+        results: [],
+        analysis: { jobId: "job-1", status: "completed", blueprint: DERIVED_DOC },
+        ...(guided ? { guided } : {}),
+        ...(run ? { run } : {}),
+      },
+    },
+  })
+  const patchedRecast = (calls: InjectCall[]) =>
+    (calls.find((c) => c.method === "PATCH")!.payload as { settings: { recast: Record<string, unknown> } }).settings.recast
+
+  function confirmStubs() {
+    return stubFastify({
+      "/v1/recast/estimate": () => ({ statusCode: 200, body: { totalCredits: 420, breakdown: {} } }),
+      "/v1/recast": (c) => (c.method === "POST" ? { statusCode: 200, body: { recastId: "run-1" } } : { statusCode: 404, body: {} }),
+      "/v1/workflows/": () => ({ statusCode: 200, body: { data: { id: WF_ID } } }),
+    })
+  }
+
+  it("start_recast confirm keeps the stored marker on the run write", async () => {
+    h.workflowsRow = seededWith({ v: 1 })
+    const { fastify, calls } = confirmStubs()
+    const server = buildServer()
+    registerRecastTools({ server, session: sessionWith(ALL), fastify })
+    await callTool(server, "start_recast", { recast_id: WF_ID, confirm: true })
+    expect(patchedRecast(calls).guided).toEqual({ v: 1 })
+  })
+
+  it("the planned → /start hop keeps the stored marker", async () => {
+    h.workflowsRow = seededWith({ v: 1 }, { recastId: "run-1", analysisJobId: "job-1", status: "planning", startedAt: "t" })
+    const { fastify, calls } = stubFastify({
+      "/v1/recast/run-1/start": () => ({ statusCode: 200, body: { gvpJobId: "gvp-1" } }),
+      "/v1/recast/run-1": () => ({ statusCode: 200, body: { status: "planned" } }),
+      "/v1/workflows/": () => ({ statusCode: 200, body: { data: { id: WF_ID } } }),
+    })
+    const server = buildServer()
+    registerRecastTools({ server, session: sessionWith(ALL), fastify })
+    await callTool(server, "start_recast", { recast_id: WF_ID })
+    expect(patchedRecast(calls).guided).toEqual({ v: 1 })
+  })
+
+  it("get_recast_status's completed reconcile keeps the stored marker", async () => {
+    h.workflowsRow = seededWith({ v: 1 }, { recastId: "run-1", status: "generating", startedAt: "t" })
+    const { fastify, calls } = stubFastify({
+      "/v1/recast/run-1": () => ({ statusCode: 200, body: { status: "completed", resultUrl: "https://r2/final.mp4" } }),
+      "/v1/workflows/": () => ({ statusCode: 200, body: { data: { id: WF_ID } } }),
+    })
+    const server = buildServer()
+    registerRecastTools({ server, session: sessionWith(ALL), fastify })
+    await callTool(server, "get_recast_status", { recast_id: WF_ID })
+    expect(patchedRecast(calls).guided).toEqual({ v: 1 })
+  })
+
+  it("a newer app's marker ({ v: 2 }) is carried untouched, never downgraded", async () => {
+    h.workflowsRow = seededWith({ v: 2 })
+    const { fastify, calls } = confirmStubs()
+    const server = buildServer()
+    registerRecastTools({ server, session: sessionWith(ALL), fastify })
+    await callTool(server, "start_recast", { recast_id: WF_ID, confirm: true })
+    expect(patchedRecast(calls).guided).toEqual({ v: 2 })
+  })
+
+  it("an unmarked recast (minted classic in the app) stays unmarked through start_recast", async () => {
+    h.workflowsRow = seededWith()
+    const { fastify, calls } = confirmStubs()
+    const server = buildServer()
+    registerRecastTools({ server, session: sessionWith(ALL), fastify })
+    await callTool(server, "start_recast", { recast_id: WF_ID, confirm: true })
+    expect("guided" in patchedRecast(calls)).toBe(false)
   })
 })
 

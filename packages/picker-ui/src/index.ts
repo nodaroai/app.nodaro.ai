@@ -20,6 +20,7 @@ export * from "./types.js"
 export * from "./pickers/index.js"
 export * from "./registry.js"
 export * from "./lib/parameter-node-prefs.js"
+export * from "./lib/field-restrictions.js"
 // The @-mention prompt editor (M4) — component + its public helpers
 export * from "./prompt-editor/index.js"
 export * from "./prompt-editor/editor-types.js"

@@ -1,29 +1,27 @@
+import type { TelegramChannelPost, TelegramChannelPostMedia } from "@nodaro/shared"
 import { safeFetch } from "../../lib/safe-fetch.js"
 
 /**
  * Read-only scraper for PUBLIC Telegram channels via the preview page
  * (`t.me/s/<channel>`). No auth, no bot — anyone can read a public channel's
- * recent posts this way. Used by the Telegram Channel Feed source node to pull
- * posts for rewrite/repost workflows.
+ * recent posts this way. Used by the Telegram Channel Feed source node.
  *
- * Honest limits: public channels with the web preview ENABLED only; ~20 most
- * recent posts per fetch (what the preview page renders); markup-dependent —
- * the parser is guarded by a fixture test so a Telegram markup change is caught
- * in CI rather than silently returning nothing.
+ * Honest limits: public channels with the web preview ENABLED only; one page
+ * renders ~20 posts, and `?after=<id>` pages forward from an id (oldest
+ * first) — verified live 2026-10-06: `/s/telegram` → 441..460, `?after=441` →
+ * 442..460, `?after=460` → an empty page that still carries the channel's
+ * markup. Markup-dependent — the parser is guarded by a fixture test (real
+ * snippets captured from the page) so a Telegram markup change is caught in
+ * CI rather than silently returning nothing.
+ *
+ * What a post carries (`TelegramChannelPost`, @nodaro/shared): id, channel,
+ * link, text (a reply's quoted text excluded), date, forwarded-from, EVERY
+ * photo and video (an album is several; a video's file when the page embeds
+ * it, else its poster only), the first picture, and the view counter.
  */
 
-export interface ChannelPost {
-  /** Sequential per-channel message id (from data-post="channel/<id>"). */
-  id: number
-  /** Plain-text content (HTML tags stripped, entities decoded). */
-  text: string
-  /** First photo URL if the post has one. */
-  imageUrl?: string
-  /** ISO timestamp of the post. */
-  date?: string
-  /** Canonical link to the post. */
-  url: string
-}
+/** @deprecated The post shape lives in `@nodaro/shared` as `TelegramChannelPost`. */
+export type ChannelPost = TelegramChannelPost
 
 const CHANNEL_RE = /^[a-zA-Z0-9_]{3,64}$/
 
@@ -35,77 +33,195 @@ export function normalizeChannel(input: string): string | null {
   return CHANNEL_RE.test(s) ? s : null
 }
 
+/** A code point the text can hold, else the entity as written — one `&#9999999;` in a post must not fail every tick. */
+const codePointOrLiteral = (n: number, literal: string): string =>
+  Number.isInteger(n) && n >= 0 && n <= 0x10ffff && !(n >= 0xd800 && n <= 0xdfff) ? String.fromCodePoint(n) : literal
+
+/**
+ * The named entities Telegram's preview page writes into a post's text. The
+ * bidi marks (`&rlm;` / `&lrm;`) matter most: a Hebrew channel's posts carry
+ * them around Latin words, and shown as text they read as "&rlm;Speech".
+ * An unknown name stays as written.
+ */
+const NAMED_ENTITIES: Readonly<Record<string, string>> = {
+  nbsp: " ",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  apos: "'",
+  rlm: "‏",
+  lrm: "‎",
+  zwj: "‍",
+  zwnj: "‌",
+  shy: "",
+  hellip: "…",
+  mdash: "—",
+  ndash: "–",
+  laquo: "«",
+  raquo: "»",
+  bull: "•",
+  middot: "·",
+  times: "×",
+  copy: "©",
+  reg: "®",
+  trade: "™",
+}
+
 function decodeEntities(s: string): string {
   return s
     .replace(/<br\s*\/?>/gi, "\n")
     .replace(/<[^>]+>/g, "")
-    .replace(/&nbsp;/g, " ")
+    // Numeric entities first, range-checked.
+    .replace(/&#(\d+);/g, (m, n) => codePointOrLiteral(Number(n), m))
+    .replace(/&#x([0-9a-f]+);/gi, (m, n) => codePointOrLiteral(parseInt(n, 16), m))
+    // Named entities (never `amp` here, so "&amp;lt;" survives as the literal "&lt;" below).
+    .replace(/&([a-z]+);/gi, (m, name: string) => {
+      const key = name.toLowerCase()
+      // Own keys only: `&constructor;` must not read Object.prototype.
+      return key !== "amp" && Object.hasOwn(NAMED_ENTITIES, key) ? NAMED_ENTITIES[key]! : m
+    })
+    // `&amp;` LAST.
     .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
-    .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16)))
     .replace(/[ \t]+\n/g, "\n")
     .trim()
+}
+
+/** The post's own text — `js-message_text`, never the quoted `js-message_reply_text` of a reply. */
+function parseText(chunk: string): string {
+  const m = chunk.match(/class="tgme_widget_message_text js-message_text"[^>]*>([\s\S]*?)<\/div>/)
+  return m ? decodeEntities(m[1]!) : ""
+}
+
+/** Every photo and video, in page order. An album wraps several photo wraps; a video player carries a poster and, when the page embeds the file, a `<video src>`. */
+function parseMedia(chunk: string): TelegramChannelPostMedia[] {
+  const found: Array<{ index: number; media: TelegramChannelPostMedia }> = []
+  for (const m of chunk.matchAll(/tgme_widget_message_photo_wrap[^>]*?background-image:url\('([^']+)'/g)) {
+    found.push({ index: m.index ?? 0, media: { type: "photo", url: m[1]! } })
+  }
+  const players = [...chunk.matchAll(/tgme_widget_message_video_player/g)]
+  players.forEach((player, i) => {
+    const start = player.index ?? 0
+    const end = players[i + 1]?.index ?? chunk.length
+    const block = chunk.slice(start, end)
+    const poster = block.match(/tgme_widget_message_video_thumb[^>]*?background-image:url\('([^']+)'/)?.[1]
+    const src = block.match(/<video[^>]*\ssrc="([^"]+)"/)?.[1]
+    // A player with neither a file nor a poster yet (a post seconds old) is not a
+    // medium anyone can show or store — `{ type: "video" }` alone said nothing.
+    if (!src && !poster) return
+    found.push({ index: start, media: { type: "video", ...(src ? { url: src } : {}), ...(poster ? { posterUrl: poster } : {}) } })
+  })
+  return found.sort((a, b) => a.index - b.index).map((f) => f.media)
+}
+
+/** `<a class="tgme_widget_message_forwarded_from_name" href="…">Name</a>`, or the `<span>` form for a sender without a link. */
+function parseForwardedFrom(chunk: string): TelegramChannelPost["forwardedFrom"] {
+  const m = chunk.match(/tgme_widget_message_forwarded_from_name"(?:[^>]*?href="([^"]+)")?[^>]*>([\s\S]*?)<\/(?:a|span)>/)
+  if (!m) return undefined
+  const name = decodeEntities(m[2]!)
+  if (!name) return undefined
+  return { name, ...(m[1] ? { url: m[1] } : {}) }
+}
+
+/** The post's own timestamp — the footer's date link; a video's `<time>` is its duration and carries no `datetime`. */
+function parseDate(chunk: string): string | undefined {
+  return chunk.match(/tgme_widget_message_date[^>]*>\s*<time[^>]*datetime="([^"]+)"/)?.[1] ?? chunk.match(/<time[^>]*datetime="([^"]+)"/)?.[1]
 }
 
 /**
  * Parse the preview HTML into posts (oldest→newest, as the page renders them).
  * Exported for the guard test.
  */
-export function parseChannelHtml(html: string, channel: string): ChannelPost[] {
-  const posts: ChannelPost[] = []
+export function parseChannelHtml(html: string, channel: string): TelegramChannelPost[] {
+  return parseChannelPage(html, channel).posts
+}
+
+export interface ChannelPage {
+  readonly posts: TelegramChannelPost[]
+  /**
+   * The highest message id the page rendered, posts with nothing to read
+   * (polls, voice notes, documents without a caption) included. The feed's
+   * position moves past them; without it, twenty such posts in a row would
+   * have the feed read the same unreadable page every tick for ever.
+   */
+  readonly maxSeenId: number | undefined
+}
+
+/** Parse the preview HTML into posts (oldest→newest) and the highest id it rendered. */
+export function parseChannelPage(html: string, channel: string): ChannelPage {
+  const posts: TelegramChannelPost[] = []
+  let maxSeenId: number | undefined
   // Each post is a .tgme_widget_message wrapper carrying data-post="chan/<id>".
   const wrappers = html.split(/<div class="tgme_widget_message[ "]/).slice(1)
   for (const chunk of wrappers) {
     const idMatch = chunk.match(/data-post="[^"/]+\/(\d+)"/)
     if (!idMatch) continue
     const id = Number(idMatch[1])
+    if (Number.isFinite(id) && (maxSeenId === undefined || id > maxSeenId)) maxSeenId = id
 
-    const textMatch = chunk.match(/tgme_widget_message_text[^"]*"[^>]*>(.*?)<\/div>/s)
-    const text = textMatch ? decodeEntities(textMatch[1]) : ""
+    const text = parseText(chunk)
+    const media = parseMedia(chunk)
+    // Skip service/empty entries with neither text nor media.
+    if (!text && media.length === 0) continue
 
-    const photoMatch = chunk.match(/tgme_widget_message_photo_wrap[^>]*background-image:url\('([^']+)'/)
-    const imageUrl = photoMatch?.[1]
-
-    const dateMatch = chunk.match(/datetime="([^"]+)"/)
-
-    // Skip service/empty entries with neither text nor image.
-    if (!text && !imageUrl) continue
+    const imageUrl = media.find((m) => m.type === "photo")?.url ?? media.find((m) => m.type === "video")?.posterUrl
+    const date = parseDate(chunk)
+    const views = chunk.match(/tgme_widget_message_views"[^>]*>([^<]+)</)?.[1]?.trim()
+    const forwardedFrom = parseForwardedFrom(chunk)
 
     posts.push({
       id,
+      channel,
+      postUrl: `https://t.me/${channel}/${id}`,
       text,
+      ...(date ? { date } : {}),
+      ...(forwardedFrom ? { forwardedFrom } : {}),
+      media,
       ...(imageUrl ? { imageUrl } : {}),
-      ...(dateMatch ? { date: dateMatch[1] } : {}),
-      url: `https://t.me/${channel}/${id}`,
+      ...(views ? { views } : {}),
     })
   }
   // De-dup by id (the page can repeat a pinned post) and sort ascending.
   const byId = new Map(posts.map((p) => [p.id, p]))
-  return [...byId.values()].sort((a, b) => a.id - b.id)
+  return { posts: [...byId.values()].sort((a, b) => a.id - b.id), maxSeenId }
 }
 
-/** Fetch + parse a public channel's recent posts. Throws with a clear message
- *  on a private/nonexistent channel or preview-disabled channel. */
-export async function fetchChannelPosts(channelInput: string): Promise<ChannelPost[]> {
+export interface FetchChannelPostsOptions {
+  /** Page forward from this post id: only posts above it, oldest first (`?after=<id>`). */
+  readonly after?: number
+}
+
+/** Fetch + parse a public channel's posts — the newest page, or the page after `after`. Throws with a clear message
+ *  on a private/nonexistent channel or preview-disabled channel; an empty page past the newest post is not an error. */
+export async function fetchChannelPosts(channelInput: string, opts: FetchChannelPostsOptions = {}): Promise<TelegramChannelPost[]> {
+  return (await fetchChannelPage(channelInput, opts)).posts
+}
+
+/** The page's posts AND the highest id it rendered (see `ChannelPage`). */
+export async function fetchChannelPage(channelInput: string, opts: FetchChannelPostsOptions = {}): Promise<ChannelPage> {
   const channel = normalizeChannel(channelInput)
   if (!channel) throw new Error(`"${channelInput}" is not a valid Telegram channel name`)
 
-  const res = await safeFetch(`https://t.me/s/${channel}`, {
+  const after = typeof opts.after === "number" && Number.isFinite(opts.after) && opts.after > 0 ? Math.floor(opts.after) : undefined
+  const url = `https://t.me/s/${channel}${after !== undefined ? `?after=${after}` : ""}`
+  const res = await safeFetch(url, {
     headers: { "User-Agent": "Mozilla/5.0 (Nodaro channel reader)" },
   })
   if (!res.ok) {
     throw new Error(`Could not read t.me/s/${channel} (HTTP ${res.status})`)
   }
   const html = await res.text()
-  const posts = parseChannelHtml(html, channel)
-  if (posts.length === 0) {
+  const page = parseChannelPage(html, channel)
+  if (page.posts.length === 0) {
     // The page loads but renders no posts → private, empty, or preview disabled.
+    // (A page past the newest post is empty too, but still carries the channel's markup.)
     if (!/tgme_channel_info|tgme_widget_message/.test(html)) {
       throw new Error(`Channel "${channel}" is private, doesn't exist, or has its web preview disabled`)
     }
   }
-  return posts
+  // The page may render the anchor post itself; only what lies above it counts.
+  if (after === undefined) return page
+  return {
+    posts: page.posts.filter((p) => p.id > after),
+    maxSeenId: page.maxSeenId !== undefined && page.maxSeenId > after ? page.maxSeenId : undefined,
+  }
 }

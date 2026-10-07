@@ -25,7 +25,7 @@ import type { TutorialTemplateDoc } from "../types.js"
 const HERE = dirname(fileURLToPath(import.meta.url))
 const TEMPLATES_DIR = join(HERE, "..", "templates")
 
-const SLUGS = ["podcast-tighten-episode", "podcast-clip-pack"] as const
+const SLUGS = ["podcast-tighten-episode", "podcast-clip-pack", "podcast-multicam-cut"] as const
 
 async function loadTemplate(slug: string): Promise<TutorialTemplateDoc> {
   return JSON.parse(await readFile(join(TEMPLATES_DIR, `${slug}.json`), "utf8")) as TutorialTemplateDoc
@@ -166,4 +166,105 @@ describe("podcast editing templates — structural validity", () => {
     const capTranscript = edges.find((e) => e.target === captions.id && e.targetHandle === "transcript")
     expect(capTranscript, "add-captions has NO wired transcript edge").toBeUndefined()
   })
+
+  describe("Multicam Cut", () => {
+    function only(nodes: Node[], type: string): Node {
+      const found = nodes.filter((n) => n.type === type)
+      expect(found, `exactly one ${type} node`).toHaveLength(1)
+      return found[0]!
+    }
+    function into(edges: Edge[], target: Node, handle: string): Edge[] {
+      return edges.filter((e) => e.target === target.id && e.targetHandle === handle)
+    }
+
+    it("wires the multicam chain: sources → Audio Sync + Transcribe(master) → Edit Plan(tighten) → Camera Switch → Apply EDL", async () => {
+      const t = await loadTemplate("podcast-multicam-cut")
+      const nodes = t.nodes as Node[]
+      const edges = t.edges as Edge[]
+
+      const master = only(nodes, "upload-audio")
+      const cameras = nodes.filter((n) => n.type === "upload-video")
+      expect(cameras.length, "2–5 cameras beside the master (2–6 sources in total)").toBeGreaterThanOrEqual(2)
+      expect(cameras.length).toBeLessThanOrEqual(5)
+      const recordings = [master, ...cameras]
+
+      const sync = only(nodes, "audio-sync")
+      const transcribe = only(nodes, "transcribe")
+      const plan = only(nodes, "edit-plan")
+      const cameraSwitch = only(nodes, "camera-switch")
+      const apply = only(nodes, "apply-edl")
+
+      // Every recording feeds BOTH Audio Sync and Edit Plan's Sources — offsets
+      // are matched to sources by upstream node.
+      for (const handle of [[sync, "sources"], [plan, "sources"]] as const) {
+        expect(into(edges, handle[0], handle[1]).map((e) => e.source).sort()).toEqual(recordings.map((n) => n.id).sort())
+      }
+      // Audio Sync measures against the master; its result lands on Offsets.
+      expect((sync.data as { reference?: string }).reference).toBe(master.id)
+      expect(into(edges, plan, "offsets").map((e) => [e.source, e.sourceHandle])).toEqual([[sync.id, "json"]])
+
+      // Transcribe hears the MASTER (the plan refuses a transcript off the
+      // master's clock), diarized (Camera Switch refuses one with no speakers).
+      expect(into(edges, transcribe, "audio").map((e) => e.source)).toEqual([master.id])
+      expect((transcribe.data as { diarize?: boolean }).diarize).toBe(true)
+      expect(into(edges, plan, "transcript").map((e) => [e.source, e.sourceHandle])).toEqual([[transcribe.id, "json"]])
+
+      // Edit Plan tightens on the master's clock: the master is marked master
+      // audio and leads the source order; no offset is typed (a typed offset
+      // beats the measured one).
+      const planData = plan.data as {
+        mode?: string
+        sourceOrder?: string[]
+        sourceConfig?: Record<string, { role?: string; offsetMs?: number }>
+      }
+      expect(planData.mode).toBe("tighten")
+      expect(planData.sourceOrder?.[0]).toBe(master.id)
+      expect([...(planData.sourceOrder ?? [])].sort()).toEqual(recordings.map((n) => n.id).sort())
+      expect(planData.sourceConfig?.[master.id]?.role).toBe("master-audio")
+      for (const cam of cameras) expect(["camera", "wide"]).toContain(planData.sourceConfig?.[cam.id]?.role)
+      for (const cfg of Object.values(planData.sourceConfig ?? {})) expect(cfg.offsetMs).toBeUndefined()
+
+      // Camera Switch reads the plan's edit and the diarized transcript.
+      expect(into(edges, cameraSwitch, "edl").map((e) => [e.source, e.sourceHandle])).toEqual([[plan.id, "edl"]])
+      expect(into(edges, cameraSwitch, "transcript").map((e) => [e.source, e.sourceHandle])).toEqual([[transcribe.id, "json"]])
+
+      // Apply EDL renders the SWITCHED edit (and the named transcript, remapped
+      // onto the cut for captions added later).
+      expect(into(edges, apply, "edl").map((e) => [e.source, e.sourceHandle])).toEqual([[cameraSwitch.id, "edl"]])
+      expect(into(edges, apply, "transcript").map((e) => [e.source, e.sourceHandle])).toEqual([[cameraSwitch.id, "transcript"]])
+      // Media resolves from the EDL's sources: no camera is wired as an override.
+      expect(into(edges, apply, "sources")).toEqual([])
+      // Nothing renders after it in this template.
+      expect(edges.filter((e) => e.source === apply.id)).toEqual([])
+    })
+
+    it("turns Camera Switch's layout hints OFF so the EDL is cut-only and Apply EDL can render it (decided 2026-09-23)", async () => {
+      const t = await loadTemplate("podcast-multicam-cut")
+      const cameraSwitch = only(t.nodes as Node[], "camera-switch")
+      // Written explicitly, not left to the node's default.
+      expect((cameraSwitch.data as { layoutHints?: boolean }).layoutHints).toBe(false)
+    })
+
+    it("renders at the same quality as the other podcast templates (Final)", async () => {
+      for (const slug of SLUGS) {
+        const t = await loadTemplate(slug)
+        const apply = only(t.nodes as Node[], "apply-edl")
+        expect((apply.data as { quality?: string }).quality, slug).toBe("final")
+      }
+    })
+
+    it("lists the node types and providers it actually uses", async () => {
+      const t = await loadTemplate("podcast-multicam-cut")
+      const nodes = t.nodes as Node[]
+      expect([...(t.nodeTypesUsed ?? [])].sort()).toEqual([...new Set(nodes.map((n) => n.type))].sort())
+      const providers = new Set(nodes.flatMap((n) => {
+        const p = (n.data as { provider?: unknown } | undefined)?.provider
+        return typeof p === "string" ? [p] : []
+      }))
+      expect([...(t.providersUsed ?? [])].sort()).toEqual([...providers].sort())
+    })
+  })
+
+  // The listing price of every built-in template (these three included) is
+  // pinned in template-listing-prices.test.ts.
 })

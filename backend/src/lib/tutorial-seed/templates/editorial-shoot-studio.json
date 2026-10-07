@@ -15,7 +15,7 @@
     "lookbook"
   ],
   "complexity": "intermediate",
-  "estimatedCredits": 110,
+  "estimatedCredits": 79,
   "nodeTypesUsed": [
     "upload-image",
     "person",

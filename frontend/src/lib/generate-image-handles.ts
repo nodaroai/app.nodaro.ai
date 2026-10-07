@@ -7,7 +7,7 @@
  * renamed from `subjects` → `assets`. Legacy edge handles (`style`,
  * `cinematography`, `subjects`) are migrated on load by source type.
  */
-import { DYNAMIC_PRODUCER_TYPES, SETTINGS_INPUT_HANDLE, settingsInputAccepts } from "@nodaro/shared"
+import { DYNAMIC_PRODUCER_TYPES, IMAGE_PRODUCER_TYPES, SETTINGS_INPUT_HANDLE, settingsInputAccepts } from "@nodaro/shared"
 import { SCRAPE_NODE_TYPES } from "./scrape-node-types"
 
 // + the Settings input (Aspect Ratio / Provider), one input for all.
@@ -124,6 +124,9 @@ export const TEXT_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   "telegram-account-trigger",
   // telegram-channel-feed emits the recent posts' text (generatedText).
   "telegram-channel-feed",
+  // collection-read emits its records' digest (generatedText); collection-write the saved record's headline.
+  "collection-read",
+  "collection-write",
   // Content Recipe's `text` handle is the readable recipe; Content Ideas emits
   // one creative brief per idea (and the digest of all of them) — text either
   // way, so both feed prompt/text inputs (Generate Script's topic above all).
@@ -141,53 +144,11 @@ export const TEXT_PRODUCER_TYPES: ReadonlySet<string> = new Set([
  *  TEXT_PRODUCER_TYPES on purpose: that set widens every text handle at once. */
 export const JSON_PRODUCER_TYPES: ReadonlySet<string> = new Set<string>(SCRAPE_NODE_TYPES)
 
-/** Source node types whose output image feeds References (mirrors backend
- *  `imageSourceTypes` in payload-builder.ts:1328). */
-export const IMAGE_PRODUCER_TYPES: ReadonlySet<string> = new Set([
-  "upload-image", "generate-image", "edit-image", "image-to-image", "modify-image", "upscale-image", "remove-background",
-  // extract-frame produces a single still image extracted from a video source.
-  // Without this entry, its typed source pip's popover returned zero target
-  // candidates and downstream image consumers couldn't enumerate it as a
-  // valid producer.
-  "extract-frame",
-  // generate-mask emits the source image AND a mask PNG. Its `image` source
-  // pip is the passthrough (same image as the input) — included here so
-  // downstream image consumers (Generate Image References, etc.) enumerate it
-  // as a valid candidate.
-  "generate-mask",
-  // paint-mask emits the hand-painted mask PNG (a plain image at runtime).
-  // Membership is what makes mask targets accept it (ACCEPTS_IMAGE_OR_DYN) —
-  // mask is an advisory color, not a gated type.
-  "paint-mask",
-  // reference-sheet's `sheet` handle is a single composited image and `panels`
-  // carries clean reference images; both resolve to image URLs at runtime
-  // (node-input-resolver.ts / input-resolver.ts route them into
-  // referenceImageUrls). Membership lets the canvas accept sheet/panels → any
-  // image input; edge colors stay handle-correct via HANDLE_OUTPUT_TYPES.
-  "reference-sheet",
-  // reference-board's `image` source pip emits a real generated board image
-  // (extractNodeOutput + backend IMAGE_RESULT_TYPES + frontend IMAGE_SOURCE_TYPES
-  // all route it). Without this entry the canvas validator rejected
-  // reference-board → every image consumer (the voice-changer-pro output-drift
-  // class). Guarded by connection-validation.test.ts.
-  "reference-board",
-  // image-collage composites N images → ONE image (generatedImageUrl). Its
-  // `image` source pip must be enumerable by downstream image consumers.
-  "image-collage",
-  // image-overlay places layers on a base → ONE image (generatedImageUrl).
-  "image-overlay",
-  // 3D Render Pro's `stills` handle carries one PNG per shot of the exported
-  // composition (the input resolvers spread them into referenceImageUrls,
-  // exactly like reference-sheet `panels`). Membership is what lets the canvas
-  // accept stills → any image input; the validator only ever sees the source
-  // NODE type, so this also makes its `video` pip droppable on an image input
-  // — the same handle-blind trade `reference-sheet` and `split-media` already
-  // document. Edge colors stay handle-correct via HANDLE_OUTPUT_TYPES, and the
-  // input resolvers route by handle, so only `stills` becomes an image at
-  // runtime. Deliberately NOT added to IMAGE_SOURCE_TYPES on either engine:
-  // that set types the node's PRIMARY asset, and 3D Render Pro's is the MP4.
-  "pro-3d-render",
-])
+/** Source node types whose output image feeds References — the shared set
+ *  (`@nodaro/shared` producer-types.ts), which the backend's handle migration
+ *  and the MCP edge normalizer read too. Re-exported so every canvas importer
+ *  keeps its path. */
+export { IMAGE_PRODUCER_TYPES }
 
 /** Identity-locking source node types that feed Subjects. */
 export const IDENTITY_TYPES: ReadonlySet<string> = new Set([

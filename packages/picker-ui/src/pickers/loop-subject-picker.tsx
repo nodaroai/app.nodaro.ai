@@ -2,24 +2,29 @@
 
 import { memo, useMemo, useState } from "react"
 import { Search, Cloud, Flame, Sparkles, Waves, Star, CloudRain, Spline, Hexagon, Zap, Atom, Infinity as InfinityIcon, Tornado, CloudSnow, CloudLightning, Orbit, Sun, FlowerIcon, Droplets, Flame as FireIcon, Grid3x3, Box, BarChart3, Dna, Disc3, Aperture, RotateCw, AlertTriangle, CircleDot, Layers } from "lucide-react"
-import { LOOP_SUBJECTS as BASE_LOOP_SUBJECTS, type LoopSubject, type LoopSubjectCategory } from "@nodaro/prompts"
+import { LOOP_SUBJECTS as BASE_LOOP_SUBJECTS, LOOP_SUBJECT_CATEGORY_LABELS, LOOP_SUBJECT_CATEGORY_ORDER, type LoopSubject, type LoopSubjectCategory } from "@nodaro/prompts"
 import { Input } from "../ui/input"
 import { FitText } from "../ui/fit-text"
 import { cn } from "../lib/cn"
 import { useLocalizedCatalog } from "../i18n"
 import { useCuratedEntries } from "../curated.js"
+import { identityLabel, type PickerSearchCopy } from "./picker-copy"
+
+/** The English copy, used when the host passes none. */
+export const LOOP_SUBJECT_PICKER_COPY_EN: PickerSearchCopy = {
+  searchPlaceholder: "Search loop subject",
+  noMatch: (query) => `No subject matches “${query}”`,
+}
 
 interface LoopSubjectPickerProps {
   readonly value: string
   readonly onValueChange: (subjectId: string) => void
   readonly className?: string
-}
-
-const CATEGORY_ORDER: ReadonlyArray<LoopSubjectCategory> = ["realistic", "abstract"]
-
-const CATEGORY_LABELS: Record<LoopSubjectCategory, string> = {
-  realistic: "Realistic",
-  abstract: "Abstract / VJ",
+  /** Localizes an English group name (`LOOP_SUBJECT_CATEGORY_LABELS`) — the
+   *  host app's option-label table. Identity when omitted. */
+  readonly localizeLabel?: (english: string) => string
+  /** The picker's interface strings in the host's language. English when omitted. */
+  readonly copy?: PickerSearchCopy
 }
 
 const SUBJECT_ICONS: Record<string, React.ReactNode> = {
@@ -71,6 +76,8 @@ export const LoopSubjectPicker = memo(function LoopSubjectPicker({
   value,
   onValueChange,
   className,
+  localizeLabel = identityLabel,
+  copy = LOOP_SUBJECT_PICKER_COPY_EN,
 }: LoopSubjectPickerProps) {
   // Curated view of the bundled catalog: filtered to ids this deployment
   // offers, relabelled where a pack rewrote an entry. Subscribed, so a late
@@ -89,7 +96,7 @@ export const LoopSubjectPicker = memo(function LoopSubjectPicker({
       list.push(subject)
       byCategory.set(subject.category, list)
     }
-    return CATEGORY_ORDER.map((cat) => ({
+    return LOOP_SUBJECT_CATEGORY_ORDER.map((cat) => ({
       category: cat,
       subjects: byCategory.get(cat) ?? [],
     }))
@@ -102,8 +109,8 @@ export const LoopSubjectPicker = memo(function LoopSubjectPicker({
       <div className="relative">
         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
         <Input
-          aria-label="Search loop subject"
-          placeholder="Search loop subject"
+          aria-label={copy.searchPlaceholder}
+          placeholder={copy.searchPlaceholder}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           className="pl-8 h-8 text-xs"
@@ -112,18 +119,19 @@ export const LoopSubjectPicker = memo(function LoopSubjectPicker({
 
       {!anyVisible && query && (
         <div className="text-xs text-muted-foreground text-center py-4">
-          No subject matches &quot;{query}&quot;
+          {copy.noMatch(query)}
         </div>
       )}
 
       {grouped.map(({ category, subjects }) => {
         if (subjects.length === 0) return null
+        const groupLabel = localizeLabel(LOOP_SUBJECT_CATEGORY_LABELS[category])
         return (
           <div key={category} className="flex flex-col gap-1.5">
             <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground px-0.5">
-              {CATEGORY_LABELS[category]}
+              {groupLabel}
             </div>
-            <div role="radiogroup" aria-label={CATEGORY_LABELS[category]} className="grid grid-cols-3 gap-1.5">
+            <div role="radiogroup" aria-label={groupLabel} className="grid grid-cols-3 gap-1.5">
               {subjects.map((subject) => {
                 const selected = subject.id === value
                 const label = resolveLabel(subject.id, subject.label)

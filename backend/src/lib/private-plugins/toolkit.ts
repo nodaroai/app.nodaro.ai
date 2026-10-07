@@ -5,11 +5,16 @@ import { retainImage, readRetainedImage, copyRetainedImage } from "../retained-i
 import { retainJobImage, readRetainedJobImages } from "../retained-job-images.js"
 import { recordRetainedImageCopy, readRetainedImageCopies } from "../retained-image-copies.js"
 import { readPublicVideoFrame } from "../public-video-frame.js"
+import { ensureMediaProxy } from "../../services/media-proxy.js"
+import { proxyFrameToSourceMs } from "../../services/media-proxy-span-map.js"
+import { detectFaces } from "../../services/face-detect/detect-faces.js"
 import { isStorageConfigured } from "../storage.js"
 import { createSceneRenderingToolkit } from "./scene3d-render-toolkit.js"
 import { completeStructuredMetered } from "./llm-metered.js"
 import { createSSEStream } from "../sse.js"
 import { directVoiceChanger } from "../../providers/elevenlabs/voice-changer.js"
+import { directElevenLabsTTS } from "../../providers/elevenlabs/direct-tts.js"
+import { hostTtsCapabilities } from "./tts-capabilities-toolkit.js"
 import { createScene3DArtifactToolkit } from "./scene3d-artifact-toolkit.js"
 import { createScene3DPlaybackToolkit } from "./scene3d-playback-toolkit.js"
 import { createDurableScene3DStageJournal } from "./scene3d-stage-storage.js"
@@ -65,6 +70,7 @@ import {
   refundJobCredits,
   uploadVideoMaybeWatermark,
   requestJobStop,
+  generateAndUploadThumbnail,
 } from "../../workers/shared.js"
 import { supabase } from "../supabase.js"
 import { isRelayOwnedObject } from "../asset-delete.js"
@@ -110,6 +116,8 @@ import { pollKieTask, isUpstreamKieFailure } from "../../providers/kie/client.js
 import { sunoGenerate, sunoCreditType } from "../../providers/kie/suno-client.js"
 import { combineVideos as combineVideosCore } from "../../providers/video/combine-videos.js"
 import { extractTailToFile } from "../../providers/video/extract-tail.js"
+import { APPLY_EDL_LABEL, renderEdlTimeline } from "../../providers/video/edl-timeline.js"
+import { DeterministicJobError } from "../deterministic-job-error.js"
 import { llmCompleteStructured } from "../llm-client.js"
 import type { FastifyInstance } from "fastify"
 import type { LlmReasoningEffort } from "@nodaro/shared"
@@ -129,7 +137,8 @@ import { randomUUID } from "node:crypto"
 import { dirname, join } from "node:path"
 import { promises as fs } from "node:fs"
 import type { ZodType } from "zod"
-import type { PluginEntityRead, PluginEntityTable, PluginInternalRequestOptions, PluginOwnedJobRow } from "./types.js"
+import type { PluginEdlTimelineOptions, PluginEdlTimelineResult } from "./types.js"
+import type { PluginCapabilities, PluginEntityRead, PluginEntityTable, PluginInternalRequestOptions, PluginOwnedJobRow } from "./types.js"
 import type { PluginToolkit, PluginLlmRequest, PluginLlmMultimodalRequest, PluginVideoGenOptions, PluginVideoGenResult, PluginImageGenOptions, PluginImageGenResult, PluginMusicGenOptions, PluginMusicGenResult, PipelineSnapshot } from "./types.js"
 import { applyFrameFitAndDelivery } from "../video-frame-dispatch.js"
 
@@ -436,6 +445,68 @@ async function combineVideosToUrl(options: {
     // combineVideos uses its own temp dir structure (not cleanupWorkDir-
     // compatible) — mirrors workers/handlers/ffmpeg.ts's handleCombineVideos.
     await fs.rm(dirname(localPath), { recursive: true, force: true }).catch(() => {})
+  }
+}
+
+/** A plugin's timeline label names its work dir, logs and R2 checkpoint
+ *  prefix (`<label>-cache/`): a short slug — lowercase words of letters and
+ *  digits joined by single hyphens, a letter first, at most 40 characters. */
+const PLUGIN_TIMELINE_LABEL = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/
+const PLUGIN_TIMELINE_LABEL_MAX = 40
+
+/**
+ * The plugin's own render label, required (decided 2026-10-06) so a plugin's
+ * checkpoints and logs never mix with Apply EDL's `apply-edl-cache/`. No
+ * default: a missing, malformed or borrowed label is a pure function of the
+ * call, so it is a `DeterministicJobError` (failed + refunded now, never
+ * retried) thrown before any download or render.
+ */
+function assertPluginTimelineLabel(label: unknown): asserts label is string {
+  const shown = typeof label === "string" ? `"${label}"` : String(label)
+  if (typeof label !== "string" || label.length > PLUGIN_TIMELINE_LABEL_MAX || !PLUGIN_TIMELINE_LABEL.test(label)) {
+    throw new DeterministicJobError(
+      `renderEdlTimeline: label ${shown} must be the plugin's own short slug (e.g. "speaker-view"): ` +
+        `lowercase letters and digits in words joined by single hyphens, a letter first, at most ${PLUGIN_TIMELINE_LABEL_MAX} characters`,
+    )
+  }
+  if (label === APPLY_EDL_LABEL) {
+    throw new DeterministicJobError(
+      `renderEdlTimeline: label "${label}" is Apply EDL's own — a plugin passes its own label (e.g. "speaker-view") so its checkpoints never mix with ${APPLY_EDL_LABEL}-cache/`,
+    )
+  }
+}
+
+/**
+ * `tk.ffmpeg.renderEdlTimeline` — the EDL timeline with the plugin's picture
+ * (`providers/video/edl-timeline.ts`), then the plain upload + thumbnail core
+ * Apply EDL's handler does (`workers/handlers/ffmpeg.ts`), then the local
+ * cleanup. Checkpoints stay on (keyed by `jobId`, so a retry resumes).
+ */
+async function renderEdlTimelineToUrl(opts: PluginEdlTimelineOptions): Promise<PluginEdlTimelineResult> {
+  // `opts` comes from plugin code: the type requires a label, the runtime
+  // still checks it (an untyped or older plugin can omit it).
+  const label: unknown = opts.label
+  assertPluginTimelineLabel(label)
+  const output = opts.output === "audio" ? "audio" : "video"
+  const { outputPath, durationMs } = await renderEdlTimeline({
+    edl: opts.edl,
+    output,
+    quality: opts.quality === "proxy" ? "proxy" : "final",
+    jobId: opts.jobId,
+    jobUserId: opts.jobUserId,
+    label,
+    ...(opts.picture ? { picture: opts.picture } : {}),
+    ...(opts.speakerRegions ? { speakerRegions: opts.speakerRegions } : {}),
+    ...(opts.regionFor ? { regionFor: opts.regionFor } : {}),
+    ...(opts.canvas ? { canvas: opts.canvas } : {}),
+    ...(opts.onProgress ? { onProgress: opts.onProgress } : {}),
+  })
+  try {
+    const url = await uploadFileToR2(outputPath, opts.jobId, output, opts.jobUserId)
+    const thumbnailUrl = output === "video" ? await generateAndUploadThumbnail(url, opts.jobId, opts.jobUserId) : null
+    return { url, thumbnailUrl, durationMs }
+  } finally {
+    await fs.rm(dirname(outputPath), { recursive: true, force: true }).catch(() => {})
   }
 }
 
@@ -1157,6 +1228,15 @@ function assertNotLeaseKey(key: string): void {
   if (key.startsWith(LEASE_KEY_PREFIX)) throw new Error(`keys under "${LEASE_KEY_PREFIX}" belong to tk.redis.lease`)
 }
 
+/**
+ * Additive capability markers (`PluginCapabilities`). Frozen module constant:
+ * every member is a static fact about this build, so there is nothing to
+ * compute per toolkit. Add a member here WITH the feature it describes.
+ */
+const HOST_CAPABILITIES: PluginCapabilities = Object.freeze({
+  mixAudioDuck: true,
+})
+
 export interface BuildToolkitOptions {
   /**
    * `"daemon"` — the toolkit the plugin daemon host (`plugin-daemons.ts`)
@@ -1185,6 +1265,18 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
     stages: createDurableScene3DStageJournal(),
     providers: {
       directVoiceChanger,
+      // Voice `text` with one ElevenLabs voice and store it under the job's key. `opts.voiceType`
+      // is accepted for the contract and not forwarded: `directElevenLabsTTS` falls back to a
+      // default voice only when `allowDefaultVoiceFallback` is set, which this member never
+      // sets — a missing voice fails the step (SP6 §7).
+      textToSpeech: async (text, opts) => {
+        const audio = await directElevenLabsTTS(text, opts.voiceId, opts.model, opts.languageCode ? { languageCode: opts.languageCode } : {})
+        const audioUrl = await uploadBufferToR2(audio, mediaObjectKey(opts.jobId, "audio", "mp3"), "audio/mpeg", opts.userId)
+        return { audioUrl, durationSec: await probeMediaDuration(audioUrl) }
+      },
+      // The host's speech-model capability sheet, from THIS app's catalog —
+      // a plugin never reads model capability from its own lagging pin.
+      ttsCapabilities: hostTtsCapabilities,
       // Exposed as a plain function per the contract; the real capability is
       // a class method (`AudioSeparationProvider` interface implementation),
       // so this wraps a fresh instance per call — the class itself carries
@@ -1255,6 +1347,7 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       downloadFile,
       combineVideos: combineVideosToUrl,
       extractTail: extractTailToUrl,
+      renderEdlTimeline: renderEdlTimelineToUrl,
       trimVideo: trimVideoToUrl,
       probeVideoMeta,
       runFfprobe,
@@ -1268,6 +1361,9 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
     },
     media: {
       readPublicVideoFrame,
+      ensureMediaProxy,
+      proxyFrameToSourceMs,
+      detectFaces,
       extractAudio,
       mixAudio,
       mergeVideoAudio,
@@ -1365,6 +1461,12 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       hasWaivingRecastRun,
     },
     http: {
+      // Dynamic import keeps the core/ee boundary (see computeGenerateVideoProPricing below).
+      priceUgcCalls: async (caller, calls) => {
+        if (!hasCredits()) throw new Error("UGC pricing needs Nodaro Cloud")
+        const { priceUgcCalls } = await import("../../ee/lib/ugc-quote.js")
+        return priceUgcCalls(caller, calls)
+      },
       supabase,
       internalRequest,
       supportsJobSubmissionContext: true,
@@ -1550,6 +1652,7 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       scene3dAdvanced: hasCredits() && config.SCENE3D_ADVANCED_ENABLED,
       scene3dLocal: hasCredits() && config.SCENE3D_ADVANCED_ENABLED && config.SCENE3D_LOCAL_ENABLED,
     },
+    capabilities: HOST_CAPABILITIES,
     deployment: { publicUrl: appBaseUrl() },
     redis: {
       url: config.REDIS_URL,
@@ -1595,10 +1698,15 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
     workflows: {
       writeCompatible,
       accessCols: WORKFLOW_ACCESS_COLS,
-      loadWorkflowFor,
+      // As stored unless the plugin asks (types.ts `loadWorkflowFor`): the
+      // core loaders resolve saved result ids by default, which a plugin call
+      // that only judges the row would pay for and throw away.
+      loadWorkflowFor: (req, reply, userId, workflowId, min, cols, failureMessage, opts) =>
+        loadWorkflowFor(req, reply, userId, workflowId, min, cols, failureMessage, { resolveResultIds: false, ...opts }),
       canChangeVisibility: canChangeWorkflowVisibility,
       supportsEditableCopySharing: true,
-      loadStudioEditableCopySource,
+      loadStudioEditableCopySource: (req, reply, userId, workflowId, min, cols, failureMessage, opts) =>
+        loadStudioEditableCopySource(req, reply, userId, workflowId, min, cols, failureMessage, { resolveResultIds: false, ...opts }),
       changesStudioPublishFlag,
     },
     entities: { listOwned: listOwnedEntities },
