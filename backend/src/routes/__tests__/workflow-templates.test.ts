@@ -63,6 +63,8 @@ vi.mock("@/lib/storage.js", () => ({
 import { workflowTemplatesRoutes, extractNodeTypes } from "../workflow-templates.js"
 import { supabase } from "../../lib/supabase.js"
 import { copyToTemplatePreview } from "../../lib/storage.js"
+import { resetPerMinuteColumnsForTest } from "../../lib/listing-per-minute-columns.js"
+import { TYPICAL_EPISODE_MINUTES } from "@nodaro/render-rules"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -368,9 +370,13 @@ function mockBrowseQuery(rows: Array<Record<string, unknown>>) {
 describe("GET /v1/templates/browse — sort=cheapest", () => {
   const cheap = { id: "t1", slug: "cheap", name: "Cheap", estimated_credits: 80, created_at: "2026-02-01T00:00:00Z" }
   const dearer = { id: "t2", slug: "dearer", name: "Dearer", estimated_credits: 120, created_at: "2026-03-01T00:00:00Z" }
+  afterEach(() => resetPerMinuteColumnsForTest())
 
-  it("orders by estimated credits ascending, then newest, and continues past the cursor", async () => {
-    const { builder, calls } = mockBrowseQuery([cheap, dearer])
+  // Cheapest first is the price of a typical episode (decided 2026-10-07):
+  // fixed + TYPICAL_EPISODE_MINUTES x per minute, a stored generated column.
+  it("orders by a typical episode's price ascending, then newest, and continues past the cursor", async () => {
+    const perMinute = { ...cheap, estimated_credits: 82, estimated_per_minute_credits: 14 }
+    const { builder, calls } = mockBrowseQuery([perMinute, dearer])
     vi.mocked(supabase.from).mockReturnValue(builder)
 
     const res = await app.inject({
@@ -380,14 +386,40 @@ describe("GET /v1/templates/browse — sort=cheapest", () => {
 
     expect(res.statusCode).toBe(200)
     expect(calls.order).toEqual([
+      ["typical_episode_credits", { ascending: true }],
+      ["created_at", { ascending: false }],
+    ])
+    expect(calls.or).toEqual(["typical_episode_credits.gt.60,and(typical_episode_credits.eq.60,created_at.lt.2026-01-15T00:00:00Z)"])
+    const body = res.json()
+    expect(body.data.map((c: { slug: string }) => c.slug)).toEqual(["cheap"])
+    // The cursor names the last card's typical-episode price + date — the columns the sort keys on.
+    expect(TYPICAL_EPISODE_MINUTES).toBe(60)
+    expect(body.nextCursor).toBe(`${82 + TYPICAL_EPISODE_MINUTES * 14}:2026-02-01T00:00:00Z`)
+  })
+
+  it("a listing with no per-minute part sorts at its fixed price", async () => {
+    const { builder } = mockBrowseQuery([cheap, dearer])
+    vi.mocked(supabase.from).mockReturnValue(builder)
+    const res = await app.inject({ method: "GET", url: "/v1/templates/browse?sort=cheapest&limit=1" })
+    expect(res.json().nextCursor).toBe("80:2026-02-01T00:00:00Z")
+  })
+
+  it("before the column exists, orders by the fixed price (which then holds the folded ceiling)", async () => {
+    const missing = mockBrowseQuery([])
+    ;(missing.builder as Record<string, unknown>).then = (resolve: (v: unknown) => unknown) =>
+      Promise.resolve({ data: null, error: { code: "42703", message: "column workflow_templates.typical_episode_credits does not exist" } }).then(resolve)
+    const { builder, calls } = mockBrowseQuery([cheap, dearer])
+    vi.mocked(supabase.from).mockReturnValueOnce(missing.builder).mockReturnValue(builder)
+
+    const res = await app.inject({ method: "GET", url: "/v1/templates/browse?sort=cheapest&limit=1" })
+
+    expect(res.statusCode).toBe(200)
+    expect(missing.calls.order[0]).toEqual(["typical_episode_credits", { ascending: true }])
+    expect(calls.order).toEqual([
       ["estimated_credits", { ascending: true }],
       ["created_at", { ascending: false }],
     ])
-    expect(calls.or).toEqual(["estimated_credits.gt.60,and(estimated_credits.eq.60,created_at.lt.2026-01-15T00:00:00Z)"])
-    const body = res.json()
-    expect(body.data.map((c: { slug: string }) => c.slug)).toEqual(["cheap"])
-    // The cursor names the last card's credits + date — the columns the sort keys on.
-    expect(body.nextCursor).toBe("80:2026-02-01T00:00:00Z")
+    expect(res.json().nextCursor).toBe("80:2026-02-01T00:00:00Z")
   })
 
   it("keeps the whole timestamp of a popular-sort cursor (only the first colon separates the pair)", async () => {

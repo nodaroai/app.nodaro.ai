@@ -19,6 +19,8 @@ It has four modes:
 
 A trailer's length is **fixed at 20–40 seconds**. There is no length setting: the Clips **count** and **target length** do not apply to a trailer. When the recording has fewer than 20 seconds of strong moments, the trailer still ships, shorter than 20 seconds, with a note in the EDL's `meta.notes` saying so (for example *"Only 14 s of strong moments were found; the trailer is shorter than 20 s."*). When no usable moment is found at all, the run fails and is refunded.
 
+The **Trailer + Formats** template in the template marketplace is a trailer chain, ready to fill: Episode Recording → Transcribe (with speaker detection) → Edit Plan in Trailer mode (standard tier) → Apply EDL → [Combine Videos](./combine-videos.md), which plays an optional intro-card video before the trailer with no frames trimmed off either clip (left empty, the trailer passes through unchanged and is not charged) → three [Social Media Format](./social-media-format.md) nodes, padded rather than cropped: a 9:16 story or reel, a 1:1 square post and a 4:5 portrait post. Make the intro card the same size as the recording, or Combine Videos letterboxes one of the two to fit the other.
+
 ### When Trailer is greyed out
 
 Trailer needs a server that can plan it. The editor asks the server which modes it plans ([`GET /v1/edit-plan/capabilities`](../../api-integration.md#edit-plan-modes)) and, until the server lists `trailer`, shows the Trailer option greyed out with the reason: **needs a plugin update** on nodaro.ai, and on a self-hosted install connected to nodaro.ai **Available once nodaro.ai supports it** or, when the install can't reach nodaro.ai, **Couldn't reach nodaro.ai — try again later**. A node already saved in Trailer mode (imported, or written into the workflow by an agent or the API) keeps its mode and shows a notice with the reason: on nodaro.ai, that it needs a plugin update and cannot plan a trailer yet; on a connected self-hosted install, **Available once nodaro.ai supports it** or **Couldn't reach nodaro.ai — try again later**. Its run is refused before anything is charged, however it starts (the canvas Run, a workflow or app run, the REST API, or the MCP `plan_edit` tool), except on a self-hosted install connected to nodaro.ai that can't reach it, where the job is retried instead (see below). Every refusal carries the same message: *Trailer mode is not available on this server yet. Choose another mode, or try again after the next update. You were not charged.*
@@ -70,35 +72,37 @@ The plan a workflow run makes (Run, Run from here) lands on the node like one fr
 
 ## Credit Cost
 
-Edit Plan is priced **per source-minute × tier**, plus a flat component for the extra scoring work in Clips and Trailer modes. The source duration is rounded up to a bucket (15 / 30 / 60 / 90 / 120 / 180 minutes) — the credit id carries that bucket (`edit-plan:<mode>:<tier>:<bucket>m`).
+Edit Plan is priced **per source-minute × tier**, plus a flat component for the extra scoring work in Clips and Trailer modes. The price is two rows per mode and tier: a **rate** per source minute and a **flat** part (`edit-plan:<mode>:<tier>:per-minute` and `edit-plan:<mode>:<tier>:flat`).
 
 - **Per source-minute (by tier):** economy `2`, standard `4`, premium `8` credits per minute.
-- **Flat (by tier, added once in Clips and Trailer modes):** economy `10`, standard `20`, premium `40` credits. Trailer uses the same flat as Clips, so a Trailer plan costs the same as a Clips plan of the same recording and tier.
-- **Formula:** `credits = per_minute(tier) × bucket_minutes + (mode is "clips" or "trailer" ? flat(tier) : 0)`
+- **Flat (by tier, added once in Clips and Trailer modes):** economy `10`, standard `20`, premium `40` credits. Tighten and Chapters have no flat part. Trailer uses the same flat as Clips, so a Trailer plan costs the same as a Clips plan of the same recording and tier.
+- **Formula:** `credits = flat(mode, tier) + per_minute(tier) × N`, where **N** is the number of minutes charged.
 
-| Example | Bucket | Formula | Credits |
-|---------|--------|---------|---------|
-| Tighten · standard · 45-min episode | 60 min | `4 × 60` | 240 |
-| Chapters · economy · 20-min episode | 30 min | `2 × 30` | 60 |
-| Clips · premium · 90-min episode | 90 min | `8 × 90 + 40` | 760 |
-| Trailer · standard · 60-min episode | 60 min | `4 × 60 + 20` | 260 |
-| Trailer · economy · 25-min episode | 30 min | `2 × 30 + 10` | 70 |
+**How N is counted.** On a server whose Edit Plan charges **per started minute**, N is the recording's started minutes: `N = ceil(seconds / 60)`, from 1 to 180 (a 44-minute-12-second episode is 45 minutes). On a server that has not switched yet, N is the **step** the length rounds up to: 15, 30, 60, 90, 120 or 180 minutes. The credit id a run reserves carries N (`edit-plan:<mode>:<tier>:<N>m`). Per started minute is never more than the step, and equals it when the length is exactly a step. `GET /v1/edit-plan/capabilities` says which one the server uses (`perMinute`), and every estimate follows it.
 
-The price shown when neither the mode nor the length is known is the largest in the table, **1,480** (premium Clips or Trailer at 180 minutes).
+| Example | Per started minute | Credits | At the step | Credits |
+|---------|--------------------|---------|-------------|---------|
+| Tighten · standard · 45-min episode | `4 × 45` | 180 | `4 × 60` | 240 |
+| Chapters · economy · 20-min episode | `2 × 20` | 40 | `2 × 30` | 60 |
+| Clips · premium · 90-min episode | `40 + 8 × 90` | 760 | `40 + 8 × 90` | 760 |
+| Trailer · standard · 60-min episode | `20 + 4 × 60` | 260 | `20 + 4 × 60` | 260 |
+| Trailer · economy · 25-min episode | `10 + 2 × 25` | 60 | `10 + 2 × 30` | 70 |
 
-The reserve is taken from the recording's own duration; on Nodaro Cloud the exact amount is settled against your account.
+The price shown when neither the mode nor the length is known is the largest any run can cost, **1,480** (premium Clips or Trailer at 180 minutes).
+
+The reserve is taken from the recording's own duration; on Nodaro Cloud the exact amount is settled against your account. When that duration cannot be measured at reserve time (the file cannot be reached) and the source node records none, the reserve falls back to the transcript's length, and then always uses the **step**, even on a server that charges per started minute: the transcript ends with the last word, so music or silence after it would put the started minutes under the file's real length and the run would be refused.
 
 ### What the estimate shows before you run
 
-The cost on the node, the **Run** button and the run-confirm dialog is an **estimate**, bucketed on the length of the **master source** — the source with the *master audio* role, otherwise the first source in the node's order. It reads that source's own recorded length:
+The cost on the node, the **Run** button and the run-confirm dialog is an **estimate** of N for the length of the **master source** — the source with the *master audio* role, otherwise the first source in the node's order. It reads that source's own recorded length:
 
-- **Uploaded audio or video, and generated video** carry their length, so the estimate lands on the real bucket.
-- **A YouTube link extracted through [Reference Audio](../input/reference-audio.md)** records the extracted file's length at extraction, so it lands on the real bucket too.
-- **A source with no recorded length** — a direct audio link, or a Reference Audio node extracted before lengths were recorded — estimates at the **largest bucket (180 minutes)**. Re-extracting a YouTube source records its length.
+- **Uploaded audio or video, and generated video** carry their length, so the estimate counts the real N.
+- **A YouTube link extracted through [Reference Audio](../input/reference-audio.md)** records the extracted file's length at extraction, so it counts the real N too.
+- **A source with no recorded length** — a direct audio link, or a Reference Audio node extracted before lengths were recorded — estimates at the **maximum, 180 minutes**. Re-extracting a YouTube source records its length.
 
 The estimate never borrows a length from the wired transcript: a transcript on the canvas is from the *previous* run, and after you swap in a longer episode it would under-quote the new one. When the length is unknown the estimate deliberately over-quotes instead — it is what the balance check before a run compares against, so a run is refused up front rather than failing partway after earlier nodes were charged. Whatever the estimate showed, what you are **charged is always checked against the recording's real duration**: the server measures the master itself before it reserves, and a run whose master cannot be measured is refused and refunded rather than charged on a guess.
 
-The listed price of a published template or app has no recording to read, so it counts Edit Plan at the node's own mode and tier at the 180-minute bucket.
+The listed price of a published template, app or component has no recording to read, so it lists Edit Plan **per minute of the recording**: the flat part of Clips and Trailer modes as a fixed figure, plus the tier's per-minute rate. A standard Trailer plan lists `20` plus `4` per minute; a standard Tighten plan lists `4` per minute. The listing shows its fixed parts and its per-minute parts as one figure each, for example **82 + 14/min**. On a server that charges per started minute, that is exactly what a run of a recording that long is charged (at the started minutes). On a server that still charges the step, a recording whose length falls between two steps costs more than the per-minute figure: a 45-minute episode is charged at the 60-minute step (standard Tighten: `4 × 60 = 240`, where `4 × 45` is `180`). When the workflow holds a recording whose length is known and that the app's user cannot replace, the listing counts Edit Plan at that recording's length (its started minutes, or its step). A recording exposed as an app input, and every upload in a template, is replaced by the user's own, so its saved length is not counted: the listing stays per minute.
 
 ## Multicam: recordings on different clocks
 
@@ -123,7 +127,7 @@ A hand-set offset always wins, so it is the fix for any single source audio coul
 
 ## API
 
-`GET /v1/edit-plan/capabilities` lists the modes this server plans and who answered (`{ modes: [...], source }`; see [Trailer greyed out](#when-trailer-is-greyed-out) and [Edit Plan modes](../../api-integration.md#edit-plan-modes)).
+`GET /v1/edit-plan/capabilities` lists the modes this server plans, who answered, and whether Edit Plan is charged per started minute (`{ modes: [...], source, perMinute }`; see [Trailer greyed out](#when-trailer-is-greyed-out) and [Edit Plan modes](../../api-integration.md#edit-plan-modes)).
 
 `POST /v1/edit-plan` with `{ mode, planTier, transcript, sources: [{ id?, url, kind?, role?, speakers?, offsetMs? }], … }` — source ids up to 200 characters. Each source carries its own `offsetMs`: apply an Audio Sync result to the sources first. The [SDK](../../sdk-reference.md) (`client.edit.editPlan({ offsets })`), the [CLI](../../cli.md) (`nodaro edit plan --offsets`) and MCP (`plan_edit` with `offsets`) do that for you, with the checks above. The route itself refuses, before measuring or charging, a raw `offsets` field (`422 offsets_not_applied`) and an offset on the master or on the transcript's own source (`422 master_offset`).
 

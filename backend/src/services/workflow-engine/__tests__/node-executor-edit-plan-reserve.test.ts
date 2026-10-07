@@ -23,12 +23,14 @@ const {
   mockProbeMediaDuration,
   mockGetAppSettings,
   built,
+  perMinute,
 } = vi.hoisted(() => ({
   mockCheckCredits: vi.fn(),
   mockReserveCredits: vi.fn(),
   mockProbeMediaDuration: vi.fn(),
   mockGetAppSettings: vi.fn(),
   built: { result: {} as Record<string, unknown> },
+  perMinute: { value: false },
 }))
 
 vi.mock("@/lib/config.js", () => ({
@@ -67,8 +69,11 @@ vi.mock("@/lib/app-settings.js", () => ({ getAppSettings: mockGetAppSettings }))
 // (via lib/edit-plan-pricing.ts); mocking the resolved id intercepts it.
 vi.mock("@/providers/video/ffmpeg-utils.js", () => ({ probeMediaDuration: mockProbeMediaDuration }))
 
+// Per started minute (decided 2026-10-07): the capability the executor asks.
+vi.mock("@/lib/private-plugins/edit-plan-per-minute.js", () => ({ editPlanPerMinuteActive: async () => perMinute.value }))
+
 vi.mock("../payload-builder.js", () => ({
-  buildPayload: vi.fn(() => built.result),
+  buildPayload: vi.fn((..._args: unknown[]) => built.result),
   buildNodeRefMap: vi.fn().mockReturnValue({}),
 }))
 
@@ -106,6 +111,7 @@ vi.mock("@nodaro/shared", async (importOriginal) => ({
 }))
 
 import { executeNode } from "../node-executor.js"
+import { buildPayload } from "../payload-builder.js"
 import type { SimpleNode, OrchestratorContext } from "../types.js"
 
 function makeNode(): SimpleNode {
@@ -127,6 +133,7 @@ describe("node-executor — edit-plan reserve keys off the ffprobed bucket id", 
     mockReserveCredits.mockRejectedValue(new Error("reservation-sentinel"))
     // A 59.4-min master → the 60m bucket (buildPayload emitted the :180m ceiling).
     mockProbeMediaDuration.mockResolvedValue(3564)
+    perMinute.value = false
     built.result = {
       jobName: "edit-plan",
       queueName: "video-generation",
@@ -180,5 +187,28 @@ describe("node-executor — edit-plan reserve keys off the ffprobed bucket id", 
     expect((built.result.payload as { reservedCreditId?: string }).reservedCreditId).toBe(
       "edit-plan:tighten:standard:180m",
     )
+  })
+
+  // Per started minute (decided 2026-10-07): with the plugin's capability the
+  // reserve is the probed length's started minutes, and buildPayload is told so
+  // (a length recorded on the master uses the same rule; a transcript basis
+  // keeps the step, review round F4).
+  it("with the per-minute capability a 44.2-min master reserves :45m, and buildPayload is told", async () => {
+    perMinute.value = true
+    mockProbeMediaDuration.mockResolvedValue(2652)
+    await expect(executeNode(makeNode(), {}, [], [], {}, makeCtx())).rejects.toThrow(/reservation-sentinel|Credit reservation failed/)
+    const [, , modelIdentifier] = mockReserveCredits.mock.calls[0] as [string, string, string]
+    expect(modelIdentifier).toBe("edit-plan:tighten:standard:45m")
+    expect((mockCheckCredits.mock.calls[0] as unknown[])[1]).toBe("edit-plan:tighten:standard:45m")
+    expect((built.result.payload as { reservedCreditId?: string }).reservedCreditId).toBe("edit-plan:tighten:standard:45m")
+    const ctxArg = (vi.mocked(buildPayload).mock.calls[0] as unknown[])[4] as { editPlanPerMinute?: boolean }
+    expect(ctxArg.editPlanPerMinute).toBe(true)
+  })
+
+  it("without it the same master reserves the :60m step", async () => {
+    mockProbeMediaDuration.mockResolvedValue(2652)
+    await expect(executeNode(makeNode(), {}, [], [], {}, makeCtx())).rejects.toThrow(/reservation-sentinel|Credit reservation failed/)
+    const [, , modelIdentifier] = mockReserveCredits.mock.calls[0] as [string, string, string]
+    expect(modelIdentifier).toBe("edit-plan:tighten:standard:60m")
   })
 })

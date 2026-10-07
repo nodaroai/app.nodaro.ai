@@ -15,7 +15,15 @@ export interface TemplateBrowseCard {
   slug: string
   name: string
   description: string | null
+  /** The listed price; when `estimatedPerMinuteCredits` is above 0, its fixed part. */
   estimatedCredits: number
+  /**
+   * Credits per minute of the recording the template is given, when its price
+   * follows that recording's length (an Apply EDL render of a whole episode,
+   * an Edit Plan pass): the price is `estimatedCredits` plus this per minute.
+   * 0 or absent when the price does not depend on a recording's length.
+   */
+  estimatedPerMinuteCredits?: number
   category: string
   outputTypes: string[]
   tags: string[]

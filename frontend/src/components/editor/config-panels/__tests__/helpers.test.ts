@@ -1,4 +1,5 @@
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, afterEach } from "vitest"
+import { __setEditPlanModesForTests } from "@/lib/edit-plan-modes"
 import {
   FIELD_COMPATIBLE_TYPES,
   getCompatibleSources,
@@ -337,6 +338,31 @@ describe("getModelIdentifier", () => {
     const edges: WorkflowEdge[] = [{ id: "e1", source: "a1", target: "ep", targetHandle: "sources" } as WorkflowEdge]
     // 45 min → the 60m bucket.
     expect(getModelIdentifier(editPlan, edges, [editPlan, audio])).toBe("edit-plan:clips:premium:60m")
+  })
+
+  // Per started minute (decided 2026-10-07): once the server says its plugin
+  // charges that way, the estimate asks for the id the run reserves for the
+  // source's started minutes — 45 minutes → `:45m`, not the 60-minute step.
+  describe("edit-plan per started minute", () => {
+    afterEach(() => __setEditPlanModesForTests(null))
+    const editPlan = makeNode({ id: "ep", type: "edit-plan", data: { label: "EP", mode: "clips", planTier: "premium" } as any })
+    const audio = makeNode({ id: "a1", type: "upload-audio", data: { label: "A", metadata: { durationSeconds: 44 * 60 + 12 } } as any })
+    const edges: WorkflowEdge[] = [{ id: "e1", source: "a1", target: "ep", targetHandle: "sources" } as WorkflowEdge]
+
+    it("quotes the started minutes when the server charges per started minute", () => {
+      __setEditPlanModesForTests(["tighten", "clips", "chapters"], "server", true)
+      expect(getModelIdentifier(editPlan, edges, [editPlan, audio])).toBe("edit-plan:clips:premium:45m")
+    })
+
+    it("quotes the step otherwise", () => {
+      __setEditPlanModesForTests(["tighten", "clips", "chapters"], "server", false)
+      expect(getModelIdentifier(editPlan, edges, [editPlan, audio])).toBe("edit-plan:clips:premium:60m")
+    })
+
+    it("an unknown length is the 180-minute maximum either way", () => {
+      __setEditPlanModesForTests(["tighten", "clips", "chapters"], "server", true)
+      expect(getModelIdentifier(editPlan, [], [editPlan])).toBe("edit-plan:clips:premium:180m")
+    })
   })
 
   it("edit-plan trailer mode prices its own composite (Track D1)", () => {

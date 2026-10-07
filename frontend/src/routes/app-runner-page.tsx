@@ -1,4 +1,7 @@
 import { useEffect, useCallback, type ReactNode } from "react"
+import { listingCeilingCredits } from "@/lib/listing-price"
+import { appRunListedPrice } from "@/lib/run-price"
+import { setEditPlanPerMinute } from "@/lib/edit-plan-modes"
 import { useParams, useSearchParams, Link } from "react-router-dom"
 import { Loader2, Clock, MoreVertical, Trash2, Link as LinkIcon } from "lucide-react"
 import {
@@ -59,6 +62,7 @@ export default function AppRunnerPage() {
       nodes: [],
       edges: [],
       inputValues: {},
+      listedPrice: null,
       nodeStates: {},
       executionId: null,
       executionStatus: "idle",
@@ -74,13 +78,20 @@ export default function AppRunnerPage() {
     if (!app) return
     const snapshotSettings = (app.snapshotSettings ?? {}) as Record<string, unknown>
     const presentationSettings = (snapshotSettings.presentationSettings ?? DEFAULT_PRESENTATION_SETTINGS) as PresentationSettings
+    // Before the nodes land, so the first live estimate prices Edit Plan the
+    // way the run reserves it (per started minute or the step; review round F1).
+    setEditPlanPerMinute(app.editPlanPerMinute)
     usePresentationStore.setState({
       workflowId: app.workflowId,
       workflowName: app.name,
       nodes: app.snapshotNodes as WorkflowNode[],
       edges: app.snapshotEdges as WorkflowEdge[],
       isOwner: false,
-      estimatedCost: app.estimatedCredits,
+      // The figure that never under-quotes before the live estimate is in: a
+      // per-minute listing at the longest recording (decided 2026-10-07).
+      estimatedCost: listingCeilingCredits(app.estimatedCredits, app.perMinuteCredits),
+      // The Run button lists the app run alone, its Render final part left out (review round F4).
+      listedPrice: appRunListedPrice(app),
       presentationSettings,
     })
   }, [app])

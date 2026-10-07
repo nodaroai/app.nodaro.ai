@@ -34,3 +34,52 @@ export function exposedTextCaps(
   }
   return caps
 }
+
+/**
+ * The nodes whose MEDIA a published app's user replaces: every exposed image,
+ * video or audio input, from the same classifier (`extractAppInputSchema`).
+ * With no presentation items that is every upload node, as the runner shows
+ * them. The listing prices these with no length (decided 2026-10-07): the
+ * creator's sample recording is not the app user's, so a price that follows
+ * the recording's length is listed per minute (ee/billing/credits.ts ::
+ * listingEstimate). A template's cloner replaces every upload node: the same
+ * call with no settings.
+ */
+export function exposedMediaNodeIds(
+  snapshotSettings: Record<string, unknown> | null | undefined,
+  snapshotNodes: ReadonlyArray<GraphNode> | null | undefined,
+): ReadonlySet<string> {
+  const withIds = snapshotNodes?.filter((n): n is GraphNode & { id: string } => typeof n.id === "string")
+  const { fields, keyMap } = extractAppInputSchema({ snapshotSettings, snapshotNodes: withIds ?? null })
+  const ids = new Set<string>()
+  for (const field of fields) {
+    if (field.type !== "image" && field.type !== "video" && field.type !== "audio") continue
+    const target = keyMap[field.key]
+    if (target) ids.add(target.nodeId)
+  }
+  return ids
+}
+
+/**
+ * The List nodes of a published app or component that its user fills: every
+ * `list` input `extractAppInputSchema` exposes (decided 2026-10-07). The user
+ * can enter more items than the creator saved, and each item runs what the
+ * List fans out once more, so the listing prices a further item
+ * (`AppListingEstimate.previewPerItem`). A template has none: its cloner edits
+ * the workflow itself.
+ */
+export function exposedListNodeIds(
+  snapshotSettings: Record<string, unknown> | null | undefined,
+  snapshotNodes: ReadonlyArray<GraphNode> | null | undefined,
+): ReadonlySet<string> {
+  const withIds = snapshotNodes?.filter((n): n is GraphNode & { id: string } => typeof n.id === "string")
+  const { fields, keyMap } = extractAppInputSchema({ snapshotSettings, snapshotNodes: withIds ?? null })
+  const ids = new Set<string>()
+  for (const field of fields) {
+    if (field.type !== "list") continue
+    const target = keyMap[field.key]
+    if (target) ids.add(target.nodeId)
+  }
+  return ids
+}
+

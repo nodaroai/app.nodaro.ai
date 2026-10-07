@@ -52,6 +52,7 @@ const DocSchema = z.object({
   tags: z.array(z.string()).optional(),
   complexity: z.string().optional(),
   estimatedCredits: z.number().int().nonnegative().optional(),
+  estimatedPerMinuteCredits: z.number().int().nonnegative().optional(),
   nodeTypesUsed: z.array(z.string()).optional(),
   providersUsed: z.array(z.string()).optional(),
   creatorDisplayName: z.string().nullish(),

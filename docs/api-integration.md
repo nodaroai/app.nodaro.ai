@@ -1377,8 +1377,15 @@ modes this server can plan. Authenticated; `Cache-Control: private, no-store`
 (a server update can change the answer).
 
 ```json
-{ "modes": ["tighten", "clips", "chapters", "trailer"], "source": "server" }
+{ "modes": ["tighten", "clips", "chapters", "trailer"], "source": "server", "perMinute": true }
 ```
+
+`perMinute` says whether this server charges Edit Plan **per started minute**
+of the recording (`true`) or at the 15/30/60/90/120/180-minute step its length
+rounds up to (`false`, and on a self-hosted install). The editor's estimates
+follow it; the formula and examples are on the
+[Edit Plan](./nodes/processing-video/edit-plan.md#credit-cost) page. A client
+that predates the field can ignore it.
 
 `tighten`, `clips` and `chapters` are always listed. `trailer` is listed only
 when the server can plan a trailer; until then the editor greys the Trailer

@@ -1,4 +1,4 @@
-import { buildEditPlanCreditId, parseEditPlanMode, asEditPlanTier } from "@nodaro/shared"
+import { editPlanReserveCreditId, parseEditPlanMode, asEditPlanTier } from "@nodaro/shared"
 import { probeMediaDuration } from "../providers/video/ffmpeg-utils.js"
 
 /**
@@ -33,10 +33,17 @@ import { probeMediaDuration } from "../providers/video/ffmpeg-utils.js"
  * basis, already baked into `reservedCreditId`/`modelIdentifier`, then stands as
  * the safe fallback BENEATH the probe. The caller keys the reservation + usage
  * log off the returned id so the reserve, the gate, and the usage log agree.
+ *
+ * Per started minute (decided 2026-10-07): when the loaded plugin charges that
+ * way (`perMinute`, `supports().editPlanPerMinute`, resolved by the caller) the
+ * id carries the probed length's started minutes
+ * (`edit-plan:<mode>:<tier>:<N>m`, flat + rate × N) instead of the step it
+ * rounds up to — the id the plugin's own route reserves for the same source.
  */
 export async function computeEditPlanReserveId(
   jobName: string,
   payload: Record<string, unknown>,
+  perMinute = false,
 ): Promise<string | undefined> {
   if (jobName !== "edit-plan") return undefined
   // An unknown mode is never re-priced as tighten (buildPayload refuses it
@@ -61,11 +68,7 @@ export async function computeEditPlanReserveId(
     return undefined
   }
   if (!Number.isFinite(probedSec) || probedSec <= 0) return undefined
-  const creditId = buildEditPlanCreditId(
-    mode,
-    asEditPlanTier(payload.planTier),
-    probedSec,
-  )
+  const creditId = editPlanReserveCreditId(mode, asEditPlanTier(payload.planTier), probedSec, perMinute)
   payload.reservedCreditId = creditId
   payload.probedDurationSec = Math.ceil(probedSec)
   return creditId

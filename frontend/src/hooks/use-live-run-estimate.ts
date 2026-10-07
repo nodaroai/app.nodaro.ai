@@ -29,11 +29,14 @@
  * pattern) — the already-allowlisted callers pass them in.
  */
 import { useEffect, useRef, useState } from "react"
-import { isExpandedClone, mergeNodeInputOverrides } from "@nodaro/shared"
+import { EDIT_PLAN_MAX_MINUTES, isExpandedClone, mergeNodeInputOverrides } from "@nodaro/shared"
 import { estimateNodeCredits, isExecutableNode, getCostMultiplier } from "@/components/editor/workflow-editor/types"
 import { getModelIdentifier } from "@/components/editor/config-panels/helpers"
 import { previewRunnable } from "@/components/editor/workflow-editor/preview-gate"
 import { speechUnitIdsFor } from "@/lib/speech-estimate"
+import { chosenRecordingUrl } from "@/lib/run-price"
+import { withoutMediaLength } from "@nodaro/render-rules"
+import { useEditPlanModes } from "@/lib/edit-plan-modes"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 
 export interface LiveRunEstimateDeps {
@@ -52,6 +55,12 @@ export interface LiveRunEstimateArgs {
   readonly inputValues?: Record<string, Record<string, unknown>>
   /** False on editions without credits — nothing is computed and 0 is returned. */
   readonly enabled: boolean
+  /**
+   * The lengths (seconds) read for the recordings the user chose, by url
+   * (`useChosenRecordingLengths`): a chosen recording is priced at its own
+   * length, never at the creator's sample's (decided 2026-10-07).
+   */
+  readonly mediaLengths?: ReadonlyMap<string, number>
 }
 
 /** Debounce for input changes — a plain text keystroke must not trigger the
@@ -66,13 +75,33 @@ export const LIVE_ESTIMATE_DEBOUNCE_MS = 300
 export function applyRunInputValues(
   nodes: WorkflowNode[],
   inputValues: Record<string, Record<string, unknown>> | undefined,
+  mediaLengths?: ReadonlyMap<string, number>,
 ): WorkflowNode[] {
   if (!inputValues) return nodes
   return nodes.map((n) => {
     const vals = inputValues[n.id]
-    return vals
-      ? { ...n, data: mergeNodeInputOverrides(n.type, n.data as Record<string, unknown>, vals) as typeof n.data }
-      : n
+    if (!vals) return n
+    const merged = mergeNodeInputOverrides(n.type, n.data as Record<string, unknown>, vals)
+    // A recording the user chose replaces the creator's sample: no length the
+    // sample carried describes it (`withoutMediaLength`), only the one read for
+    // this very file, stamped with its url so the reader trusts it for that url alone.
+    const chosen = chosenRecordingUrl(n, inputValues)
+    if (chosen === undefined || chosen === (n.data as Record<string, unknown>).url) return { ...n, data: merged as typeof n.data }
+    // A length not known (the browser cannot read the file, or the read is
+    // still pending) is the longest recording (decision #3) for EVERY length
+    // reader — not only Edit Plan and Apply EDL, which take that ceiling on
+    // their own, but a Trim / Loop / Combine / Video SFX on the recording, which
+    // would otherwise price their 8-second fallback while the server reserves
+    // the probed length (review round F2, decided 2026-10-07). Video SFX caps
+    // itself at its longest row.
+    const length = mediaLengths?.get(chosen) ?? EDIT_PLAN_MAX_MINUTES * 60
+    const data = withoutMediaLength(merged)
+    // Both places a length is read from: `duration` (the Trim / Loop / Combine
+    // estimators, `extractVideoDurationFromNode`) and the url-bound `metadata`
+    // (Edit Plan and Apply EDL, `mediaLengthSecOf`).
+    data.duration = length
+    data.metadata = { ...((data.metadata as Record<string, unknown> | undefined) ?? {}), durationSeconds: length, mediaUrl: chosen }
+    return { ...n, data: data as typeof n.data }
   })
 }
 
@@ -82,7 +111,7 @@ export function computeLiveRunEstimate(
   getCachedCredits: LiveRunEstimateDeps["getCachedCredits"],
   isModelUnpriced: NonNullable<LiveRunEstimateDeps["isModelUnpriced"]> = () => false,
 ): { total: number; uncachedModelIds: string[] } {
-  const effectiveNodes = applyRunInputValues(args.nodes, args.inputValues)
+  const effectiveNodes = applyRunInputValues(args.nodes, args.inputValues, args.mediaLengths)
   const allExecutable = effectiveNodes.filter((n) => isExecutableNode(n) && !isExpandedClone(n))
   // A presented run executes every node, so any upstream planner re-plans.
   const rerunIds = new Set(allExecutable.map((n) => n.id))
@@ -109,8 +138,12 @@ export function computeLiveRunEstimate(
 }
 
 export function useLiveRunEstimate(args: LiveRunEstimateArgs, deps: LiveRunEstimateDeps): number {
-  const { nodes, edges, inputValues, enabled } = args
+  const { nodes, edges, inputValues, enabled, mediaLengths } = args
   const [estimate, setEstimate] = useState(0)
+  // Edit Plan's id follows the server's per-minute answer, which can land after
+  // the nodes (the runner seeds it from the app detail, the dashboard asks the
+  // capabilities route): recompute when it does.
+  const editPlanModesVersion = useEditPlanModes()
   const firstRunRef = useRef(true)
   // Read through a ref so a caller passing fresh function identities each
   // render does not re-trigger the effect (only the graph and inputs should).
@@ -123,7 +156,7 @@ export function useLiveRunEstimate(args: LiveRunEstimateArgs, deps: LiveRunEstim
 
     const compute = () => {
       const { getCachedCredits, prefetchModelCredits, isModelUnpriced } = depsRef.current
-      const first = computeLiveRunEstimate({ nodes, edges, inputValues }, getCachedCredits, isModelUnpriced)
+      const first = computeLiveRunEstimate({ nodes, edges, inputValues, mediaLengths }, getCachedCredits, isModelUnpriced)
       if (first.uncachedModelIds.length === 0) {
         setEstimate(first.total)
         return
@@ -132,7 +165,7 @@ export function useLiveRunEstimate(args: LiveRunEstimateArgs, deps: LiveRunEstim
       setEstimate(first.total)
       prefetchModelCredits(first.uncachedModelIds).then(() => {
         if (cancelled) return
-        setEstimate(computeLiveRunEstimate({ nodes, edges, inputValues }, getCachedCredits, isModelUnpriced).total)
+        setEstimate(computeLiveRunEstimate({ nodes, edges, inputValues, mediaLengths }, getCachedCredits, isModelUnpriced).total)
       })
     }
 
@@ -150,7 +183,7 @@ export function useLiveRunEstimate(args: LiveRunEstimateArgs, deps: LiveRunEstim
       cancelled = true
       clearTimeout(timer)
     }
-  }, [nodes, edges, inputValues, enabled])
+  }, [nodes, edges, inputValues, enabled, mediaLengths, editPlanModesVersion])
 
   return estimate
 }

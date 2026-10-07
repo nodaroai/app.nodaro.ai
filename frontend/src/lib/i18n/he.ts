@@ -2758,6 +2758,7 @@ export const he: ChromeDict = {
   "templates.count": "{n} תבניות",
   "templates.countMore": "‎+{n} תבניות",
   "templates.sortCheapest": "הכי פחות קרדיטים",
+  "templates.sortCheapestHint": "ממוין לפי המחיר של הקלטה באורך {n} דקות: תבנית שמתומחרת לפי דקה נספרת לפי המחיר הקבוע שלה ועוד {n} דקות.",
   "templates.sortLabel": "מיון תבניות",
   "templates.viewLabel": "אילו תבניות",
   "templates.clearSearch": "ניקוי חיפוש",
@@ -5753,6 +5754,10 @@ export const he: ChromeDict = {
   "credits.upgradePlanTitle": "שדרגו את התוכנית שלכם",
   "credits.buyPacksTitle": "רכשו חבילות קרדיטים",
   "credits.perCreditSuffix": "/{u}",
+  "credits.plusPerMinute": "+ {n} לדקה",
+  "credits.perMinuteTitle": "{fixed} {u} ועוד {n} {u} לכל דקה של ההקלטה",
+  "credits.plusPerItem": "+ {n} לפריט",
+  "credits.perItemTitle": "{n} {u} לכל פריט מעבר לרשימה השמורה",
 
   // Workflow run toasts
   "run.noExecutableNodes": "לא נמצאו רכיבים להרצה. הוסיפו רכיבי יצירת תמונה, תמונה לווידאו או וידאו לווידאו.",

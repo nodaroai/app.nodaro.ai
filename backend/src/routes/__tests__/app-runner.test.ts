@@ -54,6 +54,13 @@ vi.mock("@/services/app-execution.js", async (importOriginal) => {
   return { ...orig, executeAppRun: (p: unknown) => mockExecuteAppRun(p) }
 })
 
+// Edit Plan per started minute (review round F1, decided 2026-10-07): the
+// capability the detail response carries for the runner's estimate.
+const editPlanPerMinute = vi.hoisted(() => ({ value: false }))
+vi.mock("@/lib/private-plugins/edit-plan-per-minute.js", () => ({
+  editPlanPerMinuteActive: async () => editPlanPerMinute.value,
+}))
+
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
@@ -223,6 +230,70 @@ describe("GET /v1/app/:slug", () => {
     expect(body.icon_url).toBeUndefined()
     expect(body.snapshot_nodes).toBeUndefined()
     expect(body.creator_id).toBeUndefined()
+  })
+
+  it("carries the app run's own listed pair beside the full listing (review round F4)", async () => {
+    // Preview 22 + 5/min with a 5 flat + 50% fee (38 + 8/min), plus a Render final of 40 + 10/min.
+    const row = {
+      ...DB_APP_ROW,
+      base_estimated_credits: 22, estimated_credits: 78, base_per_minute_credits: 5, per_minute_credits: 18,
+      monetization_enabled: true, monetization_flat_fee: 5, monetization_percent: 50,
+    }
+    let callCount = 0
+    vi.mocked(supabase.from).mockImplementation(() => {
+      callCount++
+      if (callCount === 1) return createChainMock({ data: { workflow_id: TEST_WORKFLOW_ID }, error: null }) as never
+      return createChainMock({ data: [row], error: null }) as never
+    })
+    const res = await app.inject({ method: "GET", url: "/v1/app/run-price-app" })
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body.estimatedCredits).toBe(78)
+    expect(body.perMinuteCredits).toBe(18)
+    expect(body.runEstimatedCredits).toBe(38)
+    expect(body.runPerMinuteCredits).toBe(8)
+    expect(body.perItemCredits).toBe(0)
+    expect(body.runPerItemCredits).toBe(0)
+  })
+
+  it("carries the per-item pair of a List the app user fills (decided 2026-10-07)", async () => {
+    // Preview 30/item with a 50% fee (45/item), plus a Render final of 4/item.
+    const row = {
+      ...DB_APP_ROW,
+      base_estimated_credits: 22, estimated_credits: 22, base_per_item_credits: 30, per_item_credits: 49,
+      monetization_enabled: true, monetization_flat_fee: 0, monetization_percent: 50,
+    }
+    let callCount = 0
+    vi.mocked(supabase.from).mockImplementation(() => {
+      callCount++
+      if (callCount === 1) return createChainMock({ data: { workflow_id: TEST_WORKFLOW_ID }, error: null }) as never
+      return createChainMock({ data: [row], error: null }) as never
+    })
+    const body = (await app.inject({ method: "GET", url: "/v1/app/per-item-app" })).json()
+    expect(body.perItemCredits).toBe(49)
+    expect(body.runPerItemCredits).toBe(45)
+  })
+
+  it("says whether Edit Plan is charged per started minute, read per request (review round F1)", async () => {
+    // The runner and the embed price Edit Plan from this; they never ask the
+    // authenticated capabilities route. Read on every request, never frozen
+    // into the cached body: a plugin that drops the capability must stop it.
+    let callCount = 0
+    vi.mocked(supabase.from).mockImplementation(() => {
+      callCount++
+      if (callCount === 1) return createChainMock({ data: { workflow_id: TEST_WORKFLOW_ID }, error: null }) as never
+      return createChainMock({ data: [DB_APP_ROW], error: null }) as never
+    })
+    editPlanPerMinute.value = true
+    try {
+      expect((await app.inject({ method: "GET", url: "/v1/app/per-minute-app" })).json().editPlanPerMinute).toBe(true)
+      editPlanPerMinute.value = false
+      // The same slug again — served from the in-memory cache.
+      expect((await app.inject({ method: "GET", url: "/v1/app/per-minute-app" })).json().editPlanPerMinute).toBe(false)
+    } finally {
+      editPlanPerMinute.value = false
+      invalidateAppCache("per-minute-app")
+    }
   })
 
   it("does not require auth", async () => {

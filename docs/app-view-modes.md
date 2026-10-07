@@ -70,11 +70,47 @@ the render do not run yet, and are not billed.
 - **The app's listed price** counts both steps: the whole workflow at its
   saved settings (each render at the preview rate), with the creator's fee,
   plus each Render final and the nodes after it, without the fee. A step
-  after two renders set to Proxy is counted in each of their finals. The
-  listed price never quotes less than a run is charged, whether or not the
-  deployment stops at previews; where it does, it can quote more, because a
-  run leaves the nodes after the preview to the final, and a step after two
-  previews runs only in the later final. A template lists the same way,
+  after two renders set to Proxy is counted in each of their finals. When
+  the price follows the length of the recording you give the app (an Edit
+  Plan's pass, the render of a whole episode), it is listed as a fixed
+  figure plus a figure per minute of the recording, for example
+  **82 + 14/min**. A Trim, Loop or Combine Videos node on the recording you
+  give, or on a render or another such step whose length follows it, is
+  listed per minute of it too; a Video SFX node on any recording you give, or
+  on a step whose length follows it, is listed at its fixed 300-second price,
+  since it refuses a video over 5 minutes. On a generated video (Generate
+  Video, Image to Video or Text to Video) each of the four is listed at the
+  generation's configured duration (8 seconds when none is set, as a run of
+  the step after it counts it), or the length the model renders when that is
+  longer (its longest clip on auto). A list you fill is
+  listed at the items the creator saved plus a figure per further item, for
+  example **82 + 14/min + 30/item**. The creator's flat fee is added once to
+  the fixed figure, and the percentage to every figure. The listed price never quotes less than a run
+  is charged, whether or not the deployment stops at previews, except for
+  Edit Plan's pass on a server that still charges it on the length step the
+  recording rounds up to rather than per started minute (see
+  [Edit Plan](nodes/processing-video/edit-plan.md#credit-cost)), and a step
+  priced by its input's length on a video other than the episode (the output
+  of another step whose length the listing does not follow, such as Resize
+  Video or Lip Sync, or a second recording such as an intro card), which is
+  listed at a default length;
+  where the deployment stops at previews, it can quote more, because a run
+  leaves the nodes after the preview to the final, and a step after two
+  previews runs only in the later final. It counts every run the editor's
+  estimate counts: a node's Repeat count, each of several providers on one
+  node at its own price, and the runs a List, Content Ideas or other Each wire
+  fans out (a Content Ideas that makes fresh ideas at its idea count, 5 when
+  none is set). The app's **Run** button shows the run's part of that listed
+  price, for example **82 + 14/min**, until you choose your recording: the
+  listed price less its Render final part, which is run and charged on its
+  own. Once you have chosen it, and the browser has read its length, the
+  button shows the exact figure of the run for that length. If
+  the length cannot be read, the button keeps the listed price, and the
+  balance check assumes the longest recording (180 minutes) for every node
+  priced by its length: Edit Plan, the render, and a Trim, Loop, Combine
+  Videos or Video SFX on that recording. The exact figure prices Edit Plan the
+  way the server charges it, per started minute or at the length step. A
+  template lists the same way,
   without a fee. An app published before this was priced on its whole
   workflow alone; its price changes to this on its next publish.
 - **While it renders**, the card reads `Rendering final… 42%` and the preview

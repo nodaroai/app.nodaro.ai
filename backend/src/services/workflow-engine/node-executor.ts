@@ -48,6 +48,7 @@ import { ltxExtendBaseCredits } from "../../lib/ltx-extend-credits.js"
 import { ltxRetakeBaseCredits } from "../../lib/ltx-retake-credits.js"
 import { probeAndCheckRefVideoDurations, probeRefVideoDurations } from "../../lib/ref-video-probe.js"
 import { computeEditPlanReserveId } from "../../lib/edit-plan-pricing.js"
+import { editPlanPerMinuteActive } from "../../lib/private-plugins/edit-plan-per-minute.js"
 import type {
   SimpleNode,
   SimpleEdge,
@@ -1779,6 +1780,10 @@ async function executeWorkerNode(
   // No admin lookup unless this node type is hidden from users (the common
   // path resolves synchronously to the user view).
   const viewer = await viewerForNode(node.type, ctx.userId)
+  // Edit Plan per started minute (decided 2026-10-07): asked only for an
+  // edit-plan node — the standalone orchestrator learns it from this
+  // container's API (cached, fails closed to the steps).
+  const editPlanPerMinute = node.type === "edit-plan" ? await editPlanPerMinuteActive() : false
   let buildResult: ReturnType<typeof buildPayload>
   try {
     buildResult = buildPayload(
@@ -1794,6 +1799,7 @@ async function executeWorkerNode(
         authoredData,
         viewer,
         listRow,
+        editPlanPerMinute,
       },
     )
   } catch (err) {
@@ -1954,7 +1960,7 @@ async function executeWorkerNode(
       // video-sfx is the same shape: a row per clip length, and the length was
       // measured and stamped above, so the reservation keys off that row.
       const reserveModelIdentifier =
-        (await computeEditPlanReserveId(jobName, payload)) ??
+        (await computeEditPlanReserveId(jobName, payload, editPlanPerMinute)) ??
         videoSfxReserveId(jobName, payload) ??
         modelIdentifier
 

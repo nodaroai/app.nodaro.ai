@@ -10,6 +10,7 @@ import { hasCredits } from "@/lib/edition"
 import { browseTemplates, getMyTemplates, updateTemplate, deleteTemplate, type WorkflowTemplate } from "@/lib/api"
 import { useAuth } from "@/hooks/use-auth"
 import { normalizeTemplateCategory } from "@nodaro/shared"
+import { TYPICAL_EPISODE_MINUTES } from "@nodaro/render-rules"
 import { TEMPLATE_CATEGORY_VALUES, templateCategoryLabel } from "@/lib/template-categories"
 import type { TemplateSort } from "@/lib/template-utils"
 import { readTemplatesUrlState, writeTemplatesUrlState, type TemplatesUrlPatch } from "@/lib/template-url-state"
@@ -178,6 +179,8 @@ function TemplatesContent() {
   const sortOptions = SORT_CONTROL.filter((sort) => sort !== "cheapest" || hasCredits()).map((value) => ({
     value,
     label: t(SORT_LABELS[value]),
+    // Cheapest first prices a per-minute template at a typical episode (decided 2026-10-07).
+    hint: value === "cheapest" ? t("templates.sortCheapestHint", { n: TYPICAL_EPISODE_MINUTES }) : undefined,
   }))
   const viewOptions: { value: ViewMode; label: string }[] = [
     { value: "browse", label: t("templates.tabBrowse") },

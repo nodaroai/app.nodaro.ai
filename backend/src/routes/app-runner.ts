@@ -8,6 +8,8 @@ import { executionOutcome } from "@nodaro/shared"
  * DELETE /v1/app/:slug/runs/:runId  — Delete run from history
  */
 
+import { perMinuteOf, selectWithPerMinute } from "../lib/listing-per-minute-columns.js"
+import { storedListingRunPrice, type StoredAppListing } from "../lib/app-listing-price.js"
 import { previewReviewRefusal } from "../lib/preview-review-gate.js"
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
 import { sendInternalError } from "../lib/http-errors.js"
@@ -20,6 +22,7 @@ import { orchestrationQueue } from "../lib/orchestration-queue.js"
 import { resolveWebSurfaceFlag } from "../middleware/credit-guard.js"
 import { MIN_IDEMPOTENCY_KEY_LENGTH } from "../lib/dedup-fingerprint.js"
 import { hasCredits } from "../lib/config.js"
+import { editPlanPerMinuteActive } from "../lib/private-plugins/edit-plan-per-minute.js"
 import { CreditsService } from "../ee/billing/credits.js"
 import { findRestrictedPickerValue, flattenItems } from "@nodaro/shared"
 import type { PickerCardRestrictions, PresentationItem } from "@nodaro/shared"
@@ -206,6 +209,15 @@ export async function appRunnerRoutes(app: FastifyInstance) {
     return true
   }
 
+  // Does this server charge Edit Plan per started minute (review round F1,
+  // decided 2026-10-07)? The runner and the embed price Edit Plan from it: they
+  // sit outside the signed-in dashboard, the only place that asks the
+  // capabilities route, and an embed viewer may have no user to ask it with.
+  // Read per request, never frozen into the cached body.
+  async function withEditPlanPerMinute(data: unknown): Promise<Record<string, unknown>> {
+    return { ...(data as Record<string, unknown>), editPlanPerMinute: await editPlanPerMinuteActive() }
+  }
+
   // --- Load published app (public, auth optional for personalization) ---
   app.get("/v1/app/:slug", async (req, reply) => {
     const parsed = slugParams.safeParse(req.params)
@@ -225,7 +237,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
     const cached = appCache.get(cacheKey)
     if (cached && Date.now() < cached.expiry) {
       reply.header("Cache-Control", "public, max-age=10, s-maxage=10, stale-while-revalidate=86400")
-      return reply.send(cached.data)
+      return reply.send(await withEditPlanPerMinute(cached.data))
     }
 
     // Step 1: resolve slug → workflow_id
@@ -235,12 +247,20 @@ export async function appRunnerRoutes(app: FastifyInstance) {
     }
 
     // Step 2: load all versions by workflow_id (slug is unique per row, workflow_id spans versions)
-    const { data: allVersionRows } = await supabase
-      .from("published_apps")
-      .select("id, name, description, icon_url, version, snapshot_nodes, snapshot_edges, snapshot_settings, estimated_credits, creator_id, max_runs_per_user_per_day, thumbnail_node_id, supports_remix, created_at, workflow_id, monetization_enabled, monetization_flat_fee, monetization_percent")
-      .eq("workflow_id", workflowId)
-      .is("deleted_at", null)
-      .order("version", { ascending: false })
+    // With the per-minute price, unless its column has not reached this database yet.
+    const { data: allVersionRows } = await selectWithPerMinute<Record<string, unknown>[]>(
+      "published_apps",
+      "id, name, description, icon_url, version, snapshot_nodes, snapshot_edges, snapshot_settings, estimated_credits, base_estimated_credits, creator_id, max_runs_per_user_per_day, thumbnail_node_id, supports_remix, created_at, workflow_id, monetization_enabled, monetization_flat_fee, monetization_percent",
+      (columns) =>
+        supabase
+          .from("published_apps")
+          .select(columns)
+          .eq("workflow_id", workflowId)
+          .is("deleted_at", null)
+          .order("version", { ascending: false }),
+      // Both per-minute columns: the run's own pair below reads the fee's base.
+      "all",
+    )
 
     if (!allVersionRows || allVersionRows.length === 0) {
       return reply.status(404).send({ error: { code: "not_found", message: "App not found" } })
@@ -263,6 +283,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       createdAt: v.created_at as string,
     }))
 
+    const runPrice = storedListingRunPrice(appRow as StoredAppListing)
     const responseData = {
       id: appRow.id,
       name: appRow.name,
@@ -273,6 +294,16 @@ export async function appRunnerRoutes(app: FastifyInstance) {
       snapshotEdges: appRow.snapshot_edges,
       snapshotSettings: appRow.snapshot_settings,
       estimatedCredits: appRow.estimated_credits,
+      // Per minute of the episode (decided 2026-10-07): 0 when the price does not follow a recording's length.
+      perMinuteCredits: perMinuteOf(appRow, "per_minute_credits"),
+      // The app run alone (review round F4): the listing less its Render final
+      // part, which is run and charged separately. The Run button's listing.
+      runEstimatedCredits: runPrice.fixed,
+      runPerMinuteCredits: runPrice.perMinute,
+      // Per item beyond the saved count of a List the app user fills (decided
+      // 2026-10-07): the listed figure and the run's part of it; 0 when none.
+      perItemCredits: perMinuteOf(appRow, "per_item_credits"),
+      runPerItemCredits: runPrice.perItem,
       creatorId: appRow.creator_id,
       maxRunsPerUserPerDay: appRow.max_runs_per_user_per_day,
       thumbnailNodeId: appRow.thumbnail_node_id ?? null,
@@ -296,7 +327,7 @@ export async function appRunnerRoutes(app: FastifyInstance) {
     }
 
     reply.header("Cache-Control", "public, max-age=10, s-maxage=10, stale-while-revalidate=86400")
-    return reply.send(responseData)
+    return reply.send(await withEditPlanPerMinute(responseData))
   })
 
   // --- Run the app (auth required, runner pays) ---

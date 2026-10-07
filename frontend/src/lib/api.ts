@@ -8530,10 +8530,35 @@ export interface PublishedApp {
   isEmbeddable: boolean
   allowedOrigins: string[]
   estimatedCredits: number
+  /** Credits per minute of the recording the app is given (decided 2026-10-07):
+   *  the price is `estimatedCredits` plus this per minute. 0 or absent: none. */
+  perMinuteCredits?: number
+  /** The preview part's per minute before the creator's fee (its percentage applies per minute). */
+  basePerMinuteCredits?: number
+  /** The Render finals' per minute, which the fee never marks up. */
+  finalPerMinuteCredits?: number
   /** The part of the price the creator's fee applies to: the app run (its preview). */
   baseEstimatedCredits?: number
   /** The Render finals' part of the price: never marked up by the creator's fee (decided 2026-10-06). */
   finalEstimatedCredits?: number
+  /** The app run alone, from the runner payload (GET /v1/app/:slug): the listed
+   *  price less its Render final part. The Run button's listing (review round F4). */
+  runEstimatedCredits?: number
+  /** The app run's own per-minute part, as `runEstimatedCredits`. */
+  runPerMinuteCredits?: number
+  /** Does this server charge Edit Plan per started minute (review round F1,
+   *  decided 2026-10-07)? Seeds the runner's estimate, which then prices Edit
+   *  Plan the way the run reserves it. Absent (an older server): the steps. */
+  editPlanPerMinute?: boolean
+  /** Credits per item beyond the saved count of a List the app user fills
+   *  (decided 2026-10-07); 0 or absent: none. */
+  perItemCredits?: number
+  /** The preview part's per item before the creator's fee. */
+  basePerItemCredits?: number
+  /** The Render finals' per item, which the fee never marks up. */
+  finalPerItemCredits?: number
+  /** The app run's own per-item part, as `runEstimatedCredits`. */
+  runPerItemCredits?: number
   thumbnailNodeId: string | null
   category: string
   outputTypes: string[]
@@ -8563,6 +8588,10 @@ export interface AppBrowseCard {
   description: string
   iconUrl: string | null
   estimatedCredits: number
+  /** Credits per minute of the recording the app is given; 0 or absent: none. */
+  perMinuteCredits?: number
+  /** Credits per item beyond the saved count of a List the app user fills; 0 or absent: none. */
+  perItemCredits?: number
   category: string
   outputTypes: string[]
   tags: string[]
@@ -9263,6 +9292,8 @@ export interface WorkflowTemplate {
   providersUsed: string[]
   nodeCount: number
   estimatedCredits: number
+  /** Credits per minute of the recording the template is given (decided 2026-10-07); 0 or absent: none. */
+  estimatedPerMinuteCredits?: number
   complexity: "simple" | "intermediate" | "advanced"
   category: string
   outputTypes: string[]
@@ -9288,6 +9319,8 @@ export interface TemplateBrowseCard {
   providersUsed: string[]
   nodeCount: number
   estimatedCredits: number
+  /** Credits per minute of the recording the template is given (decided 2026-10-07); 0 or absent: none. */
+  estimatedPerMinuteCredits?: number
   complexity: "simple" | "intermediate" | "advanced"
   category: string
   outputTypes: string[]
@@ -9547,6 +9580,8 @@ export interface FlowTutorialItem {
   previewMediaType: "image" | "video" | null
   complexity: "simple" | "intermediate" | "advanced"
   estimatedCredits: number
+  /** Credits per minute of the recording the template is given; 0 or absent: none. */
+  estimatedPerMinuteCredits?: number
   nodeTypesUsed: string[]
   providersUsed: string[]
   creatorDisplayName: string | null

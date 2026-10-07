@@ -3,6 +3,7 @@ import { readdirSync, readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { CreditsService } from "../../../ee/billing/credits.js"
+import { videoUtilityBaseCredits, videoUtilityEstimateBody } from "../../video-utility-credits.js"
 import type { TutorialTemplateDoc } from "../types.js"
 
 /**
@@ -21,7 +22,9 @@ import type { TutorialTemplateDoc } from "../types.js"
  * the same function as an app's) — its preview part, every node at its saved
  * settings, plus its final part, each render set to Preview at Final and the
  * nodes after it — at STATIC_CREDIT_COSTS' base prices, what the doc can know
- * without a database. Unknown recording lengths price at the ceilings.
+ * without a database. A price that follows an unknown recording's length is
+ * listed per minute of it (decided 2026-10-07): `estimatedCredits` holds the
+ * fixed parts, `estimatedPerMinuteCredits` the per-minute parts (absent = 0).
  */
 const here = dirname(fileURLToPath(import.meta.url))
 const templatesDir = join(here, "..", "templates")
@@ -45,8 +48,57 @@ describe("built-in template listing prices", () => {
 
   it.each(priced)("%s stores the listing the pricing functions derive for it", (file) => {
     const t = load(file)
-    const { preview, final } = CreditsService.estimateWorkflowBaseListing(t.nodes as Node[], t.edges as Edge[], "template")
-    expect(preview).toBeGreaterThan(0)
-    expect(t.estimatedCredits).toBe(preview + final)
+    const l = CreditsService.estimateWorkflowBaseListing(t.nodes as Node[], t.edges as Edge[], "template")
+    expect(l.preview).toBeGreaterThan(0)
+    expect({ fixed: t.estimatedCredits, perMinute: t.estimatedPerMinuteCredits ?? 0 }).toEqual({
+      fixed: l.preview + l.final,
+      perMinute: l.previewPerMinute + l.finalPerMinute,
+    })
+  })
+
+  it("a template with no length-dependent part stores no per-minute figure", () => {
+    for (const file of priced) {
+      const t = load(file)
+      if (t.estimatedPerMinuteCredits !== undefined) expect(t.estimatedPerMinuteCredits, file).toBeGreaterThan(0)
+    }
+  })
+})
+
+// The four podcast templates (decided 2026-10-07). At the 180-minute cap a
+// per-minute listing is the figure the ceiling listing quoted before
+// (Tighten 2602, Multicam 2582), so splitting it dropped nothing; Trailer is
+// above its old 882 by its Combine Videos alone, which now counts the
+// trailer render's 2 minutes rather than the 8-second fallback (decided
+// 2026-10-07); Clip Pack is above its old 832 by its fan-out alone: 4 more
+// renders of 2 minutes and 4 more caption runs.
+describe("the podcast templates per minute", () => {
+  const CAP = 180
+  const atCap = (file: string) => {
+    const t = load(file)
+    return t.estimatedCredits! + CAP * (t.estimatedPerMinuteCredits ?? 0)
+  }
+
+  it.each([
+    ["podcast-tighten-episode.json", 2602],
+    ["podcast-multicam-cut.json", 2582],
+  ])("%s at the cap is its old ceiling price (%i)", (file, before) => {
+    expect(atCap(file)).toBe(before)
+  })
+
+  it("podcast-trailer-formats.json at the cap is its old 882 plus its Combine on the render's 2 minutes", () => {
+    const t = load("podcast-trailer-formats.json")
+    const combine = (t.nodes as Node[]).find((n) => n.type === "combine-videos")!
+    const body = videoUtilityEstimateBody(combine, t.edges as Edge[])!
+    // The intro card stays at the fallback (undefined); the render is 2 minutes.
+    const atRender = videoUtilityBaseCredits("combine-videos", { ...body, upstreamDurations: [undefined, 2 * 60] })!
+    const atFallback = videoUtilityBaseCredits("combine-videos", { ...body, upstreamDurations: [undefined, undefined] })!
+    expect(atCap("podcast-trailer-formats.json")).toBe(882 + atRender - atFallback)
+  })
+
+  it("podcast-clip-pack.json at the cap is its old price plus 4 more clips (render + captions)", () => {
+    const t = load("podcast-clip-pack.json")
+    const captions = CreditsService.estimateWorkflowBaseCredits(t.nodes as Node[], t.edges as Edge[], { runNodeIds: new Set(["clips-captions"]) })
+    const render = CreditsService.estimateWorkflowBaseCredits(t.nodes as Node[], t.edges as Edge[], { runNodeIds: new Set(["clips-apply"]) }) * 2
+    expect(atCap("podcast-clip-pack.json")).toBe(832 + 4 * (render + captions))
   })
 })

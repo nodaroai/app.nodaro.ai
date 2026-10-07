@@ -70,6 +70,13 @@ The response is JSON. The fields you care about (others omitted for brevity):
   "iconUrl": "https://...",
   "version": 3,                        // latest version number
   "estimatedCredits": 5,               // the listed price: a run (with any Render final after it)
+  "perMinuteCredits": 0,               // credits per minute of the recording the app is given; 0 when the price does not depend on it
+                                       // (with it, the price is estimatedCredits + perMinuteCredits × minutes)
+  "perItemCredits": 0,                 // credits per item beyond the creator's saved items of a list input the user fills; 0 when none
+  "runEstimatedCredits": 5,            // the run alone: the listed price less its Render final part
+  "runPerMinuteCredits": 0,            // …and its per-minute and per-item parts
+  "runPerItemCredits": 0,
+  "editPlanPerMinute": false,          // true: an Edit Plan node is charged per started minute of the recording, else in 15/30/60/90/120/180-minute steps
   "maxRunsPerUserPerDay": null,        // or a number
   "thumbnailNodeId": "node-abc",       // node whose output is the "hero" result
   "snapshotNodes": [                   // the workflow's nodes

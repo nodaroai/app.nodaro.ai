@@ -15,6 +15,10 @@ export interface TutorialTemplateDoc {
    *  by the content and passed through by the seeder. Absent → DB-safe defaults
    *  (0 / [] / []). */
   estimatedCredits?: number
+  /** The listing's credits per minute of the episode, when its price follows
+   *  the input recording's length (decided 2026-10-07): `estimatedCredits` is
+   *  then the fixed part. Absent → 0, no per-minute part. */
+  estimatedPerMinuteCredits?: number
   nodeTypesUsed?: string[]
   providersUsed?: string[]
   /** Overrides the seeder's default attribution ("Nodaro") for THIS tutorial.

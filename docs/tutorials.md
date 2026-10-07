@@ -132,7 +132,10 @@ rebuilding the image. Point `NODARO_TUTORIAL_PACKS` at one or more directories
   clones the tutorial, those baked results come with it, so the copy opens
   showing the finished run rather than empty boxes. Optional card metadata the
   full tutorials list (Explore › Level up › All tutorials) surfaces:
-  `estimatedCredits` (credits a run costs), `nodeTypesUsed` / `providersUsed`
+  `estimatedCredits` (credits a run costs; when the price follows the
+  length of the recording the tutorial is given, its fixed part, with
+  `estimatedPerMinuteCredits` the credits per minute of the recording),
+  `nodeTypesUsed` / `providersUsed`
   (the chips shown on the card), a per-tutorial `creatorDisplayName`
   (overrides the pack-wide author for this one tutorial), and `listedIn`
   (which channel the tutorial is first listed in — `["tutorial"]` for the

@@ -2779,6 +2779,7 @@ export const en = {
   "templates.count": "{n} templates",
   "templates.countMore": "{n}+ templates",
   "templates.sortCheapest": "Fewest credits",
+  "templates.sortCheapestHint": "Ordered by the price of a {n}-minute recording: a template priced per minute counts its fixed price plus {n} minutes.",
   "templates.sortLabel": "Sort templates",
   "templates.viewLabel": "Which templates",
   "templates.clearSearch": "Clear search",
@@ -5797,6 +5798,12 @@ export const en = {
   "credits.upgradePlanTitle": "Upgrade Your Plan",
   "credits.buyPacksTitle": "Buy Credit Packs",
   "credits.perCreditSuffix": "/{u}",
+  // A listing priced per minute of the input recording (decided 2026-10-07):
+  // the fixed figure, then this. {n} is the per-minute figure in the display unit.
+  "credits.plusPerMinute": "+ {n}/min",
+  "credits.perMinuteTitle": "{fixed} {u} plus {n} {u} per minute of the recording",
+  "credits.plusPerItem": "+ {n}/item",
+  "credits.perItemTitle": "{n} {u} for each item beyond the saved list",
 
   // ── Workflow run toasts (every run — orchestration) ─────────────────────
   "run.noExecutableNodes": "No executable nodes found. Add Generate Image, Image to Video, or Video to Video nodes.",

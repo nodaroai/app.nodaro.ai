@@ -16,7 +16,8 @@ import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { useEditPlanEstimateDurationSec } from "@/hooks/use-edit-plan-estimate-duration"
 import { ACCEPTS_MEDIA } from "@/lib/ffmpeg-handles"
 import { ACCEPTS_JSON, DATA_HANDLE_COLORS } from "@/lib/data-handles"
-import { buildEditPlanCreditId, asEditPlanMode, asEditPlanTier } from "@nodaro/shared"
+import { editPlanReserveCreditId, asEditPlanMode, asEditPlanTier } from "@nodaro/shared"
+import { editPlanPerMinuteReported, useEditPlanModes } from "@/lib/edit-plan-modes"
 import { useT } from "@/lib/i18n"
 import { copyToClipboard } from "@/lib/utils"
 import { editPlanOutputOf } from "@/lib/edit-plan-saved-output"
@@ -38,13 +39,18 @@ function EditPlanNodeComponent({ id, data, selected }: NodeProps) {
   const tier = asEditPlanTier(nodeData.planTier)
   // Duration for the credit-bucket estimate: the MASTER source's length, through
   // the same resolver the run-level estimates use (so the pill can't disagree
-  // with them); unknown → buildEditPlanCreditId's ceiling bucket — never a length
+  // with them); unknown → the 180-minute ceiling — never a length
   // borrowed from the wired transcript (lib/edit-plan-estimate says why). The
   // reserve itself is computed server-side.
   const estimateDurationSec = useEditPlanEstimateDurationSec(id)
+  // Per started minute once the server says its plugin charges that way
+  // (decided 2026-10-07); the answer can land after the first render.
+  const capabilityVersion = useEditPlanModes()
+  const perMinute = editPlanPerMinuteReported()
   const creditModelId = useMemo(
-    () => buildEditPlanCreditId(mode, tier, estimateDurationSec),
-    [mode, tier, estimateDurationSec],
+    () => editPlanReserveCreditId(mode, tier, estimateDurationSec, perMinute),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- capabilityVersion re-reads the store
+    [mode, tier, estimateDurationSec, perMinute, capabilityVersion],
   )
   const credits = useModelCredits(creditModelId)
   const [treeOpen, setTreeOpen] = useState(false)

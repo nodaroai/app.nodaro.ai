@@ -231,6 +231,7 @@ function CompactFlowCard({
             <span className="flex items-center gap-1">
               <Coins className="h-2.5 w-2.5" />
               {flow.estimatedCredits}
+              {(flow.estimatedPerMinuteCredits ?? 0) > 0 && ` ${t("credits.plusPerMinute", { n: flow.estimatedPerMinuteCredits ?? 0 })}`}
             </span>
           )}
           <span className="flex items-center gap-1">
@@ -257,6 +258,7 @@ export function flowToTemplateBrowseCard(flow: FlowTutorialItem): TemplateBrowse
     providersUsed: flow.providersUsed,
     nodeCount: flow.nodeCount,
     estimatedCredits: flow.estimatedCredits,
+    estimatedPerMinuteCredits: flow.estimatedPerMinuteCredits,
     complexity: flow.complexity,
     category: "other",
     outputTypes: [],

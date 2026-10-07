@@ -26,6 +26,7 @@ import { readFileSync, readdirSync } from "node:fs"
 import { join } from "node:path"
 import { describe, it, expect } from "vitest"
 import { STATIC_CREDIT_COSTS } from "../credits.js"
+import { EDIT_PLAN_BUCKET_MINUTES, EDIT_PLAN_MODES, EDIT_PLAN_TIERS } from "@nodaro/shared"
 
 // REPO_ROOT: backend/src/ee/billing/__tests__/ → up 5 → repo root
 const REPO_ROOT = join(__dirname, "..", "..", "..", "..", "..")
@@ -303,6 +304,14 @@ const KNOWN_GHOST_IDENTIFIERS: ReadonlySet<string> = new Set([
   "beeble-switchx:144f:720p",
   "beeble-switchx:192f:1080p",
   "beeble-switchx:192f:720p",
+  // ── Edit Plan step rows (migrations 432 + 465) — decided 2026-10-07, every
+  //    `edit-plan:<mode>:<tier>:<N>m` id is priced from its mode/tier's rate
+  //    and flat rows (migration 484), never a row of its own; 484 DELETEs the
+  //    72 step rows and they left STATIC_CREDIT_COSTS. The literal INSERTs stay
+  //    on disk (append-only), so the scanner still sees them as ghosts. ──
+  ...EDIT_PLAN_MODES.flatMap((mode) =>
+    EDIT_PLAN_TIERS.flatMap((tier) => EDIT_PLAN_BUCKET_MINUTES.map((minutes) => `edit-plan:${mode}:${tier}:${minutes}m`)),
+  ),
 ])
 
 /**

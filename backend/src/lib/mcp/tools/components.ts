@@ -1,4 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js"
+import { selectWithPerMinute } from "../../listing-per-minute-columns.js"
 import { z } from "zod"
 import type { FastifyInstance } from "fastify"
 import type { McpSession } from "../session.js"
@@ -68,33 +69,36 @@ export function registerComponents({
       async (args) => {
         const limit = args.limit ?? 20
         const scope = args.scope ?? "public"
-        let query = supabase
-          .from("published_apps")
-          .select(
-            "id, slug, name, description, icon_url, estimated_credits, category, tags, total_run_count, created_at",
-          )
-          .eq("is_active", true)
-          .eq("publish_type", "component")
-          .is("deleted_at", null)
-          .order("created_at", { ascending: false })
-          .limit(limit)
-        if (scope === "mine") {
-          if (!session.userId) {
-            return {
-              content: [{ type: "text", text: 'scope="mine" requires authentication.' }],
-              isError: true,
-            }
+        if (scope === "mine" && !session.userId) {
+          return {
+            content: [{ type: "text", text: 'scope="mine" requires authentication.' }],
+            isError: true,
           }
-          query = query.eq("creator_id", session.userId)
-        } else {
-          query = query.eq("is_listed", true)
         }
-        if (args.cursor) query = query.lt("created_at", args.cursor)
-        if (args.search) {
-          const tsQuery = args.search.trim().split(/\s+/).join(" & ")
-          query = query.textSearch("search_vector", tsQuery)
+        // With the listed per-minute price (decided 2026-10-07), unless its
+        // column has not reached this database yet.
+        const buildQuery = (columns: string) => {
+          let query = supabase
+            .from("published_apps")
+            .select(columns)
+            .eq("is_active", true)
+            .eq("publish_type", "component")
+            .is("deleted_at", null)
+            .order("created_at", { ascending: false })
+            .limit(limit)
+          if (scope === "mine") {
+            query = query.eq("creator_id", session.userId!)
+          } else {
+            query = query.eq("is_listed", true)
+          }
+          if (args.cursor) query = query.lt("created_at", args.cursor)
+          if (args.search) {
+            const tsQuery = args.search.trim().split(/\s+/).join(" & ")
+            query = query.textSearch("search_vector", tsQuery)
+          }
+          return query
         }
-        const { data, error } = await query
+        const { data, error } = await selectWithPerMinute<Record<string, unknown>[]>("published_apps", "id, slug, name, description, icon_url, estimated_credits, category, tags, total_run_count, created_at", buildQuery, "listed")
         if (error) {
           return {
             content: [{ type: "text", text: `Error: ${error.message}` }],

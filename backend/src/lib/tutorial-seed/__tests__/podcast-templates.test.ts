@@ -25,7 +25,7 @@ import type { TutorialTemplateDoc } from "../types.js"
 const HERE = dirname(fileURLToPath(import.meta.url))
 const TEMPLATES_DIR = join(HERE, "..", "templates")
 
-const SLUGS = ["podcast-tighten-episode", "podcast-clip-pack", "podcast-multicam-cut"] as const
+const SLUGS = ["podcast-tighten-episode", "podcast-clip-pack", "podcast-multicam-cut", "podcast-trailer-formats"] as const
 
 async function loadTemplate(slug: string): Promise<TutorialTemplateDoc> {
   return JSON.parse(await readFile(join(TEMPLATES_DIR, `${slug}.json`), "utf8")) as TutorialTemplateDoc
@@ -265,6 +265,102 @@ describe("podcast editing templates — structural validity", () => {
     })
   })
 
-  // The listing price of every built-in template (these three included) is
+  describe("Trailer + Formats", () => {
+    function only(nodes: Node[], type: string): Node {
+      const found = nodes.filter((n) => n.type === type)
+      expect(found, `exactly one ${type} node`).toHaveLength(1)
+      return found[0]!
+    }
+    function into(edges: Edge[], target: Node, handle: string): Edge[] {
+      return edges.filter((e) => e.target === target.id && e.targetHandle === handle)
+    }
+
+    it("wires the trailer chain: Recording → Transcribe → Edit Plan(trailer) → Apply EDL → Combine Videos(intro card) → three formats", async () => {
+      const t = await loadTemplate("podcast-trailer-formats")
+      const nodes = t.nodes as Node[]
+      const edges = t.edges as Edge[]
+
+      const uploads = nodes.filter((n) => n.type === "upload-video")
+      expect(uploads, "the recording and the intro card").toHaveLength(2)
+      const transcribe = only(nodes, "transcribe")
+      const plan = only(nodes, "edit-plan")
+      const apply = only(nodes, "apply-edl")
+      const combine = only(nodes, "combine-videos")
+
+      // The same front as Tighten Episode / Clip Pack: the recording is
+      // transcribed, diarized, and is the plan's (and the render's) one source.
+      const [recording] = into(edges, transcribe, "audio").map((e) => uploads.find((u) => u.id === e.source))
+      expect(recording, "Transcribe hears an upload-video recording").toBeDefined()
+      expect((transcribe.data as { provider?: string }).provider).toBe("elevenlabs-stt")
+      expect((transcribe.data as { diarize?: boolean }).diarize).toBe(true)
+      expect(into(edges, plan, "sources").map((e) => e.source)).toEqual([recording!.id])
+      expect(into(edges, plan, "transcript").map((e) => [e.source, e.sourceHandle])).toEqual([[transcribe.id, "json"]])
+      expect(into(edges, apply, "sources").map((e) => e.source)).toEqual([recording!.id])
+
+      // Edit Plan in trailer mode: one 20–40 s EDL (decided: fixed length, no
+      // count or target-length setting carried over from Clips).
+      const planData = plan.data as { mode?: string; planTier?: string; count?: unknown; targetDurationSec?: unknown }
+      expect(planData.mode).toBe("trailer")
+      expect(planData.planTier).toBe("standard")
+      expect(planData.count).toBeUndefined()
+      expect(planData.targetDurationSec).toBeUndefined()
+      expect(into(edges, apply, "edl").map((e) => [e.source, e.sourceHandle])).toEqual([[plan.id, "edl"]])
+
+      // The title card is an OPTIONAL intro-video slot joined BEFORE the
+      // trailer by Combine Videos (no blueprint node exists). An empty slot
+      // resolves to nothing, and Combine Videos passes the trailer through.
+      const card = uploads.find((u) => u.id !== recording!.id)!
+      expect(into(edges, combine, "in").map((e) => [e.source, e.sourceHandle]).sort()).toEqual(
+        [[apply.id, "media"], [card.id, "video"]].sort(),
+      )
+      expect((combine.data as { clipOrder?: string[] }).clipOrder).toEqual([card.id, apply.id])
+      expect(edges.filter((e) => e.source === card.id).map((e) => e.target)).toEqual([combine.id])
+
+      // The formats: story/reel 9:16, square feed 1:1, portrait feed 4:5, each
+      // fed the combined video, padded (a centre crop would cut a speaker off a
+      // two-person wide shot).
+      const formats = nodes.filter((n) => n.type === "social-media-format")
+      expect(formats.map((n) => (n.data as { specKey?: string }).specKey).sort()).toEqual(
+        ["instagram:feed-portrait", "instagram:feed-square", "instagram:story-reel"],
+      )
+      for (const f of formats) {
+        const d = f.data as { specKey?: string; platform?: string; contentType?: string; method?: string }
+        expect(`${d.platform}:${d.contentType}`, f.id).toBe(d.specKey)
+        expect(d.method, f.id).toBe("pad")
+        expect(into(edges, f, "media").map((e) => [e.source, e.sourceHandle]), f.id).toEqual([[combine.id, "video"]])
+      }
+      // Nothing else renders after Apply EDL, and nothing after the formats.
+      expect(edges.filter((e) => e.source === apply.id).map((e) => e.target)).toEqual([combine.id])
+      expect(edges.filter((e) => formats.some((f) => f.id === e.source))).toEqual([])
+    })
+
+    it("joins the intro card and the trailer whole: no frames trimmed off either clip (decided 2026-10-07)", async () => {
+      const t = await loadTemplate("podcast-trailer-formats")
+      const combine = only(t.nodes as Node[], "combine-videos")
+      const d = combine.data as { trimStartFrames?: number; trimEndFrames?: number }
+      // Written explicitly, not left to the node's default (1 at the start, 2 at the end).
+      expect(d.trimStartFrames).toBe(0)
+      expect(d.trimEndFrames).toBe(0)
+    })
+
+    it("lists the node types and providers it actually uses", async () => {
+      const t = await loadTemplate("podcast-trailer-formats")
+      const nodes = t.nodes as Node[]
+      expect([...(t.nodeTypesUsed ?? [])].sort()).toEqual([...new Set(nodes.map((n) => n.type))].sort())
+      const providers = new Set(nodes.flatMap((n) => {
+        const p = (n.data as { provider?: unknown } | undefined)?.provider
+        return typeof p === "string" ? [p] : []
+      }))
+      expect([...(t.providersUsed ?? [])].sort()).toEqual([...providers].sort())
+    })
+
+    it("sorts after the other podcast templates", async () => {
+      const orders = await Promise.all(SLUGS.map(async (s) => (await loadTemplate(s)).tutorialSortOrder))
+      expect(new Set(orders).size, "no two podcast templates share a sort order").toBe(SLUGS.length)
+      expect((await loadTemplate("podcast-trailer-formats")).tutorialSortOrder).toBe(Math.max(...orders))
+    })
+  })
+
+  // The listing price of every built-in template (these four included) is
   // pinned in template-listing-prices.test.ts.
 })

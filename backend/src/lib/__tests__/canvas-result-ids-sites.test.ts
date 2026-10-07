@@ -70,6 +70,7 @@ const EXEMPT: ReadonlyMap<string, string> = new Map([
   // the app resolves it.
   ["lib/collect-app-r2-keys.ts::published_apps", "harvests storage keys for deletion; hands nothing out"],
   ["lib/mcp/tools/apps.ts::published_apps", "an immutable published snapshot (resolved when published)"],
+  ["lib/mcp/tools/components.ts::published_apps", "list_components' card columns, no snapshot (the column list is built at run time, lib/listing-per-minute-columns.ts)"],
   ["routes/app-runner.ts::published_apps", "an immutable published snapshot (resolved when published)"],
   ["routes/app-render-final.ts::published_apps", "an immutable published snapshot (resolved when published); reads its graph to compute a final's run set"],
   ["routes/component-execute.ts::published_apps", "an immutable published snapshot (resolved when published)"],
@@ -84,6 +85,7 @@ const EXEMPT: ReadonlyMap<string, string> = new Map([
   // stored on every clone; resolving it by its creator at clone time is an
   // open product decision, not done here.
   ["routes/workflow-templates.ts::workflow_templates", "immutable template snapshots (resolved when published); handed out and cloned as stored"],
+  ["routes/tutorials.ts::workflow_templates", "the tutorial cards' columns, no snapshot (the column list is built at run time, lib/listing-per-minute-columns.ts)"],
 ])
 
 /** `resolveResultIds: false` on a shared loader — each one says why. */

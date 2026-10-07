@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify"
 import type { PlannableEditPlanModes } from "../lib/private-plugins/edit-plan-mode-gate.js"
 import { plannableEditPlanModes } from "../lib/private-plugins/plannable-edit-plan-modes.js"
+import { editPlanPerMinuteActive } from "../lib/private-plugins/edit-plan-per-minute.js"
 
 /**
  * GET /v1/edit-plan/capabilities — the Edit Plan modes this server can plan.
@@ -24,19 +25,28 @@ import { plannableEditPlanModes } from "../lib/private-plugins/plannable-edit-pl
  * supports it", "Couldn't reach nodaro.ai — try again later"). The list itself
  * is unchanged: it still fails closed when nodaro.ai can't be reached.
  *
+ * Per started minute (decided 2026-10-07): `perMinute` says whether the
+ * loaded plugin charges Edit Plan per started minute
+ * (`supports().editPlanPerMinute`, read through `editPlanPerMinuteActive`).
+ * The editor then quotes `edit-plan:<mode>:<tier>:<N>m` for N started minutes
+ * instead of the step. The standalone orchestrator, which loads no plugin,
+ * asks this route over loopback with the internal secret (no user) before it
+ * reserves, so it is answered for an internal call too.
+ *
  * Read at REQUEST time: `app.ts` registers core routes before it loads the
  * plugins, so a value captured at registration would always be empty.
  */
 export async function editPlanCapabilitiesRoutes(
   app: FastifyInstance,
-  opts: { plannable?: PlannableEditPlanModes } = {},
+  opts: { plannable?: PlannableEditPlanModes; perMinute?: () => Promise<boolean> } = {},
 ) {
   const plannable = opts.plannable ?? plannableEditPlanModes
+  const perMinuteOf = opts.perMinute ?? (() => editPlanPerMinuteActive())
   app.get("/v1/edit-plan/capabilities", async (req, reply) => {
-    if (!req.userId) {
+    if (!req.userId && !req.isInternalCall) {
       return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
     }
-    const { modes, source } = await plannable()
-    return reply.header("Cache-Control", "private, no-store").send({ modes: [...modes], source })
+    const [{ modes, source }, perMinute] = await Promise.all([plannable(), perMinuteOf()])
+    return reply.header("Cache-Control", "private, no-store").send({ modes: [...modes], source, perMinute })
   })
 }

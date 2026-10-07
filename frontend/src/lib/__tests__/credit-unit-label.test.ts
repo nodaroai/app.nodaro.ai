@@ -108,6 +108,7 @@ describe("credit-unit label scan (Phase B, H14)", () => {
     "marketplace.costSummary",
     "cost.col.perRunCredits",
     "credits.perCreditSuffix",
+    "credits.perMinuteTitle",
   ]
   it("every caller of a unit-bearing i18n key passes the label as `u`", () => {
     const offenders: string[] = []

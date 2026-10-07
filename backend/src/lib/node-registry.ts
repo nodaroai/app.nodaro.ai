@@ -1,4 +1,4 @@
-import { IMAGE_GEN_PROVIDERS, IMAGE_TO_VIDEO_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, LIP_SYNC_PROVIDERS, VOICE_CHANGER_MODEL_IDS, GVP_SUPPORTED_PROVIDERS, SEEDANCE_2_PROVIDERS, VIDEO_ANALYSIS_TIER_ORDER, MUSIC_PROVIDERS, TRANSCRIBE_PROVIDERS, MODIFY_IMAGE_PROVIDERS, UPSCALE_IMAGE_PROVIDERS, REFERENCE_BOARD_PROVIDERS, TTS_PROVIDERS, DIALOGUE_PROVIDERS, TEXT_TO_AUDIO_PROVIDERS, MOTION_TRANSFER_PROVIDERS, SPEECH_UNIT_CREDIT_SUFFIX, buildMotionCreditModelIdentifier, hasContiguousSegmentDurations, isMinimaxH3Provider, MODEL_CATALOG, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY, OVERLAY_PLATFORM_IDS, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, VIDEO_OVERLAY_OUTPUT_ASPECTS, VIDEO_OVERLAY_FITS } from "@nodaro/shared"
+import { IMAGE_GEN_PROVIDERS, IMAGE_TO_VIDEO_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, LIP_SYNC_PROVIDERS, VOICE_CHANGER_MODEL_IDS, GVP_SUPPORTED_PROVIDERS, SEEDANCE_2_PROVIDERS, VIDEO_ANALYSIS_TIER_ORDER, MUSIC_PROVIDERS, TRANSCRIBE_PROVIDERS, MODIFY_IMAGE_PROVIDERS, UPSCALE_IMAGE_PROVIDERS, REFERENCE_BOARD_PROVIDERS, TTS_PROVIDERS, DIALOGUE_PROVIDERS, TEXT_TO_AUDIO_PROVIDERS, MOTION_TRANSFER_PROVIDERS, SPEECH_UNIT_CREDIT_SUFFIX, buildMotionCreditModelIdentifier, hasContiguousSegmentDurations, isMinimaxH3Provider, MODEL_CATALOG, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY, OVERLAY_PLATFORM_IDS, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDIT_PLAN_MAX_MINUTES, editPlanFlatCreditId, editPlanRateCreditId, editPlanMinutesBaseCredits, VIDEO_OVERLAY_OUTPUT_ASPECTS, VIDEO_OVERLAY_FITS } from "@nodaro/shared"
 import type { OutputType } from "@nodaro/shared"
 import { nodeSupportsPromptAffixes } from "@nodaro/prompts"
 import { SCRAPER_ACTOR_LABELS, type ScraperActorId } from "@nodaro/shared"
@@ -188,7 +188,14 @@ export const CREDIT_BAND_SOURCES: Readonly<Record<string, CreditBandSource>> = {
   },
   "video-analysis": { ids: familyIds("video-analysis") },
   "video-audit": { ids: familyIds("video-audit") },
-  "edit-plan": { ids: familyIds("edit-plan") },
+  "edit-plan": {
+    ids: familyIds("edit-plan"),
+    // The stored rows are a rate and a flat per mode × tier (decided
+    // 2026-10-07), not whole charges: the band is the cheapest run (one
+    // started minute) up to the dearest (180 minutes), flat + rate × N.
+    band: editPlanBand,
+    note: "Charged flat + rate × N per mode and tier (`edit-plan:<mode>:<tier>:per-minute` and `:flat`): N is the source's started minutes on a server that charges per started minute, else the 15/30/60/90/120/180-minute step it rounds up to.",
+  },
   "camera-switch": { ids: familyIds("camera-switch") },
   "content-recipe": { ids: familyIds("content-recipe") },
   "content-ideas": {
@@ -262,6 +269,21 @@ function creditBandFor(type: string): number | string {
     throw new Error(`node-registry: credit-band source for "${type}" names no priced identifier`)
   }
   return formatBand(Math.min(...prices) * minUnits, Math.max(...prices) * maxUnits)
+}
+
+/** Edit Plan's band: flat + rate × N over every mode and tier, from 1 to 180 minutes. */
+function editPlanBand(credit: (id: string, units?: number) => number | undefined): [number, number] | undefined {
+  const at = (minutes: number) =>
+    EDIT_PLAN_MODES.flatMap((mode) =>
+      EDIT_PLAN_TIERS.flatMap((tier) => {
+        const flat = credit(editPlanFlatCreditId(mode, tier))
+        const rate = credit(editPlanRateCreditId(mode, tier))
+        return flat === undefined || rate === undefined ? [] : [editPlanMinutesBaseCredits(flat, rate, minutes)]
+      }),
+    )
+  const low = at(1)
+  const high = at(EDIT_PLAN_MAX_MINUTES)
+  return low.length && high.length ? [Math.min(...low), Math.max(...high)] : undefined
 }
 
 function formatBand(min: number, max: number): number | string {
@@ -649,10 +671,9 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     // handle. tighten → one Edl (tightened timeline); clips → a bare Edl[] that fans
     // out one downstream render per clip; chapters → a { version, chapters } list;
     // trailer → one Edl (a short teaser from the strongest moments).
-    // Cloud-EXCLUSIVE (relayed). Duration-bucketed per-source-minute pricing × tier
-    // (+ a flat component on clips and trailer); PROVISIONAL placeholders finalized
-    // by a probe. See backend/src/ee/billing/credits.ts (EDIT_PLAN_STATIC) +
-    // migrations 432 and 462.
+    // Cloud-EXCLUSIVE (relayed). Per-source-minute pricing × tier (+ a flat
+    // component on clips and trailer), one rate row and one flat row per mode ×
+    // tier. See backend/src/ee/billing/credits.ts (EDIT_PLAN_STATIC) + migration 484.
     description:
       "Turn a transcript into an edit-decision-list plan: tighten a recording, find short clips, mark chapters, or cut a short trailer. Reads the transcript, never pixels; emits an EDL that Apply Edit renders.",
     outputType: "data",

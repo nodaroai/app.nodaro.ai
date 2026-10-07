@@ -1581,6 +1581,15 @@ recency.
 
 **Input:** `scope`, `limit`, `cursor`
 
+**Output:** each row's `estimated_credits` is the app's listed price. When the
+price follows the length of a recording the app is given (an Apply EDL render
+of a whole episode, an Edit Plan's planning pass), `estimated_credits` is the
+fixed part and `per_minute_credits` the credits per minute of the recording,
+for example `82` and `14` for "82 + 14 per minute of episode". It is `0` (or
+absent) when the price does not depend on a recording's length. When the app
+has a list input its user fills, `per_item_credits` is the credits each item
+beyond the creator's saved items adds (`0` or absent when none).
+
 ---
 
 ### `get_app_inputs`
@@ -1643,6 +1652,9 @@ List your saved workflow components (reusable sub-graphs). Ordered by most
 recently updated.
 
 **Input:** `limit`, `cursor`
+
+**Output:** each row carries `estimated_credits`, `per_minute_credits` and
+`per_item_credits`, read the same way as in `list_apps`.
 
 ---
 

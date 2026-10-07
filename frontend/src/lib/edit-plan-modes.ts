@@ -56,6 +56,8 @@ export type EditPlanModeUnavailableReason = "plugin-update" | "nodaro-unsupporte
 
 let reported: ReadonlySet<string> | null = null
 let reportedSource: EditPlanModesSource | null = null
+/** The answer's `perMinute` (decided 2026-10-07); false until it says true. */
+let reportedPerMinute = false
 let inflight: Promise<void> | null = null
 /** Set by the session's first load; a refresh before it is a no-op (pre-auth). */
 let sessionHeaders: AuthHeaders | null = null
@@ -78,6 +80,32 @@ const snapshot = (): number => version
 /** Subscribe a component to the answer arriving. */
 export function useEditPlanModes(): number {
   return useSyncExternalStore(subscribe, snapshot, snapshot)
+}
+
+/**
+ * Does this server's plugin charge Edit Plan per started minute (decided
+ * 2026-10-07)? The editor then quotes `edit-plan:<mode>:<tier>:<N>m` for the
+ * source's N started minutes, the id a run reserves; until the answer says so
+ * it quotes the 15/30/60/90/120/180-minute step (never under the charge).
+ * Components re-render on the answer through `useEditPlanModes()`.
+ */
+export function editPlanPerMinuteReported(): boolean {
+  return reportedPerMinute
+}
+
+/**
+ * Seed the per-minute answer from the published app's detail
+ * (`GET /v1/app/:slug` → `editPlanPerMinute`; review round F1, decided
+ * 2026-10-07). The app runner and the embed sit outside the signed-in
+ * dashboard, the only place that asks the capabilities route, and an embed
+ * viewer may have no user to ask it with. Anything but `true` is the steps.
+ * Sets nothing else: the modes keep whatever the capabilities route said.
+ */
+export function setEditPlanPerMinute(perMinute: boolean | undefined): void {
+  const next = perMinute === true
+  if (next === reportedPerMinute) return
+  reportedPerMinute = next
+  emit()
 }
 
 /** Can this server plan `mode`? False for a newer mode until the server says so. */
@@ -106,10 +134,11 @@ export async function loadEditPlanModes(getAuthHeaders: AuthHeaders): Promise<vo
     try {
       const res = await fetch("/v1/edit-plan/capabilities", { headers: await getAuthHeaders() })
       if (!res.ok) return
-      const json = (await res.json()) as { modes?: unknown; source?: unknown }
+      const json = (await res.json()) as { modes?: unknown; source?: unknown; perMinute?: unknown }
       if (!Array.isArray(json.modes)) return
       reported = new Set(json.modes.filter((m): m is string => typeof m === "string"))
       reportedSource = SOURCES.find((s) => s === json.source) ?? null
+      reportedPerMinute = json.perMinute === true
       emit()
     } catch {
       // Offline / pre-auth / an older backend — newer modes stay greyed out,
@@ -150,9 +179,11 @@ export function watchEditPlanModes(getAuthHeaders: AuthHeaders): () => void {
 export function __setEditPlanModesForTests(
   modes: readonly string[] | null,
   source: EditPlanModesSource | null = null,
+  perMinute = false,
 ): void {
   reported = modes ? new Set(modes) : null
   reportedSource = modes ? source : null
+  reportedPerMinute = modes ? perMinute : false
   if (!modes) {
     sessionHeaders = null
     lastAttemptAt = Number.NEGATIVE_INFINITY

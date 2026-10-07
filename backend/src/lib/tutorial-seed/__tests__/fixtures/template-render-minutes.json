@@ -1,0 +1,18 @@
+{
+  "about": "The output minutes each built-in template's Apply EDL render is estimated at, fresh from the seed (no recording uploaded, so no length known), at the 180-minute cap. The editor's run estimate after cloning a template prices these minutes (frontend: template-render-minutes-parity.test.ts); the template's stored listing (backend: template-render-minutes-parity.test.ts) lists a render that follows the episode per minute of it, which at the cap is the same figure. Both read @nodaro/render-rules' resolveApplyEdlEstimateMinutes / resolveApplyEdlEstimateLength (decided 2026-10-07).",
+  "minutes": {
+    "podcast-clip-pack": 2,
+    "podcast-multicam-cut": 180,
+    "podcast-tighten-episode": 180,
+    "podcast-trailer-formats": 2
+  },
+  "aboutPerEpisodeMinute": "The output minutes per minute of the episode the listing lists each render at; 0 (a fixed length) when a template is not listed.",
+  "perEpisodeMinute": {
+    "podcast-multicam-cut": 1,
+    "podcast-tighten-episode": 1
+  },
+  "aboutFanOut": "How many times each template's render runs: the clip count of a Clips plan; 1 when a template is not listed. The editor's run estimate (frontend half) and the listing (backend half, through @nodaro/render-rules' clipFanOut) both count it (decided 2026-10-07).",
+  "fanOut": {
+    "podcast-clip-pack": 5
+  }
+}
