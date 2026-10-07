@@ -38,7 +38,7 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffec
 import { useVirtualizer } from "@tanstack/react-virtual"
 import type { ReviewEdits } from "@/hooks/use-review-edits"
 import type { ReviewModel } from "@/hooks/use-review-model"
-import { observeScrollOffset } from "@/lib/edl-review/observe-scroll-offset"
+import { observeScrollOffset } from "@/lib/virtual/observe-scroll-offset"
 import { collapseFindRuns, collapseRun, expandRun, focusedRun, innermostLayer, trackExpandedRuns, type ExpandedRun } from "@/lib/edl-review/escape-layers"
 import { collapsedRunOfWord, expandedRuns, rowOfWord, runSpan, type CollapsedRow, type ReviewRow, type WordSpan } from "@/lib/edl-review/review-rows"
 import {

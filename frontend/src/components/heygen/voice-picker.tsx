@@ -24,6 +24,7 @@ import {
   useState,
 } from "react"
 import { useVirtualizer } from "@tanstack/react-virtual"
+import { observeScrollOffset } from "@/lib/virtual/observe-scroll-offset"
 import { Search, Play, Pause, AlertCircle, Volume2 } from "lucide-react"
 import type { HeygenVoice } from "@/lib/api"
 import { useHeygenVoices, keylessCatalogHint, genderLabel } from "./heygen-catalog"
@@ -236,6 +237,8 @@ export const VoicePicker = memo(function VoicePicker({
     getScrollElement: () => parentRef.current,
     estimateSize: () => ROW_HEIGHT,
     overscan: 6,
+    // The library's observer leaves its is-scrolling reset timer running after unmount.
+    observeElementOffset: observeScrollOffset,
   })
 
   // -------------------------------------------------------------------------

@@ -4,6 +4,7 @@ import {
   useWindowVirtualizer,
   type VirtualItem,
 } from "@tanstack/react-virtual"
+import { observeScrollOffset, observeWindowScrollOffset } from "@/lib/virtual/observe-scroll-offset"
 
 /**
  * Row-virtualization for uniform fixed-height tile grids (gallery, library,
@@ -253,6 +254,8 @@ export function useVirtualGrid({
     ...commonOptions,
     scrollMargin,
     enabled: isWindow,
+    // The library's observers leave their is-scrolling reset timer running after unmount.
+    observeElementOffset: observeWindowScrollOffset,
   })
 
   const elementVirtualizer = useVirtualizer({
@@ -260,6 +263,7 @@ export function useVirtualGrid({
     getScrollElement: () => scrollElementRef?.current ?? detectedScrollParent,
     scrollMargin,
     enabled: !isWindow,
+    observeElementOffset: observeScrollOffset,
   })
 
   const virtualizer = isWindow ? windowVirtualizer : elementVirtualizer

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { Virtualizer } from "@tanstack/react-virtual"
-import { observeScrollOffset } from "../observe-scroll-offset"
+import { observeScrollOffset, observeWindowScrollOffset } from "../observe-scroll-offset"
 
 /** The parts of a virtualizer the observer reads. */
 function instance(el: HTMLElement, options: Partial<Virtualizer<HTMLElement, Element>["options"]> = {}) {
@@ -71,5 +71,65 @@ describe("observeScrollOffset", () => {
   it("observes nothing without a scroll element", () => {
     const none = { scrollElement: null, targetWindow: window, options: {} } as unknown as Virtualizer<HTMLElement, Element>
     expect(observeScrollOffset(none, vi.fn())).toBeUndefined()
+  })
+})
+
+/** A window virtualizer: its scroll element is the window itself. */
+function windowInstance(options: Partial<Virtualizer<Window, Element>["options"]> = {}) {
+  return {
+    scrollElement: window,
+    targetWindow: window,
+    options: { horizontal: false, isRtl: false, isScrollingResetDelay: 150, useScrollendEvent: false, ...options },
+  } as unknown as Virtualizer<Window, Element>
+}
+
+function scrollWindow(y: number, x = 0) {
+  Object.defineProperty(window, "scrollY", { value: y, configurable: true })
+  Object.defineProperty(window, "scrollX", { value: x, configurable: true })
+  window.dispatchEvent(new Event("scroll"))
+}
+
+describe("observeWindowScrollOffset", () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+    scrollWindow(0)
+  })
+
+  it("reports the window's scroll as scrolling, then its end once the reset delay passes", () => {
+    const cb = vi.fn()
+    const off = observeWindowScrollOffset(windowInstance(), cb)!
+    scrollWindow(120)
+    expect(cb).toHaveBeenLastCalledWith(120, true)
+    vi.advanceTimersByTime(150)
+    expect(cb).toHaveBeenLastCalledWith(120, false)
+    off()
+  })
+
+  it("reads scrollX when horizontal", () => {
+    const cb = vi.fn()
+    const off = observeWindowScrollOffset(windowInstance({ horizontal: true }), cb)!
+    scrollWindow(0, 64)
+    expect(cb).toHaveBeenLastCalledWith(64, true)
+    off()
+  })
+
+  it("cancels the pending reset on unsubscribe", () => {
+    const cb = vi.fn()
+    const off = observeWindowScrollOffset(windowInstance(), cb)!
+    scrollWindow(40)
+    off()
+    vi.advanceTimersByTime(1000)
+    expect(cb).toHaveBeenCalledTimes(1)
+    expect(vi.getTimerCount()).toBe(0)
+    scrollWindow(80)
+    expect(cb).toHaveBeenCalledTimes(1)
+  })
+
+  it("observes nothing without a window", () => {
+    const none = { scrollElement: null, targetWindow: null, options: {} } as unknown as Virtualizer<Window, Element>
+    expect(observeWindowScrollOffset(none, vi.fn())).toBeUndefined()
   })
 })
