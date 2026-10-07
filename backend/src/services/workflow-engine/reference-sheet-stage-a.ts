@@ -90,6 +90,8 @@ async function postGenerateAsset(
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     "X-Internal-Orchestrator-Secret": config.INTERNAL_ORCHESTRATOR_SECRET,
+    // The rate limiter's key; the body's userId stays the identity (#1888).
+    "X-Internal-User-Id": ctx.userId,
   }
   if (ctx.isAppRun) headers["X-App-Run"] = "true"
   const body: Record<string, unknown> = {

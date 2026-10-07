@@ -43,6 +43,10 @@ Each record carries: `id`, `collectionId`, `title`, `text`, `url`, `media` (link
 
 Free — reading a collection costs 0 credits.
 
+Reading works even when your media storage is full, because records are text.
+
+Workflow runs, from the editor or on the server, are not rate-limited here. A direct API call with an API token or an app token is limited to 120 reads a minute per token.
+
 ## Example: do not cover the same story twice
 
 ```

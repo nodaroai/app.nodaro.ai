@@ -581,15 +581,27 @@ describe("POST /v1/collections/:id/records", () => {
     expect(existing.eq).toHaveBeenCalledWith("idempotency_key", "wf-exec1-node1-0")
   })
 
-  it("answers 409 when the unique rule fired but the row is gone", async () => {
+  it("answers 409 only when the unique rule fires twice with the row gone both times (#1890: one retry)", async () => {
+    const DUP = { error: { code: "23505", message: "dup" } }
     tables({
       collections: [owned()],
-      collection_records: [makeQB({ error: { code: "23505", message: "dup" } }), makeQB({ data: null })],
+      collection_records: [makeQB(DUP), makeQB({ data: null }), makeQB(DUP), makeQB({ data: null })],
     })
     const app = await buildApp()
     const res = await app.inject({ method: "POST", url: `/v1/collections/${COLL}/records`, payload: { url: "https://t.me/telegram/441" } })
     expect(res.statusCode).toBe(409)
     expect(res.json().error.code).toBe("conflict")
+  })
+
+  it("a unique violation whose row is gone by the lookup is inserted again (#1890)", async () => {
+    tables({
+      collections: [owned()],
+      collection_records: [makeQB({ error: { code: "23505", message: "dup" } }), makeQB({ data: null }), makeQB({ data: recordRow() }), makeQB({ count: 1 })],
+      profiles: [profile()],
+    })
+    const app = await buildApp()
+    const res = await app.inject({ method: "POST", url: `/v1/collections/${COLL}/records`, payload: { url: "https://t.me/telegram/441" } })
+    expect(res.statusCode).toBe(201)
   })
 
   it("accepts a medium with a null poster, and a long text cut to whole characters", async () => {

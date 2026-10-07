@@ -107,6 +107,12 @@ export interface CreditGuardOpts {
    *  ee/lib/__tests__/check-only-credit-guard.test.ts, which fails when a
    *  new no-reserve route appears unclassified. */
   checkOnly?: boolean
+  /** This route stores no media, so the media storage quota does not apply:
+   *  a person over their quota can still save and read text (Save to
+   *  Collection / Read Collection, #1890). The account gates and the credit
+   *  check still run. The routes allowed to skip are pinned by
+   *  ee/lib/__tests__/check-only-credit-guard.test.ts. */
+  skipStorageCheck?: boolean
   /** The id `modelResolver` returns is the model the request RUNS on, so the
    *  surface deny reads it too. Routes whose provider field is optional (an
    *  omitted or unknown value runs on a default: text-to-speech,

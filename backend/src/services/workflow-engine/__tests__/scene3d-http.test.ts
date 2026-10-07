@@ -91,6 +91,8 @@ describe("Scene3D workflow authoring through its HTTP route", () => {
     expect(url).toMatch(/\/v1\/3d-scene\/generate$/)
     expect(JSON.parse(request.body)).toMatchObject({ prompt: "Match the camera", references: [video], userId: "user-1", workflowId: "workflow-1", nodeId: node.id, forcePrivate: true, fps: 24, durationSeconds: 4 })
     expect(request.headers["X-Internal-Orchestrator-Secret"]).toBe("x".repeat(40))
+    // The rate limiter keys an internal call on this; the body's userId stays the identity (#1888).
+    expect(request.headers["X-Internal-User-Id"]).toBe("user-1")
     expect(mocks.queue).not.toHaveBeenCalled()
     expect(ctx.onJobCreated).toHaveBeenCalledWith(node.id, "scene-job")
     expect(mocks.update).toHaveBeenCalledWith(expect.objectContaining({ workflow_execution_id: "execution-1" }))

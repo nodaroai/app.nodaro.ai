@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto"
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
-import { constantTimeEqualStr } from "../lib/constant-time.js"
+import { internalSecretMatches } from "../lib/internal-caller.js"
 import { supabase } from "../lib/supabase.js"
 import { config } from "../lib/config.js"
 import { warmAdminCache } from "../lib/admin-check.js"
@@ -336,7 +336,7 @@ export function registerAuthHook(app: FastifyInstance): void {
       internalSecretHeader !== undefined
     if (hasInternalHeader) {
       const provided = firstHeaderValue(internalSecretHeader)
-      if (typeof provided !== "string" || !constantTimeEqualStr(provided, config.INTERNAL_ORCHESTRATOR_SECRET)) {
+      if (!internalSecretMatches(provided)) {
         reply.status(403).send({
           error: { code: "forbidden", message: "Invalid internal orchestrator secret" },
         })

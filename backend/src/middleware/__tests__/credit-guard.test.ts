@@ -76,7 +76,7 @@ vi.mock("@/lib/credits-job-lifecycle.js", () => ({
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
-import { creditGuard, reserveCreditsForJob } from "../credit-guard.js"
+import { creditGuard, reserveCreditsForJob, type CreditGuardOpts } from "../credit-guard.js"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -93,7 +93,7 @@ function createSupabaseProfileChain(data: unknown, error: unknown = null) {
 }
 
 /** Build a minimal Fastify app with the creditGuard preHandler on a test route. */
-async function buildApp(modelResolver?: (req: unknown) => string): Promise<FastifyInstance> {
+async function buildApp(modelResolver?: (req: unknown) => string, guardOpts?: CreditGuardOpts): Promise<FastifyInstance> {
   const app = Fastify({ logger: false })
 
   // Simulate authenticated user via userId in the request body.
@@ -122,11 +122,12 @@ async function buildApp(modelResolver?: (req: unknown) => string): Promise<Fasti
   })
 
   app.post("/v1/test-route", {
-    preHandler: creditGuard(resolver),
+    preHandler: creditGuard(resolver, guardOpts),
   }, async (req) => {
     return {
       ok: true,
       creditReservation: req.creditReservation ?? null,
+      storageSnapshot: req.storageSnapshot ?? null,
     }
   })
 
@@ -283,6 +284,42 @@ describe("creditGuard", () => {
     expect(body.error.usedBytes).toBe(2_000_000_000)
     expect(body.error.quotaBytes).toBe(1_000_000_000)
     expect(body.error.tier).toBe("free")
+  })
+
+  it("skipStorageCheck lets an over-quota account through a route that stores no media (#1890)", async () => {
+    const profile = {
+      role: "user",
+      tier: "free",
+      subscription_tier: null,
+      subscription_credits: 50,
+      topup_credits: 0,
+      daily_spent_credits: 0,
+      last_daily_reset: new Date().toISOString(),
+      storage_used_bytes: 2_000_000_000,
+      storage_limit_bytes: 1_000_000_000,
+    }
+    mockFrom.mockReturnValue(createSupabaseProfileChain(profile))
+    mockCheckStorageLimitWithProfile.mockReturnValue({
+      allowed: false,
+      error: "Storage limit reached (1.0 GB)",
+      usedBytes: 2_000_000_000,
+      limitBytes: 1_000_000_000,
+    })
+    mockCheckCreditsWithProfile.mockResolvedValue({ allowed: true, balance: 50, required: 0, watermark: true })
+    app = await buildApp(undefined, { checkOnly: true, skipStorageCheck: true })
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/test-route",
+      payload: { userId: "user-1", provider: "flux" },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(mockCheckStorageLimitWithProfile).not.toHaveBeenCalled()
+    // No storage snapshot either: nothing downstream may treat the skip as a measurement.
+    expect(res.json().storageSnapshot).toBeNull()
+    // The credit check still runs: the option skips the quota, not the guard.
+    expect(mockCheckCreditsWithProfile).toHaveBeenCalled()
   })
 
   it("returns 402 when insufficient credits", async () => {

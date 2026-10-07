@@ -49,21 +49,33 @@ describe("mcpInject", () => {
     expect(r.calls[0].headers).not.toHaveProperty("x-nodaro-workspace")
   })
 
-  it("merges a route's own headers but does not let them override the two it owns", async () => {
+  it("merges a route's own headers but does not let them override the three it owns", async () => {
     const r = recorder()
     await mcpInject(r.fastify, session(WS), {
       method: "POST",
       url: "/v1/thing",
       headers: {
-        "x-internal-user-id": USER,
+        "x-internal-user-id": "00000000-0000-4000-8000-000000000999",
         "x-internal-orchestrator-secret": "forged",
         "x-nodaro-workspace": "20000000-0000-4000-8000-000000000009",
+        "x-route-own": "kept",
       },
     })
     const headers = r.calls[0].headers as Record<string, string>
     expect(headers["x-internal-user-id"]).toBe(USER)
     expect(headers["x-internal-orchestrator-secret"]).toBe("test-secret")
     expect(headers["x-nodaro-workspace"]).toBe(WS)
+    expect(headers["x-route-own"]).toBe("kept")
+  })
+
+  it("names the session's user on every request, a POST that passed no header included (#1888)", async () => {
+    // The rate limiter keys an internal request on this header; without it
+    // every MCP user on an instance shared one bucket (the loopback address).
+    for (const method of ["GET", "POST", "PATCH", "PUT", "DELETE"] as const) {
+      const r = recorder()
+      await mcpInject(r.fastify, session(), { method, url: "/v1/thing", payload: method === "GET" ? undefined : { a: 1 } })
+      expect((r.calls[0].headers as Record<string, string>)["x-internal-user-id"], method).toBe(USER)
+    }
   })
 
   it("omits payload and query rather than sending them undefined", async () => {

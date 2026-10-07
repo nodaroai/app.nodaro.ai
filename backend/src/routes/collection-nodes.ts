@@ -135,11 +135,36 @@ async function failJob(jobId: string, message: string) {
   await markJobFailed(jobId, { error_message: message })
 }
 
+/**
+ * The per-minute limit on the two node routes (#1890). They are run lanes:
+ * the editor's Run (a person's session) and the orchestrator (the internal
+ * secret) call them once per item of a fan-out, so a cap there would fail a
+ * long run halfway. A direct caller with an API token or an app token, the
+ * credentials the Collections API limits, gets that API's record rate per
+ * credential, so these routes are not a way around it. The limiter runs
+ * before auth, so it reads the credential's shape. A forged `ndr_` token is
+ * limited and then refused, and any other forged header is refused by auth.
+ */
+const MACHINE_CREDENTIAL = /^Bearer ndr_/
+function machineCredentialLimit(max: number) {
+  return {
+    rateLimit: {
+      max,
+      timeWindow: "1 minute",
+      allowList: (req: FastifyRequest) => !MACHINE_CREDENTIAL.test(req.headers.authorization ?? ""),
+    },
+  }
+}
+
 export async function collectionNodeRoutes(app: FastifyInstance): Promise<void> {
   // Save to Collection — 0 credits; the guard keeps the account gates and reserves nothing.
   // The same scope the Collections API asks of an app token for a record write;
   // the orchestrator's internal calls carry no app token and pass through.
-  app.post("/v1/collection-write", { preHandler: [requireAppScope("assets:write"), creditGuard(() => "collection-write", { checkOnly: true })] }, async (req, reply) => {
+  // A text record is not media, so the media storage quota does not apply.
+  app.post("/v1/collection-write", {
+    config: machineCredentialLimit(120),
+    preHandler: [requireAppScope("assets:write"), creditGuard(() => "collection-write", { checkOnly: true, skipStorageCheck: true })],
+  }, async (req, reply) => {
     const userId = req.userId
     if (!userId) return unauthorized(reply)
     const body = req.body as Record<string, unknown>
@@ -211,8 +236,11 @@ export async function collectionNodeRoutes(app: FastifyInstance): Promise<void> 
     return reply.status(status).send({ error: { code, message } })
   })
 
-  // Read Collection — 0 credits.
-  app.post("/v1/collection-read", { preHandler: [requireAppScope("assets:read"), creditGuard(() => "collection-read", { checkOnly: true })] }, async (req, reply) => {
+  // Read Collection — 0 credits. It reads text records, so no storage quota either.
+  app.post("/v1/collection-read", {
+    config: machineCredentialLimit(120),
+    preHandler: [requireAppScope("assets:read"), creditGuard(() => "collection-read", { checkOnly: true, skipStorageCheck: true })],
+  }, async (req, reply) => {
     const userId = req.userId
     if (!userId) return unauthorized(reply)
     const body = req.body as Record<string, unknown>

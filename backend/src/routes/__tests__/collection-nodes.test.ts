@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
+import rateLimit from "@fastify/rate-limit"
 
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: vi.fn() } }))
 vi.mock("@/lib/app-reports.js", () => ({ insertAppReport: vi.fn(async () => undefined) }))
@@ -184,6 +185,40 @@ describe("POST /v1/collection-write (Save to Collection)", () => {
     expect(replay.json().outcome).toBe("replayed")
   })
 
+  it("a duplicate whose row is gone by the lookup (evicted or deleted meanwhile) is written again, not refused (#1890)", async () => {
+    const DUP = { error: { code: "23505", message: 'violates unique constraint "uq_collection_records_dedupe"' } }
+    const used = tables({
+      collections: [owned()],
+      collection_records: [makeQB(DUP), makeQB({ data: null }), makeQB({ data: recordRow() })],
+      jobs: [makeQB()],
+    })
+    const app = await buildApp()
+    const res = await app.inject({ method: "POST", url: "/v1/collection-write", payload: { collectionId: COLL, link: "https://t.me/telegram/441" } })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().outcome).toBe("inserted")
+    expect(jobUpdate(used).status).toBe("completed")
+    const inserts = [...new Set(used.collection_records ?? [])]
+      .reduce((n, qb) => n + (qb.insert as ReturnType<typeof vi.fn>).mock.calls.length, 0)
+    expect(inserts).toBe(2)
+  })
+
+  it("a second miss is a conflict: the job fails plainly and the write answers 409, after exactly two inserts", async () => {
+    const DUP = { error: { code: "23505", message: 'violates unique constraint "uq_collection_records_dedupe"' } }
+    const used = tables({
+      collections: [owned()],
+      collection_records: [makeQB(DUP), makeQB({ data: null }), makeQB(DUP), makeQB({ data: null })],
+      jobs: [makeQB()],
+    })
+    const app = await buildApp()
+    const res = await app.inject({ method: "POST", url: "/v1/collection-write", payload: { collectionId: COLL, link: "https://t.me/telegram/441" } })
+    expect(res.statusCode).toBe(409)
+    expect(res.json().error.code).toBe("conflict")
+    expect(jobUpdate(used).status).toBe("failed")
+    const inserts = [...new Set(used.collection_records ?? [])]
+      .reduce((n, qb) => n + (qb.insert as ReturnType<typeof vi.fn>).mock.calls.length, 0)
+    expect(inserts).toBe(2)
+  })
+
   it("evicts past the self-host ceiling and reports it", async () => {
     tables({
       collections: [owned()],
@@ -295,5 +330,69 @@ describe("POST /v1/collection-read (Read Collection)", () => {
     expect(foreign.jobs).toBeUndefined()
     tables({ collections: [makeQB({ error: { code: "PGRST205" } })], jobs: [makeQB()] })
     expect((await app.inject({ method: "POST", url: "/v1/collection-read", payload: { collectionId: COLL } })).statusCode).toBe(503)
+  })
+})
+
+// The per-minute limit (#1890). These routes are run lanes: the editor's Run
+// (a person's session) and the orchestrator (no credential, the internal
+// secret) call them once per item of a fan-out and are never limited. A
+// direct caller with an API or app token is held to the Collections API's
+// record rate, per credential, so the node route is not a way around it.
+describe("the node routes' per-minute limit", () => {
+  async function buildLimitedApp(): Promise<FastifyInstance> {
+    const app = Fastify()
+    // Shaped like app.ts's rateLimitKeyGenerator for a credential request.
+    await app.register(rateLimit, {
+      global: false,
+      keyGenerator: (req) => {
+        const auth = req.headers.authorization
+        return typeof auth === "string" && auth.length > 0 ? `cred:${auth}` : "address"
+      },
+    })
+    app.addHook("preHandler", async (req) => {
+      ;(req as { userId?: string }).userId = USER
+    })
+    await app.register(collectionNodeRoutes)
+    return app
+  }
+
+  async function statuses(app: FastifyInstance, url: string, n: number, authorization?: string): Promise<number[]> {
+    const codes: number[] = []
+    for (let i = 0; i < n; i++) {
+      const res = await app.inject({
+        method: "POST",
+        url,
+        ...(authorization ? { headers: { authorization } } : {}),
+        payload: { collectionId: COLL, text: `item ${i}` },
+      })
+      codes.push(res.statusCode)
+    }
+    return codes
+  }
+
+  beforeEach(() => {
+    tables({ collections: [owned()], collection_records: [makeQB({ data: recordRow() })], jobs: [makeQB()] })
+  })
+
+  it("an API token gets 120 writes a minute; the 121st is refused, and another token is unaffected", async () => {
+    const app = await buildLimitedApp()
+    const codes = await statuses(app, "/v1/collection-write", 121, "Bearer ndr_token_one")
+    expect(codes.slice(0, 120).every((c) => c === 200)).toBe(true)
+    expect(codes[120]).toBe(429)
+    expect(await statuses(app, "/v1/collection-write", 1, "Bearer ndr_token_two")).toEqual([200])
+  })
+
+  it("an app token is limited on reads too", async () => {
+    tables({ collections: [owned()], collection_records: [makeQB({ data: [] })], jobs: [makeQB()] })
+    const app = await buildLimitedApp()
+    const codes = await statuses(app, "/v1/collection-read", 121, "Bearer ndr_app_token")
+    expect(codes[119]).toBe(200)
+    expect(codes[120]).toBe(429)
+  })
+
+  it("a person's session (the editor's Run) and an internal run are never limited", async () => {
+    const app = await buildLimitedApp()
+    expect((await statuses(app, "/v1/collection-write", 130, "Bearer eyJhbGciOi.session.sig")).every((c) => c === 200)).toBe(true)
+    expect((await statuses(app, "/v1/collection-write", 130)).every((c) => c === 200)).toBe(true)
   })
 })

@@ -689,6 +689,10 @@ async function executeSyncHttpNode(
     // Authenticate to the auth hook with the shared orchestrator secret — NOT req.ip,
     // which is always 127.0.0.1 behind the Caddy reverse proxy.
     "X-Internal-Orchestrator-Secret": config.INTERNAL_ORCHESTRATOR_SECRET,
+    // The user this call acts for, for the rate limiter (it runs before the
+    // body is read). The auth hook still takes the user from the body. Without
+    // it every run on an instance shared one bucket on a limited route (#1888).
+    "X-Internal-User-Id": ctx.userId,
   }
   // Propagate app-run context so the route's credit reservation applies the
   // free-tier app allowance gate (and avoids crediting allowance on app runs).
@@ -2500,6 +2504,8 @@ async function executeComponentNode(
       headers: {
         "Content-Type": "application/json",
         "X-Internal-Orchestrator-Secret": config.INTERNAL_ORCHESTRATOR_SECRET,
+        // The rate limiter's key; the body's userId stays the identity (#1888).
+        "X-Internal-User-Id": ctx.userId,
       },
       body: JSON.stringify({
         appSlug,

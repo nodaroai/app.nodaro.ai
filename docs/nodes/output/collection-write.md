@@ -48,6 +48,10 @@ The Save to Collection node is where a workflow's output lives after the run: ar
 
 Free — saving a record costs 0 credits.
 
+A record is text, not media, so it does not count against your media storage space. You can keep saving records even when your storage is full.
+
+Workflow runs, from the editor or on the server, are not rate-limited here, so a long list can save every item. A direct API call with an API token or an app token is limited to 120 records a minute per token, the same as the Collections API.
+
 ## Example: an article pipeline that remembers
 
 ```
