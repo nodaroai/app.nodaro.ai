@@ -28,20 +28,31 @@ function runAs(renderId: string, kind: "final" | "proxy", nodes: WorkflowNode[],
 }
 
 export interface RenderFinalControls {
-  readonly renderFinal: () => void
-  readonly updatePreview: () => void
+  /** Settles once the editor's handler has started the run or given up on it. */
+  readonly renderFinal: () => void | Promise<unknown>
+  readonly updatePreview: () => void | Promise<unknown>
   /** Credits Render final will charge; 0 outside credit editions. */
   readonly finalCredits: number
   /** Credits Update preview will charge; 0 outside credit editions or with the flag off. */
   readonly previewCredits: number
   /** Update preview exists only with the stop rule on (decided 2026-10-06). */
   readonly canUpdatePreview: boolean
+  /** A click on ANY render is waiting on its newer-run check (15 s at most,
+   *  decided 2026-10-07): both run buttons are disabled. The editor holds one
+   *  run click at a time (`handleRenderFinal`'s lock), so a click here would
+   *  otherwise be dropped without a word. */
+  readonly checkPending: boolean
+  /** This render's run whose click is waiting on that check: that button
+   *  alone shows it is busy (spinner, aria-busy). */
+  readonly checking: "final" | "proxy" | null
 }
 
 export function useRenderFinal(renderId: string): RenderFinalControls {
   const nodes = useWorkflowStore((s) => s.nodes)
   const edges = useWorkflowStore((s) => s.edges)
   const canUpdatePreview = runtimePreviewStopRule()
+  const checkPending = useWorkflowStore((s) => s.renderCheck != null)
+  const checking = useWorkflowStore((s) => (s.renderCheck?.renderId === renderId ? s.renderCheck.kind : null))
   const asFinal = useMemo(() => runAs(renderId, "final", nodes, edges), [renderId, nodes, edges])
   const asPreview = useMemo(
     () => (canUpdatePreview ? runAs(renderId, "proxy", nodes, edges) : { executable: NONE, graph: nodes }),
@@ -55,5 +66,7 @@ export function useRenderFinal(renderId: string): RenderFinalControls {
     finalCredits,
     previewCredits,
     canUpdatePreview,
+    checkPending,
+    checking,
   }
 }

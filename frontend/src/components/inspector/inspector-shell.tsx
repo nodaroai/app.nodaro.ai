@@ -34,6 +34,13 @@
  * outside the content: spread `INSPECTOR_POPPER` on their content so they are
  * `.nokey` too and their lists scroll (the modal's scroll lock cancels wheel
  * events outside the content).
+ *
+ * DIALOGS OPENED OVER AN INSPECTOR (the editor's run confirm, which Render final
+ * opens from the review inspector) are portalled beside it, and a default
+ * dialog's z-50 draws them underneath: Radix still gives the newest layer the
+ * pointer events, so the reviewer would face a frozen inspector with an
+ * invisible dialog holding the focus. Put `INSPECTOR_CHILD_DIALOG_Z` on such a
+ * dialog's content and its overlay.
  */
 import type { KeyboardEvent as ReactKeyboardEvent, ReactNode, SyntheticEvent } from "react"
 import { useCallback, useRef } from "react"
@@ -82,6 +89,12 @@ export interface InspectorShellProps {
 
 const stop = (e: SyntheticEvent) => e.stopPropagation()
 
+/** The inspector's own layer (overlay and content). */
+export const INSPECTOR_Z_VALUE = 9999
+export const INSPECTOR_Z = "z-[9999]"
+/** For a dialog that can open while an inspector is up: above `INSPECTOR_Z` (see the header). */
+export const INSPECTOR_CHILD_DIALOG_Z = "z-[10000]"
+
 /** Pointer gestures that must not reach the node the inspector was opened from. */
 const CONTAINED = { onClick: stop, onDoubleClick: stop, onContextMenu: stop } as const
 
@@ -109,7 +122,7 @@ export function InspectorShell({
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay
           data-slot="inspector-overlay"
-          className="fixed inset-0 z-[9999] bg-black/80"
+          className={cn("fixed inset-0 bg-black/80", INSPECTOR_Z)}
           // Keep focus in the dialog when the backdrop is pressed (a right-click
           // keeps a modal open but would otherwise blur it to <body>). Radix
           // dismisses on pointerdown/click, so a left click still closes it.
@@ -139,7 +152,8 @@ export function InspectorShell({
           onKeyDown={onKeyDown}
           tabIndex={-1}
           className={cn(
-            "nokey fixed left-1/2 top-1/2 z-[9999] -translate-x-1/2 -translate-y-1/2 flex flex-col",
+            "nokey fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col",
+            INSPECTOR_Z,
             "bg-background rounded-lg border border-border shadow-xl outline-none",
             SIZE_CLASS[size],
           )}
@@ -173,7 +187,7 @@ export function InspectorShell({
           <div className={cn("flex-1 min-h-0 overflow-auto p-4 flex flex-col gap-3", bodyClassName)}>
             {children}
           </div>
-          {footer && <div className="shrink-0 border-t border-border px-4 py-3">{footer}</div>}
+          {footer && <div data-slot="inspector-footer" className="shrink-0 border-t border-border px-4 py-3">{footer}</div>}
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>

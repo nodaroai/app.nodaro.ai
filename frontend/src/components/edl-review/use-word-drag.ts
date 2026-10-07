@@ -11,8 +11,10 @@
  *  - near the top or bottom edge of the scroller the transcript scrolls on its
  *    own (one step per frame) and the focus follows;
  *  - shift-click moves the focus of the selection there is;
- *  - a press on a word focuses the scroller (cancelling pointerdown would
- *    otherwise leave focus where it was, e.g. in the find box);
+ *  - a press on a word focuses its row (cancelling pointerdown would
+ *    otherwise leave focus where it was, e.g. in the find box), so Escape
+ *    knows which expanded run the reviewer is in (escape-layers.ts); the
+ *    scroller takes it when the word is in no focusable row;
  *  - a press that never reaches another word is a CLICK on that word
  *    (`onWordClick`), and leaves no selection.
  * Words carry `user-select: none`, so the browser draws no selection of its own.
@@ -67,7 +69,8 @@ export function useWordDrag(options: WordDragOptions): WordDrag {
     // which preventDefault on pointerdown suppresses: Del and R go to the
     // transcript, not to the find box the reviewer typed in before.
     event.preventDefault()
-    latest.current.scrollRef.current?.focus({ preventScroll: true })
+    const row = event.target instanceof Element ? event.target.closest<HTMLElement>("[data-review-row]") : null
+    ;(row ?? latest.current.scrollRef.current)?.focus({ preventScroll: true })
     const current = latest.current.selection
     if (event.shiftKey && current) {
       latest.current.onSelect(extendSelection(current, word))

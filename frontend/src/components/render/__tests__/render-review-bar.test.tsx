@@ -9,6 +9,8 @@ const controls = {
   finalCredits: 530,
   previewCredits: 144,
   canUpdatePreview: true,
+  checking: null as "final" | "proxy" | null,
+  checkPending: false,
 }
 vi.mock("@/hooks/use-render-final", () => ({ useRenderFinal: () => controls }))
 vi.mock("@/lib/edition", () => ({ hasCredits: () => true }))
@@ -24,6 +26,8 @@ beforeEach(() => {
   controls.renderFinal.mockClear()
   controls.updatePreview.mockClear()
   controls.canUpdatePreview = true
+  controls.checking = null
+  controls.checkPending = false
 })
 afterEach(() => cleanup())
 
@@ -48,5 +52,37 @@ describe("RenderReviewBar", () => {
     const button = screen.getByText(/Render final/).closest("button")!
     expect(button.disabled).toBe(true)
     expect(button.title).toMatch(/run is in progress/)
+  })
+
+  // Decided 2026-10-07: while the click's newer-run check is out (15 s at most),
+  // both buttons are disabled; only the clicked one is busy (spinner, aria-busy).
+  it.each([
+    ["final", /Render final/, /Update preview/],
+    ["proxy", /Update preview/, /Render final/],
+  ] as const)("while %s's newer-run check is out, both buttons wait and only that one is busy", (kind, clicked, other) => {
+    controls.checking = kind
+    controls.checkPending = true
+    render(<RenderReviewBar renderId="r" busy={false} />)
+    const on = screen.getByText(clicked).closest("button")!
+    const off = screen.getByText(other).closest("button")!
+    expect(on.getAttribute("aria-busy")).toBe("true")
+    expect(on.disabled).toBe(true)
+    expect(on.querySelector("[data-testid=check-spinner]")).not.toBeNull()
+    expect(off.getAttribute("aria-busy")).toBeNull()
+    expect(off.disabled).toBe(true)
+    expect(off.querySelector("[data-testid=check-spinner]")).toBeNull()
+  })
+
+  // The editor holds one run click at a time, so while another render's check
+  // is out a click here would be swallowed: both wait, neither spins.
+  it("while another render's newer-run check is out, both buttons wait and neither is busy", () => {
+    controls.checkPending = true
+    render(<RenderReviewBar renderId="r" busy={false} />)
+    for (const name of [/Render final/, /Update preview/]) {
+      const b = screen.getByText(name).closest("button")!
+      expect(b.disabled).toBe(true)
+      expect(b.getAttribute("aria-busy")).toBeNull()
+      expect(b.querySelector("[data-testid=check-spinner]")).toBeNull()
+    }
   })
 })

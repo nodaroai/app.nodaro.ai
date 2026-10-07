@@ -5,21 +5,23 @@
  * `InspectorShell` anchored at one render, built on the review model
  * (`useReviewModel`, `useReviewEdits`, `useReviewChecks`).
  *
- * This is the frame (A3-3a): the header and the transcript pane, with its
- * rows, span popover, selection toolbar and find bar. The reasons panel, the
- * footer and the banners (A3-3b), and the player and minimap (A3-4) slot in
- * beside the transcript later. NOTHING in the editor opens it until A3-5 adds
+ * The header, the transcript pane (its rows, span popover, selection toolbar
+ * and find bar), the reasons panel, the banners and the footer with its gate;
+ * below `sm` the panes become tabs (review-body.tsx). The player and the
+ * minimap (A3-4) slot in later. NOTHING in the editor opens it until A3-5 adds
  * the entry points (§2.7); its tests mount it directly.
  *
  * KEYS, all inside the dialog only (the canvas's own shortcuts stand down
  * under a modal, and keys typed in a portalled menu are the menu's): ⌘Z / ⇧⌘Z
- * undo and redo the review (R8 a); ⌘F find; with a selection, Del cuts it, R
+ * undo and redo the review (R8 a); ⌘F find (below `sm`, from the Cuts or
+ * Issues tab too: it switches to Transcript); with a selection, Del cuts it, R
  * restores it and ⌘C copies its words.
  *
  * ESCAPE closes the innermost layer first (§2.4): the span popover (a Radix
  * layer, which closes itself), then the selection toolbar, then the find bar,
- * then the run the reviewer expanded last, and only then the dialog. Closing, by
- * any route, writes the pending edit first (`flush`).
+ * then the expanded run that has focus (decided 2026-10-06), and only then the
+ * dialog. Closing, by any route, writes the pending edit first (`flush`), as
+ * do Render final and Update preview (`useReviewRuns`).
  */
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react"
 import { Scissors } from "lucide-react"
@@ -27,11 +29,14 @@ import { InspectorShell } from "@/components/inspector/inspector-shell"
 import { useReviewChecks } from "@/hooks/use-review-checks"
 import { useReviewEdits } from "@/hooks/use-review-edits"
 import { useReviewModel } from "@/hooks/use-review-model"
+import { useReviewRuns } from "@/hooks/use-review-runs"
+import { SM_UP, useMediaQuery } from "@/hooks/use-media-query"
 import { useT } from "@/lib/i18n"
 import { copyToClipboard } from "@/lib/utils"
 import { ReviewActions, ReviewMeta, ReviewTitle, type ReviewView } from "./review-header"
+import { ReviewBody, type ReviewBodyHandle } from "./review-body"
+import { ReviewFooter } from "./review-footer"
 import { ReviewJsonView } from "./review-json-view"
-import { TranscriptPane, type TranscriptPaneHandle } from "./transcript-pane"
 
 export interface ReviewInspectorProps {
   readonly open: boolean
@@ -58,8 +63,10 @@ function OpenReviewInspector({ renderId: anchoredAt, onClose, onRenderChange }: 
   const model = useReviewModel(renderId)
   const edits = useReviewEdits(model)
   const checks = useReviewChecks(model, edits)
+  const runs = useReviewRuns(model, edits, checks)
+  const wide = useMediaQuery(SM_UP)
   const [view, setView] = useState<ReviewView>("cut")
-  const pane = useRef<TranscriptPaneHandle | null>(null)
+  const pane = useRef<ReviewBodyHandle | null>(null)
 
   const close = useCallback(() => {
     edits.flush()
@@ -124,6 +131,9 @@ function OpenReviewInspector({ renderId: anchoredAt, onClose, onRenderChange }: 
       }
       onEscapeKeyDown={onEscapeKeyDown}
       onKeyDown={onKeyDown}
+      // Decided here, not by the footer returning null: the shell draws its
+      // bordered band for any footer element it is given.
+      footer={model.base && runs.gate.mode !== "hidden" ? <ReviewFooter model={model} edits={edits} runs={runs} compact={!wide} /> : undefined}
       bodyClassName="p-0 gap-0"
     >
       {!model.base ? (
@@ -131,8 +141,7 @@ function OpenReviewInspector({ renderId: anchoredAt, onClose, onRenderChange }: 
       ) : view === "json" ? (
         <ReviewJsonView edited={editedValue} planned={model.plan} />
       ) : (
-        // A3-3b and A3-4 add the reasons panel, the player and the footer around the transcript.
-        <TranscriptPane ref={pane} model={model} edits={edits} />
+        <ReviewBody ref={pane} model={model} edits={edits} checks={checks} runs={runs} wide={wide} />
       )}
     </InspectorShell>
   )

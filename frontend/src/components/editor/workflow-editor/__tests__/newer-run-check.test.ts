@@ -10,12 +10,13 @@ const mockPatches = vi.fn()
 const mockUpdateNodeData = vi.fn()
 const mockToastError = vi.fn()
 const mockToastSuccess = vi.fn()
+const store = vi.hoisted(() => ({ isReadOnly: false }))
 
 vi.mock("sonner", () => ({ toast: { error: (...a: unknown[]) => mockToastError(...a), success: (...a: unknown[]) => mockToastSuccess(...a) } }))
 vi.mock("@/lib/api", () => ({ listWorkflowExecutions: (...a: unknown[]) => mockList(...a) }))
 vi.mock("@/hooks/use-workflow-persistence", () => ({ TERMINAL_RESTORABLE_STATUSES: "completed,failed", restoreEndedEditorRun: vi.fn() }))
 vi.mock("@/hooks/use-workflow-store", () => ({
-  useWorkflowStore: { getState: () => ({ updateNodeData: (...a: unknown[]) => mockUpdateNodeData(...a) }) },
+  useWorkflowStore: { getState: () => ({ isReadOnly: store.isReadOnly, updateNodeData: (...a: unknown[]) => mockUpdateNodeData(...a) }) },
 }))
 vi.mock("../render-final-checks", () => ({ newerRunPatches: (...a: unknown[]) => mockPatches(...a) }))
 
@@ -27,6 +28,7 @@ beforeEach(() => {
   mockUpdateNodeData.mockReset()
   mockToastError.mockReset()
   mockToastSuccess.mockReset()
+  store.isReadOnly = false
 })
 
 describe("newerRunOnServer", () => {
@@ -51,8 +53,22 @@ describe("newerRunOnServer", () => {
 
 describe("loading the newer run", () => {
   it("applyNewerRun writes each node's data", () => {
-    applyNewerRun({ a: { x: 1 } as never, b: { y: 2 } as never })
+    expect(applyNewerRun({ a: { x: 1 } as never, b: { y: 2 } as never })).toBe(true)
     expect(mockUpdateNodeData.mock.calls).toEqual([["a", { x: 1 }], ["b", { y: 2 }]])
+  })
+
+  it("applyNewerRun writes nothing on a read-only canvas, and says so", () => {
+    store.isReadOnly = true
+    expect(applyNewerRun({ a: { x: 1 } as never })).toBe(false)
+    expect(mockUpdateNodeData).not.toHaveBeenCalled()
+  })
+
+  it("refuseForNewerRun claims no load on a read-only canvas", () => {
+    store.isReadOnly = true
+    refuseForNewerRun({ a: { x: 1 } as never })
+    const action = (mockToastError.mock.calls[0]![1] as { action: { onClick: () => void } }).action
+    action.onClick()
+    expect(mockToastSuccess).not.toHaveBeenCalled()
   })
 
   it("refuseForNewerRun offers the one click that loads it", () => {

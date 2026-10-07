@@ -10,7 +10,13 @@
  *
  *  1. Apply EDL's rule on what the render would send (TA1 a);
  *  2. a newer run the canvas does not show (TA3 c): the final would otherwise
- *     bill an older plan (newer-run-check.ts, the review inspector's check too);
+ *     bill an older plan (newer-run-check.ts, the review inspector's check too).
+ *     It waits 15 s at most, with every render's run buttons disabled (the
+ *     lock below drops any other click meanwhile) and the clicked one busy
+ *     (`renderCheck`), then goes ahead with a warning (decided 2026-10-07).
+ *     A newer run that answers
+ *     later still stops the run up to its submission (`runWorkflow`), never
+ *     after;
  *  3. Render final only: nothing changed since the last final (TA15 a), which
  *     asks first rather than refuses;
  *  4. the run's confirm, priced on the overridden graph — never the canvas,
@@ -42,7 +48,7 @@ import { previewRunnable } from "./preview-gate"
 import { liveExecutable } from "./run-from-here-set"
 import { renderFinalRunSet, renderRunOverrides } from "./render-final-set"
 import { finalIsUnchanged, renderRuleVerdict } from "./render-final-checks"
-import { newerRunOnServer, refuseForNewerRun } from "./newer-run-check"
+import { NEWER_RUN_UNCHECKED, refuseForNewerRun, startNewerRunCheck, type NewerRunCheck } from "./newer-run-check"
 import {
   attachToRunningExecution,
   clearConnectedListRows,
@@ -65,6 +71,14 @@ function ruleRefusalText(issues: readonly string[]): string {
   if (issues.length === 1 && issues[0] === NO_EDL) return tx("renderFinal.noEdl")
   const shown = issues.slice(0, ISSUES_SHOWN).join("; ")
   return tx("renderFinal.ruleRefusal", { issues: issues.length > ISSUES_SHOWN ? `${shown}; …` : shown })
+}
+
+/** The click's newer-run check has answered "newer" by now (in time or late): refuse. */
+function refusedLate(check: NewerRunCheck): boolean {
+  const late = check.answer()
+  if (!late) return false
+  refuseForNewerRun(late)
+  return true
 }
 
 /** A save that came back refused (`SaveResult`), as opposed to one that did not say. */
@@ -93,6 +107,7 @@ export async function handleRenderFinal(
   }
   _renderFinalLock = true
   try {
+    let check: NewerRunCheck
     const st = useWorkflowStore.getState()
     const render = st.nodes.find((n) => n.id === renderId)
     if (!render || !PREVIEW_RENDER_NODE_TYPES.has(render.type ?? "")) return
@@ -114,8 +129,16 @@ export async function handleRenderFinal(
         toast.error(ruleRefusalText(verdict.issues))
         return
       }
-      const newer = await newerRunOnServer(workflowId, st.nodes, st.edges)
-      if (newer) {
+      check = startNewerRunCheck(workflowId, st.nodes, st.edges)
+      st.setRenderCheck({ renderId, kind })
+      let newer: Awaited<NewerRunCheck["withinLimit"]>
+      try {
+        newer = await check.withinLimit
+      } finally {
+        useWorkflowStore.getState().setRenderCheck(null)
+      }
+      if (newer === NEWER_RUN_UNCHECKED) toast.warning(tx("renderFinal.newerUnchecked"))
+      else if (newer) {
         refuseForNewerRun(newer)
         return
       }
@@ -134,6 +157,8 @@ export async function handleRenderFinal(
       if (!(await confirmRunOrAbort(ctx, exec, overridden, st.edges, kind === "final" ? "render-final" : "update-preview", kind === "final", false, renderId))) return
       if (!(await ensureVideoLinksBeforeRun(exec.map((n) => n.id), setIsRunning))) return
     }
+    // A newer run that answered late, while the confirms were open.
+    if (refusedLate(check)) return
     if (refuseWhileReadOnly()) return
     rejectAllManualEdits()
     const { nodes, edges } = collapseExpandedClones()
@@ -186,6 +211,14 @@ export async function handleRenderFinal(
         toast.error(tx("renderFinal.saveFailed"))
         return
       }
+    }
+
+    // The last point a late answer counts: the run is not submitted yet.
+    if (refusedLate(check)) {
+      undoReset()
+      setIsRunning(false)
+      markNodesStatus(executableIds, undefined)
+      return
     }
 
     toast.info(tx(kind === "final" ? "renderFinal.toastFinal" : "renderFinal.toastPreview"), {

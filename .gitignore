@@ -36,6 +36,9 @@ venv/
 coverage/
 .DS_Store
 .playwright-mcp/
+# Playwright runs (frontend/playwright*.config.ts)
+test-results/
+playwright-report/
 supabase/.temp/
 
 # Scraped pages / scratch dumps — never commit (see OSS-readiness audit)

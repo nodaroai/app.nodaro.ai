@@ -701,9 +701,15 @@ interface WorkflowState {
   readonly setRunSelected: (fn: (() => void) | null) => void
   /** Render final (`"final"`) or Update preview (`"proxy"`) on a render node:
    *  a run of the review's render set with the render's quality overridden for
-   *  that run only (`render-final-handler.ts`). Null while the canvas is read-only. */
-  readonly renderFinal: ((renderId: string, kind: "final" | "proxy") => void) | null
-  readonly setRenderFinal: (fn: ((renderId: string, kind: "final" | "proxy") => void) | null) => void
+   *  that run only (`render-final-handler.ts`). Null while the canvas is read-only.
+   *  Returns the handler's promise, which settles once the run has started or
+   *  been given up on. */
+  readonly renderFinal: ((renderId: string, kind: "final" | "proxy") => void | Promise<unknown>) | null
+  readonly setRenderFinal: (fn: ((renderId: string, kind: "final" | "proxy") => void | Promise<unknown>) | null) => void
+  /** The Render final / Update preview click whose newer-run check is out
+   *  (at most 15 s, decided 2026-10-07): that button shows it is busy. */
+  readonly renderCheck: { readonly renderId: string; readonly kind: "final" | "proxy" } | null
+  readonly setRenderCheck: (check: { readonly renderId: string; readonly kind: "final" | "proxy" } | null) => void
   /** Opens the canvas add-node popup anchored to a specific handle. Wired
    *  by `workflow-canvas.tsx` at mount; consumed by HandleWithPopover's
    *  "Add new" affordance. Null when the canvas isn't mounted. */
@@ -2811,6 +2817,8 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
   setRunSelected: (fn) => set({ runSelected: fn }),
   renderFinal: null,
   setRenderFinal: (fn) => set({ renderFinal: fn }),
+  renderCheck: null,
+  setRenderCheck: (check) => set({ renderCheck: check }),
   openAddNodePopupForHandle: null,
   setOpenAddNodePopupForHandle: (fn) => set({ openAddNodePopupForHandle: fn }),
   onNodeCreated: null,

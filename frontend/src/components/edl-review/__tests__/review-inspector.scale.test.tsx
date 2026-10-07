@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react"
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react"
 
 vi.mock("@xyflow/react", () => ({
   applyNodeChanges: vi.fn((_changes, nodes) => nodes),
@@ -11,7 +11,7 @@ import { editPlanBasis } from "@nodaro/shared"
 import { resetUndoStacks } from "@/lib/edl-review/undo-stack"
 import { threeHourSession } from "@/lib/edl-review/__tests__/three-hour-fixture"
 import { TRANSCRIPT_OVERSCAN } from "../transcript-pane"
-import { ROW_PX, VIEWPORT_PX, layOut, loadCanvas, mountInspector, planData, wordEl } from "./review-test-canvas"
+import { ROW_PX, VIEWPORT_PX, escape, key, layOut, loadCanvas, mountInspector, planData, wordEl, wordGestures } from "./review-test-canvas"
 
 /**
  * The inspector on the 3-hour episode (§7 of the inspectors design): ~30k
@@ -109,5 +109,25 @@ describe("the 3-hour transcript", () => {
     expect(edit.edl.dropped.filter((d) => d.inMs >= after)).toEqual(
       base.dropped!.filter((d) => d.inMs >= after).map(({ inMs, outMs, reason }) => ({ inMs, outMs, reason })),
     )
+  })
+
+  it("returns focus to the row that had it when find scrolled it out of the DOM, and shows it again (decided 2026-10-07)", async () => {
+    mountInspector()
+    wordGestures(page).click(0)
+    const row = () => wordEl(0)?.closest("[data-review-row]") ?? null
+    await waitFor(() => expect(document.activeElement).toBe(row()))
+    key("f", { metaKey: true })
+    const input = await screen.findByRole("textbox", { name: "Find in transcript" })
+    fireEvent.change(input, { target: { value: "word2500" } })
+    await waitFor(() => expect(within(screen.getByRole("dialog")).getByText(/^1 of \d+$/)).toBeTruthy())
+    // The match is far down: the row that had focus is no longer in the DOM.
+    await waitFor(() => expect(scroller().scrollTop).toBeGreaterThan(0))
+    await waitFor(() => expect(wordEl(0)).toBeNull())
+    escape()
+    // Keys never fall to <body> while the row comes back into view.
+    expect(scroller().contains(document.activeElement)).toBe(true)
+    await waitFor(() => expect(row()).not.toBeNull())
+    await waitFor(() => expect(document.activeElement).toBe(row()))
+    expect(scroller().scrollTop).toBeLessThan(VIEWPORT_PX)
   })
 })

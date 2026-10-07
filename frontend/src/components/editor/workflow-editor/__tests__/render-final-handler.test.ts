@@ -19,13 +19,15 @@ const mockUnchanged = vi.fn()
 const mockListExecutions = vi.fn()
 const mockUpdateNodeData = vi.fn()
 const mockGate = vi.fn()
+const mockToastWarning = vi.fn()
+const mockSetRenderCheck = vi.fn()
 type TestNode = { id: string; type: string; position: { x: number; y: number }; data: Record<string, unknown> }
 let mockNodes: TestNode[] = []
 let mockEdges: unknown[] = []
 let mockDirty = false
 
 vi.mock("sonner", () => ({
-  toast: { error: (...a: unknown[]) => mockToastError(...a), success: vi.fn(), info: (...a: unknown[]) => mockToastInfo(...a), warning: vi.fn() },
+  toast: { error: (...a: unknown[]) => mockToastError(...a), success: vi.fn(), info: (...a: unknown[]) => mockToastInfo(...a), warning: (...a: unknown[]) => mockToastWarning(...a) },
 }))
 vi.mock("@/hooks/use-workflow-store", () => ({
   useWorkflowStore: {
@@ -33,6 +35,7 @@ vi.mock("@/hooks/use-workflow-store", () => ({
       nodes: mockNodes, edges: mockEdges,
       updateNodeData: (...a: unknown[]) => mockUpdateNodeData(...a),
       markNodesStatus: (...a: unknown[]) => mockMarkNodesStatus(...a),
+      setRenderCheck: (...a: unknown[]) => mockSetRenderCheck(...a),
       isDirty: mockDirty, workflowId: "wf-1", isReadOnly: false,
     }),
   },
@@ -96,6 +99,7 @@ const { handleRenderFinal } = await import("../render-final-handler")
 const { detachActiveWorkflowStream, RUN_CONFIRM_CREDITS } = await import("../run-handlers")
 
 afterEach(() => {
+  vi.useRealTimers()
   detachActiveWorkflowStream()
   delete window.__NODARO_RUNTIME__
 })
@@ -419,5 +423,144 @@ describe("a run already in progress", () => {
     mockRunWorkflow.mockRejectedValue(new MockAlreadyRunning("busy"))
     await run("final")
     expect(mockToastInfo).toHaveBeenCalledWith(expect.stringMatching(/run is in progress/))
+  })
+})
+
+// The click's own newer-run check (decided 2026-10-07): the same 15 s limit as
+// the inspector's open-time check, a busy state on the clicked button while it
+// is out, and an answer that lands late still counts until the run is
+// submitted (the `runWorkflow` call), never after.
+describe("the click's newer-run check has 15 s", () => {
+  const PATCHES = { plan: { label: "plan", generatedJson: { segments: [] } } }
+  /** A listing that answers only when the test says so. */
+  function hangListing() {
+    let answer!: (v: { data: unknown[] }) => void
+    mockListExecutions.mockImplementation(() => new Promise((resolve) => { answer = resolve }))
+    return {
+      /** Answer now; `newer` makes that answer a newer run. */
+      answer: (newer: boolean) => {
+        mockNewerPatches.mockReturnValue(newer ? PATCHES : {})
+        answer({ data: [{ id: "later" }] })
+      },
+    }
+  }
+  function deferred<T>() {
+    let resolve!: (v: T) => void
+    const promise = new Promise<T>((r) => { resolve = r })
+    return { promise, resolve }
+  }
+  const newerRunRefused = () => mockToastError.mock.calls.some(([m]) => /newer run/.test(String(m)))
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
+  it("holds the run for 15 s, then lets it go with the \"Couldn't check for a newer run\" warning", async () => {
+    hangListing()
+    const done = run("final")
+    await vi.advanceTimersByTimeAsync(14_999)
+    expect(mockRunWorkflow).not.toHaveBeenCalled()
+    expect(mockToastWarning).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
+    await done
+    expect(mockToastWarning).toHaveBeenCalledWith(expect.stringMatching(/Couldn't check for a newer run/))
+    expect(mockRunWorkflow).toHaveBeenCalledTimes(1)
+  })
+
+  it("Update preview gets the same 15 s", async () => {
+    hangListing()
+    const done = run("proxy")
+    await vi.advanceTimersByTimeAsync(15_000)
+    await done
+    expect(mockToastWarning).toHaveBeenCalledWith(expect.stringMatching(/Couldn't check for a newer run/))
+    expect(mockRunWorkflow).toHaveBeenCalledTimes(1)
+  })
+
+  it("marks the clicked render and kind busy while the check is out, and clears it when the check gives up", async () => {
+    hangListing()
+    let atConfirm: unknown = "never asked"
+    const confirmRun = vi.fn(async () => {
+      atConfirm = mockSetRenderCheck.mock.calls.at(-1)?.[0]
+      return true
+    })
+    const done = run("final", makeCtx({ confirmRun }))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(mockSetRenderCheck).toHaveBeenLastCalledWith({ renderId: "cut", kind: "final" })
+    await vi.advanceTimersByTimeAsync(15_000)
+    await done
+    expect(confirmRun).toHaveBeenCalledTimes(1)
+    expect(atConfirm).toBeNull() // no spinner behind the confirm
+    expect(mockSetRenderCheck).toHaveBeenLastCalledWith(null)
+  })
+
+  it("an answer in time: no warning, and the busy state clears with it", async () => {
+    const listing = hangListing()
+    const done = run("final")
+    await vi.advanceTimersByTimeAsync(2_000)
+    expect(mockSetRenderCheck).toHaveBeenLastCalledWith({ renderId: "cut", kind: "final" })
+    listing.answer(false)
+    await done
+    expect(mockSetRenderCheck).toHaveBeenLastCalledWith(null)
+    expect(mockToastWarning).not.toHaveBeenCalled()
+    expect(mockRunWorkflow).toHaveBeenCalledTimes(1)
+  })
+
+  it("a newer run that answers late, while the confirm is open, still stops the run", async () => {
+    const listing = hangListing()
+    const confirm = deferred<boolean>()
+    const confirmRun = vi.fn(() => confirm.promise)
+    const done = run("final", makeCtx({ confirmRun }))
+    await vi.advanceTimersByTimeAsync(15_000)
+    // The check gave up and the confirm is open: the answer below is late.
+    expect(mockToastWarning).toHaveBeenCalledWith(expect.stringMatching(/Couldn't check for a newer run/))
+    expect(confirmRun).toHaveBeenCalledTimes(1)
+    listing.answer(true)
+    await vi.advanceTimersByTimeAsync(0)
+    confirm.resolve(true)
+    await done
+    expect(mockRunWorkflow).not.toHaveBeenCalled()
+    expect(newerRunRefused()).toBe(true)
+    expect(mockMarkNodesStatus).not.toHaveBeenCalled()
+  })
+
+  it("a newer run that answers late, during the save, still stops the run and gives the nodes back", async () => {
+    mockDirty = true
+    const BATCH = [{ url: "a.mp4" }, { url: "b.mp4" }]
+    mockNodes = [PLAN, n("cut", "apply-edl", { quality: "proxy", __listResults: BATCH, __listTotal: 2 }), CAP]
+    const listing = hangListing()
+    const saving = deferred<{ success: boolean }>()
+    const setIsRunning = vi.fn()
+    const done = handleRenderFinal("cut", "final", makeCtx() as never, "p1", vi.fn(() => saving.promise), setIsRunning)
+    await vi.advanceTimersByTimeAsync(15_000)
+    listing.answer(true)
+    await vi.advanceTimersByTimeAsync(0)
+    saving.resolve({ success: true })
+    await done
+    expect(mockRunWorkflow).not.toHaveBeenCalled()
+    expect(newerRunRefused()).toBe(true)
+    expect(mockMarkNodesStatus).toHaveBeenLastCalledWith(["cut", "cap"], undefined)
+    expect(setIsRunning).toHaveBeenLastCalledWith(false)
+    // The run cleared the render's Preview batch before the save; nothing ran, so it is back.
+    expect(mockUpdateNodeData).toHaveBeenCalledWith("cut", expect.objectContaining({ __listResults: undefined }))
+    expect(mockUpdateNodeData).toHaveBeenLastCalledWith("cut", expect.objectContaining({ __listResults: BATCH, __listTotal: 2 }))
+  })
+
+  it("an answer that lands after the run is submitted is ignored", async () => {
+    const listing = hangListing()
+    const done = run("final")
+    await vi.advanceTimersByTimeAsync(15_000)
+    await done
+    expect(mockRunWorkflow).toHaveBeenCalledTimes(1)
+    listing.answer(true)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(newerRunRefused()).toBe(false)
+    expect(mockRunWorkflow).toHaveBeenCalledTimes(1)
+  })
+
+  it("clears the busy state when the handler gives up for another reason", async () => {
+    mockListExecutions.mockResolvedValue({ data: [] })
+    mockNewerPatches.mockReturnValue(PATCHES)
+    await run("final")
+    expect(mockSetRenderCheck).toHaveBeenLastCalledWith(null)
   })
 })

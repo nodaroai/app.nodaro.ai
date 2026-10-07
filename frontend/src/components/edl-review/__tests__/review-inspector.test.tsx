@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react"
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react"
 
 vi.mock("@xyflow/react", () => ({
   applyNodeChanges: vi.fn((_changes, nodes) => nodes),
@@ -10,13 +10,13 @@ const copy = vi.hoisted(() => vi.fn())
 vi.mock("@/lib/utils", async (importOriginal) => ({ ...(await importOriginal<Record<string, unknown>>()), copyToClipboard: copy }))
 
 import { resetUndoStacks } from "@/lib/edl-review/undo-stack"
-import { COLLAPSED_ROW_PX, PLAN, ROW_PX, layOut, loadCanvas, mountInspector, planData, wordEl } from "./review-test-canvas"
+import { PLAN, dialog, escape, key, layOut, loadCanvas, mountInspector, planData, wordEl, wordGestures } from "./review-test-canvas"
 
 /**
  * The review inspector's frame (A3-3a): the header, the transcript and its
- * layers — span popover, selection toolbar, find bar — and Escape's order
- * (§2.4 of the inspectors design). Nothing in the editor opens it yet (A3-5),
- * so it is mounted directly.
+ * layers — span popover, selection toolbar, find bar. Collapsed runs and
+ * Escape's order are in review-inspector.runs.test.tsx. Nothing in the editor
+ * opens it yet (A3-5), so it is mounted directly.
  */
 let page: ReturnType<typeof layOut>
 beforeEach(() => {
@@ -30,22 +30,8 @@ afterEach(() => {
   page.restore()
 })
 
-const dialog = () => screen.getByRole("dialog")
-const key = (k: string, init: KeyboardEventInit = {}) => fireEvent.keyDown(document.activeElement ?? dialog(), { key: k, ...init })
-const escape = () => key("Escape")
-
-/** Press on word `from`, drag to word `to`, release. */
-function drag(from: number, to: number) {
-  fireEvent.pointerDown(wordEl(from)!, { button: 0 })
-  page.pointAt(wordEl(to))
-  fireEvent.pointerMove(window)
-  fireEvent.pointerUp(window)
-}
-/** A click on word `i`: a press that never reaches another word. */
-function click(i: number) {
-  fireEvent.pointerDown(wordEl(i)!, { button: 0 })
-  fireEvent.pointerUp(window)
-}
+const drag = (from: number, to: number) => wordGestures(page).drag(from, to)
+const click = (i: number) => wordGestures(page).click(i)
 
 describe("the frame", () => {
   it("is titled by the plan and the render, and badges the take and the render rule", () => {
@@ -62,7 +48,7 @@ describe("the frame", () => {
     expect(wordEl(0)!.dataset.state).toBe("kept")
     expect(wordEl(3)!.dataset.state).toBe("cut")
     expect(wordEl(3)!.className).toContain("decoration-amber-500")
-    expect(within(dialog()).getByRole("button", { name: /Filler/ })).toBeTruthy()
+    expect(within(screen.getByTestId("review-transcript")).getByRole("button", { name: /Filler/ })).toBeTruthy()
   })
 
   it("says so when no Edit Plan cut feeds the render", () => {
@@ -192,13 +178,13 @@ describe("the selection", () => {
     expect(copy).toHaveBeenCalledWith("So the thing um is", "Copied")
   })
 
-  it("takes Del from the find box once a word is pressed: the press moves focus to the transcript", async () => {
+  it("takes Del from the find box once a word is pressed: the press moves focus to the word's row", async () => {
     mountInspector()
     key("f", { metaKey: true })
     const input = await screen.findByRole("textbox", { name: "Find in transcript" })
     fireEvent.change(input, { target: { value: "thing" } })
     drag(0, 2)
-    expect(document.activeElement).toBe(screen.getByTestId("review-transcript"))
+    expect(document.activeElement).toBe(wordEl(0)!.closest("[data-review-row]"))
     key("Delete")
     await waitFor(() => expect(wordEl(0)!.dataset.state).toBe("cut"))
     expect((input as HTMLInputElement).value).toBe("thing")
@@ -278,260 +264,5 @@ describe("find (⌘F)", () => {
     fireEvent.change(input, { target: { value: "THING" } })
     await waitFor(() => expect(within(dialog()).getByText("1 of 1")).toBeTruthy())
     expect(wordEl(2)!.className).toContain("bg-amber-300/60")
-  })
-})
-
-// A run of cut paragraphs 60 s or longer collapses (R11): "off topic" is one.
-const COLLAPSING = {
-  plan: {
-    version: 1,
-    clock: "master",
-    sources: [{ id: "cam", url: "https://cdn.test/cam.mp4", kind: "video" }],
-    segments: [
-      { id: "s0", inMs: 0, outMs: 5000, video: "cam" },
-      { id: "s1", inMs: 80000, outMs: 85000, video: "cam" },
-    ],
-    dropped: [{ inMs: 5000, outMs: 80000, reason: "tangent" }],
-  },
-  transcript: {
-    version: 1,
-    words: [
-      { text: "hello", startMs: 100, endMs: 500, speaker: "A" },
-      { text: "off", startMs: 20000, endMs: 20400, speaker: "B" },
-      { text: "topic", startMs: 30000, endMs: 30400, speaker: "B" },
-      { text: "back", startMs: 80100, endMs: 80500, speaker: "A" },
-    ],
-  },
-}
-
-// Three speaker turns cut whole (B, C, D): a run of three paragraphs, "off topic" its first.
-const THREE_PARAGRAPH_RUN = {
-  plan: COLLAPSING.plan,
-  transcript: {
-    version: 1,
-    words: [
-      { text: "hello", startMs: 100, endMs: 500, speaker: "A" },
-      { text: "off", startMs: 20000, endMs: 20400, speaker: "B" },
-      { text: "topic", startMs: 30000, endMs: 30400, speaker: "B" },
-      { text: "more", startMs: 40000, endMs: 40400, speaker: "C" },
-      { text: "stuff", startMs: 50000, endMs: 50400, speaker: "C" },
-      { text: "again", startMs: 60000, endMs: 60400, speaker: "D" },
-      { text: "back", startMs: 80100, endMs: 80500, speaker: "A" },
-    ],
-  },
-}
-
-// Two tangents of 75 s, each one paragraph that says "topic".
-const TWO_RUNS = {
-  plan: {
-    version: 1,
-    clock: "master",
-    sources: [{ id: "cam", url: "https://cdn.test/cam.mp4", kind: "video" }],
-    segments: [
-      { id: "s0", inMs: 0, outMs: 5000, video: "cam" },
-      { id: "s1", inMs: 80000, outMs: 85000, video: "cam" },
-      { id: "s2", inMs: 160000, outMs: 165000, video: "cam" },
-    ],
-    dropped: [{ inMs: 5000, outMs: 80000, reason: "tangent" }, { inMs: 85000, outMs: 160000, reason: "tangent" }],
-  },
-  transcript: {
-    version: 1,
-    words: [
-      { text: "hello", startMs: 100, endMs: 500, speaker: "A" },
-      { text: "off", startMs: 20000, endMs: 20400, speaker: "B" },
-      { text: "topic", startMs: 30000, endMs: 30400, speaker: "B" },
-      { text: "back", startMs: 80100, endMs: 80500, speaker: "A" },
-      { text: "another", startMs: 100000, endMs: 100400, speaker: "B" },
-      { text: "topic", startMs: 110000, endMs: 110400, speaker: "B" },
-      { text: "end", startMs: 160100, endMs: 160500, speaker: "A" },
-    ],
-  },
-}
-
-// Forty one-word turns, two seconds apart; turns 2–4 and 30–32 are cut whole.
-function manyTurns() {
-  const words = Array.from({ length: 40 }, (_, i) => ({ text: `w${i}`, startMs: i * 2000 + 100, endMs: i * 2000 + 500, speaker: i % 2 ? "B" : "A" }))
-  return {
-    plan: {
-      version: 1,
-      clock: "master",
-      sources: [{ id: "cam", url: "https://cdn.test/cam.mp4", kind: "video" }],
-      segments: [
-        { id: "s0", inMs: 0, outMs: 4000, video: "cam" },
-        { id: "s1", inMs: 10000, outMs: 60000, video: "cam" },
-        { id: "s2", inMs: 66000, outMs: 80000, video: "cam" },
-      ],
-      dropped: [{ inMs: 4000, outMs: 10000, reason: "tangent" }, { inMs: 60000, outMs: 66000, reason: "tangent" }],
-    },
-    transcript: { version: 1, words },
-  }
-}
-
-describe("collapsed runs (R11)", () => {
-  it("collapse a cut of 60 s or more into one row", () => {
-    loadCanvas(COLLAPSING)
-    mountInspector()
-    expect(wordEl(1)).toBeNull()
-    expect(within(dialog()).getByRole("button", { name: "Show these words" }).textContent).toContain("Tangent · 1:15 · 2 words")
-  })
-
-  it("restores a collapsed run whole with its ↺", async () => {
-    loadCanvas(COLLAPSING)
-    mountInspector()
-    fireEvent.click(within(dialog()).getByRole("button", { name: "Restore" }))
-    await waitFor(() => expect(wordEl(1)!.dataset.state).toBe("kept"))
-    expect(wordEl(2)!.dataset.state).toBe("kept")
-  })
-
-  it("stay expanded while the reviewer restores the run's first paragraph", async () => {
-    loadCanvas(THREE_PARAGRAPH_RUN)
-    mountInspector()
-    fireEvent.click(within(dialog()).getByRole("button", { name: "Show these words" }))
-    expect(wordEl(3)).not.toBeNull()
-    drag(1, 2)
-    key("r")
-    await waitFor(() => expect(wordEl(1)!.dataset.state).toBe("kept"))
-    // C and D are still a run of cut paragraphs, and still open.
-    expect(wordEl(3)).not.toBeNull()
-    expect(wordEl(5)).not.toBeNull()
-    expect(within(dialog()).queryByRole("button", { name: "Show these words" })).toBeNull()
-  })
-
-  it("keep each row's measured height when a run above them expands", () => {
-    loadCanvas(manyTurns())
-    mountInspector()
-    const scroller = screen.getByTestId("review-transcript")
-    const spacer = scroller.firstElementChild as HTMLElement
-    // Lay every row out once, as a reviewer scrolling through would.
-    for (let top = 0; top <= 40 * ROW_PX; top += 4 * ROW_PX) {
-      act(() => {
-        scroller.scrollTop = top
-        scroller.dispatchEvent(new Event("scroll"))
-      })
-    }
-    act(() => {
-      scroller.scrollTop = 0
-      scroller.dispatchEvent(new Event("scroll"))
-    })
-    // 34 paragraphs and two collapsed runs.
-    expect(spacer.style.height).toBe(`${34 * ROW_PX + 2 * COLLAPSED_ROW_PX}px`)
-    fireEvent.click(within(dialog()).getAllByRole("button", { name: "Show these words" })[0]!)
-    // 37 paragraphs and one collapsed run: every row past the first keeps its own height.
-    expect(spacer.style.height).toBe(`${37 * ROW_PX + COLLAPSED_ROW_PX}px`)
-  })
-})
-
-describe("Escape closes the innermost layer first (§2.4)", () => {
-  it("closes the span popover, and leaves the dialog open", async () => {
-    const { onClose } = mountInspector()
-    click(3)
-    await screen.findByTestId("span-popover")
-    escape()
-    await waitFor(() => expect(screen.queryByTestId("span-popover")).toBeNull())
-    expect(dialog()).toBeTruthy()
-    expect(onClose).not.toHaveBeenCalled()
-  })
-
-  it("clears the selection toolbar, and leaves the dialog open", () => {
-    const { onClose } = mountInspector()
-    drag(0, 2)
-    escape()
-    expect(screen.queryByRole("toolbar", { name: "Selection" })).toBeNull()
-    expect(onClose).not.toHaveBeenCalled()
-  })
-
-  it("closes the find bar, and leaves the dialog open with focus in it", async () => {
-    const { onClose } = mountInspector()
-    key("f", { metaKey: true })
-    await screen.findByRole("textbox", { name: "Find in transcript" })
-    escape()
-    expect(screen.queryByRole("textbox", { name: "Find in transcript" })).toBeNull()
-    expect(onClose).not.toHaveBeenCalled()
-    expect(dialog().contains(document.activeElement)).toBe(true)
-  })
-
-  it("collapses an expanded run, and leaves the dialog open", () => {
-    loadCanvas(COLLAPSING)
-    const { onClose } = mountInspector()
-    expect(wordEl(1)).toBeNull()
-    fireEvent.click(within(dialog()).getByRole("button", { name: "Show these words" }))
-    expect(wordEl(1)).not.toBeNull()
-    escape()
-    expect(wordEl(1)).toBeNull()
-    expect(onClose).not.toHaveBeenCalled()
-  })
-
-  it("closes the dialog with one Escape once an expanded run's words are restored", async () => {
-    loadCanvas(COLLAPSING)
-    const { onClose } = mountInspector()
-    fireEvent.click(within(dialog()).getByRole("button", { name: "Show these words" }))
-    drag(1, 2)
-    key("r")
-    await waitFor(() => expect(wordEl(1)!.dataset.state).toBe("kept"))
-    escape()
-    expect(onClose).toHaveBeenCalledTimes(1)
-  })
-
-  it("collapses a run the reviewer expanded even after its first paragraph is restored", async () => {
-    loadCanvas(THREE_PARAGRAPH_RUN)
-    const { onClose } = mountInspector()
-    fireEvent.click(within(dialog()).getByRole("button", { name: "Show these words" }))
-    drag(1, 2)
-    key("r")
-    await waitFor(() => expect(wordEl(1)!.dataset.state).toBe("kept"))
-    expect(wordEl(3)).not.toBeNull()
-    escape()
-    expect(wordEl(3)).toBeNull()
-    expect(onClose).not.toHaveBeenCalled()
-    escape()
-    expect(onClose).toHaveBeenCalledTimes(1)
-  })
-
-  it("does not stack the runs find expanded: one Escape closes find, the next the dialog", async () => {
-    loadCanvas(TWO_RUNS)
-    const { onClose } = mountInspector()
-    key("f", { metaKey: true })
-    const input = await screen.findByRole("textbox", { name: "Find in transcript" })
-    fireEvent.change(input, { target: { value: "topic" } })
-    await waitFor(() => expect(within(dialog()).getByText("1 of 2")).toBeTruthy())
-    await waitFor(() => expect(wordEl(2)).not.toBeNull())
-    fireEvent.keyDown(input, { key: "Enter" })
-    await waitFor(() => expect(within(dialog()).getByText("2 of 2")).toBeTruthy())
-    await waitFor(() => expect(wordEl(5)).not.toBeNull())
-    escape()
-    expect(screen.queryByRole("textbox", { name: "Find in transcript" })).toBeNull()
-    expect(onClose).not.toHaveBeenCalled()
-    escape()
-    expect(onClose).toHaveBeenCalledTimes(1)
-  })
-
-  it("closes the dialog when no layer is open, writing the edit made just before", async () => {
-    const { onClose } = mountInspector()
-    drag(0, 2)
-    key("Delete")
-    await waitFor(() => expect(wordEl(0)!.dataset.state).toBe("cut"))
-    // The debounced write has not run yet: Escape-to-close flushes it.
-    expect(planData().editedEdl).toBeUndefined()
-    escape()
-    expect(onClose).toHaveBeenCalledTimes(1)
-    const edit = planData().editedEdl as { kind: string; edl: { dropped: Array<{ reason: string; inMs: number; outMs: number }> } }
-    expect(edit.kind).toBe("edl")
-    expect(edit.edl.dropped).toContainEqual(expect.objectContaining({ reason: "manual", inMs: 100, outMs: 1300 }))
-  })
-
-  it("closes one layer per Escape, innermost first", async () => {
-    const { onClose } = mountInspector()
-    key("f", { metaKey: true })
-    await screen.findByRole("textbox", { name: "Find in transcript" })
-    // The press on a word takes focus from the find box (no hand-focusing here).
-    drag(0, 1)
-    escape()
-    expect(screen.queryByRole("toolbar", { name: "Selection" })).toBeNull()
-    expect(screen.getByRole("textbox", { name: "Find in transcript" })).toBeTruthy()
-    escape()
-    expect(screen.queryByRole("textbox", { name: "Find in transcript" })).toBeNull()
-    expect(onClose).not.toHaveBeenCalled()
-    escape()
-    expect(onClose).toHaveBeenCalledTimes(1)
   })
 })

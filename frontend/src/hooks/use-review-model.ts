@@ -18,7 +18,10 @@
  *  - `locked` (R9 a): the canvas is read-only, or a live run includes the
  *    render or its Edit Plan. Playback and find stay live; edits do not.
  *  - The newer run (TA3 c), asked once per open: `undefined` while the answer
- *    is out, `null` when the canvas shows the newest run.
+ *    is out, `null` when the canvas shows the newest run. After 15 s with no
+ *    answer `newerRunCheckTimedOut` turns true (decided 2026-10-07), and the
+ *    gate stops holding the runs on it; an answer that comes later still
+ *    lands.
  *
  * It reads the canvas through `useReviewGraph`: the render and what feeds it,
  * held until a value the review reads changes, so a run's progress ticks and
@@ -56,7 +59,12 @@ import { buildParagraphs, type Paragraph } from "@/lib/edl-review/paragraphs"
 import { planIssues, type ReviewRenderContext } from "@/lib/edl-review/restore"
 import { transcriptOffsetMs } from "@/lib/edl-review/word-index"
 import { resolveNodeInputs } from "@/components/editor/workflow-editor/node-input-resolver"
-import { applyNewerRun, newerRunOnServer, type NewerRunPatches } from "@/components/editor/workflow-editor/newer-run-check"
+import {
+  applyNewerRun,
+  NEWER_RUN_CHECK_TIMEOUT_MS,
+  newerRunOnServer,
+  type NewerRunPatches,
+} from "@/components/editor/workflow-editor/newer-run-check"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 
 /** What the Edit Plan behind the render holds. */
@@ -93,8 +101,14 @@ export interface ReviewModel {
   readonly locked: boolean
   /** A newer run's changes; `undefined` while the check is out, `null` when there is none. */
   readonly newerRun: NewerRunPatches | null | undefined
+  /** The newer-run check has had no answer for `NEWER_RUN_CHECK_TIMEOUT_MS`. */
+  readonly newerRunCheckTimedOut: boolean
   readonly loadNewerRun: () => void
 }
+
+/** How long the open-time newer-run check holds the runs (decided 2026-10-07):
+ *  the same limit as the click's own check in `handleRenderFinal`. */
+export { NEWER_RUN_CHECK_TIMEOUT_MS }
 
 const EMPTY_SOURCES: readonly string[] = []
 
@@ -212,23 +226,34 @@ export function useReviewModel(renderId: string): ReviewModel {
 
   const checkKey = workflowId ? `${workflowId}\u0000${renderId}` : null
   const [newer, setNewer] = useState<{ readonly key: string; readonly patches: NewerRunPatches | null } | null>(null)
+  const [timedOutKey, setTimedOutKey] = useState<string | null>(null)
   useEffect(() => {
     if (!checkKey || !workflowId) return
     let live = true
+    // Each check gets its own 15 s: a timeout left from an earlier visit to
+    // this render must not let its runs go before this check has had its time.
+    setTimedOutKey(null)
+    const timer = setTimeout(() => {
+      if (live) setTimedOutKey(checkKey)
+    }, NEWER_RUN_CHECK_TIMEOUT_MS)
     const now = useWorkflowStore.getState()
     void newerRunOnServer(workflowId, now.nodes, now.edges).then((patches) => {
+      clearTimeout(timer)
       if (live) setNewer({ key: checkKey, patches })
     })
     return () => {
       live = false
+      clearTimeout(timer)
     }
   }, [checkKey, workflowId])
   const newerRun = !checkKey ? null : newer?.key === checkKey ? newer.patches : undefined
+  const newerRunCheckTimedOut = newerRun === undefined && timedOutKey === checkKey
   const loadNewerRun = useCallback(() => {
-    if (!checkKey || newer?.key !== checkKey || !newer.patches) return
-    applyNewerRun(newer.patches)
+    if (locked || !checkKey || newer?.key !== checkKey || !newer.patches) return
+    // Cleared only once the results are written: the banner stays otherwise.
+    if (!applyNewerRun(newer.patches)) return
     setNewer({ key: checkKey, patches: null })
-  }, [checkKey, newer])
+  }, [locked, checkKey, newer])
 
   return {
     renderId,
@@ -252,6 +277,7 @@ export function useReviewModel(renderId: string): ReviewModel {
     passesOtherNodes: !!path && path.hops.length > 1,
     locked,
     newerRun,
+    newerRunCheckTimedOut,
     loadNewerRun,
   }
 }
