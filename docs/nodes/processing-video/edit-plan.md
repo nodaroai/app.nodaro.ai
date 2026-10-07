@@ -125,6 +125,69 @@ A hand-set offset always wins, so it is the fix for any single source audio coul
 
 **Sound.** Every cut keeps the sound of the plan's clock — the *master audio* source, or the first source — whichever camera it shows, so the soundtrack never switches mics at a camera change. (Past the end of the clock recording, should the plan run longer, a cut keeps its camera's own sound.) Chapters mode shows no picture, so cameras are not measured for it.
 
+## Reviewing a cut
+
+<a id="reviewing-a-cut"></a>A **Tighten** plan is a proposal. Review it before you render: read the transcript with every cut struck through, hear any cut, restore what the plan removed, cut what it kept, and render from the same screen. Your changes are saved on the Edit Plan and are what every render of that plan cuts.
+
+Reviewing is for a Tighten plan that feeds an [Apply EDL](./apply-edl.md) render. A Clips plan keeps its JSON on **Expand** for now, and a plan that has not run has nothing to review yet.
+
+### Four ways in
+
+- **Review cut** on the render's node. It is there whatever the render shows: a Preview, a Final, or no render yet. (Render final and Update preview on the node still appear only under a Preview.)
+- **Expand** on the Edit Plan. It opens the review at the render the plan feeds. When no render consumes the plan, Expand opens the plan's JSON as before; with the review open, the same JSON is under the **JSON** switch.
+- **Review cut** in the right-click menu of the render and of the Edit Plan. A plan that feeds several renders lists one entry per render, by name.
+- **A link.** The address carries `?review=` and the id of the render or the Edit Plan (a plan opens at the first render it feeds). Reloading the page, or sending the link to someone who can open the workflow, reopens the review. Closing it removes the parameter, and opening or closing replaces the history entry, so Back does not walk through reviews.
+
+When one plan feeds several renders, the arrow in the header chooses which render you are reviewing (for example a video cut and an audio master). The edits are the plan's, so they apply to every render of it; the choice decides which render's take, price, rule and **Render final** you see.
+
+### What the screen shows
+
+- **Title and badges.** `Review cut · <plan> → <render>`, a **Preview** or **Final** badge for the take on show, and the render's own validity badge: the same check the [Apply EDL panel](./apply-edl.md#the-render-check-in-the-panel) runs, over the cut as you have edited it.
+- **Player.** **Preview** plays the render's take. **Original** plays the source file around a cut, with a second and a half on either side, so you can hear what the plan removed. With no take yet (or a take that has expired), the player says so, and Original still works.
+- **Transcript.** Every word, in speaker paragraphs, with the time of each paragraph. A cut word is struck through in the colour of its reason (silence, filler, false start, tangent, no picture, or a manual cut of yours). Pauses show as chips with their length. Long cuts collapse into one line you can open. Without a transcript on the Edit Plan's Transcript input, the review lists the cuts by time instead.
+- **Cuts by reason.** One row per reason with its count and total time. Each row's box cuts or restores every span of that reason at once.
+- **Map.** A strip over the whole source marking where the cuts fall; click or drag to move the transcript there.
+- **Footer.** Undo and redo, `Cut length · source · removed` (the cut length shows with a leading "≤" while a default crossfade shortens it), **Update preview** and **Render final** with their prices.
+
+### Cutting and restoring
+
+- **Click a kept word** to move the player there. **Click a cut word** (or a pause chip) for the cut: its reason and length, **Hear it**, **Restore**, and **Restore all** for its reason.
+- **Select words** (drag, or click and Shift-click) for **Play selection**, **Cut selection** and, when the selection touches cut words, **Restore selection**. Selections snap to whole words. **Delete** cuts the selection and **R** restores it.
+- **A restore can be refused.** A span stays cut when putting it back would make a cut the render cannot make: for example the time has no picture, no camera filmed it, or the cut would run past the render's length limit. The popover says why, in the render's own words. A cut is never refused.
+- **Undo and redo** (⌘/Ctrl+Z, Shift+⌘/Ctrl+Z, or the footer buttons) hold up to 200 steps per Edit Plan in this browser tab. Closing the review by accident costs nothing: reopen it and the history is still there. Reloading the page, or planning again, clears it.
+- **Reset to plan** (the **...** menu) discards your edits. The same happens by itself when your cut is back to exactly the plan's: an unedited plan never shows as edited.
+
+### Your edits stay on the Edit Plan
+
+- The review writes your cut to the Edit Plan as you work, a moment after you stop. The Edit Plan node shows an **Edited** chip while your edits are applied, and what it hands downstream, the validity badge and the Apply EDL estimate describe the edited cut. The plan the planner made is kept, so **Reset to plan** and the **JSON** switch's **As planned** view are always there.
+- A render cuts the edited plan whether it runs in the editor or on the server. Your edits are written before **Render final**, **Update preview**, closing the review, or leaving the page.
+- Edits belong to the plan they were made on. If the Edit Plan plans again, the review says "Your edits were made on an earlier plan and no longer apply" and offers **Discard them**. A run that would plan again asks first, and says how many spans you restored and dropped (see [Apply EDL](./apply-edl.md)).
+- **Edits lock** while a run that includes the render or the Edit Plan is in progress ("Rendering final... edits locked"), and on a workflow you can only view (a read-only one). Playing, finding and listening to the original still work.
+
+### A preview that is behind your edits
+
+A Preview records which plan and which render settings it was cut from. When you have changed the cut since, the review says "This preview was made before your latest changes. Until you update it, clicking a word plays from the original.", and the render's node shows **Edited since this preview**. Click **Update preview** to render the edited cut. A Preview made before previews carried that record is treated the same way once the plan holds an edit. Behind a Camera Switch, a click on a word always plays from the original: the take's own timeline is the switched cut, which the review cannot map back to the plan.
+
+### Rendering from the review
+
+**Render final** and **Update preview** in the footer run exactly what the node's buttons run, with the same checks (Apply EDL's rule, a newer run, nothing changed since the last final) and the same confirm; see [Render final](./apply-edl.md#render-final) and [Update preview](./apply-edl.md#update-preview). **Update preview** exists only where the [stop rule](./apply-edl.md#a-run-stops-at-a-preview) is on; with it off the review has **Render final** alone. The review opens on a render with no Preview too. The footer holds both buttons, and says why, when:
+
+- **Nothing is kept.**
+- **Fix n issues first**: the render's rule refuses the cut as it stands. The issues are listed under **Issues**, in the validator's own words.
+- **Load the newer run first**: a run finished that this canvas does not show. The check waits at most 15 seconds, then lets the run go with a warning.
+
+### Keys
+
+| Key | Does |
+|-----|------|
+| Space | Play or pause the player |
+| Delete | Cut the selection |
+| R | Restore the selection |
+| ⌘/Ctrl+Z, Shift+⌘/Ctrl+Z | Undo, redo |
+| ⌘/Ctrl+F | Find in the transcript |
+| ⌘/Ctrl+C | Copy the selected words |
+| Escape | Close the innermost layer first: a cut's popover, the selection bar, find, an open collapsed cut, then the review |
+
 ## API
 
 `GET /v1/edit-plan/capabilities` lists the modes this server plans, who answered, and whether Edit Plan is charged per started minute (`{ modes: [...], source, perMinute }`; see [Trailer greyed out](#when-trailer-is-greyed-out) and [Edit Plan modes](../../api-integration.md#edit-plan-modes)).

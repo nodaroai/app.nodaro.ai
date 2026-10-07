@@ -20,7 +20,9 @@ import { editPlanReserveCreditId, asEditPlanMode, asEditPlanTier } from "@nodaro
 import { editPlanPerMinuteReported, useEditPlanModes } from "@/lib/edit-plan-modes"
 import { useT } from "@/lib/i18n"
 import { copyToClipboard } from "@/lib/utils"
-import { editPlanOutputOf } from "@/lib/edit-plan-saved-output"
+import { editPlanEditStatusOf, editPlanOutputOf } from "@/lib/edit-plan-saved-output"
+import { openReview } from "@/hooks/use-review-open-store"
+import { usePlanReviewRender } from "@/hooks/use-plan-review-render"
 import type { EditPlanNodeData } from "@/types/nodes"
 
 function EditPlanNodeComponent({ id, data, selected }: NodeProps) {
@@ -54,6 +56,10 @@ function EditPlanNodeComponent({ id, data, selected }: NodeProps) {
   )
   const credits = useModelCredits(creditModelId)
   const [treeOpen, setTreeOpen] = useState(false)
+  // Expand opens the review at the render this plan feeds (R17 a, A3-5), whose
+  // JSON tab holds the tree below; with nothing to review it opens the tree.
+  const reviewRender = usePlanReviewRender(id)
+  const edited = editPlanEditStatusOf(nodeData as unknown as Readonly<Record<string, unknown>>) === "applied"
 
   return (
     <div className="relative max-w-[240px]">
@@ -109,6 +115,14 @@ function EditPlanNodeComponent({ id, data, selected }: NodeProps) {
             <div className="relative group flex-1 min-h-0 flex flex-col">
               <div className="flex items-center gap-2 pb-1">
                 <EdlValidityBadge value={plan} />
+                {edited && (
+                  <span
+                    title={t("edlReview.editedChipTitle")}
+                    className="inline-flex items-center rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400"
+                  >
+                    {t("edlReview.editedChip")}
+                  </span>
+                )}
                 {clipCount !== undefined && (
                   <span className="text-[10px] text-muted-foreground tabular-nums">
                     {t("node.editPlanClips", { count: clipCount })}
@@ -125,7 +139,7 @@ function EditPlanNodeComponent({ id, data, selected }: NodeProps) {
                   type="button"
                   aria-label={t("node.expandResult")}
                   className="w-6 h-6 flex items-center justify-center bg-black/40 backdrop-blur-sm hover:bg-black/60 border border-white/10 text-white rounded-full shadow-sm"
-                  onClick={(e) => { e.stopPropagation(); setTreeOpen(true) }}
+                  onClick={(e) => { e.stopPropagation(); if (reviewRender) openReview(reviewRender); else setTreeOpen(true) }}
                 >
                   <Expand className="w-3 h-3" />
                 </button>

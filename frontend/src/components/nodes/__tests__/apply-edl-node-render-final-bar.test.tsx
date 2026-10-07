@@ -40,6 +40,10 @@ vi.mock("@/components/render/render-review-bar", () => ({
   RenderReviewBar: ({ renderId }: { renderId: string }) => <div data-testid="review-bar">{renderId}</div>,
 }))
 
+// The review entries read the canvas; this test stands the store in with a stub.
+vi.mock("@/components/render/review-cut-button", () => ({ ReviewCutButton: () => null }))
+vi.mock("@/components/render/edited-since-note", () => ({ EditedSincePreviewNote: () => null }))
+
 import { ApplyEdlNode } from "../apply-edl-node"
 
 const take = (url: string, quality?: "proxy" | "final") => ({ url, jobId: url, timestamp: "t", ...(quality ? { quality } : {}) })

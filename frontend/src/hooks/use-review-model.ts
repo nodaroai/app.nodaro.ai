@@ -54,6 +54,7 @@ import { useReviewGraph } from "@/hooks/use-review-graph"
 import type { IgnoredKeys } from "@/lib/edl-review/review-graph"
 import { applyEdlRenderSettings, resolveApplyEdlRenders } from "@/lib/apply-edl-render-input"
 import { isReviewableBase } from "@/lib/edl-review/build-edited"
+import { planKindOf, type ReviewPlanKind } from "@/lib/edl-review/plan-kind"
 import { keptSetOf, type KeptSet } from "@/lib/edl-review/kept-set"
 import { buildParagraphs, type Paragraph } from "@/lib/edl-review/paragraphs"
 import { planIssues, type ReviewRenderContext } from "@/lib/edl-review/restore"
@@ -67,8 +68,7 @@ import {
 } from "@/components/editor/workflow-editor/newer-run-check"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 
-/** What the Edit Plan behind the render holds. */
-export type ReviewPlanKind = "edl" | "clips" | "other" | "none"
+export type { ReviewPlanKind } from "@/lib/edl-review/plan-kind"
 
 export interface ReviewModel {
   readonly renderId: string
@@ -116,13 +116,6 @@ const EMPTY_SOURCES: readonly string[] = []
 const RUN_STATE_AND_EDIT: ReadonlySet<string> = new Set([...TRANSIENT_RUNTIME_KEYS, "editedEdl"])
 const ignoringEditOn = (planId: string | null): IgnoredKeys => (id) =>
   id === planId ? RUN_STATE_AND_EDIT : TRANSIENT_RUNTIME_KEYS
-
-function planKindOf(plan: unknown): ReviewPlanKind {
-  if (plan === undefined || plan === null) return "none"
-  if (Array.isArray(plan)) return "clips"
-  if (typeof plan === "object" && Array.isArray((plan as { segments?: unknown }).segments)) return "edl"
-  return "other"
-}
 
 function baseOf(plan: unknown): Edl | null {
   if (planKindOf(plan) !== "edl") return null

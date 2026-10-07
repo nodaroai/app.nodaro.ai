@@ -45,6 +45,10 @@ vi.mock("@/hooks/use-result-aspect-ratio", () => ({
   useResultAspectRatio: () => ({ aspectRatio: undefined, onLoadDimensions: () => {} }),
 }))
 
+// The review entries read the canvas; this test stands the store in with a stub.
+vi.mock("@/components/render/review-cut-button", () => ({ ReviewCutButton: () => null }))
+vi.mock("@/components/render/edited-since-note", () => ({ EditedSincePreviewNote: () => null }))
+
 import { ApplyEdlNode } from "../apply-edl-node"
 import { useLocaleStore } from "@/lib/locale-store"
 import { translate } from "@/lib/i18n"

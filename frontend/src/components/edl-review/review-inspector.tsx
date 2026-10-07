@@ -8,9 +8,10 @@
  * The header, the player (Preview or Final, and Original audition), the
  * transcript pane (its rows, minimap, span popover, selection toolbar and
  * find bar), the reasons panel, the banners and the footer with its gate;
- * below `sm` the panes become tabs (review-body.tsx). NOTHING in the editor
- * opens it until A3-5 adds the entry points (§2.7); its tests mount it
- * directly.
+ * below `sm` the panes become tabs (review-body.tsx). The editor mounts it
+ * once, in `ReviewInspectorHost`, and opens it from a render's Review cut, the
+ * context menu, an Edit Plan's Expand and `?review=<id>` (A3-5); its component
+ * tests mount it directly.
  *
  * KEYS, all inside the dialog only (the canvas's own shortcuts stand down
  * under a modal, and keys typed in a portalled menu are the menu's): ⌘Z / ⇧⌘Z
@@ -49,6 +50,11 @@ export interface ReviewInspectorProps {
   readonly onClose: () => void
   /** The reviewer chose another render of the same plan in the header's picker. */
   readonly onRenderChange?: (renderId: string) => void
+}
+
+/** The canvas node the review is anchored at: where focus goes back to when the opener is gone. */
+function nodeElementOf(renderId: string): HTMLElement | null {
+  return document.querySelector<HTMLElement>(`.react-flow__node[data-id="${CSS.escape(renderId)}"]`)
 }
 
 export function ReviewInspector(props: ReviewInspectorProps) {
@@ -112,6 +118,7 @@ function OpenReviewInspector({ renderId: anchoredAt, onClose, onRenderChange }: 
     <InspectorShell
       open
       size="full"
+      returnFocusTo={() => nodeElementOf(renderId)}
       onClose={close}
       icon={<Scissors />}
       title={<ReviewTitle planId={model.planId} renderId={renderId} />}

@@ -1,7 +1,7 @@
 "use client"
 
 import { useRef, useMemo, useState } from "react"
-import { Play, FastForward, Film, RefreshCw, ListChecks, Copy, Trash2, CircleSlash, CircleCheck, ImageIcon, ZoomIn, Maximize2, UserPlus, CircleHelp, ArrowUpRight } from "lucide-react"
+import { Play, FastForward, ListChecks, Copy, Trash2, CircleSlash, CircleCheck, ImageIcon, ZoomIn, Maximize2, UserPlus, CircleHelp, ArrowUpRight } from "lucide-react"
 import { toast } from "sonner"
 import { useT, tx } from "@/lib/i18n"
 import { useReactFlow } from "@xyflow/react"
@@ -15,9 +15,7 @@ import { useAuth } from "@/hooks/use-auth"
 import { SHORTCUTS, formatBinding, isMacPlatform } from "@/lib/shortcuts"
 import { nodeDocsLinksShown, useNodeDocsUrl } from "@/lib/node-docs/node-docs"
 import { nodeThumbnailUrl } from "./node-thumbnail"
-import { rendersOfPlan } from "./workflow-editor/render-final-set"
-import { isRenderNodeType } from "@nodaro/shared"
-import { runtimePreviewStopRule } from "@/lib/runtime-config"
+import { RenderMenuItems } from "./node-context-menu-render"
 
 interface NodeContextMenuProps {
   readonly nodeId: string
@@ -33,7 +31,6 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const runFromHere = useWorkflowStore((s) => s.runFromHere)
   const runSelected = useWorkflowStore((s) => s.runSelected)
-  const renderFinal = useWorkflowStore((s) => s.renderFinal)
   const toggleSkipNode = useWorkflowStore((s) => s.toggleSkipNode)
   const setWorkflowThumbnail = useWorkflowStore((s) => s.setWorkflowThumbnail)
   const updateNode = useWorkflowStore((s) => s.updateNode)
@@ -53,19 +50,6 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
   const hasDownstream = useMemo(() => {
     return edges.some((e) => e.source === nodeId)
   }, [nodeId, edges])
-
-  // Render final, from the render itself or from the Edit Plan behind it. A
-  // plan that feeds several renders asks which: one render per entry.
-  const reviewRenders = useMemo(() => {
-    if (isRenderNodeType(nodeType)) return [{ id: nodeId, name: "" }]
-    if (nodeType !== "edit-plan") return []
-    return rendersOfPlan(nodeId, nodes, edges).map((n) => ({
-      id: n.id,
-      name: ((n.data as { label?: string }).label ?? "") || n.type || "",
-    }))
-  }, [nodeId, nodeType, nodes, edges])
-  // Update preview exists only with the stop rule on (decided 2026-10-06).
-  const canUpdatePreview = runtimePreviewStopRule()
 
   const selectedCount = useMemo(() => {
     return nodes.filter((n) => n.selected).length
@@ -121,11 +105,6 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
 
   function handleRunFromHere() {
     runFromHere?.(nodeId)
-    onClose()
-  }
-
-  function handleRenderFinal(renderId: string, kind: "final" | "proxy") {
-    renderFinal?.(renderId, kind)
     onClose()
   }
 
@@ -261,28 +240,7 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
           {t("node.runFromHere")}
         </button>
       )}
-      {renderFinal && reviewRenders.map((render) => (
-        <div key={render.id}>
-          <button
-            className="flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-accent text-start cursor-pointer disabled:opacity-50"
-            onClick={() => handleRenderFinal(render.id, "final")}
-            disabled={isRunning}
-          >
-            <Film className="h-3.5 w-3.5" />
-            {reviewRenders.length > 1 && render.name ? t("renderFinal.menuFor", { name: render.name }) : t("renderFinal.action")}
-          </button>
-          {canUpdatePreview && (
-            <button
-              className="flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-accent text-start cursor-pointer disabled:opacity-50"
-              onClick={() => handleRenderFinal(render.id, "proxy")}
-              disabled={isRunning}
-            >
-              <RefreshCw className="h-3.5 w-3.5" />
-              {reviewRenders.length > 1 && render.name ? t("renderFinal.updatePreviewFor", { name: render.name }) : t("renderFinal.updatePreview")}
-            </button>
-          )}
-        </div>
-      ))}
+      <RenderMenuItems nodeId={nodeId} nodeType={nodeType} isRunning={isRunning} onClose={onClose} />
       {selectedCount >= 2 && (
         <button
           className="flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-accent text-start cursor-pointer disabled:opacity-50"

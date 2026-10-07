@@ -18,6 +18,8 @@ import { useResultAspectRatio } from "@/hooks/use-result-aspect-ratio"
 import { videoNodeSizing } from "./video-node-defaults"
 import { PreviewBadge, isPreviewQuality } from "@/components/render/preview-badge"
 import { RenderReviewBar } from "@/components/render/render-review-bar"
+import { ReviewCutButton } from "@/components/render/review-cut-button"
+import { EditedSincePreviewNote } from "@/components/render/edited-since-note"
 import { useT } from "@/lib/i18n"
 import type { ApplyEdlData } from "@/types/nodes"
 
@@ -99,6 +101,13 @@ function ApplyEdlNodeComponent({ id, data, selected }: NodeProps) {
               <audio src={activeUrl} controls className="w-full" onError={() => setMediaError(true)} />
             </div>
           )}
+
+          {/* "Edited since this preview", while the take on show is a Preview. */}
+          {hasResult && showsPreview && <EditedSincePreviewNote renderId={id} />}
+
+          {/* Review cut, for any take on show or none (R18 a): the one control here
+              that is not Preview-gated. It hides itself where the review cannot open. */}
+          <ReviewCutButton renderId={id} />
 
           {/* Render final / Update preview, while the take on show is a Preview.
               "pending" is the runtime-only queued state (markNodesStatus), not in the narrower data type. */}
