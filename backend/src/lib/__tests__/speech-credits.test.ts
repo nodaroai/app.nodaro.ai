@@ -138,6 +138,8 @@ describe("base credits — the formula on the model's :per-100-chars row", () =>
     expect(await dialogueBaseCredits([{ text: "a".repeat(100), voice: "R" }], "elevenlabs-dialogue-v4")).toBe(32)
     expect(getModelCreditBaseCost).toHaveBeenLastCalledWith("elevenlabs-dialogue-v4:per-100-chars")
     expect(await dialogueBaseCredits([{ text: "a".repeat(2500), voice: "R" }, { text: "b".repeat(2500), voice: "G" }], "elevenlabs-dialogue-v4")).toBe(200)
-    expect(await dialogueBaseCredits([{ text: "a".repeat(9000), voice: "R" }], "elevenlabs-dialogue-v4")).toBe(200) // the total cap, 5,000
+    expect(await dialogueBaseCredits([{ text: "a".repeat(9000), voice: "R" }], "elevenlabs-dialogue-v4")).toBe(360) // inside v4's cap: 90 units × 4
+    expect(await dialogueBaseCredits([{ text: "a".repeat(12000), voice: "R" }], "elevenlabs-dialogue-v4")).toBe(400) // the total cap, 10,000
+    expect(await dialogueBaseCredits([{ text: "a".repeat(9000), voice: "R" }], "elevenlabs-dialogue")).toBe(200) // v3 dialogue keeps its 5,000
   })
 })

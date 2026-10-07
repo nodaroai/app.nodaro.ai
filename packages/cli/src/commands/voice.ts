@@ -690,7 +690,7 @@ Examples:
     .option("--profile <name>")
     .option("--json")
     .addHelpText("after", `
-Limits: 5,000 characters total on either model (under 2,000 recommended), up to 10 unique voices.
+Limits: 5,000 characters total on Dialogue v3, 10,000 on Dialogue v4 (under 2,000 recommended), up to 10 unique voices.
 Line text may carry [audio tags] like [laughs].
 
 Examples:

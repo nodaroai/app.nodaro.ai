@@ -618,7 +618,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         "model voices the exchange with natural turn-taking. Supports " +
         "`[audio tags]` like `[laughs]`, `[whispers]` inside line text, and " +
         "ANY voice — premade names, cloned/library UUIDs, mixed casts.\n\n" +
-        "Limits: 5,000 characters total across lines on either model (≤2,000 " +
+        "Limits: 5,000 characters total across lines on v3, 10,000 on v4 (≤2,000 " +
         "recommended for best quality), at most 10 unique voices per generation. " +
         "Where length pricing is on, the charge is per started 100 characters of the " +
         "script, at least 8 units; `list_models` shows the per-100-characters row when it applies.\n\n" +

@@ -532,7 +532,7 @@ A request is **voiced** only when a spec is present **and** the model can carry 
 
 Kling models speak scripted dialogue natively: quote the line in the prompt (optionally with a voice description, e.g. `[Anna: warm calm voice]: "good morning"`) and enable sound. Kling 2.6 voices are English/Chinese; other languages are auto-translated to English by the model.
 
-**Speaker mapping.** Each `dialogue[].speaker` is matched (case-insensitive) to a `characterVoices[].speaker` to pick that line's `voiceId`. An unmatched speaker falls back to the default (first) voice, mirroring the pipeline's non-fatal missing-voice behavior. Total dialogue text is capped at the chosen dialogue model's limit (5,000 characters on both Dialogue v3 and v4); lines over the budget are dropped with a log entry.
+**Speaker mapping.** Each `dialogue[].speaker` is matched (case-insensitive) to a `characterVoices[].speaker` to pick that line's `voiceId`. An unmatched speaker falls back to the default (first) voice, mirroring the pipeline's non-fatal missing-voice behavior. Total dialogue text is capped at the chosen dialogue model's limit (5,000 characters on Dialogue v3, 10,000 on Dialogue v4); lines over the budget are dropped with a log entry.
 
 **References ride along.** Images, videos and audio wired to the node reach the model on the voiced path exactly as on an unvoiced run, with one substitution: on an `audio_driven` model the synthesised dialogue track takes the audio-reference slot. A Seedance reference-video run is reserved and settled like an unvoiced one (see *Reference videos bill input + output duration* under pricing), with the audio add-on on top.
 
@@ -542,7 +542,7 @@ The audio step is reserved as an add-on **on top of** the base video cost — sa
 
 | Mode | Add-on identifier | Add-on credits |
 |---|---|---|
-| `audio_driven` (Seedance 2 / MiniMax H3) | the model the track is synthesised on: `elevenlabs-dialogue-v4` for a multi-voice cast whose every voice is on `elevenlabs-v4`, `elevenlabs-dialogue` for any other multi-voice cast, else the voice's own text-to-speech model | Rolling out: by length — every started 100 characters of the voiced lines (a single voice's lines are counted joined by a space, as they are sent), at least 8 units; 4 credits per unit on Dialogue v3, Dialogue v4, v3, v4 and Multilingual v2 (so 1–800 characters cost 32, 5,000 cost 200), 2 on Turbo v2.5 (16 and 100). Until the rollout reaches your instance: a flat 25, whichever dialogue model the cast renders on |
+| `audio_driven` (Seedance 2 / MiniMax H3) | the model the track is synthesised on: `elevenlabs-dialogue-v4` for a multi-voice cast whose every voice is on `elevenlabs-v4`, `elevenlabs-dialogue` for any other multi-voice cast, else the voice's own text-to-speech model | Rolling out: by length — every started 100 characters of the voiced lines (a single voice's lines are counted joined by a space, as they are sent), at least 8 units; 4 credits per unit on Dialogue v3, Dialogue v4, v3, v4 and Multilingual v2 (so 1–800 characters cost 32, 5,000 cost 200, and 10,000 on Dialogue v4 cost 400), 2 on Turbo v2.5 (16 and 100). Until the rollout reaches your instance: a flat 25, whichever dialogue model the cast renders on |
 | `native_speech` (VEO 3.x) | `elevenlabs-voice-changer` | +40 |
 
 The dialogue add-on is reserved under the identifier of the model the cast actually renders on, chosen once when the request is accepted and forwarded to the worker.

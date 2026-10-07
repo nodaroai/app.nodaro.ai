@@ -4062,8 +4062,8 @@ on ElevenLabs Dialogue v3 — the default — or Dialogue v4
 and a `similarityBoost`). Each line's `voice` is a premade voice name or an
 ElevenLabs voice UUID — cloned and Voice Library voices work, mixed casts are
 fine, and line text may carry `[audio tags]` like `[laughs]`. At most 5,000
-characters total across lines on either model (under 2,000 recommended for
-best quality) and 10 unique voices per generation. Flat credits per request
+characters total across lines on Dialogue v3 and 10,000 on Dialogue v4 (under
+2,000 recommended for best quality) and 10 unique voices per generation. Flat credits per request
 under the chosen model's identifier. Poll `jobs.get(jobId)` for
 `output_data.audioUrl` and — on every dialogue model, since both return timings
 at no extra credits — `output_data.transcript`, a `Transcript`

@@ -227,11 +227,11 @@ describe("with SPEECH_LENGTH_PRICING_ENABLED on, the speech bands state the leng
     expect(tts.creditCost).toBe("16-800")
     const dialogueHigh = Math.max(...DIALOGUE_PROVIDERS.map((id) => speechPriceUnits(getDialogueCapabilities(id).maxChars) * table[speechUnitCreditId(id)]!))
     expect(dialogue.creditCost).toBe(`${SPEECH_FLOOR_UNITS * 4}-${dialogueHigh}`)
-    expect(dialogue.creditCost).toBe("32-200")
+    expect(dialogue.creditCost).toBe("32-400") // 100 units × 4 at Dialogue v4's 10,000-character cap
     // The flag-on computer is what `deriveBand` would read too — the sources agree with the registry.
     const lookup = (id: string, units = 1) => (typeof table[id] === "number" ? Math.ceil(table[id]! * units) : undefined)
     expect(sources["text-to-speech"]!.band!(lookup)).toEqual([16, 800])
-    expect(sources["text-to-dialogue"]!.band!(lookup)).toEqual([32, 200])
+    expect(sources["text-to-dialogue"]!.band!(lookup)).toEqual([32, 400])
   })
 
   it("the charged descriptor (GET /v1/nodes) states the same range at the charged prices", async () => {

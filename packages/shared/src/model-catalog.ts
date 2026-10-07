@@ -2506,14 +2506,15 @@ const TTS_LANGS_V3 = [
 const TTS_LEVERS_V2 = ["stability", "similarity", "style", "speed", "speakerBoost"] as const
 /**
  * ElevenLabs Dialogue v4's total-character cap across lines — ONE constant, so
- * the live probe's answer lands in one place. Rule (decided 2026-10-06): the
- * largest of 2,500 / 5,000 that returned 200, voiced its last line and finished
- * well inside the funnel's timeout in a live check of v4 dialogue above 2,000
- * characters; never above 5,000 (parity with v3 dialogue) without a separate
- * decision. Written at parity until that check reports; ElevenLabs recommends
- * ≤ 2,000 for quality on either model.
+ * the live probe's answer lands in one place. Measured 2026-10-06: a
+ * 10,000-character v4 dialogue returned 200, voiced its last line and finished
+ * whole in 130 s, well inside the funnel's 300 s timeout
+ * (`DIALOGUE_GENERATION_TIMEOUT_MS`); decided 2026-10-07 to raise the cap to
+ * that number, twice v3 dialogue's 5,000. Length pricing charges
+ * `min(total, cap)`, so the same unit rows reach 10,000 characters without a
+ * new row. ElevenLabs recommends ≤ 2,000 for quality on either model.
  */
-const DIALOGUE_V4_MAX_CHARS = 5000
+const DIALOGUE_V4_MAX_CHARS = 10000
 
 const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
   // ── ElevenLabs TTS ──

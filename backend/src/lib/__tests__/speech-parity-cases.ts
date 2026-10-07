@@ -20,4 +20,5 @@ export const DIALOGUE_PARITY_CASES: ReadonlyArray<readonly [provider: string | u
   [undefined, [{ text: "a".repeat(1234), voice: "Rachel" }, { text: "[laughs] " + "b".repeat(900), voice: "George" }]],
   ["elevenlabs-dialogue-v4", [{ text: "a".repeat(1234), voice: "Rachel" }, { text: "b".repeat(900), voice: "George" }]],
   [undefined, [{ text: "a".repeat(2500), voice: "Rachel" }, { text: "b".repeat(2500), voice: "George" }]],
+  ["elevenlabs-dialogue-v4", [{ text: "a".repeat(5000), voice: "Rachel" }, { text: "b".repeat(5000), voice: "George" }]],
 ]

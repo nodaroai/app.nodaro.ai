@@ -18,10 +18,10 @@ v3 stays the default everywhere: a new node, a request that omits `provider`, th
 
 | Limit | Dialogue v3 | Dialogue v4 |
 |-------|-------------|-------------|
-| Total text across all lines | 5,000 characters (≤2,000 recommended for best quality) | 5,000 characters (≤2,000 recommended for best quality) |
+| Total text across all lines | 5,000 characters (≤2,000 recommended for best quality) | 10,000 characters (≤2,000 recommended for best quality) |
 | Unique voices per generation | 10 (reusing a voice across lines does not count extra) | 10 |
 
-Dialogue v4's cap is the same 5,000 characters as v3 dialogue, and the platform never raises it above that so the per-request price stays honest. It may be lowered after a live check of v4 dialogue at longer lengths; this page will say so if that happens.
+Dialogue v4's cap is twice v3 dialogue's: a 10,000-character v4 dialogue was voiced whole in a live check on 2026-10-06, well inside the platform's time limit, and the cap was raised to that number. v3 dialogue stays at 5,000. A script over the chosen model's cap is refused before anything is charged; the editor's counter shows the cap of the model the node is set to.
 
 ## Configuration
 
@@ -55,7 +55,7 @@ A dialogue is priced on the total characters across its lines, in **units of 100
 | ElevenLabs Dialogue v3 | `elevenlabs-dialogue` | 4 | 25 per request |
 | ElevenLabs Dialogue v4 | `elevenlabs-dialogue-v4` | 4 | 25 per request |
 
-Worked examples, on either model: **100 characters** (any script up to 800) → **32 credits**; **1,000 characters** → **40 credits**; **5,000 characters** (the cap) → **200 credits**. A script over 5,000 characters is refused before anything is charged, on the API and in a workflow alike. The editor's estimate, a published app's advertised price and the credits reserved when the node runs all read the same rows.
+Worked examples, on either model: **100 characters** (any script up to 800) → **32 credits**; **1,000 characters** → **40 credits**; **5,000 characters** (Dialogue v3's cap) → **200 credits**; on Dialogue v4 only, **10,000 characters** (Dialogue v4's cap) → **400 credits**. A script over the chosen model's cap is refused before anything is charged, on the API and in a workflow alike. The editor's estimate, a published app's advertised price and the credits reserved when the node runs all read the same rows.
 
 The timings add nothing: 25 base credits per request on either model. Both models return their timings at the same character cost as the plain render (measured 2026-10-06), so every dialogue run carries them and there is no switch to turn them off.
 
@@ -74,7 +74,7 @@ The timings add nothing: 25 base credits per request on either model. Both model
 - Assign distinct voices to each speaker to make the conversation easy to follow. Use the Voice Browser to preview voices before assigning them.
 - Keep individual lines at a natural conversational length -- avoid putting entire paragraphs into a single dialogue entry.
 - Use Stability at 0.5 for natural-sounding conversation. Lower it for more dramatic or emotional dialogue, raise it for formal or narration-like delivery. On Dialogue v4 you can pick any value in between.
-- The 5,000-character total limit applies across all lines combined on either model. Plan longer dialogues by splitting them across multiple Text to Dialogue nodes if needed.
+- The total limit (5,000 characters on Dialogue v3, 10,000 on Dialogue v4) applies across all lines combined. Plan longer dialogues by splitting them across multiple Text to Dialogue nodes if needed.
 
 ### Captions without a second transcription
 

@@ -75,6 +75,16 @@ describe("buildPayload — text-to-dialogue", () => {
     expect(() => buildPayload(n, "job1", {}, "usage1")).not.toThrow()
   })
 
+  it("v4's cap is its own (10,000): exactly at it dispatches, one over fails with v4's numbers", () => {
+    const at = node("d1", "text-to-dialogue", { provider: "elevenlabs-dialogue-v4", dialogue: [{ id: "1", text: "a".repeat(10000), voice: "Rachel" }] })
+    expect(() => buildPayload(at, "job1", {}, "usage1")).not.toThrow()
+    const over = node("d1", "text-to-dialogue", {
+      provider: "elevenlabs-dialogue-v4",
+      dialogue: [{ id: "1", text: "a".repeat(6000), voice: "Rachel" }, { id: "2", text: "b".repeat(4001), voice: "Sarah" }],
+    })
+    expect(() => buildPayload(over, "job1", {}, "usage1")).toThrow(/10001 characters of dialogue; this model takes at most 10000/)
+  })
+
   it("filters empty lines (matches the frontend engine)", () => {
     const n = node("d1", "text-to-dialogue", {
       dialogue: [
