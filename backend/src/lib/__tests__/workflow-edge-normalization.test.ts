@@ -163,8 +163,8 @@ describe("normalizeWorkflowEdges — the classifiers that follow the table (the 
   })
 })
 
-describe("normalizeWorkflowEdges — nodes whose component renders pips the definition does not declare (the burn-down list)", () => {
-  it("the rendered pip is known and kept; the declared-only id moves onto the pip that draws", () => {
+describe("normalizeWorkflowEdges — the #1877 burn-down: definitions declare the pips their components render", () => {
+  it("the rendered pip is the declared output and is kept; the id a definition used to declare moves onto it as an alias", () => {
     const r = clean(
       normalizeWorkflowEdges(nodes, [
         { id: "a", source: "trim", sourceHandle: "video-out", target: "merge", targetHandle: "in" },
@@ -175,16 +175,16 @@ describe("normalizeWorkflowEdges — nodes whose component renders pips the defi
     )
     expect(r.edges.map((e) => e.sourceHandle)).toEqual(["video-out", "video-out", "out", "vocals"])
     expect(r.adjustments).toEqual([
-      { edgeId: "b", field: "sourceHandle", from: "video", to: "video-out", reason: "rendered" },
-      { edgeId: "c", field: "sourceHandle", from: "asset", to: "out", reason: "rendered" },
+      { edgeId: "b", field: "sourceHandle", from: "video", to: "video-out", reason: "alias" },
+      { edgeId: "c", field: "sourceHandle", from: "asset", to: "out", reason: "alias" },
     ])
   })
 
-  it("a declared-only id with several rendered pips is kept and warned about — never guessed", () => {
+  it("audio-separation's old `audio` id is kept and warned about — it could mean any stem, and a stem is never guessed", () => {
     const r = normalizeWorkflowEdges(nodes, [{ id: "a", source: "stems", sourceHandle: "audio", target: "vc", targetHandle: "audio" }])
     expect(r.adjustments).toEqual([])
     expect(r.edges[0]!.sourceHandle).toBe("audio")
-    expect(r.warnings[0]).toContain('"audio" is declared by audio-separation but the node renders bass, drums')
+    expect(r.warnings[0]).toContain('"audio" is not an output of audio-separation (outputs: vocals, instrumental, drums, bass, guitar, piano, other)')
   })
 })
 

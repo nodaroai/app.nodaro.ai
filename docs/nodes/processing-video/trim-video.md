@@ -33,7 +33,7 @@ The Trim Video node extracts or shapes a section of video. Six modes:
 ## Inputs & Outputs
 
 **Inputs:** Video (required)
-**Outputs:** Single trimmed video clip — silent when "Output Silent Video" is enabled, otherwise audio is preserved.
+**Outputs:** `video-out` — single trimmed video clip — silent when "Output Silent Video" is enabled, otherwise audio is preserved.
 
 ## Credit Cost
 

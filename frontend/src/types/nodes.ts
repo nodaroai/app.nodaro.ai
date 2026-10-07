@@ -8524,7 +8524,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "ai",
     creditCost: 8,
     inputs: ["audio"],
-    outputs: ["audio"],
+    outputs: ["vocals", "instrumental", "drums", "bass", "guitar", "piano", "other"],
     defaultData: {
       label: "Audio Separation",
       mode: "vocal_instrumental",
@@ -8563,7 +8563,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "ai",
     creditCost: 4,
     inputs: ["audio", "video"],
-    outputs: ["audio"],
+    outputs: ["audio", "video"],
     defaultData: {
       label: "Voice Changer",
       voiceId: "",
@@ -8916,7 +8916,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "processing",
     creditCost: 1,
     inputs: ["in"],
-    outputs: ["video"],
+    outputs: ["video-out"],
     defaultData: { label: "Merge Video & Audio", audioType: "voiceover", voiceoverVolume: 100, backgroundVolume: 30, keepOriginalAudio: true, originalAudioVolume: 30, originalAudioRole: "background", trackSettings: {}, fieldMappings: {} },
   },
   {
@@ -8943,7 +8943,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "processing",
     creditCost: 2,
     inputs: ["in", "transcript", "captionPlan"],
-    outputs: ["video"],
+    outputs: ["video-out"],
     defaultData: { label: "Add Captions", style: "subtitle", position: "bottom", fontSize: 32, color: "#ffffff", fieldMappings: {} },
   },
   {
@@ -8952,7 +8952,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "processing",
     creditCost: 1,
     inputs: ["in"],
-    outputs: ["video"],
+    outputs: ["video-out"],
     defaultData: { label: "Resize Video", targetAspect: "9:16", method: "crop", padColor: "#000000", fieldMappings: {} },
   },
   {
@@ -9035,7 +9035,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "processing",
     creditCost: 1,
     inputs: ["in"],
-    outputs: ["audio"],
+    outputs: ["audio-out"],
     defaultData: { label: "Mix Audio", trackCount: 2, trackVolumes: {}, fieldMappings: {} },
   },
   {
@@ -9044,7 +9044,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "processing",
     creditCost: 1,
     inputs: ["in"],
-    outputs: ["audio"],
+    outputs: ["audio-out"],
     defaultData: { label: "Combine Audio", segmentOrder: [], segmentSettings: {}, fieldMappings: {} },
   },
   {
@@ -9053,7 +9053,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "processing",
     creditCost: 0,
     inputs: ["in"],
-    outputs: ["audio"],
+    outputs: ["audio-out", "video-out"],
     defaultData: { label: "Adjust Volume", volume: 100, normalize: false, fadeIn: 0, fadeOut: 0, fieldMappings: {} },
   },
   {
@@ -9062,7 +9062,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "processing",
     creditCost: 2,
     inputs: ["in"],
-    outputs: ["audio"],
+    outputs: ["audio-out"],
     defaultData: { label: "Audio FX", preset: "room", fieldMappings: {} } as AudioFxData,
   },
   {
@@ -9071,7 +9071,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "processing",
     creditCost: 0,
     inputs: ["in"],
-    outputs: ["video"],
+    outputs: ["video-out"],
     defaultData: { label: "Trim Video", startTime: 0, endTime: 0, fieldMappings: {} },
   },
   {
@@ -9309,7 +9309,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "processing",
     creditCost: 0,
     inputs: ["in"],
-    outputs: ["video"],
+    outputs: ["video-out"],
     defaultData: { label: "Loop Video", mode: "repeat", repeatCount: 2, targetDuration: 10, fieldMappings: {} },
   },
   {
@@ -9617,7 +9617,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "output",
     creditCost: 0,
     inputs: ["in"],
-    outputs: ["asset"],
+    outputs: ["out"],
     defaultData: { label: "Save to Storage", filename: "", format: "mp4", quality: "standard", fieldMappings: {} },
   },
   {
@@ -9626,7 +9626,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "output",
     creditCost: 0,
     inputs: ["in"],
-    outputs: [],
+    outputs: ["out"],
     defaultData: { label: "Webhook Output", url: "", params: [] },
   },
   // Character
@@ -10185,7 +10185,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     category: "utility",
     creditCost: 0,
     inputs: ["in"],
-    outputs: [],
+    outputs: ["out"],
     defaultData: {
       label: "Sub-Workflow Output",
       routeId: "",

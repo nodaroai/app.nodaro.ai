@@ -1,7 +1,7 @@
 ---
 node_type: mix-audio
-generated_at: 2026-10-05T19:57:37.251Z
-generated_from: 8777f7b1a
+generated_at: 2026-10-06T17:44:08.069Z
+generated_from: cf92127ce
 ---
 
 # Mix Audio
@@ -11,7 +11,7 @@ generated_from: 8777f7b1a
 **Category:** processing
 **Credit cost:** `20` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
 **Inputs (target handles):** `in`
-**Outputs (source handles):** `audio`
+**Outputs (source handles):** `audio-out`
 
 **Required data fields:**
 - `label: string`

@@ -18,7 +18,7 @@ The Adjust Volume node modifies the volume level of an audio track and optionall
 ## Inputs & Outputs
 
 **Inputs:** Audio (required)
-**Outputs:** Volume-adjusted audio
+**Outputs:** `audio-out` (audio) or `video-out` (video) — the volume-adjusted media. The node shows the pip for the kind of media its last editor run processed, and `audio-out` before its first run.
 ## Best Practices
 
 - Use normalize for audio from different sources to ensure consistent levels

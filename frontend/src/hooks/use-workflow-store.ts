@@ -2416,12 +2416,13 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
     // renaming an unrelated future node's `in` handle never collides with
     // this pass.
     //
-    // NOTE: The 5 ffmpeg-overlapping nodes (merge-video-audio, trim-audio,
-    // mix-audio, combine-audio, adjust-volume) are NOT migrated here —
-    // their ids were shipped via the #2809 ffmpeg migration with a
-    // different design (single `in` retained) and dev's loadWorkflow
-    // already handles them via the ffmpeg migration block (if any). Do
-    // NOT add entries for them — would silently double-rewrite.
+    // NOTE: the ffmpeg-overlapping nodes (merge-video-audio, mix-audio,
+    // combine-audio, adjust-volume, trim-video, …) keep their `in` target and
+    // their `video-out` / `audio-out` pips from the #2809 ffmpeg migration
+    // (trim-audio keeps its `in` and renders `audio`).
+    // Never alias THOSE ids away — that would rewrite a live edge a second
+    // time. Their table entries (#1877) only move the id the definitions used
+    // to declare (`video` / `audio`) onto the pip that draws.
     {
       // The two alias tables AND the classifiers that follow them live in
       // @nodaro/shared (handle-aliases.ts): the server rewires an MCP-written

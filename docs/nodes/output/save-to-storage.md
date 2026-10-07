@@ -18,7 +18,7 @@ The Save to Storage node persists the upstream media result to Cloudflare R2 clo
 - `in` -- Any media type (image, video, audio) from an upstream node.
 
 **Outputs:**
-None. This is a terminal output node.
+`out` — the saved file's link, so a node after it can use what was saved.
 ## Best Practices
 - Use descriptive filenames to organize saved assets in your library.
 - Choose the appropriate quality tier based on your needs -- `draft` for quick previews, `high` or `4k` for final deliverables.

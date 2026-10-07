@@ -19,7 +19,7 @@ The Loop Video node extends short video clips by repeating them. Choose between 
 ## Inputs & Outputs
 
 **Inputs:** Video (required)
-**Outputs:** Looped video
+**Outputs:** `video-out` — looped video
 
 ## Credit Cost
 

@@ -51,7 +51,7 @@ If the track you picked is later disconnected, the node falls back to a plain mi
 ## Inputs & Outputs
 
 **Inputs:** 2+ audio tracks (connected via input handles)
-**Outputs:** Single mixed audio file
+**Outputs:** `audio-out` — single mixed audio file
 
 ## Credits
 

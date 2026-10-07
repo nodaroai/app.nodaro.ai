@@ -84,7 +84,7 @@ a credential and the importer picks their own.
 - `in` -- Any media type or data from an upstream node.
 
 **Outputs:**
-None. This is a terminal output node.
+`out` — what the delivery returned, to run a step after it: the response body in an editor run, the word `sent` in a server run.
 ## Best Practices
 - Verify the webhook URL is reachable and accepts POST requests before running the workflow.
 - Define parameter names and types that match what the receiving service expects.

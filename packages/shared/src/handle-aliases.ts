@@ -16,10 +16,13 @@
  * in the frontend fails when an alias points at a handle the node no longer
  * declares, or when a "legacy" spelling is still a declared handle.
  *
- * NOTE: five ffmpeg-overlapping nodes (merge-video-audio, trim-audio,
- * mix-audio, combine-audio, adjust-volume) are deliberately absent — their
- * ids shipped through a different migration with the single `in` retained,
- * and a second rewrite would silently double-apply.
+ * NOTE: the ffmpeg-overlapping nodes (merge-video-audio, mix-audio,
+ * combine-audio, adjust-volume, trim-video, …) keep their live `in` target and
+ * their `video-out` / `audio-out` pips from the #2809 migration (trim-audio
+ * keeps its `in` and renders `audio`): never alias those AWAY, or a second
+ * rewrite would move a live edge onto a pip the node does not render. The
+ * entries below go the other way (#1877): the id their definitions used to
+ * declare (`video` / `audio`) onto the pip that draws.
  */
 import { AUDIO_PRODUCER_TYPES, VIDEO_PRODUCER_TYPES } from "./producer-types.js"
 
@@ -67,6 +70,21 @@ export const LEGACY_SOURCE_HANDLE_ALIASES: Readonly<Record<string, Readonly<Reco
   // Telegram Trigger: the docs once named six outputs; the component renders
   // one, `out`, and media rides it by kind on both engines.
   "telegram-trigger": { text: "out", imageUrl: "out", videoUrl: "out", audioUrl: "out" },
+  // #1877 — the definitions now declare the pips these components render. The
+  // id they used to declare (what MCP clients and the docs were told) moves
+  // onto the pip that draws, so an edge written with it still connects.
+  "add-captions": { video: "video-out" },
+  "adjust-volume": { audio: "audio-out" },
+  "audio-fx": { audio: "audio-out" },
+  "combine-audio": { audio: "audio-out" },
+  "loop-video": { video: "video-out" },
+  "merge-video-audio": { video: "video-out" },
+  "mix-audio": { audio: "audio-out" },
+  "resize-video": { video: "video-out" },
+  "trim-video": { video: "video-out" },
+  "save-to-storage": { asset: "out" },
+  // (audio-separation's old `audio` is NOT aliased: it could mean any of the
+  // seven stems, and a stem is never guessed.)
 }
 
 /** Legacy TARGET handle id → canonical id, per node type. */
@@ -248,29 +266,14 @@ export function classifyLegacyTargetHandle(
  * node's real outputs: an edge on one draws; an edge on the declared-only id
  * does not, so the write-time pass moves it onto the one pip that draws. An
  * entry leaves this table the day its definition is fixed.
+ *
+ * EMPTY since #1877 was burned down: every definition declares the pips its
+ * component renders, and the ids they used to declare are source aliases
+ * above. The table and `renderedSourceHandle` stay so a drift that is found
+ * later can be recorded here instead of shipping an invisible edge; the guard
+ * test fails until it is.
  */
-export const RENDERED_OUTPUT_HANDLES: Readonly<Record<string, readonly string[]>> = {
-  // The ffmpeg family shipped `video-out` / `audio-out` pips through a
-  // different migration (single `in` retained) and was left out of the alias
-  // pass on purpose.
-  "add-captions": ["video-out"],
-  "adjust-volume": ["audio-out", "video-out"],
-  "audio-fx": ["audio-out"],
-  "combine-audio": ["audio-out"],
-  "loop-video": ["video-out"],
-  "merge-video-audio": ["video-out"],
-  "mix-audio": ["audio-out"],
-  "resize-video": ["video-out"],
-  "trim-video": ["video-out"],
-  // Output nodes: a pass-through `out` pip the definition does not declare.
-  "save-to-storage": ["out"],
-  "sub-workflow-output": ["out"],
-  "webhook-output": ["out"],
-  // Stem separator: one declared `audio` output, a pip per stem rendered.
-  "audio-separation": ["bass", "drums", "guitar", "instrumental", "other", "piano", "vocals"],
-  // Dual-mode revoice: the video pip is rendered but undeclared.
-  "voice-changer": ["audio", "video"],
-}
+export const RENDERED_OUTPUT_HANDLES: Readonly<Record<string, readonly string[]>> = {}
 
 /**
  * The pip that draws for a source handle a node DECLARES but does not render

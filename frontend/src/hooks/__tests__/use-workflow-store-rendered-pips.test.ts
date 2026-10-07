@@ -10,13 +10,14 @@ vi.mock("@xyflow/react", () => ({
 import { useWorkflowStore } from "../use-workflow-store"
 
 /**
- * The burn-down table (`RENDERED_OUTPUT_HANDLES`, @nodaro/shared): a node whose
- * component still renders a pip its definition does not declare. A saved edge
- * on the DECLARED id would not draw (React Flow error 008), so the load pass
- * moves it onto the pip that draws — the same move the server makes when it
- * writes such an edge (`renderedSourceHandle`, one rule for both).
+ * The nodes of the #1877 burn-down: their definitions used to declare an id the
+ * component never rendered (`video` on trim-video, `asset` on save-to-storage).
+ * A saved edge on that old id would not draw (React Flow error 008), so the
+ * load pass moves it onto the pip that draws, through the source aliases in
+ * @nodaro/shared's handle-aliases.ts — the same table the server applies when
+ * it writes such an edge.
  */
-describe("loadWorkflow — a declared-only source id on a burn-down node moves onto the pip that draws", () => {
+describe("loadWorkflow — an id a definition used to declare moves onto the pip that draws", () => {
   it("trim-video `video` → `video-out`, save-to-storage `asset` → `out`; a rendered pip and a node outside the table stay as saved", () => {
     const at = { x: 0, y: 0 }
     const nodes = [

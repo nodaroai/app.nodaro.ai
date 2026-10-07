@@ -70,12 +70,12 @@ describe("validateWorkflowEdges", () => {
     expect(result.warnings).toEqual([])
   })
 
-  it("a pip the component renders beyond its definition (the burn-down table) is published: trim-video's `video-out` passes, and the known list names it", () => {
+  it("the pip a node renders is its published output: trim-video's `video-out` passes, and the known list names it (#1877)", () => {
     const withTrim = [...nodes, { id: "trim", type: "trim-video" }, { id: "merge", type: "merge-video-audio" }]
     const rendered = validateWorkflowEdges(withTrim, [{ id: "e1", source: "trim", sourceHandle: "video-out", target: "merge", targetHandle: "in" }])
     expect(rendered.warnings).toEqual([])
     const odd = validateWorkflowEdges(withTrim, [{ id: "e2", source: "trim", sourceHandle: "clip", target: "merge", targetHandle: "in" }])
-    expect(odd.warnings.join(" ")).toContain("(known: video, video-out)")
+    expect(odd.warnings.join(" ")).toContain("(known: video-out)")
   })
 
   it("warns when a non-video source feeds a video input", () => {

@@ -27,7 +27,7 @@ The Sub-Workflow Output node declares the output interface for a workflow that i
 - `in` -- Receives the final result(s) from upstream nodes within the sub-workflow.
 
 **Outputs:**
-None. This is a terminal node within the sub-workflow. Results are returned to the calling Sub-Workflow node.
+`out` — carries no value of its own. The results are returned to the calling Sub-Workflow node.
 ## Best Practices
 - Always pair with a Sub-Workflow Input node by selecting its route ID.
 - Set the Visible Output Port to the most relevant result for preview in the calling workflow.

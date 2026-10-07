@@ -655,7 +655,9 @@ export function handleExpandStoryboard(
       newEdges.push({
         id: `edge_${Date.now()}_${i}_merge_comb`,
         source: mergeNodeIds[i],
-        sourceHandle: "video",
+        // The pip Merge Video & Audio renders (#1877): this edge is added
+        // without the load pass, so the old `video` id would not draw.
+        sourceHandle: "video-out",
         target: combineNodeId,
         targetHandle: "in",
       } as WorkflowEdge);
