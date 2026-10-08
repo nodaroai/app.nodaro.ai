@@ -42,7 +42,9 @@ export function buildConditionVariables<
     if (edge.targetHandle !== VARIABLES_HANDLE_ID) continue
     const src = nodes.find((n) => n.id === edge.source)
     if (!src) continue
-    const output = extractOutput(src)
+    // Surrounding whitespace is never part of a variable: a model's answer
+    // ("<id>\n") must still equal the field it is compared with.
+    const output = extractOutput(src)?.trim()
     if (output === undefined || output === "") continue
     const label = (src.data.label as string) || src.type || src.id
     pairs.push({ label, output })

@@ -42,6 +42,8 @@ Condition groups evaluate the upstream JSON. Each group has:
 
 Multiple groups union their results — a route is activated if any matching group targets it. Supported operators include `=`, `!=`, `contains`, `not_contains`, `starts_with`, `ends_with`, `>`, `<`, `>=`, `<=`, `regex`, `exists`, `not_exists`.
 
+A condition's value can read another node: wire that node to the **Variables** input and write `{Its label}` as the value. The whitespace around that node's output is ignored, so a Generate Text answer that ends with a line break still equals the field.
+
 ## Inputs & Outputs
 
 **Inputs:** `in` — upstream data (text, JSON, image URL, video URL, audio URL).

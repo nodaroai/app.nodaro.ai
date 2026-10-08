@@ -87,6 +87,18 @@ describe("buildConditionVariables", () => {
     expect(map.has("Missing")).toBe(false)
   })
 
+  it("trims the surrounding whitespace of a variable — a model's answer ends with a newline", () => {
+    // A Generate Text answer ("<id>\n") wired to Variables must still EQUAL the
+    // field it is compared with; the newline is the model's, not the value's.
+    const answer = node("a", "llm-chat", "Pick", { text: "  11111111-1111-4111-8111-111111111111\n" })
+    const blank = node("b", "llm-chat", "Blank", { text: " \n " })
+    const filter = node("f", "filter-list", "Filter")
+    const edges: E[] = [edge("a", "f", "variables", "text"), edge("b", "f", "variables", "text")]
+    const map = buildConditionVariables("f", edges, [answer, blank, filter], extract)
+    expect(map.get("Pick")).toBe("11111111-1111-4111-8111-111111111111")
+    expect(map.has("Blank")).toBe(false)
+  })
+
   it("ignores edges targeting other nodes", () => {
     const tp = node("a", "text-prompt", "Ref", { text: "x" })
     const other = node("o", "filter-list", "Other")
