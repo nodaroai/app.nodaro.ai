@@ -155,16 +155,17 @@ export function UserRow({
           )}
         </td>
         {flagged ? (
-          /* The flag and the email stay together; the chips sit inline after
-             them while there is room and wrap under them when there is not
-             (this table keeps Topup CR and Role, so its Email column is
-             narrower than the mock's). */
-          <td className="px-4 py-2 font-semibold">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-              <span className="inline-flex items-center gap-2 whitespace-nowrap">
-                {clusterId !== null && <FlagBadge clusterId={clusterId} tier={tier} />}
-                <span>{user.email}</span>
-              </span>
+          /* A fixed two-line cell: the flag and the email on the first line,
+             the chips on a second line that is ALWAYS reserved and positioned
+             out of the flow. The "shares …" chip comes and goes with the
+             pointer, and if it took part in the layout every row below would
+             jump each time the mouse moved. Anything too long is clipped. */
+          <td className="relative overflow-hidden px-4 pb-7 pt-2 align-top font-semibold">
+            <div className="flex items-center gap-2 whitespace-nowrap">
+              {clusterId !== null && <FlagBadge clusterId={clusterId} tier={tier} />}
+              <span>{user.email}</span>
+            </div>
+            <div className="absolute bottom-1.5 start-4 flex items-center gap-1.5 whitespace-nowrap">
               {isBlocked && <Badge variant="destructive">Blocked</Badge>}
               {user.free_grant_state && <DecisionChip decision={user.free_grant_state} />}
               {linked && pointer && <SharedChip axes={axes} label={sharedLabel(pointer, axes)} />}
