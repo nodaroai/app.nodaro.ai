@@ -50,6 +50,10 @@ Selecting a render also sets the **Transcript** output to the transcript that re
 | Quality | Select | final | `final` = full-quality delivery, with stereo sound (AAC at 192 kbps, 48 kHz). `proxy` = a fast review render: the picture at most 720p at the final's frame rate, and lighter **mono** sound (AAC at 96 kbps, still 48 kHz), for a video render and an audio-only one alike, billed at the lower **preview** rate (see [Credit Cost](#credit-cost)). See [Proxy renders](#proxy-renders). |
 | Default crossfade (ms) | Number | 0 | Crossfade applied at every boundary that has **no** explicit transition in the EDL. Clamped per-boundary to 90% of the shorter neighbouring segment (the FFmpeg limit), so it can never over-blend a short segment. `0` = hard cuts. |
 
+### When the EDL has not been made yet
+
+When a node before Apply EDL has not run (an Edit Plan that has never run, say), the panel says the upstream has not run and offers **Run up to here · ≈N**. It runs the nodes before Apply EDL that have not run, asking first only when the estimate is above the usual run-confirm threshold, and does not render. You can then read the plan, and the badge below judges it, before the render is paid for. It is also in the node's right-click menu. See [Run up to here](../../features/run-results.md#run-up-to-here).
+
 ### The render check in the panel
 
 The config panel shows a badge for every render the node would make if it ran now. Each render reads the EDL delivered by the last wire into **EDL** that delivers one (from an Edit Plan, a Camera Switch, a List, Generate Text, or a Text or JSON node holding an EDL); when none does, it is the node's own EDL. The badge reads the output the wire leaves from: Camera Switch's **Transcript** output wired into **EDL** is checked as the transcript, which is not an EDL. The badge checks each render with the same rule the render applies before it charges anything, using the node's **Output** and **Default crossfade** and the media wired into **Sources** for that render:

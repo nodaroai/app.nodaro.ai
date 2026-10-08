@@ -1290,6 +1290,7 @@ export const en = {
 
   // ── Node run strip (cross-cutting — appears under every node) ────────────
   "node.runFromHere": "Run from here",
+  "node.runUpToHere": "Run up to here",
   "node.stop": "Stop",
   "node.runInstead": "Run instead",
   "node.stopAndKeep": "Stop & keep what's rendered",
@@ -5818,6 +5819,8 @@ export const en = {
   "run.videoLinkChanged": "\"{label}\": the link changed while it was downloading — run again.",
   "run.runningFromHere": "Running from here...",
   "run.runningSelected": "Running selected nodes...",
+  "run.runningUpToHere": "Running up to here...",
+  "run.nothingToRunUpstream": "Nothing upstream needs to run.",
   "run.nodesToRun": "{count} node(s) to run",
   "run.alreadyRunning": "Workflow is already running — reattaching...",
   "run.failedToStartWorkflow": "Failed to start workflow",
@@ -10731,6 +10734,11 @@ export const en = {
   "renderFinal.updatePreview": "Update preview",
   "renderFinal.confirmTitle": "Render the final?",
   "renderFinal.confirmTitleCredits": "Render final · ≈{credits} credits",
+  "runUpToHere.button": "Run up to here · ≈{credits}",
+  "runUpToHere.confirmTitle": "Run up to here?",
+  "runUpToHere.confirmTitleCredits": "Run up to here · ≈{credits} credits",
+  "runUpToHere.upstreamNotRun": "Upstream hasn't run yet. Run it to see this node's input.",
+  "runUpToHere.tooltip": "Runs the upstream nodes that haven't run yet, without running this node",
   "renderFinal.menuFor": "Render final: {name}",
   "renderFinal.updatePreviewFor": "Update preview: {name}",
   "renderFinal.toastFinal": "Rendering the final",

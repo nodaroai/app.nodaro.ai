@@ -26,6 +26,7 @@ import { connectionJustLost, jobGoneMessage, shouldStopPolling } from "./poll-co
 import { estimateRunCreditLines, estimateRunCredits, sumRunCreditLines } from "./estimate-run-credits";
 import { renderConfirmDetail } from "./render-confirm-detail";
 import { liveExecutable, getDownstreamNodeIds, runFromHereExecutable } from "./run-from-here-set";
+import { runUpToHereSet } from "./run-up-to-here-set";
 import { wordTimingsPreflight } from "./add-captions-preflight";
 import { nestedRunPreflight } from "./sub-workflow-preflight";
 import { speakerViewPricePreflight } from "./speaker-view-price-preflight";
@@ -391,7 +392,7 @@ export async function confirmRunOrAbort(
       executable.map((n) => previewSingleRunRefusal(n.id, allNodes, edges)).find(Boolean) ??
       executable.map((n) => renderOwnRunRefusal(n.id, allNodes, edges)).find(Boolean);
     if (refusal) { toast.error(refusal); return false; }
-  } else if (trigger === "from-here" || trigger === "selected") {
+  } else if (trigger === "from-here" || trigger === "up-to-here" || trigger === "selected") {
     const ids = new Set(executable.map((n) => n.id));
     const refusal = executable.map((n) => renderOwnRunRefusal(n.id, allNodes, edges, ids)).find(Boolean);
     if (refusal) { toast.error(refusal); return false; }
@@ -812,13 +813,124 @@ export async function handleRunFromHere(
   // The stop rule's closure never runs: never reset, flipped or counted.
   const executableNodes = previewRunnable(downstreamExecutable, nodes, edges);
 
+  await startSubsetRun({
+    ctx, projectId, save, setIsRunning, onExecutionStarted, onExecutionEnded,
+    workflowId, ids: [...downstream], executableNodes, startedToast: tx("run.runningFromHere"),
+  });
+  } finally {
+    _runFromHereLock = false;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// handleRunUpToHere
+// ---------------------------------------------------------------------------
+
+/**
+ * "Run up to here": the not-yet-run upstream nodes of `nodeId`, and never the
+ * node itself — so a node that needs an upstream result (Speaker View's EDL,
+ * Apply EDL's) can be fed without running it. It is the partial-run machinery
+ * "Run from here" uses (`startSubsetRun`: one `runWorkflow` over a node-id
+ * subset, the rest seeded from their saved output) over a different set
+ * (`runUpToHereSet`), behind the run-confirm dialog under Run from here's own
+ * spend-threshold rule: the run is priced, and asked about when it costs more
+ * than RUN_CONFIRM_CREDITS, before anything is touched.
+ */
+export async function handleRunUpToHere(
+  nodeId: string,
+  ctx: ExecutionContext,
+  projectId: string | undefined,
+  save: (pid: string) => Promise<unknown>,
+  setIsRunning: (v: boolean) => void,
+  onExecutionStarted?: (id: string) => void,
+  onExecutionEnded?: () => void,
+): Promise<void> {
+  if (_runFromHereLock) return;
+  if (refuseWhileStreaming()) return;
+  _runFromHereLock = true;
+
+  try {
+  // Confirm before any mutation, by the same spend-threshold rule as Run from
+  // here (only above RUN_CONFIRM_CREDITS; decided 2026-10-08): the button
+  // already quotes the price, so a cheap run goes straight through.
+  {
+    const st = useWorkflowStore.getState();
+    const { executable } = runUpToHereSet(nodeId, st.nodes, st.edges);
+    if (executable.length === 0) {
+      toast.info(tx("run.nothingToRunUpstream"));
+      return;
+    }
+    if (!(await confirmRunOrAbort(ctx, executable, st.nodes, st.edges, "up-to-here", false))) return;
+    if (!(await ensureVideoLinksBeforeRun(executable.map((n) => n.id), setIsRunning))) return;
+  }
+  // The canvas may have turned read-only while those were awaited.
+  if (refuseWhileReadOnly()) return;
+  rejectAllManualEdits();
+  const { nodes, edges } = collapseExpandedClones();
+  if (!nodes.some((n) => n.id === nodeId)) return;
+
+  const workflowId = useWorkflowStore.getState().workflowId;
+  if (!workflowId) {
+    toast.error(tx("run.saveBeforeRunning"));
+    return;
+  }
+
+  // Read again on the collapsed graph: the confirm may have taken minutes.
+  const { ids, executable } = runUpToHereSet(nodeId, nodes, edges);
+  if (executable.length === 0) {
+    toast.info(tx("run.nothingToRunUpstream"));
+    return;
+  }
+  // Only the nodes that re-run lose their connected list rows: the node asked
+  // about does not run, so nothing would refill what clearing took from it.
+  clearConnectedListRows(nodes.filter((n) => ids.has(n.id)));
+  warnUnderMinRows(nodes.filter((n) => ids.has(n.id)));
+  // The stop rule's closure never runs: never reset, flipped or counted.
+  const executableNodes = previewRunnable(executable, nodes, edges);
+
+  await startSubsetRun({
+    ctx, projectId, save, setIsRunning, onExecutionStarted, onExecutionEnded,
+    workflowId, ids: [...ids], executableNodes, startedToast: tx("run.runningUpToHere"),
+  });
+  } finally {
+    _runFromHereLock = false;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// startSubsetRun — the one partial-run executor
+// ---------------------------------------------------------------------------
+
+/**
+ * Starts a server run over a node-id subset: reset what re-runs, flip it to
+ * pending, save when dirty, `runWorkflow(ids)`, then follow the execution.
+ * "Run from here", "Run up to here" and "Run selected" differ only in WHICH
+ * nodes they send; this is everything after that choice, so a fix to a
+ * partial run's start-up (the dirty-save, the already-running attach, the
+ * failure rollback) lands in all three.
+ */
+async function startSubsetRun(o: {
+  ctx: ExecutionContext;
+  projectId: string | undefined;
+  save: (pid: string) => Promise<unknown>;
+  setIsRunning: (v: boolean) => void;
+  onExecutionStarted?: (id: string) => void;
+  onExecutionEnded?: () => void;
+  workflowId: string;
+  /** Every id sent to the server (executable or not). */
+  ids: string[];
+  /** The nodes that execute: reset, flipped to pending and counted. */
+  executableNodes: WorkflowNode[];
+  startedToast: string;
+}): Promise<void> {
+  const { ctx, projectId, save, setIsRunning, onExecutionStarted, onExecutionEnded, workflowId, ids, executableNodes } = o;
   // Capture dirtiness BEFORE the per-run resets / optimistic flip so a clean
   // editor skips the pre-Run save round-trip (see FIX 4).
   const wasDirty = useWorkflowStore.getState().isDirty;
 
-  // Only clear the scope that's actually re-running — upstream/out-of-subset
-  // nodes keep their saved output so the backend orchestrator can still
-  // resolve inputs from them via extractSavedNodeOutput.
+  // Only clear the scope that's actually re-running — out-of-subset nodes keep
+  // their saved output so the backend orchestrator can still resolve inputs
+  // from them via extractSavedNodeOutput.
   // preserveHistory keeps `generatedResults` so the new run prepends to the
   // existing list instead of replacing it (matches single-node Run behavior).
   resetNodeAccumulation(executableNodes, { preserveHistory: true });
@@ -834,13 +946,13 @@ export async function handleRunFromHere(
     await save(projectId);
   }
 
-  toast.info(tx("run.runningFromHere"), {
+  toast.info(o.startedToast, {
     description: tx("run.nodesToRun", { count: executableNodes.length }),
   });
 
   try {
     const idempotencyKey = generateIdempotencyKey();
-    const result = await withDedupRaceRetry(() => runWorkflow(workflowId, [...downstream], idempotencyKey));
+    const result = await withDedupRaceRetry(() => runWorkflow(workflowId, ids, idempotencyKey));
     onExecutionStarted?.(result.executionId);
     streamBackendExecution(result.executionId, ctx, setIsRunning, onExecutionEnded);
   } catch (err: unknown) {
@@ -855,9 +967,6 @@ export async function handleRunFromHere(
     toast.error(tx("run.failedToStartExecution"), {
       description: err instanceof Error ? err.message : tx("run.unknownError"),
     });
-  }
-  } finally {
-    _runFromHereLock = false;
   }
 }
 
@@ -912,47 +1021,13 @@ export async function handleRunSelected(
 
   const selectedIds = selectedNodes.map((n) => n.id);
 
-  // Capture dirtiness BEFORE the per-run resets / optimistic flip so a clean
-  // editor skips the pre-Run save round-trip (see FIX 4).
-  const wasDirty = useWorkflowStore.getState().isDirty;
-
-  // preserveHistory:true — Run-Selected accumulates new takes and never wipes
-  // generatedResults (same fix as Execute-All above; clears only stale badges).
-  resetNodeAccumulation(executableNodes, { preserveHistory: true });
-
-  // Optimistic UI FIRST — batched pending flip + running state before the save
-  // round-trip so the active border appears the instant Run is clicked.
-  const { markNodesStatus } = useWorkflowStore.getState();
-  const executableIds = executableNodes.map((n) => n.id);
-  markNodesStatus(executableIds, "pending");
-  setIsRunning(true);
-
-  if (wasDirty && projectId) {
-    await save(projectId);
-  }
-
-  toast.info(tx("run.runningSelected"), {
-    description: tx("run.nodesToRun", { count: executableNodes.length }),
+  // preserveHistory:true (in the shared start) — Run-Selected accumulates new
+  // takes and never wipes generatedResults (same fix as Execute-All above;
+  // clears only stale badges).
+  await startSubsetRun({
+    ctx, projectId, save, setIsRunning, onExecutionStarted, onExecutionEnded,
+    workflowId, ids: selectedIds, executableNodes, startedToast: tx("run.runningSelected"),
   });
-
-  try {
-    const idempotencyKey = generateIdempotencyKey();
-    const result = await withDedupRaceRetry(() => runWorkflow(workflowId, selectedIds, idempotencyKey));
-    onExecutionStarted?.(result.executionId);
-    streamBackendExecution(result.executionId, ctx, setIsRunning, onExecutionEnded);
-  } catch (err: unknown) {
-    if (err instanceof WorkflowAlreadyRunningError) {
-      toast.info(tx("run.alreadyRunning"));
-      onExecutionStarted?.(err.executionId);
-      void attachToRunningExecution(err.executionId, ctx, setIsRunning, onExecutionEnded, () => markNodesStatus(executableIds, undefined));
-      return;
-    }
-    setIsRunning(false);
-    markNodesStatus(executableIds, undefined);
-    toast.error(tx("run.failedToStartExecution"), {
-      description: err instanceof Error ? err.message : tx("run.unknownError"),
-    });
-  }
 }
 
 // ---------------------------------------------------------------------------

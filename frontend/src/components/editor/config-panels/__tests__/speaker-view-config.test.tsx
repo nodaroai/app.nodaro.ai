@@ -67,6 +67,14 @@ describe("SpeakerViewConfig: the input and its states (U2b)", () => {
     expect(screen.getByTestId("speaker-view-input-state").textContent).toBe(t("speakerView.state.notRun", { producer: "Edit Plan" }))
   })
 
+  it("an upstream that has not run also offers Run up to here, under the panel's own line (decided 2026-10-08)", () => {
+    panel({}, { producerData: {} })
+    expect(screen.getByRole("button", { name: /Run up to here/ })).toBeTruthy()
+    // The panel's line names the producer; the notice does not repeat it in generic words.
+    expect(screen.queryByText(t("runUpToHere.upstreamNotRun"))).toBeNull()
+    expect(screen.queryByText(t("speakerView.inputNone"))).toBeNull()
+  })
+
   it("summarises the wired edit, and a clip pack across its clips", () => {
     panel({}, { edl: TWO })
     expect(screen.getByTestId("speaker-view-input-summary").textContent).toBe(t("speakerView.inputSummary", { speakers: 2, cameras: 2 }))

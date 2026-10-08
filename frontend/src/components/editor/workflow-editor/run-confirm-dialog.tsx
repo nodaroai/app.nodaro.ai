@@ -52,14 +52,20 @@ export function runConfirmText(
       : t("renderFinal.confirmTitle")
     : info?.trigger === "update-preview" && credits != null
       ? t("renderFinal.previewConfirmTitleCredits", { credits: creditUnits(credits) })
+    : info?.trigger === "up-to-here"
+      ? credits != null
+        ? t("runUpToHere.confirmTitleCredits", { credits: creditUnits(credits) })
+        : t("runUpToHere.confirmTitle")
     : info?.alwaysConfirm
       ? t("editor.runConfirmEntireTitle")
       : t("editor.runConfirmCreditsTitle", { credits: creditUnits(credits ?? 0) })
-  const body = !isRenderFinal && info?.alwaysConfirm && credits != null ? t("editor.runConfirmEstimated", { nodes: nodeLabel, credits: creditUnits(credits) }) : nodeLabel
+  // Run up to here carries its figure in the title, as Render final does.
+  const body = !isRenderFinal && info?.trigger !== "up-to-here" && info?.alwaysConfirm && credits != null ? t("editor.runConfirmEstimated", { nodes: nodeLabel, credits: creditUnits(credits) }) : nodeLabel
   const action =
     info?.trigger === "render-final" ? t("renderFinal.action")
       : info?.trigger === "update-preview" ? t("renderFinal.updatePreview")
-        : t("common.run")
+        : info?.trigger === "up-to-here" ? t("node.runUpToHere")
+          : t("common.run")
   return { title, body, action }
 }
 

@@ -697,6 +697,9 @@ interface WorkflowState {
   readonly setRunSingleNode: (fn: ((nodeId: string) => void) | null) => void
   readonly runFromHere: ((nodeId: string) => void) | null
   readonly setRunFromHere: (fn: ((nodeId: string) => void) | null) => void
+  /** "Run up to here": the not-yet-run upstream nodes of a node, never the node itself. */
+  readonly runUpToHere: ((nodeId: string) => void) | null
+  readonly setRunUpToHere: (fn: ((nodeId: string) => void) | null) => void
   readonly runSelected: (() => void) | null
   readonly setRunSelected: (fn: (() => void) | null) => void
   /** Render final (`"final"`) or Update preview (`"proxy"`) on a render node:
@@ -2813,6 +2816,8 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
   setRunSingleNode: (fn) => set({ runSingleNode: fn }),
   runFromHere: null,
   setRunFromHere: (fn) => set({ runFromHere: fn }),
+  runUpToHere: null,
+  setRunUpToHere: (fn) => set({ runUpToHere: fn }),
   runSelected: null,
   setRunSelected: (fn) => set({ runSelected: fn }),
   renderFinal: null,

@@ -57,7 +57,7 @@ export function SpeakerViewConfig({ data, onUpdate, nodes, edges = [], nodeId }:
         </p>
       )}
 
-      <SpeakerViewInputSummary state={state} ctx={ctx} verdict={verdict} problem={problem} mismatch={mismatch} />
+      <SpeakerViewInputSummary state={state} ctx={ctx} verdict={verdict} problem={problem} mismatch={mismatch} nodeId={nodeId} nodes={nodes} edges={edges} />
 
       <section className="flex flex-col gap-2">
         <Label>{t("speakerView.section.output")}</Label>

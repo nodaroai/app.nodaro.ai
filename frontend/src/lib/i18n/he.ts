@@ -1283,6 +1283,7 @@ export const he: ChromeDict = {
 
   // Node run strip (cross-cutting)
   "node.runFromHere": "הרצה מכאן",
+  "node.runUpToHere": "הרצה עד כאן",
   "node.stop": "עצירה",
   "node.runInstead": "הרצה מחדש",
   "node.stopAndKeep": "עצירה ושמירת החלק שכבר נוצר",
@@ -5772,6 +5773,8 @@ export const he: ChromeDict = {
   "run.videoLinkChanged": "\\\"{label}\\\": הקישור השתנה במהלך ההורדה — הריצו שוב.",
   "run.runningFromHere": "מריץ מכאן…",
   "run.runningSelected": "מריץ את הרכיבים שנבחרו…",
+  "run.runningUpToHere": "מריץ עד כאן…",
+  "run.nothingToRunUpstream": "אין במעלה הזרם רכיבים שצריך להריץ.",
   "run.nodesToRun": "{count} רכיבים להרצה",
   "run.alreadyRunning": "התהליך כבר פועל — מתחבר מחדש…",
   "run.failedToStartWorkflow": "הפעלת התהליך נכשלה",
@@ -10648,6 +10651,11 @@ export const he: ChromeDict = {
   "renderFinal.updatePreview": "עדכון תצוגה מקדימה",
   "renderFinal.confirmTitle": "לרנדר את הגרסה הסופית?",
   "renderFinal.confirmTitleCredits": "רינדור סופי · ≈{credits} קרדיטים",
+  "runUpToHere.button": "הרצה עד כאן · ≈{credits}",
+  "runUpToHere.confirmTitle": "להריץ עד כאן?",
+  "runUpToHere.confirmTitleCredits": "הרצה עד כאן · ≈{credits} קרדיטים",
+  "runUpToHere.upstreamNotRun": "הרכיבים במעלה הזרם עדיין לא רצו. הריצו אותם כדי לראות את הקלט של הרכיב הזה.",
+  "runUpToHere.tooltip": "מריץ את הרכיבים במעלה הזרם שעוד לא רצו, בלי להריץ את הרכיב הזה",
   "renderFinal.menuFor": "רינדור סופי: {name}",
   "renderFinal.updatePreviewFor": "עדכון תצוגה מקדימה: {name}",
   "renderFinal.toastFinal": "מרנדר את הגרסה הסופית",

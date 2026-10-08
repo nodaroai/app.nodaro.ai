@@ -4,6 +4,8 @@ import { Label } from "@/components/ui/label"
 import type { EdlValidity } from "@/lib/edl-validity"
 import { useT } from "@/lib/i18n"
 import type { SpeakerViewInputProblem, SpeakerViewInputState } from "@/lib/speaker-view-input-state"
+import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
+import { RunUpToHereNotice } from "./run-up-to-here-notice"
 
 const PROBLEM_KEYS = {
   "wire-camera-switch": "speakerView.state.wireCameraSwitch",
@@ -19,23 +21,32 @@ interface SpeakerViewInputSummaryProps {
   readonly problem: SpeakerViewInputProblem | null
   /** The transcript's speakers against the edit's, when they differ. */
   readonly mismatch: { readonly labels: readonly string[]; readonly names: readonly string[] } | null
+  /** The panel's node and graph: an upstream that has not run offers "Run up to here" from them. */
+  readonly nodeId?: string
+  readonly nodes: ReadonlyArray<WorkflowNode>
+  readonly edges: ReadonlyArray<WorkflowEdge>
 }
 
 /**
  * The panel's INPUT section (U2, U2b): what the wired edit holds, and which of
  * the input states applies — no edit, an upstream that has not run, a clip
  * pack, speakers the plugin cannot read (SV24) or a transcript whose speakers
- * are not the edit's. The badge beneath it carries the full list of issues.
+ * are not the edit's. An upstream that has not run also offers "Run up to
+ * here · ≈N". The badge beneath it carries the full list of issues.
  */
-export function SpeakerViewInputSummary({ state, ctx, verdict, problem, mismatch }: SpeakerViewInputSummaryProps) {
+export function SpeakerViewInputSummary({ state, ctx, verdict, problem, mismatch, nodeId, nodes, edges }: SpeakerViewInputSummaryProps) {
   const t = useT()
   return (
     <section className="flex flex-col gap-1">
       <Label>{t("speakerView.section.input")}</Label>
       {state.kind === "not-run" ? (
-        <p role="status" data-testid="speaker-view-input-state" className="text-[11px] text-muted-foreground">
-          {t("speakerView.state.notRun", { producer: state.producer })}
-        </p>
+        <>
+          <p role="status" data-testid="speaker-view-input-state" className="text-[11px] text-muted-foreground">
+            {t("speakerView.state.notRun", { producer: state.producer })}
+          </p>
+          {/* The line above already names the producer, so the notice brings only its button. */}
+          {nodeId && <RunUpToHereNotice nodeId={nodeId} nodes={nodes} edges={edges} showMessage={false} />}
+        </>
       ) : ctx ? (
         <p className="text-[11px] text-muted-foreground" data-testid="speaker-view-input-summary">
           {ctx.clips.length > 1

@@ -1,6 +1,6 @@
 # Run results on the canvas
 
-When you press **Run**, **Run from here** or **Run selected**, the workflow runs
+When you press **Run**, **Run from here**, **Run up to here** or **Run selected**, the workflow runs
 on the server, and each node shows its result on the canvas as it finishes —
 the same result a run of that node alone would leave.
 
@@ -49,6 +49,35 @@ stays empty rather than showing one from an earlier run.
 before that part are not run again: they hand on what they already hold. Those
 nodes keep exactly what they show — the run never writes their result back onto
 them, so an edit you made to one stays as it is.
+
+## Run up to here
+
+**Run up to here** is the other half of Run from here: it runs the nodes
+**before** a node that have not run yet, and never the node itself. Use it to
+feed a node that reads an upstream result (a Speaker View or an Apply EDL
+waiting on an Edit Plan) and look at that result before you spend on the node.
+
+- **Where:** right-click the node and choose **Run up to here**, or press the
+  **Run up to here · ≈N** button in the Speaker View and Apply EDL panels. The
+  panels show it, with a line saying the upstream has not run yet, when a node
+  before them has no result. The menu entry appears only when there is
+  something to run.
+- **What runs:** the nodes before the node that hold no result. A node that
+  already holds its result is not run again, and neither are the nodes that
+  only feed it: it hands on what it holds, as in Run from here. A node whose
+  last run failed holds no result and runs again. A result that is out of date
+  because something before it changed still counts as a result: use **Run from
+  here** on the changed node to refresh it.
+- **It asks first when it is costly.** Run up to here follows the same rule as
+  Run from here: the confirm dialog (**Run up to here · ≈N credits**) appears
+  only when the estimate for exactly those nodes is above the usual run-confirm
+  threshold; below it the run starts straight away, since the button already
+  shows the figure. The estimate is the same one Run and Run from here use, over
+  that set. Where credits are not charged, the run starts without asking.
+- **What it does:** the same partial run as Run from here, so the result of each
+  node shows on the canvas as it finishes, and Stop and the usual run history
+  work as usual. A run already in progress, or a canvas you can only view, does
+  not start one.
 
 ## Reopening after a run finished
 

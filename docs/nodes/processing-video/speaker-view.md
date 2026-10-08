@@ -21,6 +21,8 @@ A **Preview** (Quality: Proxy) is a private 720p render to review before a final
 | EDL | json | **Yes** | One edit on the recording's clock — Edit Plan's or Camera Switch's EDL. A clip set is refused here (it fans out one Speaker View run per clip on the canvas). Media resolves from each source's URL; there is no *Sources* input. |
 | Transcript | json | When the edit does not name its speakers | The word transcript with speaker labels. Speaker View splits the edit at each speaker's turn and uses the labels when no segment names a speaker. |
 
+When the node wired into **EDL** has not run yet, the panel says so and offers **Run up to here · ≈N**. It runs the nodes before Speaker View that have not run, asking first only when the estimate is above the usual run-confirm threshold, and does not run Speaker View itself. See [Run up to here](../../features/run-results.md#run-up-to-here).
+
 ## Outputs
 
 | Handle | Type | Description |

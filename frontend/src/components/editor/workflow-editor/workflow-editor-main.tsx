@@ -91,6 +91,7 @@ import {
   handleRun,
   handleRunSingleNode,
   handleRunFromHere,
+  handleRunUpToHere,
   handleRunSelected,
   restorePollingForRunningJobs,
   streamBackendExecution,
@@ -1044,6 +1045,13 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       isReadOnly ? null : (nodeId: string) => handleRunFromHere(nodeId, ctx, projectId, save, setIsRunning, onExecutionStarted, onExecutionEnded),
     );
     return () => useWorkflowStore.getState().setRunFromHere(null);
+  });
+
+  useEffect(() => {
+    useWorkflowStore.getState().setRunUpToHere(
+      isReadOnly ? null : (nodeId: string) => handleRunUpToHere(nodeId, ctx, projectId, save, setIsRunning, onExecutionStarted, onExecutionEnded),
+    );
+    return () => useWorkflowStore.getState().setRunUpToHere(null);
   });
 
   useEffect(() => {

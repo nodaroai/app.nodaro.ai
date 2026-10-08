@@ -1031,7 +1031,7 @@ export interface RunConfirmLine extends RunCreditLine {
 /** Payload for the run-confirmation dialog (Execute-All always; any run >100cr). */
 export interface RunConfirmInfo {
   /** "render-final" / "update-preview": a run of a review's render set (`handleRenderFinal`). */
-  readonly trigger: "all" | "selected" | "from-here" | "single" | "render-final" | "update-preview";
+  readonly trigger: "all" | "selected" | "from-here" | "up-to-here" | "single" | "render-final" | "update-preview";
   readonly nodeCount: number;
   /** Estimated credits, or null in non-credit editions (cost line hidden). */
   readonly estimatedCredits: number | null;

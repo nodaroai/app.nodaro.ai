@@ -1,7 +1,7 @@
 "use client"
 
 import { useRef, useMemo, useState } from "react"
-import { Play, FastForward, ListChecks, Copy, Trash2, CircleSlash, CircleCheck, ImageIcon, ZoomIn, Maximize2, UserPlus, CircleHelp, ArrowUpRight } from "lucide-react"
+import { Play, FastForward, Rewind, ListChecks, Copy, Trash2, CircleSlash, CircleCheck, ImageIcon, ZoomIn, Maximize2, UserPlus, CircleHelp, ArrowUpRight } from "lucide-react"
 import { toast } from "sonner"
 import { useT, tx } from "@/lib/i18n"
 import { useReactFlow } from "@xyflow/react"
@@ -16,6 +16,7 @@ import { SHORTCUTS, formatBinding, isMacPlatform } from "@/lib/shortcuts"
 import { nodeDocsLinksShown, useNodeDocsUrl } from "@/lib/node-docs/node-docs"
 import { nodeThumbnailUrl } from "./node-thumbnail"
 import { RenderMenuItems } from "./node-context-menu-render"
+import { runUpToHereSet } from "./workflow-editor/run-up-to-here-set"
 
 interface NodeContextMenuProps {
   readonly nodeId: string
@@ -30,6 +31,7 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
   const deleteNode = useWorkflowStore((s) => s.deleteNode)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
   const runFromHere = useWorkflowStore((s) => s.runFromHere)
+  const runUpToHere = useWorkflowStore((s) => s.runUpToHere)
   const runSelected = useWorkflowStore((s) => s.runSelected)
   const toggleSkipNode = useWorkflowStore((s) => s.toggleSkipNode)
   const setWorkflowThumbnail = useWorkflowStore((s) => s.setWorkflowThumbnail)
@@ -50,6 +52,12 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
   const hasDownstream = useMemo(() => {
     return edges.some((e) => e.source === nodeId)
   }, [nodeId, edges])
+
+  // Offered only where it would run something: upstream nodes that have not run.
+  const hasUpstreamToRun = useMemo(
+    () => runUpToHere !== null && runUpToHereSet(nodeId, nodes, edges).executable.length > 0,
+    [runUpToHere, nodeId, nodes, edges],
+  )
 
   const selectedCount = useMemo(() => {
     return nodes.filter((n) => n.selected).length
@@ -105,6 +113,11 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
 
   function handleRunFromHere() {
     runFromHere?.(nodeId)
+    onClose()
+  }
+
+  function handleRunUpToHere() {
+    runUpToHere?.(nodeId)
     onClose()
   }
 
@@ -238,6 +251,17 @@ export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps)
         >
           <FastForward className="h-3.5 w-3.5" />
           {t("node.runFromHere")}
+        </button>
+      )}
+      {hasUpstreamToRun && (
+        <button
+          className="flex items-center gap-2 w-full px-3 py-1.5 text-sm hover:bg-accent text-start cursor-pointer disabled:opacity-50"
+          onClick={handleRunUpToHere}
+          disabled={isRunning}
+          title={t("runUpToHere.tooltip")}
+        >
+          <Rewind className="h-3.5 w-3.5" />
+          {t("node.runUpToHere")}
         </button>
       )}
       <RenderMenuItems nodeId={nodeId} nodeType={nodeType} isRunning={isRunning} onClose={onClose} />
