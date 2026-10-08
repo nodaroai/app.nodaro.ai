@@ -217,6 +217,37 @@ export async function activateSignupGrant(
   return { activated: row?.did_activate === true, state: asState(row?.state, "withheld") }
 }
 
+/**
+ * The exit from 'withheld', for the user: a SETTLED purchase.
+ *
+ * Called by the Stripe webhook after a fresh top-up or auto-recharge grant —
+ * and only then: provision-credits.ts gates the call on the idempotent grant
+ * RPC's own "granted" answer, so a redelivered or failed grant never re-opens
+ * a grant an admin has since taken back. Money moved from a real payment
+ * method is the evidence the device and network rules were a proxy for. The
+ * previous exit saved a card at $0 and read its fingerprint as "a person we
+ * have not seen"; virtual cards made a fresh fingerprint free to mint, so it
+ * is gone.
+ *
+ * Only 'withheld' moves. 'unclaimed' is left to the claim, which reads the
+ * purchase itself (`countPurchases`) and grants; 'revoked' is an admin's
+ * decision and stays. Never throws: the purchase that triggered it is already
+ * granted, and nothing here may fail it — the caller logs the outcome.
+ */
+export async function activateSignupGrantOnPurchase(
+  userId: string,
+): Promise<{ activated: boolean; state: FreeGrantState | null }> {
+  let state: FreeGrantState | null = null
+  try {
+    state = await readFreeGrantState(userId)
+    if (state !== "withheld") return { activated: false, state }
+    const result = await activateSignupGrant(userId, "Free signup grant (activated by first purchase)")
+    return { activated: result.activated, state: result.state }
+  } catch {
+    return { activated: false, state }
+  }
+}
+
 /** Why a take-back or a restore moved nothing (the RPC's own words, migration 458). */
 export type GrantChangeRefusal = "not_found" | "not_revocable" | "not_revoked" | "paid_account" | "reservations_open"
 

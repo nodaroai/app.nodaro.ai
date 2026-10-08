@@ -25,6 +25,15 @@ import { supabase } from "../../lib/supabase.js"
  * makes two identical laptops in one timezone collide. The same key from the
  * same network is treated as the same machine; from different networks it
  * takes a cluster of them to fire.
+ *
+ * A PURCHASE OUTRANKS THE SIGNALS. Every rule above is a proxy for one
+ * question — is this a person we have not seen, or a farmed account — and
+ * money moved from a real payment method answers it directly. An account with
+ * a settled purchase on record (`transactions`, written only by the Stripe
+ * webhook after settlement) is granted whatever the signals say. This is the
+ * ONE read here that does not fail open: a count we could not make is 0, and
+ * 0 leaves the rules to decide. The other order — a purchase AFTER a withhold
+ * — is the webhook's job (`activateSignupGrantOnPurchase`, signup-grant.ts).
  */
 
 export const SIGNUP_GRANT_RULES = {
@@ -77,7 +86,11 @@ export function decideSignupGrant(input: {
   counts: SignupSignalCounts | null
   /** The claim carried neither a browser nor a device key (blocked, or a keyless fallback). */
   keyless?: boolean
+  /** The account has a settled purchase on record — see the header: it outranks every rule. */
+  hasPurchase?: boolean
 }): GrantDecision {
+  if (input.hasPurchase === true) return { decision: "granted", reasons: [] }
+
   const reasons: GrantReason[] = []
 
   // An empty list is a GoTrue quirk, not an identity claim — fail open on it
@@ -175,6 +188,31 @@ export async function countSimilarEmails(userId: string, email: string | null, l
   }
 }
 
+/**
+ * Settled purchases on record for the account: `transactions` rows (top-ups and
+ * subscription invoices), which only the Stripe webhook writes, after
+ * settlement. A failed read is 0 — the one input here that does not fail
+ * open: a count we could not make must never become the reason to grant.
+ */
+export async function countPurchases(userId: string, log: FastifyBaseLogger): Promise<number> {
+  try {
+    // Counted on the column the filter already names, so the query cannot
+    // depend on a column this module never otherwise reads.
+    const { count, error } = await supabase
+      .from("transactions")
+      .select("user_id", { count: "exact", head: true })
+      .eq("user_id", userId)
+    if (error) {
+      log.warn({ err: error, userId }, "signup grant: purchase count failed")
+      return 0
+    }
+    return count ?? 0
+  } catch (err) {
+    log.warn({ err, userId }, "signup grant: purchase count threw")
+    return 0
+  }
+}
+
 /** One head-count against signup_signals. A failed query counts as 0. */
 async function countOthers(
   build: (q: ReturnType<typeof signalsHead>) => PromiseLike<{ count: number | null; error: unknown }>,
@@ -240,11 +278,17 @@ export async function evaluateSignupGrant(
   params: { userId: string; browserKey: string | null; deviceKey: string | null; ipHash: string },
   log: FastifyBaseLogger,
 ): Promise<GrantDecision> {
-  const [{ providers, email }, counts] = await Promise.all([readAuthUser(params.userId, log), countSignupSignals(params, log)])
+  const [{ providers, email }, counts, purchases] = await Promise.all([
+    readAuthUser(params.userId, log),
+    countSignupSignals(params, log),
+    countPurchases(params.userId, log),
+  ])
   const similarEmailOthers = await countSimilarEmails(params.userId, email, log)
+  if (purchases > 0) log.info({ userId: params.userId, purchases }, "signup grant: purchase on record, granting")
   return decideSignupGrant({
     providers,
     counts: { ...counts, similarEmailOthers },
     keyless: !params.browserKey && !params.deviceKey,
+    hasPurchase: purchases > 0,
   })
 }

@@ -1,14 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { render, screen, fireEvent, waitFor } from "@testing-library/react"
+import { render, screen } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
 import React from "react"
 
-const { mockBalance, mockStart, mockComplete, mockInvalidate, mockToast } = vi.hoisted(() => ({
+const { mockBalance } = vi.hoisted(() => ({
   mockBalance: vi.fn<() => { data: Record<string, unknown> | undefined }>(() => ({ data: undefined })),
-  mockStart: vi.fn(),
-  mockComplete: vi.fn(),
-  mockInvalidate: vi.fn(),
-  mockToast: { success: vi.fn(), error: vi.fn() },
 }))
 vi.mock("@/ee/hooks/queries/use-credits-queries", () => ({
   useUserCredits: () => mockBalance(),
@@ -16,18 +12,7 @@ vi.mock("@/ee/hooks/queries/use-credits-queries", () => ({
 vi.mock("@/hooks/use-auth", () => ({
   useAuth: () => ({ user: { id: "user-1" } }),
 }))
-vi.mock("@/lib/api", () => ({
-  startFreeGrantActivation: () => mockStart(),
-  completeFreeGrantActivation: (id: string) => mockComplete(id),
-}))
-vi.mock("@tanstack/react-query", () => ({
-  useQueryClient: () => ({ invalidateQueries: mockInvalidate }),
-}))
-vi.mock("sonner", () => ({ toast: mockToast }))
-
 vi.mock("lucide-react", () => ({
-  CreditCard: () => React.createElement("span"),
-  Loader2: () => React.createElement("span", { "data-testid": "loader" }),
   Sparkles: () => React.createElement("span"),
 }))
 
@@ -39,6 +24,8 @@ function renderAt(path: string) {
   )
 }
 
+const withheldFree = { total: 0, freeGrantState: "withheld", effectiveTier: "free" }
+
 beforeEach(() => {
   vi.clearAllMocks()
   mockBalance.mockReturnValue({ data: undefined })
@@ -46,65 +33,43 @@ beforeEach(() => {
 
 describe("FreeGrantWithheldBanner", () => {
   it("renders nothing while the balance is unknown", () => {
-    renderAt("/billing")
+    renderAt("/projects")
     expect(screen.queryByTestId("free-grant-withheld-banner")).toBeNull()
   })
 
   it("renders nothing for a granted account, and for a build that predates the gate", () => {
-    mockBalance.mockReturnValue({ data: { total: 1500, freeGrantState: "granted" } })
-    renderAt("/billing")
+    mockBalance.mockReturnValue({ data: { total: 1500, freeGrantState: "granted", effectiveTier: "free" } })
+    renderAt("/projects")
     expect(screen.queryByTestId("free-grant-withheld-banner")).toBeNull()
 
     mockBalance.mockReturnValue({ data: { total: 1500 } })
-    renderAt("/billing")
+    renderAt("/projects")
     expect(screen.queryByTestId("free-grant-withheld-banner")).toBeNull()
   })
 
-  it("shows the activation path for a withheld account — 'activate', never 'denied'", () => {
-    mockBalance.mockReturnValue({ data: { total: 0, freeGrantState: "withheld" } })
+  it("renders nothing for a withheld account that already pays — the grant is not a paid account's business", () => {
+    for (const effectiveTier of ["payg", "basic", "pro"]) {
+      mockBalance.mockReturnValue({ data: { total: 8500, freeGrantState: "withheld", effectiveTier } })
+      const { unmount } = renderAt("/projects")
+      expect(screen.queryByTestId("free-grant-withheld-banner")).toBeNull()
+      unmount()
+    }
+  })
+
+  it("tells a withheld free account that the credits come with the first purchase — never 'denied', never a card step", () => {
+    mockBalance.mockReturnValue({ data: withheldFree })
     renderAt("/projects")
     const banner = screen.getByTestId("free-grant-withheld-banner")
-    expect(banner.textContent).toMatch(/Activate your/)
-    expect(banner.textContent).toMatch(/nothing is charged/i)
-    expect(banner.textContent).not.toMatch(/denied|blocked|abuse|fraud/i)
+    expect(banner.textContent).toMatch(/first purchase/i)
+    expect(banner.textContent).toMatch(/1,?500/)
+    expect(banner.textContent).not.toMatch(/denied|blocked|abuse|fraud|nothing is charged|payment method/i)
   })
 
-  it("START: sends the browser to the hosted Stripe page", async () => {
-    mockBalance.mockReturnValue({ data: { total: 0, freeGrantState: "withheld" } })
-    mockStart.mockResolvedValue({ data: { url: "https://checkout.stripe.test/s" } })
-    const assign = vi.fn()
-    Object.defineProperty(window, "location", { value: { assign }, writable: true })
-
+  it("sends the user to the pricing page, where packs are bought — no Stripe step of its own", () => {
+    mockBalance.mockReturnValue({ data: withheldFree })
     renderAt("/projects")
-    fireEvent.click(screen.getByRole("button"))
-    await waitFor(() => expect(assign).toHaveBeenCalledWith("https://checkout.stripe.test/s"))
-  })
-
-  it("COMPLETE: posts the returned session id exactly once and refreshes the balance", async () => {
-    mockBalance.mockReturnValue({ data: { total: 0, freeGrantState: "withheld" } })
-    mockComplete.mockResolvedValue({ state: "granted", activated: true })
-
-    const { rerender } = renderAt("/billing?activate_grant=cs_test_1")
-    await waitFor(() => expect(mockComplete).toHaveBeenCalledWith("cs_test_1"))
-    await waitFor(() => expect(mockInvalidate).toHaveBeenCalled())
-    expect(mockToast.success).toHaveBeenCalled()
-
-    // A re-render with the same id must not replay the completion.
-    rerender(
-      React.createElement(
-        MemoryRouter,
-        { initialEntries: ["/billing?activate_grant=cs_test_1"] },
-        React.createElement(FreeGrantWithheldBanner),
-      ),
-    )
-    expect(mockComplete).toHaveBeenCalledTimes(1)
-  })
-
-  it("COMPLETE: surfaces a refusal (card already used) as an error toast", async () => {
-    mockBalance.mockReturnValue({ data: { total: 0, freeGrantState: "withheld" } })
-    mockComplete.mockRejectedValue(new Error("This card has already activated free credits on another account"))
-    renderAt("/billing?activate_grant=cs_test_2")
-    await waitFor(() => expect(mockToast.error).toHaveBeenCalledWith(expect.stringMatching(/already activated/)))
-    expect(mockInvalidate).not.toHaveBeenCalled()
+    const link = screen.getByRole("link")
+    expect(link.getAttribute("href")).toBe("/pricing")
+    expect(screen.queryByRole("button")).toBeNull()
   })
 })

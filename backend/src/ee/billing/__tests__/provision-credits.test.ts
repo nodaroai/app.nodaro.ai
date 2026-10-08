@@ -130,6 +130,15 @@ vi.mock("@/ee/routes/credits.js", () => ({
   invalidateBalanceCache: mockInvalidateBalanceCache,
 }))
 
+// The free-grant exit by purchase (signup-grant.ts). Mocked at the module
+// seam: these tests pin WHEN the webhook calls it, its own tests pin WHAT it does.
+const { mockActivateOnPurchase } = vi.hoisted(() => ({
+  mockActivateOnPurchase: vi.fn().mockResolvedValue({ activated: false, state: "granted" }),
+}))
+vi.mock("@/ee/billing/signup-grant.js", () => ({
+  activateSignupGrantOnPurchase: mockActivateOnPurchase,
+}))
+
 // ---------------------------------------------------------------------------
 // Import module under test (after mocks are registered)
 // ---------------------------------------------------------------------------
@@ -140,6 +149,7 @@ import {
   handleSubscriptionUpdated,
   handleSubscriptionCanceled,
   handleTransactionCompleted,
+  handleAutoRechargeSucceeded,
 } from "../provision-credits.js"
 
 // ---------------------------------------------------------------------------
@@ -183,6 +193,7 @@ function updatePayloadsFor(table: string): Array<Record<string, unknown>> {
 describe("provision-credits", () => {
   beforeEach(() => {
     resetMockState()
+    mockActivateOnPurchase.mockClear()
   })
 
   // ════════════════════════════════════════════════════════════════════════
@@ -732,6 +743,100 @@ describe("provision-credits", () => {
 
       expect(mockRpc).not.toHaveBeenCalled()
       expect(mockInvalidateBalanceCache).not.toHaveBeenCalled()
+      expect(mockActivateOnPurchase).not.toHaveBeenCalled()
+    })
+
+    // ── The free-grant exit by purchase ──────────────────────────────────
+    // A withheld signup grant leaves 'withheld' on the first SETTLED purchase
+    // (any pack, any card). The hook runs on exactly the path that granted
+    // credits: never on a redelivery, never on a failed grant — a redelivered
+    // webhook must not re-open a grant an admin has since taken back.
+
+    it("unlocks the signup grant on a FRESH top-up — the purchase is the proof", async () => {
+      mockSelect("stripe_customers", { user_id: "user-001" })
+      mockRpc.mockResolvedValueOnce({ data: true, error: null })
+
+      await handleTransactionCompleted(baseTransactionData)
+
+      expect(mockActivateOnPurchase).toHaveBeenCalledTimes(1)
+      expect(mockActivateOnPurchase).toHaveBeenCalledWith("user-001")
+    })
+
+    it("does NOT touch the signup grant on a redelivered (duplicate) top-up", async () => {
+      mockSelect("stripe_customers", { user_id: "user-001" })
+      mockRpc.mockResolvedValueOnce({ data: false, error: null })
+
+      await handleTransactionCompleted(baseTransactionData)
+
+      expect(mockActivateOnPurchase).not.toHaveBeenCalled()
+    })
+
+    it("does NOT touch the signup grant when the grant RPC errors (nothing was committed)", async () => {
+      mockSelect("stripe_customers", { user_id: "user-001" })
+      mockRpc.mockResolvedValueOnce({ data: null, error: { message: "transient db error" } })
+
+      await handleTransactionCompleted(baseTransactionData)
+
+      expect(mockActivateOnPurchase).not.toHaveBeenCalled()
+    })
+
+    it("a failing grant hook never fails the purchase", async () => {
+      mockSelect("stripe_customers", { user_id: "user-001" })
+      mockRpc.mockResolvedValueOnce({ data: true, error: null })
+      mockActivateOnPurchase.mockRejectedValueOnce(new Error("grant hook exploded"))
+
+      await expect(handleTransactionCompleted(baseTransactionData)).resolves.toBeUndefined()
+      expect(mockInvalidateBalanceCache).toHaveBeenCalledWith("user-001")
+    })
+
+    it("reports the activation through the request logger when the route passes one", async () => {
+      mockSelect("stripe_customers", { user_id: "user-001" })
+      mockRpc.mockResolvedValueOnce({ data: true, error: null })
+      mockActivateOnPurchase.mockResolvedValueOnce({ activated: true, state: "granted" })
+      const log = { info: vi.fn(), error: vi.fn() }
+
+      await handleTransactionCompleted(baseTransactionData, log as never)
+
+      expect(log.info).toHaveBeenCalledWith(expect.objectContaining({ userId: "user-001" }), expect.stringMatching(/activated by purchase/))
+      expect(log.error).not.toHaveBeenCalled()
+    })
+
+    it("reports a failing hook through the request logger, and still completes the purchase", async () => {
+      mockSelect("stripe_customers", { user_id: "user-001" })
+      mockRpc.mockResolvedValueOnce({ data: true, error: null })
+      mockActivateOnPurchase.mockRejectedValueOnce(new Error("grant hook exploded"))
+      const log = { info: vi.fn(), error: vi.fn() }
+
+      await expect(handleTransactionCompleted(baseTransactionData, log as never)).resolves.toBeUndefined()
+
+      expect(log.error).toHaveBeenCalledWith(expect.objectContaining({ userId: "user-001" }), expect.stringMatching(/failed/))
+      expect(mockInvalidateBalanceCache).toHaveBeenCalledWith("user-001")
+    })
+  })
+
+  // ════════════════════════════════════════════════════════════════════════
+  // handleAutoRechargeSucceeded — same exit, same gate
+  // ════════════════════════════════════════════════════════════════════════
+
+  describe("handleAutoRechargeSucceeded", () => {
+    const recharge = { piId: "pi_auto_1", userId: "user-001", amountReceivedCents: 2500 }
+
+    it("unlocks the signup grant on a FRESH auto-recharge grant", async () => {
+      mockRpc.mockResolvedValueOnce({ data: true, error: null })
+
+      await handleAutoRechargeSucceeded(recharge)
+
+      expect(mockActivateOnPurchase).toHaveBeenCalledWith("user-001")
+    })
+
+    it("does NOT touch the signup grant on a duplicate or a failed grant", async () => {
+      mockRpc.mockResolvedValueOnce({ data: false, error: null })
+      await handleAutoRechargeSucceeded(recharge)
+
+      mockRpc.mockResolvedValueOnce({ data: null, error: { message: "db down" } })
+      await handleAutoRechargeSucceeded(recharge)
+
+      expect(mockActivateOnPurchase).not.toHaveBeenCalled()
     })
   })
 })

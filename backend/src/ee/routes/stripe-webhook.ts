@@ -131,7 +131,7 @@ export async function stripeWebhookRoutes(app: FastifyInstance) {
               lineItems: await getSessionLineItems(session.id),
               totalAmount: session.amount_total ?? 0,
               metadata: session.metadata ?? null,
-            })
+            }, req.log)
           }
           // subscription mode: handled by customer.subscription.created
           break
@@ -233,7 +233,7 @@ export async function stripeWebhookRoutes(app: FastifyInstance) {
               piId: pi.id,
               userId: pi.metadata.userId ?? null,
               amountReceivedCents: pi.amount_received ?? 0,
-            })
+            }, req.log)
           }
           break
         }

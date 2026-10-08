@@ -6,6 +6,7 @@
  * All DB operations use the Supabase service-role client.
  */
 
+import type { FastifyBaseLogger } from "fastify"
 import { supabase } from "../../lib/supabase.js"
 import {
   getTierFromPriceId,
@@ -20,6 +21,29 @@ import { downgradeToEffectiveFloor, raiseStorageFloorOnActivation, reapplyStorag
 import { creditsForLoadUsd } from "./load-rate.js"
 import { CreditsService } from "./credits.js"
 import { invalidateBalanceCache } from "../routes/credits.js"
+import { activateSignupGrantOnPurchase } from "./signup-grant.js"
+
+/**
+ * The free-grant exit by purchase: a withheld signup grant leaves 'withheld'
+ * on the account's first SETTLED purchase (any pack, any card). Called ONLY on
+ * the path that granted credits — the idempotent RPC answered true — so a
+ * redelivered or failed grant never re-opens a grant an admin has since taken
+ * back. Best-effort end to end: the purchase is already granted and nothing
+ * here may fail it.
+ */
+async function unlockSignupGrantAfterPurchase(userId: string, log?: FastifyBaseLogger): Promise<void> {
+  try {
+    const { activated } = await activateSignupGrantOnPurchase(userId)
+    if (!activated) return
+    // The request logger when the route hands one over (tagged, shipped);
+    // this file's console fallback only where no logger reaches us.
+    if (log) log.info({ userId }, "signup grant activated by purchase")
+    else console.log(`[stripe] signup grant activated by purchase: user=${userId}`)
+  } catch (err) {
+    if (log) log.error({ err, userId }, "signup grant activation after purchase failed")
+    else console.error("[stripe] signup grant activation after purchase failed:", userId, (err as Error).message)
+  }
+}
 
 // ── Stripe Customer Mapping ──────────────────────────────────────
 
@@ -549,7 +573,8 @@ interface TransactionCompletedData {
 }
 
 export async function handleTransactionCompleted(
-  data: TransactionCompletedData
+  data: TransactionCompletedData,
+  log?: FastifyBaseLogger,
 ): Promise<void> {
   // Skip subscription-related transactions (handled by subscription events)
   if (data.subscriptionId) {
@@ -647,6 +672,9 @@ export async function handleTransactionCompleted(
   }
 
   invalidateBalanceCache(userId)
+
+  // The free-grant exit by purchase (unlockSignupGrantAfterPurchase above).
+  await unlockSignupGrantAfterPurchase(userId, log)
 
   // First-purchase payg activation: lift the storage floor to 10 GB
   // (GREATEST semantics — never lowers an admin-raised limit; no-op for
@@ -798,11 +826,14 @@ export async function handleTopupClawback(data: TopupClawbackData): Promise<void
  * `amount_received` through the load rate function — metadata never sizes a
  * grant — and claims idempotently by the PI id.
  */
-export async function handleAutoRechargeSucceeded(data: {
-  readonly piId: string
-  readonly userId: string | null
-  readonly amountReceivedCents: number
-}): Promise<void> {
+export async function handleAutoRechargeSucceeded(
+  data: {
+    readonly piId: string
+    readonly userId: string | null
+    readonly amountReceivedCents: number
+  },
+  log?: FastifyBaseLogger,
+): Promise<void> {
   if (!data.userId) {
     console.error("[stripe] auto-recharge succeeded without userId metadata:", data.piId)
     return
@@ -843,6 +874,7 @@ export async function handleAutoRechargeSucceeded(data: {
     .eq("id", data.userId)
 
   invalidateBalanceCache(data.userId)
+  await unlockSignupGrantAfterPurchase(data.userId, log)
   await raiseStorageFloorOnActivation(data.userId)
   void captureReceiptUrl(data.piId)
   console.log(`[stripe] auto-recharge granted: user=${data.userId} +${credits} credits (${data.piId})`)
