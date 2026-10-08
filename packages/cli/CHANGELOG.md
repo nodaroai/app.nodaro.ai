@@ -1,5 +1,34 @@
 # @nodaro/cli
 
+## 1.26.2
+
+### Patch Changes
+
+- b4dce5a: Image models are now chosen by role, from one table: `IMAGE_MODEL_ROLE_DEFAULTS` (characters, general text-to-image and video anchors on `gpt-image-2`; edits on `gpt-image-2-5-flare-i2i`) and `defaultImageModel(role, aspectRatio)`. A ratio the role's model can't draw moves to the next model in `IMAGE_MODEL_RATIO_FALLBACKS` that can: GPT Image 2.5 Sunburst for 21:9, 3:2, 2:3 and other wide or in-between ratios, Nano Banana Pro for 4:5 / 5:4. Nano Banana Pro is no longer a default; it remains the last ratio fallback and the safety-block retry. Decided 2026-10-08 from a blind five-model comparison, quality first.
+
+  The catalog's quick recommendations follow the same comparison: GPT Image 2 for typography and highest fidelity, GPT Image 2.5 Flare i2i for edits. GPT Image 2 is the featured image model in place of Nano Banana Pro.
+
+  `@nodaro/prompts`: all 97 factory presets that ran on Nano Banana Pro moved, by role, after a preset re-test:
+
+  - GPT Image 2 for boards, character sheets, portraits from a photo, product, scenes and the Cast & Consistency grids.
+  - GPT Image 2.5 Sunburst where the preset is 2:3.
+  - Nano Banana 2.1 for 4:5 presets and labelled illustrated sheets.
+  - GPT Image 2.5 Flare (`-i2i` on Modify Image) for the Edits and Stylized Subject presets.
+
+  `@nodaro/cli` and `@nodaro/sdk`: help text and examples name the new default.
+
+- 4a2d2dc: LLM calls are priced on the lane they run on. `llmServesDirect(modelId, reasoningEffort, advancedMode)` is new: a call runs on the vendor's own API when Advanced mode is on, or when it carries a reasoning effort on a model whose effort only works there (`LlmModelDef.effortRequiresDirect` — the Claude family). `buildLlmCreditIdentifier` bills such a call one rung up on the new four-rung ladder `LLM_CREDIT_RUNGS` (`economy` / `standard` / `premium` / `premium-direct`), so a premium model served direct now bills `<feature>:premium-direct`; `llmCreditIdForRung` and `llmTierCreditIds` list the ids. `supportsAdvancedMode` now also covers models with a direct Anthropic lane (Claude), and `ADVANCED_MODE_UNAVAILABLE_REASON` says so. Every Claude model is KIE-first (`preferKie`), and `gemini-3.1-pro` is no longer direct-first. `CONTENT_RECIPE_IDEAS_CREDIT_IDS` gains the `:premium-direct` ids. The SDK's prompt-helper docs and the CLI's `--advanced` help say Advanced mode covers Gemini and Claude models.
+- Updated dependencies [09bd431]
+- Updated dependencies [b4dce5a]
+- Updated dependencies [28960d7]
+- Updated dependencies [4a2d2dc]
+- Updated dependencies [4a2d2dc]
+- Updated dependencies [f24b666]
+- Updated dependencies [8c938fa]
+  - @nodaro/shared@3.26.0
+  - @nodaro/prompts@1.35.0
+  - @nodaro/sdk@2.21.1
+
 ## 1.26.1
 
 ### Patch Changes

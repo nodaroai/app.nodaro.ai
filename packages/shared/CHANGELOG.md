@@ -1,5 +1,31 @@
 # @nodaro/shared
 
+## 3.26.0
+
+### Minor Changes
+
+- b4dce5a: Image models are now chosen by role, from one table: `IMAGE_MODEL_ROLE_DEFAULTS` (characters, general text-to-image and video anchors on `gpt-image-2`; edits on `gpt-image-2-5-flare-i2i`) and `defaultImageModel(role, aspectRatio)`. A ratio the role's model can't draw moves to the next model in `IMAGE_MODEL_RATIO_FALLBACKS` that can: GPT Image 2.5 Sunburst for 21:9, 3:2, 2:3 and other wide or in-between ratios, Nano Banana Pro for 4:5 / 5:4. Nano Banana Pro is no longer a default; it remains the last ratio fallback and the safety-block retry. Decided 2026-10-08 from a blind five-model comparison, quality first.
+
+  The catalog's quick recommendations follow the same comparison: GPT Image 2 for typography and highest fidelity, GPT Image 2.5 Flare i2i for edits. GPT Image 2 is the featured image model in place of Nano Banana Pro.
+
+  `@nodaro/prompts`: all 97 factory presets that ran on Nano Banana Pro moved, by role, after a preset re-test:
+
+  - GPT Image 2 for boards, character sheets, portraits from a photo, product, scenes and the Cast & Consistency grids.
+  - GPT Image 2.5 Sunburst where the preset is 2:3.
+  - Nano Banana 2.1 for 4:5 presets and labelled illustrated sheets.
+  - GPT Image 2.5 Flare (`-i2i` on Modify Image) for the Edits and Stylized Subject presets.
+
+  `@nodaro/cli` and `@nodaro/sdk`: help text and examples name the new default.
+
+- 4a2d2dc: LLM calls are priced on the lane they run on. `llmServesDirect(modelId, reasoningEffort, advancedMode)` is new: a call runs on the vendor's own API when Advanced mode is on, or when it carries a reasoning effort on a model whose effort only works there (`LlmModelDef.effortRequiresDirect` — the Claude family). `buildLlmCreditIdentifier` bills such a call one rung up on the new four-rung ladder `LLM_CREDIT_RUNGS` (`economy` / `standard` / `premium` / `premium-direct`), so a premium model served direct now bills `<feature>:premium-direct`; `llmCreditIdForRung` and `llmTierCreditIds` list the ids. `supportsAdvancedMode` now also covers models with a direct Anthropic lane (Claude), and `ADVANCED_MODE_UNAVAILABLE_REASON` says so. Every Claude model is KIE-first (`preferKie`), and `gemini-3.1-pro` is no longer direct-first. `CONTENT_RECIPE_IDEAS_CREDIT_IDS` gains the `:premium-direct` ids. The SDK's prompt-helper docs and the CLI's `--advanced` help say Advanced mode covers Gemini and Claude models.
+- 4a2d2dc: Eight LLMs join the registry: Claude Sonnet 5.5, Claude Opus 5.5, GPT-6 Luna, GPT-6 Sol, GPT-6.1 Sol, Grok 4.7, Kimi K3 and DeepSeek V4.1 Flash. `LlmVendor` gains `deepseek` and `moonshot` (with their `LLM_VENDOR_ORDER` / `LLM_VENDOR_LABELS` entries), and `LlmModelDef` gains two optional capability flags: `supportsForcedToolChoice: false` (the model rejects a forced tool choice) and `conversationBoundThinking: true` (its thinking blocks are valid only in the unedited conversation that produced them). The `describe-to-picker` default moves from `claude-opus-5` to `claude-opus-5.5`, and the descriptions of Claude Opus 5, Claude Sonnet 5 and Grok 4.6 now read as previous-generation models.
+- f24b666: `loneMediaUrlKind(value)` and `isLoneMediaLinkSource(nodeType)`: the one rule both engines use when a text-shaped wire reaches a social post — a value that is exactly one image or video link (a path ending in a file name the platforms post) carries the medium, not the caption.
+- 8c938fa: Add Seedream 5 Flash, Bytedance's fast, low-cost Seedream 5, as a text-to-image id (`seedream-5-flash`, in `IMAGE_GEN_PROVIDERS`) and an image-to-image id (`seedream-5-flash-i2i`, in `IMAGE_I2I_PROVIDERS`); a text-to-image request with reference images routes to the i2i id (`T2I_TO_I2I_VARIANT`). It takes up to 10 input images and a 5,000-character prompt, and offers the eight Seedream aspect ratios at 1K or 2K. Unlike the other Seedream 5 models its lever is resolution, not quality. The `MODEL_CATALOG` entries list a flat 10 credits per image at either size. The prompt wizard describes both ids.
+
+### Patch Changes
+
+- 09bd431: `buildConditionVariables` trims the surrounding whitespace of a variable's output, so a Generate Text answer that ends with a line break still equals the field a Filter List or Router condition compares it with.
+
 ## 3.25.0
 
 ### Minor Changes
