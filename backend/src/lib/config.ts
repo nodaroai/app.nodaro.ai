@@ -30,6 +30,23 @@ export function parseSiteCaptureEnabled(value: string | undefined): boolean {
   return (value ?? "").trim().toLowerCase() !== "false"
 }
 
+/**
+ * UPLOAD_FASTSTART_ENABLED: unset, empty, or anything but "false" means on.
+ * Strict on purpose (like SITE_CAPTURE_ENABLED) -- `z.coerce.boolean()` would
+ * read the string "false" as true, and this is the switch you reach for in a hurry.
+ */
+export function parseUploadFaststartEnabled(value: string | undefined): boolean {
+  return (value ?? "").trim().toLowerCase() !== "false"
+}
+
+/**
+ * UPLOAD_FASTSTART_MAX_FILE_REMUXES: how many faststart remuxes of an imported
+ * recording (the file lane) one process runs at once. Unset or empty means 2;
+ * anything else must be a whole number from 1 to 16 or the boot fails, like the
+ * other concurrency knobs.
+ */
+export const UPLOAD_FASTSTART_MAX_FILE_REMUXES_DEFAULT = 2
+
 /** An http(s) URL that is ONLY an origin: no credentials, and no path, query or fragment beyond `/`. */
 function isBareHttpOrigin(value: string): boolean {
   try {
@@ -422,6 +439,17 @@ export const envSchema = z.object({
    *  default; "false" keeps the route unregistered and the tool unlisted on this
    *  install. Read through siteCaptureEnabled(). */
   SITE_CAPTURE_ENABLED: z.string().optional().transform(parseSiteCaptureEnabled),
+  /** Kill switch for the faststart rewrite of uploaded MP4/MOV video (decided
+   *  2026-10-08). On by default; "false" stores every upload exactly as sent,
+   *  on every lane, from the next boot. Read through uploadFaststartEnabled(). */
+  UPLOAD_FASTSTART_ENABLED: z.string().optional().transform(parseUploadFaststartEnabled),
+  /** Concurrent faststart remuxes of an imported recording per process (decided
+   *  2026-10-08); past it the file is stored as fetched, with a warning. Default 2.
+   *  Read through uploadFaststartMaxFileRemuxes(). */
+  UPLOAD_FASTSTART_MAX_FILE_REMUXES: z.preprocess(
+    (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+    z.coerce.number().int().min(1).max(16).default(UPLOAD_FASTSTART_MAX_FILE_REMUXES_DEFAULT),
+  ),
   /** The preview stop rule (a run stops at a render set to Preview; nothing
    *  downstream runs until Render final). Rollout gate, decided 2026-10-05:
    *  on in staging, off in production until Render final ships. Off = every
@@ -542,6 +570,16 @@ export function scheduleTriggersEnabled(): boolean {
 /** Site Capture is offered on this install (the SITE_CAPTURE_ENABLED switch; default on). */
 export function siteCaptureEnabled(): boolean {
   return config.SITE_CAPTURE_ENABLED
+}
+
+/** Uploaded MP4/MOV video is rewritten with its index in front (the UPLOAD_FASTSTART_ENABLED switch; default on). */
+export function uploadFaststartEnabled(): boolean {
+  return config.UPLOAD_FASTSTART_ENABLED
+}
+
+/** Most faststart remuxes of an imported recording one process runs at once (UPLOAD_FASTSTART_MAX_FILE_REMUXES; default 2). */
+export function uploadFaststartMaxFileRemuxes(): number {
+  return config.UPLOAD_FASTSTART_MAX_FILE_REMUXES
 }
 
 /** Length-based speech pricing is on for this process (SPEECH_LENGTH_PRICING_ENABLED; default off). */

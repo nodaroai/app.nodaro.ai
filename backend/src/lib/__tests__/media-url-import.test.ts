@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
+import { promises as nodeFs } from "node:fs"
 
 vi.mock("../safe-fetch.js", () => ({ safeFetch: vi.fn() }))
 vi.mock("../storage.js", () => ({ uploadLocalFileToR2Key: vi.fn() }))
@@ -9,12 +10,14 @@ vi.mock("../../utils/file-validation.js", () => ({
 }))
 vi.mock("../../providers/video/ffmpeg-utils.js", () => ({ probeMediaDuration: vi.fn(), probeMediaStreams: vi.fn() }))
 vi.mock("../supabase.js", () => ({ supabase: { from: vi.fn() } }))
+vi.mock("../../utils/faststart.js", () => ({ faststartVideoFile: vi.fn(), noteFaststartOutcome: vi.fn() }))
 
 import { safeFetch } from "../safe-fetch.js"
 import { uploadLocalFileToR2Key } from "../storage.js"
 import { reserveStorageIfWithinLimit, checkStorageQuota } from "../../utils/file-validation.js"
 import { probeMediaDuration, probeMediaStreams } from "../../providers/video/ffmpeg-utils.js"
 import { supabase } from "../supabase.js"
+import { faststartVideoFile } from "../../utils/faststart.js"
 import { clearUploadPolicies, registerUploadPolicy } from "../upload-policy.js"
 import { importRecordingFromUrl, IMPORT_MAX_BYTES } from "../media-url-import.js"
 
@@ -40,6 +43,8 @@ beforeEach(() => {
   vi.mocked(reserveStorageIfWithinLimit).mockResolvedValue(true)
   vi.mocked(uploadLocalFileToR2Key).mockResolvedValue("https://cdn.test/uploads/videos/x.mp4")
   okSupabaseInsert("asset-1")
+  // Default: the file is already faststart — the import behaves exactly as before.
+  vi.mocked(faststartVideoFile).mockImplementation(async (path) => ({ path, outcome: "already-faststart" }))
 })
 
 describe("importRecordingFromUrl — fetch/validation gates", () => {
@@ -154,6 +159,60 @@ describe("importRecordingFromUrl — probe + duration cap + happy path", () => {
     const postSize = check.mock.calls[1][0].sizeBytes
     expect(postSize).toBe("real bytes here".length)
     expect(postSize).not.toBe(999999)
+  })
+})
+
+describe("importRecordingFromUrl — faststart (moov-last MP4/MOV is rewritten before anything is counted or stored)", () => {
+  /** A remux that grows the file, so every downstream consumer visibly reads the NEW one. */
+  function remuxesTo(content: string) {
+    vi.mocked(faststartVideoFile).mockImplementation(async (path) => {
+      const out = `${path}.faststart`
+      await nodeFs.writeFile(out, content)
+      return { path: out, outcome: "remuxed" }
+    })
+  }
+
+  it("uploads, sizes, reserves, polices and records the REMUXED file", async () => {
+    const remuxed = "remuxed bytes, a little longer"
+    remuxesTo(remuxed)
+    const check = vi.fn().mockReturnValue({ allow: true })
+    registerUploadPolicy({ id: "spy3", check })
+    vi.mocked(safeFetch).mockResolvedValue(mediaResponse("fetched bytes", { "content-type": "video/mp4" }))
+    const insert = vi.fn().mockReturnValue({ select: vi.fn().mockReturnValue({ single: vi.fn().mockResolvedValue({ data: { id: "a1" }, error: null }) }) })
+    vi.mocked(supabase.from).mockReturnValue({ insert } as never)
+
+    const r = await importRecordingFromUrl("u1", URL_OK)
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+
+    expect(vi.mocked(faststartVideoFile).mock.calls[0]![1]).toBe("video/mp4")
+    expect(vi.mocked(uploadLocalFileToR2Key).mock.calls[0]![0]).toMatch(/\.faststart$/)
+    expect(r.sizeBytes).toBe(remuxed.length)
+    expect(vi.mocked(reserveStorageIfWithinLimit)).toHaveBeenCalledWith("u1", remuxed.length)
+    expect(check.mock.calls[1]![0].sizeBytes).toBe(remuxed.length) // the post-download policy sees the final bytes
+    expect(insert).toHaveBeenCalledWith(expect.objectContaining({ size_bytes: remuxed.length }))
+  })
+
+  it("a failed remux imports the file exactly as fetched", async () => {
+    vi.mocked(faststartVideoFile).mockImplementation(async (path) => ({ path, outcome: "failed", reason: "boom" }))
+    vi.mocked(safeFetch).mockResolvedValue(mediaResponse("fetched bytes", { "content-type": "video/mp4" }))
+    const r = await importRecordingFromUrl("u1", URL_OK)
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.sizeBytes).toBe("fetched bytes".length)
+    expect(vi.mocked(uploadLocalFileToR2Key).mock.calls[0]![0]).toMatch(/source\.mp4$/)
+  })
+
+  it("never runs for audio, and not before the file has probed as real media", async () => {
+    vi.mocked(safeFetch).mockResolvedValue(mediaResponse("bytes", { "content-type": "audio/mpeg" }))
+    vi.mocked(probeMediaStreams).mockResolvedValue({ hasVideo: false } as never)
+    await importRecordingFromUrl("u1", "https://host.example/show.mp3")
+    expect(faststartVideoFile).not.toHaveBeenCalled()
+
+    vi.mocked(safeFetch).mockResolvedValue(mediaResponse("junk", { "content-type": "video/mp4" }))
+    vi.mocked(probeMediaDuration).mockResolvedValue(0)
+    await importRecordingFromUrl("u1", URL_OK)
+    expect(faststartVideoFile).not.toHaveBeenCalled()
   })
 })
 

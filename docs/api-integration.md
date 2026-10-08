@@ -2260,6 +2260,24 @@ extension**. A type that still resolves to nothing we accept is rejected with
 `400 validation_error` listing the accepted formats. The resolved type is what
 comes back as `mimeType` and what the stored object is served as.
 
+**MP4 and MOV videos are stored with their index in front ("faststart").**
+A recording from OBS or a phone often keeps the MP4/MOV index (the `moov`
+box) at the end of the file, so the first seek into a large upload has to fetch
+the tail first. Every video upload lane — `POST /v1/upload`, the proxy PUT
+behind `prepare_video_upload`, the handoff page and widget behind
+`request_video_upload`, and the server-side import of a recording URL —
+rewrites such a file once, before it is stored, by copying its streams into a
+new container: no re-encode, the picture and sound are byte-identical, and the
+duration and stream count are checked against the original. A file that is
+already faststart, fragmented, or not an MP4/MOV is stored exactly as sent, and
+so is any file the rewrite does not verify, has no room to run (it needs
+free disk of at least twice the file's size), or arrives while the server is
+already rewriting its limit of files at once. Because a
+rewritten file is re-wrapped, the stored size can differ slightly from the
+number of bytes you sent: `sizeBytes` (and the byte count the upload returns) is
+always the stored object's final length, so do not compare it to your local
+file size or checksum. Files uploaded before this change are not rewritten. A self-hosted install can turn the rewrite off with `UPLOAD_FASTSTART_ENABLED=false` (see the deployment guide); every upload is then stored exactly as sent.
+
 ### Media processing (free, synchronous)
 
 `POST /v1/media/process` cuts or crops a stored file: body

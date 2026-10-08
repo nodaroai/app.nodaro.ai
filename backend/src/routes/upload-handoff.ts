@@ -30,8 +30,9 @@ import { PutObjectCommand } from "@aws-sdk/client-s3"
 import { s3, withObjectAcl } from "../lib/storage.js"
 import { storageTransferOptions } from "../lib/storage-timeouts.js"
 import { config } from "../lib/config.js"
-import { verifyUploadToken, claimUploadToken } from "./upload-proxy.js"
+import { verifyUploadToken, claimUploadToken, isUploadTokenClaimed } from "./upload-proxy.js"
 import { applyUploadPolicies, uploadBlockedBody, uploadKindFromMime } from "../lib/upload-policy.js"
+import { faststartVideoBuffer, noteFaststartOutcome } from "../utils/faststart.js"
 
 const MAX_HANDOFF_BYTES = 256 * 1024 * 1024 // 256 MB
 
@@ -287,6 +288,28 @@ export async function uploadHandoffRoutes(app: FastifyInstance): Promise<void> {
             },
           })
         }
+      }
+
+      // MP4/MOV with the index at the END is rewritten with it in front (a
+      // stream copy, before the first write — see utils/faststart.ts); any
+      // failure stores the file exactly as sent. The key is fixed at token-mint
+      // time and the length is read from the final buffer, so nothing changes
+      // for the caller.
+      if (payload.kind === "video") {
+        // A link that was already used is turned away BEFORE the remux: the claim below
+        // comes after the policy check (a deny must leave the link reusable), so without
+        // this peek every replay of a spent link would still box-walk, write, remux and
+        // read back up to 256 MB, and fill the global remux slots a genuine upload needs.
+        // Read-only — the atomic claim stays where it is, and two simultaneous first
+        // posts on one fresh link can still both remux (only one then stores).
+        if (await isUploadTokenClaimed(payload)) {
+          return reply.status(409).send({
+            error: { code: "token_already_used", message: "This upload link has already been used." },
+          })
+        }
+        const faststart = await faststartVideoBuffer(finalBuffer, finalMime)
+        noteFaststartOutcome("upload-handoff", faststart.outcome, faststart.reason)
+        finalBuffer = faststart.buffer
       }
 
       // B4d: deployment upload policy on the FINAL bytes (post-transcode),
