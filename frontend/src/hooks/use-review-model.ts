@@ -30,7 +30,7 @@
  * `editedEdl`, which the review rewrites as the reviewer edits. Only `locked`
  * reads run state, from the live store.
  */
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useMemo } from "react"
 import {
   editPlanBasis,
   normalizeEdl,
@@ -51,6 +51,7 @@ import type { ApplyEdlIssue } from "@nodaro/render-rules"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { showsARunInFlight } from "@/hooks/workflow-access-mode"
 import { useReviewGraph } from "@/hooks/use-review-graph"
+import { useNewerRunCheck } from "@/hooks/use-newer-run-check"
 import type { IgnoredKeys } from "@/lib/edl-review/review-graph"
 import { applyEdlRenderSettings, resolveApplyEdlRenders } from "@/lib/apply-edl-render-input"
 import { isReviewableBase } from "@/lib/edl-review/build-edited"
@@ -60,12 +61,7 @@ import { buildParagraphs, type Paragraph } from "@/lib/edl-review/paragraphs"
 import { planIssues, type ReviewRenderContext } from "@/lib/edl-review/restore"
 import { transcriptOffsetMs } from "@/lib/edl-review/word-index"
 import { resolveNodeInputs } from "@/components/editor/workflow-editor/node-input-resolver"
-import {
-  applyNewerRun,
-  NEWER_RUN_CHECK_TIMEOUT_MS,
-  newerRunOnServer,
-  type NewerRunPatches,
-} from "@/components/editor/workflow-editor/newer-run-check"
+import { NEWER_RUN_CHECK_TIMEOUT_MS, type NewerRunPatches } from "@/components/editor/workflow-editor/newer-run-check"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 
 export type { ReviewPlanKind } from "@/lib/edl-review/plan-kind"
@@ -77,6 +73,8 @@ export interface ReviewModel {
   readonly planId: string | null
   /** The plan as stored (`generatedJson`): what an edit's basis is taken of. */
   readonly plan: unknown
+  /** The plan's stored review (`editedEdl`), as it stands on the canvas. */
+  readonly editedEdl: unknown
   readonly planKind: ReviewPlanKind
   /** The planner's EDL, normalized; null unless the plan is a Tighten EDL. */
   readonly base: Edl | null
@@ -114,7 +112,7 @@ const EMPTY_SOURCES: readonly string[] = []
 
 /** Run state, and on the plan also the review's own edit (`editedEdl`). */
 const RUN_STATE_AND_EDIT: ReadonlySet<string> = new Set([...TRANSIENT_RUNTIME_KEYS, "editedEdl"])
-const ignoringEditOn = (planId: string | null): IgnoredKeys => (id) =>
+export const ignoringEditOn = (planId: string | null): IgnoredKeys => (id) =>
   id === planId ? RUN_STATE_AND_EDIT : TRANSIENT_RUNTIME_KEYS
 
 function baseOf(plan: unknown): Edl | null {
@@ -155,7 +153,6 @@ function newestPreview(data: Readonly<Record<string, unknown>>): SavedRenderItem
 
 export function useReviewModel(renderId: string): ReviewModel {
   const { nodes, edges } = useReviewGraph(renderId)
-  const workflowId = useWorkflowStore((s) => s.workflowId)
 
   const renderNode = nodes.find((n) => n.id === renderId)
   const path = useMemo(() => renderPlanPath(renderId, nodes, edges as readonly RenderGraphEdge[]), [renderId, nodes, edges])
@@ -197,10 +194,12 @@ export function useReviewModel(renderId: string): ReviewModel {
     [settings.output, settings.crossfadeMs, sourcesKey],
   )
 
+  const planKind = planKindOf(plan)
+  // A clip set's review reads no transcript: its cards are the clips themselves.
   const transcriptText = useMemo(() => {
-    const plan = planId ? inputs.nodes.find((n) => n.id === planId) : undefined
+    const plan = planId && planKind === "edl" ? inputs.nodes.find((n) => n.id === planId) : undefined
     return plan ? resolveNodeInputs(plan, inputs.nodes as WorkflowNode[], inputs.edges as WorkflowEdge[]).transcript : undefined
-  }, [planId, inputs])
+  }, [planId, planKind, inputs])
   const transcript = useMemo(() => transcriptOf(transcriptText), [transcriptText])
   const offsetMs = base && transcript ? transcriptOffsetMs(base, transcript) : 0
   const paragraphs = useMemo(() => (transcript ? buildParagraphs(transcript) : []), [transcript])
@@ -217,36 +216,7 @@ export function useReviewModel(renderId: string): ReviewModel {
     (s) => s.isReadOnly || s.nodes.some((n) => (n.id === renderId || n.id === planId) && showsARunInFlight(n)),
   )
 
-  const checkKey = workflowId ? `${workflowId}\u0000${renderId}` : null
-  const [newer, setNewer] = useState<{ readonly key: string; readonly patches: NewerRunPatches | null } | null>(null)
-  const [timedOutKey, setTimedOutKey] = useState<string | null>(null)
-  useEffect(() => {
-    if (!checkKey || !workflowId) return
-    let live = true
-    // Each check gets its own 15 s: a timeout left from an earlier visit to
-    // this render must not let its runs go before this check has had its time.
-    setTimedOutKey(null)
-    const timer = setTimeout(() => {
-      if (live) setTimedOutKey(checkKey)
-    }, NEWER_RUN_CHECK_TIMEOUT_MS)
-    const now = useWorkflowStore.getState()
-    void newerRunOnServer(workflowId, now.nodes, now.edges).then((patches) => {
-      clearTimeout(timer)
-      if (live) setNewer({ key: checkKey, patches })
-    })
-    return () => {
-      live = false
-      clearTimeout(timer)
-    }
-  }, [checkKey, workflowId])
-  const newerRun = !checkKey ? null : newer?.key === checkKey ? newer.patches : undefined
-  const newerRunCheckTimedOut = newerRun === undefined && timedOutKey === checkKey
-  const loadNewerRun = useCallback(() => {
-    if (locked || !checkKey || newer?.key !== checkKey || !newer.patches) return
-    // Cleared only once the results are written: the banner stays otherwise.
-    if (!applyNewerRun(newer.patches)) return
-    setNewer({ key: checkKey, patches: null })
-  }, [locked, checkKey, newer])
+  const { newerRun, newerRunCheckTimedOut, loadNewerRun } = useNewerRunCheck(renderId, locked)
 
   return {
     renderId,
@@ -254,7 +224,8 @@ export function useReviewModel(renderId: string): ReviewModel {
     path: path ?? null,
     planId,
     plan,
-    planKind: planKindOf(plan),
+    editedEdl,
+    planKind,
     base,
     basis,
     reviewable,

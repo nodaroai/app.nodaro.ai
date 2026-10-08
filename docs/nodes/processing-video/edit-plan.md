@@ -129,13 +129,13 @@ A hand-set offset always wins, so it is the fix for any single source audio coul
 
 <a id="reviewing-a-cut"></a>A **Tighten** plan is a proposal. Review it before you render: read the transcript with every cut struck through, hear any cut, restore what the plan removed, cut what it kept, and render from the same screen. Your changes are saved on the Edit Plan and are what every render of that plan cuts.
 
-Reviewing is for a Tighten plan that feeds an [Apply EDL](./apply-edl.md) render. A Clips plan keeps its JSON on **Expand** for now, and a plan that has not run has nothing to review yet.
+Reviewing is for a Tighten plan or a Clips plan that feeds an [Apply EDL](./apply-edl.md) render; a Clips plan opens the clip review described under [Reviewing clips](#reviewing-clips). A plan that has not run, and a chapter list, have nothing to review yet.
 
 ### Four ways in
 
 - **Review cut** on the render's node. It is there whatever the render shows: a Preview, a Final, or no render yet. (Render final and Update preview on the node still appear only under a Preview.)
 - **Expand** on the Edit Plan. It opens the review at the render the plan feeds. When no render consumes the plan, Expand opens the plan's JSON as before; with the review open, the same JSON is under the **JSON** switch.
-- **Review cut** in the right-click menu of the render and of the Edit Plan. A plan that feeds several renders lists one entry per render, by name.
+- **Review cut** (for a Clips plan, **Review clips**) in the right-click menu of the render and of the Edit Plan. A plan that feeds several renders lists one entry per render, by name.
 - **A link.** The address carries `?review=` and the id of the render or the Edit Plan (a plan opens at the first render it feeds). Reloading the page, or sending the link to someone who can open the workflow, reopens the review. Closing it removes the parameter, and opening or closing replaces the history entry, so Back does not walk through reviews.
 
 When one plan feeds several renders, the arrow in the header chooses which render you are reviewing (for example a video cut and an audio master). The edits are the plan's, so they apply to every render of it; the choice decides which render's take, price, rule and **Render final** you see.
@@ -187,6 +187,48 @@ A Preview records which plan and which render settings it was cut from. When you
 | ⌘/Ctrl+F | Find in the transcript |
 | ⌘/Ctrl+C | Copy the selected words |
 | Escape | Close the innermost layer first: a cut's popover, the selection bar, find, an open collapsed cut, then the review |
+
+## Reviewing clips
+
+<a id="reviewing-clips"></a>A **Clips** plan is a proposal too. Review it before you render: see one card per clip, drop the ones you do not want, rewrite a hook, and render the clips you kept from the same screen. A clip set opens the same way a cut does (see [Four ways in](#four-ways-in)), but the node's button and the menu entry read **Review clips**, and the screen is a grid of clips instead of a transcript.
+
+### What the screen shows
+
+- **Title and summary.** `Review clips · <plan> → <render>`, the render's own validity badge (the check the [Apply EDL panel](./apply-edl.md#the-render-check-in-the-panel) runs, over every clip a run would send) and the count: `8 clips · 6 kept · 6:41`.
+- **One card per clip the render receives.** Each card shows a **Preview** or **Final** badge (or **Dropped**), the clip's number, its length, its title, where it sits in the source, its hook, a **Keep** switch and a line saying where the clip stands: no preview yet, rendering, failed, final. Press the picture to play the clip; one clip plays at a time. An audio render shows an audio tile instead of a picture; press its play button and the player appears, again one at a time.
+- **Which clips get a card.** The clips the wire between the Edit Plan and the render sends it. A selector on that wire (a range, a list, one item) sends fewer than the plan holds; a muted line counts the rest ("2 clips not sent to this render by its wire's selection"), so a Keep switch is never shown for a clip the render would not read.
+- **Show.** **All**, **Kept** and **Dropped**, each with its count. **Keep all** and **Drop all** in the header set every clip the render receives.
+- **JSON.** The header's **Clips | JSON** switch shows the clip set as you have edited it and as the planner made it.
+
+### Keeping and dropping
+
+**Keep** off drops a clip: its card dims, its hook turns read-only, and **Render final** leaves it out (and does not bill it). Turn it on to keep it again. The change is saved on the Edit Plan at once. A dropped clip that already has a final keeps the final's card: "Final (not in this set)".
+
+### Hooks are text only
+
+Edit a clip's hook in its card. **Edited · Reset** appears under it and shows the planner's hook; **Reset** gives that hook back, and emptying the box stores an empty hook. The title cannot be edited.
+
+A hook is text only: editing one does not re-render the clip, and it does not make the clip's final count as changed. The hook travels with the clip as `meta.hook`, for the nodes that read it (Extract Field, publishing). **Render final does not re-run those nodes** unless they come after the render: a node that reads the Edit Plan directly picks the hook up the next time it runs.
+
+### The takes on each card
+
+Each card shows the clip's latest take, matched to the clip by what it was made from, so a re-plan or a drop never puts one clip's video on another clip's card. A Preview made before a re-plan that changed the clip's cut says **Preview predates this plan**. A Preview that failed says **Preview failed. It still renders at Render final.** A clip that was not in the last preview run says **No preview yet**. Finals of clips the plan no longer has are listed under **From earlier plans**, collapsed.
+
+### Rendering from the review
+
+The footer names what **Render final** runs: "Render final: Render Clip ×6 → Caption Clip ×6." It renders the clips you kept, and only those. A second Render final re-renders and re-bills **every kept clip**, changed or not; the footer says how many have not changed ("4 of 6 unchanged; all 6 re-render and are billed again"), and the button shows the price: `Render final · 6 clips · ≈420`. The run uses the same checks and the same confirm as the node's button (Apply EDL's rule, a newer run, nothing changed since the last final; see [Render final](./apply-edl.md#render-final)). The footer holds the button, and says why, when:
+
+- **Nothing is kept.**
+- **Fix n issues first**: the render's rule refuses a clip as it stands. The issues are listed in the validator's own words.
+- **Load the newer run first**: a run finished that this canvas does not show.
+
+A hook you typed a moment ago is written before the run, so the run reads it. **Close** and Escape write it too. The review has no **Update preview**; use the node's button or the context menu.
+
+While a run that includes the render or the Edit Plan is in progress, edits lock ("Rendering final... clip 3 of 6 · edits locked"), and on a workflow you can only view. Playing clips still works.
+
+### Your edits stay on the Edit Plan
+
+The review writes your Keep and hook choices to the Edit Plan, and a render cuts the edited clip set whether it runs in the editor or on the server. The Edit Plan shows an **Edited** chip while they apply. A review that keeps every clip and rewrites no hook is no edit: it clears itself, so an unedited plan never shows as edited. Edits belong to the plan they were made on: if the Edit Plan plans again, the review says "Your edits were made on an earlier plan and no longer apply" and offers **Discard them**, and a run that would plan again asks first and says how many clips you dropped and how many hooks you edited (see [Apply EDL](./apply-edl.md)).
 
 ## API
 

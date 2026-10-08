@@ -1,8 +1,8 @@
 /**
  * What an Edit Plan's stored plan (`generatedJson`) is: a Tighten EDL (an
  * object with segments), a clip set (a list of EDLs), something else (chapters),
- * or nothing yet. The review inspector opens on the first only; a clip set's
- * review is the Clip Pack inspector's (A4).
+ * or nothing yet. The cut review opens on the first, the Clip Pack inspector
+ * (A4-2) on the second.
  */
 export type ReviewPlanKind = "edl" | "clips" | "other" | "none"
 

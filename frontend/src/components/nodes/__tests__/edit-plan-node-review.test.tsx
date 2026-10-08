@@ -89,12 +89,12 @@ describe("EditPlanNode — Expand", () => {
     expect(within(screen.getByRole("dialog")).getByText(/segments/)).toBeTruthy()
   })
 
-  it("a clip set keeps opening its JSON: its review is the Clip Pack inspector's", () => {
+  it("a clip set opens the Clip Pack inspector at its render (A4-2)", () => {
     canvas({ mode: "clips", generatedJson: [PLAN, PLAN] })
     mount()
     expand()
-    expect(useReviewOpenStore.getState().renderId).toBeNull()
-    expect(screen.getByRole("dialog")).toBeTruthy()
+    expect(useReviewOpenStore.getState().renderId).toBe("r")
+    expect(screen.queryByRole("dialog")).toBeNull()
   })
 
   it("where no inspector is mounted, keeps opening its JSON", () => {

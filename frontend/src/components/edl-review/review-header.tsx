@@ -39,11 +39,11 @@ function useNodeLabel(id: string | null): string {
   return localize(label)
 }
 
-export function ReviewTitle({ planId, renderId }: { readonly planId: string | null; readonly renderId: string }) {
+export function ReviewTitle({ planId, renderId, kind = "edl" }: { readonly planId: string | null; readonly renderId: string; readonly kind?: "edl" | "clips" }) {
   const t = useT()
   const plan = useNodeLabel(planId)
   const render = useNodeLabel(renderId)
-  return <>{t("edlReview.title", { plan, render })}</>
+  return <>{t(kind === "clips" ? "clipReview.title" : "edlReview.title", { plan, render })}</>
 }
 
 interface RenderChoice {

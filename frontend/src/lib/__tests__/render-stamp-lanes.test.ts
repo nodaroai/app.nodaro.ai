@@ -41,6 +41,11 @@ const PLAN_BASIS_PENDING: Readonly<Record<string, string>> = {
 const NOT_A_LANE: Readonly<Record<string, string>> = {
   "frontend/src/components/editor/workflow-editor/render-final-checks.ts":
     "finalIsUnchanged matches a render's last final by clip; it keeps its effective-EDL comparison (R19)",
+  "frontend/src/lib/edl-review/clip-live.ts": "reads the clips whose take has landed in a live run, for the Clip Pack's cards; it stamps nothing",
+  "frontend/src/components/edl-review/clip-pack/clip-card.tsx": "a card is keyed and played by its clip; it reads the card model's takes (build-clip-cards.ts compares the bases)",
+  "frontend/src/components/edl-review/clip-pack/clip-grid.tsx": "keys cards by clip and tells the playing card",
+  "frontend/src/components/edl-review/clip-pack/use-single-playback.ts": "names the playing card by its clip",
+  "frontend/src/components/edl-review/clip-pack/clip-inspector.tsx": "passes the playing card's clip to the grid",
 }
 
 const SCANNED = ["backend/src", "frontend/src", "packages/shared/src", "packages/client/src"]

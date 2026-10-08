@@ -15,7 +15,7 @@ import { hasCredits } from "@/lib/edition"
 import { useT } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 
-const BUTTON =
+export const RUN_BUTTON =
   "inline-flex items-center justify-center gap-1 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
 
 /** " · {credits}" on a credit edition with a price to show. */
@@ -30,7 +30,7 @@ export function ReviewRunButtons({ runs }: { readonly runs: ReviewRuns }) {
       {runs.canUpdatePreview && (
         <button
           type="button"
-          className={cn(BUTTON, "border-border bg-background hover:bg-accent")}
+          className={cn(RUN_BUTTON, "border-border bg-background hover:bg-accent")}
           disabled={disabled}
           aria-busy={runs.checking === "proxy" || undefined}
           onClick={runs.updatePreview}
@@ -41,7 +41,7 @@ export function ReviewRunButtons({ runs }: { readonly runs: ReviewRuns }) {
       )}
       <button
         type="button"
-        className={cn(BUTTON, "border-[#ff0073]/60 bg-[#ff0073] text-white hover:bg-[#ff0073]/90")}
+        className={cn(RUN_BUTTON, "border-[#ff0073]/60 bg-[#ff0073] text-white hover:bg-[#ff0073]/90")}
         disabled={disabled}
         aria-busy={runs.checking === "final" || undefined}
         onClick={runs.renderFinal}

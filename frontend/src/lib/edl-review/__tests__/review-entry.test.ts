@@ -1,8 +1,9 @@
 // Where a review can be opened (A3-5, R17 a, R18 a): a render with an Edit Plan
-// cut behind it, whatever its take; the plan opens at the renders it feeds; a
-// clip set's review is the Clip Pack inspector's (A4), not this one.
+// cut or a clip set behind it, whatever its take; the plan opens at the renders
+// it feeds. The entry names which inspector it opens: the cut review for a
+// Tighten EDL, the Clip Pack inspector for a clip set (A4-2).
 import { describe, expect, it } from "vitest"
-import { reviewEntryOf, reviewRendersOf, reviewTargetOf } from "../review-entry"
+import { reviewEntryOf, reviewKindOf, reviewRendersOf, reviewTargetOf } from "../review-entry"
 
 const TIGHTEN = { version: 1, clock: "master", sources: [], segments: [{ id: "s0", inMs: 0, outMs: 1000, video: "cam" }], dropped: [] }
 const CLIPS = [TIGHTEN, TIGHTEN]
@@ -12,12 +13,12 @@ const edge = (source: string, target: string, targetHandle = "edl") => ({ id: `$
 describe("reviewEntryOf", () => {
   it("is the plan behind a render whose plan holds a Tighten EDL, with or without a take", () => {
     const nodes = [node("p", "edit-plan", { generatedJson: TIGHTEN }), node("r", "apply-edl", { quality: "final" })]
-    expect(reviewEntryOf("r", nodes, [edge("p", "r")])).toEqual({ planId: "p" })
+    expect(reviewEntryOf("r", nodes, [edge("p", "r")])).toEqual({ planId: "p", kind: "edl" })
   })
 
   it("follows the wire through Camera Switch", () => {
     const nodes = [node("p", "edit-plan", { generatedJson: TIGHTEN }), node("s", "camera-switch"), node("r", "apply-edl")]
-    expect(reviewEntryOf("r", nodes, [edge("p", "s"), edge("s", "r")])).toEqual({ planId: "p" })
+    expect(reviewEntryOf("r", nodes, [edge("p", "s"), edge("s", "r")])).toEqual({ planId: "p", kind: "edl" })
   })
 
   it("is null with no plan behind the render", () => {
@@ -29,9 +30,14 @@ describe("reviewEntryOf", () => {
     expect(reviewEntryOf("r", nodes, [edge("p", "r")])).toBeNull()
   })
 
-  it("is null for a clip set (its review is A4's) and for a chapter list", () => {
+  it("is the Clip Pack's review for a clip set (A4-2), through a Camera Switch too", () => {
     const clips = [node("p", "edit-plan", { generatedJson: CLIPS }), node("r", "apply-edl")]
-    expect(reviewEntryOf("r", clips, [edge("p", "r")])).toBeNull()
+    expect(reviewEntryOf("r", clips, [edge("p", "r")])).toEqual({ planId: "p", kind: "clips" })
+    const switched = [node("p", "edit-plan", { generatedJson: CLIPS }), node("s", "camera-switch"), node("r", "apply-edl")]
+    expect(reviewEntryOf("r", switched, [edge("p", "s"), edge("s", "r")])).toEqual({ planId: "p", kind: "clips" })
+  })
+
+  it("is null for a chapter list", () => {
     const chapters = [node("p", "edit-plan", { generatedJson: { version: 1, chapters: [] } }), node("r", "apply-edl")]
     expect(reviewEntryOf("r", chapters, [edge("p", "r")])).toBeNull()
   })
@@ -49,9 +55,9 @@ describe("reviewRendersOf", () => {
     expect(reviewRendersOf("p", nodes, [edge("p", "a"), edge("p", "b")]).map((n) => n.id)).toEqual(["a", "b"])
   })
 
-  it("is empty for a clip set, whose renders have no cut review", () => {
+  it("lists a clip set's renders too: their review is the Clip Pack's (A4-2)", () => {
     const nodes = [node("p", "edit-plan", { generatedJson: CLIPS }), node("a", "apply-edl")]
-    expect(reviewRendersOf("p", nodes, [edge("p", "a")])).toEqual([])
+    expect(reviewRendersOf("p", nodes, [edge("p", "a")]).map((n) => n.id)).toEqual(["a"])
   })
 })
 
@@ -73,6 +79,12 @@ describe("reviewTargetOf (what ?review= names)", () => {
     expect(reviewTargetOf("p", nodes, edges)).toBe("a")
   })
 
+  it("a clip set's plan and its render name themselves too", () => {
+    const clips = [node("cp", "edit-plan", { generatedJson: CLIPS }), node("cr", "apply-edl")]
+    expect(reviewTargetOf("cp", clips, [edge("cp", "cr")])).toBe("cr")
+    expect(reviewTargetOf("cr", clips, [edge("cp", "cr")])).toBe("cr")
+  })
+
   it("a plan that feeds no render, a node of another kind and an unknown id name nothing", () => {
     expect(reviewTargetOf("lone", nodes, edges)).toBeNull()
     expect(reviewTargetOf("t", nodes, edges)).toBeNull()
@@ -81,5 +93,15 @@ describe("reviewTargetOf (what ?review= names)", () => {
 
   it("a render with no plan behind it names nothing: there is nothing to review", () => {
     expect(reviewTargetOf("a", [node("a", "apply-edl")], [])).toBeNull()
+  })
+})
+
+describe("reviewKindOf (which inspector a render opens)", () => {
+  it("names the kind, or null where nothing opens", () => {
+    const nodes = [node("p", "edit-plan", { generatedJson: TIGHTEN }), node("r", "apply-edl"), node("cp", "edit-plan", { generatedJson: CLIPS }), node("cr", "apply-edl")]
+    const edges = [edge("p", "r"), edge("cp", "cr")]
+    expect(reviewKindOf("r", nodes, edges)).toBe("edl")
+    expect(reviewKindOf("cr", nodes, edges)).toBe("clips")
+    expect(reviewKindOf("p", nodes, edges)).toBeNull()
   })
 })

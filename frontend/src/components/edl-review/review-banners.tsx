@@ -34,9 +34,9 @@ export interface ReviewBannersProps {
   readonly runs: ReviewRuns
 }
 
-const ACTION = "shrink-0 rounded-md border border-border bg-background px-2 py-1 text-xs font-medium hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
+export const BANNER_ACTION = "shrink-0 rounded-md border border-border bg-background px-2 py-1 text-xs font-medium hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
 
-function Banner({ id, tone = "info", children, action }: { readonly id: string; readonly tone?: "info" | "warn"; readonly children: ReactNode; readonly action?: ReactNode }) {
+export function Banner({ id, tone = "info", children, action }: { readonly id: string; readonly tone?: "info" | "warn"; readonly children: ReactNode; readonly action?: ReactNode }) {
   const Icon = tone === "warn" ? AlertTriangle : Info
   return (
     <div
@@ -68,7 +68,7 @@ export function ReviewBanners({ model, edits, checks, runs }: ReviewBannersProps
           id="stale-edit"
           tone="warn"
           action={!model.locked && (
-            <button type="button" className={ACTION} onClick={edits.discardStaleEdit}>{t("edlReview.discardEdits")}</button>
+            <button type="button" className={BANNER_ACTION} onClick={edits.discardStaleEdit}>{t("edlReview.discardEdits")}</button>
           )}
         >
           {t("edlReview.staleEdit")}
@@ -83,7 +83,7 @@ export function ReviewBanners({ model, edits, checks, runs }: ReviewBannersProps
         <Banner
           id="stale-take"
           action={canRun && runs.canUpdatePreview && (
-            <button type="button" className={ACTION} disabled={gate.hold !== null} onClick={runs.updatePreview}>
+            <button type="button" className={BANNER_ACTION} disabled={gate.hold !== null} onClick={runs.updatePreview}>
               {t("renderFinal.updatePreview")}{priceOf(runs.previewCredits)}
             </button>
           )}
@@ -96,7 +96,7 @@ export function ReviewBanners({ model, edits, checks, runs }: ReviewBannersProps
           id="newer-run"
           tone="warn"
           action={!model.locked && (
-            <button type="button" className={ACTION} onClick={model.loadNewerRun}>{t("renderFinal.loadNewerRun")}</button>
+            <button type="button" className={BANNER_ACTION} onClick={model.loadNewerRun}>{t("renderFinal.loadNewerRun")}</button>
           )}
         >
           {t("edlReview.newerRunBanner")}

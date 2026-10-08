@@ -95,6 +95,7 @@ describe("preview stop rule — every derived set builder is classified (Render 
     "hooks/use-render-final.ts", // the bar's prices: estimateRunCredits (via useRunSetCredits) on the overridden graph
     "hooks/use-run-from-here-credits.ts", // the button's quote: estimateRunCredits
     "components/render/app-render-review.tsx", // the app runner's Render final price: estimateRunCredits (via useRunSetCredits) on the overridden run graph
+    "lib/edl-review/clip-chain.ts", // the Clip Pack footer's "Render Clip ×6 → Caption Clip ×6": the handler's own set, previewRunnable on the overridden graph
   ])
   const DERIVED_EXEMPT: Readonly<Record<string, string>> = {
     "components/editor/workflow-editor/run-from-here-set.ts": "defines liveExecutable / runFromHereExecutable",

@@ -41,8 +41,16 @@ describe("ReviewCutButton", () => {
     expect(screen.queryByRole("button")).toBeNull()
   })
 
-  it("is not there for a clip set: its review is the Clip Pack inspector's", () => {
+  it("reads Review clips for a clip set, and opens the same review store entry (A4-2)", () => {
     loadCanvas({ plan: [{ version: 1, clock: "master", sources: [], segments: [], dropped: [] }] })
+    render(<ReviewCutButton renderId="cut" />)
+    expect(screen.queryByRole("button", { name: "Review cut" })).toBeNull()
+    fireEvent.click(screen.getByRole("button", { name: "Review clips" }))
+    expect(useReviewOpenStore.getState().renderId).toBe("cut")
+  })
+
+  it("is not there for a chapter list, which has nothing to review", () => {
+    loadCanvas({ plan: { version: 1, chapters: [] } })
     render(<ReviewCutButton renderId="cut" />)
     expect(screen.queryByRole("button")).toBeNull()
   })

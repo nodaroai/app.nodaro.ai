@@ -11,6 +11,11 @@
  * exactly as it does in the banner. With no edit nothing was "edited", so the
  * note stays quiet however old the take.
  *
+ * A Tighten note only (§2.7, U1). A clip set's review (Keep, hooks: A4-2) changes
+ * no clip's cut, and the render's node face shows ONE take of a batch, which
+ * the first clip's basis below cannot judge: the Clip Pack inspector judges each
+ * card by its own clip. So a clip set never reads as "edited since".
+ *
  * Cheap where it is asked: the stamps are only computed once an edit applies and
  * a take exists.
  */
@@ -18,6 +23,7 @@ import { renderPlanPath, resolveEditPlanOutput, savedRenderOutput, type RenderGr
 import { applyEdlRenderSettings, resolveApplyEdlRenders } from "@/lib/apply-edl-render-input"
 import { currentRenderPlanBasis } from "@/components/editor/workflow-editor/apply-edl-stamps"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
+import { planKindOf } from "./plan-kind"
 import { isFreshTake, renderSettingsBasisOf, showsStaleTake } from "./staleness"
 
 export function editedSincePreview(
@@ -33,7 +39,8 @@ export function editedSincePreview(
   const plan = path && nodes.find((n) => n.id === path.planId)
   if (!plan) return false
   const data = plan.data as Readonly<Record<string, unknown>>
-  if (data.generatedJson === undefined || resolveEditPlanOutput(data.generatedJson, data.editedEdl).status !== "applied") return false
+  if (planKindOf(data.generatedJson) !== "edl") return false
+  if (resolveEditPlanOutput(data.generatedJson, data.editedEdl).status !== "applied") return false
 
   const first = resolveApplyEdlRenders(render, nodes, edges)[0]
   const now = {

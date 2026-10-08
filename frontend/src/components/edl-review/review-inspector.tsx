@@ -9,7 +9,8 @@
  * transcript pane (its rows, minimap, span popover, selection toolbar and
  * find bar), the reasons panel, the banners and the footer with its gate;
  * below `sm` the panes become tabs (review-body.tsx). The editor mounts it
- * once, in `ReviewInspectorHost`, and opens it from a render's Review cut, the
+ * once, in `ReviewInspectorHost` (which shows the Clip Pack inspector instead
+ * for a clip set: `ReviewInspector` picks), and opens it from a render's Review cut, the
  * context menu, an Edit Plan's Expand and `?review=<id>` (A3-5); its component
  * tests mount it directly.
  *
@@ -35,22 +36,19 @@ import { useReviewModel } from "@/hooks/use-review-model"
 import { useReviewPlayback } from "@/hooks/use-review-playback"
 import { useReviewRuns } from "@/hooks/use-review-runs"
 import { SM_UP, useMediaQuery } from "@/hooks/use-media-query"
+import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { reviewKindOf } from "@/lib/edl-review/review-entry"
 import { useT } from "@/lib/i18n"
 import { copyToClipboard } from "@/lib/utils"
+import { ClipInspector } from "./clip-pack/clip-inspector"
 import { ReviewActions, ReviewMeta, ReviewTitle, type ReviewView } from "./review-header"
 import { ReviewBody, type ReviewBodyHandle } from "./review-body"
 import { ReviewFooter } from "./review-footer"
 import { ReviewJsonView } from "./review-json-view"
 import { isControl, isTextField } from "./transcript-keys"
 
-export interface ReviewInspectorProps {
-  readonly open: boolean
-  /** The render the review is anchored at. */
-  readonly renderId: string
-  readonly onClose: () => void
-  /** The reviewer chose another render of the same plan in the header's picker. */
-  readonly onRenderChange?: (renderId: string) => void
-}
+import type { ReviewInspectorProps } from "./inspector-props"
+export type { ReviewInspectorProps }
 
 /** The canvas node the review is anchored at: where focus goes back to when the opener is gone. */
 function nodeElementOf(renderId: string): HTMLElement | null {
@@ -58,8 +56,12 @@ function nodeElementOf(renderId: string): HTMLElement | null {
 }
 
 export function ReviewInspector(props: ReviewInspectorProps) {
+  // Which inspector a render opens (A4-2): a clip set's is the Clip Pack's. Read
+  // as a string, so a run's ticks re-render nothing.
+  const kind = useWorkflowStore((s) => reviewKindOf(props.renderId, s.nodes, s.edges))
+  if (!props.open) return null
   // The model subscribes to the store: mounted only while the review is open.
-  return props.open ? <OpenReviewInspector {...props} /> : null
+  return kind === "clips" ? <ClipInspector {...props} /> : <OpenReviewInspector {...props} />
 }
 
 function OpenReviewInspector({ renderId: anchoredAt, onClose, onRenderChange }: ReviewInspectorProps) {

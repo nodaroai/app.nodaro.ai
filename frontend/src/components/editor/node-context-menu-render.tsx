@@ -2,12 +2,12 @@
 
 /**
  * The context menu's render entries, on a render and on the Edit Plan behind it:
- * Review cut (A3-5, R17 a), Render final and Update preview (A6.1). A plan that
+ * Review cut, or Review clips for a clip set (A3-5, A4-2; R17 a), Render final and Update preview (A6.1). A plan that
  * feeds several renders asks which: one entry per render, named, one render per
  * click (TA2 item 4, decided 2026-10-04).
  *
- * Review cut is there only for a Tighten cut and only where an inspector is
- * mounted (a clip set's review is the Clip Pack inspector's); Render final needs
+ * The review entry is there only where an inspector is mounted and the plan is
+ * a Tighten cut or a clip set; Render final needs
  * the editor's run action; Update preview exists only with the stop rule on
  * (decided 2026-10-06).
  */
@@ -16,8 +16,8 @@ import { Film, RefreshCw, ScanSearch } from "lucide-react"
 import { isRenderNodeType } from "@nodaro/shared"
 import { openReview, useReviewHostMounted } from "@/hooks/use-review-open-store"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import { reviewEntryOf } from "@/lib/edl-review/review-entry"
-import { useT } from "@/lib/i18n"
+import { reviewKindOf } from "@/lib/edl-review/review-entry"
+import { useT, type TFunction } from "@/lib/i18n"
 import { runtimePreviewStopRule } from "@/lib/runtime-config"
 import { rendersOfPlan } from "./workflow-editor/render-final-set"
 
@@ -28,6 +28,12 @@ interface Props {
   readonly nodeType: string | undefined
   readonly isRunning: boolean
   readonly onClose: () => void
+}
+
+/** "Review cut" / "Review clips", named after the render when the plan feeds several. */
+function reviewLabel(kind: "edl" | "clips", name: string | null, t: TFunction): string {
+  if (kind === "clips") return name ? t("edlReview.reviewClipsFor", { name }) : t("edlReview.reviewClips")
+  return name ? t("edlReview.reviewCutFor", { name }) : t("edlReview.reviewCut")
 }
 
 export function RenderMenuItems({ nodeId, nodeType, isRunning, onClose }: Props) {
@@ -48,7 +54,10 @@ export function RenderMenuItems({ nodeId, nodeType, isRunning, onClose }: Props)
     }))
   }, [nodeId, nodeType, nodes, edges])
   const reviewable = useMemo(
-    () => (hosted ? renders.filter((r) => reviewEntryOf(r.id, nodes, edges) !== null) : []),
+    () => (hosted ? renders.flatMap((r) => {
+      const kind = reviewKindOf(r.id, nodes, edges)
+      return kind ? [{ ...r, kind }] : []
+    }) : []),
     [hosted, renders, nodes, edges],
   )
 
@@ -64,7 +73,7 @@ export function RenderMenuItems({ nodeId, nodeType, isRunning, onClose }: Props)
           }}
         >
           <ScanSearch className="h-3.5 w-3.5" />
-          {renders.length > 1 && render.name ? t("edlReview.reviewCutFor", { name: render.name }) : t("edlReview.reviewCut")}
+          {reviewLabel(render.kind, renders.length > 1 && render.name ? render.name : null, t)}
         </button>
       ))}
       {renderFinal && renders.map((render) => (

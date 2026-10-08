@@ -30,7 +30,7 @@ import { editPlanOutputOf } from "@/lib/edit-plan-saved-output"
 import { extractNodeOutputAsList } from "./node-input-resolver"
 
 /** The plan value a render iteration reads, as the canvas holds the plan. */
-const planOutputOf = (planNode: RenderGraphNode): unknown => {
+export const planOutputOf = (planNode: RenderGraphNode): unknown => {
   const node = planNode as WorkflowNode
   return extractNodeOutputAsList(node, "edl") ?? editPlanOutputOf(node.data as Readonly<Record<string, unknown>>)?.json
 }

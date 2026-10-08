@@ -28,9 +28,10 @@ import { restoreReason as restoreReasonOf, restoreSpan as restoreSpanOf, type Lo
 import { selectionRange, type WordSelection } from "@/lib/edl-review/selection"
 import { undoStackOf } from "@/lib/edl-review/undo-stack"
 import { clearReview, createReviewWriter, reviewOf, writeReview } from "@/lib/edl-review/write-review"
+import type { ReviewEditState } from "./review-edit-state"
 import type { ReviewModel } from "./use-review-model"
 
-export interface ReviewEdits {
+export interface ReviewEdits extends ReviewEditState {
   /** K; null when the plan cannot be reviewed here. */
   readonly kept: KeptSet | null
   /** The edit K gives (`buildEdited`); null with no K. */
@@ -185,6 +186,7 @@ export function useReviewEdits(model: ReviewModel): ReviewEdits {
 
   return {
     kept,
+    keptCount: kept ? kept.length : null,
     edited,
     pendingReview,
     canEdit,

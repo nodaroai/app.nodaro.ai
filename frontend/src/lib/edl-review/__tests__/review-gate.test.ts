@@ -6,12 +6,18 @@ const ready: ReviewGateInput = {
   reviewable: true,
   readOnly: false,
   locked: false,
-  kept: [{ inMs: 0, outMs: 1000 }],
+  keptCount: 1,
   verdict: { ok: true },
   newerRun: null,
 }
 
 describe("reviewGate", () => {
+  // A4-2: a clip set's gate counts kept clips, not intervals.
+  it("holds the runs when no clip is kept, and does not when the count is unknown", () => {
+    expect(reviewGate({ ...ready, keptCount: 0 }).hold).toEqual({ kind: "nothing-kept" })
+    expect(reviewGate({ ...ready, keptCount: null }).hold).toBeNull()
+  })
+
   it("lets both runs go when the cut keeps time, passes the rule and no newer run waits", () => {
     expect(reviewGate(ready)).toEqual({ mode: "ready", hold: null })
   })
@@ -27,7 +33,7 @@ describe("reviewGate", () => {
 
   it("holds the runs, first match wins: nothing kept, the rule's issues, a newer run, the check out, no verdict yet", () => {
     const issues = { ok: false as const, issues: ["too long"] }
-    expect(reviewGate({ ...ready, kept: [], verdict: issues }).hold).toEqual({ kind: "nothing-kept" })
+    expect(reviewGate({ ...ready, keptCount: 0, verdict: issues }).hold).toEqual({ kind: "nothing-kept" })
     expect(reviewGate({ ...ready, verdict: issues, newerRun: {} }).hold).toEqual({ kind: "issues", issues: ["too long"] })
     expect(reviewGate({ ...ready, newerRun: { cut: {} } }).hold).toEqual({ kind: "newer-run" })
     expect(reviewGate({ ...ready, newerRun: undefined }).hold).toEqual({ kind: "checking-newer" })
@@ -42,7 +48,7 @@ describe("reviewGate", () => {
       warning: "newer-unchecked",
     })
     // Earlier holds still win; the warning stays beside them.
-    expect(reviewGate({ ...ready, kept: [], newerRun: undefined, newerCheckTimedOut: true })).toEqual({
+    expect(reviewGate({ ...ready, keptCount: 0, newerRun: undefined, newerCheckTimedOut: true })).toEqual({
       mode: "ready",
       hold: { kind: "nothing-kept" },
       warning: "newer-unchecked",

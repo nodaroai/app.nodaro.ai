@@ -1,6 +1,7 @@
-// Review cut in the node context menu (A3-5, R17 a): on a render with an Edit
-// Plan cut behind it, and on that plan (one entry per render it feeds, named when
-// there are several: one render per click, like Render final).
+// Review cut (a Tighten EDL) and Review clips (a clip set, A4-2) in the node
+// context menu (A3-5, R17 a): on a render with an Edit Plan cut behind it, and on
+// that plan (one entry per render it feeds, named when there are several: one
+// render per click, like Render final).
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { render, screen, cleanup, fireEvent } from "@testing-library/react"
 
@@ -73,9 +74,29 @@ describe("NodeContextMenu — Review cut", () => {
     expect(review.compareDocumentPosition(final) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
-  it("is not offered on a clip set (the Clip Pack inspector's), a render with no plan, or a node of another kind", () => {
+  it("on a clip set: Review clips, never Review cut, opening the same review of that render (A4-2)", () => {
     open("r", [plan("p", [TIGHTEN]), node("r", "apply-edl")], [edge("p", "r", "edl")])
     expect(screen.queryByText("Review cut")).toBeNull()
+    fireEvent.click(screen.getByText("Review clips"))
+    expect(useReviewOpenStore.getState().renderId).toBe("r")
+    expect(onClose).toHaveBeenCalled()
+  })
+
+  it("on a clip set's plan that feeds several renders: Review clips, named per render", () => {
+    open(
+      "p",
+      [plan("p", [TIGHTEN]), node("a", "apply-edl", "Clip A"), node("b", "apply-edl", "Clip B")],
+      [edge("p", "a", "edl"), edge("p", "b", "edl")],
+    )
+    fireEvent.click(screen.getByText("Review clips: Clip B"))
+    expect(useReviewOpenStore.getState().renderId).toBe("b")
+    expect(screen.getByText("Review clips: Clip A")).toBeTruthy()
+  })
+
+  it("is not offered on a chapter list, a render with no plan, or a node of another kind", () => {
+    open("r", [plan("p", { version: 1, chapters: [] }), node("r", "apply-edl")], [edge("p", "r", "edl")])
+    expect(screen.queryByText("Review cut")).toBeNull()
+    expect(screen.queryByText("Review clips")).toBeNull()
     cleanup()
     open("r", [node("r", "apply-edl")], [])
     expect(screen.queryByText("Review cut")).toBeNull()

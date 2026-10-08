@@ -32,7 +32,7 @@ import { isFreshTake, renderSettingsBasisOf, showsStaleTake } from "@/lib/edl-re
 import { withPendingReview } from "@/lib/edl-review/write-review"
 import { currentRenderPlanBasis } from "@/components/editor/workflow-editor/apply-edl-stamps"
 import { renderRuleVerdict, type RenderRuleVerdict } from "@/components/editor/workflow-editor/render-final-checks"
-import type { ReviewEdits } from "./use-review-edits"
+import type { ReviewEditState } from "./review-edit-state"
 import type { ReviewModel } from "./use-review-model"
 
 export const REVIEW_CHECK_DEBOUNCE_MS = 150
@@ -62,12 +62,12 @@ function useSettled<T>(value: T, ms: number): T {
   return settled
 }
 
-export function useReviewChecks(model: ReviewModel, edits: ReviewEdits): ReviewChecks {
+export function useReviewChecks(model: ReviewModel, edits: ReviewEditState): ReviewChecks {
   const { renderId, planId, take, previewTake, passesOtherNodes, render, editStatus, renderExists } = model
   const canvas = useReviewGraph(renderId)
   // The inspector owns the plan's edit only while it holds K; otherwise the
   // canvas is judged as it stands.
-  const owned = edits.kept !== null
+  const owned = edits.keptCount !== null
   const pending = edits.pendingReview
   const input = useMemo(
     () => ({ canvas, owned, pending, take, previewTake, editStatus, render, passesOtherNodes, renderExists, planId }),

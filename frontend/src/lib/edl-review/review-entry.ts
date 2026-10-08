@@ -4,11 +4,13 @@
  * question: the render's node bar, the context menu, the Edit Plan's Expand
  * and `?review=`.
  *
- * A render can be reviewed when an Edit Plan's Tighten EDL is behind it
- * (`renderPlanPath`: straight, through teleports, or through Camera Switch),
- * WHATEVER its take (R18 a): a Preview, a Final, or none yet. A clip set's
- * review is the Clip Pack inspector's (A4-2), and a plan that has not run has
- * nothing to review, so neither is an entry here.
+ * A render can be reviewed when an Edit Plan's Tighten EDL or clip set is
+ * behind it (`renderPlanPath`: straight, through teleports, or through Camera
+ * Switch), WHATEVER its take (R18 a): a Preview, a Final, or none yet. The
+ * entry names which inspector opens (`ReviewKind`): the cut review for a
+ * Tighten EDL, the Clip Pack inspector for a clip set (A4-2). A plan that has
+ * not run, and a chapter list, have nothing to review, so neither is an
+ * entry here.
  *
  * `?review=` names a render or a plan. A plan opens at the first render it
  * feeds, in canvas order; the header's render picker (TA2 item 4) chooses among
@@ -23,14 +25,18 @@ export interface ReviewGraphNodeLike {
   readonly data?: unknown
 }
 
+/** Which inspector a review opens in: the cut review, or the Clip Pack's. */
+export type ReviewKind = "edl" | "clips"
+
 export interface ReviewEntry {
-  /** The Edit Plan whose cut the review edits. */
+  /** The Edit Plan whose cut (or clip set) the review edits. */
   readonly planId: string
+  readonly kind: ReviewKind
 }
 
 type Edges = readonly RenderGraphEdge[]
 
-/** The Edit Plan behind `renderId` when its plan is a Tighten EDL; else null. */
+/** The Edit Plan behind `renderId` when its plan is a Tighten EDL or a clip set; else null. */
 export function reviewEntryOf(renderId: string, nodes: readonly ReviewGraphNodeLike[], edges: Edges): ReviewEntry | null {
   const render = nodes.find((n) => n.id === renderId)
   if (!render || !isRenderNodeType(render.type)) return null
@@ -38,7 +44,13 @@ export function reviewEntryOf(renderId: string, nodes: readonly ReviewGraphNodeL
   if (!path) return null
   const plan = nodes.find((n) => n.id === path.planId)
   const stored = (plan?.data as { readonly generatedJson?: unknown } | undefined)?.generatedJson
-  return planKindOf(stored) === "edl" ? { planId: path.planId } : null
+  const kind = planKindOf(stored)
+  return kind === "edl" || kind === "clips" ? { planId: path.planId, kind } : null
+}
+
+/** Which inspector `renderId` opens; null when it cannot be reviewed. */
+export function reviewKindOf(renderId: string, nodes: readonly ReviewGraphNodeLike[], edges: Edges): ReviewKind | null {
+  return reviewEntryOf(renderId, nodes, edges)?.kind ?? null
 }
 
 /** The renders `planId` feeds that can be reviewed, in canvas order. */
