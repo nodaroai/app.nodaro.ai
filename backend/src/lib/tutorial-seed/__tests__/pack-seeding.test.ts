@@ -40,6 +40,7 @@ const store = vi.hoisted(() => ({
   workflows: [] as Row[],
   workflow_templates: [] as Row[],
   tutorial_categories: [] as Row[],
+  app_settings: [] as Row[],
   seq: 0,
   fromCalls: 0,
   updatePayloads: [] as Array<{ table: string; payload: Row }>,
@@ -139,6 +140,18 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { config } from "../../config.js"
 import { OPERATOR_OWNED_COLUMNS, seedTutorialTemplates } from "../index.js"
+
+// A Cloud run seeds only from the environment holding the database's seeder
+// claim (seeder-claim.ts), keyed by PUBLIC_URL: give each test an empty claim
+// and this environment's URL, so the first Cloud seed takes the claim.
+const REAL_PUBLIC_URL = config.PUBLIC_URL
+beforeEach(() => {
+  config.PUBLIC_URL = "https://app.example.test"
+  store.app_settings.length = 0
+})
+afterEach(() => {
+  config.PUBLIC_URL = REAL_PUBLIC_URL
+})
 
 const REAL_EDITION = config.EDITION
 

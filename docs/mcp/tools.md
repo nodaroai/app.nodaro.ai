@@ -533,7 +533,7 @@ completes (`"nothing_new"` when the nodes had nothing to work on — a feed with
 no new posts — and nothing failed). MCP clients that support the `tasks/*` API
 and widget rendering will show live progress inline.
 
-A workflow whose Apply EDL render is set to **Proxy** stops at that preview for
+A workflow whose Apply EDL render is set to **Preview** (`quality: "proxy"`) stops at that preview for
 a person to review in the editor. An MCP run has nobody to review it, so it is
 refused with `preview_review_required` unless `inputs` sets the render to Final
 for this run: `{ "<render node id>": { "quality": "final" } }`. A sub-workflow
@@ -591,7 +591,7 @@ quoted figure before any execution exists),
 [continuation codes](../api-integration.md#continuing-a-run)
 (`continuation_not_found`, `continuation_workflow_mismatch`,
 `continuation_version_mismatch`, `continuation_not_completed`), and
-`preview_review_required` when another render after this one still reads Proxy
+`preview_review_required` when another render after this one still reads Preview
 (rolled out under the `PREVIEW_STOP_RULE_ENABLED` flag; where it is off, that is
 not refused).
 Writing the review (the Edit Plan's edits) is not part of this tool.

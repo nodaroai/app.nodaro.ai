@@ -4,6 +4,7 @@ import type {
   TutorialPackManifest,
   TutorialTemplateDoc,
 } from "./types.js"
+import { unknownStopRuleNoteIds } from "./preview-gate.js"
 
 // --- manifest schema --------------------------------------------------------
 
@@ -53,6 +54,17 @@ const DocSchema = z.object({
   complexity: z.string().optional(),
   estimatedCredits: z.number().int().nonnegative().optional(),
   estimatedPerMinuteCredits: z.number().int().nonnegative().optional(),
+  withoutPreviewStopRule: z
+    .object({
+      estimatedCredits: z.number().int().nonnegative(),
+      estimatedPerMinuteCredits: z.number().int().nonnegative().optional(),
+      description: z.string().optional(),
+      markdownDescription: z.string().nullish(),
+      notes: z
+        .record(z.string(), z.object({ text: z.string().min(1), height: z.number().positive().optional(), y: z.number().finite().optional() }))
+        .optional(),
+    })
+    .optional(),
   nodeTypesUsed: z.array(z.string()).optional(),
   providersUsed: z.array(z.string()).optional(),
   creatorDisplayName: z.string().nullish(),
@@ -187,6 +199,13 @@ export function validatePackDoc(
   // is legitimate — do NOT require edges.)
   if (doc.nodes.length === 0) {
     at("error", "empty_flow", "template has no nodes")
+  }
+
+  // Rule: a rule-off note text (withoutPreviewStopRule.notes) names a sticky
+  // note of this template. A typo would leave the rule-on text — the one that
+  // names a Preview and a review — standing where no run stops at a Preview.
+  for (const id of unknownStopRuleNoteIds(doc)) {
+    at("error", "unknown_stop_rule_note", `withoutPreviewStopRule.notes names "${id}", which is not a sticky note of this template`)
   }
 
   // Rule: every referenced asset is on a public https URL.

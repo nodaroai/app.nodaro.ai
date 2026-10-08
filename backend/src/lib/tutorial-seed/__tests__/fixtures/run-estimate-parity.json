@@ -1,9 +1,10 @@
 {
-  "about": "One figure for one graph (decided 2026-10-07): the template listing at the 180-minute cap, the server's run estimate (estimateWorkflowCredits) and the editor's run estimate (estimateRunCreditLines) all quote these base totals. Read by backend/src/lib/tutorial-seed/__tests__/run-estimate-parity.test.ts and frontend/src/lib/__tests__/run-estimate-parity.test.ts.",
+  "about": "One figure for one graph (decided 2026-10-07): the template listing at the 180-minute cap, the server's run estimate (estimateWorkflowCredits) and the editor's run estimate (estimateRunCreditLines) all quote these base totals while the preview stop rule (PREVIEW_STOP_RULE_ENABLED) is off. A graph whose render is set to Preview (the four podcast templates, decided 2026-10-08) is listed in two parts: `templates` is its preview part (the whole graph at its saved settings, the run estimate of a whole run with the rule off) and `templateFinals` its Render final (the render at Final and every node after it, the run estimate of that Render final). With the rule on, a run stops at the Preview and its estimate leaves out the nodes after the render: `templateRunsWithStopRule` is that run estimate, below the preview part by that tail; the listing and a whole-graph estimate still quote `templates`. The sync writes the four that way only where the rule is on (decided 2026-10-08); where it is off it writes their render at Final, and `templatesSyncedWithoutStopRule` is that graph's one figure: its listing (it has no Render final part), its run estimate and its whole-graph estimate. Read by backend/src/lib/tutorial-seed/__tests__/run-estimate-parity.test.ts and frontend/src/lib/__tests__/run-estimate-parity.test.ts.",
   "aboutPrices": "The base price of every credit id the cases read; the backend half checks each against STATIC_CREDIT_COSTS, the editor half prices from this table alone.",
   "prices": {
     "add-captions:kinetic": 50,
     "apply-edl": 10,
+    "apply-edl:proxy": 1,
     "audio-sync:4src": 30,
     "camera-switch": 10,
     "combine-videos": 10,
@@ -21,6 +22,24 @@
     "social-media-format": 20
   },
   "templates": {
+    "podcast-clip-pack": 1022,
+    "podcast-multicam-cut": 962,
+    "podcast-tighten-episode": 982,
+    "podcast-trailer-formats": 1084
+  },
+  "templateFinals": {
+    "podcast-clip-pack": 350,
+    "podcast-multicam-cut": 1810,
+    "podcast-tighten-episode": 1850,
+    "podcast-trailer-formats": 340
+  },
+  "templateRunsWithStopRule": {
+    "podcast-clip-pack": 772,
+    "podcast-multicam-cut": 962,
+    "podcast-tighten-episode": 932,
+    "podcast-trailer-formats": 764
+  },
+  "templatesSyncedWithoutStopRule": {
     "podcast-clip-pack": 1112,
     "podcast-multicam-cut": 2582,
     "podcast-tighten-episode": 2602,

@@ -111,7 +111,7 @@ On the canvas, the price follows the number of recordings wired into **Sources**
 ## Best Practices
 
 - To cut the recordings together, wire this node's **Offsets** output into an [Edit Plan](../processing-video/edit-plan.md) node's **Offsets** input, with the same recordings wired into its Sources. Edit Plan writes each offset onto its source, re-based onto its own master's clock — so any recording can be the reference here — and stops before charging if a recording it uses was not measured or matched weakly. See [Multicam](../processing-video/edit-plan.md#multicam-recordings-on-different-clocks).
-- The **Multicam Cut** template in the template marketplace comes wired this way, with the master audio as the reference, and continues through [Camera Switch](../processing-video/camera-switch.md) to Apply EDL.
+- The **Multicam Cut** template in the template marketplace comes wired this way, with the master audio as the reference, and continues through [Camera Switch](../processing-video/camera-switch.md) to Apply EDL, which [renders a Preview first](../processing-video/apply-edl.md#podcast-templates) on a deployment with the preview stop rule on (at Final where it is off).
 - Making the master microphone the reference (wire it first, or pick it) keeps the numbers easy to read: its offsets are then exactly the values the EDL takes.
 - Check any recording with low confidence by ear. It usually means that recording barely heard the conversation (a muted camera, a distant wide shot in a loud room).
 - For long episodes, read the drift notes. More than a frame of drift means lip sync slides over the episode, even though the start lines up.

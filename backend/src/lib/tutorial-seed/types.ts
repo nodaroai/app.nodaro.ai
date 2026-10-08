@@ -19,6 +19,27 @@ export interface TutorialTemplateDoc {
    *  the input recording's length (decided 2026-10-07): `estimatedCredits` is
    *  then the fixed part. Absent → 0, no per-minute part. */
   estimatedPerMinuteCredits?: number
+  /** What the sync writes where the preview stop rule
+   *  (`PREVIEW_STOP_RULE_ENABLED`) is off (decided 2026-10-08): each render
+   *  set to Preview written at Final (see preview-gate.ts), with the listing
+   *  and the texts of that Final graph. The authored doc holds the rule-on
+   *  wording; this holds the rule-off wording, so each state reads true. A
+   *  template with a render set to Preview carries it to opt into that gate;
+   *  one without a Preview render never does. Absent → the doc is written as
+   *  authored. */
+  withoutPreviewStopRule?: {
+    estimatedCredits: number
+    estimatedPerMinuteCredits?: number
+    /** The rule-off description. Absent → the authored one. */
+    description?: string
+    /** The rule-off markdown description. Absent → the authored one. */
+    markdownDescription?: string | null
+    /** The rule-off text of a canvas note, keyed by its sticky-note node id,
+     *  with the note's height for that text and its y (decided 2026-10-08,
+     *  round 4: so a rule-off template is the pre-Preview graph byte for
+     *  byte). A note not listed keeps its authored text and position. */
+    notes?: Record<string, { text: string; height?: number; y?: number }>
+  }
   nodeTypesUsed?: string[]
   providersUsed?: string[]
   /** Overrides the seeder's default attribution ("Nodaro") for THIS tutorial.

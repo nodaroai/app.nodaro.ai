@@ -29,6 +29,14 @@
 //      and an admin's later edits (is_active / listed_in) are never clobbered.
 // Nodaro's shared cloud sets neither env by default, so it still returns before
 // a single Supabase call — see seedTutorialTemplates.
+//
+// On Cloud, either lane writes only from the environment that holds the
+// database's seeder claim (seeder-claim.ts, decided 2026-10-08): staging and
+// production share the database, and each would otherwise overwrite the
+// other's templates. The one exception is an environment with PUBLIC_URL
+// unset: it writes, without taking the claim, only while no claim exists. One
+// with PUBLIC_URL set but malformed never writes. Every database call here
+// goes through the claim's licence.
 
 import { writeWithPerMinute } from "../listing-per-minute-columns.js"
 import { createHash } from "node:crypto"
@@ -36,12 +44,14 @@ import { readFile, readdir } from "node:fs/promises"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { normalizeTemplateCategory } from "@nodaro/shared"
-import { supabase } from "../supabase.js"
 import { config, hasCredits, isCloud } from "../config.js"
 import { findCloudOnlyNodeTypes } from "../cloud-only-nodes.js"
 import { isTransportError, withTransportRetry, type TransportRetryOptions } from "../boot-retry.js"
 import { TUTORIAL_SYSTEM_EMAIL } from "../system-account.js"
 import { loadTutorialPacks, parsePackDirList } from "./packs.js"
+import { claimTemplateSeeding, type SeederLicence } from "./seeder-claim.js"
+import { templateForPreviewStopRule } from "./preview-gate.js"
+import { previewStopRuleEnabled } from "../preview-stop-rule-flag.js"
 import type { TutorialPackCategory, TutorialTemplateDoc } from "./types.js"
 
 const TEMPLATES_DIR = join(dirname(fileURLToPath(import.meta.url)), "templates")
@@ -102,7 +112,7 @@ async function loadDocs(): Promise<TutorialTemplateDoc[]> {
 
 /** Find or create the owning account. The `handle_new_user` trigger creates the
  *  matching profile row, so nothing else is needed here. */
-async function ensureSystemUser(): Promise<string | null> {
+async function ensureSystemUser(db: SeederLicence["db"]): Promise<string | null> {
   // Primary lookup: the profiles row, keyed by the indexed email column
   // (idx_profiles_email, migration 099). listUsers() PAGES — on a high-volume
   // install (Nodaro's Cloud) the system account drops off the first page once
@@ -111,7 +121,7 @@ async function ensureSystemUser(): Promise<string | null> {
   // every later boot (the seed silently stops reaching updated content). A
   // direct row lookup does not page, and is what keeps the seeder idempotent —
   // and the Cloud marketplace lane alive — past the first few hundred signups.
-  const { data: profile } = await supabase
+  const { data: profile } = await db
     .from("profiles")
     .select("id")
     .eq("email", SYSTEM_EMAIL)
@@ -121,12 +131,12 @@ async function ensureSystemUser(): Promise<string | null> {
   // No profile row yet: a fresh install's first boot (the auth user and its
   // profile are minted together by the handle_new_user trigger). Fall back to
   // the auth list — on a fresh install it comfortably fits one page.
-  const { data: list, error: listError } = await supabase.auth.admin.listUsers({ perPage: 200 })
+  const { data: list, error: listError } = await db.auth.admin.listUsers({ perPage: 200 })
   if (listError) throw listError
   const existing = list.users.find((u) => u.email === SYSTEM_EMAIL)
   if (existing) return existing.id
 
-  const { data, error } = await supabase.auth.admin.createUser({
+  const { data, error } = await db.auth.admin.createUser({
     email: SYSTEM_EMAIL,
     email_confirm: true,
     user_metadata: { full_name: SYSTEM_NAME, is_system_account: true },
@@ -137,8 +147,8 @@ async function ensureSystemUser(): Promise<string | null> {
 
 /** The project the seeded workflows live in. Mirrors `ensureDefaultProject`,
  *  which depends on `auth.uid()` and so cannot be used under the service role. */
-async function ensureSystemProject(userId: string): Promise<string> {
-  const { data: found } = await supabase
+async function ensureSystemProject(db: SeederLicence["db"], userId: string): Promise<string> {
+  const { data: found } = await db
     .from("projects")
     .select("id")
     .eq("user_id", userId)
@@ -146,7 +156,7 @@ async function ensureSystemProject(userId: string): Promise<string> {
     .maybeSingle()
   if (found?.id) return found.id as string
 
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from("projects")
     .insert({ user_id: userId, name: "Tutorials" })
     .select("id")
@@ -155,8 +165,8 @@ async function ensureSystemProject(userId: string): Promise<string> {
   return data.id as string
 }
 
-async function categoryIdBySlug(slug: string): Promise<string | null> {
-  const { data } = await supabase
+async function categoryIdBySlug(db: SeederLicence["db"], slug: string): Promise<string | null> {
+  const { data } = await db
     .from("tutorial_categories")
     .select("id")
     .eq("slug", slug)
@@ -171,10 +181,10 @@ async function categoryIdBySlug(slug: string): Promise<string | null> {
  * in listed_in REQUIRES a category). Returns false on failure so the caller can
  * skip that pack rather than let N per-template CHECK violations fire.
  */
-async function ensureTutorialCategory(cat: TutorialPackCategory): Promise<boolean> {
-  const existing = await categoryIdBySlug(cat.slug)
+async function ensureTutorialCategory(db: SeederLicence["db"], cat: TutorialPackCategory): Promise<boolean> {
+  const existing = await categoryIdBySlug(db, cat.slug)
   if (existing) return true
-  const { error } = await supabase
+  const { error } = await db
     .from("tutorial_categories")
     .insert({ slug: cat.slug, name: cat.name, sort_order: cat.sortOrder ?? 0, description: cat.description ?? null })
   if (error) {
@@ -219,15 +229,23 @@ const SEEDED_DEFAULTS = {
 }
 
 async function seedOne(
-  doc: TutorialTemplateDoc,
+  db: SeederLicence["db"],
+  authored: TutorialTemplateDoc,
   userId: string,
   projectId: string,
 ): Promise<"created" | "updated" | "unchanged"> {
+  // The one place a template reaches the database, so the one place the
+  // preview stop rule gates it (decided 2026-10-08): a render set to Preview is
+  // written at Final where the rule is off. Everything below — fingerprint,
+  // workflow, snapshot and listing — reads the gated doc, so turning the flag
+  // on (then a restart) reads as new content and rewrites the row. Packs pass
+  // through it too; one that does not opt in is written as authored.
+  const doc = templateForPreviewStopRule(authored, previewStopRuleEnabled())
   const hash = fingerprint(doc)
 
   // Scoped to this owner on purpose: a template with the same slug created by a
   // real user must never be overwritten by the seeder.
-  const { data: existing } = await supabase
+  const { data: existing } = await db
     .from("workflow_templates")
     .select("id, workflow_id, markdown_description")
     .eq("slug", doc.slug)
@@ -260,9 +278,9 @@ async function seedOne(
 
   let workflowId = existing?.workflow_id as string | undefined
   if (workflowId) {
-    await supabase.from("workflows").update(workflowPayload).eq("id", workflowId)
+    await db.from("workflows").update(workflowPayload).eq("id", workflowId)
   } else {
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from("workflows")
       .insert(workflowPayload)
       .select("id")
@@ -271,7 +289,7 @@ async function seedOne(
     workflowId = data.id as string
   }
 
-  const categoryId = await categoryIdBySlug(doc.tutorialCategorySlug)
+  const categoryId = await categoryIdBySlug(db, doc.tutorialCategorySlug)
   // Everything a content update owns. Every OPERATOR_OWNED_COLUMNS entry is
   // deliberately absent — they are applied on the insert below and never
   // resent.
@@ -332,7 +350,7 @@ async function seedOne(
     const { error } = await writeWithPerMinute(
       "workflow_templates",
       row,
-      (r) => supabase.from("workflow_templates").update(r).eq("id", existing.id),
+      (r) => db.from("workflow_templates").update(r).eq("id", existing.id),
       markFolded,
     )
     if (error) throw error
@@ -344,7 +362,7 @@ async function seedOne(
   const { error } = await writeWithPerMinute(
     "workflow_templates",
     { ...row, ...SEEDED_DEFAULTS, listed_in: doc.listedIn ?? SEEDED_DEFAULTS.listed_in },
-    (r) => supabase.from("workflow_templates").insert(r),
+    (r) => db.from("workflow_templates").insert(r),
     markFolded,
   )
   if (error) throw error
@@ -417,12 +435,20 @@ async function runSeed(): Promise<void> {
   if (!seedBuiltIns && !seedMarketplaceCloud && !packsConfigured()) return
   if (docs.length === 0 && !packsConfigured()) return
 
-  const userId = await ensureSystemUser()
+  // The claim gates every write below: the system account, its project, pack
+  // categories and every template row (seeder-claim.ts). Off Cloud it is a
+  // licence with no database call; on Cloud an environment that does not hold
+  // the claim stops here, having written nothing.
+  const licence = await claimTemplateSeeding()
+  if (!licence) return
+  const { db } = licence
+
+  const userId = await ensureSystemUser(db)
   if (!userId) {
     console.warn("[tutorial-seed] could not resolve the system account — skipping")
     return
   }
-  const projectId = await ensureSystemProject(userId)
+  const projectId = await ensureSystemProject(db, userId)
 
   const counts = { created: 0, updated: 0, unchanged: 0 }
   const notForThisEdition: string[] = []
@@ -439,7 +465,7 @@ async function runSeed(): Promise<void> {
       }
     }
     try {
-      counts[await seedOne(doc, userId, projectId)] += 1
+      counts[await seedOne(db, doc, userId, projectId)] += 1
     } catch (err) {
       // A dead proxy mid-run is not "one bad tutorial" — let the run retry.
       if (isTransportError(err)) throw err
@@ -464,7 +490,7 @@ async function runSeed(): Promise<void> {
   for (const pack of packs) {
     let categoriesOk = true
     for (const cat of pack.categories) {
-      if (!(await ensureTutorialCategory(cat))) categoriesOk = false
+      if (!(await ensureTutorialCategory(db, cat))) categoriesOk = false
     }
     if (!categoriesOk) {
       console.warn(`[tutorial-seed] pack ${pack.name}: a category could not be ensured — skipping its tutorials`)

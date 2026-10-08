@@ -1,9 +1,10 @@
 /**
  * MCP `render_final` — an agent's Render final (decided 2026-10-06).
  *
- * A workflow whose Apply EDL render reads Proxy stops at that preview for a
- * person to review in the editor. Once they have, Render final runs the
- * render at Final for that run only, and everything after it. The SERVER
+ * A workflow whose Apply EDL render is set to Preview (quality "proxy") stops
+ * at that preview for a person to review in the editor. Once they have,
+ * Render final runs the render at Final for that run only, and everything
+ * after it. The SERVER
  * derives what runs — the render, its tail, Camera Switch first in multicam —
  * by the editor's own rule (`renderFinal` on POST /v1/workflows/:id/run), so
  * the agent sends only the render's id and the execution it continues.

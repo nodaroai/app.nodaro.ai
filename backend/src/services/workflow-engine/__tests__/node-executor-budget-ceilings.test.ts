@@ -2,8 +2,8 @@
  * Podcast Track 0.11 — budget-aware caps, at the node executor.
  *
  * THE BUG THIS PINS: a final-quality apply-edl render inside a workflow (the
- * shipped Tighten Episode / Clip Pack templates render `quality: "final"` in
- * the DAG) was cancelled at 90 minutes by `pollJobToCompletion`'s flat clocks
+ * podcast templates' Render final runs `quality: "final"` in the DAG, as
+ * their copies made before they rendered a Preview first do) was cancelled at 90 minutes by `pollJobToCompletion`'s flat clocks
  * — `NODE_TIMEOUT_MS` (processing) and `POLL_ABSOLUTE_TIMEOUT_MS` (queue wait
  * included) — while its worker, whose heartbeat beats for the handler's own
  * declared budget, kept rendering. The decided rule: a node that declares a

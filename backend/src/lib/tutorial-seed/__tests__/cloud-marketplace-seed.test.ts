@@ -55,6 +55,7 @@ const store = vi.hoisted(() => ({
   workflows: [] as Row[],
   workflow_templates: [] as Row[],
   tutorial_categories: [] as Row[],
+  app_settings: [] as Row[],
   seq: 0,
   fromCalls: 0,
   updatePayloads: [] as Array<{ table: string; payload: Row }>,
@@ -147,6 +148,18 @@ vi.mock("../../supabase.js", () => {
 
 import { config } from "../../config.js"
 import { seedTutorialTemplates } from "../index.js"
+
+// A Cloud run seeds only from the environment holding the database's seeder
+// claim (seeder-claim.ts), keyed by PUBLIC_URL: give each test an empty claim
+// and this environment's URL, so the first Cloud seed takes the claim.
+const REAL_PUBLIC_URL = config.PUBLIC_URL
+beforeEach(() => {
+  config.PUBLIC_URL = "https://app.example.test"
+  store.app_settings.length = 0
+})
+afterEach(() => {
+  config.PUBLIC_URL = REAL_PUBLIC_URL
+})
 
 const REAL_EDITION = config.EDITION
 const REAL_FLAG = config.NODARO_SEED_MARKETPLACE_TEMPLATES
@@ -348,5 +361,130 @@ describe("tutorial seeder — templates built on a Cloud-only node", () => {
     docs.value = [cloudOnlyDoc({ listedIn: ["marketplace"] })]
     await seed()
     expect(store.workflow_templates.map((r) => r.slug)).toEqual(["steal-the-format"])
+  })
+})
+
+// The podcast templates' Preview is gated in code (decided 2026-10-08): the
+// sync writes a render set to Preview only where the preview stop rule
+// (PREVIEW_STOP_RULE_ENABLED) is on, and at Final, with the Final graph's
+// listing, where it is off. Turning the flag on and restarting flips the row.
+describe("tutorial seeder — a template whose render is set to Preview", () => {
+  const REAL_STOP_RULE = config.PREVIEW_STOP_RULE_ENABLED
+  const setStopRule = (on: boolean) => {
+    ;(config as { PREVIEW_STOP_RULE_ENABLED: boolean }).PREVIEW_STOP_RULE_ENABLED = on
+  }
+  const previewDoc = () =>
+    marketplaceDoc({
+      estimatedCredits: 132,
+      estimatedPerMinuteCredits: 15,
+      description: ON_DESCRIPTION,
+      withoutPreviewStopRule: {
+        estimatedCredits: 82,
+        estimatedPerMinuteCredits: 14,
+        description: OFF_DESCRIPTION,
+        notes: { intro: { text: OFF_NOTE, height: 300 } },
+      },
+      nodes: [
+        {
+          id: "intro",
+          type: "sticky-note",
+          position: { x: 0, y: -400 },
+          data: { text: ON_NOTE, height: 440 },
+          measured: { width: 460, height: 440 },
+        },
+        { id: "rec", type: "upload-video", position: { x: 0, y: 0 }, data: {} },
+        { id: "render", type: "apply-edl", position: { x: 0, y: 0 }, data: { label: "Apply Cut", quality: "proxy" } },
+      ],
+      edges: [{ id: "e1", source: "rec", target: "render", targetHandle: "sources" }],
+    })
+  const ON_DESCRIPTION = "Renders a 720p Preview first; review it, then Render final."
+  const OFF_DESCRIPTION = "Renders the final video."
+  const ON_NOTE = "Apply Cut renders a Preview first. Review it, then choose Render final."
+  const OFF_NOTE = "Apply Cut renders the result."
+  const introNote = (nodes: unknown) =>
+    (nodes as Array<{ id: string; data: { text?: string; height?: number }; measured?: { height?: number } }>).find(
+      (n) => n.id === "intro",
+    )!
+  /** The description and the intro note, as written to the template row AND its workflow. */
+  const texts = (row: Row) => ({
+    description: row.description,
+    snapshotNote: introNote(row.snapshot_nodes).data.text,
+    snapshotHeight: [introNote(row.snapshot_nodes).data.height, introNote(row.snapshot_nodes).measured?.height],
+    workflowNote: introNote(workflowOf(row).nodes).data.text,
+  })
+  const ON_TEXTS = { description: ON_DESCRIPTION, snapshotNote: ON_NOTE, snapshotHeight: [440, 440], workflowNote: ON_NOTE }
+  const OFF_TEXTS = { description: OFF_DESCRIPTION, snapshotNote: OFF_NOTE, snapshotHeight: [300, 300], workflowNote: OFF_NOTE }
+  const renderQuality = (nodes: unknown) =>
+    (nodes as Array<{ id: string; data: { quality?: string } }>).find((n) => n.id === "render")?.data.quality
+  const templateRow = () => store.workflow_templates.find((r) => r.slug === "podcast-tighten-episode")!
+  const workflowOf = (row: Row) => store.workflows.find((w) => w.id === row.workflow_id)!
+
+  beforeEach(() => {
+    config.EDITION = "cloud"
+    config.NODARO_SEED_MARKETPLACE_TEMPLATES = true
+    store.users.length = 0
+    store.profiles.length = 0
+    store.projects.length = 0
+    store.workflows.length = 0
+    store.workflow_templates.length = 0
+    store.tutorial_categories.length = 0
+    store.seq = 0
+    store.fromCalls = 0
+    store.updatePayloads.length = 0
+    docs.value = [previewDoc()]
+  })
+
+  afterEach(() => {
+    config.EDITION = REAL_EDITION
+    config.NODARO_SEED_MARKETPLACE_TEMPLATES = REAL_FLAG
+    setStopRule(REAL_STOP_RULE)
+  })
+
+  it("rule off: writes the render at Final, with the Final graph's listing", async () => {
+    setStopRule(false)
+    await seed()
+    const row = templateRow()
+    expect(renderQuality(row.snapshot_nodes)).toBe("final")
+    expect(renderQuality(workflowOf(row).nodes)).toBe("final")
+    expect([row.estimated_credits, row.estimated_per_minute_credits]).toEqual([82, 14])
+    expect(texts(row)).toEqual(OFF_TEXTS)
+  })
+
+  it("rule on: writes the render at Preview, with the authored listing", async () => {
+    setStopRule(true)
+    await seed()
+    const row = templateRow()
+    expect(renderQuality(row.snapshot_nodes)).toBe("proxy")
+    expect(renderQuality(workflowOf(row).nodes)).toBe("proxy")
+    expect([row.estimated_credits, row.estimated_per_minute_credits]).toEqual([132, 15])
+    expect(texts(row)).toEqual(ON_TEXTS)
+  })
+
+  it("turning the rule on, then a restart, flips the row; a further restart writes nothing", async () => {
+    setStopRule(false)
+    await seed()
+    expect(renderQuality(templateRow().snapshot_nodes)).toBe("final")
+    expect(texts(templateRow())).toEqual(OFF_TEXTS)
+
+    setStopRule(true)
+    store.updatePayloads.length = 0
+    await seed()
+    const row = templateRow()
+    expect(store.workflow_templates).toHaveLength(1)
+    expect(renderQuality(row.snapshot_nodes)).toBe("proxy")
+    expect(renderQuality(workflowOf(row).nodes)).toBe("proxy")
+    expect([row.estimated_credits, row.estimated_per_minute_credits]).toEqual([132, 15])
+    expect(texts(row)).toEqual(ON_TEXTS)
+
+    store.updatePayloads.length = 0
+    await seed()
+    expect(store.updatePayloads.filter((u) => u.table === "workflow_templates")).toEqual([])
+
+    // And back: turning it off again writes Final once more.
+    setStopRule(false)
+    await seed()
+    expect(renderQuality(templateRow().snapshot_nodes)).toBe("final")
+    expect(templateRow().estimated_credits).toBe(82)
+    expect(texts(templateRow())).toEqual(OFF_TEXTS)
   })
 })

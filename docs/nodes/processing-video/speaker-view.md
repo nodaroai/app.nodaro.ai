@@ -12,7 +12,7 @@
 
 It decides **how** the speakers are shown, never **who** is on screen: [Camera Switch](./camera-switch.md) chooses the camera for each cut, Speaker View lays them out. A typical chain: **Audio Sync** → **Transcribe** with speaker detection → **Edit Plan** → **Camera Switch** → **Speaker View**.
 
-A **Preview** (Quality: Proxy) is a private 720p render to review before a final is made.
+A **Preview** (**Quality** set to **Preview**) is a private 720p render to review before a final is made. In the editor the **Quality** select reads **Final — no review step** and **Preview first — review, then Render final**, the same two options as [Apply EDL](./apply-edl.md#configuration)'s. Where the preview stop rule is on (`PREVIEW_STOP_RULE_ENABLED`), a run stops at a Speaker View set to Preview exactly as it [stops at an Apply EDL Preview](./apply-edl.md#a-run-stops-at-a-preview): the nodes after it are skipped and not billed in that run. **Render final** is in the right-click menu of Speaker View and of the Edit Plan behind it (there is no Render final button on the node itself): it renders Speaker View at Final for that run only, then everything after it, and the node keeps its own **Quality**. See [Render final](./apply-edl.md#render-final).
 
 ## Inputs
 
@@ -35,7 +35,7 @@ When the node wired into **EDL** has not run yet, the panel says so and offers *
 | Field | Control | Default | Description |
 |-------|---------|---------|-------------|
 | Aspect ratio | Tiles | the edit's own, else 16:9 | 16:9, 9:16, 1:1 or 4:5. Output size is fixed per aspect: a final is 1920×1080, 1080×1920, 1080×1080 or 1080×1350; a Preview has a 720-pixel short side. |
-| Quality | Select | Final | Final, or Proxy (a private Preview). |
+| Quality | Select | Final | Final, or Preview (a private 720p render to review). |
 | Layout | Tiles | Auto (Single on one camera) | Auto, Single, Side by side, Stacked, Grid, Picture in picture. Each tile is drawn at the output's aspect. |
 | Switch | Tiles | Cut (Pan on one camera) | What happens at a speaker change: Cut, Pan, Zoom, or a Crossfade chosen from a list of transitions. Cut, Pan and Zoom loop a small animation of what they do. |
 | Switch duration | Slider | 600 ms | The tween length of a Pan or Zoom; 0–5000 ms in 50 ms steps. |

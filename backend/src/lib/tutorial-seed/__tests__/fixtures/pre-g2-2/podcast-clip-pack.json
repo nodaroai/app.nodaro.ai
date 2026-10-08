@@ -1,7 +1,7 @@
 {
   "slug": "podcast-clip-pack",
   "name": "Clip Pack",
-  "description": "Cut a long recording into a pack of short clips. The editor finds the best moments and each one renders on its own as a 720p Preview; review them, then Render final renders the clips you keep at full quality, each with word-level (karaoke) captions.",
+  "description": "Cut a long recording into a pack of short clips. The editor finds the best moments and each one renders on its own with word-level (karaoke) captions.",
   "markdownDescription": null,
   "category": "automations",
   "outputTypes": [
@@ -21,25 +21,8 @@
   ],
   "tutorialCategorySlug": "workflows",
   "tutorialSortOrder": 1,
-  "estimatedCredits": 652,
+  "estimatedCredits": 392,
   "estimatedPerMinuteCredits": 4,
-  "withoutPreviewStopRule": {
-    "estimatedCredits": 392,
-    "estimatedPerMinuteCredits": 4,
-    "description": "Cut a long recording into a pack of short clips. The editor finds the best moments and each one renders on its own with word-level (karaoke) captions.",
-    "notes": {
-      "clips-note-intro": {
-        "text": "Clip Pack\n\nUpload a recording and get a pack of short clips. Find Clips (Cloud) plans several highlight moments; because it emits a list of edits, the edge into Render Clip fans out — one render per moment. Each clip then gets its own word-level (karaoke) captions.\n\nDrop your recording on Episode Recording and Run.",
-        "height": 320,
-        "y": -340
-      },
-      "clips-note-fanout": {
-        "text": "One run per clip\n\nFind Clips emits a list of edits, so the edge into Render Clip fans out — everything to its right runs once per clip. Each Caption Clip transcribes its own clip (autoTranscribe) for word-level captions, so a run costs one transcription per clip.\n\nGathering all clips into a single set (and pairing each clip with its remapped transcript) is deferred engine work — for now each clip is an independent captioned result.",
-        "height": 300,
-        "y": -320
-      }
-    }
-  },
   "nodeTypesUsed": [
     "upload-video",
     "transcribe",
@@ -58,15 +41,15 @@
       "zIndex": -1,
       "position": {
         "x": -100,
-        "y": -440
+        "y": -340
       },
       "data": {
         "bold": false,
-        "text": "Clip Pack\n\nUpload a recording and get a pack of short clips. Find Clips (Cloud) plans several highlight moments; because it emits a list of edits, the edge into Render Clip fans out — one render per moment, each a 720p Preview first. Review the clips and drop any you do not want, then choose Render final on Render Clip: each kept clip renders at full quality and gets its own word-level (karaoke) captions.\n\nDrop your recording on Episode Recording and Run.\n\nTo skip the review, set Render Clip's Quality to Final.",
+        "text": "Clip Pack\n\nUpload a recording and get a pack of short clips. Find Clips (Cloud) plans several highlight moments; because it emits a list of edits, the edge into Render Clip fans out — one render per moment. Each clip then gets its own word-level (karaoke) captions.\n\nDrop your recording on Episode Recording and Run.",
         "color": "#2d2d44",
         "label": "Sticky Note",
         "width": 480,
-        "height": 420,
+        "height": 320,
         "italic": false,
         "fontSize": "base",
         "alignment": "left",
@@ -74,7 +57,7 @@
       },
       "measured": {
         "width": 480,
-        "height": 420
+        "height": 320
       }
     },
     {
@@ -137,7 +120,7 @@
       "data": {
         "label": "Render Clip",
         "output": "video",
-        "quality": "proxy",
+        "quality": "final",
         "crossfadeMs": 0,
         "fieldMappings": {}
       }
@@ -166,15 +149,15 @@
       "zIndex": -1,
       "position": {
         "x": 1340,
-        "y": -360
+        "y": -320
       },
       "data": {
         "bold": false,
-        "text": "One run per clip\n\nFind Clips emits a list of edits, so the edge into Render Clip fans out — everything to its right runs once per clip. Each Caption Clip transcribes its own clip (autoTranscribe) for word-level captions, at one transcription per clip. Render final runs them on the full-quality clips you keep.\n\nGathering all clips into a single set (and pairing each clip with its remapped transcript) is deferred engine work — for now each clip is an independent captioned result.",
+        "text": "One run per clip\n\nFind Clips emits a list of edits, so the edge into Render Clip fans out — everything to its right runs once per clip. Each Caption Clip transcribes its own clip (autoTranscribe) for word-level captions, so a run costs one transcription per clip.\n\nGathering all clips into a single set (and pairing each clip with its remapped transcript) is deferred engine work — for now each clip is an independent captioned result.",
         "color": "#2d2d44",
         "label": "Sticky Note",
         "width": 440,
-        "height": 340,
+        "height": 300,
         "italic": false,
         "fontSize": "base",
         "alignment": "left",
@@ -182,7 +165,7 @@
       },
       "measured": {
         "width": 440,
-        "height": 340
+        "height": 300
       }
     }
   ],

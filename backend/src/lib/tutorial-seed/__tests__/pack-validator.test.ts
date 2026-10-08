@@ -142,6 +142,41 @@ describe("A7 G8 additive schema", () => {
   })
 })
 
+describe("the rule-off texts of a template with a Preview render (withoutPreviewStopRule)", () => {
+  const withNote = (notes: Record<string, unknown>) =>
+    doc({
+      nodes: [
+        ...doc().nodes,
+        { id: "note", type: "sticky-note", data: { text: "Review the Preview, then Render final." } },
+      ],
+      withoutPreviewStopRule: { estimatedCredits: 10, description: "Renders at Final.", notes },
+    })
+
+  it("keeps the rule-off description and note texts (and a note's y)", () => {
+    const { doc: d, issues } = validatePackDoc(withNote({ note: { text: "Renders at Final.", height: 200, y: -120 } }), manifest())
+    expect(issues.filter((i) => i.severity === "error")).toEqual([])
+    expect(d?.withoutPreviewStopRule).toEqual({
+      estimatedCredits: 10,
+      description: "Renders at Final.",
+      notes: { note: { text: "Renders at Final.", height: 200, y: -120 } },
+    })
+  })
+
+  it("errors on a rule-off note that names no sticky note of the template", () => {
+    const { doc: d, issues } = validatePackDoc(withNote({ n1: { text: "x" }, ghost: { text: "y" } }), manifest())
+    expect(d).toBeNull()
+    expect(issues.filter((i) => i.code === "unknown_stop_rule_note").map((i) => i.message)).toEqual([
+      expect.stringContaining('"n1"'),
+      expect.stringContaining('"ghost"'),
+    ])
+  })
+
+  it("errors on an empty rule-off note text", () => {
+    const { doc: d } = validatePackDoc(withNote({ note: { text: "" } }), manifest())
+    expect(d).toBeNull()
+  })
+})
+
 describe("isPublicHttpsUrl", () => {
   it.each([
     ["https://cdn.example.com/a.png", true],

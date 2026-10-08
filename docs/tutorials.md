@@ -152,8 +152,10 @@ asset must be a public `https://` URL so the tutorial loads on any machine.
 A pack that fails validation — invalid JSON, an undeclared category, a
 non-public asset URL, or a slug that collides with an existing tutorial — is
 **skipped whole and logged**; it can never corrupt the built-in tutorials.
-Restart the container to pick up pack changes. Cloud installs are seeded
-separately and ignore this variable.
+Restart the container to pick up pack changes. On Cloud a pack is written
+only by the environment holding the database's
+[template seeder claim](./deployment.md#template-seeder-claim-cloud), or,
+while no claim exists, by an environment with no `PUBLIC_URL`.
 
 ## See also
 
