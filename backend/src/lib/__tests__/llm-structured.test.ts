@@ -294,6 +294,23 @@ describe("llmCompleteStructured", () => {
     expect(body.response_format.json_schema.schema.properties.prompt).toBeDefined()
   })
 
+  it("a Google model's KIE wire schema gets the direct lane's rewrite — no array cap, no over-long enum list", async () => {
+    const { llmCompleteStructured } = await import("../llm-client.js")
+    const { GEMINI_ENUM_LIST_LIMIT } = await import("../gemini/response-schema.js")
+    const ids = Array.from({ length: GEMINI_ENUM_LIST_LIMIT + 50 }, (_, i) => `id-${i}`) as [string, ...string[]]
+    const capped = z.object({ tags: z.array(z.enum(ids)).max(2), mood: z.enum(["calm", "tense"]) })
+    fetchMock.mockImplementation(async () => geminiContent('{"tags":["id-1"],"mood":"calm"}'))
+    await llmCompleteStructured(
+      { modelId: "gemini-3-flash", system: "", messages: [{ role: "user", content: "x" }] },
+      capped,
+      { schemaName: "out" },
+    )
+    const wire = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body).response_format.json_schema.schema
+    expect(wire.properties.tags.maxItems).toBeUndefined()
+    expect(wire.properties.tags.items).toEqual({ type: "string" })
+    expect(wire.properties.mood.enum).toEqual(["calm", "tense"])
+  })
+
   it("does NOT add response_format for GPT (no native structured mode via KIE)", async () => {
     const { llmCompleteStructured } = await import("../llm-client.js")
     fetchMock.mockResolvedValue(geminiContent('{"prompt":"gpt"}'))
@@ -327,8 +344,13 @@ describe("llmCompleteStructured", () => {
       const body = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)
       const person = body.response_format.json_schema.schema.properties.person
       expect(person.properties.type).toBeUndefined()
+      // The caller's `type` list (160 ids) is over the per-list cap a Google
+      // decoder accepts, so the wire carries the renamed property as a plain
+      // string; the legend and the caller's Zod still hold the ids, and the
+      // answer above validated under the caller's own name.
       const callerPerson = (structuredJsonSchema(spec.schema).properties as Record<string, { properties: Record<string, unknown> }>).person
-      expect(person.properties.type_).toEqual(callerPerson.properties.type)
+      expect(callerPerson.properties.type).toMatchObject({ type: "string", enum: expect.any(Array) })
+      expect(person.properties.type_).toEqual({ type: "string" })
     })
 
     it("a schema with no such name goes on the wire byte for byte", async () => {

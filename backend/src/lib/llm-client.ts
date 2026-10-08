@@ -32,6 +32,7 @@ import { z, type ZodType } from "zod"
 import { extractJsonFromAIResponse, extractKieToolCallInput } from "./json-utils.js"
 import { anthropicStrictToolSchema, restrictObjectSchemas } from "./json-schema-strict.js"
 import { aliasKeywordPropertyNames } from "./json-schema-property-alias.js"
+import { toGeminiResponseSchema } from "./gemini/response-schema.js"
 
 const LLM_TIMEOUT_MS = 120_000
 
@@ -1376,7 +1377,7 @@ function buildAnthropicMessages(req: LlmRequest) {
  */
 function kieResponseFormat(model: LlmModelDef, req: LlmRequest): KieSchemaFormat | undefined {
   if (!req.jsonSchema || model.structuredOutputMode !== "kie-response-format") return undefined
-  const wire = kieWireSchema(req.jsonSchema)
+  const wire = kieWireSchema(req.jsonSchema, model)
   return {
     body: { type: "json_schema", json_schema: { name: req.jsonSchema.name, strict: false, schema: wire.schema } },
     restoreText: wire.restoreText,
@@ -1402,13 +1403,19 @@ interface KieSchemaFormat {
  * request is never changed: a fallback lane reads the caller's schema from the
  * same `req`.
  */
-function kieWireSchema(jsonSchema: NonNullable<LlmRequest["jsonSchema"]>): {
+function kieWireSchema(jsonSchema: NonNullable<LlmRequest["jsonSchema"]>, model: LlmModelDef): {
   schema: Record<string, unknown>
   restoreText: (text: string) => string
 } {
   const wire = aliasKeywordPropertyNames(jsonSchema.schema)
+  // KIE forwards a Google model's schema to Google's own decoder, which
+  // refuses an array cap and a schema with too many enum ids exactly as it
+  // does on the direct lane (`gemini/response-schema.ts`) — the proxy adds no
+  // tolerance. The same wire form keeps the two lanes from failing apart;
+  // the rewrite never touches property names, so the alias restore still holds.
+  const schema = model.vendor === "google" ? (toGeminiResponseSchema(wire.schema) as Record<string, unknown>) : wire.schema
   return {
-    schema: wire.schema,
+    schema,
     restoreText: wire.aliases.size === 0 ? (text) => text : (text) => restoreAnswerText(text, wire.restore),
   }
 }
@@ -1437,7 +1444,7 @@ function restoreAnswerText(text: string, restore: (value: unknown) => unknown): 
  */
 function kieResponsesTextFormat(model: LlmModelDef, req: LlmRequest): KieSchemaFormat | undefined {
   if (!req.jsonSchema || model.structuredOutputMode !== "responses-json-schema") return undefined
-  const wire = kieWireSchema(req.jsonSchema)
+  const wire = kieWireSchema(req.jsonSchema, model)
   return {
     body: { format: { type: "json_schema", name: req.jsonSchema.name, strict: false, schema: wire.schema } },
     restoreText: wire.restoreText,
