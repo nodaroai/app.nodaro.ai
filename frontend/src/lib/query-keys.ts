@@ -155,6 +155,8 @@ export const queryKeys = {
       ["editor", "cost-summary", [...jobIds].sort()] as const,
     importableWorkflows: (projectId: string, currentWorkflowId: string) =>
       ["editor", "importable-workflows", projectId, currentWorkflowId] as const,
+    /** The project a workflow lives in — the short /editor/<id> link's lookup. */
+    workflowProject: (workflowId: string) => ["editor", "workflow-project", workflowId] as const,
   },
 
   // Jobs

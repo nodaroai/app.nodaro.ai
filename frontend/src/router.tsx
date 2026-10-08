@@ -24,6 +24,7 @@ import ProjectPage from "@/routes/project-page"
 
 // Lazy-loaded routes — not needed for initial /projects page load
 const WorkflowEditorPage = lazy(() => import("@/routes/workflow-editor-page"))
+const EditorLinkPage = lazy(() => import("@/routes/editor-link-page"))
 const PipelinePage = lazy(() => import("@/routes/pipeline-page"))
 const VideoDirectorPage = lazy(() => import("@/routes/video-director-page"))
 const BillingPage = lazy(() => import("@/ee/app/(dashboard)/billing/page"))
@@ -322,6 +323,11 @@ export const router = createBrowserRouter([
       {
         path: "/projects/:id/workflows/:workflowId",
         element: <SuspenseWrapper><WorkflowEditorPage /></SuspenseWrapper>,
+      },
+      {
+        // The short link (assistants, the Shared page): finds the project, then opens the editor above.
+        path: "/editor/:workflowId",
+        element: <SuspenseWrapper><EditorLinkPage /></SuspenseWrapper>,
       },
       {
         path: "/Pipeline",

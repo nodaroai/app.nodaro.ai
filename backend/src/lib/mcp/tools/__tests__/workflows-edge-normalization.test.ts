@@ -36,6 +36,7 @@ vi.mock("../../../media-portability.js", async (importOriginal) => {
 
 const { registerWorkflows } = await import("../workflows.js")
 const { supabase } = await import("../../../supabase.js")
+const { appBaseUrl } = await import("../../../deployment-urls.js")
 const fromMock = supabase.from as unknown as ReturnType<typeof vi.fn>
 
 const MCP_PROJECT_ID = "11111111-1111-4111-8111-111111111111"
@@ -157,7 +158,7 @@ describe("MCP workflow writes normalize their edges", () => {
     const result = await callTool(server, "create_workflow", { name: "Flow", nodes: NODES, edges: STORED_EDGES })
     expect(result.isError).toBeUndefined()
     expect(firstCall("insert")!.edges).toEqual(STORED_EDGES)
-    expect(result.structuredContent).toEqual({ id: WORKFLOW_ID, name: "Flow" })
+    expect(result.structuredContent).toEqual({ id: WORKFLOW_ID, name: "Flow", editorUrl: `${appBaseUrl()}/editor/${WORKFLOW_ID}` })
     expect(text(result)).not.toContain("Adjusted")
   })
 
@@ -224,5 +225,9 @@ describe("MCP workflow writes normalize their edges", () => {
     expect(firstCall("insert")!.edges).toEqual(STORED_EDGES)
     expect((result.structuredContent as { edgeAdjustments?: unknown[] }).edgeAdjustments).toHaveLength(4)
     expect(text(result)).toContain("Adjusted 4 edge field(s)")
+    // Like create_workflow, the new workflow's editor link comes back with it.
+    const link = `${appBaseUrl()}/editor/${WORKFLOW_ID}`
+    expect((result.structuredContent as { editorUrl?: string }).editorUrl).toBe(link)
+    expect(text(result)).toContain(link)
   })
 })

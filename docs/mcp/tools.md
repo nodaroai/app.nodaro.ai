@@ -284,7 +284,10 @@ graph or leave it empty.
 | `edges` | array of objects | Optional; React Flow edge objects |
 | `settings` | object | Optional; workflow-level settings |
 
-**Response:** Returns the new workflow's `id` and `name` in structured content.
+**Response:** Returns the new workflow's `id`, `name` and `editorUrl` in structured
+content. `editorUrl` is the link that opens the workflow in the editor on this
+deployment (`<PUBLIC_URL>/editor/<id>`; the app resolves the workflow's project
+from there) — share it as returned rather than building one.
 
 **Edges are normalized on every write** (`create_workflow`, `update_workflow_json`,
 `import_workflow`): a recorded legacy handle name is rewired to the node's current
@@ -496,8 +499,8 @@ copies.
 |-------|------|-------|
 | `workflow_json` | string | The full JSON string from `export_workflow` |
 
-**Response:** Returns the new workflow's `id` and `name` in structured content,
-plus `importReport` — `{ rehosted, unreachable[], skipped[], assetIdMap?,
+**Response:** Returns the new workflow's `id`, `name` and `editorUrl` (as in
+`create_workflow`) in structured content, plus `importReport` — `{ rehosted, unreachable[], skipped[], assetIdMap?,
 assetsSkipped? }` — saying which media was copied, which points at a private
 host this instance cannot reach (left as-is), and which was skipped with the
 reason. The text reply repeats the same, naming the affected nodes. The bundle's
