@@ -21,6 +21,8 @@ import {
 import { getScheduledCancelDate } from "@/ee/lib/subscription"
 import { UserMessagesSection } from "@/ee/components/admin/user-messages/user-messages-section"
 import { UserAccessPanel } from "@/ee/components/admin/user-access/user-access-panel"
+import { SignalsDetail } from "@/ee/components/admin/users-linkage/signals-detail"
+import type { LinkageCluster, LinkageUser } from "@/ee/components/admin/users-linkage/types"
 import { hasCredits } from "@/lib/edition"
 import { formatBytes, unitsOrDash, useDeploymentPayerMode } from "./user-admin-helpers"
 
@@ -57,11 +59,17 @@ export function UserExpandedRow({
   onCreditsAdjusted,
   adminUserId,
   isSuperAdmin,
+  columnCount,
+  linkage = null,
 }: {
   readonly user: AdminUser
   readonly onCreditsAdjusted: () => void
   readonly adminUserId: string
   readonly isSuperAdmin: boolean
+  /** The table's column count; the page adds a Signals column when the marking is on. */
+  readonly columnCount?: number
+  /** The account's claim-time signals and its cluster, when it has them. */
+  readonly linkage?: { readonly user: LinkageUser; readonly cluster: LinkageCluster | null; readonly partial: boolean } | null
 }) {
   const { data: txResult, isLoading: txLoading } = useAdminUserTransactions(user.id)
   const { data: subInfo } = useAdminUserSubscription(user.id)
@@ -159,7 +167,8 @@ export function UserExpandedRow({
 
   return (
     <tr>
-      <td colSpan={payerMode ? 10 : 11} className="px-4 py-4 bg-muted/30">
+      <td colSpan={columnCount ?? (payerMode ? 10 : 11)} className="px-4 py-4 bg-muted/30">
+        {linkage && <SignalsDetail user={linkage.user} cluster={linkage.cluster} partial={linkage.partial} />}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Left: Credit Management */}
           <div className="space-y-4">

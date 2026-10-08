@@ -164,6 +164,7 @@ import { registerCopilotRoutes } from "./ee/routes/copilot.js"
 import { claimSignupGrantRoutes } from "./ee/routes/claim-signup-grant.js"
 import { welcomeOfferRoutes } from "./ee/routes/welcome-offer.js"
 import { adminFreeGrantRoutes } from "./ee/routes/admin-free-grants.js"
+import { adminUsersLinkageRoutes } from "./ee/routes/admin-users-linkage.js"
 import { adminAccessRoutes } from "./ee/routes/admin-access.js"
 import { adminRoutes } from "./ee/routes/admin.js"
 import { libraryRoutes } from "./routes/library.js"
@@ -649,6 +650,8 @@ export async function buildApp() {
   if (hasCredits()) await app.register(consentRoutes)
   // The review surface only means something where the grant exists.
   if (hasCredits()) await app.register(adminFreeGrantRoutes)
+  // The Users page's linked-account marking rides on the same clusters RPC.
+  if (hasCredits()) await app.register(adminUsersLinkageRoutes)
   if (hasAdmin()) await app.register(adminAccessRoutes)
   if (hasAdmin()) await app.register(adminRoutes)
   if (hasAdmin()) await app.register(adminJobsRoutes)

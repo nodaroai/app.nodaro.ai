@@ -74,10 +74,35 @@ export interface AdminWhoami {
 const BLOCKS_KEY = ["admin", "access", "blocks"] as const
 const userAccessKey = (userId: string) => ["admin", "access", "user", userId] as const
 
+/**
+ * A refusal with its status kept: a caller running several requests in a row
+ * (the Users page's cluster block) tells a 403 it should skip from a 429 it
+ * should wait out from a failure it should stop on.
+ */
+export class AccessError extends Error {
+  readonly status: number
+  /** From the Retry-After header, in seconds, when the server sent one. */
+  readonly retryAfterSeconds: number | null
+
+  constructor(message: string, status: number, retryAfterSeconds: number | null) {
+    super(message)
+    this.name = "AccessError"
+    this.status = status
+    this.retryAfterSeconds = retryAfterSeconds
+  }
+}
+
 /** The server's own sentence when it has one: every refusal here explains itself. */
 async function accessError(res: Response, fallback: string): Promise<Error> {
   const body = (await res.json().catch(() => null)) as { error?: { message?: string } } | null
-  return new Error(body?.error?.message || fallback)
+  // Optional on purpose: a Response always has headers, but the panels' tests hand in bare
+  // `{ ok, status, json }` stand-ins, and the refusal must still read word for word.
+  const retryAfter = Number(res.headers?.get?.("retry-after") ?? NaN)
+  return new AccessError(
+    body?.error?.message || fallback,
+    res.status,
+    Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : null,
+  )
 }
 
 async function getJson<T>(url: string, fallback: string): Promise<T> {

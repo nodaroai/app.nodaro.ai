@@ -53,6 +53,11 @@ vi.mock("@/ee/hooks/queries/use-admin-queries", () => ({
 vi.mock("@/ee/hooks/queries/use-admin-access", () => ({
   useAdminBlocks: () => ({ data: h.blocks }),
 }))
+// The linked-account marking has its own test (linkage-marking.test.tsx); here the page runs unmarked.
+vi.mock("@/ee/components/admin/users-linkage/use-users-linkage", () => ({
+  useUsersLinkage: () => ({ data: undefined, isLoading: false }),
+  useClusterMembers: () => ({ data: undefined, isLoading: false, isError: false, error: null }),
+}))
 vi.mock("@/hooks/use-auth", () => ({
   useAuth: () => ({ user: { id: "00000000-0000-4000-8000-0000000000f0" }, role: h.role }),
 }))
