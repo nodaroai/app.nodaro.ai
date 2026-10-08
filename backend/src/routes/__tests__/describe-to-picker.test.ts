@@ -216,6 +216,7 @@ describe("POST /v1/describe-to-picker — W1-a minor-age floor", () => {
     // The floored value is also what gets persisted on the job row and fed to gap recording.
     expect(mocks.jobUpdate).toHaveBeenCalledWith({
       status: "completed",
+      completed_at: expect.any(String),
       output_data: { json: { person: { age: "age-pre-teen" }, styling: {} }, targetPickers: ["person", "styling"], usage: { inputTokens: 100, outputTokens: 50 } },
     })
   })
@@ -374,7 +375,7 @@ describe("POST /v1/describe-to-picker — streamed answer (Accept: text/event-st
     expect(evts.at(-1)?.data).toEqual({ code: "llm_error", message: "The model stopped responding" })
     expect(mocks.refundReservedCreditsForJob).toHaveBeenCalledWith("job-1")
     expect(mocks.commitReservedCreditsForJob).not.toHaveBeenCalled()
-    expect(mocks.jobUpdate).toHaveBeenCalledWith({ status: "failed", output_data: { error: "The model stopped responding" } })
+    expect(mocks.jobUpdate).toHaveBeenCalledWith({ status: "failed", completed_at: expect.any(String), output_data: { error: "The model stopped responding" } })
   })
 
   it("a minor: no field carries a value the floor removes, and done carries the floored answer", async () => {
@@ -427,7 +428,7 @@ describe("POST /v1/describe-to-picker — streamed answer (Accept: text/event-st
       mocks.llmStreamStructured.mockRejectedValue(failure)
       const res = await app.inject({ method: "POST", url: URL, payload: VALID, headers })
 
-      expect(mocks.jobUpdate).toHaveBeenCalledWith({ status: "failed", output_data: { error: "got status: 400 Bad Request." } })
+      expect(mocks.jobUpdate).toHaveBeenCalledWith({ status: "failed", completed_at: expect.any(String), output_data: { error: "got status: 400 Bad Request." } })
       const logged = errorSpy.mock.calls.map((c) => c.map(String).join(" ")).filter((l) => l.includes("[describe-to-picker]"))
       expect(logged).toHaveLength(1)
       expect(logged[0]).toContain("job-1")

@@ -223,6 +223,7 @@ async function completeAnalysis(
     .from("jobs")
     .update({
       status: "completed",
+      completed_at: new Date().toISOString(),
       output_data: { json: flooredPickerJson, targetPickers, usage: { inputTokens, outputTokens } },
     })
     .eq("id", jobId)
@@ -259,7 +260,11 @@ async function failAnalysis(analysis: Analysis, err: unknown): Promise<string> {
   // whose own message is that sentence used to leave no log line at all.
   const message = userFacingMessage(err, "Picker analysis failed")
   console.error(`[describe-to-picker] job ${analysis.jobId} failed — ${describeErrorChain(err)}`)
-  await supabase.from("jobs").update({ status: "failed", output_data: { error: message } }).eq("id", analysis.jobId).eq("user_id", analysis.userId)
+  await supabase
+    .from("jobs")
+    .update({ status: "failed", completed_at: new Date().toISOString(), output_data: { error: message } })
+    .eq("id", analysis.jobId)
+    .eq("user_id", analysis.userId)
   await refundReservedCreditsForJob(analysis.jobId)
   return message
 }
@@ -355,6 +360,9 @@ export async function describeToPickerRoutes(app: FastifyInstance) {
           force_private: extractForcePrivate(req.body) || undefined,
           user_id: userId,
           status: "pending",
+          // A sync route works the job at once: `started_at` here and
+          // `completed_at` on the answer give the read a measurable duration.
+          started_at: new Date().toISOString(),
           input_data: buildJobInputData(parsed.data, "describe-to-picker"),
         })
       if (jobError) {

@@ -31,8 +31,50 @@ const WITHHELD_KEYWORDS: ReadonlySet<string> = new Set(["maxItems"])
  */
 const NAME_KEYED: ReadonlySet<string> = new Set(["properties", "patternProperties", "definitions", "$defs", "dependencies"])
 
+/**
+ * The decoder's budget also counts ENUM VALUES, across the whole schema: the
+ * five-picker analyzer schema (53 enums, 1,101 ids) is refused the same way,
+ * and so is any cut of it that keeps too many ids in total — with every enum
+ * capped at 64 values (916 ids) or only the two largest withheld (815) it is
+ * still a 400; with the three largest withheld (727) or four (660) it answers
+ * in 7–10 s (measured 2026-10-08 on `gemini-3.8-flash`). A per-enum cap does
+ * not describe it; a total does, somewhere between 727 and 815. So the wire schema withholds whole `enum` lists,
+ * largest first, until the total fits: a withheld list leaves a plain string
+ * behind, the prompt's legend still names every id, and the caller's Zod
+ * still enforces the full list on the answer.
+ */
+export const GEMINI_ENUM_VALUE_BUDGET = 700
+
 export function toGeminiResponseSchema(schema: unknown): unknown {
-  return rewrite(schema, false)
+  return withholdEnumsOverBudget(rewrite(schema, false), GEMINI_ENUM_VALUE_BUDGET)
+}
+
+/** Withhold `enum` lists, largest first, until their values total at most `budget`. Mutates and returns `schema`. */
+export function withholdEnumsOverBudget(schema: unknown, budget: number): unknown {
+  const carriers: Array<Record<string, unknown> & { enum: unknown[] }> = []
+  collectEnumCarriers(schema, false, carriers)
+  let total = carriers.reduce((n, c) => n + c.enum.length, 0)
+  carriers.sort((a, b) => b.enum.length - a.enum.length)
+  for (const carrier of carriers) {
+    if (total <= budget) break
+    total -= carrier.enum.length
+    delete (carrier as Record<string, unknown>).enum
+  }
+  return schema
+}
+
+function collectEnumCarriers(node: unknown, keysAreNames: boolean, out: Array<Record<string, unknown> & { enum: unknown[] }>): void {
+  if (Array.isArray(node)) {
+    for (const entry of node) collectEnumCarriers(entry, false, out)
+    return
+  }
+  if (node === null || typeof node !== "object") return
+  const obj = node as Record<string, unknown>
+  if (!keysAreNames && Array.isArray(obj.enum)) out.push(obj as Record<string, unknown> & { enum: unknown[] })
+  for (const [key, value] of Object.entries(obj)) {
+    if (!keysAreNames && key === "enum") continue
+    collectEnumCarriers(value, !keysAreNames && NAME_KEYED.has(key), out)
+  }
 }
 
 function rewrite(node: unknown, keysAreNames: boolean): unknown {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { anthropicStrictToolSchema } from "../json-schema-strict.js"
+import { anthropicStrictToolSchema, countOptionalProperties } from "../json-schema-strict.js"
 
 describe("anthropicStrictToolSchema", () => {
   it("withholds the keywords strict mode refuses, at every depth", () => {
@@ -55,5 +55,29 @@ describe("anthropicStrictToolSchema", () => {
     const input = { type: "object", properties: { s: { type: "string", maxLength: 2 } } }
     anthropicStrictToolSchema(input)
     expect(input).toEqual({ type: "object", properties: { s: { type: "string", maxLength: 2 } } })
+  })
+})
+
+describe("anthropicStrictToolSchema — the optional-property cap", () => {
+  const objectWith = (optional: number, required = 0) => {
+    const properties: Record<string, unknown> = {}
+    for (let i = 0; i < optional + required; i++) properties[`p${i}`] = { type: "string" }
+    return { type: "object", properties, required: Object.keys(properties).slice(0, required) }
+  }
+
+  it("counts every property not named in its object's required, at every depth", () => {
+    const schema = {
+      type: "object",
+      properties: { a: objectWith(3, 1), b: { type: "array", items: objectWith(2) } },
+      required: ["a"],
+    }
+    // top: b optional (1); a: 3 optional; items: 2 optional
+    expect(countOptionalProperties(schema)).toBe(6)
+  })
+
+  it("goes without strict above 24 optional properties — the five-picker analyzer schema", () => {
+    expect(anthropicStrictToolSchema(objectWith(24))).toBeDefined()
+    expect(anthropicStrictToolSchema(objectWith(25))).toBeUndefined()
+    expect(anthropicStrictToolSchema({ type: "object", properties: { x: objectWith(13), y: objectWith(12) }, required: ["x", "y"] })).toBeUndefined()
   })
 })

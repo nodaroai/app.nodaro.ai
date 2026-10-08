@@ -97,9 +97,41 @@ const STRICT_WITHHELD_KEYWORDS = [
  *
  * Returns a deep copy; the input is never mutated.
  */
+/**
+ * Strict mode also refuses a schema with more than this many OPTIONAL
+ * properties, counted across every object in it ("Schemas contains too many
+ * optional parameters (61) … (limit: 24)" — measured 2026-10-08 on Opus 5.5
+ * with describe-to-picker's five-picker schema, a 400 on every call). Such a
+ * schema goes without `strict`, like one strict mode cannot express.
+ */
+export const STRICT_OPTIONAL_LIMIT = 24
+
 export function anthropicStrictToolSchema(schema: Record<string, unknown>): Record<string, unknown> | undefined {
+  if (countOptionalProperties(schema) > STRICT_OPTIONAL_LIMIT) return undefined
   const copy = structuredClone(schema)
   return strictWalk(copy) ? copy : undefined
+}
+
+/** Every property not named in its object's `required`, over the whole schema. */
+export function countOptionalProperties(node: unknown): number {
+  if (Array.isArray(node)) return node.reduce<number>((n, item) => n + countOptionalProperties(item), 0)
+  if (!node || typeof node !== "object") return 0
+  const obj = node as Record<string, unknown>
+  let count = 0
+  const properties = obj.properties
+  if (properties && typeof properties === "object" && !Array.isArray(properties)) {
+    const required = new Set(Array.isArray(obj.required) ? (obj.required as unknown[]) : [])
+    count += Object.keys(properties as Record<string, unknown>).filter((key) => !required.has(key)).length
+  }
+  for (const [key, v] of Object.entries(obj)) {
+    if (!v || typeof v !== "object") continue
+    if (key === "properties" || key === "$defs" || key === "definitions" || key === "patternProperties") {
+      count += Object.values(v as Record<string, unknown>).reduce<number>((n, sub) => n + countOptionalProperties(sub), 0)
+    } else if (key !== "enum" && key !== "const" && key !== "default" && key !== "examples") {
+      count += countOptionalProperties(v)
+    }
+  }
+  return count
 }
 
 function strictWalk(node: unknown): boolean {

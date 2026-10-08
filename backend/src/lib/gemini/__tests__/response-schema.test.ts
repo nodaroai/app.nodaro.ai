@@ -1,3 +1,4 @@
+import { GEMINI_ENUM_VALUE_BUDGET, toGeminiResponseSchema, withholdEnumsOverBudget } from "../response-schema.js"
 /**
  * What the direct Google lane is told about the SHAPE of a structured answer.
  *
@@ -156,5 +157,52 @@ describe("the wire: no array cap reaches Google on either call shape", () => {
 
     const sent = generateContentStream.mock.calls[0]![0] as { config: { responseJsonSchema: unknown } }
     expect(sent.config.responseJsonSchema).toEqual({ type: "array", items: { type: "string" } })
+  })
+})
+
+describe("the enum-value budget", () => {
+  const enumOf = (n: number, prefix = "v") => ({ type: "string", enum: Array.from({ length: n }, (_, i) => `${prefix}${i}`) })
+
+  it("withholds whole enum lists, largest first, until the total fits — a withheld list leaves a plain string", () => {
+    const schema = {
+      type: "object",
+      properties: { a: enumOf(50, "a"), b: enumOf(30, "b"), c: { type: "array", items: enumOf(40, "c") }, d: enumOf(5, "d") },
+    }
+    const out = withholdEnumsOverBudget(structuredClone(schema), 60) as typeof schema
+    // 125 > 60: drop a (75 left), drop c (35 left) — b and d stay.
+    expect(out.properties.a).toEqual({ type: "string" })
+    expect(out.properties.c.items).toEqual({ type: "string" })
+    expect(out.properties.b.enum).toHaveLength(30)
+    expect(out.properties.d.enum).toHaveLength(5)
+  })
+
+  it("leaves a schema within budget untouched", () => {
+    const schema = { type: "object", properties: { a: enumOf(10), b: enumOf(20) } }
+    expect(withholdEnumsOverBudget(structuredClone(schema), 30)).toEqual(schema)
+  })
+
+  it("a property NAMED enum is data, not an enum list", () => {
+    const schema = { type: "object", properties: { enum: { type: "array", items: { type: "string" } }, kind: enumOf(5) } }
+    expect(withholdEnumsOverBudget(structuredClone(schema), 1)).toEqual({
+      type: "object",
+      properties: { enum: { type: "array", items: { type: "string" } }, kind: { type: "string" } },
+    })
+  })
+
+  it("toGeminiResponseSchema applies the measured budget to the five-picker analyzer schema", async () => {
+    const { buildMultiPickerAnalyzerSpec } = await import("@nodaro/prompts")
+    const { z } = await import("zod")
+    const spec = buildMultiPickerAnalyzerSpec(["person", "styling", "held-prop", "material", "animal"])
+    const schema = z.toJSONSchema(spec.schema, { target: "draft-7", unrepresentable: "any", io: "input" }) as Record<string, unknown>
+    const total = (node: unknown): number => {
+      if (Array.isArray(node)) return node.reduce<number>((n, x) => n + total(x), 0)
+      if (!node || typeof node !== "object") return 0
+      const obj = node as Record<string, unknown>
+      let n = Array.isArray(obj.enum) ? obj.enum.length : 0
+      for (const [k, v] of Object.entries(obj)) if (k !== "enum" && v && typeof v === "object") n += k === "properties" ? Object.values(v as object).reduce<number>((m, x) => m + total(x), 0) : total(v)
+      return n
+    }
+    expect(total(schema)).toBeGreaterThan(GEMINI_ENUM_VALUE_BUDGET)
+    expect(total(toGeminiResponseSchema(schema))).toBeLessThanOrEqual(GEMINI_ENUM_VALUE_BUDGET)
   })
 })
