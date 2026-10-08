@@ -74,7 +74,7 @@ export function SpeakerViewConfig({ data, onUpdate, nodes, edges = [], nodeId }:
       <SpeakerViewLayoutSection options={validSpeakerLayouts(settings, ctx)} value={layout} aspect={aspect} snapped={normalizeSpeakerViewData(settings, ctx).notes} onUpdate={onUpdate} />
       <SpeakerViewSwitchSection options={validSpeakerSwitches(settings, ctx)} crossfade={validSpeakerCrossfade(settings, ctx)} value={switchType} durationMs={data.switchDurationMs} counts={counts} onUpdate={onUpdate} />
       <SpeakerViewEmphasisSection options={validSpeakerEmphasis(settings)} value={data.emphasisStyle} durationMs={data.emphasisDurationMs} onUpdate={onUpdate} />
-      <SpeakerViewFramingSummary regions={(data as { speakerRegions?: unknown }).speakerRegions} />
+      <SpeakerViewFramingSummary regions={(data as { speakerRegions?: unknown }).speakerRegions} nodeId={nodeId} />
       <SpeakerViewAdvanced accentColor={data.accentColor} onChange={(accentColor) => onUpdate({ accentColor })} />
     </div>
   )

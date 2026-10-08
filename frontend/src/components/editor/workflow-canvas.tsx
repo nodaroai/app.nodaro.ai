@@ -33,6 +33,7 @@ import { CopilotCenterSlot } from "./workflow-editor/copilot-panel-slot"
 import { ShortcutsHelpModal } from "@/components/editor/shortcuts-help-modal"
 import { NodeContextMenu } from "./node-context-menu"
 import { ReviewInspectorHost } from "@/components/edl-review/review-inspector-host"
+import { FramingEditorHost } from "@/components/speaker-view/region-editor/framing-editor-host"
 import { CanvasContextMenu } from "./canvas-context-menu"
 import { CanvasToolbar } from "./canvas-toolbar"
 import { CanvasControls } from "./canvas-controls"
@@ -3151,6 +3152,8 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       {/* The review inspector (A3-5): every way into it — a render's Review cut, the
           context menu, an Edit Plan's Expand, ?review=<id> — opens it here. */}
       <ReviewInspectorHost />
+      {/* Speaker View's region editor (C3.5): "Edit framing…" and ?framing=<nodeId>. */}
+      <FramingEditorHost />
 
       {nodeContextMenu && (
         <NodeContextMenu
