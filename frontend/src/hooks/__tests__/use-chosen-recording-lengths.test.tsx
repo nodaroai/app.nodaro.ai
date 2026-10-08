@@ -24,6 +24,15 @@ describe("useChosenRecordingLengths", () => {
     expect(read).toHaveBeenCalledTimes(2)
   })
 
+  it("reads a Video URL's file as a video, keyed by the file", async () => {
+    const read = vi.fn(async () => 1234)
+    const POST = "https://www.youtube.com/watch?v=abc123def45"
+    const inputValues = { y: { youtubeUrl: POST, downloadedVideoUrl: "https://cdn/ep.mp4", downloadedFromUrl: POST } }
+    const { result } = renderHook(() => useChosenRecordingLengths([{ id: "y", type: "youtube-video" }], inputValues, read))
+    await waitFor(() => expect(result.current.get("https://cdn/ep.mp4")).toBe(1234))
+    expect(read).toHaveBeenCalledWith("https://cdn/ep.mp4", "video")
+  })
+
   it("reads nothing before a recording is chosen, and keeps an unreadable one unknown", async () => {
     const read = vi.fn(async () => undefined)
     const { result } = renderHook(() => useChosenRecordingLengths(nodes, { v: { url: "https://cdn/broken.mp4" } }, read))

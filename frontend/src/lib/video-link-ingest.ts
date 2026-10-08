@@ -38,6 +38,7 @@ import {
   type VideoDownloadSection,
 } from "@/lib/api"
 import { followVideoDownload } from "@/lib/video-download-stream"
+import { VIDEO_LINK_INGEST_DEBOUNCE_MS } from "@/lib/video-link-ingest-timing"
 import { tx } from "@/lib/i18n"
 import {
   AUTO_DOWNLOAD_MAX_SEC,
@@ -50,10 +51,7 @@ import {
   type DownloadErrorCode,
 } from "@/lib/video-link"
 
-/** How long the link must sit still before it is fetched. A link is usually
- *  pasted, but it CAN be typed — and `instagram.com/reel/A`, `/reel/AB`, … are
- *  each a valid link, so without the pause every keystroke was a download. */
-export const VIDEO_LINK_INGEST_DEBOUNCE_MS = 700
+export { VIDEO_LINK_INGEST_DEBOUNCE_MS }
 
 /** Downloads the pre-run pass runs side by side. Kept under the server's
  *  per-account cap on purpose, so a Run never refuses itself. */
@@ -504,7 +502,9 @@ function ingestAudio(nodeId: string, url: string): void {
   )
 }
 
-const CLEARED_DOWNLOAD: NodeData = {
+/** What a link change resets on the node. A run-time link swap (an app's input) drops the same
+ *  set on the server (`VIDEO_LINK_DERIVED_FIELDS`, `@nodaro/shared`) — guarded to cover this. */
+export const CLEARED_DOWNLOAD: NodeData = {
   downloadedVideoUrl: "",
   downloadedThumbnailUrl: "",
   downloadedFromUrl: "",

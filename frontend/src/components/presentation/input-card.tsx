@@ -7,6 +7,7 @@ import { TextInputCard } from "./input-cards/text-input-card"
 import { ImageUploadCard } from "./input-cards/image-upload-card"
 import { VideoUploadCard } from "./input-cards/video-upload-card"
 import { AudioUploadCard } from "./input-cards/audio-upload-card"
+import { VideoLinkInputCard } from "./input-cards/video-link-input-card"
 import { ParameterCard } from "./input-cards/parameter-card"
 import { ListInputCard } from "./input-cards/list-input-card"
 import { LoopInputCard } from "./input-cards/loop-input-card"
@@ -188,6 +189,24 @@ function InputCardInner({
           inputValues={inputValues}
           onUpdateInput={onUpdateInput}
           readOnly={readOnly}
+          variant={variant}
+        />
+      )
+
+    // The Video URL node: a link to a video (a post, or a file) the runner
+    // pastes; a post is downloaded in the card before Run.
+    case "youtube-video":
+      return (
+        <VideoLinkInputCard
+          nodeId={node.id}
+          label={label}
+          data={data}
+          isFullscreen={isFullscreen}
+          inputValues={inputValues}
+          onUpdateInput={onUpdateInput}
+          readOnly={readOnly}
+          nodes={nodes}
+          edges={edges}
           variant={variant}
         />
       )

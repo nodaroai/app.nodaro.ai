@@ -10,7 +10,7 @@ vi.mock("@/components/editor/config-panels/helpers", () => ({
   getModelIdentifier: (n: { type?: string }) => n.type ?? "",
 }))
 
-import { appRunListedPrice, recordingLengthPending, runCostLabel } from "../run-price"
+import { appRunListedPrice, chosenRecordingUrl, recordingLengthPending, runCostLabel } from "../run-price"
 import { applyRunInputValues, computeLiveRunEstimate } from "@/hooks/use-live-run-estimate"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 import { extractVideoDurationFromNode } from "@nodaro/shared"
@@ -148,5 +148,78 @@ describe("an unknown chosen length is the longest recording for every length rea
   it("a length read later replaces it", () => {
     const [merged] = applyRunInputValues([video], chosen, new Map([["https://cdn/mine.mkv", 95]]))
     expect(extractVideoDurationFromNode(merged!.data as Record<string, unknown>)).toBe(95)
+  })
+})
+
+// Review round (decided 2026-10-07): a Video URL node the app exposes is the
+// replaced recording, exactly as an upload is. Its file (or a direct link) is
+// what is measured; a post link with no file yet has no length to read.
+describe("a Video URL input is a recording input", () => {
+  const MAX_SEC = 180 * 60
+  const FILE = "https://cdn.nodaro.ai/downloads/ep.mp4"
+  const POST = "https://www.youtube.com/watch?v=abc123def45"
+  const sample = n("y", "youtube-video", { youtubeUrl: "https://www.youtube.com/watch?v=creator0001", downloadedVideoUrl: "https://cdn/sample.mp4", downloadedFromUrl: "https://www.youtube.com/watch?v=creator0001", videoDurationSec: 600 })
+
+  describe("chosenRecordingUrl", () => {
+    it("a post link with its downloaded file: the file", () => {
+      expect(chosenRecordingUrl(sample, { y: { youtubeUrl: POST, downloadedVideoUrl: FILE, downloadedFromUrl: POST } })).toBe(FILE)
+    })
+    it("a file that belongs to another link is not this link's", () => {
+      expect(chosenRecordingUrl(sample, { y: { youtubeUrl: POST, downloadedVideoUrl: FILE, downloadedFromUrl: "https://youtu.be/other000000" } })).toBeUndefined()
+    })
+    it("a direct file link: the link itself, trimmed", () => {
+      expect(chosenRecordingUrl(sample, { y: { youtubeUrl: ` ${FILE} ` } })).toBe(FILE)
+    })
+    it("a post link with no file yet, an empty or an invalid link: nothing yet", () => {
+      expect(chosenRecordingUrl(sample, { y: { youtubeUrl: POST } })).toBeUndefined()
+      expect(chosenRecordingUrl(sample, { y: { youtubeUrl: "" } })).toBeUndefined()
+      expect(chosenRecordingUrl(sample, { y: { youtubeUrl: "not a link" } })).toBeUndefined()
+      expect(chosenRecordingUrl(sample, {})).toBeUndefined()
+    })
+  })
+
+  describe("recordingLengthPending", () => {
+    it("holds the listing until a file exists and its length is read", () => {
+      expect(recordingLengthPending([sample], {}, new Map())).toBe(true)
+      expect(recordingLengthPending([sample], { y: { youtubeUrl: POST } }, new Map())).toBe(true)
+      expect(recordingLengthPending([sample], { y: { youtubeUrl: POST, downloadedVideoUrl: FILE, downloadedFromUrl: POST } }, new Map())).toBe(true)
+    })
+    it("releases it once the file's length is known", () => {
+      expect(recordingLengthPending([sample], { y: { youtubeUrl: POST, downloadedVideoUrl: FILE, downloadedFromUrl: POST } }, new Map([[FILE, 2700]]))).toBe(false)
+      expect(recordingLengthPending([sample], { y: { youtubeUrl: FILE } }, new Map([[FILE, 2700]]))).toBe(false)
+    })
+  })
+
+  describe("the live estimate", () => {
+    const PRICES: Record<string, number> = { transcribe: 10, "edit-plan": 240, "apply-edl": 10 }
+    const nodes = [sample, n("tr", "transcribe"), n("ep", "edit-plan", { mode: "tighten" }), n("ae", "apply-edl")]
+    const edges = [e("y", "tr", "audio"), e("y", "ep", "sources"), e("tr", "ep", "transcript"), e("ep", "ae", "edl")]
+    const price = (id: string) => PRICES[id]
+    const mine = { y: { youtubeUrl: POST, downloadedVideoUrl: FILE, downloadedFromUrl: POST } }
+
+    it("prices the episode at the length read for its file", () => {
+      const total = computeLiveRunEstimate({ nodes, edges, inputValues: mine, mediaLengths: new Map([[FILE, 45 * 60]]) }, price).total
+      expect(total).toBe(10 + 240 + 10 * 45)
+    })
+    it("a length not read yet is the longest recording, never the creator's sample length", () => {
+      const [merged] = applyRunInputValues(nodes, mine)
+      const data = merged!.data as Record<string, unknown>
+      expect(extractVideoDurationFromNode(data)).toBe(MAX_SEC)
+      expect(data.videoDurationSec).toBeUndefined()
+      expect(data.metadata).toEqual({ durationSeconds: MAX_SEC, mediaUrl: FILE })
+    })
+    it("a Trim after the episode is priced at the longest recording, not 8 seconds", () => {
+      const trim = n("t", "trim-video", { trimMode: "seconds", trimStartSeconds: 0, trimEndSeconds: 0 })
+      const total = computeLiveRunEstimate({ nodes: [sample, trim], edges: [e("y", "t", "video")], inputValues: mine, mediaLengths: new Map() }, (id) => (id === "trim-video" ? 10 : undefined)).total
+      expect(total).toBe(10 * Math.ceil(MAX_SEC / 5))
+    })
+    it("a direct file link is measured by the link itself", () => {
+      const [merged] = applyRunInputValues(nodes, { y: { youtubeUrl: FILE } }, new Map([[FILE, 95]]))
+      expect(extractVideoDurationFromNode(merged!.data as Record<string, unknown>)).toBe(95)
+    })
+    it("the creator's own link and file leave their saved length alone", () => {
+      const [merged] = applyRunInputValues(nodes, { y: { youtubeUrl: "https://www.youtube.com/watch?v=creator0001" } })
+      expect((merged!.data as Record<string, unknown>).videoDurationSec).toBe(600)
+    })
   })
 })

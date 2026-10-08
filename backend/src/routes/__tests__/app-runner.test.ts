@@ -710,6 +710,69 @@ describe("POST /v1/app/:slug/run", () => {
     expect(mockExecuteAppRun).not.toHaveBeenCalled()
   })
 
+  // A Video URL node a publisher exposes IS a destination the stranger sets
+  // (the node is on the outbound list). The lock admits its link, but only a
+  // link the node itself would download; every other value is refused before a
+  // row is written, on the flat lane and on the nested one alike.
+  it("runs a Video URL app input with the caller's link — the flat `inputs` lane lands on youtubeUrl", async () => {
+    const snapshot = {
+      snapshot_nodes: [{ id: "ep-1", type: "youtube-video", data: { label: "Episode", youtubeUrl: "https://youtu.be/AAAAAAAAAAA" } }],
+      snapshot_settings: { presentationSettings: { inputItems: [{ type: "node", nodeId: "ep-1" }] } },
+    }
+    setupSuccessfulRunMocks(snapshot)
+    mockExecuteAppRun.mockResolvedValueOnce({ executionId: TEST_EXECUTION_ID, appRunId: TEST_RUN_ID, deduped: false })
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/app/${TEST_SLUG}/run`,
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { inputs: { episode: "https://cdn.example.com/ep-12.mp4" } },
+    })
+    expect(res.statusCode).toBe(202)
+    expect(mockExecuteAppRun.mock.calls[0]?.[0]?.inputOverrides).toEqual({ "ep-1": { youtubeUrl: "https://cdn.example.com/ep-12.mp4" } })
+  })
+
+  it("refuses a Video URL input that is not a video link — 400 locked_field, flat or nested, no run", async () => {
+    const snapshot = {
+      snapshot_nodes: [{ id: "ep-1", type: "youtube-video", data: { label: "Episode", youtubeUrl: "https://youtu.be/AAAAAAAAAAA" } }],
+      snapshot_settings: { presentationSettings: { inputItems: [{ type: "node", nodeId: "ep-1" }] } },
+    }
+    for (const payload of [
+      { inputs: { episode: "not a link" } },
+      { inputOverrides: { "ep-1": { youtubeUrl: "http://169.254.169.254/latest/meta.mp4" } } },
+      { inputOverrides: { "ep-1": { downloadedAudioUrl: "https://attacker.example/a.mp3" } } },
+    ]) {
+      setupSuccessfulRunMocks(snapshot)
+      const res = await app.inject({ method: "POST", url: `/v1/app/${TEST_SLUG}/run`, headers: { "x-user-id": TEST_USER_ID }, payload })
+      expect(res.statusCode, JSON.stringify(payload)).toBe(400)
+      expect(res.json().error.code).toBe("locked_field")
+    }
+    expect(mockExecuteAppRun).not.toHaveBeenCalled()
+  })
+
+  // Review round (decided 2026-10-07): a fixed Video URL node the creator did NOT
+  // expose (a reference video the workflow analyses or dubs) is not the caller's
+  // to re-point, link or no link.
+  it("refuses a link for a Video URL node the app does not expose — 400 locked_field, no run", async () => {
+    const snapshot = {
+      snapshot_nodes: [
+        { id: "ep-1", type: "youtube-video", data: { label: "Episode", youtubeUrl: "https://youtu.be/AAAAAAAAAAA" } },
+        { id: "ref-1", type: "youtube-video", data: { label: "Reference", youtubeUrl: "https://youtu.be/CCCCCCCCCCC" } },
+      ],
+      snapshot_settings: { presentationSettings: { inputItems: [{ type: "node", nodeId: "ep-1" }] } },
+    }
+    for (const payload of [
+      { inputOverrides: { "ref-1": { youtubeUrl: "https://cdn.example.com/ep-12.mp4" } } },
+      { inputOverrides: { "ep-1": { youtubeUrl: "https://cdn.example.com/ep-12.mp4" }, "ref-1": { downloadedVideoUrl: "https://cdn.example.com/x.mp4" } } },
+    ]) {
+      setupSuccessfulRunMocks(snapshot)
+      const res = await app.inject({ method: "POST", url: `/v1/app/${TEST_SLUG}/run`, headers: { "x-user-id": TEST_USER_ID }, payload })
+      expect(res.statusCode, JSON.stringify(payload)).toBe(400)
+      expect(res.json().error.code).toBe("locked_field")
+      expect(res.json().error.message).toContain("ref-1")
+    }
+    expect(mockExecuteAppRun).not.toHaveBeenCalled()
+  })
+
   it("refuses the flat `inputs` lane the same way once it is translated onto an outbound node", async () => {
     // A publisher cannot expose a destination as an app input today (no
     // INPUT_FIELD_MAP entry, no exposableFields), so a translated flat input

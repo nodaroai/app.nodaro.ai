@@ -7,17 +7,37 @@
  * the live figure, as before. The balance gate reads the live estimate in
  * every case: it is never priced from the per-minute label.
  */
+import { isDirectVideoFileUrl, isSocialVideoUrl, videoLinkDownloadedFile } from "@nodaro/shared"
 import { creditUnits, formatCreditUnits } from "@/lib/credit-units"
 
-/** The node types whose input is a recording with a length. */
-export const RECORDING_INPUT_TYPES: ReadonlySet<string> = new Set(["upload-video", "upload-audio"])
+/**
+ * The node types whose input is a recording with a length. A Video URL node
+ * the app exposes is the replaced episode like an upload (the server's listing
+ * counts it the same way, `RECORDING_SOURCE_TYPES`).
+ */
+export const RECORDING_INPUT_TYPES: ReadonlySet<string> = new Set(["upload-video", "upload-audio", "youtube-video"])
 
-/** The recording a user chose for an input node: its run-time `url`, if any. */
+/**
+ * The file a Video URL input holds for the link the user gave: the downloaded
+ * file that belongs to that link, else the link itself when it is a direct
+ * video file. A post link whose file is not made yet has none (its output is a
+ * web page, which has no length to read).
+ */
+function videoLinkRecordingUrl(vals: Readonly<Record<string, unknown>> | undefined): string | undefined {
+  if (!vals) return undefined
+  const file = videoLinkDownloadedFile(vals)
+  if (file !== undefined) return file
+  const link = typeof vals.youtubeUrl === "string" ? vals.youtubeUrl.trim() : ""
+  return link !== "" && !isSocialVideoUrl(link) && isDirectVideoFileUrl(link) ? link : undefined
+}
+
+/** The recording a user chose for an input node: its run-time `url` (a Video URL: its file), if any. */
 export function chosenRecordingUrl(
   node: { readonly id: string; readonly type?: string },
   inputValues: Readonly<Record<string, Readonly<Record<string, unknown>>>> | undefined,
 ): string | undefined {
   if (!RECORDING_INPUT_TYPES.has(node.type ?? "")) return undefined
+  if (node.type === "youtube-video") return videoLinkRecordingUrl(inputValues?.[node.id])
   const url = inputValues?.[node.id]?.url
   return typeof url === "string" && url !== "" ? url : undefined
 }

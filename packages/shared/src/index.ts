@@ -1569,12 +1569,19 @@ export * from "./fan-out-meta.js"
 
 export { SUNO_TRACK_SOURCE_TYPES } from "./suno-track-sources.js"
 
+export { isPrivateOrReservedIP, isLocalOrPrivateHostname } from "./private-host.js"
+
 // --- Video URL node + social-video import (host allowlist, node output rule) ---
 export {
   SOCIAL_VIDEO_HOSTS,
   YOUTUBE_HOSTS,
   INSTAGRAM_HOSTS,
   VIDEO_LINK_TOLERANT_CONSUMER_TYPES,
+  VIDEO_LINK_AUDIO_CONSUMER_TYPES,
+  videoLinkNeedOf,
+  videoLinkRunNeeds,
+  AUTO_DOWNLOAD_MAX_SEC,
+  YOUTUBE_MAX_HEIGHT,
   hostnameMatchesAllowlist,
   hasUrlParserHazard,
   isSocialVideoUrl,
@@ -1583,8 +1590,14 @@ export {
   resolveVideoLinkOutput,
   videoLinkPageUrl,
   videoLinkNeedsDownload,
+  DIRECT_VIDEO_EXTENSIONS,
+  MAX_VIDEO_LINK_INPUT_CHARS,
+  VIDEO_LINK_DERIVED_FIELDS,
+  isDirectVideoFileUrl,
+  videoLinkInputProblem,
+  dropStaleVideoLinkFields,
 } from "./video-link.js"
-export type { VideoLinkPlatform, VideoLinkNodeFields } from "./video-link.js"
+export type { VideoLinkPlatform, VideoLinkNodeFields, VideoLinkInputProblem, VideoLinkNeed, VideoLinkGraphNode, VideoLinkGraphEdge } from "./video-link.js"
 
 export {
   VOICE_CHANGER_MODELS,

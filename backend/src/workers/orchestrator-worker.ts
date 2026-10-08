@@ -8,6 +8,9 @@ import { assertCanvasExecutionAllowed, findWordlessTranscriptFeeds, PREVIEW_REVI
 
 import { Worker, DelayedError, type Job } from "bullmq"
 import IORedis from "ioredis"
+import { exposedVideoLinkNodeIds } from "../lib/exposed-text-caps.js"
+import { prepareVideoLinksForRun } from "./orchestrator-video-links.js"
+import { loadExecutionVideoLinkFiles, mergeVideoLinkFiles, saveExecutionVideoLinkFiles } from "../lib/execution-video-link-files.js"
 import { config, hasCredits } from "../lib/config.js"
 import { DrainAbortError, isWorkerDraining } from "../lib/worker-drain.js"
 import { TIER_PARALLELISM } from "../ee/billing/stripe-config.js"
@@ -730,7 +733,16 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     // value wholesale (this is what makes the lottie full-plan `motionPlan`
     // override work; see apply-input-overrides). Also clears stale generated*
     // results so the user's fresh input wins over a cached snapshot result.
-    applyInputOverridesToNodes(nodes, inputOverrides)
+    // A Video URL node may be pointed at a new link only where it is an input
+    // the app exposes (the routes' own rule); a live-workflow run is its
+    // owner's, or a presentation viewer the route already held to the same rule.
+    applyInputOverridesToNodes(
+      nodes,
+      inputOverrides,
+      appVersionId
+        ? exposedVideoLinkNodeIds(workflowData.settings as Record<string, unknown> | null, nodes as unknown as Array<{ id?: string; type?: string }>)
+        : "all",
+    )
 
     // THE WALL for catalog curation (packages/prompts catalog-id-guard). This
     // is the one place every run passes with its graph in hand — eight
@@ -1234,6 +1246,86 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
       completedNodes: 0,
       failedNodes: 0,
     })
+
+    // THE PRE-RUN VIDEO URL FETCH (decided 2026-10-08). A Video URL node is a
+    // source that is read, never executed, so a post link a run's request set
+    // (an MCP / SDK / API caller, an app's input) would reach the nodes after it
+    // as a web page. Fetch what those nodes read — the video under the card's
+    // rules, or only its sound — BEFORE the first level, so every lane behaves
+    // like the app runner. Before `startTime` on purpose: the fetch has its own
+    // ceiling and must not eat the run's cap. A link it cannot fetch refuses the
+    // run here, before any node reserves a credit. Inert when the request set no
+    // link. (`workers/orchestrator-video-links.ts`.)
+    {
+      const fetched = await prepareVideoLinksForRun({
+        userId,
+        nodes,
+        edges,
+        executingIds: new Set(executableNodes.filter((n) => nodeStates[n.id]?.status === "pending").map((n) => n.id)),
+        inputOverrides,
+        controlStatus: () => checkExecutionControl(executionId),
+        // Kept on the execution (decided 2026-10-08): what this execution fetched before a re-pick,
+        // and what the run it continues fetched — never fetched again, outside the run lock.
+        loadRecorded: async () =>
+          mergeVideoLinkFiles(
+            continuationSource ? await loadExecutionVideoLinkFiles(continuationSource.id, userId) : {},
+            await loadExecutionVideoLinkFiles(executionId, userId),
+          ),
+        // Anything already run and charged — a continued run's preview, or the done nodes a re-pick
+        // carried forward — makes "nothing ran and nothing was charged" untrue (decided 2026-10-08).
+        continued: continuationSource !== null || resumedNodeCount > 0,
+      })
+      if (fetched.kind === "stopped") {
+        // A deploy drain is not an ending: hand the job back at zero cost (nothing written to
+        // the execution, nothing refunded, no attempt used) and let the replacement container
+        // re-pick it. Nothing was pinned yet, so the re-pick fetches afresh.
+        if (fetched.by === "drain") throw new DrainAbortError()
+        // Discard Run keeps its own status and event (the canvas detaches on it) and does not
+        // set ctx.cancelled — the same ending the level loop gives it.
+        if (fetched.by === "discarded") {
+          await updateExecution(executionId, { status: "discarded", node_states: nodeStates, completed_at: new Date().toISOString() })
+          emitExecutionEvent({
+            type: "execution:discarded",
+            executionId,
+            nodeStates: { ...nodeStates },
+            completedNodes: resumedNodeCount,
+            failedNodes: 0,
+            totalCreditsUsed: 0,
+          })
+          return
+        }
+        ctx.cancelled = true
+        await updateExecution(executionId, { status: "cancelled", node_states: nodeStates, completed_at: new Date().toISOString() })
+        emitExecutionEvent({
+          type: "execution:cancelled",
+          executionId,
+          nodeStates: { ...nodeStates },
+          completedNodes: resumedNodeCount,
+          failedNodes: 0,
+          totalCreditsUsed: 0,
+        })
+        return
+      }
+      if (fetched.kind === "refused") {
+        console.warn(`[video-link-fetch] execution ${executionId} REFUSED — ${fetched.message}`)
+        await failExecution(executionId, fetched.message, nodeStates)
+        return
+      }
+      if (fetched.fetched.length > 0) {
+        // The files are on the nodes now: hand them on from the node, and pin them
+        // with the rest of the overrides so a continued run reads the same files —
+        // and keep every one (a saved link's too, which the pin cannot hold) on the
+        // execution, where Render final and a re-pick find it (decided 2026-10-08).
+        inputOverrides = fetched.inputOverrides
+        await pinExecutionInputOverrides(executionId, inputOverrides)
+        await saveExecutionVideoLinkFiles(executionId, fetched.files)
+        for (const id of fetched.fetched) {
+          const node = nodes.find((n) => n.id === id)
+          const output = node ? extractSourceNodeOutput(node, triggerData) : undefined
+          if (output) nodeStates[id] = seededFromSavedData(output)
+        }
+      }
+    }
 
     // 7. Execute level by level. On a resume, the carried-forward done nodes
     // already count toward progress (they're in totalExecutions) — seed the

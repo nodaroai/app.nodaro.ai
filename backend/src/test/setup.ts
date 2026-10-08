@@ -16,6 +16,8 @@ process.env.NODE_ENV = "test"
 // processes; a unit test is one process with no Redis to depend on. The ledger's
 // own tests build it directly.
 process.env.FFMPEG_MEMORY_LEDGER = "local"
+// Likewise the per-account download cap: a unit test is one process with no Redis.
+process.env.DOWNLOAD_SLOT_LEDGER = "local"
 process.env.INTERNAL_ORCHESTRATOR_SECRET = "0".repeat(64)
 // The self-host config seams default to "vendor host / no ACL / auto region",
 // and the guard tests assert exactly that. config.ts loads the developer's

@@ -209,8 +209,8 @@ export function MobileAppShell({
     : ""
 
   const allInputsFilled = useMemo(
-    () => areAllInputsFilled(orderedInputNodes, presInputValues),
-    [orderedInputNodes, presInputValues],
+    () => areAllInputsFilled(orderedInputNodes, presInputValues, { nodes: presNodes, edges: presEdges }),
+    [orderedInputNodes, presInputValues, presNodes, presEdges],
   )
 
   // ---- Local state ----

@@ -361,6 +361,8 @@ export const envSchema = z.object({
   FFMPEG_DEFAULT_PEAK_MIB: z.coerce.number().int().min(1).optional(),
   /** Where the ffmpeg memory budget is spent: `redis` (default) — ONE budget shared by every process of the container through a Redis ledger, keyed by RAILWAY_REPLICA_ID (else the hostname); `local` — this process spends the whole budget alone (one process per container, tests). */
   FFMPEG_MEMORY_LEDGER: z.enum(["redis", "local"]).default("redis"),
+  /** Where the per-account cap on running video downloads is counted: `redis` (default) — ONE count shared by every backend process and replica through the Redis the queues already use (keys `download:slots:{<account id>}`), so a card download and a run's download of one account count against each other; `local` — this process counts its own downloads only (one backend process, tests). When Redis is unreachable the cap falls back to the local count by itself. */
+  DOWNLOAD_SLOT_LEDGER: z.enum(["redis", "local"]).default("redis"),
   /** The share of the ffmpeg memory budget ONE process may spend while the shared ledger is unreachable, in (0, 1] (default 0.5: the heavy renders run in the video worker and the render worker, so half each never sums past the whole; the server's lighter in-process launches are the residual). */
   FFMPEG_MEMORY_LOCAL_SHARE: z.coerce.number().gt(0).max(1).optional(),
   /** Shared secret for authenticating internal orchestrator → API calls (replaces the unreliable `req.ip === 127.0.0.1` check). MUST be set to ≥32 random bytes hex. In Docker, start.sh auto-generates one if unset so all sibling processes inherit the same value. */

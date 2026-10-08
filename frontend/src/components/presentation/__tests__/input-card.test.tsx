@@ -27,6 +27,9 @@ vi.mock("../input-cards/image-upload-card", () => ({ ImageUploadCard: () => null
 vi.mock("../input-cards/video-upload-card", () => ({ VideoUploadCard: () => null }))
 vi.mock("../input-cards/audio-upload-card", () => ({ AudioUploadCard: () => null }))
 vi.mock("../input-cards/parameter-card", () => ({ ParameterCard: () => null }))
+vi.mock("../input-cards/video-link-input-card", () => ({
+  VideoLinkInputCard: (p: { nodeId: string; variant?: string }) => <div data-testid="video-link-input-card" data-node={p.nodeId} data-variant={p.variant ?? ""} />,
+}))
 vi.mock("../input-cards/picker-input-card", () => ({ PickerInputCard: () => null }))
 
 // useWorkflowStore is only read for cardMeta (a selector) — return undefined.
@@ -91,5 +94,17 @@ describe("InputCard list/loop routing by column count", () => {
     renderCard(makeNode("loop", [{ id: "c1", name: "A" }, { id: "c2", name: "B" }]))
     expect(screen.queryByTestId("loop-input-card")).not.toBeInTheDocument()
     expect(screen.queryByTestId("list-input-card")).not.toBeInTheDocument()
+  })
+})
+
+describe("InputCard routes a Video URL node to its link card", () => {
+  it("renders the Video URL link card, not the generic text parameter card", () => {
+    renderCard(makeNode("youtube-video", []))
+    expect(screen.getByTestId("video-link-input-card")).toHaveAttribute("data-node", "n1")
+  })
+
+  it("hands the chat composer's variant through", () => {
+    render(<InputCard node={makeNode("youtube-video", [])} {...baseProps} variant="composer" />)
+    expect(screen.getByTestId("video-link-input-card")).toHaveAttribute("data-variant", "composer")
   })
 })

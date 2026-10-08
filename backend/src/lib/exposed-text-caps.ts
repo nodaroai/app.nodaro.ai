@@ -110,3 +110,23 @@ export function exposedListNodeIds(
   return ids
 }
 
+
+/**
+ * The Video URL nodes a published app exposes as an input: the only ones a run
+ * request may point at a new link (lib/input-override-lock.ts ::
+ * VideoLinkAdmission). Same classifier as the rest of this file, so "exposed"
+ * means what the app's runner and `get_app_inputs` mean by it — including the
+ * no-presentation-settings case, where every source node is an input.
+ */
+export function exposedVideoLinkNodeIds(
+  snapshotSettings: Record<string, unknown> | null | undefined,
+  snapshotNodes: ReadonlyArray<GraphNode> | null | undefined,
+): ReadonlySet<string> {
+  const withIds = snapshotNodes?.filter((n): n is GraphNode & { id: string } => typeof n.id === "string")
+  const videoLinkIds = new Set(withIds?.filter((n) => n.type === "youtube-video").map((n) => n.id))
+  const ids = new Set<string>()
+  if (videoLinkIds.size === 0) return ids
+  const { keyMap } = extractAppInputSchema({ snapshotSettings, snapshotNodes: withIds ?? null })
+  for (const target of Object.values(keyMap)) if (videoLinkIds.has(target.nodeId)) ids.add(target.nodeId)
+  return ids
+}

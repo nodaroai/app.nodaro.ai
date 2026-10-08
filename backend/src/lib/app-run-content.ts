@@ -1,4 +1,5 @@
 import { inputOverridesCleared } from "./execution-input-overrides.js"
+import { videoLinkFilesCleared } from "./execution-video-link-files.js"
 
 /**
  * The `app_runs` columns that hold a runner's own content — what the admin
@@ -40,6 +41,10 @@ export function appRunContentRedaction(): Record<AppRunUserContentColumn, null> 
  *   pinned when it started. Nullable; a pin is an object or NULL. Until 466
  *   reaches the shared database (staging runs dev against it) the column is
  *   missing, and the guard module drops it from the patch once a write says so.
+ * - the fetched files (487, `videoLinkFilesCleared`): the files the run fetched
+ *   from a Video URL post link, with the link they came from — the runner's own
+ *   episode (decided 2026-10-08). Nullable; an object or NULL. Dropped from the
+ *   patch by its guard module while the column is missing, like the pin.
  * - `error_message` (036): the run-level failure line. The orchestrator and
  *   reconcile copy a child job's message into it ("Execution failed — child
  *   job error …"), and that job's own copy is erased, so this one is too
@@ -55,8 +60,9 @@ export function appRunContentRedaction(): Record<AppRunUserContentColumn, null> 
  */
 export function executionContentRedaction(): { node_states: Record<string, never>; error_message: null } & ReturnType<
   typeof inputOverridesCleared
-> {
-  return { node_states: {}, ...inputOverridesCleared(), error_message: null }
+> &
+  ReturnType<typeof videoLinkFilesCleared> {
+  return { node_states: {}, ...inputOverridesCleared(), ...videoLinkFilesCleared(), error_message: null }
 }
 
 /**

@@ -2,14 +2,13 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { safeUrlSchema, isAllowedSocialVideoUrl, isDirectVideoFileUrl } from "../lib/url-validator.js"
 import { resolvesOnlyToPublicAddresses } from "../lib/safe-fetch.js"
-import { thumbnailFromLocalVideo } from "../utils/thumbnail.js"
-import { randomUUID } from "node:crypto"
-import { tmpdir } from "node:os"
-import { join } from "node:path"
-import { promises as fs } from "node:fs"
-import { uploadFileWithKeyToR2, uploadBufferToR2 } from "../lib/storage.js"
-import { recordDownloadedVideoAsset } from "../lib/asset-records.js"
-import { downloadYouTubeVideo, type VideoSection } from "../providers/video/youtube-video.js"
+import {
+  DIRECT_FILE_MAX_BYTES,
+  MAX_ACTIVE_DOWNLOADS_PER_USER,
+  activeDownloads,
+  startTrackedDownload,
+  tryAcquireDownloadSlot,
+} from "../lib/video-download.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { isOriginAllowedDynamic } from "../lib/dynamic-origins.js"
 import { firstHeaderValue } from "../lib/request-helpers.js"
@@ -74,191 +73,10 @@ const downloadVideoBody = z
     }
   })
 
-/** Size cap for DIRECT-file downloads — parity with /v1/upload's and
- *  save-to-storage's 500MB video limit (file-validation SIZE_LIMITS.video).
- *  Social fetches stay uncapped: their sources are duration-bounded flows whose
- *  behavior must not change. */
-const DIRECT_FILE_MAX_BYTES = 500 * 1024 * 1024
-
-/**
- * Downloads one account may have RUNNING at once. Each one is a yt-dlp process,
- * usually an ffmpeg re-encode, and paid proxy bandwidth — and this route has no
- * credit guard in front of it. The editor now starts downloads by itself (on a
- * pasted link, and before a run for every link that feeds it), so the bound has
- * to live here, where workflow JSON written by someone else cannot argue with
- * it. Generous for a person — Recast, Studio and the voice changer import one
- * video at a time — and the editor's pre-run pass stays under it on purpose.
- */
-export const MAX_ACTIVE_DOWNLOADS_PER_USER = 4
-
-interface ActiveDownload {
-  /** The owner — only ever read to count an account's running downloads. */
-  userId: string
-  percent: number
-  phase: "downloading" | "processing" | "uploading" | "completed" | "failed"
-  videoUrl?: string
-  thumbnailUrl?: string
-  error?: string
-}
-
-const activeDownloads = new Map<string, ActiveDownload>()
-
-/** How many of this account's downloads are still running (terminal ones linger
- *  in the map for the progress stream's sake and do not count). */
-function runningDownloadsFor(userId: string): number {
-  let count = 0
-  for (const download of activeDownloads.values()) {
-    if (download.userId === userId && download.phase !== "completed" && download.phase !== "failed") count++
-  }
-  return count
-}
-
-async function findAndUploadThumbnail(baseName: string, outputId: string): Promise<string | undefined> {
-  const thumbExtensions = [".jpg", ".webp", ".png"]
-  for (const ext of thumbExtensions) {
-    const thumbPath = join(tmpdir(), `${baseName}${ext}`)
-    try {
-      await fs.access(thumbPath)
-      const thumbStat = await fs.stat(thumbPath)
-      if (thumbStat.size > 0) {
-        const thumbBuffer = await fs.readFile(thumbPath)
-        const contentType = ext === ".jpg" ? "image/jpeg" : ext === ".webp" ? "image/webp" : "image/png"
-        const thumbR2Key = `thumbnails/yt-${outputId}${ext}`
-        const url = await uploadBufferToR2(thumbBuffer, thumbR2Key, contentType)
-        await fs.unlink(thumbPath).catch(() => {})
-        return url
-      }
-      await fs.unlink(thumbPath).catch(() => {})
-    } catch {
-      continue
-    }
-  }
-  return undefined
-}
-
-function cleanupFiles(baseName: string): void {
-  const videoExts = [".mp4", ".mkv", ".webm", ".mov", ".avi", ".flv"]
-  const thumbExts = [".jpg", ".webp", ".png"]
-  for (const ext of [...videoExts, ...thumbExts]) {
-    fs.unlink(join(tmpdir(), `${baseName}${ext}`)).catch(() => {})
-  }
-}
-
-async function runDownloadWithProgress(
-  downloadId: string,
-  url: string,
-  outputId: string,
-  baseName: string,
-  outPath: string,
-  userId: string,
-  section?: VideoSection,
-  maxHeight?: number,
-  maxFilesizeBytes?: number,
-  requireAudio = true,
-): Promise<void> {
-  const state = activeDownloads.get(downloadId)
-  if (!state) return
-
-  try {
-    // Provider owns yt-dlp spawn + spoof + h264 normalize; we keep the SSE
-    // progress map, fed by its callbacks. onProgress reports download percent;
-    // onProcessingStart fires once when the h264 re-encode begins. For section
-    // downloads yt-dlp's percents are jumpy — accepted, the map just relays them.
-    await downloadYouTubeVideo({
-      url,
-      outPath,
-      section,
-      maxHeight,
-      maxFilesizeBytes,
-      // Default TRUE: a voice changer can't use a silent clip, and a silent
-      // result is usually a degraded source response — so fail the import (and
-      // fail over to the next attempt) instead of ingesting it. The caller can
-      // opt out for a clip that really has no sound. See assertAudioPresent; a
-      // silent file re-encodes video-only, so the "-c:a aac" crash can't happen.
-      requireAudio,
-      onProgress: (pct) => {
-        if (state.phase === "downloading") {
-          state.percent = Math.min(Math.round(pct), 99)
-        }
-      },
-      onProcessingStart: () => {
-        state.phase = "processing"
-        state.percent = 90
-      },
-    })
-
-    state.phase = "uploading"
-    state.percent = 95
-
-    const videoR2Key = `videos/yt-${outputId}.mp4`
-    // Size taken BEFORE the upload path unlinks the file — it becomes the
-    // assets row's size_bytes, which is exactly what the delete paths
-    // (library.ts, media-process deleteSource) decrement by later.
-    const videoSizeBytes = (await fs.stat(outPath)).size
-    const videoR2Url = await uploadFileWithKeyToR2(outPath, videoR2Key, "video/mp4")
-
-    // Sidecar thumbnail first (yt-dlp's --write-thumbnail); when the source had
-    // none — a direct file URL never does, and some social fetches come back
-    // bare — extract the file's own first frame while it is still on disk.
-    // Nice-to-have semantics, same as /v1/upload: a poster failure logs and the
-    // download proceeds without one.
-    let thumbnailUrl = await findAndUploadThumbnail(baseName, outputId)
-    if (!thumbnailUrl) {
-      try {
-        const poster = await thumbnailFromLocalVideo(outPath)
-        thumbnailUrl = await uploadBufferToR2(poster, `thumbnails/yt-${outputId}.png`, "image/png")
-      } catch (err) {
-        console.warn(
-          `[download-video] poster fallback failed: ${err instanceof Error ? err.message : String(err)}`,
-        )
-      }
-    }
-    await fs.unlink(outPath).catch(() => {})
-
-    // Ownership row + increment-only storage accounting — the same assets shape
-    // /v1/upload and /v1/media/process insert. Without this row the downloaded
-    // object is unowned and untracked: the ownership-gated deleteSource on
-    // /v1/media/process could never clean it up, and its bytes never counted
-    // toward the user's storage. Primary video object only — no thumbnail row
-    // and no thumbnail byte tracking, matching the platform's delete paths
-    // (which remove/decrement only the primary object + row).
-    //
-    // DELIBERATELY no reserve_storage_if_within_limit here: social imports have
-    // never been quota-ENFORCED, and silently making them fail over-quota would
-    // be an unauthorized product change. Increment-only accounting for now;
-    // enforcement is an explicit future decision.
-    //
-    // Bookkeeping is best-effort: a failure must never fail a download whose
-    // video already uploaded — the user keeps their video; it is merely unowned
-    // (deleteSource will skip it), same as every pre-existing download.
-    await recordDownloadedVideoAsset({
-      userId,
-      outputId,
-      sizeBytes: videoSizeBytes,
-      r2Key: videoR2Key,
-      r2Url: videoR2Url,
-      thumbnailUrl,
-      sourceUrl: url,
-    })
-
-    state.phase = "completed"
-    state.percent = 100
-    state.videoUrl = videoR2Url
-    state.thumbnailUrl = thumbnailUrl
-  } catch (err) {
-    state.phase = "failed"
-    state.error = err instanceof Error ? err.message : "Download failed"
-    // LOG IT. This ran in the background and only ever reported the failure to
-    // the SSE client, so a broken downloader looked like silence server-side —
-    // which is how a `spawn ... yt-dlp ENOENT` (the binary was missing from the
-    // image entirely) survived unnoticed across every social-video path.
-    console.error(`[download-video] ${downloadId} failed: ${state.error}`)
-    cleanupFiles(baseName)
-  }
-
-  // Auto-clean from map after 5 minutes
-  setTimeout(() => activeDownloads.delete(downloadId), 5 * 60 * 1000)
-}
+// The download itself (provider call, upload, poster, ownership row) and the
+// account's running-download bookkeeping live in `lib/video-download.ts`, shared
+// with the orchestrator's pre-run fetch (decided 2026-10-08): one downloader.
+export { MAX_ACTIVE_DOWNLOADS_PER_USER }
 
 export async function downloadVideoRoutes(app: FastifyInstance) {
   // POST /v1/download-video - Start download, return downloadId immediately
@@ -279,15 +97,6 @@ export async function downloadVideoRoutes(app: FastifyInstance) {
     const userId = req.userId
     const { url, sectionStartSec, sectionEndSec, exactSection, maxHeight: rawMaxHeight, requireAudio } = parsed.data
 
-    if (runningDownloadsFor(userId) >= MAX_ACTIVE_DOWNLOADS_PER_USER) {
-      return reply.status(429).send({
-        error: {
-          code: "too_many_downloads",
-          message: "Too many downloads are running — wait for one to finish and try again.",
-        },
-      })
-    }
-
     const isSocial = isAllowedSocialVideoUrl(url)
     if (!isSocial) {
       // Direct-file URL on an ARBITRARY host. yt-dlp does its own DNS+HTTP —
@@ -305,10 +114,6 @@ export async function downloadVideoRoutes(app: FastifyInstance) {
     // videoFormatSelector. Absent stays absent (unchanged "best" behaviour).
     const maxHeight =
       rawMaxHeight !== undefined ? Math.min(4320, Math.max(144, rawMaxHeight)) : undefined
-    const downloadId = randomUUID()
-    const outputId = randomUUID()
-    const baseName = `yt-video-${outputId}`
-    const outPath = join(tmpdir(), `${baseName}.mp4`)
 
     // Zod guarantees both-or-neither; collapse the pair into one value here so
     // everything downstream deals with a single optional section object.
@@ -317,15 +122,32 @@ export async function downloadVideoRoutes(app: FastifyInstance) {
         ? { startSec: sectionStartSec, endSec: sectionEndSec, ...(exactSection ? { exact: true } : {}) }
         : undefined
 
-    const state: ActiveDownload = { userId, percent: 0, phase: "downloading" }
-    activeDownloads.set(downloadId, state)
+    // The account's download slot, across processes (a run's download in the
+    // orchestrator counts here too). Taken last, with nothing that can fail
+    // between it and the start, so a request that is refused for anything else
+    // never holds one.
+    const slot = await tryAcquireDownloadSlot(userId)
+    if (!slot) {
+      return reply.status(429).send({
+        error: {
+          code: "too_many_downloads",
+          message: "Too many downloads are running — wait for one to finish and try again.",
+        },
+      })
+    }
 
     // Start download in background. Direct files carry the 500MB cap; social
-    // fetches pass none (unchanged).
-    void runDownloadWithProgress(
-      downloadId, url, outputId, baseName, outPath, userId, section, maxHeight,
-      isSocial ? undefined : DIRECT_FILE_MAX_BYTES,
-      requireAudio ?? true,
+    // fetches pass none (unchanged). The slot is given back when it ends.
+    const { downloadId } = startTrackedDownload(
+      {
+        url,
+        userId,
+        section,
+        maxHeight,
+        maxFilesizeBytes: isSocial ? undefined : DIRECT_FILE_MAX_BYTES,
+        requireAudio: requireAudio ?? true,
+      },
+      slot,
     )
 
     return { downloadId }

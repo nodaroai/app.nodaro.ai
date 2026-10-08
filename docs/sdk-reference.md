@@ -3445,6 +3445,14 @@ Triggers an app run. `inputs` keys must match the app's input-schema field
 names. Returns `{ executionId, status, runId? }` — poll via
 `client.executions.get(executionId)`.
 
+An app that takes a video link (an exposed
+[Video URL](./nodes/input/youtube-video.md) node) is run with the link as the
+input, for example `client.apps.run("clip-pack", { episode: "https://www.youtube.com/watch?v=dQw4w9WgXcQ" })`.
+The server downloads a post link itself before the first node runs (a YouTube
+video of 4 minutes or more only as a part named with `opts.inputOverrides`);
+any other web link is used as it is. See
+[Video URL inputs](./embed-app-guide.md#video-url-inputs).
+
 `opts.inputOverrides` is the advanced escape hatch: nested
 `{ nodeId: { field: value } }` raw node data for THIS run, which reaches fields
 the app does not expose to its end users — such as

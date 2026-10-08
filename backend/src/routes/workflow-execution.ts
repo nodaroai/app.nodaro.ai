@@ -476,6 +476,8 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     const lockedOverrides = findLockedOverrides(
       (workflow.nodes as ReadonlyArray<{ id: string; type?: string }> | null) ?? [],
       effectiveOverrides,
+      // The workflow's own run: its owner may point a Video URL node at a link.
+      "all",
     )
     if (lockedOverrides.length > 0) {
       return reply.status(400).send({

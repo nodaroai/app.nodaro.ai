@@ -41,25 +41,39 @@ by `downloadedFromUrl`), and that file is what the `video` handle emits.
 
 ## Common gotchas
 
-- **Nothing downloads at run time on the server.** The node is a source node — it
-  is read, never executed. A workflow written through the API / MCP carries only
-  the link, so its `video` handle emits the PAGE address and every video
-  consumer fails on it. To feed a social video into an API-built workflow, import
-  it first with `POST /v1/download-video` (follow
+- **The server downloads a post link at run time, but does not save the file back.**
+  The node is a source node — it is read, never executed — so a run (API, MCP, SDK
+  or app) fetches a post link saved in the workflow, or set by the request in
+  `inputOverrides`, BEFORE the first node runs, whenever a node that runs reads
+  the file (or only its sound: Transcribe and Suno Cover take just the audio
+  track; Dubbing and Content Recipe take the page address and need nothing). The
+  fetched file is kept on that run's execution, not written to `downloadedVideoUrl`
+  on the saved node: Render final after the run, and a run picked up again after a
+  deploy, use the same file instead of downloading it again, while a repeated run
+  (a new execution) downloads it afresh. To reuse one file across runs, import it
+  first with `POST /v1/download-video` (follow
   `GET /v1/download-video/progress/:id` to the `videoUrl`) and put that file url
   in an `upload-video` node — or in this node's `youtubeUrl`: a direct file link
-  passes through untouched.
+  passes through untouched. A file already stored for the node's own link
+  (`downloadedFromUrl` equal to `youtubeUrl`) is used as it is.
+- **A long or unreadable YouTube video needs a part.** A YouTube video of 4
+  minutes or more, or one whose length cannot be read, is refused before anything
+  runs or is charged, unless `sectionStartSec` and `sectionEndSec` (seconds,
+  `0 <= start < end`) are set on the node or in `inputOverrides`; the run then
+  downloads exactly that part. A live stream is refused. Other platforms
+  download whole.
 - **Never write `downloadedVideoUrl` without `downloadedFromUrl` set to the same
   link as `youtubeUrl`**, and never change `youtubeUrl` while leaving the two
   behind. A file whose `downloadedFromUrl` differs from the current link is
   ignored (the node falls back to the link) — that is the guard against emitting
   the previous link's video.
-- `downloadMode`, `sectionStartSec` / `sectionEndSec`, `downloadStatus` and
-  `downloadId` are RECORDS of what the editor did, never instructions. Writing
-  `downloadStatus: "downloading"` or `downloadMode: "whole"` starts nothing: the
-  editor re-attaches only to a download the server still knows by an id bound to
-  the same link (`downloadIdUrl`), and otherwise shows the node as not
-  downloaded. Leave all of them out when authoring a node.
+- `downloadMode`, `downloadStatus` and `downloadId` are RECORDS of what the editor
+  did, never instructions. Writing `downloadStatus: "downloading"` or
+  `downloadMode: "whole"` starts nothing: the editor re-attaches only to a
+  download the server still knows by an id bound to the same link
+  (`downloadIdUrl`), and otherwise shows the node as not downloaded. Leave them
+  out when authoring a node. `sectionStartSec` / `sectionEndSec` are different:
+  the server honours them as the part to download (see above).
 - The `in` handle is not an executable input: a URL wired into it is not
   downloaded at run time.
 - Opening the workflow in the editor and pressing Run fetches any link that feeds

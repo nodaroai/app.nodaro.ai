@@ -65,3 +65,22 @@ describe("makeSnapshotInputs — list/loop by column count", () => {
     expect(out.n1).toEqual({ items: [""] })
   })
 })
+
+describe("a Video URL input", () => {
+  const YT = "https://youtu.be/AAAAAAAAAAA"
+
+  it("starts empty for a new run: the runner brings their own link", () => {
+    expect(makeEmptyInputs([mk("v1", "youtube-video", { youtubeUrl: YT, downloadedVideoUrl: "https://cdn/s.mp4" })]).v1).toEqual({ youtubeUrl: "" })
+  })
+
+  it("the creator's run shows the creator's link and the file made from it", () => {
+    const out = makeSnapshotInputs([
+      mk("v1", "youtube-video", { youtubeUrl: YT, downloadedVideoUrl: "https://cdn/s.mp4", downloadedFromUrl: YT, title: "kept off" }),
+    ])
+    expect(out.v1).toEqual({ youtubeUrl: YT, downloadedVideoUrl: "https://cdn/s.mp4", downloadedFromUrl: YT })
+  })
+
+  it("a creator's node with no link yet snapshots an empty link", () => {
+    expect(makeSnapshotInputs([mk("v1", "youtube-video", {})]).v1).toEqual({ youtubeUrl: "" })
+  })
+})

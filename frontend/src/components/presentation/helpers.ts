@@ -1,10 +1,11 @@
 import type { WorkflowNode } from "@/types/nodes"
 import { NODE_DEF_MAP, EDIT_VIDEO_PRO_SPAN_DEFAULTS, EDIT_VIDEO_PRO_DEFAULT_SPAN_SEC } from "@/types/nodes"
 import { migrateToItems, deriveLottieSlotFields, LOTTIE_SLOT_FIELD_PREFIX, canonicalExposedFieldKey } from "@nodaro/shared"
-import type { ExposableField, PresentationItem } from "@nodaro/shared"
+import type { ExposableField, PresentationItem, VideoLinkGraphEdge, VideoLinkGraphNode } from "@nodaro/shared"
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
 import { getNodeLabel, getNodeResult } from "@/lib/presentation-utils"
 import { isMultiColumnList } from "@/lib/list-loop-migration"
+import { isVideoLinkInputReady, videoLinkInputNeed, videoLinkInputValues } from "@/lib/video-link-input"
 
 /** Resolve input items from settings — prefer inputItems, fallback to migrated inputOrder */
 export function resolveInputItems(settings: PresentationSettings): PresentationItem[] | null {
@@ -189,6 +190,8 @@ export function deriveSingleColumnListItems(
 export function areAllInputsFilled(
   inputNodes: WorkflowNode[],
   inputValues: Record<string, Record<string, unknown>>,
+  /** The app's graph, to read what each Video URL input must have fetched; absent = its file. */
+  graph?: { readonly nodes: readonly VideoLinkGraphNode[]; readonly edges: readonly VideoLinkGraphEdge[] },
 ): boolean {
   for (const node of inputNodes) {
     const data = node.data as Record<string, unknown>
@@ -200,6 +203,9 @@ export function areAllInputsFilled(
     } else if (nodeType === "upload-image" || nodeType === "upload-video" || nodeType === "upload-audio") {
       const url = (inputVals?.url as string) ?? (data.url as string) ?? ""
       if (!url) return false
+    } else if (nodeType === "youtube-video") {
+      // A usable link — and for a post link, the file the runner's card fetched from IT.
+      if (!isVideoLinkInputReady(videoLinkInputValues(data, inputVals), videoLinkInputNeed(node.id, graph))) return false
     } else if (nodeType === "list") {
       // "Filled" check by column count (see isMultiColumnList): multi-column
       // validates the `rows` grid, single-column validates `items`.

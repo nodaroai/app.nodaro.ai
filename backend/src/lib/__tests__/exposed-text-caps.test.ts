@@ -102,3 +102,22 @@ describe("exposedTextCaps", () => {
     })
   })
 })
+
+describe("exposedVideoLinkNodeIds", () => {
+  const nodes = [
+    { id: "ep", type: "youtube-video", data: {} },
+    { id: "ref", type: "youtube-video", data: {} },
+    { id: "up", type: "upload-video", data: {} },
+  ]
+  const settings = (ids: string[]) => ({ presentationSettings: { inputItems: ids.map((nodeId) => ({ type: "node", nodeId })) } })
+
+  it("is the Video URL nodes the app lists as inputs, and no other node", async () => {
+    const { exposedVideoLinkNodeIds } = await import("../exposed-text-caps.js")
+    expect([...exposedVideoLinkNodeIds(settings(["ep", "up"]), nodes)]).toEqual(["ep"])
+  })
+  it("an app that exposes none of them has none", async () => {
+    const { exposedVideoLinkNodeIds } = await import("../exposed-text-caps.js")
+    expect(exposedVideoLinkNodeIds(settings(["up"]), nodes).size).toBe(0)
+    expect(exposedVideoLinkNodeIds(null, null).size).toBe(0)
+  })
+})

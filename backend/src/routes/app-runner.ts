@@ -32,6 +32,7 @@ import { shouldRefuseDegradedRunFor, personalPayer } from "../lib/billing-contex
 import { billingPairColumns } from "../lib/insert-job.js"
 import { extractAppInputSchema, flatInputsToOverrides, mergeInputOverrides } from "../lib/mcp/extract-app-inputs.js"
 import { describeLockedOverrides, findLockedOverrides } from "../lib/input-override-lock.js"
+import { exposedVideoLinkNodeIds } from "../lib/exposed-text-caps.js"
 import { appReviewerPresent } from "../lib/app-reviewer.js"
 import { appRunViewStates } from "../lib/app-run-states.js"
 import { appRunFinalChain, finalExecutionIdOf, loadAppRunFinals, selectWithFinalExecution, type AppRunFinal } from "../lib/app-run-final-column.js"
@@ -400,6 +401,11 @@ export async function appRunnerRoutes(app: FastifyInstance) {
     const lockedOverrides = findLockedOverrides(
       (appRow.snapshot_nodes as ReadonlyArray<{ id: string; type?: string }> | null) ?? [],
       inputOverrides,
+      // Only a Video URL node the app exposes may be pointed at the caller's link.
+      exposedVideoLinkNodeIds(
+        appRow.snapshot_settings as Record<string, unknown> | null,
+        appRow.snapshot_nodes as ReadonlyArray<{ id?: string; type?: string }> | null,
+      ),
     )
     if (lockedOverrides.length > 0) {
       return reply.status(400).send({

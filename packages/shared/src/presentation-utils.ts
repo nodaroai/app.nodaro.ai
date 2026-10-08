@@ -8,6 +8,7 @@ import type { PresentationItem } from "./presentation-types.js"
 import { AUDIO_PRODUCER_TYPES, VIDEO_PRODUCER_TYPES } from "./producer-types.js"
 import { canonicalizeOverrideKeys } from "./exposed-field-keys.js"
 import { RENDER_NODE_TYPE_IDS } from "./render-nodes.js"
+import { dropStaleVideoLinkFields } from "./video-link.js"
 
 // ---------------------------------------------------------------------------
 // Node type sets
@@ -35,6 +36,7 @@ export const INPUT_NODE_TYPES = new Set([
   "action-fx",
   "temporal",
   "reference-audio",
+  "youtube-video",
 ])
 
 const TRIGGER_NODE_TYPES = new Set([
@@ -346,6 +348,8 @@ export const INPUT_FIELD_MAP: Record<string, InputFieldSchema> = {
   "upload-video": { key: "url", type: "video-url" },
   "upload-audio": { key: "url", type: "audio-url" },
   "reference-audio": { key: "extractedAudioUrl", type: "audio-url" },
+  // A LINK, not an upload (rule: `videoLinkInputProblem`, video-link.ts); still a `video-url` media input.
+  "youtube-video": { key: "youtubeUrl", type: "video-url" },
   // --- Classic parameters ---
   "provider": { key: "provider", type: "select" },
   "style-guide": { key: "text", type: "text" }, // reads data.text (was wrongly "styleGuide")
@@ -450,7 +454,10 @@ export function mergeNodeInputOverrides(
   data: Record<string, unknown>,
   overrides: Record<string, unknown>,
 ): Record<string, unknown> {
-  const merged: Record<string, unknown> = { ...data, ...canonicalizeOverrideKeys(nodeType, overrides) }
+  const incoming = canonicalizeOverrideKeys(nodeType, overrides)
+  // A Video URL node on a new link sheds what was fetched for the old one.
+  const base = nodeType === "youtube-video" ? dropStaleVideoLinkFields(data, incoming) : data
+  const merged: Record<string, unknown> = { ...base, ...incoming }
   const schema = nodeType ? INPUT_FIELD_MAP[nodeType] : undefined
   if (
     schema &&

@@ -63,6 +63,10 @@ import { supabase } from "../../lib/supabase.js"
 import { updateStorageUsage } from "../../utils/file-validation.js"
 import { resolvesOnlyToPublicAddresses } from "../../lib/safe-fetch.js"
 import { thumbnailFromLocalVideo } from "../../utils/thumbnail.js"
+import { DownloadSlots } from "../../lib/download-slots.js"
+import { setDownloadSlotsForTests } from "../../lib/download-slots-instance.js"
+import { RedisDownloadLedger } from "../../lib/download-slot-ledger.js"
+import { makeFakeDownloadClient, makeFakeDownloadStore } from "../../lib/__tests__/fake-download-redis.js"
 
 const TEST_USER_ID = "00000000-0000-4000-8000-000000000001"
 const YT_URL = "https://www.youtube.com/watch?v=abc123"
@@ -372,6 +376,59 @@ describe("POST /v1/download-video — running downloads per account", () => {
 
     releases.forEach((release) => release())
     await vi.waitFor(() => expect(updateStorageUsage).toHaveBeenCalledTimes(MAX_ACTIVE_DOWNLOADS_PER_USER + 1))
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Tests — the cap is ONE count across processes (decided 2026-10-08): a run's
+// download in the orchestrator process takes the same account slots.
+// ---------------------------------------------------------------------------
+
+describe("POST /v1/download-video — the account's slots are shared with the orchestrator process", () => {
+  function sharedWithOrchestrator() {
+    const client = makeFakeDownloadClient(makeFakeDownloadStore())
+    const ledger = new RedisDownloadLedger({ client: () => client, commandTimeoutMs: 50 })
+    const make = () => new DownloadSlots({ ledger: async () => ledger, log: () => undefined })
+    setDownloadSlotsForTests(make())
+    return make() // the orchestrator process
+  }
+  afterEach(() => setDownloadSlotsForTests(undefined))
+
+  it("answers 429 while the account's slots are taken by downloads in the OTHER process, and starts nothing", async () => {
+    const orchestrator = sharedWithOrchestrator()
+    const taken = []
+    for (let i = 0; i < MAX_ACTIVE_DOWNLOADS_PER_USER; i++) taken.push(await orchestrator.tryAcquire(TEST_USER_ID, MAX_ACTIVE_DOWNLOADS_PER_USER))
+
+    const refused = await post({ url: YT_URL })
+    expect(refused.statusCode).toBe(429)
+    expect(refused.json().error.code).toBe("too_many_downloads")
+    expect(downloadYouTubeVideo).not.toHaveBeenCalled()
+
+    taken[0]!.release()
+    await vi.waitFor(async () => expect((await post({ url: YT_URL })).statusCode).toBe(200))
+  })
+
+  it("this route's downloads take slots the other process sees, and give them back when they end", async () => {
+    const orchestrator = sharedWithOrchestrator()
+    const releases: Array<() => void> = []
+    vi.mocked(downloadYouTubeVideo).mockImplementation(
+      (opts) => new Promise<void>((resolve) => releases.push(() => void fs.writeFile(opts.outPath, FAKE_VIDEO_BYTES).then(() => resolve()))),
+    )
+    for (let i = 0; i < MAX_ACTIVE_DOWNLOADS_PER_USER - 1; i++) expect((await post({ url: YT_URL })).statusCode).toBe(200)
+    expect(await orchestrator.tryAcquire(TEST_USER_ID, MAX_ACTIVE_DOWNLOADS_PER_USER)).not.toBeNull() // the fourth
+    expect(await orchestrator.tryAcquire(TEST_USER_ID, MAX_ACTIVE_DOWNLOADS_PER_USER)).toBeNull()
+
+    releases.forEach((release) => release())
+    await vi.waitFor(async () => expect(await orchestrator.tryAcquire(TEST_USER_ID, MAX_ACTIVE_DOWNLOADS_PER_USER)).not.toBeNull())
+  })
+
+  it("a request refused for another reason (an address that cannot be fetched) never holds a slot", async () => {
+    const orchestrator = sharedWithOrchestrator()
+    vi.mocked(resolvesOnlyToPublicAddresses).mockResolvedValueOnce(false)
+    expect((await post({ url: "https://cdn.nodaro.ai/uploads/videos/5b3f3a3b.mp4" })).statusCode).toBe(400)
+    for (let i = 0; i < MAX_ACTIVE_DOWNLOADS_PER_USER; i++) {
+      expect(await orchestrator.tryAcquire(TEST_USER_ID, MAX_ACTIVE_DOWNLOADS_PER_USER)).not.toBeNull()
+    }
   })
 })
 

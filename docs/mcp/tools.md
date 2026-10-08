@@ -1617,6 +1617,16 @@ an LLM **Temperature**, a **Duration**, a Lottie number slot, …) is
 (An exposed node slider used to be reported as `type: "text"` with no range.)
 `run_app` accepts a number or a numeric string for a `number` input; a
 value that is not a number is passed to the node unchanged.
+A [Video URL](../nodes/input/youtube-video.md) node the app exposes is
+`type: "video"` with `required: true`; its value is a link to a video (a
+YouTube, TikTok, Instagram, Facebook or X post, or any other public web
+link). A value that is not a web link is refused with `400 locked_field`. The
+server downloads a post link itself before the first node runs, under the
+app page's rules: a YouTube video of 4 minutes or more is downloaded only as a
+part named in `inputOverrides` (`sectionStartSec` / `sectionEndSec` on the
+node), and a run without one is refused before anything is billed; a node that
+only reads the sound (Transcribe, Suno Cover) gets just the sound. See
+[Video URL inputs](../embed-app-guide.md#video-url-inputs).
 
 ---
 

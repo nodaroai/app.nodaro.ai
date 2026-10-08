@@ -5,8 +5,10 @@ import {
   INSTAGRAM_HOSTS,
   hostnameMatchesAllowlist,
   hasUrlParserHazard,
+  DIRECT_VIDEO_EXTENSIONS,
+  isDirectVideoFileUrl,
+  isLocalOrPrivateHostname,
 } from "@nodaro/shared"
-import { isPrivateOrReservedIP } from "./safe-fetch.js"
 import { isConfiguredStorageUrl } from "./own-storage-url.js"
 
 /**
@@ -39,15 +41,11 @@ export const safeUrlSchema = z
         // This install's own public-storage subtree (self-host MinIO behind
         // the app origin) is legitimately localhost — see safe-fetch.ts.
         if (isConfiguredStorageUrl(parsed)) return true
-        const hostname = parsed.hostname.toLowerCase()
-        if (hostname === "localhost" || hostname === "[::1]") {
-          return false
-        }
-        // Hostnames from URL parsing retain brackets for IPv6. Strip them
-        // before handing to the shared IP classifier so `::1`, `fe80::…`,
-        // IPv4-mapped, etc. are all handled consistently with safeFetch.
-        const ip = hostname.replace(/^\[|\]$/g, "")
-        if (isPrivateOrReservedIP(ip)) return false
+        // Hostnames from URL parsing retain brackets for IPv6; the shared rule
+        // strips them and classifies `::1`, `fe80::…`, IPv4-mapped, etc.
+        // consistently with safeFetch — and is the very rule the app runner's
+        // link card applies, so the two cannot disagree on a literal host.
+        if (isLocalOrPrivateHostname(parsed.hostname)) return false
         return true
       } catch {
         return false
@@ -98,35 +96,9 @@ export function isAllowedSocialVideoUrl(url: string, domains: readonly string[] 
   }
 }
 
-/**
- * File extensions accepted as DIRECT video-file URLs (pathname suffix match).
- * Mirrors save-to-storage's video auto-detect set.
- */
-export const DIRECT_VIDEO_EXTENSIONS = [".mp4", ".webm", ".mov", ".avi"] as const
-
-/**
- * True for a DIRECT video-file URL: http(s) whose PATHNAME ends in a video
- * extension — `https://cdn.nodaro.ai/uploads/videos/<id>.mp4` and any other
- * cdn-style link. Query/fragment are ignored (signed CDN URLs keep the
- * extension in the path); an extension that appears only in the query does not
- * qualify. Host-agnostic BY DESIGN, which is exactly why admission is not
- * sufficient on its own: yt-dlp does its own DNS+HTTP (no `safeFetch`), so the
- * download route must pre-resolve these hosts via
- * `resolvesOnlyToPublicAddresses` before fetching.
- */
-export function isDirectVideoFileUrl(url: string): boolean {
-  // Same parser-differential refusal as the social gate: the route pre-resolves
-  // the WHATWG host, and yt-dlp would fetch whatever host ITS parser reads.
-  if (hasUrlParserHazard(url)) return false
-  try {
-    const parsed = new URL(url)
-    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false
-    const path = parsed.pathname.toLowerCase()
-    return DIRECT_VIDEO_EXTENSIONS.some((ext) => path.endsWith(ext))
-  } catch {
-    return false
-  }
-}
+// The direct-file rule lives in `@nodaro/shared` too (`video-link.ts`): the app
+// runner's card and the run-request lock apply the SAME rule this route does.
+export { DIRECT_VIDEO_EXTENSIONS, isDirectVideoFileUrl }
 
 /** True when the video-download paths accept `url`: a social host OR a direct
  *  video file. The provider's defense-in-depth guard uses this; the route layers

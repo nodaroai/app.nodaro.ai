@@ -60,6 +60,7 @@ describe("INPUT_NODE_TYPES", () => {
     "atmosphere",
     "action-fx",
     "temporal",
+    "youtube-video",
   ]
 
   it("contains all expected types", () => {

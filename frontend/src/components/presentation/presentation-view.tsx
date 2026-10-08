@@ -427,8 +427,8 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   // Check if all required inputs are filled (fullscreen app/embed mode only)
   const allInputsFilled = useMemo(() => {
     if (!isFullscreen) return true
-    return areAllInputsFilled(orderedInputNodes, presInputValues)
-  }, [isFullscreen, orderedInputNodes, presInputValues])
+    return areAllInputsFilled(orderedInputNodes, presInputValues, { nodes, edges })
+  }, [isFullscreen, orderedInputNodes, presInputValues, nodes, edges])
 
   const underMinTables = useMemo(() => {
     if (!isFullscreen) return []

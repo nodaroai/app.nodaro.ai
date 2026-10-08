@@ -146,6 +146,7 @@ describe("migration NOT NULL reader", () => {
     const executions = migrationNotNullColumnsOf("workflow_executions")
     expect(executions.has("node_states")).toBe(true) // 036
     expect(executions.has("input_overrides")).toBe(false) // 466
+    expect(executions.has("video_link_files")).toBe(false) // 487
     expect(executions.has("error_message")).toBe(false)
     expect(jobs.has("error_message")).toBe(false) // 001: TEXT, nullable
     const reports = migrationNotNullColumnsOf("app_reports")
@@ -224,7 +225,14 @@ describe("what expunge erases", () => {
     // error_message (036, nullable) too (decided 2026-10-07): the run-level
     // failure line repeats a child job's message ("Execution failed — child
     // job error …"), and the job's own copy is erased.
-    expect(executionContentRedaction()).toEqual({ node_states: {}, input_overrides: null, error_message: null })
+    // video_link_files (487, decided 2026-10-08): the files fetched from a Video
+    // URL link — a runner's own episode — nullable, an object or NULL.
+    expect(executionContentRedaction()).toEqual({
+      node_states: {},
+      input_overrides: null,
+      video_link_files: null,
+      error_message: null,
+    })
   })
 
   it("clears a job's inputs, outputs, held output, error messages and input fingerprint", () => {

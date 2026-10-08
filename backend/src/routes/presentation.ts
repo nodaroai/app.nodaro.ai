@@ -23,7 +23,7 @@ import { previewReviewRefusal } from "../lib/preview-review-gate.js"
 import type { WorkflowExecutionJob } from "../services/workflow-engine/types.js"
 import { ACTIVE_EXECUTION_STATUSES } from "../lib/request-helpers.js"
 import { estimateWorkflowCredits, type EstimateNode, type EstimateEdge } from "../ee/billing/credits.js"
-import { exposedTextCaps } from "../lib/exposed-text-caps.js"
+import { exposedTextCaps, exposedVideoLinkNodeIds } from "../lib/exposed-text-caps.js"
 import { resolveCanvasResultIds } from "../lib/canvas-result-ids.js"
 
 const workflowIdParams = z.object({
@@ -281,6 +281,11 @@ export async function presentationRoutes(app: FastifyInstance) {
     const lockedOverrides = findLockedOverrides(
       (workflow.nodes as ReadonlyArray<{ id: string; type?: string }> | null) ?? [],
       inputOverrides,
+      // Only a Video URL node the presentation exposes may be pointed at the viewer's link.
+      exposedVideoLinkNodeIds(
+        workflow.settings as Record<string, unknown> | null,
+        workflow.nodes as ReadonlyArray<{ id?: string; type?: string }> | null,
+      ),
     )
     if (lockedOverrides.length > 0) {
       return reply.status(400).send({

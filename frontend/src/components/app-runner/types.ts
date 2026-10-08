@@ -66,6 +66,8 @@ export function makeEmptyInputs(inputNodes: WorkflowNode[]): Record<string, Reco
       // Preserve the original value for readonly prompts — they can't be edited
       empty[node.id] = { text: d.presentationReadOnly ? (d.text as string) ?? "" : "" }
     } else if (t === "upload-image" || t === "upload-video" || t === "upload-audio") empty[node.id] = { url: "" }
+    // A Video URL input: the runner brings their own link (the creator's is only a sample).
+    else if (t === "youtube-video") empty[node.id] = { youtubeUrl: "" }
     else if (t === "list") {
       // Empty shape by column count (see isMultiColumnList): multi-column → `rows`
       // grid (LoopInputCard), single-column → `items` (ListInputCard).
@@ -108,6 +110,14 @@ export function makeSnapshotInputs(inputNodes: WorkflowNode[]): Record<string, R
       inputs[node.id] = { text: (node.data.text as string) ?? "" }
     } else if (t === "upload-image" || t === "upload-video" || t === "upload-audio") {
       inputs[node.id] = { url: (node.data.url as string) ?? "" }
+    } else if (t === "youtube-video") {
+      // The creator's link and the file made from it — nothing else the node holds (title, picture, audio track).
+      const d = node.data as Record<string, unknown>
+      inputs[node.id] = {
+        youtubeUrl: typeof d.youtubeUrl === "string" ? d.youtubeUrl : "",
+        ...(typeof d.downloadedVideoUrl === "string" && d.downloadedVideoUrl ? { downloadedVideoUrl: d.downloadedVideoUrl } : {}),
+        ...(typeof d.downloadedFromUrl === "string" && d.downloadedFromUrl ? { downloadedFromUrl: d.downloadedFromUrl } : {}),
+      }
     } else if (t === "list") {
       // Snapshot shape by column count (see isMultiColumnList).
       const d = node.data as Record<string, unknown>

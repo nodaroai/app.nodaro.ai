@@ -32,7 +32,7 @@
  * pattern) — the already-allowlisted callers pass them in.
  */
 import { useEffect, useRef, useState } from "react"
-import { EDIT_PLAN_MAX_MINUTES, mergeNodeInputOverrides } from "@nodaro/shared"
+import { EDIT_PLAN_MAX_MINUTES, mergeNodeInputOverrides, resolveVideoLinkOutput } from "@nodaro/shared"
 import { estimateWholeRun } from "@/components/editor/workflow-editor/estimate-run-credits"
 import { chosenRecordingUrl } from "@/lib/run-price"
 import { withoutMediaLength } from "@nodaro/render-rules"
@@ -86,7 +86,12 @@ export function applyRunInputValues(
     // sample carried describes it (`withoutMediaLength`), only the one read for
     // this very file, stamped with its url so the reader trusts it for that url alone.
     const chosen = chosenRecordingUrl(n, inputValues)
-    if (chosen === undefined || chosen === (n.data as Record<string, unknown>).url) return { ...n, data: merged as typeof n.data }
+    // The sample it replaces: an upload's `url`; a Video URL's resolved output
+    // (its file, else its link) — the creator's own link, left as it is, keeps
+    // the length the creator measured.
+    const nodeData = n.data as Record<string, unknown>
+    const sample = n.type === "youtube-video" ? resolveVideoLinkOutput(nodeData) : nodeData.url
+    if (chosen === undefined || chosen === sample) return { ...n, data: merged as typeof n.data }
     // A length not known (the browser cannot read the file, or the read is
     // still pending) is the longest recording (decision #3) for EVERY length
     // reader — not only Edit Plan and Apply EDL, which take that ceiling on
