@@ -139,7 +139,7 @@ describe("handleCreateNodesFromWriter", () => {
     handleCreateNodesFromWriter("w1")
 
     expect(mockToastError).toHaveBeenCalledWith(
-      "No generated prompts to create nodes from. Run the Prompt node first.",
+      "No generated prompts to create nodes from. Run the Generate Text - Any LLM node first.",
     )
     expect(mockBatchAddNodesAndEdges).not.toHaveBeenCalled()
   })
@@ -150,7 +150,7 @@ describe("handleCreateNodesFromWriter", () => {
     handleCreateNodesFromWriter("w1")
 
     expect(mockToastError).toHaveBeenCalledWith(
-      "No generated prompts to create nodes from. Run the Prompt node first.",
+      "No generated prompts to create nodes from. Run the Generate Text - Any LLM node first.",
     )
     expect(mockBatchAddNodesAndEdges).not.toHaveBeenCalled()
   })

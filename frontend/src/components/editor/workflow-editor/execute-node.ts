@@ -5424,7 +5424,7 @@ function executeNodeCore(
         )?.generatedResults?.[0];
         updateNodeData(node.id, {
           executionStatus: "failed",
-          errorMessage: err.message || "Prompt failed",
+          errorMessage: err.message || "Generate Text failed",
           generatedText: lastGood?.text ?? "",
           ...(lastGood ? { activeResultIndex: 0 } : {}),
         });

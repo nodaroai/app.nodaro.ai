@@ -56,8 +56,8 @@ describe("getNodeTypeDisplayName", () => {
     expect(getNodeTypeDisplayName("audio-isolation")).toBe("Voice Extractor")
   })
 
-  it("returns the hardcoded name for 'llm-chat' (Prompt, formerly Generate Text)", () => {
-    expect(getNodeTypeDisplayName("llm-chat")).toBe("Prompt")
+  it("returns the hardcoded name for 'llm-chat' (Generate Text - Any LLM; formerly Prompt, before that Generate Text)", () => {
+    expect(getNodeTypeDisplayName("llm-chat")).toBe("Generate Text - Any LLM")
   })
 
   it("returns the hardcoded name for 'image-to-text' (Describe Image)", () => {

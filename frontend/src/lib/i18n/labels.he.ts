@@ -135,6 +135,7 @@ const NODE_LABELS_HE: Record<string, string> = {
   "Describe Image": "תיאור תמונה",
   "Describe to Picker": "תיאור לבורר",
   "Generate Text": "יצירת טקסט",
+  "Generate Text - Any LLM": "יצירת טקסט - כל LLM",
   "Prompt": "פרומפט",
   // Processing
   "Combine Videos": "שילוב סרטונים",

@@ -113,7 +113,7 @@ const NODE_TYPE_DISPLAY_NAMES: Record<string, string> = {
   "transcribe": "Transcribe",
   "image-to-text": "Describe Image",
   "describe-to-picker": "Describe to Picker",
-  "llm-chat": "Prompt",
+  "llm-chat": "Generate Text - Any LLM",
   "combine-videos": "Combine Videos",
   "apply-edl": "Apply EDL",
   "edit-plan": "Edit Plan",

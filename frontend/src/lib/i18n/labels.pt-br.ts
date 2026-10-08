@@ -132,6 +132,7 @@ const NODE_LABELS_PT_BR: Record<string, string> = {
   "Describe Image": "Descrever imagem",
   "Describe to Picker": "Descrever para seletor",
   "Generate Text": "Gerar texto",
+  "Generate Text - Any LLM": "Gerar texto - qualquer LLM",
   "Prompt": "Prompt",
   "Combine Videos": "Combinar vídeos",
   "Assemble Narrated Video": "Montar vídeo narrado",

@@ -38,10 +38,10 @@ describe("Prompt node naming", () => {
   const option = NODE_OPTIONS.find((o) => o.type === "llm-chat")
   const definition = NODE_DEFINITIONS.find((d) => d.type === "llm-chat")
 
-  it("is labeled Prompt in the picker and on a fresh node", () => {
-    expect(option?.label).toBe("Prompt")
-    expect(definition?.label).toBe("Prompt")
-    expect((definition?.defaultData as { label?: string } | undefined)?.label).toBe("Prompt")
+  it("is labeled Generate Text - Any LLM in the picker and on a fresh node (decided 2026-10-08)", () => {
+    expect(option?.label).toBe("Generate Text - Any LLM")
+    expect(definition?.label).toBe("Generate Text - Any LLM")
+    expect((definition?.defaultData as { label?: string } | undefined)?.label).toBe("Generate Text - Any LLM")
   })
 
   it("is searchable by its former name and by llm", () => {

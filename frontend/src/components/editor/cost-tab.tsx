@@ -28,7 +28,7 @@ const NODE_TYPE_LABELS: Record<string, string> = {
   "text-to-audio": "Text to Audio",
   "transcribe": "Transcribe",
   "ai-writer": "AI Agent",
-  "llm-chat": "Prompt",
+  "llm-chat": "Generate Text - Any LLM",
   "combine-videos": "Combine Videos",
   "merge-video-audio": "Merge Video & Audio",
   "still-to-video": "Still to Video",

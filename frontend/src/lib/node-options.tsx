@@ -740,13 +740,14 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
   },
   {
     type: "llm-chat",
-    label: "Prompt",
+    label: "Generate Text - Any LLM",
     icon: <MessageSquare className="h-4 w-4" />,
     category: "AI",
     group: "automate-text",
-    // The node was called "Generate Text" until Sept 2026 — keep the old
-    // name and the model-family words searchable.
-    keywords: ["generate text", "llm", "ai text", "chat", "gpt", "claude", "gemini", "writer"],
+    // Named "Generate Text" until Sept 2026, "Prompt" until 2026-10-08 (renamed
+    // to "Generate Text - Any LLM", decided that day) — keep both old names and
+    // the model-family words searchable.
+    keywords: ["generate text", "prompt", "llm", "any llm", "ai text", "chat", "gpt", "claude", "gemini", "grok", "kimi", "deepseek", "writer"],
   },
   {
     type: "transcribe",

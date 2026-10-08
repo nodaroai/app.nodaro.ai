@@ -1,9 +1,9 @@
-# Prompt
+# Generate Text - Any LLM
 > LLM text generation from a prompt, with optional image/video/audio reference inputs, real-time streaming, and a built-in fan-out item list.
 
 ## Overview
 
-The Prompt node (`llm-chat`, labeled "Prompt" on the canvas; called "Generate Text" until September 2026) generates text from a prompt using a selectable LLM, with optional system instructions. It supports real-time token streaming and can reference upstream node outputs in its prompt via field mappings, making it a flexible text-generation and transformation step in any workflow.
+The Generate Text - Any LLM node (`llm-chat`; labeled "Prompt" from September 2026 until October 2026, and "Generate Text" before that) generates text from a prompt using a selectable LLM, with optional system instructions. It supports real-time token streaming and can reference upstream node outputs in its prompt via field mappings, making it a flexible text-generation and transformation step in any workflow.
 
 It can also accept **reference inputs** on the multi-modal **References** handle (its own fuchsia pip) — an image, video, audio clip, **or text** — for multimodal prompting (e.g. "describe this image", "summarize this clip"). Image/video/audio references are routed to the model as reference media (video and audio require a Gemini model — see [Multimodal inputs](#multimodal-inputs)); a **text** reference is merged into the prompt as added context.
 
