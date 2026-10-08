@@ -696,6 +696,25 @@ jobs:
         run: node tools/check-private-leaks.mjs
       - name: Check published package manifests declare real @nodaro/* ranges
         run: node tools/check-published-manifests.mjs
+      - name: Install the image's Caddy (for the Caddyfile tests)
+        # The Caddyfile tests run the real config and skip without a binary —
+        # one guards that no file URL ever answers with the SPA's HTML. The
+        # version and checksum are read from the Dockerfile, so CI tests the
+        # Caddy production runs.
+        run: |
+          version=$(sed -n 's/^ARG CADDY_VERSION=//p' Dockerfile)
+          sha512=$(sed -n 's/^ARG CADDY_SHA512_AMD64=//p' Dockerfile)
+          if [ -z "$version" ] || [ -z "$sha512" ]; then
+            echo "::error::CADDY_VERSION / CADDY_SHA512_AMD64 not found in the Dockerfile"
+            exit 1
+          fi
+          dir="$RUNNER_TEMP/caddy"
+          mkdir -p "$dir"
+          curl -fsSL --retry 3 "https://github.com/caddyserver/caddy/releases/download/v${version}/caddy_${version}_linux_amd64.tar.gz" -o "$dir/caddy.tar.gz"
+          echo "${sha512}  $dir/caddy.tar.gz" | sha512sum -c -
+          tar -xzf "$dir/caddy.tar.gz" -C "$dir" caddy
+          "$dir/caddy" version
+          echo "$dir" >> "$GITHUB_PATH"
       - name: Tool self-tests (tools/__tests__)
         run: node --test tools/__tests__/*.test.mjs
       - name: Check no provider key is frozen at construction/import (keys are live)

@@ -295,6 +295,10 @@ describe("deleteFromR2", () => {
     await expect(deleteFromR2(`${prefix}/00000000-0000-4000-8000-000000000001`)).rejects.toThrow("cannot be deleted")
     expect(mocks.deleteCalls).toHaveLength(0)
   })
+  it("skips a past build's styling file — never deleted, and never a refusal that stops a sweep", async () => {
+    await expect(deleteFromR2("site-assets/assets/index-Dz56B_55.css")).resolves.toBeUndefined()
+    expect(mocks.deleteCalls).toHaveLength(0)
+  })
   it("calls send with DeleteObjectCommand params", async () => {
     await deleteFromR2("images/old.png")
 
@@ -330,6 +334,16 @@ describe("batchDeleteFromR2", () => {
     await expect(batchDeleteFromR2(["images/ordinary.png", "retained-images/00000000-0000-4000-8000-000000000001"]))
       .rejects.toThrow("cannot be deleted")
     expect(mocks.deleteObjectsCalls).toHaveLength(0)
+  })
+  it("deletes the rest of a batch and leaves past builds' styling files where they are", async () => {
+    mocks.mockSend.mockResolvedValueOnce({ Deleted: [{ Key: "images/a.png" }], Errors: [] })
+    const result = await batchDeleteFromR2(["images/a.png", "site-assets/assets/index-Dz56B_55.css"])
+    expect(result).toEqual({ deleted: 1, errors: 0 })
+    expect(mocks.deleteObjectsCalls).toEqual([expect.objectContaining({ Delete: { Objects: [{ Key: "images/a.png" }] } })])
+  })
+  it("a batch of only archived styling files sends nothing", async () => {
+    expect(await batchDeleteFromR2(["site-assets/assets/index-Dz56B_55.css"])).toEqual({ deleted: 0, errors: 0 })
+    expect(mocks.mockSend).not.toHaveBeenCalled()
   })
   it("returns zeroes for empty array without calling send", async () => {
     const result = await batchDeleteFromR2([])

@@ -189,6 +189,10 @@ const PUBLIC_ROUTES: { method?: string; path: string; prefix?: boolean; bearer?:
   { path: "/v1/image-proxy" },
   // Bundled overlay fonts for the canvas preview — static, immutable, no user data.
   { method: "GET", path: "/v1/fonts", prefix: true },
+  // Past builds' styling files (routes/site-assets.ts) — public like the site's own
+  // /assets/*; HEAD too, since a probe reads headers only.
+  { method: "GET", path: "/v1/site-assets/", prefix: true },
+  { method: "HEAD", path: "/v1/site-assets/", prefix: true },
   { path: "/v1/credits/model-cost" },
   { path: "/v1/credits/model-costs" },
   { path: "/v1/download-video/progress", prefix: true },

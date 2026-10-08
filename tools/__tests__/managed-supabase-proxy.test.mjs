@@ -39,7 +39,8 @@ test("managed Supabase proxy preserves HTTP requests and WebSocket upgrades; bun
       child.stderr.on("data", data => { logs += data })
       const exited = new Promise(resolve => child.once("exit", resolve))
       try {
-        for (let attempt = 0; attempt < 50; attempt++) {
+        // Up to 5 s for Caddy to listen, as app-search-indexing.test.mjs gives it: CI's tools job has one CPU.
+        for (let attempt = 0; attempt < 100; attempt++) {
           try { await fetch(`http://127.0.0.1:${port}/config.js`); break } catch {
             if (child.exitCode !== null) assert.fail(logs)
             await new Promise(resolve => setTimeout(resolve, 50))

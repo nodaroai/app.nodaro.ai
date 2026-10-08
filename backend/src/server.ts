@@ -28,6 +28,7 @@ import { assertClientAddressConfig, describeClientAddressConfig } from "./lib/cl
 import { watchProviderCredentials } from "./providers/index.js"
 import { warmHeygenCatalog } from "./providers/heygen/catalog.js"
 import { ensureStorageBucket } from "./lib/storage.js"
+import { archiveThisBuild } from "./lib/site-asset-archive.js"
 import { initTelegramRoutingTable } from "./lib/telegram-router.js"
 import { pipelineEvents } from "./ee/pipelines/events.js"
 
@@ -93,6 +94,11 @@ async function main() {
   // there. Fire-and-forget: tutorials are not worth delaying boot for, and the
   // seeder swallows its own failures.
   void seedTutorialTemplates()
+
+  // This build's styling files into the archive of past builds, so pages it
+  // served keep their stylesheet after the next deploy. Background, one log
+  // line, never throws; a no-op unless the archive is on.
+  void archiveThisBuild((message) => app.log.info(message))
 
   // Operator-supplied provider keys (pasted on /setup, stored encrypted).
   // The API process reads keys too (LLM lanes, setup status) and is where

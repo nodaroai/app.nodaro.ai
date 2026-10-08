@@ -71,6 +71,7 @@ import { applyEdlRoutes } from "./routes/apply-edl.js"
 import { imageCollageRoutes } from "./routes/image-collage.js"
 import { imageOverlayRoutes } from "./routes/image-overlay.js"
 import { fontRoutes } from "./routes/fonts.js"
+import { siteAssetRoutes } from "./routes/site-assets.js"
 import { imageOverlayPlacementRoutes } from "./routes/image-overlay-placement.js"
 import { assembleNarratedVideoRoutes } from "./routes/assemble-narrated-video.js"
 import { referenceSheetRoutes } from "./routes/reference-sheet.js"
@@ -541,6 +542,7 @@ export async function buildApp() {
   await app.register(imageCollageRoutes)
   await app.register(imageOverlayRoutes)
   await app.register(fontRoutes)
+  await app.register(siteAssetRoutes)
   await app.register(imageOverlayPlacementRoutes)
   await app.register(assembleNarratedVideoRoutes)
   await app.register(referenceSheetRoutes)
