@@ -85,7 +85,9 @@ import {
   nodaroExclusiveRelayHandlers,
   isNodaroExclusiveJobType,
   finalizeExclusiveCloudOutput,
+  relayPollBudgetMs,
 } from "../nodaro-exclusive-relay.js"
+import { BUDGETED_JOB_NAMES, declaredJobBudgetMs, nodeCeilings } from "../../../lib/job-budget.js"
 import { editPlanModeRefusalMessage, editPlanModesOf, withEditPlanModeGate } from "../../../lib/private-plugins/edit-plan-mode-gate.js"
 import {
   plannableEditPlanModes,
@@ -1036,5 +1038,38 @@ describe("finalizeExclusiveCloudOutput — speaker-view copies under the finaliz
       claimant: "cron",
     })
     expect(mocks.finalizeJobWithMedia).toHaveBeenCalledWith(expect.objectContaining({ claimant: "cron" }))
+  })
+})
+
+/**
+ * The relay's poll budget reads the job-budget REGISTRY, never a list of its
+ * own: a job type that declares a budget (a plugin's long job — speaker-view,
+ * and speaker-frames once its node relays) polls for the orchestrator's
+ * ceiling for it, less the margin, so a 3-hour source relayed from a self-host
+ * install is not given up at 85 minutes while nodaro.ai is still working.
+ */
+describe("relayPollBudgetMs — every budgeted job type polls for its own declared budget", () => {
+  const MIN = 60_000
+  const MARGIN = 5 * MIN
+
+  it("speaker-frames (relayed once its node exists): a bare 3-hour source polls past 85 minutes", () => {
+    const payload = { videoUrl: "https://f.test/episode.mp4" }
+    expect(BUDGETED_JOB_NAMES).toContain("speaker-frames")
+    expect(relayPollBudgetMs("speaker-frames", payload)).toBe(nodeCeilings(declaredJobBudgetMs("speaker-frames", payload)).processingMs - MARGIN)
+    expect(relayPollBudgetMs("speaker-frames", payload)!).toBeGreaterThan(85 * MIN)
+  })
+
+  it("for every registered budget, readable or not: the same number the orchestrator sizes the node from", () => {
+    for (const name of BUDGETED_JOB_NAMES) {
+      for (const payload of [{}, { edl: "not an edit" }, { videoUrl: "https://f.test/v.mp4" }]) {
+        expect(relayPollBudgetMs(name, payload), name).toBe(nodeCeilings(declaredJobBudgetMs(name, payload)).processingMs - MARGIN)
+      }
+    }
+  })
+
+  it("an unreadable payload keeps the 85-minute default; an unbudgeted type keeps its own table entry", () => {
+    expect(relayPollBudgetMs("speaker-frames", {})).toBe(85 * MIN)
+    expect(relayPollBudgetMs("voice-changer-pro", {})).toBe(30 * MIN)
+    expect(relayPollBudgetMs("edit-plan", {})).toBe(85 * MIN)
   })
 })

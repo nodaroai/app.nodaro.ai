@@ -50,7 +50,7 @@ import { nodaroCloudFetch } from "../../lib/nodaro-connect.js"
 import { INSTANCE_ONLY_FIELDS, rehostIfUrlField } from "../../providers/nodaro/run-on-cloud.js"
 import { relayFieldsFrom, relayResultFields } from "../../providers/nodaro/relay-cost.js"
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
-import { declaredJobBudgetMs, nodeCeilings } from "../../lib/job-budget.js"
+import { BUDGETED_JOB_NAMES, declaredJobBudgetMs, nodeCeilings } from "../../lib/job-budget.js"
 import { checkRehostSizes, rehostSizeMessage, type RehostSizeHit } from "../../lib/rehost-size-check.js"
 import { bringRenderHome } from "./relay-render-home.js"
 
@@ -96,15 +96,19 @@ export function isNodaroExclusiveJobType(jobType: string): boolean {
 }
 
 /**
- * The poll budget of one relayed job. A render is sized by its OWN declared
- * budget (`declaredJobBudgetMs`, the number the orchestrator sizes the node
- * from and the worker's heartbeat beats for): the orchestrator's ceiling for
- * it, less the margin every type keeps — so a 3-hour final is never given up
- * at a fixed 85 minutes while nodaro.ai is still rendering it. A payload the
- * budget cannot read keeps the 85-minute default.
+ * The poll budget of one relayed job. A job type with a REGISTERED budget
+ * (`BUDGETED_JOB_NAMES`: speaker-view, and speaker-frames once its node
+ * relays) is sized by its own declared budget (`declaredJobBudgetMs`, the
+ * number the orchestrator sizes the node from and the worker's heartbeat beats
+ * for): the orchestrator's ceiling for it, less the margin every type keeps —
+ * so a 3-hour source is never given up at a fixed 85 minutes while nodaro.ai is
+ * still working on it. Read off the registry, never a list here, so a budget
+ * registered for a newly relayed type reaches its poll with no second edit. A
+ * payload the budget cannot read keeps the 85-minute default. Every other type
+ * keeps its table entry.
  */
-function pollBudgetMs(jobType: string, payload: Record<string, unknown>): number | undefined {
-  if (jobType === "speaker-view") return nodeCeilings(declaredJobBudgetMs(jobType, payload)).processingMs - POLL_MARGIN_MS
+export function relayPollBudgetMs(jobType: string, payload: Record<string, unknown>): number | undefined {
+  if (BUDGETED_JOB_NAMES.includes(jobType)) return nodeCeilings(declaredJobBudgetMs(jobType, payload)).processingMs - POLL_MARGIN_MS
   return POLL_BUDGET_BY_JOB_TYPE[jobType]
 }
 
@@ -458,7 +462,7 @@ export function makeNodaroExclusiveHandler(jobType: string): HandlerFn {
       async (p) => {
         await setJobProgress(job, ctx.jobId, Math.min(95, Math.max(5, Math.round(p))))
       },
-      { budgetMs: pollBudgetMs(jobType, payload) },
+      { budgetMs: relayPollBudgetMs(jobType, payload) },
     )
     await setJobProgress(job, ctx.jobId, 97)
     const ok = await finalizeExclusiveCloudOutput({

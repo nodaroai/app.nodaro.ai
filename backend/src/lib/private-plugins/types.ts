@@ -872,6 +872,11 @@ export interface PluginVideoProxyOptions {
   readonly height?: number
   /** Omitted = the whole source. Padding (the 2 s detection margin) is the caller's. */
   readonly spans?: readonly PluginProxySpan[]
+  /** Per-spawn ffmpeg timeout (ms). Omitted: each span's encode runs at a
+   *  ceiling sized by its length, the whole source and the join at the
+   *  proxy's ~3h ceiling. ANY value replaces all of them, the per-span
+   *  ceilings included — a handler charged by a per-span budget
+   *  (`speaker-frames-budget.ts`) must leave it unset. */
   readonly timeoutMs?: number
 }
 

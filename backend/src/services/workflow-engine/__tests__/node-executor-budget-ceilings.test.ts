@@ -118,6 +118,7 @@ import { NODE_TIMEOUT_MS, POLL_ABSOLUTE_TIMEOUT_MS } from "../types.js"
 import type { SimpleNode, OrchestratorContext, ResolvedInputs } from "../types.js"
 import { BUDGETED_JOB_NAMES, declaredJobBudgetMs } from "../../../lib/job-budget.js"
 import { VIDEO_PRODUCER_TYPES } from "@nodaro/shared"
+import { NODARO_EXCLUSIVE_NODE_TYPES } from "../../../lib/cloud-only-nodes.js"
 import { applyEdlRenderBudgetMs } from "../../../providers/video/apply-edl-budget.js"
 import { audioSyncRenderBudgetMs } from "../../../providers/audio/audio-sync-budget.js"
 
@@ -446,8 +447,24 @@ describe("every registered budgeted job is dispatched under its node type's own 
     }),
   }
 
+  // A budgeted job registered before its node exists: Speaker Frames' budget
+  // (P3.3b) ships ahead of its handler (P3.4) so the worker beats for it from
+  // its first job; the node, and with it this dispatch fixture, lands in P3.6.
+  // The tripwire: P3.6 makes `speaker-frames` a Nodaro-exclusive node (step
+  // 22a), and then this exception fails until the fixture replaces it.
+  const AWAITING_NODE: Record<string, string> = { "speaker-frames": "Speaker Frames' node (P3.6)" }
+
+  it("a budget awaiting its node is not a node yet", () => {
+    for (const [name, why] of Object.entries(AWAITING_NODE)) {
+      expect(BUDGETED_JOB_NAMES, name).toContain(name)
+      expect(NODARO_EXCLUSIVE_NODE_TYPES.has(name), `${name} is a node now — add its dispatch fixture and drop it from AWAITING_NODE (${why})`).toBe(false)
+      expect(FIXTURES[name], name).toBeUndefined()
+    }
+  })
+
   it("has a dispatch fixture for every registered name, and each dispatches as its node type", async () => {
     for (const name of BUDGETED_JOB_NAMES) {
+      if (name in AWAITING_NODE) continue
       const make = FIXTURES[name]
       expect(make, `add a dispatch fixture for budgeted job "${name}"`).toBeTypeOf("function")
       mockVideoAdd.mockClear()

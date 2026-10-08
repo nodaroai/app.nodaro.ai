@@ -26,6 +26,22 @@ vi.mock("../supabase.js", () => {
 vi.mock("../config.js", () => {
   throw new Error("the job-budget leaf must not load config")
 })
+// Speaker Frames' runtime: the detector (onnxruntime, the decode) and the media proxy.
+vi.mock("onnxruntime-node", () => {
+  throw new Error("the job-budget leaf must not load onnxruntime")
+})
+vi.mock("../../services/face-detect/detect-faces.js", () => {
+  throw new Error("the job-budget leaf must not load the face detector")
+})
+vi.mock("../../services/face-detect/yunet-session.js", () => {
+  throw new Error("the job-budget leaf must not load the detector session")
+})
+vi.mock("../../services/media-proxy.js", () => {
+  throw new Error("the job-budget leaf must not load the media proxy")
+})
+vi.mock("../../services/video-proxy-encode.js", () => {
+  throw new Error("the job-budget leaf must not load the proxy encode")
+})
 
 describe("job-budget import graph", () => {
   it("the registry and the apply-edl budget leaf load without the ffmpeg runtime, storage, supabase or config", async () => {
@@ -58,5 +74,17 @@ describe("the speaker-view budget leaf", () => {
     const registry = await import("../job-budget.js")
     expect(typeof leaf.speakerViewJobBudgetMs).toBe("function")
     expect(registry.BUDGETED_JOB_NAMES).toContain("speaker-view")
+  })
+})
+
+// Speaker Frames' handler is the private plugin's; its runtime is the media
+// proxy and the face detector (onnxruntime-node). The mocks above throw on any
+// of them: the registry reaches its budget through the pure leaf only.
+describe("the speaker-frames budget leaf", () => {
+  it("the registry reaches speaker-frames' budget without loading the proxy, the detector or onnxruntime", async () => {
+    const leaf = await import("../../providers/video/speaker-frames-budget.js")
+    const registry = await import("../job-budget.js")
+    expect(typeof leaf.speakerFramesJobBudgetMs).toBe("function")
+    expect(registry.BUDGETED_JOB_NAMES).toContain("speaker-frames")
   })
 })

@@ -38,7 +38,11 @@
 import { promises as fs } from "node:fs"
 import { join } from "node:path"
 import { probeVideoFramePtsMs as framePtsMs, runFfmpeg, runFfprobe } from "../providers/video/ffmpeg-utils.js"
-import { MEDIA_PROXY_FFMPEG_TIMEOUT_MS } from "../providers/video/ffmpeg-timeouts.js"
+import {
+  MEDIA_PROXY_FFMPEG_TIMEOUT_MS,
+  proxySpanEncodeTimeoutMs,
+  proxySpanProbeTimeoutMs,
+} from "../providers/video/ffmpeg-timeouts.js"
 import { audioPeakMemoryMiB, canvasPeakMemoryMiB } from "../providers/video/ffmpeg-memory-model.js"
 import { ffmpegEffectiveThreads } from "../providers/video/ffmpeg-threads.js"
 import { DeterministicJobError } from "../lib/deterministic-job-error.js"
@@ -59,7 +63,9 @@ export interface VideoProxyEncodeOptions {
   readonly height: number
   /** Normalized spans (`normalizeProxySpans`); undefined = the whole source. */
   readonly spans?: readonly ProxySpan[]
-  /** Per-spawn ffmpeg timeout. */
+  /** Per-spawn ffmpeg timeout, overriding every spawn's own: a span's encode is
+   *  otherwise bounded by its length (`proxySpanEncodeTimeoutMs`), the whole
+   *  source and the join by `MEDIA_PROXY_FFMPEG_TIMEOUT_MS`. */
   readonly timeoutMs?: number
 }
 
@@ -121,12 +127,15 @@ export async function encodeVideoProxy(src: string, workDir: string, opts: Video
   const segments: Array<EncodedProxySegment & { readonly path: string }> = []
   for (const [i, span] of spans.entries()) {
     const path = join(workDir, `seg-${String(i).padStart(4, "0")}.mp4`)
+    // A span is bounded by its own length; the whole source (length unknown) by the proxy's ceiling.
+    const spanMs = span ? span.endMs - span.startMs : undefined
     await runFfmpeg(
       ["-y", ...cutArgs(span), "-i", src, "-an", "-vf", pictureFilter(opts.fps, opts.height, span), ...ENCODE, path],
-      timeoutMs,
+      opts.timeoutMs ?? (spanMs === undefined ? timeoutMs : proxySpanEncodeTimeoutMs(spanMs)),
       { peakMemoryMiB: encodePeak },
     )
-    segments.push({ path, seekMs: span?.startMs ?? 0, framePtsMs: await framePtsMs(path) })
+    const pts = spanMs === undefined ? await framePtsMs(path) : await framePtsMs(path, proxySpanProbeTimeoutMs(spanMs))
+    segments.push({ path, seekMs: span?.startMs ?? 0, framePtsMs: pts })
   }
 
   const written = segments.filter((s) => s.framePtsMs.length > 0)

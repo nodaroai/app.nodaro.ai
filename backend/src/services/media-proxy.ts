@@ -106,7 +106,13 @@ export interface MediaProxyOptions {
   /** Video only: sample just these stretches of the source (ms, source clock).
    *  Omitted = the whole source. Normalized (sorted, merged) before keying. */
   readonly spans?: readonly ProxySpan[]
-  /** Override the per-spawn ffmpeg timeout (ms). Default handles a ~3h source. */
+  /** Override the per-spawn ffmpeg timeout (ms). Without it, an audio proxy, a
+   *  whole-source video proxy and a span proxy's join run at
+   *  `MEDIA_PROXY_FFMPEG_TIMEOUT_MS` (a ~3h source), and each span of a
+   *  span-scoped video proxy at its own length-sized ceiling
+   *  (`proxySpanEncodeTimeoutMs`). ANY value replaces all of those, the
+   *  per-span ceilings included, so a caller whose budget counts per-span
+   *  ceilings (`speaker-frames-budget.ts`) must not pass one. */
   readonly timeoutMs?: number
 }
 

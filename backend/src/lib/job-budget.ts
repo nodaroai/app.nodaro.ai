@@ -57,11 +57,20 @@
  * (`providers/video/speaker-view-budget.ts`). Until the Speaker View node
  * exists (C3.2) only the worker reads it; the node's dispatch fixture joins
  * `node-executor-budget-ceilings.test.ts` then.
+ *
+ * speaker-frames joins with P3.3b, ahead of its plugin handler (P3.4): the same
+ * dispatch fallback, with an upper bound summed from the kill ceilings of its
+ * steps — the detection proxy per source, one admission hold per detection
+ * window, and the in-process work the box cap bounds
+ * (`providers/video/speaker-frames-budget.ts`). Until its node exists (P3.6)
+ * only the worker reads it; `node-executor-budget-ceilings.test.ts` lists it as
+ * awaiting its node.
  * Pure: imports only the budget leaves and the engine's constants.
  */
 import { applyEdlJobBudgetMs } from "../providers/video/apply-edl-budget.js"
 import { audioSyncJobBudgetMs } from "../providers/audio/audio-sync-budget.js"
 import { silenceDetectJobBudgetMs } from "../providers/audio/silence-detect-budget.js"
+import { speakerFramesJobBudgetMs } from "../providers/video/speaker-frames-budget.js"
 import { speakerViewJobBudgetMs } from "../providers/video/speaker-view-budget.js"
 import {
   NODE_TIMEOUT_MS,
@@ -76,6 +85,7 @@ const DECLARED_JOB_BUDGETS: Readonly<Record<string, JobBudgetFn>> = Object.freez
   "apply-edl": applyEdlJobBudgetMs,
   "audio-sync": audioSyncJobBudgetMs,
   "silence-detect": silenceDetectJobBudgetMs,
+  "speaker-frames": speakerFramesJobBudgetMs,
   "speaker-view": speakerViewJobBudgetMs,
 })
 
