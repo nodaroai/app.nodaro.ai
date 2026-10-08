@@ -711,6 +711,54 @@ describe("POST /v1/api/run — token runs are PERSONAL-ONLY (P9 doctrine, enforc
   })
 })
 
+describe("GET /v1/api/status and /v1/api/result — a key limited to some workflows", () => {
+  // This lane resolves the key itself, so it holds the limit on its own too:
+  // the guard in front of it cannot, when the auth hook could not read the key.
+  const ALLOWED = "00000000-0000-4000-8000-0000000000a7"
+  const OTHER = "00000000-0000-4000-8000-0000000000b7"
+  const RUN = "00000000-0000-4000-8000-0000000000e7"
+
+  function runOf(workflowId: string) {
+    mockResolveToken.mockResolvedValue({
+      id: TEST_TOKEN_ID,
+      userId: TEST_USER_ID,
+      workflowIds: [ALLOWED],
+      rateLimit: 60,
+      tokenHash: "th-limited",
+      workspaceId: null,
+    })
+    vi.mocked(supabase.from).mockImplementation(() => {
+      const chain: Record<string, unknown> = {}
+      for (const m of ["select", "eq", "in", "is", "order", "limit"]) chain[m] = vi.fn().mockReturnValue(chain)
+      chain.single = vi.fn().mockResolvedValue({
+        data: { id: RUN, workflow_id: workflowId, status: "completed", node_states: {}, total_credits_used: 0, nodes: [], edges: [] },
+        error: null,
+      })
+      return chain as never
+    })
+  }
+
+  function get(path: string) {
+    return app.inject({ method: "GET", url: path, headers: { authorization: "Bearer ndr_test_token" } })
+  }
+
+  it("refuses a run of another workflow, on both routes", async () => {
+    runOf(OTHER)
+    for (const path of [`/v1/api/status/${RUN}`, `/v1/api/result/${RUN}`]) {
+      const res = await get(path)
+      expect(res.statusCode, path).toBe(403)
+      expect(res.json().error.code).toBe("forbidden")
+      expect(res.json().error.message).toContain("limited to specific workflows")
+    }
+  })
+
+  it("answers for a run of one of its workflows", async () => {
+    runOf(ALLOWED)
+    expect((await get(`/v1/api/status/${RUN}`)).statusCode).toBe(200)
+    expect((await get(`/v1/api/result/${RUN}`)).statusCode).toBe(200)
+  })
+})
+
 describe("POST /v1/api/run — the override lock (issue #1555)", () => {
   const WORKFLOW_ID = "00000000-0000-4000-8000-000000000042"
 
@@ -763,6 +811,23 @@ describe("POST /v1/api/run — the override lock (issue #1555)", () => {
     })
     expect(byLabel.statusCode).toBe(400)
     expect(byLabel.json().error.code).toBe("locked_field")
+    expect(mockOrchestrationQueueAdd).not.toHaveBeenCalled()
+  })
+
+  it("refuses an input that re-points a Sub-workflow node at another workflow — 400 locked_field, nothing enqueued", async () => {
+    mockTokenRunWithGraph([
+      { id: "sub-1", type: "sub-workflow", data: { label: "Intro", workflowId: "00000000-0000-4000-8000-0000000000c1" } },
+    ])
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/api/run",
+      headers: { authorization: "Bearer ndr_test_token" },
+      payload: { workflowId: WORKFLOW_ID, inputs: { Intro: { workflowId: "00000000-0000-4000-8000-0000000000c2" } } },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("locked_field")
+    expect(res.json().error.message).toContain('"workflowId" on node "sub-1"')
     expect(mockOrchestrationQueueAdd).not.toHaveBeenCalled()
   })
 

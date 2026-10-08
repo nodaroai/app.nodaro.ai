@@ -22,12 +22,19 @@
  * `UGC_OVERRIDABLE_FIELDS` (`@nodaro/shared`): a runner may choose a creator's
  * source, gender and photo and a script's length, but may never inject a run's
  * state (a kept creator, a plan, a clip ticket) into the publisher's graph.
+ *
+ * Nor may a run request re-point a Sub-workflow node (`SUB_WORKFLOW_REFERENCE_FIELDS`):
+ * which workflow it runs, and which part of it, is the workflow's own choice.
+ * Otherwise one workflow could be made to run any other of its owner's and
+ * hand back the result, to a published app's stranger or to a personal API
+ * key limited to that one workflow.
  */
 
 import { findUgcLockedFields, videoLinkInputProblem } from "@nodaro/shared"
 import { safeUrlSchema } from "./url-validator.js"
 import {
   DENIED_NODE_TYPES,
+  MAX_LOCK_WALK_DEPTH,
   OUTBOUND_SELECTOR_FIELDS,
   isPlainObject,
   lockedFieldPaths,
@@ -38,8 +45,29 @@ export interface LockedOverride {
   readonly nodeType: string
   /** Dotted path of the refused field inside the node's override map. */
   readonly field: string
-  /** Why it is refused. Absent means an outbound-node destination. `video-link`: a Video URL node's link that is not one it would download. */
-  readonly kind?: "outbound" | "ugc" | "video-link"
+  /** Why it is refused. Absent means an outbound-node destination. `video-link`: a Video URL node's link that is not one it would download. `sub-workflow`: what a Sub-workflow node runs. */
+  readonly kind?: "outbound" | "ugc" | "video-link" | "sub-workflow"
+}
+
+/**
+ * What a Sub-workflow node runs: the workflow it names, the route it picked,
+ * and the slice of that workflow the route covers (`subWorkflowReference` and
+ * `loadSubWorkflowGraph` in services/workflow-engine/sub-workflow-handler.ts).
+ * Refused at any depth, so `fieldMappings.workflowId` (the run-time wire that
+ * writes a node's field) counts like the field itself.
+ */
+const SUB_WORKFLOW_REFERENCE_FIELDS: ReadonlySet<string> = new Set(["workflowId", "selectedRouteId", "routeSnapshot"])
+
+/** Every path in a Sub-workflow node's override map that reaches a reference
+ *  field; too deep to walk is refused too (fail closed, as `lockedFieldPaths`). */
+function subWorkflowReferencePaths(value: unknown, path: string, depth: number): string[] {
+  if (depth > MAX_LOCK_WALK_DEPTH) return [path]
+  if (Array.isArray(value)) return value.flatMap((item, i) => subWorkflowReferencePaths(item, `${path}[${i}]`, depth + 1))
+  if (!isPlainObject(value)) return []
+  return Object.entries(value).flatMap(([key, inner]) => {
+    const here = path ? `${path}.${key}` : key
+    return SUB_WORKFLOW_REFERENCE_FIELDS.has(key) ? [here] : subWorkflowReferencePaths(inner, here, depth + 1)
+  })
 }
 
 /**
@@ -108,6 +136,17 @@ export function findLockedOverrides(
   for (const node of nodes) {
     if (!node) continue
     const nodeType = node.type
+    if (nodeType === "sub-workflow") {
+      const fields = inputOverrides[node.id]
+      const nodeId = String(node.id)
+      for (const field of isPlainObject(fields) ? subWorkflowReferencePaths(fields, "", 0) : []) {
+        const key = `${nodeId}\u0000${field}`
+        if (seen.has(key)) continue
+        seen.add(key)
+        found.push({ nodeId, nodeType, field, kind: "sub-workflow" })
+      }
+      continue
+    }
     if (typeof nodeType !== "string" || !DENIED_NODE_TYPES.has(nodeType)) continue
     const fields = inputOverrides[node.id]
     if (!isPlainObject(fields)) continue
@@ -172,9 +211,11 @@ function clip(value: string, max: number): string {
 export function describeLockedOverrides(locked: ReadonlyArray<LockedOverride>): string {
   const shown = locked.slice(0, MESSAGE_MAX_ENTRIES)
   const rest = locked.length - shown.length
-  const outbound = shown.filter((entry) => entry.kind !== "ugc" && entry.kind !== "video-link")
+  const outbound = shown.filter((entry) => entry.kind === undefined || entry.kind === "outbound")
   const ugc = shown.filter((entry) => entry.kind === "ugc")
   const videoLink = shown.filter((entry) => entry.kind === "video-link")
+  const subWorkflow = shown.filter((entry) => entry.kind === "sub-workflow")
+  const otherSentences = ugc.length > 0 || videoLink.length > 0 || subWorkflow.length > 0
   const parts: string[] = []
   if (outbound.length > 0) {
     const list =
@@ -183,7 +224,7 @@ export function describeLockedOverrides(locked: ReadonlyArray<LockedOverride>): 
           (entry) =>
             `"${clip(entry.field, MESSAGE_MAX_PATH_CHARS)}" on ${entry.nodeType} node "${clip(entry.nodeId, MESSAGE_MAX_PATH_CHARS)}"`,
         )
-        .join(", ") + (ugc.length === 0 && videoLink.length === 0 && rest > 0 ? `, and ${rest} more` : "")
+        .join(", ") + (!otherSentences && rest > 0 ? `, and ${rest} more` : "")
     parts.push(
       "inputOverrides cannot set a destination — or the selector that chooses one — on an outbound node: " +
         `where a workflow sends to or fetches from is decided by the workflow itself, not by a run request. Refused: ${list}`,
@@ -200,8 +241,17 @@ export function describeLockedOverrides(locked: ReadonlyArray<LockedOverride>): 
         "YouTube, TikTok, Instagram, Facebook or X video, or any other public web link (http or https, a public address).",
     )
   }
+  if (subWorkflow.length > 0) {
+    const list = subWorkflow
+      .map((entry) => `"${clip(entry.field, MESSAGE_MAX_PATH_CHARS)}" on node "${clip(entry.nodeId, MESSAGE_MAX_PATH_CHARS)}"`)
+      .join(", ")
+    parts.push(
+      "inputOverrides cannot change which workflow a Sub-workflow node runs, or which part of it: " +
+        `that is decided by the workflow itself, not by a run request. Refused: ${list}`,
+    )
+  }
   // With another sentence in the message the overflow cannot ride on the outbound list.
-  if ((ugc.length > 0 || videoLink.length > 0) && rest > 0) parts.push(`${rest} more refused.`)
+  if (otherSentences && rest > 0) parts.push(`${rest} more refused.`)
   return parts.join(" ")
 }
 

@@ -72,7 +72,7 @@ openApiRegistry.registerPath({
 })
 
 export async function workflowRenderFinalRoutes(app: FastifyInstance) {
-  app.post("/v1/workflows/:id/render-final/estimate", async (req, reply) => {
+  app.post("/v1/workflows/:id/render-final/estimate", { config: { workflowScope: { workflowParam: "id" } } }, async (req, reply) => {
     if (!req.userId) {
       return reply.status(401).send({ error: { code: "unauthorized", message: "Authentication required" } })
     }

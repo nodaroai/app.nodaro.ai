@@ -39,6 +39,7 @@ import { getInputNodes, getOutputNodes, getOutputType, getNodeLabel, getInputFie
 import type { PresentationItem, GenericNode, GenericEdge } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 import { describeLockedOverrides, findLockedOverrides } from "../lib/input-override-lock.js"
+import { refuseLimitedKey } from "../middleware/token-workflow-scope.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { deletedNothing, sendNotFound } from "../lib/scoped-delete.js"
 
@@ -501,7 +502,7 @@ export async function apiTokenRoutes(app: FastifyInstance) {
     })
 
     // --- List workflows ---
-    api.get("/v1/api/workflows", async (req, reply) => {
+    api.get("/v1/api/workflows", { config: { workflowScope: "handler" } }, async (req, reply) => {
       const resolved = req.apiToken!
 
       if (!checkApiRateLimit(resolved.tokenHash, resolved.rateLimit)) {
@@ -600,7 +601,7 @@ export async function apiTokenRoutes(app: FastifyInstance) {
     })
 
     // --- Schema ---
-    api.get("/v1/api/schema", async (req, reply) => {
+    api.get("/v1/api/schema", { config: { workflowScope: "handler" } }, async (req, reply) => {
       const resolved = req.apiToken!
 
       const queryParsed = schemaQuery.safeParse(req.query)
@@ -614,9 +615,7 @@ export async function apiTokenRoutes(app: FastifyInstance) {
 
       // Check workflow scoping
       if (resolved.workflowIds.length > 0 && !resolved.workflowIds.includes(workflowId)) {
-        return reply.status(403).send({
-          error: { code: "forbidden", message: "Token not authorized for this workflow" },
-        })
+        return refuseLimitedKey(reply)
       }
 
       // Load workflow
@@ -724,7 +723,7 @@ export async function apiTokenRoutes(app: FastifyInstance) {
     })
 
     // --- Run workflow ---
-    api.post("/v1/api/run", async (req, reply) => {
+    api.post("/v1/api/run", { config: { workflowScope: "handler" } }, async (req, reply) => {
       const resolved = req.apiToken!
 
       const bodyParsed = runBody.safeParse(req.body)
@@ -745,9 +744,7 @@ export async function apiTokenRoutes(app: FastifyInstance) {
 
       // Check workflow scoping
       if (resolved.workflowIds.length > 0 && !resolved.workflowIds.includes(workflowId)) {
-        return reply.status(403).send({
-          error: { code: "forbidden", message: "Token not authorized for this workflow" },
-        })
+        return refuseLimitedKey(reply)
       }
 
       // Load workflow
@@ -891,7 +888,7 @@ export async function apiTokenRoutes(app: FastifyInstance) {
     })
 
     // --- Status ---
-    api.get("/v1/api/status/:execId", async (req, reply) => {
+    api.get("/v1/api/status/:execId", { config: { workflowScope: { executionParam: "execId" } } }, async (req, reply) => {
       const resolved = req.apiToken!
 
       const parsed = apiExecIdParams.safeParse(req.params)
@@ -903,7 +900,7 @@ export async function apiTokenRoutes(app: FastifyInstance) {
 
       const { data: execution, error } = await supabase
         .from("workflow_executions")
-        .select("id, status, node_states, total_nodes, completed_nodes, failed_nodes, total_credits_used, error_message, created_at, completed_at")
+        .select("id, workflow_id, status, node_states, total_nodes, completed_nodes, failed_nodes, total_credits_used, error_message, created_at, completed_at")
         .eq("id", parsed.data.execId)
         .eq("user_id", resolved.userId)
         .single()
@@ -912,6 +909,12 @@ export async function apiTokenRoutes(app: FastifyInstance) {
         return reply.status(404).send({
           error: { code: "not_found", message: "Execution not found" },
         })
+      }
+      // The guard in front (middleware/token-workflow-scope.ts) already refused
+      // a run of another workflow; asked again here because this lane resolves
+      // the key itself, also when the auth hook could not.
+      if (resolved.workflowIds.length > 0 && !resolved.workflowIds.includes(execution.workflow_id as string)) {
+        return refuseLimitedKey(reply)
       }
 
       const outcome = executionOutcome(execution.status, execution.node_states as Record<string, { status?: unknown; skipReason?: unknown }> | null)
@@ -930,7 +933,7 @@ export async function apiTokenRoutes(app: FastifyInstance) {
     })
 
     // --- Result ---
-    api.get("/v1/api/result/:execId", async (req, reply) => {
+    api.get("/v1/api/result/:execId", { config: { workflowScope: { executionParam: "execId" } } }, async (req, reply) => {
       const resolved = req.apiToken!
 
       const parsed = apiExecIdParams.safeParse(req.params)
@@ -952,6 +955,10 @@ export async function apiTokenRoutes(app: FastifyInstance) {
         return reply.status(404).send({
           error: { code: "not_found", message: "Execution not found" },
         })
+      }
+      // As on the status route: asked again in the lane that resolves its own key.
+      if (resolved.workflowIds.length > 0 && !resolved.workflowIds.includes(execution.workflow_id as string)) {
+        return refuseLimitedKey(reply)
       }
 
       if (execution.status !== "completed" && execution.status !== "failed") {

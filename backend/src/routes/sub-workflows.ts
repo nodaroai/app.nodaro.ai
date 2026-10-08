@@ -142,7 +142,7 @@ export async function subWorkflowRoutes(app: FastifyInstance) {
   })
 
   // GET /v1/workflows/:id/interface — returns route interface of a specific workflow
-  app.get("/v1/workflows/:id/interface", async (req, reply) => {
+  app.get("/v1/workflows/:id/interface", { config: { workflowScope: { workflowParam: "id" } } }, async (req, reply) => {
     if (!req.userId) {
       return reply
         .status(401)
