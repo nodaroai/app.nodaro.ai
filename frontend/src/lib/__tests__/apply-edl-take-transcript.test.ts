@@ -151,3 +151,36 @@ describe("the rules the pick and the read share", () => {
     expect(takeTranscriptFromJob(TAKE_1, null)).toBeUndefined()
   })
 })
+
+describe("Speaker View — a picked take's EDL and transcript, read back per field (decided 2026-10-08)", () => {
+  const DRAWN = { version: 1, clock: "master", sources: [], segments: [] }
+
+  it("fills both outputs a take kept neither of, from one read of its own job", async () => {
+    const h = harness(picked(), async () => ({ videoUrl: URL_1, json: DRAWN, transcript: TRANSCRIPT_1 }))
+    await expect(restorePickedTakeTranscript("sv", TAKE_1, h.deps, "speaker-view")).resolves.toBe(true)
+    expect(h.fetchJobOutput).toHaveBeenCalledOnce()
+    expect(h.updateNodeData).toHaveBeenCalledWith("sv", { generatedJson: DRAWN, generatedTranscript: TRANSCRIPT_1 })
+  })
+
+  it("a take that kept its EDL but no transcript (landed before the output existed) reads only the transcript", async () => {
+    const take: ApplyEdlTake = { ...TAKE_1, generatedJson: DRAWN }
+    const h = harness(picked({ generatedJson: DRAWN }), async () => ({ videoUrl: URL_1, json: { other: true }, transcript: TRANSCRIPT_1 }))
+    await expect(restorePickedTakeTranscript("sv", take, h.deps, "speaker-view")).resolves.toBe(true)
+    expect(h.updateNodeData).toHaveBeenCalledWith("sv", { generatedTranscript: TRANSCRIPT_1 })
+  })
+
+  it("a take that kept both reads nothing; a job from an older plugin (no transcript) leaves the transcript cleared", async () => {
+    const kept = harness(picked(), async () => ({}))
+    await expect(restorePickedTakeTranscript("sv", { ...TAKE_1, generatedJson: DRAWN, generatedTranscript: undefined }, kept.deps, "speaker-view")).resolves.toBe(false)
+    expect(kept.fetchJobOutput).not.toHaveBeenCalled()
+    const old = harness(picked({ generatedJson: DRAWN }), async () => ({ videoUrl: URL_1, json: DRAWN }))
+    await expect(restorePickedTakeTranscript("sv", { ...TAKE_1, generatedJson: DRAWN }, old.deps, "speaker-view")).resolves.toBe(false)
+    expect(old.updateNodeData).not.toHaveBeenCalled()
+  })
+
+  it("takeKeptTranscript / takeTranscriptFromJob read the field they are asked for", () => {
+    expect(takeKeptTranscript({ url: URL_1, generatedTranscript: undefined }, "generatedTranscript")).toBe(true)
+    expect(takeKeptTranscript({ url: URL_1, generatedJson: DRAWN }, "generatedTranscript")).toBe(false)
+    expect(takeTranscriptFromJob(TAKE_1, { videoUrl: URL_1, json: DRAWN, transcript: TRANSCRIPT_1 }, "transcript")).toEqual(TRANSCRIPT_1)
+  })
+})

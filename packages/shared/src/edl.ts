@@ -501,13 +501,22 @@ export function outputMsToMasterMs(edl: Edl, outputMs: number): number | null {
 
 /**
  * Remap a transcript onto the rendered output: drop words that fall entirely
- * in removed material, clip a word that straddles a cut to its kept part, and
- * apply the source offset (via `transcript.sourceId`). Captions, chapters and
+ * in removed material, clip a word that straddles a cut to its kept part (a
+ * word running across two TOUCHING segments — contiguous on both the master
+ * and the output clock — is not cut, and keeps its full length), and apply
+ * the source offset (via `transcript.sourceId`). Captions, chapters and
  * clip offsets all depend on this one function.
  */
 export function remapTranscriptThroughEdl(edl: Edl, transcript: Transcript): Transcript {
   const off = offsetFor(edl, transcript.sourceId)
   const starts = segmentOutputStarts(edl)
+  /** Segment `j + 1` continues segment `j` on BOTH clocks: master time with no
+   *  jump, output time with no overlap. */
+  const touches = (j: number): boolean => {
+    const a = edl.segments[j]
+    const b = edl.segments[j + 1]
+    return b.inMs === a.outMs && starts[j + 1] === starts[j] + Math.max(0, a.outMs - a.inMs)
+  }
 
   const mapWord = (w: Transcript["words"][number]): (Transcript["words"][number]) | null => {
     const startMaster = w.startMs + off
@@ -525,12 +534,21 @@ export function remapTranscriptThroughEdl(edl: Edl, transcript: Transcript): Tra
       return null
     }
     // Find the first kept segment that intersects [startMaster, endMaster) and
-    // clip the word to that kept part.
+    // clip the word to that kept part — extended across every following
+    // segment that TOUCHES it (decided 2026-10-08): the next segment resumes
+    // the master clock exactly where this one ends and starts on the output
+    // exactly where this one ends (no overlap into it), so the word plays
+    // through unbroken and keeps its full length. A Speaker View turn split is
+    // the common case. A jump in the master clock, or a crossfade / xfade into
+    // the next segment, still clips the word to its first kept part.
     for (let i = 0; i < edl.segments.length; i++) {
       const seg = edl.segments[i]
       const lo = Math.max(startMaster, seg.inMs)
-      const hi = Math.min(endMaster, seg.outMs)
+      let hi = Math.min(endMaster, seg.outMs)
       if (lo < hi) {
+        for (let j = i; hi < endMaster && j + 1 < edl.segments.length && touches(j); j++) {
+          hi = Math.min(endMaster, edl.segments[j + 1].outMs)
+        }
         return {
           ...w,
           startMs: Math.round(starts[i] + (lo - seg.inMs)),
@@ -738,29 +756,58 @@ function normalizeLayout(input: unknown, dropTransition = false): EdlLayout | un
   }
 }
 
-/** Coerce an unknown value into a `Transcript`. ms-only, same rule as `normalizeEdl`. */
+/** A time field as integer ms: a finite, non-negative number or numeric
+ *  string; `undefined` for anything else. */
+function timeMs(v: unknown): number | undefined {
+  const n = typeof v === "number" ? v : typeof v === "string" && v.trim() !== "" ? Number(v) : Number.NaN
+  return Number.isFinite(n) && n >= 0 ? Math.round(n) : undefined
+}
+
+/** A word's or segment's span: `startMs`/`endMs` (or the `start`/`end`
+ *  aliases). A zero-width span is a point and is kept; `undefined` only for a
+ *  broken one — a missing or unusable time, or an end before its start. */
+function spanMs(o: Record<string, unknown>): { startMs: number; endMs: number } | undefined {
+  const startMs = timeMs(o.startMs ?? o.start)
+  const endMs = timeMs(o.endMs ?? o.end)
+  if (startMs === undefined || endMs === undefined || endMs < startMs) return undefined
+  return { startMs, endMs }
+}
+
+/**
+ * Coerce an unknown value into a `Transcript` — THE transcript reader
+ * (decided 2026-10-08). The Cloud plugin's `coerceTranscript` reads by the
+ * same rule, so the app and the plugin read one transcript the same way.
+ * ms-only, as `normalizeEdl`; the `start`/`end` aliases are read when
+ * `startMs`/`endMs` are absent. A zero-width word or segment (also one that
+ * rounds to zero width) is a POINT and is kept, as before. Only a broken one
+ * is dropped, never clamped: a missing start or end, a time that is not a
+ * finite, non-negative number, or an end before its start. Words come out
+ * sorted by start time (stable).
+ */
 export function normalizeTranscript(input: unknown): Transcript {
   const o = (input && typeof input === "object" ? input : {}) as Record<string, unknown>
-  const words: Transcript["words"][number][] = Array.isArray(o.words)
-    ? o.words.map(raw => {
-        const w = (raw ?? {}) as Record<string, unknown>
-        const startMs = Math.round(num(w.startMs))
-        return {
-          text: str(w.text) ?? "",
-          startMs,
-          // Never inverted: an endMs < startMs (garbage upstream) would be
-          // silently dropped at remap; clamp it to a non-negative width.
-          endMs: Math.max(startMs, Math.round(num(w.endMs))),
-          ...(str(w.speaker) ? { speaker: str(w.speaker) } : {}),
-          ...(typeof w.confidence === "number" ? { confidence: w.confidence } : {}),
-        }
+  const words: Transcript["words"][number][] = []
+  if (Array.isArray(o.words)) {
+    for (const raw of o.words) {
+      if (!raw || typeof raw !== "object") continue
+      const w = raw as Record<string, unknown>
+      const span = spanMs(w)
+      if (!span) continue
+      words.push({
+        text: str(w.text) ?? "",
+        ...span,
+        ...(str(w.speaker) ? { speaker: str(w.speaker) } : {}),
+        ...(typeof w.confidence === "number" ? { confidence: w.confidence } : {}),
       })
-    : []
+    }
+    words.sort((a, b) => a.startMs - b.startMs)
+  }
   const segments = Array.isArray(o.segments)
-    ? o.segments.map(raw => {
-        const s = (raw ?? {}) as Record<string, unknown>
-        const startMs = Math.round(num(s.startMs))
-        return { startMs, endMs: Math.max(startMs, Math.round(num(s.endMs))), text: str(s.text) ?? "", ...(str(s.speaker) ? { speaker: str(s.speaker) } : {}) }
+    ? o.segments.flatMap(raw => {
+        if (!raw || typeof raw !== "object") return []
+        const s = raw as Record<string, unknown>
+        const span = spanMs(s)
+        return span ? [{ ...span, text: str(s.text) ?? "", ...(str(s.speaker) ? { speaker: str(s.speaker) } : {}) }] : []
       })
     : undefined
   return {

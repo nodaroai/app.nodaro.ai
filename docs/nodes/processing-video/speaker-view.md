@@ -8,7 +8,7 @@
 
 ## Overview
 
-[Apply EDL](./apply-edl.md) shows one camera full-frame per segment. Speaker View is the render for edits that need more: both hosts side by side, a vertical clip that follows whoever is speaking, a grid for a panel, a picture-in-picture, with a crop framed on each speaker. It reads the originals on the master clock, so the picture and the sound stay locked, and it hands back the **EDL as it drew it** on its `json` output.
+[Apply EDL](./apply-edl.md) shows one camera full-frame per segment. Speaker View is the render for edits that need more: both hosts side by side, a vertical clip that follows whoever is speaking, a grid for a panel, a picture-in-picture, with a crop framed on each speaker. It reads the originals on the master clock, so the picture and the sound stay locked, and it hands back the **EDL as it drew it** on its `json` output and the wired **transcript remapped through that edit** on its `transcript` output, ready for captions.
 
 It decides **how** the speakers are shown, never **who** is on screen: [Camera Switch](./camera-switch.md) chooses the camera for each cut, Speaker View lays them out. A typical chain: **Audio Sync** → **Transcribe** with speaker detection → **Edit Plan** → **Camera Switch** → **Speaker View**.
 
@@ -29,6 +29,9 @@ When the node wired into **EDL** has not run yet, the panel says so and offers *
 |--------|------|-------------|
 | Video | video | The rendered edit. |
 | EDL | json | The edit as drawn: split at the speakers' turns, with its layouts, switches and emphasis written in. It is an **EDL, not a transcript** — it never feeds Add Captions' Transcript input. |
+| Transcript | json | The transcript wired into **Transcript**, remapped through the edit as drawn — the same remap [Apply EDL](./apply-edl.md)'s Transcript output uses. Words in removed material are dropped, a word that straddles a cut is clipped to its kept part (a word running across a speaker switch keeps its full length whatever the Switch setting, since the recording carries on through it — only a jump in the recording, where a stretch was cut out between the two speakers, clips it), and the rest move to where the video plays them, crossfades included. Wire it into [Add Captions](./add-captions.md)' Transcript input to caption the render without transcribing it again. Empty when no transcript was wired: an Add Captions wired to it then works as if nothing were wired (it transcribes the video it receives, or refuses for want of a caption source when auto-transcribe is off). |
+
+Each take keeps its own EDL and Transcript: picking an older take in the results restores the ones that take was rendered with.
 
 ## Settings
 
@@ -114,7 +117,7 @@ Speaker View is reviewed the way [Apply EDL](./apply-edl.md#reviewing-a-cut) is:
 
 ## API
 
-`POST /v1/speaker-view` with `{ edl, transcript?, quality?, targetAspect?, layout?, switch?: { type, durationMs? }, emphasis?: { style, durationMs? }, accentColor?, speakerRegions? }` — `edl` is one EDL (an object or its JSON string), `layout` one of `auto`, `single`, `side-by-side`, `stacked`, `grid`, `pip`, `switch.type` one of `cut`, `pan`, `zoom` or `xfade:<transition>`, `emphasis.style` a `+`-joined set of `scale`, `border`, `dim` (or `none`). A refusal above is a `400` (`invalid_edl`, `unsupported_setting` or `too_long`). Until its price is set the route answers `503 not_priced`. The finished job's `output_data` has `videoUrl`, `thumbnailUrl`, `json` (the EDL as drawn) and the stamps `quality`, `clipKey`, `planBasis` and `renderBasis`.
+`POST /v1/speaker-view` with `{ edl, transcript?, quality?, targetAspect?, layout?, switch?: { type, durationMs? }, emphasis?: { style, durationMs? }, accentColor?, speakerRegions? }` — `edl` is one EDL (an object or its JSON string), `layout` one of `auto`, `single`, `side-by-side`, `stacked`, `grid`, `pip`, `switch.type` one of `cut`, `pan`, `zoom` or `xfade:<transition>`, `emphasis.style` a `+`-joined set of `scale`, `border`, `dim` (or `none`). A refusal above is a `400` (`invalid_edl`, `unsupported_setting` or `too_long`). Until its price is set the route answers `503 not_priced`. The finished job's `output_data` has `videoUrl`, `thumbnailUrl`, `json` (the EDL as drawn), `transcript` (the wired transcript remapped through that EDL; absent when none was wired) and the stamps `quality`, `clipKey`, `planBasis` and `renderBasis`.
 
 ## Tips
 

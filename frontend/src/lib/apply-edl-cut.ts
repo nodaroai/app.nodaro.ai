@@ -23,9 +23,12 @@
  * no transcript wired. The landed take keeps the same value on its result, so a
  * later pick restores it with no job read (lib/apply-edl-take-transcript.ts).
  *
- * Every render in RENDER_NODE_TYPES lands its cut this way (Apply EDL today).
+ * Every render in RENDER_NODE_TYPES lands its cut this way. Each json output it
+ * lands moves with the cut the same way (`renderSavedJsonOutputs`): Apply EDL's
+ * Transcript on `generatedJson`; Speaker View's EDL as drawn on `generatedJson`
+ * and its remapped transcript on `generatedTranscript` (decided 2026-10-08).
  */
-import { isRenderNodeType } from "@nodaro/shared"
+import { isRenderNodeType, renderSavedJsonOutputs } from "@nodaro/shared"
 
 export type ApplyEdlMedium = "video" | "audio"
 
@@ -47,9 +50,26 @@ export function applyEdlCutFields(medium: ApplyEdlMedium, url: string): Record<s
 export interface ApplyEdlRunOutput {
   readonly videoUrl?: unknown
   readonly audioUrl?: unknown
-  /** The wired transcript remapped through this render's cut; absent when
-   *  none was wired. */
+  /** Apply EDL: the wired transcript remapped through this render's cut;
+   *  Speaker View: the EDL as drawn. Absent when there is none. */
   readonly json?: unknown
+  /** Speaker View: the wired transcript remapped through its cut; absent when
+   *  none was wired (or from a plugin that predates it). */
+  readonly transcript?: unknown
+}
+
+/**
+ * The json outputs of a render's run, by the node-data field each lands on —
+ * every one present, `undefined` for one the run carries none of, so landing it
+ * CLEARS what an earlier take left there. Empty for any other node type.
+ */
+export function renderJsonOutputFields(
+  nodeType: string | null | undefined,
+  output: Readonly<Record<string, unknown>> | null | undefined,
+): Record<string, unknown> {
+  const fields: Record<string, unknown> = {}
+  for (const o of renderSavedJsonOutputs(nodeType)) fields[o.dataField] = output?.[o.outputKey] ?? undefined
+  return fields
 }
 
 /** The render an output describes: its one medium and that medium's URL, or
@@ -79,13 +99,14 @@ export function applyEdlRunCutFields(
   if (!isRenderNodeType(nodeType)) return undefined
   const cut = renderedCut(output)
   if (!cut) return undefined
-  return { [APPLY_EDL_MEDIA_FIELD[OTHER[cut.medium]]]: undefined, generatedJson: output?.json ?? undefined }
+  return { [APPLY_EDL_MEDIA_FIELD[OTHER[cut.medium]]]: undefined, ...renderJsonOutputFields(nodeType, output as Readonly<Record<string, unknown>>) }
 }
 
 /**
  * For the lanes that add a run's render to the node's results: what the take
  * whose file is `url` keeps — the Transcript its render was cut with, as an own
- * `generatedJson` (`undefined` when it was cut with none), so a later pick
+ * `generatedJson` (`undefined` when it was cut with none; and every other json
+ * output of the render, each on its own field), so a later pick
  * restores it with no job read. Only on the take that IS the render the output
  * describes: a list run lands several takes from one output, which carries its
  * first render's transcript only (the server's fan-out spreads that render's
@@ -96,9 +117,9 @@ export function applyEdlTakeTranscriptField(
   nodeType: string | null | undefined,
   output: ApplyEdlRunOutput | null | undefined,
   url: string | null | undefined,
-): { readonly generatedJson: unknown } | undefined {
+): Readonly<Record<string, unknown>> | undefined {
   if (!isRenderNodeType(nodeType)) return undefined
   const cut = renderedCut(output)
   if (!cut || cut.url !== url) return undefined
-  return { generatedJson: output?.json ?? undefined }
+  return renderJsonOutputFields(nodeType, output as Readonly<Record<string, unknown>>)
 }

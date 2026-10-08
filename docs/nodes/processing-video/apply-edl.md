@@ -8,7 +8,7 @@ The Apply EDL node takes a structured **edit decision list** and renders it into
 
 Every segment names a time window on the **master clock**; the node trims each source to that window, conforms the picture to one canvas, and joins the segments in order. Hard-cut boundaries abut; crossfade boundaries overlap, so the rendered timeline is *shorter* than the sum of the segment lengths by the total crossfade time.
 
-When you wire a **Transcript** into the node, it emits that transcript **remapped through the cut** on its `json` output — words that fall in removed material are dropped and a word straddling a cut is clipped to the kept part — so captions built downstream stay aligned to the finished edit.
+When you wire a **Transcript** into the node, it emits that transcript **remapped through the cut** on its `json` output — words that fall in removed material are dropped and a word straddling a cut is clipped to the kept part (a word running across two segments that continue each other — the second resumes the recording exactly where the first ends, with no crossfade between them — plays unbroken and keeps its full length) — so captions built downstream stay aligned to the finished edit.
 
 All processing is local FFmpeg. No provider key is required.
 
@@ -16,7 +16,7 @@ All processing is local FFmpeg. No provider key is required.
 
 | Handle | Type | Required | Description |
 |--------|------|----------|-------------|
-| EDL | json | **Yes** | The edit decision list. Wire it from an editorial node or a Text/JSON source. Media resolves from each source's `url`. A Transcript output (Transcribe's `json`, Text to Dialogue's `json`, Camera Switch's `transcript`, Apply EDL's `json`) cannot be wired here; the editor refuses it. |
+| EDL | json | **Yes** | The edit decision list. Wire it from an editorial node or a Text/JSON source. Media resolves from each source's `url`. A Transcript output (Transcribe's `json`, Text to Dialogue's `json`, Camera Switch's `transcript`, Apply EDL's `json`, Speaker View's `transcript`) cannot be wired here; the editor refuses it. |
 | Transcript | json | No | A transcript to remap through the cut for the `json` output (e.g. from a Transcribe node). An EDL output (Edit Plan's or Camera Switch's `edl`) cannot be wired here; the editor refuses it. |
 | Sources | video/audio | No | Optional media-URL overrides for the EDL's sources, applied **positionally** in connection order. The EDL's own `url` values are the primary path; use this only when the media isn't addressable by URL in the EDL. |
 

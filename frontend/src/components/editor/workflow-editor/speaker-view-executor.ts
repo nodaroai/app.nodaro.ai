@@ -24,6 +24,7 @@ import {
 import { renderPlanClipKey, renderRunQuality } from "@nodaro/shared"
 import { speakerView } from "@/lib/api"
 import { runResultIdentity } from "@/lib/run-result-identity"
+import { renderJsonOutputFields } from "@/lib/apply-edl-cut"
 import type { SpeakerViewData, WorkflowNode } from "@/types/nodes"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { browserRenderPlanBasis } from "./apply-edl-stamps"
@@ -40,8 +41,10 @@ const parseMaybe = (v: unknown): unknown => {
 const blank = (v: unknown) => v === undefined || v === null || v === ""
 
 /** The job of one Speaker View render: the video onto `generatedVideoUrl`, the
- *  EDL as drawn onto `generatedJson` (so the `json` handle resolves on a single
- *  Run as it does on a server run), the take's identity on the RESULT only
+ *  EDL as drawn onto `generatedJson` and the remapped transcript onto
+ *  `generatedTranscript` (so the `json` and `transcript` handles resolve on a
+ *  single Run as they do on a server run; one the render carries none of is
+ *  cleared), the take's identity on the RESULT only
  *  (`quality` there is the node's own setting, which a one-shot Render final
  *  must not flip). */
 export function runSpeakerView(
@@ -55,7 +58,7 @@ export function runSpeakerView(
     "generatedVideoUrl",
     "Speaker View",
     ctx,
-    (od) => ({ generatedJson: od.json ?? undefined }),
+    (od) => renderJsonOutputFields("speaker-view", od),
     undefined,
     { resultFields: (od) => runResultIdentity("speaker-view", od) },
   )

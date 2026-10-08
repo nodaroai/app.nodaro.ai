@@ -3,7 +3,7 @@ import {
   transcribeLaneSupportsWordTimestamps,
   transcribeProvidersWithWordTimestamps,
 } from "./model-constants.js"
-import { rendersTranscriptJson } from "./render-nodes.js"
+import { renderTranscriptOutputOf } from "./render-nodes.js"
 
 /**
  * Pre-run checks for the transcribe → captions chain.
@@ -47,14 +47,12 @@ export interface WordlessTranscriptFeed {
 // Handle ids (generated map: backend/src/lib/mcp/generated/node-handles.ts).
 const TRANSCRIBE_JSON_OUT = "json"
 const TRANSCRIPT_IN = "transcript"
-/** A render's `json` output — handed on as a Transcript only by a render whose
- *  `jsonKind` is `transcript` (Apply EDL's is; an EDL-emitting render's is not). */
-const RENDER_JSON_OUT = "json"
 
 /**
  * Every transcribe node on a word-INCAPABLE lane whose `json` output reaches an
  * add-captions `transcript` input — directly, or through apply-edl, which remaps
- * the transcript and re-emits it on its own `json` handle. add-captions rejects a
+ * the transcript and re-emits it on its own `json` handle (or any render, by
+ * its registry `transcriptOutput`: Speaker View's `transcript`). add-captions rejects a
  * transcript with no words, so such a run can only fail, after paying for the
  * transcription. Skipped nodes are ignored on both ends.
  *
@@ -77,8 +75,8 @@ export function findWordlessTranscriptFeeds(
     const refusal = transcribeWordTimestampsRefusal(provider)
     if (!refusal) continue
 
-    // Walk the transcript's path: transcribe.json → [render.transcript → render.json]* → add-captions.transcript,
-    // through every render whose json is a Transcript (RENDER_NODE_TYPES jsonKind)
+    // Walk the transcript's path: transcribe.json → [render.transcript → its transcript output]* → add-captions.transcript,
+    // out of every render on the pip its registry names (RENDER_NODE_TYPES transcriptOutput)
     const seen = new Set<string>()
     const frontier: Array<{ id: string; outHandle: string }> = [{ id: node.id, outHandle: TRANSCRIBE_JSON_OUT }]
     while (frontier.length > 0) {
@@ -94,9 +92,12 @@ export function findWordlessTranscriptFeeds(
             provider,
             message: `Captions need word timings, but ${refusal}.`,
           })
-        } else if (rendersTranscriptJson(target!.type) && !seen.has(target!.id)) {
-          seen.add(target!.id)
-          frontier.push({ id: target!.id, outHandle: RENDER_JSON_OUT })
+        } else if (!seen.has(target!.id)) {
+          const remapped = renderTranscriptOutputOf(target!.type)
+          if (remapped) {
+            seen.add(target!.id)
+            frontier.push({ id: target!.id, outHandle: remapped.handle })
+          }
         }
       }
     }

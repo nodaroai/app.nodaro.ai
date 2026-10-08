@@ -116,8 +116,10 @@ export const JSON_PRODUCER_TYPES: ReadonlySet<string> = new Set<string>([
   // camera-switch: the switched edit (`edl`) and the renamed `transcript`.
   "camera-switch",
   // speaker-view: its `json` handle is the EDL as it drew it (an EDL, never a
-  // Transcript: `jsonKind: "edl"` in RENDER_NODE_TYPES). Its default handle is
-  // the video, a VIDEO_PRODUCER_TYPES member.
+  // Transcript: `jsonKind: "edl"` in RENDER_NODE_TYPES), and its `transcript`
+  // handle the wired transcript remapped through that edit (its registry
+  // `transcriptOutput`). Its default handle is the video, a
+  // VIDEO_PRODUCER_TYPES member.
   "speaker-view",
   // Content Recipe's `json` handle carries the recipe object (its `text`
   // handle stays in DATA_TEXT_PRODUCER_TYPES) — a dual producer like transcribe.

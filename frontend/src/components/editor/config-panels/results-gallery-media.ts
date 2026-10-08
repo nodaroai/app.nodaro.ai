@@ -18,7 +18,7 @@
  * reads it. results-gallery-medium-census.test.ts fails for a gallery type with
  * no medium.
  */
-import { AUDIO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES, RENDER_NODE_TYPES, VIDEO_PRODUCER_TYPES, renderNodeOf } from "@nodaro/shared"
+import { AUDIO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES, RENDER_NODE_TYPES, VIDEO_PRODUCER_TYPES, renderNodeOf, renderSavedJsonOutputs } from "@nodaro/shared"
 import { applyEdlCutFields } from "@/lib/apply-edl-cut"
 import { takeKeptTranscript, type ApplyEdlTake } from "@/lib/apply-edl-take-transcript"
 import { isAudioUrl, isImageUrl, isVideoUrl } from "@/lib/media-type"
@@ -181,10 +181,17 @@ export function resultsGalleryPickPatch(
   const render = renderNodeOf(nodeType)
   if (render) {
     const take = (data.generatedResults as ReadonlyArray<ApplyEdlTake> | undefined)?.[index]
+    // Every json output the render lands (Apply EDL's Transcript; Speaker
+    // View's EDL as drawn and its remapped transcript): the take's own, or
+    // cleared when it kept none.
+    const kept: Record<string, unknown> = {}
+    for (const { dataField } of renderSavedJsonOutputs(nodeType)) {
+      kept[dataField] = take && takeKeptTranscript(take, dataField) ? (take as unknown as Record<string, unknown>)[dataField] : undefined
+    }
     return {
       activeResultIndex: index,
       ...applyEdlCutFields(render.mediumOf(data), url),
-      generatedJson: take && takeKeptTranscript(take) ? take.generatedJson : undefined,
+      ...kept,
     }
   }
   const fromData = NODE_DATA_MEDIUM.get(nodeType)

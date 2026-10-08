@@ -58,6 +58,12 @@ describe("speakerViewTranscript", () => {
     const cs = [node("cs", "camera-switch", { generatedJson: { edl: TWO, transcript: WORDS } }), node("sv", "speaker-view")]
     expect(speakerViewTranscript("sv", cs, [edge("cs", "sv", "transcript")])).toEqual(WORDS)
   })
+  it("reads a render's transcript output from the field its registry names — never Speaker View's EDL", () => {
+    const sv = [node("up", "speaker-view", { generatedJson: TWO, generatedTranscript: WORDS }), node("sv", "speaker-view")]
+    expect(speakerViewTranscript("sv", sv, [edge("up", "sv", "transcript")])).toEqual(WORDS)
+    const ae = [node("up", "apply-edl", { generatedJson: WORDS }), node("sv", "speaker-view")]
+    expect(speakerViewTranscript("sv", ae, [edge("up", "sv", "transcript")])).toEqual(WORDS)
+  })
   it("is undefined with nothing wired", () => {
     expect(speakerViewTranscript("sv", [node("sv", "speaker-view")], [])).toBeUndefined()
   })

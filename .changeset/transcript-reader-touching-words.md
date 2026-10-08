@@ -1,0 +1,5 @@
+---
+"@nodaro/shared": minor
+---
+
+`remapTranscriptThroughEdl` keeps a word's full length when it runs across two TOUCHING segments — the next segment resumes the master clock exactly where this one ends (`seg[i].outMs === seg[i + 1].inMs`) and starts on the output exactly where this one ends (no crossfade / `xfade` into it). Such a word used to be clipped at the boundary; a jump in the master clock or an overlap transition still clips it to its first kept part. `normalizeTranscript` is now the one transcript reader with the Cloud plugin's rules: it reads the `start`/`end` aliases when `startMs`/`endMs` are absent (numbers or numeric strings), keeps a zero-width word or segment (also one that rounds to zero width) as a point, as before, drops only a broken one — a missing start or end, a time that is not a finite non-negative number, or an end before its start (an inverted word used to be clamped into a point) — and returns words sorted by start time. `transcriptSpeakerLabels` reads through it, so an untimed word names no speaker and first appearance is in time order.

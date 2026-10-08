@@ -18,6 +18,7 @@ const types: Record<string, string> = {
   caps: "add-captions",
   render2: "apply-edl",
   plan2: "edit-plan",
+  sv: "speaker-view",
 }
 const typeOf = (id: string): string | undefined => types[id]
 const labelOf = (t: string): string | undefined => NODE_DEF_MAP.get(t)?.label
@@ -136,5 +137,17 @@ describe("the output kinds name pips the nodes really declare", () => {
     expect(NODE_DEF_MAP.get("edit-plan")!.outputs).toContain("edl")
     expect(NODE_DEF_MAP.get("camera-switch")!.outputs).toEqual(expect.arrayContaining(["edl", "transcript"]))
     expect(jsonOutputKind("edit-plan", "edl")).toBe("edl")
+  })
+})
+
+describe("Speaker View's two json outputs (decided 2026-10-08)", () => {
+  it("its `transcript` (the remapped transcript) feeds Add Captions' Transcript input; its `json` (the EDL as drawn) is refused there", () => {
+    expect(ok("sv", "transcript", "caps", "transcript")).toBe(true)
+    expect(ok("sv", "json", "caps", "transcript")).toBe(false)
+  })
+
+  it("its `transcript` is refused at an EDL input; its `json` connects there", () => {
+    expect(ok("sv", "transcript", "render", "edl")).toBe(false)
+    expect(ok("sv", "json", "render", "edl")).toBe(true)
   })
 })

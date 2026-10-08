@@ -257,6 +257,30 @@ describe("Apply EDL — a pick moves the Transcript output with the cut", () => 
   })
 })
 
+describe("Speaker View — a pick moves its EDL and its transcript output with the cut (decided 2026-10-08)", () => {
+  const drawnA = { version: 1, clock: "master", sources: [], segments: [], meta: { notes: "a" } }
+  const cutA = { version: 1, words: [{ text: "back", startMs: 1310, endMs: 1650 }] }
+
+  it("restores what the picked take kept on each field, and clears a field it kept nothing on", () => {
+    const takes = [
+      { url: "https://media.test/take-2.mp4", timestamp: "2026-10-04T12:00:00.000Z", jobId: "job-2" },
+      { url: "https://media.test/take-1.mp4", timestamp: "2026-10-04T11:00:00.000Z", jobId: "job-1", generatedJson: drawnA, generatedTranscript: cutA },
+    ]
+    expect(pickSecond("speaker-view", { generatedResults: takes, activeResultIndex: 0 })).toStrictEqual({
+      activeResultIndex: 1,
+      generatedVideoUrl: "https://media.test/take-1.mp4",
+      generatedAudioUrl: undefined,
+      generatedJson: drawnA,
+      generatedTranscript: cutA,
+    })
+    cleanup()
+    // a take that kept its EDL but no transcript (landed before the output existed): the transcript output is cleared
+    const { generatedTranscript: _t, ...olderTake } = takes[1]!
+    const older = [takes[0], olderTake]
+    expect(pickSecond("speaker-view", { generatedResults: older, activeResultIndex: 0, generatedTranscript: { stale: true } })).toMatchObject({ generatedJson: drawnA, generatedTranscript: undefined })
+  })
+})
+
 describe("a node whose medium is a setting: the pick writes what its own canvas picker writes", () => {
   it("voice-changer holding a video result (video mode): video tiles, the pick writes generatedVideoUrl", () => {
     const data = { generatedResults: results("mp4"), activeResultIndex: 0, generatedVideoUrl: "https://media.test/take-2.mp4", generatedAudioUrl: "https://media.test/take-2.mp3" }

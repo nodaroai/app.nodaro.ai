@@ -4,6 +4,7 @@
  * screen is decided by the Cloud plugin; these only read the inputs it needs
  * and pre-fill the speaker table. Pure, no I/O.
  */
+import { normalizeTranscript } from "./edl.js"
 
 /** The settings and their decided defaults (the plugin holds its own copy, D13). */
 export const CAMERA_SWITCH_DEFAULTS = Object.freeze({
@@ -28,14 +29,16 @@ const parseMaybe = (raw: unknown): unknown => {
 }
 
 /** Distinct speaker labels of a transcript (an object or its JSON string), in
- *  order of first appearance. Empty → camera-switch refuses before charging. */
+ *  order of first appearance in time. Read through `normalizeTranscript`
+ *  (decided 2026-10-08) — the Cloud plugin's reading — so a broken word (no
+ *  usable time) names no speaker here either; a zero-width word is a point
+ *  and does. Empty → camera-switch refuses before charging. */
 export function transcriptSpeakerLabels(transcript: unknown): string[] {
-  const words = (parseMaybe(transcript) as { words?: unknown } | null | undefined)?.words
-  if (!Array.isArray(words)) return []
+  const parsed = parseMaybe(transcript)
+  if (!parsed || typeof parsed !== "object") return []
   const seen = new Set<string>()
-  for (const w of words) {
-    const s = (w as { speaker?: unknown } | null)?.speaker
-    if (typeof s === "string" && s && !seen.has(s)) seen.add(s)
+  for (const w of normalizeTranscript(parsed).words) {
+    if (w.speaker && !seen.has(w.speaker)) seen.add(w.speaker)
   }
   return [...seen]
 }

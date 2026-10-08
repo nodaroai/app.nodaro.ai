@@ -37,6 +37,11 @@ describe("findWordlessTranscriptFeeds", () => {
     )
     expect(hits.map((h) => h.consumerNodeId)).toEqual(["c"])
   })
+  it("follows the transcript THROUGH speaker-view (transcript in → its own transcript out, decided 2026-10-08), never its EDL json", () => {
+    const nodes = [n("t", "transcribe", { provider: "whisper" }), n("sv", "speaker-view"), n("c", "add-captions")]
+    expect(findWordlessTranscriptFeeds(nodes, [e("t", "json", "sv", "transcript"), e("sv", "transcript", "c", "transcript")]).map((h) => h.consumerNodeId)).toEqual(["c"])
+    expect(findWordlessTranscriptFeeds(nodes, [e("t", "json", "sv", "transcript"), e("sv", "json", "c", "transcript")])).toEqual([])
+  })
   it("does NOT flag a word-capable lane, the text handle, or a non-caption consumer", () => {
     const nodes = [n("ok", "transcribe", { provider: "elevenlabs-stt" }), n("w", "transcribe", { provider: "whisper" }), n("c", "add-captions"), n("p", "edit-plan")]
     expect(findWordlessTranscriptFeeds(nodes, [e("ok", "json", "c", "transcript")])).toEqual([])

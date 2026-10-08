@@ -27,6 +27,21 @@ export type RenderClockSource = "input" | "output-json"
  *  on as one (Add Captions, the word-timing preflight). */
 export type RenderJsonKind = "transcript" | "edl"
 
+/** Where a render's wired transcript, remapped through its cut, comes out
+ *  (Apply EDL's on its `json`; Speaker View's on its own `transcript` pip,
+ *  decided 2026-10-08). */
+export interface RenderTranscriptOutput {
+  /** The output pip — also the key it rides on the job's `output_data` and on
+   *  a run's node output. */
+  readonly handle: string
+  /** The saved node-data field that holds it (the landed take's). */
+  readonly dataField: string
+}
+
+/** The pip a render's `json` output (its `jsonKind`) comes out on, and its key
+ *  on the job's `output_data`. */
+export const RENDER_JSON_HANDLE = "json"
+
 export interface RenderNodeDescriptor {
   /** The medium the render's order asks for (its node data, or its job's
    *  `input_data`) — before any output exists to say. */
@@ -42,6 +57,9 @@ export interface RenderNodeDescriptor {
    *  (TA6, decided 2026-10-04). */
   readonly latestBatch: boolean
   readonly jsonKind: RenderJsonKind
+  /** Where its remapped transcript comes out. On the `json` pip exactly when
+   *  `jsonKind` is `transcript` (a guard test holds the two together). */
+  readonly transcriptOutput: RenderTranscriptOutput
 }
 
 type Data = Readonly<Record<string, unknown>>
@@ -49,7 +67,8 @@ type Data = Readonly<Record<string, unknown>>
 /** Its `output` setting, video when absent. */
 const outputSettingMedium = (data: Data): RenderMedium => (data.output === "audio" ? "audio" : "video")
 
-const descriptor = (d: RenderNodeDescriptor): RenderNodeDescriptor => Object.freeze({ ...d })
+const descriptor = (d: RenderNodeDescriptor): RenderNodeDescriptor =>
+  Object.freeze({ ...d, transcriptOutput: Object.freeze({ ...d.transcriptOutput }) })
 
 export const RENDER_NODE_TYPES: Readonly<Record<string, RenderNodeDescriptor>> = Object.freeze({
   "apply-edl": descriptor({
@@ -59,10 +78,13 @@ export const RENDER_NODE_TYPES: Readonly<Record<string, RenderNodeDescriptor>> =
     ownerOnlyListing: true,
     latestBatch: true,
     jsonKind: "transcript",
+    transcriptOutput: { handle: RENDER_JSON_HANDLE, dataField: "generatedJson" },
   }),
   // Speaker View (C3.2): video only; its `json` is the EDL as it drew it (the
   // turns split, the layouts written), so a player maps the output clock
-  // through THAT, and Add Captions never takes it for a Transcript.
+  // through THAT, and Add Captions never takes it for a Transcript. The wired
+  // transcript, remapped through that same drawn edit, comes out on its own
+  // `transcript` pip (decided 2026-10-08) — what a caption step reads.
   "speaker-view": descriptor({
     mediumOf: () => "video",
     creditId: (quality) => speakerViewCreditId(quality),
@@ -70,6 +92,7 @@ export const RENDER_NODE_TYPES: Readonly<Record<string, RenderNodeDescriptor>> =
     ownerOnlyListing: true,
     latestBatch: true,
     jsonKind: "edl",
+    transcriptOutput: { handle: "transcript", dataField: "generatedTranscript" },
   }),
 })
 
@@ -95,6 +118,39 @@ export function rendersLatestBatch(type: unknown): boolean {
 /** Is this node a render whose `json` output is a Transcript? */
 export function rendersTranscriptJson(type: unknown): boolean {
   return renderNodeOf(type)?.jsonKind === "transcript"
+}
+
+/** Where a render's remapped transcript comes out; `undefined` for any other
+ *  node type. */
+export function renderTranscriptOutputOf(type: unknown): RenderTranscriptOutput | undefined {
+  return renderNodeOf(type)?.transcriptOutput
+}
+
+/** Is `handle` one of a render's data pips — its `json` or its transcript —
+ *  rather than its media? Every other pip of a render (the default included)
+ *  is the rendered media. `false` for any other node type. */
+export function isRenderDataHandle(type: unknown, handle: unknown): boolean {
+  const d = renderNodeOf(type)
+  if (!d || typeof handle !== "string") return false
+  return handle === RENDER_JSON_HANDLE || handle === d.transcriptOutput.handle
+}
+
+/** One json output a render lands on its node: its key on the job's
+ *  `output_data` (and on a run's node output) and its saved node-data field. */
+export interface RenderSavedJsonOutput {
+  readonly outputKey: string
+  readonly dataField: string
+}
+
+/** The json outputs a render lands on its node, `json` first, each once — what
+ *  every lane that lands a take (or picks one) writes or restores. Empty for
+ *  any other node type. */
+export function renderSavedJsonOutputs(type: unknown): readonly RenderSavedJsonOutput[] {
+  const d = renderNodeOf(type)
+  if (!d) return []
+  const json: RenderSavedJsonOutput = { outputKey: RENDER_JSON_HANDLE, dataField: "generatedJson" }
+  const t = d.transcriptOutput
+  return t.handle === RENDER_JSON_HANDLE ? [json] : [json, { outputKey: t.handle, dataField: t.dataField }]
 }
 
 /** The render job types that list in their owner's own views only. */

@@ -1,6 +1,6 @@
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { proShotStills } from "@/lib/scene3d/pro-media-result";
-import { collectAncestorRefs as sharedCollectAncestorRefs, isExpandedClone, PARAMETER_NODE_TYPES, aggregateByType, buildChildrenByParent, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member, ASPECT_RATIO_DIMENSIONS, overlayVariantIdFromHandle, featuredMetaAdOutputs, featuredInstagramOutputs, resolveVideoLinkOutput, isTelegramAccountTriggerNamedHandle, telegramAccountTriggerOutputs, type Transcript, isSocialSearchPickFrozen, socialPostsFrom, socialPostsDigest, savedRenderOutput, telegramPostsFrom, isRenderNodeType } from "@nodaro/shared";
+import { collectAncestorRefs as sharedCollectAncestorRefs, isExpandedClone, PARAMETER_NODE_TYPES, aggregateByType, buildChildrenByParent, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member, ASPECT_RATIO_DIMENSIONS, overlayVariantIdFromHandle, featuredMetaAdOutputs, featuredInstagramOutputs, resolveVideoLinkOutput, isTelegramAccountTriggerNamedHandle, telegramAccountTriggerOutputs, type Transcript, isSocialSearchPickFrozen, socialPostsFrom, socialPostsDigest, savedRenderOutput, telegramPostsFrom, isRenderNodeType, isRenderDataHandle, renderTranscriptOutputOf, RENDER_JSON_HANDLE } from "@nodaro/shared";
 import { getParameterPromptHint } from "@nodaro/prompts"
 import type {
   WorkflowNode,
@@ -630,9 +630,17 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     // rendered cut (video OR audio per the node's `output` setting). Mirrors
     // backend getPrimaryOutput; the media default is what node-input-resolver
     // taps when no sourceHandle is set (C4).
-    if (sourceHandle === "json") {
+    if (sourceHandle === RENDER_JSON_HANDLE) {
       const json = data.generatedJson;
       return json === undefined ? undefined : JSON.stringify(json);
+    }
+    // A render whose remapped transcript has its OWN pip (Speaker View's
+    // `transcript` → `generatedTranscript`, decided 2026-10-08): that, or
+    // nothing — never the media.
+    const remapped = renderTranscriptOutputOf(type)!;
+    if (remapped.handle !== RENDER_JSON_HANDLE && sourceHandle === remapped.handle) {
+      const transcript = data[remapped.dataField];
+      return transcript === undefined || transcript === null ? undefined : JSON.stringify(transcript);
     }
     // The selected take — the one reader the server uses too (@nodaro/shared
     // savedRenderOutput), so a pick reaches a workflow run exactly as it
@@ -1272,9 +1280,10 @@ export function detectPreviewItemType(
   // and Content Ideas are readable text.
   if (nodeType === "content-recipe") return sourceHandle === "json" ? "data" : "text"
   if (nodeType === "content-ideas") return "text"
-  // A render's `json` handle (Apply EDL: the remapped Transcript) is data. Its
+  // A render's data pips (`json` — Apply EDL: the remapped Transcript — and a
+  // transcript pip of its own, Speaker View's `transcript`) are data. Its
   // media handle falls through to the URL regex below (mp4 → video, m4a → audio).
-  if (isRenderNodeType(nodeType) && sourceHandle === "json") return "data"
+  if (isRenderDataHandle(nodeType, sourceHandle)) return "data"
   if (value) {
     if (IMAGE_URL_RE.test(value)) return "image"
     if (VIDEO_URL_RE.test(value)) return "video"

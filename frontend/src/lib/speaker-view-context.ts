@@ -11,6 +11,7 @@
  * judged against EVERY clip (SV23).
  */
 import { speakerViewContext, type SpeakerViewContext } from "@nodaro/render-rules"
+import { renderTranscriptOutputOf } from "@nodaro/shared"
 import { editPlanOutputOf } from "@/lib/edit-plan-saved-output"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 
@@ -68,6 +69,9 @@ export function speakerViewTranscript(nodeId: string, nodes: ReadonlyArray<Workf
   const results = Array.isArray(d.generatedResults) ? d.generatedResults : []
   const fromResult = results[typeof d.activeResultIndex === "number" ? d.activeResultIndex : 0]?.transcript
   if (fromResult !== undefined) return fromResult
+  // A render: the field its transcript output lands on (Speaker View's json is its EDL).
+  const remapped = renderTranscriptOutputOf(producer.type)
+  if (remapped) return (d as Record<string, unknown>)[remapped.dataField]
   return producer.type === "camera-switch" ? (d.generatedJson as { transcript?: unknown } | undefined)?.transcript : d.generatedJson
 }
 

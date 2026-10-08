@@ -3694,6 +3694,9 @@ export type SpeakerViewData = {
   generatedVideoUrl?: string
   /** The EDL as it drew it, emitted on the `json` handle. */
   generatedJson?: unknown
+  /** The wired transcript remapped through the EDL as it drew it, emitted on
+   *  the `transcript` handle (decided 2026-10-08); absent when none was wired. */
+  generatedTranscript?: unknown
   generatedResults?: readonly GeneratedResult[]
   activeResultIndex?: number
 }
@@ -8867,7 +8870,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     // Not priced yet (C4): the node says so and a run is refused.
     creditCost: 0,
     inputs: ["edl", "transcript"],
-    outputs: ["video", "json"],
+    outputs: ["video", "json", "transcript"],
     defaultData: { label: "Speaker View", quality: "final", fieldMappings: {} } as SpeakerViewData,
     exposableOutputs: [{ key: "result", label: "Result", outputType: "video" as const }],
     // SV17: the aspect and the layout; the normalizer snaps an invalid pair at run.

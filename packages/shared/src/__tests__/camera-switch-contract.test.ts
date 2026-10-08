@@ -16,6 +16,16 @@ describe("transcriptSpeakerLabels", () => {
     expect(transcriptSpeakerLabels({ words: [{ text: "a", startMs: 0, endMs: 1 }] })).toEqual([])
     for (const bad of [undefined, null, "nope", 4, { words: "x" }]) expect(transcriptSpeakerLabels(bad)).toEqual([])
   })
+  it("reads through normalizeTranscript (decided 2026-10-08), as the Cloud plugin reads it: an untimed word names no speaker, a point word does, and first appearance is in time order", () => {
+    const raw = { words: [
+      { text: "late", start: 5_000, end: 5_400, speaker: "speaker_2" },
+      { text: "point", startMs: 100, endMs: 100, speaker: "speaker_3" },
+      { text: "untimed", speaker: "ghost" },
+      { text: "inverted", startMs: 700, endMs: 300, speaker: "ghost_2" },
+      { text: "early", startMs: 200, endMs: 600, speaker: "speaker_0" },
+    ] }
+    expect(transcriptSpeakerLabels(raw)).toEqual(["speaker_3", "speaker_0", "speaker_2"])
+  })
 })
 
 describe("cameraSwitchCameras", () => {

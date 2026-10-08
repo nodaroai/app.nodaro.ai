@@ -25,6 +25,7 @@ import type { WorkflowNode } from "@/types/nodes"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { applyBackendExecutionState, applyCompletedExecutionResults } from "@/hooks/use-workflow-persistence"
 import { JSON_RUN_RESULT_TYPES } from "@/lib/json-run-result"
+import { RENDER_NODE_TYPES } from "@nodaro/shared"
 import { paintRunStates } from "../run-handlers"
 import census from "../../../../../../backend/src/services/workflow-engine/__tests__/fixtures/saved-json-producers.json"
 
@@ -113,6 +114,26 @@ describe("every node type whose saved json the engine hands on (the backend cens
         const state = { status: "completed", startedAt: "2026-10-04T21:28:13.932Z", completedAt: "2026-10-04T21:28:26.196Z", jobId: "c0ffee00-0000-4000-8000-000000000001", output: outputOf(type) }
         const data = LANES[lane](node, state)
         expect(landed(type, field, data), `a server run's json never reaches ${field}: map it (lib/json-run-result.ts)`).toBe(true)
+      })
+    }
+  }
+})
+
+describe("a render's own transcript output (RENDER_NODE_TYPES transcriptOutput; Speaker View's, decided 2026-10-08)", () => {
+  const renders = Object.entries(RENDER_NODE_TYPES).filter(([, d]) => d.transcriptOutput.handle !== "json")
+
+  it("covers Speaker View", () => {
+    expect(renders.map(([t]) => t)).toContain("speaker-view")
+  })
+
+  for (const [type, d] of renders) {
+    for (const lane of Object.keys(LANES) as Lane[]) {
+      it(`${type}.${d.transcriptOutput.handle} → ${d.transcriptOutput.dataField}, through ${lane}`, () => {
+        const node = { id: "n", type, position: { x: 0, y: 0 }, data: { label: type } } as unknown as WorkflowNode
+        const output = { ...outputOf(type), [d.transcriptOutput.handle]: JSON_OBJECT }
+        const state = { status: "completed", startedAt: "2026-10-04T21:28:13.932Z", completedAt: "2026-10-04T21:28:26.196Z", jobId: "c0ffee00-0000-4000-8000-000000000001", output }
+        const data = LANES[lane](node, state)
+        expect(JSON.stringify(data[d.transcriptOutput.dataField] ?? null), `a server run's transcript never reaches ${d.transcriptOutput.dataField}`).toContain(MARK)
       })
     }
   }

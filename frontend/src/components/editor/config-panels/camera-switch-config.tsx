@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { CAMERA_SWITCH_BOUNDS, CAMERA_SWITCH_DEFAULTS, CAMERA_SWITCH_NAME_MAX, cameraSwitchCameras, clampCameraSwitchSetting, defaultSpeakerMap, transcriptSpeakerLabels, type CameraSwitchNumericSetting } from "@nodaro/shared"
+import { CAMERA_SWITCH_BOUNDS, CAMERA_SWITCH_DEFAULTS, CAMERA_SWITCH_NAME_MAX, cameraSwitchCameras, clampCameraSwitchSetting, defaultSpeakerMap, renderTranscriptOutputOf, transcriptSpeakerLabels, type CameraSwitchNumericSetting } from "@nodaro/shared"
 import type { CameraSwitchNodeData, WorkflowEdge, WorkflowNode } from "@/types/nodes"
 import type { ConfigProps } from "./types"
 
@@ -59,8 +59,10 @@ export function speakerChoices(
   const results = Array.isArray(d.generatedResults) ? d.generatedResults : []
   const fromResult = results[d.activeResultIndex ?? 0]?.transcript
   const generated = d.generatedJson as { transcript?: unknown } | undefined
-  // A Camera Switch upstream carries { edl, transcript }.
-  const transcript = fromResult ?? (producer.type === "camera-switch" ? generated?.transcript : d.generatedJson)
+  // A Camera Switch upstream carries { edl, transcript }; a render carries its
+  // transcript on the field its registry names (Speaker View's json is its EDL).
+  const remapped = renderTranscriptOutputOf(producer.type)
+  const transcript = fromResult ?? (producer.type === "camera-switch" ? generated?.transcript : remapped ? (d as Record<string, unknown>)[remapped.dataField] : d.generatedJson)
   return transcriptSpeakerLabels(transcript)
 }
 

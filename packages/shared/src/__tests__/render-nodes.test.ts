@@ -12,6 +12,10 @@ import {
   renderNodeOf,
   rendersLatestBatch,
   rendersTranscriptJson,
+  RENDER_JSON_HANDLE,
+  renderTranscriptOutputOf,
+  isRenderDataHandle,
+  renderSavedJsonOutputs,
 } from "../index.js"
 
 describe("RENDER_NODE_TYPES — one render-node registry (SV18)", () => {
@@ -85,8 +89,49 @@ describe("RENDER_NODE_TYPES — one render-node registry (SV18)", () => {
     expect(rendersTranscriptJson("transcribe")).toBe(false)
   })
 
+  describe("the transcript output: where a render's wired transcript, remapped through its cut, comes out (decided 2026-10-08)", () => {
+    it("Apply EDL's rides its `json` pip and `generatedJson`; Speaker View's its own `transcript` pip and `generatedTranscript`", () => {
+      expect(RENDER_JSON_HANDLE).toBe("json")
+      expect(renderTranscriptOutputOf("apply-edl")).toEqual({ handle: "json", dataField: "generatedJson" })
+      expect(renderTranscriptOutputOf("speaker-view")).toEqual({ handle: "transcript", dataField: "generatedTranscript" })
+      for (const t of ["camera-switch", "transcribe", "constructor", undefined, null]) expect(renderTranscriptOutputOf(t)).toBeUndefined()
+    })
+
+    it("a render's json is its transcript exactly when its transcript output IS the json pip — the two descriptions never disagree", () => {
+      for (const [t, d] of Object.entries(RENDER_NODE_TYPES)) {
+        const onJson = d.transcriptOutput.handle === RENDER_JSON_HANDLE
+        expect(d.jsonKind === "transcript", t).toBe(onJson)
+        expect(d.transcriptOutput.dataField === "generatedJson", t).toBe(onJson)
+      }
+    })
+
+    it("tells a render's data pips (json, transcript) from its media pip", () => {
+      expect(isRenderDataHandle("apply-edl", "json")).toBe(true)
+      expect(isRenderDataHandle("apply-edl", "media")).toBe(false)
+      expect(isRenderDataHandle("apply-edl", "transcript")).toBe(false)
+      expect(isRenderDataHandle("apply-edl", undefined)).toBe(false)
+      expect(isRenderDataHandle("speaker-view", "json")).toBe(true)
+      expect(isRenderDataHandle("speaker-view", "transcript")).toBe(true)
+      expect(isRenderDataHandle("speaker-view", "video")).toBe(false)
+      expect(isRenderDataHandle("speaker-view", null)).toBe(false)
+      expect(isRenderDataHandle("camera-switch", "transcript")).toBe(false)
+    })
+
+    it("lists the json outputs a render lands on its node, json first, each once", () => {
+      expect(renderSavedJsonOutputs("apply-edl")).toEqual([{ outputKey: "json", dataField: "generatedJson" }])
+      expect(renderSavedJsonOutputs("speaker-view")).toEqual([
+        { outputKey: "json", dataField: "generatedJson" },
+        { outputKey: "transcript", dataField: "generatedTranscript" },
+      ])
+      expect(renderSavedJsonOutputs("camera-switch")).toEqual([])
+    })
+  })
+
   it("is frozen: no consumer can register a render at run time", () => {
     expect(Object.isFrozen(RENDER_NODE_TYPES)).toBe(true)
-    for (const d of Object.values(RENDER_NODE_TYPES)) expect(Object.isFrozen(d)).toBe(true)
+    for (const d of Object.values(RENDER_NODE_TYPES)) {
+      expect(Object.isFrozen(d)).toBe(true)
+      expect(Object.isFrozen(d.transcriptOutput)).toBe(true)
+    }
   })
 })

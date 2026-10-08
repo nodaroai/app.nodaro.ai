@@ -79,10 +79,10 @@ export function ResultsGallery({
     const patch = resultsGalleryPickPatch(nodeType, nodeData, result.url, idx)
     if (!patch) return
     onUpdate(patch)
-    // A render (Apply EDL): a take that kept no json output (its Transcript)
-    // had the node's cleared by the pick; read the take's own back from its
-    // job (once per pick).
-    if (isRenderNodeType(nodeType) && nodeId) void restorePickedTakeTranscript(nodeId, { ...result, url: result.url })
+    // A render: a take that kept no json output (Apply EDL's Transcript;
+    // Speaker View's EDL or transcript) had the node's cleared by the pick;
+    // read the take's own back from its job (once per pick, for all of them).
+    if (isRenderNodeType(nodeType) && nodeId) void restorePickedTakeTranscript(nodeId, { ...result, url: result.url }, undefined, nodeType)
   }, [results, nodeId, nodeType, nodeData, onUpdate])
 
   if (results.length === 0 || !activeUrl) return null
