@@ -26,6 +26,7 @@ import { getR2ObjectSize, readR2ObjectBuffer, uploadBufferToR2, uploadLocalFileT
 import { encodeVideoProxy } from "../video-proxy-encode.js"
 import { ensureMediaProxy, MediaHasNoAudioError, mediaProxyKey, mediaProxyManifestKey } from "../media-proxy.js"
 import { InvalidProxySpansError } from "../media-proxy-span-map.js"
+import { SCENE_CUT_RECIPE } from "../media-proxy-cuts.js"
 import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
 
 const SRC = "https://example.com/episode.mp4"
@@ -34,7 +35,9 @@ const SPAN_MAP = [
   { proxyStartMs: 0, proxyEndMs: 3500, sourceStartMs: 0, firstFrame: 0, frameCount: 7 },
   { proxyStartMs: 3500, proxyEndMs: 8500, sourceStartMs: 10_300, firstFrame: 7, frameCount: 10 },
 ]
-const ENCODED = { outPath: "/tmp/media-proxy-work/proxy.mp4", spanMap: SPAN_MAP, frame: { w: 960, h: 540 }, frameCount: 17 }
+const CUTS = [1650.5, 12_034.367]
+const ENCODED = { outPath: "/tmp/media-proxy-work/proxy.mp4", spanMap: SPAN_MAP, frame: { w: 960, h: 540 }, frameCount: 17, cuts: CUTS }
+const SC = `sc${SCENE_CUT_RECIPE}`
 const SPANS = [{ startMs: 10_300, endMs: 14_900 }, { startMs: 0, endMs: 3300 }]
 const DETECT = { fps: 2, height: 540, spans: SPANS }
 
@@ -51,8 +54,8 @@ describe("mediaProxyKey", () => {
   it("is stable for the same source/kind/fps and under the proxies/ prefix", () => {
     expect(mediaProxyKey(SRC, "audio")).toBe(mediaProxyKey(SRC, "audio"))
     expect(mediaProxyKey(SRC, "audio")).toMatch(/^proxies\/[0-9a-f]{40}\/audio-v2\.m4a$/)
-    expect(mediaProxyKey(SRC, "video", { fps: 15 })).toMatch(/^proxies\/[0-9a-f]{40}\/video-v2@15fps-360p\.mp4$/)
-    expect(mediaProxyKey(SRC, "video", DETECT)).toMatch(/^proxies\/[0-9a-f]{40}\/video-v2@2fps-540p-spans-[0-9a-f]{16}\.mp4$/)
+    expect(mediaProxyKey(SRC, "video", { fps: 15 })).toMatch(new RegExp(`^proxies/[0-9a-f]{40}/video-v3@15fps-360p-${SC.replace(/\./g, "\\.")}\\.mp4$`))
+    expect(mediaProxyKey(SRC, "video", DETECT)).toMatch(new RegExp(`^proxies/[0-9a-f]{40}/video-v3@2fps-540p-${SC.replace(/\./g, "\\.")}-spans-[0-9a-f]{16}\\.mp4$`))
   })
 
   it("varies by kind, by fps, by height, by spans and by source", () => {
@@ -62,6 +65,11 @@ describe("mediaProxyKey", () => {
     expect(mediaProxyKey(SRC, "video", DETECT)).not.toBe(mediaProxyKey(SRC, "video", { fps: 2, height: 540 }))
     expect(mediaProxyKey(SRC, "video", DETECT)).not.toBe(mediaProxyKey(SRC, "video", { ...DETECT, spans: [{ startMs: 0, endMs: 3300 }] }))
     expect(mediaProxyKey(SRC, "audio")).not.toBe(mediaProxyKey("https://other/x.mp4", "audio"))
+  })
+
+  it("names the scene-cut rule, so a rule change re-encodes instead of serving another rule's cuts", () => {
+    expect(mediaProxyKey(SRC, "video", { fps: 2 })).toContain(`-${SC}`)
+    expect(mediaProxyKey(SRC, "audio")).not.toContain("-sc")
   })
 
   it("is the same for equivalent spans: order, overlaps and sub-ms noise do not split the cache", () => {
@@ -138,6 +146,7 @@ describe("ensureMediaProxy — video with spans (the detection proxy)", () => {
     expect(r.spanMap).toEqual(SPAN_MAP)
     expect(r.frame).toEqual({ w: 960, h: 540 })
     expect(r.frameCount).toBe(17)
+    expect(r.cuts).toEqual(CUTS)
     expect(r.fps).toBe(2)
     expect(r.url).toBe(`https://cdn.test/${mediaProxyKey(SRC, "video", DETECT)}`)
   })
@@ -149,15 +158,21 @@ describe("ensureMediaProxy — video with spans (the detection proxy)", () => {
     const [body, manifestKey] = vi.mocked(uploadBufferToR2).mock.calls[0]
     expect(manifestKey).toBe(mediaProxyManifestKey(key))
     expect(vi.mocked(uploadLocalFileToR2Key).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(uploadBufferToR2).mock.invocationCallOrder[0])
-    expect(JSON.parse(body.toString("utf8"))).toMatchObject({ fps: 2, height: 540, spanMap: SPAN_MAP, frame: { w: 960, h: 540 }, frameCount: 17 })
+    expect(JSON.parse(body.toString("utf8"))).toMatchObject({
+      version: 2, fps: 2, height: 540, spanMap: SPAN_MAP, frame: { w: 960, h: 540 }, frameCount: 17,
+      cuts: CUTS, cutRecipe: SCENE_CUT_RECIPE,
+    })
   })
 
-  it("a cache hit returns the stored span map without downloading or encoding", async () => {
+  it("a cache hit returns the stored span map and cuts without downloading or encoding", async () => {
     vi.mocked(getR2ObjectSize).mockResolvedValue(4242)
-    vi.mocked(readR2ObjectBuffer).mockResolvedValue(Buffer.from(JSON.stringify({ version: 1, fps: 2, height: 540, spanMap: SPAN_MAP, frame: { w: 960, h: 540 }, frameCount: 17 })))
+    vi.mocked(readR2ObjectBuffer).mockResolvedValue(Buffer.from(JSON.stringify({
+      version: 2, fps: 2, height: 540, spanMap: SPAN_MAP, frame: { w: 960, h: 540 }, frameCount: 17, cuts: CUTS, cutRecipe: SCENE_CUT_RECIPE,
+    })))
     const r = await ensureMediaProxy(SRC, "video", DETECT)
     expect(r.cached).toBe(true)
     expect(r.spanMap).toEqual(SPAN_MAP)
+    expect(r.cuts).toEqual(CUTS)
     expect(vi.mocked(readR2ObjectBuffer).mock.calls[0][0]).toBe(mediaProxyManifestKey(mediaProxyKey(SRC, "video", DETECT)))
     expect(downloadFile).not.toHaveBeenCalled()
     expect(encodeVideoProxy).not.toHaveBeenCalled()
@@ -165,7 +180,20 @@ describe("ensureMediaProxy — video with spans (the detection proxy)", () => {
 
   it("a proxy with no span map beside it (or an unreadable one) is re-encoded, never served without its clock", async () => {
     vi.mocked(getR2ObjectSize).mockResolvedValue(4242)
-    for (const manifest of [null, Buffer.from("{not json"), Buffer.from(JSON.stringify({ version: 1, spanMap: "nope" }))]) {
+    const v1 = { version: 1, fps: 2, height: 540, spanMap: SPAN_MAP, frame: { w: 960, h: 540 }, frameCount: 17 }
+    const v2 = { ...v1, version: 2, cuts: CUTS, cutRecipe: SCENE_CUT_RECIPE }
+    for (const manifest of [
+      null,
+      Buffer.from("{not json"),
+      Buffer.from(JSON.stringify({ version: 1, spanMap: "nope" })),
+      // P3.2's manifest has no cuts: re-encoded, never served cutless
+      Buffer.from(JSON.stringify(v1)),
+      Buffer.from(JSON.stringify({ ...v2, cuts: undefined })),
+      Buffer.from(JSON.stringify({ ...v2, cuts: [5000, 1000] })),
+      Buffer.from(JSON.stringify({ ...v2, cuts: [1000, Number.NaN] })),
+      // cuts found by another rule are not this proxy's cuts
+      Buffer.from(JSON.stringify({ ...v2, cutRecipe: "t1-r1-f1" })),
+    ]) {
       vi.mocked(encodeVideoProxy).mockClear()
       vi.mocked(readR2ObjectBuffer).mockResolvedValueOnce(manifest)
       const r = await ensureMediaProxy(SRC, "video", DETECT)

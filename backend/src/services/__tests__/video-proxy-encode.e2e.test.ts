@@ -152,6 +152,53 @@ describe("encodeVideoProxy (e2e, real ffmpeg)", () => {
     ])
     // Audio only.
     await runFfmpeg(["-y", "-f", "lavfi", "-i", "sine=d=2", p("audio.m4a")])
+    // Scene cuts (P3.2b). A pre-edited source: three different pictures, hard
+    // cuts at source frames 120 and 210 (4.004 s and 7.007 s at 29.97 fps),
+    // each picture moving or still the way a camera's is.
+    await runFfmpeg([
+      "-y", "-f", "lavfi", "-i",
+      `testsrc2=s=384x216:r=30000/1001:d=4[a];smptehdbars=s=384x216:r=30000/1001:d=3[b];testsrc=s=384x216:r=30000/1001:d=5[c];[a][b][c]concat=n=3:v=1`,
+      ...x264, "-g", "60", p("cuts.mp4"),
+    ])
+    // Two hard cuts 300 ms apart (a quick reaction insert): testsrc2 for 2 s,
+    // SMPTE bars for 0.3 s, then a mandelbrot. Closer together than the rule's
+    // window, so each cut's nearest neighbour is the other cut.
+    await runFfmpeg([
+      "-y", "-f", "lavfi", "-i",
+      `testsrc2=s=384x216:r=30000/1001:d=2[a];smptebars=s=384x216:r=30000/1001:d=0.3[b];mandelbrot=s=384x216:r=30000/1001,trim=duration=2[c];[a][b][c]concat=n=3:v=1`,
+      ...x264, "-g", "60", p("cuts-close.mp4"),
+    ])
+    // A one-second dissolve between two pictures, from 3 s to 4 s (catie's
+    // opening is one): gradual, so a decode-rate jump detector may miss it.
+    await runFfmpeg([
+      "-y", "-f", "lavfi", "-i",
+      `testsrc2=s=384x216:r=30000/1001:d=5[a];smptehdbars=s=384x216:r=30000/1001:d=5[b];[a][b]xfade=transition=fade:duration=1:offset=3`,
+      ...x264, p("dissolve.mp4"),
+    ])
+    // A static shot with camera grain: no cut anywhere.
+    await runFfmpeg(["-y", "-f", "lavfi", "-i", "color=c=0x506070:s=384x216:r=30000/1001:d=10,noise=alls=12:allf=t+u", ...x264, p("grain.mp4")])
+    // A handheld shake: a window jumping up to 40 px at random every frame
+    // over a textured picture. Its scdet scores sit at 5–18 on frame after
+    // frame (a plateau), well over the threshold — never a spike.
+    await runFfmpeg([
+      "-y", "-f", "lavfi", "-i",
+      "nullsrc=s=1400x216:r=30000/1001:d=4,geq=lum='128+60*sin(X/7)*cos(Y/5)+40*sin(X/23)':cb=128:cr=128,crop=384:216:'600+40*random(1)':0",
+      ...x264, p("shake.mp4"),
+    ])
+    // A camera flash: one all-white frame (source frame 60) inside a shot, the
+    // picture before it coming straight back.
+    await runFfmpeg([
+      "-y", "-f", "lavfi", "-i", "testsrc2=s=384x216:r=30000/1001:d=4,drawbox=x=0:y=0:w=iw:h=ih:color=white:t=fill:enable='eq(n,60)'",
+      ...x264, p("flash.mp4"),
+    ])
+    // Flashes held for two and for three frames (source frames 60–61, 60–62):
+    // the picture before each comes back after it.
+    for (const held of [2, 3]) {
+      await runFfmpeg([
+        "-y", "-f", "lavfi", "-i", `testsrc2=s=384x216:r=30000/1001:d=4,drawbox=x=0:y=0:w=iw:h=ih:color=white:t=fill:enable='between(n,60,${59 + held})'`,
+        ...x264, p(`flash-${held}.mp4`),
+      ])
+    }
   }, 120_000)
 
   afterAll(async () => {
@@ -251,6 +298,90 @@ describe("encodeVideoProxy (e2e, real ffmpeg)", () => {
     const err = await encodeVideoProxy(p("anamorphic.mp4"), await work("all-past-end"), { fps: 2, height: 108, spans: [{ startMs: 20_000, endMs: 30_000 }] }).catch((e: unknown) => e)
     expect(err).toBeInstanceOf(DeterministicJobError)
   }, 120_000)
+
+  describe("scene cuts in the same decode (P3.2b)", () => {
+    /** Source frame N's time on the source clock (ms). */
+    const frameMs = (n: number) => n * SRC_FRAME_MS
+    /** A cut lands ON the first frame of the new shot: within a ms of its pts. */
+    const expectCutsAt = (cuts: readonly number[], frames: readonly number[]) => {
+      expect(cuts).toHaveLength(frames.length)
+      cuts.forEach((c, i) => expect(Math.abs(c - frameMs(frames[i])), `cut ${i} at ${c} ms, frame ${frames[i]} at ${frameMs(frames[i])}`).toBeLessThan(1))
+    }
+
+    // Exactly two cuts: the moving test pictures between them (testsrc2's
+    // drifting shapes, testsrc's sweep) are motion, not edits.
+    it("a whole pre-edited source: every hard cut, on the source clock, at the first frame of the new shot", async () => {
+      const r = await encodeVideoProxy(p("cuts.mp4"), await work("cuts-whole"), { fps: 2, height: 108 })
+      expectCutsAt(r.cuts, [120, 210])
+    }, 120_000)
+
+    it("span-scoped: each span's cuts come back on the SOURCE clock, not the proxy's or the span's", async () => {
+      const spans = [{ startMs: 3000, endMs: 5000 }, { startMs: 6100, endMs: 9000 }]
+      const r = await encodeVideoProxy(p("cuts.mp4"), await work("cuts-spans"), { fps: 2, height: 108, spans })
+      expectCutsAt(r.cuts, [120, 210])
+      // and each cut falls between the two proxy samples either side of it
+      for (const c of r.cuts) {
+        const rowIdx = r.spanMap.findIndex((row) => c >= row.sourceStartMs && c < row.sourceStartMs + (row.frameCount * 1000) / 2)
+        expect(rowIdx, `cut ${c} inside a sampled row`).toBeGreaterThanOrEqual(0)
+      }
+    }, 120_000)
+
+    it("a cut in the source between two kept spans is not decoded, so it is not reported — the next row's start is where a consumer places the possible cut", async () => {
+      const r = await encodeVideoProxy(p("cuts.mp4"), await work("cuts-gap"), {
+        fps: 2, height: 108, spans: [{ startMs: 0, endMs: 3500 }, { startMs: 8000, endMs: 11_000 }],
+      })
+      expect(r.cuts).toEqual([])
+      // Both real cuts (4004 and 7007 ms) fall after the first row's last sample and at or before the
+      // second row's first: a boundary at that row's sourceStartMs separates every sample either side.
+      expect(r.spanMap).toHaveLength(2)
+      const [first, second] = r.spanMap
+      expect(first.sourceStartMs + (first.frameCount - 1) * 500).toBeLessThan(frameMs(120))
+      expect(second.sourceStartMs).toBeGreaterThanOrEqual(frameMs(210))
+    }, 120_000)
+
+    it("a cut right at a span's end belongs to the next span's read, never to both", async () => {
+      // The cut at frame 120 (4004 ms) is past the first span's end (4000 ms).
+      const r = await encodeVideoProxy(p("cuts.mp4"), await work("cuts-edge"), {
+        fps: 2, height: 108, spans: [{ startMs: 1000, endMs: 4000 }, { startMs: 6500, endMs: 7500 }],
+      })
+      expectCutsAt(r.cuts, [210])
+    }, 120_000)
+
+    it("two hard cuts 300 ms apart are not lost: at least one cut, each at the first frame of a new shot", async () => {
+      const r = await encodeVideoProxy(p("cuts-close.mp4"), await work("cuts-close"), { fps: 2, height: 108 })
+      // The shot changes at source frames 60 (bars) and 69 (mandelbrot).
+      expect(r.cuts.length).toBeGreaterThanOrEqual(1)
+      for (const c of r.cuts) expect(Math.min(Math.abs(c - frameMs(60)), Math.abs(c - frameMs(69))), `cut at ${c} ms`).toBeLessThan(1)
+    }, 120_000)
+
+    it("a dissolve is never reported as a run of cuts, and nothing outside it is", async () => {
+      const r = await encodeVideoProxy(p("dissolve.mp4"), await work("dissolve"), { fps: 2, height: 108 })
+      expect(r.cuts.length).toBeLessThanOrEqual(1)
+      for (const c of r.cuts) expect(c >= 3000 && c <= 4000 + SRC_FRAME_MS, `cut at ${c}`).toBe(true)
+    }, 120_000)
+
+    it("a handheld shake is camera motion, not a run of cuts", async () => {
+      const r = await encodeVideoProxy(p("shake.mp4"), await work("shake"), { fps: 2, height: 108 })
+      expect(r.cuts).toEqual([])
+    }, 120_000)
+
+    it("a camera flash (one white frame) is not a cut: the picture comes straight back", async () => {
+      const r = await encodeVideoProxy(p("flash.mp4"), await work("flash"), { fps: 2, height: 108 })
+      expect(r.cuts).toEqual([])
+    }, 120_000)
+
+    for (const held of [2, 3]) {
+      it(`a flash held for ${held} frames is not a cut either: the picture before it comes back within the look-ahead`, async () => {
+        const r = await encodeVideoProxy(p(`flash-${held}.mp4`), await work(`flash-${held}`), { fps: 2, height: 108 })
+        expect(r.cuts).toEqual([])
+      }, 120_000)
+    }
+
+    it("a static shot with camera grain has no cut", async () => {
+      const r = await encodeVideoProxy(p("grain.mp4"), await work("grain"), { fps: 2, height: 108 })
+      expect(r.cuts).toEqual([])
+    }, 120_000)
+  })
 
   it("a source with no picture is a typed deterministic error", async () => {
     const err = await encodeVideoProxy(p("audio.m4a"), await work("audio"), { fps: 2, height: 108 }).catch((e: unknown) => e)

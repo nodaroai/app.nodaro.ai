@@ -892,6 +892,17 @@ export interface PluginVideoProxy {
   /** Display-oriented, square-pixel frame size; box fractions refer to it. */
   readonly frame: { readonly w: number; readonly h: number }
   readonly frameCount: number
+  /**
+   * Scene cuts (P3.2b), ms on the SOURCE clock, ascending: a cut at `c` starts
+   * a new shot at `c`. Found in the decode that built the proxy, at the decode
+   * rate, over the kept spans only. A gap between two kept spans is never
+   * decoded, so a cut in it cannot be seen: every `spanMap` row after the
+   * first starts a POSSIBLE shot, and a consumer merges those rows'
+   * `sourceStartMs` into this list.
+   * Added after `ensureMediaProxy` itself shipped: a plugin mirrors it as
+   * optional and treats its absence as an older host.
+   */
+  readonly cuts: readonly number[]
 }
 
 /** Mirrors `DetectFacesInput` (`services/face-detect/detect-faces.ts`): one

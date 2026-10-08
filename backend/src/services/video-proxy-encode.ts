@@ -30,12 +30,20 @@
  * across a VFR hole that follows the span, or past a late seek landing — so
  * without it a row ran past its span and overlapped the next one.
  *
+ * Scene cuts (P3.2b) come out of the same decode: `scdet` runs first in the
+ * chain, on every DECODED frame before `fps` drops any, and writes each
+ * frame's scores to a file per span, which `media-proxy-cuts.ts` judges.
+ * Their times are rebased to the span's `-ss` point like every other frame, so
+ * a cut lands on the same source clock as the span map. A cut in the source
+ * between two kept spans is not decoded, so it is not seen: a consumer treats
+ * every span-map row after the first as a possible cut.
+ *
  * Every launch goes through `runFfmpeg`: the FIFO slots, the memory admission
  * (#1860) with a real prediction — the decode of the SOURCE canvas dominates,
  * not the small output — and the CPU-quota thread counts the launcher places
  * (#1841), which is why no argv here names its own.
  */
-import { promises as fs } from "node:fs"
+import { createReadStream, promises as fs } from "node:fs"
 import { join } from "node:path"
 import { probeVideoFramePtsMs as framePtsMs, runFfmpeg, runFfprobe } from "../providers/video/ffmpeg-utils.js"
 import {
@@ -47,6 +55,7 @@ import { audioPeakMemoryMiB, canvasPeakMemoryMiB } from "../providers/video/ffmp
 import { ffmpegEffectiveThreads } from "../providers/video/ffmpeg-threads.js"
 import { DeterministicJobError } from "../lib/deterministic-job-error.js"
 import { buildSpanMap, type EncodedProxySegment, type ProxySpan, type ProxySpanMap } from "./media-proxy-span-map.js"
+import { findSceneCuts, mergeSceneCuts, readSceneScores, sceneCutFilter, segmentCutsToSourceMs } from "./media-proxy-cuts.js"
 
 /** A VIDEO proxy was asked of a source with no picture (an audio-only file).
  *  Deterministic: a retry re-downloads the same file to the same answer. */
@@ -75,6 +84,9 @@ export interface EncodedVideoProxy {
   /** The proxy's frame, display-oriented with square pixels: what box fractions refer to. */
   readonly frame: { readonly w: number; readonly h: number }
   readonly frameCount: number
+  /** Scene cuts, ms on the SOURCE clock, ascending: a cut at `c` starts a new
+   *  shot at `c`. Only what the kept spans decoded. */
+  readonly cuts: readonly number[]
 }
 
 /** Same picture recipe for every segment, so the stream-copy join is valid. */
@@ -98,11 +110,13 @@ async function frameSize(file: string): Promise<{ w: number; h: number }> {
 
 const seconds = (ms: number) => (ms / 1000).toFixed(3)
 
-/** The picture chain: sample (clipped to the span, when there is one), square
- *  the pixels at the display aspect (rotation is already applied by ffmpeg's
- *  autorotate), then scale down — never up. */
-function pictureFilter(fps: number, height: number, span: ProxySpan | undefined): string {
+/** The picture chain: find the scene cuts on every decoded frame, sample
+ *  (clipped to the span, when there is one), square the pixels at the display
+ *  aspect (rotation is already applied by ffmpeg's autorotate), then scale
+ *  down — never up. */
+function pictureFilter(fps: number, height: number, span: ProxySpan | undefined, cutsFile: string): string {
   return [
+    sceneCutFilter(cutsFile),
     `fps=fps=${fps}:round=up`,
     ...(span ? [`trim=end=${seconds(span.endMs - span.startMs)}`] : []),
     "scale=trunc(iw*sar/2)*2:ih",
@@ -124,18 +138,23 @@ export async function encodeVideoProxy(src: string, workDir: string, opts: Video
   const timeoutMs = opts.timeoutMs ?? MEDIA_PROXY_FFMPEG_TIMEOUT_MS
   const encodePeak = canvasPeakMemoryMiB({ width: source.width, height: source.height }, 1, ffmpegEffectiveThreads())
 
-  const segments: Array<EncodedProxySegment & { readonly path: string }> = []
+  const segments: Array<EncodedProxySegment & { readonly path: string; readonly cuts: readonly number[] }> = []
   for (const [i, span] of spans.entries()) {
-    const path = join(workDir, `seg-${String(i).padStart(4, "0")}.mp4`)
+    const name = String(i).padStart(4, "0")
+    const path = join(workDir, `seg-${name}.mp4`)
+    const cutsFile = join(workDir, `cuts-${name}.txt`)
     // A span is bounded by its own length; the whole source (length unknown) by the proxy's ceiling.
     const spanMs = span ? span.endMs - span.startMs : undefined
     await runFfmpeg(
-      ["-y", ...cutArgs(span), "-i", src, "-an", "-vf", pictureFilter(opts.fps, opts.height, span), ...ENCODE, path],
+      ["-y", ...cutArgs(span), "-i", src, "-an", "-vf", pictureFilter(opts.fps, opts.height, span, cutsFile), ...ENCODE, path],
       opts.timeoutMs ?? (spanMs === undefined ? timeoutMs : proxySpanEncodeTimeoutMs(spanMs)),
       { peakMemoryMiB: encodePeak },
     )
+    const seekMs = span?.startMs ?? 0
+    const cutTimesS = findSceneCuts(await readSceneScores(createReadStream(cutsFile, "utf8")))
+    const cuts = segmentCutsToSourceMs(cutTimesS, seekMs, spanMs)
     const pts = spanMs === undefined ? await framePtsMs(path) : await framePtsMs(path, proxySpanProbeTimeoutMs(spanMs))
-    segments.push({ path, seekMs: span?.startMs ?? 0, framePtsMs: pts })
+    segments.push({ path, seekMs, framePtsMs: pts, cuts })
   }
 
   const written = segments.filter((s) => s.framePtsMs.length > 0)
@@ -153,5 +172,6 @@ export async function encodeVideoProxy(src: string, workDir: string, opts: Video
 
   const spanMap = buildSpanMap(written, await framePtsMs(outPath), opts.fps)
   const frameCount = spanMap.reduce((n, r) => n + r.frameCount, 0)
-  return { outPath, spanMap, frame: await frameSize(outPath), frameCount }
+  const cuts = mergeSceneCuts(written.map((s) => s.cuts))
+  return { outPath, spanMap, frame: await frameSize(outPath), frameCount, cuts }
 }
