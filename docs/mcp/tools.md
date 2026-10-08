@@ -426,6 +426,12 @@ model's supported values up front, or pick the sibling model that supports what
 you want. The same correction applies to `create_workflow` and
 `import_workflow`.
 
+One value is kept rather than corrected: `aspectRatio: "auto"` on an
+`image-to-image`, `modify-image` or `edit-image` node. Auto keeps your photo's
+shape, so it is resolved against the source image when the workflow runs — a
+model with a native `auto` receives it, and on a model without one the run uses
+the supported ratio closest to the source image.
+
 Nodes configured with multiple providers at once are left untouched — the valid
 set there is the intersection across every selected provider, and no single
 replacement is correct for all of them.
@@ -666,7 +672,7 @@ prompt with no questions round-trip.
 | Tool | Description |
 |------|-------------|
 | `generate_image` | Text-to-image generation. Accepts `prompt`, `model`, `aspect_ratio`, `resolution`, `quality`, `negative_prompt`, `reference_image_urls` (up to 14 URLs or asset ids for identity/style/composition guidance — the response text confirms how many were attached), and optional `structured` fields. Advanced callers can also pass `connected_references` (the editor's structured wired-reference shape) + `reference_order` — labeled/ordered references the route assembles into `@image_N` directives and `{image:N}` token resolution — and `described_references` (up to 10 `{name, description}` entries for a subject you can name but have no picture for: no url, nothing attached, each rendered as a `<Name> — <description>.` line so a name in your prompt reaches the model as a described subject). Also accepts `presetId` (from `list_node_presets`) to apply a built-in or saved preset's config server-side; any explicit field above overrides the preset, and `prompt` may be omitted when the preset supplies one. A preset's `promptPrefix` / `promptSuffix` wrap your `prompt`. |
-| `modify_image` | Image-to-image transformation — apply a style, change colors, swap backgrounds. Accepts `prompt` and the source as `image_url` or `image_asset_id`, plus `model`, `resolution`, `quality`, `aspect_ratio`, `negative_prompt` and `structured`. |
+| `modify_image` | Image-to-image transformation — apply a style, change colors, swap backgrounds. Accepts `prompt` and the source as `image_url` or `image_asset_id`, plus `model`, `resolution`, `quality`, `aspect_ratio`, `negative_prompt` and `structured`. `aspect_ratio: "auto"` keeps the photo's shape on every model: a model with a native `auto` receives it, and on the others the supported ratio closest to the source image is used. Any other ratio the model does not list falls back as before. |
 | `image_to_image` | Structural image-to-image (i2i) using a dedicated i2i model. Distinct from `modify_image` in that it uses models optimized for structural transfer. Supports multi-reference composition via `reference_image_urls` (up to 13). |
 | `edit_image` | Targeted edits: remove background, upscale, inpaint (nano-banana-edit), or Grok task-chained ops — free segment maps (`grok-2-segment`) and region-targeted edits (`grok-2-edit`) of a prior grok-2 generation. |
 | `generate_mask` | Generate or refine a segmentation mask for inpainting workflows. |

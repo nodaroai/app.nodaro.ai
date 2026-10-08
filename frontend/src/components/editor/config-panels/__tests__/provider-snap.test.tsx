@@ -497,6 +497,36 @@ describe("ModifyImageConfig — provider-snap useEffect", () => {
     expect(merged.resolution).toBe("1K")
   })
 
+  // Modify Image transforms a source photo, so "auto" (keep the photo's shape)
+  // is valid on EVERY model here — the platform resolves it to the model's
+  // nearest ratio where the model has no native auto. Opening the panel must
+  // not reset it.
+  it("keeps 'auto' on a model without a native auto", () => {
+    for (const provider of ["seedream-5-pro-i2i", "nano-banana-edit", "flux-kontext", "qwen-edit"]) {
+      const onUpdate = vi.fn()
+      render(<ModifyImageConfig {...commonProps(onUpdate, baseModifyImageData({ provider, aspectRatio: "auto" }))} />)
+      for (const [u] of onUpdate.mock.calls) {
+        expect("aspectRatio" in u, provider).toBe(false)
+      }
+    }
+  })
+
+  it("still snaps any other stale ratio to the model's first listed ratio — never to Auto", () => {
+    const onUpdate = vi.fn()
+    // Seedream lists 1:1 first and has no 4:5.
+    render(<ModifyImageConfig {...commonProps(onUpdate, baseModifyImageData({ provider: "seedream-5-pro-i2i", aspectRatio: "4:5" }))} />)
+    const merged: Record<string, unknown> = onUpdate.mock.calls.reduce((acc: any, [u]: any) => ({ ...acc, ...u }), {})
+    expect(merged.aspectRatio).toBe("1:1")
+  })
+
+  it("leaves a native-auto model's snap exactly as before", () => {
+    const onUpdate = vi.fn()
+    // GPT Image 2 (I2I) lists auto first and has no 3:2.
+    render(<ModifyImageConfig {...commonProps(onUpdate, baseModifyImageData({ provider: "gpt-image-2-i2i", aspectRatio: "3:2" }))} />)
+    const merged: Record<string, unknown> = onUpdate.mock.calls.reduce((acc: any, [u]: any) => ({ ...acc, ...u }), {})
+    expect(merged.aspectRatio).toBe("auto")
+  })
+
   it("clears maskUrl when provider does not support mask", () => {
     // nano-banana (default) is not in I2I_MASK_SUPPORT.
     const onUpdate = vi.fn()

@@ -16,7 +16,7 @@ Edit Image takes an existing image as input and applies a transformation operati
 | Style | select | `""` | Style preset or custom text (only used by nano-banana-edit) |
 | Negative Prompt | text | `""` | Elements to exclude (only used by nano-banana-edit) |
 | Upscale Factor | select | 2 | Topaz only: 1x, 2x, 4x |
-| Aspect Ratio | select | -- | Available for nano-banana-edit |
+| Aspect Ratio | select | -- | Available for nano-banana-edit. **Auto** keeps your photo's shape; on models without a native auto it picks the closest supported shape. |
 | Seed | number | -- | Reproducibility seed (nano-banana-edit) |
 | Connected Media Order | list | -- | Order of connected input media assets |
 

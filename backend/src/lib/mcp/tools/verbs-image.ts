@@ -18,7 +18,7 @@ import {
 } from "./_verb-helpers.js"
 import { LLM_MCP_FIELDS, llmPayloadFields } from "./_llm-fields.js"
 import { WIDGET_URI } from "../widgets/registrar.js"
-import { defaultImageModel, modelIdsByKindMode, MODIFY_IMAGE_PROVIDERS, TASK_CHAINED_EDIT_PROVIDERS, readPromptAffixes, SCRIPT_SCENE_COUNT_RANGE, SCRIPT_SCENE_COUNT_DEFAULT, SCRIPT_TARGET_DURATION_RANGE, SCRIPT_TARGET_DURATION_DEFAULT, SCRIPT_TONE_MAX_LENGTH, SCRIPT_STYLE_GUIDE_MAX_LENGTH } from "@nodaro/shared"
+import { defaultImageModel, isAutoAspectToken, modelIdsByKindMode, MODIFY_IMAGE_PROVIDERS, TASK_CHAINED_EDIT_PROVIDERS, readPromptAffixes, SCRIPT_SCENE_COUNT_RANGE, SCRIPT_SCENE_COUNT_DEFAULT, SCRIPT_TARGET_DURATION_RANGE, SCRIPT_TARGET_DURATION_DEFAULT, SCRIPT_TONE_MAX_LENGTH, SCRIPT_STYLE_GUIDE_MAX_LENGTH } from "@nodaro/shared"
 import { applyPromptAffixes } from "@nodaro/prompts"
 import { getUserMcpPreferences } from "../user-preferences.js"
 import { normalizeImageInput } from "../normalize.js"
@@ -379,7 +379,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
             ),
           resolution: z.string().optional().describe("Resolution: falls back to nearest supported."),
           quality: z.string().optional().describe("Quality: medium/high/basic. Synonyms accepted."),
-          aspect_ratio: z.string().optional().describe("Aspect ratio. Variations and unsupported values fall back."),
+          aspect_ratio: z.string().optional().describe("Aspect ratio. 'auto' keeps the photo's shape on every model. Variations and unsupported values fall back."),
           negative_prompt: z.string().max(2000).optional(),
           structured: StructuredFields.optional(),
         },
@@ -426,7 +426,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         } catch {
           /* swallow */
         }
-        const { model, aspectRatio, resolution, quality } = normalizeImageInput(
+        const normalized = normalizeImageInput(
           {
             model: args.model,
             aspect_ratio: args.aspect_ratio,
@@ -441,6 +441,11 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           },
           defaultImageModel("edit", args.aspect_ratio ?? userImg.aspectRatio),
         )
+        const { model, resolution, quality } = normalized
+        // "auto" keeps the source photo's shape: /v1/image-to-image resolves it
+        // against the image (natively, or to the model's nearest listed ratio),
+        // so it is handed on instead of snapped to a fixed ratio here.
+        const aspectRatio = isAutoAspectToken(args.aspect_ratio) ? "auto" : normalized.aspectRatio
 
         // The /v1/image-to-image route validates against MODIFY_IMAGE_PROVIDERS.
         // normalizeImageInput keeps any valid catalog id verbatim — including

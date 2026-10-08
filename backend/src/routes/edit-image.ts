@@ -9,6 +9,7 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/re
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { applySnappedLevers, withAdjustments } from "../lib/image-gen-normalize.js"
+import { sourceImageForAutoAspect } from "../lib/image-source-size.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { IMAGE_ASPECT_RATIO_VALUES, IMAGE_EDIT_PROVIDERS, TASK_CHAINED_EDIT_PROVIDERS, PROMPT_HARD_CEILING, buildCreditModelIdentifier, resolveNormalizedImageGen, resolveTopazUpscale } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
@@ -156,12 +157,16 @@ export async function editImageRoutes(app: FastifyInstance) {
     // remove-bg and the grok task-chained ops — DROP the value, so
     // `image_size` stops being forwarded upstream for them; `nano-banana-edit`
     // keeps its own ratio list. Must run BEFORE `buildJobInputData` so the job
-    // row records what actually ran.
+    // row records what actually ran. "auto" on a model without a native auto
+    // keeps the source photo's shape: `imageUrl`'s size, read from its header
+    // (and only in that case), picks the model's nearest ratio.
+    const sourceImage = await sourceImageForAutoAspect(baseProvider, rawAspectRatio, imageUrl)
     const normalized = resolveNormalizedImageGen({
       provider: baseProvider,
       aspectRatio: rawAspectRatio,
       refCount: 0,
       swapToI2i: false,
+      sourceImage,
     })
     applySnappedLevers(parsed.data, normalized, editImageBody)
 

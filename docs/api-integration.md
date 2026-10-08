@@ -572,8 +572,17 @@ changed:
   dropped (e.g. an `aspectRatio` sent to `recraft-upscale`).
 - **Credits are reserved against the corrected values.** A `gpt-image-2` request
   for `auto` + `2K` renders and bills at 1K, because `auto` only renders 1K.
+- **`aspectRatio: "auto"` keeps your photo's shape** on `/v1/image-to-image` and
+  `/v1/edit-image`. A model with a native `auto` receives it as is. On a model
+  without one, the server reads the size of `imageUrl` and uses the supported
+  ratio closest to it — a 1104x1472 portrait sent to `seedream-5-pro-i2i`
+  renders at `3:4` — and reports the choice in `adjustments`. If the image's
+  size cannot be read, `auto` falls back to the model's first listed ratio.
+  The ratio never changes the price on these models.
 - The per-model option lists are in `GET /v1/models`; a workflow saved through
-  the API or MCP is corrected the same way at write time.
+  the API or MCP is corrected the same way at write time — except `auto` on an
+  image-to-image, modify-image or edit-image node, which is kept and resolved
+  against the source image when the workflow runs.
 
 ### On the video routes
 

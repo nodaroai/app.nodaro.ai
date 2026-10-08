@@ -985,6 +985,7 @@ const OPTION_QUALIFIERS_HE: Record<string, string> = {
   "Detailed": "מפורט",
   "Default": "ברירת מחדל",
   "Auto": "אוטומטי",
+  "Match the photo": "לפי התמונה",
   "Fast": "מהיר",
   "Best": "הטוב ביותר",
   "Quality": "איכות",

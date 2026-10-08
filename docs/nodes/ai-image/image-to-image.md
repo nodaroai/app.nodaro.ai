@@ -17,7 +17,7 @@ Image to Image takes a source image and a text prompt to generate a transformed 
 | Negative Prompt | text | `""` | Elements to exclude from the result |
 | Strength | slider (0-1) | varies | How much to deviate from the source image. Higher values mean more change. Only available for providers that support it. |
 | Guidance Scale | number | varies | Prompt adherence strength. Only available for providers that support it. |
-| Aspect Ratio | select | varies | Provider-specific ratio sets (same sets as Generate Image) |
+| Aspect Ratio | select | varies | Provider-specific ratio sets (same sets as Generate Image). **Auto** keeps your photo's shape; on models without a native auto it picks the closest supported shape. |
 | Resolution | select | varies | Available for flux-i2i, flux-pro-i2i: 1K, 2K; seedream-5-flash-i2i: 1K, 2K (same price at either) |
 | Quality | select | varies | Available for gpt-image-i2i (medium/high), seedream-edit (basic/high), seedream-5-lite-i2i (basic/high), seedream-5-pro-i2i (basic 1K / high 2K) |
 | Rendering Speed | select | -- | Available for ideogram variants: turbo, balanced, quality |

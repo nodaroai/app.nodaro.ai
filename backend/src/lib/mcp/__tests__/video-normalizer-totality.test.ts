@@ -14,6 +14,22 @@ import { snapAspectRatioToken } from "../../../providers/video/aspect-ratio.js"
  */
 const CANDIDATE_OFF_LIST = ["9:21", "5:4", "4:5", "21:9", "3:2", "1:1"]
 
+/**
+ * Every concrete ratio ANY catalog entry lists (image and video), plus the
+ * off-list candidates above. An off-list ratio a caller sends is, in practice,
+ * a ratio some other model lists — and the geometric-mean cases (4:3 sits
+ * exactly between 16:9 and 1:1 in log space) only show up when the candidate
+ * set is the whole vocabulary rather than a hand-picked few.
+ */
+const EVERY_CATALOG_RATIO: readonly string[] = [
+  ...new Set([
+    ...CANDIDATE_OFF_LIST,
+    ...Object.values(MODEL_CATALOG).flatMap((m) =>
+      (m.aspectRatios ?? []).filter((r) => /^\d+(\.\d+)?:\d+(\.\d+)?$/.test(r)),
+    ),
+  ]),
+]
+
 describe("every catalogued video provider snaps an off-list aspect ratio identically in both normalizers", () => {
   const withAspects = VIDEO_GEN_PROVIDERS.filter((p) => (MODEL_CATALOG[p]?.aspectRatios?.length ?? 0) > 0)
 
@@ -23,16 +39,21 @@ describe("every catalogued video provider snaps an off-list aspect ratio identic
 
   for (const provider of withAspects) {
     const allowed = MODEL_CATALOG[provider]!.aspectRatios as readonly string[]
-    const offList = CANDIDATE_OFF_LIST.find((r) => !allowed.includes(r))
-    if (!offList) continue
+    // The first off-list candidate, plus 4:3 and 3:4 — the ratios a log-space
+    // tie between a landscape and a square (or portrait and square) lands on.
+    const offLists = [
+      ...new Set([CANDIDATE_OFF_LIST.find((r) => !allowed.includes(r)), "4:3", "3:4"]),
+    ].filter((r): r is string => r !== undefined && !allowed.includes(r))
 
-    it(`${provider}: both normalizers snap ${offList} to the same supported ratio`, () => {
-      const route = normalizeVideoRequestParams(provider, { aspectRatio: offList })
-      const mcp = normalizeVideoInput({ model: provider, aspect_ratio: offList }, {}, provider)
-      expect(allowed, `${provider} forwarded ${offList} unchanged (route lane)`).toContain(route.aspectRatio)
-      expect(allowed, `${provider} forwarded ${offList} unchanged (MCP lane)`).toContain(mcp.aspectRatio)
-      expect(mcp.aspectRatio, `${provider}: route says ${route.aspectRatio}, MCP says ${mcp.aspectRatio}`).toBe(route.aspectRatio)
-    })
+    for (const offList of offLists) {
+      it(`${provider}: both normalizers snap ${offList} to the same supported ratio`, () => {
+        const route = normalizeVideoRequestParams(provider, { aspectRatio: offList })
+        const mcp = normalizeVideoInput({ model: provider, aspect_ratio: offList }, {}, provider)
+        expect(allowed, `${provider} forwarded ${offList} unchanged (route lane)`).toContain(route.aspectRatio)
+        expect(allowed, `${provider} forwarded ${offList} unchanged (MCP lane)`).toContain(mcp.aspectRatio)
+        expect(mcp.aspectRatio, `${provider}: route says ${route.aspectRatio}, MCP says ${mcp.aspectRatio}`).toBe(route.aspectRatio)
+      })
+    }
   }
 })
 
@@ -55,8 +76,8 @@ describe("the shared normalizer agrees with the provider adapters' snapAspectRat
     const concrete = allowed.filter((a) => a.includes(":"))
     if (concrete.length === 0) continue
 
-    it(`${provider}: every off-list candidate snaps to the adapter's answer`, () => {
-      for (const offList of CANDIDATE_OFF_LIST) {
+    it(`${provider}: every off-list ratio in the catalog vocabulary snaps to the adapter's answer`, () => {
+      for (const offList of EVERY_CATALOG_RATIO) {
         if (allowed.includes(offList)) continue
         const shared = normalizeVideoRequestParams(provider, { aspectRatio: offList }).aspectRatio
         const adapter = snapAspectRatioToken(offList, concrete)

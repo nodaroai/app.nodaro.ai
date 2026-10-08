@@ -1297,6 +1297,9 @@ export {
   normalizeVideoRequestParams,
   fitAspectRatioToModel,
   defaultResolutionFor,
+  nearestCatalogAspectRatio,
+  autoAspectNeedsSourceImage,
+  isAutoAspectToken,
 } from "./model-catalog.js"
 export type {
   NormalizedVideoRequest,
@@ -1311,6 +1314,8 @@ export type {
   ModelMenuOption,
   ModelInputAdjustment,
   NormalizedModelInput,
+  ModelInputContext,
+  SourceImageSize,
   TtsCapabilities,
   TtsSettingLever,
 } from "./model-catalog.js"
@@ -1644,6 +1649,7 @@ export type { ExecutionOutcome } from "./execution-outcome.js"
 
 export {
   MODEL_PARAM_NODE_TYPES,
+  SOURCE_IMAGE_NODE_TYPES,
   normalizeNodeModelParams,
   describeNodeAdjustments,
 } from "./normalize-node-params.js"

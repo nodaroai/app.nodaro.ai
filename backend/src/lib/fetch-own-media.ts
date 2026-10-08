@@ -121,6 +121,10 @@ export function cacheBustedUrl(url: string, attempt: number): string {
  * handling and their own error text. A thrown transport error is NOT retried
  * here: that is the connection ladder's job, and no caller of this helper has
  * reported one.
+ *
+ * A caller's `init.signal` bounds the pauses too: aborting it mid-pause ends
+ * the ladder at once with the signal's reason (what the next attempt would
+ * have thrown anyway), instead of after the pause.
  */
 export async function fetchOwnMedia(url: string, init: SafeFetchInit = {}): Promise<Response> {
   let res = await safeFetch(url, init)
@@ -142,7 +146,8 @@ export async function fetchOwnMedia(url: string, init: SafeFetchInit = {}): Prom
         `attempt ${i + 2}/${total} in ${pause} ms`,
     )
     discard(res)
-    await sleep(pause)
+    const signal = init.signal as AbortSignal | null | undefined
+    await (signal ? sleep(pause, signal) : sleep(pause))
     res = await safeFetch(cacheBustedUrl(url, i + 2), init)
     if (res.ok || !isTransientOwnMediaStatus(res.status)) return res
   }

@@ -964,6 +964,7 @@ const OPTION_QUALIFIERS_PT_BR: Record<string, string> = {
   "Detailed": "Detalhada",
   "Default": "Padrão",
   "Auto": "Automático",
+  "Match the photo": "Conforme a foto",
   "Fast": "Rápido",
   "Best": "Melhor qualidade",
   "Quality": "Qualidade",

@@ -28,6 +28,8 @@ import { refundJobCredits } from "../../workers/shared.js"
 import { buildScene3DHttpBody, isScene3DAuthoringType } from "./scene3d-http.js"
 import { loopbackFetch } from "./loopback-fetch.js"
 import { buildPayload, buildNodeRefMap, type WorkflowSettings } from "./payload-builder.js"
+import { autoAspectSourceImageUrl } from "./source-image.js"
+import { probeImageDisplaySize } from "../../lib/image-source-size.js"
 import { assertNodeAvailableForUser, viewerForNode } from "../../lib/availability-viewer.js"
 import { passThroughFor } from "./pass-through.js"
 import { ensureWorkflowSheetPanels } from "./reference-sheet-stage-a.js"
@@ -1810,6 +1812,14 @@ async function executeWorkerNode(
   const editPlanPerMinute = node.type === "edit-plan" ? await editPlanPerMinuteActive() : false
   let buildResult: ReturnType<typeof buildPayload>
   try {
+    // "auto" on a model without a native auto keeps the source photo's shape.
+    // The builder is synchronous, so the size is read here — from the url the
+    // build will send (`autoAspectSourceImageUrl`), through the same probe the
+    // image routes use — and handed back as `sourceImage`. No url means the
+    // size would not be used, and nothing is read; an unreadable size leaves
+    // "auto" on its usual ratio.
+    const sourceUrl = autoAspectSourceImageUrl(node, resolvedInputs, { nodes: allNodes, edges, nodeStates })
+    const sourceImage = sourceUrl ? await probeImageDisplaySize(sourceUrl) : undefined
     buildResult = buildPayload(
       node,
       jobId,
@@ -1824,6 +1834,7 @@ async function executeWorkerNode(
         viewer,
         listRow,
         editPlanPerMinute,
+        sourceImage,
       },
     )
   } catch (err) {

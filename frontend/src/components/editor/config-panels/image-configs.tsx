@@ -40,7 +40,7 @@ import type {
   ManualReferenceImage,
   ImageProvider,
 } from "@/types/nodes"
-import { IMAGE_GEN_MODELS, MODIFY_IMAGE_MODELS, UPSCALE_IMAGE_MODELS, imageStylePresets, getAspectRatiosForModel, IMAGE_RESOLUTION_OPTIONS, IMAGE_QUALITY_OPTIONS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, REF_IMAGE_MAX_LIMITS, DEFAULT_REF_IMAGE_MAX, I2I_STRENGTH_SUPPORT, I2I_MASK_SUPPORT, SEED_SUPPORT, RENDERING_SPEED_SUPPORT, GUIDANCE_SCALE_SUPPORT, defaultResolutionFor, withoutDeniedModels } from "./model-options"
+import { IMAGE_GEN_MODELS, MODIFY_IMAGE_MODELS, UPSCALE_IMAGE_MODELS, imageStylePresets, getAspectRatiosForModel, getSourcePhotoAspectRatios, IMAGE_RESOLUTION_OPTIONS, IMAGE_QUALITY_OPTIONS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, REF_IMAGE_MAX_LIMITS, DEFAULT_REF_IMAGE_MAX, I2I_STRENGTH_SUPPORT, I2I_MASK_SUPPORT, SEED_SUPPORT, RENDERING_SPEED_SUPPORT, GUIDANCE_SCALE_SUPPORT, defaultResolutionFor, withoutDeniedModels } from "./model-options"
 import { ModelSelectOption } from "./model-select-option"
 import { ModelSearchSelect } from "./model-search-select"
 import { ModelDescriptionHint } from "./model-description-hint"
@@ -922,7 +922,10 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
   const currentProvider = data.provider || IMAGE_MODEL_ROLE_DEFAULTS.edit
   const isNanoBananaEdit = currentProvider === "nano-banana-edit"
   const supportsRefImage = !isNanoBananaEdit && MODELS_WITH_REFERENCE_IMAGE_SUPPORT.has(currentProvider)
-  const aspectRatioOptions = useMemo(() => getAspectRatiosForModel(currentProvider), [currentProvider])
+  // The tiles: Auto (keep the photo's shape) on every model, then the model's
+  // own ratios. The catalog list is still what a stale ratio snaps to below.
+  const aspectRatioOptions = useMemo(() => getSourcePhotoAspectRatios(currentProvider), [currentProvider])
+  const listedAspectRatios = useMemo(() => getAspectRatiosForModel(currentProvider), [currentProvider])
   const resolutionOptions = useMemo(() => !isNanoBananaEdit ? IMAGE_RESOLUTION_OPTIONS[currentProvider] : undefined, [currentProvider, isNanoBananaEdit])
   const qualityOptions = useMemo(() => !isNanoBananaEdit ? IMAGE_QUALITY_OPTIONS[currentProvider] : undefined, [currentProvider, isNanoBananaEdit])
   const strengthConfig = useMemo(() => !isNanoBananaEdit ? I2I_STRENGTH_SUPPORT[currentProvider] : undefined, [currentProvider, isNanoBananaEdit])
@@ -932,10 +935,12 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
   const supportsMask = !isNanoBananaEdit && I2I_MASK_SUPPORT.has(currentProvider)
 
   useEffect(() => {
+    // "auto" is valid on every model here (see getSourcePhotoAspectRatios);
+    // any other stale ratio snaps to the model's first listed ratio, as before.
     const validValues = aspectRatioOptions.map((o) => o.value)
     const updates: Partial<ModifyImageData> = {}
     if (data.aspectRatio && !validValues.includes(data.aspectRatio)) {
-      updates.aspectRatio = validValues[0] || "1:1"
+      updates.aspectRatio = listedAspectRatios[0]?.value || "1:1"
     }
     // Resolution / quality fail-safe: snap invalid values to a valid option
     // when the provider exposes the lever, otherwise clear the stale value
@@ -1658,7 +1663,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
           <MappableField field="aspectRatio" label={t("field.aspectRatio")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <AspectRatioSelector
               options={aspectRatioOptions}
-              value={data.aspectRatio || aspectRatioOptions[0]?.value || "1:1"}
+              value={data.aspectRatio || listedAspectRatios[0]?.value || "1:1"}
               onValueChange={(v) => onUpdate({ aspectRatio: v })}
             />
           </MappableField>

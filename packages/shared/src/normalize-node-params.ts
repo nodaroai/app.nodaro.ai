@@ -20,7 +20,7 @@
  * is covered without touching this file.
  */
 
-import { normalizeModelInput, type ModelInputAdjustment } from "./model-catalog.js"
+import { autoAspectNeedsSourceImage, normalizeModelInput, type ModelInputAdjustment } from "./model-catalog.js"
 
 /**
  * Node types whose `data` carries catalog-governed model parameters under the
@@ -39,6 +39,21 @@ import { normalizeModelInput, type ModelInputAdjustment } from "./model-catalog.
  */
 export const MODEL_PARAM_NODE_TYPES: ReadonlySet<string> = new Set([
   "generate-image",
+  "image-to-image",
+  "modify-image",
+  "edit-image",
+])
+
+/**
+ * The image node types that transform a SOURCE image (their required `image`
+ * input). On these "auto" means "keep the source photo's shape", and the run
+ * resolves it against that image — natively on a model that lists "auto", else
+ * to the model's nearest listed ratio (`normalizeModelInput`'s `sourceImage`).
+ *
+ * `generate-image` is deliberately absent: its images are references, not a
+ * photo being transformed, so "auto" there still snaps at write time.
+ */
+export const SOURCE_IMAGE_NODE_TYPES: ReadonlySet<string> = new Set([
   "image-to-image",
   "modify-image",
   "edit-image",
@@ -97,12 +112,19 @@ export function normalizeNodeModelParams<T extends NodeLike>(
           : undefined
     if (!provider) return node
 
+    // A write boundary has no source image, so "auto" on a source-image node is
+    // left for the run to resolve against the image it transforms — snapping it
+    // here would discard the very request ("keep my photo's shape") the run can
+    // honour. It is stored in its canonical spelling, the one the image routes'
+    // ratio enum accepts.
+    const deferAuto = SOURCE_IMAGE_NODE_TYPES.has(type) && autoAspectNeedsSourceImage(provider, d.aspectRatio)
     const normalized = normalizeModelInput(provider, {
-      aspectRatio: typeof d.aspectRatio === "string" ? d.aspectRatio : undefined,
+      aspectRatio: !deferAuto && typeof d.aspectRatio === "string" ? d.aspectRatio : undefined,
       resolution: typeof d.resolution === "string" ? d.resolution : undefined,
       quality: typeof d.quality === "string" ? d.quality : undefined,
     })
-    if (normalized.adjustments.length === 0) return node
+    const respell = deferAuto && d.aspectRatio !== "auto"
+    if (normalized.adjustments.length === 0 && !respell) return node
 
     const nodeId = typeof node.id === "string" ? node.id : "(unknown node)"
     for (const adj of normalized.adjustments) {
@@ -116,7 +138,7 @@ export function normalizeNodeModelParams<T extends NodeLike>(
       ...node,
       data: {
         ...d,
-        aspectRatio: normalized.aspectRatio,
+        aspectRatio: deferAuto ? "auto" : normalized.aspectRatio,
         resolution: normalized.resolution,
         quality: normalized.quality,
       },
