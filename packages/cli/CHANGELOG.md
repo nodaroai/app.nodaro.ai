@@ -1,5 +1,26 @@
 # @nodaro/cli
 
+## 1.26.1
+
+### Patch Changes
+
+- 1f414c9: ElevenLabs Dialogue v4's total-character cap across lines rises from 5,000 to 10,000 (`getDialogueCapabilities("elevenlabs-dialogue-v4").maxChars`): a 10,000-character v4 dialogue was voiced whole in a live check on 2026-10-06, well inside the platform's time limit. v3 dialogue stays at 5,000. The SDK's `voices.textToDialogue()` JSDoc and `nodaro voice dialogue --help` state each model's own cap.
+- Updated dependencies [0320eec]
+- Updated dependencies [b9e7c8a]
+- Updated dependencies [1f414c9]
+- Updated dependencies [cd26efd]
+- Updated dependencies [23a9098]
+- Updated dependencies [d61bff7]
+- Updated dependencies [0320eec]
+- Updated dependencies [a36adeb]
+- Updated dependencies [1f21d46]
+- Updated dependencies [1766435]
+- Updated dependencies [887bfdf]
+- Updated dependencies [cec354b]
+  - @nodaro/sdk@2.21.0
+  - @nodaro/shared@3.25.0
+  - @nodaro/prompts@1.34.0
+
 ## 1.26.0
 
 ### Minor Changes
