@@ -300,7 +300,8 @@ reported in `edgeWarnings` (the orchestrator never ran it). An edit-list (EDL) o
 wired into a Transcript input (Edit Plan's or Camera Switch's `edl` into Add Captions'
 `transcript`, for example) is dropped the same way, with the reason in the warning: an
 EDL is not a transcript, and the canvas refuses that connection too. So is the reverse, a
-transcript output (Transcribe's `json`, Camera Switch's `transcript`) wired into an `edl` input. Two edges with the same
+transcript output (Transcribe's `json`, Text to Dialogue's `json`, Camera Switch's `transcript`,
+Apply EDL's `json`) wired into an `edl` input. Two edges with the same
 `id` refuse the whole write; nothing is stored.
 
 ---

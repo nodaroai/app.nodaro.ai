@@ -16,7 +16,7 @@ All processing is local FFmpeg. No provider key is required.
 
 | Handle | Type | Required | Description |
 |--------|------|----------|-------------|
-| EDL | json | **Yes** | The edit decision list. Wire it from an editorial node or a Text/JSON source. Media resolves from each source's `url`. A Transcript output (Transcribe's `json`, Camera Switch's `transcript`) cannot be wired here; the editor refuses it. |
+| EDL | json | **Yes** | The edit decision list. Wire it from an editorial node or a Text/JSON source. Media resolves from each source's `url`. A Transcript output (Transcribe's `json`, Text to Dialogue's `json`, Camera Switch's `transcript`, Apply EDL's `json`) cannot be wired here; the editor refuses it. |
 | Transcript | json | No | A transcript to remap through the cut for the `json` output (e.g. from a Transcribe node). An EDL output (Edit Plan's or Camera Switch's `edl`) cannot be wired here; the editor refuses it. |
 | Sources | video/audio | No | Optional media-URL overrides for the EDL's sources, applied **positionally** in connection order. The EDL's own `url` values are the primary path; use this only when the media isn't addressable by URL in the EDL. |
 

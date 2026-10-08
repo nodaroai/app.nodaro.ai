@@ -767,12 +767,15 @@ export {
   type RenderJsonKind,
 } from "./render-nodes.js"
 export {
+  declaredJsonOutput,
+  declaredJsonOutputRows,
   jsonOutputKind,
   jsonInputKind,
   jsonKindMismatch,
   jsonKindMismatchMessage,
   type JsonKind,
   type JsonKindMismatch,
+  type JsonOutputDeclaration,
 } from "./json-kinds.js"
 export {
   PREVIEW_RENDER_NODE_TYPES,

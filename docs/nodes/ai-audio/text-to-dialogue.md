@@ -67,7 +67,7 @@ The timings add nothing: 25 base credits per request on either model. Both model
 
 - **Input**: `in` -- optional upstream connection (not typically used; dialogue is configured directly in the panel)
 - **Output**: `audio` -- single audio file containing all dialogue lines spoken in sequence (URL)
-- **Output**: `json` -- the dialogue's timings as a Transcript: one `segments[]` entry per line (`startMs`, `endMs`, `text`, `speaker` = that line's voice) and `words[]` with per-word `startMs` / `endMs` / `speaker`. Filled on both Dialogue v3 and Dialogue v4 — every dialogue run returns its timings. Over the API the same Transcript is `output_data.transcript` on the finished job.
+- **Output**: `json` -- the dialogue's timings as a Transcript: one `segments[]` entry per line (`startMs`, `endMs`, `text`, `speaker` = that line's voice) and `words[]` with per-word `startMs` / `endMs` / `speaker`. Filled on both Dialogue v3 and Dialogue v4 — every dialogue run returns its timings. Over the API the same Transcript is `output_data.transcript` on the finished job. It connects to Transcript inputs and is refused at an `edl` input (an edit list) such as Apply EDL's or Camera Switch's.
 
 ## Best Practices
 

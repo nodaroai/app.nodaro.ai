@@ -7,6 +7,8 @@ import {
   jsonKindMismatch,
   jsonKindMismatchMessage,
   jsonOutputKind,
+  declaredJsonOutput,
+  declaredJsonOutputRows,
   type RenderNodeDescriptor,
 } from "../index.js"
 
@@ -132,5 +134,46 @@ describe("jsonKindMismatch — an EDL is not a transcript", () => {
     expect(msg).toMatch(/EDL input/)
     expect(msg).toMatch(/Edit Plan/)
     expect(msg).not.toMatch(/not a transcript/i)
+  })
+})
+
+describe("declaredJsonOutput — every JSON pip is classified (decided 2026-10-08)", () => {
+  it("a Text to Dialogue's json is a Transcript, so the EDL block covers it; its default read is the audio", () => {
+    expect(declaredJsonOutput("text-to-dialogue", "json")).toBe("transcript")
+    expect(jsonOutputKind("text-to-dialogue", "json")).toBe("transcript")
+    expect(declaredJsonOutput("text-to-dialogue", undefined)).toBeUndefined()
+    expect(declaredJsonOutput("text-to-dialogue", "audio")).toBeUndefined()
+    expect(jsonKindMismatch("text-to-dialogue", "json", "apply-edl", "edl")).toEqual({ output: "transcript", input: "edl" })
+    expect(jsonKindMismatch("text-to-dialogue", "json", "add-captions", "transcript")).toBeNull()
+  })
+
+  it("`other` is a recorded classification, not a kind: it blocks nothing", () => {
+    expect(declaredJsonOutput("web-scrape", "json")).toBe("other")
+    expect(declaredJsonOutput("forced-alignment", "data")).toBe("other")
+    expect(declaredJsonOutput("describe-to-picker", "picker-json")).toBe("other")
+    expect(jsonOutputKind("web-scrape", "json")).toBeUndefined()
+    expect(jsonKindMismatch("video-analysis", "json", "add-captions", "transcript")).toBeNull()
+    expect(jsonKindMismatch("silence-detect", "json", "apply-edl", "edl")).toBeNull()
+  })
+
+  it("answers a render's json from the registry and nothing else on a render", () => {
+    expect(declaredJsonOutput("speaker-view", "json")).toBe("edl")
+    expect(declaredJsonOutput("speaker-view", "video")).toBeUndefined()
+  })
+
+  it("is undefined for anything undeclared, and never reads inherited keys", () => {
+    expect(declaredJsonOutput("generate-image", "json")).toBeUndefined()
+    expect(declaredJsonOutput("constructor", "json")).toBeUndefined()
+    expect(declaredJsonOutput("web-scrape", "constructor")).toBeUndefined()
+    expect(declaredJsonOutput(undefined, "json")).toBeUndefined()
+  })
+
+  it("lists its rows, each declaring one of the three classifications", () => {
+    const rows = declaredJsonOutputRows()
+    expect(rows.length).toBeGreaterThan(0)
+    for (const [type, pip, kind] of rows) {
+      expect(["transcript", "edl", "other"], `${type}.${pip}`).toContain(kind)
+      expect(declaredJsonOutput(type, pip)).toBe(kind)
+    }
   })
 })
