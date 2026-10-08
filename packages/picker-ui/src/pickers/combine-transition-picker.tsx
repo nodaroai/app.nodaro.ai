@@ -1,6 +1,6 @@
 "use client"
 
-import { memo, useEffect, useMemo, useState } from "react"
+import { memo, useEffect, useMemo, useState, type ReactNode } from "react"
 import { COMBINE_TRANSITIONS, COMBINE_TRANSITION_GROUP_ORDER, COMBINE_TRANSITION_GROUP_LABELS, getCombineTransition, type CombineTransition, type CombineTransitionGroup } from "@nodaro/shared"
 import { cn } from "../lib/cn"
 import "../previews/combine-transitions.css"
@@ -27,6 +27,16 @@ interface CombineTransitionPickerProps {
   /** Localizes an English tile, tab or caption string — the host app's
    *  option-label table. Identity when omitted, so English hosts need nothing. */
   readonly localizeLabel?: (english: string) => string
+  /** Offer only these catalog ids (a host that draws a subset, such as Speaker
+   *  View's crossfades). A tab with none of them is not drawn, and a value
+   *  outside the set opens on the first tab that has a tile. Every id when
+   *  omitted — the picker then draws exactly as it always has. */
+  readonly allowedIds?: readonly string[]
+  /** Tiles drawn in a group above the tabs (the host's own, beside the
+   *  catalog's). Nothing is drawn when omitted. */
+  readonly leadingTiles?: ReactNode
+  /** The group's accessible name, already localized by the host. */
+  readonly leadingLabel?: string
 }
 
 const identity = (s: string): string => s
@@ -46,6 +56,9 @@ export const CombineTransitionPicker = memo(function CombineTransitionPicker({
   value,
   onChange,
   localizeLabel = identity,
+  allowedIds,
+  leadingTiles,
+  leadingLabel,
 }: CombineTransitionPickerProps) {
   const byTab = useMemo<Record<TabKey, CombineTransition[]>>(() => {
     const out: Record<TabKey, CombineTransition[]> = {
@@ -60,15 +73,22 @@ export const CombineTransitionPicker = memo(function CombineTransitionPicker({
       covers: [],
       effects: [],
     }
+    const allowed = allowedIds ? new Set(allowedIds) : null
     for (const t of COMBINE_TRANSITIONS) {
+      if (allowed && !allowed.has(t.id)) continue
       if (t.common) out.common.push(t)
       out[t.group].push(t)
     }
     return out
-  }, [])
+  }, [allowedIds])
+
+  // With every id on offer all tabs are drawn, as before; a subset hides the
+  // tabs it leaves empty.
+  const tabs = useMemo(() => (allowedIds ? TAB_ORDER.filter((tab) => byTab[tab].length > 0) : TAB_ORDER), [allowedIds, byTab])
 
   const currentEntry = useMemo(() => getCombineTransition(value), [value])
-  const naturalTab: TabKey = currentEntry?.common ? "common" : (currentEntry?.group ?? "common")
+  const wantedTab: TabKey = currentEntry?.common ? "common" : (currentEntry?.group ?? "common")
+  const naturalTab: TabKey = tabs.includes(wantedTab) && (byTab[wantedTab].length > 0 || !allowedIds) ? wantedTab : (tabs[0] ?? "common")
 
   // Follow the current value's natural tab when it changes externally
   // (workflow load, undo/redo). Manual tab clicks stick until `value` moves.
@@ -81,12 +101,17 @@ export const CombineTransitionPicker = memo(function CombineTransitionPicker({
 
   return (
     <div className="flex flex-col gap-2">
+      {leadingTiles && (
+        <div role="group" aria-label={leadingLabel} className="grid grid-cols-3 gap-1.5">
+          {leadingTiles}
+        </div>
+      )}
       <div
         role="tablist"
         aria-label={localizeLabel("Transition category")}
         className="flex flex-wrap gap-x-3 gap-y-1 border-b border-gray-200 dark:border-[#2D2D2D]"
       >
-        {TAB_ORDER.map((tab) => {
+        {tabs.map((tab) => {
           const active = tab === activeTab
           const hasPick = tab === naturalTab
           return (
@@ -133,7 +158,9 @@ export const CombineTransitionPicker = memo(function CombineTransitionPicker({
   )
 })
 
-function TransitionTile({
+/** One transition tile: the catalog's own mini-animation, drawn by the host
+ *  as well when it composes the picker with tiles of its own. */
+export function TransitionTile({
   entry,
   label,
   selected,

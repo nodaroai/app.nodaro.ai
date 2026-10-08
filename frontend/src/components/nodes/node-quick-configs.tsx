@@ -67,6 +67,14 @@ export interface QuickConfigOption {
    *  (not in the compact trigger). Use when the labels alone are ambiguous —
    *  e.g. SwitchX alpha modes (auto/fill/select/custom). */
   readonly description?: string
+  /** Greyed rather than removed (Speaker View's Crossfade when no speaker change
+   *  crosses a clock jump): the row stays in the menu and reachable by keyboard
+   *  (`aria-disabled`, not the hard `disabled` that skips it), shows `reason` on
+   *  hover and as visible text, and never writes its value. A stored value that
+   *  is only greyed is NOT snapped away. Give it a `reason`. */
+  readonly disabled?: boolean
+  /** Why it is greyed, already localized. */
+  readonly reason?: string
 }
 
 /** What an options function may read besides the node's own data (SV10):
@@ -1075,6 +1083,8 @@ export function QuickConfigSelect({
                 setCustomOpenCounted(true)
                 return
               }
+              // A greyed row is explained, never chosen.
+              if (options.find((o) => o.value === v)?.disabled) return
               writeValue(v)
             }}
             onOpenChange={onOpenChange}
@@ -1085,18 +1095,27 @@ export function QuickConfigSelect({
               <SelectValue placeholder={shownLabel}>{shownLabel}</SelectValue>
             </SelectTrigger>
             <SelectContent className="node-menu-surface">
-              {options.map((o) => (
-                <SelectItem key={o.value} value={o.value} className="text-xs">
-                  {o.description ? (
-                    <span className="flex flex-col gap-0.5">
-                      <span>{localizeOption(o.label)}</span>
-                      <span className="text-[10px] leading-tight text-muted-foreground/70">{o.description}</span>
-                    </span>
-                  ) : (
-                    localizeOption(o.label)
-                  )}
-                </SelectItem>
-              ))}
+              {options.map((o) => {
+                // A greyed row explains itself in place of its description.
+                const note = o.disabled ? o.reason : o.description
+                return (
+                  <SelectItem
+                    key={o.value}
+                    value={o.value}
+                    className={o.disabled ? "text-xs opacity-60 cursor-not-allowed" : "text-xs"}
+                    {...(o.disabled ? { "aria-disabled": true, title: o.reason } : {})}
+                  >
+                    {note ? (
+                      <span className="flex flex-col gap-0.5">
+                        <span>{localizeOption(o.label)}</span>
+                        <span className="text-[10px] leading-tight text-muted-foreground/70">{note}</span>
+                      </span>
+                    ) : (
+                      localizeOption(o.label)
+                    )}
+                  </SelectItem>
+                )
+              })}
               {range && (
                 <SelectItem key={CUSTOM} value={CUSTOM} className="text-xs">
                   {t("node.customEllipsis")}

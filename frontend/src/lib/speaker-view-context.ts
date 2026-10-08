@@ -43,6 +43,12 @@ function savedEdits(node: WorkflowNode): unknown[] {
   return Array.isArray(generated) ? generated : [generated]
 }
 
+/** The node feeding `nodeId`'s `edl` handle, if one is wired and still on the canvas. */
+export function speakerViewEdlProducer(nodeId: string, nodes: ReadonlyArray<WorkflowNode>, edges: ReadonlyArray<WorkflowEdge>): WorkflowNode | undefined {
+  const wire = lastWire(nodeId, "edl", edges)
+  return wire ? nodes.find((n) => n.id === wire.source) : undefined
+}
+
 /** The edits wired into `nodeId`'s `edl` handle (the node's inline `edl` when none is wired). */
 export function speakerViewEdits(nodeId: string, nodes: ReadonlyArray<WorkflowNode>, edges: ReadonlyArray<WorkflowEdge>): unknown[] {
   const wire = lastWire(nodeId, "edl", edges)

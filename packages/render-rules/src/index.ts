@@ -114,9 +114,11 @@ export {
 export { speakerViewContext, type SpeakerViewClip, type SpeakerViewContext } from "./speaker-view-context"
 export {
   SPEAKER_VIEW_BASIC_SWITCHES,
+  SPEAKER_VIEW_CROSSFADE_ID,
   normalizeSpeakerViewData,
   speakerViewAspectOf,
   speakerViewDefaultsFor,
+  validSpeakerCrossfade,
   validSpeakerEmphasis,
   validSpeakerLayouts,
   validSpeakerSwitches,

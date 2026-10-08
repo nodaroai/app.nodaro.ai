@@ -30,21 +30,23 @@ A **Preview** (Quality: Proxy) is a private 720p render to review before a final
 
 ## Settings
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| Aspect ratio | Select | the edit's own, else 16:9 | 16:9, 9:16, 1:1 or 4:5. Output size is fixed per aspect: a final is 1920×1080, 1080×1920, 1080×1080 or 1080×1350; a Preview has a 720-pixel short side. |
+| Field | Control | Default | Description |
+|-------|---------|---------|-------------|
+| Aspect ratio | Tiles | the edit's own, else 16:9 | 16:9, 9:16, 1:1 or 4:5. Output size is fixed per aspect: a final is 1920×1080, 1080×1920, 1080×1080 or 1080×1350; a Preview has a 720-pixel short side. |
 | Quality | Select | Final | Final, or Proxy (a private Preview). |
-| Layout | Select | Auto (Single on one camera) | Auto, Single, Side by side, Stacked, Grid, Picture in picture. |
-| Switch | Select | Cut (Pan on one camera) | What happens at a speaker change: Cut, Pan, Zoom or a crossfade. |
-| Switch duration (ms) | Number | 600 | The tween length of a Pan or Zoom; up to 5000 ms. |
+| Layout | Tiles | Auto (Single on one camera) | Auto, Single, Side by side, Stacked, Grid, Picture in picture. Each tile is drawn at the output's aspect. |
+| Switch | Tiles | Cut (Pan on one camera) | What happens at a speaker change: Cut, Pan, Zoom, or a Crossfade chosen from a list of transitions. Cut, Pan and Zoom loop a small animation of what they do. |
+| Switch duration | Slider | 600 ms | The tween length of a Pan or Zoom; 0–5000 ms in 50 ms steps. |
 | Emphasis | Toggles | Scale | Scale, Border and Dim, alone or together; all off is *none*. |
-| Emphasis ease (ms) | Number | 300 | Up to 5000 ms. |
-| Border colour | Colour | white | The colour of the Border emphasis, `#RRGGBB`. |
-| Framing | Per speaker | full frame | A crop of each camera per speaker, as fractions of the frame. Written in the workflow JSON as `speakerRegions` for now; the editor control for it arrives later. |
+| Emphasis ease | Slider | 300 ms | 0–5000 ms in 50 ms steps. |
+| Border colour | Colour (under *Advanced*) | white | The colour of the Border emphasis, `#RRGGBB`. |
+| Framing | Per speaker | full frame | A crop of each camera per speaker, as fractions of the frame. The panel says how many crops are set. Written in the workflow JSON as `speakerRegions` for now; the editor control for it arrives later. |
+
+A tile the aspect or the speaker count rules out is greyed. Hover it or move the keyboard focus onto it and it says why ("Side by side shows at most 2 speakers; this edit has 3"); the reasons are also listed under the group, for touch screens. A greyed tile cannot be picked, but a stored value the rules no longer allow is shown as it is and can always be switched off or changed.
 
 ### Which choices apply where
 
-The panel greys a choice the aspect or the speaker count rules out and says why; the quick strip lists only what can run.
+The panel greys a choice the aspect or the speaker count rules out and says why; the quick strip removes a layout that is ruled out, but its switch list always lists Cut, Pan and Zoom and greys the ones the rule rules out, with the reason on hover and on keyboard focus. The Crossfade is greyed the same way, as one row (below).
 
 | Layout | At a speaker change | Switch | Emphasis |
 |--------|--------------------|--------|----------|
@@ -55,7 +57,19 @@ The panel greys a choice the aspect or the speaker count rules out and says why;
 - **Side by side** is drawn for 16:9 and 1:1; **Stacked** for 9:16, 4:5 and 1:1; **Grid**, **Single** and **Picture in picture** for every aspect.
 - **Side by side**, **Stacked** and **Picture in picture** take exactly two speakers; **Grid** takes two to six. The slots are the speakers in order of first appearance.
 - A layout the aspect or the speaker count rules out **snaps** to its twin (Side by side ↔ Stacked), else Grid if the count fits, else Single — "Side by side isn't drawn for 9:16 — renders as Stacked". An edit written as JSON snaps the same way.
-- **Pan** is a sweep inside one camera; at a speaker change between two cameras it cuts, and the panel counts how many changes it applies to. **Crossfade** is written only where the edit's clock jumps, never over contiguous speech.
+- **Pan** is a sweep inside one camera; at a speaker change between two cameras it cuts. **Crossfade** is written only where the edit's clock jumps (a stretch of the recording was cut out between the two speakers), never over contiguous speech. Under the Switch tiles the panel counts how many of the edit's speaker changes each one reaches — "Pan applies to 41 of 63 speaker changes; the other 22 are between cameras and cut" — and the Pan tile, and the Pan row in the quick strip, is greyed ("No speaker change can pan here.") only when none of them stays on one camera. Pan and Zoom are greyed under a fixed multi-slot layout (Side by side, Stacked or Grid), because its slots stay where they are. The Crossfade tile, and its row in the quick strip, is greyed the same way when none of them crosses a jump of the clock, saying so on hover and on keyboard focus; a crossfade you already chose is kept as it is. The counts need the edit to name its speakers (Camera Switch does); an edit that does not shows none.
+
+### What the Input section says
+
+| You see | It means |
+|---------|----------|
+| *Wire an EDL …* | Nothing is wired into **EDL** yet; only the rules the aspect alone decides apply. |
+| *Edit Plan hasn't run yet. Layout and framing need its speakers.* | An EDL is wired, but the node feeding it has no result yet; run it first. |
+| *Camera Switch clips: 8 clips · 2–3 speakers …* | A clip set from Camera Switch runs Speaker View once per clip, so a setting is offered only when it suits every clip, and a greyed tile names the clip. |
+| *This transcript's speakers (speaker_0, speaker_1) don't match the edit's (Host, Guest) …* | Camera Switch renames the speakers; wire its **Transcript** output rather than Transcribe's. |
+| *This edit has several cameras but no speaker on any segment …* | Wire Camera Switch between Edit Plan and Speaker View. |
+| *Wire a transcript …* / *This transcript has no speaker labels …* | The edit names only some of its speakers and the transcript cannot fill in the rest. |
+| *Side by side isn't drawn for 9:16 — renders as Stacked.* | The stored layout snaps to the layout that is drawn, as described above. |
 
 ### A camera that starts late
 

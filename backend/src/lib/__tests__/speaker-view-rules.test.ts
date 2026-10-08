@@ -6,6 +6,7 @@
  */
 import { describe, it, expect } from "vitest"
 import {
+  SPEAKER_VIEW_DEFAULTS,
   SPEAKER_VIEW_NOT_PRICED_MESSAGE,
   SPEAKER_VIEW_PRICED,
   defaultSpeakerRegions,
@@ -15,6 +16,7 @@ import {
   speakerViewRenderBasis,
   speakerViewWireSettings,
   validSpeakerEmphasis,
+  validSpeakerCrossfade,
   validSpeakerLayouts,
   validSpeakerSwitches,
 } from "@nodaro/render-rules"
@@ -102,6 +104,17 @@ describe("validSpeakerSwitches (SV2, SV5)", () => {
     expect(validSpeakerSwitches({}, speakerViewContext(TWO_CAM_TWO)!).find((x) => x.id === "pan")!.reason).toMatchObject({ code: "no-same-camera-change", params: { changes: 2 } })
     // One wide camera: every change is inside it.
     expect(ids(validSpeakerSwitches({}, speakerViewContext(ONE_CAM_TWO)!))).toEqual(["cut", "pan", "zoom"])
+  })
+
+  it("judges a clips batch as a whole: a clip with no changes does not keep pan available", () => {
+    const ONE_SPEAKER = edl([MIC, src("w")], [seg("s0", 0, "w", "Host"), seg("s1", 5, "w", "Host")])
+    const o = validSpeakerSwitches({}, speakerViewContext([ONE_SPEAKER, TWO_CAM_TWO]))
+    expect(o.find((x) => x.id === "pan")).toMatchObject({ allowed: false, reason: { code: "no-same-camera-change", params: { changes: 2 } } })
+    // ...but a clip with a change inside a camera keeps it.
+    expect(validSpeakerSwitches({}, speakerViewContext([ONE_SPEAKER, ONE_CAM_TWO])).find((x) => x.id === "pan")!.allowed).toBe(true)
+    // ...and a clip whose changes cannot be counted keeps it too.
+    const UNNAMED = edl([MIC, src("a"), src("b")], [seg("s0", 0, "a"), seg("s1", 5, "b")])
+    expect(validSpeakerSwitches({}, speakerViewContext([UNNAMED, TWO_CAM_TWO])).find((x) => x.id === "pan")!.allowed).toBe(true)
   })
 
   it("keeps pan available when the changes cannot be counted yet (no speaker named on the edit)", () => {
@@ -246,5 +259,65 @@ describe("defaultSpeakerRegions (the overview's left and right thirds)", () => {
   it("gives a lone speaker no box (full frame) and keeps every box inside the frame", () => {
     expect(defaultSpeakerRegions(["Solo"], 9 / 16, 16 / 9)).toEqual([])
     for (const { region } of defaultSpeakerRegions(["a", "b", "c", "d", "e", "f"], 1, 4 / 3)) expect(region.x + region.w).toBeLessThanOrEqual(1 + 1e-9)
+  })
+})
+
+describe("validSpeakerCrossfade (SV21 c, decided 2026-10-08)", () => {
+  // Host on a 0-5 s, Guest on b from 8 s: the master clock JUMPS at the change.
+  const JUMP = edl([MIC, src("a"), src("b")], [seg("s0", 0, "a", "Host"), seg("s1", 8, "b", "Guest")])
+  const MIXED = edl([MIC, src("a"), src("b")], [seg("s0", 0, "a", "Host"), seg("s1", 5, "b", "Guest"), seg("s2", 12, "a", "Host")])
+  const jump = (e: unknown) => speakerViewContext(e)
+
+  it("is available while the edit is not known yet", () => {
+    expect(validSpeakerCrossfade({})).toEqual({ id: "crossfade", allowed: true })
+  })
+
+  it("is ruled out, with the count, when no speaker change crosses a clock jump", () => {
+    const o = validSpeakerCrossfade({}, jump(ONE_CAM_TWO))
+    expect(o).toMatchObject({ id: "crossfade", allowed: false, reason: { code: "no-clock-jump", params: { changes: 1 } } })
+  })
+
+  it("is available when at least one speaker change crosses a clock jump", () => {
+    expect(validSpeakerCrossfade({}, jump(JUMP)).allowed).toBe(true)
+    expect(validSpeakerCrossfade({}, jump(MIXED)).allowed).toBe(true)
+  })
+
+  it("is not decided by the layout (a crossfade is offered under every layout)", () => {
+    expect(validSpeakerCrossfade({ layout: "grid" }, jump(JUMP)).allowed).toBe(true)
+    expect(validSpeakerCrossfade({ layout: "grid" }, jump(ONE_CAM_TWO)).allowed).toBe(false)
+  })
+
+  it("stays available when the changes cannot be counted (no speaker named) or there are none", () => {
+    expect(validSpeakerCrossfade({}, jump(edl([MIC, src("a"), src("b")], [seg("s0", 0, "a"), seg("s1", 5, "b")]))).allowed).toBe(true)
+    expect(validSpeakerCrossfade({}, jump(edl([MIC, src("w")], [seg("s0", 0, "w", "Host"), seg("s1", 5, "w", "Host")]))).allowed).toBe(true)
+  })
+
+  it("in a clip pack is ruled out only when EVERY clip has no jump", () => {
+    expect(validSpeakerCrossfade({}, speakerViewContext([ONE_CAM_TWO, ONE_CAM_TWO])).allowed).toBe(false)
+    expect(validSpeakerCrossfade({}, speakerViewContext([ONE_CAM_TWO, JUMP])).allowed).toBe(true)
+  })
+
+  it("judges a clips batch as a whole: a clip with no changes does not keep it available", () => {
+    const ONE_SPEAKER = edl([MIC, src("w")], [seg("s0", 0, "w", "Host"), seg("s1", 5, "w", "Host")])
+    expect(validSpeakerCrossfade({}, speakerViewContext([ONE_SPEAKER, ONE_CAM_TWO]))).toMatchObject({ allowed: false, reason: { code: "no-clock-jump", params: { changes: 1 } } })
+    expect(validSpeakerCrossfade({}, speakerViewContext([ONE_SPEAKER, JUMP])).allowed).toBe(true)
+    // a clip whose changes cannot be counted keeps it available
+    const UNNAMED = edl([MIC, src("a"), src("b")], [seg("s0", 0, "a"), seg("s1", 5, "b")])
+    expect(validSpeakerCrossfade({}, speakerViewContext([UNNAMED, ONE_CAM_TWO])).allowed).toBe(true)
+    // nothing to judge in any clip
+    expect(validSpeakerCrossfade({}, speakerViewContext([ONE_SPEAKER, ONE_SPEAKER])).allowed).toBe(true)
+  })
+
+  it("does not count a change whose boundary already carries a transition of its own", () => {
+    const owned = edl([MIC, src("a"), src("b")], [seg("s0", 0, "a", "Host"), { ...seg("s1", 8, "b", "Guest"), transition: { type: "crossfade", durationMs: 300 } }])
+    expect(validSpeakerCrossfade({}, jump(owned))).toMatchObject({ allowed: false, reason: { code: "no-clock-jump" } })
+  })
+})
+
+describe("no minimum-shot setting (decided 2026-10-08)", () => {
+  it("is not a Speaker View setting: not in the defaults, not carried by the wire settings", () => {
+    expect(Object.keys(SPEAKER_VIEW_DEFAULTS).filter((k) => /min.?shot/i.test(k))).toEqual([])
+    const wire = speakerViewWireSettings({ minShotMs: 3000 } as never, speakerViewContext(ONE_CAM_TWO))
+    expect(Object.keys(wire).filter((k) => /min.?shot/i.test(k))).toEqual([])
   })
 })

@@ -46,6 +46,8 @@ export interface SpeakerViewNodeSettings {
  *  - slots-fixed: a fixed multi-slot layout keeps its slots, so Pan / Zoom
  *    have nothing to move.
  *  - no-same-camera-change: no speaker change stays inside one camera.
+ *  - no-clock-jump: no speaker change crosses a jump of the master clock, the
+ *    only place the plugin writes a crossfade (SV21 c).
  */
 export type SpeakerViewReasonCode =
   | "aspect-not-drawn"
@@ -55,6 +57,7 @@ export type SpeakerViewReasonCode =
   | "swap-is-emphasis"
   | "slots-fixed"
   | "no-same-camera-change"
+  | "no-clock-jump"
 
 export interface SpeakerViewReason {
   readonly code: SpeakerViewReasonCode
@@ -102,6 +105,20 @@ export function validSpeakerLayouts(data: SpeakerViewNodeSettings, ctx?: Speaker
  *  the master clock jumps); this lists the three it cannot summarise. */
 export const SPEAKER_VIEW_BASIC_SWITCHES = ["cut", "pan", "zoom"] as const
 
+/**
+ * The ONE batch rule behind Pan and Crossfade being greyed: judge the clips as a
+ * whole. Returns the total number of speaker changes when every clip's changes
+ * are countable, there is at least one change, and none of them qualifies
+ * (`key` sums to 0); otherwise undefined, i.e. the option stays available. A
+ * clip with no changes contributes nothing, so it cannot keep an option on.
+ */
+function noQualifyingChange(ctx: SpeakerViewContext, key: "sameCameraChanges" | "jumpChanges"): number | undefined {
+  if (!ctx.clips.every((c) => c.changesKnown)) return undefined
+  const changes = ctx.clips.reduce((n, c) => n + c.changes, 0)
+  const qualifying = ctx.clips.reduce((n, c) => n + c[key], 0)
+  return changes > 0 && qualifying === 0 ? changes : undefined
+}
+
 /** The three basic switches with whether they apply to this layout and edit
  *  (SV2, SV5): a fixed multi-slot layout keeps its slots, so Pan and Zoom are
  *  ruled out; Pan is ruled out when NO speaker change stays inside one camera. */
@@ -111,11 +128,33 @@ export function validSpeakerSwitches(data: SpeakerViewNodeSettings, ctx?: Speake
   return SPEAKER_VIEW_BASIC_SWITCHES.map((id) => {
     if (id === "cut") return allowed(id)
     if (fixed) return ruledOut(id, "slots-fixed", { layout })
-    if (id === "pan" && ctx && ctx.clips.every((c) => c.changesKnown && c.changes > 0 && c.sameCameraChanges === 0)) {
-      return ruledOut(id, "no-same-camera-change", { changes: ctx.clips.reduce((n, c) => n + c.changes, 0) })
+    if (id === "pan" && ctx) {
+      const changes = noQualifyingChange(ctx, "sameCameraChanges")
+      if (changes !== undefined) return ruledOut(id, "no-same-camera-change", { changes })
     }
     return allowed(id)
   })
+}
+
+/** The id the Crossfade option answers to: the whole `xfade:*` family is one
+ *  choice here, since the plugin writes any of them at the same places. */
+export const SPEAKER_VIEW_CROSSFADE_ID = "crossfade"
+
+/**
+ * Whether the Crossfade family applies to this edit (SV21 c, decided
+ * 2026-10-08). The plugin writes a crossfade only where a speaker change
+ * crosses a jump of the master clock (`continuous()` is false there; over
+ * contiguous speech it would blend the speech with itself), and the context
+ * counts exactly those (`jumpChanges`). Ruled out when NO change qualifies in
+ * ANY clip (judged over the whole batch, so a clip with no changes is neutral). Unknown edit, uncountable changes (no speaker named) or no changes
+ * at all leave it available, as with Pan. The layout does not decide it: a
+ * crossfade is offered under every layout. The panel greys the tile and the
+ * quick strip greys its row from this ONE answer.
+ */
+export function validSpeakerCrossfade(_data: SpeakerViewNodeSettings, ctx?: SpeakerViewContext): SpeakerViewOption {
+  const changes = ctx ? noQualifyingChange(ctx, "jumpChanges") : undefined
+  if (changes !== undefined) return ruledOut(SPEAKER_VIEW_CROSSFADE_ID, "no-clock-jump", { changes })
+  return allowed(SPEAKER_VIEW_CROSSFADE_ID)
 }
 
 /** The emphasis atoms with whether they apply (SV2): Single shows one speaker,

@@ -3,8 +3,8 @@
  * code and its numbers (`SpeakerViewReason`); this turns it into one localized
  * sentence. A greyed tile says WHY, never just "unavailable".
  */
-import type { SpeakerViewNormalizeNote, SpeakerViewReason } from "@nodaro/render-rules"
-import { SPEAKER_LAYOUT_LABEL_KEYS } from "@/components/nodes/speaker-view-quick-configs"
+import type { SpeakerViewNormalizeNote, SpeakerViewOption, SpeakerViewReason } from "@nodaro/render-rules"
+import { SPEAKER_LAYOUT_LABEL_KEYS } from "@/components/nodes/speaker-view-label-keys"
 import type { MessageKey } from "@/lib/i18n"
 
 export const SPEAKER_EMPHASIS_LABEL_KEYS: Readonly<Record<string, MessageKey>> = {
@@ -47,6 +47,9 @@ export function speakerViewReasonText(reason: SpeakerViewReason, t: T): string {
     case "no-same-camera-change":
       text = t("speakerView.reason.noSameCamera", { changes: Number(p.changes) })
       break
+    case "no-clock-jump":
+      text = t("speakerView.reason.noClockJump", { changes: Number(p.changes) })
+      break
   }
   return typeof p.clip === "number" ? t("speakerView.reason.clip", { clip: p.clip, reason: text }) : text
 }
@@ -55,4 +58,24 @@ export function speakerViewReasonText(reason: SpeakerViewReason, t: T): string {
 export function speakerViewSnapText(note: SpeakerViewNormalizeNote, t: T): string {
   const vars = { from: layoutName(note.from, t), aspect: note.aspect, to: layoutName(note.to, t) }
   return t(note.because === "aspect" ? "speakerView.snappedAspect" : "speakerView.snappedSpeakers", vars)
+}
+
+/** The option lists of the tile pickers: the rule's `allowed` / `reason` turned
+ *  into the finished, localized text a picker draws. */
+export function speakerViewPickerOptions(
+  options: readonly SpeakerViewOption[],
+  labelKeys: Readonly<Record<string, MessageKey>>,
+  t: T,
+): Array<{ id: string; label: string; disabled: boolean; reason?: string }> {
+  return options.map((o) => ({
+    id: o.id,
+    label: t(labelKeys[o.id]!),
+    disabled: !o.allowed,
+    ...(o.reason ? { reason: speakerViewReasonText(o.reason, t) } : {}),
+  }))
+}
+
+/** One line per distinct reason (Single rules all three emphasis atoms out for the same one). */
+export function distinctReasons(options: readonly SpeakerViewOption[], t: T): string[] {
+  return [...new Set(options.flatMap((o) => (o.reason ? [speakerViewReasonText(o.reason, t)] : [])))]
 }
