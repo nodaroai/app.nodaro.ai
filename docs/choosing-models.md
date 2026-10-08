@@ -59,13 +59,14 @@ Text-to-image, image-to-image, editing, upscaling, and background removal. For e
 | Grok Imagine 2 Edit | xAI | Everyday | 10 | edit | Prompt-edit a prior grok-2 generation by task id. Optional mask indexes (from grok-2-segment) restrict the edit to named regions. |
 | Imagen 4 Fast | Google | Everyday | 10 | t2i | Cheaper / quicker Imagen 4 tier. |
 | Nano Banana 2 Lite | Google | Everyday | 10 | t2i, i2i | Lightweight Nano Banana 2 (Gemini 3.1 Flash-Lite) — fast, low-cost 1K generation and editing. |
+| Nano Banana 2.1 | Google | Everyday | 10 | t2i, i2i | Google's high-efficiency image model for generation and editing — sharper quality, prompt adherence, character consistency and text rendering, up to 10 references and 4K output. |
 | Nano Banana Edit | Google | Everyday | 10 | edit | Image-to-image edits via Google's Nano Banana family. Good general-purpose editor. |
 | Qwen | Alibaba | Everyday | 10 | t2i | Cheap, fast, decent quality. Native negative-prompt support. |
 | Qwen (I2I) | Alibaba | Everyday | 10 | i2i | Image-to-image with Qwen. |
-| Flux 2 Pro | Black Forest Labs | Everyday | 13 | t2i | Flux 2 Pro text-to-image. Strong realism, fast. Resolution lever to 2K. |
-| Flux 2 Pro (I2I) | Black Forest Labs | Everyday | 13 | i2i | Image-to-image with Flux Pro. Cheaper than Flex variant, good general edits. |
-| Flux Kontext Pro | Black Forest Labs | Everyday | 13 | t2i, edit | Context-aware editing and style transfer. Strong at preserving subject identity through edits. |
-| Qwen Edit | Alibaba | Everyday | 13 | edit | Qwen image edit endpoint with native negative prompt. |
+| Flux 2 Pro | Black Forest Labs | Standard | 13 | t2i | Flux 2 Pro text-to-image. Strong realism, fast. Resolution lever to 2K. |
+| Flux 2 Pro (I2I) | Black Forest Labs | Standard | 13 | i2i | Image-to-image with Flux Pro. Cheaper than Flex variant, good general edits. |
+| Flux Kontext Pro | Black Forest Labs | Standard | 13 | t2i, edit | Context-aware editing and style transfer. Strong at preserving subject identity through edits. |
+| Qwen Edit | Alibaba | Standard | 13 | edit | Qwen image edit endpoint with native negative prompt. |
 | Seedream 5 Lite | Bytedance | Standard | 14 | t2i | Newer Seedream 5 Lite — instruction-based generation, visual reasoning. |
 | Seedream 5 Lite (I2I) | Bytedance | Standard | 14 | i2i | Image-to-image with Seedream 5 Lite. |
 | GPT Image 2 | OpenAI | Standard | 15 | t2i | Next-gen GPT Image — broader aspect ratios, resolution-based pricing (1K/2K/4K). |

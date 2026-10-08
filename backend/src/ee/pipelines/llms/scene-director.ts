@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { PIPELINE_PINNABLE_IMAGE_MODELS, modelsForInputMode, VIDEO_MODEL_CAPS, type SceneInputMode, type ShowrunnerPlan } from "@nodaro/shared"
+import { PIPELINE_ACCEPTED_IMAGE_MODELS, modelsForInputMode, VIDEO_MODEL_CAPS, type SceneInputMode, type ShowrunnerPlan } from "@nodaro/shared"
 import { callLLM } from "./call-llm.js"
 import { SceneDirectorPlanSchema, type SceneDirectorPlan } from "./scene-director-plan.js"
 import { pipelineEvents } from "../events.js"
@@ -115,7 +115,7 @@ export async function runSceneDirector(args: RunSceneDirectorArgs): Promise<Scen
 
   const userImagePick =
     args.imageModelOverride &&
-    (PIPELINE_PINNABLE_IMAGE_MODELS as readonly string[]).includes(args.imageModelOverride)
+    (PIPELINE_ACCEPTED_IMAGE_MODELS as readonly string[]).includes(args.imageModelOverride)
       ? args.imageModelOverride
       : undefined
   if (args.imageModelOverride && !userImagePick) {
@@ -132,7 +132,7 @@ export async function runSceneDirector(args: RunSceneDirectorArgs): Promise<Scen
 
 You MUST set image_model="${userImagePick}" for every shot. Do not pick anything else.`
     : `CAPABILITY REGISTRY (image models — all eligible in Phase 1B.2):
-- nano-banana-2
+- nano-banana-2-1
 - flux
 - gpt-image`
 

@@ -50,7 +50,7 @@ const PipelineModelStageEnum = z.enum(PIPELINE_MODEL_STAGES)
 export const PIPELINE_PINNABLE_IMAGE_MODELS = [
   "nano-banana",
   "nano-banana-pro",
-  "nano-banana-2",
+  "nano-banana-2-1",
   "flux",
   "gpt-image",
   "gpt-image-2",
@@ -58,6 +58,17 @@ export const PIPELINE_PINNABLE_IMAGE_MODELS = [
   "gpt-image-2-5-sunburst",
 ] as const
 export type PipelinePinnableImageModel = (typeof PIPELINE_PINNABLE_IMAGE_MODELS)[number]
+
+// Image models no longer OFFERED as a pin but still honoured when a saved
+// pipeline names one: Nano Banana 2.1 replaced Nano Banana 2 in the picker
+// (decided 2026-10-08), and a pipeline pinned to NB2 before that keeps its pin.
+export const PIPELINE_LEGACY_PINNED_IMAGE_MODELS = ["nano-banana-2"] as const
+
+/** Every image model a pipeline's config may name: the offered pins plus the legacy ones. */
+export const PIPELINE_ACCEPTED_IMAGE_MODELS = [
+  ...PIPELINE_PINNABLE_IMAGE_MODELS,
+  ...PIPELINE_LEGACY_PINNED_IMAGE_MODELS,
+] as const
 
 export const PIPELINE_PINNABLE_VIDEO_MODELS = [
   "kling-turbo",
@@ -91,7 +102,7 @@ export const PIPELINE_PINNABLE_SCRIPT_LLMS = [
 ] as const
 export type PipelinePinnableScriptLlm = (typeof PIPELINE_PINNABLE_SCRIPT_LLMS)[number]
 
-const ImageModelEnum = z.enum(PIPELINE_PINNABLE_IMAGE_MODELS)
+const ImageModelEnum = z.enum(PIPELINE_ACCEPTED_IMAGE_MODELS)
 const VideoModelEnum = z.enum(PIPELINE_PINNABLE_VIDEO_MODELS)
 const ScriptLlmEnum = z.enum(PIPELINE_PINNABLE_SCRIPT_LLMS)
 

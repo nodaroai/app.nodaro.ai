@@ -66,7 +66,7 @@ Image-to-image: edit / transform / restyle / outpaint / inpaint (`modify_image` 
 ### Model guidance
 
 - **`nano-banana-pro`** — best overall and best for face/character identity preservation across multi-turn edits (up to 14 reference images, ~5 distinct characters); also leads on text/typography. First pick when in doubt.
-- **`nano-banana-2`** (default) — very good consistency, faster and cheaper than Pro.
+- **`nano-banana-2-1`** (default) — Nano Banana 2.1: very good consistency, up to 10 references, faster and cheaper than Pro.
 - **`gpt-image-2`** — strong for typography / logos / text-heavy edits and prompt-adherence-critical work.
 - **`ideogram-remix`** — character-aware, good for stylized remix.
 - **`seedream-edit`** — high-res output for instruction-style edits.

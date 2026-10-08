@@ -667,6 +667,13 @@ const UGC_FINISH_ROOM_SOUND_BYTES = 303
 // this suite: 406_138 total − 405_655 before = 483 B (the tool: 1_558 → 2_041 B), and the budget
 // rises by exactly that, keeping whatever headroom the list had (none).
 const UGC_CLIPS_SPEECH_LANE_VOICE_BYTES = 483
+// RAISED 2026-10-08 by Nano Banana 2.1 (`nano-banana-2-1`, one id for t2i and i2i) and
+// nothing else: it widens the model enums and recommended-model lists `generate_image` /
+// `modify_image` already carry. No tool was added, so the fixture does NOT move. Measured by
+// this suite: 406_189 total − 406_138 before = 51 B; then +10 B when 2.1 became the default
+// named in the image tools' text (decided 2026-10-08): 406_199 total. `generate_image` is
+// 8_116 B against the 8_192 B per-tool cap.
+const NANO_BANANA_2_1_MODEL_BYTES = 61
 // RAISED by the four bytes `generate_dialogue`'s Limits sentence grew when Dialogue v4's cap
 // rose to 10,000 characters (decided 2026-10-07, after the 2026-10-06 live check): "on either
 // model" became "on v3, 10,000 on v4" — the description must name each model's own cap, since
@@ -747,7 +754,8 @@ export const TOOL_WIRE_BUDGET = {
     COMBINE_VIDEOS_TRIM_ARGS_BYTES +
     UGC_FINISH_ROOM_SOUND_BYTES +
     DIALOGUE_V4_CAP_WORDING_BYTES +
-    UGC_CLIPS_SPEECH_LANE_VOICE_BYTES,
+    UGC_CLIPS_SPEECH_LANE_VOICE_BYTES +
+    NANO_BANANA_2_1_MODEL_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

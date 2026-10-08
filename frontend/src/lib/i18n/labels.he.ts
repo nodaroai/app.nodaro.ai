@@ -597,6 +597,8 @@ const MODEL_DESCRIPTIONS_HE: Record<string, string> = {
   "Diffusion-based, best for singing": "מבוסס דיפוזיה, המתאים ביותר לשירה",
   "English-optimized speech-to-speech.": "המרת דיבור לדיבור ממוטבת לאנגלית.",
   "Extended duration support": "תמיכה במשך מוארך",
+  "Sharper quality, text and character consistency, up to 4K": "שיפור באיכות, בטקסט ובעקביות הדמויות, עד 4K",
+  "Consistent edits, up to 10 references and 4K output": "עריכות עקביות, עד 10 תמונות ייחוס ופלט 4K",
   "Fast 1K edits, up to 10 reference images": "עריכות 1K מהירות, עד 10 תמונות ייחוס",
   "Fast Gemini, agentic-tuned": "Gemini מהיר, מכוונן לעבודת סוכנים",
   "Fast Gemini, sharper reasoning": "Gemini מהיר, חשיבה חדה יותר",

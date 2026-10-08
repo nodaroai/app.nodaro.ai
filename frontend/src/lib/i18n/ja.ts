@@ -4017,7 +4017,7 @@ export const ja: ChromeDict = {
   "cfgext.genFramesFiveEvenlyDesc": "1 ショットあたり 5 フレーム（0%/25%/50%/75%/100%）。動きの不具合を最も確実に検出できます。1 ショットあたり最大 {n} クレジット。",
   "cfgext.genImgNanoBanana": "Nano Banana：高速",
   "cfgext.genImgNanoBananaPro": "Nano Banana Pro：より高精細",
-  "cfgext.genImgNanoBanana2": "Nano Banana 2：最新",
+  "cfgext.genImgNanoBanana2": "Nano Banana 2：旧バージョン",
   "cfgext.genVidKlingTurbo": "Kling Turbo：最安",
   "cfgext.genLlmHaiku45": "Claude Haiku 4.5：最速",
   "cfgext.genLlmSonnet46": "Claude Sonnet 4.6：デフォルト",

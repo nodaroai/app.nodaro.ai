@@ -4084,7 +4084,7 @@ export const en = {
   "cfgext.genFramesFiveEvenlyDesc": "5 frames per shot at 0%/25%/50%/75%/100%. Best motion-glitch coverage. Up to {n} credits per shot.",
   "cfgext.genImgNanoBanana": "Nano Banana — fast",
   "cfgext.genImgNanoBananaPro": "Nano Banana Pro — higher fidelity",
-  "cfgext.genImgNanoBanana2": "Nano Banana 2 — latest",
+  "cfgext.genImgNanoBanana2": "Nano Banana 2 — previous version",
   "cfgext.genVidKlingTurbo": "Kling Turbo — cheapest",
   "cfgext.genLlmHaiku45": "Claude Haiku 4.5 — fastest",
   "cfgext.genLlmSonnet46": "Claude Sonnet 4.6 — default",

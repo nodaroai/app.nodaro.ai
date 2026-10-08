@@ -171,15 +171,16 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
   // ── Cast & Consistency (clean grids per the multi-character workflow:
   // sterile neutral-background reference grids built to be FED BACK as identity
   // anchors — unlike the editorial boards above, decoration here is noise.
-  // nano-banana-2 per the source guide: cheaper/faster per attempt with strong
-  // practical consistency; 4K so panel faces stay sharp when reused as refs.) ──
+  // Nano Banana 2.1 (decided 2026-10-08 — it replaced Nano Banana 2, which the
+  // source guide recommended: cheaper/faster per attempt with strong practical
+  // consistency); 4K so panel faces stay sharp when reused as refs.) ──
   {
     id: "generate-image/character-reference-grid",
     name: "Character Reference Grid",
     description: "Connect a photo → clean 4-angle identity grid (no decorations) — the strongest consistency anchor.",
     group: "Cast & Consistency",
     data: {
-      provider: "nano-banana-2",
+      provider: "nano-banana-2-1",
       aspectRatio: "3:4",
       resolution: "4K",
       promptPrefix: `Create a clean character reference grid using the attached photo of the person as the single source of truth for face, hair, eyes, skin tone, build and outfit. Four equal panels arranged in a tidy two-by-two grid on a single seamless neutral light-grey studio background: a tight front-facing portrait close-up, a 3/4-view portrait, a full-body shot from the front in a relaxed neutral stance, and a full-body shot from the back. The SAME person in every panel — identical age, features, hairstyle and outfit from the attached photo. Identical soft, even studio lighting in all four panels with no dramatic shadows. No decorations, no background props, no text, no UI elements — a sterile, production-neutral reference sheet built to be reused as an identity reference in later generations.`,
@@ -194,7 +195,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Connect 2–4 character refs → one labeled cast sheet; then reference cast members by name in scenes.",
     group: "Cast & Consistency",
     data: {
-      provider: "nano-banana-2",
+      provider: "nano-banana-2-1",
       aspectRatio: "3:4",
       resolution: "4K",
       prompt: `Create a clean multi-character cast reference sheet composed as horizontal strips stacked vertically in one image — one strip per character from the attached reference images, in the order they are attached, using exactly as many strips as there are attached characters. Each strip shows that character in four aligned studio panels: tight front portrait close-up · 3/4 portrait · full body front · full body back, all in a relaxed neutral stance. Label each strip on the left edge with the character's name in clean bold lettering: {character names || ALEX · MAYA · SAM}. Every character must match their attached reference exactly — same face, hair, skin tone, build and outfit — with no identity blending between rows. Single seamless neutral light-grey studio background across the whole sheet, identical soft even lighting in every panel, consistent panel sizing and alignment. No decorations, no props, no UI elements beyond the row name labels. A sterile production casting sheet built to be reused as the single identity reference for this cast in later generations. Photorealistic, sharp focus, natural skin texture, true-to-life color.`,
@@ -208,7 +209,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Connect a cast grid → stage a scene naming the characters; never re-describe their looks.",
     group: "Cast & Consistency",
     data: {
-      provider: "nano-banana-2",
+      provider: "nano-banana-2-1",
       aspectRatio: "16:9",
       resolution: "2K",
       prompt: `Using the attached character reference sheet as the single source of truth for every named character's face, hair, build and outfit, generate one photorealistic scene: {scene || ALEX and MAYA share a quiet laugh at the counter of a sunlit ramen bar while SAM studies the menu}. Refer to the characters ONLY by the names labeled on the reference sheet and keep each one perfectly consistent with their reference row — do not invent new physical traits, do not blend identities, and do not alter outfits unless the scene says so. Stage them naturally in the environment with believable eye-lines, interactions and spacing. Cinematic photography, 35mm lens look with gentle depth of field, soft motivated lighting that matches the location, cohesive filmic color grade, natural skin texture, sharp detail on every character.`,

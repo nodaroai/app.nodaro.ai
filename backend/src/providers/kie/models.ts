@@ -123,6 +123,18 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
     extraParams: { aspect_ratio: "16:9", resolution: "1K", output_format: "jpg" },
   },
 
+  // Nano Banana 2.1 — same request shape as nano-banana-2: native aspect_ratio
+  // (incl. `auto` + banner ratios), resolution 1K/2K/4K, output_format jpg|png,
+  // input images via the family's `image_input` (up to 10).
+  // 4 / 6 / 9 KIE credits at 1K / 2K / 4K — 2K and 4K via composite identifiers.
+  // See: docs.kie.ai/market/google/nanobanana-2-1.md
+  "nano-banana-2-1": {
+    model: "nano-banana-2-1",
+    credits: 4,
+    cost: 0.02,  // (1K default)
+    extraParams: { aspect_ratio: "16:9", resolution: "1K", output_format: "jpg" },
+  },
+
   // Nano Banana 2 Lite (Gemini 3.1 Flash-Lite Image) — fast, low-cost, 1K ONLY.
   // Single-id t2i+i2i like nano-banana-2, but input images go via `image_urls`
   // (array, up to 10) — NOT the family's `image_input`. No resolution, quality,

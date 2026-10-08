@@ -3951,7 +3951,7 @@ export const ko: ChromeDict = {
   "cfgext.genFramesFiveEvenlyDesc": "샷당 0%/25%/50%/75%/100% 지점의 5프레임을 사용합니다. 모션 결함을 가장 잘 잡아냅니다. 샷당 최대 {n}크레딧이 소모됩니다.",
   "cfgext.genImgNanoBanana": "Nano Banana — 빠름",
   "cfgext.genImgNanoBananaPro": "Nano Banana Pro — 더 높은 충실도",
-  "cfgext.genImgNanoBanana2": "Nano Banana 2 — 최신",
+  "cfgext.genImgNanoBanana2": "Nano Banana 2 — 이전 버전",
   "cfgext.genVidKlingTurbo": "Kling Turbo — 가장 저렴",
   "cfgext.genLlmHaiku45": "Claude Haiku 4.5 — 가장 빠름",
   "cfgext.genLlmSonnet46": "Claude Sonnet 4.6 — 기본값",

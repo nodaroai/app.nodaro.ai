@@ -4057,7 +4057,7 @@ export const he: ChromeDict = {
   "cfgext.genFramesFiveEvenlyDesc": "5 פריימים לכל שוט ב־0%/25%/50%/75%/100%. הכיסוי הטוב ביותר לתקלות תנועה. עד {n} קרדיטים לכל שוט.",
   "cfgext.genImgNanoBanana": "Nano Banana — מהיר",
   "cfgext.genImgNanoBananaPro": "Nano Banana Pro — נאמנות גבוהה יותר",
-  "cfgext.genImgNanoBanana2": "Nano Banana 2 — העדכני ביותר",
+  "cfgext.genImgNanoBanana2": "Nano Banana 2 — גרסה קודמת",
   "cfgext.genVidKlingTurbo": "Kling Turbo — הזול ביותר",
   "cfgext.genLlmHaiku45": "Claude Haiku 4.5 — המהיר ביותר",
   "cfgext.genLlmSonnet46": "Claude Sonnet 4.6 — ברירת מחדל",

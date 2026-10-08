@@ -33,7 +33,7 @@ downstream prompt itself. The image node's own `prompt` stays EMPTY.
 
 ## The three steps (build them in this order)
 
-1. **Meet the node** — one Person → one `generate-image` (nano-banana-2 or
+1. **Meet the node** — one Person → one `generate-image` (nano-banana-2-1 or
    another current image model, explicit aspect ratio, empty prompt). The user
    can open the image node's Final Prompt to SEE the text the picker wrote —
    point them to it; it makes the mechanism legible.

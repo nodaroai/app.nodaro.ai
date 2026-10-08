@@ -312,6 +312,10 @@ const NANO_BANANA_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "
 // nano-banana-2-lite). Kept separate so the wider set can't leak to the
 // rest of the family.
 const NANO_BANANA_2_LITE_RATIOS = ["auto", "1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "4:5", "5:4", "21:9", "4:1", "1:4", "8:1", "1:8"] as const
+// Nano Banana 2.1 — its own documented enum, the same fifteen ratios as Lite
+// (docs.kie.ai/market/google/nanobanana-2-1). Declared separately so a change to
+// either model's set cannot silently move the other.
+const NANO_BANANA_2_1_RATIOS = ["auto", "1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "4:5", "5:4", "21:9", "4:1", "1:4", "8:1", "1:8"] as const
 // Note: these arrays are synchronized with the frontend's
 // `model-options.ts` constants of the same names. The frontend now imports
 // them via the `getAspectRatioOptions(modelId)` helper; if you update one
@@ -395,6 +399,26 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "nano-banana-2", credits: 20, note: "1K default" },
       { identifier: "nano-banana-2:2K", credits: 50, note: "2K" },
       { identifier: "nano-banana-2:4K", credits: 50, note: "4K" },
+    ],
+  },
+  "nano-banana-2-1": {
+    id: "nano-banana-2-1",
+    kind: "image",
+    // Single id for both modes, like nano-banana-2: optional input images via
+    // image_input (up to 10) on the one endpoint.
+    modes: ["t2i", "i2i"] as const,
+    family: "Google",
+    label: "Nano Banana 2.1",
+    series: "Nano Banana",
+    description: "Google's high-efficiency image model for generation and editing — sharper quality, prompt adherence, character consistency and text rendering, up to 10 references and 4K output.",
+    useCases: ["realistic", "character", "typography", "high-res"],
+    features: ["reference-image"],
+    aspectRatios: NANO_BANANA_2_1_RATIOS,
+    resolutions: ["1K", "2K", "4K"],
+    pricing: [
+      { identifier: "nano-banana-2-1", credits: 10, note: "1K default" },
+      { identifier: "nano-banana-2-1:2K", credits: 20, note: "2K" },
+      { identifier: "nano-banana-2-1:4K", credits: 30, note: "4K" },
     ],
   },
   "nano-banana-2-lite": {

@@ -581,6 +581,8 @@ const MODEL_DESCRIPTIONS_KO: Record<string, string> = {
   "Diffusion-based, best for singing": "확산 모델 기반, 노래에 최적",
   "English-optimized speech-to-speech.": "영어에 최적화된 음성→음성 변환.",
   "Extended duration support": "더 긴 길이 지원",
+  "Sharper quality, text and character consistency, up to 4K": "더 선명한 품질, 텍스트와 캐릭터 일관성, 최대 4K",
+  "Consistent edits, up to 10 references and 4K output": "일관된 편집, 레퍼런스 최대 10장, 4K 출력",
   "Fast 1K edits, up to 10 reference images": "빠른 1K 편집, 레퍼런스 이미지 최대 10장",
   "Fast Gemini, agentic-tuned": "빠른 Gemini, 에이전트 작업에 맞게 튜닝",
   "Fast Gemini, sharper reasoning": "빠른 Gemini, 더 정교한 추론",

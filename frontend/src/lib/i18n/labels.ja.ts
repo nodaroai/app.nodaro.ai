@@ -581,6 +581,8 @@ const MODEL_DESCRIPTIONS_JA: Record<string, string> = {
   "Diffusion-based, best for singing": "拡散モデルベース、歌声に最適",
   "English-optimized speech-to-speech.": "英語に最適化された音声から音声への変換。",
   "Extended duration support": "長尺に対応",
+  "Sharper quality, text and character consistency, up to 4K": "画質・テキスト・キャラクターの一貫性が向上、最大 4K",
+  "Consistent edits, up to 10 references and 4K output": "一貫性のある編集、最大 10 枚のリファレンスと 4K 出力",
   "Fast 1K edits, up to 10 reference images": "高速な 1K 編集、最大 10 枚のリファレンス画像",
   "Fast Gemini, agentic-tuned": "高速な Gemini、エージェント向けに調整",
   "Fast Gemini, sharper reasoning": "高速な Gemini、より鋭い推論",

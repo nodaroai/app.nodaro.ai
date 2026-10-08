@@ -581,6 +581,8 @@ const MODEL_DESCRIPTIONS_PT_BR: Record<string, string> = {
   "Diffusion-based, best for singing": "Baseado em difusão, ideal para canto",
   "English-optimized speech-to-speech.": "Fala para fala otimizada para inglês.",
   "Extended duration support": "Suporte a duração estendida",
+  "Sharper quality, text and character consistency, up to 4K": "Mais qualidade, texto e consistência de personagens, até 4K",
+  "Consistent edits, up to 10 references and 4K output": "Edições consistentes, até 10 referências e saída em 4K",
   "Fast 1K edits, up to 10 reference images": "Edições 1K rápidas, até 10 imagens de referência",
   "Fast Gemini, agentic-tuned": "Gemini rápido, ajustado para agentes",
   "Fast Gemini, sharper reasoning": "Gemini rápido, raciocínio mais afiado",

@@ -78,6 +78,7 @@ export const MAX_IMAGE_PROMPT_CHARS_BY_PROVIDER: Record<string, number> = {
   // ── higher than the 5000 default ──
   "nano-banana-2": 20000,      // docs.kie.ai/market/google/nano-banana-2
   "nano-banana-2-lite": 20000, // docs.kie.ai/market/google/nano-banana-2-lite
+  "nano-banana-2-1": 20000,    // docs.kie.ai/market/google/nanobanana-2-1
   "nano-banana-pro": 20000,    // docs.kie.ai/market/google/pro-image-to-image
   "gpt-image-2-i2i": 20000,    // docs.kie.ai/market/gpt/gpt-image-2-image-to-image
   // GPT Image 2.5 — all four lanes document a 20000-char prompt ceiling.
@@ -490,6 +491,7 @@ export const MODELS_WITH_REFERENCE_IMAGE_SUPPORT = new Set([
   "nano-banana-pro",
   "nano-banana-2",
   "nano-banana-2-lite",
+  "nano-banana-2-1",
   // T2I providers that auto-route to their i2i sibling when refs are attached
   "gpt-image",
   "gpt-image-2",
@@ -576,6 +578,7 @@ export const REF_IMAGE_MAX_LIMITS: Record<string, number> = {
   "nano-banana-pro": 8,
   "nano-banana-2": 4,
   "nano-banana-2-lite": 10,
+  "nano-banana-2-1": 10,
   "wan-2.7": 9,
   // grok-2 reference chain consumes exactly one image (segment-map input).
   "grok-2-i2i": 1,
@@ -655,6 +658,7 @@ export const VARIABLE_PRICING_MODELS: Record<string, "quality" | "resolution" | 
   "gpt-image-2-5-sunburst-i2i": "resolution",
   "nano-banana-pro": "resolution",
   "nano-banana-2": "resolution",
+  "nano-banana-2-1": "resolution",
   "flux": "resolution",
   "flux-flex": "resolution",
   "flux-i2i": "resolution",
@@ -683,6 +687,7 @@ export const TWO_K_RESOLUTION_PROVIDERS = new Set(["flux", "flux-pro-i2i", "flux
 // Models where both 2K and 4K resolutions trigger composite credit identifiers (1K is base)
 export const RESOLUTION_2K_4K_TIERED_PROVIDERS = new Set([
   "nano-banana-2",
+  "nano-banana-2-1",
   "gpt-image-2",
   "gpt-image-2-i2i",
   "gpt-image-2-5-flare",
@@ -712,6 +717,7 @@ export const IMAGE_GEN_PROVIDERS = [
   "nano-banana-pro",
   "nano-banana-2",
   "nano-banana-2-lite",
+  "nano-banana-2-1",
   "grok",
   "grok-2",
   "gpt-image",
@@ -743,6 +749,7 @@ export const IMAGE_I2I_PROVIDERS = [
   "nano-banana",
   "nano-banana-2",
   "nano-banana-2-lite",
+  "nano-banana-2-1",
   "nano-banana-pro",
   "grok-i2i",
   "flux-i2i",
@@ -1519,6 +1526,7 @@ export const IMAGE_MASK_MODE: Record<ImageGenProvider, ImageMaskMode> = {
   "nano-banana-pro": "prompt",
   "nano-banana-2": "prompt",
   "nano-banana-2-lite": "prompt",
+  "nano-banana-2-1": "prompt",
   "gpt-image": "prompt",
   "gpt-image-2": "prompt",
   "gpt-image-2-5-flare": "prompt",

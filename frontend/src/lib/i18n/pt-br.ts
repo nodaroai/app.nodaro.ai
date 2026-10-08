@@ -3951,7 +3951,7 @@ export const ptBR: ChromeDict = {
   "cfgext.genFramesFiveEvenlyDesc": "5 quadros por tomada, em 0%/25%/50%/75%/100%. A melhor cobertura de falhas de movimento. Até {n} créditos por tomada.",
   "cfgext.genImgNanoBanana": "Nano Banana — rápido",
   "cfgext.genImgNanoBananaPro": "Nano Banana Pro — maior fidelidade",
-  "cfgext.genImgNanoBanana2": "Nano Banana 2 — o mais recente",
+  "cfgext.genImgNanoBanana2": "Nano Banana 2 — versão anterior",
   "cfgext.genVidKlingTurbo": "Kling Turbo — o mais barato",
   "cfgext.genLlmHaiku45": "Claude Haiku 4.5 — o mais rápido",
   "cfgext.genLlmSonnet46": "Claude Sonnet 4.6 — padrão",

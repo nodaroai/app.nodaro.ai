@@ -22,7 +22,7 @@ import { uploadBufferToR2 } from "../../lib/storage.js"
 import { safeFetch } from "../../lib/safe-fetch.js"
 
 // Models that need output_format forced to "png" (legacy Nano Banana family).
-// Nano Banana 2 uses its own output_format from extraParams (jpg default), so it is NOT included.
+// Nano Banana 2 and 2.1 use their own output_format from extraParams (jpg default), so they are NOT included.
 const FORCE_PNG_OUTPUT_PROVIDERS = new Set([
   "nano-banana", "nano-banana-pro", "nano-banana-edit",
 ])
@@ -549,7 +549,7 @@ export class KieImageProvider
     }
 
     // Nano Banana family supports output_format parameter
-    if (provider.startsWith("nano-banana") && provider !== "nano-banana-2") {
+    if (provider.startsWith("nano-banana") && provider !== "nano-banana-2" && provider !== "nano-banana-2-1") {
       input.output_format = "png"
     }
 
