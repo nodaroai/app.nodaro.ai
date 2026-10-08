@@ -1,7 +1,7 @@
 ---
 node_type: styling
-generated_at: 2026-09-27T12:51:22.901Z
-generated_from: c607aa02c
+generated_at: 2026-10-08T22:50:03.424Z
+generated_from: ae4e7e3d0
 ---
 
 # Styling
@@ -40,6 +40,7 @@ generated_from: c607aa02c
 - `applyMode?: PickerApplyMode`
 - `autoApplyInjected?: boolean`
 - `lastAppliedPickerJson?: Record<string, unknown>`
+- `lastAppliedPickerRunId?: string`
 - `hintMode?: "full" | "compact"`
 
 **Valid values:** call `get_picker_catalog("styling")` (MCP) or `GET /v1/picker-catalogs/styling` for the catalog of valid ids.

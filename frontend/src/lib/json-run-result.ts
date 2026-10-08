@@ -293,7 +293,9 @@ export function jsonRunResultPatch(
     // The run's gaps never reach the job row or the node output (the route
     // records them server-side), so an earlier canvas run's are cleared rather
     // than left beside a picker json they do not describe.
-    return { generatedPickerJson: output.json, generatedGaps: undefined }
+    // The run id makes a server run an upstream change for every wired picker
+    // (use-picker-json-consumer.ts), as the canvas run's job id does.
+    return { generatedPickerJson: output.json, generatedPickerRunId: take.jobId, generatedGaps: undefined }
   }
   if (nodeType === "video-audit") {
     // The report travels beside the corrected analysis, so the node never

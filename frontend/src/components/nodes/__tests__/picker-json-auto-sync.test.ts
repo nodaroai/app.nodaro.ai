@@ -3,6 +3,7 @@ import { renderHook, act } from "@testing-library/react"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import { usePickerJsonConsumer } from "../use-picker-json-consumer"
+import { jsonRunResultPatch } from "@/lib/json-run-result"
 
 function seed(pickerData: Record<string, unknown>, pickerJson?: Record<string, unknown>) {
   const nodes = [
@@ -111,5 +112,69 @@ describe("saved workflows from before auto-sync was the default", () => {
       }),
     )
     expect(lensOf()).toBe("portrait-85mm")
+  })
+})
+
+describe("every analysis run re-syncs (a run id is an upstream change)", () => {
+  beforeEach(() => useWorkflowStore.setState({ nodes: [], edges: [] }))
+
+  function run(lens: string, runId: string) {
+    act(() =>
+      useWorkflowStore.getState().updateNodeData("d", {
+        generatedPickerJson: { lens: { lens } },
+        generatedPickerRunId: runId,
+      }),
+    )
+  }
+
+  it("a re-run that returns the same section still replaces a hand edit", () => {
+    seed({ lens: "normal-50mm" })
+    mount()
+    run("portrait-85mm", "job-1")
+    act(() => useWorkflowStore.getState().updateNodeData("p", { lens: "fisheye" }))
+    run("portrait-85mm", "job-2")
+    expect(lensOf()).toBe("portrait-85mm")
+    const data = useWorkflowStore.getState().nodes.find((n) => n.id === "p")!.data as Record<string, unknown>
+    expect(data.lastAppliedPickerRunId).toBe("job-2")
+  })
+
+  it("the same run seen again (a reload) does not re-apply over a hand edit", () => {
+    seed({ lens: "fisheye", lastAppliedPickerJson: { lens: "portrait-85mm" }, lastAppliedPickerRunId: "job-1" })
+    act(() =>
+      useWorkflowStore.getState().updateNodeData("d", {
+        generatedPickerJson: { lens: { lens: "portrait-85mm" } },
+        generatedPickerRunId: "job-1",
+      }),
+    )
+    const { result } = mount()
+    expect(lensOf()).toBe("fisheye")
+    expect(result.current.showSyncButton).toBe(true)
+  })
+
+  it("a picker synced before runs had ids takes the first run that has one", () => {
+    seed({ lens: "fisheye", lastAppliedPickerJson: { lens: "portrait-85mm" } }, { lens: { lens: "portrait-85mm" } })
+    mount()
+    expect(lensOf()).toBe("fisheye")
+    run("portrait-85mm", "job-9")
+    expect(lensOf()).toBe("portrait-85mm")
+  })
+
+  it("manual mode offers the new run on the button", () => {
+    seed({ lens: "portrait-85mm", autoApplyInjected: false, lastAppliedPickerJson: { lens: "portrait-85mm" }, lastAppliedPickerRunId: "job-1" })
+    const { result } = mount()
+    run("portrait-85mm", "job-2")
+    expect(result.current.hasPending).toBe(true)
+    act(() => result.current.apply())
+    expect(result.current.hasPending).toBe(false)
+  })
+})
+
+describe("a server run lands with its run id", () => {
+  it("the result patch carries the job id, so a server re-run re-syncs too", () => {
+    expect(jsonRunResultPatch("describe-to-picker", { json: { lens: { lens: "macro" } } }, { jobId: "job-7" })).toEqual({
+      generatedPickerJson: { lens: { lens: "macro" } },
+      generatedPickerRunId: "job-7",
+      generatedGaps: undefined,
+    })
   })
 })

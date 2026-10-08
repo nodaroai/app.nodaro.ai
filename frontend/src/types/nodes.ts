@@ -24,6 +24,8 @@ export interface PickerConsumerData {
   autoApplyInjected?: boolean
   /** The picker JSON last applied — basis for change detection. */
   lastAppliedPickerJson?: Record<string, unknown>
+  /** The producer run (`generatedPickerRunId`) last applied. */
+  lastAppliedPickerRunId?: string
 }
 
 /** Hint-mode lever shared by every parameter picker (the registry set in
@@ -3578,6 +3580,10 @@ export type DescribeToPickerData = {
   /** Latest emitted multi-section picker JSON `{ person:{…}, styling:{…} }`
    *  (consumed by the wired picker nodes; each reads its own section). */
   generatedPickerJson?: Record<string, unknown>
+  /** The run that produced `generatedPickerJson` (its job id). A new id is an
+   *  upstream change for every wired picker, even when a picker's own section
+   *  came back the same — so each run re-syncs every auto-sync picker. */
+  generatedPickerRunId?: string
   /** Latest catalog-gap feedback from the analyzer (display only). */
   generatedGaps?: PickerGaps
 }

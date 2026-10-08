@@ -5265,6 +5265,7 @@ function executeNodeCore(
         updateNodeData(node.id, {
           executionStatus: "completed",
           generatedPickerJson: result.pickerJson,
+          generatedPickerRunId: result.jobId,
           generatedGaps: result.gaps,
           errorMessage: undefined,
         });
