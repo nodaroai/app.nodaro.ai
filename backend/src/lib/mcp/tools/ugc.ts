@@ -243,6 +243,16 @@ export function registerUgcTools({ server, session, fastify }: RegisterUgcToolsO
           .max(8)
           .optional()
           .describe("The segments from ugc_split_speech's output, when the answer to the first call asked for them. Leave out on the first call."),
+        speech_lane: z
+          .enum(["prompt-quoted", "reference-audio"])
+          .optional()
+          .describe("English only. reference-audio (the default): a voice speaks the script and the video model performs it. prompt-quoted: the video model reads the line in its own voice, no ElevenLabs."),
+        voice_id: z
+          .string()
+          .min(1)
+          .max(200)
+          .optional()
+          .describe("English only: the ElevenLabs mode's anchor voice (a premade name or a list_voices id), replacing the builder's pick from the creator."),
       },
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
@@ -254,6 +264,8 @@ export function registerUgcTools({ server, session, fastify }: RegisterUgcToolsO
         identityImages: args.identity_images,
         ...(args.seed !== undefined ? { seed: args.seed } : {}),
         ...(args.segments ? { segments: args.segments } : {}),
+        ...(args.speech_lane ? { speechLane: args.speech_lane } : {}),
+        ...(args.voice_id ? { voiceId: args.voice_id } : {}),
       })
       if (res.statusCode >= 400) return ugcError(res.statusCode, res.body)
       const body = JSON.parse(res.body) as { errors?: unknown[]; quoteItems?: unknown; estimateQuoteItems?: unknown; worstCaseQuoteItems?: unknown; clips?: unknown[] } & Record<string, unknown>
