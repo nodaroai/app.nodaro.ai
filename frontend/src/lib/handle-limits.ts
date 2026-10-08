@@ -5,6 +5,7 @@ import {
   PROVIDERS_WITH_REFERENCES,
 } from "@/components/editor/config-panels/model-options"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
 
 /**
  * Connection counts a caller can thread into `getHandleConnectionLimit` so the
@@ -128,7 +129,7 @@ export function getHandleConnectionLimit(
     const providers: readonly string[] =
       data?.providers && data.providers.length > 0
         ? data.providers
-        : [data?.provider || "nano-banana-pro"]
+        : [data?.provider || IMAGE_MODEL_ROLE_DEFAULTS.general]
 
     // Filter to providers that actually consume reference images — others
     // ignore them entirely, so their "limit" of zero would be misleading.

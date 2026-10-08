@@ -5,6 +5,7 @@ import type { EntityKind, SheetType, SheetFlavour } from "@nodaro/shared"
 import { resolveSheetEntity } from "./payload-builder.js"
 import { loopbackFetch } from "./loopback-fetch.js"
 import type { SimpleNode, SimpleEdge, NodeExecutionState, OrchestratorContext } from "./types.js"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
 
 /**
  * Reference Sheet — Stage A for the WORKFLOW-RUN path.
@@ -50,7 +51,7 @@ const ROUTE: Record<EntityKind, { path: string; attachField: string }> = {
  * docs/nodes/ai-image/reference-sheet.md prices sheet panels at it — change
  * the three together.
  */
-export const SHEET_PANEL_PROVIDER = "nano-banana"
+export const SHEET_PANEL_PROVIDER = IMAGE_MODEL_ROLE_DEFAULTS.character
 
 /** Generated concurrently at most this many at once (mirrors the frontend
  *  SHEET_PANEL_CONCURRENCY + spec §15 "bounded parallel"). */

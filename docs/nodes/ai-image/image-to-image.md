@@ -11,7 +11,7 @@ Image to Image takes a source image and a text prompt to generate a transformed 
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| Provider | select | `nano-banana` | AI model to use for transformation (21 options) |
+| Provider | select | `gpt-image-2-5-flare-i2i` | AI model to use for transformation (21 options) |
 | Prompt | text | `""` | Description of the desired transformation |
 | Style | select | `""` | 16 presets + "Custom..." free text (same as Generate Image) |
 | Negative Prompt | text | `""` | Elements to exclude from the result |
@@ -37,7 +37,7 @@ Image to Image takes a source image and a text prompt to generate a transformed 
 | Provider | Label | Description | Key Capability |
 |----------|-------|-------------|----------------|
 | nano-banana | Nano Banana | Fast iteration, quick transforms | General I2I |
-| nano-banana-2 | Nano Banana 2 | Updated Nano Banana; 1K/2K/4K resolution. Superseded by Nano Banana 2.1 (`nano-banana-2-1`), now the default; still available. | General I2I, resolution options |
+| nano-banana-2 | Nano Banana 2 | Updated Nano Banana; 1K/2K/4K resolution. Superseded by Nano Banana 2.1 (`nano-banana-2-1`); still available. | General I2I, resolution options |
 | nano-banana-2-1 | Nano Banana 2.1 | Consistent edits with strong character consistency and text rendering; 1K / 2K / 4K at **10 / 20 / 30 credits** | Up to 10 input images, resolution options |
 | nano-banana-2-lite | Nano Banana 2 Lite | Fast, low-cost 1K edits (Gemini 3.1 Flash-Lite); flat 10 credits | Up to 10 input images |
 | nano-banana-pro | Nano Banana Pro | Higher detail, production images | General I2I, resolution options |
@@ -46,7 +46,7 @@ Image to Image takes a source image and a text prompt to generate a transformed 
 | flux-pro-i2i | Flux-2 Pro | Premium quality image transforms | Resolution options (1K/2K) |
 | gpt-image-i2i | GPT Image | Text rendering, complex compositions | Quality options (medium/high) |
 | gpt-image-2-i2i | GPT Image 2 | Higher resolution GPT Image; 1K/2K/4K | Resolution options |
-| gpt-image-2-5-flare-i2i | GPT Image 2.5 Flare | Fast GPT Image 2.5 edits, up to 16 source images — the default while iterating; 1K/2K/4K at **15 / 25 / 40 credits** | Resolution options |
+| gpt-image-2-5-flare-i2i | GPT Image 2.5 Flare | Fast GPT Image 2.5 edits, up to 16 source images — the default edit model; 1K/2K/4K at **15 / 25 / 40 credits** | Resolution options |
 | gpt-image-2-5-sunburst-i2i | GPT Image 2.5 Sunburst | Precision GPT Image 2.5 edits, up to 16 source images — tightest control for demanding retouches, slower; same **15 / 25 / 40 credits** | Resolution options |
 | ideogram-edit | Ideogram Edit | AI-guided image editing | Mask-based inpainting |
 | ideogram-remix | Ideogram Remix | Restyle with character consistency | Character-consistent restyling |

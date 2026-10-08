@@ -14,6 +14,7 @@ import { makeOnTaskCreated } from "../../lib/reconcile/persistence.js"
 import { providerKindForImageModel } from "../../lib/reconcile/provider-kind.js"
 import { autoAttachLocationAsset } from "../../lib/location-auto-attach.js"
 import type { PluginSurroundEngine } from "../../lib/private-plugins/types.js"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
 
 const DEFAULT_REFINE_PROVIDER = "recraft-upscale"
 
@@ -66,7 +67,7 @@ function makeHandler(engine: PluginSurroundEngine): HandlerFn {
       attachToColumn,
       attachName,
     } = data
-    const resolvedProvider = provider ?? "nano-banana"
+    const resolvedProvider = provider ?? IMAGE_MODEL_ROLE_DEFAULTS.general
     const refineProvider = data.refineProvider ?? DEFAULT_REFINE_PROVIDER
     const carriedFraction = data.carriedFraction ?? defaultCarriedFraction(direction)
 

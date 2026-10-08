@@ -132,9 +132,8 @@ export async function runSceneDirector(args: RunSceneDirectorArgs): Promise<Scen
 
 You MUST set image_model="${userImagePick}" for every shot. Do not pick anything else.`
     : `CAPABILITY REGISTRY (image models — all eligible in Phase 1B.2):
-- nano-banana-2-1
-- flux
-- gpt-image`
+- gpt-image-2 (the default; draws 1:1, 16:9, 9:16, 4:3, 3:4)
+- gpt-image-2-5-sunburst (for wider or in-between ratios such as 21:9, 3:2, 2:3)`
 
   const criticPreamble = args.criticFeedback
     ? `\n\nPRIOR ATTEMPT WAS REJECTED BY THE SHOT LIST CRITIC:\n${JSON.stringify(args.criticFeedback, null, 2)}\n\nAddress every blocking issue.\n\n`

@@ -10,11 +10,11 @@ import { MODEL_CATALOG } from "@nodaro/shared"
  * the identifier space against `buildCreditModelIdentifier`'s provider sets.
  */
 describe("resolveEntityImageCreditIdentifier", () => {
-  it("defaults to nano-banana on an empty / non-object body", () => {
-    expect(resolveEntityImageCreditIdentifier({})).toBe("nano-banana")
-    expect(resolveEntityImageCreditIdentifier(null)).toBe("nano-banana")
-    expect(resolveEntityImageCreditIdentifier(undefined)).toBe("nano-banana")
-    expect(resolveEntityImageCreditIdentifier("nonsense")).toBe("nano-banana")
+  it("defaults to the character model (gpt-image-2) on an empty / non-object body", () => {
+    expect(resolveEntityImageCreditIdentifier({})).toBe("gpt-image-2")
+    expect(resolveEntityImageCreditIdentifier(null)).toBe("gpt-image-2")
+    expect(resolveEntityImageCreditIdentifier(undefined)).toBe("gpt-image-2")
+    expect(resolveEntityImageCreditIdentifier("nonsense")).toBe("gpt-image-2")
   })
 
   it("passes a plain provider through unchanged (legacy behavior)", () => {

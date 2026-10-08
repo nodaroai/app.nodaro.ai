@@ -4,6 +4,7 @@ import { usdToCredits, type AnchorSceneStyleResult, type SceneNodeData, type Sho
 import { callLLM } from "../call-llm.js"
 import { pipelineGenerateImage } from "../../services/pipeline-generate-image.js"
 import { getPipelinePrompt, PIPELINE_PROMPT_KEYS } from "../prompt-registry.js"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
 
 const AnchorPromptSchema = z.object({
   anchor_prompt: z.string().min(20).max(800),
@@ -77,7 +78,7 @@ Write the anchor_prompt and respond as JSON.`
     pipelineEntityId: args.pipelineEntityId,
     userId: args.userId,
     prompt: anchorPrompt,
-    modelIdentifier: args.scene.image_model || "nano-banana",
+    modelIdentifier: args.scene.image_model || IMAGE_MODEL_ROLE_DEFAULTS.general,
   })
 
   return {

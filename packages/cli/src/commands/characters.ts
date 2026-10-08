@@ -283,7 +283,7 @@ export function charactersCommand(): Command {
     .description("trigger portrait generation for a character")
     .option("--seed-prompt <prompt>")
     .option("--description <desc>")
-    .option("--provider <provider>", "image provider (defaults to nano-banana)")
+    .option("--provider <provider>", "image provider (defaults to gpt-image-2)")
     .option("--count <n>", "1, 2, or 4 candidate portraits", "1")
     .option("--name <name>", "override the character's display name in the prompt")
     .option("--profile <name>")

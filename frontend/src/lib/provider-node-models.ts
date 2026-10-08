@@ -9,6 +9,7 @@ import { DEFAULT_VIDEO_PROVIDER } from "@nodaro/shared"
 import { IMAGE_GEN_MODELS, VIDEO_GEN_MODELS } from "@/components/editor/config-panels/model-options"
 import type { MessageKey } from "@/lib/i18n"
 import type { ProviderData } from "@/types/nodes"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
 
 export type ProviderNodeCategory = "image" | "video"
 
@@ -20,7 +21,7 @@ interface ProviderNodeCategoryEntry {
 }
 
 export const PROVIDER_NODE_CATEGORIES: Readonly<Record<ProviderNodeCategory, ProviderNodeCategoryEntry>> = {
-  image: { label: "common.image", models: IMAGE_GEN_MODELS, defaultModel: "nano-banana" },
+  image: { label: "common.image", models: IMAGE_GEN_MODELS, defaultModel: IMAGE_MODEL_ROLE_DEFAULTS.general },
   video: { label: "common.video", models: VIDEO_GEN_MODELS, defaultModel: DEFAULT_VIDEO_PROVIDER },
 }
 

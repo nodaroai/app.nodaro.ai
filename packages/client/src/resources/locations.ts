@@ -332,7 +332,7 @@ export interface GenerateSurroundContinuationInput {
   refineProvider?: "recraft-upscale" | "topaz-image-upscale"
   /** Optional free-form scene hint woven into the fill prompt. */
   userPrompt?: string
-  /** Image model. Studio pins `nano-banana-pro`; default `nano-banana`. */
+  /** Image model. Defaults to the platform's general image model (`gpt-image-2`). */
   provider?: string
   /** Studio pins `"16:9"` so every ring view matches the establishing frame. */
   aspectRatio?: CharacterAspectRatio

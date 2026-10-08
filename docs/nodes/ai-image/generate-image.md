@@ -9,7 +9,7 @@ Generate Image is the primary text-to-image node. It accepts a text prompt (with
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| Provider | select | `nano-banana-pro` | AI model to use for generation (24 options) |
+| Provider | select | `gpt-image-2` | AI model to use for generation (24 options). With no model set, a ratio GPT Image 2 can't draw (21:9, 3:2, 2:3, …) uses `gpt-image-2-5-sunburst`, and 4:5 / 5:4 use `nano-banana-pro`. |
 | Prompt | text | `""` | Text description of the image to generate. Each model has its own prompt-length limit -- 20 000 characters on the Nano Banana / GPT Image families, 5 000 by default, and as little as **1 000 on Z-Image and Seedream 5 Lite**. The editor counts down to your model's limit as you type, and a prompt still over it at run time is **shortened to fit** rather than refused |
 | Style | select | `""` | One of 16 presets (Photorealistic, Cinematic, Anime, Digital Art, Oil Painting, Watercolor, Children's Book, Comic Book, Pixel Art, 3D Render, Pencil Sketch, Pop Art, Minimalist, Retro/Vintage, Fantasy, Noir) or "Custom..." free text. Style text is appended to the prompt at execution time. |
 | Negative Prompt | text | `""` | Elements to exclude. Sent natively for imagen4, ideogram, qwen; appended as "Avoid:..." for other providers. |
@@ -77,7 +77,7 @@ The migration runs on the frontend (`loadWorkflow`) plus three defensive backend
 |----------|-------|-------------|---------------|
 | nano-banana | Nano Banana | Fast drafts, iteration, storyboards | 1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3, 5:4, 4:5, 21:9 |
 | nano-banana-pro | Nano Banana Pro | Higher detail, production-ready images | Same as Nano Banana |
-| nano-banana-2 | Nano Banana 2 | Updated Nano Banana with web grounding. Superseded by Nano Banana 2.1 (`nano-banana-2-1`), now the default; still available. | Same as Nano Banana |
+| nano-banana-2 | Nano Banana 2 | Updated Nano Banana with web grounding. Superseded by Nano Banana 2.1 (`nano-banana-2-1`); still available. | Same as Nano Banana |
 | nano-banana-2-1 | Nano Banana 2.1 | Google's high-efficiency image model — improved visual quality, prompt adherence, character consistency and text rendering; up to 10 reference images. 1K / 2K / 4K at **10 / 20 / 30 credits**. | auto, 1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3, 4:5, 5:4, 21:9, 4:1, 1:4, 8:1, 1:8 |
 | nano-banana-2-lite | Nano Banana 2 Lite | Fast, low-cost 1K drafts and iteration (Gemini 3.1 Flash-Lite). Flat **10 credits** per image — no resolution tiers. | auto, 1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3, 4:5, 5:4, 21:9, 4:1, 1:4, 8:1, 1:8 |
 | grok | Grok | Creative and stylized imagery | 1:1, 16:9, 9:16, 3:2, 2:3 |
@@ -237,7 +237,7 @@ deliberate: a preset should carry its look.
 
 ## Best Practices
 
-- Use Nano Banana or Z-Image for rapid iteration and storyboarding due to fast generation speed.
+- Use Nano Banana 2.1 or Z-Image for rapid, low-cost iteration and storyboarding.
 - Use GPT Image for scenes requiring accurate text rendering (signs, labels, UI mockups).
 - Append style presets rather than writing style instructions in the prompt -- the system handles appending automatically.
 - For models that support reference images (nano-banana, nano-banana-pro, nano-banana-2, nano-banana-2-1, nano-banana-2-lite), connect Character nodes upstream for consistent character appearance across shots.

@@ -60,7 +60,7 @@ function renderPanel() {
 
 describe("CharacterSheetPanel cost readouts", () => {
   beforeEach(() => {
-    prices.byId = { "nano-banana": 10, "reference-sheet:assembly": 40 }
+    prices.byId = { "gpt-image-2": 15, "reference-sheet:assembly": 40 }
   })
 
   it("prices each missing panel and the compose fee at their live prices", () => {
@@ -69,12 +69,12 @@ describe("CharacterSheetPanel cost readouts", () => {
 
     renderPanel()
 
-    expect(screen.getByText(`Reuses 0 existing · ${missing} missing → Prepare ~${missing * 10} cr · Compose 40 cr`)).toBeTruthy()
-    expect(screen.getByText(`${missing} to generate → ~${missing * 10 + 40} cr`)).toBeTruthy()
+    expect(screen.getByText(`Reuses 0 existing · ${missing} missing → Prepare ~${missing * 15} cr · Compose 40 cr`)).toBeTruthy()
+    expect(screen.getByText(`${missing} to generate → ~${missing * 15 + 40} cr`)).toBeTruthy()
   })
 
   it("shows no price until both live prices have loaded", () => {
-    prices.byId = { "nano-banana": 10 } // the compose price is still loading
+    prices.byId = { "gpt-image-2": 15 } // the compose price is still loading
 
     renderPanel()
 

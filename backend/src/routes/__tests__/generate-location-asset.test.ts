@@ -535,7 +535,7 @@ describe("POST /v1/generate-location-asset — quality / resolution levers", () 
 
     expect(res.statusCode).toBe(200)
     expect(vi.mocked(reserveCreditsForJob)).toHaveBeenCalledWith(
-      expect.anything(), expect.anything(), "job-1", "nano-banana",
+      expect.anything(), expect.anything(), "job-1", "gpt-image-2",
     )
   })
 

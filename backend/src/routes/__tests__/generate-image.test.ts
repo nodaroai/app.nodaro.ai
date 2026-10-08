@@ -1710,7 +1710,7 @@ describe("POST /v1/generate-image", () => {
         identifier = resolveImageCreditIdentifier({ body } as unknown as FastifyRequest)
       }).not.toThrow()
       // Non-object body → flat path, 0 refs, default provider.
-      expect(identifier).toBe("nano-banana")
+      expect(identifier).toBe("gpt-image-2")
     })
   })
 })

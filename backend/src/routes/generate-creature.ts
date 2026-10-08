@@ -14,6 +14,7 @@ import { buildCreaturePrompt } from "@nodaro/prompts"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { hasCredits } from "../lib/config.js"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
 
 const generateCreatureBody = z.object({
   name: z.string().min(1).max(200),
@@ -26,7 +27,7 @@ const generateCreatureBody = z.object({
   category: z.string().max(50).optional(),
   style: z.string().max(50).optional(),
   sourceImageUrl: safeUrlSchema.optional(),
-  provider: z.string().optional().default("nano-banana"),
+  provider: z.string().optional().default(IMAGE_MODEL_ROLE_DEFAULTS.character),
   userId: z.string().uuid().optional(),
   // Multi-candidate generation. `1` keeps the legacy single-job behavior and
   // response shape `{ jobId }`. `2`–`10` insert N jobs in parallel and return
@@ -86,10 +87,10 @@ export async function generateCreatureRoutes(app: FastifyInstance) {
       //
       // NOTE: priced by the request `provider` (e.g. nano-banana) — there is
       // NO flat `"generate-creature"` credit identifier (matches object).
-      preHandler: creditGuard((req: FastifyRequest) => extractProvider(req.body, "nano-banana"), {
+      preHandler: creditGuard((req: FastifyRequest) => extractProvider(req.body, IMAGE_MODEL_ROLE_DEFAULTS.character), {
         computeCredits: async (body) => {
           const count = extractCount(body)
-          const provider = extractProvider(body, "nano-banana")
+          const provider = extractProvider(body, IMAGE_MODEL_ROLE_DEFAULTS.character)
           // Dynamic import: getModelCreditBaseCost lives in ee/ and we keep
           // core free of static ee/ imports. Only reached in cloud edition
           // (creditGuard short-circuits to a no-op otherwise).

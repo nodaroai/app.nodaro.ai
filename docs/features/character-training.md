@@ -27,7 +27,7 @@ identity match in image generations. Available on the **Cloud edition only**.
 
 When you `@mention` a single trained character in a `generate-image` node, the
 backend automatically routes that generation through the trained Flux LoRA on
-Replicate instead of the default `nano-banana` + reference-image injection.
+Replicate instead of the default image model (`gpt-image-2`) + reference-image injection.
 
 - The trained model lives on the `nodaroai/char-<characterId>` Replicate model.
 - Only Nodaro can submit inference requests to it (your API token).
@@ -43,7 +43,7 @@ on the roadmap (Phase 2).
 | Action | Credits | Notes |
 |--------|---------|-------|
 | Training | **1,500 cr** | Refunded if Replicate reports failure or cancel. |
-| Inference per image | **20 cr** | Applied when the trained model is used. The dropdown's provider price (typically nano-banana, 10 cr) is replaced. |
+| Inference per image | **20 cr** | Applied when the trained model is used. The dropdown's provider price (by default gpt-image-2, 15 cr) is replaced. |
 | Re-training | 1,500 cr | Full re-training price every time. |
 
 ## Limits

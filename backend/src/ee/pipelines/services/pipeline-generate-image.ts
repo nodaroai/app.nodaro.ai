@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { runPipelineWorkerJob } from "./_run-worker-job.js"
+import { defaultImageModel } from "@nodaro/shared"
 
 export interface PipelineGenerateImageArgs {
   supabase: SupabaseClient
@@ -68,9 +69,10 @@ export async function pipelineGenerateImage(
     referenceImageUrls,
     aspectRatio = "1:1",
   } = args
-  // Precedence: explicit modelIdentifier > userOverride > nano-banana default.
+  // Precedence: explicit modelIdentifier > userOverride > the platform's
+  // default for this ratio (shared image-model-roles.ts).
   const modelIdentifier =
-    args.modelIdentifier ?? args.userOverride ?? "nano-banana"
+    args.modelIdentifier ?? args.userOverride ?? defaultImageModel("general", aspectRatio)
 
   return runPipelineWorkerJob({
     supabase,

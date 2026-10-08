@@ -11,6 +11,7 @@ import { createSSEStream } from "../lib/sse.js"
 import { ownedAssetUrlsById, ownedSceneNodeData } from "../lib/pipeline-asset-ownership.js"
 import { supabase } from "../lib/supabase.js"
 import { creditGuard, paygSurfaceSpendHook, reserveCreditsForJob } from "../middleware/credit-guard.js"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
 
 /**
  * Phase 1D.2b E1: body schema for the stage-approve route. `edits` is an
@@ -1951,7 +1952,7 @@ export async function pipelinesRoutes(app: FastifyInstance) {
           userId,
           prompt,
           modelIdentifier:
-            (shot.image_model as string | undefined) ?? snd.image_model ?? "nano-banana",
+            (shot.image_model as string | undefined) ?? snd.image_model ?? IMAGE_MODEL_ROLE_DEFAULTS.general,
           referenceImageUrls,
         })
       } catch (e) {

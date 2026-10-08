@@ -135,27 +135,30 @@ export interface GenerateVideoProPricing {
   endAnchors?: boolean
 }
 
-/** Image model the keyframes engine generates scene anchors with — GPT Image 2
- *  at 2K since 2026-08-04 (was `nano-banana-pro`). The `:2K` COMPOSITE is the
- *  billed identifier, not the bare id: bare `gpt-image-2` is the 1K price and
- *  would under-reserve every anchor by half (nano-banana-pro's base covered
- *  1K AND 2K, which is why the old constant was bare). */
-const KEYFRAME_ANCHOR_MODEL = "gpt-image-2:2K"
-/** Wide-aspect fallback — GPT Image 2 renders only `auto/1:1/16:9/9:16/4:3/
- *  3:4`, so ratios it cannot do (21:9) generate on nano-banana-pro and must
- *  price at nano-banana-pro. Its base already covers 2K (no composite). */
+/** Image models the keyframes engine generates scene anchors with, in the
+ *  order it tries them for an aspect ratio — GPT Image 2 at 2K first (decided
+ *  2026-10-08: quality first; the engine had used Sunburst since 2026-09-16 and
+ *  GPT Image 2 before that), GPT Image 2.5 Sunburst for the ratios GPT Image 2
+ *  cannot draw (21:9, 3:2, 2:3, …), then nano-banana-pro for 4:5 / 5:4. The
+ *  `:2K` COMPOSITES are the billed identifiers, not the bare ids (a bare GPT id
+ *  is the 1K price and would under-reserve every anchor); nano-banana-pro's
+ *  base already covers 2K. */
+const KEYFRAME_ANCHOR_CHAIN = ["gpt-image-2:2K", "gpt-image-2-5-sunburst:2K", "nano-banana-pro"] as const
+/** The last link — also what an aspect-less (pre-field) plugin generates on. */
 const KEYFRAME_ANCHOR_FALLBACK_MODEL = "nano-banana-pro"
 /** Worst-case anchors per segment (start + end frame). */
 const ANCHORS_PER_SEGMENT = 2
 
 /**
- * Billed identifier for ONE anchor at a given aspect — CATALOG-DRIVEN off the
- * base model's documented `aspectRatios`, never a hand-kept ratio list, so
- * widening GPT Image 2 moves price and generation together.
+ * Billed identifier for ONE anchor at a given aspect — CATALOG-DRIVEN off each
+ * model's documented `aspectRatios`, never a hand-kept ratio list, so widening
+ * a model moves price and generation together.
  *
- * TWIN: the anchor-model resolver in the plugin repo — same predicate, same
- * fallback, and the plugin resolves `"adaptive"`/absent to `"16:9"` before
- * sending. A mismatch is a mispriced run, so keep them in lock-step.
+ * TWIN: `resolveAnchorModel` in the plugin repo (generate-video-pro
+ * `engine/keyframes.ts`) — the first of gpt-image-2, gpt-image-2-5-sunburst,
+ * nano-banana-pro whose catalog lists the ratio. The plugin resolves
+ * `"adaptive"`/absent to `"16:9"` before sending. A mismatch is a mispriced
+ * run, so keep them in lock-step.
  *
  * ABSENT aspect → the FALLBACK (pricier) id, deliberately. The only caller
  * that omits it is a plugin predating the field, whose engine still generates
@@ -164,9 +167,11 @@ const ANCHORS_PER_SEGMENT = 2
  */
 function anchorCreditIdFor(aspectRatio?: string): string {
   if (!aspectRatio) return KEYFRAME_ANCHOR_FALLBACK_MODEL
-  const base = KEYFRAME_ANCHOR_MODEL.split(":")[0]!
-  const supported = MODEL_CATALOG[base]?.aspectRatios as readonly string[] | undefined
-  return supported?.includes(aspectRatio) ? KEYFRAME_ANCHOR_MODEL : KEYFRAME_ANCHOR_FALLBACK_MODEL
+  for (const id of KEYFRAME_ANCHOR_CHAIN) {
+    const supported = MODEL_CATALOG[id.split(":")[0]!]?.aspectRatios as readonly string[] | undefined
+    if (supported?.includes(aspectRatio)) return id
+  }
+  return KEYFRAME_ANCHOR_FALLBACK_MODEL
 }
 
 /**

@@ -134,7 +134,7 @@ describe("generate-image handler", () => {
     await handler(job as never, ctx)
 
     expect(mocks.mockGenerateImage).toHaveBeenCalledWith(
-      "a cat", "nano-banana", undefined, undefined,
+      "a cat", "gpt-image-2", undefined, undefined,
       expect.objectContaining({ onTaskCreated: expect.any(Function) }),
     )
     expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith({
@@ -144,12 +144,12 @@ describe("generate-image handler", () => {
     })
   })
 
-  it("uses default provider 'nano-banana' when none specified", async () => {
+  it("uses the general default model (gpt-image-2) when none specified", async () => {
     const job = makeJob("generate-image", { prompt: "a dog" })
     await handler(job as never, makeCtx())
 
     expect(mocks.mockGenerateImage).toHaveBeenCalledWith(
-      "a dog", "nano-banana", undefined, undefined,
+      "a dog", "gpt-image-2", undefined, undefined,
       expect.objectContaining({ onTaskCreated: expect.any(Function) }),
     )
   })
@@ -170,7 +170,7 @@ describe("generate-image handler", () => {
     await handler(job as never, makeCtx())
 
     expect(mocks.mockGenerateImage).toHaveBeenCalledWith(
-      "style transfer", "nano-banana", refs, undefined,
+      "style transfer", "gpt-image-2", refs, undefined,
       expect.objectContaining({ onTaskCreated: expect.any(Function) }),
     )
   })
@@ -180,7 +180,7 @@ describe("generate-image handler", () => {
     await handler(job as never, makeCtx())
 
     expect(mocks.mockGenerateImage).toHaveBeenCalledWith(
-      "wide shot", "nano-banana", undefined, { aspect_ratio: "16:9" },
+      "wide shot", "gpt-image-2", undefined, { aspect_ratio: "16:9" },
       expect.objectContaining({ onTaskCreated: expect.any(Function) }),
     )
   })
@@ -393,7 +393,7 @@ describe("image-to-image handler", () => {
     await handler(job as never, makeCtx())
 
     expect(mocks.mockGenerateImage).toHaveBeenCalledWith(
-      "transform", "nano-banana", ["https://main.png", "https://ref1.png"], undefined,
+      "transform", "gpt-image-2-5-flare-i2i", ["https://main.png", "https://ref1.png"], undefined,
       expect.objectContaining({ onTaskCreated: expect.any(Function) }),
     )
     expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith({
@@ -403,12 +403,12 @@ describe("image-to-image handler", () => {
     })
   })
 
-  it("uses default provider 'nano-banana' when none specified", async () => {
+  it("uses the edit default model (gpt-image-2-5-flare-i2i) when none specified", async () => {
     const job = makeJob("image-to-image", { imageUrl: "https://main.png", prompt: "edit" })
     await handler(job as never, makeCtx())
 
     expect(mocks.mockGenerateImage).toHaveBeenCalledWith(
-      "edit", "nano-banana", ["https://main.png"], undefined,
+      "edit", "gpt-image-2-5-flare-i2i", ["https://main.png"], undefined,
       expect.objectContaining({ onTaskCreated: expect.any(Function) }),
     )
   })
@@ -428,7 +428,7 @@ describe("image-to-image handler", () => {
     await handler(job as never, makeCtx())
 
     expect(mocks.mockGenerateImage).toHaveBeenCalledWith(
-      "solo", "nano-banana", ["https://main.png"], undefined,
+      "solo", "gpt-image-2-5-flare-i2i", ["https://main.png"], undefined,
       expect.objectContaining({ onTaskCreated: expect.any(Function) }),
     )
   })

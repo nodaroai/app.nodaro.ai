@@ -31,7 +31,7 @@ import { estimateSeededPipelineCredits, estimateSceneAnimationCredits } from "..
 // if the real pricing table changes — a real repricing SHOULD change what
 // the real resolver returns, not this mock.
 const MOCK_CREDIT_COSTS: Record<string, number> = {
-  "nano-banana": 1, // default keyframe image model
+  "gpt-image-2": 1, // default keyframe image model (IMAGE_MODEL_ROLE_DEFAULTS.general)
   "kling-turbo:5s": 11, // default video model, snapped to the 5s tier
   "kling-turbo:10s": 21, // same model, snapped to the 10s tier
   "elevenlabs-turbo": 2, // fixed TTS identifier (no config override exists)
@@ -127,7 +127,7 @@ describe("estimateSeededPipelineCredits", () => {
       ["animation", "keyframes", "music", "pipelineUpfront", "speech"].sort(),
     )
 
-    // 6 shots (shot_count_hint summed) × nano-banana (1cr default image model)
+    // 6 shots (shot_count_hint summed) × gpt-image-2 (1cr default image model)
     expect(result.breakdown.keyframes).toBe(6 * 1)
     // 6 shots × kling-turbo:5s (11cr) — each scene's 5s duration / 1 shot = 5s/shot
     expect(result.breakdown.animation).toBe(6 * 11)
@@ -186,7 +186,7 @@ describe("estimateSeededPipelineCredits", () => {
       config: {},
     })
 
-    expect(getModelCreditCostFromDB).toHaveBeenCalledWith("nano-banana")
+    expect(getModelCreditCostFromDB).toHaveBeenCalledWith("gpt-image-2")
     expect(getModelCreditCostFromDB).toHaveBeenCalledWith("kling-turbo:5s")
   })
 })

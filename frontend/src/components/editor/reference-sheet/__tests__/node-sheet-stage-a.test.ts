@@ -121,7 +121,7 @@ describe("ensureNodeSheetPanels", () => {
     await ensureNodeSheetPanels({ ...base, confirm: () => true })
 
     expect(generateCharacterAsset).toHaveBeenCalled()
-    for (const [req] of generateCharacterAsset.mock.calls) expect(req).toMatchObject({ provider: "nano-banana" })
+    for (const [req] of generateCharacterAsset.mock.calls) expect(req).toMatchObject({ provider: "gpt-image-2" })
   })
 })
 
@@ -132,7 +132,7 @@ describe("the cost confirm before panels are generated", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     getCharacter.mockResolvedValue(charRow()) // empty buckets → every planned panel missing
-    livePrices.byId = { "nano-banana": 10, "reference-sheet:assembly": 40, "reference-sheet:assembly-motion": 60 }
+    livePrices.byId = { "gpt-image-2": 15, "reference-sheet:assembly": 40, "reference-sheet:assembly-motion": 60 }
   })
 
   async function confirmMessage(flavour = base.flavour): Promise<string> {
@@ -149,10 +149,10 @@ describe("the cost confirm before panels are generated", () => {
     const message = await confirmMessage()
 
     expect(message).toContain(`${n} more panels`)
-    expect(message).toContain(`about ${n * 10} CR`)
+    expect(message).toContain(`about ${n * 15} CR`)
     expect(message).toContain("adds 40 CR")
-    expect(message).toContain(`about ${n * 10 + 40} CR in all`)
-    expect(fetchModelCredits).toHaveBeenCalledWith("nano-banana")
+    expect(message).toContain(`about ${n * 15 + 40} CR in all`)
+    expect(fetchModelCredits).toHaveBeenCalledWith("gpt-image-2")
     expect(fetchModelCredits).toHaveBeenCalledWith("reference-sheet:assembly")
     expect(generateCharacterAsset).not.toHaveBeenCalled()
   })
@@ -165,7 +165,7 @@ describe("the cost confirm before panels are generated", () => {
   })
 
   it("with no live price it names the panel count and quotes no figure", async () => {
-    livePrices.byId = { "nano-banana": 10 } // the compose price did not load
+    livePrices.byId = { "gpt-image-2": 15 } // the compose price did not load
 
     const message = await confirmMessage()
 

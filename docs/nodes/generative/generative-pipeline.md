@@ -161,9 +161,9 @@ reference images and (for characters) voice-matching against the ElevenLabs cata
 
 ### Credits
 
-Phase 1B.1 image gen uses `nano-banana` by default (10 credits/image, tier-overridable
+Phase 1B.1 image gen uses `gpt-image-2` by default (15 credits/image, tier-overridable
 in Phase 1C). Voice match is a small Haiku call (about 3 credits). A typical 4-cast,
-3-object, 3-location run with default variants is ~500-800 credits beyond the Phase 1A
+3-object, 3-location run with default variants is ~750-1,200 credits beyond the Phase 1A
 300-credit Stage 1 estimate.
 
 ## Stage 5 — Shot List (Phase 1B.2)

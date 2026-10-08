@@ -1341,6 +1341,13 @@ export {
 // Per-model safety-filter retry/fallback policy (derives from
 // `ModelCatalogEntry.safetyFilter` above).
 export { safetyRetryPolicy } from "./safety-retry-policy.js"
+export {
+  IMAGE_MODEL_ROLE_DEFAULTS,
+  IMAGE_MODEL_RATIO_FALLBACKS,
+  defaultImageModel,
+  imageModelDrawsRatio,
+} from "./image-model-roles.js"
+export type { ImageModelRole } from "./image-model-roles.js"
 export type { SafetyRetryPolicy } from "./safety-retry-policy.js"
 
 export {

@@ -322,6 +322,6 @@ describe("character / location — ref-aware entity credit identifier", () => {
 
   it("character on the default provider keeps the bare identifier", () => {
     const n = node("c1", "character", { name: "Aria" })
-    expect(buildPayload(n, JOB_ID, {}).modelIdentifier).toBe("nano-banana")
+    expect(buildPayload(n, JOB_ID, {}).modelIdentifier).toBe("gpt-image-2")
   })
 })

@@ -17,6 +17,7 @@ import {
   CREATURE_ASSET_DESCRIPTION_LLM_OPTIONS,
   buildCreatureAssetDescriptionUserMessage,
 } from "../lib/creature-asset-description.js"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
 
 // Creature asset types (mirrors object's angles/materials/variations/custom
 // with `materials`→`poses` per the Creature delta map). `custom` carries a
@@ -45,7 +46,7 @@ const generateCreatureAssetBody = z.object({
   // fixed enum). Matches the hero generate-creature route's `style` shape.
   style: z.string().max(50).optional(),
   sourceImageUrl: safeUrlSchema.optional(),
-  provider: z.string().optional().default("nano-banana"),
+  provider: z.string().optional().default(IMAGE_MODEL_ROLE_DEFAULTS.character),
   userId: z.string().uuid().optional(),
   // Creature Studio auto-attach: when all three are set, the worker appends
   // `{name: attachName, url: <result>}` to the named JSONB array column on
@@ -121,7 +122,7 @@ function buildVariantPrompt(
 }
 
 export async function generateCreatureAssetRoutes(app: FastifyInstance) {
-  app.post("/v1/generate-creature-asset", { preHandler: creditGuard((req) => extractProvider(req.body, "nano-banana")) }, async (req, reply) => {
+  app.post("/v1/generate-creature-asset", { preHandler: creditGuard((req) => extractProvider(req.body, IMAGE_MODEL_ROLE_DEFAULTS.character)) }, async (req, reply) => {
     const parsed = generateCreatureAssetBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({

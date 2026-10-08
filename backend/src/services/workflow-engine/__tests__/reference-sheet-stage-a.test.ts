@@ -106,7 +106,7 @@ describe("ensureWorkflowSheetPanels (workflow-run Stage A)", () => {
       expect(
         JSON.parse((init as { body: string }).body).provider,
         "the editor's SHEET_PANEL_PROVIDER (sheet-tab-adapter.ts) and docs/nodes/ai-image/reference-sheet.md name this model too — change them together",
-      ).toBe("nano-banana")
+      ).toBe("gpt-image-2")
     }
   })
 

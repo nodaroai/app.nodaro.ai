@@ -15,8 +15,7 @@ exports[`per-node skill file snapshots > generate-image.md auto-gen blocks match
   "data": {
     "label": "Generate Image",
     "prompt": "",
-    "provider": "nano-banana-pro",
-    "model": "gemini-2.5-flash-image",
+    "provider": "gpt-image-2",
     "style": "",
     "aspectRatio": "16:9",
     "negativePrompt": "",
@@ -133,8 +132,7 @@ _Generated from \`IMAGE_REFERENCE_PROMPT_DOCTRINE\` in \`@nodaro/prompts\` — e
 {
   "label": "Generate Image",
   "prompt": "",
-  "provider": "nano-banana-pro",
-  "model": "gemini-2.5-flash-image",
+  "provider": "gpt-image-2",
   "style": "",
   "aspectRatio": "16:9",
   "negativePrompt": "",

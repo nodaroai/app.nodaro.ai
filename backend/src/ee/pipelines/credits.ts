@@ -20,6 +20,7 @@ import { speechLineEstimate } from "../../lib/speech-estimate.js"
 // cycle with seed-pipeline.ts's own (dynamic, function-body) import of this
 // file's `estimateUpfrontCredits`/`reservePipelineCredits`.
 import type { SeededPipelineInput } from "./seed-pipeline.js"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
 
 // Every upfront reservation below is stated in DOLLARS and converted, not
 // written as a credit count. They were bare credit literals (2 / 5 / 2-3-4)
@@ -392,7 +393,7 @@ export interface SeededPipelineCreditEstimate {
  * `pipelineGenerateImage`'s own fallback (services/pipeline-generate-image.ts)
  * so the estimate agrees with what an un-pinned seeded run actually reserves.
  */
-const DEFAULT_KEYFRAME_IMAGE_MODEL = "nano-banana"
+const DEFAULT_KEYFRAME_IMAGE_MODEL = IMAGE_MODEL_ROLE_DEFAULTS.general
 
 /**
  * Per-shot video-gen default when `config.video_model` is unset. No
@@ -481,7 +482,7 @@ export async function estimateSceneAnimationCredits(
  *     `createSeededPipeline` in seed-pipeline.ts).
  *   - `keyframes` — one image-gen credit per anticipated shot
  *     (`plan.scenes[].shot_count_hint` summed), priced by `config.image_model`
- *     (default "nano-banana").
+ *     (default: the platform's general image model, IMAGE_MODEL_ROLE_DEFAULTS).
  *   - `animation` — one video-gen credit per anticipated shot, priced by
  *     `config.video_model` (default "kling-turbo") at that shot's
  *     approximate duration (`scene.duration_seconds / scene.shot_count_hint`

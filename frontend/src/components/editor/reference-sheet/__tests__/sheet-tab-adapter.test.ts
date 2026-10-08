@@ -25,7 +25,7 @@ describe("sheet panels are generated with the model their price is read for", ()
     expect(
       SHEET_PANEL_PROVIDER,
       "the backend's SHEET_PANEL_PROVIDER (reference-sheet-stage-a.ts) and docs/nodes/ai-image/reference-sheet.md name this model too — change them together",
-    ).toBe("nano-banana")
+    ).toBe("gpt-image-2")
   })
 
   it("every entity kind's panel request names the model", async () => {

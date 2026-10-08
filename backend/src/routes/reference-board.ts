@@ -8,7 +8,7 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { insertJobIdempotent } from "../lib/insert-job.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { sendInternalError } from "../lib/http-errors.js"
-import { buildCreditModelIdentifier, REFERENCE_BOARD_PROVIDERS, buildBoardPrompt } from "@nodaro/shared"
+import { buildCreditModelIdentifier, REFERENCE_BOARD_PROVIDERS, buildBoardPrompt, defaultImageModel } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 
 const referenceBoardBody = z.object({
@@ -35,8 +35,9 @@ export function resolveBoardCreditIdentifier(req: FastifyRequest): string {
   // Clamp the raw (pre-Zod) provider to the valid set before pricing, so a body
   // with an out-of-enum provider can't reserve under a different (cheaper) model
   // id than execution uses. Mirrors generate-image's defensive resolver.
-  const raw = String(b.provider ?? "nano-banana-pro")
-  const provider = (REFERENCE_BOARD_PROVIDERS as readonly string[]).includes(raw) ? raw : "nano-banana-pro"
+  const fallback = defaultImageModel("character", b.aspectRatio as string | undefined)
+  const raw = String(b.provider ?? fallback)
+  const provider = (REFERENCE_BOARD_PROVIDERS as readonly string[]).includes(raw) ? raw : fallback
   return buildCreditModelIdentifier(
     provider,
     b.quality as string | undefined,

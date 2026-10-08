@@ -33,6 +33,7 @@ import { USAGE_MODES, DEFAULT_USAGE_MODE, usageModeLabel, type UsageMode, CHARAC
 import { DEFAULT_IDENTITY_LOCK } from "@nodaro/prompts"
 import { IMAGE_REFERENCE_FORMAT } from "@/lib/image-reference-format"
 import type { CharacterNodeData } from "@/types/nodes"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
 
 const isPickerType = (s: string) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(s)
 const ACCEPTS_PROMPT = (t: string) => isValidCharacterConnection("in", t, isPickerType)
@@ -49,7 +50,7 @@ function CharacterNodeComponent({ id, data, selected }: NodeProps) {
   const t = useT()
   const localizeOption = useLocalizeOptionLabel()
   const nodeData = data as CharacterNodeData
-  const credits = useModelCredits((nodeData.provider as string | undefined) ?? "nano-banana", 2)
+  const credits = useModelCredits((nodeData.provider as string | undefined) ?? IMAGE_MODEL_ROLE_DEFAULTS.character, 2)
   const useFull = useFullResolution(id)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const setCharacterStudioNodeId = useWorkflowStore((s) => s.setCharacterStudioNodeId)

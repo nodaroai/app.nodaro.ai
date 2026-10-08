@@ -13,6 +13,7 @@ import { speechQuote, upstreamSpeechText } from "@/lib/speech-estimate"
 // a speech unit row cached there means the server prices speech by length.
 import { getCachedModelCredits } from "@/hooks/use-model-credit-cost"
 import type { LlmFeature } from "@nodaro/shared"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
 /** Every node type whose output is prose/text. Used to build the compatible
  *  source list for any text-shaped field so the MappableField dropdown is
  *  visible whenever *any* text source is wired — not just a literal Text
@@ -435,7 +436,7 @@ export function getModelIdentifier(
 
   // Entity nodes: use provider field (default nano-banana)
   if (nodeType === "character" || nodeType === "face" || nodeType === "object" || nodeType === "location") {
-    const entityProvider = (data.provider as string) || "nano-banana"
+    const entityProvider = (data.provider as string) || IMAGE_MODEL_ROLE_DEFAULTS.character
     return buildCreditModelIdentifier(entityProvider, data)
   }
 

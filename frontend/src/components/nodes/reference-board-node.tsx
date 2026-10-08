@@ -27,6 +27,7 @@ import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import { imageToImage, createReferenceBoard } from "@/lib/api"
 import { pollImageRefineToNode } from "@/components/editor/workflow-editor/poll-job"
 import type { ReferenceBoardData } from "@/types/nodes"
+import { defaultImageModel } from "@nodaro/shared"
 
 // Lazy-loaded mask painter — same pattern as image-configs.tsx. Its onSave
 // uploads the brushed mask and hands back a ready-to-use R2 URL.
@@ -68,7 +69,7 @@ function ReferenceBoardNodeComponent({ id, data, selected }: NodeProps) {
   const upstreamImageAspect = useUpstreamImageAspect(id)
 
   const creditModelId = buildCreditModelIdentifier(
-    nodeData.provider ?? "nano-banana-pro",
+    nodeData.provider ?? defaultImageModel("character", nodeData.aspectRatio),
     nodeData as unknown as Record<string, unknown>,
   )
   const credits = useModelCredits(creditModelId, 1)
@@ -90,7 +91,7 @@ function ReferenceBoardNodeComponent({ id, data, selected }: NodeProps) {
       id,
       () =>
         createReferenceBoard({
-          provider: nodeData.provider ?? "nano-banana-pro",
+          provider: nodeData.provider ?? defaultImageModel("character", nodeData.aspectRatio),
           boardTemplate: nodeData.boardTemplate,
           prompt: nodeData.prompt?.trim() ? nodeData.prompt : undefined,
           negativePrompt: nodeData.negativePrompt || undefined,

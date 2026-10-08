@@ -11,6 +11,7 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { buildFaceTemplateInputs, containsMinorAgeHint } from "@nodaro/prompts"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
 
 const generateFaceBody = z.object({
   name: z.string().min(1).max(200),
@@ -20,12 +21,12 @@ const generateFaceBody = z.object({
   prompt: z.string().max(4000).optional(),
   userPrompt: z.string().max(8000).optional(),
   sourceImageUrl: safeUrlSchema.optional(),
-  provider: z.string().optional().default("nano-banana"),
+  provider: z.string().optional().default(IMAGE_MODEL_ROLE_DEFAULTS.character),
   userId: z.string().uuid().optional(),
 })
 
 export async function generateFaceRoutes(app: FastifyInstance) {
-  app.post("/v1/generate-face", { preHandler: creditGuard((req) => extractProvider(req.body, "nano-banana")) }, async (req, reply) => {
+  app.post("/v1/generate-face", { preHandler: creditGuard((req) => extractProvider(req.body, IMAGE_MODEL_ROLE_DEFAULTS.character)) }, async (req, reply) => {
     const parsed = generateFaceBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({

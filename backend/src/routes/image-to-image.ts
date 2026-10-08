@@ -13,6 +13,7 @@ import { applySnappedLevers, withAdjustments } from "../lib/image-gen-normalize.
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { llmComplete } from "../lib/llm-client.js"
 import { MODIFY_IMAGE_PROVIDERS, IMAGE_ASPECT_RATIO_VALUES, IMAGE_PROMPT_MAX, PROMPT_HARD_CEILING, resolveNormalizedImageGen } from "@nodaro/shared"
+import { defaultImageModel } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 import {
   ASSET_DESCRIPTION_SYSTEM_PROMPT,
@@ -84,7 +85,7 @@ const IDENTITY_PRESERVE_SUFFIX =
  */
 export function resolveImageToImageCreditIdentifier(req: FastifyRequest): string {
   const body = req.body as Record<string, unknown> | null
-  const provider = extractProvider(req.body, "nano-banana")
+  const provider = extractProvider(req.body, defaultImageModel("edit", (body?.aspectRatio as string | undefined)))
   // flux-2-max bills per reference image. In image-to-image the primary
   // `imageUrl` is always one input plus any extra `referenceImageUrls` — so
   // refCount = 1 + extras (the worker concatenates them into `allImages` before
@@ -108,6 +109,11 @@ export async function imageToImageRoutes(app: FastifyInstance) {
       return reply.status(400).send({
         error: { code: "validation_error", ...formatZodError(parsed.error) },
       })
+    }
+    // No model named → the platform's edit default for this ratio (shared
+    // `image-model-roles.ts`), resolved once so snap, credits and job agree.
+    if (!parsed.data.provider) {
+      parsed.data.provider = defaultImageModel("edit", parsed.data.aspectRatio) as NonNullable<(typeof parsed.data)["provider"]>
     }
 
     // The three catalog-governed levers are destructured as `raw*` on purpose:

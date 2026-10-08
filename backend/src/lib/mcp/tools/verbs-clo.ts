@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { CHARACTER_ASSET_TYPES, CHARACTER_ATTACH_COLUMNS, LOCATION_ASSET_TYPES, LOCATION_ATTACH_COLUMNS } from "@nodaro/shared"
+import { CHARACTER_ASSET_TYPES, CHARACTER_ATTACH_COLUMNS, LOCATION_ASSET_TYPES, LOCATION_ATTACH_COLUMNS, IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import type { RegisterOpts } from "./verbs-image.js"
 import { mcpInject } from "../internal-request.js"
@@ -43,7 +43,7 @@ export function registerCloVerbs({ server, session, fastify }: RegisterOpts): vo
         style: STYLE,
         base_outfit: z.string().max(1000).optional(),
         source_image_url: z.string().url().optional(),
-        model: z.string().optional().describe("Image model (defaults to nano-banana)"),
+        model: z.string().optional().describe("Image model (defaults to gpt-image-2)"),
         // asset-only fields
         asset_type: z
           .enum(CHARACTER_ASSET_TYPES)
@@ -162,7 +162,7 @@ export function registerCloVerbs({ server, session, fastify }: RegisterOpts): vo
         widgetKind: "image",
         widgetData: {
           prompt: args.description ?? args.name,
-          model: args.model ?? "nano-banana",
+          model: args.model ?? IMAGE_MODEL_ROLE_DEFAULTS.character,
         },
       })
     },
@@ -194,7 +194,7 @@ export function registerCloVerbs({ server, session, fastify }: RegisterOpts): vo
           .optional(),
         style: STYLE,
         source_image_url: z.string().url().optional(),
-        model: z.string().optional().describe("Image model (defaults to nano-banana)"),
+        model: z.string().optional().describe("Image model (defaults to gpt-image-2)"),
         // asset-only
         asset_type: z
           .enum(LOCATION_ASSET_TYPES)
@@ -300,7 +300,7 @@ export function registerCloVerbs({ server, session, fastify }: RegisterOpts): vo
         widgetKind: "image",
         widgetData: {
           prompt: args.description ?? args.name,
-          model: args.model ?? "nano-banana",
+          model: args.model ?? IMAGE_MODEL_ROLE_DEFAULTS.character,
         },
       })
     },
@@ -333,7 +333,7 @@ export function registerCloVerbs({ server, session, fastify }: RegisterOpts): vo
           .optional(),
         style: STYLE,
         source_image_url: z.string().url().optional(),
-        model: z.string().optional().describe("Image model (defaults to nano-banana)"),
+        model: z.string().optional().describe("Image model (defaults to gpt-image-2)"),
         // asset-only
         asset_type: z.enum(["angles", "materials", "variations", "custom"]).optional(),
         variant: z
@@ -405,7 +405,7 @@ export function registerCloVerbs({ server, session, fastify }: RegisterOpts): vo
         widgetKind: "image",
         widgetData: {
           prompt: args.description ?? args.name,
-          model: args.model ?? "nano-banana",
+          model: args.model ?? IMAGE_MODEL_ROLE_DEFAULTS.character,
         },
       })
     },
@@ -446,7 +446,7 @@ export function registerCloVerbs({ server, session, fastify }: RegisterOpts): vo
           .optional()
           .describe("Free-text style — e.g. 'realistic', 'anime', '3d-pixar', 'illustration'."),
         source_image_url: z.string().url().optional(),
-        model: z.string().optional().describe("Image model (defaults to nano-banana)"),
+        model: z.string().optional().describe("Image model (defaults to gpt-image-2)"),
         // asset-only
         asset_type: z.enum(["angles", "poses", "variations", "custom"]).optional(),
         variant: z
@@ -530,7 +530,7 @@ export function registerCloVerbs({ server, session, fastify }: RegisterOpts): vo
         widgetKind: "image",
         widgetData: {
           prompt: args.description ?? args.name,
-          model: args.model ?? "nano-banana",
+          model: args.model ?? IMAGE_MODEL_ROLE_DEFAULTS.character,
         },
       })
     },

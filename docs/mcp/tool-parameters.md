@@ -840,7 +840,7 @@ Needs `workflows:execute`.
 | `style` | string |  | At most 50 characters. |
 | `base_outfit` | string |  | At most 1000 characters. |
 | `source_image_url` | string (URL) |  |  |
-| `model` | string |  | Image model (defaults to nano-banana) |
+| `model` | string |  | Image model (defaults to gpt-image-2) |
 | `asset_type` | string |  | Required when kind='asset'. One of: expressions, poses, lighting, angles, headAngles, bodyAngles, custom. `angles` is the legacy alias for `headAngles` (head-and-shoulders); prefer `headAngles` for new code. For animated clips, use `generate_character_motion` instead. One of `expressions`, `poses`, `lighting`, `angles`, `headAngles`, `bodyAngles`, `custom`. |
 | `variant` | string |  | Required when kind='asset'. Variant name — e.g. expressions: 'smile'/'angry'/...; headAngles/bodyAngles: 'front'/'3/4 left'/'left profile'/'right profile'/'3/4 right'/'back'; poses: 'standing'/'walking'/...; lighting: 'daylight'/'night'/'dramatic'; or any short label for custom. From 1 to 100 characters. |
 | `attach_to_character_id` | string |  | If provided, the generated asset is auto-attached to this character row. The character's anchor portrait is reused as the i2i source; the route returns `portrait_required` (400) if no approved portrait exists. Required for the studio path. |
@@ -878,7 +878,7 @@ Needs `workflows:execute`.
 | `category` | string |  | Free-text category (creatures use open strings, not a fixed enum) — e.g. 'mammal', 'mythical', 'reptile'. At most 50 characters. |
 | `style` | string |  | Free-text style — e.g. 'realistic', 'anime', '3d-pixar', 'illustration'. At most 50 characters. |
 | `source_image_url` | string (URL) |  |  |
-| `model` | string |  | Image model (defaults to nano-banana) |
+| `model` | string |  | Image model (defaults to gpt-image-2) |
 | `asset_type` | string |  | One of `angles`, `poses`, `variations`, `custom`. |
 | `variant` | string |  | Required when kind='asset'. e.g. 'front', 'standing', 'weathered'. From 1 to 100 characters. |
 
@@ -924,7 +924,7 @@ Needs `workflows:execute`.
 |---|---|---|---|
 | `prompt` | string |  | Free-text image prompt. From 1 to 4000 characters. |
 | `presetId` | string |  | Apply a built-in/custom preset by id from list_node_presets; explicit fields below override it. A preset's promptPrefix/promptSuffix wrap your prompt. From 1 to 200 characters. |
-| `model` | string |  | Image model. Default nano-banana-2-1. Recommended: flux, flux-2-klein, flux-2-max, flux-2-pro, flux-flex, flux-kontext, flux-kontext-max, gpt-image, gpt-image-2, gpt-image-2-5-flare, gpt-image-2-5-sunburst, grok, grok-2, ideogram-v3, imagen4, imagen4-fast, imagen4-ultra, nano-banana, nano-banana-2, nano-banana-2-1, nano-banana-2-lite, nano-banana-pro, qwen, seedream, seedream-5-flash, seedream-5-lite, seedream-5-pro, wan-2.7, wan-2.7-pro, z-image. Unknown values silently fall back to the default. Call list_models for capability details. |
+| `model` | string |  | Image model. Default gpt-image-2. Recommended: flux, flux-2-klein, flux-2-max, flux-2-pro, flux-flex, flux-kontext, flux-kontext-max, gpt-image, gpt-image-2, gpt-image-2-5-flare, gpt-image-2-5-sunburst, grok, grok-2, ideogram-v3, imagen4, imagen4-fast, imagen4-ultra, nano-banana, nano-banana-2, nano-banana-2-1, nano-banana-2-lite, nano-banana-pro, qwen, seedream, seedream-5-flash, seedream-5-lite, seedream-5-pro, wan-2.7, wan-2.7-pro, z-image. Unknown values silently fall back to the default. Call list_models for capability details. |
 | `resolution` | string |  | Resolution: 1K / 2K / 4K. Falls back to nearest supported value. |
 | `quality` | string |  | Quality: medium / high (model-dependent). Synonyms accepted. |
 | `aspect_ratio` | string |  | Aspect ratio (e.g. 16:9, 9:16, 1:1, 4:3, 3:4, 21:9). Default 16:9. Variations like 16x9 / 16-9 are accepted; unsupported values fall back. |
@@ -1006,7 +1006,7 @@ Needs `workflows:execute`.
 | `category` | string |  | One of `indoor`, `outdoor`, `urban`, `nature`, `fantasy`, `sci-fi`, `historical`, `futuristic`, `other`. |
 | `style` | string |  | At most 50 characters. |
 | `source_image_url` | string (URL) |  |  |
-| `model` | string |  | Image model (defaults to nano-banana) |
+| `model` | string |  | Image model (defaults to gpt-image-2) |
 | `asset_type` | string |  | Required when kind='asset'. One of: timeOfDay, weather, seasons, angles, lighting, custom. One of `timeOfDay`, `weather`, `seasons`, `angles`, `lighting`, `custom`. |
 | `variant` | string |  | Required when kind='asset'. e.g. timeOfDay: 'dawn'/'noon'/'dusk'/'night'; weather: 'rain'/'snow'/'fog'; seasons: 'spring'/'summer'/'autumn'/'winter'; angles: 'aerial'/'street-level'/'wide'; lighting: 'golden-hour'/'overcast'/'neon'; or any short label for custom. From 1 to 100 characters. |
 | `attach_to_location_id` | string |  | If provided, the generated asset is auto-attached to this location row. The location's anchor establishing shot is reused as the i2i source; the route returns `main_image_required` (400) if no approved main image exists. Required for the studio path. |
@@ -1071,7 +1071,7 @@ Needs `workflows:execute`.
 | `category` | string |  | One of `furniture`, `vehicle`, `weapon`, `food`, `clothing`, `electronics`, `nature`, `tool`, `animal`, `other`. |
 | `style` | string |  | At most 50 characters. |
 | `source_image_url` | string (URL) |  |  |
-| `model` | string |  | Image model (defaults to nano-banana) |
+| `model` | string |  | Image model (defaults to gpt-image-2) |
 | `asset_type` | string |  | One of `angles`, `materials`, `variations`, `custom`. |
 | `variant` | string |  | Required when kind='asset'. e.g. 'front', 'wood', 'weathered'. From 1 to 100 characters. |
 
@@ -1572,7 +1572,7 @@ Needs `workflows:execute`.
 | `image_url` | string (URL) |  | Source image URL. |
 | `image_asset_id` | string |  | Nodaro image job id. |
 | `prompt` | string | yes | Transformation description. From 1 to 2000 characters. |
-| `model` | string |  | img2img model. Default nano-banana. Options: flux-2-max, flux-2-pro, flux-i2i, flux-kontext, flux-kontext-max, flux-pro-i2i, gpt-image-2-5-flare-i2i, gpt-image-2-5-sunburst-i2i, gpt-image-2-i2i, gpt-image-i2i, grok-2-edit, grok-2-i2i, grok-2-segment, grok-i2i, ideogram-edit, ideogram-remix, kontext-multi, nano-banana, nano-banana-2, nano-banana-2-1, nano-banana-2-lite, nano-banana-edit, nano-banana-pro, qwen-edit, qwen-i2i, seedream-5-flash-i2i, seedream-5-lite-i2i, seedream-5-pro-i2i, seedream-edit. Unknown values fall back to nano-banana. |
+| `model` | string |  | img2img model. Default gpt-image-2-5-flare-i2i. Options: flux-2-max, flux-2-pro, flux-i2i, flux-kontext, flux-kontext-max, flux-pro-i2i, gpt-image-2-5-flare-i2i, gpt-image-2-5-sunburst-i2i, gpt-image-2-i2i, gpt-image-i2i, grok-2-edit, grok-2-i2i, grok-2-segment, grok-i2i, ideogram-edit, ideogram-remix, kontext-multi, nano-banana, nano-banana-2, nano-banana-2-1, nano-banana-2-lite, nano-banana-edit, nano-banana-pro, qwen-edit, qwen-i2i, seedream-5-flash-i2i, seedream-5-lite-i2i, seedream-5-pro-i2i, seedream-edit. Unknown values fall back to the default. |
 | `reference_image_urls` | string[] or string |  | Extra reference images (URLs or Nodaro asset ids, up to 13) for multi-ref models — asset ids are resolved server-side. Accepts an array; a lone URL or a JSON-stringified array is coerced. |
 | `resolution` | string |  | One of `1K`, `2K`, `4K`. |
 | `quality` | string |  | One of `medium`, `high`, `basic`. |
@@ -1891,7 +1891,7 @@ Needs `workflows:execute`.
 | `prompt` | string | yes | From 1 to 8000 characters. |
 | `image_url` | string (URL) |  |  |
 | `image_asset_id` | string |  |  |
-| `model` | string |  | I2I / edit model. Default nano-banana-2-1. Recommended: flux-2-max, flux-2-pro, flux-i2i, flux-kontext, flux-kontext-max, flux-pro-i2i, gpt-image-2-5-flare-i2i, gpt-image-2-5-sunburst-i2i, gpt-image-2-i2i, gpt-image-i2i, grok-2-edit, grok-2-i2i, grok-2-segment, grok-i2i, ideogram-edit, ideogram-remix, kontext-multi, nano-banana, nano-banana-2, nano-banana-2-1, nano-banana-2-lite, nano-banana-edit, nano-banana-pro, qwen-edit, qwen-i2i, seedream-5-flash-i2i, seedream-5-lite-i2i, seedream-5-pro-i2i, seedream-edit. For identity-preserving edits use nano-banana-pro. Unknown values fall back. Call list_models for capability details. |
+| `model` | string |  | I2I / edit model. Default gpt-image-2-5-flare-i2i. Recommended: flux-2-max, flux-2-pro, flux-i2i, flux-kontext, flux-kontext-max, flux-pro-i2i, gpt-image-2-5-flare-i2i, gpt-image-2-5-sunburst-i2i, gpt-image-2-i2i, gpt-image-i2i, grok-2-edit, grok-2-i2i, grok-2-segment, grok-i2i, ideogram-edit, ideogram-remix, kontext-multi, nano-banana, nano-banana-2, nano-banana-2-1, nano-banana-2-lite, nano-banana-edit, nano-banana-pro, qwen-edit, qwen-i2i, seedream-5-flash-i2i, seedream-5-lite-i2i, seedream-5-pro-i2i, seedream-edit. For identity-preserving edits use gpt-image-2-i2i. Unknown values fall back. Call list_models for capability details. |
 | `resolution` | string |  | Resolution: falls back to nearest supported. |
 | `quality` | string |  | Quality: medium/high/basic. Synonyms accepted. |
 | `aspect_ratio` | string |  | Aspect ratio. Variations and unsupported values fall back. |

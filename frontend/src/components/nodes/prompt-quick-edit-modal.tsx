@@ -65,6 +65,7 @@ import { buildCreditModelIdentifier } from "@/components/editor/config-panels/he
 import { buildVideoCreditModelIdentifier } from "@nodaro/shared"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import type { FieldMappings } from "@/types/nodes"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
 
 const EDIT_MODE_STORAGE_KEY = "nodaro-prompt-edit-mode"
 
@@ -240,7 +241,7 @@ export function PromptQuickEditModal() {
   // so useModelCredits returns its fallback and the value is unused.
   const imageCreditsId = nodeType === "generate-image"
     ? buildCreditModelIdentifier(
-        (data.provider as string | undefined) ?? "nano-banana-pro",
+        (data.provider as string | undefined) ?? IMAGE_MODEL_ROLE_DEFAULTS.general,
         data,
       )
     : undefined

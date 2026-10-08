@@ -14,6 +14,7 @@ import { buildLocationPrompt, buildLocationRefinePrompt } from "@nodaro/prompts"
 import { formatZodError } from "../lib/zod-error.js"
 import { hasCredits } from "../lib/config.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
 
 const generateLocationBody = z.object({
   name: z.string().min(1).max(200),
@@ -23,7 +24,7 @@ const generateLocationBody = z.object({
   // Free-text style (matches the entity save route + DB; a narrow enum would 400 inherited styles like "cinematic").
   style: z.string().max(50).optional(),
   sourceImageUrl: safeUrlSchema.optional(),
-  provider: z.string().optional().default("nano-banana"),
+  provider: z.string().optional().default(IMAGE_MODEL_ROLE_DEFAULTS.general),
   // Credit-affecting output levers (mirrors generate-image). The enums are
   // PERMISSIVE on purpose — a value the chosen model doesn't support is never
   // 400d. It is SNAPPED to the model's catalog entry inside

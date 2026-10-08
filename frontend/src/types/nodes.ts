@@ -7899,7 +7899,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["prompt", "negative", "references", "assets", "elements", "look", "settings"],
     outputs: ["image"],
     width: 220,
-    defaultData: { label: "Generate Image", prompt: "", provider: "nano-banana-pro", model: "gemini-2.5-flash-image", style: "", aspectRatio: "16:9", negativePrompt: "", fieldMappings: {} },
+    defaultData: { label: "Generate Image", prompt: "", provider: "gpt-image-2", style: "", aspectRatio: "16:9", negativePrompt: "", fieldMappings: {} },
     exposableOutputs: [{ key: "result", label: "Result", outputType: "image" as const }],
     exposableFields: [
       {
@@ -7976,7 +7976,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     defaultData: {
       label: "Modify Image",
       prompt: "",
-      provider: "nano-banana" as ModifyImageProvider,
+      provider: "gpt-image-2-5-flare-i2i" as ModifyImageProvider,
       negativePrompt: "",
       fieldMappings: {},
     },
@@ -9992,7 +9992,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       location_key: "",
       object_keys: [],
       continuity_from_prev: "hard_cut",
-      image_model: "nano-banana-2-1",
+      image_model: "gpt-image-2",
       video_model: "kling",
       shots: [],
       scene_anchor_keyframe: null,
@@ -10189,7 +10189,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       label: "Reference Board",
       sourceMode: "image",
       boardTemplate: "character/full-board",
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2-5-sunburst",
       prompt: "",
       negativePrompt: "",
       aspectRatio: "2:3",

@@ -185,10 +185,10 @@ describe("generate-image factory preset data validity", () => {
     const char = presets.find((p) => p.id === "generate-image/character-board")
     const loc = presets.find((p) => p.id === "generate-image/location-board")
     expect(char?.group).toBe("Reference Sheet")
-    expect(char?.data.provider).toBe("nano-banana-pro")
+    expect(char?.data.provider).toBe("gpt-image-2")
     expect(char?.data.resolution).toBe("2K")
     expect(loc?.group).toBe("Reference Sheet")
-    expect(loc?.data.provider).toBe("nano-banana-pro")
+    expect(loc?.data.provider).toBe("gpt-image-2")
     expect(loc?.data.resolution).toBe("2K")
   })
 
@@ -200,7 +200,7 @@ describe("generate-image factory preset data validity", () => {
       const b = presets.find((p) => p.id === id)
       expect(b, `${id} missing`).toBeTruthy()
       expect(b!.group).toBe("Reference Sheet")
-      expect(b!.data.provider).toBe("nano-banana-pro")
+      expect(b!.data.provider).toBe("gpt-image-2")
       expect(b!.data.resolution).toBe("2K")
       expect((b!.data.negativePrompt as string)?.length).toBeGreaterThan(0)
     }
@@ -215,7 +215,7 @@ describe("generate-image factory preset data validity", () => {
       const b = presets.find((p) => p.id === id)
       expect(b, `${id} missing`).toBeTruthy()
       expect(b!.group).toBe("Reference Sheet")
-      expect(b!.data.provider).toBe("nano-banana-pro")
+      expect(b!.data.provider).toBe("gpt-image-2")
       expect(b!.data.resolution).toBe("2K")
       expect((b!.data.negativePrompt as string)?.length).toBeGreaterThan(0)
     }
@@ -234,20 +234,27 @@ describe("generate-image factory preset data validity", () => {
     }
   })
 
-  it("includes the Cast & Consistency grids on nano-banana-2-1", () => {
-    // Grids are FED BACK as identity references — they ride Nano Banana 2.1
-    // (cheap, consistency-strong) at 4K so reused panel faces stay sharp.
+  it("no factory preset defaults to Nano Banana Pro (2026-10-08 re-test)", () => {
+    for (const nodeType of ["generate-image", "modify-image"] as const) {
+      for (const p of getFactoryPresets(nodeType)) expect(p.data.provider, p.id).not.toBe("nano-banana-pro")
+    }
+  })
+
+  it("includes the Cast & Consistency grids on gpt-image-2", () => {
+    // Grids are FED BACK as identity references — they ride GPT Image 2, the
+    // platform's character model (2026-10-08 bake-off), at 4K so reused panel
+    // faces stay sharp.
     for (const id of ["generate-image/character-reference-grid", "generate-image/cast-mega-grid"]) {
       const g = presets.find((p) => p.id === id)
       expect(g, `${id} missing`).toBeTruthy()
       expect(g!.group).toBe("Cast & Consistency")
-      expect(g!.data.provider).toBe("nano-banana-2-1")
+      expect(g!.data.provider).toBe("gpt-image-2")
       expect(g!.data.aspectRatio).toBe("3:4")
       expect(g!.data.resolution).toBe("4K")
     }
     const scene = presets.find((p) => p.id === "generate-image/cast-scene")
     expect(scene?.group).toBe("Cast & Consistency")
-    expect(scene?.data.provider).toBe("nano-banana-2-1")
+    expect(scene?.data.provider).toBe("gpt-image-2")
   })
 
   it("ships the Handmade & Stop-Motion family with the in-prompt NOT-digital-CG clause", () => {
@@ -260,13 +267,15 @@ describe("generate-image factory preset data validity", () => {
     }
   })
 
-  it("shares the Doodle Overlay edits with modify-image (same catalog, provider valid for both)", () => {
+  it("shares the Doodle Overlay edits with modify-image (same catalog, the edit model on each node)", () => {
     for (const nodeType of ["generate-image", "modify-image"] as const) {
       for (const slug of ["doodle-overlay", "doodle-overlay-expressive"]) {
         const p = getFactoryPresets(nodeType).find((x) => x.id === `${nodeType}/${slug}`)
         expect(p, `${nodeType}/${slug} missing`).toBeTruthy()
         expect(p!.group).toBe("Edits")
-        expect(p!.data.provider).toBe("nano-banana-pro")
+        // The edit model, as the id each node accepts (Generate Image swaps the
+        // t2i id to its i2i sibling once a reference is connected).
+        expect(p!.data.provider).toBe(nodeType === "modify-image" ? "gpt-image-2-5-flare-i2i" : "gpt-image-2-5-flare")
       }
     }
   })

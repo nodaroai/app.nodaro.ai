@@ -8,6 +8,7 @@ import {
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { shortenLabel } from "./strip-label"
 import type { GenerateImageData } from "@/types/nodes"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
 
 /**
  * Single source for the generate-image run-strip model/aspect/resolution/repeat
@@ -29,7 +30,7 @@ export function useGenerateImageStripModel(nodeId: string, data: GenerateImageDa
 
   const providers = data.providers && data.providers.length > 0
     ? data.providers
-    : [data.provider || "nano-banana-pro"]
+    : [data.provider || IMAGE_MODEL_ROLE_DEFAULTS.general]
   const currentProvider = providers[0]
   const isMulti = providers.length > 1
 

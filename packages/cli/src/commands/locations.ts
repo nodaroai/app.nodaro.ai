@@ -240,7 +240,7 @@ export function locationsCommand(): Command {
     .option("--user-prompt <prompt>", "additional free-text prompt")
     .option("--category <category>")
     .option("--style <style>")
-    .option("--provider <provider>", "image provider (defaults to nano-banana)")
+    .option("--provider <provider>", "image provider (defaults to gpt-image-2)")
     .option("--count <n>", "1, 2, or 4 candidate main images", "1")
     .option("--attach-to-location-id <id>", "auto-attach result to this location row (count=1 only)")
     .option("--profile <name>")

@@ -24,6 +24,7 @@ import { buildCreditModelIdentifier } from "@/components/editor/config-panels/he
 import { EditableNodeLabel } from "./editable-node-label"
 import { I2I_MASK_SUPPORT } from "@nodaro/shared"
 import type { ModifyImageData } from "@/types/nodes"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
 
 const isPickerType = (s: string) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(s)
 const ACCEPTS_IMAGE          = (t: string) => isValidModifyImageConnection("image",          t, isPickerType)
@@ -57,7 +58,7 @@ function ModifyImageNodeComponent({ id, data, selected }: NodeProps) {
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
   const [showThumbnails, setShowThumbnails] = useState(false)
   const creditModelId = buildCreditModelIdentifier(
-    nodeData.provider ?? "nano-banana",
+    nodeData.provider ?? IMAGE_MODEL_ROLE_DEFAULTS.edit,
     nodeData as unknown as Record<string, unknown>,
   )
   const credits = useModelCredits(creditModelId, 1)

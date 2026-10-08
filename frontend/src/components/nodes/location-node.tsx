@@ -23,6 +23,7 @@ import { NodeJobProgress } from "./node-job-progress"
 import { PipelineStateOverlay } from "./pipeline-state-overlay"
 import { computeDeleteResultUpdates, copyToClipboard } from "@/lib/utils"
 import type { LocationNodeData } from "@/types/nodes"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
 
 const isPickerType = (s: string) => VISUAL_PARAMETER_PICKER_NODE_TYPES.has(s)
 const ACCEPTS_PROMPT         = (t: string) => isValidLocationConnection("in",             t, isPickerType)
@@ -51,7 +52,7 @@ const CATEGORY_LABEL_KEYS: Record<string, MessageKey> = {
 function LocationNodeComponent({ id, data, selected }: NodeProps) {
   const t = useT()
   const nodeData = data as LocationNodeData
-  const credits = useModelCredits((nodeData.provider as string | undefined) ?? "nano-banana", 2)
+  const credits = useModelCredits((nodeData.provider as string | undefined) ?? IMAGE_MODEL_ROLE_DEFAULTS.character, 2)
   const useFull = useFullResolution(id)
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
