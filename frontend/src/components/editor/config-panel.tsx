@@ -1,5 +1,6 @@
 "use client"
 
+import { SPEAKER_VIEW_PRICED } from "@nodaro/render-rules"
 import { useMemo, useCallback, useState, useRef, useEffect, Suspense, type TouchEvent as ReactTouchEvent } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
@@ -160,6 +161,7 @@ import {
   ApplyEdlConfig,
   EditPlanConfig,
   CameraSwitchConfig,
+  SpeakerViewConfig,
   ContentRecipeConfig,
   ContentIdeasConfig,
   AssembleNarratedVideoConfig,
@@ -234,6 +236,8 @@ import {
   TelegramAccountSendConfig,
   TelegramChannelFeedConfig,
   CollectionReadConfig,
+  InspirationReadConfig,
+  CompetitorReadConfig,
   CollectionWriteConfig,
   InstagramPostConfig,
   TiktokPostConfig,
@@ -464,6 +468,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "apply-edl": return <ApplyEdlConfig {...configProps} nodeId={selectedNodeId} />
     case "edit-plan": return <EditPlanConfig {...configProps} />
     case "camera-switch": return <CameraSwitchConfig {...configProps} nodeId={selectedNodeId} />
+    case "speaker-view": return <SpeakerViewConfig {...configProps} nodeId={selectedNodeId} />
     case "content-recipe": return <ContentRecipeConfig {...configProps} />
     case "content-ideas": return <ContentIdeasConfig {...configProps} />
     case "assemble-narrated-video": return <AssembleNarratedVideoConfig {...configProps} />
@@ -537,6 +542,8 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "telegram-account-trigger": return <TelegramAccountTriggerConfig key={selectedNodeId ?? ""} {...configProps} onUpdate={updateAccountTrigger} />
     case "telegram-channel-feed": return <TelegramChannelFeedConfig {...configProps} nodeId={selectedNodeId} />
     case "collection-read": return <CollectionReadConfig {...configProps} />
+    case "inspiration-read": return <InspirationReadConfig {...configProps} />
+    case "competitor-read": return <CompetitorReadConfig {...configProps} />
     case "collection-write": return <CollectionWriteConfig {...configProps} />
     case "sub-workflow-input": return <SubWorkflowInputConfig {...configProps} />
     case "sub-workflow-output": return <SubWorkflowOutputConfig {...configProps} />
@@ -1153,11 +1160,14 @@ export function ConfigPanel() {
                     userId={userId ?? ""}
                     label={t("configPanel.runThisNode")}
                     isRunning={nodeData.executionStatus === "running"}
-                    disabled={imageGateBlocked}
+                    // Speaker View has no price yet (C4): the button says so and does not run.
+                    disabled={imageGateBlocked || (nodeType === "speaker-view" && !SPEAKER_VIEW_PRICED)}
                     disabledReason={
                       imageGateBlocked
                         ? t("node.imageRequiredHint", { model: (nodeData.provider as string | undefined) ?? "" })
-                        : undefined
+                        : nodeType === "speaker-view" && !SPEAKER_VIEW_PRICED
+                          ? t("speakerView.notPriced")
+                          : undefined
                     }
                     creditOverride={
                       nodeType === "component"

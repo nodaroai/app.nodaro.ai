@@ -15,8 +15,8 @@ import { PLAN, dialog, escape, key, layOut, loadCanvas, mountInspector, planData
 /**
  * The review inspector's frame (A3-3a): the header, the transcript and its
  * layers — span popover, selection toolbar, find bar. Collapsed runs and
- * Escape's order are in review-inspector.runs.test.tsx. Nothing in the editor
- * opens it yet (A3-5), so it is mounted directly.
+ * Escape's order are in review-inspector.runs.test.tsx. It is mounted
+ * directly here; the editor's ways in are in review-entry-flow.test.tsx.
  */
 let page: ReturnType<typeof layOut>
 beforeEach(() => {
@@ -38,7 +38,8 @@ describe("the frame", () => {
     loadCanvas({ cut: { generatedResults: [{ url: "https://cdn.test/p.mp4", quality: "proxy" }] } })
     mountInspector()
     expect(screen.getByRole("dialog", { name: "Review cut · Tighten Plan → Apply Cut" })).toBeTruthy()
-    expect(within(dialog()).getByText("Preview")).toBeTruthy()
+    // The header's badge (the player's Preview | Original switch says "Preview" too).
+    expect(within(dialog()).getByTitle("A 720p preview, kept private").textContent).toBe("Preview")
     expect(within(dialog()).getByTestId("edl-validity-badge").dataset.ok).toBe("true")
   })
 

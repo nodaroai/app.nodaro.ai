@@ -51,8 +51,8 @@ function tighten(quality: "proxy" | "final" | undefined) {
 }
 
 describe("PREVIEW_RENDER_NODE_TYPES", () => {
-  it("names the render nodes a run can stop at (apply-edl; speaker-view joins when it lands)", () => {
-    expect([...PREVIEW_RENDER_NODE_TYPES]).toEqual(["apply-edl"])
+  it("names the render nodes a run can stop at (apply-edl and speaker-view)", () => {
+    expect([...PREVIEW_RENDER_NODE_TYPES]).toEqual(["apply-edl", "speaker-view"])
   })
 })
 

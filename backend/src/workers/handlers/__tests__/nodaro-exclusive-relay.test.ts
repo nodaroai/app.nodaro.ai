@@ -26,10 +26,14 @@ const mocks = vi.hoisted(() => {
     uploadVideoMaybeWatermark: vi.fn().mockResolvedValue("https://local.r2/videos/job-1.mp4"),
     uploadToR2: vi.fn().mockResolvedValue("https://local.r2/audio/job-1.mp3"),
     finalizeJobWithMedia: vi.fn().mockResolvedValue({ ok: true }),
+    claimJobFinalize: vi.fn(async (): Promise<{ won: boolean; ts: string | null }> => ({ won: true, ts: "claim-ts-1" })),
+    releaseJobFinalizeClaim: vi.fn(async () => {}),
     createCloudJob: vi.fn().mockResolvedValue("cloud-job-1"),
     waitForCloudJob: vi.fn(),
     nodaroCloudFetch: vi.fn().mockResolvedValue({ ok: true }),
     rehostIfUrlField: vi.fn(async (_key: string, value: unknown) => value),
+    rehostByteSize: vi.fn(async (_url: string): Promise<number | undefined> => undefined),
+    bringRenderHome: vi.fn(async (): Promise<{ videoUrl: string; thumbnailUrl: string | null }> => ({ videoUrl: "https://local.r2/videos/job-1.mp4", thumbnailUrl: "https://local.r2/thumbnails/job-1.png" })),
     jobsUpdate,
     jobsUpdateEq,
     jobsSelect,
@@ -50,12 +54,22 @@ vi.mock("../../../lib/post-processing-error.js", () => ({
   runPostProcessing: vi.fn(async (fn: () => Promise<unknown>) => fn()),
 }))
 vi.mock("../../../lib/supabase.js", () => ({ supabase: { from: mocks.from } }))
-vi.mock("../../../lib/job-finalize.js", () => ({ finalizeJobWithMedia: mocks.finalizeJobWithMedia }))
+vi.mock("../../../lib/job-finalize.js", () => ({
+  finalizeJobWithMedia: mocks.finalizeJobWithMedia,
+  claimJobFinalize: mocks.claimJobFinalize,
+  releaseJobFinalizeClaim: mocks.releaseJobFinalizeClaim,
+}))
 vi.mock("../../../providers/nodaro/client.js", () => ({
   createCloudJob: mocks.createCloudJob,
   waitForCloudJob: mocks.waitForCloudJob,
-  NodaroCloudError: class NodaroCloudError extends Error {},
+  rehostByteSize: mocks.rehostByteSize,
+  NodaroCloudError: class NodaroCloudError extends Error {
+    constructor(message: string, readonly statusCode?: number, readonly code?: string) {
+      super(message)
+    }
+  },
 }))
+vi.mock("../relay-render-home.js", () => ({ bringRenderHome: mocks.bringRenderHome }))
 vi.mock("../../../lib/nodaro-connect.js", () => ({ nodaroCloudFetch: mocks.nodaroCloudFetch }))
 vi.mock("../../../providers/nodaro/run-on-cloud.js", async (importOriginal) => ({
   // The REAL module, with only the network-touching rehost mocked. The strip
@@ -88,6 +102,8 @@ const EXCLUSIVES = [
   "video-audit",
   "edit-plan",
   "camera-switch",
+  // C2.1 (cloud-plugins #732): POST /v1/speaker-view.
+  "speaker-view",
 ] as const
 
 const bullJob = (data: Record<string, unknown>) =>
@@ -106,15 +122,18 @@ beforeEach(() => {
   mocks.generateAndUploadThumbnail.mockResolvedValue("https://local.r2/thumbnails/job-1.png")
   mocks.uploadToR2.mockResolvedValue("https://local.r2/audio/job-1.mp3")
   mocks.finalizeJobWithMedia.mockResolvedValue({ ok: true })
+  mocks.claimJobFinalize.mockResolvedValue({ won: true, ts: "claim-ts-1" })
   mocks.markJobCompleted.mockResolvedValue(true)
   mocks.jobsUpdateEq.mockResolvedValue({ error: null })
   mocks.maybeSingle.mockResolvedValue({ data: { stop_requested_at: null } })
   mocks.rehostIfUrlField.mockImplementation(async (_key: string, value: unknown) => value)
+  mocks.rehostByteSize.mockResolvedValue(undefined)
+  mocks.bringRenderHome.mockResolvedValue({ videoUrl: "https://local.r2/videos/job-1.mp4", thumbnailUrl: "https://local.r2/thumbnails/job-1.png" })
   mocks.nodaroCloudFetch.mockResolvedValue({ ok: true })
 })
 
 describe("handler registry", () => {
-  it("serves exactly the six exclusive types", () => {
+  it("serves exactly the exclusive types", () => {
     expect(Object.keys(nodaroExclusiveRelayHandlers).sort()).toEqual([...EXCLUSIVES].sort())
     for (const t of EXCLUSIVES) expect(isNodaroExclusiveJobType(t)).toBe(true)
     expect(isNodaroExclusiveJobType("generate-image")).toBe(false)
@@ -227,10 +246,9 @@ describe("relay to the cloud", () => {
   // B5: camera-switch's media sits one level down in its edit (`edl.sources[].url`),
   // which the top-level walker never reaches — the cloud must still read each camera.
   it("camera-switch: the edit's source URLs are re-hosted too, at the type's wire path", async () => {
+    // One source at a time (its `url`), so an over-cap camera is named.
     mocks.rehostIfUrlField.mockImplementation(async (key: string, value: unknown) =>
-      key === "sources" && Array.isArray(value)
-        ? value.map((s) => ({ ...(s as Record<string, unknown>), url: `https://cloud-reachable/${(s as { id: string }).id}` }))
-        : value,
+      key === "url" && typeof value === "string" ? value.replace("http://localhost:9000/a.mp4", "https://cloud-reachable/camA") : value,
     )
     await nodaroExclusiveRelayHandlers["camera-switch"](
       bullJob({
@@ -613,5 +631,410 @@ describe("finalizeExclusiveCloudOutput — relay provenance (lane 4)", () => {
       output_data: { videoUrl: "https://cloud.r2/v.mp4" },
     })
     expect(Object.keys(finalizeResult()).sort()).toEqual(["cost", "providerUsed", "url"])
+  })
+})
+
+/**
+ * Speaker View on a self-host (C3.1, decided 2026-10-06). It relays at its own
+ * wire path, with the edit's sources re-hosted one by one; it polls for as long
+ * as its own budget says (a 3-hour final outlives the fixed 85 minutes); a
+ * private source over the re-host cap is refused before anything is relayed,
+ * naming it (SV12); and the render comes home as a plain copy (SV13).
+ */
+describe("speaker-view relay", () => {
+  const MIN = 60_000
+  /** `n` 30-second segments alternating two cameras, on the master clock. */
+  const edit = (n: number, url = "http://localhost:9000/a.mp4") => ({
+    version: 1,
+    clock: "master",
+    sources: [
+      { id: "camA", url, kind: "video" },
+      { id: "camB", url: "https://media.example/b.mp4", kind: "video" },
+      { id: "mic", url: "https://media.example/mic.wav", kind: "audio", role: "master-audio" },
+    ],
+    segments: Array.from({ length: n }, (_, i) => ({
+      id: `s${i}`, inMs: i * 30_000, outMs: (i + 1) * 30_000, video: i % 2 ? "camB" : "camA", speaker: i % 2 ? "Guest" : "Host",
+    })),
+  })
+  const run = (data: Record<string, unknown>) => nodaroExclusiveRelayHandlers["speaker-view"](bullJob(data), ctx)
+
+  it("relays at /v1/speaker-view with every setting, the edit's sources re-hosted", async () => {
+    mocks.rehostIfUrlField.mockImplementation(async (key: string, value: unknown) =>
+      key === "url" && value === "http://localhost:9000/a.mp4" ? "https://cloud-reachable/camA" : value,
+    )
+    const e = edit(2)
+    await run({
+      jobId: "job-sv",
+      usageLogId: "u-1",
+      nodeId: "node_1",
+      edl: e,
+      transcript: { version: 1, words: [] },
+      quality: "proxy",
+      targetAspect: "9:16",
+      layout: "auto",
+      switch: { type: "cut" },
+      clipKey: "0-60000",
+      planBasis: "0123456789abcdef",
+      renderBasis: "fedcba9876543210",
+    })
+    // The stamps (decided 2026-10-07) reach the far end, which stamps them on its result.
+    expect(mocks.createCloudJob).toHaveBeenCalledWith("/v1/speaker-view", {
+      edl: { ...e, sources: [{ ...e.sources[0], url: "https://cloud-reachable/camA" }, e.sources[1], e.sources[2]] },
+      transcript: { version: 1, words: [] },
+      quality: "proxy",
+      targetAspect: "9:16",
+      layout: "auto",
+      switch: { type: "cut" },
+      clipKey: "0-60000",
+      planBasis: "0123456789abcdef",
+      renderBasis: "fedcba9876543210",
+    })
+  })
+
+  it("polls for its own declared budget, past the fixed 85 minutes a 3-hour final would outlive", async () => {
+    const { declaredJobBudgetMs, nodeCeilings } = await import("../../../lib/job-budget.js")
+    const payload = { edl: edit(360), quality: "final" } // 180 min
+    await run(payload)
+    const budgetMs = (mocks.waitForCloudJob.mock.calls[0]![2] as { budgetMs: number }).budgetMs
+    expect(budgetMs).toBeGreaterThan(85 * MIN)
+    // The orchestrator's ceiling for this node, less the margin every relayed
+    // type keeps under it — read off the same budget, never a second formula.
+    expect(budgetMs).toBe(nodeCeilings(declaredJobBudgetMs("speaker-view", payload)).processingMs - 5 * MIN)
+  })
+
+  it("keeps the 85-minute poll when the budget cannot be read", async () => {
+    await run({ edl: "not an edit" })
+    await run({ edl: { ...edit(2), segments: [] } })
+    expect(mocks.waitForCloudJob).toHaveBeenCalledTimes(2)
+    for (const call of mocks.waitForCloudJob.mock.calls) {
+      expect((call[2] as { budgetMs: number }).budgetMs).toBe(85 * MIN)
+    }
+  })
+
+  it("refuses a private source over the cap BEFORE relaying — named, and not retried", async () => {
+    mocks.rehostByteSize.mockImplementation(async (url: string) => (url === "http://localhost:9000/a.mp4" ? 3_100_000_000 : undefined))
+    const err = await run({ edl: edit(2) }).catch((e: unknown) => e)
+    expect(isDeterministicJobError(err)).toBe(true)
+    expect((err as Error).message).toBe(
+      'Speaker View sends each source of the edit to nodaro.ai; "camA" is 3.1 GB, over the 500 MB limit. Use a public URL or a smaller file.',
+    )
+    expect(mocks.rehostIfUrlField).not.toHaveBeenCalled()
+    expect(mocks.createCloudJob).not.toHaveBeenCalled()
+  })
+
+  it("the in-rehost cap is the backstop when no size was readable up front, and names the source the same way", async () => {
+    mocks.rehostIfUrlField.mockImplementation(async (key: string, value: unknown) => {
+      if (key === "url" && value === "http://localhost:9000/a.mp4") {
+        throw Object.assign(new Error("nodaro.ai: media is too large to send to the cloud (900 MB; limit 500 MB)"), { code: "media_too_large", bytes: 900_000_000 })
+      }
+      return value
+    })
+    const err = await run({ edl: edit(2) }).catch((e: unknown) => e)
+    expect(isDeterministicJobError(err)).toBe(true)
+    expect((err as Error).message).toBe(
+      'Speaker View sends each source of the edit to nodaro.ai; "camA" is 900 MB, over the 500 MB limit. Use a public URL or a smaller file.',
+    )
+    expect(mocks.createCloudJob).not.toHaveBeenCalled()
+  })
+
+  it("nodaro.ai's refusal before it charges (not priced yet, until C4) fails the job once, with its message", async () => {
+    const { NodaroCloudError } = await import("../../../providers/nodaro/client.js")
+    mocks.createCloudJob.mockRejectedValueOnce(new NodaroCloudError("nodaro.ai: Speaker View is not priced yet", 503, "not_priced"))
+    const err = await run({ edl: edit(2) }).catch((e: unknown) => e)
+    expect(isDeterministicJobError(err)).toBe(true)
+    expect((err as Error).message).toBe("nodaro.ai: Speaker View is not priced yet")
+    expect(mocks.waitForCloudJob).not.toHaveBeenCalled()
+  })
+
+  it("an outage at create stays retryable", async () => {
+    const { NodaroCloudError } = await import("../../../providers/nodaro/client.js")
+    mocks.createCloudJob.mockRejectedValueOnce(new NodaroCloudError("nodaro.ai: POST /v1/speaker-view failed (502)", 502))
+    const err = await run({ edl: edit(2) }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(Error)
+    expect(isDeterministicJobError(err)).toBe(false)
+  })
+
+  it("camera-switch's backstop names its source too", async () => {
+    mocks.rehostIfUrlField.mockImplementation(async (key: string, value: unknown) => {
+      if (key === "url" && value === "http://localhost:9000/a.mp4") {
+        throw Object.assign(new Error("too large"), { code: "media_too_large", bytes: 2_000_000_000 })
+      }
+      return value
+    })
+    const err = await nodaroExclusiveRelayHandlers["camera-switch"](bullJob({ edl: edit(2), transcript: { version: 1, words: [] } }), ctx).catch((e: unknown) => e)
+    expect((err as Error).message).toBe(
+      'Camera Switch sends each source of the edit to nodaro.ai; "camA" is 2.0 GB, over the 500 MB limit. Use a public URL or a smaller file.',
+    )
+  })
+
+  it("names EVERY source over the cap in the backstop, in source order, whichever upload settles first", async () => {
+    // Re-hosts run concurrently: camB's refusal settles first, then camA's.
+    mocks.rehostIfUrlField.mockImplementation(async (key: string, value: unknown) => {
+      if (key === "url" && value === "http://localhost:9000/a.mp4") {
+        await new Promise((r) => setTimeout(r, 5))
+        throw Object.assign(new Error("too large"), { code: "media_too_large", bytes: 900_000_000 })
+      }
+      if (key === "url" && value === "https://media.example/b.mp4") {
+        throw Object.assign(new Error("too large"), { code: "media_too_large", bytes: 2_000_000_000 })
+      }
+      return value
+    })
+    const err = await run({ edl: edit(2) }).catch((e: unknown) => e)
+    expect(isDeterministicJobError(err)).toBe(true)
+    expect((err as Error).message).toBe(
+      'Speaker View sends each source of the edit to nodaro.ai; "camA" is 900 MB and "camB" is 2.0 GB, over the 500 MB limit. Use a public URL or a smaller file.',
+    )
+    expect(mocks.createCloudJob).not.toHaveBeenCalled()
+  })
+
+  it("a size refusal outranks a transient re-host failure on another source — no retry can change it", async () => {
+    mocks.rehostIfUrlField.mockImplementation(async (key: string, value: unknown) => {
+      if (key === "url" && value === "http://localhost:9000/a.mp4") throw new Error("ECONNRESET")
+      if (key === "url" && value === "https://media.example/b.mp4") {
+        throw Object.assign(new Error("too large"), { code: "media_too_large", bytes: 2_000_000_000 })
+      }
+      return value
+    })
+    const err = await run({ edl: edit(2) }).catch((e: unknown) => e)
+    expect(isDeterministicJobError(err)).toBe(true)
+    expect((err as Error).message).toContain('"camB" is 2.0 GB')
+  })
+
+  it("a transient re-host failure alone stays retryable", async () => {
+    mocks.rehostIfUrlField.mockImplementation(async (key: string, value: unknown) => {
+      if (key === "url" && value === "http://localhost:9000/a.mp4") throw new Error("ECONNRESET")
+      return value
+    })
+    const err = await run({ edl: edit(2) }).catch((e: unknown) => e)
+    expect((err as Error).message).toBe("ECONNRESET")
+    expect(isDeterministicJobError(err)).toBe(false)
+  })
+})
+
+describe("finalizeExclusiveCloudOutput — speaker-view comes home as a plain copy (SV13)", () => {
+  const svOutput = {
+    videoUrl: "https://cloud.r2/videos/sv-1.mp4",
+    thumbnailUrl: "https://cloud.r2/thumbnails/sv-1.png",
+    json: { version: 1, clock: "master", sources: [], segments: [] },
+    quality: "proxy",
+    clipKey: "0-60000",
+    planBasis: "0123456789abcdef",
+    renderBasis: "fedcba9876543210",
+  }
+
+  it("copies the render without watermark or transcode, carrying json, quality, clipKey, planBasis and renderBasis", async () => {
+    await finalizeExclusiveCloudOutput({
+      jobId: "job-1",
+      jobType: "speaker-view",
+      cloudJob: { id: "cloud-sv-1", status: "completed", credits: 30, output_data: svOutput } as never,
+      jobUserId: "user-1",
+      shouldWatermark: true, // a render of the user's own footage is never watermarked
+    })
+    expect(mocks.bringRenderHome).toHaveBeenCalledWith("https://cloud.r2/videos/sv-1.mp4", "job-1", "user-1")
+    expect(mocks.uploadVideoMaybeWatermark).not.toHaveBeenCalled()
+    expect(mocks.generateAndUploadThumbnail).not.toHaveBeenCalled()
+    expect(mocks.finalizeJobWithMedia).not.toHaveBeenCalled()
+    expect(mocks.markJobCompleted).toHaveBeenCalledWith("job-1", {
+      output_data: {
+        videoUrl: "https://local.r2/videos/job-1.mp4",
+        thumbnailUrl: "https://local.r2/thumbnails/job-1.png",
+        json: svOutput.json,
+        quality: "proxy",
+        clipKey: "0-60000",
+        planBasis: "0123456789abcdef",
+        renderBasis: "fedcba9876543210",
+        viaNodaroCloud: true,
+      },
+      provider: "nodaro",
+      provider_task_id: "cloud-sv-1",
+      relay_job_id: "cloud-sv-1",
+      relay_credits: 30,
+    })
+  })
+
+  it("keeps the far end's thumbnail only when it could not cut its own", async () => {
+    mocks.bringRenderHome.mockResolvedValueOnce({ videoUrl: "https://local.r2/videos/job-1.mp4", thumbnailUrl: null })
+    await finalizeExclusiveCloudOutput({
+      jobId: "job-1",
+      jobType: "speaker-view",
+      cloudJob: { id: "cloud-sv-1", status: "completed", output_data: svOutput } as never,
+      jobUserId: "user-1",
+      shouldWatermark: false,
+    })
+    const out = (mocks.markJobCompleted.mock.calls[0]![1] as { output_data: Record<string, unknown> }).output_data
+    expect(out.thumbnailUrl).toBe("https://cloud.r2/thumbnails/sv-1.png")
+  })
+
+  it("is byte-identical to a non-relay completion when the far end gave no id — no relay_* key", async () => {
+    await finalizeExclusiveCloudOutput({
+      jobId: "job-1",
+      jobType: "speaker-view",
+      cloudJob: { id: "", status: "completed", output_data: svOutput } as never,
+      jobUserId: "user-1",
+      shouldWatermark: false,
+    })
+    expect(Object.keys(mocks.markJobCompleted.mock.calls[0]![1] as Record<string, unknown>).sort()).toEqual(["output_data", "provider"])
+  })
+
+  it("fails loudly when the render finished with no video", async () => {
+    await expect(
+      finalizeExclusiveCloudOutput({
+        jobId: "job-1",
+        jobType: "speaker-view",
+        cloudJob: { id: "c", status: "completed", output_data: { json: {} } } as never,
+        jobUserId: "user-1",
+        shouldWatermark: false,
+      }),
+    ).rejects.toThrow(/no media/)
+    expect(mocks.markJobCompleted).not.toHaveBeenCalled()
+  })
+})
+
+// Review round (finding A): the copy is the slow part of a Speaker View
+// finalize — an hour-long download of a multi-GB render. Without the finalize
+// claim every reconcile tick that finds the stale row starts ANOTHER copy of
+// the same render; the claim (kept fresh for as long as the copy runs) is what
+// the cron's hasFreshFinalizeClaim reads to leave the row alone.
+describe("finalizeExclusiveCloudOutput — speaker-view copies under the finalize claim", () => {
+  const svJob = {
+    id: "cloud-sv-1",
+    status: "completed",
+    output_data: { videoUrl: "https://cloud.r2/videos/sv-1.mp4", json: {}, quality: "final" },
+  } as never
+  const finalize = (claimant?: "worker" | "cron") =>
+    finalizeExclusiveCloudOutput({
+      jobId: "job-1",
+      jobType: "speaker-view",
+      cloudJob: svJob,
+      jobUserId: "user-1",
+      shouldWatermark: false,
+      ...(claimant ? { claimant } : {}),
+    })
+
+  it("claims the finalize BEFORE it copies, as the worker by default", async () => {
+    await expect(finalize()).resolves.toBe(true)
+    expect(mocks.claimJobFinalize).toHaveBeenCalledWith("job-1", "worker")
+    expect(mocks.claimJobFinalize.mock.invocationCallOrder[0]!).toBeLessThan(mocks.bringRenderHome.mock.invocationCallOrder[0]!)
+    expect(mocks.markJobCompleted).toHaveBeenCalledTimes(1)
+  })
+
+  it("claims as the cron when the cron recovers it", async () => {
+    await finalize("cron")
+    expect(mocks.claimJobFinalize).toHaveBeenCalledWith("job-1", "cron")
+  })
+
+  it("another finalizer holds the claim: no second copy, no completion", async () => {
+    mocks.claimJobFinalize.mockResolvedValueOnce({ won: false, ts: null })
+    await expect(finalize("cron")).resolves.toBe(false)
+    expect(mocks.bringRenderHome).not.toHaveBeenCalled()
+    expect(mocks.markJobCompleted).not.toHaveBeenCalled()
+  })
+
+  it("a cron tick that scanned before another tick claimed the row does not re-enter that tick's claim", async () => {
+    // Two cron ticks share the claimant "cron", which the claim RPC lets re-enter.
+    // A long tick reaches a row on an hour-old scan: the claim is read again here.
+    mocks.maybeSingle.mockResolvedValueOnce({ data: { finalize_claimed_at: new Date(Date.now() - 60_000).toISOString() } })
+    await expect(finalize("cron")).resolves.toBe(false)
+    expect(mocks.claimJobFinalize).not.toHaveBeenCalled()
+    expect(mocks.bringRenderHome).not.toHaveBeenCalled()
+  })
+
+  it("a stall re-pick (the worker) still re-takes its crashed predecessor's fresh claim", async () => {
+    // The worker does not read the claim first: the RPC's same-claimant re-entry decides.
+    await expect(finalize("worker")).resolves.toBe(true)
+    expect(mocks.jobsSelect).not.toHaveBeenCalled()
+    expect(mocks.claimJobFinalize).toHaveBeenCalledWith("job-1", "worker")
+  })
+
+  it("a cron finds a claim older than its TTL (a dead copier) and takes over", async () => {
+    const { FINALIZE_CLAIM_TTL_MS } = await import("../../../lib/reconcile/types.js")
+    mocks.maybeSingle.mockResolvedValueOnce({ data: { finalize_claimed_at: new Date(Date.now() - FINALIZE_CLAIM_TTL_MS - 1000).toISOString() } })
+    await expect(finalize("cron")).resolves.toBe(true)
+    expect(mocks.bringRenderHome).toHaveBeenCalledTimes(1)
+  })
+
+  it("a failed copy releases the claim, so the next attempt need not wait out its TTL", async () => {
+    mocks.bringRenderHome.mockRejectedValueOnce(new Error("download timed out"))
+    await expect(finalize()).rejects.toThrow("download timed out")
+    expect(mocks.releaseJobFinalizeClaim).toHaveBeenCalledWith("job-1", "claim-ts-1")
+    expect(mocks.markJobCompleted).not.toHaveBeenCalled()
+  })
+
+  it("keeps the claim fresh while a copy outlives the claim's TTL, and stops once it is done", async () => {
+    const { FINALIZE_CLAIM_TTL_MS } = await import("../../../lib/reconcile/types.js")
+    vi.useFakeTimers()
+    try {
+      let finishCopy: () => void = () => {}
+      mocks.bringRenderHome.mockImplementationOnce(
+        () => new Promise((resolve) => {
+          finishCopy = () => resolve({ videoUrl: "https://local.r2/videos/job-1.mp4", thumbnailUrl: null })
+        }),
+      )
+      mocks.claimJobFinalize
+        .mockResolvedValueOnce({ won: true, ts: "claim-ts-1" })
+        .mockResolvedValue({ won: true, ts: "claim-ts-later" })
+      const done = finalize("cron")
+      // An hour of copying: the claim must never be older than its TTL.
+      for (let elapsed = 0; elapsed < 60 * 60_000; elapsed += FINALIZE_CLAIM_TTL_MS / 2) {
+        await vi.advanceTimersByTimeAsync(FINALIZE_CLAIM_TTL_MS / 2)
+      }
+      const refreshes = mocks.claimJobFinalize.mock.calls.length - 1
+      expect(refreshes).toBeGreaterThanOrEqual(Math.floor((60 * 60_000) / FINALIZE_CLAIM_TTL_MS))
+      for (const call of mocks.claimJobFinalize.mock.calls) expect(call).toEqual(["job-1", "cron"])
+      finishCopy()
+      await expect(done).resolves.toBe(true)
+      const callsAtFinish = mocks.claimJobFinalize.mock.calls.length
+      await vi.advanceTimersByTimeAsync(3 * FINALIZE_CLAIM_TTL_MS)
+      expect(mocks.claimJobFinalize.mock.calls.length).toBe(callsAtFinish)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("a failed copy after a refresh releases the LATEST claim", async () => {
+    const { FINALIZE_CLAIM_TTL_MS } = await import("../../../lib/reconcile/types.js")
+    vi.useFakeTimers()
+    try {
+      let failCopy: () => void = () => {}
+      mocks.bringRenderHome.mockImplementationOnce(
+        () => new Promise((_resolve, reject) => {
+          failCopy = () => reject(new Error("upload failed"))
+        }),
+      )
+      mocks.claimJobFinalize
+        .mockResolvedValueOnce({ won: true, ts: "claim-ts-1" })
+        .mockResolvedValue({ won: true, ts: "claim-ts-refreshed" })
+      const done = finalize()
+      const settled = done.catch((e: unknown) => e)
+      await vi.advanceTimersByTimeAsync(FINALIZE_CLAIM_TTL_MS)
+      failCopy()
+      expect(((await settled) as Error).message).toBe("upload failed")
+      expect(mocks.releaseJobFinalizeClaim).toHaveBeenCalledWith("job-1", "claim-ts-refreshed")
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("only Speaker View takes the claim here — gvp/evp take it inside finalizeJobWithMedia", async () => {
+    await finalizeExclusiveCloudOutput({
+      jobId: "job-1",
+      jobType: "video-analysis",
+      cloudJob: { id: "c", status: "completed", output_data: { json: {} } } as never,
+      jobUserId: "user-1",
+      shouldWatermark: false,
+    })
+    expect(mocks.claimJobFinalize).not.toHaveBeenCalled()
+  })
+
+  it("passes the claimant into finalizeJobWithMedia for gvp/evp, so a cron recovery claims as the cron", async () => {
+    await finalizeExclusiveCloudOutput({
+      jobId: "job-1",
+      jobType: "generate-video-pro",
+      cloudJob: { id: "c", status: "completed", output_data: { videoUrl: "https://cloud.r2/v.mp4" } } as never,
+      jobUserId: "user-1",
+      shouldWatermark: false,
+      claimant: "cron",
+    })
+    expect(mocks.finalizeJobWithMedia).toHaveBeenCalledWith(expect.objectContaining({ claimant: "cron" }))
   })
 })

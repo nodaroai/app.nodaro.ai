@@ -64,8 +64,10 @@ describe("the workflow estimate under the preview stop rule", () => {
 })
 
 describe("the listing estimate (stored at publish) ignores the stop rule", () => {
-  const whole = () => CreditsService.estimateWorkflowBaseCredits(nodes("proxy"))
+  // The whole graph: the render and the tail it gates. (Not the estimate with
+  // edges omitted: unknown wiring quotes a render at the 180-minute ceiling.)
   const render = () => CreditsService.estimateWorkflowBaseCredits([nodes("proxy")[0]], [])
+  const whole = () => render() + STATIC_CREDIT_COSTS["nano-banana"]!
 
   it("with the flag on, the listing's preview part counts the gated tail", async () => {
     const { preview } = await estimateWorkflowListingCredits(nodes("proxy"), edges, { publishType: "app" })
@@ -121,7 +123,7 @@ describe("the app listing estimate: the whole graph at Preview plus each Render 
   it("a Final render: no final part — the whole graph is the preview part", async () => {
     const { preview, final } = await split(nodes("final"), edges)
     expect(final).toBe(0)
-    expect(preview).toBe(CreditsService.estimateWorkflowBaseCredits(nodes("final")))
+    expect(preview).toBe(CreditsService.estimateWorkflowBaseCredits(nodes("final"), edges))
   })
 
   it("a template lists with the same function and the same figure", async () => {
@@ -131,7 +133,7 @@ describe("the app listing estimate: the whole graph at Preview plus each Render 
   it("a component never stops at a Preview: its final part is 0, its preview part the whole graph", async () => {
     const { preview, final } = await estimateWorkflowListingCredits(nodes("proxy"), edges, { publishType: "component" })
     expect(final).toBe(0)
-    expect(preview).toBe(CreditsService.estimateWorkflowBaseCredits(nodes("proxy")))
+    expect(preview).toBe(CreditsService.estimateWorkflowBaseCredits(nodes("proxy"), edges, { scope: "whole-graph" }))
   })
 
   it("the base-price listing (what a built-in template pins) is the same split", async () => {
@@ -233,7 +235,7 @@ describe("PREVIEW_STOP_RULE_ENABLED off (production until Render final): dev bef
     const quoted = CreditsService.estimateWorkflowBaseCredits(nodes("proxy"), edges)
     const render = CreditsService.estimateWorkflowBaseCredits([nodes("proxy")[0]], [])
     expect(quoted - render).toBe(STATIC_CREDIT_COSTS["nano-banana"])
-    expect(quoted).toBe(CreditsService.estimateWorkflowBaseCredits(nodes("proxy")))
+    expect(quoted).toBe(CreditsService.estimateWorkflowBaseCredits(nodes("proxy"), edges, { scope: "whole-graph" }))
   })
 })
 
@@ -247,6 +249,16 @@ describe("guard: a render with a Preview price is a render the run stops at", ()
     // A node priced as a Preview that the stop rule does not know would let
     // its tail consume the preview; a stop-rule render with no Preview price
     // would bill its preview as a final.
-    expect(proxyTypes).toEqual([...PREVIEW_RENDER_NODE_TYPES].sort())
+    //
+    // A render with NO price at all is the one honest exception: Speaker View
+    // is refused before anything is reserved ("not priced yet") until C4 sets
+    // its rows, so its preview can never bill as a final. The tripwire: the
+    // moment its `:proxy` row exists this exception fails until it is dropped.
+    const UNPRICED_RENDERS: Record<string, string> = { "speaker-view": "no price until C4; every run is refused before the reserve" }
+    for (const [type, why] of Object.entries(UNPRICED_RENDERS)) {
+      expect(proxyTypes, `${type} is priced now — drop it from UNPRICED_RENDERS (${why})`).not.toContain(type)
+      expect(STATIC_CREDIT_COSTS[type], type).toBeUndefined()
+    }
+    expect(proxyTypes).toEqual([...PREVIEW_RENDER_NODE_TYPES].filter((t) => !(t in UNPRICED_RENDERS)).sort())
   })
 })

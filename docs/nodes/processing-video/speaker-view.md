@@ -1,0 +1,104 @@
+# Speaker View
+
+> Render an edit with its speakers on screen — a layout, a switch at each speaker change and an emphasis on whoever is talking. The sound is the edit's own, passed through.
+
+**Not priced yet.** Speaker View has no credit price at the moment, so every run that includes it is refused before anything starts — no node upstream runs or is charged — with *"Speaker View is not priced yet"*, naming the node. Run a selection that leaves it out to use the nodes before it. The node, its settings and its checks are all in place; running it opens when its price is set.
+
+**Cloud feature.** Speaker View runs on Nodaro Cloud. On a self-hosted install, connect your instance to nodaro.ai (Integrations → nodaro.ai, or paste an API key) and the node relays to the cloud; without a connection the node saves on the canvas but cannot run. A self-host sends each camera to nodaro.ai, so a private camera file over the 500 MB re-host limit is refused up front, naming the file — use a public URL or a smaller file.
+
+## Overview
+
+[Apply EDL](./apply-edl.md) shows one camera full-frame per segment. Speaker View is the render for edits that need more: both hosts side by side, a vertical clip that follows whoever is speaking, a grid for a panel, a picture-in-picture, with a crop framed on each speaker. It reads the originals on the master clock, so the picture and the sound stay locked, and it hands back the **EDL as it drew it** on its `json` output.
+
+It decides **how** the speakers are shown, never **who** is on screen: [Camera Switch](./camera-switch.md) chooses the camera for each cut, Speaker View lays them out. A typical chain: **Audio Sync** → **Transcribe** with speaker detection → **Edit Plan** → **Camera Switch** → **Speaker View**.
+
+A **Preview** (Quality: Proxy) is a private 720p render to review before a final is made.
+
+## Inputs
+
+| Handle | Type | Required | Description |
+|--------|------|----------|-------------|
+| EDL | json | **Yes** | One edit on the recording's clock — Edit Plan's or Camera Switch's EDL. A clip set is refused here (it fans out one Speaker View run per clip on the canvas). Media resolves from each source's URL; there is no *Sources* input. |
+| Transcript | json | When the edit does not name its speakers | The word transcript with speaker labels. Speaker View splits the edit at each speaker's turn and uses the labels when no segment names a speaker. |
+
+When the node wired into **EDL** has not run yet, the panel says so and offers **Run up to here · ≈N**. It runs the nodes before Speaker View that have not run, asking first only when the estimate is above the usual run-confirm threshold, and does not run Speaker View itself. See [Run up to here](../../features/run-results.md#run-up-to-here).
+
+## Outputs
+
+| Handle | Type | Description |
+|--------|------|-------------|
+| Video | video | The rendered edit. |
+| EDL | json | The edit as drawn: split at the speakers' turns, with its layouts, switches and emphasis written in. It is an **EDL, not a transcript** — it never feeds Add Captions' Transcript input. |
+
+## Settings
+
+| Field | Control | Default | Description |
+|-------|---------|---------|-------------|
+| Aspect ratio | Tiles | the edit's own, else 16:9 | 16:9, 9:16, 1:1 or 4:5. Output size is fixed per aspect: a final is 1920×1080, 1080×1920, 1080×1080 or 1080×1350; a Preview has a 720-pixel short side. |
+| Quality | Select | Final | Final, or Proxy (a private Preview). |
+| Layout | Tiles | Auto (Single on one camera) | Auto, Single, Side by side, Stacked, Grid, Picture in picture. Each tile is drawn at the output's aspect. |
+| Switch | Tiles | Cut (Pan on one camera) | What happens at a speaker change: Cut, Pan, Zoom, or a Crossfade chosen from a list of transitions. Cut, Pan and Zoom loop a small animation of what they do. |
+| Switch duration | Slider | 600 ms | The tween length of a Pan or Zoom; 0–5000 ms in 50 ms steps. |
+| Emphasis | Toggles | Scale | Scale, Border and Dim, alone or together; all off is *none*. |
+| Emphasis ease | Slider | 300 ms | 0–5000 ms in 50 ms steps. |
+| Border colour | Colour (under *Advanced*) | white | The colour of the Border emphasis, `#RRGGBB`. |
+| Framing | Per speaker | full frame | A crop of each camera per speaker, as fractions of the frame. The panel says how many crops are set. Written in the workflow JSON as `speakerRegions` for now; the editor control for it arrives later. |
+
+A tile the aspect or the speaker count rules out is greyed. Hover it or move the keyboard focus onto it and it says why ("Side by side shows at most 2 speakers; this edit has 3"); the reasons are also listed under the group, for touch screens. A greyed tile cannot be picked, but a stored value the rules no longer allow is shown as it is and can always be switched off or changed.
+
+### Which choices apply where
+
+The panel greys a choice the aspect or the speaker count rules out and says why; the quick strip removes a layout that is ruled out, but its switch list always lists Cut, Pan and Zoom and greys the ones the rule rules out, with the reason on hover and on keyboard focus. The Crossfade is greyed the same way, as one row (below).
+
+| Layout | At a speaker change | Switch | Emphasis |
+|--------|--------------------|--------|----------|
+| **Single** | the one slot re-frames to the new speaker | Cut, Pan (between two crops of one camera), Zoom, crossfade | greyed — Single shows one speaker |
+| **Picture in picture** | main and inset swap | Cut, Zoom, crossfade; Pan when both are on one camera | Border and Dim (the swap is the Scale) |
+| **Side by side**, **Stacked**, **Grid** | the slots stay; the active one is marked | used only where the layout itself changes: Cut or crossfade | Scale, Border, Dim, and combinations |
+
+- **Side by side** is drawn for 16:9 and 1:1; **Stacked** for 9:16, 4:5 and 1:1; **Grid**, **Single** and **Picture in picture** for every aspect.
+- **Side by side**, **Stacked** and **Picture in picture** take exactly two speakers; **Grid** takes two to six. The slots are the speakers in order of first appearance.
+- A layout the aspect or the speaker count rules out **snaps** to its twin (Side by side ↔ Stacked), else Grid if the count fits, else Single — "Side by side isn't drawn for 9:16 — renders as Stacked". An edit written as JSON snaps the same way.
+- **Pan** is a sweep inside one camera; at a speaker change between two cameras it cuts. **Crossfade** is written only where the edit's clock jumps (a stretch of the recording was cut out between the two speakers), never over contiguous speech. Under the Switch tiles the panel counts how many of the edit's speaker changes each one reaches — "Pan applies to 41 of 63 speaker changes; the other 22 are between cameras and cut" — and the Pan tile, and the Pan row in the quick strip, is greyed ("No speaker change can pan here.") only when none of them stays on one camera. Pan and Zoom are greyed under a fixed multi-slot layout (Side by side, Stacked or Grid), because its slots stay where they are. The Crossfade tile, and its row in the quick strip, is greyed the same way when none of them crosses a jump of the clock, saying so on hover and on keyboard focus; a crossfade you already chose is kept as it is. The counts need the edit to name its speakers (Camera Switch does); an edit that does not shows none.
+
+### What the Input section says
+
+| You see | It means |
+|---------|----------|
+| *Wire an EDL …* | Nothing is wired into **EDL** yet; only the rules the aspect alone decides apply. |
+| *Edit Plan hasn't run yet. Layout and framing need its speakers.* | An EDL is wired, but the node feeding it has no result yet; run it first. |
+| *Camera Switch clips: 8 clips · 2–3 speakers …* | A clip set from Camera Switch runs Speaker View once per clip, so a setting is offered only when it suits every clip, and a greyed tile names the clip. |
+| *This transcript's speakers (speaker_0, speaker_1) don't match the edit's (Host, Guest) …* | Camera Switch renames the speakers; wire its **Transcript** output rather than Transcribe's. |
+| *This edit has several cameras but no speaker on any segment …* | Wire Camera Switch between Edit Plan and Speaker View. |
+| *Wire a transcript …* / *This transcript has no speaker labels …* | The edit names only some of its speakers and the transcript cannot fill in the rest. |
+| *Side by side isn't drawn for 9:16 — renders as Stacked.* | The stored layout snaps to the layout that is drawn, as described above. |
+
+### A camera that starts late
+
+A multi-camera segment that reads a camera before that camera's own start (its offset) does not refuse the edit: it drops the cameras that had not begun and snaps what is left by the rule above, and the notes of the badge say how many segments did. Only a segment whose **own** camera, or whose sound, has not begun is refused.
+
+## What is refused before anything is reserved
+
+The badge and the run use the same rule, so what the badge passes, the run accepts:
+
+- an edit that is not one master-clock EDL with a picture on every segment (a clip set, a rendered output's EDL, a source with no URL);
+- an edit the shared EDL validator refuses;
+- a framing crop too small to crop (each side must be at least 1% of the frame) or outside the frame;
+- a layout, switch, emphasis or colour the renderer does not draw;
+- an output over **180 minutes**;
+- on **two or more cameras**, speakers it cannot read: no speaker on any segment while the transcript names two or more speakers or none (*"Wire Camera Switch between Edit Plan and Speaker View"*); a partly named edit with no transcript, or a transcript with no speaker labels. A transcript with exactly **one** speaker label passes, and a fully named edit is never refused for its transcript;
+- a speaker no camera shows.
+
+## Credit Cost
+
+**Not priced yet** — see the notice above. This page will give the formula, with worked examples, when the price is set.
+
+## API
+
+`POST /v1/speaker-view` with `{ edl, transcript?, quality?, targetAspect?, layout?, switch?: { type, durationMs? }, emphasis?: { style, durationMs? }, accentColor?, speakerRegions? }` — `edl` is one EDL (an object or its JSON string), `layout` one of `auto`, `single`, `side-by-side`, `stacked`, `grid`, `pip`, `switch.type` one of `cut`, `pan`, `zoom` or `xfade:<transition>`, `emphasis.style` a `+`-joined set of `scale`, `border`, `dim` (or `none`). A refusal above is a `400` (`invalid_edl`, `unsupported_setting` or `too_long`). Until its price is set the route answers `503 not_priced`. The finished job's `output_data` has `videoUrl`, `thumbnailUrl`, `json` (the EDL as drawn) and the stamps `quality`, `clipKey`, `planBasis` and `renderBasis`.
+
+## Tips
+
+- Run **Camera Switch** first on a multicam shoot: Speaker View never picks a camera, and refuses a multi-camera edit that names no speaker.
+- Turn Camera Switch's **Layout hints** on and set Speaker View's layout to **Auto** to follow its side-by-side moments; Apply EDL refuses a hinted edit.
+- Pick the aspect first — it decides which layouts are offered.

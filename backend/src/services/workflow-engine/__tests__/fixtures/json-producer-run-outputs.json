@@ -397,5 +397,91 @@
       },
       "createdAt": "2026-10-06T09:00:00.000Z"
     }
+  },
+  "inspiration-read": {
+    "text": "1. @s1 · 1 likes\n   post s1\n   https://media.example.test/post/s1\n\n2. @s2 · 1 likes\n   post s2\n   https://media.example.test/post/s2",
+    "json": [
+      {
+        "id": "s1",
+        "url": "https://media.example.test/post/s1",
+        "text": "post s1",
+        "platform": "tiktok",
+        "author": {
+          "handle": "@s1",
+          "name": "Author s1"
+        },
+        "metrics": {
+          "likes": 1
+        },
+        "media": {},
+        "hashtags": [],
+        "extra": {},
+        "savedAt": "2026-10-06T09:00:00.000Z"
+      },
+      {
+        "id": "s2",
+        "url": "https://media.example.test/post/s2",
+        "text": "post s2",
+        "platform": "tiktok",
+        "author": {
+          "handle": "@s2",
+          "name": "Author s2"
+        },
+        "metrics": {
+          "likes": 1
+        },
+        "media": {},
+        "hashtags": [],
+        "extra": {},
+        "savedAt": "2026-10-05T09:00:00.000Z"
+      }
+    ],
+    "listResults": [
+      "{\"id\":\"s1\",\"url\":\"https://media.example.test/post/s1\",\"text\":\"post s1\",\"platform\":\"tiktok\",\"author\":{\"handle\":\"@s1\",\"name\":\"Author s1\"},\"metrics\":{\"likes\":1},\"media\":{},\"hashtags\":[],\"extra\":{},\"savedAt\":\"2026-10-06T09:00:00.000Z\"}",
+      "{\"id\":\"s2\",\"url\":\"https://media.example.test/post/s2\",\"text\":\"post s2\",\"platform\":\"tiktok\",\"author\":{\"handle\":\"@s2\",\"name\":\"Author s2\"},\"metrics\":{\"likes\":1},\"media\":{},\"hashtags\":[],\"extra\":{},\"savedAt\":\"2026-10-05T09:00:00.000Z\"}"
+    ]
+  },
+  "competitor-read": {
+    "text": "1. @b1 · 1 likes\n   post b1\n   https://media.example.test/post/b1\n\n2. @b2 · 1 likes\n   post b2\n   https://media.example.test/post/b2",
+    "json": [
+      {
+        "id": "b1",
+        "url": "https://media.example.test/post/b1",
+        "text": "post b1",
+        "platform": "tiktok",
+        "author": {
+          "handle": "@b1",
+          "name": "Author b1"
+        },
+        "metrics": {
+          "likes": 1
+        },
+        "media": {},
+        "hashtags": [],
+        "extra": {},
+        "role": "own"
+      },
+      {
+        "id": "b2",
+        "url": "https://media.example.test/post/b2",
+        "text": "post b2",
+        "platform": "tiktok",
+        "author": {
+          "handle": "@b2",
+          "name": "Author b2"
+        },
+        "metrics": {
+          "likes": 1
+        },
+        "media": {},
+        "hashtags": [],
+        "extra": {},
+        "role": "about"
+      }
+    ],
+    "listResults": [
+      "{\"id\":\"b1\",\"url\":\"https://media.example.test/post/b1\",\"text\":\"post b1\",\"platform\":\"tiktok\",\"author\":{\"handle\":\"@b1\",\"name\":\"Author b1\"},\"metrics\":{\"likes\":1},\"media\":{},\"hashtags\":[],\"extra\":{},\"role\":\"own\"}",
+      "{\"id\":\"b2\",\"url\":\"https://media.example.test/post/b2\",\"text\":\"post b2\",\"platform\":\"tiktok\",\"author\":{\"handle\":\"@b2\",\"name\":\"Author b2\"},\"metrics\":{\"likes\":1},\"media\":{},\"hashtags\":[],\"extra\":{},\"role\":\"about\"}"
+    ]
   }
 }

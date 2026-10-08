@@ -7,7 +7,8 @@ import { supabase } from "../lib/supabase.js"
 import { estimateWorkflowListingCredits, type EstimateNode, type EstimateEdge } from "../ee/billing/credits.js"
 import { invalidateAppCache } from "./app-runner.js"
 import { getNodeResult, getOutputType, parseHandleId } from "@nodaro/shared"
-import { appListingPrice, storedListingFinalCredits, type StoredAppListing } from "../lib/app-listing-price.js"
+import { appListingPrice, relistedAppPrices, storedListingFinalCredits, storedListingFinalPerItem, storedListingFinalPerMinute, type StoredAppListing } from "../lib/app-listing-price.js"
+import { perMinuteOf, selectWithPerMinute, writeWithPerMinute } from "../lib/listing-per-minute-columns.js"
 import { sanitizeSlugBase, generateSlug, getCreatorDisplayName } from "../lib/marketplace-helpers.js"
 import { bareOriginSchema } from "../lib/url-validator.js"
 import { sendInternalError } from "../lib/http-errors.js"
@@ -16,7 +17,7 @@ import { toAccessRow } from "../lib/workflow-route-access.js"
 import { findUnpublishableNodeTypes, unpublishableNodesMessage } from "../lib/surface-deny.js"
 import { sendCredentialUnbound, unboundCredentialUsesFor } from "../lib/credential-gate.js"
 import { resolveCanvasResultIds } from "../lib/canvas-result-ids.js"
-import { exposedTextCaps } from "../lib/exposed-text-caps.js"
+import { exposedListNodeIds, exposedMediaNodeIds, exposedTextCaps } from "../lib/exposed-text-caps.js"
 
 const VALID_CATEGORIES = [
   "image-generation", "video-production", "audio-music", "content-writing",
@@ -77,6 +78,14 @@ function toCamelCase(row: Record<string, unknown>) {
     baseEstimatedCredits: row.base_estimated_credits ?? 0,
     // The Render finals' part of the listed price, which the creator's fee never marks up.
     finalEstimatedCredits: storedListingFinalCredits(row as StoredAppListing),
+    // Per minute of the episode (decided 2026-10-07): 0 when the price does not follow a recording's length.
+    perMinuteCredits: perMinuteOf(row, "per_minute_credits"),
+    basePerMinuteCredits: perMinuteOf(row, "base_per_minute_credits"),
+    finalPerMinuteCredits: storedListingFinalPerMinute(row as StoredAppListing),
+    // Per item beyond the saved count of a List the app user fills (decided 2026-10-07): 0 when none.
+    perItemCredits: perMinuteOf(row, "per_item_credits"),
+    basePerItemCredits: perMinuteOf(row, "base_per_item_credits"),
+    finalPerItemCredits: storedListingFinalPerItem(row as StoredAppListing),
     thumbnailNodeId: row.thumbnail_node_id ?? null,
     category: row.category ?? "other",
     outputTypes: row.output_types ?? [],
@@ -105,6 +114,10 @@ function toBrowseCard(row: Record<string, unknown>) {
     description: row.description,
     iconUrl: row.icon_url,
     estimatedCredits: row.estimated_credits,
+    // Per minute of the episode (decided 2026-10-07): 0 when none.
+    perMinuteCredits: perMinuteOf(row, "per_minute_credits"),
+    // Per further item of a List the app user fills (decided 2026-10-07): 0 when none.
+    perItemCredits: perMinuteOf(row, "per_item_credits"),
     category: row.category ?? "other",
     outputTypes: row.output_types ?? [],
     tags: row.tags ?? [],
@@ -231,79 +244,87 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
     // Card-only columns (no snapshot_nodes/edges/settings)
     const selectCols = "id, slug, name, description, icon_url, estimated_credits, category, output_types, tags, preview_media_url, preview_media_type, supports_remix, creator_id, creator_display_name, total_run_count, favorite_count, created_at, monetization_enabled, publish_type, component_metadata"
 
-    let query = supabase
-      .from("published_apps")
-      .select(selectCols)
-      .eq("is_listed", true)
-      .eq("is_active", true)
-      .is("deleted_at", null)
-      .limit(limit + 1) // fetch one extra to detect next page
-
-    // Filters
-    if (category) query = query.eq("category", category)
-    if (outputType) query = query.contains("output_types", [outputType])
-    if (tag) query = query.contains("tags", [tag])
-    if (creatorId) query = query.eq("creator_id", creatorId)
-    if (publishType) query = query.eq("publish_type", publishType)
-
-    // Full-text search
-    if (search) {
-      const tsQuery = search.trim().split(/\s+/).join(" & ")
-      query = query.textSearch("search_vector", tsQuery)
-    }
-
     // Favorites-only filter
+    let favoriteIds: string[] | null = null
     if (favoritesOnly && req.userId) {
       const { data: favIds } = await supabase
         .from("app_favorites")
         .select("app_id")
         .eq("user_id", req.userId)
-      const ids = (favIds ?? []).map((f: { app_id: string }) => f.app_id)
-      if (ids.length === 0) {
+      favoriteIds = (favIds ?? []).map((f: { app_id: string }) => f.app_id)
+      if (favoriteIds.length === 0) {
         return reply.send({ data: [], nextCursor: null })
       }
-      query = query.in("id", ids)
     }
 
-    // Sort + cursor. Split on the FIRST colon only — the timestamp half
-    // contains colons (`2026-03-23T19:30:10...`), so a naive `split(":")`
-    // shreds it and the resulting `dateStr` is a partial like `"2026-03-23T19"`,
-    // which Postgres rejects as an invalid timestamp (500 internal_error).
-    const splitCursor = (raw: string): { countStr: string; dateStr: string } => {
-      const idx = raw.indexOf(":")
-      return idx < 0
-        ? { countStr: raw, dateStr: "" }
-        : { countStr: raw.slice(0, idx), dateStr: raw.slice(idx + 1) }
-    }
+    // With the per-minute column, unless it has not reached this database yet
+    // (lib/listing-per-minute-columns.ts).
+    const buildQuery = (columns: string) => {
+      let query = supabase
+        .from("published_apps")
+        .select(columns)
+        .eq("is_listed", true)
+        .eq("is_active", true)
+        .is("deleted_at", null)
+        .limit(limit + 1) // fetch one extra to detect next page
 
-    if (sort === "popular") {
-      query = query.order("total_run_count", { ascending: false }).order("created_at", { ascending: false })
-      if (cursor) {
-        // cursor = "runCount:createdAt"
-        const { countStr, dateStr } = splitCursor(cursor)
-        const countVal = Number(countStr)
-        if (!isNaN(countVal) && dateStr) {
-          query = query.or(`total_run_count.lt.${countVal},and(total_run_count.eq.${countVal},created_at.lt.${dateStr})`)
+      // Filters
+      if (category) query = query.eq("category", category)
+      if (outputType) query = query.contains("output_types", [outputType])
+      if (tag) query = query.contains("tags", [tag])
+      if (creatorId) query = query.eq("creator_id", creatorId)
+      if (publishType) query = query.eq("publish_type", publishType)
+
+      if (favoriteIds) query = query.in("id", favoriteIds)
+
+      // Full-text search
+      if (search) {
+        const tsQuery = search.trim().split(/\s+/).join(" & ")
+        query = query.textSearch("search_vector", tsQuery)
+      }
+
+      // Sort + cursor. Split on the FIRST colon only — the timestamp half
+      // contains colons (`2026-03-23T19:30:10...`), so a naive `split(":")`
+      // shreds it and the resulting `dateStr` is a partial like `"2026-03-23T19"`,
+      // which Postgres rejects as an invalid timestamp (500 internal_error).
+      const splitCursor = (raw: string): { countStr: string; dateStr: string } => {
+        const idx = raw.indexOf(":")
+        return idx < 0
+          ? { countStr: raw, dateStr: "" }
+          : { countStr: raw.slice(0, idx), dateStr: raw.slice(idx + 1) }
+      }
+
+      if (sort === "popular") {
+        query = query.order("total_run_count", { ascending: false }).order("created_at", { ascending: false })
+        if (cursor) {
+          // cursor = "runCount:createdAt"
+          const { countStr, dateStr } = splitCursor(cursor)
+          const countVal = Number(countStr)
+          if (!isNaN(countVal) && dateStr) {
+            query = query.or(`total_run_count.lt.${countVal},and(total_run_count.eq.${countVal},created_at.lt.${dateStr})`)
+          }
+        }
+      } else if (sort === "most-favorited") {
+        query = query.order("favorite_count", { ascending: false }).order("created_at", { ascending: false })
+        if (cursor) {
+          const { countStr, dateStr } = splitCursor(cursor)
+          const countVal = Number(countStr)
+          if (!isNaN(countVal) && dateStr) {
+            query = query.or(`favorite_count.lt.${countVal},and(favorite_count.eq.${countVal},created_at.lt.${dateStr})`)
+          }
+        }
+      } else {
+        // newest
+        query = query.order("created_at", { ascending: false })
+        if (cursor) {
+          query = query.lt("created_at", cursor)
         }
       }
-    } else if (sort === "most-favorited") {
-      query = query.order("favorite_count", { ascending: false }).order("created_at", { ascending: false })
-      if (cursor) {
-        const { countStr, dateStr } = splitCursor(cursor)
-        const countVal = Number(countStr)
-        if (!isNaN(countVal) && dateStr) {
-          query = query.or(`favorite_count.lt.${countVal},and(favorite_count.eq.${countVal},created_at.lt.${dateStr})`)
-        }
-      }
-    } else {
-      // newest
-      query = query.order("created_at", { ascending: false })
-      if (cursor) {
-        query = query.lt("created_at", cursor)
-      }
+
+      return query
     }
 
-    const { data: rows, error } = await query
+    const { data: rows, error } = await selectWithPerMinute<Record<string, unknown>[]>("published_apps", selectCols, buildQuery, "listed")
 
     if (error) {
       return sendInternalError(reply, req, error, "Failed to browse apps")
@@ -633,9 +654,18 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
     // user's input exists, so every exposed text input reaches the estimator
     // with its character limit (or none): an exposed speech text is priced at
     // that ceiling, never at the author's placeholder (decided 2026-10-06;
-    // lib/exposed-text-caps.ts).
+    // lib/exposed-text-caps.ts). Likewise an exposed recording is the app
+    // user's, not the creator's sample: priced with no length (decided 2026-10-07).
     const speechTextCaps = exposedTextCaps(workflow.settings as Record<string, unknown> | null, nodes as EstimateNode[])
-    const listingSplit = await estimateWorkflowListingCredits(nodes as EstimateNode[], edges as EstimateEdge[], { publishType, speechTextCaps })
+    const replaceableMediaNodeIds = exposedMediaNodeIds(workflow.settings as Record<string, unknown> | null, nodes as EstimateNode[])
+    // A List the app user fills is listed per further item (decided 2026-10-07).
+    const exposedLists = exposedListNodeIds(workflow.settings as Record<string, unknown> | null, nodes as EstimateNode[])
+    const listingSplit = await estimateWorkflowListingCredits(nodes as EstimateNode[], edges as EstimateEdge[], {
+      publishType,
+      speechTextCaps,
+      replaceableMediaNodeIds,
+      exposedListNodeIds: exposedLists,
+    })
 
     // Inherit monetization from previous version, then user defaults, then zeros
     let inheritedMonetizationEnabled = false
@@ -664,7 +694,15 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
     }
 
     // The fee's base is the preview part (the whole graph at Preview); the listed price adds each final, unmarked.
-    const { base: baseEstimatedCredits, estimated: estimatedCredits } = appListingPrice(listingSplit, {
+    // Each part is fixed plus per minute of the episode (decided 2026-10-07).
+    const {
+      base: baseEstimatedCredits,
+      estimated: estimatedCredits,
+      basePerMinute: basePerMinuteCredits,
+      perMinute: perMinuteCredits,
+      basePerItem: basePerItemCredits,
+      perItem: perItemCredits,
+    } = appListingPrice(listingSplit, {
       enabled: inheritedMonetizationEnabled,
       flatFee: inheritedMonetizationFlatFee,
       percent: inheritedMonetizationPercent,
@@ -701,9 +739,8 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
         ? inheritedSlug
         : generateSlug(attempt === 0 && providedSlug ? providedSlug : name)
 
-      const result = await supabase
-        .from("published_apps")
-        .insert({
+      // The per-minute columns drop out until migration 483 reaches this database.
+      const result = await writeWithPerMinute("published_apps", {
           workflow_id: workflowId,
           creator_id: userId,
           name,
@@ -717,6 +754,10 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
           snapshot_settings: workflow.settings || {},
           base_estimated_credits: baseEstimatedCredits,
           estimated_credits: estimatedCredits,
+          base_per_minute_credits: basePerMinuteCredits,
+          per_minute_credits: perMinuteCredits,
+          base_per_item_credits: basePerItemCredits,
+          per_item_credits: perItemCredits,
           monetization_enabled: inheritedMonetizationEnabled,
           monetization_flat_fee: inheritedMonetizationFlatFee,
           monetization_percent: inheritedMonetizationPercent,
@@ -731,9 +772,7 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
           creator_display_name: creatorDisplayName,
           publish_type: publishType,
           component_metadata: publishType === "component" ? componentMetadata : null,
-        })
-        .select()
-        .single()
+        }, (row) => supabase.from("published_apps").insert(row).select().single())
 
       if (!result.error) {
         publishedApp = result.data
@@ -780,11 +819,13 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
     const mineCols =
       "id, workflow_id, creator_id, version, slug, name, description, icon_url, is_active, is_listed, is_embeddable, allowed_origins, estimated_credits, base_estimated_credits, monetization_enabled, monetization_flat_fee, monetization_percent, thumbnail_node_id, category, output_types, tags, preview_media_url, preview_media_type, supports_remix, creator_display_name, total_run_count, favorite_count, created_at, publish_type, component_metadata, deleted_at"
 
-    const { data: apps, error } = await supabase
-      .from("published_apps")
-      .select(`${mineCols}, app_runs(count), workflows!workflow_id(project_id)`)
-      .eq("creator_id", userId)
-      .order("created_at", { ascending: false })
+    const { data: apps, error } = await selectWithPerMinute<any[]>("published_apps", mineCols, (columns) =>
+      supabase
+        .from("published_apps")
+        .select(`${columns}, app_runs(count), workflows!workflow_id(project_id)`)
+        .eq("creator_id", userId)
+        .order("created_at", { ascending: false }),
+    )
 
     if (error) {
       return sendInternalError(reply, req, error, "Failed to fetch apps")
@@ -809,6 +850,13 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
       baseEstimatedCredits: app.base_estimated_credits ?? 0,
       // The Render finals' part of the listed price, which the creator's fee never marks up.
       finalEstimatedCredits: storedListingFinalCredits(app),
+      // Per minute of the episode (decided 2026-10-07): 0 when none.
+      perMinuteCredits: perMinuteOf(app, "per_minute_credits"),
+      basePerMinuteCredits: perMinuteOf(app, "base_per_minute_credits"),
+      finalPerMinuteCredits: storedListingFinalPerMinute(app),
+      perItemCredits: perMinuteOf(app, "per_item_credits"),
+      basePerItemCredits: perMinuteOf(app, "base_per_item_credits"),
+      finalPerItemCredits: storedListingFinalPerItem(app),
       monetizationEnabled: app.monetization_enabled ?? false,
       monetizationFlatFee: app.monetization_flat_fee ?? 0,
       monetizationPercent: app.monetization_percent ?? 0,
@@ -872,11 +920,17 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
     }
 
     // Verify ownership (include monetization fields to avoid a second SELECT)
-    const { data: existing, error: fetchError } = await supabase
-      .from("published_apps")
-      .select("id, creator_id, base_estimated_credits, estimated_credits, monetization_enabled, monetization_flat_fee, monetization_percent, slug, workflow_id")
-      .eq("id", appId)
-      .single()
+    const { data: existing, error: fetchError } = await selectWithPerMinute<StoredAppListing & {
+      id: string
+      creator_id: string
+      monetization_enabled: boolean | null
+      monetization_flat_fee: number | null
+      monetization_percent: number | null
+      slug: string
+      workflow_id: string
+    }>("published_apps", "id, creator_id, base_estimated_credits, estimated_credits, monetization_enabled, monetization_flat_fee, monetization_percent, slug, workflow_id", (columns) =>
+      supabase.from("published_apps").select(columns).eq("id", appId).single(),
+    )
 
     if (fetchError || !existing) {
       return reply.status(404).send({ error: { code: "not_found", message: "App not found" } })
@@ -909,15 +963,14 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
     // Recalculate estimated_credits when any monetization field changes
     const monetizationChanged = body.monetizationEnabled !== undefined || body.monetizationFlatFee !== undefined || body.monetizationPercent !== undefined
     if (monetizationChanged) {
-      const base = existing.base_estimated_credits ?? 0
       const enabled = body.monetizationEnabled ?? existing.monetization_enabled
       const flat = body.monetizationFlatFee ?? existing.monetization_flat_fee ?? 0
       const pct = body.monetizationPercent ?? existing.monetization_percent ?? 0
 
-      // The fee applies to the preview run (the stored base); each Render
-      // final, held in the stored price, stays unmarked (decided 2026-10-06).
-      const final = storedListingFinalCredits(existing)
-      updates.estimated_credits = appListingPrice({ preview: base, final }, { enabled: !!enabled, flatFee: flat, percent: pct }).estimated
+      // The fee applies to the preview run (the stored bases, fixed and per
+      // minute); each Render final, held in the stored prices, stays unmarked
+      // (decided 2026-10-06, per minute decided 2026-10-07).
+      Object.assign(updates, relistedAppPrices(existing, { enabled: !!enabled, flatFee: flat, percent: pct }))
 
       invalidateAppCache(existing.slug)
 
@@ -949,12 +1002,9 @@ export async function publishedAppsRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: { code: "bad_request", message: "No fields to update" } })
     }
 
-    const { data: updated, error: updateError } = await supabase
-      .from("published_apps")
-      .update(updates)
-      .eq("id", appId)
-      .select()
-      .single()
+    const { data: updated, error: updateError } = await writeWithPerMinute("published_apps", updates, (row) =>
+      supabase.from("published_apps").update(row).eq("id", appId).select().single(),
+    )
 
     if (updateError) {
       return sendInternalError(reply, req, updateError, "Failed to update app")

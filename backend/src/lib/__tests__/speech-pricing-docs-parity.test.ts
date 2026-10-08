@@ -43,7 +43,12 @@ describe("text-to-speech.md Credits", () => {
 })
 
 describe("text-to-dialogue.md Credits", () => {
-  it.each([[100, 32, "**100 characters** (any script up to 800) → **32 credits**"], [1000, 40, "**1,000 characters** → **40 credits**"], [5000, 200, "**5,000 characters** (the cap) → **200 credits**"]])(
+  it.each([
+    [100, 32, "**100 characters** (any script up to 800) → **32 credits**"],
+    [1000, 40, "**1,000 characters** → **40 credits**"],
+    [5000, 200, "**5,000 characters** (Dialogue v3's cap) → **200 credits**"],
+    [10000, 400, "**10,000 characters** (Dialogue v4's cap) → **400 credits**"],
+  ])(
     "%i characters → %i", (chars, credits, sentence) => {
       expect(speechCredits(chars, 4)).toBe(credits)
       expect(dialogue).toContain(sentence)
@@ -84,6 +89,7 @@ describe("generate-video.md Credit pricing (character voice) — the audio_drive
   it.each([
     [800, 4, 32, "1–800 characters cost 32"],
     [5000, 4, 200, "5,000 cost 200"],
+    [10000, 4, 400, "10,000 on Dialogue v4 cost 400"],
     [800, 2, 16, "2 on Turbo v2.5 (16 and 100)"],
     [5000, 2, 100, "2 on Turbo v2.5 (16 and 100)"],
   ])("%i characters at %i per unit → %i", (chars, unit, credits, sentence) => {

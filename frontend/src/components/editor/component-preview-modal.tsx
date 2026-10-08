@@ -92,7 +92,7 @@ export function ComponentPreviewModal({
               <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground flex-wrap">
                 <span className="truncate">{t("preview.by", { name: creatorLabel })}</span>
                 <span>·</span>
-                <CreditCost credits={card.estimatedCredits} icon="sm" className="gap-0.5" />
+                <CreditCost credits={card.estimatedCredits} perMinute={card.perMinuteCredits} perItem={card.perItemCredits} icon="sm" className="gap-0.5" />
                 <span>·</span>
                 <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full font-medium", categoryColor)}>
                   {t(categoryLabelKey)}

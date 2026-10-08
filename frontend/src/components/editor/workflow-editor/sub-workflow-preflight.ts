@@ -1,6 +1,7 @@
 import type { WorkflowNode, SubWorkflowData } from "@/types/nodes"
 import { wordTimingsPreflight } from "./add-captions-preflight"
 import { previewRenderPreflight } from "./preview-gate"
+import { speakerViewPricePreflight } from "./speaker-view-price-preflight"
 import {
   SUB_WORKFLOW_MAX_DEPTH,
   loadSubWorkflowRouteGraph,
@@ -89,7 +90,8 @@ export async function nestedWordTimingsPreflight(
  * Every up-front question a run asks of its nested graphs, in ONE walk (one
  * load per referenced route): the word-timings refusal above, and a nested
  * graph that holds a Preview render — it would hand a preview to the parent,
- * where nothing can Render final (refused permanently, decided 2026-10-04).
+ * where nothing can Render final (refused permanently, decided 2026-10-04), and
+ * a Speaker View, which has no price until C4.
  */
 export async function nestedRunPreflight(
   executing: ReadonlyArray<WorkflowNode>,
@@ -97,7 +99,7 @@ export async function nestedRunPreflight(
 ): Promise<string | null> {
   return nestedGraphPreflight(
     executing,
-    (nodes, edges) => wordTimingsPreflight(nodes, edges) ?? previewRenderPreflight(nodes, edges),
+    (nodes, edges) => wordTimingsPreflight(nodes, edges) ?? previewRenderPreflight(nodes, edges) ?? speakerViewPricePreflight(nodes),
     opts,
   )
 }

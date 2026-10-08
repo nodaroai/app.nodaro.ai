@@ -31,35 +31,46 @@
  * then has no Escape layers and takes no keys. ⌘F there switches to the
  * transcript and opens find (`openFindFromTab`, decided 2026-10-07).
  *
- * Seeking the player on a kept word arrives with the player (A3-4); until then
- * a click on a kept word does nothing.
+ * THE PLAYER (A3-4). A click on a kept word seeks the player (`seekWord`:
+ * the take through its clock, else the original, R3 a); a struck word or a
+ * pause chip opens its span, whose popover offers Hear it (the original, R6
+ * a); the selection toolbar's Play plays the selection (`playRange`, decided
+ * 2026-10-07). Follow playback marks the word playing and keeps its row on screen
+ * (use-transcript-follow.ts), and the minimap above the find row shows the
+ * whole source, the rows on screen and the playhead; a click or drag on it
+ * scrolls the transcript there.
  */
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type KeyboardEvent } from "react"
 import { useVirtualizer } from "@tanstack/react-virtual"
+import type { EdlDropped } from "@nodaro/shared"
 import type { ReviewEdits } from "@/hooks/use-review-edits"
 import type { ReviewModel } from "@/hooks/use-review-model"
+import type { ReviewPlayback } from "@/hooks/use-review-playback"
+import { indexAtMs } from "@/lib/edl-review/minimap"
 import { observeScrollOffset } from "@/lib/virtual/observe-scroll-offset"
-import { collapseFindRuns, collapseRun, expandRun, focusedRun, innermostLayer, trackExpandedRuns, type ExpandedRun } from "@/lib/edl-review/escape-layers"
-import { collapsedRunOfWord, expandedRuns, rowOfWord, runSpan, type CollapsedRow, type ReviewRow, type WordSpan } from "@/lib/edl-review/review-rows"
+import { collapseFindRuns, collapseRun, expandRun, innermostLayer, trackExpandedRuns, type ExpandedRun } from "@/lib/edl-review/escape-layers"
+import { collapsedRunOfWord, expandedRuns, rowOfWord, runSpan, type CollapsedRow } from "@/lib/edl-review/review-rows"
 import {
   selectedWords,
-  selectionCutMs,
-  selectionRestoreMs,
   selectionText,
-  selectionTouchesCut,
   type WordSelection,
 } from "@/lib/edl-review/selection"
 import { useT } from "@/lib/i18n"
 import { copyToClipboard } from "@/lib/utils"
-import { CutsOnlyRow } from "./cuts-only-row"
 import { CLOSED_FIND, FindBar, useFindMatches, type FindState } from "./find-bar"
+import { FollowToggle, ReviewMinimap } from "./review-minimap"
 import { SelectionToolbar } from "./selection-toolbar"
 import { SpanPopover, toastRestoreLock, type SpanTarget } from "./span-popover"
-import { TranscriptRow } from "./transcript-row"
+import { TranscriptList } from "./transcript-list"
+import { useFindFocus } from "./use-find-focus"
+import { focusedRunOf, selectionKeyAction } from "./transcript-keys"
+import { useTranscriptFollow } from "./use-transcript-follow"
 import { useTranscriptView } from "./use-transcript-view"
+import { useSelectionActions } from "./use-selection-actions"
 import { useWordDrag } from "./use-word-drag"
 
 export const TRANSCRIPT_OVERSCAN = 6
+const NO_DROPS: readonly EdlDropped[] = []
 /** A paragraph row's height before it is measured, in px. */
 const ESTIMATED_ROW_PX = 88
 
@@ -85,56 +96,11 @@ export interface TranscriptPaneProps {
    * tab; there it has no Escape layers and takes no keys.
    */
   readonly active?: boolean
+  /** The review's player: kept-word clicks seek it, Hear it plays the original, follow playback reads it. */
+  readonly playback?: ReviewPlayback
 }
 
-const isTextField = (target: EventTarget | null): boolean =>
-  target instanceof HTMLElement && (target.isContentEditable || target.tagName === "INPUT" || target.tagName === "TEXTAREA")
-
-/** The expanded run the focused row of the transcript belongs to (escape-layers.ts). */
-function focusedRunOf(scroller: HTMLElement | null, rows: readonly ReviewRow[]): { readonly run: string; readonly span: WordSpan } | undefined {
-  const active = document.activeElement
-  const row = scroller && active instanceof Element && scroller.contains(active) ? active.closest<HTMLElement>("[data-review-row]") : null
-  const index = row ? Number(row.dataset.index) : -1
-  const span = focusedRun(rows, index)
-  const run = rows[index]
-  return span && run?.kind === "paragraph" && run.run ? { run: run.run, span } : undefined
-}
-
-/**
- * Where focus was when find opened, to return it there when find closes
- * (decided 2026-10-07). The element itself while it is still in the page;
- * otherwise its stand-in, when it was a run's toggle, a row or the find button
- * (the virtualizer and the run toggles swap those elements, and the find
- * button unmounts while find is open). A toggle or a row also names the row it
- * lives in, so when find scrolled that row out of the DOM the transcript
- * scrolls back to it and focuses it once it renders.
- */
-interface FocusMark {
-  readonly el: HTMLElement
-  readonly selector?: string
-  /** The transcript row the stand-in lives in: by its key, or by its run's id (a toggle). */
-  readonly row?: { readonly key: string } | { readonly run: string }
-}
-
-function focusMarkOf(active: Element | null): FocusMark | null {
-  if (!(active instanceof HTMLElement)) return null
-  const toggle = active.dataset.runToggle
-  if (toggle !== undefined) return { el: active, selector: `[data-run-toggle="${CSS.escape(toggle)}"]`, row: { run: toggle } }
-  if (active.hasAttribute("data-find-open")) return { el: active, selector: "[data-find-open]" }
-  const row = active.closest<HTMLElement>("[data-row-key]")
-  if (row) return { el: active, selector: `[data-row-key="${CSS.escape(row.dataset.rowKey!)}"]`, row: { key: row.dataset.rowKey! } }
-  return { el: active }
-}
-
-/** The index in `rows` of the row a focus mark lives in; -1 when it is gone. */
-function rowIndexOf(mark: FocusMark, rows: readonly ReviewRow[]): number {
-  const row = mark.row
-  if (!row) return -1
-  // A run's toggle is on its collapsed row, or on its first paragraph once expanded.
-  return "key" in row ? rows.findIndex((r) => r.key === row.key) : rows.findIndex((r) => r.run === row.run)
-}
-
-export const TranscriptPane = forwardRef<TranscriptPaneHandle, TranscriptPaneProps>(function TranscriptPane({ model, edits, active = true }, ref) {
+export const TranscriptPane = forwardRef<TranscriptPaneHandle, TranscriptPaneProps>(function TranscriptPane({ model, edits, active = true, playback }, ref) {
   const t = useT()
   const [expanded, setExpanded] = useState<readonly ExpandedRun[]>([])
   const view = useTranscriptView(model, edits, expanded)
@@ -145,11 +111,6 @@ export const TranscriptPane = forwardRef<TranscriptPaneHandle, TranscriptPanePro
   const rootRef = useRef<HTMLDivElement | null>(null)
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const findInputRef = useRef<HTMLInputElement | null>(null)
-  // Where focus was before find opened, and a request to return it there.
-  const beforeFind = useRef<FocusMark | null>(null)
-  const [refocus, setRefocus] = useState(0)
-  // The stand-in to focus once the virtualizer renders it (find scrolled it away).
-  const [pendingFocus, setPendingFocus] = useState<FocusMark | null>(null)
   const [selection, setSelection] = useState<WordSelection | null>(null)
   const [target, setTarget] = useState<SpanTarget | null>(null)
   const [find, setFind] = useState<FindState>(CLOSED_FIND)
@@ -178,6 +139,7 @@ export const TranscriptPane = forwardRef<TranscriptPaneHandle, TranscriptPanePro
     observeElementOffset: observeScrollOffset,
   })
   const items = virtualizer.getVirtualItems()
+  const findFocus = useFindFocus({ rootRef, scrollRef, rows, items, virtualizer })
 
   // The rows' drop indices are into the edit they were drawn from: the latest one.
   const shownRef = useRef(shown)
@@ -191,12 +153,18 @@ export const TranscriptPane = forwardRef<TranscriptPaneHandle, TranscriptPanePro
 
   const onWordClick = useCallback((word: number) => {
     const mark = marks[word]
+    if (mark?.state === "kept") playback?.seekWord(word)
     if (!mark || mark.state === "kept" || mark.drop === undefined) return
     const el = scrollRef.current?.querySelector<HTMLElement>(`[data-w="${word}"]`)
     if (el) openDrop(mark.drop, el)
-  }, [marks, openDrop])
+  }, [marks, openDrop, playback])
 
   const drag = useWordDrag({ scrollRef, selection, onSelect: setSelection, onWordClick })
+  const expandForFollow = useCallback((run: string) => {
+    const span = runSpan(rows, run)
+    if (span) setExpanded((runs) => expandRun(runs, span))
+  }, [rows])
+  const activeWord = useTranscriptFollow({ playback, words, offsetMs: model.offsetMs, rows, virtualizer, expand: expandForFollow })
 
   const onExpand = useCallback((run: string) => {
     const span = runSpan(rows, run)
@@ -257,13 +225,10 @@ export const TranscriptPane = forwardRef<TranscriptPaneHandle, TranscriptPanePro
   }, [virtualizer, rows])
 
   const openFind = useCallback(() => {
-    if (!find.open) {
-      beforeFind.current = focusMarkOf(document.activeElement)
-      setPendingFocus(null)
-    }
+    if (!find.open) findFocus.remember()
     setFind((f) => ({ ...f, open: true }))
     findInputRef.current?.focus()
-  }, [find.open])
+  }, [find.open, findFocus])
   useEffect(() => {
     if (find.open) findInputRef.current?.focus()
   }, [find.open])
@@ -274,67 +239,30 @@ export const TranscriptPane = forwardRef<TranscriptPaneHandle, TranscriptPanePro
   const closeFind = useCallback(() => {
     setFind((f) => ({ ...f, open: false, current: -1 }))
     setExpanded(collapseFindRuns)
-    setRefocus((n) => n + 1)
-  }, [])
-  // The rows of this render (after find's runs collapse), for the refocus below.
-  const rowsRef = useRef(rows)
-  rowsRef.current = rows
-  useLayoutEffect(() => {
-    if (refocus === 0) return
-    const mark = beforeFind.current
-    beforeFind.current = null
-    setPendingFocus(null)
-    const dialog = rootRef.current?.closest("[role='dialog']")
-    const stillThere = mark !== null && mark.el.isConnected && (!dialog || dialog.contains(mark.el))
-    const standIn = !stillThere && mark?.selector ? rootRef.current?.querySelector<HTMLElement>(mark.selector) : null
-    const target = stillThere ? mark.el : standIn
-    if (target) {
-      target.focus()
-      return
-    }
-    // Its row is out of the DOM (find scrolled away from it): scroll back and
-    // focus it once it renders. The scroller holds focus meanwhile.
-    scrollRef.current?.focus({ preventScroll: true })
-    const index = mark ? rowIndexOf(mark, rowsRef.current) : -1
-    if (mark && index >= 0) {
-      virtualizer.scrollToIndex(index, { align: "auto" })
-      setPendingFocus(mark)
-    }
-  }, [refocus, virtualizer])
-  useEffect(() => {
-    if (!pendingFocus?.selector) return
-    const el = rootRef.current?.querySelector<HTMLElement>(pendingFocus.selector)
-    if (el) {
-      // Only while the reviewer has not moved focus elsewhere in the meantime.
-      if (document.activeElement === scrollRef.current) el.focus({ preventScroll: true })
-      setPendingFocus(null)
-    } else if (rowIndexOf(pendingFocus, rows) < 0) setPendingFocus(null)
-  }, [pendingFocus, items, rows])
+    findFocus.restore()
+  }, [findFocus])
   const onFindChange = useCallback((next: FindState) => {
     if (find.open && !next.open) closeFind()
     else {
-      if (!find.open && next.open) {
-        beforeFind.current = focusMarkOf(document.activeElement)
-        setPendingFocus(null)
-      }
+      if (!find.open && next.open) findFocus.remember()
       setFind(next)
     }
-  }, [find.open, closeFind])
+  }, [find.open, closeFind, findFocus])
 
-  const cutSelection = useCallback(() => {
-    if (!selection) return
-    edits.cutSelection(selection)
-    setSelection(null)
-  }, [edits, selection])
-
-  const restoreSelection = useCallback(() => {
-    if (!selection) return
-    const lock = edits.restoreSelection(selection)
-    if (lock) toastRestoreLock(lock)
-    setSelection(null)
-  }, [edits, selection])
-
-  const touchesCut = selection !== null && selectionTouchesCut(selection, marks)
+  const { cutSelection, restoreSelection, playSelection, touchesCut, selectionMs } = useSelectionActions({ selection, setSelection, model, edits, words, marks, playback })
+  // The selection stays after Play, so the button a mouse click focused stays
+  // too, and Space on it would press it again: hand focus back to the
+  // transcript, where Space is the player's pause.
+  const onPlaySelection = useMemo(
+    () =>
+      playSelection
+        ? () => {
+            playSelection()
+            scrollRef.current?.focus({ preventScroll: true })
+          }
+        : undefined,
+    [playSelection],
+  )
   const toolbarShown = selection !== null && !drag.dragging && canEdit && !cutsOnly
 
   useImperativeHandle(ref, () => ({
@@ -360,53 +288,50 @@ export const TranscriptPane = forwardRef<TranscriptPaneHandle, TranscriptPanePro
         openFind()
         return
       }
-      if (isTextField(e.target) || !selection || drag.dragging) return
-      if (mod && key === "c") {
-        e.preventDefault()
-        copyToClipboard(selectionText(selection, words), t("common.copied"))
-        return
-      }
-      if (!canEdit || mod || e.altKey) return
-      if (key === "delete" || key === "backspace") {
-        e.preventDefault()
-        cutSelection()
-      } else if (key === "r" && touchesCut) {
-        e.preventDefault()
-        restoreSelection()
-      }
+      const action = selectionKeyAction(e, { hasSelection: selection !== null, dragging: drag.dragging, canEdit, touchesCut })
+      if (!action || !selection) return
+      e.preventDefault()
+      if (action === "copy") copyToClipboard(selectionText(selection, words), t("common.copied"))
+      else if (action === "cut") cutSelection()
+      else restoreSelection()
     },
     canFind: !cutsOnly && !!findIndex,
     openFindFromTab: () => {
       if (!active || cutsOnly || !findIndex) return
-      if (!find.open) {
-        beforeFind.current = scrollRef.current ? { el: scrollRef.current } : null
-        setPendingFocus(null)
-      }
+      if (!find.open) findFocus.rememberTranscript()
       setFind((f) => ({ ...f, open: true }))
       findInputRef.current?.focus()
     },
-  }), [active, selection, find.open, closeFind, expanded, rows, cutsOnly, findIndex, openFind, drag.dragging, words, t, canEdit, cutSelection, touchesCut, restoreSelection])
+  }), [active, selection, find.open, closeFind, expanded, rows, cutsOnly, findIndex, openFind, drag.dragging, words, t, canEdit, cutSelection, touchesCut, restoreSelection, findFocus])
 
   const sel = selection ? selectedWords(selection) : null
-  const selectionMs = useMemo(() => {
-    if (!selection || !edits.kept) return { cut: 0, restore: 0 }
-    return {
-      cut: selectionCutMs(selection, words, edits.kept, model.offsetMs),
-      restore: selectionRestoreMs(selection, words, edits.kept, model.offsetMs),
-    }
-  }, [selection, words, edits.kept, model.offsetMs])
-
-  // The toolbar floats over the row the selection ends in, while that row is laid out.
+  // The toolbar floats over the row the selection ends in while that row is
+  // laid out (it scrolls with the rows), else at the bottom of the scroller.
   const focusRow = selection ? rowOfWord(rows, selection.focus) : -1
   const focusItem = items.find((item) => item.index === focusRow)
+
+  // The rows on screen, for the minimap's window, and a time to scroll to.
+  const timed: readonly { readonly inMs: number; readonly outMs: number }[] = cutsOnly ?? rows
+  const scrollTop = virtualizer.scrollOffset ?? 0
+  const onScreen = items.filter((i) => i.end > scrollTop && i.start < scrollTop + (virtualizer.scrollRect?.height ?? 0))
+  const firstOn = onScreen.length > 0 ? timed[onScreen[0]!.index] : undefined
+  const lastOn = onScreen.length > 0 ? timed[onScreen[onScreen.length - 1]!.index] : undefined
+  const onScreenMs = firstOn && lastOn ? { inMs: firstOn.inMs, outMs: lastOn.outMs } : null
+  const scrollToMs = useCallback((ms: number) => {
+    virtualizer.scrollToIndex(Math.max(0, indexAtMs(timed, ms)), { align: "start" })
+  }, [virtualizer, timed])
 
   if (!shown) return null
 
   return (
     <div ref={rootRef} className="flex min-h-0 flex-1 flex-col">
+      {playback && model.base && (
+        <ReviewMinimap base={model.base} edited={shown} kept={edits.kept} onScreen={onScreenMs} playback={playback} onScrollTo={scrollToMs} />
+      )}
       {!cutsOnly && findIndex && (
         <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-1.5">
           <FindBar find={find} matches={matches} inputRef={findInputRef} fromWord={firstWordOnScreen} onChange={onFindChange} />
+          {playback && <FollowToggle on={playback.follow} onChange={playback.setFollow} />}
         </div>
       )}
       <div
@@ -418,59 +343,31 @@ export const TranscriptPane = forwardRef<TranscriptPaneHandle, TranscriptPanePro
         onPointerDown={cutsOnly ? undefined : drag.onPointerDown}
       >
         <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
-          {items.map((item) => {
-            if (cutsOnly) {
-              const row = cutsOnly[item.index]!
-              return (
-                <div key={item.key} data-index={item.index} data-review-row ref={virtualizer.measureElement} className="absolute inset-x-0 top-0" style={{ transform: `translateY(${item.start}px)` }}>
-                  <CutsOnlyRow row={row} onOpenDrop={openDrop} />
-                </div>
-              )
-            }
-            const row = rows[item.index]!
-            const inSel = sel && sel.first < row.end && sel.last >= row.first
-            const inMatch = match && match.first < row.end && match.last >= row.first
-            const prev = rows[item.index - 1]
-            return (
-              <div key={row.key} data-index={item.index} data-review-row data-row-key={row.key} tabIndex={-1} ref={virtualizer.measureElement} className="absolute inset-x-0 top-0 outline-none" style={{ transform: `translateY(${item.start}px)` }}>
-                <TranscriptRow
-                  row={row}
-                  words={words}
-                  marks={marks}
-                  dropped={shown.dropped ?? []}
-                  selFirst={inSel ? sel.first : -1}
-                  selLast={inSel ? sel.last : -1}
-                  matchFirst={inMatch ? match.first : -1}
-                  matchLast={inMatch ? match.last : -1}
-                  runStart={row.kind === "paragraph" && !!row.run && prev?.run !== row.run}
-                  canEdit={canEdit}
-                  onOpenDrop={openDrop}
-                  onExpand={onExpand}
-                  onCollapse={onCollapse}
-                  onRestoreRun={onRestoreRun}
-                />
-              </div>
-            )
-          })}
-          {toolbarShown && focusItem && (
-            <SelectionToolbar
-              className="absolute inset-x-0 z-10 mx-auto"
-              style={{ top: Math.max(0, focusItem.start - 36) }}
-              cutMs={selectionMs.cut}
-              restoreMs={selectionMs.restore}
-              touchesCut={touchesCut}
-              onCut={cutSelection}
-              onRestore={restoreSelection}
-              onClear={() => setSelection(null)}
-            />
-          )}
+          <TranscriptList
+            items={items}
+            measure={virtualizer.measureElement}
+            cutsOnly={cutsOnly}
+            rows={rows}
+            words={words}
+            marks={marks}
+            dropped={shown.dropped ?? NO_DROPS}
+            selection={sel}
+            match={match}
+            activeWord={activeWord}
+            canEdit={canEdit}
+            onOpenDrop={openDrop}
+            onExpand={onExpand}
+            onCollapse={onCollapse}
+            onRestoreRun={onRestoreRun}
+          />
         </div>
-        {toolbarShown && !focusItem && (
-          <div className="sticky bottom-2 z-10 flex justify-center">
+        {toolbarShown && (
+          <div className={focusItem ? "absolute inset-x-0 z-10 flex justify-center" : "sticky bottom-2 z-10 flex justify-center"} style={focusItem ? { top: Math.max(0, focusItem.start - 36) } : undefined}>
             <SelectionToolbar
               cutMs={selectionMs.cut}
               restoreMs={selectionMs.restore}
               touchesCut={touchesCut}
+              onPlay={onPlaySelection}
               onCut={cutSelection}
               onRestore={restoreSelection}
               onClear={() => setSelection(null)}
@@ -488,6 +385,7 @@ export const TranscriptPane = forwardRef<TranscriptPaneHandle, TranscriptPanePro
         canEdit={canEdit}
         onRestore={edits.restoreSpan}
         onRestoreReason={edits.restoreReason}
+        onHear={playback?.hear}
       />
     </div>
   )

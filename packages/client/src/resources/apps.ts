@@ -15,6 +15,21 @@ export interface PublishedApp {
   category?: string | null
   isFeatured?: boolean
   runCount?: number
+  /** The listed price per run; when `perMinuteCredits` is above 0, its fixed part. */
+  estimatedCredits?: number | null
+  /**
+   * Credits per minute of the recording the app is given, when its price
+   * follows that recording's length: the price is `estimatedCredits` plus
+   * this per minute. 0 or absent when the price does not depend on a
+   * recording's length.
+   */
+  perMinuteCredits?: number
+  /**
+   * Credits for each item beyond the creator's saved items of a list input
+   * the app's user fills: the price is the listed one plus this per further
+   * item. 0 or absent when the app has no such input.
+   */
+  perItemCredits?: number
   createdAt: string
   updatedAt: string
 }
@@ -43,6 +58,21 @@ export interface ListAppsResult {
 export interface PublishedAppDetail extends PublishedApp {
   inputSchema: Record<string, unknown>
   outputs: Array<{ nodeId: string; label: string; type: string }>
+  /**
+   * The app run alone: the listed price less its Render final part (run and
+   * charged separately) — fixed, per minute of the recording and per further
+   * list item. Absent from a server that predates them; read the listed
+   * `estimatedCredits` / `perMinuteCredits` / `perItemCredits` instead.
+   */
+  runEstimatedCredits?: number
+  runPerMinuteCredits?: number
+  runPerItemCredits?: number
+  /**
+   * Whether this server charges Edit Plan per started minute of the recording
+   * (otherwise in 15/30/60/90/120/180-minute steps). Absent from a server that
+   * predates it: read it as the steps.
+   */
+  editPlanPerMinute?: boolean
 }
 
 export interface AppRunResult {

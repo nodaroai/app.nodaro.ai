@@ -21,6 +21,15 @@ describe("getPrimaryOutput on an empty window", () => {
     expect(getPrimaryOutput({ json: posts, text: "hello" }, "telegram-channel-feed", "text")).toBe("hello")
   })
 
+  it("Read Inspiration and Read Competitor: the same rule", () => {
+    for (const type of ["inspiration-read", "competitor-read"]) {
+      expect(getPrimaryOutput({ json: [], text: "" }, type, "json")).toBeUndefined()
+      expect(getPrimaryOutput({ json: [], text: "" }, type, "text")).toBe("")
+      expect(getPrimaryOutput({ json: [{ id: "p1" }], text: "post p1" }, type, "json")).toBe(JSON.stringify([{ id: "p1" }]))
+      expect(getPrimaryOutput({ json: [{ id: "p1" }], text: "post p1" }, type, undefined)).toBe("post p1")
+    }
+  })
+
   it("Read Collection: the same rule", () => {
     expect(getPrimaryOutput({ json: [], text: "" }, "collection-read", "json")).toBeUndefined()
     expect(getPrimaryOutput({ json: [{ id: "r1" }], text: "- r1" }, "collection-read", "json")).toBe(JSON.stringify([{ id: "r1" }]))

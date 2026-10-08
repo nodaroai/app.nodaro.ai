@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify"
 import { z } from "zod"
 import { openApiRegistry } from "../lib/openapi-registry.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
+import { loopTrimAddonCreditsFor } from "../lib/loop-trim-addon.js"
 import { supabase } from "../lib/supabase.js"
 import { videoQueue } from "../lib/queue.js"
 import { shotsSchema, elementsSchema } from "../lib/video-schemas.js"
@@ -19,7 +20,7 @@ import { insertJobIdempotent } from "../lib/insert-job.js"
 import { voicedDialogueProvider } from "../lib/voiced-dialogue-model.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
-import { VIDEO_GEN_PROVIDERS, VIDEO_DURATION_AUTO, isAutoVideoDuration, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, PROMPT_HARD_CEILING, isSeedance2Provider, pricedOutputDurationSec, isMinimaxH3Provider, isVeoProvider, estimateLoopTrimAddonCredits, seedance2AudioLimitSec, findSeedance2AudioOverLimit, videoModelCanSpeakDialogue, getVideoAudioCapability, TTS_PROVIDERS, buildVideoCreditModelIdentifier, applyDefaultVideoSelection, VIDEO_REF_LIMITS_BY_PROVIDER, videoProviderRequiresImage, videoProviderFoldsLoneEndFrame, videoCharacterRefProblem, type ConnectedReference, type DescribedReference } from "@nodaro/shared"
+import { VIDEO_GEN_PROVIDERS, VIDEO_DURATION_AUTO, SEEDANCE_2_REF_LIMITS, SEEDANCE_2_5_REF_LIMITS, PROMPT_HARD_CEILING, isSeedance2Provider, pricedOutputDurationSec, isMinimaxH3Provider, isVeoProvider, seedance2AudioLimitSec, findSeedance2AudioOverLimit, videoModelCanSpeakDialogue, getVideoAudioCapability, TTS_PROVIDERS, buildVideoCreditModelIdentifier, applyDefaultVideoSelection, VIDEO_REF_LIMITS_BY_PROVIDER, videoProviderRequiresImage, videoProviderFoldsLoneEndFrame, videoCharacterRefProblem, type ConnectedReference, type DescribedReference } from "@nodaro/shared"
 import { imageRequiredError } from "../lib/video-image-required.js"
 import { resolveVideoReferenceCore, resolveReferenceTokens, resolveRefIdTokens, composeVideoPromptText, appendReferenceLines, renderDescribedReferenceLines, renderReferenceCaptionLines, type VideoExtraRef, type CharacterMeta } from "@nodaro/prompts"
 import { connectedReferenceSchema, describedReferenceSchema, referenceCaptionSchema, DESCRIBED_REFERENCE_LIMIT } from "../lib/connected-reference-schema.js"
@@ -838,12 +839,10 @@ export async function generateVideoRoutes(app: FastifyInstance) {
           const loopTrim = rawLoopTrim ?? (legacyAuto !== undefined
             ? (legacyAuto ? { enabled: true, framesToTest: 8 } : { enabled: false })
             : undefined)
-          // Auto has no seconds of its own — the add-on is sized for the
-          // longest clip the model can render, the same ceiling the base reserves.
-          const duration = isAutoVideoDuration(b.duration)
-            ? pricedOutputDurationSec(bSel.provider, b.duration as number)
-            : typeof b.duration === "number" ? b.duration : 8
-          const addon = estimateLoopTrimAddonCredits(loopTrim, duration)
+          // Sized on the seconds the model renders (Auto: its ceiling, unset:
+          // its own default) — the worker's settlement and the reconcile read
+          // the same helper, so what is held here is what is refunded.
+          const addon = loopTrimAddonCreditsFor(loopTrim, bSel.provider, b.duration as number | string | undefined)
           const audioAddon = await voicedAudioAddonCredits(b)
           return baseCost + addon + audioAddon
         },

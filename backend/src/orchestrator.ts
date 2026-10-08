@@ -11,6 +11,8 @@ import { initializeExternalWallet } from "./lib/external-wallet.js"
 import { loadAvailabilityOverrides } from "./lib/availability-override.js"
 import { registerMainlinePromptPolicies } from "./lib/prompt-policies/index.js"
 import { beginWorkerDrain, SHUTDOWN_DRAIN_MS } from "./lib/worker-drain.js"
+import { setEditPlanPerMinuteSource } from "./lib/private-plugins/edit-plan-per-minute.js"
+import { askApiEditPlanPerMinute } from "./services/workflow-engine/edit-plan-per-minute-loopback.js"
 
 process.on("unhandledRejection", (err) => {
   console.error("[orchestrator] Unhandled rejection:", err)
@@ -37,6 +39,11 @@ registerMainlinePromptPolicies()
 // never builds the app, so it loads it here — otherwise the admin switch does
 // not exist for any execution this worker picks up.
 await loadAvailabilityOverrides()
+
+// Edit Plan per started minute (decided 2026-10-07): this process loads no
+// plugin, so it asks this container's API whether the plugin charges per
+// started minute before it reserves an edit-plan job (fails closed to steps).
+setEditPlanPerMinuteSource(() => askApiEditPlanPerMinute())
 
 const worker = createOrchestratorWorker()
 

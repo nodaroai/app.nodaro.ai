@@ -96,6 +96,8 @@ import {
   AGGREGATE_LANE_SOURCE_TYPES,
   AGGREGATEABLE_TYPES,
   groupHandleId,
+  jsonKindMismatch,
+  jsonKindMismatchMessage,
 } from "@nodaro/shared"
 import { isVisualPickerType } from "./parameter-picker-types"
 import { isScrapeNodeType } from "./scrape-node-types"
@@ -192,6 +194,27 @@ export function buildAdjacency(edges: readonly EdgeShape[]): AdjacencyIndex {
 }
 
 /**
+ * Why a connection is refused for what its JSON carries, in a sentence the
+ * editor can show — `null` when it is not (the other refusals are shape rules
+ * with no message of their own). Same rule, same shared kinds as the early
+ * return in `isValidWorkflowConnection`.
+ */
+export function workflowConnectionProblem(
+  connection: ConnectionShape,
+  getNodeType: (id: string) => string | undefined,
+  labelOf?: (nodeType: string) => string | undefined,
+): string | null {
+  const sourceType = connection.source ? getNodeType(connection.source) : undefined
+  const targetType = connection.target ? getNodeType(connection.target) : undefined
+  const mismatch = jsonKindMismatch(sourceType, connection.sourceHandle, targetType, connection.targetHandle)
+  if (!mismatch) return null
+  return jsonKindMismatchMessage(mismatch, {
+    sourceLabel: sourceType ? labelOf?.(sourceType) : undefined,
+    targetLabel: targetType ? labelOf?.(targetType) : undefined,
+  })
+}
+
+/**
  * Pure validity check for a workflow connection. Mirrors the rules enforced
  * by `<ReactFlow isValidConnection>` in `workflow-canvas.tsx` so any code path
  * that creates edges outside of drag-to-connect (e.g., HandlePopover's
@@ -233,6 +256,13 @@ export function isValidWorkflowConnection(
     if (wouldCreateCycle(graph, connection.source, connection.target)) {
       return false
     }
+  }
+
+  // An EDL-shaped JSON output (Edit Plan, Camera Switch, an EDL-emitting
+  // render) is not a Transcript: refused at connect time, whatever the target
+  // node (decided 2026-10-07). Read from the shared output kinds, not a name list.
+  if (jsonKindMismatch(typeOf(connection.source), connection.sourceHandle, typeOf(connection.target), connection.targetHandle)) {
+    return false
   }
 
   // Composition output may ONLY target render-video, or the `scene` input of a
@@ -569,6 +599,10 @@ export function isValidWorkflowConnection(
   // apply-edl — `edl` (required) and `transcript` (optional) take json/data
   // producers; `sources` takes optional media-URL overrides (video or audio).
   // camera-switch — `edl` and `transcript` both take json/data producers.
+  // speaker-view — the same two json lanes: `edl` and `transcript`.
+  if (targetType === "speaker-view" && connection.targetHandle) {
+    return (connection.targetHandle === "edl" || connection.targetHandle === "transcript") && ACCEPTS_JSON(imageSourceType)
+  }
   if (targetType === "camera-switch" && connection.targetHandle) {
     return (connection.targetHandle === "edl" || connection.targetHandle === "transcript") && ACCEPTS_JSON(imageSourceType)
   }

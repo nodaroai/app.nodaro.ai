@@ -20,7 +20,7 @@ import type {
   ProviderOptions,
   ReconcileOpts,
 } from "../provider.interface.js"
-import { FRAME_MODE_ADAPTIVE_ONLY_ASPECT, VIDEO_DURATION_AUTO, isAutoVideoDuration, supportsAutoVideoDuration, isSeedance2Provider, isMinimaxH3Provider, normalizeMinimaxH3Resolution, isGeminiOmniProvider, isWan3Provider, normalizeWan3Resolution, isVeoProvider, getLipSyncMaxAudioSeconds, applyVideoNegativePrompt, applyVideoAudioToggle, getModel, DEFAULT_VIDEO_PROVIDER, SEEDANCE_2_REF_LIMITS, VIDEO_REF_LIMITS_BY_PROVIDER, videoCharacterRefProblem, videoCharacterRefUnits, videoCharacterVoiceCap } from "@nodaro/shared"
+import { snapToNearestDuration, FRAME_MODE_ADAPTIVE_ONLY_ASPECT, VIDEO_DURATION_AUTO, isAutoVideoDuration, supportsAutoVideoDuration, isSeedance2Provider, isMinimaxH3Provider, normalizeMinimaxH3Resolution, isGeminiOmniProvider, isWan3Provider, normalizeWan3Resolution, isVeoProvider, getLipSyncMaxAudioSeconds, applyVideoNegativePrompt, applyVideoAudioToggle, getModel, DEFAULT_VIDEO_PROVIDER, SEEDANCE_2_REF_LIMITS, VIDEO_REF_LIMITS_BY_PROVIDER, videoCharacterRefProblem, videoCharacterRefUnits, videoCharacterVoiceCap } from "@nodaro/shared"
 import { resolveSeedance2Inputs, resolveGeminiOmniI2vInputs, resolveVeoI2vInputs } from "@nodaro/prompts"
 import {
   createSanitizedError,
@@ -935,12 +935,11 @@ export async function ensureImageForProvider(
   return newUrl
 }
 
+// The runners' snap IS the pricing funnel's snap (`pricedOutputDurationSec`
+// applies the same function to the catalog's `durations`), so the length a
+// request is charged at and the length it renders cannot disagree.
 function snapToAllowedDuration(requested: number, allowed: number[]): number {
-  if (!allowed || allowed.length === 0) return requested
-  if (allowed.includes(requested)) return requested
-  return allowed.reduce((best, d) =>
-    Math.abs(d - requested) < Math.abs(best - requested) ? d : best
-  )
+  return snapToNearestDuration(requested, allowed)
 }
 
 /**

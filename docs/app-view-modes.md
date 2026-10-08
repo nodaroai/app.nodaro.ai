@@ -70,11 +70,44 @@ the render do not run yet, and are not billed.
 - **The app's listed price** counts both steps: the whole workflow at its
   saved settings (each render at the preview rate), with the creator's fee,
   plus each Render final and the nodes after it, without the fee. A step
-  after two renders set to Proxy is counted in each of their finals. The
-  listed price never quotes less than a run is charged, whether or not the
-  deployment stops at previews; where it does, it can quote more, because a
-  run leaves the nodes after the preview to the final, and a step after two
-  previews runs only in the later final. A template lists the same way,
+  after two renders set to Proxy is counted in each of their finals. When
+  the price follows the length of the recording you give the app (an Edit
+  Plan's pass, the render of a whole episode), it is listed as a fixed
+  figure plus a figure per minute of the recording, for example
+  **82 + 14/min**. A Trim, Loop or Combine Videos node on the recording you
+  give, or on a render or another such step whose length follows it, is
+  listed per minute of it too; a Video SFX node on any recording you give, or
+  on a step whose length follows it, is listed at its fixed 300-second price,
+  since it refuses a video over 5 minutes. On a generated video (Generate
+  Video, Image to Video or Text to Video) each of the four is listed at the
+  generation's configured duration (8 seconds when none is set, as a run of
+  the step after it counts it), or the length the model renders when that is
+  longer (its longest clip on auto). On the output of any other step that delivers a video, each of the four is listed at the length that step passes on: a step that keeps its input whole its input's length, a lip sync or an avatar its audio's (at most what its model takes), an extension its input plus the seconds it adds. A voice made from a script the listing can read (a literal script, one fed from an input with a character limit, or one written by a Prompt or AI Writer node) is listed at the seconds that script takes to read, at 12 characters a second (slower for a slower voice speed, and for Chinese, Japanese and Korean text) and at most 300. A Prompt or AI Writer node's script is counted at 8 characters for each token the node can write: its Max Tokens (the node's default when it has none), raised to the model's own minimum when the model shares its output with its thinking, and at the most the node allows when an app exposes that setting or another node writes it. Because that script's language is not known in advance, it is read at the Latin-script rate (with the voice's speed), not the slower rate for Chinese, Japanese and Korean text. A voice whose own text holds a {Reference} is not bounded this way, since the reference can resolve to any length. A script from any other source is not bounded, so the step after it is listed as above. A video link (YouTube or any other) the user replaces counts as the episode, like an uploaded recording. A list you fill is
+  listed at the items the creator saved plus a figure per further item, for
+  example **82 + 14/min + 30/item**. The creator's flat fee is added once to
+  the fixed figure, and the percentage to every figure. The listed price never quotes less than a run
+  is charged, whether or not the deployment stops at previews, except for
+  Edit Plan's pass on a server that still charges it on the length step the
+  recording rounds up to rather than per started minute (see
+  [Edit Plan](nodes/processing-video/edit-plan.md#credit-cost)), and a step
+  priced by its input's length on a video other than the episode whose length is not known before the run (a second recording such as an intro card, or the output of a step with no length before the run: a YouTube or other video link the user cannot replace, a GIF to Video, the output of Render Video or Manual Edit, a VEO or Runway extension, a Suno music video, a narrated step whose audio is wired in or is a generated voice whose script comes from a source the listing cannot bound (not a literal text, an input with a character limit, or a Prompt or AI Writer node), or a list or sub-workflow), which is listed at a default length;
+  where the deployment stops at previews, it can quote more, because a run
+  leaves the nodes after the preview to the final, and a step after two
+  previews runs only in the later final. It counts every run the editor's
+  estimate counts: a node's Repeat count, each of several providers on one
+  node at its own price, and the runs a List, Content Ideas or other Each wire
+  fans out (a Content Ideas that makes fresh ideas at its idea count, 5 when
+  none is set). The app's **Run** button shows the run's part of that listed
+  price, for example **82 + 14/min**, until you choose your recording: the
+  listed price less its Render final part, which is run and charged on its
+  own. Once you have chosen it, and the browser has read its length, the
+  button shows the exact figure of the run for that length. If
+  the length cannot be read, the button keeps the listed price, and the
+  balance check assumes the longest recording (180 minutes) for every node
+  priced by its length: Edit Plan, the render, and a Trim, Loop, Combine
+  Videos or Video SFX on that recording. The exact figure prices Edit Plan the
+  way the server charges it, per started minute or at the length step. A
+  template lists the same way,
   without a fee. An app published before this was priced on its whole
   workflow alone; its price changes to this on its next publish.
 - **While it renders**, the card reads `Rendering final… 42%` and the preview

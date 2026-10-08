@@ -307,6 +307,9 @@ describe("free inline / control node identifiers price to 0 (must not hard-fail)
     // Collections: free sync-HTTP nodes (the plan's caps bound them, not credits).
     "collection-write",
     "collection-read",
+    // Read Inspiration / Read Competitor: free sync-HTTP readers of what the account holds.
+    "inspiration-read",
+    "competitor-read",
   ] as const
 
   it.each(FREE_INLINE_IDS)("%s is present in STATIC_CREDIT_COSTS as 0", (id) => {

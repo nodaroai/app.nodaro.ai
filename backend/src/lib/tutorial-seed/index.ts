@@ -30,6 +30,7 @@
 // Nodaro's shared cloud sets neither env by default, so it still returns before
 // a single Supabase call — see seedTutorialTemplates.
 
+import { writeWithPerMinute } from "../listing-per-minute-columns.js"
 import { createHash } from "node:crypto"
 import { readFile, readdir } from "node:fs/promises"
 import { dirname, join } from "node:path"
@@ -236,6 +237,13 @@ async function seedOne(
   // The fingerprint rides in markdown_description's leading marker line so the
   // seeder needs no schema change of its own.
   const marker = `<!-- seed:${hash} -->`
+  // A row written without the per-minute column (it has not reached this
+  // database yet) carries a marker that never matches, so a later boot that
+  // has the column rewrites the row with its per-minute part.
+  const markFolded = <R extends Record<string, unknown>>(r: R): R => ({
+    ...r,
+    markdown_description: `<!-- seed:${hash}:without-per-minute -->\n${doc.markdownDescription ?? ""}`,
+  })
   if (existing && typeof existing.markdown_description === "string" &&
       existing.markdown_description.startsWith(marker)) {
     return "unchanged"
@@ -293,6 +301,7 @@ async function seedOne(
     // the doc (estimated credits cannot be derived in core — the credit engine
     // is EE). Absent → the same DB defaults the columns already carry.
     estimated_credits: doc.estimatedCredits ?? 0,
+    estimated_per_minute_credits: doc.estimatedPerMinuteCredits ?? 0,
     node_types_used: doc.nodeTypesUsed ?? [],
     providers_used: doc.providersUsed ?? [],
     // Migration 114's CHECK is one-directional — 'tutorial' in listed_in
@@ -317,16 +326,27 @@ async function seedOne(
     // to the never-loginable system account, so both 403. It arrives from the
     // back office instead — direct SQL, a support script, or an admin lever
     // added later. Preserving it is what makes any of those safe.
-    const { error } = await supabase.from("workflow_templates").update(row).eq("id", existing.id)
+    // The per-minute column drops out until migration 483 reaches this
+    // database, folded into the fixed price; the row is then marked stale so
+    // the first boot with the column writes it whole.
+    const { error } = await writeWithPerMinute(
+      "workflow_templates",
+      row,
+      (r) => supabase.from("workflow_templates").update(r).eq("id", existing.id),
+      markFolded,
+    )
     if (error) throw error
     return "updated"
   }
-  const { error } = await supabase
-    .from("workflow_templates")
-    // `listedIn` overrides the default channel on INSERT only (a marketplace
-    // template declares `["marketplace"]`); every other OPERATOR_OWNED default
-    // still applies. Spread order matters — the explicit key wins.
-    .insert({ ...row, ...SEEDED_DEFAULTS, listed_in: doc.listedIn ?? SEEDED_DEFAULTS.listed_in })
+  // `listedIn` overrides the default channel on INSERT only (a marketplace
+  // template declares `["marketplace"]`); every other OPERATOR_OWNED default
+  // still applies. Spread order matters — the explicit key wins.
+  const { error } = await writeWithPerMinute(
+    "workflow_templates",
+    { ...row, ...SEEDED_DEFAULTS, listed_in: doc.listedIn ?? SEEDED_DEFAULTS.listed_in },
+    (r) => supabase.from("workflow_templates").insert(r),
+    markFolded,
+  )
   if (error) throw error
   return "created"
 }

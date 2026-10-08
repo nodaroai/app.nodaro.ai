@@ -56,9 +56,13 @@ function holdsVideo(data: NodeData): "video" | "audio" {
  *  one's own canvas picker reads it. Every other dynamic producer (Split into
  *  Chunks, Choose Best, …) has results of either medium, typed one by one. */
 export const NODE_DATA_MEDIUM: ReadonlyMap<string, (data: NodeData) => "video" | "audio"> = new Map([
-  // Every render (RENDER_NODE_TYPES): the medium its order asks for — Apply
-  // EDL's `output` field, video when absent.
-  ...Object.entries(RENDER_NODE_TYPES).map(([type, render]) => [type, render.mediumOf] as const),
+  // Every render whose medium is a SETTING (a dynamic producer — Apply EDL's
+  // `output` field, video when absent): the medium its order asks for. A render
+  // of one fixed medium (Speaker View: video only) is typed by its producer set
+  // below, like any other video node.
+  ...Object.entries(RENDER_NODE_TYPES)
+    .filter(([type]) => DYNAMIC_PRODUCER_TYPES.has(type))
+    .map(([type, render]) => [type, render.mediumOf] as const),
   ["voice-changer", holdsVideo],
   ["voice-changer-pro", holdsVideo],
   ["dubbing", holdsVideo],

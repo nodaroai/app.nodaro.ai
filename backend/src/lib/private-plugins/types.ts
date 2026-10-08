@@ -2596,6 +2596,17 @@ export interface PluginSupports {
    * (`lib/private-plugins/edit-plan-mode-gate.ts`).
    */
   readonly editPlanModes?: readonly string[]
+  /**
+   * The plugin's `POST /v1/edit-plan` route reserves PER STARTED MINUTE
+   * (`edit-plan:<mode>:<tier>:<N>m`, N = ceil(probed seconds / 60), priced
+   * flat + rate × N from one rate row and one flat row per mode × tier), and
+   * its handler's money gate accepts those ids (decided 2026-10-07). The host
+   * switches its own reserve (workflow runs), estimates and listing from the
+   * 15/30/60/90/120/180-minute steps only when this is `true`, so the same
+   * node costs the same from the Run button and from Execute-All. Absent ⇒
+   * steps (`lib/private-plugins/edit-plan-per-minute.ts`).
+   */
+  readonly editPlanPerMinute?: boolean
 }
 
 export interface PluginDeploymentToolkit {

@@ -22,6 +22,7 @@ import { storageTransferOptions } from "../lib/storage-timeouts.js"
 import { config } from "../lib/config.js"
 import { redis } from "../lib/queue.js"
 import { applyUploadPolicies, uploadBlockedBody, uploadKindFromMime } from "../lib/upload-policy.js"
+import { faststartVideoBuffer, noteFaststartOutcome } from "../utils/faststart.js"
 
 // Dedicated upload-token signing key, HKDF-derived from the internal secret so
 // the upload-signing purpose is cryptographically separated from the
@@ -76,6 +77,24 @@ export async function claimUploadToken(payload: TokenPayload): Promise<boolean> 
     return res === "OK"
   } catch {
     return true
+  }
+}
+
+/**
+ * Read-only twin of {@link claimUploadToken}: has this token's nonce already
+ * been consumed? Never writes, so it cannot burn a link — it exists so a lane
+ * that does expensive work BEFORE it can claim (the handoff's faststart remux
+ * runs ahead of the policy check, which must be able to deny without burning
+ * the link) can turn a replay away first instead of paying for the work and
+ * then 409ing. Same fail-open contract as the claim: no jti or a Redis error
+ * reads as "not claimed"; the atomic claim at consume time stays the real gate.
+ */
+export async function isUploadTokenClaimed(payload: TokenPayload): Promise<boolean> {
+  if (!payload.jti) return false
+  try {
+    return (await redis.exists(`upload:jti:${payload.jti}`)) > 0
+  } catch {
+    return false
   }
 }
 
@@ -163,6 +182,15 @@ export async function uploadProxyRoutes(app: FastifyInstance): Promise<void> {
         return reply.status(400).send({
           error: { code: "empty_body", message: "Empty body." },
         })
+      }
+
+      // MP4/MOV with the index at the END is rewritten with it in front (a
+      // stream copy, before the first write — see utils/faststart.ts); any
+      // failure stores the file exactly as sent.
+      if (uploadKindFromMime(payload.mime) === "video") {
+        const faststart = await faststartVideoBuffer(buffer, payload.mime)
+        noteFaststartOutcome("upload-proxy", faststart.outcome, faststart.reason)
+        buffer = faststart.buffer
       }
 
       // B4d: deployment upload policy — the proxy lane's bytes are in hand

@@ -20,7 +20,7 @@ import { useRenderFinal } from "@/hooks/use-render-final"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { reviewGate, type ReviewGate } from "@/lib/edl-review/review-gate"
 import type { ReviewChecks } from "./use-review-checks"
-import type { ReviewEdits } from "./use-review-edits"
+import type { ReviewEditState } from "./review-edit-state"
 import type { ReviewModel } from "./use-review-model"
 
 export type ReviewRunKind = "final" | "proxy"
@@ -44,7 +44,7 @@ export interface ReviewRuns {
   readonly updatePreview: () => void
 }
 
-export function useReviewRuns(model: ReviewModel, edits: ReviewEdits, checks: ReviewChecks): ReviewRuns {
+export function useReviewRuns(model: ReviewModel, edits: ReviewEditState, checks: ReviewChecks): ReviewRuns {
   const { renderId, locked } = model
   const controls = useRenderFinal(renderId)
   const readOnly = useWorkflowStore((s) => s.isReadOnly)
@@ -67,15 +67,16 @@ export function useReviewRuns(model: ReviewModel, edits: ReviewEdits, checks: Re
 
   const gate = useMemo(
     () => reviewGate({
-      reviewable: !!model.base && model.reviewable && !!model.planId,
+      // A Tighten plan reviews when its segments are monotonic; a clip set always does.
+      reviewable: !!model.planId && (model.planKind === "clips" || (!!model.base && model.reviewable)),
       readOnly,
       locked,
-      kept: edits.kept,
+      keptCount: edits.keptCount,
       verdict: checks.verdict,
       newerRun: model.newerRun,
       newerCheckTimedOut: model.newerRunCheckTimedOut,
     }),
-    [model.base, model.reviewable, model.planId, readOnly, locked, edits.kept, checks.verdict, model.newerRun, model.newerRunCheckTimedOut],
+    [model.base, model.reviewable, model.planKind, model.planId, readOnly, locked, edits.keptCount, checks.verdict, model.newerRun, model.newerRunCheckTimedOut],
   )
 
   const { flush } = edits

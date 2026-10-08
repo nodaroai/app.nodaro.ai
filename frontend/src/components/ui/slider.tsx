@@ -11,8 +11,13 @@ function Slider({
   value,
   min = 0,
   max = 100,
+  thumbAriaLabel,
   ...props
-}: React.ComponentProps<typeof SliderPrimitive.Root>) {
+}: React.ComponentProps<typeof SliderPrimitive.Root> & {
+  /** Accessible name of the thumb (the draggable `role="slider"`), which the
+   *  root's own `aria-label` does not reach. */
+  readonly thumbAriaLabel?: string
+}) {
   const _values = React.useMemo(
     () => value ?? defaultValue ?? [min],
     [value, defaultValue, min]
@@ -43,6 +48,7 @@ function Slider({
       {_values.map((_, index) => (
         <SliderPrimitive.Thumb
           data-slot="slider-thumb"
+          aria-label={thumbAriaLabel}
           key={index}
           className="border-primary bg-background focus-visible:ring-ring/50 block size-4 shrink-0 rounded-full border shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-[3px] disabled:pointer-events-none"
         />

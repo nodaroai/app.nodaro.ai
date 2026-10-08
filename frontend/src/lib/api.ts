@@ -1,3 +1,4 @@
+import type { SpeakerViewWireSettings } from "@nodaro/render-rules"
 import { createClient } from "@/lib/supabase"
 import { WORKSPACE_HEADER, DEFAULT_SUNO_MODEL, isKineticCaptionStyle, KINETIC_ONLY_CAPTION_LEVER_KEYS } from "@nodaro/shared"
 import { clearActiveWorkspaceAfterRefusal, getActiveWorkspaceId } from "@/lib/workspace-context"
@@ -3348,6 +3349,41 @@ export async function applyEdl(params: {
     body,
     workflowId: true,
     label: "apiErr.startEDLRender",
+  })
+}
+
+/**
+ * speaker-view (Track C): render an EDL with its speakers framed — a layout, a
+ * switch at each speaker change and an emphasis on who is speaking. Nodaro-
+ * EXCLUSIVE: the cloud plugin renders it, and a self-host's route relays it.
+ * `edl` and `transcript` go as OBJECTS (the plugin coerces an object, never a
+ * string); the settings are the route's wire shape (`SpeakerViewWireSettings`),
+ * already normalized by the caller. Refused before anything is reserved while
+ * Speaker View has no price.
+ */
+export async function speakerView(params: {
+  edl: unknown
+  transcript?: unknown
+  quality?: "proxy" | "final"
+  settings?: SpeakerViewWireSettings
+  /** The plan clip this render cuts, and the plan value it cuts, stamped on the result. */
+  clipKey?: string
+  planBasis?: string
+  /** The render's own settings and sources, stamped on the result. */
+  renderBasis?: string
+  userId?: string
+}): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = { edl: params.edl, ...(params.settings ?? {}) }
+  if (params.transcript !== undefined) body.transcript = params.transcript
+  if (params.quality) body.quality = params.quality
+  if (params.clipKey) body.clipKey = params.clipKey
+  if (params.planBasis) body.planBasis = params.planBasis
+  if (params.renderBasis) body.renderBasis = params.renderBasis
+  if (params.userId) body.userId = params.userId
+  return apiJson("/v1/speaker-view", {
+    body,
+    workflowId: true,
+    label: "apiErr.startSpeakerView",
   })
 }
 
@@ -8299,6 +8335,60 @@ export async function collectionReadApi(params: {
   return apiJson("/v1/collection-read", { body, workflowId: true, label: "apiErr.collectionRead" })
 }
 
+/**
+ * What a post reader's route answers: the posts of the period (the Social
+ * Search shape), their digest, the range read — or the job alone when the
+ * read did not complete (cancelled, or held by a result policy).
+ */
+export interface SocialReadResponse {
+  readonly jobId: string
+  readonly posts?: import("@nodaro/shared").SocialPost[]
+  readonly text?: string
+  readonly count?: number
+  readonly from?: string
+  readonly to?: string
+}
+
+/** The period fields both post readers send; a day only in day mode, with the timezone it was picked in. */
+function socialReadPeriodBody(params: {
+  period?: import("@nodaro/shared").SocialReadPeriod
+  windowAmount?: number
+  windowUnit?: import("@nodaro/shared").CollectionReadWindowUnit
+  day?: string
+  timezone?: string
+  limit?: number
+  order?: import("@nodaro/shared").CollectionReadOrder
+  platform?: string
+  nodeId?: string
+}): Record<string, unknown> {
+  const body: Record<string, unknown> = {}
+  if (params.period) body.period = params.period
+  if (params.windowAmount !== undefined) body.windowAmount = params.windowAmount
+  if (params.windowUnit) body.windowUnit = params.windowUnit
+  if (params.period === "day") {
+    if (params.day) body.day = params.day
+    if (params.timezone) body.timezone = params.timezone
+  }
+  if (params.limit !== undefined) body.limit = params.limit
+  if (params.order) body.order = params.order
+  if (params.platform) body.platform = params.platform
+  if (params.nodeId) body.nodeId = params.nodeId
+  return body
+}
+
+/** Read Inspiration: the person's saved posts of the period, optionally one platform and one tag. */
+export async function inspirationReadApi(params: Parameters<typeof socialReadPeriodBody>[0] & { tag?: string }): Promise<SocialReadResponse> {
+  const body = socialReadPeriodBody(params)
+  if (params.tag && params.tag.trim()) body.tag = params.tag.trim()
+  return apiJson("/v1/inspiration-read", { body, workflowId: true, label: "apiErr.inspirationRead" })
+}
+
+/** Read Competitor: a tracked brand's posts of the period as its scans found them. */
+export async function competitorReadApi(params: Parameters<typeof socialReadPeriodBody>[0] & { competitorId: string; role?: import("@nodaro/shared").CompetitorReadRole }): Promise<SocialReadResponse> {
+  const body = { ...socialReadPeriodBody(params), competitorId: params.competitorId, ...(params.role ? { role: params.role } : {}) }
+  return apiJson("/v1/competitor-read", { body, workflowId: true, label: "apiErr.competitorRead" })
+}
+
 /** What the Save to Collection node's route answers: the record saved (or already there), the outcome, the collection. */
 export async function collectionWriteApi(params: {
   collectionId: string
@@ -8530,10 +8620,35 @@ export interface PublishedApp {
   isEmbeddable: boolean
   allowedOrigins: string[]
   estimatedCredits: number
+  /** Credits per minute of the recording the app is given (decided 2026-10-07):
+   *  the price is `estimatedCredits` plus this per minute. 0 or absent: none. */
+  perMinuteCredits?: number
+  /** The preview part's per minute before the creator's fee (its percentage applies per minute). */
+  basePerMinuteCredits?: number
+  /** The Render finals' per minute, which the fee never marks up. */
+  finalPerMinuteCredits?: number
   /** The part of the price the creator's fee applies to: the app run (its preview). */
   baseEstimatedCredits?: number
   /** The Render finals' part of the price: never marked up by the creator's fee (decided 2026-10-06). */
   finalEstimatedCredits?: number
+  /** The app run alone, from the runner payload (GET /v1/app/:slug): the listed
+   *  price less its Render final part. The Run button's listing (review round F4). */
+  runEstimatedCredits?: number
+  /** The app run's own per-minute part, as `runEstimatedCredits`. */
+  runPerMinuteCredits?: number
+  /** Does this server charge Edit Plan per started minute (review round F1,
+   *  decided 2026-10-07)? Seeds the runner's estimate, which then prices Edit
+   *  Plan the way the run reserves it. Absent (an older server): the steps. */
+  editPlanPerMinute?: boolean
+  /** Credits per item beyond the saved count of a List the app user fills
+   *  (decided 2026-10-07); 0 or absent: none. */
+  perItemCredits?: number
+  /** The preview part's per item before the creator's fee. */
+  basePerItemCredits?: number
+  /** The Render finals' per item, which the fee never marks up. */
+  finalPerItemCredits?: number
+  /** The app run's own per-item part, as `runEstimatedCredits`. */
+  runPerItemCredits?: number
   thumbnailNodeId: string | null
   category: string
   outputTypes: string[]
@@ -8563,6 +8678,10 @@ export interface AppBrowseCard {
   description: string
   iconUrl: string | null
   estimatedCredits: number
+  /** Credits per minute of the recording the app is given; 0 or absent: none. */
+  perMinuteCredits?: number
+  /** Credits per item beyond the saved count of a List the app user fills; 0 or absent: none. */
+  perItemCredits?: number
   category: string
   outputTypes: string[]
   tags: string[]
@@ -9263,6 +9382,8 @@ export interface WorkflowTemplate {
   providersUsed: string[]
   nodeCount: number
   estimatedCredits: number
+  /** Credits per minute of the recording the template is given (decided 2026-10-07); 0 or absent: none. */
+  estimatedPerMinuteCredits?: number
   complexity: "simple" | "intermediate" | "advanced"
   category: string
   outputTypes: string[]
@@ -9288,6 +9409,8 @@ export interface TemplateBrowseCard {
   providersUsed: string[]
   nodeCount: number
   estimatedCredits: number
+  /** Credits per minute of the recording the template is given (decided 2026-10-07); 0 or absent: none. */
+  estimatedPerMinuteCredits?: number
   complexity: "simple" | "intermediate" | "advanced"
   category: string
   outputTypes: string[]
@@ -9547,6 +9670,8 @@ export interface FlowTutorialItem {
   previewMediaType: "image" | "video" | null
   complexity: "simple" | "intermediate" | "advanced"
   estimatedCredits: number
+  /** Credits per minute of the recording the template is given; 0 or absent: none. */
+  estimatedPerMinuteCredits?: number
   nodeTypesUsed: string[]
   providersUsed: string[]
   creatorDisplayName: string | null

@@ -249,7 +249,7 @@ export function TemplatePreviewModal({
                 <Layers className="h-3.5 w-3.5" />
                 {t("templates.nodes", { n: template.nodeCount })}
               </span>
-              <CreditCost credits={template.estimatedCredits} icon="md" />
+              <CreditCost credits={template.estimatedCredits} perMinute={template.estimatedPerMinuteCredits} icon="md" />
               <span className="flex items-center gap-1">
                 <Copy className="h-3.5 w-3.5" />
                 {formatCount(template.cloneCount)}

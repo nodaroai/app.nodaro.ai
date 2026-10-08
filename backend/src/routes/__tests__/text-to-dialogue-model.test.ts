@@ -146,9 +146,11 @@ describe("POST /v1/text-to-dialogue — elevenlabs-dialogue-v4", () => {
     expect(res.statusCode).toBe(400)
   })
 
-  it("its total cap is its own sheet's (the probe's number)", async () => {
-    expect((await post({ provider: "elevenlabs-dialogue-v4", dialogue: [{ text: "a".repeat(5000), voice: "Rachel" }] })).statusCode).toBe(200)
-    const over = await post({ provider: "elevenlabs-dialogue-v4", dialogue: [{ text: "a".repeat(5001), voice: "Rachel" }] })
+  it("its total cap is its own sheet's (the probe's number: 10,000, twice v3 dialogue's)", async () => {
+    expect((await post({ provider: "elevenlabs-dialogue-v4", dialogue: [{ text: "a".repeat(5001), voice: "Rachel" }] })).statusCode).toBe(200)
+    expect((await post({ provider: "elevenlabs-dialogue-v4", dialogue: [{ text: "a".repeat(10000), voice: "Rachel" }] })).statusCode).toBe(200)
+    const over = await post({ provider: "elevenlabs-dialogue-v4", dialogue: [{ text: "a".repeat(10001), voice: "Rachel" }] })
     expect(over.statusCode).toBe(400)
+    expect(over.body).toContain("Total dialogue text must not exceed 10000 characters")
   })
 })

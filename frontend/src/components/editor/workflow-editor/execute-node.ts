@@ -2,6 +2,7 @@ import { toast } from "sonner";
 import { DEFAULT_OVERLAY_LAYER, OVERLAY_MAX_LAYERS } from "@/types/nodes";
 import { captionPlanPassThrough, styleCaptionPlan, combineVideosPassThrough, videoOverlayPassThrough, assertCanvasExecutionAllowed, scene3DInputAssetsForEngine, overlayVariantIdFromHandle, readScriptSettings, applySettingsInput, SETTINGS_INPUT_CONSUMERS, resolveMusicProvider, resolveEditPlanSources, describeAudioSyncOffsetIssue, type AudioSyncOffsetSource, transcriptSpeakerLabels, cameraSwitchEdlProblem, cameraSwitchSettingsPayload, renderPlanClipKey, collectionRecordHeadline, isCollectionUrl } from "@nodaro/shared";
 import { browserRenderPlanBasis } from "./apply-edl-stamps";
+import { executeSpeakerView } from "./speaker-view-executor";
 import { findUpstreamSunoIds } from "@/lib/suno-ids";
 import { contentRunResultPatch } from "@/lib/content-run-output";
 import { sourceJsonOf } from "@/lib/edit-plan-saved-output";
@@ -264,6 +265,8 @@ import type {
   SocialSearchNodeData,
   TelegramChannelFeedData,
   CollectionReadData,
+  InspirationReadData,
+  CompetitorReadData,
   CollectionWriteData,
   ExtractFieldNodeData,
   JsonProcessNodeData,
@@ -5508,6 +5511,55 @@ function executeNodeCore(
     );
   }
 
+  if (node.type === "inspiration-read" || node.type === "competitor-read") {
+    const isCompetitor = node.type === "competitor-read";
+    const d = node.data as InspirationReadData | CompetitorReadData;
+    const { updateNodeData } = useWorkflowStore.getState();
+    const competitorId = isCompetitor ? (d as CompetitorReadData).competitorId : "";
+    if (isCompetitor && !competitorId) {
+      const msg = nodeRunError(d.label, "nodeRun.competitorPickOne");
+      updateNodeData(node.id, { executionStatus: "failed", errorMessage: msg });
+      guardedToast.error(msg);
+      return Promise.reject(new Error(msg));
+    }
+    updateNodeData(node.id, { ...RUN_START_RESET });
+    const period = {
+      period: d.period,
+      windowAmount: d.windowAmount,
+      windowUnit: d.windowUnit,
+      day: d.day,
+      timezone: d.timezone,
+      limit: d.limit,
+      order: d.order,
+      platform: d.platform,
+      nodeId: node.id,
+    };
+    return import("@/lib/api").then(({ inspirationReadApi, competitorReadApi }) =>
+      (isCompetitor
+        ? competitorReadApi({ ...period, competitorId, role: (d as CompetitorReadData).role })
+        : inspirationReadApi({ ...period, tag: (d as InspirationReadData).tag }))
+        .then((res) => {
+          // An empty read writes [] — the card says "no posts" instead of keeping the last run's.
+          // A read that did not complete answers with the job alone: nothing to show.
+          const posts = Array.isArray(res.posts) ? res.posts : [];
+          updateNodeData(node.id, {
+            executionStatus: "completed",
+            generatedJson: posts,
+            generatedText: res.text ?? "",
+          });
+          guardedToast.success(
+            posts.length === 0 ? tx("nodeRun.readerNone") : posts.length === 1 ? tx("nodeRun.readerReadOne") : tx("nodeRun.readerRead", { count: posts.length }),
+          );
+          return res.text ?? "";
+        })
+        .catch((err: Error) => {
+          updateNodeData(node.id, { executionStatus: "failed", errorMessage: err.message || tx("nodeRun.readerReadFailed") });
+          guardedToast.error(err.message || tx("nodeRun.readerReadFailed"));
+          throw err;
+        }),
+    );
+  }
+
   if (node.type === "collection-write") {
     const d = node.data as CollectionWriteData;
     const { updateNodeData } = useWorkflowStore.getState();
@@ -7146,6 +7198,13 @@ function executeNodeCore(
       clampSmartCutWindow(combineData.smartCutFramesNext),
       combineData.smartCutMode,
     );
+  }
+
+  // Speaker View (C3.2): refused here before anything is sent — the plugin's own
+  // refusals from the shared rule, and "not priced yet" until C4 (the executor).
+  if (node.type === "speaker-view") {
+    setUserPromptTemplate(undefined);
+    return executeSpeakerView(node, inputs, ctx, listRowIndex);
   }
 
   if (node.type === "apply-edl") {

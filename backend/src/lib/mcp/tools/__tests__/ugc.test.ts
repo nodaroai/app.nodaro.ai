@@ -302,6 +302,11 @@ describe("build_ugc_clips", () => {
     await callTool(serverWith(fastify), "build_ugc_clips", { plan, gender: "man", traits: { t: 1 }, identity_images: ["job-1"], seed: 3 })
     expect(received.clips!.body).toEqual({ userId: USER, plan, gender: "man", traits: { t: 1 }, identityImages: ["job-1"], seed: 3 })
   })
+  it("the English mode and the anchor voice reach the builder under its own names (two English modes; the agent may pick the voice)", async () => {
+    const { fastify, received } = builder({ clips: [200, { errors: [{ code: "X", path: "p", message: "m", fix: "f" }], warnings: [] }] })
+    await callTool(serverWith(fastify), "build_ugc_clips", { plan, gender: "man", identity_images: ["job-1"], speech_lane: "prompt-quoted", voice_id: "Brian" })
+    expect(received.clips!.body).toEqual({ userId: USER, plan, gender: "man", identityImages: ["job-1"], speechLane: "prompt-quoted", voiceId: "Brian" })
+  })
   it("an invalid plan comes back as the builder answered it, with no quote", async () => {
     const answer = { errors: [{ code: "X", path: "p", message: "m", fix: "f" }], warnings: [] }
     const { fastify } = builder({ clips: [200, answer] })

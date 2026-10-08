@@ -16,8 +16,8 @@ The **Multicam Cut** template in the template marketplace is this chain, ready t
 
 | Handle | Type | Required | Description |
 |--------|------|----------|-------------|
-| EDL | json | **Yes** | One edit — wire Edit Plan's EDL output (Tighten mode, or Clips mode: each clip fans out to its own Camera Switch run). A chapters plan is refused. |
-| Transcript | json | **Yes** | The word transcript **with speaker labels** — a Transcribe node run with speaker detection on. |
+| EDL | json | **Yes** | One edit — wire Edit Plan's EDL output (Tighten mode, or Clips mode: each clip fans out to its own Camera Switch run). A chapters plan is refused. A Transcript output cannot be wired here; the editor refuses it. |
+| Transcript | json | **Yes** | The word transcript **with speaker labels** — a Transcribe node run with speaker detection on. An EDL output cannot be wired here; the editor refuses it. |
 
 ## Outputs
 

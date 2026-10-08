@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto"
+import { LISTED_PER_MINUTE_COLUMN, PER_MINUTE_SORT_COLUMN, perMinuteOf, selectWithPerMinute, writeWithPerMinute } from "../lib/listing-per-minute-columns.js"
+import { typicalEpisodeCredits } from "@nodaro/render-rules"
 import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../lib/supabase.js"
@@ -24,7 +26,7 @@ import { toAccessRow } from "../lib/workflow-route-access.js"
 import { findUnpublishableNodeTypes, unpublishableNodesMessage } from "../lib/surface-deny.js"
 import { VALID_OUTPUT_TYPES, publishBodySchema } from "../lib/template-publish-schema.js"
 import { resolveCanvasResultIds } from "../lib/canvas-result-ids.js"
-import { exposedTextCaps } from "../lib/exposed-text-caps.js"
+import { exposedMediaNodeIds, exposedTextCaps } from "../lib/exposed-text-caps.js"
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -193,6 +195,8 @@ function toCamelCase(row: Record<string, unknown>) {
     tutorialCategoryId: row.tutorial_category_id ?? null,
     tutorialSortOrder: row.tutorial_sort_order ?? 0,
     estimatedCredits: row.estimated_credits,
+    // Per minute of the episode (decided 2026-10-07): 0 when the price does not follow a recording's length.
+    estimatedPerMinuteCredits: perMinuteOf(row, "estimated_per_minute_credits"),
     category: normalizeTemplateCategory(row.category as string | null | undefined),
     outputTypes: row.output_types ?? [],
     tags: row.tags ?? [],
@@ -217,6 +221,7 @@ function toBrowseCard(row: Record<string, unknown>) {
     name: row.name,
     description: row.description,
     estimatedCredits: row.estimated_credits,
+    estimatedPerMinuteCredits: perMinuteOf(row, "estimated_per_minute_credits"),
     category: normalizeTemplateCategory(row.category as string | null | undefined),
     outputTypes: row.output_types ?? [],
     tags: row.tags ?? [],
@@ -333,56 +338,65 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
     // Card-only columns (no snapshot_nodes/edges/settings)
     const selectCols = "id, slug, name, description, estimated_credits, category, output_types, tags, node_types_used, providers_used, node_count, complexity, preview_media_url, preview_media_type, creator_id, creator_display_name, clone_count, favorite_count, created_at"
 
-    let query = supabase
-      .from("workflow_templates")
-      .select(selectCols)
-      .contains("listed_in", [MARKETPLACE])
-      .eq("is_active", true)
-      .limit(limit + 1) // fetch one extra to detect next page
+    // With the per-minute column, unless it has not reached this database yet
+    // (lib/listing-per-minute-columns.ts).
+    const buildQuery = (columns: string, perMinute: boolean) => {
+      let query = supabase
+        .from("workflow_templates")
+        .select(columns)
+        .contains("listed_in", [MARKETPLACE])
+        .eq("is_active", true)
+        .limit(limit + 1) // fetch one extra to detect next page
 
-    // Filters
-    if (category) query = query.in("category", templateCategoryStoredValues(category))
-    if (outputType) query = query.contains("output_types", [outputType])
-    if (tag) query = query.contains("tags", [tag])
-    if (nodeType) query = query.contains("node_types_used", [nodeType])
-    if (provider) query = query.contains("providers_used", [provider])
-    if (complexity) query = query.eq("complexity", complexity)
-    if (favoriteIds) query = query.in("id", favoriteIds)
+      // Filters
+      if (category) query = query.in("category", templateCategoryStoredValues(category))
+      if (outputType) query = query.contains("output_types", [outputType])
+      if (tag) query = query.contains("tags", [tag])
+      if (nodeType) query = query.contains("node_types_used", [nodeType])
+      if (provider) query = query.contains("providers_used", [provider])
+      if (complexity) query = query.eq("complexity", complexity)
+      if (favoriteIds) query = query.in("id", favoriteIds)
 
-    // Full-text search
-    if (search) {
-      const tsQuery = search.trim().split(/\s+/).join(" & ")
-      query = query.textSearch("search_vector", tsQuery)
+      // Full-text search
+      if (search) {
+        const tsQuery = search.trim().split(/\s+/).join(" & ")
+        query = query.textSearch("search_vector", tsQuery)
+      }
+
+      // Sort + cursor
+      const after = cursor ? parseCompositeCursor(cursor) : null
+      if (sort === "popular") {
+        query = query.order("clone_count", { ascending: false }).order("created_at", { ascending: false })
+        if (after) {
+          query = query.or(`clone_count.lt.${after.count},and(clone_count.eq.${after.count},created_at.lt.${after.date})`)
+        }
+      } else if (sort === "most-favorited") {
+        query = query.order("favorite_count", { ascending: false }).order("created_at", { ascending: false })
+        if (after) {
+          query = query.or(`favorite_count.lt.${after.count},and(favorite_count.eq.${after.count},created_at.lt.${after.date})`)
+        }
+      } else if (sort === "cheapest") {
+        // Fewest credits for a typical episode first (decided 2026-10-07):
+        // fixed + TYPICAL_EPISODE_MINUTES x per minute, the generated column of
+        // migration 483; before it applies, the fixed price, which then holds
+        // the per-minute part folded in at the ceiling. The next page
+        // continues PAST the last card — more credits, or the same and older.
+        const by = perMinute ? PER_MINUTE_SORT_COLUMN.workflow_templates! : "estimated_credits"
+        query = query.order(by, { ascending: true }).order("created_at", { ascending: false })
+        if (after) {
+          query = query.or(`${by}.gt.${after.count},and(${by}.eq.${after.count},created_at.lt.${after.date})`)
+        }
+      } else {
+        // newest
+        query = query.order("created_at", { ascending: false })
+        if (cursor) {
+          query = query.lt("created_at", cursor)
+        }
+      }
+
+      return query
     }
-
-    // Sort + cursor
-    const after = cursor ? parseCompositeCursor(cursor) : null
-    if (sort === "popular") {
-      query = query.order("clone_count", { ascending: false }).order("created_at", { ascending: false })
-      if (after) {
-        query = query.or(`clone_count.lt.${after.count},and(clone_count.eq.${after.count},created_at.lt.${after.date})`)
-      }
-    } else if (sort === "most-favorited") {
-      query = query.order("favorite_count", { ascending: false }).order("created_at", { ascending: false })
-      if (after) {
-        query = query.or(`favorite_count.lt.${after.count},and(favorite_count.eq.${after.count},created_at.lt.${after.date})`)
-      }
-    } else if (sort === "cheapest") {
-      // Fewest credits per run first; the next page continues PAST the last
-      // card — more credits, or the same credits and older.
-      query = query.order("estimated_credits", { ascending: true }).order("created_at", { ascending: false })
-      if (after) {
-        query = query.or(`estimated_credits.gt.${after.count},and(estimated_credits.eq.${after.count},created_at.lt.${after.date})`)
-      }
-    } else {
-      // newest
-      query = query.order("created_at", { ascending: false })
-      if (cursor) {
-        query = query.lt("created_at", cursor)
-      }
-    }
-
-    const { data: rows, error } = await query
+    const { data: rows, error } = await selectWithPerMinute<Record<string, unknown>[]>("workflow_templates", selectCols, buildQuery, "listed")
 
     if (error) {
       return sendInternalError(reply, req, error, "Failed to browse templates")
@@ -399,7 +413,8 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
       } else if (sort === "most-favorited") {
         nextCursor = `${last.favorite_count}:${last.created_at}`
       } else if (sort === "cheapest") {
-        nextCursor = `${last.estimated_credits}:${last.created_at}`
+        // The value the sort keyed on: 0 per minute when the column is absent.
+        nextCursor = `${typicalEpisodeCredits(Number(last.estimated_credits ?? 0), perMinuteOf(last, LISTED_PER_MINUTE_COLUMN.workflow_templates))}:${last.created_at}`
       } else {
         nextCursor = last.created_at as string
       }
@@ -487,8 +502,13 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
     const listing = await estimateWorkflowListingCredits(nodes as unknown as EstimateNode[], edges as unknown as EstimateEdge[], {
       publishType: "template",
       speechTextCaps,
+      // A template's cloner replaces every upload node, whatever this says: its
+      // sample recording's length is not theirs (decided 2026-10-07).
+      replaceableMediaNodeIds: exposedMediaNodeIds(null, nodes as unknown as EstimateNode[]),
     })
     const estimatedCredits = listing.preview + listing.final
+    // Per minute of the episode (decided 2026-10-07): 0 when the price does not follow a recording's length.
+    const estimatedPerMinuteCredits = listing.previewPerMinute + listing.finalPerMinute
     // Whoever clones this template gets the snapshot: UGC run state (a kept creator, the last plan, clip tickets) never ships.
     const snapshotNodes = stripUgcRunState(nodes)
 
@@ -548,6 +568,7 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
         node_count: nodeCount,
         complexity,
         estimated_credits: estimatedCredits,
+        estimated_per_minute_credits: estimatedPerMinuteCredits,
         category: category ?? DEFAULT_TEMPLATE_CATEGORY,
         output_types: outputTypes ?? [],
         tags: tags ?? [],
@@ -583,12 +604,9 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
         updates.slug = newSlug
       }
 
-      const { data: updated, error: updateError } = await supabase
-        .from("workflow_templates")
-        .update(updates)
-        .eq("id", existingTemplate.id)
-        .select()
-        .single()
+      const { data: updated, error: updateError } = await writeWithPerMinute("workflow_templates", updates, (row) =>
+        supabase.from("workflow_templates").update(row).eq("id", existingTemplate.id).select().single(),
+      )
 
       if (updateError || !updated) {
         return sendInternalError(reply, req, updateError, "Failed to update template")
@@ -627,9 +645,7 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
     for (let attempt = 0; attempt < MAX_SLUG_RETRIES; attempt++) {
       const slug = generateSlug(attempt === 0 && providedSlug ? providedSlug : name)
 
-      const result = await supabase
-        .from("workflow_templates")
-        .insert({
+      const result = await writeWithPerMinute("workflow_templates", {
           id: newTemplateId,
           workflow_id: workflowId,
           creator_id: userId,
@@ -645,6 +661,7 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
           node_count: nodeCount,
           complexity,
           estimated_credits: estimatedCredits,
+          estimated_per_minute_credits: estimatedPerMinuteCredits,
           category: category ?? DEFAULT_TEMPLATE_CATEGORY,
           output_types: outputTypes ?? [],
           tags: tags ?? [],
@@ -652,9 +669,7 @@ export async function workflowTemplatesRoutes(app: FastifyInstance) {
           preview_media_type: durablePreviewType,
           listed_in: initialListed,
           creator_display_name: creatorDisplayName,
-        })
-        .select()
-        .single()
+        }, (row) => supabase.from("workflow_templates").insert(row).select().single())
 
       if (!result.error) {
         publishedTemplate = result.data

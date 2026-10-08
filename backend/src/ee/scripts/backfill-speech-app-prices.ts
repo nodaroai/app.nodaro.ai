@@ -51,7 +51,7 @@ import { resolve } from "node:path"
 import { supabase } from "../../lib/supabase.js"
 import { hasCredits, speechLengthPricingEnabled } from "../../lib/config.js"
 import { resolveCanvasResultIds } from "../../lib/canvas-result-ids.js"
-import { exposedTextCaps } from "../../lib/exposed-text-caps.js"
+import { exposedListNodeIds, exposedMediaNodeIds, exposedTextCaps } from "../../lib/exposed-text-caps.js"
 import { appListingPrice, type AppListingSplit } from "../../lib/app-listing-price.js"
 import { SPEECH_NODE_TYPES, speechEstimate, upstreamSpeechText } from "../../lib/speech-estimate.js"
 import { estimateWorkflowListingCredits, type EstimateEdge, type EstimateNode, type ListingPublishType } from "../billing/credits.js"
@@ -110,6 +110,19 @@ export function recomputePrice(row: Pick<AppRow, "monetization_enabled" | "monet
   const { base, estimated } = appListingPrice(split, { enabled: row.monetization_enabled === true, flatFee: row.monetization_flat_fee ?? 0, percent: row.monetization_percent ?? 0 })
   return { base, listed: estimated }
 }
+
+/**
+ * A listing with a part per minute of the episode (decided 2026-10-07) is not
+ * backfilled: this script writes the fixed pair only, and a fixed price
+ * without its per-minute part would under-quote. Its next publish stores both.
+ */
+export function hasPerMinutePart(split: AppListingSplit): boolean {
+  // A per-item part (decided 2026-10-07) is skipped the same way: this script writes the fixed pair alone.
+  return (split.previewPerMinute ?? 0) + (split.finalPerMinute ?? 0) + (split.previewPerItem ?? 0) + (split.finalPerItem ?? 0) > 0
+}
+
+/** The note a skipped per-minute listing carries in the report. */
+export const PER_MINUTE_SKIP_NOTE = "per-minute listing: left for its next publish"
 
 export interface PlannedWrite {
   readonly id: string
@@ -193,7 +206,12 @@ async function recomputeListing(
   const nodes = (await resolveCanvasResultIds(graphNodes(row.snapshot_nodes), row.creator_id, { settings })) as GraphNode[]
   const edges = (Array.isArray(row.snapshot_edges) ? row.snapshot_edges : []) as EstimateEdge[]
   const caps = exposedTextCaps(settings, nodes)
-  const split = await estimateWorkflowListingCredits(nodes as EstimateNode[], edges, { publishType, speechTextCaps: caps })
+  const split = await estimateWorkflowListingCredits(nodes as EstimateNode[], edges, {
+    publishType,
+    speechTextCaps: caps,
+    replaceableMediaNodeIds: exposedMediaNodeIds(settings, nodes),
+    exposedListNodeIds: exposedListNodeIds(settings, nodes),
+  })
   return { split, caps, nodes }
 }
 
@@ -223,7 +241,8 @@ export async function runBackfill(opts: BackfillOptions): Promise<{ ok: boolean;
     const publishType: ListingPublishType = row.publish_type === "component" ? "component" : "app"
     const { split, caps, nodes } = await recomputeListing(row, publishType)
     const after = recomputePrice(row, split)
-    const write = planWrite(row, after)
+    const perMinute = hasPerMinutePart(split)
+    const write = perMinute ? null : planWrite(row, after)
     const line: CandidateLine = {
       kind: row.publish_type === "component" ? "component" : "app",
       id: row.id,
@@ -232,7 +251,7 @@ export async function runBackfill(opts: BackfillOptions): Promise<{ ok: boolean;
       before: { base: row.base_estimated_credits ?? 0, listed: row.estimated_credits ?? 0 },
       after,
       changed: write !== null,
-      speech: speechNodeSummary(nodes, row.snapshot_edges, caps),
+      speech: `${speechNodeSummary(nodes, row.snapshot_edges, caps)}${perMinute ? ` · ${PER_MINUTE_SKIP_NOTE}` : ""}`,
     }
     lines.push(line)
     console.log(formatLine(line))
@@ -254,8 +273,10 @@ export async function runBackfill(opts: BackfillOptions): Promise<{ ok: boolean;
       const listed = split.preview + split.final
       const after: Price = { base: listed, listed }
       const before: Price = { base: row.estimated_credits ?? 0, listed: row.estimated_credits ?? 0 }
-      const changed = before.listed !== after.listed
-      const line: CandidateLine = { kind: "template", id: row.id, slug: row.slug, monetized: false, before, after, changed, speech: speechNodeSummary(nodes, row.snapshot_edges, caps) }
+      const perMinute = hasPerMinutePart(split)
+      const changed = !perMinute && before.listed !== after.listed
+      const speech = `${speechNodeSummary(nodes, row.snapshot_edges, caps)}${perMinute ? ` · ${PER_MINUTE_SKIP_NOTE}` : ""}`
+      const line: CandidateLine = { kind: "template", id: row.id, slug: row.slug, monetized: false, before, after, changed, speech }
       lines.push(line)
       console.log(formatLine(line))
       if (changed && opts.apply) {

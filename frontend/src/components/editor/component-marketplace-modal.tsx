@@ -1,4 +1,5 @@
 import { useAppDir } from "@/lib/locale-store"
+import { listingCeilingCredits } from "@/lib/listing-price"
 import { clampPopupLeft, popupDefaultStyle } from "./marketplace-popup-geometry"
 import { useState, useCallback, useEffect, useRef, useMemo } from "react"
 import { createPortal } from "react-dom"
@@ -80,7 +81,8 @@ function browseCardToSelection(card: AppBrowseCard): ComponentSelection {
     label: card.name,
     creatorName: card.creatorDisplayName ?? "",
     creatorId: card.creatorId,
-    estimatedCredits: card.estimatedCredits,
+    // A component inside a run estimate is priced at its most (decided 2026-10-07).
+    estimatedCredits: listingCeilingCredits(card.estimatedCredits, card.perMinuteCredits),
   }
 }
 
@@ -95,7 +97,7 @@ function myAppToSelection(app: PublishedApp): ComponentSelection {
     label: app.name,
     creatorName: app.creatorDisplayName ?? "",
     creatorId: app.creatorId ?? "",
-    estimatedCredits: app.estimatedCredits,
+    estimatedCredits: listingCeilingCredits(app.estimatedCredits, app.perMinuteCredits),
   }
 }
 
@@ -107,6 +109,8 @@ function publishedAppToBrowseCard(app: PublishedApp): AppBrowseCard {
     description: app.description ?? "",
     iconUrl: app.iconUrl ?? null,
     estimatedCredits: app.estimatedCredits ?? 0,
+    perMinuteCredits: app.perMinuteCredits,
+    perItemCredits: app.perItemCredits,
     category: app.category ?? "",
     outputTypes: app.outputTypes ?? [],
     tags: app.tags ?? [],
@@ -207,6 +211,8 @@ function ComponentListItem({
       {card.estimatedCredits > 0 && (
         <span className="text-[10px] text-purple-400 font-medium flex items-center gap-0.5 flex-shrink-0">
           <Coins className="w-2.5 h-2.5" />{card.estimatedCredits}
+          {(card.perMinuteCredits ?? 0) > 0 && ` ${t("credits.plusPerMinute", { n: card.perMinuteCredits ?? 0 })}`}
+          {(card.perItemCredits ?? 0) > 0 && ` ${t("credits.plusPerItem", { n: card.perItemCredits ?? 0 })}`}
         </span>
       )}
       {isFavorited && <Star className="w-3 h-3 text-yellow-400 fill-yellow-400 flex-shrink-0" />}
@@ -580,7 +586,7 @@ export function ComponentMarketplaceModal({ open, onOpenChange, onSelect, varian
                   )}
                   <div className="flex items-center gap-3 mb-3 text-xs text-muted-foreground">
                     <span>{t("marketplace.runsCount", { n: comp.totalRunCount ?? 0 })}</span>
-                    <CreditCost credits={comp.estimatedCredits ?? 0} suffix={t("marketplace.crPerRun", { u: creditUnitLabel(t("credits.unitShort")) })} />
+                    <CreditCost credits={comp.estimatedCredits ?? 0} perMinute={comp.perMinuteCredits} perItem={comp.perItemCredits} suffix={t("marketplace.crPerRun", { u: creditUnitLabel(t("credits.unitShort")) })} />
                     {(comp.favoriteCount ?? 0) > 0 && <span>{t("marketplace.favsCount", { n: comp.favoriteCount })}</span>}
                   </div>
                   <div className="flex items-center gap-1.5 flex-wrap">

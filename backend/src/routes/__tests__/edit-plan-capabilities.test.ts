@@ -32,13 +32,14 @@ const deps = (over: Partial<PlannableEditPlanModesDeps> = {}): PlannableEditPlan
 
 let app: FastifyInstance
 
-async function build(plannable: PlannableEditPlanModes): Promise<void> {
+async function build(plannable: PlannableEditPlanModes, perMinute: () => Promise<boolean> = async () => false): Promise<void> {
   app = Fastify({ logger: false })
   app.addHook("preHandler", async (req) => {
     const header = req.headers["x-user-id"]
     if (typeof header === "string") (req as { userId?: string }).userId = header
+    if (req.headers["x-internal"] === "1") (req as { isInternalCall?: boolean }).isInternalCall = true
   })
-  await app.register(routes, { plannable })
+  await app.register(routes, { plannable, perMinute })
   await app.ready()
 }
 
@@ -61,12 +62,12 @@ describe("GET /v1/edit-plan/capabilities", () => {
   it("answers the three Phase-1 modes when no plugin declares anything (community, an older plugin)", async () => {
     const res = await get()
     expect(res.statusCode).toBe(200)
-    expect(res.json()).toEqual({ modes: ["tighten", "clips", "chapters"], source: "server" })
+    expect(res.json()).toEqual({ modes: ["tighten", "clips", "chapters"], source: "server", perMinute: false })
   })
 
   it("adds trailer once the loaded plugin declares it", async () => {
     setPluginSupports({ editPlanModes: ["tighten", "clips", "chapters", "trailer"] })
-    expect((await get()).json()).toEqual({ modes: ["tighten", "clips", "chapters", "trailer"], source: "server" })
+    expect((await get()).json()).toEqual({ modes: ["tighten", "clips", "chapters", "trailer"], source: "server", perMinute: false })
   })
 
   it("reads the declaration at request time, not at registration (plugins load after routes register)", async () => {
@@ -95,23 +96,43 @@ describe("GET /v1/edit-plan/capabilities on a self-hosted install", () => {
 
   it("lists trailer when connected and nodaro.ai plans it", async () => {
     await selfHost({})
-    expect((await get()).json()).toEqual({ modes: [...PHASE1, "trailer"], source: "nodaro.ai" })
+    expect((await get()).json()).toEqual({ modes: [...PHASE1, "trailer"], source: "nodaro.ai", perMinute: false })
   })
 
   // Round 7 (decided 2026-10-06): the editor words each case differently, so
   // the answer says who answered — the list itself is unchanged (fails closed).
   it("lists the original three when nodaro.ai can't be reached, and says so", async () => {
     await selfHost({ cloudFetch: async () => { throw new Error("ECONNREFUSED") } })
-    expect((await get()).json()).toEqual({ modes: PHASE1, source: "nodaro.ai-unreachable" })
+    expect((await get()).json()).toEqual({ modes: PHASE1, source: "nodaro.ai-unreachable", perMinute: false })
   })
 
   it("says nodaro.ai answered when it plans no trailer yet", async () => {
     await selfHost({ cloudFetch: async () => new Response(JSON.stringify({ modes: PHASE1 }), { status: 200 }) })
-    expect((await get()).json()).toEqual({ modes: PHASE1, source: "nodaro.ai" })
+    expect((await get()).json()).toEqual({ modes: PHASE1, source: "nodaro.ai", perMinute: false })
   })
 
   it("lists the original three when not connected, as before", async () => {
     await selfHost({ isNodaroConnected: async () => false })
-    expect((await get()).json()).toEqual({ modes: PHASE1, source: "server" })
+    expect((await get()).json()).toEqual({ modes: PHASE1, source: "server", perMinute: false })
+  })
+})
+
+// Per started minute (decided 2026-10-07): the answer also says whether the
+// loaded plugin charges Edit Plan per started minute. The editor quotes N
+// started minutes when it does, and the standalone orchestrator (which loads
+// no plugin) asks this route over loopback before it reserves.
+describe("GET /v1/edit-plan/capabilities — per started minute", () => {
+  it("says whether the plugin charges per started minute", async () => {
+    await app.close()
+    await build(() => plannableEditPlanModes(deps()), async () => true)
+    expect((await get()).json().perMinute).toBe(true)
+  })
+
+  it("answers the orchestrator's internal call, which carries no user", async () => {
+    await app.close()
+    await build(() => plannableEditPlanModes(deps()), async () => true)
+    const res = await app.inject({ method: "GET", url: "/v1/edit-plan/capabilities", headers: { "x-internal": "1" } })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().perMinute).toBe(true)
   })
 })

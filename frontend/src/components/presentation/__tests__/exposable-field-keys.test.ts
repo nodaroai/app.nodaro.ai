@@ -20,6 +20,9 @@ const OPTIONAL_DATA_FIELDS: Readonly<Record<string, Readonly<Record<string, stri
   "generate-image": { quality: "GenerateImageData" },
   "text-to-video": { aspectRatio: "TextToVideoData", generateAudio: "TextToVideoData" },
   "voice-design": { loudness: "VoiceDesignData" },
+  // Speaker View (SV17): the aspect and the layout stay unset on a fresh node so
+  // the node can take its defaults from the topology of the first edit (SV20).
+  "speaker-view": { targetAspect: "SpeakerViewData", layout: "SpeakerViewData" },
 }
 
 /**

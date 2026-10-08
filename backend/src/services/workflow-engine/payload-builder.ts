@@ -1,3 +1,4 @@
+import { buildSpeakerViewPayload } from "./speaker-view-payload.js"
 import { dubbingModelIdentifier } from "../../lib/dubbing-model.js"
 import { imageCollageCreditModelIdentifier } from "../../lib/image-collage-credit-id.js"
 import {
@@ -23,7 +24,8 @@ import { normalizeCollageLabels } from "../../providers/image/collage-badges.js"
 
 // Shared logic from packages/shared — single source of truth
 import { resolveVideoRequestNorm } from "../../lib/video-request-norm.js"
-import { resolveSlideshowTransition, collectAncestorRefs as sharedCollectAncestorRefs, applyDefaultVideoSelection, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionableAssetArrays, buildCreditModelIdentifier, sunoCreditType, resolveImageGenCreditIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, applyVideoNegativePrompt, resolveVideoProviderForMode, resolveVideoModeForInputs, videoProviderRequiresImage, isVeoProvider, buildLipSyncCreditId, isPerSecondLipSyncProvider, resolveAiAvatarCreditId, resolveSwitchXCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, buildVideoAuditCreditId, resolveVideoAnalysisModel, extractReferencedLabels, combineSameLabelRefs, refHandleCategory, canonicalVarName, validateAiAvatarPayload, validateCinematicAvatarPayload, resolveNodeRefs, readScriptSettings, speedRampCreditId, resolveEffectiveSourceType, PARAMETER_NODE_TYPES, characterMentionSlug, expandExtraRefsToConnectedReferences, PLATFORM_SPECS, isSeedance2Provider, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, seedanceVideoEditCreditId, isMinimaxH3Provider, isWan3Provider, isGeminiOmniProvider, PRICING_DEFAULT_RESOLUTION, supportsExtendRender, MODEL_CATALOG, hasFeature, referenceModalityForHandle, countRefModalityEdges as countRefModalityEdgesCore, type ReferenceModality, COMPOSER_PLAN_MAP, ASPECT_RATIO_DIMENSIONS, buildLlmCreditIdentifier, motionGraphicsFeature, FLUX_LORA_CHARACTER_MODEL_ID, extractCharacterLoraFields, clampSmartCutWindow, resolveGvpAnchorWire, normalizeModelInput, readPromptAffixes, findImageMentionTokens, knownImageSlugsFromRefs, findEntityMentionTokens, knownEntitySlugsFromRefs, uiAspectRatioFill, uiResolutionFill, resolveTopazUpscale, unresolvedRefTokens, classifyRefToken, parseNodeRef, NODE_REF_PATTERN, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY, newScene3DRevisionId, resolveScene3DAuthoringEngine, scene3DPlanSchema, PRO3D_RENDER_CREDIT_ID, PRO3D_RENDER_DEFAULT_ENGINE, buildPro3DRenderSource, pro3DRenderTimingOverrides, renderVideoCreditId, VIDEO_ONLY_PARAMETER_NODE_TYPES, EXECUTION_GRAPH_COMPOSED_PARAMETER_TYPES, normalizeTranscript, captionRoutesToRemotion, normalizeCaptionNumericLevers, buildEditPlanCreditId, parseEditPlanMode, EDIT_PLAN_MODES, asEditPlanTier, transcriptDurationSec, DEFAULT_TRANSCRIBE_NODE_PROVIDER, transcribeLaneSupportsWordTimestamps, transcribeWordTimestampsRefusal, resolveMusicProvider, MUSIC_CREDIT_ID, isSettingsHintEdge, type Scene3DPlan, styleCaptionPlan } from "@nodaro/shared"
+import { LEGACY_VIDEO_NODE_DEFAULT_PROVIDER } from "../../lib/generated-video-length.js"
+import { resolveSlideshowTransition, collectAncestorRefs as sharedCollectAncestorRefs, applyDefaultVideoSelection, LOCATION_REFERENCE_PHOTO_KINDS, locationReferencePhotoKindLabel, type LocationReferencePhotoKind, characterMentionableAssetArrays, buildCreditModelIdentifier, sunoCreditType, resolveImageGenCreditIdentifier, buildVideoCreditModelIdentifier, buildMotionCreditModelIdentifier, applyVideoNegativePrompt, resolveVideoProviderForMode, resolveVideoModeForInputs, videoProviderRequiresImage, isVeoProvider, buildLipSyncCreditId, isPerSecondLipSyncProvider, resolveAiAvatarCreditId, resolveSwitchXCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, buildVideoAuditCreditId, resolveVideoAnalysisModel, extractReferencedLabels, combineSameLabelRefs, refHandleCategory, canonicalVarName, validateAiAvatarPayload, validateCinematicAvatarPayload, resolveNodeRefs, readScriptSettings, speedRampCreditId, resolveEffectiveSourceType, PARAMETER_NODE_TYPES, characterMentionSlug, expandExtraRefsToConnectedReferences, PLATFORM_SPECS, isSeedance2Provider, isSeedanceVideoEditProvider, SEEDANCE_VIDEO_EDIT_SHAPE, seedanceVideoEditCreditId, isMinimaxH3Provider, isWan3Provider, isGeminiOmniProvider, PRICING_DEFAULT_RESOLUTION, supportsExtendRender, MODEL_CATALOG, hasFeature, referenceModalityForHandle, countRefModalityEdges as countRefModalityEdgesCore, type ReferenceModality, COMPOSER_PLAN_MAP, ASPECT_RATIO_DIMENSIONS, buildLlmCreditIdentifier, motionGraphicsFeature, FLUX_LORA_CHARACTER_MODEL_ID, extractCharacterLoraFields, clampSmartCutWindow, resolveGvpAnchorWire, normalizeModelInput, readPromptAffixes, findImageMentionTokens, knownImageSlugsFromRefs, findEntityMentionTokens, knownEntitySlugsFromRefs, uiAspectRatioFill, uiResolutionFill, resolveTopazUpscale, unresolvedRefTokens, classifyRefToken, parseNodeRef, NODE_REF_PATTERN, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY, newScene3DRevisionId, resolveScene3DAuthoringEngine, scene3DPlanSchema, PRO3D_RENDER_CREDIT_ID, PRO3D_RENDER_DEFAULT_ENGINE, buildPro3DRenderSource, pro3DRenderTimingOverrides, renderVideoCreditId, VIDEO_ONLY_PARAMETER_NODE_TYPES, EXECUTION_GRAPH_COMPOSED_PARAMETER_TYPES, normalizeTranscript, captionRoutesToRemotion, normalizeCaptionNumericLevers, editPlanReserveCreditId, parseEditPlanMode, EDIT_PLAN_MODES, asEditPlanTier, transcriptDurationSec, DEFAULT_TRANSCRIBE_NODE_PROVIDER, transcribeLaneSupportsWordTimestamps, transcribeWordTimestampsRefusal, resolveMusicProvider, MUSIC_CREDIT_ID, isSettingsHintEdge, type Scene3DPlan, styleCaptionPlan } from "@nodaro/shared"
 import { composeNegative, resolveTemplate, applyTemplate, computeNodePrompt, appendPromptHints, joinSentences, computeScriptTopic, assembleImageInput, readDirectionFields, readStructuredFields, readSubjectFields, buildImagePrompt, buildScenePrompt, collectIdentityLockClause as sharedCollectIdentityLockClause, getParameterPromptHint, characterLockToRefLock, buildCharacterPrompt, buildObjectPrompt, buildCreaturePrompt, buildLocationPrompt, buildFaceTemplateInputs, appendMusicMeta, composeSoundHintFromConnections, truncateForField, appendField, assembleSunoInput, type SoundConsumerType, type SoundComposition, resolveVideoReferenceCore, buildSeedanceVideoEditPrompt, applyPromptAffixes, composeVideoPromptText, ownMotionHint, isMinorAge, containsMinorAgeHint, type DirectionFields, type StructuredPromptFields, type SubjectFields, NODE_PROMPT_CANDIDATE_FIELDS, hookPlateCaptionSegments, CAPTION_SEGMENT_LEVER_KEYS } from "@nodaro/prompts"
 import { labelRefHintContext } from "./label-ref-hint-context.js"
 import type { CharacterDef, ConnectedReference, SceneData, ExtraRefInput, ExtraRefCharacterContext } from "@nodaro/shared"
@@ -111,6 +113,11 @@ export interface PayloadBuildContext {
    *  run once and for a Repeat xN copy nothing list-drives. A render reads its
    *  plan clip's identity from it. */
   listRow?: number
+  /** Whether the loaded plugin charges Edit Plan per started minute
+   *  (`supports().editPlanPerMinute`, decided 2026-10-07), resolved by the
+   *  caller (`editPlanPerMinuteActive`) because this builder is synchronous.
+   *  ABSENT = steps, the reserve every plugin accepts. */
+  editPlanPerMinute?: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -3453,7 +3460,7 @@ export function buildPayload(
 
     // --- Video generation ---
     case "image-to-video": {
-      const provider = (data.provider as string) ?? "kling"
+      const provider = (data.provider as string) ?? LEGACY_VIDEO_NODE_DEFAULT_PROVIDER
       const hasVideoRef = (resolvedInputs.referenceVideoUrls?.length ?? 0) > 0
       // Compose the prompt first so we can run @-mention resolution against
       // it before the worker sees the final string. The mention pass swaps
@@ -3643,7 +3650,7 @@ export function buildPayload(
     }
 
     case "text-to-video": {
-      const provider = (data.provider as string) ?? "kling"
+      const provider = (data.provider as string) ?? LEGACY_VIDEO_NODE_DEFAULT_PROVIDER
       const hasVideoRef = (resolvedInputs.referenceVideoUrls?.length ?? 0) > 0
       // Resolve @-mentions in the t2v prompt (see i2v case for the rationale).
       // t2v has no `imageUrl` slot — all resolved URLs become entries in
@@ -4394,8 +4401,19 @@ export function buildPayload(
       // fails honestly rather than undercharging.
       const masterRow =
         wired.find((row) => cfg[row.nodeId]?.role === "master-audio") ?? wired[0]
-      const masterDurationSec = masterRow?.duration ?? transcriptDurationSec(transcript)
-      const creditId = buildEditPlanCreditId(mode, tier, masterDurationSec)
+      const recordedDurationSec = masterRow?.duration ?? undefined
+      const masterDurationSec = recordedDurationSec ?? transcriptDurationSec(transcript)
+      // Per started minute when the plugin charges that way (decided
+      // 2026-10-07), else the step — the same builder the estimates use. Only
+      // on a length RECORDED on the master (review round F4): the transcript's
+      // last word is a lower bound (trailing music and silence are not
+      // transcribed), so its started minutes can sit under the file's length
+      // and the plugin, which re-probes it, refuses a reserve more than 3 s
+      // short. That basis keeps the step, which absorbs the tail. The
+      // executor's probe of the master (`computeEditPlanReserveId`) still
+      // replaces either id with the exact started minutes when it succeeds.
+      const perMinute = buildCtx?.editPlanPerMinute === true && recordedDurationSec !== undefined
+      const creditId = editPlanReserveCreditId(mode, tier, masterDurationSec, perMinute)
       return simpleResult("edit-plan", creditId, {
         jobId,
         mode,
@@ -6011,6 +6029,27 @@ export function buildPayload(
         upstreamDurations,
         usageLogId,
       })
+    }
+
+    // Speaker View (C3.2): the edit, the transcript and the node's settings to
+    // the cloud plugin's renderer. Refused here — the rule's words, and "not
+    // priced yet" until C4 — before a render is paid for. The case is thin:
+    // `buildSpeakerViewPayload` holds the logic (and the rule it shares with
+    // the editor's badge).
+    case "speaker-view": {
+      const clipKey = applyEdlClipKey(node, buildCtx)
+      const planBasis = applyEdlPlanBasis(node, buildCtx)
+      const built = buildSpeakerViewPayload({
+        nodeId: node.id,
+        jobId,
+        usageLogId,
+        data: data as Record<string, unknown>,
+        edl: resolvedInputs.edl ?? (data.edl as unknown),
+        transcript: resolvedInputs.transcript ?? (data.transcript as unknown),
+        clipKey,
+        planBasis,
+      })
+      return simpleResult("speaker-view", built.creditId, built.payload)
     }
 
     case "apply-edl": {

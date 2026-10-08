@@ -120,12 +120,34 @@ describe("editor reads of an Edit Plan's saved output", () => {
     for (const where of [
       "components/editor/workflow-editor/execution-graph.ts",
       "components/editor/workflow-editor/node-input-resolver.ts",
-      "components/editor/workflow-editor/types.ts",
-      "lib/apply-edl-estimate.ts",
       "lib/json-run-result.ts",
     ]) {
       expect(branches, where).toContain(where)
     }
+  })
+
+  // The render estimate's minutes live in @nodaro/render-rules (decided
+  // 2026-10-07), which the listing reads too. The editor hands it its reader
+  // (`lib/apply-edl-estimate.ts`); the shared Edit Plan branch must read
+  // through the reader it is handed, never the raw plan.
+  it("the shared render estimate reads an Edit Plan through the reader it is handed", () => {
+    const shared = readFileSync(join(SRC, "..", "..", "packages", "render-rules", "src", "apply-edl-estimate.ts"), "utf8")
+    const branches = editPlanBranches(shared)
+    expect(branches.length).toBeGreaterThan(0)
+    for (const body of branches) expect(body.match(RAW_READ) ?? [], body.slice(0, 120)).toEqual([])
+    expect(shared).toMatch(/producer\.type === "edit-plan"\) return planOutputOf\(data\)/)
+  })
+
+  // The clips fan-out lives there too (decided 2026-10-07): the editor's
+  // estimate (`components/editor/workflow-editor/types.ts`) and the listing
+  // both read it, and its Edit Plan branches read a held plan's clips through
+  // the reader they are handed.
+  it("the shared clips fan-out reads an Edit Plan through the reader it is handed", () => {
+    const shared = readFileSync(join(SRC, "..", "..", "packages", "render-rules", "src", "clip-fan-out.ts"), "utf8")
+    const branches = editPlanBranches(shared)
+    expect(branches.length).toBeGreaterThan(0)
+    for (const body of branches) expect(body.match(RAW_READ) ?? [], body.slice(0, 120)).toEqual([])
+    expect(shared).toMatch(/const rows = planOutputOf\(data\)\?\.listResults/)
   })
 
   it("sees a raw read in an if block, a one-line if and a ternary arm", () => {
@@ -201,12 +223,14 @@ describe("editor reads of an Edit Plan's saved output", () => {
       "components/editor/workflow-editor/execution-graph.ts": 1,
       // extractNodeOutputAsList (resolveNodeInputs and the fan-out read through it)
       "components/editor/workflow-editor/node-input-resolver.ts": 1,
-      // editPlanClipFanOut, the run estimate's clip count
+      // the reader the clips fan-out (@nodaro/render-rules) is handed
       "components/editor/workflow-editor/types.ts": 1,
-      // persistedEdlPlan, the render estimate's minutes
+      // the reader the render estimate's minutes (@nodaro/render-rules) are handed
       "lib/apply-edl-estimate.ts": 1,
       // the node's badge, clip count and tree
       "components/nodes/edit-plan-node.tsx": 1,
+      // Speaker View's panel, strip and badge: the edit(s) wired into its `edl` handle
+      "lib/speaker-view-context.ts": 1,
       // the reader itself (its cache), and sourceJsonOf (Extract Field and
       // JSON Process read a source's JSON through it)
       "lib/edit-plan-saved-output.ts": 2,

@@ -21,7 +21,8 @@
   ],
   "tutorialCategorySlug": "workflows",
   "tutorialSortOrder": 0,
-  "estimatedCredits": 812,
+  "estimatedCredits": 82,
+  "estimatedPerMinuteCredits": 14,
   "nodeTypesUsed": [
     "upload-video",
     "transcribe",

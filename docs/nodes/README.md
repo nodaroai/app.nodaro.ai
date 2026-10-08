@@ -169,6 +169,8 @@ Provide data to your workflow: text, images, video, audio, or external triggers.
 | [Telegram Account Trigger](./input/telegram-account-trigger.md) | Trigger workflow when a message arrives in a chosen chat of your connected Telegram account (Cloud, preview) | React to posts in the channels and groups you follow, private ones included |
 | [Telegram Channel Feed](./input/telegram-channel-feed.md) | Read recent posts from a public Telegram channel | Follow channels, pull posts, rewrite and repost |
 | [Read Collection](./input/collection-read.md) | Read what a collection holds from the last hours or days | Know what a pipeline already covered; feed saved records into a prompt |
+| [Read Inspiration](./input/inspiration-read.md) | Read the posts saved to your Inspiration library, by platform, tag and period | Feed the posts you collected into a prompt |
+| [Read Competitor](./input/competitor-read.md) | Read a tracked competitor's posts, by platform and period, as its scans found them | Learn from what a brand published this week |
 
 ---
 
@@ -386,6 +388,7 @@ FFmpeg-based video manipulation.
 | [Apply EDL](./processing-video/apply-edl.md) | Render an edit decision list into one media file (per output minute: 10 CR final, 1 CR preview) | Turn a structured edit description (sources + ordered segments) into a finished video or audio cut; optionally emit a transcript remapped to match the cut |
 | [Edit Plan](./processing-video/edit-plan.md) | Plan an edit from a transcript — tighten, find clips, mark chapters, or cut a trailer (Cloud; per source-minute × tier) | Turn a timed transcript into an EDL plan that Apply EDL renders; clips mode fans out one render per clip |
 | [Camera Switch](./processing-video/camera-switch.md) | Put each cut of an edit on the camera of whoever is speaking (Cloud; flat 10 credits per run) | Multicam podcasts and interviews: Edit Plan's EDL + a diarized transcript → a switched EDL for Apply EDL, sound unchanged |
+| [Speaker View](./processing-video/speaker-view.md) | Render an edit with its speakers on screen — a layout, a switch at each speaker change, an emphasis on who is talking (Cloud; not priced yet) | Side-by-side and vertical podcast cuts, panels, picture-in-picture: an EDL (+ transcript) → video and the EDL as drawn |
 | [Assemble Narrated Video](./processing-video/assemble-narrated-video.md) | Fit N ordered (clip, voice) blocks into one MP4 | Audio-led narrated-video assembly: short voice centers over its clip with padding, long voice slows the clip (capped, then holds); audio is never cropped |
 | [Still to Video](./processing-video/still-to-video.md) | One still image + one audio track → MP4, zero credits | Animate a still with zoom / pan / Ken Burns (or none) for exactly the audio's length — narrated slides, visualizers, photo moments |
 | [Slideshow](./processing-video/slideshow.md) | 2–100 images over one optional audio track → MP4, zero credits | Ordered stills with per-slide motion + transitions; audio-anchored timing (equal split / pinned rows / disclosed proportional scale), silent without audio |

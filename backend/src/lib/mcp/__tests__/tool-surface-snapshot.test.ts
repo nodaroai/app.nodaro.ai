@@ -660,6 +660,19 @@ const COMBINE_VIDEOS_TRIM_ARGS_BYTES = 406
 // measured by this suite: the sentence is exactly 303 B in `tools/list`, and the budget rises by
 // exactly that, keeping whatever headroom the list had.
 const UGC_FINISH_ROOM_SOUND_BYTES = 303
+// RAISED 2026-10-08 by the two arguments `build_ugc_clips` gained for the two English
+// modes: `speech_lane` (reference-audio, the default, or prompt-quoted — the video model's
+// own voice) and `voice_id` (the ElevenLabs mode's anchor voice, replacing the builder's pick from
+// the creator), and nothing else. No tool was added, so the fixture does NOT move. measured by
+// this suite: 406_138 total − 405_655 before = 483 B (the tool: 1_558 → 2_041 B), and the budget
+// rises by exactly that, keeping whatever headroom the list had (none).
+const UGC_CLIPS_SPEECH_LANE_VOICE_BYTES = 483
+// RAISED by the four bytes `generate_dialogue`'s Limits sentence grew when Dialogue v4's cap
+// rose to 10,000 characters (decided 2026-10-07, after the 2026-10-06 live check): "on either
+// model" became "on v3, 10,000 on v4" — the description must name each model's own cap, since
+// the tool refuses a script by the chosen model's number. No tool was added, so the fixture
+// does NOT move. measured by this suite: 405_655 total − 405_651 budget = 4 B.
+const DIALOGUE_V4_CAP_WORDING_BYTES = 4
 
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES,
@@ -732,7 +745,9 @@ export const TOOL_WIRE_BUDGET = {
     RENDER_FINAL_TOOL_BYTES +
     SPEECH_LENGTH_PRICING_WORDING_BYTES +
     COMBINE_VIDEOS_TRIM_ARGS_BYTES +
-    UGC_FINISH_ROOM_SOUND_BYTES,
+    UGC_FINISH_ROOM_SOUND_BYTES +
+    DIALOGUE_V4_CAP_WORDING_BYTES +
+    UGC_CLIPS_SPEECH_LANE_VOICE_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

@@ -26,10 +26,13 @@
  * "corrected" into an invisible one. An edge that names no node, loops on
  * itself or has no endpoint is DROPPED with a warning — the orchestrator never
  * ran it anyway, and refusing it would refuse every graph that already carries
- * one. A duplicate id is the one thing refused: two edges cannot share it. An
- * edge sent twice WITHOUT an id (the same connection, as stored) is kept once
- * and the repeat dropped with a warning — two ids for one wire would otherwise
- * be stored side by side.
+ * one. So is an EDL-shaped JSON output wired into a Transcript input (Edit Plan
+ * -> Add Captions' Transcript): the canvas refuses that connection, so a write
+ * does too (decided 2026-10-07), with the reason in the message. A duplicate id
+ * is the one thing refused: two edges cannot share it. An edge sent twice
+ * WITHOUT an id (the same connection, as stored) is kept once and the repeat
+ * dropped with a warning — two ids for one wire would otherwise be stored side
+ * by side.
  */
 import {
   DYNAMIC_HANDLE_NODE_TYPES,
@@ -38,6 +41,8 @@ import {
   canonicalSourceHandle,
   canonicalTargetHandle,
   classifyLegacyTargetHandle,
+  jsonKindMismatch,
+  jsonKindMismatchMessage,
   renderedSourceHandle,
 } from "@nodaro/shared"
 import { migrateGenerateImageHandles } from "./generate-image-handle-migration.js"
@@ -93,7 +98,7 @@ export interface NormalizedEdges<E extends NormalizableEdge> {
   readonly adjustments: EdgeAdjustment[]
   /** Handles the node does not declare, stored as sent. */
   readonly warnings: string[]
-  /** Edges left out: an endpoint naming no node, a self-loop, a missing endpoint, a non-object, an id-less repeat of a connection. */
+  /** Edges left out: an endpoint naming no node, a self-loop, a missing endpoint, a non-object, an id-less repeat of a connection, an EDL output wired to a Transcript input. */
   readonly dropped: string[]
   /** A duplicate id — a caller refuses the whole write when non-empty. */
   readonly errors: string[]
@@ -106,6 +111,9 @@ interface HandleFix {
   readonly drafts: Draft[]
   readonly warning: string | null
 }
+
+/** A node type as a person says it ("edit-plan" -> "Edit Plan"). Deliberately not the node registry's label: this module sits under route code that mocks config and billing, and the registry pulls both in. */
+const typeName = (nodeType: string): string => nodeType.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")
 
 const str = (v: unknown): string | null => (typeof v === "string" && v.length > 0 ? v : null)
 
@@ -294,6 +302,19 @@ export function normalizeWorkflowEdges<E extends NormalizableEdge>(
     const earlier = connections.get(key)
     if (given === null && earlier !== undefined) {
       dropped.push(`edge "${where}": the same connection as edge "${earlier}", sent again without an id — dropped`)
+      return
+    }
+    // An EDL-shaped JSON output is not a Transcript (decided 2026-10-07): the
+    // canvas refuses the connection, so a write refuses it too. Judged on the
+    // handles as they will be stored, from the shared output kinds.
+    const kindMismatch = jsonKindMismatch(sourceType, sourceFix.handle, targetType, targetFix.handle)
+    if (kindMismatch) {
+      dropped.push(
+        `edge "${where}": ${jsonKindMismatchMessage(kindMismatch, {
+          sourceLabel: typeName(sourceType),
+          targetLabel: typeName(targetType),
+        })} — dropped`,
+      )
       return
     }
     drafts.push(...sourceFix.drafts, ...targetFix.drafts)

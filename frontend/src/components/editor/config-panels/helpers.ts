@@ -1,12 +1,13 @@
 import type { WorkflowNode, WorkflowEdge, FieldMappings, ProbedVideoInfo } from "@/types/nodes"
 import type { SourceNodeInfo } from "./types"
-import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, buildCreditModelIdentifier as sharedBuildCreditModelIdentifier, buildVideoCreditModelIdentifier, isSeedanceVideoEditProvider, seedanceVideoEditCreditId, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS, motionGraphicsFeature, buildScraperCreditId, isScraperActor, metaAdsScrapeCreditIdFromNode, instagramScrapeCreditIdFromNode, captionRoutesToRemotion, resolveAiAvatarCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, buildVideoAuditCreditId, buildEditPlanCreditId, asEditPlanMode, asEditPlanTier, sunoCreditType, speedRampCreditId, applyEdlCreditId, resolveTopazUpscale, applyDefaultVideoSelection, withWiredSettings, MUSIC_CREDIT_ID, contentRecipeCreditId, contentIdeasCreditId, socialSearchCreditIdFromNode, videoSfxCreditId, textToAudioCreditId, LTX_EXTEND_PER_SECOND_CREDIT_ID, LTX_RETAKE_PER_SECOND_CREDIT_ID, dialogueProviderOf } from "@nodaro/shared"
+import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, buildCreditModelIdentifier as sharedBuildCreditModelIdentifier, buildVideoCreditModelIdentifier, isSeedanceVideoEditProvider, seedanceVideoEditCreditId, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS, motionGraphicsFeature, buildScraperCreditId, isScraperActor, metaAdsScrapeCreditIdFromNode, instagramScrapeCreditIdFromNode, captionRoutesToRemotion, resolveAiAvatarCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, buildVideoAuditCreditId, editPlanReserveCreditId, asEditPlanMode, asEditPlanTier, sunoCreditType, speedRampCreditId, applyEdlCreditId, resolveTopazUpscale, applyDefaultVideoSelection, withWiredSettings, MUSIC_CREDIT_ID, contentRecipeCreditId, contentIdeasCreditId, socialSearchCreditIdFromNode, videoSfxCreditId, textToAudioCreditId, LTX_EXTEND_PER_SECOND_CREDIT_ID, LTX_RETAKE_PER_SECOND_CREDIT_ID, dialogueProviderOf } from "@nodaro/shared"
 import { videoAuditAnalysisWired } from "@/components/editor/workflow-editor/types"
 import { renderVideoCreditIdForNode } from "@/lib/render-video-plan"
 import { resolveEditPlanEstimateDurationSec } from "@/lib/edit-plan-estimate"
+import { editPlanPerMinuteReported } from "@/lib/edit-plan-modes"
 import { audioSyncCreditId, audioSyncWiredSourceCount } from "@/lib/audio-sync"
 import { wiredSocialPostsVideoSec } from "@/lib/video-analysis-handles"
-import { upstreamVideoDurationSec } from "@/lib/upstream-video-duration"
+import { videoSfxQuotedSec } from "@/lib/video-utility-estimate"
 import { speechQuote, upstreamSpeechText } from "@/lib/speech-estimate"
 // The core price cache (the same one `getCachedCredits` under @/ee re-exports):
 // a speech unit row cached there means the server prices speech by length.
@@ -531,9 +532,12 @@ export function getModelIdentifier(
   // length borrowed from the wired transcript (see that module: this estimate
   // gates the run, and the browser's transcript is the PREVIOUS run's). Callers
   // MUST pass `nodes`; without them the master lane is blind.
+  // Per started minute (decided 2026-10-07): when the server's plugin charges
+  // that way (`GET /v1/edit-plan/capabilities` → perMinute) the id carries the
+  // source's started minutes, priced flat + rate × N server-side; else the step.
   if (nodeType === "edit-plan") {
     const durationSec = resolveEditPlanEstimateDurationSec(node, nodes ?? [], edges ?? [])
-    return buildEditPlanCreditId(asEditPlanMode(data.mode), asEditPlanTier(data.planTier), durationSec)
+    return editPlanReserveCreditId(asEditPlanMode(data.mode), asEditPlanTier(data.planTier), durationSec, editPlanPerMinuteReported())
   }
 
   // HeyGen avatar nodes + reference sheet are COMPOSITE-only priced (duration/
@@ -622,12 +626,15 @@ export function getModelIdentifier(
   // `!provider` bail so a provider-less node is quoted on the default engine.
   if (nodeType === "text-to-audio") return textToAudioCreditId(data.provider as string | undefined, data.duration)
 
-  // Video SFX: the price row for the clip's length — the upstream video's
-  // reported duration through the rule the run charges by (videoSfxCreditId;
-  // the run itself measures the real file). Unknown → the 8s row, as the
+  // Video SFX: the price row for the clip's length through the rule the run
+  // charges by (videoSfxCreditId; the run itself measures the real file). A
+  // clip whose length the graph tells (a render's output, a chain of
+  // length-priced steps) is quoted at that length, at most 300 seconds, as the
+  // listing and the server's run estimate quote it (decided 2026-10-07); else
+  // the upstream video's reported duration. Unknown → the 8s row, as the
   // node's own Run button quotes.
   if (nodeType === "video-sfx") {
-    return videoSfxCreditId(upstreamVideoDurationSec(node.id, "video", nodes ?? [], edges ?? []))
+    return videoSfxCreditId(videoSfxQuotedSec(node, nodes ?? [], edges ?? [], reruns))
   }
 
   // Text to Speech / Text to Dialogue by length (decided 2026-10-06): when the

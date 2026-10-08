@@ -7,6 +7,7 @@ import { create } from "zustand"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 import { DEFAULT_PRESENTATION_SETTINGS, type PresentationSettings } from "./use-workflow-store"
 import { migrateListLoopNodes } from "@/lib/list-loop-migration"
+import type { ListedPrice } from "@/lib/run-price"
 import {
   getSharedWorkflow,
   runSharedWorkflow,
@@ -36,6 +37,12 @@ interface PresentationState {
 
   // Presentation config (from workflow settings)
   estimatedCost: number
+  /**
+   * A published app's listed price, fixed + per minute (with the creator's
+   * fee): what its Run button shows until the user's recording and its
+   * length are known (decided 2026-10-07). Null outside an app.
+   */
+  listedPrice: ListedPrice | null
   presentationSettings: PresentationSettings
 
   // Viewer input overrides (ephemeral, never saved)
@@ -75,6 +82,7 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
   shareToken: null,
   isOwner: false,
   estimatedCost: 0,
+  listedPrice: null,
   presentationSettings: DEFAULT_PRESENTATION_SETTINGS,
   inputValues: {},
   executionId: null,
@@ -105,6 +113,7 @@ export const usePresentationStore = create<PresentationState>((set, get) => ({
         edges,
         isOwner: data.isOwner,
         estimatedCost: data.estimatedCost ?? 0,
+        listedPrice: null,
         presentationSettings: data.presentationSettings ?? DEFAULT_PRESENTATION_SETTINGS,
         executionStatus: "idle",
       })

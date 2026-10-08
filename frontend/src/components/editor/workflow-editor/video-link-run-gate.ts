@@ -12,7 +12,7 @@
  * handlers.
  */
 import { toast } from "sonner"
-import { VIDEO_LINK_TOLERANT_CONSUMER_TYPES, videoLinkNeedsDownload } from "@nodaro/shared"
+import { videoLinkNeedsDownload, videoLinkRunNeeds } from "@nodaro/shared"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { tx } from "@/lib/i18n"
 import { localizeNodeLabel } from "@/lib/i18n/labels"
@@ -42,42 +42,17 @@ export function videoLinkNodesFeeding(
   nodes: readonly WorkflowNode[],
   edges: readonly WorkflowEdge[],
 ): string[] {
-  const byId = new Map(nodes.map((n) => [n.id, n] as const))
-  const isSkipped = (id: string) => (byId.get(id)?.data as { skipped?: unknown } | undefined)?.skipped === true
-
-  const sourcesOf = new Map<string, string[]>()
-  for (const edge of edges) {
-    const list = sourcesOf.get(edge.target)
-    if (list) list.push(edge.source)
-    else sourcesOf.set(edge.target, [edge.source])
-  }
-
-  // Everything the run touches: the nodes about to run plus all they read from.
-  const inRun = new Set<string>()
-  const queue = scopeIds.filter((id) => !isSkipped(id))
-  for (const id of queue) inRun.add(id)
-  while (queue.length > 0) {
-    const current = queue.pop()!
-    for (const source of sourcesOf.get(current) ?? []) {
-      if (inRun.has(source)) continue
-      inRun.add(source)
-      queue.push(source)
-    }
-  }
-
-  const needsTheVideo = (linkId: string) =>
-    edges.some((edge) => {
-      if (edge.source !== linkId || !inRun.has(edge.target)) return false
-      const consumerType = byId.get(edge.target)?.type ?? ""
-      return !VIDEO_LINK_TOLERANT_CONSUMER_TYPES.has(consumerType)
-    })
-
+  // One reading of the graph, shared with the app runner's card and the server's
+  // pre-run fetch (`videoLinkRunNeeds`): which links feed the run, and what each
+  // needs. The editor downloads the FILE; a link read only for its sound or its
+  // page address was fetched (or needs nothing) when it was pasted.
+  const needs = videoLinkRunNeeds(scopeIds, nodes, edges)
   return nodes
     .filter(
       (n) =>
         n.type === "youtube-video" &&
         videoLinkNeedsDownload(n.data as Record<string, unknown>) &&
-        needsTheVideo(n.id),
+        needs.get(n.id) === "file",
     )
     .map((n) => n.id)
 }

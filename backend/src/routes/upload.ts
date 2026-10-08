@@ -24,6 +24,7 @@ import {
   type FileMetadata,
 } from "../utils/thumbnail.js"
 import { applyUploadPolicies, uploadBlockedBody, uploadKindFromMime } from "../lib/upload-policy.js"
+import { faststartVideoBuffer, noteFaststartOutcome } from "../utils/faststart.js"
 
 // ============================================================
 // Legacy Constants (kept for backward-compatible endpoints)
@@ -165,9 +166,20 @@ export async function uploadRoutes(app: FastifyInstance) {
       }
     }
 
+    // MP4/MOV with the index at the END (an OBS or phone recording) is
+    // rewritten with it in front, so the first seek into the stored file does
+    // not fetch its tail first. A stream copy, done BEFORE the first write
+    // (never a replace of a stored, immutably-cached key); any failure stores
+    // the file exactly as sent. See utils/faststart.ts.
+    if (category === "video") {
+      const faststart = await faststartVideoBuffer(buffer, mimeTypeFinal)
+      noteFaststartOutcome("upload", faststart.outcome, faststart.reason)
+      buffer = faststart.buffer
+    }
+
     // B4d: deployment upload policy — the server-authoritative gate, on the
-    // FINAL bytes (post-transcode), before any quota reserve or storage
-    // write. No policy registered = allow (mainline byte-identical).
+    // FINAL bytes (post-transcode, post-faststart), before any quota reserve
+    // or storage write. No policy registered = allow (mainline byte-identical).
     const uploadDecision = await applyUploadPolicies({
       kind: uploadKindFromMime(mimeTypeFinal),
       lane: "upload",

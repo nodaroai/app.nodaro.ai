@@ -21,6 +21,18 @@ describe("applyEdlMedium — which kind an Apply EDL render lists under (decided
   })
 })
 
+describe("Speaker View's listing (C3.2): a video render, owner-only, and a Preview when made at proxy quality", () => {
+  it("always lists as a video, whatever its order carries", () => {
+    expect(renderListingMedium("speaker-view", { output: "audio" }, null)).toBe("video")
+    expect(renderListingMedium("speaker-view", {}, { videoUrl: "https://r2/sv.mp4" })).toBe("video")
+  })
+
+  it("is a Preview listing when its output says proxy, read from the render rather than the node's setting", () => {
+    expect(isPreviewListing({ id: "j", job_type: "speaker-view", input_data: { quality: "final" }, output_data: { videoUrl: "v", quality: "proxy" } })).toBe(true)
+    expect(isPreviewListing({ id: "j", job_type: "speaker-view", input_data: { quality: "proxy" }, output_data: { videoUrl: "v", quality: "final" } })).toBe(false)
+  })
+})
+
 describe("renderListingMedium — a job that is not a render has no listing medium here", () => {
   it("answers undefined for any other job, whatever its output holds", () => {
     expect(renderListingMedium("generate-video", {}, { videoUrl: "https://r2/v.mp4" })).toBeUndefined()
@@ -28,7 +40,7 @@ describe("renderListingMedium — a job that is not a render has no listing medi
   })
 
   it("gates exactly the registry's owner-only renders on the owner", () => {
-    expect([...OWNER_ONLY_RENDER_JOBS]).toEqual(["apply-edl"])
+    expect([...OWNER_ONLY_RENDER_JOBS]).toEqual(["apply-edl", "speaker-view"])
   })
 })
 

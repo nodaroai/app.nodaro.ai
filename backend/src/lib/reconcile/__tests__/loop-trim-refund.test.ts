@@ -22,9 +22,11 @@ describe("loopTrimAddonForReconcile", () => {
     ).toBe(30)
   })
 
-  it("defaults duration to 8 when absent", () => {
+  it("sizes an absent duration on the model's own default length", () => {
+    // seedance-2-5 defaults to 8 s: 10 x (ceil(8/5) + 1) = 30
     expect(
       loopTrimAddonForReconcile("image-to-video", {
+        provider: "seedance-2-5",
         loopTrim: { enabled: true, framesToTest: 16 },
       }),
     ).toBe(30)

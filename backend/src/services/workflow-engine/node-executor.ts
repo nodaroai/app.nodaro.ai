@@ -1,6 +1,7 @@
 import { projectDubbingCreditOverride, stampDubbingDuration } from "../../lib/dubbing-pricing.js"
 import { applyEdlCreditOverride } from "../../lib/apply-edl-plan.js"
 import { isPreviewRender } from "../../lib/preview-render.js"
+import { LLM_NODE_MAX_TOKENS_DEFAULTS } from "../../lib/llm-node-output-cap.js"
 import { assertCanvasExecutionAllowed, imageOverlayCredits, applySettingsInput, SETTINGS_INPUT_CONSUMERS, PREVIEW_RENDER_NESTED, PREVIEW_REVIEW_REQUIRED, isCollectionUrl, fitCollectionField } from "@nodaro/shared"
 import { PREVIEW_RENDER_NESTED_MESSAGE } from "./nested-preview-renders.js"
 import { PREVIEW_REVIEW_REQUIRED_MESSAGE } from "../../lib/preview-review-gate.js"
@@ -48,6 +49,7 @@ import { ltxExtendBaseCredits } from "../../lib/ltx-extend-credits.js"
 import { ltxRetakeBaseCredits } from "../../lib/ltx-retake-credits.js"
 import { probeAndCheckRefVideoDurations, probeRefVideoDurations } from "../../lib/ref-video-probe.js"
 import { computeEditPlanReserveId } from "../../lib/edit-plan-pricing.js"
+import { editPlanPerMinuteActive } from "../../lib/private-plugins/edit-plan-per-minute.js"
 import type {
   SimpleNode,
   SimpleEdge,
@@ -67,6 +69,7 @@ import { refundReservedCreditsForJob } from "../../lib/credits-job-lifecycle.js"
 import { isWorkerDraining, DrainAbortError } from "../../lib/worker-drain.js"
 import type { ErrorHint } from "../../lib/safety-block.js"
 import { noteSlotWaitColumnError, withSlotWaitColumn } from "../../lib/jobs-slot-wait-column.js"
+import { GENERATE_VIDEO_PRO_DEFAULT_DURATION_SEC } from "../../lib/generate-video-pro-length.js"
 
 // ---------------------------------------------------------------------------
 // Sync HTTP node types — called via internal fetch
@@ -107,6 +110,8 @@ export const SYNC_HTTP_NODES = new Set([
   "reduce",
   "collection-write",
   "collection-read",
+  "inspiration-read",
+  "competitor-read",
 ])
 
 /**
@@ -140,6 +145,8 @@ export const SYNC_HTTP_ROUTES: Record<string, string> = {
   "save-to-storage": "/v1/save-to-storage",
   "collection-write": "/v1/collection-write",
   "collection-read": "/v1/collection-read",
+  "inspiration-read": "/v1/inspiration-read",
+  "competitor-read": "/v1/competitor-read",
   "web-scrape": "/v1/web-scrape",
   "meta-ads-scrape": "/v1/meta-ads-scrape",
   "instagram-scrape": "/v1/instagram-scrape",
@@ -882,7 +889,7 @@ export function buildSyncHttpBody(
         userId: ctx.userId,
         ...llmNodeParams(data),
         temperature: data.temperature ?? 0.7,
-        maxTokens: data.maxTokens ?? 4096,
+        maxTokens: data.maxTokens ?? LLM_NODE_MAX_TOKENS_DEFAULTS["ai-writer"],
       })
 
     case "llm-chat": {
@@ -903,7 +910,7 @@ export function buildSyncHttpBody(
         referenceAudioUrls: resolvedInputs.referenceAudioUrls,
         ...llmNodeParams(data),
         temperature: data.temperature ?? 0.7,
-        maxTokens: data.maxTokens ?? 8192,
+        maxTokens: data.maxTokens ?? LLM_NODE_MAX_TOKENS_DEFAULTS["llm-chat"],
         userId: ctx.userId,
       })
     }
@@ -1115,6 +1122,24 @@ export function buildSyncHttpBody(
         limit: data.limit,
         order: data.order,
         textFormat: data.textFormat,
+        workflowId: ctx.workflowId,
+        nodeId: node.id,
+        userId: ctx.userId,
+      }
+
+    case "inspiration-read":
+    case "competitor-read":
+      // Reads by the node's own settings; nothing is wired in. A day is sent
+      // only in day mode, with the timezone the editor stored when it was picked.
+      return {
+        ...(node.type === "competitor-read" ? { competitorId: data.competitorId, role: data.role } : { tag: data.tag }),
+        platform: data.platform,
+        period: data.period,
+        windowAmount: data.windowAmount,
+        windowUnit: data.windowUnit,
+        ...(data.period === "day" ? { day: data.day, timezone: data.timezone } : {}),
+        limit: data.limit,
+        order: data.order,
         workflowId: ctx.workflowId,
         nodeId: node.id,
         userId: ctx.userId,
@@ -1569,7 +1594,7 @@ export async function computeGenerateVideoProCreditOverride(
   const pricing = await computeGenerateVideoProPricing({
     provider: String(payload.provider ?? "seedance-2"),
     resolution: String(payload.resolution ?? "720p"),
-    durationSec: Number(payload.duration ?? 8),
+    durationSec: Number(payload.duration ?? GENERATE_VIDEO_PRO_DEFAULT_DURATION_SEC),
     // Context-tail override (helper clamps to [2,5]; undefined → default 2).
     ...(typeof payload.contextTailSec === "number" ? { tailSec: payload.contextTailSec } : {}),
     // Segment levers (2026-08-03): the DAG path must forward BOTH, or its
@@ -1779,6 +1804,10 @@ async function executeWorkerNode(
   // No admin lookup unless this node type is hidden from users (the common
   // path resolves synchronously to the user view).
   const viewer = await viewerForNode(node.type, ctx.userId)
+  // Edit Plan per started minute (decided 2026-10-07): asked only for an
+  // edit-plan node — the standalone orchestrator learns it from this
+  // container's API (cached, fails closed to the steps).
+  const editPlanPerMinute = node.type === "edit-plan" ? await editPlanPerMinuteActive() : false
   let buildResult: ReturnType<typeof buildPayload>
   try {
     buildResult = buildPayload(
@@ -1794,6 +1823,7 @@ async function executeWorkerNode(
         authoredData,
         viewer,
         listRow,
+        editPlanPerMinute,
       },
     )
   } catch (err) {
@@ -1954,7 +1984,7 @@ async function executeWorkerNode(
       // video-sfx is the same shape: a row per clip length, and the length was
       // measured and stamped above, so the reservation keys off that row.
       const reserveModelIdentifier =
-        (await computeEditPlanReserveId(jobName, payload)) ??
+        (await computeEditPlanReserveId(jobName, payload, editPlanPerMinute)) ??
         videoSfxReserveId(jobName, payload) ??
         modelIdentifier
 

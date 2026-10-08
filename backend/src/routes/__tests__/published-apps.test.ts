@@ -353,7 +353,7 @@ describe("POST /v1/apps/publish", () => {
     expect(estimateWorkflowListingCredits).toHaveBeenCalledWith(
       expect.any(Array),
       workflow.edges,
-      { publishType: "app", speechTextCaps: { "s:text": null, "t:directText": 1200 } },
+      { publishType: "app", speechTextCaps: { "s:text": null, "t:directText": 1200 }, replaceableMediaNodeIds: new Set(), exposedListNodeIds: new Set() },
     )
   })
 

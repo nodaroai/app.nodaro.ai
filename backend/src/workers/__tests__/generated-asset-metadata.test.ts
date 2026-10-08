@@ -10,6 +10,11 @@ describe("generatedAssetMetadata — a generated asset says it is a Preview (A1b
     expect(generatedAssetMetadata({ audioUrl: "a", quality: "final" }, "apply-edl")).toEqual({ quality: "final" })
   })
 
+  it("a Speaker View preview is labelled the same way (it is a registered render, C3.2)", () => {
+    expect(generatedAssetMetadata({ videoUrl: "v", thumbnailUrl: "t", quality: "proxy" }, "speaker-view")).toEqual({ thumbnail_url: "t", quality: "proxy" })
+    expect(generatedAssetMetadata({ videoUrl: "v", quality: "final" }, "speaker-view")).toEqual({ quality: "final" })
+  })
+
   it("another job's output never carries a render quality", () => {
     expect(generatedAssetMetadata({ imageUrl: "i", thumbnailUrl: "t", quality: "proxy" }, "generate-image")).toEqual({ thumbnail_url: "t" })
     expect(generatedAssetMetadata({ imageUrl: "i" }, null)).toEqual({})

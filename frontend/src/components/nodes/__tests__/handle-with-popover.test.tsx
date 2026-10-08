@@ -125,3 +125,145 @@ describe("HandleWithPopover — entity image handle lights up image inputs (drag
     },
   )
 })
+
+describe("HandleWithPopover — an EDL drag does not light the Transcript pip (drag-glow)", () => {
+  beforeEach(() => {
+    vi.mocked(useConnection).mockReset()
+  })
+
+  const acceptsJson = (t: string) => t === "edit-plan" || t === "transcribe"
+
+  const renderTranscriptPip = () =>
+    render(
+      <HandleWithPopover
+        nodeId="cap1"
+        nodeType="add-captions"
+        handleId="transcript"
+        type="target"
+        position={Position.Left}
+        label="Transcript"
+        color="#22d3ee"
+        icon={<span />}
+        side="left"
+        top="0px"
+        accepts={acceptsJson}
+      />,
+    )
+
+  const pip = () => screen.getByRole("button", { name: /Transcript/i })
+
+  const dragFrom = (nodeId: string, handleId: string, nodeType: string) =>
+    vi.mocked(useConnection).mockReturnValue({
+      inProgress: true,
+      fromHandle: { nodeId, id: handleId, type: "source" },
+      fromNode: { type: nodeType },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any)
+
+  it("target-direction: dragging Edit Plan's edl leaves the Transcript pip dark", () => {
+    dragFrom("plan1", "edl", "edit-plan")
+    renderTranscriptPip()
+    expect(pip().className).not.toContain("valid-candidate")
+  })
+
+  it("target-direction: a Transcript-kind source still lights it", () => {
+    dragFrom("tr1", "json", "transcribe")
+    renderTranscriptPip()
+    expect(pip().className).toContain("valid-candidate")
+  })
+
+  it("source-direction: dragging back from the Transcript input leaves Edit Plan's edl pip dark", () => {
+    vi.mocked(useConnection).mockReturnValue({
+      inProgress: true,
+      fromHandle: { nodeId: "cap1", id: "transcript", type: "target" },
+      fromNode: { type: "add-captions" },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any)
+    render(
+      <HandleWithPopover
+        nodeId="plan1"
+        nodeType="edit-plan"
+        handleId="edl"
+        type="source"
+        position={Position.Right}
+        label="EDL"
+        color="#22d3ee"
+        icon={<span />}
+        side="right"
+        top="0px"
+      />,
+    )
+    expect(screen.getByRole("button", { name: /EDL/i }).className).not.toContain("valid-candidate")
+  })
+})
+
+describe("HandleWithPopover — a Transcript drag does not light the EDL pip (drag-glow, decided 2026-10-08)", () => {
+  beforeEach(() => {
+    vi.mocked(useConnection).mockReset()
+  })
+
+  const acceptsJson = (t: string) => t === "edit-plan" || t === "transcribe"
+
+  const renderEdlPip = () =>
+    render(
+      <HandleWithPopover
+        nodeId="render1"
+        nodeType="apply-edl"
+        handleId="edl"
+        type="target"
+        position={Position.Left}
+        label="EDL"
+        color="#22d3ee"
+        icon={<span />}
+        side="left"
+        top="0px"
+        accepts={acceptsJson}
+      />,
+    )
+
+  it("target-direction: dragging Transcribe's json leaves the EDL pip dark", () => {
+    vi.mocked(useConnection).mockReturnValue({
+      inProgress: true,
+      fromHandle: { nodeId: "tr1", id: "json", type: "source" },
+      fromNode: { type: "transcribe" },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any)
+    renderEdlPip()
+    expect(screen.getByRole("button", { name: /EDL/i }).className).not.toContain("valid-candidate")
+  })
+
+  it("target-direction: an EDL source still lights it", () => {
+    vi.mocked(useConnection).mockReturnValue({
+      inProgress: true,
+      fromHandle: { nodeId: "plan1", id: "edl", type: "source" },
+      fromNode: { type: "edit-plan" },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any)
+    renderEdlPip()
+    expect(screen.getByRole("button", { name: /EDL/i }).className).toContain("valid-candidate")
+  })
+
+  it("source-direction: dragging back from the EDL input leaves Transcribe's json pip dark", () => {
+    vi.mocked(useConnection).mockReturnValue({
+      inProgress: true,
+      fromHandle: { nodeId: "render1", id: "edl", type: "target" },
+      fromNode: { type: "apply-edl" },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any)
+    render(
+      <HandleWithPopover
+        nodeId="tr1"
+        nodeType="transcribe"
+        handleId="json"
+        type="source"
+        position={Position.Right}
+        label="JSON"
+        color="#22d3ee"
+        icon={<span />}
+        side="right"
+        top="0px"
+      />,
+    )
+    expect(screen.getByRole("button", { name: /JSON/i }).className).not.toContain("valid-candidate")
+  })
+})

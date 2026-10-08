@@ -32,6 +32,30 @@ describe("CreditCost — the edition gate lives in the component (#645)", () => 
     expect(container.textContent).toBe(" · 0 CR/run")
   })
 
+  // A listing priced per minute of its recording (decided 2026-10-07).
+  it("a per-minute listing shows its fixed figure, then its per-minute one", () => {
+    editionMock.hasCredits.mockReturnValue(true)
+    const { container } = render(<CreditCost credits={82} perMinute={14} />)
+    expect(container.textContent).toBe("82 CR + 14/min")
+    expect(container.querySelector("span")?.getAttribute("title")).toBe("82 CR plus 14 CR per minute of the recording")
+  })
+
+  it("0 or no per-minute part renders exactly as before", () => {
+    editionMock.hasCredits.mockReturnValue(true)
+    for (const perMinute of [0, null, undefined]) {
+      const { container } = render(<CreditCost credits={82} suffix="CR/run" perMinute={perMinute} />)
+      expect(container.textContent).toBe("82 CR/run")
+      expect(container.querySelector("span")?.hasAttribute("title")).toBe(false)
+      cleanup()
+    }
+  })
+
+  it("a per-minute listing shows nothing either on an edition without credits", () => {
+    editionMock.hasCredits.mockReturnValue(false)
+    const { container } = render(<CreditCost credits={82} perMinute={14} />)
+    expect(container.innerHTML).toBe("")
+  })
+
   it("CreditGate hides bespoke credit layouts the same way", () => {
     editionMock.hasCredits.mockReturnValue(false)
     const { container } = render(

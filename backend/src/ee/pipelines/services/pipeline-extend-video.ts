@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { buildVideoCreditModelIdentifier, isSeedance2Provider } from "@nodaro/shared"
+import { buildVideoCreditModelIdentifier, isSeedance2Provider, pricedOutputDurationSec } from "@nodaro/shared"
 import { runPipelineWorkerJob } from "./_run-worker-job.js"
 
 /**
@@ -116,7 +116,7 @@ export async function pipelineExtendVideo(
       )
     }
     const augmentedPrompt = `${prompt.trim()} Continue seamlessly from the previous clip, matching its motion, lighting, and style.`
-    const effectiveDuration = duration && duration > 0 ? Math.max(1, Math.round(duration)) : 8
+    const effectiveDuration = duration && duration > 0 ? Math.max(1, Math.round(duration)) : pricedOutputDurationSec(model, undefined)
     // hasVideoRef=true → credit identifier gets `-ref` suffix (e.g.
     // `seedance-2:8s:480p-ref`), which is the cheaper rate Seedance 2 uses
     // when a reference video is attached.

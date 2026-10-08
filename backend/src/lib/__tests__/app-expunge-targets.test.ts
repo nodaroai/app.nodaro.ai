@@ -24,6 +24,7 @@ import { appRunStamp } from "../app-run-stamp.js"
 import { appRenderFinalStamp } from "../app-run-final-column.js"
 import { migrationColumnsOf } from "../../test/migration-columns.js"
 import { resetInputOverridesColumnForTests } from "../execution-input-overrides.js"
+import { resetVideoLinkFilesColumnForTests } from "../execution-video-link-files.js"
 
 const APP_ID = "00000000-0000-4000-8000-000000000099"
 const WORKFLOW = "00000000-0000-4000-8000-0000000000f1"
@@ -52,7 +53,7 @@ function fakeSupabase(opts: {
   /** PostgREST's row cap: a read returns at most this many rows, without an error (default 1000). */
   maxRows?: number
   /** A column the database does not have yet: a write naming it fails whole, as PostgREST does. */
-  missingColumn?: { table: string; column: string }
+  missingColumn?: { table: string; column: string } | Array<{ table: string; column: string }>
   rejected?: Update[]
 }) {
   const touched = opts.touched ?? []
@@ -75,9 +76,11 @@ function fakeSupabase(opts: {
     const run = () => {
       if (patch) {
         if (opts.failUpdate === table) return { data: null, error: { message: `update ${table} failed` } }
-        if (opts.missingColumn?.table === table && opts.missingColumn.column in patch) {
+        // One column per error, the first the patch names — as PostgREST reports it.
+        const missing = [opts.missingColumn ?? []].flat().find((m) => m.table === table && m.column in patch!)
+        if (missing) {
           opts.rejected?.push({ table, patch, ids: [] })
-          return { data: null, error: { code: "PGRST204", message: `column ${opts.missingColumn.column} not found` } }
+          return { data: null, error: { code: "PGRST204", message: `column ${missing.column} not found` } }
         }
         const hit = (opts.tables[table] ?? []).filter((r) => filters.every((f) => f(r)))
         opts.updates?.push({ table, patch, ids: hit.map((r) => r.id as string) })
@@ -663,7 +666,7 @@ describe("redactAppExpungeTargets", () => {
     expect(result).toEqual({ executions: 150, jobs: 3, innerRuns: 0, reports: 0 })
     const execUpdates = updates.filter((u) => u.table === "workflow_executions")
     const jobUpdates = updates.filter((u) => u.table === "jobs")
-    for (const u of execUpdates) expect(u.patch).toEqual({ node_states: {}, input_overrides: null, error_message: null })
+    for (const u of execUpdates) expect(u.patch).toEqual({ node_states: {}, input_overrides: null, video_link_files: null, error_message: null })
     for (const u of jobUpdates) expect(u.patch).toEqual(JOB_PATCH)
     expect(execUpdates.flatMap((u) => u.ids).sort()).toEqual([...execIds].sort())
     expect(jobUpdates.flatMap((u) => u.ids).sort()).toEqual([...jobIds].sort())
@@ -796,11 +799,63 @@ describe("redactAppExpungeTargets", () => {
 
     expect(result).toEqual({ executions: 150, jobs: 3, innerRuns: 0, reports: 0 })
     const execUpdates = updates.filter((u) => u.table === "workflow_executions")
-    for (const u of execUpdates) expect(u.patch).toEqual({ node_states: {}, error_message: null })
+    for (const u of execUpdates) expect(u.patch).toEqual({ node_states: {}, video_link_files: null, error_message: null })
     expect(execUpdates.flatMap((u) => u.ids).sort()).toEqual([...execIds].sort())
     // Learned once: the second chunk is written without the column straight away.
     expect(rejected).toHaveLength(1)
     resetInputOverridesColumnForTests()
+  })
+
+  // `video_link_files` is migration 487 (the files a run fetched from a Video URL
+  // link, a runner's content). The same window, the same rule: a write naming it
+  // before the migration reaches the shared database fails whole, and that must
+  // neither fail the expunge nor make the pin column look missing.
+  it("clears the rest when the fetched-files column is not in the database yet — and the pin is still cleared", async () => {
+    resetInputOverridesColumnForTests()
+    resetVideoLinkFilesColumnForTests()
+    const updates: Update[] = []
+    const rejected: Update[] = []
+    vi.mocked(supabase.from).mockImplementation(
+      fakeSupabase({ tables: tables(), updates, rejected, missingColumn: { table: "workflow_executions", column: "video_link_files" } }),
+    )
+
+    const result = await redactAppExpungeTargets(one)
+
+    expect(result).toEqual({ executions: 150, jobs: 3, innerRuns: 0, reports: 0 })
+    const execUpdates = updates.filter((u) => u.table === "workflow_executions")
+    for (const u of execUpdates) expect(u.patch).toEqual({ node_states: {}, input_overrides: null, error_message: null })
+    expect(execUpdates.flatMap((u) => u.ids).sort()).toEqual([...execIds].sort())
+    expect(rejected).toHaveLength(1)
+    resetInputOverridesColumnForTests()
+    resetVideoLinkFilesColumnForTests()
+  })
+
+  it("clears the rest when BOTH columns are missing: one retry per missing column, then the plain patch", async () => {
+    resetInputOverridesColumnForTests()
+    resetVideoLinkFilesColumnForTests()
+    const updates: Update[] = []
+    const rejected: Update[] = []
+    vi.mocked(supabase.from).mockImplementation(
+      fakeSupabase({
+        tables: tables(),
+        updates,
+        rejected,
+        missingColumn: [
+          { table: "workflow_executions", column: "input_overrides" },
+          { table: "workflow_executions", column: "video_link_files" },
+        ],
+      }),
+    )
+
+    const result = await redactAppExpungeTargets(one)
+
+    expect(result).toEqual({ executions: 150, jobs: 3, innerRuns: 0, reports: 0 })
+    const execUpdates = updates.filter((u) => u.table === "workflow_executions")
+    for (const u of execUpdates) expect(u.patch).toEqual({ node_states: {}, error_message: null })
+    expect(execUpdates.flatMap((u) => u.ids).sort()).toEqual([...execIds].sort())
+    expect(rejected).toHaveLength(2)
+    resetInputOverridesColumnForTests()
+    resetVideoLinkFilesColumnForTests()
   })
 
   it("writes nothing for no targets", async () => {

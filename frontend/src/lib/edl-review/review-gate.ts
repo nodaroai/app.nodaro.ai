@@ -20,7 +20,6 @@
  * the guard.
  */
 import type { RenderRuleVerdict } from "@/components/editor/workflow-editor/render-final-checks"
-import type { KeptSet } from "./kept-set"
 
 export type ReviewGateMode = "hidden" | "view-only" | "running" | "ready"
 
@@ -43,12 +42,14 @@ export interface ReviewGate {
 }
 
 export interface ReviewGateInput {
-  /** The plan is a Tighten EDL the inspector can edit. */
+  /** The plan is a Tighten EDL or clip set the inspector can edit. */
   readonly reviewable: boolean
   readonly readOnly: boolean
   /** R9 a: read-only, or a live run includes the render or its plan. */
   readonly locked: boolean
-  readonly kept: KeptSet | null
+  /** How much the review keeps: intervals of a Tighten cut, or kept clips of a
+   *  clip set. Zero holds the runs; null is "not known" (nothing is held). */
+  readonly keptCount: number | null
   readonly verdict: RenderRuleVerdict | undefined
   /** A newer run's changes; `undefined` while the check is out, `null` when there is none. */
   readonly newerRun: unknown
@@ -67,8 +68,8 @@ export function reviewGate(input: ReviewGateInput): ReviewGate {
 const unchecked = ({ newerRun, newerCheckTimedOut }: ReviewGateInput): boolean => newerRun === undefined && !!newerCheckTimedOut
 
 function holdOf(input: ReviewGateInput): ReviewGateHold | null {
-  const { kept, verdict, newerRun } = input
-  if (kept !== null && kept.length === 0) return { kind: "nothing-kept" }
+  const { keptCount, verdict, newerRun } = input
+  if (keptCount === 0) return { kind: "nothing-kept" }
   if (verdict && !verdict.ok) return { kind: "issues", issues: verdict.issues }
   if (newerRun !== null && newerRun !== undefined) return { kind: "newer-run" }
   if (newerRun === undefined && !unchecked(input)) return { kind: "checking-newer" }

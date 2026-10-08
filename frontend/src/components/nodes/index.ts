@@ -113,6 +113,7 @@ import { CombineVideosNode } from "./combine-videos-node";
 import { ApplyEdlNode } from "./apply-edl-node";
 import { EditPlanNode } from "./edit-plan-node";
 import { CameraSwitchNode } from "./camera-switch-node";
+import { SpeakerViewNode } from "./speaker-view-node";
 import { ContentRecipeNode } from "./content-recipe-node";
 import { ContentIdeasNode } from "./content-ideas-node";
 import { ImageCollageNode } from "./image-collage-node";
@@ -194,6 +195,8 @@ import { TelegramAccountTriggerNode } from "./telegram-account-trigger-node";
 import { TelegramAccountSendNode } from "./telegram-account-send-node";
 import { TelegramChannelFeedNode } from "./telegram-channel-feed-node";
 import { CollectionReadNode } from "./collection-read-node";
+import { InspirationReadNode } from "./inspiration-read-node";
+import { CompetitorReadNode } from "./competitor-read-node";
 import { CollectionWriteNode } from "./collection-write-node";
 import { GenerativePipelineNode } from "./generative-pipeline-node";
 import { GroupNode } from "./group-node";
@@ -333,6 +336,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "apply-edl": ApplyEdlNode,
   "edit-plan": EditPlanNode,
   "camera-switch": CameraSwitchNode,
+  "speaker-view": SpeakerViewNode,
   "content-recipe": ContentRecipeNode,
   "content-ideas": ContentIdeasNode,
   "image-collage": ImageCollageNode,
@@ -430,6 +434,8 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "publish-social": SocialNode,
   "telegram-channel-feed": TelegramChannelFeedNode,
   "collection-read": CollectionReadNode,
+  "inspiration-read": InspirationReadNode,
+  "competitor-read": CompetitorReadNode,
   "collection-write": CollectionWriteNode,
   "telegram-trigger": TelegramTriggerNode,
   "telegram-account-trigger": TelegramAccountTriggerNode,

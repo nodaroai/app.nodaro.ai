@@ -11,6 +11,8 @@
  * the server could only refuse.
  */
 import {
+  AUTO_DOWNLOAD_MAX_SEC,
+  YOUTUBE_MAX_HEIGHT,
   detectVideoLinkPlatform,
   isSocialVideoUrl,
   videoLinkDownloadedFile,
@@ -30,16 +32,9 @@ export const VIDEO_PLATFORM_LABELS: Readonly<Record<Exclude<VideoLinkPlatform, "
   twitter: "Twitter/X",
 }
 
-/**
- * A YouTube video shorter than this downloads whole the moment the link lands;
- * a longer one (or one whose length could not be read) waits for the person to
- * pick a part. The same 4 minutes Recast and Studio use — a two-hour talk
- * nobody asked for never gets fetched by accident.
- */
-export const AUTO_DOWNLOAD_MAX_SEC = 240
-
-/** YouTube's quality cap ("up to N rows"). Other hosts have no ladder worth capping. */
-export const YOUTUBE_MAX_HEIGHT = 1080
+// The 4-minute auto-download ceiling and the 1080-row YouTube cap are `@nodaro/shared`'s:
+// the app runner's card, the editor and the server's pre-run fetch read ONE number.
+export { AUTO_DOWNLOAD_MAX_SEC, YOUTUBE_MAX_HEIGHT }
 
 const YOUTUBE_ID = /^[a-zA-Z0-9_-]{11}$/
 

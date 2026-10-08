@@ -2703,57 +2703,74 @@ export const VIDEO_VARIABLE_PRICING: Record<string, "duration" | "duration+audio
 }
 
 /**
- * Duration assumed for PRICING when a request names a provider but omits
- * `duration` — MUST match the provider's KIE-side default (`extraParams.duration`
- * in backend kie/models.ts) so an intent-less request reserves what it will
- * actually render. Providers absent here use the historical global 5s fallback,
- * which is only safe when their duration TIERS snap 5 up to (or past) the model
- * default (e.g. seedance-2's 4/8/12/15 ladder snaps 5 → the 8s tier = its 8s
- * default). minimax-h3 prices per-second (every 4-15s tier seeded), so a 5s
- * fallback would under-reserve its 6s default render.
+ * @deprecated Read {@link pricedOutputDurationSec} (or the catalog's
+ * `defaultDuration`). Kept only as a derived view of `MODEL_CATALOG` for
+ * consumers of the published package that imported the old hand-kept map; no
+ * pricing path reads it (`pricing-default-duration-guard.test.ts` fails the
+ * build if one does).
  */
-export const PRICING_DEFAULT_DURATION_SEC: Record<string, number> = {
-  "minimax-h3": 6,
-  // KIE renders 8s when `duration` is omitted (kie/models.ts extraParams), and
-  // Seedance 2.5 prices one tier per second across 4–30s, so the 5s fallback
-  // billed a 5s tier against an 8s render — and under-reserved every
-  // reference-video run's output seconds by three (#1397).
-  "seedance-2-5": 8,
-  // Same shape: KIE renders 8s by default and the ladder is priced per second,
-  // so the 5s fallback billed a 5s tier against an 8s render (caught by the
-  // render-default ↔ priced-tier invariant in
-  // backend/src/providers/__tests__/pricing-default-duration-sync.test.ts).
-  "grok-imagine-video-1.5": 8,
+export const PRICING_DEFAULT_DURATION_SEC: Readonly<Record<string, number>> = Object.freeze(
+  Object.fromEntries(
+    Object.values(MODEL_CATALOG)
+      .filter((e) => e.kind === "video" && typeof e.defaultDuration === "number")
+      .map((e) => [e.id, e.defaultDuration as number]),
+  ),
+)
+
+/**
+ * The legal length nearest to `requested` — ties go to the earlier (shorter)
+ * entry of the list. This is the SAME rule every video runner snaps a request
+ * with (`snapToAllowedDuration` delegates here), so the length a request is
+ * priced at and the length it renders can never be two different numbers.
+ */
+export function snapToNearestDuration(requested: number, allowed: readonly number[] | undefined): number {
+  if (!allowed || allowed.length === 0) return requested
+  if (allowed.includes(requested)) return requested
+  return allowed.reduce((best, d) => (Math.abs(d - requested) < Math.abs(best - requested) ? d : best))
 }
 
 /**
- * The output seconds a request is PRICED at: the requested duration when the
- * caller gave one, else the provider's own default render length
- * ({@link PRICING_DEFAULT_DURATION_SEC}), else the historical 5s fallback.
+ * The length a model renders when the request names none, from the model
+ * catalog (`defaultDuration`); else its shortest legal length; else 5 for an id
+ * the catalog does not list. A video model that is priced by length MUST
+ * declare `defaultDuration` (`pricing-default-duration-sync.test.ts`).
+ */
+export function videoDefaultDurationSec(provider: string): number {
+  const entry = MODEL_CATALOG[provider]
+  if (typeof entry?.defaultDuration === "number") return entry.defaultDuration
+  const shortest = entry?.durations?.length ? Math.min(...entry.durations) : undefined
+  return shortest ?? 5
+}
+
+/**
+ * The output seconds a video request is CHARGED at — the ONE funnel every
+ * price path reads (the credit identifier's tier, the run reservation and
+ * commit, the editor and server estimates, the Seedance and MiniMax
+ * reference-video reservations and the Loop Trim refund).
  *
- * The ONE source for `buildVideoCreditModelIdentifier`'s tier AND for every
- * dynamic reservation that scales by output seconds (the Seedance 2 and
- * MiniMax Hailuo 3 reference-video overrides on both the route and the DAG
- * lane) — a literal `?? 5` in any of those places re-opens the gap this map
- * closes.
+ *  - no duration (or an unusable one) → the model's own default render length
+ *    (`MODEL_CATALOG[provider].defaultDuration`), never a global 5;
+ *  - a duration the model does not offer → the nearest one it does
+ *    ({@link snapToNearestDuration}, the runners' own rule), because that is the
+ *    length it renders;
+ *  - AUTO (`VIDEO_DURATION_AUTO`) → the model's longest clip: the model picks
+ *    the length, `commit_credits` refunds a surplus but never collects a
+ *    deficit, and the delivered clip is measured at settle time
+ *    (lib/seedance2-ref-video-settle.ts).
+ *
+ * A literal `?? 5` (or `?? 8`) at any pricing site re-opens the gap this closes;
+ * `pricing-default-duration-guard.test.ts` fails the build on one.
  */
 export function pricedOutputDurationSec(provider: string, requested: number | string | undefined): number {
-  const fallback = PRICING_DEFAULT_DURATION_SEC[provider] ?? 5
+  const fallback = videoDefaultDurationSec(provider)
   const parsed = typeof requested === "string" ? parseInt(requested, 10) : requested
   if (parsed === undefined || Number.isNaN(parsed)) return fallback
-  // AUTO (`VIDEO_DURATION_AUTO`): the model picks the length, so the only
-  // safe price is the LONGEST it can render — `commit_credits` refunds a surplus
-  // but never collects a deficit, and the delivered clip is measured at settle
-  // time (lib/seedance2-ref-video-settle.ts). Living HERE, the one source every
-  // tier and every scaled reservation reads, a new pricing call site reserves
-  // the ceiling by default instead of having to remember to. Any other
-  // non-positive value is nonsense and prices at the render default.
   if (parsed <= 0) {
     return isAutoVideoDuration(parsed) && supportsAutoVideoDuration(provider)
       ? maxVideoDurationSec(provider) ?? fallback
       : fallback
   }
-  return parsed
+  return snapToNearestDuration(parsed, MODEL_CATALOG[provider]?.durations)
 }
 
 /** Models that accept `VIDEO_DURATION_AUTO` — a catalog capability (docs.kie.ai:

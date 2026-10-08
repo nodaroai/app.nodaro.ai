@@ -75,6 +75,25 @@ describe("useClipDecisions", () => {
     expect(planData().editedEdl).toBeUndefined()
   })
 
+  it("Keep all and Drop all set the named clips in ONE write, and leave the others alone (A4-2, R15 a)", () => {
+    const { result } = renderHook(() => useClipDecisions(source()))
+    const writes = vi.spyOn(useWorkflowStore.getState(), "updateNodeData")
+    act(() => result.current.setKeepFor([0, 2], false))
+    expect(writes).toHaveBeenCalledTimes(1)
+    expect(planData().editedEdl).toMatchObject({ kind: "clips", clips: [{ keep: false }, { keep: true }, { keep: false }] })
+    act(() => result.current.setKeepFor([0, 2], true))
+    expect(planData().editedEdl).toBeUndefined()
+    expect(writes).toHaveBeenCalledTimes(2)
+    writes.mockRestore()
+  })
+
+  it("Drop all keeps the hooks typed so far, flushed with it", () => {
+    const { result } = renderHook(() => useClipDecisions(source()))
+    act(() => result.current.setHook(1, "typed"))
+    act(() => result.current.setKeepFor([0, 1, 2], false))
+    expect(planData().editedEdl).toMatchObject({ clips: [{ keep: false }, { keep: false, hook: "typed" }, { keep: false }] })
+  })
+
   it("a hook edit is written once the typing pauses", () => {
     const { result } = renderHook(() => useClipDecisions(source()))
     act(() => result.current.setHook(0, "Nobody tells"))
@@ -134,6 +153,7 @@ describe("useClipDecisions", () => {
     const { result } = renderHook(() => useClipDecisions(source({ locked: true })))
     expect(result.current.canEdit).toBe(false)
     act(() => result.current.setKeep(0, false))
+    act(() => result.current.setKeepFor([0, 1], false))
     act(() => result.current.setHook(0, "x"))
     act(() => result.current.flush())
     expect(planData().editedEdl).toBeUndefined()

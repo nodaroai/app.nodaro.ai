@@ -3404,6 +3404,14 @@ list(params?: ListAppsParams): Promise<ListAppsResult>
 Cursor-paginated browse of published apps. Optional `search`, `category`, and
 `limit` (server caps at 50).
 
+Each app's `estimatedCredits` is its listed price per run. When its price
+follows the length of the recording the app is given (an Edit Plan pass, the
+render of a whole episode), `perMinuteCredits` is above 0: the price is then
+`estimatedCredits` plus `perMinuteCredits` per minute of the recording (both
+optional on `PublishedApp`). When the app has a list input its user fills,
+`perItemCredits` is above 0: each item beyond the creator's saved items adds
+that many credits.
+
 ```ts
 const { data, nextCursor } = await client.apps.list({ search: "headshot", limit: 20 })
 ```
@@ -3415,7 +3423,13 @@ get(slug: string): Promise<{ data: PublishedAppDetail }>
 ```
 
 Fetches one app's metadata plus its `inputSchema` (the fields end users fill
-in) and `outputs` mapping.
+in) and `outputs` mapping. `runEstimatedCredits`, `runPerMinuteCredits` and
+`runPerItemCredits` price the app run alone: the listed price less its
+[Render final](./app-view-modes.md#render-final) part, which runs and is
+charged separately (all optional; absent from an older server).
+`editPlanPerMinute` says whether this server charges an Edit Plan node per
+started minute of the recording (`true`) or in 15/30/60/90/120/180-minute steps
+(`false`, or absent on an older server).
 
 ```ts
 const { data: app } = await client.apps.get("pro-headshot")
@@ -3430,6 +3444,14 @@ run(slug: string, inputs?: Record<string, unknown>, opts?: RunAppOptions): Promi
 Triggers an app run. `inputs` keys must match the app's input-schema field
 names. Returns `{ executionId, status, runId? }` — poll via
 `client.executions.get(executionId)`.
+
+An app that takes a video link (an exposed
+[Video URL](./nodes/input/youtube-video.md) node) is run with the link as the
+input, for example `client.apps.run("clip-pack", { episode: "https://www.youtube.com/watch?v=dQw4w9WgXcQ" })`.
+The server downloads a post link itself before the first node runs (a YouTube
+video of 4 minutes or more only as a part named with `opts.inputOverrides`);
+any other web link is used as it is. See
+[Video URL inputs](./embed-app-guide.md#video-url-inputs).
 
 `opts.inputOverrides` is the advanced escape hatch: nested
 `{ nodeId: { field: value } }` raw node data for THIS run, which reaches fields
@@ -4048,8 +4070,8 @@ on ElevenLabs Dialogue v3 — the default — or Dialogue v4
 and a `similarityBoost`). Each line's `voice` is a premade voice name or an
 ElevenLabs voice UUID — cloned and Voice Library voices work, mixed casts are
 fine, and line text may carry `[audio tags]` like `[laughs]`. At most 5,000
-characters total across lines on either model (under 2,000 recommended for
-best quality) and 10 unique voices per generation. Flat credits per request
+characters total across lines on Dialogue v3 and 10,000 on Dialogue v4 (under
+2,000 recommended for best quality) and 10 unique voices per generation. Flat credits per request
 under the chosen model's identifier. Poll `jobs.get(jobId)` for
 `output_data.audioUrl` and — on every dialogue model, since both return timings
 at no extra credits — `output_data.transcript`, a `Transcript`
@@ -5435,6 +5457,17 @@ required). `params`: `cursor`, `limit`, `category`, `outputType`, `tag`,
 `"most-favorited"`), `nodeType`, `provider`, `complexity`. Returns
 `{ data: TemplateBrowseCard[], nextCursor: string | null }` — pass
 `nextCursor` back as `cursor` for the next page.
+
+A card's `estimatedCredits` is the template's listed price. When the price
+follows the length of the recording the template is given,
+`estimatedPerMinuteCredits` is above 0 and the price is `estimatedCredits` plus
+that many credits per minute of the recording — the Tighten Episode template
+lists `82` and `14`. It is absent or `0` otherwise.
+
+The route also takes `sort=cheapest`, the Templates page's **Fewest credits**:
+the price of a 60-minute recording first, lowest first (`estimatedCredits` plus
+60 × `estimatedPerMinuteCredits`), so `82` + `14`/min sorts as `922`. The SDK's
+`TemplateSort` does not list it yet; pass it through `client.request()`.
 
 ```ts
 const page = await client.templates.browse({ sort: "popular", search: "trailer" })

@@ -163,3 +163,39 @@ describe("edit-plan orchestrated payload — unknown mode", () => {
     expect((out.payload as { mode?: string }).mode).toBe("tighten")
   })
 })
+
+// Per started minute (decided 2026-10-07): when the caller says the plugin
+// charges that way, a length RECORDED on the master reserves its started
+// minutes. A transcript basis keeps the step (review round F4): the last
+// word's end is a lower bound — trailing music and silence are not
+// transcribed — so its started minutes would sit under the file's real length,
+// and the plugin, which re-probes the file, refuses a reserve more than 3 s
+// short of it. The step absorbs that. The executor's own probe of the master
+// replaces either id with the exact started minutes when it succeeds.
+describe("edit-plan orchestrated reserve — per started minute", () => {
+  // Speech ends at 44:12; the file itself may run on past 45:00.
+  const transcript44m = { version: 1, words: [{ text: "hi", startMs: 0, endMs: 500 }, { text: "bye", startMs: 2_651_000, endMs: 2_652_000 }] }
+  const buildWith = (perMinute: boolean | undefined, source: Record<string, unknown> = urlSourceRow) =>
+    buildPayload(node({}) as never, "job-1", { transcript: JSON.stringify(transcript44m), editPlanSources: [source] } as never, undefined, {
+      ...ctx,
+      ...(perMinute === undefined ? {} : { editPlanPerMinute: perMinute }),
+    } as never)
+
+  it("reserves the 45 started minutes of a master whose 44.2-min length is recorded", () => {
+    const out = buildWith(true, { ...urlSourceRow, duration: 44.2 * 60 })
+    expect(out.modelIdentifier).toBe("edit-plan:tighten:standard:45m")
+    expect((out.payload as { reservedCreditId?: string }).reservedCreditId).toBe("edit-plan:tighten:standard:45m")
+  })
+
+  it("never reserves started minutes from the transcript's clock: the step, a 44.2-min transcript is :60m", () => {
+    const out = buildWith(true)
+    expect(out.modelIdentifier).toBe("edit-plan:tighten:standard:60m")
+    expect((out.payload as { reservedCreditId?: string }).reservedCreditId).toBe("edit-plan:tighten:standard:60m")
+  })
+
+  it("keeps the 60-minute step without the capability (absent or false)", () => {
+    expect(buildWith(false).modelIdentifier).toBe("edit-plan:tighten:standard:60m")
+    expect(buildWith(undefined).modelIdentifier).toBe("edit-plan:tighten:standard:60m")
+    expect(buildWith(false, { ...urlSourceRow, duration: 44.2 * 60 }).modelIdentifier).toBe("edit-plan:tighten:standard:60m")
+  })
+})

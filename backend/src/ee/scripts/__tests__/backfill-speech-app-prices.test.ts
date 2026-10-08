@@ -14,7 +14,7 @@ vi.mock("@/lib/config.js", async (importOriginal) => {
 })
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: db.from } }))
 
-import { formatLine, hasSpeechNode, parseArgs, planWrite, recomputePrice, runBackfill, selectCandidates, speechNodeSummary } from "../backfill-speech-app-prices.js"
+import { formatLine, hasPerMinutePart, hasSpeechNode, parseArgs, planWrite, recomputePrice, runBackfill, selectCandidates, speechNodeSummary } from "../backfill-speech-app-prices.js"
 
 const tts = { id: "t", type: "text-to-speech", data: { textSource: "direct", provider: "elevenlabs-v4", directText: "a".repeat(1000) } }
 const image = { id: "i", type: "generate-image", data: {} }
@@ -120,5 +120,16 @@ describe("the edition gate", () => {
     expect(db.from).not.toHaveBeenCalled()
     error.mockRestore()
     flag.credits = true
+  })
+})
+
+// A listing with a per-minute part (decided 2026-10-07) is never backfilled:
+// the script writes the fixed pair alone, which would drop the per-minute part.
+describe("a per-minute listing is left for its next publish", () => {
+  it("has a per-minute part when either part has one", () => {
+    expect(hasPerMinutePart({ preview: 10, final: 0 })).toBe(false)
+    expect(hasPerMinutePart({ preview: 10, final: 0, previewPerMinute: 0, finalPerMinute: 0 })).toBe(false)
+    expect(hasPerMinutePart({ preview: 10, final: 0, previewPerMinute: 4 })).toBe(true)
+    expect(hasPerMinutePart({ preview: 10, final: 0, finalPerMinute: 10 })).toBe(true)
   })
 })

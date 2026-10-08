@@ -296,7 +296,12 @@ does not declare is stored as sent and reported in `edgeWarnings` — the canvas
 edge only on a handle the node renders, so read a node's handle ids from
 `get_node_skill`. An edge naming a node that does not exist, a self-loop, an edge with
 a missing endpoint, or the same connection sent twice without an `id` is dropped and
-reported in `edgeWarnings` (the orchestrator never ran it). Two edges with the same
+reported in `edgeWarnings` (the orchestrator never ran it). An edit-list (EDL) output
+wired into a Transcript input (Edit Plan's or Camera Switch's `edl` into Add Captions'
+`transcript`, for example) is dropped the same way, with the reason in the warning: an
+EDL is not a transcript, and the canvas refuses that connection too. So is the reverse, a
+transcript output (Transcribe's `json`, Text to Dialogue's `json`, Camera Switch's `transcript`,
+Apply EDL's `json`) wired into an `edl` input. Two edges with the same
 `id` refuse the whole write; nothing is stored.
 
 ---
@@ -848,7 +853,7 @@ hand-maintained; if the two ever disagree, the tool description is right.
 |------|-------------|
 | `generate_music` | Text-to-music generation. Accepts `prompt`, `genre`, `mood`, `duration`, `instrumental`, `lyrics`, `title`, `model` — `suno-v6` (default; greater musical expression, more natural vocals, richer details), `suno-v6_wild` (bolder, more distinctive, less predictable), `suno-v6_mini` (lightweight and fast), `suno-v5_5` (alias `suno-v5-5`), `suno-v5`, `suno`; `minimax` (MiniMax Music) follows a reference song, voice or instrumental and needs `reference_audio_url` or `reference_audio_asset_id` (a Nodaro audio job id) — without one the tool asks for it instead of starting a job. Also accepts `presetId` (from `list_node_presets { nodeType: "generate-music" }`) to apply a built-in or saved preset's config server-side; any explicit field above overrides the preset, and `prompt` may be omitted when the preset supplies one. A preset's `promptPrefix` / `promptSuffix` wrap your `prompt`. |
 | `generate_speech` | Text-to-speech. Accepts `text`, `voice_id` (with `voice_type`: `premade`, `custom` or `library`), `model` — `elevenlabs-v4` (default: stability + similarity only, up to 10,000 characters), `elevenlabs-v3` (the previous model: stability only, up to 5,000 characters), `elevenlabs-turbo` or `elevenlabs-multilingual` (v2) — and the delivery levers `stability`, `similarity_boost`, `style`, `speed` and `language_code`. Also accepts `presetId` (from `list_node_presets { nodeType: "text-to-speech" }`) to apply a built-in delivery preset (speed/stability/style) server-side; explicit fields override it, and `text` is always required (presets tune delivery; a preset's `promptPrefix` / `promptSuffix` wrap your `text`). `previous_text` / `next_text` carry the neighbouring clips' lines (up to 1,000 characters each) for continuous intonation across clips on models that stitch (v4, Turbo v2.5, Multilingual v2; not v3). |
-| `generate_dialogue` | Multi-speaker dialogue as ONE audio file (ElevenLabs dialogue, direct API — v3 by default, v4 with `model: "elevenlabs-dialogue-v4"`). Accepts `dialogue` — an ordered array of `{ text, voice_id }` lines (premade names or cloned/library UUIDs, mixed casts fine; `[audio tags]` allowed in line text) — plus optional `model`, `stability` (v3: exactly 0 / 0.5 / 1; v4: any 0–1), `similarity_boost` (v4 only), `language_code`, `seed`, `apply_text_normalization`. A stability the chosen model does not take, or a script over its total cap, is refused with the numbers before anything is reserved. Limits: 5,000 chars total across lines on either model, 10 unique voices. Use it instead of stitching per-line `generate_speech` calls. The finished job's `output_data` carries `audioUrl` and, on both models (timings cost no extra credits), `transcript` — per-word timings and one segment per line with the line's voice as `speaker` — to pass its `words` to `add_captions` as `captions` with `auto_transcribe: false` instead of transcribing the track again. |
+| `generate_dialogue` | Multi-speaker dialogue as ONE audio file (ElevenLabs dialogue, direct API — v3 by default, v4 with `model: "elevenlabs-dialogue-v4"`). Accepts `dialogue` — an ordered array of `{ text, voice_id }` lines (premade names or cloned/library UUIDs, mixed casts fine; `[audio tags]` allowed in line text) — plus optional `model`, `stability` (v3: exactly 0 / 0.5 / 1; v4: any 0–1), `similarity_boost` (v4 only), `language_code`, `seed`, `apply_text_normalization`. A stability the chosen model does not take, or a script over its total cap, is refused with the numbers before anything is reserved. Limits: 5,000 chars total across lines on v3, 10,000 on v4, 10 unique voices. Use it instead of stitching per-line `generate_speech` calls. The finished job's `output_data` carries `audioUrl` and, on both models (timings cost no extra credits), `transcript` — per-word timings and one segment per line with the line's voice as `speaker` — to pass its `words` to `add_captions` as `captions` with `auto_transcribe: false` instead of transcribing the track again. |
 | `text_to_audio` | Text-to-sound-effect (ElevenLabs SFX). Accepts `prompt` and optional `duration`, `loop` (a seamlessly looping effect) and `prompt_influence` (0–1, how closely it follows the prompt). Also accepts `presetId` (from `list_node_presets { nodeType: "text-to-audio" }`) to apply a built-in or saved preset's config server-side; any explicit field overrides the preset, and `prompt` may be omitted when the preset supplies one. A preset's `promptPrefix` / `promptSuffix` wrap your `prompt`. |
 | `list_voices` | List the available premade voices (id + name, plus any gender/accent/description metadata) so you can pick a `voice_id` for `generate_speech`, `voice_changer`, or `voice_changer_pro` — all of which require a voice id. Read-only; returns the catalog as JSON. |
 | `voice_design` | Design a new synthetic voice from text descriptors (ElevenLabs `/v1/text-to-voice/design`). Accepts `text`, `voice_description`, `model` (default `eleven_ttv_v3`; `eleven_multilingual_ttv_v2` is the legacy model), `loudness`, `guidance_scale`, `seed`, `quality`, `should_enhance`. Returns a `voice_id`. |
@@ -1581,6 +1586,15 @@ recency.
 
 **Input:** `scope`, `limit`, `cursor`
 
+**Output:** each row's `estimated_credits` is the app's listed price. When the
+price follows the length of a recording the app is given (an Apply EDL render
+of a whole episode, an Edit Plan's planning pass), `estimated_credits` is the
+fixed part and `per_minute_credits` the credits per minute of the recording,
+for example `82` and `14` for "82 + 14 per minute of episode". It is `0` (or
+absent) when the price does not depend on a recording's length. When the app
+has a list input its user fills, `per_item_credits` is the credits each item
+beyond the creator's saved items adds (`0` or absent when none).
+
 ---
 
 ### `get_app_inputs`
@@ -1603,6 +1617,16 @@ an LLM **Temperature**, a **Duration**, a Lottie number slot, …) is
 (An exposed node slider used to be reported as `type: "text"` with no range.)
 `run_app` accepts a number or a numeric string for a `number` input; a
 value that is not a number is passed to the node unchanged.
+A [Video URL](../nodes/input/youtube-video.md) node the app exposes is
+`type: "video"` with `required: true`; its value is a link to a video (a
+YouTube, TikTok, Instagram, Facebook or X post, or any other public web
+link). A value that is not a web link is refused with `400 locked_field`. The
+server downloads a post link itself before the first node runs, under the
+app page's rules: a YouTube video of 4 minutes or more is downloaded only as a
+part named in `inputOverrides` (`sectionStartSec` / `sectionEndSec` on the
+node), and a run without one is refused before anything is billed; a node that
+only reads the sound (Transcribe, Suno Cover) gets just the sound. See
+[Video URL inputs](../embed-app-guide.md#video-url-inputs).
 
 ---
 
@@ -1643,6 +1667,9 @@ List your saved workflow components (reusable sub-graphs). Ordered by most
 recently updated.
 
 **Input:** `limit`, `cursor`
+
+**Output:** each row carries `estimated_credits`, `per_minute_credits` and
+`per_item_credits`, read the same way as in `list_apps`.
 
 ---
 

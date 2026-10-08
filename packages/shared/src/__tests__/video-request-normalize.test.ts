@@ -175,9 +175,24 @@ describe("pricedVideoSelection", () => {
     expect(pricedVideoSelection({ provider: "ltx-2.3-pro" }).adjustments).toEqual([])
   })
 
-  it("leaves duration alone for every non-LTX provider (legality is not a flat catalog list)", () => {
-    expect(pricedVideoSelection({ provider: "seedance-2-5", duration: 7 }).duration).toBeUndefined()
-    expect(pricedVideoSelection({ provider: "kling-3.0", duration: 7 }).duration).toBeUndefined()
+  it("a length-priced provider carries the length it is charged at: its own default when unset, an offered length as sent", () => {
+    expect(pricedVideoSelection({ provider: "seedance-2-5", duration: 7 })).toMatchObject({ duration: 7, adjustments: [] })
+    expect(pricedVideoSelection({ provider: "kling-3.0", duration: 7 })).toMatchObject({ duration: 7, adjustments: [] })
+    expect(pricedVideoSelection({ provider: "seedance-2" }).duration).toBe(8)
+    expect(pricedVideoSelection({ provider: "hailuo-2.3-pro" }).duration).toBe(6)
+    expect(pricedVideoSelection({ provider: "kling" }).duration).toBe(5)
+  })
+
+  it("a length the model does not offer is carried (and disclosed) as the nearest one it renders", () => {
+    const sel = pricedVideoSelection({ provider: "kling", duration: 7 })
+    expect(sel.duration).toBe(5)
+    expect(sel.adjustments).toEqual([expect.objectContaining({ field: "duration", from: 7, to: 5 })])
+  })
+
+  it("leaves Auto and a flat-priced provider's duration alone", () => {
+    expect(pricedVideoSelection({ provider: "seedance-2", duration: -1 }).duration).toBeUndefined()
+    expect(pricedVideoSelection({ provider: "veo3", duration: 7 }).duration).toBeUndefined()
+    expect(pricedVideoSelection({ provider: "veo3" }).duration).toBeUndefined()
   })
 })
 

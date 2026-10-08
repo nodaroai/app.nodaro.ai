@@ -150,6 +150,46 @@ describe("InspectorShell", () => {
     expect(document.activeElement).toBe(expand)
   })
 
+  it("returnFocusTo catches focus when the opener unmounted on click, and when nothing had focus", async () => {
+    function Gone({ focusFirst }: { readonly focusFirst: boolean }) {
+      const [isOpen, setOpen] = useState(false)
+      const [entry, setEntry] = useState(true)
+      return (
+        <>
+          <button type="button" data-testid="fallback">node</button>
+          {entry && (
+            <button type="button" onClick={() => { setOpen(true); if (focusFirst) setEntry(false) }}>entry</button>
+          )}
+          <InspectorShell
+            open={isOpen}
+            onClose={() => setOpen(false)}
+            title="Plan"
+            returnFocusTo={() => screen.getByTestId("fallback")}
+          ><p>body</p></InspectorShell>
+        </>
+      )
+    }
+    // The entry is gone by the time the dialog mounts (a context menu).
+    const first = render(<Gone focusFirst />)
+    const entry = screen.getByRole("button", { name: "entry" })
+    entry.focus()
+    await userEvent.click(entry)
+    await waitFor(() => expect(screen.getByRole("dialog")).toBeTruthy())
+    await userEvent.keyboard("{Escape}")
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull())
+    expect(document.activeElement).toBe(screen.getByTestId("fallback"))
+    first.unmount()
+
+    // Nothing held focus (a link): <body> is not an opener.
+    render(<Gone focusFirst={false} />)
+    ;(document.activeElement as HTMLElement | null)?.blur()
+    fireEvent.click(screen.getByRole("button", { name: "entry" }))
+    await waitFor(() => expect(screen.getByRole("dialog")).toBeTruthy())
+    await userEvent.keyboard("{Escape}")
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull())
+    expect(document.activeElement).toBe(screen.getByTestId("fallback"))
+  })
+
   it("offers Copy JSON only when given a value", () => {
     open()
     expect(screen.queryByRole("button", { name: "Copy JSON" })).toBeNull()

@@ -72,7 +72,7 @@ function label(v: EdlValidity, rendered: boolean, t: ReturnType<typeof useT>): s
   return rendered ? t("node.edlReadyToRender") : t("node.edlWellFormed")
 }
 
-export function EdlValidityBadge({ value, renders, settings, className }: {
+export function EdlValidityBadge({ value, renders, settings, verdict, className }: {
   /** Structure mode: the EDL value to check (the Edit Plan badge). */
   readonly value?: unknown
   /** Render mode: every render the node's Run would make (see
@@ -80,19 +80,25 @@ export function EdlValidityBadge({ value, renders, settings, className }: {
    *  `settings`. Takes the place of `value`. */
   readonly renders?: readonly ApplyEdlRenderInput[]
   readonly settings?: ApplyEdlRenderSettings
+  /** A render judged by ANOTHER render node's own rule (Speaker View's, via
+   *  `speakerViewBatchValidity`): the verdict as computed, shown as a render's
+   *  ("Ready to render"). `null` shows nothing. Takes the place of the rest. */
+  readonly verdict?: EdlValidity | null
   readonly className?: string
 }) {
   const t = useT()
-  const rendered = renders !== undefined && settings !== undefined
+  const rendered = verdict !== undefined || (renders !== undefined && settings !== undefined)
   // Keyed on the settings' fields, not their object: a caller may build it inline.
   const output = settings?.output
   const crossfadeMs = settings?.crossfadeMs
   const validity = useMemo(
     () =>
-      renders !== undefined && output !== undefined && crossfadeMs !== undefined
-        ? applyEdlRendersValidity(renders, { output, crossfadeMs })
-        : edlValidityOf(value),
-    [value, renders, output, crossfadeMs],
+      verdict !== undefined
+        ? verdict
+        : renders !== undefined && output !== undefined && crossfadeMs !== undefined
+          ? applyEdlRendersValidity(renders, { output, crossfadeMs })
+          : edlValidityOf(value),
+    [value, renders, output, crossfadeMs, verdict],
   )
   const [open, setOpen] = useState(false)
   if (!validity) return null

@@ -746,13 +746,13 @@ function MyAppCard({
             {/* Label and figure are joined by the dictionary (no gap after a
                 full-width colon); the space between the two pairs follows the
                 Latin credit unit, so it stays in every language. */}
-            {t("apps.baseLabel")}{t("common.fragmentGap")}<CreditCost credits={(app.baseEstimatedCredits ?? 0) + (app.finalEstimatedCredits ?? 0)} /> {t("apps.totalLabel")}{t("common.fragmentGap")}
-            <CreditCost credits={app.estimatedCredits ?? 0} />
+            {t("apps.baseLabel")}{t("common.fragmentGap")}<CreditCost credits={(app.baseEstimatedCredits ?? 0) + (app.finalEstimatedCredits ?? 0)} perMinute={(app.basePerMinuteCredits ?? 0) + (app.finalPerMinuteCredits ?? 0)} perItem={(app.basePerItemCredits ?? 0) + (app.finalPerItemCredits ?? 0)} /> {t("apps.totalLabel")}{t("common.fragmentGap")}
+            <CreditCost credits={app.estimatedCredits ?? 0} perMinute={app.perMinuteCredits} perItem={app.perItemCredits} />
           </span>
         ) : (
           // Pre-#645 this else branch rendered the figure UNGATED — the one
           // leak the per-site pass missed. The component self-gates.
-          <CreditCost credits={app.estimatedCredits ?? 0} suffix={t("apps.crRunSuffix", { u: creditUnitLabel(t("credits.unitShort")) })} />
+          <CreditCost credits={app.estimatedCredits ?? 0} perMinute={app.perMinuteCredits} perItem={app.perItemCredits} suffix={t("apps.crRunSuffix", { u: creditUnitLabel(t("credits.unitShort")) })} />
         )}
         {app.favoriteCount > 0 && <span>{t(app.favoriteCount === 1 ? "apps.favoritesOne" : "apps.favorites", { n: app.favoriteCount })}</span>}
       </div>

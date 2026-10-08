@@ -7,7 +7,6 @@ import {
   SAVED_POSTS_PAGE_MAX,
   SOCIAL_PLATFORMS,
   normalizeSavedPostTags,
-  type SavedPost,
   type SocialPost,
 } from "@nodaro/shared"
 import { supabase } from "../lib/supabase.js"
@@ -16,6 +15,7 @@ import { sendInternalError } from "../lib/http-errors.js"
 import { isMissingTableError } from "../lib/postgrest-errors.js"
 import { cleanSocialPostSnapshot } from "../lib/saved-post-snapshot.js"
 import { mirrorSavedPostStill, deleteSavedPostStill } from "../lib/saved-post-still.js"
+import { SAVED_POST_COLUMNS, SAVED_POSTS_TABLE, asSavedPostRow, hasLiveStill, toSavedPost, type SavedPostRow } from "../lib/saved-posts-store.js"
 
 /**
  * Saved posts — the inspiration wall (migration 446). Personal data: every
@@ -24,56 +24,12 @@ import { mirrorSavedPostStill, deleteSavedPostStill } from "../lib/saved-post-st
  * missing table reads as an empty wall and refuses writes with a 503, never a 500.
  */
 
-const TABLE = "saved_posts"
-/** The still's asset rides along, so a copy whose bytes were cleaned up is
- *  never handed out (the asset row survives the cleanup, its url does not). */
-const COLUMNS =
-  "id, post_id, platform, url, post, thumbnail_asset_id, thumbnail_url, note, tags, source, created_at, updated_at, still:assets!thumbnail_asset_id(r2_url, r2_key)"
+const TABLE = SAVED_POSTS_TABLE
+const COLUMNS = SAVED_POST_COLUMNS
+const asRow = asSavedPostRow
+type Row = SavedPostRow
 /** A post snapshot larger than this is refused (a real post is a few KB). */
 const POST_MAX_BYTES = 64 * 1024
-
-type Row = {
-  id: string
-  post_id: string
-  platform: string
-  url: string
-  post: unknown
-  thumbnail_asset_id: string | null
-  thumbnail_url: string | null
-  note: string
-  tags: string[] | null
-  source: string
-  created_at: string
-  updated_at: string
-  still?: { r2_url: string | null; r2_key: string | null } | null
-}
-
-/** A row as PostgREST returns it: the still is a many-to-one embed (one object
- *  or null), which the untyped client cannot know and types as a list. */
-function asRow(data: unknown): Row {
-  return data as Row
-}
-
-/** True when the save's copied still still has its bytes. */
-function hasLiveStill(row: Row): boolean {
-  return Boolean(row.thumbnail_asset_id && row.still?.r2_key && row.still.r2_url)
-}
-
-export function toSavedPost(row: Row): SavedPost {
-  return {
-    id: row.id,
-    postId: row.post_id,
-    platform: row.platform as SavedPost["platform"],
-    url: row.url,
-    post: row.post as SocialPost,
-    thumbnailUrl: hasLiveStill(row) ? row.still!.r2_url : null,
-    note: row.note,
-    tags: row.tags ?? [],
-    source: row.source as SavedPost["source"],
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  }
-}
 
 function notAvailable(reply: FastifyReply) {
   return reply.status(503).send({ error: { code: "not_available", message: "Saved posts are not available on this server yet." } })

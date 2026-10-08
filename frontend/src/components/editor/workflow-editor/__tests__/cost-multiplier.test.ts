@@ -400,3 +400,16 @@ describe("a Social Search wire set to Each", () => {
     expect("social-search" in EACH_WIRE_FAN_OUT).toBe(true)
   })
 })
+
+describe("a post reader's wire set to Each", () => {
+  const va = n("va", "video-analysis", {})
+
+  it.each(["inspiration-read", "competitor-read"])("%s: once per post it holds, a fresh read by its limit, a plain wire once", (type) => {
+    const reader = n("r", type, { generatedJson: [{ id: "a" }, { id: "b" }], limit: 7 })
+    const nodes = [reader, va]
+    expect(getCostMultiplier(va, nodes, [e("r", "va", "video", "each")], ids(va))).toBe(2)
+    expect(getCostMultiplier(va, nodes, [e("r", "va", "video", "each")], ids(reader, va))).toBe(7)
+    expect(getCostMultiplier(va, nodes, [e("r", "va", "video")], ids(va))).toBe(1)
+    expect(FAN_OUT_EACH_TYPES.has(type)).toBe(false)
+  })
+})

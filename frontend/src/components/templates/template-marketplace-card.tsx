@@ -28,14 +28,14 @@ export function TemplateMeta({
   template,
   className,
 }: {
-  readonly template: Pick<TemplateBrowseCard, "estimatedCredits" | "nodeCount">
+  readonly template: Pick<TemplateBrowseCard, "estimatedCredits" | "estimatedPerMinuteCredits" | "nodeCount">
   readonly className?: string
 }) {
   const t = useT()
   return (
     <span className={cn("flex items-center gap-1 text-[10px] text-[var(--home-muted)]", className)}>
       <CreditGate>
-        <CreditCost credits={template.estimatedCredits} prefix="~" suffix={creditUnitLabel(t("credits.unit.other"))} />
+        <CreditCost credits={template.estimatedCredits} perMinute={template.estimatedPerMinuteCredits} prefix="~" suffix={creditUnitLabel(t("credits.unit.other"))} />
         <span aria-hidden>·</span>
       </CreditGate>
       <span>{t("templates.nodes", { n: template.nodeCount })}</span>

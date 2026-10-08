@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import { TRANSIENT_RUNTIME_KEYS } from "@nodaro/shared"
+import { TRANSIENT_RUNTIME_KEYS, VIDEO_LINK_DERIVED_FIELDS } from "@nodaro/shared"
 
 // ---------------------------------------------------------------------------
 // A tiny stand-in for the workflow store: the controller only reads `nodes` /
@@ -44,6 +44,7 @@ vi.mock("@/lib/video-download-stream", () => ({
 }))
 
 import {
+  CLEARED_DOWNLOAD,
   __resetVideoLinkIngestForTests,
   clearVideoLink,
   ensureVideoLinksDownloaded,
@@ -726,5 +727,14 @@ describe("ensureVideoLinksDownloaded — the gate in front of Run", () => {
 
     follow.resolve({ status: "completed", videoUrl: FILE })
     await vi.waitFor(() => expect(dataOf().downloadedVideoUrl).toBe(FILE))
+  })
+})
+
+describe("a link swap drops the same state in the editor and in an app run", () => {
+  it("everything the editor resets when the link changes is in the server's list for an overridden link", () => {
+    const dropped = new Set<string>(VIDEO_LINK_DERIVED_FIELDS)
+    for (const key of [...Object.keys(CLEARED_DOWNLOAD), "videoId", "title", "thumbnailUrl"]) {
+      expect(dropped.has(key), `${key} would outlive an overridden link in an app run`).toBe(true)
+    }
   })
 })

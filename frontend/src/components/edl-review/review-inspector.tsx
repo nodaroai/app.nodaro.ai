@@ -5,17 +5,21 @@
  * `InspectorShell` anchored at one render, built on the review model
  * (`useReviewModel`, `useReviewEdits`, `useReviewChecks`).
  *
- * The header, the transcript pane (its rows, span popover, selection toolbar
- * and find bar), the reasons panel, the banners and the footer with its gate;
- * below `sm` the panes become tabs (review-body.tsx). The player and the
- * minimap (A3-4) slot in later. NOTHING in the editor opens it until A3-5 adds
- * the entry points (§2.7); its tests mount it directly.
+ * The header, the player (Preview or Final, and Original audition), the
+ * transcript pane (its rows, minimap, span popover, selection toolbar and
+ * find bar), the reasons panel, the banners and the footer with its gate;
+ * below `sm` the panes become tabs (review-body.tsx). The editor mounts it
+ * once, in `ReviewInspectorHost` (which shows the Clip Pack inspector instead
+ * for a clip set: `ReviewInspector` picks), and opens it from a render's Review cut, the
+ * context menu, an Edit Plan's Expand and `?review=<id>` (A3-5); its component
+ * tests mount it directly.
  *
  * KEYS, all inside the dialog only (the canvas's own shortcuts stand down
  * under a modal, and keys typed in a portalled menu are the menu's): ⌘Z / ⇧⌘Z
  * undo and redo the review (R8 a); ⌘F find (below `sm`, from the Cuts or
- * Issues tab too: it switches to Transcript); with a selection, Del cuts it, R
- * restores it and ⌘C copies its words.
+ * Issues tab too: it switches to Transcript); Space plays or pauses the
+ * player (not in a text field, and not on a focused control, whose own key
+ * it is); with a selection, Del cuts it, R restores it and ⌘C copies its words.
  *
  * ESCAPE closes the innermost layer first (§2.4): the span popover (a Radix
  * layer, which closes itself), then the selection toolbar, then the find bar,
@@ -29,30 +33,35 @@ import { InspectorShell } from "@/components/inspector/inspector-shell"
 import { useReviewChecks } from "@/hooks/use-review-checks"
 import { useReviewEdits } from "@/hooks/use-review-edits"
 import { useReviewModel } from "@/hooks/use-review-model"
+import { useReviewPlayback } from "@/hooks/use-review-playback"
 import { useReviewRuns } from "@/hooks/use-review-runs"
 import { SM_UP, useMediaQuery } from "@/hooks/use-media-query"
+import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { reviewKindOf } from "@/lib/edl-review/review-entry"
 import { useT } from "@/lib/i18n"
 import { copyToClipboard } from "@/lib/utils"
+import { ClipInspector } from "./clip-pack/clip-inspector"
 import { ReviewActions, ReviewMeta, ReviewTitle, type ReviewView } from "./review-header"
 import { ReviewBody, type ReviewBodyHandle } from "./review-body"
 import { ReviewFooter } from "./review-footer"
 import { ReviewJsonView } from "./review-json-view"
+import { isControl, isTextField } from "./transcript-keys"
 
-export interface ReviewInspectorProps {
-  readonly open: boolean
-  /** The render the review is anchored at. */
-  readonly renderId: string
-  readonly onClose: () => void
-  /** The reviewer chose another render of the same plan in the header's picker. */
-  readonly onRenderChange?: (renderId: string) => void
+import type { ReviewInspectorProps } from "./inspector-props"
+export type { ReviewInspectorProps }
+
+/** The canvas node the review is anchored at: where focus goes back to when the opener is gone. */
+function nodeElementOf(renderId: string): HTMLElement | null {
+  return document.querySelector<HTMLElement>(`.react-flow__node[data-id="${CSS.escape(renderId)}"]`)
 }
 
-const isTextField = (target: EventTarget | null): boolean =>
-  target instanceof HTMLElement && (target.isContentEditable || target.tagName === "INPUT" || target.tagName === "TEXTAREA")
-
 export function ReviewInspector(props: ReviewInspectorProps) {
+  // Which inspector a render opens (A4-2): a clip set's is the Clip Pack's. Read
+  // as a string, so a run's ticks re-render nothing.
+  const kind = useWorkflowStore((s) => reviewKindOf(props.renderId, s.nodes, s.edges))
+  if (!props.open) return null
   // The model subscribes to the store: mounted only while the review is open.
-  return props.open ? <OpenReviewInspector {...props} /> : null
+  return kind === "clips" ? <ClipInspector {...props} /> : <OpenReviewInspector {...props} />
 }
 
 function OpenReviewInspector({ renderId: anchoredAt, onClose, onRenderChange }: ReviewInspectorProps) {
@@ -64,6 +73,7 @@ function OpenReviewInspector({ renderId: anchoredAt, onClose, onRenderChange }: 
   const edits = useReviewEdits(model)
   const checks = useReviewChecks(model, edits)
   const runs = useReviewRuns(model, edits, checks)
+  const playback = useReviewPlayback(model, edits, checks)
   const wide = useMediaQuery(SM_UP)
   const [view, setView] = useState<ReviewView>("cut")
   const pane = useRef<ReviewBodyHandle | null>(null)
@@ -95,8 +105,13 @@ function OpenReviewInspector({ renderId: anchoredAt, onClose, onRenderChange }: 
       else edits.undo()
       return
     }
+    if (view === "cut" && e.key === " " && !mod && !e.altKey && !isTextField(e.target) && !isControl(e.target)) {
+      e.preventDefault()
+      playback.toggle()
+      return
+    }
     if (view === "cut") pane.current?.handleKey(e)
-  }, [edits, view])
+  }, [edits, view, playback])
 
   const editedValue = edits.edited ?? model.base ?? model.plan
   const canReset = edits.canEdit && (edits.pendingReview !== undefined || model.editStatus !== "none")
@@ -105,6 +120,7 @@ function OpenReviewInspector({ renderId: anchoredAt, onClose, onRenderChange }: 
     <InspectorShell
       open
       size="full"
+      returnFocusTo={() => nodeElementOf(renderId)}
       onClose={close}
       icon={<Scissors />}
       title={<ReviewTitle planId={model.planId} renderId={renderId} />}
@@ -141,7 +157,7 @@ function OpenReviewInspector({ renderId: anchoredAt, onClose, onRenderChange }: 
       ) : view === "json" ? (
         <ReviewJsonView edited={editedValue} planned={model.plan} />
       ) : (
-        <ReviewBody ref={pane} model={model} edits={edits} checks={checks} runs={runs} wide={wide} />
+        <ReviewBody ref={pane} model={model} edits={edits} checks={checks} runs={runs} playback={playback} wide={wide} />
       )}
     </InspectorShell>
   )

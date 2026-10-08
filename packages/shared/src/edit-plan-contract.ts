@@ -56,7 +56,73 @@ export function editPlanBucketMinutes(durationSec: number | undefined): number {
 /** `edit-plan:<mode>:<tier>:<bucket>m`. `durationSec` undefined → the ceiling
  *  bucket. Single source of truth for the composite id shape. */
 export function buildEditPlanCreditId(mode: EditPlanMode, tier: EditPlanTier, durationSec?: number): string {
-  return `edit-plan:${mode}:${tier}:${editPlanBucketMinutes(durationSec)}m`
+  return editPlanMinutesCreditId(mode, tier, editPlanBucketMinutes(durationSec))
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+//  Per started minute (decided 2026-10-07). A plugin that declares
+//  `supports().editPlanPerMinute` reserves `edit-plan:<mode>:<tier>:<N>m` with
+//  N = the started minutes of the source (1..180), priced flat + rate × N from
+//  ONE rate row and ONE flat row per mode × tier. The step ids above have the
+//  same shape (N = a step), so one parser reads both, and the plugin's money
+//  gate (`:(\d+)m$`) accepts both.
+// ─────────────────────────────────────────────────────────────────────────
+
+/** Started minutes of a source (seconds): ceil(sec / 60), at least 1, capped at
+ *  the maximum. `undefined` / non-finite → the maximum (over-reserve direction). */
+export function editPlanStartedMinutes(durationSec: number | undefined): number {
+  const secs = typeof durationSec === "number" && Number.isFinite(durationSec) ? durationSec : EDIT_PLAN_MAX_MINUTES * 60
+  return Math.min(EDIT_PLAN_MAX_MINUTES, Math.max(1, Math.ceil(secs / 60)))
+}
+
+/** `edit-plan:<mode>:<tier>:<N>m` for N minutes (a started-minute count or a step). */
+export function editPlanMinutesCreditId(mode: EditPlanMode, tier: EditPlanTier, minutes: number): string {
+  return `edit-plan:${mode}:${tier}:${minutes}m`
+}
+
+/** The id a run of this mode/tier on a source of `durationSec` reserves: per
+ *  started minute when the plugin charges that way (`perMinute`), else the step
+ *  the length rounds up to. An unknown length → the 180-minute maximum either way. */
+export function editPlanReserveCreditId(
+  mode: EditPlanMode,
+  tier: EditPlanTier,
+  durationSec: number | undefined,
+  perMinute: boolean,
+): string {
+  return perMinute
+    ? editPlanMinutesCreditId(mode, tier, editPlanStartedMinutes(durationSec))
+    : buildEditPlanCreditId(mode, tier, durationSec)
+}
+
+/** The rate row: credits per started source minute for a mode/tier. Never reserved. */
+export function editPlanRateCreditId(mode: EditPlanMode, tier: EditPlanTier): string {
+  return `edit-plan:${mode}:${tier}:per-minute`
+}
+
+/** The flat row: credits once per plan for a mode/tier (0 for tighten and chapters). Never reserved. */
+export function editPlanFlatCreditId(mode: EditPlanMode, tier: EditPlanTier): string {
+  return `edit-plan:${mode}:${tier}:flat`
+}
+
+/** The mode, tier and minutes of an `edit-plan:<mode>:<tier>:<N>m` id (1 ≤ N ≤
+ *  the maximum), or `undefined` for anything else (the bare id, a rate or flat
+ *  row, an unknown mode or tier). */
+export function parseEditPlanMinutesCreditId(
+  id: string,
+): { mode: EditPlanMode; tier: EditPlanTier; minutes: number } | undefined {
+  const m = /^edit-plan:([a-z]+):([a-z]+):(\d+)m$/.exec(id)
+  if (!m) return undefined
+  const mode = parseEditPlanMode(m[1])
+  const tier = (EDIT_PLAN_TIERS as readonly string[]).includes(m[2]!) ? (m[2] as EditPlanTier) : undefined
+  const minutes = Number(m[3])
+  if (!mode || !tier || !Number.isInteger(minutes) || minutes < 1 || minutes > EDIT_PLAN_MAX_MINUTES) return undefined
+  return { mode, tier, minutes }
+}
+
+/** flat + rate × N, rounded up, at least 1 credit — what an
+ *  `edit-plan:<mode>:<tier>:<N>m` id costs from its two rows (the plugin's formula). */
+export function editPlanMinutesBaseCredits(flat: number, rate: number, minutes: number): number {
+  return Math.max(1, Math.ceil(flat + rate * minutes))
 }
 
 /** Narrow an arbitrary value to a known edit-plan mode, defaulting to "tighten".

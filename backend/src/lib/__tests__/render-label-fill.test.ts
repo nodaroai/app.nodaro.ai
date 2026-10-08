@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
+import { RENDER_NODE_TYPE_IDS } from "@nodaro/shared"
 
 /**
  * The Preview label for renders recorded BEFORE it was stored (decided
@@ -133,7 +134,7 @@ describe("fillAssetRenderQuality — a library page takes an old render's label 
     expect(jobsQuery.calls).toHaveLength(1)
     expect([...jobsQuery.calls[0]!.ids].sort()).toEqual(["j1", "j2"])
     // Restricted to render jobs (RENDER_NODE_TYPES): Apply EDL today.
-    expect(jobsQuery.calls[0]!.jobTypes).toEqual(["apply-edl"])
+    expect(jobsQuery.calls[0]!.jobTypes).toEqual([...RENDER_NODE_TYPE_IDS])
     expect(out.map((a) => (a.metadata as Record<string, unknown>).quality)).toEqual(["proxy", "final", "proxy"])
     expect((out[0]!.metadata as Record<string, unknown>).thumbnail_url).toBe("t")
   })

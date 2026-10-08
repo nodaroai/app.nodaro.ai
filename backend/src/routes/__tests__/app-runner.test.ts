@@ -54,6 +54,13 @@ vi.mock("@/services/app-execution.js", async (importOriginal) => {
   return { ...orig, executeAppRun: (p: unknown) => mockExecuteAppRun(p) }
 })
 
+// Edit Plan per started minute (review round F1, decided 2026-10-07): the
+// capability the detail response carries for the runner's estimate.
+const editPlanPerMinute = vi.hoisted(() => ({ value: false }))
+vi.mock("@/lib/private-plugins/edit-plan-per-minute.js", () => ({
+  editPlanPerMinuteActive: async () => editPlanPerMinute.value,
+}))
+
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
@@ -223,6 +230,70 @@ describe("GET /v1/app/:slug", () => {
     expect(body.icon_url).toBeUndefined()
     expect(body.snapshot_nodes).toBeUndefined()
     expect(body.creator_id).toBeUndefined()
+  })
+
+  it("carries the app run's own listed pair beside the full listing (review round F4)", async () => {
+    // Preview 22 + 5/min with a 5 flat + 50% fee (38 + 8/min), plus a Render final of 40 + 10/min.
+    const row = {
+      ...DB_APP_ROW,
+      base_estimated_credits: 22, estimated_credits: 78, base_per_minute_credits: 5, per_minute_credits: 18,
+      monetization_enabled: true, monetization_flat_fee: 5, monetization_percent: 50,
+    }
+    let callCount = 0
+    vi.mocked(supabase.from).mockImplementation(() => {
+      callCount++
+      if (callCount === 1) return createChainMock({ data: { workflow_id: TEST_WORKFLOW_ID }, error: null }) as never
+      return createChainMock({ data: [row], error: null }) as never
+    })
+    const res = await app.inject({ method: "GET", url: "/v1/app/run-price-app" })
+    expect(res.statusCode).toBe(200)
+    const body = res.json()
+    expect(body.estimatedCredits).toBe(78)
+    expect(body.perMinuteCredits).toBe(18)
+    expect(body.runEstimatedCredits).toBe(38)
+    expect(body.runPerMinuteCredits).toBe(8)
+    expect(body.perItemCredits).toBe(0)
+    expect(body.runPerItemCredits).toBe(0)
+  })
+
+  it("carries the per-item pair of a List the app user fills (decided 2026-10-07)", async () => {
+    // Preview 30/item with a 50% fee (45/item), plus a Render final of 4/item.
+    const row = {
+      ...DB_APP_ROW,
+      base_estimated_credits: 22, estimated_credits: 22, base_per_item_credits: 30, per_item_credits: 49,
+      monetization_enabled: true, monetization_flat_fee: 0, monetization_percent: 50,
+    }
+    let callCount = 0
+    vi.mocked(supabase.from).mockImplementation(() => {
+      callCount++
+      if (callCount === 1) return createChainMock({ data: { workflow_id: TEST_WORKFLOW_ID }, error: null }) as never
+      return createChainMock({ data: [row], error: null }) as never
+    })
+    const body = (await app.inject({ method: "GET", url: "/v1/app/per-item-app" })).json()
+    expect(body.perItemCredits).toBe(49)
+    expect(body.runPerItemCredits).toBe(45)
+  })
+
+  it("says whether Edit Plan is charged per started minute, read per request (review round F1)", async () => {
+    // The runner and the embed price Edit Plan from this; they never ask the
+    // authenticated capabilities route. Read on every request, never frozen
+    // into the cached body: a plugin that drops the capability must stop it.
+    let callCount = 0
+    vi.mocked(supabase.from).mockImplementation(() => {
+      callCount++
+      if (callCount === 1) return createChainMock({ data: { workflow_id: TEST_WORKFLOW_ID }, error: null }) as never
+      return createChainMock({ data: [DB_APP_ROW], error: null }) as never
+    })
+    editPlanPerMinute.value = true
+    try {
+      expect((await app.inject({ method: "GET", url: "/v1/app/per-minute-app" })).json().editPlanPerMinute).toBe(true)
+      editPlanPerMinute.value = false
+      // The same slug again — served from the in-memory cache.
+      expect((await app.inject({ method: "GET", url: "/v1/app/per-minute-app" })).json().editPlanPerMinute).toBe(false)
+    } finally {
+      editPlanPerMinute.value = false
+      invalidateAppCache("per-minute-app")
+    }
   })
 
   it("does not require auth", async () => {
@@ -636,6 +707,69 @@ describe("POST /v1/app/:slug/run", () => {
     expect(res.statusCode).toBe(400)
     expect(res.json().error.code).toBe("locked_field")
     expect(res.json().error.message).toContain('inputOverrides cannot set "keepResult" on a UGC node "ugc-1".')
+    expect(mockExecuteAppRun).not.toHaveBeenCalled()
+  })
+
+  // A Video URL node a publisher exposes IS a destination the stranger sets
+  // (the node is on the outbound list). The lock admits its link, but only a
+  // link the node itself would download; every other value is refused before a
+  // row is written, on the flat lane and on the nested one alike.
+  it("runs a Video URL app input with the caller's link — the flat `inputs` lane lands on youtubeUrl", async () => {
+    const snapshot = {
+      snapshot_nodes: [{ id: "ep-1", type: "youtube-video", data: { label: "Episode", youtubeUrl: "https://youtu.be/AAAAAAAAAAA" } }],
+      snapshot_settings: { presentationSettings: { inputItems: [{ type: "node", nodeId: "ep-1" }] } },
+    }
+    setupSuccessfulRunMocks(snapshot)
+    mockExecuteAppRun.mockResolvedValueOnce({ executionId: TEST_EXECUTION_ID, appRunId: TEST_RUN_ID, deduped: false })
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/app/${TEST_SLUG}/run`,
+      headers: { "x-user-id": TEST_USER_ID },
+      payload: { inputs: { episode: "https://cdn.example.com/ep-12.mp4" } },
+    })
+    expect(res.statusCode).toBe(202)
+    expect(mockExecuteAppRun.mock.calls[0]?.[0]?.inputOverrides).toEqual({ "ep-1": { youtubeUrl: "https://cdn.example.com/ep-12.mp4" } })
+  })
+
+  it("refuses a Video URL input that is not a video link — 400 locked_field, flat or nested, no run", async () => {
+    const snapshot = {
+      snapshot_nodes: [{ id: "ep-1", type: "youtube-video", data: { label: "Episode", youtubeUrl: "https://youtu.be/AAAAAAAAAAA" } }],
+      snapshot_settings: { presentationSettings: { inputItems: [{ type: "node", nodeId: "ep-1" }] } },
+    }
+    for (const payload of [
+      { inputs: { episode: "not a link" } },
+      { inputOverrides: { "ep-1": { youtubeUrl: "http://169.254.169.254/latest/meta.mp4" } } },
+      { inputOverrides: { "ep-1": { downloadedAudioUrl: "https://attacker.example/a.mp3" } } },
+    ]) {
+      setupSuccessfulRunMocks(snapshot)
+      const res = await app.inject({ method: "POST", url: `/v1/app/${TEST_SLUG}/run`, headers: { "x-user-id": TEST_USER_ID }, payload })
+      expect(res.statusCode, JSON.stringify(payload)).toBe(400)
+      expect(res.json().error.code).toBe("locked_field")
+    }
+    expect(mockExecuteAppRun).not.toHaveBeenCalled()
+  })
+
+  // Review round (decided 2026-10-07): a fixed Video URL node the creator did NOT
+  // expose (a reference video the workflow analyses or dubs) is not the caller's
+  // to re-point, link or no link.
+  it("refuses a link for a Video URL node the app does not expose — 400 locked_field, no run", async () => {
+    const snapshot = {
+      snapshot_nodes: [
+        { id: "ep-1", type: "youtube-video", data: { label: "Episode", youtubeUrl: "https://youtu.be/AAAAAAAAAAA" } },
+        { id: "ref-1", type: "youtube-video", data: { label: "Reference", youtubeUrl: "https://youtu.be/CCCCCCCCCCC" } },
+      ],
+      snapshot_settings: { presentationSettings: { inputItems: [{ type: "node", nodeId: "ep-1" }] } },
+    }
+    for (const payload of [
+      { inputOverrides: { "ref-1": { youtubeUrl: "https://cdn.example.com/ep-12.mp4" } } },
+      { inputOverrides: { "ep-1": { youtubeUrl: "https://cdn.example.com/ep-12.mp4" }, "ref-1": { downloadedVideoUrl: "https://cdn.example.com/x.mp4" } } },
+    ]) {
+      setupSuccessfulRunMocks(snapshot)
+      const res = await app.inject({ method: "POST", url: `/v1/app/${TEST_SLUG}/run`, headers: { "x-user-id": TEST_USER_ID }, payload })
+      expect(res.statusCode, JSON.stringify(payload)).toBe(400)
+      expect(res.json().error.code).toBe("locked_field")
+      expect(res.json().error.message).toContain("ref-1")
+    }
     expect(mockExecuteAppRun).not.toHaveBeenCalled()
   })
 

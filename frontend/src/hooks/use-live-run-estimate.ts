@@ -5,9 +5,10 @@
  *
  * It matters because this number GATES the run: the runner refuses to start
  * when the spendable balance is below it. The mobile shell used to gate on the
- * store's seeded figure alone — the server's static, edge-less
- * `estimateWorkflowCredits`, which prices a per-output-minute render (Apply
- * EDL) as ONE minute and knows nothing about fan-out — while only the desktop
+ * store's seeded figure alone — the server's `estimateWorkflowCredits`, which
+ * then priced a per-output-minute render (Apply EDL) as ONE minute and knew
+ * nothing about fan-out (it reads the shared rules since decided 2026-10-07,
+ * but knows nothing of the user's inputs) — while only the desktop
  * `PresentationView` ever computed the live figure. A podcast app on a phone
  * passed the precheck, charged Transcribe and Edit Plan, then had its render
  * reserve refused.
@@ -16,9 +17,11 @@
  * through `mergeNodeInputOverrides` (a swapped media input also drops the
  * saved media-bound `metadata`, so a publisher's recorded length can't price a
  * caller's file); every executable node re-runs, so `rerunIds` is the whole
- * set and any upstream planner re-plans; each node costs its live model price
- * (or the static fallback) × `getCostMultiplier` (fan-out × repeat × output
- * minutes). Uncached model prices are prefetched, then the total recomputes.
+ * set and any upstream planner re-plans; the graph is then priced by the
+ * editor's own whole-run estimate (`estimateWholeRun`): each node — each of
+ * several providers at its own price — at its live model price (or the
+ * cold-cache fallback) × fan-out × repeat × output minutes. Uncached model
+ * prices (every provider's) are prefetched, then the total recomputes.
  *
  * Returns the BASE figure (0 until the first compute). Callers apply the app's
  * monetization markup — and fall back to the seeded server figure, which is
@@ -29,11 +32,11 @@
  * pattern) — the already-allowlisted callers pass them in.
  */
 import { useEffect, useRef, useState } from "react"
-import { isExpandedClone, mergeNodeInputOverrides } from "@nodaro/shared"
-import { estimateNodeCredits, isExecutableNode, getCostMultiplier } from "@/components/editor/workflow-editor/types"
-import { getModelIdentifier } from "@/components/editor/config-panels/helpers"
-import { previewRunnable } from "@/components/editor/workflow-editor/preview-gate"
-import { speechUnitIdsFor } from "@/lib/speech-estimate"
+import { EDIT_PLAN_MAX_MINUTES, mergeNodeInputOverrides, resolveVideoLinkOutput } from "@nodaro/shared"
+import { estimateWholeRun } from "@/components/editor/workflow-editor/estimate-run-credits"
+import { chosenRecordingUrl } from "@/lib/run-price"
+import { withoutMediaLength } from "@nodaro/render-rules"
+import { useEditPlanModes } from "@/lib/edit-plan-modes"
 import type { WorkflowNode, WorkflowEdge } from "@/types/nodes"
 
 export interface LiveRunEstimateDeps {
@@ -52,6 +55,12 @@ export interface LiveRunEstimateArgs {
   readonly inputValues?: Record<string, Record<string, unknown>>
   /** False on editions without credits — nothing is computed and 0 is returned. */
   readonly enabled: boolean
+  /**
+   * The lengths (seconds) read for the recordings the user chose, by url
+   * (`useChosenRecordingLengths`): a chosen recording is priced at its own
+   * length, never at the creator's sample's (decided 2026-10-07).
+   */
+  readonly mediaLengths?: ReadonlyMap<string, number>
 }
 
 /** Debounce for input changes — a plain text keystroke must not trigger the
@@ -66,51 +75,64 @@ export const LIVE_ESTIMATE_DEBOUNCE_MS = 300
 export function applyRunInputValues(
   nodes: WorkflowNode[],
   inputValues: Record<string, Record<string, unknown>> | undefined,
+  mediaLengths?: ReadonlyMap<string, number>,
 ): WorkflowNode[] {
   if (!inputValues) return nodes
   return nodes.map((n) => {
     const vals = inputValues[n.id]
-    return vals
-      ? { ...n, data: mergeNodeInputOverrides(n.type, n.data as Record<string, unknown>, vals) as typeof n.data }
-      : n
+    if (!vals) return n
+    const merged = mergeNodeInputOverrides(n.type, n.data as Record<string, unknown>, vals)
+    // A recording the user chose replaces the creator's sample: no length the
+    // sample carried describes it (`withoutMediaLength`), only the one read for
+    // this very file, stamped with its url so the reader trusts it for that url alone.
+    const chosen = chosenRecordingUrl(n, inputValues)
+    // The sample it replaces: an upload's `url`; a Video URL's resolved output
+    // (its file, else its link) — the creator's own link, left as it is, keeps
+    // the length the creator measured.
+    const nodeData = n.data as Record<string, unknown>
+    const sample = n.type === "youtube-video" ? resolveVideoLinkOutput(nodeData) : nodeData.url
+    if (chosen === undefined || chosen === sample) return { ...n, data: merged as typeof n.data }
+    // A length not known (the browser cannot read the file, or the read is
+    // still pending) is the longest recording (decision #3) for EVERY length
+    // reader — not only Edit Plan and Apply EDL, which take that ceiling on
+    // their own, but a Trim / Loop / Combine / Video SFX on the recording, which
+    // would otherwise price their 8-second fallback while the server reserves
+    // the probed length (review round F2, decided 2026-10-07). Video SFX caps
+    // itself at its longest row.
+    const length = mediaLengths?.get(chosen) ?? EDIT_PLAN_MAX_MINUTES * 60
+    const data = withoutMediaLength(merged)
+    // Both places a length is read from: `duration` (the Trim / Loop / Combine
+    // estimators, `extractVideoDurationFromNode`) and the url-bound `metadata`
+    // (Edit Plan and Apply EDL, `mediaLengthSecOf`).
+    data.duration = length
+    data.metadata = { ...((data.metadata as Record<string, unknown> | undefined) ?? {}), durationSeconds: length, mediaUrl: chosen }
+    return { ...n, data: data as typeof n.data }
   })
 }
 
-/** One synchronous pass over the graph with whatever prices are cached. */
+/**
+ * One synchronous pass over the graph with whatever prices are cached: the
+ * run-time inputs merged in, then the editor's own whole-run estimate
+ * (`estimateWholeRun` — the Execute-workflow badge, the run's confirm and
+ * precheck), so the runner prices each of several providers, each run and
+ * each output minute exactly as they do, and asks for every provider's price.
+ */
 export function computeLiveRunEstimate(
   args: Omit<LiveRunEstimateArgs, "enabled">,
   getCachedCredits: LiveRunEstimateDeps["getCachedCredits"],
   isModelUnpriced: NonNullable<LiveRunEstimateDeps["isModelUnpriced"]> = () => false,
 ): { total: number; uncachedModelIds: string[] } {
-  const effectiveNodes = applyRunInputValues(args.nodes, args.inputValues)
-  const allExecutable = effectiveNodes.filter((n) => isExecutableNode(n) && !isExpandedClone(n))
-  // A presented run executes every node, so any upstream planner re-plans.
-  const rerunIds = new Set(allExecutable.map((n) => n.id))
-  // …except what a Preview render gates: it runs only after Render final.
-  const executable = previewRunnable(allExecutable, effectiveNodes, args.edges)
-  // A speech node's unit row is asked for beside the flat ids: until it is
-  // cached, getModelIdentifier quotes the flat row, so the runner could never
-  // learn that the server prices speech by length. One the server has reported
-  // priced nowhere (length pricing off) is not asked again.
-  const modelIds = [...new Set([
-    ...executable.map((n) => getModelIdentifier(n, args.edges, effectiveNodes, rerunIds)),
-    ...speechUnitIdsFor(executable, effectiveNodes, args.edges),
-  ].filter(Boolean))]
-  const uncachedModelIds = modelIds.filter((m) => getCachedCredits(m) === undefined && !isModelUnpriced(m))
-  const total = executable.reduce((sum, node) => {
-    const cached = getCachedCredits(getModelIdentifier(node, args.edges, effectiveNodes, rerunIds))
-    const cost =
-      cached !== undefined
-        ? cached
-        : estimateNodeCredits({ id: node.id, type: node.type, data: node.data as Record<string, unknown> }, args.edges, effectiveNodes, rerunIds)
-    return sum + cost * getCostMultiplier(node, effectiveNodes, args.edges, rerunIds)
-  }, 0)
-  return { total, uncachedModelIds }
+  const effectiveNodes = applyRunInputValues(args.nodes, args.inputValues, args.mediaLengths)
+  return estimateWholeRun(effectiveNodes, args.edges, getCachedCredits, isModelUnpriced)
 }
 
 export function useLiveRunEstimate(args: LiveRunEstimateArgs, deps: LiveRunEstimateDeps): number {
-  const { nodes, edges, inputValues, enabled } = args
+  const { nodes, edges, inputValues, enabled, mediaLengths } = args
   const [estimate, setEstimate] = useState(0)
+  // Edit Plan's id follows the server's per-minute answer, which can land after
+  // the nodes (the runner seeds it from the app detail, the dashboard asks the
+  // capabilities route): recompute when it does.
+  const editPlanModesVersion = useEditPlanModes()
   const firstRunRef = useRef(true)
   // Read through a ref so a caller passing fresh function identities each
   // render does not re-trigger the effect (only the graph and inputs should).
@@ -123,7 +145,7 @@ export function useLiveRunEstimate(args: LiveRunEstimateArgs, deps: LiveRunEstim
 
     const compute = () => {
       const { getCachedCredits, prefetchModelCredits, isModelUnpriced } = depsRef.current
-      const first = computeLiveRunEstimate({ nodes, edges, inputValues }, getCachedCredits, isModelUnpriced)
+      const first = computeLiveRunEstimate({ nodes, edges, inputValues, mediaLengths }, getCachedCredits, isModelUnpriced)
       if (first.uncachedModelIds.length === 0) {
         setEstimate(first.total)
         return
@@ -132,7 +154,7 @@ export function useLiveRunEstimate(args: LiveRunEstimateArgs, deps: LiveRunEstim
       setEstimate(first.total)
       prefetchModelCredits(first.uncachedModelIds).then(() => {
         if (cancelled) return
-        setEstimate(computeLiveRunEstimate({ nodes, edges, inputValues }, getCachedCredits, isModelUnpriced).total)
+        setEstimate(computeLiveRunEstimate({ nodes, edges, inputValues, mediaLengths }, getCachedCredits, isModelUnpriced).total)
       })
     }
 
@@ -150,7 +172,7 @@ export function useLiveRunEstimate(args: LiveRunEstimateArgs, deps: LiveRunEstim
       cancelled = true
       clearTimeout(timer)
     }
-  }, [nodes, edges, inputValues, enabled])
+  }, [nodes, edges, inputValues, enabled, mediaLengths, editPlanModesVersion])
 
   return estimate
 }

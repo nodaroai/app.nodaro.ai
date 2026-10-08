@@ -9,6 +9,7 @@ import { IMAGE_STYLE_PRESETS, GVP_PROVIDERS, getAspectRatiosForVideoModel, getVi
 import type { FrameFit, FrameDelivery } from "@nodaro/shared"
 import type { EditedEdl, PassThroughWarning } from "@nodaro/shared"
 import type { ScheduleRule } from "@nodaro/shared"
+import type { SocialPlatform, SocialPost, SocialReadPeriod, CompetitorReadRole } from "@nodaro/shared"
 import type { VideoOverlayFit, VideoOverlayLayerInput, VideoOverlayOutputAspect, VideoOverlayWarning } from "@nodaro/shared"
 
 export type NodeCategory = "input" | "parameter" | "ai" | "processing" | "output" | "scene" | "character" | "face" | "object" | "creature" | "location" | "utility"
@@ -3656,6 +3657,47 @@ export type ApplyEdlData = {
   activeResultIndex?: number
 }
 
+/** speaker-view (Track C, C3.2) — an EDL rendered with its speakers framed.
+ *  Nodaro-EXCLUSIVE (the cloud plugin's renderer, relayed from a self-host).
+ *  Reads an edit (`edl`, Edit Plan's or Camera Switch's) and the diarized
+ *  `transcript`; emits the video and, on `json`, the EDL as it drew it (the
+ *  turns split, the layouts written) — an EDL, NOT a Transcript. The
+ *  settings follow the applicability matrix (SV2); `normalizeSpeakerViewData`
+ *  (@nodaro/render-rules) snaps a value the aspect or speaker count rules out.
+ *  NOT PRICED YET (C4): a run is refused. */
+export type SpeakerViewData = {
+  currentJobProgress?: number
+  [key: string]: unknown
+  label: string
+  /** proxy = a 720p Preview, private, reviewed before a final is paid for. */
+  quality?: "proxy" | "final"
+  /** The aspect drawn; unset follows the edit's own, else 16:9. */
+  targetAspect?: "16:9" | "9:16" | "1:1" | "4:5"
+  /** `auto` follows Camera Switch's layout hints, else Single. */
+  layout?: "auto" | "single" | "side-by-side" | "stacked" | "grid" | "pip"
+  /** The switch at each speaker change: cut, pan, zoom or `xfade:<id>`. */
+  switchType?: string
+  switchDurationMs?: number
+  /** A `+`-joined set of scale / border / dim, or `none`. */
+  emphasisStyle?: string
+  emphasisDurationMs?: number
+  /** The border emphasis's colour, `#RRGGBB`. */
+  accentColor?: string
+  /** D20 framing: one crop per (source, speaker), as fractions of the frame. */
+  speakerRegions?: Array<{ source: string; speaker: string; region: { x: number; y: number; w: number; h: number } }>
+  /** Optional inline edit / transcript, used when nothing is wired. */
+  edl?: unknown
+  transcript?: unknown
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  generatedVideoUrl?: string
+  /** The EDL as it drew it, emitted on the `json` handle. */
+  generatedJson?: unknown
+  generatedResults?: readonly GeneratedResult[]
+  activeResultIndex?: number
+}
+
 export type ImageCollageData = {
   currentJobProgress?: number
   [key: string]: unknown
@@ -6691,6 +6733,66 @@ export type CollectionReadData = {
   generatedText?: string
 }
 
+/**
+ * Read Inspiration — the posts saved to the person's Inspiration library in a
+ * period (by the day each was saved), optionally one platform and one tag.
+ * Emits them the way Social Search does: `json` the posts, `text` their digest.
+ */
+export type InspirationReadData = {
+  [key: string]: unknown
+  label: string
+  /** One platform, or "all". */
+  platform: SocialPlatform | "all"
+  /** Only saves carrying this tag; "" for any. */
+  tag: string
+  /** `window`: the last N hours or days. `day`: one calendar day. */
+  period: SocialReadPeriod
+  windowAmount: number
+  windowUnit: CollectionReadWindowUnit
+  /** The calendar day in day mode (YYYY-MM-DD). */
+  day?: string
+  /** The browser's timezone when the day was picked (IANA); the server reads the day in it. */
+  timezone?: string
+  limit: number
+  order: CollectionReadOrder
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  currentJobId?: string
+  currentJobProgress?: number
+  /** The posts the last run read (the `json` handle). */
+  generatedJson?: SocialPost[]
+  /** Their digest (the `text` handle). */
+  generatedText?: string
+}
+
+/**
+ * Read Competitor — a tracked brand's posts as its scans found them, by the
+ * day each was published; optionally one platform and the brand's own posts
+ * or the posts about it. Nodaro Cloud.
+ */
+export type CompetitorReadData = {
+  [key: string]: unknown
+  label: string
+  competitorId: string
+  /** Shown before the brand list arrives; the name is looked up live by id. */
+  competitorName?: string
+  platform: SocialPlatform | "all"
+  role: CompetitorReadRole
+  period: SocialReadPeriod
+  windowAmount: number
+  windowUnit: CollectionReadWindowUnit
+  day?: string
+  timezone?: string
+  limit: number
+  order: CollectionReadOrder
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  currentJobId?: string
+  currentJobProgress?: number
+  generatedJson?: SocialPost[]
+  generatedText?: string
+}
+
 export interface GenerativePipelineNodeData {
   [key: string]: unknown
   label?: string
@@ -6866,6 +6968,7 @@ export type SceneNodeData =
   | ForcedAlignmentData
   | CombineVideosData
   | ApplyEdlData
+  | SpeakerViewData
   | ImageCollageData
   | ImageOverlayData
   | AssembleNarratedVideoData
@@ -6964,6 +7067,8 @@ export type SceneNodeData =
   | TelegramChannelFeedData
   | CollectionWriteData
   | CollectionReadData
+  | InspirationReadData
+  | CompetitorReadData
   | SocialPostData
   | MusicGenreData
   | MusicMoodData
@@ -7077,6 +7182,7 @@ export type SceneNodeType =
   | "video-audit"
   | "combine-videos"
   | "apply-edl"
+  | "speaker-view"
   | "edit-plan"
   | "camera-switch"
   | "content-recipe"
@@ -7174,6 +7280,8 @@ export type SceneNodeType =
   | "telegram-channel-feed"
   | "collection-write"
   | "collection-read"
+  | "inspiration-read"
+  | "competitor-read"
   | "component"
   | "music-genre"
   | "music-mood"
@@ -8748,6 +8856,40 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["edl", "transcript", "sources"],
     outputs: ["media", "json"],
     defaultData: { label: "Apply EDL", output: "video", quality: "final", crossfadeMs: 0, fieldMappings: {} } as ApplyEdlData,
+  },
+  {
+    type: "speaker-view",
+    label: "Speaker View",
+    category: "processing",
+    // Not priced yet (C4): the node says so and a run is refused.
+    creditCost: 0,
+    inputs: ["edl", "transcript"],
+    outputs: ["video", "json"],
+    defaultData: { label: "Speaker View", quality: "final", fieldMappings: {} } as SpeakerViewData,
+    exposableOutputs: [{ key: "result", label: "Result", outputType: "video" as const }],
+    // SV17: the aspect and the layout; the normalizer snaps an invalid pair at run.
+    exposableFields: [
+      {
+        key: "targetAspect", label: "Aspect Ratio", type: "aspect-ratio" as const,
+        options: [
+          { value: "16:9", label: "16:9 (Landscape)" },
+          { value: "9:16", label: "9:16 (Portrait)" },
+          { value: "1:1", label: "1:1 (Square)" },
+          { value: "4:5", label: "4:5 (Portrait)" },
+        ],
+      },
+      {
+        key: "layout", label: "Layout", type: "select" as const,
+        options: [
+          { value: "auto", label: "Auto" },
+          { value: "single", label: "Single" },
+          { value: "side-by-side", label: "Side by side" },
+          { value: "stacked", label: "Stacked" },
+          { value: "grid", label: "Grid" },
+          { value: "pip", label: "Picture in picture" },
+        ],
+      },
+    ],
   },
   {
     type: "edit-plan",
@@ -10412,6 +10554,43 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       order: "newest",
       textFormat: "headlines",
     } as CollectionReadData,
+  },
+  {
+    type: "inspiration-read",
+    label: "Read Inspiration",
+    category: "input",
+    creditCost: 0,
+    inputs: [],
+    outputs: ["json", "text"],
+    defaultData: {
+      label: "Read Inspiration",
+      platform: "all",
+      tag: "",
+      period: "window",
+      windowAmount: 7,
+      windowUnit: "days",
+      limit: 20,
+      order: "newest",
+    } as InspirationReadData,
+  },
+  {
+    type: "competitor-read",
+    label: "Read Competitor",
+    category: "input",
+    creditCost: 0,
+    inputs: [],
+    outputs: ["json", "text"],
+    defaultData: {
+      label: "Read Competitor",
+      competitorId: "",
+      platform: "all",
+      role: "all",
+      period: "window",
+      windowAmount: 7,
+      windowUnit: "days",
+      limit: 20,
+      order: "newest",
+    } as CompetitorReadData,
   },
   {
     type: "collection-write",

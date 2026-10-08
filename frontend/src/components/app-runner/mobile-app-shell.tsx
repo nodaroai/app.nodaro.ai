@@ -13,8 +13,9 @@ import { useAppRunnerStore } from "@/hooks/use-app-runner-store"
 import { usePresentationStore } from "@/hooks/use-presentation-store"
 import { useUserCredits, getCachedCredits, prefetchModelCredits, isModelUnpriced } from "@/ee/hooks/queries/use-credits-queries"
 import { useLiveRunEstimate } from "@/hooks/use-live-run-estimate"
+import { useChosenRecordingLengths } from "@/hooks/use-chosen-recording-lengths"
+import { recordingLengthPending, runCostLabel } from "@/lib/run-price"
 import { hasCredits } from "@/lib/edition"
-import { formatCreditUnits } from "@/lib/credit-units"
 import { spendableCredits } from "@/lib/spendable-credits"
 import { useBillingSurface } from "@/hooks/use-billing-surface"
 import { AUTH_REDIRECT_KEY } from "@/lib/storage-keys"
@@ -167,8 +168,10 @@ export function MobileAppShell({
   // figure, which is the server's static, edge-less estimate and under-quoted a
   // per-minute render as one minute. The live figure is BASE credits; the seeded
   // one is already marked up, so it is used as-is until the first compute.
+  // The recordings the user chose, read for their length (decided 2026-10-07).
+  const chosenRecordingLengths = useChosenRecordingLengths(inputNodes, presInputValues)
   const liveBaseEstimate = useLiveRunEstimate(
-    { nodes: presNodes, edges: presEdges, inputValues: presInputValues, enabled: hasCredits() },
+    { nodes: presNodes, edges: presEdges, inputValues: presInputValues, enabled: hasCredits(), mediaLengths: chosenRecordingLengths },
     { getCachedCredits, prefetchModelCredits, isModelUnpriced },
   )
   const estimatedCost = useMemo(() => {
@@ -192,11 +195,22 @@ export function MobileAppShell({
     return gateApplies && figure < estimatedCost
   }, [user, userCredits, estimatedCost, deploymentPayer])
 
-  const costLabel = hasCredits() && estimatedCost > 0 ? ` (${formatCreditUnits(estimatedCost)})` : ""
+  // The app's listing until the user's recording and its length are known,
+  // then the exact figure (decided 2026-10-07).
+  const listedPrice = usePresentationStore((s) => s.listedPrice)
+  const costLabel = hasCredits()
+    ? runCostLabel({
+        exact: estimatedCost,
+        listing: listedPrice,
+        pending: recordingLengthPending(inputNodes, presInputValues, chosenRecordingLengths),
+        plusPerMinute: (n) => t("credits.plusPerMinute", { n }),
+        plusPerItem: (n) => t("credits.plusPerItem", { n }),
+      })
+    : ""
 
   const allInputsFilled = useMemo(
-    () => areAllInputsFilled(orderedInputNodes, presInputValues),
-    [orderedInputNodes, presInputValues],
+    () => areAllInputsFilled(orderedInputNodes, presInputValues, { nodes: presNodes, edges: presEdges }),
+    [orderedInputNodes, presInputValues, presNodes, presEdges],
   )
 
   // ---- Local state ----

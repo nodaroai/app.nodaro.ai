@@ -48,6 +48,8 @@ const store = vi.hoisted(() => ({
   seq: 0,
   fromCalls: 0,
   updatePayloads: [] as Array<{ table: string; payload: Row }>,
+  /** The per-minute column (migration 483) is not in this database yet. */
+  rejectPerMinute: false,
 }))
 
 vi.mock("../../supabase.js", () => {
@@ -81,6 +83,9 @@ vi.mock("../../supabase.js", () => {
     }
 
     private run(): { data: unknown; error: unknown } {
+      if (this.op !== "select" && store.rejectPerMinute && "estimated_per_minute_credits" in this.payload) {
+        return { data: null, error: { code: "PGRST204", message: "Could not find the 'estimated_per_minute_credits' column" } }
+      }
       if (this.op === "insert") {
         const row = { id: nextId(this.name), ...this.payload }
         table(this.name).push(row)
@@ -141,6 +146,7 @@ vi.mock("../../supabase.js", () => {
 
 import { config } from "../../config.js"
 import { OPERATOR_OWNED_COLUMNS, seedTutorialTemplates } from "../index.js"
+import { resetPerMinuteColumnsForTest } from "../../listing-per-minute-columns.js"
 
 // The shared test setup pins EDITION=cloud, where the seeder is a deliberate
 // no-op (staging and production share one Supabase project). Self-host is the
@@ -195,7 +201,34 @@ describe("tutorial seeder — operator decisions survive a content reseed", () =
     store.seq = 0
     store.fromCalls = 0
     store.updatePayloads.length = 0
+    store.rejectPerMinute = false
+    resetPerMinuteColumnsForTest()
     docs.value = [doc()]
+  })
+
+  // Staging seeds the SHARED database before migration 483 reaches it, and
+  // production reads that row with code that knows no per-minute part
+  // (decided 2026-10-07).
+  it("without the per-minute column: the price at 180 minutes, then the parts once the column exists", async () => {
+    docs.value = [doc({ estimatedCredits: 82, estimatedPerMinuteCredits: 14 })]
+    store.rejectPerMinute = true
+    await seed()
+    expect(template().estimated_credits).toBe(2602)
+    expect("estimated_per_minute_credits" in template()).toBe(false)
+
+    // The column arrives (the promotion restarts the process). The same doc
+    // is NOT "unchanged": the folded row is rewritten with its parts.
+    store.rejectPerMinute = false
+    resetPerMinuteColumnsForTest()
+    await seed()
+    expect(template().estimated_credits).toBe(82)
+    expect(template().estimated_per_minute_credits).toBe(14)
+    expect(String(template().markdown_description)).toContain("v1")
+
+    // And from then on it is unchanged.
+    const writes = store.updatePayloads.length
+    await seed()
+    expect(store.updatePayloads.length).toBe(writes)
   })
 
   // Per-test, not afterAll: EDITION is a process global and the cloud case

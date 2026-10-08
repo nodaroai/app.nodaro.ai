@@ -51,8 +51,8 @@ const dataOf = (nodes: readonly WorkflowNode[], id: string) => (nodes.find((n) =
 const activeTake = (data: Data) => (data.generatedResults as Data[] | undefined)?.[(data.activeResultIndex as number | undefined) ?? 0]
 
 describe("the review region", () => {
-  it("is every node on a canvas with a render (Apply EDL today) — the tail after the render too (decided 2026-10-05)", () => {
-    expect([...REVIEW_RENDER_NODE_TYPES]).toEqual(["apply-edl"])
+  it("is every node on a canvas with a render (Apply EDL and Speaker View) — the tail after the render too (decided 2026-10-05)", () => {
+    expect([...REVIEW_RENDER_NODE_TYPES]).toEqual(["apply-edl", "speaker-view"])
     // Not its own copy: the shared stop rule's set, derived from the render-node registry (SV18).
     expect(REVIEW_RENDER_NODE_TYPES).toBe(PREVIEW_RENDER_NODE_TYPES)
     expect([...REVIEW_RENDER_NODE_TYPES]).toEqual(Object.keys(RENDER_NODE_TYPES))

@@ -32,6 +32,7 @@ import { sendInternalError } from "../lib/http-errors.js"
 import { isNodaroConnected, nodaroCloudFetch } from "../lib/nodaro-connect.js"
 import { callCloudRoute } from "../providers/nodaro/client.js"
 import { requestJobStop } from "../workers/shared.js"
+import { checkRehostSizes, rehostSizeMessage } from "../lib/rehost-size-check.js"
 
 /** Structured refusal shared by every route here — the frontend renders it
  *  with a "Connect nodaro.ai" CTA. 503: the capability exists, the install
@@ -126,6 +127,23 @@ function refuseCameraSwitch(body: Record<string, unknown>):
   }
   return { body: { ...body, edl, transcript: parse(body.transcript) } }
 }
+// speaker-view (Track C, C2.1/C3.1): HOW the speakers are on screen. The cloud
+// plugin's Zod is the schema authority (settings, regions, the edit itself);
+// here only the edit has to be there, PARSED — the relay re-hosts its sources
+// from the object — and no private source may be over the re-host cap (SV12,
+// decided 2026-10-06), refused before anything is created and named.
+const speakerViewBody = z.object({
+  edl: z.unknown(),
+  transcript: z.unknown().optional(),
+}).passthrough().refine((v) => v.edl !== undefined && v.edl !== null, { message: "edl is required" })
+async function refuseSpeakerView(body: Record<string, unknown>):
+  Promise<{ refused: { status: number; code: string; message: string } } | { body: Record<string, unknown> }> {
+  const parse = (v: unknown) => (typeof v === "string" ? (() => { try { return JSON.parse(v) as unknown } catch { return v } })() : v)
+  const edl = parse(body.edl)
+  const hits = await checkRehostSizes(edl)
+  if (hits.length > 0) return { refused: { status: 422, code: "source_too_large", message: rehostSizeMessage("Speaker View", hits) } }
+  return { body: { ...body, edl, ...(body.transcript !== undefined ? { transcript: parse(body.transcript) } : {}) } }
+}
 const continueBody = z.object({
   fromJobId: z.string().min(1),
   fromSegment: z.number().int().min(1).optional(),
@@ -144,6 +162,13 @@ interface EnqueueArgs {
  *  instead. The full payload still rides the queue job data below. Mirrors the
  *  cloud plugin route's slimming; a no-op for every other exclusive type. */
 function slimInputData(body: Record<string, unknown>, jobType: string): Record<string, unknown> {
+  if (jobType === "speaker-view") {
+    // The edit stays (the review reads it, as the cloud route keeps it); the
+    // transcript shrinks to its size.
+    const { transcript, ...slim } = body
+    const words = (transcript as { words?: unknown } | null | undefined)?.words
+    return { ...slim, ...(Array.isArray(words) ? { transcriptWordCount: words.length } : {}) }
+  }
   if (jobType === "camera-switch") {
     const { edl, transcript, ...slim } = body
     const segments = (edl as { segments?: unknown } | null | undefined)?.segments
@@ -170,7 +195,8 @@ async function enqueueExclusive({ req, reply, jobType, body, extraPayload }: Enq
   const { data: job, error } = await insertJob(req, {
     workflow_id: extractWorkflowId(req.body),
     node_id: extractNodeId(req.body),
-    force_private: extractForcePrivate(req.body) || undefined,
+    // A Preview render (quality proxy) is private on every lane (Track A F1).
+    force_private: extractForcePrivate(req.body) || (jobType === "speaker-view" && body.quality === "proxy") || undefined,
     user_id: userId,
     status: "pending",
     input_data: buildJobInputData(slimInputData(body, jobType), jobType),
@@ -209,6 +235,14 @@ export async function nodaroExclusiveRoutes(app: FastifyInstance) {
         }
         return enqueueExclusive({ req, reply, jobType, body: checked.body })
       }
+      if (jobType === "speaker-view") {
+        const checked = await refuseSpeakerView(parsed.data as Record<string, unknown>)
+        if ("refused" in checked) {
+          const { status, code, message } = checked.refused
+          return reply.status(status).send({ error: { code, message } })
+        }
+        return enqueueExclusive({ req, reply, jobType, body: checked.body })
+      }
       return enqueueExclusive({ req, reply, jobType, body: parsed.data as Record<string, unknown> })
     }
   // checkOnly: this file registers only when !hasCredits() (see app.ts) —
@@ -230,6 +264,8 @@ export async function nodaroExclusiveRoutes(app: FastifyInstance) {
   // not the HTTP body, so this only guards the direct REST POST).
   app.post("/v1/edit-plan", { ...guarded("edit-plan"), bodyLimit: 24 * 1024 * 1024 }, jobHandler("edit-plan", editPlanBody))
   app.post("/v1/camera-switch", { ...guarded("camera-switch"), bodyLimit: 24 * 1024 * 1024 }, jobHandler("camera-switch", cameraSwitchBody))
+  // An episode's edit plus its word-level transcript is several MB, as for camera-switch.
+  app.post("/v1/speaker-view", { ...guarded("speaker-view"), bodyLimit: 24 * 1024 * 1024 }, jobHandler("speaker-view", speakerViewBody))
 
   // ── video-analysis probe: synchronous passthrough ─────────────────────
   app.post("/v1/video-analysis/probe", async (req, reply) => {

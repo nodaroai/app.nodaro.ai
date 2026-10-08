@@ -25,6 +25,8 @@ export function SectionTitle({
 export interface SegmentOption<T extends string> {
   readonly value: T
   readonly label: string
+  /** What the option means, shown as its tooltip. */
+  readonly hint?: string
 }
 
 /** The design's segmented filter: toggle buttons in a labelled group. */
@@ -52,6 +54,7 @@ export function SegmentedControl<T extends string>({
             key={option.value}
             type="button"
             aria-pressed={active}
+            title={option.hint}
             onClick={() => onChange(option.value)}
             className={cn(
               "whitespace-nowrap rounded-[7px] px-3 py-1.5 text-xs transition-colors",

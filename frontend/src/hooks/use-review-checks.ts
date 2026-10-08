@@ -19,6 +19,8 @@
  *    take. Behind Camera Switch it is null: a take records no run it shares
  *    with the switch's saved output, so the map cannot be shown to be the cut
  *    the take was made from, and clicks play the original instead.
+ *    `previewClockMap` is the same map for the newest Preview the player offers
+ *    beside a Final on display (A3-4), judged by that take's own stamps.
  */
 import { useEffect, useMemo, useState } from "react"
 import type { Edl, RenderGraphEdge } from "@nodaro/shared"
@@ -30,7 +32,7 @@ import { isFreshTake, renderSettingsBasisOf, showsStaleTake } from "@/lib/edl-re
 import { withPendingReview } from "@/lib/edl-review/write-review"
 import { currentRenderPlanBasis } from "@/components/editor/workflow-editor/apply-edl-stamps"
 import { renderRuleVerdict, type RenderRuleVerdict } from "@/components/editor/workflow-editor/render-final-checks"
-import type { ReviewEdits } from "./use-review-edits"
+import type { ReviewEditState } from "./review-edit-state"
 import type { ReviewModel } from "./use-review-model"
 
 export const REVIEW_CHECK_DEBOUNCE_MS = 150
@@ -42,6 +44,8 @@ export interface ReviewChecks {
   /** The stale-preview banner shows. */
   readonly staleTake: boolean
   readonly clockMap: Edl | null
+  /** The clock map for the newest Preview beside the take on display (`model.previewTake`). */
+  readonly previewClockMap: Edl | null
   /** Every render the Run would make with the edit in place; empty with no render or plan. */
   readonly renders: readonly ApplyEdlRenderInput[]
 }
@@ -58,22 +62,24 @@ function useSettled<T>(value: T, ms: number): T {
   return settled
 }
 
-export function useReviewChecks(model: ReviewModel, edits: ReviewEdits): ReviewChecks {
-  const { renderId, planId, take, passesOtherNodes, render, editStatus, renderExists } = model
+export function useReviewChecks(model: ReviewModel, edits: ReviewEditState): ReviewChecks {
+  const { renderId, planId, take, previewTake, passesOtherNodes, render, editStatus, renderExists } = model
   const canvas = useReviewGraph(renderId)
   // The inspector owns the plan's edit only while it holds K; otherwise the
   // canvas is judged as it stands.
-  const owned = edits.kept !== null
+  const owned = edits.keptCount !== null
   const pending = edits.pendingReview
   const input = useMemo(
-    () => ({ canvas, owned, pending, take, editStatus, render, passesOtherNodes, renderExists, planId }),
-    [canvas, owned, pending, take, editStatus, render, passesOtherNodes, renderExists, planId],
+    () => ({ canvas, owned, pending, take, previewTake, editStatus, render, passesOtherNodes, renderExists, planId }),
+    [canvas, owned, pending, take, previewTake, editStatus, render, passesOtherNodes, renderExists, planId],
   )
   const settled = useSettled(input, REVIEW_CHECK_DEBOUNCE_MS)
 
   return useMemo(() => {
-    const { canvas, owned, pending, take, editStatus, render, passesOtherNodes, renderExists, planId } = settled
-    if (!renderExists || !planId) return { verdict: undefined, fresh: undefined, staleTake: false, clockMap: null, renders: NO_RENDERS }
+    const { canvas, owned, pending, take, previewTake, editStatus, render, passesOtherNodes, renderExists, planId } = settled
+    if (!renderExists || !planId) {
+      return { verdict: undefined, fresh: undefined, staleTake: false, clockMap: null, previewClockMap: null, renders: NO_RENDERS }
+    }
     const { nodes, edges } = canvas
     const graph = owned ? withPendingReview(nodes, planId, pending) : nodes
     const verdict = renderRuleVerdict(renderId, graph, edges)
@@ -85,12 +91,15 @@ export function useReviewChecks(model: ReviewModel, edits: ReviewEdits): ReviewC
       renderBasis: renderSettingsBasisOf(first, applyEdlRenderSettings(renderNode.data as Record<string, unknown>)),
     }
     const fresh = isFreshTake(take, now)
+    const previewFresh = isFreshTake(previewTake, now)
     const planHasEdit = owned ? pending !== undefined : editStatus === "applied"
+    const map = !passesOtherNodes && (fresh === true || previewFresh === true) ? clockMapOf(first?.edl, render) : null
     return {
       verdict,
       fresh,
       staleTake: showsStaleTake(fresh, !!take, planHasEdit),
-      clockMap: fresh === true && !passesOtherNodes ? clockMapOf(first?.edl, render) : null,
+      clockMap: fresh === true ? map : null,
+      previewClockMap: previewFresh === true ? map : null,
       renders,
     }
   }, [settled, renderId])

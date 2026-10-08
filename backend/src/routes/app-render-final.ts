@@ -40,6 +40,7 @@ import { resolveWebSurfaceFlag } from "../middleware/credit-guard.js"
 import { MIN_IDEMPOTENCY_KEY_LENGTH } from "../lib/dedup-fingerprint.js"
 import { personalPayer, shouldRefuseDegradedRunFor } from "../lib/billing-context.js"
 import { describeLockedOverrides, findLockedOverrides } from "../lib/input-override-lock.js"
+import { exposedVideoLinkNodeIds } from "../lib/exposed-text-caps.js"
 import { previewReviewRefusal } from "../lib/preview-review-gate.js"
 import { previewStopRuleEnabled } from "../lib/preview-stop-rule-flag.js"
 import { ACTIVE_EXECUTION_STATUSES } from "../lib/request-helpers.js"
@@ -103,7 +104,7 @@ export async function appRenderFinalRoutes(app: FastifyInstance) {
     const { data: version } = await supabase
       // tenant-scope-ignore: published version, verified against the slug/workflow and blocked creator below
       .from("published_apps")
-      .select("id, slug, workflow_id, creator_id, publish_type, snapshot_nodes, snapshot_edges")
+      .select("id, slug, workflow_id, creator_id, publish_type, snapshot_nodes, snapshot_edges, snapshot_settings")
       .eq("id", run.app_id)
       .is("deleted_at", null)
       .maybeSingle()
@@ -114,6 +115,7 @@ export async function appRenderFinalRoutes(app: FastifyInstance) {
       publish_type: string | null
       snapshot_nodes: SnapshotNode[] | null
       snapshot_edges: SnapshotEdge[] | null
+      snapshot_settings: Record<string, unknown> | null
     } | null
     const { data: slugRow } = await supabase
       .from("published_apps")
@@ -209,7 +211,7 @@ export async function appRenderFinalRoutes(app: FastifyInstance) {
       ...renderRunOverrides(renderNodeId, "final", runSet),
     }
     const effective = continuationInputOverrides(source, sent)
-    const locked = findLockedOverrides(nodes, effective)
+    const locked = findLockedOverrides(nodes, effective, exposedVideoLinkNodeIds(appRow.snapshot_settings as Record<string, unknown> | null, nodes))
     if (locked.length > 0) {
       return reply.status(400).send({ error: { code: "locked_field", message: describeLockedOverrides(locked) } })
     }

@@ -7,6 +7,7 @@ import {
   OWNER_ONLY_LISTING_RENDER_TYPES,
   PREVIEW_RENDER_NODE_TYPES,
   applyEdlCreditId,
+  speakerViewCreditId,
   isRenderNodeType,
   renderNodeOf,
   rendersLatestBatch,
@@ -14,9 +15,27 @@ import {
 } from "../index.js"
 
 describe("RENDER_NODE_TYPES — one render-node registry (SV18)", () => {
-  it("holds Apply EDL, and only it, until Speaker View registers", () => {
-    expect(Object.keys(RENDER_NODE_TYPES)).toEqual(["apply-edl"])
-    expect(RENDER_NODE_TYPE_IDS).toEqual(["apply-edl"])
+  it("holds Apply EDL and Speaker View", () => {
+    expect(Object.keys(RENDER_NODE_TYPES)).toEqual(["apply-edl", "speaker-view"])
+    expect(RENDER_NODE_TYPE_IDS).toEqual(["apply-edl", "speaker-view"])
+  })
+
+  it("describes Speaker View: video only, mapped through the EDL it emits, a json that is an EDL (C3.2)", () => {
+    const d = renderNodeOf("speaker-view")!
+    expect(d.clockMapFrom).toBe("output-json")
+    expect(d.ownerOnlyListing).toBe(true)
+    expect(d.latestBatch).toBe(true)
+    expect(d.jsonKind).toBe("edl")
+    expect(d.mediumOf({ output: "audio" })).toBe("video")
+    expect(d.mediumOf({})).toBe("video")
+    expect(rendersTranscriptJson("speaker-view")).toBe(false)
+  })
+
+  it("prices a Preview on its own row and everything else on the final's", () => {
+    const d = renderNodeOf("speaker-view")!
+    expect(d.creditId("proxy")).toBe("speaker-view:proxy")
+    for (const q of ["final", undefined, null, "", "high", 3]) expect(d.creditId(q)).toBe("speaker-view")
+    expect(speakerViewCreditId("proxy")).toBe("speaker-view:proxy")
   })
 
   it("describes Apply EDL exactly as its hard-coded sites behaved", () => {

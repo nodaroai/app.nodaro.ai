@@ -1,5 +1,6 @@
 "use client"
 
+import { listingCeilingCredits } from "@/lib/listing-price"
 import { useCallback, useMemo, useEffect, useRef, useState } from "react"
 import { Puzzle, RefreshCw } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
@@ -64,8 +65,11 @@ export function ComponentConfig({ data, onUpdate, nodeId }: ConfigProps<Componen
             onUpdate({ exposedSettings: { ...nodeData.exposedSettings, ...defaults } })
           }
         }
-        if (app.estimatedCredits != null && app.estimatedCredits !== nodeData.estimatedCredits) {
-          onUpdate({ estimatedCredits: app.estimatedCredits })
+        // A component inside a run estimate is priced at its most: a per-minute
+        // listing at the longest recording (decided 2026-10-07).
+        const ceiling = app.estimatedCredits != null ? listingCeilingCredits(app.estimatedCredits, app.perMinuteCredits) : null
+        if (ceiling != null && ceiling !== nodeData.estimatedCredits) {
+          onUpdate({ estimatedCredits: ceiling })
         }
       })
       .catch(() => {})

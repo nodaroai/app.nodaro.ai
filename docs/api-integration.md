@@ -605,10 +605,15 @@ For those the correction targets the band the provider will actually produce, so
 the price still matches the render. Each such model declares this in the catalog
 via `unlistedResolutionRendersAs`, which is what `GET /v1/models` reflects.
 
-`duration` is passed through as you send it, with one exception: the LTX 2.3
-models are priced on a fixed ladder of seeded durations per resolution band, so
-a duration between rungs is moved to the nearest one and reported in
-`adjustments`.
+**Duration is billed for the length the model renders.** A video request that
+sends no `duration` renders — and is charged for — the model's own default
+length, `defaultDuration` in `GET /v1/models` (Seedance 2 / Fast / Mini and
+Seedance 2.5 8 s, Grok Imagine 6 s on `grok-i2v` and 8 s on 1.5, Hailuo 6 s,
+Kling 5 s, LTX 6 s), never a flat 5 s; that length is sent to the provider, so
+what you are charged for is what is rendered. A `duration` the model does not
+offer is moved to the nearest length it does (a tie goes to the shorter one) and
+reported in `adjustments`: a 7 s request on Kling renders and bills 5 s, a 7 s
+request on an LTX 2.3 model renders and bills 6 s.
 
 `duration: -1` means **Auto** on the models that support it (the Seedance 2
 family — `autoDuration: true` in `GET /v1/models`): the model picks the clip
@@ -1377,8 +1382,15 @@ modes this server can plan. Authenticated; `Cache-Control: private, no-store`
 (a server update can change the answer).
 
 ```json
-{ "modes": ["tighten", "clips", "chapters", "trailer"], "source": "server" }
+{ "modes": ["tighten", "clips", "chapters", "trailer"], "source": "server", "perMinute": true }
 ```
+
+`perMinute` says whether this server charges Edit Plan **per started minute**
+of the recording (`true`) or at the 15/30/60/90/120/180-minute step its length
+rounds up to (`false`, and on a self-hosted install). The editor's estimates
+follow it; the formula and examples are on the
+[Edit Plan](./nodes/processing-video/edit-plan.md#credit-cost) page. A client
+that predates the field can ignore it.
 
 `tighten`, `clips` and `chapters` are always listed. `trailer` is listed only
 when the server can plan a trailer; until then the editor greys the Trailer
@@ -2247,6 +2259,24 @@ calls a plain `.aac` — → `audio/aac`; `image/jpg` → `image/jpeg`;
 extension**. A type that still resolves to nothing we accept is rejected with
 `400 validation_error` listing the accepted formats. The resolved type is what
 comes back as `mimeType` and what the stored object is served as.
+
+**MP4 and MOV videos are stored with their index in front ("faststart").**
+A recording from OBS or a phone often keeps the MP4/MOV index (the `moov`
+box) at the end of the file, so the first seek into a large upload has to fetch
+the tail first. Every video upload lane — `POST /v1/upload`, the proxy PUT
+behind `prepare_video_upload`, the handoff page and widget behind
+`request_video_upload`, and the server-side import of a recording URL —
+rewrites such a file once, before it is stored, by copying its streams into a
+new container: no re-encode, the picture and sound are byte-identical, and the
+duration and stream count are checked against the original. A file that is
+already faststart, fragmented, or not an MP4/MOV is stored exactly as sent, and
+so is any file the rewrite does not verify, has no room to run (it needs
+free disk of at least twice the file's size), or arrives while the server is
+already rewriting its limit of files at once. Because a
+rewritten file is re-wrapped, the stored size can differ slightly from the
+number of bytes you sent: `sizeBytes` (and the byte count the upload returns) is
+always the stored object's final length, so do not compare it to your local
+file size or checksum. Files uploaded before this change are not rewritten. A self-hosted install can turn the rewrite off with `UPLOAD_FASTSTART_ENABLED=false` (see the deployment guide); every upload is then stored exactly as sent.
 
 ### Media processing (free, synchronous)
 
@@ -3233,6 +3263,7 @@ for the formulas). Off Cloud, the four `voice-changer-pro*` routes are absent (4
 | `POST` | `/v1/audio-sync` | Measure how far apart the clocks of 2–6 recordings of one conversation are, from their sound, local FFmpeg + correlation, **10 × (sources − 1) credits** (2 → 10, 4 → 30, 6 → 50), keyless (`{ sources: [{ id, url }] (2–6, unique ids, audio or video), reference?: <one of the ids, default the first> }`; a repeated id or a `reference` that is not one of the ids is a `400 validation_error` naming it; `output_data.json` = `{ version, reference, offsets: [{ sourceId, offsetMs, confidence, driftMsPerHour }], notes }` with `referenceMs = sourceMs + offsetMs`; drift is measured and warned in `notes` past 33 ms over the shared stretch, never corrected). Full reference: [Audio Sync](./nodes/processing-audio/audio-sync.md). → job. |
 | `POST` | `/v1/edit-plan` | Plan a transcript-driven edit of a recording, no media output (`{ mode: tighten\|clips\|chapters\|trailer, planTier: economy\|standard\|premium, transcript, sources: [{ id, url, kind, role?, speakers?, offsetMs? }] (1–6), silence?, instructions?, styleGuide?, count?, targetDurationSec?, targetAspect?, platform? }`; `output_data` = an EDL for `tighten`, `{ version, clips: Edl[] }` for `clips`, `{ version, chapters }` for `chapters`, an EDL for `trailer`). A mode the server does not plan ([Edit Plan modes](#edit-plan-modes)) or does not know answers `400 mode_not_available` before anything is charged. Priced per source-minute × tier on a length bucket, plus a flat term in `clips` and `trailer` modes: `per_minute(tier) × bucket_minutes + (clips or trailer ? clips_flat(tier) : 0)` — full formula and worked examples on [Edit Plan](./nodes/processing-video/edit-plan.md#credit-cost). Runs on nodaro.ai; a self-hosted install relays it once connected and otherwise answers `503 nodaro_connection_required`. Multicam offsets are applied by the caller before this request (the SDK's `editPlan({ offsets })` and MCP `plan_edit` do it for you). → job. |
 | `POST` | `/v1/camera-switch` | Put each cut of an edit on the camera of whoever is speaking — the sound never changes (`{ edl, transcript (with speaker labels), speakerMap?, speakerNames?, minShotMs?, leadMs?, maxShotMs?, wideEvery?, layoutHints? }`; `output_data.json` = the switched EDL for `/v1/apply-edl`, `output_data.transcript` = the transcript with `speakerNames` applied). **10 credits** flat per run. Refused before anything is created: `400 invalid_edl` when `edl` is not one master-clock edit (a clip set, a chapters plan), `422 no_speakers` when the transcript has no speaker labels. Runs on nodaro.ai; a self-hosted install relays it once connected and otherwise answers `503 nodaro_connection_required`. Full reference: [Camera Switch](./nodes/processing-video/camera-switch.md). → job. |
+| `POST` | `/v1/speaker-view` | Render an edit with the speakers laid out on screen, from the original cameras with the master audio (`{ edl, transcript?, quality?: final\|proxy, targetAspect?: 16:9\|9:16\|1:1\|4:5, layout?, switch?: { type, durationMs? }, emphasis?: { style, durationMs? }, speakerRegions?: [{ source, speaker, region }], clipKey? }`; `output_data` = `videoUrl` + `thumbnailUrl`, `json` = the edit as rendered). **Not available yet**: until its price ships, nodaro.ai answers `503 not_priced` ("Speaker View is not priced yet") before anything is created or charged (on a self-hosted install, the relayed job fails with that message). Runs on nodaro.ai; a self-hosted install relays it once connected (otherwise `503 nodaro_connection_required`), and first refuses `422 source_too_large`, naming the source and its size, when a source stored on the install is over the 500 MB a relay can send — use a public URL for a large camera file. A `quality: proxy` render is private. → job. |
 | `POST` | `/v1/apply-edl` | Render an edit decision list into one video or audio file, local FFmpeg, keyless (`{ edl, sources?: [url] (positional overrides of edl.sources[i].url), transcript?, output?: video\|audio, quality?: final\|proxy, crossfadeMs?: 0–5000, clipKey?: "<first inMs>-<last outMs>" }`; `output_data` = `videoUrl` + `thumbnailUrl` or `audioUrl`, `quality`, `clipKey` when sent, and `json` = the transcript remapped through the cut when one was sent). Priced per minute of rendered output: **10 credits × ceil(output_seconds ÷ 60)** at `final`, **1 credit × ceil(output_seconds ÷ 60)** for a `proxy` Preview (minimum one minute; a Preview is always private). An EDL the renderer cannot render, or one over 180 minutes of output, is a `400 invalid_edl` naming the segment and rule before any credits are reserved. Full reference: [Apply EDL](./nodes/processing-video/apply-edl.md). → job. |
 | `POST` | `/v1/still-to-video` | One still image + one audio track → MP4, local FFmpeg, **0 credits** (`{ imageUrl, audioUrl, motion?, intensity?, resolution?, aspectRatio?, fps?, fit?, padColor? }`; output duration = the audio's duration, no duration field) → job. |
 | `POST` | `/v1/slideshow` | 2–100 images + one optional audio track → MP4 slideshow, local FFmpeg, **0 credits** (`{ imageUrls[], audioUrl?, imageDurations?[] (null=auto), perImageDuration?, transition?, transitionDuration?, motion?, intensity?, resolution?, aspectRatio?, fps?, fit?, padColor? }`; with audio the duration IS the audio's — pinned-row mismatches scale proportionally, disclosed in output) → job. |

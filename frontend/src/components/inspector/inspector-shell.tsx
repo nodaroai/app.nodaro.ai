@@ -85,6 +85,13 @@ export interface InspectorShellProps {
   /** Keys pressed anywhere in the dialog, including on the dialog itself (where
    *  focus lands when it opens). Not stopped: listeners outside still see them. */
   readonly onKeyDown?: (event: ReactKeyboardEvent<HTMLDivElement>) => void
+  /**
+   * Where focus goes on close when whatever had it at open is gone, or never
+   * held it: an entry that unmounts on click (a context menu), or a link that
+   * opened the inspector with focus on `<body>`. Without it focus would fall to
+   * `<body>`, and a keyboard user is left nowhere.
+   */
+  readonly returnFocusTo?: () => HTMLElement | null
 }
 
 const stop = (e: SyntheticEvent) => e.stopPropagation()
@@ -104,7 +111,7 @@ export const INSPECTOR_POPPER = { className: "nokey", onWheel: stop } as const
 
 export function InspectorShell({
   open, onClose, title, icon, meta, actions, copyValue, size = "compact", footer, bodyClassName, children,
-  onEscapeKeyDown, onKeyDown,
+  onEscapeKeyDown, onKeyDown, returnFocusTo,
 }: InspectorShellProps) {
   const t = useT()
   const contentRef = useRef<HTMLDivElement | null>(null)
@@ -138,7 +145,9 @@ export function InspectorShell({
           aria-describedby={undefined}
           onOpenAutoFocus={(e) => {
             e.preventDefault()
-            openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+            // <body> is where focus sits when nothing has it: not an opener.
+            const active = document.activeElement
+            openerRef.current = active instanceof HTMLElement && active !== document.body ? active : null
             // Land focus on the dialog itself, not on its first button.
             contentRef.current?.focus()
           }}
@@ -147,6 +156,7 @@ export function InspectorShell({
             const opener = openerRef.current
             openerRef.current = null
             if (opener?.isConnected) opener.focus()
+            else returnFocusTo?.()?.focus()
           }}
           onEscapeKeyDown={onEscapeKeyDown}
           onKeyDown={onKeyDown}

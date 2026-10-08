@@ -31,7 +31,7 @@ const read = (rel: string) => readFileSync(join(SRC, rel), "utf8")
 describe("catalog guard placement", () => {
   it("orchestrator: after the override merge, before parameter pre-completion", () => {
     const src = read("workers/orchestrator-worker.ts")
-    const merge = src.indexOf("applyInputOverridesToNodes(nodes, inputOverrides)")
+    const merge = src.indexOf("applyInputOverridesToNodes(\n")
     const guard = src.indexOf("findForeignCatalogIds(nodes)")
     const preComplete = src.indexOf("getParameterPromptHint(node, ")
     expect(merge, "override merge present").toBeGreaterThan(-1)

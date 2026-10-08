@@ -1227,6 +1227,9 @@ const TEXT_SOURCE_NODE_TYPES = new Set([
   // Collections — Read Collection's digest, Save to Collection's headline.
   "collection-read",
   "collection-write",
+  // Read Inspiration / Read Competitor — the posts' digest (or the posts as JSON).
+  "inspiration-read",
+  "competitor-read",
   // Content Recipe (the readable recipe) and Content Ideas (one brief per idea,
   // or the digest) — text is the primary output of both.
   "content-recipe",
@@ -1750,6 +1753,22 @@ function routeOutput(
   // `transcript`, both stringified json — routed by targetHandle before any
   // source-type branch, like apply-edl's. Mirrors the frontend resolver. ---
   if (targetType === "camera-switch") {
+    if (edge.targetHandle === "edl") {
+      inputs.edl = output
+      return
+    }
+    if (edge.targetHandle === "transcript") {
+      inputs.transcript = output
+      return
+    }
+  }
+
+  // --- speaker-view inputs (C3.2): the edit (`edl`) and the diarized
+  // `transcript`, both stringified json — the same two lanes as camera-switch,
+  // routed by targetHandle before any source-type branch. The EDL lane is NOT a
+  // Transcript wherever a render's `json` is concerned (`jsonKind: "edl"`).
+  // Mirrors the frontend resolver. ---
+  if (targetType === "speaker-view") {
     if (edge.targetHandle === "edl") {
       inputs.edl = output
       return

@@ -331,8 +331,9 @@ jobs:
         if: ${{ !cancelled() && steps.build-packages.outcome == 'success' }}
         run: npm run test --workspace=@nodaro/prompts
 
-  # The ffmpeg memory ledger's real Lua scripts. Every other ledger test runs on
-  # a JS twin of them (fake-ledger-redis.ts), so a mistake in the scripts — a
+  # The ffmpeg memory ledger's real Lua scripts (and, in the same job, the
+  # download-slot ledger's: download-slot-ledger.redis.test.ts). Every other
+  # ledger test runs on a JS twin of them (fake-ledger-redis.ts), so a mistake in the scripts — a
   # string compared with a number, a wrong key — would ship green. This job runs
   # the same contract against a real Redis and FAILS (never skips) if it cannot
   # reach one. A job of its own, not a service on Backend Tests: that job may run
@@ -384,7 +385,7 @@ jobs:
           kind: packages
       - name: Run the ledger suites against the real Redis
         working-directory: backend
-        run: npx vitest run src/providers/video/__tests__/ffmpeg-memory-ledger.redis.test.ts
+        run: npx vitest run src/providers/video/__tests__/ffmpeg-memory-ledger.redis.test.ts src/lib/__tests__/download-slot-ledger.redis.test.ts
 
   typecheck:
     name: Type Check

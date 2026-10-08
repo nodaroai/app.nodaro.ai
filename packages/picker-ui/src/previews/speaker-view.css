@@ -1,0 +1,149 @@
+/* ============================================================================
+   Speaker View pickers: layout diagrams, switch previews and emphasis glyphs.
+
+   Tiles share the combine-transition tile's look (`.ct-tile`) so a row of
+   Speaker View choices and the crossfade popover read as one family. A ruled-out
+   tile stays focusable (`aria-disabled`), dims, and says why through its title.
+
+   Switch previews (`.stv-root`) loop on 2.4 s: two pictures A and B side by
+   side inside a frame, and what moves is what the switch does.
+     cut    — the frame jumps from A to B;
+     pan    — it glides from A to B (`stv-pan-*`);
+     zoom   — it tightens in on B (`stv-zoom-*`);
+     xfade  — A dissolves into B in place (`stv-xfade-*`).
+   ========================================================================== */
+
+.stv-cell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.stv-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  width: 100%;
+  padding: 3px;
+  border-radius: 8px;
+  border: 1px solid var(--border, #e5e7eb);
+  background: var(--bg, #f9fafb);
+  cursor: pointer;
+  transition: border-color 120ms, background-color 120ms, box-shadow 120ms, opacity 120ms;
+}
+.stv-tile:hover { border-color: #cbd5e1; }
+:is(.dark) .stv-tile { background: #161616; border-color: #2d2d2d; }
+:is(.dark) .stv-tile:hover { border-color: #3d3d3d; }
+.stv-tile[data-selected="true"] {
+  border-color: #ff0073;
+  background: rgba(255, 0, 115, 0.08);
+  box-shadow: 0 0 0 1px rgba(255, 0, 115, 0.6) inset;
+}
+.stv-tile[data-disabled="true"] { opacity: 0.45; cursor: not-allowed; }
+.stv-tile:focus-visible { outline: 2px solid #ff0073; outline-offset: 1px; }
+
+/* The reason a ruled-out tile is unavailable, shown while it holds keyboard
+   focus (the title covers mouse hover). Decorative: the sr-only span next to
+   it is what assistive technology reads. */
+.stv-reason-caption {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 20;
+  margin-top: 4px;
+  width: max-content;
+  max-width: 180px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 1.3;
+  color: #f8fafc;
+  background: #1e293b;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+}
+:is(.dark) .stv-reason-caption { color: #0f172a; background: #e2e8f0; }
+
+.stv-tile-label {
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.2;
+  text-align: center;
+  color: #475569;
+  padding: 0 2px 3px;
+  overflow-wrap: break-word;
+  hyphens: auto;
+}
+:is(.dark) .stv-tile-label { color: #e2e8f0; }
+.stv-tile[data-selected="true"] .stv-tile-label { color: #ff0073; }
+
+/* ---- Layout diagrams and emphasis glyphs ---- */
+.stv-diagram { width: 100%; height: auto; aspect-ratio: 48 / 32; display: block; }
+.stv-canvas { fill: #e2e8f0; }
+:is(.dark) .stv-canvas { fill: #1f2937; }
+.stv-slot { fill: #94a3b8; }
+.stv-slot-main { fill: #38bdf8; }
+.stv-slot-auto { fill: none; stroke: #38bdf8; stroke-width: 1; stroke-dasharray: 2 1.5; }
+.stv-dimmed { opacity: 0.35; }
+.stv-bordered { stroke: #ff0073; stroke-width: 1.6; }
+
+/* ---- Switch previews ---- */
+.stv-root {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: 6px;
+  background: #050a14;
+  isolation: isolate;
+}
+.stv-pic { position: absolute; top: 0; bottom: 0; width: 50%; }
+.stv-pic-a { left: 0; background: linear-gradient(135deg, #38bdf8, #0369a1); }
+.stv-pic-b { left: 50%; background: linear-gradient(135deg, #fb7185, #9f1239); }
+.stv-frame {
+  position: absolute;
+  top: 12%;
+  left: 4%;
+  width: 42%;
+  height: 76%;
+  border: 2px solid #fff;
+  border-radius: 3px;
+  box-shadow: 0 0 0 999px rgba(5, 10, 20, 0.55);
+  animation-duration: 2.4s;
+  animation-iteration-count: infinite;
+}
+.stv-root[data-kind="cut"] .stv-frame { animation-name: stv-cut-jump; animation-timing-function: steps(1, end); }
+.stv-root[data-kind="pan"] .stv-frame { animation-name: stv-pan-sweep; animation-timing-function: ease-in-out; }
+.stv-root[data-kind="zoom"] .stv-frame { animation-name: stv-zoom-in; animation-timing-function: ease-in-out; left: 54%; }
+.stv-root[data-kind="xfade"] .stv-frame { display: none; }
+.stv-root[data-kind="xfade"] .stv-pic-a { width: 100%; animation: stv-xfade-out 2.4s infinite ease-in-out; z-index: 2; }
+.stv-root[data-kind="xfade"] .stv-pic-b { left: 0; width: 100%; z-index: 1; }
+
+@keyframes stv-cut-jump {
+  0%, 45% { left: 4%; }
+  50%, 95% { left: 54%; }
+  100% { left: 4%; }
+}
+@keyframes stv-pan-sweep {
+  0%, 20% { left: 4%; }
+  55%, 80% { left: 54%; }
+  100% { left: 4%; }
+}
+@keyframes stv-zoom-in {
+  0%, 20% { left: 54%; top: 12%; width: 42%; height: 76%; }
+  60%, 85% { left: 62%; top: 30%; width: 26%; height: 44%; }
+  100% { left: 54%; top: 12%; width: 42%; height: 76%; }
+}
+@keyframes stv-xfade-out {
+  0%, 20% { opacity: 1; }
+  60%, 85% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stv-frame, .stv-root[data-kind="xfade"] .stv-pic-a { animation: none; }
+  .stv-root[data-kind="pan"] .stv-frame, .stv-root[data-kind="cut"] .stv-frame { left: 4%; }
+}

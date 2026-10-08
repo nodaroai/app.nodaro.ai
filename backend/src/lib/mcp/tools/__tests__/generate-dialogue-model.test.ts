@@ -5,6 +5,7 @@
  * and the tool never states a character figure its own schema forbids.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest"
+import { DIALOGUE_PROVIDERS, getDialogueCapabilities } from "@nodaro/shared"
 import { registerVerbs } from "../verbs.js"
 import { _resetRegistry } from "../../tasks.js"
 import { buildServer, callTool, executeSession, listTools, stubRoute } from "./_helpers.js"
@@ -52,11 +53,22 @@ describe("generate_dialogue — the model", () => {
   })
 
   it("refuses a script over the chosen model's total cap with the numbers", async () => {
-    const long = [{ text: "a".repeat(3000), voice_id: "Rachel" }, { text: "b".repeat(2001), voice_id: "George" }]
+    const long = [{ text: "a".repeat(6000), voice_id: "Rachel" }, { text: "b".repeat(4001), voice_id: "George" }]
     const { result, body } = await run({ dialogue: long, model: "elevenlabs-dialogue-v4" })
     expect(result.isError).toBe(true)
-    expect((result.content[0] as { text: string }).text).toMatch(/5001 characters in total; elevenlabs-dialogue-v4 takes at most 5000/)
+    expect((result.content[0] as { text: string }).text).toMatch(/10001 characters in total; elevenlabs-dialogue-v4 takes at most 10000/)
     expect(body).toBeUndefined()
+  })
+
+  it("a script over v3 dialogue's cap but inside v4's runs on v4 and is refused on v3, each with its own number", async () => {
+    const long = [{ text: "a".repeat(3000), voice_id: "Rachel" }, { text: "b".repeat(2001), voice_id: "George" }]
+    const v4 = await run({ dialogue: long, model: "elevenlabs-dialogue-v4" })
+    expect(v4.result.isError).toBeUndefined()
+    expect(v4.body?.provider).toBe("elevenlabs-dialogue-v4")
+    const v3 = await run({ dialogue: long })
+    expect(v3.result.isError).toBe(true)
+    expect((v3.result.content[0] as { text: string }).text).toMatch(/5001 characters in total; elevenlabs-dialogue takes at most 5000/)
+    expect(v3.body).toBeUndefined()
   })
 
   it("never states a character figure larger than the largest dialogue cap", async () => {
@@ -66,6 +78,9 @@ describe("generate_dialogue — the model", () => {
     const tool = (await listTools(server)).find((t) => t.name === "generate_dialogue")!
     const stated = [...JSON.stringify(tool).matchAll(/\b\d{1,3}(?:,\d{3})+\b/g)].map((m) => Number(m[0].replace(/,/g, "")))
     expect(stated.length).toBeGreaterThan(0)
-    for (const n of stated) expect(n).toBeLessThanOrEqual(5000)
+    const largestCap = Math.max(...DIALOGUE_PROVIDERS.map((id) => getDialogueCapabilities(id).maxChars))
+    expect(largestCap).toBe(10000) // Dialogue v4 (measured 2026-10-06)
+    expect(stated).toContain(largestCap) // the description names v4's own cap, not only v3's
+    for (const n of stated) expect(n).toBeLessThanOrEqual(largestCap)
   })
 })

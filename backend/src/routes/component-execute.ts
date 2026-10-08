@@ -16,6 +16,7 @@ import { sendInternalError } from "../lib/http-errors.js"
 import { isBillingContext, shouldRefuseDegradedRunFor, type BillingContext } from "../lib/billing-context.js"
 import { billingPairColumns } from "../lib/insert-job.js"
 import { describeLockedOverrides, findLockedOverrides } from "../lib/input-override-lock.js"
+import { exposedVideoLinkNodeIds } from "../lib/exposed-text-caps.js"
 import { requireScope } from "../lib/scopes.js"
 
 
@@ -88,7 +89,7 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
     // upstream node's output from nodeStates.
     let appQuery = supabase
       .from("published_apps")
-      .select("id, workflow_id, creator_id, name, component_metadata, estimated_credits, snapshot_nodes, snapshot_edges")
+      .select("id, workflow_id, creator_id, name, component_metadata, estimated_credits, snapshot_nodes, snapshot_edges, snapshot_settings")
       .eq("slug", appSlug)
       .eq("publish_type", "component")
       .eq("is_active", true)
@@ -118,6 +119,10 @@ export async function componentExecuteRoutes(app: FastifyInstance) {
     const lockedOverrides = findLockedOverrides(
       (appRow.snapshot_nodes as ReadonlyArray<{ id: string; type?: string }> | null) ?? [],
       inputOverrides,
+      exposedVideoLinkNodeIds(
+        appRow.snapshot_settings as Record<string, unknown> | null,
+        appRow.snapshot_nodes as ReadonlyArray<{ id?: string; type?: string }> | null,
+      ),
     )
     if (lockedOverrides.length > 0) {
       return reply.status(400).send({

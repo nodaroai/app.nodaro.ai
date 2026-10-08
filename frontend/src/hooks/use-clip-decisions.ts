@@ -38,6 +38,8 @@ export interface ClipDecisionEdits {
   readonly pendingReview: EditedClipSet | undefined
   readonly canEdit: boolean
   readonly setKeep: (row: number, keep: boolean) => void
+  /** Keep all / Drop all (R15 a): `keep` for each named clip, one write. */
+  readonly setKeepFor: (rows: readonly number[], keep: boolean) => void
   readonly setHook: (row: number, hook: string) => void
   readonly resetHook: (row: number) => void
   /** Write the pending decisions now. */
@@ -82,10 +84,12 @@ export function useClipDecisions(source: ClipDecisionsSource): ClipDecisionEdits
   const canEdit = decisions !== null && !locked && isClips
 
   const commit = useCallback(
-    (row: number, change: (d: EditedClipDecision) => EditedClipDecision, now: boolean) => {
+    (rows: readonly number[], change: (d: EditedClipDecision) => EditedClipDecision, now: boolean) => {
       const current = decisionsRef.current
-      if (!canEdit || !current || !planId || row < 0 || row >= current.length) return
-      const next = current.map((d, i) => (i === row ? change(d) : d))
+      if (!canEdit || !current || !planId) return
+      const named = new Set(rows.filter((row) => row >= 0 && row < current.length))
+      if (named.size === 0) return
+      const next = current.map((d, i) => (named.has(i) ? change(d) : d))
       decisionsRef.current = next
       setState({ key: seedKey, decisions: next })
       writer.schedule({ planId, plan, decisions: next })
@@ -95,20 +99,24 @@ export function useClipDecisions(source: ClipDecisionsSource): ClipDecisionEdits
   )
 
   const setKeep = useCallback(
-    (row: number, keep: boolean) => commit(row, (d) => ({ ...d, keep }), true),
+    (row: number, keep: boolean) => commit([row], (d) => ({ ...d, keep }), true),
+    [commit],
+  )
+  const setKeepFor = useCallback(
+    (rows: readonly number[], keep: boolean) => commit(rows, (d) => ({ ...d, keep }), true),
     [commit],
   )
   const setHook = useCallback(
-    (row: number, hook: string) => commit(row, (d) => ({ ...d, hook }), false),
+    (row: number, hook: string) => commit([row], (d) => ({ ...d, hook }), false),
     [commit],
   )
   const resetHook = useCallback(
-    (row: number) => commit(row, (d) => ({ keep: d.keep }), true),
+    (row: number) => commit([row], (d) => ({ keep: d.keep }), true),
     [commit],
   )
   const flush = useCallback(() => writer.flush(), [writer])
 
   const pendingReview = useMemo(() => (decisions ? clipReviewOf(plan, decisions) : undefined), [plan, decisions])
 
-  return { decisions, pendingReview, canEdit, setKeep, setHook, resetHook, flush }
+  return { decisions, pendingReview, canEdit, setKeep, setKeepFor, setHook, resetHook, flush }
 }

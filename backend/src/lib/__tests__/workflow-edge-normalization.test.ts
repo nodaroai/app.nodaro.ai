@@ -307,3 +307,83 @@ describe("describeEdgeAdjustments", () => {
     ])
   })
 })
+
+/**
+ * An EDL-shaped JSON output is not a Transcript (decided 2026-10-07). Every
+ * JSON pip draws the same, so the canvas — and the editor's typed handles —
+ * accepted Edit Plan -> Add Captions' Transcript; the server's write path now
+ * refuses it too, reading the same output kinds from `@nodaro/shared`.
+ */
+describe("normalizeWorkflowEdges — an EDL is not a transcript", () => {
+  const graph = [
+    { id: "plan", type: "edit-plan" },
+    { id: "cam", type: "camera-switch" },
+    { id: "render", type: "apply-edl" },
+    { id: "tx", type: "transcribe" },
+    { id: "caps", type: "add-captions" },
+    { id: "cam2", type: "camera-switch" },
+  ]
+
+  it("drops an Edit Plan or Camera Switch edl wired to a Transcript input, with a message that names both nodes", () => {
+    const r = normalizeWorkflowEdges(graph, [
+      { id: "a", source: "plan", sourceHandle: "edl", target: "caps", targetHandle: "transcript" },
+      { id: "b", source: "cam", sourceHandle: "edl", target: "caps", targetHandle: "transcript" },
+      { id: "c", source: "plan", sourceHandle: "edl", target: "render", targetHandle: "transcript" },
+      { id: "d", source: "plan", sourceHandle: "edl", target: "cam2", targetHandle: "transcript" },
+    ])
+    expect(r.edges).toEqual([])
+    expect(r.errors).toEqual([])
+    expect(r.dropped).toHaveLength(4)
+    expect(r.dropped[0]).toMatch(/^edge "a": /)
+    expect(r.dropped[0]).toContain("Edit Plan")
+    expect(r.dropped[0]).toContain("Add Captions")
+    expect(r.dropped[0]).toMatch(/not a transcript/i)
+    expect(r.dropped[0]).toMatch(/ — dropped$/)
+  })
+
+  it("drops it when the edge names no source pip (the node's primary output is the edl)", () => {
+    const r = normalizeWorkflowEdges(graph, [{ id: "a", source: "plan", target: "caps", targetHandle: "transcript" }])
+    expect(r.edges).toEqual([])
+    expect(r.dropped).toHaveLength(1)
+  })
+
+  it("keeps every real Transcript, and every EDL on an EDL input, and the other pips", () => {
+    const edges = [
+      { id: "a", source: "tx", sourceHandle: "json", target: "caps", targetHandle: "transcript" },
+      { id: "b", source: "render", sourceHandle: "json", target: "caps", targetHandle: "transcript" },
+      { id: "c", source: "cam", sourceHandle: "transcript", target: "caps", targetHandle: "transcript" },
+      { id: "d", source: "plan", sourceHandle: "edl", target: "render", targetHandle: "edl" },
+      { id: "e", source: "plan", sourceHandle: "edl", target: "cam", targetHandle: "edl" },
+      { id: "f", source: "tx", sourceHandle: "json", target: "plan", targetHandle: "transcript" },
+    ]
+    const r = normalizeWorkflowEdges(graph, edges)
+    expect(r.dropped).toEqual([])
+    expect(r.edges.map((e) => e.id)).toEqual(["a", "b", "c", "d", "e", "f"])
+  })
+
+  it("keeps the edges around a dropped one", () => {
+    const r = normalizeWorkflowEdges(graph, [
+      { id: "bad", source: "plan", sourceHandle: "edl", target: "caps", targetHandle: "transcript" },
+      { id: "good", source: "tx", sourceHandle: "json", target: "caps", targetHandle: "transcript" },
+    ])
+    expect(r.edges.map((e) => e.id)).toEqual(["good"])
+    expect(r.dropped).toHaveLength(1)
+  })
+
+  it("drops a Transcript output wired to an EDL input (decided 2026-10-08), saying it is not an edit list", () => {
+    const r = normalizeWorkflowEdges(graph, [
+      { id: "a", source: "tx", sourceHandle: "json", target: "render", targetHandle: "edl" },
+      { id: "b", source: "cam", sourceHandle: "transcript", target: "cam2", targetHandle: "edl" },
+      { id: "c", source: "render", sourceHandle: "json", target: "cam2", targetHandle: "edl" },
+      { id: "ok", source: "plan", sourceHandle: "edl", target: "render", targetHandle: "edl" },
+    ])
+    expect(r.edges.map((e) => e.id)).toEqual(["ok"])
+    expect(r.errors).toEqual([])
+    expect(r.dropped).toHaveLength(3)
+    expect(r.dropped[0]).toMatch(/^edge "a": /)
+    expect(r.dropped[0]).toContain("Transcribe")
+    expect(r.dropped[0]).toContain("Apply Edl")
+    expect(r.dropped[0]).toMatch(/not an edit list/i)
+    expect(r.dropped[0]).toMatch(/ — dropped$/)
+  })
+})

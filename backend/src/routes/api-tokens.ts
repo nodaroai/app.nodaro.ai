@@ -777,7 +777,7 @@ export async function apiTokenRoutes(app: FastifyInstance) {
 
       // A token run may not re-point an outbound node (issue #1555). The
       // orchestrator's merge refuses too.
-      const lockedOverrides = findLockedOverrides(nodes, inputOverrides)
+      const lockedOverrides = findLockedOverrides(nodes, inputOverrides, "all")
       if (lockedOverrides.length > 0) {
         return reply.status(400).send({
           error: { code: "locked_field", message: describeLockedOverrides(lockedOverrides) },

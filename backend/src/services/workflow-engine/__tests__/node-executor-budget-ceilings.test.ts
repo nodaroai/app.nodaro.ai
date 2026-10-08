@@ -106,6 +106,13 @@ vi.mock("../../../providers/video/social-post-video.js", async (importOriginal) 
   probeSocialPostVideo: vi.fn(async () => ({ durationSec: null, title: null, isLive: false })),
 }))
 
+// Speaker View is refused before the reserve until C4 sets its price. This file
+// tests dispatch names and budgets, not pricing, so it lets the flag through.
+vi.mock("@nodaro/render-rules", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@nodaro/render-rules")>()),
+  SPEAKER_VIEW_PRICED: true,
+}))
+
 import { executeNode } from "../node-executor.js"
 import { NODE_TIMEOUT_MS, POLL_ABSOLUTE_TIMEOUT_MS } from "../types.js"
 import type { SimpleNode, OrchestratorContext, ResolvedInputs } from "../types.js"
@@ -420,6 +427,10 @@ describe("every registered budgeted job is dispatched under its node type's own 
   // (audio-sync reads its recordings off the resolved `sources` edges).
   const FIXTURES: Record<string, () => { node: SimpleNode; inputs?: ResolvedInputs }> = {
     "apply-edl": () => ({ node: applyEdlNode(3) }),
+    // Speaker View's node (C3.2): its one-camera edit needs no transcript. The
+    // run is refused as "not priced yet" until C4, so this file lets the price
+    // flag through (below) to test what it tests: the dispatch name and budget.
+    "speaker-view": () => ({ node: { id: "view", type: "speaker-view", data: { label: "Speaker View", edl: edl(3), quality: "final" } } }),
     "audio-sync": () => ({
       node: { id: "sync", type: "audio-sync", data: { label: "Audio Sync" } },
       inputs: {
@@ -435,23 +446,8 @@ describe("every registered budgeted job is dispatched under its node type's own 
     }),
   }
 
-  // A budgeted job registered before its node exists: Speaker View's budget
-  // ships with its renderer (C2.0) so the worker beats for the plugin's
-  // handler; the node, and with it this dispatch fixture, lands in C3.2. The
-  // tripwire: once `speaker-view` is a video-producing node, this exception
-  // fails until the fixture replaces it.
-  const AWAITING_NODE: Record<string, string> = { "speaker-view": "Speaker View's node (C3.2)" }
-
-  it("a budget awaiting its node is not a node yet", () => {
-    for (const [name, why] of Object.entries(AWAITING_NODE)) {
-      expect(VIDEO_PRODUCER_TYPES.has(name), `${name} is a node now — add its dispatch fixture and drop it from AWAITING_NODE (${why})`).toBe(false)
-      expect(FIXTURES[name], name).toBeUndefined()
-    }
-  })
-
   it("has a dispatch fixture for every registered name, and each dispatches as its node type", async () => {
     for (const name of BUDGETED_JOB_NAMES) {
-      if (name in AWAITING_NODE) continue
       const make = FIXTURES[name]
       expect(make, `add a dispatch fixture for budgeted job "${name}"`).toBeTypeOf("function")
       mockVideoAdd.mockClear()

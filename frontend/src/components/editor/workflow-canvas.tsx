@@ -32,6 +32,7 @@ import { useCopilotCenterAllowed, useCopilotPlacement } from "./workflow-editor/
 import { CopilotCenterSlot } from "./workflow-editor/copilot-panel-slot"
 import { ShortcutsHelpModal } from "@/components/editor/shortcuts-help-modal"
 import { NodeContextMenu } from "./node-context-menu"
+import { ReviewInspectorHost } from "@/components/edl-review/review-inspector-host"
 import { CanvasContextMenu } from "./canvas-context-menu"
 import { CanvasToolbar } from "./canvas-toolbar"
 import { CanvasControls } from "./canvas-controls"
@@ -43,7 +44,7 @@ import { enumerateConnectionOptionsCore, chooseSmartConnection, handleIdsFromBou
 import { nearestNodeInDirection, type ArrowDirection } from "@/lib/node-spatial-nav"
 import { getSmartConnectPref } from "@/lib/auto-connect-pref"
 import { computeMissingPromptRefs } from "@/lib/missing-prompt-refs"
-import { buildAdjacency, isValidWorkflowConnection } from "@/lib/connection-validation"
+import { buildAdjacency, isValidWorkflowConnection, workflowConnectionProblem } from "@/lib/connection-validation"
 import { nodeRect, connectedNodePosition } from "@/lib/find-free-position"
 import { pickEdgeAccent } from "@/lib/edge-accent"
 import { getEdgeTypeColor } from "@/lib/edge-type-color"
@@ -393,6 +394,8 @@ function getMiniMapNodeColor(node: { type?: string }): string {
       nodeType === 'upload-audio' ||
       nodeType === 'rss-feed' ||
       nodeType === 'collection-read' ||
+      nodeType === 'inspiration-read' ||
+      nodeType === 'competitor-read' ||
       nodeType === 'reference-audio') return '#38BDF8'
   // Parameter nodes - modern indigo
   if (nodeType === 'image-provider' ||
@@ -1081,8 +1084,24 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
     (event: MouseEvent | TouchEvent, connectionState: FinalConnectionState) => {
       setConnectingFromType(null)
 
-      // If connection landed on a valid handle, normal flow — do nothing extra
-      if (connectionState.toHandle) return
+      // If connection landed on a handle, normal flow — except a refusal that has
+      // a reason worth saying (an EDL output into a Transcript input), which the
+      // cursor's "not allowed" cannot.
+      if (connectionState.toHandle) {
+        const { fromNode, fromHandle, toNode, toHandle } = connectionState
+        if (connectionState.isValid === false && fromNode && fromHandle && toNode) {
+          const fromIsSource = fromHandle.type === "source"
+          const problem = workflowConnectionProblem(
+            fromIsSource
+              ? { source: fromNode.id, sourceHandle: fromHandle.id, target: toNode.id, targetHandle: toHandle.id }
+              : { source: toNode.id, sourceHandle: toHandle.id, target: fromNode.id, targetHandle: fromHandle.id },
+            (id) => getNode(id)?.type,
+            (type) => NODE_DEF_MAP.get(type)?.label,
+          )
+          if (problem) toast.error(problem, { id: "connection-refused" })
+        }
+        return
+      }
 
       // Dropped on empty canvas — open filtered popup
       const fromHandle = connectionState.fromHandle
@@ -1107,7 +1126,7 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       })
       setAddNodePopupOpen(true)
     },
-    [screenToFlowPosition],
+    [screenToFlowPosition, getNode],
   )
   // Click-to-connect (mobile connectOnClick mode)
   const handleClickConnectStart = useCallback((_: unknown, params: { handleType: "source" | "target" | null }) => {
@@ -3128,6 +3147,10 @@ export function WorkflowCanvas({ sidebarVisible, onToggleSidebar }: WorkflowCanv
       {isMobile && focusMode && selectedNodeId && (
         <FocusModeNav selectedNodeId={selectedNodeId} onNavigate={handleFocusNavigate} />
       )}
+
+      {/* The review inspector (A3-5): every way into it — a render's Review cut, the
+          context menu, an Edit Plan's Expand, ?review=<id> — opens it here. */}
+      <ReviewInspectorHost />
 
       {nodeContextMenu && (
         <NodeContextMenu

@@ -111,7 +111,7 @@ export async function tryInlineReconcile(row: InlineReconcileRow): Promise<void>
         provider_task_id: row.provider_task_id,
         reconcile_attempts: row.reconcile_attempts,
         job_type: row.job_type,
-      })
+      }, { claimant: "worker" })
       return
     }
     // Unknown async kind — leave to the cron's catch-all sync sweep.

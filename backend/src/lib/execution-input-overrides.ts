@@ -24,9 +24,17 @@ const COLUMN = "input_overrides"
 
 let absent = false
 
-/** True when `error` says a named column does not exist (and records it). */
-export function noteInputOverridesColumnError(error: { readonly code?: string | null } | null | undefined): boolean {
+/**
+ * True when `error` says THIS column does not exist (and records it). An error
+ * that names another column is not ours: the expunge write carries two guarded
+ * columns (466, 487), and one missing must never read as the other missing.
+ * An error with no message (a bare code) counts.
+ */
+export function noteInputOverridesColumnError(
+  error: { readonly code?: string | null; readonly message?: string | null } | null | undefined,
+): boolean {
   if (!error?.code || !MISSING_COLUMN_CODES.has(error.code)) return false
+  if (error.message && !error.message.includes(COLUMN)) return false
   absent = true
   return true
 }

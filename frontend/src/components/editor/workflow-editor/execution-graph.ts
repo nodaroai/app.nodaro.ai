@@ -508,6 +508,15 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     }
     return data.generatedText as string | undefined;
   }
+  if (type === "inspiration-read" || type === "competitor-read") {
+    // `json` → the posts the last run read (stringified for text consumers),
+    // `text` / no handle → their digest. Mirrors the backend getPrimaryOutput branch.
+    if (sourceHandle === "json") {
+      const posts = Array.isArray(data.generatedJson) ? data.generatedJson : [];
+      return posts.length > 0 ? JSON.stringify(posts) : undefined;
+    }
+    return data.generatedText as string | undefined;
+  }
   if (type === "collection-write") {
     // Its one handle `json` → the record the last run saved; a text consumer gets its headline.
     const record = data.generatedJson;

@@ -68,6 +68,24 @@ describe("computeLiveRunEstimate", () => {
     const merged = applyRunInputValues(nodes, { m: { extractedAudioUrl: "https://cdn/x.mp3" } })
     expect((merged[0]!.data as Record<string, unknown>).metadata).toBeUndefined()
   })
+
+  it("a Video URL episode: the creator's saved length never prices the caller's file; the length read does", () => {
+    const POST = "https://www.youtube.com/watch?v=abc123def45"
+    const FILE = "https://cdn.nodaro.ai/downloads/ep.mp4"
+    const episode = n("m", "youtube-video", {
+      youtubeUrl: "https://www.youtube.com/watch?v=creator0001",
+      downloadedVideoUrl: "https://cdn/sample.mp4",
+      downloadedFromUrl: "https://www.youtube.com/watch?v=creator0001",
+      videoDurationSec: 600,
+    })
+    const nodes = [episode, tr, plan, ae]
+    const cache = new Map(Object.entries(PRICES))
+    const mine = { m: { youtubeUrl: POST, downloadedVideoUrl: FILE, downloadedFromUrl: POST } }
+    const read = computeLiveRunEstimate({ nodes, edges: EDGES, inputValues: mine, mediaLengths: new Map([[FILE, 45 * 60]]) }, (id) => cache.get(id)).total
+    expect(read).toBe(TIGHTEN_TOTAL)
+    const unread = computeLiveRunEstimate({ nodes, edges: EDGES, inputValues: mine, mediaLengths: new Map() }, (id) => cache.get(id)).total
+    expect(unread).toBe(10 + 240 + 10 * 180)
+  })
 })
 
 describe("useLiveRunEstimate", () => {

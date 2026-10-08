@@ -15,6 +15,7 @@ import {
   watchEditPlanModes,
   EDIT_PLAN_MODES_MAX_AGE_MS,
   __setEditPlanModesForTests,
+  editPlanPerMinuteReported,
 } from "../edit-plan-modes"
 
 const headers = async () => ({ Authorization: "Bearer t" })
@@ -177,5 +178,34 @@ describe("editPlanModeUnavailableReason", () => {
     expect(editPlanModeUnavailableReason("trailer")).toBe("nodaro-unreachable")
     __setEditPlanModesForTests(null)
     expect(editPlanModeUnavailableReason("trailer")).toBe("plugin-update")
+  })
+})
+
+// Per started minute (decided 2026-10-07): the same answer says whether the
+// server's plugin charges Edit Plan per started minute. Until it says so — no
+// answer yet, an older backend, an error — the editor quotes the steps (the
+// higher figure, never under the charge).
+describe("edit-plan per started minute", () => {
+  it("is off before the answer and on an answer without it", async () => {
+    expect(editPlanPerMinuteReported()).toBe(false)
+    vi.stubGlobal("fetch", answer(["tighten", "clips", "chapters"]))
+    await loadEditPlanModes(headers)
+    expect(editPlanPerMinuteReported()).toBe(false)
+  })
+
+  it("is on once the server says so, and off again when it stops", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ modes: ["tighten"], perMinute: true }))))
+    await loadEditPlanModes(headers)
+    expect(editPlanPerMinuteReported()).toBe(true)
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ modes: ["tighten"], perMinute: false }))))
+    await loadEditPlanModes(headers)
+    expect(editPlanPerMinuteReported()).toBe(false)
+  })
+
+  it("the test seam resets it", () => {
+    __setEditPlanModesForTests(["tighten"], "server", true)
+    expect(editPlanPerMinuteReported()).toBe(true)
+    __setEditPlanModesForTests(null)
+    expect(editPlanPerMinuteReported()).toBe(false)
   })
 })

@@ -20,7 +20,7 @@ import { isValidWorkflowConnection, buildAdjacency, type EdgeShape } from "../co
 const HERE = dirname(fileURLToPath(import.meta.url))
 const TEMPLATES_DIR = join(HERE, "../../../../backend/src/lib/tutorial-seed/templates")
 
-const SLUGS = ["podcast-tighten-episode", "podcast-clip-pack", "podcast-multicam-cut"] as const
+const SLUGS = ["podcast-tighten-episode", "podcast-clip-pack", "podcast-multicam-cut", "podcast-trailer-formats"] as const
 
 type Node = { id: string; type: string }
 type Edge = { id: string; source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }

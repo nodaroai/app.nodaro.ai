@@ -3,12 +3,13 @@ import { StorageExceededError, SubscriptionRequiredError } from "@/lib/api";
 import { useWorkflowStore } from "@/hooks/use-workflow-store";
 import { resolveApplyEdlEstimateMinutes } from "@/lib/apply-edl-estimate";
 import { editPlanOutputOf } from "@/lib/edit-plan-saved-output";
+import { EACH_WIRE_FAN_OUT as SHARED_EACH_WIRE_FAN_OUT, nodeFanOut, PRODUCER_FAN_OUT as SHARED_PRODUCER_FAN_OUT, type ProducerFanOut } from "@nodaro/render-rules";
 import { videoUtilityPricingUnits } from "@/lib/video-utility-estimate";
 import { extendVideoPricingUnits } from "@/lib/extend-video-estimate";
 import { videoRetakePricingUnits } from "@/lib/video-retake-estimate";
 import { audioSyncCreditId, audioSyncWiredSourceCount } from "@/lib/audio-sync";
 import { wiredSocialPostsVideoSec } from "@/lib/video-analysis-handles";
-import { buildMotionCreditModelIdentifier, isDefaultSelectorConfig, selectListItems, type SelectorFields, getEffectiveRepeatCount, buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, bucketSecondsFromCreditId, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAuditCreditId, VIDEO_AUDIT_BUCKET_CREDITS, FAN_OUT_EACH_TYPES, FAN_OUT_EACH_HANDLES, defaultEdgeOutputMode, listResultsServeHandle, EDIT_PLAN_DEFAULT_CLIP_COUNT, EDIT_PLAN_MAX_CLIP_COUNT, buildVideoCreditModelIdentifier, SEEDANCE_2_CONTINUATION_REF_SEC, isSeedance2Provider, isMinimaxH3Provider, maxSegmentSecFor, normalizeMinimaxH3Resolution, PRO3D_RENDER_CREDIT_ID, withWiredSettings, FAN_IN_TARGETS, contentRecipeCreditId, contentIdeasCreditId, clampContentIdeasCount, SOCIAL_SEARCH_CREDIT_COSTS, socialSearchCreditIdFromNode, socialPostsFrom, socialSearchPickTop, isSocialSearchPickFrozen, applyEdlCreditId, compactWithRows, telegramPostsFrom, TELEGRAM_FEED_LIMIT_MAX, COLLECTION_READ_LIMIT_MAX, TELEGRAM_FEED_DEFAULT_LIMIT } from "@nodaro/shared"
+import { buildMotionCreditModelIdentifier, type SelectorFields, buildScraperCreditId, isScraperActor, SCRAPER_CREDIT_COSTS, META_ADS_SCRAPE_CREDIT_COSTS, metaAdsScrapeCreditIdFromNode, INSTAGRAM_SCRAPE_CREDIT_COSTS, instagramScrapeCreditIdFromNode, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, bucketSecondsFromCreditId, VIDEO_ANALYSIS_BUCKET_CREDITS, buildVideoAuditCreditId, VIDEO_AUDIT_BUCKET_CREDITS, FAN_OUT_EACH_TYPES, buildVideoCreditModelIdentifier, SEEDANCE_2_CONTINUATION_REF_SEC, isSeedance2Provider, isMinimaxH3Provider, maxSegmentSecFor, normalizeMinimaxH3Resolution, PRO3D_RENDER_CREDIT_ID, withWiredSettings, FAN_IN_TARGETS, contentRecipeCreditId, contentIdeasCreditId, SOCIAL_SEARCH_CREDIT_COSTS, socialSearchCreditIdFromNode, applyEdlCreditId } from "@nodaro/shared"
 // getCachedCredits reads the live React-Query model-cost cache (an `ee/`
 // concern — credits are enterprise-only). Allowlisted in
 // tools/check-ee-imports.mjs (same coupling as ./run-handlers.ts).
@@ -165,6 +166,8 @@ export const NODE_CREDIT_COSTS: Record<string, number> = {
   "telegram-channel-feed": 10,
   "collection-read": 0,
   "collection-write": 0,
+  "inspiration-read": 0,
+  "competitor-read": 0,
   "save-to-storage": 0,
   "qa-check": 20,
   "image-critic": 20,
@@ -700,6 +703,7 @@ export const EXECUTABLE_TYPES = new Set([
   "apply-edl",
   "edit-plan",
   "camera-switch",
+  "speaker-view",
   "assemble-narrated-video",
   "image-collage",
   "image-overlay",
@@ -770,6 +774,9 @@ export const EXECUTABLE_TYPES = new Set([
   // Collections: both answer from their route directly (no job to poll).
   "collection-read",
   "collection-write",
+  // The post readers answer from their route directly too.
+  "inspiration-read",
+  "competitor-read",
   "qa-check",
   "image-critic",
   "web-scrape",
@@ -861,9 +868,8 @@ export function getFanOutMultiplier(
   edges: WorkflowEdge[],
   rerunIds: ReadonlySet<string> = NO_RERUNS,
 ): number {
-  const baseFanOut = getBaseFanOut(node, allNodes, edges, rerunIds);
-  const repeat = getEffectiveRepeatCount(node.data as Record<string, unknown>);
-  return baseFanOut * repeat;
+  // `@nodaro/render-rules`' rule — the stored listing reads it too (decided 2026-10-07).
+  return nodeFanOut(node, allNodes, edges, rerunIds, readPlan);
 }
 
 /** No upstream node re-runs: a single-node estimate (a node's pill, its Run button). */
@@ -963,304 +969,30 @@ export function getCostFactors(
   };
 }
 
-/**
- * Downstream executions one Edit Plan run fans out: 1 unless it is in `clips`
- * mode. When the planner is NOT re-running, its persisted plan is what iterates —
- * exact. When it re-plans, it returns UP TO `count` clips, so the setting is the
- * figure; a persisted plan holding more is still honoured, never under-counted.
- * A persisted clip set counts its KEPT clips the edge selects: 0 when it
- * selects none, since nothing renders.
- */
-function editPlanClipFanOut(
-  data: Record<string, unknown>,
-  replans: boolean,
-  selector?: SelectorFields,
-): number {
-  const plan = data.generatedJson;
-  const persisted = Array.isArray(plan) ? plan.length : 0;
-  if (!replans && plan !== undefined && plan !== null) {
-    // Both engines fan out on the SHAPE of the persisted plan, not on the node's
-    // current `mode` — the user may have switched mode without re-running. An
-    // array iterates; an object (tighten / chapters) runs once.
-    if (persisted === 0) return 1;
-    // The clips as the person's review leaves them: the PLAN's rows, "" at
-    // every dropped clip (TA13, TA16). The edge's range / list selector picks
-    // rows of the plan, and only the kept clips among them run — what both
-    // engines' fan-out does with the same list. None kept (by the review or by
-    // the selection) is 0: the wire carries no clip, so nothing renders
-    // (`pickHeldRow` in @nodaro/shared, on both engines).
-    const rows = editPlanOutputOf(data)?.listResults ?? [];
-    const picked = isDefaultSelectorConfig(selector) ? rows : selectListItems(rows, selector);
-    return compactWithRows(picked).items.length;
-  }
-  // Re-planning — or no plan yet (a fresh template): what the settings ask for,
-  // the same fallback the minutes resolver takes in that state. A re-plan
-  // replaces any review, so the count is the planner's.
-  if (data.mode !== "clips") return 1;
-  const raw = typeof data.count === "number" && data.count > 0 ? Math.floor(data.count) : EDIT_PLAN_DEFAULT_CLIP_COUNT;
-  const clips = Math.max(Math.min(EDIT_PLAN_MAX_CLIP_COUNT, Math.max(1, raw)), persisted);
-  // The edge may carry a range / list selector ("first 3 clips") that both
-  // engines honour — count what it keeps, exactly as the `list` branches do.
-  const kept = fanOutCount(Array.from({ length: clips }, (_, i) => String(i + 1)), selector);
-  return kept > 0 ? kept : 1;
+/** The editor's Edit Plan reader, handed to the shared fan-out rule. */
+const readPlan = (data: Readonly<Record<string, unknown>>) => editPlanOutputOf(data);
+
+/** A shared producer table with the editor's Edit Plan reader bound. */
+function withEditorPlanReader(
+  table: Readonly<Record<string, ProducerFanOut>>,
+): Readonly<Record<string, (data: Record<string, unknown>, reruns: boolean, selector?: SelectorFields) => number>> {
+  return Object.fromEntries(
+    Object.entries(table).map(([type, fanOut]) => [type, (data: Record<string, unknown>, reruns: boolean, selector?: SelectorFields) => fanOut(data, reruns, selector, readPlan)]),
+  );
 }
 
 /**
- * Downstream executions one Content Ideas run fans out: one per idea. Not
- * re-running → its saved briefs are what iterate (exact). Running → it writes
- * `count` ideas, clamped the way the run clamps it (1–10, default 5).
+ * Downstream executions one run of a fan-out producer makes (Edit Plan in
+ * `clips` mode, Content Ideas) — `@nodaro/render-rules`' table, the one the
+ * stored listing reads too (decided 2026-10-07). A producer missing there is
+ * estimated as ONE run downstream, which under-quotes and lets a run pass the
+ * balance precheck it cannot finish, so `__tests__/cost-multiplier.test.ts`
+ * fails the build for any such producer.
  */
-function contentIdeasFanOut(
-  data: Record<string, unknown>,
-  reruns: boolean,
-  selector?: SelectorFields,
-): number {
-  const saved = Array.isArray(data.ideaBriefs)
-    ? data.ideaBriefs.filter((b) => typeof b === "string" && b.trim() !== "").length
-    : 0;
-  const ideas = !reruns && saved > 0 ? saved : clampContentIdeasCount(data.count);
-  const kept = fanOutCount(Array.from({ length: ideas }, (_, i) => String(i + 1)), selector);
-  return kept > 0 ? kept : 1;
-}
+export const PRODUCER_FAN_OUT = withEditorPlanReader(SHARED_PRODUCER_FAN_OUT);
 
-/**
- * How many times one run of a fan-out PRODUCER makes the node after it run,
- * for every `FAN_OUT_EACH_TYPES` member that is not a list operation (a list
- * operation's count is its items, read below). Keyed by node type; the value
- * reads the producer's data, whether it is about to run again, and the edge's
- * selector. A producer missing here is estimated as ONE run downstream — which
- * under-quotes and lets a run pass the balance precheck it cannot finish, so
- * `__tests__/cost-multiplier.test.ts` fails the build for any such producer.
- */
-/**
- * Downstream executions one Social Search fans out on an Each wire: one per
- * post it passes on. Not re-running, or picks kept → the posts it holds now
- * (exact). Running a fresh search → the first `pickTop` posts (default 5), the
- * number a run without picks passes on.
- */
-function socialSearchFanOut(
-  data: Record<string, unknown>,
-  reruns: boolean,
-  selector?: SelectorFields,
-): number {
-  const held = socialPostsFrom(data.generatedJson).length;
-  const posts = (!reruns || isSocialSearchPickFrozen("social-search", data)) && held > 0 ? held : socialSearchPickTop(data.pickTop);
-  const kept = fanOutCount(Array.from({ length: posts }, (_, i) => String(i + 1)), selector);
-  return kept > 0 ? kept : 1;
-}
-
-export const PRODUCER_FAN_OUT: Readonly<
-  Record<string, (data: Record<string, unknown>, reruns: boolean, selector?: SelectorFields) => number>
-> = {
-  "edit-plan": editPlanClipFanOut,
-  "content-ideas": contentIdeasFanOut,
-};
-
-/**
- * Producers NOT in FAN_OUT_EACH_TYPES (a wire from them passes the whole list
- * by default) whose wire, once set to Each, runs the next node once per item
- * they emit. Sized the same way as PRODUCER_FAN_OUT.
- */
-/** Telegram Channel Feed on an "each" wire: one run per post the node holds, else per post its limit allows. */
-function telegramFeedFanOut(data: Record<string, unknown>, reruns: boolean, selector?: SelectorFields): number {
-  const held = telegramPostsFrom(data.generatedJson).length;
-  const posts = !reruns && held > 0 ? held : Math.max(1, Math.min(TELEGRAM_FEED_LIMIT_MAX, Number(data.limit) || TELEGRAM_FEED_DEFAULT_LIMIT));
-  const kept = fanOutCount(Array.from({ length: posts }, (_, i) => String(i + 1)), selector);
-  return kept > 0 ? kept : 1;
-}
-
-/** Read Collection on an "each" wire: the records it holds, else its limit. */
-function collectionReadFanOut(data: Record<string, unknown>, reruns: boolean, selector?: SelectorFields): number {
-  const held = Array.isArray(data.generatedJson) ? data.generatedJson.length : 0;
-  const records = !reruns && held > 0 ? held : Math.max(1, Math.min(COLLECTION_READ_LIMIT_MAX, Number(data.limit) || 50));
-  const kept = fanOutCount(Array.from({ length: records }, (_, i) => String(i + 1)), selector);
-  return kept > 0 ? kept : 1;
-}
-
-export const EACH_WIRE_FAN_OUT: Readonly<
-  Record<string, (data: Record<string, unknown>, reruns: boolean, selector?: SelectorFields) => number>
-> = {
-  "social-search": socialSearchFanOut,
-  "telegram-channel-feed": telegramFeedFanOut,
-  "collection-read": collectionReadFanOut,
-};
-
-/**
- * The clips fan-out a node INHERITS from further upstream: Clip Pack renders each
- * clip (edit-plan ⇒ apply-edl) and then captions each render across an explicit
- * "each" edge (apply-edl ⇒ add-captions), so the captions node runs once per clip
- * too. Deliberately narrow — it follows ONLY a chain that starts at an Edit Plan
- * in clips mode, through non-list nodes. General "each"-edge inheritance is a
- * different question (a Selector or a list transform runs ONCE over its whole
- * list), and every other graph's estimate stays exactly what it was.
- */
-/** A per-handle fan-out node (Camera Switch) that is NOT re-running renders the
- *  batch it holds: one downstream run per item of its last batch. 0 otherwise. */
-function heldBatchFanOut(node: WorkflowNode, rerunIds: ReadonlySet<string>): number {
-  if (!Object.prototype.hasOwnProperty.call(FAN_OUT_EACH_HANDLES, node.type ?? "") || rerunIds.has(node.id)) return 0;
-  const batch = (node.data as Record<string, unknown>).__listResults;
-  return Array.isArray(batch) && batch.length > 1 ? batch.length : 0;
-}
-
-function inheritedClipFanOut(
-  source: WorkflowNode,
-  allNodes: WorkflowNode[],
-  edges: WorkflowEdge[],
-  rerunIds: ReadonlySet<string>,
-  visited: Set<string>,
-): number {
-  if (visited.has(source.id) || FAN_OUT_EACH_TYPES.has(source.type ?? "")) return 1;
-  visited.add(source.id);
-  for (const edge of edges) {
-    if (edge.target !== source.id) continue;
-    const upstream = allNodes.find((n) => n.id === edge.source);
-    if (!upstream) continue;
-    const explicit = (edge.data as Record<string, unknown> | undefined)?.outputMode as string | undefined;
-    if (upstream.type === "edit-plan") {
-      if ((explicit ?? "each") !== "each") continue;
-      const n = editPlanClipFanOut(
-        upstream.data as Record<string, unknown>,
-        rerunIds.has(upstream.id),
-        edge.data as SelectorFields | undefined,
-      );
-      // 0: no kept clip reaches this chain, so nothing after it runs.
-      if (n !== 1) return n;
-      continue;
-    }
-    if ((explicit ?? defaultEdgeOutputMode(upstream.type, edge.sourceHandle)) !== "each") continue;
-    // A handle whose edge never lists (Camera Switch's transcript) fans nothing out.
-    if (!listResultsServeHandle(upstream.type, edge.sourceHandle)) continue;
-    const held = heldBatchFanOut(upstream, rerunIds);
-    if (held > 1) return held;
-    const n = inheritedClipFanOut(upstream, allNodes, edges, rerunIds, visited);
-    if (n !== 1) return n;
-  }
-  return 1;
-}
-
-/** An Each wire whose producer emits nothing on it: 0 runs, read the way
- *  `getBaseFanOut` reads the same wire (a fan-out producer, else a clips chain
- *  it inherits). */
-function eachWireCarriesNothing(
-  edge: WorkflowEdge,
-  allNodes: WorkflowNode[],
-  edges: WorkflowEdge[],
-  rerunIds: ReadonlySet<string>,
-): boolean {
-  const sourceNode = allNodes.find((n) => n.id === edge.source);
-  if (!sourceNode) return false;
-  const edgeData = edge.data as Record<string, unknown> | undefined;
-  const mode = (edgeData?.outputMode as string | undefined) ?? defaultEdgeOutputMode(sourceNode.type, edge.sourceHandle);
-  if (mode !== "each") return false;
-  const producer = PRODUCER_FAN_OUT[sourceNode.type ?? ""] ?? EACH_WIRE_FAN_OUT[sourceNode.type ?? ""];
-  if (producer) return producer(sourceNode.data as Record<string, unknown>, rerunIds.has(sourceNode.id), edgeData as SelectorFields | undefined) === 0;
-  if (!listResultsServeHandle(sourceNode.type, edge.sourceHandle) || heldBatchFanOut(sourceNode, rerunIds) > 1) return false;
-  return inheritedClipFanOut(sourceNode, allNodes, edges, rerunIds, new Set()) === 0;
-}
-
-function getBaseFanOut(
-  node: WorkflowNode,
-  allNodes: WorkflowNode[],
-  edges: WorkflowEdge[],
-  rerunIds: ReadonlySet<string>,
-): number {
-  const incomingEdges = edges.filter((e) => e.target === node.id);
-
-  // A wire that carries nothing (an Edit Plan whose review or selection keeps
-  // no clip) means the node does not run, whatever another wire lists. Checked
-  // over every wire BEFORE any count, so the answer never depends on the order
-  // the wires were drawn in.
-  if (incomingEdges.some((edge) => eachWireCarriesNothing(edge, allNodes, edges, rerunIds))) return 0;
-
-  for (const edge of incomingEdges) {
-    const sourceNode = allNodes.find((n) => n.id === edge.source);
-    if (!sourceNode) continue;
-
-    const edgeMode = (edge.data as Record<string, unknown> | undefined)
-      ?.outputMode as string | undefined;
-    const mode = edgeMode ?? defaultEdgeOutputMode(sourceNode.type, edge.sourceHandle);
-    if (mode !== "each") continue;
-
-    const edgeData = edge.data as Record<string, unknown> | undefined;
-    const selector = edgeData as SelectorFields | undefined;
-
-    // A fan-out producer (Edit Plan in `clips` mode, Content Ideas): one
-    // downstream execution per item it emits. It is in FAN_OUT_EACH_TYPES but
-    // has no `items`/`rows` for the list reads below — see PRODUCER_FAN_OUT.
-    const producer = PRODUCER_FAN_OUT[sourceNode.type ?? ""] ?? EACH_WIRE_FAN_OUT[sourceNode.type ?? ""];
-    if (producer) {
-      const n = producer(sourceNode.data as Record<string, unknown>, rerunIds.has(sourceNode.id), selector);
-      if (n > 1) return n;
-    }
-
-    if (sourceNode.type === "list") {
-      const items = ((sourceNode.data as Record<string, unknown>).items as string || "")
-        .split("\n").map((s) => s.trim()).filter(Boolean);
-      const n = fanOutCount(items, selector);
-      if (n > 0) return n;
-    }
-
-    if (sourceNode.type === "list") {
-      const rows = (sourceNode.data as Record<string, unknown>).rows as
-        | string[][]
-        | undefined;
-      if (rows && rows.length > 1) {
-        const rowStrs = rows.map((_, i) => String(i + 1));
-        const n = fanOutCount(rowStrs, selector);
-        if (n > 0) return n;
-      }
-    }
-
-    // Transitive: text-prompt upstream of list
-    if (sourceNode.type === "text-prompt") {
-      const srcEdges = edges.filter((e) => e.target === sourceNode.id);
-      for (const srcEdge of srcEdges) {
-        const listNode = allNodes.find((n) => n.id === srcEdge.source);
-        if (!listNode || !FAN_OUT_EACH_TYPES.has(listNode.type ?? "")) continue;
-        const gpMode = (srcEdge.data as Record<string, unknown> | undefined)
-          ?.outputMode as string | undefined;
-        if ((gpMode ?? "each") !== "each") continue;
-
-        const gpSelector = srcEdge.data as SelectorFields | undefined;
-
-        if (listNode.type === "list") {
-          const items = ((listNode.data as Record<string, unknown>).items as string || "")
-            .split("\n").map((s) => s.trim()).filter(Boolean);
-          const n = fanOutCount(items, gpSelector);
-          if (n > 0) return n;
-        }
-        if (listNode.type === "list") {
-          const rows = (listNode.data as Record<string, unknown>).rows as
-            | string[][]
-            | undefined;
-          if (rows && rows.length > 1) {
-            const rowStrs = rows.map((_, i) => String(i + 1));
-            const n = fanOutCount(rowStrs, gpSelector);
-            if (n > 0) return n;
-          }
-        }
-      }
-    }
-
-    // Clip Pack: an "each" edge (set by hand, or a per-handle default like
-    // Camera Switch's EDL) from a node that is itself fanned out per clip.
-    // Narrow by design — see `inheritedClipFanOut`.
-    if (mode === "each" && listResultsServeHandle(sourceNode.type, edge.sourceHandle)) {
-      const held = heldBatchFanOut(sourceNode, rerunIds);
-      if (held > 1) return held;
-      const inherited = inheritedClipFanOut(sourceNode, allNodes, edges, rerunIds, new Set());
-      if (inherited > 1) return inherited;
-    }
-  }
-
-  return 1;
-}
-
-/** Fan-out count for a list with an optional selector: returns 0 when ≤1 item after filtering. */
-function fanOutCount(items: string[], selector: SelectorFields | undefined): number {
-  const count = isDefaultSelectorConfig(selector) ? items.length : selectListItems(items, selector).length;
-  return count > 1 ? count : 0;
-}
+/** Producers whose wire, once set to Each, runs the next node once per item (Social Search, …). */
+export const EACH_WIRE_FAN_OUT = withEditorPlanReader(SHARED_EACH_WIRE_FAN_OUT);
 
 /** A yes/no question a run asks before it goes on (the text is already translated). */
 export interface AskConfirmInfo {
@@ -1284,7 +1016,7 @@ export interface RunCreditLine {
   readonly nodeId: string;
   readonly label: string;
   readonly quantity: RunCreditQuantity;
-  /** cost × fanOut × units: exactly what the run's total adds for this node. */
+  /** cost × fanOut × units (cost: each of several providers at its own price, summed): exactly what the run's total adds for this node. */
   readonly credits: number;
 }
 
@@ -1299,7 +1031,7 @@ export interface RunConfirmLine extends RunCreditLine {
 /** Payload for the run-confirmation dialog (Execute-All always; any run >100cr). */
 export interface RunConfirmInfo {
   /** "render-final" / "update-preview": a run of a review's render set (`handleRenderFinal`). */
-  readonly trigger: "all" | "selected" | "from-here" | "single" | "render-final" | "update-preview";
+  readonly trigger: "all" | "selected" | "from-here" | "up-to-here" | "single" | "render-final" | "update-preview";
   readonly nodeCount: number;
   /** Estimated credits, or null in non-credit editions (cost line hidden). */
   readonly estimatedCredits: number | null;

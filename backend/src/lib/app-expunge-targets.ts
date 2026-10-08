@@ -9,6 +9,7 @@ import {
 import { ACTIVE_EXECUTION_STATUSES } from "./request-helpers.js"
 import { IN_FLIGHT_JOB_STATUSES } from "./job-status.js"
 import { noteInputOverridesColumnError } from "./execution-input-overrides.js"
+import { noteVideoLinkFilesColumnError } from "./execution-video-link-files.js"
 import { appRenderFinalStampOf, finalExecutionIdOf, selectWithFinalExecution } from "./app-run-final-column.js"
 import { APP_RENDER_FINAL_STAMP_PATH, APP_RUN_STAMP_PATH, appRunStampOf } from "./app-run-stamp.js"
 import { STALE_EXECUTION_THRESHOLD_MS, staleExecutionThresholdMs } from "./job-budget.js"
@@ -485,8 +486,8 @@ async function innerAppRunsOf(executions: readonly ExecutionRow[]): Promise<Arra
  * stay cleared. A retry finds the same rows again through the runs, their
  * stamps and the wrappers not yet cleared, but not the storage keys that only
  * the already-cleared columns named: those objects are no longer harvested,
- * and stay in R2. An execution write refused only because the pin column
- * (466) is missing is retried once without it.
+ * and stay in R2. An execution write refused only because a guarded column
+ * (the pin, 466; the fetched files, 487) is missing is retried without it.
  */
 export async function redactAppExpungeTargets(targets: {
   levels: ReadonlyArray<Pick<AppExpungeLevel, "executionIds" | "jobIds"> & { appRunIds?: string[] }>
@@ -500,8 +501,12 @@ export async function redactAppExpungeTargets(targets: {
     for (const chunk of chunks(level.executionIds)) {
       const write = () => supabase.from("workflow_executions").update(executionContentRedaction()).in("id", chunk)
       let { error } = await write()
-      // The pin column (466) is not in the database yet: the patch drops it now.
-      if (error && noteInputOverridesColumnError(error)) ({ error } = await write())
+      // A guarded column (the pin, 466; the fetched files, 487) is not in the database yet:
+      // the patch drops it now. One column is reported per error, so retry once per guarded column.
+      for (let retries = 0; error && retries < 2; retries++) {
+        if (!noteInputOverridesColumnError(error) && !noteVideoLinkFilesColumnError(error)) break
+        ;({ error } = await write())
+      }
       if (error) throw new Error(`redactAppExpungeTargets failed at workflow_executions: ${error.message}`)
     }
     for (const chunk of chunks(level.jobIds)) {

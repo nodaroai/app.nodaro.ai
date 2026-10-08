@@ -32,6 +32,7 @@ import type { ComponentMetadata, PresentationItem, InputFieldSchema, LottieSlotF
 import { sanitizeSlug } from "./slug-sanitizer.js"
 import { EXPOSABLE_SLIDERS } from "./generated/exposable-sliders.js"
 import { normalizeLegacyNodeTypes } from "../../services/workflow-engine/normalize-node-types.js"
+import { appInputDescription } from "./app-input-descriptions.js"
 
 /** Public schema entry surfaced to the LLM. No node-id leak. */
 export interface NormalizedInputField {
@@ -127,10 +128,11 @@ const SHARED_FIELD_TYPE_TO_NORMALIZED: Record<
 
 function sharedFieldInfo(
   nodeType: string,
-): { fieldKey: string; type: NormalizedInputField["type"] } | undefined {
+): { fieldKey: string; type: NormalizedInputField["type"]; description?: string } | undefined {
   const s = getInputFieldSchema(nodeType)
   if (!s) return undefined
-  return { fieldKey: s.key, type: SHARED_FIELD_TYPE_TO_NORMALIZED[s.type] }
+  const description = appInputDescription(nodeType)
+  return { fieldKey: s.key, type: SHARED_FIELD_TYPE_TO_NORMALIZED[s.type], ...(description ? { description } : {}) }
 }
 
 /**

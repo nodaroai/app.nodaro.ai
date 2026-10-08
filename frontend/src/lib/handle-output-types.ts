@@ -40,6 +40,8 @@ export const HANDLE_OUTPUT_TYPES: Record<string, Partial<Record<string, HandleCo
   "edit-plan": { edl: "look" },
   // camera-switch: the switched edit and the renamed transcript, both json.
   "camera-switch": { edl: "look", transcript: "look" },
+  // speaker-view: the rendered video and the EDL as drawn (json).
+  "speaker-view": { video: "video", json: "look" },
   "add-captions": { "video-out": "video" },
   "adjust-volume": { "video-out": "video", "audio-out": "audio" },
   "assemble-narrated-video": { video: "video" },
@@ -144,6 +146,9 @@ export const HANDLE_OUTPUT_TYPES: Record<string, Partial<Record<string, HandleCo
   // Collections: Read Collection's records (json) and their digest (text); Save to Collection's saved record (json).
   "collection-read": { json: "look", text: "text" },
   "collection-write": { json: "look" },
+  // The post readers: the posts (json) and their digest (text).
+  "inspiration-read": { json: "look", text: "text" },
+  "competitor-read": { json: "look", text: "text" },
   "text-to-audio": { audio: "audio" },
   "text-to-dialogue": { audio: "audio", json: "look" },
   "text-to-speech": { audio: "audio" },

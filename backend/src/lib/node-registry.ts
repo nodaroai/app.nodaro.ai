@@ -1,4 +1,4 @@
-import { IMAGE_GEN_PROVIDERS, IMAGE_TO_VIDEO_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, LIP_SYNC_PROVIDERS, VOICE_CHANGER_MODEL_IDS, GVP_SUPPORTED_PROVIDERS, SEEDANCE_2_PROVIDERS, VIDEO_ANALYSIS_TIER_ORDER, MUSIC_PROVIDERS, TRANSCRIBE_PROVIDERS, MODIFY_IMAGE_PROVIDERS, UPSCALE_IMAGE_PROVIDERS, REFERENCE_BOARD_PROVIDERS, TTS_PROVIDERS, DIALOGUE_PROVIDERS, TEXT_TO_AUDIO_PROVIDERS, MOTION_TRANSFER_PROVIDERS, SPEECH_UNIT_CREDIT_SUFFIX, buildMotionCreditModelIdentifier, hasContiguousSegmentDurations, isMinimaxH3Provider, MODEL_CATALOG, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY, OVERLAY_PLATFORM_IDS, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, VIDEO_OVERLAY_OUTPUT_ASPECTS, VIDEO_OVERLAY_FITS } from "@nodaro/shared"
+import { IMAGE_GEN_PROVIDERS, IMAGE_TO_VIDEO_PROVIDERS, TEXT_TO_VIDEO_PROVIDERS, VIDEO_GEN_PROVIDERS, LIP_SYNC_PROVIDERS, VOICE_CHANGER_MODEL_IDS, GVP_SUPPORTED_PROVIDERS, SEEDANCE_2_PROVIDERS, VIDEO_ANALYSIS_TIER_ORDER, MUSIC_PROVIDERS, TRANSCRIBE_PROVIDERS, MODIFY_IMAGE_PROVIDERS, UPSCALE_IMAGE_PROVIDERS, REFERENCE_BOARD_PROVIDERS, TTS_PROVIDERS, DIALOGUE_PROVIDERS, TEXT_TO_AUDIO_PROVIDERS, MOTION_TRANSFER_PROVIDERS, SPEECH_UNIT_CREDIT_SUFFIX, buildMotionCreditModelIdentifier, hasContiguousSegmentDurations, isMinimaxH3Provider, MODEL_CATALOG, PROMPT_PREFIX_KEY, PROMPT_SUFFIX_KEY, OVERLAY_PLATFORM_IDS, EDIT_PLAN_MODES, EDIT_PLAN_TIERS, EDIT_PLAN_MAX_MINUTES, editPlanFlatCreditId, editPlanRateCreditId, editPlanMinutesBaseCredits, VIDEO_OVERLAY_OUTPUT_ASPECTS, VIDEO_OVERLAY_FITS } from "@nodaro/shared"
 import type { OutputType } from "@nodaro/shared"
 import { nodeSupportsPromptAffixes } from "@nodaro/prompts"
 import { SCRAPER_ACTOR_LABELS, type ScraperActorId } from "@nodaro/shared"
@@ -188,7 +188,14 @@ export const CREDIT_BAND_SOURCES: Readonly<Record<string, CreditBandSource>> = {
   },
   "video-analysis": { ids: familyIds("video-analysis") },
   "video-audit": { ids: familyIds("video-audit") },
-  "edit-plan": { ids: familyIds("edit-plan") },
+  "edit-plan": {
+    ids: familyIds("edit-plan"),
+    // The stored rows are a rate and a flat per mode × tier (decided
+    // 2026-10-07), not whole charges: the band is the cheapest run (one
+    // started minute) up to the dearest (180 minutes), flat + rate × N.
+    band: editPlanBand,
+    note: "Charged flat + rate × N per mode and tier (`edit-plan:<mode>:<tier>:per-minute` and `:flat`): N is the source's started minutes on a server that charges per started minute, else the 15/30/60/90/120/180-minute step it rounds up to.",
+  },
   "camera-switch": { ids: familyIds("camera-switch") },
   "content-recipe": { ids: familyIds("content-recipe") },
   "content-ideas": {
@@ -262,6 +269,21 @@ function creditBandFor(type: string): number | string {
     throw new Error(`node-registry: credit-band source for "${type}" names no priced identifier`)
   }
   return formatBand(Math.min(...prices) * minUnits, Math.max(...prices) * maxUnits)
+}
+
+/** Edit Plan's band: flat + rate × N over every mode and tier, from 1 to 180 minutes. */
+function editPlanBand(credit: (id: string, units?: number) => number | undefined): [number, number] | undefined {
+  const at = (minutes: number) =>
+    EDIT_PLAN_MODES.flatMap((mode) =>
+      EDIT_PLAN_TIERS.flatMap((tier) => {
+        const flat = credit(editPlanFlatCreditId(mode, tier))
+        const rate = credit(editPlanRateCreditId(mode, tier))
+        return flat === undefined || rate === undefined ? [] : [editPlanMinutesBaseCredits(flat, rate, minutes)]
+      }),
+    )
+  const low = at(1)
+  const high = at(EDIT_PLAN_MAX_MINUTES)
+  return low.length && high.length ? [Math.min(...low), Math.max(...high)] : undefined
 }
 
 function formatBand(min: number, max: number): number | string {
@@ -520,7 +542,9 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     // outputType: video — input-resolver isVideoSourceType() treats youtube-video as a video source.
     description: "Download video or audio from YouTube, TikTok, Instagram, Facebook, or X.",
     outputType: "video",
-    inputSchema: { fields: [{ key: "url", type: "text", required: true }] },
+    // `youtubeUrl` is the field a run override and a published app's input write
+    // (INPUT_FIELD_MAP in @nodaro/shared); it holds a link, not an upload.
+    inputSchema: { fields: [{ key: "youtubeUrl", type: "text", required: true }] },
   },
   {
     type: "reference-audio",
@@ -649,10 +673,9 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     // handle. tighten → one Edl (tightened timeline); clips → a bare Edl[] that fans
     // out one downstream render per clip; chapters → a { version, chapters } list;
     // trailer → one Edl (a short teaser from the strongest moments).
-    // Cloud-EXCLUSIVE (relayed). Duration-bucketed per-source-minute pricing × tier
-    // (+ a flat component on clips and trailer); PROVISIONAL placeholders finalized
-    // by a probe. See backend/src/ee/billing/credits.ts (EDIT_PLAN_STATIC) +
-    // migrations 432 and 462.
+    // Cloud-EXCLUSIVE (relayed). Per-source-minute pricing × tier (+ a flat
+    // component on clips and trailer), one rate row and one flat row per mode ×
+    // tier. See backend/src/ee/billing/credits.ts (EDIT_PLAN_STATIC) + migration 484.
     description:
       "Turn a transcript into an edit-decision-list plan: tighten a recording, find short clips, mark chapters, or cut a short trailer. Reads the transcript, never pixels; emits an EDL that Apply Edit renders.",
     outputType: "data",
@@ -1472,6 +1495,33 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     { key: "crossfadeMs", type: "number" },
   ] } },
   {
+    type: "speaker-view",
+    label: "Speaker View",
+    category: "processing",
+    // outputType: video — the rendered cut on the default handle; its `json`
+    // handle is the EDL as it drew it (turns split, layouts written), NOT a
+    // Transcript. Nodaro-EXCLUSIVE (relayed). NOT PRICED YET (C4): every run is
+    // refused with "Speaker View is not priced yet" before anything is reserved.
+    description:
+      "Render an edit with its speakers on screen: a layout (single, side by side, stacked, grid, picture-in-picture, or Camera Switch's hints), a switch at each speaker change (cut, pan, zoom, crossfade) and an emphasis on who is speaking (scale, border, dim). Wire an EDL (Edit Plan's or Camera Switch's) and a diarized transcript; emits the video and the EDL as drawn on `json`. Not priced yet: runs are refused until its price is set.",
+    outputType: "video",
+    inputSchema: {
+      fields: [
+        { key: "edl", type: "json", required: true },
+        { key: "transcript", type: "json" },
+        { key: "targetAspect", type: "select", options: ["16:9", "9:16", "1:1", "4:5"] },
+        { key: "layout", type: "select", options: ["auto", "single", "side-by-side", "stacked", "grid", "pip"] },
+        { key: "switchType", type: "string" },
+        { key: "switchDurationMs", type: "number" },
+        { key: "emphasisStyle", type: "string" },
+        { key: "emphasisDurationMs", type: "number" },
+        { key: "accentColor", type: "string" },
+        { key: "speakerRegions", type: "object" },
+        { key: "quality", type: "select", options: ["proxy", "final"] },
+      ],
+    },
+  },
+  {
     type: "assemble-narrated-video",
     label: "Assemble Narrated Video",
     category: "processing",
@@ -1665,6 +1715,9 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
   { type: "telegram-channel-feed", label: "Telegram Channel Feed", category: "input", description: "Read recent posts from a PUBLIC Telegram channel (t.me/s/<channel>) — emits their text for rewrite/repost workflows. Pair with a Schedule Trigger to poll; dedupes via a per-node cursor so each post is processed once.", outputType: "text" },
   // ---- Collections (migration 462): where a workflow's records live. Free; the plan's caps apply. ----
   { type: "collection-read", label: "Read Collection", category: "input", description: "Read a collection's records saved in the last N hours or days — newest or oldest first, up to a limit — as structured records (json), one item per record for an each-wire, and as text (headlines, or the full text). A window with nothing in it emits empty text, so a text node behind it is skipped and the run ends nothing-new. Free.", outputType: "data", creditCost: 0 },
+  // ---- Post readers: posts the account already holds, emitted the way Social Search emits its results. Free. ----
+  { type: "inspiration-read", label: "Read Inspiration", category: "input", description: "Read the posts saved to your Inspiration library in the last N hours or days, or on one day — optionally one platform (X, Instagram, TikTok, …) and one tag — as posts (json, the Social Search post shape, with when each was saved, its note and tags; one item per post for an each-wire) and as text (their digest). The still copied when the post was saved replaces the platform's expiring thumbnail. Nothing in the period emits empty text, so a text node behind it is skipped and the run ends nothing-new. Free.", outputType: "data", creditCost: 0 },
+  { type: "competitor-read", label: "Read Competitor", category: "input", description: "Read a tracked competitor's posts as its scans found them — published in the last N hours or days, or on one day; optionally one platform (X, Instagram, TikTok, …) and the brand's own posts or the posts about it — as posts (json, the Social Search post shape with a role; one item per post for an each-wire) and as text (their digest). It reads what the scans already found: a day no scan covered has no posts, and each scan reads up to 20 posts per account. Nodaro Cloud. Free.", outputType: "data", creditCost: 0 },
   { type: "collection-write", label: "Save to Collection", category: "output", description: "Save what is wired in as one record of a collection: the item (a feed post, a search result, an article object, or plain text) mapped to title / text / link / media / fields, with the node's own title, text, link and dedupe key winning; the picture and video wired in ride along as links. The same link twice is one record (duplicate); a re-run of the same step writes once (replayed); past the plan's cap the oldest records are evicted. Emits the saved record. Free.", outputType: "data", creditCost: 0 },
 
   { type: "list", label: "List", category: "control", description: "Static list of items for fan-out.", outputType: "data" },

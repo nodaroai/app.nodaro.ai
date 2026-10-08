@@ -14,7 +14,7 @@
  */
 
 import { locationMentionSlug, mergeNodeInputOverrides, RUN_OVERRIDE_CLEARED_FIELDS } from "@nodaro/shared"
-import { assertNoLockedOverrides } from "../lib/input-override-lock.js"
+import { assertNoLockedOverrides, type VideoLinkAdmission } from "../lib/input-override-lock.js"
 import { coerceListItemsOverrideToRows } from "../services/workflow-engine/output-extractor.js"
 import { LOCATION_VARIANT_BUCKETS } from "../services/workflow-engine/payload-builder.js"
 
@@ -67,13 +67,17 @@ interface OverridableNode {
  * merge every run lane shares, so the lock here covers an entry point that
  * forgot its own 400; the throw leaves the graph untouched and the
  * orchestrator's outer catch fails the execution with the message.
+ *
+ * `admitVideoLinks`: which Video URL nodes the run may point at a new link — a
+ * published app's exposed ones (the route's own rule); omitted = none.
  */
 export function applyInputOverridesToNodes(
   nodes: OverridableNode[],
   inputOverrides: Record<string, Record<string, unknown>> | undefined,
+  admitVideoLinks?: VideoLinkAdmission,
 ): void {
   if (!inputOverrides) return
-  assertNoLockedOverrides(nodes, inputOverrides)
+  assertNoLockedOverrides(nodes, inputOverrides, admitVideoLinks)
   for (const node of nodes) {
     const overrides = inputOverrides[node.id]
     if (!overrides) continue

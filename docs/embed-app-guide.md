@@ -70,6 +70,13 @@ The response is JSON. The fields you care about (others omitted for brevity):
   "iconUrl": "https://...",
   "version": 3,                        // latest version number
   "estimatedCredits": 5,               // the listed price: a run (with any Render final after it)
+  "perMinuteCredits": 0,               // credits per minute of the recording the app is given; 0 when the price does not depend on it
+                                       // (with it, the price is estimatedCredits + perMinuteCredits × minutes)
+  "perItemCredits": 0,                 // credits per item beyond the creator's saved items of a list input the user fills; 0 when none
+  "runEstimatedCredits": 5,            // the run alone: the listed price less its Render final part
+  "runPerMinuteCredits": 0,            // …and its per-minute and per-item parts
+  "runPerItemCredits": 0,
+  "editPlanPerMinute": false,          // true: an Edit Plan node is charged per started minute of the recording, else in 15/30/60/90/120/180-minute steps
   "maxRunsPerUserPerDay": null,        // or a number
   "thumbnailNodeId": "node-abc",       // node whose output is the "hero" result
   "snapshotNodes": [                   // the workflow's nodes
@@ -147,6 +154,35 @@ The starting value is only what the card shows. A run sends a card's value only 
 For the Text to Speech voice settings (`stability`, `similarityBoost`, `style`, `speed`), a number or a numeric string is accepted (`0.4` or `"0.4"`), in `inputOverrides` and in MCP or SDK flat inputs alike. A value outside the setting's range (`stability`, `similarityBoost` and `style` 0–1, `speed` 0.7–1.2) is clamped into it. A value that is not a number (an empty string, a word) is ignored, and the voice's own setting applies. `null` depends on where you send it: in `inputOverrides` it replaces the node's saved value and is ignored the same way, so the voice's own setting applies; as an MCP or SDK flat input it is dropped before it reaches the node, so the node's saved value applies (the voice's own setting applies only when the node has none).
 
 Every exposed slider, on any node, is typed in the flat input schema MCP `get_app_inputs` returns: `type: "number"` with the slider's own `min`, `max` and `step` (Text to Speech **Stability**: `0`, `1`, `0.05`). A flat input (MCP `run_app`, SDK `apps.run(slug, inputs)`, the `inputs` of `POST /v1/app/:slug/run`) for such a field takes a number or a numeric string, and a numeric string reaches the node as a number; a value that is not a number is passed on unchanged, for the node to treat as it always has. The range is not enforced when the input is translated: Text to Speech clamps its voice settings as described above, and for other nodes keep your control inside the range.
+
+### Video URL inputs
+
+A [Video URL](./nodes/input/youtube-video.md) node can be exposed as an app input, so an app can take an episode as a link instead of an upload. The creator exposes the node like any other input; the app's page (desktop, mobile and embedded) shows a field to paste a link into.
+
+**What the field takes.** A link to a video on YouTube, TikTok, Instagram, Facebook or X, or any other link to a video on a public web address (`http` or `https`; the address does not need to end in a video extension). That is the rule the Video URL node follows on the canvas: a post link is downloaded, any other link is used as it is. A value that is not a web link, or that points at this machine or a private address, is refused: the page shows the field in error, and a request answers `400 locked_field` before anything runs or is billed. A request can set the link only of a Video URL node the app exposes as an input: a Video URL node the creator keeps fixed (a reference video the workflow analyses or dubs) is refused with `400 locked_field`, whatever the link.
+
+**On the app's page.** Any other link is used as it is. A post link that a node after it watches is downloaded in the field, with a progress bar, before Run: a YouTube video shorter than 4 minutes downloads whole, and a longer one (or one whose length cannot be read) asks for the part to download (From / To) or all of it, so an episode is never fetched whole on its own. Run stays disabled until the file is ready, and a failed download says why and offers Try again. Changing the link drops everything that was fetched for the old one. When every node after the link reads only its sound (Transcribe, Suno Cover) or only its page address (Dubbing, Content Recipe), nothing is downloaded in the field and no part is asked for: the field says so, and Run is ready as soon as the link is valid. The sound is fetched when the app runs.
+
+**Over MCP, the SDK and the API.** `get_app_inputs` lists the field as `type: "video"`, `required: true`, with a `description` of what it takes. A flat input is the link:
+
+```json
+{ "inputs": { "episode": "https://www.youtube.com/watch?v=dQw4w9WgXcQ" } }
+```
+
+The server downloads a post link itself, before the first node runs, with the same rules as the app's page; there is no file to import first. What it fetches follows what the nodes after the link read:
+
+- a node that watches the video (video analysis, editing, render, …): the video, downloaded whole at up to 1080 rows for a YouTube video shorter than 4 minutes, and whole for any other platform;
+- only Transcribe and Suno Cover: just the sound, however long the video is, and no part is asked for;
+- only Dubbing and Content Recipe: nothing, they take the page address;
+- a link that is not a post (any other web link) is passed to the nodes as it is.
+
+A YouTube video of 4 minutes or more, or one whose length cannot be read, is downloaded only as a part, and a run has nobody to choose one. Name the part in `inputOverrides` on the node, in seconds (it is cut exactly): `{ "inputOverrides": { "<nodeId>": { "sectionStartSec": 600, "sectionEndSec": 1200 } } }`. Without a part the run is refused, before any node runs and before anything is billed, and the message says so and names `sectionStartSec` and `sectionEndSec`; the part may also be saved on the node itself; a direct link to the video file always works. A live stream is refused the same way, and a download that fails (a private or removed video, a region block) refuses the run with the reason.
+
+A link saved in the workflow is fetched the same way, whenever the run needs the file (a run of your own workflow through the API included): a Video URL node whose file was already downloaded for its own link keeps that file, and a link that is not a post is passed on as it is. The download is limited like the page's: an account has at most 4 downloads running at once, counted across everything it has running (the page's downloads and the server's together), and a run waits up to 5 minutes for a free one. The time the download takes comes before the run's own clock starts. In `inputOverrides`, the link goes in the node's `youtubeUrl` field; `downloadedVideoUrl` and `downloadedFromUrl` carry a file you downloaded for that link, as the page does, and the server then fetches nothing.
+
+Whatever a run brings for a new link replaces what the creator's node held for theirs: the creator's downloaded file, audio track, title, picture and length never stand under the caller's link, so a Transcribe or an Edit Plan after it reads the caller's episode.
+
+**Price.** An exposed Video URL node is the recording the app's user replaces. The steps after it that are charged by the length of the video are listed per minute of that recording, as they are after an exposed Upload Video.
 
 ---
 

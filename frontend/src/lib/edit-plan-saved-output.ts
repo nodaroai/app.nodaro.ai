@@ -1,4 +1,4 @@
-import { editPlanSavedOutput, type EditPlanSavedOutput } from "@nodaro/shared"
+import { editPlanSavedOutput, resolveEditPlanOutput, type EditPlanEditStatus, type EditPlanSavedOutput } from "@nodaro/shared"
 
 /**
  * An Edit Plan node's saved output with the person's review applied — the ONE
@@ -46,4 +46,24 @@ export function sourceJsonOf(src: { readonly type?: string; readonly data: unkno
   const data = src.data as Readonly<Record<string, unknown>>
   if (src.type === "edit-plan") return editPlanOutputOf(data)?.json
   return data.generatedJson
+}
+
+const statusCache = new WeakMap<object, { readonly edited: unknown; readonly status: EditPlanEditStatus }>()
+
+/**
+ * Where the person's review of an Edit Plan stands (`resolveEditPlanOutput`'s
+ * status): `applied` (the plan hands on their edit), `stale` (made on an earlier
+ * plan, ignored), `invalid`, or `none`. Cached per plan object like
+ * `editPlanOutputOf`, for the node's EDITED chip, which asks on every render.
+ */
+export function editPlanEditStatusOf(data: Readonly<Record<string, unknown>>): EditPlanEditStatus {
+  const plan = data.generatedJson
+  if (plan === undefined || plan === null) return "none"
+  if (typeof plan !== "object") return resolveEditPlanOutput(plan, data.editedEdl).status
+  const edited = data.editedEdl
+  const hit = statusCache.get(plan)
+  if (hit && hit.edited === edited) return hit.status
+  const { status } = resolveEditPlanOutput(plan, edited)
+  statusCache.set(plan, { edited, status })
+  return status
 }

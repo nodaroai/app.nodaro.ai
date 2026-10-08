@@ -18,7 +18,7 @@ vi.mock("@/ee/billing/credits.js", () => ({
   })),
 }))
 
-import { getMaxTtsChars } from "@nodaro/shared"
+import { getMaxTtsChars, getDialogueCapabilities } from "@nodaro/shared"
 import { stripAudioTags } from "../../providers/elevenlabs/audio-tags.js"
 import { planVoicedDialogue, voicedAddonBaseCredits, voicedAddonCreditId } from "../voiced-dialogue-lines.js"
 
@@ -37,7 +37,9 @@ describe("planVoicedDialogue", () => {
   })
 
   it("keeps lines in order up to the dialogue total and counts the rest as dropped — the worker's old capDialogueLines rule", () => {
-    const cap = getMaxTtsChars("elevenlabs-dialogue")
+    // A sole v4 voice renders on Dialogue v4, so the total is ITS cap (10,000 since 2026-10-06), not v3 dialogue's.
+    const cap = getDialogueCapabilities("elevenlabs-dialogue-v4").maxChars
+    expect(cap).toBe(10000)
     const plan = planVoicedDialogue({
       dialogue: [{ speaker: "Anna", line: "a".repeat(cap - 10) }, { speaker: "Anna", line: "b".repeat(20) }, { speaker: "Anna", line: "c" }],
       characterVoices: [ANNA],
@@ -138,12 +140,15 @@ describe("voicedAddonBaseCredits", () => {
     await expect(voicedAddonBaseCredits(hostile as never)).resolves.toBe(16) // no usable line → 8 units × turbo's 2
   })
 
-  it("flag on: a multi-speaker cast is priced on the dialogue model it renders on — v4 on the v4 unit row, a mixed cast on v3's — floor 8 units (32), cap 5,000 (200)", async () => {
+  it("flag on: a multi-speaker cast is priced on the dialogue model it renders on — v4 on the v4 unit row (cap 10,000 → 400), a mixed cast on v3's (cap 5,000 → 200) — floor 8 units (32)", async () => {
     const { getModelCreditBaseCost } = await import("@/ee/billing/credits.js")
     expect(await voicedAddonBaseCredits({ dialogue: duo("Anna", "Cara"), characterVoices: [ANNA, CARA] })).toBe(32)
     expect(getModelCreditBaseCost).toHaveBeenLastCalledWith("elevenlabs-dialogue-v4:per-100-chars")
     expect(await voicedAddonBaseCredits({ dialogue: duo("Anna", "Cara", 2500), characterVoices: [ANNA, CARA] })).toBe(200)
-    expect(await voicedAddonBaseCredits({ dialogue: duo("Anna", "Cara", 3500), characterVoices: [ANNA, CARA] })).toBe(140) // the plan keeps the lines that fit the 5,000 total: only the first 3,500
+    expect(await voicedAddonBaseCredits({ dialogue: duo("Anna", "Cara", 3500), characterVoices: [ANNA, CARA] })).toBe(280) // 7,000 fits v4's 10,000 total: both lines, 70 units × 4
+    expect(await voicedAddonBaseCredits({ dialogue: duo("Anna", "Cara", 5000), characterVoices: [ANNA, CARA] })).toBe(400) // exactly v4's cap
+    expect(await voicedAddonBaseCredits({ dialogue: duo("Anna", "Cara", 6000), characterVoices: [ANNA, CARA] })).toBe(240) // the plan keeps the lines that fit the 10,000 total: only the first 6,000
+    expect(await voicedAddonBaseCredits({ dialogue: duo("Anna", "Dan", 3500), characterVoices: [ANNA, DAN] })).toBe(140) // a mixed cast renders on v3 dialogue: only the first 3,500 fit its 5,000
     expect(await voicedAddonBaseCredits({ dialogue: duo("Anna", "Dan"), characterVoices: [ANNA, DAN] })).toBe(32)
     expect(getModelCreditBaseCost).toHaveBeenLastCalledWith("elevenlabs-dialogue:per-100-chars")
     expect(await voicedAddonBaseCredits({ dialogue: duo("Anna", "Bob"), characterVoices: [ANNA, BOB] })).toBe(32)

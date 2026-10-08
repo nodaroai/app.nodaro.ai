@@ -25,6 +25,7 @@ vi.mock("@/lib/url-validator.js", async () => {
   return { safeUrlSchema: z.string().url() }
 })
 
+import { RENDER_NODE_TYPE_IDS } from "@nodaro/shared"
 import { libraryRoutes } from "../library.js"
 import { supabase } from "../../lib/supabase.js"
 
@@ -102,7 +103,7 @@ describe("GET /v1/library — the Preview label of a render made before it was s
     expect(jobCalls).toHaveLength(1)
     expect([...jobCalls[0]!.ids].sort()).toEqual(["j1", "j2"])
     // Restricted to render jobs (RENDER_NODE_TYPES): Apply EDL today.
-    expect(jobCalls[0]!.jobTypes).toEqual(["apply-edl"])
+    expect(jobCalls[0]!.jobTypes).toEqual([...RENDER_NODE_TYPE_IDS])
   })
 
   it("asks the assets table for job_id (the link to the job)", async () => {

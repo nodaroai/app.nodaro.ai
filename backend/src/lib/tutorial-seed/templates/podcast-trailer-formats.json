@@ -1,0 +1,353 @@
+{
+  "slug": "podcast-trailer-formats",
+  "name": "Trailer + Formats",
+  "description": "Cut a 20–40 second teaser from a long recording, put an optional intro card in front, and deliver it as a 9:16 story or reel, a square post and a 4:5 portrait post.",
+  "markdownDescription": null,
+  "category": "automations",
+  "outputTypes": [
+    "video"
+  ],
+  "tags": [
+    "podcast",
+    "trailer",
+    "social",
+    "video"
+  ],
+  "complexity": "intermediate",
+  "previewMediaUrl": null,
+  "previewMediaType": null,
+  "listedIn": [
+    "marketplace"
+  ],
+  "tutorialCategorySlug": "workflows",
+  "tutorialSortOrder": 3,
+  "estimatedCredits": 382,
+  "estimatedPerMinuteCredits": 4,
+  "nodeTypesUsed": [
+    "upload-video",
+    "transcribe",
+    "edit-plan",
+    "apply-edl",
+    "combine-videos",
+    "social-media-format",
+    "sticky-note"
+  ],
+  "providersUsed": [
+    "elevenlabs-stt"
+  ],
+  "nodes": [
+    {
+      "id": "trailer-note-intro",
+      "type": "sticky-note",
+      "zIndex": -1,
+      "position": {
+        "x": -100,
+        "y": -340
+      },
+      "data": {
+        "bold": false,
+        "text": "Trailer + Formats\n\nUpload a recording and get a short teaser in three social formats. Transcribe reads the words, the Trailer Plan node (Cloud) picks the strongest moments and joins them with crossfades into one 20–40 second trailer, and Apply Cut renders it. Combine Videos puts your optional intro card in front, and the three format nodes deliver it as a 9:16 story or reel, a 1:1 square post and a 4:5 portrait post.\n\nDrop your recording on Episode Recording, then Run down the chain.",
+        "color": "#2d2d44",
+        "label": "Sticky Note",
+        "width": 480,
+        "height": 340,
+        "italic": false,
+        "fontSize": "base",
+        "alignment": "left",
+        "textColor": "#ffffff"
+      },
+      "measured": {
+        "width": 480,
+        "height": 340
+      }
+    },
+    {
+      "id": "trailer-src",
+      "type": "upload-video",
+      "position": {
+        "x": 0,
+        "y": 40
+      },
+      "data": {
+        "label": "Episode Recording",
+        "assetId": "",
+        "url": ""
+      }
+    },
+    {
+      "id": "trailer-transcribe",
+      "type": "transcribe",
+      "position": {
+        "x": 440,
+        "y": -140
+      },
+      "data": {
+        "label": "Transcribe",
+        "provider": "elevenlabs-stt",
+        "language": "auto",
+        "diarize": true,
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "trailer-plan",
+      "type": "edit-plan",
+      "position": {
+        "x": 900,
+        "y": 20
+      },
+      "data": {
+        "label": "Trailer Plan",
+        "mode": "trailer",
+        "planTier": "standard",
+        "instructions": "",
+        "sourceOrder": [
+          "trailer-src"
+        ],
+        "sourceConfig": {},
+        "fieldMappings": {},
+        "executionStatus": "idle"
+      }
+    },
+    {
+      "id": "trailer-apply",
+      "type": "apply-edl",
+      "position": {
+        "x": 1360,
+        "y": 20
+      },
+      "data": {
+        "label": "Apply Cut",
+        "output": "video",
+        "quality": "final",
+        "crossfadeMs": 0,
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "trailer-intro",
+      "type": "upload-video",
+      "position": {
+        "x": 1360,
+        "y": 420
+      },
+      "data": {
+        "label": "Intro Card (optional)",
+        "assetId": "",
+        "url": ""
+      }
+    },
+    {
+      "id": "trailer-note-intro-card",
+      "type": "sticky-note",
+      "zIndex": -1,
+      "position": {
+        "x": 1300,
+        "y": 720
+      },
+      "data": {
+        "bold": false,
+        "text": "The intro card is optional\n\nDrop a short title-card video on Intro Card and Combine Videos plays it before the trailer. Make it the same size and shape as your recording (for example 1920×1080 for a 16:9 episode), or one of the two is letterboxed to fit the other.\n\nLeave Intro Card empty and the trailer passes through Combine Videos unchanged, at no charge.",
+        "color": "#2d2d44",
+        "label": "Sticky Note",
+        "width": 440,
+        "height": 300,
+        "italic": false,
+        "fontSize": "base",
+        "alignment": "left",
+        "textColor": "#ffffff"
+      },
+      "measured": {
+        "width": 440,
+        "height": 300
+      }
+    },
+    {
+      "id": "trailer-combine",
+      "type": "combine-videos",
+      "position": {
+        "x": 1820,
+        "y": 20
+      },
+      "data": {
+        "label": "Add Intro Card",
+        "transition": "cut",
+        "transitionDuration": 0.5,
+        "audioMode": "crossfade",
+        "audioCrossfadeDuration": 0.5,
+        "trimEndFrames": 0,
+        "trimStartFrames": 0,
+        "smartCutFramesPrev": 8,
+        "smartCutFramesNext": 8,
+        "clipOrder": [
+          "trailer-intro",
+          "trailer-apply"
+        ],
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "trailer-format-story",
+      "type": "social-media-format",
+      "position": {
+        "x": 2280,
+        "y": -300
+      },
+      "data": {
+        "label": "Story / Reel (9:16)",
+        "platform": "instagram",
+        "contentType": "story-reel",
+        "specKey": "instagram:story-reel",
+        "method": "pad",
+        "padColor": "#000000",
+        "formattedText": "",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "trailer-format-square",
+      "type": "social-media-format",
+      "position": {
+        "x": 2280,
+        "y": 20
+      },
+      "data": {
+        "label": "Square Feed (1:1)",
+        "platform": "instagram",
+        "contentType": "feed-square",
+        "specKey": "instagram:feed-square",
+        "method": "pad",
+        "padColor": "#000000",
+        "formattedText": "",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "trailer-format-portrait",
+      "type": "social-media-format",
+      "position": {
+        "x": 2280,
+        "y": 340
+      },
+      "data": {
+        "label": "Portrait Feed (4:5)",
+        "platform": "instagram",
+        "contentType": "feed-portrait",
+        "specKey": "instagram:feed-portrait",
+        "method": "pad",
+        "padColor": "#000000",
+        "formattedText": "",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "trailer-note-formats",
+      "type": "sticky-note",
+      "zIndex": -1,
+      "position": {
+        "x": 2260,
+        "y": 660
+      },
+      "data": {
+        "bold": false,
+        "text": "Three formats\n\nEach format node fits the trailer to its platform size. They pad (the whole picture, with bars) rather than crop, because a centre crop of a two-person wide shot cuts a speaker off. For a single speaker centred in frame, switch a node's method to Crop to fill the frame.\n\nDelete any format you do not need, or add another Social Media Format node for a different platform.",
+        "color": "#2d2d44",
+        "label": "Sticky Note",
+        "width": 440,
+        "height": 320,
+        "italic": false,
+        "fontSize": "base",
+        "alignment": "left",
+        "textColor": "#ffffff"
+      },
+      "measured": {
+        "width": 440,
+        "height": 320
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "trailer-e-src-transcribe",
+      "source": "trailer-src",
+      "target": "trailer-transcribe",
+      "sourceHandle": "video",
+      "targetHandle": "audio"
+    },
+    {
+      "id": "trailer-e-src-plan",
+      "source": "trailer-src",
+      "target": "trailer-plan",
+      "sourceHandle": "video",
+      "targetHandle": "sources"
+    },
+    {
+      "id": "trailer-e-src-apply",
+      "source": "trailer-src",
+      "target": "trailer-apply",
+      "sourceHandle": "video",
+      "targetHandle": "sources"
+    },
+    {
+      "id": "trailer-e-transcribe-plan",
+      "source": "trailer-transcribe",
+      "target": "trailer-plan",
+      "sourceHandle": "json",
+      "targetHandle": "transcript"
+    },
+    {
+      "id": "trailer-e-plan-apply",
+      "source": "trailer-plan",
+      "target": "trailer-apply",
+      "sourceHandle": "edl",
+      "targetHandle": "edl"
+    },
+    {
+      "id": "trailer-e-intro-combine",
+      "source": "trailer-intro",
+      "target": "trailer-combine",
+      "sourceHandle": "video",
+      "targetHandle": "in"
+    },
+    {
+      "id": "trailer-e-apply-combine",
+      "source": "trailer-apply",
+      "target": "trailer-combine",
+      "sourceHandle": "media",
+      "targetHandle": "in"
+    },
+    {
+      "id": "trailer-e-combine-story",
+      "source": "trailer-combine",
+      "target": "trailer-format-story",
+      "sourceHandle": "video",
+      "targetHandle": "media"
+    },
+    {
+      "id": "trailer-e-combine-square",
+      "source": "trailer-combine",
+      "target": "trailer-format-square",
+      "sourceHandle": "video",
+      "targetHandle": "media"
+    },
+    {
+      "id": "trailer-e-combine-portrait",
+      "source": "trailer-combine",
+      "target": "trailer-format-portrait",
+      "sourceHandle": "video",
+      "targetHandle": "media"
+    }
+  ],
+  "settings": {
+    "viewport": {
+      "x": 120,
+      "y": 360,
+      "zoom": 0.45
+    },
+    "flowPromptTemplates": {},
+    "characterDefinitions": [],
+    "presentationSettings": {
+      "runTarget": "workflow"
+    }
+  }
+}

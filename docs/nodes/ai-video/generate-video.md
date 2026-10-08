@@ -390,6 +390,41 @@ If neither has the identifier, the route returns HTTP 503 `price_not_configured`
 
 **Audio default (`sound` omitted).** When the request doesn't set `sound`, the `:audio` composite follows the model's own default: `kling-3.0` generates audio by default, so an intent-less request is billed at the `:audio` rate (pass `sound: false` for the cheaper silent tier); `kling` (2.6) defaults to silent. Explicit `sound: true` / `false` always wins.
 
+### When no duration is set
+
+A request with no `duration` renders the model's own default length and is
+charged for that length — never a flat 5 seconds. The default is the model's
+`defaultDuration` (listed by `GET /v1/models` and the MCP `list_models` tool), the
+same value the editor's Run button, the workflow total, the server and MCP
+estimates and the reservation all use, and it is the length sent to the
+provider, so the price and the render cannot differ. A **reference video** run
+reserves its output seconds at that same length.
+
+| Model | Default length | Charged as | Credits |
+|---|---|---|---|
+| `seedance-2` | 8s | `seedance-2:8s:720p` | 820 |
+| `seedance-2-fast` | 8s | `seedance-2-fast:8s:720p` | 660 |
+| `seedance-2-mini` | 8s | `seedance-2-mini:8s:720p` | 410 |
+| `seedance-2-5` | 8s | `seedance-2-5:8s:720p` | 1260 |
+| `grok-i2v` | 6s | `grok-i2v:6s` | 50 |
+| `hailuo-2.3-pro` | 6s | `hailuo-2.3-pro:6s` | 130 |
+| `kling` | 5s | `kling:5s` | 138 |
+| `ltx-2.3-pro` | 6s | `ltx-2.3-pro:1080p:6s` | 240 |
+
+(The Seedance rows are shown at 720p; an omitted resolution is a separate lever,
+described above.) A **duration the model does not offer** is charged as the
+nearest length it does:
+
+| Model | You set | Rendered and charged as | Credits |
+|---|---|---|---|
+| `kling` | 7s | `kling:5s` | 138 |
+| `kling` | 8s | `kling:10s` | 275 |
+| `grok-i2v` | 8s | `grok-i2v:6s` | 50 |
+| `grok-i2v` | 15s | `grok-i2v:10s` | 80 |
+| `seedance` | 6s | `seedance:4s` | 40 |
+| `seedance` | 10s | `seedance:8s` | 70 |
+| `ltx-2.3-pro` | 7s | `ltx-2.3-pro:1080p:6s` | 240 |
+
 ### Worked examples
 
 | Provider | Duration | Resolution | Mode | Refs | Credits |
@@ -532,7 +567,7 @@ A request is **voiced** only when a spec is present **and** the model can carry 
 
 Kling models speak scripted dialogue natively: quote the line in the prompt (optionally with a voice description, e.g. `[Anna: warm calm voice]: "good morning"`) and enable sound. Kling 2.6 voices are English/Chinese; other languages are auto-translated to English by the model.
 
-**Speaker mapping.** Each `dialogue[].speaker` is matched (case-insensitive) to a `characterVoices[].speaker` to pick that line's `voiceId`. An unmatched speaker falls back to the default (first) voice, mirroring the pipeline's non-fatal missing-voice behavior. Total dialogue text is capped at the chosen dialogue model's limit (5,000 characters on both Dialogue v3 and v4); lines over the budget are dropped with a log entry.
+**Speaker mapping.** Each `dialogue[].speaker` is matched (case-insensitive) to a `characterVoices[].speaker` to pick that line's `voiceId`. An unmatched speaker falls back to the default (first) voice, mirroring the pipeline's non-fatal missing-voice behavior. Total dialogue text is capped at the chosen dialogue model's limit (5,000 characters on Dialogue v3, 10,000 on Dialogue v4); lines over the budget are dropped with a log entry.
 
 **References ride along.** Images, videos and audio wired to the node reach the model on the voiced path exactly as on an unvoiced run, with one substitution: on an `audio_driven` model the synthesised dialogue track takes the audio-reference slot. A Seedance reference-video run is reserved and settled like an unvoiced one (see *Reference videos bill input + output duration* under pricing), with the audio add-on on top.
 
@@ -542,7 +577,7 @@ The audio step is reserved as an add-on **on top of** the base video cost — sa
 
 | Mode | Add-on identifier | Add-on credits |
 |---|---|---|
-| `audio_driven` (Seedance 2 / MiniMax H3) | the model the track is synthesised on: `elevenlabs-dialogue-v4` for a multi-voice cast whose every voice is on `elevenlabs-v4`, `elevenlabs-dialogue` for any other multi-voice cast, else the voice's own text-to-speech model | Rolling out: by length — every started 100 characters of the voiced lines (a single voice's lines are counted joined by a space, as they are sent), at least 8 units; 4 credits per unit on Dialogue v3, Dialogue v4, v3, v4 and Multilingual v2 (so 1–800 characters cost 32, 5,000 cost 200), 2 on Turbo v2.5 (16 and 100). Until the rollout reaches your instance: a flat 25, whichever dialogue model the cast renders on |
+| `audio_driven` (Seedance 2 / MiniMax H3) | the model the track is synthesised on: `elevenlabs-dialogue-v4` for a multi-voice cast whose every voice is on `elevenlabs-v4`, `elevenlabs-dialogue` for any other multi-voice cast, else the voice's own text-to-speech model | Rolling out: by length — every started 100 characters of the voiced lines (a single voice's lines are counted joined by a space, as they are sent), at least 8 units; 4 credits per unit on Dialogue v3, Dialogue v4, v3, v4 and Multilingual v2 (so 1–800 characters cost 32, 5,000 cost 200, and 10,000 on Dialogue v4 cost 400), 2 on Turbo v2.5 (16 and 100). Until the rollout reaches your instance: a flat 25, whichever dialogue model the cast renders on |
 | `native_speech` (VEO 3.x) | `elevenlabs-voice-changer` | +40 |
 
 The dialogue add-on is reserved under the identifier of the model the cast actually renders on, chosen once when the request is accepted and forwarded to the worker.
@@ -606,10 +641,14 @@ value actually sent to the provider.**
 - **`Auto` / `adaptive` are passed through untouched** — they are instructions to
   the provider ("match the input"), not concrete ratios, so they are resolved at
   render time rather than snapped to a fixed ratio.
-- **Duration is passed through as you set it**, except on **LTX 2.3**, which is
-  priced on a fixed ladder of durations per resolution band (Pro: 6 / 8 / 10s at
-  every band; Fast: up to 20s at 1080p, 6 / 8 / 10s at 2k / 4k). A duration
-  between rungs moves to the nearest one — a 7s LTX request renders and bills 6s.
+- **An omitted duration is the model's own default length** (see
+  [When no duration is set](#when-no-duration-is-set)), and **a duration the model
+  does not offer moves to the nearest one it does — a tie goes to the shorter
+  length.** What you are billed for is the length rendered: a 7s Kling request
+  renders and bills 5s, an 8s one 10s. **LTX 2.3** is priced on a fixed ladder of
+  durations per resolution band (Pro: 6 / 8 / 10s at every band; Fast: up to 20s
+  at 1080p, 6 / 8 / 10s at 2k / 4k), so a duration between rungs moves to the
+  nearest one — a 7s LTX request renders and bills 6s.
 - **A few models ignore an unsupported resolution** and render a fixed default
   rather than the nearest band: `minimax-h3` renders 2K for anything that is not
   `768P`, and the `wan-3` family renders 720p. For those the correction targets

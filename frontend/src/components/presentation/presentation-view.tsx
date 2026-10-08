@@ -34,7 +34,6 @@ import { useUserCredits } from "@/ee/hooks/queries/use-credits-queries"
 import { useAppRunnerStore } from "@/hooks/use-app-runner-store"
 import { isResetAction, newRunActionLabel, type NewRunAction } from "@/components/app-runner/types"
 import { hasCredits } from "@/lib/edition"
-import { formatCreditUnits } from "@/lib/credit-units"
 import { spendableCredits } from "@/lib/spendable-credits"
 import { useBillingSurface } from "@/hooks/use-billing-surface"
 import { useAuth, refreshAuth, setAuthFromTokens } from "@/hooks/use-auth"
@@ -49,6 +48,8 @@ import {
 } from "@/lib/presentation-utils"
 import { EXECUTABLE_TYPES, isExecutableNode } from "@/components/editor/workflow-editor/types"
 import { useLiveRunEstimate } from "@/hooks/use-live-run-estimate"
+import { useChosenRecordingLengths } from "@/hooks/use-chosen-recording-lengths"
+import { recordingLengthPending, runCostLabel } from "@/lib/run-price"
 import { getModelIdentifier } from "@/components/editor/config-panels/helpers"
 import { getCachedCredits, prefetchModelCredits, isModelUnpriced } from "@/ee/hooks/use-model-credits"
 import { isExpandedClone, calculateMonetizedCost, getItemSortId } from "@nodaro/shared"
@@ -366,11 +367,14 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   // In fullscreen/app mode, inputValues contains live loop rows that affect fan-out,
   // so we merge them into node data for accurate cost calculation.
   const inputValues = isFullscreen ? presInputValues : undefined
+  // The recordings the app user chose, read for their length (decided
+  // 2026-10-07): the live estimate prices each at its own length.
+  const chosenRecordingLengths = useChosenRecordingLengths(inputNodes, inputValues)
   // ONE live estimate for every runner surface (the mobile shell prices the same
   // hook), so desktop and phone cannot quote different numbers for one run. Base
   // figure; the app's monetization markup is applied below.
   const dynamicEstimatedCost = useLiveRunEstimate(
-    { nodes, edges, inputValues, enabled: hasCredits() },
+    { nodes, edges, inputValues, enabled: hasCredits(), mediaLengths: chosenRecordingLengths },
     { getCachedCredits, prefetchModelCredits, isModelUnpriced },
   )
   // Mirror the live base figure into the presentation store so other consumers
@@ -423,8 +427,8 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
   // Check if all required inputs are filled (fullscreen app/embed mode only)
   const allInputsFilled = useMemo(() => {
     if (!isFullscreen) return true
-    return areAllInputsFilled(orderedInputNodes, presInputValues)
-  }, [isFullscreen, orderedInputNodes, presInputValues])
+    return areAllInputsFilled(orderedInputNodes, presInputValues, { nodes, edges })
+  }, [isFullscreen, orderedInputNodes, presInputValues, nodes, edges])
 
   const underMinTables = useMemo(() => {
     if (!isFullscreen) return []
@@ -1564,7 +1568,20 @@ export function PresentationView({ mode, isOwner, onExitFullscreen, onRun, onCan
     [outputItems, makeItemsDragEndHandler, handleOutputDragEnd],
   )
 
-  const costLabel = hasCredits() && estimatedCost > 0 ? ` (${formatCreditUnits(estimatedCost)})` : ""
+  // An app (app page or embed, both full screen) priced per minute shows its
+  // listing — never in the editor tab, which may hold a store left by an app —
+  // until the user's recording and its length are known, then the exact
+  // figure (decided 2026-10-07).
+  const listedPrice = usePresentationStore((s) => s.listedPrice)
+  const costLabel = hasCredits()
+    ? runCostLabel({
+        exact: estimatedCost,
+        listing: isFullscreen ? listedPrice : null,
+        pending: recordingLengthPending(inputNodes, inputValues, chosenRecordingLengths),
+        plusPerMinute: (n) => t("credits.plusPerMinute", { n }),
+        plusPerItem: (n) => t("credits.plusPerItem", { n }),
+      })
+    : ""
 
   // Stable reference for ShareDialog nodes prop
   const allPresentationNodes = useMemo(

@@ -204,3 +204,30 @@ describe("runConfirmText — titles", () => {
       .toBe(tx("editor.runConfirmCreditsTitle", { credits: 200 }))
   })
 })
+
+/** "Run up to here" (decided 2026-10-08): its own title, the price in it, and its own action. */
+describe("runConfirmText — Run up to here", () => {
+  const upTo = (extra: Partial<RunConfirmInfo> = {}) =>
+    info({ trigger: "up-to-here", alwaysConfirm: true, estimatedCredits: 240, nodeCount: 3, lines: undefined, ...extra })
+
+  it("titles with the figure, not with the whole-workflow question", () => {
+    expect(runConfirmText(upTo(), tx).title).toBe("Run up to here · ≈240 credits")
+  })
+
+  it("a non-credit edition keeps the question, with no figure", () => {
+    expect(runConfirmText(upTo({ estimatedCredits: null }), tx).title).toBe("Run up to here?")
+  })
+
+  it("the action is the button's own words, and the body counts the nodes", () => {
+    const text = runConfirmText(upTo(), tx)
+    expect(text.action).toBe("Run up to here")
+    expect(text.body).toBe(tx("editor.runConfirmNodes", { n: 3 }))
+  })
+
+  it.each(["he", "ja", "ko", "pt-BR"] as LocaleId[])("%s: the title starts with the action and carries the figure", (locale) => {
+    useLocaleStore.setState({ locale })
+    const text = runConfirmText(upTo(), tx)
+    expect(text.title.startsWith(text.action)).toBe(true)
+    expect(text.title).toContain("240")
+  })
+})

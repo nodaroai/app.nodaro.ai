@@ -13,6 +13,9 @@
  *   - Touch event forwarding for mobile iframe scroll
  */
 
+import { listingCeilingCredits } from "@/lib/listing-price"
+import { appRunListedPrice } from "@/lib/run-price"
+import { setEditPlanPerMinute } from "@/lib/edit-plan-modes"
 import { useEffect, useState } from "react"
 import { useParams, useSearchParams } from "react-router-dom"
 import { useTheme } from "next-themes"
@@ -132,13 +135,20 @@ export default function EmbedPage() {
     if (!app) return
     const snapshotSettings = (app.snapshotSettings ?? {}) as Record<string, unknown>
     const presentationSettings = (snapshotSettings.presentationSettings ?? DEFAULT_PRESENTATION_SETTINGS) as PresentationSettings
+    // Before the nodes land, so the first live estimate prices Edit Plan the
+    // way the run reserves it (per started minute or the step; review round F1).
+    setEditPlanPerMinute(app.editPlanPerMinute)
     usePresentationStore.setState({
       workflowId: app.workflowId,
       workflowName: app.name,
       nodes: app.snapshotNodes as WorkflowNode[],
       edges: app.snapshotEdges as WorkflowEdge[],
       isOwner: false,
-      estimatedCost: app.estimatedCredits,
+      // The figure that never under-quotes before the live estimate is in: a
+      // per-minute listing at the longest recording (decided 2026-10-07).
+      estimatedCost: listingCeilingCredits(app.estimatedCredits, app.perMinuteCredits),
+      // The Run button lists the app run alone, its Render final part left out (review round F4).
+      listedPrice: appRunListedPrice(app),
       presentationSettings,
     })
   }, [app])

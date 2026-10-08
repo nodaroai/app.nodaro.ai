@@ -65,6 +65,7 @@ import type { ConfigProps } from "./types"
 import { formatNumber } from "@/lib/i18n/format"
 import { EdlValidityBadge } from "@/components/inspector/edl-validity-badge"
 import { useApplyEdlRenders } from "@/hooks/use-apply-edl-renders"
+import { RunUpToHereNotice } from "./run-up-to-here-notice"
 import { applyEdlRenderSettings } from "@/lib/apply-edl-render-input"
 import {
   editPlanModeUnavailableReason,
@@ -867,7 +868,7 @@ export function TrimAudioConfig({ data, onUpdate }: ConfigProps<TrimAudioData>) 
   )
 }
 
-export function ApplyEdlConfig({ data, onUpdate, nodeId }: ConfigProps<ApplyEdlData> & { readonly nodeId?: string }) {
+export function ApplyEdlConfig({ data, onUpdate, nodeId, nodes, edges }: ConfigProps<ApplyEdlData> & { readonly nodeId?: string }) {
   const t = useT()
   // Every render this node's Run would make now — each with the EDL it reads
   // (what the wired producer holds, or its inline EDL) and its wired sources —
@@ -880,6 +881,7 @@ export function ApplyEdlConfig({ data, onUpdate, nodeId }: ConfigProps<ApplyEdlD
         {t("proccfg.applyEdlHint")}
       </p>
       <EdlValidityBadge renders={renders} settings={applyEdlRenderSettings(data)} />
+      {nodeId && <RunUpToHereNotice nodeId={nodeId} nodes={nodes} edges={edges ?? []} />}
       <div>
         <Label>{t("proccfg.applyEdlOutput")}</Label>
         <Select value={data.output ?? "video"} onValueChange={(v) => onUpdate({ output: v as "video" | "audio" })}>

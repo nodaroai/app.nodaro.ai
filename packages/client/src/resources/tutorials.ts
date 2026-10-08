@@ -31,7 +31,10 @@ export interface TutorialFlowItem {
   previewMediaUrl: string | null
   previewMediaType: "image" | "video" | null
   complexity: string
+  /** The listed price; when `estimatedPerMinuteCredits` is above 0, its fixed part. */
   estimatedCredits: number
+  /** Credits per minute of the recording the template is given (see `TemplateBrowseCard`); 0 or absent when none. */
+  estimatedPerMinuteCredits?: number
   nodeTypesUsed: string[]
   providersUsed: string[]
   nodeCount: number

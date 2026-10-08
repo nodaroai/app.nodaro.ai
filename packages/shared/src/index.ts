@@ -186,6 +186,8 @@ export {
   applyDefaultVideoSelection,
   PRICING_DEFAULT_DURATION_SEC,
   pricedOutputDurationSec,
+  snapToNearestDuration,
+  videoDefaultDurationSec,
   supportsAutoVideoDuration,
   maxVideoDurationSec,
   PRICING_DEFAULT_RESOLUTION,
@@ -299,6 +301,7 @@ export {
   buildMotionCreditModelIdentifier,
   speedRampCreditId,
   applyEdlCreditId,
+  speakerViewCreditId,
   sunoCreditType,
   SUNO_VERSION_CREDIT_KEYS,
   SUNO_VERSION_PRICED_OPERATIONS,
@@ -764,6 +767,17 @@ export {
   type RenderJsonKind,
 } from "./render-nodes.js"
 export {
+  declaredJsonOutput,
+  declaredJsonOutputRows,
+  jsonOutputKind,
+  jsonInputKind,
+  jsonKindMismatch,
+  jsonKindMismatchMessage,
+  type JsonKind,
+  type JsonKindMismatch,
+  type JsonOutputDeclaration,
+} from "./json-kinds.js"
+export {
   PREVIEW_RENDER_NODE_TYPES,
   PREVIEW_REVIEW_REQUIRED,
   PREVIEW_RENDER_NESTED,
@@ -996,6 +1010,23 @@ export {
   type ListSavedPostsResult,
   type SavedPostsLookupResult,
 } from "./saved-posts.js"
+
+// Read Inspiration / Read Competitor: the post readers (emit posts the way Social Search does).
+export {
+  INSPIRATION_READ_NODE_TYPE,
+  COMPETITOR_READ_NODE_TYPE,
+  SOCIAL_POST_READER_NODE_TYPES,
+  isSocialPostReaderNodeType,
+  SOCIAL_READ_LIMIT_MAX,
+  SOCIAL_READ_DEFAULT_LIMIT,
+  SOCIAL_READ_WINDOW_HOURS_MAX,
+  SOCIAL_READ_WINDOW_DAYS_MAX,
+  SOCIAL_READ_PERIODS,
+  COMPETITOR_READ_ROLES,
+  SOCIAL_READ_DAY_PATTERN,
+  type SocialReadPeriod,
+  type CompetitorReadRole,
+} from "./social-post-readers.js"
 
 export {
   COLLECTION_NAME_MAX,
@@ -1538,12 +1569,19 @@ export * from "./fan-out-meta.js"
 
 export { SUNO_TRACK_SOURCE_TYPES } from "./suno-track-sources.js"
 
+export { isPrivateOrReservedIP, isLocalOrPrivateHostname } from "./private-host.js"
+
 // --- Video URL node + social-video import (host allowlist, node output rule) ---
 export {
   SOCIAL_VIDEO_HOSTS,
   YOUTUBE_HOSTS,
   INSTAGRAM_HOSTS,
   VIDEO_LINK_TOLERANT_CONSUMER_TYPES,
+  VIDEO_LINK_AUDIO_CONSUMER_TYPES,
+  videoLinkNeedOf,
+  videoLinkRunNeeds,
+  AUTO_DOWNLOAD_MAX_SEC,
+  YOUTUBE_MAX_HEIGHT,
   hostnameMatchesAllowlist,
   hasUrlParserHazard,
   isSocialVideoUrl,
@@ -1552,8 +1590,14 @@ export {
   resolveVideoLinkOutput,
   videoLinkPageUrl,
   videoLinkNeedsDownload,
+  DIRECT_VIDEO_EXTENSIONS,
+  MAX_VIDEO_LINK_INPUT_CHARS,
+  VIDEO_LINK_DERIVED_FIELDS,
+  isDirectVideoFileUrl,
+  videoLinkInputProblem,
+  dropStaleVideoLinkFields,
 } from "./video-link.js"
-export type { VideoLinkPlatform, VideoLinkNodeFields } from "./video-link.js"
+export type { VideoLinkPlatform, VideoLinkNodeFields, VideoLinkInputProblem, VideoLinkNeed, VideoLinkGraphNode, VideoLinkGraphEdge } from "./video-link.js"
 
 export {
   VOICE_CHANGER_MODELS,

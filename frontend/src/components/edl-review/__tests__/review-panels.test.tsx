@@ -18,8 +18,8 @@ import { BEFORE_SOURCE, LOCKED_NO_PICTURE, OVERLAPPING, TWO_FILLERS, narrowWindo
 
 /**
  * The review inspector's reasons panel, banners and below-`sm` tabs (A3-3b,
- * §2.3 and §2.4 of the inspectors design). Nothing in the editor opens the
- * inspector yet (A3-5), so it is mounted directly.
+ * §2.3 and §2.4 of the inspectors design). It is mounted directly here; the
+ * editor's ways in are in review-entry-flow.test.tsx.
  */
 let page: ReturnType<typeof layOut>
 beforeEach(() => {

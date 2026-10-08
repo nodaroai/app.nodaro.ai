@@ -205,8 +205,9 @@ export class VoicesResource {
    * Dialogue v4 (`provider: "elevenlabs-dialogue-v4"`). Each `dialogue` line is
    * `{ text, voice }` in speaking order — `voice` is a premade voice name or an
    * ElevenLabs voice UUID (cloned/library voices work too; mixed casts are
-   * fine). At most 5,000 characters total across lines on either model
-   * (≤2,000 recommended for best quality) and 10 unique voices. Line text may
+   * fine). At most 5,000 characters total across lines on Dialogue v3 and
+   * 10,000 on Dialogue v4 (≤2,000 recommended for best quality) and 10 unique
+   * voices. Line text may
    * carry `[audio tags]` like `[laughs]`. Costs credits and runs async — poll
    * `jobs.get(jobId)` for `output_data.audioUrl` and — on every dialogue model,
    * since both return timings at no extra credits — `output_data.transcript`, a

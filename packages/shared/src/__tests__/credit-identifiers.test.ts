@@ -509,16 +509,20 @@ describe("buildVideoCreditModelIdentifier", () => {
       expect(buildVideoCreditModelIdentifier("seedance", 8)).toBe("seedance:8s")
     })
 
-    it("6s falls into 8s tier", () => {
-      expect(buildVideoCreditModelIdentifier("seedance", 6)).toBe("seedance:8s")
+    it("6s is charged as the 4s the runner renders (nearest offered length, a tie goes shorter)", () => {
+      expect(buildVideoCreditModelIdentifier("seedance", 6)).toBe("seedance:4s")
     })
 
     it("12s -> :12s", () => {
       expect(buildVideoCreditModelIdentifier("seedance", 12)).toBe("seedance:12s")
     })
 
-    it("10s falls into 12s tier", () => {
-      expect(buildVideoCreditModelIdentifier("seedance", 10)).toBe("seedance:12s")
+    it("10s is charged as the 8s the runner renders (nearest offered length)", () => {
+      expect(buildVideoCreditModelIdentifier("seedance", 10)).toBe("seedance:8s")
+    })
+
+    it("11s is charged as the 12s the runner renders", () => {
+      expect(buildVideoCreditModelIdentifier("seedance", 11)).toBe("seedance:12s")
     })
 
     it("exceeding max clamps to 12s", () => {
@@ -560,8 +564,8 @@ describe("buildVideoCreditModelIdentifier", () => {
       expect(buildVideoCreditModelIdentifier("grok-i2v", 6)).toBe("grok-i2v:6s")
     })
 
-    it("grok-i2v 15s", () => {
-      expect(buildVideoCreditModelIdentifier("grok-i2v", 15)).toBe("grok-i2v:15s")
+    it("grok-i2v 15s is charged as the 10s clip it renders (it offers 6s and 10s only)", () => {
+      expect(buildVideoCreditModelIdentifier("grok-i2v", 15)).toBe("grok-i2v:10s")
     })
   })
 

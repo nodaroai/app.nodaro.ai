@@ -24,7 +24,8 @@
  * state (a kept creator, a plan, a clip ticket) into the publisher's graph.
  */
 
-import { findUgcLockedFields } from "@nodaro/shared"
+import { findUgcLockedFields, videoLinkInputProblem } from "@nodaro/shared"
+import { safeUrlSchema } from "./url-validator.js"
 import {
   DENIED_NODE_TYPES,
   OUTBOUND_SELECTOR_FIELDS,
@@ -37,9 +38,46 @@ export interface LockedOverride {
   readonly nodeType: string
   /** Dotted path of the refused field inside the node's override map. */
   readonly field: string
-  /** Why it is refused. Absent means an outbound-node destination. */
-  readonly kind?: "outbound" | "ugc"
+  /** Why it is refused. Absent means an outbound-node destination. `video-link`: a Video URL node's link that is not one it would download. */
+  readonly kind?: "outbound" | "ugc" | "video-link"
 }
+
+/**
+ * The Video URL node is on the outbound list (it fetches from a host its data
+ * names) AND may be an app input, so a run request may set exactly these three
+ * fields on a node the app EXPOSES (`VideoLinkAdmission`), each only to a
+ * value the node itself would act on:
+ *   - `youtubeUrl`: a link the node accepts on the canvas (`videoLinkInputProblem`
+ *     — a supported post link, or any other http(s) link it passes through, decided
+ *     2026-10-08) that also clears the server's SSRF guard;
+ *   - `downloadedFromUrl`: the link a file was fetched from — a video link;
+ *   - `downloadedVideoUrl`: that file, the way an upload's `url` may be set —
+ *     any safe public url.
+ * Anything else destination-shaped on the node stays locked. Nothing here is
+ * fetched by the run: a social link is downloaded by whoever pasted it, and
+ * every node that reads the file goes through the SSRF-guarded fetch.
+ */
+const VIDEO_LINK_ADMITTED: Readonly<Record<string, (value: unknown) => boolean>> = {
+  youtubeUrl: (value) => isSafeVideoLink(value),
+  downloadedFromUrl: (value) => isSafeVideoLink(value),
+  downloadedVideoUrl: (value) => typeof value === "string" && safeUrlSchema.safeParse(value.trim()).success,
+}
+
+function isSafeVideoLink(value: unknown): boolean {
+  return typeof value === "string" && videoLinkInputProblem(value) === null && safeUrlSchema.safeParse(value.trim()).success
+}
+
+/**
+ * Which Video URL nodes a run request may re-point with a link: the ids of the
+ * nodes the app EXPOSES as an input (`exposedVideoLinkNodeIds`), or `"all"` for
+ * a lane whose caller is the workflow's own owner. Every other Video URL node
+ * keeps all its fields locked, so a creator's fixed, unexposed reference video
+ * can never be swapped for a stranger's. The default is NONE: a caller that
+ * forgets to pass the set fails closed.
+ */
+export type VideoLinkAdmission = ReadonlySet<string> | "all"
+
+const NO_VIDEO_LINKS: ReadonlySet<string> = new Set()
 
 /** The node shape the lock needs — id and type; data is irrelevant. */
 export interface LockableNode {
@@ -62,6 +100,7 @@ export interface LockableNode {
 export function findLockedOverrides(
   nodes: ReadonlyArray<LockableNode> | null | undefined,
   inputOverrides: Record<string, Record<string, unknown>> | null | undefined,
+  admitVideoLinks: VideoLinkAdmission = NO_VIDEO_LINKS,
 ): LockedOverride[] {
   if (!inputOverrides || !nodes) return []
   const found: LockedOverride[] = []
@@ -73,9 +112,29 @@ export function findLockedOverrides(
     const fields = inputOverrides[node.id]
     if (!isPlainObject(fields)) continue
     const nodeId = String(node.id)
+    // The Video URL node's link fields are admitted when the node is an input
+    // of the app AND their value is right (see VIDEO_LINK_ADMITTED); a wrong
+    // value is its own refusal. A node the app does not expose keeps every
+    // field locked, the link included.
+    let rest = fields
+    if (nodeType === "youtube-video" && (admitVideoLinks === "all" || admitVideoLinks.has(nodeId))) {
+      rest = {}
+      for (const [key, value] of Object.entries(fields)) {
+        const admits = Object.hasOwn(VIDEO_LINK_ADMITTED, key) ? VIDEO_LINK_ADMITTED[key]! : undefined
+        if (!admits) {
+          rest[key] = value
+          continue
+        }
+        if (admits(value)) continue
+        const seenKey = `${nodeId}\u0000${key}`
+        if (seen.has(seenKey)) continue
+        seen.add(seenKey)
+        found.push({ nodeId, nodeType, field: key, kind: "video-link" })
+      }
+    }
     // One walk for destinations AND selectors, so a selector reached through a
     // nested object (`fieldMappings.mode`) is refused exactly like a nested url.
-    for (const field of lockedFieldPaths(fields, "", { extraKeys: OUTBOUND_SELECTOR_FIELDS })) {
+    for (const field of lockedFieldPaths(rest, "", { extraKeys: OUTBOUND_SELECTOR_FIELDS })) {
       const key = `${nodeId}\u0000${field}`
       if (seen.has(key)) continue
       seen.add(key)
@@ -113,8 +172,9 @@ function clip(value: string, max: number): string {
 export function describeLockedOverrides(locked: ReadonlyArray<LockedOverride>): string {
   const shown = locked.slice(0, MESSAGE_MAX_ENTRIES)
   const rest = locked.length - shown.length
-  const outbound = shown.filter((entry) => entry.kind !== "ugc")
+  const outbound = shown.filter((entry) => entry.kind !== "ugc" && entry.kind !== "video-link")
   const ugc = shown.filter((entry) => entry.kind === "ugc")
+  const videoLink = shown.filter((entry) => entry.kind === "video-link")
   const parts: string[] = []
   if (outbound.length > 0) {
     const list =
@@ -123,7 +183,7 @@ export function describeLockedOverrides(locked: ReadonlyArray<LockedOverride>): 
           (entry) =>
             `"${clip(entry.field, MESSAGE_MAX_PATH_CHARS)}" on ${entry.nodeType} node "${clip(entry.nodeId, MESSAGE_MAX_PATH_CHARS)}"`,
         )
-        .join(", ") + (ugc.length === 0 && rest > 0 ? `, and ${rest} more` : "")
+        .join(", ") + (ugc.length === 0 && videoLink.length === 0 && rest > 0 ? `, and ${rest} more` : "")
     parts.push(
       "inputOverrides cannot set a destination — or the selector that chooses one — on an outbound node: " +
         `where a workflow sends to or fetches from is decided by the workflow itself, not by a run request. Refused: ${list}`,
@@ -134,8 +194,14 @@ export function describeLockedOverrides(locked: ReadonlyArray<LockedOverride>): 
       `inputOverrides cannot set "${clip(entry.field, MESSAGE_MAX_PATH_CHARS)}" on a UGC node "${clip(entry.nodeId, MESSAGE_MAX_PATH_CHARS)}".`,
     )
   }
-  // With a UGC sentence in the message the overflow cannot ride on the outbound list.
-  if (ugc.length > 0 && rest > 0) parts.push(`${rest} more refused.`)
+  for (const entry of videoLink) {
+    parts.push(
+      `inputOverrides "${clip(entry.field, MESSAGE_MAX_PATH_CHARS)}" on Video URL node "${clip(entry.nodeId, MESSAGE_MAX_PATH_CHARS)}" must be a link to a ` +
+        "YouTube, TikTok, Instagram, Facebook or X video, or any other public web link (http or https, a public address).",
+    )
+  }
+  // With another sentence in the message the overflow cannot ride on the outbound list.
+  if ((ugc.length > 0 || videoLink.length > 0) && rest > 0) parts.push(`${rest} more refused.`)
   return parts.join(" ")
 }
 
@@ -155,7 +221,8 @@ export class LockedOverrideError extends Error {
 export function assertNoLockedOverrides(
   nodes: ReadonlyArray<LockableNode> | null | undefined,
   inputOverrides: Record<string, Record<string, unknown>> | null | undefined,
+  admitVideoLinks: VideoLinkAdmission = NO_VIDEO_LINKS,
 ): void {
-  const locked = findLockedOverrides(nodes, inputOverrides)
+  const locked = findLockedOverrides(nodes, inputOverrides, admitVideoLinks)
   if (locked.length > 0) throw new LockedOverrideError(locked)
 }

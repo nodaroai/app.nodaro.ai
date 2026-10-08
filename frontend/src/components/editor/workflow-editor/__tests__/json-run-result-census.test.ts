@@ -44,6 +44,8 @@ const FEED_POST = { id: 1, channel: MARK, postUrl: `https://t.me/${MARK}/1`, tex
 const RUN_OUTPUT: Record<string, Data> = {
   // A render names exactly one medium; its json is the transcript remapped through the cut.
   "apply-edl": { audioUrl: "https://media.example.test/cut.m4a", json: JSON_OBJECT },
+  // Speaker View renders video only; its json is the EDL as it drew it.
+  "speaker-view": { videoUrl: "https://media.example.test/cut.mp4", json: JSON_OBJECT },
   // The plain transcript rides beside the json.
   transcribe: { text: MARK, json: JSON_OBJECT },
   // The dialogue's audio beside its timings (the json). A model without timings sends the audio alone.
@@ -57,6 +59,9 @@ const RUN_OUTPUT: Record<string, Data> = {
   // Read Collection's json is the LIST of records (an object is not a result); Save to Collection's is the one record.
   "collection-read": { json: [JSON_OBJECT], text: MARK, listResults: [JSON.stringify(JSON_OBJECT)] },
   "collection-write": { json: JSON_OBJECT, text: MARK },
+  // The post readers' json is the LIST of posts (the Social Search shape).
+  "inspiration-read": { json: [POST], text: MARK, listResults: [JSON.stringify(POST)] },
+  "competitor-read": { json: [POST], text: MARK, listResults: [JSON.stringify(POST)] },
   // A scrape's json is the list of pages / ads / posts; an empty or non-list one is "no results".
   "web-scrape": { json: [JSON_OBJECT] },
   "meta-ads-scrape": { json: [JSON_OBJECT] },

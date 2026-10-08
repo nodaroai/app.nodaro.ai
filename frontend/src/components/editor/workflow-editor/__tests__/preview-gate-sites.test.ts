@@ -40,7 +40,9 @@ const GATED = /previewRunnable\(|estimateRunCredits\(/
 const GATED_SITES = new Set([
   "components/editor/workflow-editor/run-handlers.ts", // Run / from-here / selected: pending flip, reset, precheck, confirm
   "components/editor/workflow-editor/workflow-editor-main.tsx", // the editor badge; the Copilot card and run
-  "hooks/use-live-run-estimate.ts", // the live estimate that gates presentation and mobile runs
+  // estimateWholeRun: the editor badge and the live estimate that gates
+  // presentation and mobile runs (use-live-run-estimate.ts prices through it)
+  "components/editor/workflow-editor/estimate-run-credits.ts",
   "components/presentation/views/chat-view-helpers.ts", // buildStepChips
 ])
 
@@ -86,16 +88,20 @@ describe("preview stop rule — every derived set builder is classified (Render 
   // fresh `isExecutableNode` filter, so the census above cannot see them: this
   // one reads the other door. Each consumer prices or flips its set through the
   // rule, on the graph the run executes.
-  const USES_LIVE_SET = /\b(liveExecutable|runFromHereExecutable)\(/
+  const USES_LIVE_SET = /\b(liveExecutable|runFromHereExecutable|runUpToHereSet)\(/
   const DERIVED_GATED = new Set([
     "components/editor/workflow-editor/run-handlers.ts", // Run from here / selected
     "components/editor/workflow-editor/render-final-handler.ts", // Render final / Update preview: previewRunnable on the overridden graph
     "hooks/use-render-final.ts", // the bar's prices: estimateRunCredits (via useRunSetCredits) on the overridden graph
     "hooks/use-run-from-here-credits.ts", // the button's quote: estimateRunCredits
     "components/render/app-render-review.tsx", // the app runner's Render final price: estimateRunCredits (via useRunSetCredits) on the overridden run graph
+    "components/editor/config-panels/run-up-to-here-notice.tsx", // Run up to here's quote: estimateRunCredits (via useRunSetCredits) over the run's own set
+    "lib/edl-review/clip-chain.ts", // the Clip Pack footer's "Render Clip ×6 → Caption Clip ×6": the handler's own set, previewRunnable on the overridden graph
   ])
   const DERIVED_EXEMPT: Readonly<Record<string, string>> = {
     "components/editor/workflow-editor/run-from-here-set.ts": "defines liveExecutable / runFromHereExecutable",
+    "components/editor/workflow-editor/run-up-to-here-set.ts": "defines runUpToHereSet (builds on liveExecutable)",
+    "components/editor/node-context-menu.tsx": "asks only whether Run up to here's set is empty; the run and its price take the set through the rule",
   }
 
   it("has no unclassified consumer", () => {
@@ -139,10 +145,10 @@ describe("Render final's guards (A6.1)", () => {
     expect(gate.indexOf("replanEditLosses(")).toBeLessThan(gate.indexOf("if (skip ||"))
   })
 
-  it("Run from here and Run selected are held to the same refusal, above the skip-confirm shortcut", () => {
+  it("Run from here, Run up to here and Run selected are held to the same refusal, above the skip-confirm shortcut", () => {
     const src = FILES.find((f) => f.rel === "components/editor/workflow-editor/run-handlers.ts")!.text
     const gate = src.slice(src.indexOf("export async function confirmRunOrAbort("))
-    expect(gate).toMatch(/trigger === "from-here" \|\| trigger === "selected"/)
+    expect(gate).toMatch(/trigger === "from-here" \|\| trigger === "up-to-here" \|\| trigger === "selected"/)
     expect(gate).toMatch(/renderOwnRunRefusal\(n\.id, allNodes, edges, ids\)/)
     expect(gate.indexOf('trigger === "from-here" ||')).toBeLessThan(gate.indexOf("if (skip ||"))
   })

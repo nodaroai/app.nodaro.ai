@@ -119,8 +119,9 @@ describe("elevenlabs-dialogue-v4 — added beside v3 dialogue", () => {
     expect(c.levers).toEqual(["stability", "similarity"])
     expect(c.stabilitySteps).toBeUndefined()
     expect(c.languageCode).toBe(true)
-    // The live-probe number (parity with v3 dialogue until the probe says otherwise); never above 5,000 here.
-    expect(c.maxChars).toBe(5000)
+    // The live-probe number: a 10,000-character v4 dialogue voiced whole in 130 s (measured 2026-10-06).
+    expect(c.maxChars).toBe(10000)
+    expect(getDialogueCapabilities("elevenlabs-dialogue").maxChars).toBe(5000) // v3 dialogue did not move
     expect(c.languages).toEqual(getDialogueCapabilities("elevenlabs-dialogue").languages)
   })
 

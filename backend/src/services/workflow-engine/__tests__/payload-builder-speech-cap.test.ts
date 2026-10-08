@@ -70,4 +70,12 @@ describe("text-to-dialogue over the total cap on the workflow lane", () => {
     const built = buildPayload(node("text-to-dialogue", { dialogue }), "job1", {})
     expect(built.payload.dialogue).toHaveLength(1)
   })
+
+  it("Dialogue v4 is judged by ITS cap (10,000): a script v3 refuses runs on v4, and v4 refuses with its own numbers", () => {
+    const overV3 = [{ text: "a".repeat(3000), voice: "Rachel" }, { text: "b".repeat(2001), voice: "George" }]
+    expect(() => buildPayload(node("text-to-dialogue", { provider: "elevenlabs-dialogue-v4", dialogue: overV3 }), "job1", {})).not.toThrow()
+    const overV4 = [{ text: "a".repeat(6000), voice: "Rachel" }, { text: "b".repeat(4001), voice: "George" }]
+    expect(() => buildPayload(node("text-to-dialogue", { provider: "elevenlabs-dialogue-v4", dialogue: overV4 }), "job1", {}))
+      .toThrow("Text to Dialogue has 10001 characters of dialogue; this model takes at most 10000 characters in total")
+  })
 })

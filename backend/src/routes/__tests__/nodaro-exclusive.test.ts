@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   isNodaroConnected: vi.fn().mockResolvedValue(true),
   nodaroCloudFetch: vi.fn().mockResolvedValue({ ok: true, status: 200 }),
   callCloudRoute: vi.fn().mockResolvedValue({ ok: true, durationSec: 42 }),
+  rehostByteSize: vi.fn(async (_url: string): Promise<number | undefined> => undefined),
   requestJobStop: vi.fn().mockResolvedValue(undefined),
   insertJob: vi.fn().mockResolvedValue({ data: { id: "job-1" }, error: null }),
   queueAdd: vi.fn().mockResolvedValue({ id: "bull-1" }),
@@ -29,7 +30,7 @@ vi.mock("@/lib/nodaro-connect.js", () => ({
   isNodaroConnected: mocks.isNodaroConnected,
   nodaroCloudFetch: mocks.nodaroCloudFetch,
 }))
-vi.mock("@/providers/nodaro/client.js", () => ({ callCloudRoute: mocks.callCloudRoute }))
+vi.mock("@/providers/nodaro/client.js", () => ({ callCloudRoute: mocks.callCloudRoute, rehostByteSize: mocks.rehostByteSize }))
 vi.mock("@/workers/shared.js", () => ({ requestJobStop: mocks.requestJobStop }))
 vi.mock("@/lib/insert-job.js", () => ({ insertJob: mocks.insertJob }))
 vi.mock("@/lib/queue.js", () => ({ videoQueue: { add: mocks.queueAdd }, redis: {} }))
@@ -58,6 +59,7 @@ beforeEach(async () => {
   mocks.insertJob.mockResolvedValue({ data: { id: "job-1" }, error: null })
   mocks.nodaroCloudFetch.mockResolvedValue({ ok: true, status: 200 })
   mocks.callCloudRoute.mockResolvedValue({ ok: true, durationSec: 42 })
+  mocks.rehostByteSize.mockResolvedValue(undefined)
   app = Fastify({ logger: false })
   app.addHook("preHandler", async (req) => {
     const body = req.body as Record<string, unknown> | undefined
@@ -85,6 +87,7 @@ describe("connection gate", () => {
     ["/v1/video-audit", { videoUrl: VIDEO }],
     ["/v1/video-analysis/probe", { videoUrl: VIDEO }],
     ["/v1/generate-video-pro/continue", { fromJobId: "j-0" }],
+    ["/v1/speaker-view", { edl: { version: 1, clock: "master", sources: [], segments: [] } }],
   ]
   for (const [url, payload] of posts) {
     it(`${url} answers 503 nodaro_connection_required when unconnected — and creates nothing`, async () => {
@@ -366,5 +369,76 @@ describe("gvp continue", () => {
       payload: { fromJobId: "j-parent", userId: USER },
     })
     expect(res.statusCode).toBe(404)
+  })
+})
+
+// Speaker View (C3.1, decided 2026-10-06): relayed like the other exclusive
+// renders. Before anything is created, a private source over the re-host cap
+// is refused, naming it and its size (SV12); a Preview is private from its
+// insert (Track A F1); the job keeps the edit and slims the transcript.
+describe("speaker-view", () => {
+  const OWN = "http://localhost:9000/nodaro-assets/cam-a.mp4"
+  const edl = {
+    version: 1,
+    clock: "master",
+    sources: [
+      { id: "camA", url: OWN, kind: "video" },
+      { id: "mic", url: "https://example.com/mic.wav", kind: "audio", role: "master-audio" },
+    ],
+    segments: [{ id: "s0", inMs: 0, outMs: 30_000, video: "camA", speaker: "Host" }],
+  }
+  const transcript = { version: 1, words: [{ text: "hi", startMs: 0, endMs: 400, speaker: "Host" }, { text: "there", startMs: 400, endMs: 800, speaker: "Host" }] }
+  const post = (body: Record<string, unknown>) =>
+    app.inject({ method: "POST", url: "/v1/speaker-view", payload: { userId: USER, ...body } })
+
+  it("enqueues the edit PARSED (the relay re-hosts its cameras from the object), every setting passing through", async () => {
+    const res = await post({ edl: JSON.stringify(edl), transcript, quality: "final", targetAspect: "9:16", layout: "auto", clipKey: "0-30000" })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual({ jobId: "job-1" })
+    expect(mocks.queueAdd).toHaveBeenCalledWith(
+      "speaker-view",
+      expect.objectContaining({ jobId: "job-1", edl, transcript, quality: "final", targetAspect: "9:16", layout: "auto", clipKey: "0-30000" }),
+    )
+  })
+
+  it("keeps the edit on the job row and slims the transcript to its size", async () => {
+    await post({ edl, transcript })
+    const inputData = mocks.insertJob.mock.calls[0]![1].input_data as Record<string, unknown>
+    expect(inputData.edl).toEqual(edl)
+    expect(inputData.transcript).toBeUndefined()
+    expect(inputData.transcriptWordCount).toBe(2)
+  })
+
+  it("inserts a Preview (quality proxy) private, and a final as the request says", async () => {
+    await post({ edl, quality: "proxy" })
+    expect(mocks.insertJob.mock.calls[0]![1].force_private).toBe(true)
+    mocks.insertJob.mockClear()
+    await post({ edl, quality: "final" })
+    expect(mocks.insertJob.mock.calls[0]![1].force_private).toBeUndefined()
+  })
+
+  it("refuses a private source over the re-host cap BEFORE anything is created, naming it and its size", async () => {
+    mocks.rehostByteSize.mockImplementation(async (url: string) => (url === OWN ? 3_100_000_000 : undefined))
+    const res = await post({ edl, transcript })
+    expect(res.statusCode).toBe(422)
+    expect(res.json().error).toEqual({
+      code: "source_too_large",
+      message: 'Speaker View sends each source of the edit to nodaro.ai; "camA" is 3.1 GB, over the 500 MB limit. Use a public URL or a smaller file.',
+    })
+    expect(mocks.insertJob).not.toHaveBeenCalled()
+    expect(mocks.queueAdd).not.toHaveBeenCalled()
+  })
+
+  it("lets a source through whose size cannot be read (the relay's in-rehost cap is the backstop)", async () => {
+    const res = await post({ edl })
+    expect(res.statusCode).toBe(200)
+    expect(mocks.rehostByteSize).toHaveBeenCalledWith(OWN)
+  })
+
+  it("refuses a request with no edit", async () => {
+    const res = await post({ transcript })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+    expect(mocks.insertJob).not.toHaveBeenCalled()
   })
 })

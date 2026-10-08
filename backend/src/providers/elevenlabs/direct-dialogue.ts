@@ -49,7 +49,8 @@ interface DialogueTimestampsResponse {
 
 // Generous bound, explicit for the same reason as direct-tts's: a stalled
 // connection must never idle a worker slot until undici's implicit ~300s.
-// A 5,000-char dialogue was measured at 125s — 300s leaves real headroom.
+// A 5,000-char dialogue was measured at 125s and a 10,000-char v4 dialogue (its
+// cap, DIALOGUE_V4_MAX_CHARS) at 130s on 2026-10-06 — 300s leaves real headroom.
 const DIALOGUE_GENERATION_TIMEOUT_MS = 300_000
 
 /**

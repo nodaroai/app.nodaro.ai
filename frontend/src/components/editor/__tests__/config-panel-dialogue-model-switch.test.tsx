@@ -170,6 +170,6 @@ describe("text-to-dialogue panel — a model the user picks", () => {
     } as never)
     mountPanel()
     await tick()
-    expect(screen.getByText(/\/5000$/)).toBeTruthy() // the probe's number (DIALOGUE_V4_MAX_CHARS)
+    expect(screen.getByText(/\/10000$/)).toBeTruthy() // the probe's number (DIALOGUE_V4_MAX_CHARS, measured 2026-10-06)
   })
 })

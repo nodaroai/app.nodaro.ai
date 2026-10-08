@@ -8,6 +8,9 @@ import { assertCanvasExecutionAllowed, findWordlessTranscriptFeeds, PREVIEW_REVI
 
 import { Worker, DelayedError, type Job } from "bullmq"
 import IORedis from "ioredis"
+import { exposedVideoLinkNodeIds } from "../lib/exposed-text-caps.js"
+import { prepareVideoLinksForRun } from "./orchestrator-video-links.js"
+import { loadExecutionVideoLinkFiles, mergeVideoLinkFiles, saveExecutionVideoLinkFiles } from "../lib/execution-video-link-files.js"
 import { config, hasCredits } from "../lib/config.js"
 import { DrainAbortError, isWorkerDraining } from "../lib/worker-drain.js"
 import { TIER_PARALLELISM } from "../ee/billing/stripe-config.js"
@@ -60,6 +63,8 @@ import { previewStopRuleEnabled } from "../lib/preview-stop-rule-flag.js"
 import { pinExecutionInputOverrides } from "../lib/execution-input-overrides.js"
 import { nestedPreviewRenders, nestedPreviewRenderLocation } from "../services/workflow-engine/nested-preview-renders.js"
 import { seededFromSavedData } from "../services/workflow-engine/saved-data.js"
+import { speakerViewRunPreflight } from "../services/workflow-engine/speaker-view-run-preflight.js"
+import { findRelayRehostRefusals, nestedRelayRehostRefusals } from "../services/workflow-engine/relay-rehost-preflight.js"
 import { applyEdlRowSentStamps } from "../services/workflow-engine/payload-builder.js"
 import { executeNode, loadCompletedFanOutIterations, type ExecuteNodeResult } from "../services/workflow-engine/node-executor.js"
 import { labelRefHintContext } from "../services/workflow-engine/label-ref-hint-context.js"
@@ -728,7 +733,16 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     // value wholesale (this is what makes the lottie full-plan `motionPlan`
     // override work; see apply-input-overrides). Also clears stale generated*
     // results so the user's fresh input wins over a cached snapshot result.
-    applyInputOverridesToNodes(nodes, inputOverrides)
+    // A Video URL node may be pointed at a new link only where it is an input
+    // the app exposes (the routes' own rule); a live-workflow run is its
+    // owner's, or a presentation viewer the route already held to the same rule.
+    applyInputOverridesToNodes(
+      nodes,
+      inputOverrides,
+      appVersionId
+        ? exposedVideoLinkNodeIds(workflowData.settings as Record<string, unknown> | null, nodes as unknown as Array<{ id?: string; type?: string }>)
+        : "all",
+    )
 
     // THE WALL for catalog curation (packages/prompts catalog-id-guard). This
     // is the one place every run passes with its graph in hand — eight
@@ -808,6 +822,14 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
     {
       // A node the stop rule gates never runs, so nothing nested behind it does.
       const runNodes = (nodeSubset ? nodes.filter((n) => nodeSubset.has(n.id)) : nodes).filter((n) => !previewGated.has(n.id))
+      // Speaker View has no price until C4 and refuses at its own dispatch, after
+      // every paid node upstream of it has run. Refused here, in the top graph.
+      const unpricedSpeakerView = speakerViewRunPreflight(runNodes)
+      if (unpricedSpeakerView) {
+        console.warn(`[speaker-view-preflight] execution ${executionId} REFUSED — ${unpricedSpeakerView}`)
+        await failExecution(executionId, unpricedSpeakerView)
+        return
+      }
       const wordless = findWordlessTranscriptFeeds(runNodes, edges)
       if (wordless.length > 0) {
         console.warn(
@@ -836,6 +858,12 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
       // parent, add-captions in the child, or the reverse) — no single graph
       // holds that edge pair.
       const nestedGraphs = await loadNestedRunGraphs(runNodes, subWorkflowOwnerId(ctx))
+      const unpricedNested = speakerViewRunPreflight([], nestedGraphs)
+      if (unpricedNested) {
+        console.warn(`[speaker-view-preflight] execution ${executionId} REFUSED — ${unpricedNested}`)
+        await failExecution(executionId, unpricedNested)
+        return
+      }
       const nested = nestedWordlessTranscriptFeeds(nestedGraphs)
       if (nested.length > 0) {
         console.warn(
@@ -857,6 +885,23 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
         )
         await failExecution(executionId, PREVIEW_RENDER_NESTED)
         return
+      }
+
+      // The re-host size scan (SV12) of the nested graphs: a Speaker View in a
+      // sub-workflow relays like any other on a self-host, and the parent's
+      // relayed nodes upstream would otherwise charge the connected cloud
+      // account before it failed. The top-level graph is scanned below, after
+      // its seeds; a nested graph's seeds are its own (relay-rehost-preflight.ts).
+      if (!hasCredits()) {
+        const nestedOversize = await nestedRelayRehostRefusals(nestedGraphs)
+        if (nestedOversize.length > 0) {
+          console.warn(
+            `[rehost-preflight] execution ${executionId} REFUSED — ${nestedOversize.length} nested relayed node(s) hold a source over the re-host cap: ` +
+              nestedOversize.map((r) => r.nodeId).join(", "),
+          )
+          await failExecution(executionId, nestedOversize.map((r) => r.message).join(" "))
+          return
+        }
       }
     }
 
@@ -1058,6 +1103,27 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
       nodeStates[node.id] = { status: "skipped", nodeType: node.type, completedAt: new Date().toISOString() }
     }
 
+    // THE RE-HOST SIZE SCAN (SV12, decided 2026-10-06). On a self-host,
+    // Speaker View runs on nodaro.ai and the relay re-hosts each private
+    // source of its edit (500 MB cap). An edit the run can already read (saved,
+    // outside the subset, written on the node) with a source over the cap
+    // refuses the run HERE — after the seeds above, before any node dispatches
+    // — because a relayed node upstream is billed on the connected cloud
+    // account and would otherwise charge before Speaker View failed. Inert on
+    // the cloud, where nothing is relayed. `relay-rehost-preflight.ts` says
+    // what it cannot see (an edit made during the run; the relay checks those).
+    if (!hasCredits()) {
+      const oversize = await findRelayRehostRefusals(nodes, edges, nodeStates)
+      if (oversize.length > 0) {
+        console.warn(
+          `[rehost-preflight] execution ${executionId} REFUSED — ${oversize.length} relayed node(s) hold a source over the re-host cap: ` +
+            oversize.map((r) => r.nodeId).join(", "),
+        )
+        await failExecution(executionId, oversize.map((r) => r.message).join(" "))
+        return
+      }
+    }
+
     // 4. Build execution levels (topological sort)
     //    Pass pre-resolved node IDs so their outgoing edges don't create
     //    execution-level barriers.  This lets downstream nodes whose only
@@ -1180,6 +1246,86 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
       completedNodes: 0,
       failedNodes: 0,
     })
+
+    // THE PRE-RUN VIDEO URL FETCH (decided 2026-10-08). A Video URL node is a
+    // source that is read, never executed, so a post link a run's request set
+    // (an MCP / SDK / API caller, an app's input) would reach the nodes after it
+    // as a web page. Fetch what those nodes read — the video under the card's
+    // rules, or only its sound — BEFORE the first level, so every lane behaves
+    // like the app runner. Before `startTime` on purpose: the fetch has its own
+    // ceiling and must not eat the run's cap. A link it cannot fetch refuses the
+    // run here, before any node reserves a credit. Inert when the request set no
+    // link. (`workers/orchestrator-video-links.ts`.)
+    {
+      const fetched = await prepareVideoLinksForRun({
+        userId,
+        nodes,
+        edges,
+        executingIds: new Set(executableNodes.filter((n) => nodeStates[n.id]?.status === "pending").map((n) => n.id)),
+        inputOverrides,
+        controlStatus: () => checkExecutionControl(executionId),
+        // Kept on the execution (decided 2026-10-08): what this execution fetched before a re-pick,
+        // and what the run it continues fetched — never fetched again, outside the run lock.
+        loadRecorded: async () =>
+          mergeVideoLinkFiles(
+            continuationSource ? await loadExecutionVideoLinkFiles(continuationSource.id, userId) : {},
+            await loadExecutionVideoLinkFiles(executionId, userId),
+          ),
+        // Anything already run and charged — a continued run's preview, or the done nodes a re-pick
+        // carried forward — makes "nothing ran and nothing was charged" untrue (decided 2026-10-08).
+        continued: continuationSource !== null || resumedNodeCount > 0,
+      })
+      if (fetched.kind === "stopped") {
+        // A deploy drain is not an ending: hand the job back at zero cost (nothing written to
+        // the execution, nothing refunded, no attempt used) and let the replacement container
+        // re-pick it. Nothing was pinned yet, so the re-pick fetches afresh.
+        if (fetched.by === "drain") throw new DrainAbortError()
+        // Discard Run keeps its own status and event (the canvas detaches on it) and does not
+        // set ctx.cancelled — the same ending the level loop gives it.
+        if (fetched.by === "discarded") {
+          await updateExecution(executionId, { status: "discarded", node_states: nodeStates, completed_at: new Date().toISOString() })
+          emitExecutionEvent({
+            type: "execution:discarded",
+            executionId,
+            nodeStates: { ...nodeStates },
+            completedNodes: resumedNodeCount,
+            failedNodes: 0,
+            totalCreditsUsed: 0,
+          })
+          return
+        }
+        ctx.cancelled = true
+        await updateExecution(executionId, { status: "cancelled", node_states: nodeStates, completed_at: new Date().toISOString() })
+        emitExecutionEvent({
+          type: "execution:cancelled",
+          executionId,
+          nodeStates: { ...nodeStates },
+          completedNodes: resumedNodeCount,
+          failedNodes: 0,
+          totalCreditsUsed: 0,
+        })
+        return
+      }
+      if (fetched.kind === "refused") {
+        console.warn(`[video-link-fetch] execution ${executionId} REFUSED — ${fetched.message}`)
+        await failExecution(executionId, fetched.message, nodeStates)
+        return
+      }
+      if (fetched.fetched.length > 0) {
+        // The files are on the nodes now: hand them on from the node, and pin them
+        // with the rest of the overrides so a continued run reads the same files —
+        // and keep every one (a saved link's too, which the pin cannot hold) on the
+        // execution, where Render final and a re-pick find it (decided 2026-10-08).
+        inputOverrides = fetched.inputOverrides
+        await pinExecutionInputOverrides(executionId, inputOverrides)
+        await saveExecutionVideoLinkFiles(executionId, fetched.files)
+        for (const id of fetched.fetched) {
+          const node = nodes.find((n) => n.id === id)
+          const output = node ? extractSourceNodeOutput(node, triggerData) : undefined
+          if (output) nodeStates[id] = seededFromSavedData(output)
+        }
+      }
+    }
 
     // 7. Execute level by level. On a resume, the carried-forward done nodes
     // already count toward progress (they're in totalExecutions) — seed the
