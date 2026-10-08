@@ -211,6 +211,14 @@ app.post("/v1/my-route", {
 
 ---
 
+## Admin "Signed in now" — presence (`ee/lib/presence*.ts`, decided 2026-10-08)
+
+Every signed-in request (an `onResponse` hook, `hasAdmin()` only) notes its user and surface — `deriveJobSource`, plus a same-origin browser GET read as the site at `Host`, since browsers send no `Origin` there — with the client address (`clientAddress`), Cloudflare's country (`clientCountry`, display only) and browser. Invariants:
+- **The notes live only in Redis, 15 minutes.** Never a database row, never a log line with an address.
+- **Bounded however a caller behaves.** A caller names its surface freely (Origin, `mcp_client`, `X-Nodaro-Client`), so the caps are per user (8 surfaces) and in all (5,000 users; a read returns 500), and the in-process throttle (one write per user and surface per 30 s) is an LRU. The job queue shares this Redis.
+- **`GET /v1/admin/online-users` answers an admin signed in to the app only** (`req.authKind === "jwt"`) — never an API or app token — and never lists the deployment's payer to anyone but itself.
+- The orchestrator's internal hop and refused requests (401/403 — a blocked account) never count as someone here.
+
 ## Auth Middleware (`middleware/auth.ts`)
 
 - `registerAuthHook(app)` — Fastify preHandler: extracts Bearer token, verifies via Supabase `auth.getUser()`, sets `req.userId` + `req.userRole`
@@ -511,6 +519,13 @@ All billing code lives under `backend/src/ee/billing/` and `backend/src/ee/route
 **Admin Storage:** `PUT /v1/admin/users/:id/storage` -- progress bar + tier presets + custom GB
 
 **Change Plan:** After `stripe.subscriptions.update()` succeeds, immediately update DB. Webhook = backup reconciliation.
+
+**Past builds' styling files (`site-assets/`, decided 2026-10-08):** a build ships only its own content-hashed `/assets` files, but a page an earlier deploy served still asks for its own — a Microsoft Clarity session replay draws its recording with the stylesheet the visitor had, at its original URL; a tab stays open across a deploy. Each boot copies the build's CSS, fonts and images (once per name — a name is its content) under `site-assets/` (`lib/site-asset-archive.ts`, `SITE_ASSET_ARCHIVE`: `auto` = Cloud only), and the Caddyfile's `/assets/*` handle asks `GET /v1/site-assets/assets/:name` (public, `routes/site-assets.ts`) for any name the running build does not have. Two invariants:
+- **Nothing deletes under `site-assets/`.** `deleteFromR2` / `batchDeleteFromR2` skip those keys (with a warning) rather than refuse: a key can come from a URL a user wrote into a row, and a refusal would stop a whole cleanup sweep. A new delete path must go through those two.
+- **The build live when the archive first ships never archived itself**: `backend/scripts/backfill-site-assets.ts <origin>` copies a live site's styling files in (run 2026-10-08 for app. and next.).
+- **A file URL never answers with the SPA shell.** Behind Cloudflare, an `index.html` served for a missing `*.css`/`*.js` URL with the year-long immutable header is kept under that URL for a year. Missing files are a 404 with `no-store` (`tools/__tests__/site-assets-caddy.test.mjs`, which runs the real Caddy in CI).
+
+Scripts are never archived: a tab that misses a chunk after a deploy must keep reloading into the new build, as it always has.
 
 **Library:** `GET /v1/library` -- Storage summary, filter by type, cursor pagination, bulk delete.
 Files: `backend/src/routes/library.ts`

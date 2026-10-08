@@ -216,21 +216,83 @@
 		header @picker_art_missing Cache-Control "no-store"
 		file_server
 	}
+	# Vite's build output. Every name carries its content hash, so a file here
+	# never changes and is cached for good. A name this build does not have
+	# is one an earlier deployment served — a session replay renders its
+	# recording with the stylesheet the visitor had, a tab outlives a deploy —
+	# and the backend answers it from the archive of past builds' styling
+	# files (backend/src/lib/site-asset-archive.ts), or with a 404 nobody
+	# caches. Never with index.html: the CDN in front would keep that HTML
+	# under the file's URL for a year. Readable from any origin, because a
+	# replay player renders the page from its own.
+	handle /assets/* {
+		root * /app/frontend/dist
+		# A file — never the folder itself, which would answer as one.
+		@asset_in_build {
+			file
+			not path */
+		}
+		handle @asset_in_build {
+			encode zstd gzip
+			header Cache-Control "public, max-age=31536000, immutable"
+			header Access-Control-Allow-Origin "*"
+			file_server
+		}
+		# The backend sets this response's headers itself: a header set here as
+		# well would reach the client twice.
+		handle {
+			request_header -X-Internal-Orchestrator
+			request_header -X-Internal-Orchestrator-Secret
+			encode zstd gzip
+			rewrite * /v1/site-assets{path}
+			reverse_proxy 127.0.0.1:9000 {
+				import client_ip_header
+			}
+		}
+	}
 	handle {
 		# zstd + gzip: Caddy negotiates the best supported encoding per request.
 		# zstd shaves ~15-25% more off JS/CSS than gzip alone.
 		encode zstd gzip
 		root * /app/frontend/dist
-		try_files {path} /index.html
-		file_server
+		# A file the site does not have is a 404 nobody caches, never the SPA
+		# shell: a script, stylesheet, font or image URL answered with
+		# index.html is HTML in place of the file, kept by the CDN for a year.
+		# Only file types, so an app route with a dot in it (an invitation
+		# token) still opens the app.
+		@missing_file {
+			path *.js *.mjs *.css *.map *.woff2 *.woff *.ttf *.otf *.eot *.png *.jpg *.jpeg *.gif *.svg *.webp *.avif *.ico *.mp4 *.webm *.mov *.mp3 *.wav *.ogg *.m4a *.wasm
+			not file
+		}
+		handle @missing_file {
+			header Cache-Control "no-store"
+			respond 404
+		}
+		handle {
+			try_files {path} /index.html
+			file_server
+		}
 	}
+	# Only a file that exists is cached for good — never a 404, and never a
+	# response the /assets/* archive fallback above writes itself.
 	@static {
 		path *.js *.css *.png *.svg *.woff2
 		not path /config.js
+		file {
+			root /app/frontend/dist
+		}
 	}
 	header @static Cache-Control "public, max-age=31536000, immutable"
-	@favicon path *.ico
+	@favicon {
+		path *.ico
+		file {
+			root /app/frontend/dist
+		}
+	}
 	header @favicon Cache-Control "public, max-age=86400"
+	# Fonts load with CORS: a session replay player renders the page from its
+	# own origin and draws its text with these.
+	header /fonts/* Access-Control-Allow-Origin "*"
 
 	# The SPA shell (index.html) must always be revalidated. try_files serves
 	# index.html for the bare path "/", any *.html, and every extensionless SPA
@@ -241,7 +303,11 @@
 	# `^[^.]*$` matches paths with no dot (the SPA routes) and `/.*\.html$`
 	# matches .html files — both disjoint from the hashed *.js/*.css/*.png/etc.
 	# assets above, which keep their 1yr immutable header.
-	@html path_regexp html ^([^.]*|/.*\.html)$
+	@html {
+		path_regexp html ^([^.]*|/.*\.html)$
+		# The archive fallback above writes its own Cache-Control.
+		not path /assets/*
+	}
 	header @html Cache-Control "no-cache"
 
 	# Which SPA routes search engines may index: an allow-list, so a route

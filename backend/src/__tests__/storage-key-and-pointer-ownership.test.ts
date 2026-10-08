@@ -368,6 +368,8 @@ const SERVER_MADE_KEYS: Readonly<Record<string, string>> = {
   "backend/src/ee/services/community/clone.ts": "rolls back the copies it just made",
   "backend/src/routes/character-training.ts": "the training zip it uploaded in the same request",
   "backend/src/providers/video/edl-timeline.ts": "the render's own checkpoints",
+  "backend/src/lib/speaker-frames-cache-sweep.ts":
+    "lists the plugin-written speaker-frames-cache/ checkpoint prefix by age; no key comes from a row",
 }
 
 describe("every storage deleter asks whose object it is", () => {

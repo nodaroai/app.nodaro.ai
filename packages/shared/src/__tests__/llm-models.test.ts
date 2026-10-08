@@ -597,6 +597,17 @@ describe("reasoning effort registry", () => {
     expect(m?.thinkingDefaultOn).toBe(true)
   })
 
+  it("every model whose thinking cannot be turned off carries thinkingDefaultOn", () => {
+    // Vendor docs: Claude Fable 5 always has thinking enabled, and Claude Opus
+    // 5.5 rejects `disabled` at every effort. Nothing in the registry says
+    // "cannot be turned off", so the list is pinned here. Consumers floor
+    // max_tokens off this flag; unflagged, such a model's reasoning shares the
+    // plain 16384 cap with its answer on every call.
+    for (const id of ["claude-fable-5", "claude-opus-5.5"]) {
+      expect(getLlmModel(id)?.thinkingDefaultOn, id).toBe(true)
+    }
+  })
+
   it("thinkingDefaultOn is set only where the vendor default actually reasons", () => {
     // Opus 4.8 / 4.7 and Sonnet 5 do NOT reason when `thinking` is omitted —
     // flagging them would inflate every call's cap for no reason.

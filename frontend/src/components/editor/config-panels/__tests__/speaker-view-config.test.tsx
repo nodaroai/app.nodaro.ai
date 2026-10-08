@@ -8,7 +8,10 @@
 import { describe, it, expect, vi, afterEach } from "vitest"
 import { render, screen, cleanup, fireEvent, within } from "@testing-library/react"
 
-vi.mock("@/hooks/use-workflow-store", () => ({ useWorkflowStore: Object.assign((s: (x: unknown) => unknown) => s({}), { getState: () => ({}) }) }))
+// A read-only store: the panel's "Back to Apply EDL" action is covered with a
+// live graph in speaker-view-back-to-render.test.tsx.
+const STORE = vi.hoisted(() => ({ nodes: [], edges: [], isReadOnly: true }))
+vi.mock("@/hooks/use-workflow-store", () => ({ useWorkflowStore: Object.assign((s: (x: unknown) => unknown) => s(STORE), { getState: () => STORE }) }))
 
 import { SpeakerViewConfig } from "../speaker-view-config"
 import { translate } from "@/lib/i18n"

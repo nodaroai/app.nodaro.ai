@@ -1,4 +1,4 @@
-import { formatDate, formatDateTime, formatNumber } from "@/lib/i18n/format"
+import { formatDate, formatDateTime, formatNumber, formatTime } from "@/lib/i18n/format"
 
 export const countText = (n: number): string => formatNumber(n)
 
@@ -60,3 +60,6 @@ export function pageAddress(row: { host?: string; path?: string }, siteDomain: s
 export const dayText = (day: string): string => formatDate(`${day}T12:00:00`, { month: "short", day: "numeric" })
 
 export const momentText = (iso: string): string => formatDateTime(iso, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+
+/** The time of day, to the second — when a realtime snapshot was taken. */
+export const clockText = (iso: string): string => formatTime(iso, { hour: "2-digit", minute: "2-digit", second: "2-digit" })

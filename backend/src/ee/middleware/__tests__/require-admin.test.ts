@@ -109,3 +109,26 @@ describe("requireAdmin middleware", () => {
     expect(mockCheckIsAdmin).toHaveBeenCalledWith("specific-user-42")
   })
 })
+
+describe("a refusal ends the request, whatever hooks the app carries", () => {
+  it("with two async onSend hooks, a non-admin gets 403 and the handler never runs", async () => {
+    const handler = vi.fn(async () => ({ secret: true }))
+    const hooked = Fastify({ logger: false })
+    hooked.addHook("preHandler", async (req) => {
+      const query = req.query as Record<string, string>
+      if (query.userId) req.userId = query.userId
+    })
+    // Two async onSend hooks: the shape in which a hook that sends without returning let the handler run.
+    hooked.addHook("onSend", async (_req, _reply, payload) => payload)
+    hooked.addHook("onSend", async (_req, _reply, payload) => payload)
+    hooked.get("/guarded", { preHandler: requireAdmin }, handler)
+    await hooked.ready()
+    mockCheckIsAdmin.mockResolvedValue(false)
+    const refused = await hooked.inject({ method: "GET", url: "/guarded?userId=not-an-admin" })
+    const anonymous = await hooked.inject({ method: "GET", url: "/guarded" })
+    await hooked.close()
+    expect(refused.statusCode).toBe(403)
+    expect(anonymous.statusCode).toBe(401)
+    expect(handler).not.toHaveBeenCalled()
+  })
+})

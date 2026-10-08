@@ -63,6 +63,10 @@ export function SectionProblem({ result, product, email }: { result: Missing; pr
   )
 }
 
+/** A number column in every table here: aligned to the end, never wrapped, with room from the column before it. */
+export const NUMBER_HEAD = "text-end py-2 ps-4 font-medium whitespace-nowrap"
+export const NUMBER_CELL = "py-1.5 ps-4 text-end font-mono whitespace-nowrap"
+
 export function FilterInput({ value, onChange, placeholder }: { value: string; onChange: (value: string) => void; placeholder: string }) {
   return <Input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="h-8 max-w-xs text-sm" />
 }

@@ -19,7 +19,7 @@ import {
 import {
   pro3DRenderShotStills, COMPOSER_PLAN_MAP, COMPOSER_PLAN_FIELDS, extractAllGeneratedResults, splitGeneratedItems, aggregateByType, getOutputType, isAggregateableType, isCollectInEdge, parseGroupHandle, type AggregationBuckets, type Member, overlayVariantIdFromHandle, featuredMetaAdOutputs, featuredInstagramOutputs, unwrapEditPlanOutput, editPlanSavedOutput, resolveVideoLinkOutput, telegramAccountTriggerOutputs, isTelegramAccountTriggerNamedHandle, pickSocialPosts, socialPostsFrom, socialPostsDigest, FAN_OUT_EACH_HANDLES, isSocialPostReaderNodeType } from "@nodaro/shared"
 import type { SceneData, Transcript } from "@nodaro/shared"
-import { isRenderNodeType, renderResultStamp, savedRenderOutput } from "@nodaro/shared"
+import { isRenderNodeType, renderResultStamp, renderTranscriptOutputOf, RENDER_JSON_HANDLE, savedRenderOutput } from "@nodaro/shared"
 import { buildScenePrompt } from "@nodaro/prompts"
 export { extractVideoDurationFromNode } from "@nodaro/shared"
 export { extractAllGeneratedResults }
@@ -1005,9 +1005,16 @@ export function getPrimaryOutput(
   // per the node's `output` setting. Without this branch the json edge resolves
   // to the video URL via the generic tail (the C4 audit-dag parity break).
   // Mirrors the frontend extractNodeOutput apply-edl branch.
+  // A render whose transcript comes out on its OWN pip (Speaker View's
+  // `transcript`, decided 2026-10-08) hands it there — absent (an older plugin,
+  // or no transcript wired) is nothing, never the media.
   if (isRenderNodeType(sourceType)) {
-    if (sourceHandle === "json") {
+    if (sourceHandle === RENDER_JSON_HANDLE) {
       return output.json === undefined ? undefined : JSON.stringify(output.json)
+    }
+    const transcriptPip = renderTranscriptOutputOf(sourceType)!.handle
+    if (transcriptPip !== RENDER_JSON_HANDLE && sourceHandle === transcriptPip) {
+      return output.transcript === undefined || output.transcript === null ? undefined : JSON.stringify(output.transcript)
     }
     return output.videoUrl || output.audioUrl
   }
@@ -1416,7 +1423,11 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
     }
     const json = data.generatedJson
     if (json !== undefined) out.json = json
-    return out.videoUrl || out.audioUrl || out.json !== undefined ? out : undefined
+    // Its remapped transcript, when it has its own pip and saved field (Speaker
+    // View's `generatedTranscript`); Apply EDL's is `generatedJson` above.
+    const remapped = renderTranscriptOutputOf(type)!
+    if (remapped.handle !== RENDER_JSON_HANDLE && data[remapped.dataField] !== undefined) out.transcript = data[remapped.dataField]
+    return out.videoUrl || out.audioUrl || out.json !== undefined || out.transcript !== undefined ? out : undefined
   }
 
   // Voice-changer is dual-mode: audio in → audio out; video in → video out (+
@@ -1963,6 +1974,13 @@ export function buildNodeOutputFromJobData(
   // the plan clip it cut — read only off a render's output (another node's
   // `quality` is something else entirely).
   if (isRenderNodeType(nodeType)) Object.assign(output, renderResultStamp(outputData))
+  // …and its remapped transcript, when it comes out on its own pip (Speaker
+  // View's `transcript`, decided 2026-10-08). A job from an older plugin
+  // carries none: the pip then hands nothing.
+  if (isRenderNodeType(nodeType)) {
+    const remapped = renderTranscriptOutputOf(nodeType)!
+    if (remapped.handle !== RENDER_JSON_HANDLE && outputData[remapped.handle] != null) output.transcript = outputData[remapped.handle]
+  }
 
   if (nodeType === "edit-plan") {
     const plan = unwrapEditPlanOutput(outputData)

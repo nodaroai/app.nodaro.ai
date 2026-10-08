@@ -1,5 +1,7 @@
 import { config } from "../../../lib/config.js"
+import { readRealtime, type RealtimeQuota, type RealtimeSnapshot } from "./ga4-realtime.js"
 import { readGaReport, type SiteAnalyticsDays, type TrafficReport } from "./ga4-report.js"
+import { readSourcesReport, type SourcesReport } from "./ga4-sources.js"
 import { GoogleApiError, type FetchLike } from "./google-api.js"
 import { createTokenSource, KeyFileError } from "./google-token.js"
 import { createInspectionBudget, INSPECTIONS_PER_DAY, redisCounterStore, type InspectionBudget } from "./inspection-budget.js"
@@ -15,6 +17,8 @@ export interface SectionFailure {
   readonly message: string
   readonly httpStatus?: number
   readonly reason?: string
+  /** When the server will ask Google again — a refusal is remembered, never re-asked on every poll. */
+  readonly retryMinutes?: number
 }
 
 /** One part of the page: Google's answer, why there is none, or what Google said when it refused. */
@@ -33,6 +37,8 @@ export interface SiteAnalyticsReport {
   readonly setup: SetupView
   readonly traffic: SectionResult<TrafficReport>
   readonly search: SectionResult<SearchReport>
+  /** Where visits came from: channel, source / medium, campaign and every utm_ field, landing page. */
+  readonly sources: SectionResult<SourcesReport>
 }
 
 export type InspectResult =
@@ -44,6 +50,13 @@ export type InspectResult =
 export interface SiteAnalyticsService {
   report(days: SiteAnalyticsDays, opts: { fresh: boolean }): Promise<SiteAnalyticsReport>
   inspect(url: string, opts: { fresh: boolean }): Promise<InspectResult>
+  /** The last 30 minutes — one snapshot for every admin, asked of Google once a minute at most. */
+  realtime(): Promise<SectionResult<RealtimeView>>
+}
+
+/** A snapshot and how often the server asks Google for the next one — the page says what the server does, never a copy of its rule. */
+export interface RealtimeView extends RealtimeSnapshot {
+  readonly refreshMinutes: number
 }
 
 /** Reports change slowly and cost quota; ten minutes keeps the page live without asking Google on every view. */
@@ -53,6 +66,37 @@ const INSPECTION_TTL_MS = 24 * 3_600_000
 const INSPECTIONS_KEPT = 2_000
 /** "Refresh" / "Check again" within a minute of the last answer gets that answer. */
 const MIN_FRESH_MS = 60_000
+/**
+ * A realtime snapshot costs three questions of some 35–45 tokens each — about
+ * half of the hourly allowance (about 14,000) the Google Cloud project shares
+ * with every tool on it, at one snapshot a minute. Below a floor in any of
+ * Google's buckets — the project's hour, the property's hour, the property's
+ * day — once every five minutes.
+ */
+const REALTIME_TTL_MS = 60_000
+const REALTIME_SLOW_TTL_MS = 5 * 60_000
+export const REALTIME_QUOTA_FLOORS: Readonly<Record<keyof RealtimeQuota, number>> = {
+  projectPerHour: 3_000,
+  propertyPerHour: 8_000,
+  propertyPerDay: 40_000,
+}
+/**
+ * A refusal is remembered a minute — fifteen when Google says the allowance
+ * is spent, or failed on its own side: its allowance of server errors is
+ * small and shared with every tool on the project.
+ */
+const REALTIME_RETRY_MS = 60_000
+const REALTIME_LONG_RETRY_MS = 15 * 60_000
+const realtimeRetryMs = (refusal: SectionFailure): number =>
+  refusal.httpStatus === 429 || refusal.reason === "RESOURCE_EXHAUSTED" || (refusal.httpStatus ?? 0) >= 500 ? REALTIME_LONG_RETRY_MS : REALTIME_RETRY_MS
+
+const quotaLow = (quota: RealtimeQuota): boolean =>
+  (Object.keys(REALTIME_QUOTA_FLOORS) as Array<keyof RealtimeQuota>).some((bucket) => {
+    const left = quota[bucket]
+    return left !== null && left < REALTIME_QUOTA_FLOORS[bucket]
+  })
+
+const realtimeTtl = (snapshot: RealtimeSnapshot): number => (quotaLow(snapshot.quota) ? REALTIME_SLOW_TTL_MS : REALTIME_TTL_MS)
 
 class BudgetSpentError extends Error {}
 
@@ -82,7 +126,10 @@ export function createSiteAnalytics(
   const budget = deps.budget ?? createInspectionBudget(redisCounterStore)
   const setup = resolveSetup(env)
   const token = setup.account ? createTokenSource(setup.account, { fetch, now }) : null
-  const reports = createTtlCache<TrafficReport | SearchReport>({ ttlMs: REPORT_TTL_MS, maxEntries: 20, minFreshMs: MIN_FRESH_MS, now })
+  const reports = createTtlCache<TrafficReport | SearchReport | SourcesReport>({ ttlMs: REPORT_TTL_MS, maxEntries: 20, minFreshMs: MIN_FRESH_MS, now })
+  const realtimeSnapshots = createTtlCache<RealtimeSnapshot>({ ttlMs: REALTIME_TTL_MS, maxEntries: 1, now, ttlOf: realtimeTtl })
+  // Google's last realtime refusal and until when it stands: a poll inside that window gets it back without asking Google.
+  let realtimeRefusal: { readonly result: SectionFailure; readonly until: number } | null = null
   const inspections = createTtlCache<IndexStatus>({ ttlMs: INSPECTION_TTL_MS, maxEntries: INSPECTIONS_KEPT, minFreshMs: MIN_FRESH_MS, now })
 
   const view: SetupView = {
@@ -92,7 +139,7 @@ export function createSiteAnalytics(
     problems: setup.problems,
   }
 
-  async function section<T extends TrafficReport | SearchReport>(
+  async function section<T extends TrafficReport | SearchReport | SourcesReport>(
     key: string,
     ready: boolean,
     what: string,
@@ -111,11 +158,34 @@ export function createSiteAnalytics(
   return {
     async report(days, { fresh }) {
       const { ga4PropertyId: propertyId, searchConsoleSite: site } = setup
-      const [traffic, search] = await Promise.all([
+      const [traffic, search, sources] = await Promise.all([
         section<TrafficReport>(`traffic:${days}`, propertyId !== null, "Analytics", (t) => readGaReport({ propertyId: propertyId ?? "", days, token: t, fetch, now: new Date(now()) }), fresh),
         section<SearchReport>(`search:${days}`, site !== null, "Search Console", (t) => readSearchReport({ site: site ?? "", days, token: t, fetch, now: new Date(now()) }), fresh),
+        // Sources end yesterday: a refresh within the day would ask for the same tables again.
+        section<SourcesReport>(`sources:${days}`, propertyId !== null, "Analytics sources", (t) => readSourcesReport({ propertyId: propertyId ?? "", days, token: t, fetch }), false),
       ])
-      return { days, setup: view, traffic, search }
+      return { days, setup: view, traffic, search, sources }
+    },
+
+    async realtime() {
+      const propertyId = setup.ga4PropertyId
+      if (!propertyId || !token) return { status: "not_configured" }
+      // The minutes left, counted down on every poll — not the wait the refusal started with.
+      const remembered = (refusal: { readonly result: SectionFailure; readonly until: number }): SectionFailure => ({
+        ...refusal.result,
+        retryMinutes: Math.max(1, Math.ceil((refusal.until - now()) / 60_000)),
+      })
+      if (realtimeRefusal && now() < realtimeRefusal.until) return remembered(realtimeRefusal)
+      try {
+        const cached = await realtimeSnapshots.get("now", async () => readRealtime({ propertyId, token: await token(), fetch }))
+        realtimeRefusal = null
+        const data = { ...cached.value, refreshMinutes: realtimeTtl(cached.value) / 60_000 }
+        return { status: "ok", data, fetchedAt: new Date(cached.fetchedAt).toISOString() }
+      } catch (error) {
+        const result = failure(error, "real-time Analytics")
+        realtimeRefusal = { result, until: now() + realtimeRetryMs(result) }
+        return remembered(realtimeRefusal)
+      }
     },
 
     async inspect(url, { fresh }) {

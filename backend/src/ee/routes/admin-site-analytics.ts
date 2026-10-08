@@ -28,6 +28,8 @@ const inspectBody = z.object({
  */
 const REPORT_LIMIT = { rateLimit: { max: 30, timeWindow: "1 minute" } }
 const INSPECT_LIMIT = { rateLimit: { max: 30, timeWindow: "1 minute" } }
+/** The page asks once a minute; the snapshot is shared, so this only bounds a runaway client. */
+const REALTIME_LIMIT = { rateLimit: { max: 20, timeWindow: "1 minute" } }
 
 function validationError(reply: FastifyReply, error: z.ZodError) {
   const issue = error.issues[0]
@@ -43,6 +45,8 @@ export async function adminSiteAnalyticsRoutes(app: FastifyInstance, opts: { ser
     if (!parsed.success) return validationError(reply, parsed.error)
     return service().report(Number(parsed.data.days) as SiteAnalyticsDays, { fresh: parsed.data.fresh === "1" })
   })
+
+  app.get("/v1/admin/site-analytics/realtime", { preHandler: requireAdmin, config: REALTIME_LIMIT }, async () => service().realtime())
 
   app.post("/v1/admin/site-analytics/inspect", { preHandler: requireAdmin, config: INSPECT_LIMIT }, async (req, reply) => {
     const parsed = inspectBody.safeParse(req.body)

@@ -16,7 +16,7 @@
  * input; the details are the validators' own messages, shown left-to-right in
  * every locale (they quote field names).
  */
-import { useMemo, useState } from "react"
+import { useMemo, useState, type ReactNode } from "react"
 import { AlertTriangle, CheckCircle2, XCircle } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import {
@@ -72,7 +72,7 @@ function label(v: EdlValidity, rendered: boolean, t: ReturnType<typeof useT>): s
   return rendered ? t("node.edlReadyToRender") : t("node.edlWellFormed")
 }
 
-export function EdlValidityBadge({ value, renders, settings, verdict, className }: {
+export function EdlValidityBadge({ value, renders, settings, verdict, action, className }: {
   /** Structure mode: the EDL value to check (the Edit Plan badge). */
   readonly value?: unknown
   /** Render mode: every render the node's Run would make (see
@@ -84,6 +84,9 @@ export function EdlValidityBadge({ value, renders, settings, verdict, className 
    *  `speakerViewBatchValidity`): the verdict as computed, shown as a render's
    *  ("Ready to render"). `null` shows nothing. Takes the place of the rest. */
   readonly verdict?: EdlValidity | null
+  /** A way out, under the issues in the popover — "Replace with Speaker View"
+   *  on an Apply EDL that meets a hinted edit (U6). Shown only with issues. */
+  readonly action?: ReactNode
   readonly className?: string
 }) {
   const t = useT()
@@ -163,6 +166,7 @@ export function EdlValidityBadge({ value, renders, settings, verdict, className 
           <MessageList title={t("node.edlIssuesTitle")} messages={validity.issues} />
         )}
         <MessageList title={t("node.edlWarningsTitle")} messages={validity.warnings} />
+        {!validity.ok && action}
       </PopoverContent>
     </Popover>
   )

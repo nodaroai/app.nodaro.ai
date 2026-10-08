@@ -230,3 +230,71 @@ describe("the output readers", () => {
     expect(saved?.quality).toBe("proxy")
   })
 })
+
+describe("the transcript output (decided 2026-10-08): the wired transcript remapped through the edit as drawn", () => {
+  const drawn = { ...EDL, meta: { targetAspect: "9:16" } }
+  const remapped = { version: 1, words: [{ text: "Welcome", startMs: 200, endMs: 640, speaker: "Host" }] }
+  const VIDEO = "https://r2.test/sv.mp4"
+  const jobOutput = { videoUrl: VIDEO, json: drawn, transcript: remapped, quality: "proxy" }
+
+  it("reads it off a finished job beside the EDL, and hands it on `transcript` — the EDL stays on json, the video on the default", () => {
+    const out = buildNodeOutputFromJobData(jobOutput, "speaker-view")
+    expect(out.json).toEqual(drawn)
+    expect(out.transcript).toEqual(remapped)
+    expect(getPrimaryOutput(out, "speaker-view", "transcript")).toBe(JSON.stringify(remapped))
+    expect(getPrimaryOutput(out, "speaker-view", "json")).toBe(JSON.stringify(drawn))
+    expect(getPrimaryOutput(out, "speaker-view", undefined)).toBe(VIDEO)
+  })
+
+  it("an older plugin's job carries none: the transcript pip hands nothing — never the video url", () => {
+    const out = buildNodeOutputFromJobData({ videoUrl: VIDEO, json: drawn, quality: "proxy" }, "speaker-view")
+    expect(out.transcript).toBeUndefined()
+    expect(getPrimaryOutput(out, "speaker-view", "transcript")).toBeUndefined()
+  })
+
+  it("Apply EDL keeps its transcript on json and reads nothing new", () => {
+    const out = buildNodeOutputFromJobData({ videoUrl: VIDEO, json: remapped, transcript: { stray: true } }, "apply-edl")
+    expect(out.json).toEqual(remapped)
+    expect(out.transcript).toBeUndefined()
+  })
+
+  it("hydrates it from saved node data (`generatedTranscript`) for a skipped node or Run from here", () => {
+    const node: SimpleNode = {
+      id: SV,
+      type: "speaker-view",
+      data: { generatedVideoUrl: VIDEO, generatedJson: drawn, generatedTranscript: remapped, generatedResults: [{ url: VIDEO, jobId: "j", timestamp: "t" }] },
+    }
+    const saved = extractSavedNodeOutput(node)!
+    expect(saved.json).toEqual(drawn)
+    expect(saved.transcript).toEqual(remapped)
+    expect(getPrimaryOutput(saved, "speaker-view", "transcript")).toBe(JSON.stringify(remapped))
+  })
+
+  describe("into Add Captions", () => {
+    const graph = (output: Record<string, unknown>) => {
+      const nodes: SimpleNode[] = [
+        { id: SV, type: "speaker-view", data: { label: "Speaker View" } },
+        { id: "cap", type: "add-captions", data: { label: "Caption Video" } },
+      ]
+      const edges: SimpleEdge[] = [
+        { id: "v", source: SV, target: "cap", sourceHandle: "video", targetHandle: "in" },
+        { id: "t", source: SV, target: "cap", sourceHandle: "transcript", targetHandle: "transcript" },
+      ]
+      const states: Record<string, NodeExecutionState> = { [SV]: { status: "completed", output: buildNodeOutputFromJobData(output, "speaker-view") } as unknown as NodeExecutionState }
+      return resolveNodeInputs(nodes[1]!, edges, states, nodes)
+    }
+
+    it("receives the video on `in` and the remapped transcript on `transcript`", () => {
+      const inputs = graph(jobOutput)
+      expect(inputs.videoUrl).toBe(VIDEO)
+      expect(JSON.parse(inputs.transcript as string)).toEqual(remapped)
+    })
+
+    it("from an older plugin, the transcript lane reads nothing — the video is never routed into it, nor a second video", () => {
+      const inputs = graph({ videoUrl: VIDEO, json: drawn })
+      expect(inputs.videoUrl).toBe(VIDEO)
+      expect(inputs.transcript).toBeUndefined()
+      expect(inputs.videoUrls ?? []).not.toContain(VIDEO)
+    })
+  })
+})

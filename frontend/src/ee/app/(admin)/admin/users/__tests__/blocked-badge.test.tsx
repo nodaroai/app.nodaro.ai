@@ -10,12 +10,15 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { render, screen, within } from "@testing-library/react"
+import { MemoryRouter } from "react-router-dom"
 import userEvent from "@testing-library/user-event"
 import type { AdminUser } from "@/ee/hooks/queries/use-admin-queries"
 import type { AdminBlocks } from "@/ee/hooks/queries/use-admin-access"
 
 const h = vi.hoisted(() => ({
   users: [] as AdminUser[],
+  /** Accounts the direct link can open that are not on the listed page. */
+  elsewhere: [] as AdminUser[],
   blocks: undefined as AdminBlocks | undefined,
   role: "admin",
   deploymentPayer: false,
@@ -34,6 +37,11 @@ vi.mock("@/ee/hooks/queries/use-admin-queries", () => ({
     created_at: "desc",
   },
   useAdminUsers: () => ({ data: h.users, isLoading: false, refetch: () => undefined }),
+  useAdminUser: (id: string | null) => ({
+    data: id ? ([...h.users, ...h.elsewhere].find((u) => u.id === id) ?? null) : null,
+    isLoading: false,
+    refetch: () => undefined,
+  }),
   useAdminChangeRoleMutation: () => ({ mutateAsync: async () => undefined }),
   // The expanded row's own hooks, inert.
   useAdminUserTransactions: () => ({ data: [], isLoading: false }),
@@ -113,8 +121,16 @@ function blocksFor(userIds: readonly string[]): AdminBlocks {
 
 const rowOf = (email: string) => screen.getByText(email).closest("tr")!
 
+const renderPage = (path = "/admin/users") =>
+  render(
+    <MemoryRouter initialEntries={[path]}>
+      <AdminUsersPage />
+    </MemoryRouter>,
+  )
+
 beforeEach(() => {
   h.users = [makeUser(ALICE_ID, "alice@x.test"), makeUser(BOB_ID, "bob@x.test")]
+  h.elsewhere = []
   h.blocks = blocksFor([BOB_ID])
   h.role = "admin"
   h.deploymentPayer = false
@@ -123,7 +139,7 @@ beforeEach(() => {
 
 describe("the Blocked badge", () => {
   it("marks the blocked account's row and no other", () => {
-    render(<AdminUsersPage />)
+    renderPage()
 
     expect(within(rowOf("bob@x.test")).getByText("Blocked")).toBeInTheDocument()
     expect(within(rowOf("alice@x.test")).queryByText("Blocked")).toBeNull()
@@ -132,7 +148,7 @@ describe("the Blocked badge", () => {
 
   it("lists every account without badges while the block list has not loaded", () => {
     h.blocks = undefined
-    render(<AdminUsersPage />)
+    renderPage()
 
     expect(screen.getByText("alice@x.test")).toBeInTheDocument()
     expect(screen.getByText("bob@x.test")).toBeInTheDocument()
@@ -143,7 +159,7 @@ describe("the Blocked badge", () => {
 describe("opening a row", () => {
   it("mounts the Access panel for that account, with free credits where they exist", async () => {
     const user = userEvent.setup()
-    render(<AdminUsersPage />)
+    renderPage()
 
     expect(screen.queryByTestId("access-panel")).toBeNull()
     await user.click(screen.getByText("bob@x.test"))
@@ -157,7 +173,7 @@ describe("opening a row", () => {
   it("gives the panel no free-credit section where one account pays for everyone", async () => {
     const user = userEvent.setup()
     h.deploymentPayer = true
-    render(<AdminUsersPage />)
+    renderPage()
 
     await user.click(screen.getByText("bob@x.test"))
     expect(screen.getByTestId("access-panel")).toHaveAttribute("data-free-credits", "false")
@@ -166,7 +182,7 @@ describe("opening a row", () => {
   it("gives the panel no free-credit section on an edition without credits", async () => {
     const user = userEvent.setup()
     h.credits = false
-    render(<AdminUsersPage />)
+    renderPage()
 
     await user.click(screen.getByText("bob@x.test"))
     expect(screen.getByTestId("access-panel")).toHaveAttribute("data-free-credits", "false")
@@ -175,9 +191,46 @@ describe("opening a row", () => {
   it("tells the panel when the viewer is a super admin", async () => {
     const user = userEvent.setup()
     h.role = "super_admin"
-    render(<AdminUsersPage />)
+    renderPage()
 
     await user.click(screen.getByText("bob@x.test"))
     expect(screen.getByTestId("access-panel")).toHaveAttribute("data-super-admin", "true")
+  })
+})
+
+describe("a direct link (?user=<id>)", () => {
+  const CAROL_ID = "00000000-0000-4000-8000-0000000000f3"
+
+  it("opens that person above the list — even one not on this page — and lists them once", () => {
+    h.elsewhere = [makeUser(CAROL_ID, "carol@x.test")]
+    renderPage(`/admin/users?user=${CAROL_ID}`)
+    expect(screen.getByText("Opened from a link.")).toBeInTheDocument()
+    expect(screen.getByTestId("access-panel")).toHaveAttribute("data-user", "carol@x.test")
+    // Bob's cell also carries his Blocked badge.
+    const emails = screen.getAllByText(/@x\.test/).map((cell) => cell.textContent?.replace("Blocked", ""))
+    expect(emails).toEqual(["carol@x.test", "alice@x.test", "bob@x.test"])
+  })
+
+  it("with nobody else on the page, the linked person is not followed by 'No users found.'", () => {
+    h.users = []
+    h.elsewhere = [makeUser(CAROL_ID, "carol@x.test")]
+    renderPage(`/admin/users?user=${CAROL_ID}`)
+    expect(screen.getByText("carol@x.test")).toBeInTheDocument()
+    expect(screen.queryByText("No users found.")).toBeNull()
+  })
+
+  it("a person on this page is pinned, not shown twice", () => {
+    renderPage(`/admin/users?user=${BOB_ID}`)
+    expect(screen.getAllByText("bob@x.test")).toHaveLength(1)
+    expect(screen.getByTestId("access-panel")).toHaveAttribute("data-user", "bob@x.test")
+  })
+
+  it("an id that matches nobody says so; Show all users drops the link", async () => {
+    const user = userEvent.setup()
+    renderPage("/admin/users?user=00000000-0000-4000-8000-0000000000ee")
+    expect(screen.getByText(/No user with that id/)).toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: "Show all users" }))
+    expect(screen.queryByText(/No user with that id/)).toBeNull()
+    expect(screen.getByText("alice@x.test")).toBeInTheDocument()
   })
 })

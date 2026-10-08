@@ -4,7 +4,7 @@ import { useLocalizeNodeLabel, useLocalizeHandleLabel, useLocalizeOptionLabel } 
 import { useT, tx, type MessageKey } from "@/lib/i18n"
 import { useAppDir } from "@/lib/locale-store"
 import { cn } from "@/lib/utils"
-import { useState, useEffect, Suspense } from "react"
+import { useState, useEffect, useMemo, Suspense } from "react"
 import { lazyWithRetry } from "@/lib/lazy-with-retry"
 import { ChevronDown, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -64,6 +64,8 @@ import { MappableField } from "./mappable-field"
 import type { ConfigProps } from "./types"
 import { formatNumber } from "@/lib/i18n/format"
 import { EdlValidityBadge } from "@/components/inspector/edl-validity-badge"
+import { ReplaceRenderNodeAction } from "@/components/editor/replace-render-node-action"
+import { rendersNeedingSpeakerView, SPEAKER_VIEW_TYPE } from "@/lib/replace-render-node"
 import { useApplyEdlRenders } from "@/hooks/use-apply-edl-renders"
 import { RunUpToHereNotice } from "./run-up-to-here-notice"
 import { applyEdlRenderSettings } from "@/lib/apply-edl-render-input"
@@ -875,12 +877,21 @@ export function ApplyEdlConfig({ data, onUpdate, nodeId, nodes, edges }: ConfigP
   // judged with Apply EDL's own render rule and the node's settings, as the
   // server will judge the run.
   const renders = useApplyEdlRenders(nodeId)
+  const { output, crossfadeMs } = applyEdlRenderSettings(data)
+  const settings = useMemo(() => ({ output, crossfadeMs }), [output, crossfadeMs])
+  // An edit with layouts or regions is Speaker View's to draw (G1): the badge
+  // offers the swap under its issues (U6, SV16 b).
+  const hinted = useMemo(() => rendersNeedingSpeakerView(renders, settings), [renders, settings])
   return (
     <div className="flex flex-col gap-3">
       <p className="text-[11px] text-muted-foreground">
         {t("proccfg.applyEdlHint")}
       </p>
-      <EdlValidityBadge renders={renders} settings={applyEdlRenderSettings(data)} />
+      <EdlValidityBadge
+        renders={renders}
+        settings={settings}
+        action={nodeId && hinted ? <ReplaceRenderNodeAction nodeId={nodeId} toType={SPEAKER_VIEW_TYPE} className="border-t pt-2" /> : undefined}
+      />
       {nodeId && <RunUpToHereNotice nodeId={nodeId} nodes={nodes} edges={edges ?? []} />}
       <div>
         <Label>{t("proccfg.applyEdlOutput")}</Label>

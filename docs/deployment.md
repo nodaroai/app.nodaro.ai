@@ -172,6 +172,7 @@ here for each one anyway.
 | `R2_REGION` | `auto` | S3 region. `auto` suits Cloudflare R2 and MinIO ignores it; set a real one for Supabase-local (`local`), DO Spaces (`nyc3`, …) or AWS — they reject `auto` |
 | `STORAGE_OBJECT_ACL` | `""` (header omitted) | Canned ACL stamped on every uploaded object. For S3-compatible stores that cannot take a bucket policy — e.g. DO Spaces refuses `PutBucketPolicy` to a bucket-scoped key. See 2d |
 | `R2_PUBLIC_FALLBACK_DOMAIN` | `""` | A second public host for assets (e.g. the raw `pub-<id>.r2.dev` beside a CDN domain) |
+| `SITE_ASSET_ARCHIVE` | `auto` | Keeps every build's styling files (CSS, fonts, images under `/assets/`) in storage under `site-assets/`, so a page an earlier deploy served — a session replay, a tab left open — still gets its stylesheet at its original URL. Each boot copies the build's files once; nothing deletes them. `auto` = on for a production Cloud server only (`NODE_ENV=production`, as the image sets — never a developer's checkout); `on` / `off` decide for any edition. Needs storage configured. |
 | `R2_SHARED_WITH_RELAY_TARGET` | `false` | Set `true` ONLY when `R2_PUBLIC_URL` names the same bucket the instance's relay target (`NODARO_CLOUD_URL`) writes to. It keys on the SOURCE URL, not on the lane: **any** source URL that is already an object in this bucket is then referenced in place instead of being copied under a second key. That covers relayed outputs — which this instance also stops deleting and stops counting against its quota, because another instance created them — and it covers non-relayed sources too: the `save-to-storage` node stores a reference rather than an independent copy when its input is already in the bucket, so deleting that input's library item removes the object the save node points at. Strict parse: only `true` / `1` enable it |
 | `MAX_CONCURRENT_NODES_PER_EXECUTION` | `6` (max 20) | Nodes one workflow run may execute at once — the self-host parallelism ceiling |
 | `VIDEO_WORKER_CONCURRENCY` | `50` | BullMQ concurrency of the media worker (I/O-bound) |
@@ -1048,7 +1049,10 @@ it only references them by key. One exception: on Cloud, a daily cron
 reaps transient `video-analysis-tmp/` intermediates (analysis working
 files, orphaned after a worker crash). Self-hosted (Community/Business)
 deployments have no such cron, so include the `video-analysis-tmp/`
-prefix in your bucket lifecycle rule.
+prefix in your bucket lifecycle rule. On every edition, a daily sweep
+also deletes Speaker Frames detection checkpoints under
+`speaker-frames-cache/` once they are older than 7 days (leftovers of an
+attempt that crashed; the prefix exists only where Speaker Frames runs).
 
 ### Plugin daemon host (Cloud)
 

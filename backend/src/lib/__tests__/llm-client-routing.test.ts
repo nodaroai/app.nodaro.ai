@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest"
+import { LlmLaneError } from "../llm-errors.js"
 
 vi.mock("../config.js", () => ({
   config: { KIE_API_KEY: "test-kie-key", ANTHROPIC_API_KEY: "test-anthropic-key", NODE_ENV: "test" },
@@ -191,6 +192,66 @@ describe("preferKie routing (claude-sonnet-5 / claude-opus-4.8)", () => {
     expect(fetchMock).toHaveBeenCalledTimes(6)
   })
 
+  // The fallback lane's error is what the caller gets, and it used to leave no
+  // log line: only the primary lane's warn was written, so a broken fallback
+  // looked like a request that simply failed.
+  it("a direct fallback that fails too is error-logged with its causes, and its own error surfaces", async () => {
+    const { llmComplete } = await import("../llm-client.js")
+    vi.spyOn(console, "warn").mockImplementation(() => {})
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    try {
+      fetchMock.mockResolvedValue(streamResponse([
+        'data: {"type":"error","error":{"type":"api_error","message":"no_available_account"}}\n',
+      ]))
+      const directErr = Object.assign(
+        new Error('400 {"type":"error","error":{"type":"invalid_request_error","message":"rejected"}}', { cause: new Error("transport detail") }),
+        { status: 400 },
+      )
+      createSpy.mockReset().mockRejectedValue(directErr)
+
+      await expect(llmComplete({
+        modelId: "claude-fable-5",
+        system: "",
+        messages: [{ role: "user", content: "hi" }],
+        retryStreamOnError: false,
+      })).rejects.toBe(directErr)
+
+      const lines = errorSpy.mock.calls.map((c) => String(c[0])).filter((l) => l.includes("[llm-lane-fallback]"))
+      expect(lines).toHaveLength(1)
+      expect(lines[0]).toContain("claude-fable-5: direct-anthropic lane also failed (after the kie lane)")
+      expect(lines[0]).toContain("invalid_request_error")
+      expect(lines[0]).toContain("transport detail")
+    } finally {
+      errorSpy.mockRestore()
+    }
+  })
+
+  it("a KIE fallback that fails too is error-logged, and KIE's own error surfaces", async () => {
+    const { llmComplete } = await import("../llm-client.js")
+    vi.spyOn(console, "warn").mockImplementation(() => {})
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    try {
+      createSpy.mockReset().mockRejectedValue(new Error("anthropic 529 overloaded"))
+      fetchMock.mockResolvedValue(streamResponse(['{"code":500,"msg":"maintenance"}']))
+
+      // An effort makes direct the primary lane, and KIE the fallback.
+      await expect(llmComplete({
+        modelId: "claude-opus-5",
+        system: "",
+        messages: [{ role: "user", content: "hi" }],
+        reasoningEffort: "high",
+        retryStreamOnError: false,
+      })).rejects.toBeInstanceOf(LlmLaneError)
+
+      const lines = errorSpy.mock.calls.map((c) => String(c[0])).filter((l) => l.includes("[llm-lane-fallback]"))
+      expect(lines).toHaveLength(1)
+      expect(lines[0]).toContain("claude-opus-5: kie lane also failed (after the direct-anthropic lane)")
+      expect(lines[0]).toContain("maintenance")
+    } finally {
+      errorSpy.mockRestore()
+    }
+  })
+
   it("falls back to direct Anthropic when KIE errors (no extra charge — billed as KIE)", async () => {
     const { llmComplete } = await import("../llm-client.js")
     vi.spyOn(console, "warn").mockImplementation(() => {})
@@ -303,6 +364,28 @@ describe("llmStream preferKie routing (claude-sonnet-5)", () => {
     expect(streamSpy).toHaveBeenCalledOnce()
     expect(tokens).toEqual(["direct-stream-text"])
     expect(res.text).toBe("direct-stream-text")
+  })
+
+  it("a direct stream fallback that fails too is error-logged, and its own error surfaces", async () => {
+    const { llmStream } = await import("../llm-client.js")
+    vi.spyOn(console, "warn").mockImplementation(() => {})
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    try {
+      fetchMock.mockResolvedValue(streamResponse(['{"code":500,"msg":"maintenance"}']))
+      const directErr = new Error("direct stream refused")
+      streamSpy.mockReturnValue({ on() { return this }, abort() {}, finalMessage: () => Promise.reject(directErr) })
+
+      await expect(llmStream(
+        { modelId: "claude-sonnet-5", system: "", messages: [{ role: "user", content: "hi" }] },
+        () => {},
+      )).rejects.toBe(directErr)
+
+      const lines = errorSpy.mock.calls.map((c) => String(c[0])).filter((l) => l.includes("[llm-lane-fallback]"))
+      expect(lines).toHaveLength(1)
+      expect(lines[0]).toContain("claude-sonnet-5: direct-anthropic lane also failed (after the kie lane) — Error: direct stream refused")
+    } finally {
+      errorSpy.mockRestore()
+    }
   })
 
   // KIE's Claude stream can emit an `event: error` frame instead of content

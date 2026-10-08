@@ -1,7 +1,7 @@
 ---
 node_type: speaker-view
-generated_at: 2026-10-07T18:19:14.289Z
-generated_from: d8bc7b6a9
+generated_at: 2026-10-08T13:45:33.617Z
+generated_from: dcbc55538
 ---
 
 # Speaker View
@@ -11,7 +11,7 @@ generated_from: d8bc7b6a9
 **Category:** processing
 **Credit cost:** none declared — an input / parameter / trigger node runs no job; otherwise the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`).
 **Inputs (target handles):** `edl`, `transcript`
-**Outputs (source handles):** `video`, `json`
+**Outputs (source handles):** `video`, `json`, `transcript`
 
 **Required data fields:**
 - `label: string`
@@ -34,6 +34,7 @@ generated_from: d8bc7b6a9
 - `errorMessage?: string`
 - `generatedVideoUrl?: string`
 - `generatedJson?: unknown`
+- `generatedTranscript?: unknown`
 - `generatedResults?: readonly GeneratedResult[]`
 - `activeResultIndex?: number`
 

@@ -9,8 +9,10 @@
  *
  * Word timings arrive in MS (Caption-shaped, already converted by
  * captions-mappers). Whisper segments arrive in SECONDS and are converted here.
- * `normalizeTranscript` is the single coerce-never-reject gate (clamps
- * `endMs >= startMs`, drops junk, enforces the wire shape).
+ * `normalizeTranscript` is the single coerce-never-reject gate: it keeps a
+ * zero-width word or segment as a point, drops a broken one (a missing or
+ * unusable time, or an end before its start — never clamped), drops junk,
+ * sorts words by start and enforces the wire shape.
  */
 import type { Caption } from "@remotion/captions"
 import { normalizeTranscript, type Transcript } from "@nodaro/shared"

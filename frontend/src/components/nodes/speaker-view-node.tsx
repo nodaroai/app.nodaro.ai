@@ -163,6 +163,7 @@ function SpeakerViewNodeComponent({ id, data, selected }: NodeProps) {
       <HandleWithPopover nodeId={id} nodeType="speaker-view" handleId="transcript" type="target" position={Position.Left}  label={t("node.transcript")}       color={DATA_HANDLE_COLORS.json} icon={<Braces />} side="left"  top="52px"              accepts={ACCEPTS_JSON} />
       <HandleWithPopover nodeId={id} nodeType="speaker-view" handleId="video"      type="source" position={Position.Right} label={t("node.applyEdlVideoOut")} color={HANDLE_COLORS.video}     icon={<Film />}   side="right" top="calc(100% - 24px)" />
       <HandleWithPopover nodeId={id} nodeType="speaker-view" handleId="json"       type="source" position={Position.Right} label={t("node.applyEdlEdlIn")}    color={DATA_HANDLE_COLORS.json} icon={<Braces />} side="right" top="24px" />
+      <HandleWithPopover nodeId={id} nodeType="speaker-view" handleId="transcript" type="source" position={Position.Right} label={t("node.transcript")}       color={DATA_HANDLE_COLORS.json} icon={<Braces />} side="right" top="52px" />
     </div>
   )
 }

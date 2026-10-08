@@ -10,6 +10,7 @@ import { Readable, Transform } from "node:stream"
 import { config } from "./config.js"
 import { safeFetch } from "./safe-fetch.js"
 import { assertOrdinaryMediaKey } from "./retained-image-keys.js"
+import { SITE_ASSET_ARCHIVE_PREFIX } from "./site-asset-keys.js"
 import { templatePreviewKey } from "./template-preview-key.js"
 import {
   STORAGE_DOWNLOAD_LIMITS,
@@ -1043,7 +1044,20 @@ export async function copyR2ObjectToPrefix(
   return { url: r2Url(destKey), bytes: Number(head.ContentLength ?? 0) }
 }
 
+/**
+ * Past builds' styling files are never deleted (`lib/site-asset-archive.ts`).
+ * A delete that reaches one SKIPS it rather than refusing: a key can come
+ * from a URL a user wrote into a row, and a refusal would stop a whole
+ * cleanup sweep — every user's — on it.
+ */
+const isArchivedSiteAsset = (key: string): boolean => key.startsWith(SITE_ASSET_ARCHIVE_PREFIX)
+
+function warnKeptSiteAssets(count: number): void {
+  if (count > 0) console.warn(`[storage] not deleting ${count} archived site asset key(s): past builds' styling files are kept for good`)
+}
+
 export async function deleteFromR2(key: string): Promise<void> {
+  if (isArchivedSiteAsset(key)) return warnKeptSiteAssets(1)
   assertOrdinaryMediaKey(key)
   await s3.send(
     new DeleteObjectCommand({
@@ -1057,7 +1071,9 @@ export async function deleteFromR2(key: string): Promise<void> {
  * Batch delete up to 1000 keys per call from R2.
  * Automatically chunks if more than 1000 keys are provided.
  */
-export async function batchDeleteFromR2(keys: string[]): Promise<{ deleted: number; errors: number }> {
+export async function batchDeleteFromR2(requested: string[]): Promise<{ deleted: number; errors: number }> {
+  const keys = requested.filter((key) => !isArchivedSiteAsset(key))
+  warnKeptSiteAssets(requested.length - keys.length)
   if (keys.length === 0) return { deleted: 0, errors: 0 }
   // Validate the entire batch before deleting any object.
   keys.forEach(assertOrdinaryMediaKey)

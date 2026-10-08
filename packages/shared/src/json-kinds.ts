@@ -14,7 +14,8 @@
  * Output kinds are DATA, never a list of node names:
  *   - a render node's `json` pip answers its registry `jsonKind`
  *     (`RENDER_NODE_TYPES`), so a render registered later — Speaker View, whose
- *     json is an EDL — is covered by its own registry entry;
+ *     json is an EDL — is covered by its own registry entry; its transcript pip
+ *     (`transcriptOutput`, Speaker View's `transcript`) is a Transcript;
  *   - the other JSON producers declare a kind per output pip in
  *     `JSON_OUTPUT_KINDS` below. EVERY node with a JSON output declares one
  *     (decided 2026-10-08): `transcript`, `edl`, or `other` for JSON that is
@@ -26,7 +27,7 @@
  * Input kinds follow the platform's handle vocabulary: a `transcript` pip
  * expects a Transcript, an `edl` pip an EDL.
  */
-import { RENDER_NODE_TYPES, type RenderNodeDescriptor } from "./render-nodes.js"
+import { RENDER_JSON_HANDLE, RENDER_NODE_TYPES, type RenderNodeDescriptor } from "./render-nodes.js"
 
 /** The two JSON shapes the platform's handle vocabulary tells apart. */
 export type JsonKind = "transcript" | "edl"
@@ -81,9 +82,6 @@ const JSON_OUTPUT_KINDS: Readonly<Record<string, JsonOutputs>> = Object.freeze({
   "describe-to-picker": { primary: "picker-json", pips: { "picker-json": "other" } },
 })
 
-/** The pip a render's order reads/writes its json on. */
-const RENDER_JSON_PIP = "json"
-
 /** The input pips whose kind is fixed by the handle vocabulary. */
 const JSON_INPUT_KINDS: Readonly<Record<string, JsonKind>> = Object.freeze({
   transcript: "transcript",
@@ -107,7 +105,11 @@ export function declaredJsonOutput(
 ): JsonOutputDeclaration | undefined {
   if (typeof nodeType !== "string") return undefined
   const render = own(renders, nodeType)
-  if (render) return (sourceHandle ?? RENDER_JSON_PIP) === RENDER_JSON_PIP ? render.jsonKind : undefined
+  if (render) {
+    const pip = sourceHandle ?? RENDER_JSON_HANDLE
+    if (pip === RENDER_JSON_HANDLE) return render.jsonKind
+    return pip === render.transcriptOutput.handle ? "transcript" : undefined
+  }
   const outputs = own(JSON_OUTPUT_KINDS, nodeType)
   if (!outputs) return undefined
   const pip = sourceHandle ?? outputs.primary

@@ -78,6 +78,54 @@ describe("withFallback lane logging", () => {
     expect(String(fallbackWarns[0]![0])).toContain("gemini-3.6-flash")
   })
 
+  // The fallback lane is the call's last word: when it fails too, its error is
+  // what the caller gets — and before this, the only log line was the primary
+  // lane's warn, so a broken fallback was invisible.
+  it("a fallback lane that fails too is error-logged with its cause chain, and its own error surfaces", async () => {
+    const { llmComplete } = await import("../llm-client.js")
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    try {
+      fetchMock.mockRejectedValue(new Error("socket hang up"))
+      const directErr = new Error("got status: 400 Bad Request. INVALID_ARGUMENT", { cause: new Error("decoder detail") })
+      geminiMock.callGeminiDirect.mockRejectedValue(directErr)
+
+      await expect(llmComplete({
+        modelId: "gemini-3.6-flash",
+        system: "",
+        messages: [{ role: "user", content: "hi" }],
+      })).rejects.toBe(directErr)
+
+      const lines = errorSpy.mock.calls.map((c: unknown[]) => String(c[0])).filter((l: string) => l.includes("[llm-lane-fallback]"))
+      expect(lines).toHaveLength(1)
+      expect(lines[0]).toContain("gemini-3.6-flash: direct-gemini lane also failed (after the kie lane)")
+      expect(lines[0]).toContain("got status: 400 Bad Request. INVALID_ARGUMENT")
+      expect(lines[0]).toContain("decoder detail")
+    } finally {
+      errorSpy.mockRestore()
+    }
+  })
+
+  it("the direct lane is asked with the caller's own schema, not the KIE wire form", async () => {
+    const { llmComplete } = await import("../llm-client.js")
+    geminiMock.callGeminiDirect.mockResolvedValue({ text: '{"type":"wide"}', usage: { inputTokens: 1, outputTokens: 1 }, model: "gemini-3.8-flash" })
+    fetchMock.mockRejectedValue(new Error("socket hang up"))
+    const schema = { type: "object", properties: { type: { type: "string" } } }
+
+    const res = await llmComplete({
+      modelId: "gemini-3.8-flash",
+      system: "",
+      messages: [{ role: "user", content: "hi" }],
+      jsonSchema: { name: "shot", schema },
+    })
+
+    expect(res.text).toBe('{"type":"wide"}')
+    const kieBody = JSON.parse((fetchMock.mock.calls[0]![1] as { body: string }).body)
+    expect(Object.keys(kieBody.response_format.json_schema.schema.properties)).toEqual(["type_"])
+    const directReq = geminiMock.callGeminiDirect.mock.calls[0]![1] as { jsonSchema: { schema: unknown } }
+    expect(directReq.jsonSchema.schema).toEqual({ type: "object", properties: { type: { type: "string" } } })
+    expect(schema).toEqual({ type: "object", properties: { type: { type: "string" } } })
+  })
+
   it("no warn when the primary lane succeeds", async () => {
     const { llmComplete } = await import("../llm-client.js")
     fetchMock.mockResolvedValue(kieChatOk("kie-ok"))

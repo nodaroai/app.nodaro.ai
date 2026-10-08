@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest"
 import { z } from "zod"
+import { buildMultiPickerAnalyzerSpec } from "@nodaro/prompts"
 
 // ANTHROPIC_API_KEY set so claude models route to the direct SDK (tool path);
 // Gemini/GPT have no directFallbackModel so they always go through KIE.
@@ -302,6 +303,140 @@ describe("llmCompleteStructured", () => {
     )
     const body = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)
     expect(body.response_format).toBeUndefined()
+  })
+
+  // KIE's chat-completions validator reads a PROPERTY named `type` as the
+  // `type` keyword and refuses the request: `(code 422) $.response_format
+  // .json_schema.schema.properties.person.properties.type must be string or
+  // array`. The Person analyzer's first dimension is `type`, so every Gemini
+  // Describe-to-Picker run failed on this lane.
+  describe("a property named like a keyword the KIE validator misreads", () => {
+    const personAnswer = { person: { type_: "woman", age: "age-30s" }, gaps: { missingItems: [], missingCategories: [] } }
+
+    it("the Person analyzer is sent under the wire name, and its answer validates on the first attempt", async () => {
+      const { llmCompleteStructured, structuredJsonSchema } = await import("../llm-client.js")
+      const spec = buildMultiPickerAnalyzerSpec(["person"])
+      fetchMock.mockImplementation(async () => geminiContent(JSON.stringify(personAnswer)))
+      const r = await llmCompleteStructured(
+        { modelId: "gemini-3.8-flash", system: "", messages: [{ role: "user", content: "x" }] },
+        spec.schema,
+        { schemaName: spec.toolName },
+      )
+      expect(r.output).toEqual({ person: { type: "woman", age: "age-30s" }, gaps: { missingItems: [], missingCategories: [] } })
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+      const body = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)
+      const person = body.response_format.json_schema.schema.properties.person
+      expect(person.properties.type).toBeUndefined()
+      const callerPerson = (structuredJsonSchema(spec.schema).properties as Record<string, { properties: Record<string, unknown> }>).person
+      expect(person.properties.type_).toEqual(callerPerson.properties.type)
+    })
+
+    it("a schema with no such name goes on the wire byte for byte", async () => {
+      const { llmCompleteStructured, structuredJsonSchema } = await import("../llm-client.js")
+      fetchMock.mockResolvedValue(geminiContent('{"prompt":"x"}'))
+      await llmCompleteStructured(
+        { modelId: "gemini-3.8-flash", system: "", messages: [{ role: "user", content: "x" }] },
+        schema,
+      )
+      const sent = (fetchMock.mock.calls[0][1] as { body: string }).body
+      expect(sent).toContain(`"schema":${JSON.stringify(structuredJsonSchema(schema))}`)
+    })
+
+    it("an answer that is not JSON reaches the caller's validation as the model wrote it", async () => {
+      const { llmCompleteStructured } = await import("../llm-client.js")
+      const spec = buildMultiPickerAnalyzerSpec(["person"])
+      fetchMock
+        .mockResolvedValueOnce(geminiContent('{"person":{"type_":"woman"'))
+        .mockResolvedValueOnce(geminiContent(JSON.stringify(personAnswer)))
+      const r = await llmCompleteStructured(
+        { modelId: "gemini-3.8-flash", system: "", messages: [{ role: "user", content: "x" }] },
+        spec.schema,
+      )
+      expect((r.output as { person: unknown }).person).toEqual({ type: "woman", age: "age-30s" })
+      const retry = JSON.parse((fetchMock.mock.calls[1][1] as { body: string }).body)
+      const replayed = retry.messages.find((m: { role: string }) => m.role === "assistant")
+      expect(replayed.content).toBe('{"person":{"type_":"woman"')
+    })
+
+    // The responses lane (GPT, Grok, Kimi, DeepSeek) takes the same schema as
+    // `text.format`; the rename is invisible to the caller either way.
+    const responsesAnswer = (text: string) => jsonResponse({
+      status: "completed",
+      output: [{ type: "message", content: [{ type: "output_text", text }] }],
+      usage: { input_tokens: 5, output_tokens: 5 },
+    })
+
+    it("the responses lane sends the Person analyzer under the wire name too, and its answer validates", async () => {
+      const { llmCompleteStructured, structuredJsonSchema } = await import("../llm-client.js")
+      const spec = buildMultiPickerAnalyzerSpec(["person"])
+      fetchMock.mockImplementation(async () => responsesAnswer(JSON.stringify(personAnswer)))
+      const r = await llmCompleteStructured(
+        { modelId: "gpt-5.6-terra", system: "", messages: [{ role: "user", content: "x" }] },
+        spec.schema,
+        { schemaName: spec.toolName },
+      )
+      expect(r.output).toEqual({ person: { type: "woman", age: "age-30s" }, gaps: { missingItems: [], missingCategories: [] } })
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+      const body = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)
+      const person = body.text.format.schema.properties.person
+      expect(person.properties.type).toBeUndefined()
+      const callerPerson = (structuredJsonSchema(spec.schema).properties as Record<string, { properties: Record<string, unknown> }>).person
+      expect(person.properties.type_).toEqual(callerPerson.properties.type)
+    })
+
+    it("the responses lane's collapsed stream restores the text it returns", async () => {
+      const { llmCompleteStructured } = await import("../llm-client.js")
+      const spec = buildMultiPickerAnalyzerSpec(["person"])
+      fetchMock.mockImplementation(async () => streamResponse([
+        `data: ${JSON.stringify({ type: "response.output_text.delta", delta: JSON.stringify(personAnswer) })}\n\n`,
+        'data: {"type":"response.completed","response":{"usage":{"input_tokens":9,"output_tokens":4}}}\n\n',
+      ]))
+      const r = await llmCompleteStructured(
+        { modelId: "gpt-6-astra", system: "", messages: [{ role: "user", content: "x" }] },
+        spec.schema,
+      )
+      expect((r.output as { person: unknown }).person).toEqual({ type: "woman", age: "age-30s" })
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+      const body = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)
+      expect(body.stream).toBe(true)
+      expect(body.text.format.schema.properties.person.properties.type).toBeUndefined()
+    })
+
+    it("a schema with no such name goes on the responses wire byte for byte", async () => {
+      const { llmCompleteStructured, structuredJsonSchema } = await import("../llm-client.js")
+      fetchMock.mockResolvedValue(responsesAnswer('{"prompt":"x"}'))
+      await llmCompleteStructured(
+        { modelId: "gpt-5.6-terra", system: "", messages: [{ role: "user", content: "x" }] },
+        schema,
+      )
+      const sent = (fetchMock.mock.calls[0][1] as { body: string }).body
+      expect(sent).toContain(`"schema":${JSON.stringify(structuredJsonSchema(schema))}`)
+    })
+
+    it("the stream path sends the same wire schema and restores the text it returns", async () => {
+      const { llmStream } = await import("../llm-client.js")
+      fetchMock.mockResolvedValue(streamResponse([
+        'data: {"choices":[{"delta":{"content":"{\\"type_\\":"}}]}\n\n',
+        'data: {"choices":[{"delta":{"content":"\\"wide\\"}"},"finish_reason":"stop"}],"usage":{"prompt_tokens":3,"completion_tokens":2}}\n\n',
+        "data: [DONE]\n\n",
+      ]))
+      const tokens: string[] = []
+      const res = await llmStream(
+        {
+          modelId: "gemini-3.8-flash",
+          system: "",
+          messages: [{ role: "user", content: "x" }],
+          jsonSchema: { name: "shot", schema: { type: "object", properties: { type: { type: "string" } } } },
+        },
+        (t) => tokens.push(t),
+      )
+      const body = JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body)
+      expect(body.stream).toBe(true)
+      expect(Object.keys(body.response_format.json_schema.schema.properties)).toEqual(["type_"])
+      expect(JSON.parse(res.text)).toEqual({ type: "wide" })
+      // Chunks reach the caller as they arrive, so they carry the wire name.
+      expect(tokens.join("")).toBe('{"type_":"wide"}')
+    })
   })
 
   it("retries on invalid JSON, then succeeds", async () => {

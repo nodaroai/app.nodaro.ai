@@ -216,6 +216,7 @@ describe("POST /v1/describe-to-picker — W1-a minor-age floor", () => {
     // The floored value is also what gets persisted on the job row and fed to gap recording.
     expect(mocks.jobUpdate).toHaveBeenCalledWith({
       status: "completed",
+      completed_at: expect.any(String),
       output_data: { json: { person: { age: "age-pre-teen" }, styling: {} }, targetPickers: ["person", "styling"], usage: { inputTokens: 100, outputTokens: 50 } },
     })
   })
@@ -374,7 +375,7 @@ describe("POST /v1/describe-to-picker — streamed answer (Accept: text/event-st
     expect(evts.at(-1)?.data).toEqual({ code: "llm_error", message: "The model stopped responding" })
     expect(mocks.refundReservedCreditsForJob).toHaveBeenCalledWith("job-1")
     expect(mocks.commitReservedCreditsForJob).not.toHaveBeenCalled()
-    expect(mocks.jobUpdate).toHaveBeenCalledWith({ status: "failed", output_data: { error: "The model stopped responding" } })
+    expect(mocks.jobUpdate).toHaveBeenCalledWith({ status: "failed", completed_at: expect.any(String), output_data: { error: "The model stopped responding" } })
   })
 
   it("a minor: no field carries a value the floor removes, and done carries the floored answer", async () => {
@@ -411,5 +412,36 @@ describe("POST /v1/describe-to-picker — streamed answer (Accept: text/event-st
     release()
     await ended
     expect(text).toContain('"type":"done"')
+  })
+
+  // A plain provider error's message IS the sentence the person reads, so a
+  // log keyed on "the message was rewritten" never fired for it: a failed
+  // fallback lane reached the person with no log line anywhere.
+  it.each([
+    ["the JSON answer", {}],
+    ["the streamed answer", SSE],
+  ])("%s logs the raw failure, its causes and the job id, and the person reads the same sentence as before", async (_label, headers) => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    try {
+      const failure = new Error("got status: 400 Bad Request.", { cause: new Error("upstream detail") })
+      mocks.llmCompleteStructured.mockRejectedValue(failure)
+      mocks.llmStreamStructured.mockRejectedValue(failure)
+      const res = await app.inject({ method: "POST", url: URL, payload: VALID, headers })
+
+      expect(mocks.jobUpdate).toHaveBeenCalledWith({ status: "failed", completed_at: expect.any(String), output_data: { error: "got status: 400 Bad Request." } })
+      const logged = errorSpy.mock.calls.map((c) => c.map(String).join(" ")).filter((l) => l.includes("[describe-to-picker]"))
+      expect(logged).toHaveLength(1)
+      expect(logged[0]).toContain("job-1")
+      expect(logged[0]).toContain("got status: 400 Bad Request.")
+      expect(logged[0]).toContain("upstream detail")
+      if (headers === SSE) {
+        expect(events(res.payload).at(-1)).toEqual({ type: "error", data: { code: "llm_error", message: "got status: 400 Bad Request." } })
+      } else {
+        expect(res.statusCode).toBe(502)
+        expect(res.json()).toEqual({ error: { code: "llm_error", message: "got status: 400 Bad Request." } })
+      }
+    } finally {
+      errorSpy.mockRestore()
+    }
   })
 })

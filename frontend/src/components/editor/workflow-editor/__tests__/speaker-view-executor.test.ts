@@ -7,7 +7,7 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-const { toastError, polls, flag } = vi.hoisted(() => ({ toastError: vi.fn(), polls: [] as Array<{ call: () => Promise<unknown>; resultFields?: unknown }>, flag: { priced: false } }))
+const { toastError, polls, flag } = vi.hoisted(() => ({ toastError: vi.fn(), polls: [] as Array<{ call: () => Promise<unknown>; extra?: unknown; resultFields?: unknown }>, flag: { priced: false } }))
 
 vi.mock("sonner", () => ({ toast: Object.assign(vi.fn(), { error: toastError, success: vi.fn(), info: vi.fn() }) }))
 vi.mock("@/lib/supabase", () => ({ createClient: () => ({}) }))
@@ -18,14 +18,14 @@ vi.mock("@nodaro/render-rules", async (orig) => {
 const speakerViewApi = vi.fn(async (_p: unknown) => ({ jobId: "job-1" }))
 vi.mock("@/lib/api", () => ({ speakerView: (p: unknown) => speakerViewApi(p) }))
 vi.mock("../poll-job", () => ({
-  pollJobWithNodeUpdate: (_id: string, call: () => Promise<unknown>, _key: unknown, _label: string, _ctx: unknown, _extra: unknown, _est: unknown, opts: { resultFields?: unknown }) => {
-    polls.push({ call, resultFields: opts?.resultFields })
+  pollJobWithNodeUpdate: (_id: string, call: () => Promise<unknown>, _key: unknown, _label: string, _ctx: unknown, extra: unknown, _est: unknown, opts: { resultFields?: unknown }) => {
+    polls.push({ call, extra, resultFields: opts?.resultFields })
     return Promise.resolve("done")
   },
 }))
 vi.mock("@/hooks/use-workflow-store", () => ({ useWorkflowStore: { getState: () => ({ nodes: [], edges: [] }) } }))
 
-import { executeSpeakerView } from "../speaker-view-executor"
+import { executeSpeakerView, runSpeakerView } from "../speaker-view-executor"
 import { translate } from "@/lib/i18n"
 import type { WorkflowNode } from "@/types/nodes"
 
@@ -77,5 +77,16 @@ describe("executeSpeakerView", () => {
     await executeSpeakerView(node(), { edl: JSON.stringify(EDL) }, ctx, undefined)
     const fields = (polls[0]!.resultFields as (od: Record<string, unknown>) => Record<string, unknown>)({ quality: "proxy", clipKey: "0-10000", renderBasis: "0123456789abcdef", thumbnailUrl: "t.jpg" })
     expect(fields).toMatchObject({ quality: "proxy", clipKey: "0-10000", renderBasis: "0123456789abcdef", thumbnailUrl: "t.jpg" })
+  })
+})
+
+describe("runSpeakerView — what a finished render lands on the node and its take", () => {
+  it("the EDL as drawn on generatedJson and the remapped transcript on generatedTranscript (decided 2026-10-08)", async () => {
+    await runSpeakerView("sv", {} as never, ctx)
+    const extra = polls[0]!.extra as (od: Record<string, unknown>) => Record<string, unknown>
+    const transcript = { version: 1, words: [{ text: "hi", startMs: 0, endMs: 300 }] }
+    expect(extra({ videoUrl: "https://r2/sv.mp4", json: EDL, transcript })).toStrictEqual({ generatedJson: EDL, generatedTranscript: transcript })
+    // none (no transcript wired, or an older plugin): cleared, never left from an earlier take
+    expect(extra({ videoUrl: "https://r2/sv.mp4", json: EDL })).toStrictEqual({ generatedJson: EDL, generatedTranscript: undefined })
   })
 })

@@ -144,6 +144,18 @@ export function clientAddress(req: AddressedRequest): string | null {
   return resolveClientAddress(req).address
 }
 
+/**
+ * The client's country as Cloudflare states it (`CF-IPCountry`, ISO 3166
+ * two letters), or null: the header is missing (no Cloudflare in front, or
+ * its IP Geolocation off), unknown (`XX`), or Tor (`T1`). For display only —
+ * a caller that bypasses Cloudflare could send its own, so nothing may decide
+ * anything on it.
+ */
+export function clientCountry(req: AddressedRequest): string | null {
+  const value = headerValue(req, "cf-ipcountry")?.trim().toUpperCase() ?? ""
+  return /^[A-Z]{2}$/.test(value) && value !== "XX" && value !== "T1" ? value : null
+}
+
 /** The client's network (IPv4 address / IPv6 /64), or null when unknown. */
 export function clientNetworkKey(req: AddressedRequest): string | null {
   const address = clientAddress(req)

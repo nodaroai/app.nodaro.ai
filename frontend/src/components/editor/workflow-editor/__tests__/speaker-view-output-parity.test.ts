@@ -9,7 +9,7 @@ import { describe, it, expect, vi } from "vitest"
 
 vi.mock("@/lib/supabase", () => ({ createClient: () => ({}) }))
 
-import { extractNodeOutput } from "../execution-graph"
+import { detectPreviewItemType, extractNodeOutput } from "../execution-graph"
 import { resolveNodeInputs } from "../node-input-resolver"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 
@@ -56,5 +56,38 @@ describe("the lanes around a Speaker View node, in the editor's resolver", () =>
     const inputs = resolveNodeInputs(nodes[2]!, nodes, [edge("plan", "sv", "edl", "edl"), edge("tx", "sv", "json", "transcript")])
     expect(JSON.parse(inputs.edl as string)).toEqual(EDL)
     expect(JSON.parse(inputs.transcript as string)).toEqual(words)
+  })
+})
+
+describe("Speaker View's transcript output (decided 2026-10-08): the wired transcript remapped through the edit as drawn", () => {
+  const REMAPPED = { version: 1, words: [{ text: "Welcome", startMs: 200, endMs: 640, speaker: "Host" }] }
+  const withTranscript = () => node("sv", "speaker-view", { generatedVideoUrl: VIDEO, generatedJson: EDL, generatedTranscript: REMAPPED, generatedResults: [{ url: VIDEO, jobId: "j", timestamp: "t" }] })
+
+  it("hands it on `transcript` — the EDL stays on json, the video on the default", () => {
+    expect(extractNodeOutput(withTranscript(), "transcript")).toBe(JSON.stringify(REMAPPED))
+    expect(extractNodeOutput(withTranscript(), "json")).toBe(JSON.stringify(EDL))
+    expect(extractNodeOutput(withTranscript())).toBe(VIDEO)
+  })
+
+  it("a render with none (no transcript wired, an older plugin) hands nothing on it — never the video url", () => {
+    expect(extractNodeOutput(sv(), "transcript")).toBeUndefined()
+  })
+
+  it("previews it as data", () => {
+    expect(detectPreviewItemType("speaker-view", JSON.stringify(REMAPPED), "transcript")).toBe("data")
+  })
+
+  it("Add Captions receives the video on `in` and the remapped transcript on `transcript`", () => {
+    const nodes = [withTranscript(), node("cap", "add-captions")]
+    const inputs = resolveNodeInputs(nodes[1]!, nodes, [edge("sv", "cap", "video", "in"), edge("sv", "cap", "transcript", "transcript")])
+    expect(inputs.videoUrl).toBe(VIDEO)
+    expect(JSON.parse(inputs.transcript as string)).toEqual(REMAPPED)
+  })
+
+  it("from a render with none, Add Captions' transcript lane reads nothing and the video is never routed into it", () => {
+    const nodes = [sv(), node("cap", "add-captions")]
+    const inputs = resolveNodeInputs(nodes[1]!, nodes, [edge("sv", "cap", "video", "in"), edge("sv", "cap", "transcript", "transcript")])
+    expect(inputs.videoUrl).toBe(VIDEO)
+    expect(inputs.transcript).toBeUndefined()
   })
 })

@@ -41,7 +41,7 @@ export const HANDLE_OUTPUT_TYPES: Record<string, Partial<Record<string, HandleCo
   // camera-switch: the switched edit and the renamed transcript, both json.
   "camera-switch": { edl: "look", transcript: "look" },
   // speaker-view: the rendered video and the EDL as drawn (json).
-  "speaker-view": { video: "video", json: "look" },
+  "speaker-view": { video: "video", json: "look", transcript: "look" },
   "add-captions": { "video-out": "video" },
   "adjust-volume": { "video-out": "video", "audio-out": "audio" },
   "assemble-narrated-video": { video: "video" },

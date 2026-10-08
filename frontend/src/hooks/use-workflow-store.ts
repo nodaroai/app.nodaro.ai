@@ -14,6 +14,7 @@ import { NODE_DEFINITIONS, NODE_DEF_MAP, TELEPORTER_CHANNEL_COLORS, LOOP_COL_ADD
 import { HANDLE_OUTPUT_TYPES } from "@/lib/handle-output-types"
 import type { WorkflowSnapshot } from "./use-undo-redo-store"
 import { setSkipUndoCapture } from "./undo-flags"
+import { followNodeIdMoves, type NodeIdMove } from "@/lib/presentation-node-id"
 import { LEGACY_SOURCE_HANDLE_ALIASES, LEGACY_TARGET_HANDLE_ALIASES, classifyLegacyTargetHandle, renderedSourceHandle, filterCloneNodes, EXECUTION_DATA_KEYS, TRANSIENT_RUNTIME_KEYS, migrateToItems, validateNoNestedGroups, cleanOrphanedItems, isCollectInEdge, overlayVariantIdFromHandle, isTelegramAccountTriggerNamedHandle, telegramAccountTriggerOutputs, TELEGRAM_ACCOUNT_TRIGGER_NODE_TYPE } from "@nodaro/shared"
 import type { PresentationItem, PipelineStatus } from "@nodaro/shared"
 import type { VariableDisplayMode } from "@/components/editor/config-panels/types"
@@ -759,6 +760,13 @@ interface WorkflowState {
   readonly unskipSelectedNodes: (nodeIds: string[]) => void
   readonly restoreSnapshot: (snapshot: WorkflowSnapshot) => void
   /**
+   * Every node swapped for another in this editing session, as [old id, new
+   * id] (`lib/replace-render-node.ts`). The published app's items are not part
+   * of an undo step, so a restore re-points them at whichever id of a swap
+   * chain is on the canvas again (`followNodeIdMoves`). Cleared on load.
+   */
+  readonly nodeIdMoves: readonly NodeIdMove[]
+  /**
    * Rewrite the graph in ONE store update — one undo step, one dirty epoch.
    *
    * For a bulk edit computed outside the store (Clear results). `edit` reads
@@ -770,8 +778,19 @@ interface WorkflowState {
    * Returns whether anything changed.
    */
   readonly editGraph: (
-    edit: (graph: { readonly nodes: WorkflowNode[]; readonly edges: WorkflowEdge[] }) =>
-      | { readonly nodes: WorkflowNode[]; readonly edges: WorkflowEdge[] }
+    edit: (graph: {
+      readonly nodes: WorkflowNode[]
+      readonly edges: WorkflowEdge[]
+      readonly presentationSettings: PresentationSettings
+    }) =>
+      | {
+          readonly nodes: WorkflowNode[]
+          readonly edges: WorkflowEdge[]
+          /** The app's settings, when the edit re-points them (a swap). */
+          readonly presentationSettings?: PresentationSettings
+          /** A node the edit replaced with another, as [old id, new id]. */
+          readonly nodeIdMove?: NodeIdMove
+        }
       | null,
   ) => boolean
   readonly batchAddNodesAndEdges: (nodes: WorkflowNode[], edges: WorkflowEdge[]) => void
@@ -886,6 +905,32 @@ function generateNodeId(existingIds: Iterable<string>): string {
   const next = maxSuffix + 1
   nextNodeId = next + 1
   return `node_${next}`
+}
+
+/** A fresh `node_<n>` id for a node added outside `addNode` (a node swapped in
+ *  place, `lib/replace-render-node.ts`): the same drift-proof mint. */
+export function mintNodeId(existingIds: Iterable<string>): string {
+  return generateNodeId(existingIds)
+}
+
+/**
+ * The data a new node of `type` starts with, as `addNode` resolves it — the
+ * factory defaults under the admin's and then the user's saved defaults, then
+ * the curated ones. `undefined` for a type with no definition.
+ */
+export function newNodeDefaultData(type: SceneNodeType): Record<string, unknown> | undefined {
+  const definition = NODE_DEFINITIONS.find((d) => d.type === type)
+  if (!definition) return undefined
+  // Three-layer default resolution: factory ← admin DB ← user localStorage.
+  // No-op for node types not in NODE_DEFAULT_TYPES.
+  const adminDefaults = queryClient.getQueryData<AdminDefault[]>(queryKeys.nodeDefaults.all) ?? []
+  const resolvedDefaults = resolveNodeDefaults({
+    nodeType: type,
+    factory: definition.defaultData as Record<string, unknown>,
+    adminDefaults,
+    userId: getCachedUserId(),
+  })
+  return { ...curatedNodeDefaults(type, resolvedDefaults) }
 }
 
 /**
@@ -1074,6 +1119,7 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
   needsAutoLayout: false,
   setNeedsAutoLayout: (v) => set({ needsAutoLayout: v }),
   loadGeneration: 0,
+  nodeIdMoves: [],
   saveStatus: "idle" as SaveStatus,
   saveError: null,
   loadedUpdatedAt: null,
@@ -1483,16 +1529,7 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
 
     const id = generateNodeId(get().nodes.map((n) => n.id))
 
-    // Three-layer default resolution: factory ← admin DB ← user localStorage.
-    // No-op for node types not in NODE_DEFAULT_TYPES.
-    const adminDefaults = queryClient.getQueryData<AdminDefault[]>(queryKeys.nodeDefaults.all) ?? []
-    const resolvedDefaults = resolveNodeDefaults({
-      nodeType: type,
-      factory: definition.defaultData as Record<string, unknown>,
-      adminDefaults,
-      userId: getCachedUserId(),
-    })
-    const nodeData = { ...curatedNodeDefaults(type, resolvedDefaults), ...initialData }
+    const nodeData = { ...newNodeDefaultData(type), ...initialData }
 
     // Parameter nodes: seed displayMode from the user's per-device preference
     // so a new node opens in whatever mode (picks/prompt/both) they last used.
@@ -2627,6 +2664,8 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
       saveRefusedFor: null,
       needsAutoLayout: positioned.filledCount > 0,
       loadGeneration: state.loadGeneration + 1,
+      // A swap's id moves belong to the graph they were made on.
+      nodeIdMoves: [],
       saveStatus: "idle" as SaveStatus,
       saveError: null,
       loadedUpdatedAt: null,
@@ -2654,6 +2693,8 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
       selectedNodeId: null,
       isDirty: false,
       loadGeneration: state.loadGeneration + 1,
+      // A swap's id moves belong to the graph they were made on.
+      nodeIdMoves: [],
       saveStatus: "idle" as SaveStatus,
       saveError: null,
       loadedUpdatedAt: null,
@@ -2726,6 +2767,8 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
         ...(version !== undefined ? { loadedVersion: version } : {}),
         remoteUpdatedAt: null,
         loadGeneration: state.loadGeneration + 1,
+        // A swap's id moves belong to the graph they were made on.
+        nodeIdMoves: [],
       }
       // The adopted remote graph becomes the next delta base. Meta fields
       // mirror what this reconcile leaves in the store (settings fields are
@@ -3122,6 +3165,12 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
       characterDefinitions: snapshot.characterDefinitions,
       flowPromptTemplates: snapshot.flowPromptTemplates,
       workflowName: snapshot.workflowName,
+      // A swapped node coming back (or going again) takes the app's items with it.
+      presentationSettings: followNodeIdMoves(
+        get().presentationSettings,
+        new Set(snapshot.nodes.map((n) => n.id)),
+        get().nodeIdMoves,
+      ),
       isDirty: true,
     })
   },
@@ -3130,10 +3179,16 @@ export const useWorkflowStore = create<WorkflowState>((rawSet, get) => {
     if (get().isReadOnly) return false
     let changed = false
     set((state) => {
-      const next = edit({ nodes: state.nodes, edges: state.edges })
+      const next = edit({ nodes: state.nodes, edges: state.edges, presentationSettings: state.presentationSettings })
       if (!next) return {}
       changed = true
-      return { nodes: next.nodes, edges: next.edges, isDirty: true }
+      return {
+        nodes: next.nodes,
+        edges: next.edges,
+        ...(next.presentationSettings ? { presentationSettings: next.presentationSettings } : {}),
+        ...(next.nodeIdMove ? { nodeIdMoves: [...state.nodeIdMoves, next.nodeIdMove] } : {}),
+        isDirty: true,
+      }
     })
     return changed
   },

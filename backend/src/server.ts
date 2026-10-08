@@ -6,6 +6,7 @@ import { startReconcileCron } from "./lib/reconcile/start.js"
 import { startAppReportSweepCron } from "./lib/app-report-sweep.js"
 import { startScene3DArtifactCleanup } from "./lib/scene3d-artifact-cleanup.js"
 import { startRetainedImageCleanup } from "./lib/retained-image-cleanup.js"
+import { startSpeakerFramesCacheSweep } from "./lib/speaker-frames-cache-sweep.js"
 import { startScheduleCron, stopScheduleCron } from "./lib/schedule-cron.js"
 import { SHUTDOWN_DRAIN_MS } from "./lib/worker-drain.js"
 import { seedTutorialTemplates } from "./lib/tutorial-seed/index.js"
@@ -28,6 +29,7 @@ import { assertClientAddressConfig, describeClientAddressConfig } from "./lib/cl
 import { watchProviderCredentials } from "./providers/index.js"
 import { warmHeygenCatalog } from "./providers/heygen/catalog.js"
 import { ensureStorageBucket } from "./lib/storage.js"
+import { archiveThisBuild } from "./lib/site-asset-archive.js"
 import { initTelegramRoutingTable } from "./lib/telegram-router.js"
 import { pipelineEvents } from "./ee/pipelines/events.js"
 
@@ -46,8 +48,10 @@ async function main() {
   const app = await buildApp()
   let stopScene3DArtifactCleanup: (() => Promise<void>) | undefined
   let stopRetainedImageCleanup: (() => Promise<void>) | undefined
+  let stopSpeakerFramesCacheSweep: (() => Promise<void>) | undefined
   app.addHook("onClose", async () => { await stopScene3DArtifactCleanup?.() })
   app.addHook("onClose", async () => { await stopRetainedImageCleanup?.() })
+  app.addHook("onClose", async () => { await stopSpeakerFramesCacheSweep?.() })
 
   // Load Telegram routing table before accepting traffic
   try {
@@ -87,12 +91,20 @@ async function main() {
   startAppReportSweepCron()
   stopScene3DArtifactCleanup = startScene3DArtifactCleanup((message) => app.log.warn(message))
   stopRetainedImageCleanup = startRetainedImageCleanup((message) => app.log.warn(message))
+  // Speaker Frames checkpoints left by a crashed attempt — ALL editions (the
+  // prefix simply never exists where the plugin does not run).
+  stopSpeakerFramesCacheSweep = startSpeakerFramesCacheSweep((message) => app.log.warn(message))
 
   // Built-in guided tutorials. Self-host only — Cloud already has these rows,
   // and staging/production share one Supabase project, so this must never run
   // there. Fire-and-forget: tutorials are not worth delaying boot for, and the
   // seeder swallows its own failures.
   void seedTutorialTemplates()
+
+  // This build's styling files into the archive of past builds, so pages it
+  // served keep their stylesheet after the next deploy. Background, one log
+  // line, never throws; a no-op unless the archive is on.
+  void archiveThisBuild((message) => app.log.info(message))
 
   // Operator-supplied provider keys (pasted on /setup, stored encrypted).
   // The API process reads keys too (LLM lanes, setup status) and is where

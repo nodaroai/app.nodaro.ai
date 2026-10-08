@@ -156,9 +156,19 @@ describe("declaredJsonOutput — every JSON pip is classified (decided 2026-10-0
     expect(jsonKindMismatch("silence-detect", "json", "apply-edl", "edl")).toBeNull()
   })
 
-  it("answers a render's json from the registry and nothing else on a render", () => {
+  it("answers a render's json and transcript pips from the registry and nothing else on a render", () => {
     expect(declaredJsonOutput("speaker-view", "json")).toBe("edl")
     expect(declaredJsonOutput("speaker-view", "video")).toBeUndefined()
+    // Speaker View's second output (decided 2026-10-08): the remapped transcript
+    expect(declaredJsonOutput("speaker-view", "transcript")).toBe("transcript")
+    expect(declaredJsonOutput("apply-edl", "transcript")).toBeUndefined()
+    expect(declaredJsonOutput("apply-edl", "media")).toBeUndefined()
+  })
+
+  it("Speaker View's transcript feeds a Transcript input and is blocked from an EDL input; its json the reverse", () => {
+    expect(jsonKindMismatch("speaker-view", "transcript", "add-captions", "transcript")).toBeNull()
+    expect(jsonKindMismatch("speaker-view", "transcript", "apply-edl", "edl")).toEqual({ output: "transcript", input: "edl" })
+    expect(jsonKindMismatch("speaker-view", "json", "add-captions", "transcript")).toEqual({ output: "edl", input: "transcript" })
   })
 
   it("is undefined for anything undeclared, and never reads inherited keys", () => {

@@ -1,67 +1,20 @@
 /**
  * The Site Analytics page: a setup that is not finished says what is missing;
- * a section Google refuses never hides the other, and says what fixes it;
+ * a section Google refuses never hides the others, and says what fixes it;
  * a refresh files its answer under its own range; a page's index verdict is
  * asked once and survives tab switches; only the site's own pages are links.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import type { SearchReport, SiteAnalyticsReport, TrafficReport } from "../types"
+import { MemoryRouter } from "react-router-dom"
+import type { SiteAnalyticsReport } from "../types"
+import { AT, EMAIL, NOT_SET_UP, REALTIME_OK, answer, onlineData, report, searchData } from "./fixtures"
 
 vi.mock("@/lib/api", () => ({ getAuthHeaders: async () => ({ Authorization: "Bearer t" }) }))
 vi.mock("@/lib/edition", () => ({ hasAdmin: () => true }))
 
 import AdminSiteAnalyticsPage from "../page"
-
-const EMAIL = "reader@nodaro-analytics.iam.gserviceaccount.com"
-const SETUP = { serviceAccountEmail: EMAIL, ga4PropertyId: "537345785", searchConsoleSite: "sc-domain:nodaro.ai", problems: [] }
-
-const NOT_SET_UP: SiteAnalyticsReport = {
-  days: 28,
-  setup: {
-    serviceAccountEmail: null,
-    ga4PropertyId: null,
-    searchConsoleSite: null,
-    problems: ["SITE_ANALYTICS_SERVICE_ACCOUNT_JSON is not set.", "SITE_ANALYTICS_GA4_PROPERTY_ID is not set.", "SITE_ANALYTICS_SEARCH_CONSOLE_SITE is not set."],
-  },
-  traffic: { status: "not_configured" },
-  search: { status: "not_configured" },
-}
-
-const searchData = (clicks: number, pages = [{ key: "https://nodaro.ai/docs", clicks: 300, impressions: 5000, ctr: 0.06, position: 4.2 }]): SearchReport => ({
-  window: { startDate: "2026-09-10", endDate: "2026-10-07" },
-  totals: { clicks, impressions: 98765, ctr: 0.0437, position: 12.3 },
-  daily: [
-    { date: "2026-10-06", clicks: 100, impressions: 2000 },
-    { date: "2026-10-07", clicks: 120, impressions: 2100 },
-  ],
-  pages,
-  pagesCapped: false,
-  queries: [{ key: "nodaro", clicks: 250, impressions: 400, ctr: 0.625, position: 1.1 }],
-  queriesCapped: false,
-  sitemaps: [],
-})
-
-const trafficData: TrafficReport = {
-  totals: { views: 1200, activeUsers: 300, engagementSeconds: 54000, events: 5000 },
-  daily: [],
-  pages: [
-    { key: "nodaro.ai/docs", host: "nodaro.ai", path: "/docs", views: 500, activeUsers: 90, engagementSeconds: 900, events: 700 },
-    { key: "nodaro.ai.attacker.tld/win", host: "nodaro.ai.attacker.tld", path: "/win", views: 3, activeUsers: 1, engagementSeconds: 0, events: 3 },
-  ],
-  pagesTotal: 575,
-  titles: [],
-  titlesTotal: 0,
-}
-
-const report = (over: Partial<SiteAnalyticsReport> = {}): SiteAnalyticsReport => ({
-  days: 28,
-  setup: SETUP,
-  traffic: { status: "ok", fetchedAt: "2026-10-08T12:00:00.000Z", data: trafficData },
-  search: { status: "ok", fetchedAt: "2026-10-08T12:00:00.000Z", data: searchData(4321) },
-  ...over,
-})
 
 const fetchMock = vi.fn()
 
@@ -71,30 +24,39 @@ beforeEach(() => {
 })
 afterEach(() => vi.unstubAllGlobals())
 
-const answer = (body: unknown, status = 200) => Promise.resolve(new Response(JSON.stringify(body), { status }))
+/** The server: the realtime snapshot, whatever a test answers itself, and otherwise the report. */
+function serve(body: SiteAnalyticsReport, extra: (url: string) => Promise<Response> | undefined = () => undefined) {
+  fetchMock.mockImplementation(
+    (url: string) => extra(url) ?? (url.endsWith("/realtime") ? answer(REALTIME_OK) : url.endsWith("/online-users") ? answer(onlineData()) : answer(body)),
+  )
+}
 
 function renderPage() {
   return render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <AdminSiteAnalyticsPage />
+      <MemoryRouter>
+        <AdminSiteAnalyticsPage />
+      </MemoryRouter>
     </QueryClientProvider>,
   )
 }
 
 describe("setup and refusals", () => {
-  it("a setup that is not finished names every missing variable, and both sections wait for it", async () => {
-    fetchMock.mockImplementation(() => answer(NOT_SET_UP))
+  it("a setup that is not finished names every missing variable, every section waits for it, and nothing real-time is asked", async () => {
+    serve(NOT_SET_UP)
     renderPage()
     expect(await screen.findByText("Finish the setup")).toBeInTheDocument()
     expect(screen.getByText("SITE_ANALYTICS_SERVICE_ACCOUNT_JSON is not set.")).toBeInTheDocument()
-    expect(screen.getAllByText(/Not set up yet/)).toHaveLength(2)
-    expect(String(fetchMock.mock.calls[0]?.[0])).toBe("/v1/admin/site-analytics?days=28")
+    expect(screen.getAllByText(/Not set up yet/)).toHaveLength(4)
+    // The report for 28 days — whichever request the page happens to send first.
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).startsWith("/v1/admin/site-analytics?")).map(([url]) => String(url))).toEqual(["/v1/admin/site-analytics?days=28"])
+    expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/realtime"))).toBe(false)
+    expect(screen.queryByRole("link", { name: /Google Analytics/ })).toBeNull()
+    expect(screen.queryByRole("link", { name: /Search Console/ })).toBeNull()
   })
 
   it("Analytics refusing access shows Google's reason and whom to grant, and Search Console still shows its numbers", async () => {
-    fetchMock.mockImplementation(() =>
-      answer(report({ traffic: { status: "error", httpStatus: 403, reason: "PERMISSION_DENIED", message: "User does not have sufficient permissions for this property." } })),
-    )
+    serve(report({ traffic: { status: "error", httpStatus: 403, reason: "PERMISSION_DENIED", message: "User does not have sufficient permissions for this property." } }))
     renderPage()
     expect(await screen.findByText(/User does not have sufficient permissions for this property/)).toBeInTheDocument()
     expect(screen.getByText(/Admin → Property access management/)).toBeInTheDocument()
@@ -103,9 +65,7 @@ describe("setup and refusals", () => {
   })
 
   it("an API that is turned off says to turn it on — not to grant access that would change nothing", async () => {
-    fetchMock.mockImplementation(() =>
-      answer(report({ traffic: { status: "error", httpStatus: 403, reason: "SERVICE_DISABLED", message: "Google Analytics Data API has not been used in project 123 before or it is disabled." } })),
-    )
+    serve(report({ traffic: { status: "error", httpStatus: 403, reason: "SERVICE_DISABLED", message: "Google Analytics Data API has not been used in project 123 before or it is disabled." } }))
     renderPage()
     expect(await screen.findByText(/Turn the API on/)).toBeInTheDocument()
     expect(screen.queryByText(/Property access management/)).toBeNull()
@@ -115,7 +75,7 @@ describe("setup and refusals", () => {
 describe("links", () => {
   it("only the site's own pages are links; an address from Google that is not http(s) stays text", async () => {
     const hostile = searchData(1, [{ key: "javascript:alert(1)", clicks: 1, impressions: 2, ctr: 0.5, position: 3 }])
-    fetchMock.mockImplementation(() => answer(report({ search: { status: "ok", fetchedAt: "2026-10-08T12:00:00.000Z", data: hostile } })))
+    serve(report({ search: { status: "ok", fetchedAt: AT, data: hostile } }))
     renderPage()
     expect(await screen.findByText("javascript:alert(1)")).toBeInTheDocument()
     expect(screen.queryByRole("link", { name: "javascript:alert(1)" })).toBeNull()
@@ -125,29 +85,44 @@ describe("links", () => {
     expect(screen.getByText("/win")).toBeInTheDocument()
     expect(screen.getByText(/Google sent its busiest 2 of 575/)).toBeInTheDocument()
   })
+
+  it("Google Analytics and Search Console open in a new tab, GA over the page's range and with no account number", async () => {
+    serve(report())
+    renderPage()
+    const ga = await screen.findByRole("link", { name: /Google Analytics/ })
+    expect(ga).toHaveAttribute("target", "_blank")
+    expect(ga.getAttribute("rel")).toContain("noopener")
+    expect(ga).toHaveAttribute(
+      "href",
+      "https://analytics.google.com/analytics/web/#/p537345785/reports/dashboard?params=_u..nav%3Dmaui%26_u.dateOption%3Dlast28Days%26_u.comparisonOption%3Ddisabled&ruid=business-objectives-generate-leads-overview,business-objectives,generate-leads&collectionId=business-objectives&r=business-objectives-generate-leads-overview",
+    )
+    const searchConsole = screen.getByRole("link", { name: /Search Console/ })
+    expect(searchConsole).toHaveAttribute("target", "_blank")
+    expect(searchConsole).toHaveAttribute("href", "https://search.google.com/search-console/performance/search-analytics?resource_id=sc-domain%3Anodaro.ai")
+    fireEvent.click(screen.getByRole("button", { name: "7 days" }))
+    expect(screen.getByRole("link", { name: /Google Analytics/ }).getAttribute("href")).toContain("_u.dateOption%3Dlast7Days%26")
+  })
 })
 
 describe("ranges and refresh", () => {
   it("a range switch keeps the last report on screen while the next one loads", async () => {
     let releaseSeven: (r: Response) => void = () => undefined
-    fetchMock.mockImplementation((url: string) =>
-      url.includes("days=7") ? new Promise<Response>((resolve) => (releaseSeven = resolve)) : answer(report()),
-    )
+    serve(report(), (url) => (url.includes("days=7") ? new Promise<Response>((resolve) => (releaseSeven = resolve)) : undefined))
     renderPage()
     expect(await screen.findByText("4,321")).toBeInTheDocument()
     fireEvent.click(screen.getByRole("button", { name: "7 days" }))
     await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url) === "/v1/admin/site-analytics?days=7")).toBe(true))
     expect(screen.getByText("4,321")).toBeInTheDocument()
-    await act(async () => releaseSeven(new Response(JSON.stringify(report({ days: 7, search: { status: "ok", fetchedAt: "2026-10-08T12:00:00.000Z", data: searchData(777) } })))))
+    await act(async () => releaseSeven(new Response(JSON.stringify(report({ days: 7, search: { status: "ok", fetchedAt: AT, data: searchData(777) } })))))
     expect(await screen.findByText("777")).toBeInTheDocument()
   })
 
   it("a refresh files its answer under the range it was asked for, even after a switch", async () => {
     let releaseFresh: (r: Response) => void = () => undefined
-    fetchMock.mockImplementation((url: string) => {
+    serve(report(), (url) => {
       if (url.includes("fresh=1")) return new Promise<Response>((resolve) => (releaseFresh = resolve))
-      if (url.includes("days=7")) return answer(report({ days: 7, search: { status: "ok", fetchedAt: "2026-10-08T12:00:00.000Z", data: searchData(777) } }))
-      return answer(report())
+      if (url.includes("days=7")) return answer(report({ days: 7, search: { status: "ok", fetchedAt: AT, data: searchData(777) } }))
+      return undefined
     })
     renderPage()
     expect(await screen.findByText("4,321")).toBeInTheDocument()
@@ -165,18 +140,15 @@ describe("ranges and refresh", () => {
 })
 
 describe("index checks", () => {
+  const inspections = () => fetchMock.mock.calls.filter(([url]) => String(url).endsWith("/inspect"))
+
   it("Check asks the server about that one page, shows Google's verdict and when it was checked, and keeps it across tabs", async () => {
-    fetchMock.mockImplementation((url: string) =>
-      url.endsWith("/inspect")
-        ? answer({ url: "https://nodaro.ai/docs", verdict: "PASS", coverageState: "Submitted and indexed", checkedAt: "2026-10-08T12:00:00.000Z" })
-        : answer(report()),
-    )
+    serve(report(), (url) => (url.endsWith("/inspect") ? answer({ url: "https://nodaro.ai/docs", verdict: "PASS", coverageState: "Submitted and indexed", checkedAt: AT }) : undefined))
     renderPage()
     fireEvent.click(await screen.findByRole("button", { name: "Check" }))
     expect(await screen.findByText("Indexed")).toBeInTheDocument()
     expect(screen.getByText("Submitted and indexed")).toBeInTheDocument()
     expect(screen.getByText(/^Checked /)).toBeInTheDocument()
-    const inspections = () => fetchMock.mock.calls.filter(([url]) => String(url).endsWith("/inspect"))
     expect(JSON.parse(String((inspections()[0]?.[1] as RequestInit).body))).toEqual({ url: "https://nodaro.ai/docs", fresh: false })
 
     const searchSection = within(screen.getByRole("heading", { name: /Google Search/ }).closest("section") as HTMLElement)
@@ -190,10 +162,8 @@ describe("index checks", () => {
   })
 
   it("a check the server refuses shows its reason in the row, and Check stays", async () => {
-    fetchMock.mockImplementation((url: string) =>
-      url.endsWith("/inspect")
-        ? answer({ error: { code: "daily_budget", message: "Today's budget of 900 page checks is used up. It resets at midnight Pacific time." } }, 429)
-        : answer(report()),
+    serve(report(), (url) =>
+      url.endsWith("/inspect") ? answer({ error: { code: "daily_budget", message: "Today's budget of 900 page checks is used up. It resets at midnight Pacific time." } }, 429) : undefined,
     )
     renderPage()
     fireEvent.click(await screen.findByRole("button", { name: "Check" }))
@@ -202,14 +172,11 @@ describe("index checks", () => {
   })
 
   it("Check again asks past the server's cache", async () => {
-    fetchMock.mockImplementation((url: string) =>
-      url.endsWith("/inspect") ? answer({ url: "https://nodaro.ai/docs", verdict: "FAIL", coverageState: "Crawled - currently not indexed", checkedAt: "2026-10-08T12:00:00.000Z" }) : answer(report()),
-    )
+    serve(report(), (url) => (url.endsWith("/inspect") ? answer({ url: "https://nodaro.ai/docs", verdict: "FAIL", coverageState: "Crawled - currently not indexed", checkedAt: AT }) : undefined))
     renderPage()
     fireEvent.click(await screen.findByRole("button", { name: "Check" }))
     fireEvent.click(await screen.findByRole("button", { name: "Check again" }))
-    await waitFor(() => expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith("/inspect"))).toHaveLength(2))
-    const last = fetchMock.mock.calls.filter(([url]) => String(url).endsWith("/inspect"))[1]
-    expect(JSON.parse(String((last?.[1] as RequestInit).body))).toEqual({ url: "https://nodaro.ai/docs", fresh: true })
+    await waitFor(() => expect(inspections()).toHaveLength(2))
+    expect(JSON.parse(String((inspections()[1]?.[1] as RequestInit).body))).toEqual({ url: "https://nodaro.ai/docs", fresh: true })
   })
 })

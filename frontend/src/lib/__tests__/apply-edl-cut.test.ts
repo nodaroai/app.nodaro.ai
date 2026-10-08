@@ -80,3 +80,27 @@ describe("applyEdlTakeTranscriptField — what a landed take keeps", () => {
     expect(applyEdlTakeTranscriptField("apply-edl", null, "https://m/v.mp4")).toBeUndefined()
   })
 })
+
+describe("Speaker View — its transcript output moves with the cut beside its EDL (decided 2026-10-08)", () => {
+  const DRAWN = { version: 1, clock: "master", sources: [], segments: [] }
+  const out = { videoUrl: "https://m/sv.mp4", json: DRAWN, transcript: TRANSCRIPT }
+
+  it("a run lands the EDL on generatedJson and the remapped transcript on generatedTranscript", () => {
+    expect(applyEdlRunCutFields("speaker-view", out)).toStrictEqual({ generatedAudioUrl: undefined, generatedJson: DRAWN, generatedTranscript: TRANSCRIPT })
+  })
+
+  it("CLEARS the transcript output when the render carries none (no transcript wired, or an older plugin)", () => {
+    expect(applyEdlRunCutFields("speaker-view", { videoUrl: "https://m/sv.mp4", json: DRAWN })).toStrictEqual({ generatedAudioUrl: undefined, generatedJson: DRAWN, generatedTranscript: undefined })
+  })
+
+  it("the take that IS the render keeps both, each as an own field", () => {
+    expect(applyEdlTakeTranscriptField("speaker-view", out, "https://m/sv.mp4")).toStrictEqual({ generatedJson: DRAWN, generatedTranscript: TRANSCRIPT })
+    const none = applyEdlTakeTranscriptField("speaker-view", { videoUrl: "https://m/sv.mp4", json: DRAWN }, "https://m/sv.mp4")
+    expect(none).toHaveProperty("generatedTranscript", undefined)
+    expect(applyEdlTakeTranscriptField("speaker-view", out, "https://m/other.mp4")).toBeUndefined()
+  })
+
+  it("Apply EDL lands no generatedTranscript: its transcript IS its json", () => {
+    expect(applyEdlRunCutFields("apply-edl", { videoUrl: "https://m/v.mp4", json: TRANSCRIPT, transcript: { stray: 1 } })).not.toHaveProperty("generatedTranscript")
+  })
+})

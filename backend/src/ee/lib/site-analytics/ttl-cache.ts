@@ -18,6 +18,8 @@ export function createTtlCache<T>(opts: {
   maxEntries: number
   /** A `fresh` ask still gets the stored value when it is younger than this: a held-down Refresh cannot spend Google's quota. */
   minFreshMs?: number
+  /** A stored value's own lifetime, when it decides — the realtime snapshot is kept longer once Google's allowance runs low. */
+  ttlOf?: (value: T) => number
   now?: () => number
 }): TtlCache<T> {
   const now = opts.now ?? Date.now
@@ -36,7 +38,8 @@ export function createTtlCache<T>(opts: {
     async get(key, load, getOpts = {}) {
       const stored = entries.get(key)
       const age = stored ? now() - stored.fetchedAt : Infinity
-      if (stored && age < (getOpts.fresh ? minFreshMs : opts.ttlMs)) return stored
+      const ttl = stored && opts.ttlOf ? opts.ttlOf(stored.value) : opts.ttlMs
+      if (stored && age < (getOpts.fresh ? minFreshMs : ttl)) return stored
       const pending = inflight.get(key)
       if (pending) return pending
       const loading = load().then((value) => {

@@ -15,7 +15,7 @@ import {
   pro3DRenderShotStills, extractGeneratedJsonAsList, splitGeneratedItems, resolveNodeRefs, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, SOCIAL_POST_NODE_TYPES, PARAMETER_NODE_TYPES, getParameterValue, FAN_OUT_EACH_TYPES, FAN_OUT_EACH_HANDLES, defaultEdgeOutputMode, listResultsServeHandle, compactWithRows, pickHeldRow, liveRowColumn, resolveListFanOut, type FanOutCandidate, type ListFanOut, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES, editPlanSourceDurationSec, extractReferencedLabels, canonicalVarName, REFERENCE_HANDLE_MAP, parseGroupHandle, SUNO_TRACK_SOURCE_TYPES, isFanInEdge, isFanInNodeType, videoLinkPageUrl, socialSearchPostVideo, ownsItsList } from "@nodaro/shared"
 import { isSourceNode } from "./execution-graph.js"
 import { overlayHandleIndex } from "../../providers/image/overlay-contract.js"
-import { VIDEO_OVERLAY_LAYER_PLAN_HANDLE, videoOverlaySlotOfHandle, isTelegramAccountTriggerNamedHandle, editPlanTranscriptOrigin, clipNotesFrom, fanOutItemMeta, isRenderNodeType, rendersLatestBatch, loneMediaUrlKind, isLoneMediaLinkSource } from "@nodaro/shared"
+import { VIDEO_OVERLAY_LAYER_PLAN_HANDLE, videoOverlaySlotOfHandle, isTelegramAccountTriggerNamedHandle, editPlanTranscriptOrigin, clipNotesFrom, fanOutItemMeta, isRenderNodeType, isRenderDataHandle, rendersLatestBatch, loneMediaUrlKind, isLoneMediaLinkSource } from "@nodaro/shared"
 import { buildNodeRefMap } from "./payload-builder.js"
 import { jsonArrayItems, listFor, savedDataAllowed, savedListFor } from "./saved-data.js"
 import { IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE } from "./inline-executor.js"
@@ -2421,11 +2421,12 @@ function routeOutput(
   // VIDEO/AUDIO_OUTPUT_NODE_TYPES), so without this branch its media output falls
   // through to the `prompt` fallback on server DAG runs — the exact drift its own
   // comments warn about. Route by what the run produced, through routeVideo/
-  // AudioOutput so a combine-videos/mix-audio consumer accumulates it. The `json`
-  // handle (the remapped Transcript) is NOT handled here — it was already caught
+  // AudioOutput so a combine-videos/mix-audio consumer accumulates it. Its data
+  // pips (`json`, and a transcript pip of its own — Speaker View's
+  // `transcript`) are NOT handled here — they were already caught
   // by the apply-edl / add-captions target interceptor, or falls through to the
   // generic json/text routing. Mirrors the frontend node-input-resolver. ---
-  if (isRenderNodeType(srcType) && edge.sourceHandle !== "json") {
+  if (isRenderNodeType(srcType) && !isRenderDataHandle(srcType, edge.sourceHandle)) {
     const producedVideo = producedVideoIn(src, nodeStates)
     if (producedVideo) {
       routeVideoOutput(inputs, output, targetType, src.id)

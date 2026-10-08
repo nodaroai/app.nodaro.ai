@@ -71,6 +71,7 @@ import { applyEdlRoutes } from "./routes/apply-edl.js"
 import { imageCollageRoutes } from "./routes/image-collage.js"
 import { imageOverlayRoutes } from "./routes/image-overlay.js"
 import { fontRoutes } from "./routes/fonts.js"
+import { siteAssetRoutes } from "./routes/site-assets.js"
 import { imageOverlayPlacementRoutes } from "./routes/image-overlay-placement.js"
 import { assembleNarratedVideoRoutes } from "./routes/assemble-narrated-video.js"
 import { referenceSheetRoutes } from "./routes/reference-sheet.js"
@@ -201,6 +202,8 @@ import { adminCopilotGapsRoutes } from "./ee/routes/admin-copilot-gaps.js"
 import { adminAppReportsRoutes } from "./ee/routes/admin-app-reports.js"
 import { adminKieCreditsRoutes } from "./ee/routes/admin-kie-credits.js"
 import { adminSiteAnalyticsRoutes } from "./ee/routes/admin-site-analytics.js"
+import { adminOnlineUsersRoutes } from "./ee/routes/admin-online-users.js"
+import { recordPresence } from "./ee/lib/presence-instance.js"
 import { adminStuckPipelinesRoutes } from "./ee/routes/admin-stuck-pipelines.js"
 import { adminMessagesRoutes } from "./ee/routes/admin-messages.js"
 import { adminReviewRoutes } from "./ee/routes/admin-review.js"
@@ -507,6 +510,10 @@ export async function buildApp() {
   // Admin network blocks: browser sessions from a blocked network (after auth,
   // so an admin is recognised and never refused). Inert without an admin panel.
   registerNetworkBlockHook(app)
+  // Who is signed in right now, for the admin list (ee/lib/presence.ts): after
+  // the response, in the background, at most one note per user and surface per
+  // 30 s. Only where an admin panel can show it.
+  if (hasAdmin()) app.addHook("onResponse", async (req, reply) => recordPresence(req, reply.statusCode))
   // App-token scopes for routes a private plugin serves (it cannot see the grant).
   registerPluginRouteScopeHook(app)
   registerSequenceExecutionGuard(app)
@@ -541,6 +548,7 @@ export async function buildApp() {
   await app.register(imageCollageRoutes)
   await app.register(imageOverlayRoutes)
   await app.register(fontRoutes)
+  await app.register(siteAssetRoutes)
   await app.register(imageOverlayPlacementRoutes)
   await app.register(assembleNarratedVideoRoutes)
   await app.register(referenceSheetRoutes)
@@ -689,6 +697,7 @@ export async function buildApp() {
   if (hasAdmin()) await app.register(adminAppReportsRoutes)
   if (hasAdmin()) await app.register(adminKieCreditsRoutes)
   if (hasAdmin()) await app.register(adminSiteAnalyticsRoutes)
+  if (hasAdmin()) await app.register(adminOnlineUsersRoutes)
   if (hasAdmin()) await app.register(adminStuckPipelinesRoutes)
   if (hasAdmin()) await app.register(adminMessagesRoutes)
   if (hasAdmin()) await app.register(adminReviewRoutes)

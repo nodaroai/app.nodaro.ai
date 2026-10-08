@@ -6,7 +6,8 @@ import { he } from "../he"
 
 /**
  * Glossary guard for the Hebrew strings the EDITOR renders (config panels,
- * node cards, presets, cost drawer): node = רכיב (never צומת), reference =
+ * node cards, presets, cost drawer, and the toasts of the hooks behind
+ * them): node = רכיב (never צומת), reference =
  * ייחוס (never הפניה — a cross-reference/link), "(optional)" = (אופציונלי).
  * A key from another page (executions table, marketplace) may legitimately
  * keep its own term, so only keys actually rendered by editor components are
@@ -26,7 +27,7 @@ function walk(dir: string, out: string[] = []): string[] {
 // Collected ONCE (a substring search per dictionary key over the multi-MB
 // source timed out under the parallel suite).
 const editorKeys = new Set<string>()
-for (const f of [...walk(path.join(SRC, "components/editor")), ...walk(path.join(SRC, "components/nodes"))]) {
+for (const f of [...walk(path.join(SRC, "components/editor")), ...walk(path.join(SRC, "components/nodes")), ...walk(path.join(SRC, "hooks"))]) {
   for (const m of fs.readFileSync(f, "utf8").matchAll(/"([a-z][A-Za-z0-9]*\.[A-Za-z0-9.]+)"/g)) editorKeys.add(m[1])
 }
 

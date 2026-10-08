@@ -5816,7 +5816,9 @@ remapTranscript(edl: Edl, transcript: Transcript): Transcript
 
 A PURE local transform (no request): returns a new transcript whose word (and
 segment) timings are on the EDL's rendered output clock, dropping words in cut
-regions and clipping straddlers. The same remap `applyEdl` performs server-side.
+regions and clipping straddlers (a word across two segments that continue each
+other on both clocks — no jump in the recording, no crossfade — keeps its full
+length). The same remap `applyEdl` performs server-side.
 
 ---
 

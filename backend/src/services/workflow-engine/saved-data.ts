@@ -46,6 +46,7 @@ export const SAVED_RESULT_FIELDS: ReadonlySet<string> = new Set([
   "generatedItems",
   "generatedResults",
   "generatedJson",
+  "generatedTranscript",
   "pickedResults",
   "restResults",
   "__pickedResults",

@@ -170,6 +170,16 @@ export const envSchema = z.object({
    * default — self-hosters typically only need R2_PUBLIC_URL.
    */
   R2_PUBLIC_FALLBACK_DOMAIN: z.string().default(""),
+  /**
+   * The archive of past builds' styling files (`lib/site-asset-archive.ts`):
+   * each boot copies the build's CSS, fonts and images to storage under
+   * `site-assets/`, and `/assets/*` answers a name an earlier deployment
+   * served from there — what a session replay or a long-open tab asks for.
+   * "auto" keeps it on a production Cloud server only (never a developer's
+   * checkout, whose build must not land in the archive production serves);
+   * "on" / "off" decide for any edition. Needs storage configured either way.
+   */
+  SITE_ASSET_ARCHIVE: z.enum(["auto", "on", "off"]).default("auto"),
   REPLICATE_API_TOKEN: z.string().default(""),
   /** Replicate Standard Webhooks signing secret. Required in Cloud edition for character LoRA training callbacks. */
   REPLICATE_WEBHOOK_SECRET: z.string().default(""),

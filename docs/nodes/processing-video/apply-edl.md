@@ -8,7 +8,7 @@ The Apply EDL node takes a structured **edit decision list** and renders it into
 
 Every segment names a time window on the **master clock**; the node trims each source to that window, conforms the picture to one canvas, and joins the segments in order. Hard-cut boundaries abut; crossfade boundaries overlap, so the rendered timeline is *shorter* than the sum of the segment lengths by the total crossfade time.
 
-When you wire a **Transcript** into the node, it emits that transcript **remapped through the cut** on its `json` output — words that fall in removed material are dropped and a word straddling a cut is clipped to the kept part — so captions built downstream stay aligned to the finished edit.
+When you wire a **Transcript** into the node, it emits that transcript **remapped through the cut** on its `json` output — words that fall in removed material are dropped and a word straddling a cut is clipped to the kept part (a word running across two segments that continue each other — the second resumes the recording exactly where the first ends, with no crossfade between them — plays unbroken and keeps its full length) — so captions built downstream stay aligned to the finished edit.
 
 All processing is local FFmpeg. No provider key is required.
 
@@ -16,7 +16,7 @@ All processing is local FFmpeg. No provider key is required.
 
 | Handle | Type | Required | Description |
 |--------|------|----------|-------------|
-| EDL | json | **Yes** | The edit decision list. Wire it from an editorial node or a Text/JSON source. Media resolves from each source's `url`. A Transcript output (Transcribe's `json`, Text to Dialogue's `json`, Camera Switch's `transcript`, Apply EDL's `json`) cannot be wired here; the editor refuses it. |
+| EDL | json | **Yes** | The edit decision list. Wire it from an editorial node or a Text/JSON source. Media resolves from each source's `url`. A Transcript output (Transcribe's `json`, Text to Dialogue's `json`, Camera Switch's `transcript`, Apply EDL's `json`, Speaker View's `transcript`) cannot be wired here; the editor refuses it. |
 | Transcript | json | No | A transcript to remap through the cut for the `json` output (e.g. from a Transcribe node). An EDL output (Edit Plan's or Camera Switch's `edl`) cannot be wired here; the editor refuses it. |
 | Sources | video/audio | No | Optional media-URL overrides for the EDL's sources, applied **positionally** in connection order. The EDL's own `url` values are the primary path; use this only when the media isn't addressable by URL in the EDL. |
 
@@ -68,6 +68,18 @@ A wire that runs the node once per item renders once per item: a plan's clip lis
 When the run makes several renders, the badge still shows one summary: **Ready to render** when every render passes, or **Issues in N of M renders**. Click it to see each failing render, numbered along the list that fans the run out (**Render 2** reads its second item), with its issues. For example, with a two-column List of cameras wired into **Sources** and a row that has no second camera, that row's render is refused because the EDL's second source has no URL. The other rows are ready.
 
 The badge on an Edit Plan node checks the plan's structure only (**Well-formed EDL**). A plan can be well-formed there and still be refused here: for example, a plan with a side-by-side layout, or one longer than 180 minutes.
+
+### Replace with Speaker View
+
+When the badge's issues include a layout or a region crop — what [Camera Switch](./camera-switch.md)'s **Layout hints** write, and what this node does not draw — the popover offers **Replace with Speaker View**, with one line saying what the swap keeps and drops. The same action sits under Camera Switch's **Layout hints** note. After a confirm, the node is replaced in place by a [Speaker View](./speaker-view.md) node, as **one undo step**:
+
+- Its **EDL** and **Transcript** wires stay. Its **Sources** wires are dropped (Speaker View reads the media from the EDL's own URLs) and listed in the confirm and in the message after.
+- Its outputs move with it: the media wire comes out of Speaker View's video, and a `json` wire — the remapped transcript, such as the one into Add Captions — comes out of Speaker View's `transcript` output, which carries the same transcript remapped through the edit as drawn. Nothing is transcribed again.
+- Its **Quality** carries over, and so does its **label** when you renamed it; a node still named "Apply EDL" becomes one named "Speaker View". An **EDL** or **Transcript** typed into the node itself (set through the API, MCP or workflow JSON rather than wired) carries over too, as text. Its Preview and Final history does not: the new node has a new id, and those renders are on the old node's clock. **Undo** (the message's own, the toolbar's or Ctrl+Z) puts the Apply EDL back with its history and its wires.
+- **A published app follows the node.** The app's input and output items that name this node move to the new one, with the card's title and description, its display mode and whether it is hidden; the confirm lists them. An item the new node cannot show (an output or setting the other render does not expose) still moves, and the confirm says so; it shows again if you swap back. Undo and Redo take the app's items along with the node.
+- It is refused, with the reason and before anything changes, for an **Audio only** render (Speaker View renders video only) and for an edit whose cameras come from the **Sources** wire: *"This edit's cameras come from the Sources wire, which Speaker View does not take"*. It is also refused while a run is in progress.
+- **When the edit is not known yet** — Camera Switch has not run, or the upload wired into **Sources** is empty — that check cannot be made. The swap is allowed, and the confirm says plainly that the Sources wire will be dropped and the cameras may need re-wiring: Speaker View reads each camera from the edit's own URLs.
+- **Back to Apply EDL.** Speaker View's panel carries **Back to Apply EDL**: the same swap the other way, with the same confirm and as one undo step. The transcript wire moves back onto Apply EDL's `json`; a wire on Speaker View's `json` (the EDL as drawn) has no place on Apply EDL and is dropped and listed. Speaker View's own settings (aspect, layout, switch, emphasis, framing) do not carry; Undo brings them back.
 
 ## How the edit is rendered
 

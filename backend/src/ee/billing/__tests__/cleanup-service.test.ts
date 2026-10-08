@@ -683,6 +683,118 @@ describe("cleanup-service", () => {
   })
 
   // ════════════════════════════════════════════════════════════════════════
+  // A job artefact held INSIDE output_data (decided 2026-10-08): Speaker
+  // Frames' node output is a descriptor `{ json: { url, sha256, bytes, … } }`
+  // whose body lives at `speaker-tracks/<jobId>.json`. It expires exactly like
+  // the job's other outputs, so both reapers must reach the nested url — and
+  // only for a REGISTERED artefact prefix, in the job's own key family.
+  // ════════════════════════════════════════════════════════════════════════
+
+  describe("registered nested job artefacts (speaker-tracks/)", () => {
+    const JOB = "00000000-0000-4000-8000-0000000000aa"
+    const OTHER = "00000000-0000-4000-8000-0000000000bb"
+    const trackUrl = (id: string) => `https://cdn.example.com/speaker-tracks/${id}.json`
+    const descriptorOutput = (id: string) => ({
+      json: { version: 1, sources: [], url: trackUrl(id), sha256: "a".repeat(64), bytes: 10 },
+      notes: [],
+      stats: { sources: [] },
+    })
+
+    function captureDeletes(): string[] {
+      const seen: string[] = []
+      mockBatchDeleteFromR2.mockImplementation((keys: readonly string[]) => {
+        seen.push(...keys)
+        return Promise.resolve({ deleted: keys.length, errors: 0 })
+      })
+      return seen
+    }
+
+    function jobUpdates(): Array<Record<string, unknown>> {
+      return mockFrom.mock.calls
+        .map((c, i) => ({ table: c[0] as string, chain: mockFrom.mock.results[i]?.value as { update: { mock: { calls: unknown[][] } } } }))
+        .filter((r) => r.table === "jobs")
+        .flatMap((r) => r.chain.update.mock.calls.map((u) => (u[0] as { output_data: Record<string, unknown> }).output_data))
+    }
+
+    it("free-user expiry deletes the job's track file and clears its url from the descriptor", async () => {
+      mockTableQueue("profiles", [{ data: [{ id: "free-user-1" }], error: null }])
+      mockTableQueue("assets", [{ data: [], error: null }])
+      // The free-user read is `.in("user_id", …)` first, which this mock treats
+      // as a terminal and answers from the queue, then `.limit()`: one filler.
+      mockTableQueue("jobs", [
+        { data: [], error: null },
+        { data: [{ id: JOB, user_id: "free-user-1", output_data: descriptorOutput(JOB) }], error: null },
+        { data: [], error: null },
+      ])
+      const seen = captureDeletes()
+
+      await cleanupFreeUserMedia()
+
+      expect(seen).toContain(`speaker-tracks/${JOB}.json`)
+      const updated = jobUpdates()
+      expect(updated).toHaveLength(1)
+      expect(updated[0]._cleaned).toBe(true)
+      const json = updated[0].json as Record<string, unknown>
+      expect(json.url).toBeNull()
+      // The rest of the descriptor is left as it was.
+      expect(json.sha256).toBe("a".repeat(64))
+    })
+
+    it("canceled-user expiry deletes the job's track file", async () => {
+      mockTableQueue("profiles", [{ data: [{ id: "user-expired", tier: "pro", subscription_tier: null }], error: null }])
+      mockTableQueue("assets", [{ data: [], error: null }])
+      mockTableQueue("jobs", [
+        { data: [{ id: JOB, output_data: descriptorOutput(JOB) }], error: null },
+        { data: [], error: null },
+      ])
+      const seen = captureDeletes()
+
+      await cleanupCanceledUserMedia()
+
+      expect(seen).toContain(`speaker-tracks/${JOB}.json`)
+    })
+
+    it("a nested track url outside the job's own key family is held back", async () => {
+      mockTableQueue("profiles", [{ data: [{ id: "free-user-1" }], error: null }])
+      mockTableQueue("assets", [{ data: [], error: null }])
+      // The free-user read is `.in("user_id", …)` first, which this mock treats
+      // as a terminal and answers from the queue, then `.limit()`: one filler.
+      mockTableQueue("jobs", [
+        { data: [], error: null },
+        { data: [{ id: JOB, user_id: "free-user-1", output_data: descriptorOutput(OTHER) }], error: null },
+        { data: [], error: null },
+      ])
+      const seen = captureDeletes()
+
+      await cleanupFreeUserMedia()
+
+      expect(seen).not.toContain(`speaker-tracks/${OTHER}.json`)
+    })
+
+    it("a nested url under an unregistered prefix is not reached (no widening beyond the registry)", async () => {
+      mockTableQueue("profiles", [{ data: [{ id: "free-user-1" }], error: null }])
+      mockTableQueue("assets", [{ data: [], error: null }])
+      // The free-user read is `.in("user_id", …)` first, which this mock treats
+      // as a terminal and answers from the queue, then `.limit()`: one filler.
+      mockTableQueue("jobs", [
+        { data: [], error: null },
+        {
+          data: [{ id: JOB, user_id: "free-user-1", output_data: { result: { imageUrl: `https://cdn.example.com/images/${JOB}.png` } } }],
+          error: null,
+        },
+        { data: [], error: null },
+      ])
+      const seen = captureDeletes()
+
+      await cleanupFreeUserMedia()
+
+      expect(seen).not.toContain(`images/${JOB}.png`)
+      const updated = jobUpdates()
+      expect((updated[0].result as Record<string, unknown>).imageUrl).toBe(`https://cdn.example.com/images/${JOB}.png`)
+    })
+  })
+
+  // ════════════════════════════════════════════════════════════════════════
   // renewSubscriptionCredits
   // ════════════════════════════════════════════════════════════════════════
 

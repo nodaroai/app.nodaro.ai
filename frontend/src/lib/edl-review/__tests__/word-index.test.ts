@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { normalizeEdl, normalizeTranscript, type Edl } from "@nodaro/shared"
+import { normalizeEdl, normalizeTranscript, type Edl, type Transcript } from "@nodaro/shared"
 import { buildEdited } from "../build-edited"
 import { cutRange, keptSetOf } from "../kept-set"
 import { buildWordIndex, transcriptOffsetMs } from "../word-index"
@@ -88,12 +88,19 @@ describe("buildWordIndex: each word kept or cut, and why", () => {
 
   it("words out of time order get the same marks as in order", () => {
     const words: Array<[string, number, number]> = [["a", 100, 300], ["b", 1050, 1250], ["c", 2500, 2900], ["d", 900, 1100]]
-    const shuffled = buildWordIndex(edl, transcriptOf(words)).marks
+    // Built as a literal: normalizeTranscript sorts words by time (decided
+    // 2026-10-08), so only a hand-built Transcript can hand buildWordIndex
+    // words out of order.
+    const unsorted: Transcript = { version: 1, words: words.map(([text, startMs, endMs]) => ({ text, startMs, endMs })) }
+    const shuffled = buildWordIndex(edl, unsorted).marks
     expect(shuffled).toEqual(words.map((w) => buildWordIndex(edl, transcriptOf([w])).marks[0]))
   })
 
   it("never mutates its inputs", () => {
-    const t = transcriptOf([["b", 1050, 1250], ["a", 100, 300]])
+    // A literal, not transcriptOf: normalizeTranscript sorts words by time,
+    // and this transcript must reach buildWordIndex out of order so an
+    // in-place sort of its words would show up here.
+    const t: Transcript = { version: 1, words: [{ text: "b", startMs: 1050, endMs: 1250 }, { text: "a", startMs: 100, endMs: 300 }] }
     const frozen = JSON.stringify([edl, t])
     buildWordIndex(edl, t)
     expect(JSON.stringify([edl, t])).toBe(frozen)

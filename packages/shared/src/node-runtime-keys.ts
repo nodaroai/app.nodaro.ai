@@ -72,6 +72,9 @@ export const EXECUTION_DATA_KEYS: ReadonlySet<string> = new Set([
   "__pickedTotal",
   "__restTotal",
   "generatedJson",
+  // A render's remapped transcript on its own pip (Speaker View's
+  // `transcript`, RENDER_NODE_TYPES transcriptOutput) — run-result data.
+  "generatedTranscript",
   // Edit Plan: a person's review of the plan (`EditedEdl`, edit-plan-review.ts),
   // kept beside `generatedJson` and fingerprinted against it. Run-result data
   // (TA14, decided 2026-10-04): out of undo, presets, templates and exports,

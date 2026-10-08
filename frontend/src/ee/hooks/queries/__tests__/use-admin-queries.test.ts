@@ -9,6 +9,7 @@ const mockFetch = vi.fn()
 const mockCreateClient = vi.fn()
 
 vi.mock("@tanstack/react-query", () => ({
+  keepPreviousData: "keepPreviousData",
   useQuery: (opts: unknown) => mockUseQuery(opts),
   useMutation: (opts: unknown) => mockUseMutation(opts),
   useQueryClient: () => ({ invalidateQueries: mockInvalidateQueries }),
@@ -30,7 +31,9 @@ vi.mock("@/lib/query-keys", () => ({
   queryKeys: {
     admin: {
       stats: () => ["admin", "stats"],
-      users: (page: number, pageSize: number) => ["admin", "users", page, pageSize],
+      users: (page: number, pageSize: number, _sortBy?: string, _sortDir?: string, search?: string) =>
+        search ? ["admin", "users", page, pageSize, search] : ["admin", "users", page, pageSize],
+      user: (id: string) => ["admin", "users", "one", id],
       jobs: (
         page: number,
         pageSize: number,
@@ -67,7 +70,9 @@ vi.mock("@/lib/query-keys", () => ({
 
 import {
   useAdminStats,
+  useAdminUser,
   useAdminUsers,
+  sanitizeUserSearch,
   useAdminJobs,
   useAllAdminUsersLite,
   useAdminUsageLogs,
@@ -200,6 +205,65 @@ describe("admin query hooks — shared hasAdmin() gating", () => {
       expect(opts.enabled).toBe(false)
     }
   )
+})
+
+describe("useAdminUsers search", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockHasAdmin.mockReturnValue(true)
+    mockUseQuery.mockReturnValue({ data: null })
+    mockGetAuthHeaders.mockResolvedValue({ Authorization: "Bearer tok" })
+    globalThis.fetch = mockFetch as unknown as typeof fetch
+  })
+
+  function profilesBuilder() {
+    const builder = {
+      or: vi.fn(() => builder),
+      order: vi.fn(() => builder),
+      range: vi.fn(async () => ({ data: [], error: null })),
+    }
+    const select = vi.fn(() => builder)
+    mockCreateClient.mockReturnValue({ from: vi.fn(() => ({ select })) })
+    return builder
+  }
+
+  it("filters every profile in the query, not the loaded page", async () => {
+    const builder = profilesBuilder()
+    useAdminUsers(3, 50, "created_at", "desc", undefined, "  dana@x.com ")
+    const opts = mockUseQuery.mock.calls[0][0]
+    expect(opts.queryKey).toEqual(["admin", "users", 3, 50, "dana@x.com"])
+    await opts.queryFn()
+    expect(builder.or).toHaveBeenCalledWith("email.ilike.%dana@x.com%,full_name.ilike.%dana@x.com%")
+    expect(builder.range).toHaveBeenCalledWith(150, 199)
+  })
+
+  it("adds no filter for an empty search", async () => {
+    const builder = profilesBuilder()
+    useAdminUsers(0, 50)
+    await mockUseQuery.mock.calls[0][0].queryFn()
+    expect(builder.or).not.toHaveBeenCalled()
+  })
+
+  it("sends the search to the route under a deployment payer", async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ data: [] }) })
+    useAdminUsers(1, 50, "created_at", "desc", { viaRoute: true, ready: true }, "דנה כהן")
+    await mockUseQuery.mock.calls[0][0].queryFn()
+    expect(mockFetch).toHaveBeenCalledWith(
+      `/v1/admin/users?limit=50&offset=50&search=${encodeURIComponent("דנה כהן")}`,
+      expect.anything(),
+    )
+  })
+
+  it("keeps the current rows while a new search loads", () => {
+    useAdminUsers(0, 50, "created_at", "desc", undefined, "dana")
+    expect(mockUseQuery.mock.calls[0][0].placeholderData).toBe("keepPreviousData")
+  })
+
+  it("strips PostgREST filter syntax but keeps names and email characters", () => {
+    expect(sanitizeUserSearch("a,b),email.eq.(x:y)%")).toBe("abemail.eq.xy")
+    expect(sanitizeUserSearch(" john_doe+tag@mail.co ")).toBe("john_doe+tag@mail.co")
+    expect(sanitizeUserSearch("דנה כהן")).toBe("דנה כהן")
+  })
 })
 
 describe("useAdminJobs with statusFilter", () => {
@@ -482,5 +546,52 @@ describe("admin mutation hooks", () => {
       hook()
       expect(mockUseMutation).toHaveBeenCalledTimes(1)
     }
+  })
+})
+
+describe("useAdminUser — one account, for the users page's direct link", () => {
+  const ID = "00000000-0000-4000-8000-0000000000d1"
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockHasAdmin.mockReturnValue(true)
+    mockUseQuery.mockReturnValue({ data: null })
+    mockGetAuthHeaders.mockResolvedValue({ Authorization: "Bearer tok" })
+    globalThis.fetch = mockFetch as unknown as typeof fetch
+  })
+
+  const optionsOf = () =>
+    mockUseQuery.mock.calls.at(-1)![0] as { queryKey: unknown; queryFn: () => Promise<unknown>; enabled: boolean; retry: unknown }
+
+  it("under a payer, asks the route for that id and answers its one row", async () => {
+    useAdminUser(ID, { viaRoute: true, ready: true })
+    mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ data: [{ id: ID, email: "dana@x.test" }] })))
+    expect(await optionsOf().queryFn()).toEqual({ id: ID, email: "dana@x.test" })
+    expect(String(mockFetch.mock.calls[0]![0])).toBe(`/v1/admin/users?id=${ID}&limit=1`)
+    expect(optionsOf().queryKey).toEqual(["admin", "users", "one", ID, "route"])
+  })
+
+  it("otherwise reads the profile directly, with the list's columns and tier rule", async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: { id: ID, tier: "pro", subscription_tier: "free", subscription_credits: null, topup_credits: 5, daily_spent_credits: null, storage_limit_bytes: null },
+      error: null,
+    })
+    const eq = vi.fn(() => ({ maybeSingle }))
+    const select = vi.fn(() => ({ eq }))
+    mockCreateClient.mockReturnValue({ from: vi.fn(() => ({ select })) })
+    useAdminUser(ID)
+    expect(await optionsOf().queryFn()).toMatchObject({ id: ID, subscription_tier: "pro", subscription_credits: 0, topup_credits: 5, storage_limit_bytes: 524288000 })
+    expect(eq).toHaveBeenCalledWith("id", ID)
+    expect(String((select.mock.calls[0] as unknown[])[0])).toContain("free_grant_state")
+  })
+
+  it("a link that is not an account id names nobody, without a request; an answer is never retried", async () => {
+    useAdminUser("not-an-id", { viaRoute: true, ready: true })
+    expect(await optionsOf().queryFn()).toBeNull()
+    expect(mockFetch).not.toHaveBeenCalled()
+    expect(mockCreateClient).not.toHaveBeenCalled()
+    expect(optionsOf().retry).toBe(false)
+    useAdminUser(null)
+    expect(optionsOf().enabled).toBe(false)
   })
 })

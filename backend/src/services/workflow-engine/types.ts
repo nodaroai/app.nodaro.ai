@@ -36,6 +36,10 @@ export interface NodeOutput {
   reduceMeta?: Record<string, unknown>
   /** JSON output for web-scrape and future JSON-emitting nodes. */
   json?: unknown
+  /** A render's remapped transcript when it comes out on its OWN pip
+   *  (`RENDER_NODE_TYPES` `transcriptOutput`: Speaker View's `transcript`,
+   *  decided 2026-10-08) — Apply EDL's rides `json`. */
+  transcript?: unknown
   /** An Edit Plan state whose `json` is NOT the plan as planned — a seed (from
    *  saved data, or from an earlier execution) with the person's review
    *  applied — carries the plan as planned here, so a later continuation

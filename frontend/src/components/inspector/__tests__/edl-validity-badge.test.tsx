@@ -147,3 +147,16 @@ describe("EdlValidityBadge", () => {
     })
   })
 })
+
+describe("EdlValidityBadge — an action under the issues (U6)", () => {
+  it("shown in the popover with the issues", async () => {
+    render(<EdlValidityBadge value={BROKEN} action={<button type="button">Way out</button>} />)
+    await userEvent.click(screen.getByTestId("edl-validity-badge"))
+    expect(await screen.findByText("Way out")).toBeTruthy()
+  })
+
+  it("not shown when there is nothing wrong", () => {
+    render(<EdlValidityBadge value={VALID} action={<button type="button">Way out</button>} />)
+    expect(screen.queryByText("Way out")).toBeNull()
+  })
+})

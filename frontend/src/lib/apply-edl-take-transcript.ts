@@ -26,7 +26,14 @@
  * transcript rather than another cut's timing (Add Captions transcribes the cut
  * it receives, or refuses for want of a caption source when auto-transcribe is
  * off).
+ *
+ * The same holds for EVERY json output a render lands (`renderSavedJsonOutputs`):
+ * Speaker View's EDL as drawn (`generatedJson`) and its remapped transcript
+ * (`generatedTranscript`, decided 2026-10-08) are each restored from what the
+ * take kept, and each one it kept none of is read back from its job — one read
+ * for all of them.
  */
+import { renderSavedJsonOutputs, RENDER_JSON_HANDLE, type RenderSavedJsonOutput } from "@nodaro/shared"
 import { getJobStatusLean } from "@/lib/api"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { isValidUuid } from "@/lib/uuid"
@@ -36,15 +43,22 @@ export interface ApplyEdlTake {
   readonly url: string
   readonly jobId?: string
   /** The Transcript this take was cut with, kept by the lane that landed it
-   *  (an own `undefined`: it was cut with none). */
+   *  (an own `undefined`: it was cut with none). Speaker View: its EDL as drawn. */
   readonly generatedJson?: unknown
+  /** Speaker View: the transcript remapped through this take's cut, kept the
+   *  same way. */
+  readonly generatedTranscript?: unknown
 }
 
 type Data = Readonly<Record<string, unknown>>
 
-/** Whether the take kept the Transcript it was cut with on its own result. */
-export function takeKeptTranscript(take: ApplyEdlTake): boolean {
-  return Object.prototype.hasOwnProperty.call(take, "generatedJson")
+/** Apply EDL's one json output: the Transcript on `json` / `generatedJson`. */
+const JSON_OUTPUT: RenderSavedJsonOutput = { outputKey: RENDER_JSON_HANDLE, dataField: "generatedJson" }
+
+/** Whether the take kept the output it was cut with on its own result (the
+ *  Transcript on `generatedJson` unless another field is named). */
+export function takeKeptTranscript(take: ApplyEdlTake, dataField: string = JSON_OUTPUT.dataField): boolean {
+  return Object.prototype.hasOwnProperty.call(take, dataField)
 }
 
 /** The job a pick may read the take's Transcript from: a real job id only. */
@@ -56,10 +70,10 @@ export function readableTakeJobId(take: ApplyEdlTake): string | undefined {
  * The Transcript in a job's output when that output is the take's own file,
  * else `undefined`. A job whose render had no transcript wired carries none.
  */
-export function takeTranscriptFromJob(take: ApplyEdlTake, outputData: Data | null | undefined): unknown {
+export function takeTranscriptFromJob(take: ApplyEdlTake, outputData: Data | null | undefined, outputKey: string = JSON_OUTPUT.outputKey): unknown {
   if (!outputData) return undefined
   if (outputData.videoUrl !== take.url && outputData.audioUrl !== take.url) return undefined
-  return outputData.json ?? undefined
+  return outputData[outputKey] ?? undefined
 }
 
 export interface TakeTranscriptDeps {
@@ -94,8 +108,13 @@ export async function restorePickedTakeTranscript(
   nodeId: string,
   take: ApplyEdlTake,
   deps: TakeTranscriptDeps = STORE_DEPS,
+  /** The render's node type: which json outputs it lands (Apply EDL's
+   *  Transcript on `generatedJson` when not given). */
+  nodeType?: string,
 ): Promise<boolean> {
-  if (takeKeptTranscript(take)) return false
+  const outputs = nodeType === undefined ? [JSON_OUTPUT] : renderSavedJsonOutputs(nodeType)
+  const missing = outputs.filter((o) => !takeKeptTranscript(take, o.dataField))
+  if (missing.length === 0) return false
   const jobId = readableTakeJobId(take)
   if (!jobId) return false
   let outputData: Data | null | undefined
@@ -104,13 +123,18 @@ export async function restorePickedTakeTranscript(
   } catch {
     return false
   }
-  const transcript = takeTranscriptFromJob(take, outputData)
-  if (transcript === undefined) return false
+  const found = missing
+    .map((o) => [o.dataField, takeTranscriptFromJob(take, outputData, o.outputKey)] as const)
+    .filter(([, value]) => value !== undefined)
+  if (found.length === 0) return false
   const data = deps.nodeData(nodeId)
   if (!data) return false
   const results = data.generatedResults as ReadonlyArray<{ readonly url?: string }> | undefined
   const selected = results?.[(data.activeResultIndex as number | undefined) ?? 0]
-  if (selected?.url !== take.url || data.generatedJson !== undefined) return false
-  deps.updateNodeData(nodeId, { generatedJson: transcript })
+  if (selected?.url !== take.url) return false
+  // Never over a value something wrote since the pick cleared it.
+  const patch = Object.fromEntries(found.filter(([field]) => data[field] === undefined))
+  if (Object.keys(patch).length === 0) return false
+  deps.updateNodeData(nodeId, patch)
   return true
 }

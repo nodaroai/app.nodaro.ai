@@ -296,10 +296,190 @@ describe("normalizeTranscript", () => {
     expect(t.words[0]).toEqual({ text: "hi", startMs: 2, endMs: 2 })
   })
 
-  it("never produces an inverted word (endMs >= startMs)", () => {
-    const t = normalizeTranscript({ words: [{ text: "x", startMs: 500, endMs: 100 }] })
-    expect(t.words[0].endMs).toBeGreaterThanOrEqual(t.words[0].startMs)
-    expect(t.words[0].endMs).toBe(500)
+  // The one transcript reader (decided 2026-10-08), the Cloud plugin's
+  // coerceTranscript reads by the same rule, so the app and the plugin read
+  // one transcript the same way. Round 2 (decided 2026-10-08): a zero-width
+  // word is a POINT and is kept, as before; only a broken word is dropped.
+  it("keeps a zero-width word as a point (also one that rounds to zero width)", () => {
+    const t = normalizeTranscript({
+      words: [
+        { text: "point", startMs: 700, endMs: 700, speaker: "A" },
+        { text: "rounds-to-point", startMs: 1.6, endMs: 2.4 },
+        { text: "alias-point", start: 900, end: "900" },
+      ],
+    })
+    expect(t.words).toEqual([
+      { text: "rounds-to-point", startMs: 2, endMs: 2 },
+      { text: "point", startMs: 700, endMs: 700, speaker: "A" },
+      { text: "alias-point", startMs: 900, endMs: 900 },
+    ])
+  })
+
+  it("drops only a broken word: no start or end, a non-finite or negative time, or an end before its start", () => {
+    const t = normalizeTranscript({
+      words: [
+        { text: "inverted", startMs: 500, endMs: 100 },
+        { text: "negative", startMs: -100, endMs: 200 },
+        { text: "nan", startMs: Number.NaN, endMs: 200 },
+        { text: "inf", startMs: 0, endMs: Number.POSITIVE_INFINITY },
+        { text: "not-a-number", startMs: "soon", endMs: 300 },
+        { text: "no-start", endMs: 300 },
+        { text: "no-end", startMs: 300 },
+        { text: "untimed" },
+        null,
+        "word",
+        { text: "point", startMs: 800, endMs: 800 },
+        { text: "kept", startMs: 900, endMs: 1_200 },
+      ],
+    })
+    expect(t.words).toEqual([
+      { text: "point", startMs: 800, endMs: 800 },
+      { text: "kept", startMs: 900, endMs: 1_200 },
+    ])
+  })
+
+  it("accepts start/end as aliases of startMs/endMs (and numeric strings), startMs/endMs winning when both are given", () => {
+    const t = normalizeTranscript({
+      words: [
+        { text: "a", start: 100, end: 400, speaker: "A" },
+        { text: "b", startMs: 500, start: 9_999, endMs: 800, end: 1 },
+        { text: "c", start: "900", end: "1100.4" },
+      ],
+      segments: [{ start: 100, end: 1_100, text: "a b c" }],
+    })
+    expect(t.words).toEqual([
+      { text: "a", startMs: 100, endMs: 400, speaker: "A" },
+      { text: "b", startMs: 500, endMs: 800 },
+      { text: "c", startMs: 900, endMs: 1_100 },
+    ])
+    expect(t.segments).toEqual([{ startMs: 100, endMs: 1_100, text: "a b c" }])
+  })
+
+  it("sorts words by start time (a stable sort: ties keep their order)", () => {
+    const t = normalizeTranscript({
+      words: [
+        { text: "late", startMs: 2_000, endMs: 2_300 },
+        { text: "early", startMs: 100, endMs: 300 },
+        { text: "tie-1", startMs: 1_000, endMs: 1_100 },
+        { text: "tie-2", startMs: 1_000, endMs: 1_200 },
+      ],
+    })
+    expect(t.words.map((w) => w.text)).toEqual(["early", "tie-1", "tie-2", "late"])
+  })
+
+  it("reads a segment by the same rule: a point is kept, a broken one dropped", () => {
+    const t = normalizeTranscript({
+      words: [],
+      segments: [
+        { startMs: 0, endMs: 0, text: "point" },
+        { startMs: 400, endMs: 100, text: "inverted" },
+        { startMs: -5, endMs: 100, text: "negative" },
+        { endMs: 100, text: "no-start" },
+        { startMs: 100, endMs: 900, text: "kept", speaker: "A" },
+      ],
+    })
+    expect(t.segments).toEqual([
+      { startMs: 0, endMs: 0, text: "point" },
+      { startMs: 100, endMs: 900, text: "kept", speaker: "A" },
+    ])
+  })
+
+  it("a point word the reader keeps survives the remap when its instant is kept", () => {
+    const edl: Edl = {
+      version: 1,
+      clock: "master",
+      sources: [{ id: "m", url: "https://x/m.mp4", kind: "video", role: "master-audio" }],
+      segments: [{ id: "s0", inMs: 0, outMs: 1_000, video: "m" }, { id: "s1", inMs: 2_000, outMs: 3_000, video: "m" }],
+    }
+    const t = normalizeTranscript({ words: [{ text: "[laugh]", start: 2_500, end: 2_500 }, { text: "[cut]", startMs: 1_500, endMs: 1_500 }] })
+    expect(remapTranscriptThroughEdl(edl, t).words).toEqual([{ text: "[laugh]", startMs: 1_500, endMs: 1_500 }])
+  })
+})
+
+describe("remapTranscriptThroughEdl — a word across TOUCHING segments keeps its full length (decided 2026-10-08)", () => {
+  const master: Edl["sources"] = [{ id: "m", url: "https://x/m.mp4", kind: "video", role: "master-audio" }]
+  const at = (segments: Edl["segments"]): Edl => ({ version: 1, clock: "master", sources: master, segments })
+  const word = (startMs: number, endMs: number): Transcript => ({ version: 1, words: [{ text: "w", startMs, endMs }] })
+  const only = (edl: Edl, t: Transcript) => {
+    const out = remapTranscriptThroughEdl(edl, t).words
+    expect(out).toHaveLength(1)
+    return { startMs: out[0].startMs, endMs: out[0].endMs }
+  }
+
+  it("a split in continuous master time (seg[i].outMs === seg[i+1].inMs, contiguous on the output) does not clip the word", () => {
+    const edl = at([
+      { id: "s0", inMs: 0, outMs: 5_000, video: "m" },
+      { id: "s1", inMs: 5_000, outMs: 9_000, video: "m" },
+    ])
+    expect(only(edl, word(4_800, 5_300))).toEqual({ startMs: 4_800, endMs: 5_300 })
+  })
+
+  it("the time-free switches (cut, pan, zoom) keep the output contiguous, so the word stays whole", () => {
+    for (const layoutTransition of [{ type: "cut" }, { type: "pan", durationMs: 500 }, { type: "zoom", durationMs: 300 }]) {
+      const edl = at([
+        { id: "s0", inMs: 0, outMs: 5_000, video: "m", layout: { mode: "single" } },
+        { id: "s1", inMs: 5_000, outMs: 9_000, video: "m", layout: { mode: "single", transition: layoutTransition } },
+      ])
+      expect(only(edl, word(4_800, 5_300)), layoutTransition.type).toEqual({ startMs: 4_800, endMs: 5_300 })
+    }
+    const segCut = at([
+      { id: "s0", inMs: 0, outMs: 5_000, video: "m" },
+      { id: "s1", inMs: 5_000, outMs: 9_000, video: "m", transition: { type: "cut" } },
+    ])
+    expect(only(segCut, word(4_800, 5_300))).toEqual({ startMs: 4_800, endMs: 5_300 })
+  })
+
+  it("an overlap INTO the next segment (crossfade, xfade:*) breaks output contiguity: the word is clipped to its first kept part, as before", () => {
+    const crossfade = at([
+      { id: "s0", inMs: 0, outMs: 5_000, video: "m" },
+      { id: "s1", inMs: 5_000, outMs: 9_000, video: "m", transition: { type: "crossfade", durationMs: 400 } },
+    ])
+    expect(only(crossfade, word(4_800, 5_300))).toEqual({ startMs: 4_800, endMs: 5_000 })
+    const xfade = at([
+      { id: "s0", inMs: 0, outMs: 5_000, video: "m", layout: { mode: "single" } },
+      { id: "s1", inMs: 5_000, outMs: 9_000, video: "m", layout: { mode: "single", transition: { type: "xfade:wipe-left", durationMs: 400 } } },
+    ])
+    expect(only(xfade, word(4_800, 5_300))).toEqual({ startMs: 4_800, endMs: 5_000 })
+  })
+
+  it("runs across a chain of touching segments", () => {
+    const edl = at([
+      { id: "s0", inMs: 0, outMs: 1_000, video: "m" },
+      { id: "s1", inMs: 1_000, outMs: 2_000, video: "m" },
+      { id: "s2", inMs: 2_000, outMs: 3_000, video: "m" },
+    ])
+    expect(only(edl, word(500, 2_500))).toEqual({ startMs: 500, endMs: 2_500 })
+  })
+
+  it("stops at a real cut: across a touching boundary, then clipped where the master clock jumps", () => {
+    const edl = at([
+      { id: "s0", inMs: 0, outMs: 5_000, video: "m" },
+      { id: "s1", inMs: 5_000, outMs: 6_000, video: "m" },
+      { id: "s2", inMs: 8_000, outMs: 12_000, video: "m" },
+    ])
+    expect(only(edl, word(4_800, 8_300))).toEqual({ startMs: 4_800, endMs: 6_000 })
+  })
+
+  it("touching means the NEXT segment in the list: a later segment that happens to resume the master clock does not extend the word", () => {
+    const edl = at([
+      { id: "s0", inMs: 5_000, outMs: 8_000, video: "m" },
+      { id: "s1", inMs: 0, outMs: 5_000, video: "m" },
+    ])
+    // The first kept part is in s0 (output 0..3000): 5_000..5_200 → 0..200.
+    expect(only(edl, word(4_800, 5_200))).toEqual({ startMs: 0, endMs: 200 })
+  })
+
+  it("applies the source offset before testing the boundary", () => {
+    const edl: Edl = {
+      version: 1,
+      clock: "master",
+      sources: [...master, { id: "cam", url: "https://x/c.mp4", kind: "video", offsetMs: 1_000 }],
+      segments: [
+        { id: "s0", inMs: 0, outMs: 5_000, video: "m" },
+        { id: "s1", inMs: 5_000, outMs: 9_000, video: "m" },
+      ],
+    }
+    expect(only(edl, { ...word(3_800, 4_300), sourceId: "cam" })).toEqual({ startMs: 4_800, endMs: 5_300 })
   })
 })
 

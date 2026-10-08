@@ -845,6 +845,9 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     effortRequiresDirect: true,
     supportsTemperature: false,
     preferKie: true,
+    // Thinking is always on (vendor docs: `disabled` is not supported), so it
+    // shares the output cap on every call.
+    thinkingDefaultOn: true,
   },
   // ── Moonshot / DeepSeek ───────────────────────────────────────────────────
   // Both on KIE's THIRD responses family path, openai/v1/responses (llm-client
