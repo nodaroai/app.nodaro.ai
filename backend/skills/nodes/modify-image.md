@@ -1,7 +1,7 @@
 ---
 node_type: modify-image
-generated_at: 2026-10-05T21:37:06.159Z
-generated_from: 066cc1460
+generated_at: 2026-10-08T13:21:55.831Z
+generated_from: 8d2b0c402
 ---
 
 # Modify Image
@@ -52,7 +52,7 @@ generated_from: 066cc1460
 {
   "label": "Modify Image",
   "prompt": "",
-  "provider": "nano-banana",
+  "provider": "gpt-image-2-5-flare-i2i",
   "negativePrompt": "",
   "fieldMappings": {}
 }
@@ -65,13 +65,13 @@ Image-to-image: edit / transform / restyle / outpaint / inpaint (`modify_image` 
 
 ### Model guidance
 
-- **`nano-banana-pro`** — best overall and best for face/character identity preservation across multi-turn edits (up to 14 reference images, ~5 distinct characters); also leads on text/typography. First pick when in doubt.
-- **`nano-banana-2-1`** (default) — Nano Banana 2.1: very good consistency, up to 10 references, faster and cheaper than Pro.
-- **`gpt-image-2`** — strong for typography / logos / text-heavy edits and prompt-adherence-critical work.
+- **`gpt-image-2-5-flare-i2i`** (default) — the most reliable editor in the 2026-10 comparison: changes what you ask and keeps pose, framing, face and product detail. Up to 16 source images.
+- **`gpt-image-2-i2i`** — identity-critical edits of a person, and text-heavy edits.
+- **`nano-banana-2-1`** — good edits for a lower price, up to 10 references.
 - **`ideogram-remix`** — character-aware, good for stylized remix.
 - **`seedream-edit`** — high-res output for instruction-style edits.
 - **`recraft-remove-bg`** — background removal, no prompt (`list_models` shows its credits).
-- **Avoid `flux-kontext`** for general use — it degrades quickly across multi-turn edits; only for one-shot texture-heavy edits, and even then prefer Nano Banana Pro.
+- **Avoid `flux-kontext`** for general use — it degrades quickly across multi-turn edits; only for one-shot texture-heavy edits, and even then prefer GPT Image 2.5 Flare.
 
 Provide ONE of `image_url` (any publicly fetchable HTTPS URL) or `image_asset_id` (a Nodaro job id whose output is an image).
 
@@ -112,7 +112,7 @@ Provide ONE of `image_url` (any publicly fetchable HTTPS URL) or `image_asset_id
   "data": {
     "label": "Modify Image",
     "prompt": "",
-    "provider": "nano-banana",
+    "provider": "gpt-image-2-5-flare-i2i",
     "negativePrompt": "",
     "fieldMappings": {}
   }

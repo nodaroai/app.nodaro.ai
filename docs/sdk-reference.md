@@ -594,7 +594,7 @@ used; a destination on an outbound node is refused with `400 locked_field`).
 const { executionId } = await client.workflows.run(id, { nodeIds: ["node-1"] })
 ```
 
-A workflow whose Apply EDL render is set to **Proxy** stops at that preview
+A workflow whose Apply EDL render is set to **Preview** (`quality: "proxy"`) stops at that preview
 for a person to review in the editor; a run through the SDK has nobody to
 review it, whichever auth it uses (an API key or `supabaseAuth`), so it is refused with `400 preview_review_required` unless the run
 sets the render to Final
@@ -675,7 +675,7 @@ Both are refused before anything exists with `render_final_node_not_found` (no
 such node), `render_final_not_a_render` (not an Apply EDL render) or a
 [continuation code](./api-integration.md#continuing-a-run). `renderFinal` is
 otherwise refused as `run` is — `preview_review_required` when another render after
-this one still reads Proxy (under the `PREVIEW_STOP_RULE_ENABLED` flag; where it is off,
+this one still reads Preview (under the `PREVIEW_STOP_RULE_ENABLED` flag; where it is off,
 that is not refused). A run its payer cannot cover — checked on the quoted
 figure, before any execution exists — throws `InsufficientCreditsError` (`402`),
 with `required` and, unless a deployment's operator pays, `available`.
@@ -1922,7 +1922,7 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > only), which runs the request on the provider's own API rather than through
 > the aggregator. That is the only lane where `temperature`, `maxTokens` and the
 > full reasoning-effort range actually take effect — on the default lane those
-> levers are not reliably honoured. It bills **one credit tier up** (capped at premium), and this
+> levers are not reliably honoured. It bills **one credit rung up** (a premium model moves to its premium-direct price), and this
 > bump is independent of the effort bump above. A model with no direct lane
 > returns `400 advanced_mode_unsupported`. Canvas LLM nodes carry the same field
 > on their node `data` (`advancedMode?: boolean`), and the CLI exposes it as
@@ -5468,11 +5468,14 @@ A card's `estimatedCredits` is the template's listed price. When the price
 follows the length of the recording the template is given,
 `estimatedPerMinuteCredits` is above 0 and the price is `estimatedCredits` plus
 that many credits per minute of the recording — the Tighten Episode template
-lists `82` and `14`. It is absent or `0` otherwise.
+lists `82` and `14`, or, on a deployment with the preview stop rule on (where it
+renders a Preview first), `132` and `15`: its run plus its Render final. It is
+absent or `0` otherwise.
 
 The route also takes `sort=cheapest`, the Templates page's **Fewest credits**:
 the price of a 60-minute recording first, lowest first (`estimatedCredits` plus
-60 × `estimatedPerMinuteCredits`), so `82` + `14`/min sorts as `922`. The SDK's
+60 × `estimatedPerMinuteCredits`), so `82` + `14`/min sorts as `922` (`132` +
+`15`/min, with the preview stop rule on, as `1032`). The SDK's
 `TemplateSort` does not list it yet; pass it through `client.request()`.
 
 ```ts

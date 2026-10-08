@@ -200,3 +200,13 @@ describe("toolkit.llm forwards every tuning field", () => {
     expect(sent.temperature).toBeUndefined()
   })
 })
+
+describe("toolkit.llm.isKnownModel — the host's live registry, not the plugin's pin", () => {
+  it("knows the host's newest models, their dash-form aliases, and nothing else", () => {
+    const tk = buildToolkit()
+    expect(tk.llm.isKnownModel?.("claude-opus-5.5")).toBe(true)
+    expect(tk.llm.isKnownModel?.("claude-opus-5-5")).toBe(true)
+    expect(tk.llm.isKnownModel?.("kimi-k3")).toBe(true)
+    expect(tk.llm.isKnownModel?.("not-a-model")).toBe(false)
+  })
+})

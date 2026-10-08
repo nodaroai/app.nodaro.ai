@@ -102,7 +102,9 @@ export const MAX_IMAGE_PROMPT_CHARS_BY_PROVIDER: Record<string, number> = {
   // verified == 5000 default (no entry needed): imagen4(-fast/-ultra), nano-banana,
   //   nano-banana-edit, flux, flux-flex, gpt-image-2, ideogram-v3/-edit/-remix,
   //   grok, qwen-i2i, seedream-5-pro, seedream-5-pro-i2i
-  //   (docs.kie.ai/market/seedream/5-pro-text-to-image + 5-pro-image-to-image).
+  //   (docs.kie.ai/market/seedream/5-pro-text-to-image + 5-pro-image-to-image),
+  //   seedream-5-flash, seedream-5-flash-i2i (both "4–5000 characters";
+  //   docs.kie.ai/market/seedream/5-flash-text-to-image + 5-flash-image-to-image).
   // grok-i2i: doc states 390000 (78× its t2i sibling) — treated as a KIE schema
   //   typo and left at the 5000 default per the sanity-cap decision.
   // UNVERIFIED (no limit stated in schema) → 5000 default: flux-kontext(-max)
@@ -503,6 +505,7 @@ export const MODELS_WITH_REFERENCE_IMAGE_SUPPORT = new Set([
   "seedream",
   "seedream-5-lite",
   "seedream-5-pro",
+  "seedream-5-flash",
   "flux",
   "flux-flex",
   // Image editing / image-to-image (reference = source image)
@@ -523,6 +526,7 @@ export const MODELS_WITH_REFERENCE_IMAGE_SUPPORT = new Set([
   "seedream-edit",
   "seedream-5-lite-i2i",
   "seedream-5-pro-i2i",
+  "seedream-5-flash-i2i",
   "grok-i2i",
   // Upscale / background ops (source acts as the reference)
   "recraft-remove-bg",
@@ -558,6 +562,7 @@ export const T2I_TO_I2I_VARIANT: Record<string, string> = {
   "seedream": "seedream-edit",
   "seedream-5-lite": "seedream-5-lite-i2i",
   "seedream-5-pro": "seedream-5-pro-i2i",
+  "seedream-5-flash": "seedream-5-flash-i2i",
   "flux": "flux-pro-i2i",
   "flux-flex": "flux-i2i",
 }
@@ -593,6 +598,8 @@ export const REF_IMAGE_MAX_LIMITS: Record<string, number> = {
   "seedream-edit": 16,
   "seedream-5-lite-i2i": 16,
   "seedream-5-pro-i2i": 16,
+  // Flash takes at most 10 `image_urls` (docs.kie.ai/market/seedream/5-flash-image-to-image) — not the family's 16.
+  "seedream-5-flash-i2i": 10,
   // Single-source i2i (one input image)
   "flux-kontext": 1,
   "flux-kontext-max": 1,
@@ -732,6 +739,7 @@ export const IMAGE_GEN_PROVIDERS = [
   "seedream",
   "seedream-5-lite",
   "seedream-5-pro",
+  "seedream-5-flash",
   "flux-flex",
   "flux-kontext",
   "flux-kontext-max",
@@ -766,6 +774,7 @@ export const IMAGE_I2I_PROVIDERS = [
   "seedream-edit",
   "seedream-5-lite-i2i",
   "seedream-5-pro-i2i",
+  "seedream-5-flash-i2i",
   "flux-kontext",
   "flux-kontext-max",
   // Replicate Open (uncensored) — multi-image Kontext via Replicate
@@ -1535,6 +1544,7 @@ export const IMAGE_MASK_MODE: Record<ImageGenProvider, ImageMaskMode> = {
   "seedream": "prompt",
   "seedream-5-lite": "prompt",
   "seedream-5-pro": "prompt",
+  "seedream-5-flash": "prompt",
   "qwen": "prompt",
   "flux-kontext": "prompt",
   "flux-kontext-max": "prompt",

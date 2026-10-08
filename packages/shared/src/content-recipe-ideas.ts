@@ -8,8 +8,8 @@ import { buildLlmCreditIdentifier, getLlmModel, LLM_FEATURE_DEFAULTS } from "./l
  * the cloud plugin that runs the nodes computes the same ids.
  *
  * Content Ideas is charged per batch of up to five ideas: a run of 1–5 ideas
- * bills `content-ideas[:economy|:premium]`, a run of 6–10 bills
- * `content-ideas:10[:economy|:premium]`, priced at two batches.
+ * bills `content-ideas[:economy|:premium|:premium-direct]`, a run of 6–10 bills
+ * `content-ideas:10[:economy|:premium|:premium-direct]`, priced at two batches.
  */
 
 export const CONTENT_IDEAS_MAX_COUNT = 10
@@ -60,10 +60,13 @@ export const CONTENT_RECIPE_IDEAS_CREDIT_IDS = [
   "content-recipe:economy",
   "content-recipe",
   "content-recipe:premium",
+  "content-recipe:premium-direct",
   "content-ideas:economy",
   "content-ideas",
   "content-ideas:premium",
+  "content-ideas:premium-direct",
   "content-ideas:10:economy",
   "content-ideas:10",
   "content-ideas:10:premium",
+  "content-ideas:10:premium-direct",
 ] as const

@@ -6,7 +6,7 @@
 
 The Component node lets you drop any published Component — a curated, versioned sub-workflow from the Nodaro marketplace or your own published apps — into your current workflow. The component's exposed inputs, settings, and outputs are surfaced directly in the config panel, so you configure and wire it just like any other node.
 
-A component cannot stop for a review: one that holds an [Apply EDL](../processing-video/apply-edl.md) render set to **Proxy** (a Preview) is refused when it is published, and the run of a version published earlier is refused before any of its nodes runs (code `preview_render_nested`). Set the render's **Quality** to **Final** before publishing. (Rolled out under a flag, `PREVIEW_STOP_RULE_ENABLED`; where it is off, nothing is refused. See [Apply EDL](../processing-video/apply-edl.md#a-run-stops-at-a-preview).)
+A component cannot stop for a review: one that holds an [Apply EDL](../processing-video/apply-edl.md) render set to **Preview** is refused when it is published, and the run of a version published earlier is refused before any of its nodes runs (code `preview_render_nested`). Set the render's **Quality** to **Final** before publishing. (Rolled out under a flag, `PREVIEW_STOP_RULE_ENABLED`; where it is off, nothing is refused. See [Apply EDL](../processing-video/apply-edl.md#a-run-stops-at-a-preview).)
 
 Components are versioned. The node records the version it was added at (`pinnedVersion`). When the component publisher releases a new version, you can refresh the node to pick it up. The credit cost is estimated from the component's content and shown in the config panel.
 

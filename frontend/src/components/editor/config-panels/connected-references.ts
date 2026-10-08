@@ -105,8 +105,17 @@ export function buildImageConnectedReferences(params: {
   readonly sources: ReadonlyArray<SourceNodeInfo>
   readonly nodes: ReadonlyArray<WorkflowNode>
   readonly attachedChars: ReadonlyArray<CharacterDefinition>
+  /**
+   * A wired upstream with no output image yet is SKIPPED by default — the
+   * `@`-autocomplete has nothing to show for it. When this returns a URL for
+   * such a source, the reference is kept under that URL instead, in the slot
+   * the source's real image will take. The final-prompt preview passes a
+   * placeholder for an upstream that renders its image when the workflow runs,
+   * so its `{image:N}` tokens bind the way they will in that run.
+   */
+  readonly pendingUpstreamUrl?: (source: SourceNodeInfo, refKey: string) => string | undefined
 }): ConnectedReference[] {
-  const { data, sources, nodes, attachedChars } = params
+  const { data, sources, nodes, attachedChars, pendingUpstreamUrl } = params
   const wiredSourceTypeMap: Record<string, ReferenceSource> = {
     "upload-image": "wired-image",
     "generate-image": "wired-image",
@@ -230,15 +239,18 @@ export function buildImageConnectedReferences(params: {
       }
       // No source image yet — fall through to generic handling.
     }
-    // `entityActiveImageUrl` covers entity nodes wired via their `image` handle
-    // (active result URL). `sourceImageUrl` covers object / creature / face whose
-    // approved main image lives in that field rather than generatedImageUrl.
-    const url = entityActiveImageUrl(nd) || (nd.generatedImageUrl as string) || (nd.url as string) || (nd.referenceImageUrl as string) || (nd.sourceImageUrl as string) || ""
-    if (!url) continue
     // Handle-scoped key so an entity node wired via BOTH its identity handle
     // (keyed by node id above) and its `image` handle (here, demoted to
     // wired-image) produces TWO refs instead of one clobbering the other.
     const refKey = sourceRefKey(s.id, s.sourceHandle, s.type)
+    // `entityActiveImageUrl` covers entity nodes wired via their `image` handle
+    // (active result URL). `sourceImageUrl` covers object / creature / face whose
+    // approved main image lives in that field rather than generatedImageUrl.
+    const url =
+      entityActiveImageUrl(nd) || (nd.generatedImageUrl as string) || (nd.url as string) ||
+      (nd.referenceImageUrl as string) || (nd.sourceImageUrl as string) ||
+      pendingUpstreamUrl?.(s, refKey) || ""
+    if (!url) continue
     map.set(refKey, {
       id: refKey,
       defaultName: s.label || s.type,

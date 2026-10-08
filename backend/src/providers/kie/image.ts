@@ -14,7 +14,7 @@ import type {
 import sharp from "sharp"
 import { KieError, createSanitizedError, runKieTask, type KieResultJson } from "./client.js"
 import { runFluxKontextTask } from "./kontext-client.js"
-import { KIE_IMAGE_MODELS, kieSeedForWire } from "./models.js"
+import { KIE_IMAGE_MODELS, kieSeedForWire, type KieModelConfig } from "./models.js"
 import { ensureImageForProvider } from "./video.js"
 import { TASK_CHAINED_EDIT_PROVIDERS, getMaxImagePromptChars } from "@nodaro/shared"
 import { logCreditAudit, extractCreditFields } from "../../lib/credit-audit.js"
@@ -179,6 +179,23 @@ function clampPromptForProvider(prompt: string, provider: string): string {
   return `${prompt.slice(0, Math.max(0, max - 3))}...`
 }
 
+/**
+ * Send our `resolution` under the key this SKU's schema declares (models.ts
+ * `resolutionParam`; e.g. seedream-5-flash takes `size`). Mutates `input`.
+ * A SKU without the field keeps `resolution`.
+ */
+function applyResolutionParam(modelConfig: KieModelConfig, input: Record<string, unknown>): void {
+  const key = modelConfig.resolutionParam
+  if (!key || key === "resolution" || input.resolution === undefined) return
+  input[key] = input.resolution
+  delete input.resolution
+}
+
+/** The resolution value on the wire, wherever `applyResolutionParam` put it. */
+function wireResolution(modelConfig: KieModelConfig, input: Record<string, unknown>): string | number | undefined {
+  return input[modelConfig.resolutionParam ?? "resolution"] as string | number | undefined
+}
+
 export class KieImageProvider
   implements ImageGenerationProvider, ImageEditingProvider
 {
@@ -303,6 +320,11 @@ export class KieImageProvider
       delete input.resolution
     }
 
+    // A SKU whose schema names the resolution lever differently (seedream-5-flash:
+    // `size`) declares it in models.ts `resolutionParam`; read off the FINAL
+    // modelConfig, after the t2i → i2i swaps above.
+    applyResolutionParam(modelConfig, input)
+
     // Native negative_prompt: keep for supported models, remove for others.
     // The caller passes negative_prompt via extraParams; it was already spread into input above.
     if (input.negative_prompt && !NATIVE_NEGATIVE_PROMPT_MODELS.has(provider)) {
@@ -380,7 +402,7 @@ export class KieImageProvider
       modelKey: provider,
       dimensions: {
         ...reconcileOpts?.dimensions,
-        resolution: input.resolution as string | number | undefined,
+        resolution: wireResolution(modelConfig, input),
         quality: input.quality as string | number | undefined,
       },
     }
@@ -585,6 +607,9 @@ export class KieImageProvider
           preserveGeometry: typeof input.mask_url === "string" && input.mask_url.length > 0,
         })
 
+    // Same resolution-key rule as generateImage (models.ts `resolutionParam`).
+    applyResolutionParam(modelConfig, input)
+
     // Set the image parameter based on model config
     const imageParamName = modelConfig.imageParam ?? "image"
     if (
@@ -608,6 +633,7 @@ export class KieImageProvider
       provider === "seedream-edit" ||
       provider === "seedream-5-lite-i2i" ||
       provider === "seedream-5-pro-i2i" ||
+      provider === "seedream-5-flash-i2i" ||
       provider === "grok-2-edit"
     )) {
       input.prompt = clampPromptForProvider(prompt, provider)
@@ -633,7 +659,7 @@ export class KieImageProvider
         modelKey: provider,
         dimensions: {
           ...reconcileOpts?.dimensions,
-          resolution: input.resolution as string | number | undefined,
+          resolution: wireResolution(modelConfig, input),
           quality: input.quality as string | number | undefined,
         },
       },

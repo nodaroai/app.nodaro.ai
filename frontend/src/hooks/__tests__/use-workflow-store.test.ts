@@ -116,7 +116,7 @@ describe("useWorkflowStore", () => {
 
       const node = useWorkflowStore.getState().nodes[0]
       expect(node.data.label).toBe("Generate Image")
-      expect((node.data as Record<string, unknown>).provider).toBe("nano-banana-pro")
+      expect((node.data as Record<string, unknown>).provider).toBe("gpt-image-2")
     })
 
     it("does not add node for invalid type", () => {

@@ -681,12 +681,39 @@ const UGC_CLIPS_SPEECH_LANE_VOICE_BYTES = 483
 // named in the image tools' text (decided 2026-10-08): 406_199 total. `generate_image` is
 // 8_116 B against the 8_192 B per-tool cap.
 const NANO_BANANA_2_1_MODEL_BYTES = 61
+// RAISED 2026-10-08 by Seedream 5 Flash (`seedream-5-flash` t2i + `seedream-5-flash-i2i`) and
+// nothing else: it widens the model lists `generate_image` / `image_to_image` / `modify_image`
+// already carry. No tool was added, so the fixture does NOT move. Measured by this suite:
+// 407_692 total − 407_630 before = 62 B; `generate_image` is 8_134 B against the 8_192 B
+// per-tool cap.
+const SEEDREAM_5_FLASH_MODEL_BYTES = 62
+// RAISED 2026-10-08 by the image-model role defaults (decided from the image model
+// bake-off): the image tools now name GPT Image 2 as the generate default and
+// GPT Image 2.5 Flare i2i as the edit default, and the character/location/object/
+// creature tools say "defaults to gpt-image-2". No tool was added, so the fixture
+// does NOT move. Measured by this suite: 406_494 total − 406_446 before = 48 B;
+// `generate_image` is 8_108 B against the 8_192 B per-tool cap.
+const IMAGE_MODEL_ROLE_DEFAULTS_BYTES = 48
 // RAISED by the four bytes `generate_dialogue`'s Limits sentence grew when Dialogue v4's cap
 // rose to 10,000 characters (decided 2026-10-07, after the 2026-10-06 live check): "on either
 // model" became "on v3, 10,000 on v4" — the description must name each model's own cap, since
 // the tool refuses a script by the chosen model's number. No tool was added, so the fixture
 // does NOT move. measured by this suite: 405_655 total − 405_651 budget = 4 B.
 const DIALOGUE_V4_CAP_WORDING_BYTES = 4
+// RAISED 2026-10-08 by the eight LLM ids added to the registry (claude-sonnet-5.5,
+// claude-opus-5.5, gpt-6-luna, gpt-6-sol, gpt-6.1-sol, grok-4.7, kimi-k3, deepseek-v4.1-flash):
+// every tool whose `llm_model` argument is `z.enum(LLM_MODEL_IDS)` lists them all, and nothing
+// else moved. No tool was added, so the fixture does NOT move. measured by this suite:
+// 406_618 total − 406_138 budget = 480 B.
+const LLM_REGISTRY_2026_10_IDS_BYTES = 480
+// RAISED 2026-10-08 by the wording of the shared LLM arguments when Advanced
+// mode reached Claude and a Claude effort began running direct (decided that
+// day: a call is priced on the lane it runs on): `advanced_mode` now names
+// Gemini AND Claude and the premium-direct rung, and `reasoning_effort` says a
+// Claude effort runs on Anthropic's API. Every LLM tool carries both, and
+// nothing else moved. No tool was added, so the fixture does NOT move.
+// measured by this suite: 407_322 total − 406_618 budget = 704 B.
+const LLM_LANE_PRICING_WORDING_BYTES = 704
 
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES,
@@ -762,8 +789,12 @@ export const TOOL_WIRE_BUDGET = {
     UGC_FINISH_ROOM_SOUND_BYTES +
     ELEVENLABS_V4_TURBO_BYTES +
     DIALOGUE_V4_CAP_WORDING_BYTES +
+    LLM_REGISTRY_2026_10_IDS_BYTES +
+    LLM_LANE_PRICING_WORDING_BYTES +
     UGC_CLIPS_SPEECH_LANE_VOICE_BYTES +
-    NANO_BANANA_2_1_MODEL_BYTES,
+    NANO_BANANA_2_1_MODEL_BYTES +
+    SEEDREAM_5_FLASH_MODEL_BYTES +
+    IMAGE_MODEL_ROLE_DEFAULTS_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

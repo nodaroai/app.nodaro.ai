@@ -67,9 +67,35 @@ export function faceDetectPeakMemoryMiB(
   return decode + FACE_DETECT_SESSION_PEAK_MIB_PER_THREAD * Math.max(1, Math.ceil(ortThreads))
 }
 
-/** How long a window of `frames` may hold its slot (the decode is killed past it). */
-export function faceDetectTimeoutMs(frames: number): number {
+/**
+ * The most boxes of one frame that get a face descriptor (P3.2b round 3): the
+ * highest-scoring first, the rest none (a caller then abstains on them, as it
+ * does for a host with no descriptors). It is what makes the per-frame term
+ * below a bound. Four times the most faces any committed tuning clip holds in
+ * one frame at score 0.7 (8: back's convention-floor crowd; the P3.0b and
+ * holdout windows, 2026-10-08), so it never binds on podcast footage.
+ */
+export const FACE_DESCRIPTOR_MAX_PER_FRAME = 32
+
+/**
+ * Hold budget per frame the caller asks descriptors for, ms. Measured
+ * 2026-10-08: 14–17 µs of CPU per box (`faceDescriptor`, 7 reps of 2,000 on a
+ * 960×540 frame, Apple M-series, Node 26; the work is fixed-size per box —
+ * 1,024 bilinear luma samples and two 256-sample histograms — so it does not
+ * grow with the face). `FACE_DESCRIPTOR_MAX_PER_FRAME` boxes is about 0.5 ms;
+ * 10 ms is about 20× that, the same busy-box headroom as
+ * `FACE_DETECT_MS_PER_FRAME` and room for a core half as fast. The pricing
+ * measurement (P3.0f) re-pins it on the D5 venue with the rest.
+ */
+export const FACE_DETECT_DESCRIPTOR_MS_PER_FRAME = 10
+
+/**
+ * How long a window of `frames` may hold its slot (the decode is killed past
+ * it), `describedFrames` of them with face descriptors.
+ */
+export function faceDetectTimeoutMs(frames: number, describedFrames = 0): number {
   return FACE_DETECT_FIXED_MS + FACE_DETECT_MS_PER_FRAME * Math.max(1, Math.ceil(frames))
+    + FACE_DETECT_DESCRIPTOR_MS_PER_FRAME * Math.max(0, Math.ceil(describedFrames))
 }
 
 /**

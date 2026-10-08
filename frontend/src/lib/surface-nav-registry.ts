@@ -127,6 +127,7 @@ export const ENTRY_BY_LINK: readonly string[] = [
   "picker-gaps",
   "copilot-gaps",
   "kie-credits",
+  "site-analytics",
   "subscriptions",
   "llm-models",
   "node-defaults",

@@ -234,11 +234,11 @@ export const CREDIT_BAND_SOURCES: Readonly<Record<string, CreditBandSource>> = {
     note: "A frame-size ladder for 3D scene plans — advertise the whole range rather than one end of it.",
   },
   "generate-3d-scene": {
-    ids: ["3d-scene:economy", "3d-scene", "3d-scene:premium"],
+    ids: familyIds("3d-scene"),
     note: "Authoring tiers only — the optional video-reference analysis job is priced separately.",
   },
   "edit-3d-scene": {
-    ids: ["3d-scene-ops", "3d-scene:economy", "3d-scene", "3d-scene:premium"],
+    ids: ["3d-scene-ops", ...familyIds("3d-scene")],
     note: "Deterministic edits reserve the free `3d-scene-ops` row; an instruction re-authors at the LLM tiers above.",
   },
   // ── Control ──

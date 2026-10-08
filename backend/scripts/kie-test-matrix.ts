@@ -569,6 +569,37 @@ export const IMAGE_TEST_CONFIGS: TestConfig[] = [
     estimatedTimeSec: 20,
     skipByDefault: false,
   },
+  // Seedream 5 Flash — the lever is `size` (no `quality` input); flat 3.24 at 1K and 2K.
+  {
+    modelKey: "seedream-5-flash",
+    category: "image",
+    kieModel: "seedream/5-flash-text-to-image",
+    expectedKieCredits: 3.24,
+    expectedCostUsd: 0.0162,
+    configDesc: "Seedream 5 Flash T2I (1K)",
+    apiType: "standard",
+    input: { prompt: "test", aspect_ratio: "1:1", size: "1K", output_format: "png" },
+    requiresImage: false,
+    requiresAudio: false,
+    requiresVideo: false,
+    estimatedTimeSec: 15,
+    skipByDefault: false,
+  },
+  {
+    modelKey: "seedream-5-flash-i2i",
+    category: "image",
+    kieModel: "seedream/5-flash-image-to-image",
+    expectedKieCredits: 3.24,
+    expectedCostUsd: 0.0162,
+    configDesc: "Seedream 5 Flash I2I (1K, 1 input image)",
+    apiType: "standard",
+    input: { prompt: "make it blue", image_urls: ["{{IMAGE}}"], aspect_ratio: "1:1", size: "1K", output_format: "png" },
+    requiresImage: true,
+    requiresAudio: false,
+    requiresVideo: false,
+    estimatedTimeSec: 15,
+    skipByDefault: false,
+  },
 
   // --- Z-Image ---
   {

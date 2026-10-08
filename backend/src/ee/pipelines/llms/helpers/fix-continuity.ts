@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { type FixContinuityResult, type SceneNodeData, type ShowrunnerPlan } from "@nodaro/shared"
 import { runImageCritic } from "../image-critic.js"
 import { pipelineGenerateImage } from "../../services/pipeline-generate-image.js"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
 
 /**
  * §6.11.13 Fix Continuity — Phase 1C.1 vision-keyframe helper.
@@ -102,7 +103,7 @@ export async function runFixContinuity(
     pipelineEntityId: args.sceneId,
     userId: args.userId,
     prompt: target.visual_keyframe_prompt,
-    modelIdentifier: args.scene.image_model || "nano-banana",
+    modelIdentifier: args.scene.image_model || IMAGE_MODEL_ROLE_DEFAULTS.general,
     referenceImageUrls: [prior.last_frame_url],
   })
 

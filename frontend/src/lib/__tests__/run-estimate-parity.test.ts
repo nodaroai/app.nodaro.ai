@@ -12,26 +12,54 @@
  * (`estimateWholeRun`) are the fourth and fifth sides: the same graph, the
  * same total.
  *
+ * A template whose render is set to Preview (the four podcast templates,
+ * decided 2026-10-08) lists a second part, its Render final: the editor's
+ * Render final quotes it (the render at Final and every node after it).
+ *
+ * All of that holds with the preview stop rule off, which this file sets
+ * rather than reading the deployment's /config.js. With it on, a run stops at
+ * the Preview and its estimate leaves out the nodes after the render; a
+ * describe pins that figure, the one the server's half pins too.
+ *
+ * The sync writes those templates with their render at Preview only where the
+ * rule is on (decided 2026-10-08); where it is off it writes each render set
+ * to Preview at Final. The last describe opens that graph in the editor: its
+ * run estimate quotes the listing stored with it, the server's half pins both.
+ *
  * The editor is priced from the fixture's price table alone (the backend half
  * pins that table to the server's base prices), so the totals can only agree
  * when both sides read the same credit ids, the same minutes, the same runs
  * and the same providers.
  */
-import { describe, it, expect } from "vitest"
-import { videoSfxCreditId } from "@nodaro/shared"
+import { describe, it, expect, vi, beforeEach } from "vitest"
+import { rendersAsPreview, videoSfxCreditId, withRunOverrides } from "@nodaro/shared"
 import { readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { estimateRunCreditLines, estimateRunCredits, estimateWholeRun, runModelIds } from "@/components/editor/workflow-editor/estimate-run-credits"
 import { computeLiveRunEstimate } from "@/hooks/use-live-run-estimate"
 import { isExecutableNode } from "@/components/editor/workflow-editor/types"
+import { renderFinalRunSet, renderRunOverrides } from "@/components/editor/workflow-editor/render-final-set"
+import { liveExecutable } from "@/components/editor/workflow-editor/run-from-here-set"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
+
+const stopRule = vi.hoisted(() => ({ on: false }))
+vi.mock("@/lib/runtime-config", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/runtime-config")>()),
+  runtimePreviewStopRule: () => stopRule.on,
+}))
+beforeEach(() => {
+  stopRule.on = false
+})
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const SEED = join(HERE, "../../../../backend/src/lib/tutorial-seed")
 const fixture = JSON.parse(readFileSync(join(SEED, "__tests__/fixtures/run-estimate-parity.json"), "utf8")) as {
   prices: Record<string, number>
   templates: Record<string, number>
+  templateFinals: Record<string, number>
+  templateRunsWithStopRule: Record<string, number>
+  templatesSyncedWithoutStopRule: Record<string, number>
   graphs: Record<string, { nodes: WorkflowNode[]; edges: WorkflowEdge[]; credits: number }>
 }
 
@@ -60,6 +88,20 @@ describe("the editor's run estimate quotes what the listing lists and the server
     const total = estimateRunCredits(executable, nodes, edges, cachedCost)
     expect([...missing], `${name}: credit ids the fixture does not price`).toEqual([])
     expect(total, name).toBe(credits)
+  })
+})
+
+describe("the editor's Render final quotes the listing's final part", () => {
+  // As handleRenderFinal prices it: the run set, the render at Final.
+  it.each(Object.entries(fixture.templateFinals))("%s", (slug, credits) => {
+    const { nodes, edges } = template(slug)
+    const render = nodes.find((n) => n.type === "apply-edl")!
+    const runSet = renderFinalRunSet(render.id, nodes, edges)
+    const overridden = withRunOverrides(nodes, renderRunOverrides(render.id, "final", runSet))
+    const { cachedCost, missing } = pricesFrom(fixture.prices)
+    const total = estimateRunCredits(liveExecutable(overridden).filter((n) => runSet.has(n.id)), overridden, edges, cachedCost)
+    expect([...missing], `${slug}: credit ids the fixture does not price`).toEqual([])
+    expect(total, slug).toBe(credits)
   })
 })
 
@@ -210,4 +252,43 @@ describe("a step priced by the length it is given, on a render's output", () => 
     expect(ids).toContain(videoSfxCreditId(120))
   })
 
+})
+
+describe("with the preview stop rule on, a template's run stops at its Preview", () => {
+  // Every run estimate leaves out the nodes the Preview render gates; the
+  // Render final still quotes the listing's final part.
+  beforeEach(() => {
+    stopRule.on = true
+  })
+  it.each(Object.entries(fixture.templateRunsWithStopRule))("%s", (slug, credits) => {
+    const { nodes, edges } = template(slug)
+    const { cachedCost, missing } = pricesFrom(fixture.prices)
+    expect(estimateRunCredits(nodes.filter(isExecutableNode), nodes, edges, cachedCost), `${slug}: editor run estimate`).toBe(credits)
+    expect(computeLiveRunEstimate({ nodes, edges }, cachedCost).total, `${slug}: app runner's live estimate`).toBe(credits)
+    expect(estimateWholeRun(nodes, edges, cachedCost).total, `${slug}: Execute-workflow badge`).toBe(credits)
+    const render = nodes.find((n) => n.type === "apply-edl")!
+    const runSet = renderFinalRunSet(render.id, nodes, edges)
+    const overridden = withRunOverrides(nodes, renderRunOverrides(render.id, "final", runSet))
+    const final = estimateRunCredits(liveExecutable(overridden).filter((n) => runSet.has(n.id)), overridden, edges, cachedCost)
+    expect(final, `${slug}: Render final`).toBe(fixture.templateFinals[slug])
+    expect([...missing], `${slug}: credit ids the fixture does not price`).toEqual([])
+  })
+})
+
+describe("with the preview stop rule off, the template the sync writes renders at Final", () => {
+  // Each render set to Preview, written at Final: a whole run renders the
+  // delivery and runs the nodes after it, at the listing stored with it.
+  const atFinal = ({ nodes, edges }: Graph): Graph => ({
+    nodes: withRunOverrides(nodes, Object.fromEntries(nodes.filter((n) => rendersAsPreview(n)).map((n) => [n.id, { quality: "final" }]))),
+    edges,
+  })
+  it.each(Object.entries(fixture.templatesSyncedWithoutStopRule))("%s", (slug, credits) => {
+    const { nodes, edges } = atFinal(template(slug))
+    expect(nodes.filter((n) => n.type === "apply-edl").map((n) => (n.data as { quality?: string }).quality), slug).toEqual(["final"])
+    const { cachedCost, missing } = pricesFrom(fixture.prices)
+    expect(estimateRunCredits(nodes.filter(isExecutableNode), nodes, edges, cachedCost), `${slug}: editor run estimate`).toBe(credits)
+    expect(computeLiveRunEstimate({ nodes, edges }, cachedCost).total, `${slug}: app runner's live estimate`).toBe(credits)
+    expect(estimateWholeRun(nodes, edges, cachedCost).total, `${slug}: Execute-workflow badge`).toBe(credits)
+    expect([...missing], `${slug}: credit ids the fixture does not price`).toEqual([])
+  })
 })

@@ -130,9 +130,9 @@ describe("mention splice — the {image:N:label} positional pill", () => {
     )
   })
 
-  it("an out-of-range token stays visible, and its whitespace with it", () => {
-    expect(buildTokens("a man wearing {image:7:hat}  in the park", [hat])).toContain(
-      "{image:7:hat}  in the park",
+  it("an out-of-range token drops to its label, and the gap it leaves collapses", () => {
+    expect(buildTokens("a man wearing {image:7:hat}  in the park", [hat])).toBe(
+      "A man wearing hat in the park",
     )
   })
 })

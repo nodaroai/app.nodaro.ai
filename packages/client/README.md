@@ -76,7 +76,7 @@ Core pattern (all generation is async; runAndWait submits + polls + resolves):
     auth: new StaticTokenAuth(process.env.NODARO_ACCESS_TOKEN!),
   })
   const img = await client.nodes.runAndWait("generate-image", {
-    prompt: "…", provider: "nano-banana-2-1",        // fast + cheap, great default
+    prompt: "…", provider: "gpt-image-2",            // the platform default
   })
   const vid = await client.nodes.runAndWait("generate-video", {
     prompt: "…", imageUrl: img.imageUrl,

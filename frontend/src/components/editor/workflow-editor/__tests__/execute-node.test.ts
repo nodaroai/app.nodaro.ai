@@ -22,6 +22,7 @@ const mockCollectAncestorRefs = vi.fn()
 const mockRunImageGeneration = vi.fn()
 const mockRunEditImage = vi.fn()
 const mockRunImageToImage = vi.fn()
+const mockRunModifyImage = vi.fn()
 const mockRunVideoGeneration = vi.fn()
 const mockRunVideoToVideoGeneration = vi.fn()
 const mockRunTextToVideoGeneration = vi.fn()
@@ -229,6 +230,7 @@ vi.mock("../node-executors", () => ({
     mockRunImageGeneration(...args),
   runEditImage: (...args: unknown[]) => mockRunEditImage(...args),
   runImageToImage: (...args: unknown[]) => mockRunImageToImage(...args),
+  runModifyImage: (...args: unknown[]) => mockRunModifyImage(...args),
   runVideoGeneration: (...args: unknown[]) =>
     mockRunVideoGeneration(...args),
   runVideoToVideoGeneration: (...args: unknown[]) =>
@@ -603,7 +605,7 @@ describe("generate-image", () => {
       "a cat",
       expect.anything(),
       undefined,
-      "nano-banana-pro",
+      "gpt-image-2",
       undefined,
       undefined,
       undefined,
@@ -640,7 +642,7 @@ describe("generate-image", () => {
       "override prompt",
       expect.anything(),
       undefined,
-      "nano-banana-pro",
+      "gpt-image-2",
       undefined,
       undefined,
       undefined,
@@ -836,6 +838,94 @@ describe("generate-image", () => {
     const passedPrompt = callArgs[1] as string
     // Literal mention must be replaced.
     expect(passedPrompt).not.toMatch(/@kira:1:smile\b/)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Unwired `{image:N}` reference tokens (generate-image / modify-image)
+//
+// A token with no image at its position follows the video rule: a labelled one
+// becomes its label, an unlabelled one is dropped. The orchestrator's twin is
+// `payload-builder-unwired-image-tokens.test.ts` — same prompts, same
+// expected text.
+// ---------------------------------------------------------------------------
+
+describe("unwired {image:N} reference tokens", () => {
+  const CREATOR_AT_HOME =
+    "Waist-up photo of {image:1:person}, an adult, standing at home in front of a plain wall, arms relaxed, empty hands."
+  const CREATOR_UNWIRED =
+    "Waist-up photo of person, an adult, standing at home in front of a plain wall, arms relaxed, empty hands."
+
+  it("generate-image with nothing wired sends the label, not the raw token", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    mockRunImageGeneration.mockResolvedValue(undefined)
+    await executeNode(
+      makeNode("generate-image", { prompt: CREATOR_AT_HOME, provider: "nano-banana-pro" }),
+      makeCtx(),
+    )
+    expect(mockRunImageGeneration.mock.calls[0][1]).toBe(CREATOR_UNWIRED)
+    expect(mockRunImageGeneration.mock.calls[0][3]).toBeUndefined()
+  })
+
+  it("generate-image with nothing wired drops an unlabelled token", async () => {
+    mockResolveNodeInputs.mockReturnValue({})
+    mockRunImageGeneration.mockResolvedValue(undefined)
+    await executeNode(
+      makeNode("generate-image", {
+        prompt: "remove persons faces from {image:1}, keep everything else the same",
+        provider: "gpt-image-2",
+      }),
+      makeCtx(),
+    )
+    expect(mockRunImageGeneration.mock.calls[0][1]).toBe(
+      "remove persons faces from , keep everything else the same",
+    )
+  })
+
+  it("generate-image with the photo wired binds the token exactly as before", async () => {
+    const upload = {
+      id: "up-1",
+      type: "upload-image",
+      position: { x: 0, y: 0 },
+      data: { label: "Photo", imageUrl: "http://photo.png" },
+    }
+    const gen = makeNode("generate-image", { prompt: CREATOR_AT_HOME, provider: "nano-banana-pro" })
+    mockNodes = [upload, gen]
+    mockEdges = [{ source: "up-1", target: "n1" }]
+    mockResolveNodeInputs.mockReturnValue({ referenceImageUrls: ["http://photo.png"] })
+    mockRunImageGeneration.mockResolvedValue(undefined)
+    await executeNode(gen, makeCtx())
+    expect(mockRunImageGeneration.mock.calls[0][1]).toBe(
+      "Use these references for the output image:\n" +
+        "- Image 1 (person) — match exactly. Maintain perfect likeness (face, body proportions, distinctive features).\n\n" +
+        "Compose them naturally into a single image: Waist-up photo of Image 1 (person), an adult, standing at home in front of a plain wall, arms relaxed, empty hands.",
+    )
+    expect(mockRunImageGeneration.mock.calls[0][3]).toEqual(["http://photo.png"])
+  })
+
+  it("modify-image: the wired reference binds, the token past it drops to its label", async () => {
+    // The first wired image is the image being modified; `{image:N}` numbers
+    // the references after it, so only `{image:1}` has an image here.
+    mockResolveNodeInputs.mockReturnValue({
+      referenceImageUrls: ["http://main.png", "http://hat.png"],
+    })
+    mockRunModifyImage.mockResolvedValue(undefined)
+    await executeNode(
+      makeNode("modify-image", {
+        prompt: "the woman wears {image:1:hat} and {image:2:scarf}",
+        provider: "nano-banana",
+      }),
+      makeCtx(),
+    )
+    const [, imageUrl, prompt, , , refs] = mockRunModifyImage.mock.calls[0] as [
+      string, string, string, unknown, string, string[] | undefined,
+    ]
+    expect(imageUrl).toBe("http://main.png")
+    expect(prompt).toBe(
+      "Use these references for the output image:\n- Image 1 (hat) — match exactly.\n\n" +
+        "Compose them naturally into a single image: the woman wears Image 1 (hat) and scarf",
+    )
+    expect(refs).toEqual(["http://hat.png"])
   })
 })
 

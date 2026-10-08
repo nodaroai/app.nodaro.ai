@@ -174,7 +174,7 @@ describe("pipelineGenerateImage", () => {
     expect(CreditsService.reserveCredits).toHaveBeenCalledWith(
       "u1",
       "job-1",
-      "nano-banana",
+      "gpt-image-2",
       0,
       0,
       { isAppRun: false, billingContext: { payer: "user", userId: "u1" } },
@@ -187,7 +187,7 @@ describe("pipelineGenerateImage", () => {
       expect.objectContaining({
         jobId: "job-1",
         prompt: "weathered pilot portrait",
-        provider: "nano-banana",
+        provider: "gpt-image-2",
         aspectRatio: "1:1",
         usageLogId: "log-1",
       }),

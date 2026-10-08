@@ -1,3 +1,4 @@
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "./image-model-roles.js"
 /**
  * The "Settings" input: ONE input handle on a generation node that takes the
  * Generation Settings nodes. Aspect Ratio, Duration and Provider set the
@@ -107,7 +108,7 @@ const SETTINGS_CONSUMERS: Readonly<Record<string, SettingsConsumer>> = {
     models: IMAGE_GEN_PROVIDERS,
     // The node's own default (NODE_DEFINITIONS) — only used to fit a wired
     // ratio when the node names no model.
-    defaultModel: "nano-banana-pro",
+    defaultModel: IMAGE_MODEL_ROLE_DEFAULTS.general,
     modelList: "providers",
   },
 }

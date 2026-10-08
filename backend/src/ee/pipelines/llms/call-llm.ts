@@ -1,7 +1,8 @@
 import type Anthropic from "@anthropic-ai/sdk"
 import { z } from "zod"
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { LLM_MODELS } from "@nodaro/shared"
+import { LLM_MODELS, getLlmModel } from "@nodaro/shared"
+import { calculateLlmCost } from "../../../lib/pricing/llm-cost.js"
 import { getAnthropicClient } from "../../../lib/anthropic.js"
 import { getPipelineSignal } from "../pipeline-context.js"
 import { restrictObjectSchemas } from "../../../lib/json-schema-strict.js"
@@ -332,15 +333,14 @@ export class CallLLMValidationError extends Error {
   }
 }
 
-// Anthropic pricing as of model launch (USD per million tokens). Update when prices change.
-const MODEL_PRICING: Record<string, { input: number; output: number; cacheWrite: number; cacheRead: number }> = {
-  "claude-haiku-4-5":  { input: 1.0, output: 5.0,  cacheWrite: 1.25, cacheRead: 0.10 },
-  "claude-sonnet-4-6": { input: 3.0, output: 15.0, cacheWrite: 3.75, cacheRead: 0.30 },
-  "claude-opus-4-7":   { input: 15.0, output: 75.0, cacheWrite: 18.75, cacheRead: 1.50 },
-  "claude-opus-4-6":   { input: 15.0, output: 75.0, cacheWrite: 18.75, cacheRead: 1.50 },
-  "claude-opus-5":     { input: 5.0,  output: 25.0, cacheWrite: 6.25,  cacheRead: 0.50 },
-}
-
+/**
+ * Provider cost of one pipeline call, from the ONE rate table the rest of the
+ * platform uses (`calculateLlmCost`, lib/pricing/llm-cost.ts) on the DIRECT
+ * lane — this wrapper only ever calls the Anthropic SDK. It used to keep its own
+ * table, which went stale (Opus 4.7 at $15/$75 against a $5/$25 list; decided
+ * 2026-10-08: every call is costed at the rates of the lane that served it).
+ * An id the registry does not know costs 0, as before.
+ */
 function estimateCost(
   modelId: string,
   inputTokens: number,
@@ -348,20 +348,19 @@ function estimateCost(
   cacheCreate: number,
   cacheRead: number,
 ): number {
-  const p = MODEL_PRICING[normalizeModelId(modelId)]
-  if (!p) return 0
-  // Anthropic Usage fields are disjoint: input_tokens is the non-cached portion only.
-  return (
-    (inputTokens * p.input +
-      outputTokens * p.output +
-      cacheCreate * p.cacheWrite +
-      cacheRead * p.cacheRead) /
-    1_000_000
+  const model = getLlmModel(normalizeModelId(modelId))
+  if (!model) return 0
+  // Anthropic Usage fields are disjoint: input_tokens is the non-cached portion
+  // only — the shape LlmCostUsage's cache fields expect.
+  return calculateLlmCost(
+    model,
+    { inputTokens, outputTokens, cacheWriteTokens: cacheCreate, cacheReadTokens: cacheRead },
+    "direct",
   )
 }
 
 // Anthropic accepts both alias ("claude-opus-4-7") and dated ("claude-opus-4-7-20251201").
-// MODEL_PRICING is keyed on the alias. Normalize before lookup.
+// The registry resolves the alias (its direct-lane slug). Normalize before lookup.
 function normalizeModelId(modelId: string): string {
   // Strip optional date suffix: "claude-haiku-4-5-20251001" -> "claude-haiku-4-5"
   return modelId.replace(/-\d{8}$/, "")

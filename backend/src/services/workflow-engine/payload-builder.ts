@@ -6,6 +6,7 @@ import {
   resolveEditPlanSources, describeAudioSyncOffsetIssue, type AudioSyncOffsetSource,
   CAMERA_SWITCH_CREDIT_ID, cameraSwitchEdlProblem, cameraSwitchSettingsPayload, transcriptSpeakerLabels, type CameraSwitchNodeSettings } from "@nodaro/shared"
 import { assembleVideoOverlayRequest, formatVideoOverlayError, validateVideoOverlayRequest, videoOverlayCompositionKey, videoOverlaySlotSources, type VideoOverlayNodeFields } from "@nodaro/shared"
+import { defaultImageModel, IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
 import { effectiveContentModel, contentRecipeCreditId, contentIdeasCreditId, clampContentIdeasCount, CONTENT_RECIPE_SOURCE_MAX, CONTENT_IDEAS_MAX_RECIPE_INPUTS, CONTENT_IDEAS_BRAND_MAX, CONTENT_IDEAS_LANGUAGE_MAX } from "@nodaro/shared"
 import { TELEGRAM_ACCOUNT_SEND_NODE_TYPE, telegramSendAsOf, telegramSendDestinationOf } from "@nodaro/shared"
 import { DEFAULT_TEXT_TO_AUDIO_PROVIDER, dialogueProviderOf, getDialogueCapabilities } from "@nodaro/shared"
@@ -2528,7 +2529,7 @@ export function buildPayload(
   switch (type) {
     // --- Image generation ---
     case "generate-image": {
-      const provider = (data.provider as string) ?? "nano-banana"
+      const provider = (data.provider as string) ?? defaultImageModel("general", data.aspectRatio as string | undefined)
       const settings = buildCtx?.settings
       // Last-mile guard on the catalog-governed levers. The config panel snaps
       // these when the provider changes, but that only runs when the panel is
@@ -2875,7 +2876,7 @@ export function buildPayload(
 
     // --- Reference board: single-pass image generation (same flow as generate-image) ---
     case "reference-board": {
-      const provider = (data.provider as string) ?? "nano-banana-pro"
+      const provider = (data.provider as string) ?? defaultImageModel("character", data.aspectRatio as string | undefined)
       const rawPrompt = promptFor("reference-board")
 
       // Collect manual reference images
@@ -3030,7 +3031,7 @@ export function buildPayload(
     }
 
     case "image-to-image": {
-      const provider = (data.provider as string) ?? "nano-banana"
+      const provider = (data.provider as string) ?? defaultImageModel("edit", data.aspectRatio as string | undefined)
       const settings = buildCtx?.settings
       // Same last-mile guard as generate-image — see the comment there.
       const i2iParams = normalizeModelInput(provider, {
@@ -3186,7 +3187,7 @@ export function buildPayload(
     }
 
     case "modify-image": {
-      const provider = (data.provider as string) ?? "nano-banana"
+      const provider = (data.provider as string) ?? defaultImageModel("edit", data.aspectRatio as string | undefined)
       // Same last-mile catalog snap as generate-image / image-to-image — see the
       // comment there. Hoisted ABOVE the provider fork so both arms share it:
       // the nano-banana-edit arm sends `aspectRatio`, and the i2i arm feeds
@@ -6879,7 +6880,7 @@ export function buildPayload(
     // enqueues directly to the worker, bypassing that enrichment — so we must
     // construct the prompt ourselves using the shared builders.
     case "character": {
-      const provider = (data.provider as string) ?? "nano-banana"
+      const provider = (data.provider as string) ?? IMAGE_MODEL_ROLE_DEFAULTS.character
       const name = (data.name as string | undefined) ?? ""
       const entityPrompt = name
         ? buildCharacterPrompt({
@@ -6924,7 +6925,7 @@ export function buildPayload(
       }
     }
     case "face": {
-      const provider = (data.provider as string) ?? "nano-banana"
+      const provider = (data.provider as string) ?? IMAGE_MODEL_ROLE_DEFAULTS.character
       const name = (data.name as string | undefined) ?? ""
       let entityPrompt: string | undefined
       if (name) {
@@ -6972,7 +6973,7 @@ export function buildPayload(
       }
     }
     case "object": {
-      const provider = (data.provider as string) ?? "nano-banana"
+      const provider = (data.provider as string) ?? IMAGE_MODEL_ROLE_DEFAULTS.character
       const name = (data.name as string | undefined) ?? ""
       const entityPrompt = name
         ? buildObjectPrompt({
@@ -7000,7 +7001,7 @@ export function buildPayload(
     case "creature": {
       // Mirrors `case "object"` — the creature delta is the free-text `species`
       // (a dragon/wolf IS the subject), which buildCreaturePrompt leads with.
-      const provider = (data.provider as string) ?? "nano-banana"
+      const provider = (data.provider as string) ?? IMAGE_MODEL_ROLE_DEFAULTS.character
       const name = (data.name as string | undefined) ?? ""
       const entityPrompt = name
         ? buildCreaturePrompt({
@@ -7027,7 +7028,7 @@ export function buildPayload(
       }
     }
     case "location": {
-      const provider = (data.provider as string) ?? "nano-banana"
+      const provider = (data.provider as string) ?? IMAGE_MODEL_ROLE_DEFAULTS.character
       const name = (data.name as string | undefined) ?? ""
       const cinematographyHints = collectCinematographyHints(node.id, buildCtx, { excludeTypes: STILL_IMAGE_EXCLUDE_TYPES })
       const augmentedDescription = appendPromptHints(data.description as string | undefined, cinematographyHints) || undefined
@@ -7058,7 +7059,7 @@ export function buildPayload(
     }
 
     case "scene": {
-      const provider = (data.provider as string) ?? "nano-banana"
+      const provider = (data.provider as string) ?? IMAGE_MODEL_ROLE_DEFAULTS.character
       const sceneSettings = buildCtx?.settings
       const charDefs = sceneSettings?.characterDefinitions ?? []
       const userTpl = sceneSettings?.userPromptTemplates

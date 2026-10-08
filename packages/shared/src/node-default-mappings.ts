@@ -181,6 +181,9 @@ const QUALITY_MAP: Record<string, QualityMapping> = {
   "seedream-5-lite-i2i": { field: "quality",    values: { low: "basic",  mid: "basic",  high: "high" } },
   "seedream-5-pro":      { field: "quality",    values: { low: "basic",  mid: "basic",  high: "high" } },
   "seedream-5-pro-i2i":  { field: "quality",    values: { low: "basic",  mid: "basic",  high: "high" } },
+  // Seedream 5 Flash's lever is size (sent as KIE `size`), flat-priced — resolution-style.
+  "seedream-5-flash":     { field: "resolution", values: { low: "1K", mid: "2K", high: "2K" } },
+  "seedream-5-flash-i2i": { field: "resolution", values: { low: "1K", mid: "2K", high: "2K" } },
   // Video gen — resolution-style (720p/1080p)
   "veo3":                { field: "resolution", values: { low: "720p", mid: "1080p", high: "1080p" } },
   "veo3.1":              { field: "resolution", values: { low: "720p", mid: "1080p", high: "1080p" } },

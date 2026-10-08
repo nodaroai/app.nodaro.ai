@@ -9,12 +9,12 @@ Generate Image is the primary text-to-image node. It accepts a text prompt (with
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| Provider | select | `nano-banana-pro` | AI model to use for generation (24 options) |
+| Provider | select | `gpt-image-2` | AI model to use for generation (24 options). With no model set, a ratio GPT Image 2 can't draw (21:9, 3:2, 2:3, …) uses `gpt-image-2-5-sunburst`, and 4:5 / 5:4 use `nano-banana-pro`. |
 | Prompt | text | `""` | Text description of the image to generate. Each model has its own prompt-length limit -- 20 000 characters on the Nano Banana / GPT Image families, 5 000 by default, and as little as **1 000 on Z-Image and Seedream 5 Lite**. The editor counts down to your model's limit as you type, and a prompt still over it at run time is **shortened to fit** rather than refused |
 | Style | select | `""` | One of 16 presets (Photorealistic, Cinematic, Anime, Digital Art, Oil Painting, Watercolor, Children's Book, Comic Book, Pixel Art, 3D Render, Pencil Sketch, Pop Art, Minimalist, Retro/Vintage, Fantasy, Noir) or "Custom..." free text. Style text is appended to the prompt at execution time. |
 | Negative Prompt | text | `""` | Elements to exclude. Sent natively for imagen4, ideogram, qwen; appended as "Avoid:..." for other providers. |
 | Aspect Ratio | select | `"16:9"` | Provider-specific ratio sets (see table below) |
-| Resolution | select | varies | Available for nano-banana-pro, nano-banana-2, nano-banana-2-1, flux, flux-flex, gpt-image-2 and the GPT Image 2.5 models: 1K, 2K, 4K |
+| Resolution | select | varies | Available for nano-banana-pro, nano-banana-2, nano-banana-2-1, flux, flux-flex, gpt-image-2 and the GPT Image 2.5 models: 1K, 2K, 4K; seedream-5-flash: 1K, 2K (same price at either) |
 | Quality | select | varies | Available for gpt-image (medium/high), seedream/seedream-5-lite (basic 2K / high 4K), and seedream-5-pro (basic 1K / high 2K) |
 | Rendering Speed | select | -- | Available for ideogram-v3: turbo, balanced, quality |
 | Seed | number | -- | Reproducibility seed (supported by select providers) |
@@ -77,7 +77,7 @@ The migration runs on the frontend (`loadWorkflow`) plus three defensive backend
 |----------|-------|-------------|---------------|
 | nano-banana | Nano Banana | Fast drafts, iteration, storyboards | 1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3, 5:4, 4:5, 21:9 |
 | nano-banana-pro | Nano Banana Pro | Higher detail, production-ready images | Same as Nano Banana |
-| nano-banana-2 | Nano Banana 2 | Updated Nano Banana with web grounding. Superseded by Nano Banana 2.1 (`nano-banana-2-1`), now the default; still available. | Same as Nano Banana |
+| nano-banana-2 | Nano Banana 2 | Updated Nano Banana with web grounding. Superseded by Nano Banana 2.1 (`nano-banana-2-1`); still available. | Same as Nano Banana |
 | nano-banana-2-1 | Nano Banana 2.1 | Google's high-efficiency image model — improved visual quality, prompt adherence, character consistency and text rendering; up to 10 reference images. 1K / 2K / 4K at **10 / 20 / 30 credits**. | auto, 1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3, 4:5, 5:4, 21:9, 4:1, 1:4, 8:1, 1:8 |
 | nano-banana-2-lite | Nano Banana 2 Lite | Fast, low-cost 1K drafts and iteration (Gemini 3.1 Flash-Lite). Flat **10 credits** per image — no resolution tiers. | auto, 1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3, 4:5, 5:4, 21:9, 4:1, 1:4, 8:1, 1:8 |
 | grok | Grok | Creative and stylized imagery | 1:1, 16:9, 9:16, 3:2, 2:3 |
@@ -98,6 +98,7 @@ The migration runs on the frontend (`loadWorkflow`) plus three defensive backend
 | seedream | Seedream | Photorealistic, high detail | 1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3, 21:9 |
 | seedream-5-lite | Seedream 5 Lite | Latest Seedream, fast and sharp | Same as Seedream |
 | seedream-5-pro | Seedream 5 Pro | Flagship Seedream, best instruction following. Quality-tiered pricing: **18 credits** at basic (1K output) / **60 credits** at high (2K output). | Same as Seedream |
+| seedream-5-flash | Seedream 5 Flash | Fast, low-cost Seedream 5 for quick drafts and iteration. Resolution 1K or 2K at a flat **10 credits** per image (no quality setting). Attach reference images and it routes to `seedream-5-flash-i2i` (up to 10 input images, same price). Prompts up to 5,000 characters. | Same as Seedream |
 | z-image | Z-Image | Fast, lightweight generation. **Shortest prompt limit in the catalog: 1 000 characters** | 1:1, 16:9, 9:16, 4:3, 3:4 |
 | wan-2.7 | Wan 2.7 | Text-to-image, 1K/2K/4K resolution, up to 9 optional reference images | 1:1, 16:9, 9:16, 4:3, 3:4, 21:9, 8:1, 1:8 |
 | wan-2.7-pro | Wan 2.7 Pro | Higher quality text-to-image, 1K/2K/4K resolution | 1:1, 16:9, 9:16, 4:3, 3:4, 21:9, 8:1, 1:8 |
@@ -130,7 +131,7 @@ When the node has a current result, open its config panel and scroll to the **In
 
 This works on **every image provider**, not just one model. A server-side **composite floor** restricts the change to the masked region (`out = base·(1−mask) + result·mask`), so even providers that have no native mask parameter produce a clean, localized edit.
 
-**Strong instruction-following editors** (`gpt-image`, `gpt-image-2`, `gpt-image-2-5-flare`, `gpt-image-2-5-sunburst`, `nano-banana`, `nano-banana-pro`, `nano-banana-2`, `nano-banana-2-1`, `nano-banana-2-lite`, `seedream`, `seedream-5-lite`, `seedream-5-pro`, `qwen`, `flux-kontext`, `flux-kontext-max`) additionally get a natural-language **region hint** injected into the prompt (e.g. "Apply the following change only to the upper-left region…") for better in-region results. This is automatic — no user action required. Other providers rely on the composite floor alone, which still keeps the edit localized.
+**Strong instruction-following editors** (`gpt-image`, `gpt-image-2`, `gpt-image-2-5-flare`, `gpt-image-2-5-sunburst`, `nano-banana`, `nano-banana-pro`, `nano-banana-2`, `nano-banana-2-1`, `nano-banana-2-lite`, `seedream`, `seedream-5-lite`, `seedream-5-pro`, `seedream-5-flash`, `qwen`, `flux-kontext`, `flux-kontext-max`) additionally get a natural-language **region hint** injected into the prompt (e.g. "Apply the following change only to the upper-left region…") for better in-region results. This is automatic — no user action required. Other providers rely on the composite floor alone, which still keeps the edit localized.
 
 The mask comes from either:
 
@@ -236,7 +237,7 @@ deliberate: a preset should carry its look.
 
 ## Best Practices
 
-- Use Nano Banana or Z-Image for rapid iteration and storyboarding due to fast generation speed.
+- Use Nano Banana 2.1 or Z-Image for rapid, low-cost iteration and storyboarding.
 - Use GPT Image for scenes requiring accurate text rendering (signs, labels, UI mockups).
 - Append style presets rather than writing style instructions in the prompt -- the system handles appending automatically.
 - For models that support reference images (nano-banana, nano-banana-pro, nano-banana-2, nano-banana-2-1, nano-banana-2-lite), connect Character nodes upstream for consistent character appearance across shots.
@@ -256,6 +257,7 @@ deliberate: a preset should carry its look.
 - The style dropdown supports a "Custom..." option for free-text style descriptions when presets are insufficient.
 - When connecting a Provider parameter node upstream, it overrides the provider selection on this node, which is useful for batch-switching models across multiple Generate Image nodes.
 - **Name your upload nodes to mention them.** Give a wired Upload Image node a Label and you can address it in the prompt by the slug of that label — `@town:1` puts that picture's binding exactly where you typed it, and `@town:1:background` says what to take from it. Roles are the usual media set (`object`, `person`, `face`, `clothes`, `background`, `style`, `pose`, `texture`) or any custom single word, and `~lock` / `~nolock` work as they do on character mentions. Unnamed uploads still attach as before — mentioning is optional, not required (an unlabelled node falls back to its node type, so it is still addressable as `@upload-image:1` if you want it). A label starting with a digit (`3D Render`) can't form a mention; rename it if you want to address it inline. Full grammar: [Reference Roles guide](../../reference-roles-guide.md#naming-a-plain-image-so-you-can-mention-it).
+- **An `{image:N}` token with no image wired at its position becomes its label.** `{image:1:person}` reads as `person` and a bare `{image:1}` is left out, so a preset written for a wired photo still runs as plain prose without one — wire the photo into References to bind the token. An image label is any text up to the closing brace, wider than a video token's: `{image:1:man's jacket}` reads as `man's jacket`.
 
 ## Trained character routing (Cloud edition)
 

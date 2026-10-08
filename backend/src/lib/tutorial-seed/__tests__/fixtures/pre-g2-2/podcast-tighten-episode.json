@@ -1,0 +1,269 @@
+{
+  "slug": "podcast-tighten-episode",
+  "name": "Tighten Episode",
+  "description": "Turn a raw recording into a tightened cut: transcribe it, detect the silences, let the editor plan the trims, then render the final video with optional captions.",
+  "markdownDescription": null,
+  "category": "automations",
+  "outputTypes": [
+    "video"
+  ],
+  "tags": [
+    "podcast",
+    "editing",
+    "transcript",
+    "video"
+  ],
+  "complexity": "intermediate",
+  "previewMediaUrl": null,
+  "previewMediaType": null,
+  "listedIn": [
+    "marketplace"
+  ],
+  "tutorialCategorySlug": "workflows",
+  "tutorialSortOrder": 0,
+  "estimatedCredits": 82,
+  "estimatedPerMinuteCredits": 14,
+  "nodeTypesUsed": [
+    "upload-video",
+    "transcribe",
+    "silence-detect",
+    "edit-plan",
+    "apply-edl",
+    "add-captions",
+    "sticky-note"
+  ],
+  "providersUsed": [
+    "elevenlabs-stt"
+  ],
+  "nodes": [
+    {
+      "id": "tighten-note-intro",
+      "type": "sticky-note",
+      "zIndex": -1,
+      "position": {
+        "x": -100,
+        "y": -320
+      },
+      "data": {
+        "bold": false,
+        "text": "Tighten Episode\n\nUpload a recording, and this canvas plans a tighter cut for you. Transcribe reads the words, Silence Detect finds the dead air, and the Tighten Plan node (Cloud) decides what to trim. Apply Cut renders the result, and Add Captions burns in the remapped word-highlight captions.\n\nDrop your recording on the Episode Recording node, then Run down the chain.",
+        "color": "#2d2d44",
+        "label": "Sticky Note",
+        "width": 460,
+        "height": 300,
+        "italic": false,
+        "fontSize": "base",
+        "alignment": "left",
+        "textColor": "#ffffff"
+      },
+      "measured": {
+        "width": 460,
+        "height": 300
+      }
+    },
+    {
+      "id": "tighten-src",
+      "type": "upload-video",
+      "position": {
+        "x": 0,
+        "y": 40
+      },
+      "data": {
+        "label": "Episode Recording",
+        "assetId": "",
+        "url": ""
+      }
+    },
+    {
+      "id": "tighten-transcribe",
+      "type": "transcribe",
+      "position": {
+        "x": 440,
+        "y": -140
+      },
+      "data": {
+        "label": "Transcribe",
+        "provider": "elevenlabs-stt",
+        "language": "auto",
+        "diarize": true,
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "tighten-silence",
+      "type": "silence-detect",
+      "position": {
+        "x": 440,
+        "y": 220
+      },
+      "data": {
+        "label": "Silence Detect",
+        "thresholdDb": -35,
+        "minSilenceMs": 700,
+        "padMs": 120,
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "tighten-plan",
+      "type": "edit-plan",
+      "position": {
+        "x": 900,
+        "y": 20
+      },
+      "data": {
+        "label": "Tighten Plan",
+        "mode": "tighten",
+        "planTier": "standard",
+        "instructions": "",
+        "sourceOrder": [
+          "tighten-src"
+        ],
+        "sourceConfig": {},
+        "fieldMappings": {},
+        "executionStatus": "idle"
+      }
+    },
+    {
+      "id": "tighten-apply",
+      "type": "apply-edl",
+      "position": {
+        "x": 1360,
+        "y": 20
+      },
+      "data": {
+        "label": "Apply Cut",
+        "output": "video",
+        "quality": "final",
+        "crossfadeMs": 0,
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "tighten-captions",
+      "type": "add-captions",
+      "position": {
+        "x": 1820,
+        "y": 20
+      },
+      "data": {
+        "label": "Add Captions",
+        "style": "word-highlight",
+        "wordLevel": false,
+        "position": "bottom",
+        "fontSize": 24,
+        "color": "#ffffff",
+        "fieldMappings": {}
+      }
+    },
+    {
+      "id": "tighten-note-captions",
+      "type": "sticky-note",
+      "zIndex": -1,
+      "position": {
+        "x": 1800,
+        "y": -300
+      },
+      "data": {
+        "bold": false,
+        "text": "Captions are optional\n\nAdd Captions reads the REMAPPED transcript from Apply Cut (not the raw one), so the highlighted-word captions stay aligned to the tightened video. A wired transcript needs a kinetic style, so this uses Word Highlight (grouped lines, current word lit). Delete this node if you just want the clean cut.",
+        "color": "#2d2d44",
+        "label": "Sticky Note",
+        "width": 360,
+        "height": 240,
+        "italic": false,
+        "fontSize": "base",
+        "alignment": "left",
+        "textColor": "#ffffff"
+      },
+      "measured": {
+        "width": 360,
+        "height": 240
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "tighten-e-src-transcribe",
+      "source": "tighten-src",
+      "target": "tighten-transcribe",
+      "sourceHandle": "video",
+      "targetHandle": "audio"
+    },
+    {
+      "id": "tighten-e-src-silence",
+      "source": "tighten-src",
+      "target": "tighten-silence",
+      "sourceHandle": "video",
+      "targetHandle": "in"
+    },
+    {
+      "id": "tighten-e-src-plan",
+      "source": "tighten-src",
+      "target": "tighten-plan",
+      "sourceHandle": "video",
+      "targetHandle": "sources"
+    },
+    {
+      "id": "tighten-e-src-apply",
+      "source": "tighten-src",
+      "target": "tighten-apply",
+      "sourceHandle": "video",
+      "targetHandle": "sources"
+    },
+    {
+      "id": "tighten-e-transcribe-plan",
+      "source": "tighten-transcribe",
+      "target": "tighten-plan",
+      "sourceHandle": "json",
+      "targetHandle": "transcript"
+    },
+    {
+      "id": "tighten-e-silence-plan",
+      "source": "tighten-silence",
+      "target": "tighten-plan",
+      "sourceHandle": "json",
+      "targetHandle": "silence"
+    },
+    {
+      "id": "tighten-e-plan-apply",
+      "source": "tighten-plan",
+      "target": "tighten-apply",
+      "sourceHandle": "edl",
+      "targetHandle": "edl"
+    },
+    {
+      "id": "tighten-e-transcribe-apply",
+      "source": "tighten-transcribe",
+      "target": "tighten-apply",
+      "sourceHandle": "json",
+      "targetHandle": "transcript"
+    },
+    {
+      "id": "tighten-e-apply-captions",
+      "source": "tighten-apply",
+      "target": "tighten-captions",
+      "sourceHandle": "media",
+      "targetHandle": "in"
+    },
+    {
+      "id": "tighten-e-apply-captions-transcript",
+      "source": "tighten-apply",
+      "target": "tighten-captions",
+      "sourceHandle": "json",
+      "targetHandle": "transcript"
+    }
+  ],
+  "settings": {
+    "viewport": {
+      "x": 120,
+      "y": 340,
+      "zoom": 0.55
+    },
+    "flowPromptTemplates": {},
+    "characterDefinitions": [],
+    "presentationSettings": {
+      "runTarget": "workflow"
+    }
+  }
+}

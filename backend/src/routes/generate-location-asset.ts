@@ -13,6 +13,7 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { CHARACTER_ASPECT_OPTIONS, LOCATION_ASSET_TYPES, LOCATION_ATTACH_COLUMNS } from "@nodaro/shared"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
 
 // Single source of truth for the asset-type and attach-column enums lives in
 // `@nodaro/shared/entity-prompts` — reused by the MCP `generate_location` verb
@@ -63,7 +64,7 @@ const generateLocationAssetBody = z.object({
   // Style is only prompt seasoning (`${style} art style`), never a hard gate.
   style: z.string().max(50).optional(),
   sourceImageUrl: safeUrlSchema.optional(),
-  provider: z.string().optional().default("nano-banana"),
+  provider: z.string().optional().default(IMAGE_MODEL_ROLE_DEFAULTS.general),
   // Credit-affecting output levers (mirrors generate-image). The enums are
   // PERMISSIVE on purpose — a value the chosen model doesn't support is never
   // 400d. It is SNAPPED to the model's catalog entry inside

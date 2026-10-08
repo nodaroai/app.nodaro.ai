@@ -34,8 +34,11 @@ describe("content recipe / ideas pricing", () => {
     expect(contentIdeasCreditId(6, "claude-sonnet-4.6")).toBe("content-ideas:10")
     expect(contentIdeasCreditId(10)).toBe("content-ideas:10:economy")
     expect(contentIdeasCreditId(10, "claude-opus-5")).toBe("content-ideas:10:premium")
-    // an xhigh/max effort bumps one tier, as for every LLM node
-    expect(contentIdeasCreditId(3, "claude-sonnet-4.6", "max")).toBe("content-ideas:premium")
+    // an xhigh/max effort bumps one tier, as for every LLM node — and on a
+    // Claude model any effort also runs direct (+1 rung, decided 2026-10-08):
+    // sonnet-4.6 tops out at `max`, so standard → premium → premium-direct.
+    expect(contentIdeasCreditId(3, "claude-sonnet-4.6", "max")).toBe("content-ideas:premium-direct")
+    expect(contentIdeasCreditId(3, "gpt-5.6-terra", "max")).toBe("content-ideas:premium")
   })
 
   it("count: numbers only, clamped to 1..10", () => {
@@ -49,8 +52,10 @@ describe("content recipe / ideas pricing", () => {
   it("every id a run can bill is listed", () => {
     const reachable = new Set<string>()
     for (const model of [undefined, "claude-sonnet-4.6", "claude-opus-5"]) {
-      reachable.add(contentRecipeCreditId(model))
-      for (const count of [1, 5, 6, 10]) reachable.add(contentIdeasCreditId(count, model))
+      for (const effort of [undefined, "high"]) {
+        reachable.add(contentRecipeCreditId(model, effort))
+        for (const count of [1, 5, 6, 10]) reachable.add(contentIdeasCreditId(count, model, effort))
+      }
     }
     expect([...reachable].sort()).toEqual([...CONTENT_RECIPE_IDEAS_CREDIT_IDS].sort())
   })

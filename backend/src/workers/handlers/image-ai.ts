@@ -12,6 +12,7 @@ import { providerKindForImageModel } from "../../lib/reconcile/provider-kind.js"
 import { finalizeJobWithMedia } from "../../lib/job-finalize.js"
 import { supabase } from "../../lib/supabase.js"
 import { IMAGE_MASK_MODE, describeMaskRegion, T2I_TO_I2I_VARIANT, TASK_CHAINED_EDIT_PROVIDERS, resolveTopazUpscale, type ImageGenProvider } from "@nodaro/shared"
+import { defaultImageModel } from "@nodaro/shared"
 import { compositeInpaint, maskBoundingBoxFromUrl, imageDimensions } from "../../services/inpaint/composite.js"
 
 const handleGenerateImage: HandlerFn = async function handleGenerateImage(job, ctx) {
@@ -46,7 +47,7 @@ const handleGenerateImage: HandlerFn = async function handleGenerateImage(job, c
     strength?: number
     guidanceScale?: number
   }
-  const resolvedModel = model ?? provider ?? "nano-banana"
+  const resolvedModel = model ?? provider ?? defaultImageModel("general", aspectRatio)
   const inpaintBase = baseImageUrl ?? referenceImageUrls?.[0]
   // A mask present + a base → masked inpaint (composite + region hint).
   const isInpaint = Boolean(maskUrl && inpaintBase)
@@ -308,7 +309,7 @@ const handleImageToImage: HandlerFn = async function handleImageToImage(job, ctx
     description?: string
     realLifeRefs?: string[]
   }
-  const resolvedProvider = provider ?? "nano-banana"
+  const resolvedProvider = provider ?? defaultImageModel("edit", aspectRatio)
   // Combine main image with additional reference images (e.g., from Location/Character nodes)
   const allImages = [imageUrl, ...(referenceImageUrls ?? [])]
   console.log(`[worker] image-to-image ${ctx.jobId} (provider: ${resolvedProvider}, images: ${allImages.length}): "${prompt}"`)

@@ -763,6 +763,17 @@ describe("CreditsService", () => {
       }
     })
 
+    it("resolves seedream-5-flash flat at 1K / 2K (t2i and i2i)", () => {
+      for (const resolution of ["1K", "2K"] as const) {
+        expect(CreditsService.estimateWorkflowBaseCredits([
+          { type: "generate-image", data: { provider: "seedream-5-flash", resolution } },
+        ])).toBe(10)
+        expect(CreditsService.estimateWorkflowBaseCredits([
+          { type: "image-to-image", data: { provider: "seedream-5-flash-i2i", resolution } },
+        ])).toBe(10)
+      }
+    })
+
     it("resolves nano-banana-pro:4K", () => {
       expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "generate-image", data: { provider: "nano-banana-pro", resolution: "4K" } },

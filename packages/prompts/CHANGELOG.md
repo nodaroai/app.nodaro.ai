@@ -1,5 +1,34 @@
 # @nodaro/prompts
 
+## 1.35.0
+
+### Minor Changes
+
+- b4dce5a: Image models are now chosen by role, from one table: `IMAGE_MODEL_ROLE_DEFAULTS` (characters, general text-to-image and video anchors on `gpt-image-2`; edits on `gpt-image-2-5-flare-i2i`) and `defaultImageModel(role, aspectRatio)`. A ratio the role's model can't draw moves to the next model in `IMAGE_MODEL_RATIO_FALLBACKS` that can: GPT Image 2.5 Sunburst for 21:9, 3:2, 2:3 and other wide or in-between ratios, Nano Banana Pro for 4:5 / 5:4. Nano Banana Pro is no longer a default; it remains the last ratio fallback and the safety-block retry. Decided 2026-10-08 from a blind five-model comparison, quality first.
+
+  The catalog's quick recommendations follow the same comparison: GPT Image 2 for typography and highest fidelity, GPT Image 2.5 Flare i2i for edits. GPT Image 2 is the featured image model in place of Nano Banana Pro.
+
+  `@nodaro/prompts`: all 97 factory presets that ran on Nano Banana Pro moved, by role, after a preset re-test:
+
+  - GPT Image 2 for boards, character sheets, portraits from a photo, product, scenes and the Cast & Consistency grids.
+  - GPT Image 2.5 Sunburst where the preset is 2:3.
+  - Nano Banana 2.1 for 4:5 presets and labelled illustrated sheets.
+  - GPT Image 2.5 Flare (`-i2i` on Modify Image) for the Edits and Stylized Subject presets.
+
+  `@nodaro/cli` and `@nodaro/sdk`: help text and examples name the new default.
+
+### Patch Changes
+
+- 28960d7: Image prompts: an `{image:N}` reference token with no image at its position now falls back to its label (`{image:1:person}` → `person`) and a bare `{image:N}` is dropped, instead of reaching the model as raw text — the rule video prompts already follow, through the same shared helper. Every token that binds renders exactly as before.
+- 8c938fa: Add Seedream 5 Flash, Bytedance's fast, low-cost Seedream 5, as a text-to-image id (`seedream-5-flash`, in `IMAGE_GEN_PROVIDERS`) and an image-to-image id (`seedream-5-flash-i2i`, in `IMAGE_I2I_PROVIDERS`); a text-to-image request with reference images routes to the i2i id (`T2I_TO_I2I_VARIANT`). It takes up to 10 input images and a 5,000-character prompt, and offers the eight Seedream aspect ratios at 1K or 2K. Unlike the other Seedream 5 models its lever is resolution, not quality. The `MODEL_CATALOG` entries list a flat 10 credits per image at either size. The prompt wizard describes both ids.
+- Updated dependencies [09bd431]
+- Updated dependencies [b4dce5a]
+- Updated dependencies [4a2d2dc]
+- Updated dependencies [4a2d2dc]
+- Updated dependencies [f24b666]
+- Updated dependencies [8c938fa]
+  - @nodaro/shared@3.26.0
+
 ## 1.34.0
 
 ### Minor Changes

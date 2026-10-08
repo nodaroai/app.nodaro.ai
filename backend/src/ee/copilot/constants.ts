@@ -75,8 +75,11 @@ export const COPILOT_TIERS: Record<CopilotModelTier, CopilotTierSpec> = {
     caps: { maxIterations: 12, maxToolCalls: 24, wallClockMs: 8 * 60_000, hardTimeoutMs: 9 * 60_000 },
   },
   premium: {
-    registryId: "claude-opus-5",
-    anthropicModelId: "claude-opus-5",
+    // Opus 5.5 since 2026-10-08 (decided: it takes the Opus 5 defaults). Its
+    // thinking is conversation-bound, which the agent loop handles by replaying
+    // prior turns without their thinking blocks (see agent-loop.ts).
+    registryId: "claude-opus-5.5",
+    anthropicModelId: "claude-opus-5-5",
     reasoningEffort: "xhigh",
     creditId: "workflow-copilot:premium",
     // The deep rung: room to hold a whole campaign in one turn. Roughly 1.7x

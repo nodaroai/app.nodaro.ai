@@ -28,6 +28,7 @@ import {
   ASSET_DESCRIPTION_LLM_OPTIONS,
   buildAssetDescriptionUserMessage,
 } from "../lib/asset-description-prompt.js"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
 
 // `headAngles` is an alias for `angles` (the legacy single-surface column,
 // now treated as head-angles in the UI). `bodyAngles` writes to the new
@@ -62,7 +63,7 @@ const generateCharacterAssetBody = z.object({
   // that support multi-image conditioning. Capped at 5 to keep prompt size
   // bounded; URLs validated via safeUrlSchema (SSRF gate).
   realLifeRefs: z.array(safeUrlSchema).max(5).optional(),
-  provider: z.string().optional().default("nano-banana"),
+  provider: z.string().optional().default(IMAGE_MODEL_ROLE_DEFAULTS.character),
   // Credit-affecting output levers (mirrors generate-image). The enums are
   // PERMISSIVE on purpose — a value the chosen model doesn't support is never
   // 400d. It is SNAPPED to the model's catalog entry inside

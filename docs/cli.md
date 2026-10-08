@@ -233,7 +233,7 @@ nodaro prompt wizard [--node-type <type>] [--prompt "…"] [--provider <name>] [
 nodaro prompt analyze --node-type <type> [--prompt "…"] [--provider <name>] [--style <name>] [--aspect-ratio <ratio>] [--duration <seconds>] [--llm-model <id>] [--reasoning-effort <level>] [--json]   # return guided questions
 nodaro prompt generate --node-type <type> --selection category=value [--selection ...] [--original-prompt "…"] [--provider <name>] [--style <name>] [--aspect-ratio <ratio>] [--duration <seconds>] [--llm-model <id>] [--reasoning-effort <level>] [--json]   # build a prompt from selections
 nodaro prompt enhance --node-type <type> --prompt "…" [--provider <name>] [--style <name>] [--aspect-ratio <ratio>] [--duration <seconds>] [--llm-model <id>] [--reasoning-effort <level>] [--json]   # one-shot rewrite, no questions
-#   --reasoning-effort <level>: none|low|medium|high|xhigh|max (model-dependent; unsupported/omitted -> vendor default). xhigh/max bill one tier up. `--advanced` (Gemini models only) runs on the provider's own API so `--temperature` / `--max-tokens` / the full reasoning range apply, and also bills one tier up.
+#   --reasoning-effort <level>: none|low|medium|high|xhigh|max (model-dependent; unsupported/omitted -> vendor default). xhigh/max bill one tier up. `--advanced` (Gemini and Claude models) runs on the provider's own API so `--temperature` / `--max-tokens` / the full reasoning range apply, and also bills one tier up.
 
 # Executions
 nodaro executions get <id> [--watch] [--json]

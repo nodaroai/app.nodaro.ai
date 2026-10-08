@@ -314,6 +314,19 @@ export const envSchema = z.object({
    */
   PLATFORM_OPERATOR_EMAILS: z.string().default(""),
   /**
+   * Site Analytics (admin panel): the deployment's Google Analytics traffic
+   * and Search Console search data, read with a Google service account so
+   * every admin sees them without a Google login. The service account's key
+   * file (JSON, or its base64); the GA4 property number (not the G-…
+   * measurement id); the Search Console site as Search Console names it
+   * (`sc-domain:example.com` or `https://example.com/`). All empty = the page
+   * explains the setup. Parsed on first use in `ee/lib/site-analytics/` —
+   * never here, so a bad value cannot stop the server.
+   */
+  SITE_ANALYTICS_SERVICE_ACCOUNT_JSON: z.string().default(""),
+  SITE_ANALYTICS_GA4_PROPERTY_ID: z.string().default(""),
+  SITE_ANALYTICS_SEARCH_CONSOLE_SITE: z.string().default(""),
+  /**
    * Hours a job may sit in `pending_review` (held by a registered job policy
    * for human review) before the platform AUTO-REJECTS it: the reservation is
    * refunded, the withheld output is deleted, and the decision is recorded

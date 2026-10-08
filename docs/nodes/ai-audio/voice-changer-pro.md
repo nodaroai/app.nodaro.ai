@@ -139,11 +139,11 @@ step (`voice-changer-pro-analyze`, 10 credits) and the `export` step
 > **Translate step** (`POST /v1/voice-changer-pro/translate`, credit
 > identifier `voice-changer-pro-translate`): charged on the translation
 > model's **measured usage**, never below a floor of **2 credits**. The
-> request reserves a ceiling of **5 / 10 / 50 credits per started 1,000
+> request reserves a ceiling of **5 / 10 / 15 credits per started 1,000
 > source characters** for the `economy` / `standard` / `premium` tier and
 > settles the measured amount under it (`ceiling = max(2, ceil(sourceChars / 1000) × tierRate)`).
 > A 1,500-character transcript on `economy` reserves 10 and typically settles
-> for 2–6; on `premium` it reserves 100. A transcript with no text reserves
+> for 2–6; on `premium` it reserves 30. A transcript with no text reserves
 > the floor. The translated text then prices the Re-speak voices by *its*
 > length (per started 1,000 characters, as above) — a translation into a
 > wordier language re-speaks more characters than the source did.

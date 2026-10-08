@@ -14,6 +14,7 @@ import { CHARACTER_ASPECT_OPTIONS, SURROUND_DIRECTIONS, defaultCarriedFraction, 
 import { buildSurroundFillPrompt } from "@nodaro/prompts"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
 
 /**
  * S8 (2026-07): surround-continuation was ungated at birth (Community and
@@ -73,7 +74,7 @@ const generateSurroundContinuationBody = z.object({
   refineProvider: z.enum(REFINE_PROVIDERS).optional().default("recraft-upscale"),
   // Optional free-form scene hint woven into the fill prompt.
   userPrompt: z.string().max(8000).optional(),
-  provider: z.string().optional().default("nano-banana"),
+  provider: z.string().optional().default(IMAGE_MODEL_ROLE_DEFAULTS.general),
   // Studio pins "16:9" so every ring view matches the establishing shot's frame.
   aspectRatio: z.enum(CHARACTER_ASPECT_OPTIONS).optional(),
   userId: z.string().uuid().optional(),
@@ -88,14 +89,14 @@ export async function generateSurroundContinuationRoutes(app: FastifyInstance) {
   app.post(
     "/v1/generate-surround-continuation",
     {
-      preHandler: creditGuard((req) => extractProvider(req.body, "nano-banana"), {
+      preHandler: creditGuard((req) => extractProvider(req.body, IMAGE_MODEL_ROLE_DEFAULTS.general), {
         // Add the opt-in refine upscale as a credit addon on top of the image
         // provider's base. Returns BASE credits (markup applied in creditGuard so
         // the same number is checked + reserved). Mirrors generate-character.
         computeCredits: async (body) => {
           const b = body as Record<string, unknown>
           const { getModelCreditBaseCost } = await import("../ee/billing/credits.js")
-          let credits = (await getModelCreditBaseCost(extractProvider(body, "nano-banana"))).creditCost
+          let credits = (await getModelCreditBaseCost(extractProvider(body, IMAGE_MODEL_ROLE_DEFAULTS.general))).creditCost
           if (b.refine === true) {
             const rp = typeof b.refineProvider === "string" ? b.refineProvider : "recraft-upscale"
             credits += (await getModelCreditBaseCost(rp)).creditCost

@@ -11,19 +11,49 @@
  * (`nodeFanOut`) and the providers it runs (`nodeProviders`, each at its own
  * price).
  *
+ * A graph whose render is set to Preview — the four podcast templates (decided
+ * 2026-10-08) — is listed in two parts, and each part is one of those quotes:
+ * its preview part is the run estimate of a whole run (the whole graph at its
+ * saved settings), its final part the run estimate of its Render final (the
+ * render at Final and every node after it, the set the editor, the API and the
+ * app runner run).
+ *
+ * All of that holds with the preview stop rule (PREVIEW_STOP_RULE_ENABLED)
+ * off, which this file sets rather than reading the environment. With it on, a
+ * run stops at the Preview, so its estimate leaves out the nodes after the
+ * render and quotes less than the preview part; a describe pins that figure
+ * for each template.
+ *
+ * The sync writes the four with their render at Preview only where the rule
+ * is on (decided 2026-10-08, `templateForPreviewStopRule`); where it is off it
+ * writes the render at Final, and the graph it writes, listing included,
+ * quotes one figure again: the last describe pins it.
+ *
  * The fixture holds the expected base totals and the base price of every
  * credit id the cases read; the editor's half
  * (frontend/src/lib/__tests__/run-estimate-parity.test.ts) prices the same
  * graphs from that same price table, so a total that moves on one side only
  * fails one half.
  */
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, vi, beforeEach } from "vitest"
 import { readdirSync, readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
-import { EDIT_PLAN_MAX_MINUTES, editPlanFlatCreditId, editPlanMinutesBaseCredits, editPlanRateCreditId, parseEditPlanMinutesCreditId, videoSfxCreditId } from "@nodaro/shared"
+import { renderFinalRunSet, renderRunOverrides } from "@nodaro/render-rules"
+import { EDIT_PLAN_MAX_MINUTES, editPlanFlatCreditId, editPlanMinutesBaseCredits, editPlanRateCreditId, parseEditPlanMinutesCreditId, videoSfxCreditId, withRunOverrides } from "@nodaro/shared"
 import { CreditsService, STATIC_CREDIT_COSTS } from "../../../ee/billing/credits.js"
+import { templateForPreviewStopRule } from "../preview-gate.js"
 import type { TutorialTemplateDoc } from "../types.js"
+
+// The preview stop rule (PREVIEW_STOP_RULE_ENABLED) changes what a RUN
+// estimate counts, so it is set explicitly here and never read from the
+// environment: off for every case below but the last describe, which turns it
+// on.
+const stopRule = vi.hoisted(() => ({ on: false }))
+vi.mock("@/lib/preview-stop-rule-flag.js", () => ({ previewStopRuleEnabled: () => stopRule.on }))
+beforeEach(() => {
+  stopRule.on = false
+})
 
 const here = dirname(fileURLToPath(import.meta.url))
 const templatesDir = join(here, "..", "templates")
@@ -35,21 +65,38 @@ type Graph = { nodes: Node[]; edges: Edge[] }
 const fixture = JSON.parse(readFileSync(join(here, "fixtures", "run-estimate-parity.json"), "utf8")) as {
   prices: Record<string, number>
   templates: Record<string, number>
+  templateFinals: Record<string, number>
+  templateRunsWithStopRule: Record<string, number>
+  templatesSyncedWithoutStopRule: Record<string, number>
   graphs: Record<string, Graph & { credits: number }>
 }
 
 const PODCAST = ["podcast-clip-pack", "podcast-multicam-cut", "podcast-tighten-episode", "podcast-trailer-formats"]
-const templates = new Map(
+const docs = new Map(
   readdirSync(templatesDir)
     .filter((f) => f.endsWith(".json"))
     .map((f) => JSON.parse(readFileSync(join(templatesDir, f), "utf8")) as TutorialTemplateDoc)
-    .map((t) => [t.slug, { nodes: t.nodes as Node[], edges: t.edges as Edge[] }] as const),
+    .map((t) => [t.slug, t] as const),
 )
+const templates = new Map([...docs].map(([slug, t]) => [slug, { nodes: t.nodes as Node[], edges: t.edges as Edge[] }] as const))
 
 /** The listing at the 180-minute cap: what it quotes when no recording is known. */
 function listingAtCap({ nodes, edges }: Graph): number {
+  const { preview, final } = listingPartsAtCap({ nodes, edges })
+  return preview + final
+}
+
+/** Each part of the listing at the 180-minute cap. */
+function listingPartsAtCap({ nodes, edges }: Graph): { preview: number; final: number } {
   const l = CreditsService.estimateWorkflowBaseListing(nodes, edges, "template")
-  return l.preview + l.final + 180 * (l.previewPerMinute + l.finalPerMinute)
+  return { preview: l.preview + 180 * l.previewPerMinute, final: l.final + 180 * l.finalPerMinute }
+}
+
+/** The run estimate of a render's Render final: its run set, the render at Final. */
+function renderFinalEstimate({ nodes, edges }: Graph, renderId: string): number {
+  const set = renderFinalRunSet(renderId, nodes, edges)
+  const priced = withRunOverrides(nodes, renderRunOverrides(renderId, "final", set))
+  return CreditsService.estimateWorkflowBaseCredits(priced, edges, { runNodeIds: set })
 }
 
 const cases: Array<[string, Graph, number]> = [
@@ -81,6 +128,7 @@ describe("the fixture's prices are the server's base prices", () => {
 describe("the fixture covers the four podcast templates", () => {
   it("every one, and nothing else", () => {
     expect(Object.keys(fixture.templates).sort()).toEqual(PODCAST)
+    expect(Object.keys(fixture.templateFinals).sort()).toEqual(PODCAST)
     for (const slug of PODCAST) expect(templates.has(slug), slug).toBe(true)
   })
 })
@@ -88,9 +136,20 @@ describe("the fixture covers the four podcast templates", () => {
 describe("the server's run estimate quotes what the listing lists", () => {
   it.each(cases)("%s", (name, graph, credits) => {
     const { nodes, edges } = graph
-    expect(listingAtCap(graph), `${name}: listing at the cap`).toBe(credits)
+    // A graph with no Preview render has no final part: its whole listing is the run.
+    expect(listingPartsAtCap(graph), `${name}: listing at the cap`).toEqual({ preview: credits, final: fixture.templateFinals[name] ?? 0 })
     expect(CreditsService.estimateWorkflowBaseCredits(nodes, edges), `${name}: run estimate`).toBe(credits)
     expect(CreditsService.estimateWorkflowBaseCredits(nodes, edges, { scope: "whole-graph" }), `${name}: whole-graph run estimate`).toBe(credits)
+  })
+})
+
+describe("a template's Render final quotes the listing's final part", () => {
+  it.each(PODCAST)("%s", (slug) => {
+    const graph = templates.get(slug)!
+    const renders = graph.nodes.filter((n) => n.type === "apply-edl")
+    // One render, set to Preview (decided 2026-10-08): the run stops at it.
+    expect(renders.map((n) => n.data?.quality), slug).toEqual(["proxy"])
+    expect(renderFinalEstimate(graph, renders[0]!.id), `${slug}: Render final run estimate`).toBe(fixture.templateFinals[slug])
   })
 })
 
@@ -228,4 +287,59 @@ describe("a step priced by the length it is given, on a render's output", () => 
     expect(sfxCredits({ nodes, edges })).toBe(sfxRow(8))
   })
 
+})
+
+describe("with the preview stop rule on, a template's run stops at its Preview", () => {
+  // A run's estimate leaves out every node the Preview render gates (they run
+  // at Render final), so it quotes the preview part less that tail. The
+  // listing is not a run estimate: it still counts the whole graph, and so
+  // does a whole-graph estimate.
+  beforeEach(() => {
+    stopRule.on = true
+  })
+  it("the fixture covers the four podcast templates", () => {
+    expect(Object.keys(fixture.templateRunsWithStopRule).sort()).toEqual(PODCAST)
+  })
+  it.each(PODCAST)("%s", (slug) => {
+    const graph = templates.get(slug)!
+    const { nodes, edges } = graph
+    const run = fixture.templateRunsWithStopRule[slug]!
+    expect(CreditsService.estimateWorkflowBaseCredits(nodes, edges), `${slug}: run estimate`).toBe(run)
+    expect(run, `${slug}: never above the preview part`).toBeLessThanOrEqual(fixture.templates[slug]!)
+    expect(CreditsService.estimateWorkflowBaseCredits(nodes, edges, { scope: "whole-graph" }), `${slug}: whole-graph run estimate`).toBe(fixture.templates[slug])
+    expect(listingPartsAtCap(graph), `${slug}: listing at the cap`).toEqual({ preview: fixture.templates[slug], final: fixture.templateFinals[slug] })
+    const render = nodes.find((n) => n.type === "apply-edl")!
+    expect(renderFinalEstimate(graph, render.id), `${slug}: Render final run estimate`).toBe(fixture.templateFinals[slug])
+  })
+})
+
+describe("the template the sync writes, in each state of the preview stop rule", () => {
+  // Rule on: the template as authored, render at Preview — every figure above.
+  // Rule off: the render at Final (decided 2026-10-08), so a run renders the
+  // delivery and runs the nodes after it, and the listing stored with it, its
+  // run estimate and a whole-graph estimate all quote one figure.
+  it("the fixture covers the four podcast templates", () => {
+    expect(Object.keys(fixture.templatesSyncedWithoutStopRule).sort()).toEqual(PODCAST)
+  })
+
+  it.each(PODCAST)("%s: rule on, the authored graph and its listing", (slug) => {
+    stopRule.on = true
+    const doc = templateForPreviewStopRule(docs.get(slug)!, true)
+    const { nodes, edges } = { nodes: doc.nodes as Node[], edges: doc.edges as Edge[] }
+    expect(nodes.filter((n) => n.type === "apply-edl").map((n) => n.data?.quality), slug).toEqual(["proxy"])
+    expect(listingPartsAtCap({ nodes, edges }), `${slug}: listing at the cap`).toEqual({ preview: fixture.templates[slug], final: fixture.templateFinals[slug] })
+    expect(doc.estimatedCredits! + 180 * (doc.estimatedPerMinuteCredits ?? 0), `${slug}: the listing stored`).toBe(fixture.templates[slug]! + fixture.templateFinals[slug]!)
+    expect(CreditsService.estimateWorkflowBaseCredits(nodes, edges), `${slug}: run estimate`).toBe(fixture.templateRunsWithStopRule[slug])
+  })
+
+  it.each(PODCAST)("%s: rule off, the Final graph and its listing quote one figure", (slug) => {
+    const doc = templateForPreviewStopRule(docs.get(slug)!, false)
+    const { nodes, edges } = { nodes: doc.nodes as Node[], edges: doc.edges as Edge[] }
+    const credits = fixture.templatesSyncedWithoutStopRule[slug]!
+    expect(nodes.filter((n) => n.type === "apply-edl").map((n) => n.data?.quality), slug).toEqual(["final"])
+    expect(listingPartsAtCap({ nodes, edges }), `${slug}: listing at the cap`).toEqual({ preview: credits, final: 0 })
+    expect(doc.estimatedCredits! + 180 * (doc.estimatedPerMinuteCredits ?? 0), `${slug}: the listing stored`).toBe(credits)
+    expect(CreditsService.estimateWorkflowBaseCredits(nodes, edges), `${slug}: run estimate`).toBe(credits)
+    expect(CreditsService.estimateWorkflowBaseCredits(nodes, edges, { scope: "whole-graph" }), `${slug}: whole-graph run estimate`).toBe(credits)
+  })
 })

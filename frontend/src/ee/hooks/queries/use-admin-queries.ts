@@ -1,3 +1,4 @@
+import type { LlmCreditRung } from "@nodaro/shared"
 import {
   useQuery,
   useInfiniteQuery,
@@ -1217,8 +1218,9 @@ export interface AdminLlmModel {
 
 export interface AdminLlmModelsResponse {
   readonly models: AdminLlmModel[]
-  readonly tierCosts: { economy: number | null; standard: number | null; premium: number | null }
-  readonly featureCosts: Record<string, { economy: number | null; standard: number | null; premium: number | null }>
+  /** Keyed by credit rung (`LLM_CREDIT_RUNGS`): economy / standard / premium / premium-direct. */
+  readonly tierCosts: Partial<Record<LlmCreditRung, number | null>>
+  readonly featureCosts: Record<string, Partial<Record<LlmCreditRung, number | null>>>
 }
 
 export function useAdminLlmModels() {

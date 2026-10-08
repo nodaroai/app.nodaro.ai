@@ -17,7 +17,7 @@ import { lowerNameSet } from "../studio-shell/preset-state"
 // Curated top-tier image models for character work. Drop budget/older options — the studio is
 // opinionated about quality and these all produce high-fidelity character output by default.
 export const IMAGE_MODELS = ["nano-banana-pro", "nano-banana-2-1", "gpt-image-2", "gpt-image-2-5-flare", "gpt-image-2-5-sunburst", "seedream"] as const
-export const DEFAULT_IMAGE_MODEL: (typeof IMAGE_MODELS)[number] = "nano-banana-pro"
+export const DEFAULT_IMAGE_MODEL: (typeof IMAGE_MODELS)[number] = "gpt-image-2"
 
 const EXPRESSION_PRESETS = [
   "neutral",

@@ -53,6 +53,7 @@ import { EFFORT_LABELS } from "@/components/editor/config-panels/reasoning-effor
 import { ALL_LANGUAGES } from "@/lib/audio-tags"
 import { ttsModelSwitchPatch, type TtsSwitchFields } from "@/lib/tts-model-switch"
 import { dialogueModelSwitchPatch, type DialogueSwitchFields } from "@/lib/dialogue-model-switch"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
 
 /**
  * Data-driven quick-config controls for {@link NodeQuickStrip}. Each AI node
@@ -522,7 +523,7 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
       ariaLabel: tx("node.aspect"),
       icon: Ratio,
       options: (data) => {
-        const provider = typeof data.provider === "string" ? data.provider : "nano-banana-pro"
+        const provider = typeof data.provider === "string" ? data.provider : IMAGE_MODEL_ROLE_DEFAULTS.general
         return getAspectRatiosForModel(provider)
       },
     },
@@ -531,7 +532,7 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
       ariaLabel: tx("field.resolution"),
       icon: Maximize2,
       options: (data) => {
-        const provider = typeof data.provider === "string" ? data.provider : "nano-banana-pro"
+        const provider = typeof data.provider === "string" ? data.provider : IMAGE_MODEL_ROLE_DEFAULTS.general
         return IMAGE_RESOLUTION_OPTIONS[provider] ?? []
       },
     },

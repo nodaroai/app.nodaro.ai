@@ -6,6 +6,7 @@ import {
   generateLocationAsset,
   getJobStatusLean,
 } from "@/lib/api"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
 
 /**
  * Per-entity bridge for `<ReferenceSheetTab>`.
@@ -44,7 +45,7 @@ import {
  * and docs/nodes/ai-image/reference-sheet.md prices sheet panels at it —
  * change the three together.
  */
-export const SHEET_PANEL_PROVIDER = "nano-banana"
+export const SHEET_PANEL_PROVIDER = IMAGE_MODEL_ROLE_DEFAULTS.character
 
 export interface SheetTabAdapter {
   entityKind: EntityKind

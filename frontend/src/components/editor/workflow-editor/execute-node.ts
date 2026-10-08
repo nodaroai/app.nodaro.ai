@@ -336,6 +336,7 @@ import {
   runLocationGeneration,
 } from "./asset-executors";
 import { IMAGE_REFERENCE_FORMAT } from "@/lib/image-reference-format";
+import { IMAGE_MODEL_ROLE_DEFAULTS, defaultImageModel } from "@nodaro/shared"
 ;
 import { collectCinematographyHints, hasConnectedStyleNode, STILL_IMAGE_EXCLUDE_TYPES } from "@/lib/cinematography-hints";
 // Video prompt-assembly building blocks — MOVED out of this module into a
@@ -1317,7 +1318,7 @@ function executeNodeCore(
 
   if (node.type === "generate-image") {
     const imgData = node.data as GenerateImageData;
-    const providerKey = imgData.provider || "nano-banana-pro";
+    const providerKey = imgData.provider || IMAGE_MODEL_ROLE_DEFAULTS.general;
 
     // Build a rich, ordered list of connected references (manual + wired + char)
     // with source-type and default-name metadata. This drives both the
@@ -1765,7 +1766,7 @@ function executeNodeCore(
 
   if (node.type === "reference-board") {
     const boardData = node.data as ReferenceBoardData;
-    const providerKey = boardData.provider || "nano-banana-pro";
+    const providerKey = boardData.provider || defaultImageModel("character", boardData.aspectRatio as string | undefined);
 
     // Collect wired reference image URLs (entity images or uploaded references).
     const chainRefs = inputs.referenceImageUrls ?? (inputs.imageUrl ? [inputs.imageUrl] : undefined);
@@ -1936,7 +1937,7 @@ function executeNodeCore(
     // assembled prompt entirely. We defer the empty-prompt check until AFTER
     // `buildImagePrompt` so empty user input + wired identity still runs.
     let rawPrompt: string | undefined = i2iData.prompt;
-    const provider = i2iData.provider || "nano-banana";
+    const provider = i2iData.provider || IMAGE_MODEL_ROLE_DEFAULTS.edit;
 
     {
       // Bullet consumer (stamps character elements onto the ref) → exclude here.
@@ -2088,7 +2089,7 @@ function executeNodeCore(
     // assembled prompt entirely. We defer the empty-prompt check until AFTER
     // `buildImagePrompt` so empty user input + wired identity still runs.
     let rawPrompt: string | undefined = applyPromptAffixes(modData.prompt, readPromptAffixes(modData), refMap);
-    const provider = modData.provider || "nano-banana";
+    const provider = modData.provider || IMAGE_MODEL_ROLE_DEFAULTS.edit;
 
     {
       // Bullet consumer (stamps character elements onto the ref) → exclude here.

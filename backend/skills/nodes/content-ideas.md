@@ -1,7 +1,7 @@
 ---
 node_type: content-ideas
-generated_at: 2026-10-04T07:00:53.601Z
-generated_from: d3cedd55a
+generated_at: 2026-10-08T09:21:52.553Z
+generated_from: cdb16c72b
 ---
 
 # Content Ideas
@@ -9,7 +9,7 @@ generated_from: d3cedd55a
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `content-ideas`
 **Category:** ai
-**Credit cost:** `10-100` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `10-250` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
 **Inputs (target handles):** `recipes`, `field-brand`
 **Outputs (source handles):** `ideas`
 

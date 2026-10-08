@@ -25,6 +25,7 @@ import { findEntityMentionTokens, entityMentionSlugForRef, knownEntitySlugsFromR
 import type { CharacterDef, ConnectedReference, DescribedReference, IdentityFidelity, IdentityMeta, ReferenceSource, SceneData } from "@nodaro/shared"
 import { appendReferenceLines, referenceDescriptionLine, renderDescribedReferenceLines } from "./described-references.js"
 import { locationReferencePhotoKindLabel, type LocationReferencePhotoKind } from "@nodaro/shared"
+import { tidyReferenceTokenGaps, unboundReferenceTokenText } from "./unbound-reference-tokens.js"
 
 export interface ResolveCharacterMentionsResult {
   /** Prompt with @-tokens replaced by display names + "Use these characters:" directive prepended. */
@@ -3068,7 +3069,16 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
 
     const refsToSend = supportsRefs && finalUrls.length > 0 ? finalUrls : undefined
 
-    return { prompt: finalPrompt, nativeNegativePrompt, referenceImageUrls: refsToSend }
+    // LAST, after the reorder (as the video core runs `resolveReferenceTokens`
+    // last): an `{image:N}` with no image at N becomes its label, or nothing.
+    // The binding test is the one both expanders above use, so a token that
+    // binds is never touched here and every wired output is unchanged.
+    const assembledPrompt = dropUnwiredImageTokens(
+      finalPrompt,
+      (n) => Boolean(tokenFinalSlot(n, nonCharacterRefs, finalIndexByUrl)),
+    )
+
+    return { prompt: assembledPrompt, nativeNegativePrompt, referenceImageUrls: refsToSend }
   }
 
   // -------------------------------------------------------------------------
@@ -3160,6 +3170,9 @@ function buildImagePromptInternal(config: BuildImagePromptConfig, marks?: Assemb
 
   // Expand {image:N} position references in prompt (legacy: → "[reference image N]")
   prompt = expandImagePositionRefs(prompt, allRefs.length)
+  // Then the unwired rule for a token past the last image — same pass, same
+  // binding test, as the connected-reference return above.
+  prompt = dropUnwiredImageTokens(prompt, (n) => hasImageAt(n, allRefs.length))
 
   return { prompt, nativeNegativePrompt, referenceImageUrls: refsToSend }
 }
@@ -3220,6 +3233,61 @@ const STRICT_DEFAULT_SOURCES: ReadonlySet<ReferenceSource> = new Set([
 // Label allows spaces (multi-word labels like "clothes and shoes") but never a
 // newline or `}` so the match can't run away across lines / token boundaries.
 const IMAGE_TOKEN_PATTERN = /\{image:(\d+)(?::([^}\n]+))?\}/gi
+
+/**
+ * The final 1-based slot an `{image:N}` token binds to on the connected-reference
+ * path — the slot of `refs[N - 1]`'s URL — or `undefined` when no image sits at
+ * N (no such reference, or one without a URL). The ONE binding test shared by
+ * both token expanders and the unwired-token pass, so "this token is wired"
+ * means the same thing to all three.
+ */
+function tokenFinalSlot(
+  n: number,
+  refs: readonly ConnectedReference[],
+  finalIndexByUrl: ReadonlyMap<string, number>,
+): number | undefined {
+  const ref = refs[n - 1]
+  return ref?.url ? finalIndexByUrl.get(ref.url) : undefined
+}
+
+/** Whether position N has an image among `count` flat references (the
+ *  no-`connectedReferences` path). Shared by its expander and the unwired pass. */
+function hasImageAt(n: number, count: number): boolean {
+  return n >= 1 && n <= count
+}
+
+/**
+ * The last step of image prompt assembly. Every `{image:N}` token still in the
+ * prompt whose N has no image follows the unwired rule SHARED with the video
+ * resolver (`resolveReferenceTokens`): a labelled token becomes its label, an
+ * unlabelled one is dropped, and the horizontal gap left behind is collapsed
+ * and the prompt trimmed.
+ *
+ * WIRED OUTPUT IS UNCHANGED BY CONSTRUCTION, on two counts:
+ *   - a token whose N binds (`isWired`) is returned verbatim — the expanders
+ *     already rendered every such token they own;
+ *   - the tidy runs only when at least one token was dropped, so a prompt whose
+ *     tokens all bind keeps every doubled space and indent its author typed.
+ *     (The video resolver tidies unconditionally; the image path never did, and
+ *     a wired image prompt stays byte-identical.)
+ *
+ * TWO PLACES KEEP A TOKEN AS TYPED, on purpose:
+ *   - a WIRED token the hybrid format never expands — its expansion covers the
+ *     scene only, so one typed into the negative prompt keeps its text in the
+ *     `Avoid:` line (rewriting it would move a wired output);
+ *   - the native negative prompt (`nativeNegativePrompt`, the models in
+ *     `NATIVE_NEGATIVE_PROMPT_MODELS` such as ideogram-v3) is never read by this
+ *     pass — it goes to the provider's own negative field as typed, wired or not.
+ */
+function dropUnwiredImageTokens(prompt: string, isWired: (n: number) => boolean): string {
+  let dropped = false
+  const out = prompt.replace(IMAGE_TOKEN_PATTERN, (match: string, num: string, label?: string) => {
+    if (isWired(parseInt(num, 10))) return match
+    dropped = true
+    return unboundReferenceTokenText(label)
+  })
+  return dropped ? tidyReferenceTokenGaps(out) : prompt
+}
 
 interface ResolvedIdentity {
   imageIndex: number
@@ -3506,7 +3574,9 @@ function buildNonCharacterDirectives(
  * consistent identifier in both the bulleted list and the scene description.
  * Numeric indices match the user-typed slug format (`@kira:1:smile`).
  *
- * Out-of-range indices are left untouched so they're visible in the output.
+ * Out-of-range indices are left untouched by this helper. `buildImagePrompt`
+ * then renders any such token by the unwired rule (`dropUnwiredImageTokens`):
+ * its label, or nothing — never the raw token.
  */
 export function expandImageRefTokens(prompt: string, imageCount: number): string {
   return prompt.replace(IMAGE_TOKEN_PATTERN, (match, num, label) => {
@@ -3525,8 +3595,9 @@ export function expandImageRefTokens(prompt: string, imageCount: number): string
  *
  * When the final slot equals the token index (no Phase-0 prefix shifting the
  * positions), the output is byte-identical to `expandImageRefTokens`.
- * Out-of-range tokens (or refs without a URL) are left untouched, matching the
- * "visible so the author can fix it" contract.
+ * Out-of-range tokens (or refs without a URL) are left untouched here; the
+ * assembly's last step, `dropUnwiredImageTokens`, renders them by the unwired
+ * rule with the same `tokenFinalSlot` binding test.
  */
 function expandImageRefTokensForRefs(
   prompt: string,
@@ -3534,9 +3605,7 @@ function expandImageRefTokensForRefs(
   finalIndexByUrl: ReadonlyMap<string, number>,
 ): string {
   return prompt.replace(IMAGE_TOKEN_PATTERN, (match, num, label) => {
-    const n = parseInt(num, 10)
-    const ref = refs[n - 1]
-    const finalIdx = ref?.url ? finalIndexByUrl.get(ref.url) : undefined
+    const finalIdx = tokenFinalSlot(parseInt(num, 10), refs, finalIndexByUrl)
     if (!finalIdx) return match
     return label ? `Image ${finalIdx} (${label})` : `Image ${finalIdx}`
   })
@@ -3571,8 +3640,8 @@ function hybridRolePhrase(label: string, letter: string): string {
 /**
  * Like `expandImageRefTokensForRefs`, but emits the hybrid lettered phrase
  * ("the subject from reference image A") instead of the legacy "Image N
- * (label)". Out-of-range tokens / URL-less refs are left untouched — visible so
- * the author can fix them.
+ * (label)". Out-of-range tokens / URL-less refs are left untouched here and
+ * rendered by the unwired rule at the end of assembly (`dropUnwiredImageTokens`).
  *
  * A `{image:N:label}` pill is a mention chip like any other: `buildRefPillNodes`
  * appends its own trailing space to EVERY pill it builds, the positional
@@ -3591,9 +3660,7 @@ function expandImageRefTokensHybrid(
 ): string {
   const splices: Array<{ offset: number; length: number; phrase: string }> = []
   for (const m of prompt.matchAll(IMAGE_TOKEN_PATTERN)) {
-    const n = parseInt(m[1], 10)
-    const ref = refs[n - 1]
-    const finalIdx = ref?.url ? finalIndexByUrl.get(ref.url) : undefined
+    const finalIdx = tokenFinalSlot(parseInt(m[1], 10), refs, finalIndexByUrl)
     if (!finalIdx) continue
     splices.push({
       offset: m.index ?? 0,
@@ -3669,7 +3736,7 @@ export function expandImagePositionRefs(
 ): string {
   return prompt.replace(IMAGE_TOKEN_PATTERN, (match, num, label) => {
     const n = parseInt(num, 10)
-    if (n < 1 || n > imageCount) return match
+    if (!hasImageAt(n, imageCount)) return match
     if (label) return `Image ${n} (${label})`
     if (names && names[n - 1]) return names[n - 1]
     return `Image ${n}`

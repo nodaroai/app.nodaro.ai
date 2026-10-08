@@ -1123,7 +1123,7 @@ describe("POST /v1/image-to-image", () => {
       expect(() =>
         resolveImageToImageCreditIdentifier({ body: null } as unknown as FastifyRequest),
       ).not.toThrow()
-      expect(resolveImageToImageCreditIdentifier({ body: null } as unknown as FastifyRequest)).toBe("nano-banana")
+      expect(resolveImageToImageCreditIdentifier({ body: null } as unknown as FastifyRequest)).toBe("gpt-image-2-5-flare-i2i")
     })
   })
 

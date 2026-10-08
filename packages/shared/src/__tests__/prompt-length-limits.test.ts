@@ -54,6 +54,8 @@ describe("per-model prompt length limits", () => {
       expect(getMaxImagePromptChars("imagen4")).toBe(IMAGE_PROMPT_MAX)
       expect(getMaxImagePromptChars("seedream-5-pro")).toBe(IMAGE_PROMPT_MAX) // verified 5000 in KIE schema
       expect(getMaxImagePromptChars("seedream-5-pro-i2i")).toBe(IMAGE_PROMPT_MAX) // verified 5000 in KIE schema
+      expect(getMaxImagePromptChars("seedream-5-flash")).toBe(IMAGE_PROMPT_MAX) // verified 5000 in KIE schema
+      expect(getMaxImagePromptChars("seedream-5-flash-i2i")).toBe(IMAGE_PROMPT_MAX) // verified 5000 in KIE schema
       expect(getMaxImagePromptChars("grok-i2i")).toBe(IMAGE_PROMPT_MAX) // 390000 doc = sanity-capped
       expect(getMaxImagePromptChars("flux-kontext")).toBe(IMAGE_PROMPT_MAX) // UNVERIFIED
       expect(getMaxImagePromptChars(undefined)).toBe(IMAGE_PROMPT_MAX)

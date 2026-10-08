@@ -66,7 +66,7 @@ describe("toolkit http.computeVoiceChangerProTranslatePricing (additive-optional
   it("the row's value is the floor (an admin retune reaches the plugin without a redeploy)", async () => {
     mockGetModelCreditBaseCost.mockResolvedValue(row(7))
     await expect(tk.http.computeVoiceChangerProTranslatePricing!({ sourceChars: 0, tier: "premium" }))
-      .resolves.toEqual({ floor: 7, ceilingPer1K: 50, reserveBase: 7 })
+      .resolves.toEqual({ floor: 7, ceilingPer1K: 15, reserveBase: 7 })
   })
 
   it("throws outside Cloud (hasCredits false) without touching the credit layer", async () => {

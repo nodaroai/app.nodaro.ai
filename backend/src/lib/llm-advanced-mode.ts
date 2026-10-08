@@ -22,7 +22,8 @@
  */
 
 import { z } from "zod"
-import { supportsAdvancedMode, ADVANCED_MODE_UNAVAILABLE_REASON } from "@nodaro/shared"
+import { getLlmModel, supportsAdvancedMode, ADVANCED_MODE_UNAVAILABLE_REASON } from "@nodaro/shared"
+import { config } from "./config.js"
 import type { LlmServingLane } from "./pricing/llm-cost.js"
 
 /**
@@ -66,8 +67,21 @@ export function advancedModeError(
   llmModel: string | undefined,
 ): { code: string; message: string } | null {
   if (!input.advancedMode) return null
-  if (supportsAdvancedMode(llmModel)) return null
-  return { code: "advanced_mode_unsupported", message: ADVANCED_MODE_UNAVAILABLE_REASON }
+  if (!supportsAdvancedMode(llmModel)) {
+    return { code: "advanced_mode_unsupported", message: ADVANCED_MODE_UNAVAILABLE_REASON }
+  }
+  // The model HAS a direct lane, but this install may hold no key for it (a
+  // self-hosted install with no ANTHROPIC_API_KEY / GEMINI_API_KEY). Refuse up
+  // front, before any credit reservation, instead of failing inside the call.
+  const model = getLlmModel(llmModel!)
+  const keyed = model?.directGeminiModel ? Boolean(config.GEMINI_API_KEY) : Boolean(config.ANTHROPIC_API_KEY)
+  if (!keyed) {
+    return {
+      code: "advanced_mode_unavailable",
+      message: "Advanced mode needs this provider's own API key, which this installation does not have — turn Advanced mode off to run the model.",
+    }
+  }
+  return null
 }
 
 /**

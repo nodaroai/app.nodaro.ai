@@ -6,6 +6,7 @@ import { getConnectedSources } from "./helpers"
 import { buildImageConnectedReferences, type ConnectedRefsData } from "./connected-references"
 import { useFinalPromptSegments, type UseFinalPromptSegmentsResult } from "./use-final-prompt-segments"
 import type { ConnectedReference, IdentityMeta } from "@nodaro/shared"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
 
 /**
  * Final-prompt assembly for a node BY ID — the SAME machinery the config panel's
@@ -99,7 +100,7 @@ export function useNodeFinalPrompt(nodeId: string): UseFinalPromptSegmentsResult
     ...(isVideo
       ? { videoProvider: (data.provider as string) || "seedance-2-fast" }
       : isImage
-        ? { provider: (data.provider as string) || "nano-banana-pro" }
+        ? { provider: (data.provider as string) || IMAGE_MODEL_ROLE_DEFAULTS.general }
         : {}),
     connectedReferences,
     identityMeta: isImage ? (data.identityMeta as ReadonlyArray<IdentityMeta> | undefined) : undefined,

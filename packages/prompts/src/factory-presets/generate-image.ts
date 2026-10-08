@@ -9,7 +9,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Connect a sharp, well-lit photo → dense character sheet; reuse it as a reference for consistent shots.",
     group: "Reference Sheet",
     data: {
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2",
       aspectRatio: "16:9",
       resolution: "2K",
       promptPrefix: `Create a single high-resolution, densely packed character reference sheet titled "CHARACTER BOARD" using the attached photo of the person as the single source of truth for face, hair, beard, eyes, skin tone and body proportions. The same person must appear in every panel — same age, same features. Outfit identical to the attached photo across all panels. All on-image labels in ENGLISH. Editorial reference-board layout with a dark near-black background, thin yellow neon accent light, faint film-grain overlay, and production-grade character-design UI. The composition should feel organized but not rigidly locked: allow the main portrait, metadata, and supporting panels to shift position naturally within the board. The panel arrangement can vary from generation to generation while remaining readable, balanced, and premium. Design the board so it works cleanly in different aspect ratios without depending on a fixed left-column structure. Include: A large hero portrait or 3/4-length character image, accompanied by a detailed metadata block: NAME · AGE · HEIGHT · BUILD · HAIR · EYES · FEATURES · OUTFIT (describe the exact clothing from the attached photo) · CHARACTER · MOOD. Also include six content groupings — render ALL six panel headings exactly as written, never merging or omitting a panel: PANEL 01 — VIEWS (5 full-body shots, neutral pose, identical outfit and lighting, neutral tan backdrop): FRONT · 3/4 LEFT · SIDE LEFT · BACK · 3/4 RIGHT. PANEL 02 — EXPRESSIONS (5 tight headshots, same lighting): CALM · LAUGHING · INTENSE · CONTEMPLATIVE · CONFIDENT. PANEL 03 — DETAILS (3 macros): face/eyes close-up · hand close-up (showing ring, watch or cuff) · distinctive outfit detail. PANEL 04 — OUTFIT FLAT-LAYS (5 isolated product shots on dark background): outerwear · top · bottom · footwear · main accessory. PANEL 05 — LIGHTING / MOOD (4 same-pose portraits under different lighting): SOFT WINDOW LIGHT · GOLDEN HOUR · COOL BLUE NIGHT · DRAMATIC RIM-LIGHT. PANEL 06 — COLOR PALETTE: 6 swatches with HEX codes derived from the outfit and skin tones. Bottom caption: "Use this character board as a visual reference for consistent depiction of the character across all generations." Bottom-right tags: STYLE · Modern · Realistic · Cinematic.`,
@@ -24,7 +24,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Connect a sharp photo → animation-ready pose & expression sheet; reuse it as a reference for consistent action.",
     group: "Reference Sheet",
     data: {
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2",
       aspectRatio: "16:9",
       resolution: "2K",
       promptPrefix: `Create a single high-resolution, densely packed pose reference sheet titled "POSE BOARD" using the attached photo of the person as the single source of truth for face, hair, eyes, skin tone, body proportions and outfit. The same person must appear in every panel — same age, same features, outfit identical to the attached photo across all panels. All on-image labels in ENGLISH. Editorial reference-board layout with a dark near-black background, thin yellow neon accent light, faint film-grain overlay, and production-grade animation-planning UI. The composition should feel organized but not rigidly locked: allow the hero figure, metadata, and supporting panels to shift position naturally within the board while remaining readable, balanced, and premium. Design the board to adapt cleanly to different aspect ratios without depending on a fixed left-column layout. Include a large full-body hero shot in a relaxed standing pose with a metadata block: NAME · AGE · BUILD · HEIGHT · OUTFIT · POSE LANGUAGE · CENTER OF GRAVITY · DOMINANT HAND · PURPOSE. Also include five content groupings — render ALL five panel headings exactly as written, never merging or omitting a panel: PANEL 01 — BASIC POSES (5 full-body shots, identical outfit and lighting, neutral tan backdrop): STANDING · SITTING · WALKING · RUNNING · JUMPING. PANEL 02 — ACTION POSES (5 dynamic full-body shots with clear silhouettes): FIGHT STANCE · THROW · DODGE · CLIMB · LAND. PANEL 03 — EXPRESSIONS (5 tight headshots, same lighting): NEUTRAL · LAUGHING · ANGRY · SAD · SURPRISED. PANEL 04 — ANGLE COVERAGE (4 chest-up portraits): FRONT · 3/4 · SIDE · BACK. PANEL 05 — COLOR PALETTE: 6 swatches with HEX codes derived from the outfit and skin tones. Bottom caption: "Use this pose board as a visual reference for consistent posing of the character across all generations." Bottom-right tags: STYLE · Modern · Realistic · Cinematic.`,
@@ -39,7 +39,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Connect a photo → dense location sheet; reuse it as a reference for consistent scenes.",
     group: "Reference Sheet",
     data: {
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2",
       aspectRatio: "16:9",
       resolution: "2K",
       promptPrefix: `Create a single high-resolution, densely packed location reference sheet titled "LOCATION BOARD" using the attached photo of the location as the single source of truth for its architecture, atmosphere, lighting, materials and color palette. The space must be identical across every panel — same place, same materials, same era. All on-image labels in ENGLISH. Editorial location-reference board layout with a dark near-black background, thin yellow neon accent light on the far left, faint film-grain overlay, subtle cinematic interface elements, and production-grade location-scout UI. The composition should feel structured but not rigidly fixed: allow the hero location view, metadata, environmental studies, and supporting panels to shift position naturally within the board. The arrangement may vary from generation to generation while remaining readable, balanced, and premium. Design the board so it adapts cleanly to different aspect ratios without depending on a fixed left-column layout. Include a prominent hero shot of the location, ideally a wide establishing or defining view, accompanied by a detailed metadata block: NAME · TYPE (street / interior / exterior / forest) · ERA · SCALE (intimate / vast) ARCHITECTURE: (key features) MATERIALS: (stone, brick, wood, glass, etc.) ATMOSPHERE: (busy / quiet / eerie / romantic) DEFAULT TIME · DEFAULT WEATHER · PURPOSE (e.g. chase sequence, dialogue scene). Also include six content groupings — render ALL six panel headings exactly as written, never merging or omitting a panel: PANEL 01 — VIEWS (5 same-location shots, identical lighting): WIDE · MID · TIGHT · ALT ANGLE · OVERHEAD. PANEL 02 — TIME OF DAY (4 same-angle shots): DAWN · NOON · DUSK · NIGHT. PANEL 03 — DETAILS (2 macros): material/texture close-up · distinctive architectural detail. PANEL 04 — SET DRESSING / PROPS (5 isolated prop or signage studies on dark background): 5 key props or signage elements from the location. PANEL 05 — WEATHER / MOOD (4 same-angle shots): CLEAR SUNNY · OVERCAST · RAIN-SOAKED · MISTY FOG. PANEL 06 — COLOR PALETTE: 6 swatches with HEX codes from the location's dominant tones. Bottom caption: "Use this location board as a visual reference for consistent depiction of the environment across all generations." Bottom-right tags: STYLE · Modern · Realistic · Cinematic.`,
@@ -54,7 +54,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Connect a photo → dense product sheet; reuse it as a reference for consistent shots.",
     group: "Reference Sheet",
     data: {
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2",
       aspectRatio: "16:9",
       resolution: "2K",
       promptPrefix: `Create a single high-resolution, densely packed product reference sheet titled "PRODUCT BOARD" using the attached photo of the product as the single source of truth for its shape, materials, colorway, proportions, branding and finish. The same product must appear in every panel — identical model, identical colorway and markings. All on-image labels in ENGLISH. Editorial product-reference layout with a dark near-black background, thin yellow neon accent light, faint film-grain overlay, and production-grade industrial-design UI. The composition should feel organized but not rigidly locked: allow the hero shot, metadata, and supporting panels to shift position naturally within the board while remaining readable, balanced, and premium. Design the board to adapt cleanly to different aspect ratios without depending on a fixed left-column layout. Include a large hero product shot with a metadata block: NAME · CATEGORY · BRAND · DIMENSIONS · WEIGHT · MATERIALS · FINISH · KEY FEATURES · COLORWAY. Also include six content groupings — render ALL six panel headings exactly as written, never merging or omitting a panel: PANEL 01 — VIEWS (5 studio shots on a seamless background, identical lighting): FRONT · 3/4 · SIDE · BACK · TOP. PANEL 02 — DETAILS (3 macros): material/texture close-up · seam/joint or mechanism · logo/branding detail. PANEL 03 — COLORWAYS (4 isolated shots of the same product in alternate finishes). PANEL 04 — SCALE (the product beside a common reference object, with a dimension callout). PANEL 05 — IN USE / CONTEXT (3 lifestyle shots in a real setting). PANEL 06 — COLOR PALETTE: 6 swatches with HEX codes from the product's materials and finish. Bottom caption: "Use this product board as a visual reference for consistent depiction of the product across all generations." Bottom-right tags: STYLE · Modern · Realistic · Studio.`,
@@ -69,7 +69,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Connect a photo → dense wardrobe sheet; reuse it as a reference for consistent looks.",
     group: "Reference Sheet",
     data: {
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2",
       aspectRatio: "16:9",
       resolution: "2K",
       promptPrefix: `Create a single high-resolution, densely packed wardrobe reference sheet titled "OUTFIT BOARD" using the attached photo of the outfit as the single source of truth for its garments, fabrics, colorway, silhouette and styling. The same outfit must appear in every panel — identical garments, identical colors and trims. All on-image labels in ENGLISH. Editorial fashion-reference layout with a dark near-black background, thin yellow neon accent light, faint film-grain overlay, and production-grade stylist UI. The composition should feel organized but not rigidly locked: allow the hero look, metadata, and supporting panels to shift position naturally while remaining readable, balanced, and premium. Design the board to adapt cleanly to different aspect ratios without depending on a fixed left-column layout. Include a hero full-look shot with a metadata block: LOOK NAME · STYLE · SEASON · FABRICS · PALETTE · FIT · OCCASION. Also include six content groupings — render ALL six panel headings exactly as written, never merging or omitting a panel: PANEL 01 — ON-BODY VIEWS (5 full-length shots, identical lighting): FRONT · 3/4 LEFT · SIDE · BACK · 3/4 RIGHT. PANEL 02 — FLAT-LAYS (5 isolated garment shots on a dark surface): top · bottom · outerwear · footwear · headwear. PANEL 03 — FABRIC & DETAIL (3 macros): weave/texture close-up · stitching or hardware · print or trim detail. PANEL 04 — ACCESSORIES (4 isolated accessory studies: bag · jewelry · belt · eyewear). PANEL 05 — COLORWAYS (3 alternate colorways of the same look). PANEL 06 — COLOR PALETTE: 6 swatches with HEX codes from the garments. Bottom caption: "Use this outfit board as a visual reference for consistent depiction of the wardrobe across all generations." Bottom-right tags: STYLE · Modern · Editorial · Fashion.`,
@@ -84,7 +84,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Connect a photo → set-dressing & props study; reuse it as a reference for consistent sets.",
     group: "Reference Sheet",
     data: {
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2",
       aspectRatio: "16:9",
       resolution: "2K",
       promptPrefix: `Create a single high-resolution, densely packed set-dressing reference sheet titled "SCENE BOARD" using the attached photo of the scene as the single source of truth for its props, set dressing, materials, signage and mood. The space and its contents must be consistent across every panel — same props, same materials, same era. All on-image labels in ENGLISH. Editorial set-decoration layout with a dark near-black background, thin yellow neon accent light, faint film-grain overlay, and production-grade art-department UI. The composition should feel organized but not rigidly locked: allow the hero shot, metadata, and supporting panels to shift position naturally while remaining readable, balanced, and premium. Design the board to adapt cleanly to different aspect ratios without depending on a fixed left-column layout. Include a hero establishing shot with a metadata block: SCENE NAME · TYPE · ERA · MOOD · KEY MATERIALS · PURPOSE. Also include six content groupings — render ALL six panel headings exactly as written, never merging or omitting a panel: PANEL 01 — KEY PROPS (5 isolated prop studies on a dark background). PANEL 02 — SIGNAGE / GRAPHICS (3 readable signage or printed-graphic elements from the scene). PANEL 03 — MATERIALS & TEXTURES (3 macros: surface · fabric/wood/metal · wear/patina). PANEL 04 — LAYOUT / BLOCKING (a simple top-down or wide diagram of where key elements sit). PANEL 05 — LIGHTING STATES (3 same-angle shots: day · practical-lit night · dramatic). PANEL 06 — COLOR PALETTE: 6 swatches with HEX codes from the scene's dominant tones. Bottom caption: "Use this scene board as a visual reference for consistent set dressing across all generations." Bottom-right tags: STYLE · Modern · Realistic · Cinematic.`,
@@ -99,7 +99,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Connect a sharp photo → dense creature sheet; reuse it as a reference for consistent shots.",
     group: "Reference Sheet",
     data: {
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2",
       aspectRatio: "16:9",
       resolution: "2K",
       promptPrefix: `Create a single high-resolution, densely packed creature reference sheet titled "CREATURE BOARD" using the attached photo of the creature as the single source of truth for its anatomy, silhouette, coloration, textures and features. The same creature must appear in every panel — identical species, identical markings and proportions. All on-image labels in ENGLISH. Editorial creature-design layout with a dark near-black background, thin yellow neon accent light, faint film-grain overlay, and production-grade concept-design UI. The composition should feel organized but not rigidly locked: allow the hero render, metadata, and supporting panels to shift position naturally while remaining readable, balanced, and premium. Design the board to adapt cleanly to different aspect ratios without depending on a fixed left-column layout. Include a large hero full-body render with a metadata block: NAME · SPECIES · SIZE · BUILD · COLORATION · TEXTURES · TEMPERAMENT · FEATURES · MOVEMENT · VOCALIZATION. Also include six content groupings — render ALL six panel headings exactly as written, never merging or omitting a panel: PANEL 01 — VIEWS (5 full-body angles, neutral pose, identical lighting): FRONT · 3/4 · SIDE · BACK · TOP-DOWN. PANEL 02 — POSES (4 dynamic full-body poses: idle · moving · alert · aggressive). PANEL 03 — DETAILS (3 macros): head/face close-up · hide/scale/fur texture · distinctive feature (claw, horn, fin). PANEL 04 — EXPRESSIONS (4 head studies showing temperament range). PANEL 05 — SCALE (the creature beside a human silhouette for size reference). PANEL 06 — COLOR PALETTE: 6 swatches with HEX codes from the creature's coloration. Bottom caption: "Use this creature board as a visual reference for consistent depiction of the creature across all generations." Bottom-right tags: STYLE · Modern · Realistic · Cinematic.`,
@@ -114,7 +114,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Connect a photo → dense vehicle sheet; reuse it as a reference for consistent shots.",
     group: "Reference Sheet",
     data: {
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2",
       aspectRatio: "16:9",
       resolution: "2K",
       promptPrefix: `Create a single high-resolution, densely packed vehicle reference sheet titled "VEHICLE BOARD" using the attached photo of the vehicle as the single source of truth for its body shape, proportions, paintwork, trim, wheels and condition. The same vehicle must appear in every panel — identical model, identical colorway, markings and wear. All on-image labels in ENGLISH. Editorial vehicle-reference layout with a dark near-black background, thin yellow neon accent light, faint film-grain overlay, and production-grade transportation-design UI. The composition should feel organized but not rigidly locked: allow the hero shot, metadata, and supporting panels to shift position naturally while remaining readable, balanced, and premium. Design the board to adapt cleanly to different aspect ratios without depending on a fixed left-column layout. Include a large three-quarter hero shot with a metadata block: NAME · TYPE · ERA · SCALE · BODY & MATERIALS · FINISH · SEATS · TOP SPEED · SIGNATURE FEATURE · ROLE. Also include six content groupings — render ALL six panel headings exactly as written, never merging or omitting a panel: PANEL 01 — VIEWS (5 studio shots, identical lighting): FRONT · 3/4 · SIDE · BACK · TOP-DOWN. PANEL 02 — INTERIOR / CABIN (4 close shots): cockpit through the window · dashboard detail · seats or cargo area · driver POV. PANEL 03 — DETAIL MACROS (4): headlight or light cluster · wheel and tire · badge or panel line · paint and wear close-up. PANEL 04 — IN MOTION (4 staged frames): driving straight · cornering · parked on an incline · night with headlights on. PANEL 05 — LIGHTING / MOOD (4 same-angle hero shots): DESERT MIDDAY · GOLDEN HOUR · STORMY OVERCAST · NIGHT NEON. PANEL 06 — COLOR PALETTE: 6 swatches with HEX codes from the paintwork and trim. Bottom caption: "Use this vehicle board as a visual reference for consistent depiction of the vehicle across all generations." Bottom-right tags: STYLE · Modern · Realistic · Cinematic.`,
@@ -129,7 +129,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Connect a photo → dense dish sheet; reuse it as a reference for consistent food shots.",
     group: "Reference Sheet",
     data: {
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2",
       aspectRatio: "16:9",
       resolution: "2K",
       promptPrefix: `Create a single high-resolution, densely packed dish reference sheet titled "FOOD BOARD" using the attached photo of the dish as the single source of truth for its ingredients, plating, colors, textures and garnish. The same dish must appear in every panel — identical recipe, identical plating, bowl or plate, and props. All on-image labels in ENGLISH. Editorial culinary-reference layout with a dark near-black background, thin yellow neon accent light, faint film-grain overlay, and production-grade food-styling UI. The composition should feel organized but not rigidly locked: allow the hero shot, metadata, and supporting panels to shift position naturally while remaining readable, balanced, and premium. Design the board to adapt cleanly to different aspect ratios without depending on a fixed left-column layout. Include a large appetizing hero shot with a metadata block: DISH NAME · CUISINE · CATEGORY · KEY INGREDIENTS · TEXTURES · GARNISH · SERVED · AUDIENCE. Also include six content groupings — render ALL six panel headings exactly as written, never merging or omitting a panel: PANEL 01 — PLATING ANGLES (5 beauty shots, identical styling): TOP-DOWN · 3/4 HERO · SIDE · EXTREME CLOSE-UP · IN HAND OR WITH UTENSIL. PANEL 02 — INGREDIENT BREAKDOWN (5 isolated ingredient studies on a dark background). PANEL 03 — DETAIL MACROS (4): surface texture · glaze or sauce sheen · steam or freshness cue · garnish detail. PANEL 04 — IN CONTEXT (4 staged frames): steam rising · utensil lifting a bite · sauce pour frozen mid-action · hands holding the dish. PANEL 05 — LIGHTING / MOOD (4 same-angle hero shots): WARM APPETIZING · COOL EDITORIAL · HARD COMMERCIAL · MOODY DRAMATIC. PANEL 06 — COLOR PALETTE: 6 swatches with HEX codes from the dish and plating. Bottom caption: "Use this food board as a visual reference for consistent depiction of the dish across all generations." Bottom-right tags: STYLE · Modern · Realistic · Commercial.`,
@@ -144,7 +144,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Connect a mascot image → brand-character sheet with brand applications; reuse it for a consistent mascot.",
     group: "Reference Sheet",
     data: {
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2",
       aspectRatio: "16:9",
       resolution: "2K",
       promptPrefix: `Create a single high-resolution, densely packed mascot reference sheet titled "MASCOT BOARD" using the attached image of the mascot as the single source of truth for its design, proportions, colors, materials and personality. The same mascot must appear in every panel — identical design, identical colors and details — rendered in the mascot's native art style read from the attached image (illustrated, plush, costumed or 3D), never drifting between styles. All on-image labels in ENGLISH. Editorial brand-character layout with a dark near-black background, thin yellow neon accent light, faint film-grain overlay, and production-grade brand-design UI. The composition should feel organized but not rigidly locked: allow the hero pose, metadata, and supporting panels to shift position naturally while remaining readable, balanced, and premium. Design the board to adapt cleanly to different aspect ratios without depending on a fixed left-column layout. Include a large hero pose with a metadata block: MASCOT NAME · BRAND · CATEGORY · MATERIAL / STYLE · PERSONALITY · CATCHPHRASE · SIZE · USE CASES. Also include six content groupings — render ALL six panel headings exactly as written, never merging or omitting a panel: PANEL 01 — VIEWS (5 full-body angles, identical lighting): FRONT · 3/4 LEFT · SIDE · BACK · 3/4 RIGHT. PANEL 02 — EXPRESSIONS (6 head studies): HAPPY · WAVING · SHOCKED · WINKING · SLEEPY · CURIOUS. PANEL 03 — DETAIL MACROS (3): face detail · material or texture close-up · signature accessory. PANEL 04 — BRAND APPLICATIONS (4 mockups): on product packaging · on a storefront sign · in a print ad · on merch. PANEL 05 — POSES (4 action poses): GREETING · CELEBRATING · PRESENTING · THUMBS-UP. PANEL 06 — BRAND COLOR PALETTE: 6 swatches with HEX codes from the mascot's colors. Bottom caption: "Use this mascot board as a visual reference for consistent depiction of the mascot across all generations." Bottom-right tags: STYLE · Brand · Character · Consistent.`,
@@ -159,7 +159,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Connect a sharp photo → dense pet sheet; reuse it as a reference for consistent shots.",
     group: "Reference Sheet",
     data: {
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2",
       aspectRatio: "16:9",
       resolution: "2K",
       promptPrefix: `Create a single high-resolution, densely packed pet reference sheet titled "PET BOARD" using the attached photo of the pet as the single source of truth for its species, breed, coat colors, markings, eyes and build. The same animal must appear in every panel — identical markings, identical proportions, identical collar or accessories. All on-image labels in ENGLISH. Editorial reference-board layout with a dark near-black background, thin yellow neon accent light, faint film-grain overlay, and production-grade character-design UI. The composition should feel organized but not rigidly locked: allow the hero portrait, metadata, and supporting panels to shift position naturally while remaining readable, balanced, and premium. Design the board to adapt cleanly to different aspect ratios without depending on a fixed left-column layout. Include a large hero portrait with a metadata block: NAME · SPECIES · BREED · AGE · SIZE · COAT & MARKINGS · EYES · COLLAR / ACCESSORIES · TEMPERAMENT · SIGNATURE BEHAVIOR. Also include six content groupings — render ALL six panel headings exactly as written, never merging or omitting a panel: PANEL 01 — VIEWS (5 full-body angles, neutral stance, identical lighting): FRONT · 3/4 · SIDE · BACK · TOP-DOWN. PANEL 02 — EXPRESSIONS & MOODS (6 head studies): ALERT · CURIOUS · PLAYFUL · SLEEPY · GRUMPY · HAPPY. PANEL 03 — DETAIL MACROS (4): eye close-up · coat or fur texture · paw detail · collar tag or accessory. PANEL 04 — POSES (5 natural poses): SITTING · LYING DOWN · WALKING · PLAYING · CURLED ASLEEP. PANEL 05 — LIGHTING / MOOD (4 same-pose portraits): SOFT WINDOW LIGHT · GOLDEN HOUR · COOL BLUE NIGHT · DRAMATIC RIM-LIGHT. PANEL 06 — COLOR PALETTE: 6 swatches with HEX codes from the coat and accessories. Bottom caption: "Use this pet board as a visual reference for consistent depiction of the pet across all generations." Bottom-right tags: STYLE · Modern · Realistic · Cinematic.`,
@@ -171,16 +171,16 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
   // ── Cast & Consistency (clean grids per the multi-character workflow:
   // sterile neutral-background reference grids built to be FED BACK as identity
   // anchors — unlike the editorial boards above, decoration here is noise.
-  // Nano Banana 2.1 (decided 2026-10-08 — it replaced Nano Banana 2, which the
-  // source guide recommended: cheaper/faster per attempt with strong practical
-  // consistency); 4K so panel faces stay sharp when reused as refs.) ──
+  // GPT Image 2 (decided 2026-10-08 from the image model bake-off: it built the
+  // best reference grid and kept both identities on the cast sheet); 4K so
+  // panel faces stay sharp when reused as refs.) ──
   {
     id: "generate-image/character-reference-grid",
     name: "Character Reference Grid",
     description: "Connect a photo → clean 4-angle identity grid (no decorations) — the strongest consistency anchor.",
     group: "Cast & Consistency",
     data: {
-      provider: "nano-banana-2-1",
+      provider: "gpt-image-2",
       aspectRatio: "3:4",
       resolution: "4K",
       promptPrefix: `Create a clean character reference grid using the attached photo of the person as the single source of truth for face, hair, eyes, skin tone, build and outfit. Four equal panels arranged in a tidy two-by-two grid on a single seamless neutral light-grey studio background: a tight front-facing portrait close-up, a 3/4-view portrait, a full-body shot from the front in a relaxed neutral stance, and a full-body shot from the back. The SAME person in every panel — identical age, features, hairstyle and outfit from the attached photo. Identical soft, even studio lighting in all four panels with no dramatic shadows. No decorations, no background props, no text, no UI elements — a sterile, production-neutral reference sheet built to be reused as an identity reference in later generations.`,
@@ -195,7 +195,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Connect 2–4 character refs → one labeled cast sheet; then reference cast members by name in scenes.",
     group: "Cast & Consistency",
     data: {
-      provider: "nano-banana-2-1",
+      provider: "gpt-image-2",
       aspectRatio: "3:4",
       resolution: "4K",
       prompt: `Create a clean multi-character cast reference sheet composed as horizontal strips stacked vertically in one image — one strip per character from the attached reference images, in the order they are attached, using exactly as many strips as there are attached characters. Each strip shows that character in four aligned studio panels: tight front portrait close-up · 3/4 portrait · full body front · full body back, all in a relaxed neutral stance. Label each strip on the left edge with the character's name in clean bold lettering: {character names || ALEX · MAYA · SAM}. Every character must match their attached reference exactly — same face, hair, skin tone, build and outfit — with no identity blending between rows. Single seamless neutral light-grey studio background across the whole sheet, identical soft even lighting in every panel, consistent panel sizing and alignment. No decorations, no props, no UI elements beyond the row name labels. A sterile production casting sheet built to be reused as the single identity reference for this cast in later generations. Photorealistic, sharp focus, natural skin texture, true-to-life color.`,
@@ -209,7 +209,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Connect a cast grid → stage a scene naming the characters; never re-describe their looks.",
     group: "Cast & Consistency",
     data: {
-      provider: "nano-banana-2-1",
+      provider: "gpt-image-2",
       aspectRatio: "16:9",
       resolution: "2K",
       prompt: `Using the attached character reference sheet as the single source of truth for every named character's face, hair, build and outfit, generate one photorealistic scene: {scene || ALEX and MAYA share a quiet laugh at the counter of a sunlit ramen bar while SAM studies the menu}. Refer to the characters ONLY by the names labeled on the reference sheet and keep each one perfectly consistent with their reference row — do not invent new physical traits, do not blend identities, and do not alter outfits unless the scene says so. Stage them naturally in the environment with believable eye-lines, interactions and spacing. Cinematic photography, 35mm lens look with gentle depth of field, soft motivated lighting that matches the location, cohesive filmic color grade, natural skin texture, sharp detail on every character.`,
@@ -300,7 +300,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Moody, shallow-depth portrait look.",
     group: "Photography & Cinematic",
     data: {
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2",
       aspectRatio: "9:16",
       prompt:
         "cinematic portrait of {subject || a pensive young man with stubble}, 85mm lens at f/1.8, shallow depth of field with creamy bokeh, soft key with warm rim separation against a moody low-key background, gentle film grain, filmic teal-and-amber grade, natural skin texture, tack-sharp eyes",
@@ -314,7 +314,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Film-grade scene, dramatic lighting.",
     group: "Photography & Cinematic",
     data: {
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2",
       aspectRatio: "16:9",
       prompt:
         "cinematic film still of {subject || a lone detective in a rain-slicked alley at night}, anamorphic lens at 40mm and f/2, shallow depth of field with oval bokeh and subtle horizontal flares, dramatic motivated key light with deep falloff, off-center framing with negative space, tense noir mood in a moody teal-and-amber grade, fine film grain, photoreal detail",
@@ -342,7 +342,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Soft-lit 85mm studio headshot.",
     group: "Photography & Cinematic",
     data: {
-      provider: "nano-banana-pro",
+      provider: "nano-banana-2-1",
       aspectRatio: "4:5",
       prompt:
         "studio portrait of {subject || a confident woman with sleek dark hair}, 85mm lens at f/2.8, shallow depth of field, soft octabox key with gentle fill and a subtle hair light, clean seamless gray backdrop, tight head-and-shoulders framing, polished editorial mood with a neutral true-to-life palette, natural skin texture, catchlights and tack-sharp eyes",
@@ -356,7 +356,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Clean professional headshot.",
     group: "Photography & Cinematic",
     data: {
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2",
       aspectRatio: "1:1",
       prompt:
         "professional corporate headshot of {subject || a friendly executive in a tailored navy blazer}, 85mm lens at f/4, soft even three-point lighting with a broad key and clean fill, smooth neutral gray-blue background, centered head-and-shoulders framing, approachable confident expression, crisp business mood with a clean neutral palette, sharp focus and natural skin texture",
@@ -384,7 +384,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "High-contrast editorial mono.",
     group: "Photography & Cinematic",
     data: {
-      provider: "nano-banana-pro",
+      provider: "nano-banana-2-1",
       aspectRatio: "4:5",
       prompt:
         "black and white editorial portrait of {subject || a weathered old fisherman with a lined face}, 85mm lens at f/2, shallow depth of field, dramatic single-source chiaroscuro with deep falloff, tight off-center framing, timeless brooding mood with a rich high-contrast monochrome tonal range, deep blacks and luminous highlights, fine silver grain, sharp eyes and natural skin texture",
@@ -412,7 +412,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Appetizing 45° hero shot.",
     group: "Photography & Cinematic",
     data: {
-      provider: "nano-banana-pro",
+      provider: "nano-banana-2-1",
       aspectRatio: "4:5",
       prompt:
         "appetizing hero food photograph of {dish || a rustic bowl of ramen with a soft-boiled egg}, 50mm lens at f/2.8, shallow depth of field, soft diffused window light from the side with a gentle fill, 45-degree angle on a weathered rustic surface, props and steam fading into a clean background, warm mouth-watering mood with natural color, fresh garnish, glistening textures and crisp focus on the hero",
@@ -426,7 +426,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Overhead styled food spread.",
     group: "Photography & Cinematic",
     data: {
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2",
       aspectRatio: "1:1",
       prompt:
         "overhead flat-lay food photograph of {dish || a colorful brunch spread with coffee and pastries}, 35mm lens at f/5.6 with even focus, perfect top-down ninety-degree angle, soft diffused daylight casting gentle natural shadows, balanced styled arrangement with breathing room and scattered ingredients, fresh vibrant editorial mood with a clean color palette on a textured surface, crisp appetizing detail",
@@ -470,7 +470,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Front / side / back, T-pose.",
     group: "Characters",
     data: {
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2",
       aspectRatio: "16:9",
       prompt:
         "full-body character turnaround model sheet of {character description || a rugged space mercenary with a scarred jaw and worn leather armor}, three matching views in a row — front, side profile, and back — held in a clean T-pose with a neutral expression, identical proportions and costume details across all three views, flat even studio lighting with no harsh shadows so every view reads the same, evenly spaced on a plain light-grey backdrop, crisp concept-art model-sheet style, clean line work and consistent color palette across panels",
@@ -484,7 +484,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Four dynamic full-body poses.",
     group: "Characters",
     data: {
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2",
       aspectRatio: "16:9",
       prompt:
         "character action model sheet of {character description || a nimble rogue archer in a hooded green cloak}, four distinct full-body dynamic action poses in a row — running, leaping, attacking, landing — strictly consistent face, character design, and outfit across every pose, full-figure framing with confident gesture and clear silhouettes, even studio lighting that stays identical across all four poses, plain neutral backdrop, energetic concept-art model sheet, clean linework and matching color palette",
@@ -498,7 +498,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "6 emotions, 2 rows of 3.",
     group: "Characters",
     data: {
-      provider: "nano-banana-pro",
+      provider: "nano-banana-2-1",
       aspectRatio: "4:3",
       prompt:
         "character expression model sheet of {character description || a cheerful freckled teen with messy red hair}, six head-and-shoulders portraits arranged in two even rows of three, labeled emotions in order — neutral, happy, angry, surprised, sad, determined — strictly consistent face, hairstyle, and features across every panel with only the expression changing, flat even portrait lighting identical in all six panels, evenly spaced on a plain neutral backdrop, clean concept-art model sheet, natural facial detail and matching color palette",
@@ -512,7 +512,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "4×4 emotion grid, one face.",
     group: "Characters",
     data: {
-      provider: "nano-banana-pro",
+      provider: "nano-banana-2-1",
       aspectRatio: "1:1",
       prompt:
         "16-panel character expression grid of {character description || a stoic silver-haired knight with a faint scar}, evenly spaced 4x4 layout of head-and-shoulders portraits, sixteen distinct facial emotions ranging from calm to intense, strictly consistent face, hairstyle, and design across every cell with only the expression changing, flat even portrait lighting identical in all panels, plain neutral backdrop, clean concept-art model sheet, natural facial detail and matching color palette",
@@ -526,7 +526,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Same character, 4 outfits.",
     group: "Characters",
     data: {
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2",
       aspectRatio: "16:9",
       prompt:
         "outfit variation model sheet of {character description || a confident young woman with a sleek dark bob}, the same character shown full-body in four different complete outfits side by side — casual, formal, athletic, seasonal — strictly consistent face, body, and hairstyle across all four with only the wardrobe changing, full-figure framing in a relaxed standing pose, flat even studio lighting identical across every panel, evenly spaced on a plain neutral backdrop, clean concept-art model sheet, matching color palette and crisp fabric detail",
@@ -554,7 +554,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Cute super-deformed poses.",
     group: "Characters",
     data: {
-      provider: "nano-banana-pro",
+      provider: "nano-banana-2-1",
       aspectRatio: "1:1",
       prompt:
         "chibi character model sheet of {character description || a tiny brave knight with oversized armor}, adorable super-deformed proportions with a big head and small body, several cute mini full-body poses arranged across the sheet, strictly consistent design and color palette across every pose, soft even flat lighting identical across all poses, evenly spaced on a plain pastel backdrop, clean bold outlines and flat cel shading, charming concept-art model sheet",
@@ -582,7 +582,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Dynamic full-body hero shot.",
     group: "Characters",
     data: {
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2-5-sunburst",
       aspectRatio: "2:3",
       prompt:
         "full-body hero shot of {character description || a heroic armored warrior with a flowing crimson cape}, cinematic character key art, confident dynamic power pose, dramatic rim lighting with a warm key and cool back-light carving the silhouette, low camera angle for an imposing heroic stance, softly blurred atmospheric background, bold dramatic color grade, intricately detailed costume and crisp material textures",
@@ -596,7 +596,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Concept creature, multi-angle.",
     group: "Characters",
     data: {
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2",
       aspectRatio: "16:9",
       prompt:
         "creature design model sheet of {creature description || a six-legged bioluminescent forest beast with mossy scales}, several full-body views from multiple angles plus inset anatomy and texture close-ups, strictly consistent species, markings, and proportions across every view, professional creature-concept art, flat even studio lighting identical across all views so the design reads clearly, neatly arranged on a plain neutral backdrop, detailed believable anatomy and crisp surface textures, cohesive color palette",
@@ -610,7 +610,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Centered, bold, clean bg.",
     group: "Characters",
     data: {
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2",
       aspectRatio: "1:1",
       prompt:
         "stylized avatar profile picture of {character or subject || a friendly fox with bright amber eyes}, clean modern character illustration, bold thick outlines with smooth flat shading, soft even front lighting with a gentle glow, perfectly centered head-and-shoulders composition with comfortable margins, vibrant punchy color palette on a clean solid-color background, crisp friendly and instantly readable as a small icon",
@@ -626,7 +626,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Clean e-commerce product photo on white.",
     group: "Product & Commerce",
     data: {
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2",
       aspectRatio: "1:1",
       prompt:
         "e-commerce studio product photograph of {product || a matte-black wireless headphone}, on a seamless pure-white background, 100mm lens at f/8 with deep focus, soft even high-key lighting from a large diffused softbox with gentle fill, perfectly centered with generous margins, clean catalog-ready mood with true-to-life color, crisp edges and accurate material texture",
@@ -654,7 +654,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Overhead styled arrangement.",
     group: "Product & Commerce",
     data: {
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2",
       aspectRatio: "1:1",
       prompt:
         "overhead flat-lay product photograph of {product || a leather travel wallet} surrounded by complementary props, 35mm lens at f/5.6 with even focus, perfect top-down ninety-degree angle, soft diffused daylight casting gentle natural shadows, balanced styled arrangement with breathing room around the hero, clean modern editorial mood with a cohesive palette on a textured surface, crisp material detail",
@@ -668,7 +668,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Box / bottle / pouch render.",
     group: "Product & Commerce",
     data: {
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2",
       aspectRatio: "1:1",
       prompt:
         "photorealistic product packaging mockup of {product || an artisanal coffee brand}, presented as {format || a standing kraft pouch}, with a crisp accurately-printed label wrapping the form, 85mm lens at f/8 with deep focus, soft studio lighting with a subtle highlight and grounded contact shadow, centered hero composition on a clean seamless background, premium retail mood with true-to-life color, sharp legible label artwork and realistic material finish",
@@ -696,7 +696,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Premium cosmetic hero shot.",
     group: "Product & Commerce",
     data: {
-      provider: "nano-banana-pro",
+      provider: "nano-banana-2-1",
       aspectRatio: "4:5",
       prompt:
         "luxury beauty product hero shot of {product || a frosted-glass serum bottle with a gold dropper}, 100mm macro lens at f/8 with crisp focus, dramatic single-source key light with a soft gradient falloff and a bright specular edge, fresh water droplets beading on the surface, centered low hero angle on a premium glossy reflective surface, elegant high-end mood with a refined jewel-toned palette, immaculate detail and luminous reflections",
@@ -870,7 +870,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Cinematic key art, title + tagline.",
     group: "Print & Posters",
     data: {
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2-5-sunburst",
       aspectRatio: "2:3",
       prompt:
         "theatrical movie poster for '{TITLE}', cinematic key art in a {genre || gritty sci-fi thriller} mood, dramatic vertical hero composition with a commanding central figure, moody atmospheric lighting with strong rim light and volumetric haze, rich filmic teal-and-amber color grade, bold title treatment along the bottom with a short tagline above it and a small billing-block strip, premium high-detail finish, legible correctly-spelled text",
@@ -898,7 +898,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Genre cover, title + author.",
     group: "Print & Posters",
     data: {
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2-5-sunburst",
       aspectRatio: "2:3",
       prompt:
         "professional book cover for '{TITLE}' by {AUTHOR}, evocative {genre || literary thriller} mood and symbolic central imagery, vertical composition with a strong focal point, bold title typography across the top and the author name along the bottom with clear hierarchy, atmospheric lighting and a cohesive genre-appropriate color palette, refined bookstore-quality finish, legible correctly-spelled text",
@@ -956,7 +956,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Cel-shaded anime look.",
     group: "Illustration & Art Styles",
     data: {
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2",
       aspectRatio: "16:9",
       style: "anime",
       prompt: "{scene or subject || a girl watching fireworks over a summer festival}, cel-shaded with crisp linework, expressive eyes, soft gradient sky, gentle bloom",
@@ -969,7 +969,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Inked panel with action.",
     group: "Illustration & Art Styles",
     data: {
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2",
       aspectRatio: "4:3",
       style: "comic-book",
       prompt: "{scene || a caped hero landing on a rooftop at dusk}, dynamic comic panel composition, bold ink outlines, motion lines, clear space for a speech bubble",
@@ -982,7 +982,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Screentone black-and-white.",
     group: "Illustration & Art Styles",
     data: {
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2",
       aspectRatio: "3:4",
       style: "manga",
       prompt: "{scene || a swordsman bracing against the wind}, black-and-white manga panel, crisp inking, screentone shading, dramatic low angle, speed lines",
@@ -1034,7 +1034,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "3/4 axonometric scene.",
     group: "Illustration & Art Styles",
     data: {
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2",
       aspectRatio: "1:1",
       style: "isometric",
       prompt: "isometric {building or scene || a cozy corner coffee shop}, true 3/4 axonometric angle, clean miniature game-art forms, soft even lighting, tidy modular detail",
@@ -1047,7 +1047,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Retro low-res pixel grid.",
     group: "Illustration & Art Styles",
     data: {
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2",
       aspectRatio: "1:1",
       style: "pixel-art",
       prompt: "{subject || a hero exploring a torch-lit dungeon}, retro 16-bit pixel art, crisp pixel grid, limited dithered palette, hard-edged sprite detail",
@@ -1060,7 +1060,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Polished CG character look.",
     group: "Illustration & Art Styles",
     data: {
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2",
       aspectRatio: "1:1",
       style: "pixar-3d",
       prompt: "{character or subject || a curious round-cheeked kid with big expressive eyes}, polished 3D animated render, soft subsurface skin, warm key light with gentle bounce, charming appeal",
@@ -1086,7 +1086,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Bold linework, isolated.",
     group: "Illustration & Art Styles",
     data: {
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2-5-sunburst",
       aspectRatio: "2:3",
       prompt:
         "tattoo flash design of {subject || a roaring tiger with peony flowers} in {tattoo style || bold American traditional} style, confident clean linework with strong outlines, limited tattoo-ink palette, solid black fills and tasteful negative space, single centered motif isolated on a plain white sheet",
@@ -1099,7 +1099,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Painterly pre-production art.",
     group: "Illustration & Art Styles",
     data: {
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2",
       aspectRatio: "16:9",
       style: "concept-art",
       prompt: "concept art of {environment or subject || ancient ruins reclaimed by a glowing jungle}, sweeping sense of scale, atmospheric depth and haze, dramatic god-ray light",
@@ -1116,7 +1116,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Plasticine stop-motion look, thumbprints included.",
     group: "Handmade & Stop-Motion",
     data: {
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2",
       aspectRatio: "16:9",
       prompt:
         "{scene || a tiny clay fisherman rowing across a stormy plasticine sea}, tactile stop-motion claymation scene — real plasticine clay characters and set with visible thumbprints, tool marks, seam lines and a soft matte sheen, miniature studio photography with shallow depth of field and warm practical lighting, handmade Aardman-quality charm. NOT digital CG, NOT a 3D render, NOT 2D illustration — a physically sculpted miniature scene photographed on a real stop-motion stage",
@@ -1130,7 +1130,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Fuzzy felted-wool miniature.",
     group: "Handmade & Stop-Motion",
     data: {
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2",
       aspectRatio: "1:1",
       prompt:
         "{subject || a round little fox curled in a mossy nest}, needle-felted wool sculpture — soft wool roving with visible fluffy fibers and a halo of stray strands, glass-bead eyes with a tiny sheen, embroidered nose and stitched details, handcrafted miniature photographed in a cozy diorama with soft window light, Laika-quality handmade charm. NOT digital CG, NOT a 3D render, NOT 2D illustration — real felted wool photographed up close",
@@ -1144,7 +1144,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Stitched-sock character on stage.",
     group: "Handmade & Stop-Motion",
     data: {
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2",
       aspectRatio: "4:3",
       prompt:
         "{character || a cheerful sock-puppet chef holding a tiny wooden spoon}, handmade sock puppet — thick cotton knit texture, stitched felt mouth, ping-pong-ball eyes with painted pupils, yarn hair, visible seams and hot-glue details, puppet-studio photography with soft even lighting and a simple stage backdrop, Henson-style handmade charm. NOT digital CG, NOT a 3D render, NOT 2D illustration — a real fabric puppet photographed on a puppet stage",
@@ -1158,7 +1158,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Cut-cardboard craft set, tape & paint.",
     group: "Handmade & Stop-Motion",
     data: {
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2",
       aspectRatio: "16:9",
       prompt:
         "{scene || a rocket launching over a tiny cardboard city}, handmade cardboard-craft diorama — corrugated cardboard structures with visible cut edges, masking tape, hot-glue joints and hand-painted acrylic surfaces, hand-lettered signs, miniature set photography with warm practical lighting and gentle depth of field, Michel Gondry handmade-prop charm. NOT digital CG, NOT a 3D render, NOT 2D illustration — a real cardboard miniature set photographed in studio",
@@ -1172,7 +1172,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Hand-stitched thread on hooped linen.",
     group: "Handmade & Stop-Motion",
     data: {
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2",
       aspectRatio: "1:1",
       prompt:
         "{subject || a songbird on a blossoming branch} rendered as fine hand embroidery — visible individual thread stitches, satin-stitch fills and chain-stitch outlines, subtle thread sheen, slight fabric pucker around dense stitching, hooped natural linen background with a few loose thread tails, soft daylight craft photography, artisan needlework quality. NOT digital CG, NOT a 3D render, NOT 2D illustration, NOT a print — real stitched thread on real fabric",
@@ -1186,7 +1186,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Plasticine dish styled as a commercial.",
     group: "Handmade & Stop-Motion",
     data: {
-      provider: "nano-banana-pro",
+      provider: "nano-banana-2-1",
       aspectRatio: "4:5",
       prompt:
         "{dish || a steaming bowl of ramen with a soft egg and curled noodles} sculpted entirely from plasticine modeling clay and styled as a glossy food commercial — visible sculpting tool marks, clear gloss varnish standing in for broth sheen, wool-tuft steam, clay ingredients with charming hand-modeled imperfection, miniature studio food-commercial lighting with a warm appetizing key, Aardman-quality handmade charm. NOT real food photography, NOT digital CG, NOT a 3D render, NOT 2D illustration — a physically sculpted clay dish photographed like a commercial",
@@ -1244,7 +1244,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Single cohesive aesthetic tile.",
     group: "Film & Storyboard",
     data: {
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2",
       aspectRatio: "1:1",
       prompt:
         "single cohesive mood-board tile capturing {aesthetic or theme || warm Scandinavian minimalism}, one unified evocative image — not a collage or grid, soft natural lighting with gentle texture and tactile materials, balanced editorial composition, restrained {color palette || muted oat, sage and terracotta} grade, calm atmospheric mood, crisp tasteful detail",
@@ -1302,7 +1302,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Bright, inviting listing shot.",
     group: "Architecture & Interiors",
     data: {
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2",
       aspectRatio: "16:9",
       prompt:
         "professional real estate photograph of {property || a bright open-concept living room with patio doors}, wide-angle architectural lens with straight true verticals and corrected perspective, bright airy natural daylight balanced with warm interior fill for a high-dynamic-range look, clean tasteful staging with uncluttered surfaces, welcoming aspirational mood with a fresh neutral palette, accurate geometry and crisp listing-ready detail",
@@ -1332,7 +1332,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Glossy RPG inventory icon.",
     group: "Icons, Game Assets & Textures",
     data: {
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2",
       aspectRatio: "1:1",
       prompt:
         "polished RPG inventory game icon of {item || a glowing enchanted health potion in a crystal vial}, rounded glossy 3D style with smooth beveled edges and a subtle inner glow, soft studio key light with a bright specular highlight and a faint magical rim, single object perfectly centered with generous margins, isolated on a clean dark gradient background, vibrant saturated game-art palette, crisp readable silhouette at small sizes",
@@ -1345,7 +1345,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Tileable PBR-style material.",
     group: "Icons, Game Assets & Textures",
     data: {
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2",
       aspectRatio: "1:1",
       prompt:
         "seamless tileable PBR-style surface texture of {material || weathered mossy cobblestone}, perfectly repeating with no visible seams, dead-flat top-down orthographic view, even diffuse flat lighting across the whole frame with no shadows or hotspots, edges that wrap cleanly when tiled, fine high-resolution material detail, true-to-life color, crisp uniform grain",
@@ -1371,7 +1371,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Glossy 3D emoji variations.",
     group: "Icons, Game Assets & Textures",
     data: {
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2",
       aspectRatio: "1:1",
       prompt:
         "a set of glossy 3D emoji-style reaction icons of {subject || a round smiling yellow face}, several distinct expressions arranged in an even grid — happy, laughing, surprised, sad, angry, love — strictly consistent style, shading, and proportions across every icon with only the expression changing, smooth rounded inflatable forms with a candy-gloss finish, soft even studio lighting identical on each icon with a bright specular highlight, evenly spaced on a clean plain background, vibrant saturated palette, crisp and instantly readable at small sizes",
@@ -1384,7 +1384,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Game-ready pixel sprite.",
     group: "Icons, Game Assets & Textures",
     data: {
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2",
       aspectRatio: "1:1",
       style: "pixel-art",
       prompt: "game-ready sprite of {character or item || a plucky knight with a tiny sword}, crisp clean pixels, bold readable silhouette, limited palette, centered on a plain background",
@@ -1399,7 +1399,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Backlit subject, dramatic sky.",
     group: "Photography & Cinematic",
     data: {
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2",
       aspectRatio: "16:9",
       prompt:
         "dramatic silhouette of {subject || a lone figure on a hilltop with arms outstretched}, 50mm lens at f/8 with crisp deep focus, subject fully backlit against a vivid sunset sky and rendered as a clean dark shape with a glowing rim, low-angle composition with the figure off-center on the horizon, bold high-contrast mood in a fiery orange-to-purple gradient, smooth graded sky, minimal interior detail and clean recognizable outline",
@@ -1427,7 +1427,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Fake-miniature selective blur.",
     group: "Photography & Cinematic",
     data: {
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2",
       aspectRatio: "16:9",
       prompt:
         "tilt-shift miniature photograph of {scene || a bustling city intersection with tiny cars and crowds}, tilt-shift lens with a narrow band of sharp focus and strong blur above and below, high elevated bird's-eye angle, tiny people and vehicles reading like toys, centered subject band, playful diorama mood with punchy high saturation and crisp clean detail in the focus zone",
@@ -1443,7 +1443,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Objects arranged at 90°.",
     group: "Product & Commerce",
     data: {
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2",
       aspectRatio: "1:1",
       prompt:
         "knolling flat-lay photograph of {items || an everyday-carry kit — knife, pen, watch, wallet and keys}, every object precisely aligned at ninety-degree right angles and evenly spaced in a tidy grid, 35mm lens at f/8 with even edge-to-edge focus, perfect top-down ninety-degree angle, soft diffused overhead light with gentle even shadows, organized symmetrical composition with consistent gaps, satisfying orderly editorial mood with a clean palette on a smooth neutral surface, crisp product detail",
@@ -1457,7 +1457,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Invisible-mannequin clothing shot.",
     group: "Product & Commerce",
     data: {
-      provider: "nano-banana-pro",
+      provider: "nano-banana-2-1",
       aspectRatio: "4:5",
       prompt:
         "ghost-mannequin apparel photograph of {garment || a tailored wool blazer}, invisible-mannequin hollow three-dimensional effect with the garment holding its worn shape and a visible hollow neckline and cuffs, 85mm lens at f/8 with deep focus, soft even studio lighting from large diffusers with a subtle grounding shadow, centered front-facing composition on a clean pure-white background, crisp commercial e-commerce mood with true-to-life color, accurate fabric texture and sharp seams",
@@ -1479,14 +1479,14 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     name: "Vaporwave",
     description: "80s neon pastel aesthetic.",
     group: "Illustration & Art Styles",
-    data: { provider: "nano-banana-pro", aspectRatio: "16:9", style: "vaporwave", prompt: "{subject || a marble bust beside a glowing palm tree}, neon pink-and-cyan glow, retro grid horizon, dreamy gradient sunset, subtle VHS haze", negativePrompt: "muted colors, photorealistic, dull, lowres, watermark, text" },
+    data: { provider: "gpt-image-2", aspectRatio: "16:9", style: "vaporwave", prompt: "{subject || a marble bust beside a glowing palm tree}, neon pink-and-cyan glow, retro grid horizon, dreamy gradient sunset, subtle VHS haze", negativePrompt: "muted colors, photorealistic, dull, lowres, watermark, text" },
   },
   {
     id: "generate-image/cyberpunk-scene",
     name: "Cyberpunk Scene",
     description: "Neon-lit dystopian night.",
     group: "Illustration & Art Styles",
-    data: { provider: "nano-banana-pro", aspectRatio: "16:9", style: "cyberpunk", prompt: "{scene || a crowded neon market street}, rain-slicked night with glowing reflections, holographic signage, dense atmospheric haze, moody teal-and-magenta glow", negativePrompt: "daylight, flat lighting, washed out, lowres, deformed, watermark, text" },
+    data: { provider: "gpt-image-2", aspectRatio: "16:9", style: "cyberpunk", prompt: "{scene || a crowded neon market street}, rain-slicked night with glowing reflections, holographic signage, dense atmospheric haze, moody teal-and-magenta glow", negativePrompt: "daylight, flat lighting, washed out, lowres, deformed, watermark, text" },
   },
   {
     id: "generate-image/pop-art",
@@ -1500,21 +1500,21 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     name: "Low Poly",
     description: "Faceted geometric 3D.",
     group: "Illustration & Art Styles",
-    data: { provider: "nano-banana-pro", aspectRatio: "1:1", style: "low-poly", prompt: "{subject || a stylized mountain fox}, faceted triangular geometry, crisp flat-shaded polygons, clean gradient color blocking, soft studio light", negativePrompt: "smooth surfaces, rounded organic detail, photorealistic, lowres, watermark, text" },
+    data: { provider: "gpt-image-2", aspectRatio: "1:1", style: "low-poly", prompt: "{subject || a stylized mountain fox}, faceted triangular geometry, crisp flat-shaded polygons, clean gradient color blocking, soft studio light", negativePrompt: "smooth surfaces, rounded organic detail, photorealistic, lowres, watermark, text" },
   },
   {
     id: "generate-image/paper-cut",
     name: "Paper Cut",
     description: "Layered cut-paper craft.",
     group: "Illustration & Art Styles",
-    data: { provider: "nano-banana-pro", aspectRatio: "1:1", style: "paper-cutout", prompt: "{subject || a fox in a layered forest}, layered cut-paper craft, stacked depth with soft drop shadows between layers, clean torn-and-cut edges, warm tactile palette", negativePrompt: "photorealistic, flat single-layer, smooth gradients, lowres, watermark, text" },
+    data: { provider: "gpt-image-2", aspectRatio: "1:1", style: "paper-cutout", prompt: "{subject || a fox in a layered forest}, layered cut-paper craft, stacked depth with soft drop shadows between layers, clean torn-and-cut edges, warm tactile palette", negativePrompt: "photorealistic, flat single-layer, smooth gradients, lowres, watermark, text" },
   },
   {
     id: "generate-image/stained-glass",
     name: "Stained Glass",
     description: "Leaded colored-glass mosaic.",
     group: "Illustration & Art Styles",
-    data: { provider: "nano-banana-pro", aspectRatio: "2:3", style: "stained-glass", prompt: "{subject || a phoenix rising in flames}, bold black leading lines between glowing colored glass panes, luminous backlit jewel tones, symmetrical mosaic composition", negativePrompt: "photorealistic, flat, muddy colors, broken composition, lowres, watermark, text" },
+    data: { provider: "gpt-image-2-5-sunburst", aspectRatio: "2:3", style: "stained-glass", prompt: "{subject || a phoenix rising in flames}, bold black leading lines between glowing colored glass panes, luminous backlit jewel tones, symmetrical mosaic composition", negativePrompt: "photorealistic, flat, muddy colors, broken composition, lowres, watermark, text" },
   },
 
   // ── Diagrams & Infographics ──────────────────────────────────────────────
@@ -1565,7 +1565,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     name: "X-Ray / See-Through",
     description: "Internal-structure radiograph look.",
     group: "Illustration & Art Styles",
-    data: { provider: "nano-banana-pro", aspectRatio: "4:3", prompt: "x-ray see-through render of {subject || a blooming flower}, translucent body revealing the internal structure and skeleton beneath, glowing luminous white-and-cyan lines on a deep black background, crisp radiograph aesthetic, centered specimen composition", negativePrompt: "opaque solid surface, full color, photorealistic skin, cluttered background, lowres, watermark, text" },
+    data: { provider: "gpt-image-2", aspectRatio: "4:3", prompt: "x-ray see-through render of {subject || a blooming flower}, translucent body revealing the internal structure and skeleton beneath, glowing luminous white-and-cyan lines on a deep black background, crisp radiograph aesthetic, centered specimen composition", negativePrompt: "opaque solid surface, full color, photorealistic skin, cluttered background, lowres, watermark, text" },
   },
 
   // ── More Icons, Game Assets & Textures ───────────────────────────────────
@@ -1574,7 +1574,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     name: "3D Icon",
     description: "Glossy single 3D-rendered icon.",
     group: "Icons, Game Assets & Textures",
-    data: { provider: "nano-banana-pro", aspectRatio: "1:1", prompt: "a single glossy 3D rendered icon of {subject || a friendly chat bubble}, smooth rounded clay-like form with soft beveled edges, soft studio key light with a gentle gradient falloff, a bright specular highlight and a soft contact shadow, perfectly centered with generous padding, isolated on a clean plain background, vibrant cohesive palette, crisp and readable at small sizes", negativePrompt: "flat, 2d, multiple objects, cluttered background, harsh shadows, photographic scene, lowres, watermark, text" },
+    data: { provider: "gpt-image-2", aspectRatio: "1:1", prompt: "a single glossy 3D rendered icon of {subject || a friendly chat bubble}, smooth rounded clay-like form with soft beveled edges, soft studio key light with a gentle gradient falloff, a bright specular highlight and a soft contact shadow, perfectly centered with generous padding, isolated on a clean plain background, vibrant cohesive palette, crisp and readable at small sizes", negativePrompt: "flat, 2d, multiple objects, cluttered background, harsh shadows, photographic scene, lowres, watermark, text" },
   },
 
   // ── More Architecture & Interiors ────────────────────────────────────────
@@ -1595,7 +1595,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
 
   // ── Portrait Transformations (identity-locked, from a connected reference photo) ──
   // Like Stylized Subject, these are TRANSFORM presets: connect a clean front-facing
-  // reference portrait and nano-banana-pro rebuilds it. The "Timeless Soul" age
+  // reference portrait and GPT Image 2 rebuilds it. The "Timeless Soul" age
   // progression renders ONE person at several ages in a single studio composite — the
   // whole effect rides on the identity-lock clause (same eyes/brow/nose/ears/bone
   // structure), so it stays one person aging rather than several different people.
@@ -1605,7 +1605,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "One person at 5 ages, studio line-up. Needs a reference photo.",
     group: "Portrait Transformations",
     data: {
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2",
       aspectRatio: "3:4",
       promptPrefix:
         "Single photorealistic studio composite of the SAME person from the reference image at five stages of life, shoulder-to-shoulder left to right in a smooth age progression: a child around 7, a teen around 15, a young adult around 27, a mature adult around 45, and an elder around 70. Editorial portrait photography, 85mm lens at f/2.8, each figure framed chest-up, all facing camera with the same calm expression. CRITICAL identity lock — same eyes, eye color, brow, nose, ears, jawline and facial bone structure across every figure, unmistakably the same person; age ONLY via skin texture, fine lines and wrinkles, hairline, hair color (darker in youth, greying with age), and a slight shift in facial fullness. Age-appropriate wardrobe per stage. Even soft cinematic studio key with gentle rim separation, clean dark-grey gradient seamless backdrop, refined neutral grade, natural skin tones, tack-sharp facial detail; the five figures fill the frame.",
@@ -1619,7 +1619,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Same person at 3 ages (~10 / 40 / 75). Needs a reference photo.",
     group: "Portrait Transformations",
     data: {
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2",
       aspectRatio: "3:4",
       promptPrefix:
         "Single photorealistic studio composite of the SAME person from the reference image as a three-age triptych, shoulder-to-shoulder left to right: around age 10, around age 40, and around age 75. Editorial portrait photography, 85mm lens at f/2.8, each figure framed chest-up, facing camera with the same calm expression. CRITICAL identity lock — same eyes, eye color, brow, nose, ears, jawline and facial bone structure across all three, unmistakably the same person; age ONLY via skin texture, fine lines, hairline, hair color (darker in youth, greying with age), and a slight shift in facial fullness. Age-appropriate clothing per stage. Even soft cinematic studio key light with gentle rim separation, clean dark-grey gradient seamless backdrop, refined neutral grade, natural skin tones, tack-sharp facial detail; the three figures fill the frame.",
@@ -1633,7 +1633,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Monochrome age line-up. Needs a reference photo.",
     group: "Portrait Transformations",
     data: {
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2",
       aspectRatio: "3:4",
       promptPrefix:
         "Single black-and-white photorealistic studio composite of the SAME person from the reference image rendered at five stages of life, shoulder-to-shoulder left to right in a smooth age progression: around 7, 15, 27, 45, and 70. Fine-art monochrome portraiture, 85mm lens at f/2.8, chest-up framing, all facing camera with the same calm expression. CRITICAL identity lock — same eyes, brow, nose, ears, jawline and facial bone structure across every figure, unmistakably the same person; age ONLY via skin texture, fine lines, hairline, greying hair, and a slight shift in facial fullness. Age-appropriate clothing per stage. Even soft studio key light with gentle rim separation, clean dark-grey gradient backdrop. Deep tonal range from rich blacks to clean highlights, fine silver-gelatin film grain, tack-sharp facial detail; the five figures fill the frame.",
@@ -1647,7 +1647,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Same person across the '80s–2020s. Needs a reference photo.",
     group: "Portrait Transformations",
     data: {
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2",
       aspectRatio: "3:4",
       promptPrefix:
         "Single photorealistic studio composite of the SAME person from the reference image across five decades, shoulder-to-shoulder left to right with a smooth age progression and period-accurate styling: a 1980s child, a 1990s teen, a 2000s young adult, a 2010s adult, and a 2020s mature adult. Editorial portrait photography, 85mm lens at f/2.8, chest-up framing, all facing camera with the same calm expression. CRITICAL identity lock — same eyes, eye color, brow, nose, ears, jawline and facial bone structure across every figure, unmistakably the same person; age ONLY via skin texture, fine lines, hairline, hair color, and a slight shift in facial fullness. Style each to its decade in hair and wardrobe with a subtle period-accurate film treatment per decade: 1980s bold colors and big hair, 1990s casual grunge, 2000s frosted tips, 2010s clean modern, 2020s contemporary. Even soft studio key with gentle rim separation, clean dark-grey gradient seamless backdrop, natural skin tones, tack-sharp facial detail; the five figures fill the frame.",
@@ -1661,7 +1661,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Same person in spring / summer / autumn / winter. Needs a reference photo.",
     group: "Portrait Transformations",
     data: {
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2",
       aspectRatio: "3:4",
       promptPrefix:
         "Single photorealistic studio composite of the SAME person from the reference image in four seasonal looks, shoulder-to-shoulder left to right: spring, summer, autumn, and winter. Editorial portrait photography, 85mm lens at f/2.8, chest-up framing, all facing camera with the same calm expression, all at the SAME age as the reference — this is seasons, not aging. CRITICAL identity lock — same eyes, eye color, brow, nose, ears, jawline and facial bone structure across all four figures, unmistakably the same person; ONLY wardrobe, hair styling and a subtle seasonal color grade change. Spring: light pastel layers, fresh airy tone. Summer: light tee, warm sunny tone. Autumn: knit sweater, golden amber tone. Winter: coat and scarf, cool crisp tone. Even soft studio key light with a gentle seasonal color cast and rim separation per figure, clean dark-grey gradient seamless backdrop, natural skin tones, tack-sharp facial detail; the four figures fill the frame.",
@@ -1675,7 +1675,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "Same person at dawn / midday / golden hour / night. Needs a reference photo.",
     group: "Portrait Transformations",
     data: {
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2",
       aspectRatio: "3:4",
       promptPrefix:
         "Single photorealistic composite of the SAME person from the reference image across four times of day, shoulder-to-shoulder left to right: dawn, midday, golden hour, and night. Editorial portrait photography, 85mm lens at f/2.8, chest-up framing, all facing camera with the same calm expression, all at the SAME age as the reference. CRITICAL identity lock — same eyes, eye color, brow, nose, ears, jawline and facial bone structure across all four figures, unmistakably the same person; ONLY the lighting and color temperature change between figures. Dawn: soft cool blue light. Midday: bright neutral daylight. Golden hour: warm amber backlight with a gentle glow. Night: moody low light with a cool rim. Consistent chest-up framing and a clean dark-grey gradient seamless backdrop, natural skin tones, tack-sharp facial detail; the four figures fill the frame.",
@@ -1689,7 +1689,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
     description: "You in an oversized team jersey, studio editorial. Needs a reference photo.",
     group: "Portrait Transformations",
     data: {
-      provider: "nano-banana-pro",
+      provider: "nano-banana-2-1",
       aspectRatio: "4:5",
       prompt:
         "Premium studio editorial portrait of the SAME person from the reference image wearing an oversized modern football jersey in the colors of {team || deep crimson and gold}. Sports-fashion editorial photography, 85mm lens at f/2, shallow depth of field with the subject tack-sharp against a softly blurred background. CRITICAL identity lock — same eyes, brow, nose, ears, jawline and facial bone structure, unmistakably the same person, exact skin tone preserved. Soft directional stadium-spotlight key with natural shadow depth and a subtle rim; gradient backdrop in the jersey colors with a faint geometric pattern and soft pitch markings; gentle atmospheric haze and light film grain. Confident, relaxed three-quarter pose, rich saturated grade. Crisp fabric weave and clean jersey graphics.",
@@ -1699,7 +1699,7 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
   },
   // ── Stylized Subject + Edits (shared with the deprecating modify-image) ──
   // Transform patterns — work here when a reference image is connected
-  // (nano-banana-pro edits it while preserving untouched regions). The
+  // (GPT Image 2.5 Flare edits it while preserving untouched regions). The
   // instruction lives in the prompt, not `style`.
   ...stylizedSubjectFor("generate-image"),
   ...editsFor("generate-image"),

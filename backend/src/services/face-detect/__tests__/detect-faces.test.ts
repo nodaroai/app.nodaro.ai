@@ -122,13 +122,27 @@ vi.mock("../../../lib/storage.js", () => ({
 
 import { detectFaces, FaceDetectRequestError, FaceDetectCapError } from "../detect-faces.js"
 import { FaceDetectorUnavailableError } from "../yunet-model.js"
-import { FACE_DETECT_MAX_FRAMES_PER_CALL, faceDetectPeakMemoryMiB, faceDetectTimeoutMs } from "../face-detect-budget.js"
+import {
+  FACE_DESCRIPTOR_MAX_PER_FRAME,
+  FACE_DETECT_MAX_FRAMES_PER_CALL,
+  faceDetectPeakMemoryMiB,
+  faceDetectTimeoutMs,
+} from "../face-detect-budget.js"
+import { FACE_DESCRIPTOR_VERSION } from "../face-descriptor.js"
 import { DeterministicJobError } from "../../../lib/deterministic-job-error.js"
 import type { ProxySpanMap } from "../../media-proxy-span-map.js"
 
 const URL_OK = "https://media.example/proxies/abc/video-v2@2fps-540p.mp4"
 const MAP: ProxySpanMap = [{ proxyStartMs: 0, proxyEndMs: 600_000, sourceStartMs: 0, firstFrame: 0, frameCount: 1200 }]
-const base = { proxyUrl: URL_OK, fps: 2, spanMap: MAP, fromFrame: 0, toFrame: 4, minScore: 0.7 }
+const base: {
+  proxyUrl: string
+  fps: number
+  spanMap: ProxySpanMap
+  fromFrame: number
+  toFrame: number
+  minScore: number
+  descriptorFrames?: number[]
+} = { proxyUrl: URL_OK, fps: 2, spanMap: MAP, fromFrame: 0, toFrame: 4, minScore: 0.7 }
 
 beforeEach(() => {
   fx.slots = []
@@ -153,6 +167,10 @@ describe("detectFaces refuses before it reserves anything", () => {
     ["a bad fps", { fps: 0 }],
     ["a score outside (0, 1]", { minScore: 0 }],
     ["an empty span map", { spanMap: [] }],
+    ["a descriptor frame outside the window", { descriptorFrames: [4] }],
+    ["a descriptor frame before the window", { fromFrame: 1, descriptorFrames: [0] }],
+    ["a non-integer descriptor frame", { descriptorFrames: [1.5] }],
+    ["descriptor frames that are not a list", { descriptorFrames: 2 as unknown as number[] }],
   ]
   for (const [what, patch] of refusals) {
     it(what, async () => {
@@ -240,5 +258,46 @@ describe("detectFaces respects the speaker-track caps (P3.1)", () => {
     const result = await detectFaces(base)
     expect(result.boxCount).toBe(12)
     expect(result.frames.every((f) => f.boxes.length === 3)).toBe(true)
+  })
+})
+
+describe("the job-only face descriptor (P3.2b round 3)", () => {
+  it("is absent unless asked for: an old caller sees exactly what it saw before", async () => {
+    const result = await detectFaces(base)
+    expect(result.frames.flatMap((f) => f.boxes).every((b) => !("descriptor" in b))).toBe(true)
+    expect(fx.slots[0]!.timeoutMs).toBe(faceDetectTimeoutMs(4))
+  })
+
+  it("rides only on the boxes of the frames the caller names", async () => {
+    fx.facesPerFrame = 2
+    const result = await detectFaces({ ...base, descriptorFrames: [0, 3] })
+    for (const f of result.frames) {
+      for (const b of f.boxes) {
+        if (f.frame === 0 || f.frame === 3) {
+          expect(b.descriptor?.version).toBe(FACE_DESCRIPTOR_VERSION)
+          expect(Buffer.from(b.descriptor!.luma, "base64")).toHaveLength(64)
+          expect(Buffer.from(b.descriptor!.hist, "base64")).toHaveLength(128)
+        } else {
+          expect(b.descriptor).toBeUndefined()
+        }
+      }
+    }
+  })
+
+  it("the hold's limit grows by the descriptor term for each named frame the window holds", async () => {
+    await detectFaces({ ...base, descriptorFrames: [0, 1, 1, 3] })
+    // Three distinct frames: a repeat is described once and charged once.
+    expect(fx.slots[0]!.timeoutMs).toBe(faceDetectTimeoutMs(4, 3))
+    expect(faceDetectTimeoutMs(4, 3)).toBeGreaterThan(faceDetectTimeoutMs(4))
+  })
+
+  it(`describes at most ${FACE_DESCRIPTOR_MAX_PER_FRAME} boxes of a frame, the highest-scoring first (the term's bound)`, async () => {
+    fx.facesPerFrame = FACE_DESCRIPTOR_MAX_PER_FRAME + 5
+    const result = await detectFaces({ ...base, toFrame: 1, descriptorFrames: [0] })
+    const boxes = result.frames[0]!.boxes
+    expect(boxes).toHaveLength(FACE_DESCRIPTOR_MAX_PER_FRAME + 5)
+    expect(boxes.filter((b) => b.descriptor).length).toBe(FACE_DESCRIPTOR_MAX_PER_FRAME)
+    // Boxes come highest score first; the described ones are a prefix.
+    expect(boxes.slice(0, FACE_DESCRIPTOR_MAX_PER_FRAME).every((b) => b.descriptor)).toBe(true)
   })
 })

@@ -43,7 +43,7 @@ Every refine acts on the **realized board** (the image you actually got back) an
 |-------|------|---------|-------------|
 | Source | select | `image` | `entity` (use a connected Character / Location / Object) or `image` (use attached reference images). |
 | Board template | select | `character/full-board` | The board structure to generate; seeds the prompt. Templates are grouped by entity kind (character / location / object). |
-| Provider | select | `nano-banana-pro` | Image model — `nano-banana-pro`, `gpt-image-2`, `gpt-image-2-5-flare` or `gpt-image-2-5-sunburst`. All handle the board's in-image labels and palette text. |
+| Provider | select | `gpt-image-2-5-sunburst` | Image model — `gpt-image-2`, `gpt-image-2-5-flare`, `gpt-image-2-5-sunburst` or `nano-banana-pro`. With no model set the board uses `gpt-image-2`, or `gpt-image-2-5-sunburst` at a ratio GPT Image 2 can't draw (such as the default 2:3). All handle the board's in-image labels and palette text. |
 | Prompt | text | seeded | Prefilled from the board template; fully editable. |
 | Negative prompt | text | — | Things to avoid. |
 | Reference images | image[] | — | Subject and/or style references (used at generation and in refine passes). |

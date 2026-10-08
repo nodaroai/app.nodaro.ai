@@ -121,7 +121,7 @@ import { DeterministicJobError } from "../deterministic-job-error.js"
 import { llmCompleteStructured } from "../llm-client.js"
 import type { FastifyInstance } from "fastify"
 import type { LlmReasoningEffort } from "@nodaro/shared"
-import { ENTITY_TABLE, WORKSPACE_HEADER_LOWER, DEFAULT_SUNO_MODEL } from "@nodaro/shared"
+import { ENTITY_TABLE, WORKSPACE_HEADER_LOWER, DEFAULT_SUNO_MODEL, getLlmModel } from "@nodaro/shared"
 import type { EntityNodeKind } from "@nodaro/shared"
 import { WORKFLOW_ACCESS_COLS, loadWorkflowFor, loadStudioEditableCopySource } from "../workflow-route-access.js"
 import { writeCompatible } from "../compatible-workflow-writes.js"
@@ -1560,6 +1560,7 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       youtubeHosts: YOUTUBE_HOSTS,
     },
     llm: {
+      isKnownModel: (modelId: string) => getLlmModel(modelId) !== undefined,
       completeStructuredMetered,
       // Adapts PluginLlmRequest {model, system?, prompt, maxTokens?} to
       // lib/llm-client.ts's LlmRequest and unwraps StructuredLlmOutput<T> to

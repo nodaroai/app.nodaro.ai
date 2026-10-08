@@ -7,6 +7,8 @@ import { describe, it, expect } from "vitest"
 import { SPEAKER_TRACKS_MAX_BOXES_PER_SOURCE, SPEAKER_TRACKS_MAX_BYTES } from "@nodaro/shared"
 import { canvasPeakMemoryMiB } from "../../../providers/video/ffmpeg-memory-model.js"
 import {
+  FACE_DESCRIPTOR_MAX_PER_FRAME,
+  FACE_DETECT_DESCRIPTOR_MS_PER_FRAME,
   FACE_DETECT_MAX_FRAMES_PER_CALL,
   FACE_DETECT_ORT_INTRA_OP_THREADS,
   FACE_DETECT_SESSION_PEAK_MIB_PER_THREAD,
@@ -46,6 +48,16 @@ describe("face-detect admission figures", () => {
   it("holds a slot at most a generous multiple of the measured 13–16 ms per frame", () => {
     expect(faceDetectTimeoutMs(1200)).toBe(60_000 + 1200 * 250)
     expect(faceDetectTimeoutMs(1)).toBe(60_000 + 250)
+  })
+
+  it("describes at most 32 boxes of a frame — four times the most faces a committed tuning clip holds in one frame", () => {
+    expect(FACE_DESCRIPTOR_MAX_PER_FRAME).toBe(32)
+  })
+
+  it("charges each described frame 10 ms of hold: ~20× the measured 32 × 14–17 µs", () => {
+    expect(FACE_DETECT_DESCRIPTOR_MS_PER_FRAME).toBe(10)
+    expect(faceDetectTimeoutMs(1200, 0)).toBe(faceDetectTimeoutMs(1200))
+    expect(faceDetectTimeoutMs(1200, 8)).toBe(60_000 + 1200 * 250 + 8 * 10)
   })
 
   it("the per-call caps are the speaker-track caps", () => {

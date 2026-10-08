@@ -4,8 +4,8 @@ import type { FactoryPreset } from "./types.js"
  * Selective-stylization presets shared by `modify-image` (transform an input photo) and
  * `generate-image` (use a connected reference image). `modify-image` is slated for deprecation in
  * favor of `generate-image`, so the catalog lives in ONE place to prevent the two from drifting —
- * when `modify-image` is removed, just drop its key from `FACTORY_PRESETS` below. `nano-banana-pro`
- * is a valid provider for both nodes' enums (IMAGE_GEN_PROVIDERS and MODIFY_IMAGE_PROVIDERS).
+ * when `modify-image` is removed, just drop its key from `FACTORY_PRESETS` below. The provider is
+ * set per node by {@link editProviderFor}.
  */
 const STYLIZED_SUBJECT: ReadonlyArray<{
   readonly slug: string
@@ -18,7 +18,6 @@ const STYLIZED_SUBJECT: ReadonlyArray<{
     name: "Cartoon Person, Real World",
     description: "Subject → 3D cartoon, rest stays photoreal.",
     data: {
-      provider: "nano-banana-pro",
       promptPrefix:
         "Restyle ONLY the person in the reference image into a polished 3D animated character — Pixar/Disney sensibility: soft subsurface skin shading, expressive oversized eyes, smoothly stylized hair, clean rounded forms. Preserve their identity, exact pose, expression, and framing. Everything else stays untouched and fully photorealistic: keep the original background, props, clothing fabric and texture, and the scene's real lighting, shadows, and color grade. Composite the stylized figure into the real plate so it sits naturally — matched light direction, contact shadows, and depth.",
       negativePrompt:
@@ -30,7 +29,6 @@ const STYLIZED_SUBJECT: ReadonlyArray<{
     name: "Caricature, Real Photo",
     description: "Exaggerated cartoon head on a real scene.",
     data: {
-      provider: "nano-banana-pro",
       promptPrefix:
         "Turn ONLY the person into a playful hand-illustrated caricature: enlarge the head, exaggerate their most recognizable features, and amplify expression with bold, confident linework and clean cel-style shading — while keeping them clearly identifiable. Leave everything else exactly as shot and photorealistic: the body proportions below the neck, the clothing, the background, props, and the scene's real lighting and shadows remain unchanged. Blend the caricature head onto the real photo seamlessly with matched lighting and a believable neckline.",
       negativePrompt:
@@ -42,7 +40,6 @@ const STYLIZED_SUBJECT: ReadonlyArray<{
     name: "Anime Person, Real Background",
     description: "Subject → 2D anime, real environment.",
     data: {
-      provider: "nano-banana-pro",
       promptPrefix:
         "Restyle ONLY the person as a crisp 2D anime character — clean ink outlines, flat cel shading with sharp shadow shapes, glossy stylized hair, and expressive anime eyes — while preserving their identity, pose, expression, and framing. Keep the real-world background, environment, props, and the original photographic lighting, shadows, and color completely untouched and photorealistic. Integrate the 2D figure into the live-action plate so the light direction and contact shadows read naturally.",
       negativePrompt:
@@ -54,7 +51,6 @@ const STYLIZED_SUBJECT: ReadonlyArray<{
     name: "Real Person, Cartoon World",
     description: "Inverse — real subject, stylized world.",
     data: {
-      provider: "nano-banana-pro",
       promptPrefix:
         "Inverse stylization: keep the PERSON completely photorealistic and unchanged — real skin, hair, clothing, identity, pose, and framing all preserved exactly. Restyle ONLY the surrounding world into a vibrant, hand-crafted cartoon environment: simplified painterly shapes, bold saturated colors, soft graphic shading, and whimsical stylized props and scenery. Light the real person to match the cartoon world's color and direction so they sit convincingly inside it, with believable contact shadows.",
       negativePrompt:
@@ -66,7 +62,6 @@ const STYLIZED_SUBJECT: ReadonlyArray<{
     name: "Claymation Figure, Real Set",
     description: "Subject → clay figure, real surroundings.",
     data: {
-      provider: "nano-banana-pro",
       promptPrefix:
         "Restyle ONLY the person into a tactile stop-motion claymation figure — molded plasticine surface with visible fingerprints, tool marks, subtle seams, and a soft matte sheen, in the handmade spirit of Aardman puppets — while keeping their identity, pose, expression, and framing. Everything else stays exactly as shot and photorealistic: the real background, set, props, and the scene's natural lighting and shadows are unchanged. Seat the clay figure into the real plate with matched light direction and grounded contact shadows.",
       negativePrompt:
@@ -76,13 +71,23 @@ const STYLIZED_SUBJECT: ReadonlyArray<{
 ]
 
 /** Build the Stylized Subject presets for a node type (id = `<nodeType>/<slug>`). */
+/**
+ * Both preset families are edits of a connected photo, so they run on the platform's edit model,
+ * GPT Image 2.5 Flare (decided 2026-10-08 from the image model bake-off: it kept pose, framing and
+ * product design on every edit). Modify Image takes the i2i id; Generate Image takes the t2i id,
+ * which the platform swaps to the same i2i model whenever a reference image is connected.
+ */
+export function editProviderFor(nodeType: string): string {
+  return nodeType === "modify-image" ? "gpt-image-2-5-flare-i2i" : "gpt-image-2-5-flare"
+}
+
 export function stylizedSubjectFor(nodeType: string): FactoryPreset[] {
   return STYLIZED_SUBJECT.map((p) => ({
     id: `${nodeType}/${p.slug}`,
     name: p.name,
     description: p.description,
     group: "Stylized Subject",
-    data: p.data,
+    data: { provider: editProviderFor(nodeType), ...p.data },
   }))
 }
 
@@ -102,7 +107,6 @@ const IMAGE_EDITS: ReadonlyArray<{
     name: "Remove Background",
     description: "Cut out the subject on white.",
     data: {
-      provider: "nano-banana-pro",
       promptPrefix:
         "Cleanly cut the main subject out of the reference image and place it on a pure, solid white background. Trace a crisp, accurate edge — preserve fine detail like hair strands, fur, and translucent or wispy edges — with no leftover background pixels and no color fringing. Keep the subject itself completely unchanged: same pose, lighting, color, and full silhouette, nothing cropped.",
       negativePrompt:
@@ -114,7 +118,6 @@ const IMAGE_EDITS: ReadonlyArray<{
     name: "Replace Background",
     description: "Swap in a new scene.",
     data: {
-      provider: "nano-banana-pro",
       prompt:
         "Replace the background behind the subject with {scene || a sunlit Mediterranean terrace}. Keep the subject perfectly unchanged — identity, pose, edges, and proportions intact — and composite it into the new scene so it looks truly photographed there: relight the subject's rim and ambient tones to match the new environment, cast believable contact shadows, and match perspective, depth of field, and color grade.",
       negativePrompt:
@@ -126,7 +129,6 @@ const IMAGE_EDITS: ReadonlyArray<{
     name: "Colorize B&W Photo",
     description: "Natural color from grayscale.",
     data: {
-      provider: "nano-banana-pro",
       promptPrefix:
         "Colorize this black-and-white photograph with natural, historically plausible color. Give skin realistic, even tones, and assign believable hues to clothing, foliage, sky, and materials. Preserve every original detail, grain, contrast, and the exact composition — add color only, never invent or remove content.",
       negativePrompt:
@@ -138,7 +140,6 @@ const IMAGE_EDITS: ReadonlyArray<{
     name: "Restore Old Photo",
     description: "Repair scratches, denoise, sharpen.",
     data: {
-      provider: "nano-banana-pro",
       promptPrefix:
         "Restore this old, damaged photograph: remove scratches, dust, creases, stains, and noise, repair torn or missing areas by reconstructing what is plainly there, and gently recover sharpness and tonal detail. Keep the result authentic and true to the original — preserve identity, era, natural film grain, and composition. Repair only; do not beautify, restyle, or invent new features.",
       negativePrompt:
@@ -150,7 +151,6 @@ const IMAGE_EDITS: ReadonlyArray<{
     name: "Relight Scene",
     description: "New lighting, same subject.",
     data: {
-      provider: "nano-banana-pro",
       prompt:
         "Relight the image with {lighting style || soft golden-hour key light from the left}. Re-derive highlights, shadows, ambient fill, and color temperature consistently across the whole frame for a believable, physically plausible result. Keep the subject, pose, expression, materials, and composition completely unchanged — only the lighting changes.",
       negativePrompt:
@@ -162,7 +162,6 @@ const IMAGE_EDITS: ReadonlyArray<{
     name: "Restyle (whole image)",
     description: "Apply an art style to everything.",
     data: {
-      provider: "nano-banana-pro",
       prompt:
         "Restyle the entire image in a {art style || soft watercolor illustration} look, applying the style consistently to the subject, background, and every element. Keep the composition, subject placement, and the subject clearly recognizable — reinterpret texture, color, and rendering, not the underlying content or layout.",
       negativePrompt:
@@ -174,7 +173,6 @@ const IMAGE_EDITS: ReadonlyArray<{
     name: "Doodle Overlay",
     description: "Hand-drawn marker doodles on top — photo stays untouched.",
     data: {
-      provider: "nano-banana-pro",
       promptPrefix:
         "Layer playful hand-drawn doodles ON TOP of the reference photo while keeping every pixel of the underlying photograph completely unchanged — same people, same colors, same lighting, same crop. Doodle style: wobbly hand-drawn felt-tip marker lines in white with a few yellow accents, like quick sketches on a printed photo. Add: loose outline traces hugging one or two key shapes, small sparkles and stars, a hand-drawn thought cloud or speech bubble with a short witty handwritten phrase that reacts to what is actually happening in the photo, and simple arrows or underlines pointing at fun details. Outlines only — never fill shapes with color. Never cover faces or the main focal point; place doodles in empty areas like sky, walls or margins. Keep it balanced: four to seven doodle elements total, charming and confident, not cluttered. The photo is the hero — the doodles are the seasoning.",
       negativePrompt:
@@ -186,7 +184,6 @@ const IMAGE_EDITS: ReadonlyArray<{
     name: "Doodle Overlay · Expressive",
     description: "Looser free-form doodles — the model improvises.",
     data: {
-      provider: "nano-banana-pro",
       promptPrefix:
         "Decorate the reference photo with expressive hand-drawn doodles layered on top, keeping the underlying photograph itself completely unchanged. Free, confident hand-drawn marker linework — wobbly outlines, sparkles, squiggles, little flames or hearts where they fit the mood, and a short handwritten phrase that responds cleverly to the content of the photo (never a generic cliché). Mix of white and one or two bright accent colors. Outline style only, no filled shapes. Compose the doodles around the subject — never on top of faces or the focal point — using empty areas and edges. Loose, playful, zine-like energy: it should feel like a bored genius doodled on a printed photo. Keep the original image pixels intact beneath the doodle layer.",
       negativePrompt:
@@ -202,6 +199,6 @@ export function editsFor(nodeType: string): FactoryPreset[] {
     name: p.name,
     description: p.description,
     group: "Edits",
-    data: p.data,
+    data: { provider: editProviderFor(nodeType), ...p.data },
   }))
 }

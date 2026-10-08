@@ -375,7 +375,7 @@ describe("computeGenerateVideoProPricing — keyframes render method (seedance-2
     durations.reduce((sum, d) => sum + Math.ceil(d * NO_REF_PER_SEC), 0) +
     durations.length * 2 * ANCHOR
 
-  // ── anchor unit follows the aspect (2026-08-04: nano-banana-pro → GPT Image 2) ──
+  // ── anchor unit follows the aspect (2026-10-08: GPT Image 2 → Sunburst → nano-banana-pro) ──
 
   it("prices anchors at the GPT Image 2 2K unit for every ratio it can render", async () => {
     for (const aspectRatio of ["16:9", "9:16", "1:1", "4:3", "3:4"]) {
@@ -387,16 +387,26 @@ describe("computeGenerateVideoProPricing — keyframes render method (seedance-2
     }
   })
 
-  it("prices a 21:9 run's anchors at the nano-banana-pro fallback — GPT Image 2 cannot render it", async () => {
-    // TWIN of the plugin's `resolveAnchorModel`: 21:9 generates on
-    // nano-banana-pro, so it must RESERVE nano-banana-pro. Pricing it at the
-    // cheaper unit would under-reserve every ultra-wide keyframes run.
-    const r = await computeGenerateVideoProPricing({
-      provider: "seedance-2", resolution: "720p", durationSec: 16,
-      renderMethod: "keyframes", aspectRatio: "21:9",
-    })
-    expect(r.anchorReserve).toBe(2 * 2 * ANCHOR)
-    expect(ANCHOR).toBeGreaterThan(ANCHOR_GPT2)
+  it("prices ratios GPT Image 2 cannot render at Sunburst, and 4:5 / 5:4 at nano-banana-pro", async () => {
+    // TWIN of the plugin's `resolveAnchorModel` (2026-10-08): the first of
+    // gpt-image-2, gpt-image-2-5-sunburst, nano-banana-pro whose catalog lists
+    // the ratio. Reserving a cheaper unit than the model that draws it would
+    // under-reserve every such run.
+    const ANCHOR_SUNBURST = STATIC_CREDIT_COSTS["gpt-image-2-5-sunburst:2K"]!
+    for (const aspectRatio of ["21:9", "3:2", "2:3"]) {
+      const r = await computeGenerateVideoProPricing({
+        provider: "seedance-2", resolution: "720p", durationSec: 16,
+        renderMethod: "keyframes", aspectRatio,
+      })
+      expect(r.anchorReserve, aspectRatio).toBe(2 * 2 * ANCHOR_SUNBURST)
+    }
+    for (const aspectRatio of ["4:5", "5:4"]) {
+      const r = await computeGenerateVideoProPricing({
+        provider: "seedance-2", resolution: "720p", durationSec: 16,
+        renderMethod: "keyframes", aspectRatio,
+      })
+      expect(r.anchorReserve, aspectRatio).toBe(2 * 2 * ANCHOR)
+    }
   })
 
   it("an absent aspect reserves the FALLBACK unit — an older plugin still spends nano-banana-pro", async () => {

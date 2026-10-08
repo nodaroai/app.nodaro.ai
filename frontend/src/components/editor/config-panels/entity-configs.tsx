@@ -42,6 +42,7 @@ import { MappableField } from "./mappable-field"
 import { prefetchModelCredits, useModelCredits } from "@/ee/hooks/use-model-credits"
 import { formatCreditUnits } from "@/lib/credit-units"
 import type { ConfigProps } from "./types"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
 
 type CharacterConfigProps = ConfigProps<CharacterNodeData> & { nodeId?: string }
 
@@ -179,7 +180,7 @@ export function FaceConfig({ data, onUpdate, sources, fieldMappings, onMapField 
   useEffect(() => {
     prefetchModelCredits(IMAGE_GEN_MODEL_IDS)
   }, [])
-  const creditCost = useModelCredits(data.provider || "nano-banana")
+  const creditCost = useModelCredits(data.provider || IMAGE_MODEL_ROLE_DEFAULTS.character)
 
   const isRunning = data.executionStatus === "running"
 
@@ -277,7 +278,7 @@ export function FaceConfig({ data, onUpdate, sources, fieldMappings, onMapField 
       <div>
         <Label className="text-xs">{t("cfgext.entImageModel")}</Label>
         <ModelSearchSelect
-          value={data.provider || "nano-banana"}
+          value={data.provider || IMAGE_MODEL_ROLE_DEFAULTS.character}
           onChange={(v) => onUpdate({ provider: v })}
           options={withoutDeniedModels(IMAGE_GEN_MODELS)}
           triggerClassName="h-8 text-xs mt-1"

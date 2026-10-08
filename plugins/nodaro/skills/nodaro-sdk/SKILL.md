@@ -34,7 +34,7 @@ All generation is async. `runAndWait` submits, polls, and resolves the output:
 
 ```ts
 const img = await client.nodes.runAndWait("generate-image", {
-  prompt: "…", provider: "nano-banana-2-1",        // fast + cheap, great default
+  prompt: "…", provider: "gpt-image-2",            // the platform default
 })
 const vid = await client.nodes.runAndWait("generate-video", {
   prompt: "…", imageUrl: img.imageUrl,             // start frame → image-to-video

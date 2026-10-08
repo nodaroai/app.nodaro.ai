@@ -65,13 +65,13 @@ You can also generate sheets directly from the **Sheet** tab inside an entity's 
 
 ## Pricing
 
-Cost = **(newly-generated panels × 10 credits)** + a flat **40-credit** assembly fee. The sheet generates every missing panel with **Nano Banana** (10 credits a panel), whether it runs from the node, from an automated workflow, or from the Sheet tab in the entity's Studio. Panels that already exist in the entity's Studio are **reused for free**, whichever model made them — you only pay to generate the panels that don't exist yet, plus the one-time assembly fee. A panel you generate yourself in the Studio is charged there, at the price of the model you pick.
+Cost = **(newly-generated panels × 15 credits)** + a flat **40-credit** assembly fee. The sheet generates every missing panel with **GPT Image 2**, the platform's character model (15 credits a panel), whether it runs from the node, from an automated workflow, or from the Sheet tab in the entity's Studio. Panels that already exist in the entity's Studio are **reused for free**, whichever model made them — you only pay to generate the panels that don't exist yet, plus the one-time assembly fee. A panel you generate yourself in the Studio is charged there, at the price of the model you pick.
 
 | Scenario | Math | Credits |
 |----------|------|---------|
 | Turnaround reusing 4 angles the entity already has | `0 + 40` | **40** |
-| Turnaround missing 1 angle (the rest reused) | `1×10 + 40` | **50** |
-| 4 new angles generated | `4×10 + 40` | **80** |
+| Turnaround missing 1 angle (the rest reused) | `1×15 + 40` | **55** |
+| 4 new angles generated | `4×15 + 40` | **100** |
 
 The flat assembly fee covers layout, palette extraction, and compositing. The node's Run button shows the assembly fee; when panels need generating, the node first shows how many it will generate and the estimated total (panels plus the assembly fee) and asks you to confirm before it starts. On an edition without credits it shows the panel count only.
 

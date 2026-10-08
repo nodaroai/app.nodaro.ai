@@ -20,6 +20,7 @@ import {
 import { clampAspectRatioToModel } from "../../lib/aspect-ratio.js"
 import { entityImageRefCap } from "../../lib/entity-ref-cap.js"
 import { applyPromptPolicies } from "../../lib/prompt-policy.js"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
 
 interface EntityImageJobData {
   jobId: string
@@ -139,7 +140,7 @@ function makeEntityImageHandler(
       kind: "image",
       subjectMinor: subjectMinor === true,
     }).prompt
-    const resolvedProvider = provider ?? "nano-banana"
+    const resolvedProvider = provider ?? IMAGE_MODEL_ROLE_DEFAULTS.character
 
     if (opts?.includeAssetType) {
       console.log(`[worker] ${logPrefix} ${ctx.jobId} (type: ${assetType}, provider: ${resolvedProvider})`)

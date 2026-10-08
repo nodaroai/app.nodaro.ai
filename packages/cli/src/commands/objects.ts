@@ -282,7 +282,7 @@ export function objectsCommand(): Command {
     .option("--user-prompt <prompt>", "additional free-text prompt")
     .addOption(new Option("--category <category>", "object category").choices([...OBJECT_CATEGORIES]))
     .addOption(new Option("--style <style>", "object visual style").choices([...OBJECT_STYLES]))
-    .option("--provider <provider>", "image provider (defaults to nano-banana)")
+    .option("--provider <provider>", "image provider (defaults to gpt-image-2)")
     .option("--count <n>", "1, 2, or 4 candidate main images", "1")
     .option("--attach-to-object-id <id>", "auto-attach result to this object row (count=1 only)")
     .option("--seed-prompt-hint <hint>", "parameter-picker prompt-fragment pass-through")

@@ -18,6 +18,7 @@ import {
   OBJECT_ASSET_DESCRIPTION_LLM_OPTIONS,
   buildObjectAssetDescriptionUserMessage,
 } from "../lib/object-asset-description.js"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
 
 const assetTypeEnum = z.enum(["angles", "materials", "variations", "custom"])
 
@@ -42,7 +43,7 @@ const generateObjectAssetBody = z.object({
   // Free-text style (matches the entity save route + DB; a narrow enum would 400 inherited styles like "cinematic").
   style: z.string().max(50).optional(),
   sourceImageUrl: safeUrlSchema.optional(),
-  provider: z.string().optional().default("nano-banana"),
+  provider: z.string().optional().default(IMAGE_MODEL_ROLE_DEFAULTS.general),
   userId: z.string().uuid().optional(),
   // Object Studio auto-attach: when all three are set, the worker appends
   // `{name: attachName, url: <result>}` to the named JSONB array column on
@@ -96,7 +97,7 @@ function buildVariantPrompt(
 }
 
 export async function generateObjectAssetRoutes(app: FastifyInstance) {
-  app.post("/v1/generate-object-asset", { preHandler: creditGuard((req) => extractProvider(req.body, "nano-banana")) }, async (req, reply) => {
+  app.post("/v1/generate-object-asset", { preHandler: creditGuard((req) => extractProvider(req.body, IMAGE_MODEL_ROLE_DEFAULTS.general)) }, async (req, reply) => {
     const parsed = generateObjectAssetBody.safeParse(req.body)
     if (!parsed.success) {
       return reply.status(400).send({

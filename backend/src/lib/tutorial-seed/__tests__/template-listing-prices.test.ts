@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest"
 import { readdirSync, readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
-import { CreditsService } from "../../../ee/billing/credits.js"
-import { videoUtilityBaseCredits, videoUtilityEstimateBody } from "../../video-utility-credits.js"
+import { CreditsService, STATIC_CREDIT_COSTS } from "../../../ee/billing/credits.js"
+import { templateForPreviewStopRule } from "../preview-gate.js"
 import type { TutorialTemplateDoc } from "../types.js"
 
 /**
@@ -25,6 +25,11 @@ import type { TutorialTemplateDoc } from "../types.js"
  * without a database. A price that follows an unknown recording's length is
  * listed per minute of it (decided 2026-10-07): `estimatedCredits` holds the
  * fixed parts, `estimatedPerMinuteCredits` the per-minute parts (absent = 0).
+ *
+ * What is stored is the doc the sync writes, which follows the preview stop
+ * rule (decided 2026-10-08, `templateForPreviewStopRule`): a render set to
+ * Preview is written at Final where the rule is off, with the listing of that
+ * graph. Each state's stored figure is checked against its own graph.
  */
 const here = dirname(fileURLToPath(import.meta.url))
 const templatesDir = join(here, "..", "templates")
@@ -46,8 +51,8 @@ describe("built-in template listing prices", () => {
     expect(priced.length).toBeGreaterThan(30)
   })
 
-  it.each(priced)("%s stores the listing the pricing functions derive for it", (file) => {
-    const t = load(file)
+  it.each(priced.flatMap((f) => [[f, "on"], [f, "off"]] as const))("%s, preview stop rule %s: stores the listing the pricing functions derive for the graph the sync writes", (file, rule) => {
+    const t = templateForPreviewStopRule(load(file), rule === "on")
     const l = CreditsService.estimateWorkflowBaseListing(t.nodes as Node[], t.edges as Edge[], "template")
     expect(l.preview).toBeGreaterThan(0)
     expect({ fixed: t.estimatedCredits, perMinute: t.estimatedPerMinuteCredits ?? 0 }).toEqual({
@@ -66,40 +71,58 @@ describe("built-in template listing prices", () => {
 
 // The four podcast templates (decided 2026-10-07). At the 180-minute cap a
 // per-minute listing is the figure the ceiling listing quoted before
-// (Tighten 2602, Multicam 2582), so splitting it dropped nothing; Trailer is
-// above its old 882 by its Combine Videos alone, which now counts the
-// trailer render's 2 minutes rather than the 8-second fallback (decided
-// 2026-10-07); Clip Pack is above its old 832 by its fan-out alone: 4 more
-// renders of 2 minutes and 4 more caption runs.
+// (Tighten 2602, Multicam 2582), so splitting it dropped nothing; Trailer was
+// its old 882 plus its Combine Videos on the trailer render's 2 minutes rather
+// than the 8-second fallback (1102); Clip Pack its old 832 plus 4 more renders
+// of 2 minutes and 4 more caption runs (1112).
+//
+// Each now renders a Preview first (decided 2026-10-08), so its listing is in
+// two parts. The preview part is that old price with the render at the
+// Preview rate; the final part is its Render final: the render again at
+// Final, and every node after it (Camera Switch first, in Multicam).
 describe("the podcast templates per minute", () => {
   const CAP = 180
+  const FINAL = STATIC_CREDIT_COSTS["apply-edl"]!
+  const PREVIEW = STATIC_CREDIT_COSTS["apply-edl:proxy"]!
+  const parts = (file: string) => {
+    const t = load(file)
+    const l = CreditsService.estimateWorkflowBaseListing(t.nodes as Node[], t.edges as Edge[], "template")
+    return { preview: l.preview + CAP * l.previewPerMinute, final: l.final + CAP * l.finalPerMinute }
+  }
   const atCap = (file: string) => {
     const t = load(file)
     return t.estimatedCredits! + CAP * (t.estimatedPerMinuteCredits ?? 0)
   }
+  /** What the nodes after the render (and Camera Switch) add to a final. */
+  const tail = (file: string, ids: string[]) => {
+    const t = load(file)
+    return CreditsService.estimateWorkflowBaseCredits(t.nodes as Node[], t.edges as Edge[], { runNodeIds: new Set(ids) })
+  }
 
+  it("the rates: a Preview is billed below a Final", () => {
+    expect(PREVIEW).toBeGreaterThan(0)
+    expect(PREVIEW).toBeLessThan(FINAL)
+  })
+
+  // [file, the old Final-only price at the cap, the render's minutes across all its runs, the nodes after it]
   it.each([
-    ["podcast-tighten-episode.json", 2602],
-    ["podcast-multicam-cut.json", 2582],
-  ])("%s at the cap is its old ceiling price (%i)", (file, before) => {
-    expect(atCap(file)).toBe(before)
+    ["podcast-tighten-episode.json", 2602, 180, ["tighten-captions"]],
+    ["podcast-multicam-cut.json", 2582, 180, ["multicam-switch"]],
+    ["podcast-trailer-formats.json", 1102, 2, ["trailer-combine", "trailer-format-story", "trailer-format-square", "trailer-format-portrait"]],
+    ["podcast-clip-pack.json", 1112, 5 * 2, ["clips-captions"]],
+  ] as const)("%s: its old price with the render at Preview (%i before), plus its Render final", (file, before, minutes, after) => {
+    const { preview, final } = parts(file)
+    expect(preview).toBe(before - minutes * (FINAL - PREVIEW))
+    expect(final).toBe(minutes * FINAL + tail(file, [...after]))
+    expect(atCap(file)).toBe(preview + final)
   })
 
-  it("podcast-trailer-formats.json at the cap is its old 882 plus its Combine on the render's 2 minutes", () => {
-    const t = load("podcast-trailer-formats.json")
-    const combine = (t.nodes as Node[]).find((n) => n.type === "combine-videos")!
-    const body = videoUtilityEstimateBody(combine, t.edges as Edge[])!
-    // The intro card stays at the fallback (undefined); the render is 2 minutes.
-    const atRender = videoUtilityBaseCredits("combine-videos", { ...body, upstreamDurations: [undefined, 2 * 60] })!
-    const atFallback = videoUtilityBaseCredits("combine-videos", { ...body, upstreamDurations: [undefined, undefined] })!
-    expect(atCap("podcast-trailer-formats.json")).toBe(882 + atRender - atFallback)
-  })
-
-  it("podcast-clip-pack.json at the cap is its old price plus 4 more clips (render + captions)", () => {
-    const t = load("podcast-clip-pack.json")
-    // One clip's render (2 minutes) and caption run: the run estimate of each
-    // node counts all 5 clips, as the listing does (decided 2026-10-07).
-    const perClip = (id: string) => CreditsService.estimateWorkflowBaseCredits(t.nodes as Node[], t.edges as Edge[], { runNodeIds: new Set([id]) }) / 5
-    expect(atCap("podcast-clip-pack.json")).toBe(832 + 4 * (perClip("clips-apply") + perClip("clips-captions")))
+  it("pins the four at the cap", () => {
+    expect({
+      tighten: atCap("podcast-tighten-episode.json"),
+      multicam: atCap("podcast-multicam-cut.json"),
+      trailer: atCap("podcast-trailer-formats.json"),
+      clipPack: atCap("podcast-clip-pack.json"),
+    }).toEqual({ tighten: 2832, multicam: 2772, trailer: 1424, clipPack: 1372 })
   })
 })

@@ -2,6 +2,7 @@ import type { IdentityMeta } from "@nodaro/shared"
 import type { AssembleImageInput } from "@nodaro/prompts"
 import { readDirectionFields, readStructuredFields, readSubjectFields } from "@nodaro/prompts"
 import { collectAncestorRefs } from "@/components/editor/workflow-editor/execution-graph"
+import { EXECUTABLE_TYPES } from "@/components/editor/workflow-editor/types"
 import type {
   WorkflowNode,
   WorkflowEdge,
@@ -13,6 +14,18 @@ import {
   buildImageConnectedReferences,
   type ConnectedRefsData,
 } from "./connected-references"
+import type { SourceNodeInfo } from "./types"
+
+/**
+ * The placeholder URL a not-yet-run upstream gets in the PREVIEW, one per
+ * reference (URLs are deduped, so two pending upstreams must not share one).
+ * Only an upstream that renders its image when the workflow runs qualifies —
+ * an Upload Image node with no file will still have none, so its tokens keep
+ * showing their label. Never sent anywhere: the preview reads only the text.
+ */
+function pendingUpstreamPlaceholder(source: SourceNodeInfo, refKey: string): string | undefined {
+  return EXECUTABLE_TYPES.has(source.type) ? `pending-upstream:${refKey}` : undefined
+}
 
 /**
  * Build the `AssembleImageInput` for an image node's PREVIEW so the inline
@@ -85,7 +98,10 @@ export function buildImageAssembleInput(
   // Connected references — built exactly like the quick-edit modal
   // (`buildImageConnectedReferences` + `getConnectedSources` + attachedChars
   // derived from `characterDefinitionIds` × `characterDefinitions`). Correct
-  // for the prompt TEXT; URL fidelity for un-run upstreams is best-effort.
+  // for the prompt TEXT; URL fidelity for un-run upstreams is best-effort. An
+  // upstream that has not run yet keeps its slot under a placeholder URL, so an
+  // `{image:N}` pointing at it previews as bound (the way the workflow run will
+  // send it) instead of falling back to its label.
   const attachedIds = (data.characterDefinitionIds as readonly string[] | undefined) ?? []
   const attachedChars = characterDefinitions.filter((c) => attachedIds.includes(c.id))
   const connectedReferences = stampElementInjections(
@@ -94,6 +110,7 @@ export function buildImageAssembleInput(
       sources: getConnectedSources(node.id, edges, nodes),
       nodes,
       attachedChars,
+      pendingUpstreamUrl: pendingUpstreamPlaceholder,
     }),
     node.id,
     nodes,

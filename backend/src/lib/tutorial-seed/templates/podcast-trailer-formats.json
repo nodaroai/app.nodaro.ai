@@ -1,7 +1,7 @@
 {
   "slug": "podcast-trailer-formats",
   "name": "Trailer + Formats",
-  "description": "Cut a 20–40 second teaser from a long recording, put an optional intro card in front, and deliver it as a 9:16 story or reel, a square post and a 4:5 portrait post.",
+  "description": "Cut a 20–40 second teaser from a long recording and review it as a 720p Preview. Render final then renders it at full quality, puts an optional intro card in front, and delivers it as a 9:16 story or reel, a square post and a 4:5 portrait post.",
   "markdownDescription": null,
   "category": "automations",
   "outputTypes": [
@@ -21,8 +21,20 @@
   ],
   "tutorialCategorySlug": "workflows",
   "tutorialSortOrder": 3,
-  "estimatedCredits": 382,
+  "estimatedCredits": 704,
   "estimatedPerMinuteCredits": 4,
+  "withoutPreviewStopRule": {
+    "estimatedCredits": 382,
+    "estimatedPerMinuteCredits": 4,
+    "description": "Cut a 20–40 second teaser from a long recording, put an optional intro card in front, and deliver it as a 9:16 story or reel, a square post and a 4:5 portrait post.",
+    "notes": {
+      "trailer-note-intro": {
+        "text": "Trailer + Formats\n\nUpload a recording and get a short teaser in three social formats. Transcribe reads the words, the Trailer Plan node (Cloud) picks the strongest moments and joins them with crossfades into one 20–40 second trailer, and Apply Cut renders it. Combine Videos puts your optional intro card in front, and the three format nodes deliver it as a 9:16 story or reel, a 1:1 square post and a 4:5 portrait post.\n\nDrop your recording on Episode Recording, then Run down the chain.",
+        "height": 340,
+        "y": -340
+      }
+    }
+  },
   "nodeTypesUsed": [
     "upload-video",
     "transcribe",
@@ -42,15 +54,15 @@
       "zIndex": -1,
       "position": {
         "x": -100,
-        "y": -340
+        "y": -460
       },
       "data": {
         "bold": false,
-        "text": "Trailer + Formats\n\nUpload a recording and get a short teaser in three social formats. Transcribe reads the words, the Trailer Plan node (Cloud) picks the strongest moments and joins them with crossfades into one 20–40 second trailer, and Apply Cut renders it. Combine Videos puts your optional intro card in front, and the three format nodes deliver it as a 9:16 story or reel, a 1:1 square post and a 4:5 portrait post.\n\nDrop your recording on Episode Recording, then Run down the chain.",
+        "text": "Trailer + Formats\n\nUpload a recording and get a short teaser in three social formats. Transcribe reads the words, the Trailer Plan node (Cloud) picks the strongest moments and joins them with crossfades into one 20–40 second trailer, and Apply Cut renders it as a 720p Preview first. Review it, then choose Render final on Apply Cut: it renders the trailer at full quality, Combine Videos puts your optional intro card in front, and the three format nodes deliver it as a 9:16 story or reel, a 1:1 square post and a 4:5 portrait post.\n\nDrop your recording on Episode Recording, then Run down the chain.\n\nTo skip the review, set Apply Cut's Quality to Final.",
         "color": "#2d2d44",
         "label": "Sticky Note",
         "width": 480,
-        "height": 340,
+        "height": 460,
         "italic": false,
         "fontSize": "base",
         "alignment": "left",
@@ -58,7 +70,7 @@
       },
       "measured": {
         "width": 480,
-        "height": 340
+        "height": 460
       }
     },
     {
@@ -119,7 +131,7 @@
       "data": {
         "label": "Apply Cut",
         "output": "video",
-        "quality": "final",
+        "quality": "proxy",
         "crossfadeMs": 0,
         "fieldMappings": {}
       }

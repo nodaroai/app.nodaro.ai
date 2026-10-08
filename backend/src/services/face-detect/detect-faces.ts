@@ -36,12 +36,14 @@ import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
 import { r2KeyFromOurUrl } from "../../lib/storage.js"
 import { proxyFrameToSourceMs, type ProxySpanMap } from "../media-proxy-span-map.js"
 import {
+  FACE_DESCRIPTOR_MAX_PER_FRAME,
   FACE_DETECT_MAX_FRAMES_PER_CALL,
   faceDetectCaps,
   faceDetectPeakMemoryMiB,
   faceDetectTimeoutMs,
 } from "./face-detect-budget.js"
 import { decodeYunet, fillYunetInput, paddedSize, rgbThumb, type YunetFace } from "./yunet-decode.js"
+import { faceDescriptor, type FaceDescriptor } from "./face-descriptor.js"
 import { yunetSession } from "./yunet-session.js"
 
 /** The setup thumbnail's size (P3-30 (b)): 16 × 9 cells of RGB. */
@@ -76,11 +78,24 @@ export interface DetectFacesWindow {
   readonly minScore: number
   /** Also return a `FACE_DETECT_THUMB` RGB thumbnail per frame (base64). */
   readonly thumb?: boolean
+  /**
+   * Proxy frames, inside the window, whose boxes also carry a job-only face
+   * `descriptor` (`face-descriptor.ts`; P3.2b round 3) — Speaker Frames names
+   * the samples at the edges of each kept span. At most
+   * `FACE_DESCRIPTOR_MAX_PER_FRAME` boxes of a frame, highest score first.
+   */
+  readonly descriptorFrames?: readonly number[]
 }
 
 export interface DetectFacesInput extends DetectFacesWindow {
   /** The proxy's URL (`VideoProxyResult.url`) — our own storage only. */
   readonly proxyUrl: string
+}
+
+/** A detected face, with its descriptor when its frame was named in `descriptorFrames`. */
+export interface DetectedFace extends YunetFace {
+  /** Job-only (never stored, checkpointed or written to an artifact): see `face-descriptor.ts`. */
+  readonly descriptor?: FaceDescriptor
 }
 
 export interface DetectedFrame {
@@ -89,7 +104,7 @@ export interface DetectedFrame {
   /** Where the frame sits on the SOURCE clock, ms (through the span map). */
   readonly sourceMs: number
   /** Highest score first. Top-left boxes and landmarks, fractions of `frame`. */
-  readonly boxes: readonly YunetFace[]
+  readonly boxes: readonly DetectedFace[]
   /** `FACE_DETECT_THUMB.w × .h` RGB bytes, base64 — only when asked for. */
   readonly thumb?: string
 }
@@ -150,6 +165,14 @@ function validateWindow(w: DetectFacesWindow): number {
   }
   if (!(typeof w.minScore === "number" && w.minScore > 0 && w.minScore <= 1)) {
     throw new FaceDetectRequestError(`minScore ${w.minScore} is not in (0, 1]`)
+  }
+  if (w.descriptorFrames !== undefined) {
+    if (!Array.isArray(w.descriptorFrames)) throw new FaceDetectRequestError("descriptorFrames is not a list of frames")
+    for (const k of w.descriptorFrames) {
+      if (!Number.isInteger(k) || k < from || k >= to) {
+        throw new FaceDetectRequestError(`descriptor frame ${String(k)} is not a frame of the window [${from}, ${to})`)
+      }
+    }
   }
   return total
 }
@@ -251,7 +274,8 @@ export async function detectFacesInMedia(source: string, window: DetectFacesWind
   const { width, height, startMs } = await probeProxy(source)
   const { pw, ph } = paddedSize(width, height)
   const frames = toFrame - fromFrame
-  const timeoutMs = faceDetectTimeoutMs(frames)
+  const described = new Set(window.descriptorFrames ?? [])
+  const timeoutMs = faceDetectTimeoutMs(frames, described.size)
   const peakMemoryMiB = faceDetectPeakMemoryMiB({ width, height }, session.intraOpThreads, ffmpegEffectiveThreads())
   const caps = faceDetectCaps()
   // Half a period before the first frame: frame-exact whatever the seek's rounding.
@@ -274,7 +298,11 @@ export async function detectFacesInMedia(source: string, window: DetectFacesWind
       }
       fillYunetInput(bgr, width, height, pw, ph, input)
       const outputs = await session.run(input, pw, ph)
-      const boxes = decodeYunet(outputs, { pw, ph, width, height, minScore }).map(roundFace)
+      const faces = decodeYunet(outputs, { pw, ph, width, height, minScore }).map(roundFace)
+      // Highest score first (decodeYunet's order): the first boxes of a named frame are described.
+      const boxes: DetectedFace[] = described.has(index)
+        ? faces.map((f, j) => (j < FACE_DESCRIPTOR_MAX_PER_FRAME ? { ...f, descriptor: faceDescriptor(bgr, width, height, f) } : f))
+        : faces
       boxCount += boxes.length
       if (boxCount > caps.maxBoxes) {
         throw new FaceDetectCapError(`a window holds more than ${caps.maxBoxes} boxes (the per-source cap) by frame ${index}`)

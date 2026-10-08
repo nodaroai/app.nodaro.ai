@@ -1,7 +1,7 @@
 ---
 node_type: reference-board
-generated_at: 2026-09-27T12:51:25.219Z
-generated_from: c607aa02c
+generated_at: 2026-10-08T13:21:57.286Z
+generated_from: 8d2b0c402
 ---
 
 # Reference Board
@@ -43,7 +43,7 @@ generated_from: c607aa02c
   "label": "Reference Board",
   "sourceMode": "image",
   "boardTemplate": "character/full-board",
-  "provider": "nano-banana-pro",
+  "provider": "gpt-image-2-5-sunburst",
   "prompt": "",
   "negativePrompt": "",
   "aspectRatio": "2:3",
@@ -79,7 +79,7 @@ generated_from: c607aa02c
     "label": "Reference Board",
     "sourceMode": "image",
     "boardTemplate": "character/full-board",
-    "provider": "nano-banana-pro",
+    "provider": "gpt-image-2-5-sunburst",
     "prompt": "",
     "negativePrompt": "",
     "aspectRatio": "2:3",

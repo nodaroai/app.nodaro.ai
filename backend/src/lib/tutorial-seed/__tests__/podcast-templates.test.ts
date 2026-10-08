@@ -245,11 +245,24 @@ describe("podcast editing templates — structural validity", () => {
       expect((cameraSwitch.data as { layoutHints?: boolean }).layoutHints).toBe(false)
     })
 
-    it("renders at the same quality as the other podcast templates (Final)", async () => {
+    it("renders a Preview first, as the other podcast templates do (decided 2026-10-08)", async () => {
+      // A run stops at the 720p Preview; Render final renders the cut at Final
+      // and runs what follows it. Copies made before stay at Final.
       for (const slug of SLUGS) {
         const t = await loadTemplate(slug)
         const apply = only(t.nodes as Node[], "apply-edl")
-        expect((apply.data as { quality?: string }).quality, slug).toBe("final")
+        expect((apply.data as { quality?: string }).quality, slug).toBe("proxy")
+      }
+    })
+
+    it("tells the user how the review works and how to skip it, on every podcast template", async () => {
+      for (const slug of SLUGS) {
+        const t = await loadTemplate(slug)
+        const notes = (t.nodes as Node[]).filter((n) => n.type === "sticky-note").map((n) => String((n.data as { text?: unknown }).text ?? ""))
+        expect(t.description, slug).toMatch(/720p Preview/)
+        expect(t.description, slug).toMatch(/Render final/)
+        expect(notes.some((text) => /Render final/.test(text)), `${slug}: a note names Render final`).toBe(true)
+        expect(notes.some((text) => /To skip the review, set .+'s Quality to Final\./.test(text)), `${slug}: a note says how to skip the review`).toBe(true)
       }
     })
 

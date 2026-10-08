@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest"
+import { assembleImageInput } from "@nodaro/prompts"
 import { buildImageAssembleInput } from "../build-image-assemble-input"
+import { buildImageConnectedReferences } from "../connected-references"
+import { getConnectedSources } from "../helpers"
 import type { WorkflowNode, WorkflowEdge, CharacterDefinition } from "@/types/nodes"
 
 /**
@@ -269,5 +272,61 @@ describe("buildImageAssembleInput", () => {
       expect(out.direction).toBeUndefined()
       expect(out.structured).toBeUndefined()
     }
+  })
+})
+
+// An `{image:N}` with no image at N falls back to its label. In the PREVIEW a
+// wired upstream that simply has not run yet has no image either, so without a
+// placeholder the Final view would show the label even though the workflow run
+// (which renders that upstream first) binds the token.
+describe("buildImageAssembleInput — an upstream that has not run yet", () => {
+  const PROMPT = "{image:1:person} on a beach"
+  const consumer = {
+    id: "n1",
+    type: "generate-image",
+    position: { x: 0, y: 0 },
+    data: { label: "Image", prompt: PROMPT },
+  } as unknown as WorkflowNode
+  const upstream = (type: string, data: Record<string, unknown>): WorkflowNode =>
+    ({ id: "up1", type, position: { x: 0, y: 0 }, data: { label: "Portrait", ...data } }) as unknown as WorkflowNode
+  const edges = [{ id: "e1", source: "up1", target: "n1" }] as unknown as WorkflowEdge[]
+  const preview = (source: WorkflowNode): string =>
+    assembleImageInput(
+      buildImageAssembleInput({
+        node: consumer,
+        nodes: [source, consumer],
+        edges,
+        characterDefinitions: [],
+        composedPrompt: PROMPT,
+        provider: "nano-banana-pro",
+        styleBypass: false,
+      }),
+    ).prompt
+
+  const BOUND =
+    "Use these references for the output image:\n" +
+    "- Image 1 (person) — match exactly. Maintain perfect likeness (face, body proportions, distinctive features).\n\n" +
+    "Compose them naturally into a single image: Image 1 (person) on a beach"
+
+  it("a Generate Image upstream with no result yet previews the token as bound", () => {
+    expect(preview(upstream("generate-image", {}))).toBe(BOUND)
+  })
+
+  it("…which is the text the same graph previews once that upstream has its result", () => {
+    expect(preview(upstream("generate-image", { generatedImageUrl: "https://r2/portrait.png" }))).toBe(BOUND)
+  })
+
+  it("an Upload Image node with no file has nothing to bind: the token previews as its label", () => {
+    expect(preview(upstream("upload-image", {}))).toBe("person on a beach")
+  })
+
+  it("the @-autocomplete list still leaves the pending upstream out", () => {
+    const refs = buildImageConnectedReferences({
+      data: {},
+      sources: getConnectedSources("n1", edges, [upstream("generate-image", {}), consumer]),
+      nodes: [upstream("generate-image", {}), consumer],
+      attachedChars: [],
+    })
+    expect(refs).toEqual([])
   })
 })

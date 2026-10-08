@@ -55,7 +55,7 @@ Render final re-renders it at Final and runs the nodes after it again (the
 [API](./api-integration.md#render-final-of-an-app-run) does the same).
 
 When an app's [Apply EDL](./nodes/processing-video/apply-edl.md#render-final)
-render is set to **Proxy**, a run started on the app's page **stops at a
+render is set to **Preview**, a run started on the app's page **stops at a
 720p preview** for you to review, as it would in the editor: the nodes after
 the render do not run yet, and are not billed.
 
@@ -70,7 +70,7 @@ the render do not run yet, and are not billed.
 - **The app's listed price** counts both steps: the whole workflow at its
   saved settings (each render at the preview rate), with the creator's fee,
   plus each Render final and the nodes after it, without the fee. A step
-  after two renders set to Proxy is counted in each of their finals. When
+  after two renders set to Preview is counted in each of their finals. When
   the price follows the length of the recording you give the app (an Edit
   Plan's pass, the render of a whole episode), it is listed as a fixed
   figure plus a figure per minute of the recording, for example
@@ -121,7 +121,7 @@ the render do not run yet, and are not billed.
   final got as far as rendering it before a later step failed.
 - **Your edits of the preview** stay until the final is done: a final that
   fails keeps the preview on show, and your edit of it.
-- **A second render set to Proxy** after the first stops the final at its own
+- **A second render set to Preview** after the first stops the final at its own
   preview. That preview is shown with its own **Render final** button, and
   the cards after it wait for it. Its final continues from the first one, so
   nothing the first final rendered runs or is billed again. One render at a

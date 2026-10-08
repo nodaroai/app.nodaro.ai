@@ -892,6 +892,17 @@ export interface PluginVideoProxy {
   /** Display-oriented, square-pixel frame size; box fractions refer to it. */
   readonly frame: { readonly w: number; readonly h: number }
   readonly frameCount: number
+  /**
+   * Scene cuts (P3.2b), ms on the SOURCE clock, ascending: a cut at `c` starts
+   * a new shot at `c`. Found in the decode that built the proxy, at the decode
+   * rate, over the kept spans only. A gap between two kept spans is never
+   * decoded, so a cut in it cannot be seen: every `spanMap` row after the
+   * first starts a POSSIBLE shot, and a consumer merges those rows'
+   * `sourceStartMs` into this list.
+   * Added after `ensureMediaProxy` itself shipped: a plugin mirrors it as
+   * optional and treats its absence as an older host.
+   */
+  readonly cuts: readonly number[]
 }
 
 /** Mirrors `DetectFacesInput` (`services/face-detect/detect-faces.ts`): one
@@ -911,6 +922,28 @@ export interface PluginDetectFacesInput {
   readonly minScore: number
   /** Also return a 16×9 RGB thumbnail per frame (base64): the camera-setup signature input. */
   readonly thumb?: boolean
+  /**
+   * Proxy frames inside the window whose boxes also carry a job-only
+   * `descriptor` (P3.2b round 3): the samples at the edges of each kept span.
+   * Additive-optional: a host without it returns no descriptors, and the
+   * caller abstains (links nothing across a gap), as before.
+   */
+  readonly descriptorFrames?: readonly number[]
+}
+
+/**
+ * Mirrors `FaceDescriptor` (`services/face-detect/face-descriptor.ts`):
+ * appearance plus landmark alignment, not an embedding. JOB-ONLY: never store
+ * it, never checkpoint it, never write it to an artifact, never compare it
+ * across episodes.
+ */
+export interface PluginFaceDescriptor {
+  /** Compare only descriptors of equal versions. */
+  readonly version: 1
+  /** 64 signed bytes, base64: the 8×8 luma crop aligned on the five landmarks, zero-mean, unit length (×127). */
+  readonly luma: string
+  /** 128 bytes, base64: 64-bin RGB histograms (4 levels per channel) of the face, then of the region just below it; each totals ~255, all zeros when absent. */
+  readonly hist: string
 }
 
 /** Mirrors `YunetFace` (`services/face-detect/yunet-decode.ts`). */
@@ -923,6 +956,8 @@ export interface PluginDetectedFace {
   readonly score: number
   /** Right eye, left eye, nose tip, right and left mouth corners: [x, y] fractions. */
   readonly landmarks: ReadonlyArray<readonly [number, number]>
+  /** Only on the boxes of `descriptorFrames` (at most 32 a frame, highest score first). */
+  readonly descriptor?: PluginFaceDescriptor
 }
 
 /** Mirrors `DetectFacesResult` (`services/face-detect/detect-faces.ts`). */
@@ -2241,6 +2276,16 @@ export type PluginLlmMeteredResult<T> =
   | { ok: false; message: string; usage: PluginLlmMeteredUsage }
 
 export interface PluginLlmToolkit {
+  /**
+   * Is `modelId` an LLM this host can serve — answered from the HOST's live
+   * registry (canonical ids and their dash-form/slug aliases, `getLlmModel`).
+   *
+   * A plugin validates a caller-supplied model id with this instead of its own
+   * pinned `@nodaro/shared`, which lags the host by whole releases (a model the
+   * host added last week would be refused). Additive-optional: on a host that
+   * predates it a plugin falls back to its pinned list.
+   */
+  isKnownModel?(modelId: string): boolean
   /** Preserves usage on failures and uses the selected model's normal lane. */
   completeStructuredMetered?<T>(
     req: PluginLlmMultimodalRequest,

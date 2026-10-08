@@ -14,6 +14,7 @@ import { insertJobIdempotent } from "../lib/insert-job.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { IMAGE_GEN_PROVIDERS, T2I_TO_I2I_VARIANT, FLUX_LORA_CHARACTER_MODEL_ID, IMAGE_ASPECT_RATIO_VALUES, IMAGE_PROMPT_MAX, PROMPT_HARD_CEILING, resolveNormalizedImageGen } from "@nodaro/shared"
+import { defaultImageModel } from "@nodaro/shared"
 import { assembleImageInput, REFERENCE_RULES, REFERENCE_RULES_MULTI_PERSON, type AssembleImageInput, type BuildImagePromptResult } from "@nodaro/prompts"
 import { connectedReferenceSchema, describedReferenceSchema, DESCRIBED_REFERENCE_LIMIT } from "../lib/connected-reference-schema.js"
 import { directionSchema } from "../lib/direction-schema.js"
@@ -276,7 +277,7 @@ function buildAssembleInput(
     // Default provider mirrors the rest of the route (`nano-banana`) so the
     // per-provider reference gate inside `buildImagePrompt` resolves the same
     // way regardless of which call site invokes assembly.
-    provider: body.provider ?? "nano-banana",
+    provider: body.provider ?? defaultImageModel("general"),
     // HYBRID IS THE DEFAULT everywhere (dev AND production). Test runs resolve
     // to legacy (route tests assert the legacy assembly), as does an explicit
     // IMAGE_REFERENCE_FORMAT=legacy. `backendHybridRoles()` IS that
@@ -365,7 +366,7 @@ export function resolveImageCreditIdentifier(req: FastifyRequest): string {
   ) {
     return FLUX_LORA_CHARACTER_MODEL_ID
   }
-  const rawProvider = (body?.provider as string) ?? "nano-banana"
+  const rawProvider = (body?.provider as string) ?? defaultImageModel("general", body?.aspectRatio as string | undefined)
   const flatRefs = body?.referenceImageUrls as string[] | undefined
   // Read the levers RAW — this preHandler runs before Zod, so any of them can
   // be a non-string. `resolveNormalizedImageGen` coerces defensively.
@@ -457,6 +458,12 @@ export async function generateImageRoutes(app: FastifyInstance) {
       return reply.status(400).send({
         error: { code: "validation_error", ...formatZodError(parsed.error) },
       })
+    }
+    // No model named → the platform's default for this ratio (shared
+    // `image-model-roles.ts`), resolved once here so the snap, the credit
+    // reservation and the job all see the same concrete model.
+    if (!parsed.data.provider) {
+      parsed.data.provider = defaultImageModel("general", parsed.data.aspectRatio) as NonNullable<(typeof parsed.data)["provider"]>
     }
 
     // The three catalog-governed levers are destructured as `raw*` on purpose:

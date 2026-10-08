@@ -24,11 +24,11 @@ Don't know where to start? Find your goal here, then jump to the model in the ta
 <!-- AUTO-GEN:START model-recommendations -->
 | I want… | Models | Notes |
 | --- | --- | --- |
-| best for typography / logos / text-heavy | Nano Banana Pro, GPT Image 2 | Nano Banana Pro for diagrams / complex text; GPT Image 2 for logos and short copy. |
+| best for typography / logos / text-heavy | GPT Image 2, GPT Image 2.5 Flare | GPT Image 2 for exact copy, labels and non-Latin text; GPT Image 2.5 Flare is close and faster. |
 | cheapest realistic image | Z-Image, Qwen, Imagen 4 Fast | Z-Image is the cheapest. Qwen / Imagen4 Fast for slightly higher quality. |
-| highest fidelity image | Nano Banana Pro, Imagen 4 Ultra, Flux 2 Flex | Pick by family preference; all three are premium tiers. |
-| image edit / restyle | Flux Kontext Pro, Ideogram Remix, Seedream 5 Pro (I2I) | Flux Kontext preserves identity; Ideogram Remix is character-aware; Seedream 5 Pro for instruction-based edits (5 Lite is the budget option). |
-| highest-resolution image | Topaz Image Upscale, Nano Banana Pro, GPT Image 2 | Generate at the model's top tier, then Topaz upscale 4x (Topaz's only lever is the 1x/2x/4x factor). |
+| highest fidelity image | GPT Image 2, GPT Image 2.5 Sunburst, Imagen 4 Ultra | GPT Image 2 for characters and identity; GPT Image 2.5 Sunburst for wide or in-between ratios GPT Image 2 can't draw. |
+| image edit / restyle | GPT Image 2.5 Flare (I2I), GPT Image 2 (I2I), Seedream 5 Pro (I2I) | GPT Image 2.5 Flare keeps pose, framing and product detail; GPT Image 2 i2i for identity-critical edits; Seedream 5 Pro for instruction-based edits. |
+| highest-resolution image | Topaz Image Upscale, GPT Image 2, GPT Image 2.5 Sunburst | Generate at the model's top tier, then Topaz upscale 4x (Topaz's only lever is the 1x/2x/4x factor). |
 | background removal / cutout | Recraft Remove BG | Cheap, no prompt needed. |
 | best cinematic video | VEO 3.1 Quality, Kling 3.0, Seedance 2 | VEO 3.1 Quality for premium narrative; Kling 3.0 for music-synced motion; Seedance 2 for reference-driven consistency. |
 | cheap batch video clips | VEO 3.1 Fast, Wan 2.2 Turbo, Bytedance Lite I2V | VEO 3.1 Fast is the best price/quality balance with native audio. |
@@ -63,13 +63,15 @@ Text-to-image, image-to-image, editing, upscaling, and background removal. For e
 | Nano Banana Edit | Google | Everyday | 10 | edit | Image-to-image edits via Google's Nano Banana family. Good general-purpose editor. |
 | Qwen | Alibaba | Everyday | 10 | t2i | Cheap, fast, decent quality. Native negative-prompt support. |
 | Qwen (I2I) | Alibaba | Everyday | 10 | i2i | Image-to-image with Qwen. |
+| Seedream 5 Flash | Bytedance | Everyday | 10 | t2i | Fast, low-cost Seedream 5 — quick generations at 1K or 2K, same price at either size. |
+| Seedream 5 Flash (I2I) | Bytedance | Everyday | 10 | i2i | Image-to-image with Seedream 5 Flash — fast edits from up to 10 input images at 1K or 2K, same price at either size. |
 | Flux 2 Pro | Black Forest Labs | Standard | 13 | t2i | Flux 2 Pro text-to-image. Strong realism, fast. Resolution lever to 2K. |
 | Flux 2 Pro (I2I) | Black Forest Labs | Standard | 13 | i2i | Image-to-image with Flux Pro. Cheaper than Flex variant, good general edits. |
 | Flux Kontext Pro | Black Forest Labs | Standard | 13 | t2i, edit | Context-aware editing and style transfer. Strong at preserving subject identity through edits. |
 | Qwen Edit | Alibaba | Standard | 13 | edit | Qwen image edit endpoint with native negative prompt. |
 | Seedream 5 Lite | Bytedance | Standard | 14 | t2i | Newer Seedream 5 Lite — instruction-based generation, visual reasoning. |
 | Seedream 5 Lite (I2I) | Bytedance | Standard | 14 | i2i | Image-to-image with Seedream 5 Lite. |
-| GPT Image 2 | OpenAI | Standard | 15 | t2i | Next-gen GPT Image — broader aspect ratios, resolution-based pricing (1K/2K/4K). |
+| ⭐ GPT Image 2 | OpenAI | Standard | 15 | t2i | Next-gen GPT Image — broader aspect ratios, resolution-based pricing (1K/2K/4K). |
 | GPT Image 2 (I2I) | OpenAI | Standard | 15 | i2i | Image-to-image with GPT Image 2. |
 | GPT Image 2.5 Flare | OpenAI | Standard | 15 | t2i | Fast everyday GPT Image 2.5 - higher quality than GPT Image 2 at about half the latency. The default of the pair: social and creator content, campaign variants, thumbnails, rapid iteration, high-volume work. |
 | GPT Image 2.5 Flare (I2I) | OpenAI | Standard | 15 | i2i | Fast GPT Image 2.5 edits (up to 16 source images) - the default when you are iterating rather than finishing. |
@@ -77,7 +79,7 @@ Text-to-image, image-to-image, editing, upscaling, and background removal. For e
 | GPT Image 2.5 Sunburst (I2I) | OpenAI | Standard | 15 | i2i | Precision GPT Image 2.5 edits (up to 16 source images) - the most controlled edit in the GPT family, at the cost of a longer run. |
 | Ideogram V3 | Ideogram | Standard | 18 | t2i | Strong typography and stylized illustration. Speed/quality tiered (TURBO/BALANCED/QUALITY). |
 | Seedream 5 Pro | Bytedance | Standard | 18 | t2i | Flagship Seedream 5 Pro — strongest instruction following and visual reasoning. Basic = 1K, high = 2K. |
-| Seedream 5 Pro (I2I) | Bytedance | Standard | 19 | i2i | Image-to-image with Seedream 5 Pro — multi-reference instruction edits. Basic = 1K, high = 2K. |
+| Seedream 5 Pro (I2I) | Bytedance | Premium | 19 | i2i | Image-to-image with Seedream 5 Pro — multi-reference instruction edits. Basic = 1K, high = 2K. |
 | Imagen 4 | Google | Premium | 20 | t2i | Google's Imagen 4 — strong photographic quality and prompt fidelity. |
 | Nano Banana 2 | Google | Premium | 20 | t2i, i2i | Newer Nano Banana with native resolution control (1K/2K/4K) and Google Search context. |
 | Wan 2.7 | Alibaba | Premium | 20 | t2i | Wan 2.7 text-to-image — 1K/2K/4K, up to 9 optional style/character reference images. |
@@ -90,7 +92,7 @@ Text-to-image, image-to-image, editing, upscaling, and background removal. For e
 | Flux 2 Flex | Black Forest Labs | Premium | 35 | t2i | Flux 2 Flex — premium fidelity, more flexible composition. Pricier than Pro. |
 | Ideogram Edit | Ideogram | Premium | 45 | edit | Inpainting / mask-based editing with Ideogram. Pair with a mask URL. |
 | Ideogram Remix | Ideogram | Premium | 45 | i2i | Ideogram remix — character-aware restyling driven by reference images. |
-| ⭐ Nano Banana Pro | Google | Premium | 45 | t2i, i2i | Top-tier Nano Banana — best for text rendering, diagrams, and complex compositions. |
+| Nano Banana Pro | Google | Premium | 45 | t2i, i2i | Top-tier Nano Banana — best for text rendering, diagrams, and complex compositions. |
 | Flux 2 Flex (I2I) | Black Forest Labs | Premium | 60 | i2i | Image-to-image with Flux Flex. Honors source image structure while applying prompt. |
 | Flux 2 Max (Safety Tolerance) | Black Forest Labs | Premium | 70 | t2i, i2i | BFL Flux 2 Max — even larger sibling of Pro via Replicate, safety_tolerance=5, up to 8 reference images. Variable pricing by MP and ref count. |
 | Wan 2.7 Pro | Alibaba | Premium | 120 | t2i | Wan 2.7 Pro text-to-image — higher quality, 1K/2K/4K, no image input. |

@@ -24,7 +24,8 @@ import { describe, it, expect } from "vitest"
 import { readdirSync, readFileSync, statSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
-import { nodeFanOut, resolveApplyEdlEstimateLength } from "@nodaro/render-rules"
+import { nodeFanOut, renderFinalRunSet, renderRunOverrides, resolveApplyEdlEstimateLength } from "@nodaro/render-rules"
+import { withRunOverrides } from "@nodaro/shared"
 import { CreditsService, graphPricingUnits } from "../../../ee/billing/credits.js"
 import { APPLY_EDL_CREDITS_PER_OUTPUT_MINUTE } from "../../apply-edl-plan.js"
 import { videoUtilityBaseCredits, videoUtilityEstimateBody } from "../../video-utility-credits.js"
@@ -140,16 +141,25 @@ describe("a listing's Render final prices the render per minute of the user's ep
 // The server's run estimate (`estimateWorkflowCredits`, here at base prices)
 // reads the same rules (decided 2026-10-07): each render at the shared rule's
 // minutes, every node times the runs it makes. So, for each built-in
-// template, the listing at the 180-minute cap (fixed + 180 × per minute) IS
-// the run estimate. The three-way parity, the editor included, is
-// run-estimate-parity.test.ts.
+// template, each part of the listing at the 180-minute cap (fixed + 180 × per
+// minute) IS a run estimate: the preview part is a whole run's, and the final
+// part, for a template whose render is set to Preview (decided 2026-10-08), is
+// its Render final's (the render at Final and every node after it). The
+// three-way parity, the editor included, is run-estimate-parity.test.ts.
 describe("the server's run estimate prices a render as the listing does", () => {
   it.each(rendering.map((t) => [t.slug, t] as const))("%s", (slug, t) => {
     const nodes = t.nodes as Node[]
     const edges = t.edges as Edge[]
     const run = CreditsService.estimateWorkflowBaseCredits(nodes, edges, { scope: "whole-graph" })
+    const finals = nodes
+      .filter((n) => n.type === "apply-edl" && n.data?.quality === "proxy")
+      .map((render) => {
+        const set = renderFinalRunSet(render.id, nodes, edges)
+        const priced = withRunOverrides(nodes, renderRunOverrides(render.id, "final", set))
+        return CreditsService.estimateWorkflowBaseCredits(priced, edges, { runNodeIds: set })
+      })
     const l = CreditsService.estimateWorkflowBaseListing(nodes, edges, "template")
-    const atCap = l.preview + l.final + 180 * (l.previewPerMinute + l.finalPerMinute)
-    expect(atCap - run, slug).toBe(0)
+    expect(l.preview + 180 * l.previewPerMinute - run, `${slug}: the preview part`).toBe(0)
+    expect(l.final + 180 * l.finalPerMinute - finals.reduce((a, b) => a + b, 0), `${slug}: the final part`).toBe(0)
   })
 })

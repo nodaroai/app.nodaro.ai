@@ -13,8 +13,12 @@
  * Source of truth for the semantics documented here (verified 2026-08-25):
  * - `IMAGE_TOKEN_PATTERN` = `/\{image:(\d+)(?::([^}\n]+))?\}/gi`
  * - `expandImageRefTokens`: `{image:N:label}` → `Image N (label)`,
- *   `{image:N}` → `Image N`; out-of-range tokens are left untouched so the
- *   author can see and fix them.
+ *   `{image:N}` → `Image N`.
+ * - A token with no reference at N follows the video resolver's rule
+ *   (`dropUnwiredImageTokens` in `prompt-builder.ts`): `{image:N:label}` →
+ *   `label`, a bare `{image:N}` is dropped. Two places keep a token as typed,
+ *   on purpose: a wired token in a hybrid `Avoid:` line, and the native
+ *   negative prompt of models with their own negative field (e.g. ideogram-v3).
  * - N is the reference's 1-based position in the assembled reference list
  *   (connection order on the `references` handle).
  */
@@ -32,7 +36,7 @@ export const IMAGE_REFERENCE_PROMPT_DOCTRINE: ImageReferenceDoctrine = {
 
 - \`{image:N:label}\` → expands server-side to \`Image N (label)\`, aligned with the numbered reference list sent to the provider.
 - \`{image:N}\` → \`Image N\` (no role named).
-- A token whose N has no wired reference is left as literal text in the final prompt — visible on purpose, so fix the numbering instead of ignoring it.
+- A token whose N has no wired reference falls back to its label (\`{image:3:dog}\` → \`dog\`); a bare \`{image:N}\` is dropped. The prompt still runs but binds nothing at N, so check the numbering against what is wired.
 
 **How to compose**
 - The prompt should be little more than tokens plus glue words: \`{image:1:person} with {image:2:face}\`. The label tells the model what to TAKE from that image — \`person\`, \`face\`, \`background\`, \`settings\`, or a concrete garment/prop name (\`jacket\`).

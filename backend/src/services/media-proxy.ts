@@ -32,6 +32,11 @@
  * stored beside the proxy, so a cache hit returns the same clock; a proxy found
  * without its map is re-encoded, never served clockless. The encode itself is
  * `video-proxy-encode.ts`.
+ *
+ * Every video proxy also carries its SCENE CUTS (P3.2b), found in the same
+ * decode and stored in the same manifest, on the source clock
+ * (`media-proxy-cuts.ts`). The cut rule is part of the key, and a manifest
+ * without cuts — or with another rule's — is a miss.
  */
 import { createHash } from "node:crypto"
 import { join } from "node:path"
@@ -55,6 +60,7 @@ import {
 } from "../lib/storage.js"
 import { encodeVideoProxy } from "./video-proxy-encode.js"
 import { normalizeProxySpans, type ProxySpan, type ProxySpanMap } from "./media-proxy-span-map.js"
+import { SCENE_CUT_RECIPE, isSceneCutList } from "./media-proxy-cuts.js"
 
 export { MediaHasNoVideoError } from "./video-proxy-encode.js"
 
@@ -94,6 +100,9 @@ export interface VideoProxyResult extends MediaProxyResult {
   /** Display-oriented, square-pixel frame size: what box fractions refer to. */
   readonly frame: { readonly w: number; readonly h: number }
   readonly frameCount: number
+  /** Scene cuts, ms on the SOURCE clock, ascending: a cut at `c` starts a new
+   *  shot at `c`. Found in the decode that built the proxy, over the kept spans only. */
+  readonly cuts: readonly number[]
 }
 
 export interface MediaProxyOptions {
@@ -135,15 +144,17 @@ const AUDIO_PROXY_VERSION = 2
 
 /** Version of the VIDEO proxy's recipe. v2 (2026-10-06, P3.2): span-scoped,
  *  height-keyed, square pixels, a sample grid anchored at each span's start,
- *  and a span map stored beside it. */
-const VIDEO_PROXY_VERSION = 2
+ *  and a span map stored beside it. v3 (2026-10-08, P3.2b): scene cuts found
+ *  in the same decode, stored in the manifest; the key also names the cut
+ *  rule (`-sc<SCENE_CUT_RECIPE>`). */
+const VIDEO_PROXY_VERSION = 3
 
 const sha = (text: string, chars: number) => createHash("sha256").update(text).digest("hex").slice(0, chars)
 
-/** Content-addressed cache key. The variant (kind + fps + height + spans for
- *  video, the recipe version for audio) is part of the key so an audio proxy,
- *  a 2-fps detection proxy, a 15-fps review proxy and two different span sets
- *  of the same source never collide. Spans are normalized first, so equivalent
+/** Content-addressed cache key. The variant (kind + fps + height + the
+ *  scene-cut rule + spans for video, the recipe version for audio) is part of
+ *  the key so an audio proxy, a 2-fps detection proxy, a 15-fps review proxy
+ *  and two different span sets of the same source never collide. Spans are normalized first, so equivalent
  *  span lists share one proxy. */
 export function mediaProxyKey(
   sourceUrl: string,
@@ -153,7 +164,7 @@ export function mediaProxyKey(
   let variant = `audio-v${AUDIO_PROXY_VERSION}`
   if (kind === "video") {
     const fps = opts.fps ?? VIDEO_PROXY.defaultFps
-    variant = `video-v${VIDEO_PROXY_VERSION}@${fps}fps-${opts.height ?? VIDEO_PROXY.height}p`
+    variant = `video-v${VIDEO_PROXY_VERSION}@${fps}fps-${opts.height ?? VIDEO_PROXY.height}p-sc${SCENE_CUT_RECIPE}`
     if (opts.spans) variant += `-spans-${sha(JSON.stringify(normalizeProxySpans(opts.spans, fps)), 16)}`
   }
   const hash = sha(`${sourceIdentity(sourceUrl)}::${variant}`, 40)
@@ -166,15 +177,18 @@ export function mediaProxyManifestKey(proxyKey: string): string {
   return proxyKey.replace(/\.[^./]+$/, ".json")
 }
 
-/** What is stored beside a video proxy. */
+/** What is stored beside a video proxy. Version 2 (P3.2b) adds the cuts and
+ *  the rule that found them; a version 1 manifest is a miss. */
 interface VideoProxyManifest {
-  readonly version: 1
+  readonly version: 2
   readonly fps: number
   readonly height: number
   readonly spans: readonly ProxySpan[] | null
   readonly spanMap: ProxySpanMap
   readonly frame: { readonly w: number; readonly h: number }
   readonly frameCount: number
+  readonly cuts: readonly number[]
+  readonly cutRecipe: string
 }
 
 const isFiniteNumber = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v)
@@ -186,7 +200,9 @@ function parseManifest(body: Buffer | null): VideoProxyManifest | null {
     const m = JSON.parse(body.toString("utf8")) as Partial<VideoProxyManifest>
     const rowsOk = Array.isArray(m.spanMap) && m.spanMap.length > 0 && m.spanMap.every((r) =>
       [r?.proxyStartMs, r?.proxyEndMs, r?.sourceStartMs, r?.firstFrame, r?.frameCount].every(isFiniteNumber))
-    if (m.version !== 1 || !rowsOk || !isFiniteNumber(m.frameCount) || !isFiniteNumber(m.frame?.w) || !isFiniteNumber(m.frame?.h)) return null
+    if (m.version !== 2 || !rowsOk || !isFiniteNumber(m.frameCount) || !isFiniteNumber(m.frame?.w) || !isFiniteNumber(m.frame?.h)) return null
+    // The cuts this key promises: found by this rule, a valid list.
+    if (m.cutRecipe !== SCENE_CUT_RECIPE || !isSceneCutList(m.cuts)) return null
     return m as VideoProxyManifest
   } catch {
     return null
@@ -280,7 +296,10 @@ async function ensureVideoProxy(sourceUrl: string, opts: MediaProxyOptions): Pro
   if (await getR2ObjectSize(key) > 0) {
     const manifest = parseManifest(await readR2ObjectBuffer(manifestKey))
     if (manifest) {
-      return { url: r2Url(key), key, kind: "video", cached: true, fps, spanMap: manifest.spanMap, frame: manifest.frame, frameCount: manifest.frameCount }
+      return {
+        url: r2Url(key), key, kind: "video", cached: true, fps,
+        spanMap: manifest.spanMap, frame: manifest.frame, frameCount: manifest.frameCount, cuts: manifest.cuts,
+      }
     }
   }
 
@@ -293,11 +312,15 @@ async function ensureVideoProxy(sourceUrl: string, opts: MediaProxyOptions): Pro
     // with no map, which the cache check above reads as a miss.
     const url = await uploadLocalFileToR2Key(encoded.outPath, key, VIDEO_PROXY.contentType)
     const manifest: VideoProxyManifest = {
-      version: 1, fps, height, spans: spans ?? null,
+      version: 2, fps, height, spans: spans ?? null,
       spanMap: encoded.spanMap, frame: encoded.frame, frameCount: encoded.frameCount,
+      cuts: encoded.cuts, cutRecipe: SCENE_CUT_RECIPE,
     }
     await uploadBufferToR2(Buffer.from(JSON.stringify(manifest)), manifestKey, "application/json")
-    return { url, key, kind: "video", cached: false, fps, spanMap: encoded.spanMap, frame: encoded.frame, frameCount: encoded.frameCount }
+    return {
+      url, key, kind: "video", cached: false, fps,
+      spanMap: encoded.spanMap, frame: encoded.frame, frameCount: encoded.frameCount, cuts: encoded.cuts,
+    }
   } finally {
     await cleanupWorkDir(workDir)
   }

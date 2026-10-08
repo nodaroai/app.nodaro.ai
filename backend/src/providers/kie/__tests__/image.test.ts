@@ -11,47 +11,54 @@ const mocks = vi.hoisted(() => {
 vi.mock("../client.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../client.js")>()
   return {
-    // Real class so `err instanceof KieError` checks in image.ts stay honest.
-    KieError: actual.KieError,
-    runKieTask: mocks.mockRunKieTask,
-    createSanitizedError: mocks.mockCreateSanitizedError,
+      // Real class so `err instanceof KieError` checks in image.ts stay honest.
+      KieError: actual.KieError,
+      runKieTask: mocks.mockRunKieTask,
+      createSanitizedError: mocks.mockCreateSanitizedError,
   }
 })
 
 // Spread the real module: editImage now imports the shared image-format
 // chokepoint from ../video.js, which pulls the KIE_VIDEO_* maps out of
 // models.js. A fixture-only mock would leave those undefined.
-vi.mock("../models.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../models.js")>()),
-  KIE_IMAGE_MODELS: {
-    "nano-banana": { model: "nano-banana-pro", cost: 0.02, inputType: "text-to-image", extraParams: { output_format: "png" } },
-    "flux": { model: "flux-2/pro-text-to-image", cost: 0.05, inputType: "text-to-image", extraParams: {} },
-    // GPT Image 1.5 — t2i endpoint IGNORES a supplied anchor; the i2i sibling
-    // consumes it via input_urls. Mirrors the real models.ts shapes (t2i has no
-    // inputType/imageParam) so the t2i→i2i anchor routing is exercised honestly.
-    "gpt-image": { model: "gpt-image/1.5-text-to-image", cost: 0.02, extraParams: { aspect_ratio: "3:2", quality: "medium" } },
-    "gpt-image-i2i": { model: "gpt-image/1.5-image-to-image", cost: 0.02, inputType: "image-to-image", imageParam: "input_urls", extraParams: { aspect_ratio: "3:2", quality: "medium" } },
-    // GPT Image 2 — same quirk; resolution-based pricing instead of quality.
-    "gpt-image-2": { model: "gpt-image-2-text-to-image", cost: 0.02, extraParams: { aspect_ratio: "16:9", resolution: "1K" } },
-    "gpt-image-2-i2i": { model: "gpt-image-2-image-to-image", cost: 0.02, inputType: "image-to-image", imageParam: "input_urls", extraParams: { aspect_ratio: "16:9", resolution: "1K" } },
-    // GPT Image 2.5 Flare — same family quirk; widest ratio set, no cross-field limit.
-    "gpt-image-2-5-flare": { model: "gpt-image-2-5-flare-text-to-image", cost: 0.03, extraParams: { aspect_ratio: "16:9", resolution: "1K" } },
-    "gpt-image-2-5-flare-i2i": { model: "gpt-image-2-5-flare-image-to-image", cost: 0.03, inputType: "image-to-image", imageParam: "input_urls", extraParams: { aspect_ratio: "16:9", resolution: "1K" } },
-    "grok-i2i": { model: "grok-imagine/image-to-image", cost: 0.04, inputType: "image-to-image", imageParam: "image_urls", extraParams: {} },
-    // Z-Image — the family's SHORTEST prompt cap (1000 chars, docs.kie.ai), so
-    // it is the fixture the per-provider clamp is exercised on.
-    "z-image": { model: "z-image", cost: 0.004, extraParams: { aspect_ratio: "16:9" } },
-    "recraft-upscale": { model: "recraft/crisp-upscale", cost: 0.04, inputType: "image-to-image", imageParam: "image", extraParams: {} },
-    "recraft-remove-bg": { model: "recraft/remove-background", cost: 0.03, inputType: "image-to-image", imageParam: "image", extraParams: {} },
-    "nano-banana-edit": { model: "google/nano-banana-edit", cost: 0.04, inputType: "image-to-image", imageParam: "image_urls", extraParams: {} },
-    "ideogram-edit": { model: "ideogram/character-edit", cost: 0.09, inputType: "image-to-image", imageParam: "image_url", extraParams: { rendering_speed: "BALANCED", style: "AUTO" } },
-    // SKUs whose KIE schema types `seed` as a STRING (google/imagen4 and
-    // imagen4-ultra are the real ones). One per lane, so both input builders
-    // are shown to honour the declaration — not a model name.
-    "string-seed-t2i": { model: "test/string-seed-t2i", cost: 0.01, seedType: "string", extraParams: {} },
-    "string-seed-edit": { model: "test/string-seed-edit", cost: 0.01, inputType: "image-to-image", imageParam: "image_url", seedType: "string", extraParams: {} },
-  },
-}))
+vi.mock("../models.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../models.js")>()
+  return {
+    ...actual,
+    KIE_IMAGE_MODELS: {
+      // Seedream 5 Flash — the REAL configs, so the `resolutionParam: "size"`
+      // declaration (its schema has no `resolution`/`quality`) is what is tested.
+      "seedream-5-flash": actual.KIE_IMAGE_MODELS["seedream-5-flash"],
+      "seedream-5-flash-i2i": actual.KIE_IMAGE_MODELS["seedream-5-flash-i2i"],
+      "nano-banana": { model: "nano-banana-pro", cost: 0.02, inputType: "text-to-image", extraParams: { output_format: "png" } },
+      "flux": { model: "flux-2/pro-text-to-image", cost: 0.05, inputType: "text-to-image", extraParams: {} },
+      // GPT Image 1.5 — t2i endpoint IGNORES a supplied anchor; the i2i sibling
+      // consumes it via input_urls. Mirrors the real models.ts shapes (t2i has no
+      // inputType/imageParam) so the t2i→i2i anchor routing is exercised honestly.
+      "gpt-image": { model: "gpt-image/1.5-text-to-image", cost: 0.02, extraParams: { aspect_ratio: "3:2", quality: "medium" } },
+      "gpt-image-i2i": { model: "gpt-image/1.5-image-to-image", cost: 0.02, inputType: "image-to-image", imageParam: "input_urls", extraParams: { aspect_ratio: "3:2", quality: "medium" } },
+      // GPT Image 2 — same quirk; resolution-based pricing instead of quality.
+      "gpt-image-2": { model: "gpt-image-2-text-to-image", cost: 0.02, extraParams: { aspect_ratio: "16:9", resolution: "1K" } },
+      "gpt-image-2-i2i": { model: "gpt-image-2-image-to-image", cost: 0.02, inputType: "image-to-image", imageParam: "input_urls", extraParams: { aspect_ratio: "16:9", resolution: "1K" } },
+      // GPT Image 2.5 Flare — same family quirk; widest ratio set, no cross-field limit.
+      "gpt-image-2-5-flare": { model: "gpt-image-2-5-flare-text-to-image", cost: 0.03, extraParams: { aspect_ratio: "16:9", resolution: "1K" } },
+      "gpt-image-2-5-flare-i2i": { model: "gpt-image-2-5-flare-image-to-image", cost: 0.03, inputType: "image-to-image", imageParam: "input_urls", extraParams: { aspect_ratio: "16:9", resolution: "1K" } },
+      "grok-i2i": { model: "grok-imagine/image-to-image", cost: 0.04, inputType: "image-to-image", imageParam: "image_urls", extraParams: {} },
+      // Z-Image — the family's SHORTEST prompt cap (1000 chars, docs.kie.ai), so
+      // it is the fixture the per-provider clamp is exercised on.
+      "z-image": { model: "z-image", cost: 0.004, extraParams: { aspect_ratio: "16:9" } },
+      "recraft-upscale": { model: "recraft/crisp-upscale", cost: 0.04, inputType: "image-to-image", imageParam: "image", extraParams: {} },
+      "recraft-remove-bg": { model: "recraft/remove-background", cost: 0.03, inputType: "image-to-image", imageParam: "image", extraParams: {} },
+      "nano-banana-edit": { model: "google/nano-banana-edit", cost: 0.04, inputType: "image-to-image", imageParam: "image_urls", extraParams: {} },
+      "ideogram-edit": { model: "ideogram/character-edit", cost: 0.09, inputType: "image-to-image", imageParam: "image_url", extraParams: { rendering_speed: "BALANCED", style: "AUTO" } },
+      // SKUs whose KIE schema types `seed` as a STRING (google/imagen4 and
+      // imagen4-ultra are the real ones). One per lane, so both input builders
+      // are shown to honour the declaration — not a model name.
+      "string-seed-t2i": { model: "test/string-seed-t2i", cost: 0.01, seedType: "string", extraParams: {} },
+      "string-seed-edit": { model: "test/string-seed-edit", cost: 0.01, inputType: "image-to-image", imageParam: "image_url", seedType: "string", extraParams: {} },
+    },
+  }
+})
 
 // editImage now runs its source image through ensureImageForProvider (the
 // shared format chokepoint), which downloads via safeFetch and — for a format
@@ -388,5 +395,37 @@ describe("ideogram-edit upstream internal-500 hint", () => {
     ).rejects.toMatchObject({
       message: "Generation failed. Please try again or contact support if the issue persists.",
     })
+  })
+})
+
+describe("Seedream 5 Flash — resolution goes out as `size`", () => {
+  const lastInput = () => mocks.mockRunKieTask.mock.calls.at(-1)?.[1] as Record<string, unknown>
+  const lastOpts = () => mocks.mockRunKieTask.mock.calls.at(-1)?.[4] as { dimensions?: Record<string, unknown> }
+
+  it("t2i: default 1K and a chosen 2K are sent as size, never as resolution", async () => {
+    await provider.generateImage("a lighthouse at dusk", undefined, "seedream-5-flash")
+    expect(mocks.mockRunKieTask.mock.calls.at(-1)?.[0]).toBe("seedream/5-flash-text-to-image")
+    expect(lastInput()).toMatchObject({ size: "1K", aspect_ratio: "16:9", output_format: "png" })
+    expect(lastInput()).not.toHaveProperty("resolution")
+
+    await provider.generateImage("a lighthouse at dusk", undefined, "seedream-5-flash", { resolution: "2K", aspect_ratio: "21:9" })
+    expect(lastInput()).toMatchObject({ size: "2K", aspect_ratio: "21:9" })
+    expect(lastInput()).not.toHaveProperty("resolution")
+    expect(lastOpts().dimensions).toMatchObject({ resolution: "2K" })
+  })
+
+  it("i2i: references ride image_urls and the size rename still applies", async () => {
+    await provider.generateImage("make it winter", ["https://a.png", "https://b.png"], "seedream-5-flash-i2i", { resolution: "2K" })
+    expect(mocks.mockRunKieTask.mock.calls.at(-1)?.[0]).toBe("seedream/5-flash-image-to-image")
+    expect(lastInput()).toMatchObject({ image_urls: ["https://a.png", "https://b.png"], size: "2K" })
+    expect(lastInput()).not.toHaveProperty("resolution")
+  })
+
+  it("editImage lane: prompt is kept, size replaces resolution", async () => {
+    await provider.editImage("https://src.png", "make it winter", "seedream-5-flash-i2i", { resolution: "2K" })
+    expect(mocks.mockRunKieTask.mock.calls.at(-1)?.[0]).toBe("seedream/5-flash-image-to-image")
+    expect(lastInput()).toMatchObject({ prompt: "make it winter", image_urls: ["https://src.png"], size: "2K" })
+    expect(lastInput()).not.toHaveProperty("resolution")
+    expect(lastOpts().dimensions).toMatchObject({ resolution: "2K" })
   })
 })

@@ -1,7 +1,7 @@
 {
   "slug": "podcast-tighten-episode",
   "name": "Tighten Episode",
-  "description": "Turn a raw recording into a tightened cut: transcribe it, detect the silences, let the editor plan the trims, then render the final video with optional captions.",
+  "description": "Turn a raw recording into a tightened cut: transcribe it, detect the silences and let the editor plan the trims. The cut renders as a 720p Preview first; review it, then Render final renders the full-quality video with optional captions.",
   "markdownDescription": null,
   "category": "automations",
   "outputTypes": [
@@ -21,8 +21,25 @@
   ],
   "tutorialCategorySlug": "workflows",
   "tutorialSortOrder": 0,
-  "estimatedCredits": 82,
-  "estimatedPerMinuteCredits": 14,
+  "estimatedCredits": 132,
+  "estimatedPerMinuteCredits": 15,
+  "withoutPreviewStopRule": {
+    "estimatedCredits": 82,
+    "estimatedPerMinuteCredits": 14,
+    "description": "Turn a raw recording into a tightened cut: transcribe it, detect the silences, let the editor plan the trims, then render the final video with optional captions.",
+    "notes": {
+      "tighten-note-intro": {
+        "text": "Tighten Episode\n\nUpload a recording, and this canvas plans a tighter cut for you. Transcribe reads the words, Silence Detect finds the dead air, and the Tighten Plan node (Cloud) decides what to trim. Apply Cut renders the result, and Add Captions burns in the remapped word-highlight captions.\n\nDrop your recording on the Episode Recording node, then Run down the chain.",
+        "height": 300,
+        "y": -320
+      },
+      "tighten-note-captions": {
+        "text": "Captions are optional\n\nAdd Captions reads the REMAPPED transcript from Apply Cut (not the raw one), so the highlighted-word captions stay aligned to the tightened video. A wired transcript needs a kinetic style, so this uses Word Highlight (grouped lines, current word lit). Delete this node if you just want the clean cut.",
+        "height": 240,
+        "y": -300
+      }
+    }
+  },
   "nodeTypesUsed": [
     "upload-video",
     "transcribe",
@@ -42,15 +59,15 @@
       "zIndex": -1,
       "position": {
         "x": -100,
-        "y": -320
+        "y": -460
       },
       "data": {
         "bold": false,
-        "text": "Tighten Episode\n\nUpload a recording, and this canvas plans a tighter cut for you. Transcribe reads the words, Silence Detect finds the dead air, and the Tighten Plan node (Cloud) decides what to trim. Apply Cut renders the result, and Add Captions burns in the remapped word-highlight captions.\n\nDrop your recording on the Episode Recording node, then Run down the chain.",
+        "text": "Tighten Episode\n\nUpload a recording, and this canvas plans a tighter cut for you. Transcribe reads the words, Silence Detect finds the dead air, and the Tighten Plan node (Cloud) decides what to trim. Apply Cut renders the cut as a 720p Preview first. Review it, then choose Render final on Apply Cut: it renders the full-quality video, and Add Captions burns in the remapped word-highlight captions.\n\nDrop your recording on the Episode Recording node, then Run down the chain.\n\nTo skip the review, set Apply Cut's Quality to Final.",
         "color": "#2d2d44",
         "label": "Sticky Note",
         "width": 460,
-        "height": 300,
+        "height": 440,
         "italic": false,
         "fontSize": "base",
         "alignment": "left",
@@ -58,7 +75,7 @@
       },
       "measured": {
         "width": 460,
-        "height": 300
+        "height": 440
       }
     },
     {
@@ -134,7 +151,7 @@
       "data": {
         "label": "Apply Cut",
         "output": "video",
-        "quality": "final",
+        "quality": "proxy",
         "crossfadeMs": 0,
         "fieldMappings": {}
       }
@@ -162,15 +179,15 @@
       "zIndex": -1,
       "position": {
         "x": 1800,
-        "y": -300
+        "y": -340
       },
       "data": {
         "bold": false,
-        "text": "Captions are optional\n\nAdd Captions reads the REMAPPED transcript from Apply Cut (not the raw one), so the highlighted-word captions stay aligned to the tightened video. A wired transcript needs a kinetic style, so this uses Word Highlight (grouped lines, current word lit). Delete this node if you just want the clean cut.",
+        "text": "Captions are optional\n\nAdd Captions reads the REMAPPED transcript from Apply Cut (not the raw one), so the highlighted-word captions stay aligned to the tightened video. Render final runs it on the full-quality cut. A wired transcript needs a kinetic style, so this uses Word Highlight (grouped lines, current word lit). Delete this node if you just want the clean cut.",
         "color": "#2d2d44",
         "label": "Sticky Note",
         "width": 360,
-        "height": 240,
+        "height": 280,
         "italic": false,
         "fontSize": "base",
         "alignment": "left",
@@ -178,7 +195,7 @@
       },
       "measured": {
         "width": 360,
-        "height": 240
+        "height": 280
       }
     }
   ],

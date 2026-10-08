@@ -3,8 +3,8 @@ import { z } from "zod"
 import { supabase } from "../../lib/supabase.js"
 import { requireAdmin } from "../middleware/require-admin.js"
 import { requirePlatformOperator } from "../middleware/require-platform-operator.js"
-import { LLM_MODELS, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
-import type { LlmFeature } from "@nodaro/shared"
+import { LLM_MODELS, LLM_FEATURE_DEFAULTS, LLM_CREDIT_RUNGS, llmCreditIdForRung, llmTierCreditIds } from "@nodaro/shared"
+import type { LlmCreditRung, LlmFeature } from "@nodaro/shared"
 /** Derive credit features from the shared LlmFeature type (single source of truth) */
 const LLM_CREDIT_FEATURES = Object.keys(LLM_FEATURE_DEFAULTS) as LlmFeature[]
 
@@ -16,11 +16,7 @@ export async function adminLlmModelsRoutes(app: FastifyInstance) {
   // GET /v1/admin/llm-models — list all LLM models merged with DB pricing
   app.get("/v1/admin/llm-models", { preHandler: requireAdmin }, async (_req, reply) => {
     const modelIds = LLM_MODELS.map((m) => m.id)
-    const featurePatterns = LLM_CREDIT_FEATURES.flatMap((f) => [
-      f,
-      `${f}:economy`,
-      `${f}:premium`,
-    ])
+    const featurePatterns = LLM_CREDIT_FEATURES.flatMap((f) => llmTierCreditIds(f))
     const allIdentifiers = [...modelIds, ...featurePatterns]
 
     const { data: pricingRows, error } = await supabase
@@ -38,22 +34,18 @@ export async function adminLlmModelsRoutes(app: FastifyInstance) {
       (pricingRows ?? []).map((r) => [r.model_identifier, r])
     )
 
-    // Build per-feature credit cost map
-    const featureCosts: Record<string, { economy: number | null; standard: number | null; premium: number | null }> = {}
+    // Build per-feature credit cost map — one entry per credit rung
+    // (economy / standard / premium / premium-direct), from the shared list.
+    const featureCosts: Record<string, Record<LlmCreditRung, number | null>> = {}
     for (const feature of LLM_CREDIT_FEATURES) {
-      const base = pricingMap.get(feature)
-      const economy = pricingMap.get(`${feature}:economy`)
-      const premium = pricingMap.get(`${feature}:premium`)
-      featureCosts[feature] = {
-        economy: economy?.credit_cost ?? null,
-        standard: base?.credit_cost ?? null,
-        premium: premium?.credit_cost ?? null,
-      }
+      featureCosts[feature] = Object.fromEntries(
+        LLM_CREDIT_RUNGS.map((rung) => [rung, pricingMap.get(llmCreditIdForRung(feature, rung))?.credit_cost ?? null]),
+      ) as Record<LlmCreditRung, number | null>
     }
 
-    // Average credit cost per tier
-    const tierCosts = { economy: null as number | null, standard: null as number | null, premium: null as number | null }
-    for (const tier of ["economy", "standard", "premium"] as const) {
+    // Average credit cost per rung
+    const tierCosts = Object.fromEntries(LLM_CREDIT_RUNGS.map((rung) => [rung, null])) as Record<LlmCreditRung, number | null>
+    for (const tier of LLM_CREDIT_RUNGS) {
       const values = Object.values(featureCosts)
         .map((fc) => fc[tier])
         .filter((v): v is number => v !== null)

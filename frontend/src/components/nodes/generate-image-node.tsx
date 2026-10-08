@@ -8,6 +8,7 @@ import { ImageIcon, Loader2, AlertCircle, ShieldAlert, X, Scissors, LayoutGrid, 
 import { HandleWithPopover, HANDLE_COLORS, TEXT_HANDLE_COLOR } from "./handle-with-popover"
 import { isValidGenerateImageConnection } from "@/lib/generate-image-handles"
 import { VISUAL_PARAMETER_PICKER_NODE_TYPES } from "@/lib/parameter-picker-types"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
 
 // Stable, module-level `accepts` predicates for each typed handle. Defining
 // these outside the component avoids creating fresh arrow refs on every
@@ -126,7 +127,7 @@ function GenerateImageNodeComponent({ id, data, selected }: NodeProps) {
   // see the unified sizing effect in `base-node.tsx`. No per-node sizing
   // logic needed here.
   const creditModelId = buildCreditModelIdentifier(
-    runData.provider ?? "nano-banana-pro",
+    runData.provider ?? IMAGE_MODEL_ROLE_DEFAULTS.general,
     runData as unknown as Record<string, unknown>,
   )
   // Single-provider primary cost (also primes the cache). Multi-provider total

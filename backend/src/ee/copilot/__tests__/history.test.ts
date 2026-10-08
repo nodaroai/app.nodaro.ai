@@ -213,3 +213,50 @@ describe("replay drops an image block the model cannot read", () => {
     expect(buildHistory(rows)[0]!.content).toEqual(content)
   })
 })
+
+describe("stripThinkingBlocks (conversation-bound thinking, Claude 5.5)", () => {
+  it("drops thinking + redacted_thinking blocks and keeps text / tool blocks in order", async () => {
+    const { stripThinkingBlocks } = await import("../history.js")
+    const input = [
+      { role: "user" as const, content: "build it" },
+      {
+        role: "assistant" as const,
+        content: [
+          { type: "thinking" as const, thinking: "", signature: "s1" },
+          { type: "text" as const, text: "On it." },
+          { type: "redacted_thinking" as const, data: "x" },
+          { type: "tool_use" as const, id: "t1", name: "edit_workflow", input: {} },
+        ],
+      },
+      { role: "user" as const, content: [{ type: "tool_result" as const, tool_use_id: "t1", content: "ok" }] },
+    ]
+    const out = stripThinkingBlocks(input)
+    expect(out[1]!.content).toEqual([
+      { type: "text", text: "On it." },
+      { type: "tool_use", id: "t1", name: "edit_workflow", input: {} },
+    ])
+    expect(out[0]).toBe(input[0])
+    expect(out[2]).toBe(input[2])
+    // Never mutates the stored history.
+    expect((input[1]!.content as unknown[]).length).toBe(4)
+  })
+
+  it("drops an assistant message left empty", async () => {
+    const { stripThinkingBlocks } = await import("../history.js")
+    const out = stripThinkingBlocks([
+      { role: "user", content: "hi" },
+      { role: "assistant", content: [{ type: "thinking", thinking: "", signature: "s" }] },
+    ])
+    expect(out).toEqual([{ role: "user", content: "hi" }])
+  })
+})
+
+describe("premium tier is Opus 5.5 with conversation-bound thinking", () => {
+  it("the premium tier's registry model declares conversationBoundThinking", async () => {
+    const { COPILOT_TIERS } = await import("../constants.js")
+    const { getLlmModel } = await import("@nodaro/shared")
+    expect(COPILOT_TIERS.premium.registryId).toBe("claude-opus-5.5")
+    expect(COPILOT_TIERS.premium.anthropicModelId).toBe("claude-opus-5-5")
+    expect(getLlmModel(COPILOT_TIERS.premium.registryId)?.conversationBoundThinking).toBe(true)
+  })
+})

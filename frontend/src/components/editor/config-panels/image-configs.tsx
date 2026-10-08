@@ -69,6 +69,7 @@ import { ConnectedCinematographySources } from "./connected-cinematography-sourc
 import { hasConnectedStyleNode } from "@/lib/cinematography-hints"
 import type { ConfigProps } from "./types"
 import type { SelectedAsset } from "../asset-selection-modal"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
 
 const AssetSelectionModal = lazy(() => import("../asset-selection-modal").then(m => ({ default: m.AssetSelectionModal })))
 const MaskPainterModal = lazy(() => import("../mask-painter-modal").then(m => ({ default: m.MaskPainterModal })))
@@ -176,10 +177,10 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
   const providersList = useMemo<readonly ImageProvider[]>(
     () => (data.providers && data.providers.length > 0
       ? data.providers
-      : [data.provider || "nano-banana-pro"]),
+      : [data.provider || IMAGE_MODEL_ROLE_DEFAULTS.general]),
     [data.providers, data.provider],
   )
-  const currentProvider = providersList[0] || "nano-banana-pro"
+  const currentProvider = providersList[0] || IMAGE_MODEL_ROLE_DEFAULTS.general
   const isMulti = providersList.length > 1
 
   // Narrow option sets to what ALL selected providers support (intersection).
@@ -918,7 +919,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
   const promptSnippets = useSnippetPool("image", "prompt")
   const negativeSnippets = useSnippetPool("image", "negative")
   useEffect(() => { prefetchModelCredits(MODIFY_IMAGE_MODELS.map((m) => m.value)) }, [])
-  const currentProvider = data.provider || "nano-banana"
+  const currentProvider = data.provider || IMAGE_MODEL_ROLE_DEFAULTS.edit
   const isNanoBananaEdit = currentProvider === "nano-banana-edit"
   const supportsRefImage = !isNanoBananaEdit && MODELS_WITH_REFERENCE_IMAGE_SUPPORT.has(currentProvider)
   const aspectRatioOptions = useMemo(() => getAspectRatiosForModel(currentProvider), [currentProvider])
@@ -1344,7 +1345,7 @@ function ModifyImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
     <div className="flex flex-col gap-3">
       <MappableField field="provider" label={t("field.provider")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField} providerCategory="image">
         <ModelSearchSelect
-          value={data.provider || "nano-banana"}
+          value={data.provider || IMAGE_MODEL_ROLE_DEFAULTS.edit}
           onChange={(v) => onUpdate({ provider: v as ModifyImageData["provider"] })}
           options={MODIFY_IMAGE_MODELS.map((m) => ({
             value: m.value,

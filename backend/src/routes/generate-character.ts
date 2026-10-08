@@ -17,6 +17,7 @@ import { formatZodError } from "../lib/zod-error.js"
 import { hasCredits } from "../lib/config.js"
 import { CHARACTER_ASPECT_OPTIONS, resolveCharacterAspectRatio, CHARACTER_REFERENCE_PHOTO_KINDS } from "@nodaro/shared"
 import { sendInternalError } from "../lib/http-errors.js"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
 
 const generateCharacterBody = z
   .object({
@@ -43,7 +44,7 @@ const generateCharacterBody = z
     style: z.string().max(50).optional(),
     baseOutfit: z.string().max(1000).optional(),
     sourceImageUrl: safeUrlSchema.optional(),
-    provider: z.string().optional().default("nano-banana"),
+    provider: z.string().optional().default(IMAGE_MODEL_ROLE_DEFAULTS.character),
     // Credit-affecting output levers (mirrors generate-image). The enums are
     // PERMISSIVE on purpose — a value the chosen model doesn't support is never
     // 400d. It is SNAPPED to the model's catalog entry inside

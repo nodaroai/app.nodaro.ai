@@ -11,14 +11,14 @@ Image to Image takes a source image and a text prompt to generate a transformed 
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| Provider | select | `nano-banana` | AI model to use for transformation (21 options) |
+| Provider | select | `gpt-image-2-5-flare-i2i` | AI model to use for transformation (21 options) |
 | Prompt | text | `""` | Description of the desired transformation |
 | Style | select | `""` | 16 presets + "Custom..." free text (same as Generate Image) |
 | Negative Prompt | text | `""` | Elements to exclude from the result |
 | Strength | slider (0-1) | varies | How much to deviate from the source image. Higher values mean more change. Only available for providers that support it. |
 | Guidance Scale | number | varies | Prompt adherence strength. Only available for providers that support it. |
 | Aspect Ratio | select | varies | Provider-specific ratio sets (same sets as Generate Image) |
-| Resolution | select | varies | Available for flux-i2i, flux-pro-i2i: 1K, 2K |
+| Resolution | select | varies | Available for flux-i2i, flux-pro-i2i: 1K, 2K; seedream-5-flash-i2i: 1K, 2K (same price at either) |
 | Quality | select | varies | Available for gpt-image-i2i (medium/high), seedream-edit (basic/high), seedream-5-lite-i2i (basic/high), seedream-5-pro-i2i (basic 1K / high 2K) |
 | Rendering Speed | select | -- | Available for ideogram variants: turbo, balanced, quality |
 | Seed | number | -- | Reproducibility seed (select providers) |
@@ -37,7 +37,7 @@ Image to Image takes a source image and a text prompt to generate a transformed 
 | Provider | Label | Description | Key Capability |
 |----------|-------|-------------|----------------|
 | nano-banana | Nano Banana | Fast iteration, quick transforms | General I2I |
-| nano-banana-2 | Nano Banana 2 | Updated Nano Banana; 1K/2K/4K resolution. Superseded by Nano Banana 2.1 (`nano-banana-2-1`), now the default; still available. | General I2I, resolution options |
+| nano-banana-2 | Nano Banana 2 | Updated Nano Banana; 1K/2K/4K resolution. Superseded by Nano Banana 2.1 (`nano-banana-2-1`); still available. | General I2I, resolution options |
 | nano-banana-2-1 | Nano Banana 2.1 | Consistent edits with strong character consistency and text rendering; 1K / 2K / 4K at **10 / 20 / 30 credits** | Up to 10 input images, resolution options |
 | nano-banana-2-lite | Nano Banana 2 Lite | Fast, low-cost 1K edits (Gemini 3.1 Flash-Lite); flat 10 credits | Up to 10 input images |
 | nano-banana-pro | Nano Banana Pro | Higher detail, production images | General I2I, resolution options |
@@ -46,7 +46,7 @@ Image to Image takes a source image and a text prompt to generate a transformed 
 | flux-pro-i2i | Flux-2 Pro | Premium quality image transforms | Resolution options (1K/2K) |
 | gpt-image-i2i | GPT Image | Text rendering, complex compositions | Quality options (medium/high) |
 | gpt-image-2-i2i | GPT Image 2 | Higher resolution GPT Image; 1K/2K/4K | Resolution options |
-| gpt-image-2-5-flare-i2i | GPT Image 2.5 Flare | Fast GPT Image 2.5 edits, up to 16 source images — the default while iterating; 1K/2K/4K at **15 / 25 / 40 credits** | Resolution options |
+| gpt-image-2-5-flare-i2i | GPT Image 2.5 Flare | Fast GPT Image 2.5 edits, up to 16 source images — the default edit model; 1K/2K/4K at **15 / 25 / 40 credits** | Resolution options |
 | gpt-image-2-5-sunburst-i2i | GPT Image 2.5 Sunburst | Precision GPT Image 2.5 edits, up to 16 source images — tightest control for demanding retouches, slower; same **15 / 25 / 40 credits** | Resolution options |
 | ideogram-edit | Ideogram Edit | AI-guided image editing | Mask-based inpainting |
 | ideogram-remix | Ideogram Remix | Restyle with character consistency | Character-consistent restyling |
@@ -55,6 +55,7 @@ Image to Image takes a source image and a text prompt to generate a transformed 
 | seedream-edit | Seedream Edit | Photorealistic image editing | Quality options (basic/high) |
 | seedream-5-lite-i2i | Seedream 5 Lite | Latest Seedream image-to-image | Quality options (basic/high) |
 | seedream-5-pro-i2i | Seedream 5 Pro | Flagship Seedream image-to-image, multi-reference instruction edits. **19 credits** at basic (1K) / **60 credits** at high (2K). | Quality options (basic/high) |
+| seedream-5-flash-i2i | Seedream 5 Flash | Fast, low-cost Seedream edits; flat **10 credits** at 1K or 2K | Up to 10 input images, resolution options (1K/2K) |
 | flux-kontext | Flux Kontext | Context-aware editing via Kontext | Context-aware transforms |
 | flux-kontext-max | Flux Kontext Max | Highest quality Kontext editing | Premium context-aware transforms |
 | kontext-multi | Kontext Multi (Open) | Multi-image Flux Kontext Pro via Replicate — no safety filter | Up to 2 reference images. 30 credits |
@@ -82,3 +83,4 @@ Image to Image takes a source image and a text prompt to generate a transformed 
 - Not all providers support every configuration field. The config panel dynamically shows/hides fields based on the selected provider. For example, mask is only available for ideogram-edit, and strength is only shown for providers that support it.
 - Ideogram providers use rendering speed (turbo/balanced/quality) instead of resolution to control output quality and cost -- turbo is cheapest, quality is most expensive.
 - When chaining Image to Image after Generate Image, the output of Generate Image connects to the `image` input handle. The `out` output handle feeds downstream nodes.
+- **An `{image:N}` token with no reference image at its position becomes its label** — `{image:1:person}` reads as `person`, a bare `{image:1}` is left out, and an image label is any text up to the closing brace (`{image:1:man's jacket}` reads as `man's jacket`).

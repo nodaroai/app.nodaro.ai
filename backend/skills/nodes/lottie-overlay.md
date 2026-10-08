@@ -1,7 +1,7 @@
 ---
 node_type: lottie-overlay
-generated_at: 2026-10-05T21:37:07.368Z
-generated_from: 066cc1460
+generated_at: 2026-10-08T09:21:52.813Z
+generated_from: cdb16c72b
 ---
 
 # Lottie Overlay
@@ -9,7 +9,7 @@ generated_from: 066cc1460
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `lottie-overlay`
 **Category:** processing
-**Credit cost:** `5-20` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `5-50` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
 **Inputs (target handles):** `video`, `lottie`
 **Outputs (source handles):** `composition`
 

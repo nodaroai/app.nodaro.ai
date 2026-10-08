@@ -12,7 +12,7 @@ behind those defaults so you can make your own trade-offs.
 | Presets | Character, Pose, Location, Product, Outfit, Scene, Creature, Vehicle, Food, Mascot, Pet Board | Character Reference Grid, Cast Mega Grid, Cast Scene |
 | What they make | A dense, editorial production sheet: hero shot, metadata block, labeled panels (views, expressions, details, lighting), HEX color palette | A sterile, neutral-background grid of canonical angles — no text, no decoration |
 | Made for | **Humans** — art direction, briefing, a project's visual bible | **Models** — feeding back into later generations as an identity anchor |
-| Default model | `nano-banana-pro` @ 2K, 16:9 | `nano-banana-2-1` @ 4K, 3:4 |
+| Default model | `gpt-image-2` @ 2K, 16:9 | `gpt-image-2` @ 4K, 3:4 |
 
 Both follow the same workflow: **connect one sharp, well-lit, front-facing photo** → generate →
 **reuse the result as a reference image** in every later generation (image or video) featuring that
@@ -24,12 +24,30 @@ re-describing them — less re-description means less identity drift.
 
 | Job | Use | Why |
 |---|---|---|
-| Any Reference Sheet board | `nano-banana-pro` (default) | Best identity fidelity across panels and best text rendering for the metadata block, panel labels, and HEX swatches |
-| Identity grids to feed back as references | `nano-banana-2-1` (default) | Nano Banana 2.1 — nearly Pro-level identity at lower cost and higher speed (consistency work is iteration-heavy, so cost-per-attempt matters); 4K keeps panel faces sharp when reused. It replaced `nano-banana-2`, the model in the tests below |
-| Layout-critical sheets where likeness is secondary | `gpt-image-2` | In our tests it followed multi-panel layout instructions the most completely and produced very uniform panel sizing — but the face drifts (see below) |
-| Label/edit workflows (Edit by Name, annotations) | `gpt-image-2` | Strong instruction-following for overlay/labeling tasks |
+| Any Reference Sheet board | `gpt-image-2` (default) | Dense boards with a faithful face, every requested panel, and clean labels and HEX swatches |
+| Identity grids to feed back as references | `gpt-image-2` (default) | Built the cleanest four-angle grid and kept both identities on the two-person cast sheet; 4K keeps panel faces sharp when reused |
+| A board at a ratio GPT Image 2 can't draw (2:3, 21:9, 3:2) | `gpt-image-2-5-sunburst` | The same family's precision model, with a wider ratio set |
+| Fast, cheap iteration before a final board | `nano-banana-2-1` | Strong for its price; switch to `gpt-image-2` for the board you keep |
 
-## The experiment behind the defaults
+## The October 2026 comparison (current defaults)
+
+The defaults above come from a blind comparison on 2026-10-08: GPT Image 2, GPT Image 2.5 Flare,
+GPT Image 2.5 Sunburst, Nano Banana Pro and Nano Banana 2.1 on the same prompts and source photos,
+including the exact Character Reference Grid, Cast Mega Grid and Character Board presets. One
+generation per cell, so treat single results as directional; the pattern across prompts is what
+counts.
+
+- **GPT Image 2 produced the best reference grid and character board**, kept both identities on
+  the cast sheet, and was the cleanest on exact text.
+- **Nano Banana Pro was the weakest on these presets.** It broke the four-panel grid layout,
+  dropped a name label on the cast sheet and changed an outfit.
+- **Nano Banana 2.1 labelled the cast sheet correctly** and is a good, cheaper choice for drafts.
+
+That reverses the identity result of the June test below, which compared fewer models with
+different prompts. The board prompts still carry the never-merge-panels clause that came out of
+the June run.
+
+## The earlier experiment (June 2026)
 
 We ran the same prompts with the same source photos head-to-head (June 2026, one generation per
 cell — treat as directional, not statistical):

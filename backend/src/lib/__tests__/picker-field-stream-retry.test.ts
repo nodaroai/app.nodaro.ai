@@ -71,7 +71,7 @@ describe("the field gate across a correction retry", () => {
     const events: Array<{ field: string; value: string | string[] }> = []
     const fields = createPickerFieldStream({ targetPickers: ["person", "styling"], onField: (e) => events.push(e) })
     const res = await llmStreamStructured(
-      { modelId: "claude-sonnet-4.6", system: "sys", messages: [{ role: "user", content: "analyze" }] },
+      { modelId: "claude-sonnet-4.6", system: "sys", messages: [{ role: "user", content: "analyze" }], reasoningEffort: "low" },
       schema,
       { schemaName: toolName, onToolJson: (partialJson) => fields.push(partialJson) },
     )

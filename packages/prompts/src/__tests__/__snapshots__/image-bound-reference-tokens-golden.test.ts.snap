@@ -1,0 +1,1273 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, hybrid · creatorAtHome 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Waist-up photo of the person from reference image A, an adult, standing at home in front of a plain wall, arms relaxed, empty hands.",
+  "referenceImageUrls": [
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, hybrid · facePrivacy 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Remove persons faces from reference image A, keep everything else the same",
+  "referenceImageUrls": [
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, hybrid · multiLine 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Scene:
+    The person from reference image A stands  still
+
+Reference image B behind",
+  "referenceImageUrls": [
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, hybrid · pillSpacing 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "A man wearing the hat from reference image A in the park",
+  "referenceImageUrls": [
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, hybrid · productInHand 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "An adult woman in her thirties holds the product from reference image A at chest height toward the viewer, label facing out, in a bright room at home.",
+  "referenceImageUrls": [
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, hybrid · skinDetailSheet 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Create a single skin detail reference sheet titled "SKIN DETAIL SHEET" from the person from reference image A, the single source of truth for identity, skin tone and features. Six panels: PANEL 01 — FULL FACE (front, eye level) · PANEL 02 — LEFT CHEEK & NOSE. In every panel: Skin shows its real structure. Plain neutral grey background, thin white panel labels in English.",
+  "referenceImageUrls": [
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, hybrid · tokenFreeIndented 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Shot list:
+    1. Wide
+    2. Close  up",
+  "referenceImageUrls": [
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, hybrid · tokenFreeSpacing 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "A  cat   on a mat ",
+  "referenceImageUrls": [
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, hybrid · twoTokens 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "The person from reference image A with the face from reference image B",
+  "referenceImageUrls": [
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, hybrid, bound token in the negative · creatorAtHome 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Waist-up photo of the person from reference image A, an adult, standing at home in front of a plain wall, arms relaxed, empty hands.
+Avoid: {image:1:hat} on the floor",
+  "referenceImageUrls": [
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, hybrid, bound token in the negative · facePrivacy 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Remove persons faces from reference image A, keep everything else the same
+Avoid: {image:1:hat} on the floor",
+  "referenceImageUrls": [
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, hybrid, bound token in the negative · multiLine 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Scene:
+    The person from reference image A stands  still
+
+Reference image B behind
+Avoid: {image:1:hat} on the floor",
+  "referenceImageUrls": [
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, hybrid, bound token in the negative · pillSpacing 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "A man wearing the hat from reference image A in the park
+Avoid: {image:1:hat} on the floor",
+  "referenceImageUrls": [
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, hybrid, bound token in the negative · productInHand 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "An adult woman in her thirties holds the product from reference image A at chest height toward the viewer, label facing out, in a bright room at home.
+Avoid: {image:1:hat} on the floor",
+  "referenceImageUrls": [
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, hybrid, bound token in the negative · skinDetailSheet 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Create a single skin detail reference sheet titled "SKIN DETAIL SHEET" from the person from reference image A, the single source of truth for identity, skin tone and features. Six panels: PANEL 01 — FULL FACE (front, eye level) · PANEL 02 — LEFT CHEEK & NOSE. In every panel: Skin shows its real structure. Plain neutral grey background, thin white panel labels in English.
+Avoid: {image:1:hat} on the floor",
+  "referenceImageUrls": [
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, hybrid, bound token in the negative · tokenFreeIndented 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Shot list:
+    1. Wide
+    2. Close  up
+Avoid: {image:1:hat} on the floor",
+  "referenceImageUrls": [
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, hybrid, bound token in the negative · tokenFreeSpacing 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "A  cat   on a mat 
+Avoid: {image:1:hat} on the floor",
+  "referenceImageUrls": [
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, hybrid, bound token in the negative · twoTokens 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "The person from reference image A with the face from reference image B
+Avoid: {image:1:hat} on the floor",
+  "referenceImageUrls": [
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, hybrid, wired character first · creatorAtHome 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Waist-up photo of the person from reference image B, an adult, standing at home in front of a plain wall, arms relaxed, empty hands.
+the person from reference image A",
+  "referenceImageUrls": [
+    "https://r2/kira.png",
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, hybrid, wired character first · facePrivacy 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "remove persons faces from reference image B, keep everything else the same
+the person from reference image A",
+  "referenceImageUrls": [
+    "https://r2/kira.png",
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, hybrid, wired character first · multiLine 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Scene:
+    the person from reference image B stands  still
+
+reference image C behind
+the person from reference image A",
+  "referenceImageUrls": [
+    "https://r2/kira.png",
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, hybrid, wired character first · pillSpacing 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "a man wearing the hat from reference image B in the park
+the person from reference image A",
+  "referenceImageUrls": [
+    "https://r2/kira.png",
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, hybrid, wired character first · productInHand 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "An adult woman in her thirties holds the product from reference image B at chest height toward the viewer, label facing out, in a bright room at home.
+the person from reference image A",
+  "referenceImageUrls": [
+    "https://r2/kira.png",
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, hybrid, wired character first · skinDetailSheet 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Create a single skin detail reference sheet titled "SKIN DETAIL SHEET" from the person from reference image B, the single source of truth for identity, skin tone and features. Six panels: PANEL 01 — FULL FACE (front, eye level) · PANEL 02 — LEFT CHEEK & NOSE. In every panel: Skin shows its real structure. Plain neutral grey background, thin white panel labels in English.
+the person from reference image A",
+  "referenceImageUrls": [
+    "https://r2/kira.png",
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, hybrid, wired character first · tokenFreeIndented 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Shot list:
+    1. wide
+    2. close  up
+the person from reference image A",
+  "referenceImageUrls": [
+    "https://r2/kira.png",
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, hybrid, wired character first · tokenFreeSpacing 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "a  cat   on a mat 
+the person from reference image A",
+  "referenceImageUrls": [
+    "https://r2/kira.png",
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, hybrid, wired character first · twoTokens 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "the person from reference image B with the face from reference image C
+the person from reference image A",
+  "referenceImageUrls": [
+    "https://r2/kira.png",
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, legacy · creatorAtHome 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Use these references for the output image:
+- Image 1 (person) — match exactly. Maintain perfect likeness (face, body proportions, distinctive features).
+
+Compose them naturally into a single image: Waist-up photo of Image 1 (person), an adult, standing at home in front of a plain wall, arms relaxed, empty hands.",
+  "referenceImageUrls": [
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, legacy · facePrivacy 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "remove persons faces from Image 1, keep everything else the same",
+  "referenceImageUrls": [
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, legacy · multiLine 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Use these references for the output image:
+- Image 1 (person) — match exactly. Maintain perfect likeness (face, body proportions, distinctive features).
+
+Compose them naturally into a single image: Scene:
+    Image 1 (person) stands  still
+
+Image 2 behind",
+  "referenceImageUrls": [
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, legacy · pillSpacing 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Use these references for the output image:
+- Image 1 (hat) — match exactly.
+
+Compose them naturally into a single image: a man wearing Image 1 (hat)  in the park",
+  "referenceImageUrls": [
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, legacy · productInHand 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Use these references for the output image:
+- Image 1 (product) — match exactly.
+
+Compose them naturally into a single image: An adult woman in her thirties holds Image 1 (product) at chest height toward the viewer, label facing out, in a bright room at home.",
+  "referenceImageUrls": [
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, legacy · skinDetailSheet 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Use these references for the output image:
+- Image 1 (person) — match exactly. Maintain perfect likeness (face, body proportions, distinctive features).
+
+Compose them naturally into a single image: Create a single skin detail reference sheet titled "SKIN DETAIL SHEET" from Image 1 (person), the single source of truth for identity, skin tone and features. Six panels: PANEL 01 — FULL FACE (front, eye level) · PANEL 02 — LEFT CHEEK & NOSE. In every panel: Skin shows its real structure. Plain neutral grey background, thin white panel labels in English.",
+  "referenceImageUrls": [
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, legacy · tokenFreeIndented 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Shot list:
+    1. wide
+    2. close  up",
+  "referenceImageUrls": [
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, legacy · tokenFreeSpacing 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "a  cat   on a mat ",
+  "referenceImageUrls": [
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, legacy · twoTokens 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Use these references for the output image:
+- Image 1 (person) — match exactly. Maintain perfect likeness (face, body proportions, distinctive features).
+- Image 2 (face) — match exactly. Maintain perfect likeness (face, body proportions, distinctive features).
+
+Compose them naturally into a single image: Image 1 (person) with Image 2 (face)",
+  "referenceImageUrls": [
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, legacy, face + image, style + negative · creatorAtHome 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Use these references for the output image:
+- Image 1 (person — tall, red hair) — match exactly. Maintain perfect likeness (face, body proportions, distinctive features).
+
+Compose them naturally into a single image: Waist-up photo of Image 1 (person), an adult, standing at home in front of a plain wall, arms relaxed, empty hands.
+Style: cinematic film style, dramatic lighting with cinematic color grading, widescreen aesthetic and film-like depth of field
+Avoid: blurry",
+  "referenceImageUrls": [
+    "https://r2/sarah.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, legacy, face + image, style + negative · facePrivacy 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "remove persons faces from Image 1, keep everything else the same
+Style: cinematic film style, dramatic lighting with cinematic color grading, widescreen aesthetic and film-like depth of field
+Avoid: blurry",
+  "referenceImageUrls": [
+    "https://r2/sarah.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, legacy, face + image, style + negative · multiLine 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Use these references for the output image:
+- Image 1 (person — tall, red hair) — match exactly. Maintain perfect likeness (face, body proportions, distinctive features).
+
+Compose them naturally into a single image: Scene:
+    Image 1 (person) stands  still
+
+Image 2 behind
+Style: cinematic film style, dramatic lighting with cinematic color grading, widescreen aesthetic and film-like depth of field
+Avoid: blurry",
+  "referenceImageUrls": [
+    "https://r2/sarah.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, legacy, face + image, style + negative · pillSpacing 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Use these references for the output image:
+- Image 1 (hat — tall, red hair) — match exactly. Maintain perfect likeness.
+
+Compose them naturally into a single image: a man wearing Image 1 (hat)  in the park
+Style: cinematic film style, dramatic lighting with cinematic color grading, widescreen aesthetic and film-like depth of field
+Avoid: blurry",
+  "referenceImageUrls": [
+    "https://r2/sarah.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, legacy, face + image, style + negative · productInHand 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Use these references for the output image:
+- Image 1 (product — tall, red hair) — match exactly. Maintain perfect likeness.
+
+Compose them naturally into a single image: An adult woman in her thirties holds Image 1 (product) at chest height toward the viewer, label facing out, in a bright room at home.
+Style: cinematic film style, dramatic lighting with cinematic color grading, widescreen aesthetic and film-like depth of field
+Avoid: blurry",
+  "referenceImageUrls": [
+    "https://r2/sarah.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, legacy, face + image, style + negative · skinDetailSheet 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Use these references for the output image:
+- Image 1 (person — tall, red hair) — match exactly. Maintain perfect likeness (face, body proportions, distinctive features).
+
+Compose them naturally into a single image: Create a single skin detail reference sheet titled "SKIN DETAIL SHEET" from Image 1 (person), the single source of truth for identity, skin tone and features. Six panels: PANEL 01 — FULL FACE (front, eye level) · PANEL 02 — LEFT CHEEK & NOSE. In every panel: Skin shows its real structure. Plain neutral grey background, thin white panel labels in English.
+Style: cinematic film style, dramatic lighting with cinematic color grading, widescreen aesthetic and film-like depth of field
+Avoid: blurry",
+  "referenceImageUrls": [
+    "https://r2/sarah.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, legacy, face + image, style + negative · tokenFreeIndented 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Shot list:
+    1. wide
+    2. close  up
+Style: cinematic film style, dramatic lighting with cinematic color grading, widescreen aesthetic and film-like depth of field
+Avoid: blurry",
+  "referenceImageUrls": [
+    "https://r2/sarah.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, legacy, face + image, style + negative · tokenFreeSpacing 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "a  cat   on a mat 
+Style: cinematic film style, dramatic lighting with cinematic color grading, widescreen aesthetic and film-like depth of field
+Avoid: blurry",
+  "referenceImageUrls": [
+    "https://r2/sarah.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, legacy, face + image, style + negative · twoTokens 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Use these references for the output image:
+- Image 1 (person — tall, red hair) — match exactly. Maintain perfect likeness (face, body proportions, distinctive features).
+- Image 2 (face) — match exactly. Maintain perfect likeness (face, body proportions, distinctive features).
+
+Compose them naturally into a single image: Image 1 (person) with Image 2 (face)
+Style: cinematic film style, dramatic lighting with cinematic color grading, widescreen aesthetic and film-like depth of field
+Avoid: blurry",
+  "referenceImageUrls": [
+    "https://r2/sarah.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, legacy, provider without reference support · creatorAtHome 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Use these references for the output image:
+- Image 1 (person) — match exactly. Maintain perfect likeness (face, body proportions, distinctive features).
+
+Compose them naturally into a single image: Waist-up photo of Image 1 (person), an adult, standing at home in front of a plain wall, arms relaxed, empty hands.",
+  "referenceImageUrls": undefined,
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, legacy, provider without reference support · facePrivacy 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "remove persons faces from Image 1, keep everything else the same",
+  "referenceImageUrls": undefined,
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, legacy, provider without reference support · multiLine 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Use these references for the output image:
+- Image 1 (person) — match exactly. Maintain perfect likeness (face, body proportions, distinctive features).
+
+Compose them naturally into a single image: Scene:
+    Image 1 (person) stands  still
+
+Image 2 behind",
+  "referenceImageUrls": undefined,
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, legacy, provider without reference support · pillSpacing 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Use these references for the output image:
+- Image 1 (hat) — match exactly.
+
+Compose them naturally into a single image: a man wearing Image 1 (hat)  in the park",
+  "referenceImageUrls": undefined,
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, legacy, provider without reference support · productInHand 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Use these references for the output image:
+- Image 1 (product) — match exactly.
+
+Compose them naturally into a single image: An adult woman in her thirties holds Image 1 (product) at chest height toward the viewer, label facing out, in a bright room at home.",
+  "referenceImageUrls": undefined,
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, legacy, provider without reference support · skinDetailSheet 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Use these references for the output image:
+- Image 1 (person) — match exactly. Maintain perfect likeness (face, body proportions, distinctive features).
+
+Compose them naturally into a single image: Create a single skin detail reference sheet titled "SKIN DETAIL SHEET" from Image 1 (person), the single source of truth for identity, skin tone and features. Six panels: PANEL 01 — FULL FACE (front, eye level) · PANEL 02 — LEFT CHEEK & NOSE. In every panel: Skin shows its real structure. Plain neutral grey background, thin white panel labels in English.",
+  "referenceImageUrls": undefined,
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, legacy, provider without reference support · tokenFreeIndented 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Shot list:
+    1. wide
+    2. close  up",
+  "referenceImageUrls": undefined,
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, legacy, provider without reference support · tokenFreeSpacing 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "a  cat   on a mat ",
+  "referenceImageUrls": undefined,
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, legacy, provider without reference support · twoTokens 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Use these references for the output image:
+- Image 1 (person) — match exactly. Maintain perfect likeness (face, body proportions, distinctive features).
+- Image 2 (face) — match exactly. Maintain perfect likeness (face, body proportions, distinctive features).
+
+Compose them naturally into a single image: Image 1 (person) with Image 2 (face)",
+  "referenceImageUrls": undefined,
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, legacy, reorder · creatorAtHome 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Use these references for the output image:
+- Image 2 (person) — match exactly. Maintain perfect likeness (face, body proportions, distinctive features).
+
+Compose them naturally into a single image: Waist-up photo of Image 2 (person), an adult, standing at home in front of a plain wall, arms relaxed, empty hands.",
+  "referenceImageUrls": [
+    "https://r2/coat.png",
+    "https://r2/hat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, legacy, reorder · facePrivacy 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "remove persons faces from Image 2, keep everything else the same",
+  "referenceImageUrls": [
+    "https://r2/coat.png",
+    "https://r2/hat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, legacy, reorder · multiLine 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Use these references for the output image:
+- Image 2 (person) — match exactly. Maintain perfect likeness (face, body proportions, distinctive features).
+
+Compose them naturally into a single image: Scene:
+    Image 2 (person) stands  still
+
+Image 1 behind",
+  "referenceImageUrls": [
+    "https://r2/coat.png",
+    "https://r2/hat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, legacy, reorder · pillSpacing 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Use these references for the output image:
+- Image 2 (hat) — match exactly.
+
+Compose them naturally into a single image: a man wearing Image 2 (hat)  in the park",
+  "referenceImageUrls": [
+    "https://r2/coat.png",
+    "https://r2/hat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, legacy, reorder · productInHand 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Use these references for the output image:
+- Image 2 (product) — match exactly.
+
+Compose them naturally into a single image: An adult woman in her thirties holds Image 2 (product) at chest height toward the viewer, label facing out, in a bright room at home.",
+  "referenceImageUrls": [
+    "https://r2/coat.png",
+    "https://r2/hat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, legacy, reorder · skinDetailSheet 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Use these references for the output image:
+- Image 2 (person) — match exactly. Maintain perfect likeness (face, body proportions, distinctive features).
+
+Compose them naturally into a single image: Create a single skin detail reference sheet titled "SKIN DETAIL SHEET" from Image 2 (person), the single source of truth for identity, skin tone and features. Six panels: PANEL 01 — FULL FACE (front, eye level) · PANEL 02 — LEFT CHEEK & NOSE. In every panel: Skin shows its real structure. Plain neutral grey background, thin white panel labels in English.",
+  "referenceImageUrls": [
+    "https://r2/coat.png",
+    "https://r2/hat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, legacy, reorder · tokenFreeIndented 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Shot list:
+    1. wide
+    2. close  up",
+  "referenceImageUrls": [
+    "https://r2/coat.png",
+    "https://r2/hat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, legacy, reorder · tokenFreeSpacing 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "a  cat   on a mat ",
+  "referenceImageUrls": [
+    "https://r2/coat.png",
+    "https://r2/hat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, legacy, reorder · twoTokens 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Use these references for the output image:
+- Image 2 (person) — match exactly. Maintain perfect likeness (face, body proportions, distinctive features).
+- Image 1 (face) — match exactly. Maintain perfect likeness (face, body proportions, distinctive features).
+
+Compose them naturally into a single image: Image 2 (person) with Image 1 (face)",
+  "referenceImageUrls": [
+    "https://r2/coat.png",
+    "https://r2/hat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, legacy, wired character first · creatorAtHome 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Use these characters:
+- Image 1 (Kira) — auburn shoulder-length hair. The subject must remain exactly the same person — preserve 100% facial identity, bone structure, skin tone, proportions, and all unique features. Do not alter eyes, nose, mouth, or facial shape. Maintain natural skin texture, including pores and imperfections.
+- Image 2 (person) — match exactly. Maintain perfect likeness (face, body proportions, distinctive features).
+
+Waist-up photo of Image 2 (person), an adult, standing at home in front of a plain wall, arms relaxed, empty hands.",
+  "referenceImageUrls": [
+    "https://r2/kira.png",
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, legacy, wired character first · facePrivacy 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Use these characters:
+- Image 1 (Kira) — auburn shoulder-length hair. The subject must remain exactly the same person — preserve 100% facial identity, bone structure, skin tone, proportions, and all unique features. Do not alter eyes, nose, mouth, or facial shape. Maintain natural skin texture, including pores and imperfections.
+
+remove persons faces from Image 2, keep everything else the same",
+  "referenceImageUrls": [
+    "https://r2/kira.png",
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, legacy, wired character first · multiLine 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Use these characters:
+- Image 1 (Kira) — auburn shoulder-length hair. The subject must remain exactly the same person — preserve 100% facial identity, bone structure, skin tone, proportions, and all unique features. Do not alter eyes, nose, mouth, or facial shape. Maintain natural skin texture, including pores and imperfections.
+- Image 2 (person) — match exactly. Maintain perfect likeness (face, body proportions, distinctive features).
+
+Scene:
+    Image 2 (person) stands  still
+
+Image 3 behind",
+  "referenceImageUrls": [
+    "https://r2/kira.png",
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, legacy, wired character first · pillSpacing 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Use these characters:
+- Image 1 (Kira) — auburn shoulder-length hair. The subject must remain exactly the same person — preserve 100% facial identity, bone structure, skin tone, proportions, and all unique features. Do not alter eyes, nose, mouth, or facial shape. Maintain natural skin texture, including pores and imperfections.
+- Image 2 (hat) — match exactly.
+
+a man wearing Image 2 (hat)  in the park",
+  "referenceImageUrls": [
+    "https://r2/kira.png",
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, legacy, wired character first · productInHand 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Use these characters:
+- Image 1 (Kira) — auburn shoulder-length hair. The subject must remain exactly the same person — preserve 100% facial identity, bone structure, skin tone, proportions, and all unique features. Do not alter eyes, nose, mouth, or facial shape. Maintain natural skin texture, including pores and imperfections.
+- Image 2 (product) — match exactly.
+
+An adult woman in her thirties holds Image 2 (product) at chest height toward the viewer, label facing out, in a bright room at home.",
+  "referenceImageUrls": [
+    "https://r2/kira.png",
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, legacy, wired character first · skinDetailSheet 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Use these characters:
+- Image 1 (Kira) — auburn shoulder-length hair. The subject must remain exactly the same person — preserve 100% facial identity, bone structure, skin tone, proportions, and all unique features. Do not alter eyes, nose, mouth, or facial shape. Maintain natural skin texture, including pores and imperfections.
+- Image 2 (person) — match exactly. Maintain perfect likeness (face, body proportions, distinctive features).
+
+Create a single skin detail reference sheet titled "SKIN DETAIL SHEET" from Image 2 (person), the single source of truth for identity, skin tone and features. Six panels: PANEL 01 — FULL FACE (front, eye level) · PANEL 02 — LEFT CHEEK & NOSE. In every panel: Skin shows its real structure. Plain neutral grey background, thin white panel labels in English.",
+  "referenceImageUrls": [
+    "https://r2/kira.png",
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, legacy, wired character first · tokenFreeIndented 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Use these characters:
+- Image 1 (Kira) — auburn shoulder-length hair. The subject must remain exactly the same person — preserve 100% facial identity, bone structure, skin tone, proportions, and all unique features. Do not alter eyes, nose, mouth, or facial shape. Maintain natural skin texture, including pores and imperfections.
+
+Shot list:
+    1. wide
+    2. close  up",
+  "referenceImageUrls": [
+    "https://r2/kira.png",
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, legacy, wired character first · tokenFreeSpacing 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Use these characters:
+- Image 1 (Kira) — auburn shoulder-length hair. The subject must remain exactly the same person — preserve 100% facial identity, bone structure, skin tone, proportions, and all unique features. Do not alter eyes, nose, mouth, or facial shape. Maintain natural skin texture, including pores and imperfections.
+
+a  cat   on a mat ",
+  "referenceImageUrls": [
+    "https://r2/kira.png",
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > connected refs, legacy, wired character first · twoTokens 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Use these characters:
+- Image 1 (Kira) — auburn shoulder-length hair. The subject must remain exactly the same person — preserve 100% facial identity, bone structure, skin tone, proportions, and all unique features. Do not alter eyes, nose, mouth, or facial shape. Maintain natural skin texture, including pores and imperfections.
+- Image 2 (person) — match exactly. Maintain perfect likeness (face, body proportions, distinctive features).
+- Image 3 (face) — match exactly. Maintain perfect likeness (face, body proportions, distinctive features).
+
+Image 2 (person) with Image 3 (face)",
+  "referenceImageUrls": [
+    "https://r2/kira.png",
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > flat path, provider without reference support · creatorAtHome 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Waist-up photo of Image 1 (person), an adult, standing at home in front of a plain wall, arms relaxed, empty hands.",
+  "referenceImageUrls": undefined,
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > flat path, provider without reference support · facePrivacy 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "remove persons faces from Image 1, keep everything else the same",
+  "referenceImageUrls": undefined,
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > flat path, provider without reference support · multiLine 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Scene:
+    Image 1 (person) stands  still
+
+Image 2 behind",
+  "referenceImageUrls": undefined,
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > flat path, provider without reference support · pillSpacing 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "a man wearing Image 1 (hat)  in the park",
+  "referenceImageUrls": undefined,
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > flat path, provider without reference support · productInHand 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "An adult woman in her thirties holds Image 1 (product) at chest height toward the viewer, label facing out, in a bright room at home.",
+  "referenceImageUrls": undefined,
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > flat path, provider without reference support · skinDetailSheet 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Create a single skin detail reference sheet titled "SKIN DETAIL SHEET" from Image 1 (person), the single source of truth for identity, skin tone and features. Six panels: PANEL 01 — FULL FACE (front, eye level) · PANEL 02 — LEFT CHEEK & NOSE. In every panel: Skin shows its real structure. Plain neutral grey background, thin white panel labels in English.",
+  "referenceImageUrls": undefined,
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > flat path, provider without reference support · tokenFreeIndented 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Shot list:
+    1. wide
+    2. close  up",
+  "referenceImageUrls": undefined,
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > flat path, provider without reference support · tokenFreeSpacing 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "a  cat   on a mat ",
+  "referenceImageUrls": undefined,
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > flat path, provider without reference support · twoTokens 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Image 1 (person) with Image 2 (face)",
+  "referenceImageUrls": undefined,
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > flat path, two ancestor refs, style + negative · creatorAtHome 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Waist-up photo of Image 1 (person), an adult, standing at home in front of a plain wall, arms relaxed, empty hands.
+Style: cinematic film style, dramatic lighting with cinematic color grading, widescreen aesthetic and film-like depth of field
+Avoid: blurry",
+  "referenceImageUrls": [
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > flat path, two ancestor refs, style + negative · facePrivacy 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "remove persons faces from Image 1, keep everything else the same
+Style: cinematic film style, dramatic lighting with cinematic color grading, widescreen aesthetic and film-like depth of field
+Avoid: blurry",
+  "referenceImageUrls": [
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > flat path, two ancestor refs, style + negative · multiLine 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Scene:
+    Image 1 (person) stands  still
+
+Image 2 behind
+Style: cinematic film style, dramatic lighting with cinematic color grading, widescreen aesthetic and film-like depth of field
+Avoid: blurry",
+  "referenceImageUrls": [
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > flat path, two ancestor refs, style + negative · pillSpacing 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "a man wearing Image 1 (hat)  in the park
+Style: cinematic film style, dramatic lighting with cinematic color grading, widescreen aesthetic and film-like depth of field
+Avoid: blurry",
+  "referenceImageUrls": [
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > flat path, two ancestor refs, style + negative · productInHand 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "An adult woman in her thirties holds Image 1 (product) at chest height toward the viewer, label facing out, in a bright room at home.
+Style: cinematic film style, dramatic lighting with cinematic color grading, widescreen aesthetic and film-like depth of field
+Avoid: blurry",
+  "referenceImageUrls": [
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > flat path, two ancestor refs, style + negative · skinDetailSheet 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Create a single skin detail reference sheet titled "SKIN DETAIL SHEET" from Image 1 (person), the single source of truth for identity, skin tone and features. Six panels: PANEL 01 — FULL FACE (front, eye level) · PANEL 02 — LEFT CHEEK & NOSE. In every panel: Skin shows its real structure. Plain neutral grey background, thin white panel labels in English.
+Style: cinematic film style, dramatic lighting with cinematic color grading, widescreen aesthetic and film-like depth of field
+Avoid: blurry",
+  "referenceImageUrls": [
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > flat path, two ancestor refs, style + negative · tokenFreeIndented 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Shot list:
+    1. wide
+    2. close  up
+Style: cinematic film style, dramatic lighting with cinematic color grading, widescreen aesthetic and film-like depth of field
+Avoid: blurry",
+  "referenceImageUrls": [
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > flat path, two ancestor refs, style + negative · tokenFreeSpacing 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "a  cat   on a mat 
+Style: cinematic film style, dramatic lighting with cinematic color grading, widescreen aesthetic and film-like depth of field
+Avoid: blurry",
+  "referenceImageUrls": [
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > flat path, two ancestor refs, style + negative · twoTokens 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Image 1 (person) with Image 2 (face)
+Style: cinematic film style, dramatic lighting with cinematic color grading, widescreen aesthetic and film-like depth of field
+Avoid: blurry",
+  "referenceImageUrls": [
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > flat path, two refs · creatorAtHome 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Waist-up photo of Image 1 (person), an adult, standing at home in front of a plain wall, arms relaxed, empty hands.",
+  "referenceImageUrls": [
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > flat path, two refs · facePrivacy 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "remove persons faces from Image 1, keep everything else the same",
+  "referenceImageUrls": [
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > flat path, two refs · multiLine 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Scene:
+    Image 1 (person) stands  still
+
+Image 2 behind",
+  "referenceImageUrls": [
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > flat path, two refs · pillSpacing 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "a man wearing Image 1 (hat)  in the park",
+  "referenceImageUrls": [
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > flat path, two refs · productInHand 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "An adult woman in her thirties holds Image 1 (product) at chest height toward the viewer, label facing out, in a bright room at home.",
+  "referenceImageUrls": [
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > flat path, two refs · skinDetailSheet 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Create a single skin detail reference sheet titled "SKIN DETAIL SHEET" from Image 1 (person), the single source of truth for identity, skin tone and features. Six panels: PANEL 01 — FULL FACE (front, eye level) · PANEL 02 — LEFT CHEEK & NOSE. In every panel: Skin shows its real structure. Plain neutral grey background, thin white panel labels in English.",
+  "referenceImageUrls": [
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > flat path, two refs · tokenFreeIndented 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Shot list:
+    1. wide
+    2. close  up",
+  "referenceImageUrls": [
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > flat path, two refs · tokenFreeSpacing 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "a  cat   on a mat ",
+  "referenceImageUrls": [
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;
+
+exports[`image prompt assembly — wired reference tokens are byte-identical > flat path, two refs · twoTokens 1`] = `
+{
+  "nativeNegativePrompt": undefined,
+  "prompt": "Image 1 (person) with Image 2 (face)",
+  "referenceImageUrls": [
+    "https://r2/hat.png",
+    "https://r2/coat.png",
+  ],
+}
+`;

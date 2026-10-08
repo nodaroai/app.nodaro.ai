@@ -378,7 +378,7 @@ describe("POST /v1/generate-creature — multi-candidate + auto-attach (Phase D5
     expect(modelIdentifierArg).not.toBe("generate-creature")
   })
 
-  it("defaults the credit identifier to nano-banana when no provider is sent (NOT 'generate-creature')", async () => {
+  it("defaults the credit identifier to the character model (gpt-image-2) when no provider is sent (NOT 'generate-creature')", async () => {
     setupSupabaseMock()
 
     const res = await app.inject({
@@ -390,12 +390,12 @@ describe("POST /v1/generate-creature — multi-candidate + auto-attach (Phase D5
 
     expect(res.statusCode).toBe(200)
     const modelIdentifierArg = vi.mocked(reserveCreditsForJob).mock.calls[0][3]
-    expect(modelIdentifierArg).toBe("nano-banana")
+    expect(modelIdentifierArg).toBe("gpt-image-2")
     expect(modelIdentifierArg).not.toBe("generate-creature")
     // Enqueued under the same provider — single source of truth.
     expect(videoQueue.add).toHaveBeenCalledWith(
       "generate-creature",
-      expect.objectContaining({ provider: "nano-banana" }),
+      expect.objectContaining({ provider: "gpt-image-2" }),
     )
   })
 

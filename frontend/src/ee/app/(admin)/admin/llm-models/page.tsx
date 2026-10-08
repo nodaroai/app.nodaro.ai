@@ -8,6 +8,7 @@ import {
   type AdminLlmModel,
 } from "@/ee/hooks/queries/use-admin-queries"
 import type { LlmTier } from "@nodaro/shared"
+import { LLM_CREDIT_RUNGS } from "@nodaro/shared"
 
 // ── Badge colors ────────────────────────────────────────────────────
 
@@ -179,8 +180,8 @@ export default function AdminLlmModelsPage() {
           <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">
             Average Credit Cost by Tier
           </h2>
-          <div className="grid grid-cols-3 gap-4 text-center">
-            {(["economy", "standard", "premium"] as const).map((tier) => (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
+            {LLM_CREDIT_RUNGS.map((tier) => (
               <div key={tier}>
                 <p className="text-xs text-muted-foreground capitalize">{tier}</p>
                 <p className="text-lg font-bold font-mono">{tierCosts[tier] ?? "--"}</p>
@@ -201,18 +202,18 @@ export default function AdminLlmModelsPage() {
               <thead>
                 <tr className="border-b bg-muted/40 text-xs text-muted-foreground uppercase tracking-wider">
                   <th className="text-left py-2 px-4 font-medium">Feature</th>
-                  <th className="text-left py-2 px-4 font-medium">Economy</th>
-                  <th className="text-left py-2 px-4 font-medium">Standard</th>
-                  <th className="text-left py-2 px-4 font-medium">Premium</th>
+                  {LLM_CREDIT_RUNGS.map((rung) => (
+                    <th key={rung} className="text-left py-2 px-4 font-medium">{rung}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
                 {Object.entries(featureCosts).map(([feature, costs]) => (
                   <tr key={feature} className="border-b last:border-b-0 hover:bg-muted/30 transition-colors">
                     <td className="py-2 px-4 font-mono text-sm">{feature}</td>
-                    <td className="py-2 px-4"><CreditCostCell value={costs.economy} /></td>
-                    <td className="py-2 px-4"><CreditCostCell value={costs.standard} /></td>
-                    <td className="py-2 px-4"><CreditCostCell value={costs.premium} /></td>
+                    {LLM_CREDIT_RUNGS.map((rung) => (
+                      <td key={rung} className="py-2 px-4"><CreditCostCell value={costs[rung] ?? null} /></td>
+                    ))}
                   </tr>
                 ))}
               </tbody>

@@ -117,7 +117,7 @@ generated_from: <git-commit-sha>
 
 **Default data** (from NODE_DEFINITIONS):
 ```json
-{ "label": "Generate Image", "prompt": "", "provider": "nano-banana-pro", "model": "gemini-2.5-flash-image", "style": "", "aspectRatio": "16:9", "negativePrompt": "", "fieldMappings": {} }
+{ "label": "Generate Image", "prompt": "", "provider": "gpt-image-2", "style": "", "aspectRatio": "16:9", "negativePrompt": "", "fieldMappings": {} }
 ```
 <!-- AUTO-GEN:END node-data-shape -->
 
@@ -126,7 +126,7 @@ generated_from: <git-commit-sha>
 
 **Input parameters** (from Zod schema):
 - `prompt: string`
-- `provider?: string` — defaults to `"nano-banana-pro"`
+- `provider?: string` — defaults to `"gpt-image-2"`
 - `aspectRatio?: string` — defaults to `"16:9"`
 - `referenceImageUrl?: string`
 - ...
@@ -143,7 +143,7 @@ Use for any text-to-image generation in a workflow. For trailers / cinematic flo
 - The `provider` enum is large (~15 options) and varies by capability — see the auto-gen list above for the canonical set.
 - `executionStatus: "completed"` is REQUIRED for the image to render after attaching the node via `update_workflow_json`. Without it, the canvas shows an empty placeholder.
 - Field name is `generatedImageUrl` — NOT `imageUrl`, `outputUrl`, or `result.url`.
-- For 4K output, only `nano-banana-pro` supports it currently.
+- For 4K output, use a model whose catalog entry lists `4K` (for example `gpt-image-2`, the GPT Image 2.5 pair, or `nano-banana-pro`).
 
 <!-- AUTO-GEN:START examples -->
 ## Worked example

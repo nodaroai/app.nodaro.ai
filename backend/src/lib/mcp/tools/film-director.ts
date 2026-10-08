@@ -175,7 +175,7 @@ For each shot in the shot list:
 
 1. Call \`generate_image\` (or \`image_to_image\` if the user has provided reference images) with:
    - Prompt: action_in_shot + character description (embedded inline) + location description (embedded inline) + style directives
-   - Provider: \`nano-banana-pro\` is a good default; respect any user override
+   - Provider: \`gpt-image-2\` is the default (\`gpt-image-2-5-sunburst\` for 21:9 or other ratios it can't draw); respect any user override
    - aspectRatio matching the chosen format (16:9 for trailer/commercial; 9:16 for reel; 1:1 for square social)
 2. Show to user
 

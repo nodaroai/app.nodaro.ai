@@ -43,7 +43,7 @@ describe("buildPayload", () => {
       expect(result.queueName).toBe("video-generation")
       expect(result.payload.jobId).toBe(jobId)
       expect(result.payload.prompt).toBe("a cat")
-      expect(result.payload.provider).toBe("nano-banana")
+      expect(result.payload.provider).toBe("gpt-image-2")
       expect(result.payload.usageLogId).toBe(usageLogId)
     })
 

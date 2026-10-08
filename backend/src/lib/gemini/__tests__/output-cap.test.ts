@@ -113,11 +113,11 @@ describe("a cap stop is never re-asked on the other lane — that would bill the
     expect(generateContent).not.toHaveBeenCalled()
   })
 
-  it("direct-first (gemini-3.1-pro): a direct cap stop surfaces — KIE is never called", async () => {
+  it("pinned direct (gemini-3.1-pro, Advanced): a direct cap stop surfaces — KIE is never called", async () => {
     const { llmComplete, LlmOutputTruncatedError } = await import("../../llm-client.js")
     generateContent.mockResolvedValue(capped())
 
-    await expect(llmComplete({ ...REQ, modelId: "gemini-3.1-pro" })).rejects.toBeInstanceOf(LlmOutputTruncatedError)
+    await expect(llmComplete({ ...REQ, modelId: "gemini-3.1-pro", requireLane: "direct" })).rejects.toBeInstanceOf(LlmOutputTruncatedError)
     expect(fetchMock).not.toHaveBeenCalled()
   })
 

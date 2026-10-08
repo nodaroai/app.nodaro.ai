@@ -156,11 +156,15 @@ rate. So the order is always: **Preview → review → Render final.**
    switched EDL) and `quality: "final"`. For a clip pack, one final per kept clip, each
    with its `clip_key`. Every result's `output_data.quality` says which it is.
 
-**In a workflow (the editor's Tighten Episode / Clip Pack templates).** There the Apply
-EDL node's **Quality** set to **Proxy** renders a Preview, and its **Render final** button
-renders the final from the saved plan without re-running it. A deployment can turn on the
+**In a workflow (the editor's podcast templates: Tighten Episode, Clip Pack, Multicam Cut,
+Trailer + Formats).** There the Apply EDL node's **Quality** set to **Preview** renders a
+Preview, and its **Render final** button renders the final from the saved plan without
+re-running it. On a deployment with the preview stop rule on, the four templates are
+saved with their render at **Preview**, so a run of one renders the Preview and Render
+final makes the delivery; a copy made before keeps **Final**. Where the rule is off they
+are saved with their render at **Final**, as before. A deployment can turn on the
 **preview stop rule** with `PREVIEW_STOP_RULE_ENABLED` (off by default; where it is off,
-nothing below applies): a run then stops at a render set to Proxy — nothing after it runs
+nothing below applies): a run then stops at a render set to Preview — nothing after it runs
 or is billed until Render final — and a run started anywhere but the editor (including
 `run_workflow`) that would execute such a render is refused with
 `preview_review_required`, because nobody is there to review it. To run it anyway from
@@ -169,7 +173,7 @@ Once the user has reviewed a preview their editor run stopped at, `render_final(
 render_node_id, execution_id)` runs the editor's Render final for them — the render at Final
 and every node after it, continuing that run; the server picks the nodes. Call it once for
 the price, and again with `confirm: true` once the user accepts it.
-A sub-workflow or component holding a Proxy render is refused with `preview_render_nested`.
+A sub-workflow or component holding a Preview render is refused with `preview_render_nested`.
 
 ---
 

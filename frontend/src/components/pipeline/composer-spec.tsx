@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react"
 import { STYLE_PRESETS } from "@nodaro/prompts"
 import { pipelinesApi } from "@/lib/pipelines-api"
 import { useT, tx, type MessageKey } from "@/lib/i18n"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
 
 /**
  * Phase 3 — "Nodaro Cinema" Composer Spec (design anchor).
@@ -163,7 +164,7 @@ function ComposerPanel({
   ]
   const engineNode =
     tab === "framing"
-      ? t("pipe.cinemaFramingCore", { model: scene.image_model ?? "nano-banana-2-1" })
+      ? t("pipe.cinemaFramingCore", { model: scene.image_model ?? IMAGE_MODEL_ROLE_DEFAULTS.general })
       : t("pipe.cinemaDirectingCore", { model: scene.video_model ?? "kling-3.0" })
 
   const save = async () => {

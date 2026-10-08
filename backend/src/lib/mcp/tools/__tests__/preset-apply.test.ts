@@ -17,7 +17,7 @@ beforeEach(() => {
  * The supabase mock here returns no custom preset rows AND empty mcp_preferences,
  * so these tests exercise the FACTORY path (no DB) + the catalog-default fallback.
  * The factory preset `generate-image/location-board` ships
- * `{ provider: "nano-banana-pro", aspectRatio: "16:9", resolution: "2K",
+ * `{ provider: "gpt-image-2", aspectRatio: "16:9", resolution: "2K",
  * promptPrefix: "...LOCATION BOARD...", promptSuffix: "..." }` — its doctrine is
  * PRE/POST TEXT, not a `prompt`, so the board's text wraps whatever prompt the
  * caller supplies instead of being clobbered by it.
@@ -92,7 +92,7 @@ describe("generate_image preset application", () => {
 
     expect(result.isError).toBeUndefined()
     // Preset supplies the provider and prompt — they reach the route verbatim.
-    expect(body?.provider).toBe("nano-banana-pro")
+    expect(body?.provider).toBe("gpt-image-2")
     expect(body?.prompt).toContain("LOCATION BOARD")
     // With no caller prompt the core is empty, so the two affixes alone ARE the
     // prompt — byte-identical to the board's old single `prompt` field.
@@ -115,7 +115,7 @@ describe("generate_image preset application", () => {
     // pre/post text, so the caller's prompt lands between the two affixes.
     expect(body?.prompt).toBe(`${LB_PREFIX} my own prompt ${LB_SUFFIX}`)
     // Non-overridden preset fields still apply.
-    expect(body?.provider).toBe("nano-banana-pro")
+    expect(body?.provider).toBe("gpt-image-2")
   })
 
   it("lets an explicit provider/model OVERRIDE the preset's provider", async () => {
@@ -143,7 +143,7 @@ describe("generate_image preset application", () => {
     // Caller never sent aspect_ratio → the preset's 9:16 must win (not the
     // generate_image default of 16:9).
     expect(body?.aspectRatio).toBe("9:16")
-    expect(body?.provider).toBe("nano-banana-pro")
+    expect(body?.provider).toBe("gpt-image-2")
   })
 
   it("returns isError for an unknown presetId (does not silently generate)", async () => {

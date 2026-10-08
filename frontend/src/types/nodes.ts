@@ -1603,7 +1603,7 @@ export type GenerateScriptData = PromptAffixFields & {
   llmModel?: string
   reasoningEffort?: LlmReasoningEffort
   /** Advanced mode: pin this node to the vendor's own API so the sampling
-   *  levers below actually apply. Bills one credit tier up, capped at premium. Undefined (not
+   *  levers below actually apply. Bills one credit rung up (a premium model moves to premium-direct). Undefined (not
    *  false) when off, so pre-feature workflows stay byte-identical. */
   advancedMode?: boolean
   /** Sampling levers — only honoured when `advancedMode` is on (the
@@ -2831,7 +2831,7 @@ export type QACheckData = {
   llmModel?: string
   reasoningEffort?: LlmReasoningEffort
   /** Advanced mode: pin this node to the vendor's own API so the sampling
-   *  levers below actually apply. Bills one credit tier up, capped at premium. Undefined (not
+   *  levers below actually apply. Bills one credit rung up (a premium model moves to premium-direct). Undefined (not
    *  false) when off, so pre-feature workflows stay byte-identical. */
   advancedMode?: boolean
   /** Sampling levers — only honoured when `advancedMode` is on (the
@@ -2856,7 +2856,7 @@ export type ImageCriticData = PromptAffixFields & {
   llmModel?: string
   reasoningEffort?: LlmReasoningEffort
   /** Advanced mode: pin this node to the vendor's own API so the sampling
-   *  levers below actually apply. Bills one credit tier up, capped at premium. Undefined (not
+   *  levers below actually apply. Bills one credit rung up (a premium model moves to premium-direct). Undefined (not
    *  false) when off, so pre-feature workflows stay byte-identical. */
   advancedMode?: boolean
   /** Sampling levers — only honoured when `advancedMode` is on (the
@@ -3539,7 +3539,7 @@ export type ImageToTextData = PromptAffixFields & {
   llmModel?: string
   reasoningEffort?: LlmReasoningEffort
   /** Advanced mode: pin this node to the vendor's own API so the sampling
-   *  levers below actually apply. Bills one credit tier up, capped at premium. Undefined (not
+   *  levers below actually apply. Bills one credit rung up (a premium model moves to premium-direct). Undefined (not
    *  false) when off, so pre-feature workflows stay byte-identical. */
   advancedMode?: boolean
   /** Sampling levers — only honoured when `advancedMode` is on (the
@@ -3562,7 +3562,7 @@ export type DescribeToPickerData = {
   llmModel?: string
   reasoningEffort?: LlmReasoningEffort
   /** Advanced mode: pin this node to the vendor's own API so the sampling
-   *  levers below actually apply. Bills one credit tier up, capped at premium. Undefined (not
+   *  levers below actually apply. Bills one credit rung up (a premium model moves to premium-direct). Undefined (not
    *  false) when off, so pre-feature workflows stay byte-identical. */
   advancedMode?: boolean
   /** Sampling levers — only honoured when `advancedMode` is on (the
@@ -4295,7 +4295,7 @@ export type VideoComposerData = {
   llmModel?: string
   reasoningEffort?: LlmReasoningEffort
   /** Advanced mode: pin this node to the vendor's own API so the sampling
-   *  levers below actually apply. Bills one credit tier up, capped at premium. Undefined (not
+   *  levers below actually apply. Bills one credit rung up (a premium model moves to premium-direct). Undefined (not
    *  false) when off, so pre-feature workflows stay byte-identical. */
   advancedMode?: boolean
   /** Sampling levers — only honoured when `advancedMode` is on (the
@@ -4319,7 +4319,7 @@ export type AfterEffectsData = {
   llmModel?: string
   reasoningEffort?: LlmReasoningEffort
   /** Advanced mode: pin this node to the vendor's own API so the sampling
-   *  levers below actually apply. Bills one credit tier up, capped at premium. Undefined (not
+   *  levers below actually apply. Bills one credit rung up (a premium model moves to premium-direct). Undefined (not
    *  false) when off, so pre-feature workflows stay byte-identical. */
   advancedMode?: boolean
   /** Sampling levers — only honoured when `advancedMode` is on (the
@@ -4345,7 +4345,7 @@ export type LottieOverlayData = {
   llmModel?: string
   reasoningEffort?: LlmReasoningEffort
   /** Advanced mode: pin this node to the vendor's own API so the sampling
-   *  levers below actually apply. Bills one credit tier up, capped at premium. Undefined (not
+   *  levers below actually apply. Bills one credit rung up (a premium model moves to premium-direct). Undefined (not
    *  false) when off, so pre-feature workflows stay byte-identical. */
   advancedMode?: boolean
   /** Sampling levers — only honoured when `advancedMode` is on (the
@@ -4370,7 +4370,7 @@ export type ThreeDTitleData = PromptAffixFields & {
   llmModel?: string
   reasoningEffort?: LlmReasoningEffort
   /** Advanced mode: pin this node to the vendor's own API so the sampling
-   *  levers below actually apply. Bills one credit tier up, capped at premium. Undefined (not
+   *  levers below actually apply. Bills one credit rung up (a premium model moves to premium-direct). Undefined (not
    *  false) when off, so pre-feature workflows stay byte-identical. */
   advancedMode?: boolean
   /** Sampling levers — only honoured when `advancedMode` is on (the
@@ -4609,7 +4609,7 @@ export type MotionGraphicsData = PromptAffixFields & {
   llmModel?: string
   reasoningEffort?: LlmReasoningEffort
   /** Advanced mode: pin this node to the vendor's own API so the sampling
-   *  levers below actually apply. Bills one credit tier up, capped at premium. Undefined (not
+   *  levers below actually apply. Bills one credit rung up (a premium model moves to premium-direct). Undefined (not
    *  false) when off, so pre-feature workflows stay byte-identical. */
   advancedMode?: boolean
   /** Sampling levers — only honoured when `advancedMode` is on (the
@@ -5493,7 +5493,7 @@ export type LLMChatData = PromptAffixFields & {
   llmModel?: string
   reasoningEffort?: LlmReasoningEffort
   /** Advanced mode: pin this node to the vendor's own API so the sampling
-   *  levers below actually apply. Bills one credit tier up, capped at premium. Undefined (not
+   *  levers below actually apply. Bills one credit rung up (a premium model moves to premium-direct). Undefined (not
    *  false) when off, so pre-feature workflows stay byte-identical. */
   advancedMode?: boolean
   temperature: number
@@ -5778,7 +5778,7 @@ export type VideoAnalysisNodeData = PromptAffixFields & {
   llmModel?: string
   reasoningEffort?: LlmReasoningEffort
   /** Advanced mode: pin this node to the vendor's own API so the sampling
-   *  levers below actually apply. Bills one credit tier up, capped at premium. Undefined (not
+   *  levers below actually apply. Bills one credit rung up (a premium model moves to premium-direct). Undefined (not
    *  false) when off, so pre-feature workflows stay byte-identical. */
   advancedMode?: boolean
   /** Sampling levers — only honoured when `advancedMode` is on (the
@@ -7899,7 +7899,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["prompt", "negative", "references", "assets", "elements", "look", "settings"],
     outputs: ["image"],
     width: 220,
-    defaultData: { label: "Generate Image", prompt: "", provider: "nano-banana-pro", model: "gemini-2.5-flash-image", style: "", aspectRatio: "16:9", negativePrompt: "", fieldMappings: {} },
+    defaultData: { label: "Generate Image", prompt: "", provider: "gpt-image-2", style: "", aspectRatio: "16:9", negativePrompt: "", fieldMappings: {} },
     exposableOutputs: [{ key: "result", label: "Result", outputType: "image" as const }],
     exposableFields: [
       {
@@ -7928,6 +7928,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
           { value: "seedream", label: "Seedream" },
           { value: "seedream-5-lite", label: "Seedream 5 Lite" },
           { value: "seedream-5-pro", label: "Seedream 5 Pro" },
+          { value: "seedream-5-flash", label: "Seedream 5 Flash" },
           { value: "z-image", label: "Z-Image" },
           { value: "flux-2-klein", label: "Flux 2 Klein (Open)" },
           { value: "flux-2-pro", label: "Flux 2 Pro (Safety Tolerance)" },
@@ -7975,7 +7976,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     defaultData: {
       label: "Modify Image",
       prompt: "",
-      provider: "nano-banana" as ModifyImageProvider,
+      provider: "gpt-image-2-5-flare-i2i" as ModifyImageProvider,
       negativePrompt: "",
       fieldMappings: {},
     },
@@ -9991,7 +9992,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       location_key: "",
       object_keys: [],
       continuity_from_prev: "hard_cut",
-      image_model: "nano-banana-2-1",
+      image_model: "gpt-image-2",
       video_model: "kling",
       shots: [],
       scene_anchor_keyframe: null,
@@ -10188,7 +10189,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       label: "Reference Board",
       sourceMode: "image",
       boardTemplate: "character/full-board",
-      provider: "nano-banana-pro",
+      provider: "gpt-image-2-5-sunburst",
       prompt: "",
       negativePrompt: "",
       aspectRatio: "2:3",

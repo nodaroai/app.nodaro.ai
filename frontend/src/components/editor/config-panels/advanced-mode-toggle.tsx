@@ -3,7 +3,7 @@ import { useEffect } from "react"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
-import { supportsAdvancedMode, LLM_FEATURE_DEFAULTS, llmRouteDefaults } from "@nodaro/shared"
+import { getLlmModel, supportsAdvancedMode, LLM_FEATURE_DEFAULTS, llmRouteDefaults } from "@nodaro/shared"
 import type { LlmFeature } from "@nodaro/shared"
 
 /** Mirrors `LLM_ADVANCED_SHAPE.maxTokens` in the backend. A number input's
@@ -54,6 +54,9 @@ export function AdvancedModeToggle({
   const effectiveModel = modelId || LLM_FEATURE_DEFAULTS[feature]
   const supported = supportsAdvancedMode(effectiveModel)
   const on = value === true
+  // A model that rejects `temperature` (Claude 5-era) has it stripped from
+  // every wire body, so a slider for it would promise a lever that does nothing.
+  const takesTemperature = getLlmModel(effectiveModel)?.supportsTemperature !== false
 
   // Switching to a model that can't run advanced must clear the flag, not
   // leave it set-but-unreachable — the route would 400 on the next run and the
@@ -87,7 +90,7 @@ export function AdvancedModeToggle({
         </p>
       ) : (
         <div className="space-y-2 pt-1">
-          <div>
+          {takesTemperature && <div>
             <Label className="text-xs text-muted-foreground">
               {t("audiocfg.temperature")}{t("common.labelColon")}{(temperature ?? defaultTemperature ?? 0.7).toFixed(1)}
             </Label>
@@ -105,7 +108,7 @@ export function AdvancedModeToggle({
                 {t("cfgshared.structuredOutputTempWarn")}
               </p>
             )}
-          </div>
+          </div>}
           <div>
             <Label className="text-xs text-muted-foreground">{t("cfgshared.maxTokens")}</Label>
             <Input

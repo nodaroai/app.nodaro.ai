@@ -1,5 +1,6 @@
 import { resolveNormalizedImageGen } from "@nodaro/shared"
 import { extractProvider } from "./request-helpers.js"
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
 
 /**
  * Quality-aware credit model identifier for the entity image routes
@@ -52,7 +53,7 @@ export function resolveEntityImageParams(
   const refCount =
     refCountOverride ?? (typeof b.sourceImageUrl === "string" && b.sourceImageUrl.length > 0 ? 1 : 0)
   const n = resolveNormalizedImageGen({
-    provider: extractProvider(body, "nano-banana"),
+    provider: extractProvider(body, IMAGE_MODEL_ROLE_DEFAULTS.character),
     quality: b.quality,
     resolution: b.resolution,
     refCount,

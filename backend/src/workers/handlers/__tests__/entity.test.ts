@@ -139,7 +139,7 @@ describe("generate-character handler", () => {
     await handler(job as never, makeCtx())
 
     expect(mocks.mockGenerateImage).toHaveBeenCalledWith(
-      "a warrior", "nano-banana", undefined, undefined,
+      "a warrior", "gpt-image-2", undefined, undefined,
       expect.objectContaining({ onTaskCreated: expect.any(Function) }),
     )
     expect(mocks.mockUploadImageMaybeWatermark).toHaveBeenCalledWith(PROVIDER_RESULT.url, "job-1", "user-1", false)
@@ -159,7 +159,7 @@ describe("generate-character handler", () => {
     const job = makeJob("generate-character", { prompt: "style transfer", sourceImageUrl: "https://ref.png" })
     await handler(job as never, makeCtx())
     expect(mocks.mockGenerateImage).toHaveBeenCalledWith(
-      "style transfer", "nano-banana", ["https://ref.png"], undefined,
+      "style transfer", "gpt-image-2", ["https://ref.png"], undefined,
       expect.objectContaining({ onTaskCreated: expect.any(Function) }),
     )
   })
@@ -172,7 +172,7 @@ describe("generate-character handler", () => {
     await handler(job as never, makeCtx())
     expect(mocks.mockGenerateImage).toHaveBeenCalledWith(
       "a warrior",
-      "nano-banana",
+      "gpt-image-2",
       undefined,
       { aspect_ratio: "3:4" },
       expect.objectContaining({ onTaskCreated: expect.any(Function) }),
@@ -214,7 +214,7 @@ describe("generate-character handler", () => {
     await handler(job as never, makeCtx())
     expect(mocks.mockGenerateImage).toHaveBeenCalledWith(
       "a warrior",
-      "nano-banana",
+      "gpt-image-2",
       undefined,
       { aspect_ratio: "3:4", resolution: "4K", quality: "high" },
       expect.objectContaining({ onTaskCreated: expect.any(Function) }),
@@ -226,7 +226,7 @@ describe("generate-character handler", () => {
     await handler(job as never, makeCtx())
     expect(mocks.mockGenerateImage).toHaveBeenCalledWith(
       "a warrior",
-      "nano-banana",
+      "gpt-image-2",
       undefined,
       { quality: "high" },
       expect.objectContaining({ onTaskCreated: expect.any(Function) }),
@@ -275,7 +275,7 @@ describe("generate-face handler", () => {
     const job = makeJob("generate-face", { prompt: "a portrait" })
     await handler(job as never, makeCtx())
     expect(mocks.mockGenerateImage).toHaveBeenCalledWith(
-      "a portrait", "nano-banana", undefined, { aspect_ratio: "1:1" },
+      "a portrait", "gpt-image-2", undefined, { aspect_ratio: "1:1" },
       expect.objectContaining({ onTaskCreated: expect.any(Function) }),
     )
   })
@@ -324,7 +324,7 @@ describe("generate-object handler", () => {
     const job = makeJob("generate-object", { prompt: "a treasure chest" })
     await handler(job as never, makeCtx())
     expect(mocks.mockGenerateImage).toHaveBeenCalledWith(
-      "a treasure chest", "nano-banana", undefined, undefined,
+      "a treasure chest", "gpt-image-2", undefined, undefined,
       expect.objectContaining({ onTaskCreated: expect.any(Function) }),
     )
     expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1", PROVIDER_RESULT.cost)
@@ -350,7 +350,7 @@ describe("generate-location handler", () => {
     const job = makeJob("generate-location", { prompt: "a dark forest" })
     await handler(job as never, makeCtx())
     expect(mocks.mockGenerateImage).toHaveBeenCalledWith(
-      "a dark forest", "nano-banana", undefined, undefined,
+      "a dark forest", "gpt-image-2", undefined, undefined,
       expect.objectContaining({ onTaskCreated: expect.any(Function) }),
     )
     expect(mocks.mockCommitJobCredits).toHaveBeenCalledWith("usage-1", "job-1", PROVIDER_RESULT.cost)

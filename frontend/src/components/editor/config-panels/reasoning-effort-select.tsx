@@ -1,7 +1,7 @@
 import { useT, tx } from "@/lib/i18n"
 import { useEffect } from "react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { availableReasoningEfforts, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
+import { availableReasoningEfforts, getLlmModel, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
 import type { LlmFeature, LlmReasoningEffort } from "@nodaro/shared"
 
 /** Shared across every reasoning-effort surface (this select + the llm-chat
@@ -12,12 +12,10 @@ export function EFFORT_LABELS(): Record<LlmReasoningEffort, string> {
   low: tx("audiocfg.low"),
   medium: tx("cfgshared.effortMedium"),
   high: tx("audiocfg.high"),
-  // Still accurate alongside Advanced mode: xhigh/max only exist on models
-  // that have no direct lane (Claude/GPT), and Advanced only exists on Gemini,
-  // so the effort bump and the advanced bump can never both apply to one call.
-  // That is not a note to remember — it's pinned by "no advanced-capable model
-  // declares xhigh/max" in packages/shared's llm-models test, which goes red if
-  // the two bumps ever become stackable and this wording needs to change.
+  // "May": these two levels bump one tier for the effort itself. On a Claude
+  // model the call ALSO runs direct (any effort does — see the hint below), and
+  // the two bumps stack, as Advanced mode's always has; the stacking is pinned
+  // in packages/shared's llm-models test ("the effort and direct bumps stack").
   xhigh: tx("cfgshared.effortVeryHigh"),
   max: tx("cfgshared.effortMax"),
 }
@@ -54,6 +52,10 @@ export function ReasoningEffortSelect({ feature, modelId, advanced, value, onCha
   }, [effectiveModel, advanced])
 
   if (levels.length === 0) return null
+  // Claude's effort only takes effect on Anthropic's own API, so any level
+  // runs there and bills one tier more (llmServesDirect) — say so where the
+  // choice is made. Advanced on: the toggle's own hint already says it.
+  const effortRunsDirect = !advanced && Boolean(getLlmModel(effectiveModel)?.effortRequiresDirect)
 
   return (
     <div className="space-y-1">
@@ -74,6 +76,9 @@ export function ReasoningEffortSelect({ feature, modelId, advanced, value, onCha
           ))}
         </SelectContent>
       </Select>
+      {effortRunsDirect && (
+        <p className="text-[11px] text-muted-foreground">{t("cfgshared.effortRunsDirect")}</p>
+      )}
     </div>
   )
 }

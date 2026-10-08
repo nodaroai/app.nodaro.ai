@@ -282,14 +282,14 @@ export interface ModelRecommendation {
 
 export const MODEL_RECOMMENDATIONS: readonly ModelRecommendation[] = [
   // image
-  { intent: "best for typography / logos / text-heavy", modelIds: ["nano-banana-pro", "gpt-image-2"], note: "Nano Banana Pro for diagrams / complex text; GPT Image 2 for logos and short copy." },
+  { intent: "best for typography / logos / text-heavy", modelIds: ["gpt-image-2", "gpt-image-2-5-flare"], note: "GPT Image 2 for exact copy, labels and non-Latin text; GPT Image 2.5 Flare is close and faster." },
   // Notes name the RANKING, not the price — the price sits in the generated
   // table directly below them and in `pricing`, so restating it here just
   // creates a copy that rots (this one said "1 credit" long after it was 2).
   { intent: "cheapest realistic image", modelIds: ["z-image", "qwen", "imagen4-fast"], note: "Z-Image is the cheapest. Qwen / Imagen4 Fast for slightly higher quality." },
-  { intent: "highest fidelity image", modelIds: ["nano-banana-pro", "imagen4-ultra", "flux-flex"], note: "Pick by family preference; all three are premium tiers." },
-  { intent: "image edit / restyle", modelIds: ["flux-kontext", "ideogram-remix", "seedream-5-pro-i2i"], note: "Flux Kontext preserves identity; Ideogram Remix is character-aware; Seedream 5 Pro for instruction-based edits (5 Lite is the budget option)." },
-  { intent: "highest-resolution image", modelIds: ["topaz-image-upscale", "nano-banana-pro", "gpt-image-2"], note: "Generate at the model's top tier, then Topaz upscale 4x (Topaz's only lever is the 1x/2x/4x factor)." },
+  { intent: "highest fidelity image", modelIds: ["gpt-image-2", "gpt-image-2-5-sunburst", "imagen4-ultra"], note: "GPT Image 2 for characters and identity; GPT Image 2.5 Sunburst for wide or in-between ratios GPT Image 2 can't draw." },
+  { intent: "image edit / restyle", modelIds: ["gpt-image-2-5-flare-i2i", "gpt-image-2-i2i", "seedream-5-pro-i2i"], note: "GPT Image 2.5 Flare keeps pose, framing and product detail; GPT Image 2 i2i for identity-critical edits; Seedream 5 Pro for instruction-based edits." },
+  { intent: "highest-resolution image", modelIds: ["topaz-image-upscale", "gpt-image-2", "gpt-image-2-5-sunburst"], note: "Generate at the model's top tier, then Topaz upscale 4x (Topaz's only lever is the 1x/2x/4x factor)." },
   { intent: "background removal / cutout", modelIds: ["recraft-remove-bg"], note: "Cheap, no prompt needed." },
   // video
   { intent: "best cinematic video", modelIds: ["veo3", "kling-3.0", "seedance-2"], note: "VEO 3.1 Quality for premium narrative; Kling 3.0 for music-synced motion; Seedance 2 for reference-driven consistency." },
@@ -453,7 +453,6 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "nano-banana-pro", credits: 45, note: "1K / 2K" },
       { identifier: "nano-banana-pro:4K", credits: 60, note: "4K" },
     ],
-    featured: true,
   },
   "nano-banana-edit": {
     id: "nano-banana-edit",
@@ -691,6 +690,7 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "gpt-image-2:4K", credits: 60, note: "4K" },
     ],
     safetyFilter: { stochastic: true, fallback: "nano-banana-pro" },
+    featured: true,
   },
   "gpt-image-2-i2i": {
     id: "gpt-image-2-i2i",
@@ -1012,6 +1012,40 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "seedream-5-pro-i2i", credits: 19, note: "basic / 1K default" },
       { identifier: "seedream-5-pro-i2i:high", credits: 60, note: "high / 2K" },
     ],
+  },
+  // Seedream 5 Flash — fast, low-cost Seedream 5. Its lever is KIE's `size`
+  // (1K / 1.5K / 2K), NOT the siblings' `quality`: declared as `resolutions`
+  // (the KIE config renames it to `size` on the wire). Flat price at every
+  // offered size. 1.5K is not offered yet: no other image model or route enum
+  // carries it, and its price has not been confirmed.
+  // See: docs.kie.ai/market/seedream/5-flash-text-to-image.md
+  "seedream-5-flash": {
+    id: "seedream-5-flash",
+    kind: "image",
+    modes: ["t2i"] as const,
+    family: "Bytedance",
+    label: "Seedream 5 Flash",
+    series: "Seedream",
+    description: "Fast, low-cost Seedream 5 — quick generations at 1K or 2K, same price at either size.",
+    useCases: ["realistic", "drafts", "iteration"],
+    features: ["reference-image"],
+    aspectRatios: SEEDREAM_RATIOS,
+    resolutions: ["1K", "2K"],
+    pricing: [{ identifier: "seedream-5-flash", credits: 10, note: "1K / 2K flat" }],
+  },
+  "seedream-5-flash-i2i": {
+    id: "seedream-5-flash-i2i",
+    kind: "image",
+    modes: ["i2i"] as const,
+    family: "Bytedance",
+    label: "Seedream 5 Flash (I2I)",
+    series: "Seedream",
+    description: "Image-to-image with Seedream 5 Flash — fast edits from up to 10 input images at 1K or 2K, same price at either size.",
+    useCases: ["edit", "iteration"],
+    features: ["reference-image"],
+    aspectRatios: SEEDREAM_RATIOS,
+    resolutions: ["1K", "2K"],
+    pricing: [{ identifier: "seedream-5-flash-i2i", credits: 10, note: "1K / 2K flat" }],
   },
 
   // ── Alibaba Qwen ──

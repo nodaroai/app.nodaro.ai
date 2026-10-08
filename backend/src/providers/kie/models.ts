@@ -45,7 +45,10 @@ export interface KieModelConfig {
   acceptsResolution?: true
   supportsEndFrame?: boolean   // Video models: supports start + end frame (2 images -> video)
   endFrameParam?: string       // Parameter name for end frame (e.g., "tail_image_url", "end_image_url")
-  // Lip-sync param mapping (per-model overrides for the generic lipSync dispatch):
+  // Lip-sync param mapping (per-model overrides for the generic lipSync dispatch).
+  // `resolutionParam` is also read by the KIE IMAGE lanes (generateImage /
+  // editImage in kie/image.ts): our `resolution` is sent under this key instead
+  // (seedream-5-flash: `size`).
   resolutionParam?: string                 // KIE input key for resolution (default "resolution")
   resolutionMap?: Record<string, string>   // our enum (480p/720p/1080p) → KIE value
   defaultResolution?: string               // KIE resolution value when none supplied
@@ -488,6 +491,31 @@ export const KIE_IMAGE_MODELS: Record<string, KieModelConfig> = {
     inputType: "image-to-image",
     imageParam: "image_urls",  // Array of URLs (like seedream-edit)
     extraParams: { aspect_ratio: "16:9", quality: "basic" },
+  },
+  // Seedream 5 Flash (fast, low-cost Bytedance model). Unlike the rest of the
+  // family it has NO `quality` input: the lever is `size` (1K / 1.5K / 2K,
+  // default 1K), carried as our `resolution` and renamed on the wire by
+  // `resolutionParam` (image.ts). `aspect_ratio` is REQUIRED; the doc says to
+  // set `output_format` (png | jpeg) explicitly. 3.24 KIE credits per image,
+  // the same at 1K and 2K — flat, no composite identifiers. I2I takes up to
+  // 10 `image_urls` (jpeg/png/webp, 30 MB each).
+  // See: docs.kie.ai/market/seedream/5-flash-text-to-image.md
+  //      docs.kie.ai/market/seedream/5-flash-image-to-image.md
+  "seedream-5-flash": {
+    model: "seedream/5-flash-text-to-image",
+    credits: 3.24,
+    cost: 0.0162,
+    resolutionParam: "size",
+    extraParams: { aspect_ratio: "16:9", resolution: "1K", output_format: "png" },
+  },
+  "seedream-5-flash-i2i": {
+    model: "seedream/5-flash-image-to-image",
+    credits: 3.24,
+    cost: 0.0162,
+    inputType: "image-to-image",
+    imageParam: "image_urls",  // Array of URLs, max 10
+    resolutionParam: "size",
+    extraParams: { aspect_ratio: "16:9", resolution: "1K", output_format: "png" },
   },
 
   // Flux-2 Flex text-to-image (we already have Flex I2I but were missing T2I)

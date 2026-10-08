@@ -21,7 +21,11 @@ import {
   padSpans,
   type ProxySpan,
 } from "../../../services/media-proxy-span-map.js"
-import { FACE_DETECT_MAX_FRAMES_PER_CALL, faceDetectTimeoutMs } from "../../../services/face-detect/face-detect-budget.js"
+import {
+  FACE_DETECT_DESCRIPTOR_MS_PER_FRAME,
+  FACE_DETECT_MAX_FRAMES_PER_CALL,
+  faceDetectTimeoutMs,
+} from "../../../services/face-detect/face-detect-budget.js"
 import {
   DEFAULT_FFMPEG_TIMEOUT_MS,
   DOWNLOAD_MAX_MS,
@@ -33,12 +37,14 @@ import {
   proxySpanProbeTimeoutMs,
 } from "../ffmpeg-timeouts.js"
 import {
+  SPEAKER_FRAMES_DESCRIBED_EDGE_SAMPLES,
   SPEAKER_FRAMES_HOLD_OVERRUN_MS,
   SPEAKER_FRAMES_MAX_SOURCE_MS,
   SPEAKER_FRAMES_PROXY_FIXED_MS,
   SPEAKER_FRAMES_RUN_SLACK_MS,
   SPEAKER_FRAMES_TAIL_MS_PER_BOX,
   speakerFramesBudgetBreakdown,
+  speakerFramesDescriptorSpanBudgetMs,
   speakerFramesJobBudgetMs,
   speakerFramesProxySpanBudgetMs,
   speakerFramesWindowBudgetMs,
@@ -125,6 +131,18 @@ describe("the terms — each one a kill ceiling the handler's steps run under", 
     }
   })
 
+  it("each span's edge samples carry face descriptors (P3.2b round 3): the first and last 4, at the detector's per-frame term", () => {
+    expect(SPEAKER_FRAMES_DESCRIBED_EDGE_SAMPLES).toBe(4)
+    // A span long enough to have both edges: 8 described frames.
+    expect(speakerFramesDescriptorSpanBudgetMs(24_000)).toBe(8 * FACE_DETECT_DESCRIPTOR_MS_PER_FRAME)
+    // A span of at most 8 samples is described whole: its frames, never more.
+    expect(speakerFramesDescriptorSpanBudgetMs(1_000)).toBe(3 * FACE_DETECT_DESCRIPTOR_MS_PER_FRAME)
+    // The whole source (length unknown) is one span: its two edges.
+    expect(speakerFramesDescriptorSpanBudgetMs(undefined)).toBe(8 * FACE_DETECT_DESCRIPTOR_MS_PER_FRAME)
+    // Small: 80 ms a span.
+    expect(speakerFramesDescriptorSpanBudgetMs(undefined)).toBe(80)
+  })
+
   it("the in-process tail is bounded by the box cap: a window hands back at most the per-source cap", () => {
     // Measured (P3.4L/P3.4S): linking 75 ms over 170 min, the chain pass < 0.1 s
     // for 129,600 boxes — microseconds per box. 1 ms per box is the placeholder
@@ -144,6 +162,7 @@ describe("what the leaf reads off the payload", () => {
     const b = speakerFramesBudgetBreakdown({ videoUrl: "https://f.test/episode.mp4" })!
     expect(b.sources).toEqual([{ spans: 1, frames: 180 * 60 * 2 + 1, spanLengthsMs: null }])
     expect(b.windows).toBe(Math.ceil((180 * 60 * 2 + 1) / FACE_DETECT_MAX_FRAMES_PER_CALL))
+    expect(b.descriptorMs).toBe(speakerFramesDescriptorSpanBudgetMs(undefined))
   })
 
   it("an EDL: every video source samples the kept spans plus the margins; spans closer than the margins merge", () => {
@@ -244,6 +263,8 @@ describe("worked examples", () => {
     // The same 90 min in 20 s runs with 6 s cuts: no cut closes → 270 spans of 24 s,
     // each a spawn and a probe at the span's own ceilings (was 254.25 h at the flat 45-min one).
     expect(hours({ edl: tighten(90, 20_000, 6_000, ONE_CAM) })).toBe(55.43)
+    // Its descriptor term: 270 spans × 8 edge samples × 10 ms = 21.6 s of the 55.43 h.
+    expect(speakerFramesBudgetBreakdown({ edl: tighten(90, 20_000, 6_000, ONE_CAM) })!.descriptorMs).toBe(270 * 8 * 10)
     // 8 clips of 60 s, 11 min apart: 8 spans of 64 s, 1,032 frames, 1 window (was 9.73 h).
     expect(hours({ edl: clipPack(ONE_CAM) })).toBe(4.02)
     // 6 cameras × 180 min: 6 × (1 span, 21,609 frames, 19 windows).
@@ -292,9 +313,16 @@ describe("the leaf is an upper bound on the handler's step ceilings", () => {
         : proxySpanEncodeTimeoutMs(len) + overrun + proxySpanProbeTimeoutMs(len)
     }
     ms += MEDIA_PROXY_FFMPEG_TIMEOUT_MS + overrun + DEFAULT_FFMPEG_TIMEOUT_MS + FFPROBE_TIMEOUT_MS // join, its frame times, its size
+    // The descriptor frames: each span's first and last 4 samples (all of a span of 8 or fewer), wherever they fall.
+    const spanFramesOf = (len: number | undefined) => (len === undefined ? Number.POSITIVE_INFINITY : Math.ceil((len * DETECTION_PROXY.fps) / 1000))
+    let described = 0
+    for (const len of spanLengthsMs) described += Math.min(2 * 4, spanFramesOf(len))
     for (let at = 0; at < frames; at += FACE_DETECT_MAX_FRAMES_PER_CALL) {
       const f = Math.min(FACE_DETECT_MAX_FRAMES_PER_CALL, frames - at)
-      ms += FFPROBE_TIMEOUT_MS + faceDetectTimeoutMs(f) + overrun // probe, detect
+      // Charged where they fall: at most `f` of them in this window, the rest in later ones.
+      const here = Math.min(f, described)
+      described -= here
+      ms += FFPROBE_TIMEOUT_MS + faceDetectTimeoutMs(f, here) + overrun // probe, detect
       ms += SPEAKER_TRACKS_MAX_BOXES_PER_SOURCE * SPEAKER_FRAMES_TAIL_MS_PER_BOX // its boxes, in process
     }
     return ms
@@ -370,7 +398,7 @@ describe("the step inventory the leaf charges", () => {
     expect(count(detect, /\brunFfprobe\(/g)).toBe(1)
     expect(count(detect, /\bwithFfmpegSlot\(/g)).toBe(1)
     expect(count(detect, /\bspawnFfmpeg\(/g)).toBe(1)
-    expect(detect).toMatch(/const timeoutMs = faceDetectTimeoutMs\(frames\)/)
+    expect(detect).toMatch(/const timeoutMs = faceDetectTimeoutMs\(frames, described\.size\)/)
     expect(detect).toMatch(/\{ timeoutMs, peakMemoryMiB, label: "face-detect" \}/)
   })
 })

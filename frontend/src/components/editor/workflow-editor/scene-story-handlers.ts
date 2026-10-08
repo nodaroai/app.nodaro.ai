@@ -23,6 +23,7 @@ import {
 } from "./types";
 import { shouldStopPolling } from "./poll-connection";
 import { tx } from "@/lib/i18n";
+import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
 
 // ---------------------------------------------------------------------------
 // Scene-in-script helpers
@@ -466,7 +467,7 @@ export function handleExpandStoryboard(
       data: {
         label: `Scene ${scene.sceneNumber} Image`,
         prompt: scene.imagePrompt,
-        provider: "nano-banana-pro",
+        provider: IMAGE_MODEL_ROLE_DEFAULTS.general,
         model: "gemini-2.5-flash-image",
         style: "",
         aspectRatio: "16:9",

@@ -32,6 +32,7 @@ import {
 import { REFERENCE_BOARD_PROVIDERS, listBoardTemplates, buildBoardPrompt } from "@nodaro/shared"
 import type { ReferenceBoardData, ManualReferenceImage } from "@/types/nodes"
 import type { ConfigProps } from "./types"
+import { defaultImageModel } from "@nodaro/shared"
 
 // ---------------------------------------------------------------------------
 // SOURCE SEGMENTED CONTROL
@@ -146,7 +147,7 @@ function ReferenceBoardConfigImpl({
     prefetchModelCredits([...REFERENCE_BOARD_PROVIDERS])
   }, [])
 
-  const currentProvider = data.provider || "nano-banana-pro"
+  const currentProvider = data.provider || defaultImageModel("character", data.aspectRatio)
 
   const aspectRatioOptions = getAspectRatiosForModel(currentProvider)
   const resolutionOptions = IMAGE_RESOLUTION_OPTIONS[currentProvider]

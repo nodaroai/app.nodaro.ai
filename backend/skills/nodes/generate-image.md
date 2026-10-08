@@ -1,7 +1,7 @@
 ---
 node_type: generate-image
-generated_at: 2026-09-28T22:47:00.889Z
-generated_from: c77a445b3
+generated_at: 2026-10-08T13:32:41.474Z
+generated_from: c20219700
 ---
 
 # generate-image
@@ -69,8 +69,7 @@ generated_from: c77a445b3
 {
   "label": "Generate Image",
   "prompt": "",
-  "provider": "nano-banana-pro",
-  "model": "gemini-2.5-flash-image",
+  "provider": "gpt-image-2",
   "style": "",
   "aspectRatio": "16:9",
   "negativePrompt": "",
@@ -107,13 +106,13 @@ Text-to-image generation. For trailer / cinematic flows, embed character + locat
 
 ### Quick model picks (MCP `generate_image`)
 
-- `nano-banana-pro` — best overall; best for typography / logos / text-heavy and multi-character scenes; the face-identity pick for reference images.
-- `nano-banana-2-1` (default) — Nano Banana 2.1: very good consistency and text rendering, faster and cheaper.
-- `gpt-image-2` — strong for logos / short copy / prompt adherence.
+- `gpt-image-2` (default) — best overall in the 2026-10 comparison: characters and identity from reference images, character boards and grids, exact text and non-Latin lettering. It draws 1:1, 16:9, 9:16, 4:3 and 3:4.
+- `gpt-image-2-5-sunburst` — the same family for ratios GPT Image 2 can't draw (21:9, 3:2, 2:3); `gpt-image-2-5-flare` is its faster sibling.
+- `nano-banana-2-1` — strong scenes and illustration for a lower price; good for drafts and iteration.
 - `z-image` — cheapest stylized output.
 - **Avoid `flux`** for general use — it degrades in multi-turn workflows; use one of the above.
 
-Aspect ratios are model-specific: for 21:9 use a model whose `aspectRatios` includes it (the Nano Banana family, Seedream). Pass `reference_image_urls` (up to 14 URLs or Nodaro asset ids) for "the same person / character / product as this image" — identity, style and composition guidance; the tool's response text confirms how many references attached, and if it does not mention them they did not make it.
+Aspect ratios are model-specific: for 21:9 use a model whose `aspectRatios` includes it (GPT Image 2.5, the Nano Banana family, Seedream). Pass `reference_image_urls` (up to 14 URLs or Nodaro asset ids) for "the same person / character / product as this image" — identity, style and composition guidance; the tool's response text confirms how many references attached, and if it does not mention them they did not make it.
 
 ## Common gotchas
 
@@ -136,8 +135,7 @@ Aspect ratios are model-specific: for 21:9 use a model whose `aspectRatios` incl
   "data": {
     "label": "Generate Image",
     "prompt": "",
-    "provider": "nano-banana-pro",
-    "model": "gemini-2.5-flash-image",
+    "provider": "gpt-image-2",
     "style": "",
     "aspectRatio": "16:9",
     "negativePrompt": "",
@@ -154,7 +152,7 @@ The `references` handle takes MULTIPLE image producers (upload-image, generate-i
 
 - `{image:N:label}` → expands server-side to `Image N (label)`, aligned with the numbered reference list sent to the provider.
 - `{image:N}` → `Image N` (no role named).
-- A token whose N has no wired reference is left as literal text in the final prompt — visible on purpose, so fix the numbering instead of ignoring it.
+- A token whose N has no wired reference falls back to its label (`{image:3:dog}` → `dog`); a bare `{image:N}` is dropped. The prompt still runs but binds nothing at N, so check the numbering against what is wired.
 
 **How to compose**
 - The prompt should be little more than tokens plus glue words: `{image:1:person} with {image:2:face}`. The label tells the model what to TAKE from that image — `person`, `face`, `background`, `settings`, or a concrete garment/prop name (`jacket`).

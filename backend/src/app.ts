@@ -201,6 +201,7 @@ import { adminPickerGapsRoutes } from "./ee/routes/admin-picker-gaps.js"
 import { adminCopilotGapsRoutes } from "./ee/routes/admin-copilot-gaps.js"
 import { adminAppReportsRoutes } from "./ee/routes/admin-app-reports.js"
 import { adminKieCreditsRoutes } from "./ee/routes/admin-kie-credits.js"
+import { adminSiteAnalyticsRoutes } from "./ee/routes/admin-site-analytics.js"
 import { adminStuckPipelinesRoutes } from "./ee/routes/admin-stuck-pipelines.js"
 import { adminMessagesRoutes } from "./ee/routes/admin-messages.js"
 import { adminReviewRoutes } from "./ee/routes/admin-review.js"
@@ -689,6 +690,7 @@ export async function buildApp() {
   if (hasAdmin()) await app.register(adminCopilotGapsRoutes)
   if (hasAdmin()) await app.register(adminAppReportsRoutes)
   if (hasAdmin()) await app.register(adminKieCreditsRoutes)
+  if (hasAdmin()) await app.register(adminSiteAnalyticsRoutes)
   if (hasAdmin()) await app.register(adminStuckPipelinesRoutes)
   if (hasAdmin()) await app.register(adminMessagesRoutes)
   if (hasAdmin()) await app.register(adminReviewRoutes)

@@ -1,7 +1,7 @@
 {
   "slug": "podcast-multicam-cut",
   "name": "Multicam Cut",
-  "description": "Edit a podcast filmed on several cameras: line the recordings up, tighten the episode, then cut to whoever is talking — the sound stays on the master track throughout.",
+  "description": "Edit a podcast filmed on several cameras: line the recordings up, tighten the episode, then cut to whoever is talking — the sound stays on the master track throughout. The cut renders as a 720p Preview first; review it, then Render final renders it at full quality.",
   "markdownDescription": null,
   "category": "automations",
   "outputTypes": [
@@ -21,8 +21,25 @@
   ],
   "tutorialCategorySlug": "workflows",
   "tutorialSortOrder": 2,
-  "estimatedCredits": 62,
-  "estimatedPerMinuteCredits": 14,
+  "estimatedCredits": 72,
+  "estimatedPerMinuteCredits": 15,
+  "withoutPreviewStopRule": {
+    "estimatedCredits": 62,
+    "estimatedPerMinuteCredits": 14,
+    "description": "Edit a podcast filmed on several cameras: line the recordings up, tighten the episode, then cut to whoever is talking — the sound stays on the master track throughout.",
+    "notes": {
+      "multicam-note-intro": {
+        "text": "Multicam Cut\n\nUpload the recordings of one conversation: a camera per speaker, a wide shot and the master audio (the mixer or recorder track). Audio Sync lines their clocks up, Transcribe reads the master with speaker labels, the Tighten Plan node (Cloud) trims the episode, Camera Switch (Cloud) puts each stretch on the camera of whoever is talking, and Apply Cut renders it. The sound always comes from the master; only the picture switches.\n\nDrop a file on each recording node, then Run down the chain.",
+        "height": 340,
+        "y": -760
+      },
+      "multicam-note-render": {
+        "text": "The render\n\nApply Cut reads each camera at the right moment from the switched edit itself, so the cameras are not wired into it. Its Transcript output is the named transcript remapped onto the cut: wire it into an Add Captions node to caption the episode.",
+        "height": 260,
+        "y": -360
+      }
+    }
+  },
   "nodeTypesUsed": [
     "upload-audio",
     "upload-video",
@@ -43,15 +60,15 @@
       "zIndex": -1,
       "position": {
         "x": -100,
-        "y": -760
+        "y": -800
       },
       "data": {
         "bold": false,
-        "text": "Multicam Cut\n\nUpload the recordings of one conversation: a camera per speaker, a wide shot and the master audio (the mixer or recorder track). Audio Sync lines their clocks up, Transcribe reads the master with speaker labels, the Tighten Plan node (Cloud) trims the episode, Camera Switch (Cloud) puts each stretch on the camera of whoever is talking, and Apply Cut renders it. The sound always comes from the master; only the picture switches.\n\nDrop a file on each recording node, then Run down the chain.",
+        "text": "Multicam Cut\n\nUpload the recordings of one conversation: a camera per speaker, a wide shot and the master audio (the mixer or recorder track). Audio Sync lines their clocks up, Transcribe reads the master with speaker labels, the Tighten Plan node (Cloud) trims the episode, Camera Switch (Cloud) puts each stretch on the camera of whoever is talking, and Apply Cut renders it as a 720p Preview first. Review it, then choose Render final on Apply Cut. The sound always comes from the master; only the picture switches.\n\nDrop a file on each recording node, then Run down the chain.\n\nTo skip the review, set Apply Cut's Quality to Final.",
         "color": "#2d2d44",
         "label": "Sticky Note",
         "width": 500,
-        "height": 340,
+        "height": 440,
         "italic": false,
         "fontSize": "base",
         "alignment": "left",
@@ -59,7 +76,7 @@
       },
       "measured": {
         "width": 500,
-        "height": 340
+        "height": 440
       }
     },
     {
@@ -258,7 +275,7 @@
       "data": {
         "label": "Apply Cut",
         "output": "video",
-        "quality": "final",
+        "quality": "proxy",
         "crossfadeMs": 0,
         "fieldMappings": {}
       }
@@ -269,15 +286,15 @@
       "zIndex": -1,
       "position": {
         "x": 1820,
-        "y": -360
+        "y": -460
       },
       "data": {
         "bold": false,
-        "text": "The render\n\nApply Cut reads each camera at the right moment from the switched edit itself, so the cameras are not wired into it. Its Transcript output is the named transcript remapped onto the cut: wire it into an Add Captions node to caption the episode.",
+        "text": "The render\n\nApply Cut reads each camera at the right moment from the switched edit itself, so the cameras are not wired into it. Render final runs Camera Switch again on the reviewed cut first, so a stretch you restore gets a camera too, then renders at full quality. Its Transcript output is the named transcript remapped onto the cut: wire it into an Add Captions node to caption the episode.",
         "color": "#2d2d44",
         "label": "Sticky Note",
         "width": 400,
-        "height": 260,
+        "height": 360,
         "italic": false,
         "fontSize": "base",
         "alignment": "left",
@@ -285,7 +302,7 @@
       },
       "measured": {
         "width": 400,
-        "height": 260
+        "height": 360
       }
     }
   ],
