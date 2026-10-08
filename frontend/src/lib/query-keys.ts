@@ -353,6 +353,10 @@ export const queryKeys = {
       ["admin", "app-reports", "list", offset, kind, appSlug, status, userFilter] as const,
     kieCredits: (days: number) =>
       ["admin", "kie-credits", days] as const,
+    siteAnalytics: (days: number) =>
+      ["admin", "site-analytics", days] as const,
+    siteAnalyticsInspection: (url: string) =>
+      ["admin", "site-analytics", "inspection", url] as const,
     copilotGapsOverview: (days: number) =>
       ["admin", "copilot-gaps", "overview", days] as const,
     copilotGapsDay: (day: string) =>

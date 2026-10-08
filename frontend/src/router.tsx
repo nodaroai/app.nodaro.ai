@@ -106,6 +106,7 @@ const AdminBlocks = lazy(() => import("@/ee/app/(admin)/admin/blocks/page"))
 const AdminPickerGaps = lazy(() => import("@/ee/app/(admin)/admin/picker-gaps/page"))
 const AdminCopilotGaps = lazy(() => import("@/ee/app/(admin)/admin/copilot-gaps/page"))
 const AdminKieCredits = lazy(() => import("@/ee/app/(admin)/admin/kie-credits/page"))
+const AdminSiteAnalytics = lazy(() => import("@/ee/app/(admin)/admin/site-analytics/page"))
 const AdminSubscriptions = lazy(() => import("@/ee/app/(admin)/admin/subscriptions/page"))
 const AdminLlmModels = lazy(() => import("@/ee/app/(admin)/admin/llm-models/page"))
 const AdminNodeDefaults = lazy(() => import("@/ee/app/(admin)/admin/node-defaults/page"))
@@ -159,6 +160,7 @@ const adminRoutes: RouteObject[] = hasAdmin() ? [
       { path: "picker-gaps", element: <SuspenseWrapper><AdminPickerGaps /></SuspenseWrapper> },
       { path: "copilot-gaps", element: <SuspenseWrapper><AdminCopilotGaps /></SuspenseWrapper> },
       { path: "kie-credits", element: <SuspenseWrapper><AdminKieCredits /></SuspenseWrapper> },
+      { path: "site-analytics", element: <SuspenseWrapper><AdminSiteAnalytics /></SuspenseWrapper> },
       { path: "subscriptions", element: <SuspenseWrapper><AdminSubscriptions /></SuspenseWrapper> },
       { path: "llm-models", element: <SuspenseWrapper><AdminLlmModels /></SuspenseWrapper> },
       { path: "node-defaults", element: <SuspenseWrapper><AdminNodeDefaults /></SuspenseWrapper> },
