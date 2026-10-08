@@ -584,6 +584,8 @@ const MODEL_DESCRIPTIONS_JA: Record<string, string> = {
   "Sharper quality, text and character consistency, up to 4K": "画質・テキスト・キャラクターの一貫性が向上、最大 4K",
   "Consistent edits, up to 10 references and 4K output": "一貫性のある編集、最大 10 枚のリファレンスと 4K 出力",
   "Fast 1K edits, up to 10 reference images": "高速な 1K 編集、最大 10 枚のリファレンス画像",
+  "Fast, low-cost Seedream at 1K or 2K": "高速・低コストの Seedream、1K または 2K",
+  "Fast, low-cost Seedream edits, up to 10 input images": "高速・低コストの Seedream 編集、入力画像は最大 10 枚",
   "Fast Gemini, agentic-tuned": "高速な Gemini、エージェント向けに調整",
   "Fast Gemini, sharper reasoning": "高速な Gemini、より鋭い推論",
   "Fast Imagen, lower latency": "高速な Imagen、低レイテンシー",

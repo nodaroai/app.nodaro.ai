@@ -584,6 +584,8 @@ const MODEL_DESCRIPTIONS_KO: Record<string, string> = {
   "Sharper quality, text and character consistency, up to 4K": "더 선명한 품질, 텍스트와 캐릭터 일관성, 최대 4K",
   "Consistent edits, up to 10 references and 4K output": "일관된 편집, 레퍼런스 최대 10장, 4K 출력",
   "Fast 1K edits, up to 10 reference images": "빠른 1K 편집, 레퍼런스 이미지 최대 10장",
+  "Fast, low-cost Seedream at 1K or 2K": "빠르고 저렴한 Seedream, 1K 또는 2K",
+  "Fast, low-cost Seedream edits, up to 10 input images": "빠르고 저렴한 Seedream 편집, 입력 이미지 최대 10장",
   "Fast Gemini, agentic-tuned": "빠른 Gemini, 에이전트 작업에 맞게 튜닝",
   "Fast Gemini, sharper reasoning": "빠른 Gemini, 더 정교한 추론",
   "Fast Imagen, lower latency": "빠른 Imagen, 더 낮은 지연 시간",

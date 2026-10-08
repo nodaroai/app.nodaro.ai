@@ -18,7 +18,7 @@ Image to Image takes a source image and a text prompt to generate a transformed 
 | Strength | slider (0-1) | varies | How much to deviate from the source image. Higher values mean more change. Only available for providers that support it. |
 | Guidance Scale | number | varies | Prompt adherence strength. Only available for providers that support it. |
 | Aspect Ratio | select | varies | Provider-specific ratio sets (same sets as Generate Image) |
-| Resolution | select | varies | Available for flux-i2i, flux-pro-i2i: 1K, 2K |
+| Resolution | select | varies | Available for flux-i2i, flux-pro-i2i: 1K, 2K; seedream-5-flash-i2i: 1K, 2K (same price at either) |
 | Quality | select | varies | Available for gpt-image-i2i (medium/high), seedream-edit (basic/high), seedream-5-lite-i2i (basic/high), seedream-5-pro-i2i (basic 1K / high 2K) |
 | Rendering Speed | select | -- | Available for ideogram variants: turbo, balanced, quality |
 | Seed | number | -- | Reproducibility seed (select providers) |
@@ -55,6 +55,7 @@ Image to Image takes a source image and a text prompt to generate a transformed 
 | seedream-edit | Seedream Edit | Photorealistic image editing | Quality options (basic/high) |
 | seedream-5-lite-i2i | Seedream 5 Lite | Latest Seedream image-to-image | Quality options (basic/high) |
 | seedream-5-pro-i2i | Seedream 5 Pro | Flagship Seedream image-to-image, multi-reference instruction edits. **19 credits** at basic (1K) / **60 credits** at high (2K). | Quality options (basic/high) |
+| seedream-5-flash-i2i | Seedream 5 Flash | Fast, low-cost Seedream edits; flat **10 credits** at 1K or 2K | Up to 10 input images, resolution options (1K/2K) |
 | flux-kontext | Flux Kontext | Context-aware editing via Kontext | Context-aware transforms |
 | flux-kontext-max | Flux Kontext Max | Highest quality Kontext editing | Premium context-aware transforms |
 | kontext-multi | Kontext Multi (Open) | Multi-image Flux Kontext Pro via Replicate — no safety filter | Up to 2 reference images. 30 credits |

@@ -114,6 +114,18 @@ describe("buildCreditModelIdentifier", () => {
     })
   })
 
+  // --- seedream-5-flash ---
+  describe("seedream-5-flash", () => {
+    it("is flat-priced: every size and a stray quality bill the bare id", () => {
+      for (const provider of ["seedream-5-flash", "seedream-5-flash-i2i"]) {
+        for (const resolution of [undefined, "1K", "2K"]) {
+          expect(buildCreditModelIdentifier(provider, undefined, resolution)).toBe(provider)
+          expect(buildCreditModelIdentifier(provider, "high", resolution)).toBe(provider)
+        }
+      }
+    })
+  })
+
   // --- topaz-image-upscale ---
   describe("topaz-image-upscale", () => {
     it('targetResolution="4K" returns composite identifier', () => {

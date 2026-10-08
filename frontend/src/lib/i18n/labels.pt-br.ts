@@ -584,6 +584,8 @@ const MODEL_DESCRIPTIONS_PT_BR: Record<string, string> = {
   "Sharper quality, text and character consistency, up to 4K": "Mais qualidade, texto e consistência de personagens, até 4K",
   "Consistent edits, up to 10 references and 4K output": "Edições consistentes, até 10 referências e saída em 4K",
   "Fast 1K edits, up to 10 reference images": "Edições 1K rápidas, até 10 imagens de referência",
+  "Fast, low-cost Seedream at 1K or 2K": "Seedream rápido e de baixo custo em 1K ou 2K",
+  "Fast, low-cost Seedream edits, up to 10 input images": "Edições Seedream rápidas e de baixo custo, até 10 imagens de entrada",
   "Fast Gemini, agentic-tuned": "Gemini rápido, ajustado para agentes",
   "Fast Gemini, sharper reasoning": "Gemini rápido, raciocínio mais afiado",
   "Fast Imagen, lower latency": "Imagen rápido, menor latência",

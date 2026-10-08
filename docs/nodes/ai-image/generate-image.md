@@ -14,7 +14,7 @@ Generate Image is the primary text-to-image node. It accepts a text prompt (with
 | Style | select | `""` | One of 16 presets (Photorealistic, Cinematic, Anime, Digital Art, Oil Painting, Watercolor, Children's Book, Comic Book, Pixel Art, 3D Render, Pencil Sketch, Pop Art, Minimalist, Retro/Vintage, Fantasy, Noir) or "Custom..." free text. Style text is appended to the prompt at execution time. |
 | Negative Prompt | text | `""` | Elements to exclude. Sent natively for imagen4, ideogram, qwen; appended as "Avoid:..." for other providers. |
 | Aspect Ratio | select | `"16:9"` | Provider-specific ratio sets (see table below) |
-| Resolution | select | varies | Available for nano-banana-pro, nano-banana-2, nano-banana-2-1, flux, flux-flex, gpt-image-2 and the GPT Image 2.5 models: 1K, 2K, 4K |
+| Resolution | select | varies | Available for nano-banana-pro, nano-banana-2, nano-banana-2-1, flux, flux-flex, gpt-image-2 and the GPT Image 2.5 models: 1K, 2K, 4K; seedream-5-flash: 1K, 2K (same price at either) |
 | Quality | select | varies | Available for gpt-image (medium/high), seedream/seedream-5-lite (basic 2K / high 4K), and seedream-5-pro (basic 1K / high 2K) |
 | Rendering Speed | select | -- | Available for ideogram-v3: turbo, balanced, quality |
 | Seed | number | -- | Reproducibility seed (supported by select providers) |
@@ -98,6 +98,7 @@ The migration runs on the frontend (`loadWorkflow`) plus three defensive backend
 | seedream | Seedream | Photorealistic, high detail | 1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3, 21:9 |
 | seedream-5-lite | Seedream 5 Lite | Latest Seedream, fast and sharp | Same as Seedream |
 | seedream-5-pro | Seedream 5 Pro | Flagship Seedream, best instruction following. Quality-tiered pricing: **18 credits** at basic (1K output) / **60 credits** at high (2K output). | Same as Seedream |
+| seedream-5-flash | Seedream 5 Flash | Fast, low-cost Seedream 5 for quick drafts and iteration. Resolution 1K or 2K at a flat **10 credits** per image (no quality setting). Attach reference images and it routes to `seedream-5-flash-i2i` (up to 10 input images, same price). Prompts up to 5,000 characters. | Same as Seedream |
 | z-image | Z-Image | Fast, lightweight generation. **Shortest prompt limit in the catalog: 1 000 characters** | 1:1, 16:9, 9:16, 4:3, 3:4 |
 | wan-2.7 | Wan 2.7 | Text-to-image, 1K/2K/4K resolution, up to 9 optional reference images | 1:1, 16:9, 9:16, 4:3, 3:4, 21:9, 8:1, 1:8 |
 | wan-2.7-pro | Wan 2.7 Pro | Higher quality text-to-image, 1K/2K/4K resolution | 1:1, 16:9, 9:16, 4:3, 3:4, 21:9, 8:1, 1:8 |
@@ -130,7 +131,7 @@ When the node has a current result, open its config panel and scroll to the **In
 
 This works on **every image provider**, not just one model. A server-side **composite floor** restricts the change to the masked region (`out = base·(1−mask) + result·mask`), so even providers that have no native mask parameter produce a clean, localized edit.
 
-**Strong instruction-following editors** (`gpt-image`, `gpt-image-2`, `gpt-image-2-5-flare`, `gpt-image-2-5-sunburst`, `nano-banana`, `nano-banana-pro`, `nano-banana-2`, `nano-banana-2-1`, `nano-banana-2-lite`, `seedream`, `seedream-5-lite`, `seedream-5-pro`, `qwen`, `flux-kontext`, `flux-kontext-max`) additionally get a natural-language **region hint** injected into the prompt (e.g. "Apply the following change only to the upper-left region…") for better in-region results. This is automatic — no user action required. Other providers rely on the composite floor alone, which still keeps the edit localized.
+**Strong instruction-following editors** (`gpt-image`, `gpt-image-2`, `gpt-image-2-5-flare`, `gpt-image-2-5-sunburst`, `nano-banana`, `nano-banana-pro`, `nano-banana-2`, `nano-banana-2-1`, `nano-banana-2-lite`, `seedream`, `seedream-5-lite`, `seedream-5-pro`, `seedream-5-flash`, `qwen`, `flux-kontext`, `flux-kontext-max`) additionally get a natural-language **region hint** injected into the prompt (e.g. "Apply the following change only to the upper-left region…") for better in-region results. This is automatic — no user action required. Other providers rely on the composite floor alone, which still keeps the edit localized.
 
 The mask comes from either:
 

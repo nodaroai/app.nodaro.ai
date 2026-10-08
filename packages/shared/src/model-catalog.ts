@@ -1013,6 +1013,40 @@ const IMAGE_MODELS: Record<string, ModelCatalogEntry> = {
       { identifier: "seedream-5-pro-i2i:high", credits: 60, note: "high / 2K" },
     ],
   },
+  // Seedream 5 Flash — fast, low-cost Seedream 5. Its lever is KIE's `size`
+  // (1K / 1.5K / 2K), NOT the siblings' `quality`: declared as `resolutions`
+  // (the KIE config renames it to `size` on the wire). Flat price at every
+  // offered size. 1.5K is not offered yet: no other image model or route enum
+  // carries it, and its price has not been confirmed.
+  // See: docs.kie.ai/market/seedream/5-flash-text-to-image.md
+  "seedream-5-flash": {
+    id: "seedream-5-flash",
+    kind: "image",
+    modes: ["t2i"] as const,
+    family: "Bytedance",
+    label: "Seedream 5 Flash",
+    series: "Seedream",
+    description: "Fast, low-cost Seedream 5 — quick generations at 1K or 2K, same price at either size.",
+    useCases: ["realistic", "drafts", "iteration"],
+    features: ["reference-image"],
+    aspectRatios: SEEDREAM_RATIOS,
+    resolutions: ["1K", "2K"],
+    pricing: [{ identifier: "seedream-5-flash", credits: 10, note: "1K / 2K flat" }],
+  },
+  "seedream-5-flash-i2i": {
+    id: "seedream-5-flash-i2i",
+    kind: "image",
+    modes: ["i2i"] as const,
+    family: "Bytedance",
+    label: "Seedream 5 Flash (I2I)",
+    series: "Seedream",
+    description: "Image-to-image with Seedream 5 Flash — fast edits from up to 10 input images at 1K or 2K, same price at either size.",
+    useCases: ["edit", "iteration"],
+    features: ["reference-image"],
+    aspectRatios: SEEDREAM_RATIOS,
+    resolutions: ["1K", "2K"],
+    pricing: [{ identifier: "seedream-5-flash-i2i", credits: 10, note: "1K / 2K flat" }],
+  },
 
   // ── Alibaba Qwen ──
   "qwen": {

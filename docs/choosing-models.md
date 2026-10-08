@@ -63,6 +63,8 @@ Text-to-image, image-to-image, editing, upscaling, and background removal. For e
 | Nano Banana Edit | Google | Everyday | 10 | edit | Image-to-image edits via Google's Nano Banana family. Good general-purpose editor. |
 | Qwen | Alibaba | Everyday | 10 | t2i | Cheap, fast, decent quality. Native negative-prompt support. |
 | Qwen (I2I) | Alibaba | Everyday | 10 | i2i | Image-to-image with Qwen. |
+| Seedream 5 Flash | Bytedance | Everyday | 10 | t2i | Fast, low-cost Seedream 5 — quick generations at 1K or 2K, same price at either size. |
+| Seedream 5 Flash (I2I) | Bytedance | Everyday | 10 | i2i | Image-to-image with Seedream 5 Flash — fast edits from up to 10 input images at 1K or 2K, same price at either size. |
 | Flux 2 Pro | Black Forest Labs | Standard | 13 | t2i | Flux 2 Pro text-to-image. Strong realism, fast. Resolution lever to 2K. |
 | Flux 2 Pro (I2I) | Black Forest Labs | Standard | 13 | i2i | Image-to-image with Flux Pro. Cheaper than Flex variant, good general edits. |
 | Flux Kontext Pro | Black Forest Labs | Standard | 13 | t2i, edit | Context-aware editing and style transfer. Strong at preserving subject identity through edits. |
@@ -77,7 +79,7 @@ Text-to-image, image-to-image, editing, upscaling, and background removal. For e
 | GPT Image 2.5 Sunburst (I2I) | OpenAI | Standard | 15 | i2i | Precision GPT Image 2.5 edits (up to 16 source images) - the most controlled edit in the GPT family, at the cost of a longer run. |
 | Ideogram V3 | Ideogram | Standard | 18 | t2i | Strong typography and stylized illustration. Speed/quality tiered (TURBO/BALANCED/QUALITY). |
 | Seedream 5 Pro | Bytedance | Standard | 18 | t2i | Flagship Seedream 5 Pro — strongest instruction following and visual reasoning. Basic = 1K, high = 2K. |
-| Seedream 5 Pro (I2I) | Bytedance | Standard | 19 | i2i | Image-to-image with Seedream 5 Pro — multi-reference instruction edits. Basic = 1K, high = 2K. |
+| Seedream 5 Pro (I2I) | Bytedance | Premium | 19 | i2i | Image-to-image with Seedream 5 Pro — multi-reference instruction edits. Basic = 1K, high = 2K. |
 | Imagen 4 | Google | Premium | 20 | t2i | Google's Imagen 4 — strong photographic quality and prompt fidelity. |
 | Nano Banana 2 | Google | Premium | 20 | t2i, i2i | Newer Nano Banana with native resolution control (1K/2K/4K) and Google Search context. |
 | Wan 2.7 | Alibaba | Premium | 20 | t2i | Wan 2.7 text-to-image — 1K/2K/4K, up to 9 optional style/character reference images. |

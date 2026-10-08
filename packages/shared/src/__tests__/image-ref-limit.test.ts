@@ -17,6 +17,7 @@ describe("imageReferenceLimit", () => {
     "gpt-image-2": 16, // → gpt-image-2-i2i
     "seedream-5-lite": 16, // → seedream-5-lite-i2i
     "seedream-5-pro": 16, // → seedream-5-pro-i2i
+    "seedream-5-flash": 10, // → seedream-5-flash-i2i (schema maxItems 10, not the family's 16)
     "nano-banana-2": 4,
     "nano-banana-2-lite": 10, // schema maxItems (image_urls)
     flux: 4, // → flux-pro-i2i

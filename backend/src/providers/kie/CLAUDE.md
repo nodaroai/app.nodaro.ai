@@ -64,6 +64,8 @@ Base URL: `https://api.kie.ai`, Auth: `Bearer KIE_API_KEY`
 | `seedream-5-lite-i2i` | `seedream/5-lite-image-to-image` | [seedream 5 lite i2i](https://docs.kie.ai/market/seedream-5-lite-image-to-image.md) |
 | `seedream-5-pro` | `seedream/5-pro-text-to-image` | [seedream 5 pro t2i](https://docs.kie.ai/market/seedream/5-pro-text-to-image.md) |
 | `seedream-5-pro-i2i` | `seedream/5-pro-image-to-image` | [seedream 5 pro i2i](https://docs.kie.ai/market/seedream/5-pro-image-to-image.md) |
+| `seedream-5-flash` | `seedream/5-flash-text-to-image` | [seedream 5 flash t2i](https://docs.kie.ai/market/seedream/5-flash-text-to-image.md) |
+| `seedream-5-flash-i2i` | `seedream/5-flash-image-to-image` | [seedream 5 flash i2i](https://docs.kie.ai/market/seedream/5-flash-image-to-image.md) |
 | `z-image` | `z-image` | [z-image](https://docs.kie.ai/market/z-image/z-image.md) |
 | `topaz-image-upscale` | `topaz/image-upscale` | [topaz img upscale](https://docs.kie.ai/market/topaz/image-upscale.md) |
 | `recraft-remove-bg` | `recraft/remove-background` | [recraft bg remove](https://docs.kie.ai/market/recraft/remove-background.md) |
@@ -324,7 +326,7 @@ Different models use different param names for input images — getting this wro
 | Pattern | Models | Param |
 |---------|--------|-------|
 | Single URL string | minimax, kling-turbo, kling-avatar, topaz, ideogram-edit, ideogram-remix, qwen-i2i, qwen-edit, topaz-image-upscale | `image_url` |
-| Array of URLs | kling, grok, sora2-pro, flux, gpt-image, nano-banana-edit, seedream-edit, nano-banana-2-lite (up to 10, NOT the family's `image_input`) | `image_urls` or `input_urls` |
+| Array of URLs | kling, grok, sora2-pro, flux, gpt-image, nano-banana-edit, seedream-edit, nano-banana-2-lite (up to 10, NOT the family's `image_input`), seedream-5-flash-i2i (up to 10, not the family's 16) | `image_urls` or `input_urls` |
 | VEO array | veo3, veo3.1 | `imageUrls` (camelCase!) |
 | Video URL | wan v2v | `video_urls` (array) |
 | Video URL | topaz upscale | `video_url` (string) |
@@ -368,6 +370,7 @@ Not all models use `aspect_ratio` — getting this wrong causes silent failures 
 | Nano Banana 2 Lite | Not supported — 1K ONLY (no resolution param; `image.ts` strips stale values) | — |
 | GPT Image 2 (T2I + I2I) | `resolution` | `"1K"`, `"2K"`, `"4K"` (1:1 cannot use 4K; `auto` aspect_ratio limited to 1K) |
 | Flux (all variants) | `resolution` | `"1K"`, `"2K"` |
+| Seedream 5 Flash (T2I + I2I) | **`size`** — our `resolution`, renamed on the wire by `resolutionParam: "size"` in `models.ts` (`image.ts` `applyResolutionParam`, both lanes) | `"1K"`, `"2K"` offered (schema also has `"1.5K"`, not offered); flat price at every size |
 | Other image models | Not supported | — |
 
 ### quality Support
@@ -379,6 +382,7 @@ Not all models use `aspect_ratio` — getting this wrong causes silent failures 
 | Seedream 4.5 (T2I + Edit) | `quality` | `"basic"` (2K), `"high"` (4K) |
 | Seedream 5 Lite (T2I + I2I) | `quality` | `"basic"` (2K), `"high"` (4K) |
 | Seedream 5 Pro (T2I + I2I) | `quality` | `"basic"` (1K), `"high"` (2K) — note: one tier LOWER than Lite/4.5 |
+| Seedream 5 Flash (T2I + I2I) | Not supported — NO `quality` input (the lever is `size`, see above). A `"quality":"basic"` appears only in the doc's callback `param` echo | — |
 | Other image models | Not supported | — |
 
 ### negative_prompt Support
