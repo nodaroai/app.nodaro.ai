@@ -4,7 +4,7 @@
  * the steps it runs at the same numbers without dragging `child_process`,
  * the storage client or `config` into its importer's graph (the workflow
  * engine reads apply-edl's budget to size its own node ceilings).
- * `ffmpeg-utils.ts` re-exports all three; either import path is the same value.
+ * `ffmpeg-utils.ts` re-exports them all; either import path is the same value.
  */
 // Hard ceiling so a hung ffmpeg can't hold its slot forever and starve the
 // FIFO queue. (It once had to stay below a 15-min BullMQ lockDuration; the
@@ -59,6 +59,17 @@ export function downloadBodyDeadlineMs(
   return Math.min(limits.maxMs, Math.max(limits.minMs, Math.ceil((contentLength / limits.floorBytesPerSec) * 1000)))
 }
 
+/** A timed-out ffmpeg gets SIGTERM, then SIGKILL this long after (Track 0.13). */
+export const FFMPEG_KILL_GRACE_MS = 5_000
+
+/** How long after its holder's own limit (plus the kill grace) a slot releases
+ *  ITSELF, even if the work never settles — a process stuck past SIGKILL, a
+ *  raster step that hangs. No job queued behind it waits on it forever: the
+ *  waits are not capped (decided 2026-10-04), so every hold must be. With the
+ *  kill grace, the most any slot-gated step can outlast its own limit — which
+ *  is how a pure budget (`speaker-frames-budget.ts`) counts a hold. */
+export const FFMPEG_SLOT_BACKSTOP_MS = 30_000
+
 /** Wall-clock ceiling of one `runFfprobe` call (its execFile watchdog). */
 export const FFPROBE_TIMEOUT_MS = 120_000
 
@@ -67,3 +78,33 @@ export const FFPROBE_TIMEOUT_MS = 120_000
  *  Faster than real time at those settings, so a backstop, not a target. Here
  *  so a pure budget (audio-sync's) counts the proxy step at the same number. */
 export const MEDIA_PROXY_FFMPEG_TIMEOUT_MS = 45 * 60_000
+
+/** The least a video proxy's span spawn is given, whatever its length: the
+ *  launch, the input-side seek (back to the keyframe before the span) and the
+ *  output's finish, on a contended box. */
+export const PROXY_SPAN_TIMEOUT_FLOOR_MS = 5 * 60_000
+
+/**
+ * Per-spawn ceiling of ONE span's encode in the video proxy
+ * (`services/video-proxy-encode.ts`): the floor plus the span's own length at
+ * real time, never above the whole-proxy ceiling. Sized by the span, as
+ * apply-edl's per-chunk kill budget is by its chunk, so a proxy of many short
+ * spans (a Tighten edit's 270) is not charged a three-hour ceiling for each —
+ * and a hung spawn on a 24-second span is killed in minutes. Real time is four
+ * times the slack `MEDIA_PROXY_FFMPEG_TIMEOUT_MS` already assumes of a whole
+ * 3-hour proxy (45 min), so no span is held tighter than that ceiling holds a
+ * whole source. Monotone and subadditive (a floor of minutes, a gap under one
+ * frame period), so a budget over separate spans also covers their merge. A
+ * length it cannot read gets the whole-proxy ceiling.
+ */
+export function proxySpanEncodeTimeoutMs(spanMs: number): number {
+  if (!Number.isFinite(spanMs)) return MEDIA_PROXY_FFMPEG_TIMEOUT_MS
+  return Math.min(MEDIA_PROXY_FFMPEG_TIMEOUT_MS, PROXY_SPAN_TIMEOUT_FLOOR_MS + Math.max(0, spanMs))
+}
+
+/** Ceiling of the frame-time probe of one span's segment
+ *  (`probeVideoFramePtsMs`): the span's own, never longer than the default the
+ *  probe otherwise runs at — it reads packet headers, no decode. */
+export function proxySpanProbeTimeoutMs(spanMs: number): number {
+  return Math.min(DEFAULT_FFMPEG_TIMEOUT_MS, proxySpanEncodeTimeoutMs(spanMs))
+}

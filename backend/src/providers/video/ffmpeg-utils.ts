@@ -24,6 +24,8 @@ import {
   DOWNLOAD_RATE_WINDOW_MS,
   DOWNLOAD_TIMEOUT_MS,
   BIG_MEDIA_MAX_BYTES,
+  FFMPEG_KILL_GRACE_MS,
+  FFMPEG_SLOT_BACKSTOP_MS,
   FFPROBE_TIMEOUT_MS,
   downloadBodyDeadlineMs,
 } from "./ffmpeg-timeouts.js"
@@ -38,6 +40,8 @@ export {
   DOWNLOAD_RATE_WINDOW_MS,
   DOWNLOAD_TIMEOUT_MS,
   BIG_MEDIA_MAX_BYTES,
+  FFMPEG_KILL_GRACE_MS,
+  FFMPEG_SLOT_BACKSTOP_MS,
   FFPROBE_TIMEOUT_MS,
   downloadBodyDeadlineMs,
 }
@@ -261,14 +265,6 @@ function acquireFfmpegSlot(signal: AbortSignal | undefined, peakMemoryMiB: numbe
   return acquireFfmpegAdmission(signal, peakMemoryMiB, currentSlotWaitLedger())
 }
 
-/** A timed-out ffmpeg gets SIGTERM, then SIGKILL this long after (Track 0.13). */
-export const FFMPEG_KILL_GRACE_MS = 5_000
-
-/** How long after its holder's own limit (plus the kill grace) a slot releases
- *  ITSELF, even if the work never settles — a process stuck past SIGKILL, a
- *  raster step that hangs. No job queued behind it waits on it forever: the
- *  waits are not capped (decided 2026-10-04), so every hold must be. */
-export const FFMPEG_SLOT_BACKSTOP_MS = 30_000
 
 /** Hold one slot for `work`, never longer than `limitMs` (+ the backstop): past
  *  that the slot is released and the call rejects, while `work` is left to
@@ -1267,8 +1263,9 @@ function scanPacketEnds(filePath: string, streamIndex: number): Promise<{ maxPts
  *  sorted (packets come in decode order; B-frames reorder them). One csv line
  *  per frame, so the packet list is STREAMED: a long proxy at a high fps is
  *  megabytes of csv, past `runFfprobe`'s buffer (a 2 h proxy at 60 fps is
- *  ~430k lines, over 5 MiB). Packets with no pts are skipped. */
-export function probeVideoFramePtsMs(filePath: string): Promise<number[]> {
+ *  ~430k lines, over 5 MiB). Packets with no pts are skipped. `timeoutMs` is
+ *  the watchdog (a proxy segment passes its span's own, `proxySpanProbeTimeoutMs`). */
+export function probeVideoFramePtsMs(filePath: string, timeoutMs: number = DEFAULT_FFMPEG_TIMEOUT_MS): Promise<number[]> {
   return new Promise((resolve, reject) => {
     const proc = spawn("ffprobe", [
       "-v", "error",
@@ -1282,7 +1279,7 @@ export function probeVideoFramePtsMs(filePath: string): Promise<number[]> {
     const watchdog = setTimeout(() => {
       timedOut = true
       proc.kill("SIGKILL")
-    }, DEFAULT_FFMPEG_TIMEOUT_MS)
+    }, timeoutMs)
 
     const ptsMs: number[] = []
     let lineBuf = ""
@@ -1307,7 +1304,7 @@ export function probeVideoFramePtsMs(filePath: string): Promise<number[]> {
     proc.on("close", (code) => {
       clearTimeout(watchdog)
       if (lineBuf) take(lineBuf)
-      if (timedOut) reject(new Error(`probeVideoFramePtsMs: ffprobe timed out after ${DEFAULT_FFMPEG_TIMEOUT_MS}ms`))
+      if (timedOut) reject(new Error(`probeVideoFramePtsMs: ffprobe timed out after ${timeoutMs}ms`))
       else if (code !== 0) reject(new Error(`probeVideoFramePtsMs: ffprobe exit ${code}: ${stderrTail.trim() || "no output"}`))
       else resolve(ptsMs.sort((a, b) => a - b))
     })

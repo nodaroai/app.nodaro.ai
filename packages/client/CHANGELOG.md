@@ -1,5 +1,28 @@
 # @nodaro/sdk
 
+## 2.21.0
+
+### Minor Changes
+
+- 0320eec: `PublishedApp.perItemCredits`: credits for each item beyond the creator's saved items of a list input the app's user fills. `PublishedAppDetail.runEstimatedCredits`, `runPerMinuteCredits` and `runPerItemCredits`: the app run alone, the listed price less its Render final part. All optional and additive. `PublishedAppDetail.editPlanPerMinute`: whether the server charges Edit Plan per started minute of the recording (otherwise in steps); optional and additive.
+- 0320eec: Listing prices per minute of the recording: `TemplateBrowseCard.estimatedPerMinuteCredits`, `TutorialFlowItem.estimatedPerMinuteCredits` and `PublishedApp.perMinuteCredits` (with `PublishedApp.estimatedCredits`). When the per-minute figure is above 0 the listed price follows the length of the recording the template or app is given: the fixed `estimatedCredits` plus that many credits per minute. All optional and additive.
+
+### Patch Changes
+
+- 1f414c9: ElevenLabs Dialogue v4's total-character cap across lines rises from 5,000 to 10,000 (`getDialogueCapabilities("elevenlabs-dialogue-v4").maxChars`): a 10,000-character v4 dialogue was voiced whole in a live check on 2026-10-06, well inside the platform's time limit. v3 dialogue stays at 5,000. The SDK's `voices.textToDialogue()` JSDoc and `nodaro voice dialogue --help` state each model's own cap.
+- Updated dependencies [b9e7c8a]
+- Updated dependencies [1f414c9]
+- Updated dependencies [cd26efd]
+- Updated dependencies [23a9098]
+- Updated dependencies [d61bff7]
+- Updated dependencies [a36adeb]
+- Updated dependencies [1f21d46]
+- Updated dependencies [1766435]
+- Updated dependencies [887bfdf]
+- Updated dependencies [cec354b]
+  - @nodaro/shared@3.25.0
+  - @nodaro/prompts@1.34.0
+
 ## 2.20.0
 
 ### Minor Changes

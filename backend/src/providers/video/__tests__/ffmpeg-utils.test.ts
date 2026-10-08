@@ -190,6 +190,7 @@ import {
   probeStreamEnds,
   probeVideoFramePtsMs,
 } from "../ffmpeg-utils.js"
+import { DEFAULT_FFMPEG_TIMEOUT_MS } from "../ffmpeg-timeouts.js"
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -1819,6 +1820,20 @@ describe("probeVideoFramePtsMs", () => {
     const pts = await probeVideoFramePtsMs("/tmp/long.mp4")
     expect(pts).toHaveLength(frames)
     expect(pts[frames - 1]).toBeCloseTo(((frames - 1) / 60) * 1000, 3)
+  })
+
+  it("its watchdog runs at the caller's ceiling (a proxy segment's own), else the default", async () => {
+    const timer = vi.spyOn(globalThis, "setTimeout")
+    try {
+      mocks.spawnScripts.push({ stdout: "0.000000\n" }, { stdout: "0.000000\n" })
+      await probeVideoFramePtsMs("/tmp/seg.mp4", 90_000)
+      await probeVideoFramePtsMs("/tmp/proxy.mp4")
+      const delays = timer.mock.calls.map((c) => c[1])
+      expect(delays).toContain(90_000)
+      expect(delays).toContain(DEFAULT_FFMPEG_TIMEOUT_MS)
+    } finally {
+      timer.mockRestore()
+    }
   })
 
   it("a failed probe rejects with ffprobe's stderr", async () => {

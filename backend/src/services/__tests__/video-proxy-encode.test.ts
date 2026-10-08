@@ -15,6 +15,7 @@ vi.mock("node:fs", async (orig) => {
 
 import { probeVideoFramePtsMs, runFfmpeg, runFfprobe } from "../../providers/video/ffmpeg-utils.js"
 import { audioPeakMemoryMiB, canvasPeakMemoryMiB } from "../../providers/video/ffmpeg-memory-model.js"
+import { MEDIA_PROXY_FFMPEG_TIMEOUT_MS, proxySpanEncodeTimeoutMs, proxySpanProbeTimeoutMs } from "../../providers/video/ffmpeg-timeouts.js"
 import { encodeVideoProxy } from "../video-proxy-encode.js"
 
 const THREADS = { decode: 2, filter: 2, encode: 2 }
@@ -82,6 +83,30 @@ describe("encodeVideoProxy — every ffmpeg goes through the admitted, thread-pl
     expect(r.spanMap).toEqual([{ proxyStartMs: 0, proxyEndMs: 60_000, sourceStartMs: 0, firstFrame: 0, frameCount: 120 }])
     const probe = vi.mocked(runFfprobe).mock.calls[0][0]
     expect(probe.join(" ")).not.toContain("duration")
+  })
+
+  it("each span's encode and its frame-time probe run at the span's own ceiling; the join keeps the whole-proxy ceiling", async () => {
+    probeAnswers([7, 10])
+    await encodeVideoProxy("/w/source", "/w", { fps: 2, height: 540, spans: [{ startMs: 0, endMs: 3300 }, { startMs: 10_300, endMs: 14_900 }] })
+    const calls = vi.mocked(runFfmpeg).mock.calls
+    expect(calls[0][1]).toBe(proxySpanEncodeTimeoutMs(3300))
+    expect(calls[1][1]).toBe(proxySpanEncodeTimeoutMs(4600))
+    expect(calls[2][1]).toBe(MEDIA_PROXY_FFMPEG_TIMEOUT_MS)
+    const probes = vi.mocked(probeVideoFramePtsMs).mock.calls
+    expect(probes[0]).toEqual(["/w/seg-0000.mp4", proxySpanProbeTimeoutMs(3300)])
+    expect(probes[1]).toEqual(["/w/seg-0001.mp4", proxySpanProbeTimeoutMs(4600)])
+    expect(probes[2]).toEqual(["/w/proxy.mp4"]) // the join's: the default ceiling
+  })
+
+  it("the whole source (length unknown) keeps the whole-proxy ceiling; a caller's timeoutMs overrides every spawn", async () => {
+    probeAnswers([120])
+    await encodeVideoProxy("/w/source", "/w", { fps: 2, height: 540 })
+    expect(vi.mocked(runFfmpeg).mock.calls.map((c) => c[1])).toEqual([MEDIA_PROXY_FFMPEG_TIMEOUT_MS, MEDIA_PROXY_FFMPEG_TIMEOUT_MS])
+    expect(vi.mocked(probeVideoFramePtsMs).mock.calls[0]).toEqual(["/w/seg-0000.mp4"])
+    vi.clearAllMocks()
+    probeAnswers([7])
+    await encodeVideoProxy("/w/source", "/w", { fps: 2, height: 540, spans: [{ startMs: 0, endMs: 3300 }], timeoutMs: 7 * 60_000 })
+    expect(vi.mocked(runFfmpeg).mock.calls.map((c) => c[1])).toEqual([7 * 60_000, 7 * 60_000])
   })
 
   it("a segment that wrote no frames is left out of the join and of the map", async () => {
