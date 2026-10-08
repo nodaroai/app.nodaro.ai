@@ -15,7 +15,7 @@ import {
   pro3DRenderShotStills, extractGeneratedJsonAsList, splitGeneratedItems, resolveNodeRefs, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, SOCIAL_POST_NODE_TYPES, PARAMETER_NODE_TYPES, getParameterValue, FAN_OUT_EACH_TYPES, FAN_OUT_EACH_HANDLES, defaultEdgeOutputMode, listResultsServeHandle, compactWithRows, pickHeldRow, liveRowColumn, resolveListFanOut, type FanOutCandidate, type ListFanOut, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, DYNAMIC_PRODUCER_TYPES, editPlanSourceDurationSec, extractReferencedLabels, canonicalVarName, REFERENCE_HANDLE_MAP, parseGroupHandle, SUNO_TRACK_SOURCE_TYPES, isFanInEdge, isFanInNodeType, videoLinkPageUrl, socialSearchPostVideo, ownsItsList } from "@nodaro/shared"
 import { isSourceNode } from "./execution-graph.js"
 import { overlayHandleIndex } from "../../providers/image/overlay-contract.js"
-import { VIDEO_OVERLAY_LAYER_PLAN_HANDLE, videoOverlaySlotOfHandle, isTelegramAccountTriggerNamedHandle, editPlanTranscriptOrigin, clipNotesFrom, fanOutItemMeta, isRenderNodeType, rendersLatestBatch } from "@nodaro/shared"
+import { VIDEO_OVERLAY_LAYER_PLAN_HANDLE, videoOverlaySlotOfHandle, isTelegramAccountTriggerNamedHandle, editPlanTranscriptOrigin, clipNotesFrom, fanOutItemMeta, isRenderNodeType, rendersLatestBatch, loneMediaUrlKind, isLoneMediaLinkSource } from "@nodaro/shared"
 import { buildNodeRefMap } from "./payload-builder.js"
 import { jsonArrayItems, listFor, savedDataAllowed, savedListFor } from "./saved-data.js"
 import { IMAGE_URL_RE, VIDEO_URL_RE, AUDIO_URL_RE } from "./inline-executor.js"
@@ -1192,6 +1192,27 @@ function routeVideoOutput(
   }
 }
 
+/** A social post's text-shaped wire (Extract Field over a saved record, a JSON
+ *  field, a Generate Text answer) whose WHOLE value is one media link carries
+ *  the medium, not a caption: a publisher reading an article's stored cover
+ *  posts the picture (decided 2026-10-08). The rule — what counts as one media
+ *  link, which sources are text-shaped — is `@nodaro/shared`'s, so the editor's
+ *  resolver agrees by construction. A text-only action (`post-text`) keeps its
+ *  text, and a real media wire already in the slot is never displaced. Returns
+ *  whether the value was consumed as media. */
+function routeLoneMediaLinkToSocialPost(inputs: ResolvedInputs, src: SimpleNode, target: SimpleNode, output: string): boolean {
+  if (!isLoneMediaLinkSource(src.type) || target.data.action === "post-text") return false
+  const kind = loneMediaUrlKind(output)
+  if (kind === null) return false
+  const url = output.trim()
+  if (kind === "video") {
+    if (!inputs.videoUrl) routeVideoOutput(inputs, url, target.type, src.id)
+  } else if (!inputs.imageUrl) {
+    inputs.imageUrl = url
+  }
+  return true
+}
+
 // ---------------------------------------------------------------------------
 // Media type sets for source type classification
 // ---------------------------------------------------------------------------
@@ -1388,6 +1409,12 @@ function routeOutput(
     inputs.componentInputMap[handleId] = output
     return
   }
+
+  // --- Social post ← a text-shaped wire that IS one media link ---
+  // Ahead of the per-source chain so every text-shaped source (a text branch,
+  // the social fallback, a trigger's text, a component port) follows one rule;
+  // the editor's resolver runs the same pre-pass on the same shared predicates.
+  if (SOCIAL_POST_NODE_TYPES.has(targetType) && routeLoneMediaLinkToSocialPost(inputs, src, target, output)) return
 
   // --- Image Collage accumulates EVERY connected image into imageUrls[] ---
   // Single choke point (like combine-videos → videoUrls). Every valid input is

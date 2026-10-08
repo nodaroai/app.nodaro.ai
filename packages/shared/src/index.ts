@@ -1567,6 +1567,8 @@ export {
 
 export * from "./fan-out-meta.js"
 
+export { loneMediaUrlKind, isLoneMediaLinkSource } from "./lone-media-url.js"
+export type { LoneMediaUrlKind } from "./lone-media-url.js"
 export { SUNO_TRACK_SOURCE_TYPES } from "./suno-track-sources.js"
 
 export { isPrivateOrReservedIP, isLocalOrPrivateHostname } from "./private-host.js"

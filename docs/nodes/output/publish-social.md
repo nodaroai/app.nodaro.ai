@@ -24,7 +24,7 @@ The Publish to Social node is the unified publisher: one node that can post to *
 
 ## Inputs & Outputs
 
-**Inputs:** Optional image, video, audio, or text from an upstream node (media routes to the platform's media post; text becomes the caption).
+**Inputs:** Optional image, video, audio, or text from an upstream node (media routes to the platform's media post; text becomes the caption — unless the action posts media and the text is exactly one link to an image or video file, ending in `.jpg`, `.jpeg`, `.png`, `.gif`, `.webp`, `.mp4`, `.mov` or `.webm`, which is published as that medium; with `post-text`, and for a page link, it stays the text).
 
 **Outputs:** None. This is a terminal output node.
 

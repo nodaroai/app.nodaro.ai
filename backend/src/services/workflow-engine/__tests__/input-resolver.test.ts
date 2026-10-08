@@ -1081,4 +1081,119 @@ describe("resolveNodeInputs — video-to-video reference handles", () => {
     const result = resolveNodeInputs(target, edges, states, [src, target])
     expect(result.referenceAudioUrls).toEqual(["https://ref.mp3"])
   })
+
+  describe("social post nodes: a text wire that is ONE media link carries the medium", () => {
+    // A publisher reads an article's stored cover through Extract Field — a
+    // text-shaped source, whose value lands on `prompt` (the node executor
+    // reads a social post's caption as `caption ?? prompt`). The whole value
+    // being a single image/video LINK — a path ending in a file name the
+    // platforms post — means "post this picture", not "write this link as the
+    // caption" (decided 2026-10-08). What counts as one media link and which
+    // sources are text-shaped is @nodaro/shared's (`loneMediaUrlKind`,
+    // `isLoneMediaLinkSource`), the same rule the editor's resolver runs.
+    const SOCIAL_TYPES = ["telegram-post", "x-post", "instagram-post", "facebook-post", "linkedin-post", "tiktok-post", "youtube-upload", "publish-social"]
+    const textStates = (text: string): Record<string, NodeExecutionState> => ({
+      s: { status: "completed", output: { extractedText: text, text, listResults: [text] } },
+    })
+    const resolve = (sourceType: string, text: string, targetType = "telegram-post", data: Record<string, unknown> = {}) => {
+      const target = node("t", targetType, data)
+      const src = node("s", sourceType)
+      const handle = sourceType === "extract-field" ? "text" : null
+      return resolveNodeInputs(target, [edge("s", "t", handle, "in")], textStates(text), [src, target])
+    }
+
+    it("a lone image link from Extract Field lands as the photo, not the caption — on every social post type", () => {
+      const url = " https://cdn4.telesco.pe/file/abc.jpg?token=xyz "
+      for (const type of SOCIAL_TYPES) {
+        const result = resolve("extract-field", url, type)
+        expect(result.imageUrl, type).toBe(url.trim())
+        expect(result.prompt, type).toBeUndefined()
+      }
+    })
+
+    it("a lone video link lands as the video", () => {
+      const url = "https://cdn4.telesco.pe/file/clip.mp4?poster=x.jpg"
+      const result = resolve("extract-field", url)
+      expect(result.videoUrl).toBe(url)
+      expect(result.prompt).toBeUndefined()
+    })
+
+    it("the sources that reach the social fallback follow the same rule", () => {
+      // JSON Process, Selector and Filter List have no text branch of their
+      // own on the server; before the shared pre-pass their link became the
+      // caption while the editor posted a picture. They are list sources, so
+      // the social node is a fan-out row (index 0 here, as the worker resolves it).
+      const url = "https://media.nodaro.ai/images/9b1c.png"
+      for (const sourceType of ["json-process", "selector", "filter-list"]) {
+        const target = node("t", "telegram-post")
+        const src = node("s", sourceType)
+        const states: Record<string, NodeExecutionState> = { s: { status: "completed", output: { text: url, listResults: [url], processedResult: url } } }
+        const result = resolveNodeInputs(target, [edge("s", "t", null, "in")], states, [src, target], undefined, 0)
+        expect(result.imageUrl, sourceType).toBe(url)
+        expect(result.caption, sourceType).toBeUndefined()
+        expect(result.prompt, sourceType).toBeUndefined()
+      }
+    })
+
+    it("a lone media link into a NON-social consumer is still its text", () => {
+      const target = node("t", "llm-chat")
+      const src = node("s", "extract-field")
+      const url = "https://cdn4.telesco.pe/file/abc.jpg"
+      const result = resolveNodeInputs(target, [edge("s", "t", "text", "prompt")], textStates(url), [src, target])
+      expect(result.prompt).toBe(url)
+      expect(result.imageUrl).toBeUndefined()
+    })
+
+    it("a sentence with a link, a page link, a host that merely looks like a file name, and a format no platform posts stay the caption", () => {
+      for (const text of [
+        "Seedance 2 is out https://example.com/demo.png",
+        "https://example.com/demo.png looks amazing",
+        "https://t.me/somechannel/123",
+        "https://www.movistar.es/news/ai",
+        "https://site.com/page?img=a.png",
+        "https://cdn.example/images/cover.avif",
+        "Just the news.",
+      ]) {
+        const result = resolve("extract-field", text)
+        expect(result.prompt, text).toBe(text)
+        expect(result.imageUrl, text).toBeUndefined()
+        expect(result.videoUrl, text).toBeUndefined()
+      }
+    })
+
+    it("a text-only action keeps the link as its text", () => {
+      const url = "https://media.nodaro.ai/images/9b1c.png"
+      const result = resolve("extract-field", url, "linkedin-post", { action: "post-text" })
+      expect(result.prompt).toBe(url)
+      expect(result.imageUrl).toBeUndefined()
+    })
+
+    it("an entity's picture keeps its own routing (the rule is for text-shaped sources only)", () => {
+      const url = "https://media.nodaro.ai/images/maya.png"
+      const target = node("t", "telegram-post")
+      const src = node("s", "character", { imageUrl: url })
+      const states: Record<string, NodeExecutionState> = { s: { status: "completed", output: { imageUrl: url, text: url } } }
+      const result = resolveNodeInputs(target, [edge("s", "t", "characterRef", "in")], states, [src, target])
+      expect(result.imageUrl).toBeUndefined()
+      expect(result.referenceImageUrls).toEqual([url])
+    })
+
+    it("a real image wire is never displaced by a text-derived link, whichever comes first", () => {
+      const real = "https://media.nodaro.ai/images/real.png"
+      const other = "https://media.nodaro.ai/images/other.png"
+      const target = node("t", "telegram-post")
+      const img = node("i", "upload-image", { url: real })
+      const src = node("s", "extract-field")
+      const states: Record<string, NodeExecutionState> = {
+        s: { status: "completed", output: { extractedText: other, text: other } },
+      }
+      for (const edges of [
+        [edge("i", "t", "image", "in"), edge("s", "t", "text", "in")],
+        [edge("s", "t", "text", "in"), edge("i", "t", "image", "in")],
+      ]) {
+        const result = resolveNodeInputs(target, edges, states, [img, src, target])
+        expect(result.imageUrl).toBe(real)
+      }
+    })
+  })
 })
