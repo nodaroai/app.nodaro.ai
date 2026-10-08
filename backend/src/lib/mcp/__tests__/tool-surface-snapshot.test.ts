@@ -687,6 +687,20 @@ const NANO_BANANA_2_1_MODEL_BYTES = 61
 // the tool refuses a script by the chosen model's number. No tool was added, so the fixture
 // does NOT move. measured by this suite: 405_655 total − 405_651 budget = 4 B.
 const DIALOGUE_V4_CAP_WORDING_BYTES = 4
+// RAISED 2026-10-08 by the eight LLM ids added to the registry (claude-sonnet-5.5,
+// claude-opus-5.5, gpt-6-luna, gpt-6-sol, gpt-6.1-sol, grok-4.7, kimi-k3, deepseek-v4.1-flash):
+// every tool whose `llm_model` argument is `z.enum(LLM_MODEL_IDS)` lists them all, and nothing
+// else moved. No tool was added, so the fixture does NOT move. measured by this suite:
+// 406_618 total − 406_138 budget = 480 B.
+const LLM_REGISTRY_2026_10_IDS_BYTES = 480
+// RAISED 2026-10-08 by the wording of the shared LLM arguments when Advanced
+// mode reached Claude and a Claude effort began running direct (decided that
+// day: a call is priced on the lane it runs on): `advanced_mode` now names
+// Gemini AND Claude and the premium-direct rung, and `reasoning_effort` says a
+// Claude effort runs on Anthropic's API. Every LLM tool carries both, and
+// nothing else moved. No tool was added, so the fixture does NOT move.
+// measured by this suite: 407_322 total − 406_618 budget = 704 B.
+const LLM_LANE_PRICING_WORDING_BYTES = 704
 
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES,
@@ -762,6 +776,8 @@ export const TOOL_WIRE_BUDGET = {
     UGC_FINISH_ROOM_SOUND_BYTES +
     ELEVENLABS_V4_TURBO_BYTES +
     DIALOGUE_V4_CAP_WORDING_BYTES +
+    LLM_REGISTRY_2026_10_IDS_BYTES +
+    LLM_LANE_PRICING_WORDING_BYTES +
     UGC_CLIPS_SPEECH_LANE_VOICE_BYTES +
     NANO_BANANA_2_1_MODEL_BYTES,
 }

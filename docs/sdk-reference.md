@@ -1922,7 +1922,7 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > only), which runs the request on the provider's own API rather than through
 > the aggregator. That is the only lane where `temperature`, `maxTokens` and the
 > full reasoning-effort range actually take effect — on the default lane those
-> levers are not reliably honoured. It bills **one credit tier up** (capped at premium), and this
+> levers are not reliably honoured. It bills **one credit rung up** (a premium model moves to its premium-direct price), and this
 > bump is independent of the effort bump above. A model with no direct lane
 > returns `400 advanced_mode_unsupported`. Canvas LLM nodes carry the same field
 > on their node `data` (`advancedMode?: boolean`), and the CLI exposes it as

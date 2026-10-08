@@ -6,7 +6,7 @@ The Video Composer node uses Claude Sonnet (configurable via the model selector 
 
 Reasoning-capable models additionally show an **Effort** selector next to the model picker (Auto by default — the vendor default, no charge change). `xhigh`/`max` bill one tier up, same rule as every other LLM-backed node — see the Generate Text node's [Reasoning effort](../ai-text/llm-chat.md#reasoning-effort) section for the exact formula and worked examples.
 
-**Advanced mode.** Gemini models offer an **Advanced mode** switch. Turning it on runs the model on the provider's own API instead of through our aggregator, which is the only place `Temperature`, `Max Tokens` and the full reasoning-depth range actually take effect — those controls appear once it is on. It bills **one credit tier up** (capped at premium), and the node's cost badge updates immediately so you can see the change before running. On a non-Gemini model the switch is visible but disabled, with the reason shown inline.
+**Advanced mode.** Gemini and Claude models offer an **Advanced mode** switch. Turning it on runs the model on the provider's own API instead of through our aggregator, which is the only place `Temperature`, `Max Tokens` and the full reasoning-depth range actually take effect — those controls appear once it is on. It bills **one credit rung up** (a premium model moves to its premium-direct price), and the node's cost badge updates immediately so you can see the change before running. On any other model the switch is visible but disabled, with the reason shown inline. On a Claude model, choosing any reasoning effort runs the call the same way (Anthropic's API is the only place Claude's effort applies) and bills the same.
 
 ## Configuration
 

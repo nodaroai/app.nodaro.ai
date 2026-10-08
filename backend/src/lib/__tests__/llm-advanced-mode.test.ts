@@ -5,7 +5,10 @@
  * byte-identical to what the routes sent before the feature existed, or a
  * stored `temperature` on a structured-JSON node silently degrades its output.
  */
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, vi } from "vitest"
+// Both direct keys configured: whether an install HOLDS the key is its own case
+// (llm-advanced-mode-keys.test.ts) — CI runs with neither, so state them here.
+vi.mock("../config.js", () => ({ config: { GEMINI_API_KEY: "test-gemini", ANTHROPIC_API_KEY: "test-anthropic" } }))
 import { LLM_ADVANCED_SHAPE, advancedModeError, resolveLlmParams } from "../llm-advanced-mode.js"
 import { z } from "zod"
 

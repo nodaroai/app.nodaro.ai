@@ -1,7 +1,7 @@
 ---
 node_type: image-critic
-generated_at: 2026-10-04T11:01:27.750Z
-generated_from: c90be8fb1
+generated_at: 2026-10-08T09:21:52.140Z
+generated_from: cdb16c72b
 ---
 
 # Image Critic
@@ -9,7 +9,7 @@ generated_from: c90be8fb1
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `image-critic`
 **Category:** ai
-**Credit cost:** `10-40` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `10-100` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
 **Inputs (target handles):** `image`, `reference`, `prompt`
 **Outputs (source handles):** `approved`, `rejected`
 

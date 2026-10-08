@@ -1,7 +1,7 @@
 ---
 node_type: content-recipe
-generated_at: 2026-10-01T22:35:58.583Z
-generated_from: 9efb4473c
+generated_at: 2026-10-08T09:21:52.534Z
+generated_from: cdb16c72b
 ---
 
 # Content Recipe
@@ -9,7 +9,7 @@ generated_from: 9efb4473c
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `content-recipe`
 **Category:** ai
-**Credit cost:** `5-35` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `5-88` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
 **Inputs (target handles):** `in`, `link`
 **Outputs (source handles):** `json`, `text`
 

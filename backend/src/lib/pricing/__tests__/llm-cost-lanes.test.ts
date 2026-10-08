@@ -158,3 +158,10 @@ describe("direct-Anthropic lane costing", () => {
       .toBeCloseTo(0.10, 10)
   })
 })
+
+describe("Claude 5.5 direct-lane rows (Anthropic list, verified 2026-10-08)", () => {
+  it("costs Sonnet 5.5 at $2/$10 and Opus 5.5 at $4/$20 per M on the direct lane", () => {
+    expect(calculateLlmCost("claude-sonnet-5.5", { inputTokens: 1_000_000, outputTokens: 1_000_000 }, "direct")).toBeCloseTo(12, 10)
+    expect(calculateLlmCost("claude-opus-5.5", { inputTokens: 1_000_000, outputTokens: 1_000_000 }, "direct")).toBeCloseTo(24, 10)
+  })
+})

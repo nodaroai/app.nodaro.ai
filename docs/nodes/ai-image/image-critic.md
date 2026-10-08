@@ -14,7 +14,7 @@ The Image Critic node uses a vision-language model to evaluate an image against 
 | Threshold | number 0-1 | `0.7` | `approved = score >= threshold`. Below the threshold, the `rejected` handle fires instead. |
 | Prompt | text | `""` | Required for `prompt-adherence` and `all` modes. Can be wired via the `prompt` input edge -- the edge wins when present. |
 | LLM model | select | Claude Sonnet 4.6 | Any vision-capable model. Pricing varies by tier (10 / 20 / 40 credits for economy / standard / premium). |
-| Advanced mode | boolean | `false` | Gemini models only. Runs the model on the provider's own API so **Temperature**, **Max Tokens** and the full reasoning-depth range actually apply. Bills one credit tier up, capped at premium; disabled with an inline reason on non-Gemini models |
+| Advanced mode | boolean | `false` | Gemini and Claude models. Runs the model on the provider's own API so **Temperature**, **Max Tokens** and the full reasoning-depth range actually apply. Bills one credit rung up (a premium model moves to premium-direct); disabled with an inline reason on other models |
 | `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
 ## Inputs & Outputs

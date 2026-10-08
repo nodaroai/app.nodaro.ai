@@ -11,9 +11,11 @@
  * identical-call short circuit, and the cancel check before every tool call.
  */
 import type Anthropic from "@anthropic-ai/sdk"
+import { getLlmModel } from "@nodaro/shared"
 import { getAnthropicClient } from "../../lib/anthropic.js"
 import { calculateLlmCost } from "../../lib/pricing/llm-cost.js"
 import { COPILOT_TIERS, DEFAULT_COPILOT_TIER, TURN_CAPS, type CopilotTierSpec } from "./constants.js"
+import { stripThinkingBlocks } from "./history.js"
 import { estimateNextCallUsd, wouldExceedBudget, type TurnBudget } from "./budget.js"
 import { newUntrustedNonce, wrapUntrusted } from "./untrusted.js"
 import { toolLabel } from "./tool-labels.js"
@@ -107,12 +109,21 @@ export async function runAgentLoop(input: LoopInput): Promise<LoopResult> {
     proposal,
   })
 
+  // A model whose thinking is bound to its conversation prefix rejects a
+  // replayed block once an earlier turn changed — and stored history is NOT
+  // append-only here (buildHistory drops the oldest turns to stay in budget).
+  // Prior turns therefore go back without their thinking; this turn's own
+  // blocks stay, because within the loop the history only grows.
+  const history = getLlmModel(tier.registryId)?.conversationBoundThinking
+    ? stripThinkingBlocks(input.history)
+    : input.history
+
   while (true) {
     if (input.signal.aborted) return finish("cancelled")
     if (iterations >= tier.caps.maxIterations) return finish("capped")
     if (Date.now() > deadline) return finish("capped")
 
-    const messages = [...input.history, ...turnMessages]
+    const messages = [...history, ...turnMessages]
     // From the second iteration on the prefix is a cache hit — pricing it at
     // the full input rate would end turns early over money never spent.
     const nextCallUsd = estimateNextCallUsd(tier.registryId, promptChars(input.system, messages), iterations > 0)

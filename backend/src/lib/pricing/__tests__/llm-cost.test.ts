@@ -94,6 +94,21 @@ describe("calculateLlmCost", () => {
     // 560/2800 KIE credits per M @ $0.005 = $2.80/$14.00. 1M/1M: 2.80 + 14.00 = 16.80
     expect(calculateLlmCost("gpt-6-astra", { inputTokens: 1_000_000, outputTokens: 1_000_000 })).toBeCloseTo(16.8, 10)
   })
+  // 2026-10-08 additions — KIE list credits/M × $0.005, as given at add time.
+  it.each([
+    ["claude-sonnet-5.5", 0.80, 4.00],
+    ["claude-opus-5.5", 1.60, 8.00],
+    ["gpt-6-luna", 0.03, 0.15],
+    ["gpt-6-sol", 0.60, 3.00],
+    ["gpt-6.1-sol", 0.60, 3.00],
+    ["grok-4.7", 0.80, 2.40],
+    ["kimi-k3", 2.40, 12.00],
+    ["deepseek-v4.1-flash", 0.12, 0.475],
+  ])("prices %s at KIE list rates ($%s / $%s per M)", (id, inUsd, outUsd) => {
+    expect(calculateLlmCost(id, { inputTokens: 1_000_000, outputTokens: 0 })).toBeCloseTo(inUsd, 10)
+    expect(calculateLlmCost(id, { inputTokens: 0, outputTokens: 1_000_000 })).toBeCloseTo(outUsd, 10)
+  })
+
   it("prices gpt-6-astra on ONE flat input band (KIE's cached/cache-write rows are deliberately unmodelled)", () => {
     // KIE bills cached input at 56 and cache writes at 700 credits/M, but this
     // is an OpenAI-shape lane: it reports cached tokens INSIDE the prompt

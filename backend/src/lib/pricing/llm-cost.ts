@@ -84,19 +84,48 @@ const LLM_MODEL_RATES_USD_PER_M: Record<string, LlmModelRateUsd> = {
   // to equal the Anthropic ones the formula applies.) `credits_consumed`
   // capture keeps provider_cost honest.
   "gpt-6-astra":       { inputPricePerM: 2.80,  outputPricePerM: 14.00 },
+  // GPT-6 Luna / Sol / 6.1 Sol — KIE list prices ($0.005/credit), confirmed
+  // 2026-10-08. Flat uncached band only, exactly as astra's row and for the
+  // same reason (OpenAI-shape usage counts cached tokens INSIDE the prompt
+  // total). KIE's cache tiers, for reference — Luna: cached 0.6, cache write
+  // 7.5 credits/M; Sol: cached 12, write 150; 6.1 Sol: cached 6, write 150.
+  // All three are served non-stream, so `credits_consumed` is the billed cost
+  // and this row is the estimate it is compared against. NOTE: this endpoint
+  // reports top-level `usage.input_tokens: 0` (measured 2026-10-08 — the real
+  // counts sit in `usage.attribution`), so the estimate here is output-only
+  // and the drift warning will read low on input.
+  "gpt-6-luna":        { inputPricePerM: 0.03,  outputPricePerM: 0.15 },
+  "gpt-6-sol":         { inputPricePerM: 0.60,  outputPricePerM: 3.00 },
+  "gpt-6.1-sol":       { inputPricePerM: 0.60,  outputPricePerM: 3.00 },
   // KIE list price 160/480 KIE-credits per M ($0.005/credit) — 40% of xAI's
   // official $2/$6 (confirmed 2026-08-18, docs.kie.ai/market/grok/grok-4-6).
   // Cached input reprices to $0.20/M on KIE's side; the table models the flat
   // uncached band and `credits_consumed` capture keeps provider_cost honest.
   "grok-4.6":          { inputPricePerM: 0.80,  outputPricePerM: 2.40 },
+  // KIE list price 160/480 KIE-credits per M (cached input 40) — confirmed
+  // 2026-10-08, docs.kie.ai/market/grok/grok-4-7. Same band as 4.6.
+  "grok-4.7":          { inputPricePerM: 0.80,  outputPricePerM: 2.40 },
   "claude-sonnet-5":   { inputPricePerM: 0.85,  outputPricePerM: 4.275 },
+  // KIE list price 160/800 KIE-credits per M ($0.005/credit) — 40% of
+  // Anthropic's $2/$10 (confirmed 2026-10-08).
+  "claude-sonnet-5.5": { inputPricePerM: 0.80,  outputPricePerM: 4.00 },
   "claude-opus-4.8":   { inputPricePerM: 2.00,  outputPricePerM: 10.00 },
   // KIE list price 400/2000 KIE-credits per M ($0.005/credit) — ~40% of the
   // official vendor price (confirmed 2026-07-27).
   "claude-opus-5":     { inputPricePerM: 2.00,  outputPricePerM: 10.00 },
+  // KIE list price 320/1600 KIE-credits per M ($0.005/credit) — 40% of
+  // Anthropic's $4/$20 (confirmed 2026-10-08).
+  "claude-opus-5.5":   { inputPricePerM: 1.60,  outputPricePerM: 8.00 },
   // KIE list price 800/4000 KIE-credits per M ($0.005/credit) — ~40% of the
   // official vendor price (confirmed 2026-07-26).
   "claude-fable-5":    { inputPricePerM: 4.00,  outputPricePerM: 20.00 },
+  // KIE openai/v1/responses lane, list prices confirmed 2026-10-08 ($0.005 per
+  // KIE credit). Kimi: 480/2400 credits per M (cached input 48). DeepSeek V4.1
+  // Flash: 24/95 (cached input 0.5). Flat uncached band, as for every
+  // OpenAI-shape lane above; both reported real `usage.input_tokens` and
+  // `credits_consumed` in the probe.
+  "kimi-k3":           { inputPricePerM: 2.40,  outputPricePerM: 12.00 },
+  "deepseek-v4.1-flash": { inputPricePerM: 0.12, outputPricePerM: 0.475 },
 }
 
 /**
@@ -147,6 +176,12 @@ const LLM_DIRECT_RATES_USD_PER_M: Record<string, LlmModelRateUsd> = {
   "claude-sonnet-5": { inputPricePerM: 3.00, outputPricePerM: 15.00 },
   "claude-opus-4.8": { inputPricePerM: 5.00, outputPricePerM: 25.00 },
   "claude-opus-5": { inputPricePerM: 5.00, outputPricePerM: 25.00 },
+  // Anthropic list prices, verified 2026-10-08. Opus 5.5's cache READ is $0.20
+  // (0.05× input) where the formula applies 0.1× — the direct estimate
+  // over-reports its cache reads 2×, the safe direction. Sonnet 5.5 reads at
+  // $0.20 = 0.1×, exact.
+  "claude-sonnet-5.5": { inputPricePerM: 2.00, outputPricePerM: 10.00 },
+  "claude-opus-5.5": { inputPricePerM: 4.00, outputPricePerM: 20.00 },
   "claude-fable-5": { inputPricePerM: 10.00, outputPricePerM: 50.00 },
 }
 

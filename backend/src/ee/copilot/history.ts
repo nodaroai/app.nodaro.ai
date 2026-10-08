@@ -87,6 +87,29 @@ function groupTurns(rows: readonly CopilotMessageRow[]): TurnGroup[] {
  * The history to replay for the NEXT turn: newest turns first until the
  * budget is spent, then restored to chronological order.
  */
+/**
+ * `messages` with every `thinking` / `redacted_thinking` block removed (text,
+ * tool_use and tool_result blocks kept), for a model whose thinking blocks are
+ * bound to the exact conversation that produced them
+ * (`LlmModelDef.conversationBoundThinking`). An assistant message left with no
+ * content at all is dropped rather than sent empty. Never mutates its input.
+ */
+export function stripThinkingBlocks(
+  messages: readonly Anthropic.Messages.MessageParam[],
+): Anthropic.Messages.MessageParam[] {
+  const out: Anthropic.Messages.MessageParam[] = []
+  for (const m of messages) {
+    if (typeof m.content === "string") {
+      out.push(m)
+      continue
+    }
+    const content = m.content.filter((b) => b.type !== "thinking" && b.type !== "redacted_thinking")
+    if (content.length === 0 && m.role === "assistant") continue
+    out.push(content.length === m.content.length ? m : { ...m, content })
+  }
+  return out
+}
+
 export function buildHistory(rows: readonly CopilotMessageRow[]): Anthropic.Messages.MessageParam[] {
   const groups = groupTurns(rows).filter((g) => !hasUnansweredToolUse(g.messages))
   const budgetChars = TURN_CAPS.historyTokenBudget * 4

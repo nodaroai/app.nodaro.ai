@@ -43,7 +43,7 @@ function directOk(text = "from-direct") {
 
 const baseReq = { system: "", messages: [{ role: "user" as const, content: "hi" }] }
 
-describe("preferDirect model (gemini-3.1-pro)", () => {
+describe("gemini-3.1-pro is KIE-first since 2026-10-08 (direct is Advanced mode)", () => {
   let fetchMock: ReturnType<typeof vi.fn>
 
   beforeEach(() => {
@@ -57,34 +57,35 @@ describe("preferDirect model (gemini-3.1-pro)", () => {
   })
   afterEach(() => vi.unstubAllGlobals())
 
-  it("goes direct first and never touches KIE on success", async () => {
+  it("goes to KIE first and never touches direct on success", async () => {
     const { llmComplete } = await import("../../llm-client.js")
-    callGeminiDirect.mockResolvedValue(directOk())
-
-    const res = await llmComplete({ modelId: "gemini-3.1-pro", ...baseReq })
-
-    expect(res.text).toBe("from-direct")
-    expect(callGeminiDirect).toHaveBeenCalledOnce()
-    expect(fetchMock).not.toHaveBeenCalled()
-  })
-
-  it("falls back to KIE when the direct lane throws", async () => {
-    const { llmComplete } = await import("../../llm-client.js")
-    callGeminiDirect.mockRejectedValue(new Error("google 503"))
     fetchMock.mockResolvedValue(kieOk())
 
     const res = await llmComplete({ modelId: "gemini-3.1-pro", ...baseReq })
 
     expect(res.text).toBe("from-kie")
     expect(fetchMock).toHaveBeenCalledOnce()
+    expect(callGeminiDirect).not.toHaveBeenCalled()
   })
 
-  it("surfaces the direct error when KIE is not configured (no silent swallow)", async () => {
-    configMock.KIE_API_KEY = ""
+  it("falls back to direct when KIE throws (no extra charge — billed as KIE)", async () => {
+    const { llmComplete } = await import("../../llm-client.js")
+    vi.spyOn(console, "warn").mockImplementation(() => {})
+    fetchMock.mockRejectedValue(new Error("kie 503"))
+    callGeminiDirect.mockResolvedValue(directOk())
+
+    const res = await llmComplete({ modelId: "gemini-3.1-pro", ...baseReq })
+
+    expect(res.text).toBe("from-direct")
+    expect(callGeminiDirect).toHaveBeenCalledOnce()
+  })
+
+  it("Advanced (a direct pin) goes direct and never falls back", async () => {
     const { llmComplete } = await import("../../llm-client.js")
     callGeminiDirect.mockRejectedValue(new Error("google 503"))
 
-    await expect(llmComplete({ modelId: "gemini-3.1-pro", ...baseReq })).rejects.toThrow("google 503")
+    await expect(llmComplete({ modelId: "gemini-3.1-pro", ...baseReq, requireLane: "direct" })).rejects.toThrow("google 503")
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it("passes the derived params through to the direct lane", async () => {
@@ -92,7 +93,7 @@ describe("preferDirect model (gemini-3.1-pro)", () => {
     callGeminiDirect.mockResolvedValue(directOk())
 
     // Above the model's reasoning floor, so the caller's cap is what arrives.
-    await llmComplete({ modelId: "gemini-3.1-pro", ...baseReq, temperature: 0.4, maxTokens: 20_000 })
+    await llmComplete({ modelId: "gemini-3.1-pro", ...baseReq, temperature: 0.4, maxTokens: 20_000, requireLane: "direct" })
 
     const params = callGeminiDirect.mock.calls[0]![2]
     expect(params).toMatchObject({ temperature: 0.4, maxTokens: 20_000 })
@@ -277,30 +278,37 @@ describe("streaming", () => {
     expect(res.text).toBe("hello")
   })
 
-  it("does NOT fail over once tokens have already reached the caller", async () => {
+  it("does NOT fail over once KIE tokens have already reached the caller", async () => {
     const { llmStream } = await import("../../llm-client.js")
-    streamGeminiDirect.mockImplementation(async (_m, _r, _p, onToken) => {
-      onToken("partial")
-      throw new Error("died mid-stream")
-    })
-    fetchMock.mockResolvedValue(kieOk())
+    let pulls = 0
+    fetchMock.mockResolvedValue(new Response(new ReadableStream<Uint8Array>({
+      pull(c) {
+        pulls += 1
+        if (pulls === 1) return c.enqueue(new TextEncoder().encode('data: {"choices":[{"delta":{"content":"partial"}}]}\n\n'))
+        throw new Error("died mid-stream")
+      },
+    }), { status: 200, headers: { "Content-Type": "text/event-stream" } }))
 
-    // Restarting on KIE here would replay "partial" to the client — the
+    // Restarting on direct here would replay "partial" to the client — the
     // tainted stream must surface its error instead.
     await expect(
       llmStream({ modelId: "gemini-3.1-pro", ...baseReq }, () => {}),
     ).rejects.toThrow("died mid-stream")
-    expect(fetchMock).not.toHaveBeenCalled()
+    expect(streamGeminiDirect).not.toHaveBeenCalled()
   })
 
-  it("DOES fail over when the direct lane dies before emitting anything", async () => {
+  it("DOES fail over to direct when KIE dies before emitting anything", async () => {
     const { llmStream } = await import("../../llm-client.js")
-    streamGeminiDirect.mockRejectedValue(new Error("failed to connect"))
-    fetchMock.mockResolvedValue(kieSseOk())
+    vi.spyOn(console, "warn").mockImplementation(() => {})
+    fetchMock.mockRejectedValue(new Error("failed to connect"))
+    streamGeminiDirect.mockImplementation(async (_m, _r, _p, onToken) => {
+      onToken("from-direct")
+      return { text: "from-direct", usage: { inputTokens: 1, outputTokens: 1 }, model: "gemini-3.1-pro" }
+    })
 
     const chunks: string[] = []
     const res = await llmStream({ modelId: "gemini-3.1-pro", ...baseReq }, (c) => chunks.push(c))
-    expect(res.text).toBe("from-kie")
-    expect(chunks).toEqual(["from-kie"])
+    expect(res.text).toBe("from-direct")
+    expect(chunks).toEqual(["from-direct"])
   })
 })

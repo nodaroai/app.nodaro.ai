@@ -15,7 +15,7 @@
 
 export type LlmTier = "economy" | "standard" | "premium"
 export type KieApiFormat = "chat-completions" | "messages" | "responses"
-export type LlmVendor = "anthropic" | "google" | "openai" | "xai"
+export type LlmVendor = "anthropic" | "deepseek" | "google" | "moonshot" | "openai" | "xai"
 
 export const LLM_REASONING_EFFORTS = ["none", "low", "medium", "high", "xhigh", "max"] as const
 export type LlmReasoningEffort = (typeof LLM_REASONING_EFFORTS)[number]
@@ -92,6 +92,43 @@ export interface LlmModelDef {
   directReasoningEfforts?: readonly LlmReasoningEffort[]
   /** false = model rejects `temperature` (Claude 5-era, GPT-5.6). Absent = accepts. */
   supportsTemperature?: false
+  /**
+   * false = the model 400s on a FORCED `tool_choice` (`{ type: "tool" }` /
+   * `{ type: "any" }`) — Claude Sonnet 5.5 and Opus 5.5 (vendor docs: "not
+   * supported for this model"). Absent = forcing is accepted.
+   *
+   * Only meaningful with `structuredOutputMode: "anthropic-tool"`: such a model
+   * is asked with `tool_choice: auto` plus an instruction naming the tool, and
+   * the tool carries `strict: true` whenever its schema is expressible in the
+   * vendor's strict subset (`anthropicStrictToolSchema` in llm-client). The
+   * caller's Zod still validates every answer, so nothing the wire withholds is
+   * lost. Declared per model, never matched on a model name.
+   */
+  supportsForcedToolChoice?: false
+  /**
+   * true = the model binds each thinking block to the exact conversation prefix
+   * that produced it ("preserved thinking" — Claude Sonnet 5.5 / Opus 5.5):
+   * replaying a block after an earlier turn was edited, dropped or rebuilt is a
+   * 400 on accounts the vendor enforces. A caller that trims or rebuilds stored
+   * history between requests (the Workflow Copilot keeps a token budget by
+   * dropping its oldest turns) must strip thinking blocks from the turns it
+   * replays. Within one request's own tool loop the history only grows, so
+   * blocks produced there stay valid.
+   */
+  conversationBoundThinking?: true
+  /**
+   * true = this model's reasoning effort takes effect ONLY on the vendor's own
+   * API: the aggregator accepts the field and silently ignores it. Measured
+   * 2026-10-08 for the Claude family on KIE — `low`, `max` and no effort gave
+   * the same output length on a reasoning-heavy prompt, and no thinking block
+   * ever came back, even on Sonnet 4.6 at `max`.
+   *
+   * So an effort-bearing call on such a model is SERVED direct, and it bills
+   * as Advanced mode does — one rung up (decided 2026-10-08: "effort =
+   * Advanced"). {@link llmServesDirect} is the one place that decides it, for
+   * the credit identifier and the routing alike.
+   */
+  effortRequiresDirect?: true
   /** Claude-only: KIE is the preferred routing, direct Anthropic the fallback. */
   preferKie?: true
   /**
@@ -306,6 +343,9 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     supportsImages: true,
     maxOutputTokens: 8192,
     directFallbackModel: "claude-haiku-4-5-20251001",
+    // KIE-first since 2026-10-08 (a call is priced on the lane it runs on);
+    // KIE served it plain and with a tool on its streaming wire that day.
+    preferKie: true,
   },
   {
     id: "claude-sonnet-4.6",
@@ -319,7 +359,12 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     supportsImages: true,
     maxOutputTokens: 16384,
     directFallbackModel: "claude-sonnet-4-6",
+    // KIE-first since 2026-10-08 (a call is priced on the lane it runs on);
+    // KIE served it plain and with a tool on its streaming wire that day.
+    preferKie: true,
     reasoningEfforts: ["low", "medium", "high", "max"],
+    // KIE ignores Claude effort (measured 2026-10-08): an effort call runs direct and bills as Advanced.
+    effortRequiresDirect: true,
   },
   {
     id: "gpt-5.2",
@@ -358,14 +403,14 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     // text such as a name badge), which is exactly what video-analysis casts
     // identities from — so adding an entry here would silently move analysis to
     // the shallower lane. Don't. Full comparison lives with the analysis engine.
-    // The ONE Gemini model routed direct-first. It is the premium/low-volume
-    // tier (video-analysis `pro`, no LLM_FEATURE_DEFAULTS entry), so the ~4×
-    // list-price premium lands on the smallest call volume — and it is where
-    // the direct lane's capability wins actually matter: real `thinkingLevel`
-    // control, native media ingestion, and a `responseJsonSchema` that honours
-    // `additionalProperties` (KIE's `response_format` silently DROPS
+    // KIE-first since 2026-10-08 (decided: a call is priced on the lane it runs
+    // on, so the base premium price buys the KIE lane; the direct lane is
+    // Advanced mode, billed `premium-direct`). It was the one direct-first
+    // Gemini before. What the direct lane buys, now behind Advanced: real
+    // `thinkingLevel` control, native media ingestion, and a `responseJsonSchema`
+    // that honours `additionalProperties` (KIE's `response_format` silently DROPS
     // record/map-shaped fields — see the z.record rule in backend/CLAUDE.md).
-    preferDirect: true,
+    // Video-analysis is unaffected: it pins `requireLane: "direct"` itself.
     // Reasons with no thinking param sent on both lanes — the proxied endpoint
     // DEFAULTS to "high" (above), and the direct lane reasons harder still.
     // Floored at its own 16384: its KIE fallback is not known to take more.
@@ -389,6 +434,8 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     maxOutputTokens: 16384,
     directFallbackModel: "claude-opus-4-7",
     reasoningEfforts: ["low", "medium", "high", "xhigh", "max"],
+    // KIE ignores Claude effort (measured 2026-10-08): an effort call runs direct and bills as Advanced.
+    effortRequiresDirect: true,
     supportsTemperature: false,
     preferKie: true,
   },
@@ -538,10 +585,76 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     // why this is per-model and not a lane-wide flag.
     kieCollapseStream: true,
   },
+  // ── GPT-6 Luna / Sol / 6.1 Sol ────────────────────────────────────────────
+  // Same KIE endpoint and dialect as gpt-6-astra (codex/v1/responses; the doc
+  // pages differ only in the model name). Live-probed 2026-10-08, per model:
+  // `text.format` json_schema ENFORCED (echo `strict: true`, schema-valid
+  // reply), `temperature: 0.2` echoed back as 1 → silently ignored, no
+  // reasoning param → echo "medium" (reasons by default), and data-URI vision.
+  // Unlike astra, the NON-stream lane served them reliably — luna 10/10 and sol
+  // 10/10, 6.1 sol 8/8 at levels other than `none` (incl. 4 long structured
+  // calls each, 500–1,500 output tokens) — so none of them is collapsed:
+  // `credits_consumed` stays the real provider charge.
+  // Their ladder is WIDER than astra's doc-enum one: `none` and `max` were each
+  // sent and echoed back by the endpoint (6.1 sol excepted below).
+  {
+    id: "gpt-6-luna",
+    displayName: "GPT-6 Luna",
+    desc: "Fastest GPT-6, high-volume workloads",
+    tier: "economy",
+    kieFormat: "responses",
+    kieSlugOrModel: "gpt-6-luna",
+    vendor: "openai",
+    structuredOutputMode: "responses-json-schema",
+    supportsImages: true,
+    maxOutputTokens: 16384,
+    reasoningEfforts: ["none", "low", "medium", "high", "xhigh", "max"],
+    supportsTemperature: false,
+    thinkingDefaultOn: true,
+  },
+  {
+    id: "gpt-6-sol",
+    displayName: "GPT-6 Sol",
+    desc: "Strong GPT-6, deep reasoning at lower cost",
+    // Premium by decision (2026-10-08), not by unit cost — "Sol" is the
+    // deep-reasoning rung of the family, and gpt-5.6-sol bills premium too.
+    tier: "premium",
+    kieFormat: "responses",
+    kieSlugOrModel: "gpt-6-sol",
+    vendor: "openai",
+    structuredOutputMode: "responses-json-schema",
+    supportsImages: true,
+    maxOutputTokens: 16384,
+    reasoningEfforts: ["none", "low", "medium", "high", "xhigh", "max"],
+    supportsTemperature: false,
+    thinkingDefaultOn: true,
+  },
+  {
+    id: "gpt-6.1-sol",
+    displayName: "GPT-6.1 Sol",
+    // Measured slow: 30–76 s for 500–1,100 output tokens (2026-10-08), roughly
+    // twice gpt-6-sol on the same request — say so where the picker shows it.
+    desc: "Newest GPT-6 Sol, thorough but slower",
+    tier: "premium",
+    kieFormat: "responses",
+    kieSlugOrModel: "gpt-6-1-sol",
+    vendor: "openai",
+    structuredOutputMode: "responses-json-schema",
+    supportsImages: true,
+    maxOutputTokens: 16384,
+    // NO `none`: every probe at `reasoning.effort: none` failed (502, a 120 s
+    // timeout, 502, 429 — 0/4, 2026-10-08) while every other level answered,
+    // and the same request at `none` succeeded on luna and sol. Clamping maps a
+    // `none` request to nothing sent (Auto) rather than to a level that fails.
+    reasoningEfforts: ["low", "medium", "high", "xhigh", "max"],
+    supportsTemperature: false,
+    thinkingDefaultOn: true,
+  },
   {
     id: "grok-4.6",
     displayName: "Grok 4.6",
-    desc: "xAI flagship, strong reasoning",
+    // Demoted 2026-10-08 when grok-4.7 registered — the flagship copy moved up.
+    desc: "Previous Grok, strong reasoning",
     tier: "standard",
     kieFormat: "responses",
     // KIE serves Grok on the responses dialect under its own family path —
@@ -568,9 +681,34 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     thinkingDefaultOn: true,
   },
   {
+    id: "grok-4.7",
+    displayName: "Grok 4.7",
+    desc: "xAI flagship, strong reasoning",
+    tier: "standard",
+    kieFormat: "responses",
+    // Same grok/v1/responses family path and wire as grok-4.6 (the KIE doc
+    // pages differ only in the model name). Live-probed 2026-10-08: non-stream
+    // 6/6, `text.format` json_schema enforced, data-URI vision, SSE deltas.
+    kieSlugOrModel: "grok-4-7",
+    vendor: "xai",
+    structuredOutputMode: "responses-json-schema",
+    supportsImages: true,
+    maxOutputTokens: 16384,
+    // 4.6's ladder. `none` is NOT honoured: the endpoint echoed it back as
+    // "minimal" and still reasoned (33 of 35 output tokens), so offering it
+    // would promise a lever the wire overrides.
+    reasoningEfforts: ["low", "medium", "high", "xhigh"],
+    // `temperature: 0.2` → echo stayed at the 0.7 default: ignored.
+    supportsTemperature: false,
+    // "Capital of France" with no reasoning param spent 310 of 311 output
+    // tokens reasoning.
+    thinkingDefaultOn: true,
+  },
+  {
     id: "claude-sonnet-5",
     displayName: "Claude Sonnet 5",
-    desc: "Near-Opus quality at Sonnet cost",
+    // Demoted 2026-10-08 when claude-sonnet-5.5 registered.
+    desc: "Previous Sonnet, near-Opus quality",
     tier: "standard",
     kieFormat: "messages",
     kieSlugOrModel: "claude-sonnet-5",
@@ -580,8 +718,42 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     maxOutputTokens: 16384,
     directFallbackModel: "claude-sonnet-5",
     reasoningEfforts: ["low", "medium", "high", "xhigh", "max"],
+    // KIE ignores Claude effort (measured 2026-10-08): an effort call runs direct and bills as Advanced.
+    effortRequiresDirect: true,
     supportsTemperature: false,
     preferKie: true,
+  },
+  {
+    id: "claude-sonnet-5.5",
+    displayName: "Claude Sonnet 5.5",
+    desc: "Latest Sonnet, near-Opus quality at Sonnet cost",
+    tier: "standard",
+    kieFormat: "messages",
+    // KIE serves it on the Claude-native messages dialect under its plain id
+    // (docs.kie.ai/market/claude/claude-sonnet-5-5.md — the page is
+    // claude-opus-5's with the model name swapped). Live-probed 2026-10-08 on
+    // the streaming wire: plain, effort, and forced/auto+strict tool calls all
+    // answered.
+    kieSlugOrModel: "claude-sonnet-5-5",
+    vendor: "anthropic",
+    structuredOutputMode: "anthropic-tool",
+    // Anthropic 400s a forced tool_choice on this model. KIE's proxy happened
+    // to accept one in the probe, but the direct lane is where every
+    // effort-bearing and every streamed structured call goes.
+    supportsForcedToolChoice: false,
+    conversationBoundThinking: true,
+    supportsImages: true,
+    maxOutputTokens: 16384,
+    directFallbackModel: "claude-sonnet-5-5",
+    reasoningEfforts: ["low", "medium", "high", "xhigh", "max"],
+    // KIE ignores Claude effort (measured 2026-10-08): an effort call runs direct and bills as Advanced.
+    effortRequiresDirect: true,
+    // Anthropic rejects non-default sampling values on this model (KIE's proxy
+    // accepted temperature: 0.2 in the probe; the direct lane is the contract).
+    supportsTemperature: false,
+    preferKie: true,
+    // Adaptive thinking runs when no thinking param is sent (vendor default).
+    thinkingDefaultOn: true,
   },
   {
     id: "claude-opus-4.8",
@@ -596,13 +768,16 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     maxOutputTokens: 16384,
     directFallbackModel: "claude-opus-4-8",
     reasoningEfforts: ["low", "medium", "high", "xhigh", "max"],
+    // KIE ignores Claude effort (measured 2026-10-08): an effort call runs direct and bills as Advanced.
+    effortRequiresDirect: true,
     supportsTemperature: false,
     preferKie: true,
   },
   {
     id: "claude-opus-5",
     displayName: "Claude Opus 5",
-    desc: "Latest Opus, deepest agentic reasoning",
+    // Demoted 2026-10-08 when claude-opus-5.5 registered.
+    desc: "Previous Opus, deep agentic reasoning",
     tier: "premium",
     kieFormat: "messages",
     // KIE serves Opus 5 on the Claude-native messages dialect under the plain
@@ -615,10 +790,42 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     maxOutputTokens: 16384,
     directFallbackModel: "claude-opus-5",
     reasoningEfforts: ["low", "medium", "high", "xhigh", "max"],
+    // KIE ignores Claude effort (measured 2026-10-08): an effort call runs direct and bills as Advanced.
+    effortRequiresDirect: true,
     supportsTemperature: false,
     preferKie: true,
     // Opus 5 reasons with NO thinking param sent (vendor default flipped from
     // Opus 4.8/4.7) — so every call needs output headroom, not just xhigh/max.
+    thinkingDefaultOn: true,
+  },
+  {
+    id: "claude-opus-5.5",
+    displayName: "Claude Opus 5.5",
+    // Positioned as Fable-class (decided 2026-10-08: offered wherever Fable is).
+    desc: "Latest Opus, frontier-class reasoning",
+    tier: "premium",
+    kieFormat: "messages",
+    // KIE plain id on the messages dialect (docs.kie.ai/market/claude/
+    // claude-opus-5-5 — claude-opus-5's page with the name swapped).
+    // Live-probed 2026-10-08 on the streaming wire (plain + effort); the KIE
+    // Claude lane was erroring for claude-opus-5 too during the tool probes.
+    kieSlugOrModel: "claude-opus-5-5",
+    vendor: "anthropic",
+    structuredOutputMode: "anthropic-tool",
+    // Forced tool_choice is a 400 on this model (vendor docs) — see the field.
+    supportsForcedToolChoice: false,
+    conversationBoundThinking: true,
+    supportsImages: true,
+    maxOutputTokens: 16384,
+    directFallbackModel: "claude-opus-5-5",
+    reasoningEfforts: ["low", "medium", "high", "xhigh", "max"],
+    // KIE ignores Claude effort (measured 2026-10-08): an effort call runs direct and bills as Advanced.
+    effortRequiresDirect: true,
+    supportsTemperature: false,
+    preferKie: true,
+    // Thinking cannot be turned off on this model at all (`disabled` is a 400
+    // at every effort); with no effort sent it runs adaptive at the vendor's
+    // `medium` default. Nothing on our wire sends `disabled`.
     thinkingDefaultOn: true,
   },
   {
@@ -634,8 +841,60 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     maxOutputTokens: 16384,
     directFallbackModel: "claude-fable-5",
     reasoningEfforts: ["low", "medium", "high", "xhigh", "max"],
+    // KIE ignores Claude effort (measured 2026-10-08): an effort call runs direct and bills as Advanced.
+    effortRequiresDirect: true,
     supportsTemperature: false,
     preferKie: true,
+  },
+  // ── Moonshot / DeepSeek ───────────────────────────────────────────────────
+  // Both on KIE's THIRD responses family path, openai/v1/responses (llm-client
+  // derives it from `vendor`). KIE labels both pages "Chat only — not adapted
+  // for agent use": fine for single (structured) completions, so neither may
+  // back a tool-loop feature.
+  {
+    id: "kimi-k3",
+    displayName: "Kimi K3",
+    desc: "Moonshot flagship, 1M context, careful reasoning",
+    tier: "premium",
+    kieFormat: "responses",
+    kieSlugOrModel: "kimi-k3",
+    vendor: "moonshot",
+    // Live-probed 2026-10-08: `text.format` json_schema is ENFORCED — asked to
+    // answer "no json here" in plain prose, it returned schema-shaped JSON.
+    structuredOutputMode: "responses-json-schema",
+    supportsImages: true,
+    maxOutputTokens: 16384,
+    // KIE's documented enum. The endpoint accepted xhigh/none without error but
+    // never echoes an effort back, so nothing beyond the doc is verifiable.
+    reasoningEfforts: ["low", "medium", "high"],
+    // The doc lists no `temperature` field at all.
+    supportsTemperature: false,
+    // "Reasons by default" per KIE's doc (its usage reports no reasoning-token
+    // split, so this is the doc's word, not a measurement).
+    thinkingDefaultOn: true,
+  },
+  {
+    id: "deepseek-v4.1-flash",
+    displayName: "DeepSeek V4.1 Flash",
+    desc: "Very cheap and fast, solid reasoning",
+    tier: "economy",
+    kieFormat: "responses",
+    kieSlugOrModel: "deepseek-v4-1-flash",
+    vendor: "deepseek",
+    // Live-probed 2026-10-08: json_schema echoed `strict: true` and enforced.
+    structuredOutputMode: "responses-json-schema",
+    supportsImages: true,
+    // ADVISORY ONLY: KIE documents `max_output_tokens` as "not supported … no
+    // effect" on this model (a probe sending it was accepted and ignored), so
+    // neither this cap nor the reasoning floor binds its output length, and the
+    // `incomplete` cap-stop signal cannot fire from our own cap.
+    maxOutputTokens: 16384,
+    // The endpoint takes none/minimal/low/medium/high/xhigh/max; each of none,
+    // low and xhigh was echoed back. `minimal` is not in our ladder.
+    reasoningEfforts: ["none", "low", "medium", "high", "xhigh", "max"],
+    // Documented "not supported … no effect".
+    supportsTemperature: false,
+    thinkingDefaultOn: true,
   },
 ] as const
 
@@ -658,10 +917,12 @@ export const STRUCTURED_VISION_MODELS = LLM_MODELS.filter(
  * ship with its models silently sorted to the end of every menu unlabeled.
  * Alphabetical on purpose: stable, and no vendor-preference fights.
  */
-export const LLM_VENDOR_ORDER: readonly LlmVendor[] = ["anthropic", "google", "openai", "xai"]
+export const LLM_VENDOR_ORDER: readonly LlmVendor[] = ["anthropic", "deepseek", "google", "moonshot", "openai", "xai"]
 export const LLM_VENDOR_LABELS: Record<LlmVendor, string> = {
   anthropic: "Anthropic",
+  deepseek: "DeepSeek",
   google: "Google",
+  moonshot: "Moonshot AI",
   openai: "OpenAI",
   xai: "xAI",
 }
@@ -763,7 +1024,9 @@ export const LLM_FEATURE_DEFAULTS: Record<LlmFeature, string> = {
   // runs once per returned ad — volume, not depth. Must stay an image-capable
   // structured-output model (STRUCTURED_VISION_MODELS); a registry test pins it.
   "meta-ads-analysis": "gemini-3.6-flash",
-  "describe-to-picker": "claude-opus-5",
+  // Moved from claude-opus-5 on 2026-10-08 (decided: Opus 5.5 takes the Opus 5
+  // defaults). Still an image-capable structured model — a registry test pins it.
+  "describe-to-picker": "claude-opus-5.5",
   "qa-check": "gemini-3.6-flash",
   "generate-script": "gemini-3.6-flash",
   "translate": "gemini-3.6-flash",
@@ -816,11 +1079,21 @@ export const LLM_MODALITY_CAPS: Record<string, { image: boolean; video: boolean;
   "gpt-5.6-sol":       { image: true,  video: false, audio: false },
   // KIE's GPT-6 doc lists text + image + file inputs only — no video, no audio.
   "gpt-6-astra":       { image: true,  video: false, audio: false },
+  // Same KIE doc as astra: text + image + file inputs only.
+  "gpt-6-luna":        { image: true,  video: false, audio: false },
+  "gpt-6-sol":         { image: true,  video: false, audio: false },
+  "gpt-6.1-sol":       { image: true,  video: false, audio: false },
   "grok-4.6":          { image: true,  video: false, audio: false },
+  "grok-4.7":          { image: true,  video: false, audio: false },
   "claude-sonnet-5":   { image: true,  video: false, audio: false },
+  "claude-sonnet-5.5": { image: true,  video: false, audio: false },
   "claude-opus-4.8":   { image: true,  video: false, audio: false },
   "claude-opus-5":     { image: true,  video: false, audio: false },
+  "claude-opus-5.5":   { image: true,  video: false, audio: false },
   "claude-fable-5":    { image: true,  video: false, audio: false },
+  // KIE documents text + image input only for both.
+  "kimi-k3":           { image: true,  video: false, audio: false },
+  "deepseek-v4.1-flash": { image: true, video: false, audio: false },
 }
 
 /** Capability lookup with safe default — unknown models get image-only. */
@@ -971,13 +1244,59 @@ function bumpTier(tier: LlmTier): LlmTier {
  * rather than on a hand-maintained model list.
  */
 export function supportsAdvancedMode(modelId: string | undefined): boolean {
-  return Boolean(modelId && getLlmModel(modelId)?.directGeminiModel)
+  const model = modelId ? getLlmModel(modelId) : undefined
+  return Boolean(model?.directGeminiModel || model?.directFallbackModel)
 }
 
 /** User-facing reason a model can't offer Advanced mode. Single-sourced so the
  *  config panel's disabled hint and the route's 400 say the same thing. */
 export const ADVANCED_MODE_UNAVAILABLE_REASON =
-  "Advanced mode is available on Gemini models — switch the model to enable it."
+  "Advanced mode is available on Gemini and Claude models — switch the model to enable it."
+
+/**
+ * Is this call served on the vendor's own API — and therefore billed as such?
+ *
+ * The rule (decided 2026-10-08): a call is priced on the lane it runs on.
+ * It runs direct when Advanced mode is on, or when it carries a reasoning
+ * effort on a model whose effort only works there (`effortRequiresDirect` —
+ * the Claude family). Everything else runs on the aggregator at its price,
+ * falling back to the vendor's API only if the aggregator fails (at no extra
+ * charge).
+ *
+ * The SINGLE decision both the credit identifier and the LLM client's routing
+ * read, so what is billed and where it runs cannot disagree. Ignores a stale
+ * `advancedMode` on a model with no direct lane, like the bump always has.
+ */
+export function llmServesDirect(
+  modelId: string | undefined,
+  reasoningEffort?: string,
+  advancedMode?: boolean,
+): boolean {
+  if (!supportsAdvancedMode(modelId)) return false
+  if (advancedMode) return true
+  return Boolean(
+    getLlmModel(modelId!)?.effortRequiresDirect && effectiveReasoningEffort(modelId, reasoningEffort) !== undefined,
+  )
+}
+
+/**
+ * The credit rungs an LLM feature bills on, cheapest first. `premium-direct` is
+ * reached only by a premium model served direct (decided 2026-10-08): the bump
+ * for running direct moves one rung on THIS ladder, so a premium model has
+ * somewhere to go. The effort bump keeps the three-rung ladder.
+ */
+export const LLM_CREDIT_RUNGS = ["economy", "standard", "premium", "premium-direct"] as const
+export type LlmCreditRung = (typeof LLM_CREDIT_RUNGS)[number]
+
+/** The credit identifier for `feature` on one rung — the standard rung is the bare feature id. */
+export function llmCreditIdForRung(feature: string, rung: LlmCreditRung): string {
+  return rung === "standard" ? feature : `${feature}:${rung}`
+}
+
+/** Every credit identifier a tier-priced LLM feature can bill under, in rung order. */
+export function llmTierCreditIds(feature: string): string[] {
+  return LLM_CREDIT_RUNGS.map((rung) => llmCreditIdForRung(feature, rung))
+}
 
 export function buildLlmCreditIdentifier(
   feature: string,
@@ -989,14 +1308,20 @@ export function buildLlmCreditIdentifier(
   let tier = getLlmTier(modelId)
   const eff = effectiveReasoningEffort(modelId, reasoningEffort)
   if (eff !== undefined && EFFORT_TIER_BUMP.has(eff)) tier = bumpTier(tier)
-  // Advanced mode routes to the vendor's own API, which bills materially more
-  // per token than the aggregator. It bumps INDEPENDENTLY of the effort bump —
-  // the two are separate cost levers and genuinely stack, so a max-effort
-  // advanced economy call lands at premium. The bump is ignored on a model that
-  // can't run advanced at all, so a stale flag never inflates a bill.
-  if (advancedMode && supportsAdvancedMode(modelId)) tier = bumpTier(tier)
-  if (tier === "standard") return feature
-  return `${feature}:${tier}`
+  // A call served on the vendor's own API (Advanced mode, or an effort on a
+  // model whose effort only works there — llmServesDirect) bills materially
+  // more per token than the aggregator. It bumps INDEPENDENTLY of the effort
+  // bump — the two are separate cost levers and genuinely stack, so a
+  // max-effort advanced economy call lands at premium — and on the four-rung
+  // ladder, so a premium model served direct lands at `premium-direct`. A stale
+  // flag on a model with no direct lane never inflates a bill.
+  const rung: LlmCreditRung = llmServesDirect(modelId, reasoningEffort, advancedMode) ? bumpToDirectRung(tier) : tier
+  return llmCreditIdForRung(feature, rung)
+}
+
+/** One rung up the four-rung ladder — the direct-lane bump. */
+function bumpToDirectRung(tier: LlmTier): LlmCreditRung {
+  return tier === "premium" ? "premium-direct" : bumpTier(tier)
 }
 
 /**

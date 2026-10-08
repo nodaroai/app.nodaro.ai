@@ -361,7 +361,7 @@ describe("llmCompleteStructured", () => {
     })
   }
 
-  it("structured Claude goes straight to the direct SDK — KIE's non-stream lane is 500ing", async () => {
+  it("structured Claude with an effort goes straight to the direct SDK (KIE ignores Claude effort)", async () => {
     const { llmCompleteStructured } = await import("../llm-client.js")
     // KIE would decode fine here; the point is that it is never asked. While
     // KIE_CLAUDE_NONSTREAM_VERIFIED is false, spending a round-trip on a
@@ -372,7 +372,7 @@ describe("llmCompleteStructured", () => {
       usage: { input_tokens: 7, output_tokens: 3 },
     })
     const r = await llmCompleteStructured(
-      { modelId: "claude-opus-4.7", system: "sys", messages: [{ role: "user", content: "x" }] },
+      { modelId: "claude-opus-4.7", system: "sys", messages: [{ role: "user", content: "x" }], reasoningEffort: "low" },
       schema,
       { schemaName: "out" },
     )
@@ -506,7 +506,7 @@ describe("llmCompleteStructured", () => {
       usage: { input_tokens: 7, output_tokens: 3 },
     })
     const r = await llmCompleteStructured(
-      { modelId: "claude-haiku-4.5", system: "sys", messages: [{ role: "user", content: "x" }] },
+      { modelId: "claude-haiku-4.5", system: "sys", messages: [{ role: "user", content: "x" }], requireLane: "direct" },
       schema,
       { schemaName: "out" },
     )

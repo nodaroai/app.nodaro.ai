@@ -2265,6 +2265,16 @@ export type PluginLlmMeteredResult<T> =
   | { ok: false; message: string; usage: PluginLlmMeteredUsage }
 
 export interface PluginLlmToolkit {
+  /**
+   * Is `modelId` an LLM this host can serve — answered from the HOST's live
+   * registry (canonical ids and their dash-form/slug aliases, `getLlmModel`).
+   *
+   * A plugin validates a caller-supplied model id with this instead of its own
+   * pinned `@nodaro/shared`, which lags the host by whole releases (a model the
+   * host added last week would be refused). Additive-optional: on a host that
+   * predates it a plugin falls back to its pinned list.
+   */
+  isKnownModel?(modelId: string): boolean
   /** Preserves usage on failures and uses the selected model's normal lane. */
   completeStructuredMetered?<T>(
     req: PluginLlmMultimodalRequest,

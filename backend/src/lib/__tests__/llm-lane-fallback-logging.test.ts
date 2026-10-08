@@ -52,26 +52,10 @@ describe("withFallback lane logging", () => {
     warnSpy.mockRestore()
   })
 
-  it("preferDirect model: direct-lane failure is served by KIE AND warn-logged", async () => {
-    const { llmComplete } = await import("../llm-client.js")
-    geminiMock.callGeminiDirect.mockRejectedValue(
-      new Error('{"error":{"code":403,"message":"The caller does not have permission","status":"PERMISSION_DENIED"}}'),
-    )
-    fetchMock.mockResolvedValue(kieChatOk())
-
-    const res = await llmComplete({
-      modelId: "gemini-3.1-pro",
-      system: "",
-      messages: [{ role: "user", content: "hi" }],
-    })
-
-    expect(res.text).toBe("kie-served")
-    const fallbackWarns = warnSpy.mock.calls.filter((c: unknown[]) => String(c[0]).includes("[llm-lane-fallback]"))
-    expect(fallbackWarns).toHaveLength(1)
-    const line = String(fallbackWarns[0]![0])
-    expect(line).toContain("gemini-3.1-pro")
-    expect(line).toContain("PERMISSION_DENIED")
-  })
+  // The direct-PRIMARY direction (a Claude call with an effort, served direct
+  // with KIE as the fallback) is pinned in llm-client-routing.test.ts — no
+  // model is direct-first unpinned any more (decided 2026-10-08), so this file,
+  // which mocks the Gemini lane, keeps the KIE-primary direction.
 
   it("KIE-first model: KIE failure served by direct lane is warn-logged too", async () => {
     const { llmComplete } = await import("../llm-client.js")
@@ -96,11 +80,7 @@ describe("withFallback lane logging", () => {
 
   it("no warn when the primary lane succeeds", async () => {
     const { llmComplete } = await import("../llm-client.js")
-    geminiMock.callGeminiDirect.mockResolvedValue({
-      text: "direct-ok",
-      usage: { inputTokens: 1, outputTokens: 1 },
-      model: "gemini-3.1-pro",
-    })
+    fetchMock.mockResolvedValue(kieChatOk("kie-ok"))
 
     const res = await llmComplete({
       modelId: "gemini-3.1-pro",
@@ -108,7 +88,8 @@ describe("withFallback lane logging", () => {
       messages: [{ role: "user", content: "hi" }],
     })
 
-    expect(res.text).toBe("direct-ok")
+    expect(res.text).toBe("kie-ok")
+    expect(geminiMock.callGeminiDirect).not.toHaveBeenCalled()
     expect(warnSpy.mock.calls.filter((c: unknown[]) => String(c[0]).includes("[llm-lane-fallback]"))).toHaveLength(0)
   })
 })

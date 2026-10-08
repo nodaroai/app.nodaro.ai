@@ -20,6 +20,9 @@ import {
   orderedLlmModels,
   REASONING_OUTPUT_FLOOR,
   reasoningOutputFloor,
+  llmServesDirect,
+  llmTierCreditIds,
+  LLM_CREDIT_RUNGS,
 } from "../llm-models.js"
 import type { LlmModelDef, LlmTier, LlmFeature } from "../llm-models.js"
 import { PIPELINE_PINNABLE_SCRIPT_LLMS } from "../pipeline-types.js"
@@ -49,11 +52,19 @@ const EXPECTED_MODEL_IDS = [
   "gpt-5.6-terra",
   "gpt-5.6-sol",
   "gpt-6-astra",
+  "gpt-6-luna",
+  "gpt-6-sol",
+  "gpt-6.1-sol",
   "grok-4.6",
+  "grok-4.7",
   "claude-sonnet-5",
+  "claude-sonnet-5.5",
   "claude-opus-4.8",
   "claude-opus-5",
+  "claude-opus-5.5",
   "claude-fable-5",
+  "kimi-k3",
+  "deepseek-v4.1-flash",
 ]
 
 // ---------------------------------------------------------------------------
@@ -98,14 +109,14 @@ describe("LLM_MODELS data integrity", () => {
     expect(new Set(ids).size).toBe(ids.length)
   })
 
-  it("has 6 economy, 5 standard, 9 premium models", () => {
+  it("has 8 economy, 7 standard, 13 premium models", () => {
     const tierCounts: Record<LlmTier, number> = { economy: 0, standard: 0, premium: 0 }
     for (const model of LLM_MODELS) {
       tierCounts[model.tier]++
     }
-    expect(tierCounts.economy).toBe(6)
-    expect(tierCounts.standard).toBe(5)
-    expect(tierCounts.premium).toBe(9)
+    expect(tierCounts.economy).toBe(8)
+    expect(tierCounts.standard).toBe(7)
+    expect(tierCounts.premium).toBe(13)
   })
 
   it("all three kieFormats are represented", () => {
@@ -115,8 +126,9 @@ describe("LLM_MODELS data integrity", () => {
     expect(formats).toContain("responses")
   })
 
-  it("all four vendors are represented", () => {
+  it("every vendor in LLM_VENDOR_ORDER is represented", () => {
     const vendors = new Set(LLM_MODELS.map((m) => m.vendor))
+    for (const v of LLM_VENDOR_ORDER) expect(vendors).toContain(v)
     expect(vendors).toContain("anthropic")
     expect(vendors).toContain("google")
     expect(vendors).toContain("openai")
@@ -429,11 +441,11 @@ describe("LLM_FEATURE_DEFAULTS", () => {
     expect(getLlmTier(LLM_FEATURE_DEFAULTS["ai-writer"])).toBe("standard")
   })
 
-  it('"describe-to-picker" defaults to "claude-opus-5" (premium vision)', () => {
-    expect(LLM_FEATURE_DEFAULTS["describe-to-picker"]).toBe("claude-opus-5")
+  it('"describe-to-picker" defaults to "claude-opus-5.5" (premium vision)', () => {
+    expect(LLM_FEATURE_DEFAULTS["describe-to-picker"]).toBe("claude-opus-5.5")
     expect(getLlmTier(LLM_FEATURE_DEFAULTS["describe-to-picker"])).toBe("premium")
     // The default MUST be an accepted analyzer model (vision + structured output).
-    expect(STRUCTURED_VISION_MODELS.map((m) => m.id)).toContain("claude-opus-5")
+    expect(STRUCTURED_VISION_MODELS.map((m) => m.id)).toContain("claude-opus-5.5")
   })
 
   it('"generate-script" defaults to "gemini-3.6-flash" (economy)', () => {
@@ -511,6 +523,16 @@ describe("STRUCTURED_VISION_MODELS", () => {
         "gpt-6-astra",
         // responses-format Grok — vision + text.format live-verified 2026-08-18.
         "grok-4.6",
+        // 2026-10-08 additions — vision (data URI) + text.format json_schema
+        // live-probed per model; the two Claude 5.5s via auto + strict tool.
+        "gpt-6-luna",
+        "gpt-6-sol",
+        "gpt-6.1-sol",
+        "grok-4.7",
+        "claude-sonnet-5.5",
+        "claude-opus-5.5",
+        "kimi-k3",
+        "deepseek-v4.1-flash",
       ].sort(),
     )
   })
@@ -821,11 +843,15 @@ describe("buildLlmCreditIdentifier effort bump (xhigh/max only)", () => {
   it("premium + max stays premium", () => {
     expect(buildLlmCreditIdentifier("llm-chat", "gpt-5.6-sol", "max")).toBe("llm-chat:premium")
   })
-  it("high never bumps", () => {
-    expect(buildLlmCreditIdentifier("llm-chat", "claude-sonnet-5", "high")).toBe("llm-chat")
+  it("high never bumps for the effort itself", () => {
+    // A model whose effort works on the aggregator: no bump at all.
+    expect(buildLlmCreditIdentifier("llm-chat", "gpt-5.6-terra", "high")).toBe("llm-chat")
+    // Claude: `high` adds no EFFORT bump, but any effort runs direct (+1 rung).
+    expect(buildLlmCreditIdentifier("llm-chat", "claude-sonnet-5", "high")).toBe("llm-chat:premium")
   })
-  it("clamp on a partial-list standard model never bumps (sonnet-4.6 @ xhigh → high)", () => {
-    expect(buildLlmCreditIdentifier("llm-chat", "claude-sonnet-4.6", "xhigh")).toBe("llm-chat")
+  it("clamp on a partial-list standard model never bumps for effort (sonnet-4.6 @ xhigh → high)", () => {
+    // Clamped to `high`: no effort bump; the direct bump alone lands premium.
+    expect(buildLlmCreditIdentifier("llm-chat", "claude-sonnet-4.6", "xhigh")).toBe("llm-chat:premium")
   })
   it("bump uses the CLAMPED effort (xhigh on a low/medium/high model clamps to high → no bump)", () => {
     expect(buildLlmCreditIdentifier("llm-chat", "gpt-5.4", "xhigh")).toBe("llm-chat:premium")
@@ -881,9 +907,9 @@ describe("direct-vendor lane declarations", () => {
 })
 
 describe("advanced mode", () => {
-  it("is available exactly on models with a direct Gemini lane", () => {
+  it("is available exactly on models with a direct lane (Gemini or Anthropic)", () => {
     for (const m of LLM_MODELS) {
-      expect(supportsAdvancedMode(m.id), m.id).toBe(Boolean(m.directGeminiModel))
+      expect(supportsAdvancedMode(m.id), m.id).toBe(Boolean(m.directGeminiModel || m.directFallbackModel))
     }
   })
 
@@ -912,35 +938,30 @@ describe("advanced mode", () => {
     }
   })
 
-  it("no advanced-capable model declares xhigh/max — the UI copy depends on it", () => {
-    // `EFFORT_LABELS` in reasoning-effort-select.tsx labels xhigh/max "may bill
-    // one tier up" and its comment explains that the effort bump and the
-    // advanced bump can never both apply, because Advanced is Gemini-only and
-    // no Gemini model reaches xhigh/max. That was a note asking a future reader
-    // to remember; this is the check that fails instead.
-    //
-    // If this ever goes red, the two bumps CAN stack: reword the labels to say
-    // so and revisit whether a double bump is the price we want.
-    for (const m of LLM_MODELS) {
-      if (!supportsAdvancedMode(m.id)) continue
-      const levels = [...(m.reasoningEfforts ?? []), ...(m.directReasoningEfforts ?? [])]
-      expect(levels, `${m.id} can run advanced AND declares a tier-bumping effort`)
-        .not.toEqual(expect.arrayContaining(["xhigh"]))
-      expect(levels, `${m.id} can run advanced AND declares a tier-bumping effort`)
-        .not.toEqual(expect.arrayContaining(["max"]))
-    }
+  it("the effort and direct bumps stack — the UI copy says so", () => {
+    // `EFFORT_LABELS` (reasoning-effort-select.tsx) says xhigh/max "may bill one
+    // tier up", and the Claude hint under the picker says any effort runs direct
+    // and bills one tier more. Both apply to a Claude xhigh/max call (decided
+    // 2026-10-08: effort = Advanced, and the two bumps stack as Advanced's did).
+    expect(buildLlmCreditIdentifier("llm-chat", "claude-sonnet-5.5", "low")).toBe("llm-chat:premium")
+    expect(buildLlmCreditIdentifier("llm-chat", "claude-sonnet-5.5", "xhigh")).toBe("llm-chat:premium-direct")
+    expect(buildLlmCreditIdentifier("llm-chat", "claude-haiku-4.5", "xhigh")).toBe("llm-chat:economy") // no ladder
   })
 
-  it("never bumps past premium", () => {
-    expect(buildLlmCreditIdentifier("llm-chat", "gemini-3.1-pro", "max", true)).toBe("llm-chat:premium")
+  it("a premium model served direct lands on premium-direct, and nothing goes past it", () => {
+    expect(buildLlmCreditIdentifier("llm-chat", "gemini-3.1-pro", "max", true)).toBe("llm-chat:premium-direct")
+    expect(buildLlmCreditIdentifier("llm-chat", "claude-opus-5.5", "max", true)).toBe("llm-chat:premium-direct")
+    expect(buildLlmCreditIdentifier("llm-chat", "claude-opus-5.5", "medium")).toBe("llm-chat:premium-direct")
+    // No effort, no Advanced: a premium Claude runs on the aggregator at premium.
+    expect(buildLlmCreditIdentifier("llm-chat", "claude-opus-5.5")).toBe("llm-chat:premium")
   })
 
   it("ignores the flag on a model that cannot run advanced (no silent overcharge)", () => {
-    // gpt-5.2 has no direct lane — a stale advancedMode flag must not inflate it.
+    // gpt-5.2 / kimi-k3 have no direct lane — a stale advancedMode flag must not inflate them.
     expect(buildLlmCreditIdentifier("llm-chat", "gpt-5.2", undefined, true))
       .toBe(buildLlmCreditIdentifier("llm-chat", "gpt-5.2"))
-    expect(buildLlmCreditIdentifier("llm-chat", "claude-opus-4.7", undefined, true))
-      .toBe(buildLlmCreditIdentifier("llm-chat", "claude-opus-4.7"))
+    expect(buildLlmCreditIdentifier("llm-chat", "kimi-k3", "high", true))
+      .toBe(buildLlmCreditIdentifier("llm-chat", "kimi-k3", "high"))
   })
 
   it("back-compat: omitting the 4th arg is identical to before for every model", () => {
@@ -1039,7 +1060,7 @@ describe("groupLlmModelsByVendor / orderedLlmModels", () => {
     const groups = groupLlmModelsByVendor(LLM_MODELS.filter((m) => m.vendor === "xai"))
     expect(groups).toHaveLength(1)
     expect(groups[0].label).toBe("xAI")
-    expect(groups[0].models.map((m) => m.id)).toEqual(["grok-4.6"])
+    expect(groups[0].models.map((m) => m.id)).toEqual(["grok-4.6", "grok-4.7"])
   })
 
   it("does not mutate the registry (registry order is load-bearing for LLM_MODEL_IDS)", () => {
@@ -1049,9 +1070,87 @@ describe("groupLlmModelsByVendor / orderedLlmModels", () => {
     expect(LLM_MODELS.map((m) => m.id)).toEqual(before)
   })
 
+  it("orders the new vendors alphabetically with their labels", () => {
+    expect(LLM_VENDOR_ORDER).toEqual(["anthropic", "deepseek", "google", "moonshot", "openai", "xai"])
+    expect(LLM_VENDOR_LABELS.deepseek).toBe("DeepSeek")
+    expect(LLM_VENDOR_LABELS.moonshot).toBe("Moonshot AI")
+  })
+
   it("orderedLlmModels is the flattened grouping", () => {
     expect(orderedLlmModels().map((m) => m.id)).toEqual(
       groupLlmModelsByVendor().flatMap((g) => g.models.map((m) => m.id)),
     )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Forced tool choice + conversation-bound thinking (Claude 5.5 generation)
+// ---------------------------------------------------------------------------
+describe("supportsForcedToolChoice / conversationBoundThinking", () => {
+  it("are declared exactly on the Claude 5.5 models", () => {
+    const noForce = LLM_MODELS.filter((m) => m.supportsForcedToolChoice === false).map((m) => m.id)
+    const bound = LLM_MODELS.filter((m) => m.conversationBoundThinking).map((m) => m.id)
+    expect(noForce.sort()).toEqual(["claude-opus-5.5", "claude-sonnet-5.5"])
+    expect(bound.sort()).toEqual(["claude-opus-5.5", "claude-sonnet-5.5"])
+  })
+
+  it("only an anthropic-tool model can decline a forced tool choice (the flag has no reader elsewhere)", () => {
+    for (const m of LLM_MODELS.filter((x) => x.supportsForcedToolChoice === false)) {
+      expect(m.structuredOutputMode).toBe("anthropic-tool")
+    }
+  })
+
+  it("never offers `none` where the endpoint was measured to fail or override it", () => {
+    expect(getLlmModel("gpt-6.1-sol")?.reasoningEfforts).not.toContain("none")
+    expect(getLlmModel("grok-4.7")?.reasoningEfforts).not.toContain("none")
+  })
+
+  // The film pipeline's callLLM (backend/src/ee/pipelines/llms/call-llm.ts) still
+  // sends a FORCED tool_choice on the raw Anthropic SDK, and it is reachable only
+  // through PIPELINE_PINNABLE_SCRIPT_LLMS. A model that 400s on forcing must not
+  // join that list until callLLM reads `supportsForcedToolChoice`.
+  it("no pipeline-pinnable script LLM rejects a forced tool choice", () => {
+    for (const id of PIPELINE_PINNABLE_SCRIPT_LLMS) {
+      expect(getLlmModel(id)?.supportsForcedToolChoice, id).not.toBe(false)
+    }
+  })
+
+  it("resolves the KIE / Anthropic dash-form ids of the new models", () => {
+    expect(getLlmModel("claude-opus-5-5")?.id).toBe("claude-opus-5.5")
+    expect(getLlmModel("claude-sonnet-5-5")?.id).toBe("claude-sonnet-5.5")
+    expect(getLlmModel("gpt-6-1-sol")?.id).toBe("gpt-6.1-sol")
+    expect(getLlmModel("deepseek-v4-1-flash")?.id).toBe("deepseek-v4.1-flash")
+    expect(getLlmModel("grok-4-7")?.id).toBe("grok-4.7")
+  })
+})
+
+describe("llmServesDirect (decided 2026-10-08: priced on the lane it runs on)", () => {
+  it("Advanced mode serves direct on any model with a direct lane", () => {
+    expect(llmServesDirect("gemini-3.6-flash", undefined, true)).toBe(true)
+    expect(llmServesDirect("claude-haiku-4.5", undefined, true)).toBe(true)
+    expect(llmServesDirect("gpt-6-sol", "high", true)).toBe(false)
+  })
+  it("an effort serves direct only where the aggregator ignores it (Claude)", () => {
+    expect(llmServesDirect("claude-opus-5.5", "low")).toBe(true)
+    expect(llmServesDirect("gemini-3.6-flash", "high")).toBe(false)
+    expect(llmServesDirect("gpt-6-sol", "max")).toBe(false)
+    // Haiku has no effort ladder: an effort clamps to nothing, so it stays on KIE.
+    expect(llmServesDirect("claude-haiku-4.5", "high")).toBe(false)
+  })
+  it("no effort and no Advanced: every model runs on the aggregator", () => {
+    for (const m of LLM_MODELS) expect(llmServesDirect(m.id), m.id).toBe(false)
+  })
+  it("every Claude model with an effort ladder declares effortRequiresDirect, and is KIE-first", () => {
+    for (const m of LLM_MODELS.filter((x) => x.vendor === "anthropic")) {
+      expect(m.preferKie, m.id).toBe(true)
+      expect(Boolean(m.effortRequiresDirect), m.id).toBe(Boolean(m.reasoningEfforts?.length))
+    }
+  })
+  it("no model is direct-first any more", () => {
+    expect(LLM_MODELS.filter((m) => m.preferDirect).map((m) => m.id)).toEqual([])
+  })
+  it("llmTierCreditIds lists the four rungs in order", () => {
+    expect(llmTierCreditIds("llm-chat")).toEqual(["llm-chat:economy", "llm-chat", "llm-chat:premium", "llm-chat:premium-direct"])
+    expect(LLM_CREDIT_RUNGS).toEqual(["economy", "standard", "premium", "premium-direct"])
   })
 })

@@ -76,6 +76,9 @@ describe("direct-Anthropic non-streaming guard", () => {
       system: "",
       messages: [{ role: "user", content: "hi" }],
       maxTokens: 64,
+      // Pinned direct (Advanced mode): with no effort and no pin, a Claude call
+      // is served by KIE since 2026-10-08, and this guard is about the SDK lane.
+      requireLane: "direct",
     })
     expect(res.text).toBe("OK")
     expect(fetchMock).toHaveBeenCalledOnce()

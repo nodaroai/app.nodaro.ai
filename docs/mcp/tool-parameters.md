@@ -116,9 +116,9 @@ Needs `workflows:execute`.
 | `style` | string |  |  |
 | `aspectRatio` | string |  |  |
 | `duration` | number |  |  |
-| `llmModel` | string |  | LLM model id. Defaults to this feature's configured model. One of `gemini-3-flash`, `gemini-3.6-flash`, `gemini-3.7-flash`, `gemini-3.8-flash`, `claude-haiku-4.5`, `claude-sonnet-4.6`, `gpt-5.2`, `gemini-3.1-pro`, `claude-opus-4.7`, `gpt-5.4`, `gpt-5.5`, `gpt-5.6-luna`, `gpt-5.6-terra`, `gpt-5.6-sol`, `gpt-6-astra`, `grok-4.6`, `claude-sonnet-5`, `claude-opus-4.8`, `claude-opus-5`, `claude-fable-5`. |
-| `reasoning_effort` | string |  | Reasoning effort (model-dependent; xhigh/max bill one tier up). One of `none`, `low`, `medium`, `high`, `xhigh`, `max`. |
-| `advanced_mode` | boolean |  | Gemini models only. Runs on the provider's own API so temperature, max tokens and the full reasoning range apply. Bills one credit tier up, capped at premium; a non-Gemini model returns 400 advanced_mode_unsupported. |
+| `llmModel` | string |  | LLM model id. Defaults to this feature's configured model. One of `gemini-3-flash`, `gemini-3.6-flash`, `gemini-3.7-flash`, `gemini-3.8-flash`, `claude-haiku-4.5`, `claude-sonnet-4.6`, `gpt-5.2`, `gemini-3.1-pro`, `claude-opus-4.7`, `gpt-5.4`, `gpt-5.5`, `gpt-5.6-luna`, `gpt-5.6-terra`, `gpt-5.6-sol`, `gpt-6-astra`, `gpt-6-luna`, `gpt-6-sol`, `gpt-6.1-sol`, `grok-4.6`, `grok-4.7`, `claude-sonnet-5`, `claude-sonnet-5.5`, `claude-opus-4.8`, `claude-opus-5`, `claude-opus-5.5`, `claude-fable-5`, `kimi-k3`, `deepseek-v4.1-flash`. |
+| `reasoning_effort` | string |  | Reasoning effort (model-dependent; xhigh/max bill one tier up; on a Claude model any effort runs on Anthropic's own API and bills one rung up as well). One of `none`, `low`, `medium`, `high`, `xhigh`, `max`. |
+| `advanced_mode` | boolean |  | Gemini and Claude models. Runs on the provider's own API so temperature, max tokens and the full reasoning range apply. Bills one credit rung up (a premium model moves to premium-direct); any other model returns 400 advanced_mode_unsupported. On a Claude model any reasoning_effort already runs this way. |
 | `temperature` | number |  | Sampling temperature. Only honoured when advanced_mode is true. From 0 to 2. |
 | `max_tokens` | integer |  | Output token cap. Only honoured when advanced_mode is true. From 1 to 32768. |
 
@@ -721,9 +721,9 @@ Needs `workflows:execute`.
 | `style` | string |  |  |
 | `aspectRatio` | string |  |  |
 | `duration` | number |  |  |
-| `llmModel` | string |  | LLM model id. Defaults to this feature's configured model. One of `gemini-3-flash`, `gemini-3.6-flash`, `gemini-3.7-flash`, `gemini-3.8-flash`, `claude-haiku-4.5`, `claude-sonnet-4.6`, `gpt-5.2`, `gemini-3.1-pro`, `claude-opus-4.7`, `gpt-5.4`, `gpt-5.5`, `gpt-5.6-luna`, `gpt-5.6-terra`, `gpt-5.6-sol`, `gpt-6-astra`, `grok-4.6`, `claude-sonnet-5`, `claude-opus-4.8`, `claude-opus-5`, `claude-fable-5`. |
-| `reasoning_effort` | string |  | Reasoning effort (model-dependent; xhigh/max bill one tier up). One of `none`, `low`, `medium`, `high`, `xhigh`, `max`. |
-| `advanced_mode` | boolean |  | Gemini models only. Runs on the provider's own API so temperature, max tokens and the full reasoning range apply. Bills one credit tier up, capped at premium; a non-Gemini model returns 400 advanced_mode_unsupported. |
+| `llmModel` | string |  | LLM model id. Defaults to this feature's configured model. One of `gemini-3-flash`, `gemini-3.6-flash`, `gemini-3.7-flash`, `gemini-3.8-flash`, `claude-haiku-4.5`, `claude-sonnet-4.6`, `gpt-5.2`, `gemini-3.1-pro`, `claude-opus-4.7`, `gpt-5.4`, `gpt-5.5`, `gpt-5.6-luna`, `gpt-5.6-terra`, `gpt-5.6-sol`, `gpt-6-astra`, `gpt-6-luna`, `gpt-6-sol`, `gpt-6.1-sol`, `grok-4.6`, `grok-4.7`, `claude-sonnet-5`, `claude-sonnet-5.5`, `claude-opus-4.8`, `claude-opus-5`, `claude-opus-5.5`, `claude-fable-5`, `kimi-k3`, `deepseek-v4.1-flash`. |
+| `reasoning_effort` | string |  | Reasoning effort (model-dependent; xhigh/max bill one tier up; on a Claude model any effort runs on Anthropic's own API and bills one rung up as well). One of `none`, `low`, `medium`, `high`, `xhigh`, `max`. |
+| `advanced_mode` | boolean |  | Gemini and Claude models. Runs on the provider's own API so temperature, max tokens and the full reasoning range apply. Bills one credit rung up (a premium model moves to premium-direct); any other model returns 400 advanced_mode_unsupported. On a Claude model any reasoning_effort already runs this way. |
 | `temperature` | number |  | Sampling temperature. Only honoured when advanced_mode is true. From 0 to 2. |
 | `max_tokens` | integer |  | Output token cap. Only honoured when advanced_mode is true. From 1 to 32768. |
 
@@ -1109,9 +1109,9 @@ Needs `workflows:execute`.
 | `style` | string |  |  |
 | `aspectRatio` | string |  |  |
 | `duration` | number |  |  |
-| `llmModel` | string |  | LLM model id. Defaults to this feature's configured model. One of `gemini-3-flash`, `gemini-3.6-flash`, `gemini-3.7-flash`, `gemini-3.8-flash`, `claude-haiku-4.5`, `claude-sonnet-4.6`, `gpt-5.2`, `gemini-3.1-pro`, `claude-opus-4.7`, `gpt-5.4`, `gpt-5.5`, `gpt-5.6-luna`, `gpt-5.6-terra`, `gpt-5.6-sol`, `gpt-6-astra`, `grok-4.6`, `claude-sonnet-5`, `claude-opus-4.8`, `claude-opus-5`, `claude-fable-5`. |
-| `reasoning_effort` | string |  | Reasoning effort (model-dependent; xhigh/max bill one tier up). One of `none`, `low`, `medium`, `high`, `xhigh`, `max`. |
-| `advanced_mode` | boolean |  | Gemini models only. Runs on the provider's own API so temperature, max tokens and the full reasoning range apply. Bills one credit tier up, capped at premium; a non-Gemini model returns 400 advanced_mode_unsupported. |
+| `llmModel` | string |  | LLM model id. Defaults to this feature's configured model. One of `gemini-3-flash`, `gemini-3.6-flash`, `gemini-3.7-flash`, `gemini-3.8-flash`, `claude-haiku-4.5`, `claude-sonnet-4.6`, `gpt-5.2`, `gemini-3.1-pro`, `claude-opus-4.7`, `gpt-5.4`, `gpt-5.5`, `gpt-5.6-luna`, `gpt-5.6-terra`, `gpt-5.6-sol`, `gpt-6-astra`, `gpt-6-luna`, `gpt-6-sol`, `gpt-6.1-sol`, `grok-4.6`, `grok-4.7`, `claude-sonnet-5`, `claude-sonnet-5.5`, `claude-opus-4.8`, `claude-opus-5`, `claude-opus-5.5`, `claude-fable-5`, `kimi-k3`, `deepseek-v4.1-flash`. |
+| `reasoning_effort` | string |  | Reasoning effort (model-dependent; xhigh/max bill one tier up; on a Claude model any effort runs on Anthropic's own API and bills one rung up as well). One of `none`, `low`, `medium`, `high`, `xhigh`, `max`. |
+| `advanced_mode` | boolean |  | Gemini and Claude models. Runs on the provider's own API so temperature, max tokens and the full reasoning range apply. Bills one credit rung up (a premium model moves to premium-direct); any other model returns 400 advanced_mode_unsupported. On a Claude model any reasoning_effort already runs this way. |
 | `temperature` | number |  | Sampling temperature. Only honoured when advanced_mode is true. From 0 to 2. |
 | `max_tokens` | integer |  | Output token cap. Only honoured when advanced_mode is true. From 1 to 32768. |
 
@@ -1592,9 +1592,9 @@ Needs `workflows:execute`.
 | `image_asset_id` | string |  | Nodaro image job id. |
 | `detail_level` | string |  | How much detail to include. Default detailed. One of `brief`, `detailed`, `comprehensive`. |
 | `custom_prompt` | string |  | Override the default system prompt with a specific question (e.g. 'List all text visible in the image'). At most 2000 characters. |
-| `llmModel` | string |  | LLM model id. Defaults to this feature's configured model. One of `gemini-3-flash`, `gemini-3.6-flash`, `gemini-3.7-flash`, `gemini-3.8-flash`, `claude-haiku-4.5`, `claude-sonnet-4.6`, `gpt-5.2`, `gemini-3.1-pro`, `claude-opus-4.7`, `gpt-5.4`, `gpt-5.5`, `gpt-5.6-luna`, `gpt-5.6-terra`, `gpt-5.6-sol`, `gpt-6-astra`, `grok-4.6`, `claude-sonnet-5`, `claude-opus-4.8`, `claude-opus-5`, `claude-fable-5`. |
-| `reasoning_effort` | string |  | Reasoning effort (model-dependent; xhigh/max bill one tier up). One of `none`, `low`, `medium`, `high`, `xhigh`, `max`. |
-| `advanced_mode` | boolean |  | Gemini models only. Runs on the provider's own API so temperature, max tokens and the full reasoning range apply. Bills one credit tier up, capped at premium; a non-Gemini model returns 400 advanced_mode_unsupported. |
+| `llmModel` | string |  | LLM model id. Defaults to this feature's configured model. One of `gemini-3-flash`, `gemini-3.6-flash`, `gemini-3.7-flash`, `gemini-3.8-flash`, `claude-haiku-4.5`, `claude-sonnet-4.6`, `gpt-5.2`, `gemini-3.1-pro`, `claude-opus-4.7`, `gpt-5.4`, `gpt-5.5`, `gpt-5.6-luna`, `gpt-5.6-terra`, `gpt-5.6-sol`, `gpt-6-astra`, `gpt-6-luna`, `gpt-6-sol`, `gpt-6.1-sol`, `grok-4.6`, `grok-4.7`, `claude-sonnet-5`, `claude-sonnet-5.5`, `claude-opus-4.8`, `claude-opus-5`, `claude-opus-5.5`, `claude-fable-5`, `kimi-k3`, `deepseek-v4.1-flash`. |
+| `reasoning_effort` | string |  | Reasoning effort (model-dependent; xhigh/max bill one tier up; on a Claude model any effort runs on Anthropic's own API and bills one rung up as well). One of `none`, `low`, `medium`, `high`, `xhigh`, `max`. |
+| `advanced_mode` | boolean |  | Gemini and Claude models. Runs on the provider's own API so temperature, max tokens and the full reasoning range apply. Bills one credit rung up (a premium model moves to premium-direct); any other model returns 400 advanced_mode_unsupported. On a Claude model any reasoning_effort already runs this way. |
 | `temperature` | number |  | Sampling temperature. Only honoured when advanced_mode is true. From 0 to 2. |
 | `max_tokens` | integer |  | Output token cap. Only honoured when advanced_mode is true. From 1 to 32768. |
 

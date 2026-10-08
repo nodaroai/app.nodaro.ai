@@ -1870,6 +1870,63 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
 }
 
 /**
+ * The `premium-direct` rung (decided 2026-10-08): what a PREMIUM model costs
+ * when the call runs on the vendor's own API — Advanced mode, or a reasoning
+ * effort on a model whose effort only works there (`llmServesDirect` in
+ * @nodaro/shared). The direct lane bills ~2.5× the aggregator per token, and a
+ * premium model had no rung above it, so its direct call cost the same as its
+ * aggregator call. Every tier-priced LLM feature gets one, DERIVED from its own
+ * premium price so a new feature or a repriced premium can't leave it stale.
+ * The seed migration (490) applies the same multiplier to the live prices.
+ */
+export const LLM_PREMIUM_DIRECT_MULTIPLIER = 2.5
+
+/**
+ * The features whose credit id is built by `buildLlmCreditIdentifier` with the
+ * caller's model, effort AND Advanced flag — the only ones a direct call can
+ * reach `premium-direct` on. Explicit, so a new tier-priced id is a decision:
+ * the guard test fails until it is listed here or in NO_DIRECT_RUNG.
+ */
+export const LLM_DIRECT_RUNG_FEATURES: readonly string[] = [
+  "prompt-helper", "ai-writer", "llm-chat", "translate", "scene-graph-ai", "video-composer",
+  "after-effects", "lottie-overlay", "3d-title", "motion-graphics", "motion-graphics-lottie",
+  "3d-scene", "reduce:pick-best-llm", "generate-script", "qa-check", "image-to-text",
+  "describe-to-picker", "llm-structured", "image-critic", "content-recipe", "content-ideas",
+  "content-ideas:10",
+]
+
+/**
+ * Tier-priced ids that get NO direct rung, each with its reason. A prefix
+ * entry (ending ":") covers every id under it.
+ *  - workflow-copilot: reservation CEILINGS on a metered, always-direct loop.
+ *  - the social scrapers' per-ad analysis tiers: built from the model's tier
+ *    alone (metaAdsAnalysisCreditId / instagramAnalysisCreditId); the routes
+ *    send no effort and no Advanced flag, so the call never runs direct.
+ */
+export const NO_DIRECT_RUNG: readonly string[] = [
+  "workflow-copilot",
+  "meta-ads-analysis",
+  "instagram-analysis",
+  "meta-ads-scrape:",
+  "instagram-scrape:",
+]
+
+/** Every `X` with both an `X:economy` and an `X:premium` price — the ids that
+ *  bill in tiers. Exported for the guard test. */
+export function llmTierPricedFeatures(costs: Readonly<Record<string, number>> = STATIC_CREDIT_COSTS): string[] {
+  return Object.keys(costs)
+    .filter((id) => id.endsWith(":premium") && !id.endsWith(":premium-direct"))
+    .map((id) => id.slice(0, -":premium".length))
+    .filter((feature) => `${feature}:economy` in costs)
+}
+
+for (const feature of LLM_DIRECT_RUNG_FEATURES) {
+  STATIC_CREDIT_COSTS[`${feature}:premium-direct`] ??= Math.ceil(
+    STATIC_CREDIT_COSTS[`${feature}:premium`]! * LLM_PREMIUM_DIRECT_MULTIPLIER,
+  )
+}
+
+/**
  * Additive registration hook for private-plugin static credit costs. Called
  * by the private-plugins loader (`backend/src/lib/private-plugins/load.ts`)
  * once per loaded plugin that declares `staticCreditCosts()` — e.g. a future

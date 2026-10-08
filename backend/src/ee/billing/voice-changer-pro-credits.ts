@@ -201,7 +201,12 @@ export type VcpTranslateTier = "economy" | "standard" | "premium"
 export const TRANSLATE_CEILING_PER_1K: Readonly<Record<VcpTranslateTier, number>> = {
   economy: 5,
   standard: 10,
-  premium: 50,
+  // Re-derived 2026-10-08 when the premium tier moved to claude-opus-5.5: the
+  // plugin's token profile (≈ 850 in / 800 out per 1K source characters) costs
+  // ≈ 10 base credits on its DIRECT lane — the worst case, since a KIE failure
+  // falls back there at no extra charge — so 15 bounds it. The old 50 came
+  // from a rate that matched neither of Opus 5's lanes.
+  premium: 15,
 }
 export const TRANSLATE_CHARS_PER_UNIT = 1000
 

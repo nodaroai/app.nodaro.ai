@@ -21,10 +21,14 @@ describe("model support gating", () => {
   })
 
   it("is DISABLED, not hidden, for a model with no direct lane", () => {
-    const { toggle } = setup({ modelId: "claude-opus-4.7" })
+    const { toggle } = setup({ modelId: "kimi-k3" })
     expect(toggle).toBeInTheDocument()
     expect(toggle).toBeDisabled()
-    expect(screen.getByText(/available on Gemini models/i)).toBeInTheDocument()
+    expect(screen.getByText(/available on Gemini and Claude models/i)).toBeInTheDocument()
+  })
+
+  it("is ENABLED for a Claude model — its direct Anthropic lane (decided 2026-10-08)", () => {
+    expect(setup({ modelId: "claude-opus-4.7" }).toggle).not.toBeDisabled()
   })
 
   it("stays disabled for GPT too", () => {
@@ -101,6 +105,19 @@ describe("cost disclosure", () => {
   it("says the tier bump out loud before the user opts in", () => {
     setup({ modelId: "gemini-3.6-flash" })
     // A silent price increase reads as a billing bug.
-    expect(screen.getByText(/one credit tier more, capped at premium/i)).toBeInTheDocument()
+    expect(screen.getByText(/one credit tier more; a premium model moves to its direct rate/i)).toBeInTheDocument()
+  })
+})
+
+describe("levers a model cannot take", () => {
+  it("hides the temperature slider for a model that rejects temperature (Claude 5-era), keeps max tokens", () => {
+    render(<AdvancedModeToggle feature="llm-chat" modelId="claude-opus-5.5" value={true} onChange={vi.fn()} />)
+    expect(screen.queryByText(/^Temperature: /)).not.toBeInTheDocument()
+    expect(screen.getByRole("spinbutton")).toBeInTheDocument()
+  })
+
+  it("keeps it for a model that takes temperature", () => {
+    render(<AdvancedModeToggle feature="llm-chat" modelId="claude-haiku-4.5" value={true} onChange={vi.fn()} />)
+    expect(screen.getByText(/^Temperature: /)).toBeInTheDocument()
   })
 })

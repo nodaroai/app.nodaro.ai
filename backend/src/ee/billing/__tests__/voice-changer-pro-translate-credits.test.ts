@@ -41,13 +41,13 @@ describe("translate pricing (host) — the reservation ceiling", () => {
   })
 
   it("the tiers escalate at the decided ceilings (5 / 10 / 50)", () => {
-    expect(TRANSLATE_CEILING_PER_1K).toEqual({ economy: 5, standard: 10, premium: 50 })
+    expect(TRANSLATE_CEILING_PER_1K).toEqual({ economy: 5, standard: 10, premium: 15 })
     expect(TRANSLATE_CEILING_PER_1K.economy).toBeLessThan(TRANSLATE_CEILING_PER_1K.standard)
     expect(TRANSLATE_CEILING_PER_1K.standard).toBeLessThan(TRANSLATE_CEILING_PER_1K.premium)
   })
 
   it("priceTranslate echoes the floor, the tier's ceiling and the reservation", () => {
-    expect(priceTranslate(2, "premium", 8_700)).toEqual({ floor: 2, ceilingPer1K: 50, reserveBase: 450 })
+    expect(priceTranslate(2, "premium", 8_700)).toEqual({ floor: 2, ceilingPer1K: 15, reserveBase: 135 })
     expect(priceTranslate(2, "economy", 1_500)).toEqual({ floor: 2, ceilingPer1K: 5, reserveBase: 10 })
     expect(priceTranslate(2, "standard", 0)).toEqual({ floor: 2, ceilingPer1K: 10, reserveBase: 2 })
   })
@@ -64,7 +64,7 @@ describe("computeVoiceChangerProTranslatePricing — reads the floor through the
     await expect(computeVoiceChangerProTranslatePricing({ sourceChars: 0, tier: "economy" }))
       .resolves.toEqual({ floor: 3, ceilingPer1K: 5, reserveBase: 3 })
     await expect(computeVoiceChangerProTranslatePricing({ sourceChars: 1_500, tier: "premium" }))
-      .resolves.toEqual({ floor: 3, ceilingPer1K: 50, reserveBase: 100 })
+      .resolves.toEqual({ floor: 3, ceilingPer1K: 15, reserveBase: 30 })
     expect(mockGetModelCreditBaseCost).toHaveBeenCalledWith("voice-changer-pro-translate")
   })
 

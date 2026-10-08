@@ -143,7 +143,8 @@ describe("POST /v1/llm/structured — refusals that cost nothing", () => {
   })
 
   it("400s Advanced mode on a model with no direct lane", async () => {
-    const res = await post({ ...VALID, llmModel: "claude-fable-5", advancedMode: true })
+    // Claude gained a direct lane for Advanced (decided 2026-10-08); GPT has none.
+    const res = await post({ ...VALID, llmModel: "gpt-6-astra", advancedMode: true })
     expect(res.statusCode).toBe(400)
     expect(res.json().error.code).toBe("advanced_mode_unsupported")
   })

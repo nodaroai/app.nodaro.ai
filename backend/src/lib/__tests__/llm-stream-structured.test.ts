@@ -28,8 +28,11 @@ const SCHEMA = z.object({ person: z.object({ age: z.string() }), n: z.number() }
 const ANSWER = { person: { age: "age-30s" }, n: 7 }
 const FRAGMENTS = ['{"person":{"a', 'ge":"age-3', '0s"},"n":', "7}"]
 const USER = [{ role: "user" as const, content: "analyze" }]
-const OPUS = { modelId: "claude-opus-4.7", system: "sys", messages: USER }
-const SONNET = { modelId: "claude-sonnet-4.6", system: "sys", messages: USER }
+// Both carry an effort: a Claude call with one is served on the DIRECT lane
+// (KIE ignores Claude effort, decided 2026-10-08), which is the lane this suite
+// is about. The KIE structured stream is pinned in its own case below.
+const OPUS = { modelId: "claude-opus-4.7", system: "sys", messages: USER, reasoningEffort: "low" as const }
+const SONNET = { modelId: "claude-sonnet-4.6", system: "sys", messages: USER, reasoningEffort: "low" as const }
 
 let fetchMock: ReturnType<typeof vi.fn>
 
@@ -254,7 +257,7 @@ describe("llmStreamStructured", () => {
     expect(anthropicStream).not.toHaveBeenCalled()
   })
 
-  it("does not stream without a direct Anthropic key, on a lane pin, or with no onToolJson", async () => {
+  it("never streams on the direct SDK without a direct Anthropic key, on a KIE pin, or with no onToolJson", async () => {
     const { llmStreamStructured } = await import("../llm-client.js")
     const cases: Array<{ ant?: string; req: Record<string, unknown>; onToolJson?: () => void }> = [
       { ant: undefined, req: {}, onToolJson: () => {} },
@@ -269,5 +272,29 @@ describe("llmStreamStructured", () => {
       )
     }
     expect(anthropicStream).not.toHaveBeenCalled()
+  })
+
+  it("streams the tool input off KIE for a call that runs there (no effort), forwarding each fragment", async () => {
+    const { llmStreamStructured } = await import("../llm-client.js")
+    const sse = [
+      'data: {"type":"content_block_start","content_block":{"type":"tool_use","name":"emit_pickers"}}\n',
+      ...JSON.stringify(ANSWER).match(/.{1,12}/g)!.map(
+        (chunk) => `data: ${JSON.stringify({ type: "content_block_delta", delta: { type: "input_json_delta", partial_json: chunk } })}\n`,
+      ),
+      'data: {"type":"message_delta","usage":{"input_tokens":5,"output_tokens":7}}\n',
+    ]
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(new ReadableStream<Uint8Array>({
+      start(c) { const e = new TextEncoder(); for (const l of sse) c.enqueue(e.encode(l)); c.close() },
+    }), { status: 200, headers: { "Content-Type": "text/event-stream" } })))
+    const fragments: string[] = []
+    const res = await llmStreamStructured(
+      { modelId: "claude-sonnet-4.6", system: "sys", messages: USER },
+      SCHEMA,
+      { schemaName: "emit_pickers", onToolJson: (p) => fragments.push(p) },
+    )
+    expect(anthropicStream).not.toHaveBeenCalled()
+    expect(fragments.join("")).toBe(JSON.stringify(ANSWER))
+    expect(res.output).toEqual(ANSWER)
+    vi.unstubAllGlobals()
   })
 })

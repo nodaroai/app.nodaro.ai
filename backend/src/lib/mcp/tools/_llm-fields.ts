@@ -27,12 +27,12 @@ export const LLM_MCP_FIELDS = {
   reasoning_effort: z
     .enum(LLM_REASONING_EFFORTS)
     .optional()
-    .describe("Reasoning effort (model-dependent; xhigh/max bill one tier up)."),
+    .describe("Reasoning effort (model-dependent; xhigh/max bill one tier up; on a Claude model any effort runs on Anthropic's own API and bills one rung up as well)."),
   advanced_mode: z
     .boolean()
     .optional()
     .describe(
-      "Gemini models only. Runs on the provider's own API so temperature, max tokens and the full reasoning range apply. Bills one credit tier up, capped at premium; a non-Gemini model returns 400 advanced_mode_unsupported.",
+      "Gemini and Claude models. Runs on the provider's own API so temperature, max tokens and the full reasoning range apply. Bills one credit rung up (a premium model moves to premium-direct); any other model returns 400 advanced_mode_unsupported. On a Claude model any reasoning_effort already runs this way.",
     ),
   temperature: z
     .number()

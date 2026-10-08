@@ -13,7 +13,7 @@ import { config } from "./config.js"
 import { describeEmptyCapability, type ProviderKeyName } from "../providers/provider-keys.js"
 import { getLlmModel, LLM_FEATURE_DEFAULTS, effectiveReasoningEffort } from "@nodaro/shared"
 import { raiseToReasoningFloor } from "./llm-node-output-cap.js"
-import type { LlmModelDef, LlmFeature, LlmReasoningEffort } from "@nodaro/shared"
+import type { LlmModelDef, LlmFeature, LlmReasoningEffort, LlmVendor } from "@nodaro/shared"
 import { calculateLlmCost, type LlmServingLane } from "./pricing/llm-cost.js"
 import { getAnthropicClient } from "./anthropic.js"
 import { callGeminiDirect, streamGeminiDirect } from "./gemini/client.js"
@@ -29,13 +29,20 @@ import {
 import { KIE_API_BASE } from "../providers/kie/client.js"
 import { z, type ZodType } from "zod"
 import { extractJsonFromAIResponse, extractKieToolCallInput } from "./json-utils.js"
-import { restrictObjectSchemas } from "./json-schema-strict.js"
+import { anthropicStrictToolSchema, restrictObjectSchemas } from "./json-schema-strict.js"
 
 const LLM_TIMEOUT_MS = 120_000
 
 // KIE Claude-proxy passthrough facts. When false, the affected request class
 // routes direct-Anthropic instead of through KIE.
-const KIE_CLAUDE_EFFORT_VERIFIED = false // thinking/output_config passthrough NOT verified — effort-carrying calls route direct
+// KIE's Claude proxy accepts `thinking` / `output_config.effort` and IGNORES
+// them — measured 2026-10-08 on a reasoning-heavy prompt across Sonnet 5.5,
+// Opus 5.5 and Sonnet 4.6: `low`, `max` and no effort gave the same output
+// length (±15%), and no thinking block came back even at `max`. So an
+// effort-carrying Claude call is served direct, and bills that way: the
+// registry marks these models `effortRequiresDirect`, which `llmServesDirect`
+// (@nodaro/shared) turns into the credit rung.
+const KIE_CLAUDE_EFFORT_VERIFIED = false
 // KIE's Claude proxy answers HTTP 500 `{"type":"api_error","message":"Server
 // exception, please try again later"}` to EVERY `stream: false` request, for
 // EVERY Claude slug — measured 2026-08-06: 0/6 non-stream succeeded against
@@ -52,8 +59,13 @@ const KIE_CLAUDE_EFFORT_VERIFIED = false // thinking/output_config passthrough N
 // `llmComplete` is the non-streaming entry point, so this forces every
 // non-streamed Claude call onto the direct SDK. `llmStream` is deliberately
 // NOT gated — streaming is the shape that still works on KIE.
-// Flip to `true` only after re-measuring non-stream success against KIE; it
-// gates real spend (the direct lane bills ~2.5× the KIE row), not just a path.
+// Re-measured 2026-10-08: `stream: false` now answers (9/9 across Sonnet 5.5,
+// Opus 5.5 and Sonnet 4.6). The flag stays false anyway, for a different
+// reason: the collapsed streaming wire (`callKieMessagesCollapsed`) returns a
+// forced tool as a REAL tool_use block and carries `credits_consumed`, where
+// the non-streaming one re-serializes it as a malformed `<tool_calls>` tag. So
+// it now only selects `callKie`'s Claude shape — it no longer pushes any call
+// off KIE (a non-advanced, effort-free Claude call is KIE-first since then).
 const KIE_CLAUDE_NONSTREAM_VERIFIED = false
 // Forced tool_choice DOES reach the model, but the response is NOT a tool_use
 // block: KIE re-serializes the call into a `<tool_calls>` text pseudo-tag with
@@ -253,27 +265,19 @@ export const LLM_MAX_LANES_PER_CALL = 2
 
 export async function llmComplete(req: LlmRequest): Promise<LlmResponse> {
   const model = resolveModel(req)
-  assertInlineVideoLane(req)
+  assertInlineVideoLane(req, model)
 
   // A pinned lane wins over every registry preference below, and never falls back.
   if (req.requireLane) {
     assertLanePinnable(model, req.requireLane)
-    return req.requireLane === "direct"
+    if (req.requireLane === "kie") return callKie(model, req)
+    return model.directGeminiModel
       ? callGeminiDirect(model, req, deriveParams(model, req))
-      : callKie(model, req)
+      : callAnthropicDirect(model, req)
   }
 
   if (model.directFallbackModel && config.ANTHROPIC_API_KEY) {
-    const eff = effectiveReasoningEffort(model.id, req.reasoningEffort)
-    const mustDirect =
-      // KIE's Claude proxy 500s on every non-streaming request, and this is the
-      // non-streaming entry point — so while that outage stands, NO Claude call
-      // routed here can be served by KIE. Trying anyway just spends 6–12s on a
-      // guaranteed 500 before the catch below reaches the same place.
-      !KIE_CLAUDE_NONSTREAM_VERIFIED ||
-      (req.jsonSchema !== undefined && model.structuredOutputMode === "anthropic-tool" && !KIE_CLAUDE_TOOLS_VERIFIED) ||
-      (eff !== undefined && !KIE_CLAUDE_EFFORT_VERIFIED)
-    if (!model.preferKie || mustDirect || !config.KIE_API_KEY) {
+    if (!model.preferKie || claudeMustServeDirect(model, req) || !config.KIE_API_KEY) {
       // Direct is the primary lane here, but it is not incident-free — Anthropic
       // logged four elevated-error incidents across 2026-08-04/05, two of them
       // naming Opus 5. `callKieMessagesCollapsed` is a genuine second lane
@@ -387,11 +391,19 @@ async function noLlmProviderError(model: LlmModelDef): Promise<LlmProviderUnavai
  * Claude or GPT model has no `directGeminiModel`, so pinning it direct throws
  * there rather than reaching a builder that would have to drop the block.
  */
-function assertInlineVideoLane(req: LlmRequest): void {
-  if (req.requireLane === "direct") return
+function assertInlineVideoLane(req: LlmRequest, model: LlmModelDef): void {
   for (const message of req.messages) {
     if (typeof message.content === "string") continue
     if (!message.content.some((b) => b.type === "video_base64")) continue
+    if (req.requireLane === "direct") {
+      // The direct lane exists for Claude too now, but only Google carries
+      // inline video bytes — refuse before any provider request is made.
+      if (model.directGeminiModel) return
+      throw new Error(
+        `Model ${model.id} is pinned to the direct lane but declares no directGeminiModel — ` +
+          `a video_base64 block is carried only by the direct Google lane`,
+      )
+    }
     throw new Error(
       `llm-client: a video_base64 block requires requireLane: "direct" (the direct Google lane is the only one that ` +
         `carries inline video bytes; this call is ${req.requireLane ? `pinned to "${req.requireLane}"` : "unpinned"})`,
@@ -407,10 +419,19 @@ function assertInlineVideoLane(req: LlmRequest): void {
  */
 function assertLanePinnable(model: LlmModelDef, lane: LlmServingLane): void {
   if (lane === "direct") {
+    if (!model.directGeminiModel && model.directFallbackModel) {
+      if (!config.ANTHROPIC_API_KEY) {
+        throw new Error(
+          `Model ${model.id} is pinned to the direct lane but ANTHROPIC_API_KEY is not set — ` +
+            `set it in the environment (Railway: staging AND production)`,
+        )
+      }
+      return
+    }
     if (!model.directGeminiModel) {
       throw new Error(
-        `Model ${model.id} is pinned to the direct lane but declares no directGeminiModel — ` +
-          `pick a model with a direct Google lane (see packages/shared/src/llm-models.ts)`,
+        `Model ${model.id} is pinned to the direct lane but declares no directGeminiModel or directFallbackModel — ` +
+          `pick a Gemini or Claude model (see packages/shared/src/llm-models.ts)`,
       )
     }
     if (!config.GEMINI_API_KEY) {
@@ -437,6 +458,21 @@ function geminiDirectAvailable(model: LlmModelDef): boolean {
  *  case the primary lane's error must surface rather than be swallowed). */
 function kieFallback(model: LlmModelDef, req: LlmRequest): (() => Promise<LlmResponse>) | undefined {
   return config.KIE_API_KEY ? () => callKie(model, req) : undefined
+}
+
+/**
+ * A Claude call KIE cannot honour, so it is served direct even unpinned: one
+ * carrying a reasoning effort (KIE ignores it — see KIE_CLAUDE_EFFORT_VERIFIED;
+ * `llmServesDirect` bills the same call one rung up), or a structured call
+ * while KIE's tool passthrough is unverified. Direct is still only the
+ * PRIMARY lane here: a direct failure falls back to KIE.
+ */
+function claudeMustServeDirect(model: LlmModelDef, req: LlmRequest): boolean {
+  const eff = effectiveReasoningEffort(model.id, req.reasoningEffort)
+  return (
+    (eff !== undefined && !KIE_CLAUDE_EFFORT_VERIFIED) ||
+    (req.jsonSchema !== undefined && model.structuredOutputMode === "anthropic-tool" && !KIE_CLAUDE_TOOLS_VERIFIED)
+  )
 }
 
 /** Which lane failed and which one is about to serve — for the fallback warn. */
@@ -497,23 +533,22 @@ export async function llmStream(
   signal?: AbortSignal,
 ): Promise<LlmResponse> {
   const model = resolveModel(req)
-  assertInlineVideoLane(req)
+  assertInlineVideoLane(req, model)
 
   // A pinned lane wins over every registry preference below, and never falls back.
   if (req.requireLane) {
     assertLanePinnable(model, req.requireLane)
-    return req.requireLane === "direct"
+    if (req.requireLane === "kie") return streamKie(model, req, onToken, signal)
+    return model.directGeminiModel
       ? streamGeminiDirect(model, req, deriveParams(model, req), onToken, signal)
-      : streamKie(model, req, onToken, signal)
+      : streamAnthropicDirect(model, req, onToken, signal)
   }
 
   if (model.directFallbackModel && config.ANTHROPIC_API_KEY) {
-    const eff = effectiveReasoningEffort(model.id, req.reasoningEffort)
-    // streamed forced-tool output is not parsed on the KIE path — always take the direct SDK for structured streams
-    const mustDirect =
-      (req.jsonSchema !== undefined && model.structuredOutputMode === "anthropic-tool") ||
-      (eff !== undefined && !KIE_CLAUDE_EFFORT_VERIFIED)
-    if (!model.preferKie || mustDirect || !config.KIE_API_KEY) {
+    // A streamed tool call is read on the KIE path too (parseSseStream collects
+    // its `input_json_delta` fragments), so a structured stream no longer has
+    // to go direct — only what KIE cannot honour does.
+    if (!model.preferKie || claudeMustServeDirect(model, req) || !config.KIE_API_KEY) {
       return streamAnthropicDirect(model, req, onToken, signal)
     }
     // Fall back only if KIE fails BEFORE any token reached the caller — after
@@ -796,7 +831,7 @@ export async function llmStreamStructured<T>(
   opts?: StructuredStreamOptions,
 ): Promise<StructuredLlmOutput<T>> {
   const model = resolveModel(req)
-  assertInlineVideoLane(req)
+  assertInlineVideoLane(req, model)
   const onToolJson = opts?.onToolJson
   if (!onToolJson || !canStreamStructured(model, req)) {
     return runStructuredAttempts(req, schema, opts, (attemptReq) => llmComplete(attemptReq))
@@ -807,16 +842,15 @@ export async function llmStreamStructured<T>(
   )
 }
 
-/** Forced-tool output streams only on the direct Anthropic lane: the model
- *  speaks `anthropic-tool`, names a direct model, the key is set, and no
- *  `requireLane` pins the call elsewhere. */
+/** Tool output streams for an `anthropic-tool` model on whichever lane serves
+ *  it: the direct SDK (pinned, or a call KIE cannot honour) or KIE's messages
+ *  stream, whose `input_json_delta` fragments parseSseStream forwards. */
 function canStreamStructured(model: LlmModelDef, req: LlmRequest): boolean {
-  return (
-    req.requireLane === undefined &&
-    model.structuredOutputMode === "anthropic-tool" &&
-    Boolean(model.directFallbackModel) &&
-    Boolean(config.ANTHROPIC_API_KEY)
-  )
+  if (model.structuredOutputMode !== "anthropic-tool") return false
+  const direct = Boolean(model.directFallbackModel) && Boolean(config.ANTHROPIC_API_KEY)
+  if (req.requireLane === "direct") return direct
+  if (req.requireLane === "kie") return Boolean(config.KIE_API_KEY)
+  return direct || Boolean(config.KIE_API_KEY)
 }
 
 /** A broken consumer must never fail a paid call: its first throw is logged
@@ -855,13 +889,36 @@ async function streamStructuredAttempt(
   signal?: AbortSignal,
 ): Promise<LlmResponse> {
   if (!req.jsonSchema) return llmComplete(req)
+  const directAvailable = Boolean(model.directFallbackModel) && Boolean(config.ANTHROPIC_API_KEY)
+  const kieAvailable = Boolean(config.KIE_API_KEY) && req.requireLane !== "direct"
+  // The same lane rule as llmStream: direct when pinned there, when KIE cannot
+  // honour the call, or when there is no KIE key; KIE otherwise.
+  // A KIE pin never reaches the direct lane, whatever the call carries.
+  const directFirst = req.requireLane === "direct" ||
+    (req.requireLane !== "kie" && (!kieAvailable || (directAvailable && (!model.preferKie || claudeMustServeDirect(model, req)))))
+  if (directFirst) {
+    try {
+      return await streamAnthropicStructured(model, req, req.jsonSchema, onToolJson, signal)
+    } catch (err) {
+      const kie = kieAvailable && req.requireLane === undefined ? kieFallback(model, req) : undefined
+      if (!kie || err instanceof LlmStreamResponseError || signal?.aborted) throw err
+      warnLaneFallback({ modelId: model.id, primary: "direct-anthropic stream", fallback: "kie" }, err)
+      return kie()
+    }
+  }
+  // KIE first. A failure before the first fragment reached the caller falls
+  // back to direct (at no extra charge — the call is still billed as KIE);
+  // after one, the stream is tainted and the error surfaces.
+  let emitted = false
   try {
-    return await streamAnthropicStructured(model, req, req.jsonSchema, onToolJson, signal)
+    return await streamKieMessages(model, req, () => {}, signal, (partial) => {
+      emitted = true
+      onToolJson(partial, undefined)
+    })
   } catch (err) {
-    const kie = kieFallback(model, req)
-    if (!kie || err instanceof LlmStreamResponseError || signal?.aborted) throw err
-    warnLaneFallback({ modelId: model.id, primary: "direct-anthropic stream", fallback: "kie" }, err)
-    return kie()
+    if (emitted || !directAvailable || req.requireLane === "kie" || !laneFallbackAllowed(err) || signal?.aborted) throw err
+    warnLaneFallback({ modelId: model.id, primary: "kie stream", fallback: "direct-anthropic stream" }, err)
+    return streamAnthropicStructured(model, req, req.jsonSchema, onToolJson, signal)
   }
 }
 
@@ -1160,26 +1217,63 @@ function buildMessagesBody(model: LlmModelDef, req: LlmRequest): Record<string, 
   })
 
   const { eff, temperature, topP, maxTokens } = deriveParams(model, req)
+  const structured = req.jsonSchema && model.structuredOutputMode === "anthropic-tool"
+    ? anthropicStructuredTool(model, req.system, req.jsonSchema)
+    : undefined
   return {
     model: model.kieSlugOrModel,
     max_tokens: maxTokens,
     ...(temperature !== undefined ? { temperature } : {}),
     ...(topP !== undefined ? { top_p: topP } : {}),
     ...(eff !== undefined ? { thinking: { type: "adaptive" }, output_config: { effort: eff } } : {}),
-    // Forced-tool structured output — mirrors callAnthropicDirect's pattern.
-    // KIE_CLAUDE_TOOLS_VERIFIED gates routing (see llmComplete/llmStream); once
-    // a structured call reaches here, the schema must actually be carried on
-    // the wire or KIE has no way to know to emit a tool_use block.
-    ...(req.jsonSchema && model.structuredOutputMode === "anthropic-tool" ? {
-      tools: [{
-        name: req.jsonSchema.name,
-        description: "Emit the structured result.",
-        input_schema: req.jsonSchema.schema,
-      }],
-      tool_choice: { type: "tool", name: req.jsonSchema.name },
-    } : {}),
-    system: req.system,
+    // Tool-carried structured output — the SAME fields the direct lane sends
+    // (anthropicStructuredTool). KIE_CLAUDE_TOOLS_VERIFIED gates routing (see
+    // llmComplete/llmStream); once a structured call reaches here, the schema
+    // must actually be carried on the wire or KIE has no way to know to emit a
+    // tool_use block.
+    ...(structured ? { tools: structured.tools, tool_choice: structured.toolChoice } : {}),
+    system: structured ? structured.system : req.system,
     messages,
+  }
+}
+
+/**
+ * The tool fields of an `anthropic-tool` structured call, shared by BOTH lanes
+ * (KIE's messages proxy and the direct SDK) so they can never ask differently.
+ *
+ * A model that accepts a forced `tool_choice` gets exactly that — the shape
+ * every Claude model before the 5.5 generation has always been sent. One that
+ * declares `supportsForcedToolChoice: false` (Sonnet 5.5 / Opus 5.5 400 on a
+ * forced choice) is asked with `tool_choice: auto`, an instruction naming the
+ * tool appended to the system prompt, and `strict: true` on the tool whenever
+ * the schema fits the strict subset (`anthropicStrictToolSchema` withholds the
+ * keywords strict mode refuses; a map-shaped schema goes without `strict`).
+ * The caller's Zod still validates the answer, so a withheld cap is enforced
+ * there, and an answer given as plain JSON text instead of a tool call is read
+ * as the response text (see `anthropicToolResponse` / `parseSseStream`).
+ */
+function anthropicStructuredTool(
+  model: LlmModelDef,
+  system: string,
+  jsonSchema: NonNullable<LlmRequest["jsonSchema"]>,
+): { tools: Array<Record<string, unknown>>; toolChoice: Record<string, unknown>; system: string } {
+  if (model.supportsForcedToolChoice !== false) {
+    return {
+      tools: [{ name: jsonSchema.name, description: "Emit the structured result.", input_schema: jsonSchema.schema }],
+      toolChoice: { type: "tool", name: jsonSchema.name },
+      system,
+    }
+  }
+  const strictSchema = anthropicStrictToolSchema(jsonSchema.schema)
+  return {
+    tools: [{
+      name: jsonSchema.name,
+      description: "Emit the structured result.",
+      input_schema: strictSchema ?? jsonSchema.schema,
+      ...(strictSchema ? { strict: true } : {}),
+    }],
+    toolChoice: { type: "auto" },
+    system: `${system ? `${system}\n\n` : ""}Respond by calling the \`${jsonSchema.name}\` tool exactly once with the complete result. Do not answer in plain text.`,
   }
 }
 
@@ -1558,6 +1652,7 @@ async function callKieMessages(model: LlmModelDef, req: LlmRequest): Promise<Llm
 
 async function streamKieMessages(
   model: LlmModelDef, req: LlmRequest, onToken: (chunk: string) => void, signal?: AbortSignal,
+  onToolJson?: (partialJson: string) => void,
 ): Promise<LlmResponse> {
   const url = `${KIE_API_BASE}/claude/v1/messages`
   const base = buildMessagesBody(model, req)
@@ -1575,7 +1670,7 @@ async function streamKieMessages(
     throw new LlmLaneError(`KIE.ai messages stream ${model.id} failed (${response.status}): ${errText}`, { lane: "kie", httpStatus: response.status })
   }
 
-  return parseSseStream(response, model.id, onToken, "messages", base.max_tokens as number)
+  return parseSseStream(response, model.id, onToken, "messages", base.max_tokens as number, onToolJson)
 }
 
 /**
@@ -1615,16 +1710,25 @@ async function callKieMessagesCollapsed(model: LlmModelDef, req: LlmRequest): Pr
 /**
  * KIE serves the responses dialect under a per-family path prefix — the GPT
  * models live at codex/v1/responses, Grok at grok/v1/responses (live-verified
- * 2026-08-18; the wrong prefix is a hard 4xx/5xx, not a graceful alias).
- * Derived from the registry's `vendor` so a future responses-format model on a
- * new vendor fails loudly HERE instead of silently posting to another family's
- * endpoint.
+ * 2026-08-18; the wrong prefix is a hard 4xx/5xx, not a graceful alias), and
+ * Kimi + DeepSeek at openai/v1/responses (live-verified 2026-10-08).
+ *
+ * A TOTAL map over `LlmVendor`, so adding a vendor to the registry fails the
+ * build until its family is stated here. `null` = the vendor has no model on
+ * this dialect, and asking for one throws instead of silently posting to
+ * another family's endpoint.
  */
+const KIE_RESPONSES_FAMILY: Record<LlmVendor, string | null> = {
+  anthropic: null,
+  deepseek: "openai",
+  google: null,
+  moonshot: "openai",
+  openai: "codex",
+  xai: "grok",
+}
+
 function kieResponsesUrl(model: LlmModelDef): string {
-  const family =
-    model.vendor === "openai" ? "codex"
-    : model.vendor === "xai" ? "grok"
-    : undefined
+  const family = KIE_RESPONSES_FAMILY[model.vendor]
   if (!family) {
     throw new Error(`llm-client: no KIE responses endpoint family for vendor "${model.vendor}" (model ${model.id})`)
   }
@@ -1817,18 +1921,15 @@ function anthropicStructuredRequest(
   jsonSchema: NonNullable<LlmRequest["jsonSchema"]>,
 ): { body: Record<string, unknown>; options: { timeout: number }; maxTokens: number } {
   const { eff, maxTokens } = deriveParams(model, req)
+  const structured = anthropicStructuredTool(model, req.system, jsonSchema)
   return {
     body: {
       model: model.directFallbackModel!,
       max_tokens: maxTokens,
-      system: req.system,
+      system: structured.system,
       messages: buildAnthropicMessages(req),
-      tools: [{
-        name: jsonSchema.name,
-        description: "Emit the structured result.",
-        input_schema: jsonSchema.schema as Anthropic.Messages.Tool.InputSchema,
-      }],
-      tool_choice: { type: "tool", name: jsonSchema.name },
+      tools: structured.tools,
+      tool_choice: structured.toolChoice,
       ...(eff !== undefined ? { thinking: { type: "adaptive" as const }, output_config: { effort: eff } } : {}),
     },
     options: { timeout: effectiveTimeout(req) },
@@ -1855,9 +1956,17 @@ function anthropicToolResponse(
     (b): b is Anthropic.Messages.ToolUseBlock => b.type === "tool_use",
   )
   const usage = { inputTokens: message.usage.input_tokens, outputTokens: message.usage.output_tokens }
+  // No tool call at all is possible only on a model asked with `tool_choice:
+  // auto` (anthropicStructuredTool): read its text then, which is where a model
+  // that answered with JSON instead of the tool put it — the caller's parse +
+  // Zod decide whether it is an answer.
+  const text = message.content
+    .filter((b): b is Anthropic.Messages.TextBlock => b.type === "text")
+    .map((b) => b.text)
+    .join("")
   return buildResponse(
     model,
-    streamedJson || (toolUse ? JSON.stringify(toolUse.input) : ""),
+    streamedJson || (toolUse ? JSON.stringify(toolUse.input) : text),
     { stopReason: message.stop_reason, cap: maxTokens },
     usage,
     undefined,
@@ -2152,6 +2261,8 @@ async function parseSseStream(
   format: "chat-completions" | "messages" | "responses",
   /** The output cap sent — `ReplyEnd.cap`; required so no stream lane skips the cap check. */
   cap: ReplyEnd["cap"],
+  /** Receives each tool-input fragment as it arrives (a structured Claude stream on KIE). */
+  onToolJson?: (partialJson: string) => void,
 ): Promise<LlmResponse> {
   const reader = response.body?.getReader()
   if (!reader) throw new Error("No response body for SSE stream")
@@ -2301,7 +2412,10 @@ async function parseSseStream(
               onToken(text)
             }
             const partial = delta?.partial_json as string | undefined
-            if (partial) toolJson += partial
+            if (partial) {
+              toolJson += partial
+              onToolJson?.(partial)
+            }
           }
           if (eventType === "message_delta") {
             const u = parsed.usage as Record<string, number> | undefined
@@ -2401,7 +2515,9 @@ async function parseSseStream(
   return {
     // Text wins when present; the accumulated tool payload is the body only for
     // a forced-tool call, which emits no text block at all.
-    text: fullText || toolJson,
+    // A tool call IS the structured answer; any text beside it is preamble (a
+    // model asked with `tool_choice: auto` may say a sentence first).
+    text: toolJson || fullText,
     usage,
     model: modelId,
     providerCost,

@@ -278,7 +278,8 @@ describe("direct Anthropic SDK", () => {
       stop_reason: "max_tokens",
     })
 
-    await expect(llmComplete({ modelId: "claude-sonnet-4.6", system: "s", messages: USER, maxTokens: 64 }))
+    // An effort makes direct the primary lane with KIE as its fallback.
+    await expect(llmComplete({ modelId: "claude-sonnet-4.6", system: "s", messages: USER, maxTokens: 64, reasoningEffort: "low" }))
       .rejects.toBeInstanceOf(LlmOutputTruncatedError)
     expect(fetchMock).not.toHaveBeenCalled()
   })
