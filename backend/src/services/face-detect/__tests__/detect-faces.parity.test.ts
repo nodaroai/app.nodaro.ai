@@ -31,6 +31,7 @@ import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { monitorEventLoopDelay, performance } from "node:perf_hooks"
 import { detectFacesInMedia, FACE_DETECT_THUMB } from "../detect-faces.js"
+import { readFaceDescriptor } from "../face-descriptor.js"
 import { yunetSession, releaseYunetSession } from "../yunet-session.js"
 import { YUNET_DETECTOR_ID } from "../yunet-model.js"
 import type { ProxySpanMap } from "../../media-proxy-span-map.js"
@@ -177,6 +178,50 @@ describe("the setup thumbnail", () => {
     for (const f of withThumb.frames) {
       expect(Buffer.from(f.thumb!, "base64")).toHaveLength(FACE_DETECT_THUMB.w * FACE_DETECT_THUMB.h * 3)
     }
+  })
+})
+
+describe("the job-only face descriptor on real frames (P3.2b round 3)", () => {
+  const all = Array.from({ length: FRAMES }, (_, k) => k)
+
+  it("asking for descriptors changes no box: the same faces, the same numbers", async () => {
+    const plain = await detectFacesInMedia(CLIP, { fps: FPS, spanMap: ONE_ROW, fromFrame: 0, toFrame: FRAMES, minScore: 0.7 })
+    const described = await detectFacesInMedia(CLIP, { fps: FPS, spanMap: ONE_ROW, fromFrame: 0, toFrame: FRAMES, minScore: 0.7, descriptorFrames: all })
+    const strip = (r: typeof described) => r.frames.map((f) => f.boxes.map(({ descriptor: _d, ...b }) => b))
+    expect(strip(described)).toEqual(strip(plain))
+    expect(described.frames.every((f) => f.boxes.every((b) => b.descriptor?.version === 1))).toBe(true)
+  })
+
+  it("is the same however the window is split", async () => {
+    const whole = await detectFacesInMedia(CLIP, { fps: FPS, spanMap: ONE_ROW, fromFrame: 0, toFrame: FRAMES, minScore: 0.7, descriptorFrames: all })
+    const a = await detectFacesInMedia(CLIP, { fps: FPS, spanMap: ONE_ROW, fromFrame: 0, toFrame: 13, minScore: 0.7, descriptorFrames: all.slice(0, 13) })
+    const b = await detectFacesInMedia(CLIP, { fps: FPS, spanMap: ONE_ROW, fromFrame: 13, toFrame: FRAMES, minScore: 0.7, descriptorFrames: all.slice(13) })
+    expect([...a.frames, ...b.frames]).toEqual(whole.frames)
+  })
+
+  it("tells the four seated people apart: each face's best luma match a second later is the same seat", async () => {
+    const r = await detectFacesInMedia(CLIP, { fps: FPS, spanMap: ONE_ROW, fromFrame: 0, toFrame: FRAMES, minScore: 0.7, descriptorFrames: all })
+    const cos = (p: Int8Array, q: Int8Array) => {
+      let d = 0, np = 0, nq = 0
+      for (let i = 0; i < p.length; i++) { d += p[i]! * q[i]!; np += p[i]! ** 2; nq += q[i]! ** 2 }
+      return np && nq ? d / Math.sqrt(np * nq) : 0
+    }
+    let pairs = 0
+    let agree = 0
+    for (let k = 0; k + 2 < r.frames.length; k++) {
+      const now = r.frames[k]!.boxes, later = r.frames[k + 2]!.boxes
+      for (const f of now) {
+        const lf = readFaceDescriptor(f.descriptor!).luma
+        const byLook = [...later].sort((p, q) => cos(lf, readFaceDescriptor(q.descriptor!).luma) - cos(lf, readFaceDescriptor(p.descriptor!).luma))[0]
+        const byPlace = [...later].sort((p, q) => Math.abs(p.x - f.x) - Math.abs(q.x - f.x))[0]
+        if (!byLook || !byPlace) continue
+        pairs++
+        if (byLook === byPlace) agree++
+      }
+    }
+    console.info(`[face-detect descriptor] best luma match = same seat in ${agree} of ${pairs} pairs`)
+    expect(pairs).toBeGreaterThan(40)
+    expect(agree / pairs).toBeGreaterThan(0.9)
   })
 })
 

@@ -29,6 +29,12 @@
  *    admission hold whose limit is the detector's own (`faceDetectTimeoutMs`,
  *    from the measured 13–16 CPU-ms per frame of inference plus the proxy
  *    decode — P3.3's figures, re-pinned there by the pricing measurement).
+ *  - THE FACE DESCRIPTORS (P3.2b round 3): the handler asks `detectFaces` for
+ *    job-only descriptors on the samples at the EDGES of each kept span (the
+ *    first and last `SPEAKER_FRAMES_DESCRIBED_EDGE_SAMPLES`), so the linker can
+ *    relink a face across the gap by how it looks. Each described frame lengthens
+ *    its window's hold by `FACE_DETECT_DESCRIPTOR_MS_PER_FRAME`, wherever it
+ *    falls, so the term is per SPAN: `speakerFramesDescriptorSpanBudgetMs`.
  *  - THE IN-PROCESS TAIL: linking, subject selection, identity, the window's
  *    checkpoint body and the artifact's normalize/validate. No kill ceiling
  *    bounds JS, so its INPUT does: a window hands back at most
@@ -67,7 +73,9 @@
  *  - one detection proxy per source (ONE `ensureMediaProxy` call per source
  *    until the bursts' term below exists), with no `timeoutMs` override (each
  *    span then runs at its own ceiling), over the padded kept spans;
- *  - the 180-minute refusal for a bare video.
+ *  - the 180-minute refusal for a bare video;
+ *  - descriptors on at most the first and last `SPEAKER_FRAMES_DESCRIBED_EDGE_SAMPLES`
+ *    samples of each span of the proxy (every sample of a span shorter than both).
  *
  * NOT IN IT YET: the attribution bursts (P3.5: a second, 15 fps proxy per
  * source over up to 20 turns per speaker, plan rung 3). They are unbuilt and
@@ -95,7 +103,11 @@ import {
   padSpans,
   type ProxySpan,
 } from "../../services/media-proxy-span-map.js"
-import { FACE_DETECT_MAX_FRAMES_PER_CALL, faceDetectTimeoutMs } from "../../services/face-detect/face-detect-budget.js"
+import {
+  FACE_DETECT_DESCRIPTOR_MS_PER_FRAME,
+  FACE_DETECT_MAX_FRAMES_PER_CALL,
+  faceDetectTimeoutMs,
+} from "../../services/face-detect/face-detect-budget.js"
 import {
   DEFAULT_FFMPEG_TIMEOUT_MS,
   DOWNLOAD_MAX_MS,
@@ -142,6 +154,21 @@ export function speakerFramesProxySpanBudgetMs(lengthMs: number | undefined): nu
   return proxySpanEncodeTimeoutMs(charged) + SPEAKER_FRAMES_HOLD_OVERRUN_MS + proxySpanProbeTimeoutMs(charged)
 }
 
+/** Samples at each edge of a kept span whose faces carry descriptors (P3.2b round 3). */
+export const SPEAKER_FRAMES_DESCRIBED_EDGE_SAMPLES = 4
+
+/**
+ * The descriptor term of one proxy span of `lengthMs` (`undefined`: the whole
+ * source, length unknown): its described frames — both edges, or every frame
+ * of a span with fewer — at the detector's per-frame descriptor term. Small:
+ * 80 ms a span at most (measured 14–17 µs per box, `face-detect-budget.ts`).
+ */
+export function speakerFramesDescriptorSpanBudgetMs(lengthMs: number | undefined): number {
+  const edges = 2 * SPEAKER_FRAMES_DESCRIBED_EDGE_SAMPLES
+  const frames = lengthMs === undefined ? edges : Math.min(edges, spanFrames(lengthMs, DETECTION_PROXY.fps))
+  return frames * FACE_DETECT_DESCRIPTOR_MS_PER_FRAME
+}
+
 /**
  * In-process time charged per box a window hands back. Measured on the
  * plugin's linker and subject filter (P3.4L, P3.4S): linking 75 ms for a
@@ -176,22 +203,35 @@ export interface SpeakerFramesBudgetBreakdown {
   readonly windows: number
   readonly proxyMs: number
   readonly detectMs: number
+  /** The face descriptors' share of the detection holds: one term per span. */
+  readonly descriptorMs: number
   readonly slackMs: number
   readonly totalMs: number
 }
 
 /** The most frames a span of `lengthMs` can give at `fps`: the samples on its
  *  grid, plus one for the edge (the encoder's `round=up` grid and its trim). */
-const spanFrames = (lengthMs: number, fps: number) => Math.ceil((lengthMs * fps) / 1000) + 1
+function spanFrames(lengthMs: number, fps: number): number {
+  return Math.ceil((lengthMs * fps) / 1000) + 1
+}
 
 /** Per source: its proxy's spans and frames, and the detection windows over them. */
-function sourceMs(plan: SpeakerFramesSourcePlan): { proxyMs: number; detectMs: number; windows: number } {
+function sourceMs(plan: SpeakerFramesSourcePlan): { proxyMs: number; detectMs: number; descriptorMs: number; windows: number } {
   const full = Math.floor(plan.frames / FACE_DETECT_MAX_FRAMES_PER_CALL)
   const rest = plan.frames - full * FACE_DETECT_MAX_FRAMES_PER_CALL
   let spansMs = 0
-  if (plan.spanLengthsMs === null) spansMs = plan.spans * speakerFramesProxySpanBudgetMs(undefined)
-  else for (const len of plan.spanLengthsMs) spansMs += speakerFramesProxySpanBudgetMs(len)
+  let descriptorMs = 0
+  if (plan.spanLengthsMs === null) {
+    spansMs = plan.spans * speakerFramesProxySpanBudgetMs(undefined)
+    descriptorMs = plan.spans * speakerFramesDescriptorSpanBudgetMs(undefined)
+  } else {
+    for (const len of plan.spanLengthsMs) {
+      spansMs += speakerFramesProxySpanBudgetMs(len)
+      descriptorMs += speakerFramesDescriptorSpanBudgetMs(len)
+    }
+  }
   return {
+    descriptorMs,
     proxyMs: SPEAKER_FRAMES_PROXY_FIXED_MS + spansMs,
     detectMs: full * speakerFramesWindowBudgetMs(FACE_DETECT_MAX_FRAMES_PER_CALL) + (rest > 0 ? speakerFramesWindowBudgetMs(rest) : 0),
     windows: full + (rest > 0 ? 1 : 0),
@@ -201,15 +241,17 @@ function sourceMs(plan: SpeakerFramesSourcePlan): { proxyMs: number; detectMs: n
 function breakdownOf(sources: readonly SpeakerFramesSourcePlan[]): SpeakerFramesBudgetBreakdown {
   let proxyMs = 0
   let detectMs = 0
+  let descriptorMs = 0
   let windows = 0
   for (const plan of sources) {
     const s = sourceMs(plan)
     proxyMs += s.proxyMs
     detectMs += s.detectMs
+    descriptorMs += s.descriptorMs
     windows += s.windows
   }
   const slackMs = SPEAKER_FRAMES_RUN_SLACK_MS
-  return { sources, windows, proxyMs, detectMs, slackMs, totalMs: proxyMs + detectMs + slackMs }
+  return { sources, windows, proxyMs, detectMs, descriptorMs, slackMs, totalMs: proxyMs + detectMs + descriptorMs + slackMs }
 }
 
 const isFiniteNumber = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v)

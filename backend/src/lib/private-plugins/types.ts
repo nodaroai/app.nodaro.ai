@@ -911,6 +911,28 @@ export interface PluginDetectFacesInput {
   readonly minScore: number
   /** Also return a 16×9 RGB thumbnail per frame (base64): the camera-setup signature input. */
   readonly thumb?: boolean
+  /**
+   * Proxy frames inside the window whose boxes also carry a job-only
+   * `descriptor` (P3.2b round 3): the samples at the edges of each kept span.
+   * Additive-optional: a host without it returns no descriptors, and the
+   * caller abstains (links nothing across a gap), as before.
+   */
+  readonly descriptorFrames?: readonly number[]
+}
+
+/**
+ * Mirrors `FaceDescriptor` (`services/face-detect/face-descriptor.ts`):
+ * appearance plus landmark alignment, not an embedding. JOB-ONLY: never store
+ * it, never checkpoint it, never write it to an artifact, never compare it
+ * across episodes.
+ */
+export interface PluginFaceDescriptor {
+  /** Compare only descriptors of equal versions. */
+  readonly version: 1
+  /** 64 signed bytes, base64: the 8×8 luma crop aligned on the five landmarks, zero-mean, unit length (×127). */
+  readonly luma: string
+  /** 128 bytes, base64: 64-bin RGB histograms (4 levels per channel) of the face, then of the region just below it; each totals ~255, all zeros when absent. */
+  readonly hist: string
 }
 
 /** Mirrors `YunetFace` (`services/face-detect/yunet-decode.ts`). */
@@ -923,6 +945,8 @@ export interface PluginDetectedFace {
   readonly score: number
   /** Right eye, left eye, nose tip, right and left mouth corners: [x, y] fractions. */
   readonly landmarks: ReadonlyArray<readonly [number, number]>
+  /** Only on the boxes of `descriptorFrames` (at most 32 a frame, highest score first). */
+  readonly descriptor?: PluginFaceDescriptor
 }
 
 /** Mirrors `DetectFacesResult` (`services/face-detect/detect-faces.ts`). */
