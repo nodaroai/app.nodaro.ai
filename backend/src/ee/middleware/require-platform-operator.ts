@@ -81,8 +81,8 @@ export async function requirePlatformOperator(
 ): Promise<FastifyReply | void> {
   // Mainline: byte-equivalent to the gate these routes carried before.
   if (!deploymentPayerActive()) {
-    await requireAdmin(req, reply)
-    return
+    // Its refusal is returned, not dropped: see requireAdmin.
+    return requireAdmin(req, reply)
   }
 
   const userId = req.userId

@@ -2,7 +2,7 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { countText, dayText, durationText, momentText, pageAddress, perUser } from "./format"
 import { LineChart } from "./line-chart"
-import { FilterInput, RowsFooter, SectionProblem, SectionShell, StatCard } from "./parts"
+import { FilterInput, NUMBER_CELL, NUMBER_HEAD, RowsFooter, SectionProblem, SectionShell, StatCard } from "./parts"
 import type { SectionResult, SiteAnalyticsDays, TrafficReport, TrafficRow } from "./types"
 
 type Grouping = "pages" | "titles"
@@ -94,11 +94,11 @@ function TrafficBody({ report, siteDomain }: { report: TrafficReport; siteDomain
           <thead>
             <tr className="text-muted-foreground border-b">
               <th className="text-start py-2 font-medium">{grouping === "pages" ? "Page" : "Page title"}</th>
-              <th className="text-end py-2 font-medium">Views</th>
-              <th className="text-end py-2 font-medium">Active users</th>
-              <th className="text-end py-2 font-medium">Views per user</th>
-              <th className="text-end py-2 font-medium">Engagement per user</th>
-              <th className="text-end py-2 font-medium">Events</th>
+              <th className={NUMBER_HEAD}>Views</th>
+              <th className={NUMBER_HEAD}>Active users</th>
+              <th className={NUMBER_HEAD}>Views per user</th>
+              <th className={NUMBER_HEAD}>Engagement per user</th>
+              <th className={NUMBER_HEAD}>Events</th>
             </tr>
           </thead>
           <tbody>
@@ -107,11 +107,11 @@ function TrafficBody({ report, siteDomain }: { report: TrafficReport; siteDomain
                 <td className="py-1.5 pe-3">
                   <PageCell row={row} grouping={grouping} siteDomain={siteDomain} />
                 </td>
-                <td className="py-1.5 text-end font-mono">{countText(row.views)}</td>
-                <td className="py-1.5 text-end font-mono">{countText(row.activeUsers)}</td>
-                <td className="py-1.5 text-end font-mono">{perUser(row.views, row.activeUsers).toFixed(2)}</td>
-                <td className="py-1.5 text-end font-mono">{durationText(perUser(row.engagementSeconds, row.activeUsers))}</td>
-                <td className="py-1.5 text-end font-mono">{countText(row.events)}</td>
+                <td className={NUMBER_CELL}>{countText(row.views)}</td>
+                <td className={NUMBER_CELL}>{countText(row.activeUsers)}</td>
+                <td className={NUMBER_CELL}>{perUser(row.views, row.activeUsers).toFixed(2)}</td>
+                <td className={NUMBER_CELL}>{durationText(perUser(row.engagementSeconds, row.activeUsers))}</td>
+                <td className={NUMBER_CELL}>{countText(row.events)}</td>
               </tr>
             ))}
             {shown.length === 0 && (

@@ -2,7 +2,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { getAuthHeaders } from "@/lib/api"
 import { hasAdmin } from "@/lib/edition"
 import { queryKeys } from "@/lib/query-keys"
-import type { IndexStatus, SiteAnalyticsDays, SiteAnalyticsReport } from "./types"
+import type { IndexStatus, RealtimeSnapshot, SectionResult, SiteAnalyticsDays, SiteAnalyticsReport } from "./types"
 
 /** The server's reason, or a plain one when it sent none. */
 async function failureMessage(res: Response, fallback: string): Promise<string> {
@@ -24,6 +24,31 @@ export function useSiteAnalytics(days: SiteAnalyticsDays) {
     enabled: hasAdmin(),
     staleTime: 5 * 60_000,
     placeholderData: keepPreviousData,
+  })
+}
+
+/**
+ * Once a minute, and only while the page is on screen: every realtime
+ * question spends Google's allowance. The server keeps one snapshot for
+ * every admin and decides when Google is actually asked.
+ */
+export const REALTIME_POLLING = { refetchInterval: 60_000, refetchIntervalInBackground: false } as const
+
+/** A page nobody has touched for this long stops asking — it resumes on the next movement. */
+export const REALTIME_IDLE_MS = 20 * 60_000
+
+/** The last 30 minutes. Nothing is asked without a GA property, or while `enabled` is false (an idle page). */
+export function useRealtime(enabled: boolean) {
+  return useQuery({
+    queryKey: queryKeys.admin.siteAnalyticsRealtime(),
+    queryFn: async (): Promise<SectionResult<RealtimeSnapshot>> => {
+      const res = await fetch("/v1/admin/site-analytics/realtime", { headers: await getAuthHeaders() })
+      if (!res.ok) throw new Error(await failureMessage(res, "Failed to load real-time data"))
+      return (await res.json()) as SectionResult<RealtimeSnapshot>
+    },
+    enabled: hasAdmin() && enabled,
+    ...REALTIME_POLLING,
+    staleTime: 30_000,
   })
 }
 

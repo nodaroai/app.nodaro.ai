@@ -1,19 +1,22 @@
 import type { FastifyRequest, FastifyReply } from "fastify"
 import { checkIsAdmin } from "../../lib/admin-check.js"
 
-export async function requireAdmin(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+/**
+ * Admins only. A refusal RETURNS the reply: an async hook that sends without
+ * returning lets Fastify carry on into the handler once another async hook
+ * (an onSend) is registered — the handler would then run for a non-admin.
+ */
+export async function requireAdmin(req: FastifyRequest, reply: FastifyReply): Promise<FastifyReply | void> {
   const userId = req.userId
   if (!userId) {
-    reply.status(401).send({
+    return reply.status(401).send({
       error: { code: "unauthorized", message: "Authentication required" },
     })
-    return
   }
   const isAdmin = await checkIsAdmin(userId)
   if (!isAdmin) {
-    reply.status(403).send({
+    return reply.status(403).send({
       error: { code: "forbidden", message: "Admin access required" },
     })
-    return
   }
 }

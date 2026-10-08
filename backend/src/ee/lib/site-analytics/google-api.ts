@@ -39,14 +39,29 @@ export function googleErrorMessage(body: unknown, status: number): string {
   return message.slice(0, MESSAGE_MAX)
 }
 
-/** Google's code for a refusal: an ErrorInfo detail's `reason` (SERVICE_DISABLED, …), else the status (PERMISSION_DENIED, …). */
+/** The older API generation's names (Search Console still answers with them), in today's words. */
+const LEGACY_REASONS: Readonly<Record<string, string>> = {
+  forbidden: "PERMISSION_DENIED",
+  insufficientPermissions: "PERMISSION_DENIED",
+  accessNotConfigured: "SERVICE_DISABLED",
+}
+
+/**
+ * Google's code for a refusal: an ErrorInfo detail's `reason`
+ * (SERVICE_DISABLED, …), else the status (PERMISSION_DENIED, …), else the
+ * older `errors[].reason` that Search Console's v3 API still sends — its
+ * "forbidden" is the same refusal as PERMISSION_DENIED and is named so.
+ */
 export function googleErrorReason(body: unknown): string | undefined {
-  const error = (body as { error?: { status?: unknown; details?: unknown } } | null)?.error
+  const error = (body as { error?: { status?: unknown; details?: unknown; errors?: unknown } } | null)?.error
   if (!error || typeof error !== "object") return undefined
   const details = Array.isArray(error.details) ? (error.details as Array<{ reason?: unknown }>) : []
   const detailed = details.find((d) => typeof d?.reason === "string")?.reason
   if (typeof detailed === "string") return detailed
-  return typeof error.status === "string" ? error.status : undefined
+  if (typeof error.status === "string") return error.status
+  const legacy = (Array.isArray(error.errors) ? (error.errors as Array<{ reason?: unknown }>) : []).find((e) => typeof e?.reason === "string")?.reason
+  if (typeof legacy !== "string") return undefined
+  return Object.hasOwn(LEGACY_REASONS, legacy) ? LEGACY_REASONS[legacy] : legacy
 }
 
 /** One authorized call to a Google API: JSON in (when there is a body), JSON out, Google's reason on failure. */

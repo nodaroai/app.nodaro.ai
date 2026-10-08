@@ -1,12 +1,27 @@
 import { useState } from "react"
-import { Loader2, RefreshCw } from "lucide-react"
+import { ExternalLink, Loader2, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { siteDomainOf } from "./format"
+import { analyticsLink, searchConsoleLink } from "./google-links"
+import { RealtimeCard } from "./realtime-card"
 import { SearchSection } from "./search-section"
 import { SetupPanel } from "./setup-panel"
+import { SourcesSection } from "./sources-section"
 import { TrafficSection } from "./traffic-section"
 import { SITE_ANALYTICS_DAYS, type SiteAnalyticsDays } from "./types"
 import { useRefreshSiteAnalytics, useSiteAnalytics } from "./use-site-analytics"
+
+/** Google's own screen for the same numbers, in a new tab — for whoever has access there. */
+function GoogleLink({ href, label }: { href: string; label: string }) {
+  return (
+    <Button variant="outline" size="sm" asChild>
+      <a href={href} target="_blank" rel="noopener noreferrer">
+        {label}
+        <ExternalLink className="h-3.5 w-3.5 ms-1.5" />
+      </a>
+    </Button>
+  )
+}
 
 /**
  * Google Analytics and Search Console for every admin, read on the server
@@ -19,7 +34,7 @@ export default function AdminSiteAnalyticsPage() {
   const busy = isPlaceholderData || refresh.isPending
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-6">
+    <div className="p-6 space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold">Site Analytics</h1>
@@ -36,6 +51,8 @@ export default function AdminSiteAnalyticsPage() {
             <RefreshCw className={`h-4 w-4 me-2 ${refresh.isPending ? "animate-spin" : ""}`} />
             Refresh
           </Button>
+          {data?.setup.ga4PropertyId && <GoogleLink href={analyticsLink(data.setup.ga4PropertyId, days)} label="Google Analytics" />}
+          {data?.setup.searchConsoleSite && <GoogleLink href={searchConsoleLink(data.setup.searchConsoleSite)} label="Search Console" />}
         </div>
       </div>
 
@@ -50,7 +67,9 @@ export default function AdminSiteAnalyticsPage() {
       ) : (
         <>
           {data.setup.problems.length > 0 && <SetupPanel setup={data.setup} />}
+          <RealtimeCard configured={data.setup.ga4PropertyId !== null && data.setup.serviceAccountEmail !== null} email={data.setup.serviceAccountEmail} />
           <TrafficSection result={data.traffic} days={data.days} email={data.setup.serviceAccountEmail} siteDomain={siteDomainOf(data.setup.searchConsoleSite)} />
+          <SourcesSection result={data.sources} days={data.days} email={data.setup.serviceAccountEmail} />
           <SearchSection result={data.search} email={data.setup.serviceAccountEmail} />
           {data.setup.serviceAccountEmail && data.setup.problems.length === 0 && (
             <p className="text-xs text-muted-foreground">

@@ -4,7 +4,7 @@ import { httpLink } from "@/lib/post-site"
 import { countText, dayText, momentText, percentText, positionText } from "./format"
 import { IndexStatusCell } from "./index-status-cell"
 import { LineChart } from "./line-chart"
-import { FilterInput, RowsFooter, SectionProblem, SectionShell, StatCard } from "./parts"
+import { FilterInput, NUMBER_CELL, NUMBER_HEAD, RowsFooter, SectionProblem, SectionShell, StatCard } from "./parts"
 import type { SearchReport, SearchRow, SectionResult, SitemapStatus } from "./types"
 
 type Tab = "pages" | "queries"
@@ -36,10 +36,10 @@ function MaybeLink({ href, text }: { href: string | null; text: string }) {
 function Numbers({ row }: { row: SearchRow }) {
   return (
     <>
-      <td className="py-1.5 text-end font-mono">{countText(row.clicks)}</td>
-      <td className="py-1.5 text-end font-mono">{countText(row.impressions)}</td>
-      <td className="py-1.5 text-end font-mono">{percentText(row.ctr)}</td>
-      <td className="py-1.5 text-end font-mono">{positionText(row.position)}</td>
+      <td className={NUMBER_CELL}>{countText(row.clicks)}</td>
+      <td className={NUMBER_CELL}>{countText(row.impressions)}</td>
+      <td className={NUMBER_CELL}>{percentText(row.ctr)}</td>
+      <td className={NUMBER_CELL}>{positionText(row.position)}</td>
     </>
   )
 }
@@ -89,11 +89,11 @@ function SearchBody({ report }: { report: SearchReport }) {
           <thead>
             <tr className="text-muted-foreground border-b">
               <th className="text-start py-2 font-medium">{tab === "pages" ? "Page" : "Search"}</th>
-              <th className="text-end py-2 font-medium">Clicks</th>
-              <th className="text-end py-2 font-medium">Impressions</th>
-              <th className="text-end py-2 font-medium">CTR</th>
-              <th className="text-end py-2 font-medium">Position</th>
-              {tab === "pages" && <th className="text-end py-2 font-medium">In Google’s index</th>}
+              <th className={NUMBER_HEAD}>Clicks</th>
+              <th className={NUMBER_HEAD}>Impressions</th>
+              <th className={NUMBER_HEAD}>CTR</th>
+              <th className={NUMBER_HEAD}>Position</th>
+              {tab === "pages" && <th className={NUMBER_HEAD}>In Google’s index</th>}
             </tr>
           </thead>
           <tbody>

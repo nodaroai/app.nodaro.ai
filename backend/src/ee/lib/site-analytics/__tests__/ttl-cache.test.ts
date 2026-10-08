@@ -33,6 +33,18 @@ describe("createTtlCache", () => {
     expect(load).toHaveBeenCalledTimes(2)
   })
 
+  it("a value can set its own lifetime", async () => {
+    let now = 0
+    const cache = createTtlCache<{ slow: boolean }>({ ttlMs: 60_000, maxEntries: 10, ttlOf: (v) => (v.slow ? 300_000 : 60_000), now: () => now })
+    const load = vi.fn().mockResolvedValueOnce({ slow: true }).mockResolvedValueOnce({ slow: false })
+    await cache.get("k", load)
+    now = 200_000
+    expect((await cache.get("k", load)).value).toEqual({ slow: true })
+    now = 300_000
+    expect((await cache.get("k", load)).value).toEqual({ slow: false })
+    expect(load).toHaveBeenCalledTimes(2)
+  })
+
   it("two gets at once share one load", async () => {
     const cache = createTtlCache<string>({ ttlMs: 1_000, maxEntries: 10, now: () => 0 })
     const load = vi.fn(async () => "a")

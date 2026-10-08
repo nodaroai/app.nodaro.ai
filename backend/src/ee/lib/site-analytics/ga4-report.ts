@@ -1,4 +1,5 @@
 import { everyDay, shiftDay } from "./days.js"
+import { columns, GA_DATA_API, type Columns, type GaAnswer, type GaRow } from "./ga4-columns.js"
 import { googleJson, type FetchLike } from "./google-api.js"
 
 /** The ranges the page offers — GA's own presets, so a number here matches the one in GA. */
@@ -36,22 +37,10 @@ export interface TrafficReport {
   readonly titlesTotal: number
 }
 
-const GA_DATA_API = "https://analyticsdata.googleapis.com/v1beta"
 const METRICS = ["screenPageViews", "activeUsers", "userEngagementDuration", "eventCount"] as const
 export const PAGES_MAX = 250
 export const TITLES_MAX = 100
 
-interface GaRow {
-  dimensionValues?: Array<{ value?: string }>
-  metricValues?: Array<{ value?: string }>
-}
-interface GaAnswer {
-  dimensionHeaders?: Array<{ name?: string }>
-  metricHeaders?: Array<{ name?: string }>
-  rows?: GaRow[]
-  rowCount?: number
-  metadata?: { timeZone?: string }
-}
 interface GaBatch {
   reports?: GaAnswer[]
 }
@@ -77,26 +66,12 @@ export function trafficRequests(days: SiteAnalyticsDays): unknown[] {
   ]
 }
 
-/** A report's columns by the names GA puts in its headers — never by the order they were asked for. */
-function columns(answer: GaAnswer | undefined) {
-  const metricAt = new Map((answer?.metricHeaders ?? []).map((header, i) => [header.name ?? "", i]))
-  const dimensionAt = new Map((answer?.dimensionHeaders ?? []).map((header, i) => [header.name ?? "", i]))
-  const metric = (row: GaRow, name: string) => {
-    const i = metricAt.get(name)
-    return i === undefined ? 0 : Number(row.metricValues?.[i]?.value) || 0
-  }
-  const dimension = (row: GaRow, name: string) => {
-    const i = dimensionAt.get(name)
-    return i === undefined ? "" : (row.dimensionValues?.[i]?.value ?? "")
-  }
-  const totals = (row: GaRow | undefined): TrafficTotals => ({
-    views: row ? metric(row, "screenPageViews") : 0,
-    activeUsers: row ? metric(row, "activeUsers") : 0,
-    engagementSeconds: row ? metric(row, "userEngagementDuration") : 0,
-    events: row ? metric(row, "eventCount") : 0,
-  })
-  return { rows: answer?.rows ?? [], rowCount: Number(answer?.rowCount) || 0, metric, dimension, totals }
-}
+const trafficTotals = (report: Columns, row: GaRow | undefined): TrafficTotals => ({
+  views: report.metric(row, "screenPageViews"),
+  activeUsers: report.metric(row, "activeUsers"),
+  engagementSeconds: report.metric(row, "userEngagementDuration"),
+  events: report.metric(row, "eventCount"),
+})
 
 /** GA writes a day as YYYYMMDD. */
 const isoDay = (day: string) => `${day.slice(0, 4)}-${day.slice(4, 6)}-${day.slice(6, 8)}`
@@ -131,15 +106,15 @@ export function trafficReportOf(batch: GaBatch, days: SiteAnalyticsDays, now: Da
   const pages = columns(batch.reports?.[2])
   const titles = columns(batch.reports?.[3])
   return {
-    totals: totals.totals(totals.rows[0]),
+    totals: trafficTotals(totals, totals.rows[0]),
     daily: dailyOf(batch.reports?.[1], days, now),
     pages: pages.rows.map((row) => {
       const host = pages.dimension(row, "hostName")
       const path = pages.dimension(row, "pagePath")
-      return { key: `${host}${path}`, host, path, ...pages.totals(row) }
+      return { key: `${host}${path}`, host, path, ...trafficTotals(pages, row) }
     }),
     pagesTotal: pages.rowCount,
-    titles: titles.rows.map((row) => ({ key: titles.dimension(row, "unifiedScreenClass"), ...titles.totals(row) })),
+    titles: titles.rows.map((row) => ({ key: titles.dimension(row, "unifiedScreenClass"), ...trafficTotals(titles, row) })),
     titlesTotal: titles.rowCount,
   }
 }

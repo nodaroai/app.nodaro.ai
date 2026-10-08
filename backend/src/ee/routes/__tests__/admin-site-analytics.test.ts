@@ -1,6 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
-import type { InspectResult, SiteAnalyticsReport, SiteAnalyticsService } from "../../lib/site-analytics/site-analytics.js"
+import type { InspectResult, RealtimeView, SectionResult, SiteAnalyticsReport, SiteAnalyticsService } from "../../lib/site-analytics/site-analytics.js"
 
 const ADMIN = "00000000-0000-4000-8000-0000000000ad"
 const USER = "00000000-0000-4000-8000-0000000000aa"
@@ -18,15 +18,18 @@ const REPORT: SiteAnalyticsReport = {
   setup: { serviceAccountEmail: null, ga4PropertyId: null, searchConsoleSite: null, problems: ["SITE_ANALYTICS_SERVICE_ACCOUNT_JSON is not set."] },
   traffic: { status: "not_configured" },
   search: { status: "not_configured" },
+  sources: { status: "not_configured" },
 }
 
 let app: FastifyInstance
-let service: { report: ReturnType<typeof vi.fn>; inspect: ReturnType<typeof vi.fn> }
+// Typed by the service itself, so a stale fixture is a type error rather than a silent pass.
+let service: { [K in keyof SiteAnalyticsService]: Mock<SiteAnalyticsService[K]> }
 
 beforeEach(async () => {
   service = {
-    report: vi.fn(async (days: number) => ({ ...REPORT, days })),
-    inspect: vi.fn(async (): Promise<InspectResult> => ({ status: "not_configured" })),
+    report: vi.fn<SiteAnalyticsService["report"]>(async (days) => ({ ...REPORT, days })),
+    inspect: vi.fn<SiteAnalyticsService["inspect"]>(async (): Promise<InspectResult> => ({ status: "not_configured" })),
+    realtime: vi.fn<SiteAnalyticsService["realtime"]>(async () => ({ status: "not_configured" })),
   }
   app = Fastify({ logger: false })
   app.addHook("preHandler", async (req) => {
@@ -67,6 +70,22 @@ describe("GET /v1/admin/site-analytics", () => {
     expect(res.statusCode).toBe(400)
     expect(res.json().error.code).toBe("validation_error")
     expect(service.report).not.toHaveBeenCalled()
+  })
+})
+
+describe("GET /v1/admin/site-analytics/realtime", () => {
+  it("is for admins only, and answers the shared snapshot", async () => {
+    expect((await get("/v1/admin/site-analytics/realtime", USER)).statusCode).toBe(403)
+    expect(service.realtime).not.toHaveBeenCalled()
+    const snapshot: SectionResult<RealtimeView> = {
+      status: "ok",
+      fetchedAt: "2026-10-08T12:00:00.000Z",
+      data: { activeUsers: 5, views: 8, events: 11, perMinute: [], pages: [], quota: { projectPerHour: 13_000, propertyPerHour: 39_000, propertyPerDay: 190_000 }, refreshMinutes: 1 },
+    }
+    service.realtime.mockResolvedValueOnce(snapshot)
+    const res = await get("/v1/admin/site-analytics/realtime")
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toEqual(snapshot)
   })
 })
 

@@ -92,6 +92,8 @@ export interface SectionFailure {
   message: string
   httpStatus?: number
   reason?: string
+  /** When the server will ask Google again. */
+  retryMinutes?: number
 }
 
 export type SectionResult<T> = { status: "ok"; data: T; fetchedAt: string } | { status: "not_configured" } | SectionFailure
@@ -103,9 +105,50 @@ export interface SetupView {
   problems: string[]
 }
 
+/** The last 30 minutes, as GA's Realtime report shows them. */
+export interface RealtimeSnapshot {
+  activeUsers: number
+  views: number
+  events: number
+  /** Active users per minute: index 0 is this minute, 29 is half an hour ago. */
+  perMinute: number[]
+  /** The pages people are on, by title (realtime has no path). */
+  pages: Array<{ title: string; activeUsers: number; views: number }>
+  /** Google's realtime tokens left per bucket; null where Google did not say. */
+  quota: { projectPerHour: number | null; propertyPerHour: number | null; propertyPerDay: number | null }
+  /** How often the server asks Google for the next snapshot — 1, or 5 once Google's hourly allowance runs low. */
+  refreshMinutes: number
+}
+
+export interface SourceRow {
+  /** One value per dimension of its table: ["google", "organic"], ["nodaro.ai", "/pricing"]. */
+  labels: string[]
+  sessions: number
+  activeUsers: number
+  newUsers: number
+  /** 0–1. */
+  engagementRate: number
+  keyEvents: number
+}
+
+export interface SourceTable {
+  rows: SourceRow[]
+  /** How many rows GA has in all. */
+  total: number
+}
+
+export interface SourcesReport {
+  channels: SourceTable
+  sourceMedium: SourceTable
+  campaigns: SourceTable
+  utm: SourceTable
+  landingPages: SourceTable
+}
+
 export interface SiteAnalyticsReport {
   days: SiteAnalyticsDays
   setup: SetupView
   traffic: SectionResult<TrafficReport>
   search: SectionResult<SearchReport>
+  sources: SectionResult<SourcesReport>
 }
