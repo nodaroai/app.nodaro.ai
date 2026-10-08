@@ -211,3 +211,27 @@ export function assertNotOutputCapped(opts: {
     complete: usage !== undefined && providerCost !== undefined,
   })
 }
+
+/** How many links of a `cause` chain a log line carries, and how much of each. */
+const ERROR_CHAIN_MAX_LINKS = 6
+const ERROR_CHAIN_MAX_CHARS_PER_LINK = 600
+
+/**
+ * An error and every `cause` beneath it as one log line, outermost first: each
+ * link's class name and message. Name and message only, on purpose — an SDK
+ * error object also carries the request it failed on, and that is never
+ * logged. Bounded, because a provider's message is not a log budget.
+ */
+export function describeErrorChain(err: unknown): string {
+  const links: string[] = []
+  let current: unknown = err
+  for (let depth = 0; current !== null && current !== undefined && depth < ERROR_CHAIN_MAX_LINKS; depth++) {
+    const message = (current as { message?: unknown }).message
+    const text = current instanceof Error
+      ? `${current.name}: ${current.message}`
+      : typeof message === "string" ? message : String(current)
+    links.push(text.length > ERROR_CHAIN_MAX_CHARS_PER_LINK ? `${text.slice(0, ERROR_CHAIN_MAX_CHARS_PER_LINK)}…` : text)
+    current = typeof current === "object" ? (current as { cause?: unknown }).cause : undefined
+  }
+  return links.join(" | caused by ")
+}

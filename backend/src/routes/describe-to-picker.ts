@@ -21,6 +21,7 @@ import { markProviderCallStart } from "../lib/reconcile/persistence.js"
 import { insertAppReport, type AppReportInput } from "../lib/app-reports.js"
 import { commitReservedCreditsForJob, refundReservedCreditsForJob } from "../lib/credits-job-lifecycle.js"
 import { userFacingMessage } from "../lib/user-facing-error.js"
+import { describeErrorChain } from "../lib/llm-errors.js"
 
 /** Models the analyzer accepts: vision-capable AND able to return guaranteed
  *  structured output (Anthropic forced-tool or Gemini `response_format`). Derived
@@ -254,9 +255,10 @@ async function completeAnalysis(
 /** Fail the job and refund its reservation; returns the message to report. */
 async function failAnalysis(analysis: Analysis, err: unknown): Promise<string> {
   // The person reads a model-lane failure's user-safe sentence; the full
-  // diagnostic goes to the log.
+  // diagnostic goes to the log EVERY time, causes included — a provider error
+  // whose own message is that sentence used to leave no log line at all.
   const message = userFacingMessage(err, "Picker analysis failed")
-  if (err instanceof Error && err.message !== message) console.error("[describe-to-picker] Error:", err.message)
+  console.error(`[describe-to-picker] job ${analysis.jobId} failed — ${describeErrorChain(err)}`)
   await supabase.from("jobs").update({ status: "failed", output_data: { error: message } }).eq("id", analysis.jobId).eq("user_id", analysis.userId)
   await refundReservedCreditsForJob(analysis.jobId)
   return message

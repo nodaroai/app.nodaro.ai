@@ -22,6 +22,7 @@ import {
   LlmOutputTruncatedError,
   LlmStreamResponseError,
   assertNotOutputCapped,
+  describeErrorChain,
   isOutputCapStop,
   outputCappedMessage,
   type ReplyEnd,
@@ -30,6 +31,7 @@ import { KIE_API_BASE } from "../providers/kie/client.js"
 import { z, type ZodType } from "zod"
 import { extractJsonFromAIResponse, extractKieToolCallInput } from "./json-utils.js"
 import { anthropicStrictToolSchema, restrictObjectSchemas } from "./json-schema-strict.js"
+import { aliasKeywordPropertyNames } from "./json-schema-property-alias.js"
 
 const LLM_TIMEOUT_MS = 120_000
 
@@ -294,8 +296,11 @@ export async function llmComplete(req: LlmRequest): Promise<LlmResponse> {
     } catch (err) {
       if (!laneFallbackAllowed(err)) throw err
       // KIE proxy failure — the direct SDK is the reliability backstop.
-      warnLaneFallback({ modelId: model.id, primary: "kie", fallback: "direct-anthropic" }, err)
-      return callAnthropicDirect(model, req)
+      return serveFromFallback(
+        { modelId: model.id, primary: "kie", fallback: "direct-anthropic" },
+        err,
+        () => callAnthropicDirect(model, req),
+      )
     }
   }
 
@@ -483,19 +488,39 @@ interface LaneFallbackCtx {
 }
 
 /**
- * One greppable line per silently-recovered lane failure. Without it a chronic
+ * Serve a call from its fallback lane once `primaryErr` ended the primary one —
+ * the ONE way every fallback site in this file reaches its second lane, so
+ * none can skip either log line.
+ *
+ * The primary failure is one greppable warn line. Without it a chronic
  * primary-lane outage is invisible: every unpinned call quietly serves from the
  * other lane (at that lane's cost profile) and only lane-PINNED calls ever
  * surface the error — which is exactly how the 2026-08-14 direct-Gemini
  * `403 PERMISSION_DENIED` blip was diagnosable only through a pinned
- * video-analysis job. Warn, not error: the request is about to succeed.
+ * video-analysis job. Warn, not error: the request may still succeed.
+ *
+ * A fallback that fails too is an error line, with its whole cause chain. Its
+ * error is what the caller gets, and it often reaches the person as the
+ * provider's own sentence — which a route logs only when it rewrote it — so
+ * without this line a broken fallback lane left no trace at all. The error is
+ * rethrown AS IS: `instanceof` decides billing and retries downstream
+ * (`failureWithSpend`, `transportRetryable`, `userFacingMessage`).
  */
-function warnLaneFallback(ctx: LaneFallbackCtx, err: unknown): void {
-  const msg = err instanceof Error ? err.message : String(err)
+async function serveFromFallback<T>(ctx: LaneFallbackCtx, primaryErr: unknown, fallback: () => Promise<T>): Promise<T> {
+  const msg = primaryErr instanceof Error ? primaryErr.message : String(primaryErr)
   const head = msg.length > 300 ? `${msg.slice(0, 300)}…` : msg
   console.warn(
     `[llm-lane-fallback] ${ctx.modelId}: ${ctx.primary} lane failed, serving from ${ctx.fallback} — ${head}`,
   )
+  try {
+    return await fallback()
+  } catch (err) {
+    console.error(
+      `[llm-lane-fallback] ${ctx.modelId}: ${ctx.fallback} lane also failed (after the ${ctx.primary} lane) — ` +
+        describeErrorChain(err),
+    )
+    throw err
+  }
 }
 
 /**
@@ -522,8 +547,7 @@ async function withFallback(
     return await primary()
   } catch (err) {
     if (!laneFallbackAllowed(err)) throw err
-    warnLaneFallback(ctx, err)
-    return secondary()
+    return serveFromFallback(ctx, err, secondary)
   }
 }
 
@@ -559,8 +583,11 @@ export async function llmStream(
       return await streamKie(model, req, wrapped, signal)
     } catch (err) {
       if (emitted || !laneFallbackAllowed(err)) throw err
-      warnLaneFallback({ modelId: model.id, primary: "kie", fallback: "direct-anthropic" }, err)
-      return streamAnthropicDirect(model, req, onToken, signal)
+      return serveFromFallback(
+        { modelId: model.id, primary: "kie", fallback: "direct-anthropic" },
+        err,
+        () => streamAnthropicDirect(model, req, onToken, signal),
+      )
     }
   }
 
@@ -606,8 +633,7 @@ async function streamWithFallback(
   } catch (err) {
     // A cap stop with no visible token (all of it reasoning) is still a cap stop.
     if (emitted || !laneFallbackAllowed(err)) throw err
-    warnLaneFallback(ctx, err)
-    return secondary(onToken)
+    return serveFromFallback(ctx, err, () => secondary(onToken))
   }
 }
 
@@ -888,7 +914,8 @@ async function streamStructuredAttempt(
   onToolJson: (partialJson: string, jsonSnapshot: unknown) => void,
   signal?: AbortSignal,
 ): Promise<LlmResponse> {
-  if (!req.jsonSchema) return llmComplete(req)
+  const jsonSchema = req.jsonSchema
+  if (!jsonSchema) return llmComplete(req)
   const directAvailable = Boolean(model.directFallbackModel) && Boolean(config.ANTHROPIC_API_KEY)
   const kieAvailable = Boolean(config.KIE_API_KEY) && req.requireLane !== "direct"
   // The same lane rule as llmStream: direct when pinned there, when KIE cannot
@@ -898,12 +925,11 @@ async function streamStructuredAttempt(
     (req.requireLane !== "kie" && (!kieAvailable || (directAvailable && (!model.preferKie || claudeMustServeDirect(model, req)))))
   if (directFirst) {
     try {
-      return await streamAnthropicStructured(model, req, req.jsonSchema, onToolJson, signal)
+      return await streamAnthropicStructured(model, req, jsonSchema, onToolJson, signal)
     } catch (err) {
       const kie = kieAvailable && req.requireLane === undefined ? kieFallback(model, req) : undefined
       if (!kie || err instanceof LlmStreamResponseError || signal?.aborted) throw err
-      warnLaneFallback({ modelId: model.id, primary: "direct-anthropic stream", fallback: "kie" }, err)
-      return kie()
+      return serveFromFallback({ modelId: model.id, primary: "direct-anthropic stream", fallback: "kie" }, err, kie)
     }
   }
   // KIE first. A failure before the first fragment reached the caller falls
@@ -917,8 +943,11 @@ async function streamStructuredAttempt(
     })
   } catch (err) {
     if (emitted || !directAvailable || req.requireLane === "kie" || !laneFallbackAllowed(err) || signal?.aborted) throw err
-    warnLaneFallback({ modelId: model.id, primary: "kie stream", fallback: "direct-anthropic stream" }, err)
-    return streamAnthropicStructured(model, req, req.jsonSchema, onToolJson, signal)
+    return serveFromFallback(
+      { modelId: model.id, primary: "kie stream", fallback: "direct-anthropic stream" },
+      err,
+      () => streamAnthropicStructured(model, req, jsonSchema, onToolJson, signal),
+    )
   }
 }
 
@@ -968,8 +997,8 @@ async function runStructuredAttempts<T>(
   throw new StructuredLlmError(`llm-structured: validation failed after ${retries + 1} attempt(s): ${lastError}`, spendUsage(spend))
 }
 
-/** The forced output's JSON Schema. */
-function structuredJsonSchema(schema: ZodType): Record<string, unknown> {
+/** The forced output's JSON Schema — the caller's contract, before any lane's wire rewrite. */
+export function structuredJsonSchema(schema: ZodType): Record<string, unknown> {
   // Draft-7 keeps Anthropic's tool input_schema happy; strip the $schema marker.
   // io:"input" mirrors zod-to-json-schema's semantics (defaulted fields optional).
   const jsonSchema = restrictObjectSchemas(
@@ -1342,13 +1371,58 @@ function buildAnthropicMessages(req: LlmRequest) {
  * still strongly constrains the shape, and `llmCompleteStructured`'s validate +
  * retry is the actual guarantee. Returns undefined for models with no native
  * mode (GPT-via-KIE ignores response_format) so the caller falls back to text.
+ *
+ * The schema goes on the wire through {@link kieWireSchema}.
  */
-function kieResponseFormat(model: LlmModelDef, req: LlmRequest): Record<string, unknown> | undefined {
+function kieResponseFormat(model: LlmModelDef, req: LlmRequest): KieSchemaFormat | undefined {
   if (!req.jsonSchema || model.structuredOutputMode !== "kie-response-format") return undefined
+  const wire = kieWireSchema(req.jsonSchema)
   return {
-    type: "json_schema",
-    json_schema: { name: req.jsonSchema.name, strict: false, schema: req.jsonSchema.schema },
+    body: { type: "json_schema", json_schema: { name: req.jsonSchema.name, strict: false, schema: wire.schema } },
+    restoreText: wire.restoreText,
   }
+}
+
+/** A KIE structured-output request field, and the way its answer text gets back to the caller's names. */
+interface KieSchemaFormat {
+  body: Record<string, unknown>
+  restoreText: (text: string) => string
+}
+
+/**
+ * The caller's schema as KIE is sent it, on both of its JSON-schema lanes.
+ *
+ * KIE's chat-completions validator reads a property NAMED like a keyword
+ * (`type`) as that keyword and refuses the request
+ * (`json-schema-property-alias.ts`), so such a property is sent under a wire
+ * name, and `restoreText` puts the caller's name back on the answer before
+ * anything reads it. The responses lane gets the same wire form: the rename is
+ * invisible to the caller either way, so no lane is left to fail on a validator
+ * we have not seen yet. A schema with no such name is sent as it is. The
+ * request is never changed: a fallback lane reads the caller's schema from the
+ * same `req`.
+ */
+function kieWireSchema(jsonSchema: NonNullable<LlmRequest["jsonSchema"]>): {
+  schema: Record<string, unknown>
+  restoreText: (text: string) => string
+} {
+  const wire = aliasKeywordPropertyNames(jsonSchema.schema)
+  return {
+    schema: wire.schema,
+    restoreText: wire.aliases.size === 0 ? (text) => text : (text) => restoreAnswerText(text, wire.restore),
+  }
+}
+
+/** An answer's text under the caller's names. Text that is not JSON is returned
+ *  as the model wrote it, for the caller's own parse to judge. */
+function restoreAnswerText(text: string, restore: (value: unknown) => unknown): string {
+  let answer: unknown
+  try {
+    answer = JSON.parse(extractJsonFromAIResponse(text))
+  } catch {
+    return text
+  }
+  return JSON.stringify(restore(answer))
 }
 
 /**
@@ -1359,12 +1433,14 @@ function kieResponseFormat(model: LlmModelDef, req: LlmRequest): Record<string, 
  * echoed back and output arrives schema-shaped). Same `strict: false`
  * rationale as {@link kieResponseFormat}; `llmCompleteStructured`'s
  * validate+retry remains the actual guarantee. Returns undefined for models
- * without the mode.
+ * without the mode. The schema goes on the wire through {@link kieWireSchema}.
  */
-function kieResponsesTextFormat(model: LlmModelDef, req: LlmRequest): Record<string, unknown> | undefined {
+function kieResponsesTextFormat(model: LlmModelDef, req: LlmRequest): KieSchemaFormat | undefined {
   if (!req.jsonSchema || model.structuredOutputMode !== "responses-json-schema") return undefined
+  const wire = kieWireSchema(req.jsonSchema)
   return {
-    format: { type: "json_schema", name: req.jsonSchema.name, strict: false, schema: req.jsonSchema.schema },
+    body: { format: { type: "json_schema", name: req.jsonSchema.name, strict: false, schema: wire.schema } },
+    restoreText: wire.restoreText,
   }
 }
 
@@ -1529,7 +1605,7 @@ async function callKieChatCompletions(model: LlmModelDef, req: LlmRequest): Prom
     ...(eff !== undefined ? { reasoning_effort: eff } : {}),
   }
   const responseFormat = kieResponseFormat(model, req)
-  if (responseFormat) body.response_format = responseFormat
+  if (responseFormat) body.response_format = responseFormat.body
 
   const response = await fetch(url, {
     method: "POST",
@@ -1551,7 +1627,7 @@ async function callKieChatCompletions(model: LlmModelDef, req: LlmRequest): Prom
 
   return buildResponse(
     model,
-    text,
+    responseFormat ? responseFormat.restoreText(text) : text,
     { stopReason: choices?.[0]?.finish_reason, cap: maxTokens },
     usage ? { inputTokens: usage.prompt_tokens ?? 0, outputTokens: usage.completion_tokens ?? 0 } : undefined,
     extractActualUsd(data),
@@ -1560,6 +1636,13 @@ async function callKieChatCompletions(model: LlmModelDef, req: LlmRequest): Prom
   )
 }
 
+/**
+ * The streamed twin of {@link callKieChatCompletions}. With a schema, the chunks
+ * `onToken` receives are the WIRE form — they reach the caller as they arrive,
+ * before anything could rename a key in them — while the returned text carries
+ * the caller's names. No structured caller reads those chunks today
+ * (`llmStreamStructured` streams `anthropic-tool` models only).
+ */
 async function streamKieChatCompletions(
   model: LlmModelDef, req: LlmRequest, onToken: (chunk: string) => void, signal?: AbortSignal,
 ): Promise<LlmResponse> {
@@ -1575,7 +1658,7 @@ async function streamKieChatCompletions(
     stream: true,
   }
   const responseFormat = kieResponseFormat(model, req)
-  if (responseFormat) body.response_format = responseFormat
+  if (responseFormat) body.response_format = responseFormat.body
 
   const response = await fetch(url, {
     method: "POST",
@@ -1589,7 +1672,8 @@ async function streamKieChatCompletions(
     throw new LlmLaneError(`KIE.ai chat-completions stream ${model.id} failed (${response.status}): ${errText}`, { lane: "kie", httpStatus: response.status })
   }
 
-  return parseSseStream(response, model.id, onToken, "chat-completions", maxTokens)
+  const streamed = await parseSseStream(response, model.id, onToken, "chat-completions", maxTokens)
+  return responseFormat ? { ...streamed, text: responseFormat.restoreText(streamed.text) } : streamed
 }
 
 // -- Messages format (Claude models) --
@@ -1747,7 +1831,7 @@ async function callKieResponses(model: LlmModelDef, req: LlmRequest): Promise<Ll
   }
   if (req.maxTokens !== undefined || eff === "xhigh" || eff === "max") body.max_output_tokens = maxTokens
   const textFormat = kieResponsesTextFormat(model, req)
-  if (textFormat) body.text = textFormat
+  if (textFormat) body.text = textFormat.body
 
   const response = await fetch(url, {
     method: "POST",
@@ -1777,7 +1861,7 @@ async function callKieResponses(model: LlmModelDef, req: LlmRequest): Promise<Ll
 
   return buildResponse(
     model,
-    text,
+    textFormat ? textFormat.restoreText(text) : text,
     { stopReason: incompleteReason, cap: body.max_output_tokens as number | undefined },
     usage ? { inputTokens: usage.input_tokens ?? 0, outputTokens: usage.output_tokens ?? 0 } : undefined,
     extractActualUsd(data),
@@ -1800,7 +1884,7 @@ async function streamKieResponses(
   }
   if (req.maxTokens !== undefined || eff === "xhigh" || eff === "max") body.max_output_tokens = maxTokens
   const textFormat = kieResponsesTextFormat(model, req)
-  if (textFormat) body.text = textFormat
+  if (textFormat) body.text = textFormat.body
 
   const response = await fetch(url, {
     method: "POST",
@@ -1814,7 +1898,10 @@ async function streamKieResponses(
     throw new LlmLaneError(`KIE.ai responses stream ${model.id} failed (${response.status}): ${errText}`, { lane: "kie", httpStatus: response.status })
   }
 
-  return parseSseStream(response, model.id, onToken, "responses", body.max_output_tokens as number | undefined)
+  // As on the chat-completions stream: `onToken` chunks are the wire form, the
+  // returned text the caller's.
+  const streamed = await parseSseStream(response, model.id, onToken, "responses", body.max_output_tokens as number | undefined)
+  return textFormat ? { ...streamed, text: textFormat.restoreText(streamed.text) } : streamed
 }
 
 /**
