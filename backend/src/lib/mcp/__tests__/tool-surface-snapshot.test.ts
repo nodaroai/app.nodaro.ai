@@ -714,6 +714,14 @@ const LLM_REGISTRY_2026_10_IDS_BYTES = 480
 // nothing else moved. No tool was added, so the fixture does NOT move.
 // measured by this suite: 407_322 total − 406_618 budget = 704 B.
 const LLM_LANE_PRICING_WORDING_BYTES = 704
+// RAISED 2026-10-08 by the `build_ugc_creator` description and nothing else: the image
+// generations it hands back are now one per candidate (a sampled creator is drawn by every
+// image candidate and the user picks one). `build_ugc_clips`' `spent_job_ids` cap moving from
+// 30 to 64 changes no byte (`maxItems` keeps two digits). No tool was added, so the fixture
+// does NOT move. Measured by this suite: 407_760 total − 407_740 before = 20 B (the tool:
+// 1_322 → 1_342 B), and the budget rises by exactly that, keeping whatever headroom the list
+// had (none).
+const UGC_CREATOR_CANDIDATES_WORDING_BYTES = 20
 
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES,
@@ -794,7 +802,8 @@ export const TOOL_WIRE_BUDGET = {
     UGC_CLIPS_SPEECH_LANE_VOICE_BYTES +
     NANO_BANANA_2_1_MODEL_BYTES +
     SEEDREAM_5_FLASH_MODEL_BYTES +
-    IMAGE_MODEL_ROLE_DEFAULTS_BYTES,
+    IMAGE_MODEL_ROLE_DEFAULTS_BYTES +
+    UGC_CREATOR_CANDIDATES_WORDING_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

@@ -4,19 +4,20 @@ Every new Nodaro Cloud account gets a one-time grant of **1,500 credits**.
 Nothing to buy, nothing to enter — the credits land the first time you open
 the app after signing up.
 
-## When activation asks for a payment method
+## When the grant waits for a first purchase
 
 Occasionally the grant is not applied automatically. When that happens the
-account works normally, and a banner at the top of the app offers to
-**activate** the free credits by adding a payment method:
+account works normally, and a banner at the top of the app says that the free
+credits are added with your **first purchase**:
 
-- It is a standard card-on-file step handled by Stripe. **Nothing is
-  charged**, and no subscription is started.
-- The credits arrive as soon as the card is saved.
-- A card can activate free credits on **one** account.
+- Buy any credit pack, with any card. The free credits are added on top as
+  soon as the payment settles — there is no separate activation step and no
+  card-on-file form.
+- A subscription brings its own monthly credits instead; the one-time grant
+  does not stack on a plan.
 
-If you believe your grant should have applied and you would rather not add a
-card, contact support from the same account and we will look into it.
+If you believe your grant should have applied and you would rather not buy
+anything, contact support from the same account and we will look into it.
 
 ## What the grant covers
 

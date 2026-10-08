@@ -7,11 +7,13 @@ const h = vi.hoisted(() => ({
   services: {} as Record<string, unknown>,
   priceFails: false,
 }))
+/** Two image models priced apart, so a line can be told from another; any other image is 45. */
+const IMAGE_PRICES: Record<string, number> = { "m-1": 15, "m-2": 18 }
 const priceOf = (c: Call): number =>
   c.tool === "generate_video" ? 100 * Number(c.args.duration)
   : c.tool === "generate_speech" ? 10
   : c.tool === "image_to_text" ? 3
-  : c.tool === "generate_image" ? 45
+  : c.tool === "generate_image" ? IMAGE_PRICES[String(c.args.model)] ?? 45
   : Number.NaN
 
 vi.mock("../ugc-quote.js", async (importOriginal) => {
@@ -102,5 +104,66 @@ describe("the dry-run estimate (spec §6.7)", () => {
   })
   it("a ticket from a newer wire version is refused", async () => {
     await expect(quoteUgcTickets({ userId: "u1" }, [{ ...ticket(0, 12), v: 2 }], true)).rejects.toBeInstanceOf(UgcQuoteError)
+  })
+})
+
+describe("a sampled creator drawn by more than one image candidate", () => {
+  const image = (model: string) => ({ tool: "generate_image", args: { prompt: "p", model } })
+  const check = { tool: "image_to_text", args: { custom_prompt: "q" } }
+  const plan = (candidates: Call[] | undefined, creatorImage: Call | null = image("m-1")) =>
+    vi.fn((input: { targetDurationSec: number }) => ({
+      tickets: [ticket(0, input.targetDurationSec)],
+      creatorImage,
+      creatorChecks: [check],
+      ...(candidates ? { creatorCandidates: candidates } : {}),
+    }))
+  const input = { targetDurationSec: 15, screenshotCount: 3, source: "sampled" } as const
+  const creatorLines = (lines: ReadonlyArray<{ label: string; credits: number }>) => lines.filter((l) => l.label.startsWith("Creator"))
+
+  it("a run that renders only the primary prices the primary and its check, as before", async () => {
+    h.services = { ugc: { estimate: plan([image("m-1"), image("m-2")]) } }
+    const r = await estimateUgcRun({ userId: "u1" }, input)
+    expect(creatorLines(r.lines)).toEqual([{ label: "Creator image", credits: 15 }, { label: "Creator check", credits: 3 }])
+    expect(r.expected).toBe(20 + 15 + 3 + 1503 + FIXED)
+  })
+
+  it("a run that renders every candidate prices each candidate's image and the check on each; every figure rises by exactly the second image and its check", async () => {
+    h.services = { ugc: { estimate: plan([image("m-1"), image("m-2")]) } }
+    const primary = await estimateUgcRun({ userId: "u1" }, input)
+    const every = await estimateUgcRun({ userId: "u1" }, input, { rendersEveryCandidate: true })
+    expect(creatorLines(every.lines)).toEqual([
+      { label: "Creator image", credits: 15 },
+      { label: "Creator image", credits: 18 },
+      { label: "Creator check", credits: 3 },
+      { label: "Creator check", credits: 3 },
+    ])
+    const second = 18 + 3
+    expect(every.expected).toBe(primary.expected + second)
+    expect(every.ceiling).toBe(primary.ceiling + second)
+    expect(every.range).toEqual([primary.range[0] + second, primary.range[1] + second])
+    expect(every.worstCase).toBe(primary.worstCase + second)
+    // Everything after the creator is the same run.
+    expect(every.lines.filter((l) => !l.label.startsWith("Creator"))).toEqual(primary.lines.filter((l) => !l.label.startsWith("Creator")))
+  })
+
+  it.each([
+    ["an older plugin that lists no candidates", undefined],
+    ["a creator with one candidate", [image("m-1")]],
+  ])("%s: a run that renders every candidate prices the primary alone", async (_name, candidates) => {
+    h.services = { ugc: { estimate: plan(candidates) } }
+    const r = await estimateUgcRun({ userId: "u1" }, input, { rendersEveryCandidate: true })
+    expect(creatorLines(r.lines)).toEqual([{ label: "Creator image", credits: 15 }, { label: "Creator check", credits: 3 }])
+  })
+
+  // A photo renders no image: the plugin lists no candidates for it, or an empty list.
+  it.each([
+    ["no candidate list", undefined],
+    ["an empty candidate list", []],
+  ])("a photo creator with %s renders no image, whatever the run: its check is priced once", async (_name, candidates) => {
+    h.services = { ugc: { estimate: plan(candidates, null) } }
+    for (const opts of [{}, { rendersEveryCandidate: true }]) {
+      const r = await estimateUgcRun({ userId: "u1" }, { ...input, source: "photo" }, opts)
+      expect(creatorLines(r.lines)).toEqual([{ label: "Creator check", credits: 3 }])
+    }
   })
 })

@@ -9,6 +9,7 @@ import { optimizedImageUrl } from "@/lib/image"
 import { grokRegionEdit, grokSegmentMap } from "@/lib/api"
 import { getJobStatusLeanForNode, pollImageRefineToNode } from "../workflow-editor/poll-job"
 import { useT, tx } from "@/lib/i18n"
+import { segmentColor } from "@/lib/segment-colors"
 import type { GenerateImageData, GeneratedResult, GrokSegmentInfo } from "@/types/nodes"
 
 /**
@@ -34,20 +35,6 @@ import type { GenerateImageData, GeneratedResult, GrokSegmentInfo } from "@/type
  * mounted for provider `grok-2` — the edit endpoint references a prior grok-2
  * generation's KIE task id and cannot edit arbitrary images.
  */
-
-/** Distinct overlay tints, cycled by segment position. Brand pink first. */
-const SEGMENT_COLORS = [
-  "#ff0073",
-  "#38bdf8",
-  "#34d399",
-  "#fbbf24",
-  "#a78bfa",
-  "#fb923c",
-  "#22d3ee",
-  "#f472b6",
-] as const
-
-const segmentColor = (position: number) => SEGMENT_COLORS[position % SEGMENT_COLORS.length]
 
 /** ~3 min at 2s ticks — the segment map usually completes in seconds. */
 const SEGMENT_POLL_INTERVAL_MS = 2000

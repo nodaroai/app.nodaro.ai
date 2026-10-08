@@ -1122,7 +1122,7 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
   { type: "suno-style-boost", label: "Suno Style Boost", category: "ai-text", description: "Enhance and refine the style of lyrics or text content using Suno AI.", outputType: "text" },
   {
     type: "llm-chat",
-    label: "Prompt",
+    label: "Generate Text - Any LLM",
     category: "ai-text",
     description: "LLM text generation from a prompt (+ optional image/video/audio refs). Stream-capable. Two outputs: full text and a fan-out item list split on ===NEXT===.",
     outputType: "text",

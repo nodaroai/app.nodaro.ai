@@ -3222,8 +3222,17 @@ export interface PluginUgcEstimateInput {
  */
 export interface PluginUgcEstimate {
   readonly tickets: unknown[]
+  /** The primary's image call: what a run with no person to ask renders. */
   readonly creatorImage: { tool: string; args: Record<string, unknown> } | null
   readonly creatorChecks?: ReadonlyArray<{ tool: string; args: Record<string, unknown> }>
+  /**
+   * ADDITIVE-OPTIONAL — every image candidate's call for a sampled creator, the
+   * primary (`creatorImage`) first. A run that can ask a person renders each one
+   * and runs `creatorChecks` on each, and the person picks; a run that cannot
+   * renders `creatorImage` alone. Absent on an older plugin and for a photo:
+   * the primary alone, whatever the run.
+   */
+  readonly creatorCandidates?: ReadonlyArray<{ tool: string; args: Record<string, unknown> }>
 }
 
 /** UGC planning, provided by the plugin (the host prices what it returns with `http.priceUgcCalls`). */

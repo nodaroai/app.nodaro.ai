@@ -60,15 +60,15 @@ describe("frontend parity net (runtime) — llm-chat ∈ every reachable fronten
     expect(EXECUTABLE_TYPES.has(NODE)).toBe(true)
   })
 
-  it("template-utils: getNodeTypeLabel('llm-chat') === 'Prompt' (label map; renamed from Generate Text)", () => {
+  it("template-utils: getNodeTypeLabel('llm-chat') === 'Generate Text - Any LLM' (label map)", () => {
     // NODE_TYPE_LABELS is private; getNodeTypeLabel is the consumer. Removing the
     // llm-chat row drops to the title-cased fallback ("Llm Chat").
-    expect(getNodeTypeLabel(NODE)).toBe("Prompt")
+    expect(getNodeTypeLabel(NODE)).toBe("Generate Text - Any LLM")
   })
 
-  it("execution-utils: formatNodeType('llm-chat') === 'Prompt' (JOB_TYPE_LABELS)", () => {
-    expect(JOB_TYPE_LABELS[NODE]).toBe("Prompt")
-    expect(formatNodeType(NODE)).toBe("Prompt")
+  it("execution-utils: formatNodeType('llm-chat') === 'Generate Text - Any LLM' (JOB_TYPE_LABELS)", () => {
+    expect(JOB_TYPE_LABELS[NODE]).toBe("Generate Text - Any LLM")
+    expect(formatNodeType(NODE)).toBe("Generate Text - Any LLM")
   })
 
   it("node-defaults: pickRelevantFields keys 'llm-chat' to ['model'] only (RELEVANT_FIELDS)", () => {
@@ -103,10 +103,10 @@ describe("frontend parity net (runtime) — llm-chat ∈ every reachable fronten
 // ───────────────────────────────────────────────────────────────────────────
 
 describe("frontend parity net (source) — llm-chat in component-private sets", () => {
-  it("cost-tab: NODE_TYPE_LABELS maps 'llm-chat' → 'Prompt'", () => {
+  it("cost-tab: NODE_TYPE_LABELS maps 'llm-chat' → 'Generate Text - Any LLM'", () => {
     const src = readSrc("components/editor/cost-tab.tsx")
-    // Match `"llm-chat": "Prompt"` tolerant of whitespace.
-    expect(src).toMatch(/"llm-chat"\s*:\s*"Prompt"/)
+    // Match `"llm-chat": "Generate Text - Any LLM"` tolerant of whitespace.
+    expect(src).toMatch(/"llm-chat"\s*:\s*"Generate Text - Any LLM"/)
   })
 
   it("tag-textarea: nodeTypeCategory classifies 'llm-chat' as the Text bucket", () => {

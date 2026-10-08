@@ -45,7 +45,7 @@ export function useWelcomeOffer(): WelcomeOffer {
   const { data: balance } = useUserCredits(userId)
 
   const offer = balance?.welcomeOffer
-  // A withheld grant belongs to the card-activation banner, whatever the
+  // A withheld grant belongs to the first-purchase banner, whatever the
   // consent mark says: "your credits are active" would be a lie there, and
   // the server-side block stays regardless.
   const mode: WelcomeOfferMode =
@@ -101,7 +101,7 @@ export function useWelcomeOfferClaim(offer: Pick<WelcomeOffer, "mode" | "claim">
       }
       // A fresh grant gets the "credits added" strip. An extension-granted
       // account already had them — its consent just lifted the block — and a
-      // withheld grant shows the card-activation banner from the balance.
+      // withheld grant shows the first-purchase banner from the balance.
       if (offer.mode === "offer" && result.grant === "granted") setClaimed(result.credits)
       return result
     } catch {

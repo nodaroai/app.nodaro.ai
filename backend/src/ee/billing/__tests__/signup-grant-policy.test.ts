@@ -247,3 +247,29 @@ describe("emailStem", () => {
     expect(emailStem("not-an-email")).toBeNull()
   })
 })
+
+describe("decideSignupGrant — a purchase on record is the evidence", () => {
+  const everyRuleFires: SignupSignalCounts = {
+    browserKeyOthers: 3,
+    deviceKeySameIpOthers: 2,
+    deviceKeyOthers: SIGNUP_GRANT_RULES.deviceKeyOthersMax + 1,
+    ipClaimsInWindow: SIGNUP_GRANT_RULES.ipClaimsLookbackMax + 1,
+    ipEverOthers: 4,
+    similarEmailOthers: 2,
+  }
+
+  it("grants an account that has paid, whatever the device, network, name and provider rules say", () => {
+    expect(decideSignupGrant({ providers: ["email"], counts: everyRuleFires, keyless: true, hasPurchase: true })).toEqual({
+      decision: "granted",
+      reasons: [],
+    })
+  })
+
+  it("changes nothing for an account that has not paid", () => {
+    const r = decideSignupGrant({ providers: ["email"], counts: everyRuleFires, keyless: true, hasPurchase: false })
+    expect(r.decision).toBe("withheld")
+    expect(r.reasons).toEqual(
+      expect.arrayContaining(["email_only_provider", "browser_match", "device_ip_match", "device_cluster", "ip_velocity", "keyless_ip_reuse", "similar_email"]),
+    )
+  })
+})

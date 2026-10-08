@@ -16,6 +16,7 @@ import { imageCollageCreditModelIdentifier } from "../../lib/image-collage-credi
 import { normalizeVideoInput } from "../../lib/mcp/normalize.js"
 import { isUuid } from "../../lib/mcp/tools/_id-guard.js"
 import { llmPayloadFields, type LlmMcpArgs } from "../../lib/mcp/tools/_llm-fields.js"
+import { UGC_SPENT_JOB_IDS_MAX } from "../../lib/mcp/tools/_ugc-limits.js"
 import { MCP_TRANSCRIBE_PROVIDER } from "../../lib/mcp/tools/verbs-audio.js"
 import { supabase } from "../../lib/supabase.js"
 import { resolveVideoRequestNorm } from "../../lib/video-request-norm.js"
@@ -342,7 +343,7 @@ export async function buildUgcQuote(input: {
   const callerGates = callerGatesOf(input.userId, input.billingContext)
   const lines: UgcQuoteLine[] = []
   for (const item of input.items) lines.push(await priceItem(item, ctx, callerGates))
-  const { spent, skipped } = await spentLines(input.spentJobIds.slice(0, 30), input.userId)
+  const { spent, skipped } = await spentLines(input.spentJobIds.slice(0, UGC_SPENT_JOB_IDS_MAX), input.userId)
   const total = [...spent, ...lines].reduce((sum, l) => sum + l.credits, 0)
   return { spent, lines, total, skipped }
 }

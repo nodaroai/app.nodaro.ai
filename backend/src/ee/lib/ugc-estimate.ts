@@ -1,7 +1,7 @@
 import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, estimateCombineVideosCredits } from "@nodaro/shared"
 import { getAppSettings } from "../../lib/app-settings.js"
 import { getPluginServices } from "../../lib/private-plugins/load.js"
-import type { PluginUgcEstimateInput } from "../../lib/private-plugins/types.js"
+import type { PluginUgcEstimate, PluginUgcEstimateInput } from "../../lib/private-plugins/types.js"
 import { getModelCreditCostFromDB } from "../billing/credits.js"
 import { applyServiceMarkup } from "../billing/service-margin.js"
 import { priceUgcCalls, UgcQuoteError, type UgcPriceCaller } from "./ugc-quote.js"
@@ -19,7 +19,9 @@ import { priceUgcCalls, UgcQuoteError, type UgcPriceCaller } from "./ugc-quote.j
  *
  * `estimateUgcRun` plans a whole video from a target length with the plugin's
  * `ugc.estimate` and prices it at 0.8x, 1x and 1.2x the target. It reads no
- * job, reserves nothing and spends nothing.
+ * job, reserves nothing and spends nothing. A sampled creator is priced as the
+ * run will draw it: the primary image alone, or every image candidate when the
+ * run renders them all for a person to pick (`rendersEveryCandidate`).
  *
  * An item this cannot price is an error, never a zero.
  */
@@ -163,9 +165,35 @@ export function ugcEstimateInputOf(
 /** How far either side of the target the estimate prices. */
 const ESTIMATE_FACTORS = [0.8, 1, 1.2] as const
 
+export interface UgcEstimateOptions {
+  /**
+   * The run renders every image candidate of a sampled creator, for a person to
+   * pick one. Off (the default): the primary alone, what a run with no person to
+   * ask renders.
+   */
+  readonly rendersEveryCandidate?: boolean
+}
+
+/**
+ * The creator's paid calls, images first, then the checks: the creator's
+ * checks run on every image it renders, and once on a photo, which renders
+ * none. Every candidate only when the run renders them all and the plugin
+ * lists more than one; otherwise the primary. A fallback that fires is in no
+ * figure: the worst case is the candidates themselves; the spent lines show a
+ * fired fallback after the fact.
+ */
+function creatorCallsOf(plan: PluginUgcEstimate, opts: UgcEstimateOptions): OpaqueCall[] {
+  const checks = plan.creatorChecks ?? []
+  const candidates = plan.creatorCandidates ?? []
+  const images = opts.rendersEveryCandidate && candidates.length > 1 ? candidates : plan.creatorImage ? [plan.creatorImage] : []
+  const checked = Math.max(images.length, 1)
+  return [...images, ...Array.from({ length: checked }, () => checks).flat()]
+}
+
 export async function estimateUgcRun(
   caller: UgcPriceCaller,
   input: PluginUgcEstimateInput,
+  opts: UgcEstimateOptions = {},
 ): Promise<UgcQuoteResult & { range: readonly [number, number]; worstCase: number }> {
   const svc = getPluginServices().ugc
   if (!svc) throw new UgcEstimateUnavailable()
@@ -178,7 +206,7 @@ export async function estimateUgcRun(
   }
   const [low, mid, high] = runs as [(typeof runs)[number], (typeof runs)[number], (typeof runs)[number]]
   const script = await rowCredits("ugc-script", "the script")
-  const creatorCalls = [...(mid.plan.creatorImage ? [mid.plan.creatorImage] : []), ...(mid.plan.creatorChecks ?? [])]
+  const creatorCalls = creatorCallsOf(mid.plan, opts)
   const creatorPrices = (await priceUgcCalls(caller, creatorCalls)).map((p) => priced("the creator", p))
   const creatorLines: UgcQuoteLineOut[] = creatorCalls.map((c, i) => ({
     label: c.tool === "image_to_text" ? "Creator check" : "Creator image",

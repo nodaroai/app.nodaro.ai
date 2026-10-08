@@ -13,6 +13,11 @@ import { join } from "node:path"
  * second claim no-op, does the card index refuse a second account — is
  * `supabase/tests/free-grant.behavior.sql`, run against a real Postgres by
  * CI's migration-behavior job.
+ *
+ * Since the exit-by-purchase change, `free_grant_activations` is write-dead: the
+ * $0 card step that filled it is gone (the exit is a settled purchase —
+ * ee/billing/signup-grant.ts). The table and its pins below stay until a
+ * separate migration drops it.
  */
 
 const MIGRATION = join(import.meta.dirname, "../../../supabase/migrations/366_free_grant_enforce.sql")

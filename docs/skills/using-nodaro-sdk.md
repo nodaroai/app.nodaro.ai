@@ -147,7 +147,7 @@ LLM-backed feature routes accept an optional `reasoningEffort` field in the
 request body — `"none" | "low" | "medium" | "high" | "xhigh" | "max"`,
 model-dependent (see the model table in the
 [Models](https://nodaro.ai/docs/node/llm-chat#models)
-section of the Prompt node docs). Omit it for the vendor default
+section of the Generate Text - Any LLM node docs). Omit it for the vendor default
 ("Auto"). `xhigh` and `max` bill one tier up (economy → standard, standard →
 premium); see the
 [Credits](https://nodaro.ai/docs/node/llm-chat#credits)
@@ -182,7 +182,7 @@ reasoningEffort=<level>` on `nodaro nodes run <type>`.
 
 ## When NOT to use the SDK
 
-- **Token-streaming endpoints** (e.g. the Prompt node's `/v1/llm-chat/generate-stream`, or the legacy back-compat `/v1/ai-writer/generate-stream`): the SDK has no method for these (it streams only `client.media.downloadVideoProgress` and `client.copilot.stream`). Use the project's `streamRequest` helper or raw fetch with a `ReadableStream`.
+- **Token-streaming endpoints** (e.g. the Generate Text - Any LLM node's `/v1/llm-chat/generate-stream`, or the legacy back-compat `/v1/ai-writer/generate-stream`): the SDK has no method for these (it streams only `client.media.downloadVideoProgress` and `client.copilot.stream`). Use the project's `streamRequest` helper or raw fetch with a `ReadableStream`.
 
 For all other cases — including single-node single-shot routes — the SDK is the right tool. `client.nodes.run(type, params)` calls `POST /v1/<type>` directly without needing a workflow, and `client.nodes.runAndWait(type, params)` polls to completion for you:
 

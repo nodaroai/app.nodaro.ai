@@ -1,13 +1,17 @@
+import { Crop } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { openFraming, useFramingHostMounted } from "@/hooks/use-framing-open-store"
 import { useT } from "@/lib/i18n"
 
 const BORDER_DEFAULT_ACCENT = "#FFFFFF"
 
-/** FRAMING (U2): which speakers are cropped. Read-only until the region editor
- *  (C3.5) — a crop is written in the workflow JSON as `speakerRegions` for now. */
-export function SpeakerViewFramingSummary({ regions }: { readonly regions: unknown }) {
+/** FRAMING (U2): which speakers are cropped, and the way into the region
+ *  editor (U4, C3.5), where each (camera, speaker) crop is drawn. */
+export function SpeakerViewFramingSummary({ regions, nodeId }: { readonly regions: unknown; readonly nodeId?: string }) {
   const t = useT()
+  const canOpen = useFramingHostMounted() && !!nodeId
   const count = Array.isArray(regions) ? regions.length : 0
   return (
     <section className="flex flex-col gap-1">
@@ -15,6 +19,12 @@ export function SpeakerViewFramingSummary({ regions }: { readonly regions: unkno
       <p data-testid="speaker-view-framing" className="text-[11px] text-muted-foreground">
         {count > 0 ? t("speakerView.framing.set", { count }) : t("speakerView.framing.full")}
       </p>
+      {canOpen && (
+        <Button type="button" variant="outline" size="sm" className="self-start h-7 text-xs" onClick={() => openFraming(nodeId!)} data-testid="speaker-view-edit-framing">
+          <Crop className="w-3.5 h-3.5 me-1" />
+          {t("speakerView.framing.edit")}
+        </Button>
+      )}
     </section>
   )
 }

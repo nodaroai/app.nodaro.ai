@@ -207,6 +207,25 @@ describe("build_ugc_creator", () => {
     await callTool(serverWith(fastify), "build_ugc_creator", { source: "photo", photo_url: "https://cdn.example/me.jpg", gender: "man" })
     expect(received.creator!.body.source).toEqual({ kind: "photo", imageUrl: "https://cdn.example/me.jpg", gender: "man" })
   })
+  it("the answer reaches the agent as the builder sent it: every image candidate, the round's fallback and the pick, or an older answer's one image", async () => {
+    const call = (model: string) => ({ tool: "generate_image", args: { prompt: "p", model } })
+    const genderCheck = { tool: "image_to_text", args: { custom_prompt: "q" }, passToken: "PASS", refusal: "r" }
+    const withCandidates = {
+      kind: "sampled",
+      image: { ...call("m-1"), fallback: call("m-fallback") },
+      candidates: [{ model: "m-1", ...call("m-1") }, { model: "m-2", ...call("m-2") }],
+      fallback: call("m-fallback"),
+      pick: { how: "user" },
+      genderCheck,
+    }
+    const older = { kind: "sampled", image: { ...call("m-1"), fallback: call("m-fallback") }, genderCheck }
+    for (const answer of [withCandidates, older]) {
+      const { fastify } = builder({ creator: [200, answer] })
+      const res = await callTool(serverWith(fastify), "build_ugc_creator", { source: "sampled", gender: "woman", product_category: "saas" })
+      expect(res.isError).toBeUndefined()
+      expect(JSON.parse(text(res))).toEqual(answer)
+    }
+  })
 })
 
 describe("build_ugc_creator — a saved Character", () => {
@@ -365,9 +384,20 @@ describe("build_ugc_clips", () => {
     expect(res.isError).toBe(true)
     expect(text(res)).toBe("could not price Step 1")
   })
-  it("more than 30 spent job ids is refused by the schema", async () => {
+  // Every image candidate of a sampled creator is drawn and checked, and a re-roll draws them all
+  // again, so a long video can list some sixty jobs before its clips.
+  it("64 spent job ids all reach the quote", async () => {
+    const quoteItems = [{ label: "a", tool: "extract_frame", args: {}, count: 1 }]
+    const { fastify } = builder({ clips: [200, { errors: [], warnings: [], clips: [{}], join: null, quoteItems }] })
+    h.quote.mockResolvedValue({ spent: [], lines: [], total: 0, skipped: [] })
+    const ids = Array.from({ length: 64 }, (_, i) => `j${i}`)
+    const res = await callTool(serverWith(fastify), "build_ugc_clips", { plan, gender: "man", identity_images: ["job-1"], spent_job_ids: ids })
+    expect(res.isError).toBeUndefined()
+    expect(h.quote).toHaveBeenCalledWith({ items: quoteItems, clipCount: 1, spentJobIds: ids, userId: USER })
+  })
+  it("more than 64 spent job ids is refused by the schema", async () => {
     const { fastify, received } = builder({})
-    const res = await callTool(serverWith(fastify), "build_ugc_clips", { plan, gender: "man", identity_images: ["job-1"], spent_job_ids: Array.from({ length: 31 }, (_, i) => `j${i}`) })
+    const res = await callTool(serverWith(fastify), "build_ugc_clips", { plan, gender: "man", identity_images: ["job-1"], spent_job_ids: Array.from({ length: 65 }, (_, i) => `j${i}`) })
     expect(res.isError).toBe(true)
     expect(received.clips).toBeUndefined()
   })

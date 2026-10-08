@@ -114,7 +114,7 @@ Both music nodes ship presets organized along the three axes professional librar
   Riser), *Ambiences (loopable)* (Rain, Forest, Fire, Sci-Fi Drone, Living Room Tone, Kitchen Hum, Café Murmur — `loop: true`), *UI & Stingers*
   (Click, Notification, Applause), and *Foley & Action* (Footsteps, Door, Glass Break, Typing,
   Explosion, Magic Sparkle, Camera Shutter, Error Buzzer).
-- **Prompt** (LLM) — system-prompt roles in *Assistants*, *Writing & Marketing* (Copywriter,
+- **Generate Text - Any LLM** (LLM) — system-prompt roles in *Assistants*, *Writing & Marketing* (Copywriter,
   Social Caption, SEO, Rewrite, Script Writer, Hook Generator), *Utility* (Prompt Enhancer, Translator, Summarizer,
   Q&A, Brainstorm) and *Structured Output* (JSON Extractor, Classifier).
 

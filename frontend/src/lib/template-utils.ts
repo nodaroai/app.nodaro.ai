@@ -36,7 +36,7 @@ const NODE_TYPE_LABELS: Record<string, string> = {
   "text-to-audio": "Sound Effects",
   "generate-script": "Script Generation",
   "ai-writer": "AI Writer",
-  "llm-chat": "Prompt",
+  "llm-chat": "Generate Text - Any LLM",
   "scene": "Scene",
   "video-composer": "Video Composer",
   "after-effects": "After Effects",

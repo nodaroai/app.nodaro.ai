@@ -132,6 +132,7 @@ const NODE_LABELS_KO: Record<string, string> = {
   "Describe Image": "이미지 설명",
   "Describe to Picker": "피커로 설명",
   "Generate Text": "텍스트 생성",
+  "Generate Text - Any LLM": "텍스트 생성 - 모든 LLM",
   "Prompt": "프롬프트",
   "Combine Videos": "동영상 합치기",
   "Assemble Narrated Video": "내레이션 동영상 만들기",

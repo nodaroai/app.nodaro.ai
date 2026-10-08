@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { parseAspectRatio, type CropState } from "./utils"
+import { RECT_HANDLES, clampRect, dragRect, eventClientXY, isCornerHandle, isEdgeHandle, type RectDrag } from "./rect-handles"
 import { useT } from "@/lib/i18n"
 
 interface CropPanelProps {
@@ -16,17 +17,8 @@ interface CropPanelProps {
 }
 
 const MIN_CROP_SIZE = 20
-const HANDLE_SIZE = 16 // slightly larger for touch
 
-type DragType = "move" | "nw" | "ne" | "sw" | "se" | "n" | "s" | "e" | "w" | null
-
-function getClientXY(e: MouseEvent | TouchEvent): { x: number; y: number } {
-  if ("touches" in e) {
-    const t = e.touches[0] ?? e.changedTouches[0]
-    return { x: t.clientX, y: t.clientY }
-  }
-  return { x: e.clientX, y: e.clientY }
-}
+type DragType = RectDrag | null
 
 export function CropPanel({
   mediaUrl,
@@ -81,41 +73,15 @@ export function CropPanel({
   const effectiveRatio = aspectRatio === "original" ? naturalWidth / naturalHeight : lockedRatio
   useEffect(() => {
     if (crop && imgSize.w > 0 && effectiveRatio !== null) {
-      let { x, y, width, height } = crop
-      const currentRatio = width / height
-      if (Math.abs(currentRatio - effectiveRatio) > 0.02) {
-        if (currentRatio > effectiveRatio) {
-          width = height * effectiveRatio
-        } else {
-          height = width / effectiveRatio
-        }
-        width = Math.max(MIN_CROP_SIZE, Math.min(width, imgSize.w))
-        height = Math.max(MIN_CROP_SIZE, Math.min(height, imgSize.h))
-        x = Math.max(0, Math.min(x, imgSize.w - width))
-        y = Math.max(0, Math.min(y, imgSize.h - height))
-        onCropChange({ ...crop, x, y, width, height })
+      if (Math.abs(crop.width / crop.height - effectiveRatio) > 0.02) {
+        onCropChange(clampCrop(crop, effectiveRatio))
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aspectRatio])
 
   function clampCrop(c: CropState, ratioToEnforce: number | null): CropState {
-    let { x, y, width, height } = c
-    const maxW = imgSize.w
-    const maxH = imgSize.h
-    if (maxW <= 0 || maxH <= 0) return c
-    if (ratioToEnforce !== null) {
-      if (width / height > ratioToEnforce) {
-        width = height * ratioToEnforce
-      } else {
-        height = width / ratioToEnforce
-      }
-    }
-    width = Math.max(MIN_CROP_SIZE, Math.min(width, maxW))
-    height = Math.max(MIN_CROP_SIZE, Math.min(height, maxH))
-    x = Math.max(0, Math.min(x, maxW - width))
-    y = Math.max(0, Math.min(y, maxH - height))
-    return { ...c, x, y, width, height }
+    return clampRect(c, { width: imgSize.w, height: imgSize.h }, { minWidth: MIN_CROP_SIZE, minHeight: MIN_CROP_SIZE, ratio: ratioToEnforce })
   }
 
   // Start drag (mouse or touch)
@@ -142,29 +108,15 @@ export function CropPanel({
   useEffect(() => {
     if (!dragType || !dragStartRef.current || !crop) return
 
-    const isCorner = ["nw", "ne", "sw", "se"].includes(dragType)
-    const isEdge = ["n", "s", "e", "w"].includes(dragType)
+    const isCorner = isCornerHandle(dragType)
+    const isEdge = isEdgeHandle(dragType)
     const cornerRatio = isCorner ? dragStartRef.current.crop.width / dragStartRef.current.crop.height : null
 
     const handleMove = (e: MouseEvent | TouchEvent) => {
       e.preventDefault()
-      const { x: clientX, y: clientY } = getClientXY(e)
+      const { x: clientX, y: clientY } = eventClientXY(e)
       const start = dragStartRef.current!
-      const dx = clientX - start.x
-      const dy = clientY - start.y
-      const sc = start.crop
-      let newCrop: CropState
-
-      if (dragType === "move") {
-        newCrop = { ...sc, x: sc.x + dx, y: sc.y + dy }
-      } else {
-        let nx = sc.x, ny = sc.y, nw = sc.width, nh = sc.height
-        if (dragType.includes("e")) nw = sc.width + dx
-        if (dragType.includes("w")) { nx = sc.x + dx; nw = sc.width - dx }
-        if (dragType.includes("s")) nh = sc.height + dy
-        if (dragType.includes("n")) { ny = sc.y + dy; nh = sc.height - dy }
-        newCrop = { ...sc, x: nx, y: ny, width: nw, height: nh }
-      }
+      const newCrop = dragRect(start.crop, dragType, clientX - start.x, clientY - start.y)
 
       onCropChange(clampCrop(newCrop, isCorner ? cornerRatio : null))
 
@@ -192,17 +144,6 @@ export function CropPanel({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dragType, crop])
-
-  const handles: { type: DragType; style: React.CSSProperties; cursor: string }[] = [
-    { type: "nw", style: { top: -HANDLE_SIZE / 2, left: -HANDLE_SIZE / 2 }, cursor: "nw-resize" },
-    { type: "ne", style: { top: -HANDLE_SIZE / 2, right: -HANDLE_SIZE / 2 }, cursor: "ne-resize" },
-    { type: "sw", style: { bottom: -HANDLE_SIZE / 2, left: -HANDLE_SIZE / 2 }, cursor: "sw-resize" },
-    { type: "se", style: { bottom: -HANDLE_SIZE / 2, right: -HANDLE_SIZE / 2 }, cursor: "se-resize" },
-    { type: "n", style: { top: -HANDLE_SIZE / 2, left: "50%", marginLeft: -HANDLE_SIZE / 2 }, cursor: "n-resize" },
-    { type: "s", style: { bottom: -HANDLE_SIZE / 2, left: "50%", marginLeft: -HANDLE_SIZE / 2 }, cursor: "s-resize" },
-    { type: "e", style: { top: "50%", right: -HANDLE_SIZE / 2, marginTop: -HANDLE_SIZE / 2 }, cursor: "e-resize" },
-    { type: "w", style: { top: "50%", left: -HANDLE_SIZE / 2, marginTop: -HANDLE_SIZE / 2 }, cursor: "w-resize" },
-  ]
 
   return (
     <div className="flex flex-col gap-3 items-center">
@@ -249,7 +190,7 @@ export function CropPanel({
                 <div className="absolute top-1/3 left-0 right-0 h-px bg-white/20" />
                 <div className="absolute top-2/3 left-0 right-0 h-px bg-white/20" />
               </div>
-              {handles.map(({ type, style, cursor }) => (
+              {RECT_HANDLES.map(({ type, style, cursor }) => (
                 <div
                   key={type}
                   className="absolute w-4 h-4 bg-white border-2 border-[#ff0073] rounded-full z-10 pointer-events-auto touch-none"

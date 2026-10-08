@@ -6763,26 +6763,6 @@ export interface UserBalance {
   externalWallet?: { available: number | null }
 }
 
-/** Starts the $0 payment-method step that activates a withheld free grant. */
-export async function startFreeGrantActivation(): Promise<{ data: { url: string } }> {
-  return apiJson("/v1/credits/free-grant/activation-session", {
-    method: "POST",
-    body: {},
-    label: "credits.freeGrantStartFailed",
-  })
-}
-
-/** Completes activation with the Stripe session id the success URL carried back. */
-export async function completeFreeGrantActivation(
-  sessionId: string,
-): Promise<{ state: "granted" | "withheld" | "unclaimed"; activated: boolean }> {
-  return apiJson("/v1/credits/free-grant/activate", {
-    method: "POST",
-    body: { sessionId },
-    label: "credits.freeGrantActivateFailed",
-  })
-}
-
 export interface CreditCheckResult {
   allowed: boolean
   error?: string

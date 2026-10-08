@@ -132,6 +132,7 @@ const NODE_LABELS_JA: Record<string, string> = {
   "Describe Image": "画像の説明",
   "Describe to Picker": "説明をピッカーへ",
   "Generate Text": "テキスト生成",
+  "Generate Text - Any LLM": "テキスト生成 - あらゆる LLM",
   "Prompt": "プロンプト",
   "Combine Videos": "動画を結合",
   "Assemble Narrated Video": "ナレーション付き動画を合成",
