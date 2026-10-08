@@ -755,6 +755,14 @@ describe("CreditsService", () => {
       ])).toBe(50)
     })
 
+    it("resolves nano-banana-2-1 at 1K / 2K / 4K", () => {
+      for (const [resolution, credits] of [["1K", 10], ["2K", 20], ["4K", 30]] as const) {
+        expect(CreditsService.estimateWorkflowBaseCredits([
+          { type: "generate-image", data: { provider: "nano-banana-2-1", resolution } },
+        ])).toBe(credits)
+      }
+    })
+
     it("resolves nano-banana-pro:4K", () => {
       expect(CreditsService.estimateWorkflowBaseCredits([
         { type: "generate-image", data: { provider: "nano-banana-pro", resolution: "4K" } },

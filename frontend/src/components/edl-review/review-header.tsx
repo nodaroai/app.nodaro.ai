@@ -18,7 +18,7 @@ import { INSPECTOR_POPPER } from "@/components/inspector/inspector-shell"
 import { PreviewBadge, isPreviewQuality } from "@/components/render/preview-badge"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
-import type { ApplyEdlRenderInput, ApplyEdlRenderSettings } from "@/lib/edl-validity"
+import type { EdlValidity } from "@/lib/edl-validity"
 import { useT } from "@/lib/i18n"
 import { useLocalizeNodeLabel } from "@/lib/i18n/labels"
 import { cn } from "@/lib/utils"
@@ -76,11 +76,12 @@ export interface ReviewMetaProps {
   readonly renderId: string
   readonly onRenderChange: (id: string) => void
   readonly take: SavedRenderItem | undefined
-  readonly renders: readonly ApplyEdlRenderInput[]
-  readonly settings: ApplyEdlRenderSettings
+  /** The anchored render's own rule on the renders its Run would make
+   *  (`useReviewChecks().validity`); null shows no badge. */
+  readonly validity: EdlValidity | null
 }
 
-export function ReviewMeta({ planId, renderId, onRenderChange, take, renders, settings }: ReviewMetaProps) {
+export function ReviewMeta({ planId, renderId, onRenderChange, take, validity }: ReviewMetaProps) {
   const t = useT()
   const localize = useLocalizeNodeLabel()
   const choices = useRendersOfPlan(planId)
@@ -109,7 +110,7 @@ export function ReviewMeta({ planId, renderId, onRenderChange, take, renders, se
           {t("edlReview.finalBadge")}
         </span>
       ))}
-      {renders.length > 0 && <EdlValidityBadge renders={renders} settings={settings} />}
+      {validity && <EdlValidityBadge verdict={validity} />}
     </span>
   )
 }

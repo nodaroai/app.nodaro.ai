@@ -76,7 +76,7 @@ Core pattern (all generation is async; runAndWait submits + polls + resolves):
     auth: new StaticTokenAuth(process.env.NODARO_ACCESS_TOKEN!),
   })
   const img = await client.nodes.runAndWait("generate-image", {
-    prompt: "…", provider: "nano-banana-2",          // fast + cheap, great default
+    prompt: "…", provider: "nano-banana-2-1",        // fast + cheap, great default
   })
   const vid = await client.nodes.runAndWait("generate-video", {
     prompt: "…", imageUrl: img.imageUrl,
@@ -137,7 +137,7 @@ A proven first build (text in → video out). Paste after the primer:
 
 ```text
 Build a small web app — "animated postcard":
-  1. A prompt box. On submit: generate-image (nano-banana-2) with the prompt.
+  1. A prompt box. On submit: generate-image (nano-banana-2-1) with the prompt.
   2. Show the image IMMEDIATELY when it resolves.
   3. Then generate-video (seedance-2-fast, duration 4) with that image as
      imageUrl and prompt "subtle cinematic motion".

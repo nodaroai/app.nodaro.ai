@@ -183,6 +183,7 @@ vi.mock("../../../providers/nodaro/client.js", () => ({
 }))
 vi.mock("../../../lib/safe-fetch.js", () => ({ safeFetch: mocks.mockSafeFetch }))
 
+import { TTS_PROVIDERS, ttsSupportsTimestamps } from "@nodaro/shared"
 import { audioAIHandlers } from "../audio-ai.js"
 // The REAL config object (not a module mock — the handler's siblings read other
 // fields off it). TTS branches on ELEVENLABS_API_KEY, and `config.ts` does
@@ -444,20 +445,30 @@ describe("text-to-speech handler", () => {
     }))
   })
 
-  it.each(["elevenlabs-v3", "elevenlabs-turbo", "elevenlabs-multilingual"])(
-    "withTimestamps on %s (measured 2026-10-06) → the timed funnel too, transcript on the job output",
+  // Every speech model, each per ITS sheet (the only switch the handler reads):
+  // a sheet that says `timestamps: true` takes the timed funnel and writes the
+  // transcript; one that says false stays on the plain funnel with no key. The
+  // list is not written by hand, so a new model or a re-measured sheet (the v4
+  // Turbo probe) needs no edit here.
+  it.each([...TTS_PROVIDERS])(
+    "withTimestamps on %s → the funnel its sheet says: timed with a transcript, or plain with none",
     async (provider) => {
       config.ELEVENLABS_API_KEY = "el_test"
       await handler(makeJob("text-to-speech", { text: "Hi", provider, withTimestamps: true }) as never, makeCtx())
-      expect(mocks.mockDirectElevenLabsTTSWithTimestamps).toHaveBeenCalled()
-      expect(mocks.mockDirectElevenLabsTTS).not.toHaveBeenCalled()
-      expect(mocks.mockFinalizeJobWithMedia).toHaveBeenCalledWith(expect.objectContaining({
-        extraOutputData: expect.objectContaining({ transcript: { version: 1, words: [{ text: "Hi", startMs: 0, endMs: 100 }] } }),
-      }))
+      const call = mocks.mockFinalizeJobWithMedia.mock.calls.at(-1)![0] as Record<string, unknown>
+      if (ttsSupportsTimestamps(provider)) {
+        expect(mocks.mockDirectElevenLabsTTSWithTimestamps).toHaveBeenCalled()
+        expect(mocks.mockDirectElevenLabsTTS).not.toHaveBeenCalled()
+        expect(call.extraOutputData).toEqual(expect.objectContaining({ transcript: { version: 1, words: [{ text: "Hi", startMs: 0, endMs: 100 }] } }))
+      } else {
+        expect(mocks.mockDirectElevenLabsTTSWithTimestamps).not.toHaveBeenCalled()
+        expect(mocks.mockDirectElevenLabsTTS).toHaveBeenCalled()
+        expect("transcript" in ((call.extraOutputData ?? {}) as Record<string, unknown>)).toBe(false)
+      }
     },
   )
 
-  it.each(["elevenlabs-v4", "elevenlabs-v3", "elevenlabs-turbo", "elevenlabs-multilingual"])(
+  it.each([...TTS_PROVIDERS])(
     "no flag → today's plain funnel on %s: no timed call, no transcript key",
     async (provider) => {
       config.ELEVENLABS_API_KEY = "el_test"
@@ -611,6 +622,17 @@ describe("text-to-speech handler", () => {
 
     expect(mocks.mockDirectElevenLabsTTS).toHaveBeenCalledWith(
       "Hello [whispers]", "Rachel", "elevenlabs-v4",
+      expect.objectContaining({ allowDefaultVoiceFallback: false }),
+    )
+    expect(mocks.mockStripAudioTags).not.toHaveBeenCalled()
+  })
+
+  it("elevenlabs-v4-turbo routes direct as itself and keeps its tags (it performs them)", async () => {
+    const job = makeJob("text-to-speech", { text: "Hello [whispers]", provider: "elevenlabs-v4-turbo", voice: "Rachel", voiceType: "premade" })
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockDirectElevenLabsTTS).toHaveBeenCalledWith(
+      "Hello [whispers]", "Rachel", "elevenlabs-v4-turbo",
       expect.objectContaining({ allowDefaultVoiceFallback: false }),
     )
     expect(mocks.mockStripAudioTags).not.toHaveBeenCalled()

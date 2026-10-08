@@ -12,7 +12,7 @@ behind those defaults so you can make your own trade-offs.
 | Presets | Character, Pose, Location, Product, Outfit, Scene, Creature, Vehicle, Food, Mascot, Pet Board | Character Reference Grid, Cast Mega Grid, Cast Scene |
 | What they make | A dense, editorial production sheet: hero shot, metadata block, labeled panels (views, expressions, details, lighting), HEX color palette | A sterile, neutral-background grid of canonical angles — no text, no decoration |
 | Made for | **Humans** — art direction, briefing, a project's visual bible | **Models** — feeding back into later generations as an identity anchor |
-| Default model | `nano-banana-pro` @ 2K, 16:9 | `nano-banana-2` @ 4K, 3:4 |
+| Default model | `nano-banana-pro` @ 2K, 16:9 | `nano-banana-2-1` @ 4K, 3:4 |
 
 Both follow the same workflow: **connect one sharp, well-lit, front-facing photo** → generate →
 **reuse the result as a reference image** in every later generation (image or video) featuring that
@@ -25,7 +25,7 @@ re-describing them — less re-description means less identity drift.
 | Job | Use | Why |
 |---|---|---|
 | Any Reference Sheet board | `nano-banana-pro` (default) | Best identity fidelity across panels and best text rendering for the metadata block, panel labels, and HEX swatches |
-| Identity grids to feed back as references | `nano-banana-2` (default) | Nearly Pro-level identity at lower cost and higher speed — consistency work is iteration-heavy, so cost-per-attempt matters; 4K keeps panel faces sharp when reused |
+| Identity grids to feed back as references | `nano-banana-2-1` (default) | Nano Banana 2.1 — nearly Pro-level identity at lower cost and higher speed (consistency work is iteration-heavy, so cost-per-attempt matters); 4K keeps panel faces sharp when reused. It replaced `nano-banana-2`, the model in the tests below |
 | Layout-critical sheets where likeness is secondary | `gpt-image-2` | In our tests it followed multi-panel layout instructions the most completely and produced very uniform panel sizing — but the face drifts (see below) |
 | Label/edit workflows (Edit by Name, annotations) | `gpt-image-2` | Strong instruction-following for overlay/labeling tasks |
 

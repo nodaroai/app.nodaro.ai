@@ -15,6 +15,7 @@ import { canonicalTtsProvider, TTS_FALLBACK_PROVIDER } from "@nodaro/shared"
 export const TTS_WIRE_MODELS: Readonly<Record<string, string>> = {
   "elevenlabs-v3": "eleven_v3",
   "elevenlabs-v4": "eleven_v4",
+  "elevenlabs-v4-turbo": "eleven_v4_turbo",
   "elevenlabs-multilingual": "eleven_multilingual_v2",
   "elevenlabs-turbo": "eleven_turbo_v2_5",
 }

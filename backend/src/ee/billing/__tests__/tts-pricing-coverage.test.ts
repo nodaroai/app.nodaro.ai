@@ -54,4 +54,10 @@ describe("text-to-speech pricing coverage", () => {
     expect(STATIC_CREDIT_COSTS["elevenlabs-v4"]).toBe(STATIC_CREDIT_COSTS["elevenlabs-v3"])
     expect(STATIC_CREDIT_COSTS["elevenlabs-v4:per-100-chars"]).toBe(STATIC_CREDIT_COSTS["elevenlabs-v3:per-100-chars"])
   })
+
+  it("v4 Turbo is priced at parity with Turbo v2.5 — the flat row and the per-100-characters row alike (decided 2026-10-06)", () => {
+    expect(STATIC_CREDIT_COSTS["elevenlabs-v4-turbo"]).toBe(STATIC_CREDIT_COSTS["elevenlabs-turbo"])
+    expect(STATIC_CREDIT_COSTS["elevenlabs-v4-turbo:per-100-chars"]).toBe(STATIC_CREDIT_COSTS["elevenlabs-turbo:per-100-chars"])
+    expect(STATIC_CREDIT_COSTS["elevenlabs-v4-turbo"]).toBe(15)
+  })
 })

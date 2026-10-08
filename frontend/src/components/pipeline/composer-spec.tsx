@@ -163,7 +163,7 @@ function ComposerPanel({
   ]
   const engineNode =
     tab === "framing"
-      ? t("pipe.cinemaFramingCore", { model: scene.image_model ?? "nano-banana-2" })
+      ? t("pipe.cinemaFramingCore", { model: scene.image_model ?? "nano-banana-2-1" })
       : t("pipe.cinemaDirectingCore", { model: scene.video_model ?? "kling-3.0" })
 
   const save = async () => {

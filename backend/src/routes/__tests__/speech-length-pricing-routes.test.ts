@@ -43,7 +43,8 @@ vi.mock("@/middleware/credit-guard.js", () => ({
 }))
 vi.mock("@/ee/billing/credits.js", () => ({
   getModelCreditBaseCost: vi.fn(async (id: string) => ({
-    creditCost: id === "elevenlabs-turbo:per-100-chars" ? 2 : id.endsWith(":per-100-chars") ? 4 : 30,
+    // The Turbo-class unit rows (Turbo v2.5 and v4 Turbo) are 2; every other unit row 4; flat rows 30.
+    creditCost: id.endsWith("turbo:per-100-chars") ? 2 : id.endsWith(":per-100-chars") ? 4 : 30,
     isEnabled: true,
     tierRestriction: null,
   })),
@@ -95,6 +96,8 @@ describe("flag ON — computeCredits prices the body by length, on the model the
     [{ text: "a".repeat(1000), provider: "elevenlabs-v3" }, 40],
     [{ text: "a".repeat(6000), provider: "elevenlabs-v3" }, 200], // the handler clamps to 5,000 — priced as 5,000
     [{ text: "a".repeat(100), provider: "elevenlabs-turbo" }, 16],
+    [{ text: "a".repeat(100), provider: "elevenlabs-v4-turbo" }, 16], // Turbo's unit row (2), the 8-unit floor
+    [{ text: "a".repeat(2500), provider: "elevenlabs-v4-turbo" }, 50], // 25 started hundreds × 2
     [{ text: "a".repeat(1000), provider: "elevenlabs" }, 20], // alias → turbo's row
     [{ text: "a".repeat(100) }, 32], // omitted → the default model (v4)
     [{ text: "a".repeat(12000) }, 240], // omitted + long → turbo (the length rule), 120 units × 2

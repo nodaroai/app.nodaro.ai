@@ -57,4 +57,12 @@ describe("reviewGate", () => {
     expect(reviewGate({ ...ready, newerRun: null, newerCheckTimedOut: true })).toEqual({ mode: "ready", hold: null })
     expect(reviewGate({ ...ready, newerRun: { cut: {} }, newerCheckTimedOut: true }).hold).toEqual({ kind: "newer-run" })
   })
+
+  // C3.4: a render that cannot run at all (Speaker View until it is priced)
+  // holds both runs first, whatever else holds them, and the footer says why.
+  it("holds the runs for a render that cannot run at all, before anything else", () => {
+    expect(reviewGate({ ...ready, refusal: "speakerView.notPriced" })).toEqual({ mode: "ready", hold: { kind: "refused", reason: "speakerView.notPriced" } })
+    expect(reviewGate({ ...ready, refusal: "speakerView.notPriced", keptCount: 0, verdict: { ok: false, issues: ["x"] } }).hold).toEqual({ kind: "refused", reason: "speakerView.notPriced" })
+    expect(reviewGate({ ...ready, refusal: "speakerView.notPriced", locked: true }).mode).toBe("running")
+  })
 })

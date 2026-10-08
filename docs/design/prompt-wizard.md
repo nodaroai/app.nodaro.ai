@@ -256,6 +256,7 @@ Lives in `packages/shared/src/prompt-wizard-categories.ts`. AI uses these descri
 | `nano-banana` | Fast generation, style flexibility, reference image support |
 | `nano-banana-pro` | Higher quality Nano Banana with better detail |
 | `nano-banana-2` | Latest Nano Banana with resolution options (1K/2K/4K) |
+| `nano-banana-2-1` | Nano Banana 2.1 — sharper quality, prompt adherence, character consistency and text rendering, 1K/2K/4K |
 | `gpt-image` | Creative concepts, illustration, variable quality tiers |
 | `grok` | General purpose, good text understanding |
 | `imagen4` | Google's latest, strong photorealism and text rendering |

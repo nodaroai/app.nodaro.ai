@@ -108,7 +108,7 @@ Text-to-image generation. For trailer / cinematic flows, embed character + locat
 ### Quick model picks (MCP `generate_image`)
 
 - `nano-banana-pro` — best overall; best for typography / logos / text-heavy and multi-character scenes; the face-identity pick for reference images.
-- `nano-banana-2` (default) — very good consistency, faster and cheaper.
+- `nano-banana-2-1` (default) — Nano Banana 2.1: very good consistency and text rendering, faster and cheaper.
 - `gpt-image-2` — strong for logos / short copy / prompt adherence.
 - `z-image` — cheapest stylized output.
 - **Avoid `flux`** for general use — it degrades in multi-turn workflows; use one of the above.

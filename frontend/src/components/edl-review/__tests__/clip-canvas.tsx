@@ -38,12 +38,14 @@ export interface ClipCanvasOptions {
   readonly wire?: Record<string, unknown>
   readonly caption?: boolean
   readonly readOnly?: boolean
+  /** The render node's type (a render-node registry id); Apply EDL by default. */
+  readonly renderType?: string
 }
 
 export function loadClipCanvas(opts: ClipCanvasOptions = {}): void {
   const nodes = [
     node("plan", "edit-plan", { label: "Find Clips", mode: "clips", generatedJson: opts.plan ?? CLIPS, ...opts.planData }),
-    node("cut", "apply-edl", { label: "Render Clip", quality: "final", ...opts.cut }),
+    node("cut", opts.renderType ?? "apply-edl", { label: "Render Clip", quality: "final", ...opts.cut }),
     ...(opts.caption === false ? [] : [node("cap", "add-captions", { label: "Caption Clip" })]),
   ]
   const edges = [

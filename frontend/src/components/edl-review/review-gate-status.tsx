@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils"
 
 export function holdText(hold: ReviewGateHold, t: TFunction): string {
   switch (hold.kind) {
+    case "refused": return t(hold.reason)
     case "nothing-kept": return t("edlReview.nothingKept")
     case "issues": return hold.issues.length === 1 ? t("edlReview.fixIssuesOne") : t("edlReview.fixIssuesMany", { n: hold.issues.length })
     case "newer-run": return t("edlReview.loadNewerFirst")

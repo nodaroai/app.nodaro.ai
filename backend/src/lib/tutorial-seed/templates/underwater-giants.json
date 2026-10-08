@@ -25,7 +25,7 @@
         "model": "gemini-2.5-flash-image",
         "style": "cinematic",
         "prompt": "Two divers slowly descend through clear blue water and suddenly discover a massive living room on the ocean floor. A gigantic sofa the size of a building, a coffee table as large as a small field, huge cushions gently drifting with the current. Soft sun rays penetrate from above, creating a calm, luxurious atmosphere. The divers appear tiny like ants inside a space built for giants.",
-        "provider": "nano-banana-2",
+        "provider": "nano-banana-2-1",
         "resolution": "4K",
         "aspectRatio": "9:16",
         "fieldMappings": {
@@ -68,7 +68,7 @@
         "model": "gemini-2.5-flash-image",
         "style": "cinematic",
         "prompt": "A diver swims beside a giant coffee cup as large as an entire room. Colorful coral reefs grow along its rim, and small fish swim inside the cup like it’s a miniature lagoon. The handle is big enough for a diver to swim through.",
-        "provider": "nano-banana-2",
+        "provider": "nano-banana-2-1",
         "resolution": "4K",
         "aspectRatio": "9:16",
         "fieldMappings": {
@@ -111,7 +111,7 @@
         "model": "gemini-2.5-flash-image",
         "style": "cinematic",
         "prompt": "A colossal armchair the height of a four-story building stands on the seabed. Massive cushions are covered with soft coral and sea plants. One diver hovers near the armrest while another shines a light upward, revealing the unbelievable scale.",
-        "provider": "nano-banana-2",
+        "provider": "nano-banana-2-1",
         "resolution": "4K",
         "aspectRatio": "9:16",
         "fieldMappings": {
@@ -155,7 +155,7 @@
         "model": "gemini-2.5-flash-image",
         "style": "cinematic",
         "prompt": "A giant open book lies on the ocean floor, each page the size of a field. Deeply carved letters are filled with glowing algae. A diver swims across one of the letters as if crossing a landscape.",
-        "provider": "nano-banana-2",
+        "provider": "nano-banana-2-1",
         "resolution": "4K",
         "aspectRatio": "9:16",
         "fieldMappings": {
@@ -199,7 +199,7 @@
         "model": "gemini-2.5-flash-image",
         "style": "cinematic",
         "prompt": "A massive fruit bowl sits on a giant stone table. Instead of fruit, vibrant corals and small sea creatures fill the bowl. Fish swim through it like a living underwater garden.",
-        "provider": "nano-banana-2",
+        "provider": "nano-banana-2-1",
         "resolution": "4K",
         "aspectRatio": "9:16",
         "fieldMappings": {
@@ -242,7 +242,7 @@
         "model": "gemini-2.5-flash-image",
         "style": "cinematic",
         "prompt": "A giant bed with flowing white fabric rests on the seabed. The sheets move gently with the current like soft clouds. Above it hangs a massive lamp, surrounded by glowing jellyfish that illuminate the scene with soft, magical light.",
-        "provider": "nano-banana-2",
+        "provider": "nano-banana-2-1",
         "resolution": "4K",
         "aspectRatio": "9:16",
         "errorMessage": "The operation was aborted due to timeout",
@@ -286,7 +286,7 @@
         "model": "gemini-2.5-flash-image",
         "style": "cinematic",
         "prompt": "Final wide shot. The camera pulls back to reveal the full environment — an enormous area filled with oversized everyday objects: giant sofas, books, cups, chairs, and living room elements scattered across the ocean floor. The divers look incredibly small within a surreal underwater world that feels like a frozen luxury living space built for giants.",
-        "provider": "nano-banana-2",
+        "provider": "nano-banana-2-1",
         "resolution": "4K",
         "aspectRatio": "9:16",
         "fieldMappings": {
@@ -623,7 +623,7 @@
         "model": "gemini-2.5-flash-image",
         "style": "cinematic",
         "prompt": "Two enormous coral formations are connected by a giant white fabric hammock gently swaying in the water. The hammock is the size of a small field. Fish swim beneath it while the divers approach, realizing it was likely a resting place for giants.",
-        "provider": "nano-banana-2",
+        "provider": "nano-banana-2-1",
         "resolution": "4K",
         "aspectRatio": "9:16",
         "fieldMappings": {

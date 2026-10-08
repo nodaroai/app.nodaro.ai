@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest"
 import { render, screen, fireEvent } from "@testing-library/react"
+import { ttsSupportsStitching } from "@nodaro/shared"
 import { TtsContinuitySection } from "../tts-continuity-section"
 import { translate } from "@/lib/i18n"
 
@@ -9,6 +10,7 @@ const noop = { sources: [], fieldMappings: {}, onMapField: () => {} }
 describe("TtsContinuitySection — shown only for a model that stitches", () => {
   it.each([
     ["elevenlabs-v4", true],
+    ["elevenlabs-v4-turbo", ttsSupportsStitching("elevenlabs-v4-turbo")], // written against the sheet, so the probe's answer needs no second edit
     ["elevenlabs-turbo", true],
     ["elevenlabs-multilingual", true],
     ["elevenlabs-v3", false],

@@ -67,7 +67,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           "**Picking a model**: call `list_models { kind: \"image\", mode: \"t2i\" }` FIRST when the user " +
           "hasn't specified one — capability sheets (aspect ratios, resolutions, qualities, per-variant " +
           "pricing) plus recommendations such as 'best for typography' or 'cheapest realistic'. Aspect " +
-          "ratios are model-specific. Default nano-banana-2; the quick picks per task and reference-image " +
+          "ratios are model-specific. Default nano-banana-2-1; the quick picks per task and reference-image " +
           "prompting are in `get_node_skill(\"generate-image\")`.\n\n" +
           "**Reference images**: pass `reference_image_urls` (up to 14 URLs or Nodaro asset ids) whenever " +
           "the user wants the same person / character / product as an image; the response text confirms " +
@@ -99,7 +99,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
             .string()
             .optional()
             .describe(
-              `Image model. Default nano-banana-2. Recommended: ${T2I_MODEL_IDS.join(", ")}. ` +
+              `Image model. Default nano-banana-2-1. Recommended: ${T2I_MODEL_IDS.join(", ")}. ` +
               `Unknown values silently fall back to the default. ` +
               `Call list_models for capability details.`,
             ),
@@ -295,7 +295,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
               resolution: userImg.resolution,
               quality: userImg.quality,
             },
-            "nano-banana-2",
+            "nano-banana-2-1",
           )
 
         const compositePrompt = buildCompositePrompt(
@@ -358,7 +358,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
           "PRIMARY tool for image-to-image / edit / transform / restyle / outpaint / inpaint work. Use it " +
           "directly; do NOT search the apps marketplace for image editing.\n\n" +
           "**Picking a model**: `list_models { kind: \"image\", mode: \"i2i\" }` or `mode: \"edit\"` for the " +
-          "capability sheets. Default nano-banana-2; nano-banana-pro for face/character identity across " +
+          "capability sheets. Default nano-banana-2-1; nano-banana-pro for face/character identity across " +
           "multi-turn edits and for typography; gpt-image-2 for text-heavy, prompt-adherence-critical edits; " +
           "recraft-remove-bg for background removal (no prompt). The full model guidance is " +
           "`get_node_skill(\"modify-image\")`.\n\n" +
@@ -373,7 +373,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
             .string()
             .optional()
             .describe(
-              `I2I / edit model. Default nano-banana-2. Recommended: ${I2I_MODEL_IDS.join(", ")}. ` +
+              `I2I / edit model. Default nano-banana-2-1. Recommended: ${I2I_MODEL_IDS.join(", ")}. ` +
               `For identity-preserving edits use nano-banana-pro. Unknown values fall back. ` +
               `Call list_models for capability details.`,
             ),
@@ -439,7 +439,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
             resolution: userImg.resolution,
             quality: userImg.quality,
           },
-          "nano-banana-2",
+          "nano-banana-2-1",
         )
 
         // The /v1/image-to-image route validates against MODIFY_IMAGE_PROVIDERS.
@@ -449,7 +449,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         // advertised-but-unsupported model degrades to a working edit, not a 400.
         const provider = (MODIFY_IMAGE_PROVIDERS as readonly string[]).includes(model)
           ? model
-          : "nano-banana-2"
+          : "nano-banana-2-1"
 
         const imageUrl =
           args.image_url ??
@@ -582,7 +582,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         "Transform an image guided by a text prompt (img2img). Supports style " +
         "transfer, re-styling, inpainting with a mask, and multi-reference " +
         "composition. Returns a job_id.\n\n" +
-        "**Recommended models**: nano-banana (default, fast+cheap), nano-banana-2, " +
+        "**Recommended models**: nano-banana (default, fast+cheap), nano-banana-2-1, " +
         "flux-kontext (photorealistic edits), gpt-image-i2i (creative repaints), " +
         "flux-i2i, ideogram-remix. Call `list_models { kind: \"image\", mode: \"i2i\" }` " +
         "for the full list.",

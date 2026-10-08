@@ -21,6 +21,7 @@ describe("text-to-speech.md Credits", () => {
     ["1,000 characters on v3", 1000, 4, 40, "10 × 4 = **40 credits**"],
     ["10,000 characters on v4", 10000, 4, 400, "**400 credits**"],
     ["10,000 characters on Turbo", 10000, 2, 200, "100 × 2 = **200 credits**"],
+    ["2,500 characters on v4 Turbo", 2500, 2, 50, "25 × 2 = **50 credits**"],
   ])("%s", (_label, chars, unit, credits, sentence) => {
     expect(speechCredits(chars, unit)).toBe(credits)
     expect(tts).toContain(sentence)
@@ -30,6 +31,7 @@ describe("text-to-speech.md Credits", () => {
     expect(tts).toContain(`minimum of ${SPEECH_FLOOR_UNITS} units per request`)
     expect(tts).toContain("| ElevenLabs v4, v3, Multilingual v2 | 4 | 32 |")
     expect(tts).toContain("| Turbo v2.5 (and the legacy `elevenlabs` id, which runs as Turbo) | 2 | 16 |")
+    expect(tts).toContain("| v4 Turbo | 2 | 16 |")
     expect(tts).toContain("**Rolling out.**")
   })
 
@@ -90,8 +92,9 @@ describe("generate-video.md Credit pricing (character voice) — the audio_drive
     [800, 4, 32, "1–800 characters cost 32"],
     [5000, 4, 200, "5,000 cost 200"],
     [10000, 4, 400, "10,000 on Dialogue v4 cost 400"],
-    [800, 2, 16, "2 on Turbo v2.5 (16 and 100)"],
-    [5000, 2, 100, "2 on Turbo v2.5 (16 and 100)"],
+    // A single cast voice on Turbo v2.5 or on v4 Turbo is priced on that model's own unit row (speechRunsAs keeps the id).
+    [800, 2, 16, "2 on Turbo v2.5 and v4 Turbo (16 and 100)"],
+    [5000, 2, 100, "2 on Turbo v2.5 and v4 Turbo (16 and 100)"],
   ])("%i characters at %i per unit → %i", (chars, unit, credits, sentence) => {
     expect(speechCredits(chars, unit)).toBe(credits)
     expect(generateVideo).toContain(sentence)

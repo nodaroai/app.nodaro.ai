@@ -138,7 +138,9 @@ export function ProfilePage({ state }: StudioPageProps<CharacterStudioState, Cha
           onChange={(e) => state.patch({ provider: e.target.value })}
           className="block text-[11px] bg-[#13161f] border border-[#334155] rounded px-2 py-1 text-slate-200"
         >
-          {IMAGE_MODELS.map((m) => (
+          {/* A provider saved before the list changed (e.g. Nano Banana 2, replaced by 2.1)
+              stays selectable so the select shows what this character will use. */}
+          {[...IMAGE_MODELS, ...((IMAGE_MODELS as readonly string[]).includes(portraitProvider) ? [] : [portraitProvider])].map((m) => (
             <option key={m} value={m}>
               {m}
             </option>

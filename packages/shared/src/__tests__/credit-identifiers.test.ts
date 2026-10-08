@@ -105,6 +105,15 @@ describe("buildCreditModelIdentifier", () => {
     })
   })
 
+  // --- nano-banana-2-1 ---
+  describe("nano-banana-2-1", () => {
+    it("2K and 4K return composite identifiers; 1K is the bare id", () => {
+      expect(buildCreditModelIdentifier("nano-banana-2-1", undefined, "2K")).toBe("nano-banana-2-1:2K")
+      expect(buildCreditModelIdentifier("nano-banana-2-1", undefined, "4K")).toBe("nano-banana-2-1:4K")
+      expect(buildCreditModelIdentifier("nano-banana-2-1", undefined, "1K")).toBe("nano-banana-2-1")
+    })
+  })
+
   // --- topaz-image-upscale ---
   describe("topaz-image-upscale", () => {
     it('targetResolution="4K" returns composite identifier', () => {

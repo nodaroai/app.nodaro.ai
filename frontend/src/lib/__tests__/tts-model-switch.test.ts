@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest"
+import { ttsSupportsStitching } from "@nodaro/shared"
 import { ttsModelSwitchPatch } from "../tts-model-switch"
 
 describe("ttsModelSwitchPatch — what a user's model switch clears", () => {
@@ -16,6 +17,10 @@ describe("ttsModelSwitchPatch — what a user's model switch clears", () => {
     const patch = ttsModelSwitchPatch("elevenlabs-v4", tuned)
     expect(patch).toStrictEqual({ style: undefined, speed: undefined })
     expect(Object.keys(patch).sort()).toEqual(["speed", "style"])
+  })
+
+  it("to v4 Turbo: speed and style go, similarity stays, Hebrew stays — exactly as to v4", () => {
+    expect(ttsModelSwitchPatch("elevenlabs-v4-turbo", tuned)).toStrictEqual(ttsModelSwitchPatch("elevenlabs-v4", tuned))
   })
 
   it("to turbo: every lever stays, but Hebrew is not offered, so the language resets to auto-detect", () => {
@@ -53,6 +58,11 @@ describe("ttsModelSwitchPatch — what a user's model switch clears", () => {
 
     it("to v4: both stay", () => {
       expect(ttsModelSwitchPatch("elevenlabs-v4", withContext)).toStrictEqual({})
+    })
+
+    it("to v4 Turbo: both stay iff its sheet stitches", () => {
+      const patch = ttsModelSwitchPatch("elevenlabs-v4-turbo", withContext)
+      expect(patch).toStrictEqual(ttsSupportsStitching("elevenlabs-v4-turbo") ? {} : { previousText: "", nextText: "" })
     })
 
     it("clears only a side the node actually carries, and never an already-empty one", () => {

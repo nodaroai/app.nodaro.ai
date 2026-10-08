@@ -28,6 +28,16 @@ describe("toolkit providers.ttsCapabilities — the host's sheet, never the plug
     expect(hostTtsCapabilities("elevenlabs-v3")).toMatchObject({ maxChars: 5000, levers: ["stability"] })
   })
 
+  it("answers v4 Turbo's sheet the day the app deploys — the plugin's own pin lags", () => {
+    const sheet = MODEL_CATALOG["elevenlabs-v4-turbo"]!.tts!
+    expect(hostTtsCapabilities("elevenlabs-v4-turbo")).toEqual({
+      maxChars: sheet.maxChars,
+      levers: ["stability", "similarity"],
+      languages: [...MODEL_CATALOG["elevenlabs-v4"]!.tts!.languages],
+      audioTags: true,
+    })
+  })
+
   it("carries exactly the four fields the plugin contract names — nothing else leaks off the sheet", () => {
     expect(Object.keys(hostTtsCapabilities("elevenlabs-v4")!).sort()).toEqual(["audioTags", "languages", "levers", "maxChars"])
   })

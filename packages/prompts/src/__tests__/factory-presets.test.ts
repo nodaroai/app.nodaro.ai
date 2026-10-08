@@ -234,20 +234,20 @@ describe("generate-image factory preset data validity", () => {
     }
   })
 
-  it("includes the Cast & Consistency grids on nano-banana-2", () => {
-    // Grids are FED BACK as identity references — they ride nano-banana-2
+  it("includes the Cast & Consistency grids on nano-banana-2-1", () => {
+    // Grids are FED BACK as identity references — they ride Nano Banana 2.1
     // (cheap, consistency-strong) at 4K so reused panel faces stay sharp.
     for (const id of ["generate-image/character-reference-grid", "generate-image/cast-mega-grid"]) {
       const g = presets.find((p) => p.id === id)
       expect(g, `${id} missing`).toBeTruthy()
       expect(g!.group).toBe("Cast & Consistency")
-      expect(g!.data.provider).toBe("nano-banana-2")
+      expect(g!.data.provider).toBe("nano-banana-2-1")
       expect(g!.data.aspectRatio).toBe("3:4")
       expect(g!.data.resolution).toBe("4K")
     }
     const scene = presets.find((p) => p.id === "generate-image/cast-scene")
     expect(scene?.group).toBe("Cast & Consistency")
-    expect(scene?.data.provider).toBe("nano-banana-2")
+    expect(scene?.data.provider).toBe("nano-banana-2-1")
   })
 
   it("ships the Handmade & Stop-Motion family with the in-prompt NOT-digital-CG clause", () => {

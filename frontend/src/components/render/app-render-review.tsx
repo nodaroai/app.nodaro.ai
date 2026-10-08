@@ -34,6 +34,7 @@ import { getAppExecutionStatus, type AppRunFinalExecution } from "@/lib/api"
 import { hasCredits } from "@/lib/edition"
 import { creditUnits } from "@/lib/credit-units"
 import { useT } from "@/lib/i18n"
+import { renderRunRefusalKey } from "@/lib/render-review-adapter"
 import { RenderReviewBarView } from "./render-review-bar"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 
@@ -255,13 +256,21 @@ function AppRenderFinalAction({
 }) {
   const t = useT()
   const credits = useAppRenderFinalCredits(renderId)
+  // A render that cannot run at all (Speaker View until it is priced) says so instead.
+  const refusal = renderRunRefusalKey(useContext(AppRenderReviewContext)?.graph.find((n) => n.id === renderId))
   const [confirming, setConfirming] = useState(false)
   const note = t("appReview.note")
-  if (!confirming) {
+  if (!confirming || refusal) {
     return (
       <div className="flex flex-col gap-1 px-1">
         {failure && <p className="text-xs text-destructive">{t("appReview.failed", { reason: failure })}</p>}
-        <RenderReviewBarView onRenderFinal={() => setConfirming(true)} finalCredits={credits} busy={false} note={note} />
+        <RenderReviewBarView
+          onRenderFinal={() => setConfirming(true)}
+          finalCredits={credits}
+          busy={false}
+          note={note}
+          {...(refusal ? { disabledReason: t(refusal) } : {})}
+        />
       </div>
     )
   }

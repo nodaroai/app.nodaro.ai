@@ -14,13 +14,13 @@ Generate Image is the primary text-to-image node. It accepts a text prompt (with
 | Style | select | `""` | One of 16 presets (Photorealistic, Cinematic, Anime, Digital Art, Oil Painting, Watercolor, Children's Book, Comic Book, Pixel Art, 3D Render, Pencil Sketch, Pop Art, Minimalist, Retro/Vintage, Fantasy, Noir) or "Custom..." free text. Style text is appended to the prompt at execution time. |
 | Negative Prompt | text | `""` | Elements to exclude. Sent natively for imagen4, ideogram, qwen; appended as "Avoid:..." for other providers. |
 | Aspect Ratio | select | `"16:9"` | Provider-specific ratio sets (see table below) |
-| Resolution | select | varies | Available for nano-banana-pro, nano-banana-2, flux, flux-flex, gpt-image-2 and the GPT Image 2.5 models: 1K, 2K, 4K |
+| Resolution | select | varies | Available for nano-banana-pro, nano-banana-2, nano-banana-2-1, flux, flux-flex, gpt-image-2 and the GPT Image 2.5 models: 1K, 2K, 4K |
 | Quality | select | varies | Available for gpt-image (medium/high), seedream/seedream-5-lite (basic 2K / high 4K), and seedream-5-pro (basic 1K / high 2K) |
 | Rendering Speed | select | -- | Available for ideogram-v3: turbo, balanced, quality |
 | Seed | number | -- | Reproducibility seed (supported by select providers) |
 | Style Type | select | -- | Ideogram-specific style parameter |
 | Expand Prompt | boolean | -- | Ideogram-specific prompt expansion toggle |
-| Reference Images | image list | -- | Supported by nano-banana, nano-banana-pro, nano-banana-2, nano-banana-2-lite only. Upload or select from library. |
+| Reference Images | image list | -- | Supported by nano-banana, nano-banana-pro, nano-banana-2, nano-banana-2-1, nano-banana-2-lite only. Upload or select from library. |
 | Character/Asset References | references | -- | Connect Character, Object, or Location nodes for visual consistency |
 | Strength | slider | varies | i2i denoising strength. Shown only for providers that support it (`ideogram-remix`, `qwen-i2i`). Lower = stays closer to the base image. |
 | Guidance Scale | slider | varies | Prompt-adherence guidance. Shown only for providers that support it (`qwen-i2i`, `qwen-edit`). |
@@ -77,7 +77,8 @@ The migration runs on the frontend (`loadWorkflow`) plus three defensive backend
 |----------|-------|-------------|---------------|
 | nano-banana | Nano Banana | Fast drafts, iteration, storyboards | 1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3, 5:4, 4:5, 21:9 |
 | nano-banana-pro | Nano Banana Pro | Higher detail, production-ready images | Same as Nano Banana |
-| nano-banana-2 | Nano Banana 2 | Updated Nano Banana with web grounding | Same as Nano Banana |
+| nano-banana-2 | Nano Banana 2 | Updated Nano Banana with web grounding. Superseded by Nano Banana 2.1 (`nano-banana-2-1`), now the default; still available. | Same as Nano Banana |
+| nano-banana-2-1 | Nano Banana 2.1 | Google's high-efficiency image model — improved visual quality, prompt adherence, character consistency and text rendering; up to 10 reference images. 1K / 2K / 4K at **10 / 20 / 30 credits**. | auto, 1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3, 4:5, 5:4, 21:9, 4:1, 1:4, 8:1, 1:8 |
 | nano-banana-2-lite | Nano Banana 2 Lite | Fast, low-cost 1K drafts and iteration (Gemini 3.1 Flash-Lite). Flat **10 credits** per image — no resolution tiers. | auto, 1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3, 4:5, 5:4, 21:9, 4:1, 1:4, 8:1, 1:8 |
 | grok | Grok | Creative and stylized imagery | 1:1, 16:9, 9:16, 3:2, 2:3 |
 | grok-2 | Grok Imagine 2 | Latest Grok (Imagine Image 2.0) — expressive, high-contrast imagery, priced the same as Grok v1. Generations can chain into the **free** Grok segment map and region-targeted edits (see [Edit Image](./edit-image.md#grok-imagine-2-task-chained-editing)). Attach ONE reference image and it auto-routes through Grok's segment-map → image-edit chain (`grok-2-i2i`, same 10-credit price) — the result preserves the reference's composition while applying your prompt. Extra references beyond the first are ignored. | 1:1, 16:9, 9:16, 3:2, 2:3 |
@@ -129,7 +130,7 @@ When the node has a current result, open its config panel and scroll to the **In
 
 This works on **every image provider**, not just one model. A server-side **composite floor** restricts the change to the masked region (`out = base·(1−mask) + result·mask`), so even providers that have no native mask parameter produce a clean, localized edit.
 
-**Strong instruction-following editors** (`gpt-image`, `gpt-image-2`, `gpt-image-2-5-flare`, `gpt-image-2-5-sunburst`, `nano-banana`, `nano-banana-pro`, `nano-banana-2`, `nano-banana-2-lite`, `seedream`, `seedream-5-lite`, `seedream-5-pro`, `qwen`, `flux-kontext`, `flux-kontext-max`) additionally get a natural-language **region hint** injected into the prompt (e.g. "Apply the following change only to the upper-left region…") for better in-region results. This is automatic — no user action required. Other providers rely on the composite floor alone, which still keeps the edit localized.
+**Strong instruction-following editors** (`gpt-image`, `gpt-image-2`, `gpt-image-2-5-flare`, `gpt-image-2-5-sunburst`, `nano-banana`, `nano-banana-pro`, `nano-banana-2`, `nano-banana-2-1`, `nano-banana-2-lite`, `seedream`, `seedream-5-lite`, `seedream-5-pro`, `qwen`, `flux-kontext`, `flux-kontext-max`) additionally get a natural-language **region hint** injected into the prompt (e.g. "Apply the following change only to the upper-left region…") for better in-region results. This is automatic — no user action required. Other providers rely on the composite floor alone, which still keeps the edit localized.
 
 The mask comes from either:
 
@@ -238,7 +239,7 @@ deliberate: a preset should carry its look.
 - Use Nano Banana or Z-Image for rapid iteration and storyboarding due to fast generation speed.
 - Use GPT Image for scenes requiring accurate text rendering (signs, labels, UI mockups).
 - Append style presets rather than writing style instructions in the prompt -- the system handles appending automatically.
-- For models that support reference images (nano-banana, nano-banana-pro, nano-banana-2, nano-banana-2-lite), connect Character nodes upstream for consistent character appearance across shots.
+- For models that support reference images (nano-banana, nano-banana-pro, nano-banana-2, nano-banana-2-1, nano-banana-2-lite), connect Character nodes upstream for consistent character appearance across shots.
 - Set negative prompts for all providers to reduce unwanted artifacts. For imagen4/ideogram/qwen, the negative prompt is sent natively; for others it is appended as "Avoid:...".
 
 ## Common Use Cases

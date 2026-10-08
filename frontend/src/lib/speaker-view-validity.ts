@@ -49,10 +49,19 @@ export function speakerViewBatchValidity(
   transcript: unknown,
   settings: Readonly<Record<string, unknown>>,
 ): EdlValidity | null {
-  const held = edls.filter((e) => !isBlank(e))
+  return speakerViewRowsValidity(edls.map((edl) => ({ edl, transcript })), settings)
+}
+
+/** The renders a Run makes (C3.4: Render final and the review judge exactly
+ *  these), each EDL with the transcript on its own row; worded as a clip pack. */
+export function speakerViewRowsValidity(
+  rows: ReadonlyArray<{ readonly edl: unknown; readonly transcript?: unknown }>,
+  settings: Readonly<Record<string, unknown>>,
+): EdlValidity | null {
+  const held = rows.filter((r) => !isBlank(r.edl))
   if (held.length === 0) return null
-  if (held.length === 1) return speakerViewValidity({ edl: held[0], transcript, settings })
-  const verdicts = held.map((edl) => speakerViewValidity({ edl, transcript, settings }))
+  if (held.length === 1) return speakerViewValidity({ edl: held[0]!.edl, transcript: held[0]!.transcript, settings })
+  const verdicts = held.map(({ edl, transcript }) => speakerViewValidity({ edl, transcript, settings }))
   const name = (i: number, m: string) => `clip[${i}]: ${m}`
   const issues = verdicts.flatMap((v, i) => (v?.unparseable ? [name(i, "not valid JSON")] : (v?.issues ?? []).map((m) => name(i, m))))
   const warnings = verdicts.flatMap((v, i) => (v?.warnings ?? []).map((m) => name(i, m)))

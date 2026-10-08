@@ -13,22 +13,23 @@
  *    footer is a convenience, not the guard.
  *  - `fresh` (R1, R19): the take's `planBasis` and `renderBasis` against what
  *    the render would stamp now (staleness.ts). `staleTake` is the banner (R4 a).
- *  - `renders`: every render the node's Run would make with the edit in place
- *    (`resolveApplyEdlRenders`), what the header's validity badge judges.
- *  - `clockMap` (R3 a): the effective EDL on the render's wire, only for a fresh
- *    take. Behind Camera Switch it is null: a take records no run it shares
- *    with the switch's saved output, so the map cannot be shown to be the cut
- *    the take was made from, and clicks play the original instead.
- *    `previewClockMap` is the same map for the newest Preview the player offers
- *    beside a Final on display (A3-4), judged by that take's own stamps.
+ *  - `renders`: every render the node's Run would make with the edit in place,
+ *    and `validity`, what the header's badge shows: the anchored render's own
+ *    rule on them (`render-review-adapter.ts`; Speaker View's, not Apply EDL's).
+ *  - `clockMap` (R3 a), only for a fresh take, by the registry's `clockMapFrom`
+ *    (`takeClockMap`): Apply EDL's is the effective EDL on its wire, null
+ *    behind Camera Switch (a take records no run it shares with the switch's
+ *    saved output, so clicks play the original instead); Speaker View's is the
+ *    EDL the take itself emitted. `previewClockMap` is the same map for the
+ *    newest Preview the player offers beside a Final on display (A3-4), judged
+ *    by that take's own stamps.
  */
 import { useEffect, useMemo, useState } from "react"
 import type { Edl, RenderGraphEdge } from "@nodaro/shared"
 import { useReviewGraph } from "@/hooks/use-review-graph"
-import { applyEdlRenderSettings, resolveApplyEdlRenders } from "@/lib/apply-edl-render-input"
-import type { ApplyEdlRenderInput } from "@/lib/edl-validity"
-import { clockMapOf } from "@/lib/edl-review/review-clock"
-import { isFreshTake, renderSettingsBasisOf, showsStaleTake } from "@/lib/edl-review/staleness"
+import type { EdlValidity } from "@/lib/edl-validity"
+import { renderReviewAdapterOf, takeClockMap, type RenderRow } from "@/lib/render-review-adapter"
+import { isFreshTake, showsStaleTake } from "@/lib/edl-review/staleness"
 import { withPendingReview } from "@/lib/edl-review/write-review"
 import { currentRenderPlanBasis } from "@/components/editor/workflow-editor/apply-edl-stamps"
 import { renderRuleVerdict, type RenderRuleVerdict } from "@/components/editor/workflow-editor/render-final-checks"
@@ -47,10 +48,12 @@ export interface ReviewChecks {
   /** The clock map for the newest Preview beside the take on display (`model.previewTake`). */
   readonly previewClockMap: Edl | null
   /** Every render the Run would make with the edit in place; empty with no render or plan. */
-  readonly renders: readonly ApplyEdlRenderInput[]
+  readonly renders: readonly RenderRow[]
+  /** The anchored render's own rule on `renders` (the header's badge); null with nothing to judge. */
+  readonly validity: EdlValidity | null
 }
 
-const NO_RENDERS: readonly ApplyEdlRenderInput[] = []
+const NO_RENDERS: readonly RenderRow[] = []
 
 /** `value`, held until it has stopped changing for `ms`; the first value at once. */
 function useSettled<T>(value: T, ms: number): T {
@@ -78,29 +81,33 @@ export function useReviewChecks(model: ReviewModel, edits: ReviewEditState): Rev
   return useMemo(() => {
     const { canvas, owned, pending, take, previewTake, editStatus, render, passesOtherNodes, renderExists, planId } = settled
     if (!renderExists || !planId) {
-      return { verdict: undefined, fresh: undefined, staleTake: false, clockMap: null, previewClockMap: null, renders: NO_RENDERS }
+      return { verdict: undefined, fresh: undefined, staleTake: false, clockMap: null, previewClockMap: null, renders: NO_RENDERS, validity: null }
     }
     const { nodes, edges } = canvas
     const graph = owned ? withPendingReview(nodes, planId, pending) : nodes
     const verdict = renderRuleVerdict(renderId, graph, edges)
     const renderNode = graph.find((n) => n.id === renderId)!
-    const renders = resolveApplyEdlRenders(renderNode, graph, edges)
+    const renderData = renderNode.data as Record<string, unknown>
+    const adapter = renderReviewAdapterOf(renderNode.type)
+    const renders = adapter ? adapter.rows(renderNode, graph, edges) : NO_RENDERS
     const first = renders[0]
     const now = {
       planBasis: currentRenderPlanBasis(renderId, graph, edges as readonly RenderGraphEdge[], first?.row),
-      renderBasis: renderSettingsBasisOf(first, applyEdlRenderSettings(renderNode.data as Record<string, unknown>)),
+      renderBasis: adapter?.settingsBasis(first, renderData),
     }
     const fresh = isFreshTake(take, now)
     const previewFresh = isFreshTake(previewTake, now)
     const planHasEdit = owned ? pending !== undefined : editStatus === "applied"
-    const map = !passesOtherNodes && (fresh === true || previewFresh === true) ? clockMapOf(first?.edl, render) : null
+    const clockOf = (shown: typeof take) =>
+      takeClockMap({ type: renderNode.type, renderData, take: shown, row: first, context: render, passesOtherNodes })
     return {
       verdict,
       fresh,
       staleTake: showsStaleTake(fresh, !!take, planHasEdit),
-      clockMap: fresh === true ? map : null,
-      previewClockMap: previewFresh === true ? map : null,
+      clockMap: fresh === true ? clockOf(take) : null,
+      previewClockMap: previewFresh === true ? clockOf(previewTake) : null,
       renders,
+      validity: adapter ? adapter.validity(renders, renderData) : null,
     }
   }, [settled, renderId])
 }

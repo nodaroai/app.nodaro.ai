@@ -34,7 +34,7 @@ Don't know where to start? Find your goal here, then jump to the model in the ta
 | cheap batch video clips | VEO 3.1 Fast, Wan 2.2 Turbo, Bytedance Lite I2V | VEO 3.1 Fast is the best price/quality balance with native audio. |
 | video with start + end frame | VEO 3.1 Quality, VEO 3.1 Fast, Kling 2.5 Turbo Pro, Hailuo 02 I2V Pro, Hailuo 02 Standard, Seedance 2 | All listed support an end frame; VEO uses imageUrls[start, end]. |
 | music / song generation | Suno V6, Suno V6 Wild, Suno V6 Mini, Suno v5.5 | V6 is the default flagship; V6 Wild for bolder, less predictable results; V6 Mini when speed matters; v5.5 / v5 / v4 keep their own character. Same price. |
-| voice over / narration | ElevenLabs v4, ElevenLabs v3, ElevenLabs Turbo v2.5 | v4 is the default: [audio tags] for emotion and up to 10,000 characters per request. v3 is the previous expressive model, still selectable. Turbo is cheaper for plain narration. |
+| voice over / narration | ElevenLabs v4, ElevenLabs v3, ElevenLabs v4 Turbo, ElevenLabs Turbo v2.5 | v4 is the default: [audio tags] for emotion and up to 10,000 characters per request. v3 is the previous expressive model, still selectable. v4 Turbo keeps v4's tags at Turbo's credit price; Turbo v2.5 is the cheapest for plain narration without tags. |
 | lip-sync a portrait to audio | Kling Avatar Pro, Kling Avatar Standard, InfiniTalk | Pro for best mouth shape; InfiniTalk for resolution control. |
 | transcription / captions | ElevenLabs STT, Incredibly Fast Whisper, Whisper | Captions need WORD timestamps: ElevenLabs STT (always) or Incredibly Fast Whisper. Plain Whisper returns phrase segments only. |
 | motion transfer (drive a subject by another video) | Kling 2.6 Motion Transfer, Kling 3.0 Motion Transfer | Kling 2.6 base is cheap; Kling 3.0 is premium. |
@@ -59,13 +59,14 @@ Text-to-image, image-to-image, editing, upscaling, and background removal. For e
 | Grok Imagine 2 Edit | xAI | Everyday | 10 | edit | Prompt-edit a prior grok-2 generation by task id. Optional mask indexes (from grok-2-segment) restrict the edit to named regions. |
 | Imagen 4 Fast | Google | Everyday | 10 | t2i | Cheaper / quicker Imagen 4 tier. |
 | Nano Banana 2 Lite | Google | Everyday | 10 | t2i, i2i | Lightweight Nano Banana 2 (Gemini 3.1 Flash-Lite) — fast, low-cost 1K generation and editing. |
+| Nano Banana 2.1 | Google | Everyday | 10 | t2i, i2i | Google's high-efficiency image model for generation and editing — sharper quality, prompt adherence, character consistency and text rendering, up to 10 references and 4K output. |
 | Nano Banana Edit | Google | Everyday | 10 | edit | Image-to-image edits via Google's Nano Banana family. Good general-purpose editor. |
 | Qwen | Alibaba | Everyday | 10 | t2i | Cheap, fast, decent quality. Native negative-prompt support. |
 | Qwen (I2I) | Alibaba | Everyday | 10 | i2i | Image-to-image with Qwen. |
-| Flux 2 Pro | Black Forest Labs | Everyday | 13 | t2i | Flux 2 Pro text-to-image. Strong realism, fast. Resolution lever to 2K. |
-| Flux 2 Pro (I2I) | Black Forest Labs | Everyday | 13 | i2i | Image-to-image with Flux Pro. Cheaper than Flex variant, good general edits. |
-| Flux Kontext Pro | Black Forest Labs | Everyday | 13 | t2i, edit | Context-aware editing and style transfer. Strong at preserving subject identity through edits. |
-| Qwen Edit | Alibaba | Everyday | 13 | edit | Qwen image edit endpoint with native negative prompt. |
+| Flux 2 Pro | Black Forest Labs | Standard | 13 | t2i | Flux 2 Pro text-to-image. Strong realism, fast. Resolution lever to 2K. |
+| Flux 2 Pro (I2I) | Black Forest Labs | Standard | 13 | i2i | Image-to-image with Flux Pro. Cheaper than Flex variant, good general edits. |
+| Flux Kontext Pro | Black Forest Labs | Standard | 13 | t2i, edit | Context-aware editing and style transfer. Strong at preserving subject identity through edits. |
+| Qwen Edit | Alibaba | Standard | 13 | edit | Qwen image edit endpoint with native negative prompt. |
 | Seedream 5 Lite | Bytedance | Standard | 14 | t2i | Newer Seedream 5 Lite — instruction-based generation, visual reasoning. |
 | Seedream 5 Lite (I2I) | Bytedance | Standard | 14 | i2i | Image-to-image with Seedream 5 Lite. |
 | GPT Image 2 | OpenAI | Standard | 15 | t2i | Next-gen GPT Image — broader aspect ratios, resolution-based pricing (1K/2K/4K). |
@@ -175,6 +176,7 @@ Text-to-speech, voice design/changing, dubbing, sound effects, transcription, an
 | --- | --- | --- | --- | --- | --- |
 | ElevenLabs Sound Effects | ElevenLabs | Everyday | 5 | sfx | Generate short sound effects from a text prompt. |
 | ElevenLabs Turbo v2.5 | ElevenLabs | Everyday | 15 | tts | Fast, cheap ElevenLabs TTS via the direct ElevenLabs API. Good for narration. |
+| ElevenLabs v4 Turbo | ElevenLabs | Everyday | 15 | tts | Faster, cheaper ElevenLabs v4 at lower fidelity — [audio tags], stability and similarity control, at Turbo's credit price. Prefer v4 when quality matters. Direct API. |
 | ElevenLabs STT | ElevenLabs | Everyday | 22 | stt | Speech-to-text with WORD-level timestamps (always on), speaker diarization and audio-event tags. The engine to use when the transcript feeds captions. |
 | ElevenLabs Dialogue v3 | ElevenLabs | Everyday | 25 | dialogue | Multi-speaker dialogue via the direct ElevenLabs API — give it a script, it voices each role (any voice: premade, library, or cloned). |
 | ElevenLabs Dialogue v4 | ElevenLabs | Everyday | 25 | dialogue | Multi-speaker dialogue on ElevenLabs v4 — [audio tags], stability and similarity control. Direct API. |

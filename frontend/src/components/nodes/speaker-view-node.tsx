@@ -13,6 +13,9 @@ import { videoNodeSizing } from "./video-node-defaults"
 import { SPEAKER_LAYOUT_LABEL_KEYS, SPEAKER_SWITCH_LABEL_KEYS } from "./speaker-view-quick-configs"
 import { EdlValidityBadge } from "@/components/inspector/edl-validity-badge"
 import { PreviewBadge, isPreviewQuality } from "@/components/render/preview-badge"
+import { RenderReviewBar } from "@/components/render/render-review-bar"
+import { ReviewCutButton } from "@/components/render/review-cut-button"
+import { EditedSincePreviewNote } from "@/components/render/edited-since-note"
 import { ACCEPTS_JSON, DATA_HANDLE_COLORS } from "@/lib/data-handles"
 import { speakerViewContextOf, speakerViewEdits, speakerViewTranscript } from "@/lib/speaker-view-context"
 import { speakerViewBatchValidity } from "@/lib/speaker-view-validity"
@@ -114,6 +117,17 @@ function SpeakerViewNodeComponent({ id, data, selected }: NodeProps) {
               onLoadedMetadata={(e) => onLoadDimensions({ width: e.currentTarget.videoWidth, height: e.currentTarget.videoHeight })}
               onError={() => setMediaError(true)}
             />
+          )}
+
+          {/* Review on Speaker View (C3.4), as on Apply EDL's face: "Edited since
+              this preview" and Render final / Update preview while the take on show
+              is a Preview, and Review cut for any take or none. The bar reads the
+              render's own refusal (not priced yet, until C4) and shows no price then. */}
+          {hasResult && showsPreview && <EditedSincePreviewNote renderId={id} />}
+          <ReviewCutButton renderId={id} />
+          {hasResult && showsPreview && (
+            // "pending" is the runtime-only queued state (markNodesStatus), not in the narrower data type.
+            <RenderReviewBar renderId={id} busy={(status as string) === "pending"} />
           )}
 
           {status === "failed" && !activeUrl && (

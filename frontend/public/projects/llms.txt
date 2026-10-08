@@ -386,7 +386,7 @@ Generate an image from a text prompt.
 }
 ```
 
-**Providers:** `nano-banana`, `nano-banana-pro`, `grok`, `flux`, `flux-flex`, `gpt-image`, `imagen4`, `imagen4-fast`, `imagen4-ultra`, `ideogram-v3`, `qwen`, `seedream`, `seedream-5-lite`, `seedream-5-pro`, `nano-banana-2`, `nano-banana-2-lite`, `flux-kontext`, `flux-kontext-max`, `z-image`
+**Providers:** `nano-banana`, `nano-banana-pro`, `grok`, `flux`, `flux-flex`, `gpt-image`, `imagen4`, `imagen4-fast`, `imagen4-ultra`, `ideogram-v3`, `qwen`, `seedream`, `seedream-5-lite`, `seedream-5-pro`, `nano-banana-2`, `nano-banana-2-1`, `nano-banana-2-lite`, `flux-kontext`, `flux-kontext-max`, `z-image`
 
 **Aspect ratios by provider:**
 - Most: `1:1`, `16:9`, `9:16`, `4:3`, `3:4`, `3:2`, `2:3`
@@ -396,7 +396,7 @@ Generate an image from a text prompt.
 - Seedream: adds `21:9`
 
 **Optional fields:**
-- `resolution`: `"1K"`, `"2K"`, `"4K"` (nano-banana-pro, nano-banana-2); `"1K"`, `"2K"` (flux, flux-flex)
+- `resolution`: `"1K"`, `"2K"`, `"4K"` (nano-banana-pro, nano-banana-2, nano-banana-2-1); `"1K"`, `"2K"` (flux, flux-flex)
 - `quality`: `"medium"`, `"high"` (gpt-image); `"basic"`, `"high"` (seedream)
 - `seed`: number (for reproducibility)
 
@@ -447,7 +447,7 @@ Transform an image with AI guided by a prompt.
 }
 ```
 
-**Providers:** `nano-banana`, `nano-banana-pro`, `nano-banana-2`, `nano-banana-2-lite`, `grok-i2i`, `flux-i2i`, `flux-pro-i2i`, `gpt-image-i2i`, `ideogram-edit`, `ideogram-remix`, `ideogram-reframe`, `qwen-i2i`, `qwen-edit`, `seedream-edit`, `seedream-5-lite-i2i`, `seedream-5-pro-i2i`, `flux-kontext`, `flux-kontext-max`
+**Providers:** `nano-banana`, `nano-banana-pro`, `nano-banana-2`, `nano-banana-2-1`, `nano-banana-2-lite`, `grok-i2i`, `flux-i2i`, `flux-pro-i2i`, `gpt-image-i2i`, `ideogram-edit`, `ideogram-remix`, `ideogram-reframe`, `qwen-i2i`, `qwen-edit`, `seedream-edit`, `seedream-5-lite-i2i`, `seedream-5-pro-i2i`, `flux-kontext`, `flux-kontext-max`
 
 **Optional fields:** `strength` (0-1), `aspectRatio`, `negativePrompt`, `seed`, `guidanceScale`
 
@@ -586,7 +586,7 @@ Convert text to spoken audio.
 }
 ```
 
-**Providers:** `elevenlabs-v4` (default; audio tags; stability + similarity only; up to 10,000 characters), `elevenlabs-v3` (the previous model; audio tags; stability only; up to 5,000 characters), `elevenlabs-turbo`, `elevenlabs-multilingual`, `elevenlabs` (legacy id of `elevenlabs-turbo`)
+**Providers:** `elevenlabs-v4` (default; audio tags; stability + similarity only; up to 10,000 characters), `elevenlabs-v3` (the previous model; audio tags; stability only; up to 5,000 characters), `elevenlabs-v4-turbo` (the fast v4; audio tags; stability + similarity only; Turbo's credit price), `elevenlabs-turbo`, `elevenlabs-multilingual`, `elevenlabs` (legacy id of `elevenlabs-turbo`)
 
 **Common voice IDs:** `"Rachel"`, `"Clyde"`, `"Dave"`, `"Fin"`, `"Sarah"`, `"Antoni"`, `"Thomas"`, `"Charlie"`, `"George"`, `"Emily"`, `"Elli"`, `"Callum"`, `"Patrick"`, `"Harry"`, `"Liam"`, `"Dorothy"`, `"Josh"`, `"Arnold"`, `"Charlotte"`, `"Matilda"`, `"Jessica"`, `"Michael"`, `"Ethan"`, `"Gigi"`, `"Freya"`, `"Grace"`, `"Daniel"`, `"Lily"`, `"Serena"`, `"Adam"`, `"Nicole"`, `"Bill"`, `"Sam"`, `"Glinda"`, `"Giovanni"`, `"Mimi"`, `"Brian"`, `"Chris"`, `"James"`, `"Joseph"`, `"Drew"`, `"Paul"`, `"Aria"`, `"Roger"`, `"Eric"`, `"Valentino"`, `"Alice"`, `"Joanne"`, `"Laura"`, `"Will"`, `"Andrea"`, `"River"`
 

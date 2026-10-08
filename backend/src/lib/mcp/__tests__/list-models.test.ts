@@ -135,3 +135,18 @@ describe("MCP tool enums match catalog modes", () => {
     expect(missing).toEqual([])
   })
 })
+
+describe("list_models — the speech rows the existing models serve", () => {
+  it("the four existing text-to-speech catalog rows are exactly what they were before v4 Turbo was added (decided 2026-10-06)", () => {
+    // Characterization written BEFORE the new entry landed: the new id is filtered
+    // out, so this passes both before and after — what it pins is that nothing
+    // about the four existing rows (id, label, both price rows, the star) moved.
+    const rows = listModels({ kind: "audio", mode: "tts" }).filter((m) => m.id !== "elevenlabs-v4-turbo")
+    expect(rows.map((m) => [m.id, m.label, m.pricing.map((p) => [p.identifier, p.credits]), m.featured ?? false])).toEqual([
+      ["elevenlabs-v3", "ElevenLabs v3", [["elevenlabs-v3", 30], ["elevenlabs-v3:per-100-chars", 4]], false],
+      ["elevenlabs-v4", "ElevenLabs v4", [["elevenlabs-v4", 30], ["elevenlabs-v4:per-100-chars", 4]], true],
+      ["elevenlabs-turbo", "ElevenLabs Turbo v2.5", [["elevenlabs-turbo", 15], ["elevenlabs-turbo:per-100-chars", 2]], false],
+      ["elevenlabs-multilingual", "ElevenLabs Multilingual v2", [["elevenlabs-multilingual", 30], ["elevenlabs-multilingual:per-100-chars", 4]], false],
+    ])
+  })
+})

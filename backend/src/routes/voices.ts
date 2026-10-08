@@ -125,8 +125,8 @@ const V4_FAMILY = /^eleven_v4(_|$)/
  * verified for the base model `eleven_v4` (decided 2026-10-05: library voices
  * recommend v4 first); v3 comes next — it renders any voice unmodified, so
  * it's preferable to a v2 model when available.
- * Only the exact id `eleven_v4` counts: the `eleven_v4_…` variants
- * (`eleven_v4_turbo`, …) are not providers of ours.
+ * Only exact ids count in the v4 family: `eleven_v4` and `eleven_v4_turbo`;
+ * the other `eleven_v4_…` variants (`_hq`, `_exp`, …) are not providers of ours.
  * Library previews are rendered with the voice's verified models — generating
  * with an unverified model is what makes output drift audibly from the
  * preview. This stays pure: the route drops the models the deployment does not
@@ -146,6 +146,8 @@ export function deriveVerifiedTtsProviders(modelIds: readonly string[]): TtsProv
   const v2Era = modelIds.filter((m) => !V4_FAMILY.test(m))
   if (modelIds.includes("eleven_v4")) verified.push("elevenlabs-v4")
   if (modelIds.some((m) => m.includes("eleven_v3"))) verified.push("elevenlabs-v3")
+  // The fast v4, by its exact id. After v3 (decided 2026-10-06): a voice verified for both is recommended on v3, not on Turbo.
+  if (modelIds.includes("eleven_v4_turbo")) verified.push("elevenlabs-v4-turbo")
   if (v2Era.some((m) => m.includes("turbo") || m.includes("flash"))) verified.push("elevenlabs-turbo")
   if (v2Era.some((m) => m.includes("multilingual_v2"))) verified.push("elevenlabs-multilingual")
   return verified

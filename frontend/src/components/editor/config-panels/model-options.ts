@@ -37,6 +37,7 @@ export const IMAGE_GEN_MODELS: readonly { value: ImageGenProvider; label: string
   { value: "imagen4-ultra", label: "Imagen 4 Ultra", desc: "Highest quality Google image gen" },
   { value: "nano-banana", label: "Nano Banana", desc: "Fast drafts, iteration, storyboards" },
   { value: "nano-banana-2", label: "Nano Banana 2", desc: "Updated Nano Banana with web grounding" },
+  { value: "nano-banana-2-1", label: "Nano Banana 2.1", desc: "Sharper quality, text and character consistency, up to 4K" },
   { value: "nano-banana-2-lite", label: "Nano Banana 2 Lite", desc: "Fast, low-cost 1K drafts and iteration" },
   { value: "nano-banana-pro", label: "Nano Banana Pro", desc: "Higher detail, production-ready images" },
   { value: "qwen", label: "Qwen", desc: "Versatile, good at diverse styles" },
@@ -67,6 +68,7 @@ export const IMAGE_I2I_MODELS: readonly { value: ImageI2IProvider; label: string
   { value: "ideogram-remix", label: "Ideogram Remix", desc: "Restyle with character consistency" },
   { value: "nano-banana", label: "Nano Banana", desc: "Fast iteration, quick transforms" },
   { value: "nano-banana-2", label: "Nano Banana 2", desc: "Updated Nano Banana — web-grounded transforms, up to 4K" },
+  { value: "nano-banana-2-1", label: "Nano Banana 2.1", desc: "Consistent edits, up to 10 references and 4K output" },
   { value: "nano-banana-2-lite", label: "Nano Banana 2 Lite", desc: "Fast 1K edits, up to 10 reference images" },
   { value: "nano-banana-pro", label: "Nano Banana Pro", desc: "Higher detail, production images" },
   { value: "qwen-i2i", label: "Qwen", desc: "Versatile image transformation" },
@@ -623,6 +625,7 @@ export const LIP_SYNC_MODELS: readonly { value: LipSyncProvider; label: string; 
 export const TTS_MODELS: readonly { value: string; label: string; desc: string }[] = [
   { value: "elevenlabs-v3", label: "ElevenLabs v3", desc: "Expressive, supports audio tags for emotions" },
   { value: "elevenlabs-v4", label: "ElevenLabs v4", desc: "Newest, supports audio tags, up to 10,000 characters" },
+  { value: "elevenlabs-v4-turbo", label: "ElevenLabs v4 Turbo", desc: "Faster, cheaper v4 at lower fidelity; supports audio tags" },
   { value: "elevenlabs-turbo", label: "ElevenLabs Turbo v2.5", desc: "Fast generation, 32 languages" },
   { value: "elevenlabs-multilingual", label: "ElevenLabs Multilingual v2", desc: "29 languages, natural delivery" },
 ]

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react"
 import type { GenerativePipelineNodeData } from "@/types/nodes"
-import { PIPELINE_FORMATS, PIPELINE_MODES, PIPELINE_OUTPUT_RESOLUTIONS, PIPELINE_PINNABLE_IMAGE_MODELS, PIPELINE_PINNABLE_SCRIPT_LLMS, PIPELINE_PINNABLE_VIDEO_MODELS, VIDEO_CRITIC_FRAME_MODES, VIDEO_CRITIC_RESERVED_CREDITS_PER_SHOT, getModel, validateDurationForFormat, type PipelineFormat, type PipelineMode, type VideoCriticFrameMode } from "@nodaro/shared"
+import { PIPELINE_FORMATS, PIPELINE_MODES, PIPELINE_OUTPUT_RESOLUTIONS, PIPELINE_LEGACY_PINNED_IMAGE_MODELS, PIPELINE_PINNABLE_IMAGE_MODELS, PIPELINE_PINNABLE_SCRIPT_LLMS, PIPELINE_PINNABLE_VIDEO_MODELS, VIDEO_CRITIC_FRAME_MODES, VIDEO_CRITIC_RESERVED_CREDITS_PER_SHOT, getModel, validateDurationForFormat, type PipelineFormat, type PipelineMode, type VideoCriticFrameMode } from "@nodaro/shared"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import {
@@ -73,6 +73,7 @@ function IMAGE_MODEL_LABELS(): Record<string, string> {
     "nano-banana": tx("cfgext.genImgNanoBanana"),
     "nano-banana-pro": tx("cfgext.genImgNanoBananaPro"),
     "nano-banana-2": tx("cfgext.genImgNanoBanana2"),
+    "nano-banana-2-1": "Nano Banana 2.1",
     flux: "Flux Pro",
     "gpt-image": "GPT Image",
     "gpt-image-2": "GPT Image 2",
@@ -140,9 +141,19 @@ export function GenerativePipelineConfig({ data, onUpdate }: ConfigProps<Generat
   // Built per-locale (not at module load) so the "Auto" sentinel and the model
   // labels follow a language switch; memoized on `t` so the child select does
   // not see a fresh array identity on every render.
+  // A node saved with a pin that is no longer offered (Nano Banana 2, replaced
+  // by 2.1) keeps it: the option is shown for that node only, so the select
+  // still reads the value the run will use.
+  const savedLegacyImageModel = (PIPELINE_LEGACY_PINNED_IMAGE_MODELS as readonly string[]).includes(data.image_model ?? "")
+    ? data.image_model
+    : undefined
   const imageModelOptions = useMemo(
-    () => buildOptions(PIPELINE_PINNABLE_IMAGE_MODELS, IMAGE_MODEL_LABELS(), t("cfgext.genAutoDirectorPicks")),
-    [t],
+    () => buildOptions(
+      savedLegacyImageModel ? [...PIPELINE_PINNABLE_IMAGE_MODELS, savedLegacyImageModel] : PIPELINE_PINNABLE_IMAGE_MODELS,
+      IMAGE_MODEL_LABELS(),
+      t("cfgext.genAutoDirectorPicks"),
+    ),
+    [t, savedLegacyImageModel],
   )
   const videoModelOptions = useMemo(
     () => buildOptions(PIPELINE_PINNABLE_VIDEO_MODELS, VIDEO_MODEL_LABELS(), t("cfgext.genAutoDirectorPicks")),

@@ -8,8 +8,9 @@
  *  - View only on a read-only canvas: nothing runs from here.
  *  - Running while a live run includes the render or its plan (R9 a): edits
  *    are locked, and neither button shows.
- *  - Otherwise ready, unless held, first match wins: nothing is kept; the
- *    render's rule refuses the cut (its issues); a newer run is waiting to be
+ *  - Otherwise ready, unless held, first match wins: the render cannot run at
+ *    all (Speaker View until it is priced, C4); nothing is kept; the render's
+ *    rule refuses the cut (its issues); a newer run is waiting to be
  *    loaded (TA3 c); the newer-run check has not answered yet; the rule's
  *    verdict is not in yet.
  *  - The newer-run check holds them for 15 s at most (decided 2026-10-07):
@@ -20,10 +21,12 @@
  * the guard.
  */
 import type { RenderRuleVerdict } from "@/components/editor/workflow-editor/render-final-checks"
+import type { MessageKey } from "@/lib/i18n/en"
 
 export type ReviewGateMode = "hidden" | "view-only" | "running" | "ready"
 
 export type ReviewGateHold =
+  | { readonly kind: "refused"; readonly reason: MessageKey }
   | { readonly kind: "nothing-kept" }
   | { readonly kind: "issues"; readonly issues: readonly string[] }
   | { readonly kind: "newer-run" }
@@ -51,6 +54,8 @@ export interface ReviewGateInput {
    *  clip set. Zero holds the runs; null is "not known" (nothing is held). */
   readonly keptCount: number | null
   readonly verdict: RenderRuleVerdict | undefined
+  /** Why no run of the render can go ahead at all (`renderRunRefusalKey`); absent when one can. */
+  readonly refusal?: MessageKey
   /** A newer run's changes; `undefined` while the check is out, `null` when there is none. */
   readonly newerRun: unknown
   /** The newer-run check has been out longer than its timeout (15 s). */
@@ -68,7 +73,8 @@ export function reviewGate(input: ReviewGateInput): ReviewGate {
 const unchecked = ({ newerRun, newerCheckTimedOut }: ReviewGateInput): boolean => newerRun === undefined && !!newerCheckTimedOut
 
 function holdOf(input: ReviewGateInput): ReviewGateHold | null {
-  const { keptCount, verdict, newerRun } = input
+  const { keptCount, verdict, newerRun, refusal } = input
+  if (refusal) return { kind: "refused", reason: refusal }
   if (keptCount === 0) return { kind: "nothing-kept" }
   if (verdict && !verdict.ok) return { kind: "issues", issues: verdict.issues }
   if (newerRun !== null && newerRun !== undefined) return { kind: "newer-run" }

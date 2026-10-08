@@ -447,6 +447,7 @@ describe("POST /v1/text-to-speech", () => {
     ["legacy elevenlabs", { text: "hello", provider: "elevenlabs" }, "elevenlabs-turbo"],
     ["explicit v3", { text: "hello", provider: "elevenlabs-v3" }, "elevenlabs-v3"],
     ["explicit v4", { text: "hello", provider: "elevenlabs-v4" }, "elevenlabs-v4"],
+    ["explicit v4 Turbo", { text: "hello", provider: "elevenlabs-v4-turbo" }, "elevenlabs-v4-turbo"],
   ])("the credit guard, the reservation and the queued job agree on the model (%s)", async (_label, body, expected) => {
     mockJobInsert({ data: { id: "job-1" }, error: null })
     const payload = { ...body, userId: "00000000-0000-4000-8000-000000000001" }
@@ -554,6 +555,34 @@ describe("POST /v1/text-to-speech", () => {
     })
 
     it("is what an omitted provider resolves to (then turbo past its 10,000-character cap)", () => {
+      expect(resolveOmittedTtsProvider("short text")).toBe("elevenlabs-v4")
+      expect(resolveOmittedTtsProvider("a".repeat(10001))).toBe("elevenlabs-turbo")
+    })
+  })
+
+  describe("elevenlabs-v4-turbo", () => {
+    const userId = "00000000-0000-4000-8000-000000000001"
+
+    it("is accepted, reserved under its own credit id, and queued as itself", async () => {
+      mockJobInsert({ data: { id: "job-1" }, error: null })
+      const res = await app.inject({ method: "POST", url: "/v1/text-to-speech", payload: { text: "hello", provider: "elevenlabs-v4-turbo", userId } })
+      expect(res.statusCode).toBe(200)
+      expect(reserveCreditsForJob).toHaveBeenCalledWith(expect.anything(), expect.anything(), "job-1", "elevenlabs-v4-turbo")
+      expect(videoQueue.add).toHaveBeenCalledWith("text-to-speech", expect.objectContaining({ provider: "elevenlabs-v4-turbo" }))
+    })
+
+    it("takes its sheet's cap unclamped and clamps past it", async () => {
+      const cap = getMaxTtsChars("elevenlabs-v4-turbo")
+      mockJobInsert({ data: { id: "job-1" }, error: null })
+      await app.inject({ method: "POST", url: "/v1/text-to-speech", payload: { text: "a".repeat(cap), provider: "elevenlabs-v4-turbo", userId } })
+      expect((vi.mocked(videoQueue.add).mock.calls[0]![1] as { text: string }).text.length).toBe(cap)
+      vi.mocked(videoQueue.add).mockClear()
+      mockJobInsert({ data: { id: "job-2" }, error: null })
+      await app.inject({ method: "POST", url: "/v1/text-to-speech", payload: { text: "a".repeat(cap + 1), provider: "elevenlabs-v4-turbo", userId } })
+      expect((vi.mocked(videoQueue.add).mock.calls[0]![1] as { text: string }).text.length).toBe(cap)
+    })
+
+    it("is never what an omitted provider resolves to — the default stays v4, the long-text fallback stays turbo v2.5", () => {
       expect(resolveOmittedTtsProvider("short text")).toBe("elevenlabs-v4")
       expect(resolveOmittedTtsProvider("a".repeat(10001))).toBe("elevenlabs-turbo")
     })

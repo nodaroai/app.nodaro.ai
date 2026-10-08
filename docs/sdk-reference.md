@@ -1799,7 +1799,7 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 
 > **Continuity across clips.** `run("text-to-speech", { text, previousText, nextText, … })`
 > passes the lines spoken just before and after the clip; a model that stitches
-> (ElevenLabs v4, Turbo v2.5 and Multilingual v2; not v3) keeps one intonation across clips produced separately. Up to 1,000
+> (ElevenLabs v4, v4 Turbo, Turbo v2.5 and Multilingual v2; not v3) keeps one intonation across clips produced separately. Up to 1,000
 > characters each; context is not spoken. See the Text to Speech node docs.
 
 > **Typed structured references.**
@@ -3681,18 +3681,24 @@ Each returned voice may carry model-verification hints derived from the
 library's `verified_languages` metadata:
 
 - `recommendedProvider` — the best TTS provider the voice is verified on
-  (`elevenlabs-v4` preferred when the voice is verified for it, then
-  `elevenlabs-v3`, which renders any voice unmodified, then the cheapest v2
-  model: `elevenlabs-turbo` preferred, else `elevenlabs-multilingual`). Only
-  the base model id `eleven_v4` counts toward v4; a voice verified only for an
-  `eleven_v4_…` variant (such as `eleven_v4_turbo`) is not verified for
-  `elevenlabs-v4`. Apps without a provider picker should send it
+  (`elevenlabs-v4` when the voice is verified for the base model `eleven_v4`,
+  then `elevenlabs-v3`, which renders any voice unmodified, then
+  `elevenlabs-v4-turbo` when it is verified for the exact id `eleven_v4_turbo`,
+  then the cheapest v2 model: `elevenlabs-turbo` preferred, else
+  `elevenlabs-multilingual`). Only those two exact ids count in the v4 family:
+  a voice verified only for `eleven_v4_turbo` is recommended on
+  `elevenlabs-v4-turbo`, not on `elevenlabs-v4`; the other `eleven_v4_…`
+  variants (`eleven_v4_hq`, `eleven_v4_exp`, …) are not models of ours and
+  count toward nothing. Apps without a provider picker should send it
   as the `provider` when generating speech with this voice, so the voice
   renders on a model it's verified for (that's what keeps generation
   sounding like the library preview).
 - `verifiedProviders` — every provider the voice is verified on, in the
-  order v4 → v3 → turbo → multilingual. Apps WITH a provider picker should only
-  override the user's choice when it is **not** in this set.
+  order v4 → v3 → v4 Turbo → turbo → multilingual (`recommendedProvider` is its
+  first entry). Apps WITH a provider picker should only override the user's
+  choice when it is **not** in this set. Switch on membership, not on a closed
+  list of values: a speech model added later joins the set the release it
+  ships.
 
 Both hints only name models the deployment offers. On a deployment that does
 not offer `elevenlabs-v4` (a curated model list, or a model an admin has

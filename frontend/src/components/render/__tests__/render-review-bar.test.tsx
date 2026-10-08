@@ -20,7 +20,9 @@ vi.mock("lucide-react", () => new Proxy({}, {
   has: () => true,
 }))
 
-import { RenderReviewBar } from "../render-review-bar"
+import { RenderReviewBar, RenderReviewBarView } from "../render-review-bar"
+import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { translate } from "@/lib/i18n"
 
 beforeEach(() => {
   controls.renderFinal.mockClear()
@@ -84,5 +86,30 @@ describe("RenderReviewBar", () => {
       expect(b.getAttribute("aria-busy")).toBeNull()
       expect(b.querySelector("[data-testid=check-spinner]")).toBeNull()
     }
+  })
+
+  // C3.4: a render that cannot run at all (Speaker View until it is priced)
+  // shows both buttons disabled, with no price, and says why under them.
+  it("a render that cannot run: both disabled, no price, and the reason shown and described", () => {
+    render(<RenderReviewBarView onRenderFinal={vi.fn()} onUpdatePreview={vi.fn()} finalCredits={530} previewCredits={144} busy={false} disabledReason="Not priced yet" />)
+    const reason = screen.getByTestId("render-review-refusal")
+    expect(reason.textContent).toBe("Not priced yet")
+    for (const name of [/^Render final$/, /^Update preview$/]) {
+      const b = screen.getByText(name).closest("button")!
+      expect(b.disabled).toBe(true)
+      expect(b.title).toBe("Not priced yet")
+      expect(b.getAttribute("aria-describedby")).toBe(reason.id)
+    }
+  })
+
+  it("the editor's bar on an unpriced Speaker View says it is not priced yet", () => {
+    useWorkflowStore.setState({ nodes: [{ id: "sv", type: "speaker-view", position: { x: 0, y: 0 }, data: {} }] as never })
+    render(<RenderReviewBar renderId="sv" busy={false} />)
+    expect(screen.getByTestId("render-review-refusal").textContent).toBe(translate("en", "speakerView.notPriced"))
+    expect(screen.getByText(/^Render final$/).closest("button")!.disabled).toBe(true)
+    cleanup()
+    useWorkflowStore.setState({ nodes: [{ id: "r", type: "apply-edl", position: { x: 0, y: 0 }, data: {} }] as never })
+    render(<RenderReviewBar renderId="r" busy={false} />)
+    expect(screen.queryByTestId("render-review-refusal")).toBeNull()
   })
 })

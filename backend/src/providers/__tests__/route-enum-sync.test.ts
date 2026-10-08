@@ -112,6 +112,9 @@ const DIRECT_API_EXEMPTIONS = new Set<string>([
   // ElevenLabs v4 — the same direct API lane as v3 (direct-tts.ts); its
   // ElevenLabs model id is the row in providers/elevenlabs/tts-models.ts.
   "elevenlabs-v4",
+  // ElevenLabs v4 Turbo — the same direct API lane (direct-tts.ts); its
+  // ElevenLabs model id is the row in providers/elevenlabs/tts-models.ts.
+  "elevenlabs-v4-turbo",
   // Bare "elevenlabs" was a legacy alias kept for backwards compat — it
   // resolves at runtime to one of the v2/v3 variants.
   "elevenlabs",

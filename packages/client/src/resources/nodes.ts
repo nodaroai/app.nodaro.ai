@@ -143,7 +143,7 @@ export interface TextToSpeechParams {
   /** A premade voice NAME (Rachel, George, …) or a library / custom voice id. */
   voice?: string
   voiceType?: "premade" | "custom" | "library"
-  /** `elevenlabs-v4` (the default), `elevenlabs-v3`, `elevenlabs-turbo`, `elevenlabs-multilingual`. */
+  /** `elevenlabs-v4` (the default), `elevenlabs-v3`, `elevenlabs-v4-turbo`, `elevenlabs-turbo`, `elevenlabs-multilingual`. */
   provider?: string
   stability?: number
   similarityBoost?: number

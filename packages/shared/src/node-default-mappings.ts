@@ -161,6 +161,7 @@ const QUALITY_MAP: Record<string, QualityMapping> = {
   // Image gen — resolution-style (1K/2K/4K)
   "nano-banana-pro":     { field: "resolution", values: { low: "1K", mid: "2K", high: "4K" } },
   "nano-banana-2":       { field: "resolution", values: { low: "1K", mid: "2K", high: "4K" } },
+  "nano-banana-2-1":     { field: "resolution", values: { low: "1K", mid: "2K", high: "4K" } },
   "flux":                { field: "resolution", values: { low: "1K", mid: "2K", high: "2K" } },
   "flux-flex":           { field: "resolution", values: { low: "1K", mid: "2K", high: "2K" } },
   "flux-i2i":            { field: "resolution", values: { low: "1K", mid: "2K", high: "2K" } },

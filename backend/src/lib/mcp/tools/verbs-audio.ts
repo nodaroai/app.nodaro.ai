@@ -377,6 +377,8 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
         "ALL languages including Hebrew/Arabic/CJK, not just English. It takes " +
         "stability + similarity only (no speed/style). " +
         "`elevenlabs-v3` is the previous model: same tags, stability only. " +
+        "`elevenlabs-v4-turbo` is the fast v4 — the same tags and levers at Turbo's " +
+        "credit price; pick it over `elevenlabs-turbo` when the text carries tags. " +
         "`elevenlabs-turbo` is cheaper for plain narration. " +
         "`elevenlabs-multilingual` is a legacy v2 model routed through a " +
         "third-party wrapper known to garble some languages (Hebrew observed) " +
@@ -442,6 +444,7 @@ export function registerAudioVerbs({ server, session, fastify }: RegisterOpts): 
             "multilingual — use it for ALL languages including Hebrew/Arabic/CJK " +
             "(stability + similarity only, no speed/style). " +
             "`elevenlabs-v3` is the previous model (same tags; stability only). " +
+            "`elevenlabs-v4-turbo` is the fast v4 (same tags and levers; Turbo's price). " +
             "`elevenlabs-turbo` is cheaper for plain narration. " +
             "`elevenlabs-multilingual` is a legacy v2 model via a third-party " +
             "wrapper known to garble some languages (Hebrew observed) — only " +
