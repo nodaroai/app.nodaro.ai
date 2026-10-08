@@ -46,7 +46,6 @@ import {
   edlDurationMs,
   normalizeEdl,
   planClipKeyAt,
-  renderClipKey,
   renderReadBasis,
   renderResultStamp,
   resolveEditPlanOutput,
@@ -63,6 +62,7 @@ import {
 } from "@nodaro/shared"
 import type { ApplyEdlRenderInput, ApplyEdlRenderSettings } from "@/lib/edl-validity"
 import { renderSettingsBasisOf } from "./staleness"
+import { clipRenderBasesBy } from "./clip-render-bases"
 
 /** What a card shows on its state line. `preview-stale` is the preview with
  *  its "predates this plan" mark; `audio-only` is an audio render's preview. */
@@ -168,13 +168,7 @@ export function clipRenderBases(
   planOutput: unknown,
   hops: readonly RenderPlanHop[],
 ): Map<string, string> {
-  const bases = new Map<string, string>()
-  for (const render of renders) {
-    const key = renderClipKey(planOutput, render.row, hops)
-    const basis = key ? renderSettingsBasisOf(render, settings) : undefined
-    if (key && basis && !bases.has(key)) bases.set(key, basis)
-  }
-  return bases
+  return clipRenderBasesBy(renders, (render) => renderSettingsBasisOf(render, settings), planOutput, hops)
 }
 
 /** The plan rows a wire that hands on ONE value passes (`singlePick` in

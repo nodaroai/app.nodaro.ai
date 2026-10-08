@@ -112,6 +112,7 @@ const ALLOWLIST: readonly Entry[] = [
   ["frontend/src/lib/node-docs/summaries/pt-BR.generated.ts", `"apply-edl"`, "generated node-docs"],
   ["frontend/src/lib/node-families.ts", `types: ["trim-video", "combine-videos", "apply-edl"`, "node family"],
   ["frontend/src/lib/node-options.tsx", `type: "apply-edl"`, "NODE_OPTIONS"],
+  ["frontend/src/lib/render-review-adapter.ts", `"apply-edl"`, "review adapter table, keyed by RENDER_NODE_TYPES (its totality test fails a missing id)"],
   ["frontend/src/lib/target-handle-registry.ts", `"apply-edl"`, "target-handle registry"],
   ["frontend/src/types/nodes.ts", `| "apply-edl"`, "SceneNodeType union"],
   ["frontend/src/types/nodes.ts", `type: "apply-edl"`, "NODE_DEFINITIONS"],

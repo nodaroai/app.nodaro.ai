@@ -109,8 +109,7 @@ function OpenClipInspector({ renderId: anchoredAt, onClose, onRenderChange }: Re
           planId={model.planId}
           renderId={renderId}
           onRenderChange={changeRender}
-          renders={checks.renders}
-          settings={{ output: model.render.output, crossfadeMs: model.render.crossfadeMs }}
+          validity={checks.validity}
         />
       }
       actions={

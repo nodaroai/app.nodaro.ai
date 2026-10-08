@@ -20,11 +20,11 @@
  * a take exists.
  */
 import { renderPlanPath, resolveEditPlanOutput, savedRenderOutput, type RenderGraphEdge } from "@nodaro/shared"
-import { applyEdlRenderSettings, resolveApplyEdlRenders } from "@/lib/apply-edl-render-input"
+import { renderRowsOf, renderSettingsBasisFor } from "@/lib/render-review-adapter"
 import { currentRenderPlanBasis } from "@/components/editor/workflow-editor/apply-edl-stamps"
 import type { WorkflowEdge, WorkflowNode } from "@/types/nodes"
 import { planKindOf } from "./plan-kind"
-import { isFreshTake, renderSettingsBasisOf, showsStaleTake } from "./staleness"
+import { isFreshTake, showsStaleTake } from "./staleness"
 
 export function editedSincePreview(
   renderId: string,
@@ -42,10 +42,11 @@ export function editedSincePreview(
   if (planKindOf(data.generatedJson) !== "edl") return false
   if (resolveEditPlanOutput(data.generatedJson, data.editedEdl).status !== "applied") return false
 
-  const first = resolveApplyEdlRenders(render, nodes, edges)[0]
+  // The render's own rows and basis (Apply EDL's or Speaker View's: render-review-adapter.ts).
+  const first = renderRowsOf(render, nodes, edges)[0]
   const now = {
     planBasis: currentRenderPlanBasis(renderId, nodes, edges as readonly RenderGraphEdge[], first?.row),
-    renderBasis: renderSettingsBasisOf(first, applyEdlRenderSettings(render.data as Record<string, unknown>)),
+    renderBasis: renderSettingsBasisFor(render, first),
   }
   return showsStaleTake(isFreshTake(take, now), true, true)
 }

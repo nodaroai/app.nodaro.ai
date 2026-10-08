@@ -89,6 +89,15 @@ The badge and the run use the same rule, so what the badge passes, the run accep
 - on **two or more cameras**, speakers it cannot read: no speaker on any segment while the transcript names two or more speakers or none (*"Wire Camera Switch between Edit Plan and Speaker View"*); a partly named edit with no transcript, or a transcript with no speaker labels. A transcript with exactly **one** speaker label passes, and a fully named edit is never refused for its transcript;
 - a speaker no camera shows.
 
+## Reviewing a cut
+
+Speaker View is reviewed the way [Apply EDL](./apply-edl.md#reviewing-a-cut) is:
+
+- **Review cut.** A Speaker View fed by an [Edit Plan](./edit-plan.md#reviewing-a-cut) Tighten cut — directly or through Camera Switch — carries a **Review cut** button (**Review clips** for a Clips plan) whatever it shows: a Preview, a Final, or nothing yet. The review judges the edit by **Speaker View's** rule (the list above), not Apply EDL's, so a side-by-side moment from Camera Switch's hints is not an issue there.
+- **Clicks land where the take drew them.** In the review, a click on a word seeks the Preview through the EDL the take itself drew (its `json` output, with the turns split and the layouts written). Only the newest take carries that EDL: an older take, or one made before the edit or a setting changed, plays the original instead. Behind Camera Switch, a take is mapped only when the run that made it re-ran Camera Switch too — **Render final** and **Update preview** always do; a take from a Run of Speaker View on its own plays the original.
+- **Edited since this preview, Render final and Update preview.** While the take on show is a Preview, the node says **Edited since this preview** when the Edit Plan holds edits that the Preview on show was not cut from, and carries the **Render final** bar (with **Update preview** where `PREVIEW_STOP_RULE_ENABLED` is on), as described for [Apply EDL](./apply-edl.md#render-final). Until Speaker View has a price, that bar, the review's footer and the context menu's **Render final** / **Update preview** are disabled and say *"Not priced yet — runs are refused until its price is set."* — no price is shown.
+- **Nothing changed since the last final** is not asked for Speaker View: a Render final always renders again.
+
 ## Credit Cost
 
 **Not priced yet** — see the notice above. This page will give the formula, with worked examples, when the price is set.

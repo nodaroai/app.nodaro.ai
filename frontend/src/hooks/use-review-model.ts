@@ -12,7 +12,8 @@
  *  - The transcript (R5 a, decided 2026-10-06): the value on the Edit Plan's
  *    `transcript` wire, resolved by the editor's input resolver. None means
  *    Cuts-only mode. Never fetched.
- *  - The render's settings and its wired Sources media, as its badge reads them.
+ *  - The render's settings and its wired Sources media, as its badge reads them
+ *    (the anchored render's own: `render-review-adapter.ts`).
  *  - The take on display (`savedRenderOutput`), and the newest Preview take
  *    when the one on display is not a Preview.
  *  - `locked` (R9 a): the canvas is read-only, or a live run includes the
@@ -53,7 +54,7 @@ import { showsARunInFlight } from "@/hooks/workflow-access-mode"
 import { useReviewGraph } from "@/hooks/use-review-graph"
 import { useNewerRunCheck } from "@/hooks/use-newer-run-check"
 import type { IgnoredKeys } from "@/lib/edl-review/review-graph"
-import { applyEdlRenderSettings, resolveApplyEdlRenders } from "@/lib/apply-edl-render-input"
+import { renderReviewAdapterOf } from "@/lib/render-review-adapter"
 import { isReviewableBase } from "@/lib/edl-review/build-edited"
 import { planKindOf, type ReviewPlanKind } from "@/lib/edl-review/plan-kind"
 import { keptSetOf, type KeptSet } from "@/lib/edl-review/kept-set"
@@ -109,6 +110,9 @@ export interface ReviewModel {
 export { NEWER_RUN_CHECK_TIMEOUT_MS }
 
 const EMPTY_SOURCES: readonly string[] = []
+
+/** Read for a render that is not one (a deleted node): Apply EDL's video defaults. */
+const NO_ADAPTER = { reviewContext: () => ({ output: "video", crossfadeMs: 0, sources: EMPTY_SOURCES }) as ReviewRenderContext }
 
 /** Run state, and on the plan also the review's own edit (`editedEdl`). */
 const RUN_STATE_AND_EDIT: ReadonlySet<string> = new Set([...TRANSIENT_RUNTIME_KEYS, "editedEdl"])
@@ -182,16 +186,18 @@ export function useReviewModel(renderId: string): ReviewModel {
   }, [base, reviewable, editStatus, editedEdl])
 
   const renderData = (renderNode?.data ?? {}) as Readonly<Record<string, unknown>>
-  const settings = applyEdlRenderSettings(renderData)
+  const adapter = renderReviewAdapterOf(renderNode?.type)
   const sourcesKey = useMemo(() => {
     const render = inputs.nodes.find((n) => n.id === renderId)
-    if (!render) return "[]"
-    const first = resolveApplyEdlRenders(render, inputs.nodes, inputs.edges)[0]
+    if (!render || !adapter) return "[]"
+    const first = adapter.rows(render, inputs.nodes, inputs.edges)[0]
     return JSON.stringify(first?.sources ?? EMPTY_SOURCES)
-  }, [renderId, inputs])
+  }, [renderId, inputs, adapter])
+  // Keyed on the context's fields, not its object: the adapter builds a new one each read.
+  const context = (adapter ?? NO_ADAPTER).reviewContext(renderData, EMPTY_SOURCES)
   const render = useMemo<ReviewRenderContext>(
-    () => ({ output: settings.output, crossfadeMs: settings.crossfadeMs, sources: JSON.parse(sourcesKey) as string[] }),
-    [settings.output, settings.crossfadeMs, sourcesKey],
+    () => ({ output: context.output, crossfadeMs: context.crossfadeMs, sources: JSON.parse(sourcesKey) as string[] }),
+    [context.output, context.crossfadeMs, sourcesKey],
   )
 
   const planKind = planKindOf(plan)

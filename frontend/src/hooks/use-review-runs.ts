@@ -13,12 +13,16 @@
  *
  * The prices are `useRenderFinal`'s: they read the plan as written, so they
  * follow an edit once its debounced write lands. The gate reads the pending
- * edit (`useReviewChecks`), so it never lags.
+ * edit (`useReviewChecks`), so it never lags. A render that cannot run at all
+ * (`renderRunRefusalKey`: Speaker View until it is priced, C4) quotes no price:
+ * both are 0, so no button, banner or footer that shows these figures quotes
+ * the run-set estimate's fallback for a run that is refused.
  */
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useRenderFinal } from "@/hooks/use-render-final"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { reviewGate, type ReviewGate } from "@/lib/edl-review/review-gate"
+import { renderRunRefusalKey } from "@/lib/render-review-adapter"
 import type { ReviewChecks } from "./use-review-checks"
 import type { ReviewEditState } from "./review-edit-state"
 import type { ReviewModel } from "./use-review-model"
@@ -27,7 +31,9 @@ export type ReviewRunKind = "final" | "proxy"
 
 export interface ReviewRuns {
   readonly gate: ReviewGate
+  /** Credits Render final will charge; 0 outside credit editions and while the render's runs are refused. */
   readonly finalCredits: number
+  /** Credits Update preview will charge; 0 likewise. */
   readonly previewCredits: number
   readonly canUpdatePreview: boolean
   /** While running: the run this inspector started, or null for one started elsewhere. */
@@ -48,6 +54,8 @@ export function useReviewRuns(model: ReviewModel, edits: ReviewEditState, checks
   const { renderId, locked } = model
   const controls = useRenderFinal(renderId)
   const readOnly = useWorkflowStore((s) => s.isReadOnly)
+  // A render that cannot run at all holds both runs, and the footer says why.
+  const refusal = useWorkflowStore((s) => renderRunRefusalKey(s.nodes.find((n) => n.id === renderId)))
   const progress = useWorkflowStore((s) => {
     const value = (s.nodes.find((n) => n.id === renderId)?.data as { currentJobProgress?: unknown } | undefined)?.currentJobProgress
     return typeof value === "number" && value > 0 ? Math.round(value) : null
@@ -73,10 +81,11 @@ export function useReviewRuns(model: ReviewModel, edits: ReviewEditState, checks
       locked,
       keptCount: edits.keptCount,
       verdict: checks.verdict,
+      ...(refusal ? { refusal } : {}),
       newerRun: model.newerRun,
       newerCheckTimedOut: model.newerRunCheckTimedOut,
     }),
-    [model.base, model.reviewable, model.planKind, model.planId, readOnly, locked, edits.keptCount, checks.verdict, model.newerRun, model.newerRunCheckTimedOut],
+    [model.base, model.reviewable, model.planKind, model.planId, readOnly, locked, edits.keptCount, checks.verdict, refusal, model.newerRun, model.newerRunCheckTimedOut],
   )
 
   const { flush } = edits
@@ -92,8 +101,9 @@ export function useReviewRuns(model: ReviewModel, edits: ReviewEditState, checks
 
   return {
     gate,
-    finalCredits: controls.finalCredits,
-    previewCredits: controls.previewCredits,
+    // A refused run charges nothing: no figure to quote (the gate says why).
+    finalCredits: refusal ? 0 : controls.finalCredits,
+    previewCredits: refusal ? 0 : controls.previewCredits,
     canUpdatePreview,
     running: gate.mode === "running" ? started : null,
     progress: gate.mode === "running" ? progress : null,

@@ -6,7 +6,7 @@
  *  - `useClipCardInputs`: everything the model reads that does not depend on a
  *    live run — the plan and its stored review, the reviewer's not-yet-written
  *    decisions, the render's data, the wires between them, and the settings
- *    basis each clip's render would stamp now (`clipRenderBases`). Read through
+ *    basis each clip's render would stamp now (`clipRenderBasesBy`). Read through
  *    `useReviewGraph`, so a run's progress ticks and edits beside the render
  *    leave it alone. The renders are resolved with the decisions' KEEPS in place
  *    (a pure overlay, no store write): a hook edit changes neither a clip's
@@ -19,10 +19,11 @@
  */
 import { useMemo } from "react"
 import type { EditedClipDecision, RenderPlanHop } from "@nodaro/shared"
-import { buildClipCards, clipRenderBases, type ClipCards, type ClipCardsInput, type ClipLiveRun } from "@/lib/edl-review/build-clip-cards"
+import { buildClipCards, type ClipCards, type ClipCardsInput, type ClipLiveRun } from "@/lib/edl-review/build-clip-cards"
 import { clipLiveRun } from "@/lib/edl-review/clip-live"
+import { clipRenderBasesBy } from "@/lib/edl-review/clip-render-bases"
 import { clipReviewOf, withPendingReview } from "@/lib/edl-review/write-review"
-import { applyEdlRenderSettings, resolveApplyEdlRenders } from "@/lib/apply-edl-render-input"
+import { renderRowsOf, renderSettingsBasisFor } from "@/lib/render-review-adapter"
 import { planOutputOf } from "@/components/editor/workflow-editor/apply-edl-stamps"
 import { showsARunInFlight } from "./workflow-access-mode"
 import { useReviewGraph } from "./use-review-graph"
@@ -47,9 +48,9 @@ export function useClipCardInputs(model: ReviewModel, decisions: readonly Edited
     const render = nodes.find((n) => n.id === renderId)
     const planNode = nodes.find((n) => n.id === planId)
     if (!render || !planNode) return undefined
-    const renders = resolveApplyEdlRenders(render, nodes, canvas.edges)
-    const settings = applyEdlRenderSettings(render.data as Record<string, unknown>)
-    return clipRenderBases(renders, settings, planOutputOf(planNode), path.hops)
+    // The anchored render's own rows and basis (render-review-adapter.ts).
+    const renders = renderRowsOf(render, nodes, canvas.edges)
+    return clipRenderBasesBy(renders, (row) => renderSettingsBasisFor(render, row), planOutputOf(planNode), path.hops)
   }, [canvas, renderId, planId, plan, path, keeps])
 
   const renderData = canvas.nodes.find((n) => n.id === renderId)?.data as Readonly<Record<string, unknown>> | undefined

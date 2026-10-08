@@ -17,6 +17,7 @@ import { isRenderNodeType } from "@nodaro/shared"
 import { openReview, useReviewHostMounted } from "@/hooks/use-review-open-store"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { reviewKindOf } from "@/lib/edl-review/review-entry"
+import { renderRunRefusalKey } from "@/lib/render-review-adapter"
 import { useT, type TFunction } from "@/lib/i18n"
 import { runtimePreviewStopRule } from "@/lib/runtime-config"
 import { rendersOfPlan } from "./workflow-editor/render-final-set"
@@ -46,11 +47,13 @@ export function RenderMenuItems({ nodeId, nodeType, isRunning, onClose }: Props)
   const canUpdatePreview = runtimePreviewStopRule()
 
   const renders = useMemo(() => {
-    if (isRenderNodeType(nodeType)) return [{ id: nodeId, name: "" }]
+    const refusalOf = (id: string) => renderRunRefusalKey(nodes.find((n) => n.id === id))
+    if (isRenderNodeType(nodeType)) return [{ id: nodeId, name: "", refusal: refusalOf(nodeId) }]
     if (nodeType !== "edit-plan") return []
     return rendersOfPlan(nodeId, nodes, edges).map((n) => ({
       id: n.id,
       name: ((n.data as { label?: string }).label ?? "") || n.type || "",
+      refusal: refusalOf(n.id),
     }))
   }, [nodeId, nodeType, nodes, edges])
   const reviewable = useMemo(
@@ -84,7 +87,9 @@ export function RenderMenuItems({ nodeId, nodeType, isRunning, onClose }: Props)
               void renderFinal(render.id, "final")
               onClose()
             }}
-            disabled={isRunning}
+            // A render that cannot run at all (Speaker View until it is priced) says why.
+            disabled={isRunning || !!render.refusal}
+            title={render.refusal ? t(render.refusal) : undefined}
           >
             <Film className="h-3.5 w-3.5" />
             {renders.length > 1 && render.name ? t("renderFinal.menuFor", { name: render.name }) : t("renderFinal.action")}
@@ -96,7 +101,8 @@ export function RenderMenuItems({ nodeId, nodeType, isRunning, onClose }: Props)
                 void renderFinal(render.id, "proxy")
                 onClose()
               }}
-              disabled={isRunning}
+              disabled={isRunning || !!render.refusal}
+              title={render.refusal ? t(render.refusal) : undefined}
             >
               <RefreshCw className="h-3.5 w-3.5" />
               {renders.length > 1 && render.name ? t("renderFinal.updatePreviewFor", { name: render.name }) : t("renderFinal.updatePreview")}

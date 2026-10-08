@@ -10,9 +10,11 @@
  * Mounted only while the take on display IS a Preview: the prices are computed
  * on every graph change, so the bar must not be live on every render card.
  */
-import type { ReactNode } from "react"
+import { useId, type ReactNode } from "react"
 import { Film, Loader2, RefreshCw } from "lucide-react"
 import { useRenderFinal } from "@/hooks/use-render-final"
+import { useWorkflowStore } from "@/hooks/use-workflow-store"
+import { renderRunRefusalKey } from "@/lib/render-review-adapter"
 import { hasCredits } from "@/lib/edition"
 import { creditUnits } from "@/lib/credit-units"
 import { useT } from "@/lib/i18n"
@@ -42,6 +44,10 @@ export interface RenderReviewBarViewProps {
   readonly finalLabel?: string
   /** A line under the buttons (the app runner's "charged to you" note). */
   readonly note?: ReactNode
+  /** No run of this render can go ahead at all (Speaker View until it is
+   *  priced, C4): both buttons are disabled, show no price, and this says why
+   *  under them — never a price that is not real. */
+  readonly disabledReason?: string
   readonly className?: string
 }
 
@@ -57,11 +63,16 @@ export function RenderReviewBarView({
   checking = null,
   finalLabel,
   note,
+  disabledReason,
   className,
 }: RenderReviewBarViewProps) {
   const t = useT()
-  const price = (credits: number) => (hasCredits() && credits > 0 ? ` · ${creditUnits(credits)}` : "")
-  const waiting = busy ? (busyReason ?? t("renderFinal.inProgress")) : undefined
+  const reasonId = useId()
+  const blocked = disabledReason !== undefined
+  const price = (credits: number) => (!blocked && hasCredits() && credits > 0 ? ` · ${creditUnits(credits)}` : "")
+  const waiting = blocked ? disabledReason : busy ? (busyReason ?? t("renderFinal.inProgress")) : undefined
+  const off = blocked || busy || checkPending || checking !== null
+  const described = blocked ? reasonId : undefined
 
   return (
     <div className={cn("flex flex-col gap-1", className)}>
@@ -69,8 +80,9 @@ export function RenderReviewBarView({
         <button
           type="button"
           className={cn(BUTTON, "border-[#ff0073]/60 bg-[#ff0073] text-white hover:bg-[#ff0073]/90")}
-          disabled={busy || checkPending || checking !== null}
+          disabled={off}
           aria-busy={checking === "final" || undefined}
+          aria-describedby={described}
           title={waiting}
           onClick={onRenderFinal}
         >
@@ -81,8 +93,9 @@ export function RenderReviewBarView({
           <button
             type="button"
             className={cn(BUTTON, "border-border bg-background hover:bg-accent")}
-            disabled={busy || checkPending || checking !== null}
+            disabled={off}
             aria-busy={checking === "proxy" || undefined}
+            aria-describedby={described}
             title={waiting}
             onClick={onUpdatePreview}
           >
@@ -91,6 +104,11 @@ export function RenderReviewBarView({
           </button>
         )}
       </div>
+      {blocked && (
+        <p id={reasonId} data-testid="render-review-refusal" className="text-[10px] leading-snug text-amber-700 dark:text-amber-400">
+          {disabledReason}
+        </p>
+      )}
       {note && <p className="text-[10px] leading-snug text-muted-foreground">{note}</p>}
     </div>
   )
@@ -112,9 +130,12 @@ interface RenderReviewBarProps {
   readonly className?: string
 }
 
-/** The editor's bar: Render final always; Update preview with the flag on (decided 2026-10-06). */
+/** The editor's bar: Render final always; Update preview with the flag on (decided 2026-10-06).
+ *  A render that cannot run at all (`renderRunRefusalKey`) shows both disabled, with why. */
 export function RenderReviewBar({ renderId, busy, className }: RenderReviewBarProps) {
+  const t = useT()
   const { renderFinal, updatePreview, finalCredits, previewCredits, canUpdatePreview, checkPending, checking } = useRenderFinal(renderId)
+  const refusal = useWorkflowStore((s) => renderRunRefusalKey(s.nodes.find((n) => n.id === renderId)))
   return (
     <RenderReviewBarView
       onRenderFinal={renderFinal}
@@ -123,6 +144,7 @@ export function RenderReviewBar({ renderId, busy, className }: RenderReviewBarPr
       busy={busy}
       checkPending={checkPending}
       checking={checking}
+      {...(refusal ? { disabledReason: t(refusal) } : {})}
       className={className}
     />
   )

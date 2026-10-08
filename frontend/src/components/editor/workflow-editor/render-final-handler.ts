@@ -8,7 +8,9 @@
  *
  * It is a run from here with a few more duties, all before any node is touched:
  *
- *  1. Apply EDL's rule on what the render would send (TA1 a);
+ *  0. a render that cannot run at all says why and stops (Speaker View until
+ *     it is priced, C4) — the server's preflight refuses the same run;
+ *  1. the render's own rule on what it would send (TA1 a);
  *  2. a newer run the canvas does not show (TA3 c): the final would otherwise
  *     bill an older plan (newer-run-check.ts, the review inspector's check too).
  *     It waits 15 s at most, with every render's run buttons disabled (the
@@ -39,6 +41,7 @@ import { getJobStatus, runWorkflow, WorkflowAlreadyRunningError, withDedupRaceRe
 import { generateIdempotencyKey } from "@/lib/idempotency-key"
 import { tx } from "@/lib/i18n"
 import { NO_EDL } from "@/lib/edl-validity"
+import { renderRunRefusalKey } from "@/lib/render-review-adapter"
 import { runtimePreviewStopRule } from "@/lib/runtime-config"
 import type { ExecutionContext } from "./types"
 import { collapseExpandedClones } from "./execution-graph"
@@ -111,6 +114,11 @@ export async function handleRenderFinal(
     const st = useWorkflowStore.getState()
     const render = st.nodes.find((n) => n.id === renderId)
     if (!render || !PREVIEW_RENDER_NODE_TYPES.has(render.type ?? "")) return
+    const refusal = renderRunRefusalKey(render)
+    if (refusal) {
+      toast.error(tx(refusal))
+      return
+    }
     const workflowId = st.workflowId
     if (!workflowId) {
       toast.error(tx("run.saveBeforeRunning"))

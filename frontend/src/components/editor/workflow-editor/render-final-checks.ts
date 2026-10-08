@@ -2,8 +2,8 @@
  * What Render final checks before it saves and bills (spec §6 item 12). Three
  * pure-as-possible checks, each answering one question:
  *
- *  - `renderRuleVerdict` (TA1 a): will Apply EDL's own rule refuse what this
- *    render would send? The same verdict the render's badge shows, with the
+ *  - `renderRuleVerdict` (TA1 a): will the render's OWN rule refuse what it
+ *    would send (Apply EDL's, Speaker View's: `render-review-adapter.ts`)? The same verdict the render's badge shows, with the
  *    EDL the canvas holds NOW (an Edit Plan's review applied). In multicam the
  *    render reads Camera Switch's SAVED, pre-edit EDL, because the real final
  *    re-runs Camera Switch: this check can only judge what is saved, and a
@@ -22,15 +22,14 @@
  *    failed fetch, a render behind Camera Switch) answers "changed": it fails
  *    open, so the person is never asked a question the editor cannot answer.
  */
-import { buildEffectiveEdl } from "@nodaro/render-rules"
-import { editPlanBasis, renderPlanClipKey, renderPlanPath, type RenderGraphEdge } from "@nodaro/shared"
+import { renderPlanClipKey, renderPlanPath, type RenderGraphEdge } from "@nodaro/shared"
 import type { GeneratedResult, WorkflowEdge, WorkflowNode } from "@/types/nodes"
-import { applyEdlRendersValidity, NO_EDL } from "@/lib/edl-validity"
-import { applyEdlRenderSettings, resolveApplyEdlRenders } from "@/lib/apply-edl-render-input"
+import { NO_EDL } from "@/lib/edl-validity"
+import { renderReviewAdapterOf } from "@/lib/render-review-adapter"
 import { edlPathIds, type ListedRun } from "./newer-run-review"
 import { extractNodeOutputAsList } from "./node-input-resolver"
 
-// ── TA1 (a): Apply EDL's rule ───────────────────────────────────────────────
+// ── TA1 (a): the render's own rule ──────────────────────────────────────────
 
 export type RenderRuleVerdict = { readonly ok: true } | { readonly ok: false; readonly issues: readonly string[] }
 
@@ -41,9 +40,9 @@ export function renderRuleVerdict(
   edges: readonly WorkflowEdge[],
 ): RenderRuleVerdict {
   const node = nodes.find((n) => n.id === renderId)
-  if (!node) return { ok: false, issues: [NO_EDL] }
-  const renders = resolveApplyEdlRenders(node, nodes, edges)
-  const verdict = applyEdlRendersValidity(renders, applyEdlRenderSettings(node.data as Record<string, unknown>))
+  const adapter = renderReviewAdapterOf(node?.type)
+  if (!node || !adapter) return { ok: false, issues: [NO_EDL] }
+  const verdict = adapter.validity(adapter.rows(node, nodes, edges), node.data as Record<string, unknown>)
   // Nothing to judge is nothing to render: the run itself refuses a render with no EDL.
   if (!verdict) return { ok: false, issues: [NO_EDL] }
   return verdict.ok ? { ok: true } : { ok: false, issues: verdict.issues }
@@ -86,21 +85,19 @@ export function newerRunPatches(
 
 // ── TA15 (a): nothing changed since the last final ──────────────────────────
 
-/** What a finished apply-edl job stored of its request (`GET /v1/jobs/:id`). */
+/** What a finished render job stored of its request (`GET /v1/jobs/:id`). */
 export interface FinalJob {
   readonly input_data?: Readonly<Record<string, unknown>> | null
 }
 
 const isBlank = (v: unknown): boolean => v === undefined || v === null || (typeof v === "string" && !v.trim())
 
-/** The key-order-free fingerprint of a value (the shared canonical hash). */
-const same = (a: unknown, b: unknown): boolean => editPlanBasis(a) === editPlanBasis(b)
-
 /**
  * Does every render this Render final would make send exactly what its last
  * final was made from? The last final of a render is the newest take that is
  * stamped final — for a clip set, the newest stamped final of the same plan
- * clip (`clipKey`).
+ * clip (`clipKey`). A render whose request cannot be compared (Speaker View:
+ * no adapter `sameAsStoredFinal`) answers "changed".
  */
 export async function finalIsUnchanged(
   renderId: string,
@@ -110,15 +107,15 @@ export async function finalIsUnchanged(
 ): Promise<boolean> {
   try {
     const node = nodes.find((n) => n.id === renderId)
-    if (!node) return false
+    const compare = renderReviewAdapterOf(node?.type)
+    if (!node || !compare?.sameAsStoredFinal) return false
     const path = renderPlanPath(renderId, nodes, edges as readonly RenderGraphEdge[])
     // Behind Camera Switch the real final re-runs the switch: what the canvas
     // holds is its pre-edit EDL, which says nothing about this final.
     if (path && path.hops.length > 1) return false
     const data = node.data as Record<string, unknown>
-    const settings = applyEdlRenderSettings(data)
     const takes = (Array.isArray(data.generatedResults) ? data.generatedResults : []) as readonly GeneratedResult[]
-    const renders = resolveApplyEdlRenders(node, nodes, edges)
+    const renders = compare.rows(node, nodes, edges)
     if (renders.length === 0) return false
     for (const render of renders) {
       if (isBlank(render.edl)) return false
@@ -135,10 +132,7 @@ export async function finalIsUnchanged(
       if (!last) return false
       const stored = (await getJob(last.jobId)).input_data
       if (!stored || stored.edl === undefined || stored.edl === null) return false
-      const raw = typeof render.edl === "string" ? JSON.parse(render.edl) : render.edl
-      const effective = buildEffectiveEdl(raw, { crossfadeMs: settings.crossfadeMs, sourceOverrides: render.sources })
-      if (!same(stored.edl, effective)) return false
-      if ((stored.output === "audio" ? "audio" : "video") !== settings.output) return false
+      if (!compare.sameAsStoredFinal(render, data, stored)) return false
     }
     return true
   } catch {

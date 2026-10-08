@@ -130,8 +130,7 @@ function OpenReviewInspector({ renderId: anchoredAt, onClose, onRenderChange }: 
           renderId={renderId}
           onRenderChange={changeRender}
           take={model.take}
-          renders={checks.renders}
-          settings={{ output: model.render.output, crossfadeMs: model.render.crossfadeMs }}
+          validity={checks.validity}
         />
       }
       actions={
