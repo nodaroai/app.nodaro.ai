@@ -45,7 +45,7 @@ The **Multicam Cut** template in the template marketplace is this chain, ready t
 | Cut early (s) | Number | 0.2 | Cut this long before the new speaker starts. 0–5 s. |
 | Wide break after (s) | Number | 20 | With a Wide camera: break to it after this long on one camera (0 = never). Up to 600 s. |
 | Wide every N cuts | Number | 0 (off) | With a Wide camera: every N-th cut goes to the wide. 0–20. |
-| Layout hints | Toggle | off | When two people talk over each other for more than 1.2 s, suggest a side-by-side (or stacked, for portrait) layout on those cuts. Apply EDL renders cut-only edits today and refuses a layout-hinted one — leave this off unless the edit goes to a layout-aware renderer. |
+| Layout hints | Toggle | off | When two people talk over each other for more than 1.2 s, suggest a side-by-side (or stacked, for portrait) layout on those cuts. [Speaker View](./speaker-view.md) draws them; Apply EDL renders cut-only edits and refuses a layout-hinted one. With hints on, the panel offers **Replace Apply EDL with Speaker View** on each Apply EDL the edit goes to (see [Replace with Speaker View](./apply-edl.md#replace-with-speaker-view)). |
 
 A value outside its range snaps to the nearest end when you leave the field. Speaker names are up to 80 characters.
 

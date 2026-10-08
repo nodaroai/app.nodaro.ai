@@ -4,9 +4,12 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { CAMERA_SWITCH_BOUNDS, CAMERA_SWITCH_DEFAULTS, CAMERA_SWITCH_NAME_MAX, cameraSwitchCameras, clampCameraSwitchSetting, defaultSpeakerMap, renderTranscriptOutputOf, transcriptSpeakerLabels, type CameraSwitchNumericSetting } from "@nodaro/shared"
+import { CAMERA_SWITCH_BOUNDS, CAMERA_SWITCH_DEFAULTS, CAMERA_SWITCH_NAME_MAX, cameraSwitchCameras, clampCameraSwitchSetting, defaultSpeakerMap, isRenderNodeType, renderTranscriptOutputOf, transcriptSpeakerLabels, type CameraSwitchNumericSetting } from "@nodaro/shared"
 import type { CameraSwitchNodeData, WorkflowEdge, WorkflowNode } from "@/types/nodes"
 import type { ConfigProps } from "./types"
+import { ReplaceRenderNodeAction } from "@/components/editor/replace-render-node-action"
+import { renderTypeLabel } from "@/hooks/use-replace-render-node"
+import { SPEAKER_VIEW_TYPE } from "@/lib/replace-render-node"
 
 /** The Select value for "no camera of their own" (stored as ""). */
 const NO_CAMERA = "__none__"
@@ -44,6 +47,19 @@ export function cameraChoices(
   return cameraSwitchCameras(edl).map((c) => ({ id: c.id, label: labelOf(c.id) }))
 }
 
+/** The renders this Camera Switch's edit goes to directly that are not Speaker
+ *  View — the ones layout hints would make refuse (G1), each offered the swap
+ *  under the hints note (U7, SV16 b). In edge order, each once. */
+export function hintRefusingRenders(
+  nodeId: string | undefined,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+): WorkflowNode[] {
+  if (!nodeId) return []
+  const ids = new Set(edges.filter((e) => e.source === nodeId && e.sourceHandle === "edl").map((e) => e.target))
+  return nodes.filter((n) => ids.has(n.id) && isRenderNodeType(n.type) && n.type !== SPEAKER_VIEW_TYPE)
+}
+
 /** The speaker labels of the transcript wired into `transcript` (from the
  *  producer's last result), in order of first appearance. */
 export function speakerChoices(
@@ -76,6 +92,7 @@ export function CameraSwitchConfig({ data, onUpdate, nodes, edges = [], nodeId }
   const t = useT()
   const cameras = useMemo(() => cameraChoices(nodeId, nodes, edges), [nodeId, nodes, edges])
   const speakers = useMemo(() => speakerChoices(nodeId, nodes, edges), [nodeId, nodes, edges])
+  const refusing = useMemo(() => hintRefusingRenders(nodeId, nodes, edges), [nodeId, nodes, edges])
   const stored = data.speakerMap ?? {}
   // What the run will use: the person's choices, the rest pre-filled by order.
   const effective = defaultSpeakerMap(speakers, cameras.map((c) => c.id), stored)
@@ -159,6 +176,18 @@ export function CameraSwitchConfig({ data, onUpdate, nodes, edges = [], nodeId }
         <Switch id="camera-switch-layout-hints" checked={data.layoutHints === true} onCheckedChange={(v) => onUpdate({ layoutHints: v })} />
       </div>
       <p className="text-[11px] text-muted-foreground">{t("proccfg.cameraSwitchLayoutHintsHint")}</p>
+      {data.layoutHints === true && refusing.map((r) => (
+        <ReplaceRenderNodeAction
+          key={r.id}
+          nodeId={r.id}
+          toType={SPEAKER_VIEW_TYPE}
+          label={t("renderSwap.replaceNode", {
+            // One render: its type ("Replace Apply EDL with …"); several: each by its own label.
+            from: refusing.length === 1 ? renderTypeLabel(r.type ?? "") : String((r.data as { label?: unknown }).label ?? r.id),
+            to: renderTypeLabel(SPEAKER_VIEW_TYPE),
+          })}
+        />
+      ))}
     </div>
   )
 }

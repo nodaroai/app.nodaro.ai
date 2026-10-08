@@ -69,6 +69,18 @@ When the run makes several renders, the badge still shows one summary: **Ready t
 
 The badge on an Edit Plan node checks the plan's structure only (**Well-formed EDL**). A plan can be well-formed there and still be refused here: for example, a plan with a side-by-side layout, or one longer than 180 minutes.
 
+### Replace with Speaker View
+
+When the badge's issues include a layout or a region crop — what [Camera Switch](./camera-switch.md)'s **Layout hints** write, and what this node does not draw — the popover offers **Replace with Speaker View**, with one line saying what the swap keeps and drops. The same action sits under Camera Switch's **Layout hints** note. After a confirm, the node is replaced in place by a [Speaker View](./speaker-view.md) node, as **one undo step**:
+
+- Its **EDL** and **Transcript** wires stay. Its **Sources** wires are dropped (Speaker View reads the media from the EDL's own URLs) and listed in the confirm and in the message after.
+- Its outputs move with it: the media wire comes out of Speaker View's video, and a `json` wire — the remapped transcript, such as the one into Add Captions — comes out of Speaker View's `transcript` output, which carries the same transcript remapped through the edit as drawn. Nothing is transcribed again.
+- Its **Quality** carries over, and so does its **label** when you renamed it; a node still named "Apply EDL" becomes one named "Speaker View". An **EDL** or **Transcript** typed into the node itself (set through the API, MCP or workflow JSON rather than wired) carries over too, as text. Its Preview and Final history does not: the new node has a new id, and those renders are on the old node's clock. **Undo** (the message's own, the toolbar's or Ctrl+Z) puts the Apply EDL back with its history and its wires.
+- **A published app follows the node.** The app's input and output items that name this node move to the new one, with the card's title and description, its display mode and whether it is hidden; the confirm lists them. An item the new node cannot show (an output or setting the other render does not expose) still moves, and the confirm says so; it shows again if you swap back. Undo and Redo take the app's items along with the node.
+- It is refused, with the reason and before anything changes, for an **Audio only** render (Speaker View renders video only) and for an edit whose cameras come from the **Sources** wire: *"This edit's cameras come from the Sources wire, which Speaker View does not take"*. It is also refused while a run is in progress.
+- **When the edit is not known yet** — Camera Switch has not run, or the upload wired into **Sources** is empty — that check cannot be made. The swap is allowed, and the confirm says plainly that the Sources wire will be dropped and the cameras may need re-wiring: Speaker View reads each camera from the edit's own URLs.
+- **Back to Apply EDL.** Speaker View's panel carries **Back to Apply EDL**: the same swap the other way, with the same confirm and as one undo step. The transcript wire moves back onto Apply EDL's `json`; a wire on Speaker View's `json` (the EDL as drawn) has no place on Apply EDL and is dropped and listed. Speaker View's own settings (aspect, layout, switch, emphasis, framing) do not carry; Undo brings them back.
+
 ## How the edit is rendered
 
 - **Segment order is the timeline.** The node never re-sorts segments — a multicam or clip-reordering EDL legitimately revisits earlier source time.

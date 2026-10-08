@@ -1,4 +1,5 @@
 import { useMemo } from "react"
+import { RENDER_NODE_TYPE_IDS } from "@nodaro/shared"
 import {
   SPEAKER_VIEW_ASPECTS,
   SPEAKER_VIEW_NOT_PRICED_MESSAGE,
@@ -22,6 +23,13 @@ import { AspectRatioSelector } from "./aspect-ratio-selector"
 import type { ConfigProps } from "./types"
 import { SpeakerViewAdvanced, SpeakerViewFramingSummary } from "./speaker-view-framing-summary"
 import { SpeakerViewInputSummary } from "./speaker-view-input-summary"
+import { ReplaceRenderNodeAction } from "@/components/editor/replace-render-node-action"
+import { renderTypeLabel } from "@/hooks/use-replace-render-node"
+import { SPEAKER_VIEW_TYPE } from "@/lib/replace-render-node"
+
+/** The renders Speaker View can go back to (Round 2, decided 2026-10-08):
+ *  every other render in the registry, so none is named here. */
+const BACK_TO_TYPES = RENDER_NODE_TYPE_IDS.filter((type) => type !== SPEAKER_VIEW_TYPE)
 import { SpeakerViewEmphasisSection, SpeakerViewLayoutSection, SpeakerViewSwitchSection } from "./speaker-view-sections"
 
 const ASPECT_OPTIONS = SPEAKER_VIEW_ASPECTS.map((a) => ({ value: a, label: a }))
@@ -76,6 +84,15 @@ export function SpeakerViewConfig({ data, onUpdate, nodes, edges = [], nodeId }:
       <SpeakerViewEmphasisSection options={validSpeakerEmphasis(settings)} value={data.emphasisStyle} durationMs={data.emphasisDurationMs} onUpdate={onUpdate} />
       <SpeakerViewFramingSummary regions={(data as { speakerRegions?: unknown }).speakerRegions} nodeId={nodeId} />
       <SpeakerViewAdvanced accentColor={data.accentColor} onChange={(accentColor) => onUpdate({ accentColor })} />
+      {nodeId && BACK_TO_TYPES.map((type) => (
+        <ReplaceRenderNodeAction
+          key={type}
+          nodeId={nodeId}
+          toType={type}
+          label={t("renderSwap.backTo", { to: renderTypeLabel(type) })}
+          className="border-t pt-2"
+        />
+      ))}
     </div>
   )
 }

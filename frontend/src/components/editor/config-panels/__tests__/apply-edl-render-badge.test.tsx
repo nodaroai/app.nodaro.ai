@@ -6,7 +6,7 @@
  * pinned against the server in lib/__tests__/apply-edl-render-rule-parity.test.ts.
  */
 import { describe, it, expect, vi, afterEach } from "vitest"
-import { render, screen, cleanup } from "@testing-library/react"
+import { render, screen, cleanup, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 
 const { store } = vi.hoisted(() => {
@@ -148,5 +148,46 @@ describe("the Apply EDL panel badge judges what the node would render", () => {
     expect(failing).toHaveLength(1)
     expect(failing[0]!.textContent).toContain("Render 2")
     expect(failing[0]!.textContent).toMatch(/source "cam2" has no url/)
+  })
+})
+
+// U6 (SV16 b): an edit Apply EDL refuses for a Speaker View feature offers the
+// swap under its issues, saying what it keeps and drops; a swap that would be
+// refused shows its reason, disabled, before anything changes.
+describe("the badge offers 'Replace with Speaker View' on a hinted edit (U6)", () => {
+  const hinted = edlOf([CAM, CAM2], [
+    seg("s0", 0, 3000, { video: "cam" }),
+    seg("s1", 3000, 6000, { video: "cam", layout: { mode: "side-by-side", slots: [{ source: "cam" }, { source: "cam2" }] } }),
+  ])
+
+  it("under the issues: the action and what it keeps and drops", async () => {
+    await userEvent.click(canvas(hinted, {}, { uploadUrl: "https://media.test/up.mp4" }))
+    const action = await screen.findByTestId("replace-render-node")
+    expect(action.textContent).toContain("Replace with Speaker View")
+    expect(action.textContent).toContain("keeps the edl wires; drops 1 sources wire; one undo step")
+    expect(action.querySelector("button")!.disabled).toBe(false)
+  })
+
+  it("the confirm opens over the popover, lists every wire and says the history is not carried", async () => {
+    await userEvent.click(canvas(hinted, {}, { uploadUrl: "https://media.test/up.mp4" }))
+    await userEvent.click(within(await screen.findByTestId("replace-render-node")).getByRole("button"))
+    const dialog = await screen.findByRole("alertdialog")
+    expect(dialog.textContent).toContain("Replace Apply EDL with Speaker View?")
+    expect(dialog.textContent).toContain("Preview and Final history is not carried")
+    expect(dialog.textContent).toContain("Edit Plan → edl")
+    expect(dialog.textContent).toContain("Upload Video → sources")
+  })
+
+  it("an audio-only render: disabled, with the reason", async () => {
+    await userEvent.click(canvas(hinted, { output: "audio" }))
+    const action = await screen.findByTestId("replace-render-node")
+    expect(action.querySelector("button")!.disabled).toBe(true)
+    expect(action.textContent).toContain("Speaker View has no audio-only render")
+  })
+
+  it("not offered for an issue Speaker View does not fix", async () => {
+    const ghost = edlOf([CAM], [seg("s0", 0, 4000, { video: "ghost" })])
+    await userEvent.click(canvas(ghost))
+    expect(screen.queryByTestId("replace-render-node")).toBeNull()
   })
 })

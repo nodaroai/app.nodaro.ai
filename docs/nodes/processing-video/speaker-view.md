@@ -123,4 +123,5 @@ Speaker View is reviewed the way [Apply EDL](./apply-edl.md#reviewing-a-cut) is:
 
 - Run **Camera Switch** first on a multicam shoot: Speaker View never picks a camera, and refuses a multi-camera edit that names no speaker.
 - Turn Camera Switch's **Layout hints** on and set Speaker View's layout to **Auto** to follow its side-by-side moments; Apply EDL refuses a hinted edit.
+- **Back to Apply EDL.** The panel's **Back to Apply EDL** replaces this node with an [Apply EDL](./apply-edl.md#replace-with-speaker-view) in place, as one undo step — the reverse of Apply EDL's **Replace with Speaker View**, with the same confirm. The EDL and Transcript wires stay, the `transcript` output wire moves to Apply EDL's `json`, a `json` (EDL) output wire is dropped and listed, and the quality, a label you chose, an EDL or transcript typed into the node and the published app's items carry over. This node's Preview and Final history and its layout settings do not; Undo brings them back.
 - Pick the aspect first — it decides which layouts are offered.
