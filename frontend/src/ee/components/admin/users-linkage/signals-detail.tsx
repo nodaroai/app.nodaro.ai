@@ -39,7 +39,11 @@ export function SignalsDetail({
             </div>
             <div className="my-1 font-mono text-[15px]">{signal ? signal.token : "—"}</div>
             <div className="text-[12.5px] text-muted-foreground">
-              {signal ? sharedText(signal.count, partial) : "not recorded"}
+              {signal
+                ? sharedText(signal.count, partial)
+                : axis === "ip"
+                  ? "no real client address recorded (signed up before addresses were read, or unknown)"
+                  : "not recorded"}
             </div>
           </div>
         )

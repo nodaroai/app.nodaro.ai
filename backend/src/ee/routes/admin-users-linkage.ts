@@ -226,17 +226,26 @@ interface SignalRecord {
   device_key: string | null
   browser_key: string | null
   ip_hash: string | null
+  /** 'client' when ip_hash is a real client network (458); null before real addresses were read, or unknown. */
+  ip_scheme: string | null
   decision: string | null
   reasons: string[] | null
   created_at: string
 }
 
+/**
+ * A network is a signal only when it is a real client network. A row written
+ * before the backend read real addresses holds a hosting proxy's hash shared
+ * by every user of the platform, and an unknown address hashes to a constant —
+ * shown as a network, either would link strangers. The RPC applies the same
+ * rule to its network axis (492), so the two never disagree.
+ */
 function toSignal(record: SignalRecord): UserSignalRow {
   return {
     userId: record.user_id,
     deviceKey: record.device_key,
     browserKey: record.browser_key,
-    ipHash: record.ip_hash,
+    ipHash: record.ip_scheme === "client" ? record.ip_hash : null,
     decision: record.decision,
     reasons: Array.isArray(record.reasons) ? record.reasons : [],
     createdAt: record.created_at,
@@ -248,7 +257,7 @@ async function readSignals(ids: readonly string[]): Promise<UserSignalRow[]> {
   for (const part of chunk(ids, HYDRATION_CHUNK)) {
     const { data, error } = await supabase
       .from("signup_signals")
-      .select("user_id, device_key, browser_key, ip_hash, decision, reasons, created_at")
+      .select("user_id, device_key, browser_key, ip_hash, ip_scheme, decision, reasons, created_at")
       .in("user_id", part)
       .eq("source", "claim")
     if (error) throw error

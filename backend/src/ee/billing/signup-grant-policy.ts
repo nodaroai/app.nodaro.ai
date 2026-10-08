@@ -26,6 +26,15 @@ import { supabase } from "../../lib/supabase.js"
  * same network is treated as the same machine; from different networks it
  * takes a cluster of them to fire.
  *
+ * A BUSY NETWORK IS EVIDENCE TOO — ONLY A REAL ONE. One old neighbour on the
+ * network says nothing (an office, a dorm, a carrier). A network that already
+ * carries a crowd of accounts is the one thing a farm cannot vary when it
+ * spreads its signups over days and hands each a fresh machine profile, so
+ * past `ipEverOthersMax` the grant waits. Every network count reads rows
+ * marked `ip_scheme = 'client'` (458) only: rows from before the backend read
+ * real addresses (#1827) hold a hosting proxy's hash shared by every user, and
+ * an unknown address hashes to a constant — neither is a network.
+ *
  * A PURCHASE OUTRANKS THE SIGNALS. Every rule above is a proxy for one
  * question — is this a person we have not seen, or a farmed account — and
  * money moved from a real payment method answers it directly. An account with
@@ -48,6 +57,8 @@ export const SIGNUP_GRANT_RULES = {
   ipLookbackMs: 24 * 60 * 60 * 1000,
   /** A claim with no browser or device key: any other account ever seen on this network withholds. */
   keylessIpOthersMax: 0,
+  /** A keyed claim: more than this many other accounts EVER seen on the network withholds — a farm's one constant. */
+  ipEverOthersMax: 4,
   /** Another account named like this one (the same name with other digits, same domain) withholds. */
   similarEmailOthersMax: 0,
   /** The fewest letters an email name must keep once its trailing digits are cut, to be compared at all. */
@@ -63,6 +74,7 @@ export type GrantReason =
   | "device_cluster"
   | "ip_velocity"
   | "keyless_ip_reuse"
+  | "ip_reuse"
   | "similar_email"
 
 export interface GrantDecision {
@@ -75,7 +87,7 @@ export interface SignupSignalCounts {
   deviceKeySameIpOthers: number
   deviceKeyOthers: number
   ipClaimsInWindow: number
-  /** Other accounts ever seen on this network — read only for a claim with no keys. */
+  /** Other accounts ever seen on this network — real client networks only (ip_scheme = 'client'). */
   ipEverOthers?: number
   /** Other accounts whose email is this one's name with other digits, same domain. */
   similarEmailOthers?: number
@@ -109,6 +121,10 @@ export function decideSignupGrant(input: {
     // repeat signup that blocks fingerprinting relies on: the network is the
     // only observation left, so ANY earlier account on it withholds.
     if (input.keyless && (c.ipEverOthers ?? 0) > SIGNUP_GRANT_RULES.keylessIpOthersMax) reasons.push("keyless_ip_reuse")
+    // With keys, one old neighbour on the network is nothing — but a network
+    // that already carries a crowd of accounts is the one thing a farm cannot
+    // vary when it spreads its signups over days and gives each a fresh VM.
+    if (!input.keyless && (c.ipEverOthers ?? 0) > SIGNUP_GRANT_RULES.ipEverOthersMax) reasons.push("ip_reuse")
     if ((c.similarEmailOthers ?? 0) > SIGNUP_GRANT_RULES.similarEmailOthersMax) reasons.push("similar_email")
   }
 
@@ -263,12 +279,18 @@ export async function countSignupSignals(
     deviceKey
       ? countOthers((q) => q.eq("device_key", deviceKey).neq("user_id", userId), "device_cluster", log)
       : Promise.resolve(0),
+    // Network counts read REAL client networks only (see the header): a row
+    // without the 458 marker holds a hosting proxy's hash or a constant.
     countOthers(
-      (q) => q.eq("ip_hash", ipHash).gte("created_at", since).neq("user_id", userId),
+      (q) => q.eq("ip_hash", ipHash).eq("ip_scheme", "client").gte("created_at", since).neq("user_id", userId),
       "ip_velocity",
       log,
     ),
-    keyless ? countOthers((q) => q.eq("ip_hash", ipHash).neq("user_id", userId), "keyless_ip_reuse", log) : Promise.resolve(0),
+    countOthers(
+      (q) => q.eq("ip_hash", ipHash).eq("ip_scheme", "client").neq("user_id", userId),
+      keyless ? "keyless_ip_reuse" : "ip_reuse",
+      log,
+    ),
   ])
 
   return { browserKeyOthers, deviceKeySameIpOthers, deviceKeyOthers, ipClaimsInWindow, ipEverOthers }

@@ -288,7 +288,7 @@ export async function adminFreeGrantRoutes(app: FastifyInstance) {
     try {
       const { data: own, error: ownError } = await supabase
         .from("signup_signals")
-        .select("browser_key, device_key, ip_hash, created_at")
+        .select("browser_key, device_key, ip_hash, ip_scheme, created_at")
         .eq("user_id", userId)
         .eq("source", "claim")
         .maybeSingle()
@@ -296,11 +296,16 @@ export async function adminFreeGrantRoutes(app: FastifyInstance) {
       if (!own) return { data: { userId, signal: null, related: [], truncated: false } }
 
       const byAxis = async (column: "device_key" | "browser_key" | "ip_hash", value: string) => {
-        const { data, error } = await supabase
+        let query = supabase
           .from("signup_signals")
           .select("user_id, created_at, reasons")
           .eq(column, value)
           .eq("source", "claim")
+        // A network relates accounts only between REAL client networks (458):
+        // a row from before real addresses were read holds a hosting proxy's
+        // hash shared by every user, and an unknown address is a constant.
+        if (column === "ip_hash") query = query.eq("ip_scheme", "client")
+        const { data, error } = await query
           .neq("user_id", userId)
           .order("created_at", { ascending: false })
           .limit(RELATED_PER_AXIS_LIMIT)
@@ -309,11 +314,12 @@ export async function adminFreeGrantRoutes(app: FastifyInstance) {
       }
 
       // Order matters: device, browser, ip — `matches` and the test's queued
-      // results both read in this order.
+      // results both read in this order. The network axis is asked only when
+      // this account's own network is a real client address.
       const [deviceRows, browserRows, ipRows] = await Promise.all([
         own.device_key ? byAxis("device_key", own.device_key as string) : Promise.resolve<SignalRow[]>([]),
         own.browser_key ? byAxis("browser_key", own.browser_key as string) : Promise.resolve<SignalRow[]>([]),
-        byAxis("ip_hash", own.ip_hash as string),
+        own.ip_scheme === "client" ? byAxis("ip_hash", own.ip_hash as string) : Promise.resolve<SignalRow[]>([]),
       ])
 
       const perAxis = [

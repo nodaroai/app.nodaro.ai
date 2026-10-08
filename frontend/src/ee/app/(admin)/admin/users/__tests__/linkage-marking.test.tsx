@@ -506,6 +506,21 @@ describe("opening a row", () => {
     expect(screen.queryByTestId("signals-detail")).toBeNull()
   })
 
+  it("says when the network was not a real client address, instead of calling it unique", async () => {
+    const user = userEvent.setup()
+    const dave = linkageFixture().users[DAVE]!
+    h.linkage = {
+      ...linkageFixture(),
+      users: { ...linkageFixture().users, [DAVE]: { ...dave, signals: { ...dave.signals!, ip: null } } },
+    }
+    mount()
+
+    await user.click(screen.getByText("dave@x.test"))
+    const detail = screen.getByTestId("signals-detail")
+    expect(within(detail).getAllByText("unique in system")).toHaveLength(2)
+    expect(within(detail).getByText(/no real client address recorded/)).toBeInTheDocument()
+  })
+
   it("will not call a lone key unique after a partial walk", async () => {
     const user = userEvent.setup()
     h.linkage = { ...linkageFixture(), partial: true }

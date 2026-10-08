@@ -286,6 +286,7 @@ describe("GET /v1/admin/free-grants/:userId/related", () => {
           browser_key: "b".repeat(64),
           device_key: "d".repeat(64),
           ip_hash: "i".repeat(64),
+          ip_scheme: "client",
           created_at: "2026-09-01T10:00:00.000Z",
         },
         error: null,
@@ -342,6 +343,55 @@ describe("GET /v1/admin/free-grants/:userId/related", () => {
     expect(argsFor("profiles", "in")).toEqual([["id", [U2, U3]]])
   })
 
+  it("never relates accounts through a network that is not a real client address", async () => {
+    // The reviewed account signed up before real addresses were read: its
+    // ip_hash is a hosting proxy's, shared by every user. Only the device and
+    // browser axes are asked; the proxy hash never reaches a query.
+    queueTable(
+      "signup_signals",
+      {
+        data: { browser_key: "b".repeat(64), device_key: "d".repeat(64), ip_hash: "p".repeat(64), ip_scheme: null, created_at: "2026-09-01T10:00:00.000Z" },
+        error: null,
+      },
+      { data: [{ user_id: U2, created_at: "2026-09-01T09:00:00.000Z", reasons: [] }], error: null },
+      { data: [], error: null },
+    )
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/admin/free-grants/${U1}/related`,
+      headers: { "x-user-id": ADMIN_UUID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.related.map((r: { userId: string; matches: string[] }) => [r.userId, r.matches])).toEqual([[U2, ["device"]]])
+    const eqArgs = argsFor("signup_signals", "eq")
+    expect(eqArgs.some((a) => a[0] === "ip_hash")).toBe(false)
+    expect(queryCount("signup_signals")).toBe(3)
+  })
+
+  it("relates through a real client network only to other real client networks", async () => {
+    queueTable(
+      "signup_signals",
+      {
+        data: { browser_key: null, device_key: null, ip_hash: "i".repeat(64), ip_scheme: "client", created_at: "2026-09-01T10:00:00.000Z" },
+        error: null,
+      },
+      { data: [{ user_id: U3, created_at: "2026-09-01T08:00:00.000Z", reasons: ["ip_velocity"] }], error: null },
+    )
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/admin/free-grants/${U1}/related`,
+      headers: { "x-user-id": ADMIN_UUID },
+    })
+
+    expect(res.statusCode).toBe(200)
+    const eqArgs = argsFor("signup_signals", "eq")
+    expect(eqArgs).toContainEqual(["ip_hash", "i".repeat(64)])
+    expect(eqArgs).toContainEqual(["ip_scheme", "client"])
+  })
+
   it("answers an account with no claim signal with an empty list", async () => {
     queueTable("signup_signals", { data: null, error: null })
 
@@ -366,7 +416,7 @@ describe("GET /v1/admin/free-grants/:userId/related", () => {
     }))
     queueTable(
       "signup_signals",
-      { data: { browser_key: null, device_key: null, ip_hash: "i".repeat(64), created_at: "2026-09-01T10:00:00.000Z" }, error: null },
+      { data: { browser_key: null, device_key: null, ip_hash: "i".repeat(64), ip_scheme: "client", created_at: "2026-09-01T10:00:00.000Z" }, error: null },
       { data: full, error: null },
     )
 

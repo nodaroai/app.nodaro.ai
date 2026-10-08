@@ -125,12 +125,18 @@ function queryCount(table: string): number {
   return mockFrom.mock.calls.filter((c) => c[0] === table).length
 }
 
-function signal(userId: string, keys: { device?: string | null; browser?: string | null; ip?: string }, decision: string | null = "withheld", reasons: string[] = []) {
+function signal(
+  userId: string,
+  keys: { device?: string | null; browser?: string | null; ip?: string; ipScheme?: "client" | null },
+  decision: string | null = "withheld",
+  reasons: string[] = [],
+) {
   return {
     user_id: userId,
     device_key: keys.device ?? null,
     browser_key: keys.browser ?? null,
     ip_hash: keys.ip ?? NETWORK_UNIQUE,
+    ip_scheme: keys.ipScheme === undefined ? "client" : keys.ipScheme,
     decision,
     reasons,
     created_at: "2026-10-08T14:00:00.000Z",
@@ -356,10 +362,31 @@ describe("GET /v1/admin/users/linkage — what the page gets", () => {
     expect(body.users[U4].decision).toBe("granted")
   })
 
-  it("reads the page's signals only for the ids asked, from claim rows", async () => {
+  it("reads the page's signals only for the ids asked, from claim rows, with the network's marker", async () => {
     await list([U1, U3, U4].join(","))
     expect(argsFor("signup_signals", "in")).toEqual([["user_id", [U1, U3, U4]]])
     expect(argsFor("signup_signals", "eq")).toEqual([["source", "claim"]])
+    expect(argsFor("signup_signals", "select")[0]?.[0]).toContain("ip_scheme")
+  })
+})
+
+describe("GET /v1/admin/users/linkage — a network that is not a real client address", () => {
+  it("is no signal at all: it cannot attach the row to a cluster, and the page is told nothing about it", async () => {
+    // U2 and U3 share NETWORK_HASH as real networks (the RPC's word). U4's
+    // row carries the same hash from before real addresses were read.
+    rpcPages.set("ip", [{ data: [rpcRow(NETWORK_HASH, [U2, U3])], error: null }])
+    queueTable("profiles", { data: [state(U2, "withheld"), state(U3, "withheld")], error: null })
+    queueTable("signup_signals", {
+      data: [signal(U4, { device: "aaaa".repeat(16), browser: "bbbb".repeat(16), ip: NETWORK_HASH, ipScheme: null }, "granted", [])],
+      error: null,
+    })
+
+    const res = await list(U4)
+    const body = res.json()
+    expect(body.users[U4].clusterId).toBeNull()
+    expect(body.users[U4].signals.ip).toBeNull()
+    expect(body.users[U4].signals.device.count).toBe(1)
+    expect(body.summary.clusters).toBe(1)
   })
 })
 

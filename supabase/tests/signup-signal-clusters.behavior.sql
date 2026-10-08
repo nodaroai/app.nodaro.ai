@@ -1,10 +1,11 @@
 -- ============================================================================
--- Behavioral proof: signup_signal_clusters (migration 373).
+-- Behavioral proof: signup_signal_clusters (migrations 373 and 492).
 --
 -- The text guard in backend/src/__tests__ pins the SQL; this pins what the
 -- database DOES — that a shared key groups, that a lone account never appears,
 -- that an unknown axis is zero rows rather than an error, that total_count
--- survives paging, that the array cap holds while member_count stays true, and
+-- survives paging, that the array cap holds while member_count stays true,
+-- that only a real client network (ip_scheme = 'client') is a network key, and
 -- that a signed-in user cannot call it at all (it is a lookup oracle over other
 -- people's devices).
 --
@@ -34,11 +35,13 @@ INSERT INTO auth.users (id, email, raw_user_meta_data, aud, role) VALUES
   ('00000000-0000-4000-8000-000000000932', 'sc2@sc.test', '{}', 'authenticated', 'authenticated'),
   ('00000000-0000-4000-8000-000000000933', 'sc3@sc.test', '{}', 'authenticated', 'authenticated');
 
--- 931 + 932 share a machine and a network; 933 is alone on both.
-INSERT INTO signup_signals (user_id, browser_key, device_key, ip_hash, source, created_at) VALUES
-  ('00000000-0000-4000-8000-000000000931', 'brw-shared', 'dev-shared', 'ip-shared', 'claim', '2026-09-01T10:00:00Z'),
-  ('00000000-0000-4000-8000-000000000932', 'brw-shared', 'dev-shared', 'ip-shared', 'claim', '2026-09-01T11:00:00Z'),
-  ('00000000-0000-4000-8000-000000000933', 'brw-solo',   'dev-solo',   'ip-solo',   'claim', '2026-09-01T12:00:00Z');
+-- 931 + 932 share a machine and a network; 933 is alone on both. Their
+-- networks are REAL client addresses (ip_scheme = 'client', migration 458):
+-- since 492 only those count on the network axis.
+INSERT INTO signup_signals (user_id, browser_key, device_key, ip_hash, ip_scheme, source, created_at) VALUES
+  ('00000000-0000-4000-8000-000000000931', 'brw-shared', 'dev-shared', 'ip-shared', 'client', 'claim', '2026-09-01T10:00:00Z'),
+  ('00000000-0000-4000-8000-000000000932', 'brw-shared', 'dev-shared', 'ip-shared', 'client', 'claim', '2026-09-01T11:00:00Z'),
+  ('00000000-0000-4000-8000-000000000933', 'brw-solo',   'dev-solo',   'ip-solo',   'client', 'claim', '2026-09-01T12:00:00Z');
 
 -- 1. A shared key is exactly one cluster, sized by ACCOUNTS, spanning both times.
 SELECT pg_temp.assert_eq('a shared device key is one cluster',
@@ -65,6 +68,28 @@ SELECT pg_temp.assert_eq('the browser axis groups on browser_key',
   (SELECT member_count::text FROM signup_signal_clusters('browser', 50, 0) WHERE cluster_key = 'brw-shared'), '2');
 SELECT pg_temp.assert_eq('the ip axis groups on ip_hash',
   (SELECT member_count::text FROM signup_signal_clusters('ip', 50, 0) WHERE cluster_key = 'ip-shared'), '2');
+
+-- 3b. (492) A network recorded before the backend read real addresses — or an
+--     unknown one — carries no ip_scheme marker. Such a row holds a hosting
+--     proxy's hash, shared by every user of the platform: it neither joins a
+--     real network cluster (934 on ip-shared) nor forms one of its own (934 +
+--     935 on ip-proxy). The device axis still sees 934's key as usual.
+INSERT INTO auth.users (id, email, raw_user_meta_data, aud, role) VALUES
+  ('00000000-0000-4000-8000-000000000934', 'sc4@sc.test', '{}', 'authenticated', 'authenticated'),
+  ('00000000-0000-4000-8000-000000000935', 'sc5@sc.test', '{}', 'authenticated', 'authenticated');
+INSERT INTO signup_signals (user_id, browser_key, device_key, ip_hash, ip_scheme, source, created_at) VALUES
+  ('00000000-0000-4000-8000-000000000934', 'brw-934', 'dev-shared', 'ip-shared', NULL, 'claim', '2026-09-02T10:00:00Z'),
+  ('00000000-0000-4000-8000-000000000935', 'brw-935', 'dev-935',    'ip-proxy',  NULL, 'claim', '2026-09-02T11:00:00Z');
+SELECT pg_temp.assert_eq('a proxy-era row does not join a real network cluster',
+  (SELECT member_count::text FROM signup_signal_clusters('ip', 50, 0) WHERE cluster_key = 'ip-shared'), '2');
+INSERT INTO auth.users (id, email, raw_user_meta_data, aud, role) VALUES
+  ('00000000-0000-4000-8000-000000000936', 'sc6@sc.test', '{}', 'authenticated', 'authenticated');
+INSERT INTO signup_signals (user_id, browser_key, device_key, ip_hash, ip_scheme, source, created_at) VALUES
+  ('00000000-0000-4000-8000-000000000936', 'brw-936', 'dev-936', 'ip-proxy', NULL, 'claim', '2026-09-02T12:00:00Z');
+SELECT pg_temp.assert_eq('two proxy-era rows on one hash are not a network cluster',
+  (SELECT count(*)::text FROM signup_signal_clusters('ip', 50, 0) WHERE cluster_key = 'ip-proxy'), '0');
+SELECT pg_temp.assert_eq('...while the same row still counts on the device axis',
+  (SELECT member_count::text FROM signup_signal_clusters('device', 50, 0) WHERE cluster_key = 'dev-shared'), '3');
 
 -- 4. An unrecognised axis is zero rows, never an error.
 SELECT pg_temp.assert_eq('an unknown axis returns nothing',
