@@ -7,8 +7,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import { MemoryRouter } from "react-router-dom"
 import type { SiteAnalyticsReport } from "../types"
-import { AT, EMAIL, NOT_SET_UP, REALTIME_OK, answer, report, searchData } from "./fixtures"
+import { AT, EMAIL, NOT_SET_UP, REALTIME_OK, answer, onlineData, report, searchData } from "./fixtures"
 
 vi.mock("@/lib/api", () => ({ getAuthHeaders: async () => ({ Authorization: "Bearer t" }) }))
 vi.mock("@/lib/edition", () => ({ hasAdmin: () => true }))
@@ -25,13 +26,17 @@ afterEach(() => vi.unstubAllGlobals())
 
 /** The server: the realtime snapshot, whatever a test answers itself, and otherwise the report. */
 function serve(body: SiteAnalyticsReport, extra: (url: string) => Promise<Response> | undefined = () => undefined) {
-  fetchMock.mockImplementation((url: string) => extra(url) ?? (url.endsWith("/realtime") ? answer(REALTIME_OK) : answer(body)))
+  fetchMock.mockImplementation(
+    (url: string) => extra(url) ?? (url.endsWith("/realtime") ? answer(REALTIME_OK) : url.endsWith("/online-users") ? answer(onlineData()) : answer(body)),
+  )
 }
 
 function renderPage() {
   return render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <AdminSiteAnalyticsPage />
+      <MemoryRouter>
+        <AdminSiteAnalyticsPage />
+      </MemoryRouter>
     </QueryClientProvider>,
   )
 }
@@ -43,7 +48,8 @@ describe("setup and refusals", () => {
     expect(await screen.findByText("Finish the setup")).toBeInTheDocument()
     expect(screen.getByText("SITE_ANALYTICS_SERVICE_ACCOUNT_JSON is not set.")).toBeInTheDocument()
     expect(screen.getAllByText(/Not set up yet/)).toHaveLength(4)
-    expect(String(fetchMock.mock.calls[0]?.[0])).toBe("/v1/admin/site-analytics?days=28")
+    // The report for 28 days — whichever request the page happens to send first.
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).startsWith("/v1/admin/site-analytics?")).map(([url]) => String(url))).toEqual(["/v1/admin/site-analytics?days=28"])
     expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/realtime"))).toBe(false)
     expect(screen.queryByRole("link", { name: /Google Analytics/ })).toBeNull()
     expect(screen.queryByRole("link", { name: /Search Console/ })).toBeNull()

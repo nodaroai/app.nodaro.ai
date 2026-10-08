@@ -2,7 +2,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { getAuthHeaders } from "@/lib/api"
 import { hasAdmin } from "@/lib/edition"
 import { queryKeys } from "@/lib/query-keys"
-import type { IndexStatus, RealtimeSnapshot, SectionResult, SiteAnalyticsDays, SiteAnalyticsReport } from "./types"
+import type { IndexStatus, OnlineUsersReport, RealtimeSnapshot, SectionResult, SiteAnalyticsDays, SiteAnalyticsReport } from "./types"
 
 /** The server's reason, or a plain one when it sent none. */
 async function failureMessage(res: Response, fallback: string): Promise<string> {
@@ -49,6 +49,24 @@ export function useRealtime(enabled: boolean) {
     enabled: hasAdmin() && enabled,
     ...REALTIME_POLLING,
     staleTime: 30_000,
+  })
+}
+
+/** Twice a minute, from a tab in view only: the server notes a visit at most every 30 s. */
+export const ONLINE_USERS_POLLING = { refetchInterval: 30_000, refetchIntervalInBackground: false } as const
+
+/** Who is signed in right now. Nothing is asked while `enabled` is false (an idle page). */
+export function useOnlineUsers(enabled: boolean) {
+  return useQuery({
+    queryKey: queryKeys.admin.siteAnalyticsOnlineUsers(),
+    queryFn: async (): Promise<OnlineUsersReport> => {
+      const res = await fetch("/v1/admin/online-users", { headers: await getAuthHeaders() })
+      if (!res.ok) throw new Error(await failureMessage(res, "Failed to load who is signed in"))
+      return (await res.json()) as OnlineUsersReport
+    },
+    enabled: hasAdmin() && enabled,
+    ...ONLINE_USERS_POLLING,
+    staleTime: 15_000,
   })
 }
 

@@ -145,6 +145,38 @@ export interface SourcesReport {
   landingPages: SourceTable
 }
 
+/** Who is signed in right now — mirrors backend/src/ee/lib/online-users.ts. */
+export interface OnlineSurface {
+  /** The kind of caller (web, extension, mcp, app, cli, sdk, api) — the page shows `label`. */
+  source: string
+  /** A host, an app id, an MCP client, a client version. */
+  detail: string | null
+  /** APP, STUDIO, EXT, CLI, "MCP · Claude", a developer app's name. */
+  label: string
+  address: string | null
+  /** ISO 3166 two letters, from Cloudflare. */
+  country: string | null
+  userAgent: string | null
+  lastSeenAt: string
+}
+
+export interface OnlineUser {
+  userId: string
+  email: string | null
+  name: string | null
+  lastSeenAt: string
+  /** Newest first. */
+  surfaces: OnlineSurface[]
+}
+
+export interface OnlineUsersReport {
+  windowMinutes: number
+  checkedAt: string
+  /** False when the server could not read who is here: the list is unknown, not empty. */
+  available: boolean
+  users: OnlineUser[]
+}
+
 export interface SiteAnalyticsReport {
   days: SiteAnalyticsDays
   setup: SetupView

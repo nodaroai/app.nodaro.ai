@@ -280,6 +280,8 @@ export const queryKeys = {
     stats: () => ["admin", "stats"] as const,
     users: (page: number, pageSize: number, sortBy?: string, sortDir?: string) =>
       ["admin", "users", page, pageSize, sortBy ?? "created_at", sortDir ?? "desc"] as const,
+    /** One account, for the users page's direct link — under "users", so what refreshes the list refreshes it. */
+    user: (id: string) => ["admin", "users", "one", id] as const,
     jobs: (
       page: number,
       pageSize: number,
@@ -359,6 +361,8 @@ export const queryKeys = {
       ["admin", "site-analytics", "inspection", url] as const,
     siteAnalyticsRealtime: () =>
       ["admin", "site-analytics", "realtime"] as const,
+    siteAnalyticsOnlineUsers: () =>
+      ["admin", "site-analytics", "online-users"] as const,
     copilotGapsOverview: (days: number) =>
       ["admin", "copilot-gaps", "overview", days] as const,
     copilotGapsDay: (day: string) =>

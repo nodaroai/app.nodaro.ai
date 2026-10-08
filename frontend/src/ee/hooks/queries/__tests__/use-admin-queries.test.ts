@@ -31,6 +31,7 @@ vi.mock("@/lib/query-keys", () => ({
     admin: {
       stats: () => ["admin", "stats"],
       users: (page: number, pageSize: number) => ["admin", "users", page, pageSize],
+      user: (id: string) => ["admin", "users", "one", id],
       jobs: (
         page: number,
         pageSize: number,
@@ -67,6 +68,7 @@ vi.mock("@/lib/query-keys", () => ({
 
 import {
   useAdminStats,
+  useAdminUser,
   useAdminUsers,
   useAdminJobs,
   useAllAdminUsersLite,
@@ -482,5 +484,52 @@ describe("admin mutation hooks", () => {
       hook()
       expect(mockUseMutation).toHaveBeenCalledTimes(1)
     }
+  })
+})
+
+describe("useAdminUser — one account, for the users page's direct link", () => {
+  const ID = "00000000-0000-4000-8000-0000000000d1"
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockHasAdmin.mockReturnValue(true)
+    mockUseQuery.mockReturnValue({ data: null })
+    mockGetAuthHeaders.mockResolvedValue({ Authorization: "Bearer tok" })
+    globalThis.fetch = mockFetch as unknown as typeof fetch
+  })
+
+  const optionsOf = () =>
+    mockUseQuery.mock.calls.at(-1)![0] as { queryKey: unknown; queryFn: () => Promise<unknown>; enabled: boolean; retry: unknown }
+
+  it("under a payer, asks the route for that id and answers its one row", async () => {
+    useAdminUser(ID, { viaRoute: true, ready: true })
+    mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ data: [{ id: ID, email: "dana@x.test" }] })))
+    expect(await optionsOf().queryFn()).toEqual({ id: ID, email: "dana@x.test" })
+    expect(String(mockFetch.mock.calls[0]![0])).toBe(`/v1/admin/users?id=${ID}&limit=1`)
+    expect(optionsOf().queryKey).toEqual(["admin", "users", "one", ID, "route"])
+  })
+
+  it("otherwise reads the profile directly, with the list's columns and tier rule", async () => {
+    const maybeSingle = vi.fn().mockResolvedValue({
+      data: { id: ID, tier: "pro", subscription_tier: "free", subscription_credits: null, topup_credits: 5, daily_spent_credits: null, storage_limit_bytes: null },
+      error: null,
+    })
+    const eq = vi.fn(() => ({ maybeSingle }))
+    const select = vi.fn(() => ({ eq }))
+    mockCreateClient.mockReturnValue({ from: vi.fn(() => ({ select })) })
+    useAdminUser(ID)
+    expect(await optionsOf().queryFn()).toMatchObject({ id: ID, subscription_tier: "pro", subscription_credits: 0, topup_credits: 5, storage_limit_bytes: 524288000 })
+    expect(eq).toHaveBeenCalledWith("id", ID)
+    expect(String((select.mock.calls[0] as unknown[])[0])).toContain("free_grant_state")
+  })
+
+  it("a link that is not an account id names nobody, without a request; an answer is never retried", async () => {
+    useAdminUser("not-an-id", { viaRoute: true, ready: true })
+    expect(await optionsOf().queryFn()).toBeNull()
+    expect(mockFetch).not.toHaveBeenCalled()
+    expect(mockCreateClient).not.toHaveBeenCalled()
+    expect(optionsOf().retry).toBe(false)
+    useAdminUser(null)
+    expect(optionsOf().enabled).toBe(false)
   })
 })

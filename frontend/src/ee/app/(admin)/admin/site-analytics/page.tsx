@@ -3,6 +3,7 @@ import { ExternalLink, Loader2, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { siteDomainOf } from "./format"
 import { analyticsLink, searchConsoleLink } from "./google-links"
+import { OnlineUsersSection } from "./online-users-section"
 import { RealtimeCard } from "./realtime-card"
 import { SearchSection } from "./search-section"
 import { SetupPanel } from "./setup-panel"
@@ -68,6 +69,14 @@ export default function AdminSiteAnalyticsPage() {
         <>
           {data.setup.problems.length > 0 && <SetupPanel setup={data.setup} />}
           <RealtimeCard configured={data.setup.ga4PropertyId !== null && data.setup.serviceAccountEmail !== null} email={data.setup.serviceAccountEmail} />
+        </>
+      )}
+
+      {/* Our own record, not Google's: shown whatever the Google report did. */}
+      <OnlineUsersSection />
+
+      {data && (
+        <>
           <TrafficSection result={data.traffic} days={data.days} email={data.setup.serviceAccountEmail} siteDomain={siteDomainOf(data.setup.searchConsoleSite)} />
           <SourcesSection result={data.sources} days={data.days} email={data.setup.serviceAccountEmail} />
           <SearchSection result={data.search} email={data.setup.serviceAccountEmail} />

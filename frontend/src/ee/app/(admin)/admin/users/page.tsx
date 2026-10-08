@@ -1,4 +1,5 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import { useSearchParams } from "react-router-dom"
 import {
   Loader2,
   Search,
@@ -19,6 +20,7 @@ import {
 } from "@/components/ui/select"
 import { SortHeader } from "@/components/ui/sort-header"
 import {
+  useAdminUser,
   useAdminUsers,
   useAdminChangeRoleMutation,
   USER_SORT_DEFAULT_DIR,
@@ -102,6 +104,22 @@ export default function AdminUsersPage() {
   const toggleExpand = (userId: string) => {
     setExpandedUserId((prev) => (prev === userId ? null : userId))
   }
+
+  // A direct link (`?user=<id>`, e.g. from "Signed in now") pins that person
+  // above the list, open — whichever page of the list they are on.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const linkedId = searchParams.get("user")
+  const linked = useAdminUser(linkedId, { viaRoute: payerMode, ready: surfaceReady })
+  useEffect(() => {
+    if (linkedId) setExpandedUserId(linkedId)
+  }, [linkedId])
+  const showAll = () =>
+    setSearchParams((params) => {
+      const next = new URLSearchParams(params)
+      next.delete("user")
+      return next
+    })
+  const listedUsers = linkedId ? filteredUsers.filter((u) => u.id !== linkedId) : filteredUsers
 
   // `!surfaceReady` too: with the query disabled until the surface answers,
   // react-query reports isLoading false, and the table would flash "No users
@@ -221,7 +239,36 @@ export default function AdminUsersPage() {
             )}
           </thead>
           <tbody>
-            {filteredUsers.map((user) => {
+            {linkedId && (
+              <tr className="bg-muted/40">
+                <td colSpan={payerMode ? 10 : 11} className="px-4 py-2 text-xs text-muted-foreground">
+                  {linked.isLoading
+                    ? "Opening the user from your link…"
+                    : linked.data
+                      ? "Opened from a link."
+                      : "No user with that id, or not one you may see."}{" "}
+                  <button type="button" className="underline" onClick={showAll}>
+                    Show all users
+                  </button>
+                </td>
+              </tr>
+            )}
+            {linkedId && linked.data && (
+              <UserRow
+                key={`linked-${linked.data.id}`}
+                user={linked.data}
+                isExpanded={expandedUserId === linked.data.id}
+                onToggle={() => toggleExpand(linked.data!.id)}
+                onCreditsAdjusted={() => {
+                  void linked.refetch()
+                  void loadUsers()
+                }}
+                currentUserRole={currentUserRole}
+                currentUserId={currentUser?.id ?? ""}
+                isBlocked={blockedIds.has(linked.data.id)}
+              />
+            )}
+            {listedUsers.map((user) => {
               const isExpanded = expandedUserId === user.id
               return (
                 <UserRow
@@ -236,7 +283,7 @@ export default function AdminUsersPage() {
                 />
               )
             })}
-            {filteredUsers.length === 0 && (
+            {listedUsers.length === 0 && !(linkedId && linked.data) && (
               <tr>
                 <td colSpan={payerMode ? 10 : 11} className="px-4 py-8 text-center text-muted-foreground">
                   {searchQuery.trim() ? "No users match your search." : "No users found."}

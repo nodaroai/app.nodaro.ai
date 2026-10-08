@@ -211,6 +211,14 @@ app.post("/v1/my-route", {
 
 ---
 
+## Admin "Signed in now" — presence (`ee/lib/presence*.ts`, decided 2026-10-08)
+
+Every signed-in request (an `onResponse` hook, `hasAdmin()` only) notes its user and surface — `deriveJobSource`, plus a same-origin browser GET read as the site at `Host`, since browsers send no `Origin` there — with the client address (`clientAddress`), Cloudflare's country (`clientCountry`, display only) and browser. Invariants:
+- **The notes live only in Redis, 15 minutes.** Never a database row, never a log line with an address.
+- **Bounded however a caller behaves.** A caller names its surface freely (Origin, `mcp_client`, `X-Nodaro-Client`), so the caps are per user (8 surfaces) and in all (5,000 users; a read returns 500), and the in-process throttle (one write per user and surface per 30 s) is an LRU. The job queue shares this Redis.
+- **`GET /v1/admin/online-users` answers an admin signed in to the app only** (`req.authKind === "jwt"`) — never an API or app token — and never lists the deployment's payer to anyone but itself.
+- The orchestrator's internal hop and refused requests (401/403 — a blocked account) never count as someone here.
+
 ## Auth Middleware (`middleware/auth.ts`)
 
 - `registerAuthHook(app)` — Fastify preHandler: extracts Bearer token, verifies via Supabase `auth.getUser()`, sets `req.userId` + `req.userRole`

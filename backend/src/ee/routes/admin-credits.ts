@@ -131,6 +131,12 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
     const limit = Math.min(200, Math.max(1, parseInt(query.limit ?? "50", 10) || 50))
     const offset = Math.max(0, parseInt(query.offset ?? "0", 10) || 0)
     const search = query.search?.trim() ?? null
+    // One account by id — the users page's direct link (`/admin/users?user=<id>`).
+    // Anything but a UUID is refused rather than dropped, so it never lists everyone.
+    const id = query.id?.trim() || null
+    if (id !== null && !z.string().uuid().safeParse(id).success) {
+      return reply.code(400).send({ error: { code: "validation_error", message: "id: must be a user id" } })
+    }
 
     const payerActive = deploymentPayerActive()
     const payerId = deploymentPayerId()
@@ -147,6 +153,7 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
     // The payer's row is dropped at the QUERY, not in the map: it must not be
     // in the count, on the page, or in a log line of this response.
     if (payerActive && payerId) dbQuery = dbQuery.neq("id", payerId)
+    if (id !== null) dbQuery = dbQuery.eq("id", id)
 
     if (search) {
       // Strict allowlist: letters and digits in ANY script (this instance's

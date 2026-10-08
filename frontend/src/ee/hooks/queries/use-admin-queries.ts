@@ -257,30 +257,81 @@ export function useAdminUsers(
       // typed response shape we use below.
       const { data, error } = await supabase
         .from("profiles")
-        .select(
-          // `tier` too: the Stripe paths write only `tier`, so reading
-          // `subscription_tier` alone showed paying customers as "free".
-          "id, email, full_name, tier, subscription_tier, subscription_credits, topup_credits, daily_spent_credits, storage_used_bytes, storage_limit_bytes, role, created_at, free_grant_state",
-        )
+        .select(ADMIN_USER_COLUMNS)
         .order(sortColumn, { ascending, nullsFirst: false })
         // Stable secondary sort so paginated rows don't shift around between pages.
         .order("id", { ascending: true })
         .range(page * pageSize, (page + 1) * pageSize - 1)
       if (error) throw error
-      return (data ?? []).map((row) => ({
-        ...row,
-        // Same precedence credit enforcement uses (backend tier-columns.ts).
-        subscription_tier: row.tier ?? row.subscription_tier ?? "free",
-        subscription_credits: row.subscription_credits ?? 0,
-        topup_credits: row.topup_credits ?? 0,
-        daily_spent_credits: row.daily_spent_credits ?? 0,
-        storage_limit_bytes: row.storage_limit_bytes ?? 524288000,
-      }))
+      return (data ?? []).map(adminUserOf)
     },
     enabled: hasAdmin() && (source ? source.ready : true),
     staleTime: 30_000,
   })
 }
+
+/**
+ * The users page's columns, and how a row becomes an `AdminUser` — one copy,
+ * for the list and for the direct link. `tier` too: the Stripe paths write
+ * only `tier`, so reading `subscription_tier` alone showed paying customers
+ * as "free".
+ */
+const ADMIN_USER_COLUMNS =
+  "id, email, full_name, tier, subscription_tier, subscription_credits, topup_credits, daily_spent_credits, storage_used_bytes, storage_limit_bytes, role, created_at, free_grant_state" as const
+
+function adminUserOf<
+  T extends {
+    tier: string | null
+    subscription_tier: string | null
+    subscription_credits: number | null
+    topup_credits: number | null
+    daily_spent_credits: number | null
+    storage_limit_bytes: number | null
+  },
+>(row: T) {
+  return {
+    ...row,
+    // Same precedence credit enforcement uses (backend tier-columns.ts).
+    subscription_tier: row.tier ?? row.subscription_tier ?? "free",
+    subscription_credits: row.subscription_credits ?? 0,
+    topup_credits: row.topup_credits ?? 0,
+    daily_spent_credits: row.daily_spent_credits ?? 0,
+    storage_limit_bytes: row.storage_limit_bytes ?? 524288000,
+  }
+}
+
+/**
+ * One account by id — the users page's direct link (`/admin/users?user=<id>`),
+ * from the same source as the list: under a payer, the route (which never
+ * returns the payer's row to anyone else).
+ */
+export function useAdminUser(id: string | null, source?: { readonly viaRoute: boolean; readonly ready: boolean }) {
+  const viaRoute = source?.viaRoute === true
+  const baseKey = queryKeys.admin.user(id ?? "")
+  return useQuery({
+    queryKey: viaRoute ? [...baseKey, "route"] : baseKey,
+    queryFn: async (): Promise<AdminUser | null> => {
+      // A link that is not an account id names nobody: no request to say so.
+      if (!id || !USER_ID.test(id)) return null
+      if (viaRoute) {
+        const res = await fetch(`/v1/admin/users?id=${encodeURIComponent(id)}&limit=1`, { headers: await getAuthHeaders() })
+        if (!res.ok) throw await adminError(res, "Failed to fetch the user")
+        const json = (await res.json()) as { data?: readonly AdminUser[] }
+        return json.data?.[0] ?? null
+      }
+      const { data, error } = await createClient().from("profiles").select(ADMIN_USER_COLUMNS).eq("id", id).maybeSingle()
+      if (error) throw error
+      return data ? adminUserOf(data) : null
+    },
+    enabled: hasAdmin() && id !== null && (source ? source.ready : true),
+    staleTime: 30_000,
+    // One answer, at once: the page says the link names nobody rather than spin through retries.
+    retry: false,
+  })
+}
+
+/** An account id (a UUID). */
+const USER_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 // workflow_execution_id column exists in DB but not in generated Supabase types
 interface JobRow {

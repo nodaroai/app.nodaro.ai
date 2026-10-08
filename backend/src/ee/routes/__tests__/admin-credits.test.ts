@@ -183,6 +183,21 @@ describe("GET /v1/admin/users", () => {
     expect(body.limit).toBe(10)
     expect(body.offset).toBe(0)
   })
+
+  it("one account by id — the users page's direct link", async () => {
+    const chain = supabaseChain({ data: [], error: null, count: 0 })
+    mockFrom.mockReturnValue(chain)
+    const res = await app.inject({ method: "GET", url: `/v1/admin/users?id=${VALID_UUID}`, headers: { "x-user-id": ADMIN_UUID } })
+    expect(res.statusCode).toBe(200)
+    expect(chain.eq).toHaveBeenCalledWith("id", VALID_UUID)
+  })
+
+  it("an id that is not a user id is refused, never answered with everyone", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/admin/users?id=not-a-user", headers: { "x-user-id": ADMIN_UUID } })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error.code).toBe("validation_error")
+    expect(mockFrom).not.toHaveBeenCalled()
+  })
 })
 
 describe("POST /v1/admin/users/:id/credits", () => {

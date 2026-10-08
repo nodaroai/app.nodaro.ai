@@ -8,8 +8,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import { MemoryRouter } from "react-router-dom"
 import type { RealtimeSnapshot, SectionResult, SiteAnalyticsReport, SourceRow } from "../types"
-import { AT, answer, realtimeData, report, sourcesData } from "./fixtures"
+import { AT, answer, onlineData, realtimeData, report, sourcesData } from "./fixtures"
 
 vi.mock("@/lib/api", () => ({ getAuthHeaders: async () => ({ Authorization: "Bearer t" }) }))
 vi.mock("@/lib/edition", () => ({ hasAdmin: () => true }))
@@ -33,7 +34,9 @@ afterEach(() => {
 const OK: SectionResult<RealtimeSnapshot> = { status: "ok", fetchedAt: AT, data: realtimeData() }
 
 function serve(realtime: SectionResult<RealtimeSnapshot> = OK, body: SiteAnalyticsReport = report()) {
-  fetchMock.mockImplementation((url: string) => (url.endsWith("/realtime") ? answer(realtime) : answer(body)))
+  fetchMock.mockImplementation((url: string) =>
+    url.endsWith("/realtime") ? answer(realtime) : url.endsWith("/online-users") ? answer(onlineData()) : answer(body),
+  )
 }
 
 const realtimeCalls = () => fetchMock.mock.calls.filter(([url]) => String(url) === "/v1/admin/site-analytics/realtime").length
@@ -41,7 +44,9 @@ const realtimeCalls = () => fetchMock.mock.calls.filter(([url]) => String(url) =
 function renderPage() {
   return render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <AdminSiteAnalyticsPage />
+      <MemoryRouter>
+        <AdminSiteAnalyticsPage />
+      </MemoryRouter>
     </QueryClientProvider>,
   )
 }

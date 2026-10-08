@@ -1,4 +1,4 @@
-import type { RealtimeSnapshot, SearchReport, SectionResult, SiteAnalyticsReport, SourceRow, SourcesReport, TrafficReport } from "../types"
+import type { OnlineUser, OnlineUsersReport, RealtimeSnapshot, SearchReport, SectionResult, SiteAnalyticsReport, SourceRow, SourcesReport, TrafficReport } from "../types"
 
 export const EMAIL = "reader@nodaro-analytics.iam.gserviceaccount.com"
 export const SETUP = { serviceAccountEmail: EMAIL, ga4PropertyId: "537345785", searchConsoleSite: "sc-domain:nodaro.ai", problems: [] }
@@ -94,5 +94,8 @@ export const realtimeData = (over: Partial<RealtimeSnapshot> = {}): RealtimeSnap
 })
 
 export const REALTIME_OK: SectionResult<RealtimeSnapshot> = { status: "ok", fetchedAt: AT, data: realtimeData() }
+
+/** Who is signed in, as the server answers it — nobody, unless a test says who. */
+export const onlineData = (users: OnlineUser[] = [], over: Partial<OnlineUsersReport> = {}): OnlineUsersReport => ({ windowMinutes: 5, checkedAt: AT, available: true, users, ...over })
 
 export const answer = (body: unknown, status = 200) => Promise.resolve(new Response(JSON.stringify(body), { status }))
