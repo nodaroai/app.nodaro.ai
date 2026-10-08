@@ -19,7 +19,8 @@ export type NodeCategory = "input" | "parameter" | "ai" | "processing" | "output
 export interface PickerConsumerData {
   /** How injected picker JSON is applied. Default "override". */
   applyMode?: PickerApplyMode
-  /** When true, applies injected JSON automatically on upstream change. */
+  /** Applies injected JSON automatically when the upstream changes. On unless
+   *  explicitly `false` (absent = auto-sync). A hand edit is never reverted. */
   autoApplyInjected?: boolean
   /** The picker JSON last applied — basis for change detection. */
   lastAppliedPickerJson?: Record<string, unknown>

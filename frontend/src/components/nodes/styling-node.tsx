@@ -20,7 +20,7 @@ function StylingNodeComponent({ id, data, selected }: NodeProps) {
   const maxItemsPerRow = Math.max(1, Math.min(4, nodeData.maxItemsPerRow ?? 2))
   const gridColumns = Math.max(1, Math.min(maxItemsPerRow, enabled.length))
 
-  const { isConnected, hasPending, apply } = usePickerJsonConsumer("styling", id, nodeData)
+  const { showSyncButton, hasPending, apply } = usePickerJsonConsumer("styling", id, nodeData)
 
   return (
     <ParameterNodeShell
@@ -32,7 +32,7 @@ function StylingNodeComponent({ id, data, selected }: NodeProps) {
       fluidWidth
       inputHandles={PICKER_CONSUMER_INPUT_HANDLES}
       extraHandleIcons={<PickerJsonHandleIcon nodeId={id} nodeType="styling" />}
-      headerSlot={isConnected && !nodeData.autoApplyInjected ? <PickerUpdateButton hasPending={hasPending} onApply={apply} /> : null}
+      headerSlot={showSyncButton ? <PickerUpdateButton hasPending={hasPending} onApply={apply} /> : null}
     >
       {enabled.length > 0 ? (
         <div

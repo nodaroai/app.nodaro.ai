@@ -16,7 +16,7 @@ function LensNodeComponent({ id, data, selected }: NodeProps) {
   const lensId = nodeData.lens || "normal-50mm"
   const description = getLens(lensId)?.description
 
-  const { isConnected, hasPending, apply } = usePickerJsonConsumer("lens", id, nodeData)
+  const { showSyncButton, hasPending, apply } = usePickerJsonConsumer("lens", id, nodeData)
 
   return (
     <ParameterNodeShell
@@ -28,7 +28,7 @@ function LensNodeComponent({ id, data, selected }: NodeProps) {
       fluidWidth
       inputHandles={PICKER_CONSUMER_INPUT_HANDLES}
       extraHandleIcons={<PickerJsonHandleIcon nodeId={id} nodeType="lens" />}
-      headerSlot={isConnected && !nodeData.autoApplyInjected ? <PickerUpdateButton hasPending={hasPending} onApply={apply} /> : null}
+      headerSlot={showSyncButton ? <PickerUpdateButton hasPending={hasPending} onApply={apply} /> : null}
     >
       <div className="flex items-start justify-between gap-2">
         <p className="text-foreground text-sm font-medium min-w-0">

@@ -72,9 +72,13 @@ The picker JSON only takes effect once you connect this node's `picker-json` out
 
 In every mode the merge touches **only that picker's dimension fields** — it never changes the node's label, custom before/after text, or layout settings.
 
-**Auto-apply toggle** — "Auto-apply on change":
-- **On:** whenever a new (different) picker JSON arrives upstream, it is applied automatically using the selected apply mode.
-- **Off** *(default):* nothing is applied automatically. Instead, a manual **"⚡ Update from injected"** button appears on the picker node (enabled when the injected section differs from what was last applied; "Up to date" otherwise). Change detection is order-independent, so re-running the analyzer with the same result won't show a spurious pending change.
+**Auto-apply toggle** — "Auto-apply on change" (per picker, in its settings panel):
+- **On** *(default)*: whenever a new (different) picker JSON arrives upstream, it is applied automatically using the selected apply mode. A value you change by hand on the picker is kept — it is replaced only by the next upstream change. While a hand edit leaves the picker out of step with the injected JSON, the picker shows **"⚡ Update from injected"** so you can sync it back.
+- **Off:** nothing is applied automatically. The picker node shows a **"⚡ Update from injected"** button instead, enabled whenever applying the injected section would change the picker — after a new analysis arrives, or after you changed a value by hand — and reading "Up to date" otherwise. Change detection is order-independent, so re-running the analyzer with the same result won't show a spurious pending change.
+
+Opening a workflow never changes a picker. A picker that has never applied an analysis (for example one saved while auto-apply was off by default) treats the analysis already present when the workflow opens as its starting point: its values stay as saved, the update button offers the difference, and auto-apply takes over from the next analysis.
+
+Whether the picker counts as out of date follows the apply mode: under **Fill empty only**, a value you filled in by hand is never flagged, because applying would not touch it.
 
 ## Catalog-gap feedback
 
