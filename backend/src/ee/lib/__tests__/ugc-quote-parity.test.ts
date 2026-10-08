@@ -116,6 +116,8 @@ const CASES: Array<{ tool: string; quoted: Record<string, unknown>; added: Recor
   // The creator image and the realism pass: the quote rule maps the call with ugcCallToRouteBody and asks the route's own id function.
   { tool: "generate_image", quoted: { prompt: "a person", model: "nano-banana-pro", aspect_ratio: "3:4", resolution: "1K" }, added: {} },
   { tool: "generate_image", quoted: { prompt: "a person", model: "gpt-image-2", aspect_ratio: "3:4", resolution: "2K" }, added: {} },
+  { tool: "generate_image", quoted: { prompt: "a person", model: "gpt-image-2", aspect_ratio: "3:4", resolution: "1K" }, added: {} },
+  { tool: "generate_image", quoted: { prompt: "a person", model: "seedream-5-pro", aspect_ratio: "3:4", quality: "basic" }, added: {} },
   { tool: "generate_image", quoted: { prompt: "a person", model: "qwen", aspect_ratio: "3:4" }, added: {} },
   { tool: "image_to_image", quoted: { prompt: "make it real", model: "gpt-image-2", resolution: "2K" }, added: { image_url: IMAGE } },
   { tool: "image_to_image", quoted: { prompt: "make it real", model: "qwen-i2i" }, added: { image_url: IMAGE } },
@@ -237,6 +239,21 @@ describe("generate_speech by length — the quote's base is the route guard's ba
     expect(res.statusCode, res.body).toBe(299)
     expect(guard.base).toBeUndefined()
     expect(await pricingFor("generate_speech", speech, { clipCount: 1 })).toEqual({ id: "elevenlabs-v3" })
+  })
+})
+
+// The creator's image calls (each candidate model, and the one moderation
+// fallback of a round whose every candidate was blocked) render at each model's
+// 1K lever, so each prices at that model's 1K row — never a 2K or high-quality
+// composite.
+describe("the creator image calls price at each model's 1K row", () => {
+  it.each([
+    [{ model: "gpt-image-2", resolution: "1K" }, "gpt-image-2"],
+    [{ model: "seedream-5-pro", quality: "basic" }, "seedream-5-pro"],
+    [{ model: "nano-banana-pro", resolution: "1K" }, "nano-banana-pro"],
+  ] as const)("%j is priced as %s", async (levers, id) => {
+    const quoted = await pricingFor("generate_image", { prompt: "a person", aspect_ratio: "3:4", ...levers }, { clipCount: 1 })
+    expect(quoted).toEqual({ id })
   })
 })
 

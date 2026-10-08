@@ -352,7 +352,7 @@ Always visible · Nodaro Cloud only.
 | `traits` | object (map of any) |  |  |
 | `identity_images` | string[] | yes | From 1 to 2 items. |
 | `seed` | integer |  | From 0 to 2147483647. |
-| `spent_job_ids` | string[] |  | Job ids of the calls already made for this video; the quote lists them as already spent. At most 30 items. |
+| `spent_job_ids` | string[] |  | Job ids of the calls already made for this video; the quote lists them as already spent. At most 64 items. |
 | `segments` | object (map of any)[] |  | The segments from ugc_split_speech's output, when the answer to the first call asked for them. Leave out on the first call. At most 8 items. |
 | `speech_lane` | string |  | English only. reference-audio (the default): a voice speaks the script and the video model performs it. prompt-quoted: the video model reads the line in its own voice, no ElevenLabs. One of `prompt-quoted`, `reference-audio`. |
 | `voice_id` | string |  | English only: the ElevenLabs mode's anchor voice (a premade name or a list_voices id), replacing the builder's pick from the creator. From 1 to 200 characters. |

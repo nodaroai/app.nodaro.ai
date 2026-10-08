@@ -78,6 +78,22 @@ describe("ugcCallToRouteBody equals the MCP verbs", () => {
     })
   })
 
+  // A sampled creator is drawn by more than one image model, and a round whose
+  // every candidate is blocked by moderation falls back once to a third. Every
+  // one of these calls sets its model's own 1K lever, a resolution on one model
+  // and a quality on another; each must reach the route with that lever as
+  // sent, through either door.
+  it.each([
+    ["gpt-image-2", { resolution: "1K" }],
+    ["seedream-5-pro", { quality: "basic" }],
+    ["nano-banana-pro", { resolution: "1K" }],
+  ] as const)("generate_image on %s keeps its lever %j", async (model, levers) => {
+    const call: UgcToolCall = { tool: "generate_image", args: { prompt: "a person", model, aspect_ratio: "3:4", ...levers } }
+    const mapped = ugcCallToRouteBody(call) as { body: Record<string, unknown> }
+    expect(mapped.body).toEqual({ prompt: "a person", provider: model, aspectRatio: "3:4", ...levers })
+    await expectParity(call)
+  })
+
   it("generate_image on a lever-less model sends neither resolution nor quality", async () => {
     const call: UgcToolCall = {
       tool: "generate_image",

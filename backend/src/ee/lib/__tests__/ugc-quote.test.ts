@@ -374,6 +374,17 @@ describe("already-spent lines", () => {
     expect(q.skipped).toEqual([])
     expect(h.inCalls).toEqual([[id]])
   })
+  it("64 ids are all read and listed; past the tool's 64 none is read", async () => {
+    const ids = Array.from({ length: 65 }, (_, i) => J(i + 1))
+    h.jobs = ids.map((id) => ({ id, user_id: USER, status: "completed", job_type: "generate-image", input_data: {}, credits: 1, credits_actual: 1 }))
+    const all = await quote([], ids.slice(0, 64))
+    expect(all.spent).toHaveLength(64)
+    expect(h.inCalls).toEqual([ids.slice(0, 64)])
+    h.inCalls = []
+    const over = await quote([], ids)
+    expect(over.spent).toHaveLength(64)
+    expect(h.inCalls).toEqual([ids.slice(0, 64)])
+  })
   it("no ids → no query", async () => {
     await quote([item("extract_frame")])
     expect(h.inCalls).toEqual([])

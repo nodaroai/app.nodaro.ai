@@ -8,6 +8,7 @@ import type { McpSession } from "../session.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { entityOwnerFilter } from "./_entity-scope.js"
 import { resolveAssetId } from "../asset-resolver.js"
+import { UGC_SPENT_JOB_IDS_MAX } from "./_ugc-limits.js"
 import { internalHeaders, isRouterNotFound, textResult } from "./_studio-helpers.js"
 import { errorResult, jobResultWithWidget, parseJobId } from "./_verb-helpers.js"
 
@@ -167,8 +168,8 @@ export function registerUgcTools({ server, session, fastify }: RegisterUgcToolsO
       description:
         "Prepare the creator for a UGC-style talking-to-camera video: a newly sampled person, one of your saved " +
         "Characters, or your own photo. Returns the creator's identity images, or an image prompt with the exact " +
-        "arguments for the image generation to run next. Free: it generates nothing. Used by the ugc-website " +
-        "recipe (get_recipe).",
+        "arguments for the image generations to run next, one per candidate. Free: it generates nothing. Used by " +
+        "the ugc-website recipe (get_recipe).",
       inputSchema: {
         source: z.enum(["sampled", "character", "photo"]),
         gender: z.enum(["woman", "man"]).optional(),
@@ -235,7 +236,7 @@ export function registerUgcTools({ server, session, fastify }: RegisterUgcToolsO
         seed: z.number().int().min(0).max(2147483647).optional(),
         spent_job_ids: z
           .array(z.string())
-          .max(30)
+          .max(UGC_SPENT_JOB_IDS_MAX)
           .optional()
           .describe("Job ids of the calls already made for this video; the quote lists them as already spent."),
         segments: z
