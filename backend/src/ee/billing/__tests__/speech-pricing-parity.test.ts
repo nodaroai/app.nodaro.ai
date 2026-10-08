@@ -23,8 +23,8 @@ vi.mock("@/lib/admin-check.js", () => ({ warmAdminCache: vi.fn(), checkIsAdmin: 
 vi.mock("@/lib/url-validator.js", async () => ({ safeUrlSchema: (await import("zod")).z.string().url() }))
 
 const ROWS: Record<string, number> = {
-  "elevenlabs-v3": 30, "elevenlabs-v4": 30, "elevenlabs-multilingual": 30, "elevenlabs-turbo": 15, "elevenlabs": 15, "elevenlabs-dialogue": 25, "elevenlabs-dialogue-v4": 25,
-  "elevenlabs-v3:per-100-chars": 4, "elevenlabs-v4:per-100-chars": 4, "elevenlabs-multilingual:per-100-chars": 4,
+  "elevenlabs-v3": 30, "elevenlabs-v4": 30, "elevenlabs-v4-turbo": 15, "elevenlabs-multilingual": 30, "elevenlabs-turbo": 15, "elevenlabs": 15, "elevenlabs-dialogue": 25, "elevenlabs-dialogue-v4": 25,
+  "elevenlabs-v3:per-100-chars": 4, "elevenlabs-v4:per-100-chars": 4, "elevenlabs-v4-turbo:per-100-chars": 2, "elevenlabs-multilingual:per-100-chars": 4,
   "elevenlabs-turbo:per-100-chars": 2, "elevenlabs-dialogue:per-100-chars": 4,
   "elevenlabs-dialogue-v4:per-100-chars": 4,
 }

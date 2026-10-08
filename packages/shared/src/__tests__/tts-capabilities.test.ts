@@ -57,7 +57,7 @@ describe("speech-model capability sheets — totality", () => {
     }
   })
 
-  it("every sheet says whether the model returns timings, and all six speech models do", () => {
+  it("every sheet says whether the model returns timings, and all seven speech models do", () => {
     const yes = Object.values(MODEL_CATALOG).filter((m) => m.tts?.timestamps === true).map((m) => m.id).sort()
     for (const m of Object.values(MODEL_CATALOG)) {
       if (!m.tts) continue
@@ -65,6 +65,7 @@ describe("speech-model capability sheets — totality", () => {
     }
     // Measured 2026-10-04 (v4) and 2026-10-06 (the rest): /with-timestamps answers 200 on every
     // speech model at the same character cost. A new model joins this list only once it is measured.
+    // v4 Turbo measured 2026-10-07: with-timestamps 200 at equal character-cost.
     expect(yes).toEqual([
       "elevenlabs-dialogue",
       "elevenlabs-dialogue-v4",
@@ -72,6 +73,7 @@ describe("speech-model capability sheets — totality", () => {
       "elevenlabs-turbo",
       "elevenlabs-v3",
       "elevenlabs-v4",
+      "elevenlabs-v4-turbo",
     ])
   })
 })
@@ -260,6 +262,64 @@ describe("elevenlabs-v4 — added beside v3", () => {
 
   it("does not call v3 the latest model any more", () => {
     expect(MODEL_CATALOG["elevenlabs-v3"]!.description).not.toMatch(/latest/i)
+  })
+})
+
+describe("elevenlabs-v4-turbo — the fast v4, added beside v4 (decided 2026-10-06)", () => {
+  it("is a text-to-speech provider, in the catalog, listed after v3 and before Turbo v2.5", () => {
+    expect(TTS_PROVIDERS).toContain("elevenlabs-v4-turbo")
+    expect(MODEL_CATALOG["elevenlabs-v4-turbo"]?.modes).toContain("tts")
+    const order = TTS_PROVIDERS.filter((id) => ["elevenlabs-v3", "elevenlabs-v4-turbo", "elevenlabs-turbo"].includes(id))
+    expect(order).toEqual(["elevenlabs-v3", "elevenlabs-v4-turbo", "elevenlabs-turbo"])
+  })
+
+  it("the sheet: tags, no SSML, stability + similarity, language code, v4's curated 46 languages, the cap", () => {
+    const c = getTtsCapabilities("elevenlabs-v4-turbo")
+    expect(c.audioTags).toBe(true)
+    expect(c.ssmlBreaks).toBe(false)
+    expect(c.levers).toEqual(["stability", "similarity"])
+    expect(c.languageCode).toBe(true)
+    expect(c.languages).toEqual(getTtsCapabilities("elevenlabs-v4").languages)
+    expect(c.maxChars).toBe(10000) // measured 2026-10-07: the vendor declares 10,000; live, 10,000 AND 10,001 both returned 200 — the declared (smaller) figure is the clamp
+    expect(getMaxTtsChars("elevenlabs-v4-turbo")).toBe(c.maxChars)
+  })
+
+  it("stitching and timestamps are the probe's values, declared, never undefined", () => {
+    const c = getTtsCapabilities("elevenlabs-v4-turbo")
+    expect(c.stitching).toBe(true) // measured 2026-10-07: neighbour-text 200 at the plain call's character-cost
+    expect(c.timestamps).toBe(true) // measured 2026-10-07: with-timestamps 200 at equal character-cost
+    expect(ttsSupportsStitching("elevenlabs-v4-turbo")).toBe(c.stitching)
+    expect(ttsSupportsTimestamps("elevenlabs-v4-turbo")).toBe(c.timestamps)
+  })
+
+  it("keeps [audio tags], has no SSML breaks, honours similarity but not speed, style or speaker boost", () => {
+    expect(ttsSupportsAudioTags("elevenlabs-v4-turbo")).toBe(true)
+    expect(ttsSupportsSsmlBreaks("elevenlabs-v4-turbo")).toBe(false)
+    expect(ttsHasLever("elevenlabs-v4-turbo", "similarity")).toBe(true)
+    for (const lever of ["speed", "style", "speakerBoost"] as const) expect(ttsHasLever("elevenlabs-v4-turbo", lever), lever).toBe(false)
+  })
+
+  it("its flat row is 15 with no note — Turbo v2.5 parity — beside a 2-credit per-100-characters row; it is not featured", () => {
+    expect(MODEL_CATALOG["elevenlabs-v4-turbo"]!.pricing).toEqual([
+      { identifier: "elevenlabs-v4-turbo", credits: 15 },
+      { identifier: "elevenlabs-v4-turbo:per-100-chars", credits: 2, note: SPEECH_UNIT_PRICE_NOTE },
+    ])
+    expect(MODEL_CATALOG["elevenlabs-v4-turbo"]!.featured).toBeUndefined()
+    expect(MODEL_CATALOG["elevenlabs-turbo"]!.pricing[0]!.credits).toBe(15)
+  })
+
+  it("every existing speech sheet is exactly what it was", () => {
+    expect(getTtsCapabilities("elevenlabs-v4").maxChars).toBe(10000)
+    expect(getTtsCapabilities("elevenlabs-v3").maxChars).toBe(5000)
+    expect(getTtsCapabilities("elevenlabs-turbo").maxChars).toBe(40000)
+    expect(getTtsCapabilities("elevenlabs-multilingual").maxChars).toBe(10000)
+    expect(TTS_PROVIDERS.filter((id) => id !== "elevenlabs-v4-turbo")).toEqual(["elevenlabs-v3", "elevenlabs-v4", "elevenlabs-turbo", "elevenlabs-multilingual", "elevenlabs"])
+  })
+
+  it("the narration recommendation keeps v4 first and places v4 Turbo after v3, before Turbo v2.5", async () => {
+    const { MODEL_RECOMMENDATIONS } = await import("../model-catalog.js")
+    const narration = MODEL_RECOMMENDATIONS.find((r) => r.intent === "voice over / narration")
+    expect(narration?.modelIds).toEqual(["elevenlabs-v4", "elevenlabs-v3", "elevenlabs-v4-turbo", "elevenlabs-turbo"])
   })
 })
 

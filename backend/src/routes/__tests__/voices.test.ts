@@ -355,6 +355,29 @@ describe("GET /v1/voices/library — model availability", () => {
     expect(voice.verifiedProviders).toEqual(["elevenlabs-v4", "elevenlabs-v3", "elevenlabs-turbo"])
   })
 
+  it("a voice verified only for eleven_v4_turbo is verified for v4 Turbo — never for Turbo v2.5 — and recommended on it", async () => {
+    fetchMock.mockResolvedValueOnce(libraryPage(["eleven_v4_turbo"]))
+    const [voice] = await fetchLibrary()
+    expect(voice.verifiedProviders).toEqual(["elevenlabs-v4-turbo"])
+    expect(voice.recommendedProvider).toBe("elevenlabs-v4-turbo")
+  })
+
+  it("the verified order is v4, v3, v4 Turbo, Turbo v2.5, Multilingual v2 — v4 Turbo after v3, so the recommendation never drifts onto it", async () => {
+    fetchMock.mockResolvedValueOnce(libraryPage(["eleven_multilingual_v2", "eleven_turbo_v2_5", "eleven_v4_turbo", "eleven_v3", "eleven_v4"]))
+    const [voice] = await fetchLibrary()
+    expect(voice.verifiedProviders).toEqual(["elevenlabs-v4", "elevenlabs-v3", "elevenlabs-v4-turbo", "elevenlabs-turbo", "elevenlabs-multilingual"])
+    expect(voice.recommendedProvider).toBe("elevenlabs-v4")
+  })
+
+  it("a deployment that denies v4 Turbo drops it and keeps the rest in order", async () => {
+    cfgState.business = true
+    process.env.NODARO_SURFACE_PROFILE = JSON.stringify({ models: { deny: ["elevenlabs-v4-turbo"] } })
+    fetchMock.mockResolvedValueOnce(libraryPage(["eleven_v4_turbo", "eleven_v3"]))
+    const [voice] = await fetchLibrary()
+    expect(voice.verifiedProviders).toEqual(["elevenlabs-v3"])
+    expect(voice.recommendedProvider).toBe("elevenlabs-v3")
+  })
+
   it("a deployment that denies v4 recommends v3, and the rest keep their order", async () => {
     cfgState.business = true
     process.env.NODARO_SURFACE_PROFILE = JSON.stringify({ models: { deny: ["elevenlabs-v4"] } })

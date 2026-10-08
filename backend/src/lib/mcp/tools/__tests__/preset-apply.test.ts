@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest"
-import { DEFAULT_TTS_PROVIDER } from "@nodaro/shared"
+import { DEFAULT_TTS_PROVIDER, getMaxTtsChars } from "@nodaro/shared"
 import { registerVerbs } from "../verbs.js"
 import { _resetRegistry } from "../../tasks.js"
 import { buildServer, callTool, executeSession, stubRoute } from "./_helpers.js"
@@ -463,6 +463,19 @@ describe("generate_speech — the model and its per-request cap", () => {
     expect(legacy.result.isError).toBeUndefined()
     expect(legacy.body?.provider).toBe("elevenlabs") // the route resolves the alias; the tool still sends the id it was given
     expect((legacy.body?.text as string).length).toBe(9000)
+  })
+
+  it("accepts elevenlabs-v4-turbo, dispatches it as the provider, and refuses text over ITS cap with the numbers", async () => {
+    const cap = getMaxTtsChars("elevenlabs-v4-turbo")
+    const ok = await runGenerateSpeech({ text: "a".repeat(Math.min(cap, 10000)), model: "elevenlabs-v4-turbo" })
+    expect(ok.result.isError).toBeUndefined()
+    expect(ok.body?.provider).toBe("elevenlabs-v4-turbo")
+    if (cap < 10000) {
+      const over = await runGenerateSpeech({ text: "a".repeat(cap + 1), model: "elevenlabs-v4-turbo" })
+      expect(over.result.isError).toBe(true)
+      expect((over.result.content[0] as { text: string }).text).toMatch(new RegExp(`${cap + 1} characters; elevenlabs-v4-turbo takes at most ${cap}`))
+      expect(over.body).toBeUndefined()
+    }
   })
 
   it("still rejects past 10,000 characters at the schema, whatever the model", async () => {

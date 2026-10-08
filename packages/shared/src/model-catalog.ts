@@ -296,7 +296,7 @@ export const MODEL_RECOMMENDATIONS: readonly ModelRecommendation[] = [
   { intent: "cheap batch video clips", modelIds: ["veo3.1", "wan-turbo", "bytedance-lite"], note: "VEO 3.1 Fast is the best price/quality balance with native audio." },
   { intent: "video with start + end frame", modelIds: ["veo3", "veo3.1", "kling-turbo", "minimax", "hailuo-standard", "seedance-2"], note: "All listed support an end frame; VEO uses imageUrls[start, end]." },
   { intent: "music / song generation", modelIds: ["suno-v6", "suno-v6_wild", "suno-v6_mini", "suno-v5_5"], note: "V6 is the default flagship; V6 Wild for bolder, less predictable results; V6 Mini when speed matters; v5.5 / v5 / v4 keep their own character. Same price." },
-  { intent: "voice over / narration", modelIds: ["elevenlabs-v4", "elevenlabs-v3", "elevenlabs-turbo"], note: "v4 is the default: [audio tags] for emotion and up to 10,000 characters per request. v3 is the previous expressive model, still selectable. Turbo is cheaper for plain narration." },
+  { intent: "voice over / narration", modelIds: ["elevenlabs-v4", "elevenlabs-v3", "elevenlabs-v4-turbo", "elevenlabs-turbo"], note: "v4 is the default: [audio tags] for emotion and up to 10,000 characters per request. v3 is the previous expressive model, still selectable. v4 Turbo keeps v4's tags at Turbo's credit price; Turbo v2.5 is the cheapest for plain narration without tags." },
   { intent: "lip-sync a portrait to audio", modelIds: ["kling-avatar-pro", "kling-avatar", "infinitalk"], note: "Pro for best mouth shape; InfiniTalk for resolution control." },
   { intent: "transcription / captions", modelIds: ["elevenlabs-stt", "incredibly-fast-whisper", "whisper"], note: "Captions need WORD timestamps: ElevenLabs STT (always) or Incredibly Fast Whisper. Plain Whisper returns phrase segments only." },
   { intent: "motion transfer (drive a subject by another video)", modelIds: ["motion-transfer", "kling-3.0-motion"], note: "Kling 2.6 base is cheap; Kling 3.0 is premium." },
@@ -2586,6 +2586,17 @@ const TTS_LEVERS_V2 = ["stability", "similarity", "style", "speed", "speakerBoos
  * new row. ElevenLabs recommends ≤ 2,000 for quality on either model.
  */
 const DIALOGUE_V4_MAX_CHARS = 10000
+/**
+ * ElevenLabs v4 Turbo's per-request character cap — ONE constant, so a change
+ * of the owner's rule lands in one place. The vendor declares 10,000, the same
+ * as v4 (`maximum_text_length_per_request`, measured 2026-10-07); live, both a
+ * 10,000- and a 10,001-character request returned 200 (the vendor accepts over
+ * its declared figure), so the platform clamps at the declared figure — the
+ * smaller of the two. Decided 2026-10-07: the model takes that whole cap because
+ * it ships priced per started 100 characters. An instance that still prices
+ * speech flat charges the flat row for any length (the Text to Speech docs say so).
+ */
+const V4_TURBO_MAX_CHARS = 10000
 
 const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
   // ── ElevenLabs TTS ──
@@ -2644,6 +2655,36 @@ const AUDIO_MODELS: Record<string, ModelCatalogEntry> = {
       // (it adds e.g. Cantonese, Maltese, Mongolian, Burmese, Uzbek); widening
       // the picker is its own change — it needs a name and a translation per language.
       languages: TTS_LANGS_V3,
+    },
+  },
+  "elevenlabs-v4-turbo": {
+    id: "elevenlabs-v4-turbo",
+    kind: "audio",
+    modes: ["tts"] as const,
+    family: "ElevenLabs",
+    label: "ElevenLabs v4 Turbo",
+    series: "ElevenLabs",
+    description: "Faster, cheaper ElevenLabs v4 at lower fidelity — [audio tags], stability and similarity control, at Turbo's credit price. Prefer v4 when quality matters. Direct API.",
+    useCases: ["tts", "voice-over", "narration", "expressive", "fast"],
+    features: ["audio-tags", "voice-cloning"],
+    // Flat per request at parity with Turbo v2.5 (what a run costs where length
+    // pricing is off); per started 100 characters at Turbo's rate where it is on
+    // (decided 2026-10-06).
+    pricing: [
+      { identifier: "elevenlabs-v4-turbo", credits: 15 },
+      { identifier: "elevenlabs-v4-turbo:per-100-chars", credits: 2, note: SPEECH_UNIT_PRICE_NOTE },
+    ],
+    tts: {
+      // Every value below was measured 2026-10-07 from live calls to eleven_v4_turbo.
+      audioTags: true, // measured 2026-10-07: a tagged line → 200; Scribe hears no tag word spoken and lists [chuckles] as an audio event
+      ssmlBreaks: false,
+      levers: ["stability", "similarity"], // measured 2026-10-07: /v1/models can_use_style / can_use_speaker_boost both false, as v4; stability + similarity_boost → 200
+      languageCode: true, // measured 2026-10-07: language_code "he" with Hebrew text → 200
+      timestamps: true, // measured 2026-10-07: /with-timestamps answers 200 at the same character cost as the plain call
+      stitching: true, // measured 2026-10-07: previous_text / next_text → 200, at the same character cost (context not billed)
+      maxChars: V4_TURBO_MAX_CHARS,
+      // The curated picker, the same 46 as v4 and v3 (the model lists 85; widening is its own change).
+      languages: TTS_LANGS_V3, // measured 2026-10-07: all 46 present in the model's 85-language list
     },
   },
   "elevenlabs-turbo": {

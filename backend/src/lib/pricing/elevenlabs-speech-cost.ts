@@ -24,6 +24,7 @@ import { ttsModelKey } from "../../providers/elevenlabs/tts-models.js"
 export const ELEVENLABS_SPEECH_USD_PER_1K_CHARS: Readonly<Record<string, number>> = {
   "elevenlabs-v3": 0.08,
   "elevenlabs-v4": 0.08,
+  "elevenlabs-v4-turbo": 0.04, // the vendor's list rate after 2026-10-12 (half of v4's; the launch discount is deliberately not used — see above)
   "elevenlabs-multilingual": 0.08,
   "elevenlabs-turbo": 0.04,
   "elevenlabs-dialogue": 0.08,

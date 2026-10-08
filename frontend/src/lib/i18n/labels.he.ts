@@ -659,6 +659,7 @@ const MODEL_DESCRIPTIONS_HE: Record<string, string> = {
   "Latest Seedream, fast and sharp": "Seedream העדכני, מהיר וחד",
   "Expressive, supports audio tags for emotions": "אקספרסיבי, תומך בתגיות אודיו לרגשות",
   "Newest, supports audio tags, up to 10,000 characters": "החדש ביותר, תומך בתגיות אודיו, עד 10,000 תווים",
+  "Faster, cheaper v4 at lower fidelity; supports audio tags": "v4 מהיר וזול יותר באיכות נמוכה יותר; תומך בתגיות אודיו",
   "Expressive, supports audio tags; stability in three steps": "אקספרסיבי, תומך בתגיות אודיו; יציבות בשלוש דרגות",
   "Newest, supports audio tags, stability and similarity": "החדש ביותר, תומך בתגיות אודיו, יציבות ודמיון",
   "Light, fast, end frame support": "קליל, מהיר, תמיכה בפריים סיום",

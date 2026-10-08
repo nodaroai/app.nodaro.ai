@@ -3,7 +3,7 @@
 
 ## Overview
 
-The Text to Speech node generates spoken audio from text input using ElevenLabs models. It supports four providers with varying language coverage and feature sets. The default and recommended provider, ElevenLabs v4, and the previous ElevenLabs v3 support inline audio tags for emotions, reactions, and sound effects, while the v2 models automatically strip these tags before processing.
+The Text to Speech node generates spoken audio from text input using ElevenLabs models. It supports five providers with varying language coverage and feature sets. The default and recommended provider, ElevenLabs v4, the fast ElevenLabs v4 Turbo and the previous ElevenLabs v3 support inline audio tags for emotions, reactions, and sound effects, while the v2 models automatically strip these tags before processing.
 
 ## Configuration
 
@@ -16,20 +16,20 @@ The Text to Speech node generates spoken audio from text input using ElevenLabs 
 | Voice Type | `"premade" \| "custom" \| "library"` | `"premade"` | Source of the selected voice |
 | Language | `string` | `"en"` | Target language code, or empty for auto-detect. Available languages depend on provider model (see Language Support below) |
 | Stability | `number` (0-1) | voice's own | Controls voice consistency. Lower values produce more expressive but variable speech |
-| Similarity Boost | `number` (0-1) | voice's own | How closely output matches the target voice timbre. v4 and the v2 models only |
+| Similarity Boost | `number` (0-1) | voice's own | How closely output matches the target voice timbre. v4, v4 Turbo and the v2 models only |
 | Style Exaggeration | `number` (0-1) | voice's own | Amplifies the style of the original voice. v2 models only |
 | Speed | `number` (0.7-1.2) | voice's own | Playback speed multiplier. v2 models only |
 | Previous text | `string` | `""` | **Continuity:** the line spoken just before this clip in the finished piece. Context the model reads, not spoken. Up to 1,000 characters; a longer passage keeps its end. Used by models that stitch (see Providers) |
 | Next text | `string` | `""` | **Continuity:** the line spoken just after it. Up to 1,000 characters; a longer passage keeps its start |
 | `promptPrefix` / `promptSuffix` | text | -- | Optional pre/post text wrapped around the prompt at run time (settings panel → **Pre & post text**; hidden from app users; captured by presets). See [Prompt pre & post text](../../prompt-pre-post-text.md). |
 
-The panel shows only the settings the chosen model uses: v3 has Stability alone, v4 has Stability and Similarity Boost, and the v2 models have all four. When you choose a different model — in the panel or in the node's model dropdown — the settings the new model does not use are cleared, and a language it does not offer is reset to auto-detect.
+The panel shows only the settings the chosen model uses: v3 has Stability alone, v4 and v4 Turbo have Stability and Similarity Boost, and the v2 models have all four. When you choose a different model — in the panel or in the node's model dropdown — the settings the new model does not use are cleared, and a language it does not offer is reset to auto-detect.
 
 ### Voice settings & preview fidelity
 
-When you don't touch the sliders, generation uses the **voice's own stored settings** (including speaker boost) — the same settings its preview was rendered with, so output matches what you heard in the Voice Browser. When you adjust one or more sliders, your values are merged **over** the voice's stored settings rather than resetting the others to generic defaults. In a published app the creator can expose **Stability** and **Similarity** as sliders; Similarity writes this node's Similarity Boost, so — like the field — it changes the result on v4 and the v2 models; v3 ignores it.
+When you don't touch the sliders, generation uses the **voice's own stored settings** (including speaker boost) — the same settings its preview was rendered with, so output matches what you heard in the Voice Browser. When you adjust one or more sliders, your values are merged **over** the voice's stored settings rather than resetting the others to generic defaults. In a published app the creator can expose **Stability** and **Similarity** as sliders; Similarity writes this node's Similarity Boost, so — like the field — it changes the result on v4, v4 Turbo and the v2 models; v3 ignores it.
 
-Voice Library voices are verified per model by their creators. The Voice Browser knows each library voice's verified models: selecting a library voice while the node is set to a v2 model the voice is **not** verified for automatically snaps the provider to a verified one (your explicit choice is kept whenever the voice is verified for it; a node on v3 or v4 is never changed by a voice pick). Library voices verified for ElevenLabs v4 are recommended on v4, so when such a snap happens it lands on v4, then v3, then the cheapest v2 model the voice is verified for. A model your deployment does not offer is never the snap target; if a voice is verified only for such models, the provider is left as it is.
+Voice Library voices are verified per model by their creators. The Voice Browser knows each library voice's verified models: selecting a library voice while the node is set to a v2 model the voice is **not** verified for automatically snaps the provider to a verified one (your explicit choice is kept whenever the voice is verified for it; a node on v3, v4 or v4 Turbo is never changed by a voice pick). Library voices verified for ElevenLabs v4 are recommended on v4, so when such a snap happens it lands on v4, then v3, then v4 Turbo, then the cheapest v2 model the voice is verified for. A model your deployment does not offer is never the snap target; if a voice is verified only for such models, the provider is left as it is.
 
 ### Voice errors
 
@@ -53,6 +53,7 @@ Credits do not change: a request with context costs what it costs without.
 |----------|-------|-----------|------------|------------|----------------------------|
 | `elevenlabs-v4` | ElevenLabs v4 (default, recommended) | 46 | Yes | **Yes** | 10,000 |
 | `elevenlabs-v3` | ElevenLabs v3 | 46 | Yes | No | 5,000 |
+| `elevenlabs-v4-turbo` | ElevenLabs v4 Turbo — the faster, cheaper v4 at lower fidelity; prefer v4 when quality matters | 46 | Yes | **Yes** | 10,000 |
 | `elevenlabs-turbo` | Turbo v2.5 | 32 | No (stripped) | **Yes** | 40,000 |
 | `elevenlabs-multilingual` | Multilingual v2 | 29 | No (stripped) | **Yes** | 10,000 |
 
@@ -87,11 +88,11 @@ A node that stores a model keeps it: a node saved on v3 still runs on v3, and v3
 
 - **Multilingual v2 (29)**: English, Japanese, Chinese, German, Hindi, French, Korean, Portuguese, Italian, Spanish, Indonesian, Dutch, Turkish, Filipino, Polish, Swedish, Bulgarian, Romanian, Arabic, Czech, Greek, Finnish, Croatian, Malay, Slovak, Danish, Tamil, Ukrainian, Russian
 - **Turbo v2.5 (32)**: All Multilingual v2 languages plus Hungarian, Norwegian, Vietnamese
-- **v3 and v4 (46)**: All Turbo v2.5 languages plus Hebrew, Thai, Bengali, Urdu, Persian, Serbian, Lithuanian, Latvian, Estonian, Georgian, Icelandic, Catalan, Afrikaans, Swahili
+- **v3, v4 and v4 Turbo (46)**: All Turbo v2.5 languages plus Hebrew, Thai, Bengali, Urdu, Persian, Serbian, Lithuanian, Latvian, Estonian, Georgian, Icelandic, Catalan, Afrikaans, Swahili
 
 ## Credits
 
-> **Rolling out.** Length-based pricing is being turned on one environment at a time (it is on at `next.nodaro.ai` first). Until it reaches the instance you use, a request costs the flat amount listed for its model (30 credits on v4, v3 and Multilingual v2; 15 on Turbo v2.5), whatever its length. The editor's price badges, the workflow estimate and a published app's advertised price follow the same switch: the flat amount where length pricing is off, the length price where it is on.
+> **Rolling out.** Length-based pricing is being turned on one environment at a time (it is on at `next.nodaro.ai` first). Until it reaches the instance you use, a request costs the flat amount listed for its model (30 credits on v4, v3 and Multilingual v2; 15 on Turbo v2.5 and v4 Turbo), whatever its length. The editor's price badges, the workflow estimate and a published app's advertised price follow the same switch: the flat amount where length pricing is off, the length price where it is on.
 
 A request is priced on the text actually sent — after the per-request cap is applied and, on Turbo v2.5 and Multilingual v2, after `[audio tags]` are stripped — in **units of 100 characters, every started unit counting, with a minimum of 8 units per request**:
 
@@ -103,12 +104,14 @@ credits = max(8, ceil(characters / 100)) × unit
 |-------|----------------------------------------------|---------------------|
 | ElevenLabs v4, v3, Multilingual v2 | 4 | 32 |
 | Turbo v2.5 (and the legacy `elevenlabs` id, which runs as Turbo) | 2 | 16 |
+| v4 Turbo | 2 | 16 |
 
 Worked examples:
 
 - **100 characters on v4** → 1 started unit, below the minimum → 8 × 4 = **32 credits** (the same for anything up to 800 characters).
 - **1,000 characters on v3** → 10 units → 10 × 4 = **40 credits**.
 - **10,000 characters on v4** (its cap) → 100 units → **400 credits**; the same text on Turbo v2.5 → 100 × 2 = **200 credits**.
+- **2,500 characters on v4 Turbo** → 25 units → 25 × 2 = **50 credits** (the same text on v4 → 25 × 4 = 100).
 
 Characters are counted as the text's length (an emoji or other character outside the Basic Multilingual Plane counts as 2). A request that names no model is priced on the model the length rule picks (above). In a workflow, text longer than the named model's cap is refused before anything is charged, with the number of characters and the cap; over the API the text is cut at the cap and priced as cut. The editor's price badge, the workflow estimate and a published app's advertised price read the same rows: a node whose text arrives from another node shows a range — from the minimum up to the model's cap — and a published app with such a node is priced at its text input's character limit when the app sets one, else at the cap.
 
@@ -120,13 +123,14 @@ The node's own **Text** (the text it speaks when **Text Source** is Direct) can 
 - **Field mappings**: `previousText` / `nextText` can be bound to any text-producing node (Continuity).
 - **Output**: `audio` -- generated speech audio file (URL)
 
-Over the REST API and the SDK, `POST /v1/text-to-speech` also takes `withTimestamps: true`: every speech model (ElevenLabs v3, v4, Turbo v2.5 and Multilingual v2) returns its timings at the same character cost as the plain render (measured 2026-10-06), so the finished job's `output_data.transcript` carries the speech's per-word timings (`words[]` with `startMs` / `endMs`, no segments) at no extra credits. Without the flag the request is exactly the plain one and no `transcript` is written. The node itself has no timings output.
+Over the REST API and the SDK, `POST /v1/text-to-speech` also takes `withTimestamps: true`: every speech model (ElevenLabs v3, v4, v4 Turbo, Turbo v2.5 and Multilingual v2) returns its timings at the same character cost as the plain render (measured 2026-10-06; v4 Turbo measured 2026-10-07), so the finished job's `output_data.transcript` carries the speech's per-word timings (`words[]` with `startMs` / `endMs`, no segments) at no extra credits. Without the flag the request is exactly the plain one and no `transcript` is written. The node itself has no timings output.
 
 ## Best Practices
 
-- Use ElevenLabs v3 or v4 for the widest language support and audio tag capabilities. v4 takes up to 10,000 characters per request, but has no Speed or Style setting, and a voice can sound noticeably different on v4 than on v3 — compare the two on your own voice before switching a finished project.
+- Use ElevenLabs v3, v4 or v4 Turbo for the widest language support and audio tag capabilities. v4 takes up to 10,000 characters per request, but has no Speed or Style setting, and a voice can sound noticeably different on v4 than on v3 — compare the two on your own voice before switching a finished project.
+- v4 Turbo is v4's tags and levers at Turbo v2.5's credit price — the choice for tagged narration on a budget; compare it with v4 on your own voice before switching a finished project.
 - Keep Stability around 0.5 for a balance between expressiveness and consistency. Push toward 1.0 for narration that needs to sound uniform.
-- When using audio tags with v3 or v4, place them inline in the text at the point where the effect should occur (e.g., `"I can't believe it [laughs] that's amazing"`).
+- When using audio tags with v3, v4 or v4 Turbo, place them inline in the text at the point where the effect should occur (e.g., `"I can't believe it [laughs] that's amazing"`).
 - Custom voices you already own appear under the "My Voices" tab in the Voice Browser; for a new custom voice use [Voice Design](./voice-design.md).
 - Avoid mixing audio tags into text that will be sent to v2 models -- the tags are stripped automatically, but the resulting text may read awkwardly.
 
@@ -136,12 +140,12 @@ Over the REST API and the SDK, `POST /v1/text-to-speech` also takes `withTimesta
 - Creating character dialogue for animations or explainer videos
 - Producing podcast-style audio from written scripts
 - Adding multilingual voiceovers for localized content
-- Creating expressive speech with embedded emotions and sound effects (v3 and v4)
+- Creating expressive speech with embedded emotions and sound effects (v3, v4 and v4 Turbo)
 
 ## Tips
 
 - The Voice Browser dialog provides search, filtering by gender/accent/age/language, and audio previews to help select the right premade voice.
-- Audio tags supported by v3 and v4 include emotions (`[excited]`, `[sad]`, `[angry]`), reactions (`[laughs]`, `[sighs]`, `[gasps]`), delivery styles (`[whispers]`, `[shouting]`), pacing (`[pause]`, `[long pause]`), tone (`[cheerfully]`, `[deadpan]`), and sound effects (`[applause]`, `[thunder]`).
+- Audio tags supported by v3, v4 and v4 Turbo include emotions (`[excited]`, `[sad]`, `[angry]`), reactions (`[laughs]`, `[sighs]`, `[gasps]`), delivery styles (`[whispers]`, `[shouting]`), pacing (`[pause]`, `[long pause]`), tone (`[cheerfully]`, `[deadpan]`), and sound effects (`[applause]`, `[thunder]`).
 - v2 models support SSML break tags (e.g., `<break time="1.0s" />`) for inserting pauses.
 - Setting Language to auto-detect works well for most cases, but explicitly selecting a language can improve pronunciation accuracy for non-English text.
 - Custom voices always route through the direct ElevenLabs API.

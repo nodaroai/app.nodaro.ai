@@ -2227,6 +2227,18 @@ describe("audit follow-ups — descriptions tell the truth", () => {
     expect(maxLength).toBeGreaterThanOrEqual(getMaxTtsChars("elevenlabs-v4"))
   })
 
+  it("generate_speech names v4 Turbo in the tool and model copy as the fast v4, and keeps v4 as the one default", async () => {
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify: Fastify() })
+    const tool = (await listTools(server)).find((t) => t.name === "generate_speech")
+    const modelDesc = ((tool?.inputSchema as { properties?: Record<string, { description?: string; enum?: string[] }> }).properties?.model) ?? {}
+    expect(modelDesc.enum).toContain("elevenlabs-v4-turbo")
+    for (const copy of [tool?.description ?? "", modelDesc.description ?? ""]) {
+      expect(copy).toContain("`elevenlabs-v4-turbo`")
+      expect(copy).not.toMatch(/`elevenlabs-v4-turbo` \(default\)/)
+    }
+  })
+
   it("generate_speech's copy names the model the handler defaults to — and no other — as the default", async () => {
     const server = buildServer()
     registerVerbs({ server, session: executeSession(), fastify: Fastify() })

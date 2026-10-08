@@ -8377,6 +8377,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
         options: [
           { value: "elevenlabs-v4", label: "ElevenLabs v4 (recommended)" },
           { value: "elevenlabs-v3", label: "ElevenLabs v3" },
+          { value: "elevenlabs-v4-turbo", label: "ElevenLabs v4 Turbo (fast)" },
           { value: "elevenlabs-turbo", label: "ElevenLabs Turbo v2.5 (fast)" },
           { value: "elevenlabs-multilingual", label: "ElevenLabs Multilingual v2" },
         ],

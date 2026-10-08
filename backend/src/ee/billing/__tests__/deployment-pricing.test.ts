@@ -33,7 +33,7 @@ describe("deployment pricing identifiers", () => {
 })
 
 describe("deployment pricing of a speech model", () => {
-  const SPEECH = ["elevenlabs-v3", "elevenlabs-v4", "elevenlabs-turbo", "elevenlabs-multilingual", "elevenlabs-dialogue", "elevenlabs-dialogue-v4"]
+  const SPEECH = ["elevenlabs-v3", "elevenlabs-v4", "elevenlabs-v4-turbo", "elevenlabs-turbo", "elevenlabs-multilingual", "elevenlabs-dialogue", "elevenlabs-dialogue-v4"]
 
   it("lists no per-100-characters row while length pricing is off: the price list is today's, with no price_not_configured entry", () => {
     flag.on = false

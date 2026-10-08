@@ -174,6 +174,35 @@ describe("directElevenLabsTTS — the request body per model (existing models)",
     })
   })
 
+  describe("elevenlabs-v4-turbo", () => {
+    it("runs on eleven_v4_turbo", async () => {
+      expect((await bodyFor("elevenlabs-v4-turbo", undefined)).model_id).toBe("eleven_v4_turbo")
+    })
+
+    it("sends stability and similarity only — style, speed and speaker boost never leave, whatever the caller sets", async () => {
+      const body = await bodyFor("elevenlabs-v4-turbo", { stability: 0.4, similarityBoost: 0.8, style: 0.5, speed: 1.1 })
+      expect(body.voice_settings).toEqual({ stability: 0.4, similarity_boost: 0.8 })
+    })
+
+    it("sends no voice_settings when the caller sets no lever; fills a missing lever from the voice's stored settings", async () => {
+      expect((await bodyFor("elevenlabs-v4-turbo", undefined)).voice_settings).toBeUndefined()
+      expect((await bodyFor("elevenlabs-v4-turbo", { stability: 0.4 })).voice_settings).toEqual({ stability: 0.4, similarity_boost: 0.9 })
+    })
+
+    it("forwards a normalized language code (Hebrew included)", async () => {
+      expect((await bodyFor("elevenlabs-v4-turbo", { languageCode: "heb" })).language_code).toBe("he")
+    })
+
+    it("neighbour text follows its sheet: sent iff the model stitches", async () => {
+      const body = await bodyFor("elevenlabs-v4-turbo", { previousText: "Before.", nextText: "After." })
+      if (ttsSupportsStitching("elevenlabs-v4-turbo")) {
+        expect(Object.keys(body)).toEqual(["text", "model_id", "previous_text", "next_text"])
+      } else {
+        expect(Object.keys(body)).toEqual(["text", "model_id"])
+      }
+    })
+  })
+
   describe("language_code", () => {
     it("forwards a normalized code on v3 and turbo", async () => {
       expect((await bodyFor("elevenlabs-v3", { languageCode: "heb" })).language_code).toBe("he")

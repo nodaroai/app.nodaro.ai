@@ -132,7 +132,7 @@ Use the helper `flattenItems()` mental model: walk `inputItems`, recurse into `g
 
 ### Renamed field keys
 
-A published app keeps the field keys it was published with. When a node field is renamed, apps published earlier still list the old key in `inputItems`, and the server accepts it in `inputOverrides`. Today there is one: **Text to Speech `similarity`**, which is that node's `similarityBoost`. A card exposed from now on is stored as `similarityBoost`, while an app republished from a workflow that already exposes `similarity` keeps listing `similarity`, so read whichever key `inputItems` gives you. Send either — if you send both, `similarityBoost` wins — and pre-fill the control from `snapshotNodes[i].data.similarityBoost` for either. The control changes the result on `elevenlabs-v4` and the v2 models (`elevenlabs-turbo`, `elevenlabs-multilingual`); `elevenlabs-v3` ignores it.
+A published app keeps the field keys it was published with. When a node field is renamed, apps published earlier still list the old key in `inputItems`, and the server accepts it in `inputOverrides`. Today there is one: **Text to Speech `similarity`**, which is that node's `similarityBoost`. A card exposed from now on is stored as `similarityBoost`, while an app republished from a workflow that already exposes `similarity` keeps listing `similarity`, so read whichever key `inputItems` gives you. Send either — if you send both, `similarityBoost` wins — and pre-fill the control from `snapshotNodes[i].data.similarityBoost` for either. The control changes the result on `elevenlabs-v4`, `elevenlabs-v4-turbo` and the v2 models (`elevenlabs-turbo`, `elevenlabs-multilingual`); `elevenlabs-v3` ignores it.
 
 ### Slider inputs
 

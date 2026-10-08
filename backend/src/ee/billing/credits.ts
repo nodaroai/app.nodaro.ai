@@ -1343,6 +1343,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   // ── Audio / TTS / Music ──
   "elevenlabs-v3": 30,             // direct ElevenLabs API — flat per request; the price with length pricing off
   "elevenlabs-v4": 30,             // same flat price as v3 (parity, decided 2026-10-05)
+  "elevenlabs-v4-turbo": 15,      // the fast v4 at Turbo v2.5 parity (decided 2026-10-06); flat per request where length pricing is off
   "elevenlabs-turbo": 15,         // flat per request (NOT per 1K chars — that scaling never existed)
   "elevenlabs-multilingual": 30,  // flat per request (NOT per 1K chars)
   "elevenlabs": 15,               // alias for turbo
@@ -1357,6 +1358,7 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   // prices on turbo's (speechUnitCreditId).
   "elevenlabs-v3:per-100-chars": 4,
   "elevenlabs-v4:per-100-chars": 4,
+  "elevenlabs-v4-turbo:per-100-chars": 2,
   "elevenlabs-turbo:per-100-chars": 2,
   "elevenlabs-multilingual:per-100-chars": 4,
   // Sound effects are priced by the length asked for: one row per whole second

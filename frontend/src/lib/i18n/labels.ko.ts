@@ -643,6 +643,7 @@ const MODEL_DESCRIPTIONS_KO: Record<string, string> = {
   "Latest Seedream, fast and sharp": "최신 Seedream, 빠르고 선명함",
   "Expressive, supports audio tags for emotions": "표현력이 풍부, 감정 표현용 오디오 태그 지원",
   "Newest, supports audio tags, up to 10,000 characters": "최신 모델, 오디오 태그 지원, 최대 10,000자",
+  "Faster, cheaper v4 at lower fidelity; supports audio tags": "더 빠르고 저렴한 v4, 음질은 다소 낮음; 오디오 태그 지원",
   "Expressive, supports audio tags; stability in three steps": "표현력이 풍부하고 오디오 태그 지원, 안정성 3단계",
   "Newest, supports audio tags, stability and similarity": "최신 모델, 오디오 태그 지원, 안정성 및 유사도 조절",
   "Light, fast, end frame support": "가볍고 빠름, 종료 프레임 지원",

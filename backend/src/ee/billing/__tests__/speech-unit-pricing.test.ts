@@ -42,8 +42,8 @@ function seededUnitRows(): Map<string, number> {
 }
 
 describe("speech unit rows — coverage", () => {
-  it("the catalog walk finds the six speech models of today (the sanity floor) and every non-alias TTS provider", () => {
-    expect(SPEECH_MODELS.length).toBeGreaterThanOrEqual(6)
+  it("the catalog walk finds the seven speech models of today (the sanity floor) and every non-alias TTS provider", () => {
+    expect(SPEECH_MODELS.length).toBeGreaterThanOrEqual(7)
     for (const id of TTS_PROVIDERS) if (!(id in TTS_PROVIDER_ALIASES)) expect(SPEECH_MODELS).toContain(id)
     expect(SPEECH_MODELS).toContain(DIALOGUE_ID)
     expect(SPEECH_MODELS).toContain(DIALOGUE_V4_ID)
@@ -89,7 +89,7 @@ describe("speech unit rows — re-derived from the rate table, never scaled", ()
     expect(elevenlabsSpeechCostUsd("not-a-model", 1000)).toBeCloseTo(ELEVENLABS_SPEECH_USD_PER_1K_CHARS["elevenlabs-turbo"]!, 10) // runs as the fallback model
   })
 
-  it("the values decided 2026-10-06: 4 / 4 / 4 / 2 / 4, and v4 dialogue at parity with v3 dialogue", () => {
+  it("the values decided 2026-10-06: 4 / 4 / 4 / 2 / 4, v4 dialogue at parity with v3 dialogue, and v4 Turbo at parity with Turbo v2.5", () => {
     expect(STATIC_CREDIT_COSTS["elevenlabs-v3:per-100-chars"]).toBe(4)
     expect(STATIC_CREDIT_COSTS["elevenlabs-v4:per-100-chars"]).toBe(4)
     expect(STATIC_CREDIT_COSTS["elevenlabs-multilingual:per-100-chars"]).toBe(4)
@@ -97,6 +97,20 @@ describe("speech unit rows — re-derived from the rate table, never scaled", ()
     expect(STATIC_CREDIT_COSTS["elevenlabs-dialogue:per-100-chars"]).toBe(4)
     expect(STATIC_CREDIT_COSTS["elevenlabs-dialogue-v4:per-100-chars"]).toBe(4)
     expect(STATIC_CREDIT_COSTS["elevenlabs-dialogue-v4:per-100-chars"]).toBe(STATIC_CREDIT_COSTS["elevenlabs-dialogue:per-100-chars"])
+    expect(STATIC_CREDIT_COSTS["elevenlabs-v4-turbo:per-100-chars"]).toBe(2)
+    expect(STATIC_CREDIT_COSTS["elevenlabs-v4-turbo:per-100-chars"]).toBe(STATIC_CREDIT_COSTS["elevenlabs-turbo:per-100-chars"])
+  })
+})
+
+describe("speech unit rows — a margin on v4 is v4's alone", () => {
+  it("service_margin_percent['elevenlabs-v4'] prices elevenlabs-v4 and its unit row, not elevenlabs-v4-turbo or its unit row", () => {
+    // `serviceMarginPrefixMatches` matches on a `:` boundary only — the one place a
+    // `-turbo` suffix could silently inherit a neighbour's price.
+    const settings = { cost_markup_percent: 10, service_margin_percent: { "elevenlabs-v4": 37 } }
+    expect(effectiveMarkupPercent(settings as never, "elevenlabs-v4")).toBe(37)
+    expect(effectiveMarkupPercent(settings as never, speechUnitCreditId("elevenlabs-v4"))).toBe(37)
+    expect(effectiveMarkupPercent(settings as never, "elevenlabs-v4-turbo")).toBe(10)
+    expect(effectiveMarkupPercent(settings as never, speechUnitCreditId("elevenlabs-v4-turbo"))).toBe(10)
   })
 })
 

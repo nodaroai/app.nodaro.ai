@@ -10,6 +10,7 @@ export const SPEECH_PARITY_CASES: ReadonlyArray<readonly [provider: string | und
   ["elevenlabs-v4", ""], ["elevenlabs-v4", "a"], ["elevenlabs-v4", "a".repeat(100)], ["elevenlabs-v4", "a".repeat(101)],
   ["elevenlabs-v4", "a".repeat(800)], ["elevenlabs-v4", "a".repeat(801)], ["elevenlabs-v4", "a".repeat(10000)],
   ["elevenlabs-v3", "a".repeat(5000)], ["elevenlabs-v3", "[laughs] " + "a".repeat(700)],
+  ["elevenlabs-v4-turbo", "a".repeat(100)], ["elevenlabs-v4-turbo", "[laughs] " + "a".repeat(2500)], ["elevenlabs-v4-turbo", "a".repeat(10000)],
   ["elevenlabs-turbo", "[whispers] [laughs] " + "a".repeat(1000)], ["elevenlabs-turbo", "a".repeat(40000)],
   ["elevenlabs-multilingual", "😀".repeat(50)], ["elevenlabs", "a".repeat(1000)],
   [undefined, "a".repeat(100)], [undefined, "a".repeat(12000)],

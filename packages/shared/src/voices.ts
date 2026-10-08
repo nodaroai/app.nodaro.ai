@@ -24,10 +24,13 @@ export interface Voice {
 export interface SharedVoice extends Voice {
   /**
    * The best of our TTS providers whose underlying ElevenLabs model the
-   * voice lists in `verified_languages` (v4 preferred when verified, then v3,
-   * which renders any voice unmodified, then the cheapest v2 model: turbo
-   * preferred, else multilingual). Only the base model id `eleven_v4` counts
-   * toward v4; its `eleven_v4_…` variants do not. Models the deployment does
+   * voice lists in `verified_languages`, in the order `elevenlabs-v4` (when
+   * verified for the base model `eleven_v4`), then `elevenlabs-v3`, which
+   * renders any voice unmodified, then `elevenlabs-v4-turbo` (verified for the
+   * exact id `eleven_v4_turbo`), then the cheapest v2 model: `elevenlabs-turbo`
+   * preferred, else `elevenlabs-multilingual`. Only those two exact ids count
+   * in the v4 family; the other `eleven_v4_…` variants (`_hq`, `_exp`, …) are
+   * not models of ours and count toward nothing. Models the deployment does
    * not offer are never recommended.
    * Clients without a provider picker should send it as the `provider` on
    * text-to-speech so generation uses a model the voice is actually verified
@@ -38,11 +41,15 @@ export interface SharedVoice extends Voice {
   recommendedProvider?: TtsProvider
   /**
    * Every TTS provider the voice is verified on and the deployment offers
-   * (subset of `elevenlabs-v4` / `elevenlabs-v3` / `elevenlabs-turbo` /
-   * `elevenlabs-multilingual`, v4 first when present, then v3, turbo,
-   * multilingual); absent whenever `recommendedProvider` is. Clients WITH a provider picker should only snap the
-   * provider when the current choice is NOT in this set — most voices verify
-   * more than one, and an explicit user choice within the set must win.
+   * (a subset of {@link TtsProvider}, in the order `elevenlabs-v4`,
+   * `elevenlabs-v3`, `elevenlabs-v4-turbo`, `elevenlabs-turbo`,
+   * `elevenlabs-multilingual` — the same order `recommendedProvider` is picked
+   * from, so it is always the first entry); absent whenever
+   * `recommendedProvider` is. Clients WITH a provider picker should only snap
+   * the provider when the current choice is NOT in this set — most voices
+   * verify more than one, and an explicit user choice within the set must win.
+   * Do not switch over a closed list of members: a speech model added later
+   * joins this set the release it ships.
    */
   verifiedProviders?: TtsProvider[]
 }

@@ -659,6 +659,13 @@ const COMBINE_VIDEOS_TRIM_ARGS_BYTES = 406
 // warning on failure) and nothing else. No tool was added, so the fixture does NOT move.
 // measured by this suite: the sentence is exactly 303 B in `tools/list`, and the budget rises by
 // exactly that, keeping whatever headroom the list had.
+// RAISED by generate_speech's ElevenLabs v4 Turbo wording and nothing else — one NEW enum
+// value (`elevenlabs-v4-turbo`, taken from TTS_PROVIDERS) and one clause each on the tool and
+// its `model` argument (the fast v4: same tags and levers, Turbo's price). No tool was added,
+// so the fixture does NOT move. measured by this suite: 405_898 total − 405_651 budget = 247 B
+// (generate_speech stays far under the 8_192 B per-tool budget), which keeps whatever headroom
+// the list had.
+const ELEVENLABS_V4_TURBO_BYTES = 247
 const UGC_FINISH_ROOM_SOUND_BYTES = 303
 // RAISED 2026-10-08 by the two arguments `build_ugc_clips` gained for the two English
 // modes: `speech_lane` (reference-audio, the default, or prompt-quoted — the video model's
@@ -753,6 +760,7 @@ export const TOOL_WIRE_BUDGET = {
     SPEECH_LENGTH_PRICING_WORDING_BYTES +
     COMBINE_VIDEOS_TRIM_ARGS_BYTES +
     UGC_FINISH_ROOM_SOUND_BYTES +
+    ELEVENLABS_V4_TURBO_BYTES +
     DIALOGUE_V4_CAP_WORDING_BYTES +
     UGC_CLIPS_SPEECH_LANE_VOICE_BYTES +
     NANO_BANANA_2_1_MODEL_BYTES,

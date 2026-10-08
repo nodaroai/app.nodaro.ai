@@ -88,24 +88,25 @@ describe("deriveVerifiedTtsProviders", () => {
     expect(deriveVerifiedTtsProviders(["eleven_multilingual_v2"])).toEqual(["elevenlabs-multilingual"])
   })
 
-  it("v4 is verified only by the base model id, never by a v4 variant", () => {
+  it("v4 and v4 Turbo are verified only by their exact ids, never by another v4 variant", () => {
     expect(deriveVerifiedTtsProviders(["eleven_v4"])).toEqual(["elevenlabs-v4"])
-    expect(deriveVerifiedTtsProviders(["eleven_v4_turbo"])).toEqual([])
+    // The fast v4 is a provider of ours (decided 2026-10-06): its exact id, never Turbo v2.5.
+    expect(deriveVerifiedTtsProviders(["eleven_v4_turbo"])).toEqual(["elevenlabs-v4-turbo"])
     expect(deriveVerifiedTtsProviders(["eleven_v4_other"])).toEqual([])
-    // (`_hq`, `_exp` and `_turbo_exp` are stand-ins for any `eleven_v4_…` variant, not observed ids.)
-    // A variant is neither v4 nor a v2 model: `eleven_v4_turbo` is not Turbo v2.5.
+    // (`_hq`, `_exp` and `_turbo_exp` are stand-ins for any other `eleven_v4_…` variant, not observed ids.)
+    // Such a variant is neither v4, v4 Turbo nor a v2 model: `eleven_v4_turbo_exp` is not Turbo v2.5 either.
     expect(deriveVerifiedTtsProviders(["eleven_v4_hq", "eleven_v4_exp", "eleven_v4_turbo_exp"])).toEqual([])
     // The family is `eleven_v4` and `eleven_v4_…`; an id that merely starts with those characters is not a v4
     // id and is judged by the old rules.
     expect(deriveVerifiedTtsProviders(["eleven_v40_turbo"])).toEqual(["elevenlabs-turbo"])
   })
 
-  it("puts v4 first, then v3, turbo and multilingual, for a voice verified on all of them", () => {
+  it("puts v4 first, then v3, v4 Turbo, turbo and multilingual, for a voice verified on all of them", () => {
     expect(deriveVerifiedTtsProviders(["eleven_multilingual_v2", "eleven_turbo_v2_5", "eleven_v3", "eleven_v4", "eleven_v4_turbo"]))
-      .toEqual(["elevenlabs-v4", "elevenlabs-v3", "elevenlabs-turbo", "elevenlabs-multilingual"])
-    // A voice verified for both families keeps every v2-era provider it had, behind v4.
+      .toEqual(["elevenlabs-v4", "elevenlabs-v3", "elevenlabs-v4-turbo", "elevenlabs-turbo", "elevenlabs-multilingual"])
+    // A voice verified for both families keeps every v2-era provider it had, behind the v4 family.
     expect(deriveVerifiedTtsProviders(["eleven_v4", "eleven_v4_turbo", "eleven_multilingual_v2", "eleven_turbo_v2_5"]))
-      .toEqual(["elevenlabs-v4", "elevenlabs-turbo", "elevenlabs-multilingual"])
+      .toEqual(["elevenlabs-v4", "elevenlabs-v4-turbo", "elevenlabs-turbo", "elevenlabs-multilingual"])
   })
 })
 
