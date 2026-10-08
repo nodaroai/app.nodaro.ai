@@ -14,6 +14,7 @@ For non-prompt utility operations (pure upscaling, background removal) use [Upsc
 - Pick a provider and write a transformation prompt describing the change.
 - Optionally pick a style preset (or enter custom style text), add a negative prompt, set aspect ratio, seed, and a reference image — exactly which controls apply depends on the selected provider.
 - The node returns the transformed image on the `image` handle.
+- **An `{image:N}` token with no reference image at its position becomes its label** — `{image:1:person}` reads as `person`, a bare `{image:1}` is left out, and an image label is any text up to the closing brace (`{image:1:man's jacket}` reads as `man's jacket`).
 
 ## Inputs & Outputs
 

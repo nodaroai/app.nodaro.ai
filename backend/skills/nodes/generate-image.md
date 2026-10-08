@@ -1,7 +1,7 @@
 ---
 node_type: generate-image
-generated_at: 2026-09-28T22:47:00.889Z
-generated_from: c77a445b3
+generated_at: 2026-10-08T10:36:01.420Z
+generated_from: cfbcc5531
 ---
 
 # generate-image
@@ -154,7 +154,7 @@ The `references` handle takes MULTIPLE image producers (upload-image, generate-i
 
 - `{image:N:label}` → expands server-side to `Image N (label)`, aligned with the numbered reference list sent to the provider.
 - `{image:N}` → `Image N` (no role named).
-- A token whose N has no wired reference is left as literal text in the final prompt — visible on purpose, so fix the numbering instead of ignoring it.
+- A token whose N has no wired reference falls back to its label (`{image:3:dog}` → `dog`); a bare `{image:N}` is dropped. The prompt still runs but binds nothing at N, so check the numbering against what is wired.
 
 **How to compose**
 - The prompt should be little more than tokens plus glue words: `{image:1:person} with {image:2:face}`. The label tells the model what to TAKE from that image — `person`, `face`, `background`, `settings`, or a concrete garment/prop name (`jacket`).

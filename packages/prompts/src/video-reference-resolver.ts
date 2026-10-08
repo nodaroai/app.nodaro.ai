@@ -42,6 +42,7 @@ import {
 import { REF_BINDING } from "./ref-binding.js"
 import { resolveRefIdTokens } from "./ref-id-tokens.js"
 import { insertBeforeStyleSection } from "./prompt-style-section.js"
+import { tidyReferenceTokenGaps, unboundReferenceTokenText } from "./unbound-reference-tokens.js"
 
 // The binding surface string and the id-addressed token resolver live in their
 // own modules (see them for the contracts); re-exported here so every existing
@@ -76,19 +77,22 @@ const REFERENCE_TOKEN_RE = /\{(image|video|audio):(\d+)(?::([a-zA-Z0-9_ -]+))?\}
  *   - `N < 1` or `N > counts[kind]` (out of range / no such reference) → drop to
  *     the bare `label` (or empty if label-less). This is the legacy
  *     `stripVideoImageTokens` strip behavior: drop the token, keep the label text.
+ *     The rendering is `unboundReferenceTokenText` — shared with the image prompt
+ *     builder, which applies the same rule to its own unwired `{image:N}` tokens.
  *   - in range, label present → `REF_BINDING[kind](label, N)`
  *     (e.g. `the person from @image_2`).
  *   - in range, no label → the bare `@${kind}_${N}` (the ref-only default): the
  *     binding lands with no descriptive wrapper.
  *
  * Runs of 2+ HORIZONTAL whitespace (left behind by a dropped label-less token)
- * collapse to one space, the result is trimmed, and an empty result becomes
- * `undefined` — matching the `stripVideoImageTokens` contract so this can replace
- * it cleanly. The collapse class is `[^\S\r\n]` (NOT `\s`) on purpose: Task 2.4
- * applies this to the FULLY-ASSEMBLED core prompt, which carries `\n\n` block
- * separators between the "Use these characters:" directive block and the body —
- * a `\s{2,}` collapse would silently merge those paragraphs. Horizontal-only
- * collapse preserves newline structure while still tidying the dropped-token gap.
+ * collapse to one space, the result is trimmed (`tidyReferenceTokenGaps`, also
+ * shared with the image builder), and an empty result becomes `undefined` —
+ * matching the `stripVideoImageTokens` contract so this can replace it cleanly.
+ * The collapse class is `[^\S\r\n]` (NOT `\s`) on purpose: the core applies this
+ * to the FULLY-ASSEMBLED prompt, which carries `\n\n` block separators between
+ * the "Use these characters:" directive block and the body — a `\s{2,}` collapse
+ * would silently merge those paragraphs. Horizontal-only collapse preserves
+ * newline structure while still tidying the dropped-token gap.
  * The `kind` is lowercased before indexing `counts`/`REF_BINDING`, so a
  * case-variant token (`{Image:1}`) resolves to the same binding rather than
  * mis-classifying as out-of-range.
@@ -98,19 +102,15 @@ export function resolveReferenceTokens(
   counts: ReferenceCounts,
 ): string | undefined {
   if (!prompt) return prompt
-  return (
-    prompt
-      .replace(REFERENCE_TOKEN_RE, (_match, rawKind: string, nStr: string, label?: string) => {
-        const kind = rawKind.toLowerCase() as keyof ReferenceCounts
-        const n = parseInt(nStr, 10)
-        if (n < 1 || n > counts[kind]) return label ?? ""
-        if (label) return REF_BINDING[kind](label, n)
-        return `@${kind}_${n}`
-      })
-      // Horizontal whitespace only — preserve `\n` / `\n\n` block separators.
-      .replace(/[^\S\r\n]{2,}/g, " ")
-      .trim() || undefined
-  )
+  return tidyReferenceTokenGaps(
+    prompt.replace(REFERENCE_TOKEN_RE, (_match, rawKind: string, nStr: string, label?: string) => {
+      const kind = rawKind.toLowerCase() as keyof ReferenceCounts
+      const n = parseInt(nStr, 10)
+      if (n < 1 || n > counts[kind]) return unboundReferenceTokenText(label)
+      if (label) return REF_BINDING[kind](label, n)
+      return `@${kind}_${n}`
+    }),
+  ) || undefined
 }
 
 

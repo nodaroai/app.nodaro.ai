@@ -580,13 +580,16 @@ describe("buildImagePrompt", () => {
       expect(result.prompt).toContain("Image 1 and Image 2")
     })
 
-    it("does not expand {image:N} for out-of-range index", () => {
+    it("drops an out-of-range {image:N} instead of shipping the raw token", () => {
+      // No image 3 is wired: the unlabelled token is dropped and the gap it
+      // leaves trimmed — the video resolver's rule. A labelled one would keep
+      // its label.
       const result = buildImagePrompt({
         prompt: "{image:3} is missing",
         provider: "nano-banana",
         referenceImageUrls: ["https://a.png", "https://b.png"],
       })
-      expect(result.prompt).toContain("{image:3} is missing")
+      expect(result.prompt).toBe("is missing")
     })
 
     it("uses ancestor ref count for image expansion when no direct refs", () => {

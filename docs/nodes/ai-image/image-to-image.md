@@ -82,3 +82,4 @@ Image to Image takes a source image and a text prompt to generate a transformed 
 - Not all providers support every configuration field. The config panel dynamically shows/hides fields based on the selected provider. For example, mask is only available for ideogram-edit, and strength is only shown for providers that support it.
 - Ideogram providers use rendering speed (turbo/balanced/quality) instead of resolution to control output quality and cost -- turbo is cheapest, quality is most expensive.
 - When chaining Image to Image after Generate Image, the output of Generate Image connects to the `image` input handle. The `out` output handle feeds downstream nodes.
+- **An `{image:N}` token with no reference image at its position becomes its label** — `{image:1:person}` reads as `person`, a bare `{image:1}` is left out, and an image label is any text up to the closing brace (`{image:1:man's jacket}` reads as `man's jacket`).
