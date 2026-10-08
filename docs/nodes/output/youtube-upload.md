@@ -25,7 +25,7 @@ The YouTube Upload node uploads video content from your workflow to a connected 
 ## Inputs & Outputs
 
 **Inputs:**
-- `in` -- Video content to upload.
+- `in` -- Video content to upload. A text wire whose whole value is one link to a video file (ending in `.mp4`, `.mov` or `.webm`) is uploaded as that video, not used as the description; a page link stays text.
 
 **Outputs:**
 None. This is a terminal output node.

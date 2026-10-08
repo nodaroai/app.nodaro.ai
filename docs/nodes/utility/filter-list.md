@@ -10,6 +10,7 @@ The Filter List node filters an upstream list down to the items that satisfy a s
 
 - Connect a list-producing node upstream (List, Split Text, JSON Process, a web-scrape source, etc.). A Generate Text node wired by its `items` pip hands over one item per `===NEXT===` block of its answer; its `text` pip is one item, the whole answer.
 - Add one or more conditions. For each: choose a field (detected from the upstream schema or a custom dot-path), an operator, and a value.
+- A value can read another node: wire that node to the **Variables** input (the lower pip) and write `{Its label}` as the value — for example, a Generate Text answer that names the id to keep. The whitespace around that node's output is ignored, so an answer that ends with a line break still equals the field.
 - Choose whether conditions are combined with **AND** (all must match) or **OR** (any must match).
 - The node returns only the items that pass.
 

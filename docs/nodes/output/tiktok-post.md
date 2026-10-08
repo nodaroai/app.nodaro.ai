@@ -21,7 +21,7 @@ The TikTok Post node publishes video content from your workflow directly to a co
 ## Inputs & Outputs
 
 **Inputs:**
-- `in` -- Video content to publish.
+- `in` -- Video content to publish. A text wire whose whole value is one link to a video file (ending in `.mp4`, `.mov` or `.webm`) is published as that video, not as the caption; a page link stays the text.
 
 **Outputs:**
 None. This is a terminal output node.

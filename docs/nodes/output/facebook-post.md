@@ -22,7 +22,7 @@ The Facebook Post node publishes content from your workflow directly to a connec
 ## Inputs & Outputs
 
 **Inputs:**
-- `in` -- Text, image, or video content to publish (depending on selected action).
+- `in` -- Text, image, or video content to publish (depending on selected action). When the action posts media, a text wire whose whole value is one link to an image or video file (ending in `.jpg`, `.jpeg`, `.png`, `.gif`, `.webp`, `.mp4`, `.mov` or `.webm`) is published as that medium, not as the caption; with `post-text`, and for a page link, it stays the text.
 
 **Outputs:**
 None. This is a terminal output node.

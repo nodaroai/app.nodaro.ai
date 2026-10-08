@@ -23,7 +23,7 @@ The X Post node publishes content from your workflow directly to a connected X (
 ## Inputs & Outputs
 
 **Inputs:**
-- `in` -- Text, image, or video content to publish.
+- `in` -- Text, image, or video content to publish. A text wire whose whole value is one link to an image or video file (ending in `.jpg`, `.jpeg`, `.png`, `.gif`, `.webp`, `.mp4`, `.mov` or `.webm`) is published as that medium, not as the caption; a page link stays the text.
 
 **Outputs:**
 None. This is a terminal output node.

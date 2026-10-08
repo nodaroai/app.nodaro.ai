@@ -3,7 +3,7 @@ import { proShotStills } from "@/lib/scene3d/pro-media-result";
 import { readSunoIds } from "@/lib/suno-ids";
 import { getParameterPromptHint } from "@nodaro/prompts"
 import { DYNAMIC_PRODUCER_TYPES, DEFAULT_CHARACTER_FACET, PARAMETER_NODE_TYPES, getParameterValue, OBJECT_PICKER_NODE_TYPES, parseGroupHandle, VIDEO_PRODUCER_TYPES, AUDIO_PRODUCER_TYPES, editPlanSourceDurationSec, resolveIndex, selectListItems, type SelectorFields, splitByLoopDelimiter, FAN_OUT_EACH_TYPES, FAN_OUT_EACH_HANDLES, defaultEdgeOutputMode, listResultsServeHandle, compactWithRows, pickHeldRow, liveRowColumn, resolveListFanOut, type FanOutCandidate, type ListFanOut, extractAllGeneratedResults, extractGeneratedJsonAsList, splitGeneratedItems, SOCIAL_POST_NODE_TYPES, resolveSourceThroughConnectedList, VARIABLES_HANDLE_ID, extractReferencedLabels, canonicalVarName, characterMentionSlug, SUNO_TRACK_SOURCE_TYPES, isFanInEdge, isFanInNodeType, videoLinkPageUrl, socialSearchPostVideo, ownsItsList, savedRenderBatchUrls, isRenderNodeType, renderNodeOf, rendersLatestBatch } from "@nodaro/shared"
-import { clipNotesFrom, fanOutItemMeta } from "@nodaro/shared"
+import { clipNotesFrom, fanOutItemMeta, loneMediaUrlKind, isLoneMediaLinkSource } from "@nodaro/shared"
 import type { EntityKind, ConnectedReference, ClipNote, FanOutItemMeta } from "@nodaro/shared"
 import { VIDEO_OVERLAY_LAYER_PLAN_HANDLE, videoOverlaySlotOfHandle, editPlanTranscriptOrigin } from "@nodaro/shared"
 import { buildNodeRefMap, resolveTextRefs } from "@/lib/node-refs";
@@ -2121,6 +2121,33 @@ export function resolveNodeInputs(
         continue;
       }
       // Non-media upstream — fall through to existing chain.
+    }
+
+    // Social post targets: a text-shaped wire (Extract Field over a saved
+    // record, a JSON field, a Generate Text answer) whose WHOLE value is one
+    // media link carries the medium, not the caption — a publisher reading an
+    // article's stored cover posts the picture (decided 2026-10-08). The rule
+    // (`loneMediaUrlKind`, `isLoneMediaLinkSource`) is @nodaro/shared's, the
+    // same pre-pass the backend input-resolver runs, so the two engines agree.
+    // A sentence with a link in it stays the caption (`inputs.prompt`, below);
+    // a text-only action keeps its text; a real media wire already in the
+    // slot is never displaced.
+    if (
+      SOCIAL_POST_NODE_TYPES.has(node.type ?? "") &&
+      typeof output === "string" &&
+      isLoneMediaLinkSource(src.type) &&
+      (node.data as { action?: unknown }).action !== "post-text"
+    ) {
+      const kind = loneMediaUrlKind(output);
+      if (kind !== null) {
+        const url = output.trim();
+        if (kind === "video") {
+          if (!inputs.videoUrl) inputs.videoUrl = url;
+        } else if (!inputs.imageUrl) {
+          inputs.imageUrl = url;
+        }
+        continue;
+      }
     }
 
     if (src.type === "component") {

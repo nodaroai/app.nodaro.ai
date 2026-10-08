@@ -91,7 +91,7 @@ floor of 4 credits (six billable seconds), and so does the run as a whole.
 A Re-speak (`engine: "v3"` or `"v4"`) voice is billed by the **characters of
 the text it re-speaks**:
 
-> **Rolling out.** Length-based speech pricing is being turned on one environment at a time (it is on at `next.nodaro.ai` first). Until it reaches the instance you use, a Re-speak voice is billed **per started 1,000 characters** at the `voice-changer-pro-respeak` rate (30 credits per 1K, the same for both engines) with the same 4-credit floor as a speech-to-speech voice: `max(4, ceil(chars / 1000) × 30)` — 340 characters cost 30, 1,500 cost 60.
+> Length-based speech pricing is on at `app.nodaro.ai` and `next.nodaro.ai` (since 2026-10-08). A Cloud-edition install that leaves `SPEECH_LENGTH_PRICING_ENABLED` off instead bills a Re-speak voice **per started 1,000 characters** at the `voice-changer-pro-respeak` rate (30 credits per 1K, the same for both engines) with the same 4-credit floor as a speech-to-speech voice: `max(4, ceil(chars / 1000) × 30)` — 340 characters cost 30, 1,500 cost 60.
 
 Where length pricing is on, a Re-speak voice costs **exactly what the same
 text costs on the [Text to Speech](./text-to-speech.md) node for the same

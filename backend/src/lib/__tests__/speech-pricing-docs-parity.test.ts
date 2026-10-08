@@ -27,12 +27,15 @@ describe("text-to-speech.md Credits", () => {
     expect(tts).toContain(sentence)
   })
 
-  it("states the minimum, the unit table and the rolling-out note", () => {
+  it("states the minimum, the unit table and the live-everywhere note with the flag-off fallback", () => {
     expect(tts).toContain(`minimum of ${SPEECH_FLOOR_UNITS} units per request`)
     expect(tts).toContain("| ElevenLabs v4, v3, Multilingual v2 | 4 | 32 |")
     expect(tts).toContain("| Turbo v2.5 (and the legacy `elevenlabs` id, which runs as Turbo) | 2 | 16 |")
     expect(tts).toContain("| v4 Turbo | 2 | 16 |")
-    expect(tts).toContain("**Rolling out.**")
+    // The flag has been on in production since 2026-10-08; the note states that and keeps the flag-off fallback.
+    expect(tts).toContain("Length-based pricing is on at `app.nodaro.ai` and `next.nodaro.ai`")
+    expect(tts).toContain("leaves `SPEECH_LENGTH_PRICING_ENABLED` off instead charges the flat amount")
+    expect(tts).not.toContain("Rolling out")
   })
 
   it("states that every estimate surface reads the same rows (Phase 1b), and no longer defers it to a following release", () => {
@@ -70,11 +73,12 @@ describe("voice-changer-pro.md Credit Pricing — a Re-speak voice on the engine
     expect(voiceChangerPro).toContain(sentence)
   })
 
-  it("states the Text to Speech parity, the minimum, the formula, the rolling-out note with today's flat price, and the blind-caller ceiling", () => {
+  it("states the Text to Speech parity, the minimum, the formula, the live-everywhere note with the flag-off price, and the blind-caller ceiling", () => {
     expect(voiceChangerPro).toContain("costs **exactly what the same\ntext costs on the [Text to Speech](./text-to-speech.md) node for the same\nmodel**")
     expect(voiceChangerPro).toContain(`minimum of ${SPEECH_FLOOR_UNITS}\nunits per voice`)
     expect(voiceChangerPro).toContain("re-speak voice = max(8, ceil(chars / 100)) × 4")
-    expect(voiceChangerPro).toContain("**Rolling out.**")
+    expect(voiceChangerPro).toContain("Length-based speech pricing is on at `app.nodaro.ai` and `next.nodaro.ai`")
+    expect(voiceChangerPro).not.toContain("Rolling out")
     expect(voiceChangerPro).toContain("`max(4, ceil(chars / 1000) × 30)` — 340 characters cost 30, 1,500 cost 60")
     expect(voiceChangerPro).toContain("1,000 characters per Re-speak voice")
     // The flag-off numbers the note quotes are today's formula: max(4, ceil(chars / 1000) × 30).
@@ -100,13 +104,14 @@ describe("generate-video.md Credit pricing (character voice) — the audio_drive
     expect(generateVideo).toContain(sentence)
   })
 
-  it("names the model actually synthesised, the minimum, the rolling-out note and today's flat row", () => {
+  it("names the model actually synthesised, the minimum, the by-length row and the flag-off fallback", () => {
     expect(generateVideo).toContain("`elevenlabs-dialogue-v4` for a multi-voice cast whose every voice is on `elevenlabs-v4`, `elevenlabs-dialogue` for any other multi-voice cast, else the voice's own text-to-speech model")
     expect(generateVideo).toContain(`at least ${SPEECH_FLOOR_UNITS} units`)
     // A single voice's lines are priced joined by a space, as the worker sends them (voicedAddonBaseCredits).
     expect(generateVideo).toContain("counted joined by a space, as they are sent")
-    expect(generateVideo).toContain("Rolling out: by length")
-    expect(generateVideo).toContain("Until the rollout reaches your instance: a flat 25")
+    expect(generateVideo).toContain("By length — every started 100 characters")
+    expect(generateVideo).toContain("Where a Cloud-edition install leaves `SPEECH_LENGTH_PRICING_ENABLED` off: a flat 25")
+    expect(generateVideo).not.toContain("Rolling out")
     // The old row said "per 1K chars" for what was a flat price — gone.
     expect(generateVideo).not.toContain("per 1K chars")
   })

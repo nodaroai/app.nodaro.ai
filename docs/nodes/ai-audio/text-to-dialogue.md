@@ -46,7 +46,7 @@ Dialogue v4's cap is twice v3 dialogue's: a 10,000-character v4 dialogue was voi
 
 ## Credits
 
-> **Rolling out.** Length-based pricing is being turned on one environment at a time (on at `next.nodaro.ai` first). Until it reaches the instance you use, a dialogue costs a flat 25 credits per request, whatever its length and whichever model runs it.
+> Length-based pricing is on at `app.nodaro.ai` and `next.nodaro.ai` (since 2026-10-08). A Cloud-edition install that leaves `SPEECH_LENGTH_PRICING_ENABLED` off instead charges a flat 25 credits per dialogue, whatever its length and whichever model runs it.
 
 A dialogue is priced on the total characters across its lines, in **units of 100 characters, every started unit counting, with a minimum of 8 units per request**: `credits = max(8, ceil(total characters / 100)) × credits per unit`. Each model prices on its own row:
 
