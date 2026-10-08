@@ -278,8 +278,8 @@ export const queryKeys = {
   admin: {
     all: ["admin"] as const,
     stats: () => ["admin", "stats"] as const,
-    users: (page: number, pageSize: number, sortBy?: string, sortDir?: string) =>
-      ["admin", "users", page, pageSize, sortBy ?? "created_at", sortDir ?? "desc"] as const,
+    users: (page: number, pageSize: number, sortBy?: string, sortDir?: string, search?: string) =>
+      ["admin", "users", page, pageSize, sortBy ?? "created_at", sortDir ?? "desc", search ?? ""] as const,
     /** One account, for the users page's direct link — under "users", so what refreshes the list refreshes it. */
     user: (id: string) => ["admin", "users", "one", id] as const,
     jobs: (

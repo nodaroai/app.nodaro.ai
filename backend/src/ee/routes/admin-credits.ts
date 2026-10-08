@@ -159,9 +159,11 @@ export async function adminCreditsRoutes(app: FastifyInstance) {
       // Strict allowlist: letters and digits in ANY script (this instance's
       // display names are Hebrew — an ASCII-only allowlist reduced "דנה כהן" to
       // a bare space, which matched nearly everyone), combining marks so
-      // niqqud stays attached, spaces, and email characters. PostgREST filter
-      // syntax (parentheses, commas, colons) still cannot get through.
-      const sanitized = search.replace(/[^\p{L}\p{N}\p{M}\s@.\-]/gu, "").trim()
+      // niqqud stays attached, spaces, and email characters (`_` and `+` occur
+      // in addresses; `_` is a one-character ILIKE wildcard, which still matches
+      // itself). PostgREST filter syntax (parentheses, commas, colons) still
+      // cannot get through. The admin Users page applies the same allowlist.
+      const sanitized = search.replace(/[^\p{L}\p{N}\p{M}\s@.\-_+]/gu, "").trim()
       if (sanitized.length > 0) {
         // Same split as the projection, for the same reason: on the payer
         // branch the searchable name column is `full_name` (the one that

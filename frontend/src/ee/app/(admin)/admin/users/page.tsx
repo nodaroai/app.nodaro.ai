@@ -67,6 +67,16 @@ export default function AdminUsersPage() {
   const blockedIds = new Set((blocks?.users ?? []).map((b) => b.userId))
   const [page, setPage] = useState(0)
   const [searchQuery, setSearchQuery] = useState("")
+  // The search runs on the server over every user, so wait for a pause in
+  // typing rather than querying on each keystroke.
+  const [debouncedSearch, setDebouncedSearch] = useState("")
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery.trim())
+      setPage(0)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [searchQuery])
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null)
   const [sortBy, setSortBy] = useState<UserSortBy>("created_at")
   const [sortDir, setSortDir] = useState<SortDir>("desc")
@@ -75,12 +85,18 @@ export default function AdminUsersPage() {
   // withheld), and until the surface has answered we fetch from neither —
   // `deploymentPayer` reads false while it loads, and acting on that default
   // would flash the wrong source at a deployment admin.
-  const { data: users = [], isLoading: loading, refetch: loadUsers } = useAdminUsers(
+  const {
+    data: users = [],
+    isLoading: loading,
+    isFetching,
+    refetch: loadUsers,
+  } = useAdminUsers(
     page,
     50,
     sortBy,
     sortDir,
     { viaRoute: payerMode, ready: surfaceReady },
+    debouncedSearch,
   )
 
   const handleSort = (field: UserSortBy) => {
@@ -92,14 +108,6 @@ export default function AdminUsersPage() {
     }
     setPage(0)
   }
-
-  const filteredUsers = searchQuery.trim()
-    ? users.filter(
-        (u) =>
-          u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          (u.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false)
-      )
-    : users
 
   const toggleExpand = (userId: string) => {
     setExpandedUserId((prev) => (prev === userId ? null : userId))
@@ -119,7 +127,7 @@ export default function AdminUsersPage() {
       next.delete("user")
       return next
     })
-  const listedUsers = linkedId ? filteredUsers.filter((u) => u.id !== linkedId) : filteredUsers
+  const listedUsers = linkedId ? users.filter((u) => u.id !== linkedId) : users
 
   // `!surfaceReady` too: with the query disabled until the surface answers,
   // react-query reports isLoading false, and the table would flash "No users
@@ -142,8 +150,11 @@ export default function AdminUsersPage() {
             placeholder="Filter by email or name..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-8 h-8 text-sm"
+            className="pl-8 pr-8 h-8 text-sm"
           />
+          {isFetching && searchQuery.trim() && (
+            <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+          )}
         </div>
       </div>
 
@@ -286,7 +297,7 @@ export default function AdminUsersPage() {
             {listedUsers.length === 0 && !(linkedId && linked.data) && (
               <tr>
                 <td colSpan={payerMode ? 10 : 11} className="px-4 py-8 text-center text-muted-foreground">
-                  {searchQuery.trim() ? "No users match your search." : "No users found."}
+                  {debouncedSearch ? "No users match your search." : "No users found."}
                 </td>
               </tr>
             )}

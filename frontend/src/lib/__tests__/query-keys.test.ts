@@ -219,12 +219,17 @@ describe("queryKeys", () => {
     })
 
     it("builds users key with pagination (default sort)", () => {
-      expect(queryKeys.admin.users(1, 20)).toEqual(["admin", "users", 1, 20, "created_at", "desc"])
+      expect(queryKeys.admin.users(1, 20)).toEqual(["admin", "users", 1, 20, "created_at", "desc", ""])
     })
 
     it("builds users key with custom sort", () => {
       expect(queryKeys.admin.users(0, 50, "email", "asc"))
-        .toEqual(["admin", "users", 0, 50, "email", "asc"])
+        .toEqual(["admin", "users", 0, 50, "email", "asc", ""])
+    })
+
+    it("builds users key with a search term", () => {
+      expect(queryKeys.admin.users(0, 50, "email", "asc", "dana"))
+        .toEqual(["admin", "users", 0, 50, "email", "asc", "dana"])
     })
 
     it("builds jobs key with pagination and status", () => {

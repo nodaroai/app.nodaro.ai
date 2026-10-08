@@ -1,5 +1,6 @@
 import type { LlmCreditRung } from "@nodaro/shared"
 import {
+  keepPreviousData,
   useQuery,
   useInfiniteQuery,
   useMutation,
@@ -232,17 +233,22 @@ export function useAdminUsers(
   sortBy: UserSortBy = "created_at",
   sortDir: SortDir = "desc",
   source?: { readonly viaRoute: boolean; readonly ready: boolean },
+  search = "",
 ) {
   const viaRoute = source?.viaRoute === true
-  const baseKey = queryKeys.admin.users(page, pageSize, sortBy, sortDir)
+  // The search runs in the query, over every user — filtering the rows of the
+  // loaded page only found a user who happened to be on it.
+  const term = sanitizeUserSearch(search)
+  const baseKey = queryKeys.admin.users(page, pageSize, sortBy, sortDir, term)
   return useQuery({
     queryKey: viaRoute ? [...baseKey, "route"] : baseKey,
     queryFn: async (): Promise<AdminUser[]> => {
       if (viaRoute) {
         // Sort is the route's (`created_at` desc); the page renders plain
         // headers under a payer rather than arrows that do nothing.
+        const searchParam = term ? `&search=${encodeURIComponent(term)}` : ""
         const res = await fetch(
-          `/v1/admin/users?limit=${pageSize}&offset=${page * pageSize}`,
+          `/v1/admin/users?limit=${pageSize}&offset=${page * pageSize}${searchParam}`,
           { headers: await getAuthHeaders() },
         )
         if (!res.ok) throw await adminError(res, "Failed to fetch users")
@@ -255,9 +261,12 @@ export function useAdminUsers(
       // total_credits is a generated column added in migration 099 — Supabase's
       // generated TS types don't see it, so cast through unknown to keep the
       // typed response shape we use below.
-      const { data, error } = await supabase
+      let query = supabase
         .from("profiles")
         .select(ADMIN_USER_COLUMNS)
+      // The same two columns the page renders and the search box names.
+      if (term) query = query.or(`email.ilike.%${term}%,full_name.ilike.%${term}%`)
+      const { data, error } = await query
         .order(sortColumn, { ascending, nullsFirst: false })
         // Stable secondary sort so paginated rows don't shift around between pages.
         .order("id", { ascending: true })
@@ -267,6 +276,9 @@ export function useAdminUsers(
     },
     enabled: hasAdmin() && (source ? source.ready : true),
     staleTime: 30_000,
+    // Keep the current rows on screen while a new search loads — without it the
+    // page drops to its full-page spinner, unmounting the box being typed in.
+    placeholderData: keepPreviousData,
   })
 }
 
@@ -332,6 +344,18 @@ export function useAdminUser(id: string | null, source?: { readonly viaRoute: bo
 
 /** An account id (a UUID). */
 const USER_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/**
+ * A search term that is safe inside a PostgREST `or=(…)` filter.
+ *
+ * Letters and digits in any script (names here are often Hebrew), combining
+ * marks, spaces and the characters emails use. Everything else — the commas,
+ * parentheses and colons of the filter syntax, and the `%` wildcard — is
+ * dropped. `/v1/admin/users` applies the same allowlist server-side.
+ */
+export function sanitizeUserSearch(search: string): string {
+  return search.replace(/[^\p{L}\p{N}\p{M}\s@.\-_+]/gu, "").trim()
+}
 
 // workflow_execution_id column exists in DB but not in generated Supabase types
 interface JobRow {
