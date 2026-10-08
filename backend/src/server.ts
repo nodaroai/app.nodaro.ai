@@ -6,6 +6,7 @@ import { startReconcileCron } from "./lib/reconcile/start.js"
 import { startAppReportSweepCron } from "./lib/app-report-sweep.js"
 import { startScene3DArtifactCleanup } from "./lib/scene3d-artifact-cleanup.js"
 import { startRetainedImageCleanup } from "./lib/retained-image-cleanup.js"
+import { startSpeakerFramesCacheSweep } from "./lib/speaker-frames-cache-sweep.js"
 import { startScheduleCron, stopScheduleCron } from "./lib/schedule-cron.js"
 import { SHUTDOWN_DRAIN_MS } from "./lib/worker-drain.js"
 import { seedTutorialTemplates } from "./lib/tutorial-seed/index.js"
@@ -47,8 +48,10 @@ async function main() {
   const app = await buildApp()
   let stopScene3DArtifactCleanup: (() => Promise<void>) | undefined
   let stopRetainedImageCleanup: (() => Promise<void>) | undefined
+  let stopSpeakerFramesCacheSweep: (() => Promise<void>) | undefined
   app.addHook("onClose", async () => { await stopScene3DArtifactCleanup?.() })
   app.addHook("onClose", async () => { await stopRetainedImageCleanup?.() })
+  app.addHook("onClose", async () => { await stopSpeakerFramesCacheSweep?.() })
 
   // Load Telegram routing table before accepting traffic
   try {
@@ -88,6 +91,9 @@ async function main() {
   startAppReportSweepCron()
   stopScene3DArtifactCleanup = startScene3DArtifactCleanup((message) => app.log.warn(message))
   stopRetainedImageCleanup = startRetainedImageCleanup((message) => app.log.warn(message))
+  // Speaker Frames checkpoints left by a crashed attempt — ALL editions (the
+  // prefix simply never exists where the plugin does not run).
+  stopSpeakerFramesCacheSweep = startSpeakerFramesCacheSweep((message) => app.log.warn(message))
 
   // Built-in guided tutorials. Self-host only — Cloud already has these rows,
   // and staging/production share one Supabase project, so this must never run

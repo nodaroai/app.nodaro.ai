@@ -28,6 +28,7 @@ export const EDIT_PLAN_TMP_PREFIX = "edit-plan-tmp"
 import { updateStorageUsage } from "../../utils/file-validation.js"
 import { relayOwnedKeys, deletableKeys } from "../../lib/asset-delete.js"
 import { isOwnedObjectKey } from "../../lib/job-policy-outputs.js"
+import { isJobArtefactKey } from "../../lib/job-artefact-prefixes.js"
 import { claimedByOthers, keysClaimedByOthers } from "../../lib/key-ownership.js"
 import { TIER_STORAGE_LIMITS, TIER_CREDITS } from "./stripe-config.js"
 import { invalidateBalanceCache } from "../routes/credits.js"
@@ -103,7 +104,61 @@ function extractR2UrlsFromOutput(outputData: Record<string, unknown>): string[] 
     }
   }
 
+  for (const url of nestedArtefactUrls(outputData)) {
+    if (!urls.includes(url)) urls.push(url)
+  }
+
   return urls
+}
+
+/** A NESTED string that is one of our urls under a registered job-artefact
+ *  prefix (`lib/job-artefact-prefixes.ts`). Top-level values are not this
+ *  rule's: the shallow pass above owns them. */
+function isNestedArtefactUrl(value: unknown): value is string {
+  if (typeof value !== "string") return false
+  const key = r2KeyFromUrl(value)
+  return key !== null && isJobArtefactKey(key)
+}
+
+/**
+ * The registered artefact urls held BELOW the top level of `output_data` —
+ * e.g. Speaker Frames' descriptor, `output_data.json.url` →
+ * `speaker-tracks/<jobId>.json`. Nothing else nested is reached: a nested url
+ * is usually an echoed input, and widening the reapers to every nested url is
+ * a separate decision.
+ */
+function nestedArtefactUrls(outputData: Record<string, unknown>): string[] {
+  const found: string[] = []
+  const walk = (value: unknown): void => {
+    if (isNestedArtefactUrl(value)) {
+      if (!found.includes(value)) found.push(value)
+      return
+    }
+    if (Array.isArray(value)) {
+      for (const v of value) walk(v)
+      return
+    }
+    if (value && typeof value === "object") {
+      for (const v of Object.values(value as Record<string, unknown>)) walk(v)
+    }
+  }
+  for (const value of Object.values(outputData)) {
+    if (value && typeof value === "object") walk(value)
+  }
+  return found
+}
+
+/** `value` with every nested registered-artefact url in `urls` replaced by
+ *  null, copied (never mutated); anything else is returned as it was. */
+function withNestedArtefactUrlsCleared(value: unknown, urls: ReadonlySet<string>): unknown {
+  if (isNestedArtefactUrl(value)) return urls.has(value) ? null : value
+  if (Array.isArray(value)) return value.map((v) => withNestedArtefactUrlsCleared(v, urls))
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, withNestedArtefactUrlsCleared(v, urls)]),
+    )
+  }
+  return value
 }
 
 /**
@@ -496,6 +551,12 @@ export async function cleanupFreeUserMedia(): Promise<CleanupResult> {
         for (const [key, value] of Object.entries(cleanedOutput)) {
           if (value === url) cleanedOutput[key] = null
         }
+      }
+      // A registered artefact held inside a structured output (a descriptor's
+      // `url`) is cleared where it sits, like a top-level url above.
+      const urlSet = new Set(urls)
+      for (const [key, value] of Object.entries(cleanedOutput)) {
+        if (value && typeof value === "object") cleanedOutput[key] = withNestedArtefactUrlsCleared(value, urlSet)
       }
       return { id: job.id, cleanedOutput }
     })

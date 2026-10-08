@@ -104,6 +104,20 @@ describe("collectAppR2Keys", () => {
     expect(keys).toEqual(expect.arrayContaining(["nodes/alice-first-final-job.png", "alice-first-final-job"]))
   })
 
+  // Speaker Frames (decided 2026-10-08): the track body lives at
+  // `speaker-tracks/<jobId>.json` and the job's output holds it one level down,
+  // in the descriptor (`output_data.json.url`). An expunged run's job takes it along.
+  it("harvests a job's Speaker Frames track file from the nested descriptor", async () => {
+    tables.current.jobs!.push({
+      id: "alice-sf-job",
+      user_id: "alice",
+      workflow_execution_id: "e-alice",
+      output_data: { json: { version: 1, sources: [], url: url("speaker-tracks/alice-sf-job.json"), sha256: "a".repeat(64), bytes: 10 } },
+    })
+    const keys = await collectAppR2Keys("app")
+    expect(keys).toContain("speaker-tracks/alice-sf-job.json")
+  })
+
   it("never harvests an execution (or its jobs) that is not the run's runner's own", async () => {
     const keys = await collectAppR2Keys("app")
     expect(keys.filter((k) => k.startsWith("bob"))).toEqual([])

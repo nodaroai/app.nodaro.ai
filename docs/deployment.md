@@ -1049,7 +1049,10 @@ it only references them by key. One exception: on Cloud, a daily cron
 reaps transient `video-analysis-tmp/` intermediates (analysis working
 files, orphaned after a worker crash). Self-hosted (Community/Business)
 deployments have no such cron, so include the `video-analysis-tmp/`
-prefix in your bucket lifecycle rule.
+prefix in your bucket lifecycle rule. On every edition, a daily sweep
+also deletes Speaker Frames detection checkpoints under
+`speaker-frames-cache/` once they are older than 7 days (leftovers of an
+attempt that crashed; the prefix exists only where Speaker Frames runs).
 
 ### Plugin daemon host (Cloud)
 
