@@ -18,3 +18,16 @@ export function isMissingColumnError(error: { code?: string | null } | null | un
 export function isMissingTableError(error: { code?: string | null } | null | undefined): boolean {
   return error?.code === "42P01" || error?.code === "PGRST205"
 }
+
+/**
+ * "The function is not in the database yet" — PostgREST's schema-cache
+ * `PGRST202`, Postgres `42883` once the statement runs, or the message either
+ * one carries. Migrations reach the database on a push to main, so staging
+ * runs code that calls a new function for days before it exists.
+ */
+export function isMissingFunctionError(err: unknown): boolean {
+  if (typeof err !== "object" || err === null) return false
+  const record = err as { code?: unknown; message?: unknown }
+  if (record.code === "PGRST202" || record.code === "42883") return true
+  return typeof record.message === "string" && /could not find the function/i.test(record.message)
+}

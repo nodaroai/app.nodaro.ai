@@ -212,6 +212,24 @@ describe("toolkit.ts — edit-video-pro members", () => {
       )
     })
 
+    it("stores the result in the RUNNING job's family, so that job's expiry finds it (decided 2026-10-08)", async () => {
+      const { runWithJobCancellation } = await import("@/lib/job-cancellation.js")
+      const JOB = "00000000-0000-4000-8000-0000000000aa"
+      mockCombineVideosCore.mockResolvedValue({ outputPath: "/tmp/combine-xyz/output.mp4" })
+      mockUploadFileToR2.mockResolvedValue("https://r2.example.com/videos/combined.mp4")
+
+      await runWithJobCancellation(JOB, "user-1", () => tk.ffmpeg.combineVideos({ videoUrls: ["https://a.mp4", "https://b.mp4"], transition: "cut" }))
+      await runWithJobCancellation(JOB, "user-1", () => tk.ffmpeg.combineVideos({ videoUrls: ["https://a.mp4", "https://b.mp4"], transition: "cut" }))
+      await tk.ffmpeg.combineVideos({ videoUrls: ["https://a.mp4", "https://b.mp4"], transition: "cut" })
+
+      const ids = mockUploadFileToR2.mock.calls.slice(-3).map((c) => c[1] as string)
+      expect(ids[0]).toMatch(new RegExp(`^${JOB}-combine-[0-9a-f-]{36}$`))
+      // Two stitches in one job never share a key, nor take the deliverable's bare slot.
+      expect(ids[1]).not.toBe(ids[0])
+      // No job running: a random key, as before.
+      expect(ids[2]).toMatch(/^combine-[0-9a-f-]{36}$/)
+    })
+
     it("omits transitions/edgeFades when the caller passes neither (a plugin build predating them is unaffected)", async () => {
       mockCombineVideosCore.mockResolvedValue({ outputPath: "/tmp/combine-xyz/output.mp4" })
       mockUploadFileToR2.mockResolvedValue("https://r2.example.com/videos/combined.mp4")

@@ -37,6 +37,8 @@ import { extractFrame } from "../../providers/video/extract-frame.js"
 import { resolveSourceMatchedAspect } from "../../providers/video/source-matched-aspect.js"
 import { seedanceExtendGenerationModel, seedanceExtendDurationWindow } from "../../lib/seedance-extend-model.js"
 import { findChainedMovReference, isMovUrl } from "../../lib/seedance-extend-mov-chain.js"
+import { rawExtensionObjectId, rawExtensionReferenceObjectId, silentVideoKey } from "../../lib/job-output-keys.js"
+import { discardFailedRunCopies } from "../../lib/discard-job-copies.js"
 import { seedance25OutputFormat } from "../../providers/kie/video.js"
 import {
   cleanupWorkDir,
@@ -76,8 +78,7 @@ async function stripAudioFromR2Url(videoUrl: string, jobId: string): Promise<str
       await downloadFile(videoUrl, inputPath)
       await stripAudio(inputPath, outputPath)
       const buffer = await readFile(outputPath)
-      const key = `videos/${jobId}-silent.mp4`
-      return await uploadBufferToR2(buffer, key, "video/mp4")
+      return await uploadBufferToR2(buffer, silentVideoKey(jobId), "video/mp4")
     } finally {
       if (workDir) await cleanupWorkDir(workDir)
     }
@@ -1273,118 +1274,159 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
     // exactly the colour fidelity `output_format: "mov"` was requested for.
     // Nothing found (a foreign source, a first extension, an mp4 chain) falls
     // back to the tail, which is the transport that works today.
+    //
+    // The clip is COPIED into this job's own family first
+    // (`rawExtensionReferenceObjectId`: `videos/<jobId>-raw-ref.mov`, decided
+    // 2026-10-08) and the generation reads the copy: this job owns what it
+    // needs, so the source job's expiry can never pull it away mid-run, and
+    // the copy is named in this job's output so its own expiry deletes it. A
+    // key of its own, never the `-raw` slot this job's raw extension takes
+    // below: objects are served immutable, so no url is ever written twice.
+    // A failed copy (the source's clip already expired, say) falls back to
+    // the tail like every other miss.
     const chainedMovUrl =
       genModel === "seedance-2-5" ? await findChainedMovReference(sourceUrl, ctx.jobUserId) : undefined
-    const referenceVideoUrl = chainedMovUrl ?? tailUrl
+    let chainReferenceUrl: string | undefined
+    if (chainedMovUrl) {
+      try {
+        chainReferenceUrl = await uploadToR2(
+          chainedMovUrl,
+          rawExtensionReferenceObjectId(ctx.jobId),
+          "video",
+          ctx.jobUserId,
+          { ext: "mov" },
+        )
+      } catch (err) {
+        console.warn(`[worker] Job ${ctx.jobId}: chained mov copy failed, extending from the tail:`, err)
+      }
+    }
+    const referenceVideoUrl = chainReferenceUrl ?? tailUrl
     // `mp4` is KIE's default and is sent as no field at all, so the mp4
     // payload stays byte-identical to today.
     const outputFormat = genModel === "seedance-2-5" ? seedance25OutputFormat() : "mp4"
 
-    const seedanceRamp = startProgressRamp(job, ctx.jobId, { start: 10, cap: 75 })
-    let gen
+    // The copies above and below are named only in a COMPLETED job's output,
+    // which is how expiry finds a job's files: a run that fails after them
+    // discards them on the way out (`discardFailedRunCopies`), or they would
+    // stay in storage, on the user's quota, for good.
+    const chainCopyUrl = chainReferenceUrl && chainReferenceUrl !== chainedMovUrl ? chainReferenceUrl : undefined
+    let rawCopyUrl: string | undefined
     try {
-      // NO onTaskCreated on purpose: the KIE task's result is the raw
-      // extension clip, NOT the deliverable. Persisting it would let the
-      // reconcile cron finalize this extend-video job with the unstitched
-      // extension (silent wrong output). If the worker dies mid-wait,
-      // BullMQ's stalled-job recovery re-runs the whole handler instead.
-      gen = await imageToVideo(lastFrameUrl, genModel, kiePrompt, extSeconds, undefined, {
-        resolution: resolution ?? "720p",
-        generateAudio: generateAudio ?? true,
-        // User references (route-assembled) ride alongside the tail; the
-        // shared seedance resolver seats them as @image_1…N and appends the
-        // last-frame anchor after them, so their prompt ordinals hold.
-        ...(referenceImageUrls?.length ? { referenceImageUrls } : {}),
-        referenceVideoUrls: [referenceVideoUrl],
-        aspectRatio,
-        ...(outputFormat === "mov" ? { outputFormat } : {}),
-      })
-    } finally {
-      seedanceRamp.stop()
-    }
-
-    // A mov extension is worth keeping: it is the next extension's reference,
-    // and KIE's own URL expires long before then. Stored under a THROWAWAY
-    // uuid key — the job's own key stays reserved for the stitched deliverable,
-    // and an object sitting there could be mistaken for the result. No KIE
-    // task is persisted either way (see the onTaskCreated note above), so the
-    // reconcile cron can never finalize this job with the raw extension.
-    // A copy failure only breaks the chain (the next extend falls back to the
-    // tail) — it must not fail a job whose deliverable is the stitch.
-    let rawExtensionUrl = gen.url
-    if (isMovUrl(gen.url)) {
+      const seedanceRamp = startProgressRamp(job, ctx.jobId, { start: 10, cap: 75 })
+      let gen
       try {
-        rawExtensionUrl = await uploadToR2(gen.url, randomUUID(), "video", ctx.jobUserId, { ext: "mov" })
-      } catch (err) {
-        console.warn(`[worker] Job ${ctx.jobId}: raw mov copy failed, chain not extended:`, err)
+        // NO onTaskCreated on purpose: the KIE task's result is the raw
+        // extension clip, NOT the deliverable. Persisting it would let the
+        // reconcile cron finalize this extend-video job with the unstitched
+        // extension (silent wrong output). If the worker dies mid-wait,
+        // BullMQ's stalled-job recovery re-runs the whole handler instead.
+        gen = await imageToVideo(lastFrameUrl, genModel, kiePrompt, extSeconds, undefined, {
+          resolution: resolution ?? "720p",
+          generateAudio: generateAudio ?? true,
+          // User references (route-assembled) ride alongside the tail; the
+          // shared seedance resolver seats them as @image_1…N and appends the
+          // last-frame anchor after them, so their prompt ordinals hold.
+          ...(referenceImageUrls?.length ? { referenceImageUrls } : {}),
+          referenceVideoUrls: [referenceVideoUrl],
+          aspectRatio,
+          ...(outputFormat === "mov" ? { outputFormat } : {}),
+        })
+      } finally {
+        seedanceRamp.stop()
       }
-    }
 
-    // Smart-stitch: the extension was generated FROM the source's tail, so
-    // this is exactly the continuation case the smart cut solves — PSNR-
-    // match the source's last frames against the extension's first frames
-    // and cut at the closest pair (duplicate plays once, motion continues).
-    // The fixed SEEDANCE_2_EXTEND_STITCH trims remain the FALLBACK for
-    // boundaries where no genuine match is found (or the search fails).
-    // Hard cut + anchored audio blend keeps A/V sample-locked. A stitch
-    // failure fails the job (full refund) — never deliver the bare
-    // extension as the result.
-    const { outputPath: stitchedPath, smartCuts: stitchCuts } = await combineVideos({
-      videoUrls: [sourceUrl, gen.url],
-      transition: "cut",
-      transitionDuration: SEEDANCE_2_EXTEND_STITCH.audioFadeSec,
-      audioMode: "crossfade",
-      audioCrossfadeCurve: "equal-power",
-      trimStartFrames: SEEDANCE_2_EXTEND_STITCH.trimHeadFrames,
-      trimEndFrames: SEEDANCE_2_EXTEND_STITCH.trimTailFrames,
-      smartCut: { enabled: true, framesFromPrev: 8, framesFromNext: 8 },
-    })
-    await setJobProgress(job, ctx.jobId, 85)
+      // A mov extension is worth keeping: it is the next extension's reference,
+      // and KIE's own URL expires long before then. Stored as `<jobId>-raw`
+      // (`rawExtensionObjectId`): in the job's own family, so the job's expiry
+      // deletes it with the job (a later extend reads its own copy, above) —
+      // but never the job's bare key, which stays reserved for the stitched
+      // deliverable (an object sitting there could be mistaken for the result).
+      // No KIE task is persisted either way (see the onTaskCreated note above),
+      // so the reconcile cron can never finalize this job with the raw extension.
+      // A copy failure only breaks the chain (the next extend falls back to the
+      // tail) — it must not fail a job whose deliverable is the stitch.
+      let rawExtensionUrl = gen.url
+      if (isMovUrl(gen.url)) {
+        try {
+          rawExtensionUrl = await uploadToR2(gen.url, rawExtensionObjectId(ctx.jobId), "video", ctx.jobUserId, { ext: "mov" })
+          if (rawExtensionUrl !== gen.url) rawCopyUrl = rawExtensionUrl
+        } catch (err) {
+          console.warn(`[worker] Job ${ctx.jobId}: raw mov copy failed, chain not extended:`, err)
+        }
+      }
 
-    const stitchedR2Url = await watermarkLocalVideoAndUpload(
-      stitchedPath,
-      ctx.jobId,
-      ctx.jobUserId,
-      ctx.shouldWatermark,
-    )
-    // combineVideos manages its own temp dir (not cleanupWorkDir-compatible)
-    await rm(dirname(stitchedPath), { recursive: true, force: true }).catch(() => {})
-    await setJobProgress(job, ctx.jobId, 100)
+      // Smart-stitch: the extension was generated FROM the source's tail, so
+      // this is exactly the continuation case the smart cut solves — PSNR-
+      // match the source's last frames against the extension's first frames
+      // and cut at the closest pair (duplicate plays once, motion continues).
+      // The fixed SEEDANCE_2_EXTEND_STITCH trims remain the FALLBACK for
+      // boundaries where no genuine match is found (or the search fails).
+      // Hard cut + anchored audio blend keeps A/V sample-locked. A stitch
+      // failure fails the job (full refund) — never deliver the bare
+      // extension as the result.
+      const { outputPath: stitchedPath, smartCuts: stitchCuts } = await combineVideos({
+        videoUrls: [sourceUrl, gen.url],
+        transition: "cut",
+        transitionDuration: SEEDANCE_2_EXTEND_STITCH.audioFadeSec,
+        audioMode: "crossfade",
+        audioCrossfadeCurve: "equal-power",
+        trimStartFrames: SEEDANCE_2_EXTEND_STITCH.trimHeadFrames,
+        trimEndFrames: SEEDANCE_2_EXTEND_STITCH.trimTailFrames,
+        smartCut: { enabled: true, framesFromPrev: 8, framesFromNext: 8 },
+      })
+      await setJobProgress(job, ctx.jobId, 85)
 
-    const stitchedThumbUrl = await generateAndUploadThumbnail(stitchedR2Url, ctx.jobId, ctx.jobUserId)
-    const { ok: seedanceOk } = await finalizeJobWithMedia({
-      jobId: ctx.jobId,
-      jobType: "extend-video",
-      result: {
-        url: stitchedR2Url,
-        cost: gen.cost ?? null,
-        providerUsed: "seedance-2-extend",
-        // Same rebuilt-literal carry as lip-sync (:868) and video-upscale
-        // (:1060), same reason: `gen` IS the RouteResult from the capability
-        // router above, and on a keyless connected install the chain is
-        // [nodaro] — both seedance-2 models are in the cloud provider's
-        // image-to-video list. Dropping the pair here left jobs.relay_job_id /
-        // relay_credits NULL for a generation the far end really reserved
-        // credits for: a self-host settling on relay_credits billed it at zero,
-        // and the row carried no provenance for support to follow.
-        ...(gen.relayJobId && { relayJobId: gen.relayJobId, relayCredits: gen.relayCredits ?? null }),
-      },
-      mediaUrl: stitchedR2Url,
-      extraOutputData: {
-        thumbnailUrl: stitchedThumbUrl,
-        // Raw (unstitched) extension clip — provenance/debug, AND the mov
-        // reference the next extension in this chain will use.
-        rawExtensionUrl,
-        // Where the stitch actually cut (smart-cut decision + PSNR).
-        ...(stitchCuts ? { smartCuts: stitchCuts } : {}),
-      },
-    })
-    if (seedanceOk) {
-      console.log(
-        `[worker] Job ${ctx.jobId} completed: ${stitchedR2Url} (provider: seedance-2-extend, cost: $${gen.cost?.toFixed(6) ?? "N/A"})`,
+      const stitchedR2Url = await watermarkLocalVideoAndUpload(
+        stitchedPath,
+        ctx.jobId,
+        ctx.jobUserId,
+        ctx.shouldWatermark,
       )
+      // combineVideos manages its own temp dir (not cleanupWorkDir-compatible)
+      await rm(dirname(stitchedPath), { recursive: true, force: true }).catch(() => {})
+      await setJobProgress(job, ctx.jobId, 100)
+
+      const stitchedThumbUrl = await generateAndUploadThumbnail(stitchedR2Url, ctx.jobId, ctx.jobUserId)
+      const { ok: seedanceOk } = await finalizeJobWithMedia({
+        jobId: ctx.jobId,
+        jobType: "extend-video",
+        result: {
+          url: stitchedR2Url,
+          cost: gen.cost ?? null,
+          providerUsed: "seedance-2-extend",
+          // Same rebuilt-literal carry as lip-sync (:868) and video-upscale
+          // (:1060), same reason: `gen` IS the RouteResult from the capability
+          // router above, and on a keyless connected install the chain is
+          // [nodaro] — both seedance-2 models are in the cloud provider's
+          // image-to-video list. Dropping the pair here left jobs.relay_job_id /
+          // relay_credits NULL for a generation the far end really reserved
+          // credits for: a self-host settling on relay_credits billed it at zero,
+          // and the row carried no provenance for support to follow.
+          ...(gen.relayJobId && { relayJobId: gen.relayJobId, relayCredits: gen.relayCredits ?? null }),
+        },
+        mediaUrl: stitchedR2Url,
+        extraOutputData: {
+          thumbnailUrl: stitchedThumbUrl,
+          // Raw (unstitched) extension clip — provenance/debug, AND the mov
+          // reference the next extension in this chain will use.
+          rawExtensionUrl,
+          // This job's own copy of the clip it continued from (above), named so
+          // the job's expiry deletes it with the job.
+          ...(chainCopyUrl ? { chainReferenceUrl: chainCopyUrl } : {}),
+          // Where the stitch actually cut (smart-cut decision + PSNR).
+          ...(stitchCuts ? { smartCuts: stitchCuts } : {}),
+        },
+      })
+      if (seedanceOk) {
+        console.log(
+          `[worker] Job ${ctx.jobId} completed: ${stitchedR2Url} (provider: seedance-2-extend, cost: $${gen.cost?.toFixed(6) ?? "N/A"})`,
+        )
+      }
+      return
+    } catch (err) {
+      await discardFailedRunCopies(ctx.jobId, ctx.jobUserId, [chainCopyUrl, rawCopyUrl])
+      throw err
     }
-    return
   }
 
   const { kieTaskId, prompt, model, seeds, quality } = job.data as {

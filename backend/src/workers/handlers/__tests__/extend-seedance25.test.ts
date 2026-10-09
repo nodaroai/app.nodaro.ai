@@ -14,6 +14,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 //   3. The mov chain: a 2.5 raw extension is kept as OUR R2 `.mov` object and
 //      persisted as `rawExtensionUrl`, so the next extension can reference it
 //      un-transcoded. A KIE temp URL must never be what we persist for that.
+//   4. The next extension COPIES that clip into its own family
+//      (`videos/<its jobId>-raw-ref.mov`), reads its own copy and names it in
+//      its output, so the source's expiry never breaks it and no url is ever
+//      written twice (decided 2026-10-08, round 12).
 // ---------------------------------------------------------------------------
 
 const mocks = vi.hoisted(() => ({
@@ -30,6 +34,7 @@ const mocks = vi.hoisted(() => ({
   mockWatermarkLocalVideoAndUpload: vi.fn(),
   mockGenerateAndUploadThumbnail: vi.fn(),
   mockFrom: vi.fn(),
+  mockDiscardFailedRunCopies: vi.fn(),
 }))
 
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: mocks.mockFrom } }))
@@ -106,6 +111,7 @@ vi.mock("../../shared.js", async (importOriginal) => {
 })
 
 vi.mock("../../../lib/job-finalize.js", () => ({ finalizeJobWithMedia: mocks.mockFinalizeJobWithMedia }))
+vi.mock("@/lib/discard-job-copies.js", () => ({ discardFailedRunCopies: mocks.mockDiscardFailedRunCopies }))
 
 import { videoAIHandlers } from "../video-ai.js"
 
@@ -114,6 +120,8 @@ const KIE_MP4 = "https://kie.example.com/extension.mp4"
 const KIE_MOV = "https://kie.example.com/extension.mov?token=abc"
 const R2_MOV = "https://r2.example.com/videos/9f2c-raw.mov"
 const CHAINED_MOV = "https://r2.example.com/videos/aaaa-raw.mov"
+/** The extend's OWN copy of the source's raw clip (decided 2026-10-08, round 12). */
+const REF_COPY = "https://r2.example.com/videos/job-1-raw-ref.mov"
 const TAIL_URL = "https://r2.example.com/videos/tail-uuid.mp4"
 const LAST_FRAME_URL = "https://r2.example.com/images/frame-uuid.png"
 const STITCHED_PATH = "/tmp/combine-abc/output.mp4"
@@ -158,6 +166,7 @@ beforeEach(() => {
   mocks.mockWatermarkLocalVideoAndUpload.mockResolvedValue(STITCHED_R2)
   mocks.mockGenerateAndUploadThumbnail.mockResolvedValue("https://r2.example.com/images/thumb.png")
   mocks.mockFinalizeJobWithMedia.mockResolvedValue({ ok: true })
+  mocks.mockDiscardFailedRunCopies.mockResolvedValue(undefined)
 })
 
 afterEach(() => {
@@ -279,10 +288,63 @@ describe("lever ON — the mov reference chain", () => {
     expect(mocks.mockImageToVideo.mock.calls[0]![5]).toMatchObject({ referenceVideoUrls: [TAIL_URL] })
   })
 
-  it("a prior mov ⇒ referenced un-transcoded instead of the re-encoded tail", async () => {
+  /** The copy answers with the extend's own `-raw-ref` url; its own raw with R2_MOV. */
+  function uploadsByKey(): void {
+    mocks.mockUploadToR2.mockImplementation(async (src: string, id: string) => {
+      if (src === CHAINED_MOV && id === "job-1-raw-ref") return REF_COPY
+      return R2_MOV
+    })
+  }
+
+  it("a prior mov ⇒ copied into the extend's own -raw-ref and read from there, never the source's object", async () => {
     mocks.mockFindChainedMovReference.mockResolvedValue(CHAINED_MOV)
+    uploadsByKey()
     await handler()(makeJob() as never, ctx as never)
-    expect(mocks.mockImageToVideo.mock.calls[0]![5]).toMatchObject({ referenceVideoUrls: [CHAINED_MOV] })
+
+    expect(mocks.mockUploadToR2).toHaveBeenCalledWith(CHAINED_MOV, "job-1-raw-ref", "video", "user-1", { ext: "mov" })
+    expect(mocks.mockImageToVideo.mock.calls[0]![5]).toMatchObject({ referenceVideoUrls: [REF_COPY] })
+    // Copied BEFORE the generation reads it.
+    const copyOrder = mocks.mockUploadToR2.mock.invocationCallOrder[0]!
+    expect(copyOrder).toBeLessThan(mocks.mockImageToVideo.mock.invocationCallOrder[0]!)
+    // Named in the extend's own output, so its expiry deletes it with the job.
+    expect(mocks.mockFinalizeJobWithMedia.mock.calls[0]![0].extraOutputData).toMatchObject({
+      chainReferenceUrl: REF_COPY,
+    })
+  })
+
+  it("the reference copy and the extend's own raw extension never share a key (no url is written twice)", async () => {
+    mocks.mockFindChainedMovReference.mockResolvedValue(CHAINED_MOV)
+    mocks.mockImageToVideo.mockResolvedValue({ url: KIE_MOV, cost: 0.3 })
+    uploadsByKey()
+    await handler()(makeJob() as never, ctx as never)
+
+    const ids = mocks.mockUploadToR2.mock.calls.map((c) => c[1])
+    expect(ids).toEqual(["job-1-raw-ref", "job-1-raw"])
+    expect(mocks.mockFinalizeJobWithMedia.mock.calls[0]![0].extraOutputData).toMatchObject({
+      rawExtensionUrl: R2_MOV,
+      chainReferenceUrl: REF_COPY,
+    })
+  })
+
+  it("the source's raw clip already expired ⇒ the copy fails and the extend falls back to the tail, still completing", async () => {
+    mocks.mockFindChainedMovReference.mockResolvedValue(CHAINED_MOV)
+    mocks.mockUploadToR2.mockImplementation(async (src: string) => {
+      if (src === CHAINED_MOV) throw new Error("Failed to download video: 404")
+      return R2_MOV
+    })
+    await handler()(makeJob() as never, ctx as never)
+
+    expect(mocks.mockImageToVideo.mock.calls[0]![5]).toMatchObject({ referenceVideoUrls: [TAIL_URL] })
+    const finalize = mocks.mockFinalizeJobWithMedia.mock.calls[0]![0]
+    expect(finalize.mediaUrl).toBe(STITCHED_R2)
+    expect(finalize.extraOutputData.chainReferenceUrl).toBeUndefined()
+  })
+
+  it("no prior mov ⇒ nothing copied and no chainReferenceUrl", async () => {
+    mocks.mockFindChainedMovReference.mockResolvedValue(undefined)
+    await handler()(makeJob() as never, ctx as never)
+    expect(mocks.mockUploadToR2).not.toHaveBeenCalled()
+    expect(mocks.mockFinalizeJobWithMedia.mock.calls[0]![0].extraOutputData.chainReferenceUrl).toBeUndefined()
   })
 
   it("a mov result is stored as OUR R2 .mov and persisted — never KIE's expiring URL", async () => {
@@ -295,10 +357,11 @@ describe("lever ON — the mov reference chain", () => {
     expect(type).toBe("video")
     expect(userId).toBe("user-1")
     expect(opts).toEqual({ ext: "mov" })
-    // A throwaway key: the job's own key is reserved for the deliverable, and
-    // reusing it would let this object masquerade as the result.
+    // In the job's own family (`<jobId>-raw`), so the job's expiry finds it
+    // (decided 2026-10-08) — but never the job's bare id: that slot is the
+    // deliverable's, and reusing it would let this object masquerade as the result.
+    expect(keyId).toBe("job-1-raw")
     expect(keyId).not.toBe("job-1")
-    expect(keyId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-/)
 
     expect(mocks.mockFinalizeJobWithMedia.mock.calls[0]![0].extraOutputData).toMatchObject({
       rawExtensionUrl: R2_MOV,
@@ -322,5 +385,52 @@ describe("lever ON — the mov reference chain", () => {
     expect(finalize.mediaUrl).toBe(STITCHED_R2)
     // Chain broken (next extension falls back to the tail), job still correct.
     expect(finalize.extraOutputData.rawExtensionUrl).toBe(KIE_MOV)
+  })
+
+  // Independent review round: the copies are written before the generation,
+  // but only a completed job's output names them — a run that fails after
+  // them discards them, or nothing ever would.
+  describe("a run that fails after its copies discards them", () => {
+    function chainWithRawMov(): void {
+      mocks.mockFindChainedMovReference.mockResolvedValue(CHAINED_MOV)
+      mocks.mockImageToVideo.mockResolvedValue({ url: KIE_MOV, cost: 0.3 })
+      uploadsByKey()
+    }
+
+    it.each([
+      ["the stitch", () => mocks.mockCombineVideos.mockRejectedValue(new Error("stitch failed"))],
+      ["the watermark upload", () => mocks.mockWatermarkLocalVideoAndUpload.mockRejectedValue(new Error("upload failed"))],
+      ["the finalize", () => mocks.mockFinalizeJobWithMedia.mockRejectedValue(new Error("finalize failed"))],
+    ])("%s fails: both copies are discarded, and the job still fails", async (_step, breakIt) => {
+      chainWithRawMov()
+      breakIt()
+
+      await expect(handler()(makeJob() as never, ctx as never)).rejects.toThrow(/failed/)
+
+      expect(mocks.mockDiscardFailedRunCopies).toHaveBeenCalledWith("job-1", "user-1", [REF_COPY, R2_MOV])
+    })
+
+    it("the generation fails: the reference copy is discarded (no raw extension exists yet)", async () => {
+      mocks.mockFindChainedMovReference.mockResolvedValue(CHAINED_MOV)
+      uploadsByKey()
+      mocks.mockImageToVideo.mockRejectedValue(new Error("generation failed"))
+
+      await expect(handler()(makeJob() as never, ctx as never)).rejects.toThrow(/generation failed/)
+
+      expect(mocks.mockDiscardFailedRunCopies).toHaveBeenCalledWith("job-1", "user-1", [REF_COPY, undefined])
+    })
+
+    it("a completed run discards nothing", async () => {
+      chainWithRawMov()
+      await handler()(makeJob() as never, ctx as never)
+      expect(mocks.mockDiscardFailedRunCopies).not.toHaveBeenCalled()
+    })
+
+    it("a url that is not our copy (KIE's own, or a reference used in place) is never handed over", async () => {
+      // No chained mov and an mp4 result: neither copy was made.
+      mocks.mockCombineVideos.mockRejectedValue(new Error("stitch failed"))
+      await expect(handler()(makeJob() as never, ctx as never)).rejects.toThrow(/stitch failed/)
+      expect(mocks.mockDiscardFailedRunCopies).toHaveBeenCalledWith("job-1", "user-1", [undefined, undefined])
+    })
   })
 })

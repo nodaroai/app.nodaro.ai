@@ -802,6 +802,23 @@ export async function getR2ObjectSize(key: string): Promise<number> {
   }
 }
 
+/**
+ * HEAD an object for the failed-delete retry (lib/storage-delete-retries.ts):
+ * `exists: false` when storage says it is not there (404), else its
+ * `LastModified` (absent only if storage omits it). Throws on any other error,
+ * so a retry never acts on a guess.
+ */
+export async function headR2Object(key: string): Promise<{ exists: boolean; lastModified?: Date }> {
+  try {
+    const head = await s3.send(new HeadObjectCommand({ Bucket: config.R2_BUCKET_NAME, Key: key }))
+    return { exists: true, lastModified: head.LastModified }
+  } catch (err) {
+    const e = err as { name?: string; $metadata?: { httpStatusCode?: number } }
+    if (e?.name === "NotFound" || e?.$metadata?.httpStatusCode === 404) return { exists: false }
+    throw err
+  }
+}
+
 export function r2KeyFromOurUrl(url: string): string | null {
   if (!config.R2_PUBLIC_URL) return null
   try {
@@ -1070,11 +1087,25 @@ export async function deleteFromR2(key: string): Promise<void> {
 /**
  * Batch delete up to 1000 keys per call from R2.
  * Automatically chunks if more than 1000 keys are provided.
+ *
+ * `notDeleted` names every requested key that storage did not confirm gone:
+ * an archived site asset (skipped), a key the response lists under `Errors`,
+ * every key of a chunk whose call threw, and — when an error names no key —
+ * every key of that chunk not listed under `Deleted`. A caller that clears
+ * links to the files it deleted clears only the others, so a file still in
+ * storage never loses its link.
+ *
+ * `kept` names the archived site assets among them — skipped on purpose and
+ * never deleted, so a caller that retries failed deletes leaves these out.
  */
-export async function batchDeleteFromR2(requested: string[]): Promise<{ deleted: number; errors: number }> {
+export async function batchDeleteFromR2(
+  requested: string[],
+): Promise<{ deleted: number; errors: number; notDeleted: string[]; kept: string[] }> {
   const keys = requested.filter((key) => !isArchivedSiteAsset(key))
-  warnKeptSiteAssets(requested.length - keys.length)
-  if (keys.length === 0) return { deleted: 0, errors: 0 }
+  const kept = requested.filter(isArchivedSiteAsset)
+  const notDeleted = [...kept]
+  warnKeptSiteAssets(kept.length)
+  if (keys.length === 0) return { deleted: 0, errors: 0, notDeleted, kept }
   // Validate the entire batch before deleting any object.
   keys.forEach(assertOrdinaryMediaKey)
 
@@ -1090,11 +1121,19 @@ export async function batchDeleteFromR2(requested: string[]): Promise<{ deleted:
         Delete: { Objects: batch.map(Key => ({ Key })) },
       }))
       deleted += result.Deleted?.length ?? 0
-      errors += result.Errors?.length ?? 0
+      const failed = result.Errors ?? []
+      errors += failed.length
+      if (failed.some((e) => !e.Key)) {
+        const gone = new Set((result.Deleted ?? []).map((d) => d.Key))
+        notDeleted.push(...batch.filter((k) => !gone.has(k)))
+      } else {
+        notDeleted.push(...failed.map((e) => e.Key as string))
+      }
     } catch (err) {
       console.error(`[storage] Batch delete failed for ${batch.length} keys:`, err)
       errors += batch.length
+      notDeleted.push(...batch)
     }
   }
-  return { deleted, errors }
+  return { deleted, errors, notDeleted, kept }
 }

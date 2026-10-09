@@ -1,6 +1,7 @@
 import sharp from "sharp"
 import { safeFetch } from "../../lib/safe-fetch.js"
 import { uploadBufferToR2 } from "../../lib/storage.js"
+import { inpaintCompositeKey } from "../../lib/job-output-keys.js"
 
 const WHITE_THRESHOLD = 128
 
@@ -80,8 +81,7 @@ export async function compositeInpaint(opts: {
     fetchBytes(opts.maskUrl),
   ])
   const out = await compositeMaskedRegion({ base, result, mask, featherSigma: opts.featherSigma ?? 2 })
-  const key = `inpaint/${opts.jobId}.png`
-  return uploadBufferToR2(out, key, "image/png", opts.userId)
+  return uploadBufferToR2(out, inpaintCompositeKey(opts.jobId), "image/png", opts.userId)
 }
 
 async function fetchBytes(url: string): Promise<Buffer> {

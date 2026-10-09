@@ -33,7 +33,7 @@ vi.mock("../relay-possible.js", () => ({ relayPossible: () => false }))
 import { supabase } from "../supabase.js"
 import { deleteFromR2 } from "../storage.js"
 import { updateStorageUsage } from "../../utils/file-validation.js"
-import { keysClaimedByOthers, keyNamespaceOwner } from "../key-ownership.js"
+import { keysClaimedByOthers, keyNamespaceOwner, keysHeldByOtherLibraryRows } from "../key-ownership.js"
 import { permanentlyDeleteAsset } from "../asset-delete.js"
 import { deleteOwnedMediaByUrls } from "../media-delete.js"
 
@@ -158,6 +158,39 @@ describe("keysClaimedByOthers", () => {
   it("throws when it cannot ask — a caller that cannot tell must not delete", async () => {
     useScenario(() => ({ data: null, error: { message: "timeout" } }))
     await expect(keysClaimedByOthers(ATTACKER, [VICTIM_KEY])).rejects.toThrow(/timeout/)
+  })
+})
+
+describe("keysHeldByOtherLibraryRows — a library row another job, or no job, ties to the key", () => {
+  const OTHER_JOB = "33333333-3333-4333-8333-333333333333"
+  const sameJob = (key: string, jobId: string) => key.includes(jobId)
+
+  it("keeps a key a library row ties to another job or to no job; frees one only its own job's row names", async () => {
+    const assetRows = [
+      { r2_key: OWN_KEY, job_id: OWN_JOB }, // the job's own library row
+      { r2_key: VICTIM_KEY, job_id: OTHER_JOB }, // another job's row
+      { r2_key: "images/saved.png", job_id: null }, // a gallery save: no job
+    ]
+    useScenario((table, calls) => {
+      if (table === "assets" && calls.some((c) => c.method === "select" && c.args[0] === "r2_key, job_id")) {
+        return { data: assetRows, error: null }
+      }
+      throw new Error(`unexpected query on ${table}`)
+    })
+    const held = await keysHeldByOtherLibraryRows([OWN_KEY, VICTIM_KEY, "images/saved.png", "images/orphan.png"], sameJob)
+    expect(held).toEqual(new Set([VICTIM_KEY, "images/saved.png"]))
+  })
+
+  it("asks nothing for no keys", async () => {
+    useScenario((table) => {
+      throw new Error(`unexpected query on ${table}`)
+    })
+    expect(await keysHeldByOtherLibraryRows([], sameJob)).toEqual(new Set())
+  })
+
+  it("throws when the lookup fails: a caller that cannot ask must not delete", async () => {
+    useScenario(() => ({ data: null, error: { message: "boom" } }))
+    await expect(keysHeldByOtherLibraryRows([OWN_KEY], sameJob)).rejects.toThrow(/boom/)
   })
 })
 

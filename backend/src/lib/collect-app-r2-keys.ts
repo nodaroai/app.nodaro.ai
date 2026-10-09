@@ -1,7 +1,7 @@
 import { supabase } from "./supabase.js"
-import { r2KeyFromUrl } from "../ee/billing/cleanup-service.js"
+import { ownedJobOutputKeys, r2KeyFromUrl } from "./job-output-keys.js"
 import { isOwnedObjectKey, objectKeyJobIdCandidates } from "./job-policy-outputs.js"
-import { familyJobOwners, keyNamespaceOwner } from "./key-ownership.js"
+import { familyJobOwners, keyNamespaceOwner, keysHeldByOtherLibraryRows } from "./key-ownership.js"
 import { APP_RUN_USER_CONTENT_COLUMNS } from "./app-run-content.js"
 import { appRenderFinalStampOf, finalExecutionIdOf, selectWithFinalExecution } from "./app-run-final-column.js"
 
@@ -30,7 +30,8 @@ import { appRenderFinalStampOf, finalExecutionIdOf, selectWithFinalExecution } f
  * `<prefix>/<jobId>-<suffix>`): before 474 a client could insert its own job
  * as 'completed' with any output, so owning the row does not vouch for the
  * URLs in it. A job's output that names another object (an upload, a relayed
- * far-end file) is left alone.
+ * far-end file) is left alone. The walk and the fence are `lib/job-output-keys.ts`,
+ * the same ones the retention reapers use (decided 2026-10-08).
  *
  * Whose file (decided 2026-10-06; migration 480): a url a person wrote — the
  * creator's app media, a runner's run columns (client-writable through the run
@@ -218,9 +219,7 @@ export async function collectAppR2Keys(appId: string, scope: AppR2KeyScope = {})
           // Only an owned job is one of this app's jobs for `appOwnedKeys`: a
           // planted job's library row must not make a key deletable.
           appJobIds.add(jobId)
-          walk(j.output_data, (key) => {
-            if (isOwnedObjectKey(jobId, key)) jobKeys.add(key)
-          })
+          for (const key of ownedJobOutputKeys(jobId, j.output_data)) jobKeys.add(key)
         }
       }
     }
@@ -245,9 +244,7 @@ export async function collectAppR2Keys(appId: string, scope: AppR2KeyScope = {})
       if (typeof j.id !== "string" || j.user_id !== owner) continue
       const jobId = j.id
       appJobIds.add(jobId)
-      walk(j.output_data, (key) => {
-        if (isOwnedObjectKey(jobId, key)) jobKeys.add(key)
-      })
+      for (const key of ownedJobOutputKeys(jobId, j.output_data)) jobKeys.add(key)
     }
   }
 
@@ -299,8 +296,6 @@ async function writtenOwnObjects(
   })
 }
 
-const LIBRARY_LOOKUP_CHUNK = 100
-
 /**
  * The harvested keys minus every object a library row ties to someone else.
  *
@@ -325,14 +320,6 @@ const LIBRARY_LOOKUP_CHUNK = 100
  * the object, and the route runs it before anything is changed.
  */
 async function appOwnedKeys(keys: string[], appJobIds: ReadonlySet<string>): Promise<string[]> {
-  const foreign = new Set<string>()
-  for (let i = 0; i < keys.length; i += LIBRARY_LOOKUP_CHUNK) {
-    const chunk = keys.slice(i, i + LIBRARY_LOOKUP_CHUNK)
-    const { data, error } = await supabase.from("assets").select("r2_key, job_id").in("r2_key", chunk)
-    if (error) throw new Error(`collectAppR2Keys failed at assets: ${error.message}`)
-    for (const row of (data ?? []) as Array<{ r2_key: string | null; job_id: string | null }>) {
-      if (row.r2_key && !(row.job_id && appJobIds.has(row.job_id))) foreign.add(row.r2_key)
-    }
-  }
+  const foreign = await keysHeldByOtherLibraryRows(keys, (_key, jobId) => appJobIds.has(jobId))
   return foreign.size === 0 ? keys : keys.filter((k) => !foreign.has(k))
 }

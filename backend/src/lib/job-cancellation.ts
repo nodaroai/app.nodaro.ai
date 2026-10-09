@@ -83,6 +83,14 @@ export function getJobUserId(): string | undefined {
   return storage.getStore()?.userId
 }
 
+/** The id of the job whose context is currently active, or undefined outside
+ *  a `runWithJobCancellation` context. A storage writer that is handed no job
+ *  id (the plugin toolkit's combine and plate uploads) keys its file in this
+ *  job's family, so the job's expiry finds it. */
+export function getJobId(): string | undefined {
+  return storage.getStore()?.jobId
+}
+
 /**
  * Throw `JobCancelledError` if the surrounding job was cancelled. No-op when
  * called outside a `runWithJobCancellation` context. Throttled so a tight poll

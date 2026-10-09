@@ -68,6 +68,11 @@ vi.mock("../../../lib/storage.js", () => ({
   deleteFromR2: async (key: string) => {
     fx.deletes.push(key)
   },
+  // Checkpoint cleanup goes through the delete funnel (lib/storage-delete.ts).
+  batchDeleteFromR2: async (keys: string[]) => {
+    for (const key of keys) fx.deletes.push(key)
+    return { deleted: keys.length, errors: 0, notDeleted: [], kept: [] }
+  },
 }))
 vi.mock("../combine-videos.js", () => ({
   pickTargetResolution: async () => ({ width: 1280, height: 720 }),

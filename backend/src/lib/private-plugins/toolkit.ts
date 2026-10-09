@@ -9,6 +9,7 @@ import { ensureMediaProxy } from "../../services/media-proxy.js"
 import { proxyFrameToSourceMs } from "../../services/media-proxy-span-map.js"
 import { detectFaces } from "../../services/face-detect/detect-faces.js"
 import { isStorageConfigured } from "../storage.js"
+import { deleteKeyRecordingFailure } from "../storage-delete.js"
 import { createSceneRenderingToolkit } from "./scene3d-render-toolkit.js"
 import { completeStructuredMetered } from "./llm-metered.js"
 import { createSSEStream } from "../sse.js"
@@ -52,7 +53,6 @@ import {
   getR2ObjectSize,
   downloadR2ObjectToFile,
   readR2ObjectBuffer,
-  deleteFromR2,
   r2KeyFromOurUrl,
   mediaObjectKey,
   copyRecastObject,
@@ -105,7 +105,8 @@ import { firePluginTrigger, listActivePluginTriggers } from "../plugin-triggers.
 import { readJobExecution } from "./job-execution.js"
 import { sendTelegramBotTextFor } from "./social-toolkit.js"
 import { jobSourceColumns } from "../job-source.js"
-import { throwIfJobCancelled } from "../job-cancellation.js"
+import { getJobId, throwIfJobCancelled } from "../job-cancellation.js"
+import { jobFileObjectId } from "../job-output-keys.js"
 import { hasCredits, hasOrganizations } from "../config.js"
 import { appBaseUrl } from "../deployment-urls.js"
 import { getAppSettings } from "../app-settings.js"
@@ -407,7 +408,10 @@ async function getVideoTaskStatus(
  * inside its own temp dir, and adapts it to the contract's always-an-R2-URL
  * member. Defaults mirror the route's Zod schema (`routes/combine-videos.ts`)
  * for the fields the contract leaves optional. No `jobId` reaches this
- * member (see the `types.ts` doc comment) — the upload key is minted here.
+ * member (see the `types.ts` doc comment) — the upload key is minted here,
+ * in the RUNNING job's family (`jobFileObjectId(getJobId(), …)`: the job
+ * whose handler called the toolkit), so that job's expiry finds the file
+ * (decided 2026-10-08). Outside a job the key is random, as before.
  */
 async function combineVideosToUrl(options: {
   videoUrls: string[]
@@ -440,7 +444,7 @@ async function combineVideosToUrl(options: {
     edgeFades: options.edgeFades,
   })
   try {
-    return await uploadFileToR2(localPath, randomUUID(), "video")
+    return await uploadFileToR2(localPath, jobFileObjectId(getJobId(), "combine"), "video")
   } finally {
     // combineVideos uses its own temp dir structure (not cleanupWorkDir-
     // compatible) — mirrors workers/handlers/ffmpeg.ts's handleCombineVideos.
@@ -1326,7 +1330,9 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
         const ups = await fetchImageBuffer(r.url)
         const gate = await assertExact2xAligned(src, ups)
         const ext = gate.format === "jpeg" ? "jpg" : gate.format
-        return { url: await uploadBufferToR2(ups, `images/plate-${randomUUID()}.${ext}`, `image/${gate.format}`) }
+        // In the running job's family, like the combine result above
+        // (decided 2026-10-08); random outside a job.
+        return { url: await uploadBufferToR2(ups, `images/${jobFileObjectId(getJobId(), "plate")}.${ext}`, `image/${gate.format}`) }
       },
       getVideoTaskStatus,
       // The contract narrows `downloadYouTubeVideo`'s opts to {url,outPath,
@@ -1403,7 +1409,8 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
           )
           return
         }
-        await deleteFromR2(key)
+        // A failed delete is recorded for the retry pass, then rethrown to the plugin.
+        await deleteKeyRecordingFailure(key, "plugin")
       },
       r2KeyFromOurUrl,
       storeImportedImageBuffer,

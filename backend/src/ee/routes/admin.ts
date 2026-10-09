@@ -7,7 +7,7 @@ import { collectAppR2Keys } from "../../lib/collect-app-r2-keys.js"
 import { collectAppExpungeTargets, redactAppExpungeTargets, type AppExpungeTargets } from "../../lib/app-expunge-targets.js"
 import { appRunContentRedaction } from "../../lib/app-run-content.js"
 import { deletableKeys } from "../../lib/asset-delete.js"
-import { batchDeleteFromR2 } from "../../lib/storage.js"
+import { deleteKeysRecordingFailures } from "../../lib/storage-delete.js"
 import { formatZodError } from "../../lib/zod-error.js"
 
 // ============================================================
@@ -658,7 +658,8 @@ export async function adminRoutes(app: FastifyInstance) {
     let r2Result = { deleted: 0, errors: 0 }
     if (r2Keys.length > 0) {
       try {
-        r2Result = await batchDeleteFromR2(r2Keys)
+        // A key storage fails to delete is recorded for the retry pass.
+        r2Result = await deleteKeysRecordingFailures(r2Keys, "admin-expunge")
       } catch (err) {
         console.error(`[admin-expunge] R2 batch delete failed for ${appId}:`, err)
       }

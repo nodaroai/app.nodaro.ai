@@ -1,6 +1,5 @@
 import { remotionConcurrencyFor } from "./render-concurrency.js"
 import type { Job } from "bullmq"
-import { randomUUID } from "node:crypto"
 import { readFile } from "node:fs/promises"
 import { join } from "node:path"
 import { openBrowser, selectComposition, renderMedia, renderStill, makeCancelSignal } from "@remotion/renderer"
@@ -8,6 +7,7 @@ import { supabase } from "../lib/supabase.js"
 import { config } from "../lib/config.js"
 import { createWorkDir, cleanupWorkDir } from "../providers/video/ffmpeg-utils.js"
 import { uploadFileToR2 } from "../lib/storage.js"
+import { jobFileObjectId } from "../lib/job-output-keys.js"
 import { applyVideoWatermark } from "../utils/watermark.js"
 import { markJobCompletedDetailed, isFinalJobAttempt } from "./shared.js"
 import { markJobFailed } from "../lib/job-failure.js"
@@ -98,8 +98,11 @@ export async function processSceneRenderChild(job: Job, bundle: () => Promise<st
       }
       controller.signal.throwIfAborted()
       await requireSceneRenderParent(ports, input, true)
-      // The opaque delivery key must not be derivable from public parent/owner identities.
-      const videoUrl = await uploadFileToR2(output, randomUUID(), "video", input.userId, { signal: controller.signal })
+      // The opaque delivery key must not be derivable from public parent/owner
+      // identities: the nonce keeps it unguessable. Its `<childId>-` head puts
+      // it in the child job's family, so the child's expiry finds it (decided
+      // 2026-10-08).
+      const videoUrl = await uploadFileToR2(output, jobFileObjectId(child.id, "render"), "video", input.userId, { signal: controller.signal })
       return { kind: "video", videoUrl, sceneRevisionId: input.plan.revisionId, elapsedMs: Date.now() - started }
     })
     await requireSceneRenderParent(ports, input, true)

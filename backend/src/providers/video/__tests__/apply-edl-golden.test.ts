@@ -80,6 +80,11 @@ vi.mock("../../../lib/storage.js", () => ({
   deleteFromR2: async (key: string) => {
     fx.trace.push({ step: "checkpoint-delete", key })
   },
+  // Checkpoint cleanup goes through the delete funnel (lib/storage-delete.ts).
+  batchDeleteFromR2: async (keys: string[]) => {
+    for (const key of keys) fx.trace.push({ step: "checkpoint-delete", key })
+    return { deleted: keys.length, errors: 0, notDeleted: [], kept: [] }
+  },
 }))
 vi.mock("../combine-videos.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../combine-videos.js")>()),
