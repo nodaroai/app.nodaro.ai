@@ -20,7 +20,10 @@ const h = vi.hoisted(() => {
     deleteAnswer: { data: null, error: null } as Answer,
     upserts: [] as Array<{ rows: unknown; opts: unknown }>,
     claims: [] as Array<{ values: Record<string, unknown>; keys: unknown; filters: unknown[][] }>,
-    updates: [] as Array<{ values: Record<string, unknown>; key: unknown; failedAt: unknown }>,
+    /** A counted failure: its values, the key, and the second filter (column and value). */
+    updates: [] as Array<{ values: Record<string, unknown>; key: unknown; matchCol: string; matchValue: unknown }>,
+    /** When set, the claim and the counted failure apply to this table, as the database would. */
+    table: undefined as Map<string, Record<string, unknown>> | undefined,
     deletes: [] as unknown[],
     deleteFilters: [] as Array<{ key: unknown; failedAt: unknown }>,
     storageConfigured: true,
@@ -45,7 +48,7 @@ const h = vi.hoisted(() => {
       }),
       update: vi.fn((values: Record<string, unknown>) => {
         // A claim: update(...).in(r2_key).is(...).or(...).select(...)
-        // A counted failure: update(...).eq(r2_key).eq(failed_at)
+        // A counted failure: update(...).eq(r2_key).eq(last_attempt_at)
         const filters: unknown[][] = []
         const claim: Record<string, unknown> = {}
         claim.is = vi.fn((...a: unknown[]) => { filters.push(["is", ...a]); return claim })
@@ -57,11 +60,17 @@ const h = vi.hoisted(() => {
         return {
           in: vi.fn((_col: string, keys: unknown) => {
             state.claims.push({ values, keys, filters })
+            for (const k of keys as string[]) {
+              const r = state.table?.get(k)
+              if (r) state.table!.set(k, { ...r, ...values })
+            }
             return claim
           }),
           eq: vi.fn((_col: string, key: unknown) => ({
-            eq: vi.fn((_c: string, failedAt: unknown) => {
-              state.updates.push({ values, key, failedAt })
+            eq: vi.fn((matchCol: string, matchValue: unknown) => {
+              state.updates.push({ values, key, matchCol, matchValue })
+              const r = state.table?.get(key as string)
+              if (r && r[matchCol] === matchValue) state.table!.set(key as string, { ...r, ...values })
               return resolved(state.updateAnswer)
             }),
           })),
@@ -134,18 +143,33 @@ const row = (
   attempts,
   failed_at: failedAt,
 })
-/** The row the funnel writes for a failure: a fresh record, or a refreshed one. */
+/**
+ * The row the funnel writes for a failure: a fresh record, or a refreshed one.
+ * Only the failure's own fields — never the retry's bookkeeping (attempts,
+ * last attempt, error, give-up), which a re-record keeps (decided 2026-10-09).
+ */
 const recordedRow = (key: string, url: string | null, source: string, jobId: string | null) => ({
   r2_key: key,
   url,
   source,
   job_id: jobId,
   failed_at: expect.any(String),
-  attempts: 0,
-  last_attempt_at: null,
-  last_error: null,
-  gave_up_at: null,
 })
+/** The retry pass's own columns: a re-record never writes them. */
+const RETRY_BOOKKEEPING = ["attempts", "last_attempt_at", "last_error", "gave_up_at"] as const
+/**
+ * What PostgREST's upsert (ON CONFLICT (r2_key) DO UPDATE, merge-duplicates)
+ * leaves in the table: a new key takes the column defaults (migration 496),
+ * a recorded one gets only the columns the payload names.
+ */
+function applyUpsert(table: Map<string, Record<string, unknown>>, rows: Array<Record<string, unknown>>): void {
+  const defaults = { attempts: 0, last_error: null, last_attempt_at: null, gave_up_at: null, created_at: "now()" }
+  for (const r of rows) {
+    const key = r.r2_key as string
+    const existing = table.get(key)
+    table.set(key, existing ? { ...existing, ...r } : { ...defaults, ...r })
+  }
+}
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -161,6 +185,7 @@ beforeEach(() => {
     updates: [],
     deletes: [],
     deleteFilters: [],
+    table: undefined,
     storageConfigured: true,
   })
   h.keysHeldByOtherLibraryRows.mockResolvedValue(new Set())
@@ -186,14 +211,67 @@ describe("recordFailedDeletes", () => {
     ])
   })
 
-  it("a later failure at a recorded key REFRESHES the record — new moment, attempts and give-up reset — never ignored", async () => {
+  it("a later failure at a recorded key moves the failure's moment, never ignored", async () => {
     // Independent review round: with ON CONFLICT DO NOTHING, a second failure
-    // kept the first moment (so the retry took the new object for a rewrite
-    // and dropped it undeleted) and a given-up key could never be recorded again.
-    await recordFailedDeletes([{ key: KEY, url: URL_, source: "job-output", jobId: JOB, attemptedAt: new Date() }])
+    // kept the first moment, so the retry took the new object for a rewrite
+    // and dropped it undeleted. The new failure must still be retried.
+    const at = new Date("2026-10-06T08:00:00.500Z")
+    await recordFailedDeletes([{ key: KEY, url: URL_, source: "job-output", jobId: JOB, attemptedAt: at }])
     const { rows, opts } = h.state.upserts[0]!
     expect((opts as Record<string, unknown>).ignoreDuplicates).toBeUndefined()
-    expect(rows).toEqual([expect.objectContaining({ attempts: 0, gave_up_at: null, last_attempt_at: null })])
+    expect(rows).toEqual([expect.objectContaining({ failed_at: at.toISOString() })])
+  })
+
+  it("a re-record keeps the key's attempts, last attempt, error and give-up — the payload never names them (decided 2026-10-09)", async () => {
+    // A key a sweep lists again every day is re-recorded every day: resetting
+    // its attempts would retry it forever. The retry pass gives up after
+    // MAX_DELETE_RETRIES whoever recorded the key and however often.
+    await recordFailedDeletes([{ key: KEY, url: URL_, source: "job-scratch", jobId: null, attemptedAt: new Date() }])
+    const [written] = h.state.upserts[0]!.rows as Array<Record<string, unknown>>
+    for (const column of RETRY_BOOKKEEPING) expect(written).not.toHaveProperty(column)
+  })
+
+  it("re-recorded onto a row mid-retry: attempts and the claim stamp carry over, the failure's moment moves", async () => {
+    const table = new Map<string, Record<string, unknown>>([
+      [KEY, { r2_key: KEY, url: URL_, source: "job-scratch", job_id: null, attempts: MAX_DELETE_RETRIES - 1, last_attempt_at: "2026-10-05T00:00:00.000Z", last_error: "storage did not confirm the delete", gave_up_at: null, failed_at: RECORDED_AT, created_at: RECORDED_AT }],
+    ])
+    const at = new Date("2026-10-06T08:00:00.000Z")
+    await recordFailedDeletes([{ key: KEY, url: URL_, source: "job-scratch", jobId: null, attemptedAt: at }])
+    applyUpsert(table, h.state.upserts[0]!.rows as Array<Record<string, unknown>>)
+
+    expect(table.get(KEY)).toEqual(expect.objectContaining({
+      attempts: MAX_DELETE_RETRIES - 1,
+      last_attempt_at: "2026-10-05T00:00:00.000Z",
+      last_error: "storage did not confirm the delete",
+      gave_up_at: null,
+      failed_at: at.toISOString(),
+      // The queue position: a daily re-record never sends a key to the back.
+      created_at: RECORDED_AT,
+    }))
+  })
+
+  it("a given-up key stays given up when recorded again — not resurrected", async () => {
+    const table = new Map<string, Record<string, unknown>>([
+      [KEY, { r2_key: KEY, url: URL_, source: "job-scratch", job_id: null, attempts: MAX_DELETE_RETRIES, last_attempt_at: "2026-10-05T00:00:00.000Z", last_error: "storage did not confirm the delete", gave_up_at: "2026-10-05T00:00:00.000Z", failed_at: RECORDED_AT, created_at: RECORDED_AT }],
+    ])
+    await recordFailedDeletes([{ key: KEY, url: URL_, source: "job-scratch", jobId: null, attemptedAt: new Date("2026-10-06T08:00:00.000Z") }])
+    applyUpsert(table, h.state.upserts[0]!.rows as Array<Record<string, unknown>>)
+
+    expect(table.get(KEY)).toEqual(expect.objectContaining({ attempts: MAX_DELETE_RETRIES, gave_up_at: "2026-10-05T00:00:00.000Z" }))
+  })
+
+  it("a first failure starts from the table's defaults: no attempts, never tried, not given up", async () => {
+    const table = new Map<string, Record<string, unknown>>()
+    await recordFailedDeletes([{ key: KEY, url: URL_, source: "job-output", jobId: JOB, attemptedAt: new Date() }])
+    applyUpsert(table, h.state.upserts[0]!.rows as Array<Record<string, unknown>>)
+    expect(table.get(KEY)).toEqual(expect.objectContaining({ attempts: 0, last_attempt_at: null, last_error: null, gave_up_at: null }))
+
+    // The defaults applyUpsert assumes are the migration's.
+    const sql = readFileSync(new URL("../../../../supabase/migrations/496_storage_delete_retries.sql", import.meta.url), "utf8")
+    expect(sql).toMatch(/\n\s*attempts\s+integer NOT NULL DEFAULT 0\b/)
+    for (const column of ["last_error", "last_attempt_at", "gave_up_at"]) {
+      expect(sql).toMatch(new RegExp(`\\n\\s*${column}\\s+(text|timestamptz),?\\n`))
+    }
   })
 
   it("writes nothing for no failures", async () => {
@@ -317,7 +395,60 @@ describe("retryFailedStorageDeletes", () => {
     h.batchDeleteFromR2.mockResolvedValue({ deleted: 0, errors: 1, notDeleted: [KEY] })
     h.headR2Object.mockResolvedValue({ exists: true, lastModified: new Date("2026-10-01T00:00:00Z") })
     await retryFailedStorageDeletes()
-    expect(h.state.updates).toEqual([expect.objectContaining({ key: KEY, failedAt: RECORDED_AT })])
+    // The attempt is counted against this pass's own claim stamp.
+    const stamp = h.state.claims[h.state.claims.length - 1]!.values.last_attempt_at
+    expect(typeof stamp).toBe("string")
+    expect(h.state.updates).toEqual([expect.objectContaining({ key: KEY, matchCol: "last_attempt_at", matchValue: stamp })])
+  })
+
+  // Round 5 (decided 2026-10-09): the attempt is counted by key and the pass's
+  // own claim stamp. A re-record never writes the stamp, so one that lands
+  // between the claim and the count no longer leaves the attempt uncounted.
+  describe("a re-record between the claim and the count", () => {
+    const NEWER = (n: number) => `2026-10-0${3 + n}T00:00:00.000Z`
+    const seedTable = (attempts: number) => {
+      h.state.table = new Map([[KEY, { ...row(attempts), last_attempt_at: null, gave_up_at: null, last_error: null }]])
+    }
+    /** Storage again does not confirm the delete — and meanwhile the funnel records a newer failure at the key. */
+    const failWhileReRecorded = (n: number) => {
+      h.batchDeleteFromR2.mockImplementation(async () => {
+        await recordFailedDeletes([{ key: KEY, url: URL_, source: "job-output", jobId: JOB, attemptedAt: new Date(NEWER(n)) }])
+        applyUpsert(h.state.table!, h.state.upserts[h.state.upserts.length - 1]!.rows as Array<Record<string, unknown>>)
+        return { deleted: 0, errors: 1, notDeleted: [KEY] }
+      })
+    }
+
+    it("still counts the attempt, and keeps the newer failure for the next pass", async () => {
+      seedTable(1)
+      failWhileReRecorded(0)
+      h.state.selectAnswers = [{ data: [h.state.table!.get(KEY)], error: null }]
+
+      const result = await retryFailedStorageDeletes()
+
+      const after = h.state.table!.get(KEY)!
+      expect(after.attempts).toBe(2)
+      expect(after.failed_at).toBe(NEWER(0))
+      expect(after.gave_up_at).toBeNull()
+      expect(result).toMatchObject({ failed: 1, gaveUp: 0 })
+      expect(h.state.deletes).toEqual([])
+    })
+
+    it(`reaches the cap after ${MAX_DELETE_RETRIES}, however often a re-record lands in that window`, async () => {
+      const errorLog = vi.spyOn(console, "error").mockImplementation(() => {})
+      seedTable(0)
+      for (let pass = 0; pass < MAX_DELETE_RETRIES; pass++) {
+        expect(h.state.table!.get(KEY)!.gave_up_at).toBeNull()
+        failWhileReRecorded(pass)
+        h.state.selectAnswers = [{ data: [{ ...h.state.table!.get(KEY)! }], error: null }]
+        await retryFailedStorageDeletes()
+        expect(h.state.table!.get(KEY)!.attempts).toBe(pass + 1)
+      }
+      const after = h.state.table!.get(KEY)!
+      expect(after.attempts).toBe(MAX_DELETE_RETRIES)
+      expect(typeof after.gave_up_at).toBe("string")
+      expect(errorLog.mock.calls.some((c) => c.join(" ").includes(`Giving up on deleting ${KEY}`))).toBe(true)
+      errorLog.mockRestore()
+    })
   })
 
   it("an object rewritten in the same second the failed delete began is kept (LastModified has whole seconds)", async () => {

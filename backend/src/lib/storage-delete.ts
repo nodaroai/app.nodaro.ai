@@ -54,6 +54,7 @@ export type DeleteSource =
   | "plugin"
   | "edl-checkpoint"
   | "character-training"
+  | "job-scratch"
 
 export interface FailedDelete {
   readonly key: string
@@ -136,11 +137,15 @@ export function keyFailures(
 
 /**
  * Records files a path failed to delete. A file already recorded gets its
- * record REFRESHED: the new failure's moment (`failed_at`), and its attempts,
- * last attempt, error and give-up cleared — it is a new delete request, maybe
- * of a new object at a reused key, and a given-up key must be retried again
- * (independent review round). Returns `unavailable` when the database does not
- * have the record yet (staging ahead of `main`); throws on any other failure.
+ * record REFRESHED with the new failure's moment (`failed_at`), url, source
+ * and job: it may be a new object at a reused key, which the retry must still
+ * delete (independent review round). The retry's own bookkeeping — attempts,
+ * last attempt, error and give-up — is never written here, so a re-record
+ * keeps it (decided 2026-10-09): a key a sweep lists again every day still
+ * gives up after `MAX_DELETE_RETRIES`, and a given-up key stays given up. A
+ * new record takes the table's defaults (no attempts, not given up). Returns
+ * `unavailable` when the database does not have the record yet (staging ahead
+ * of `main`); throws on any other failure.
  */
 export async function recordFailedDeletes(
   files: readonly FailedDelete[],
@@ -153,10 +158,6 @@ export async function recordFailedDeletes(
     source: f.source,
     job_id: f.jobId,
     failed_at: f.attemptedAt.toISOString(),
-    attempts: 0,
-    last_attempt_at: null,
-    last_error: null,
-    gave_up_at: null,
   }))
   const { error } = await supabase
     .from(STORAGE_DELETE_RETRIES_TABLE)

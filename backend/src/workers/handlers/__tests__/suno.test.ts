@@ -258,7 +258,8 @@ describe("suno-cover handler", () => {
     const job = makeJob("suno-cover", { prompt: "jazz cover", uploadUrl: "https://youtube.com/watch?v=abc" })
     await handler(job as never, makeCtx())
 
-    expect(mocks.mockDownloadAudioToR2).toHaveBeenCalledWith("https://youtube.com/watch?v=abc")
+    // The job's own copy: its scratch folder, emptied when the job ends (decided 2026-10-09).
+    expect(mocks.mockDownloadAudioToR2).toHaveBeenCalledWith("https://youtube.com/watch?v=abc", { scratchJobId: "job-1" })
     expect(mocks.mockSunoCover).toHaveBeenCalledWith(
       expect.objectContaining({ uploadUrl: "https://r2.example.com/downloads/audio.mp3" }),
       expect.objectContaining({ onTaskCreated: expect.any(Function) }),
@@ -477,7 +478,8 @@ describe("suno-upload-extend handler", () => {
     const job = makeJob("suno-upload-extend", { uploadUrl: "https://youtube.com/watch?v=abc", continueAt: 30 })
     await handler(job as never, makeCtx())
 
-    expect(mocks.mockDownloadAudioToR2).toHaveBeenCalledWith("https://youtube.com/watch?v=abc")
+    // The job's own copy: its scratch folder, emptied when the job ends (decided 2026-10-09).
+    expect(mocks.mockDownloadAudioToR2).toHaveBeenCalledWith("https://youtube.com/watch?v=abc", { scratchJobId: "job-1" })
     expect(mocks.mockSunoUploadExtend).toHaveBeenCalledWith(
       expect.objectContaining({ uploadUrl: "https://r2.example.com/downloads/audio.mp3" }),
       expect.objectContaining({ onTaskCreated: expect.any(Function) }),

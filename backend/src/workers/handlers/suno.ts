@@ -247,7 +247,7 @@ const handleSunoCover: HandlerFn = async function handleSunoCover(job, ctx) {
   let resolvedUploadUrl = uploadUrl
   if (isSocialUrl(uploadUrl)) {
     console.log(`[worker] Social URL detected for cover, downloading audio first...`)
-    resolvedUploadUrl = await downloadAudioToR2(uploadUrl)
+    resolvedUploadUrl = await downloadAudioToR2(uploadUrl, { scratchJobId: ctx.jobId })
   }
   // B4b: audio PromptPolicy — same convergence hook as suno-generate.
   const _ap = applyPromptPolicies({ prompt, negativePrompt: negativeStyle ?? "", kind: "audio", vocalGender })
@@ -565,7 +565,7 @@ const handleSunoUploadExtend: HandlerFn = async function handleSunoUploadExtend(
   let resolvedUploadUrl = uploadUrl
   if (isSocialUrl(uploadUrl)) {
     console.log(`[worker] Social URL detected for upload-extend, downloading audio first...`)
-    resolvedUploadUrl = await downloadAudioToR2(uploadUrl)
+    resolvedUploadUrl = await downloadAudioToR2(uploadUrl, { scratchJobId: ctx.jobId })
   }
   const onTaskCreated = makeOnTaskCreated(ctx.jobId, providerKindForSuno())
   const result = await withProgressRamp(

@@ -11,6 +11,7 @@ import { supabase } from "../lib/supabase.js"
 import { getAppSettings } from "../lib/app-settings.js"
 import type { ProviderResult } from "../providers/provider.interface.js"
 import { uploadToR2, uploadFileToR2, uploadBufferToR2, uploadFileWithKeyToR2, getR2ObjectSize } from "../lib/storage.js"
+import { uploadJobScratchFile } from "../lib/job-scratch.js"
 import { safeFetch } from "../lib/safe-fetch.js"
 import { isAllowedSocialVideoUrl } from "../lib/url-validator.js"
 import sharp from "sharp"
@@ -89,7 +90,14 @@ export function isSocialUrl(url: string): boolean {
   return isAllowedSocialVideoUrl(url)
 }
 
-export async function downloadAudioToR2(url: string): Promise<string> {
+/**
+ * Download a social link's audio and store it. With `scratchJobId` (Suno's
+ * cover and upload-extend: a provider input) the copy goes to that job's
+ * scratch folder, emptied when the job ends (decided 2026-10-09). Without it
+ * (a workflow run's link fetch, whose audio later nodes read) it keeps its
+ * own key.
+ */
+export async function downloadAudioToR2(url: string, opts: { scratchJobId?: string } = {}): Promise<string> {
   const outputId = randomUUID()
   const baseName = `yt-audio-${outputId}`
   const outputTemplate = join(tmpdir(), `${baseName}.%(ext)s`)
@@ -139,7 +147,9 @@ export async function downloadAudioToR2(url: string): Promise<string> {
   const stat = await fs.stat(actualPath)
   if (stat.size === 0) throw new Error("Downloaded audio file is empty")
 
-  const r2Url = await uploadFileWithKeyToR2(actualPath, `audios/cover-src-${outputId}.mp3`, "audio/mpeg")
+  const r2Url = opts.scratchJobId
+    ? await uploadJobScratchFile(actualPath, "cover-src", "mp3", "audio/mpeg", opts.scratchJobId)
+    : await uploadFileWithKeyToR2(actualPath, `audios/cover-src-${outputId}.mp3`, "audio/mpeg")
   await fs.unlink(actualPath).catch(() => {})
 
   console.log(`[worker] Audio downloaded and uploaded to R2: ${r2Url}`)

@@ -21,8 +21,14 @@
  *     `variantJobId(jobId, i)`, `mediaObjectKey(jobId, …)`) is in the family:
  *     the census builds the key it makes, nests its url deep in an output, and
  *     asserts the walk returns it.
+ *   - A temporary provider upload (a copy of the user's media made only so a
+ *     provider can fetch it) goes through the job-scratch writers
+ *     (`lib/job-scratch.ts`, decided 2026-10-09): its key is in the job's
+ *     scratch folder, which is emptied when the job ends. It is never listed
+ *     below as an exception: a staging copy with a key of its own would
+ *     outlive its job.
  *   - Any other key must be listed below with WHY — not a job's output (an
- *     upload, a cache, a staging copy). A new writer whose key
+ *     upload, a cache). A new writer whose key
  *     is neither fails this test until someone decides which it is. Where one
  *     key expression serves calls with different answers, each call is listed
  *     by the variable it assigns (`<file> :: <key> → <variable>`).
@@ -51,6 +57,9 @@ import {
   silentVideoKey,
 } from "../job-output-keys.js"
 import { applyEdlOutputData } from "../apply-edl-output.js"
+import { JOB_SCRATCH_ROOT, jobScratchKey, jobScratchPrefix } from "../job-scratch-keys.js"
+import { parseText, sourceFiles as shippedSourceFiles, relPath } from "./source-scan.js"
+import ts from "typescript"
 
 const BACKEND_SRC = join(__dirname, "..", "..")
 const JOB = "00000000-0000-4000-8000-0000000000aa"
@@ -88,7 +97,6 @@ const isScript = (file: string) => file.startsWith("scripts/")
 
 const UPLOAD = "a user's upload or import: its `assets` row owns the object (the assets phase reaps it), not a job output"
 const CACHE = "a content-addressed cache any job may read; never one job's to delete"
-const STAGING = "a staging copy handed to a provider as INPUT, not a deliverable an output names"
 const NOT_A_JOB = "not written for a job: the key carries no job id and the object is not a job output"
 
 /**
@@ -109,10 +117,6 @@ const OUTSIDE_A_JOB_FAMILY: Readonly<Record<string, string>> = {
   "lib/video-download.ts :: `thumbnails/yt-${outputId}.png`": `${NOT_A_JOB} (a downloaded source video's poster)`,
   "lib/video-frame-fit.ts :: key": `${CACHE} (frame-fit, by source url + plan)`,
   "providers/audio/youtube-extractor.ts :: `yt-extract-${outputId}`": `${NOT_A_JOB} (extracted source audio)`,
-  "providers/kie/image.ts :: key": `${STAGING} (a resized mask)`,
-  "providers/kie/video.ts :: key": `${STAGING} (trimmed audio / video, under the tmp prefix)`,
-  "providers/kie/video.ts :: tmpObjectKey(`provider-converted-${stamp}`, losslessFormat)": `${STAGING} (tmp prefix)`,
-  "providers/kie/video.ts :: tmpObjectKey(`provider-converted-${stamp}`, \"jpg\")": `${STAGING} (tmp prefix)`,
   "providers/video/edl-timeline.ts :: key": "the render's own resumable chunk checkpoints, deleted by the render itself",
   "routes/media-process.ts :: r2Key": UPLOAD,
   "routes/media-process.ts :: thumbKey": UPLOAD,
@@ -125,10 +129,8 @@ const OUTSIDE_A_JOB_FAMILY: Readonly<Record<string, string>> = {
   "services/media-proxy.ts :: key": `${CACHE} (an analysis proxy, by source url + settings)`,
   "services/media-proxy.ts :: manifestKey": `${CACHE} (the proxy's manifest)`,
   "workers/handlers/ffmpeg.ts :: cacheKey": `${CACHE} (GIF → MP4, by content hash)`,
-  "workers/handlers/heygen-avatar-audio-cap.ts :: key": `${STAGING} (the capped audio sent to the avatar provider)`,
-  "workers/handlers/video-ai.ts :: randomUUID() → tailUrl": `${STAGING} (a Seedance extend's source tail)`,
-  "workers/handlers/video-ai.ts :: randomUUID() → lastFrameUrl": `${STAGING} (a Seedance extend's source last frame)`,
-  "workers/shared.ts :: `audios/cover-src-${outputId}.mp3`": `${STAGING} (the cover's source audio)`,
+  "workers/shared.ts :: `audios/cover-src-${outputId}.mp3`":
+    `${NOT_A_JOB} (a workflow run's link audio, fetched by the run before any of its jobs and read by its later nodes)`,
   // The copy helpers.
   "ee/services/community/asset-lifecycle.ts :: prefix": `${NOT_A_JOB} (a community listing's copy of an entity's assets, under \`community/<listingId>/\`)`,
   "ee/services/community/clone.ts :: destPrefix": `${NOT_A_JOB} (a user's clone of a community entity, under \`user-clones/<userId>/\`)`,
@@ -142,6 +144,55 @@ const OUTSIDE_A_JOB_FAMILY: Readonly<Record<string, string>> = {
   "routes/upload.ts :: key": UPLOAD,
   "routes/upload-proxy.ts :: payload.key": UPLOAD,
   "routes/upload-handoff.ts :: payload.key": UPLOAD,
+}
+
+/**
+ * Writer calls whose key is in the running job's SCRATCH folder
+ * (`jobScratchKey`), which `discardJobScratch` empties when the job ends
+ * (decided 2026-10-09). Only the job-scratch writers themselves are here;
+ * every temporary provider upload calls them.
+ */
+const CLEANED_AT_JOB_END: Readonly<Record<string, string>> = {
+  "lib/job-scratch.ts :: key": "the job-scratch writers: `key` is `jobScratchKey(jobId, …)`, in the folder the job's end empties",
+}
+
+/**
+ * Every call to the job-scratch writers (or `jobScratchKey`) outside the
+ * scratch module, by `<file> :: <file name>`, with the job whose end empties
+ * its folder (independent review of the scratch folder, decided 2026-10-09).
+ *
+ * The writers default to the RUNNING job (`getJobId()`), and with no job id
+ * the key falls back to the flat `tmp/provider-input/<name>-<nonce>.<ext>`
+ * that no job's end reaches. So a call is cleaned at the job's end only when
+ * it runs inside the video worker's job context (`runWithJobCancellation`,
+ * where `discardJobScratch` sits in the `finally`) or hands the writer that
+ * job's id. A new call site fails this census until someone checks which.
+ */
+const SCRATCH_CALL_SITES: Readonly<Record<string, string>> = {
+  "providers/kie/image.ts :: \"resized-mask\"": "Ideogram edit's resized mask: the KIE image provider runs only inside a video-worker job (the running job's id)",
+  "providers/kie/video.ts :: \"lip-sync-trimmed\"": "KIE lip-sync's trimmed audio: the KIE video provider runs only inside a video-worker job (the running job's id)",
+  "providers/kie/video.ts :: \"motion-trimmed\"": "KIE motion control's trimmed video: inside a video-worker job (the running job's id)",
+  "providers/kie/video.ts :: \"provider-converted\"": "KIE's format-converted input frames (both conversions): inside a video-worker job (the running job's id)",
+  "workers/handlers/heygen-avatar-audio-cap.ts :: \"ai-avatar-audio-cap\"": "HeyGen's capped audio: `jobId` is the avatar handler's `ctx.jobId`",
+  "workers/handlers/video-ai.ts :: \"extend-tail\"": "a Seedance extend's source tail: `ctx.jobId`",
+  "workers/handlers/video-ai.ts :: \"extend-last-frame\"": "a Seedance extend's last frame: `ctx.jobId`",
+  "workers/shared.ts :: \"cover-src\"": "Suno's re-hosted source audio: `opts.scratchJobId` is the Suno handler's `ctx.jobId` (without one the flat `audios/` key is listed above)",
+}
+
+/** The scratch writers' callers outside the scratch module, as `<file> :: <file name>`. */
+function scratchCallSites(): string[] {
+  const re = /\b(uploadJobScratchBuffer|uploadJobScratchFile|jobScratchKey)\(/g
+  const sites: string[] = []
+  for (const path of sourceFiles(BACKEND_SRC)) {
+    const file = relative(BACKEND_SRC, path).split("\\").join("/")
+    if (file === "lib/job-scratch.ts" || file === "lib/job-scratch-keys.ts" || isScript(file)) continue
+    const src = readFileSync(path, "utf8")
+    for (const m of src.matchAll(re)) {
+      if (/function\s+$/.test(src.slice(Math.max(0, m.index! - 20), m.index!))) continue
+      sites.push(`${file} :: ${squash(callArgs(src, m.index! + m[0].length - 1)[1] ?? "")}`)
+    }
+  }
+  return sites
 }
 
 /**
@@ -330,7 +381,7 @@ const CALLS = writerCalls()
 /** The entry a call is listed under: by its assigned variable first, else by its key. */
 function listed(c: WriterCall): string | null {
   for (const s of [c.assigned, c.signature]) {
-    if (s && (s in OUTSIDE_A_JOB_FAMILY || s in IN_FAMILY_BUILT_ELSEWHERE)) return s
+    if (s && (s in OUTSIDE_A_JOB_FAMILY || s in IN_FAMILY_BUILT_ELSEWHERE || s in CLEANED_AT_JOB_END)) return s
   }
   return null
 }
@@ -355,7 +406,11 @@ describe("the storage writers, as the code has them", () => {
 
   it("every listed entry still names a writer call (a stale entry would excuse a new one)", () => {
     const seen = new Set(CALLS.map(listed))
-    const stale = [...Object.keys(OUTSIDE_A_JOB_FAMILY), ...Object.keys(IN_FAMILY_BUILT_ELSEWHERE)].filter((s) => !seen.has(s))
+    const stale = [
+      ...Object.keys(OUTSIDE_A_JOB_FAMILY),
+      ...Object.keys(IN_FAMILY_BUILT_ELSEWHERE),
+      ...Object.keys(CLEANED_AT_JOB_END),
+    ].filter((s) => !seen.has(s))
     expect(stale).toEqual([])
     // ...and lists no call the rule already admits.
     const redundant = CALLS.filter((c) => isInFamily(c.writer, c.arg) && listed(c) !== null)
@@ -380,6 +435,65 @@ describe("the storage writers, as the code has them", () => {
       }
     }
     expect(missed).toEqual([])
+  })
+})
+
+describe("temporary provider uploads (decided 2026-10-09)", () => {
+  it("the scratch writers key every file in the job's scratch folder, which the job's end empties", () => {
+    const src = readFileSync(join(BACKEND_SRC, "lib", "job-scratch.ts"), "utf8")
+    // Both writers take the key `jobScratchKey` built, and nothing else.
+    expect(src).toMatch(/const key = jobScratchKey\(/)
+    const writes = CALLS.filter((c) => c.file === "lib/job-scratch.ts")
+    expect(writes.map((c) => c.writer).sort()).toEqual(["uploadBufferToR2", "uploadFileWithKeyToR2"])
+    expect(writes.every((c) => c.arg === "key")).toBe(true)
+    // The key is in the folder `discardJobScratch` lists and deletes.
+    expect(jobScratchKey(JOB, "mask", "png").startsWith(jobScratchPrefix(JOB))).toBe(true)
+    expect(jobScratchPrefix(JOB).startsWith(JOB_SCRATCH_ROOT)).toBe(true)
+  })
+
+  it("every scratch write runs inside a job the video worker ends, or names its job (a flat fallback key outlives every job)", () => {
+    const sites = scratchCallSites()
+    expect(sites.length).toBeGreaterThan(0)
+    // A new entry here: a temporary provider upload whose job context nobody
+    // checked. Outside a job its key is the flat one nothing deletes.
+    expect([...new Set(sites)].filter((s) => !(s in SCRATCH_CALL_SITES))).toEqual([])
+    // ...and no entry outlives its call (a stale one would excuse a new one).
+    expect(Object.keys(SCRATCH_CALL_SITES).filter((s) => !sites.includes(s))).toEqual([])
+  })
+
+  it("only the video worker opens a job context, and it empties the scratch folder when the job ends", () => {
+    const opened: string[] = []
+    for (const path of sourceFiles(BACKEND_SRC)) {
+      const file = relative(BACKEND_SRC, path).split("\\").join("/")
+      if (file === "lib/job-cancellation.ts") continue
+      if (/\brunWithJobCancellation\(/.test(readFileSync(path, "utf8"))) opened.push(file)
+    }
+    // Another worker running handlers in a job context would write scratch
+    // that only the video worker's `finally` empties: wire `discardJobScratch`
+    // there before adding it here.
+    expect(opened).toEqual(["workers/video-worker.ts"])
+    expect(readFileSync(join(BACKEND_SRC, "workers", "video-worker.ts"), "utf8")).toMatch(/\bdiscardJobScratch\(/)
+  })
+
+  it("no exception above excuses a staging copy: one must go through the scratch writers", () => {
+    const staging = /stag(?:e|ing)\b|provider[- ]input|scratch|throwaway|temporar/i
+    expect(Object.entries(OUTSIDE_A_JOB_FAMILY).filter(([, why]) => staging.test(why)).map(([k]) => k)).toEqual([])
+  })
+
+  it("only the scratch module spells the scratch root (a flat temp key next to it would outlive its job)", () => {
+    const spelled: string[] = []
+    for (const file of shippedSourceFiles()) {
+      const text = readFileSync(file, "utf8")
+      if (!text.includes("provider-input")) continue
+      const visit = (n: ts.Node): void => {
+        if ((ts.isStringLiteralLike(n) || ts.isTemplateHead(n) || ts.isTemplateMiddle(n) || ts.isTemplateTail(n)) && n.text.includes("provider-input")) {
+          spelled.push(relPath(file))
+        }
+        ts.forEachChild(n, visit)
+      }
+      visit(parseText(file, text))
+    }
+    expect([...new Set(spelled)]).toEqual(["lib/job-scratch-keys.ts"])
   })
 })
 

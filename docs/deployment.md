@@ -1053,6 +1053,10 @@ prefix in your bucket lifecycle rule. On every edition, a daily sweep
 also deletes Speaker Frames detection checkpoints under
 `speaker-frames-cache/` once they are older than 7 days (leftovers of an
 attempt that crashed; the prefix exists only where Speaker Frames runs).
+It likewise deletes temporary provider uploads under `tmp/provider-input/`
+once they are older than 7 days. These are copies of a user's media made only
+so a provider can fetch them; a job deletes its own when it ends, and the
+sweep removes the ones a crashed attempt left behind.
 
 ### Plugin daemon host (Cloud)
 

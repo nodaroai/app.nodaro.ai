@@ -258,18 +258,10 @@ export function mediaObjectKey(id: string, type: MediaType, ext: string = MEDIA_
   return `${type}s/${id}.${ext}`
 }
 
-/**
- * Key for a provider-INPUT scratch object — a re-encoded or trimmed copy of
- * the user's media that only exists so a vendor can fetch it (lip-sync audio
- * trims, motion-transfer video trims). Not a deliverable, not DB-referenced,
- * so it must not share the deliverable prefixes above; its own prefix makes
- * it identifiable for a future age-based sweep (there is none today — these
- * have always been left behind).
- */
-export const PROVIDER_INPUT_TMP_PREFIX = "tmp/provider-input/"
-export function tmpObjectKey(name: string, ext: string): string {
-  return `${PROVIDER_INPUT_TMP_PREFIX}${name}.${ext}`
-}
+// A provider-INPUT scratch object (a re-encoded or trimmed copy of the
+// user's media that only exists so a vendor can fetch it) is keyed by
+// `lib/job-scratch-keys.ts`, in its job's scratch folder, and written by
+// `lib/job-scratch.ts`, which empties the folder when the job ends.
 
 /**
  * Build the R2 object key for a given job and media type.

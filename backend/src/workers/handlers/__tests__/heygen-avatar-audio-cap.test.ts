@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
   mockRunFfmpeg: vi.fn<(args: readonly string[], timeoutMs?: number) => Promise<string>>(async () => ""),
   mockCreateWorkDir: vi.fn(async () => "/tmp/ai-avatar-audio-cap-test"),
   mockCleanupWorkDir: vi.fn(async () => {}),
-  mockUploadFileWithKeyToR2: vi.fn(async () => "https://r2.example.com/audios/trimmed.m4a"),
+  mockUploadJobScratchFile: vi.fn(async () => "https://r2.example.com/tmp/provider-input/job-1/trimmed.m4a"),
 }))
 
 vi.mock("../../../providers/video/ffmpeg-utils.js", () => ({
@@ -22,15 +22,15 @@ vi.mock("../../../providers/video/ffmpeg-utils.js", () => ({
   cleanupWorkDir: mocks.mockCleanupWorkDir,
 }))
 
-vi.mock("../../../lib/storage.js", () => ({
-  uploadFileWithKeyToR2: mocks.mockUploadFileWithKeyToR2,
+vi.mock("../../../lib/job-scratch.js", () => ({
+  uploadJobScratchFile: mocks.mockUploadJobScratchFile,
 }))
 
 import { capAudioForAvatar } from "../heygen-avatar-audio-cap.js"
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mocks.mockUploadFileWithKeyToR2.mockResolvedValue("https://r2.example.com/audios/trimmed.m4a")
+  mocks.mockUploadJobScratchFile.mockResolvedValue("https://r2.example.com/tmp/provider-input/job-1/trimmed.m4a")
   mocks.mockCreateWorkDir.mockResolvedValue("/tmp/ai-avatar-audio-cap-test")
 })
 
@@ -40,19 +40,19 @@ describe("capAudioForAvatar", () => {
   it("leaves a <=600s audio untouched (no download/trim/upload, no warning)", async () => {
     mocks.mockProbeMediaDuration.mockResolvedValueOnce(AI_AVATAR_MAX_AUDIO_SEC) // exactly at the cap
 
-    const res = await capAudioForAvatar(URL_IN, "job-1", "user-1")
+    const res = await capAudioForAvatar(URL_IN, "job-1")
 
     expect(res).toEqual({ audioUrl: URL_IN })
     expect(res.warning).toBeUndefined()
     expect(mocks.mockDownloadFile).not.toHaveBeenCalled()
     expect(mocks.mockRunFfmpeg).not.toHaveBeenCalled()
-    expect(mocks.mockUploadFileWithKeyToR2).not.toHaveBeenCalled()
+    expect(mocks.mockUploadJobScratchFile).not.toHaveBeenCalled()
   })
 
   it("trims a >600s audio to exactly the cap and returns the new url + warning", async () => {
     mocks.mockProbeMediaDuration.mockResolvedValueOnce(750) // 12:30
 
-    const res = await capAudioForAvatar(URL_IN, "job-1", "user-1")
+    const res = await capAudioForAvatar(URL_IN, "job-1")
 
     // ffmpeg invoked with -t 600 (the cap) and an AAC re-encode.
     expect(mocks.mockRunFfmpeg).toHaveBeenCalledTimes(1)
@@ -63,9 +63,17 @@ describe("capAudioForAvatar", () => {
     expect(ffmpegArgs).toContain("-c:a")
     expect(ffmpegArgs).toContain("aac")
 
-    // Trimmed file uploaded; trimmed url returned.
-    expect(mocks.mockUploadFileWithKeyToR2).toHaveBeenCalledTimes(1)
-    expect(res.audioUrl).toBe("https://r2.example.com/audios/trimmed.m4a")
+    // Trimmed file uploaded to the JOB's scratch folder (emptied when the job
+    // ends, on no one's quota — decided 2026-10-09); trimmed url returned.
+    expect(mocks.mockUploadJobScratchFile).toHaveBeenCalledTimes(1)
+    expect(mocks.mockUploadJobScratchFile).toHaveBeenCalledWith(
+      "/tmp/ai-avatar-audio-cap-test/out.m4a",
+      "ai-avatar-audio-cap",
+      "m4a",
+      "audio/mp4",
+      "job-1",
+    )
+    expect(res.audioUrl).toBe("https://r2.example.com/tmp/provider-input/job-1/trimmed.m4a")
 
     // Warning mentions both the source length and the cap (M:SS form).
     expect(res.warning).toContain("12:30")
@@ -76,7 +84,7 @@ describe("capAudioForAvatar", () => {
   })
 
   it("reuses a passed-in probedDurationSec instead of probing again", async () => {
-    const res = await capAudioForAvatar(URL_IN, "job-1", "user-1", 120)
+    const res = await capAudioForAvatar(URL_IN, "job-1", 120)
 
     expect(mocks.mockProbeMediaDuration).not.toHaveBeenCalled()
     expect(res).toEqual({ audioUrl: URL_IN })
@@ -86,7 +94,7 @@ describe("capAudioForAvatar", () => {
     mocks.mockProbeMediaDuration.mockResolvedValueOnce(900)
     mocks.mockRunFfmpeg.mockRejectedValueOnce(new Error("ffmpeg blew up"))
 
-    const res = await capAudioForAvatar(URL_IN, "job-1", "user-1")
+    const res = await capAudioForAvatar(URL_IN, "job-1")
 
     expect(res).toEqual({ audioUrl: URL_IN })
     expect(res.warning).toBeUndefined()
@@ -97,7 +105,7 @@ describe("capAudioForAvatar", () => {
   it("is best-effort: a probe failure returns the ORIGINAL url with no warning", async () => {
     mocks.mockProbeMediaDuration.mockRejectedValueOnce(new Error("probe failed"))
 
-    const res = await capAudioForAvatar(URL_IN, "job-1", "user-1")
+    const res = await capAudioForAvatar(URL_IN, "job-1")
 
     expect(res).toEqual({ audioUrl: URL_IN })
     expect(res.warning).toBeUndefined()

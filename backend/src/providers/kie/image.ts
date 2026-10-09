@@ -18,7 +18,7 @@ import { KIE_IMAGE_MODELS, kieSeedForWire, type KieModelConfig } from "./models.
 import { ensureImageForProvider } from "./video.js"
 import { TASK_CHAINED_EDIT_PROVIDERS, getMaxImagePromptChars } from "@nodaro/shared"
 import { logCreditAudit, extractCreditFields } from "../../lib/credit-audit.js"
-import { uploadBufferToR2 } from "../../lib/storage.js"
+import { uploadJobScratchBuffer } from "../../lib/job-scratch.js"
 import { safeFetch } from "../../lib/safe-fetch.js"
 
 // Models that need output_format forced to "png" (legacy Nano Banana family).
@@ -122,7 +122,7 @@ async function downloadAndMeasure(url: string): Promise<{ buffer: Buffer; width:
 
 /**
  * Ensure mask dimensions match the source image. If they differ, resize
- * the mask, upload it to R2, and return the new URL.
+ * the mask, store it in the running job's scratch folder, and return its URL.
  */
 async function ensureMaskDimensions(
   imageUrl: string,
@@ -146,8 +146,8 @@ async function ensureMaskDimensions(
     .png()
     .toBuffer()
 
-  const key = `masks/resized-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.png`
-  return uploadBufferToR2(resized, key, "image/png")
+  // A provider input: the running job's scratch folder, emptied when the job ends.
+  return uploadJobScratchBuffer(resized, "resized-mask", "png", "image/png")
 }
 
 /**

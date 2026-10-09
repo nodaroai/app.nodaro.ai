@@ -23,7 +23,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 const mocks = vi.hoisted(() => ({
   mockImageToVideo: vi.fn(),
   mockFinalize: vi.fn(),
-  mockUploadFileToR2: vi.fn(),
+  mockUploadJobScratchFile: vi.fn(),
   mockUploadToR2: vi.fn(),
   mockCombineVideos: vi.fn(),
   mockWatermarkLocal: vi.fn(),
@@ -51,10 +51,10 @@ vi.mock("@/providers/index.js", () => ({
 
 vi.mock("@/lib/storage.js", () => ({
   uploadToR2: mocks.mockUploadToR2,
-  uploadFileToR2: mocks.mockUploadFileToR2,
   uploadBufferToR2: vi.fn(),
   mediaObjectKey: vi.fn(() => "key"),
 }))
+vi.mock("@/lib/job-scratch.js", () => ({ uploadJobScratchFile: mocks.mockUploadJobScratchFile }))
 
 vi.mock("@/providers/video/ffmpeg-utils.js", async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
@@ -152,7 +152,7 @@ beforeEach(() => {
   mocks.mockCombineVideos.mockResolvedValue({ outputPath: "/tmp/stitch/out.mp4", smartCuts: null })
   mocks.mockWatermarkLocal.mockResolvedValue("https://r2.example.com/stitched.mp4")
   mocks.mockThumb.mockResolvedValue("https://r2.example.com/thumb.png")
-  mocks.mockUploadFileToR2.mockResolvedValue("https://r2.example.com/tail.mp4")
+  mocks.mockUploadJobScratchFile.mockResolvedValue("https://r2.example.com/tail.mp4")
   mocks.mockUploadToR2.mockResolvedValue("https://r2.example.com/raw.mov")
   mocks.mockImageToVideo.mockResolvedValue(VENDOR_ROUTE_RESULT)
 })

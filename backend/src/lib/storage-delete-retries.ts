@@ -53,10 +53,13 @@
  * CLAIMS its batch before it touches storage: one update stamps
  * `last_attempt_at` on the rows it read, under the same filter, and returns
  * the rows it won (the database re-checks the filter under each row's lock,
- * so two passes never both win a row). Each later write — the counted
- * failure, the dropped record — names the failure it worked (`failed_at`): a
- * newer failure recorded at the key meanwhile (the funnel refreshes the row)
- * is left for the next pass, never dropped or counted against.
+ * so two passes never both win a row). The attempt it counts names its own
+ * claim stamp (decided 2026-10-09): the funnel's re-record never writes
+ * `last_attempt_at`, so a newer failure recorded at the key between the claim
+ * and the count still has the attempt counted, and the cap holds — the newer
+ * failure stays, with its own `failed_at`, for the next pass. The record it
+ * drops names the failure it worked (`failed_at`): a newer failure recorded
+ * at the key meanwhile is left for the next pass, never dropped.
  *
  * COMMUNITY: the table arrives with the migrations on every install and the
  * pass needs nothing edition-gated (no credits, no admin; the relay guard is
@@ -168,10 +171,12 @@ export async function retryFailedStorageDeletes(): Promise<RetryResult> {
     if (read.length === 0) break
 
     // Claim them: stamped under the same filter, so a row another pass
-    // claimed since the read is not returned here.
+    // claimed since the read is not returned here. The stamp is this pass's
+    // mark on the row: the attempt it counts names it.
+    const claimedAt = new Date().toISOString()
     const claimed = await supabase
       .from(TABLE)
-      .update({ last_attempt_at: new Date().toISOString() })
+      .update({ last_attempt_at: claimedAt })
       .in("r2_key", read.map((r) => r.r2_key))
       .is("gave_up_at", null)
       .or(due)
@@ -265,8 +270,9 @@ export async function retryFailedStorageDeletes(): Promise<RetryResult> {
           ...(giveUp ? { gave_up_at: now } : {}),
         })
         .eq("r2_key", r.r2_key)
-        // Only the failure this pass worked; a newer one recorded since stays fresh.
-        .eq("failed_at", r.failed_at)
+        // The row this pass claimed, even when a newer failure was recorded at
+        // the key since (a re-record keeps the stamp): every attempt counts.
+        .eq("last_attempt_at", claimedAt)
       if (updateErr) {
         console.error(`[storage-delete] Counting a failed-delete retry for ${r.r2_key} failed:`, updateErr.message)
         errors++

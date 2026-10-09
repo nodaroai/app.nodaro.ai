@@ -39,9 +39,11 @@ CREATE TABLE IF NOT EXISTS public.storage_delete_retries (
   last_error      text,
   created_at      timestamptz NOT NULL DEFAULT now(),
   -- When the LATEST failed delete of this key began (taken before the delete
-  -- call). A later failure at the same key moves it and resets the attempts
-  -- and `gave_up_at`. The retry keeps an object storage last wrote at or
-  -- after it (to the second): that is a new object at a reused key.
+  -- call). A later failure at the same key moves it and keeps the attempts,
+  -- `last_attempt_at`, `last_error` and `gave_up_at` (decided 2026-10-09): a
+  -- key recorded again and again still gives up after 5, and a given-up key
+  -- stays given up. The retry keeps an object storage last wrote at or after
+  -- it (to the second): that is a new object at a reused key.
   failed_at       timestamptz NOT NULL DEFAULT now(),
   last_attempt_at timestamptz,
   gave_up_at      timestamptz

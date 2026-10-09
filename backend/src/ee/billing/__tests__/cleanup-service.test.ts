@@ -1236,7 +1236,7 @@ describe("cleanup-service", () => {
       await cleanupFreeUserMedia()
 
       expect(upsertsOn("storage_delete_retries")).toEqual([
-        [[expect.objectContaining({ r2_key: `videos/${JOB}.mp4`, url: video, source: "retention", job_id: JOB, attempts: 0, gave_up_at: null })], { onConflict: "r2_key" }],
+        [[expect.objectContaining({ r2_key: `videos/${JOB}.mp4`, url: video, source: "retention", job_id: JOB })], { onConflict: "r2_key" }],
       ])
       const [updated] = jobUpdates()
       expect(updated._cleaned).toBe(true)
@@ -1250,7 +1250,7 @@ describe("cleanup-service", () => {
       await cleanupCanceledUserMedia()
 
       expect(upsertsOn("storage_delete_retries")).toEqual([
-        [[expect.objectContaining({ r2_key: `videos/${JOB}.mp4`, url: video, source: "retention", job_id: JOB, attempts: 0, gave_up_at: null })], { onConflict: "r2_key" }],
+        [[expect.objectContaining({ r2_key: `videos/${JOB}.mp4`, url: video, source: "retention", job_id: JOB })], { onConflict: "r2_key" }],
       ])
       expect(jobUpdates()[0]._cleaned).toBe(true)
     })
@@ -1330,7 +1330,7 @@ describe("cleanup-service", () => {
       await cleanupFreeUserMedia()
 
       expect(recorded()).toEqual([
-        expect.objectContaining({ r2_key: "images/asset-1.png", url: cdn("images/asset-1.png"), source: "retention", job_id: null, attempts: 0, gave_up_at: null }),
+        expect.objectContaining({ r2_key: "images/asset-1.png", url: cdn("images/asset-1.png"), source: "retention", job_id: null }),
       ])
       expect(updatesOn("assets")).toContainEqual({ r2_key: null, r2_url: null })
     })
@@ -1373,7 +1373,7 @@ describe("cleanup-service", () => {
       await cleanupCanceledUserMedia()
 
       expect(recorded()).toEqual([
-        expect.objectContaining({ r2_key: "videos/asset-1.mp4", url: cdn("videos/asset-1.mp4"), source: "retention", job_id: null, attempts: 0, gave_up_at: null }),
+        expect.objectContaining({ r2_key: "videos/asset-1.mp4", url: cdn("videos/asset-1.mp4"), source: "retention", job_id: null }),
       ])
     })
 
@@ -1393,7 +1393,7 @@ describe("cleanup-service", () => {
       await cleanupFreeUserMedia()
 
       expect(recorded()).toEqual([
-        expect.objectContaining({ r2_key: "locations/main.png", url: cdn("locations/main.png"), source: "retention", job_id: null, attempts: 0, gave_up_at: null }),
+        expect.objectContaining({ r2_key: "locations/main.png", url: cdn("locations/main.png"), source: "retention", job_id: null }),
       ])
     })
 
@@ -1406,7 +1406,7 @@ describe("cleanup-service", () => {
 
       await cleanupCanceledUserMedia()
       expect(recorded()).toEqual([
-        expect.objectContaining({ r2_key: "locations/main.png", url: cdn("locations/main.png"), source: "retention", job_id: null, attempts: 0, gave_up_at: null }),
+        expect.objectContaining({ r2_key: "locations/main.png", url: cdn("locations/main.png"), source: "retention", job_id: null }),
       ])
       expect(updatesOn("profiles").some((u) => u.storage_used_bytes === 0)).toBe(true)
 
@@ -1437,7 +1437,7 @@ describe("cleanup-service", () => {
       const result = await sweepSoftDeletedLocationAssets()
 
       expect(recorded()).toEqual([
-        expect.objectContaining({ r2_key: "locations/main.png", url: cdn("locations/main.png"), source: "location", job_id: null, attempts: 0, gave_up_at: null }),
+        expect.objectContaining({ r2_key: "locations/main.png", url: cdn("locations/main.png"), source: "location", job_id: null }),
       ])
       expect(result.r2KeysDeleted).toBe(0)
       expect(updatesOn("locations").some((u) => typeof u.r2_assets_purged_at === "string")).toBe(true)

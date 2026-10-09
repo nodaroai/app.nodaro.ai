@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => {
   const mockProbeVideoSource = vi.fn()
   const mockExtractTailToFile = vi.fn().mockResolvedValue("/tmp/test-workdir/source.mp4.tail.mp4")
   const mockExtractFrame = vi.fn().mockResolvedValue({ imagePath: "/tmp/extract-frame-x/frame.png" })
-  const mockUploadFileToR2 = vi.fn()
+  const mockUploadJobScratchFile = vi.fn()
 
   const mockCommitJobCredits = vi.fn().mockResolvedValue(undefined)
   const mockShouldSaveJobResult = vi.fn().mockResolvedValue(true)
@@ -36,7 +36,7 @@ const mocks = vi.hoisted(() => {
     mockProbeVideoSource,
     mockExtractTailToFile,
     mockExtractFrame,
-    mockUploadFileToR2,
+    mockUploadJobScratchFile,
     mockCommitJobCredits,
     mockShouldSaveJobResult,
     mockMarkJobCompleted,
@@ -57,8 +57,9 @@ vi.mock("@/lib/storage.js", () => ({
   mediaObjectKey: (id: string, type: string, ext: string) => `${type}s/${id}.${ext}`,
   uploadToR2: vi.fn().mockResolvedValue("https://r2.example.com/videos/raw.mp4"),
   uploadBufferToR2: vi.fn().mockResolvedValue("https://r2.example.com/videos/buf.mp4"),
-  uploadFileToR2: mocks.mockUploadFileToR2,
 }))
+// The tail and the last frame are provider inputs: the job's scratch folder (decided 2026-10-09).
+vi.mock("@/lib/job-scratch.js", () => ({ uploadJobScratchFile: mocks.mockUploadJobScratchFile }))
 
 vi.mock("@/providers/video/extract-tail.js", () => ({
   extractTailToFile: mocks.mockExtractTailToFile,
@@ -142,8 +143,8 @@ import { videoAIHandlers } from "../video-ai.js"
 const SOURCE_URL = "https://cdn.example.com/source.mp4"
 const EXTENSION_URL = "https://kie.example.com/extension.mp4"
 const STITCHED_PATH = "/tmp/combine-abc/output.mp4"
-const TAIL_URL = "https://r2.example.com/videos/tail-uuid.mp4"
-const LAST_FRAME_URL = "https://r2.example.com/images/frame-uuid.png"
+const TAIL_URL = "https://r2.example.com/tmp/provider-input/job-1/extend-tail-aaaaaaaa.mp4"
+const LAST_FRAME_URL = "https://r2.example.com/tmp/provider-input/job-1/extend-last-frame-bbbbbbbb.png"
 
 function makeJob(data: Record<string, unknown> = {}) {
   return {
@@ -185,7 +186,7 @@ beforeEach(() => {
   mocks.mockExtractTailToFile.mockResolvedValue("/tmp/test-workdir/source.mp4.tail.mp4")
   mocks.mockExtractFrame.mockResolvedValue({ imagePath: "/tmp/extract-frame-x/frame.png" })
   // First upload = the tail video, second = the last-frame image.
-  mocks.mockUploadFileToR2.mockResolvedValueOnce(TAIL_URL).mockResolvedValueOnce(LAST_FRAME_URL)
+  mocks.mockUploadJobScratchFile.mockResolvedValueOnce(TAIL_URL).mockResolvedValueOnce(LAST_FRAME_URL)
   mocks.mockCombineVideos.mockResolvedValue({ outputPath: STITCHED_PATH })
 })
 
@@ -264,7 +265,7 @@ describe("extend-video / seedance-2-extend", () => {
     vi.clearAllMocks()
     mocks.mockProbeVideoSource.mockResolvedValue({ width: 1920, height: 1080, durationSeconds: 4.0 })
     mocks.mockImageToVideo.mockResolvedValue({ url: EXTENSION_URL, cost: 0.1, displayCost: 0.12, providerUsed: "kie" })
-    mocks.mockUploadFileToR2.mockResolvedValueOnce(TAIL_URL).mockResolvedValueOnce(LAST_FRAME_URL)
+    mocks.mockUploadJobScratchFile.mockResolvedValueOnce(TAIL_URL).mockResolvedValueOnce(LAST_FRAME_URL)
     mocks.mockExtractFrame.mockResolvedValue({ imagePath: "/tmp/extract-frame-x/frame.png" })
     mocks.mockExtractTailToFile.mockResolvedValue("/tmp/test-workdir/source.mp4.tail.mp4")
     mocks.mockCombineVideos.mockResolvedValue({ outputPath: STITCHED_PATH })

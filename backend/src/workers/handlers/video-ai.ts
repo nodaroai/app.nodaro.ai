@@ -49,8 +49,8 @@ import {
 import { applySmartLoopCutToR2Url } from "../../providers/video/apply-smart-loop-cut.js"
 import { join } from "node:path"
 import { readFile, rm } from "node:fs/promises"
-import { uploadBufferToR2, uploadFileToR2, mediaObjectKey } from "../../lib/storage.js"
-import { randomUUID } from "node:crypto"
+import { uploadBufferToR2, mediaObjectKey } from "../../lib/storage.js"
+import { uploadJobScratchFile } from "../../lib/job-scratch.js"
 import { runPostProcessing } from "../../lib/post-processing-error.js"
 import { rewriteForContentPolicy } from "../../lib/content-policy-rewrite.js"
 import { extractAudioTrack } from "../../providers/video/extract-audio-track.js"
@@ -1254,13 +1254,14 @@ const handleExtendVideo: HandlerFn = async function handleExtendVideo(job, ctx) 
         )
       }
       const tailPath = await extractTailToFile(srcLocal, SEEDANCE_2_EXTEND_STITCH.referenceTailSeconds)
-      // randomUUID keys: these are throwaway generation inputs — the job's
-      // own R2 keys stay reserved for the stitched deliverable.
-      tailUrl = await uploadFileToR2(tailPath, randomUUID(), "video", ctx.jobUserId)
+      // Generation inputs only, never the deliverable: both go to the job's
+      // scratch folder (`lib/job-scratch.ts`), emptied when the job ends,
+      // and count against no one's quota.
+      tailUrl = await uploadJobScratchFile(tailPath, "extend-tail", "mp4", "video/mp4", ctx.jobId)
       // Last frame of the tail IS the source's last frame; the tail is
       // already on R2, so the frame-exact extractor can read it directly.
       const frame = await extractFrame({ videoUrl: tailUrl, mode: "last" })
-      lastFrameUrl = await uploadFileToR2(frame.imagePath, randomUUID(), "image", ctx.jobUserId)
+      lastFrameUrl = await uploadJobScratchFile(frame.imagePath, "extend-last-frame", "png", "image/png", ctx.jobId)
       await cleanupWorkDir(dirname(frame.imagePath))
     } finally {
       await cleanupWorkDir(prepDir)

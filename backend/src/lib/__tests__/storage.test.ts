@@ -120,7 +120,6 @@ import {
   headR2Object,
   r2KeyFromOurUrl,
   mediaObjectKey,
-  tmpObjectKey,
   copyRecastObject,
   StorageLimitError,
   isStorageLimitError,
@@ -194,10 +193,6 @@ describe("mediaObjectKey (#754)", () => {
   })
   it("takes an explicit extension for writers that already encoded (mp3 speech, revoice)", () => {
     expect(mediaObjectKey("job-1", "audio", "mp3")).toBe("audios/job-1.mp3")
-  })
-  it("provider-input scratch gets its own prefix, never a deliverable one", () => {
-    expect(tmpObjectKey("lip-sync-trimmed-1", "mp3")).toBe("tmp/provider-input/lip-sync-trimmed-1.mp3")
-    expect(tmpObjectKey("x", "mp4").startsWith("audios/") || tmpObjectKey("x", "mp4").startsWith("videos/")).toBe(false)
   })
 })
 import {
