@@ -1308,6 +1308,7 @@ export const ptBR: ChromeDict = {
   "cfgshared.advancedUnavailable": "O modo avançado está disponível nos modelos Gemini e Claude — troque o modelo para ativá-lo.",
   "cfgshared.advancedModeHint": "Execute este modelo diretamente no provedor para controlar a temperatura, o tamanho da saída e a profundidade do raciocínio. Custa um nível de créditos a mais; um modelo premium passa para a tarifa direta.",
   "cfgshared.effortRunsDirect": "Nos modelos Claude, escolher um nível de esforço executa a chamada na própria API da Anthropic (o único lugar onde o esforço tem efeito) e cobra um nível a mais.",
+  "cfgshared.effortRunsDirectByDefault": "Neste modelo a execução sempre leva um nível de esforço (Alto, a menos que você escolha outro), então sempre roda na própria API da Anthropic, o único lugar onde o esforço tem efeito, e cobra um nível a mais.",
   "cfgshared.structuredOutputTempWarn": "Este nó pede ao modelo uma saída estruturada — acima de aproximadamente 0,5, ele começa a quebrar o formato.",
   "cfgshared.maxTokens": "Máx. de tokens",
   "cfgshared.generateWithAi": "Gerar com IA",

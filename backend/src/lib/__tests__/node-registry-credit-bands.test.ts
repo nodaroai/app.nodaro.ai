@@ -198,6 +198,15 @@ describe("node-registry credit bands are derived from the price table", () => {
     expect(deriveBand("text-to-speech")).toBe("15-30")
     expect(deriveBand("text-to-dialogue")).toBe(25)
   })
+
+  it("describe-to-picker advertises its whole ladder, premium-direct included: an untouched node reserves it", () => {
+    // Decided 2026-10-09: the default read is Opus 5.5 at effort high, which runs
+    // on Anthropic's own API and reserves describe-to-picker:premium-direct. The
+    // node-type row the enrichment would supply on its own quoted 10.
+    expect(CREDIT_BAND_SOURCES["describe-to-picker"]?.ids).toContain("describe-to-picker:premium-direct")
+    expect(NODE_REGISTRY.find((d) => d.type === "describe-to-picker")!.creditCost).toBe(deriveBand("describe-to-picker"))
+    expect(deriveBand("describe-to-picker")).toBe("10-25")
+  })
 })
 
 describe("with SPEECH_LENGTH_PRICING_ENABLED on, the speech bands state the length rule's own range", () => {

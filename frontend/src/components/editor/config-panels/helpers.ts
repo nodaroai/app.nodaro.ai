@@ -1,6 +1,6 @@
 import type { WorkflowNode, WorkflowEdge, FieldMappings, ProbedVideoInfo } from "@/types/nodes"
 import type { SourceNodeInfo } from "./types"
-import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, buildCreditModelIdentifier as sharedBuildCreditModelIdentifier, buildVideoCreditModelIdentifier, isSeedanceVideoEditProvider, seedanceVideoEditCreditId, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS, motionGraphicsFeature, buildScraperCreditId, isScraperActor, metaAdsScrapeCreditIdFromNode, instagramScrapeCreditIdFromNode, captionRoutesToRemotion, resolveAiAvatarCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, buildVideoAuditCreditId, editPlanReserveCreditId, asEditPlanMode, asEditPlanTier, sunoCreditType, speedRampCreditId, applyEdlCreditId, resolveTopazUpscale, applyDefaultVideoSelection, withWiredSettings, MUSIC_CREDIT_ID, contentRecipeCreditId, contentIdeasCreditId, socialSearchCreditIdFromNode, videoSfxCreditId, textToAudioCreditId, LTX_EXTEND_PER_SECOND_CREDIT_ID, LTX_RETAKE_PER_SECOND_CREDIT_ID, dialogueProviderOf } from "@nodaro/shared"
+import { DEFAULT_TRANSCRIBE_NODE_PROVIDER, buildCreditModelIdentifier as sharedBuildCreditModelIdentifier, buildVideoCreditModelIdentifier, isSeedanceVideoEditProvider, seedanceVideoEditCreditId, buildMotionCreditModelIdentifier, buildLlmCreditIdentifier, defaultReasoningEffort, LLM_FEATURE_DEFAULTS, motionGraphicsFeature, buildScraperCreditId, isScraperActor, metaAdsScrapeCreditIdFromNode, instagramScrapeCreditIdFromNode, captionRoutesToRemotion, resolveAiAvatarCreditId, resolveCinematicCreditId, referenceSheetCreditId, buildVideoAnalysisCreditId, resolveVideoAnalysisModel, buildVideoAuditCreditId, editPlanReserveCreditId, asEditPlanMode, asEditPlanTier, sunoCreditType, speedRampCreditId, applyEdlCreditId, resolveTopazUpscale, applyDefaultVideoSelection, withWiredSettings, MUSIC_CREDIT_ID, contentRecipeCreditId, contentIdeasCreditId, socialSearchCreditIdFromNode, videoSfxCreditId, textToAudioCreditId, LTX_EXTEND_PER_SECOND_CREDIT_ID, LTX_RETAKE_PER_SECOND_CREDIT_ID, dialogueProviderOf } from "@nodaro/shared"
 import { videoAuditAnalysisWired } from "@/components/editor/workflow-editor/types"
 import { renderVideoCreditIdForNode } from "@/lib/render-video-plan"
 import { resolveEditPlanEstimateDurationSec } from "@/lib/edit-plan-estimate"
@@ -406,10 +406,14 @@ export function getModelIdentifier(
     return buildLlmCreditIdentifier(feature, (data.llmModel as string | undefined) || LLM_FEATURE_DEFAULTS[feature], data.reasoningEffort as string | undefined, data.advancedMode === true)
   }
 
-  // LLM-powered nodes: use composite credit identifier based on selected model tier
+  // LLM-powered nodes: use composite credit identifier based on selected model tier.
+  // An unset effort is the one the run uses — the feature's default on its
+  // default model (describe-to-picker's high), else none.
   const llmFeature = LLM_NODE_FEATURE_MAP[node.type ?? ""]
   if (llmFeature) {
-    return buildLlmCreditIdentifier(llmFeature, (data.llmModel as string | undefined) || LLM_FEATURE_DEFAULTS[llmFeature], data.reasoningEffort as string | undefined, data.advancedMode === true)
+    const llmModel = data.llmModel as string | undefined
+    const effort = (data.reasoningEffort as string | undefined) ?? defaultReasoningEffort(llmFeature, llmModel)
+    return buildLlmCreditIdentifier(llmFeature, llmModel || LLM_FEATURE_DEFAULTS[llmFeature], effort, data.advancedMode === true)
   }
 
   const nodeType = node.type ?? "unknown"

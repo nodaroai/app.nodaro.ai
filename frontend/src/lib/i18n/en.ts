@@ -1372,6 +1372,7 @@ export const en = {
   "cfgshared.advancedUnavailable": "Advanced mode is available on Gemini and Claude models — switch the model to enable it.",
   "cfgshared.advancedModeHint": "Run this model on the provider directly to control temperature, output length and reasoning depth. Costs one credit tier more; a premium model moves to its direct rate.",
   "cfgshared.effortRunsDirect": "On Claude models, choosing an effort runs the call on Anthropic's own API (the only place effort applies) and bills one tier more.",
+  "cfgshared.effortRunsDirectByDefault": "On this model the run always carries an effort (High unless you pick another), so it always runs on Anthropic's own API, the only place effort applies, and bills one tier more.",
   "cfgshared.structuredOutputTempWarn": "This node asks the model for structured output — above about 0.5 it starts breaking format.",
   "cfgshared.maxTokens": "Max Tokens",
   "cfgshared.generateWithAi": "Generate with AI",

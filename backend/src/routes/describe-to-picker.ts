@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify"
 import { maybeProxyLlmRouteToCloud } from "../lib/cloud-llm-proxy.js"
 import { z } from "zod"
 import { buildMultiPickerAnalyzerSpec, applyMinorAgeFloorToPickerValues, PICKER_TYPES, type PickerType, type PickerGaps } from "@nodaro/prompts"
-import { buildLlmCreditIdentifier, resolveLlmCreditId, getLlmModel, LLM_FEATURE_DEFAULTS, LLM_MODEL_IDS, LLM_REASONING_EFFORTS, STRUCTURED_VISION_MODELS, type LlmModelDef } from "@nodaro/shared"
+import { buildLlmCreditIdentifier, resolveLlmCreditId, getLlmModel, defaultReasoningEffort, LLM_FEATURE_DEFAULTS, LLM_MODEL_IDS, LLM_REASONING_EFFORTS, STRUCTURED_VISION_MODELS, type LlmModelDef, type LlmReasoningEffort } from "@nodaro/shared"
 import { supabase } from "../lib/supabase.js"
 import { insertJob } from "../lib/insert-job.js"
 import { config } from "../lib/config.js"
@@ -13,6 +13,7 @@ import { llmCompleteStructured, llmStreamStructured, type LlmContentBlock, type 
 import { createSSEStream, type SSEController } from "../lib/sse.js"
 import { createPickerFieldStream } from "../lib/picker-field-stream.js"
 import { LLM_ADVANCED_SHAPE, advancedModeError, resolveLlmParams } from "../lib/llm-advanced-mode.js"
+import { effortTimeoutMs } from "../lib/llm-effort-timeout.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
@@ -181,6 +182,10 @@ interface Analysis {
   imageUrl: string
   targetPickers: PickerType[]
   model: LlmModelDef
+  /** The effort this analysis runs at — the body's, or the default model's
+   *  default — resolved once with the credit id it reserved (never re-read
+   *  from `body`, which may omit it). */
+  reasoningEffort: LlmReasoningEffort | undefined
   body: z.infer<typeof describeToPickerBody>
 }
 
@@ -189,37 +194,20 @@ function wantsEventStream(req: FastifyRequest): boolean {
   return (req.headers.accept ?? "").toLowerCase().includes("text/event-stream")
 }
 
-/** Per-effort LLM timeout for one read. The client's 120 s default fits every
- *  model at default effort, but high and above on an image routinely outlast it
- *  (GPT-6 Astra never finished a read inside it; Opus 5.5 at max averaged ~155 s).
- *  The ceiling is the workflow engine's own call to this route: it goes through
- *  the default fetch, whose 300 s headers timeout would drop the answer before
- *  the LLM returned — so the longest effort stops at 285 s and the route still
- *  answers (even with a timeout error) inside the engine's window. */
-const EFFORT_TIMEOUT_MS: Partial<Record<(typeof LLM_REASONING_EFFORTS)[number], number>> = {
-  high: 240_000,
-  xhigh: 285_000,
-  max: 285_000,
-}
-
-/** `undefined` for the default efforts, so those requests stay byte-identical
- *  and keep the client's own default. */
-export function describeToPickerTimeoutMs(effort?: (typeof LLM_REASONING_EFFORTS)[number]): number | undefined {
-  return effort === undefined ? undefined : EFFORT_TIMEOUT_MS[effort]
-}
-
 /** The analyzer call: one request, whichever way the answer is delivered.
  *  With `onToolJson`, the first attempt streams its tool input there. */
 async function runAnalyzer(analysis: Analysis, onToolJson?: (partialJson: string) => void) {
   const { schema, toolName, legend, otherPickersLegend } = buildMultiPickerAnalyzerSpec(analysis.targetPickers)
   const imageBlock = await prefetchAsBase64(analysis.imageUrl)
   const content: LlmContentBlock[] = [imageBlock, { type: "text", text: "Analyze the subject and emit the picker JSON." }]
-  const timeoutMs = describeToPickerTimeoutMs(analysis.body.reasoningEffort)
+  // The RESOLVED effort, like the request below: a default read runs at high
+  // and needs high's longer timeout even though its body sent no effort.
+  const timeoutMs = effortTimeoutMs(analysis.reasoningEffort)
   const request: LlmRequest = {
     modelId: analysis.model.id,
     system: buildSystemPrompt(legend, analysis.body.instructions, otherPickersLegend),
     messages: [{ role: "user", content }],
-    reasoningEffort: analysis.body.reasoningEffort,
+    reasoningEffort: analysis.reasoningEffort,
     ...resolveLlmParams(analysis.body),
     ...(timeoutMs === undefined ? {} : { timeoutMs }),
   }
@@ -338,10 +326,35 @@ async function streamAnalysis(reply: FastifyReply, analysis: Analysis): Promise<
   }
 }
 
+/**
+ * The raw body with the defaults the handler applies before it reserves: an
+ * omitted model is the analyzer's default, and an omitted effort is that
+ * model's default effort. The credit guard prices the raw body before
+ * validation, so without these it pre-checked a default read at the bare id
+ * (10) while the job reserved premium-direct (25), and a balance in between
+ * passed the check, then failed the reservation with a 500 instead of a 402.
+ *
+ * Shared by the two routes that bill this feature, this one and its text twin
+ * text-to-picker. It lives with them, not in the shared `resolveLlmCreditId`
+ * every LLM route's guard uses: a default model applied there would move every
+ * other feature's pre-check too. A model or effort that is not a string is
+ * treated as absent here; the handler's validation refuses it.
+ */
+export function withDescribeToPickerDefaults(body: unknown): Record<string, unknown> {
+  const raw = (body ?? {}) as Record<string, unknown>
+  const named = typeof raw.llmModel === "string" ? raw.llmModel : undefined
+  const sent = typeof raw.reasoningEffort === "string" ? raw.reasoningEffort : undefined
+  return {
+    ...raw,
+    llmModel: named ?? LLM_FEATURE_DEFAULTS["describe-to-picker"],
+    reasoningEffort: sent ?? defaultReasoningEffort("describe-to-picker", named),
+  }
+}
+
 export async function describeToPickerRoutes(app: FastifyInstance) {
   app.post(
     "/v1/describe-to-picker",
-    { preHandler: creditGuard((req) => resolveLlmCreditId("describe-to-picker", req.body)) },
+    { preHandler: creditGuard((req) => resolveLlmCreditId("describe-to-picker", withDescribeToPickerDefaults(req.body))) },
     async (req, reply) => {
       // Keyless install with a live connection: the cloud runs the same
       // code, so forward the body and pass its answer straight back.
@@ -373,7 +386,13 @@ export async function describeToPickerRoutes(app: FastifyInstance) {
       }
       const advancedError = advancedModeError(parsed.data, model.id)
       if (advancedError) return reply.status(400).send({ error: advancedError })
-      const modelIdentifier = buildLlmCreditIdentifier("describe-to-picker", llmModelId, parsed.data.reasoningEffort, parsed.data.advancedMode)
+      // No effort sent: the default model runs at its default effort (Opus 5.5
+      // at high, decided 2026-10-09); any other model keeps its Auto. Resolved
+      // ONCE and used for both the request and the credit id, so the bill and
+      // the wire agree — Opus 5.5 with an effort runs on Anthropic's own API
+      // and bills on the direct rung, as intended.
+      const reasoningEffort = parsed.data.reasoningEffort ?? defaultReasoningEffort("describe-to-picker", parsed.data.llmModel)
+      const modelIdentifier = buildLlmCreditIdentifier("describe-to-picker", llmModelId, reasoningEffort, parsed.data.advancedMode)
 
       const { data: job, error: jobError } = await insertJob(req, {
           workflow_id: extractWorkflowId(req.body),
@@ -396,7 +415,7 @@ export async function describeToPickerRoutes(app: FastifyInstance) {
 
       await markProviderCallStart(job.id, "anthropic-sync")
 
-      const analysis: Analysis = { req, jobId: job.id, userId, imageUrl, targetPickers, model, body: parsed.data }
+      const analysis: Analysis = { req, jobId: job.id, userId, imageUrl, targetPickers, model, reasoningEffort, body: parsed.data }
       if (wantsEventStream(req)) return streamAnalysis(reply, analysis)
 
       try {

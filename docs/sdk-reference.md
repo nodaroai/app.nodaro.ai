@@ -1911,7 +1911,12 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > "high" | "xhigh" | "max"`, model-dependent (see the model table in the
 > [Generate Text node docs](nodes/ai-text/llm-chat.md#model-selector)). Omit
 > it — or pick a level the model doesn't support — for the vendor default
-> ("Auto"). `xhigh` and `max` bill **one tier up** (economy → standard,
+> ("Auto"). One exception: `POST /v1/describe-to-picker` and its text twin
+> `POST /v1/text-to-picker`, on their default model (Claude Opus 5.5, whether
+> named or omitted), run at `"high"` when the field is omitted — send another
+> level to change it; any other model keeps Auto (see
+> [Describe to Picker](nodes/ai-image/describe-to-picker.md#credit-cost) for
+> what that run costs). `xhigh` and `max` bill **one tier up** (economy → standard,
 > standard → premium); see
 > [Reasoning effort](nodes/ai-text/llm-chat.md#reasoning-effort) for the
 > exact rule and worked examples. Workflow/canvas LLM nodes carry the same
@@ -5290,7 +5295,7 @@ then let the user tweak. Dimensions the text says nothing about are omitted
 | `text` | `string` | The scene/shot description (up to the prompt ceiling). |
 | `targetPickers` | `string[]?` | Picker node types to fill. Omit for **all** analyzable pickers — the server batches the analysis per catalog family and merges. |
 | `instructions` | `string?` | Extra guidance for the analyzer. |
-| `llmModel` / `reasoningEffort` | `string?` | Standard LLM selection; billed as the describe-to-picker feature. |
+| `llmModel` / `reasoningEffort` | `string?` | Standard LLM selection; billed as the describe-to-picker feature. Omitted, the run is Claude Opus 5.5 at `"high"` — the describe-to-picker default — which runs on Anthropic's own API and bills `describe-to-picker:premium-direct` (25 credits); another model with no effort keeps Auto. |
 
 `gaps` reports described attributes no catalog id represents well
 (`missingItems` / `missingCategories`) — surface as "we couldn't infer X —

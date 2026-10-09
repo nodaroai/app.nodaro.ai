@@ -2209,7 +2209,12 @@ credit-billed (an LLM call; same credit id as describe-to-picker).
 
 Body: `{ text, targetPickers?, instructions?, origin?, llmModel?,
 reasoningEffort? }` — omit `targetPickers` to analyze ALL analyzable
-pickers (the server fans out per family and merges). Returns
+pickers (the server fans out per family and merges). With no `llmModel` and
+no `reasoningEffort` the run is Claude Opus 5.5 at `"high"`, the same default
+as describe-to-picker: it runs on Anthropic's own API and bills
+`describe-to-picker:premium-direct` (25 credits, one charge however many
+batches it fans out to). Another model with no effort keeps Auto (see
+[Describe to Picker — Credit Cost](nodes/ai-image/describe-to-picker.md#credit-cost)). Returns
 `{ jobId, pickerJson, gaps? }`: `pickerJson` is
 `pickerType → dimension → chosen catalog id(s)` (the same shape as
 describe-to-picker — hydrate pickers from it verbatim), and `gaps` lists

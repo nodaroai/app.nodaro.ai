@@ -401,6 +401,8 @@ export {
   isVideoAnalysisMixedTier,
   resolveVideoAnalysisModel,
   LLM_FEATURE_DEFAULTS,
+  LLM_FEATURE_DEFAULT_EFFORTS,
+  defaultReasoningEffort,
   LLM_MODALITY_CAPS,
   LLM_REASONING_EFFORTS,
   EFFORT_TIER_BUMP,
