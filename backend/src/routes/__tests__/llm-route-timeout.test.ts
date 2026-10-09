@@ -24,5 +24,16 @@ describe("LLM route request timeout", () => {
       expect(sites.length).toBeGreaterThan(0)
       for (const site of sites) expect(site).toBe("LLM_ROUTE_REQUEST_TIMEOUT_MS")
     })
+
+    // The route-level `config.requestTimeout` is read by nothing: the socket's
+    // idle timeout set in the handler is what closes a long call. Raising the
+    // constant alone left `raw.setTimeout(120000)` behind, and the runs kept
+    // dying at 121 s (2026-10-08) — so the socket sites are pinned too.
+    it(`${file}: every socket timeout (req/reply.raw.setTimeout) is the shared constant`, () => {
+      const src = readFileSync(resolve(__dirname, "..", file), "utf8")
+      const sites = [...src.matchAll(/raw\.setTimeout\(\s*([^)]+)\)/g)].map((m) => m[1]!.trim())
+      expect(sites.length).toBeGreaterThanOrEqual(2)
+      for (const site of sites) expect(site).toBe("LLM_ROUTE_REQUEST_TIMEOUT_MS")
+    })
   }
 })

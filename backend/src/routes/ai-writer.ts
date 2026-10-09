@@ -52,8 +52,10 @@ export async function aiWriterRoutes(app: FastifyInstance) {
       if (await maybeProxyLlmRouteToCloud(req, reply, "/v1/ai-writer/generate", "ai-writer")) return
 
       // Set timeouts at every layer to prevent premature connection close
-      req.raw.setTimeout(120000)
-      reply.raw.setTimeout(120000)
+      // The socket's idle timeout is what closes the connection on a long
+      // answer — `config.requestTimeout` above is read by nothing.
+      req.raw.setTimeout(LLM_ROUTE_REQUEST_TIMEOUT_MS)
+      reply.raw.setTimeout(LLM_ROUTE_REQUEST_TIMEOUT_MS)
 
       const parsed = aiWriterBody.safeParse(req.body)
       if (!parsed.success) {
@@ -183,8 +185,10 @@ export async function aiWriterRoutes(app: FastifyInstance) {
       // code, so forward the body and pass its answer straight back.
       if (await maybeProxyLlmStreamToCloud(req, reply, "/v1/ai-writer/generate-stream")) return
 
-      req.raw.setTimeout(120000)
-      reply.raw.setTimeout(120000)
+      // The socket's idle timeout is what closes the connection on a long
+      // answer — `config.requestTimeout` above is read by nothing.
+      req.raw.setTimeout(LLM_ROUTE_REQUEST_TIMEOUT_MS)
+      reply.raw.setTimeout(LLM_ROUTE_REQUEST_TIMEOUT_MS)
 
       const parsed = aiWriterBody.safeParse(req.body)
       if (!parsed.success) {

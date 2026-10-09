@@ -88,8 +88,10 @@ export async function llmChatRoutes(app: FastifyInstance) {
       // code, so forward the body and pass its answer straight back.
       if (await maybeProxyLlmRouteToCloud(req, reply, "/v1/llm-chat/generate", "llm-chat")) return
 
-      req.raw.setTimeout(120000)
-      reply.raw.setTimeout(120000)
+      // The socket's idle timeout is what closes the connection on a long
+      // answer — `config.requestTimeout` above is read by nothing.
+      req.raw.setTimeout(LLM_ROUTE_REQUEST_TIMEOUT_MS)
+      reply.raw.setTimeout(LLM_ROUTE_REQUEST_TIMEOUT_MS)
 
       const parsed = llmChatBody.safeParse(req.body)
       if (!parsed.success) {
@@ -211,8 +213,10 @@ export async function llmChatRoutes(app: FastifyInstance) {
       // code, so forward the body and pass its answer straight back.
       if (await maybeProxyLlmStreamToCloud(req, reply, "/v1/llm-chat/generate-stream")) return
 
-      req.raw.setTimeout(120000)
-      reply.raw.setTimeout(120000)
+      // The socket's idle timeout is what closes the connection on a long
+      // answer — `config.requestTimeout` above is read by nothing.
+      req.raw.setTimeout(LLM_ROUTE_REQUEST_TIMEOUT_MS)
+      reply.raw.setTimeout(LLM_ROUTE_REQUEST_TIMEOUT_MS)
 
       const parsed = llmChatBody.safeParse(req.body)
       if (!parsed.success) {

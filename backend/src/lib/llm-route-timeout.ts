@@ -10,5 +10,12 @@
  * twice, on staging and production). The node's own ceiling is
  * `NODE_TIMEOUT_MS` (90 min); the LLM client bounds the provider call. This
  * only has to be longer than the longest honest answer.
+ *
+ * It is applied through `req.raw.setTimeout(...)` / `reply.raw.setTimeout(...)`
+ * in the handlers — the SOCKET idle timeout, which is what actually destroys
+ * the connection when no byte moves for that long. The route-level
+ * `config.requestTimeout` is read by nothing; raising only the constant it
+ * carried left the hand-typed 120 s socket timeouts in place, and the runs
+ * kept dying at 121 s (2026-10-08, three scheduled runs on production).
  */
 export const LLM_ROUTE_REQUEST_TIMEOUT_MS = 10 * 60 * 1000
