@@ -116,15 +116,34 @@ describe("Claude 5.5 structured output — auto tool choice + strict tool (force
     expect(res.text).toBe('{"ok":true}')
   })
 
-  it("an older Claude still gets the forced tool, unchanged", async () => {
+  it("an older Claude asked without an effort still gets the forced tool, unchanged", async () => {
     const { llmComplete } = await import("../llm-client.js")
-    await llmComplete({ modelId: "claude-opus-5", system: "sys", messages: [{ role: "user", content: "x" }], reasoningEffort: "low", jsonSchema: { name: "r", schema: CAPPED_SCHEMA } })
+    await llmComplete({ modelId: "claude-opus-5", system: "sys", messages: [{ role: "user", content: "x" }], requireLane: "direct", jsonSchema: { name: "r", schema: CAPPED_SCHEMA } })
     const body = createSpy.mock.calls[0][0] as Record<string, unknown>
     expect(body.tool_choice).toEqual({ type: "tool", name: "r" })
     expect(body.system).toBe("sys")
+    expect(body.thinking).toBeUndefined()
     const tool = (body.tools as Array<Record<string, unknown>>)[0]
     expect(tool.strict).toBeUndefined()
     expect(tool.input_schema).toBe(CAPPED_SCHEMA)
+  })
+
+  // A forced tool choice suppresses adaptive thinking on Claude Fable 5 — measured
+  // 2026-10-09: at high and max the answer came back with no thinking block, in
+  // the same time as a no-effort call — so an effort-bearing structured call
+  // leaves the choice to the model, the same shape the 5.5 generation is sent.
+  it("a forced-choice Claude asked WITH an effort is sent the auto choice, the instruction and the effort", async () => {
+    const { llmComplete } = await import("../llm-client.js")
+    await llmComplete({ modelId: "claude-fable-5", system: "sys", messages: [{ role: "user", content: "x" }], reasoningEffort: "max", jsonSchema: { name: "r", schema: CAPPED_SCHEMA } })
+    const body = createSpy.mock.calls[0][0] as Record<string, unknown>
+    expect(body.model).toBe("claude-fable-5")
+    expect(body.tool_choice).toEqual({ type: "auto" })
+    expect(body.system).toMatch(/^sys\n\nRespond by calling the `r` tool exactly once/)
+    expect(body.thinking).toEqual({ type: "adaptive" })
+    expect(body.output_config).toEqual({ effort: "max" })
+    const tool = (body.tools as Array<Record<string, unknown>>)[0]
+    expect(tool.strict).toBe(true)
+    expect((tool.input_schema as Record<string, unknown>).additionalProperties).toBe(false)
   })
 
   it("the direct request goes to the Anthropic id, with an effort when asked", async () => {

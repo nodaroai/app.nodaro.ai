@@ -1341,7 +1341,7 @@ function buildMessagesBody(model: LlmModelDef, req: LlmRequest): Record<string, 
 
   const { eff, temperature, topP, maxTokens } = deriveParams(model, req)
   const structured = req.jsonSchema && model.structuredOutputMode === "anthropic-tool"
-    ? anthropicStructuredTool(model, req.system, req.jsonSchema)
+    ? anthropicStructuredTool(model, req.system, req.jsonSchema, { effort: eff })
     : undefined
   return {
     model: model.kieSlugOrModel,
@@ -1374,13 +1374,20 @@ function buildMessagesBody(model: LlmModelDef, req: LlmRequest): Record<string, 
  * The caller's Zod still validates the answer, so a withheld cap is enforced
  * there, and an answer given as plain JSON text instead of a tool call is read
  * as the response text (see `anthropicToolResponse` / `parseSseStream`).
+ *
+ * A call that carries a reasoning effort takes the auto shape on EVERY Claude:
+ * a forced choice suppresses adaptive thinking (Fable 5, measured 2026-10-09 —
+ * high and max answered with no thinking block, in a no-effort call's time),
+ * so the effort was inert on exactly the calls that asked for it. Without an
+ * effort nothing changes: the forced shape stays byte-identical.
  */
 function anthropicStructuredTool(
   model: LlmModelDef,
   system: string,
   jsonSchema: NonNullable<LlmRequest["jsonSchema"]>,
+  { effort }: { effort?: LlmReasoningEffort } = {},
 ): { tools: Array<Record<string, unknown>>; toolChoice: Record<string, unknown>; system: string } {
-  if (model.supportsForcedToolChoice !== false) {
+  if (model.supportsForcedToolChoice !== false && effort === undefined) {
     return {
       tools: [{ name: jsonSchema.name, description: "Emit the structured result.", input_schema: jsonSchema.schema }],
       toolChoice: { type: "tool", name: jsonSchema.name },
@@ -2109,7 +2116,7 @@ function anthropicStructuredRequest(
   jsonSchema: NonNullable<LlmRequest["jsonSchema"]>,
 ): { body: Record<string, unknown>; options: { timeout: number }; maxTokens: number } {
   const { eff, maxTokens } = deriveParams(model, req)
-  const structured = anthropicStructuredTool(model, req.system, jsonSchema)
+  const structured = anthropicStructuredTool(model, req.system, jsonSchema, { effort: eff })
   return {
     body: {
       model: model.directFallbackModel!,

@@ -269,8 +269,9 @@ describe("preferKie routing (claude-sonnet-5 / claude-opus-4.8)", () => {
   })
 
   // A structured call with an effort runs direct (KIE ignores the effort); this
-  // pins that it carries the forced tool on the DIRECT wire.
-  it("structured requests with an effort go direct and still force the tool", async () => {
+  // pins that it carries the tool on the DIRECT wire in the auto shape — a
+  // forced choice would suppress the very thinking the effort asked for.
+  it("structured requests with an effort go direct and carry the tool with the auto choice", async () => {
     const { llmComplete } = await import("../llm-client.js")
     createSpy.mockResolvedValue({
       content: [{ type: "tool_use", name: "r", input: { ok: true } }],
@@ -286,11 +287,14 @@ describe("preferKie routing (claude-sonnet-5 / claude-opus-4.8)", () => {
     expect(fetchMock).not.toHaveBeenCalled()
     expect(createSpy).toHaveBeenCalledOnce()
 
-    // The forced-tool schema must actually be carried on the wire.
+    // The tool schema must actually be carried on the wire, with the choice left
+    // to the model and the effort it asked for.
     const body = createSpy.mock.calls[0][0] as Record<string, unknown>
     const tools = body.tools as Array<Record<string, unknown>>
     expect(tools[0].name).toBe("r")
-    expect(body.tool_choice).toEqual({ type: "tool", name: "r" })
+    expect(body.tool_choice).toEqual({ type: "auto" })
+    expect(body.system).toMatch(/Respond by calling the `r` tool exactly once/)
+    expect(body.output_config).toEqual({ effort: "low" })
 
     expect(res.text).toBe(JSON.stringify({ ok: true }))
   })
