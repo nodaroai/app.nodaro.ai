@@ -25,6 +25,8 @@ import {
   parseEditPlanMode,
 } from "../edit-plan-contract.js"
 import { editPlanSourceDurationSec } from "../video-duration.js"
+import * as edlModule from "../edl.js"
+import * as sharedIndex from "../index.js"
 
 /** A minimal valid single-camera tighten EDL: two kept spans of the master. */
 function tightenEdl(): Edl {
@@ -1032,5 +1034,98 @@ describe("validateEdl — warnings (registry class; ok stays true)", () => {
     expect(r.ok).toBe(true)
     expect(r.issues).toEqual([])
     expect(r.warnings).toEqual([expect.stringMatching(/^clip\[1\]: segment\[1\] "s1": unknown layout mode "carousel"/)])
+  })
+})
+
+describe("slots[].follow — what a tracked slot followed (P3-8, decided 2026-10-06)", () => {
+  /** Two cameras, one side-by-side segment whose first slot follows a track. */
+  function followEdl(follow: unknown, slotSource = "camA"): Edl {
+    return {
+      version: 1,
+      clock: "master",
+      sources: [
+        { id: "mic", url: "m", kind: "audio", role: "master-audio" },
+        { id: "camA", url: "a", kind: "video" },
+        { id: "camB", url: "b", kind: "video" },
+      ],
+      segments: [
+        {
+          id: "s0",
+          inMs: 0,
+          outMs: 1000,
+          video: "camA",
+          layout: {
+            mode: "side-by-side",
+            slots: [
+              { source: slotSource, speaker: "Host", region: { x: 0.1, y: 0, w: 0.4, h: 1 }, follow } as never,
+              { source: "camB", speaker: "Guest" },
+            ],
+          },
+        },
+      ],
+    }
+  }
+
+  it("accepts a follow on the slot's own video source", () => {
+    const r = validateEdl(followEdl({ sourceId: "camA", trackId: "camA/t3", motion: "glide" }))
+    expect(r.issues).toEqual([])
+    expect(r.ok).toBe(true)
+  })
+
+  it("accepts motion static", () => {
+    expect(validateEdl(followEdl({ sourceId: "camA", trackId: "camA/t3", motion: "static" })).ok).toBe(true)
+  })
+
+  it("refuses a follow naming a source other than the slot's — the crop is on the slot's frame", () => {
+    const r = validateEdl(followEdl({ sourceId: "camB", trackId: "camB/t1", motion: "glide" }))
+    expect(r.issues.join("\n")).toMatch(/follow\.sourceId "camB" is not the slot's source "camA"/)
+  })
+
+  it("refuses an empty trackId and an unknown motion", () => {
+    const r = validateEdl(followEdl({ sourceId: "camA", trackId: "", motion: "orbit" }))
+    const text = r.issues.join("\n")
+    expect(text).toMatch(/follow\.trackId is empty/)
+    expect(text).toMatch(/follow\.motion "orbit" is not one of static, glide/)
+  })
+
+  it("normalizeEdl carries a well-formed follow through, unchanged", () => {
+    const follow = { sourceId: "camA", trackId: "camA/t3", motion: "glide" }
+    const n = normalizeEdl(followEdl(follow))
+    expect(n.segments[0].layout?.slots?.[0]).toEqual({ source: "camA", region: { x: 0.1, y: 0, w: 0.4, h: 1 }, speaker: "Host", follow })
+    expect(n.segments[0].layout?.slots?.[1]).toEqual({ source: "camB", speaker: "Guest" })
+    expect(validateEdl(n).ok).toBe(true)
+  })
+
+  it("normalizeEdl drops only unknown keys inside follow", () => {
+    const n = normalizeEdl(followEdl({ sourceId: "camA", trackId: "camA/t3", motion: "static", extra: 1 }))
+    expect(n.segments[0].layout?.slots?.[0]?.follow).toEqual({ sourceId: "camA", trackId: "camA/t3", motion: "static" })
+  })
+
+  it("normalizeEdl drops a malformed follow rather than guessing it — an unknown motion is never coerced", () => {
+    for (const bad of [
+      { sourceId: "camA", trackId: "camA/t3", motion: "orbit" },
+      { sourceId: "camA", trackId: "camA/t3" },
+      { sourceId: "camA", motion: "glide" },
+      { trackId: "camA/t3", motion: "glide" },
+      { sourceId: "camA", trackId: "", motion: "glide" },
+      { sourceId: 3, trackId: "camA/t3", motion: "glide" },
+      "camA/t3",
+      null,
+    ]) {
+      const slot = normalizeEdl(followEdl(bad)).segments[0].layout?.slots?.[0]
+      expect(slot, JSON.stringify(bad)).toBeDefined()
+      expect(slot && "follow" in slot, JSON.stringify(bad)).toBe(false)
+    }
+  })
+
+  it("adds types only — no runtime export (keeps the Apache grant minimal, decided 2026-10-09)", () => {
+    const followExports = (m: object) => Object.keys(m).filter((k) => /FOLLOW/i.test(k))
+    expect(followExports(edlModule)).toEqual([])
+    expect(followExports(sharedIndex)).toEqual([])
+  })
+
+  it("a slot without follow normalizes exactly as before (the field is additive)", () => {
+    const n = normalizeEdl(followEdl(undefined))
+    expect(n.segments[0].layout?.slots?.[0]).toEqual({ source: "camA", region: { x: 0.1, y: 0, w: 0.4, h: 1 }, speaker: "Host" })
   })
 })

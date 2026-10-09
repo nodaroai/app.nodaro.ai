@@ -40,6 +40,11 @@ import type { EdlTargetAspect } from "./speaker-layouts.js"
  *    slot; `slots[].weight` (0..1, active = 1) replaces the design's
  *    `slots[].emphasis` so it no longer collides with `layout.emphasis`
  *    ({ style, durationMs }).
+ *  - P3-8 FOLLOW (decided 2026-10-06, field added decided 2026-10-09): a
+ *    slot a renderer framed on a face track names that track in
+ *    `slots[].follow` (`EdlSlotFollow`). It records what the render followed;
+ *    the path itself is recomputed from the tracks, and `slot.region` keeps a
+ *    static region, so a reader that ignores `follow` still gets a sane frame.
  *
  * Time is INTEGER MILLISECONDS everywhere. There is no seconds→ms guessing
  * (`normalizeEdl` never reinterprets a unit — an implausible value is a
@@ -80,6 +85,24 @@ export interface EdlSource {
   readonly region?: EdlRegion
 }
 
+export type EdlSlotFollowMotion = "static" | "glide"
+
+/** Module-private on purpose: the follow contract is types only (decided
+ *  2026-10-09), so no runtime value joins the published surface. */
+const FOLLOW_MOTIONS = ["static", "glide"] as const satisfies readonly EdlSlotFollowMotion[]
+const KNOWN_FOLLOW_MOTIONS: ReadonlySet<string> = new Set(FOLLOW_MOTIONS)
+
+/** The face track a slot followed (P3-8). `sourceId` is the slot's own video
+ *  source; `trackId` is a track id of the speaker-track set the render read
+ *  (unique in that set); `motion` is how it followed: `static` = one region
+ *  per segment from the track, `glide` = a moving crop along it. Additive and
+ *  optional: an EDL without it is unchanged. */
+export interface EdlSlotFollow {
+  readonly sourceId: string
+  readonly trackId: string
+  readonly motion: EdlSlotFollowMotion
+}
+
 /** How a segment is presented on screen (speaker-view, phase 2). `mode` and
  *  `transition.type` are ids from the `SPEAKER_LAYOUTS` / `SPEAKER_SWITCHES`
  *  registries (speaker-layouts.ts); `emphasis.style` is a `+`-joined set of
@@ -96,6 +119,9 @@ export interface EdlLayout {
     /** D20: 0..1, the active slot = 1. (Was `emphasis`; renamed to avoid
      *  colliding with `layout.emphasis`.) */
     readonly weight?: number
+    /** P3-8: the face track this slot followed. `region` then holds the
+     *  static region an older reader draws. */
+    readonly follow?: EdlSlotFollow
   }>
   /** A "+"-joined set of "none" | "scale" | "border" | "dim" | …, eased over durationMs. */
   readonly emphasis?: { readonly style: string; readonly durationMs: number }
@@ -421,6 +447,7 @@ export function validateEdl(edl: Edl): EdlValidation {
       }
       if (slot.weight !== undefined && !inRange(slot.weight)) issues.push(`${at}: slot.weight=${slot.weight} out of 0..1`)
       if (slot.region) issues.push(...regionIssues(slot.region, `${at} slot "${slot.source}"`))
+      if (slot.follow) issues.push(...followIssues(slot.follow, slot.source, `${at} slot "${slot.source}"`))
     }
   })
 
@@ -719,6 +746,32 @@ export function normalizeEdl(input: unknown): Edl {
   }
 }
 
+/** A slot's `follow` is structurally sound: the slot's own source (the crop
+ *  is on that frame — a follow of another camera cannot describe the render),
+ *  a track id, a known motion. */
+function followIssues(follow: EdlSlotFollow, slotSource: string, at: string): string[] {
+  const f = follow as unknown as Record<string, unknown>
+  const issues: string[] = []
+  if (f.sourceId !== slotSource) issues.push(`${at}: follow.sourceId ${JSON.stringify(f.sourceId)} is not the slot's source "${slotSource}"`)
+  if (typeof f.trackId !== "string" || !f.trackId.trim()) issues.push(`${at}: follow.trackId is empty`)
+  if (typeof f.motion !== "string" || !KNOWN_FOLLOW_MOTIONS.has(f.motion)) {
+    issues.push(`${at}: follow.motion ${JSON.stringify(f.motion)} is not one of ${FOLLOW_MOTIONS.join(", ")}`)
+  }
+  return issues
+}
+
+/** `follow` with its three fields, unknown keys dropped; undefined when any
+ *  field is missing or malformed (never guessed: an unknown motion is not a
+ *  motion this contract can describe). */
+function normalizeFollow(input: unknown): EdlSlotFollow | undefined {
+  if (!input || typeof input !== "object") return undefined
+  const o = input as Record<string, unknown>
+  const sourceId = str(o.sourceId)
+  const trackId = str(o.trackId)
+  if (!sourceId || !trackId || typeof o.motion !== "string" || !KNOWN_FOLLOW_MOTIONS.has(o.motion)) return undefined
+  return { sourceId, trackId, motion: o.motion as EdlSlotFollowMotion }
+}
+
 function normalizeLayout(input: unknown, dropTransition = false): EdlLayout | undefined {
   if (!input || typeof input !== "object") return undefined
   const o = input as Record<string, unknown>
@@ -733,11 +786,13 @@ function normalizeLayout(input: unknown, dropTransition = false): EdlLayout | un
           const source = str(s.source)
           if (!source) return null
           const region = normalizeRegion(s.region)
+          const follow = normalizeFollow(s.follow)
           return {
             source,
             ...(region ? { region } : {}),
             ...(str(s.speaker) ? { speaker: str(s.speaker) } : {}),
             ...(s.weight !== undefined ? { weight: clamp01(num(s.weight)) } : {}),
+            ...(follow ? { follow } : {}),
           }
         })
         .filter((x): x is NonNullable<typeof x> => x !== null)
