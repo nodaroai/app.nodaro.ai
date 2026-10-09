@@ -1,5 +1,29 @@
 # @nodaro/cli
 
+## 1.27.0
+
+### Minor Changes
+
+- 63e91d0: Collection records know whether they were used, and a delete moves a record to the collection's Trash instead of removing it.
+
+  - `usedAt` / `usedBy` and `deletedAt` on every record; `usage` (`all` / `unused` / `used`), `status` (`active` / `trash`), `until`, `order`, and numbered pages (`offset`, with the result's `total`) on the records list; `usedCount` and `trashCount` on a collection; the saving workflow's name and project on a record's `source`.
+  - `PATCH /v1/collections/:id/records/:recordId` (`{ used }`) marks one; `DELETE …/records/:recordId` moves it to the Trash; `POST …/records/:recordId/restore` brings it back; `DELETE …/records/:recordId/permanent` deletes a record already in the Trash for good; `POST …/records/bulk` (`{ ids, action: "trash" | "restore" | "delete" }`) does any of those for up to 100 at once.
+  - Save to Collection reads a `mediaUrl` (with `mediaKind`) into the record's media.
+  - SDK: `collections.records({ usage, status, until, order, offset })`, `collections.setUsed`, `collections.deleteRecord` (to the Trash), `collections.restoreRecord`, `collections.deleteRecordForever`, `collections.bulkRecords`. CLI: `collections records --usage --status --until --order --offset`, `collections mark-used`, `collections remove [--forever]`, `collections restore`, `collections export --until --usage`.
+
+### Patch Changes
+
+- Updated dependencies [51afaf9]
+- Updated dependencies [63e91d0]
+- Updated dependencies [70ed87f]
+- Updated dependencies [16d1284]
+- Updated dependencies [8c9fa49]
+- Updated dependencies [d72e045]
+- Updated dependencies [d72e045]
+- Updated dependencies [326978f]
+  - @nodaro/shared@3.27.0
+  - @nodaro/sdk@2.22.0
+
 ## 1.26.2
 
 ### Patch Changes
