@@ -66,15 +66,23 @@ describe("listOnlineUsers", () => {
 
   it("names that cannot be read leave the people listed, unnamed", async () => {
     const failing: OnlineUsersLookup = { profiles: async () => Promise.reject(new Error("db")), apps: async () => Promise.reject(new Error("db")) }
-    const report = await listOnlineUsers({ store: storeOf([seen("dana", 1, { source: "app", detail: "claude" })]), lookup: failing, now: () => NOW })
+    const reported: string[] = []
+    const report = await listOnlineUsers({
+      store: storeOf([seen("dana", 1, { source: "app", detail: "claude" })]),
+      lookup: failing,
+      now: () => NOW,
+      onLookupError: (what, error) => reported.push(`${what}: ${(error as Error).message}`),
+    })
     expect(report.users).toEqual([expect.objectContaining({ userId: "dana", name: null, email: null })])
     // An app the lookup could not name is not mistaken for the main app.
     expect(report.users[0]!.surfaces[0]!.label).toBe("OAuth app")
+    // And the failure is told, never swallowed: the list looking fine is how it hid.
+    expect(reported.sort()).toEqual(["apps: db", "profiles: db"])
   })
 })
 
 describe("databaseLookup", () => {
-  it("an app is an MCP client only when it registered as one; a name falls back to the display name", async () => {
+  it("an app is an MCP client only when it registered as one; a person's name is their full name", async () => {
     const tables: Record<string, unknown[]> = {
       developer_apps: [
         { id: "a1", name: "Claude", kind: "dynamic_mcp" },
@@ -82,9 +90,10 @@ describe("databaseLookup", () => {
         { id: "a3", name: "Zapier", kind: "user" },
         { id: "a4", name: "Office", kind: "community_instance" },
       ],
+      // Only columns `profiles` has (online-users-columns.test.ts checks the select).
       profiles: [
-        { id: "u1", email: "dana@x.test", full_name: "Dana Levi", display_name: "dana" },
-        { id: "u2", email: "omer@x.test", full_name: null, display_name: "Omer" },
+        { id: "u1", email: "dana@x.test", full_name: "Dana Levi" },
+        { id: "u2", email: "omer@x.test", full_name: null },
       ],
     }
     vi.doMock("../../../lib/supabase.js", () => ({
@@ -101,7 +110,8 @@ describe("databaseLookup", () => {
     ])
     const profiles = await databaseLookup.profiles(["u1", "u2"])
     expect(profiles.get("u1")).toEqual({ email: "dana@x.test", name: "Dana Levi" })
-    expect(profiles.get("u2")).toEqual({ email: "omer@x.test", name: "Omer" })
+    // No name: the page shows the email.
+    expect(profiles.get("u2")).toEqual({ email: "omer@x.test", name: null })
     vi.doUnmock("../../../lib/supabase.js")
   })
 })
