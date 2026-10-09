@@ -127,7 +127,7 @@ describe("node-executor reads the source image's size before the build", () => {
 
   it("reads nothing when the size would not be used", async () => {
     const unused: Array<[string, Record<string, unknown>]> = [
-      // A native auto, a concrete ratio, and a node with no source photo.
+      // A native auto, a concrete ratio, and a Generate Image whose build sends no photo.
       ["image-to-image", { provider: "gpt-image-2-i2i", aspectRatio: "auto" }],
       ["image-to-image", { provider: "seedream-5-pro-i2i", aspectRatio: "16:9" }],
       ["generate-image", { provider: "seedream-5-pro", aspectRatio: "auto" }],
@@ -138,5 +138,15 @@ describe("node-executor reads the source image's size before the build", () => {
       expect(mockProbe, `${type} ${JSON.stringify(data)}`).not.toHaveBeenCalled()
       expect(built.sourceImage).toBeUndefined()
     }
+  })
+
+  it("Generate Image: reads the photo its build sends, and the build that runs gets its size", async () => {
+    const assembled = { jobName: "generate-image", queueName: "video-generation", modelIdentifier: "seedream-5-pro-i2i", payload: { jobId: "test-job-id", referenceImageUrls: [SOURCE] } }
+    mockBuildPayload.mockImplementationOnce(() => assembled).mockImplementationOnce(() => assembled)
+    void executeNode(node("generate-image", { provider: "seedream-5-pro", aspectRatio: "auto" }), {}, [], [], {}, ctx()).catch(() => {})
+    await vi.waitFor(() => expect(mockBuildPayload).toHaveBeenCalledTimes(2))
+    expect(mockProbe).toHaveBeenCalledWith(SOURCE)
+    expect(((mockBuildPayload.mock.calls[0] as unknown as unknown[])[4] as { sourceImage?: unknown }).sourceImage).toBeUndefined()
+    expect(((mockBuildPayload.mock.calls[1] as unknown as unknown[])[4] as { sourceImage?: unknown }).sourceImage).toEqual({ width: 1920, height: 1080 })
   })
 })

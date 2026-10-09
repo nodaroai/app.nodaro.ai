@@ -327,26 +327,29 @@ export function getAspectRatiosForModel(provider: string): readonly LabeledOptio
   return IMAGE_ASPECT_RATIOS[provider] ?? DEFAULT_RATIOS
 }
 
-/** The Auto tile on a node that transforms a source photo — user-facing copy;
- *  the qualifier is translated in each locale's `optionQualifier` table. */
+/** The Auto tile on a node whose "auto" keeps a photo's shape — user-facing
+ *  copy; the qualifier is translated in each locale's `optionQualifier` table. */
 export const SOURCE_PHOTO_AUTO_LABEL = "Auto (match the photo)"
 
 /**
- * The ratio tiles for a node that transforms a SOURCE photo (Modify Image):
- * Auto first, on every model, then the model's own ratios. "auto" keeps the
- * photo's shape — natively on a model that lists it, else the platform picks
- * the model's supported ratio nearest the photo (`normalizeModelInput`'s
- * source size) — so it is a real choice on every model here. Source-photo
- * nodes only: text-to-image keeps the catalog's list (`getAspectRatiosForModel`).
+ * `options` with the photo Auto tile first (and any catalog "auto" folded into
+ * it). For the image nodes whose "auto" keeps a photo's shape — natively on a
+ * model that lists it, else the platform picks the model's supported ratio
+ * nearest the photo (`normalizeModelInput`'s source size): Modify Image (its
+ * source photo) and Generate Image (a wired photo; with none, "auto" is the
+ * model's default shape). That makes Auto a real choice on every model there.
  *
- * The provider fail-safe still snaps any OTHER stale ratio to the model's first
- * listed ratio — the catalog list, not this one — so Auto is never a snap target.
+ * The provider fail-safes still snap any OTHER stale ratio to the first entry
+ * of the list passed in (the catalog's own list), never to this Auto tile.
  */
+export function withPhotoAuto(options: readonly LabeledOption[]): readonly LabeledOption[] {
+  return [{ value: "auto", label: SOURCE_PHOTO_AUTO_LABEL }, ...options.filter((o) => o.value !== "auto")]
+}
+
+/** A model's ratio tiles on a photo-Auto node: `withPhotoAuto` over the catalog list
+ *  (`getAspectRatiosForModel`), which stays the list a stale ratio snaps to. */
 export function getSourcePhotoAspectRatios(provider: string): readonly LabeledOption[] {
-  return [
-    { value: "auto", label: SOURCE_PHOTO_AUTO_LABEL },
-    ...getAspectRatiosForModel(provider).filter((o) => o.value !== "auto"),
-  ]
+  return withPhotoAuto(getAspectRatiosForModel(provider))
 }
 
 // =============================================================================

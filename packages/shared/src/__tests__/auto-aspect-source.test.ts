@@ -7,9 +7,9 @@ import {
   normalizeModelInput,
   validateModelInput,
 } from "../model-catalog.js"
-import { resolveNormalizedImageGen } from "../credit-identifiers.js"
-import { IMAGE_ASPECT_RATIO_VALUES } from "../model-constants.js"
-import { normalizeNodeModelParams, SOURCE_IMAGE_NODE_TYPES } from "../normalize-node-params.js"
+import { imageGenAutoAspectNeedsSourceImage, normalizedImageGenModelId, resolveNormalizedImageGen } from "../credit-identifiers.js"
+import { IMAGE_ASPECT_RATIO_VALUES, T2I_TO_I2I_VARIANT } from "../model-constants.js"
+import { normalizeNodeModelParams, AUTO_ASPECT_AT_RUN_NODE_TYPES, SOURCE_IMAGE_NODE_TYPES } from "../normalize-node-params.js"
 
 /**
  * "auto" means "keep the source photo's shape". A model that lists "auto"
@@ -23,6 +23,25 @@ import { normalizeNodeModelParams, SOURCE_IMAGE_NODE_TYPES } from "../normalize-
 const SEEDREAM_LIST = MODEL_CATALOG["seedream-5-pro-i2i"]!.aspectRatios!
 /** A list without 21:9, for the wide-cinema case. */
 const NO_WIDE_LIST = ["1:1", "16:9", "9:16", "4:3", "3:4"] as const
+
+/** Runs `fn` with a made-up text-to-image model and its image-to-image sibling
+ *  registered (their ratio lists as given), then removes both — for the pairs
+ *  today's catalog does not have. */
+function withModelPair(textToImageRatios: string[] | undefined, siblingRatios: string[] | undefined, fn: (provider: string) => void) {
+  const provider = "pair-probe"
+  const sibling = "pair-probe-i2i"
+  const base = MODEL_CATALOG["seedream-5-pro"]!
+  MODEL_CATALOG[provider] = { ...base, label: "Pair probe", aspectRatios: textToImageRatios }
+  MODEL_CATALOG[sibling] = { ...base, label: "Pair probe edit", aspectRatios: siblingRatios }
+  T2I_TO_I2I_VARIANT[provider] = sibling
+  try {
+    fn(provider)
+  } finally {
+    delete MODEL_CATALOG[provider]
+    delete MODEL_CATALOG[sibling]
+    delete T2I_TO_I2I_VARIANT[provider]
+  }
+}
 
 describe("nearestCatalogAspectRatio", () => {
   it("returns the listed ratio a source already has", () => {
@@ -190,22 +209,62 @@ describe("resolveNormalizedImageGen — source image", () => {
       for (const quality of qualities) {
         for (const resolution of resolutions) {
           for (const refCount of [0, 1, 3]) {
-            const base = { provider: id, quality, resolution, refCount }
-            const priced = resolveNormalizedImageGen({ ...base, aspectRatio: "auto" }).identifier
-            const sizes = [{ width: 1104, height: 1472 }, { width: 2390, height: 1000 }]
-            for (const sourceImage of sizes) {
-              const withSource = resolveNormalizedImageGen({ ...base, aspectRatio: "auto", sourceImage }).identifier
-              if (withSource !== priced) failures.push(`${id} q=${quality} r=${resolution} refs=${refCount}: ${priced} vs ${withSource}`)
-            }
-            for (const ratio of m.aspectRatios ?? []) {
-              const listed = resolveNormalizedImageGen({ ...base, aspectRatio: ratio }).identifier
-              if (listed !== priced) failures.push(`${id} ${ratio} q=${quality} r=${resolution} refs=${refCount}: ${priced} vs ${listed}`)
+            // Generate Image prices with the T2I→I2I swap (references attached);
+            // the image-to-image / edit routes price without it.
+            for (const swapToI2i of [false, true]) {
+              const base = { provider: id, quality, resolution, refCount, swapToI2i }
+              const at = `${id} q=${quality} r=${resolution} refs=${refCount} swap=${swapToI2i}`
+              const priced = resolveNormalizedImageGen({ ...base, aspectRatio: "auto" }).identifier
+              const sizes = [{ width: 1104, height: 1472 }, { width: 2390, height: 1000 }]
+              for (const sourceImage of sizes) {
+                const withSource = resolveNormalizedImageGen({ ...base, aspectRatio: "auto", sourceImage }).identifier
+                if (withSource !== priced) failures.push(`${at}: ${priced} vs ${withSource}`)
+              }
+              for (const ratio of m.aspectRatios ?? []) {
+                const listed = resolveNormalizedImageGen({ ...base, aspectRatio: ratio }).identifier
+                if (listed !== priced) failures.push(`${at} ${ratio}: ${priced} vs ${listed}`)
+              }
             }
           }
         }
       }
     }
     expect(failures).toEqual([])
+  })
+
+  it("names the model the snap runs against — the i2i variant once references attach", () => {
+    expect(normalizedImageGenModelId({ provider: "seedream-5-pro", refCount: 1, swapToI2i: true })).toBe("seedream-5-pro-i2i")
+    expect(normalizedImageGenModelId({ provider: "seedream-5-pro", refCount: 0, swapToI2i: true })).toBe("seedream-5-pro")
+    expect(normalizedImageGenModelId({ provider: "seedream-5-pro", refCount: 2, swapToI2i: false })).toBe("seedream-5-pro")
+    expect(normalizedImageGenModelId({ provider: "nano-banana-2", refCount: 1, swapToI2i: true })).toBe("nano-banana-2")
+    expect(normalizedImageGenModelId({ provider: undefined, refCount: 0 })).toBe("nano-banana")
+    // The same id the snap itself reports, for every swap pair.
+    for (const t2i of Object.keys(T2I_TO_I2I_VARIANT)) {
+      const opts = { provider: t2i, refCount: 1, swapToI2i: true }
+      expect(normalizedImageGenModelId(opts), t2i).toBe(resolveNormalizedImageGen(opts).modelId)
+    }
+  })
+
+  it("asks whether 'auto' needs the photo about the model the snap runs against", () => {
+    const needs = (provider: string, refCount?: number, aspectRatio: string = "auto") =>
+      imageGenAutoAspectNeedsSourceImage({ provider, aspectRatio, refCount })
+    // With the assembled reference count: exactly that model. grok's sibling
+    // takes no ratio, so once a reference attaches there is nothing to resolve.
+    expect(needs("grok", 0)).toBe(true)
+    expect(needs("grok", 1)).toBe(false)
+    expect(needs("seedream-5-pro", 1)).toBe(true)
+    expect(needs("gpt-image-2", 1)).toBe(false)
+    expect(needs("nano-banana-2", 2)).toBe(autoAspectNeedsSourceImage("nano-banana-2", "auto"))
+    expect(needs("seedream-5-pro", 1, "16:9")).toBe(false)
+    // Before assembly (no count): either model, since references may yet attach.
+    expect(needs("grok")).toBe(true)
+    withModelPair(["auto", "1:1"], ["1:1", "16:9"], (p) => {
+      expect(needs(p, 0)).toBe(false)
+      expect(needs(p, 1)).toBe(true)
+      expect(needs(p)).toBe(true)
+    })
+    withModelPair(["auto", "1:1"], ["auto", "1:1"], (p) => expect(needs(p)).toBe(false))
+    withModelPair(undefined, undefined, (p) => expect(needs(p)).toBe(false))
   })
 
   /**
@@ -232,9 +291,14 @@ describe("normalizeNodeModelParams — 'auto' on a node that transforms a source
     expect([...SOURCE_IMAGE_NODE_TYPES].sort()).toEqual(["edit-image", "image-to-image", "modify-image"])
   })
 
-  it("keeps 'auto' for the run to resolve against the source image", () => {
-    for (const type of SOURCE_IMAGE_NODE_TYPES) {
-      const provider = type === "edit-image" ? "nano-banana-edit" : "seedream-5-pro-i2i"
+  it("names the node types whose 'auto' the run resolves — the source-image ones plus Generate Image", () => {
+    expect([...AUTO_ASPECT_AT_RUN_NODE_TYPES].sort()).toEqual(["edit-image", "generate-image", "image-to-image", "modify-image"])
+    for (const type of SOURCE_IMAGE_NODE_TYPES) expect(AUTO_ASPECT_AT_RUN_NODE_TYPES.has(type), type).toBe(true)
+  })
+
+  it("keeps 'auto' for the run to resolve against the photo", () => {
+    for (const type of AUTO_ASPECT_AT_RUN_NODE_TYPES) {
+      const provider = type === "edit-image" ? "nano-banana-edit" : type === "generate-image" ? "seedream-5-pro" : "seedream-5-pro-i2i"
       const input = [node("n", type, { provider, aspectRatio: "auto" })]
       const { nodes, adjustments } = normalizeNodeModelParams(input)
       expect(adjustments, type).toEqual([])
@@ -260,12 +324,27 @@ describe("normalizeNodeModelParams — 'auto' on a node that transforms a source
     expect(adjustments.map((a) => a.field)).toEqual(["quality"])
   })
 
-  it("keeps coercing 'auto' on a text-to-image node, which has no source photo", () => {
-    const { nodes, adjustments } = normalizeNodeModelParams([
-      node("g", "generate-image", { provider: "seedream-5-pro", aspectRatio: "auto" }),
-    ])
-    expect((nodes[0].data as Record<string, unknown>).aspectRatio).toBe(SEEDREAM_LIST[0])
-    expect(adjustments.map((a) => a.field)).toEqual(["aspectRatio"])
+  it("keeps 'auto' on a Generate Image node too, so a wired photo can decide it at run time", () => {
+    const input = [node("g", "generate-image", { provider: "seedream-5-pro", aspectRatio: "auto" })]
+    const { nodes, adjustments } = normalizeNodeModelParams(input)
+    expect(adjustments).toEqual([])
+    expect(nodes[0]).toBe(input[0])
+    // With no photo the run snaps it to exactly what this boundary used to store.
+    expect(normalizeModelInput("seedream-5-pro", { aspectRatio: "auto" }).aspectRatio).toBe(SEEDREAM_LIST[0])
+  })
+
+  it("keeps 'auto' on a Generate Image node whose image-to-image sibling resolves it from the photo", () => {
+    // The node's own model has no ratio lever; references would swap the run to
+    // a sibling that lists ratios but no auto, so the run can still use the photo.
+    withModelPair(undefined, ["1:1", "16:9"], (provider) => {
+      const input = [node("g", "generate-image", { provider, aspectRatio: "auto" })]
+      const { nodes, adjustments } = normalizeNodeModelParams(input)
+      expect(adjustments).toEqual([])
+      expect(nodes[0]).toBe(input[0])
+      // Only Generate Image swaps on references: another node type asks about its own model.
+      const other = normalizeNodeModelParams([node("m", "modify-image", { provider, aspectRatio: "auto" })])
+      expect((other.nodes[0].data as Record<string, unknown>).aspectRatio).toBeUndefined()
+    })
   })
 
   it("still drops 'auto' on a model with no ratio lever", () => {

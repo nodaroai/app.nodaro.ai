@@ -295,6 +295,8 @@ export {
   buildCreditModelIdentifier,
   resolveImageGenCreditIdentifier,
   resolveNormalizedImageGen,
+  normalizedImageGenModelId,
+  imageGenAutoAspectNeedsSourceImage,
   buildVideoCreditModelIdentifier,
   seedanceVideoEditCreditId,
   pricedVideoSelection,
@@ -1663,6 +1665,7 @@ export type { ExecutionOutcome } from "./execution-outcome.js"
 export {
   MODEL_PARAM_NODE_TYPES,
   SOURCE_IMAGE_NODE_TYPES,
+  AUTO_ASPECT_AT_RUN_NODE_TYPES,
   normalizeNodeModelParams,
   describeNodeAdjustments,
 } from "./normalize-node-params.js"

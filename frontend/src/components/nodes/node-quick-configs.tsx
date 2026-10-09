@@ -38,6 +38,7 @@ import {
   COMPOSITION_RATIOS,
   IMAGE_GEN_MODELS,
   getAspectRatiosForModel,
+  getSourcePhotoAspectRatios,
   IMAGE_RESOLUTION_OPTIONS,
   VIDEO_GEN_MODELS,
   GVP_PROVIDERS,
@@ -546,9 +547,15 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
       field: "aspectRatio",
       ariaLabel: tx("node.aspect"),
       icon: Ratio,
+      // Auto (keep a wired photo's shape) on every model; a stale ratio snaps to
+      // the model's first LISTED ratio, never to that Auto tile.
       options: (data) => {
         const provider = typeof data.provider === "string" ? data.provider : IMAGE_MODEL_ROLE_DEFAULTS.general
-        return getAspectRatiosForModel(provider)
+        return getSourcePhotoAspectRatios(provider)
+      },
+      snap: (_value, data) => {
+        const provider = typeof data.provider === "string" ? data.provider : IMAGE_MODEL_ROLE_DEFAULTS.general
+        return getAspectRatiosForModel(provider)[0]?.value ?? "1:1"
       },
     },
     {

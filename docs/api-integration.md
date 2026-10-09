@@ -618,10 +618,15 @@ changed:
   renders at `3:4` — and reports the choice in `adjustments`. If the image's
   size cannot be read, `auto` falls back to the model's first listed ratio.
   The ratio never changes the price on these models.
+- **`/v1/generate-image` does the same when a photo is wired in**: the photo is
+  the first image the request sends the model — `baseImageUrl` (inpaint /
+  refine) when set, else the first reference image (`referenceImageUrls`, or
+  the first one assembled from `connectedReferences`). Without a photo, `auto`
+  on a model without a native one gives its first listed ratio, as before.
 - The per-model option lists are in `GET /v1/models`; a workflow saved through
-  the API or MCP is corrected the same way at write time — except `auto` on an
-  image-to-image, modify-image or edit-image node, which is kept and resolved
-  against the source image when the workflow runs.
+  the API or MCP is corrected the same way at write time — except `auto` on a
+  generate-image, image-to-image, modify-image or edit-image node, which is
+  kept and resolved against the photo when the workflow runs.
 
 ### On the video routes
 

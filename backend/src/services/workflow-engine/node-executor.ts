@@ -27,9 +27,8 @@ import { CreditsService } from "../../ee/billing/credits.js"
 import { refundJobCredits } from "../../workers/shared.js"
 import { buildScene3DHttpBody, isScene3DAuthoringType } from "./scene3d-http.js"
 import { loopbackFetch } from "./loopback-fetch.js"
-import { buildPayload, buildNodeRefMap, type WorkflowSettings } from "./payload-builder.js"
-import { autoAspectSourceImageUrl } from "./source-image.js"
-import { probeImageDisplaySize } from "../../lib/image-source-size.js"
+import { buildNodeRefMap, type WorkflowSettings } from "./payload-builder.js"
+import { buildPayloadWithSourceSize, type BuiltPayload } from "./source-size-build.js"
 import { assertNodeAvailableForUser, viewerForNode } from "../../lib/availability-viewer.js"
 import { passThroughFor } from "./pass-through.js"
 import { ensureWorkflowSheetPanels } from "./reference-sheet-stage-a.js"
@@ -1813,17 +1812,14 @@ async function executeWorkerNode(
   // edit-plan node — the standalone orchestrator learns it from this
   // container's API (cached, fails closed to the steps).
   const editPlanPerMinute = node.type === "edit-plan" ? await editPlanPerMinuteActive() : false
-  let buildResult: ReturnType<typeof buildPayload>
+  let buildResult: BuiltPayload
   try {
-    // "auto" on a model without a native auto keeps the source photo's shape.
-    // The builder is synchronous, so the size is read here — from the url the
-    // build will send (`autoAspectSourceImageUrl`), through the same probe the
-    // image routes use — and handed back as `sourceImage`. No url means the
-    // size would not be used, and nothing is read; an unreadable size leaves
-    // "auto" on its usual ratio.
-    const sourceUrl = autoAspectSourceImageUrl(node, resolvedInputs, { nodes: allNodes, edges, nodeStates })
-    const sourceImage = sourceUrl ? await probeImageDisplaySize(sourceUrl) : undefined
-    buildResult = buildPayload(
+    // "auto" on a model without a native auto keeps the photo's shape. The
+    // builder is synchronous, so `buildPayloadWithSourceSize` reads the size of
+    // the photo the build sends first, through the same probe the image routes
+    // use, and hands it to the build — or builds without it when no photo is
+    // sent or its size cannot be read, and "auto" snaps as it always has.
+    buildResult = await buildPayloadWithSourceSize(
       node,
       jobId,
       resolvedInputs,
@@ -1837,7 +1833,6 @@ async function executeWorkerNode(
         viewer,
         listRow,
         editPlanPerMinute,
-        sourceImage,
       },
     )
   } catch (err) {

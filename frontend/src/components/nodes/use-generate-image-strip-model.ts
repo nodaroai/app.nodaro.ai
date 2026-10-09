@@ -1,8 +1,10 @@
 import { useMemo } from "react"
 import { useT } from "@/lib/i18n"
+import { useLocalizeOptionLabel } from "@/lib/i18n/labels"
 import {
   IMAGE_GEN_MODELS,
   getAspectRatiosForModel,
+  getSourcePhotoAspectRatios,
   IMAGE_RESOLUTION_OPTIONS,
 } from "@/components/editor/config-panels/model-options"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
@@ -19,12 +21,13 @@ import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
  *
  * Body lifted verbatim from generate-image-quick-toolbar.tsx (the original
  * lines 115-165 derivation): provider/isMulti/modelLabel/modelShort,
- * getAspectRatiosForModel(currentProvider), IMAGE_RESOLUTION_OPTIONS[provider],
+ * getSourcePhotoAspectRatios(currentProvider), IMAGE_RESOLUTION_OPTIONS[provider],
  * the shortened pill labels, repeatCount, and the handle* fns that call
  * updateNodeData. `modelOptions` is the shared IMAGE_GEN_MODELS list.
  */
 export function useGenerateImageStripModel(nodeId: string, data: GenerateImageData) {
   const t = useT()
+  const localizeOption = useLocalizeOptionLabel()
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
   const runSingleNode = useWorkflowStore((s) => s.runSingleNode)
 
@@ -46,15 +49,18 @@ export function useGenerateImageStripModel(nodeId: string, data: GenerateImageDa
     return lbl.length > 10 ? lbl.slice(0, 9).trimEnd() + "…" : lbl
   }, [isMulti, providers.length, modelEntry?.label, currentProvider])
 
-  const aspectOptions = useMemo(() => getAspectRatiosForModel(currentProvider), [currentProvider])
+  // Auto (keep a wired photo's shape) on every model; an unset ratio still
+  // displays the model's first listed ratio, the one the config panel shows.
+  const aspectOptions = useMemo(() => getSourcePhotoAspectRatios(currentProvider), [currentProvider])
   const resolutionOptions = IMAGE_RESOLUTION_OPTIONS[currentProvider]
-  const currentAspect = data.aspectRatio ?? aspectOptions[0]?.value ?? ""
+  const currentAspect = data.aspectRatio ?? getAspectRatiosForModel(currentProvider)[0]?.value ?? ""
   const currentResolution = data.resolution ?? resolutionOptions?.[0]?.value ?? ""
 
   // Short label for the pill — strips the parenthetical descriptor that
   // option labels often carry ("2K (High)" → "2K", "16:9 (Landscape)" →
-  // "16:9"). The full label still renders inside the dropdown items.
-  const aspectShort = shortenLabel(aspectOptions.find((o) => o.value === currentAspect)?.label ?? currentAspect)
+  // "16:9"). The full label still renders inside the dropdown items, which
+  // translate it; the pill translates what is left ("Auto").
+  const aspectShort = localizeOption(shortenLabel(aspectOptions.find((o) => o.value === currentAspect)?.label ?? currentAspect))
   const resolutionShort = shortenLabel(resolutionOptions?.find((o) => o.value === currentResolution)?.label ?? currentResolution)
 
   // Versions / repeat count — how many results to generate per run. Clamped to

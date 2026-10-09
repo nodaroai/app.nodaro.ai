@@ -109,15 +109,15 @@ const NORMALIZERS = new Set(["normalizeModelInput", "resolveNormalizedImageGen"]
 
 /** Normalizer calls that run WITHOUT a source size — each one a decision. */
 const NORMALIZED_WITHOUT_SOURCE: Record<string, string> = {
-  "routes/generate-image.ts:2": "text-to-image (the credit CHECK and the handler): its images are references, not a photo being transformed",
+  "routes/generate-image.ts:1": "the credit CHECK, which runs before the size is read — the ratio is not a pricing dimension on any model without a native auto (pinned in @nodaro/shared)",
   "routes/image-to-image.ts:1": "the credit CHECK, which runs before the size is read — the ratio is not a pricing dimension on any model without a native auto (pinned in @nodaro/shared)",
-  "services/workflow-engine/payload-builder.ts:1": "the generate-image branch: references, not a source photo",
   "lib/entity-credit-identifier.ts:1": "prices quality / resolution only; the entity worker clamps the ratio itself",
 }
 
 /** Builds that run WITHOUT a source size — each one a decision. */
 const BUILT_WITHOUT_SOURCE: Record<string, string> = {
   "services/workflow-engine/scene3d-http.ts:1": "builds the 3D-scene authoring nodes only, never a source-image node",
+  "services/workflow-engine/source-size-build.ts:1": "Generate Image's first pass, which only finds the photo the build sends; the build that runs is the second, with that photo's size",
 }
 
 function withoutSource(tallies: Record<string, CallTally>): string[] {
@@ -151,8 +151,9 @@ describe("'auto' on a source-image request is resolved with the source's size", 
   it("finds the call sites that pass the size (the scan is not vacuous)", () => {
     expect(normalizers["routes/image-to-image.ts"]?.withSource).toBe(1)
     expect(normalizers["routes/edit-image.ts"]?.withSource).toBe(1)
-    // edit-image, image-to-image, modify-image (one call shared by both arms).
-    expect(normalizers["services/workflow-engine/payload-builder.ts"]?.withSource).toBe(3)
+    expect(normalizers["routes/generate-image.ts"]?.withSource).toBe(1)
+    // generate-image, edit-image, image-to-image, modify-image (one call shared by both arms).
+    expect(normalizers["services/workflow-engine/payload-builder.ts"]?.withSource).toBe(4)
   })
 
   it("every normalizer call passes a size that was read, or is listed with a reason", () => {
@@ -171,7 +172,9 @@ describe("'auto' on a source-image request is resolved with the source's size", 
           s.importClause.namedBindings.elements.some((e) => e.name.text === "buildPayload"),
       )
     const builds = tallyCalls(new Set(["buildPayload"]), importsBuilder)
-    expect(builds["services/workflow-engine/node-executor.ts"]?.withSource).toBeGreaterThan(0)
+    // The workflow run builds through `buildPayloadWithSourceSize` only.
+    expect(builds["services/workflow-engine/source-size-build.ts"]?.withSource).toBe(1)
+    expect(builds["services/workflow-engine/node-executor.ts"]).toBeUndefined()
     expect(withoutSource(builds)).toEqual(Object.keys(BUILT_WITHOUT_SOURCE).sort())
   })
 })

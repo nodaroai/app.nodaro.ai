@@ -40,7 +40,7 @@ import type {
   ManualReferenceImage,
   ImageProvider,
 } from "@/types/nodes"
-import { IMAGE_GEN_MODELS, MODIFY_IMAGE_MODELS, UPSCALE_IMAGE_MODELS, imageStylePresets, getAspectRatiosForModel, getSourcePhotoAspectRatios, IMAGE_RESOLUTION_OPTIONS, IMAGE_QUALITY_OPTIONS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, REF_IMAGE_MAX_LIMITS, DEFAULT_REF_IMAGE_MAX, I2I_STRENGTH_SUPPORT, I2I_MASK_SUPPORT, SEED_SUPPORT, RENDERING_SPEED_SUPPORT, GUIDANCE_SCALE_SUPPORT, defaultResolutionFor, withoutDeniedModels } from "./model-options"
+import { IMAGE_GEN_MODELS, MODIFY_IMAGE_MODELS, UPSCALE_IMAGE_MODELS, imageStylePresets, getAspectRatiosForModel, getSourcePhotoAspectRatios, withPhotoAuto, IMAGE_RESOLUTION_OPTIONS, IMAGE_QUALITY_OPTIONS, MODELS_WITH_REFERENCE_IMAGE_SUPPORT, REF_IMAGE_MAX_LIMITS, DEFAULT_REF_IMAGE_MAX, I2I_STRENGTH_SUPPORT, I2I_MASK_SUPPORT, SEED_SUPPORT, RENDERING_SPEED_SUPPORT, GUIDANCE_SCALE_SUPPORT, defaultResolutionFor, withoutDeniedModels } from "./model-options"
 import { ModelSelectOption } from "./model-select-option"
 import { ModelSearchSelect } from "./model-search-select"
 import { ModelDescriptionHint } from "./model-description-hint"
@@ -186,9 +186,13 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
   // Narrow option sets to what ALL selected providers support (intersection).
   // Single-provider mode falls back to that provider's full set.
   const intersected = useMemo(() => intersectModelOptions(providersList), [providersList])
-  const aspectRatioOptions = isMulti
+  // The catalog's ratios (in multi mode, the ones every selected model shares) —
+  // what a stale ratio snaps to — and the tiles: Auto (keep a wired photo's
+  // shape) first, on every model.
+  const listedAspectRatios = isMulti
     ? intersected.aspectRatios
     : getAspectRatiosForModel(currentProvider)
+  const aspectRatioOptions = withPhotoAuto(listedAspectRatios)
   const resolutionOptions = isMulti
     ? (intersected.resolutions.length > 0 ? intersected.resolutions : undefined)
     : IMAGE_RESOLUTION_OPTIONS[currentProvider]
@@ -212,9 +216,11 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
   // images if the cohort no longer supports them.
   useEffect(() => {
     const updates: Partial<GenerateImageData> = {}
+    // "auto" is valid on every model here (see withPhotoAuto); any other stale
+    // ratio snaps to the first listed ratio, as before.
     const aspectValues = aspectRatioOptions.map((o) => o.value)
     if (data.aspectRatio && !aspectValues.includes(data.aspectRatio)) {
-      updates.aspectRatio = aspectValues[0] || "1:1"
+      updates.aspectRatio = listedAspectRatios[0]?.value || "1:1"
     }
     // Resolution: if provider exposes this lever, snap to a valid option;
     // if it does NOT, clear the stale value so the backend Zod enum
@@ -637,7 +643,7 @@ function GenerateImageConfigImpl({ data, onUpdate, sources, fieldMappings, onMap
           <MappableField field="aspectRatio" label={t("field.aspectRatio")} sources={sources} fieldMappings={fieldMappings} onMapField={onMapField}>
             <AspectRatioSelector
               options={aspectRatioOptions}
-              value={data.aspectRatio || aspectRatioOptions[0]?.value || "1:1"}
+              value={data.aspectRatio || listedAspectRatios[0]?.value || "1:1"}
               onValueChange={(v) => onUpdate({ aspectRatio: v })}
             />
           </MappableField>

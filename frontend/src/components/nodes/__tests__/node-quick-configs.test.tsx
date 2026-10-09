@@ -749,3 +749,35 @@ describe("video-to-video NODE_QUICK_CONFIGS registration", () => {
     expect(resolve(resolutionControl, { provider: "runway-aleph" })).toEqual([])
   })
 })
+
+describe("Generate Image's ratio control — 'auto' on every model", () => {
+  const aspect = () => getQuickConfigs("generate-image").find((c) => c.field === "aspectRatio")!
+  const optionsFor = (provider: string) => {
+    const o = aspect().options
+    return typeof o === "function" ? o({ provider }) : o
+  }
+
+  it("lists Auto first on every Generate Image model, once", async () => {
+    const { IMAGE_GEN_MODELS } = await import("@/components/editor/config-panels/model-options")
+    for (const { value: provider } of IMAGE_GEN_MODELS) {
+      const values = optionsFor(provider).map((o) => o.value)
+      expect(values[0], provider).toBe("auto")
+      expect(values.filter((v) => v === "auto"), provider).toHaveLength(1)
+    }
+  })
+
+  it("keeps a stored 'auto' on a model without a native auto", () => {
+    render(<QuickConfigSelect nodeId="n1" control={aspect()} value="auto" data={{ provider: "seedream-5-pro" }} />)
+    expect(updateNodeData).not.toHaveBeenCalled()
+  })
+
+  it("snaps any other stale ratio to the model's first listed ratio — never to Auto", () => {
+    render(<QuickConfigSelect nodeId="n1" control={aspect()} value="4:5" data={{ provider: "seedream-5-pro" }} />)
+    expect(updateNodeData).toHaveBeenCalledWith("n1", { aspectRatio: "1:1" })
+  })
+
+  it("leaves a native-auto model's snap as before", () => {
+    render(<QuickConfigSelect nodeId="n1" control={aspect()} value="3:2" data={{ provider: "gpt-image-2" }} />)
+    expect(updateNodeData).toHaveBeenCalledWith("n1", { aspectRatio: "auto" })
+  })
+})

@@ -54,9 +54,8 @@ import { supabase } from "../../lib/supabase.js"
 import { videoQueue } from "../../lib/queue.js"
 import { reserveCreditsForJob } from "../../middleware/credit-guard.js"
 import { fetchOwnMedia } from "../../lib/fetch-own-media.js"
-import { forgetProbedImageSizes, probeImageDisplaySize } from "../../lib/image-source-size.js"
-import { buildPayload } from "../../services/workflow-engine/payload-builder.js"
-import { autoAspectSourceImageUrl } from "../../services/workflow-engine/source-image.js"
+import { forgetProbedImageSizes } from "../../lib/image-source-size.js"
+import { buildPayloadWithSourceSize } from "../../services/workflow-engine/source-size-build.js"
 import type { SimpleNode, ResolvedInputs } from "../../services/workflow-engine/types.js"
 
 const USER = "00000000-0000-4000-8000-000000000001"
@@ -192,15 +191,10 @@ describe("/v1/edit-image — 'auto' keeps the source photo's shape", () => {
 /**
  * BOTH ENGINES, ONE ANSWER. The single-node route and the workflow run must
  * hand the provider the same body for the same request. The workflow side runs
- * exactly what node-executor runs: read the size of the url
- * `autoAspectSourceImageUrl` names, then build with it.
+ * exactly what node-executor runs (`buildPayloadWithSourceSize`).
  */
 describe("route and workflow run agree", () => {
-  async function workflowPayload(node: SimpleNode, inputs: ResolvedInputs) {
-    const url = autoAspectSourceImageUrl(node, inputs)
-    const sourceImage = url ? await probeImageDisplaySize(url) : undefined
-    return buildPayload(node, "job-1", inputs, undefined, { sourceImage })
-  }
+  const workflowPayload = (node: SimpleNode, inputs: ResolvedInputs) => buildPayloadWithSourceSize(node, "job-1", inputs, undefined, {})
 
   const LEVERS = ["provider", "imageUrl", "aspectRatio", "resolution", "quality"] as const
   const pick = (p: Record<string, unknown>) => Object.fromEntries(LEVERS.map((k) => [k, p[k]]))

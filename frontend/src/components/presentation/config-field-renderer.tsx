@@ -7,6 +7,7 @@ import {
   EVP_PROVIDERS,
   imageStylePresets,
   getAspectRatiosForModel,
+  getSourcePhotoAspectRatios,
   getAspectRatiosForVideoModel,
   getVideoResolutionOptions,
   IMAGE_QUALITY_OPTIONS,
@@ -58,7 +59,8 @@ const LABEL_CLS =
 type OptionEntry = { value: string; label: string; desc?: string }
 
 // ---------------------------------------------------------------------------
-// Auto-reset hook: when current value is not in available options, reset to first valid.
+// Auto-reset hook: when current value is not in available options, reset to
+// `resetTo` when it is one of them, else to the first valid option.
 // Called unconditionally at top level of the sub-components that need it.
 // ---------------------------------------------------------------------------
 
@@ -67,6 +69,7 @@ function useAutoReset(
   options: readonly { value: string }[],
   onChange: (v: unknown) => void,
   enabled = true,
+  resetTo?: string,
 ) {
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
@@ -75,9 +78,10 @@ function useAutoReset(
     if (!enabled || options.length === 0) return
     const str = String(value ?? "")
     if (!options.some((o) => o.value === str)) {
-      onChangeRef.current(options[0].value)
+      const target = resetTo !== undefined && options.some((o) => o.value === resetTo) ? resetTo : options[0].value
+      onChangeRef.current(target)
     }
-  }, [value, options, enabled])
+  }, [value, options, enabled, resetTo])
 }
 
 // ---------------------------------------------------------------------------
@@ -92,6 +96,7 @@ function AspectRatioField({
   allowedValues,
   readOnly,
   autoReset,
+  resetTo,
 }: {
   label: string
   options: readonly { value: string; label: string }[]
@@ -100,6 +105,8 @@ function AspectRatioField({
   allowedValues?: Array<string | number | boolean>
   readOnly?: boolean
   autoReset?: boolean
+  /** What a stale value resets to, when it is one of the options (else the first option). */
+  resetTo?: string
 }) {
   const filtered = allowedValues
     ? options.filter((o) =>
@@ -107,7 +114,7 @@ function AspectRatioField({
       )
     : options
 
-  useAutoReset(value, filtered, onChange, autoReset ?? false)
+  useAutoReset(value, filtered, onChange, autoReset ?? false, resetTo)
 
   const strValue = String(value ?? "")
 
@@ -364,14 +371,17 @@ function renderGenerateImage(
       )
     case "aspectRatio":
       return (
+        // Auto (keep a wired photo's shape) on every model; a stale value
+        // resets to the model's first LISTED ratio, never to that Auto tile.
         <AspectRatioField
           label={customLabel ?? t("field.aspectRatio")}
-          options={getAspectRatiosForModel(provider)}
+          options={getSourcePhotoAspectRatios(provider)}
           value={value}
           onChange={onChange}
           allowedValues={allowedValues}
           readOnly={readOnly}
           autoReset
+          resetTo={getAspectRatiosForModel(provider)[0]?.value}
         />
       )
     case "quality": {

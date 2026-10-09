@@ -116,6 +116,7 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
             .optional()
             .describe(
               "Aspect ratio (e.g. 16:9, 9:16, 1:1, 4:3, 3:4, 21:9). Default 16:9. " +
+              "'auto' keeps the shape of base_image_url, else of the first reference image, on every model. " +
               "Variations like 16x9 / 16-9 are accepted; unsupported values fall back.",
             ),
           negative_prompt: z.string().max(2000).optional(),
@@ -281,22 +282,22 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         } catch {
           // Pref read failed (DB blip, missing column) → proceed with no saved prefs.
         }
-        const { model, aspectRatio, resolution, quality, modelEntry: _modelEntry } =
-          normalizeImageInput(
-            {
-              model: effective.model as string | undefined,
-              aspect_ratio: effective.aspect_ratio as string | undefined,
-              resolution: effective.resolution as string | undefined,
-              quality: effective.quality as string | undefined,
-            },
-            {
-              model: userImg.model,
-              aspectRatio: userImg.aspectRatio,
-              resolution: userImg.resolution,
-              quality: userImg.quality,
-            },
-            defaultImageModel("general", (effective.aspect_ratio as string | undefined) ?? userImg.aspectRatio),
-          )
+        const normalized = normalizeImageInput(
+          {
+            model: effective.model as string | undefined,
+            aspect_ratio: effective.aspect_ratio as string | undefined,
+            resolution: effective.resolution as string | undefined,
+            quality: effective.quality as string | undefined,
+          },
+          {
+            model: userImg.model,
+            aspectRatio: userImg.aspectRatio,
+            resolution: userImg.resolution,
+            quality: userImg.quality,
+          },
+          defaultImageModel("general", (effective.aspect_ratio as string | undefined) ?? userImg.aspectRatio),
+        )
+        const { model, resolution, quality } = normalized
 
         const compositePrompt = buildCompositePrompt(
           effective.prompt as string,
@@ -305,6 +306,14 @@ export function registerImageVerbs({ server, session, fastify }: RegisterOpts): 
         // Tolerant: array | JSON-string | lone URL; asset ids resolved to URLs.
         // The route's referenceImageUrls schema is URL-only (max 14).
         const refUrls = await resolveRefArray(effective.reference_image_urls, session.userId, "image", 14)
+        // "auto" keeps the shape of the photo the call sends (the base image,
+        // else the first reference): /v1/generate-image resolves it against
+        // that photo — natively, or to the model's nearest listed ratio — so a
+        // call carrying one hands "auto" on, as `modify_image` does. With no
+        // photo, "auto" is snapped here exactly as before.
+        const sendsPhoto =
+          Boolean(effective.base_image_url) || refUrls.length > 0 || (args.connected_references?.length ?? 0) > 0
+        const aspectRatio = isAutoAspectToken(effective.aspect_ratio) && sendsPhoto ? "auto" : normalized.aspectRatio
         const payload = {
           prompt: compositePrompt,
           provider: model,
