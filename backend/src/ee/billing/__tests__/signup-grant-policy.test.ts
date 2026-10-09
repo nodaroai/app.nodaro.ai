@@ -235,6 +235,38 @@ describe("decideSignupGrant — repeat signups that hide their device", () => {
   })
 })
 
+describe("decideSignupGrant — a network that already carries a crowd", () => {
+  it("withholds a keyed claim once more than the threshold of accounts were ever seen on the network", () => {
+    const at = decideSignupGrant({
+      providers: google,
+      counts: { ...clean, ipEverOthers: SIGNUP_GRANT_RULES.ipEverOthersMax },
+      keyless: false,
+    })
+    expect(at.decision).toBe("granted")
+    const over = decideSignupGrant({
+      providers: google,
+      counts: { ...clean, ipEverOthers: SIGNUP_GRANT_RULES.ipEverOthersMax + 1 },
+      keyless: false,
+    })
+    expect(over).toEqual({ decision: "withheld", reasons: ["ip_reuse"] })
+  })
+
+  it("a keyless claim keeps its own, stricter rule and never carries both", () => {
+    expect(decideSignupGrant({ providers: google, counts: { ...clean, ipEverOthers: 10 }, keyless: true })).toEqual({
+      decision: "withheld",
+      reasons: ["keyless_ip_reuse"],
+    })
+  })
+
+  it("takes its place after velocity in the stable order", () => {
+    const r = decideSignupGrant({
+      providers: ["email"],
+      counts: { browserKeyOthers: 2, deviceKeySameIpOthers: 2, deviceKeyOthers: 5, ipClaimsInWindow: 9, ipEverOthers: 9 },
+    })
+    expect(r.reasons).toEqual(["email_only_provider", "browser_match", "device_ip_match", "device_cluster", "ip_velocity", "ip_reuse"])
+  })
+})
+
 describe("emailStem", () => {
   it("cuts the trailing digits, Gmail dots and +tags", () => {
     expect(emailStem("Series.Name027+x@GoogleMail.com")).toEqual({ stem: "seriesname", domain: "googlemail.com", local: "seriesname027" })

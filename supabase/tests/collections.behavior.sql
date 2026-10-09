@@ -213,6 +213,40 @@ VALUES ('00000000-0000-4000-8000-000000000963', '00000000-0000-4000-8000-0000000
 SELECT pg_temp.assert_eq('records without a key coexist',
   (SELECT count(*)::text FROM collection_records WHERE collection_id = '00000000-0000-4000-8000-000000000963'), '3');
 
+-- 4f. Usage (migration 494): a new record is not used, with an empty "used by";
+--     marking it used round-trips, and so does marking it not used again.
+SELECT pg_temp.assert_eq('a new record is not used',
+  (SELECT (used_at IS NULL)::text FROM collection_records WHERE title = 'no key one'), 'true');
+SELECT pg_temp.assert_eq('a new record has an empty used_by',
+  (SELECT used_by::text FROM collection_records WHERE title = 'no key one'), '{}');
+UPDATE collection_records
+  SET used_at = '2026-10-08T17:00:00Z', used_by = '{"via":"node","nodeType":"collection-write","workflowId":"wf-1"}'::jsonb
+  WHERE title = 'no key one';
+SELECT pg_temp.assert_eq('marking a record used keeps when and by whom',
+  (SELECT (used_at = '2026-10-08T17:00:00Z'::timestamptz)::text || ' ' || (used_by->>'workflowId') FROM collection_records WHERE title = 'no key one'),
+  'true wf-1');
+SELECT pg_temp.assert_eq('the live, "not used yet", "used" and Trash partial indexes exist',
+  (SELECT count(*)::text FROM pg_indexes WHERE indexname IN ('idx_collection_records_live', 'idx_collection_records_live_unused', 'idx_collection_records_live_used', 'idx_collection_records_trash')), '4');
+SELECT pg_temp.assert_eq('each partial index carries the predicate of its list',
+  (SELECT count(*)::text FROM pg_indexes
+    WHERE (indexname = 'idx_collection_records_live' AND indexdef LIKE '%WHERE (deleted_at IS NULL)%')
+       OR (indexname = 'idx_collection_records_live_unused' AND indexdef LIKE '%deleted_at IS NULL%' AND indexdef LIKE '%used_at IS NULL%')
+       OR (indexname = 'idx_collection_records_live_used' AND indexdef LIKE '%deleted_at IS NULL%' AND indexdef LIKE '%used_at IS NOT NULL%')
+       OR (indexname = 'idx_collection_records_trash' AND indexdef LIKE '%WHERE (deleted_at IS NOT NULL)%')), '4');
+UPDATE collection_records SET used_at = NULL, used_by = '{}'::jsonb WHERE title = 'no key one';
+SELECT pg_temp.assert_eq('a record can be marked not used again',
+  (SELECT (used_at IS NULL)::text FROM collection_records WHERE title = 'no key one'), 'true');
+-- 4g. The Trash (migration 494): a new record is live; a delete stamps deleted_at
+--     (the row stays, so the dedupe key still holds); a restore clears it.
+SELECT pg_temp.assert_eq('a new record is not in the Trash',
+  (SELECT (deleted_at IS NULL)::text FROM collection_records WHERE title = 'no key one'), 'true');
+UPDATE collection_records SET deleted_at = '2026-10-08T20:00:00Z' WHERE title = 'no key one';
+SELECT pg_temp.assert_eq('a record in the Trash keeps its row and its stamp',
+  (SELECT (deleted_at = '2026-10-08T20:00:00Z'::timestamptz)::text FROM collection_records WHERE title = 'no key one'), 'true');
+UPDATE collection_records SET deleted_at = NULL WHERE title = 'no key one';
+SELECT pg_temp.assert_eq('a record can be restored from the Trash',
+  (SELECT (deleted_at IS NULL)::text FROM collection_records WHERE title = 'no key one'), 'true');
+
 -- 4e. Deleting a collection removes its records; deleting the user removes the rest.
 DELETE FROM collections WHERE id = '00000000-0000-4000-8000-000000000965';
 SELECT pg_temp.assert_eq('deleting a collection cascades to its records',

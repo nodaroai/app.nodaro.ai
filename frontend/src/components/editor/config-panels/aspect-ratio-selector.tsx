@@ -47,10 +47,13 @@ export function RatioIcon({ value, label }: { value: string; label: string }) {
   )
 }
 
-/** Short display text: "16:9" from value, or first word of label for non-ratio values */
+/** Short display text: "16:9" from value, or the label's first word for
+ *  non-ratio values — cut at a space or an opening parenthesis, ASCII or
+ *  full-width, since some languages set a qualifier as "自動（…）" or "자동(…)"
+ *  with no space. The whole label stays in the tile's tooltip. */
 function displayText(value: string, label: string): string {
   if (value.includes(":")) return value
-  return label.split(" ")[0] || value
+  return label.split(/[\s(（]/)[0] || value
 }
 
 export function AspectRatioSelector({ options, value, onValueChange, className }: AspectRatioSelectorProps) {

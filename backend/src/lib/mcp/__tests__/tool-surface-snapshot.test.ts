@@ -722,6 +722,18 @@ const LLM_LANE_PRICING_WORDING_BYTES = 704
 // 1_322 → 1_342 B), and the budget rises by exactly that, keeping whatever headroom the list
 // had (none).
 const UGC_CREATOR_CANDIDATES_WORDING_BYTES = 20
+// RAISED 2026-10-08 by the `modify_image` `aspect_ratio` description and nothing else: it now
+// says that 'auto' keeps the photo's shape on every model (the verb hands "auto" to the route,
+// which resolves it against the source image). No tool was added, so the fixture does NOT
+// move. Measured by this suite: 407_807 total − 407_760 before = 47 B, and the budget rises by
+// exactly that, keeping whatever headroom the list had (none).
+const MODIFY_IMAGE_AUTO_ASPECT_WORDING_BYTES = 47
+// RAISED 2026-10-08 by `read_collection`'s `usage` argument (every record, the ones not used
+// yet, or the used ones — the queue reads "not used yet") and the one sentence its description
+// gained; nothing else moved. No tool was added, so the fixture does NOT move. Measured by this
+// suite as a delta on the same tree: 407_927 after − 407_761 before = 166 B, and the budget
+// rises by exactly that.
+const READ_COLLECTION_USAGE_BYTES = 166
 
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES,
@@ -785,6 +797,7 @@ export const TOOL_WIRE_BUDGET = {
     GET_APP_RUN_OUTCOME_BYTES +
     UGC_CARDS_CAPTION_STYLE_BYTES +
     COLLECTION_TOOLS_BYTES +
+    READ_COLLECTION_USAGE_BYTES +
     PLAN_EDIT_TRAILER_MODE_BYTES +
     APPLY_EDL_CLIP_KEY_BYTES +
     PLAN_EDIT_TRAILER_GATE_BYTES +
@@ -803,7 +816,8 @@ export const TOOL_WIRE_BUDGET = {
     NANO_BANANA_2_1_MODEL_BYTES +
     SEEDREAM_5_FLASH_MODEL_BYTES +
     IMAGE_MODEL_ROLE_DEFAULTS_BYTES +
-    UGC_CREATOR_CANDIDATES_WORDING_BYTES,
+    UGC_CREATOR_CANDIDATES_WORDING_BYTES +
+    MODIFY_IMAGE_AUTO_ASPECT_WORDING_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

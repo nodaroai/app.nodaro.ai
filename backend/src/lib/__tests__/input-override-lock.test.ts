@@ -228,6 +228,60 @@ describe("findLockedOverrides — review follow-ups", () => {
   })
 })
 
+describe("findLockedOverrides — a Sub-workflow node runs what its workflow chose", () => {
+  // Re-pointing it would let one workflow run any other of its owner's and hand
+  // the result back: to a published app's stranger, or to a personal API key
+  // limited to that one workflow.
+  const NESTING = [{ id: "sub-1", type: "sub-workflow" }, ...GRAPH]
+
+  it("refuses the workflow it runs, the route it picked and the part of it that route covers", () => {
+    expect(
+      findLockedOverrides(NESTING, {
+        "sub-1": { workflowId: "another-workflow", selectedRouteId: "r2", routeSnapshot: { inputNodeId: "a", outputNodeId: "b" } },
+      }),
+    ).toEqual([
+      { nodeId: "sub-1", nodeType: "sub-workflow", field: "workflowId", kind: "sub-workflow" },
+      { nodeId: "sub-1", nodeType: "sub-workflow", field: "selectedRouteId", kind: "sub-workflow" },
+      { nodeId: "sub-1", nodeType: "sub-workflow", field: "routeSnapshot", kind: "sub-workflow" },
+    ])
+  })
+
+  it("refuses them through fieldMappings too — the run-time wire that writes a node's field", () => {
+    expect(findLockedOverrides(NESTING, { "sub-1": { fieldMappings: { workflowId: { sourceNodeId: "text-1" } } } })).toEqual([
+      { nodeId: "sub-1", nodeType: "sub-workflow", field: "fieldMappings.workflowId", kind: "sub-workflow" },
+    ])
+  })
+
+  it("leaves the node's other fields alone, and the same names on other nodes", () => {
+    expect(findLockedOverrides(NESTING, { "sub-1": { label: "Intro", skipped: false } })).toEqual([])
+    expect(findLockedOverrides(NESTING, { "gen-1": { workflowId: "x", selectedRouteId: "y" } })).toEqual([])
+  })
+
+  it("is refused at the merge every run lane shares, with a message naming the field and the node", () => {
+    let caught: unknown
+    try {
+      assertNoLockedOverrides(NESTING, { "sub-1": { workflowId: "another-workflow" } })
+    } catch (err) {
+      caught = err
+    }
+    expect(caught).toBeInstanceOf(LockedOverrideError)
+    const message = (caught as LockedOverrideError).message
+    expect(message).toContain("cannot change which workflow a Sub-workflow node runs")
+    expect(message).toContain('"workflowId" on node "sub-1"')
+    expect(message).not.toContain("another-workflow")
+  })
+
+  it("keeps an outbound refusal in its own sentence beside it", () => {
+    const message = describeLockedOverrides(
+      findLockedOverrides(NESTING, { "sub-1": { workflowId: "w" }, "hook-1": { url: "https://attacker.example/" } }),
+    )
+    expect(message).toContain('Refused: "url" on webhook-output node "hook-1"')
+    expect(message).toContain('Refused: "workflowId" on node "sub-1"')
+    // Never listed as an outbound destination.
+    expect(message).not.toContain("sub-workflow node")
+  })
+})
+
 describe("assertNoLockedOverrides / the message", () => {
   it("throws a LockedOverrideError carrying code locked_field and every violation", () => {
     let caught: unknown

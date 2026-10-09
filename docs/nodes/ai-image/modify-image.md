@@ -13,6 +13,7 @@ For non-prompt utility operations (pure upscaling, background removal) use [Upsc
 - Connect a source image to the `image` input (from Upload Image, Generate Image, or any image-producing node).
 - Pick a provider and write a transformation prompt describing the change.
 - Optionally pick a style preset (or enter custom style text), add a negative prompt, set aspect ratio, seed, and a reference image — exactly which controls apply depends on the selected provider.
+- The aspect ratio control offers **Auto (match the photo)** on every model. Auto keeps your photo's shape; on models without a native auto it picks the closest supported shape. Opening the panel keeps it; any other ratio a newly picked model does not list still switches to that model's first ratio.
 - The node returns the transformed image on the `image` handle.
 - **An `{image:N}` token with no reference image at its position becomes its label** — `{image:1:person}` reads as `person`, a bare `{image:1}` is left out, and an image label is any text up to the closing brace (`{image:1:man's jacket}` reads as `man's jacket`).
 

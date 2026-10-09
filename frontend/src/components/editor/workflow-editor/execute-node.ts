@@ -5265,6 +5265,7 @@ function executeNodeCore(
         updateNodeData(node.id, {
           executionStatus: "completed",
           generatedPickerJson: result.pickerJson,
+          generatedPickerRunId: result.jobId,
           generatedGaps: result.gaps,
           errorMessage: undefined,
         });
@@ -5491,6 +5492,7 @@ function executeNodeCore(
         limit: d.limit,
         order: d.order,
         textFormat: d.textFormat,
+        usage: d.usage,
         nodeId: node.id,
       })
         .then((res) => {
@@ -5608,6 +5610,7 @@ function executeNodeCore(
         link: typedField("link"),
         dedupeKey: typedField("dedupeKey"),
         media,
+        markSourceUsed: d.markSourceUsed === true,
         nodeId: node.id,
       })
         .then((res) => {

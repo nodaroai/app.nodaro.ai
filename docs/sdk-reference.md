@@ -5009,13 +5009,43 @@ throws `ConflictError` (`name_taken`). Deleting a collection deletes its records
 #### `records(id, params?)`
 
 ```ts
-records(id: string, params?: { q?: string; since?: string; cursor?: string; limit?: number }): Promise<ListCollectionRecordsResult>
+records(
+  id: string,
+  params?: {
+    q?: string; since?: string; until?: string;
+    usage?: "all" | "unused" | "used"; status?: "active" | "trash"; order?: "newest" | "oldest";
+    cursor?: string; offset?: number; limit?: number;
+  },
+): Promise<ListCollectionRecordsResult>
 ```
 
-`GET /v1/collections/:id/records` → the records, newest first. `q` finds words
-in the title, text or link; `since` (ISO) keeps only records saved at or after
-it; page with `cursor` (the previous page's `nextCursor`) and `limit` (1-100,
-default 50).
+`GET /v1/collections/:id/records` → the records, newest first (`order: "oldest"`
+flips it). `q` finds words in the title, text or link; `since` / `until` (ISO)
+keep only records saved at or after / before them; `usage` keeps every record
+(`all`, the default), only the ones **not used yet** (`unused`) or only the
+**used** ones; `status` lists the live records (`active`, the default) or the
+**Trash**. Page with `cursor` (the previous page's `nextCursor`) or with
+`offset` (a numbered page: `(page − 1) × limit`, at most 1,000,000) and
+`limit` (1-100, default 50); a page asked for by `offset` carries `total`,
+how many records match the filters in all (a cursor walk never pays for the
+count). Each record carries `usedAt` (null until it is used), `usedBy`
+(who used it — the shape of `source`) and `deletedAt` (null while it is live);
+`source` and `usedBy` carry the workflow's `workflowName` and `projectId` when
+it is yours.
+
+#### `setUsed(id, recordId, used, source?)`
+
+```ts
+setUsed(id: string, recordId: string, used: boolean, source?: CollectionRecordSource): Promise<CollectionRecord>
+```
+
+`PATCH /v1/collections/:id/records/:recordId` → mark a record used (`usedAt`
+now, `usedBy` = `source`, by default `{ via: "api" }`) or not used again
+(`used: false`). A workflow does the same with a Save to Collection node whose
+**Mark the item as used** is on. Throws a `NodaroError` with
+`code: "not_available"` (503) on a server whose database predates the usage
+release, and a `NotFoundError` (404) for a record that is not yours — or on an
+older server, which has no such route.
 
 ```ts
 const since = new Date(Date.now() - 48 * 3_600_000).toISOString()
@@ -5057,11 +5087,31 @@ for (const post of posts) {
 }
 ```
 
-#### `deleteRecord(id, recordId)` / `export(id, params?)`
+#### `deleteRecord(id, recordId)` / `deleteRecordForever(id, recordId)` / `restoreRecord(id, recordId)` / `bulkRecords(id, input)`
 
 ```ts
 deleteRecord(id: string, recordId: string): Promise<void>
-export(id: string, params?: { format?: "csv" | "json"; since?: string; q?: string }): Promise<string>
+deleteRecordForever(id: string, recordId: string): Promise<void>
+restoreRecord(id: string, recordId: string): Promise<CollectionRecord>
+bulkRecords(id: string, input: { ids: string[]; action: "trash" | "restore" | "delete" }): Promise<{ updated: number }>
+```
+
+`deleteRecord` moves the record to the collection's **Trash** (`DELETE
+/v1/collections/:id/records/:recordId`): it leaves every list, node read,
+export and MCP read, keeps its dedupe key (the same story saved again is a
+duplicate of it and stays in the Trash), still counts toward the cap, and
+`restoreRecord` brings it back. `deleteRecordForever` removes a record that
+is already in the Trash for good (`NodaroError` `not_in_trash`, 409, for a
+live one). `bulkRecords` does any of the three for up to 100 records at
+once; `updated` says how many of the ids were yours in that collection and
+changed. On a server whose database predates the Trash every one of these
+throws `NodaroError` `not_available` (nothing is deleted in the Trash's
+stead).
+
+#### `export(id, params?)`
+
+```ts
+export(id: string, params?: { format?: "csv" | "json"; since?: string; until?: string; usage?: "all" | "unused" | "used"; q?: string }): Promise<string>
 ```
 
 `DELETE /v1/collections/:id/records/:recordId` removes one record.

@@ -84,6 +84,7 @@ export const RUN_RESULT_EXTRA_KEYS: readonly string[] = [
   "generatedVideoUrls",
   "generatedAudioUrls",
   "generatedPickerJson",
+  "generatedPickerRunId",
   "generatedGaps",
   "generatedVoiceId",
   "generatedPlan",

@@ -52,6 +52,9 @@ export const ENTRY_BY_LINK: readonly string[] = [
   "/projects",
   "/projects/:id",
   "/projects/:id/workflows/:workflowId",
+  // The short link to a workflow — what assistants share and the Shared page
+  // links to; it finds the project and opens the editor at its full address.
+  "/editor/:workflowId",
   "/Pipeline",
   "/Pipeline/:pipelineId",
   "/video-director",

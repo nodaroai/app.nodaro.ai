@@ -179,6 +179,36 @@ describe("modify_image verb", () => {
     expect(result.isError).toBe(true)
   })
 
+  // "auto" keeps the source photo's shape. The route resolves it against the
+  // image — natively, or to the model's nearest listed ratio — so the verb must
+  // hand it on instead of snapping it to a fixed ratio first.
+  it("passes aspect_ratio 'auto' through to the route, on any model", async () => {
+    for (const model of ["seedream-5-pro-i2i", "nano-banana-edit", "gpt-image-2-i2i"]) {
+      const { fastify, received } = stubRoute("POST", "/v1/image-to-image", { jobId: "j-mi" })
+      const server = buildServer()
+      registerVerbs({ server, session: executeSession(), fastify })
+      await callTool(server, "modify_image", { prompt: "make it dusk", image_url: "https://example.com/a.png", model, aspect_ratio: "auto" })
+      expect(received.body?.aspectRatio, model).toBe("auto")
+    }
+  })
+
+  it("still snaps any other ratio the model does not list", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/image-to-image", { jobId: "j-mi" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    await callTool(server, "modify_image", { prompt: "make it dusk", image_url: "https://example.com/a.png", model: "seedream-5-pro-i2i", aspect_ratio: "4:5" })
+    expect(received.body?.aspectRatio).toBe("3:4")
+  })
+
+  it("generate_image keeps snapping 'auto' on a model without one — references are not a source photo", async () => {
+    const { fastify, received } = stubRoute("POST", "/v1/generate-image", { jobId: "j-gi" })
+    const server = buildServer()
+    registerVerbs({ server, session: executeSession(), fastify })
+    await callTool(server, "generate_image", { prompt: "a lighthouse", model: "seedream-5-pro", aspect_ratio: "auto" })
+    expect(received.body?.aspectRatio).toBeDefined()
+    expect(received.body?.aspectRatio).not.toBe("auto")
+  })
+
   it("does NOT register without workflows:execute scope", async () => {
     const fastify = Fastify()
     const server = buildServer()

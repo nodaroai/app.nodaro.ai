@@ -18,6 +18,16 @@ export function appBaseUrl(): string {
 }
 
 /**
+ * The link that opens a workflow in the editor: the app's short
+ * `/editor/<workflowId>` address, which looks up the workflow's project
+ * itself — so the link a tool hands out keeps working after the workflow
+ * moves to another project.
+ */
+export function workflowEditorUrl(workflowId: string): string {
+  return `${appBaseUrl()}/editor/${encodeURIComponent(workflowId)}`
+}
+
+/**
  * MCP host base. Deliberately NOT derived from PUBLIC_URL: LLM
  * code-interpreter sandboxes (Claude.ai) only allowlist the MCP resource host
  * they discover via RFC 9728, and on Nodaro Cloud that is the mcp. subdomain

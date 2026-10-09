@@ -9,6 +9,7 @@ import {
   COLLECTION_RECORD_URL_MAX,
   COLLECTION_READ_LIMIT_MAX,
   COLLECTION_READ_WINDOW_HOURS_MAX,
+  COLLECTION_USAGES,
   isCollectionUrl,
   collectionRecordHeadline,
   collectionRecordsDigest,
@@ -26,7 +27,7 @@ import { creditGuard } from "../middleware/credit-guard.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { extractNodeId, extractWorkflowId } from "../lib/request-helpers.js"
 import { machineCredentialLimit } from "../lib/machine-credential-limit.js"
-import { findCollection, readRecordsPage, toRecord, writeCollectionRecord } from "../lib/collections-store.js"
+import { findCollection, itemFromWire, readRecordsPage, setRecordUsed, toRecord, writeCollectionRecord } from "../lib/collections-store.js"
 
 /**
  * The two collection nodes' routes — sync-HTTP, called by the editor's Run and
@@ -72,6 +73,8 @@ const writeBody = z.object({
   fields: z.record(z.string().min(1).max(100), z.union([z.string(), z.number(), z.boolean()])).optional(),
   dedupeKey: z.string().max(COLLECTION_DEDUPE_KEY_MAX).optional(),
   executionId: z.string().max(120).optional(),
+  /** When the item is itself one of the caller's collection records, mark THAT record used after the save (a queue: read → post → record → mark). */
+  markSourceUsed: z.boolean().default(false),
 })
 
 const WINDOW_DAYS_MAX = COLLECTION_READ_WINDOW_HOURS_MAX / 24
@@ -83,6 +86,7 @@ const readBody = z
     limit: z.coerce.number().int().min(1).max(COLLECTION_READ_LIMIT_MAX).default(50),
     order: z.enum(["newest", "oldest"]).default("newest"),
     textFormat: z.enum(["headlines", "full"]).default("headlines"),
+    usage: z.enum(COLLECTION_USAGES).default("all"),
   })
   // The window is at most 30 days whichever unit names it — refused, never silently clamped.
   .refine((b) => b.windowUnit !== "days" || b.windowAmount <= WINDOW_DAYS_MAX, {
@@ -114,7 +118,7 @@ function idempotencyKeyOf(req: FastifyRequest): string | null {
 }
 
 /** The record as the node's `json` handle and the run's history carry it. */
-function writeOutput(record: CollectionRecord, outcome: "inserted" | "duplicate" | "replayed", evicted: number, collectionName: string) {
+function writeOutput(record: CollectionRecord, outcome: "inserted" | "duplicate" | "replayed", evicted: number, collectionName: string, markedUsed: boolean) {
   const headline = collectionRecordHeadline(record)
   return {
     json: record,
@@ -124,7 +128,18 @@ function writeOutput(record: CollectionRecord, outcome: "inserted" | "duplicate"
     outcome,
     evicted,
     collectionName,
+    markedUsed,
   }
+}
+
+const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/** The collection record an item IS (an `id` and a `collectionId`, as Read Collection emits them) — the one "mark as used" marks. */
+export function sourceRecordOf(item: unknown): { collectionId: string; recordId: string } | null {
+  const v = itemFromWire(item)
+  if (typeof v !== "object" || v === null || Array.isArray(v)) return null
+  const { id, collectionId } = v as Record<string, unknown>
+  return typeof id === "string" && UUID_SHAPE.test(id) && typeof collectionId === "string" && UUID_SHAPE.test(collectionId) ? { recordId: id, collectionId } : null
 }
 
 /**
@@ -155,7 +170,7 @@ export async function collectionNodeRoutes(app: FastifyInstance): Promise<void> 
     }
     const workflowId = extractWorkflowId(body)
     const nodeId = extractNodeId(body)
-    const { collectionId, link, executionId, ...rest } = parsed.data
+    const { collectionId, link, executionId, markSourceUsed, ...rest } = parsed.data
 
     // Ownership before anything else: a probe of someone else's collection id
     // leaves no job row behind, and the item is never looked at.
@@ -193,11 +208,25 @@ export async function collectionNodeRoutes(app: FastifyInstance): Promise<void> 
 
     if (outcome.kind === "inserted" || outcome.kind === "duplicate" || outcome.kind === "replayed") {
       const evicted = outcome.kind === "inserted" ? outcome.evicted : 0
-      const output = writeOutput(outcome.record, outcome.kind, evicted, outcome.collection.name)
+      // "Mark the item as used": the item was one of the caller's records (a
+      // Read Collection row that went through the run) — stamp it now, after
+      // the save, with this node as who used it. A record already used keeps
+      // its first "used by" (a replay or a later duplicate never rewrites which
+      // run used it), and a record that is not theirs is never touched (the
+      // update is user-scoped). Saving a record back into its own collection
+      // (a duplicate of itself) marks it like any other item.
+      let markedUsed = false
+      const sourceRecord = markSourceUsed ? sourceRecordOf(rest.item) : null
+      if (sourceRecord) {
+        const marked = await setRecordUsed({ userId, ...sourceRecord, used: true, by: source, firstUseWins: true })
+        markedUsed = marked.kind === "updated" || marked.kind === "already_used"
+        if (marked.kind === "error") req.log.warn({ err: marked.error, recordId: sourceRecord.recordId }, "collection-write: marking the source record used failed")
+      }
+      const output = writeOutput(outcome.record, outcome.kind, evicted, outcome.collection.name, markedUsed)
       // Through the completion funnel (workers/shared.ts): the result gate sees
       // the output like any other job's, and the CAS flips only a live row.
       await markJobCompleted(job.id, { output_data: output })
-      return { jobId: job.id, record: outcome.record, outcome: outcome.kind, evicted, collection: outcome.collection }
+      return { jobId: job.id, record: outcome.record, outcome: outcome.kind, evicted, markedUsed, collection: outcome.collection }
     }
 
     const message =
@@ -231,7 +260,7 @@ export async function collectionNodeRoutes(app: FastifyInstance): Promise<void> 
     }
     const workflowId = extractWorkflowId(body)
     const nodeId = extractNodeId(body)
-    const { collectionId, windowAmount, windowUnit, limit, order, textFormat } = parsed.data
+    const { collectionId, windowAmount, windowUnit, limit, order, textFormat, usage } = parsed.data
 
     // Ownership first — no job row for a collection that is not the caller's.
     const found = await findCollection(collectionId, userId)
@@ -252,7 +281,7 @@ export async function collectionNodeRoutes(app: FastifyInstance): Promise<void> 
     if (jobErr || !job) return sendInternalError(reply, req, jobErr, "Failed to create job")
 
     const since = collectionReadSince(windowAmount, windowUnit)
-    const page = await readRecordsPage({ collectionId, userId, since, limit, order })
+    const page = await readRecordsPage({ collectionId, userId, since, limit, order, usage })
     if (page.error) {
       await failJob(job.id, "Failed to read the collection")
       return sendInternalError(reply, req, page.error, "Failed to read the collection")
@@ -268,10 +297,11 @@ export async function collectionNodeRoutes(app: FastifyInstance): Promise<void> 
       generatedText: text,
       count: records.length,
       since,
+      usage,
       collectionName: found.row.name,
     }
     await markJobCompleted(job.id, { output_data: output })
-    return { jobId: job.id, records, text, count: records.length, since, collection: found.row }
+    return { jobId: job.id, records, text, count: records.length, since, usage, collection: found.row }
   })
 }
 

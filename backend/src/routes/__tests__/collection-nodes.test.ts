@@ -31,7 +31,7 @@ type Result = { data?: unknown; error?: { code?: string; message?: string } | nu
 function makeQB(result: Result = {}) {
   const resolved = { data: result.data ?? null, error: result.error ?? null, count: result.count ?? null }
   const qb: Record<string, unknown> = {}
-  for (const name of ["select", "insert", "update", "delete", "eq", "gte", "in", "or", "order", "limit", "range"]) {
+  for (const name of ["select", "insert", "update", "delete", "eq", "gte", "lt", "is", "not", "in", "or", "order", "limit", "range"]) {
     qb[name] = vi.fn(() => qb)
   }
   qb.single = vi.fn(() => Promise.resolve({ data: resolved.data, error: resolved.error }))
@@ -259,6 +259,68 @@ describe("POST /v1/collection-write (Save to Collection)", () => {
     expect(missing.json().error.code).toBe("not_available")
   })
 
+  it("marks the item's own record used after the save when asked — the record read from a collection, by this node, workflow and run", async () => {
+    const SRC_COLL = "00000000-0000-4000-8000-0000000000c2"
+    const SRC_REC = "00000000-0000-4000-8000-0000000000e7"
+    const insert = makeQB({ data: recordRow() })
+    const mark = makeQB({ data: recordRow({ id: SRC_REC, collection_id: SRC_COLL, used_at: "2026-10-07T10:00:00+00:00" }) })
+    const used = tables({ collections: [owned()], collection_records: [insert, makeQB({ count: 1 }), mark], jobs: [makeQB()] })
+    const app = await buildApp()
+    const item = { id: SRC_REC, collectionId: SRC_COLL, title: "Ready story", text: "Body", url: null, fields: { post: "The post" } }
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/collection-write",
+      payload: { collectionId: COLL, item: JSON.stringify(item), markSourceUsed: true, executionId: "exec1", workflowId: WF, nodeId: "markDone" },
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toMatchObject({ outcome: "inserted", markedUsed: true })
+    const update = (mark.update as ReturnType<typeof vi.fn>).mock.calls[0]![0] as { used_at: string; used_by: unknown }
+    expect(typeof update.used_at).toBe("string")
+    expect(update.used_by).toEqual({ via: "node", nodeType: "collection-write", workflowId: WF, executionId: "exec1", nodeId: "markDone" })
+    expect(mark.eq).toHaveBeenCalledWith("id", SRC_REC)
+    expect(mark.eq).toHaveBeenCalledWith("collection_id", SRC_COLL)
+    expect(mark.eq).toHaveBeenCalledWith("user_id", USER)
+    expect(jobUpdate(used).output_data).toMatchObject({ markedUsed: true })
+  })
+
+  it("marks nothing for an item that is not a record or when the switch is off; a record saved back into its own collection is marked like any other", async () => {
+    const mark = makeQB({ data: recordRow({ used_at: "2026-10-07T10:00:00+00:00" }) })
+    // Three writes, each one insert and one cap count on the records table; the first also marks (one update).
+    const used = tables({
+      collections: [owned()],
+      collection_records: [makeQB({ data: recordRow() }), makeQB({ count: 1 }), mark, makeQB({ data: recordRow() }), makeQB({ count: 1 }), makeQB({ data: recordRow() }), makeQB({ count: 1 })],
+      jobs: [makeQB()],
+    })
+    const app = await buildApp()
+    const own = await app.inject({ method: "POST", url: "/v1/collection-write", payload: { collectionId: COLL, item: { id: REC, collectionId: COLL, text: "x" }, markSourceUsed: true } })
+    expect(own.json()).toMatchObject({ outcome: "inserted", markedUsed: true })
+    expect(mark.eq).toHaveBeenCalledWith("id", REC)
+    // A node's mark never rewrites an earlier use.
+    expect(mark.is).toHaveBeenCalledWith("used_at", null)
+    const plain = await app.inject({ method: "POST", url: "/v1/collection-write", payload: { collectionId: COLL, item: { text: "just text" }, markSourceUsed: true } })
+    expect(plain.json()).toMatchObject({ markedUsed: false })
+    const off = await app.inject({ method: "POST", url: "/v1/collection-write", payload: { collectionId: COLL, item: { id: "00000000-0000-4000-8000-0000000000e7", collectionId: COLL, text: "x" } } })
+    expect(off.json()).toMatchObject({ markedUsed: false })
+    for (const qb of used.collection_records ?? []) if (qb !== mark) expect(qb.update).not.toHaveBeenCalled()
+  })
+
+  it("a source record already used keeps its first use: the mark changes nothing and the node still reports it as used", async () => {
+    const SRC = "00000000-0000-4000-8000-0000000000e7"
+    const update = makeQB({ data: null })
+    const existing = makeQB({ data: recordRow({ id: SRC, used_at: "2026-10-07T10:00:00+00:00", used_by: { via: "node", executionId: "first-run" } }) })
+    const used = tables({ collections: [owned()], collection_records: [makeQB({ data: recordRow() }), makeQB({ count: 1 }), update, existing], jobs: [makeQB()] })
+    const app = await buildApp()
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/collection-write",
+      payload: { collectionId: COLL, item: { id: SRC, collectionId: COLL, text: "x" }, markSourceUsed: true, executionId: "second-run", workflowId: WF, nodeId: "markDone" },
+    })
+    expect(res.json()).toMatchObject({ outcome: "inserted", markedUsed: true })
+    expect(update.is).toHaveBeenCalledWith("used_at", null)
+    expect(existing.update).not.toHaveBeenCalled()
+    expect(jobUpdate(used).output_data).toMatchObject({ markedUsed: true })
+  })
+
   it("refuses a body without a collection id, before any job", async () => {
     const app = await buildApp()
     const res = await app.inject({ method: "POST", url: "/v1/collection-write", payload: { text: "x" } })
@@ -304,6 +366,19 @@ describe("POST /v1/collection-read (Read Collection)", () => {
     expect(res.json()).toMatchObject({ count: 0, text: "", records: [] })
     expect(records.order).toHaveBeenCalledWith("created_at", { ascending: true })
     expect(jobUpdate(used).output_data).toMatchObject({ text: "", generatedText: "", count: 0, json: [] })
+  })
+
+  it("reads only the records not used yet (or only the used ones) when asked, and says so in its result", async () => {
+    const records = makeQB({ data: [recordRow()] })
+    const used = tables({ collections: [owned()], collection_records: [records], jobs: [makeQB()] })
+    const app = await buildApp()
+    const res = await app.inject({ method: "POST", url: "/v1/collection-read", payload: { collectionId: COLL, usage: "unused" } })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().usage).toBe("unused")
+    expect(records.is).toHaveBeenCalledWith("used_at", null)
+    expect(jobUpdate(used).output_data).toMatchObject({ usage: "unused" })
+    expect((await app.inject({ method: "POST", url: "/v1/collection-read", payload: { collectionId: COLL } })).json().usage).toBe("all")
+    expect((await app.inject({ method: "POST", url: "/v1/collection-read", payload: { collectionId: COLL, usage: "whenever" } })).statusCode).toBe(400)
   })
 
   it("holds the window to 30 days and the limit to 200", async () => {

@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Switch } from "@/components/ui/switch"
 import { useT, tx } from "@/lib/i18n"
 import {
   COLLECTION_READ_LIMIT_MAX,
@@ -17,6 +18,7 @@ import {
   type CollectionDigestFormat,
   type CollectionReadOrder,
   type CollectionReadWindowUnit,
+  type CollectionUsage,
 } from "@nodaro/shared"
 import { useCollectionMutations, useCollections } from "@/hooks/queries/use-collections-queries"
 import { CollectionFormDialog } from "@/components/collections/collection-form-dialog"
@@ -174,6 +176,21 @@ export function CollectionReadConfig({ data, onUpdate }: ConfigProps<CollectionR
       </div>
 
       <div>
+        <Label className={LABEL_CLASS}>{t("collcfg.usage")}</Label>
+        <Select value={data.usage ?? "all"} onValueChange={(v) => onUpdate({ usage: v as CollectionUsage })}>
+          <SelectTrigger aria-label={t("collcfg.usage")} className="mt-1.5">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{t("collcfg.usageAll")}</SelectItem>
+            <SelectItem value="unused">{t("collcfg.usageUnused")}</SelectItem>
+            <SelectItem value="used">{t("collcfg.usageUsed")}</SelectItem>
+          </SelectContent>
+        </Select>
+        <p className={HINT_CLASS}>{t("collcfg.usageHint")}</p>
+      </div>
+
+      <div>
         <Label className={LABEL_CLASS}>{t("collcfg.order")}</Label>
         <Select value={data.order ?? "newest"} onValueChange={(v) => onUpdate({ order: v as CollectionReadOrder })}>
           <SelectTrigger aria-label={t("collcfg.order")} className="mt-1.5">
@@ -231,6 +248,16 @@ export function CollectionWriteConfig({ data, onUpdate, sources, fieldMappings, 
       <MappableField field="dedupeKey" label={t("collcfg.dedupeKey")} {...mappable}>
         <Input value={data.dedupeKey ?? ""} dir="ltr" placeholder={t("collcfg.dedupeKeyPh")} onChange={(e) => onUpdate({ dedupeKey: e.target.value })} />
       </MappableField>
+
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <Label htmlFor="collection-write-mark-used" className={LABEL_CLASS}>
+            {t("collcfg.markSourceUsed")}
+          </Label>
+          <p className={HINT_CLASS}>{t("collcfg.markSourceUsedHint")}</p>
+        </div>
+        <Switch id="collection-write-mark-used" checked={data.markSourceUsed === true} onCheckedChange={(checked) => onUpdate({ markSourceUsed: checked })} />
+      </div>
 
       <div className="space-y-1">
         <p className="text-[10px] text-muted-foreground">{t("collcfg.dedupeKeyHint")}</p>

@@ -527,8 +527,8 @@ describe("POST /v1/credits/claim-signup-grant — withholding", () => {
     const doubles = wireSupabase({ providers: ["google"] })
     await claim({ browserKey: HEX64, deviceKey: OTHER_HEX64 })
     expect(doubles.signals.select).toHaveBeenCalledWith("user_id", { count: "exact", head: true })
-    // browser, device+ip, device, ip velocity — four counts, four exclusions.
-    expect(doubles.neqCalls).toHaveLength(4)
+    // browser, device+ip, device, ip velocity, ip reuse — five counts, five exclusions.
+    expect(doubles.neqCalls).toHaveLength(5)
     for (const call of doubles.neqCalls) expect(call).toEqual(["user_id", TEST_USER_ID])
   })
 })

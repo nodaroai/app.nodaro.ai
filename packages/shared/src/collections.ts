@@ -14,6 +14,8 @@
  * read node, MCP and the CLI render records with.
  */
 
+import { loneMediaUrlKind } from "./lone-media-url.js"
+
 export const COLLECTION_NAME_MAX = 80
 export const COLLECTION_DESCRIPTION_MAX = 500
 export const COLLECTION_RECORD_TITLE_MAX = 500
@@ -77,20 +79,31 @@ export interface Collection {
   readonly name: string
   readonly description: string
   readonly recordCount: number
+  /** How many of its records have been used (`usedAt` set) and are not in the Trash. On the one-collection read; a server before the usage migration leaves it out. */
+  readonly usedCount?: number
+  /** How many of its records are in the Trash. On the one-collection read; a server before the usage migration leaves it out. `recordCount` counts them too (they still count toward the cap). */
+  readonly trashCount?: number
   readonly createdAt: string
   readonly updatedAt: string
 }
 
-/** Where a record came from — a node in a run, or a direct write. */
+/** Where a record came from — a node in a run, or a direct write. The same shape says who USED it. */
 export interface CollectionRecordSource {
   readonly via?: "api" | "mcp" | "node" | "ui"
   readonly nodeType?: string
   readonly workflowId?: string
   readonly executionId?: string
   readonly nodeId?: string
+  /** Read-side enrichment: the workflow's name and project, looked up when the records are listed. Ignored on a write. */
+  readonly workflowName?: string
+  readonly projectId?: string
 }
 
 export type CollectionFieldValue = string | number | boolean
+
+/** Which records a list or a read returns: every record, the ones not used yet, or the ones used. */
+export const COLLECTION_USAGES = ["all", "unused", "used"] as const
+export type CollectionUsage = (typeof COLLECTION_USAGES)[number]
 
 export interface CollectionRecord {
   readonly id: string
@@ -104,6 +117,35 @@ export interface CollectionRecord {
   readonly dedupeKey: string | null
   readonly source: CollectionRecordSource
   readonly createdAt: string
+  /** When the record was used (a Save to Collection node with "mark the item as used", the API, the page) — null until then. A server before the usage migration leaves it out. */
+  readonly usedAt?: string | null
+  /** Who used it, in the shape of `source`; empty until then. */
+  readonly usedBy?: CollectionRecordSource
+  /** When the record was moved to the Trash (a delete on the page, the API or the CLI); null while it is live. A server before the usage migration leaves it out. */
+  readonly deletedAt?: string | null
+}
+
+/** Which records a list returns: the live ones (`active`, the default) or the ones in the Trash. Nodes, exports and MCP read the live ones only. */
+export const COLLECTION_RECORD_STATUSES = ["active", "trash"] as const
+export type CollectionRecordStatus = (typeof COLLECTION_RECORD_STATUSES)[number]
+
+/** The most records one bulk call (`POST /v1/collections/:id/records/bulk`) touches. */
+export const COLLECTION_BULK_MAX = 100
+/** The actions of a bulk call: move the records to the Trash, bring them back, or delete records already in the Trash for good. */
+export const COLLECTION_BULK_ACTIONS = ["trash", "restore", "delete"] as const
+export type CollectionBulkAction = (typeof COLLECTION_BULK_ACTIONS)[number]
+/** The most records a numbered page may skip (`offset`) — past any page a person turns to, within the largest cap. */
+export const COLLECTION_RECORDS_OFFSET_MAX = 1_000_000
+
+/** The body of `POST /v1/collections/:id/records/bulk`. */
+export type BulkCollectionRecordsInput = {
+  readonly ids: readonly string[]
+  readonly action: CollectionBulkAction
+}
+
+export interface BulkCollectionRecordsResult {
+  /** How many of the ids were the caller's records in that collection and changed (a record already in the asked state is not counted). */
+  readonly updated: number
 }
 
 /** The caller's limits as the API quotes them: `null` is "no limit" (a
@@ -139,15 +181,34 @@ export type ListCollectionRecordsParams = {
   readonly q?: string
   /** Only records saved at or after this ISO timestamp (date and time). */
   readonly since?: string
-  /** The `nextCursor` of the previous page. */
+  /** Only records saved before this ISO timestamp (date and time). */
+  readonly until?: string
+  /** `all` (default), `unused` (not used yet) or `used`. */
+  readonly usage?: CollectionUsage
+  /** `newest` (default) or `oldest` first. */
+  readonly order?: "newest" | "oldest"
+  /** `active` (default: the live records) or `trash`. */
+  readonly status?: CollectionRecordStatus
+  /** The `nextCursor` of the previous page. Not together with `offset`. */
   readonly cursor?: string
+  /** Skip this many records first (0–`COLLECTION_RECORDS_OFFSET_MAX`; a numbered page is `offset = (page - 1) × limit`). Not together with `cursor`; the result then carries `total`. */
+  readonly offset?: number
   /** 1–100, default 50. */
   readonly limit?: number
+}
+
+/** The body of `PATCH /v1/collections/:id/records/:recordId`: mark a record used (or not used again). */
+export type SetCollectionRecordUsedInput = {
+  readonly used: boolean
+  /** Who is marking it; the API fills `via` when absent. */
+  readonly source?: CollectionRecordSource
 }
 
 export interface ListCollectionRecordsResult {
   readonly data: readonly CollectionRecord[]
   readonly nextCursor: string | null
+  /** How many records match the filters in all (a numbered page is `ceil(total / limit)` pages). Only on a page asked for by `offset`, and left out when the server could not count. */
+  readonly total?: number
 }
 
 /** The body of `POST /v1/collections/:id/records`. An explicit field wins over
@@ -437,7 +498,16 @@ function mediaFromItem(item: Record<string, unknown>): CollectionMedia[] {
   for (const key of IMAGE_KEYS) if (isHttpUrl(item[key]) && !push({ type: "image", url: item[key] as string })) break
   for (const key of VIDEO_KEYS) if (isHttpUrl(item[key]) && !push({ type: "video", url: item[key] as string })) break
   for (const key of AUDIO_KEYS) if (isHttpUrl(item[key]) && !push({ type: "audio", url: item[key] as string })) break
+  // A `mediaUrl` whose kind sits beside it (`mediaKind`: image / photo / video / audio), else read off the
+  // file's ending, else a plain link. Both keys stay fields as well: a workflow may read them there.
+  if (isHttpUrl(item.mediaUrl)) push({ type: mediaKindOf(item.mediaKind, item.mediaUrl), url: item.mediaUrl })
   return out
+}
+
+function mediaKindOf(kind: unknown, url: string): CollectionMediaType {
+  if (kind === "photo" || kind === "image") return "image"
+  if (kind === "video" || kind === "audio") return kind
+  return loneMediaUrlKind(url) ?? "link"
 }
 
 /**

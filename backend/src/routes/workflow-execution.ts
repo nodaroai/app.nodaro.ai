@@ -39,6 +39,7 @@ import { describeLockedOverrides, findLockedOverrides } from "../lib/input-overr
 import { migrateLegacyNodeType } from "../services/workflow-engine/normalize-node-types.js"
 import { accessAtLeast, canRunWorkflow, workflowAccessFromRow } from "../lib/workflow-access.js"
 import { toAccessRow } from "../lib/workflow-route-access.js"
+import { limitedKeyWorkflows, refuseLimitedKey } from "../middleware/token-workflow-scope.js"
 import { deriveRenderFinalRun, isRenderFinalRefusal, parseRenderFinalBody, renderFinalCredits } from "../lib/render-final-run.js"
 import {
   CONTINUATION_REFUSAL_MESSAGE,
@@ -275,7 +276,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
   // Spend-surface threading (D1 v2): the surface flag is captured here, at
   // run creation, and rides the execution payload — node reserves happen
   // later inside the orchestrator where the surface is no longer visible.
-  app.post("/v1/workflows/:id/run", async (req, reply) => {
+  app.post("/v1/workflows/:id/run", { config: { workflowScope: { workflowParam: "id" } } }, async (req, reply) => {
     if (!req.userId) {
       return reply.status(401).send({
         error: { code: "unauthorized", message: "Authentication required" },
@@ -672,7 +673,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
   })
 
   // --- Get execution ---
-  app.get("/v1/workflow-executions/:id", async (req, reply) => {
+  app.get("/v1/workflow-executions/:id", { config: { workflowScope: { executionParam: "id" } } }, async (req, reply) => {
     if (!req.userId) {
       return reply.status(401).send({
         error: { code: "unauthorized", message: "Authentication required" },
@@ -725,7 +726,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
   })
 
   // --- Stream execution via SSE ---
-  app.get("/v1/workflow-executions/:id/stream", async (req, reply) => {
+  app.get("/v1/workflow-executions/:id/stream", { config: { workflowScope: { executionParam: "id" } } }, async (req, reply) => {
     if (!req.userId) {
       return reply.status(401).send({
         error: { code: "unauthorized", message: "Authentication required" },
@@ -852,7 +853,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
   })
 
   // --- Cancel execution ---
-  app.post("/v1/workflow-executions/:id/cancel", async (req, reply) => {
+  app.post("/v1/workflow-executions/:id/cancel", { config: { workflowScope: { executionParam: "id" } } }, async (req, reply) => {
     if (!req.userId) {
       return reply.status(401).send({
         error: { code: "unauthorized", message: "Authentication required" },
@@ -1030,7 +1031,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
   })
 
   // --- List executions for a workflow ---
-  app.get("/v1/workflows/:id/executions", async (req, reply) => {
+  app.get("/v1/workflows/:id/executions", { config: { workflowScope: { workflowParam: "id" } } }, async (req, reply) => {
     if (!req.userId) {
       return reply.status(401).send({
         error: { code: "unauthorized", message: "Authentication required" },
@@ -1162,7 +1163,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
   })
 
   // --- List all executions (global, across all workflows) ---
-  app.get("/v1/executions", async (req, reply) => {
+  app.get("/v1/executions", { config: { workflowScope: "handler" } }, async (req, reply) => {
     if (!req.userId) {
       return reply.status(401).send({
         error: { code: "unauthorized", message: "Authentication required" },
@@ -1181,6 +1182,11 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
 
     const { limit, cursor, status, viewAll } = queryParsed.data
     const isAdminViewAll = viewAll === "true"
+
+    // A personal API key limited to some workflows lists only their runs, and
+    // never the admin view below (an admin's key included).
+    const limitedTo = limitedKeyWorkflows(req)
+    if (limitedTo && isAdminViewAll) return refuseLimitedKey(reply)
 
     if (isAdminViewAll) {
       const isAdmin = await checkIsAdmin(req.userId)
@@ -1223,6 +1229,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     if (!isAdminViewAll) {
       execQuery = execQuery.eq("user_id", req.userId)
     }
+    if (limitedTo) execQuery = execQuery.in("workflow_id", [...limitedTo])
 
     if (statusFilter.length === 1) {
       execQuery = execQuery.eq("status", statusFilter[0])
@@ -1246,6 +1253,7 @@ export async function workflowExecutionRoutes(app: FastifyInstance) {
     if (!isAdminViewAll) {
       jobsQuery = jobsQuery.eq("user_id", req.userId)
     }
+    if (limitedTo) jobsQuery = jobsQuery.in("workflow_id", [...limitedTo])
 
     if (statusFilter.length > 0) {
       const jobStatuses = mapExecStatusesToJobStatuses(statusFilter)

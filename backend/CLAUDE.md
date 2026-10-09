@@ -243,6 +243,18 @@ Every signed-in request (an `onResponse` hook, `hasAdmin()` only) notes its user
 
 **Resolution order** (in `auth.ts:registerAuthHook`): public route check → internal-secret header → `ndr_app_` OAuth token → Supabase JWT → reject with 401.
 
+### Personal API keys limited to some workflows (`middleware/token-workflow-scope.ts`)
+
+A personal key with `api_tokens.workflow_ids` set may only run those workflows, read them and their inputs, and follow their runs. It is enforced by STRUCTURE: a root preHandler right after the auth hook refuses such a key (`403 forbidden`) on every route that does not declare, in its own registration, which workflow it touches:
+
+- `config: { workflowScope: { workflowParam: "id" } }`: the path parameter is a workflow id that must be on the key's list.
+- `config: { workflowScope: { executionParam: "id" } }`: the parameter is a run id (a workflow run or a single-node job), looked up as the key owner's; it must have run a listed workflow.
+- `config: { workflowScope: "handler" }`: the handler applies `limitedKeyWorkflows(req)` itself (narrows a list, checks a body/query id).
+
+A route that takes no credential at all treats the key as no key (the request goes on anonymous). A declared route still refuses a body `workflowId` that is not on the key's list. A new route is therefore closed to limited keys until someone declares it. Declaring one is a decision about what a limited key may do: `middleware/__tests__/token-workflow-scope-routes.test.ts` pins the declared set on the app as `buildApp` registers it in tests (core + ee routes, cloud edition) and fails on any change there. A private plugin's route, or one behind a flag the test leaves off, is outside that pin, so declaring one needs the same care without the net. Never add a `"handler"` declaration without the handler actually narrowing, and add a test for that narrowing.
+
+What a Sub-workflow node runs (`workflowId`, `selectedRouteId`, `routeSnapshot`) is refused in a run request's `inputOverrides` on every lane (`lib/input-override-lock.ts`), next to outbound destinations.
+
 ### Dynamic CORS
 
 `backend/src/lib/dynamic-origins.ts` — async DB-backed origin allowlist with 60s in-process cache (stampede-safe). Combines:

@@ -78,6 +78,9 @@ export async function listOnlineUsers(opts: {
   readonly hiddenUserId?: string | null
   readonly now?: () => number
   readonly windowMs?: number
+  /** Told when names cannot be read. The list still answers, with bare ids
+   *  in their place, so the failure must reach the log. */
+  readonly onLookupError?: (what: "profiles" | "apps", error: unknown) => void
 }): Promise<OnlineUsersReport> {
   const now = (opts.now ?? Date.now)()
   const windowMs = opts.windowMs ?? PRESENCE_WINDOW_MS
@@ -98,8 +101,16 @@ export async function listOnlineUsers(opts: {
   }
   const appIds = [...new Set(entries.filter((e) => e.source === "app" && e.detail).map((e) => e.detail!))]
   const [profiles, apps] = await Promise.all([
-    opts.lookup.profiles([...byUser.keys()]).catch(() => new Map<string, { email: string | null; name: string | null }>()),
-    appIds.length > 0 ? opts.lookup.apps(appIds).catch(() => new Map<string, { name: string; mcp: boolean }>()) : new Map<string, { name: string; mcp: boolean }>(),
+    opts.lookup.profiles([...byUser.keys()]).catch((error: unknown) => {
+      opts.onLookupError?.("profiles", error)
+      return new Map<string, { email: string | null; name: string | null }>()
+    }),
+    appIds.length > 0
+      ? opts.lookup.apps(appIds).catch((error: unknown) => {
+          opts.onLookupError?.("apps", error)
+          return new Map<string, { name: string; mcp: boolean }>()
+        })
+      : new Map<string, { name: string; mcp: boolean }>(),
   ])
 
   const users = [...byUser.entries()].map(([userId, seen]): OnlineUser => {
@@ -123,14 +134,16 @@ export async function listOnlineUsers(opts: {
   return { ...head, available: true, users }
 }
 
-/** Names from the database, read with the service role — the route is admin-only. */
+/** Names from the database, read with the service role — the route is admin-only.
+ *  Every column here must exist (`online-users-columns.test.ts`): one that does
+ *  not fails the whole read, and the list falls back to bare ids. */
 export const databaseLookup: OnlineUsersLookup = {
   async profiles(ids) {
     if (ids.length === 0) return new Map()
-    const { data, error } = await supabase.from("profiles").select("id, email, full_name, display_name").in("id", [...ids])
+    const { data, error } = await supabase.from("profiles").select("id, email, full_name").in("id", [...ids])
     if (error) throw error
-    const rows = (data ?? []) as Array<{ id: string; email: string | null; full_name: string | null; display_name: string | null }>
-    return new Map(rows.map((row) => [row.id, { email: row.email, name: row.full_name ?? row.display_name }]))
+    const rows = (data ?? []) as Array<{ id: string; email: string | null; full_name: string | null }>
+    return new Map(rows.map((row) => [row.id, { email: row.email, name: row.full_name }]))
   },
   async apps(ids) {
     const { data, error } = await supabase.from("developer_apps").select("id, name, kind").in("id", [...ids])

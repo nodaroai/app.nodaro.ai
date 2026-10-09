@@ -1091,6 +1091,17 @@ export {
   type CollectionDigestFormat,
   type CollectionReadWindowUnit,
   type CollectionReadOrder,
+  COLLECTION_USAGES,
+  type CollectionUsage,
+  type SetCollectionRecordUsedInput,
+  COLLECTION_RECORD_STATUSES,
+  type CollectionRecordStatus,
+  COLLECTION_BULK_MAX,
+  COLLECTION_BULK_ACTIONS,
+  COLLECTION_RECORDS_OFFSET_MAX,
+  type CollectionBulkAction,
+  type BulkCollectionRecordsInput,
+  type BulkCollectionRecordsResult,
   type IngestedRecord,
 } from "./collections.js"
 
@@ -1297,6 +1308,9 @@ export {
   normalizeVideoRequestParams,
   fitAspectRatioToModel,
   defaultResolutionFor,
+  nearestCatalogAspectRatio,
+  autoAspectNeedsSourceImage,
+  isAutoAspectToken,
 } from "./model-catalog.js"
 export type {
   NormalizedVideoRequest,
@@ -1311,6 +1325,8 @@ export type {
   ModelMenuOption,
   ModelInputAdjustment,
   NormalizedModelInput,
+  ModelInputContext,
+  SourceImageSize,
   TtsCapabilities,
   TtsSettingLever,
 } from "./model-catalog.js"
@@ -1644,6 +1660,7 @@ export type { ExecutionOutcome } from "./execution-outcome.js"
 
 export {
   MODEL_PARAM_NODE_TYPES,
+  SOURCE_IMAGE_NODE_TYPES,
   normalizeNodeModelParams,
   describeNodeAdjustments,
 } from "./normalize-node-params.js"

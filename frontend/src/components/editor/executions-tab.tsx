@@ -1,9 +1,9 @@
-import React, { useState } from "react"
+import React, { useEffect, useState } from "react"
 import { executionErrorText } from "@/lib/execution-error-text"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { RefreshCw, ChevronLeft, ChevronRight, Loader2, AlertCircle, XCircle, ChevronDown, ChevronRight as ChevronRightIcon, Coins, Activity } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { cancelWorkflowExecution, stopWorkflowExecution, getJobs, getJobStatus, type WorkflowExecution, type Job } from "@/lib/api"
+import { cancelWorkflowExecution, stopWorkflowExecution, getJobs, getJobStatus, getWorkflowExecution, type WorkflowExecution, type Job } from "@/lib/api"
 import { hasCredits } from "@/lib/edition"
 import { executionOutcome } from "@nodaro/shared"
 import { toast } from "sonner"
@@ -35,15 +35,25 @@ import { executionsPageQuery } from "./executions-query"
 interface ExecutionsTabProps {
   readonly className?: string
   readonly workflowId?: string | null
+  /** A run to open expanded on arrival (a link from a collection record to the run that saved it). */
+  readonly initialExpandedId?: string | null
+  /** Called once the linked run is on screen, so the parent can forget it (a tab switch must not reopen it). */
+  readonly onLinkedRunShown?: () => void
 }
 
-export function ExecutionsTab({ className = "", workflowId }: ExecutionsTabProps) {
+export function ExecutionsTab({ className = "", workflowId, initialExpandedId = null, onLinkedRunShown }: ExecutionsTabProps) {
   const qc = useQueryClient()
   const t = useT()
   const isRtl = useAppDir() === "rtl"
   const [cursor, setCursor] = useState<string | undefined>()
   const [prevCursors, setPrevCursors] = useState<string[]>([])
-  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [expandedId, setExpandedId] = useState<string | null>(initialExpandedId)
+  // The linked run, kept from arrival: the parent drops it once we are here.
+  const [linkedId] = useState(initialExpandedId)
+  useEffect(() => {
+    if (linkedId) onLinkedRunShown?.()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const [cancellingId, setCancellingId] = useState<string | null>(null)
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null)
   const [selectedNodeInfo, setSelectedNodeInfo] = useState<{ nodeId: string; state: NodeState } | null>(null)
@@ -79,6 +89,15 @@ export function ExecutionsTab({ className = "", workflowId }: ExecutionsTabProps
   })
   const executions = data?.data ?? []
   const nextCursor = data?.nextCursor ?? null
+  // A linked run older than the newest page lists: read by id and pinned on top of the first
+  // page — only when it is a run of THIS workflow (the lookup is the person's, not the workflow's).
+  const linkedMissing = !!linkedId && !loading && cursor === undefined && !executions.some((e) => e.id === linkedId)
+  const { data: linkedRun } = useQuery({
+    queryKey: ["workflow-execution", linkedId],
+    queryFn: () => getWorkflowExecution(linkedId!),
+    enabled: linkedMissing,
+  })
+  const rows = linkedMissing && linkedRun && linkedRun.workflowId === workflowId ? [linkedRun, ...executions] : executions
 
   const handleRefresh = () => {
     setCursor(undefined)
@@ -234,14 +253,14 @@ export function ExecutionsTab({ className = "", workflowId }: ExecutionsTabProps
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-[#2D2D2D]">
-              {executions.length === 0 ? (
+              {rows.length === 0 ? (
                 <tr>
                   <td colSpan={hasCredits() ? 8 : 7} className="px-4 py-12 text-center text-gray-500 dark:text-[#94A3B8]">
                     {t("exec.emptyHint")}
                   </td>
                 </tr>
               ) : (
-                executions.map((exec) => {
+                rows.map((exec) => {
                   const isExpanded = expandedId === exec.id
                   const nodeStates = (exec.nodeStates ?? {}) as Record<string, NodeState>
                   // The nodes that actually executed, plus one the run skipped for a reason (execution-utils.ts).

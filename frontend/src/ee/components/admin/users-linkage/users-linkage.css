@@ -1,0 +1,75 @@
+/* Linked-account marking on the admin Users page.
+
+   Axis colours (device / browser / network) and the three size tiers
+   (>=10 / 5-9 / 2-4 accounts), each with the row backgrounds derived from it:
+   tint (a flagged row at rest), linked (shares a key with what the admin points
+   at), active (the pointed-at row itself). Light values first, dark under
+   `.dark` — the theme class next-themes puts on <html>. */
+
+:root {
+  --ulk-axis-device: oklch(0.55 0.17 300);
+  --ulk-axis-browser: oklch(0.55 0.15 230);
+  --ulk-axis-ip: oklch(0.55 0.13 165);
+
+  --ulk-large-color: oklch(0.55 0.2 25);
+  --ulk-large-tint: oklch(0.985 0.012 25);
+  --ulk-large-linked: oklch(0.96 0.045 25);
+  --ulk-large-active: oklch(0.94 0.06 25);
+
+  --ulk-medium-color: oklch(0.6 0.15 60);
+  --ulk-medium-tint: oklch(0.985 0.012 60);
+  --ulk-medium-linked: oklch(0.96 0.045 60);
+  --ulk-medium-active: oklch(0.94 0.06 60);
+
+  --ulk-small-color: oklch(0.5 0.05 260);
+  --ulk-small-tint: oklch(0.985 0.012 260);
+  --ulk-small-linked: oklch(0.96 0.045 260);
+  --ulk-small-active: oklch(0.94 0.06 260);
+
+  --ulk-on-tier: #fff;
+
+  --ulk-withheld-bg: oklch(0.93 0.07 70);
+  --ulk-withheld-fg: oklch(0.42 0.12 60);
+  --ulk-granted-bg: oklch(0.93 0.07 25);
+  --ulk-granted-fg: oklch(0.45 0.18 25);
+  --ulk-revoked-bg: oklch(0.93 0.01 260);
+  --ulk-revoked-fg: oklch(0.4 0.02 260);
+
+  --ulk-reason-bg: oklch(0.95 0.04 25);
+  --ulk-reason-fg: oklch(0.4 0.15 25);
+  --ulk-detail-bg: oklch(0.985 0.01 25);
+}
+
+.dark {
+  --ulk-axis-device: oklch(0.74 0.15 300);
+  --ulk-axis-browser: oklch(0.74 0.13 230);
+  --ulk-axis-ip: oklch(0.74 0.13 165);
+
+  --ulk-large-color: oklch(0.7 0.2 25);
+  --ulk-large-tint: oklch(0.2 0.02 25);
+  --ulk-large-linked: oklch(0.28 0.06 25);
+  --ulk-large-active: oklch(0.34 0.08 25);
+
+  --ulk-medium-color: oklch(0.78 0.15 70);
+  --ulk-medium-tint: oklch(0.2 0.02 70);
+  --ulk-medium-linked: oklch(0.28 0.06 70);
+  --ulk-medium-active: oklch(0.34 0.08 70);
+
+  --ulk-small-color: oklch(0.7 0.05 260);
+  --ulk-small-tint: oklch(0.2 0.02 260);
+  --ulk-small-linked: oklch(0.28 0.06 260);
+  --ulk-small-active: oklch(0.34 0.08 260);
+
+  --ulk-on-tier: #1c1c22;
+
+  --ulk-withheld-bg: oklch(0.32 0.07 70);
+  --ulk-withheld-fg: oklch(0.9 0.12 80);
+  --ulk-granted-bg: oklch(0.32 0.08 25);
+  --ulk-granted-fg: oklch(0.88 0.12 25);
+  --ulk-revoked-bg: oklch(0.3 0.01 260);
+  --ulk-revoked-fg: oklch(0.85 0.02 260);
+
+  --ulk-reason-bg: oklch(0.3 0.06 25);
+  --ulk-reason-fg: oklch(0.88 0.1 25);
+  --ulk-detail-bg: oklch(0.22 0.012 25);
+}

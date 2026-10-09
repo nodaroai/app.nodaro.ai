@@ -37,9 +37,11 @@ can call the same `/v1/*` endpoints using your Supabase user JWT
 3. Click **Create token**.
 4. Fill in:
    - **Name** — a label for your records (e.g. `prod-scheduler`).
-   - **Workflow scope** *(optional)* — pick specific workflows the token
-     can trigger. If empty, the token can run any workflow you own.
    - **Rate limit** — requests per minute, default `30`, max `120`.
+
+   A token made here can run any workflow you own. To limit one to
+   specific workflows, see
+   [Tokens limited to some workflows](#tokens-limited-to-some-workflows).
 5. Save. The full token is shown **once**. It will look like:
 
    ```
@@ -73,8 +75,37 @@ billing account's own routes (`/v1/deployment-billing/*`) answer
 Backend reference: `POST /v1/api-tokens` (JWT-authenticated, body
 `{ name, workflowIds[], rateLimit }`). See `backend/src/routes/api-tokens.ts`.
 
+<a id="tokens-limited-to-some-workflows"></a>**Tokens limited to some
+workflows.** Send `workflowIds` (up to 50 workflows of your personal space)
+when you create a token with `POST /v1/api-tokens`, or later with
+`PATCH /v1/api-tokens/:id`, from a signed-in session. An edit applies within
+a minute at most. Such a token is for running those workflows. It
+can run them, read them and their inputs, and follow their runs, and nothing
+else:
+
+- `GET /v1/api/workflows`, `GET /v1/workflows` and
+  `GET /v1/projects/:projectId/workflows` list only those workflows, and
+  `GET /v1/executions` lists only their runs.
+- `GET /v1/api/schema`, `POST /v1/api/run`, `GET /v1/workflows/:id`,
+  `GET /v1/workflows/:id/interface`, `POST /v1/workflows/:id/run`,
+  `POST /v1/workflows/:id/render-final/estimate` and
+  `GET /v1/workflows/:id/executions` answer for those workflows only.
+- `GET /v1/api/status/:execId`, `GET /v1/api/result/:execId` and
+  `GET /v1/workflow-executions/:id` (with `/stream` and `/cancel`) answer for
+  runs of those workflows only. A run that is not yours answers `404`.
+- Routes that need no sign-in at all (the public gallery, the model and node
+  catalogs) answer as they would without a token.
+
+Every other request answers `403 forbidden` ("This API key is limited to
+specific workflows, and this request is outside them. Use a key without a
+workflow limit for anything else."). That covers another workflow or its runs,
+editing or deleting a workflow, the direct generation routes, uploads, jobs,
+published apps, MCP, and use as a relay credential (below). It is refused
+before anything runs, so nothing is reserved or billed. A token with no
+`workflowIds` is the account's full-access token.
+
 **Using a token to run a self-hosted or local instance on a hosted one.**
-A personal token is also the simplest relay credential: on the
+A personal token (one without a workflow limit) is also the simplest relay credential: on the
 self-hosted instance set `NODARO_CLOUD_URL` to the hosted instance and
 `NODARO_API_KEY` to the token, and every generation runs on the hosted
 engine and is billed to the token's account. No OAuth connection is
@@ -87,7 +118,9 @@ is the one that creates that token. Details in
 Personal API tokens (`Authorization: Bearer ndr_…`) authenticate every
 authenticated route in the backend, including the published-app endpoints
 under `/v1/app/:slug/*` (see the [Embed App Guide](./embed-app-guide.md))
-and the per-feature routes (jobs, workflows, projects, etc.).
+and the per-feature routes (jobs, workflows, projects, etc.). A token limited
+to some workflows reaches only the routes listed under
+[Tokens limited to some workflows](#tokens-limited-to-some-workflows).
 
 A few surfaces are deliberately app-only and reject API tokens and OAuth
 app tokens with `403 in_app_only` — currently the
@@ -176,6 +209,12 @@ fields (and counts the rest); an override nested more than 32 levels deep on
 such a node is refused outright. Ordinary fields on those nodes (a caption, a
 limit) and media `url` fields on input nodes (uploads, reference audio) stay
 overridable.
+
+A second class is refused the same way on every run path: what a
+**Sub-workflow** node runs. Its `workflowId`, `selectedRouteId` and
+`routeSnapshot`, set directly or through a `fieldMappings` entry, answer
+`400 locked_field`. Which workflow a node runs, and which part of it, is
+decided by the workflow itself, not by a run request.
 
 <a id="runs-that-would-stop-for-a-review"></a>**Runs that would stop for a review.** *Rolled out under a flag* (`PREVIEW_STOP_RULE_ENABLED`, see [Apply EDL](./nodes/processing-video/apply-edl.md#a-run-stops-at-a-preview)): where it is off, none of these runs is refused. Studio, Voice and any other client besides the editor and an app's own page count as nobody to review, and get the message below as is. A workflow whose [Apply EDL](./nodes/processing-video/apply-edl.md#a-run-stops-at-a-preview) render is set to **Preview** (`quality: "proxy"`) stops at that preview for a person to review, and only a person in the editor (whose runs send `"reviewer": "editor"`) or on a published app's page (whose runs send `"reviewer": "app"` to `/v1/app/:slug/run`, with a signed-in session token, not `headless`; see [Render final of an app run](#render-final-of-an-app-run)) can. Every other run path has nobody to review it, so a run that would execute a render set to Preview is refused before anything runs or is billed: `/v1/workflows/:id/run` called with an API token, an OAuth app token, from MCP, or with a signed-in session token from anywhere but the editor (the SDK's `supabaseAuth`, for one), `/v1/api/run`, `/v1/present/:token/run` and `/v1/app/:slug/run` without the app page's mark (the SDK's `apps.run`, the CLI, MCP `run_app`) answer `400` with `{ "error": { "code": "preview_review_required", "message": "This workflow stops for a review: its render is set to Preview, and only a run started in the Nodaro editor or on an app's own page can stop for one. Open it there to run it, or set the render to Final (or send a Final quality override for it)." } }`. To run it anyway, override the render to Final for that run: `"inputOverrides": { "<render node id>": { "quality": "final" } }` on `/v1/workflows/:id/run`, or `"inputs": { "<render node id or label>": { "quality": "final" } }` on `/v1/api/run`. A webhook fire answers the same `400`; schedule and Telegram fires are skipped. Each trigger lane leaves one failed execution with `error_message: "preview_review_required"` in the workflow's history (repeated fires do not add more). A run whose sub-workflow or component holds a render set to Preview is refused with `preview_render_nested` — a nested graph cannot stop for a review — and `POST /v1/apps/publish` refuses to publish such a component (`400 preview_render_nested`). When the server's own check refuses a run that was already accepted, the execution ends `failed` with the code as its `error_message`.
 
@@ -572,8 +611,17 @@ changed:
   dropped (e.g. an `aspectRatio` sent to `recraft-upscale`).
 - **Credits are reserved against the corrected values.** A `gpt-image-2` request
   for `auto` + `2K` renders and bills at 1K, because `auto` only renders 1K.
+- **`aspectRatio: "auto"` keeps your photo's shape** on `/v1/image-to-image` and
+  `/v1/edit-image`. A model with a native `auto` receives it as is. On a model
+  without one, the server reads the size of `imageUrl` and uses the supported
+  ratio closest to it — a 1104x1472 portrait sent to `seedream-5-pro-i2i`
+  renders at `3:4` — and reports the choice in `adjustments`. If the image's
+  size cannot be read, `auto` falls back to the model's first listed ratio.
+  The ratio never changes the price on these models.
 - The per-model option lists are in `GET /v1/models`; a workflow saved through
-  the API or MCP is corrected the same way at write time.
+  the API or MCP is corrected the same way at write time — except `auto` on an
+  image-to-image, modify-image or edit-image node, which is kept and resolved
+  against the source image when the workflow runs.
 
 ### On the video routes
 
@@ -888,7 +936,7 @@ All errors share the same shape:
 | 402 | `member_cap_exceeded` | — | (Cloud edition, organizations) Workspace-paid work: your per-member spending cap in this workspace is reached. Rollout-gated. |
 | 402 | `user_allowance_exceeded` | `required`, `remaining` (top-level, on the pre-run check) | (Cloud edition, deployment-payer instances) Your per-user allowance on this deployment can't cover this run — distinct from `insufficient_credits`, which means the deployment's own pool is empty. Only the deployment's billing account can raise an allowance. Fires only on a deployment that has switched allowance **enforcement** on; until then your allowance is shown (`GET /v1/user/credits` → `allowance.enforced: false`) but never refuses a run. |
 | 402 | `instance_cap_reached` | — | (OAuth tokens of a connected self-hosted instance only) The instance has spent its monthly cap on the account that connected it. Raise or remove the cap under the account's **Connected Instances**; a personal API key used as the relay credential has no such cap. |
-| 403 | `forbidden` | — | Token isn't authorized for this workflow (workflow scoping) — or the route is session-only and refuses API/OAuth tokens: `/v1/api-tokens` management ("API token management is only available from a logged-in session."), node-preset writes, the `/v1/billing/*` purchase routes (checkout, load sessions, auto-recharge, purchase history, Stripe portal). Repeat the call with your browser session's JWT. |
+| 403 | `forbidden` | — | The token is limited to some workflows, and the request is outside them ("This API key is limited to specific workflows, and this request is outside them. Use a key without a workflow limit for anything else."; see [Tokens limited to some workflows](#tokens-limited-to-some-workflows)) — or the route is session-only and refuses API/OAuth tokens: `/v1/api-tokens` management ("API token management is only available from a logged-in session."), node-preset writes, the `/v1/billing/*` purchase routes (checkout, load sessions, auto-recharge, purchase history, Stripe portal). Repeat the call with your browser session's JWT. |
 | 403 | `access_blocked` | — | (Business and Cloud editions) An administrator blocked the account — or, for a browser session, the network the request comes from. Every credential of the account is refused (session, API token, OAuth app token), its schedules and triggers stop running, and a run of its published apps or components answers `404 not_found`. Contact support if you think this is a mistake. |
 | 403 | `member_suspended` | — | (Cloud edition, organizations) Workspace-paid work: your membership in the paying workspace is suspended. Rollout-gated. |
 | 403 | `not_a_member` | — | (Cloud edition, organizations) The request names a workspace you are not an active member of. Rollout-gated. |
@@ -2818,13 +2866,17 @@ only, never files. Available on every edition.
 |---|---|---|---|
 | `GET` | `/v1/collections` | none | Your collections, newest first, each with `recordCount`. Returns `{ data: Collection[], available, caps: { collections, records } }` — `available: false` on a server whose database does not have collections yet (then `data` is empty), `caps` are yours (`null` = no limit). |
 | `POST` | `/v1/collections` | body `{ name, description? }` | Create a collection. `201`; `409 name_taken` when you already have one by that name (case-insensitive); `403 collection_limit_reached` at your plan's cap. 30 a minute. |
-| `GET` | `/v1/collections/:id` | none | One collection. |
+| `GET` | `/v1/collections/:id` | none | One collection, with `usedCount` (how many of its live records are used) and `trashCount` (how many sit in the Trash) — both left out on a server whose database predates the usage release. `recordCount` counts every record, the Trash included: that is what the cap sees. |
 | `PATCH` | `/v1/collections/:id` | body `{ name?, description? }` | Rename or re-describe (`409 name_taken` when the new name is already yours). |
 | `DELETE` | `/v1/collections/:id` | none | Remove a collection and every record in it. Returns `{ success: true }`. |
-| `GET` | `/v1/collections/:id/records` | `q`, `since` (an ISO date **and** time, e.g. `2026-10-06T00:00:00Z`), `cursor`, `limit` (1-100, default 50) | The records, newest first. Returns `{ data: CollectionRecord[], nextCursor }`. |
+| `GET` | `/v1/collections/:id/records` | `q`, `since` / `until` (an ISO date **and** time, e.g. `2026-10-06T00:00:00Z`; `until` is exclusive), `usage` (`all`, the default, `unused` — not used yet — or `used`), `status` (`active`, the default — the live records — or `trash`), `order` (`newest`, the default, or `oldest`), `cursor` **or** `offset` (0–1,000,000; a numbered page is `offset = (page − 1) × limit`), `limit` (1-100, default 50) | The records. Returns `{ data: CollectionRecord[], nextCursor, total? }` — `total`, how many match the filters in all, comes with a page asked for by `offset` (a cursor walk never pays for the count). Each record carries `usedAt` (null until it is used), `usedBy` (who used it, the shape of `source`) and `deletedAt` (null while it is live); `source` and `usedBy` carry `workflowName` and `projectId` when the workflow is yours. |
+| `PATCH` | `/v1/collections/:id/records/:recordId` | body `{ used: boolean, source? }` | Mark a record used (`usedAt` now, `usedBy` = `source`, which defaults to `{ via: "api" }`) or not used again (`used: false`). Returns the record. `404 not_found` for a record that is not yours; `503 not_available` on a server whose database predates the usage release (an older server has no such route and answers 404, and ignores `usage` / `until` / `order` on the list). |
 | `POST` | `/v1/collections/:id/records` | body `{ title?, text?, url?, media?, fields?, dedupeKey?, source?, item? }`; header `Idempotency-Key` (optional, up to 200 characters) | Save one record. `201 { record, outcome: "inserted", evicted }`; `200` with `outcome: "duplicate"` (the same dedupe key is already there — the existing record comes back) or `"replayed"` (a write with the same `Idempotency-Key` already happened); `409 conflict` when a rule fired but that record was removed in the same instant (send it again). 120 a minute. |
-| `DELETE` | `/v1/collections/:id/records/:recordId` | none | Remove one record. |
-| `GET` | `/v1/collections/:id/export` | `format` (`csv`, the default, or `json`), `since`, `q` | The whole collection as a file, newest first (`Content-Disposition: attachment`). 10 a minute. |
+| `DELETE` | `/v1/collections/:id/records/:recordId` | none | Move one record to the collection's **Trash** — it leaves every list, node read, export and MCP read, keeps its dedupe key (the same story saved again is a duplicate of it and stays in the Trash), and still counts toward the cap. Returns `{ success: true }`; `503 not_available` on a server whose database predates the Trash (nothing is deleted in its stead). |
+| `DELETE` | `/v1/collections/:id/records/:recordId/permanent` | none | Delete a record that is already in the Trash, for good. `409 not_in_trash` for a live record (move it to the Trash first), `404 not_found` when it is not yours. |
+| `POST` | `/v1/collections/:id/records/:recordId/restore` | none | Bring a record back from the Trash. Returns the record; `404 not_found` when it is not yours; `503 not_available` on a server whose database predates the Trash. |
+| `POST` | `/v1/collections/:id/records/bulk` | body `{ ids: string[] (1–100), action: "trash" \| "restore" \| "delete" }` | Move many records to the Trash, bring them back, or (`delete`) remove records already in the Trash for good, in one call. `404 not_found` for a collection that is not yours; only the ids that are yours in that collection and not already in the asked state change. Returns `{ updated }`. 120 a minute. |
+| `GET` | `/v1/collections/:id/export` | `format` (`csv`, the default, or `json`), `since`, `until`, `usage`, `q` | The whole collection as a file, newest first (`Content-Disposition: attachment`); the CSV ends with `used_at` and `used_by` columns. 10 a minute. |
 
 **Mapping an item.** Instead of (or besides) the explicit fields, send `item`:
 any JSON — a Telegram post, a Social Search result, an article object an LLM

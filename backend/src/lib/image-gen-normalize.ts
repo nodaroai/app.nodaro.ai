@@ -39,12 +39,14 @@ type SnappedLevers = Pick<NormalizedImageGen, (typeof SNAPPED_LEVER_FIELDS)[numb
  *
  * That fallback is unreachable today and should stay that way. The snap can
  * only ever RETURN a value the caller already sent (which passed the route's
- * Zod), its canonical spelling, or the catalog's first/preferred option — so
- * the invariant the fallback depends on is narrow: every image model's FIRST
- * aspect ratio and PREFERRED resolution must be spelled in the route enums.
- * If that ever drifts, the affected lever silently keeps the caller's value
- * while the credit identifier is priced off the snapped one — so the fix is to
- * close the enum gap, never to widen this fallback.
+ * Zod), its canonical spelling, the catalog's first/preferred option, or — for
+ * "auto" with a known source image — ANY ratio the model lists. So the
+ * invariant the fallback depends on is: every aspect ratio an image model lists
+ * and every PREFERRED resolution must be spelled in the route enums (the ratio
+ * half is pinned by @nodaro/shared's auto-aspect-source test). If that ever
+ * drifts, the affected lever silently keeps the caller's value while the credit
+ * identifier is priced off the snapped one — so the fix is to close the enum
+ * gap, never to widen this fallback.
  *
  * A field the route does not expose, and a field whose snapped value equals
  * what the caller sent, are both skipped — so a catalog-valid request leaves

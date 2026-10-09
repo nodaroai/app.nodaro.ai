@@ -33,6 +33,7 @@ import { mcpInject } from "../internal-request.js"
 import { passesGate, type ToolGate } from "../tool-schemas.js"
 import { supabase } from "../../supabase.js"
 import { config } from "../../config.js"
+import { workflowEditorUrl } from "../../deployment-urls.js"
 import { registerTask } from "../tasks.js"
 import { ensureMcpProject } from "./_mcp-project.js"
 import { loadMcpWorkflow } from "./_workflow-access.js"
@@ -421,9 +422,10 @@ export function registerWorkflows({
         if (error || !data) return err(`Error: ${error?.message ?? "Failed to create workflow"}`)
         const row = data as Record<string, unknown>
         await projectTriggers(row.id as string, session.userId, session.userId, storedNodes)
+        const editorUrl = workflowEditorUrl(row.id as string)
         return ok(
-          `Created workflow "${row.name as string}" (id ${row.id as string}) in the mcp project.${edgeNote(edgeResult.adjustments, createEdgeWarnings)}`,
-          { id: row.id, name: row.name, ...edgeStructured(edgeResult.adjustments, createEdgeWarnings) },
+          `Created workflow "${row.name as string}" (id ${row.id as string}) in the mcp project. Open it in the editor: ${editorUrl}${edgeNote(edgeResult.adjustments, createEdgeWarnings)}`,
+          { id: row.id, name: row.name, editorUrl, ...edgeStructured(edgeResult.adjustments, createEdgeWarnings) },
         )
       },
     )
@@ -899,10 +901,13 @@ export function registerWorkflows({
             : "",
           ...(importReport.notes ?? []),
         ].filter(Boolean)
+        const editorUrl = workflowEditorUrl(row.id as string)
         return ok(
-          [`Imported workflow "${row.name as string}" (id ${row.id as string}) into the mcp project.`, ...mediaNotes].join(" ") +
-            edgeNote(importEdgeResult.adjustments, importEdgeWarnings),
-          { id: row.id, name: row.name, importReport, ...edgeStructured(importEdgeResult.adjustments, importEdgeWarnings) },
+          [
+            `Imported workflow "${row.name as string}" (id ${row.id as string}) into the mcp project. Open it in the editor: ${editorUrl}`,
+            ...mediaNotes,
+          ].join(" ") + edgeNote(importEdgeResult.adjustments, importEdgeWarnings),
+          { id: row.id, name: row.name, editorUrl, importReport, ...edgeStructured(importEdgeResult.adjustments, importEdgeWarnings) },
         )
       },
     )

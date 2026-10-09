@@ -10,6 +10,7 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate, extractProvider 
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { applySnappedLevers, withAdjustments } from "../lib/image-gen-normalize.js"
+import { sourceImageForAutoAspect } from "../lib/image-source-size.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
 import { llmComplete } from "../lib/llm-client.js"
 import { MODIFY_IMAGE_PROVIDERS, IMAGE_ASPECT_RATIO_VALUES, IMAGE_PROMPT_MAX, PROMPT_HARD_CEILING, resolveNormalizedImageGen } from "@nodaro/shared"
@@ -134,7 +135,14 @@ export async function imageToImageRoutes(app: FastifyInstance) {
     // image, and in i2i the primary `imageUrl` counts as one of the refs (the
     // worker concatenates [imageUrl, ...refs] before dispatch). One derivation
     // gives both the reserved tier and the parameters we actually send.
+    //
+    // "auto" on a model without a native auto keeps the source photo's shape:
+    // `imageUrl`'s size, read from its header (and only in that case), picks
+    // the model's nearest ratio. The CHECK above runs before the size is known
+    // and still prices the same tier — the ratio is not a pricing dimension on
+    // any such model (pinned in @nodaro/shared's auto-aspect-source test).
     const i2iRefCount = 1 + (referenceImageUrls?.length ?? 0)
+    const sourceImage = await sourceImageForAutoAspect(provider, rawAspectRatio, imageUrl)
     const normalized = resolveNormalizedImageGen({
       provider,
       aspectRatio: rawAspectRatio,
@@ -143,6 +151,7 @@ export async function imageToImageRoutes(app: FastifyInstance) {
       renderingSpeed,
       refCount: i2iRefCount,
       swapToI2i: false,
+      sourceImage,
     })
     const modelIdentifier = normalized.identifier
 

@@ -1,4 +1,4 @@
-import { GEMINI_ENUM_VALUE_BUDGET, toGeminiResponseSchema, withholdEnumsOverBudget } from "../response-schema.js"
+import { GEMINI_ENUM_LIST_LIMIT, GEMINI_ENUM_VALUE_BUDGET, toGeminiResponseSchema, withholdEnumsOverBudget } from "../response-schema.js"
 /**
  * What the direct Google lane is told about the SHAPE of a structured answer.
  *
@@ -187,6 +187,30 @@ describe("the enum-value budget", () => {
       type: "object",
       properties: { enum: { type: "array", items: { type: "string" } }, kind: { type: "string" } },
     })
+  })
+
+  it("a list longer than the per-list cap is withheld even when the total is under budget", () => {
+    const schema = { type: "object", properties: { big: enumOf(150, "b"), small: enumOf(10, "s") } }
+    const out = withholdEnumsOverBudget(structuredClone(schema), 700, 100) as typeof schema
+    expect(out.properties.big).toEqual({ type: "string" })
+    expect(out.properties.small.enum).toHaveLength(10)
+  })
+
+  it("toGeminiResponseSchema caps the person picker's `type` list on its own — the schema is under budget", async () => {
+    const { buildMultiPickerAnalyzerSpec } = await import("@nodaro/prompts")
+    const { z } = await import("zod")
+    const spec = buildMultiPickerAnalyzerSpec(["person"])
+    const schema = z.toJSONSchema(spec.schema, { target: "draft-7", unrepresentable: "any", io: "input" }) as Record<string, unknown>
+    const largest = (node: unknown): number => {
+      if (Array.isArray(node)) return Math.max(0, ...node.map(largest))
+      if (!node || typeof node !== "object") return 0
+      const obj = node as Record<string, unknown>
+      let n = Array.isArray(obj.enum) ? obj.enum.length : 0
+      for (const [k, v] of Object.entries(obj)) if (k !== "enum" && v && typeof v === "object") n = Math.max(n, k === "properties" ? Math.max(0, ...Object.values(v as object).map(largest)) : largest(v))
+      return n
+    }
+    expect(largest(schema)).toBeGreaterThan(GEMINI_ENUM_LIST_LIMIT)
+    expect(largest(toGeminiResponseSchema(schema))).toBeLessThanOrEqual(GEMINI_ENUM_LIST_LIMIT)
   })
 
   it("toGeminiResponseSchema applies the measured budget to the five-picker analyzer schema", async () => {

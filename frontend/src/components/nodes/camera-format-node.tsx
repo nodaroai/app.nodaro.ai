@@ -16,7 +16,7 @@ function CameraFormatNodeComponent({ id, data, selected }: NodeProps) {
   const cameraFormatId = nodeData.cameraFormat || "35mm-film"
   const description = getCameraFormat(cameraFormatId)?.description
 
-  const { isConnected, hasPending, apply } = usePickerJsonConsumer("camera-format", id, nodeData)
+  const { showSyncButton, hasPending, apply } = usePickerJsonConsumer("camera-format", id, nodeData)
 
   return (
     <ParameterNodeShell
@@ -28,7 +28,7 @@ function CameraFormatNodeComponent({ id, data, selected }: NodeProps) {
       fluidWidth
       inputHandles={PICKER_CONSUMER_INPUT_HANDLES}
       extraHandleIcons={<PickerJsonHandleIcon nodeId={id} nodeType="camera-format" />}
-      headerSlot={isConnected && !nodeData.autoApplyInjected ? <PickerUpdateButton hasPending={hasPending} onApply={apply} /> : null}
+      headerSlot={showSyncButton ? <PickerUpdateButton hasPending={hasPending} onApply={apply} /> : null}
     >
       <div className="flex items-start justify-between gap-2">
         <p className="text-foreground text-sm font-medium min-w-0">

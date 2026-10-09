@@ -23,7 +23,7 @@ function PersonNodeComponent({ id, data, selected }: NodeProps) {
   const maxItemsPerRow = Math.max(1, Math.min(4, nodeData.maxItemsPerRow ?? 2))
   const gridColumns = Math.max(1, Math.min(maxItemsPerRow, enabled.length))
 
-  const { isConnected, hasPending, apply } = usePickerJsonConsumer("person", id, nodeData)
+  const { showSyncButton, hasPending, apply } = usePickerJsonConsumer("person", id, nodeData)
 
   return (
     <ParameterNodeShell
@@ -36,7 +36,7 @@ function PersonNodeComponent({ id, data, selected }: NodeProps) {
       inputHandles={PICKER_JSON_INPUT_HANDLES}
       extraHandleIcons={<PickerJsonHandleIcon nodeId={id} nodeType="person" />}
       headerSlot={
-        isConnected && !nodeData.autoApplyInjected ? (
+        showSyncButton ? (
           <PickerUpdateButton hasPending={hasPending} onApply={apply} />
         ) : null
       }

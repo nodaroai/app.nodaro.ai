@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { hasCredits } from "@/lib/edition"
 import { useLocation, useNavigate, Outlet } from "react-router-dom"
 import { Loader2 } from "lucide-react"
@@ -14,6 +14,7 @@ import { loadSurfaceAvailability, resetSurfaceAvailability } from "@/lib/surface
 import { loadScene3DProAvailability } from "@/lib/scene3d-pro-availability"
 import { watchEditPlanModes } from "@/lib/edit-plan-modes"
 import { getAuthHeaders } from "@/lib/api"
+import { isEditorPath, loginPathFor } from "./dashboard-paths"
 
 export default function DashboardLayout() {
   const { user, loading: authLoading } = useAuth()
@@ -30,7 +31,7 @@ export default function DashboardLayout() {
   useLoadUserSettings()
 
   // Check if we're in the editor - sidebar starts collapsed but can be expanded
-  const isEditor = location.pathname.includes("/workflows/")
+  const isEditor = isEditorPath(location.pathname)
 
   // When this app is rendered inside a cross-origin iframe (e.g. studio.nodaro.ai
   // embeds /billing or /pricing as a chromeless modal), drop the app chrome
@@ -39,12 +40,18 @@ export default function DashboardLayout() {
   const embedded = isEmbedded()
 
   // Redirect unauthenticated users to login (unless an embed session handoff
-  // is still pending — see useEmbedSessionHandoff).
+  // is still pending — see useEmbedSessionHandoff). A link opened signed out
+  // comes back after sign-in; a session that ends mid-use does not (see
+  // loginPathFor).
+  const wasSignedIn = useRef(false)
+  useEffect(() => {
+    if (user) wasSignedIn.current = true
+  }, [user])
   useEffect(() => {
     if (!authLoading && !user && !awaitingHandoff) {
-      navigate("/login", { replace: true })
+      navigate(loginPathFor(location.pathname + location.search, wasSignedIn.current), { replace: true })
     }
-  }, [authLoading, user, awaitingHandoff, navigate])
+  }, [authLoading, user, awaitingHandoff, navigate, location.pathname, location.search])
 
   // B5: fetch the effective node/model availability once per session — the
   // admin runtime override can't ride the static /config.js profile, so the

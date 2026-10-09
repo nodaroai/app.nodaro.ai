@@ -3281,6 +3281,88 @@ export interface NormalizedModelInput {
   adjustments: ModelInputAdjustment[]
 }
 
+/** A source image's pixel size as it is DISPLAYED (EXIF orientation applied). */
+export interface SourceImageSize {
+  width: number
+  height: number
+}
+
+/** What a request knows beyond its own levers. */
+export interface ModelInputContext {
+  /**
+   * The image an image-to-image or edit request transforms. Only read to
+   * resolve "auto" on a model without a native auto; absent or unusable means
+   * the size is unknown and "auto" snaps the way it always has.
+   */
+  sourceImage?: SourceImageSize
+}
+
+/** True for the "auto" aspect token in any case or padding. */
+export function isAutoAspectToken(value: unknown): boolean {
+  return typeof value === "string" && value.trim().toLowerCase() === "auto"
+}
+
+function usableSize(size: SourceImageSize | undefined): size is SourceImageSize {
+  return (
+    size !== undefined &&
+    Number.isFinite(size.width) && size.width > 0 &&
+    Number.isFinite(size.height) && size.height > 0
+  )
+}
+
+/**
+ * Log-space distances closer than this are a tie. Mirror pairs that are
+ * mathematically equidistant (4:3 and 3:4 from a square) differ in the last
+ * bit once `Math.log` rounds them, so an exact comparison would let rounding,
+ * not the catalog's order, pick between them. Real catalog ratios sit at least
+ * ~1e-2 apart, far above this.
+ *
+ * Source-size path ONLY. The ratio-TOKEN fit (`nearestAspectRatio` behind
+ * `fitAspectRatioToModel`) keeps its strict comparison on purpose: it mirrors
+ * the video adapters' `snapAspectRatioToken` exactly (pinned by
+ * `video-normalizer-totality.test.ts`), and a request must snap to one ratio
+ * whichever door it came through.
+ */
+const ASPECT_TIE_EPSILON = 1e-9
+
+/**
+ * The ratio in `ratios` nearest a `sourceWidth` x `sourceHeight` image:
+ * minimises |ln(w/h) - ln(rw/rh)|, so a portrait and its landscape mirror are
+ * equally far from a square. Entries that are not ratios ("auto", "adaptive",
+ * "match_input_image") are skipped, and a tie goes to the ratio listed first
+ * (`ASPECT_TIE_EPSILON`). `undefined` for unusable dimensions or a list
+ * without a single ratio.
+ */
+export function nearestCatalogAspectRatio(
+  sourceWidth: number,
+  sourceHeight: number,
+  ratios: readonly string[],
+): string | undefined {
+  if (!usableSize({ width: sourceWidth, height: sourceHeight })) return undefined
+  const target = Math.log(sourceWidth / sourceHeight)
+  let best: string | undefined
+  let bestDist = Infinity
+  for (const ratio of ratios) {
+    const [rw, rh] = ratio.split(":").map(Number)
+    if (!rw || !rh || rw < 0 || rh < 0) continue
+    const dist = Math.abs(Math.log(rw / rh) - target)
+    if (dist < bestDist - ASPECT_TIE_EPSILON) { bestDist = dist; best = ratio }
+  }
+  return best
+}
+
+/**
+ * True when `aspectRatio` is "auto" and `modelId`'s catalog ratio list does not
+ * carry "auto" — the one case where the source image's size decides the ratio.
+ * A caller that has to fetch the size asks this first, so a request that will
+ * not use it never pays for the read.
+ */
+export function autoAspectNeedsSourceImage(modelId: string | undefined, aspectRatio: unknown): boolean {
+  if (!modelId || !isAutoAspectToken(aspectRatio)) return false
+  const ratios = MODEL_CATALOG[modelId]?.aspectRatios
+  return ratios !== undefined && ratios.length > 0 && !ratios.some(isAutoAspectToken)
+}
+
 /**
  * Coerce a model's parameters into a combination the model actually accepts.
  *
@@ -3295,6 +3377,10 @@ export interface NormalizedModelInput {
  *
  * Rules, mirroring the config panels' provider-change snap:
  *  - Model has no such lever → drop the value (sending it 400s upstream).
+ *  - "auto" on a model whose list lacks it, with a known `context.sourceImage`
+ *    → the listed ratio nearest the source's shape (`nearestCatalogAspectRatio`).
+ *    "auto" asks to keep the source photo's shape; the first listed ratio
+ *    would reframe every source of another shape.
  *  - Value outside the model's allow-list → snap to the model's default
  *    (`defaultResolutionFor`) or the first valid option.
  *  - Then apply cross-field constraints that only hold for certain models.
@@ -3313,6 +3399,7 @@ export function normalizeModelInput(
     quality?: string
     duration?: number
   },
+  context: ModelInputContext = {},
 ): NormalizedModelInput {
   const m = MODEL_CATALOG[modelId]
   const adjustments: ModelInputAdjustment[] = []
@@ -3355,7 +3442,22 @@ export function normalizeModelInput(
     return next
   }
 
-  out.aspectRatio = snap("aspectRatio", input.aspectRatio, m.aspectRatios)
+  const sourceRatio =
+    autoAspectNeedsSourceImage(modelId, input.aspectRatio) && usableSize(context.sourceImage)
+      ? nearestCatalogAspectRatio(context.sourceImage.width, context.sourceImage.height, m.aspectRatios ?? [])
+      : undefined
+  if (sourceRatio !== undefined && input.aspectRatio !== undefined) {
+    const { width, height } = context.sourceImage!
+    adjustments.push({
+      field: "aspectRatio",
+      from: input.aspectRatio,
+      to: sourceRatio,
+      reason: `${m.label} has no "auto" aspect ratio — using "${sourceRatio}", the supported ratio closest to the source image's shape (${width}x${height}).`,
+    })
+    out.aspectRatio = sourceRatio
+  } else {
+    out.aspectRatio = snap("aspectRatio", input.aspectRatio, m.aspectRatios)
+  }
   out.resolution = snap(
     "resolution",
     input.resolution,

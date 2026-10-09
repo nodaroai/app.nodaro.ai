@@ -11,6 +11,7 @@ vi.mock("../../../supabase.js", () => ({
 
 const { registerWorkflows } = await import("../workflows.js")
 const { supabase } = await import("../../../supabase.js")
+const { appBaseUrl } = await import("../../../deployment-urls.js")
 
 const fromMock = supabase.from as unknown as ReturnType<typeof vi.fn>
 
@@ -214,6 +215,18 @@ describe("create_workflow tool", () => {
       .filter((b) => (b.insert as ReturnType<typeof vi.fn>)?.mock.calls.length)
     const insertArg = (insertCalls[0]?.insert as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] as Record<string, unknown>
     expect(insertArg.project_id).toBe(MCP_PROJECT_ID)
+  })
+
+  it("hands back this deployment's editor link, so an assistant never builds one", async () => {
+    fromMock.mockReturnValue(
+      chain({ data: { id: WORKFLOW_ID, name: "New Flow", created_at: "x", updated_at: "x" }, error: null }),
+    )
+    const server = buildServer()
+    registerWorkflows({ server, session: mcpSession(["workflows:write"]), fastify: Fastify() })
+    const result = await callTool(server, "create_workflow", { name: "New Flow" })
+    const link = `${appBaseUrl()}/editor/${WORKFLOW_ID}`
+    expect(result.structuredContent?.editorUrl).toBe(link)
+    expect(result.content[0]?.text).toContain(link)
   })
 
   it("does NOT register without workflows:write scope", async () => {

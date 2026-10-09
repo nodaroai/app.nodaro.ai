@@ -5,7 +5,6 @@ import { CharacterMotionDiagnostics } from "./character-motion-diagnostics"
 import { useT, tx } from "@/lib/i18n"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import {
   Select,
@@ -18,6 +17,7 @@ import { useEffect } from "react"
 import { PROVIDER_NODE_CATEGORIES, PROVIDER_NODE_CATEGORY_IDS, isProviderNodeCategory, validProviderSelection } from "@/lib/provider-node-models"
 import { useSurfaceAvailability } from "@/lib/surface-availability"
 import { ModelSearchSelect } from "./model-search-select"
+import { PickerSyncSettings } from "./picker-sync-settings"
 import { withoutDeniedModels } from "./model-options"
 import type {
   ToneData,
@@ -322,6 +322,7 @@ export function FramingConfig({ data, onUpdate }: ConfigProps<FramingData>) {
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
       <PromptInjectionPreview hints={[data.preText, buildFramingHints(data), data.postText]} />
+      <PickerSyncSettings idPrefix="framing" data={data} onUpdate={onUpdate} />
       <CustomTextRows
         idPrefix="framing"
         preText={data.preText}
@@ -374,6 +375,7 @@ export function LensConfig({ data, onUpdate }: ConfigProps<LensData>) {
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
       <PromptInjectionPreview hints={[data.preText, getLensPromptHint(data.lens), data.postText]} />
+      <PickerSyncSettings idPrefix="lens" data={data} onUpdate={onUpdate} />
       <CustomTextRows
         idPrefix="lens"
         preText={data.preText}
@@ -401,6 +403,7 @@ export function CameraFormatConfig({ data, onUpdate }: ConfigProps<CameraFormatD
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
       <PromptInjectionPreview hints={[data.preText, getCameraFormatPromptHint(data.cameraFormat), data.postText]} />
+      <PickerSyncSettings idPrefix="camera-format" data={data} onUpdate={onUpdate} />
       <CustomTextRows
         idPrefix="camera-format"
         preText={data.preText}
@@ -652,36 +655,7 @@ export function PersonConfig({ data, onUpdate }: ConfigProps<PersonData>) {
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
       <PromptInjectionPreview hints={buildPersonHints(data)} />
-      <div className="flex flex-col gap-2 rounded-md border border-border/60 p-2">
-        <div className="flex items-center justify-between gap-2">
-          <Label htmlFor="person-apply-mode" className="text-xs text-muted-foreground">
-            {t("paramcfg.whenImageJsonIsInjected")}
-          </Label>
-        </div>
-        <Select
-          value={data.applyMode ?? "override"}
-          onValueChange={(v) => onUpdate({ applyMode: v as PersonData["applyMode"] })}
-        >
-          <SelectTrigger id="person-apply-mode" aria-label={t("paramcfg.applyMode")}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="override">{t("paramcfg.fullOverrideClearUndetected")}</SelectItem>
-            <SelectItem value="overwrite-detected">{t("paramcfg.overwriteDetectedKeepRest")}</SelectItem>
-            <SelectItem value="fill-empty">{t("paramcfg.fillEmptyOnly")}</SelectItem>
-          </SelectContent>
-        </Select>
-        <div className="flex items-center justify-between gap-2">
-          <Label htmlFor="person-auto-apply" className="text-xs text-muted-foreground">
-            {t("paramcfg.autoApplyOnChange")}
-          </Label>
-          <Switch
-            id="person-auto-apply"
-            checked={data.autoApplyInjected ?? false}
-            onCheckedChange={(c) => onUpdate({ autoApplyInjected: c })}
-          />
-        </div>
-      </div>
+      <PickerSyncSettings idPrefix="person" data={data} onUpdate={onUpdate} />
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="person-pre-text" className="text-xs text-muted-foreground">
           {t("paramcfg.customTextBefore")}
@@ -929,6 +903,7 @@ export function StylingConfig({ data, onUpdate }: ConfigProps<StylingData>) {
     <div className="flex flex-col gap-3" dir={dir}>
       <LocaleHeader />
       <PromptInjectionPreview hints={buildStylingHints(data)} />
+      <PickerSyncSettings idPrefix="styling" data={data} onUpdate={onUpdate} />
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="styling-pre-text" className="text-xs text-muted-foreground">
           {t("paramcfg.customTextBefore")}

@@ -1,7 +1,7 @@
 ---
 node_type: framing
-generated_at: 2026-09-27T12:51:22.577Z
-generated_from: c607aa02c
+generated_at: 2026-10-08T22:50:03.193Z
+generated_from: ae4e7e3d0
 ---
 
 # Framing
@@ -28,6 +28,7 @@ generated_from: c607aa02c
 - `applyMode?: PickerApplyMode`
 - `autoApplyInjected?: boolean`
 - `lastAppliedPickerJson?: Record<string, unknown>`
+- `lastAppliedPickerRunId?: string`
 - `hintMode?: "full" | "compact"`
 
 **Valid values:** call `get_picker_catalog("framing")` (MCP) or `GET /v1/picker-catalogs/framing` for the catalog of valid ids.

@@ -30,6 +30,11 @@ export async function adminOnlineUsersRoutes(
   app.get("/v1/admin/online-users", { preHandler: requireAdmin, config: LIST_LIMIT }, async (req, reply) => {
     if (req.authKind !== "jwt") return reply.status(403).send(IN_APP_ONLY)
     const payerId = deploymentPayerId()
-    return listOnlineUsers({ store: await store(), lookup, hiddenUserId: payerId !== null && payerId !== req.userId ? payerId : null })
+    return listOnlineUsers({
+      store: await store(),
+      lookup,
+      hiddenUserId: payerId !== null && payerId !== req.userId ? payerId : null,
+      onLookupError: (what, err) => req.log.warn({ err, what }, "Signed in now: could not read names; the list shows ids"),
+    })
   })
 }

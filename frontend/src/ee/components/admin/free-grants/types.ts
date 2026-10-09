@@ -76,6 +76,9 @@ export const REASON_LABELS: Record<string, string> = {
   device_ip_match: "Same device + network as another account",
   device_cluster: "Device signature shared by several accounts",
   ip_velocity: "Signup burst from one network",
+  keyless_ip_reuse: "No device signals, and the network already has an account",
+  ip_reuse: "Network already carries several accounts",
+  similar_email: "Email address resembles another account's",
 }
 
 export const AXES: ReadonlyArray<{ value: ClusterAxis; label: string }> = [

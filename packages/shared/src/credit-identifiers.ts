@@ -31,7 +31,7 @@ import {
 import { isFlux2Model, FLUX2_RES_MP, type Flux2Model } from "./flux2-pricing.js"
 import { VIDEO_DURATION_AUTO } from "./video-duration-auto.js"
 import { uiResolutionFill } from "./video-ui-defaults.js"
-import { MODEL_CATALOG, normalizeModelInput, defaultResolutionFor, type ModelInputAdjustment } from "./model-catalog.js"
+import { MODEL_CATALOG, normalizeModelInput, defaultResolutionFor, type ModelInputAdjustment, type SourceImageSize } from "./model-catalog.js"
 
 /**
  * The megapixel tier a Flux 2 credit identifier is keyed on, for ANY incoming
@@ -159,6 +159,12 @@ export interface NormalizedImageGen {
  *
  * Unknown model ids pass through untouched (same contract as
  * `normalizeModelInput`) — the route's provider enum is the gate for those.
+ *
+ * `sourceImage` is the size of the image an image-to-image / edit request
+ * transforms. It only decides "auto" on a model without a native auto, and the
+ * ratio is not a pricing dimension on any such model (pinned across the catalog
+ * by `auto-aspect-source.test.ts`), so a CHECK that runs before the size is
+ * known prices the same identifier as the DEBIT that knows it.
  */
 export function resolveNormalizedImageGen(opts: {
   provider: string | undefined
@@ -168,6 +174,7 @@ export function resolveNormalizedImageGen(opts: {
   renderingSpeed?: unknown
   refCount: number
   swapToI2i?: boolean
+  sourceImage?: SourceImageSize
 }): NormalizedImageGen {
   const str = (v: unknown): string | undefined =>
     typeof v === "string" && v.length > 0 ? v : undefined
@@ -179,11 +186,15 @@ export function resolveNormalizedImageGen(opts: {
   const modelId =
     opts.swapToI2i && opts.refCount > 0 ? (T2I_TO_I2I_VARIANT[provider] ?? provider) : provider
 
-  const n = normalizeModelInput(modelId, {
-    aspectRatio: str(opts.aspectRatio),
-    resolution: str(opts.resolution),
-    quality: str(opts.quality),
-  })
+  const n = normalizeModelInput(
+    modelId,
+    {
+      aspectRatio: str(opts.aspectRatio),
+      resolution: str(opts.resolution),
+      quality: str(opts.quality),
+    },
+    { sourceImage: opts.sourceImage },
+  )
 
   return {
     identifier: buildCreditModelIdentifier(

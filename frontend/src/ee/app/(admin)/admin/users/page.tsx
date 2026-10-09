@@ -1,59 +1,27 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "react-router-dom"
-import {
-  Loader2,
-  Search,
-  ChevronDown,
-  ChevronRight,
-  Shield,
-} from "lucide-react"
-import { toast } from "sonner"
+import { Loader2, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { SortHeader } from "@/components/ui/sort-header"
 import {
   useAdminUser,
   useAdminUsers,
-  useAdminChangeRoleMutation,
   USER_SORT_DEFAULT_DIR,
-  type AdminUser,
   type SortDir,
   type UserSortBy,
 } from "@/ee/hooks/queries/use-admin-queries"
 import { useAdminBlocks } from "@/ee/hooks/queries/use-admin-access"
 import { useAuth } from "@/hooks/use-auth"
-import { UserExpandedRow } from "./user-expanded-row"
-import { formatBytes, unitsOrDash, useDeploymentPayerMode } from "./user-admin-helpers"
-
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
-const TIER_COLORS: Record<string, string> = {
-  free: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
-  basic: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
-  standard: "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300",
-  pro: "bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-300",
-  business: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
-}
-
-// Platform owner whose super_admin row is protected in the UI. Configured via
-// VITE_PLATFORM_OWNER_EMAIL; empty (self-host default) means no protected owner.
-const OWNER_EMAIL = (import.meta.env.VITE_PLATFORM_OWNER_EMAIL as string) || ""
-
-const ROLE_COLORS: Record<string, string> = {
-  user: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
-  admin: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
-  super_admin: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",
-}
+import { hasCredits } from "@/lib/edition"
+import { ClusterToolbar } from "@/ee/components/admin/users-linkage/cluster-toolbar"
+import { ClusterDetailCard } from "@/ee/components/admin/users-linkage/cluster-detail-card"
+import { useUsersLinkage } from "@/ee/components/admin/users-linkage/use-users-linkage"
+import { sameTarget, visibleUsers } from "@/ee/components/admin/users-linkage/linkage-model"
+import type { ActiveTarget, LinkageCluster } from "@/ee/components/admin/users-linkage/types"
+import "@/ee/components/admin/users-linkage/users-linkage.css"
+import { UserRow, type RowLinkage } from "./user-row"
+import { useDeploymentPayerMode } from "./user-admin-helpers"
 
 // ---------------------------------------------------------------------------
 // Main Page
@@ -99,20 +67,6 @@ export default function AdminUsersPage() {
     debouncedSearch,
   )
 
-  const handleSort = (field: UserSortBy) => {
-    if (field === sortBy) {
-      setSortDir((d) => (d === "asc" ? "desc" : "asc"))
-    } else {
-      setSortBy(field)
-      setSortDir(USER_SORT_DEFAULT_DIR[field])
-    }
-    setPage(0)
-  }
-
-  const toggleExpand = (userId: string) => {
-    setExpandedUserId((prev) => (prev === userId ? null : userId))
-  }
-
   // A direct link (`?user=<id>`, e.g. from "Signed in now") pins that person
   // above the list, open — whichever page of the list they are on.
   const [searchParams, setSearchParams] = useSearchParams()
@@ -129,6 +83,84 @@ export default function AdminUsersPage() {
     })
   const listedUsers = linkedId ? users.filter((u) => u.id !== linkedId) : users
 
+  // Linked-account marking. Only where the free signup grant exists (credits
+  // on, nobody paying for everyone); and the page stays exactly as it was
+  // until the marks are here and the clusters RPC exists on this database.
+  // A cluster is selected by its KEY, never by its "#n": the number is a
+  // position by size and moves when a cluster grows between refreshes.
+  const [pointer, setPointer] = useState<ActiveTarget | null>(null)
+  const [pinned, setPinned] = useState<ActiveTarget | null>(null)
+  const [onlyFlagged, setOnlyFlagged] = useState(false)
+  const [selectedClusterKey, setSelectedClusterKey] = useState<string | null>(null)
+  const linkageOn = hasCredits() && surfaceReady && !payerMode
+  // The linked row is on screen too, whichever page it belongs to: mark it as well.
+  const linkedUser = linked.data ?? null
+  const markedIds = useMemo(
+    () => [...users.map((u) => u.id), ...(linkedUser && !users.some((u) => u.id === linkedUser.id) ? [linkedUser.id] : [])],
+    [users, linkedUser],
+  )
+  const { data: linkageData } = useUsersLinkage(markedIds, linkageOn)
+  const linkage = linkageOn && linkageData && !linkageData.unavailable ? linkageData : null
+  const marks = linkage?.users ?? {}
+  const active = pointer ?? pinned
+  const clusterById = useMemo(
+    () => new Map<number, LinkageCluster>((linkage?.clusters ?? []).map((c) => [c.id, c])),
+    [linkage],
+  )
+  const selectedCluster = linkage?.clusters.find((c) => c.key === selectedClusterKey) ?? null
+
+  // What the admin was pointing at belongs to the rows that were on screen.
+  const forgetPointer = () => {
+    setPointer(null)
+    setPinned(null)
+  }
+
+  const handleSort = (field: UserSortBy) => {
+    if (field === sortBy) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"))
+    } else {
+      setSortBy(field)
+      setSortDir(USER_SORT_DEFAULT_DIR[field])
+    }
+    setPage(0)
+    forgetPointer()
+  }
+
+  const turnPage = (delta: number) => {
+    setPage((p) => p + delta)
+    forgetPointer()
+  }
+
+  const filteredUsers = visibleUsers(listedUsers, marks, {
+    onlyFlagged: linkage ? onlyFlagged : false,
+    clusterId: selectedCluster ? selectedCluster.id : null,
+  })
+  const filtering = linkage !== null && (onlyFlagged || selectedCluster !== null)
+  const columnCount = payerMode ? 10 : linkage ? 12 : 11
+
+  const toggleExpand = (userId: string) => {
+    setExpandedUserId((prev) => (prev === userId ? null : userId))
+  }
+  const togglePin = (target: ActiveTarget) => {
+    setPinned((prev) => (prev && sameTarget(prev, target) ? null : target))
+  }
+  const selectCluster = (clusterKey: string) => {
+    setSelectedClusterKey((prev) => (prev === clusterKey ? null : clusterKey))
+  }
+  const rowLinkage = (userId: string): RowLinkage | null => {
+    if (!linkage) return null
+    const mark = marks[userId]
+    return {
+      users: marks,
+      mark,
+      cluster: (mark?.clusterId != null && clusterById.get(mark.clusterId)) || null,
+      partial: linkage.partial,
+      pointer: active,
+      onPoint: setPointer,
+      onPin: togglePin,
+    }
+  }
+
   // `!surfaceReady` too: with the query disabled until the surface answers,
   // react-query reports isLoading false, and the table would flash "No users
   // found." at an admin who has users.
@@ -141,7 +173,9 @@ export default function AdminUsersPage() {
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    // Marked, the page takes the mock's wider main area: twelve columns do not
+    // fit 1280px, and the admin would otherwise scroll to reach Joined.
+    <div className={`p-6 mx-auto ${linkage ? "max-w-[1560px]" : "max-w-7xl"}`}>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-xl font-bold">Users</h1>
         <div className="relative w-64">
@@ -158,9 +192,41 @@ export default function AdminUsersPage() {
         </div>
       </div>
 
-      {/* overflow-x-auto, NOT overflow-hidden: the 11-column table is wider
-          than the container on smaller viewports — hidden silently clipped
-          the Role/Joined columns with no scrollbar. */}
+      {linkage && (
+        <>
+          <ClusterToolbar
+            linkage={linkage}
+            users={marks}
+            active={active}
+            onActive={setPointer}
+            selectedKey={selectedCluster?.key ?? null}
+            onSelect={selectCluster}
+            onlyFlagged={onlyFlagged}
+            onToggleFlagged={() => setOnlyFlagged((v) => !v)}
+            pinned={pinned}
+            onUnpin={() => setPinned(null)}
+          />
+          {selectedCluster && (
+            <ClusterDetailCard
+              cluster={selectedCluster}
+              onPage={users.filter((u) => marks[u.id]?.clusterId === selectedCluster.id).length}
+              active={active}
+              pinned={pinned}
+              onActive={setPointer}
+              onPin={togglePin}
+              onClose={() => setSelectedClusterKey(null)}
+              canAct={currentUserRole === "super_admin"}
+              blockedIds={blockedIds}
+              viewerId={currentUser?.id ?? ""}
+              onChanged={() => void loadUsers()}
+            />
+          )}
+        </>
+      )}
+
+      {/* overflow-x-auto, NOT overflow-hidden: the table is wider than the
+          container on smaller viewports — hidden silently clipped the
+          Role/Joined columns with no scrollbar. */}
       <div className="border rounded-lg overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-muted/50">
@@ -239,6 +305,7 @@ export default function AdminUsersPage() {
                 dir={sortDir}
                 onSort={handleSort}
               />
+              {linkage && <th className="text-left px-2 py-2 font-medium">Signals</th>}
               <SortHeader
                 label="Joined"
                 field="created_at"
@@ -252,7 +319,7 @@ export default function AdminUsersPage() {
           <tbody>
             {linkedId && (
               <tr className="bg-muted/40">
-                <td colSpan={payerMode ? 10 : 11} className="px-4 py-2 text-xs text-muted-foreground">
+                <td colSpan={columnCount} className="px-4 py-2 text-xs text-muted-foreground">
                   {linked.isLoading
                     ? "Opening the user from your link…"
                     : linked.data
@@ -277,27 +344,32 @@ export default function AdminUsersPage() {
                 currentUserRole={currentUserRole}
                 currentUserId={currentUser?.id ?? ""}
                 isBlocked={blockedIds.has(linked.data.id)}
+                columnCount={columnCount}
+                linkage={rowLinkage(linked.data.id)}
               />
             )}
-            {listedUsers.map((user) => {
-              const isExpanded = expandedUserId === user.id
-              return (
-                <UserRow
-                  key={user.id}
-                  user={user}
-                  isExpanded={isExpanded}
-                  onToggle={() => toggleExpand(user.id)}
-                  onCreditsAdjusted={loadUsers}
-                  currentUserRole={currentUserRole}
-                  currentUserId={currentUser?.id ?? ""}
-                  isBlocked={blockedIds.has(user.id)}
-                />
-              )
-            })}
-            {listedUsers.length === 0 && !(linkedId && linked.data) && (
+            {filteredUsers.map((user) => (
+              <UserRow
+                key={user.id}
+                user={user}
+                isExpanded={expandedUserId === user.id}
+                onToggle={() => toggleExpand(user.id)}
+                onCreditsAdjusted={loadUsers}
+                currentUserRole={currentUserRole}
+                currentUserId={currentUser?.id ?? ""}
+                isBlocked={blockedIds.has(user.id)}
+                columnCount={columnCount}
+                linkage={rowLinkage(user.id)}
+              />
+            ))}
+            {filteredUsers.length === 0 && !(linkedId && linked.data) && (
               <tr>
-                <td colSpan={payerMode ? 10 : 11} className="px-4 py-8 text-center text-muted-foreground">
-                  {debouncedSearch ? "No users match your search." : "No users found."}
+                <td colSpan={columnCount} className="px-4 py-8 text-center text-muted-foreground">
+                  {debouncedSearch
+                    ? "No users match your search."
+                    : filtering
+                      ? "No users match your filter."
+                      : "No users found."}
                 </td>
               </tr>
             )}
@@ -305,12 +377,20 @@ export default function AdminUsersPage() {
         </table>
       </div>
 
+      {linkage && linkage.clusters.length > 0 && (
+        <p className="mt-2.5 text-xs text-muted-foreground">
+          Each cluster has a number; the colour is its size tier. Click a cluster to filter the table and see its
+          shared keys. Point at a cluster, a flagged row or a key to see every account sharing that device, browser
+          profile or network; click a key to keep it lit. Open a row for the details.
+        </p>
+      )}
+
       <div className="flex gap-2 mt-4">
         <Button
           variant="outline"
           size="sm"
           disabled={page === 0}
-          onClick={() => setPage((p) => p - 1)}
+          onClick={() => turnPage(-1)}
         >
           Previous
         </Button>
@@ -318,147 +398,11 @@ export default function AdminUsersPage() {
           variant="outline"
           size="sm"
           disabled={users.length < 50}
-          onClick={() => setPage((p) => p + 1)}
+          onClick={() => turnPage(1)}
         >
           Next
         </Button>
       </div>
     </div>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// User Row Component
-// ---------------------------------------------------------------------------
-
-function UserRow({
-  user,
-  isExpanded,
-  onToggle,
-  onCreditsAdjusted,
-  currentUserRole,
-  currentUserId,
-  isBlocked,
-}: {
-  readonly user: AdminUser
-  readonly isExpanded: boolean
-  readonly onToggle: () => void
-  readonly onCreditsAdjusted: () => void
-  readonly currentUserRole: string
-  readonly currentUserId: string
-  readonly isBlocked: boolean
-}) {
-  const [changingRole, setChangingRole] = useState(false)
-  const { payerMode } = useDeploymentPayerMode()
-  const total = (user.subscription_credits ?? 0) + (user.topup_credits ?? 0)
-  const tierClass = TIER_COLORS[user.subscription_tier] ?? TIER_COLORS.free
-  const roleClass = ROLE_COLORS[user.role] ?? ROLE_COLORS.user
-
-  const isOwner = OWNER_EMAIL !== "" && user.email === OWNER_EMAIL
-  const isSuperAdmin = currentUserRole === "super_admin"
-  const isSelf = currentUserId === user.id
-  const canChangeRole = isSuperAdmin && !isOwner && !isSelf
-
-  const changeRoleMut = useAdminChangeRoleMutation()
-
-  const handleRoleChange = async (newRole: string) => {
-    setChangingRole(true)
-    try {
-      await changeRoleMut.mutateAsync({ userId: user.id, role: newRole })
-      toast.success(`Role changed to ${newRole}`)
-      onCreditsAdjusted()
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to change role")
-    } finally {
-      setChangingRole(false)
-    }
-  }
-
-  return (
-    <>
-      <tr
-        className="border-t cursor-pointer hover:bg-muted/30 transition-colors"
-        onClick={onToggle}
-      >
-        <td className="px-2 py-2 text-muted-foreground">
-          {isExpanded ? (
-            <ChevronDown className="h-4 w-4" />
-          ) : (
-            <ChevronRight className="h-4 w-4" />
-          )}
-        </td>
-        <td className="px-4 py-2 font-medium">
-          {user.email}
-          {isBlocked && (
-            <Badge variant="destructive" className="ms-2">
-              Blocked
-            </Badge>
-          )}
-        </td>
-        <td className="px-4 py-2 text-muted-foreground">
-          {user.full_name ?? "-"}
-        </td>
-        <td className="px-4 py-2">
-          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${tierClass}`}>
-            {user.subscription_tier}
-          </span>
-        </td>
-        {payerMode ? (
-          <>
-            <td className="px-4 py-2 text-right font-mono">{unitsOrDash(user.sai_granted)}</td>
-            <td className="px-4 py-2 text-right font-mono font-bold">{unitsOrDash(user.sai_remaining)}</td>
-            <td className="px-4 py-2 text-right font-mono text-muted-foreground">{unitsOrDash(user.sai_spent)}</td>
-          </>
-        ) : (
-          <>
-            <td className="px-4 py-2 text-right font-mono">{user.subscription_credits}</td>
-            <td className="px-4 py-2 text-right font-mono">{user.topup_credits}</td>
-            <td className="px-4 py-2 text-right font-mono font-bold">{total}</td>
-            <td className="px-4 py-2 text-right font-mono text-muted-foreground">{user.daily_spent_credits}</td>
-          </>
-        )}
-        <td className="px-4 py-2 text-right font-mono text-muted-foreground text-xs whitespace-nowrap">
-          {formatBytes(user.storage_used_bytes)} / {formatBytes(user.storage_limit_bytes)}
-        </td>
-        <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
-          {isOwner ? (
-            <Badge className="bg-red-600 text-white hover:bg-red-600">
-              <Shield className="h-3 w-3 mr-1" />
-              Owner
-            </Badge>
-          ) : canChangeRole ? (
-            <Select
-              value={user.role}
-              onValueChange={handleRoleChange}
-              disabled={changingRole}
-            >
-              <SelectTrigger className="h-7 w-[130px] text-xs" aria-label="Change role">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent position="popper" className="z-[9999]">
-                <SelectItem value="user">user</SelectItem>
-                <SelectItem value="admin">admin</SelectItem>
-                <SelectItem value="super_admin">super_admin</SelectItem>
-              </SelectContent>
-            </Select>
-          ) : (
-            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${roleClass}`}>
-              {user.role}
-            </span>
-          )}
-        </td>
-        <td className="px-4 py-2 text-muted-foreground">
-          {new Date(user.created_at).toLocaleDateString()}
-        </td>
-      </tr>
-      {isExpanded && (
-        <UserExpandedRow
-          user={user}
-          onCreditsAdjusted={onCreditsAdjusted}
-          adminUserId={currentUserId}
-          isSuperAdmin={isSuperAdmin}
-        />
-      )}
-    </>
   )
 }

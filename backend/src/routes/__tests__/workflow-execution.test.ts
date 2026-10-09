@@ -145,6 +145,12 @@ beforeEach(async () => {
     }
     const kind = req.headers["x-auth-kind"]
     if (typeof kind === "string") (req as { authKind?: string }).authKind = kind
+    // A personal API key: `x-key-workflows` lists its workflows.
+    const keyWorkflows = req.headers["x-key-workflows"]
+    if (typeof keyWorkflows === "string" && req.userId) {
+      req.authKind = "api_token"
+      req.apiToken = { id: "t1", userId: req.userId, workflowIds: keyWorkflows.split(","), rateLimit: 30, tokenHash: "h", workspaceId: null }
+    }
   })
 
   await app.register(async (instance) => {
@@ -1789,6 +1795,48 @@ describe("GET /v1/executions", () => {
     const res = await authedGet("/v1/executions?viewAll=true")
     expect(res.statusCode).toBe(200)
     expect(mockCheckIsAdmin).toHaveBeenCalledWith(TEST_USER_ID)
+  })
+
+  describe("for a personal API key limited to some workflows", () => {
+    const calls: Array<{ table: string; method: string; args: unknown[] }> = []
+    beforeEach(() => {
+      calls.length = 0
+      vi.mocked(supabase.from).mockImplementation((table: string) => {
+        const proxy: unknown = new Proxy(() => {}, {
+          get(_t, prop) {
+            if (prop === "then") return (ok: (v: unknown) => unknown) => Promise.resolve({ data: [], error: null }).then(ok)
+            if (prop === "single" || prop === "maybeSingle") return async () => ({ data: null, error: null })
+            return (...args: unknown[]) => {
+              calls.push({ table, method: String(prop), args })
+              return proxy
+            }
+          },
+        })
+        return proxy as never
+      })
+    })
+
+    function keyGet(url: string) {
+      return app.inject({ method: "GET", url, headers: { "x-user-id": TEST_USER_ID, "x-key-workflows": TEST_WORKFLOW_ID } })
+    }
+
+    it("lists only the runs and single-node jobs of the key's workflows", async () => {
+      const res = await keyGet("/v1/executions")
+      expect(res.statusCode).toBe(200)
+      const narrowed = calls.filter((c) => c.method === "in" && c.args[0] === "workflow_id")
+      expect(narrowed.map((c) => [c.table, c.args[1]])).toEqual([
+        ["workflow_executions", [TEST_WORKFLOW_ID]],
+        ["jobs", [TEST_WORKFLOW_ID]],
+      ])
+    })
+
+    it("refuses the admin view to the key, before ever asking whether its owner is an admin", async () => {
+      const res = await keyGet("/v1/executions?viewAll=true")
+      expect(res.statusCode).toBe(403)
+      expect(res.json().error.code).toBe("forbidden")
+      expect(mockCheckIsAdmin).not.toHaveBeenCalled()
+      expect(calls).toEqual([])
+    })
   })
 })
 

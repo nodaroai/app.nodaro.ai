@@ -7,6 +7,8 @@ import {
   CAMERA_SWITCH_CREDIT_ID, cameraSwitchEdlProblem, cameraSwitchSettingsPayload, transcriptSpeakerLabels, type CameraSwitchNodeSettings } from "@nodaro/shared"
 import { assembleVideoOverlayRequest, formatVideoOverlayError, validateVideoOverlayRequest, videoOverlayCompositionKey, videoOverlaySlotSources, type VideoOverlayNodeFields } from "@nodaro/shared"
 import { defaultImageModel, IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
+import type { SourceImageSize } from "@nodaro/shared"
+import { applyOrder, getNodeImageUrl, orderedSourceImages, sourceImageNodeProvider } from "./source-image.js"
 import { effectiveContentModel, contentRecipeCreditId, contentIdeasCreditId, clampContentIdeasCount, CONTENT_RECIPE_SOURCE_MAX, CONTENT_IDEAS_MAX_RECIPE_INPUTS, CONTENT_IDEAS_BRAND_MAX, CONTENT_IDEAS_LANGUAGE_MAX } from "@nodaro/shared"
 import { TELEGRAM_ACCOUNT_SEND_NODE_TYPE, telegramSendAsOf, telegramSendDestinationOf } from "@nodaro/shared"
 import { DEFAULT_TEXT_TO_AUDIO_PROVIDER, dialogueProviderOf, getDialogueCapabilities } from "@nodaro/shared"
@@ -119,6 +121,13 @@ export interface PayloadBuildContext {
    *  caller (`editPlanPerMinuteActive`) because this builder is synchronous.
    *  ABSENT = steps, the reserve every plugin accepts. */
   editPlanPerMinute?: boolean
+  /** The displayed size of the image this node transforms, read by the caller
+   *  (`node-executor.ts`, from `autoAspectSourceImageUrl`'s url) because this
+   *  builder is synchronous. Only "auto" on a model without a native auto uses
+   *  it: the payload gets the model's ratio nearest the source's shape, the
+   *  same answer the image routes give. ABSENT = unknown, and "auto" keeps its
+   *  usual fallback. */
+  sourceImage?: SourceImageSize
 }
 
 // ---------------------------------------------------------------------------
@@ -589,14 +598,6 @@ function keepSeedance2MentionsAsRefs(
 // ---------------------------------------------------------------------------
 // Ancestor reference image collection — delegates to shared implementation
 // ---------------------------------------------------------------------------
-
-/** Get image URL from execution state, falling back to saved node data (matches frontend) — only for a node this run did not run or gate. */
-function getNodeImageUrl(
-  node: SimpleNode,
-  nodeStates: Record<string, NodeExecutionState>,
-): string | undefined {
-  return nodeStates[node.id]?.output?.imageUrl ?? savedOutputFor(node, nodeStates[node.id])?.imageUrl
-}
 
 function collectAncestorRefs(
   nodeId: string,
@@ -1578,30 +1579,9 @@ function countRefModalityEdges(
 }
 
 // ---------------------------------------------------------------------------
-// Apply user-specified ordering to a list of items with IDs
+// Apply user-specified ordering to a list of items with IDs — `applyOrder`
+// lives in ./source-image.ts, shared with node-executor.
 // ---------------------------------------------------------------------------
-
-function applyOrder<T extends { id: string }>(
-  items: readonly T[],
-  order: readonly string[],
-): T[] {
-  if (!order.length) return [...items]
-  const ordered: T[] = []
-  const seen = new Set<string>()
-  for (const id of order) {
-    const item = items.find((i) => i.id === id)
-    if (item) {
-      ordered.push(item)
-      seen.add(id)
-    }
-  }
-  for (const item of items) {
-    if (!seen.has(item.id)) {
-      ordered.push(item)
-    }
-  }
-  return ordered
-}
 
 /** Source-node types accepted as reference images by image-to-video and
  * text-to-video. Mirrors the frontend `connectedRefImages` filter in
@@ -2918,7 +2898,7 @@ export function buildPayload(
     }
 
     case "edit-image": {
-      const provider = (data.provider as string) ?? "recraft-upscale"
+      const provider = sourceImageNodeProvider(type, data)
 
       // Same last-mile catalog snap as generate-image / image-to-image — see the
       // comment there. Aspect-only on this branch: `targetResolution` is an
@@ -2927,10 +2907,14 @@ export function buildPayload(
       // neutral here. It still matters: the upscalers, remove-bg and the grok
       // task-chained ops declare NO `aspectRatios`, so a ratio a FieldMapping
       // injected at run time was forwarded upstream as `image_size` on models
-      // that have no such lever. Mirrors `routes/edit-image.ts`.
-      const editParams = normalizeModelInput(provider, {
-        aspectRatio: data.aspectRatio as string | undefined,
-      })
+      // that have no such lever. Mirrors `routes/edit-image.ts`, source size
+      // included: "auto" on a model without a native auto becomes its ratio
+      // nearest the source image.
+      const editParams = normalizeModelInput(
+        provider,
+        { aspectRatio: data.aspectRatio as string | undefined },
+        { sourceImage: buildCtx?.sourceImage },
+      )
       if (editParams.adjustments.length > 0) {
         console.warn(
           `[payload-builder] ${node.id} (${provider}): ` +
@@ -2939,28 +2923,7 @@ export function buildPayload(
       }
 
       // Apply connectedMediaOrder to determine main image vs references
-      let mainImageUrl = resolvedInputs.imageUrl || data.imageUrl
-      let editRefUrls: string[] | undefined
-      const connectedOrder = data.connectedMediaOrder as string[] | undefined
-      if (connectedOrder?.length && resolvedInputs.referenceImageUrls?.length) {
-        const allNodes = buildCtx?.nodes ?? []
-        const allEdges = buildCtx?.edges ?? []
-        const states = buildCtx?.nodeStates ?? {}
-        const sourceNodeIds = allEdges
-          .filter((e) => e.target === node.id)
-          .map((e) => e.source)
-        const sourceNodes = sourceNodeIds
-          .map((id) => allNodes.find((n) => n.id === id))
-          .filter((n): n is SimpleNode => !!n)
-        const ordered = applyOrder(sourceNodes, connectedOrder)
-        const orderedUrls = ordered
-          .map((n) => getNodeImageUrl(n, states))
-          .filter((u): u is string => !!u)
-        if (orderedUrls.length > 0) {
-          mainImageUrl = orderedUrls[0]
-          editRefUrls = orderedUrls.slice(1)
-        }
-      }
+      const { main: mainImageUrl, rest: editRefUrls } = orderedSourceImages(node, resolvedInputs, buildCtx)
 
       let editPrompt = (resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap)) as string | undefined
       if (provider === "nano-banana-edit" && editPrompt) {
@@ -3031,14 +2994,20 @@ export function buildPayload(
     }
 
     case "image-to-image": {
-      const provider = (data.provider as string) ?? defaultImageModel("edit", data.aspectRatio as string | undefined)
+      const provider = sourceImageNodeProvider(type, data)
       const settings = buildCtx?.settings
-      // Same last-mile guard as generate-image — see the comment there.
-      const i2iParams = normalizeModelInput(provider, {
-        aspectRatio: data.aspectRatio as string | undefined,
-        resolution: data.resolution as string | undefined,
-        quality: data.quality as string | undefined,
-      })
+      // Same last-mile guard as generate-image — see the comment there — plus
+      // the source size, so "auto" on a model without a native auto becomes
+      // its ratio nearest the source image, as on `routes/image-to-image.ts`.
+      const i2iParams = normalizeModelInput(
+        provider,
+        {
+          aspectRatio: data.aspectRatio as string | undefined,
+          resolution: data.resolution as string | undefined,
+          quality: data.quality as string | undefined,
+        },
+        { sourceImage: buildCtx?.sourceImage },
+      )
       if (i2iParams.adjustments.length > 0) {
         console.warn(
           `[payload-builder] ${node.id} (${provider}): ` +
@@ -3047,26 +3016,9 @@ export function buildPayload(
       }
 
       // Apply connectedMediaOrder to determine main image vs references
-      let i2iMainImage = resolvedInputs.imageUrl || data.imageUrl
-      let i2iChainRefs = resolvedInputs.referenceImageUrls ?? []
-      const i2iOrder = data.connectedMediaOrder as string[] | undefined
-      if (i2iOrder?.length && i2iChainRefs.length > 0) {
-        const allNodes = buildCtx?.nodes ?? []
-        const allEdges = buildCtx?.edges ?? []
-        const states = buildCtx?.nodeStates ?? {}
-        const srcIds = allEdges.filter((e) => e.target === node.id).map((e) => e.source)
-        const srcNodes = srcIds
-          .map((id) => allNodes.find((n) => n.id === id))
-          .filter((n): n is SimpleNode => !!n)
-        const ordered = applyOrder(srcNodes, i2iOrder)
-        const orderedUrls = ordered
-          .map((n) => getNodeImageUrl(n, states))
-          .filter((u): u is string => !!u)
-        if (orderedUrls.length > 0) {
-          i2iMainImage = orderedUrls[0]
-          i2iChainRefs = orderedUrls.slice(1)
-        }
-      }
+      const i2iOrdered = orderedSourceImages(node, resolvedInputs, buildCtx)
+      const i2iMainImage = i2iOrdered.main
+      const i2iChainRefs = i2iOrdered.rest ?? resolvedInputs.referenceImageUrls ?? []
 
       // Collect reference images from character assets
       const charIds = (data.characterDefinitionIds as string[]) ?? []
@@ -3187,19 +3139,24 @@ export function buildPayload(
     }
 
     case "modify-image": {
-      const provider = (data.provider as string) ?? defaultImageModel("edit", data.aspectRatio as string | undefined)
+      const provider = sourceImageNodeProvider(type, data)
       // Same last-mile catalog snap as generate-image / image-to-image — see the
       // comment there. Hoisted ABOVE the provider fork so both arms share it:
       // the nano-banana-edit arm sends `aspectRatio`, and the i2i arm feeds
       // `resolution` / `quality` into `resolveImageGenCreditIdentifier`, which
       // prices off the SNAPPED values. Handing that resolver raw data while
       // putting the same raw data in the payload reserved one tier and rendered
-      // another, with no upward true-up to correct it.
-      const modParams = normalizeModelInput(provider, {
-        aspectRatio: data.aspectRatio as string | undefined,
-        resolution: data.resolution as string | undefined,
-        quality: data.quality as string | undefined,
-      })
+      // another, with no upward true-up to correct it. The source size resolves
+      // "auto" on a model without a native auto, as both routes do.
+      const modParams = normalizeModelInput(
+        provider,
+        {
+          aspectRatio: data.aspectRatio as string | undefined,
+          resolution: data.resolution as string | undefined,
+          quality: data.quality as string | undefined,
+        },
+        { sourceImage: buildCtx?.sourceImage },
+      )
       if (modParams.adjustments.length > 0) {
         console.warn(
           `[payload-builder] ${node.id} (${provider}): ` +
@@ -3210,28 +3167,7 @@ export function buildPayload(
         // Same logic as edit-image case for nano-banana-edit
 
         // Apply connectedMediaOrder to determine main image vs references
-        let mainImageUrl = resolvedInputs.imageUrl || data.imageUrl
-        let editRefUrls: string[] | undefined
-        const connectedOrder = data.connectedMediaOrder as string[] | undefined
-        if (connectedOrder?.length && resolvedInputs.referenceImageUrls?.length) {
-          const allNodes = buildCtx?.nodes ?? []
-          const allEdges = buildCtx?.edges ?? []
-          const states = buildCtx?.nodeStates ?? {}
-          const sourceNodeIds = allEdges
-            .filter((e) => e.target === node.id)
-            .map((e) => e.source)
-          const sourceNodes = sourceNodeIds
-            .map((id) => allNodes.find((n) => n.id === id))
-            .filter((n): n is SimpleNode => !!n)
-          const ordered = applyOrder(sourceNodes, connectedOrder)
-          const orderedUrls = ordered
-            .map((n) => getNodeImageUrl(n, states))
-            .filter((u): u is string => !!u)
-          if (orderedUrls.length > 0) {
-            mainImageUrl = orderedUrls[0]
-            editRefUrls = orderedUrls.slice(1)
-          }
-        }
+        const { main: mainImageUrl, rest: editRefUrls } = orderedSourceImages(node, resolvedInputs, buildCtx)
 
         let editPrompt = applyPromptAffixes((resolvedInputs.prompt || resolveRefs(data.prompt as string | undefined, refMap)) as string | undefined, readPromptAffixes(data), refMap)
         if (editPrompt) {
@@ -3282,26 +3218,9 @@ export function buildPayload(
         const settings = buildCtx?.settings
 
         // Apply connectedMediaOrder to determine main image vs references
-        let i2iMainImage = resolvedInputs.imageUrl || data.imageUrl
-        let i2iChainRefs = resolvedInputs.referenceImageUrls ?? []
-        const i2iOrder = data.connectedMediaOrder as string[] | undefined
-        if (i2iOrder?.length && i2iChainRefs.length > 0) {
-          const allNodes = buildCtx?.nodes ?? []
-          const allEdges = buildCtx?.edges ?? []
-          const states = buildCtx?.nodeStates ?? {}
-          const srcIds = allEdges.filter((e) => e.target === node.id).map((e) => e.source)
-          const srcNodes = srcIds
-            .map((id) => allNodes.find((n) => n.id === id))
-            .filter((n): n is SimpleNode => !!n)
-          const ordered = applyOrder(srcNodes, i2iOrder)
-          const orderedUrls = ordered
-            .map((n) => getNodeImageUrl(n, states))
-            .filter((u): u is string => !!u)
-          if (orderedUrls.length > 0) {
-            i2iMainImage = orderedUrls[0]
-            i2iChainRefs = orderedUrls.slice(1)
-          }
-        }
+        const i2iOrdered = orderedSourceImages(node, resolvedInputs, buildCtx)
+        const i2iMainImage = i2iOrdered.main
+        const i2iChainRefs = i2iOrdered.rest ?? resolvedInputs.referenceImageUrls ?? []
 
         // Collect reference images from character assets
         const charIds = (data.characterDefinitionIds as string[]) ?? []

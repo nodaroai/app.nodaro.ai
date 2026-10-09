@@ -79,7 +79,7 @@ Before any creative work, call `create_workflow({ name: "<user's working title o
 
 > "I've started your workflow. Open the editor URL in another tab — you'll watch your film assemble on the canvas as we work together."
 
-Share the canonical editor URL from `create_workflow`'s response (the MCP server returns it). If the response does not include one, construct it from the Nodaro instance's editor pattern (e.g., `<base_url>/editor/<workflowId>`).
+Share the `editorUrl` from `create_workflow`'s response exactly as returned. The server builds it for the deployment the user is connected to (`<PUBLIC_URL>/editor/<workflowId>`, which the app resolves to the workflow's project), so the skill never constructs one.
 
 **Every subsequent MCP generation call MUST include this `workflowId`** so the resulting nodes attach to the user's canvas in real-time. The user is co-watching: chat on one side, canvas filling up on the other.
 

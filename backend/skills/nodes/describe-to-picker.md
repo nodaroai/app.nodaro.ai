@@ -1,7 +1,7 @@
 ---
 node_type: describe-to-picker
-generated_at: 2026-09-27T12:51:23.676Z
-generated_from: c607aa02c
+generated_at: 2026-10-08T22:50:03.959Z
+generated_from: ae4e7e3d0
 ---
 
 # Describe to Picker
@@ -27,6 +27,7 @@ generated_from: c607aa02c
 - `currentJobProgress?: number`
 - `errorMessage?: string`
 - `generatedPickerJson?: Record<string, unknown>`
+- `generatedPickerRunId?: string`
 - `generatedGaps?: PickerGaps`
 
 **Default data:**

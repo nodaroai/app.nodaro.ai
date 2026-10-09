@@ -52,6 +52,7 @@ import {
 } from "../lib/client-app-stamp.js"
 import { deleteWorkflowWithPrivateMedia } from "../lib/workflow-delete.js"
 import { settledWithLimit } from "../lib/settled-with-limit.js"
+import { limitedKeyWorkflows, refuseLimitedKey } from "../middleware/token-workflow-scope.js"
 
 const workflowIdParams = z.object({
   id: z.string().uuid(),
@@ -785,7 +786,7 @@ function checkSubWorkflowShape(
 
 export async function workflowRoutes(app: FastifyInstance) {
   // List workflows for a project
-  app.get("/v1/projects/:projectId/workflows", async (req, reply) => {
+  app.get("/v1/projects/:projectId/workflows", { config: { workflowScope: "handler" } }, async (req, reply) => {
     const userId = authorize(req, reply, "workflows:read")
     if (!userId) return
 
@@ -806,7 +807,7 @@ export async function workflowRoutes(app: FastifyInstance) {
     // which of a workspace's workflows a given member may see arrives with the
     // access work, and none of the levers it reads exist yet. A scope may
     // under-show and be widened later; it may never over-show and be narrowed.
-    const { data, error } = await supabase
+    let listQuery = supabase
       // tenant-scope-ignore: project-scoped list; the project carries the scope.
       .from("workflows")
       .select(WORKFLOW_META_COLS)
@@ -814,6 +815,10 @@ export async function workflowRoutes(app: FastifyInstance) {
       .eq("user_id", userId)
       .is("parent_workflow_id", null)
       .order("created_at", { ascending: false })
+    // A personal API key limited to some workflows lists only those.
+    const limitedTo = limitedKeyWorkflows(req)
+    if (limitedTo) listQuery = listQuery.in("id", [...limitedTo])
+    const { data, error } = await listQuery
 
     if (error) return sendInternalError(reply, req, error, "Failed to fetch workflows")
     return { data: (data ?? []).map(toWorkflowMeta) }
@@ -920,7 +925,7 @@ export async function workflowRoutes(app: FastifyInstance) {
   // conversion list in production the moment it deployed. That flip is Phase 2
   // and is gated on an SDK release that sends `?app=voice-changer-pro`. Until
   // every deployed client passes its slug, the default stays permissive.
-  app.get("/v1/workflows", async (req, reply) => {
+  app.get("/v1/workflows", { config: { workflowScope: "handler" } }, async (req, reply) => {
     const userId = authorize(req, reply, "workflows:read")
     if (!userId) return
 
@@ -931,6 +936,11 @@ export async function workflowRoutes(app: FastifyInstance) {
     // `?studio=true` is the legacy spelling of `?app=studio`; an explicit `?app=`
     // wins if both are somehow sent.
     const appSlug = query.app ?? (query.studio ? STUDIO_APP_SLUG : undefined)
+
+    // A personal API key limited to some workflows lists only those, and never
+    // the admin view below (an admin's key included).
+    const limitedTo = limitedKeyWorkflows(req)
+    if (limitedTo && query.viewAll) return refuseLimitedKey(reply)
 
     // Admin "All users" view — mirrors GET /v1/projects?viewAll=true. Returns
     // every user's top-level workflows (optionally scoped to one client app)
@@ -1028,6 +1038,7 @@ export async function workflowRoutes(app: FastifyInstance) {
     if (appSlug) {
       listQuery = listQuery.eq("app_slug", appSlug)
     }
+    if (limitedTo) listQuery = listQuery.in("id", [...limitedTo])
     const { data, error } = await listQuery
 
     if (error) return sendInternalError(reply, req, error, "Failed to fetch workflows")
@@ -1303,7 +1314,7 @@ export async function workflowRoutes(app: FastifyInstance) {
   })
 
   // Get workflow by ID
-  app.get("/v1/workflows/:id", async (req, reply) => {
+  app.get("/v1/workflows/:id", { config: { workflowScope: { workflowParam: "id" } } }, async (req, reply) => {
     const userId = authorize(req, reply, "workflows:read")
     if (!userId) return
 

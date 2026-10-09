@@ -70,7 +70,7 @@ describe("collections resource", () => {
       .mockReturnValueOnce(mockOk({ success: true }))
     const sdk = client(fetchMock)
 
-    const page = await sdk.collections.records(ID, { q: "telegram", since: "2026-10-05T00:00:00Z", limit: 10, cursor: "prev" })
+    const page = await sdk.collections.records(ID, { q: "telegram", since: "2026-10-05T00:00:00Z", until: "2026-10-07T00:00:00Z", usage: "unused", order: "oldest", limit: 10, cursor: "prev" })
     expect(page.nextCursor).toBe("abc")
     const added = await sdk.collections.addRecord(ID, { item: { postUrl: RECORD.url, text: "x" }, fields: { topic: "tech" } }, { idempotencyKey: "run-1-0" })
     expect(added.outcome).toBe("inserted")
@@ -86,6 +86,9 @@ describe("collections resource", () => {
     expect(url.searchParams.get("since")).toBe("2026-10-05T00:00:00Z")
     expect(url.searchParams.get("limit")).toBe("10")
     expect(url.searchParams.get("cursor")).toBe("prev")
+    expect(url.searchParams.get("until")).toBe("2026-10-07T00:00:00Z")
+    expect(url.searchParams.get("usage")).toBe("unused")
+    expect(url.searchParams.get("order")).toBe("oldest")
     const add = call(fetchMock, 1)
     expect(add).toMatchObject({ url: `https://api.example.com/v1/collections/${ID}/records`, method: "POST", body: { item: { postUrl: RECORD.url, text: "x" }, fields: { topic: "tech" } } })
     expect(add.headers["Idempotency-Key"]).toBe("run-1-0")
@@ -93,16 +96,65 @@ describe("collections resource", () => {
     expect(call(fetchMock, 3)).toMatchObject({ url: `https://api.example.com/v1/collections/${ID}/records/${RECORD.id}`, method: "DELETE" })
   })
 
+  it("lists the Trash by numbered page, restores a record, and moves many at once", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockReturnValueOnce(mockOk({ data: [{ ...RECORD, deletedAt: "2026-10-08T20:00:00Z" }], nextCursor: null, total: 1 }))
+      .mockReturnValueOnce(mockOk({ ...RECORD, deletedAt: null }))
+      .mockReturnValueOnce(mockOk({ updated: 2 }))
+      .mockReturnValueOnce(mockOk({ success: true }))
+    const sdk = client(fetchMock)
+    const bin = await sdk.collections.records(ID, { status: "trash", offset: 12, limit: 6 })
+    expect(bin.total).toBe(1)
+    expect(bin.data[0]!.deletedAt).toBe("2026-10-08T20:00:00Z")
+    const url = new URL(call(fetchMock, 0).url)
+    expect(url.searchParams.get("status")).toBe("trash")
+    expect(url.searchParams.get("offset")).toBe("12")
+    expect(url.searchParams.get("limit")).toBe("6")
+    const back = await sdk.collections.restoreRecord(ID, RECORD.id)
+    expect(back.deletedAt).toBeNull()
+    expect(call(fetchMock, 1)).toMatchObject({ url: `https://api.example.com/v1/collections/${ID}/records/${RECORD.id}/restore`, method: "POST" })
+    const moved = await sdk.collections.bulkRecords(ID, { ids: [RECORD.id, "00000000-0000-4000-8000-0000000000e2"], action: "trash" })
+    expect(moved).toEqual({ updated: 2 })
+    expect(call(fetchMock, 2)).toMatchObject({
+      url: `https://api.example.com/v1/collections/${ID}/records/bulk`,
+      method: "POST",
+      body: { ids: [RECORD.id, "00000000-0000-4000-8000-0000000000e2"], action: "trash" },
+    })
+    await expect(sdk.collections.deleteRecordForever(ID, RECORD.id)).resolves.toBeUndefined()
+    expect(call(fetchMock, 3)).toMatchObject({ url: `https://api.example.com/v1/collections/${ID}/records/${RECORD.id}/permanent`, method: "DELETE" })
+  })
+
+  it("marks a record used, or not used again, naming who when told", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockReturnValueOnce(mockOk({ ...RECORD, usedAt: "2026-10-07T10:00:00Z", usedBy: { via: "api", nodeType: "my-publisher" } }))
+      .mockReturnValueOnce(mockOk({ ...RECORD, usedAt: null, usedBy: {} }))
+    const sdk = client(fetchMock)
+    const marked = await sdk.collections.setUsed(ID, RECORD.id, true, { via: "api", nodeType: "my-publisher" })
+    expect(marked.usedAt).toBe("2026-10-07T10:00:00Z")
+    const cleared = await sdk.collections.setUsed(ID, RECORD.id, false)
+    expect(cleared.usedAt).toBeNull()
+    expect(call(fetchMock, 0)).toMatchObject({
+      url: `https://api.example.com/v1/collections/${ID}/records/${RECORD.id}`,
+      method: "PATCH",
+      body: { used: true, source: { via: "api", nodeType: "my-publisher" } },
+    })
+    expect(call(fetchMock, 1).body).toEqual({ used: false })
+  })
+
   it("exports the collection as text, in the format asked for", async () => {
     const fetchMock = vi.fn().mockReturnValueOnce(mockOk("id,created_at\r\n")).mockReturnValueOnce(mockOk("[]\n"))
     const sdk = client(fetchMock)
     expect(await sdk.collections.export(ID)).toBe("id,created_at\r\n")
-    expect(await sdk.collections.export(ID, { format: "json", since: "2026-10-05T00:00:00Z" })).toBe("[]\n")
+    expect(await sdk.collections.export(ID, { format: "json", since: "2026-10-05T00:00:00Z", until: "2026-10-07T00:00:00Z", usage: "used" })).toBe("[]\n")
     const first = new URL(call(fetchMock, 0).url)
     expect(first.pathname).toBe(`/v1/collections/${ID}/export`)
     expect(first.searchParams.get("format")).toBeNull()
     const second = new URL(call(fetchMock, 1).url)
     expect(second.searchParams.get("format")).toBe("json")
     expect(second.searchParams.get("since")).toBe("2026-10-05T00:00:00Z")
+    expect(second.searchParams.get("until")).toBe("2026-10-07T00:00:00Z")
+    expect(second.searchParams.get("usage")).toBe("used")
   })
 })

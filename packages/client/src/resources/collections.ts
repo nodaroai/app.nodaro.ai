@@ -2,8 +2,13 @@ import type { NodaroClient } from "../client.js"
 import type {
   AddCollectionRecordInput,
   AddCollectionRecordResult,
+  BulkCollectionRecordsInput,
+  BulkCollectionRecordsResult,
   Collection,
   CollectionExportFormat,
+  CollectionRecord,
+  CollectionRecordSource,
+  CollectionUsage,
   CreateCollectionInput,
   ListCollectionRecordsParams,
   ListCollectionRecordsResult,
@@ -50,10 +55,47 @@ export class CollectionsResource {
     await this.client.request<{ success: true }>("DELETE", `/v1/collections/${encodeURIComponent(id)}`)
   }
 
-  /** `GET /v1/collections/:id/records` → the records, newest first. Narrow with `q` (words) and `since` (ISO); page with `cursor` / `limit` (1-100, default 50). */
+  /**
+   * `GET /v1/collections/:id/records` → the records, newest first (`order: "oldest"`
+   * flips it). Narrow with `q` (words), `since` / `until` (ISO) and `usage`
+   * (`all`, `unused` — not used yet — or `used`); page with `cursor` / `limit`
+   * (1-100, default 50). Each record carries `usedAt` / `usedBy`, and its
+   * `source` the saving workflow's name and project when it is yours.
+   */
   records(id: string, params: ListCollectionRecordsParams = {}): Promise<ListCollectionRecordsResult> {
     return this.client.request<ListCollectionRecordsResult>("GET", `/v1/collections/${encodeURIComponent(id)}/records`, {
-      query: { q: params.q, since: params.since, cursor: params.cursor, limit: params.limit },
+      query: {
+        q: params.q,
+        since: params.since,
+        until: params.until,
+        usage: params.usage,
+        status: params.status,
+        order: params.order,
+        cursor: params.cursor,
+        offset: params.offset,
+        limit: params.limit,
+      },
+    })
+  }
+
+  /** `POST /v1/collections/:id/records/:recordId/restore` → bring a record back from the Trash; the record. */
+  restoreRecord(id: string, recordId: string): Promise<CollectionRecord> {
+    return this.client.request<CollectionRecord>("POST", `/v1/collections/${encodeURIComponent(id)}/records/${encodeURIComponent(recordId)}/restore`)
+  }
+
+  /** `POST /v1/collections/:id/records/bulk` → move up to 100 records to the Trash, bring them back, or delete records already in the Trash for good, in one call. */
+  bulkRecords(id: string, input: BulkCollectionRecordsInput): Promise<BulkCollectionRecordsResult> {
+    return this.client.request<BulkCollectionRecordsResult>("POST", `/v1/collections/${encodeURIComponent(id)}/records/bulk`, { body: input })
+  }
+
+  /**
+   * `PATCH /v1/collections/:id/records/:recordId` → mark a record used (or not
+   * used again). `source` says who is marking it (defaults to the API). A
+   * server before the usage release answers `503 not_available`.
+   */
+  setUsed(id: string, recordId: string, used: boolean, source?: CollectionRecordSource): Promise<CollectionRecord> {
+    return this.client.request<CollectionRecord>("PATCH", `/v1/collections/${encodeURIComponent(id)}/records/${encodeURIComponent(recordId)}`, {
+      body: { used, ...(source ? { source } : {}) },
     })
   }
 
@@ -71,18 +113,24 @@ export class CollectionsResource {
     })
   }
 
-  /** `DELETE /v1/collections/:id/records/:recordId` → remove one record. */
+  /**
+   * `DELETE /v1/collections/:id/records/:recordId` → the record moves to the
+   * collection's Trash (`restoreRecord` brings it back; `deleteRecordForever`
+   * removes it for good).
+   */
   async deleteRecord(id: string, recordId: string): Promise<void> {
-    await this.client.request<{ success: true }>(
-      "DELETE",
-      `/v1/collections/${encodeURIComponent(id)}/records/${encodeURIComponent(recordId)}`,
-    )
+    await this.client.request<{ success: true }>("DELETE", `/v1/collections/${encodeURIComponent(id)}/records/${encodeURIComponent(recordId)}`)
   }
 
-  /** `GET /v1/collections/:id/export` → the whole collection as CSV (default) or JSON text, newest first; `since` and `q` narrow it. */
-  export(id: string, params: { format?: CollectionExportFormat; since?: string; q?: string } = {}): Promise<string> {
+  /** `DELETE /v1/collections/:id/records/:recordId/permanent` → a record already in the Trash is deleted for good (`409 not_in_trash` for a live one). */
+  async deleteRecordForever(id: string, recordId: string): Promise<void> {
+    await this.client.request<{ success: true }>("DELETE", `/v1/collections/${encodeURIComponent(id)}/records/${encodeURIComponent(recordId)}/permanent`)
+  }
+
+  /** `GET /v1/collections/:id/export` → the whole collection as CSV (default) or JSON text, newest first; `since`, `until`, `usage` and `q` narrow it. */
+  export(id: string, params: { format?: CollectionExportFormat; since?: string; until?: string; usage?: CollectionUsage; q?: string } = {}): Promise<string> {
     return this.client.requestText("GET", `/v1/collections/${encodeURIComponent(id)}/export`, {
-      query: { format: params.format, since: params.since, q: params.q },
+      query: { format: params.format, since: params.since, until: params.until, usage: params.usage, q: params.q },
     })
   }
 }

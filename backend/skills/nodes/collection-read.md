@@ -1,7 +1,7 @@
 ---
 node_type: collection-read
-generated_at: 2026-10-06T04:15:45.140Z
-generated_from: 491960e9f
+generated_at: 2026-10-08T20:04:10.303Z
+generated_from: 204462824
 ---
 
 # Read Collection
@@ -24,6 +24,7 @@ generated_from: 491960e9f
 
 **Optional data fields:**
 - `collectionName?: string`
+- `usage?: CollectionUsage`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`
 - `currentJobId?: string`
@@ -40,7 +41,8 @@ generated_from: 491960e9f
   "windowUnit": "hours",
   "limit": 50,
   "order": "newest",
-  "textFormat": "headlines"
+  "textFormat": "headlines",
+  "usage": "all"
 }
 ```
 <!-- AUTO-GEN:END node-data-shape -->
@@ -74,7 +76,8 @@ generated_from: 491960e9f
     "windowUnit": "hours",
     "limit": 50,
     "order": "newest",
-    "textFormat": "headlines"
+    "textFormat": "headlines",
+    "usage": "all"
   }
 }
 ```

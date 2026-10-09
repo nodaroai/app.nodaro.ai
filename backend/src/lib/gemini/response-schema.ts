@@ -45,18 +45,33 @@ const NAME_KEYED: ReadonlySet<string> = new Set(["properties", "patternPropertie
  */
 export const GEMINI_ENUM_VALUE_BUDGET = 700
 
+/**
+ * One list is also capped on its own, whatever the total: the person
+ * picker's schema alone (574 ids, well under the budget) is refused while
+ * its `type` dimension carries 160 ids, and answers once that one list is
+ * withheld (its largest remaining list is 88; measured 2026-10-08 on
+ * `gemini-3.8-flash`, after a staging run from another session hit exactly
+ * this). The threshold sits between 88 and 160; 100 keeps every list that
+ * is known to pass.
+ */
+export const GEMINI_ENUM_LIST_LIMIT = 100
+
 export function toGeminiResponseSchema(schema: unknown): unknown {
-  return withholdEnumsOverBudget(rewrite(schema, false), GEMINI_ENUM_VALUE_BUDGET)
+  return withholdEnumsOverBudget(rewrite(schema, false), GEMINI_ENUM_VALUE_BUDGET, GEMINI_ENUM_LIST_LIMIT)
 }
 
-/** Withhold `enum` lists, largest first, until their values total at most `budget`. Mutates and returns `schema`. */
-export function withholdEnumsOverBudget(schema: unknown, budget: number): unknown {
+/**
+ * Withhold `enum` lists: first every list longer than `listLimit`, then,
+ * largest first, until the remaining values total at most `budget`.
+ * Mutates and returns `schema`.
+ */
+export function withholdEnumsOverBudget(schema: unknown, budget: number, listLimit = Infinity): unknown {
   const carriers: Array<Record<string, unknown> & { enum: unknown[] }> = []
   collectEnumCarriers(schema, false, carriers)
   let total = carriers.reduce((n, c) => n + c.enum.length, 0)
   carriers.sort((a, b) => b.enum.length - a.enum.length)
   for (const carrier of carriers) {
-    if (total <= budget) break
+    if (carrier.enum.length <= listLimit && total <= budget) break
     total -= carrier.enum.length
     delete (carrier as Record<string, unknown>).enum
   }

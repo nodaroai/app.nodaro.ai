@@ -1,6 +1,6 @@
 ---
 name: nodaro-film-director
-version: 2.0.0
+version: 2.0.1
 description: Use when the user wants to make a cinematic video, short film, trailer, music video, reel, or commercial using Nodaro. Guides them through a director-quality workflow that assembles an editable Nodaro workflow on the user's canvas in real-time during conversation.
 ---
 
@@ -70,7 +70,7 @@ Before any creative work, call `create_workflow({ name: "<user's working title o
 
 > "I've started your workflow. Open the editor URL in another tab — you'll watch your film assemble on the canvas as we work together."
 
-`create_workflow` returns `{ id, name }` (no editor URL today). Construct the URL as `https://app.nodaro.ai/editor/<workflowId>` for the default Nodaro deployment. If the user is on a self-hosted or staging deployment (e.g., `next.nodaro.ai`), ask them for their base URL and use that pattern instead.
+`create_workflow` returns `{ id, name, editorUrl }`. Share `editorUrl` exactly as returned, and never build the link yourself: it already points at the Nodaro deployment the user is connected to (production, staging or self-hosted).
 
 **After each approved stage, call `update_workflow_json` with the new nodes**, referencing the captured `workflowId`. The generation tools themselves do NOT accept `workflowId` (Layer 1 auto-attach is not yet implemented) — they return jobIds and asset URLs, which you embed in node entries when you write the workflow JSON. Default-flow stages that attach nodes: Stage 1 (Script display), Stage 5 (scene images), Stage 6 (animated videos), Stage 7 (music), Stage 8 (assembly). The user is co-watching: chat on one side, canvas filling up stage-by-stage on the other.
 

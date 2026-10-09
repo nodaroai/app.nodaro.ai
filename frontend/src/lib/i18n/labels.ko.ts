@@ -964,6 +964,7 @@ const OPTION_QUALIFIERS_KO: Record<string, string> = {
   "Detailed": "정밀",
   "Default": "기본값",
   "Auto": "자동",
+  "Match the photo": "사진에 맞춤",
   "Fast": "빠름",
   "Best": "최고 품질",
   "Quality": "고품질",

@@ -964,6 +964,7 @@ const OPTION_QUALIFIERS_JA: Record<string, string> = {
   "Detailed": "高精細",
   "Default": "デフォルト",
   "Auto": "自動",
+  "Match the photo": "写真に合わせる",
   "Fast": "高速",
   "Best": "最高品質",
   "Quality": "高品質",

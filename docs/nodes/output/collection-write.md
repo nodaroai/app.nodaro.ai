@@ -11,7 +11,7 @@ The Save to Collection node is where a workflow's output lives after the run: ar
 ## How it works
 
 - Pick the **Collection** (or make one from the node's settings).
-- Wire what to save into **Item**: a JSON object (from Generate Text, Extract Field, a feed, a scrape) fills the record by itself — the title from `title | headline | name | subject`, the text from `text | body | caption | description | content | summary | dek`, the link from `url | postUrl | link | href | permalink`, pictures and videos from `media[]` / `imageUrl` / `thumbnailUrl` / `videoUrl` / `audioUrl`, and every other text, number or true/false value into `fields`. Plain text becomes the record's text; a plain link (a row of a list of addresses) becomes the record's link.
+- Wire what to save into **Item**: a JSON object (from Generate Text, Extract Field, a feed, a scrape) fills the record by itself — the title from `title | headline | name | subject`, the text from `text | body | caption | description | content | summary | dek`, the link from `url | postUrl | link | href | permalink`, pictures and videos from `media[]` / `imageUrl` / `thumbnailUrl` / `videoUrl` / `audioUrl` / `mediaUrl` (its kind from `mediaKind` — image, photo, video, audio — else from the file's ending; both stay fields too), and every other text, number or true/false value into `fields`. Plain text becomes the record's text; a plain link (a row of a list of addresses) becomes the record's link.
 - **Title**, **Text**, **Link** and **Duplicate key** set in the node (typed, or mapped from another node) **win** over what the item carries.
 - A `{Node}` reference typed into one of those four fields is replaced with that node's output, as in a caption: `Breaking: {Feed}`. The node must be upstream of Save to Collection.
   - A name that matches no node is saved as typed, and so is a node that produced nothing, unless you give a fallback: `{Feed || untitled}` (or `{Feed || }` for nothing).
@@ -19,7 +19,7 @@ The Save to Collection node is where a workflow's output lives after the run: ar
   - A title, text or duplicate key whose references fill in more than the field allows is cut to fit. A link that comes out longer than 2,000 characters is not used, and the item's own link counts instead.
   - A value mapped from another node is saved as it arrives, braces included.
 - A picture wired into **Image** and a video wired into **Video** are saved as **links** beside the record, together with the item's own media (`media`).
-- **Duplicates:** the record's duplicate key is the **Duplicate key** field, else its link, else the item's `slug`, `postId`, `externalId` or a named `id` (a numeric id is not a key — each run numbers its items from 1). A record whose key is already in the collection is not saved again — the node reports `duplicate`, nothing fails, and the run goes on.
+- **Duplicates:** the record's duplicate key is the **Duplicate key** field, else its link, else the item's `slug`, `postId`, `externalId` or a named `id` (a numeric id is not a key — each run numbers its items from 1). A record whose key is already in the collection is not saved again — the node reports `duplicate`, nothing fails, and the run goes on. That holds for a record in the collection's Trash too: the duplicate is answered and the record stays in the Trash, so a run never undoes a delete.
 - **Re-runs:** when the same run re-picks the node (a retry after a crash, a resumed run) the write is recognised and answered with the existing record (`replayed`) — per fan-out iteration, inside sub-workflows too. A new run, an editor Run or "Run from here" is a new write; the duplicate key is what keeps those from saving the same story twice.
 - **Caps:** a collection holds a number of records that depends on your plan (see [Collections](../../features/collections.md#caps)). Past the cap the oldest records are removed as new ones arrive; the write's result carries how many were evicted (`evicted`), and the Collections page shows a meter.
 
@@ -32,6 +32,7 @@ The Save to Collection node is where a workflow's output lives after the run: ar
 | Text | Text (mappable) | — | Empty: taken from the item (a plain-text item is the text itself) |
 | Link | Text (mappable) | — | Empty: the item's link |
 | Duplicate key | Text (mappable) | — | Empty: the link, else the item's `slug`, `id` or `postId` |
+| Mark the item as used | Switch | off | When the item is itself a record of one of your collections (a [Read Collection](../input/collection-read.md) row: it carries `id` and `collectionId`), that record is marked **used** once this node has saved — when, and by this node, workflow and run. A record already used keeps its first "used by" (a re-run never rewrites which run used it). Nothing happens for an item that is not a record. The mark does not wait for other nodes: a publisher that runs beside this node and fails leaves the record marked — **Mark as not used** on the Collections page puts it back. |
 
 ## Inputs & Outputs
 
@@ -47,7 +48,9 @@ The Save to Collection node is where a workflow's output lives after the run: ar
 
 | Handle | Type | Content |
 |--------|------|---------|
-| `json` (**Record**) | record | The record saved (or the one already there) — `id`, `title`, `text`, `url`, `media`, `fields`, `dedupeKey`, `createdAt` |
+| `json` (**Record**) | record | The record saved (or the one already there) — `id`, `title`, `text`, `url`, `media`, `fields`, `dedupeKey`, `createdAt`, `usedAt`, `usedBy` |
+
+The run's history also says whether the item's source record is marked used (`markedUsed` — true when this node marked it or it was used before; false when the item was not a record, or the mark failed, which the server logs).
 
 ## Credits
 

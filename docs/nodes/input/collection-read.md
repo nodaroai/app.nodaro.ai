@@ -14,7 +14,7 @@ The Read Collection node reads the records a [collection](../../features/collect
 - Set the **Time window** — the last N **hours** or **days**, up to 30 days back — and **Max records** (1–200).
 - Each run reads the records saved inside that window, in the chosen **Order**, and emits them twice: as records (JSON) and as their text (**Text output**: `Headlines` — one line per record with its title, date and link; `Full records` — title, text and link of each record).
 - **Nothing in the window**: the run emits nothing on either output; the nodes behind it that needed that text — a Generate Text, a Save to Collection — are skipped, and the run ends `completed` with `outcome: "nothing_new"` (see [Runs that find nothing new](../../api-integration.md#runs-that-find-nothing-new)).
-- Records come from [Save to Collection](../output/collection-write.md), the Collections page, the API, the SDK, the CLI or MCP — the node reads them all the same.
+- Records come from [Save to Collection](../output/collection-write.md), the Collections page, the API, the SDK, the CLI or MCP — the node reads them all the same. A record moved to the collection's **Trash** is not read (restore it on the Collections page to bring it back).
 
 ## On the canvas
 
@@ -33,6 +33,7 @@ After a run, the card shows the records it read the way the [Telegram Channel Fe
 | Collection | Picker | — | The collection to read (one of yours) |
 | Time window | Number + unit | 24 hours | The last N hours (1–720) or days (1–30) |
 | Max records | Number | 50 | 1–200 records per run |
+| Which records | Select | All records | `All records`, `Only the ones not used yet`, or `Only the ones already used` — a record is used once a [Save to Collection](../output/collection-write.md) with **Mark the item as used** saved it on, or once it was marked on the Collections page |
 | Order | Select | Newest first | `Newest first` or `Oldest first` |
 | Text output | Select | Headlines | `Headlines` (title · date · link per record) or `Full records` (title, text and link) |
 
@@ -47,7 +48,21 @@ After a run, the card shows the records it read the way the [Telegram Channel Fe
 | `json` (**JSON**) | list of records | The records in the window, one per item — wire it into a List, Extract Field, or (as an **Each** wire) a node that runs once per record |
 | `text` (**Records**) | text | The digest in the chosen text output — wire it into a prompt |
 
-Each record carries: `id`, `collectionId`, `title`, `text`, `url`, `media` (links to pictures / videos saved beside it), `fields` (the other keys of the item it was made from), `dedupeKey`, `source` (the node, workflow and run that saved it) and `createdAt`.
+Each record carries: `id`, `collectionId`, `title`, `text`, `url`, `media` (links to pictures / videos saved beside it), `fields` (the other keys of the item it was made from), `dedupeKey`, `source` (the node, workflow and run that saved it), `createdAt`, and `usedAt` / `usedBy` (when and by what it was used — null and empty until then).
+
+## Example: a queue that posts one record per tick
+
+```
+Read Collection ("ready", last 30 days, only the ones not used yet, oldest first, 1 record) ──► … ──► Telegram Post
+                                                                                              └──► Save to Collection ("published", Mark the item as used on)
+```
+
+Each tick reads the oldest record not used yet, posts it, saves a copy into "published" and — because **Mark the item as used** is on — marks the original record in "ready" as used. The next tick reads the next one; a tick with nothing left inside the window reads nothing and ends `nothing_new`.
+
+Two things to know:
+
+- The **time window still applies**: a record not used yet that is older than the window is not read. Set the window to the longest a record may wait (30 days at most), or mark stale records used from the Collections page.
+- The mark happens **when the Save to Collection node runs**, whatever the post does: a publisher node has no output to wire the save after, so the two run side by side, and a post that fails leaves its record marked. To post it again, mark it **not used** on the Collections page.
 
 ## Credits
 

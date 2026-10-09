@@ -44,3 +44,18 @@ describe("appBaseUrl / mcpBaseUrl", () => {
     expect(mcpBaseUrl()).toBe("https://mcp.nodaro.example.com")
   })
 })
+
+describe("workflowEditorUrl", () => {
+  it("is this deployment's short editor link — the app's own /editor/<id> route", async () => {
+    env.PUBLIC_URL = "https://next.nodaro.example.com/"
+    const { workflowEditorUrl } = await import("../deployment-urls.js")
+    expect(workflowEditorUrl("0b9a6f8e-1111-4222-8333-444455556666")).toBe(
+      "https://next.nodaro.example.com/editor/0b9a6f8e-1111-4222-8333-444455556666",
+    )
+  })
+
+  it("an id is one path segment, never a path of its own", async () => {
+    const { workflowEditorUrl } = await import("../deployment-urls.js")
+    expect(workflowEditorUrl("../admin?x=1")).toBe("https://app.nodaro.ai/editor/..%2Fadmin%3Fx%3D1")
+  })
+})

@@ -60,7 +60,7 @@ type Result = { data?: unknown; error?: { code?: string; message?: string } | nu
 function makeQB(result: Result = {}) {
   const resolved = { data: result.data ?? null, error: result.error ?? null, count: result.count ?? null }
   const qb: Record<string, unknown> = {}
-  for (const name of ["select", "insert", "update", "delete", "eq", "gte", "in", "or", "order", "limit", "range"]) {
+  for (const name of ["select", "insert", "update", "delete", "eq", "gte", "lt", "is", "not", "in", "or", "order", "limit", "range"]) {
     qb[name] = vi.fn(() => qb)
   }
   qb.single = vi.fn(() => Promise.resolve({ data: resolved.data, error: resolved.error }))
@@ -177,22 +177,25 @@ describe("collections helpers", () => {
     expect(csvCell({ a: 1 })).toBe('"{""a"":1}"')
   })
 
-  it("a CSV line carries the record's columns, media and fields as JSON", () => {
-    const line = csvLine({
+  it("a CSV line carries the record's columns, media, fields, and when and by what it was used, as JSON", () => {
+    const record = {
       id: REC,
       collectionId: COLL,
       title: "T",
       text: "=cmd",
       url: null,
-      media: [{ type: "image", url: "https://cdn.example.com/a.jpg" }],
+      media: [{ type: "image" as const, url: "https://cdn.example.com/a.jpg" }],
       fields: { views: "1.52M" },
       dedupeKey: null,
       source: {},
       createdAt: "2026-10-06T09:00:00.000Z",
-    })
-    expect(line).toBe(
-      `"${REC}","2026-10-06T09:00:00.000Z","T","'=cmd","","","[{""type"":""image"",""url"":""https://cdn.example.com/a.jpg""}]","{""views"":""1.52M""}"`,
+      usedAt: null,
+      usedBy: {},
+    }
+    expect(csvLine(record)).toBe(
+      `"${REC}","2026-10-06T09:00:00.000Z","T","'=cmd","","","[{""type"":""image"",""url"":""https://cdn.example.com/a.jpg""}]","{""views"":""1.52M""}","",""`,
     )
+    expect(csvLine({ ...record, usedAt: "2026-10-07T10:00:00.000Z", usedBy: { via: "ui" } })).toMatch(/,"2026-10-07T10:00:00.000Z","{""via"":""ui""}"$/)
   })
 
   it("an export file is named after the collection in ASCII, with the collection's own name beside it", () => {
@@ -344,6 +347,30 @@ describe("GET / PATCH / DELETE /v1/collections/:id", () => {
     expect((await app.inject({ method: "GET", url: `/v1/collections/${COLL}` })).statusCode).toBe(404)
   })
 
+  it("says how many of its records are used and how many sit in the Trash; a database before the usage migration leaves both out", async () => {
+    const used = makeQB({ count: 3 })
+    const trash = makeQB({ count: 1 })
+    tables({
+      collections: [makeQB({ data: collectionRow() })],
+      collection_records: [used, trash, makeQB({ error: { code: "42703", message: "column collection_records.used_at does not exist" } })],
+    })
+    const app = await buildApp()
+    expect((await app.inject({ method: "GET", url: `/v1/collections/${COLL}` })).json()).toMatchObject({ id: COLL, usedCount: 3, trashCount: 1 })
+    // Used = live and used; the Trash = every record with a deleted_at.
+    expect(used.is).toHaveBeenCalledWith("deleted_at", null)
+    expect(used.not).toHaveBeenCalledWith("used_at", "is", null)
+    expect(trash.not).toHaveBeenCalledWith("deleted_at", "is", null)
+    // Each count is a GET with an empty range, never a HEAD: a HEAD answer has no body, so the
+    // error of a missing column could not be told from any other.
+    for (const q of [used, trash]) {
+      expect(q.select).toHaveBeenCalledWith("id", { count: "exact" })
+      expect(q.range).toHaveBeenCalledWith(0, 0)
+    }
+    const early = (await app.inject({ method: "GET", url: `/v1/collections/${COLL}` })).json()
+    expect(early).not.toHaveProperty("usedCount")
+    expect(early).not.toHaveProperty("trashCount")
+  })
+
   it("renames and re-describes, stamping updated_at, scoped to the caller", async () => {
     const qb = makeQB({ data: collectionRow({ name: "World" }) })
     tables({ collections: [qb] })
@@ -397,6 +424,9 @@ describe("GET /v1/collections/:id/records", () => {
       dedupeKey: "https://t.me/telegram/441",
       source: { via: "node", nodeType: "collection-write" },
       createdAt: "2026-10-06T09:00:00.123456+00:00",
+      usedAt: null,
+      usedBy: {},
+      deletedAt: null,
     })
     expect(parseRecordsCursor(body.nextCursor)).toEqual({ createdAt: recordRow().created_at, id: REC })
     expect(ownership.select).toHaveBeenCalledWith(LIGHT)
@@ -418,6 +448,130 @@ describe("GET /v1/collections/:id/records", () => {
     expect(records.or).toHaveBeenCalledWith("title.ilike.*fold*,text.ilike.*fold*,url.ilike.*fold*")
     expect(records.or).toHaveBeenCalledWith("title.ilike.*shirt*,text.ilike.*shirt*,url.ilike.*shirt*")
     expect(records.or).toHaveBeenCalledWith(`created_at.lt.2026-10-06T09:00:00+02:00,and(created_at.eq.2026-10-06T09:00:00+02:00,id.lt.${REC})`)
+  })
+
+  it("keeps only the records not used yet, or only the used ones, inside a day range, oldest first after its cursor", async () => {
+    const unused = makeQB({ data: [] })
+    const used = makeQB({ data: [] })
+    // A cursor list is one page query on the records table (a count is paid for by numbered pages only).
+    tables({ collections: [owned()], collection_records: [unused, used] })
+    const app = await buildApp()
+    const cursor = encodeRecordsCursor({ created_at: "2026-10-06T09:00:00+02:00", id: REC })
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/collections/${COLL}/records?usage=unused&since=2026-10-05T00:00:00Z&until=2026-10-07T00:00:00Z&order=oldest&cursor=${cursor}`,
+    })
+    expect(res.statusCode).toBe(200)
+    expect(unused.is).toHaveBeenCalledWith("used_at", null)
+    expect(unused.not).not.toHaveBeenCalled()
+    expect(unused.gte).toHaveBeenCalledWith("created_at", "2026-10-05T00:00:00Z")
+    expect(unused.lt).toHaveBeenCalledWith("created_at", "2026-10-07T00:00:00Z")
+    // Oldest first: the page goes on AFTER the cursor row, both sort keys ascending.
+    expect(unused.or).toHaveBeenCalledWith(`created_at.gt.2026-10-06T09:00:00+02:00,and(created_at.eq.2026-10-06T09:00:00+02:00,id.gt.${REC})`)
+    expect(unused.order).toHaveBeenCalledWith("created_at", { ascending: true })
+    expect(unused.order).toHaveBeenCalledWith("id", { ascending: true })
+
+    expect((await app.inject({ method: "GET", url: `/v1/collections/${COLL}/records?usage=used` })).statusCode).toBe(200)
+    expect(used.not).toHaveBeenCalledWith("used_at", "is", null)
+    expect(used.is).not.toHaveBeenCalledWith("used_at", null)
+    // Every list is of the live records unless the Trash is asked for.
+    expect(used.is).toHaveBeenCalledWith("deleted_at", null)
+    expect(used.order).toHaveBeenCalledWith("created_at", { ascending: false })
+
+    expect((await app.inject({ method: "GET", url: `/v1/collections/${COLL}/records?usage=later` })).statusCode).toBe(400)
+    expect((await app.inject({ method: "GET", url: `/v1/collections/${COLL}/records?until=tomorrow` })).statusCode).toBe(400)
+    expect((await app.inject({ method: "GET", url: `/v1/collections/${COLL}/records?order=random` })).statusCode).toBe(400)
+  })
+
+  it("a database before the usage migration answers the legacy columns: 'not used yet' is every record, 'used' is none", async () => {
+    const missing = makeQB({ error: { code: "42703", message: "column collection_records.used_at does not exist" } })
+    const legacy = makeQB({ data: [recordRow()] })
+    const countMissing = makeQB({ error: { code: "42703", message: "column collection_records.used_at does not exist" } })
+    const countLegacy = makeQB({ count: 1 })
+    // The page and the count start together (each takes its first builder), then each falls back in turn.
+    tables({ collections: [owned()], collection_records: [missing, countMissing, legacy, countLegacy] })
+    const app = await buildApp()
+    const res = await app.inject({ method: "GET", url: `/v1/collections/${COLL}/records?usage=unused&offset=0` })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data).toEqual([expect.objectContaining({ id: REC, usedAt: null, usedBy: {}, deletedAt: null })])
+    expect(res.json().total).toBe(1)
+    expect(missing.select).toHaveBeenCalledWith(expect.stringContaining("used_at"))
+    expect(legacy.select).toHaveBeenCalledWith(expect.not.stringContaining("used_at"))
+    expect(legacy.is).not.toHaveBeenCalled()
+    expect(countLegacy.is).not.toHaveBeenCalled()
+
+    for (const which of ["usage=used", "status=trash"]) {
+      tables({ collections: [owned()], collection_records: [makeQB({ error: { code: "42703", message: "column collection_records.used_at does not exist" } })] })
+      const none = await app.inject({ method: "GET", url: `/v1/collections/${COLL}/records?${which}&offset=0` })
+      expect(none.statusCode).toBe(200)
+      expect(none.json()).toEqual({ data: [], nextCursor: null, total: 0 })
+    }
+  })
+
+  it("lists the live records only, the Trash on request, and a numbered page by offset with how many match in all", async () => {
+    const live = makeQB({ data: [recordRow()] })
+    const liveCount = makeQB({ count: 7 })
+    tables({ collections: [owned()], collection_records: [live, liveCount] })
+    const app = await buildApp()
+    const res = await app.inject({ method: "GET", url: `/v1/collections/${COLL}/records?offset=12&limit=6` })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().total).toBe(7)
+    expect(live.is).toHaveBeenCalledWith("deleted_at", null)
+    // One more than the page, from the offset: whether a next page exists.
+    expect(live.range).toHaveBeenCalledWith(12, 18)
+    expect(live.limit).not.toHaveBeenCalled()
+    // The count is a GET with an empty range, never a HEAD: a HEAD answer has no body, so a
+    // missing column (a database before migration 494) could not be told from any other failure.
+    expect(liveCount.select).toHaveBeenCalledWith("id", { count: "exact" })
+    expect(liveCount.range).toHaveBeenCalledWith(0, 0)
+    expect(liveCount.is).toHaveBeenCalledWith("deleted_at", null)
+
+    const trash = makeQB({ data: [recordRow({ deleted_at: "2026-10-08T20:00:00+00:00" })] })
+    tables({ collections: [owned()], collection_records: [trash, makeQB({ count: 1 })] })
+    const bin = await app.inject({ method: "GET", url: `/v1/collections/${COLL}/records?status=trash&offset=0` })
+    expect(bin.json().data[0]).toMatchObject({ id: REC, deletedAt: "2026-10-08T20:00:00+00:00" })
+    expect(bin.json().total).toBe(1)
+    expect(trash.not).toHaveBeenCalledWith("deleted_at", "is", null)
+
+    expect((await app.inject({ method: "GET", url: `/v1/collections/${COLL}/records?status=bin` })).statusCode).toBe(400)
+    const cursor = encodeRecordsCursor({ created_at: "2026-10-06T09:00:00+02:00", id: REC })
+    expect((await app.inject({ method: "GET", url: `/v1/collections/${COLL}/records?offset=1&cursor=${cursor}` })).statusCode).toBe(400)
+
+    // A cursor walk (the SDK, MCP, an export) never pays for the count and gets no total.
+    const walk = makeQB({ data: [recordRow()] })
+    const used = tables({ collections: [owned()], collection_records: [walk] })
+    const page = await app.inject({ method: "GET", url: `/v1/collections/${COLL}/records?cursor=${cursor}` })
+    expect(page.json()).not.toHaveProperty("total")
+    expect(used.collection_records).toHaveLength(1)
+  })
+
+  it("names the workflow that saved or used a record, with its project, when that workflow is the caller's", async () => {
+    const WF = "00000000-0000-4000-8000-0000000000f1"
+    const OTHER = "00000000-0000-4000-8000-0000000000f2"
+    const PROJECT = "00000000-0000-4000-8000-0000000000a1"
+    const records = makeQB({
+      data: [
+        recordRow({
+          source: { via: "node", nodeType: "collection-write", workflowId: WF, executionId: "exec1" },
+          used_at: "2026-10-07T10:00:00+00:00",
+          used_by: { via: "node", workflowId: OTHER },
+        }),
+      ],
+    })
+    const workflows = makeQB({ data: [{ id: WF, name: "News pipeline", project_id: PROJECT }] })
+    tables({ collections: [owned()], collection_records: [records], workflows: [workflows] })
+    const app = await buildApp()
+    const res = await app.inject({ method: "GET", url: `/v1/collections/${COLL}/records` })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data[0]).toMatchObject({
+      source: { via: "node", workflowId: WF, executionId: "exec1", workflowName: "News pipeline", projectId: PROJECT },
+      usedAt: "2026-10-07T10:00:00+00:00",
+      usedBy: { via: "node", workflowId: OTHER },
+    })
+    // Another person's workflow: the user-scoped lookup does not answer it, so it stays a bare id.
+    expect(res.json().data[0].usedBy).not.toHaveProperty("workflowName")
+    expect(workflows.in).toHaveBeenCalledWith("id", expect.arrayContaining([WF, OTHER]))
+    expect(workflows.eq).toHaveBeenCalledWith("user_id", USER)
   })
 
   it("refuses a cursor it did not give out, a since that is not a timestamp, and an impossible date", async () => {
@@ -483,6 +637,43 @@ describe("POST /v1/collections/:id/records", () => {
       source: { via: "node", nodeType: "collection-write", workflowId: "wf1" },
     })
     expect(res.json()).toMatchObject({ outcome: "inserted", evicted: 0, record: { id: REC } })
+  })
+
+  it("writes with the legacy columns, and a duplicate lookup falls back to them, so a database before the usage migration still saves", async () => {
+    const insert = makeQB({ data: recordRow() })
+    tables({ collections: [owned()], profiles: [profile()], collection_records: [insert, makeQB({ count: 1 })] })
+    const app = await buildApp()
+    const saved = await app.inject({ method: "POST", url: `/v1/collections/${COLL}/records`, payload: { url: "https://t.me/telegram/441", text: "x" } })
+    expect(saved.statusCode).toBe(201)
+    // A fresh record is never used: the insert never names the usage columns.
+    expect(insert.select).toHaveBeenCalledWith(expect.not.stringContaining("used_at"))
+    expect(saved.json().record).toMatchObject({ id: REC, usedAt: null, usedBy: {} })
+
+    const missing = makeQB({ error: { code: "42703", message: "column collection_records.used_at does not exist" } })
+    const legacy = makeQB({ data: recordRow() })
+    tables({
+      collections: [owned()],
+      collection_records: [makeQB({ error: { code: "23505", message: 'violates unique constraint "uq_collection_records_dedupe"' } }), missing, legacy],
+    })
+    const dup = await app.inject({ method: "POST", url: `/v1/collections/${COLL}/records`, payload: { url: "https://t.me/telegram/441", text: "x" } })
+    expect(dup.statusCode).toBe(200)
+    expect(dup.json()).toMatchObject({ outcome: "duplicate", record: { id: REC } })
+    expect(missing.select).toHaveBeenCalledWith(expect.stringContaining("used_at"))
+    expect(legacy.select).toHaveBeenCalledWith(expect.not.stringContaining("used_at"))
+  })
+
+  it("the same story saved again while its record sits in the Trash is a duplicate of it — and stays in the Trash", async () => {
+    const lookup = makeQB({ data: recordRow({ deleted_at: "2026-10-08T20:00:00+00:00" }) })
+    const used = tables({
+      collections: [owned()],
+      collection_records: [makeQB({ error: { code: "23505", message: 'violates unique constraint "uq_collection_records_dedupe"' } }), lookup],
+    })
+    const app = await buildApp()
+    const res = await app.inject({ method: "POST", url: `/v1/collections/${COLL}/records`, payload: { url: "https://t.me/telegram/441", text: "x" } })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toMatchObject({ outcome: "duplicate", record: { id: REC, deletedAt: "2026-10-08T20:00:00+00:00" } })
+    // A pipeline that keeps seeing the same item must not undo a delete on every run.
+    for (const qb of used.collection_records ?? []) expect(qb.update).not.toHaveBeenCalled()
   })
 
   it("evicts the oldest records past the cap-th newest — a bounded id list per write, scoped to the collection and the caller", async () => {
@@ -648,16 +839,164 @@ describe("POST /v1/collections/:id/records", () => {
   })
 })
 
-describe("DELETE /v1/collections/:id/records/:recordId", () => {
-  it("deletes the caller's record within the collection, 404 otherwise", async () => {
-    const qb = makeQB({ data: { id: REC } })
-    tables({ collection_records: [qb, makeQB({ data: null })] })
+describe("PATCH /v1/collections/:id/records/:recordId", () => {
+  it("marks the caller's record used — now, by the API unless the body says who — and answers the record", async () => {
+    const qb = makeQB({ data: recordRow({ used_at: "2026-10-07T10:00:00+00:00", used_by: { via: "api" } }) })
+    tables({ collection_records: [qb] })
     const app = await buildApp()
-    expect((await app.inject({ method: "DELETE", url: `/v1/collections/${COLL}/records/${REC}` })).json()).toEqual({ success: true })
+    const before = Date.now()
+    const res = await app.inject({ method: "PATCH", url: `/v1/collections/${COLL}/records/${REC}`, payload: { used: true } })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toMatchObject({ id: REC, usedAt: "2026-10-07T10:00:00+00:00", usedBy: { via: "api" } })
+    const update = (qb.update as ReturnType<typeof vi.fn>).mock.calls[0]![0] as { used_at: string; used_by: unknown }
+    expect(Date.parse(update.used_at)).toBeGreaterThanOrEqual(before - 1_000)
+    expect(update.used_by).toEqual({ via: "api" })
     expect(qb.eq).toHaveBeenCalledWith("id", REC)
     expect(qb.eq).toHaveBeenCalledWith("collection_id", COLL)
     expect(qb.eq).toHaveBeenCalledWith("user_id", USER)
+    expect(qb.select).toHaveBeenCalledWith(expect.stringContaining("used_by"))
+  })
+
+  it("takes who is marking it from the body, and clears both stamps when the record is not used again", async () => {
+    const marked = makeQB({ data: recordRow({ used_at: "2026-10-07T10:00:00+00:00", used_by: { via: "ui" } }) })
+    const cleared = makeQB({ data: recordRow({ used_at: null, used_by: {} }) })
+    tables({ collection_records: [marked, cleared] })
+    const app = await buildApp()
+    await app.inject({ method: "PATCH", url: `/v1/collections/${COLL}/records/${REC}`, payload: { used: true, source: { via: "ui" } } })
+    expect((marked.update as ReturnType<typeof vi.fn>).mock.calls[0]![0]).toMatchObject({ used_by: { via: "ui" } })
+    const res = await app.inject({ method: "PATCH", url: `/v1/collections/${COLL}/records/${REC}`, payload: { used: false } })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toMatchObject({ id: REC, usedAt: null, usedBy: {} })
+    expect((cleared.update as ReturnType<typeof vi.fn>).mock.calls[0]![0]).toEqual({ used_at: null, used_by: {} })
+  })
+
+  it("answers 404 for a record that is not the caller's, 503 before the usage migration, and refuses a body without `used`", async () => {
+    tables({ collection_records: [makeQB({ data: null }), makeQB({ error: { code: "42703", message: "column collection_records.used_at does not exist" } })] })
+    const app = await buildApp()
+    expect((await app.inject({ method: "PATCH", url: `/v1/collections/${COLL}/records/${REC}`, payload: { used: true } })).statusCode).toBe(404)
+    const early = await app.inject({ method: "PATCH", url: `/v1/collections/${COLL}/records/${REC}`, payload: { used: true } })
+    expect(early.statusCode).toBe(503)
+    expect(early.json().error.code).toBe("not_available")
+    expect((await app.inject({ method: "PATCH", url: `/v1/collections/${COLL}/records/${REC}`, payload: {} })).statusCode).toBe(400)
+    expect((await app.inject({ method: "PATCH", url: `/v1/collections/${COLL}/records/not-a-uuid`, payload: { used: true } })).statusCode).toBe(400)
+  })
+
+  it("needs the assets:write scope from an app token", async () => {
+    const app = await buildApp({ scopes: ["assets:read"] })
+    expect((await app.inject({ method: "PATCH", url: `/v1/collections/${COLL}/records/${REC}`, payload: { used: true } })).statusCode).toBe(403)
+  })
+})
+
+describe("DELETE /v1/collections/:id/records/:recordId — to the Trash", () => {
+  it("moves the caller's record within the collection to the Trash, 404 otherwise", async () => {
+    const qb = makeQB({ data: [{ id: REC }] })
+    tables({ collection_records: [qb, makeQB({ data: [] })] })
+    const app = await buildApp()
+    expect((await app.inject({ method: "DELETE", url: `/v1/collections/${COLL}/records/${REC}` })).json()).toEqual({ success: true })
+    expect(qb.update).toHaveBeenCalledWith({ deleted_at: expect.any(String) })
+    expect(qb.delete).not.toHaveBeenCalled()
+    expect(qb.in).toHaveBeenCalledWith("id", [REC])
+    expect(qb.eq).toHaveBeenCalledWith("collection_id", COLL)
+    expect(qb.eq).toHaveBeenCalledWith("user_id", USER)
     expect((await app.inject({ method: "DELETE", url: `/v1/collections/${COLL}/records/${REC}` })).statusCode).toBe(404)
+  })
+
+  it("a database before migration 494 has no Trash: the delete answers 503 and never deletes for good in its stead", async () => {
+    const missing = makeQB({ error: { code: "42703", message: "column collection_records.deleted_at does not exist" } })
+    const used = tables({ collection_records: [missing] })
+    const app = await buildApp()
+    const res = await app.inject({ method: "DELETE", url: `/v1/collections/${COLL}/records/${REC}` })
+    expect(res.statusCode).toBe(503)
+    expect(res.json().error.code).toBe("not_available")
+    for (const qb of used.collection_records ?? []) expect(qb.delete).not.toHaveBeenCalled()
+  })
+
+  it("deletes a record for good only from the Trash (DELETE …/permanent): a live record is refused, a foreign one is not found", async () => {
+    const trashed = makeQB({ data: recordRow({ deleted_at: "2026-10-08T20:00:00+00:00" }) })
+    const purge = makeQB({ data: [{ id: REC }] })
+    tables({ collection_records: [trashed, purge] })
+    const app = await buildApp()
+    expect((await app.inject({ method: "DELETE", url: `/v1/collections/${COLL}/records/${REC}/permanent` })).json()).toEqual({ success: true })
+    expect(purge.delete).toHaveBeenCalled()
+    expect(purge.in).toHaveBeenCalledWith("id", [REC])
+    expect(purge.eq).toHaveBeenCalledWith("user_id", USER)
+    // Only a record already in the Trash: the delete itself keeps that filter too.
+    expect(purge.not).toHaveBeenCalledWith("deleted_at", "is", null)
+
+    tables({ collection_records: [makeQB({ data: recordRow({ deleted_at: null }) })] })
+    const live = await app.inject({ method: "DELETE", url: `/v1/collections/${COLL}/records/${REC}/permanent` })
+    expect(live.statusCode).toBe(409)
+    expect(live.json().error.code).toBe("not_in_trash")
+
+    tables({ collection_records: [makeQB({ data: null })] })
+    expect((await app.inject({ method: "DELETE", url: `/v1/collections/${COLL}/records/${REC}/permanent` })).statusCode).toBe(404)
+  })
+})
+
+describe("POST /v1/collections/:id/records/:recordId/restore and /v1/collections/:id/records/bulk", () => {
+  it("brings a record back from the Trash and answers it; 404 when it is not the caller's", async () => {
+    const restore = makeQB({ data: [{ id: REC }] })
+    const read = makeQB({ data: recordRow({ deleted_at: null }) })
+    tables({ collection_records: [restore, read, makeQB({ data: [] })] })
+    const app = await buildApp()
+    const res = await app.inject({ method: "POST", url: `/v1/collections/${COLL}/records/${REC}/restore` })
+    expect(res.statusCode).toBe(200)
+    expect(res.json()).toMatchObject({ id: REC, deletedAt: null })
+    expect(restore.update).toHaveBeenCalledWith({ deleted_at: null })
+    expect(restore.in).toHaveBeenCalledWith("id", [REC])
+    expect(restore.eq).toHaveBeenCalledWith("user_id", USER)
+    expect((await app.inject({ method: "POST", url: `/v1/collections/${COLL}/records/${REC}/restore` })).statusCode).toBe(404)
+  })
+
+  it("moves many records to the Trash, back, or away for good in one call — the caller's own collection only, changed rows counted", async () => {
+    const bulk = makeQB({ data: [{ id: REC }, { id: REC2 }] })
+    tables({ collections: [owned()], collection_records: [bulk] })
+    const app = await buildApp()
+    const res = await app.inject({ method: "POST", url: `/v1/collections/${COLL}/records/bulk`, payload: { ids: [REC, REC2, REC], action: "trash" } })
+    expect(res.json()).toEqual({ updated: 2 })
+    expect(bulk.update).toHaveBeenCalledWith({ deleted_at: expect.any(String) })
+    // The same id twice is one id; a record already in the Trash is left alone and not counted.
+    expect(bulk.in).toHaveBeenCalledWith("id", [REC, REC2])
+    expect(bulk.is).toHaveBeenCalledWith("deleted_at", null)
+    expect(bulk.eq).toHaveBeenCalledWith("collection_id", COLL)
+    expect(bulk.eq).toHaveBeenCalledWith("user_id", USER)
+
+    const back = makeQB({ data: [{ id: REC }] })
+    tables({ collections: [owned()], collection_records: [back] })
+    expect((await app.inject({ method: "POST", url: `/v1/collections/${COLL}/records/bulk`, payload: { ids: [REC], action: "restore" } })).json()).toEqual({ updated: 1 })
+    expect(back.update).toHaveBeenCalledWith({ deleted_at: null })
+    expect(back.not).toHaveBeenCalledWith("deleted_at", "is", null)
+
+    const purge = makeQB({ data: [{ id: REC }] })
+    tables({ collections: [owned()], collection_records: [purge] })
+    expect((await app.inject({ method: "POST", url: `/v1/collections/${COLL}/records/bulk`, payload: { ids: [REC, REC2], action: "delete" } })).json()).toEqual({ updated: 1 })
+    expect(purge.delete).toHaveBeenCalled()
+    expect(purge.not).toHaveBeenCalledWith("deleted_at", "is", null)
+
+    // Before migration 494 there is no Trash: nothing is deleted in its stead.
+    const missing = makeQB({ error: { code: "42703", message: "column collection_records.deleted_at does not exist" } })
+    const used = tables({ collections: [owned()], collection_records: [missing] })
+    for (const action of ["trash", "restore"]) {
+      expect((await app.inject({ method: "POST", url: `/v1/collections/${COLL}/records/bulk`, payload: { ids: [REC], action } })).statusCode).toBe(503)
+    }
+    for (const qb of used.collection_records ?? []) expect(qb.delete).not.toHaveBeenCalled()
+    // A delete for good is filtered to the Trash, which that database cannot express: 503, nothing removed.
+    expect((await app.inject({ method: "POST", url: `/v1/collections/${COLL}/records/bulk`, payload: { ids: [REC], action: "delete" } })).statusCode).toBe(503)
+
+    // Another person's collection is not found — never a quiet "0 updated", and no record is touched.
+    const foreign = tables({ collections: [makeQB({ data: null })] })
+    expect((await app.inject({ method: "POST", url: `/v1/collections/${COLL}/records/bulk`, payload: { ids: [REC], action: "trash" } })).statusCode).toBe(404)
+    expect(foreign.collection_records).toBeUndefined()
+
+    expect((await app.inject({ method: "POST", url: `/v1/collections/${COLL}/records/bulk`, payload: { ids: [], action: "trash" } })).statusCode).toBe(400)
+    expect((await app.inject({ method: "POST", url: `/v1/collections/${COLL}/records/bulk`, payload: { ids: [REC], action: "shred" } })).statusCode).toBe(400)
+  })
+
+  it("needs the assets:write scope from an app token", async () => {
+    const app = await buildApp({ scopes: ["assets:read"] })
+    expect((await app.inject({ method: "POST", url: `/v1/collections/${COLL}/records/${REC}/restore` })).statusCode).toBe(403)
+    expect((await app.inject({ method: "POST", url: `/v1/collections/${COLL}/records/bulk`, payload: { ids: [REC], action: "trash" } })).statusCode).toBe(403)
+    expect((await app.inject({ method: "DELETE", url: `/v1/collections/${COLL}/records/${REC}/permanent` })).statusCode).toBe(403)
   })
 })
 
@@ -674,7 +1013,7 @@ describe("GET /v1/collections/:id/export", () => {
     expect(res.headers["content-disposition"]).toMatch(/^attachment; filename="world-news-\d{4}-\d{2}-\d{2}\.csv"; filename\*=UTF-8''World%20News-\d{4}-\d{2}-\d{2}\.csv$/)
     expect(res.body.startsWith("﻿")).toBe(true)
     const lines = res.body.slice(1).split("\r\n").filter((l) => l.length > 0)
-    expect(lines[0]).toBe("id,created_at,title,text,url,dedupe_key,media,fields")
+    expect(lines[0]).toBe("id,created_at,title,text,url,dedupe_key,media,fields,used_at,used_by")
     expect(lines[1]).toContain(`"'=HYPERLINK(""x"")"`)
     expect(lines[2]).toContain('"He said ""hi"""')
     expect(lines).toHaveLength(3)

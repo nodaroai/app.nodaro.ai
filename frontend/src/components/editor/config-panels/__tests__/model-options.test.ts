@@ -241,3 +241,25 @@ describe("auto video duration option", () => {
     }
   })
 })
+
+describe("getSourcePhotoAspectRatios — the ratio tiles on a node that transforms a source photo", () => {
+  it("offers Auto first on every Modify Image model, then every ratio the model lists", async () => {
+    const { MODIFY_IMAGE_MODELS, getAspectRatiosForModel, getSourcePhotoAspectRatios, SOURCE_PHOTO_AUTO_LABEL } = await import("../model-options")
+    for (const { value: provider } of MODIFY_IMAGE_MODELS) {
+      const options = getSourcePhotoAspectRatios(provider)
+      expect(options[0], provider).toEqual({ value: "auto", label: SOURCE_PHOTO_AUTO_LABEL })
+      expect(options.filter((o) => o.value === "auto"), provider).toHaveLength(1)
+      expect(options.slice(1), provider).toEqual(getAspectRatiosForModel(provider).filter((o) => o.value !== "auto"))
+    }
+  })
+
+  it("says what Auto does", async () => {
+    const { SOURCE_PHOTO_AUTO_LABEL } = await import("../model-options")
+    expect(SOURCE_PHOTO_AUTO_LABEL).toBe("Auto (match the photo)")
+  })
+
+  it("leaves the text-to-image ratio list as the catalog has it", async () => {
+    const { getAspectRatiosForModel } = await import("../model-options")
+    expect(getAspectRatiosForModel("seedream-5-pro").some((o) => o.value === "auto")).toBe(false)
+  })
+})

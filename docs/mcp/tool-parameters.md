@@ -1894,7 +1894,7 @@ Needs `workflows:execute`.
 | `model` | string |  | I2I / edit model. Default gpt-image-2-5-flare-i2i. Recommended: flux-2-max, flux-2-pro, flux-i2i, flux-kontext, flux-kontext-max, flux-pro-i2i, gpt-image-2-5-flare-i2i, gpt-image-2-5-sunburst-i2i, gpt-image-2-i2i, gpt-image-i2i, grok-2-edit, grok-2-i2i, grok-2-segment, grok-i2i, ideogram-edit, ideogram-remix, kontext-multi, nano-banana, nano-banana-2, nano-banana-2-1, nano-banana-2-lite, nano-banana-edit, nano-banana-pro, qwen-edit, qwen-i2i, seedream-5-flash-i2i, seedream-5-lite-i2i, seedream-5-pro-i2i, seedream-edit. For identity-preserving edits use gpt-image-2-i2i. Unknown values fall back. Call list_models for capability details. |
 | `resolution` | string |  | Resolution: falls back to nearest supported. |
 | `quality` | string |  | Quality: medium/high/basic. Synonyms accepted. |
-| `aspect_ratio` | string |  | Aspect ratio. Variations and unsupported values fall back. |
+| `aspect_ratio` | string |  | Aspect ratio. 'auto' keeps the photo's shape on every model. Variations and unsupported values fall back. |
 | `negative_prompt` | string |  | At most 2000 characters. |
 | `structured` | object |  |  |
 | `structured.person` | object |  |  |
@@ -2122,6 +2122,7 @@ Needs `assets:read`.
 | `limit` | integer |  | Default 50. From 1 to 100. |
 | `cursor` | string |  | next_cursor from the previous call. At most 200 characters. |
 | `format` | string |  | Default headlines. One of `headlines`, `full`. |
+| `usage` | string |  | all (default), unused — not used yet — or used. One of `all`, `unused`, `used`. |
 
 ## `recaption_character`
 
