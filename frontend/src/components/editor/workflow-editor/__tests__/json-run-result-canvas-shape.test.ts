@@ -19,6 +19,12 @@ import { act } from "@testing-library/react"
 
 vi.mock("sonner", () => ({ toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() }) }))
 vi.mock("@/lib/supabase", () => ({ createClient: () => ({}) }))
+// Speaker Frames is refused before the job until P3.7 prices it; this file
+// compares what a run WRITES, so it lets the flag through.
+vi.mock("@nodaro/render-rules", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@nodaro/render-rules")>()),
+  SPEAKER_FRAMES_PRICED: true,
+}))
 
 /** The job a job-backed node starts, and the row its poll then reads. */
 const job = vi.hoisted(() => ({ row: undefined as unknown }))
@@ -64,6 +70,7 @@ vi.mock("@/lib/api", async (importOriginal) => ({
   editPlan: vi.fn(startJob),
   silenceDetectApi: vi.fn(startJob),
   audioSyncApi: vi.fn(startJob),
+  speakerFrames: vi.fn(startJob),
   telegramChannelFetchApi: vi.fn(() => Promise.resolve(feedRun)),
   collectionReadApi: vi.fn(() => Promise.resolve(collectionReadRun)),
   collectionWriteApi: vi.fn(() => Promise.resolve(collectionWriteRun)),
@@ -145,6 +152,12 @@ const SCENARIOS: Record<string, Scenario> = {
     inputs: { audioSyncSources: [{ nodeId: "cam-a", url: MEDIA }, { nodeId: "cam-b", url: "https://media.example.test/b.mp4" }] },
   },
   "video-analysis": { inputs: { videoUrl: MEDIA } },
+  // Speaker Frames: the edit folded onto its `edl` wire (one JSON string per edit).
+  "speaker-frames": {
+    inputs: {
+      inputs: [JSON.stringify({ version: 1, clock: "master", sources: [{ id: "camA", url: MEDIA, kind: "video" }], segments: [{ id: "s0", inMs: 0, outMs: 30_000, video: "camA" }] })],
+    },
+  },
   "video-audit": { inputs: { videoUrl: MEDIA } },
   "extract-field:text": { data: { field: "title" }, upstream: true },
   "extract-field:list": { data: { field: "title", outputType: "list" }, upstream: true },

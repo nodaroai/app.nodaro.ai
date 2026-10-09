@@ -20,6 +20,7 @@ import { getR2ObjectSize, r2KeyFromOurUrl, readR2Object } from "../../lib/storag
 import { isUnroutableMediaUrl } from "../../lib/media-portability.js"
 import type { ProgressCallback } from "../provider.interface.js"
 import { MAX_REHOST_BYTES } from "./rehost-limit.js"
+import { NODARO_CONNECTION_REJECTED_MESSAGE } from "../../lib/nodaro-connection-messages.js"
 
 export { MAX_REHOST_BYTES }
 
@@ -113,7 +114,7 @@ function cloudError(
       // Name the party who can (spec §13.3).
       ? "The nodaro.ai account behind this deployment is out of credits — the operator of this deployment must top it up."
       : status === 401 || status === 403
-        ? "The nodaro.ai connection was rejected — it may have been revoked. Reconnect from Integrations."
+        ? NODARO_CONNECTION_REJECTED_MESSAGE
         : `${operation} failed (${status})`
   const message = err?.message?.trim() ? err.message : fallback
   return new NodaroCloudError(`nodaro.ai: ${message}`, status, err?.code)

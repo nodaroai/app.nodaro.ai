@@ -1,4 +1,5 @@
 import { buildSpeakerViewPayload } from "./speaker-view-payload.js"
+import { buildSpeakerFramesPayload } from "./speaker-frames-payload.js"
 import { dubbingModelIdentifier } from "../../lib/dubbing-model.js"
 import { imageCollageCreditModelIdentifier } from "../../lib/image-collage-credit-id.js"
 import {
@@ -5980,6 +5981,24 @@ export function buildPayload(
         planBasis,
       })
       return simpleResult("speaker-view", built.creditId, built.payload)
+    }
+
+    // Speaker Frames (P3.6): where each speaker's face is, per camera. The
+    // edit folds onto the `edl` wire (a clip pack is ONE run, P3-24 (a));
+    // refused here — the plugin's scope, and "not priced yet" until P3.7 —
+    // before anything is reserved. `buildSpeakerFramesPayload` holds the logic.
+    case "speaker-frames": {
+      const built = buildSpeakerFramesPayload({
+        nodeId: node.id,
+        jobId,
+        usageLogId,
+        data: data as Record<string, unknown>,
+        edits: resolvedInputs.inputs,
+        edl: resolvedInputs.edl ?? (data.edl as unknown),
+        videoUrl: resolvedInputs.videoUrl,
+        transcript: resolvedInputs.transcript ?? (data.transcript as unknown),
+      })
+      return simpleResult("speaker-frames", built.creditId, built.payload)
     }
 
     case "apply-edl": {

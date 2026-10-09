@@ -124,8 +124,9 @@ const OWNER = "owner-1"
 
 const SPEAKER_VIEW = { id: "sv1", type: "speaker-view", data: { label: "Speakers" } }
 
-function makeJob(opts: { nested?: boolean; skipped?: boolean; subset?: string[] } = {}): Job<WorkflowExecutionJob> {
-  const sv = opts.skipped ? { ...SPEAKER_VIEW, data: { ...SPEAKER_VIEW.data, skipped: true } } : SPEAKER_VIEW
+function makeJob(opts: { nested?: boolean; skipped?: boolean; subset?: string[]; type?: string } = {}): Job<WorkflowExecutionJob> {
+  const base = opts.type ? { ...SPEAKER_VIEW, type: opts.type } : SPEAKER_VIEW
+  const sv = opts.skipped ? { ...base, data: { ...base.data, skipped: true } } : base
   mocks.workflows.set("wf-parent", {
     nodes: opts.nested
       ? [
@@ -192,5 +193,16 @@ describe("orchestrator pre-run check — an unpriced Speaker View in the run", (
 
     expect(failedWrite()?.error_message ?? "").not.toMatch(/not priced/)
     expect(mocks.executeNodeCalls).toContain("gv1")
+  })
+
+  // Speaker Frames (P3.6): the same refusal until P3.7 prices it.
+  it("refuses an unpriced Speaker Frames before ANY node runs, top level and nested", async () => {
+    await processWorkflowExecution(makeJob({ type: "speaker-frames" }))
+    expect(mocks.executeNodeCalls).toEqual([])
+    expect(failedWrite()!.error_message).toContain("Speaker Frames is not priced yet")
+    mocks.updateExecutionWithRetry.mockClear()
+    await processWorkflowExecution(makeJob({ type: "speaker-frames", nested: true }))
+    expect(mocks.executeNodeCalls).toEqual([])
+    expect(failedWrite()!.error_message).toContain("Sub-workflow node sw1")
   })
 })

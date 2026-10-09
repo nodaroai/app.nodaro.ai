@@ -75,3 +75,18 @@ export function rehostSizeMessage(nodeLabel: string, hits: readonly RehostSizeHi
     "Use a public URL or a smaller file."
   )
 }
+
+/**
+ * The refusal for a relayed DETECTION PROXY over the cap (Speaker Frames,
+ * P3.6): the install's own low-resolution copy of a camera is the only media
+ * that job sends (round 2, decided 2026-10-09), so the remedy is less footage,
+ * not a public URL.
+ */
+export function relayedProxySizeMessage(nodeLabel: string, hits: readonly RehostSizeHit[]): string {
+  const named = hits.map((h) => `"${h.sourceId}"'s is ${formatMediaBytes(h.bytes)}`)
+  const list = named.length <= 1 ? named.join("") : `${named.slice(0, -1).join(", ")} and ${named[named.length - 1]}`
+  return (
+    `${nodeLabel} sends a low-resolution detection copy of each camera to nodaro.ai; ${list}, over the ${formatMediaBytes(MAX_REHOST_BYTES)} limit. ` +
+    "Keep less footage in the edit, or untick that camera."
+  )
+}

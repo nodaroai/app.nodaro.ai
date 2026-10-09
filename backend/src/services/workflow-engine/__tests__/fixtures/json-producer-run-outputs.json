@@ -483,5 +483,6 @@
       "{\"id\":\"b1\",\"url\":\"https://media.example.test/post/b1\",\"text\":\"post b1\",\"platform\":\"tiktok\",\"author\":{\"handle\":\"@b1\",\"name\":\"Author b1\"},\"metrics\":{\"likes\":1},\"media\":{},\"hashtags\":[],\"extra\":{},\"role\":\"own\"}",
       "{\"id\":\"b2\",\"url\":\"https://media.example.test/post/b2\",\"text\":\"post b2\",\"platform\":\"tiktok\",\"author\":{\"handle\":\"@b2\",\"name\":\"Author b2\"},\"metrics\":{\"likes\":1},\"media\":{},\"hashtags\":[],\"extra\":{},\"role\":\"about\"}"
     ]
-  }
+  },
+  "speaker-frames": {"json": {"version": 1, "sampleFps": 2, "detector": {"id": "yunet:2023mar-dyn@0123456789ab"}, "sources": [{"sourceId": "camA", "clock": "source", "frame": {"w": 960, "h": 540}, "sampledSpans": [{"startMs": 0, "endMs": 32000}], "cuts": [12000], "tracks": [{"id": "camA/t1", "boxCount": 58}]}], "url": "https://media.example.test/speaker-tracks/c0ffee00-0000-4000-8000-0000000000bb.json", "sha256": "9f2b000000000000000000000000000000000000000000000000000000000000", "bytes": 2048}}
 }

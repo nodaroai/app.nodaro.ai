@@ -2,8 +2,7 @@
  * Speaker Frames' job budget (P3.3b) — a PURE leaf, like `speaker-view-budget.ts`:
  * the video worker's dispatch site reads it through
  * `declaredJobBudgetMs("speaker-frames", job.data)` (`lib/job-budget.ts`), and
- * so will the orchestrator's node ceilings and the relay's poll budget once the
- * node exists (P3.6).
+ * so do the orchestrator's node ceilings and the relay's poll budget (P3.6).
  *
  * WHY THE APP HOLDS IT. The handler lives in the private plugin (P3.4), and a
  * plugin handler cannot declare `livenessBudgetMs` (core-only). Without a
@@ -61,8 +60,8 @@
  * and upload, its span map, each window's checkpoint, the artifact — every call
  * bounded on its own, decided 2026-10-04).
  *
- * THE PAYLOAD it reads (the contract P3.4's route queues; P3.6 re-pins the
- * fixture to the plugin's exported type):
+ * THE PAYLOAD it reads (the contract P3.4's route queues; its test pins the
+ * plugin's exported example, `SPEAKER_FRAMES_JOB_PAYLOAD_EXAMPLE`, P3.6):
  *  - `edl`: the edit — one `Edl`, or the clip pack's `Edl[]` (P3-24: one job
  *    over the union of the clips' spans). The object; its JSON string is read
  *    too. Every source of kind `video`, or that a segment shows, samples the

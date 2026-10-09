@@ -2657,6 +2657,18 @@ export interface PluginSupports {
    * steps (`lib/private-plugins/edit-plan-per-minute.ts`).
    */
   readonly editPlanPerMinute?: boolean
+  /**
+   * The plugin's `POST /v1/speaker-frames` accepts a RELAYED job from a
+   * connected self-host (P3.6; P3-15 (a), P3-23 (b), decided 2026-10-06): the
+   * detection proxies the self-host built (`proxies: [{ sourceId, url, fps,
+   * height, spanMap, cuts, frame }]`) in place of the originals, and the
+   * `relayed: true` marker, on which the handler skips mouth-motion
+   * attribution with a note. nodaro.ai answers it on
+   * `GET /v1/speaker-frames/capabilities`, and a connected self-host relays
+   * Speaker Frames only when it is `true`; otherwise it refuses with "not
+   * available on a connected install yet". Absent ⇒ false.
+   */
+  readonly speakerFramesRelayedProxies?: boolean
 }
 
 export interface PluginDeploymentToolkit {

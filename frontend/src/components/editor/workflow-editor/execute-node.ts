@@ -3,6 +3,7 @@ import { DEFAULT_OVERLAY_LAYER, OVERLAY_MAX_LAYERS } from "@/types/nodes";
 import { captionPlanPassThrough, styleCaptionPlan, combineVideosPassThrough, videoOverlayPassThrough, assertCanvasExecutionAllowed, scene3DInputAssetsForEngine, overlayVariantIdFromHandle, readScriptSettings, applySettingsInput, SETTINGS_INPUT_CONSUMERS, resolveMusicProvider, resolveEditPlanSources, describeAudioSyncOffsetIssue, type AudioSyncOffsetSource, transcriptSpeakerLabels, cameraSwitchEdlProblem, cameraSwitchSettingsPayload, renderPlanClipKey, collectionRecordHeadline, isCollectionUrl } from "@nodaro/shared";
 import { browserRenderPlanBasis } from "./apply-edl-stamps";
 import { executeSpeakerView } from "./speaker-view-executor";
+import { executeSpeakerFrames } from "./speaker-frames-executor";
 import { findUpstreamSunoIds } from "@/lib/suno-ids";
 import { contentRunResultPatch } from "@/lib/content-run-output";
 import { sourceJsonOf } from "@/lib/edit-plan-saved-output";
@@ -7209,6 +7210,13 @@ function executeNodeCore(
   if (node.type === "speaker-view") {
     setUserPromptTemplate(undefined);
     return executeSpeakerView(node, inputs, ctx, listRowIndex);
+  }
+
+  // Speaker Frames (P3.6): refused here before anything is sent — the plugin's
+  // scope from the shared rule, and "not priced yet" until P3.7 (the executor).
+  if (node.type === "speaker-frames") {
+    setUserPromptTemplate(undefined);
+    return executeSpeakerFrames(node, inputs, ctx);
   }
 
   if (node.type === "apply-edl") {

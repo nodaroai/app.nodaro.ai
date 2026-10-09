@@ -2,6 +2,7 @@ import type { WorkflowNode, SubWorkflowData } from "@/types/nodes"
 import { wordTimingsPreflight } from "./add-captions-preflight"
 import { previewRenderPreflight } from "./preview-gate"
 import { speakerViewPricePreflight } from "./speaker-view-price-preflight"
+import { speakerFramesPricePreflight } from "./speaker-frames-price-preflight"
 import {
   SUB_WORKFLOW_MAX_DEPTH,
   loadSubWorkflowRouteGraph,
@@ -99,7 +100,7 @@ export async function nestedRunPreflight(
 ): Promise<string | null> {
   return nestedGraphPreflight(
     executing,
-    (nodes, edges) => wordTimingsPreflight(nodes, edges) ?? previewRenderPreflight(nodes, edges) ?? speakerViewPricePreflight(nodes),
+    (nodes, edges) => wordTimingsPreflight(nodes, edges) ?? previewRenderPreflight(nodes, edges) ?? speakerViewPricePreflight(nodes) ?? speakerFramesPricePreflight(nodes),
     opts,
   )
 }

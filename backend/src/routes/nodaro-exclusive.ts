@@ -33,6 +33,10 @@ import { isNodaroConnected, nodaroCloudFetch } from "../lib/nodaro-connect.js"
 import { callCloudRoute } from "../providers/nodaro/client.js"
 import { requestJobStop } from "../workers/shared.js"
 import { checkRehostSizes, rehostSizeMessage } from "../lib/rehost-size-check.js"
+import { coerceSpeakerFramesEdits, speakerFramesScope } from "@nodaro/render-rules"
+import { speakerFramesTranscriptSpeakers } from "../providers/video/speaker-frames-budget.js"
+import { speakerFramesRelayRefusal, speakerFramesRelaySupport } from "../lib/private-plugins/speaker-frames-relay-support.js"
+import { NODARO_CONNECTION_REQUIRED_CODE, NODARO_CONNECTION_REQUIRED_MESSAGE } from "../lib/nodaro-connection-messages.js"
 
 /** Structured refusal shared by every route here — the frontend renders it
  *  with a "Connect nodaro.ai" CTA. 503: the capability exists, the install
@@ -40,13 +44,7 @@ import { checkRehostSizes, rehostSizeMessage } from "../lib/rehost-size-check.js
 async function requireConnection(req: FastifyRequest, reply: FastifyReply): Promise<boolean> {
   const connected = await isNodaroConnected().catch(() => false)
   if (connected) return true
-  reply.status(503).send({
-    error: {
-      code: "nodaro_connection_required",
-      message:
-        "This node runs on nodaro.ai. Connect your install (Integrations → nodaro.ai, or paste an API key from app.nodaro.ai → Settings → API) and run again.",
-    },
-  })
+  reply.status(503).send({ error: { code: NODARO_CONNECTION_REQUIRED_CODE, message: NODARO_CONNECTION_REQUIRED_MESSAGE } })
   return false
 }
 
@@ -144,6 +142,45 @@ async function refuseSpeakerView(body: Record<string, unknown>):
   if (hits.length > 0) return { refused: { status: 422, code: "source_too_large", message: rehostSizeMessage("Speaker View", hits) } }
   return { body: { ...body, edl, ...(body.transcript !== undefined ? { transcript: parse(body.transcript) } : {}) } }
 }
+// speaker-frames (P3.6): where each speaker's face is, per camera. The cloud
+// plugin's Zod is the schema authority; here, before anything is created or
+// relayed: the scope the plugin would refuse (exactly one of an edit — one, a
+// clip pack or a clip set — and a bare video; the untick list; the 180-minute
+// cap), then whether nodaro.ai takes a RELAYED job at all (decided 2026-10-09:
+// "not available on a connected install yet" until its plugin accepts the
+// self-host's proxies and the relayed marker; a credential nodaro.ai rejects
+// answers the connection code). No source is sized: none is sent as itself.
+const speakerFramesBody = z.object({
+  edl: z.unknown().optional(),
+  videoUrl: safeUrlSchema.optional(),
+  transcript: z.unknown().optional(),
+  excludeSourceIds: z.array(z.string().min(1).max(200)).max(64).optional(),
+}).passthrough()
+async function refuseSpeakerFrames(body: Record<string, unknown>):
+  Promise<{ refused: { status: number; code: string; message: string } } | { body: Record<string, unknown> }> {
+  const parse = (v: unknown) => (typeof v === "string" ? (() => { try { return JSON.parse(v) as unknown } catch { return v } })() : v)
+  let edl: Record<string, unknown> | Record<string, unknown>[] | undefined
+  if (body.edl !== undefined && body.edl !== null) {
+    const coerced = coerceSpeakerFramesEdits(body.edl)
+    if (!coerced.ok) return { refused: { status: 400, code: coerced.code, message: coerced.message } }
+    const edits = coerced.edits as unknown as Record<string, unknown>[]
+    edl = edits.length === 1 ? edits[0] : edits
+  }
+  const scope = speakerFramesScope({
+    ...(edl ? { edits: (Array.isArray(edl) ? edl : [edl]) as never } : {}),
+    ...(typeof body.videoUrl === "string" ? { videoUrl: body.videoUrl } : {}),
+    ...(Array.isArray(body.excludeSourceIds) ? { excludeSourceIds: body.excludeSourceIds as string[] } : {}),
+  })
+  if (!scope.ok) return { refused: { status: 400, code: scope.code, message: scope.message } }
+  const refusal = speakerFramesRelayRefusal(await speakerFramesRelaySupport())
+  if (refusal) return { refused: { status: refusal.status, code: refusal.code, message: refusal.message } }
+  // No size check here: no original is relayed (round 2, decided 2026-10-09).
+  // Sampled cameras go as the detection proxies the worker builds (it sizes
+  // those before sending any); every other source as a placeholder nodaro.ai
+  // never reads.
+  const { edl: _raw, ...rest } = body
+  return { body: { ...rest, ...(edl ? { edl } : {}), ...(body.transcript !== undefined ? { transcript: parse(body.transcript) } : {}) } }
+}
 const continueBody = z.object({
   fromJobId: z.string().min(1),
   fromSegment: z.number().int().min(1).optional(),
@@ -168,6 +205,18 @@ function slimInputData(body: Record<string, unknown>, jobType: string): Record<s
     const { transcript, ...slim } = body
     const words = (transcript as { words?: unknown } | null | undefined)?.words
     return { ...slim, ...(Array.isArray(words) ? { transcriptWordCount: words.length } : {}) }
+  }
+  if (jobType === "speaker-frames") {
+    // The edit stays (the inspector reads it, as the plugin's route keeps it);
+    // the transcript shrinks to its size and its speaker count, which the job
+    // budget reads off a slimmed row.
+    const { transcript, ...slim } = body
+    const words = (transcript as { words?: unknown } | null | undefined)?.words
+    return {
+      ...slim,
+      ...(Array.isArray(words) ? { transcriptWordCount: words.length } : {}),
+      ...(transcript !== undefined ? { transcriptSpeakerCount: speakerFramesTranscriptSpeakers({ transcript }) } : {}),
+    }
   }
   if (jobType === "camera-switch") {
     const { edl, transcript, ...slim } = body
@@ -243,6 +292,14 @@ export async function nodaroExclusiveRoutes(app: FastifyInstance) {
         }
         return enqueueExclusive({ req, reply, jobType, body: checked.body })
       }
+      if (jobType === "speaker-frames") {
+        const checked = await refuseSpeakerFrames(parsed.data as Record<string, unknown>)
+        if ("refused" in checked) {
+          const { status, code, message } = checked.refused
+          return reply.status(status).send({ error: { code, message } })
+        }
+        return enqueueExclusive({ req, reply, jobType, body: checked.body })
+      }
       return enqueueExclusive({ req, reply, jobType, body: parsed.data as Record<string, unknown> })
     }
   // checkOnly: this file registers only when !hasCredits() (see app.ts) —
@@ -266,6 +323,8 @@ export async function nodaroExclusiveRoutes(app: FastifyInstance) {
   app.post("/v1/camera-switch", { ...guarded("camera-switch"), bodyLimit: 24 * 1024 * 1024 }, jobHandler("camera-switch", cameraSwitchBody))
   // An episode's edit plus its word-level transcript is several MB, as for camera-switch.
   app.post("/v1/speaker-view", { ...guarded("speaker-view"), bodyLimit: 24 * 1024 * 1024 }, jobHandler("speaker-view", speakerViewBody))
+  // An episode's EDL pack plus its word-level transcript is several MB, as for speaker-view.
+  app.post("/v1/speaker-frames", { ...guarded("speaker-frames"), bodyLimit: 24 * 1024 * 1024 }, jobHandler("speaker-frames", speakerFramesBody))
 
   // ── video-analysis probe: synchronous passthrough ─────────────────────
   app.post("/v1/video-analysis/probe", async (req, reply) => {

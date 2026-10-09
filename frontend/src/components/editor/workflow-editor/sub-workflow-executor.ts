@@ -13,6 +13,7 @@ import { wordTimingsPreflight } from "./add-captions-preflight"
 import { nestedRunPreflight } from "./sub-workflow-preflight"
 import { previewRenderPreflight } from "./preview-gate"
 import { speakerViewPricePreflight } from "./speaker-view-price-preflight"
+import { speakerFramesPricePreflight } from "./speaker-frames-price-preflight"
 import { nodeRunError } from "@/components/editor/workflow-editor/node-run-message"
 
 /**
@@ -98,6 +99,7 @@ export async function executeSubWorkflow(
         wordTimingsPreflight(subNodes, subEdges) ??
         previewRenderPreflight(subNodes, subEdges) ??
         speakerViewPricePreflight(subNodes) ??
+        speakerFramesPricePreflight(subNodes) ??
         (await nestedRunPreflight(subNodes, { depth: depth + 1, routeKeys: childExecutingKeys }))
       if (blocked) throw new Error(blocked)
     }

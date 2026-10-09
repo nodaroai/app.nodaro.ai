@@ -152,6 +152,7 @@ const NODE_LABELS_KO: Record<string, string> = {
   "Edit Plan": "편집 계획",
   "Camera Switch": "카메라 전환",
   "Speaker View": "화자 뷰",
+  "Speaker Frames": "화자 프레임",
   "Remove Audio": "오디오 제거",
   "Mix Audio": "오디오 믹스",
   "Combine Audio": "오디오 합치기",

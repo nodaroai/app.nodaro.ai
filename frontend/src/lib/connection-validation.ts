@@ -603,6 +603,13 @@ export function isValidWorkflowConnection(
   if (targetType === "speaker-view" && connection.targetHandle) {
     return (connection.targetHandle === "edl" || connection.targetHandle === "transcript") && ACCEPTS_JSON(imageSourceType)
   }
+  // speaker-frames — `edl` and `transcript` take json/data producers, `video` a
+  // bare video (P3-5 (c)).
+  if (targetType === "speaker-frames" && connection.targetHandle) {
+    if (connection.targetHandle === "edl" || connection.targetHandle === "transcript") return ACCEPTS_JSON(imageSourceType)
+    if (connection.targetHandle === "video") return ACCEPTS_VIDEO(imageSourceType)
+    return false
+  }
   if (targetType === "camera-switch" && connection.targetHandle) {
     return (connection.targetHandle === "edl" || connection.targetHandle === "transcript") && ACCEPTS_JSON(imageSourceType)
   }

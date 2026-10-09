@@ -115,6 +115,9 @@ export const JSON_PRODUCER_TYPES: ReadonlySet<string> = new Set<string>([
   "edit-plan",
   // camera-switch: the switched edit (`edl`) and the renamed `transcript`.
   "camera-switch",
+  // speaker-frames: its `tracks` handle is the stored face-track file's
+  // descriptor (json, neither an EDL nor a Transcript).
+  "speaker-frames",
   // speaker-view: its `json` handle is the EDL as it drew it (an EDL, never a
   // Transcript: `jsonKind: "edl"` in RENDER_NODE_TYPES), and its `transcript`
   // handle the wired transcript remapped through that edit (its registry

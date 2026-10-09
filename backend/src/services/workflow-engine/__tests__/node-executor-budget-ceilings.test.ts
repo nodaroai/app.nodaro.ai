@@ -106,11 +106,13 @@ vi.mock("../../../providers/video/social-post-video.js", async (importOriginal) 
   probeSocialPostVideo: vi.fn(async () => ({ durationSec: null, title: null, isLive: false })),
 }))
 
-// Speaker View is refused before the reserve until C4 sets its price. This file
-// tests dispatch names and budgets, not pricing, so it lets the flag through.
+// Speaker View (until C4) and Speaker Frames (until P3.7) are refused before the
+// reserve. This file tests dispatch names and budgets, not pricing, so it lets
+// both flags through.
 vi.mock("@nodaro/render-rules", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@nodaro/render-rules")>()),
   SPEAKER_VIEW_PRICED: true,
+  SPEAKER_FRAMES_PRICED: true,
 }))
 
 import { executeNode } from "../node-executor.js"
@@ -432,6 +434,8 @@ describe("every registered budgeted job is dispatched under its node type's own 
     // run is refused as "not priced yet" until C4, so this file lets the price
     // flag through (below) to test what it tests: the dispatch name and budget.
     "speaker-view": () => ({ node: { id: "view", type: "speaker-view", data: { label: "Speaker View", edl: edl(3), quality: "final" } } }),
+    // Speaker Frames' node (P3.6): its edit folds onto the `edl` wire.
+    "speaker-frames": () => ({ node: { id: "frames", type: "speaker-frames", data: { label: "Speaker Frames" } }, inputs: { inputs: [JSON.stringify(edl(3))] } }),
     "audio-sync": () => ({
       node: { id: "sync", type: "audio-sync", data: { label: "Audio Sync" } },
       inputs: {
@@ -447,12 +451,10 @@ describe("every registered budgeted job is dispatched under its node type's own 
     }),
   }
 
-  // A budgeted job registered before its node exists: Speaker Frames' budget
-  // (P3.3b) ships ahead of its handler (P3.4) so the worker beats for it from
-  // its first job; the node, and with it this dispatch fixture, lands in P3.6.
-  // The tripwire: P3.6 makes `speaker-frames` a Nodaro-exclusive node (step
-  // 22a), and then this exception fails until the fixture replaces it.
-  const AWAITING_NODE: Record<string, string> = { "speaker-frames": "Speaker Frames' node (P3.6)" }
+  // A budgeted job registered before its node exists (none today: Speaker
+  // Frames' node landed in P3.6). The tripwire: a name listed here that has
+  // become a Nodaro-exclusive node fails until its fixture replaces it.
+  const AWAITING_NODE: Record<string, string> = {}
 
   it("a budget awaiting its node is not a node yet", () => {
     for (const [name, why] of Object.entries(AWAITING_NODE)) {

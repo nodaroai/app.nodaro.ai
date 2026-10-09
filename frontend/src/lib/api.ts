@@ -3463,6 +3463,33 @@ export async function cameraSwitch(params: {
 }
 
 /**
+ * Speaker Frames (P3.6): where each speaker's face is, per camera. An edit (one,
+ * or a clip pack's edits — ONE run over their union, P3-24 (a)) or a bare
+ * video, the renamed transcript as given (its `speakerNames` map included),
+ * and the untick list. Not priced yet (P3.7): every run is refused before
+ * anything is reserved.
+ */
+export async function speakerFrames(params: {
+  edl?: unknown
+  videoUrl?: string
+  transcript?: unknown
+  excludeSourceIds?: string[]
+  userId?: string
+}): Promise<{ jobId: string }> {
+  const body: Record<string, unknown> = {}
+  if (params.edl !== undefined) body.edl = params.edl
+  if (params.videoUrl) body.videoUrl = params.videoUrl
+  if (params.transcript !== undefined) body.transcript = params.transcript
+  if (params.excludeSourceIds) body.excludeSourceIds = params.excludeSourceIds
+  if (params.userId) body.userId = params.userId
+  return apiJson("/v1/speaker-frames", {
+    body,
+    workflowId: true,
+    label: "apiErr.startSpeakerFrames",
+  })
+}
+
+/**
  * Image Overlay: base image + 1–12 layers → one composited image (local sharp).
  * Every layer position/size is in % of the base image; see ImageOverlayData.
  */

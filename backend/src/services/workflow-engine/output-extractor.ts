@@ -864,6 +864,12 @@ export function getPrimaryOutput(
   // Camera Switch (B5): output.json is the pair { edl, transcript } — the
   // `transcript` handle carries the renamed transcript, the `edl` handle (and
   // the default) the switched edit. Mirrors the frontend extractNodeOutput.
+  // Speaker Frames (P3.6): output.json is the stored track file's descriptor
+  // (P3-22), on its one `tracks` handle. Mirrors the frontend extractNodeOutput.
+  if (sourceType === "speaker-frames") {
+    return output.json === undefined || output.json === null ? undefined : JSON.stringify(output.json)
+  }
+
   if (sourceType === "camera-switch") {
     const pair = output.json as { edl?: unknown; transcript?: unknown } | undefined
     const value = sourceHandle === "transcript" ? pair?.transcript : pair?.edl
@@ -1692,6 +1698,11 @@ export function extractSavedNodeOutput(node: SimpleNode): NodeOutput | undefined
   // per-item list off saved state. Mirrors the analysis json branch + the live
   // buildNodeOutputFromJobData path (a plan this run made carries no review).
   // Camera Switch: data.generatedJson is the { edl, transcript } pair.
+  // Speaker Frames: data.generatedJson is the track file's descriptor.
+  if (type === "speaker-frames") {
+    const json = data.generatedJson
+    return json === undefined || json === null ? undefined : { json }
+  }
   if (type === "camera-switch") {
     const json = data.generatedJson
     return json === undefined ? undefined : { json }

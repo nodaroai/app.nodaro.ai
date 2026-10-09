@@ -40,6 +40,7 @@ const AWAITING_DOCS_PAGE: Readonly<Record<string, string>> = {
   "instagram-scrape": "hidden from users in production (availability settings); the page is written and held until release",
   "camera-switch": "new node (podcast multicam); the in-repo page is docs/nodes/processing-video/camera-switch.md and the docs-site page follows its release",
   "speaker-view": "new node (podcast Speaker View); the in-repo page is docs/nodes/processing-video/speaker-view.md and the docs-site page follows its release",
+  "speaker-frames": "new node (podcast face tracks, P3.6); the in-repo page is docs/nodes/processing-video/speaker-frames.md and the docs-site page follows its release",
 }
 
 const hasPage = (type: string) => type in NODE_DOCS_SECTIONS || type in NODE_DOCS_ALIASES

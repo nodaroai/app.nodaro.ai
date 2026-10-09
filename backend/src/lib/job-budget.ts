@@ -62,9 +62,9 @@
  * dispatch fallback, with an upper bound summed from the kill ceilings of its
  * steps — the detection proxy per source, one admission hold per detection
  * window, and the in-process work the box cap bounds
- * (`providers/video/speaker-frames-budget.ts`). Until its node exists (P3.6)
- * only the worker reads it; `node-executor-budget-ceilings.test.ts` lists it as
- * awaiting its node.
+ * (`providers/video/speaker-frames-budget.ts`). Since its node (P3.6) the
+ * orchestrator's ceilings and the relay's poll read it too, and its dispatch
+ * fixture is in `node-executor-budget-ceilings.test.ts`.
  * Pure: imports only the budget leaves and the engine's constants.
  */
 import { applyEdlJobBudgetMs } from "../providers/video/apply-edl-budget.js"

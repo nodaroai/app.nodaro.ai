@@ -71,6 +71,8 @@ export const JSON_RUN_RESULT_TYPES: ReadonlySet<string> = new Set([
   // Transcript (its `json` handle) — on generatedJson and on the take, as the
   // canvas run writes them (execute-node.ts).
   "text-to-dialogue",
+  // Speaker Frames: the stored face-track file's descriptor on generatedJson.
+  "speaker-frames",
 ])
 
 /**

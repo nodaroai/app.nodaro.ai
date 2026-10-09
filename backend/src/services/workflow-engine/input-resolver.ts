@@ -1806,6 +1806,16 @@ function routeOutput(
     }
   }
 
+  // --- speaker-frames inputs (P3.6): the edit folds onto `inputs.inputs`
+  // (FAN_IN_TARGETS: a clip pack is ONE run, P3-24 (a)) before this point; the
+  // diarized `transcript` is a stringified json lane, carried as given (Camera
+  // Switch's renamed transcript keeps its `speakerNames`). A bare video takes
+  // the generic video lane. Mirrors the frontend resolver. ---
+  if (targetType === "speaker-frames" && edge.targetHandle === "transcript") {
+    inputs.transcript = output
+    return
+  }
+
   if (targetType === "apply-edl") {
     if (edge.targetHandle === "edl") {
       inputs.edl = output

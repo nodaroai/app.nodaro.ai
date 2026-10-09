@@ -374,6 +374,13 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
     { handleId: "edl", label: "EDL", accepts: ACCEPTS_JSON },
     { handleId: "transcript", label: "Transcript", accepts: ACCEPTS_JSON },
   ],
+  // speaker-frames: an edit (one, or a clip pack folded into one run) OR a bare
+  // video, and the renamed transcript (json).
+  "speaker-frames":     [
+    { handleId: "edl", label: "EDL", accepts: ACCEPTS_JSON },
+    { handleId: "video", label: "Video", accepts: ACCEPTS_VIDEO },
+    { handleId: "transcript", label: "Transcript", accepts: ACCEPTS_JSON },
+  ],
   "apply-edl":          [
     { handleId: "edl", label: "EDL", accepts: ACCEPTS_JSON },
     { handleId: "transcript", label: "Transcript", accepts: ACCEPTS_JSON },

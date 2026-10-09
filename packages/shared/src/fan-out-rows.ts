@@ -41,7 +41,7 @@ export const NON_PROMPT_TEXT_LANES: Readonly<Record<string, "*" | readonly strin
   negative: "*",
   "system-prompt": "*",
   script: ["ai-avatar"],
-  transcript: ["add-captions", "apply-edl", "edit-plan", "camera-switch", "speaker-view"],
+  transcript: ["add-captions", "apply-edl", "edit-plan", "camera-switch", "speaker-view", "speaker-frames"],
   edl: ["apply-edl", "camera-switch", "speaker-view"],
   silence: ["edit-plan"],
   offsets: ["edit-plan"],

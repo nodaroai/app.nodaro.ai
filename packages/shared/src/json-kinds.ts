@@ -53,6 +53,9 @@ const JSON_OUTPUT_KINDS: Readonly<Record<string, JsonOutputs>> = Object.freeze({
   transcribe: { primary: "json", pips: { json: "transcript" } },
   // Camera Switch: the switched edit and the renamed (still a Transcript) transcript.
   "camera-switch": { primary: "edl", pips: { edl: "edl", transcript: "transcript" } },
+  // Speaker Frames: the stored track file's descriptor (P3-22) — neither a
+  // Transcript nor an EDL, read by Speaker View's `tracks` input (P3.9).
+  "speaker-frames": { primary: "tracks", pips: { tracks: "other" } },
   // Text to Dialogue: the Transcript built from the model's own word timings (its default read is the audio).
   "text-to-dialogue": { pips: { json: "transcript" } },
 

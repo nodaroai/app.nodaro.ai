@@ -1895,6 +1895,15 @@ export function resolveNodeInputs(
       }
     }
 
+    // speaker-frames inputs (P3.6): the edit folds onto `inputs.inputs` above
+    // (FAN_IN_TARGETS: a clip pack is ONE run); the diarized `transcript` is a
+    // json lane, carried as given. A bare video takes the generic video lane.
+    // Mirror of the backend resolver.
+    if (node.type === "speaker-frames" && srcEdge.targetHandle === "transcript") {
+      inputs.transcript = output;
+      continue;
+    }
+
     // speaker-view inputs (C3.2): the same two json lanes as camera-switch's,
     // `edl` and the diarized `transcript`. Mirror of the backend resolver.
     if (node.type === "speaker-view") {
