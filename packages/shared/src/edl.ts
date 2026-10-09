@@ -215,6 +215,10 @@ export interface Transcript {
     readonly text: string
     readonly speaker?: string
   }>
+  /** Raw speaker label → the display name the words and segments now carry,
+   *  published by a node that renamed the speakers (Camera Switch), so a later
+   *  node can still find a speaker's original label. Absent = not renamed. */
+  readonly speakerNames?: Readonly<Record<string, string>>
 }
 
 /** Duration (seconds) implied by a transcript — the LATEST word/segment `endMs`
@@ -837,7 +841,8 @@ function spanMs(o: Record<string, unknown>): { startMs: number; endMs: number } 
  * rounds to zero width) is a POINT and is kept, as before. Only a broken one
  * is dropped, never clamped: a missing start or end, a time that is not a
  * finite, non-negative number, or an end before its start. Words come out
- * sorted by start time (stable).
+ * sorted by start time (stable). A renamed transcript's `speakerNames` map is
+ * kept (its non-empty string entries).
  */
 export function normalizeTranscript(input: unknown): Transcript {
   const o = (input && typeof input === "object" ? input : {}) as Record<string, unknown>
@@ -865,11 +870,24 @@ export function normalizeTranscript(input: unknown): Transcript {
         return span ? [{ ...span, text: str(s.text) ?? "", ...(str(s.speaker) ? { speaker: str(s.speaker) } : {}) }] : []
       })
     : undefined
+  const speakerNames = speakerNamesOf(o.speakerNames)
   return {
     version: EDL_VERSION,
     ...(str(o.sourceId) ? { sourceId: str(o.sourceId) } : {}),
     ...(str(o.language) ? { language: str(o.language) } : {}),
     words,
     ...(segments ? { segments } : {}),
+    ...(speakerNames ? { speakerNames } : {}),
   }
+}
+
+/** A renamed transcript's raw → display map: entries whose label and name are
+ *  both non-empty strings; undefined when none is left. Built with
+ *  `Object.fromEntries`, so every label (even `__proto__`) stays an own entry. */
+function speakerNamesOf(v: unknown): Record<string, string> | undefined {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return undefined
+  const entries = Object.entries(v as Record<string, unknown>).filter(
+    (e): e is [string, string] => e[0].length > 0 && typeof e[1] === "string" && e[1].length > 0,
+  )
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined
 }

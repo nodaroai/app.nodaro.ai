@@ -396,6 +396,46 @@ describe("normalizeTranscript", () => {
     const t = normalizeTranscript({ words: [{ text: "[laugh]", start: 2_500, end: 2_500 }, { text: "[cut]", startMs: 1_500, endMs: 1_500 }] })
     expect(remapTranscriptThroughEdl(edl, t).words).toEqual([{ text: "[laugh]", startMs: 1_500, endMs: 1_500 }])
   })
+
+  // P3.5 round 2 (decided 2026-10-09): Camera Switch's renamed transcript
+  // carries its raw label → display name map, and the reader keeps it.
+  describe("speakerNames (the raw → display map a renamed transcript carries)", () => {
+    const words = [{ text: "hi", startMs: 0, endMs: 100, speaker: "Ana" }]
+
+    it("keeps the map", () => {
+      const t = normalizeTranscript({ words, speakerNames: { SPEAKER_00: "Ana", SPEAKER_01: "SPEAKER_01" } })
+      expect(t.speakerNames).toEqual({ SPEAKER_00: "Ana", SPEAKER_01: "SPEAKER_01" })
+    })
+
+    it("keeps only entries whose label and name are non-empty strings", () => {
+      const t = normalizeTranscript({ words, speakerNames: { SPEAKER_00: "Ana", "": "Nobody", SPEAKER_01: "", SPEAKER_02: 7, SPEAKER_03: null } })
+      expect(t.speakerNames).toEqual({ SPEAKER_00: "Ana" })
+    })
+
+    it("keeps a label spelled like an Object.prototype key as an own entry, as the plugin's reader does", () => {
+      const t = normalizeTranscript({ words, speakerNames: JSON.parse('{"__proto__":"Ana","S1":"Bo"}') })
+      expect(Object.keys(t.speakerNames ?? {})).toEqual(["__proto__", "S1"])
+      expect(Object.getOwnPropertyDescriptor(t.speakerNames, "__proto__")?.value).toBe("Ana")
+      expect(Object.getPrototypeOf(t.speakerNames)).toBe(Object.prototype)
+    })
+
+    it("leaves the field out when there is no map, an empty one, or not a map", () => {
+      for (const speakerNames of [undefined, null, {}, { SPEAKER_00: "" }, ["Ana"], "Ana", 3]) {
+        expect("speakerNames" in normalizeTranscript({ words, speakerNames })).toBe(false)
+      }
+    })
+
+    it("survives the remap onto the rendered output", () => {
+      const edl: Edl = {
+        version: 1,
+        clock: "master",
+        sources: [{ id: "m", url: "https://x/m.mp4", kind: "video", role: "master-audio" }],
+        segments: [{ id: "s0", inMs: 0, outMs: 1_000, video: "m" }],
+      }
+      const t = normalizeTranscript({ words, speakerNames: { SPEAKER_00: "Ana" } })
+      expect(remapTranscriptThroughEdl(edl, t).speakerNames).toEqual({ SPEAKER_00: "Ana" })
+    })
+  })
 })
 
 describe("remapTranscriptThroughEdl — a word across TOUCHING segments keeps its full length (decided 2026-10-08)", () => {
