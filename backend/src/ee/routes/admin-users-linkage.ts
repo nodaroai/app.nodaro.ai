@@ -112,6 +112,8 @@ export interface LinkageMember {
   state: string | null
   /** The profile role: the block route refuses admins, so the page can skip them up front. */
   role: string | null
+  /** The member's own keys as tokens (network only when a real client address), so the page can act on one key. */
+  keys: Record<LinkageAxis, string | null> | null
 }
 
 export interface ClusterMembersResponse {
@@ -280,11 +282,20 @@ async function readMembers(ids: readonly string[]): Promise<LinkageMember[]> {
     if (error) throw error
     for (const p of (data ?? []) as MemberRecord[]) byId.set(p.id, p)
   }
+  const signalOf = new Map((await readSignals(ids)).map((s) => [s.userId, s]))
+  const tokenOrNull = (key: string | null) => (key ? tokenOf(key) : null)
   // Built from the cluster's ids, never from the profile query: a member whose
   // profile row is gone is still a member of the cluster.
   return ids.map((userId) => {
     const p = byId.get(userId)
-    return { userId, email: p?.email ?? null, state: p?.free_grant_state ?? null, role: p?.role ?? null }
+    const s = signalOf.get(userId)
+    return {
+      userId,
+      email: p?.email ?? null,
+      state: p?.free_grant_state ?? null,
+      role: p?.role ?? null,
+      keys: s ? { device: tokenOrNull(s.deviceKey), browser: tokenOrNull(s.browserKey), ip: tokenOrNull(s.ipHash) } : null,
+    }
   })
 }
 

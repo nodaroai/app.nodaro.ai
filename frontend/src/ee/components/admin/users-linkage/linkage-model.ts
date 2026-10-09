@@ -3,6 +3,7 @@ import {
   AXIS_LABELS,
   CHIP_CHARS,
   type ActiveTarget,
+  type KeyRef,
   type LinkageAxis,
   type LinkageCluster,
   type LinkageMember,
@@ -207,6 +208,31 @@ export function planBlock(members: readonly LinkageMember[], blockedIds: Readonl
     .slice()
     .sort((a, b) => memberName(a).localeCompare(memberName(b)))
   return { targets, alreadyBlocked: members.length - open.length, admins: protectedOnes.length }
+}
+
+/** The members holding one key — what an action scoped to a pinned key acts on. */
+export function membersOnKey(members: readonly LinkageMember[], key: KeyRef): LinkageMember[] {
+  return members.filter((m) => m.keys?.[key.axis] === key.token)
+}
+
+export interface RevokePlan {
+  /** Members with free credits to take back (granted or withheld), by email. */
+  readonly targets: readonly LinkageMember[]
+  /** Never claimed, already taken back, or unknown: nothing to take. */
+  readonly nothingToTakeBack: number
+}
+
+export function planRevoke(members: readonly LinkageMember[]): RevokePlan {
+  const targets = members
+    .filter((m) => m.state === "granted" || m.state === "withheld")
+    .slice()
+    .sort((a, b) => memberName(a).localeCompare(memberName(b)))
+  return { targets, nothingToTakeBack: members.length - targets.length }
+}
+
+/** "13 on Network 8878a1b2" — how an action names a pinned-key scope. */
+export function scopeLabel(key: KeyRef, count: number): string {
+  return `${count} on ${AXIS_LABELS[key.axis]} ${key.token.slice(0, CHIP_CHARS)}`
 }
 
 const REASON_MAX = 500

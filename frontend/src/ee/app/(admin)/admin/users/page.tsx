@@ -215,10 +215,10 @@ export default function AdminUsersPage() {
               onActive={setPointer}
               onPin={togglePin}
               onClose={() => setSelectedClusterKey(null)}
-              canBlock={currentUserRole === "super_admin"}
+              canAct={currentUserRole === "super_admin"}
               blockedIds={blockedIds}
               viewerId={currentUser?.id ?? ""}
-              onBlocked={() => void loadUsers()}
+              onChanged={() => void loadUsers()}
             />
           )}
         </>

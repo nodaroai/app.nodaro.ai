@@ -69,6 +69,14 @@ export interface LinkageMember {
   readonly state: string | null
   /** The block route refuses admins; the panel skips them up front. */
   readonly role: string | null
+  /** The member's own keys as tokens (network only when a real client address), so an action can take one key's accounts. */
+  readonly keys: Readonly<Record<LinkageAxis, string | null>> | null
+}
+
+/** One key, as the admin pins it: an axis and its token. */
+export interface KeyRef {
+  readonly axis: LinkageAxis
+  readonly token: string
 }
 
 /** One cluster's members, read when the admin opens it. */

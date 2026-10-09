@@ -7,8 +7,11 @@ import {
   isClusterHot,
   isLinked,
   isPillHot,
+  membersOnKey,
   planBlock,
+  planRevoke,
   rowTone,
+  scopeLabel,
   sharedAxes,
   sharedLabel,
   shouldDim,
@@ -66,9 +69,9 @@ const cluster: LinkageCluster = {
 }
 
 const members: LinkageMember[] = [
-  { userId: B, email: "bob@x.test", state: "withheld", role: "user" },
-  { userId: A, email: "alice@x.test", state: "withheld", role: "user" },
-  { userId: C, email: null, state: "granted", role: "user" },
+  { userId: B, email: "bob@x.test", state: "withheld", role: "user", keys: { device: "dev1", browser: "br-b", ip: "net1" } },
+  { userId: A, email: "alice@x.test", state: "withheld", role: "user", keys: { device: "dev1", browser: "br-a", ip: "net1" } },
+  { userId: C, email: null, state: "granted", role: "user", keys: { device: "dev-c", browser: null, ip: "net1" } },
 ]
 
 describe("what a pointer links", () => {
@@ -184,13 +187,32 @@ describe("blocking a cluster", () => {
   it("targets the unblocked members by email, leaving out admins and the viewer, whom the route refuses", () => {
     const withStaff: LinkageMember[] = [
       ...members,
-      { userId: D, email: "dana@x.test", state: "granted", role: "admin" },
-      { userId: VIEWER, email: "me@x.test", state: "granted", role: "user" },
+      { userId: D, email: "dana@x.test", state: "granted", role: "admin", keys: null },
+      { userId: VIEWER, email: "me@x.test", state: "granted", role: "user", keys: null },
     ]
     const plan = planBlock(withStaff, new Set([B]), VIEWER)
     expect(plan.targets.map((m) => m.email ?? m.userId)).toEqual([C, "alice@x.test"])
     expect(plan.alreadyBlocked).toBe(1)
     expect(plan.admins).toBe(2)
+  })
+
+  it("a take-back targets only the members with free credits to take, by email", () => {
+    const mixed: LinkageMember[] = [
+      ...members,
+      { userId: D, email: "dana@x.test", state: "unclaimed", role: "user", keys: null },
+      { userId: VIEWER, email: "me@x.test", state: "revoked", role: "user", keys: null },
+      { userId: "00000000-0000-4000-8000-0000000000e6", email: "gone@x.test", state: null, role: null, keys: null },
+    ]
+    const plan = planRevoke(mixed)
+    expect(plan.targets.map((m) => m.email ?? m.userId)).toEqual([C, "alice@x.test", "bob@x.test"])
+    expect(plan.nothingToTakeBack).toBe(3)
+  })
+
+  it("a pinned key narrows the members to the ones holding it, and names the scope", () => {
+    expect(membersOnKey(members, { axis: "device", token: "dev1" }).map((m) => m.userId)).toEqual([B, A])
+    expect(membersOnKey(members, { axis: "ip", token: "net1" })).toHaveLength(3)
+    expect(membersOnKey(members, { axis: "browser", token: "br-zzz" })).toHaveLength(0)
+    expect(scopeLabel({ axis: "ip", token: "net1net1net1" }, 13)).toBe("13 on Network net1net1")
   })
 
   it("writes a reason that explains the block, inside the server's 500 characters", () => {

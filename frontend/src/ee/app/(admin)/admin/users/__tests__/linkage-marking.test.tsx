@@ -28,6 +28,7 @@ const h = vi.hoisted(() => ({
   askedIds: [] as readonly string[],
   askedKey: null as string | null,
   block: vi.fn(),
+  revoke: vi.fn(),
 }))
 
 vi.mock("@/ee/hooks/queries/use-admin-queries", () => ({
@@ -55,6 +56,7 @@ vi.mock("@/ee/hooks/queries/use-admin-access", async (orig) => ({
   ...(await orig<typeof import("@/ee/hooks/queries/use-admin-access")>()),
   useAdminBlocks: () => ({ data: h.blocks }),
   useBlockUser: () => ({ mutateAsync: h.block, isPending: false }),
+  useRevokeFreeGrant: () => ({ mutateAsync: h.revoke, isPending: false }),
 }))
 vi.mock("@/ee/components/admin/users-linkage/use-users-linkage", () => ({
   // Honours `enabled` the way the real hook does: disabled means no data.
@@ -88,6 +90,7 @@ vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: v
 
 import AdminUsersPage from "../page"
 import { AccessError } from "@/ee/hooks/queries/use-admin-access"
+import { formatCreditUnits } from "@/lib/credit-units"
 
 const VIEWER = "00000000-0000-4000-8000-0000000000f0"
 const ALICE = "00000000-0000-4000-8000-0000000000f1"
@@ -186,9 +189,9 @@ function membersFixture(): ClusterMembers {
     size: 3,
     unresolved: 0,
     members: [
-      { userId: ALICE, email: "alice@x.test", state: "withheld", role: "user" },
-      { userId: BOB, email: "bob@x.test", state: "withheld", role: "user" },
-      { userId: ERIN, email: "erin@x.test", state: "granted", role: "user" },
+      { userId: ALICE, email: "alice@x.test", state: "withheld", role: "user", keys: { device: DEV_SHARED, browser: "b1b1b1b1b1b1", ip: NET_SHARED } },
+      { userId: BOB, email: "bob@x.test", state: "withheld", role: "user", keys: { device: DEV_SHARED, browser: "b2b2b2b2b2b2", ip: NET_SHARED } },
+      { userId: ERIN, email: "erin@x.test", state: "granted", role: "user", keys: { device: "d9d9d9d9d9d9", browser: "b9b9b9b9b9b9", ip: NET_SHARED } },
     ],
   }
 }
@@ -221,6 +224,8 @@ beforeEach(() => {
   h.askedKey = null
   h.block.mockReset()
   h.block.mockResolvedValue(ok)
+  h.revoke.mockReset()
+  h.revoke.mockResolvedValue({ state: "revoked", credits: 1500 })
 })
 
 describe("marking the rows", () => {
@@ -313,7 +318,7 @@ describe("the filters", () => {
     expect(h.askedKey).toBe(CLUSTER_KEY)
     expect(within(card).getByText("3 linked accounts")).toBeInTheDocument()
     expect(within(card).getByText(/2 withheld · 1 granted · 2 on this page/)).toBeInTheDocument()
-    expect(within(card).getByTitle(`Device ${DEV_SHARED} · 3 accounts`)).toBeInTheDocument()
+    expect(within(card).getByTitle(new RegExp(`^Device ${DEV_SHARED} · 3 accounts`))).toBeInTheDocument()
     expect(screen.queryByText("carol@x.test")).toBeNull()
 
     await user.click(within(card).getByRole("button", { name: "Show all users" }))
@@ -382,7 +387,7 @@ describe("blocking a cluster", () => {
   const openPanel = async (user: ReturnType<typeof userEvent.setup>, label = "Block 3") => {
     const card = await openCard(user)
     await user.click(within(card).getByRole("button", { name: label }))
-    return screen.getByTestId("block-cluster-panel")
+    return screen.getByTestId("cluster-action-panel")
   }
   const calledIds = () => h.block.mock.calls.map((c) => (c[0] as { userId: string }).userId)
 
@@ -431,7 +436,7 @@ describe("blocking a cluster", () => {
     const user = userEvent.setup()
     h.role = "super_admin"
     h.blocks = blocksFor([BOB])
-    h.members = { ...membersFixture(), members: [...membersFixture().members, { userId: VIEWER, email: "me@x.test", state: null, role: "super_admin" }] }
+    h.members = { ...membersFixture(), members: [...membersFixture().members, { userId: VIEWER, email: "me@x.test", state: null, role: "super_admin", keys: null }] }
     mount()
     const panel = await openPanel(user, "Block 2")
 
@@ -457,7 +462,7 @@ describe("blocking a cluster", () => {
     const panel = await openPanel(user)
     await user.click(within(panel).getByRole("button", { name: "Block 3 accounts" }))
 
-    expect(await within(panel).findByText("Stopped at erin@x.test: Service unavailable. 1 account blocked before it.")).toBeInTheDocument()
+    expect(await within(panel).findByText("Stopped at erin@x.test: Service unavailable. Blocked 1 account.")).toBeInTheDocument()
     expect(within(panel).getByText("Skipped alice@x.test (This account is a platform operator)")).toBeInTheDocument()
     expect(calledIds()).toEqual([ALICE, BOB, ERIN])
     expect(within(panel).queryByRole("button", { name: "Block 3 accounts" })).toBeNull()
@@ -476,8 +481,88 @@ describe("blocking a cluster", () => {
     await user.click(within(panel).getByRole("button", { name: "Stop" }))
     releaseFirst()
 
-    expect(await within(panel).findByText("Stopped. 1 account blocked.")).toBeInTheDocument()
+    expect(await within(panel).findByText("Stopped. Blocked 1 account.")).toBeInTheDocument()
     expect(h.block).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe("taking a cluster's free credits back", () => {
+  const openCard = async (user: ReturnType<typeof userEvent.setup>) => {
+    await user.click(screen.getByRole("button", { name: "Cluster #1, 3 accounts" }))
+    return screen.getByTestId("cluster-detail")
+  }
+  const revokedIds = () => h.revoke.mock.calls.map((c) => (c[0] as { userId: string }).userId)
+
+  it("is a super admin's button too, counting only the accounts with credits to take", async () => {
+    const user = userEvent.setup()
+    const { unmount } = mount()
+    const card = await openCard(user)
+    expect(within(card).queryByRole("button", { name: /^Take back/ })).toBeNull()
+    unmount()
+
+    h.role = "super_admin"
+    h.members = { ...membersFixture(), members: [...membersFixture().members, { userId: VIEWER, email: "me@x.test", state: "unclaimed", role: "user", keys: null }] }
+    mount()
+    const card2 = await openCard(user)
+    expect(within(card2).getByRole("button", { name: "Take back 3" })).toBeInTheDocument()
+  })
+
+  it("takes them back one after another, skips what the server refuses for one account, and sums what came back", async () => {
+    const user = userEvent.setup()
+    h.role = "super_admin"
+    h.revoke.mockImplementation(async ({ userId }: { userId: string }) => {
+      if (userId === BOB) throw new AccessError("This account has no free credits to take back.", 409, null)
+      return { state: "revoked", credits: userId === ALICE ? 1500 : 1463 }
+    })
+    mount()
+    const card = await openCard(user)
+
+    await user.click(within(card).getByRole("button", { name: "Take back 3" }))
+    const panel = screen.getByTestId("cluster-action-panel")
+    expect(within(panel).getByText("Take back the free credits of 3 accounts in cluster #1")).toBeInTheDocument()
+    expect(within(panel).queryByLabelText("Block reason")).toBeNull()
+
+    await user.click(within(panel).getByRole("button", { name: "Take back from 3 accounts" }))
+    expect(await within(panel).findByText(`Took back ${formatCreditUnits(2963, { localized: true })} from 2 accounts.`)).toBeInTheDocument()
+    expect(within(panel).getByText("Skipped bob@x.test (This account has no free credits to take back.)")).toBeInTheDocument()
+    expect(revokedIds()).toEqual([ALICE, BOB, ERIN])
+    expect(h.block).not.toHaveBeenCalled()
+  })
+
+  it("stops when the server refuses the operator, since nothing after it would succeed", async () => {
+    const user = userEvent.setup()
+    h.role = "super_admin"
+    h.revoke.mockRejectedValue(new AccessError("Platform operator access required", 403, null))
+    mount()
+    const card = await openCard(user)
+
+    await user.click(within(card).getByRole("button", { name: "Take back 3" }))
+    const panel = screen.getByTestId("cluster-action-panel")
+    await user.click(within(panel).getByRole("button", { name: "Take back from 3 accounts" }))
+
+    expect(await within(panel).findByText(/^Stopped at alice@x.test: Platform operator access required/)).toBeInTheDocument()
+    expect(h.revoke).toHaveBeenCalledTimes(1)
+  })
+
+  it("a pinned key narrows both actions to the accounts holding it", async () => {
+    const user = userEvent.setup()
+    h.role = "super_admin"
+    mount()
+    const card = await openCard(user)
+    expect(within(card).getByRole("button", { name: "Take back 3" })).toBeInTheDocument()
+
+    // alice and bob share the device; erin does not.
+    await user.click(within(card).getByTitle(new RegExp(`^Device ${DEV_SHARED}`)))
+    expect(within(card).getByTestId("action-scope")).toHaveTextContent(`2 on Device ${DEV_SHARED.slice(0, 8)}`)
+    expect(within(card).getByRole("button", { name: "Take back 2" })).toBeInTheDocument()
+    expect(within(card).getByRole("button", { name: "Block 2" })).toBeInTheDocument()
+
+    await user.click(within(card).getByRole("button", { name: "Take back 2" }))
+    const panel = screen.getByTestId("cluster-action-panel")
+    expect(within(panel).queryByText("erin@x.test")).toBeNull()
+    await user.click(within(panel).getByRole("button", { name: "Take back from 2 accounts" }))
+    await waitFor(() => expect(h.revoke).toHaveBeenCalledTimes(2))
+    expect(revokedIds()).toEqual([ALICE, BOB])
   })
 })
 

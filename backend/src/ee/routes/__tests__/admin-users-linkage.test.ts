@@ -422,9 +422,17 @@ describe("GET /v1/admin/users/linkage/cluster", () => {
     expect(mockRpc).not.toHaveBeenCalled()
   })
 
-  it("names the members fresh — email, state, role — for exactly the cluster's ids, and nothing raw", async () => {
+  it("names the members fresh — email, state, role, their keys as tokens — for exactly the cluster's ids, and nothing raw", async () => {
     queueTable("profiles", {
       data: [member(U1, "one@example.test", "withheld"), member(U2, "two@example.test", "withheld", "admin"), member(U3, "three@example.test", "granted")],
+      error: null,
+    })
+    queueTable("signup_signals", {
+      data: [
+        signal(U1, { device: DEVICE_HASH, browser: BROWSER_UNIQUE, ip: NETWORK_UNIQUE }),
+        // U2's network predates real addresses: no network token for it.
+        signal(U2, { device: DEVICE_HASH, browser: null, ip: NETWORK_HASH, ipScheme: null }),
+      ],
       error: null,
     })
     const res = await cluster(token(NETWORK_HASH))
@@ -433,24 +441,24 @@ describe("GET /v1/admin/users/linkage/cluster", () => {
 
     expect(body.data).toMatchObject({ key: token(NETWORK_HASH), id: 1, size: 3, unresolved: 0 })
     expect(body.data.members).toEqual([
-      { userId: U1, email: "one@example.test", state: "withheld", role: "user" },
-      { userId: U2, email: "two@example.test", state: "withheld", role: "admin" },
-      { userId: U3, email: "three@example.test", state: "granted", role: "user" },
+      { userId: U1, email: "one@example.test", state: "withheld", role: "user", keys: { device: token(DEVICE_HASH), browser: token(BROWSER_UNIQUE), ip: token(NETWORK_UNIQUE) } },
+      { userId: U2, email: "two@example.test", state: "withheld", role: "admin", keys: { device: token(DEVICE_HASH), browser: null, ip: null } },
+      { userId: U3, email: "three@example.test", state: "granted", role: "user", keys: null },
     ])
     expect(argsFor("profiles", "select").at(-1)).toEqual(["id, email, free_grant_state, role"])
     expect(argsFor("profiles", "in").at(-1)).toEqual(["id", [U1, U2, U3]])
+    expect(argsFor("signup_signals", "in").at(-1)).toEqual(["user_id", [U1, U2, U3]])
     const text = JSON.stringify(body)
-    expect(text).not.toContain(DEVICE_HASH)
-    expect(text).not.toContain(NETWORK_HASH)
+    for (const raw of [DEVICE_HASH, NETWORK_HASH, BROWSER_UNIQUE, NETWORK_UNIQUE]) expect(text).not.toContain(raw)
   })
 
   it("keeps a member whose profile row is gone", async () => {
     queueTable("profiles", { data: [member(U1, "one@example.test", "withheld")], error: null })
     const res = await cluster(token(NETWORK_HASH))
-    expect(res.json().data.members.map((m: { userId: string; email: string | null }) => [m.userId, m.email])).toEqual([
-      [U1, "one@example.test"],
-      [U2, null],
-      [U3, null],
+    expect(res.json().data.members.map((m: { userId: string; email: string | null; keys: unknown }) => [m.userId, m.email, m.keys])).toEqual([
+      [U1, "one@example.test", null],
+      [U2, null, null],
+      [U3, null, null],
     ])
   })
 
