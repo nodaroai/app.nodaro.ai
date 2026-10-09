@@ -1108,6 +1108,8 @@ export function buildSyncHttpBody(
         link: typedField("link"),
         dedupeKey: typedField("dedupeKey"),
         ...(media.length > 0 ? { media } : {}),
+        // "Mark the item as used": the saved item was a Read Collection row — stamp that row after the save.
+        markSourceUsed: data.markSourceUsed === true,
         executionId: ctx.executionId,
         workflowId: ctx.workflowId,
         nodeId: node.id,
@@ -1124,6 +1126,7 @@ export function buildSyncHttpBody(
         limit: data.limit,
         order: data.order,
         textFormat: data.textFormat,
+        ...(typeof data.usage === "string" ? { usage: data.usage } : {}),
         workflowId: ctx.workflowId,
         nodeId: node.id,
         userId: ctx.userId,

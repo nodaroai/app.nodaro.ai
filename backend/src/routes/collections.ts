@@ -13,10 +13,17 @@ import {
   COLLECTION_RECORD_URL_MAX,
   COLLECTIONS_PAGE_DEFAULT,
   COLLECTIONS_PAGE_MAX,
+  COLLECTION_USAGES,
+  COLLECTION_RECORD_STATUSES,
+  COLLECTION_BULK_ACTIONS,
+  COLLECTION_BULK_MAX,
+  COLLECTION_RECORDS_OFFSET_MAX,
   isCollectionUrl,
   type AddCollectionRecordResult,
+  type BulkCollectionRecordsResult,
   type CollectionRecord,
   type CollectionRecordSource,
+  type CollectionUsage,
   type ListCollectionsResult,
 } from "@nodaro/shared"
 import { supabase } from "../lib/supabase.js"
@@ -25,9 +32,16 @@ import { sendInternalError } from "../lib/http-errors.js"
 import { isMissingTableError } from "../lib/postgrest-errors.js"
 import {
   COLLECTION_COLUMNS,
+  collectionCounts,
+  countRecords,
+  deleteTrashedForGood,
+  enrichRecordSources,
   findCollection,
+  findRecord,
   limitsFor,
   readRecordsPage,
+  setRecordUsed,
+  setRecordsDeleted,
   toCollection,
   toRecord,
   writeCollectionRecord,
@@ -138,18 +152,35 @@ const addRecordBody = z.object({
   item: z.unknown().optional(),
 })
 
-const sinceSchema = z.string().max(40).refine(isRealTimestamp, { message: "since must be an ISO timestamp with a date and a time" })
+const timestampSchema = (name: string) => z.string().max(40).refine(isRealTimestamp, { message: `${name} must be an ISO timestamp with a date and a time` })
+const sinceSchema = timestampSchema("since")
+const untilSchema = timestampSchema("until")
+const usageSchema = z.enum(COLLECTION_USAGES).default("all")
+/** The write routes on records share one per-minute limit per token. */
+const RECORD_WRITE_LIMIT = { rateLimit: { max: 120, timeWindow: "1 minute" } }
 const recordsQuery = z.object({
   q: z.string().max(200).optional(),
   since: sinceSchema.optional(),
+  until: untilSchema.optional(),
+  usage: usageSchema,
+  status: z.enum(COLLECTION_RECORD_STATUSES).default("active"),
+  order: z.enum(["newest", "oldest"]).default("newest"),
   cursor: z.string().max(200).optional(),
+  offset: z.coerce.number().int().min(0).max(COLLECTION_RECORDS_OFFSET_MAX).optional(),
   limit: z.coerce.number().int().min(1).max(COLLECTIONS_PAGE_MAX).default(COLLECTIONS_PAGE_DEFAULT),
+})
+const bulkBody = z.object({
+  ids: z.array(z.string().uuid()).min(1).max(COLLECTION_BULK_MAX),
+  action: z.enum(COLLECTION_BULK_ACTIONS),
 })
 const exportQuery = z.object({
   format: z.enum(["csv", "json"]).default("csv"),
   since: sinceSchema.optional(),
+  until: untilSchema.optional(),
+  usage: usageSchema,
   q: z.string().max(200).optional(),
 })
+const setUsedBody = z.object({ used: z.boolean(), source: sourceSchema.optional() })
 const idParams = z.object({ id: z.string().uuid() })
 const recordParams = z.object({ id: z.string().uuid(), recordId: z.string().uuid() })
 
@@ -179,7 +210,7 @@ export function csvCell(value: unknown): string {
   return `"${s.replace(/"/g, '""')}"`
 }
 
-const CSV_HEADER = ["id", "created_at", "title", "text", "url", "dedupe_key", "media", "fields"]
+const CSV_HEADER = ["id", "created_at", "title", "text", "url", "dedupe_key", "media", "fields", "used_at", "used_by"]
 
 export function csvLine(record: CollectionRecord): string {
   return [
@@ -191,6 +222,8 @@ export function csvLine(record: CollectionRecord): string {
     record.dedupeKey ?? "",
     record.media.length > 0 ? record.media : "",
     Object.keys(record.fields).length > 0 ? record.fields : "",
+    record.usedAt ?? "",
+    record.usedBy && Object.keys(record.usedBy).length > 0 ? record.usedBy : "",
   ]
     .map(csvCell)
     .join(",")
@@ -220,10 +253,14 @@ export function exportContentDisposition(name: string, format: "csv" | "json", n
 }
 
 /** The whole collection, newest first, a page at a time — what an export streams. */
-async function* iterateRecords(collectionId: string, userId: string, q: string | undefined, since: string | undefined): AsyncGenerator<CollectionRecord> {
+async function* iterateRecords(
+  collectionId: string,
+  userId: string,
+  filters: { q?: string; since?: string; until?: string; usage?: CollectionUsage },
+): AsyncGenerator<CollectionRecord> {
   let after: { createdAt: string; id: string } | null = null
   for (;;) {
-    const page = await readRecordsPage({ collectionId, userId, q, since, after, limit: EXPORT_PAGE })
+    const page = await readRecordsPage({ collectionId, userId, ...filters, after, limit: EXPORT_PAGE })
     if (page.error) throw page.error
     for (const row of page.rows) yield toRecord(row)
     if (page.rows.length < EXPORT_PAGE) return
@@ -313,7 +350,9 @@ export async function collectionRoutes(app: FastifyInstance) {
     if (found.missingTable) return notFound(reply, "Collection")
     if (found.error) return sendInternalError(reply, req, found.error, "Failed to load the collection")
     if (!found.row) return notFound(reply, "Collection")
-    return toCollection(found.row)
+    // How many are used, and how many sit in the Trash — left out on a database before the usage migration.
+    const counts = await collectionCounts(params.data.id, userId)
+    return { ...toCollection(found.row), ...(counts ? { usedCount: counts.used, trashCount: counts.trash } : {}) }
   })
 
   app.patch("/v1/collections/:id", { preHandler: requireAppScope("assets:write") }, async (req, reply) => {
@@ -363,7 +402,10 @@ export async function collectionRoutes(app: FastifyInstance) {
     if (!params.success) return zodError(reply, params.error)
     const parsed = recordsQuery.safeParse(req.query)
     if (!parsed.success) return zodError(reply, parsed.error)
-    const { q, since, cursor, limit } = parsed.data
+    const { q, since, until, usage, status, order, cursor, offset, limit } = parsed.data
+    if (cursor && offset !== undefined) {
+      return reply.status(400).send({ error: { code: "validation_error", message: "Send cursor or offset, not both." } })
+    }
     const after = cursor ? parseRecordsCursor(cursor) : null
     if (cursor && !after) {
       return reply.status(400).send({ error: { code: "invalid_cursor", message: "That cursor is not one this list gave out." } })
@@ -373,11 +415,96 @@ export async function collectionRoutes(app: FastifyInstance) {
     if (found.error) return sendInternalError(reply, req, found.error, "Failed to load the collection")
     if (!found.row) return notFound(reply, "Collection")
 
-    const page = await readRecordsPage({ collectionId: params.data.id, userId, q, since, after, limit: limit + 1 })
-    if (page.missingTable) return { data: [], nextCursor: null }
+    const query = { collectionId: params.data.id, userId, q, since, until, usage, status }
+    // The page — and, for a numbered page, how many match in all — side by side. A cursor
+    // walk (the SDK, MCP, an export) never pays for the count.
+    const [page, total] = await Promise.all([
+      readRecordsPage({ ...query, order, after, offset, limit: limit + 1 }),
+      offset !== undefined ? countRecords(query) : Promise.resolve(null),
+    ])
+    if (page.missingTable) return { data: [], nextCursor: null, ...(offset !== undefined ? { total: 0 } : {}) }
     if (page.error) return sendInternalError(reply, req, page.error, "Failed to load the records")
     const rows = page.rows.slice(0, limit)
-    return { data: rows.map(toRecord), nextCursor: page.rows.length > limit ? encodeRecordsCursor(rows[rows.length - 1]!) : null }
+    // The saving / using workflows' names, for the page's "from <workflow> · run …" line.
+    const data = await enrichRecordSources(rows.map(toRecord), userId)
+    return { data, nextCursor: page.rows.length > limit ? encodeRecordsCursor(rows[rows.length - 1]!) : null, ...(total !== null ? { total } : {}) }
+  })
+
+  app.post("/v1/collections/:id/records/bulk", { preHandler: requireAppScope("assets:write"), config: RECORD_WRITE_LIMIT }, async (req, reply) => {
+    const userId = requireUser(req, reply)
+    if (!userId) return
+    const params = idParams.safeParse(req.params)
+    if (!params.success) return zodError(reply, params.error)
+    const parsed = bulkBody.safeParse(req.body)
+    if (!parsed.success) return zodError(reply, parsed.error)
+    // Ownership first: a collection that is not the caller's is a 404, never a quiet "0 updated".
+    const found = await findCollection(params.data.id, userId)
+    if (found.missingTable) return notAvailable(reply)
+    if (found.error) return sendInternalError(reply, req, found.error, "Failed to update the records")
+    if (!found.row) return notFound(reply, "Collection")
+    const scope = { userId, collectionId: params.data.id, ids: [...new Set(parsed.data.ids)] }
+    const outcome =
+      parsed.data.action === "delete"
+        ? await deleteTrashedForGood(scope)
+        : await setRecordsDeleted({ ...scope, deleted: parsed.data.action === "trash", onlyChanged: true })
+    if (outcome.kind === "missing_table" || outcome.kind === "missing_column") return notAvailable(reply)
+    if (outcome.kind === "error") return sendInternalError(reply, req, outcome.error, "Failed to update the records")
+    return { updated: outcome.count } satisfies BulkCollectionRecordsResult
+  })
+
+  app.post("/v1/collections/:id/records/:recordId/restore", { preHandler: requireAppScope("assets:write"), config: RECORD_WRITE_LIMIT }, async (req, reply) => {
+    const userId = requireUser(req, reply)
+    if (!userId) return
+    const params = recordParams.safeParse(req.params)
+    if (!params.success) return zodError(reply, params.error)
+    const outcome = await setRecordsDeleted({ userId, collectionId: params.data.id, ids: [params.data.recordId], deleted: false })
+    if (outcome.kind === "missing_table" || outcome.kind === "missing_column") return notAvailable(reply)
+    if (outcome.kind === "error") return sendInternalError(reply, req, outcome.error, "Failed to restore the record")
+    if (outcome.count === 0) return notFound(reply, "Record")
+    const record = await findRecord(params.data.id, userId, params.data.recordId)
+    if (!record) return notFound(reply, "Record")
+    const [enriched] = await enrichRecordSources([record], userId)
+    return enriched
+  })
+
+  // For good — only a record already in the Trash: a live record is moved there first (409).
+  app.delete("/v1/collections/:id/records/:recordId/permanent", { preHandler: requireAppScope("assets:write"), config: RECORD_WRITE_LIMIT }, async (req, reply) => {
+    const userId = requireUser(req, reply)
+    if (!userId) return
+    const params = recordParams.safeParse(req.params)
+    if (!params.success) return zodError(reply, params.error)
+    const record = await findRecord(params.data.id, userId, params.data.recordId)
+    if (!record) return notFound(reply, "Record")
+    if (!record.deletedAt) return reply.status(409).send({ error: { code: "not_in_trash", message: "Move the record to the Trash first." } })
+    const outcome = await deleteTrashedForGood({ userId, collectionId: params.data.id, ids: [params.data.recordId] })
+    if (outcome.kind === "missing_table" || outcome.kind === "missing_column") return notAvailable(reply)
+    if (outcome.kind === "error") return sendInternalError(reply, req, outcome.error, "Failed to delete the record")
+    if (outcome.count === 0) return notFound(reply, "Record")
+    return { success: true }
+  })
+
+  app.patch("/v1/collections/:id/records/:recordId", { preHandler: requireAppScope("assets:write") }, async (req, reply) => {
+    const userId = requireUser(req, reply)
+    if (!userId) return
+    const params = recordParams.safeParse(req.params)
+    if (!params.success) return zodError(reply, params.error)
+    const parsed = setUsedBody.safeParse(req.body)
+    if (!parsed.success) return zodError(reply, parsed.error)
+    const by: CollectionRecordSource = { via: "api", ...(parsed.data.source ?? {}) }
+    const outcome = await setRecordUsed({ userId, collectionId: params.data.id, recordId: params.data.recordId, used: parsed.data.used, by })
+    switch (outcome.kind) {
+      case "updated": {
+        const [record] = await enrichRecordSources([outcome.record], userId)
+        return record
+      }
+      case "not_found":
+        return notFound(reply, "Record")
+      case "missing_table":
+      case "missing_column":
+        return notAvailable(reply)
+      case "error":
+        return sendInternalError(reply, req, outcome.error, "Failed to update the record")
+    }
   })
 
   app.post(
@@ -426,17 +553,12 @@ export async function collectionRoutes(app: FastifyInstance) {
     if (!userId) return
     const params = recordParams.safeParse(req.params)
     if (!params.success) return zodError(reply, params.error)
-    const { data, error } = await supabase
-      .from("collection_records")
-      .delete()
-      .eq("id", params.data.recordId)
-      .eq("collection_id", params.data.id)
-      .eq("user_id", userId)
-      .select("id")
-      .maybeSingle()
-    if (isMissingTableError(error)) return notAvailable(reply)
-    if (error) return sendInternalError(reply, req, error, "Failed to delete the record")
-    if (!data) return notFound(reply, "Record")
+    // To the Trash — never a delete for good in its stead: a database before migration 494
+    // (or a schema cache that has not seen the column yet) answers 503 instead.
+    const outcome = await setRecordsDeleted({ userId, collectionId: params.data.id, ids: [params.data.recordId], deleted: true })
+    if (outcome.kind === "missing_table" || outcome.kind === "missing_column") return notAvailable(reply)
+    if (outcome.kind === "error") return sendInternalError(reply, req, outcome.error, "Failed to delete the record")
+    if (outcome.count === 0) return notFound(reply, "Record")
     return { success: true }
   })
 
@@ -455,8 +577,8 @@ export async function collectionRoutes(app: FastifyInstance) {
       if (found.missingTable) return notFound(reply, "Collection")
       if (found.error) return sendInternalError(reply, req, found.error, "Failed to export the collection")
       if (!found.row) return notFound(reply, "Collection")
-      const { format, since, q } = parsed.data
-      const records = iterateRecords(params.data.id, userId, q, since)
+      const { format, since, until, usage, q } = parsed.data
+      const records = iterateRecords(params.data.id, userId, { q, since, until, usage })
       return reply
         .header("Content-Type", format === "csv" ? "text/csv; charset=utf-8" : "application/json; charset=utf-8")
         .header("Content-Disposition", exportContentDisposition(found.row.name, format))

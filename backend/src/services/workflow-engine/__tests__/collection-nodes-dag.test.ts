@@ -104,6 +104,8 @@ describe("Save to Collection through the orchestrator", () => {
     })
     // An empty or blank node field is NOT sent — the item's own value must win there.
     for (const key of ["title", "text", "link"]) expect(run.body).not.toHaveProperty(key)
+    // "Mark the item as used" travels explicitly, off unless the node has it on.
+    expect(run.body.markSourceUsed).toBe(false)
     // Fan-out iteration 2 of this node in this execution: one write, however often it is re-picked.
     expect(run.headers["Idempotency-Key"]).toBe(`wf-execution-1-${node.id}-2`)
     // Nothing queued: the route owns the job row.
@@ -113,6 +115,14 @@ describe("Save to Collection through the orchestrator", () => {
     expect(result.output.json).toEqual(written)
     expect(getPrimaryOutput(result.output, "collection-write", "json")).toBe(JSON.stringify(written))
     expect(getPrimaryOutput(result.output, "collection-write", undefined)).toBe(JSON.stringify(written))
+  })
+
+  it("sends \"mark the item as used\" when the node has it on, so the route stamps the record the item came from", async () => {
+    const node: SimpleNode = { id: "mark-done", type: "collection-write", data: { collectionId: COLLECTION_ID, markSourceUsed: true } }
+    await executeNode(node, { prompt: JSON.stringify({ id: "r9", collectionId: COLLECTION_ID, title: "Ready" }) }, [], [node], {}, context())
+    const [run] = posted()
+    expect(collectionWriteBody.safeParse(run.body).success).toBe(true)
+    expect(run.body.markSourceUsed).toBe(true)
   })
 
   it("a single (non-fan-out) run keys on the execution and the node alone, and an override item wins over the wire", async () => {
@@ -223,7 +233,7 @@ describe("Read Collection through the orchestrator", () => {
   it("posts the node's own settings as a route-valid body, with no Idempotency-Key", async () => {
     const node: SimpleNode = {
       id: "read-node", type: "collection-read",
-      data: { collectionId: COLLECTION_ID, windowAmount: 2, windowUnit: "days", limit: 25, order: "oldest", textFormat: "full" },
+      data: { collectionId: COLLECTION_ID, windowAmount: 2, windowUnit: "days", limit: 25, order: "oldest", textFormat: "full", usage: "unused" },
     }
     const result = await executeNode(node, {}, [], [node], {}, context())
 
@@ -231,7 +241,7 @@ describe("Read Collection through the orchestrator", () => {
     expect(run.url).toMatch(/\/v1\/collection-read$/)
     expect(collectionReadBody.safeParse(run.body).success).toBe(true)
     expect(run.body).toMatchObject({
-      collectionId: COLLECTION_ID, windowAmount: 2, windowUnit: "days", limit: 25, order: "oldest", textFormat: "full",
+      collectionId: COLLECTION_ID, windowAmount: 2, windowUnit: "days", limit: 25, order: "oldest", textFormat: "full", usage: "unused",
       workflowId: "workflow-1", nodeId: node.id, userId: "user-1",
     })
     expect(run.headers).not.toHaveProperty("Idempotency-Key")
@@ -250,6 +260,8 @@ describe("Read Collection through the orchestrator", () => {
     }
     const node: SimpleNode = { id: "read-node", type: "collection-read", data: { collectionId: COLLECTION_ID } }
     const result = await executeNode(node, {}, [], [node], {}, context())
+    // A node saved before the "which records" setting existed sends none: the route's default (every record) applies.
+    expect(posted()[0]!.body).not.toHaveProperty("usage")
     expect(result.output.text).toBe("")
     expect(getPrimaryOutput(result.output, "collection-read", "text")).toBe("")
     // The json pip is nothing too — never the string "[]" for a model to run on or a record to be made of.

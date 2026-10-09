@@ -37,6 +37,20 @@ export function parseFormat(raw: string | undefined): CollectionExportFormat {
   return raw
 }
 
+/** A whole number from the command line, or nothing; anything else is refused by name rather than sent as NaN. */
+export function parseCount(flag: string, raw: string | undefined): number | undefined {
+  if (raw === undefined) return undefined
+  if (!/^\d+$/.test(raw)) throw new Error(`${flag} must be a whole number`)
+  return Number(raw)
+}
+
+/** `--usage`: `all` (the default) sends nothing; `unused` / `used` narrow the records. */
+export function parseUsage(raw: string | undefined): "unused" | "used" | undefined {
+  if (raw === undefined || raw === "all") return undefined
+  if (raw !== "unused" && raw !== "used") throw new Error("--usage must be all, unused or used")
+  return raw
+}
+
 function shorten(text: string, max: number): string {
   const flat = text.replace(/\s+/g, " ").trim()
   return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat
@@ -151,28 +165,75 @@ export function collectionsCommand(): Command {
     .description("a collection's records, newest first")
     .option("--q <words>", "words in the title, text or link")
     .option("--since <iso>", "only records saved at or after this time (ISO)")
+    .option("--until <iso>", "only records saved before this time (ISO)")
+    .option("--usage <which>", "all (default), unused (not used yet) or used")
+    .option("--order <order>", "newest (default) or oldest first")
+    .option("--status <which>", "active (default: the live records) or trash")
     .option("--limit <n>", "page size, 1-100 (default 50)")
+    .option("--offset <n>", "skip this many records first (a numbered page); not with --cursor")
     .option("--cursor <cursor>", "the next cursor printed by the previous page")
     .option("--profile <name>")
     .option("--json")
-    .action(async (id: string, opts: { q?: string; since?: string; limit?: string; cursor?: string } & GlobalOpts) => {
+    .action(
+      async (
+        id: string,
+        opts: { q?: string; since?: string; until?: string; usage?: string; status?: string; order?: string; limit?: string; offset?: string; cursor?: string } & GlobalOpts,
+      ) => {
+        try {
+          const usage = parseUsage(opts.usage)
+          const order = opts.order === "oldest" ? "oldest" : opts.order === undefined || opts.order === "newest" ? undefined : null
+          if (order === null) throw new Error("--order must be newest or oldest")
+          const status = opts.status === "trash" ? "trash" : opts.status === undefined || opts.status === "active" ? undefined : null
+          if (status === null) throw new Error("--status must be active or trash")
+          const client = buildClient(opts.profile)
+          const page = await client.collections.records(id, {
+            q: opts.q,
+            since: opts.since,
+            until: opts.until,
+            usage,
+            status,
+            order,
+            limit: parseCount("--limit", opts.limit),
+            offset: parseCount("--offset", opts.offset),
+            cursor: opts.cursor,
+          })
+          if (opts.json) {
+            emit(page, opts)
+            return
+          }
+          table(
+            page.data.map((r) => ({
+              id: r.id,
+              saved: r.createdAt.slice(0, 10),
+              used: r.usedAt ? r.usedAt.slice(0, 10) : "",
+              headline: shorten(collectionRecordHeadline(r), 56),
+              from: r.source.workflowName ?? r.source.via ?? "",
+              url: r.url ?? "",
+            })),
+            ["id", "saved", "used", "headline", "from", "url"],
+          )
+          if (page.nextCursor) success(`more: --cursor "${page.nextCursor}"`)
+        } catch (err) {
+          handleError(err)
+        }
+      },
+    )
+
+  cmd
+    .command("mark-used <id> <recordId>")
+    .description("mark a record used (--not-used marks it not used again)")
+    .option("--not-used", "undo: the record is not used")
+    .option("--profile <name>")
+    .option("--json")
+    .action(async (id: string, recordId: string, opts: { notUsed?: boolean } & GlobalOpts) => {
       try {
         const client = buildClient(opts.profile)
-        const page = await client.collections.records(id, {
-          q: opts.q,
-          since: opts.since,
-          limit: opts.limit ? Number(opts.limit) : undefined,
-          cursor: opts.cursor,
-        })
+        const record = await client.collections.setUsed(id, recordId, !opts.notUsed)
         if (opts.json) {
-          emit(page, opts)
+          emit(record, opts)
           return
         }
-        table(
-          page.data.map((r) => ({ id: r.id, saved: r.createdAt.slice(0, 10), headline: shorten(collectionRecordHeadline(r), 56), url: r.url ?? "" })),
-          ["id", "saved", "headline", "url"],
-        )
-        if (page.nextCursor) success(`more: --cursor "${page.nextCursor}"`)
+        success(record.usedAt ? `used ${record.usedAt.slice(0, 16).replace("T", " ")}: ${collectionRecordHeadline(record)}` : `not used: ${collectionRecordHeadline(record)}`)
       } catch (err) {
         handleError(err)
       }
@@ -227,13 +288,38 @@ export function collectionsCommand(): Command {
 
   cmd
     .command("remove <id> <recordId>")
-    .description("remove one record")
+    .description("move one record to the collection's Trash (restore brings it back); --forever deletes a record already in the Trash for good")
+    .option("--forever", "delete for good — the record must already be in the Trash")
     .option("--profile <name>")
+    .action(async (id: string, recordId: string, opts: { forever?: boolean } & GlobalOpts) => {
+      try {
+        const client = buildClient(opts.profile)
+        if (opts.forever) {
+          await client.collections.deleteRecordForever(id, recordId)
+          success(`deleted ${recordId} for good`)
+          return
+        }
+        await client.collections.deleteRecord(id, recordId)
+        success(`moved ${recordId} to the Trash`)
+      } catch (err) {
+        handleError(err)
+      }
+    })
+
+  cmd
+    .command("restore <id> <recordId>")
+    .description("bring one record back from the collection's Trash")
+    .option("--profile <name>")
+    .option("--json")
     .action(async (id: string, recordId: string, opts: GlobalOpts) => {
       try {
         const client = buildClient(opts.profile)
-        await client.collections.deleteRecord(id, recordId)
-        success(`removed ${recordId}`)
+        const record = await client.collections.restoreRecord(id, recordId)
+        if (opts.json) {
+          emit(record, opts)
+          return
+        }
+        success(`restored: ${collectionRecordHeadline(record)}`)
       } catch (err) {
         handleError(err)
       }
@@ -244,14 +330,17 @@ export function collectionsCommand(): Command {
     .description("the whole collection as CSV (default) or JSON, to stdout or a file")
     .option("--format <format>", "csv or json (default csv)")
     .option("--since <iso>", "only records saved at or after this time (ISO)")
+    .option("--until <iso>", "only records saved before this time (ISO)")
+    .option("--usage <which>", "all (default), unused (not used yet) or used")
     .option("--q <words>", "words in the title, text or link")
     .option("--out <path>", "write to this file instead of stdout")
     .option("--profile <name>")
-    .action(async (id: string, opts: { format?: string; since?: string; q?: string; out?: string } & GlobalOpts) => {
+    .action(async (id: string, opts: { format?: string; since?: string; until?: string; usage?: string; q?: string; out?: string } & GlobalOpts) => {
       try {
         const format = parseFormat(opts.format)
+        const usage = parseUsage(opts.usage)
         const client = buildClient(opts.profile)
-        const body = await client.collections.export(id, { format, since: opts.since, q: opts.q })
+        const body = await client.collections.export(id, { format, since: opts.since, until: opts.until, usage, q: opts.q })
         if (opts.out) {
           writeFileSync(opts.out, body, "utf8")
           success(`wrote ${opts.out}`)

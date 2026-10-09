@@ -1,7 +1,7 @@
 ---
 node_type: collection-write
-generated_at: 2026-10-06T04:15:45.172Z
-generated_from: 491960e9f
+generated_at: 2026-10-08T20:04:10.344Z
+generated_from: 204462824
 ---
 
 # Save to Collection
@@ -24,6 +24,7 @@ generated_from: 491960e9f
 
 **Optional data fields:**
 - `collectionName?: string`
+- `markSourceUsed?: boolean`
 - `executionStatus?: "idle" | "running" | "completed" | "failed"`
 - `errorMessage?: string`
 - `currentJobId?: string`
@@ -41,7 +42,8 @@ generated_from: 491960e9f
   "text": "",
   "link": "",
   "dedupeKey": "",
-  "fieldMappings": {}
+  "fieldMappings": {},
+  "markSourceUsed": false
 }
 ```
 <!-- AUTO-GEN:END node-data-shape -->
@@ -75,7 +77,8 @@ generated_from: 491960e9f
     "text": "",
     "link": "",
     "dedupeKey": "",
-    "fieldMappings": {}
+    "fieldMappings": {},
+    "markSourceUsed": false
   }
 }
 ```

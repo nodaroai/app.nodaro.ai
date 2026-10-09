@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, useMemo, Suspense } from "react";
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry";
 import { RUN_BUTTON_GLASS_CLASS } from "@/lib/run-button-style";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { filterCloneNodes, getOutputType } from "@nodaro/shared"
 import { ReactFlowProvider } from "@xyflow/react";
 import {
@@ -153,9 +153,25 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
   const [remixOpen, setRemixOpen] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [activeExecutionId, setActiveExecutionId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"editor" | "present" | "executions" | "cost">(
-    "editor",
+  // A link may open the editor on its Executions tab — `?tab=executions&execution=<id>`
+  // is how a collection record links to the run that saved it. Only that tab is
+  // reachable this way (Present and Cost are gated per deployment), and both
+  // parameters are read once and then dropped from the address bar, so a reload
+  // or a later tab switch does not open the run again.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState<"editor" | "present" | "executions" | "cost">(() =>
+    searchParams.get("tab") === "executions" ? "executions" : "editor",
   );
+  const [linkedExecutionId, setLinkedExecutionId] = useState<string | null>(() => searchParams.get("execution"));
+  useEffect(() => {
+    if (!searchParams.has("tab") && !searchParams.has("execution")) return;
+    const next = new URLSearchParams(searchParams);
+    next.delete("tab");
+    next.delete("execution");
+    setSearchParams(next, { replace: true });
+    // Once, on arrival: both values were captured into state above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // A run the editor did not start (Telegram, MCP, API, a schedule, a webhook)
   // is followed on the canvas (wired below, after ctx). onExecutionStarted
   // (defined before that) reaches the watch through this ref.
@@ -1502,7 +1518,12 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
 
         {activeTab === "executions" && (
           <div className="absolute inset-0">
-            <ExecutionsTab className="h-full" workflowId={useWorkflowStore.getState().workflowId} />
+            <ExecutionsTab
+              className="h-full"
+              workflowId={useWorkflowStore.getState().workflowId}
+              initialExpandedId={linkedExecutionId}
+              onLinkedRunShown={() => setLinkedExecutionId(null)}
+            />
           </div>
         )}
 

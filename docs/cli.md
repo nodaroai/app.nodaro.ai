@@ -176,12 +176,14 @@ nodaro saved-posts delete <id>                         # also removes the copied
 nodaro collections list [--json]                            # your collections, record counts, your caps
 nodaro collections create <name> [--description <text>] [--json]
 nodaro collections show <id> [--json] | update <id> [--name <n>] [--description <d>] | delete <id>
-nodaro collections records <id> [--q <words>] [--since <iso>] [--limit <n>] [--cursor <c>] [--json]
+nodaro collections records <id> [--q <words>] [--since <iso>] [--until <iso>] [--usage all|unused|used] [--status active|trash] [--order newest|oldest] [--limit <n>] [--offset <n>] [--cursor <c>] [--json]
 nodaro collections add <id> [--title <t>] [--text <t>] [--url <link>] [--file <item.json|->] [--index <n>] [--dedupe-key <k>] [--idempotency-key <k>] [--json]
 #   --file holds any JSON item (a feed post, a search result) the server maps to a record; explicit flags win
 #   the same link twice is one record ("already there"); the same --idempotency-key twice saves once
-nodaro collections remove <id> <recordId>
-nodaro collections export <id> [--format csv|json] [--since <iso>] [--q <words>] [--out <path>]   # to stdout or a file
+nodaro collections remove <id> <recordId> [--forever]       # to the collection's Trash; --forever deletes a record already in the Trash for good
+nodaro collections restore <id> <recordId> [--json]         # back from the Trash
+nodaro collections mark-used <id> <recordId> [--not-used] [--json]
+nodaro collections export <id> [--format csv|json] [--since <iso>] [--until <iso>] [--usage all|unused|used] [--q <words>] [--out <path>]   # the live records, to stdout or a file
 
 # Competitors — tracked brands, their scans and action cards (Nodaro Cloud)
 nodaro competitors list [--json]

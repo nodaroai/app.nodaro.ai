@@ -1091,6 +1091,17 @@ export {
   type CollectionDigestFormat,
   type CollectionReadWindowUnit,
   type CollectionReadOrder,
+  COLLECTION_USAGES,
+  type CollectionUsage,
+  type SetCollectionRecordUsedInput,
+  COLLECTION_RECORD_STATUSES,
+  type CollectionRecordStatus,
+  COLLECTION_BULK_MAX,
+  COLLECTION_BULK_ACTIONS,
+  COLLECTION_RECORDS_OFFSET_MAX,
+  type CollectionBulkAction,
+  type BulkCollectionRecordsInput,
+  type BulkCollectionRecordsResult,
   type IngestedRecord,
 } from "./collections.js"
 

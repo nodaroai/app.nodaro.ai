@@ -57,8 +57,20 @@ export const queryKeys = {
     all: ["collections"] as const,
     list: () => ["collections", "list"] as const,
     detail: (id: string) => ["collections", "detail", id] as const,
-    records: (id: string, filters: { q?: string; since?: string }) =>
-      ["collections", "records", id, filters.q ?? "", filters.since ?? ""] as const,
+    records: (id: string, filters: { q?: string; since?: string; until?: string; usage?: string; status?: string; order?: string; offset?: number; limit?: number }) =>
+      [
+        "collections",
+        "records",
+        id,
+        filters.q ?? "",
+        filters.since ?? "",
+        filters.until ?? "",
+        filters.usage ?? "all",
+        filters.status ?? "active",
+        filters.order ?? "newest",
+        filters.offset ?? 0,
+        filters.limit ?? 0,
+      ] as const,
   },
 
   // Competitors (Cloud; per-user)

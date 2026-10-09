@@ -1,4 +1,4 @@
-import type { TelegramChannelPost, CollectionRecord, CollectionWriteOutcome, CollectionReadWindowUnit, CollectionReadOrder, CollectionDigestFormat } from "@nodaro/shared"
+import type { TelegramChannelPost, CollectionRecord, CollectionWriteOutcome, CollectionReadWindowUnit, CollectionReadOrder, CollectionDigestFormat, CollectionUsage } from "@nodaro/shared"
 import type { Node, Edge } from "@xyflow/react"
 import { MODIFY_IMAGE_PROVIDERS, OVERLAY_ANCHORS } from "@nodaro/shared"
 import { MUSIC_GENRE_DEFAULT_DATA, MUSIC_MOOD_DEFAULT_DATA, INSTRUMENTATION_DEFAULT_DATA, VOICE_CHARACTER_DEFAULT_DATA, VOICE_DELIVERY_DEFAULT_DATA } from "@nodaro/prompts"
@@ -6707,6 +6707,8 @@ export type CollectionWriteData = {
   link: string
   dedupeKey: string
   fieldMappings: FieldMappings
+  /** When the item is itself a collection record (a Read Collection row), mark THAT record used after the save — a queue's "done" step. */
+  markSourceUsed?: boolean
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
   currentJobId?: string
@@ -6733,6 +6735,8 @@ export type CollectionReadData = {
   limit: number
   order: CollectionReadOrder
   textFormat: CollectionDigestFormat
+  /** Every record (default), only the ones not used yet, or only the used ones. */
+  usage?: CollectionUsage
   executionStatus?: "idle" | "running" | "completed" | "failed"
   errorMessage?: string
   currentJobId?: string
@@ -10566,6 +10570,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       limit: 50,
       order: "newest",
       textFormat: "headlines",
+      usage: "all",
     } as CollectionReadData,
   },
   {
@@ -10620,6 +10625,7 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       link: "",
       dedupeKey: "",
       fieldMappings: {},
+      markSourceUsed: false,
     } as CollectionWriteData,
   },
   // Components

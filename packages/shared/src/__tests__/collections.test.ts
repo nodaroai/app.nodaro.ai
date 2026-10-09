@@ -205,6 +205,16 @@ describe("ingestRecordFromJson", () => {
     expect(r.fields).toEqual({ slug: "Markets-Rally", confidence: 0.9, topic: "business" })
   })
 
+  it("reads a `mediaUrl` as a medium — its kind from `mediaKind`, else from the file's ending — and keeps both as fields too", () => {
+    const video = ingestRecordFromJson({ headline: "H", body: "B", mediaUrl: "https://cdn4.telesco.pe/file/a.mp4?token=1", mediaKind: "video" })
+    expect(video.media).toEqual([{ type: "video", url: "https://cdn4.telesco.pe/file/a.mp4?token=1" }])
+    expect(video.fields).toMatchObject({ mediaUrl: "https://cdn4.telesco.pe/file/a.mp4?token=1", mediaKind: "video" })
+    expect(ingestRecordFromJson({ text: "t", mediaUrl: "https://cdn.example.com/p.jpg", mediaKind: "photo" }).media).toEqual([{ type: "image", url: "https://cdn.example.com/p.jpg" }])
+    expect(ingestRecordFromJson({ text: "t", mediaUrl: "https://cdn.example.com/clip.webm" }).media).toEqual([{ type: "video", url: "https://cdn.example.com/clip.webm" }])
+    expect(ingestRecordFromJson({ text: "t", mediaUrl: "https://example.com/watch?v=1" }).media).toEqual([{ type: "link", url: "https://example.com/watch?v=1" }])
+    expect(ingestRecordFromJson({ text: "t", mediaUrl: "", mediaKind: "" }).media).toEqual([])
+  })
+
   it("a link that is not http(s) is not a link; a NUMERIC id is no key (each run numbers its items from 1), a named id is", () => {
     const r = ingestRecordFromJson({ url: "javascript:alert(1)", id: 7, text: "x" })
     expect(r.url).toBeNull()

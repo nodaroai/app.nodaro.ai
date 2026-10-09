@@ -2122,6 +2122,7 @@ Needs `assets:read`.
 | `limit` | integer |  | Default 50. From 1 to 100. |
 | `cursor` | string |  | next_cursor from the previous call. At most 200 characters. |
 | `format` | string |  | Default headlines. One of `headlines`, `full`. |
+| `usage` | string |  | all (default), unused — not used yet — or used. One of `all`, `unused`, `used`. |
 
 ## `recaption_character`
 

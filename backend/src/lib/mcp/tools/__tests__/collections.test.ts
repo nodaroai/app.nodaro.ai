@@ -132,9 +132,20 @@ describe("collection MCP tools", () => {
     expect(before - since).toBeGreaterThanOrEqual(48 * 3_600_000 - 1_000)
     expect(before - since).toBeLessThan(48 * 3_600_000 + 60_000)
     const text = JSON.stringify(res.content)
-    expect(text).toContain("1 of 12 records")
+    // The page's own count, never the collection's total (which counts the Trash too).
+    expect(text).toContain('\\"News\\" — 1 record since')
     expect(text).toContain("- Telegram turns ten · 2026-10-06 · https://t.me/telegram/441")
     expect(text).toContain('cursor \\"abc\\"')
+  })
+
+  it("read_collection passes `usage` through — never the default — so a queue reads only what is not used yet", async () => {
+    const server = buildServer()
+    const stub = stubApp()
+    registerCollectionTools({ server, session: session(["assets:read"]), fastify: stub.fastify })
+    expect((await callTool(server, "read_collection", { collection: "news", usage: "unused" })).isError).toBeFalsy()
+    expect(new URL(`http://x${stub.received.recordsUrl}`).searchParams.get("usage")).toBe("unused")
+    expect((await callTool(server, "read_collection", { collection: "news", usage: "all" })).isError).toBeFalsy()
+    expect(new URL(`http://x${stub.received.recordsUrl}`).searchParams.get("usage")).toBeNull()
   })
 
   it("read_collection by id reads that one collection (never the whole list), in full, and an empty window says so", async () => {

@@ -4816,10 +4816,24 @@ export async function listCollectionRecords(
   const qs = new URLSearchParams()
   if (params.q) qs.set("q", params.q)
   if (params.since) qs.set("since", params.since)
+  if (params.until) qs.set("until", params.until)
+  if (params.usage && params.usage !== "all") qs.set("usage", params.usage)
+  if (params.status && params.status !== "active") qs.set("status", params.status)
+  if (params.order && params.order !== "newest") qs.set("order", params.order)
   if (params.cursor) qs.set("cursor", params.cursor)
+  if (params.offset !== undefined) qs.set("offset", String(params.offset))
   if (params.limit) qs.set("limit", String(params.limit))
   const query = qs.toString()
   return apiJson(`/v1/collections/${encodeURIComponent(id)}/records${query ? `?${query}` : ""}`, { method: "GET", label: "apiErr.loadCollectionRecords" })
+}
+
+/** Mark a record used (or not used again) from the page: `PATCH /v1/collections/:id/records/:recordId`. */
+export async function setCollectionRecordUsed(id: string, recordId: string, used: boolean): Promise<import("@nodaro/shared").CollectionRecord> {
+  return apiJson(`/v1/collections/${encodeURIComponent(id)}/records/${encodeURIComponent(recordId)}`, {
+    method: "PATCH",
+    body: { used, source: { via: "ui" } },
+    label: "apiErr.updateCollectionRecord",
+  })
 }
 
 export async function addCollectionRecord(
@@ -4829,8 +4843,24 @@ export async function addCollectionRecord(
   return apiJson(`/v1/collections/${encodeURIComponent(id)}/records`, { body: { ...input, source: { via: "ui", ...input.source } }, label: "apiErr.addCollectionRecord" })
 }
 
+/** Move a record to the collection's Trash. */
 export async function deleteCollectionRecord(id: string, recordId: string): Promise<void> {
   await apiJson(`/v1/collections/${encodeURIComponent(id)}/records/${encodeURIComponent(recordId)}`, { method: "DELETE", label: "apiErr.deleteCollectionRecord" })
+}
+/** Delete a record that is already in the Trash, for good. */
+export async function deleteCollectionRecordForever(id: string, recordId: string): Promise<void> {
+  await apiJson(`/v1/collections/${encodeURIComponent(id)}/records/${encodeURIComponent(recordId)}/permanent`, { method: "DELETE", label: "apiErr.deleteCollectionRecord" })
+}
+/** Bring a record back from the Trash. */
+export async function restoreCollectionRecord(id: string, recordId: string): Promise<import("@nodaro/shared").CollectionRecord> {
+  return apiJson(`/v1/collections/${encodeURIComponent(id)}/records/${encodeURIComponent(recordId)}/restore`, { method: "POST", label: "apiErr.restoreCollectionRecord" })
+}
+/** Move many records to the Trash, or bring them back, in one call. */
+export async function bulkCollectionRecords(
+  id: string,
+  input: import("@nodaro/shared").BulkCollectionRecordsInput,
+): Promise<import("@nodaro/shared").BulkCollectionRecordsResult> {
+  return apiJson(`/v1/collections/${encodeURIComponent(id)}/records/bulk`, { method: "POST", body: input, label: "apiErr.updateCollectionRecords" })
 }
 
 /** The whole collection as a file (CSV or JSON), with the server's file name. */
@@ -8303,6 +8333,7 @@ export async function collectionReadApi(params: {
   limit?: number
   order?: import("@nodaro/shared").CollectionReadOrder
   textFormat?: import("@nodaro/shared").CollectionDigestFormat
+  usage?: import("@nodaro/shared").CollectionUsage
   nodeId?: string
 }): Promise<{ jobId: string; records: import("@nodaro/shared").CollectionRecord[]; text: string; count: number; since: string; collection: { id: string; name: string } }> {
   const body: Record<string, unknown> = { collectionId: params.collectionId }
@@ -8311,6 +8342,7 @@ export async function collectionReadApi(params: {
   if (params.limit !== undefined) body.limit = params.limit
   if (params.order) body.order = params.order
   if (params.textFormat) body.textFormat = params.textFormat
+  if (params.usage) body.usage = params.usage
   if (params.nodeId) body.nodeId = params.nodeId
   return apiJson("/v1/collection-read", { body, workflowId: true, label: "apiErr.collectionRead" })
 }
@@ -8378,12 +8410,14 @@ export async function collectionWriteApi(params: {
   link?: string
   dedupeKey?: string
   media?: ReadonlyArray<{ type: "image" | "video"; url: string }>
+  markSourceUsed?: boolean
   nodeId?: string
 }): Promise<{
   jobId: string
   record: import("@nodaro/shared").CollectionRecord
   outcome: import("@nodaro/shared").CollectionWriteOutcome
   evicted: number
+  markedUsed?: boolean
   collection: { id: string; name: string }
 }> {
   const body: Record<string, unknown> = { collectionId: params.collectionId }
@@ -8393,6 +8427,7 @@ export async function collectionWriteApi(params: {
   if (params.link) body.link = params.link
   if (params.dedupeKey) body.dedupeKey = params.dedupeKey
   if (params.media && params.media.length > 0) body.media = params.media
+  if (params.markSourceUsed) body.markSourceUsed = true
   if (params.nodeId) body.nodeId = params.nodeId
   return apiJson("/v1/collection-write", { body, workflowId: true, label: "apiErr.collectionWrite" })
 }
