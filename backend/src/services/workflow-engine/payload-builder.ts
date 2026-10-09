@@ -34,6 +34,7 @@ import { labelRefHintContext } from "./label-ref-hint-context.js"
 import type { CharacterDef, ConnectedReference, SceneData, ExtraRefInput, ExtraRefCharacterContext } from "@nodaro/shared"
 import type { CharacterMeta } from "@nodaro/prompts"
 import { resolveEntityImageCreditIdentifier } from "../../lib/entity-credit-identifier.js"
+import { resolveNormalizedImageGen } from "@nodaro/shared"
 import { backendHybridRoles } from "../../lib/reference-format.js"
 import { selectLoraRoutingForMentions } from "../../lib/character-lora.js"
 import { config } from "../../lib/config.js"
@@ -2511,23 +2512,6 @@ export function buildPayload(
     case "generate-image": {
       const provider = (data.provider as string) ?? defaultImageModel("general", data.aspectRatio as string | undefined)
       const settings = buildCtx?.settings
-      // Last-mile guard on the catalog-governed levers. The config panel snaps
-      // these when the provider changes, but that only runs when the panel is
-      // mounted — and `aspectRatio` / `provider` are BOTH MappableFields, so a
-      // FieldMapping can inject either at run time, after every UI guard is out
-      // of the picture. Normalizing here is the only place that covers that.
-      // Feeds the credit identifier too, so we bill for what we actually send.
-      const imageParams = normalizeModelInput(provider, {
-        aspectRatio: data.aspectRatio as string | undefined,
-        resolution: data.resolution as string | undefined,
-        quality: data.quality as string | undefined,
-      })
-      if (imageParams.adjustments.length > 0) {
-        console.warn(
-          `[payload-builder] ${node.id} (${provider}): ` +
-          imageParams.adjustments.map((a) => `${a.field} "${a.from}" → ${a.to ?? "removed"}`).join("; "),
-        )
-      }
 
       // Build a map of all available reference images by ID
       const refUrlMap = new Map<string, string>()
@@ -2802,36 +2786,53 @@ export function buildPayload(
           })
       const result = withImagePromptPolicy(rawImageResult)
 
+      // The model this job runs, its catalog-snapped levers and the credit id
+      // that prices them, from ONE call: the one /v1/generate-image makes, so a
+      // workflow run sends what a single-node run sends. With references
+      // attached it swaps a text-to-image model to its image-to-image sibling
+      // (the text-to-image endpoints take no image input) and snaps the levers
+      // against that sibling's own lists. It runs after assembly because the
+      // swap and the per-reference Flux 2 price (no metered true-up) key off the
+      // ASSEMBLED references actually sent. It is also the last-mile guard on
+      // the levers: the config panel snaps them only while it is mounted, and
+      // `aspectRatio` / `provider` are both MappableFields a FieldMapping can
+      // inject at run time. A LoRA run sends no reference, so it never swaps.
+      const imageParams = resolveNormalizedImageGen({
+        provider,
+        aspectRatio: data.aspectRatio,
+        resolution: data.resolution,
+        quality: data.quality,
+        renderingSpeed: data.renderingSpeed,
+        refCount: result.referenceImageUrls?.length ?? 0,
+        swapToI2i: !lora,
+      })
+      if (imageParams.adjustments.length > 0) {
+        console.warn(
+          `[payload-builder] ${node.id} (${imageParams.modelId}): ` +
+          imageParams.adjustments.map((a) => `${a.field} "${a.from}" → ${a.to ?? "removed"}`).join("; "),
+        )
+      }
+      const routedModel = imageParams.modelId === provider ? undefined : imageParams.modelId
+
       return {
         jobName: "generate-image",
         queueName: "video-generation",
-        modelIdentifier: lora
-          ? FLUX_LORA_CHARACTER_MODEL_ID
-          : resolveImageGenCreditIdentifier({
-              provider,
-              quality: imageParams.quality,
-              resolution: imageParams.resolution,
-              renderingSpeed: data.renderingSpeed as string | undefined,
-              // refCount = the assembled refs actually sent to the worker, and
-              // swapToI2i mirrors the route's T2I→I2I auto-swap when refs attach.
-              // Flux 2 bills per ref with NO metered true-up, so omitting these
-              // (the old 4-arg call) under-charged every Flux 2 workflow run.
-              refCount: result.referenceImageUrls?.length ?? 0,
-              swapToI2i: true,
-            }),
+        modelIdentifier: lora ? FLUX_LORA_CHARACTER_MODEL_ID : imageParams.identifier,
         payload: {
           jobId,
           prompt: result.prompt,
           // LoRA path emits zero refs — the trained LoRA + trigger word carry identity.
           referenceImageUrls: lora ? [] : result.referenceImageUrls,
           provider: effectiveProvider,
-          // Hand the synthetic model id to the Replicate provider when LoRA is
-          // active. Otherwise pass `undefined` so the worker falls back to
-          // `provider` for routing — `data.model` is a frontend DISPLAY name
-          // (e.g. "gemini-2.5-flash-image" for "nano-banana") and is NOT a
-          // valid provider/router model identifier. Matches the single-node
-          // route at `routes/generate-image.ts:288`.
-          model: lora ? FLUX_LORA_CHARACTER_MODEL_ID : undefined,
+          // The model the worker routes when it is not `provider`: the synthetic
+          // LoRA model, or the image-to-image sibling a reference swapped to (the
+          // model the single-node route sends). It rides `model`, not `provider`,
+          // because node-executor records this payload as the job's `input_data`,
+          // whose `provider` stays the model the user picked: "re-apply settings"
+          // writes it back onto the node, and no sibling is a valid Generate
+          // Image provider. Never `data.model` — that is a frontend DISPLAY name
+          // (e.g. "gemini-2.5-flash-image" for "nano-banana"), not a router id.
+          model: lora ? FLUX_LORA_CHARACTER_MODEL_ID : routedModel,
           aspectRatio: imageParams.aspectRatio,
           resolution: imageParams.resolution,
           quality: imageParams.quality,

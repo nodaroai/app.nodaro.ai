@@ -13,7 +13,7 @@ import { applySnappedLevers, withAdjustments } from "../lib/image-gen-normalize.
 import { insertJobIdempotent } from "../lib/insert-job.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
-import { IMAGE_GEN_PROVIDERS, T2I_TO_I2I_VARIANT, FLUX_LORA_CHARACTER_MODEL_ID, IMAGE_ASPECT_RATIO_VALUES, IMAGE_PROMPT_MAX, PROMPT_HARD_CEILING, resolveNormalizedImageGen } from "@nodaro/shared"
+import { IMAGE_GEN_PROVIDERS, FLUX_LORA_CHARACTER_MODEL_ID, IMAGE_ASPECT_RATIO_VALUES, IMAGE_PROMPT_MAX, PROMPT_HARD_CEILING, resolveNormalizedImageGen } from "@nodaro/shared"
 import { defaultImageModel } from "@nodaro/shared"
 import { assembleImageInput, REFERENCE_RULES, REFERENCE_RULES_MULTI_PERSON, type AssembleImageInput, type BuildImagePromptResult } from "@nodaro/prompts"
 import { connectedReferenceSchema, describedReferenceSchema, DESCRIBED_REFERENCE_LIMIT } from "../lib/connected-reference-schema.js"
@@ -26,27 +26,6 @@ import { formatZodError } from "../lib/zod-error.js"
 // The canonical definition now lives in `lib/connected-reference-schema.ts`
 // (shared with `generate-video` so both routes use the EXACT same mirror).
 export { connectedReferenceSchema }
-
-/**
- * If the user picked a T2I provider that has an i2i sibling AND reference images
- * are ATTACHED, transparently route to the i2i variant — the T2I endpoint
- * silently ignores ref URLs, while the i2i endpoint actually consumes them.
- *
- * The trigger is attached refs (`referenceImageUrls.length > 0`), NOT a prompt
- * marker: a plain prompt + a reference still edits, so any caller just sends
- * `referenceImageUrls` and generate-image honors them — no `{image:N}` mention /
- * "Use these references…" header required. Providers that already consume refs
- * natively in their T2I call (Replicate "Open" models, nano-banana) aren't in the
- * swap map and pass through unchanged.
- */
-function resolveEffectiveProvider(
-  provider: string | undefined,
-  referenceImageUrls: string[] | undefined,
-): string | undefined {
-  if (!provider) return provider
-  if (!referenceImageUrls?.length) return provider
-  return T2I_TO_I2I_VARIANT[provider] ?? provider
-}
 
 // `connectedReferenceSchema` now lives in `lib/connected-reference-schema.ts`
 // (imported + re-exported above) so `generate-video` shares the EXACT same
@@ -627,16 +606,6 @@ export async function generateImageRoutes(app: FastifyInstance) {
       effectiveNegativePrompt = _pp.negativePrompt || undefined
     }
 
-    // LoRA inference path bypasses provider auto-routing — the synthetic
-    // flux-lora-character provider always lands on Replicate with the trained
-    // version. Otherwise, auto-route T2I providers to their i2i sibling whenever
-    // reference images are attached (no prompt-mention required). The swap keys
-    // off the ASSEMBLED ref list so a structured-mode request with a wired
-    // character that has no @-mention (→ zero assembled refs) does NOT swap.
-    const effectiveProvider = resolvedLora
-      ? FLUX_LORA_CHARACTER_MODEL_ID
-      : resolveEffectiveProvider(provider, assembledRefs)
-
     // Determine model identifier for credit reservation (composite for variable pricing).
     // Must mirror the preHandler's identifier — flux-2-max bills per reference image,
     // so refCount drives the `:Nref` suffix the model_pricing row expects. We price
@@ -648,10 +617,10 @@ export async function generateImageRoutes(app: FastifyInstance) {
     // returns both the identifier AND the snapped levers, so the credits we
     // reserve and the parameters we send the provider come from ONE derivation.
     const normalized = resolveNormalizedImageGen({
-      // Pass the RAW provider — the shared helper applies the same T2I→I2I
-      // swap as `resolveEffectiveProvider` above, keyed on the assembled
-      // ref count, so this DEBIT matches the preHandler CHECK and the
-      // workflow orchestrator exactly.
+      // Pass the RAW provider — the shared helper decides the T2I→I2I swap
+      // (keyed on the assembled ref count) and its `modelId` is the model the
+      // job is sent to below, so the model sent, this DEBIT, the preHandler
+      // CHECK and the workflow orchestrator all come from one decision.
       provider,
       aspectRatio: rawAspectRatio,
       quality: rawQuality,
@@ -715,7 +684,16 @@ export async function generateImageRoutes(app: FastifyInstance) {
       // Otherwise the ASSEMBLED refs in structured mode, or the RAW flat refs
       // (preserved verbatim, incl. undefined) in the non-structured path.
       referenceImageUrls: resolvedLora ? [] : queueReferenceImageUrls,
-      provider: effectiveProvider,
+      // LoRA runs the synthetic flux-lora-character model (Replicate, trained
+      // version), bypassing auto-routing. Otherwise the model the levers were
+      // snapped and priced against: with references attached, a text-to-image
+      // model's image-to-image sibling, since the T2I endpoints take no image
+      // input. The trigger is the ASSEMBLED list — a plain prompt plus a
+      // reference still edits, no `{image:N}` mention needed, while a wired
+      // character with no @-mention contributes no ref and does not swap.
+      // Models that consume refs in their T2I call (nano-banana, the Replicate
+      // "Open" models) have no sibling and pass through unchanged.
+      provider: resolvedLora ? FLUX_LORA_CHARACTER_MODEL_ID : normalized.modelId,
       // Hand the synthetic flux-lora-character model id to the Replicate provider.
       model: resolvedLora ? FLUX_LORA_CHARACTER_MODEL_ID : undefined,
       // Read through `parsed.data`, NOT the `raw*` locals above: those still
