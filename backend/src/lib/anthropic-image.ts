@@ -66,7 +66,19 @@ const ANTHROPIC_NATIVE_LONG_EDGE = 1568
  *  format Anthropic does not accept (AVIF, HEIC, TIFF, BMP), downscales past a
  *  3.5 MB raw budget so the base64 payload clears Anthropic's 5 MB cap; falls
  *  back to URL pass-through on any error. The block it returns NEVER carries a
- *  media type outside {@link ANTHROPIC_IMAGE_MEDIA_TYPES}. */
+ *  media type outside {@link ANTHROPIC_IMAGE_MEDIA_TYPES}.
+ *
+ *  A base64 block also names the URL it was fetched from (`sourceUrl`) when the
+ *  original is in one of the formats sent verbatim — including when it was
+ *  only downscaled, which the block then says (`downscaled: true`) so a lane
+ *  can keep preferring the smaller copy. The bytes are for the lanes that
+ *  carry bytes, and a lane that can carry an image only as a URL may send the
+ *  original instead (KIE's chat-completions and responses lanes —
+ *  `kieImageUrl` in llm-client.ts decides when, and whether KIE can reach
+ *  that URL). An original converted
+ *  from another format (AVIF, HEIC, TIFF, BMP) is not named: its URL would hand
+ *  those lanes a format they may not read, so the converted JPEG — downscaled,
+ *  so small — is the only form offered. */
 export async function prefetchAsBase64(url: string): Promise<LlmContentBlock> {
   try {
     const r = await safeFetch(url, { timeoutMs: 30_000 })
@@ -75,14 +87,17 @@ export async function prefetchAsBase64(url: string): Promise<LlmContentBlock> {
     const buf = Buffer.from(await r.arrayBuffer())
     const mediaType =
       (r.headers.get("content-type") ?? "image/jpeg").split(";")[0].trim()
+    // One rule for both questions: may these bytes go verbatim, and may the
+    // original URL stand in for whatever bytes this returns?
+    const readableOriginal = ANTHROPIC_IMAGE_MEDIA_TYPES.has(mediaType)
 
     // Small enough to send verbatim — preserve the original encoding, but only
     // when Anthropic can read it. An AVIF upload sent verbatim is a 400 on the
     // whole request ("The file format is invalid or unsupported"), so an
     // unsupported format falls through to the re-encode below regardless of
     // size.
-    if (buf.byteLength <= ANTHROPIC_B64_RAW_BUDGET && ANTHROPIC_IMAGE_MEDIA_TYPES.has(mediaType)) {
-      return { type: "image_base64", mediaType, data: buf.toString("base64") }
+    if (buf.byteLength <= ANTHROPIC_B64_RAW_BUDGET && readableOriginal) {
+      return { type: "image_base64", mediaType, data: buf.toString("base64"), sourceUrl: url }
     }
 
     // Oversized or unreadable-by-Claude: downscale to the model's native long edge and re-encode as JPEG
@@ -98,7 +113,15 @@ export async function prefetchAsBase64(url: string): Promise<LlmContentBlock> {
       .jpeg({ quality: 90 })
       .toBuffer()
     if (jpeg.byteLength <= ANTHROPIC_B64_RAW_BUDGET) {
-      return { type: "image_base64", mediaType: "image/jpeg", data: jpeg.toString("base64") }
+      return {
+        type: "image_base64",
+        mediaType: "image/jpeg",
+        data: jpeg.toString("base64"),
+        // Re-encoded for size → the original still stands in, marked as larger
+        // than these bytes. Re-encoded for format → it does not (see the doc
+        // above).
+        ...(readableOriginal ? { sourceUrl: url, downscaled: true } : {}),
+      }
     }
     // Pathologically dense even after downscale — let Claude fetch the URL itself
     // (no base64 size cap on URL sources) rather than send an oversized payload.

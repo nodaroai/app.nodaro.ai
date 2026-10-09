@@ -11,7 +11,7 @@
 import type Anthropic from "@anthropic-ai/sdk"
 import { config } from "./config.js"
 import { describeEmptyCapability, type ProviderKeyName } from "../providers/provider-keys.js"
-import { getLlmModel, LLM_FEATURE_DEFAULTS, effectiveReasoningEffort } from "@nodaro/shared"
+import { getLlmModel, LLM_FEATURE_DEFAULTS, effectiveReasoningEffort, isLocalOrPrivateHostname } from "@nodaro/shared"
 import { raiseToReasoningFloor } from "./llm-node-output-cap.js"
 import type { LlmModelDef, LlmFeature, LlmReasoningEffort, LlmVendor } from "@nodaro/shared"
 import { calculateLlmCost, type LlmServingLane } from "./pricing/llm-cost.js"
@@ -28,6 +28,8 @@ import {
   type ReplyEnd,
 } from "./llm-errors.js"
 import { KIE_API_BASE } from "../providers/kie/client.js"
+import { isUnroutableMediaUrl } from "./media-portability.js"
+import { isOwnMediaUrl } from "./fetch-own-media.js"
 import { z, type ZodType } from "zod"
 import { extractJsonFromAIResponse, extractKieToolCallInput } from "./json-utils.js"
 import { anthropicStrictToolSchema, restrictObjectSchemas } from "./json-schema-strict.js"
@@ -87,7 +89,33 @@ const KIE_CLAUDE_TOOLS_VERIFIED = true
 export type LlmContentBlock =
   | { type: "text"; text: string }
   | { type: "image"; url: string }
-  | { type: "image_base64"; mediaType: string; data: string }
+  | {
+      type: "image_base64"
+      mediaType: string
+      data: string
+      /**
+       * The URL these bytes were fetched from, when they came from one — the
+       * original image, even when `data` is a downscaled copy of it. Left
+       * unset when `data` was converted from a format a URL-only lane may not
+       * read (AVIF, HEIC, TIFF, BMP — see `prefetchAsBase64`).
+       *
+       * The lanes that can carry an image only as a URL (KIE chat-completions
+       * and responses) may send this instead of a `data:` URL — always for our
+       * own media host, for any other public host only once the data URL is
+       * too large (`kieImageUrl`): KIE refuses a large inline data URL and
+       * fetches an https one itself. Every lane that carries bytes (Anthropic,
+       * direct Gemini) ignores it. Absent → the bytes are the only form there
+       * is.
+       */
+      sourceUrl?: string
+      /**
+       * True when `data` is a smaller re-encode of the image at `sourceUrl`
+       * (downscaled and/or recompressed), not its bytes verbatim. The original
+       * may then be far larger than what is in hand, so `kieImageUrl` sends
+       * these bytes inline whenever they fit, wherever the original lives.
+       */
+      downscaled?: boolean
+    }
   | {
       type: "video"
       url: string
@@ -1167,6 +1195,71 @@ const INLINE_VIDEO_LANE_ERROR = (lane: string) =>
   `llm-client: the ${lane} lane cannot carry inline video bytes (video_base64) — ` +
   `pin requireLane: "direct" on a model that declares a directGeminiModel`
 
+/**
+ * The longest `data:` URL sent to KIE's OpenAI-shaped lanes for an image that
+ * sits on a public host other than ours; past it, the image goes by its URL.
+ *
+ * KIE refuses a large inline data URL — "Inline data URL is too large. Upload
+ * the file and pass an HTTP(S) URL instead." — and does not document where:
+ * the model pages (docs.kie.ai/market/gemini/gemini-3-8-flash-openai.md and
+ * its siblings) describe only the `image_url` shape. The one observation is a
+ * refusal of a 2,676,538-character data URL (a 2 MB PNG) on 2026-10-08. That
+ * bounds the limit from above and says nothing about how far below it the
+ * limit sits — or whether it holds still — so this stays well under it:
+ * roughly 1.1 MB of image, about 56% of the refused size.
+ */
+export const KIE_INLINE_DATA_URL_MAX_CHARS = 1_500_000
+
+/**
+ * What KIE's OpenAI-shaped lanes (chat-completions, responses) send as the
+ * image URL of an `image_base64` block, by where its source lives:
+ *
+ *  - A DOWNSCALED copy (`downscaled`) whose data URL is within
+ *    {@link KIE_INLINE_DATA_URL_MAX_CHARS}: the bytes, wherever the original
+ *    lives. The resized copy is what this lane always sent; the original may
+ *    be far larger (KIE documents no image-size limit for this lane), so it is
+ *    sent only when the copy cannot travel inline — then the rules below apply.
+ *  - OUR media host (`isOwnMediaUrl` — the configured CDN, its fallback
+ *    domain, or this install's public-storage subtree): the URL, always. KIE
+ *    fetches our host itself, as it already does for every plain `image`
+ *    block, and a URL is never refused for size.
+ *  - Any OTHER host a third party can fetch: the bytes, while their data URL
+ *    is within {@link KIE_INLINE_DATA_URL_MAX_CHARS}. Some hosts refuse a
+ *    provider's own fetch (the reason these images are prefetched at all), and
+ *    the proxied lane can answer about media it never received, so the bytes
+ *    stay the default wherever they fit. Past the limit the data URL would be
+ *    refused outright, so the URL is the only form left with a chance.
+ *  - A host KIE cannot reach, or no source at all: the bytes, whatever the
+ *    size. Our own storage is in this case too when it sits behind localhost
+ *    on a self-host install.
+ *
+ * "A third party can fetch it" = https AND two existing host rules, because
+ * each misses a spelling the other catches: `isUnroutableMediaUrl` (the
+ * workflow-portability rule for "could another host reach this" — `.local`,
+ * `.internal`, dot-less container names, the private ranges) and
+ * `isLocalOrPrivateHostname` (the SSRF rule — `.localhost` names, IPv4-mapped
+ * loopback, reserved ranges).
+ */
+function kieImageUrl(b: Extract<LlmContentBlock, { type: "image_base64" }>): string {
+  const dataUrl = `data:${b.mediaType};base64,${b.data}`
+  const source = b.sourceUrl
+  if (source === undefined || !isThirdPartyFetchable(source)) return dataUrl
+  const fitsInline = dataUrl.length <= KIE_INLINE_DATA_URL_MAX_CHARS
+  if (b.downscaled === true && fitsInline) return dataUrl
+  if (isOwnMediaUrl(source)) return source
+  return fitsInline ? dataUrl : source
+}
+
+function isThirdPartyFetchable(url: string): boolean {
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    return false
+  }
+  return parsed.protocol === "https:" && !isUnroutableMediaUrl(url) && !isLocalOrPrivateHostname(parsed.hostname)
+}
+
 function buildChatCompletionsMessages(req: LlmRequest): Array<Record<string, unknown>> {
   const msgs: Array<Record<string, unknown>> = []
   if (req.system) {
@@ -1178,7 +1271,7 @@ function buildChatCompletionsMessages(req: LlmRequest): Array<Record<string, unk
     } else {
       const parts = m.content.map((b) => {
         if (b.type === "text") return { type: "text", text: b.text }
-        if (b.type === "image_base64") return { type: "image_url", image_url: { url: `data:${b.mediaType};base64,${b.data}` } }
+        if (b.type === "image_base64") return { type: "image_url", image_url: { url: kieImageUrl(b) } }
         if (b.type === "image") return { type: "image_url", image_url: { url: b.url } }
         // KIE's OpenAI-compat chat-completions proxy forwards ONLY `image_url`
         // content parts and SILENTLY drops `video_url`/`audio_url` (HTTP 200, no
@@ -1318,7 +1411,8 @@ function buildResponsesInput(req: LlmRequest): Array<Record<string, unknown>> {
     } else {
       const parts = m.content.map((b) => {
         if (b.type === "text") return { type: "input_text", text: b.text }
-        if (b.type === "image_base64") return { type: "input_image", image_url: `data:${b.mediaType};base64,${b.data}` }
+        // The same URL-only image channel as chat-completions, so the same rule.
+        if (b.type === "image_base64") return { type: "input_image", image_url: kieImageUrl(b) }
         if (b.type === "image") return { type: "input_image", image_url: b.url }
         if (b.type === "video" || b.type === "audio") {
           throw new Error(`GPT responses API does not support ${b.type} input — pick a Gemini model for video/audio refs.`)

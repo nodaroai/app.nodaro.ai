@@ -53,6 +53,19 @@ describe("pure blocks need no network at all", () => {
     expect(part).toEqual({ inlineData: { mimeType: "image/png", data: "QUJD" } })
     expect(safeFetch).not.toHaveBeenCalled()
   })
+
+  // The source URL is for lanes that can only carry a URL. This one carries
+  // the bytes it was handed and never goes back to the network for them.
+  it("still inlines image_base64 when the block also names its source URL", async () => {
+    const part = await blockToGeminiPart(fakeAi(), {
+      type: "image_base64",
+      mediaType: "image/png",
+      data: "QUJD",
+      sourceUrl: "https://cdn.example/uploads/portrait.png",
+    })
+    expect(part).toEqual({ inlineData: { mimeType: "image/png", data: "QUJD" } })
+    expect(safeFetch).not.toHaveBeenCalled()
+  })
 })
 
 describe("small assets inline", () => {
