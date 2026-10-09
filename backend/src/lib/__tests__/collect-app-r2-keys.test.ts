@@ -37,9 +37,10 @@ vi.mock("../supabase.js", () => {
   return { supabase: { from } }
 })
 
-vi.mock("../../ee/billing/cleanup-service.js", () => ({
-  r2KeyFromUrl: (url: string) => (url.startsWith("https://r2.test/") ? url.slice("https://r2.test/".length) : null),
-}))
+vi.mock("../config.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../config.js")>()
+  return { ...actual, config: { ...actual.config, R2_PUBLIC_URL: "https://r2.test" } }
+})
 
 import { collectAppR2Keys } from "../collect-app-r2-keys.js"
 import { resetFinalExecutionColumnForTests } from "../app-run-final-column.js"

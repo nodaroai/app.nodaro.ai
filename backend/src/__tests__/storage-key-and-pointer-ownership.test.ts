@@ -352,9 +352,13 @@ describe("every read through a pointer asks for the owner's rows", () => {
  */
 const SERVER_MADE_KEYS: Readonly<Record<string, string>> = {
   "backend/src/lib/storage.ts": "defines the deleters",
+  "backend/src/lib/storage-delete.ts":
+    "the delete funnel (decided 2026-10-08): deletes exactly the keys its callers pass and records what failed; every caller is in this census itself",
   "backend/src/lib/private-plugins/types.ts": "declares the plugin toolkit's deleter type; deletes nothing",
   "backend/src/ee/routes/admin.ts": "the app expunge deletes collectAppR2Keys' answer, which asks key-ownership itself",
   "backend/src/lib/job-policy-outputs.ts": "deletes only keys in the blocked job's own key family (isOwnedObjectKey)",
+  "backend/src/lib/discard-job-copies.ts":
+    "deletes only the copies the failed run itself just wrote, in its own job's key family (isOwnedObjectKey); never a key from a row",
   "backend/src/lib/workflow-delete.ts": "recast_audio_bases rows are service-role-only (334)",
   "backend/src/lib/private-plugins/toolkit.ts":
     "hands a plugin the relay-fenced deleter, NOT ownership-fenced. The cloud-plugins callers (checked 2026-10-07) delete keys they wrote themselves or read from their own server-written state: checkpoints, staged temp objects, recast fork copies and superseded takes. A host-side fence needs the calling job in the toolkit contract; open decision",
@@ -370,13 +374,17 @@ const SERVER_MADE_KEYS: Readonly<Record<string, string>> = {
   "backend/src/providers/video/edl-timeline.ts": "the render's own checkpoints",
   "backend/src/lib/speaker-frames-cache-sweep.ts":
     "lists the plugin-written speaker-frames-cache/ checkpoint prefix by age; no key comes from a row",
+  "backend/src/lib/job-scratch.ts":
+    "lists the job's own server-written scratch folder (tmp/provider-input/<jobId>/, decided 2026-10-09); no key comes from a row",
+  "backend/src/lib/job-scratch-sweep.ts":
+    "lists the server-written scratch root by age (decided 2026-10-09, round 3); no key comes from a row",
 }
 
 describe("every storage deleter asks whose object it is", () => {
   const deleters = sourceFiles(BACKEND_SRC)
     .map((file) => ({ file: relative(REPO_ROOT, file), src: readFileSync(file, "utf8") }))
     .filter(({ src }) =>
-      /\b(batchDeleteFromR2|deleteFromR2)\s*\(|\bDeleteObjects?Command\b|\.delete\(\s*objectKey\b/.test(src),
+      /\b(batchDeleteFromR2|deleteFromR2|deleteKeysRecordingFailures|deleteKeyRecordingFailure)\s*\(|\bDeleteObjects?Command\b|\.delete\(\s*objectKey\b/.test(src),
     )
 
   it("finds the deleters (the census is not empty)", () => {

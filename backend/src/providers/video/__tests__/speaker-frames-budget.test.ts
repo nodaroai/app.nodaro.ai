@@ -29,6 +29,7 @@ import {
 import {
   DEFAULT_FFMPEG_TIMEOUT_MS,
   DOWNLOAD_MAX_MS,
+  DOWNLOAD_TIMEOUT_MS,
   FFMPEG_KILL_GRACE_MS,
   FFMPEG_SLOT_BACKSTOP_MS,
   FFPROBE_TIMEOUT_MS,
@@ -37,6 +38,10 @@ import {
   proxySpanProbeTimeoutMs,
 } from "../ffmpeg-timeouts.js"
 import {
+  SPEAKER_FRAMES_BURST_CAPTURE_TIMEOUT_MS,
+  SPEAKER_FRAMES_BURST_FPS,
+  SPEAKER_FRAMES_BURST_MS,
+  SPEAKER_FRAMES_BURSTS_PER_SPEAKER,
   SPEAKER_FRAMES_DESCRIBED_EDGE_SAMPLES,
   SPEAKER_FRAMES_HOLD_OVERRUN_MS,
   SPEAKER_FRAMES_MAX_SOURCE_MS,
@@ -44,6 +49,8 @@ import {
   SPEAKER_FRAMES_RUN_SLACK_MS,
   SPEAKER_FRAMES_TAIL_MS_PER_BOX,
   speakerFramesBudgetBreakdown,
+  speakerFramesBurstBudgetMs,
+  speakerFramesTranscriptSpeakers,
   speakerFramesDescriptorSpanBudgetMs,
   speakerFramesJobBudgetMs,
   speakerFramesProxySpanBudgetMs,
@@ -154,13 +161,82 @@ describe("the terms — each one a kill ceiling the handler's steps run under", 
   it("the run itself gets one default ffmpeg ceiling of slack (the session load, the bookkeeping)", () => {
     expect(SPEAKER_FRAMES_RUN_SLACK_MS).toBe(DEFAULT_FFMPEG_TIMEOUT_MS)
   })
+
+  it("the attribution bursts (P3.5): a burst proxy, its download, and per burst a span at its own ceilings plus one capture", () => {
+    // Plan rung 3: 1.5 s at 15 fps around a turn's middle, at most 20 turns per speaker.
+    expect(SPEAKER_FRAMES_BURST_FPS).toBe(15)
+    expect(SPEAKER_FRAMES_BURST_MS).toBe(1500)
+    expect(SPEAKER_FRAMES_BURSTS_PER_SPEAKER).toBe(20)
+    expect(SPEAKER_FRAMES_BURST_CAPTURE_TIMEOUT_MS).toBe(120_000)
+    expect(speakerFramesBurstBudgetMs(0)).toBe(0)
+    for (const n of [1, 40, 120]) {
+      expect(speakerFramesBurstBudgetMs(n)).toBe(
+        SPEAKER_FRAMES_PROXY_FIXED_MS + DOWNLOAD_TIMEOUT_MS
+        + n * (speakerFramesProxySpanBudgetMs(SPEAKER_FRAMES_BURST_MS) + SPEAKER_FRAMES_BURST_CAPTURE_TIMEOUT_MS + SPEAKER_FRAMES_HOLD_OVERRUN_MS),
+      )
+    }
+    // A burst span is charged the encoder's floor twice, like any short span: minutes each.
+    expect(speakerFramesProxySpanBudgetMs(SPEAKER_FRAMES_BURST_MS)).toBeLessThan(12 * MIN)
+  })
+})
+
+describe("the bursts read off the payload (P3.5)", () => {
+  const words = (speakers: string[], n = 50) => Array.from({ length: n }, (_, i) => ({ text: "w", startMs: i * 3000, endMs: i * 3000 + 2500, speaker: speakers[i % speakers.length] }))
+  const long = edl([[0, 60 * MIN]], ONE_CAM)
+
+  it("counts the transcript's distinct speaker labels (object or JSON string); a slimmed row reads its counts", () => {
+    expect(speakerFramesTranscriptSpeakers({ transcript: { words: words(["Host", "Guest", "Host"]) } })).toBe(2)
+    expect(speakerFramesTranscriptSpeakers({ transcript: JSON.stringify({ words: words(["A", "B", "C"]) }) })).toBe(3)
+    expect(speakerFramesTranscriptSpeakers({ transcript: { words: [{ text: "x", startMs: 0, endMs: 1 }] } })).toBe(0)
+    expect(speakerFramesTranscriptSpeakers({ transcriptSpeakerCount: 4, transcriptWordCount: 9000 })).toBe(4)
+    expect(speakerFramesTranscriptSpeakers({ transcriptWordCount: 3 })).toBe(3)
+    // a recorded 0 (a transcript without speaker labels) is a count, not "not recorded"
+    expect(speakerFramesTranscriptSpeakers({ transcriptSpeakerCount: 0, transcriptWordCount: 9000 })).toBe(0)
+    expect(speakerFramesTranscriptSpeakers({})).toBe(0)
+    expect(speakerFramesTranscriptSpeakers({ transcript: "{not json" })).toBe(0)
+  })
+
+  it("no bursts without a transcript of two or more speakers (rung 3 needs someone to tell apart)", () => {
+    expect(speakerFramesBudgetBreakdown({ edl: long })!.burstMs).toBe(0)
+    expect(speakerFramesBudgetBreakdown({ edl: long, transcript: { words: words(["Host"]) } })!.burstMs).toBe(0)
+  })
+
+  it("20 per speaker per source, every video source, a bare video included", () => {
+    const two = speakerFramesBudgetBreakdown({ edl: edl([[0, 60 * MIN]]), transcript: { words: words(["Host", "Guest"]) } })!
+    expect(two.sources.map((s) => s.bursts)).toEqual([40, 40])
+    expect(two.burstMs).toBe(2 * speakerFramesBurstBudgetMs(40))
+    const bare = speakerFramesBudgetBreakdown({ videoUrl: "https://f.test/v.mp4", transcript: { words: words(["A", "B", "C"]) } })!
+    expect(bare.sources[0]!.bursts).toBe(60)
+  })
+
+  it("never more bursts than disjoint 1.5 s windows fit in the source's spans", () => {
+    // 3 s kept, padded to 7 s: at most 5 windows, whatever the speaker count.
+    const short = speakerFramesBudgetBreakdown({ edl: edl([[10_000, 13_000]], ONE_CAM), transcript: { words: words(["A", "B", "C", "D"]) } })!
+    expect(short.sources[0]!.bursts).toBe(Math.floor((7_000 + 1_000) / 1500))
+  })
+
+  it("a jobs row whose transcript was slimmed is charged the same as the queue payload it came from", () => {
+    const queued = { edl: long, transcript: { words: words(["Host", "Guest"]) } }
+    const row = { edl: long, transcriptWordCount: 50, transcriptSpeakerCount: 2, type: "speaker-frames" }
+    expect(speakerFramesJobBudgetMs(row)).toBe(speakerFramesJobBudgetMs(queued))
+    // A row from before the count was recorded: its word count bounds its speakers.
+    expect(speakerFramesJobBudgetMs({ edl: long, transcriptWordCount: 50 })!).toBeGreaterThanOrEqual(speakerFramesJobBudgetMs(queued)!)
+  })
+
+  it("a row whose transcript had no speaker labels is charged no burst, like its queued payload", () => {
+    const unlabelled = Array.from({ length: 20_000 }, (_, i) => ({ text: "w", startMs: i * 150, endMs: i * 150 + 100 }))
+    const queued = { edl: long, transcript: { words: unlabelled } }
+    const row = { edl: long, transcriptWordCount: 20_000, transcriptSpeakerCount: 0, type: "speaker-frames" }
+    expect(speakerFramesBudgetBreakdown(row)!.burstMs).toBe(0)
+    expect(speakerFramesJobBudgetMs(row)).toBe(speakerFramesJobBudgetMs(queued))
+  })
 })
 
 describe("what the leaf reads off the payload", () => {
   it("a bare video is charged at the 180-minute source cap, one whole-source span", () => {
     expect(SPEAKER_FRAMES_MAX_SOURCE_MS).toBe(180 * MIN)
     const b = speakerFramesBudgetBreakdown({ videoUrl: "https://f.test/episode.mp4" })!
-    expect(b.sources).toEqual([{ spans: 1, frames: 180 * 60 * 2 + 1, spanLengthsMs: null }])
+    expect(b.sources).toEqual([{ spans: 1, frames: 180 * 60 * 2 + 1, spanLengthsMs: null, bursts: 0 }])
     expect(b.windows).toBe(Math.ceil((180 * 60 * 2 + 1) / FACE_DETECT_MAX_FRAMES_PER_CALL))
     expect(b.descriptorMs).toBe(speakerFramesDescriptorSpanBudgetMs(undefined))
   })
@@ -168,10 +244,10 @@ describe("what the leaf reads off the payload", () => {
   it("an EDL: every video source samples the kept spans plus the margins; spans closer than the margins merge", () => {
     // 20 s kept, 6 s cut: padded by 2 s each side the gaps close to 2 s, so they stay apart.
     const apart = speakerFramesBudgetBreakdown({ edl: edl([[0, 20_000], [26_000, 46_000]], ONE_CAM) })!
-    expect(apart.sources).toEqual([{ spans: 2, frames: 2 * (Math.ceil((24_000 * 2) / 1000) + 1), spanLengthsMs: [24_000, 24_000] }])
+    expect(apart.sources).toEqual([{ spans: 2, frames: 2 * (Math.ceil((24_000 * 2) / 1000) + 1), spanLengthsMs: [24_000, 24_000], bursts: 0 }])
     // 20 s kept, 4 s cut: padded, they touch, and the proxy encodes them as one.
     const merged = speakerFramesBudgetBreakdown({ edl: edl([[10_000, 30_000], [34_000, 54_000]], ONE_CAM) })!
-    expect(merged.sources).toEqual([{ spans: 1, frames: Math.ceil((48_000 * 2) / 1000) + 1, spanLengthsMs: [48_000] }])
+    expect(merged.sources).toEqual([{ spans: 1, frames: Math.ceil((48_000 * 2) / 1000) + 1, spanLengthsMs: [48_000], bursts: 0 }])
   })
 
   it("two video sources are two proxies; an audio-only source is none", () => {
@@ -270,6 +346,10 @@ describe("worked examples", () => {
     // 6 cameras × 180 min: 6 × (1 span, 21,609 frames, 19 windows).
     const six = Array.from({ length: 6 }, (_, i) => ({ id: `c${i}`, url: `https://f.test/c${i}.mp4`, kind: "video" }))
     expect(hours({ edl: edl([[0, 180 * MIN]], six) })).toBe(36.66)
+    // P3.5's bursts with a two-speaker transcript: 40 per source, each a 1.5 s span (two encoder floors) and a 2-min capture.
+    const two = { transcript: { words: [{ text: "a", startMs: 0, endMs: 3000, speaker: "Host" }, { text: "b", startMs: 3000, endMs: 6000, speaker: "Guest" }] } }
+    expect(Math.round((speakerFramesBurstBudgetMs(40) / H) * 100) / 100).toBe(10.85)
+    expect(hours({ edl: tighten(90, 20_000, 6_000, ONE_CAM), ...two })).toBe(Math.round((speakerFramesJobBudgetMs({ edl: tighten(90, 20_000, 6_000, ONE_CAM) })! / H + speakerFramesBurstBudgetMs(40) / H) * 100) / 100)
   })
 })
 
@@ -280,7 +360,7 @@ describe("worked examples", () => {
 // step's kill ceiling. The leaf must never be below it, whatever the edit.
 describe("the leaf is an upper bound on the handler's step ceilings", () => {
   const overrun = FFMPEG_KILL_GRACE_MS + FFMPEG_SLOT_BACKSTOP_MS
-  function modelMs(edls: readonly Edl[]): number {
+  function modelMs(edls: readonly Edl[], speakers = 0): number {
     // Group as the handler may: by source URL (P3-5 resolves sources by url).
     const byUrl = new Map<string, ProxySpan[]>()
     for (const e of edls) {
@@ -299,7 +379,23 @@ describe("the leaf is an upper bound on the handler's step ceilings", () => {
       const spans = normalizeProxySpans(padSpans(kept, DETECTION_SPAN_MARGIN_MS), DETECTION_PROXY.fps)
       const frames = spans.reduce((n, sp) => n + Math.ceil(((sp.endMs - sp.startMs) * DETECTION_PROXY.fps) / 1000), 0)
       ms += sourceStepsMs(spans.map((sp) => sp.endMs - sp.startMs), frames)
+      // The bursts: each a disjoint 1.5 s window inside one span-map row (a row holds its span's frames).
+      const rowsMs = spans.map((sp) => Math.ceil(((sp.endMs - sp.startMs) * DETECTION_PROXY.fps) / 1000) * (1000 / DETECTION_PROXY.fps))
+      const fit = rowsMs.reduce((n, len) => n + Math.floor(len / SPEAKER_FRAMES_BURST_MS), 0)
+      ms += burstStepsMs(speakers >= 2 ? Math.min(20 * speakers, fit) : 0)
     }
+    return ms
+  }
+
+  /** One source's bursts at their ceilings: the burst proxy (fetch the original, probe it, per window an
+   *  encode and its frame times, the join and its two probes), its download, one capture per window. */
+  function burstStepsMs(bursts: number): number {
+    if (bursts === 0) return 0
+    let ms = DOWNLOAD_MAX_MS + FFPROBE_TIMEOUT_MS
+    ms += bursts * (proxySpanEncodeTimeoutMs(SPEAKER_FRAMES_BURST_MS) + overrun + proxySpanProbeTimeoutMs(SPEAKER_FRAMES_BURST_MS))
+    ms += MEDIA_PROXY_FFMPEG_TIMEOUT_MS + overrun + DEFAULT_FFMPEG_TIMEOUT_MS + FFPROBE_TIMEOUT_MS
+    ms += DOWNLOAD_TIMEOUT_MS
+    ms += bursts * (SPEAKER_FRAMES_BURST_CAPTURE_TIMEOUT_MS + overrun)
     return ms
   }
 
@@ -359,8 +455,10 @@ describe("the leaf is an upper bound on the handler's step ceilings", () => {
         }
         edls.push(edl(spans, sources))
       }
-      const payload = clips === 1 ? { edl: edls[0] } : { edl: edls }
-      expect(speakerFramesJobBudgetMs(payload)!, `trial ${trial}`).toBeGreaterThanOrEqual(modelMs(edls))
+      const speakers = Math.floor(r() * 4)
+      const words = Array.from({ length: 60 }, (_, i) => ({ text: "w", startMs: i * 2500, endMs: i * 2500 + 2400, speaker: `S${i % Math.max(1, speakers)}` }))
+      const payload = { ...(clips === 1 ? { edl: edls[0] } : { edl: edls }), ...(speakers > 0 ? { transcript: { words } } : {}) }
+      expect(speakerFramesJobBudgetMs(payload)!, `trial ${trial}`).toBeGreaterThanOrEqual(modelMs(edls, speakers))
     }
   })
 

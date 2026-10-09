@@ -1308,6 +1308,7 @@ export const ko: ChromeDict = {
   "cfgshared.advancedUnavailable": "고급 모드는 Gemini 및 Claude 모델에서 사용할 수 있습니다. 사용하려면 모델을 변경하세요.",
   "cfgshared.advancedModeHint": "이 모델을 공급자에서 직접 실행해 온도, 출력 길이, 추론 깊이를 조절합니다. 비용은 한 단계 위 크레딧 등급으로 청구되며, 프리미엄 모델은 직접 실행 요금이 적용됩니다.",
   "cfgshared.effortRunsDirect": "Claude 모델에서 추론 강도를 선택하면 Anthropic 자체 API에서 실행되며(강도가 적용되는 유일한 경로) 한 단계 위 등급으로 청구됩니다.",
+  "cfgshared.effortRunsDirectByDefault": "이 모델은 항상 추론 강도를 적용해 실행되므로(다른 강도를 고르지 않으면 높음) 언제나 Anthropic 자체 API(강도가 적용되는 유일한 경로)에서 실행되며 한 단계 위 등급으로 청구됩니다.",
   "cfgshared.structuredOutputTempWarn": "이 노드는 모델에 구조화된 출력을 요청합니다. 약 0.5를 넘으면 형식이 깨지기 시작합니다.",
   "cfgshared.maxTokens": "최대 토큰 수",
   "cfgshared.generateWithAi": "AI로 생성",

@@ -1,5 +1,6 @@
 import { supabase } from "../../../lib/supabase.js"
-import { listObjectsByPrefix, batchDeleteFromR2, copyR2ObjectToPrefix } from "../../../lib/storage.js"
+import { listObjectsByPrefix, copyR2ObjectToPrefix } from "../../../lib/storage.js"
+import { deleteKeysRecordingFailures } from "../../../lib/storage-delete.js"
 import { refundStorage } from "../../../utils/file-validation.js"
 import { COMMUNITY_ENTITY_ADAPTERS, type EntityType } from "../../lib/community-entity-adapters.js"
 
@@ -114,7 +115,9 @@ export async function purgeCommunityListingBlobs(listingId: string): Promise<voi
   const claimed = (data ?? []) as Array<{ published_bytes: number; creator_id: string }>
   if (claimed.length === 0) return
   const keys = await listObjectsByPrefix(`community/${listingId}/`)
-  if (keys.length > 0) await batchDeleteFromR2(keys)
+  // The listing is claimed once (r2_assets_purged_at), so a key storage fails
+  // to delete is recorded for the retry pass rather than left behind.
+  if (keys.length > 0) await deleteKeysRecordingFailures(keys, "community")
   const row = claimed[0]!
   if (row.published_bytes > 0) await refundStorage(row.creator_id, row.published_bytes)
 }

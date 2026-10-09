@@ -107,7 +107,10 @@ export async function imageOverlayPlacementRoutes(app: FastifyInstance) {
           if (res.ok) {
             const buf = Buffer.from(await res.arrayBuffer())
             const mediaType = (res.headers.get("content-type") ?? "image/jpeg").split(";")[0].trim()
-            imageBlock = { type: "image_base64", mediaType, data: buf.toString("base64") }
+            // The bytes go verbatim, so the URL serves exactly them — a lane that
+            // carries images only as URLs may send that instead (`kieImageUrl`
+            // decides when).
+            imageBlock = { type: "image_base64", mediaType, data: buf.toString("base64"), sourceUrl: imageUrl }
           }
         } catch {
           // fall back to the URL form

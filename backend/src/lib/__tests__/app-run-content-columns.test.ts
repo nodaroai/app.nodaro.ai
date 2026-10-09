@@ -15,11 +15,11 @@ import { describe, expect, it, vi } from "vitest"
 
 vi.mock("@/lib/supabase.js", () => ({ supabase: { from: vi.fn() } }))
 
-// The real one reaches for R2 config; the harvest only needs url → key.
-vi.mock("@/ee/billing/cleanup-service.js", () => ({
-  r2KeyFromUrl: (url: string) =>
-    url.startsWith("https://r2.example.com/") ? url.slice("https://r2.example.com/".length) : null,
-}))
+// The harvest only needs url → key, which reads R2_PUBLIC_URL.
+vi.mock("@/lib/config.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../config.js")>()
+  return { ...actual, config: { ...actual.config, R2_PUBLIC_URL: "https://r2.example.com" } }
+})
 
 import { supabase } from "../supabase.js"
 import { collectAppR2Keys } from "../collect-app-r2-keys.js"

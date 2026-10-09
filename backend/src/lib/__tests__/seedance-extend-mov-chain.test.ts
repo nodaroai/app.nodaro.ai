@@ -95,6 +95,11 @@ describe("findChainedMovReference", () => {
     await expect(findChainedMovReference(SOURCE, "user-1")).resolves.toBeUndefined()
   })
 
+  it("a source whose expiry blanked its raw clip ⇒ undefined, so the extend uses the tail", async () => {
+    stubJob({ videoUrl: null, rawExtensionUrl: null, _cleaned: true })
+    await expect(findChainedMovReference(SOURCE, "user-1")).resolves.toBeUndefined()
+  })
+
   it("no user id ⇒ undefined, and no unscoped query is ever issued", async () => {
     stubJob({ rawExtensionUrl: OUR_MOV })
     await expect(findChainedMovReference(SOURCE, undefined)).resolves.toBeUndefined()

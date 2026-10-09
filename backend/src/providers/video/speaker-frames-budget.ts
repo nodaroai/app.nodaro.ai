@@ -35,6 +35,18 @@
  *    relink a face across the gap by how it looks. Each described frame lengthens
  *    its window's hold by `FACE_DETECT_DESCRIPTOR_MS_PER_FRAME`, wherever it
  *    falls, so the term is per SPAN: `speakerFramesDescriptorSpanBudgetMs`.
+ *  - THE ATTRIBUTION BURSTS (P3.5, plan rung 3 of the P3-4 ladder): per source,
+ *    when the transcript names two or more speakers, ONE second proxy of the
+ *    original at 15 fps over the bursts' windows (`ensureMediaProxy(url,
+ *    "video", { fps: 15, height: 540, spans })`, a proxy build like the
+ *    detection one: download, probe, an encode and a probe per span at the span's
+ *    own ceilings, the join and its probes), its download into the handler's
+ *    work dir, then ONE `runFfmpegCapture` per burst (the pixel read: crop →
+ *    tblend → signalstats for every face on screen) at the plugin's own limit,
+ *    `SPEAKER_FRAMES_BURST_CAPTURE_TIMEOUT_MS`. A burst is a
+ *    `SPEAKER_FRAMES_BURST_MS` window at the middle of a turn of at least 2 s
+ *    with no crosstalk, at most `SPEAKER_FRAMES_BURSTS_PER_SPEAKER` per speaker:
+ *    `speakerFramesBurstBudgetMs`.
  *  - THE IN-PROCESS TAIL: linking, subject selection, identity, the window's
  *    checkpoint body and the artifact's normalize/validate. No kill ceiling
  *    bounds JS, so its INPUT does: a window hands back at most
@@ -60,6 +72,13 @@
  *    it is charged at `SPEAKER_FRAMES_MAX_SOURCE_MS`, one whole-source span.
  *    THE ROUTE MUST REFUSE a longer source before the reserve (§3 step 1);
  *    that refusal is what makes this bound hold.
+ *  - `transcript` (an object or its JSON string): only its distinct `speaker`
+ *    labels are counted, for the bursts. A jobs row whose transcript was slimmed
+ *    reads `transcriptSpeakerCount` (the route records it; a recorded 0 is 0),
+ *    else — a row from before that — `transcriptWordCount` as the bound on its
+ *    speakers (no more speakers than words). Whatever the count, a source never gets more bursts
+ *    than disjoint `SPEAKER_FRAMES_BURST_MS` windows fit in its proxy's spans
+ *    (eligible turns never overlap, so neither do their windows).
  *  Everything else rides along unread. Never narrowed: a tick list leaves a
  *  subset of the sources (the budget over all of them covers it), and the
  *  margins are applied unclamped (a span clamped at a source's zero is shorter,
@@ -70,20 +89,21 @@
  * the payload, the `speaker-view` arrangement):
  *  - windows of `FACE_DETECT_MAX_FRAMES_PER_CALL` consecutive proxy frames
  *    (the last one partial), one `detectFaces` call each;
- *  - one detection proxy per source (ONE `ensureMediaProxy` call per source
- *    until the bursts' term below exists), with no `timeoutMs` override (each
- *    span then runs at its own ceiling), over the padded kept spans;
+ *  - one detection proxy per source, with no `timeoutMs` override (each span
+ *    then runs at its own ceiling), over the padded kept spans;
+ *  - at most one burst proxy per source (15 fps, `SPEAKER_FRAMES_BURST_MS`
+ *    windows, no `timeoutMs`), only with a transcript of two or more speakers,
+ *    at most `SPEAKER_FRAMES_BURSTS_PER_SPEAKER` windows per speaker, each inside
+ *    one span of the detection proxy; one capture per window, at
+ *    `SPEAKER_FRAMES_BURST_CAPTURE_TIMEOUT_MS`;
  *  - the 180-minute refusal for a bare video;
  *  - descriptors on at most the first and last `SPEAKER_FRAMES_DESCRIBED_EDGE_SAMPLES`
  *    samples of each span of the proxy (every sample of a span shorter than both).
  *
- * NOT IN IT YET: the attribution bursts (P3.5: a second, 15 fps proxy per
- * source over up to 20 turns per speaker, plan rung 3). They are unbuilt and
- * their pixel read is still an implementation choice; P3.5 adds their term
- * here before its plugin pin bump, as every toolkit change rides the app
- * release first. Nothing in this repo can see the plugin spawn them, so the
- * guard is the plugin's copied budget test: one `ensureMediaProxy` per source
- * (above) fails the moment a burst proxy is added without its term.
+ * Nothing in this repo can see the plugin spawn the bursts, so the guard is the
+ * plugin's copied budget test: it pins the burst constants below and fails when
+ * the handler decodes more bursts, or reads them at another limit, than this
+ * leaf charges. The plugin's pin bump waits on an app release carrying this term.
  *
  * HOW TIGHT. Per-span ceilings keep a Tighten edit's many short spans to
  * minutes each, but a span is still charged the encoder's floor (minutes,
@@ -111,6 +131,7 @@ import {
 import {
   DEFAULT_FFMPEG_TIMEOUT_MS,
   DOWNLOAD_MAX_MS,
+  DOWNLOAD_TIMEOUT_MS,
   FFMPEG_KILL_GRACE_MS,
   FFMPEG_SLOT_BACKSTOP_MS,
   FFPROBE_TIMEOUT_MS,
@@ -183,6 +204,29 @@ export const SPEAKER_FRAMES_TAIL_MS_PER_BOX = 1
  *  bookkeeping): one default ffmpeg ceiling, as audio-sync's budget carries. */
 export const SPEAKER_FRAMES_RUN_SLACK_MS = DEFAULT_FFMPEG_TIMEOUT_MS
 
+/** Rung 3's burst proxy rate (P3-4 (a), P3-5 (a)): 15 fps. Carried for the plugin's copy; the per-span
+ *  ceilings do not depend on it, and its frame period is under the detection proxy's slack. */
+export const SPEAKER_FRAMES_BURST_FPS = 15
+/** One burst: 1.5 s around a turn's middle (P3-4 (a) rung 3). */
+export const SPEAKER_FRAMES_BURST_MS = 1500
+/** At most this many bursts per speaker, per source (P3-4 (a) rung 3). */
+export const SPEAKER_FRAMES_BURSTS_PER_SPEAKER = 20
+/** The plugin's limit on one burst's pixel read (one `runFfmpegCapture`). */
+export const SPEAKER_FRAMES_BURST_CAPTURE_TIMEOUT_MS = 120_000
+
+/**
+ * One source's attribution bursts, `bursts` of them (0: none): the burst proxy
+ * (its fixed steps, then each window as a span at its own ceilings), its
+ * download into the work dir, and one slot-gated capture per burst at the
+ * plugin's limit plus its overrun.
+ */
+export function speakerFramesBurstBudgetMs(bursts: number): number {
+  if (!(bursts > 0)) return 0
+  return SPEAKER_FRAMES_PROXY_FIXED_MS + DOWNLOAD_TIMEOUT_MS
+    + bursts * (speakerFramesProxySpanBudgetMs(SPEAKER_FRAMES_BURST_MS)
+      + SPEAKER_FRAMES_BURST_CAPTURE_TIMEOUT_MS + SPEAKER_FRAMES_HOLD_OVERRUN_MS)
+}
+
 /** One detection window of `frames` proxy frames: the proxy probe, the hold at
  *  the detector's own limit and its overrun, and its boxes in process. */
 export function speakerFramesWindowBudgetMs(frames: number): number {
@@ -196,6 +240,8 @@ export interface SpeakerFramesSourcePlan {
   readonly spans: number
   readonly frames: number
   readonly spanLengthsMs: readonly number[] | null
+  /** Attribution bursts charged to this source (P3.5). */
+  readonly bursts: number
 }
 
 export interface SpeakerFramesBudgetBreakdown {
@@ -205,6 +251,8 @@ export interface SpeakerFramesBudgetBreakdown {
   readonly detectMs: number
   /** The face descriptors' share of the detection holds: one term per span. */
   readonly descriptorMs: number
+  /** The attribution bursts (P3.5): a burst proxy and one capture per burst, per source. */
+  readonly burstMs: number
   readonly slackMs: number
   readonly totalMs: number
 }
@@ -216,7 +264,7 @@ function spanFrames(lengthMs: number, fps: number): number {
 }
 
 /** Per source: its proxy's spans and frames, and the detection windows over them. */
-function sourceMs(plan: SpeakerFramesSourcePlan): { proxyMs: number; detectMs: number; descriptorMs: number; windows: number } {
+function sourceMs(plan: SpeakerFramesSourcePlan): { proxyMs: number; detectMs: number; descriptorMs: number; burstMs: number; windows: number } {
   const full = Math.floor(plan.frames / FACE_DETECT_MAX_FRAMES_PER_CALL)
   const rest = plan.frames - full * FACE_DETECT_MAX_FRAMES_PER_CALL
   let spansMs = 0
@@ -232,6 +280,7 @@ function sourceMs(plan: SpeakerFramesSourcePlan): { proxyMs: number; detectMs: n
   }
   return {
     descriptorMs,
+    burstMs: speakerFramesBurstBudgetMs(plan.bursts),
     proxyMs: SPEAKER_FRAMES_PROXY_FIXED_MS + spansMs,
     detectMs: full * speakerFramesWindowBudgetMs(FACE_DETECT_MAX_FRAMES_PER_CALL) + (rest > 0 ? speakerFramesWindowBudgetMs(rest) : 0),
     windows: full + (rest > 0 ? 1 : 0),
@@ -242,16 +291,18 @@ function breakdownOf(sources: readonly SpeakerFramesSourcePlan[]): SpeakerFrames
   let proxyMs = 0
   let detectMs = 0
   let descriptorMs = 0
+  let burstMs = 0
   let windows = 0
   for (const plan of sources) {
     const s = sourceMs(plan)
     proxyMs += s.proxyMs
     detectMs += s.detectMs
     descriptorMs += s.descriptorMs
+    burstMs += s.burstMs
     windows += s.windows
   }
   const slackMs = SPEAKER_FRAMES_RUN_SLACK_MS
-  return { sources, windows, proxyMs, detectMs, descriptorMs, slackMs, totalMs: proxyMs + detectMs + descriptorMs + slackMs }
+  return { sources, windows, proxyMs, detectMs, descriptorMs, burstMs, slackMs, totalMs: proxyMs + detectMs + descriptorMs + burstMs + slackMs }
 }
 
 const isFiniteNumber = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v)
@@ -308,7 +359,7 @@ function keptSpansBySource(edits: readonly unknown[]): Map<string, ProxySpan[]> 
 /** A source's proxy: the kept spans padded by the margins and merged as the
  *  proxy merges them. Shifted first so no span starts before zero — the merge
  *  depends only on the gaps, and the clamp at zero only ever shortens. */
-function planOf(kept: readonly ProxySpan[]): SpeakerFramesSourcePlan {
+function planOf(kept: readonly ProxySpan[], speakers: number): SpeakerFramesSourcePlan {
   let earliest = Number.POSITIVE_INFINITY
   for (const s of kept) if (s.startMs < earliest) earliest = s.startMs
   const shift = DETECTION_SPAN_MARGIN_MS + Math.max(0, -earliest)
@@ -316,18 +367,62 @@ function planOf(kept: readonly ProxySpan[]): SpeakerFramesSourcePlan {
   const spans = normalizeProxySpans(padSpans(shifted, DETECTION_SPAN_MARGIN_MS), DETECTION_PROXY.fps)
   let frames = 0
   for (const s of spans) frames += spanFrames(s.endMs - s.startMs, DETECTION_PROXY.fps)
-  return { spans: spans.length, frames, spanLengthsMs: spans.map((s) => s.endMs - s.startMs) }
+  const spanLengthsMs = spans.map((s) => s.endMs - s.startMs)
+  return { spans: spans.length, frames, spanLengthsMs, bursts: burstsFor(speakers, spanLengthsMs) }
 }
 
-function edlBreakdown(raw: unknown): SpeakerFramesBudgetBreakdown | undefined {
+/**
+ * The most speakers the payload's transcript can name (rung 3 runs with two or
+ * more): its distinct `speaker` labels, else a slimmed row's
+ * `transcriptSpeakerCount` when recorded (0 included), else its `transcriptWordCount` (no more speakers
+ * than words), else none.
+ */
+export function speakerFramesTranscriptSpeakers(data: { transcript?: unknown; transcriptSpeakerCount?: unknown; transcriptWordCount?: unknown }): number {
+  let transcript = data.transcript
+  if (typeof transcript === "string") {
+    try {
+      transcript = JSON.parse(transcript)
+    } catch {
+      transcript = undefined
+    }
+  }
+  const words = transcript && typeof transcript === "object" ? (transcript as { words?: unknown }).words : undefined
+  if (Array.isArray(words)) {
+    const seen = new Set<string>()
+    for (const w of words) {
+      const sp = w && typeof w === "object" ? (w as { speaker?: unknown }).speaker : undefined
+      if (typeof sp === "string" && sp.length > 0) seen.add(sp)
+    }
+    return seen.size
+  }
+  const count = (v: unknown) => (isFiniteNumber(v) && v > 0 ? Math.ceil(v) : 0)
+  // Presence, not truthiness: a recorded 0 (a transcript without speaker labels) is a count, and reading
+  // it as "not recorded" would charge a row min(20 x its words, fit) bursts its payload never had.
+  return isFiniteNumber(data.transcriptSpeakerCount) ? count(data.transcriptSpeakerCount) : count(data.transcriptWordCount)
+}
+
+/** A source's bursts: `SPEAKER_FRAMES_BURSTS_PER_SPEAKER` per speaker with two
+ *  or more speakers, never more than disjoint burst windows fit in its spans
+ *  (`null`: the whole source, at the 180-minute cap). Each span is read at its
+ *  length plus two detection frame periods: the handler checks a window against
+ *  the span-map row the encoder wrote, which holds up to that much more. */
+function burstsFor(speakers: number, spanLengthsMs: readonly number[] | null): number {
+  if (speakers < 2) return 0
+  const lengths = spanLengthsMs ?? [SPEAKER_FRAMES_MAX_SOURCE_MS]
+  let fit = 0
+  for (const len of lengths) fit += Math.floor((len + 2 * SPAN_SLACK_MS) / SPEAKER_FRAMES_BURST_MS)
+  return Math.min(SPEAKER_FRAMES_BURSTS_PER_SPEAKER * speakers, fit)
+}
+
+function edlBreakdown(raw: unknown, speakers: number): SpeakerFramesBudgetBreakdown | undefined {
   const bySource = keptSpansBySource(editsOf(raw))
   if (bySource.size === 0) return undefined
-  return breakdownOf([...bySource.values()].map(planOf))
+  return breakdownOf([...bySource.values()].map((kept) => planOf(kept, speakers)))
 }
 
-function videoBreakdown(url: unknown): SpeakerFramesBudgetBreakdown | undefined {
+function videoBreakdown(url: unknown, speakers: number): SpeakerFramesBudgetBreakdown | undefined {
   if (typeof url !== "string" || url.length === 0) return undefined
-  return breakdownOf([{ spans: 1, frames: spanFrames(SPEAKER_FRAMES_MAX_SOURCE_MS, DETECTION_PROXY.fps), spanLengthsMs: null }])
+  return breakdownOf([{ spans: 1, frames: spanFrames(SPEAKER_FRAMES_MAX_SOURCE_MS, DETECTION_PROXY.fps), spanLengthsMs: null, bursts: burstsFor(speakers, null) }])
 }
 
 /** The budget's terms for one speaker-frames payload, or `undefined` when it
@@ -335,13 +430,19 @@ function videoBreakdown(url: unknown): SpeakerFramesBudgetBreakdown | undefined 
 export function speakerFramesBudgetBreakdown(data: unknown): SpeakerFramesBudgetBreakdown | undefined {
   if (!data || typeof data !== "object") return undefined
   const { edl, videoUrl } = data as { edl?: unknown; videoUrl?: unknown }
+  let speakers = 0
+  try {
+    speakers = speakerFramesTranscriptSpeakers(data as Record<string, unknown>)
+  } catch {
+    speakers = 0
+  }
   let fromEdl: SpeakerFramesBudgetBreakdown | undefined
   try {
-    fromEdl = edl === undefined || edl === null ? undefined : edlBreakdown(edl)
+    fromEdl = edl === undefined || edl === null ? undefined : edlBreakdown(edl, speakers)
   } catch {
     fromEdl = undefined
   }
-  const fromVideo = videoBreakdown(videoUrl)
+  const fromVideo = videoBreakdown(videoUrl, speakers)
   if (!fromEdl) return fromVideo
   if (!fromVideo) return fromEdl
   return fromEdl.totalMs >= fromVideo.totalMs ? fromEdl : fromVideo

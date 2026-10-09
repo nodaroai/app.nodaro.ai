@@ -683,8 +683,9 @@ export async function renderEdlTimeline(options: EdlTimelineOptions): Promise<Ed
 async function deleteCheckpoints(keys: readonly string[]): Promise<void> {
   if (keys.length === 0) return
   try {
-    const { deleteFromR2 } = await import("../../lib/storage.js")
-    await Promise.allSettled(keys.map((k) => deleteFromR2(k)))
+    // A key storage fails to delete is recorded for the retry pass.
+    const { deleteKeysRecordingFailures } = await import("../../lib/storage-delete.js")
+    await deleteKeysRecordingFailures(keys, "edl-checkpoint")
   } catch {
     /* cleanup is best-effort */
   }

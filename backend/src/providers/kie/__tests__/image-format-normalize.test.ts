@@ -152,13 +152,30 @@ describe("the image lanes keep the fidelity the SKU was hired for", () => {
     expect([meta.width, meta.height]).toEqual([10, 20])
   })
 
-  it("lands converted inputs under the sweepable tmp/ prefix, not beside user media", async () => {
+  it("lands converted inputs in the running job's scratch folder, not beside user media", async () => {
+    // Decided 2026-10-09: a temporary provider upload is keyed under its job
+    // and deleted when the job ends (lib/job-scratch.ts).
+    const { KieImageProvider } = await import("../image.js")
+    const { runWithJobCancellation } = await import("../../../lib/job-cancellation.js")
+    const { jobScratchPrefix } = await import("../../../lib/job-scratch-keys.js")
+    const JOB = "00000000-0000-4000-8000-0000000000aa"
+    await serve(await tiff())
+    await runWithJobCancellation(JOB, undefined, () =>
+      new KieImageProvider().editImage("https://src.tiff", undefined, "topaz-image-upscale"),
+    )
+    const key = lastUpload()![1]
+    expect(key.startsWith(jobScratchPrefix(JOB))).toBe(true)
+    expect(key).toContain("provider-converted-")
+    // ...and counted against no one's quota.
+    expect(uploadBufferToR2.mock.calls.at(-1)![3]).toBeUndefined()
+  })
+
+  it("outside a job, a converted input keeps the flat temp key it always had", async () => {
     const { KieImageProvider } = await import("../image.js")
     await serve(await tiff())
     await new KieImageProvider().editImage("https://src.tiff", undefined, "topaz-image-upscale")
     const key = lastUpload()![1]
-    expect(key.startsWith("images/")).toBe(false)
-    expect(key).toContain("provider-converted-")
+    expect(key).toMatch(/^tmp\/provider-input\/provider-converted-[0-9a-f]{8}\.[a-z]+$/)
   })
 
   it("leaves the VIDEO lanes on JPEG — preferLossless is an image-lane opt-in", async () => {

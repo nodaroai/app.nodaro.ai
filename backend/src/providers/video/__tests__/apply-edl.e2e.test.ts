@@ -88,6 +88,14 @@ vi.mock("../../../lib/storage.js", () => ({
     r2.deletes.push(key)
     if (!r2.keepOnDelete) r2.objects.delete(key)
   },
+  // Checkpoint cleanup goes through the delete funnel (lib/storage-delete.ts).
+  batchDeleteFromR2: async (keys: string[]) => {
+    for (const key of keys) {
+      r2.deletes.push(key)
+      if (!r2.keepOnDelete) r2.objects.delete(key)
+    }
+    return { deleted: keys.length, errors: 0, notDeleted: [], kept: [] }
+  },
 }))
 
 const { applyEdl, resolveChunksForOutput, chunkOutputSec } = await import("../apply-edl.js")

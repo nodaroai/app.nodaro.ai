@@ -1054,7 +1054,28 @@ Two behaviors to know:
 - **Media retention follows account activity.** Your generated files are
   stored while your account is active; after roughly 3 months without a
   purchase or any credit spend, files older than 60 days may be cleaned
-  up. Returning and spending credits stops future cleanup.
+  up. Returning and spending credits stops future cleanup. Cleanup takes
+  the files a generation stored as its own result, including ones its result
+  holds inside a structured output (a list of variants, a track file), and
+  only those: an input the result repeats is left alone, and a file one of
+  your library items still holds (a result you saved, say) stays until that
+  item is cleaned up too. Side files a generation keeps next to its result
+  are cleaned up with it, including the unstitched clip of a video
+  extension. (An older extension stored that clip under a name of its own,
+  not the job's; those clips are not cleaned up.) A later extension keeps
+  its own copy of the clip it continues from (`chainReferenceUrl` in its
+  result), so cleaning up the earlier one never breaks it. An extension that
+  fails partway deletes the copies it had made. When a
+  file is cleaned up, its link is cleared (set to `null`) in every job
+  result that holds it, including results that repeated it as an input, so
+  no result keeps a link to a file that is gone. Nothing else in those
+  results changes. If storage fails to remove a file, whether during this
+  cleanup or when you delete something yourself, the platform tries again on
+  later days (a few times at most, on every edition, self-hosted included),
+  and the file's link stays in place until the file is really gone. A file
+  you deleted yourself (a library item or an upload) whose removal failed is
+  kept, and not tried again, when a generation made after the failure links
+  it. A file cleanup took is tried again even then.
 
 ## 9. Characters
 
@@ -2188,7 +2209,12 @@ credit-billed (an LLM call; same credit id as describe-to-picker).
 
 Body: `{ text, targetPickers?, instructions?, origin?, llmModel?,
 reasoningEffort? }` — omit `targetPickers` to analyze ALL analyzable
-pickers (the server fans out per family and merges). Returns
+pickers (the server fans out per family and merges). With no `llmModel` and
+no `reasoningEffort` the run is Claude Opus 5.5 at `"high"`, the same default
+as describe-to-picker: it runs on Anthropic's own API and bills
+`describe-to-picker:premium-direct` (25 credits, one charge however many
+batches it fans out to). Another model with no effort keeps Auto (see
+[Describe to Picker — Credit Cost](nodes/ai-image/describe-to-picker.md#credit-cost)). Returns
 `{ jobId, pickerJson, gaps? }`: `pickerJson` is
 `pickerType → dimension → chosen catalog id(s)` (the same shape as
 describe-to-picker — hydrate pickers from it verbatim), and `gaps` lists

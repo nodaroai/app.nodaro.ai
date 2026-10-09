@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify"
 import { z } from "zod"
 import { supabase } from "../../lib/supabase.js"
 import { requireAdmin } from "../middleware/require-admin.js"
-import { batchDeleteFromR2 } from "../../lib/storage.js"
+import { deleteKeysRecordingFailures } from "../../lib/storage-delete.js"
 import { deletableKeys } from "../../lib/asset-delete.js"
 import { ownKeysOnly } from "../../lib/key-ownership.js"
 import { config } from "../../lib/config.js"
@@ -309,7 +309,8 @@ export async function adminLocationRoutes(app: FastifyInstance) {
       )
       if (keys.length > 0) {
         try {
-          await batchDeleteFromR2(keys)
+          // A key storage fails to delete is recorded for the retry pass.
+          await deleteKeysRecordingFailures(keys, "location")
         } catch (err) {
           console.error(
             `[admin-locations] R2 batch delete failed for location ${id} (continuing to DB delete):`,

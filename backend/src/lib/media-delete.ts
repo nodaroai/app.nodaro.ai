@@ -1,5 +1,6 @@
 import { supabase } from "./supabase.js"
-import { deleteFromR2, r2KeyFromOurUrl } from "./storage.js"
+import { r2KeyFromOurUrl } from "./storage.js"
+import { deleteKeyRecordingFailure } from "./storage-delete.js"
 import { permanentlyDeleteAsset, isRelayOwnedObject } from "./asset-delete.js"
 import { isOwnedObjectKey } from "./job-policy-outputs.js"
 import { JOB_OUTPUT_URL_PATHS } from "./job-output-urls.js"
@@ -287,7 +288,8 @@ async function deleteOwnedMediaByUrl(
   }
 
   try {
-    await deleteFromR2(r2Key)
+    // A failed delete is recorded for the retry pass, then rethrown.
+    await deleteKeyRecordingFailure(r2Key, "media")
   } catch (err) {
     console.warn(`[media-delete] R2 delete failed for ${r2Key}:`, err)
     return { status: "skipped", reason: "error" }

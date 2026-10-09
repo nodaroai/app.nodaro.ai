@@ -1043,6 +1043,37 @@ describe("CreditsService", () => {
   })
 
   // ════════════════════════════════════════════════════════════════════════
+  // estimateWorkflowBaseCredits — describe-to-picker quotes the run it reserves
+  // (decided 2026-10-09: an untouched node runs Opus 5.5 at effort high, which
+  // runs on Anthropic's own API and reserves describe-to-picker:premium-direct;
+  // the bare node-type row it used to fall through to quoted 10.)
+  // ════════════════════════════════════════════════════════════════════════
+
+  describe("estimateWorkflowBaseCredits — describe-to-picker resolves the default model and effort", () => {
+    it("an untouched node quotes Opus 5.5 at high: the premium-direct row", () => {
+      expect(CreditsService.estimateWorkflowBaseCredits([{ type: "describe-to-picker", data: {} }]))
+        .toBe(STATIC_CREDIT_COSTS["describe-to-picker:premium-direct"])
+      expect(STATIC_CREDIT_COSTS["describe-to-picker:premium-direct"]).toBe(25)
+    })
+
+    it("another model with no effort keeps its Auto price: the default effort never follows a model switch", () => {
+      expect(CreditsService.estimateWorkflowBaseCredits([
+        { type: "describe-to-picker", data: { llmModel: "gemini-3.8-flash" } },
+      ])).toBe(STATIC_CREDIT_COSTS["describe-to-picker:economy"])
+    })
+
+    it("an explicit effort is quoted as set: on Opus 5 (premium, not the default) it moves the quote to premium-direct", () => {
+      expect(CreditsService.estimateWorkflowBaseCredits([
+        { type: "describe-to-picker", data: { llmModel: "claude-opus-5" } },
+      ])).toBe(STATIC_CREDIT_COSTS["describe-to-picker:premium"])
+      // A Claude effort runs on Anthropic's own API, one rung up.
+      expect(CreditsService.estimateWorkflowBaseCredits([
+        { type: "describe-to-picker", data: { llmModel: "claude-opus-5", reasoningEffort: "low" } },
+      ])).toBe(STATIC_CREDIT_COSTS["describe-to-picker:premium-direct"])
+    })
+  })
+
+  // ════════════════════════════════════════════════════════════════════════
   // STATIC_CREDIT_COSTS — Seedance 2 1080p coverage (no DB dependency)
   // ════════════════════════════════════════════════════════════════════════
   // `estimateWorkflowBaseCredits` doesn't thread `resolution`/`hasVideoRef`

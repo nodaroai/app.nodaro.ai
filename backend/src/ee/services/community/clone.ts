@@ -3,7 +3,8 @@ import { supabase } from "../../../lib/supabase.js"
 import { reserveStorageIfWithinLimit, refundStorage } from "../../../utils/file-validation.js"
 import { ensureDefaultProject } from "../../../lib/default-project.js"
 import { deriveAvailableName } from "../../../lib/entity-naming.js"
-import { copyR2ObjectToPrefix, batchDeleteFromR2, r2KeyFromOurUrl } from "../../../lib/storage.js"
+import { copyR2ObjectToPrefix, r2KeyFromOurUrl } from "../../../lib/storage.js"
+import { deleteKeysRecordingFailures } from "../../../lib/storage-delete.js"
 import { buildCloneRow, COMMUNITY_ENTITY_ADAPTERS, type EntityType } from "../../lib/community-entity-adapters.js"
 import { deepCopyReferenceSheet } from "./asset-lifecycle.js"
 
@@ -153,6 +154,6 @@ export async function cloneListing(input: {
 
 async function rollback(urls: string[], userId: string, reservedBytes: number): Promise<void> {
   const keys = urls.map((u) => r2KeyFromOurUrl(u)).filter((k): k is string => !!k)
-  if (keys.length) await batchDeleteFromR2(keys)
+  if (keys.length) await deleteKeysRecordingFailures(keys, "community")
   if (reservedBytes > 0) await refundStorage(userId, reservedBytes)
 }

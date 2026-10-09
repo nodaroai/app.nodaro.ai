@@ -1374,6 +1374,7 @@ export const ja: ChromeDict = {
   "cfgshared.advancedUnavailable": "詳細モードは Gemini と Claude のモデルで利用できます。有効にするにはモデルを切り替えてください。",
   "cfgshared.advancedModeHint": "このモデルをプロバイダー上で直接実行し、温度、出力の長さ、推論の深さを調整できます。料金は 1 段階上のクレジットティアになります。プレミアムモデルは直接実行の料金になります。",
   "cfgshared.effortRunsDirect": "Claude モデルでは、推論の深さを選ぶと Anthropic 自身の API で実行され（深さが反映されるのはそこだけです）、料金は 1 段階上になります。",
+  "cfgshared.effortRunsDirectByDefault": "このモデルの実行には常に推論の深さが付く（別の深さを選ばない限り「高」）ため、常に Anthropic 自身の API（深さが反映される唯一の場所）で実行され、料金は 1 段階上になります。",
   "cfgshared.structuredOutputTempWarn": "このノードはモデルに構造化出力を求めています。値が 0.5 程度を超えると、形式が崩れ始めます。",
   "cfgshared.maxTokens": "最大トークン数",
   "cfgshared.generateWithAi": "AI で生成",

@@ -19,7 +19,8 @@ There is **no "target picker" setting**. The node analyzes exactly the analyzabl
 |-------|------|---------|-------------|
 | Analyzing (read-only) | derived | — | The picker nodes currently wired to this node's output — the set that will be analyzed. Not editable; change it by wiring/unwiring pickers. |
 | Model | select | `claude-opus-5.5` | The vision model used for analysis. **Vision models with guaranteed structured output**: Claude Haiku 4.5 / Claude Sonnet 4.6 / Claude Sonnet 5 / Claude Sonnet 5.5 / Claude Opus 4.7 / Claude Opus 4.8 / Claude Opus 5 / Claude Opus 5.5 / Claude Fable 5, Gemini 3 Flash / Gemini 3.6 Flash / Gemini 3.7 Flash / Gemini 3.8 Flash / Gemini 3.1 Pro, GPT-5.4 / GPT-5.5 / GPT-5.6 Luna / GPT-5.6 Terra / GPT-5.6 Sol / GPT-6 Astra / GPT-6 Luna / GPT-6 Sol / GPT-6.1 Sol, Grok 4.6 / Grok 4.7, Kimi K3, and DeepSeek V4.1 Flash. See [Why these models](#why-these-models). |
-| Advanced mode | `boolean` | `false` | Gemini and Claude models. Runs the model on the provider's own API so **Temperature**, **Max Tokens** and the full reasoning-depth range actually apply — those controls appear once it is on. Bills one credit rung up (a premium model moves to premium-direct); the node's cost badge updates immediately. Disabled with an inline reason on other models |
+| Effort | select | `High` on Claude Opus 5.5, `Auto` on other models | Reasoning effort for models that support it — hidden for models with no reasoning levels. The default model runs at **High** unless you pick another level, and offers no Auto: an omitted effort runs at High there. On any other model, Auto sends no effort (the model's own default). Over the API, omitting `reasoningEffort` gives the same defaults. A Claude effort runs on Anthropic's own API, which changes the price — see [Credit Cost](#credit-cost). |
+| Advanced mode | `boolean` | `false` | Gemini and Claude models. Runs the model on the provider's own API so **Temperature**, **Max Tokens** and the full reasoning-depth range actually apply — those controls appear once it is on. Bills one credit rung up (a premium model moves to premium-direct) unless the call already runs on the provider's API: on the default model, Claude Opus 5.5 at High already does and bills premium-direct, so turning Advanced mode on does not change the price. The node's cost badge updates immediately. Disabled with an inline reason on other models |
 | Extra guidance | text | `""` | Optional instructions appended to the analyzer's system prompt (e.g. "focus on the foreground subject"). Max 2000 characters. |
 
 ## Inputs & Outputs
@@ -32,13 +33,27 @@ There is **no "target picker" setting**. The node analyzes exactly the analyzabl
 
 ## Why these models
 
-The node guarantees a valid, parseable result via **forced structured output**: the emit schema is composed from the connected pickers' catalogs (the same `PickerAnalyzerSpec` the pickers themselves use), so every emitted dimension is constrained to allowed ids and choice limits. It routes through the unified LLM client, which enforces that schema natively per vendor — **Anthropic** via forced tool-use (Claude Sonnet 5.5 and Opus 5.5 do not accept a forced tool, so they are asked to call it, with a strict tool schema), **Gemini** via KIE `response_format`, **GPT, Grok, Kimi and DeepSeek (responses API)** via `text.format` JSON schema — so only **vision-capable models with a native structured-output mode** are offered. GPT-5.2 is excluded (its chat-completions routing has no native structured mode → unreliable for a forced schema), and the route rejects any other model with a `validation_error`. The default is **Claude Opus 5.5** — the latest Opus-tier vision model, chosen for accurate trait extraction (e.g. skin tone). Every answer is validated against the composed schema whichever model runs it, and a non-conforming answer is retried.
+The node guarantees a valid, parseable result via **forced structured output**: the emit schema is composed from the connected pickers' catalogs (the same `PickerAnalyzerSpec` the pickers themselves use), so every emitted dimension is constrained to allowed ids and choice limits. It routes through the unified LLM client, which enforces that schema natively per vendor — **Anthropic** via forced tool-use (Claude Sonnet 5.5 and Opus 5.5 do not accept a forced tool, so they are asked to call it, with a strict tool schema), **Gemini** via KIE `response_format`, **GPT, Grok, Kimi and DeepSeek (responses API)** via `text.format` JSON schema — so only **vision-capable models with a native structured-output mode** are offered. GPT-5.2 is excluded (its chat-completions routing has no native structured mode → unreliable for a forced schema), and the route rejects any other model with a `validation_error`. The default is **Claude Opus 5.5 at High reasoning effort** — the latest Opus-tier vision model, chosen for accurate trait extraction (e.g. skin tone); at High it filled the most attributes per image. Every answer is validated against the composed schema whichever model runs it, and a non-conforming answer is retried.
 
 If no LLM API key (KIE or Anthropic) is configured, the node returns `503 provider_unavailable`.
 
 ## Credit Cost
 
-**Flat 10 credits per run**, regardless of how many pickers you wire or which vision model you pick — it is always one vision call. The tiered identifiers `describe-to-picker`, `describe-to-picker:economy`, and `describe-to-picker:premium` all resolve to the same flat price. Credits are reserved when the job starts, committed on success, and fully refunded if the analysis fails.
+One vision call per run, however many pickers you wire. Every rung costs the same except the top one:
+
+| Rung | When | Credits |
+|------|------|---------|
+| `describe-to-picker:economy`, `describe-to-picker`, `describe-to-picker:premium` | the selected model's tier | **10** |
+| `describe-to-picker:premium-direct` | a premium call (a premium model, or a standard one at `xhigh`/`max`) that runs on the provider's own API | **25** |
+
+The credit identifier is built from the selected model, effort and Advanced mode at request time, the same way as for [Generate Text](../ai-text/llm-chat.md#credit-pricing): a call runs on the provider's own API — and bills one rung up — when Advanced mode is on, or when a Claude model carries any effort (Claude's reasoning effort only takes effect on Anthropic's own API); `xhigh` and `max` add one tier of their own. The premium-direct price is the premium price × 2.5, rounded up. The default, Claude Opus 5.5 at High, runs on Anthropic's own API, so an untouched node bills premium-direct.
+
+Worked examples:
+- An untouched node (Claude Opus 5.5, Effort High) → `describe-to-picker:premium-direct` → **25 credits**
+- Claude Opus 5.5 at Effort Low → `describe-to-picker:premium-direct` → **25 credits**
+- Gemini 3.8 Flash at Effort Auto → `describe-to-picker:economy` → **10 credits**
+
+Credits are reserved when the job starts, committed on success, and fully refunded if the analysis fails.
 
 ## Streaming the answer (API)
 

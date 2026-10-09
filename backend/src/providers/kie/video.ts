@@ -50,7 +50,7 @@ import {
 } from "./models.js"
 import { logCreditAudit, extractCreditFields } from "../../lib/credit-audit.js"
 import { downloadFile, runFfmpeg, getVideoDuration, createWorkDir, cleanupWorkDir } from "../video/ffmpeg-utils.js"
-import { uploadBufferToR2, tmpObjectKey } from "../../lib/storage.js"
+import { uploadJobScratchBuffer } from "../../lib/job-scratch.js"
 import { fetchOwnMedia } from "../../lib/fetch-own-media.js"
 import { join } from "node:path"
 import { readFile } from "node:fs/promises"
@@ -580,8 +580,8 @@ async function ensureAudioDuration(
     ])
 
     const trimmedBuffer = await readFile(outputPath)
-    const key = tmpObjectKey(`lip-sync-trimmed-${Date.now()}`, "mp3")
-    const trimmedUrl = await uploadBufferToR2(trimmedBuffer, key, "audio/mpeg")
+    // A provider input: the running job's scratch folder, emptied when the job ends.
+    const trimmedUrl = await uploadJobScratchBuffer(trimmedBuffer, "lip-sync-trimmed", "mp3", "audio/mpeg")
     console.log(`[KIE.ai] Trimmed audio uploaded: ${trimmedUrl}`)
     return trimmedUrl
   } catch (err) {
@@ -637,8 +637,8 @@ async function ensureVideoDuration(
     ])
 
     const trimmedBuffer = await readFile(outputPath)
-    const key = tmpObjectKey(`motion-trimmed-${Date.now()}`, "mp4")
-    const trimmedUrl = await uploadBufferToR2(trimmedBuffer, key, "video/mp4")
+    // A provider input: the running job's scratch folder, emptied when the job ends.
+    const trimmedUrl = await uploadJobScratchBuffer(trimmedBuffer, "motion-trimmed", "mp4", "video/mp4")
     console.log(`[KIE.ai] Trimmed video uploaded: ${trimmedUrl}`)
     return trimmedUrl
   } catch (err) {
@@ -836,8 +836,6 @@ export async function ensureImageForProvider(
     `${needsCompress ? ` → compressing (>${IMAGE_MAX_BYTES / 1024 / 1024}MB)` : ""}`
   )
 
-  const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-
   // Base pipeline. `.rotate()` FIRST: re-encoding drops EXIF, so an
   // orientation-tagged photo (every HEIC/AVIF off a phone, and plenty of
   // TIFFs) would otherwise be handed to the provider sideways — the pixels
@@ -874,11 +872,7 @@ export async function ensureImageForProvider(
       ? await pipeline().webp({ lossless: true }).toBuffer()
       : await pipeline().png({ compressionLevel: 9 }).toBuffer()
     if (lossless.length <= IMAGE_MAX_BYTES) {
-      const losslessUrl = await uploadBufferToR2(
-        lossless,
-        tmpObjectKey(`provider-converted-${stamp}`, losslessFormat),
-        `image/${losslessFormat}`,
-      )
+      const losslessUrl = await uploadJobScratchBuffer(lossless, "provider-converted", losslessFormat, `image/${losslessFormat}`)
       console.log(
         `[KIE.ai] Image converted losslessly to ${losslessFormat}: ${(lossless.length / 1024 / 1024).toFixed(1)}MB → ${losslessUrl.substring(0, 80)}...`
       )
@@ -922,13 +916,10 @@ export async function ensureImageForProvider(
       .toBuffer()
   }
 
-  // tmp/ prefix: a converted INPUT is disposable once the provider has fetched
-  // it, so it belongs under the sweepable prefix, not beside user media.
-  const newUrl = await uploadBufferToR2(
-    converted,
-    tmpObjectKey(`provider-converted-${stamp}`, "jpg"),
-    "image/jpeg",
-  )
+  // A converted INPUT is disposable once the provider has fetched it: the
+  // running job's scratch folder (`lib/job-scratch.ts`), emptied when the job
+  // ends, never beside user media.
+  const newUrl = await uploadJobScratchBuffer(converted, "provider-converted", "jpg", "image/jpeg")
   console.log(
     `[KIE.ai] Image converted: ${(converted.length / 1024 / 1024).toFixed(1)}MB → ${newUrl.substring(0, 80)}...`
   )

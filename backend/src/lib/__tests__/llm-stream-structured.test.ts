@@ -74,7 +74,11 @@ describe("llmStreamStructured", () => {
     expect(anthropicCreate).not.toHaveBeenCalled()
     expect(fetchMock).not.toHaveBeenCalled()
     const [body] = anthropicStream.mock.calls[0] as [Record<string, unknown>]
-    expect(body.tool_choice).toEqual({ type: "tool", name: "emit_pickers" })
+    // The request carries an effort, so the tool rides the auto shape (a forced
+    // choice would suppress the thinking the effort asked for) — the stream
+    // still reads the tool input exactly as before.
+    expect(body.tool_choice).toEqual({ type: "auto" })
+    expect(body.system).toMatch(/Respond by calling the `emit_pickers` tool exactly once/)
     expect((body.tools as Array<{ name: string }>)[0].name).toBe("emit_pickers")
     expect(body).not.toHaveProperty("temperature")
   })

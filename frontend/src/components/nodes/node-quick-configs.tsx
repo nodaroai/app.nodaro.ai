@@ -48,7 +48,7 @@ import {
   getVideoResolutionOptions,
   VIDEO_RESOLUTION_OPTIONS,
 } from "@/components/editor/config-panels/model-options"
-import { availableReasoningEfforts, isSeedanceVideoEditProvider, orderedLlmModels, STRUCTURED_VISION_MODELS, SHEET_TYPES, SHEET_SKINS, type SheetType, type SheetSkin, VIDEO_ANALYSIS_TIER_ORDER, VIDEO_ANALYSIS_TIER_LABELS, DEFAULT_VIDEO_ANALYSIS_TIER, SCENE3D_LIMITS, VIDEO_OVERLAY_OUTPUT_ASPECTS, DEFAULT_TTS_PROVIDER, DEFAULT_DIALOGUE_PROVIDER } from "@nodaro/shared"
+import { availableReasoningEfforts, defaultReasoningEffort, LLM_FEATURE_DEFAULTS, type LlmFeature, isSeedanceVideoEditProvider, orderedLlmModels, STRUCTURED_VISION_MODELS, SHEET_TYPES, SHEET_SKINS, type SheetType, type SheetSkin, VIDEO_ANALYSIS_TIER_ORDER, VIDEO_ANALYSIS_TIER_LABELS, DEFAULT_VIDEO_ANALYSIS_TIER, SCENE3D_LIMITS, VIDEO_OVERLAY_OUTPUT_ASPECTS, DEFAULT_TTS_PROVIDER, DEFAULT_DIALOGUE_PROVIDER } from "@nodaro/shared"
 import { EFFORT_LABELS } from "@/components/editor/config-panels/reasoning-effort-select"
 import { ALL_LANGUAGES } from "@/lib/audio-tags"
 import { ttsModelSwitchPatch, type TtsSwitchFields } from "@/lib/tts-model-switch"
@@ -283,28 +283,49 @@ const llmModelControl = (): QuickConfigControl => ({
  *  {@link QuickConfigSelect} self-hides the control. Its generic fail-safe
  *  `useEffect` (same mechanism every provider-aware control here relies on)
  *  snaps or clears a stale stored effort whenever the model switch changes
- *  this list — no bespoke onChange wiring needed. */
-const reasoningEffortControl = (): QuickConfigControl => ({
-  field: "reasoningEffort",
-  ariaLabel: tx("node.effort"),
-  icon: Gauge,
-  sentinelUndefined: "auto",
-  options: (data) => {
-    // Lane-aware: Advanced mode runs the model on the vendor API, which
-    // accepts a wider ladder than the aggregator. Reading the raw
-    // `reasoningEfforts` here would hide levels the node can actually use
-    // — and on gemini-3-flash would hide the control entirely.
-    const levels = availableReasoningEfforts(
-      typeof data.llmModel === "string" ? data.llmModel : "",
-      data.advancedMode === true,
-    )
-    if (levels.length === 0) return []
-    return [
-      { value: "auto", label: tx("common.auto") },
-      ...levels.map((level) => ({ value: level, label: EFFORT_LABELS()[level] })),
-    ]
-  },
-})
+ *  this list — no bespoke onChange wiring needed.
+ *
+ *  `feature` is for a node whose run has a DEFAULT effort
+ *  (`defaultReasoningEffort` — describe-to-picker's Opus 5.5 at high). The
+ *  node stores neither its default model nor that effort, so without it the
+ *  strip would hide the control on an untouched node and read Auto for a run
+ *  that goes out at high. With it, an unset model reads as the feature's
+ *  default model and an unset effort as the effort the run will use. On that
+ *  model Auto is not offered (decided 2026-10-09): an omitted effort IS the
+ *  default there, so Auto would be a second name for it, and a stale stored
+ *  effort snaps to the default, as it did when it snapped to Auto. Nodes
+ *  without a default effort pass no feature and keep the control as it was. */
+const reasoningEffortControl = (feature?: LlmFeature): QuickConfigControl => {
+  const modelOf = (data: Record<string, unknown>): string => {
+    const stored = typeof data.llmModel === "string" ? data.llmModel : ""
+    return stored || (feature ? LLM_FEATURE_DEFAULTS[feature] : "")
+  }
+  /** The effort an omitted one runs at on this node's model, if it has one. */
+  const defaultFor = (data: Record<string, unknown>) => (feature ? defaultReasoningEffort(feature, modelOf(data)) : undefined)
+  return {
+    field: "reasoningEffort",
+    ariaLabel: tx("node.effort"),
+    icon: Gauge,
+    sentinelUndefined: "auto",
+    options: (data) => {
+      // Lane-aware: Advanced mode runs the model on the vendor API, which
+      // accepts a wider ladder than the aggregator. Reading the raw
+      // `reasoningEfforts` here would hide levels the node can actually use
+      // — and on gemini-3-flash would hide the control entirely.
+      const levels = availableReasoningEfforts(modelOf(data), data.advancedMode === true)
+      if (levels.length === 0) return []
+      return [
+        ...(defaultFor(data) === undefined ? [{ value: "auto", label: tx("common.auto") }] : []),
+        ...levels.map((level) => ({ value: level, label: EFFORT_LABELS()[level] })),
+      ]
+    },
+    ...(feature && {
+      read: (data: Record<string, unknown>) =>
+        typeof data.reasoningEffort === "string" ? data.reasoningEffort : (defaultFor(data) ?? ""),
+      snap: (_value: string, data: Record<string, unknown>) => defaultFor(data) ?? "auto",
+    }),
+  }
+}
 
 /** Vision LLM model dropdown (writes `data.llmModel`). The describe-to-picker
  *  analyzer forces a schema over an image, so the strip offers exactly the
@@ -316,6 +337,9 @@ const visionModelControl = (): QuickConfigControl => ({
   ariaLabel: tx("field.model"),
   icon: Sparkles,
   options: orderedLlmModels(STRUCTURED_VISION_MODELS).map((m) => ({ value: m.id, label: m.displayName })),
+  // A node with no stored model runs on the analyzer's default model — show
+  // that, not whichever vision model happens to be listed first.
+  defaultValue: LLM_FEATURE_DEFAULTS["describe-to-picker"],
   // Same rationale as llmModelControl: a stranded advancedMode fails an
   // orchestrated run invisibly, so clear it on any model switch.
   additionalClear: ["advancedMode"],
@@ -814,7 +838,7 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
   "generate-script": [llmModelControl(), reasoningEffortControl()],
   "qa-check": [llmModelControl(), reasoningEffortControl()],
   "image-to-text": [llmModelControl(), reasoningEffortControl()],
-  "describe-to-picker": [visionModelControl(), reasoningEffortControl()],
+  "describe-to-picker": [visionModelControl(), reasoningEffortControl("describe-to-picker")],
   "image-critic": [llmModelControl(), reasoningEffortControl()],
   // forced-alignment is a fixed ElevenLabs feature (static "elevenlabs-forced-
   // alignment" credit id in forced-alignment-node.tsx) — ForcedAlignmentData

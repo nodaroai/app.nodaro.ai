@@ -1362,6 +1362,7 @@ export const he: ChromeDict = {
   "cfgshared.advancedUnavailable": "מצב מתקדם זמין במודלים של Gemini ו-Claude — החליפו את המודל כדי להפעיל אותו.",
   "cfgshared.advancedModeHint": "הריצו את המודל ישירות אצל הספק כדי לשלוט בטמפרטורה, באורך הפלט ובעומק החשיבה. העלות גבוהה בדרגת קרדיטים אחת; מודל פרימיום עובר לתעריף הישיר שלו.",
   "cfgshared.effortRunsDirect": "במודלים של Claude, בחירת רמת מאמץ מריצה את הקריאה ב-API של Anthropic עצמה (המקום היחיד שבו המאמץ משפיע) ומחויבת בדרגה אחת גבוהה יותר.",
+  "cfgshared.effortRunsDirectByDefault": "במודל הזה ההרצה תמיד כוללת רמת מאמץ (גבוה, אלא אם תבחרו רמה אחרת), ולכן היא תמיד רצה ב-API של Anthropic עצמה (המקום היחיד שבו המאמץ משפיע) ומחויבת בדרגה אחת גבוהה יותר.",
   "cfgshared.structuredOutputTempWarn": "הרכיב הזה מבקש מהמודל פלט מובנה — מעל 0.5 בערך הוא מתחיל לשבור את המבנה.",
   "cfgshared.maxTokens": "מקסימום טוקנים",
   "cfgshared.generateWithAi": "יצירה ב-AI",

@@ -276,7 +276,7 @@ describe("handleAiAvatar — audio length cap", () => {
     const job = makeAudioJob(SHORT_AUDIO)
     await handleAiAvatar(job as never, makeCtx())
 
-    expect(mocks.mockCapAudioForAvatar).toHaveBeenCalledWith(SHORT_AUDIO, "job-1", "user-1")
+    expect(mocks.mockCapAudioForAvatar).toHaveBeenCalledWith(SHORT_AUDIO, "job-1")
   })
 
   it("a >600s audio is trimmed: the TRIMMED url drives the HeyGen call and a warning is set", async () => {

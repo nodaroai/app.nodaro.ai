@@ -86,13 +86,18 @@ export default function CollectionDetailPage() {
   const [pending, setPending] = useState<PendingDelete | null>(null)
   const [exporting, setExporting] = useState(false)
 
+  // The typed words reach the query a moment after typing stops, and only a CHANGED query
+  // starts the list over: an unconditional reset fired once on opening too, and undid a page
+  // picked in that first moment.
   useEffect(() => {
+    const next = search.trim()
+    if (next === q) return
     const timer = setTimeout(() => {
-      setQ(search.trim())
+      setQ(next)
       setPage(1)
     }, SEARCH_DELAY_MS)
     return () => clearTimeout(timer)
-  }, [search])
+  }, [search, q])
 
   const since = fromDay ? localDayStartIso(fromDay) : undefined
   // The day picked as "to" is included: the filter ends at the next day's start.

@@ -117,9 +117,9 @@ import {
   uploadBufferToR2,
   deleteFromR2,
   batchDeleteFromR2,
+  headR2Object,
   r2KeyFromOurUrl,
   mediaObjectKey,
-  tmpObjectKey,
   copyRecastObject,
   StorageLimitError,
   isStorageLimitError,
@@ -193,10 +193,6 @@ describe("mediaObjectKey (#754)", () => {
   })
   it("takes an explicit extension for writers that already encoded (mp3 speech, revoice)", () => {
     expect(mediaObjectKey("job-1", "audio", "mp3")).toBe("audios/job-1.mp3")
-  })
-  it("provider-input scratch gets its own prefix, never a deliverable one", () => {
-    expect(tmpObjectKey("lip-sync-trimmed-1", "mp3")).toBe("tmp/provider-input/lip-sync-trimmed-1.mp3")
-    expect(tmpObjectKey("x", "mp4").startsWith("audios/") || tmpObjectKey("x", "mp4").startsWith("videos/")).toBe(false)
   })
 })
 import {
@@ -338,17 +334,19 @@ describe("batchDeleteFromR2", () => {
   it("deletes the rest of a batch and leaves past builds' styling files where they are", async () => {
     mocks.mockSend.mockResolvedValueOnce({ Deleted: [{ Key: "images/a.png" }], Errors: [] })
     const result = await batchDeleteFromR2(["images/a.png", "site-assets/assets/index-Dz56B_55.css"])
-    expect(result).toEqual({ deleted: 1, errors: 0 })
+    // The skipped file is still there: reported as not deleted, never as gone.
+    expect(result).toEqual({ deleted: 1, errors: 0, notDeleted: ["site-assets/assets/index-Dz56B_55.css"], kept: ["site-assets/assets/index-Dz56B_55.css"] })
     expect(mocks.deleteObjectsCalls).toEqual([expect.objectContaining({ Delete: { Objects: [{ Key: "images/a.png" }] } })])
   })
   it("a batch of only archived styling files sends nothing", async () => {
-    expect(await batchDeleteFromR2(["site-assets/assets/index-Dz56B_55.css"])).toEqual({ deleted: 0, errors: 0 })
+    expect(await batchDeleteFromR2(["site-assets/assets/index-Dz56B_55.css"]))
+      .toEqual({ deleted: 0, errors: 0, notDeleted: ["site-assets/assets/index-Dz56B_55.css"], kept: ["site-assets/assets/index-Dz56B_55.css"] })
     expect(mocks.mockSend).not.toHaveBeenCalled()
   })
   it("returns zeroes for empty array without calling send", async () => {
     const result = await batchDeleteFromR2([])
 
-    expect(result).toEqual({ deleted: 0, errors: 0 })
+    expect(result).toEqual({ deleted: 0, errors: 0, notDeleted: [], kept: [] })
     expect(mocks.mockSend).not.toHaveBeenCalled()
   })
 
@@ -362,7 +360,7 @@ describe("batchDeleteFromR2", () => {
 
     const result = await batchDeleteFromR2(keys)
 
-    expect(result).toEqual({ deleted: 5, errors: 0 })
+    expect(result).toEqual({ deleted: 5, errors: 0, notDeleted: [], kept: [] })
     expect(mocks.mockSend).toHaveBeenCalledTimes(1)
     expect(mocks.deleteObjectsCalls).toHaveLength(1)
     expect(mocks.deleteObjectsCalls[0]).toEqual(
@@ -383,7 +381,28 @@ describe("batchDeleteFromR2", () => {
 
     const result = await batchDeleteFromR2(["a", "b", "c"])
 
-    expect(result).toEqual({ deleted: 2, errors: 1 })
+    expect(result).toEqual({ deleted: 2, errors: 1, notDeleted: ["c"], kept: [] })
+  })
+
+  it("an error that names no key leaves every key the response did not list as deleted unconfirmed", async () => {
+    mocks.mockSend.mockResolvedValueOnce({
+      Deleted: [{ Key: "a" }],
+      Errors: [{ Code: "InternalError" }],
+    })
+
+    const result = await batchDeleteFromR2(["a", "b", "c"])
+
+    expect(result).toEqual({ deleted: 1, errors: 1, notDeleted: ["b", "c"], kept: [] })
+  })
+
+  it("reports only the failed chunk's keys as not deleted", async () => {
+    const keys = Array.from({ length: 1001 }, (_, i) => `key-${i}`)
+    mocks.mockSend.mockResolvedValueOnce({ Deleted: keys.slice(0, 1000).map((Key) => ({ Key })), Errors: [] })
+    mocks.mockSend.mockRejectedValueOnce(new Error("network failure"))
+
+    const result = await batchDeleteFromR2(keys)
+
+    expect(result).toEqual({ deleted: 1000, errors: 1, notDeleted: ["key-1000"], kept: [] })
   })
 
   it("chunks into multiple batches for > 1000 keys", async () => {
@@ -402,7 +421,7 @@ describe("batchDeleteFromR2", () => {
 
     const result = await batchDeleteFromR2(keys)
 
-    expect(result).toEqual({ deleted: 1500, errors: 0 })
+    expect(result).toEqual({ deleted: 1500, errors: 0, notDeleted: [], kept: [] })
     expect(mocks.mockSend).toHaveBeenCalledTimes(2)
   })
 
@@ -411,7 +430,7 @@ describe("batchDeleteFromR2", () => {
 
     const result = await batchDeleteFromR2(["a", "b", "c"])
 
-    expect(result).toEqual({ deleted: 0, errors: 3 })
+    expect(result).toEqual({ deleted: 0, errors: 3, notDeleted: ["a", "b", "c"], kept: [] })
   })
 })
 
@@ -804,4 +823,22 @@ it.each([undefined, 1])("bounds actual object bytes when ContentLength is %s", a
   const result = await readR2Object("retained-videos/test", { maxBytes: 5 })
   expect(result?.body.length).toBe(0)
   expect(body.destroyed).toBe(true)
+})
+
+describe("headR2Object (the failed-delete retry's still-the-same-object check)", () => {
+  it("returns the object's LastModified", async () => {
+    const when = new Date("2026-10-01T00:00:00Z")
+    mocks.mockSend.mockResolvedValueOnce({ LastModified: when })
+    await expect(headR2Object("videos/a.mp4")).resolves.toEqual({ exists: true, lastModified: when })
+  })
+
+  it("a 404 means the object is gone", async () => {
+    mocks.mockSend.mockRejectedValueOnce(Object.assign(new Error("not found"), { name: "NotFound", $metadata: { httpStatusCode: 404 } }))
+    await expect(headR2Object("videos/a.mp4")).resolves.toEqual({ exists: false })
+  })
+
+  it("any other error throws, so the retry never acts on a guess", async () => {
+    mocks.mockSend.mockRejectedValueOnce(Object.assign(new Error("slow down"), { $metadata: { httpStatusCode: 503 } }))
+    await expect(headR2Object("videos/a.mp4")).rejects.toThrow(/slow down/)
+  })
 })

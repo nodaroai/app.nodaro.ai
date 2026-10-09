@@ -311,6 +311,24 @@ describe("Collection detail page", () => {
     await waitFor(() => expect(api.listCollectionRecords).toHaveBeenLastCalledWith(COLL.id, expect.objectContaining({ offset: 0, limit: 12 })))
   })
 
+  it("a page picked right after opening stays picked — only a changed search starts the list over", async () => {
+    api.listCollectionRecords.mockImplementation(async (_id: string, params: { offset?: number; limit?: number }) => ({
+      data: Array.from({ length: Math.min(params.limit ?? 6, 14 - (params.offset ?? 0)) }, (_, i) => record(`r${(params.offset ?? 0) + i + 1}`)),
+      nextCursor: null,
+      total: 14,
+    }))
+    renderPage()
+    await screen.findByRole("heading", { level: 3, name: "Story r1" })
+    fireEvent.click(screen.getByRole("button", { name: en["collections.nextPage"] }))
+    await screen.findByText("Showing 7–12 of 14")
+    // Longer than the search box's delay: a reset that fired on opening would land in here.
+    await new Promise((resolve) => setTimeout(resolve, 450))
+    expect(screen.getByText("Showing 7–12 of 14")).toBeInTheDocument()
+    expect(api.listCollectionRecords).toHaveBeenLastCalledWith(COLL.id, expect.objectContaining({ offset: 6 }))
+    fireEvent.change(screen.getByPlaceholderText(en["collections.searchPlaceholder"]), { target: { value: "story" } })
+    await waitFor(() => expect(api.listCollectionRecords).toHaveBeenLastCalledWith(COLL.id, expect.objectContaining({ q: "story", offset: 0 })))
+  })
+
   it("narrows the list to the days picked (the 'to' day included), offers the last 7 days, flips the order, and clears the days", async () => {
     renderPage()
     await screen.findByRole("heading", { level: 3, name: "Story a" })

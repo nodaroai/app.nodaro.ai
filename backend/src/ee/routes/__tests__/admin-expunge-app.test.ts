@@ -542,7 +542,7 @@ function orderedSupabase(
   })
   vi.mocked(batchDeleteFromR2).mockImplementation(async () => {
     steps.push("r2.delete")
-    return { deleted: 3, errors: 0 }
+    return { deleted: 3, errors: 0, notDeleted: [], kept: [] }
   })
 }
 

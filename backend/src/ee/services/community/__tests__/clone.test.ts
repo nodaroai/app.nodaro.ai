@@ -12,7 +12,7 @@ vi.mock("../../../../lib/default-project.js", () => ({
 vi.mock("../../../../lib/entity-naming.js", () => ({ deriveAvailableName: vi.fn().mockResolvedValue("Hero (community)") }))
 vi.mock("../../../../lib/storage.js", () => ({
   copyR2ObjectToPrefix: vi.fn().mockResolvedValue({ url: "CC", bytes: 10 }),
-  batchDeleteFromR2: vi.fn(),
+  batchDeleteFromR2: vi.fn().mockResolvedValue({ deleted: 1, errors: 0, notDeleted: [], kept: [] }),
   r2KeyFromOurUrl: vi.fn().mockReturnValue("key"),
 }))
 import { cloneListing } from "../clone.js"

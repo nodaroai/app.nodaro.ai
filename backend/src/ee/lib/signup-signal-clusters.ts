@@ -109,15 +109,11 @@ export function uniqueIds(rows: readonly ClusterRow[]): string[] {
 
 /**
  * "The function is not in the database yet" — the only supabase error the
- * cluster route answers with an empty page instead of a 500. Migrations reach
- * the database on a push to main, so staging runs this code for days first.
+ * cluster route answers with an empty page instead of a 500. Lives in
+ * `lib/postgrest-errors.ts` (core code needs it too); re-exported here for
+ * this module's callers.
  */
-export function isMissingFunctionError(err: unknown): boolean {
-  if (typeof err !== "object" || err === null) return false
-  const record = err as { code?: unknown; message?: unknown }
-  if (record.code === "PGRST202" || record.code === "42883") return true
-  return typeof record.message === "string" && /could not find the function/i.test(record.message)
-}
+export { isMissingFunctionError } from "../../lib/postgrest-errors.js"
 
 function memberFor(
   userId: string,

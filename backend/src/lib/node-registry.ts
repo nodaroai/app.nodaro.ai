@@ -182,6 +182,10 @@ export const CREDIT_BAND_SOURCES: Readonly<Record<string, CreditBandSource>> = {
   "llm-chat": { ids: familyIds("llm-chat") },
   "generate-script": { ids: familyIds("generate-script") },
   "image-critic": { ids: familyIds("image-critic") },
+  "describe-to-picker": {
+    ids: familyIds("describe-to-picker"),
+    note: "The three tier rungs share one price; the top of the band is premium-direct, which an untouched node reserves (Opus 5.5 at effort high runs on Anthropic's own API).",
+  },
   "transcribe": {
     ids: familyIds(...TRANSCRIBE_PROVIDERS),
     note: "Reserves on the ENGINE id (guard and reservation both resolve `provider ?? default`), never the node-type fallback key.",
@@ -1191,7 +1195,7 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     category: "ai-text",
     description: "Analyze an image with a vision LLM and emit catalog-valid picker JSON (Person) to auto-fill a parameter picker.",
     outputType: "data",
-    // Flat 1cr across LLM tiers (describe-to-picker / :economy / :premium all = 1) — auto-filled from STATIC_CREDIT_COSTS.
+    creditCost: creditBandFor("describe-to-picker"),
   },
   {
     type: "transcribe",

@@ -148,7 +148,11 @@ request body — `"none" | "low" | "medium" | "high" | "xhigh" | "max"`,
 model-dependent (see the model table in the
 [Models](https://nodaro.ai/docs/node/llm-chat#models)
 section of the Generate Text - Any LLM node docs). Omit it for the vendor default
-("Auto"). `xhigh` and `max` bill one tier up (economy → standard, standard →
+("Auto") — except on `describe-to-picker` and its text twin `text-to-picker`:
+on their default model (Claude Opus 5.5) an omitted effort runs at `"high"`,
+which runs on Anthropic's own API and bills the premium-direct rung (see the
+[Describe to Picker](https://nodaro.ai/docs/node/describe-to-picker) docs);
+send another level to lower it, and any other model keeps Auto. `xhigh` and `max` bill one tier up (economy → standard, standard →
 premium); see the
 [Credits](https://nodaro.ai/docs/node/llm-chat#credits)
 section for the exact rule. Workflow/canvas LLM nodes carry the same field on

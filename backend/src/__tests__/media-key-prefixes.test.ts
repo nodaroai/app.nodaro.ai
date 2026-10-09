@@ -59,6 +59,6 @@ describe("produced-media object keys (#754)", () => {
         offenders.push(`${relative(SRC, file)}: ${literal}`)
       }
     }
-    expect(offenders, "build media keys with mediaObjectKey(id, type, ext) (or tmpObjectKey for provider-input scratch) — see lib/storage.ts").toEqual([])
+    expect(offenders, "build media keys with mediaObjectKey(id, type, ext) (or the job-scratch writers for provider-input scratch) — see lib/storage.ts").toEqual([])
   })
 })

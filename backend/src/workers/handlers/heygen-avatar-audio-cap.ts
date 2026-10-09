@@ -8,8 +8,8 @@
  *
  * This helper closes that gap on the worker side: it probes the driving audio
  * and, when it runs longer than `AI_AVATAR_MAX_AUDIO_SEC`, trims it down to the
- * first 600s (re-hosted to R2) so the HeyGen call — and thus the billed clip —
- * can never exceed the reserved 600s bucket. It also returns a non-fatal,
+ * first 600s (re-hosted to the job's scratch folder) so the HeyGen call — and
+ * thus the billed clip — can never exceed the reserved 600s bucket. It also returns a non-fatal,
  * user-facing warning string so the ai-avatar node can show why the output is
  * shorter than the source.
  *
@@ -25,7 +25,6 @@
 import { extname } from "node:path"
 import { promises as fs } from "node:fs"
 import { join } from "node:path"
-import { randomUUID } from "node:crypto"
 import { AI_AVATAR_MAX_AUDIO_SEC } from "@nodaro/shared"
 import {
   downloadFile,
@@ -34,7 +33,7 @@ import {
   createWorkDir,
   cleanupWorkDir,
 } from "../../providers/video/ffmpeg-utils.js"
-import { uploadFileWithKeyToR2 } from "../../lib/storage.js"
+import { uploadJobScratchFile } from "../../lib/job-scratch.js"
 
 /** Audio container/MIME pairs we recognise; falls back to mp3 stream-copy. */
 const AUDIO_MIME: Record<string, string> = {
@@ -67,8 +66,7 @@ function formatClock(totalSec: number): string {
  * Cap an audio-mode driving track to AI_AVATAR_MAX_AUDIO_SEC.
  *
  * @param audioUrl       The driving audio url (R2-hosted in the normal flow).
- * @param jobId          Owning job id — used for the R2 key + storage tracking.
- * @param jobUserId      Owning user — used for storage tracking.
+ * @param jobId          Owning job id — the scratch folder the trimmed copy goes to.
  * @param probedDurationSec Optional already-known duration (seconds) to avoid a
  *                       second ffprobe. When omitted/invalid the audio is probed.
  * @returns the url to use + an optional warning. On any error, returns the
@@ -77,7 +75,6 @@ function formatClock(totalSec: number): string {
 export async function capAudioForAvatar(
   audioUrl: string,
   jobId: string,
-  jobUserId: string | undefined,
   probedDurationSec?: number,
 ): Promise<AudioCapResult> {
   try {
@@ -120,13 +117,9 @@ export async function capAudioForAvatar(
         outPath,
       ])
 
-      const key = `audios/ai-avatar-cap-${jobId}-${randomUUID()}${outExt}`
-      const trimmedUrl = await uploadFileWithKeyToR2(
-        outPath,
-        key,
-        AUDIO_MIME[outExt]!,
-        jobUserId,
-      )
+      // A provider input, not the deliverable: the job's scratch folder
+      // (`lib/job-scratch.ts`), emptied when the job ends, on no one's quota.
+      const trimmedUrl = await uploadJobScratchFile(outPath, "ai-avatar-audio-cap", outExt.slice(1), AUDIO_MIME[outExt]!, jobId)
 
       const warning =
         `Audio was ${formatClock(duration)} — trimmed to the ` +

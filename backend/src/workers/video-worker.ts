@@ -13,6 +13,7 @@ import { declaredJobBudgetMs } from "../lib/job-budget.js"
 import { providerDetailOf } from "../lib/provider-error-detail.js"
 import { userFacingMessage } from "../lib/user-facing-error.js"
 import { markJobFailed } from "../lib/job-failure.js"
+import { discardJobScratch } from "../lib/job-scratch.js"
 import { isReconcileRecoverable } from "../lib/reconcile/types.js"
 import { isDrainAbortError } from "../lib/worker-drain.js"
 import {
@@ -174,6 +175,9 @@ export function createVideoWorker() {
           job_type: (jobRecord.job_type as string | null) ?? null,
           input_data: (jobRecord.input_data as Record<string, unknown> | null) ?? null,
         })
+        // The attempt that died may have left scratch files; this recovery
+        // may have just ended the job (see the dispatch's `finally` below).
+        await discardJobScratch(jobId)
         return
       }
 
@@ -598,6 +602,14 @@ export function createVideoWorker() {
           }
         }
         throw err
+      } finally {
+        // Temporary provider uploads (decided 2026-10-09): the job's scratch
+        // folder (`lib/job-scratch.ts`) is emptied when the job ends — success,
+        // failure or cancel. Every exit passes here, after the failure path has
+        // marked the row; the discard reads the row and keeps the folder while
+        // the job is still in flight (a retry, a drain hand-back, a provider
+        // task left for the reconcile cron). Never throws.
+        await discardJobScratch(jobId)
       }
     },
     {

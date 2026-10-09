@@ -2,19 +2,21 @@ import type { FastifyInstance } from "fastify"
 import { maybeProxyLlmRouteToCloud } from "../lib/cloud-llm-proxy.js"
 import { z } from "zod"
 import { buildMultiPickerAnalyzerSpec, PICKER_TYPES, PICKER_ANALYZER_FAMILIES, type PickerType, type PickerGaps } from "@nodaro/prompts"
-import { buildLlmCreditIdentifier, resolveLlmCreditId, getLlmModel, LLM_FEATURE_DEFAULTS, LLM_MODEL_IDS, LLM_REASONING_EFFORTS, PROMPT_HARD_CEILING } from "@nodaro/shared"
+import { buildLlmCreditIdentifier, resolveLlmCreditId, getLlmModel, defaultReasoningEffort, LLM_FEATURE_DEFAULTS, LLM_MODEL_IDS, LLM_REASONING_EFFORTS, PROMPT_HARD_CEILING } from "@nodaro/shared"
 import { supabase } from "../lib/supabase.js"
 import { insertJob } from "../lib/insert-job.js"
 import { config } from "../lib/config.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { llmCompleteStructured } from "../lib/llm-client.js"
 import { LLM_ADVANCED_SHAPE, advancedModeError, resolveLlmParams } from "../lib/llm-advanced-mode.js"
+import { effortTimeoutMs } from "../lib/llm-effort-timeout.js"
 import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/request-helpers.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { markProviderCallStart } from "../lib/reconcile/persistence.js"
 import { commitReservedCreditsForJob, refundReservedCreditsForJob } from "../lib/credits-job-lifecycle.js"
+import { withDescribeToPickerDefaults } from "./describe-to-picker.js"
 
 /**
  * POST /v1/text-to-picker — free text in, pickerJson out.
@@ -23,9 +25,11 @@ import { commitReservedCreditsForJob, refundReservedCreditsForJob } from "../lib
  * (descriptor registry → forced structured-output tool → pickerJson + gaps),
  * fed a scene description instead of an image. No vision requirement — any
  * structured-output model works; defaults to the describe-to-picker feature
- * default. Billing deliberately REUSES the describe-to-picker credit
- * identifier: identical LLM call shape (text is strictly cheaper than
- * image+text), so no new pricing surface. Revisit if the economics diverge.
+ * default, and to its default effort on that model (Opus 5.5 at high,
+ * decided 2026-10-09 to match describe-to-picker). Billing deliberately
+ * REUSES the describe-to-picker credit identifier: identical LLM call shape
+ * (text is strictly cheaper than image+text), so no new pricing surface.
+ * Revisit if the economics diverge.
  *
  * Batching: `targetPickers` defaults to ALL 39 analyzable pickers, whose
  * combined legend measures ~53k tokens plus ~46k for Character Motion's
@@ -99,8 +103,9 @@ function buildSystemPrompt(legend: string, instructions?: string): string {
 export async function textToPickerRoutes(app: FastifyInstance) {
   app.post(
     "/v1/text-to-picker",
-    // Same LLM call shape as describe-to-picker → same credit identifier.
-    { preHandler: creditGuard((req) => resolveLlmCreditId("describe-to-picker", req.body)) },
+    // Same LLM call shape as describe-to-picker → same credit identifier, and
+    // the same defaults applied before the pre-check prices it.
+    { preHandler: creditGuard((req) => resolveLlmCreditId("describe-to-picker", withDescribeToPickerDefaults(req.body))) },
     async (req, reply) => {
       // Keyless install with a live connection: the cloud runs the same
       // code, so forward the body and pass its answer straight back.
@@ -129,7 +134,15 @@ export async function textToPickerRoutes(app: FastifyInstance) {
       }
       const advancedError = advancedModeError(parsed.data, model.id)
       if (advancedError) return reply.status(400).send({ error: advancedError })
-      const modelIdentifier = buildLlmCreditIdentifier("describe-to-picker", llmModelId, parsed.data.reasoningEffort, parsed.data.advancedMode)
+      // As in describe-to-picker: no effort sent → the default model runs at
+      // its default effort, any other model keeps its Auto. Resolved ONCE for
+      // every batch's request and the credit id, so the bill and the wire agree.
+      const reasoningEffort = parsed.data.reasoningEffort ?? defaultReasoningEffort("describe-to-picker", parsed.data.llmModel)
+      const modelIdentifier = buildLlmCreditIdentifier("describe-to-picker", llmModelId, reasoningEffort, parsed.data.advancedMode)
+      // describe-to-picker's effort-aware timeout, from the same resolved
+      // effort: a default run goes out at high and gets high's 240 s. Batches
+      // run concurrently, so each one gets the whole timeout.
+      const timeoutMs = effortTimeoutMs(reasoningEffort)
 
       const { data: job, error: jobError } = await insertJob(req, {
         workflow_id: extractWorkflowId(req.body),
@@ -159,8 +172,9 @@ export async function textToPickerRoutes(app: FastifyInstance) {
                 modelId: model.id,
                 system: buildSystemPrompt(legend, instructions),
                 messages: [{ role: "user", content: [{ type: "text", text: `Scene description:\n${text}\n\nAnalyze it and emit the picker JSON.` }] }],
-                reasoningEffort: parsed.data.reasoningEffort,
+                reasoningEffort,
                 ...resolveLlmParams(parsed.data),
+                ...(timeoutMs === undefined ? {} : { timeoutMs }),
               },
               schema,
               { schemaName: toolName },

@@ -1,6 +1,5 @@
 import { supabase } from "../../lib/supabase.js"
-import { config } from "../../lib/config.js"
-import { deleteFromR2, batchDeleteFromR2, listObjectsByPrefixWithMeta } from "../../lib/storage.js"
+import { deleteFromR2, listObjectsByPrefixWithMeta } from "../../lib/storage.js"
 import { tierColumns } from "./tier-columns.js"
 import { downgradeToEffectiveFloor, fetchLifetimeTopups } from "./downgrade-floor.js"
 import { isPaygRetentionActive, PAYG_RETENTION_DAYS } from "@nodaro/shared"
@@ -28,8 +27,10 @@ export const EDIT_PLAN_TMP_PREFIX = "edit-plan-tmp"
 import { updateStorageUsage } from "../../utils/file-validation.js"
 import { relayOwnedKeys, deletableKeys } from "../../lib/asset-delete.js"
 import { isOwnedObjectKey } from "../../lib/job-policy-outputs.js"
-import { isJobArtefactKey } from "../../lib/job-artefact-prefixes.js"
-import { claimedByOthers, keysClaimedByOthers } from "../../lib/key-ownership.js"
+import { ownedJobOutputFiles, r2KeyFromUrl, type JobOutputFile } from "../../lib/job-output-keys.js"
+import { blankUrlsInEveryJobOutput, jobOutputBlankingAvailable, markJobOutputsCleaned } from "../../lib/job-output-references.js"
+import { claimedByOthers, keysClaimedByOthers, keysHeldByOtherLibraryRows } from "../../lib/key-ownership.js"
+import { deleteKeysRecordingFailures, publicUrlOfKey, type RecordOptions } from "../../lib/storage-delete.js"
 import { TIER_STORAGE_LIMITS, TIER_CREDITS } from "./stripe-config.js"
 import { invalidateBalanceCache } from "../routes/credits.js"
 import { CreditsService } from "./credits.js"
@@ -76,114 +77,115 @@ const FREE_TIER_DEFAULTS = {
 // Helpers
 // ============================================================
 
-/**
- * Extract R2 key from a public R2 URL.
- * Returns null if the URL doesn't match the R2 public URL pattern.
- */
-export function r2KeyFromUrl(url: string): string | null {
-  if (!config.R2_PUBLIC_URL || !url.startsWith(config.R2_PUBLIC_URL)) {
-    return null
-  }
-  return url.replace(config.R2_PUBLIC_URL + "/", "")
-}
+/** Re-exported: the url → key rule lives with the job-output walk. */
+export { r2KeyFromUrl }
 
 /**
- * Extract all R2 URLs from job output_data.
- * output_data may contain imageUrl, videoUrl, audioUrl, or nested stem URLs.
- */
-function extractR2UrlsFromOutput(outputData: Record<string, unknown>): string[] {
-  const urls: string[] = []
-
-  for (const [key, value] of Object.entries(outputData)) {
-    if (typeof value === "string" && value.startsWith(config.R2_PUBLIC_URL)) {
-      urls.push(value)
-    }
-    // Handle nested objects (e.g., suno-separate stems)
-    if (key.endsWith("Url") && typeof value === "string" && value.startsWith("http")) {
-      if (!urls.includes(value)) urls.push(value)
-    }
-  }
-
-  for (const url of nestedArtefactUrls(outputData)) {
-    if (!urls.includes(url)) urls.push(url)
-  }
-
-  return urls
-}
-
-/** A NESTED string that is one of our urls under a registered job-artefact
- *  prefix (`lib/job-artefact-prefixes.ts`). Top-level values are not this
- *  rule's: the shallow pass above owns them. */
-function isNestedArtefactUrl(value: unknown): value is string {
-  if (typeof value !== "string") return false
-  const key = r2KeyFromUrl(value)
-  return key !== null && isJobArtefactKey(key)
-}
-
-/**
- * The registered artefact urls held BELOW the top level of `output_data` —
- * e.g. Speaker Frames' descriptor, `output_data.json.url` →
- * `speaker-tracks/<jobId>.json`. Nothing else nested is reached: a nested url
- * is usually an echoed input, and widening the reapers to every nested url is
- * a separate decision.
- */
-function nestedArtefactUrls(outputData: Record<string, unknown>): string[] {
-  const found: string[] = []
-  const walk = (value: unknown): void => {
-    if (isNestedArtefactUrl(value)) {
-      if (!found.includes(value)) found.push(value)
-      return
-    }
-    if (Array.isArray(value)) {
-      for (const v of value) walk(v)
-      return
-    }
-    if (value && typeof value === "object") {
-      for (const v of Object.values(value as Record<string, unknown>)) walk(v)
-    }
-  }
-  for (const value of Object.values(outputData)) {
-    if (value && typeof value === "object") walk(value)
-  }
-  return found
-}
-
-/** `value` with every nested registered-artefact url in `urls` replaced by
- *  null, copied (never mutated); anything else is returned as it was. */
-function withNestedArtefactUrlsCleared(value: unknown, urls: ReadonlySet<string>): unknown {
-  if (isNestedArtefactUrl(value)) return urls.has(value) ? null : value
-  if (Array.isArray(value)) return value.map((v) => withNestedArtefactUrlsCleared(v, urls))
-  if (value && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, withNestedArtefactUrlsCleared(v, urls)]),
-    )
-  }
-  return value
-}
-
-/**
- * The R2 keys a reaper may delete on a completed job's behalf: the ones in
- * the job's own key family (`<prefix>/<jobId>` or `<prefix>/<jobId>-<suffix>`,
- * `isOwnedObjectKey`), and no other (decided 2026-10-06; migration 474).
+ * What a reaper may delete for a batch of completed jobs (decided 2026-10-08).
  *
- * Owning the row does not vouch for the URLs in it: before 474 a client could
- * insert its own job as 'completed' with any `output_data` (another user's
- * file) and any `created_at`, and these reapers delete every key they find.
- * A legitimate output that names another object (an upload, a saved
- * reference, a relayed far-end file) is left alone too: that object's own
- * job, asset or location row is what reaps it. `heldBack` counts the keys
- * kept, so the cron's log shows how many the fence held.
+ * Each job's files are read off its WHOLE output — nested objects and lists
+ * included — by `ownedJobOutputFiles`, the walk the admin app expunge uses,
+ * and only the files in the job's own key family are taken (`<prefix>/<jobId>`
+ * or `<prefix>/<jobId>-<suffix>`; decided 2026-10-06, migration 474). Owning
+ * the row does not vouch for the urls in it: before 474 a client could insert
+ * its own job as 'completed' with any output, and a legitimate output echoes
+ * its inputs (an upload, a saved reference, a relayed far-end file) at any
+ * depth. Those are left to their own job, asset or location row.
+ *
+ * Then expunge's guard (`keysHeldByOtherLibraryRows`): a file a library row
+ * ties to another job, or to no job (a later gallery save of the output), is
+ * kept. Phase A1 / the canceled wipe have already cleared this user's own aged
+ * rows, so a row still naming the key is a live claim. And the relay rule
+ * (`deletableKeys`, below) keeps anything our relay target made.
+ *
+ * Returns the keys to delete and the files they are (`files`, each with the
+ * url that names it). Which urls lose their links is decided only AFTER the
+ * delete, from what storage confirms gone (`deletedLinks`). Throws when the
+ * library lookup fails; the reaper then stops the batch.
  */
-function ownedJobOutputKeys(jobId: string, output: Record<string, unknown>): { keys: string[]; heldBack: number } {
-  const keys: string[] = []
+async function reapableJobFiles(
+  jobs: ReadonlyArray<{ id: unknown; output_data: unknown }>,
+): Promise<{ keys: string[]; files: ReapedFile[]; heldBack: number; libraryKept: number }> {
+  const byJob = new Map<string, JobOutputFile[]>()
   let heldBack = 0
-  for (const url of extractR2UrlsFromOutput(output)) {
-    const r2Key = r2KeyFromUrl(url)
-    if (!r2Key) continue
-    if (isOwnedObjectKey(jobId, r2Key)) keys.push(r2Key)
-    else heldBack++
+  for (const job of jobs) {
+    const owned = ownedJobOutputFiles(job.id as string, job.output_data)
+    byJob.set(job.id as string, owned.files)
+    heldBack += owned.heldBack
   }
-  return { keys, heldBack }
+  const ownKeys = [...byJob.values()].flatMap((files) => files.map((f) => f.key))
+  const libraryHeld = await keysHeldByOtherLibraryRows(ownKeys, (key, jobId) => isOwnedObjectKey(jobId, key))
+  // A relayed job's `output_data` holds the FAR end's url, and under a shared
+  // bucket `r2KeyFromUrl` resolves it (see the relay-delete note below).
+  const candidates = new Set(await deletableKeys([...new Set(ownKeys.filter((k) => !libraryHeld.has(k)))]))
+
+  const files = [...byJob].flatMap(([jobId, list]) =>
+    list.filter((f) => candidates.has(f.key)).map((f) => ({ ...f, jobId })),
+  )
+  return { keys: [...candidates], files, heldBack, libraryKept: libraryHeld.size }
+}
+
+/** A file a reaper is about to delete, with the job whose output names it. */
+type ReapedFile = JobOutputFile & { readonly jobId: string }
+
+/**
+ * How a reaper records the job files storage did not confirm gone (decided
+ * 2026-10-08, rounds 11 and 12): each with the url its output names and its
+ * job. The batch is still marked cleaned and a later pass retries these; a
+ * failed record throws, so the batch stays unmarked instead.
+ */
+function jobFileRecording(files: readonly ReapedFile[]): RecordOptions {
+  const byKey = new Map(files.map((f) => [f.key, f]))
+  return {
+    urlOf: (key) => byKey.get(key)?.url ?? publicUrlOfKey(key),
+    jobIdOf: (key) => byKey.get(key)?.jobId ?? null,
+    recordErrors: "throw",
+  }
+}
+
+/**
+ * The urls whose files this run really deleted (review round 10): the batch's
+ * files minus every key storage did not confirm gone (`notDeleted` — a failed
+ * call, a per-key error, a skipped archived asset). These are the only urls
+ * `blankDeletedLinks` clears everywhere and the batch's own update nulls, so
+ * no output keeps a link to a deleted file and none loses a link to a file
+ * still in storage.
+ */
+function deletedLinks(files: readonly JobOutputFile[], notDeleted: Iterable<string> | undefined): Set<string> {
+  const kept = new Set(notDeleted ?? [])
+  return new Set(files.filter((f) => !kept.has(f.key)).map((f) => f.url))
+}
+
+/**
+ * Clears the links to the files a batch just deleted from EVERY job output
+ * that names them (decided 2026-10-08): this batch's, and any other job's
+ * whoever owns it (a later job that echoed one as its input, a copy). Only
+ * those urls change. Runs BEFORE the batch's jobs are marked `_cleaned`, and
+ * throws on a failed call: the reaper then stops without marking them, so the
+ * next run walks them again and retries (the R2 delete and the blanking are
+ * both idempotent).
+ */
+async function blankDeletedLinks(deleted: ReadonlySet<string>): Promise<void> {
+  if (deleted.size > 0) await blankUrlsInEveryJobOutput([...deleted])
+}
+
+/**
+ * Whether a reaper may run its job-output pass: migration 495's functions are
+ * on this database (staging runs dev code before `main` applies 495). Asked
+ * BEFORE anything is deleted — a deleted file whose links could not then be
+ * blanked would leave outputs pointing at nothing — so without them the pass
+ * deletes nothing and marks nothing; `main`'s own reaper covers the shared
+ * database until the promotion. A failed probe is an error, and also skips.
+ */
+async function jobOutputPassReady(): Promise<{ ready: boolean; failed: boolean }> {
+  try {
+    if (await jobOutputBlankingAvailable()) return { ready: true, failed: false }
+    console.warn("[cleanup] Job-output expiry skipped: migration 495 (blank_job_output_urls) is not on this database yet")
+    return { ready: false, failed: false }
+  } catch (err) {
+    console.error("[cleanup] Job-output expiry skipped: the migration 495 probe failed:", err)
+    return { ready: false, failed: true }
+  }
 }
 
 /**
@@ -283,20 +285,6 @@ async function collectLocationR2Keys(userId: string, cutoff?: string): Promise<s
 }
 
 /**
- * Delete a single R2 file by key, returning the freed bytes.
- * Returns 0 if deletion fails (best-effort).
- */
-async function safeDeleteR2(r2Key: string): Promise<boolean> {
-  try {
-    await deleteFromR2(r2Key)
-    return true
-  } catch (err) {
-    console.error(`[cleanup] Failed to delete R2 key ${r2Key}:`, err)
-    return false
-  }
-}
-
-/**
  * THE RELAY DELETE RULE, for the reapers (spec 2026-09-04-sai-local-development
  * §9.3, D18, invariants 9 and 10a).
  *
@@ -331,6 +319,7 @@ export async function cleanupFreeUserMedia(): Promise<CleanupResult> {
   let errors = 0
   let keysHeldBack = 0
   let keysNotOwned = 0
+  let keysLibraryKept = 0
 
   const cutoffDate = new Date()
   cutoffDate.setDate(cutoffDate.getDate() - MEDIA_RETENTION_DAYS)
@@ -437,7 +426,18 @@ export async function cleanupFreeUserMedia(): Promise<CleanupResult> {
       .map(a => a.r2_key)
       .filter((k): k is string => !!k)
     const relayKept = await relayOwnedKeys(r2Keys)
-    const batchResult = await batchDeleteFromR2(r2Keys.filter(k => !relayKept.has(k)))
+    const toDeleteKeys = r2Keys.filter(k => !relayKept.has(k))
+    // What storage did not delete is recorded for a later retry (decided
+    // 2026-10-08), BEFORE the rows lose their keys: if the record fails, the
+    // rows stay keyed and the next run deletes them again.
+    let batchResult: Awaited<ReturnType<typeof deleteKeysRecordingFailures>>
+    try {
+      batchResult = await deleteKeysRecordingFailures(toDeleteKeys, "retention", { recordErrors: "throw" })
+    } catch (err) {
+      console.error("[cleanup] Free-user asset delete or its failure record failed:", err)
+      errors++
+      break
+    }
     filesDeleted += batchResult.deleted
     errors += batchResult.errors
 
@@ -485,7 +485,9 @@ export async function cleanupFreeUserMedia(): Promise<CleanupResult> {
   }
 
   // --- Phase A2: Clean job output files (batch R2 deletes) ---
-  let hasMoreJobs = true
+  const jobPass = await jobOutputPassReady()
+  if (jobPass.failed) errors++
+  let hasMoreJobs = jobPass.ready
   while (hasMoreJobs) {
     const { data: jobs, error } = await supabase
       .from("jobs")
@@ -524,48 +526,52 @@ export async function cleanupFreeUserMedia(): Promise<CleanupResult> {
       break
     }
 
-    // Collect the R2 keys each job owns (its own key family) across the batch
-    const allR2Keys: string[] = []
-    for (const job of jobsToClean) {
-      const owned = ownedJobOutputKeys(job.id as string, job.output_data as Record<string, unknown>)
-      allR2Keys.push(...owned.keys)
-      keysHeldBack += owned.heldBack
+    // The files each job owns, read off its whole output (`reapableJobFiles`).
+    let reap: Awaited<ReturnType<typeof reapableJobFiles>>
+    try {
+      reap = await reapableJobFiles(jobsToClean)
+    } catch (err) {
+      console.error("[cleanup] Free-user job-output library lookup failed:", err)
+      errors++
+      break
+    }
+    keysHeldBack += reap.heldBack
+    keysLibraryKept += reap.libraryKept
+
+    // Delete, recording what storage did not delete for a later retry, then
+    // clear the deleted files' links from every job output that names them
+    // (`blankDeletedLinks`), all before marking this batch. A failed record
+    // or blanking leaves the batch unmarked: the next run walks it again.
+    let deleted = new Set<string>()
+    try {
+      if (reap.keys.length > 0) {
+        const batchResult = await deleteKeysRecordingFailures(reap.keys, "retention", jobFileRecording(reap.files))
+        filesDeleted += batchResult.deleted
+        errors += batchResult.errors
+        deleted = deletedLinks(reap.files, batchResult.notDeleted)
+      }
+      await blankDeletedLinks(deleted)
+    } catch (err) {
+      console.error("[cleanup] Free-user job-output delete, failure record or link blanking failed:", err)
+      errors++
+      break
     }
 
-    // Batch delete all R2 files, minus anything our relay target created:
-    // a relayed job's `output_data` holds the FAR end's url, and under a shared
-    // bucket `r2KeyFromUrl` resolves it (see the relay-delete note above).
-    const deletableJobKeys = await deletableKeys(allR2Keys)
-    if (deletableJobKeys.length > 0) {
-      const batchResult = await batchDeleteFromR2(deletableJobKeys)
-      filesDeleted += batchResult.deleted
-      errors += batchResult.errors
-    }
-
-    // Update DB records in parallel chunks of 10
-    const jobUpdates = jobsToClean.map(job => {
-      const output = job.output_data as Record<string, unknown>
-      const urls = extractR2UrlsFromOutput(output)
-      const cleanedOutput: Record<string, unknown> = { ...output, _cleaned: true }
-      for (const url of urls) {
-        for (const [key, value] of Object.entries(cleanedOutput)) {
-          if (value === url) cleanedOutput[key] = null
-        }
+    // Mark the batch in the database, from each row's CURRENT output with the
+    // deleted links nulled (`markJobOutputsCleaned`): an output written from
+    // this read would put back a link another path blanked since.
+    try {
+      const ids = jobsToClean.map((job) => job.id as string)
+      const marked = await markJobOutputsCleaned(ids, deleted)
+      // A row left unmarked would be selected again: stop rather than spin.
+      if (marked < ids.length) {
+        console.warn(`[cleanup] ${ids.length - marked} free-user job output(s) were not marked cleaned; stopping this run's job-output pass`)
+        break
       }
-      // A registered artefact held inside a structured output (a descriptor's
-      // `url`) is cleared where it sits, like a top-level url above.
-      const urlSet = new Set(urls)
-      for (const [key, value] of Object.entries(cleanedOutput)) {
-        if (value && typeof value === "object") cleanedOutput[key] = withNestedArtefactUrlsCleared(value, urlSet)
-      }
-      return { id: job.id, cleanedOutput }
-    })
-
-    for (let i = 0; i < jobUpdates.length; i += 10) {
-      const chunk = jobUpdates.slice(i, i + 10)
-      await Promise.all(chunk.map(u =>
-        supabase.from("jobs").update({ output_data: u.cleanedOutput }).eq("id", u.id)
-      ))
+    } catch (err) {
+      console.error("[cleanup] Marking free-user job outputs cleaned failed:", err)
+      errors++
+      break
     }
 
     if (jobs.length < BATCH_SIZE) hasMoreJobs = false
@@ -593,12 +599,14 @@ export async function cleanupFreeUserMedia(): Promise<CleanupResult> {
     keysNotOwned += owned.kept
     const locationKeys = await deletableKeys(owned.keys)
     if (locationKeys.length === 0) continue
-    const batchResult = await batchDeleteFromR2(locationKeys)
+    // What storage did not delete is recorded for a later retry (decided
+    // 2026-10-08); a failed record is logged (the next run sweeps again).
+    const batchResult = await deleteKeysRecordingFailures(locationKeys, "retention")
     filesDeleted += batchResult.deleted
     errors += batchResult.errors
   }
 
-  console.log(`[cleanup] Deleted ${filesDeleted} files for free users (${bytesFreed} bytes freed, ${errors} errors, ${keysHeldBack} job-output keys outside their job's family kept, ${keysNotOwned} keys another user owns kept)`)
+  console.log(`[cleanup] Deleted ${filesDeleted} files for free users (${bytesFreed} bytes freed, ${errors} errors, ${keysHeldBack} job-output keys outside their job's family kept, ${keysLibraryKept} job-output keys a library row still holds kept, ${keysNotOwned} keys another user owns kept)`)
   return { filesDeleted, bytesFreed, errors }
 }
 
@@ -612,6 +620,7 @@ export async function cleanupCanceledUserMedia(): Promise<CleanupResult> {
   let errors = 0
   let keysHeldBack = 0
   let keysNotOwned = 0
+  let keysLibraryKept = 0
 
   const cutoffDate = new Date()
   cutoffDate.setDate(cutoffDate.getDate() - MEDIA_RETENTION_DAYS)
@@ -660,6 +669,11 @@ export async function cleanupCanceledUserMedia(): Promise<CleanupResult> {
   // their media (the free-media reaper's retention window governs it from
   // here) and gets the 10 GB floor instead of the full wipe (design §4.5/4.6).
   const lifetimes = await fetchLifetimeTopups(users.map((u) => u.id))
+
+  // Migration 495's functions first (`jobOutputPassReady`): without them no
+  // user's job outputs are deleted, and no user is downgraded this run.
+  const jobPass = await jobOutputPassReady()
+  if (jobPass.failed) errors++
 
   for (const user of users) {
     if (activeUserIds.has(user.id)) continue // active subscriber — never reap
@@ -715,7 +729,19 @@ export async function cleanupCanceledUserMedia(): Promise<CleanupResult> {
         .map(a => a.r2_key)
         .filter((k): k is string => !!k)
       const relayKept = await relayOwnedKeys(r2Keys)
-      const batchResult = await batchDeleteFromR2(r2Keys.filter(k => !relayKept.has(k)))
+      const toDeleteKeys = r2Keys.filter(k => !relayKept.has(k))
+      // Failures are recorded before the rows lose their keys (see the
+      // free-user reaper); a failed record leaves the wipe incomplete, so no
+      // downgrade.
+      let batchResult: Awaited<ReturnType<typeof deleteKeysRecordingFailures>>
+      try {
+        batchResult = await deleteKeysRecordingFailures(toDeleteKeys, "retention", { recordErrors: "throw" })
+      } catch (err) {
+        console.error(`[cleanup] Asset delete or its failure record failed for canceled user ${user.id}:`, err)
+        errors++
+        ownershipFailed = true
+        break
+      }
       userFilesDeleted += batchResult.deleted
       errors += batchResult.errors
 
@@ -747,7 +773,8 @@ export async function cleanupCanceledUserMedia(): Promise<CleanupResult> {
     }
 
     // Delete all user's job output files (batch)
-    hasMore = true
+    if (!jobPass.ready) ownershipFailed = true
+    hasMore = jobPass.ready
     while (hasMore) {
       const { data: jobs } = await supabase
         .from("jobs")
@@ -778,29 +805,55 @@ export async function cleanupCanceledUserMedia(): Promise<CleanupResult> {
         break
       }
 
-      // Collect the R2 keys each job owns (its own key family)
-      const allR2Keys: string[] = []
-      for (const job of jobsToClean) {
-        const owned = ownedJobOutputKeys(job.id as string, job.output_data as Record<string, unknown>)
-        allR2Keys.push(...owned.keys)
-        keysHeldBack += owned.heldBack
+      // The files each job owns, read off its whole output (`reapableJobFiles`).
+      let reap: Awaited<ReturnType<typeof reapableJobFiles>>
+      try {
+        reap = await reapableJobFiles(jobsToClean)
+      } catch (err) {
+        console.error(`[cleanup] Job-output library lookup failed for canceled user ${user.id}:`, err)
+        errors++
+        ownershipFailed = true
+        break
+      }
+      keysHeldBack += reap.heldBack
+      keysLibraryKept += reap.libraryKept
+
+      // Delete, recording what storage did not delete for a later retry, and
+      // clear the deleted files' links everywhere (`blankDeletedLinks`),
+      // before marking; a failure leaves the user's wipe incomplete, so no
+      // downgrade.
+      let deleted = new Set<string>()
+      try {
+        if (reap.keys.length > 0) {
+          const batchResult = await deleteKeysRecordingFailures(reap.keys, "retention", jobFileRecording(reap.files))
+          userFilesDeleted += batchResult.deleted
+          errors += batchResult.errors
+          deleted = deletedLinks(reap.files, batchResult.notDeleted)
+        }
+        await blankDeletedLinks(deleted)
+      } catch (err) {
+        console.error(`[cleanup] Job-output delete, failure record or link blanking failed for canceled user ${user.id}:`, err)
+        errors++
+        ownershipFailed = true
+        break
       }
 
-      const deletableJobKeys = await deletableKeys(allR2Keys)
-      if (deletableJobKeys.length > 0) {
-        const batchResult = await batchDeleteFromR2(deletableJobKeys)
-        userFilesDeleted += batchResult.deleted
-        errors += batchResult.errors
-      }
-
-      // Update job output_data in parallel chunks of 10
-      for (let i = 0; i < jobsToClean.length; i += 10) {
-        const chunk = jobsToClean.slice(i, i + 10)
-        await Promise.all(chunk.map(job =>
-          supabase.from("jobs")
-            .update({ output_data: { ...(job.output_data as Record<string, unknown>), _cleaned: true } })
-            .eq("id", job.id)
-        ))
+      // Mark the batch in the database, from each row's current output (see
+      // the free-user reaper). A failed mark leaves the wipe incomplete.
+      try {
+        const ids = jobsToClean.map((job) => job.id as string)
+        const marked = await markJobOutputsCleaned(ids, deleted)
+        // A row left unmarked would be selected again: stop rather than spin.
+        if (marked < ids.length) {
+          console.warn(`[cleanup] ${ids.length - marked} job output(s) of canceled user ${user.id} were not marked cleaned; the wipe finishes next run`)
+          ownershipFailed = true
+          break
+        }
+      } catch (err) {
+        console.error(`[cleanup] Marking job outputs cleaned failed for canceled user ${user.id}:`, err)
+        errors++
+        ownershipFailed = true
+        break
       }
 
       if (jobs.length < BATCH_SIZE) hasMore = false
@@ -828,7 +881,19 @@ export async function cleanupCanceledUserMedia(): Promise<CleanupResult> {
     }
     const locationKeys = await deletableKeys(ownedLocationKeys)
     if (locationKeys.length > 0) {
-      const batchResult = await batchDeleteFromR2(locationKeys)
+      // What storage did not delete is recorded for a later retry. A failed
+      // record leaves the wipe incomplete: no downgrade, so the next run
+      // sweeps again.
+      let batchResult: Awaited<ReturnType<typeof deleteKeysRecordingFailures>>
+      try {
+        batchResult = await deleteKeysRecordingFailures(locationKeys, "retention", { recordErrors: "throw" })
+      } catch (err) {
+        console.error(`[cleanup] Location delete or its failure record failed for canceled user ${user.id}:`, err)
+        errors++
+        filesDeleted += userFilesDeleted
+        bytesFreed += userBytesFreed
+        continue
+      }
       userFilesDeleted += batchResult.deleted
       errors += batchResult.errors
     }
@@ -850,7 +915,7 @@ export async function cleanupCanceledUserMedia(): Promise<CleanupResult> {
     console.log(`[cleanup] Cleaned up canceled user ${user.id} -- ${userFilesDeleted} files deleted, downgraded to free`)
   }
 
-  console.log(`[cleanup] Canceled user cleanup: ${filesDeleted} files, ${bytesFreed} bytes freed across ${users.length} users (${errors} errors, ${keysHeldBack} job-output keys outside their job's family kept, ${keysNotOwned} keys another user owns kept)`)
+  console.log(`[cleanup] Canceled user cleanup: ${filesDeleted} files, ${bytesFreed} bytes freed across ${users.length} users (${errors} errors, ${keysHeldBack} job-output keys outside their job's family kept, ${keysLibraryKept} job-output keys a library row still holds kept, ${keysNotOwned} keys another user owns kept)`)
   return { filesDeleted, bytesFreed, errors }
 }
 
@@ -1230,8 +1295,11 @@ export async function sweepSoftDeletedLocationAssets(): Promise<LocationR2SweepR
     const deletable = await deletableKeys(owned.keys)
     if (deletable.length > 0) {
       try {
-        await batchDeleteFromR2(deletable)
-        result.r2KeysDeleted += deletable.length
+        // What storage did not delete is recorded for a later retry (decided
+        // 2026-10-08) before the row is marked purged; if the record fails,
+        // the row stays unmarked and the next sweep deletes again.
+        const batchResult = await deleteKeysRecordingFailures(deletable, "location", { recordErrors: "throw" })
+        result.r2KeysDeleted += deletable.length - batchResult.failed.length
       } catch (err) {
         console.error(`[cleanup] R2 batch-delete failed for location ${row.id}:`, err)
         result.errors++

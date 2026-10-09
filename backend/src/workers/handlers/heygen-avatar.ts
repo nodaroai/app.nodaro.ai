@@ -100,7 +100,7 @@ export const handleAiAvatar: HandlerFn = async function handleAiAvatar(job, ctx)
   let effectiveAudioUrl = audioUrl
   let audioCapWarning: string | undefined
   if (speechMode === "audio" && typeof audioUrl === "string" && audioUrl.length > 0) {
-    const capped = await capAudioForAvatar(audioUrl, ctx.jobId, ctx.jobUserId)
+    const capped = await capAudioForAvatar(audioUrl, ctx.jobId)
     effectiveAudioUrl = capped.audioUrl
     audioCapWarning = capped.warning
   }

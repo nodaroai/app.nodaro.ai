@@ -4,7 +4,8 @@ import { randomUUID } from "crypto"
 import { promises as fs } from "node:fs"
 import { join } from "node:path"
 import { supabase } from "../lib/supabase.js"
-import { uploadBufferToR2, deleteFromR2, r2KeyFromOurUrl } from "../lib/storage.js"
+import { uploadBufferToR2, r2KeyFromOurUrl } from "../lib/storage.js"
+import { deleteKeyRecordingFailure } from "../lib/storage-delete.js"
 import { updateStorageUsage } from "../utils/file-validation.js"
 import { isRelayOwnedObject } from "../lib/asset-delete.js"
 import { keysClaimedByOthers } from "../lib/key-ownership.js"
@@ -191,7 +192,8 @@ export async function deleteSourceAfterProcess(sourceUrl: string, userId: string
 
       if (!assetRefsExist && !jobRefsExist) {
         try {
-          await deleteFromR2(sourceKey)
+          // A failed delete is recorded for the retry pass, then rethrown.
+          await deleteKeyRecordingFailure(sourceKey, "media")
         } catch (err) {
           // Object survives; continue to the record cleanup like library.ts does.
           console.warn(`[media-process] deleteSource R2 delete failed for ${sourceKey} (continuing):`, err)

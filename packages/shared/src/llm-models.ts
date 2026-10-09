@@ -1044,6 +1044,42 @@ export const LLM_FEATURE_DEFAULTS: Record<LlmFeature, string> = {
 }
 
 /**
+ * Feature → the reasoning effort its DEFAULT model runs at when the caller
+ * sends none. Read it through {@link defaultReasoningEffort}, never directly:
+ * the effort belongs to the default model, so a call on any other model must
+ * not pick it up.
+ */
+export const LLM_FEATURE_DEFAULT_EFFORTS: Partial<Record<LlmFeature, LlmReasoningEffort>> = {
+  // Decided 2026-10-09 from the picker bake-off v2: Opus 5.5 at `high` read
+  // 4/4 portraits with the most attributes per image, ~9 s a read. Its effort
+  // only takes effect on Anthropic's own API (`effortRequiresDirect`), so the
+  // default analysis runs direct — and bills as such (`llmServesDirect`).
+  "describe-to-picker": "high",
+}
+
+/**
+ * The reasoning effort a `feature` call runs at when the caller sends none:
+ * the feature's default effort ({@link LLM_FEATURE_DEFAULT_EFFORTS}), but ONLY
+ * while the call runs on the feature's default model — named, or omitted
+ * (`undefined` / `""`) so the default model applies. A caller who picked
+ * another model and no effort gets `undefined`: that model's Auto, as before.
+ *
+ * WHY only on the default model: the default effort is part of the default
+ * model's recipe, not a global policy. Forcing `high` on a Gemini or GPT call
+ * that never asked for it would change the timing of every existing workflow
+ * that picked one (and, on a Claude model, its lane and its bill).
+ *
+ * The one place the route, the node's credit badge and its effort pickers
+ * read, so what runs, what is billed and what is shown cannot disagree.
+ */
+export function defaultReasoningEffort(feature: string, modelId?: string): LlmReasoningEffort | undefined {
+  const effort = LLM_FEATURE_DEFAULT_EFFORTS[feature as LlmFeature]
+  if (!effort) return undefined
+  if (!modelId) return effort
+  return getLlmModel(modelId)?.id === LLM_FEATURE_DEFAULTS[feature as LlmFeature] ? effort : undefined
+}
+
+/**
  * Per-model multimodal input capabilities. Drives both frontend UI gating
  * and backend route-level filtering for the LLM Chat node references.
  *

@@ -1,7 +1,7 @@
 ---
 node_type: describe-to-picker
-generated_at: 2026-10-08T22:50:03.959Z
-generated_from: ae4e7e3d0
+generated_at: 2026-10-09T09:26:17.492Z
+generated_from: e7df15b61
 ---
 
 # Describe to Picker
@@ -9,7 +9,7 @@ generated_from: ae4e7e3d0
 <!-- AUTO-GEN:START node-data-shape -->
 **Type:** `describe-to-picker`
 **Category:** ai
-**Credit cost:** `10` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
+**Credit cost:** `10-25` at list price — the price a run is charged is `GET /v1/credits/model-cost?model=<model id>` (MCP: `list_models`); `GET /v1/nodes` gives this node's charged figure.
 **Inputs (target handles):** `image`
 **Outputs (source handles):** `picker-json`
 

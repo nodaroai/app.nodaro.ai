@@ -58,6 +58,17 @@ describe("scene render worker lifecycle", () => {
       output_data: { sceneRenderResult: expect.objectContaining({ kind: "video", sceneRevisionId: input.plan.revisionId }) } }))
     expect(mocks.browserClose).toHaveBeenCalled(); expect(mocks.assetsClose).toHaveBeenCalled(); expect(mocks.cleanup).toHaveBeenCalled()
   })
+  it("stores the delivered video in the child job's family, under an unguessable key (decided 2026-10-08)", async () => {
+    await processSceneRenderChild(job, async () => "bundle", { gl: "angle" })
+    child.status = "pending"
+    await processSceneRenderChild(job, async () => "bundle", { gl: "angle" })
+    const ids = mocks.upload.mock.calls.map((c) => c[1] as string)
+    // `<childId>-render-<nonce>`: the child job's expiry finds it...
+    expect(ids[0]).toMatch(new RegExp(`^${child.id}-render-[0-9a-f-]{36}$`))
+    // ...and the key is still not derivable from the parent's or owner's ids.
+    expect(ids[1]).not.toBe(ids[0])
+    expect(mocks.upload.mock.calls[0]![2]).toBe("video")
+  })
   it("renders critic frames as owned private PNG receipts without a public video upload", async () => {
     child.input.output = { kind: "stills", frames: [0, 48] } as unknown as typeof input.output
     await processSceneRenderChild(job, async () => "bundle", {})

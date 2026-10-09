@@ -1,5 +1,6 @@
 import { supabase } from "./supabase.js"
-import { deleteFromR2, r2KeyFromOurUrl } from "./storage.js"
+import { r2KeyFromOurUrl } from "./storage.js"
+import { deleteKeyRecordingFailure } from "./storage-delete.js"
 import { isRelayedJob, relayOwnedKeys } from "./asset-delete.js"
 import { isOwnedObjectKey } from "./job-policy-outputs.js"
 import { relayPossible } from "./relay-possible.js"
@@ -129,7 +130,8 @@ async function deleteWithPrivateMedia(args: {
   }
 
   const outcomes = await Promise.allSettled(
-    [...keys].map((key) => deleteFromR2(key)),
+    // A failed delete is recorded for the retry pass (and still counted below).
+    [...keys].map((key) => deleteKeyRecordingFailure(key, "workflow")),
   )
   const failed = outcomes.filter((outcome) => outcome.status === "rejected").length
   if (failed > 0 || skipped > 0) {

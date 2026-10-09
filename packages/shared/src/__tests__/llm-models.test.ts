@@ -2,6 +2,8 @@ import {
   LLM_MODELS,
   LLM_MODEL_IDS,
   LLM_FEATURE_DEFAULTS,
+  LLM_FEATURE_DEFAULT_EFFORTS,
+  defaultReasoningEffort,
   STRUCTURED_VISION_MODELS,
   LLM_REASONING_EFFORTS,
   getLlmModel,
@@ -473,6 +475,52 @@ describe("LLM_FEATURE_DEFAULTS", () => {
     for (const feature of compositionFeatures) {
       expect(LLM_FEATURE_DEFAULTS[feature]).toBe("claude-sonnet-4.6")
     }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// defaultReasoningEffort — a feature's default effort rides its default model
+// ---------------------------------------------------------------------------
+describe("defaultReasoningEffort", () => {
+  it('"describe-to-picker" runs at "high" on its default model, named or omitted (decided 2026-10-09)', () => {
+    expect(defaultReasoningEffort("describe-to-picker", undefined)).toBe("high")
+    expect(defaultReasoningEffort("describe-to-picker", "claude-opus-5.5")).toBe("high")
+    // An unset model in node data can be "" — the same "use the default" the
+    // `llmModel || LLM_FEATURE_DEFAULTS[…]` reads give it.
+    expect(defaultReasoningEffort("describe-to-picker", "")).toBe("high")
+  })
+
+  it("names the default model by any of its accepted ids", () => {
+    // The dash alias getLlmModel resolves to the canonical claude-opus-5.5.
+    expect(defaultReasoningEffort("describe-to-picker", "claude-opus-5-5")).toBe("high")
+  })
+
+  it("a caller who picked another model and no effort keeps that model's Auto", () => {
+    expect(defaultReasoningEffort("describe-to-picker", "gemini-3.8-flash")).toBeUndefined()
+    expect(defaultReasoningEffort("describe-to-picker", "claude-opus-5")).toBeUndefined()
+  })
+
+  it("a feature with no default effort, or an unknown feature, has none", () => {
+    expect(defaultReasoningEffort("llm-chat", undefined)).toBeUndefined()
+    expect(defaultReasoningEffort("llm-chat", LLM_FEATURE_DEFAULTS["llm-chat"])).toBeUndefined()
+    expect(defaultReasoningEffort("no-such-feature", undefined)).toBeUndefined()
+  })
+
+  it("every declared default effort is a level its default model offers, on the aggregator lane and direct", () => {
+    // The effort pickers show this level as selected — one the model does not
+    // offer would leave them blank (and the quick strip's fail-safe snapping).
+    for (const [feature, effort] of Object.entries(LLM_FEATURE_DEFAULT_EFFORTS)) {
+      const model = LLM_FEATURE_DEFAULTS[feature as LlmFeature]
+      expect(availableReasoningEfforts(model), feature).toContain(effort)
+      expect(availableReasoningEfforts(model, true), feature).toContain(effort)
+    }
+  })
+
+  it("the describe-to-picker default runs and bills direct: Opus 5.5's effort only works on Anthropic's API", () => {
+    const model = LLM_FEATURE_DEFAULTS["describe-to-picker"]
+    const effort = defaultReasoningEffort("describe-to-picker", model)
+    expect(llmServesDirect(model, effort)).toBe(true)
+    expect(buildLlmCreditIdentifier("describe-to-picker", model, effort)).toBe("describe-to-picker:premium-direct")
   })
 })
 

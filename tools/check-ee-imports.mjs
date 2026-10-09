@@ -63,11 +63,6 @@ const ALLOWLIST = new Set([
   "backend/src/routes/workflow-execution.ts",
   "backend/src/routes/workflow-templates.ts",
 
-  // TODO Phase 3.5 — refactor: ee/billing/cleanup-service should expose a core
-  // facade for R2-key collection; the dynamic-require shim pattern doesn't fit
-  // here because the call site is a synchronous one-shot collector.
-  "backend/src/lib/collect-app-r2-keys.ts",                // ee/billing/cleanup-service
-
   // PERMANENT — diagnostic probe script (manual `npx tsx` invocation only,
   // never imported by core code at runtime). Probes an ee/ subsystem
   // directly because that's its whole purpose — observing the live LLM

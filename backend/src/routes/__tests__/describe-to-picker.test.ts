@@ -6,6 +6,8 @@ const mocks = vi.hoisted(() => ({
   maybeProxyLlmRouteToCloud: vi.fn(),
   insertJob: vi.fn(),
   jobUpdate: vi.fn(),
+  /** The credit id the guard's pre-check resolved for a request. */
+  guardCreditId: vi.fn(),
   reserveCreditsForJob: vi.fn(),
   commitReservedCreditsForJob: vi.fn(),
   refundReservedCreditsForJob: vi.fn(),
@@ -22,7 +24,10 @@ vi.mock("@/lib/config.js", () => ({
 vi.mock("@/lib/cloud-llm-proxy.js", () => ({ maybeProxyLlmRouteToCloud: mocks.maybeProxyLlmRouteToCloud }))
 vi.mock("@/lib/insert-job.js", () => ({ insertJob: mocks.insertJob }))
 vi.mock("@/middleware/credit-guard.js", () => ({
-  creditGuard: () => async () => {},
+  // Records the id the pre-check would price, and lets every request through.
+  creditGuard: (resolveCreditId: (req: unknown) => string) => async (req: unknown) => {
+    mocks.guardCreditId(resolveCreditId(req))
+  },
   reserveCreditsForJob: mocks.reserveCreditsForJob,
 }))
 vi.mock("@/lib/credits-job-lifecycle.js", () => ({
@@ -52,7 +57,7 @@ vi.mock("@/lib/supabase.js", () => {
   }
 })
 
-import { resolveTargetPickers, buildGapRecords, buildMissingPickerReport, buildSystemPrompt, describeToPickerRoutes } from "../describe-to-picker.js"
+import { resolveTargetPickers, buildGapRecords, buildMissingPickerReport, buildSystemPrompt, describeToPickerRoutes, withDescribeToPickerDefaults } from "../describe-to-picker.js"
 
 describe("resolveTargetPickers", () => {
   it("prefers the targetPickers array", () => {
@@ -63,6 +68,22 @@ describe("resolveTargetPickers", () => {
   })
   it("returns [] when neither present", () => {
     expect(resolveTargetPickers({})).toEqual([])
+  })
+})
+
+describe("withDescribeToPickerDefaults (what the credit guard prices)", () => {
+  it("fills an omitted model and effort with the analyzer's defaults", () => {
+    expect(withDescribeToPickerDefaults({ imageUrl: "x" })).toEqual({ imageUrl: "x", llmModel: "claude-opus-5.5", reasoningEffort: "high" })
+    expect(withDescribeToPickerDefaults(undefined)).toEqual({ llmModel: "claude-opus-5.5", reasoningEffort: "high" })
+  })
+  it("keeps what the body sent: another model gets no default effort, and an explicit effort wins", () => {
+    expect(withDescribeToPickerDefaults({ llmModel: "gemini-3.8-flash" })).toEqual({ llmModel: "gemini-3.8-flash", reasoningEffort: undefined })
+    expect(withDescribeToPickerDefaults({ reasoningEffort: "low" })).toEqual({ llmModel: "claude-opus-5.5", reasoningEffort: "low" })
+  })
+  it("treats a model or effort that is not a string as absent, and never mutates the body", () => {
+    const body = { llmModel: 42, reasoningEffort: null }
+    expect(withDescribeToPickerDefaults(body)).toEqual({ llmModel: "claude-opus-5.5", reasoningEffort: "high" })
+    expect(body).toEqual({ llmModel: 42, reasoningEffort: null })
   })
 })
 
@@ -230,6 +251,118 @@ describe("POST /v1/describe-to-picker — W1-a minor-age floor", () => {
     const res = await post(VALID)
     expect(res.statusCode).toBe(200)
     expect(res.json().pickerJson.styling).toEqual({ top: "top-bra-top" })
+  })
+
+  it("asks the LLM client for a longer timeout only when the reasoning effort is high or above", async () => {
+    mocks.llmCompleteStructured.mockResolvedValue({ output: { person: {}, styling: {} }, inputTokens: 1, outputTokens: 1 })
+    // A default read runs Opus 5.5 at the default effort, high — the timeout
+    // follows the effort the read RUNS at, not the one the body sent.
+    expect((await post(VALID)).statusCode).toBe(200)
+    expect(mocks.llmCompleteStructured.mock.calls.at(-1)?.[0]).toMatchObject({ reasoningEffort: "high", timeoutMs: 240_000 })
+    // Another model with no effort keeps its Auto, and so the client's default timeout.
+    expect((await post({ ...VALID, llmModel: "gemini-3.8-flash" })).statusCode).toBe(200)
+    expect(mocks.llmCompleteStructured.mock.calls.at(-1)?.[0]).not.toHaveProperty("timeoutMs")
+    expect((await post({ ...VALID, reasoningEffort: "max" })).statusCode).toBe(200)
+    expect(mocks.llmCompleteStructured.mock.calls.at(-1)?.[0]).toMatchObject({ reasoningEffort: "max", timeoutMs: 285_000 })
+  })
+})
+
+// Decided 2026-10-09: the analyzer's default is Opus 5.5 at effort "high". The
+// effort is resolved ONCE, so the request the model gets and the credit row the
+// job reserves always describe the same call.
+describe("POST /v1/describe-to-picker — the default reasoning effort", () => {
+  const USER_ID = "00000000-0000-4000-8000-000000000001"
+  const VALID = { imageUrl: "https://cdn.example/img.png", targetPickers: ["person"], userId: USER_ID }
+
+  let app: FastifyInstance
+
+  async function post(payload: Record<string, unknown>) {
+    return app.inject({ method: "POST", url: "/v1/describe-to-picker", payload })
+  }
+  /** The LLM request the analyzer sent, the credit id the job reserved, and
+   *  the id the guard pre-checked before the job existed. */
+  function sent() {
+    const [request] = mocks.llmCompleteStructured.mock.calls[0] as [Record<string, unknown>]
+    const [, , , creditId] = mocks.reserveCreditsForJob.mock.calls[0] as [unknown, unknown, string, string]
+    const [guardId] = mocks.guardCreditId.mock.calls[0] as [string]
+    return { request, creditId, guardId }
+  }
+
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    mocks.maybeProxyLlmRouteToCloud.mockResolvedValue(false)
+    mocks.insertJob.mockResolvedValue({ data: { id: "job-1" }, error: null })
+    mocks.reserveCreditsForJob.mockResolvedValue({ usageLogId: "usage-1" })
+    mocks.commitReservedCreditsForJob.mockResolvedValue(undefined)
+    mocks.refundReservedCreditsForJob.mockResolvedValue(0)
+    mocks.markProviderCallStart.mockResolvedValue(undefined)
+    mocks.prefetchAsBase64.mockResolvedValue({ type: "image", url: "https://cdn.example/img.png" })
+    mocks.llmCompleteStructured.mockResolvedValue({ output: { person: { age: "age-30s" } }, inputTokens: 1, outputTokens: 1 })
+
+    app = Fastify({ logger: false })
+    app.addHook("preHandler", async (req) => {
+      const body = req.body as Record<string, unknown> | undefined
+      if (typeof body?.userId === "string") req.userId = body.userId
+    })
+    await app.register(async (instance) => { await describeToPickerRoutes(instance) })
+    await app.ready()
+  })
+
+  afterEach(async () => { await app.close() })
+
+  it("no model and no effort: Opus 5.5 at high, reserved on the rung a direct premium call bills", async () => {
+    expect((await post(VALID)).statusCode).toBe(200)
+    const { request, creditId } = sent()
+    expect(request).toMatchObject({ modelId: "claude-opus-5.5", reasoningEffort: "high" })
+    expect(creditId).toBe("describe-to-picker:premium-direct")
+  })
+
+  it("the default model named with no effort gets the same default", async () => {
+    expect((await post({ ...VALID, llmModel: "claude-opus-5.5" })).statusCode).toBe(200)
+    const { request, creditId } = sent()
+    expect(request).toMatchObject({ modelId: "claude-opus-5.5", reasoningEffort: "high" })
+    expect(creditId).toBe("describe-to-picker:premium-direct")
+  })
+
+  it("another model with no effort keeps its Auto: no effort sent, no direct bump", async () => {
+    expect((await post({ ...VALID, llmModel: "gemini-3.8-flash" })).statusCode).toBe(200)
+    const { request, creditId } = sent()
+    expect(request.modelId).toBe("gemini-3.8-flash")
+    expect(request.reasoningEffort).toBeUndefined()
+    expect(creditId).toBe("describe-to-picker:economy")
+  })
+
+  it("an explicit effort wins over the default", async () => {
+    expect((await post({ ...VALID, reasoningEffort: "low" })).statusCode).toBe(200)
+    const { request, creditId } = sent()
+    expect(request).toMatchObject({ modelId: "claude-opus-5.5", reasoningEffort: "low" })
+    // Any Claude effort runs on Anthropic's own API, so low bills direct too.
+    expect(creditId).toBe("describe-to-picker:premium-direct")
+  })
+
+  // The guard reads the raw body before validation. Priced on the bare id (10)
+  // while the job reserves premium-direct (25), a balance in between passed
+  // the check and then failed the reservation with a 500 instead of a 402.
+  it("the credit guard pre-checks the rung the reservation charges: premium-direct for a default read, its own id for an explicit model", async () => {
+    expect((await post(VALID)).statusCode).toBe(200)
+    let { creditId, guardId } = sent()
+    expect(guardId).toBe("describe-to-picker:premium-direct")
+    expect(guardId).toBe(creditId)
+
+    vi.clearAllMocks()
+    expect((await post({ ...VALID, llmModel: "gemini-3.8-flash" })).statusCode).toBe(200)
+    ;({ creditId, guardId } = sent())
+    expect(guardId).toBe("describe-to-picker:economy")
+    expect(guardId).toBe(creditId)
+  })
+
+  it("the guard and the reservation agree for a named default model and an explicit effort too", async () => {
+    for (const body of [{ ...VALID, llmModel: "claude-opus-5.5" }, { ...VALID, reasoningEffort: "low" }, { ...VALID, llmModel: "claude-sonnet-4.6" }]) {
+      vi.clearAllMocks()
+      expect((await post(body)).statusCode).toBe(200)
+      const { creditId, guardId } = sent()
+      expect(guardId, JSON.stringify(body)).toBe(creditId)
+    }
   })
 })
 

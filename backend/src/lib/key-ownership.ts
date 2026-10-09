@@ -126,6 +126,41 @@ export async function libraryHolders(
 }
 
 /**
+ * The keys a library row ties to something other than the job(s) being
+ * deleted for — the guard the admin app expunge runs before it deletes a
+ * job's files, shared with the retention reapers (decided 2026-10-08).
+ *
+ * A key stays deletable only when every `assets` row that names it was filed
+ * for an own job (`isOwnJob(key, row.job_id)`): the worker files each output
+ * into its runner's library under that job. A row with no job — an upload, a
+ * gallery save, or an output whose job was deleted from history (the FK is
+ * ON DELETE SET NULL) — or with another job keeps the key: deleting would
+ * break a library item, and an R2 delete cannot be undone. A key no row names
+ * stays deletable. Any user's row counts; the question is "whose library
+ * would lose this object".
+ *
+ * Throws when the lookup fails: this is the only proof that no other library
+ * needs the object, so a caller that cannot ask must not delete.
+ */
+export async function keysHeldByOtherLibraryRows(
+  keys: readonly string[],
+  isOwnJob: (key: string, jobId: string) => boolean,
+  client: LookupClient = supabase,
+): Promise<Set<string>> {
+  const unique = [...new Set(keys.filter((k) => !!k))]
+  const held = new Set<string>()
+  for (let i = 0; i < unique.length; i += LOOKUP_CHUNK) {
+    const chunk = unique.slice(i, i + LOOKUP_CHUNK)
+    const { data, error } = await client.from("assets").select("r2_key, job_id").in("r2_key", chunk)
+    if (error) throw new Error(`key ownership lookup failed at assets: ${error.message}`)
+    for (const row of (data ?? []) as Array<{ r2_key: string | null; job_id: string | null }>) {
+      if (row.r2_key && !(row.job_id && isOwnJob(row.r2_key, row.job_id))) held.add(row.r2_key)
+    }
+  }
+  return held
+}
+
+/**
  * Each entry's verdict, in input order: `true` when the object at `key` is
  * claimed by someone other than `owner` (the user the deleter acts for).
  * Entries may name different owners — a reaper batch spans many users.

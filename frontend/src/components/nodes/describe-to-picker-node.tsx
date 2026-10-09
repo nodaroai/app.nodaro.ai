@@ -4,7 +4,7 @@ import { useT } from "@/lib/i18n"
 import { memo } from "react"
 import { Position, type NodeProps } from "@xyflow/react"
 import { Image as ImageIcon, ScanFace, AlertCircle } from "lucide-react"
-import { buildLlmCreditIdentifier, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
+import { buildLlmCreditIdentifier, defaultReasoningEffort, LLM_FEATURE_DEFAULTS } from "@nodaro/shared"
 import { useWorkflowStore } from "@/hooks/use-workflow-store"
 import { useModelCredits } from "@/ee/hooks/use-model-credits"
 import { BaseNode } from "./base-node"
@@ -21,8 +21,15 @@ function DescribeToPickerNodeComponent({ id, data, selected }: NodeProps) {
   const t = useT()
   const nodeData = data as DescribeToPickerData
   const updateNodeData = useWorkflowStore((s) => s.updateNodeData)
+  // An unset effort quotes the effort the run uses: the default model's
+  // default (Opus 5.5 at high, which runs and bills direct).
   const credits = useModelCredits(
-    buildLlmCreditIdentifier("describe-to-picker", nodeData.llmModel || LLM_FEATURE_DEFAULTS["describe-to-picker"], nodeData.reasoningEffort, nodeData.advancedMode === true),
+    buildLlmCreditIdentifier(
+      "describe-to-picker",
+      nodeData.llmModel || LLM_FEATURE_DEFAULTS["describe-to-picker"],
+      nodeData.reasoningEffort ?? defaultReasoningEffort("describe-to-picker", nodeData.llmModel),
+      nodeData.advancedMode === true,
+    ),
     1,
   )
   const status = nodeData.executionStatus ?? "idle"

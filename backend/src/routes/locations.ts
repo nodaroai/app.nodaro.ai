@@ -9,7 +9,7 @@ import { capSelectedAssetByVariant } from "../lib/selected-asset-by-variant.js"
 import { supabase } from "../lib/supabase.js"
 import { requireAppScope } from "../lib/scope-prehandler.js"
 import { formatZodError } from "../lib/zod-error.js"
-import { batchDeleteFromR2 } from "../lib/storage.js"
+import { deleteKeysRecordingFailures } from "../lib/storage-delete.js"
 import { deletableKeys } from "../lib/asset-delete.js"
 import { ownKeysOnly } from "../lib/key-ownership.js"
 import { config } from "../lib/config.js"
@@ -759,7 +759,8 @@ export async function locationRoutes(app: FastifyInstance) {
       // on R2 deletion (orphaned R2 blobs are reaped by the cleanup-cron).
       if (keys.length > 0) {
         try {
-          await batchDeleteFromR2(keys)
+          // A key storage fails to delete is recorded for the retry pass.
+          await deleteKeysRecordingFailures(keys, "location")
         } catch (err) {
           // Should not happen — batchDeleteFromR2 catches its own errors —
           // but log defensively so a partial-failure doesn't silently swallow

@@ -70,6 +70,22 @@ describe("tk.providers.imageUpscale", () => {
     expect(result).toEqual({ url: "https://cdn/images/plate-x.png" })
   })
 
+  it("hosts the plate in the RUNNING job's family, so that job's expiry finds it (decided 2026-10-08)", async () => {
+    const { runWithJobCancellation } = await import("../../job-cancellation.js")
+    const JOB = "00000000-0000-4000-8000-0000000000aa"
+    const src = await checkerPng(W, H)
+    const plate = await sharp(src).resize(W * 2, H * 2, { kernel: "lanczos3" }).png().toBuffer()
+    mockEditImage.mockResolvedValue({ url: "https://provider/plate.png" })
+    mockFetchImage.mockImplementation(async (url: string) => (url === "https://r2/anchor.png" ? src : plate))
+    mockUploadBuffer.mockResolvedValue("https://cdn/images/x.png")
+    const tk = buildToolkit()
+
+    await runWithJobCancellation(JOB, "user-1", () => tk.providers.imageUpscale("https://r2/anchor.png", "topaz-image-upscale"))
+
+    const [, key] = mockUploadBuffer.mock.calls[0]
+    expect(key).toMatch(new RegExp(`^images/${JOB}-plate-[0-9a-f-]{36}\\.png$`))
+  })
+
   it("rejects (and never hosts) when the provider breaks the exact-same-frame guarantee", async () => {
     const src = await checkerPng(W, H)
     // Right dims, wrong frame: cropped then stretched back to exact 2x.

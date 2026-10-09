@@ -1,6 +1,6 @@
 import { supabase } from "./supabase.js"
 import { config } from "./config.js"
-import { deleteFromR2 } from "./storage.js"
+import { deleteKeyRecordingFailure } from "./storage-delete.js"
 import { isOwnedObjectKey, objectKeyJobIdCandidates } from "./job-policy-outputs.js"
 import { jobOutputReferrerPaths } from "./job-output-urls.js"
 import { relayPossible } from "./relay-possible.js"
@@ -485,7 +485,8 @@ export async function permanentlyDeleteAsset(opts: {
       const jobRefsExist = !!jobRefError || otherJobRefs > 0
 
       if (!assetRefsExist && !jobRefsExist) {
-        await deleteFromR2(asset.r2_key)
+        // A failed delete is recorded for the retry pass, then rethrown.
+        await deleteKeyRecordingFailure(asset.r2_key, "asset")
         r2Deleted = true
       } else {
         console.log(

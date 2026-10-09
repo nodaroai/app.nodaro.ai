@@ -22,7 +22,7 @@ import { JobBlockedError, jobBlockOf, jobBlockedBody } from "../lib/job-policy.j
 import { supabase } from "../lib/supabase.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { formatZodError } from "../lib/zod-error.js"
-import { deleteFromR2 } from "../lib/storage.js"
+import { deleteKeyRecordingFailure } from "../lib/storage-delete.js"
 import {
   collectTrainingImages,
   zipImagesToR2Buffer,
@@ -268,7 +268,7 @@ export async function characterTrainingRoutes(app: FastifyInstance): Promise<voi
 
         // Cleanup orphan zip in R2 (cleanup-cron doesn't cover this prefix).
         if (zipKey) {
-          await deleteFromR2(zipKey).catch(() => {})
+          await deleteKeyRecordingFailure(zipKey, "character-training").catch(() => {})
         }
 
         // If creditGuard already responded, don't try to send again.

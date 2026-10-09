@@ -286,8 +286,9 @@ export async function deleteOwnedObjects(jobId: string, objects: readonly HeldOb
   const keys = [...new Set(objects.map((o) => o.key).filter((k) => isOwnedObjectKey(jobId, k)))]
   if (keys.length === 0) return 0
   try {
-    const { batchDeleteFromR2 } = await import("./storage.js")
-    const { deleted } = await batchDeleteFromR2(keys)
+    // A key storage fails to delete is recorded for the retry pass.
+    const { deleteKeysRecordingFailures } = await import("./storage-delete.js")
+    const { deleted } = await deleteKeysRecordingFailures(keys, "job-policy", { jobIdOf: () => jobId })
     return deleted
   } catch (err) {
     console.warn(`[job-policy] object cleanup failed for job ${jobId}: ${(err as Error).message}`)

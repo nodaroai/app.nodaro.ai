@@ -38,8 +38,8 @@ vi.mock("../client.js", () => ({
 }))
 
 // Spread the real module: ensureImageForProvider now keys converted inputs
-// with tmpObjectKey (the sweepable tmp/ prefix), which a replace-everything
-// mock would leave undefined.
+// with the job-scratch writers (lib/job-scratch.ts), which read more of
+// storage than the upload: a replace-everything mock would leave it undefined.
 vi.mock("../../../lib/storage.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../lib/storage.js")>()),
   uploadBufferToR2: mocks.mockUploadBufferToR2,
