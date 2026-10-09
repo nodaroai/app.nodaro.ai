@@ -52,7 +52,7 @@ vi.mock("@/lib/supabase.js", () => {
   }
 })
 
-import { resolveTargetPickers, buildGapRecords, buildMissingPickerReport, buildSystemPrompt, describeToPickerRoutes } from "../describe-to-picker.js"
+import { resolveTargetPickers, buildGapRecords, buildMissingPickerReport, buildSystemPrompt, describeToPickerRoutes, describeToPickerTimeoutMs } from "../describe-to-picker.js"
 
 describe("resolveTargetPickers", () => {
   it("prefers the targetPickers array", () => {
@@ -63,6 +63,18 @@ describe("resolveTargetPickers", () => {
   })
   it("returns [] when neither present", () => {
     expect(resolveTargetPickers({})).toEqual([])
+  })
+})
+
+describe("describeToPickerTimeoutMs", () => {
+  it("leaves the client's default for default efforts", () => {
+    for (const effort of [undefined, "none", "low", "medium"] as const) expect(describeToPickerTimeoutMs(effort)).toBeUndefined()
+  })
+  it("grows with the effort and stays under the engine's 300 s loopback ceiling", () => {
+    expect(describeToPickerTimeoutMs("high")).toBe(240_000)
+    expect(describeToPickerTimeoutMs("xhigh")).toBe(285_000)
+    expect(describeToPickerTimeoutMs("max")).toBe(285_000)
+    for (const effort of ["high", "xhigh", "max"] as const) expect(describeToPickerTimeoutMs(effort)!).toBeLessThan(300_000)
   })
 })
 
@@ -230,6 +242,14 @@ describe("POST /v1/describe-to-picker — W1-a minor-age floor", () => {
     const res = await post(VALID)
     expect(res.statusCode).toBe(200)
     expect(res.json().pickerJson.styling).toEqual({ top: "top-bra-top" })
+  })
+
+  it("asks the LLM client for a longer timeout only when the reasoning effort is high or above", async () => {
+    mocks.llmCompleteStructured.mockResolvedValue({ output: { person: {}, styling: {} }, inputTokens: 1, outputTokens: 1 })
+    expect((await post(VALID)).statusCode).toBe(200)
+    expect(mocks.llmCompleteStructured.mock.calls.at(-1)?.[0]).not.toHaveProperty("timeoutMs")
+    expect((await post({ ...VALID, reasoningEffort: "max" })).statusCode).toBe(200)
+    expect(mocks.llmCompleteStructured.mock.calls.at(-1)?.[0]).toMatchObject({ reasoningEffort: "max", timeoutMs: 285_000 })
   })
 })
 

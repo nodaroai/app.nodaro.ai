@@ -189,18 +189,39 @@ function wantsEventStream(req: FastifyRequest): boolean {
   return (req.headers.accept ?? "").toLowerCase().includes("text/event-stream")
 }
 
+/** Per-effort LLM timeout for one read. The client's 120 s default fits every
+ *  model at default effort, but high and above on an image routinely outlast it
+ *  (GPT-6 Astra never finished a read inside it; Opus 5.5 at max averaged ~155 s).
+ *  The ceiling is the workflow engine's own call to this route: it goes through
+ *  the default fetch, whose 300 s headers timeout would drop the answer before
+ *  the LLM returned — so the longest effort stops at 285 s and the route still
+ *  answers (even with a timeout error) inside the engine's window. */
+const EFFORT_TIMEOUT_MS: Partial<Record<(typeof LLM_REASONING_EFFORTS)[number], number>> = {
+  high: 240_000,
+  xhigh: 285_000,
+  max: 285_000,
+}
+
+/** `undefined` for the default efforts, so those requests stay byte-identical
+ *  and keep the client's own default. */
+export function describeToPickerTimeoutMs(effort?: (typeof LLM_REASONING_EFFORTS)[number]): number | undefined {
+  return effort === undefined ? undefined : EFFORT_TIMEOUT_MS[effort]
+}
+
 /** The analyzer call: one request, whichever way the answer is delivered.
  *  With `onToolJson`, the first attempt streams its tool input there. */
 async function runAnalyzer(analysis: Analysis, onToolJson?: (partialJson: string) => void) {
   const { schema, toolName, legend, otherPickersLegend } = buildMultiPickerAnalyzerSpec(analysis.targetPickers)
   const imageBlock = await prefetchAsBase64(analysis.imageUrl)
   const content: LlmContentBlock[] = [imageBlock, { type: "text", text: "Analyze the subject and emit the picker JSON." }]
+  const timeoutMs = describeToPickerTimeoutMs(analysis.body.reasoningEffort)
   const request: LlmRequest = {
     modelId: analysis.model.id,
     system: buildSystemPrompt(legend, analysis.body.instructions, otherPickersLegend),
     messages: [{ role: "user", content }],
     reasoningEffort: analysis.body.reasoningEffort,
     ...resolveLlmParams(analysis.body),
+    ...(timeoutMs === undefined ? {} : { timeoutMs }),
   }
   return onToolJson
     ? llmStreamStructured(request, schema, { schemaName: toolName, onToolJson })
