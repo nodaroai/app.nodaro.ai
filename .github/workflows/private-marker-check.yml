@@ -1,0 +1,48 @@
+# PR-time half of the private-marker gate. The publish path
+# (scripts/publish-to-public.sh, run nightly by mirror-to-public.yml) aborts
+# when a tracked file contains a string from the private marker list. That list
+# exists only as a repo secret, so an author could not run the gate before
+# merging: a hit first surfaced as a failed nightly publish, after the merge.
+# This job runs the SAME script, scripts/check-private-markers.sh, on every PR
+# into dev and main. A hit names only `marker #N` and the offending files —
+# marker values are never printed.
+name: private-marker-check
+on:
+  pull_request:
+    branches: [dev, main]
+  workflow_dispatch: {}
+permissions:
+  contents: read
+concurrency:
+  group: private-marker-check-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  gate:
+    name: Private Marker Gate
+    # The list is a secret of the internal repo only. This file is mirrored to
+    # the public repo, which never has it; with the list hard-required below,
+    # every PR there would fail for a reason no one there can fix.
+    if: github.repository == 'nodaroai/app.nodaro.ai-internal'
+    runs-on: ubuntu-latest
+    env:
+      # GitHub does not pass repository secrets to PRs from forks.
+      FROM_FORK: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+    steps:
+      - name: Skip PRs from forks (no access to the marker list)
+        if: env.FROM_FORK == 'true'
+        run: |
+          echo "::notice title=Private Marker Gate skipped::This PR comes from a fork, and GitHub does not pass repository secrets to fork PRs, so the private marker list is unavailable here. The publish-time gate still checks the tree after merge."
+      - uses: actions/checkout@v4
+        if: env.FROM_FORK != 'true'
+        with:
+          # The PR's own head rather than the merge ref; on a manual run, the
+          # chosen ref.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Check tracked files for private markers
+        if: env.FROM_FORK != 'true'
+        env:
+          PRIVATE_LEAK_MARKERS: ${{ secrets.PRIVATE_LEAK_MARKERS }}
+          # A missing or empty secret fails loudly instead of passing silently.
+          MIRROR_REQUIRE_MARKERS: "1"
+        run: bash scripts/check-private-markers.sh
