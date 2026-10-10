@@ -7,7 +7,7 @@ import { pickIds } from "@nodaro/shared"
 import { Input } from "../ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover"
 import { cn } from "../lib/cn"
-import { useLocaleDir } from "../i18n"
+import { useLocaleDir, usePickerLabel } from "../i18n"
 import { useLocalizedCatalog } from "../i18n"
 import { PersonDimensionGrid, usePersonDimension } from "./person-dimension-grid"
 import { CharacterThumb } from "./character-art-tile"
@@ -52,8 +52,9 @@ function DimensionPopoverBody({
   readonly onChange: (patch: Partial<PersonValue>) => void
   readonly onRequestClose: () => void
 }) {
+  const L = usePickerLabel()
   const dir = useLocaleDir()
-  const dimensionLabel = PERSON_DIMENSION_LABELS[dimension]
+  const dimensionLabel = L(PERSON_DIMENSION_LABELS[dimension])
   const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog("person")
   const { multi, field } = usePersonDimension(dimension, value, onChange)
   const [localSearch, setLocalSearch] = useState("")
@@ -129,9 +130,10 @@ function DimensionPill({
   readonly value: PersonValue
   readonly onChange: (patch: Partial<PersonValue>) => void
 }) {
+  const L = usePickerLabel()
   const [open, setOpen] = useState(false)
   const dir = useLocaleDir()
-  const dimensionLabel = PERSON_DIMENSION_LABELS[dimension]
+  const dimensionLabel = L(PERSON_DIMENSION_LABELS[dimension])
   const { selectedIds, multi, toggleOff } = usePersonDimension(dimension, value, onChange)
   const selected = selectedIds.length > 0
 
@@ -248,6 +250,7 @@ function CompactSection({
   readonly open: boolean
   readonly onToggle: () => void
 }) {
+  const L = usePickerLabel()
   const bodyId = useId()
   const count = selectedCountForSection(section, value)
   const total = section.dimensions.length
@@ -269,7 +272,7 @@ function CompactSection({
           aria-hidden="true"
         />
         <span className="text-xs font-semibold uppercase tracking-wide text-foreground">
-          {section.label}
+          {L(section.label)}
         </span>
         {count > 0 && (
           <span

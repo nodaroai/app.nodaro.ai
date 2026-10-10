@@ -5,7 +5,7 @@ import { Search } from "lucide-react"
 import { VEHICLES as BASE_VEHICLES, VEHICLE_SUBCATEGORY_LABELS, VEHICLE_SUBCATEGORY_ORDER, type Vehicle, type VehicleSubcategory } from "@nodaro/shared"
 import { Input } from "../ui/input"
 import { cn } from "../lib/cn"
-import { useLocalizedCatalog } from "../i18n"
+import { useLocalizedCatalog, usePickerLabel } from "../i18n"
 import { VEHICLE_ICON_FOR } from "../icons/parameter-picker-icons-vehicles"
 import { useCuratedEntries } from "../curated.js"
 
@@ -29,6 +29,7 @@ export const VehiclePicker = memo(function VehiclePicker({
   onValueChange,
   className,
 }: VehiclePickerProps) {
+  const L = usePickerLabel()
   // Curated view of the bundled catalog: filtered to ids this deployment
   // offers, relabelled where a pack rewrote an entry. Subscribed, so a late
   // registration re-renders. Identity-equal to the base on mainline.
@@ -78,11 +79,11 @@ export const VehiclePicker = memo(function VehiclePicker({
         return (
           <div key={subcategory} className="flex flex-col gap-1.5">
             <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground px-0.5">
-              {VEHICLE_SUBCATEGORY_LABELS[subcategory]}
+              {L(VEHICLE_SUBCATEGORY_LABELS[subcategory])}
             </div>
             <div
               role="radiogroup"
-              aria-label={VEHICLE_SUBCATEGORY_LABELS[subcategory]}
+              aria-label={L(VEHICLE_SUBCATEGORY_LABELS[subcategory])}
               className="grid grid-cols-3 gap-1.5"
             >
               {vehicles.map((vehicle) => {

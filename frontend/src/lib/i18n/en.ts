@@ -6136,6 +6136,7 @@ export const en = {
   "node.refAudio": "Ref audio",
   "node.audioStyle": "Audio style",
   "node.expandStoryboard": "Expand Storyboard",
+  "node.stickyBulletList": "Bullet list",
   "node.copyPlanJson": "Copy plan JSON",
   "node.audioOn": "Audio on",
   "node.audioOff": "Audio off",

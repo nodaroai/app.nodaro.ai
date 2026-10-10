@@ -26,6 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { usePickerLabel } from "./picker-label"
+import { useLocalizePickerLabel } from "@/lib/i18n/labels"
 
 interface PickerRestrictDialogProps {
   open: boolean
@@ -168,6 +169,7 @@ function RestrictChecklistDialog({
   const { resolveLabel, resolveDescription, matches } = useLocalizedCatalog(catalogId)
   const [query, setQuery] = useState("")
   const t = useT()
+  const localizePickerLabel = useLocalizePickerLabel()
 
   const allIds = useMemo(() => entries.map((e) => e.id), [entries])
 
@@ -199,10 +201,10 @@ function RestrictChecklistDialog({
       .filter((k) => map.has(k))
       .map((k) => ({
         key: k,
-        label: groupLabels?.[k] ?? k,
+        label: localizePickerLabel(groupLabels?.[k] ?? k),
         entries: map.get(k)!,
       }))
-  }, [filtered, groupOrder, groupLabels])
+  }, [filtered, groupOrder, groupLabels, localizePickerLabel])
 
   const checkedCount = checked.size
   const total = allIds.length

@@ -38,7 +38,7 @@ import {
 import { CHARACTER_FX as BASE_CHARACTER_FX, CHARACTER_FX_CATEGORY_LABELS, CHARACTER_FX_CATEGORY_ORDER, type CharacterFx, type CharacterFxCategory } from "@nodaro/prompts"
 import { Input } from "../ui/input"
 import { cn } from "../lib/cn"
-import { useLocalizedCatalog } from "../i18n"
+import { useLocalizedCatalog, usePickerLabel } from "../i18n"
 import { MultiPickBadge, useMultiPick } from "./multi-pick-ui"
 import { useCuratedEntries } from "../curated.js"
 
@@ -137,6 +137,7 @@ export const CharacterFxPicker = memo(function CharacterFxPicker({
   className,
   maxSelected = 2,
 }: CharacterFxPickerProps) {
+  const L = usePickerLabel()
   // Curated view of the bundled catalog: filtered to ids this deployment
   // offers, relabelled where a pack rewrote an entry. Subscribed, so a late
   // registration re-renders. Identity-equal to the base on mainline.
@@ -285,7 +286,7 @@ export const CharacterFxPicker = memo(function CharacterFxPicker({
                       : "border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/40",
                   )}
                 >
-                  <span>{CHARACTER_FX_CATEGORY_LABELS[cat]}</span>
+                  <span>{L(CHARACTER_FX_CATEGORY_LABELS[cat])}</span>
                   {hasPick && (
                     <span
                       className="inline-flex items-center justify-center min-w-[15px] h-[15px] px-[4px] rounded-full bg-[#ff0073] text-white text-[9px] font-semibold leading-none"
@@ -300,7 +301,7 @@ export const CharacterFxPicker = memo(function CharacterFxPicker({
           </div>
           <div
             role={maxSelected > 1 ? "group" : "radiogroup"}
-            aria-label={CHARACTER_FX_CATEGORY_LABELS[activeTab]}
+            aria-label={L(CHARACTER_FX_CATEGORY_LABELS[activeTab])}
             className="grid grid-cols-2 gap-1.5"
           >
             {(byCategory.get(activeTab) ?? []).map(renderTile)}

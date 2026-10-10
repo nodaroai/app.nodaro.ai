@@ -6090,6 +6090,7 @@ export const he: ChromeDict = {
   "node.refAudio": "אודיו ייחוס",
   "node.audioStyle": "סגנון אודיו",
   "node.expandStoryboard": "הרחבת הסטוריבורד",
+  "node.stickyBulletList": "רשימת תבליטים",
   "node.copyPlanJson": "העתקת JSON התוכנית",
   "node.audioOn": "אודיו מופעל",
   "node.audioOff": "אודיו כבוי",

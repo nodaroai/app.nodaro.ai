@@ -153,7 +153,7 @@ Many video models support **both** `t2v` and `i2v` from the same id — the Gene
 | InfiniTalk | InfiniTalk | Premium | 420 | lip-sync | Audio-driven talking-head from a still image. 480p / 720p. |
 | ⭐ Kling 3.0 | Kuaishou | Premium | 500 | i2v, t2v | Premium Kling 3.0 — variable 3-15s duration, native audio, 720P/1080P. |
 | Seedance 2 Extend | Bytedance | Premium | 530 | extend | Extend ANY video: generates the continuation (audio included) and trim-stitches it into one seamless clip. |
-| minimax-h3 | MiniMax | Premium | 550 | i2v, t2v | MiniMax Hailuo 3 — premium multimodal tier: first/last frame + image/video/audio references, native audio, 2K (default) or 768P output, 4-15s per-second pricing. |
+| minimax-h3 | MiniMax | Premium | 550 | i2v, t2v | MiniMax H3 — premium multimodal tier: first/last frame + image/video/audio references, native audio, 2K (default) or 768P output, 4-15s per-second pricing. |
 | Kling Avatar Pro | Kuaishou | Premium | 560 | lip-sync | Premium lip-sync — better mouth shape and timing. |
 | Video Analysis (Fast) | Nodaro | Premium | 849 | video-analysis | Analyze a video into a structured shot list (scenes, camera, audio) — fast, economy tier. Billed per duration bucket. |
 | Video Analysis (Fast — legacy) | Nodaro | Premium | 995 | video-analysis | Legacy fast-tier analysis model (backed the fast tier from 2026-07 until 2026-07-29). Kept so stored raw-model configs keep running and keep pricing under their own identifier; new fast-tier runs use the current fast model. |

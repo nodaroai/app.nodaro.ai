@@ -5944,6 +5944,7 @@ export const ptBR: ChromeDict = {
   "node.refAudio": "Áudio de ref.",
   "node.audioStyle": "Estilo de áudio",
   "node.expandStoryboard": "Expandir storyboard",
+  "node.stickyBulletList": "Lista com marcadores",
   "node.copyPlanJson": "Copiar JSON do plano",
   "node.audioOn": "Áudio ativado",
   "node.audioOff": "Áudio desativado",

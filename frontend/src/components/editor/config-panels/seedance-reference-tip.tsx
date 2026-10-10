@@ -3,7 +3,7 @@ import { useT } from "@/lib/i18n"
 
 /**
  * Inline doctrine hint under the injected-references list, shown for the
- * ordinal-referenced multimodal providers (Seedance 2.x + MiniMax Hailuo 3):
+ * ordinal-referenced multimodal providers (Seedance 2.x + MiniMax H3):
  * reference ORDER is priority, identity refs should be a headshot + full-body
  * pair (multi-view sheets cause identity drift).
  * Guidance only — never blocks or validates (no-false-positive rule).

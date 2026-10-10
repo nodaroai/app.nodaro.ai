@@ -1528,7 +1528,7 @@ so a value the model doesn't support is ignored, never a 400:
   **30 images / 10 videos / 10 audio** (audio ≤ 30s per clip). With a start
   frame it always renders at that frame's aspect ratio; an explicit
   `aspectRatio` is coerced to `adaptive` rather than sent.
-- **`minimax-h3`** (MiniMax Hailuo 3) takes the same reference fields with the
+- **`minimax-h3`** (MiniMax H3) takes the same reference fields with the
   same 9 / 3 / 3 caps and renders at `resolution: "2K"` (default) or `"768P"`
   (the cheaper per-second rate) — any other resolution value renders and bills
   as 2K. `aspectRatio: "adaptive"` is the default; a pure text-to-video call
@@ -1542,7 +1542,7 @@ so a value the model doesn't support is ignored, never a 400:
   only one checked before submission; the video caps are the provider's and
   surface mid-run). On the Wan wire the reference arrays are mutually exclusive
   with the start/end frame fields (`imageUrl` / `endFrameUrl`), so — exactly as
-  on Seedance 2 and Hailuo 3 — sending both **folds** rather than fails: the
+  on Seedance 2 and MiniMax H3 — sending both **folds** rather than fails: the
   frame is appended to `referenceImageUrls` after your own images (their
   ordinals are unchanged) and named in the prompt as the opening/closing frame.
   The two are never sent together and the call is not rejected.
@@ -1561,7 +1561,7 @@ so a value the model doesn't support is ignored, never a 400:
   10 `duration` menu (an omitted duration renders and bills as 8 s), the same
   16:9 / 9:16-only `aspectRatio`, and the same 7-unit input quota (each image
   1 unit, a source video 2). It is the cheaper, faster SKU of the pair.
-- **Frames + references coexist** (Seedance 2 and Hailuo 3 — **not** Wan 3.0,
+- **Frames + references coexist** (Seedance 2 and MiniMax H3 — **not** Wan 3.0,
   whose arrays are exclusive, see above). When any reference (image / video /
   audio) is wired alongside a start/end frame, the frames become
   prompt-directed `Image N` references rather than pinned endpoints — the
@@ -1637,7 +1637,7 @@ orchestrator already use):
   and e.g. audio-only references on an images-only model are rejected with a
   400 rather than silently dropped. An **end frame alone** is accepted the same
   way on the models that fold it into their references (Seedance 2.x, MiniMax
-  Hailuo 3, Wan 3) — send `endFrameUrl` once, without repeating the same
+  MiniMax H3, Wan 3) — send `endFrameUrl` once, without repeating the same
   picture in `referenceImageUrls`. That membership is the exported predicate
   `videoProviderFoldsLoneEndFrame(provider)` in
   [`@nodaro/shared`](https://www.npmjs.com/package/@nodaro/shared) — the same

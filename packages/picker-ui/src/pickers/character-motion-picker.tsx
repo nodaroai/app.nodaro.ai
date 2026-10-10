@@ -15,7 +15,7 @@ import {
 } from "@nodaro/prompts"
 import { Input } from "../ui/input"
 import { cn } from "../lib/cn"
-import { useLocalizedCatalog } from "../i18n"
+import { useLocalizedCatalog, usePickerLabel } from "../i18n"
 import { MultiPickBadge, useMultiPick } from "./multi-pick-ui"
 import { useCharacterMotionCopy } from "./character-motion-copy"
 import { useCuratedEntries } from "../curated.js"
@@ -69,6 +69,7 @@ export const CharacterMotionPicker = memo(function CharacterMotionPicker({
   className,
   maxSelected = CHARACTER_MOTION_MAX_PICKS,
 }: CharacterMotionPickerProps) {
+  const L = usePickerLabel()
   // Curated view: filtered to ids this deployment offers, relabelled where a
   // pack rewrote an entry. Identity-equal to the base on mainline.
   const CHARACTER_MOTIONS = useCuratedEntries("character-motion", BASE_CHARACTER_MOTIONS)
@@ -237,7 +238,7 @@ export const CharacterMotionPicker = memo(function CharacterMotionPicker({
                       : "border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/40",
                   )}
                 >
-                  <span>{CHARACTER_MOTION_CATEGORY_LABELS[cat]}</span>
+                  <span>{L(CHARACTER_MOTION_CATEGORY_LABELS[cat])}</span>
                   {count > 0 && (
                     <span
                       className="inline-flex items-center justify-center min-w-[15px] h-[15px] px-[4px] rounded-full bg-[#ff0073] text-white text-[9px] font-semibold leading-none"
@@ -252,7 +253,7 @@ export const CharacterMotionPicker = memo(function CharacterMotionPicker({
           </div>
           <div
             role={maxSelected > 1 ? "group" : "radiogroup"}
-            aria-label={CHARACTER_MOTION_CATEGORY_LABELS[activeTab]}
+            aria-label={L(CHARACTER_MOTION_CATEGORY_LABELS[activeTab])}
             className="grid grid-cols-1 sm:grid-cols-2 gap-1.5"
           >
             {(byCategory.get(activeTab) ?? []).map(renderTile)}

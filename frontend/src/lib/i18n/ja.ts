@@ -6010,6 +6010,7 @@ export const ja: ChromeDict = {
   "node.refAudio": "リファレンスオーディオ",
   "node.audioStyle": "オーディオスタイル",
   "node.expandStoryboard": "ストーリーボードを拡大表示",
+  "node.stickyBulletList": "箇条書き",
   "node.copyPlanJson": "プランの JSON をコピー",
   "node.audioOn": "オーディオあり",
   "node.audioOff": "オーディオなし",

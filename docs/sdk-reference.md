@@ -1754,7 +1754,7 @@ console.log(byAdvertiser.resolvedAdvertisers) // [{ name, pageId, url }, …]
 > stop at 15s) and takes 30 image / 10 video / 10 audio references; when a start
 > frame is wired it renders at that frame's aspect and rejects an explicit
 > `aspectRatio`.
-> **MiniMax Hailuo 3** (`minimax-h3`) takes the same reference fields (9 images /
+> **MiniMax H3** (`minimax-h3`) takes the same reference fields (9 images /
 > 3 videos / 3 audio) at `resolution: "2K"` (default) or `"768P"` (cheaper
 > per-second rate; any other value renders and bills as 2K) — ref-video input
 > seconds bill like Seedance 2 at the selected tier's rate, and input images

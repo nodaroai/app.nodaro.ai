@@ -133,8 +133,26 @@ export function localizeOptionLabel(label: string, locale: LocaleId): string {
 export function isLocalizedTableKey(s: string): boolean {
   return (Object.entries(LABEL_TABLES) as [LocaleId, LocaleLabelTables][]).some(
     ([locale, t]) =>
-      s in t.node || s in t.handle || s in t.modelDescription || s in t.option || localizeOptionLabel(s, locale) !== s,
+      s in t.node || s in t.handle || s in t.modelDescription || s in t.option || s in t.picker || localizeOptionLabel(s, locale) !== s,
   )
+}
+
+/**
+ * Translate an interface label a parameter picker renders (a section, group,
+ * topic or field name). The picker table first, then the option table (the
+ * Lighting / Color-Look / Loop Subject section names and the reference-role
+ * words live there), then the English.
+ */
+export function localizePickerLabel(label: string, locale: LocaleId): string {
+  const tables = LABEL_TABLES[locale]
+  if (!tables) return label
+  return tables.picker[label] ?? tables.option[label] ?? label
+}
+
+/** Hook: picker-label localizer bound to the current locale (stable per locale). */
+export function useLocalizePickerLabel(): (label: string) => string {
+  const locale = useLocaleStore((s) => s.locale)
+  return useCallback((label: string) => localizePickerLabel(label, locale), [locale])
 }
 
 /** Hook: option-label localizer bound to the current locale. */

@@ -10,6 +10,7 @@ import { EyewearIcon, HeadwearIcon } from "../previews/small-silhouette-icons"
 import { MultiPickBadge } from "./multi-pick-ui"
 import { CharacterArtTile, characterArtGridClass } from "./character-art-tile"
 import type { CharacterArtShape } from "../icons/character-art"
+import { usePickerLabel, fillLabel } from "../i18n"
 
 /** The drawn icon of a styling option, where the catalog has one (photo fallback). */
 function entryIcon(dimension: StylingDimension, id: string, className: string) {
@@ -120,10 +121,11 @@ function EntryTile({ dimension, entry, sectionLabel, checked, selectedIndex, mul
  * "pick up to N" for a multi-pick setting, the enable switch, then its options.
  */
 export function StylingDimensionSection({ dimension, entries, checked, selectedIds, maxSelected, isMultiData, photoShape, resolveLabel, resolveDescription, onToggle, onPick, onActivateMulti, onDemoteToSingle }: StylingDimensionSectionProps) {
+  const L = usePickerLabel()
   const switchId = `${useId()}-${dimension}`
-  const baseLabel = STYLING_DIMENSION_LABELS[dimension]
+  const baseLabel = L(STYLING_DIMENSION_LABELS[dimension])
   const multi = maxSelected > 1
-  const label = multi ? `${baseLabel} (pick up to ${maxSelected})` : baseLabel
+  const label = multi ? fillLabel(L("{section} (pick up to {n})"), { section: baseLabel, n: maxSelected }) : baseLabel
   return (
     <div className="flex flex-col gap-3 border-t border-[#ececf1] pt-4 dark:border-white/[.07]">
       <div className="flex items-center gap-2.5 px-0.5">
@@ -136,7 +138,7 @@ export function StylingDimensionSection({ dimension, entries, checked, selectedI
         >
           {baseLabel}
         </label>
-        {multi && <span className="text-[10px] text-[#6b6b75] dark:text-[#9a9aa6]">pick up to {maxSelected}</span>}
+        {multi && <span className="text-[10px] text-[#6b6b75] dark:text-[#9a9aa6]">{fillLabel(L("pick up to {n}"), { n: maxSelected })}</span>}
         <div className="flex-1" />
         {/* Hair Cut has 45 entries — the "Pick by look" pill opens the modal
             with silhouettes so users can browse by shape as well. */}

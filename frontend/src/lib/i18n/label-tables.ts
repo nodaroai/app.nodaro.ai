@@ -37,4 +37,13 @@ export interface LocaleLabelTables {
   readonly option: Readonly<Record<string, string>>
   /** The parenthetical alone, so "16:9 (Landscape)" keeps its token and translates the word. */
   readonly optionQualifier: Readonly<Record<string, string>>
+  /**
+   * Interface labels inside the parameter pickers (@nodaro/picker-ui): section,
+   * group, topic and field names ("Shot Size", "Fire & Blasts", "Subgenre"), by
+   * the English catalog string. Kept apart from `option` so a short picker word
+   * ("Top", "Roll", "Keys") never re-labels an unrelated dropdown. A picker label
+   * with no entry here falls back to `option`, then to the English. Templates
+   * carry `{n}` / `{section}` placeholders the picker fills in.
+   */
+  readonly picker: Readonly<Record<string, string>>
 }

@@ -8,7 +8,7 @@
  * the app's original `use-localized-entry` hook so moved components keep
  * byte-identical behavior. Defaults ("en", "ltr") make the provider optional.
  */
-import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from "react"
+import { createContext, useContext, useEffect, useMemo, useState, useCallback, type ReactNode } from "react"
 import {
   ensureLocaleCatalogLoaded,
   resolveLabel as sharedResolveLabel,
@@ -20,23 +20,40 @@ import {
 
 export type LocaleDirection = "ltr" | "rtl"
 
+/** Localizes an English interface label the package renders (a section,
+ *  group or field name such as "Shot Size" or "Subgenre"). */
+export type PickerLabelLocalizer = (english: string) => string
+
+const identityPickerLabel: PickerLabelLocalizer = (english) => english
+
 interface PickerUiContextValue {
   locale: LocaleId
   dir: LocaleDirection
+  localizeLabel: PickerLabelLocalizer
 }
 
-const PickerUiContext = createContext<PickerUiContextValue>({ locale: "en", dir: "ltr" })
+const PickerUiContext = createContext<PickerUiContextValue>({ locale: "en", dir: "ltr", localizeLabel: identityPickerLabel })
 
 export function PickerUiProvider({
   locale = "en",
   dir = "ltr",
+  localizeLabel = identityPickerLabel,
   children,
 }: {
   locale?: LocaleId
   dir?: LocaleDirection
+  /** The host's localizer for the English section, group and field names the
+   *  pickers render. The package owns no dictionary; English hosts omit it. */
+  localizeLabel?: PickerLabelLocalizer
   children: ReactNode
 }) {
-  return <PickerUiContext.Provider value={{ locale, dir }}>{children}</PickerUiContext.Provider>
+  const value = useMemo(() => ({ locale, dir, localizeLabel }), [locale, dir, localizeLabel])
+  return <PickerUiContext.Provider value={value}>{children}</PickerUiContext.Provider>
+}
+
+/** The host's label localizer (identity when the host passes none). */
+export function usePickerLabel(): PickerLabelLocalizer {
+  return useContext(PickerUiContext).localizeLabel
 }
 
 /** Current UI locale as injected by the host app (default "en"). */
@@ -85,4 +102,10 @@ export function useLocalizedCatalog(catalog: I18nCatalogId) {
   )
 
   return { locale, resolveLabel, resolveDescription, matches }
+}
+
+/** Fill `{name}` placeholders in a localized label template, so a host table
+ *  can translate a label that carries a number ("pick up to {n}"). */
+export function fillLabel(template: string, vars: Readonly<Record<string, string | number>>): string {
+  return template.replace(/\{(\w+)\}/g, (whole, name: string) => (name in vars ? String(vars[name]) : whole))
 }

@@ -2491,7 +2491,7 @@ function TextToVideoConfigImpl({ data, onUpdate, sources, fieldMappings, onMapFi
         </div>
       )}
 
-      {/* Multimodal reference sections — Seedance 2 family + MiniMax Hailuo 3
+      {/* Multimodal reference sections — Seedance 2 family + MiniMax H3
           (identical 9/3/3 caps, same shared resolver). */}
       {(isSeedance2 || isMinimaxH3) && (
         <>

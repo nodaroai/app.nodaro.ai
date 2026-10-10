@@ -5,7 +5,7 @@ import { Search } from "lucide-react"
 import { FURNITURE as BASE_FURNITURE, FURNITURE_SUBCATEGORY_LABELS, FURNITURE_SUBCATEGORY_ORDER, type Furniture, type FurnitureSubcategory } from "@nodaro/shared"
 import { Input } from "../ui/input"
 import { cn } from "../lib/cn"
-import { useLocalizedCatalog } from "../i18n"
+import { useLocalizedCatalog, usePickerLabel } from "../i18n"
 import { useCuratedEntries } from "../curated.js"
 
 interface FurniturePickerProps {
@@ -77,6 +77,7 @@ export const FurniturePicker = memo(function FurniturePicker({
   onValueChange,
   className,
 }: FurniturePickerProps) {
+  const L = usePickerLabel()
   // Curated view of the bundled catalog: filtered to ids this deployment
   // offers, relabelled where a pack rewrote an entry. Subscribed, so a late
   // registration re-renders. Identity-equal to the base on mainline.
@@ -126,11 +127,11 @@ export const FurniturePicker = memo(function FurniturePicker({
         return (
           <div key={subcategory} className="flex flex-col gap-1.5">
             <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground px-0.5">
-              {FURNITURE_SUBCATEGORY_LABELS[subcategory]}
+              {L(FURNITURE_SUBCATEGORY_LABELS[subcategory])}
             </div>
             <div
               role="radiogroup"
-              aria-label={FURNITURE_SUBCATEGORY_LABELS[subcategory]}
+              aria-label={L(FURNITURE_SUBCATEGORY_LABELS[subcategory])}
               className="grid grid-cols-3 gap-1.5"
             >
               {pieces.map((piece) => {

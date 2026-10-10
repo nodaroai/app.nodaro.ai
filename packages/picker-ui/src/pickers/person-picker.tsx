@@ -7,6 +7,7 @@ import {
   type PersonPickerMode,
 } from "../lib/parameter-node-prefs"
 import { cn } from "../lib/cn"
+import { usePickerLabel } from "../i18n"
 import { PersonPickerCompact } from "./person-picker-compact"
 import { PersonPickerDetailed } from "./person-picker-detailed"
 import type { PersonValue } from "@nodaro/prompts"
@@ -32,6 +33,7 @@ function ModeToggle({
   readonly mode: PersonPickerMode
   readonly onSelect: (mode: PersonPickerMode) => void
 }) {
+  const L = usePickerLabel()
   return (
     <div
       role="radiogroup"
@@ -54,7 +56,7 @@ function ModeToggle({
                 : "border-gray-200 dark:border-[#2D2D2D] bg-gray-50 dark:bg-[#161616] text-gray-600 dark:text-[#94A3B8] hover:border-gray-300 dark:hover:border-[#3D3D3D] hover:text-gray-800 dark:hover:text-[#E2E8F0]",
             )}
           >
-            <span>{opt.label}</span>
+            <span>{L(opt.label)}</span>
           </button>
         )
       })}

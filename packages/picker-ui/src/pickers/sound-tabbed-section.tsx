@@ -2,6 +2,7 @@
 
 import { memo, useId, useMemo, useState } from "react"
 import { cn } from "../lib/cn"
+import { usePickerLabel } from "../i18n"
 import { getSoundArt, type SoundArtRef } from "../icons/sound-art"
 import { MultiPickBadge } from "./multi-pick-ui"
 import { SoundArtTile } from "./sound-art-tile"
@@ -51,11 +52,11 @@ export interface SoundTabbedSectionProps {
  * component does NOT filter further.
  */
 export const SoundTabbedSection = memo(function SoundTabbedSection({
-  label,
+  label: englishLabel,
   art,
   entries,
   groupOrder,
-  groupLabels,
+  groupLabels: englishGroupLabels,
   searching = false,
   selectedIds,
   maxSelected = 1,
@@ -68,6 +69,12 @@ export const SoundTabbedSection = memo(function SoundTabbedSection({
   onActivateMulti,
   onDemoteToSingle,
 }: SoundTabbedSectionProps) {
+  const L = usePickerLabel()
+  const label = L(englishLabel)
+  const groupLabels = useMemo(
+    () => Object.fromEntries(Object.entries(englishGroupLabels).map(([g, english]) => [g, L(english)])) as Readonly<Record<string, string>>,
+    [englishGroupLabels, L],
+  )
   const id = useId()
   const multi = maxSelected > 1
   const switchId = `${id}-toggle`

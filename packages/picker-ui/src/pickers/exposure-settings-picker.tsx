@@ -7,7 +7,7 @@ import { Input } from "../ui/input"
 import { Switch } from "../ui/switch"
 import { FitText } from "../ui/fit-text"
 import { cn } from "../lib/cn"
-import { useLocalizedCatalog } from "../i18n"
+import { useLocalizedCatalog, usePickerLabel } from "../i18n"
 import { useCuratedEntries } from "../curated.js"
 
 interface ExposureSettingsPickerProps {
@@ -126,8 +126,9 @@ function CategorySection({
   onToggle,
   onPick,
 }: CategorySectionProps) {
+  const L = usePickerLabel()
   const id = useId()
-  const label = EXPOSURE_CATEGORY_LABELS[category]
+  const label = L(EXPOSURE_CATEGORY_LABELS[category])
   const switchId = `${id}-${field}`
   return (
     <div className="flex flex-col gap-1.5 border-t-[3px] border-border/40">

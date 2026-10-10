@@ -255,6 +255,8 @@ function StickyNoteNodeComponent({ id, data, selected }: NodeProps) {
           {/* Bullet list */}
           <button
             type="button"
+            title={t("node.stickyBulletList")}
+            aria-label={t("node.stickyBulletList")}
             className="w-6 h-6 flex items-center justify-center rounded text-[var(--pill-fg-muted)] hover:text-[var(--pill-fg)] hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
             onClick={(e) => {
               e.stopPropagation()

@@ -6,6 +6,7 @@ import { cn } from "../lib/cn"
 import { getSoundArt, type SoundArtRef } from "../icons/sound-art"
 import { MultiPickBadge } from "./multi-pick-ui"
 import { SoundArtTile } from "./sound-art-tile"
+import { usePickerLabel, fillLabel } from "../i18n"
 
 export interface SoundDimensionEntry {
   readonly id: string
@@ -54,6 +55,7 @@ export function SoundSectionHeader({
   readonly switchDisabled?: boolean
   readonly onToggle: (next: boolean) => void
 }) {
+  const L = usePickerLabel()
   return (
     <div className="flex items-center gap-2.5 px-0.5">
       <label
@@ -66,7 +68,7 @@ export function SoundSectionHeader({
         {label}
       </label>
       {maxSelected > 1 && (
-        <span className="text-[10px] text-[#6b6b75] dark:text-[#9a9aa6]">pick up to {maxSelected}</span>
+        <span className="text-[10px] text-[#6b6b75] dark:text-[#9a9aa6]">{fillLabel(L("pick up to {n}"), { n: maxSelected })}</span>
       )}
       <div className="flex-1" />
       <Switch
@@ -98,7 +100,7 @@ export const SOUND_SECTION_CLASS = "flex flex-col gap-3 border-t border-[#ececf1
  * tile, mirroring StylingPicker.
  */
 export const SoundDimensionSection = memo(function SoundDimensionSection({
-  label,
+  label: englishLabel,
   art,
   entries,
   selectedIds,
@@ -113,6 +115,8 @@ export const SoundDimensionSection = memo(function SoundDimensionSection({
   onDemoteToSingle,
   emptyState,
 }: SoundDimensionSectionProps) {
+  const L = usePickerLabel()
+  const label = L(englishLabel)
   const id = useId()
   const multi = maxSelected > 1
   const switchId = `${id}-toggle`
@@ -128,7 +132,7 @@ export const SoundDimensionSection = memo(function SoundDimensionSection({
       />
       {emptyState !== undefined ? (
         <div className="rounded-xl border-[1.5px] border-dashed border-[#e1e1e8] p-[18px] text-center text-[13px] text-[#6b6b75] dark:border-white/[.11] dark:text-[#9a9aa6]">
-          {emptyState}
+          {typeof emptyState === "string" ? L(emptyState) : emptyState}
         </div>
       ) : (
         <div

@@ -195,7 +195,7 @@
       },
       "data": {
         "bold": false,
-        "text": "A director turns the concept into one prompt — \"0-4s: shows @Image 1 … says \\\"…\\\" … drifts to @Image 2\" — and one Seedance 2.5 node receives the three stills as references in order and renders a single 12-second unbroken shot with the character's voice. Add Captions transcribes it. Want another model? MiniMax Hailuo 3 or Gemini Omni Flash (up to 10 s) also take references and speak.",
+        "text": "A director turns the concept into one prompt — \"0-4s: shows @Image 1 … says \\\"…\\\" … drifts to @Image 2\" — and one Seedance 2.5 node receives the three stills as references in order and renders a single 12-second unbroken shot with the character's voice. Add Captions transcribes it. Want another model? MiniMax H3 or Gemini Omni Flash (up to 10 s) also take references and speak.",
         "color": "#26221a",
         "label": "Step 5–6",
         "title": "5–6 · Timeline script → The take → Captions",
