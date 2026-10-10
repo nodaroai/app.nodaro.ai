@@ -876,6 +876,12 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
   // Camera Switch: generatedJson is the { edl, transcript } pair — the
   // `transcript` handle carries the renamed transcript, `edl` (the default) the
   // switched edit. Mirrors the backend getPrimaryOutput branch.
+  // Speaker Frames: generatedJson is the stored track file's descriptor, on its
+  // one `tracks` handle. Mirrors the backend getPrimaryOutput branch.
+  if (type === "speaker-frames") {
+    const json = (node.data as { generatedJson?: unknown }).generatedJson;
+    return json === undefined || json === null ? undefined : JSON.stringify(json);
+  }
   if (type === "camera-switch") {
     const pair = (node.data as { generatedJson?: { edl?: unknown; transcript?: unknown } }).generatedJson;
     const value = sourceHandle === "transcript" ? pair?.transcript : pair?.edl;
@@ -1276,6 +1282,8 @@ export function detectPreviewItemType(
   if (nodeType === "edit-plan") return "data"
   // camera-switch emits the switched edit + the renamed transcript, both json.
   if (nodeType === "camera-switch") return "data"
+  // speaker-frames emits the stored face-track file's descriptor (json).
+  if (nodeType === "speaker-frames") return "data"
   // Content Recipe's `json` handle is the recipe object; its `text` handle
   // and Content Ideas are readable text.
   if (nodeType === "content-recipe") return sourceHandle === "json" ? "data" : "text"

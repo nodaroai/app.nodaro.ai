@@ -242,7 +242,7 @@ describe("auto video duration option", () => {
   })
 })
 
-describe("getSourcePhotoAspectRatios — the ratio tiles on a node that transforms a source photo", () => {
+describe("getSourcePhotoAspectRatios / withPhotoAuto — the ratio tiles on the image nodes whose \"auto\" keeps a photo's shape", () => {
   it("offers Auto first on every Modify Image model, then every ratio the model lists", async () => {
     const { MODIFY_IMAGE_MODELS, getAspectRatiosForModel, getSourcePhotoAspectRatios, SOURCE_PHOTO_AUTO_LABEL } = await import("../model-options")
     for (const { value: provider } of MODIFY_IMAGE_MODELS) {
@@ -258,8 +258,50 @@ describe("getSourcePhotoAspectRatios — the ratio tiles on a node that transfor
     expect(SOURCE_PHOTO_AUTO_LABEL).toBe("Auto (match the photo)")
   })
 
-  it("leaves the text-to-image ratio list as the catalog has it", async () => {
+  it("leaves the catalog's own list (what a stale ratio snaps to) as the catalog has it", async () => {
     const { getAspectRatiosForModel } = await import("../model-options")
     expect(getAspectRatiosForModel("seedream-5-pro").some((o) => o.value === "auto")).toBe(false)
+  })
+
+  it("offers Auto first on every Generate Image model, then every ratio the model lists", async () => {
+    const { IMAGE_GEN_MODELS, getAspectRatiosForModel, getSourcePhotoAspectRatios, SOURCE_PHOTO_AUTO_LABEL } = await import("../model-options")
+    for (const { value: provider } of IMAGE_GEN_MODELS) {
+      const options = getSourcePhotoAspectRatios(provider)
+      expect(options[0], provider).toEqual({ value: "auto", label: SOURCE_PHOTO_AUTO_LABEL })
+      expect(options.filter((o) => o.value === "auto"), provider).toHaveLength(1)
+      expect(options.slice(1), provider).toEqual(getAspectRatiosForModel(provider).filter((o) => o.value !== "auto"))
+    }
+  })
+
+  it("folds a list's own \"auto\" into the one Auto tile (several models selected)", async () => {
+    const { withPhotoAuto, SOURCE_PHOTO_AUTO_LABEL } = await import("../model-options")
+    const shared = [
+      { value: "1:1", label: "1:1 (Square)" },
+      { value: "auto", label: "Auto" },
+      { value: "16:9", label: "16:9 (Landscape)" },
+    ]
+    expect(withPhotoAuto(shared)).toEqual([
+      { value: "auto", label: SOURCE_PHOTO_AUTO_LABEL },
+      { value: "1:1", label: "1:1 (Square)" },
+      { value: "16:9", label: "16:9 (Landscape)" },
+    ])
+    expect(withPhotoAuto([])).toEqual([{ value: "auto", label: SOURCE_PHOTO_AUTO_LABEL }])
+  })
+
+  it("with no photo, Auto is the model's own auto where it has one, else its first listed ratio", async () => {
+    // What the docs promise for Generate Image with nothing wired in: the
+    // platform's no-photo answer for "auto" is the ratio the panel lists first.
+    const { IMAGE_GEN_MODELS, getAspectRatiosForModel } = await import("../model-options")
+    const { MODEL_CATALOG, normalizeModelInput } = await import("@nodaro/shared")
+    let pinned = 0
+    for (const { value: provider } of IMAGE_GEN_MODELS) {
+      const ratios = MODEL_CATALOG[provider]?.aspectRatios
+      if (!ratios?.length) continue
+      const native = ratios.includes("auto")
+      const expected = native ? "auto" : getAspectRatiosForModel(provider)[0]?.value
+      expect(normalizeModelInput(provider, { aspectRatio: "auto" }).aspectRatio, provider).toBe(expected)
+      if (!native) pinned++
+    }
+    expect(pinned).toBeGreaterThan(10)
   })
 })

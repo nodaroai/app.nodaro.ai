@@ -191,6 +191,7 @@ import { configureDeploymentPayer, deploymentPayerActive, payerWebFreeConflict }
 import { deploymentBillingRoutes } from "./ee/routes/deployment-billing.js"
 import { surfaceAvailabilityRoutes } from "./routes/surface-availability.js"
 import { editPlanCapabilitiesRoutes } from "./routes/edit-plan-capabilities.js"
+import { speakerFramesCapabilitiesRoutes } from "./routes/speaker-frames-capabilities.js"
 import { registerEditPlanModeGuard } from "./routes/edit-plan-mode-guard.js"
 import { userSettingsRoutes } from "./routes/user-settings.js"
 import { meRoutes } from "./routes/me.js"
@@ -749,6 +750,7 @@ export async function buildApp() {
   // Which Edit Plan modes the loaded plugin plans (read per request — the
   // plugins load further down).
   await app.register(editPlanCapabilitiesRoutes)
+  await app.register(speakerFramesCapabilitiesRoutes)
   await app.register(voicesRoutes)
   await app.register(heygenCatalogRoutes)
   await app.register(voiceCloneRoutes)

@@ -64,6 +64,7 @@ import { pinExecutionInputOverrides } from "../lib/execution-input-overrides.js"
 import { nestedPreviewRenders, nestedPreviewRenderLocation } from "../services/workflow-engine/nested-preview-renders.js"
 import { seededFromSavedData } from "../services/workflow-engine/saved-data.js"
 import { speakerViewRunPreflight } from "../services/workflow-engine/speaker-view-run-preflight.js"
+import { speakerFramesRunPreflight } from "../services/workflow-engine/speaker-frames-run-preflight.js"
 import { findRelayRehostRefusals, nestedRelayRehostRefusals } from "../services/workflow-engine/relay-rehost-preflight.js"
 import { applyEdlRowSentStamps } from "../services/workflow-engine/payload-builder.js"
 import { executeNode, loadCompletedFanOutIterations, type ExecuteNodeResult } from "../services/workflow-engine/node-executor.js"
@@ -830,6 +831,13 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
         await failExecution(executionId, unpricedSpeakerView)
         return
       }
+      // Speaker Frames, likewise, until P3.7 prices it.
+      const unpricedSpeakerFrames = speakerFramesRunPreflight(runNodes)
+      if (unpricedSpeakerFrames) {
+        console.warn(`[speaker-frames-preflight] execution ${executionId} REFUSED — ${unpricedSpeakerFrames}`)
+        await failExecution(executionId, unpricedSpeakerFrames)
+        return
+      }
       const wordless = findWordlessTranscriptFeeds(runNodes, edges)
       if (wordless.length > 0) {
         console.warn(
@@ -862,6 +870,12 @@ export async function processWorkflowExecution(job: Job<WorkflowExecutionJob>): 
       if (unpricedNested) {
         console.warn(`[speaker-view-preflight] execution ${executionId} REFUSED — ${unpricedNested}`)
         await failExecution(executionId, unpricedNested)
+        return
+      }
+      const unpricedNestedFrames = speakerFramesRunPreflight([], nestedGraphs)
+      if (unpricedNestedFrames) {
+        console.warn(`[speaker-frames-preflight] execution ${executionId} REFUSED — ${unpricedNestedFrames}`)
+        await failExecution(executionId, unpricedNestedFrames)
         return
       }
       const nested = nestedWordlessTranscriptFeeds(nestedGraphs)

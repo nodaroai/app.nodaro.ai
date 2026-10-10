@@ -21,6 +21,7 @@
  */
 
 import { autoAspectNeedsSourceImage, normalizeModelInput, type ModelInputAdjustment } from "./model-catalog.js"
+import { imageGenAutoAspectNeedsSourceImage } from "./credit-identifiers.js"
 
 /**
  * Node types whose `data` carries catalog-governed model parameters under the
@@ -50,13 +51,27 @@ export const MODEL_PARAM_NODE_TYPES: ReadonlySet<string> = new Set([
  * resolves it against that image — natively on a model that lists "auto", else
  * to the model's nearest listed ratio (`normalizeModelInput`'s `sourceImage`).
  *
- * `generate-image` is deliberately absent: its images are references, not a
- * photo being transformed, so "auto" there still snaps at write time.
+ * `generate-image` is absent: its photo is optional, and it is the first image
+ * its references ASSEMBLE to, not a node input — see
+ * `AUTO_ASPECT_AT_RUN_NODE_TYPES`.
  */
 export const SOURCE_IMAGE_NODE_TYPES: ReadonlySet<string> = new Set([
   "image-to-image",
   "modify-image",
   "edit-image",
+])
+
+/**
+ * The node types whose "auto" aspect ratio the RUN resolves against a photo,
+ * so a write boundary (which has no photo) keeps it: the source-image types,
+ * plus `generate-image`, whose photo is the first reference the run assembles
+ * (or its inpaint / refine base). A Generate Image run with no photo snaps
+ * "auto" exactly as this boundary used to — the value that reaches a provider
+ * never changes there.
+ */
+export const AUTO_ASPECT_AT_RUN_NODE_TYPES: ReadonlySet<string> = new Set([
+  ...SOURCE_IMAGE_NODE_TYPES,
+  "generate-image",
 ])
 
 export interface NodeParamAdjustment extends ModelInputAdjustment {
@@ -112,12 +127,18 @@ export function normalizeNodeModelParams<T extends NodeLike>(
           : undefined
     if (!provider) return node
 
-    // A write boundary has no source image, so "auto" on a source-image node is
-    // left for the run to resolve against the image it transforms — snapping it
-    // here would discard the very request ("keep my photo's shape") the run can
-    // honour. It is stored in its canonical spelling, the one the image routes'
-    // ratio enum accepts.
-    const deferAuto = SOURCE_IMAGE_NODE_TYPES.has(type) && autoAspectNeedsSourceImage(provider, d.aspectRatio)
+    // A write boundary has no photo, so "auto" on a node the run resolves it for
+    // is left for the run to resolve against the photo — snapping it here would
+    // discard the very request ("keep my photo's shape") the run can honour. It
+    // is stored in its canonical spelling, the one the image routes' ratio enum
+    // accepts. A Generate Image run snaps against its model's i2i sibling once
+    // references attach, and this boundary cannot count them (wired ones come
+    // from edges), so it asks about both.
+    const deferAuto = AUTO_ASPECT_AT_RUN_NODE_TYPES.has(type) && (
+      type === "generate-image"
+        ? imageGenAutoAspectNeedsSourceImage({ provider, aspectRatio: d.aspectRatio })
+        : autoAspectNeedsSourceImage(provider, d.aspectRatio)
+    )
     const normalized = normalizeModelInput(provider, {
       aspectRatio: !deferAuto && typeof d.aspectRatio === "string" ? d.aspectRatio : undefined,
       resolution: typeof d.resolution === "string" ? d.resolution : undefined,

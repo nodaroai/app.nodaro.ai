@@ -1,4 +1,5 @@
 import { buildSpeakerViewPayload } from "./speaker-view-payload.js"
+import { buildSpeakerFramesPayload } from "./speaker-frames-payload.js"
 import { dubbingModelIdentifier } from "../../lib/dubbing-model.js"
 import { imageCollageCreditModelIdentifier } from "../../lib/image-collage-credit-id.js"
 import {
@@ -8,7 +9,8 @@ import {
 import { assembleVideoOverlayRequest, formatVideoOverlayError, validateVideoOverlayRequest, videoOverlayCompositionKey, videoOverlaySlotSources, type VideoOverlayNodeFields } from "@nodaro/shared"
 import { defaultImageModel, IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
 import type { SourceImageSize } from "@nodaro/shared"
-import { applyOrder, getNodeImageUrl, orderedSourceImages, sourceImageNodeProvider } from "./source-image.js"
+import { applyOrder, generateImageNodeProvider, getNodeImageUrl, orderedSourceImages, sourceImageNodeProvider } from "./source-image.js"
+import { aspectRatioForLoraModel } from "../../lib/image-auto-aspect.js"
 import { effectiveContentModel, contentRecipeCreditId, contentIdeasCreditId, clampContentIdeasCount, CONTENT_RECIPE_SOURCE_MAX, CONTENT_IDEAS_MAX_RECIPE_INPUTS, CONTENT_IDEAS_BRAND_MAX, CONTENT_IDEAS_LANGUAGE_MAX } from "@nodaro/shared"
 import { TELEGRAM_ACCOUNT_SEND_NODE_TYPE, telegramSendAsOf, telegramSendDestinationOf } from "@nodaro/shared"
 import { DEFAULT_TEXT_TO_AUDIO_PROVIDER, dialogueProviderOf, getDialogueCapabilities } from "@nodaro/shared"
@@ -2510,7 +2512,7 @@ export function buildPayload(
   switch (type) {
     // --- Image generation ---
     case "generate-image": {
-      const provider = (data.provider as string) ?? defaultImageModel("general", data.aspectRatio as string | undefined)
+      const provider = generateImageNodeProvider(data)
       const settings = buildCtx?.settings
 
       // Build a map of all available reference images by ID
@@ -2797,6 +2799,10 @@ export function buildPayload(
       // the levers: the config panel snaps them only while it is mounted, and
       // `aspectRatio` / `provider` are both MappableFields a FieldMapping can
       // inject at run time. A LoRA run sends no reference, so it never swaps.
+      // The photo's size (`buildCtx.sourceImage` — the first image this build
+      // sends, `imageJobPhotoUrl`, read by `buildPayloadWithSourceSize`) resolves
+      // "auto" on a model without a native auto, as the route does; with no
+      // photo, "auto" snaps exactly as it always has.
       const imageParams = resolveNormalizedImageGen({
         provider,
         aspectRatio: data.aspectRatio,
@@ -2805,6 +2811,7 @@ export function buildPayload(
         renderingSpeed: data.renderingSpeed,
         refCount: result.referenceImageUrls?.length ?? 0,
         swapToI2i: !lora,
+        sourceImage: buildCtx?.sourceImage,
       })
       if (imageParams.adjustments.length > 0) {
         console.warn(
@@ -2833,7 +2840,10 @@ export function buildPayload(
           // Image provider. Never `data.model` — that is a frontend DISPLAY name
           // (e.g. "gemini-2.5-flash-image" for "nano-banana"), not a router id.
           model: lora ? FLUX_LORA_CHARACTER_MODEL_ID : routedModel,
-          aspectRatio: imageParams.aspectRatio,
+          // The trained LoRA model takes no "auto" (a native-auto model's value
+          // survives the snap above) — `aspectRatioForLoraModel` omits it, as
+          // the route's LoRA path does.
+          aspectRatio: lora ? aspectRatioForLoraModel(imageParams.aspectRatio) : imageParams.aspectRatio,
           resolution: imageParams.resolution,
           quality: imageParams.quality,
           negativePrompt: result.nativeNegativePrompt,
@@ -5971,6 +5981,24 @@ export function buildPayload(
         planBasis,
       })
       return simpleResult("speaker-view", built.creditId, built.payload)
+    }
+
+    // Speaker Frames (P3.6): where each speaker's face is, per camera. The
+    // edit folds onto the `edl` wire (a clip pack is ONE run, P3-24 (a));
+    // refused here — the plugin's scope, and "not priced yet" until P3.7 —
+    // before anything is reserved. `buildSpeakerFramesPayload` holds the logic.
+    case "speaker-frames": {
+      const built = buildSpeakerFramesPayload({
+        nodeId: node.id,
+        jobId,
+        usageLogId,
+        data: data as Record<string, unknown>,
+        edits: resolvedInputs.inputs,
+        edl: resolvedInputs.edl ?? (data.edl as unknown),
+        videoUrl: resolvedInputs.videoUrl,
+        transcript: resolvedInputs.transcript ?? (data.transcript as unknown),
+      })
+      return simpleResult("speaker-frames", built.creditId, built.payload)
     }
 
     case "apply-edl": {

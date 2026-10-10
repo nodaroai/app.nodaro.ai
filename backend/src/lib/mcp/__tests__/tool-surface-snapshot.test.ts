@@ -734,6 +734,13 @@ const MODIFY_IMAGE_AUTO_ASPECT_WORDING_BYTES = 47
 // suite as a delta on the same tree: 407_927 after − 407_761 before = 166 B, and the budget
 // rises by exactly that.
 const READ_COLLECTION_USAGE_BYTES = 166
+// RAISED 2026-10-09 by the `generate_image` `aspect_ratio` description and nothing else: it now
+// says that 'auto' keeps the shape of base_image_url, else of the first reference image, on
+// every model (the verb hands "auto" to the route, which resolves it against that photo). No
+// tool was added, so the fixture does NOT move. Measured by this suite: 408_066 total −
+// 407_973 before = 93 B (the tool: 8_126 → 8_219 B, under the per-tool budget), and the budget
+// rises by exactly that, keeping whatever headroom the list had (none).
+const GENERATE_IMAGE_AUTO_ASPECT_WORDING_BYTES = 93
 
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES,
@@ -817,7 +824,8 @@ export const TOOL_WIRE_BUDGET = {
     SEEDREAM_5_FLASH_MODEL_BYTES +
     IMAGE_MODEL_ROLE_DEFAULTS_BYTES +
     UGC_CREATOR_CANDIDATES_WORDING_BYTES +
-    MODIFY_IMAGE_AUTO_ASPECT_WORDING_BYTES,
+    MODIFY_IMAGE_AUTO_ASPECT_WORDING_BYTES +
+    GENERATE_IMAGE_AUTO_ASPECT_WORDING_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

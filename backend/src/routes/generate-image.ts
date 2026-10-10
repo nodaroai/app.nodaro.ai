@@ -10,10 +10,12 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/re
 import { extractMcpClient } from "../lib/extract-mcp-client.js"
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { applySnappedLevers, withAdjustments } from "../lib/image-gen-normalize.js"
+import { sourceImageForAutoAspect } from "../lib/image-source-size.js"
+import { aspectRatioForLoraModel, imageJobPhotoUrl } from "../lib/image-auto-aspect.js"
 import { insertJobIdempotent } from "../lib/insert-job.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { applyPromptPolicies } from "../lib/prompt-policy.js"
-import { IMAGE_GEN_PROVIDERS, FLUX_LORA_CHARACTER_MODEL_ID, IMAGE_ASPECT_RATIO_VALUES, IMAGE_PROMPT_MAX, PROMPT_HARD_CEILING, resolveNormalizedImageGen } from "@nodaro/shared"
+import { IMAGE_GEN_PROVIDERS, FLUX_LORA_CHARACTER_MODEL_ID, IMAGE_ASPECT_RATIO_VALUES, IMAGE_PROMPT_MAX, PROMPT_HARD_CEILING, normalizedImageGenModelId, resolveNormalizedImageGen } from "@nodaro/shared"
 import { defaultImageModel } from "@nodaro/shared"
 import { assembleImageInput, REFERENCE_RULES, REFERENCE_RULES_MULTI_PERSON, type AssembleImageInput, type BuildImagePromptResult } from "@nodaro/prompts"
 import { connectedReferenceSchema, describedReferenceSchema, DESCRIBED_REFERENCE_LIMIT } from "../lib/connected-reference-schema.js"
@@ -616,6 +618,22 @@ export async function generateImageRoutes(app: FastifyInstance) {
     // Same call the preHandler CHECK made, on the ASSEMBLED ref count. It
     // returns both the identifier AND the snapped levers, so the credits we
     // reserve and the parameters we send the provider come from ONE derivation.
+    //
+    // "auto" on a model without a native auto keeps the photo's shape: the first
+    // image this job sends its provider (`imageJobPhotoUrl` — the inpaint /
+    // refine base, else the first assembled reference, what the T2I→I2I swap
+    // sends) is read for its size, only in that case, and never on a LoRA run
+    // (it sends no photo). The probe asks about the model the snap runs against
+    // (`normalizedImageGenModelId`). The CHECK ran before the size was known and
+    // priced the same tier — the ratio is not a pricing dimension on any such
+    // model (pinned in @nodaro/shared). No photo: "auto" snaps as it always has.
+    const sourceImage = resolvedLora
+      ? undefined
+      : await sourceImageForAutoAspect(
+          normalizedImageGenModelId({ provider, refCount: assembledRefs.length, swapToI2i: true }),
+          rawAspectRatio,
+          imageJobPhotoUrl({ baseImageUrl, referenceImageUrls: queueReferenceImageUrls }),
+        )
     const normalized = resolveNormalizedImageGen({
       // Pass the RAW provider — the shared helper decides the T2I→I2I swap
       // (keyed on the assembled ref count) and its `modelId` is the model the
@@ -628,15 +646,18 @@ export async function generateImageRoutes(app: FastifyInstance) {
       renderingSpeed,
       refCount: assembledRefs.length,
       swapToI2i: true,
+      sourceImage,
     })
     const modelIdentifier = resolvedLora ? FLUX_LORA_CHARACTER_MODEL_ID : normalized.identifier
 
     // Write the snapped levers back onto the parsed body — `input_data` and the
     // queue payload below both read from it, so what we persist and what we
     // send the provider are the values we just priced. The LoRA path runs a
-    // trained Replicate model with no catalog entry, so its levers stay exactly
-    // as the caller sent them.
+    // trained Replicate model with no catalog entry, so its levers stay as the
+    // caller sent them — except "auto", which that model cannot take and
+    // `aspectRatioForLoraModel` omits (the model then draws its default).
     if (!resolvedLora) applySnappedLevers(parsed.data, normalized, generateImageBody)
+    else if (aspectRatioForLoraModel(parsed.data.aspectRatio) === undefined) parsed.data.aspectRatio = undefined
     const adjustments = resolvedLora ? [] : normalized.adjustments
 
     const mcpClient = extractMcpClient(req.body)

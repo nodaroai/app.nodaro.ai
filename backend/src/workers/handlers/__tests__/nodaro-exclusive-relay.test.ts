@@ -11,7 +11,7 @@
  *     videos come home via finalizeJobWithMedia (with gvp's `pro` checkpoint
  *     carried — stop/continue read it), vcp lands audio or video.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
 const mocks = vi.hoisted(() => {
   const jobsUpdateEq = vi.fn().mockResolvedValue({ error: null })
@@ -34,6 +34,8 @@ const mocks = vi.hoisted(() => {
     rehostIfUrlField: vi.fn(async (_key: string, value: unknown) => value),
     rehostByteSize: vi.fn(async (_url: string): Promise<number | undefined> => undefined),
     bringRenderHome: vi.fn(async (): Promise<{ videoUrl: string; thumbnailUrl: string | null }> => ({ videoUrl: "https://local.r2/videos/job-1.mp4", thumbnailUrl: "https://local.r2/thumbnails/job-1.png" })),
+    speakerFramesRelayPayload: vi.fn(async (p: Record<string, unknown>): Promise<Record<string, unknown>> => ({ ...p, proxies: [{ sourceId: "camA", url: "https://cloud-reachable/proxy-camA.mp4" }], relayed: true })),
+    bringTrackSetHome: vi.fn(async (o: Record<string, unknown>): Promise<Record<string, unknown>> => ({ ...o, json: { ...(o.json as object), url: "https://local.r2/speaker-tracks/job-1.json" } })),
     jobsUpdate,
     jobsUpdateEq,
     jobsSelect,
@@ -70,6 +72,7 @@ vi.mock("../../../providers/nodaro/client.js", () => ({
   },
 }))
 vi.mock("../relay-render-home.js", () => ({ bringRenderHome: mocks.bringRenderHome }))
+vi.mock("../speaker-frames-relay.js", () => ({ speakerFramesRelayPayload: mocks.speakerFramesRelayPayload, bringTrackSetHome: mocks.bringTrackSetHome }))
 vi.mock("../../../lib/nodaro-connect.js", () => ({ nodaroCloudFetch: mocks.nodaroCloudFetch }))
 vi.mock("../../../providers/nodaro/run-on-cloud.js", async (importOriginal) => ({
   // The REAL module, with only the network-touching rehost mocked. The strip
@@ -106,14 +109,27 @@ const EXCLUSIVES = [
   "camera-switch",
   // C2.1 (cloud-plugins #732): POST /v1/speaker-view.
   "speaker-view",
+  // P3.6: POST /v1/speaker-frames, from the self-host's detection proxies.
+  "speaker-frames",
 ] as const
 
 const bullJob = (data: Record<string, unknown>) =>
   ({ id: "bull-1", data, updateProgress: vi.fn() }) as never
 const ctx = { jobId: "job-1", jobUserId: "user-1", usageLogId: null, shouldWatermark: true }
 
+// The relay's poll budget subtracts the time the handler already spent
+// (`relayPollBudgetMs(…, elapsedMs)`): a clock that ticks between the
+// handler's start and its poll makes every exact budget assertion flaky under
+// a loaded run. Time stands still unless a test moves it.
+let clock: ReturnType<typeof vi.spyOn> | undefined
+afterEach(() => {
+  clock?.mockRestore()
+  clock = undefined
+})
+
 beforeEach(() => {
   vi.clearAllMocks()
+  clock = vi.spyOn(Date, "now").mockReturnValue(1_700_000_000_000)
   mocks.createCloudJob.mockResolvedValue("cloud-job-1")
   mocks.waitForCloudJob.mockResolvedValue({
     id: "cloud-job-1",
@@ -268,6 +284,172 @@ describe("relay to the cloud", () => {
     })
   })
 
+  // Decided 2026-10-09: a clip pack (`Edl[]`) used to pass the re-host untouched
+  // and reach nodaro.ai with this install's private URLs.
+  it("a clip pack: every edit's source URLs are re-hosted, one edit at a time", async () => {
+    mocks.rehostIfUrlField.mockImplementation(async (key: string, value: unknown) =>
+      key === "url" && typeof value === "string" ? value.replace("http://localhost:9000/", "https://cloud-reachable/") : value,
+    )
+    const clip = (id: string) => ({ version: 1, clock: "master", sources: [{ id, url: `http://localhost:9000/${id}.mp4`, kind: "video" }], segments: [] })
+    await nodaroExclusiveRelayHandlers["camera-switch"](bullJob({ jobId: "job-cs", edl: [clip("camA"), clip("camB")], transcript: { version: 1, words: [] } }), ctx)
+    const body = mocks.createCloudJob.mock.calls[0]![1] as { edl: Array<{ sources: Array<{ url: string }> }> }
+    expect(body.edl.map((e) => e.sources[0]!.url)).toEqual(["https://cloud-reachable/camA.mp4", "https://cloud-reachable/camB.mp4"])
+    mocks.createCloudJob.mockClear()
+    await nodaroExclusiveRelayHandlers["camera-switch"](bullJob({ jobId: "job-cs", edl: { clips: [clip("camC")] }, transcript: { version: 1, words: [] } }), ctx)
+    const set = mocks.createCloudJob.mock.calls[0]![1] as { edl: { clips: Array<{ sources: Array<{ url: string }> }> } }
+    expect(set.edl.clips[0]!.sources[0]!.url).toBe("https://cloud-reachable/camC.mp4")
+  })
+
+  it("a clip pack re-hosts each distinct file once, however many clips share it", async () => {
+    const clip = (id: string) => ({
+      version: 1,
+      clock: "master",
+      sources: [{ id: "mic", url: "http://localhost:9000/mic.wav", kind: "audio", role: "master-audio" }, { id, url: `http://localhost:9000/${id}.mp4`, kind: "video" }],
+      segments: [],
+    })
+    await nodaroExclusiveRelayHandlers["camera-switch"](bullJob({ jobId: "job-cs", edl: [clip("camA"), clip("camA"), clip("camB")], transcript: { version: 1, words: [] } }), ctx)
+    const urls = mocks.rehostIfUrlField.mock.calls.filter(([key]) => key === "url").map(([, value]) => value)
+    expect(urls.sort()).toEqual(["http://localhost:9000/camA.mp4", "http://localhost:9000/camB.mp4", "http://localhost:9000/mic.wav"])
+  })
+
+  it("a clip pack with a source over the re-host cap is refused once, naming it, and nothing is created", async () => {
+    mocks.rehostIfUrlField.mockImplementation(async (key: string, value: unknown) => {
+      if (key === "url" && value === "http://localhost:9000/big.mp4") throw Object.assign(new Error("too large"), { code: "media_too_large", bytes: 3_100_000_000 })
+      return value
+    })
+    mocks.rehostByteSize.mockImplementation(async (url: string) => (url === "http://localhost:9000/big.mp4" ? 3_100_000_000 : undefined))
+    const clip = (id: string, url: string) => ({ version: 1, clock: "master", sources: [{ id, url, kind: "video" }], segments: [] })
+    const err = await nodaroExclusiveRelayHandlers["camera-switch"](
+      bullJob({ jobId: "job-cs", edl: [clip("small", "http://localhost:9000/s.mp4"), clip("big", "http://localhost:9000/big.mp4")], transcript: { version: 1, words: [] } }),
+      ctx,
+    ).catch((e: unknown) => e)
+    expect(isDeterministicJobError(err)).toBe(true)
+    expect((err as Error).message).toContain('"big"')
+    expect(mocks.createCloudJob).not.toHaveBeenCalled()
+  })
+
+  // A source caught only by the upload (no size readable up front) used to drop
+  // out of the pack's message when another source's size WAS readable: the
+  // message is the union of what each clip found, never a second probe.
+  it("a clip pack's oversize refusal names every source the clips found, including one only the upload caught", async () => {
+    mocks.rehostIfUrlField.mockImplementation(async (key: string, value: unknown) => {
+      if (key === "url" && value === "http://localhost:9000/big.mp4") throw Object.assign(new Error("too large"), { code: "media_too_large", bytes: 3_100_000_000 })
+      if (key === "url" && value === "http://localhost:9000/hidden.mp4") throw Object.assign(new Error("too large"), { code: "media_too_large", bytes: 2_000_000_000 })
+      return value
+    })
+    // Only "big" has a readable size; "hidden" sends no content-length.
+    mocks.rehostByteSize.mockImplementation(async (url: string) => (url === "http://localhost:9000/big.mp4" ? 3_100_000_000 : undefined))
+    const clip = (id: string, url: string) => ({ version: 1, clock: "master", sources: [{ id, url, kind: "video" }], segments: [] })
+    const err = await nodaroExclusiveRelayHandlers["camera-switch"](
+      bullJob({
+        jobId: "job-cs",
+        edl: [clip("big", "http://localhost:9000/big.mp4"), clip("hidden", "http://localhost:9000/hidden.mp4"), clip("big", "http://localhost:9000/big.mp4")],
+        transcript: { version: 1, words: [] },
+      }),
+      ctx,
+    ).catch((e: unknown) => e)
+    expect(isDeterministicJobError(err)).toBe(true)
+    const message = (err as Error).message
+    expect(message).toContain('"big" is 3.1 GB')
+    expect(message).toContain('"hidden" is 2.0 GB')
+    // Once each, however many clips share a file.
+    expect(message.split('"big"').length - 1).toBe(1)
+    expect(mocks.createCloudJob).not.toHaveBeenCalled()
+  })
+
+  // The time spent before the poll (speaker-frames builds every detection
+  // proxy locally) is spent inside the same node run: the poll gets only what
+  // is left of the orchestrator's ceiling, less the margin.
+  it("speaker-frames: the poll budget leaves out the time the proxies took", async () => {
+    let now = 1_000_000
+    const spy = vi.spyOn(Date, "now").mockImplementation(() => now)
+    try {
+      mocks.speakerFramesRelayPayload.mockImplementationOnce(async (p: Record<string, unknown>) => {
+        now += 30 * 60_000
+        return { ...p, proxies: [], relayed: true }
+      })
+      mocks.waitForCloudJob.mockResolvedValueOnce({ id: "cloud-job-1", status: "completed", output_data: { json: { url: "https://cloud.r2/t.json" } } })
+      const payload = { jobId: "job-sf", videoUrl: "https://e.com/v.mp4" }
+      await nodaroExclusiveRelayHandlers["speaker-frames"](bullJob(payload), ctx).catch(() => undefined)
+      const opts = mocks.waitForCloudJob.mock.calls[0]![2] as { budgetMs: number }
+      expect(opts.budgetMs).toBe(relayPollBudgetMs("speaker-frames", payload)! - 30 * 60_000)
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  it("speaker-frames: relays the self-host's proxies in place of the originals, at its wire path", async () => {
+    const edl = { version: 1, clock: "master", sources: [{ id: "camA", url: "https://cloud-reachable/proxy-camA.mp4", kind: "video" }], segments: [] }
+    await nodaroExclusiveRelayHandlers["speaker-frames"](bullJob({ jobId: "job-sf", edl, transcript: { version: 1, words: [] }, excludeSourceIds: [] }), ctx)
+    expect(mocks.speakerFramesRelayPayload).toHaveBeenCalledTimes(1)
+    expect(mocks.createCloudJob).toHaveBeenCalledWith("/v1/speaker-frames", expect.objectContaining({
+      edl,
+      proxies: [{ sourceId: "camA", url: "https://cloud-reachable/proxy-camA.mp4" }],
+      relayed: true,
+      excludeSourceIds: [],
+    }))
+  })
+
+  // Through the REAL payload builder (deps stubbed): what reaches nodaro.ai.
+  // A sampled camera goes as its proxy; every other source of the edit — the
+  // master audio, an unticked camera — goes as the placeholder nodaro.ai never
+  // reads (round 2, decided 2026-10-09), and the generic re-host never touches
+  // it: no original is relayed.
+  it("speaker-frames: the body nodaro.ai receives — proxies, the marker, each sampled camera as its proxy, the rest as the placeholder", async () => {
+    const real = await vi.importActual<typeof import("../speaker-frames-relay.js")>("../speaker-frames-relay.js")
+    mocks.speakerFramesRelayPayload.mockImplementationOnce((p: Record<string, unknown>) =>
+      real.speakerFramesRelayPayload(p, {
+        relaySupport: async () => ({ relay: true, source: "nodaro.ai" }),
+        ensureProxy: async (url) => ({ url: url.replace(".mp4", "-proxy.mp4"), key: "k", kind: "video", cached: true, fps: 2, spanMap: [], frame: { w: 960, h: 540 }, frameCount: 64, cuts: [] }),
+        toCloud: async (url) => url.replace("http://localhost:9000/", "https://cloud-reachable/"),
+        probeSize: async () => undefined,
+      }),
+    )
+    mocks.rehostIfUrlField.mockImplementation(async (key: string, value: unknown) =>
+      key === "url" && typeof value === "string" ? value.replace("http://localhost:9000/", "https://cloud-reachable/") : value,
+    )
+    const edl = {
+      version: 1,
+      clock: "master",
+      sources: [{ id: "mic", url: "http://localhost:9000/mic.wav", kind: "audio", role: "master-audio" }, { id: "camA", url: "http://localhost:9000/a.mp4", kind: "video" }],
+      segments: [{ id: "s0", inMs: 0, outMs: 30_000, video: "camA" }],
+    }
+    await nodaroExclusiveRelayHandlers["speaker-frames"](bullJob({ jobId: "job-sf", edl, excludeSourceIds: [] }), ctx)
+    const body = mocks.createCloudJob.mock.calls[0]![1] as Record<string, unknown> & { edl: typeof edl; proxies: Array<{ sourceId: string; url: string }> }
+    expect(body.relayed).toBe(true)
+    expect(body.proxies.map((p) => [p.sourceId, p.url])).toEqual([["camA", "https://cloud-reachable/a-proxy.mp4"]])
+    expect(body.edl.sources.map((s) => s.url)).toEqual([real.speakerFramesUnsampledUrl("mic"), "https://cloud-reachable/a-proxy.mp4"])
+    // Nothing of the mic was re-hosted: the placeholder skips the generic re-host.
+    const rehosted = mocks.rehostIfUrlField.mock.calls.map(([, v]) => v)
+    expect(rehosted).not.toContain("http://localhost:9000/mic.wav")
+    expect(rehosted.some((v) => typeof v === "string" && real.isSpeakerFramesUnsampledUrl(v))).toBe(false)
+    expect(body.jobId).toBeUndefined()
+  })
+
+  it("speaker-frames: nodaro.ai not taking a relayed job yet fails the job once, before anything is created", async () => {
+    const { DeterministicJobError } = await import("../../../lib/deterministic-job-error.js")
+    mocks.speakerFramesRelayPayload.mockRejectedValueOnce(new DeterministicJobError("Speaker Frames is not available on a connected install yet — run it on nodaro.ai for now."))
+    const err = await nodaroExclusiveRelayHandlers["speaker-frames"](bullJob({ jobId: "job-sf", videoUrl: "https://e.com/v.mp4" }), ctx).catch((e: unknown) => e)
+    expect(isDeterministicJobError(err)).toBe(true)
+    expect(mocks.createCloudJob).not.toHaveBeenCalled()
+  })
+
+  it("speaker-frames: nodaro.ai's pre-reserve refusals (not_priced until P3.7) fail once", async () => {
+    mocks.createCloudJob.mockRejectedValueOnce(Object.assign(new Error("Speaker Frames is not priced yet"), { code: "not_priced" }))
+    const err = await nodaroExclusiveRelayHandlers["speaker-frames"](bullJob({ jobId: "job-sf", videoUrl: "https://e.com/v.mp4" }), ctx).catch((e: unknown) => e)
+    expect(isDeterministicJobError(err)).toBe(true)
+    expect((err as Error).message).toBe("Speaker Frames is not priced yet")
+  })
+
+  it("speaker-frames: a relayed job nodaro.ai refuses for its proxies (invalid_proxy) fails once", async () => {
+    mocks.createCloudJob.mockRejectedValueOnce(
+      Object.assign(new Error("speaker-frames: proxies.0.spanMap: Required."), { code: "invalid_proxy" }),
+    )
+    const err = await nodaroExclusiveRelayHandlers["speaker-frames"](bullJob({ jobId: "job-sf", videoUrl: "https://e.com/v.mp4" }), ctx).catch((e: unknown) => e)
+    expect(isDeterministicJobError(err)).toBe(true)
+    expect((err as Error).message).toBe("speaker-frames: proxies.0.spanMap: Required.")
+  })
+
   it("posts the payload at the type's wire path, stripping instance-only + __ fields and re-hosting URL fields", async () => {
     mocks.rehostIfUrlField.mockImplementation(async (key: string, value: unknown) =>
       key.endsWith("Url") ? `https://cloud-reachable/${key}` : value,
@@ -402,6 +584,24 @@ describe("finalizeExclusiveCloudOutput — per-type output adaptation", () => {
       relay_credits: null,
     })
     expect(mocks.uploadVideoMaybeWatermark).not.toHaveBeenCalled()
+  })
+
+  it("speaker-frames: the track file comes home under this job's key; the descriptor names the copy", async () => {
+    const descriptor = { version: 1, sampleFps: 2, detector: { id: "yunet" }, sources: [], url: "https://cloud.r2/speaker-tracks/cloud-job-1.json", sha256: "a".repeat(64), bytes: 10 }
+    const ok = await finalizeExclusiveCloudOutput({
+      jobId: "job-1",
+      jobType: "speaker-frames",
+      cloudJob: { id: "cloud-job-1", status: "completed", output_data: { json: descriptor, notes: ["n"] } } as never,
+      jobUserId: "user-1",
+      shouldWatermark: true,
+    })
+    expect(ok).toBe(true)
+    expect(mocks.bringTrackSetHome).toHaveBeenCalledWith({ json: descriptor, notes: ["n"] }, "job-1", "user-1")
+    expect(mocks.markJobCompleted).toHaveBeenCalledWith("job-1", expect.objectContaining({
+      output_data: { json: { ...descriptor, url: "https://local.r2/speaker-tracks/job-1.json" }, notes: ["n"], viaNodaroCloud: true },
+      provider: "nodaro",
+      provider_task_id: "cloud-job-1",
+    }))
   })
 
   it("camera-switch (JSON producer): { json, transcript } lands verbatim + viaNodaroCloud, no media re-host", async () => {
@@ -1065,6 +1265,15 @@ describe("relayPollBudgetMs — every budgeted job type polls for its own declar
         expect(relayPollBudgetMs(name, payload), name).toBe(nodeCeilings(declaredJobBudgetMs(name, payload)).processingMs - MARGIN)
       }
     }
+  })
+
+  it("leaves out the time the run already spent before polling, never below a minute", () => {
+    const payload = { videoUrl: "https://f.test/episode.mp4" }
+    const full = relayPollBudgetMs("speaker-frames", payload)!
+    expect(relayPollBudgetMs("speaker-frames", payload, 20 * MIN)).toBe(full - 20 * MIN)
+    expect(relayPollBudgetMs("speaker-frames", payload, full + MIN)).toBe(MIN)
+    expect(relayPollBudgetMs("voice-changer-pro", {}, 10 * MIN)).toBe(20 * MIN)
+    expect(relayPollBudgetMs("speaker-frames", payload, 0)).toBe(full)
   })
 
   it("an unreadable payload keeps the 85-minute default; an unbudgeted type keeps its own table entry", () => {

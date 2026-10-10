@@ -1527,6 +1527,28 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
     },
   },
   {
+    type: "speaker-frames",
+    label: "Speaker Frames",
+    category: "processing",
+    // outputType: data — its `tracks` handle (json) is the stored face-track file's
+    // descriptor (url, sha256, bytes, per-track summaries; P3-22), what Speaker
+    // View's tracked framing reads. Nodaro-EXCLUSIVE (relayed from a connected
+    // self-host as detection proxies). NOT PRICED YET (P3.7): every run is
+    // refused with "Speaker Frames is not priced yet" before anything is reserved.
+    description:
+      "Find where each speaker's face is, over time, on every camera of an edit. Wire an EDL (Edit Plan's or Camera Switch's; a clip pack runs once over all its clips) or a single video, and the same renamed transcript Camera Switch outputs; it samples only the footage the edit keeps (plus 2 s each side) at 2 frames per second, on the cameras you leave ticked. Emits the face tracks as a stored file's descriptor on `tracks`. Not priced yet: runs are refused until its price is set.",
+    outputType: "data",
+    inputSchema: {
+      fields: [
+        { key: "edl", type: "json" },
+        { key: "videoUrl", type: "string" },
+        { key: "transcript", type: "json" },
+        { key: "excludeSourceIds", type: "object" },
+        { key: "trackAssignments", type: "object" },
+      ],
+    },
+  },
+  {
     type: "assemble-narrated-video",
     label: "Assemble Narrated Video",
     category: "processing",

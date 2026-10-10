@@ -1,6 +1,6 @@
 "use client"
 
-import { SPEAKER_VIEW_PRICED } from "@nodaro/render-rules"
+import { SPEAKER_FRAMES_PRICED, SPEAKER_VIEW_PRICED } from "@nodaro/render-rules"
 import { useMemo, useCallback, useState, useRef, useEffect, Suspense, type TouchEvent as ReactTouchEvent } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { lazyWithRetry as lazy } from "@/lib/lazy-with-retry"
@@ -162,6 +162,7 @@ import {
   EditPlanConfig,
   CameraSwitchConfig,
   SpeakerViewConfig,
+  SpeakerFramesConfig,
   ContentRecipeConfig,
   ContentIdeasConfig,
   AssembleNarratedVideoConfig,
@@ -469,6 +470,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "edit-plan": return <EditPlanConfig {...configProps} />
     case "camera-switch": return <CameraSwitchConfig {...configProps} nodeId={selectedNodeId} />
     case "speaker-view": return <SpeakerViewConfig {...configProps} nodeId={selectedNodeId} />
+    case "speaker-frames": return <SpeakerFramesConfig {...configProps} nodeId={selectedNodeId} />
     case "content-recipe": return <ContentRecipeConfig {...configProps} />
     case "content-ideas": return <ContentIdeasConfig {...configProps} />
     case "assemble-narrated-video": return <AssembleNarratedVideoConfig {...configProps} />
@@ -1160,14 +1162,17 @@ export function ConfigPanel() {
                     userId={userId ?? ""}
                     label={t("configPanel.runThisNode")}
                     isRunning={nodeData.executionStatus === "running"}
-                    // Speaker View has no price yet (C4): the button says so and does not run.
-                    disabled={imageGateBlocked || (nodeType === "speaker-view" && !SPEAKER_VIEW_PRICED)}
+                    // Speaker View (until C4) and Speaker Frames (until P3.7) have no
+                    // price yet: the button says so and does not run.
+                    disabled={imageGateBlocked || (nodeType === "speaker-view" && !SPEAKER_VIEW_PRICED) || (nodeType === "speaker-frames" && !SPEAKER_FRAMES_PRICED)}
                     disabledReason={
                       imageGateBlocked
                         ? t("node.imageRequiredHint", { model: (nodeData.provider as string | undefined) ?? "" })
                         : nodeType === "speaker-view" && !SPEAKER_VIEW_PRICED
                           ? t("speakerView.notPriced")
-                          : undefined
+                          : nodeType === "speaker-frames" && !SPEAKER_FRAMES_PRICED
+                            ? t("speakerFrames.notPriced")
+                            : undefined
                     }
                     creditOverride={
                       nodeType === "component"

@@ -295,6 +295,46 @@ beforeEach(() => {
 // GenerateImageConfig
 // =============================================================================
 
+describe("GenerateImageConfig — 'auto' keeps a wired photo's shape on every model", () => {
+  // Auto with a photo wired in keeps that photo's shape — natively, or the
+  // platform's nearest listed ratio on a model without a native auto — and
+  // without one it is the model's default shape. So it is a real choice on
+  // every model, and opening the panel must not reset it.
+  it("keeps 'auto' on a model without a native auto", () => {
+    for (const provider of ["seedream-5-pro", "nano-banana-pro", "flux", "qwen"]) {
+      const onUpdate = vi.fn()
+      render(<GenerateImageConfig {...commonProps(onUpdate, baseGenerateImageData({ provider, aspectRatio: "auto" }))} />)
+      for (const [u] of onUpdate.mock.calls) {
+        expect("aspectRatio" in u, provider).toBe(false)
+      }
+    }
+  })
+
+  it("keeps 'auto' with several models selected", () => {
+    const onUpdate = vi.fn()
+    render(<GenerateImageConfig {...commonProps(onUpdate, baseGenerateImageData({ provider: "seedream-5-pro", providers: ["seedream-5-pro", "flux"], aspectRatio: "auto" }))} />)
+    for (const [u] of onUpdate.mock.calls) {
+      expect("aspectRatio" in u).toBe(false)
+    }
+  })
+
+  it("still snaps any other stale ratio to the model's first listed ratio — never to Auto", () => {
+    const onUpdate = vi.fn()
+    // Seedream lists 1:1 first and has no 4:5.
+    render(<GenerateImageConfig {...commonProps(onUpdate, baseGenerateImageData({ provider: "seedream-5-pro", aspectRatio: "4:5" }))} />)
+    const merged: Record<string, unknown> = onUpdate.mock.calls.reduce((acc: any, [u]: any) => ({ ...acc, ...u }), {})
+    expect(merged.aspectRatio).toBe("1:1")
+  })
+
+  it("leaves a native-auto model's snap exactly as before", () => {
+    const onUpdate = vi.fn()
+    // GPT Image 2 lists auto first and has no 3:2.
+    render(<GenerateImageConfig {...commonProps(onUpdate, baseGenerateImageData({ provider: "gpt-image-2", aspectRatio: "3:2" }))} />)
+    const merged: Record<string, unknown> = onUpdate.mock.calls.reduce((acc: any, [u]: any) => ({ ...acc, ...u }), {})
+    expect(merged.aspectRatio).toBe("auto")
+  })
+})
+
 describe("GenerateImageConfig — provider-snap useEffect", () => {
   it("clears resolution when provider has no resolution lever", () => {
     // nano-banana (v1) has no entry in IMAGE_RESOLUTION_OPTIONS — the lever

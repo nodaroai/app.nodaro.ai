@@ -114,6 +114,7 @@ import { ApplyEdlNode } from "./apply-edl-node";
 import { EditPlanNode } from "./edit-plan-node";
 import { CameraSwitchNode } from "./camera-switch-node";
 import { SpeakerViewNode } from "./speaker-view-node";
+import { SpeakerFramesNode } from "./speaker-frames-node";
 import { ContentRecipeNode } from "./content-recipe-node";
 import { ContentIdeasNode } from "./content-ideas-node";
 import { ImageCollageNode } from "./image-collage-node";
@@ -337,6 +338,7 @@ export const nodeTypes: Record<SceneNodeType, React.ComponentType<any>> = {
   "edit-plan": EditPlanNode,
   "camera-switch": CameraSwitchNode,
   "speaker-view": SpeakerViewNode,
+  "speaker-frames": SpeakerFramesNode,
   "content-recipe": ContentRecipeNode,
   "content-ideas": ContentIdeasNode,
   "image-collage": ImageCollageNode,

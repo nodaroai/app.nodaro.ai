@@ -156,6 +156,7 @@ const NODE_LABELS_HE: Record<string, string> = {
   "Edit Plan": "תוכנית עריכה",
   "Camera Switch": "מחליף מצלמות",
   "Speaker View": "תצוגת דוברים",
+  "Speaker Frames": "מסגרות דוברים",
   "Remove Audio": "הסרת אודיו",
   "Mix Audio": "מיקס אודיו",
   "Combine Audio": "שילוב אודיו",

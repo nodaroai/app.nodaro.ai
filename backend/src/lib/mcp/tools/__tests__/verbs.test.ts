@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
 import { registerVerbs } from "../verbs.js"
+import { MODEL_CATALOG } from "@nodaro/shared"
 import {
   LIP_SYNC_PROVIDERS,
   VIDEO_TO_VIDEO_PROVIDERS,
@@ -200,13 +201,49 @@ describe("modify_image verb", () => {
     expect(received.body?.aspectRatio).toBe("3:4")
   })
 
-  it("generate_image keeps snapping 'auto' on a model without one — references are not a source photo", async () => {
+  // The route resolves "auto" against the photo the call sends (natively, or
+  // to the model's nearest listed ratio), so a call carrying one hands "auto"
+  // on rather than fixing a ratio first; a call with no photo snaps it here
+  // exactly as before.
+  const photoCalls: ReadonlyArray<[string, Record<string, unknown>]> = [
+    ["reference_image_urls", { reference_image_urls: ["https://example.com/a.png"] }],
+    ["base_image_url", { base_image_url: "https://example.com/base.png" }],
+    [
+      "connected_references",
+      { connected_references: [{ id: "r1", defaultName: "Image 1", source: "wired-image", url: "https://example.com/c.png" }] },
+    ],
+  ]
+  for (const [photo, extra] of photoCalls) {
+    it(`generate_image passes aspect_ratio 'auto' through to the route with ${photo}, on any model`, async () => {
+      for (const model of ["seedream-5-pro", "nano-banana-pro", "gpt-image-2"]) {
+        const { fastify, received } = stubRoute("POST", "/v1/generate-image", { jobId: "j-gi" })
+        const server = buildServer()
+        registerVerbs({ server, session: executeSession(), fastify })
+        await callTool(server, "generate_image", { prompt: "a lighthouse", model, aspect_ratio: "auto", ...extra })
+        expect(received.body?.aspectRatio, model).toBe("auto")
+      }
+    })
+  }
+
+  it("generate_image with 'auto' and no photo sends exactly what it sent before", async () => {
+    // Seedream lists 1:1 first, so the tool's own 16:9 fallback is what tells
+    // "as before" apart from the route's no-photo answer.
+    expect(MODEL_CATALOG["seedream-5-pro"]?.aspectRatios?.[0]).not.toBe("16:9")
+    for (const [model, sent] of [["seedream-5-pro", "16:9"], ["gpt-image-2", "auto"]] as const) {
+      const { fastify, received } = stubRoute("POST", "/v1/generate-image", { jobId: "j-gi" })
+      const server = buildServer()
+      registerVerbs({ server, session: executeSession(), fastify })
+      await callTool(server, "generate_image", { prompt: "a lighthouse", model, aspect_ratio: "auto" })
+      expect(received.body?.aspectRatio, model).toBe(sent)
+    }
+  })
+
+  it("generate_image still snaps any other ratio the model does not list", async () => {
     const { fastify, received } = stubRoute("POST", "/v1/generate-image", { jobId: "j-gi" })
     const server = buildServer()
     registerVerbs({ server, session: executeSession(), fastify })
-    await callTool(server, "generate_image", { prompt: "a lighthouse", model: "seedream-5-pro", aspect_ratio: "auto" })
-    expect(received.body?.aspectRatio).toBeDefined()
-    expect(received.body?.aspectRatio).not.toBe("auto")
+    await callTool(server, "generate_image", { prompt: "a lighthouse", model: "seedream-5-pro", aspect_ratio: "4:5" })
+    expect(received.body?.aspectRatio).toBe("3:4")
   })
 
   it("does NOT register without workflows:execute scope", async () => {

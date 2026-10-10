@@ -35,6 +35,9 @@ export const NODARO_EXCLUSIVE_NODE_TYPES: ReadonlySet<string> = new Set([
   "camera-switch",
   // Speaker View (C3.2): the plugin's renderer; relayed from a self-host.
   "speaker-view",
+  // Speaker Frames (P3.6): face tracks per camera; detection runs on the cloud
+  // worker, a connected self-host relays it (P3-15).
+  "speaker-frames",
 ])
 
 /**

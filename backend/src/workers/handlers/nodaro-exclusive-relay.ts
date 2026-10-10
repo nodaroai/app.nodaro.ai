@@ -3,7 +3,7 @@
  *
  * The exclusive nodes (every key of `EXCLUSIVE_ROUTE_BY_JOB_TYPE` below —
  * voice-changer-pro, generate-video-pro, edit-video-pro, video-analysis,
- * video-audit, edit-plan, camera-switch, speaker-view) are implemented by @nodaroai/cloud-plugins,
+ * video-audit, edit-plan, camera-switch, speaker-view, speaker-frames) are implemented by @nodaroai/cloud-plugins,
  * which never loads on a self-host — so unlike the vendor-direct relay
  * (cloud-video-relay.ts) there is no local implementation to fall back FROM:
  * the connection IS the implementation. A sibling of that relay rather than a
@@ -53,6 +53,8 @@ import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
 import { BUDGETED_JOB_NAMES, declaredJobBudgetMs, nodeCeilings } from "../../lib/job-budget.js"
 import { checkRehostSizes, rehostSizeMessage, type RehostSizeHit } from "../../lib/rehost-size-check.js"
 import { bringRenderHome } from "./relay-render-home.js"
+import { bringTrackSetHome, speakerFramesRelayPayload } from "./speaker-frames-relay.js"
+import { isSpeakerFramesUnsampledUrl } from "../../lib/speaker-frames-unsampled-url.js"
 
 /** Wire path per exclusive job type — mirrors the cloud plugin's routes. */
 const EXCLUSIVE_ROUTE_BY_JOB_TYPE: Readonly<Record<string, string>> = {
@@ -65,12 +67,16 @@ const EXCLUSIVE_ROUTE_BY_JOB_TYPE: Readonly<Record<string, string>> = {
   "camera-switch": "/v1/camera-switch",
   // Speaker View (C2.1, decided 2026-10-06): HOW the speakers are on screen.
   "speaker-view": "/v1/speaker-view",
+  // Speaker Frames (P3.6): face tracks per camera, from the self-host's
+  // detection proxies (P3-15 (a)); its poll is sized by its registered budget.
+  "speaker-frames": "/v1/speaker-frames",
 }
 
 /** How the size refusal names each type that re-hosts an edit's sources. */
 const EDL_RELAY_LABEL: Readonly<Record<string, string>> = {
   "camera-switch": "Camera Switch",
   "speaker-view": "Speaker View",
+  "speaker-frames": "Speaker Frames",
 }
 
 /** What every relayed type keeps its poll under the orchestrator's ceiling by. */
@@ -106,11 +112,24 @@ export function isNodaroExclusiveJobType(jobType: string): boolean {
  * registered for a newly relayed type reaches its poll with no second edit. A
  * payload the budget cannot read keeps the 85-minute default. Every other type
  * keeps its table entry.
+ *
+ * `elapsedMs` is the time the handler already spent in this node run before
+ * polling (speaker-frames builds every detection proxy locally; any type
+ * re-hosts its media): the orchestrator's ceiling counts it too, so it is left
+ * out of the poll — else the ceiling fires first, which the margin exists to
+ * prevent. Never below a minute.
  */
-export function relayPollBudgetMs(jobType: string, payload: Record<string, unknown>): number | undefined {
-  if (BUDGETED_JOB_NAMES.includes(jobType)) return nodeCeilings(declaredJobBudgetMs(jobType, payload)).processingMs - POLL_MARGIN_MS
-  return POLL_BUDGET_BY_JOB_TYPE[jobType]
+export function relayPollBudgetMs(jobType: string, payload: Record<string, unknown>, elapsedMs = 0): number | undefined {
+  const budget = BUDGETED_JOB_NAMES.includes(jobType)
+    ? nodeCeilings(declaredJobBudgetMs(jobType, payload)).processingMs - POLL_MARGIN_MS
+    : POLL_BUDGET_BY_JOB_TYPE[jobType]
+  if (budget === undefined) return undefined
+  return Math.max(MIN_POLL_BUDGET_MS, budget - Math.max(0, elapsedMs))
 }
+
+/** The least a poll is given once the cloud job exists: one that finished in
+ *  the meantime is still collected. */
+const MIN_POLL_BUDGET_MS = 60 * 1000
 
 /** Build the cloud request body from the enqueued payload: strip the
  *  instance-only bookkeeping and re-host URL-named media fields. */
@@ -119,8 +138,54 @@ async function buildCloudBody(payload: Record<string, unknown>, jobType: string)
     ([key, value]) => !INSTANCE_ONLY_FIELDS.has(key) && !key.startsWith("__") && value !== undefined,
   )
   return Object.fromEntries(
-    await Promise.all(kept.map(async ([key, value]) => [key, key === "edl" ? await rehostEdlSources(value, jobType) : await rehostIfUrlField(key, value)])),
+    await Promise.all(kept.map(async ([key, value]) => [key, key === "edl" ? await rehostEdlValue(value, jobType) : await rehostIfUrlField(key, value)])),
   )
+}
+
+/** The `edl` value of a relayed body: one edit, a clip pack (`Edl[]`) or a clip
+ *  set (`{ clips }`). Every edit of a pack re-hosts its sources — a pack used
+ *  to pass through untouched and reach nodaro.ai with this install's private
+ *  URLs (decided 2026-10-09). A refusal of an oversize source names every such
+ *  source across the pack. */
+async function rehostEdlValue(value: unknown, jobType: string): Promise<unknown> {
+  if (Array.isArray(value)) return rehostEdlPack(value, jobType)
+  if (value && typeof value === "object" && Array.isArray((value as { clips?: unknown }).clips)) {
+    return { ...(value as Record<string, unknown>), clips: await rehostEdlPack((value as { clips: unknown[] }).clips, jobType) }
+  }
+  return rehostEdlSources(value, jobType)
+}
+
+async function rehostEdlPack(edits: readonly unknown[], jobType: string): Promise<unknown[]> {
+  // One upload per distinct file: the clips of a pack share their cameras and mic.
+  const once = new Map<string, Promise<unknown>>()
+  const settled = await Promise.allSettled(edits.map((e) => rehostEdlSources(e, jobType, once)))
+  const rejected = settled.filter((o): o is PromiseRejectedResult => o.status === "rejected")
+  const oversize = rejected.filter((o) => o.reason instanceof DeterministicJobError)
+  if (oversize.length > 0) {
+    // One message for the pack: the union of what each clip's uploads found
+    // (a size only the upload revealed included), once per source.
+    const seen = new Set<string>()
+    const hits: RehostSizeHit[] = []
+    for (const o of oversize) {
+      for (const hit of rehostHitsOf(o.reason)) {
+        if (seen.has(hit.sourceId)) continue
+        seen.add(hit.sourceId)
+        hits.push(hit)
+      }
+    }
+    throw hits.length > 0
+      ? new DeterministicJobError(rehostSizeMessage(EDL_RELAY_LABEL[jobType] ?? "This node", hits), { cause: oversize[0]!.reason })
+      : oversize[0]!.reason
+  }
+  if (rejected.length > 0) throw rejected[0]!.reason
+  return settled.map((o) => (o as PromiseFulfilledResult<unknown>).value)
+}
+
+/** The oversize sources an edit's re-host refusal named (`rehostEdlSources`). */
+const REHOST_HITS = Symbol("rehostHits")
+function rehostHitsOf(err: unknown): readonly RehostSizeHit[] {
+  const hits = (err as { [REHOST_HITS]?: unknown } | null)?.[REHOST_HITS]
+  return Array.isArray(hits) ? (hits as RehostSizeHit[]) : []
 }
 
 /** An EDL carries its media one level down (`sources[].url`), which the
@@ -131,7 +196,7 @@ async function buildCloudBody(payload: Record<string, unknown>, jobType: string)
  *  source in source order — the same list the up-front check gives, whichever
  *  upload failed first. A refusal no retry can change, so it outranks a
  *  transient failure of another source. */
-async function rehostEdlSources(edl: unknown, jobType: string): Promise<unknown> {
+async function rehostEdlSources(edl: unknown, jobType: string, once?: Map<string, Promise<unknown>>): Promise<unknown> {
   if (!edl || typeof edl !== "object" || Array.isArray(edl)) return edl
   const sources = (edl as { sources?: unknown }).sources
   if (!Array.isArray(sources)) return edl
@@ -140,7 +205,15 @@ async function rehostEdlSources(edl: unknown, jobType: string): Promise<unknown>
       if (!row || typeof row !== "object" || Array.isArray(row)) return row
       const source = row as Record<string, unknown>
       if (typeof source.url !== "string") return row
-      return { ...source, url: await rehostIfUrlField("url", source.url) }
+      const url = source.url
+      // Speaker Frames' unsampled-source placeholder names no file: nothing to re-host.
+      if (isSpeakerFramesUnsampledUrl(url)) return row
+      let rehosted = once?.get(url)
+      if (!rehosted) {
+        rehosted = rehostIfUrlField("url", url)
+        once?.set(url, rehosted)
+      }
+      return { ...source, url: await rehosted }
     }),
   )
   const hits: RehostSizeHit[] = []
@@ -159,7 +232,9 @@ async function rehostEdlSources(edl: unknown, jobType: string): Promise<unknown>
     firstOversize ??= outcome.reason
   })
   if (hits.length > 0) {
-    throw new DeterministicJobError(rehostSizeMessage(EDL_RELAY_LABEL[jobType] ?? "This node", hits), { cause: firstOversize })
+    throw Object.assign(new DeterministicJobError(rehostSizeMessage(EDL_RELAY_LABEL[jobType] ?? "This node", hits), { cause: firstOversize }), {
+      [REHOST_HITS]: hits,
+    })
   }
   if (firstOther) throw firstOther.err
   return {
@@ -181,12 +256,33 @@ const SPEAKER_VIEW_CREATE_REFUSALS: ReadonlySet<string> = new Set([
   "too_long",
 ])
 
+/** nodaro.ai's Speaker Frames route refuses these before it reserves anything
+ *  (cloud-plugins P3.4): a function of the request or of nodaro.ai's release
+ *  (`not_priced` until P3.7, `media_proxy_unavailable` on a host without the
+ *  proxy or the detector, `invalid_proxy` for a relayed proxy its schema
+ *  refuses), so the job fails once, with nodaro.ai's message. */
+const SPEAKER_FRAMES_CREATE_REFUSALS: ReadonlySet<string> = new Set([
+  "not_priced",
+  "media_proxy_unavailable",
+  "validation_error",
+  "invalid_edl",
+  "invalid_input",
+  "invalid_proxy",
+  "no_video",
+  "too_long",
+])
+
+const CREATE_REFUSALS_BY_JOB_TYPE: Readonly<Record<string, ReadonlySet<string>>> = {
+  "speaker-view": SPEAKER_VIEW_CREATE_REFUSALS,
+  "speaker-frames": SPEAKER_FRAMES_CREATE_REFUSALS,
+}
+
 async function createRelayedJob(jobType: string, route: string, body: Record<string, unknown>): Promise<string> {
   try {
     return await createCloudJob(route, body)
   } catch (err) {
     const code = (err as { code?: unknown } | null)?.code
-    if (jobType === "speaker-view" && typeof code === "string" && SPEAKER_VIEW_CREATE_REFUSALS.has(code)) {
+    if (typeof code === "string" && CREATE_REFUSALS_BY_JOB_TYPE[jobType]?.has(code)) {
       throw new DeterministicJobError((err as Error).message, { cause: err })
     }
     throw err
@@ -350,6 +446,20 @@ export async function finalizeExclusiveCloudOutput(args: {
     })
   }
 
+  // Speaker Frames (P3.6, decided 2026-10-09): the JSON is the track file's
+  // descriptor. The file itself is copied HOME under this job's own key and its
+  // hash and size re-checked, so it expires and is expunged with this
+  // install's job, never depending on nodaro.ai's copy.
+  if (jobType === "speaker-frames") {
+    const home = await bringTrackSetHome(output, jobId, jobUserId)
+    return markJobCompleted(jobId, {
+      output_data: { ...home, viaNodaroCloud: true },
+      provider: "nodaro",
+      ...(cloudJob.id ? { provider_task_id: cloudJob.id } : {}),
+      ...relayColumns,
+    })
+  }
+
   // JSON producers: the JSON IS the result — no media to re-host. edit-plan
   // sits alongside the analysis pair: its output_data is the EDL plan (an `Edl`
   // for tighten, an `EdlClipSet` for clips, a `{version, chapters}` for
@@ -421,6 +531,7 @@ export function makeNodaroExclusiveHandler(jobType: string): HandlerFn {
     const route = EXCLUSIVE_ROUTE_BY_JOB_TYPE[jobType]
     if (!route) throw new Error(`not a nodaro-exclusive job type: ${jobType}`)
     const payload = job.data as Record<string, unknown>
+    const startedAt = Date.now()
     console.log(`[worker] ${jobType} ${ctx.jobId}: relaying to the nodaro.ai connection`)
 
     // Continue (gvp): the payload carries the CLOUD parent id the route
@@ -437,7 +548,9 @@ export function makeNodaroExclusiveHandler(jobType: string): HandlerFn {
       if (hits.length > 0) throw new DeterministicJobError(rehostSizeMessage(label, hits))
     }
 
-    const body = await buildCloudBody(payload, jobType)
+    // Speaker Frames relays the self-host's detection proxies in place of the
+    // originals (P3-15 (a)), and only once nodaro.ai takes a relayed job.
+    const body = await buildCloudBody(jobType === "speaker-frames" ? await speakerFramesRelayPayload(payload) : payload, jobType)
     const cloudJobId = cont
       ? await createCloudJob("/v1/generate-video-pro/continue", {
           ...body,
@@ -462,7 +575,7 @@ export function makeNodaroExclusiveHandler(jobType: string): HandlerFn {
       async (p) => {
         await setJobProgress(job, ctx.jobId, Math.min(95, Math.max(5, Math.round(p))))
       },
-      { budgetMs: relayPollBudgetMs(jobType, payload) },
+      { budgetMs: relayPollBudgetMs(jobType, payload, Date.now() - startedAt) },
     )
     await setJobProgress(job, ctx.jobId, 97)
     const ok = await finalizeExclusiveCloudOutput({

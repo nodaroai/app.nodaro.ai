@@ -5925,6 +5925,29 @@ export type CameraSwitchNodeData = {
   generatedJson?: { edl?: unknown; transcript?: unknown }
 }
 
+/** speaker-frames (P3.6) — WHERE each speaker's face is, over time, per camera.
+ *  Cloud-EXCLUSIVE + relayed (a connected self-host sends its detection
+ *  proxies). Reads an edit on `edl` (one, or a clip pack folded into one run,
+ *  P3-24) or a bare video on `video`, and the renamed transcript on
+ *  `transcript`; emits the stored face-track file's descriptor on `tracks`.
+ *  Not priced yet (P3.7): a run is refused. */
+export type SpeakerFramesNodeData = {
+  [key: string]: unknown
+  label: string
+  /** Source ids the user unticked (P3-5 (a)): not sampled. */
+  excludeSourceIds?: string[]
+  /** Manual corrections (P3-18 (a)): this track is this speaker (`null`:
+   *  nobody), applied at read time by every consumer. */
+  trackAssignments?: Array<{ trackId: string; speaker: string | null }>
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  currentJobId?: string
+  currentJobProgress?: number
+  /** The result: the stored track file's descriptor (`SpeakerTrackSetDescriptor`). */
+  generatedJson?: unknown
+}
+
 // --- Content Recipe / Content Ideas ("steal the format") ---
 
 /** A content recipe as the cloud returns it (`output_data.json`). Read
@@ -7052,6 +7075,7 @@ export type SceneNodeData =
   | VideoAuditNodeData
   | EditPlanNodeData
   | CameraSwitchNodeData
+  | SpeakerFramesNodeData
   | ContentRecipeNodeData
   | ContentIdeasNodeData
   | ListNodeData
@@ -7203,6 +7227,7 @@ export type SceneNodeType =
   | "speaker-view"
   | "edit-plan"
   | "camera-switch"
+  | "speaker-frames"
   | "content-recipe"
   | "content-ideas"
   | "image-collage"
@@ -8944,6 +8969,20 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       fieldMappings: {},
       executionStatus: "idle",
     } as CameraSwitchNodeData,
+  },
+  {
+    type: "speaker-frames",
+    label: "Speaker Frames",
+    category: "processing",
+    // Not priced yet (P3.7): the node says so and a run is refused.
+    creditCost: 0,
+    inputs: ["edl", "video", "transcript"],
+    outputs: ["tracks"],
+    defaultData: {
+      label: "Speaker Frames",
+      fieldMappings: {},
+      executionStatus: "idle",
+    } as SpeakerFramesNodeData,
   },
   {
     type: "content-recipe",

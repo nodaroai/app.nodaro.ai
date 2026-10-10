@@ -40,6 +40,8 @@ export const HANDLE_OUTPUT_TYPES: Record<string, Partial<Record<string, HandleCo
   "edit-plan": { edl: "look" },
   // camera-switch: the switched edit and the renamed transcript, both json.
   "camera-switch": { edl: "look", transcript: "look" },
+  // speaker-frames: the stored face-track file's descriptor (json).
+  "speaker-frames": { tracks: "look" },
   // speaker-view: the rendered video and the EDL as drawn (json).
   "speaker-view": { video: "video", json: "look", transcript: "look" },
   "add-captions": { "video-out": "video" },

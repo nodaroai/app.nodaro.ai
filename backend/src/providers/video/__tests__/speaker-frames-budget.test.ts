@@ -290,10 +290,42 @@ describe("what the leaf reads off the payload", () => {
     expect(speakerFramesJobBudgetMs({ edl: edl([[0, 5 * MIN], [6 * MIN, 11 * MIN]], ONE_CAM) })!).toBeGreaterThan(one)
   })
 
+  // Re-pinned in P3.6 to the plugin's exported contract: contract.ts
+  // `SPEAKER_FRAMES_JOB_PAYLOAD_EXAMPLE` (plugins main bdfa8cbc), copied (the
+  // private package cannot be imported), and the same payload as a connected
+  // self-host relays it (its proxies and the relayed marker beside the edit).
+  it("declares a budget for the plugin's exported example, and for its relayed form", () => {
+    const example = {
+      jobId: "00000000-0000-4000-8000-0000000000d1",
+      usageLogId: "00000000-0000-4000-8000-0000000000d2",
+      edl: {
+        version: 1,
+        clock: "master",
+        sources: [
+          { id: "mic", url: "https://media.example/mic.wav", kind: "audio", role: "master-audio" },
+          { id: "camA", url: "https://media.example/cam-a.mp4", kind: "video", speakers: ["Host"] },
+          { id: "camB", url: "https://media.example/cam-b.mp4", kind: "video", offsetMs: 4_000, speakers: ["Guest"] },
+        ],
+        segments: [
+          { id: "s0", inMs: 0, outMs: 30_000, video: "camA", speaker: "Host" },
+          { id: "s1", inMs: 45_000, outMs: 75_000, video: "camB", speaker: "Guest", transition: { type: "cut" } },
+        ],
+      },
+      transcript: { version: 1, words: [{ text: "Welcome", startMs: 200, endMs: 640, speaker: "Host" }] },
+      excludeSourceIds: [],
+      reservedCreditId: "speaker-frames",
+      workflowId: "00000000-0000-4000-8000-0000000000d3",
+      nodeId: "speaker-frames-1",
+    }
+    const budget = speakerFramesJobBudgetMs(example)
+    expect(budget).toBeGreaterThan(NODE_TIMEOUT_MS)
+    const relayed = { ...example, proxies: [{ sourceId: "camA", url: "https://cloud.test/p.mp4", fps: 2, height: 540, spanMap: [], cuts: [] }], relayed: true }
+    expect(speakerFramesJobBudgetMs(relayed)).toBe(budget)
+  })
+
   it("declares a budget for every valid payload shape the route can queue", () => {
-    // The payload is the private plugin route's `job.data`; until the plugin
-    // exports it (P3.4, re-pinned in P3.6), these stand in for it. Every one
-    // must declare a budget — `undefined` is the 90-minute sweep again.
+    // Shapes beyond the plugin's example (above). Every one must declare a
+    // budget — `undefined` is the 90-minute sweep again.
     const e = tighten(30, 20_000, 6_000)
     const payloads = [
       { edl: e },

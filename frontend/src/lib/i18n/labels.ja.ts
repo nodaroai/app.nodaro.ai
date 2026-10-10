@@ -152,6 +152,7 @@ const NODE_LABELS_JA: Record<string, string> = {
   "Edit Plan": "編集プラン",
   "Camera Switch": "カメラ切り替え",
   "Speaker View": "話者ビュー",
+  "Speaker Frames": "話者フレーム",
   "Remove Audio": "オーディオを削除",
   "Mix Audio": "オーディオをミックス",
   "Combine Audio": "オーディオを結合",

@@ -1,11 +1,17 @@
 /**
- * Which image a source-image node (image-to-image / modify-image / edit-image)
- * transforms, read from the run's graph — shared by the payload builder, which
- * sends it, and node-executor, which reads its size before the synchronous
- * build so "auto" can keep the source photo's shape. One definition, so the
- * size the run reads is always the size of the image the provider is sent.
+ * Which photo an image node's "auto" aspect ratio keeps the shape of, read
+ * from the run's graph — shared by the payload builder, which sends it, and
+ * the size read ahead of the synchronous build (`source-size-build.ts`). One
+ * definition, so the size the run reads is always the size of the image the
+ * provider is sent.
+ *
+ * A source-image node (image-to-image / modify-image / edit-image) transforms
+ * its wired or stored image, known before the build. Generate Image's photo is
+ * the first image its references ASSEMBLE to (or its inpaint / refine base),
+ * known only once the build has run — `generateImageMayUsePhotoSize` says when
+ * it is worth finding.
  */
-import { SOURCE_IMAGE_NODE_TYPES, autoAspectNeedsSourceImage, defaultImageModel } from "@nodaro/shared"
+import { SOURCE_IMAGE_NODE_TYPES, autoAspectNeedsSourceImage, defaultImageModel, imageGenAutoAspectNeedsSourceImage } from "@nodaro/shared"
 import { savedOutputFor } from "./output-extractor.js"
 import type { NodeExecutionState, ResolvedInputs, SimpleEdge, SimpleNode } from "./types.js"
 
@@ -52,6 +58,40 @@ export function getNodeImageUrl(
 export function sourceImageNodeProvider(type: string, data: Record<string, unknown>): string {
   return (data.provider as string)
     ?? (type === "edit-image" ? "recraft-upscale" : defaultImageModel("edit", data.aspectRatio as string | undefined))
+}
+
+/** The model a Generate Image node runs on: its own `provider`, else the
+ *  platform's general default for its ratio — the default the generate-image
+ *  branch applies. */
+export function generateImageNodeProvider(data: Record<string, unknown>): string {
+  return (data.provider as string) ?? defaultImageModel("general", data.aspectRatio as string | undefined)
+}
+
+/**
+ * True when a Generate Image node asks for "auto" on a model that can lack a
+ * native auto — the only case where its photo's size can change what the build
+ * sends, and so the only case worth building to find the photo. Before its
+ * references assemble the build may snap against the node's model or the i2i
+ * sibling references swap it to, so this asks about both; the build step then
+ * asks again with the references it assembled (`generateImageAutoNeedsPhotoSize`).
+ */
+export function generateImageMayUsePhotoSize(node: SimpleNode): boolean {
+  return node.type === "generate-image" &&
+    imageGenAutoAspectNeedsSourceImage({ provider: generateImageNodeProvider(node.data), aspectRatio: node.data.aspectRatio })
+}
+
+/**
+ * Whether a built Generate Image payload's "auto" needs its photo's size: the
+ * model the build snapped against — `normalizedImageGenModelId` with the
+ * ASSEMBLED reference count, the same inputs the build's
+ * `resolveNormalizedImageGen` call took — has no native auto.
+ */
+export function generateImageAutoNeedsPhotoSize(node: SimpleNode, assembledRefCount: number): boolean {
+  return imageGenAutoAspectNeedsSourceImage({
+    provider: generateImageNodeProvider(node.data),
+    aspectRatio: node.data.aspectRatio,
+    refCount: assembledRefCount,
+  })
 }
 
 /** The image a source-image node transforms (`main`) and, when the user

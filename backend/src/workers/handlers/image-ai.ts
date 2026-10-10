@@ -15,6 +15,14 @@ import { IMAGE_MASK_MODE, describeMaskRegion, T2I_TO_I2I_VARIANT, TASK_CHAINED_E
 import { defaultImageModel } from "@nodaro/shared"
 import { compositeInpaint, maskBoundingBoxFromUrl, imageDimensions } from "../../services/inpaint/composite.js"
 
+/** The text-to-image model each image-to-image sibling belongs to
+ *  (`T2I_TO_I2I_VARIANT`, reversed). With references attached, both engines
+ *  route the sibling id, while tables like IMAGE_MASK_MODE are keyed by the
+ *  text-to-image id (ImageGenProvider). */
+export const TEXT_TO_IMAGE_MODEL_OF_SIBLING: Readonly<Record<string, string>> = Object.fromEntries(
+  Object.entries(T2I_TO_I2I_VARIANT).map(([textToImage, sibling]) => [sibling, textToImage]),
+)
+
 const handleGenerateImage: HandlerFn = async function handleGenerateImage(job, ctx) {
   const { prompt, referenceImageUrls, provider, model, aspectRatio, resolution, quality, negativePrompt, seed, renderingSpeed, styleType, expandPrompt, extraParams: upstreamExtras, baseImageUrl, maskUrl, strength, guidanceScale } = job.data as {
     jobId: string
@@ -85,11 +93,14 @@ const handleGenerateImage: HandlerFn = async function handleGenerateImage(job, c
   // an inpaint), so the task-created persistence records the right provider kind.
   const onTaskCreated = makeOnTaskCreated(ctx.jobId, providerKindForImageModel(effectiveModel))
 
-  // Tier-B hint (best-effort; NEVER fails the job). Look up IMAGE_MASK_MODE by
-  // the ORIGINAL gen provider (`resolvedModel`) — the map is keyed by
-  // ImageGenProvider, not the swapped i2i variant.
+  // Tier-B hint (best-effort; NEVER fails the job). IMAGE_MASK_MODE is keyed by
+  // the text-to-image id (ImageGenProvider), not an i2i variant: with references
+  // attached `resolvedModel` is already the sibling (the route sends it as
+  // `provider`, a workflow run as `model`), so look it up by the model that
+  // sibling belongs to.
+  const maskModeModel = TEXT_TO_IMAGE_MODEL_OF_SIBLING[resolvedModel] ?? resolvedModel
   let effectivePrompt = prompt
-  if (isInpaint && IMAGE_MASK_MODE[resolvedModel as ImageGenProvider] === "prompt") {
+  if (isInpaint && IMAGE_MASK_MODE[maskModeModel as ImageGenProvider] === "prompt") {
     try {
       const [box, dims] = await Promise.all([
         maskBoundingBoxFromUrl(maskUrl!),

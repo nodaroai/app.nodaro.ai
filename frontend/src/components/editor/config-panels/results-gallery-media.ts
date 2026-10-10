@@ -43,7 +43,7 @@ export const NO_MEDIUM_RESULT_TYPES: ReadonlySet<string> = new Set([
   "video-analysis", "video-audit", "content-recipe", "content-ideas",
   "video-composer", "after-effects", "lottie-overlay", "3d-title", "motion-graphics",
   "generate-3d-scene", "edit-3d-scene", "composite",
-  "edit-plan", "camera-switch", "silence-detect", "audio-sync",
+  "edit-plan", "camera-switch", "speaker-frames", "silence-detect", "audio-sync",
   "router", "component",
 ])
 

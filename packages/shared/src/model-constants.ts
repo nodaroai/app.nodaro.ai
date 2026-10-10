@@ -640,7 +640,8 @@ export const DEFAULT_REF_IMAGE_MAX = 4
  *      route silently routes to the i2i sibling ({@link T2I_TO_I2I_VARIANT}) —
  *      the endpoint that actually consumes refs — so the advertised cap is the
  *      SIBLING's (grok→grok-i2i = 1, gpt-image-2→gpt-image-2-i2i = 16), never the
- *      t2i id's absent default. Mirrors the route's `resolveEffectiveProvider`.
+ *      t2i id's absent default. Mirrors the swap `resolveNormalizedImageGen`
+ *      makes for the route and the workflow run alike.
  *   2. {@link REF_IMAGE_MAX_LIMITS} is the PRODUCT/UI cap, which may be
  *      intentionally TIGHTER than the raw provider schema (e.g. flux-2-pro = 4
  *      here though the BFL schema accepts 8; flux-2-klein = 1 though the array
