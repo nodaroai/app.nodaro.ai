@@ -63,6 +63,13 @@ const LLM_MODEL_RATES_USD_PER_M: Record<string, LlmModelRateUsd> = {
   // so compare the two rows with that in mind (confirmed 2026-09-06).
   "gemini-3.8-flash":  { inputPricePerM: 0.225, outputPricePerM: 1.125 },
   "claude-haiku-4.5":  { inputPricePerM: 0.80,  outputPricePerM: 4.00 },
+  // KIE list price 12/60 KIE-credits per M ($0.005/credit), as given at add
+  // time (2026-10-10) — 60% of Anthropic's $0.10/$0.50 short-prompt card. One
+  // flat band: no step-up past 100k was given for this lane (the direct row
+  // below has one). The stream's `credits_consumed` could not confirm these
+  // figures: in the 2026-10-10 probe it did not track tokens (two identical
+  // calls reported 0.01 and 0.15 credits; a 140k-token prompt reported 0.15).
+  "claude-haiku-5.5":  { inputPricePerM: 0.06,  outputPricePerM: 0.30 },
   "claude-sonnet-4.6": { inputPricePerM: 3.00,  outputPricePerM: 15.00 },
   "gpt-5.2":           { inputPricePerM: 2.50,  outputPricePerM: 10.00 },
   "gemini-3.1-pro":    { inputPricePerM: 0.50,  outputPricePerM: 3.50 },
@@ -171,6 +178,16 @@ const LLM_DIRECT_RATES_USD_PER_M: Record<string, LlmModelRateUsd> = {
   },
   // Anthropic direct-SDK lane.
   "claude-haiku-4.5": { inputPricePerM: 1.00, outputPricePerM: 5.00 },
+  // Anthropic list prices, 2026-10-10: two rate cards chosen by prompt length —
+  // $0.10/$0.50 up to 100k prompt tokens, $0.50/$2.50 above. Cache reads are
+  // 0.1x input (exact); a 1-hour cache write is 2x where the formula applies
+  // 1.25x, so a call that writes one is under-reported (nothing here does).
+  "claude-haiku-5.5": {
+    inputPricePerM: 0.10,
+    outputPricePerM: 0.50,
+    longContextThresholdTokens: 100_000,
+    longContext: { inputPricePerM: 0.50, outputPricePerM: 2.50 },
+  },
   "claude-sonnet-4.6": { inputPricePerM: 3.00, outputPricePerM: 15.00 },
   "claude-opus-4.7": { inputPricePerM: 5.00, outputPricePerM: 25.00 },
   "claude-sonnet-5": { inputPricePerM: 3.00, outputPricePerM: 15.00 },

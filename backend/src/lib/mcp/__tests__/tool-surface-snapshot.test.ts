@@ -714,6 +714,11 @@ const LLM_REGISTRY_2026_10_IDS_BYTES = 480
 // nothing else moved. No tool was added, so the fixture does NOT move.
 // measured by this suite: 407_322 total − 406_618 budget = 704 B.
 const LLM_LANE_PRICING_WORDING_BYTES = 704
+// RAISED 2026-10-10 by one LLM id added to the registry (claude-haiku-5.5): each of the four
+// tools whose `llm_model` argument is `z.enum(LLM_MODEL_IDS)` lists it (19 B apiece), and
+// nothing else moved. No tool was added, so the fixture does NOT move. measured by this suite:
+// 408_142 total − 408_066 budget = 76 B.
+const CLAUDE_HAIKU_5_5_ID_BYTES = 76
 // RAISED 2026-10-08 by the `build_ugc_creator` description and nothing else: the image
 // generations it hands back are now one per candidate (a sampled creator is drawn by every
 // image candidate and the user picks one). `build_ugc_clips`' `spent_job_ids` cap moving from
@@ -825,7 +830,8 @@ export const TOOL_WIRE_BUDGET = {
     IMAGE_MODEL_ROLE_DEFAULTS_BYTES +
     UGC_CREATOR_CANDIDATES_WORDING_BYTES +
     MODIFY_IMAGE_AUTO_ASPECT_WORDING_BYTES +
-    GENERATE_IMAGE_AUTO_ASPECT_WORDING_BYTES,
+    GENERATE_IMAGE_AUTO_ASPECT_WORDING_BYTES +
+    CLAUDE_HAIKU_5_5_ID_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

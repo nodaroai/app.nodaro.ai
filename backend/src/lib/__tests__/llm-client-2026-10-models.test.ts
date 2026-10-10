@@ -176,3 +176,94 @@ describe("Claude 5.5 structured output — auto tool choice + strict tool (force
     expect(res.text).toBe('{"ok":true}')
   })
 })
+
+// Claude Haiku 5.5 (registered 2026-10-10) shares the 5.5 generation's default
+// reasoning and sampling rule, but NOT its tool-choice rule: Anthropic's API
+// served it a forced tool_choice in the probe, so it keeps the forced shape.
+describe("Claude Haiku 5.5 — reasons by default, takes a forced tool", () => {
+  let fetchMock: ReturnType<typeof vi.fn>
+  const kieStream = (lines: string[]) =>
+    new Response(new ReadableStream<Uint8Array>({
+      start(c) {
+        const e = new TextEncoder()
+        for (const l of lines) c.enqueue(e.encode(l))
+        c.close()
+      },
+    }), { status: 200, headers: { "Content-Type": "text/event-stream" } })
+  const kieBody = () => JSON.parse((fetchMock.mock.calls[0]?.[1] as { body: string }).body) as Record<string, any>
+
+  beforeEach(() => {
+    fetchMock = vi.fn()
+    vi.stubGlobal("fetch", fetchMock)
+    createSpy.mockReset().mockResolvedValue({
+      content: [{ type: "tool_use", name: "r", input: { ok: true } }],
+      usage: { input_tokens: 1, output_tokens: 1 },
+    })
+  })
+  afterEach(() => { vi.unstubAllGlobals() })
+
+  it("a plain call runs on KIE under its slug, with no sampling param and room for its reasoning", async () => {
+    const { llmComplete } = await import("../llm-client.js")
+    fetchMock.mockResolvedValue(kieStream([
+      'data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"pong"}}\n',
+      'data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"input_tokens":1,"output_tokens":1}}\n',
+    ]))
+    const res = await llmComplete({ modelId: "claude-haiku-5.5", system: "", messages: [{ role: "user", content: "ping" }], temperature: 0.2, maxTokens: 1024 })
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("https://api.kie.ai/claude/v1/messages")
+    expect(createSpy).not.toHaveBeenCalled()
+    const body = kieBody()
+    expect(body.model).toBe("claude-haiku-5-5")
+    expect(body.temperature).toBeUndefined()
+    // No effort was asked, so none is sent — but the model reasons anyway
+    // (measured: ~2,000 output tokens for a ~350-token answer), so a node's
+    // 1,024 cap is floored to the reasoning floor instead of being eaten.
+    expect(body.thinking).toBeUndefined()
+    expect(body.output_config).toBeUndefined()
+    expect(body.max_tokens).toBe(32768)
+    expect(res.text).toBe("pong")
+  })
+
+  it("a structured call with no effort runs on KIE with the FORCED tool choice, unchanged schema", async () => {
+    const { llmComplete } = await import("../llm-client.js")
+    fetchMock.mockResolvedValue(kieStream([
+      'data: {"type":"content_block_start","content_block":{"type":"tool_use","name":"r"}}\n',
+      'data: {"type":"content_block_delta","delta":{"type":"input_json_delta","partial_json":"{\\"ok\\":true}"}}\n',
+      'data: {"type":"message_delta","delta":{"stop_reason":"tool_use"},"usage":{"input_tokens":1,"output_tokens":1}}\n',
+    ]))
+    const res = await llmComplete({ modelId: "claude-haiku-5.5", system: "sys", messages: [{ role: "user", content: "x" }], jsonSchema: { name: "r", schema: CAPPED_SCHEMA } })
+    expect(createSpy).not.toHaveBeenCalled()
+    const body = kieBody()
+    expect(body.model).toBe("claude-haiku-5-5")
+    expect(body.tool_choice).toEqual({ type: "tool", name: "r" })
+    expect(body.system).toBe("sys")
+    expect(body.tools[0].strict).toBeUndefined()
+    expect(body.tools[0].input_schema).toEqual(CAPPED_SCHEMA)
+    expect(res.text).toBe('{"ok":true}')
+  })
+
+  it("an effort sends the call to Anthropic's API under its id, with adaptive thinking at that effort", async () => {
+    const { llmComplete } = await import("../llm-client.js")
+    createSpy.mockResolvedValue({ content: [{ type: "text", text: "direct" }], usage: { input_tokens: 1, output_tokens: 1 } })
+    const res = await llmComplete({ modelId: "claude-haiku-5.5", system: "", messages: [{ role: "user", content: "x" }], reasoningEffort: "max", temperature: 0.2 })
+    expect(fetchMock).not.toHaveBeenCalled()
+    const body = createSpy.mock.calls[0][0] as Record<string, unknown>
+    expect(body.model).toBe("claude-haiku-5-5")
+    expect(body.thinking).toEqual({ type: "adaptive" })
+    expect(body.output_config).toEqual({ effort: "max" })
+    expect(body.temperature).toBeUndefined()
+    expect(body.max_tokens).toBe(32768)
+    expect(res.text).toBe("direct")
+  })
+
+  // A forced tool skips this model's thinking (probed 2026-10-10: the same
+  // usage with and without an effort), so the effort would buy nothing forced.
+  it("an effort-bearing structured call leaves the tool choice to the model", async () => {
+    const { llmComplete } = await import("../llm-client.js")
+    await llmComplete({ modelId: "claude-haiku-5.5", system: "sys", messages: [{ role: "user", content: "x" }], reasoningEffort: "high", jsonSchema: { name: "r", schema: CAPPED_SCHEMA } })
+    const body = createSpy.mock.calls[0][0] as Record<string, unknown>
+    expect(body.model).toBe("claude-haiku-5-5")
+    expect(body.tool_choice).toEqual({ type: "auto" })
+    expect(body.output_config).toEqual({ effort: "high" })
+    expect(body.system).toMatch(/^sys\n\nRespond by calling the `r` tool exactly once/)
+  })
+})

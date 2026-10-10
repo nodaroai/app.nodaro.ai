@@ -159,6 +159,29 @@ describe("direct-Anthropic lane costing", () => {
   })
 })
 
+describe("Claude Haiku 5.5 direct-lane row (Anthropic list, 2026-10-10) — two rate cards by prompt length", () => {
+  it("costs $0.10/$0.50 per M up to a 100k-token prompt", () => {
+    // (100_000 * 0.10 + 10_000 * 0.50) / 1e6 = 0.015
+    expect(calculateLlmCost("claude-haiku-5.5", { inputTokens: 100_000, outputTokens: 10_000 }, "direct")).toBeCloseTo(0.015, 10)
+  })
+
+  it("costs $0.50/$2.50 per M for the WHOLE call once the prompt passes 100k", () => {
+    // (100_001 * 0.50 + 10_000 * 2.50) / 1e6 = 0.0750005
+    expect(calculateLlmCost("claude-haiku-5.5", { inputTokens: 100_001, outputTokens: 10_000 }, "direct")).toBeCloseTo(0.0750005, 10)
+  })
+
+  it("counts cached prompt tokens toward the 100k threshold", () => {
+    // 60k uncached + 50k cache-read = a 110k prompt → the long card:
+    // (60_000 + 50_000 * 0.1) * 0.50 / 1e6 = 0.0325
+    expect(calculateLlmCost("claude-haiku-5.5", { inputTokens: 60_000, outputTokens: 0, cacheReadTokens: 50_000 }, "direct")).toBeCloseTo(0.0325, 10)
+  })
+
+  it("the KIE lane keeps its one flat band at the same prompt length", () => {
+    // (150_000 * 0.06 + 10_000 * 0.30) / 1e6 = 0.012
+    expect(calculateLlmCost("claude-haiku-5.5", { inputTokens: 150_000, outputTokens: 10_000 }, "kie")).toBeCloseTo(0.012, 10)
+  })
+})
+
 describe("Claude 5.5 direct-lane rows (Anthropic list, verified 2026-10-08)", () => {
   it("costs Sonnet 5.5 at $2/$10 and Opus 5.5 at $4/$20 per M on the direct lane", () => {
     expect(calculateLlmCost("claude-sonnet-5.5", { inputTokens: 1_000_000, outputTokens: 1_000_000 }, "direct")).toBeCloseTo(12, 10)

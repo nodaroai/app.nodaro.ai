@@ -109,6 +109,14 @@ describe("calculateLlmCost", () => {
     expect(calculateLlmCost(id, { inputTokens: 0, outputTokens: 1_000_000 })).toBeCloseTo(outUsd, 10)
   })
 
+  it("prices claude-haiku-5.5 at KIE list rates, one flat band", () => {
+    // 12/60 KIE credits per M @ $0.005 = $0.06/$0.30, as given 2026-10-10.
+    expect(calculateLlmCost("claude-haiku-5.5", { inputTokens: 1_000_000, outputTokens: 0 })).toBeCloseTo(0.06, 10)
+    expect(calculateLlmCost("claude-haiku-5.5", { inputTokens: 0, outputTokens: 1_000_000 })).toBeCloseTo(0.30, 10)
+    // No step-up on this lane: a 150k prompt costs 150k × the same rate.
+    expect(calculateLlmCost("claude-haiku-5.5", { inputTokens: 150_000, outputTokens: 0 })).toBeCloseTo(0.009, 10)
+  })
+
   it("prices gpt-6-astra on ONE flat input band (KIE's cached/cache-write rows are deliberately unmodelled)", () => {
     // KIE bills cached input at 56 and cache writes at 700 credits/M, but this
     // is an OpenAI-shape lane: it reports cached tokens INSIDE the prompt
