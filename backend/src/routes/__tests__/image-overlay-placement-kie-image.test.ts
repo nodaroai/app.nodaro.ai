@@ -1,9 +1,9 @@
 /**
- * The placement call prefetches the base image into bytes, so the bytes block
- * must also name the URL they came from — otherwise a Gemini model served by
- * KIE gets an image on our own media host as an inline `data:` URL, which KIE
- * refuses past a size it does not document. Exercised through the real LLM client; only the network edges
- * and the job/credit bookkeeping are stubbed.
+ * The placement call prefetches the base image into bytes. On a Gemini model
+ * served by KIE those bytes travel inline, never as the image's URL — KIE's
+ * chat-completions lane fails every image sent as a URL. Exercised through the
+ * real LLM client; only the network edges and the job/credit bookkeeping are
+ * stubbed.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import Fastify, { type FastifyInstance } from "fastify"
@@ -11,6 +11,7 @@ import sharp from "sharp"
 
 const mocks = vi.hoisted(() => ({
   safeFetch: vi.fn(),
+  safeFetchBytes: vi.fn(),
   maybeProxyLlmRouteToCloud: vi.fn(),
   insertJob: vi.fn(),
   reserveCreditsForJob: vi.fn(),
@@ -40,6 +41,10 @@ vi.mock("@/lib/safe-fetch.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/safe-fetch.js")>()),
   safeFetch: mocks.safeFetch,
 }))
+vi.mock("@/lib/safe-fetch-bytes.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/safe-fetch-bytes.js")>()),
+  safeFetchBytes: mocks.safeFetchBytes,
+}))
 vi.mock("@/lib/cloud-llm-proxy.js", () => ({ maybeProxyLlmRouteToCloud: mocks.maybeProxyLlmRouteToCloud }))
 vi.mock("@/lib/insert-job.js", () => ({ insertJob: mocks.insertJob }))
 vi.mock("@/middleware/credit-guard.js", () => ({
@@ -56,22 +61,19 @@ vi.mock("@/lib/credits-job-lifecycle.js", () => ({
 vi.mock("@/lib/reconcile/persistence.js", () => ({ markProviderCallStart: mocks.markProviderCallStart }))
 
 import { imageOverlayPlacementRoutes } from "../image-overlay-placement.js"
+import { KIE_IMAGE_FETCH_FAILED_MESSAGE } from "@/lib/kie-inline-image.js"
 
 const USER_ID = "00000000-0000-4000-8000-000000000001"
-/** Our media host (R2_PUBLIC_URL, stubbed per test). */
-const OWN_ORIGIN = "https://cdn.example"
-const IMAGE_URL = `${OWN_ORIGIN}/images/poster.png`
+const IMAGE_URL = "https://cdn.example/images/poster.png"
 const PLACEMENT = { anchor: "bottom-right", x: -4, y: -6, width: 12, reason: "Calm corner away from the face." }
 
-describe("POST /v1/image-overlay/suggest-placement — Gemini on KIE gets the image by URL", () => {
+describe("POST /v1/image-overlay/suggest-placement — Gemini on KIE gets the image inline", () => {
   let app: FastifyInstance
   let fetchMock: ReturnType<typeof vi.fn>
   let png: Buffer
 
   beforeEach(async () => {
     vi.clearAllMocks()
-    vi.stubEnv("R2_PUBLIC_URL", OWN_ORIGIN)
-    vi.stubEnv("R2_PUBLIC_FALLBACK_DOMAIN", "")
     mocks.maybeProxyLlmRouteToCloud.mockResolvedValue(false)
     mocks.insertJob.mockResolvedValue({ data: { id: "job-1" }, error: null })
     mocks.reserveCreditsForJob.mockResolvedValue({ usageLogId: "usage-1" })
@@ -108,10 +110,9 @@ describe("POST /v1/image-overlay/suggest-placement — Gemini on KIE gets the im
   afterEach(async () => {
     await app.close()
     vi.unstubAllGlobals()
-    vi.unstubAllEnvs()
   })
 
-  it("sends an image on our media host by its https URL, not as inline bytes", async () => {
+  it("sends the prefetched image inline, never its URL", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/image-overlay/suggest-placement",
@@ -127,8 +128,52 @@ describe("POST /v1/image-overlay/suggest-placement — Gemini on KIE gets the im
     const user = body.messages.find((m) => m.role === "user")
     expect((user?.content as Array<Record<string, unknown>>)[0]).toEqual({
       type: "image_url",
-      image_url: { url: IMAGE_URL },
+      image_url: { url: `data:image/png;base64,${png.toString("base64")}` },
     })
-    expect(raw).not.toContain("data:")
+    expect(raw).not.toContain(IMAGE_URL)
+  })
+
+  // The prefetch could not read the image, so it reaches the KIE lane as a URL
+  // — and KIE's own download fails too. With no second lane, the person reads
+  // the plain sentence on the job, never the diagnostic.
+  it("records an image it could not send as its plain sentence, never the diagnostic", async () => {
+    mocks.safeFetch.mockImplementation(async () => new Response("missing", { status: 404 }))
+    mocks.safeFetchBytes.mockRejectedValue(new Error("Image download failed"))
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/image-overlay/suggest-placement",
+      payload: { imageUrl: IMAGE_URL, llmModel: "gemini-3.8-flash", userId: USER_ID },
+    })
+
+    expect(res.statusCode).toBe(502)
+    // The answer says the same plain sentence the job does.
+    expect(res.json().error).toEqual({ code: "llm_error", message: KIE_IMAGE_FETCH_FAILED_MESSAGE })
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(mocks.markJobFailed).toHaveBeenCalledWith("job-1", {
+      error_message: KIE_IMAGE_FETCH_FAILED_MESSAGE,
+      extra: { output_data: { error: KIE_IMAGE_FETCH_FAILED_MESSAGE } },
+    })
+    expect(JSON.stringify([res.json(), mocks.markJobFailed.mock.calls])).not.toMatch(/KIE|inline image/)
+  })
+
+  // A failure with no plain sentence of its own (the model never produced a
+  // valid placement) keeps the route's own answer — never an internal message.
+  it("answers its own sentence for a failure that has no plain sentence", async () => {
+    fetchMock.mockImplementation(async () =>
+      new Response(
+        JSON.stringify({ choices: [{ message: { role: "assistant", content: "not a placement" }, finish_reason: "stop" }], usage: { prompt_tokens: 9, completion_tokens: 3 } }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    )
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/image-overlay/suggest-placement",
+      payload: { imageUrl: IMAGE_URL, llmModel: "gemini-3.8-flash", userId: USER_ID },
+    })
+
+    expect(res.statusCode).toBe(502)
+    expect(res.json().error).toEqual({ code: "llm_error", message: "Could not suggest a placement" })
   })
 })

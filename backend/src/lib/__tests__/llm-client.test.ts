@@ -165,6 +165,9 @@ describe("chat-completions wire mapping (KIE forwards ONLY image_url; drops vide
     vi.unstubAllGlobals()
   })
 
+  // A real (1x1) PNG: images are read from their bytes on the way into KIE.
+  const PNG_1X1 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+
   it("maps video AND audio blocks to `image_url` parts (Gemini ingests by MIME) — never video_url/audio_url", async () => {
     const { llmComplete } = await import("../llm-client.js")
     fetchMock.mockResolvedValue(
@@ -180,7 +183,7 @@ describe("chat-completions wire mapping (KIE forwards ONLY image_url; drops vide
         {
           role: "user",
           content: [
-            { type: "image", url: "https://x/pic.png" },
+            { type: "image_base64", mediaType: "image/png", data: PNG_1X1 },
             { type: "video", url: "https://x/clip.mp4" },
             { type: "audio", url: "https://x/track.mp3" },
             { type: "text", text: "describe" },
@@ -194,8 +197,10 @@ describe("chat-completions wire mapping (KIE forwards ONLY image_url; drops vide
     const parts = body.messages[0].content as Array<Record<string, unknown>>
 
     // image, video, audio ALL serialize to `image_url` — the only part KIE's
-    // chat-completions proxy actually forwards to Gemini.
-    expect(parts[0]).toEqual({ type: "image_url", image_url: { url: "https://x/pic.png" } })
+    // chat-completions proxy actually forwards to Gemini. The image goes as
+    // inline bytes (images never go to this lane as URLs); video and audio go
+    // as URLs, which is the only way this lane carries them.
+    expect(parts[0]).toEqual({ type: "image_url", image_url: { url: `data:image/png;base64,${PNG_1X1}` } })
     expect(parts[1]).toEqual({ type: "image_url", image_url: { url: "https://x/clip.mp4" } })
     expect(parts[2]).toEqual({ type: "image_url", image_url: { url: "https://x/track.mp3" } })
     expect(parts[3]).toEqual({ type: "text", text: "describe" })

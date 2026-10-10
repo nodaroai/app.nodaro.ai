@@ -143,7 +143,7 @@ function toResponse(
   assertNotOutputCapped({
     modelId: model.id, lane: "direct-gemini", stopReason: end.stopReason, cap: end.cap, usage, providerCost,
   })
-  return { text, usage, model: model.id, providerCost }
+  return { text, usage, model: model.id, providerCost, lane: "direct-gemini" }
 }
 
 function geminiModelId(model: LlmModelDef): string {

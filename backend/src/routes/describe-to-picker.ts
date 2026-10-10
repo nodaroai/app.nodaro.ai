@@ -9,7 +9,7 @@ import { config } from "../lib/config.js"
 import { creditGuard, reserveCreditsForJob } from "../middleware/credit-guard.js"
 import { safeUrlSchema } from "../lib/url-validator.js"
 import { prefetchAsBase64 } from "../lib/anthropic-image.js"
-import { llmCompleteStructured, llmStreamStructured, type LlmContentBlock, type LlmRequest } from "../lib/llm-client.js"
+import { llmCompleteStructured, llmStreamStructured, type LlmContentBlock, type LlmRequest, type LlmServedLane } from "../lib/llm-client.js"
 import { createSSEStream, type SSEController } from "../lib/sse.js"
 import { createPickerFieldStream } from "../lib/picker-field-stream.js"
 import { LLM_ADVANCED_SHAPE, advancedModeError, resolveLlmParams } from "../lib/llm-advanced-mode.js"
@@ -220,7 +220,7 @@ async function runAnalyzer(analysis: Analysis, onToolJson?: (partialJson: string
  *  the answer's body. */
 async function completeAnalysis(
   analysis: Analysis,
-  { output, inputTokens, outputTokens }: { output: unknown; inputTokens: number; outputTokens: number },
+  { output, inputTokens, outputTokens, lane }: { output: unknown; inputTokens: number; outputTokens: number; lane: LlmServedLane },
 ) {
   const { jobId, userId, imageUrl, targetPickers } = analysis
   const { gaps, ...pickerJson } = output as Record<string, unknown> & { gaps?: PickerGaps }
@@ -234,6 +234,11 @@ async function completeAnalysis(
       status: "completed",
       completed_at: new Date().toISOString(),
       output_data: { json: flooredPickerJson, targetPickers, usage: { inputTokens, outputTokens } },
+      // Which LLM lane served the answer, a fallback included.
+      // `provider` is admin-only — outside PUBLIC_JOB_KEYS (routes/jobs.ts) and
+      // outside the browser's column grant on jobs (migration 347) — while
+      // output_data is owner-readable through both, so the lane never rides there.
+      provider: lane,
     })
     .eq("id", jobId)
     .eq("user_id", userId)

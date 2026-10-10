@@ -13,10 +13,20 @@ import { LlmLaneError, LlmStreamResponseError } from "./llm-errors.js"
  * where they are thrown.
  */
 export function userFacingMessage(err: unknown, fallback: string): string {
+  return laneUserMessage(err) ?? (err instanceof Error ? err.message : fallback)
+}
+
+/**
+ * Only the model-lane sentence: the `userMessage` of an `LlmLaneError` /
+ * `LlmStreamResponseError` anywhere on the `cause` chain, or undefined when
+ * there is none. For an answer that must otherwise keep its own fixed
+ * sentence rather than pass another error's message through.
+ */
+export function laneUserMessage(err: unknown): string | undefined {
   let cur: unknown = err
   for (let depth = 0; cur !== null && cur !== undefined && depth < 8; depth++) {
     if (cur instanceof LlmLaneError || cur instanceof LlmStreamResponseError) return cur.userMessage
     cur = (cur as { cause?: unknown }).cause
   }
-  return err instanceof Error ? err.message : fallback
+  return undefined
 }

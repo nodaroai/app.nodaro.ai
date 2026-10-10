@@ -45,7 +45,7 @@ const BASELINE_PATH = join(__dirname, "tenant-scope-baseline.json")
 // The baseline may only shrink. A re-run with --update-baseline that would
 // GROW it is a new unscoped chain being accepted as legacy, which is exactly
 // what this lint exists to stop; lower the number as entries are fixed.
-const BASELINE_MAX_ENTRIES = 27
+const BASELINE_MAX_ENTRIES = 26
 
 // ---------------------------------------------------------------------------
 // Tenant-owned tables — rows belong to a single user_id, accessible only by

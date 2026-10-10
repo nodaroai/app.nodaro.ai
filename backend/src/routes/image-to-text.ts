@@ -16,6 +16,8 @@ import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { markProviderCallStart } from "../lib/reconcile/persistence.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { userFacingMessage } from "../lib/user-facing-error.js"
+import { describeErrorChain } from "../lib/llm-errors.js"
 
 const imageToTextBody = z.object({
   imageUrl: safeUrlSchema,
@@ -129,8 +131,14 @@ export async function imageToTextRoutes(app: FastifyInstance) {
                 usage: response.usage,
               },
               provider_cost: response.providerCost ?? null,
+              // Which LLM lane served the answer, a fallback included.
+              // `provider` is admin-only — outside PUBLIC_JOB_KEYS (routes/jobs.ts) and
+              // outside the browser's column grant on jobs (migration 347) — while
+              // output_data is owner-readable through both, so the lane never rides there.
+              provider: response.lane,
             })
             .eq("id", job.id)
+            .eq("user_id", userId)
 
           if (usageLogId) {
             await CreditsService.commitCredits(usageLogId)
@@ -141,8 +149,11 @@ export async function imageToTextRoutes(app: FastifyInstance) {
 
         return reply.send({ jobId: job.id, generatedText })
       } catch (err) {
-        const message =
-          err instanceof Error ? err.message : "Claude API call failed"
+        // The person reads a model-lane failure's plain sentence; the full
+        // diagnostic (it names the vendor and the step that failed) goes to
+        // the log only.
+        const message = userFacingMessage(err, "Image description failed")
+        req.log.error({ err: describeErrorChain(err), jobId: job.id }, "[image-to-text] failed")
 
         await supabase
           .from("jobs") // tenant-scope-ignore: job.id is server-generated in this request

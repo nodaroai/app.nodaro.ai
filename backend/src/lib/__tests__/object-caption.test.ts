@@ -20,6 +20,7 @@ describe("captionObject", () => {
       text: "  A glowing katana with ancient runes etched along the blade.  ",
       usage: { inputTokens: 0, outputTokens: 0 },
       model: "claude-sonnet-4.6",
+      lane: "kie",
     })
     const result = await captionObject("https://example.com/img.png")
     expect(result).toBe("A glowing katana with ancient runes etched along the blade.")
@@ -30,6 +31,7 @@ describe("captionObject", () => {
       text: "   ",
       usage: { inputTokens: 0, outputTokens: 0 },
       model: "claude-sonnet-4.6",
+      lane: "kie",
     })
     const result = await captionObject("https://example.com/img.png")
     expect(result).toBeNull()
@@ -49,6 +51,7 @@ describe("captionObject", () => {
       text: longText,
       usage: { inputTokens: 0, outputTokens: 0 },
       model: "claude-sonnet-4.6",
+      lane: "kie",
     })
     const result = await captionObject("https://example.com/img.png")
     expect(result).not.toBeNull()
@@ -64,6 +67,7 @@ describe("captionObject", () => {
       text: longRunOn,
       usage: { inputTokens: 0, outputTokens: 0 },
       model: "claude-sonnet-4.6",
+      lane: "kie",
     })
     const result = await captionObject("https://example.com/img.png")
     expect(result).not.toBeNull()

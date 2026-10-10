@@ -18,6 +18,8 @@ import { markProviderCallStart } from "../lib/reconcile/persistence.js"
 import { sendInternalError } from "../lib/http-errors.js"
 import { rateLimiter } from "../middleware/rate-limit.js"
 import { OVERLAY_ANCHORS } from "../providers/image/overlay.js"
+import { laneUserMessage, userFacingMessage } from "../lib/user-facing-error.js"
+import { describeErrorChain } from "../lib/llm-errors.js"
 
 /**
  * "Put it where it doesn't get in the way": a vision LLM looks at the base
@@ -107,10 +109,7 @@ export async function imageOverlayPlacementRoutes(app: FastifyInstance) {
           if (res.ok) {
             const buf = Buffer.from(await res.arrayBuffer())
             const mediaType = (res.headers.get("content-type") ?? "image/jpeg").split(";")[0].trim()
-            // The bytes go verbatim, so the URL serves exactly them — a lane that
-            // carries images only as URLs may send that instead (`kieImageUrl`
-            // decides when).
-            imageBlock = { type: "image_base64", mediaType, data: buf.toString("base64"), sourceUrl: imageUrl }
+            imageBlock = { type: "image_base64", mediaType, data: buf.toString("base64") }
           }
         } catch {
           // fall back to the URL form
@@ -145,11 +144,17 @@ export async function imageOverlayPlacementRoutes(app: FastifyInstance) {
 
         return reply.send({ jobId: job.id, placement })
       } catch (err) {
-        const message = err instanceof Error ? err.message : "LLM call failed"
+        // The person reads a model-lane failure's plain sentence; the full
+        // diagnostic (it names the vendor and the step that failed) goes to
+        // the log only.
+        const message = userFacingMessage(err, "LLM call failed")
+        req.log.error({ err: describeErrorChain(err), jobId: job.id }, "[image-overlay-placement] failed")
         if (await markJobFailed(job.id, { error_message: message, extra: { output_data: { error: message } } })) {
           await refundReservedCreditsForJob(job.id)
         }
-        return reply.status(502).send({ error: { code: "llm_error", message: "Could not suggest a placement" } })
+        // A model-lane failure says its own plain sentence; anything else keeps
+        // the route's fixed one rather than passing an internal message on.
+        return reply.status(502).send({ error: { code: "llm_error", message: laneUserMessage(err) ?? "Could not suggest a placement" } })
       }
     },
   )

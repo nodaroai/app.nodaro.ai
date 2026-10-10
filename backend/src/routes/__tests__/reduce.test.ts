@@ -38,6 +38,8 @@ vi.mock("../../ee/billing/credits.js", () => ({
 // returns a fresh id — needed for the "no dedup" test that asserts the two
 // responses have different jobIds.
 let nextJobId = 0
+/** Every row the route writes to `jobs` through update(). */
+const jobUpdates = vi.hoisted(() => [] as Array<Record<string, unknown>>)
 
 vi.mock("../../lib/supabase.js", () => ({
   supabase: {
@@ -67,11 +69,14 @@ vi.mock("../../lib/supabase.js", () => ({
             },
           }),
         }),
-        update: () => ({
-          eq: () => ({
-            eq: () => Promise.resolve({ error: null }),
-          }),
-        }),
+        update: (row: Record<string, unknown>) => {
+          jobUpdates.push(row)
+          return {
+            eq: () => ({
+              eq: () => Promise.resolve({ error: null }),
+            }),
+          }
+        },
       }
     },
   },
@@ -94,6 +99,7 @@ async function buildTestApp() {
 beforeEach(() => {
   vi.clearAllMocks()
   nextJobId = 0
+  jobUpdates.length = 0
   cloudMocks.maybeProxyLlmRouteToCloud.mockResolvedValue(false)
 })
 
@@ -286,3 +292,90 @@ describe("POST /v1/reduce", () => {
     expect(res.json().error.code).toBe("no_valid_inputs")
   })
 })
+
+describe("POST /v1/reduce — a failure the person can read", () => {
+  // Pick-best puts every image candidate in one request; when they cannot all
+  // fit even small, the KIE lane refuses — and the person must read the plain
+  // sentence, not the diagnostic, in the answer and on the job.
+  it("passes an inline-image failure on as its plain sentence", async () => {
+    const { dispatchStrategy } = await import("../../services/reduce-strategies/index.js")
+    const { inlineImagesForKie, KIE_IMAGES_OVER_BUDGET_MESSAGE } = await import("../../lib/kie-inline-image.js")
+    const sharp = (await import("sharp")).default
+    const { randomBytes } = await import("node:crypto")
+    const noise = await sharp(randomBytes(300 * 300 * 3), { raw: { width: 300, height: 300, channels: 3 } }).png().toBuffer()
+    const candidates = Array.from({ length: 5 }, () => ({ type: "image_base64" as const, mediaType: "image/png", data: noise.toString("base64") }))
+    const probe = await inlineImagesForKie(
+      { modelId: "gpt-5.4", system: "", messages: [{ role: "user", content: candidates }] },
+      { budgetChars: 20_000 },
+    ).catch((e: unknown) => e)
+    expect((probe as Error).message).toContain("KIE inline image")
+    vi.mocked(dispatchStrategy).mockRejectedValue(probe)
+    const app = await buildTestApp()
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/reduce",
+      payload: { strategyId: "pick-best-llm", strategyConfig: { criteria: "x", inputKind: "text" }, inputs: ["a", "b"] },
+    })
+
+    expect(res.statusCode).toBe(500)
+    expect(res.json().error.message).toBe(KIE_IMAGES_OVER_BUDGET_MESSAGE)
+    expect(jobUpdates).toContainEqual(expect.objectContaining({ status: "failed", output_data: { error: KIE_IMAGES_OVER_BUDGET_MESSAGE } }))
+    expect(JSON.stringify([res.json(), jobUpdates])).not.toMatch(/KIE|inline image/)
+  })
+})
+
+describe("POST /v1/reduce — what it logs, and at which level", () => {
+  /** A pino-shaped logger whose warn and error lines are recorded. */
+  function spyLogger() {
+    const warn = vi.fn()
+    const error = vi.fn()
+    const logger: Record<string, unknown> = {
+      level: "info", info: vi.fn(), debug: vi.fn(), trace: vi.fn(), fatal: vi.fn(), silent: vi.fn(), warn, error,
+    }
+    logger.child = () => logger
+    return { logger, warn, error }
+  }
+
+  async function run(err: unknown) {
+    const { dispatchStrategy } = await import("../../services/reduce-strategies/index.js")
+    vi.mocked(dispatchStrategy).mockRejectedValue(err)
+    const { reduceRoutes } = await import("../reduce.js")
+    const { logger, warn, error } = spyLogger()
+    const app = Fastify({ loggerInstance: logger as never })
+    app.addHook("preHandler", async (req, reply) => {
+      req.raw.setTimeout = (() => {}) as never
+      reply.raw.setTimeout = (() => {}) as never
+      ;(req as unknown as { userId: string }).userId = "test-user-1"
+    })
+    await app.register(reduceRoutes)
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/reduce",
+      payload: { strategyId: "pick-best-llm", strategyConfig: { criteria: "x", inputKind: "text" }, inputs: ["a", "b"] },
+    })
+    return { res, warn, error }
+  }
+
+  const reduceLines = (spy: ReturnType<typeof vi.fn>) => spy.mock.calls.filter((c) => String(c[1] ?? "").startsWith("[reduce]"))
+
+  it.each([
+    ["an empty input set", async () => new (await import("../../services/reduce-strategies/index.js")).EmptyInputError(), 400],
+    ["no LLM configured", async () => new (await import("../../lib/llm-client.js")).LlmProviderUnavailableError("No provider for LLM nodes."), 503],
+  ] as const)("logs %s — an expected answer — as a warning, not an error", async (_label, makeErr, status) => {
+    const { res, warn, error } = await run(await makeErr())
+
+    expect(res.statusCode).toBe(status)
+    expect(reduceLines(warn)).toHaveLength(1)
+    expect(reduceLines(error)).toHaveLength(0)
+  })
+
+  it("logs a real failure as an error", async () => {
+    const { res, warn, error } = await run(new Error("judge crashed"))
+
+    expect(res.statusCode).toBe(500)
+    expect(reduceLines(error)).toHaveLength(1)
+    expect(reduceLines(warn)).toHaveLength(0)
+  })
+})
+

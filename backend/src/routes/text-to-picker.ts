@@ -100,6 +100,11 @@ function buildSystemPrompt(legend: string, instructions?: string): string {
     .join("\n")
 }
 
+/** One lane when every batch landed on it, else each batch's lane in batch order. */
+export function servedLanes(lanes: readonly string[]): string {
+  return lanes.every((l) => l === lanes[0]) ? (lanes[0] ?? "") : lanes.join(",")
+}
+
 export async function textToPickerRoutes(app: FastifyInstance) {
   app.post(
     "/v1/text-to-picker",
@@ -167,7 +172,7 @@ export async function textToPickerRoutes(app: FastifyInstance) {
         const results = await Promise.all(
           batches.map(async (batch) => {
             const { schema, toolName, legend } = buildMultiPickerAnalyzerSpec(batch)
-            const { output, inputTokens, outputTokens } = await llmCompleteStructured(
+            const { output, inputTokens, outputTokens, lane } = await llmCompleteStructured(
               {
                 modelId: model.id,
                 system: buildSystemPrompt(legend, instructions),
@@ -180,7 +185,7 @@ export async function textToPickerRoutes(app: FastifyInstance) {
               { schemaName: toolName },
             )
             const { gaps, ...pickerJson } = output as Record<string, unknown> & { gaps?: PickerGaps }
-            return { pickerJson, gaps, inputTokens, outputTokens }
+            return { pickerJson, gaps, inputTokens, outputTokens, lane }
           }),
         )
 
@@ -197,6 +202,12 @@ export async function textToPickerRoutes(app: FastifyInstance) {
           .update({
             status: "completed",
             output_data: { json: pickerJson, targetPickers, usage },
+            // Which LLM lane served the answer, a fallback included; batches that
+            // did not all land on one lane are listed in batch order.
+            // `provider` is admin-only — outside PUBLIC_JOB_KEYS (routes/jobs.ts) and
+            // outside the browser's column grant on jobs (migration 347) — while
+            // output_data is owner-readable through both, so the lane never rides there.
+            provider: servedLanes(results.map((r) => r.lane)),
           })
           .eq("id", job.id)
           .eq("user_id", userId)
