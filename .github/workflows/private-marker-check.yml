@@ -35,9 +35,21 @@ jobs:
       - uses: actions/checkout@v4
         if: env.FROM_FORK != 'true'
         with:
-          # The PR's own head rather than the merge ref; on a manual run, the
-          # chosen ref.
+          # The tree to scan: the PR's own head rather than the merge ref; on a
+          # manual run, the chosen ref.
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        if: env.FROM_FORK != 'true'
+        with:
+          # The gate itself comes from the protected base branch, never from the
+          # PR: a branch cut before the gate existed has no copy of it, and a PR
+          # must not be able to change the check it is judged by. It lands in an
+          # untracked subdirectory, so the scan below never sees it.
+          ref: ${{ github.base_ref || github.ref_name }}
+          path: .gate-base
+          sparse-checkout: scripts/check-private-markers.sh
+          sparse-checkout-cone-mode: false
           persist-credentials: false
       - name: Check tracked files for private markers
         if: env.FROM_FORK != 'true'
@@ -45,4 +57,6 @@ jobs:
           PRIVATE_LEAK_MARKERS: ${{ secrets.PRIVATE_LEAK_MARKERS }}
           # A missing or empty secret fails loudly instead of passing silently.
           MIRROR_REQUIRE_MARKERS: "1"
-        run: bash scripts/check-private-markers.sh
+        # Run from the PR checkout's root: the script scans the repository it is
+        # started in (git rev-parse --show-toplevel), not the one it lives in.
+        run: bash .gate-base/scripts/check-private-markers.sh

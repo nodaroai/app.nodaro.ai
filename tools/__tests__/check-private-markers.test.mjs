@@ -148,7 +148,12 @@ test("the publish path and the PR check run this one script", () => {
   assert.ok(!publish.includes("git grep -I -l -i -F"), "publish-to-public.sh re-implements the gate")
 
   const workflow = readFileSync(join(REPO, ".github/workflows/private-marker-check.yml"), "utf8")
-  assert.match(workflow, /run: bash scripts\/check-private-markers\.sh/)
+  // The PR check runs the BASE branch's copy of the gate (a branch cut before
+  // the gate existed has none, and a PR must not edit the check it is judged
+  // by), from the PR checkout's root, so it scans the PR's tracked files.
+  assert.match(workflow, /run: bash \.gate-base\/scripts\/check-private-markers\.sh/)
+  assert.match(workflow, /ref: \$\{\{ github\.base_ref \|\| github\.ref_name \}\}\s*\n\s*path: \.gate-base/)
+  assert.ok(!/run: bash scripts\/check-private-markers\.sh/.test(workflow), "the PR check runs the PR's own copy of the gate")
   assert.match(workflow, /PRIVATE_LEAK_MARKERS: \$\{\{ secrets\.PRIVATE_LEAK_MARKERS \}\}/)
   assert.match(workflow, /MIRROR_REQUIRE_MARKERS: "1"/)
 })
