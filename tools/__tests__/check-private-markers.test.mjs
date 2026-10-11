@@ -151,11 +151,39 @@ test("the publish path and the PR check run this one script", () => {
   // The PR check runs the BASE branch's copy of the gate (a branch cut before
   // the gate existed has none, and a PR must not edit the check it is judged
   // by), from the PR checkout's root, so it scans the PR's tracked files.
-  assert.match(workflow, /run: bash \.gate-base\/scripts\/check-private-markers\.sh/)
+  assert.match(workflow, /gate=\.gate-base\/scripts\/check-private-markers\.sh/)
   assert.match(workflow, /ref: \$\{\{ github\.base_ref \|\| github\.ref_name \}\}\s*\n\s*path: \.gate-base/)
   assert.ok(!/run: bash scripts\/check-private-markers\.sh/.test(workflow), "the PR check runs the PR's own copy of the gate")
   assert.match(workflow, /PRIVATE_LEAK_MARKERS: \$\{\{ secrets\.PRIVATE_LEAK_MARKERS \}\}/)
   assert.match(workflow, /MIRROR_REQUIRE_MARKERS: "1"/)
+})
+
+test("the PR check runs the base branch's gate, and the PR's own copy only while the base has none", () => {
+  const workflow = readFileSync(join(REPO, ".github/workflows/private-marker-check.yml"), "utf8")
+  // The check step's shell, exactly as the workflow runs it.
+  const m = workflow.match(/Check tracked files for private markers[\s\S]*?run: \|\n((?: {10}.*\n?)+)/)
+  assert.ok(m, "could not find the check step's run block")
+  const script = m[1].split("\n").map((l) => l.slice(10)).join("\n")
+  const dir = mkdtempSync(join(tmpdir(), "marker-gate-step-"))
+  try {
+    mkdirSync(join(dir, "scripts"), { recursive: true })
+    mkdirSync(join(dir, ".gate-base", "scripts"), { recursive: true })
+    writeFileSync(join(dir, "scripts", "check-private-markers.sh"), "echo ran-pr-copy\n")
+    writeFileSync(join(dir, ".gate-base", "scripts", "check-private-markers.sh"), "echo ran-base-copy\n")
+    writeFileSync(join(dir, "step.sh"), script)
+    const both = spawnSync("bash", ["step.sh"], { cwd: dir, encoding: "utf8" })
+    assert.equal(both.status, 0)
+    assert.match(both.stdout, /ran-base-copy/)
+    assert.doesNotMatch(both.stdout, /ran-pr-copy/, "the PR's copy ran although the base has one")
+
+    rmSync(join(dir, ".gate-base"), { recursive: true, force: true })
+    const bootstrap = spawnSync("bash", ["step.sh"], { cwd: dir, encoding: "utf8" })
+    assert.equal(bootstrap.status, 0)
+    assert.match(bootstrap.stdout, /ran-pr-copy/)
+    assert.match(bootstrap.stdout, /no copy of the gate yet/)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 })
 
 test(".leak-markers is gitignored, so the list can never be committed", () => {
