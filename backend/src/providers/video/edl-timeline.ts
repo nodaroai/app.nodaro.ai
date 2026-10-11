@@ -71,6 +71,7 @@ import { JobCancelledError, throwIfJobCancelled } from "../../lib/job-cancellati
 import { pickTargetResolution, pickTargetFps } from "./combine-videos.js"
 import { ffmpegEffectiveThreads, ffmpegThreads, type FfmpegThreads } from "./ffmpeg-threads.js"
 import { canvasPeakMemoryMiB } from "./ffmpeg-memory-model.js"
+import { retryStalledLaunch, type FfmpegStallWatch } from "./ffmpeg-stall-watchdog.js"
 import {
   audioMuxTimeoutMs,
   audioSourceId,
@@ -320,12 +321,22 @@ export function slicePeakMemoryMiB(cmd: SliceCommand, threads: FfmpegThreads | u
   return canvasPeakMemoryMiB(basis, basis.segments, threads ?? ffmpegEffectiveThreads(), basis.zoom ? { zoom: true } : undefined)
 }
 
-/** Run a built slice (`sliceArgv`): write the graph file, render `outPath`. */
+/** The production stall watch every slice launch carries (its defaults). */
+const SLICE_STALL_WATCH: FfmpegStallWatch = Object.freeze({})
+
+/** Run a built slice (`sliceArgv`): write the graph file, render `outPath`.
+ *  Every slice — a picture chunk or a sound slice, Apply EDL's or Speaker
+ *  View's — is watched for a stall and relaunched inside its own kill budget
+ *  (`ffmpeg-stall-watchdog.ts`, C4 bug fixes, decided 2026-10-10); the job's
+ *  cancellation is checked before each relaunch. */
 async function runSlice(cmd: SliceCommand, sourcePaths: Map<string, string>, outPath: string, threads?: FfmpegThreads): Promise<void> {
   const graphPath = `${outPath}.filtergraph`
   await fs.writeFile(graphPath, cmd.filterGraph)
   try {
-    await runFfmpeg(sliceArgv(cmd, sourcePaths, graphPath, outPath, threads), cmd.timeoutMs, { peakMemoryMiB: slicePeakMemoryMiB(cmd, threads) })
+    await retryStalledLaunch(
+      (timeoutMs) => runFfmpeg(sliceArgv(cmd, sourcePaths, graphPath, outPath, threads), timeoutMs, { peakMemoryMiB: slicePeakMemoryMiB(cmd, threads) }, SLICE_STALL_WATCH),
+      { timeoutMs: cmd.timeoutMs, beforeRetry: throwIfJobCancelled, label: "a render chunk" },
+    )
   } finally {
     await fs.rm(graphPath, { force: true })
   }
