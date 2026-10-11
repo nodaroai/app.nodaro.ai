@@ -97,9 +97,9 @@ export interface EdlPictureContext {
  * Either may carry a `memoryHint` (decided 2026-10-07): what the fragment
  * draws that costs memory beyond its canvas — `zoom: true` for a zoom (the
  * tween, or a segment drawn from a zoom's window), which adds the zoom's
- * term to the slice's reservation (`zoomPeakMemoryMiB`, once per slice). It
- * names the effect, not a figure: the host sizes it from the launch's own
- * thread counts. Optional — a fragment without one reserves exactly what it
+ * term to the slice's reservation (`zoomPeakMemoryMiB`: a per-slice part
+ * plus a part for every segment so marked). It names the effect, not a
+ * figure: the host sizes it from the launch's own thread counts. Optional — a fragment without one reserves exactly what it
  * always has. A malformed hint (not an object, or a non-boolean `zoom`) is
  * refused; unknown keys are ignored for forward compatibility, so a misspelled
  * key reads as no hint. Not part of the graph, so not part of the checkpoint

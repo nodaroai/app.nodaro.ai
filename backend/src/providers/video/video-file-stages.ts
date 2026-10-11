@@ -6,7 +6,7 @@
 import { spawn } from "node:child_process"
 import { COMBINE_DELIVERY_CRF, withFfmpegSlot } from "./ffmpeg-utils.js"
 import { spawnFfmpeg } from "./ffmpeg-process.js"
-import { canvasPeakMemoryMiB, UHD_CANVAS } from "./ffmpeg-memory-model.js"
+import { cameraMegapixelsOf, canvasPeakMemoryMiB, UHD_CANVAS } from "./ffmpeg-memory-model.js"
 import { ffmpegEffectiveThreads } from "./ffmpeg-threads.js"
 import { YtDlpHaltError, type FetchDeadline } from "./ytdlp-process.js"
 
@@ -93,9 +93,13 @@ export function probeStreams(
 export const REENCODE_ASSUMED_CANVAS = UHD_CANVAS
 
 /** What the re-encode's ffmpeg predicts it needs at its peak, in MiB: the
- *  canvas model for ONE segment at the threads it will run with. */
+ *  canvas model for ONE segment of ONE input file at the threads it will run
+ *  with. */
 export function reencodePeakMemoryMiB(canvas: { width: number; height: number } | undefined): number {
-  return canvasPeakMemoryMiB(canvas ?? REENCODE_ASSUMED_CANVAS, 1, ffmpegEffectiveThreads())
+  return canvasPeakMemoryMiB(canvas ?? REENCODE_ASSUMED_CANVAS, 1, ffmpegEffectiveThreads(), {
+    inputs: 1,
+    cameraMegapixels: cameraMegapixelsOf(canvas ?? REENCODE_ASSUMED_CANVAS),
+  })
 }
 
 /** The longest an ffmpeg holds its slot here — the watchdog's own default. */

@@ -69,7 +69,7 @@ describe("reencodeToH264 reserves memory before it starts", () => {
   it("reserves the canvas model for one segment at the threads it runs with", async () => {
     await reencodeToH264("/tmp/in.webm", "/tmp/out.mp4", true, undefined, { canvas: UHD })
     expect(fx.slots).toHaveLength(1)
-    expect(fx.slots[0]!.opts.peakMemoryMiB).toBe(canvasPeakMemoryMiB(UHD, 1, same(32)))
+    expect(fx.slots[0]!.opts.peakMemoryMiB).toBe(canvasPeakMemoryMiB(UHD, 1, same(32), { inputs: 1, cameraMegapixels: undefined }))
     expect(fx.slots[0]!.opts.label).toBe("re-encode")
     expect(fx.spawns).toBe(1)
   })

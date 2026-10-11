@@ -108,25 +108,25 @@ describe("ytDlpPeakMemoryMiB — sized by the requested format", () => {
 
   it("an HD section's video half reserves the canvas model at its height cap, 16:9, one segment, at the threads it runs with", () => {
     const t = same(8)
-    expect(ytDlpPeakMemoryMiB(sec(sectionHdVideoSelector(720)), t)).toBe(canvasPeakMemoryMiB({ width: 1280, height: 720 }, 1, t))
-    expect(ytDlpPeakMemoryMiB(sec(sectionHdVideoSelector(1080)), t)).toBe(canvasPeakMemoryMiB({ width: 1920, height: 1080 }, 1, t))
+    expect(ytDlpPeakMemoryMiB(sec(sectionHdVideoSelector(720)), t)).toBe(canvasPeakMemoryMiB({ width: 1280, height: 720 }, 1, t, { inputs: 1, cameraMegapixels: undefined }))
+    expect(ytDlpPeakMemoryMiB(sec(sectionHdVideoSelector(1080)), t)).toBe(canvasPeakMemoryMiB({ width: 1920, height: 1080 }, 1, t, { inputs: 1, cameraMegapixels: undefined }))
     expect(ytDlpPeakMemoryMiB(sec(sectionHdVideoSelector(720)), t)).toBeLessThan(ytDlpPeakMemoryMiB(sec(sectionHdVideoSelector(1080)), t))
   })
 
   it("the progressive section fallback reads its cap from the selector too", () => {
     const args = buildYtDlpVideoArgs({ url: URL_, outPath: "/tmp/o.mp4", maxHeight: 480, section: SECTION, proxyArgs: [] })
-    expect(ytDlpPeakMemoryMiB(args, same(4))).toBe(canvasPeakMemoryMiB({ width: 853, height: 480 }, 1, same(4)))
+    expect(ytDlpPeakMemoryMiB(args, same(4))).toBe(canvasPeakMemoryMiB({ width: 853, height: 480 }, 1, same(4), { inputs: 1, cameraMegapixels: undefined }))
   })
 
   it("a lane that requests no cap reserves 4K", () => {
     const t = same(8)
-    expect(ytDlpPeakMemoryMiB(sec(sectionHdVideoSelector()), t)).toBe(canvasPeakMemoryMiB(UHD, 1, t))
-    expect(ytDlpPeakMemoryMiB(buildYtDlpVideoArgs({ url: URL_, outPath: "/tmp/o.mp4", section: SECTION, proxyArgs: [] }), t)).toBe(canvasPeakMemoryMiB(UHD, 1, t))
+    expect(ytDlpPeakMemoryMiB(sec(sectionHdVideoSelector()), t)).toBe(canvasPeakMemoryMiB(UHD, 1, t, { inputs: 1, cameraMegapixels: undefined }))
+    expect(ytDlpPeakMemoryMiB(buildYtDlpVideoArgs({ url: URL_, outPath: "/tmp/o.mp4", section: SECTION, proxyArgs: [] }), t)).toBe(canvasPeakMemoryMiB(UHD, 1, t, { inputs: 1, cameraMegapixels: undefined }))
   })
 
   it("takes the tallest cap when a selector names several, and an exact height as its own cap", () => {
-    expect(ytDlpPeakMemoryMiB(["--format", "bv*[height<=480]/bv*[height<=720]"], same(2))).toBe(canvasPeakMemoryMiB({ width: 1280, height: 720 }, 1, same(2)))
-    expect(ytDlpPeakMemoryMiB(["-f", "bv*[height=1080]", "--recode-video", "mp4"], same(2))).toBe(canvasPeakMemoryMiB({ width: 1920, height: 1080 }, 1, same(2)))
+    expect(ytDlpPeakMemoryMiB(["--format", "bv*[height<=480]/bv*[height<=720]"], same(2))).toBe(canvasPeakMemoryMiB({ width: 1280, height: 720 }, 1, same(2), { inputs: 1, cameraMegapixels: undefined }))
+    expect(ytDlpPeakMemoryMiB(["-f", "bv*[height=1080]", "--recode-video", "mp4"], same(2))).toBe(canvasPeakMemoryMiB({ width: 1920, height: 1080 }, 1, same(2), { inputs: 1, cameraMegapixels: undefined }))
   })
 
   it("an audio extraction reserves the audio estimate, whatever the threads", () => {
@@ -134,19 +134,19 @@ describe("ytDlpPeakMemoryMiB — sized by the requested format", () => {
     expect(ytDlpPeakMemoryMiB(args, same(2))).toBe(audioPeakMemoryMiB())
     expect(ytDlpPeakMemoryMiB(args, same(64))).toBe(audioPeakMemoryMiB())
     expect(ytDlpPeakMemoryMiB(["-x", "--audio-format", "opus"], same(2))).toBe(audioPeakMemoryMiB())
-    expect(audioPeakMemoryMiB()).toBeLessThan(canvasPeakMemoryMiB({ width: 640, height: 360 }, 1, same(1)))
+    expect(audioPeakMemoryMiB()).toBeLessThan(canvasPeakMemoryMiB({ width: 640, height: 360 }, 1, same(1), { inputs: 1, cameraMegapixels: undefined }))
   })
 
   it("an audio-only format (the audio half of an HD section) reserves the audio estimate; a selector that may carry a picture does not", () => {
     expect(ytDlpPeakMemoryMiB(sec(SECTION_HD_AUDIO_SELECTOR), same(8))).toBe(audioPeakMemoryMiB())
     expect(ytDlpPeakMemoryMiB(sec("bestaudio"), same(8))).toBe(audioPeakMemoryMiB())
     for (const picture of ["ba*", "ba/b", "bv*+ba", "wa/ba*"]) {
-      expect(ytDlpPeakMemoryMiB(sec(picture), same(8)), picture).toBe(canvasPeakMemoryMiB(UHD, 1, same(8)))
+      expect(ytDlpPeakMemoryMiB(sec(picture), same(8)), picture).toBe(canvasPeakMemoryMiB(UHD, 1, same(8), { inputs: 1, cameraMegapixels: undefined }))
     }
   })
 
   it("-x with a video encode alongside is still a video run", () => {
-    expect(ytDlpPeakMemoryMiB(["-x", "--recode-video", "mp4", "--format", "bv*[height<=720]"], same(2))).toBe(canvasPeakMemoryMiB({ width: 1280, height: 720 }, 1, same(2)))
+    expect(ytDlpPeakMemoryMiB(["-x", "--recode-video", "mp4", "--format", "bv*[height<=720]"], same(2))).toBe(canvasPeakMemoryMiB({ width: 1280, height: 720 }, 1, same(2), { inputs: 1, cameraMegapixels: undefined }))
   })
 
   it("the reservation follows the threads: 32 threads at 4K are far over 2", () => {
@@ -180,12 +180,12 @@ describe("the funnel: every transcoding lane spawns the pinned argv and reserves
     expect(fx.spawned[0]!.args).toEqual([...args, ...ytDlpThreadArgs(same(3))])
     expect(fx.spawned[0]!.args).toContain("ffmpeg_i:-threads 3")
     expect(fx.slots).toHaveLength(1)
-    expect(fx.slots[0]!.peakMemoryMiB).toBe(canvasPeakMemoryMiB({ width: 1280, height: 720 }, 1, same(3)))
+    expect(fx.slots[0]!.peakMemoryMiB).toBe(canvasPeakMemoryMiB({ width: 1280, height: 720 }, 1, same(3), { inputs: 1, cameraMegapixels: undefined }))
   })
 
   it("the same lane without a cap reserves 4K", async () => {
     await run(hdVideo())
-    expect(fx.slots[0]!.peakMemoryMiB).toBe(canvasPeakMemoryMiB(UHD, 1, same(3)))
+    expect(fx.slots[0]!.peakMemoryMiB).toBe(canvasPeakMemoryMiB(UHD, 1, same(3), { inputs: 1, cameraMegapixels: undefined }))
   })
 
   it("an audio extraction: the audio estimate, and the argv still carries the threads", async () => {
@@ -204,7 +204,7 @@ describe("the funnel: every transcoding lane spawns the pinned argv and reserves
   it("the progressive section fallback reserves for its cap, with the threads in its argv", async () => {
     const args = buildYtDlpVideoArgs({ url: URL_, outPath: "/tmp/o.mp4", maxHeight: 1080, section: SECTION, proxyArgs: [] })
     await run(args)
-    expect(fx.slots[0]!.peakMemoryMiB).toBe(canvasPeakMemoryMiB({ width: 1920, height: 1080 }, 1, same(3)))
+    expect(fx.slots[0]!.peakMemoryMiB).toBe(canvasPeakMemoryMiB({ width: 1920, height: 1080 }, 1, same(3), { inputs: 1, cameraMegapixels: undefined }))
     expect(fx.spawned[0]!.args).toContain("ffmpeg_o:-filter_threads 3 -filter_complex_threads 3 -threads 3")
   })
 
@@ -213,7 +213,7 @@ describe("the funnel: every transcoding lane spawns the pinned argv and reserves
     const args = hdVideo(1080)
     await run(args)
     expect(fx.spawned[0]!.args).toEqual(args)
-    expect(fx.slots[0]!.peakMemoryMiB).toBe(canvasPeakMemoryMiB({ width: 1920, height: 1080 }, 1, fx.effective))
+    expect(fx.slots[0]!.peakMemoryMiB).toBe(canvasPeakMemoryMiB({ width: 1920, height: 1080 }, 1, fx.effective, { inputs: 1, cameraMegapixels: undefined }))
   })
 
   it("a run that only copies streams spawns its own argv and reserves nothing", async () => {

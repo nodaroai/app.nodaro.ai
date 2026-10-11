@@ -35,7 +35,7 @@
  *
  * Pure.
  */
-import { canvasPeakMemoryMiB, audioPeakMemoryMiB, UHD_CANVAS } from "./ffmpeg-memory-model.js"
+import { cameraMegapixelsOf, canvasPeakMemoryMiB, audioPeakMemoryMiB, UHD_CANVAS } from "./ffmpeg-memory-model.js"
 import type { FfmpegThreads } from "./ffmpeg-threads.js"
 import { CUTS, parseFlags } from "./ytdlp-transcode.js"
 
@@ -99,5 +99,6 @@ export function ytDlpPeakMemoryMiB(args: readonly string[], threads: FfmpegThrea
     return audioPeakMemoryMiB()
   }
   const height = selector === undefined ? undefined : requestedHeight(selector)
-  return canvasPeakMemoryMiB(height === undefined ? UHD_CANVAS : cappedCanvas(height), 1, threads)
+  const canvas = height === undefined ? UHD_CANVAS : cappedCanvas(height)
+  return canvasPeakMemoryMiB(canvas, 1, threads, { inputs: 1, cameraMegapixels: cameraMegapixelsOf(canvas) })
 }
