@@ -897,7 +897,7 @@ async function clearReconcileSentinel(jobId: string): Promise<void> {
  * inserter wrote, so a guard that accepts only the queue name is wrong in the
  * other direction — accept the pair.
  */
-async function readJob(jobId: string): Promise<{
+type PluginJobRow = {
   id: string
   status: string
   user_id: string | null
@@ -905,13 +905,11 @@ async function readJob(jobId: string): Promise<{
   error_message: string | null
   job_type?: string
   input_data?: Record<string, unknown> | null
-} | null> {
-  const { data } = await supabase
-    .from("jobs")
-    .select("id,status,user_id,output_data,error_message,job_type,input_data")
-    .eq("id", jobId)
-    .maybeSingle()
-  if (!data) return null
+}
+
+const JOB_ROW_COLUMNS = "id,status,user_id,output_data,error_message,job_type,input_data"
+
+function toPluginJobRow(data: unknown): PluginJobRow {
   const row = data as {
     id: string
     status: string
@@ -930,6 +928,57 @@ async function readJob(jobId: string): Promise<{
     job_type: row.job_type,
     input_data: row.input_data ?? null,
   }
+}
+
+async function readJob(jobId: string): Promise<PluginJobRow | null> {
+  const { data } = await supabase.from("jobs").select(JOB_ROW_COLUMNS).eq("id", jobId).maybeSingle()
+  if (!data) return null
+  return toPluginJobRow(data)
+}
+
+/**
+ * The typed error `tk.jobs.readJobStrict` throws when the DATABASE failed.
+ * A plugin cannot import this class across the boundary, so it identifies it
+ * the way it identifies `JobStopRequestedError`: by `.name === "JobReadError"`
+ * (and `.retryable === true`, `.code === "job_read_failed"`). The message is
+ * the one a caller may show: it says the READ failed, never that the job is
+ * missing, and carries none of the database's own text.
+ */
+export class JobReadError extends Error {
+  readonly retryable = true
+  readonly code = "job_read_failed"
+  constructor() {
+    super("Could not read the job just now (the database did not answer). Try again in a moment.")
+    this.name = "JobReadError"
+  }
+}
+
+/**
+ * `tk.jobs.readJobStrict` — `readJob`'s twin that tells a database ERROR apart
+ * from a row that is genuinely absent. `readJob` drops the Supabase error and
+ * returns null, so a blip reads as "no such job" (a 404, or "not your tracks")
+ * and the caller blames the user for an outage. This returns null ONLY when the
+ * query succeeded and found no row; on an error it logs the detail server-side
+ * and throws a `JobReadError` (retryable).
+ *
+ * Additive on purpose: `readJob` is unchanged, so a plugin built before this
+ * member behaves exactly as before. A plugin feature-detects it
+ * (`tk.jobs.readJobStrict ?? tk.jobs.readJob`), and an older host without it
+ * leaves the plugin on `readJob`.
+ */
+async function readJobStrict(jobId: string): Promise<PluginJobRow | null> {
+  const { data, error } = await supabase.from("jobs").select(JOB_ROW_COLUMNS).eq("id", jobId).maybeSingle()
+  // 22P02 = invalid_text_representation: `jobs.id` is a UUID, so a malformed id
+  // (`not-a-uuid` in a path param) can match no row. That is a client error, and
+  // the right answer is "absent" (a 404) — NOT a retryable outage a client would
+  // loop on. Every other database error is still an honest, retryable failure.
+  if (error?.code === "22P02") return null
+  if (error) {
+    console.error(`[private-plugins/jobs] readJobStrict(${jobId}) database error:`, error.message)
+    throw new JobReadError()
+  }
+  if (!data) return null
+  return toPluginJobRow(data)
 }
 
 /**
@@ -1462,6 +1511,7 @@ export function buildToolkit(opts: BuildToolkitOptions = {}): PluginToolkit {
       markProviderCallStart: (jobId, kind) =>
         markProviderCallStart(jobId, kind as Parameters<typeof markProviderCallStart>[1]),
       readJob,
+      readJobStrict,
       requestJobStop,
       markJobFailed: pluginMarkJobFailed,
       markJobFailedWithOutput: pluginMarkJobFailedWithOutput,

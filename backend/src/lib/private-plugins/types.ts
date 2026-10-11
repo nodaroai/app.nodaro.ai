@@ -1521,6 +1521,31 @@ export interface PluginJobsToolkit {
     input_data?: Record<string, unknown> | null
   } | null>
   /**
+   * `readJob`'s twin that tells a DATABASE ERROR apart from "no such row".
+   * `readJob` drops the Supabase error and returns null, so a blip reads as
+   * "not found" (a 404, or "not your tracks") and blames the user for an
+   * outage. This returns null ONLY when the query succeeded and found no row;
+   * on a database error it THROWS an Error whose `.name === "JobReadError"`,
+   * `.retryable === true` and `.code === "job_read_failed"`, with a message
+   * that says the read failed (never that the job is missing, never the
+   * database's own text). A route answers it as a retryable 503; a handler
+   * rethrows it so the queue's retry policy runs.
+   *
+   * OPTIONAL (additive-contract convention): absent → the app predates it;
+   * feature-detect (`tk.jobs.readJobStrict ?? tk.jobs.readJob`) and keep the
+   * old behaviour. Same row shape as `readJob`, `job_type` and `input_data`
+   * included.
+   */
+  readJobStrict?(jobId: string): Promise<{
+    id: string
+    status: string
+    user_id: string | null
+    output_data: Record<string, unknown> | null
+    error_message: string | null
+    job_type?: string
+    input_data?: Record<string, unknown> | null
+  } | null>
+  /**
    * Mirrors `requestJobStop` (`workers/shared.ts`, 2026-07-21) — stamps
    * `jobs.stop_requested_at = now()` on the row. The GRACEFUL-STOP signal:
    * unlike cancel it never flips `status`, so `markJobCompleted`'s live-status
