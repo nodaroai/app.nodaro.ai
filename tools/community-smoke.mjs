@@ -953,6 +953,37 @@ await check("Camera Switch is a Nodaro-exclusive: omitted from discovery, run re
   return "camera-switch absent from discovery + POST refused 503 nodaro_connection_required"
 })
 
+await check("Speaker Frames is a Nodaro-exclusive: omitted from discovery, run refused 503 until connected", async () => {
+  // speaker-frames (face tracks per camera) is Nodaro-EXCLUSIVE (relayed) like
+  // camera-switch: absent from discovery on an unconnected install, and a run
+  // is refused 503 nodaro_connection_required (requireConnection runs before
+  // the body checks), never a 404 / hang / raw vendor error.
+  const types = await nodeTypes()
+  assert(
+    !types.has("speaker-frames"),
+    "/v1/nodes advertises speaker-frames on a keyless/unconnected install — it is Nodaro-EXCLUSIVE (relayed) and must be omitted until nodaro.ai is connected",
+  )
+  const run = await api("/v1/speaker-frames", {
+    method: "POST",
+    token: ctx.token,
+    headers: { "idempotency-key": `community-smoke-speaker-frames-${Date.now()}` },
+    body: {
+      edl: { version: 1, clock: "master", sources: [{ id: "a", url: "https://example.com/a.mp4", kind: "video" }], segments: [{ id: "s", inMs: 0, outMs: 1000, video: "a" }] },
+    },
+  })
+  assert(run.status === 503, `POST /v1/speaker-frames expected 503, got ${run.status}: ${run.text.slice(0, 300)}`)
+  assert(
+    run.json?.error?.code === "nodaro_connection_required",
+    `expected error.code "nodaro_connection_required", got ${JSON.stringify(run.json?.error?.code)}: ${run.text.slice(0, 300)}`,
+  )
+  assert(
+    run.json?.jobId === undefined && run.json?.id === undefined,
+    `the refusal carried a job handle — a keyless speaker-frames must not enqueue: ${run.text.slice(0, 200)}`,
+  )
+  assertRenderable(run.json?.error?.message, "speaker-frames refusal")
+  return "speaker-frames absent from discovery + POST refused 503 nodaro_connection_required"
+})
+
 await check("Read Competitor is Cloud-only: a run is refused 503 not_available, never a 404 or a hang", async () => {
   // Competitors are served by the Cloud plugin, which a community install does
   // not load; discovery already omits the node (the cloud-only list above). The

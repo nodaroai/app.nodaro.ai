@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest"
-import { MODEL_CATALOG, SOURCE_IMAGE_NODE_TYPES } from "@nodaro/shared"
+import { FLUX_LORA_CHARACTER_MODEL_ID, IMAGE_GEN_PROVIDERS, MODEL_CATALOG, SOURCE_IMAGE_NODE_TYPES, autoAspectNeedsSourceImage, normalizeModelInput } from "@nodaro/shared"
 import { buildPayload, type PayloadBuildContext } from "../payload-builder.js"
 import { autoAspectSourceImageUrl } from "../source-image.js"
 import type { NodeExecutionState, SimpleEdge, SimpleNode } from "../types.js"
@@ -81,16 +81,80 @@ describe("buildPayload — 'auto' with a source image", () => {
     expect(result.payload.aspectRatio).toBe("auto")
   })
 
-  it("leaves text-to-image alone — references are not a source photo", () => {
+})
+
+/**
+ * Generate Image: the photo is the first image the build sends (the first
+ * assembled reference, or the inpaint / refine base); `buildPayloadWithSourceSize`
+ * reads its size and hands it in. With no photo, "auto" snaps exactly as before.
+ */
+describe("buildPayload — Generate Image, 'auto' and a wired photo", () => {
+  const gen = (data: Record<string, unknown>, id = "g1") => node("generate-image", { prompt: "a lighthouse", ...data }, id)
+  const todays = (modelId: string) => normalizeModelInput(modelId, { aspectRatio: "auto" }).aspectRatio
+
+  it("uses the ratio nearest the photo when its size is handed in", () => {
     vi.spyOn(console, "warn").mockImplementation(() => {})
-    const result = buildPayload(
-      node("generate-image", { provider: "seedream-5-pro", prompt: "x", aspectRatio: "auto" }),
-      "job-1",
-      {},
-      undefined,
-      { sourceImage: landscape },
-    )
+    const result = buildPayload(gen({ provider: "seedream-5-pro", aspectRatio: "auto" }), "job-1", { referenceImageUrls: [SOURCE] }, undefined, { sourceImage: landscape })
+    expect((result.payload.referenceImageUrls as string[])[0]).toBe(SOURCE)
+    expect(result.payload.aspectRatio).toBe("16:9")
+  })
+
+  it("snaps exactly as before without a size", () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {})
+    const result = buildPayload(gen({ provider: "seedream-5-pro", aspectRatio: "auto" }), "job-1", { referenceImageUrls: [SOURCE] })
     expect(result.payload.aspectRatio).toBe(MODEL_CATALOG["seedream-5-pro"]!.aspectRatios![0])
+  })
+
+  it("never moves the price", () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {})
+    const data = { provider: "seedream-5-pro", aspectRatio: "auto", quality: "high" }
+    const withSize = buildPayload(gen(data), "job-1", { referenceImageUrls: [SOURCE] }, undefined, { sourceImage: landscape })
+    const without = buildPayload(gen(data), "job-1", { referenceImageUrls: [SOURCE] })
+    expect(withSize.modelIdentifier).toBe(without.modelIdentifier)
+  })
+
+  /** NO PROVIDER EVER RECEIVES "auto" IT CANNOT TAKE — every Generate Image model without one. */
+  it("no photo: every model without a native auto is sent today's snapped ratio", () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {})
+    const failures: string[] = []
+    for (const provider of IMAGE_GEN_PROVIDERS.filter((p) => autoAspectNeedsSourceImage(p, "auto"))) {
+      const sent = buildPayload(gen({ provider, aspectRatio: "auto" }), "job-1", {}).payload.aspectRatio
+      if (sent === "auto" || sent !== todays(provider)) failures.push(`${provider} → ${String(sent)}`)
+    }
+    expect(failures).toEqual([])
+  })
+
+  /**
+   * A LoRA run swaps to the trained character model, which has no catalog
+   * entry and takes no "auto". A native-auto node model keeps "auto" through
+   * the snap, so the LoRA arm itself must not forward it.
+   */
+  describe("the LoRA arm", () => {
+    const character = node("character", {
+      characterName: "Kira",
+      sourceImageUrl: "https://cdn.example.com/kira.png",
+      loraReplicateVersion: "owner/char-kira:abc",
+      loraTriggerWord: "TOK_kira",
+      loraTrainingStatus: "succeeded",
+    }, "c1")
+    const edges: SimpleEdge[] = [{ id: "e1", source: "c1", target: "g1", sourceHandle: "character" }]
+    const lora = (data: Record<string, unknown>) => {
+      const g = gen(data)
+      return buildPayload(g, "job-1", {}, undefined, { nodes: [character, g], edges, nodeStates: {} })
+    }
+
+    it("never sends 'auto' to the trained model", () => {
+      vi.spyOn(console, "warn").mockImplementation(() => {})
+      const result = lora({ provider: "gpt-image-2", aspectRatio: "auto" })
+      expect(result.payload.model).toBe(FLUX_LORA_CHARACTER_MODEL_ID)
+      expect(result.payload.aspectRatio).toBeUndefined()
+    })
+
+    it("sends today's snapped ratio for a model without a native auto, and any concrete ratio as is", () => {
+      vi.spyOn(console, "warn").mockImplementation(() => {})
+      expect(lora({ provider: "seedream-5-pro", aspectRatio: "auto" }).payload.aspectRatio).toBe(todays("seedream-5-pro"))
+      expect(lora({ provider: "seedream-5-pro", aspectRatio: "16:9" }).payload.aspectRatio).toBe("16:9")
+    })
   })
 })
 

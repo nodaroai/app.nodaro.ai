@@ -16,6 +16,7 @@ import { watchTransferBody, type TransferRateLimits, type TransferWatch } from "
 import { currentSlotWaitLedger } from "../../lib/ffmpeg-slot-wait.js"
 import { acquireFfmpegSlot as acquireFfmpegAdmission, ffmpegMemoryBudgetNow } from "./ffmpeg-admission-instance.js"
 import { describeFfmpegMemoryBudget } from "./ffmpeg-memory.js"
+import { ffmpegStallError, watchForStall, type FfmpegStallWatch } from "./ffmpeg-stall-watchdog.js"
 import {
   DEFAULT_FFMPEG_TIMEOUT_MS,
   DOWNLOAD_FLOOR_BYTES_PER_SEC,
@@ -427,23 +428,51 @@ function execFailureFlags(error: ExecFileException): { killed: boolean; timedOut
   return { killed, timedOut: killed && error.code !== "ERR_CHILD_PROCESS_STDIO_MAXBUFFER" }
 }
 
-export async function runFfmpeg(args: readonly string[], timeoutMs?: number, launch?: FfmpegLaunchOptions): Promise<string> {
+/**
+ * Run ffmpeg to completion under its kill budget. With `stallWatch`, the launch
+ * is also stopped once it shows no progress — frozen stats AND an idle CPU —
+ * for the stall window (`ffmpeg-stall-watchdog.ts`), and rejects with
+ * `isFfmpegStall(err)` true so the caller can relaunch it. The render chunks
+ * pass it (`edl-timeline.ts` `runSlice`); every other caller is unchanged.
+ */
+export async function runFfmpeg(
+  args: readonly string[],
+  timeoutMs?: number,
+  launch?: FfmpegLaunchOptions,
+  stallWatch?: FfmpegStallWatch,
+): Promise<string> {
   const limitMs = ffmpegLimitMs(timeoutMs)
   return holdSlot(() => new Promise<string>((resolve, reject) => {
     // Declared first: the callback may run before execFile returns.
     let stopEscalation = () => {}
+    let stopWatch = () => {}
+    let stalledAfterMs: number | undefined
+    const startedAt = Date.now()
     const child = execFileFfmpeg(args, {
       maxBuffer: 10 * 1024 * 1024,
       timeout: limitMs,
     }, (error, stdout, stderr) => {
       stopEscalation()
-      if (error) {
+      stopWatch()
+      if (stalledAfterMs !== undefined) {
+        reject(ffmpegStallError(stalledAfterMs, stallWatch?.stallMs))
+      } else if (error) {
         reject(Object.assign(new Error(ffmpegFailureMessage(stderr, error.message)), execFailureFlags(error)))
       } else {
         resolve(stdout)
       }
     })
     stopEscalation = escalateKill(child, limitMs)
+    if (stallWatch) {
+      stopWatch = watchForStall(child, stallWatch, () => {
+        // Already exited (its close not yet delivered): its own result stands.
+        if (child.exitCode !== null || child.signalCode !== null) return
+        // Marked before the kill so the callback reports a stall, not a crash.
+        stalledAfterMs = Date.now() - startedAt
+        // SIGKILL: a deadlocked main loop never services a SIGTERM.
+        child.kill("SIGKILL")
+      })
+    }
   }), { limitMs, label: "ffmpeg", peakMemoryMiB: launch?.peakMemoryMiB })
 }
 

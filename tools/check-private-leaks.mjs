@@ -18,7 +18,7 @@
 // meant to protect (found in the v1.29.6 artifact audit). The list lives in
 // the internal repo secret PRIVATE_LEAK_SYMBOLS (newline-separated, exported
 // by the CI/mirror workflows) or an untracked local `.leak-symbols` file, the
-// same arrangement the marker gate in scripts/publish-to-public.sh uses.
+// same arrangement the marker gate (scripts/check-private-markers.sh) uses.
 // Symbol VALUES are never echoed — only the offending file:line is printed.
 //
 // Without a list this check SKIPS (and says so) rather than passing silently;

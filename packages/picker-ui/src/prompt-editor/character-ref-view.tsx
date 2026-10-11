@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
+import { usePickerLabel } from "../i18n"
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react"
 import { USAGE_MODES, usageModeLabel, type UsageMode } from "@nodaro/shared"
 import { optimizedImageUrl } from "./lib/image"
@@ -69,6 +70,7 @@ function resolveRef(list: readonly RefEntry[], attrs: CharacterRefAttrs): RefEnt
 const LABEL_PRESETS_LIVE: readonly UsageMode[] = USAGE_MODES
 
 export function CharacterRefView(props: NodeViewProps) {
+  const L = usePickerLabel()
   const attrs = props.node.attrs as CharacterRefAttrs
 
   const storage = props.editor.storage as unknown as Record<string, {
@@ -391,7 +393,7 @@ export function CharacterRefView(props: NodeViewProps) {
                       clearRole()
                     }}
                   >
-                    <span>Default (from character)</span>
+                    <span>{L("Default (from character)")}</span>
                     {currentRole == null && <span aria-hidden>✓</span>}
                   </button>
                   <div className="my-1 border-t border-border/60" />
@@ -411,7 +413,7 @@ export function CharacterRefView(props: NodeViewProps) {
                         setRole(role)
                       }}
                     >
-                      <span>{role}</span>
+                      <span>{L(role)}</span>
                       {currentRole === role && <span aria-hidden>✓</span>}
                     </button>
                   ))}
@@ -464,7 +466,7 @@ export function CharacterRefView(props: NodeViewProps) {
                         setCustomText(isCustomRole ? (currentRole ?? "") : "")
                       }}
                     >
-                      Custom…
+                      {L("Custom…")}
                     </button>
                   )}
                   {/* Identity-lock toggle (Task 4) — per-mention `~lock`. Kept
@@ -508,7 +510,7 @@ export function CharacterRefView(props: NodeViewProps) {
                       setUsageMode(null)
                     }}
                   >
-                    <span>Default (from character)</span>
+                    <span>{L("Default (from character)")}</span>
                     {attrs.usageMode == null && <span aria-hidden>✓</span>}
                   </button>
                   <div className="my-1 border-t border-border/60" />

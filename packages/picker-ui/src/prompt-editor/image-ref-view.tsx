@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from "react"
 import { createPortal } from "react-dom"
+import { usePickerLabel } from "../i18n"
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react"
 import { optimizedImageUrl } from "./lib/image"
 import { BODY_MENU_CLASS } from "./body-menu-class"
@@ -50,6 +51,7 @@ function useRefLookup(props: NodeViewProps): RefLookup {
 }
 
 export function ImageRefView(props: NodeViewProps) {
+  const L = usePickerLabel()
   const attrs = props.node.attrs as ImageRefAttrs
   const { url, defaultName } = useRefLookup(props)
   const [hoverAnchor, setHoverAnchor] = useState<DOMRect | null>(null)
@@ -219,7 +221,7 @@ export function ImageRefView(props: NodeViewProps) {
                   clearLabel()
                 }}
               >
-                <span>Ref only</span>
+                <span>{L("Ref only")}</span>
                 {attrs.label === "" && <span aria-hidden>✓</span>}
               </button>
               <div className="my-1 border-t border-border/60" />
@@ -238,7 +240,7 @@ export function ImageRefView(props: NodeViewProps) {
                     updateLabel(preset)
                   }}
                 >
-                  <span>{preset}</span>
+                  <span>{L(preset)}</span>
                   {attrs.label === preset && <span aria-hidden>✓</span>}
                 </button>
               ))}
@@ -293,7 +295,7 @@ export function ImageRefView(props: NodeViewProps) {
                     setCustomText(isCustom ? attrs.label : "")
                   }}
                 >
-                  Custom…
+                  {L("Custom…")}
                 </button>
               )}
             </div>

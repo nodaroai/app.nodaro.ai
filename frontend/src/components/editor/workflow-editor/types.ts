@@ -706,6 +706,7 @@ export const EXECUTABLE_TYPES = new Set([
   "apply-edl",
   "edit-plan",
   "camera-switch",
+  "speaker-frames",
   "speaker-view",
   "assemble-narrated-video",
   "image-collage",

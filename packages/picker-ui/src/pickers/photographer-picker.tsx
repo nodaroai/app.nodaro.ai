@@ -6,7 +6,7 @@ import { PHOTOGRAPHERS as BASE_PHOTOGRAPHERS, PHOTOGRAPHER_CATEGORY_LABELS, PHOT
 import { Input } from "../ui/input"
 import { FitText } from "../ui/fit-text"
 import { cn } from "../lib/cn"
-import { useLocalizedCatalog } from "../i18n"
+import { useLocalizedCatalog, usePickerLabel } from "../i18n"
 import { MultiPickBadge, useMultiPick } from "./multi-pick-ui"
 import { useCuratedEntries } from "../curated.js"
 
@@ -30,6 +30,7 @@ export const PhotographerPicker = memo(function PhotographerPicker({
   className,
   maxSelected = 1,
 }: PhotographerPickerProps) {
+  const L = usePickerLabel()
   // Curated view of the bundled catalog: filtered to ids this deployment
   // offers, relabelled where a pack rewrote an entry. Subscribed, so a late
   // registration re-renders. Identity-equal to the base on mainline.
@@ -81,11 +82,11 @@ export const PhotographerPicker = memo(function PhotographerPicker({
         return (
           <div key={category} className="flex flex-col gap-1.5 mt-5 pt-5 border-t-[3px] border-border/40">
             <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground px-0.5">
-              {PHOTOGRAPHER_CATEGORY_LABELS[category]}
+              {L(PHOTOGRAPHER_CATEGORY_LABELS[category])}
             </div>
             <div
               role="radiogroup"
-              aria-label={PHOTOGRAPHER_CATEGORY_LABELS[category]}
+              aria-label={L(PHOTOGRAPHER_CATEGORY_LABELS[category])}
               className="grid grid-cols-2 gap-1.5"
             >
               {photographers.map((photographer) => {

@@ -186,6 +186,61 @@ describe("generate-image inpaint", () => {
     expect(promptArg).toContain("a red hat")
   })
 
+  // With references attached, both engines route the image-to-image sibling: the
+  // route's job names it as `provider`, a workflow run's as `model` (keeping the
+  // user's pick in `provider`). IMAGE_MASK_MODE is keyed by the text-to-image id,
+  // so the hint is looked up by that id either way.
+  const SIBLING_JOBS: ReadonlyArray<[string, Record<string, unknown>]> = [
+    ["the route's job (provider: the sibling)", { provider: "seedream-5-pro-i2i" }],
+    ["a workflow run's job (model: the sibling)", { provider: "seedream-5-pro", model: "seedream-5-pro-i2i" }],
+  ]
+  for (const [which, routing] of SIBLING_JOBS) {
+    it(`base + mask + references, ${which}: still prepends the region hint`, async () => {
+      mocks.mockMaskBoundingBoxFromUrl.mockResolvedValueOnce({ x: 10, y: 5, width: 30, height: 40 })
+      mocks.mockImageDimensions.mockResolvedValueOnce({ width: 100, height: 100 })
+      const job = makeJob({
+        prompt: "a red hat",
+        ...routing, // IMAGE_MASK_MODE["seedream-5-pro"] === "prompt"
+        referenceImageUrls: ["https://r2/ref.png"],
+        baseImageUrl: "https://r2/base.png",
+        maskUrl: "https://r2/mask.png",
+      })
+
+      await handler(job as never, makeCtx())
+
+      const [promptArg, model] = mocks.mockGenerateImage.mock.calls[0]! as [string, string]
+      expect(model).toBe("seedream-5-pro-i2i")
+      expect(promptArg).toContain("the upper-left region")
+      expect(promptArg).toContain("a red hat")
+    })
+  }
+
+  it("every image-to-image sibling belongs to exactly one text-to-image model", async () => {
+    // The reverse lookup above is only well defined while no two models share a sibling.
+    const { T2I_TO_I2I_VARIANT } = await import("@nodaro/shared")
+    const { TEXT_TO_IMAGE_MODEL_OF_SIBLING } = await import("../image-ai.js")
+    const siblings = Object.values(T2I_TO_I2I_VARIANT)
+    expect(new Set(siblings).size).toBe(siblings.length)
+    for (const [textToImage, sibling] of Object.entries(T2I_TO_I2I_VARIANT)) {
+      expect(TEXT_TO_IMAGE_MODEL_OF_SIBLING[sibling], sibling).toBe(textToImage)
+    }
+  })
+
+  it("base + mask + references on a composite-tier model's sibling: still no region hint", async () => {
+    const job = makeJob({
+      prompt: "a red hat",
+      provider: "flux-pro-i2i", // the sibling of "flux": IMAGE_MASK_MODE["flux"] === "composite"
+      referenceImageUrls: ["https://r2/ref.png"],
+      baseImageUrl: "https://r2/base.png",
+      maskUrl: "https://r2/mask.png",
+    })
+
+    await handler(job as never, makeCtx())
+
+    expect(mocks.mockCompositeInpaint).toHaveBeenCalledTimes(1)
+    expect(mocks.mockGenerateImage.mock.calls[0]![0]).toBe("a red hat")
+  })
+
   it("base + mask (composite-tier provider): does NOT inject a region hint", async () => {
     const job = makeJob({
       prompt: "a red hat",

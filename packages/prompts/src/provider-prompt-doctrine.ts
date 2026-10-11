@@ -23,7 +23,7 @@
  *   - KIE API docs https://docs.kie.ai/market/kling/kling-3-0
  *   - Live KIE-path dialogue probe 2026-07-16 (scripted lines spoken verbatim,
  *     lip-synced, on both kling-2.6 and kling-3.0 with sound=true)
- *   MiniMax Hailuo 3:
+ *   MiniMax H3:
  *   - KIE API docs https://docs.kie.ai/market/minimax-h3 (text-to-video /
  *     image-to-video / reference-to-video — the API contract is the doctrine
  *     source: limits, modes, aspect rules, pricing dimensions). No live probe
@@ -160,7 +160,7 @@ const KLING_AUDIO_DOCTRINE: ProviderPromptDoctrine = {
 
 const MINIMAX_H3_DOCTRINE: ProviderPromptDoctrine = {
   providers: ["minimax-h3"],
-  heading: "MiniMax Hailuo 3 (minimax-h3)",
+  heading: "MiniMax H3 (minimax-h3)",
   tips: [
     "Natural-language prompts up to 7000 chars. Front-load what matters: subject → action → scene/environment → lighting → camera move → style. One camera movement per shot.",
     "Output 2K (default) or 768P (cheaper tier). Aspect: pure text-to-video needs a concrete ratio (21:9/16:9/4:3/1:1/3:4/9:16); reference runs default to adaptive (match the input).",

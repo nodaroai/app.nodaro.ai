@@ -1,4 +1,5 @@
 import type { FactoryPreset } from "./types.js"
+import { REALISM_FINISH, REALISM_PASS_INSTRUCTION } from "../realism-wording.js"
 
 /**
  * Selective-stylization presets shared by `modify-image` (transform an input photo) and
@@ -188,6 +189,47 @@ const IMAGE_EDITS: ReadonlyArray<{
         "Decorate the reference photo with expressive hand-drawn doodles layered on top, keeping the underlying photograph itself completely unchanged. Free, confident hand-drawn marker linework — wobbly outlines, sparkles, squiggles, little flames or hearts where they fit the mood, and a short handwritten phrase that responds cleverly to the content of the photo (never a generic cliché). Mix of white and one or two bright accent colors. Outline style only, no filled shapes. Compose the doodles around the subject — never on top of faces or the focal point — using empty areas and edges. Loose, playful, zine-like energy: it should feel like a bored genius doodled on a printed photo. Keep the original image pixels intact beneath the doodle layer.",
       negativePrompt:
         "altered photo, restyled or recolored scene, covered faces, filled color blocks, sticker or clipart look, cliché phrases, garbled or misspelled handwriting, cluttered composition, watermark, blurry",
+    },
+  },
+  {
+    slug: "add-skin-realism",
+    name: "Add Skin Realism",
+    description: "Brings back visible skin texture — same person, same photo.",
+    data: { provider: "nano-banana-2-1", aspectRatio: "auto", resolution: "2K", promptPrefix: REALISM_PASS_INSTRUCTION },
+  },
+  {
+    slug: "natural-photo-finish",
+    name: "Natural Photo Finish",
+    description: "Takes out a rendered-looking finish, keeps the photo.",
+    data: {
+      provider: "nano-banana-2-1",
+      aspectRatio: "auto",
+      resolution: "2K",
+      promptPrefix: `Keep this photo as it is and take out only what makes it look rendered: smoothed, waxy or airbrushed skin, a glow, over-sharpened edges, hair too perfect to be real. ${REALISM_FINISH} Otherwise the same people, framing, pose and background.`,
+    },
+  },
+  {
+    slug: "phone-camera-look",
+    name: "Phone Camera Look",
+    description: "Re-finishes a photo as an everyday snapshot.",
+    data: {
+      provider: "nano-banana-2-1",
+      aspectRatio: "auto",
+      resolution: "2K",
+      promptPrefix: `Re-finish this photo, changing nothing in it: ${REALISM_FINISH} Same people, framing, pose and background.`,
+    },
+  },
+  {
+    slug: "undo-beauty-filter",
+    name: "Undo Beauty Filter",
+    description: "Reverses smoothing and reshaping on a real photo.",
+    data: {
+      provider: "seedream-5-pro",
+      // "auto" keeps the photo's shape: this model lists no native "auto", so on either node the
+      // run takes its listed ratio nearest the connected photo.
+      aspectRatio: "auto",
+      quality: "high",
+      promptPrefix: "Undo the beauty filter on this photo: bring back the person's real skin texture, the natural shape of the face, jaw, nose and eyes, and the real colour of skin and lips. Change nothing else: the same person, expression, hair, clothing, framing and background.",
     },
   },
 ]

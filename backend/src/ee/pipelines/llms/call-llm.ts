@@ -192,7 +192,7 @@ export async function callLLM<T>(args: CallLLMArgs<T>): Promise<CallLLMResult<T>
 
     // Anthropic's reasoning models (Opus 4.7+) reject the `temperature`
     // parameter with a 400 — extended-thinking is incompatible with explicit
-    // temperature control. Omit it for those models; Sonnet/Haiku still
+    // temperature control. Omit it for those models; older Sonnet/Haiku still
     // accept it.
     const supportsTemperature = !TEMPERATURE_UNSUPPORTED_MODELS.has(modelId)
     const createParams = {

@@ -5,7 +5,7 @@ import { Search } from "lucide-react"
 import { WEAPONS as BASE_WEAPONS, WEAPON_SUBCATEGORY_LABELS, WEAPON_SUBCATEGORY_ORDER, type Weapon, type WeaponSubcategory } from "@nodaro/shared"
 import { Input } from "../ui/input"
 import { cn } from "../lib/cn"
-import { useLocalizedCatalog } from "../i18n"
+import { useLocalizedCatalog, usePickerLabel } from "../i18n"
 import { WEAPON_ICON_FOR } from "../icons/parameter-picker-icons-weapons"
 import { useCuratedEntries } from "../curated.js"
 
@@ -29,6 +29,7 @@ export const WeaponPicker = memo(function WeaponPicker({
   onValueChange,
   className,
 }: WeaponPickerProps) {
+  const L = usePickerLabel()
   // Curated view of the bundled catalog: filtered to ids this deployment
   // offers, relabelled where a pack rewrote an entry. Subscribed, so a late
   // registration re-renders. Identity-equal to the base on mainline.
@@ -78,11 +79,11 @@ export const WeaponPicker = memo(function WeaponPicker({
         return (
           <div key={subcategory} className="flex flex-col gap-1.5">
             <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground px-0.5">
-              {WEAPON_SUBCATEGORY_LABELS[subcategory]}
+              {L(WEAPON_SUBCATEGORY_LABELS[subcategory])}
             </div>
             <div
               role="radiogroup"
-              aria-label={WEAPON_SUBCATEGORY_LABELS[subcategory]}
+              aria-label={L(WEAPON_SUBCATEGORY_LABELS[subcategory])}
               className="grid grid-cols-3 gap-1.5"
             >
               {weapons.map((weapon) => {

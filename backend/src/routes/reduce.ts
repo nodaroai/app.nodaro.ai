@@ -16,6 +16,8 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/re
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { userFacingMessage } from "../lib/user-facing-error.js"
+import { describeErrorChain } from "../lib/llm-errors.js"
 
 // Zod schema. strategyConfig is validated per-strategy inside the dispatcher
 // (each strategy parses its own config), so at the route layer we accept any
@@ -168,7 +170,15 @@ export async function reduceRoutes(app: FastifyInstance) {
 
         return reply.send({ jobId: job.id, output, meta })
       } catch (err) {
-        const message = err instanceof Error ? err.message : "Strategy failed"
+        // The person reads a model-lane failure's plain sentence; the full
+        // diagnostic (it names the vendor and the step that failed) goes to
+        // the log only.
+        const message = userFacingMessage(err, "Strategy failed")
+        // An empty input set (400) and no LLM configured (503) are expected
+        // answers, not faults: warn for those, error for everything else.
+        const logged = { err: describeErrorChain(err), jobId: job.id }
+        if (err instanceof EmptyInputError || isLlmProviderUnavailable(err)) req.log.warn(logged, "[reduce] not served")
+        else req.log.error(logged, "[reduce] failed")
         await supabase
           .from("jobs")
           .update({ status: "failed", output_data: { error: message } })

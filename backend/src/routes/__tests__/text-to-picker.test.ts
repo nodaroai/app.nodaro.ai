@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   refundReservedCreditsForJob: vi.fn(),
   markProviderCallStart: vi.fn(),
   llmCompleteStructured: vi.fn(),
+  jobUpdate: vi.fn(),
 }))
 
 vi.mock("@/lib/config.js", () => ({
@@ -36,10 +37,20 @@ vi.mock("@/lib/supabase.js", () => {
   // .update({...}).eq("id", …).eq("user_id", …) — the exact chain the route uses.
   const second = vi.fn().mockResolvedValue({ data: null, error: null })
   const first = vi.fn(() => ({ eq: second }))
-  return { supabase: { from: vi.fn(() => ({ update: () => ({ eq: first }) })), rpc: vi.fn().mockResolvedValue({ error: null }) } }
+  return {
+    supabase: {
+      from: vi.fn(() => ({
+        update: (row: Record<string, unknown>) => {
+          mocks.jobUpdate(row)
+          return { eq: first }
+        },
+      })),
+      rpc: vi.fn().mockResolvedValue({ error: null }),
+    },
+  }
 })
 
-import { batchTargetPickers, mergeGaps, textToPickerRoutes } from "../text-to-picker.js"
+import { batchTargetPickers, mergeGaps, servedLanes, textToPickerRoutes } from "../text-to-picker.js"
 import { PICKER_TYPES, PICKER_ANALYZER_FAMILIES, type PickerType } from "@nodaro/prompts"
 
 describe("batchTargetPickers", () => {
@@ -122,7 +133,7 @@ describe("POST /v1/text-to-picker — the default reasoning effort", () => {
     mocks.commitReservedCreditsForJob.mockResolvedValue(undefined)
     mocks.refundReservedCreditsForJob.mockResolvedValue(0)
     mocks.markProviderCallStart.mockResolvedValue(undefined)
-    mocks.llmCompleteStructured.mockResolvedValue({ output: { person: { age: "age-30s" } }, inputTokens: 1, outputTokens: 1 })
+    mocks.llmCompleteStructured.mockResolvedValue({ output: { person: { age: "age-30s" } }, inputTokens: 1, outputTokens: 1, lane: "kie" })
 
     app = Fastify({ logger: false })
     app.addHook("preHandler", async (req) => {
@@ -181,5 +192,44 @@ describe("POST /v1/text-to-picker — the default reasoning effort", () => {
     vi.clearAllMocks()
     expect((await post({ ...VALID, reasoningEffort: "max" })).statusCode).toBe(200)
     expect(sent().request).toMatchObject({ reasoningEffort: "max", timeoutMs: 285_000 })
+  })
+
+  /** The completed job row as the route wrote it. */
+  function completedRow(): Record<string, unknown> {
+    const completed = mocks.jobUpdate.mock.calls.map(([row]) => row as Record<string, unknown>).find((row) => row.status === "completed")
+    expect(completed).toBeDefined()
+    return completed as Record<string, unknown>
+  }
+
+  it("records which lane served the analysis in the admin-only provider column, never in output_data", async () => {
+    const res = await post(VALID)
+    expect(res.statusCode).toBe(200)
+
+    expect(completedRow().provider).toBe("kie")
+    expect((completedRow().output_data as { usage: unknown }).usage).toEqual({ inputTokens: 1, outputTokens: 1, batches: 1 })
+    expect(JSON.stringify(res.json())).not.toContain("kie")
+  })
+
+  it("records each batch's lane, in batch order, when they did not all land on one", async () => {
+    mocks.llmCompleteStructured
+      .mockResolvedValueOnce({ output: {}, inputTokens: 1, outputTokens: 1, lane: "kie" })
+      .mockResolvedValueOnce({ output: {}, inputTokens: 1, outputTokens: 1, lane: "direct-gemini" })
+
+    expect((await post({ text: VALID.text, userId: USER_ID })).statusCode).toBe(200)
+
+    const row = completedRow()
+    const batches = (row.output_data as { usage: { batches: number } }).usage.batches
+    expect(batches).toBeGreaterThan(1)
+    expect(row.provider).toBe(["kie", "direct-gemini", ...Array(batches - 2).fill("kie")].join(","))
+  })
+})
+
+describe("servedLanes", () => {
+  it("names the one lane every batch landed on", () => {
+    expect(servedLanes(["kie", "kie"])).toBe("kie")
+  })
+
+  it("lists each batch's lane in order when they differ", () => {
+    expect(servedLanes(["kie", "direct-gemini", "kie"])).toBe("kie,direct-gemini,kie")
   })
 })

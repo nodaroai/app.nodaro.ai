@@ -1,5 +1,37 @@
 # @nodaro/prompts
 
+## 1.36.0
+
+### Minor Changes
+
+- 8e9b058: New factory presets for everyday, unretouched images.
+
+  - Generate Image: a Realism & Authentic folder — Unretouched Portrait, Phone Selfie, Candid Phone Snapshot, Mirror Selfie, Creator at Home · Waist-Up, Webcam / Video-Call Frame, Macro Skin Study, Product in Hand — and a Skin Detail Sheet reference board.
+  - Generate Image and Modify Image: four Edits — Add Skin Realism, Natural Photo Finish, Phone Camera Look, Undo Beauty Filter.
+  - Image to Text: Realism Audit.
+  - The wording they share is exported for reuse: `REALISM_SKIN`, `REALISM_FINISH`, `REALISM_PASS_INSTRUCTION`, `realismViewpoint(person)`, `realismEmptyHands(person)`, `NEUTRAL_PERSON` and the `PersonWords` type.
+
+### Patch Changes
+
+- 710f392: `minimax-h3` copy now names the model "MiniMax H3" (was "MiniMax Hailuo 3"): the `MODEL_CATALOG` description in `@nodaro/shared`, and the `PROVIDER_CAPABILITIES` descriptions and provider doctrine heading in `@nodaro/prompts`. Ids, pricing and capabilities are unchanged.
+
+  Korean picker labels for the Hasselblad Medium Format, Leica M Rangefinder and Daguerreotype camera formats (`camera-format.ko`).
+
+- Updated dependencies [ea4b6ca]
+- Updated dependencies [51afaf9]
+- Updated dependencies [174047e]
+- Updated dependencies [63e91d0]
+- Updated dependencies [70ed87f]
+- Updated dependencies [16d1284]
+- Updated dependencies [8c9fa49]
+- Updated dependencies [710f392]
+- Updated dependencies [e6d25de]
+- Updated dependencies [d72e045]
+- Updated dependencies [dc1075b]
+- Updated dependencies [d72e045]
+- Updated dependencies [326978f]
+  - @nodaro/shared@3.27.0
+
 ## 1.35.0
 
 ### Minor Changes

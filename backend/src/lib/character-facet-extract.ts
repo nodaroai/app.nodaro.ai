@@ -29,7 +29,7 @@ const facetSchema = z.object({ facetText: z.string() })
 
 /** Fast, reliable structured-output model for the extraction (Anthropic
  *  forced-tool path → no JSON drift). Overridable for tests. */
-const FACET_MODEL = "claude-haiku-4.5"
+const FACET_MODEL = "claude-haiku-5.5"
 /** Short timeout so a hung extractor can't stall the generate-character POST;
  *  on timeout we fall back to the full source text. */
 const FACET_TIMEOUT_MS = 20_000

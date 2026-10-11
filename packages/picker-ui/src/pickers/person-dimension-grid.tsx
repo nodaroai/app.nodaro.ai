@@ -20,6 +20,7 @@ import { MultiPickBadge } from "./multi-pick-ui"
 import { CharacterArtTile, characterArtGridClass } from "./character-art-tile"
 import { characterArtShape, characterArtUrl, type CharacterArtShape } from "../icons/character-art"
 import { usePickerFieldRestriction } from "../lib/field-restrictions"
+import { usePickerLabel, fillLabel } from "../i18n"
 import {
   FacialHairIcon,
   FaceShapeIcon,
@@ -497,6 +498,7 @@ export function PersonDimensionGrid({
   enabled,
   onToggleEnabled,
 }: PersonDimensionGridProps) {
+  const L = usePickerLabel()
   const id = useId()
   const { field, selectedIds, maxSelected, multi, isMultiData, pick, toggleOff, enableSingle, activateMulti, demoteToSingle, setCustomAge } =
     usePersonDimension(dimension, value, onChange)
@@ -516,8 +518,8 @@ export function PersonDimensionGrid({
   )
 
   const checked = enabled ?? true
-  const baseLabel = getRegisteredPersonDimensionLabels()[dimension]
-  const label = multi ? `${baseLabel} (pick up to ${maxSelected})` : baseLabel
+  const baseLabel = L(getRegisteredPersonDimensionLabels()[dimension])
+  const label = multi ? fillLabel(L("{section} (pick up to {n})"), { section: baseLabel, n: maxSelected }) : baseLabel
   // Ethnicity (39 entries / 6 region groups) and Type (60+ entries spanning
   // realistic, primitive, fantasy, mythic, sci-fi, heroes, anime) get the
   // tabbed two-level picker — flat scrolling 70 entries doesn't read.
@@ -547,7 +549,7 @@ export function PersonDimensionGrid({
             {baseLabel}
           </label>
           {multi && (
-            <span className="text-[10px] text-[#6b6b75] dark:text-[#9a9aa6]">pick up to {maxSelected}</span>
+            <span className="text-[10px] text-[#6b6b75] dark:text-[#9a9aa6]">{fillLabel(L("pick up to {n}"), { n: maxSelected })}</span>
           )}
           <div className="flex-1" />
           {onToggleEnabled && (

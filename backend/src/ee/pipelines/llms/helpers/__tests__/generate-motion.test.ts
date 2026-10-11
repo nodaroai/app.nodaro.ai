@@ -71,7 +71,7 @@ describe("runGenerateMotion", () => {
     const call = (callLLM as ReturnType<typeof vi.fn>).mock.calls[0][0]
     expect(call.role).toBe("helper")
     expect(call.task).toBe("generate_motion")
-    expect(call.modelId).toBe("claude-haiku-4-5")
+    expect(call.modelId).toBe("claude-haiku-5-5")
     expect(call.sceneId).toBe("scene-1")
     expect(call.userPrompt).toContain('"shot_01"')
     // Only the targeted shot is in the prompt

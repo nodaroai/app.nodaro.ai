@@ -1,5 +1,13 @@
 import type { FactoryPreset } from "./types.js"
 import { stylizedSubjectFor, editsFor } from "./shared-image.js"
+import { NEUTRAL_PERSON, REALISM_FINISH, REALISM_SKIN, realismEmptyHands, realismViewpoint } from "../realism-wording.js"
+
+/** Joins the sentences of one prompt with single spaces. */
+const sentences = (...parts: string[]): string => parts.join(" ")
+/** The model and resolution the Realism & Authentic presets render with. */
+const REALISM_MODEL = { provider: "gpt-image-2", resolution: "2K" } as const
+/** The model and quality the close skin studies render with (Macro Skin Study, Skin Detail Sheet). */
+const SKIN_STUDY_MODEL = { provider: "seedream-5-pro", quality: "high" } as const
 
 export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
   // ── Reference Sheet ──────────────────────────────────────────────────────
@@ -166,6 +174,22 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
       promptSuffix: `Style: photorealistic, no illustration. Consistent animal across every single panel. 8K, fine grain, cinematic color grading.`,
       negativePrompt:
         "illustration, cartoon, 3d render, garbled text, misspelled labels, watermark, deformed anatomy, inconsistent markings between panels, wrong breed, blurry, low resolution",
+    },
+  },
+  {
+    id: "generate-image/skin-detail-sheet",
+    name: "Skin Detail Sheet",
+    description: "Connect a sharp face photo → a six-panel skin reference.",
+    group: "Reference Sheet",
+    data: {
+      ...SKIN_STUDY_MODEL,
+      aspectRatio: "3:2",
+      promptPrefix: sentences(
+        "Create a single skin detail reference sheet titled \"SKIN DETAIL SHEET\" from the attached photo of the person, the single source of truth for identity, skin tone and features. The same person, the same light and the same unretouched skin in every panel. Six panels — render ALL six panel headings exactly as written, never merging or omitting a panel: PANEL 01 — FULL FACE (front, eye level) · PANEL 02 — LEFT CHEEK & NOSE · PANEL 03 — RIGHT CHEEK & JAW · PANEL 04 — FOREHEAD & HAIRLINE · PANEL 05 — EYES & BROWS · PANEL 06 — LIPS & CHIN. In every panel:",
+        REALISM_SKIN,
+        "Flat, even daylight, neutral colour, everything sharp.",
+      ),
+      promptSuffix: "Plain neutral grey background, thin white panel labels in English. Use this sheet as a visual reference for consistent skin detail of this person across generations.",
     },
   },
   // ── Cast & Consistency (clean grids per the multi-character workflow:
@@ -1703,4 +1727,94 @@ export const GENERATE_IMAGE_PRESETS: readonly FactoryPreset[] = [
   // instruction lives in the prompt, not `style`.
   ...stylizedSubjectFor("generate-image"),
   ...editsFor("generate-image"),
+
+  // ── Realism & Authentic ──────────────────────────────────────────────────
+  {
+    id: "generate-image/unretouched-portrait",
+    name: "Unretouched Portrait",
+    description: "Straight-on head-and-shoulders portrait, real skin, everyday finish.",
+    group: "Realism & Authentic",
+    data: {
+      ...REALISM_MODEL,
+      aspectRatio: "3:4",
+      prompt: sentences("{subject || An adult woman in her thirties with dark shoulder-length hair}, a straight-on head-and-shoulders portrait at eye level against a plain pale wall, soft daylight from one side.", REALISM_SKIN, REALISM_FINISH),
+    },
+  },
+  {
+    id: "generate-image/phone-selfie",
+    name: "Phone Selfie",
+    description: "Eye-level, arm's-length self-portrait look.",
+    group: "Realism & Authentic",
+    data: {
+      ...REALISM_MODEL,
+      aspectRatio: "3:4",
+      prompt: sentences("{subject || An adult woman in her late twenties with her hair tied back}, {setting || on a couch at home, a cushion and a lamp behind}.", realismViewpoint(NEUTRAL_PERSON), realismEmptyHands(NEUTRAL_PERSON), REALISM_SKIN, REALISM_FINISH),
+    },
+  },
+  {
+    id: "generate-image/candid-snapshot",
+    name: "Candid Phone Snapshot",
+    description: "Caught mid-moment, an everyday snapshot.",
+    group: "Realism & Authentic",
+    data: {
+      ...REALISM_MODEL,
+      aspectRatio: "3:4",
+      prompt: sentences("{subject || An adult man in his thirties} caught mid-moment, not posing, glancing away, the framing a little crooked, part of the scene cut by the edge, {setting || at a kitchen table at home}.", REALISM_SKIN, REALISM_FINISH),
+    },
+  },
+  {
+    id: "generate-image/mirror-selfie",
+    name: "Mirror Selfie",
+    description: "Mirror self-portrait, phone in hand.",
+    group: "Realism & Authentic",
+    data: {
+      ...REALISM_MODEL,
+      aspectRatio: "9:16",
+      prompt: sentences("{subject || An adult woman in her twenties} photographs their reflection in a full-length mirror {setting || in a hallway at home}, a phone held at chest height with its back toward the mirror.", REALISM_SKIN, REALISM_FINISH),
+    },
+  },
+  {
+    id: "generate-image/creator-at-home",
+    name: "Creator at Home · Waist-Up",
+    description: "A waist-up reference of the same person — wire a face photo into the references.",
+    group: "Realism & Authentic",
+    data: {
+      ...REALISM_MODEL,
+      aspectRatio: "9:16",
+      prompt: sentences("Waist-up photo of {image:1:person}, an adult, standing at home in front of a plain wall, arms relaxed, empty hands.", REALISM_SKIN, REALISM_FINISH),
+    },
+  },
+  {
+    id: "generate-image/video-call-frame",
+    name: "Webcam / Video-Call Frame",
+    description: "Chest-up video-call framing.",
+    group: "Realism & Authentic",
+    data: {
+      ...REALISM_MODEL,
+      aspectRatio: "16:9",
+      prompt: sentences("{subject || An adult man in his forties}, chest-up, a little off-centre, slightly wide, seen from a fixed point just above eye level about an arm's length away, a softly lit room behind, flat even light from the front.", REALISM_FINISH),
+    },
+  },
+  {
+    id: "generate-image/macro-skin-study",
+    name: "Macro Skin Study",
+    description: "A close study of one area of skin.",
+    group: "Realism & Authentic",
+    data: {
+      ...SKIN_STUDY_MODEL,
+      aspectRatio: "1:1",
+      prompt: sentences("{feature || the left cheek and the side of the nose} of {subject || an adult woman in her thirties}, filling the frame, everything sharp front to back, flat cool daylight, neutral colour, a plain study of the skin, not a glamour shot.", REALISM_SKIN),
+    },
+  },
+  {
+    id: "generate-image/product-in-hand",
+    name: "Product in Hand — phone photo",
+    description: "Wire a photo of the product into the references.",
+    group: "Realism & Authentic",
+    data: {
+      ...REALISM_MODEL,
+      aspectRatio: "3:4",
+      prompt: sentences("{subject || An adult woman in her thirties} holds {image:1:product} at chest height toward the viewer, label facing out, {setting || in a bright room at home}.", REALISM_FINISH),
+    },
+  },
 ]

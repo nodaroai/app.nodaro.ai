@@ -73,6 +73,9 @@ a2-sheet.json
 *.key
 *.pem
 *credentials*.json
+# The private-marker list for scripts/check-private-markers.sh: a local copy of
+# a repo secret. Committing it would publish the very list it guards.
+.leak-markers
 
 # graphify skill scratch output (local absolute paths; never commit)
 graphify-out/

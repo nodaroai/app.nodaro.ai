@@ -344,7 +344,7 @@ const VIDEO_RATIOS_HVS = ["16:9", "9:16", "1:1"] as const
 const WAN_27_IMAGE_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4", "21:9", "8:1", "1:8"] as const
 const VIDEO_RATIOS_HVS345 = ["16:9", "9:16", "1:1", "4:3", "3:4"] as const
 // Seedance 2.x only — KIE accepts the full fixed-ratio set incl. 21:9
-// (docs.kie.ai/market/bytedance/seedance-2); MiniMax Hailuo 3 shares the same
+// (docs.kie.ai/market/bytedance/seedance-2); MiniMax H3 shares the same
 // seven-ratio set (t2v enum + r2v adaptive default per docs.kie.ai/market/minimax-h3).
 // Kept separate from HVS so the
 // wider set can't leak to models that don't support it.
@@ -1270,7 +1270,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     defaultDuration: 5,
     pricing: [{ identifier: "minimax", credits: 143, note: "5s, 1080p" }],
   },
-  // MiniMax Hailuo 3 (KIE "minimax-h3") — t2v / i2v (first and/or last frame) /
+  // MiniMax H3 (KIE "minimax-h3") — t2v / i2v (first and/or last frame) /
   // reference-to-video (9 images / 3 videos ≤15s total / 3 audios ≤15s total;
   // audio refs require an image or video ref alongside). Two-rate resolution
   // lever (768P added 2026-08-03): 2K (KIE default) at 36.5 KIE cr/s, 768P at
@@ -1288,7 +1288,7 @@ const VIDEO_MODELS: Record<string, ModelCatalogEntry> = {
     family: "MiniMax",
     label: "minimax-h3",
     series: "Hailuo",
-    description: "MiniMax Hailuo 3 — premium multimodal tier: first/last frame + image/video/audio references, native audio, 2K (default) or 768P output, 4-15s per-second pricing.",
+    description: "MiniMax H3 — premium multimodal tier: first/last frame + image/video/audio references, native audio, 2K (default) or 768P output, 4-15s per-second pricing.",
     useCases: ["premium", "narrative"],
     features: ["end-frame", "audio", "reference-image", "video-reference"],
     aspectRatios: VIDEO_RATIOS_SEEDANCE_2,

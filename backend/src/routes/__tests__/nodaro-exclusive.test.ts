@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => ({
   insertJob: vi.fn().mockResolvedValue({ data: { id: "job-1" }, error: null }),
   queueAdd: vi.fn().mockResolvedValue({ id: "bull-1" }),
   maybeSingle: vi.fn(),
+  relaySupport: vi.fn(async (): Promise<{ relay: boolean; source: string }> => ({ relay: true, source: "nodaro.ai" })),
 }))
 
 vi.mock("@/lib/nodaro-connect.js", () => ({
@@ -49,6 +50,11 @@ vi.mock("@/lib/url-validator.js", async () => {
   return { safeUrlSchema: z.string().url() }
 })
 
+vi.mock("@/lib/private-plugins/speaker-frames-relay-support.js", async (orig) => ({
+  ...(await orig<typeof import("../../lib/private-plugins/speaker-frames-relay-support.js")>()),
+  speakerFramesRelaySupport: mocks.relaySupport,
+}))
+
 import { nodaroExclusiveRoutes } from "../nodaro-exclusive.js"
 
 let app: FastifyInstance
@@ -60,6 +66,7 @@ beforeEach(async () => {
   mocks.nodaroCloudFetch.mockResolvedValue({ ok: true, status: 200 })
   mocks.callCloudRoute.mockResolvedValue({ ok: true, durationSec: 42 })
   mocks.rehostByteSize.mockResolvedValue(undefined)
+  mocks.relaySupport.mockResolvedValue({ relay: true, source: "nodaro.ai" })
   app = Fastify({ logger: false })
   app.addHook("preHandler", async (req) => {
     const body = req.body as Record<string, unknown> | undefined
@@ -88,6 +95,7 @@ describe("connection gate", () => {
     ["/v1/video-analysis/probe", { videoUrl: VIDEO }],
     ["/v1/generate-video-pro/continue", { fromJobId: "j-0" }],
     ["/v1/speaker-view", { edl: { version: 1, clock: "master", sources: [], segments: [] } }],
+    ["/v1/speaker-frames", { videoUrl: VIDEO }],
   ]
   for (const [url, payload] of posts) {
     it(`${url} answers 503 nodaro_connection_required when unconnected — and creates nothing`, async () => {
@@ -440,5 +448,106 @@ describe("speaker-view", () => {
     expect(res.statusCode).toBe(400)
     expect(res.json().error.code).toBe("validation_error")
     expect(mocks.insertJob).not.toHaveBeenCalled()
+  })
+})
+
+// Speaker Frames (P3.6, decided 2026-10-09): relayed only once nodaro.ai takes a
+// relayed job (its proxies and the relayed marker); until then a connected
+// install answers a clear "not available on a connected install yet" and
+// creates nothing. The scope the plugin would refuse is refused here first.
+describe("speaker-frames", () => {
+  const edl = {
+    version: 1,
+    clock: "master",
+    sources: [
+      { id: "mic", url: "https://example.com/mic.wav", kind: "audio", role: "master-audio" },
+      { id: "camA", url: "https://example.com/cam-a.mp4", kind: "video" },
+    ],
+    segments: [{ id: "s0", inMs: 0, outMs: 30_000, video: "camA", speaker: "Host" }],
+  }
+  const transcript = {
+    version: 1,
+    words: [{ text: "hi", startMs: 0, endMs: 400, speaker: "Host" }, { text: "there", startMs: 400, endMs: 800, speaker: "Guest" }],
+    speakerNames: { "Speaker A": "Host", "Speaker B": "Guest" },
+  }
+  const post = (body: Record<string, unknown>) =>
+    app.inject({ method: "POST", url: "/v1/speaker-frames", payload: { userId: USER, ...body } })
+
+  it("answers 503 speaker_frames_relay_unavailable while nodaro.ai does not take a relayed job — and creates nothing", async () => {
+    mocks.relaySupport.mockResolvedValue({ relay: false, source: "nodaro.ai" })
+    const res = await post({ edl, transcript })
+    expect(res.statusCode).toBe(503)
+    expect(res.json().error).toEqual({ code: "speaker_frames_relay_unavailable", message: expect.stringContaining("not available on a connected install yet") })
+    expect(mocks.insertJob).not.toHaveBeenCalled()
+    expect(mocks.queueAdd).not.toHaveBeenCalled()
+  })
+
+  it("says so when nodaro.ai could not be asked", async () => {
+    mocks.relaySupport.mockResolvedValue({ relay: false, source: "nodaro.ai-unreachable" })
+    const res = await post({ edl })
+    expect(res.statusCode).toBe(503)
+    expect(res.json().error.message).toContain("Couldn't reach nodaro.ai")
+  })
+
+  // A revoked or expired relay credential is not an outage: the remedy is the
+  // connection's, so the answer is the connection code with the reason.
+  it("a rejected connection (401/403 from nodaro.ai) answers 503 nodaro_connection_required, saying it was rejected", async () => {
+    mocks.relaySupport.mockResolvedValue({ relay: false, source: "nodaro.ai-rejected" })
+    const res = await post({ edl })
+    expect(res.statusCode).toBe(503)
+    expect(res.json().error).toEqual({ code: "nodaro_connection_required", message: expect.stringContaining("connection was rejected") })
+    expect(res.json().error.message).not.toContain("Couldn't reach")
+    expect(mocks.insertJob).not.toHaveBeenCalled()
+  })
+
+  // Round 2 (decided 2026-10-09): the sources Speaker Frames does not sample
+  // (the master audio, an unticked camera) go as a placeholder nodaro.ai never
+  // reads, and its sampled cameras as detection proxies the worker builds — so
+  // no original is sent and none is sized here, however large.
+  it("never sizes or refuses a source of the edit: no original is relayed", async () => {
+    const twoCams = { ...edl, sources: [...edl.sources, { id: "camB", url: "https://example.com/cam-b.mp4", kind: "video" }] }
+    mocks.rehostByteSize.mockResolvedValue(9_000_000_000)
+    const res = await post({ edl: twoCams, excludeSourceIds: ["camB"] })
+    expect(res.statusCode).toBe(200)
+    expect(mocks.rehostByteSize).not.toHaveBeenCalled()
+  })
+
+  it("enqueues the plugin's job payload: the edit PARSED, the transcript with its speakerNames as given", async () => {
+    const res = await post({ edl: JSON.stringify(edl), transcript, excludeSourceIds: [] })
+    expect(res.statusCode).toBe(200)
+    expect(mocks.queueAdd).toHaveBeenCalledWith("speaker-frames", expect.objectContaining({ jobId: "job-1", edl, transcript, excludeSourceIds: [] }))
+    const payload = mocks.queueAdd.mock.calls[0]![1] as { transcript: { speakerNames?: unknown } }
+    expect(payload.transcript.speakerNames).toEqual(transcript.speakerNames)
+  })
+
+  it("enqueues a clip pack as ONE job over its edits (P3-24 (a))", async () => {
+    const res = await post({ edl: [JSON.stringify(edl), edl] })
+    expect(res.statusCode).toBe(200)
+    expect(mocks.queueAdd).toHaveBeenCalledTimes(1)
+    expect(mocks.queueAdd).toHaveBeenCalledWith("speaker-frames", expect.objectContaining({ edl: [edl, edl] }))
+  })
+
+  it("keeps the edit on the job row and slims the transcript to its word and speaker counts", async () => {
+    await post({ edl, transcript })
+    const inputData = mocks.insertJob.mock.calls[0]![1].input_data as Record<string, unknown>
+    expect(inputData.edl).toEqual(edl)
+    expect(inputData.transcript).toBeUndefined()
+    expect(inputData.transcriptWordCount).toBe(2)
+    expect(inputData.transcriptSpeakerCount).toBe(2)
+  })
+
+  it("refuses what the plugin would, before anything is created", async () => {
+    for (const [body, code] of [
+      [{}, "invalid_input"],
+      [{ edl, videoUrl: VIDEO }, "invalid_input"],
+      [{ edl: { ...edl, clock: "output" } }, "invalid_edl"],
+      [{ edl, excludeSourceIds: ["camA"] }, "invalid_input"],
+    ] as const) {
+      const res = await post(body as Record<string, unknown>)
+      expect(res.statusCode, JSON.stringify(body)).toBe(400)
+      expect(res.json().error.code).toBe(code)
+    }
+    expect(mocks.insertJob).not.toHaveBeenCalled()
+    expect(mocks.relaySupport).not.toHaveBeenCalled()
   })
 })

@@ -40,6 +40,13 @@ const SKIP_EXT = [
 // pattern here is written so it does NOT contain the literal it matches.
 const SKIP_PATHS = ["tools/", "package-lock.json"]
 
+// A third-party source's name, in any case, with a space, a hyphen, an
+// underscore or nothing between its two words. It is assembled from split
+// strings for the same reason the competitor names use character classes: this
+// file must never carry it. The lookbehind spares the platform's own
+// camera-motion tool, whose name contains it.
+const THIRD_PARTY_SOURCE = `(?<!camera[\\s_-]?)\\b${["mo", "ion"].join("t")}[\\s_-]?${["l", "b"].join("a")}\\b`
+
 /**
  * @typedef {{id: string, why: string, pattern: RegExp, allow?: RegExp[]}} Rule
  */
@@ -87,11 +94,14 @@ const RULES = [
   },
   {
     id: "competitor-citation",
-    why: "sourcing our craft from a named competitor",
+    why: "sourcing our craft from a named competitor or third-party source",
     // Written with character classes so this file does not itself carry the
     // names — the publish-path marker gate greps fixed strings and would
     // otherwise abort on the very check that guards them.
-    pattern: /\bh[i]ggsfield\b|\bap[i]yi\b|\bkr[e]a\.ai\b|\bfre[e]pik\b|\bartl[i]st\b/i,
+    pattern: new RegExp(
+      [/\bh[i]ggsfield\b|\bap[i]yi\b|\bkr[e]a\.ai\b|\bfre[e]pik\b|\bartl[i]st\b/.source, THIRD_PARTY_SOURCE].join("|"),
+      "i",
+    ),
   },
   {
     id: "internal-planning-ref",

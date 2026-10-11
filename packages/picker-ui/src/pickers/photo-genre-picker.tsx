@@ -6,7 +6,7 @@ import { PHOTO_GENRES as BASE_PHOTO_GENRES, PHOTO_GENRE_CATEGORY_LABELS, PHOTO_G
 import { Input } from "../ui/input"
 import { FitText } from "../ui/fit-text"
 import { cn } from "../lib/cn"
-import { useLocalizedCatalog } from "../i18n"
+import { useLocalizedCatalog, usePickerLabel } from "../i18n"
 import { useCuratedEntries } from "../curated.js"
 
 interface PhotoGenrePickerProps {
@@ -25,6 +25,7 @@ export const PhotoGenrePicker = memo(function PhotoGenrePicker({
   onValueChange,
   className,
 }: PhotoGenrePickerProps) {
+  const L = usePickerLabel()
   // Curated view of the bundled catalog: filtered to ids this deployment
   // offers, relabelled where a pack rewrote an entry. Subscribed, so a late
   // registration re-renders. Identity-equal to the base on mainline.
@@ -74,9 +75,9 @@ export const PhotoGenrePicker = memo(function PhotoGenrePicker({
         return (
           <div key={category} className="flex flex-col gap-1.5">
             <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground px-0.5">
-              {PHOTO_GENRE_CATEGORY_LABELS[category]}
+              {L(PHOTO_GENRE_CATEGORY_LABELS[category])}
             </div>
-            <div role="radiogroup" aria-label={PHOTO_GENRE_CATEGORY_LABELS[category]} className="grid grid-cols-2 gap-1.5">
+            <div role="radiogroup" aria-label={L(PHOTO_GENRE_CATEGORY_LABELS[category])} className="grid grid-cols-2 gap-1.5">
               {genres.map((genre) => {
                 const selected = genre.id === value
                 const label = resolveLabel(genre.id, genre.label)

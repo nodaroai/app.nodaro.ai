@@ -5,7 +5,7 @@ import { Search } from "lucide-react"
 import { ANIMALS as BASE_ANIMALS, ANIMAL_SUBCATEGORY_LABELS, ANIMAL_SUBCATEGORY_ORDER, type Animal, type AnimalSubcategory } from "@nodaro/shared"
 import { Input } from "../ui/input"
 import { cn } from "../lib/cn"
-import { useLocalizedCatalog } from "../i18n"
+import { useLocalizedCatalog, usePickerLabel } from "../i18n"
 import { ANIMAL_ICON_FOR } from "../icons/parameter-picker-icons-animals"
 import { useCuratedEntries } from "../curated.js"
 import { CharacterArtTile, characterArtGridClass } from "./character-art-tile"
@@ -29,6 +29,7 @@ export const AnimalPicker = memo(function AnimalPicker({
   onValueChange,
   className,
 }: AnimalPickerProps) {
+  const L = usePickerLabel()
   // Curated view of the bundled catalog: filtered to ids this deployment
   // offers, relabelled where a pack rewrote an entry. Subscribed, so a late
   // registration re-renders. Identity-equal to the base on mainline.
@@ -78,11 +79,11 @@ export const AnimalPicker = memo(function AnimalPicker({
         return (
           <div key={subcategory} className="flex flex-col gap-1.5">
             <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground px-0.5">
-              {ANIMAL_SUBCATEGORY_LABELS[subcategory]}
+              {L(ANIMAL_SUBCATEGORY_LABELS[subcategory])}
             </div>
             <div
               role="radiogroup"
-              aria-label={ANIMAL_SUBCATEGORY_LABELS[subcategory]}
+              aria-label={L(ANIMAL_SUBCATEGORY_LABELS[subcategory])}
               className={characterArtGridClass("square")}
             >
               {animals.map((animal) => (

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
+import { usePickerLabel } from "../i18n"
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react"
 import { LOCATION_USAGE_MODES, locationUsageModeLabel, normalizeRoleSlug, type LocationUsageMode } from "@nodaro/shared"
 import { optimizedImageUrl } from "./lib/image"
@@ -80,6 +81,7 @@ function resolveRef(list: readonly RefEntry[], attrs: LocationRefAttrs): RefEntr
 const LOCATION_MODE_PRESETS_LIVE: readonly LocationUsageMode[] = LOCATION_USAGE_MODES
 
 export function LocationRefView(props: NodeViewProps) {
+  const L = usePickerLabel()
   const attrs = props.node.attrs as LocationRefAttrs
 
   const storage = props.editor.storage as unknown as Record<string, {
@@ -407,7 +409,7 @@ export function LocationRefView(props: NodeViewProps) {
                       clearRole()
                     }}
                   >
-                    <span>Default (from location)</span>
+                    <span>{L("Default (from location)")}</span>
                     {currentRolePhrase == null && <span aria-hidden>✓</span>}
                   </button>
                   <div className="my-1 border-t border-border/60" />
@@ -427,7 +429,7 @@ export function LocationRefView(props: NodeViewProps) {
                         setRole(roleP)
                       }}
                     >
-                      <span>{roleP}</span>
+                      <span>{L(roleP)}</span>
                       {currentRolePhrase === roleP && <span aria-hidden>✓</span>}
                     </button>
                   ))}
@@ -480,7 +482,7 @@ export function LocationRefView(props: NodeViewProps) {
                         setCustomText(isCustomRole ? (currentRolePhrase ?? "") : "")
                       }}
                     >
-                      Custom…
+                      {L("Custom…")}
                     </button>
                   )}
                   {/* Identity-lock toggle (Task 4) — per-mention `~lock`. Kept
@@ -524,7 +526,7 @@ export function LocationRefView(props: NodeViewProps) {
                       setUsageMode(null)
                     }}
                   >
-                    <span>Default (from location)</span>
+                    <span>{L("Default (from location)")}</span>
                     {attrs.usageMode == null && <span aria-hidden>✓</span>}
                   </button>
                   <div className="my-1 border-t border-border/60" />

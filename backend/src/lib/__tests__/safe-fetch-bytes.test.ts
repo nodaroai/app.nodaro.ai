@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const fetch = vi.hoisted(() => vi.fn())
 vi.mock("../safe-fetch.js", () => ({ safeFetch: fetch }))
-import { safeFetchBytes } from "../safe-fetch-bytes.js"
+import { safeFetchBytes, PublicDownloadTooLargeError } from "../safe-fetch-bytes.js"
 
 beforeEach(() => vi.resetAllMocks())
 
@@ -27,15 +27,24 @@ describe("bounded public image retrieval", () => {
   })
   it.each<Record<string, string>>([{}, { "content-length": "1" }])("stops an oversized body despite unhelpful headers %j", async (headers) => {
     const cancel = response([3, 3, 3, 3], headers)
-    await expect(safeFetchBytes("https://media.test/image", 5)).rejects.toThrow("size limit")
+    const attempt = safeFetchBytes("https://media.test/image", 5)
+    // The streamed count: a typed error, so a caller can say "too large".
+    await expect(attempt).rejects.toBeInstanceOf(PublicDownloadTooLargeError)
+    await expect(attempt).rejects.toThrow("size limit")
     expect(cancel).toHaveBeenCalledOnce()
   })
   it("cancels before buffering an advertised oversized response or an HTTP error", async () => {
     const tooLarge = response([10, 10], { "content-length": "100" })
-    await expect(safeFetchBytes("https://media.test/image", 5)).rejects.toThrow("size limit")
+    const attempt = safeFetchBytes("https://media.test/image", 5)
+    // The advertised content-length: the same typed error.
+    await expect(attempt).rejects.toBeInstanceOf(PublicDownloadTooLargeError)
+    await expect(attempt).rejects.toThrow("size limit")
     expect(tooLarge).toHaveBeenCalledOnce()
     const failed = response([10, 10], {}, 403)
-    await expect(safeFetchBytes("https://media.test/image", 5)).rejects.toThrow("download failed")
+    const refused = safeFetchBytes("https://media.test/image", 5)
+    await expect(refused).rejects.toThrow("download failed")
+    // A refusal is not a size problem.
+    await expect(refused).rejects.not.toBeInstanceOf(PublicDownloadTooLargeError)
     expect(failed).toHaveBeenCalledOnce()
   })
   it("refuses invalid limits before accessing the network", async () => {

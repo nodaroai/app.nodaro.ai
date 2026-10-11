@@ -714,6 +714,11 @@ const LLM_REGISTRY_2026_10_IDS_BYTES = 480
 // nothing else moved. No tool was added, so the fixture does NOT move.
 // measured by this suite: 407_322 total − 406_618 budget = 704 B.
 const LLM_LANE_PRICING_WORDING_BYTES = 704
+// RAISED 2026-10-10 by one LLM id added to the registry (claude-haiku-5.5): each of the four
+// tools whose `llm_model` argument is `z.enum(LLM_MODEL_IDS)` lists it (19 B apiece), and
+// nothing else moved. No tool was added, so the fixture does NOT move. measured by this suite:
+// 408_142 total − 408_066 budget = 76 B.
+const CLAUDE_HAIKU_5_5_ID_BYTES = 76
 // RAISED 2026-10-08 by the `build_ugc_creator` description and nothing else: the image
 // generations it hands back are now one per candidate (a sampled creator is drawn by every
 // image candidate and the user picks one). `build_ugc_clips`' `spent_job_ids` cap moving from
@@ -734,6 +739,13 @@ const MODIFY_IMAGE_AUTO_ASPECT_WORDING_BYTES = 47
 // suite as a delta on the same tree: 407_927 after − 407_761 before = 166 B, and the budget
 // rises by exactly that.
 const READ_COLLECTION_USAGE_BYTES = 166
+// RAISED 2026-10-09 by the `generate_image` `aspect_ratio` description and nothing else: it now
+// says that 'auto' keeps the shape of base_image_url, else of the first reference image, on
+// every model (the verb hands "auto" to the route, which resolves it against that photo). No
+// tool was added, so the fixture does NOT move. Measured by this suite: 408_066 total −
+// 407_973 before = 93 B (the tool: 8_126 → 8_219 B, under the per-tool budget), and the budget
+// rises by exactly that, keeping whatever headroom the list had (none).
+const GENERATE_IMAGE_AUTO_ASPECT_WORDING_BYTES = 93
 
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES,
@@ -817,7 +829,9 @@ export const TOOL_WIRE_BUDGET = {
     SEEDREAM_5_FLASH_MODEL_BYTES +
     IMAGE_MODEL_ROLE_DEFAULTS_BYTES +
     UGC_CREATOR_CANDIDATES_WORDING_BYTES +
-    MODIFY_IMAGE_AUTO_ASPECT_WORDING_BYTES,
+    MODIFY_IMAGE_AUTO_ASPECT_WORDING_BYTES +
+    GENERATE_IMAGE_AUTO_ASPECT_WORDING_BYTES +
+    CLAUDE_HAIKU_5_5_ID_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }

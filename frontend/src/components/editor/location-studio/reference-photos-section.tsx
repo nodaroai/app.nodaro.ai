@@ -4,6 +4,7 @@ import { LOCATION_REFERENCE_PHOTO_KINDS, LOCATION_REFERENCE_PHOTO_KIND_LABELS } 
 import { tx, useT } from "@/lib/i18n"
 import type { LocationReferencePhoto, LocationReferencePhotoKind } from "@/types/nodes"
 import { formatDate } from "@/lib/i18n/format"
+import { useLocalizeOptionLabel } from "@/lib/i18n/labels"
 
 /**
  * Reference Photos grid — mood-board style. PR-1 ships add-by-URL only; PR-2
@@ -33,6 +34,7 @@ interface ReferencePhotosSectionProps {
 
 export function ReferencePhotosSection({ photos, onChange, piiConsentAt, onConsent }: ReferencePhotosSectionProps) {
   const t = useT()
+  const localizeOption = useLocalizeOptionLabel()
   const [pendingUrl, setPendingUrl] = useState("")
   const [pendingKind, setPendingKind] = useState<LocationReferencePhotoKind>("moodBoard")
   // PII consent (Phase 2 #7). The checkbox shows only when the location has
@@ -52,10 +54,14 @@ export function ReferencePhotosSection({ photos, onChange, piiConsentAt, onConse
   const visiblePhotos = q
     ? photos.filter((p) => {
         const filename = p.url.split("/").pop()?.toLowerCase() ?? ""
-        const label = LOCATION_REFERENCE_PHOTO_KIND_LABELS[p.kind]?.toLowerCase() ?? ""
+        const english = LOCATION_REFERENCE_PHOTO_KIND_LABELS[p.kind] ?? ""
+        const label = english.toLowerCase()
+        // The dropdown shows the kind in the interface language: match that too.
+        const shown = localizeOption(english).toLowerCase()
         return (
           p.kind.toLowerCase().includes(q) ||
           label.includes(q) ||
+          shown.includes(q) ||
           filename.includes(q)
         )
       })
@@ -187,7 +193,7 @@ export function ReferencePhotosSection({ photos, onChange, piiConsentAt, onConse
           className="text-[11px] bg-[#1a1d27] border border-[#1e293b] rounded px-2 py-1.5 text-slate-300"
         >
           {KINDS.map((k) => (
-            <option key={k} value={k}>{LOCATION_REFERENCE_PHOTO_KIND_LABELS[k] ?? k}</option>
+            <option key={k} value={k}>{localizeOption(LOCATION_REFERENCE_PHOTO_KIND_LABELS[k] ?? k)}</option>
           ))}
         </select>
         <input

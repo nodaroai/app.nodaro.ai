@@ -31,7 +31,7 @@ import {
 import { isFlux2Model, FLUX2_RES_MP, type Flux2Model } from "./flux2-pricing.js"
 import { VIDEO_DURATION_AUTO } from "./video-duration-auto.js"
 import { uiResolutionFill } from "./video-ui-defaults.js"
-import { MODEL_CATALOG, normalizeModelInput, defaultResolutionFor, type ModelInputAdjustment, type SourceImageSize } from "./model-catalog.js"
+import { MODEL_CATALOG, autoAspectNeedsSourceImage, normalizeModelInput, defaultResolutionFor, type ModelInputAdjustment, type SourceImageSize } from "./model-catalog.js"
 
 /**
  * The megapixel tier a Flux 2 credit identifier is keyed on, for ANY incoming
@@ -139,6 +139,42 @@ export interface NormalizedImageGen {
 }
 
 /**
+ * The catalog model `resolveNormalizedImageGen` snaps against: the provider
+ * (Nano Banana when none is named), or — with `swapToI2i` and references
+ * attached — its i2i sibling, the model the generate-image route and the
+ * workflow payload builder then send. That sibling has its OWN catalog entry
+ * and lever lists. Exported so a caller that has to decide something about
+ * those lists before the snap (whether a photo's size is worth reading) asks
+ * about the same model the snap will use.
+ */
+export function normalizedImageGenModelId(opts: {
+  provider: unknown
+  refCount: number
+  swapToI2i?: boolean
+}): string {
+  const provider = typeof opts.provider === "string" && opts.provider.length > 0 ? opts.provider : "nano-banana"
+  return opts.swapToI2i && opts.refCount > 0 ? (T2I_TO_I2I_VARIANT[provider] ?? provider) : provider
+}
+
+/**
+ * Whether "auto" on a Generate Image request can need its photo's size: the
+ * model the snap runs against (`normalizedImageGenModelId` with the swap on)
+ * has no native auto. Given the ASSEMBLED reference count, it asks about exactly
+ * that model; without one — a write boundary, or a run before its references
+ * assemble — about both the provider and its i2i sibling, since references may
+ * yet attach.
+ */
+export function imageGenAutoAspectNeedsSourceImage(opts: {
+  provider: unknown
+  aspectRatio: unknown
+  refCount?: number
+}): boolean {
+  const asks = (refCount: number) =>
+    autoAspectNeedsSourceImage(normalizedImageGenModelId({ provider: opts.provider, refCount, swapToI2i: true }), opts.aspectRatio)
+  return opts.refCount === undefined ? asks(0) || asks(1) : asks(opts.refCount)
+}
+
+/**
  * Snap an image request's catalog-governed levers to a combination the model
  * actually accepts, and price the credit identifier off the SNAPPED values.
  *
@@ -160,8 +196,9 @@ export interface NormalizedImageGen {
  * Unknown model ids pass through untouched (same contract as
  * `normalizeModelInput`) — the route's provider enum is the gate for those.
  *
- * `sourceImage` is the size of the image an image-to-image / edit request
- * transforms. It only decides "auto" on a model without a native auto, and the
+ * `sourceImage` is the size of the photo the request transforms or is drawn
+ * from (an image-to-image / edit source, or Generate Image's first wired
+ * reference). It only decides "auto" on a model without a native auto, and the
  * ratio is not a pricing dimension on any such model (pinned across the catalog
  * by `auto-aspect-source.test.ts`), so a CHECK that runs before the size is
  * known prices the same identifier as the DEBIT that knows it.
@@ -179,12 +216,7 @@ export function resolveNormalizedImageGen(opts: {
   const str = (v: unknown): string | undefined =>
     typeof v === "string" && v.length > 0 ? v : undefined
 
-  const provider = str(opts.provider) ?? "nano-banana"
-  // Same swap `resolveEffectiveProvider` applies in the route: refs attached to
-  // a bare T2I provider route the run to its i2i sibling, which has its OWN
-  // catalog entry and its own lever lists.
-  const modelId =
-    opts.swapToI2i && opts.refCount > 0 ? (T2I_TO_I2I_VARIANT[provider] ?? provider) : provider
+  const modelId = normalizedImageGenModelId(opts)
 
   const n = normalizeModelInput(
     modelId,

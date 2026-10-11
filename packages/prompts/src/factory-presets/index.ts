@@ -1,3 +1,4 @@
+import { T2I_TO_I2I_VARIANT } from "@nodaro/shared"
 import type { FactoryPreset } from "./types.js"
 import { stylizedSubjectFor, editsFor } from "./shared-image.js"
 import { GENERATE_IMAGE_PRESETS } from "./generate-image.js"
@@ -14,6 +15,19 @@ import { LOTTIE_OVERLAY_PRESETS } from "./lottie-overlay.js"
 export type { FactoryPreset, FactoryPresetGroup } from "./types.js"
 export { groupFactoryPresets } from "./types.js"
 
+/**
+ * A shared preset as Modify Image takes it. Modify Image always works from a source photo, so its
+ * provider list names a model's image-to-image id where the model has a separate one
+ * (`seedream-5-pro` → `seedream-5-pro-i2i`). The shared catalogs may carry the text-to-image id
+ * Generate Image takes — its route switches to that same image-to-image model once a photo is
+ * connected. Providers with no separate image-to-image id are left as they are.
+ */
+function forModifyImage(p: FactoryPreset): FactoryPreset {
+  const provider = p.data.provider
+  const imageToImage = typeof provider === "string" ? T2I_TO_I2I_VARIANT[provider] : undefined
+  return imageToImage ? { ...p, data: { ...p.data, provider: imageToImage } } : p
+}
+
 /** System/factory presets shipped with the app. Assembled here in the original
  *  single-file key order; each value lives in its per-domain module. */
 export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>> = {
@@ -22,7 +36,7 @@ export const FACTORY_PRESETS: Readonly<Record<string, readonly FactoryPreset[]>>
   // modify-image shares the Stylized Subject + Edits catalogs with generate-image
   // (single source of truth in STYLIZED_SUBJECT / IMAGE_EDITS). modify-image is
   // slated for deprecation in favor of generate-image — when removed, drop this key.
-  "modify-image": [...stylizedSubjectFor("modify-image"), ...editsFor("modify-image")],
+  "modify-image": [...stylizedSubjectFor("modify-image"), ...editsFor("modify-image")].map(forModifyImage),
   "generate-video": GENERATE_VIDEO_PRESETS,
   "text-to-speech": TEXT_TO_SPEECH_PRESETS,
   "text-to-audio": TEXT_TO_AUDIO_PRESETS,

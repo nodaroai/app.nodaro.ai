@@ -1,7 +1,7 @@
 ---
 node_type: generate-video
-generated_at: 2026-10-06T11:31:09.076Z
-generated_from: 63fade18b
+generated_at: 2026-10-10T19:30:00.964Z
+generated_from: a9f96de55
 ---
 
 # Generate Video
@@ -251,7 +251,7 @@ Prompt structure: Scene (setting, light) → Character/Element (who, appearance)
 - SILENT tiers: no audio parameter, so the entire Audio block above does not apply — skip dialogue/SFX cues; the Scene → Character → Motion → Style structure and motion guidance carry over unchanged.
 - Durations 5/10s; kling-turbo takes an end frame (tail_image_url); kling-master is single-image i2v.
 
-### MiniMax Hailuo 3 (minimax-h3)
+### MiniMax H3 (minimax-h3)
 
 Prompt structure (front-load what matters most):
 precise subject → action details → scene/environment → lighting & color tone → camera movement → visual style → image quality → constraints. Prompts are natural language, 1-7000 characters, across all three modes.

@@ -86,7 +86,7 @@ describe("preferKie routing (claude-sonnet-5 / claude-opus-4.8)", () => {
     expect(res.text).toBe("kie")
   })
 
-  it.each(["claude-opus-5", "claude-opus-5.5", "claude-sonnet-5.5", "claude-opus-4.8", "claude-fable-5", "claude-sonnet-5", "claude-opus-4.7", "claude-sonnet-4.6", "claude-haiku-4.5"])(
+  it.each(["claude-opus-5", "claude-opus-5.5", "claude-sonnet-5.5", "claude-opus-4.8", "claude-fable-5", "claude-sonnet-5", "claude-opus-4.7", "claude-sonnet-4.6", "claude-haiku-4.5", "claude-haiku-5.5"])(
     "%s with no effort is served by KIE",
     async (modelId) => {
       const { llmComplete } = await import("../llm-client.js")

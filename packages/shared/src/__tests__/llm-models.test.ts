@@ -27,7 +27,7 @@ import {
   LLM_CREDIT_RUNGS,
 } from "../llm-models.js"
 import type { LlmModelDef, LlmTier, LlmFeature } from "../llm-models.js"
-import { PIPELINE_PINNABLE_SCRIPT_LLMS } from "../pipeline-types.js"
+import { PIPELINE_ACCEPTED_SCRIPT_LLMS, PIPELINE_LEGACY_PINNED_SCRIPT_LLMS, PIPELINE_PINNABLE_SCRIPT_LLMS, PipelineConfigSchema } from "../pipeline-types.js"
 
 // The provider-$ per-token rate table and `calculateLlmCost` moved to
 // backend/src/lib/pricing/llm-cost.ts (S5) — its tests live in
@@ -44,6 +44,7 @@ const EXPECTED_MODEL_IDS = [
   "gemini-3.7-flash",
   "gemini-3.8-flash",
   "claude-haiku-4.5",
+  "claude-haiku-5.5",
   "claude-sonnet-4.6",
   "gpt-5.2",
   "gemini-3.1-pro",
@@ -116,7 +117,7 @@ describe("LLM_MODELS data integrity", () => {
     for (const model of LLM_MODELS) {
       tierCounts[model.tier]++
     }
-    expect(tierCounts.economy).toBe(8)
+    expect(tierCounts.economy).toBe(9)
     expect(tierCounts.standard).toBe(7)
     expect(tierCounts.premium).toBe(13)
   })
@@ -177,10 +178,22 @@ describe("getLlmModel", () => {
     expect(getLlmModel("claude-haiku-4-5")?.id).toBe("claude-haiku-4.5")
   })
 
-  it("resolves every PIPELINE_PINNABLE_SCRIPT_LLMS member (the film pipeline's pin surface)", () => {
-    for (const id of PIPELINE_PINNABLE_SCRIPT_LLMS) {
+  it("resolves every script LLM a pipeline config may name (the film pipeline's pin surface)", () => {
+    for (const id of PIPELINE_ACCEPTED_SCRIPT_LLMS) {
       expect(getLlmModel(id), `pinnable script llm ${id} must resolve`).toBeDefined()
     }
+  })
+
+  it("Claude Haiku 5.5 is the offered Haiku pin; a saved Haiku 4.5 pin is still accepted", () => {
+    expect(PIPELINE_PINNABLE_SCRIPT_LLMS).toContain("claude-haiku-5-5")
+    expect(PIPELINE_PINNABLE_SCRIPT_LLMS).not.toContain("claude-haiku-4-5")
+    expect(PIPELINE_LEGACY_PINNED_SCRIPT_LLMS).toEqual(["claude-haiku-4-5"])
+    expect(getLlmModel("claude-haiku-5-5")?.id).toBe("claude-haiku-5.5")
+    for (const id of ["claude-haiku-5-5", "claude-haiku-4-5"] as const) {
+      expect(PipelineConfigSchema.safeParse({ script_llm: id }).success, id).toBe(true)
+      expect(PipelineConfigSchema.safeParse({ stage_models: { script_llm: id } }).success, `stage ${id}`).toBe(true)
+    }
+    expect(PipelineConfigSchema.safeParse({ script_llm: "claude-haiku-3" }).success).toBe(false)
   })
 
   it("resolves provider slugs as historical aliases", () => {
@@ -241,6 +254,7 @@ describe("getLlmTier", () => {
   it.each([
     ["gemini-3-flash", "economy"],
     ["claude-haiku-4.5", "economy"],
+    ["claude-haiku-5.5", "economy"],
   ] as const)("%s -> %s", (id, expected) => {
     expect(getLlmTier(id)).toBe(expected)
   })
@@ -548,6 +562,8 @@ describe("STRUCTURED_VISION_MODELS", () => {
     expect(ids).toEqual(
       [
         "claude-haiku-4.5",
+        // Vision + a forced tool both live-probed 2026-10-10 (KIE and direct).
+        "claude-haiku-5.5",
         "claude-opus-4.7",
         "claude-sonnet-4.6",
         "gemini-3-flash",
@@ -643,6 +659,30 @@ describe("reasoning effort registry", () => {
     // reasons even with NO thinking param sent. Dropping it silently
     // reintroduces truncated answers at Effort=Auto on a premium model.
     expect(m?.thinkingDefaultOn).toBe(true)
+  })
+
+  it("claude-haiku-5.5 is the economy Claude with an effort ladder that reasons by default", () => {
+    const m = getLlmModel("claude-haiku-5.5")!
+    expect(m.tier).toBe("economy")
+    expect(m.kieFormat).toBe("messages")
+    expect(m.kieSlugOrModel).toBe("claude-haiku-5-5")
+    expect(m.directFallbackModel).toBe("claude-haiku-5-5")
+    expect(m.reasoningEfforts).toEqual(["low", "medium", "high", "xhigh", "max"])
+    expect(m.effortRequiresDirect).toBe(true)
+    expect(m.preferKie).toBe(true)
+    // Anthropic 400s `temperature` on this model (probed 2026-10-10).
+    expect(m.supportsTemperature).toBe(false)
+    // Load-bearing: measured 2026-10-10, a no-effort call spent ~2,000 output
+    // tokens on a ~350-token answer on BOTH lanes. Unflagged, a node's small
+    // cap (qa-check's 1,024) is eaten by reasoning and the answer is cut.
+    expect(m.thinkingDefaultOn).toBe(true)
+    expect(reasoningOutputFloor(m)).toBe(REASONING_OUTPUT_FLOOR)
+    expect(getLlmModalityCaps(m.id)).toEqual({ image: true, video: false, audio: false })
+    // Haiku 4.5 stays as it was: no ladder, no default reasoning, its own cap.
+    const old = getLlmModel("claude-haiku-4.5")!
+    expect(old.reasoningEfforts).toBeUndefined()
+    expect(old.thinkingDefaultOn).toBeUndefined()
+    expect(old.maxOutputTokens).toBe(8192)
   })
 
   it("every model whose thinking cannot be turned off carries thinkingDefaultOn", () => {
@@ -1005,6 +1045,14 @@ describe("advanced mode", () => {
     expect(buildLlmCreditIdentifier("llm-chat", "claude-sonnet-5.5", "low")).toBe("llm-chat:premium")
     expect(buildLlmCreditIdentifier("llm-chat", "claude-sonnet-5.5", "xhigh")).toBe("llm-chat:premium-direct")
     expect(buildLlmCreditIdentifier("llm-chat", "claude-haiku-4.5", "xhigh")).toBe("llm-chat:economy") // no ladder
+    // Haiku 5.5 is the economy Claude WITH a ladder: no effort stays economy on
+    // KIE, any effort runs direct (one rung), and xhigh/max stack the effort bump.
+    expect(buildLlmCreditIdentifier("llm-chat", "claude-haiku-5.5")).toBe("llm-chat:economy")
+    expect(buildLlmCreditIdentifier("llm-chat", "claude-haiku-5.5", "low")).toBe("llm-chat")
+    expect(buildLlmCreditIdentifier("llm-chat", "claude-haiku-5.5", "high")).toBe("llm-chat")
+    expect(buildLlmCreditIdentifier("llm-chat", "claude-haiku-5.5", "xhigh")).toBe("llm-chat:premium")
+    expect(buildLlmCreditIdentifier("llm-chat", "claude-haiku-5.5", "max")).toBe("llm-chat:premium")
+    expect(buildLlmCreditIdentifier("llm-chat", "claude-haiku-5.5", undefined, true)).toBe("llm-chat")
   })
 
   it("a premium model served direct lands on premium-direct, and nothing goes past it", () => {
@@ -1146,11 +1194,13 @@ describe("groupLlmModelsByVendor / orderedLlmModels", () => {
 // Forced tool choice + conversation-bound thinking (Claude 5.5 generation)
 // ---------------------------------------------------------------------------
 describe("supportsForcedToolChoice / conversationBoundThinking", () => {
-  it("are declared exactly on the Claude 5.5 models", () => {
+  it("are declared exactly on the Claude 5.5 models — Haiku 5.5 binds its thinking but still takes a forced tool", () => {
     const noForce = LLM_MODELS.filter((m) => m.supportsForcedToolChoice === false).map((m) => m.id)
     const bound = LLM_MODELS.filter((m) => m.conversationBoundThinking).map((m) => m.id)
+    // Haiku 5.5 is NOT here: Anthropic's API served it a forced tool_choice
+    // (probed 2026-10-10), where Sonnet 5.5 and Opus 5.5 answer 400.
     expect(noForce.sort()).toEqual(["claude-opus-5.5", "claude-sonnet-5.5"])
-    expect(bound.sort()).toEqual(["claude-opus-5.5", "claude-sonnet-5.5"])
+    expect(bound.sort()).toEqual(["claude-haiku-5.5", "claude-opus-5.5", "claude-sonnet-5.5"])
   })
 
   it("only an anthropic-tool model can decline a forced tool choice (the flag has no reader elsewhere)", () => {
@@ -1169,7 +1219,7 @@ describe("supportsForcedToolChoice / conversationBoundThinking", () => {
   // through PIPELINE_PINNABLE_SCRIPT_LLMS. A model that 400s on forcing must not
   // join that list until callLLM reads `supportsForcedToolChoice`.
   it("no pipeline-pinnable script LLM rejects a forced tool choice", () => {
-    for (const id of PIPELINE_PINNABLE_SCRIPT_LLMS) {
+    for (const id of PIPELINE_ACCEPTED_SCRIPT_LLMS) {
       expect(getLlmModel(id)?.supportsForcedToolChoice, id).not.toBe(false)
     }
   })
@@ -1177,6 +1227,7 @@ describe("supportsForcedToolChoice / conversationBoundThinking", () => {
   it("resolves the KIE / Anthropic dash-form ids of the new models", () => {
     expect(getLlmModel("claude-opus-5-5")?.id).toBe("claude-opus-5.5")
     expect(getLlmModel("claude-sonnet-5-5")?.id).toBe("claude-sonnet-5.5")
+    expect(getLlmModel("claude-haiku-5-5")?.id).toBe("claude-haiku-5.5")
     expect(getLlmModel("gpt-6-1-sol")?.id).toBe("gpt-6.1-sol")
     expect(getLlmModel("deepseek-v4-1-flash")?.id).toBe("deepseek-v4.1-flash")
     expect(getLlmModel("grok-4-7")?.id).toBe("grok-4.7")
@@ -1193,8 +1244,10 @@ describe("llmServesDirect (decided 2026-10-08: priced on the lane it runs on)", 
     expect(llmServesDirect("claude-opus-5.5", "low")).toBe(true)
     expect(llmServesDirect("gemini-3.6-flash", "high")).toBe(false)
     expect(llmServesDirect("gpt-6-sol", "max")).toBe(false)
-    // Haiku has no effort ladder: an effort clamps to nothing, so it stays on KIE.
+    // Haiku 4.5 has no effort ladder: an effort clamps to nothing, so it stays on KIE.
     expect(llmServesDirect("claude-haiku-4.5", "high")).toBe(false)
+    // Haiku 5.5 has one, and KIE ignores it like every other Claude effort.
+    expect(llmServesDirect("claude-haiku-5.5", "low")).toBe(true)
   })
   it("no effort and no Advanced: every model runs on the aggregator", () => {
     for (const m of LLM_MODELS) expect(llmServesDirect(m.id), m.id).toBe(false)

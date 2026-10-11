@@ -34,6 +34,15 @@ export const PRESET_CONTENT_HE: Record<string, PresetCopy> = {
   "generate-image/food-board": { name: "לוח מאכל", description: "חברו תמונה ← גיליון מנה צפוף; ייחוס לצילומי אוכל עקביים." },
   "generate-image/mascot-board": { name: "לוח קמע", description: "חברו תמונת קמע ← גיליון דמות מותג עם יישומים; ייחוס לקמע עקבי." },
   "generate-image/pet-board": { name: "לוח חיית מחמד", description: "חברו תמונה חדה ← גיליון חיית מחמד צפוף; ייחוס לצילומים עקביים." },
+  "generate-image/unretouched-portrait": { name: "פורטרט ללא ריטוש", description: "פורטרט ראש וכתפיים מלפנים, עור אמיתי, גימור יומיומי." },
+  "generate-image/phone-selfie": { name: "סלפי מהטלפון", description: "מראה של צילום עצמי בגובה העיניים, ממרחק יד." },
+  "generate-image/candid-snapshot": { name: "צילום ספונטני מהטלפון", description: "רגע שנתפס באמצע, צילום יומיומי." },
+  "generate-image/mirror-selfie": { name: "סלפי במראה", description: "צילום עצמי במראה, טלפון ביד." },
+  "generate-image/creator-at-home": { name: "יוצרים בבית · עד המותניים", description: "ייחוס עד המותניים של אותו אדם — חברו תמונת פנים לייחוסים." },
+  "generate-image/video-call-frame": { name: "פריים של מצלמת רשת / שיחת וידאו", description: "מסגור של שיחת וידאו, מהחזה ומעלה." },
+  "generate-image/macro-skin-study": { name: "מחקר עור במאקרו", description: "מבט קרוב על אזור עור אחד." },
+  "generate-image/product-in-hand": { name: "מוצר ביד — צילום טלפון", description: "חברו תמונה של המוצר לייחוסים." },
+  "generate-image/skin-detail-sheet": { name: "גיליון פרטי עור", description: "חברו תמונת פנים חדה ← ייחוס עור בשישה פאנלים." },
 
   // ── Cast & Consistency ──
   "generate-image/character-reference-grid": { name: "רשת ייחוס לדמות", description: "חברו תמונה ← רשת זהות נקייה מ־4 זוויות (ללא קישוטים) — עוגן העקביות החזק ביותר." },
@@ -518,6 +527,7 @@ export const PRESET_CONTENT_HE: Record<string, PresetCopy> = {
   "image-to-text/site-screenshot-summary": { name: "סיכום צילום מסך של אתר", description: "אזור, כותרות ומספרים מעמוד אינטרנט." },
   "image-to-text/scene-description": { name: "תיאור מפורט", description: "תיאור פרוזה חי." },
   "image-to-text/reverse-prompt": { name: "פרומפט הפוך", description: "תמונה ← פרומפט ליצירת תמונה." },
+  "image-to-text/realism-audit": { name: "בדיקת ריאליזם", description: "מונה את הסימנים לכך שתמונה נוצרה, עם ספירה." },
 
   // ═══ shared-image (registered under BOTH generate-image/ and modify-image/) ═══
   "generate-image/cartoon-person-real-world": { name: "דמות מצוירת בעולם אמיתי", description: "הנושא ← דמות מצוירת תלת־ממדית, השאר נשאר ריאליסטי." },
@@ -533,6 +543,10 @@ export const PRESET_CONTENT_HE: Record<string, PresetCopy> = {
   "generate-image/restyle-whole": { name: "עיצוב מחדש (כל התמונה)", description: "החלת סגנון אמנותי על הכול." },
   "generate-image/doodle-overlay": { name: "שרבוטים על התמונה", description: "שרבוטי טוש מצוירים ביד מעל — התמונה נשארת נקייה." },
   "generate-image/doodle-overlay-expressive": { name: "שרבוטים · חופשי", description: "שרבוטים חופשיים יותר — המודל מאלתר." },
+  "generate-image/add-skin-realism": { name: "הוספת מרקם עור אמיתי", description: "מחזיר מרקם עור נראה לעין — אותו אדם, אותה תמונה." },
+  "generate-image/natural-photo-finish": { name: "גימור צילום טבעי", description: "מסיר מראה מרונדר ושומר על התמונה." },
+  "generate-image/phone-camera-look": { name: "מראה מצלמת טלפון", description: "מגמר תמונה מחדש כצילום יומיומי." },
+  "generate-image/undo-beauty-filter": { name: "ביטול פילטר יופי", description: "מבטל החלקה ושינוי צורה בתמונה אמיתית." },
 
   "modify-image/cartoon-person-real-world": { name: "דמות מצוירת בעולם אמיתי", description: "הנושא ← דמות מצוירת תלת־ממדית, השאר נשאר ריאליסטי." },
   "modify-image/caricature-real-photo": { name: "קריקטורה על תמונה אמיתית", description: "ראש מצויר מוגזם על סצנה אמיתית." },
@@ -547,4 +561,8 @@ export const PRESET_CONTENT_HE: Record<string, PresetCopy> = {
   "modify-image/restyle-whole": { name: "עיצוב מחדש (כל התמונה)", description: "החלת סגנון אמנותי על הכול." },
   "modify-image/doodle-overlay": { name: "שרבוטים על התמונה", description: "שרבוטי טוש מצוירים ביד מעל — התמונה נשארת נקייה." },
   "modify-image/doodle-overlay-expressive": { name: "שרבוטים · חופשי", description: "שרבוטים חופשיים יותר — המודל מאלתר." },
+  "modify-image/add-skin-realism": { name: "הוספת מרקם עור אמיתי", description: "מחזיר מרקם עור נראה לעין — אותו אדם, אותה תמונה." },
+  "modify-image/natural-photo-finish": { name: "גימור צילום טבעי", description: "מסיר מראה מרונדר ושומר על התמונה." },
+  "modify-image/phone-camera-look": { name: "מראה מצלמת טלפון", description: "מגמר תמונה מחדש כצילום יומיומי." },
+  "modify-image/undo-beauty-filter": { name: "ביטול פילטר יופי", description: "מבטל החלקה ושינוי צורה בתמונה אמיתית." },
 }

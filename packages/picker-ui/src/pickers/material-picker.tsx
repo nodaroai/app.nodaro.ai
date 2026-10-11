@@ -6,7 +6,7 @@ import { MATERIALS as BASE_MATERIALS, MATERIAL_CATEGORY_LABELS, MATERIAL_CATEGOR
 import { Input } from "../ui/input"
 import { cn } from "../lib/cn"
 import { MaterialPreview } from "../previews/material-preview"
-import { useLocalizedCatalog } from "../i18n"
+import { useLocalizedCatalog, usePickerLabel } from "../i18n"
 import { MultiPickBadge, useMultiPick } from "./multi-pick-ui"
 import { useCuratedEntries } from "../curated.js"
 import { CharacterArtTile, characterArtGridClass } from "./character-art-tile"
@@ -29,6 +29,7 @@ export const MaterialPicker = memo(function MaterialPicker({
   className,
   maxSelected = 1,
 }: MaterialPickerProps) {
+  const L = usePickerLabel()
   // Curated view of the bundled catalog: filtered to ids this deployment
   // offers, relabelled where a pack rewrote an entry. Subscribed, so a late
   // registration re-renders. Identity-equal to the base on mainline.
@@ -80,9 +81,9 @@ export const MaterialPicker = memo(function MaterialPicker({
         return (
           <div key={category} className="flex flex-col gap-1.5 mt-5 pt-5 border-t-[3px] border-border/40">
             <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground px-0.5">
-              {MATERIAL_CATEGORY_LABELS[category]}
+              {L(MATERIAL_CATEGORY_LABELS[category])}
             </div>
-            <div role={maxSelected > 1 ? "group" : "radiogroup"} aria-label={MATERIAL_CATEGORY_LABELS[category]} className={characterArtGridClass("square")}>
+            <div role={maxSelected > 1 ? "group" : "radiogroup"} aria-label={L(MATERIAL_CATEGORY_LABELS[category])} className={characterArtGridClass("square")}>
               {materials.map((material) => {
                 const selectedIdx = selectedIds.indexOf(material.id)
                 const selected = selectedIdx >= 0

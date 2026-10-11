@@ -3,6 +3,7 @@
 import { useCallback, useId, useRef } from "react"
 import { MoreHorizontal } from "lucide-react"
 import { cn } from "../lib/cn"
+import { usePickerLabel } from "../i18n"
 import { characterSectionIconUrl } from "../icons/character-art"
 
 /** One topic of an open, by-topic picker (Person, Styling): a name and its settings. */
@@ -53,6 +54,7 @@ interface PickerTopicNavProps {
  * Each button is as wide as its name, and the row wraps.
  */
 export function PickerTopicNav({ label, topics, counts, onJump }: PickerTopicNavProps) {
+  const L = usePickerLabel()
   return (
     <nav aria-label={label} className="flex flex-wrap gap-1.5">
       {topics.map((topic) => {
@@ -69,7 +71,7 @@ export function PickerTopicNav({ label, topics, counts, onJump }: PickerTopicNav
             )}
           >
             <TopicIcon label={topic.label} className="size-6" />
-            <span>{topic.label}</span>
+            <span>{L(topic.label)}</span>
             {count > 0 && <PickBadge count={count} />}
           </button>
         )
@@ -84,11 +86,12 @@ export function PickerTopicNav({ label, topics, counts, onJump }: PickerTopicNav
  * after a jump, so a keyboard or screen-reader user lands on the topic too.
  */
 export function PickerTopicHeading({ topic, count, id }: { readonly topic: PickerTopic; readonly count: number; readonly id: string }) {
+  const L = usePickerLabel()
   return (
     <div className="flex items-center gap-2.5 px-0.5 pt-2">
       <TopicIcon label={topic.label} className="size-[30px]" />
       <h3 id={id} tabIndex={-1} className="text-[15px] font-bold text-foreground outline-none @min-[520px]:text-[16px]">
-        {topic.label}
+        {L(topic.label)}
       </h3>
       {count > 0 && <PickBadge count={count} />}
       <span className="text-[11.5px] text-[#9a9aa4] dark:text-[#7a7a85]">

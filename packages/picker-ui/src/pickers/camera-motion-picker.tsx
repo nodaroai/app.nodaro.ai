@@ -8,7 +8,7 @@ import { Input } from "../ui/input"
 import { FitText } from "../ui/fit-text"
 import { cn } from "../lib/cn"
 import { CameraMotionPreview } from "../previews/camera-motion-preview"
-import { useLocalizedCatalog } from "../i18n"
+import { useLocalizedCatalog, usePickerLabel } from "../i18n"
 import { useCuratedEntries } from "../curated.js"
 
 interface CameraMotionPickerProps {
@@ -23,6 +23,7 @@ export const CameraMotionPicker = memo(function CameraMotionPicker({
   onValueChange,
   className,
 }: CameraMotionPickerProps) {
+  const L = usePickerLabel()
   // Curated view of the bundled catalog: filtered to ids this deployment
   // offers, relabelled where a pack rewrote an entry. Subscribed, so a late
   // registration re-renders. Identity-equal to the base on mainline.
@@ -67,9 +68,9 @@ export const CameraMotionPicker = memo(function CameraMotionPicker({
       {grouped.map(({ category, motions }) => (
         <div key={category} className="flex flex-col gap-1.5">
           <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground px-0.5">
-            {CAMERA_MOTION_CATEGORY_LABELS[category]}
+            {L(CAMERA_MOTION_CATEGORY_LABELS[category])}
           </div>
-          <div role="radiogroup" aria-label={CAMERA_MOTION_CATEGORY_LABELS[category]} className="grid grid-cols-3 gap-1.5">
+          <div role="radiogroup" aria-label={L(CAMERA_MOTION_CATEGORY_LABELS[category])} className="grid grid-cols-3 gap-1.5">
             {motions.map((motion) => {
               const selected = motion.id === value
               const label = resolveLabel(motion.id, motion.label)

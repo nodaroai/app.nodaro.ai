@@ -17,6 +17,12 @@ FLOOR="15fc0318f6e853b989409e0382909c76187d17a4"   # clean-generation genesis
 IDENTITY_FLOOR="c859397a4dfe24df3e5098c9853639a2b34bda2e"
 AUTHOR_ALLOWLIST=".github/mirror-author-allowlist.txt"
 PUBLIC_REMOTE="${PUBLIC_REMOTE:-git@github.com:nodaroai/app.nodaro.ai.git}"
+# The private-marker gate is its own script, shared with the PR-time check
+# (private-marker-check.yml). Read it NOW, from the tree this script was started
+# from: the checkout below swaps in $BRANCH's tree, which can predate the gate's
+# own file, and a gate missing there would abort the publish for the wrong
+# reason. Same source as when the gate was written inline here.
+MARKER_GATE_SRC="$(cat "$(dirname "${BASH_SOURCE[0]}")/check-private-markers.sh")"
 
 git fetch origin "$BRANCH"
 git checkout -B "$BRANCH" "origin/$BRANCH"
@@ -39,34 +45,7 @@ else
   echo "!! gitleaks not installed — the secret gate is MANDATORY before publishing. Install it and re-run."; exit 1
 fi
 
-echo "== private-marker gate (strings that must never appear in a published tree) =="
-# The marker list is PRIVATE (personal addresses, internal repo names,
-# provenance terms) — it lives in the internal repo secret PRIVATE_LEAK_MARKERS
-# (newline-separated, exported by mirror-to-public.yml) or a local untracked
-# .leak-markers file, NEVER in this world-readable script. Markers are chosen
-# to have zero legitimate use in the tree, so any hit aborts the publish.
-# Marker VALUES are never echoed (this log may be shared); offending files are.
-MARKERS="${PRIVATE_LEAK_MARKERS:-}"
-if [ -z "$MARKERS" ] && [ -f .leak-markers ]; then MARKERS="$(cat .leak-markers)"; fi
-if [ -n "$MARKERS" ]; then
-  MARKER_HIT=0; MARKER_N=0
-  while IFS= read -r m; do
-    [ -z "$m" ] && continue
-    MARKER_N=$((MARKER_N + 1))
-    HITS=$(git grep -I -l -i -F -e "$m" -- . || true)
-    if [ -n "$HITS" ]; then
-      echo "ABORT: private marker #${MARKER_N} found in tracked files:"
-      echo "$HITS" | head -10
-      MARKER_HIT=1
-    fi
-  done <<< "$MARKERS"
-  [ "$MARKER_HIT" = "1" ] && exit 1
-  echo "clean (${MARKER_N} markers checked)"
-elif [ "${MIRROR_REQUIRE_MARKERS:-}" = "1" ]; then
-  echo "ABORT: MIRROR_REQUIRE_MARKERS=1 but no marker list — set the PRIVATE_LEAK_MARKERS repo secret."; exit 1
-else
-  echo "(no marker list — set PRIVATE_LEAK_MARKERS or .leak-markers; the nightly mirror requires it)"
-fi
+bash -c "$MARKER_GATE_SRC" check-private-markers.sh   # scripts/check-private-markers.sh
 
 echo "== ancestry guard (never publish pre-recreate / dirty history) =="
 git merge-base --is-ancestor "$FLOOR" "$BRANCH" \

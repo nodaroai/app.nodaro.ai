@@ -14,6 +14,11 @@ vi.mock("@/lib/safe-fetch.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/safe-fetch.js")>()
   return { ...actual, safeFetch: vi.fn() }
 })
+// The KIE lane's own download of an image, for building the error it raises.
+vi.mock("@/lib/safe-fetch-bytes.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/safe-fetch-bytes.js")>()),
+  safeFetchBytes: vi.fn().mockRejectedValue(new Error("Image download failed")),
+}))
 vi.mock("@/lib/credits-job-lifecycle.js", () => ({
   commitReservedCreditsForJob: vi.fn().mockResolvedValue(undefined),
   refundReservedCreditsForJob: vi.fn().mockResolvedValue(undefined),
@@ -36,6 +41,8 @@ vi.mock("@/lib/supabase.js", () => {
 
 import { llmComplete } from "@/lib/llm-client.js"
 import { safeFetch } from "@/lib/safe-fetch.js"
+import { supabase } from "@/lib/supabase.js"
+import { fetchImageForKieInline, KIE_IMAGE_FETCH_FAILED_MESSAGE } from "@/lib/kie-inline-image.js"
 
 const VALID_BODY = {
   imageUrl: "https://example.com/img.jpg",
@@ -128,6 +135,23 @@ describe("POST /v1/image-critic", () => {
     const res = await app.inject({ method: "POST", url: "/v1/image-critic", payload: VALID_BODY })
     expect(res.statusCode).toBe(502)
     expect(res.json().error.code).toBe("invalid_llm_output")
+  })
+
+  // An image the KIE lane could not download ends the call on a model with no
+  // second lane; the person reads the plain sentence, never the diagnostic.
+  it("passes an inline-image failure on as its plain sentence, in the answer and on the job", async () => {
+    const probe = await fetchImageForKieInline("https://cdn.example/img.jpg").catch((e: unknown) => e)
+    expect((probe as Error).message).toContain("KIE inline image")
+    ;(llmComplete as any).mockRejectedValue(probe)
+    const app = await setupApp()
+
+    const res = await app.inject({ method: "POST", url: "/v1/image-critic", payload: VALID_BODY })
+
+    expect(res.statusCode).toBe(502)
+    expect(res.json().error).toMatchObject({ code: "llm_error", message: KIE_IMAGE_FETCH_FAILED_MESSAGE })
+    const update = (supabase.from("jobs") as unknown as { update: { mock: { calls: unknown[][] } } }).update
+    expect(update.mock.calls).toContainEqual([expect.objectContaining({ status: "failed", output_data: { error: KIE_IMAGE_FETCH_FAILED_MESSAGE } })])
+    expect(JSON.stringify([res.json(), update.mock.calls])).not.toMatch(/KIE|inline image/)
   })
 
   it("returns 502 on JSON parse success but Zod failure (e.g., score 1.5)", async () => {

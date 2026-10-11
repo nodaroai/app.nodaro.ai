@@ -386,6 +386,10 @@ export const FAN_IN_TARGETS: Readonly<Record<string, "*" | readonly string[]>> =
   "merge-lists": "*",
   "sort-list": "*",
   selector: "*",
+  // Speaker Frames on a clip pack (P3-24 (a), decided 2026-10-06): ONE run over
+  // the union of the clips' spans — the pack's EDLs fold onto its `edl` wire
+  // instead of running one detection job (and one minimum charge) per clip.
+  "speaker-frames": ["edl"],
 }
 
 export function isFanInNodeType(nodeType: string | undefined | null): boolean {

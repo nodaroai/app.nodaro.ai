@@ -7,7 +7,7 @@ import { Input } from "../ui/input"
 import { FitText } from "../ui/fit-text"
 import { cn } from "../lib/cn"
 import { SettingPreview } from "../previews/setting-preview"
-import { useLocalizedCatalog } from "../i18n"
+import { useLocalizedCatalog, usePickerLabel } from "../i18n"
 import { useCuratedEntries } from "../curated.js"
 
 interface SettingPickerProps {
@@ -33,6 +33,7 @@ export const SettingPicker = memo(function SettingPicker({
   onValueChange,
   className,
 }: SettingPickerProps) {
+  const L = usePickerLabel()
   // Curated view of the bundled catalog: filtered to ids this deployment
   // offers, relabelled where a pack rewrote an entry. Subscribed, so a late
   // registration re-renders. Identity-equal to the base on mainline.
@@ -82,9 +83,9 @@ export const SettingPicker = memo(function SettingPicker({
         return (
           <div key={category} className="flex flex-col gap-1.5">
             <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground px-0.5">
-              {SETTING_CATEGORY_LABELS[category]}
+              {L(SETTING_CATEGORY_LABELS[category])}
             </div>
-            <div role="radiogroup" aria-label={SETTING_CATEGORY_LABELS[category]} className="grid grid-cols-3 gap-1.5">
+            <div role="radiogroup" aria-label={L(SETTING_CATEGORY_LABELS[category])} className="grid grid-cols-3 gap-1.5">
               {settings.map((setting) => {
                 const selected = setting.id === value
                 const label = resolveLabel(setting.id, setting.label)

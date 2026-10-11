@@ -107,7 +107,8 @@ export interface LlmModelDef {
   supportsForcedToolChoice?: false
   /**
    * true = the model binds each thinking block to the exact conversation prefix
-   * that produced it ("preserved thinking" — Claude Sonnet 5.5 / Opus 5.5):
+   * that produced it ("preserved thinking" — Claude Sonnet 5.5 / Opus 5.5 /
+   * Haiku 5.5):
    * replaying a block after an earlier turn was edited, dropped or rebuilt is a
    * 400 on accounts the vendor enforces. A caller that trims or rebuilds stored
    * history between requests (the Workflow Copilot keeps a token budget by
@@ -334,7 +335,8 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
   {
     id: "claude-haiku-4.5",
     displayName: "Claude Haiku 4.5",
-    desc: "Fast economy, good reasoning",
+    // Demoted 2026-10-10 when claude-haiku-5.5 registered.
+    desc: "Previous Haiku, fast economy",
     tier: "economy",
     kieFormat: "messages",
     kieSlugOrModel: "claude-haiku-4-5",
@@ -346,6 +348,49 @@ export const LLM_MODELS: readonly LlmModelDef[] = [
     // KIE-first since 2026-10-08 (a call is priced on the lane it runs on);
     // KIE served it plain and with a tool on its streaming wire that day.
     preferKie: true,
+  },
+  {
+    id: "claude-haiku-5.5",
+    displayName: "Claude Haiku 5.5",
+    desc: "Latest Haiku, fast and low-cost with reasoning",
+    tier: "economy",
+    kieFormat: "messages",
+    // KIE plain id on the Claude-native messages dialect
+    // (docs.kie.ai/market/claude/claude-haiku-5-5.md). Live-probed 2026-10-10
+    // on the streaming wire: plain, system prompt, base64 image, a forced tool
+    // and an auto + strict tool (both came back as a real tool_use block), and
+    // `max_tokens: 32768` were all served.
+    kieSlugOrModel: "claude-haiku-5-5",
+    vendor: "anthropic",
+    structuredOutputMode: "anthropic-tool",
+    // NO `supportsForcedToolChoice: false`, unlike Sonnet 5.5 / Opus 5.5: this
+    // model ACCEPTS a forced tool_choice (probed on Anthropic's API 2026-10-10).
+    // A forced call skips thinking (same usage with and without an effort), and
+    // an effort-bearing structured call is already sent the auto choice.
+    //
+    // A thinking block is valid only while everything before it is unchanged
+    // (vendor docs: the same history check the other 5.5 models run).
+    conversationBoundThinking: true,
+    supportsImages: true,
+    maxOutputTokens: 16384,
+    directFallbackModel: "claude-haiku-5-5",
+    // The first Haiku with effort levels. The vendor default is `medium`, where
+    // most of the family defaults to `high`.
+    reasoningEfforts: ["low", "medium", "high", "xhigh", "max"],
+    // KIE ignores effort on this slug too — measured 2026-10-10 on a
+    // reasoning-heavy prompt: none / low / max / KIE's own `thinkingFlag` gave
+    // 2,076 / 1,886 / 2,223 / 1,927 output tokens and no thinking block, while
+    // Anthropic's API gave 2,059 at low and 28,097 at max. An effort call runs
+    // direct and bills as Advanced.
+    effortRequiresDirect: true,
+    // Anthropic 400s a non-default sampling value ("`temperature` is deprecated
+    // for this model", probed 2026-10-10); KIE's proxy accepted temperature: 0.2.
+    supportsTemperature: false,
+    preferKie: true,
+    // Adaptive thinking runs when no thinking param is sent (vendor default),
+    // on BOTH lanes: a no-effort KIE call spent ~2,000 output tokens on a
+    // ~350-token answer and returned no thinking block.
+    thinkingDefaultOn: true,
   },
   {
     id: "claude-sonnet-4.6",
@@ -1108,6 +1153,7 @@ export const LLM_MODALITY_CAPS: Record<string, { image: boolean; video: boolean;
   "gemini-3.8-flash":  { image: true,  video: false, audio: false },
   "gemini-3.1-pro":    { image: true,  video: true,  audio: true  },
   "claude-haiku-4.5":  { image: true,  video: false, audio: false },
+  "claude-haiku-5.5":  { image: true,  video: false, audio: false },
   "claude-sonnet-4.6": { image: true,  video: false, audio: false },
   "claude-opus-4.7":   { image: true,  video: false, audio: false },
   "gpt-5.2":           { image: true,  video: false, audio: false },

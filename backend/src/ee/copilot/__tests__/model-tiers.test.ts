@@ -31,16 +31,30 @@ describe("the copilot model ladder", () => {
     }
   })
 
-  it("a tier carries an effort ONLY when its model declares it — Haiku gets none", () => {
+  it("a tier carries an effort ONLY when its model declares it", () => {
     for (const tier of TIERS) {
       const spec = COPILOT_TIERS[tier]
       const declared = LLM_MODELS.find((m) => m.id === spec.registryId)?.reasoningEfforts
+      // A tier with no effort is fine on any model: nothing is sent, and the
+      // model runs at its own default.
       if (spec.reasoningEffort) {
         expect(declared, `${tier} declares efforts`).toContain(spec.reasoningEffort)
-      } else {
-        expect(declared ?? undefined, `${tier} must not need an effort`).toBeUndefined()
       }
     }
+  })
+
+  it("economy runs Claude Haiku 5.5 at the model's own default effort", () => {
+    const spec = COPILOT_TIERS.economy
+    expect(spec.registryId).toBe("claude-haiku-5.5")
+    expect(spec.anthropicModelId).toBe("claude-haiku-5-5")
+    expect(spec.reasoningEffort).toBeUndefined()
+  })
+
+  it("a tier whose model binds its thinking to the conversation is one the loop strips for", () => {
+    // agent-loop.ts replays prior turns without thinking blocks for exactly
+    // these models; the flag is the registry's, so a tier swap cannot miss it.
+    const bound = TIERS.filter((t) => LLM_MODELS.find((m) => m.id === COPILOT_TIERS[t].registryId)?.conversationBoundThinking)
+    expect(bound.sort()).toEqual(["economy", "premium"])
   })
 
   it("resolveCopilotTier fails closed to standard on anything unknown", () => {

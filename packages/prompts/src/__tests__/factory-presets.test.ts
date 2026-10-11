@@ -280,11 +280,28 @@ describe("generate-image factory preset data validity", () => {
     }
   })
 
-  it("every generate-image preset has a non-empty negativePrompt", () => {
+  // These presets carry their whole wording in the prompt; an added negative list would change the wording they were written with.
+  const NEGATIVE_EXEMPT: ReadonlySet<string> = new Set([
+    "generate-image/unretouched-portrait", "generate-image/phone-selfie", "generate-image/candid-snapshot",
+    "generate-image/mirror-selfie", "generate-image/creator-at-home", "generate-image/video-call-frame",
+    "generate-image/macro-skin-study", "generate-image/product-in-hand", "generate-image/skin-detail-sheet",
+    "generate-image/add-skin-realism", "generate-image/natural-photo-finish", "generate-image/phone-camera-look",
+    "generate-image/undo-beauty-filter",
+  ])
+
+  it("every generate-image preset has a non-empty negativePrompt (except the exempt ones, which carry none)", () => {
     for (const p of presets) {
+      if (NEGATIVE_EXEMPT.has(p.id)) {
+        expect(p.data.negativePrompt, `${p.id}: carries its whole wording in the prompt`).toBeUndefined()
+        continue
+      }
       const neg = (p.data.negativePrompt as string | undefined) ?? ""
       expect(neg.trim().length, `${p.id}: missing negativePrompt`).toBeGreaterThan(0)
     }
+  })
+
+  it("every negative-exempt id exists", () => {
+    for (const id of NEGATIVE_EXEMPT) expect(presets.some((p) => p.id === id), id).toBe(true)
   })
 
   it("non-style-pinned generate-image prompts are substantive (no thin one-liners)", () => {

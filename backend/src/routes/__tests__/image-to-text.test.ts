@@ -64,6 +64,12 @@ vi.mock("@/lib/llm-client.js", () => ({
   llmComplete: vi.fn(),
 }))
 
+// The KIE lane's own download of an image, for building the error it raises.
+vi.mock("@/lib/safe-fetch-bytes.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/safe-fetch-bytes.js")>()),
+  safeFetchBytes: vi.fn().mockRejectedValue(new Error("Image download failed")),
+}))
+
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
@@ -73,6 +79,7 @@ import { supabase } from "../../lib/supabase.js"
 import { getAnthropicClient } from "../../lib/anthropic.js"
 import { llmComplete } from "../../lib/llm-client.js"
 import { CreditsService } from "../../ee/billing/credits.js"
+import { fetchImageForKieInline, KIE_IMAGE_FETCH_FAILED_MESSAGE } from "../../lib/kie-inline-image.js"
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -89,6 +96,7 @@ const MOCK_LLM_RESPONSE = {
   text: "A beautiful sunset over the ocean",
   usage: { inputTokens: 100, outputTokens: 50 },
   model: "claude-test",
+  lane: "direct-gemini" as const,
 }
 
 // ---------------------------------------------------------------------------
@@ -130,7 +138,10 @@ function setupSuccessDbMocks() {
   const mockSingle = vi.fn().mockResolvedValue({ data: { id: "job-1" }, error: null })
   const mockSelect = vi.fn().mockReturnValue({ single: mockSingle })
   const mockInsert = vi.fn().mockReturnValue({ select: mockSelect })
-  const mockEq = vi.fn().mockResolvedValue({ data: null, error: null })
+  // .update(...).eq(...) may chain a second .eq before it is awaited.
+  const mockEq = vi.fn()
+  const chain = { eq: mockEq, then: (resolve: (v: unknown) => unknown) => resolve({ data: null, error: null }) }
+  mockEq.mockReturnValue(chain)
   const mockUpdate = vi.fn().mockReturnValue({ eq: mockEq })
   vi.mocked(supabase.from).mockReturnValue({ insert: mockInsert, update: mockUpdate } as never)
   return { mockInsert, mockUpdate, mockEq }
@@ -314,9 +325,14 @@ describe("POST /v1/image-to-text/describe", () => {
           detailLevel: "detailed",
           usage: { inputTokens: 100, outputTokens: 50 },
         }),
+        // The lane that served the answer goes to the admin-only provider
+        // column — never into the owner-visible output_data.
+        provider: "direct-gemini",
       })
     )
     expect(mockEq).toHaveBeenCalledWith("id", "job-1")
+    // The completed row is written only for the requester's own job.
+    expect(mockEq).toHaveBeenCalledWith("user_id", VALID_UUID)
   })
 
   it("returns 502 when Claude API throws and refunds credits", async () => {
@@ -336,6 +352,25 @@ describe("POST /v1/image-to-text/describe", () => {
 
     // Verify credits were refunded
     expect(CreditsService.refundCredits).toHaveBeenCalledWith("usage-1")
+  })
+
+  // On a model with no second lane (any GPT), an image the KIE lane could not
+  // download ends the call — and the person must read the plain sentence, not
+  // the diagnostic, in the answer AND on the job they can open.
+  it("tells the person in plain words when the image could not be sent — never the internal diagnostic", async () => {
+    const { mockUpdate } = setupSuccessDbMocks()
+    const probe = await fetchImageForKieInline("https://cdn.example/photo.jpg").catch((e: unknown) => e)
+    expect((probe as Error).message).toContain("KIE inline image: could not fetch an image from cdn.example")
+    vi.mocked(llmComplete).mockRejectedValue(probe)
+
+    const res = await app.inject({ method: "POST", url: "/v1/image-to-text/describe", payload: VALID_PAYLOAD })
+
+    expect(res.statusCode).toBe(502)
+    expect(res.json().error.message).toBe(KIE_IMAGE_FETCH_FAILED_MESSAGE)
+    expect(mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "failed", output_data: { error: KIE_IMAGE_FETCH_FAILED_MESSAGE } }),
+    )
+    expect(JSON.stringify([res.json(), mockUpdate.mock.calls])).not.toMatch(/KIE|inline image/)
   })
 
   it("marks job as failed when Claude API throws", async () => {

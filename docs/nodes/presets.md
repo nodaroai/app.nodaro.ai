@@ -20,7 +20,7 @@ the same idea**:
 
 | Folder | Examples |
 |--------|----------|
-| **Reference Sheet** *(connect a photo)* | **Character Board**, **Pose Board**, **Location Board**, **Product Board**, **Outfit Board**, **Scene Board**, **Creature Board**, **Vehicle Board**, **Food Board**, **Mascot Board**, **Pet Board** — dense multi-panel reference sheets generated from one connected photo; reuse the board as a reference in later generations for consistency |
+| **Reference Sheet** *(connect a photo)* | **Character Board**, **Pose Board**, **Location Board**, **Product Board**, **Outfit Board**, **Scene Board**, **Creature Board**, **Vehicle Board**, **Food Board**, **Mascot Board**, **Pet Board**, **Skin Detail Sheet** — dense multi-panel reference sheets generated from one connected photo; reuse the board as a reference in later generations for consistency |
 | **Cast & Consistency** *(connect photos)* | **Character Reference Grid** (clean 4-angle identity grid, no decorations), **Cast Mega Grid** (one labeled sheet for 2–4 connected characters), **Cast Scene** (stage the cast referencing them by name) — sterile neutral-background grids built to be fed back as identity references |
 | **Edit by Name** *(two-step recipe)* | **Label Elements** (returns the connected photo with numbered callout labels) → **Apply Named Edit** (edit elements by their label name; labels removed from the result) |
 | **Face Privacy** *(connect a photo)* | **Faceless · 3D Blank Head** (persons' faces → smooth generic white 3D head shape), **Remove Faces**, **Transparent Faces** — one-click `{image:1}` anonymization edits that keep everything else in the photo untouched (gpt-image-2, auto aspect) |
@@ -36,6 +36,7 @@ the same idea**:
 | **Architecture & Interiors** | Exterior, Interior, Real Estate Hero, Skyscraper |
 | **Icons, Game Assets & Textures** | Game Icon, Seamless Texture / Pattern, Emoji Set, Pixel Sprite |
 | **Portrait Transformations** *(needs a reference photo)* | **Timeless Soul** age progression (Five Ages, Three-Age Triptych, B&W), Decade Timeline ('80s–2020s), Four Seasons, Times of Day, Sports Jersey Portrait |
+| **Realism & Authentic** | Unretouched Portrait, Phone Selfie, Candid Phone Snapshot, Mirror Selfie, Creator at Home · Waist-Up, Webcam / Video-Call Frame, Macro Skin Study, Product in Hand — everyday, unretouched looks: real skin texture, deep focus and plain colour instead of a polished studio finish |
 
 Each preset pre-selects the **best provider and aspect ratio** for its job (e.g. text-strong models
 for logos and thumbnails) — for boards and grids those defaults are backed by a head-to-head
@@ -125,7 +126,7 @@ Both music nodes ship presets organized along the three axes professional librar
   Hook→Show→Proof→Opinion) and *Long-Form & Narrative* (Podcast Outline, Trailer Narration, Story
   Beats). Type your topic in the prompt.
 - **Image to Text** — analysis presets: *Accessibility & SEO* (Alt Text, SEO Caption, Social Caption),
-  *Extraction* (OCR, Tags, Product Description, Site Screenshot Summary) and *Creative* (Detailed Description, Reverse Prompt).
+  *Extraction* (OCR, Tags, Product Description, Site Screenshot Summary) and *Creative* (Detailed Description, Reverse Prompt, Realism Audit — a yes/no list of signs an image was generated, with a count).
 - **Voice Design** — describe-a-voice presets: *Narration & Character* (Movie-Trailer Narrator, Warm
   Female Audiobook, Old Wizard, Noir Detective, Meditation Guide, Casual Creator (female / male)) and *Professional & Assistant*
   (Energetic Hype, Friendly Assistant, Corporate IVR).
@@ -135,7 +136,7 @@ Both music nodes ship presets organized along the three axes professional librar
 Beyond Stylized Subject, the transform catalog adds an **Edits** folder — *Remove/Replace Background,
 Colorize, Restore Old Photo, Relight, Restyle*, plus two **Doodle Overlay** presets (hand-drawn
 felt-tip marker doodles layered on top of the photo while every pixel underneath stays unchanged —
-one max-control white-and-yellow variant, one loose expressive variant; doodles never cover faces) —
+one max-control white-and-yellow variant, one loose expressive variant; doodles never cover faces) — plus four photo-finish edits: **Add Skin Realism**, **Natural Photo Finish**, **Phone Camera Look** and **Undo Beauty Filter** —
 available on both **Generate Image** (with a connected reference image) and **Modify Image**. Generate Image also gained a **Diagrams &
 Infographics** folder (Blueprint, Infographic, UI / App Mockup, Flowchart, Chart, Timeline).
 
@@ -230,11 +231,11 @@ Presets whose text is a complete instruction — rather than a subject you repla
 [pre & post text](../prompt-pre-post-text.md) instead of `prompt`, so applying them leaves the
 prompt field free for your own additions and the run wraps whatever you type:
 
-- **Generate Image / Modify Image:** the eleven **Reference Sheet** boards and the **Character
+- **Generate Image / Modify Image:** the twelve **Reference Sheet** boards and the **Character
   Reference Grid** (instruction as pre-text, the `Style: … 8K` tail as post-text), **Label Elements**
   and **Apply Named Edit**, the **Face Privacy** edits, the **Portrait Transformations**, the
   **Stylized Subject** family and the **Edits** folder (Background Remove, Colorize, Restore Photo,
-  Doodle Overlay ×2).
+  Doodle Overlay ×2, Add Skin Realism, Natural Photo Finish, Phone Camera Look, Undo Beauty Filter).
 - **SwitchX:** all five operation recipes.
 - **Video to Video:** the six **Restyle Looks**.
 - **Generate Video:** **Edit Video** (the `edit {video:1} as follows:` instruction as pre-text, the

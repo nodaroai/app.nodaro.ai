@@ -13,6 +13,8 @@ import { extractWorkflowId, extractNodeId, extractForcePrivate } from "../lib/re
 import { buildJobInputData } from "../lib/job-input-data.js"
 import { formatZodError } from "../lib/zod-error.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { userFacingMessage } from "../lib/user-facing-error.js"
+import { describeErrorChain, LLM_ANSWER_UNREADABLE_MESSAGE } from "../lib/llm-errors.js"
 
 const qaCheckBody = z.object({
   content: z.string().min(1).max(50000),
@@ -168,8 +170,11 @@ You MUST respond with ONLY a valid JSON object in this exact format, no other te
 
         return reply.send({ jobId: job.id, score, approved, reason })
       } catch (err) {
-        const message =
-          err instanceof Error ? err.message : "Claude API call failed"
+        // The person reads a model-lane failure's plain sentence; the full
+        // diagnostic (it names the vendor and the step that failed) goes to
+        // the log only.
+        const message = userFacingMessage(err, LLM_ANSWER_UNREADABLE_MESSAGE)
+        req.log.error({ err: describeErrorChain(err), jobId: job.id }, "[qa-check] failed")
 
         await supabase
           .from("jobs") // tenant-scope-ignore: job.id is server-generated in this request

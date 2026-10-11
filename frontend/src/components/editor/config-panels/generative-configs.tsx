@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react"
 import type { GenerativePipelineNodeData } from "@/types/nodes"
-import { PIPELINE_FORMATS, PIPELINE_MODES, PIPELINE_OUTPUT_RESOLUTIONS, PIPELINE_LEGACY_PINNED_IMAGE_MODELS, PIPELINE_PINNABLE_IMAGE_MODELS, PIPELINE_PINNABLE_SCRIPT_LLMS, PIPELINE_PINNABLE_VIDEO_MODELS, VIDEO_CRITIC_FRAME_MODES, VIDEO_CRITIC_RESERVED_CREDITS_PER_SHOT, getModel, validateDurationForFormat, type PipelineFormat, type PipelineMode, type VideoCriticFrameMode } from "@nodaro/shared"
+import { PIPELINE_FORMATS, PIPELINE_MODES, PIPELINE_OUTPUT_RESOLUTIONS, PIPELINE_LEGACY_PINNED_IMAGE_MODELS, PIPELINE_LEGACY_PINNED_SCRIPT_LLMS, PIPELINE_PINNABLE_IMAGE_MODELS, PIPELINE_PINNABLE_SCRIPT_LLMS, PIPELINE_PINNABLE_VIDEO_MODELS, VIDEO_CRITIC_FRAME_MODES, VIDEO_CRITIC_RESERVED_CREDITS_PER_SHOT, getModel, validateDurationForFormat, type PipelineFormat, type PipelineMode, type VideoCriticFrameMode } from "@nodaro/shared"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import {
@@ -105,7 +105,9 @@ function VIDEO_MODEL_LABELS(): Record<string, string> {
 
 function SCRIPT_LLM_LABELS(): Record<string, string> {
   return {
-    "claude-haiku-4-5": tx("cfgext.genLlmHaiku45"),
+    "claude-haiku-5-5": tx("cfgext.genLlmHaiku55"),
+    // Shown only on a pipeline saved with this pin; a bare product name.
+    "claude-haiku-4-5": "Claude Haiku 4.5",
     "claude-sonnet-4-6": tx("cfgext.genLlmSonnet46"),
     "claude-opus-4-7": "Claude Opus 4.7",
     "claude-opus-5": tx("cfgext.genLlmOpus5"),
@@ -159,9 +161,17 @@ export function GenerativePipelineConfig({ data, onUpdate }: ConfigProps<Generat
     () => buildOptions(PIPELINE_PINNABLE_VIDEO_MODELS, VIDEO_MODEL_LABELS(), t("cfgext.genAutoDirectorPicks")),
     [t],
   )
+  // Same rule for a saved Script LLM pin (Claude Haiku 4.5, replaced by 5.5).
+  const savedLegacyScriptLlm = (PIPELINE_LEGACY_PINNED_SCRIPT_LLMS as readonly string[]).includes(data.script_llm ?? "")
+    ? data.script_llm
+    : undefined
   const scriptLlmOptions = useMemo(
-    () => buildOptions(PIPELINE_PINNABLE_SCRIPT_LLMS, SCRIPT_LLM_LABELS(), t("cfgext.genAutoSonnet")),
-    [t],
+    () => buildOptions(
+      savedLegacyScriptLlm ? [...PIPELINE_PINNABLE_SCRIPT_LLMS, savedLegacyScriptLlm] : PIPELINE_PINNABLE_SCRIPT_LLMS,
+      SCRIPT_LLM_LABELS(),
+      t("cfgext.genAutoSonnet"),
+    ),
+    [t, savedLegacyScriptLlm],
   )
 
   async function handleRun() {

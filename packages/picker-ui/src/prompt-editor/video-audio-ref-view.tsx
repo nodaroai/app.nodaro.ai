@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from "react"
 import { createPortal } from "react-dom"
+import { usePickerLabel } from "../i18n"
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react"
 import { Film, Music } from "lucide-react"
 import { BODY_MENU_CLASS } from "./body-menu-class"
@@ -59,6 +60,7 @@ function kindOf(props: NodeViewProps): RefKind {
 }
 
 export function VideoAudioRefView(props: NodeViewProps) {
+  const L = usePickerLabel()
   const attrs = props.node.attrs as VideoAudioRefAttrs
   const kind = kindOf(props)
   const presets = PRESETS[kind]
@@ -207,7 +209,7 @@ export function VideoAudioRefView(props: NodeViewProps) {
                   clearLabel()
                 }}
               >
-                <span>Ref only</span>
+                <span>{L("Ref only")}</span>
                 {attrs.label === "" && <span aria-hidden>✓</span>}
               </button>
               <div className="my-1 border-t border-border/60" />
@@ -226,7 +228,7 @@ export function VideoAudioRefView(props: NodeViewProps) {
                     updateLabel(preset)
                   }}
                 >
-                  <span>{preset}</span>
+                  <span>{L(preset)}</span>
                   {attrs.label === preset && <span aria-hidden>✓</span>}
                 </button>
               ))}
@@ -281,7 +283,7 @@ export function VideoAudioRefView(props: NodeViewProps) {
                     setCustomText(isCustom ? attrs.label : "")
                   }}
                 >
-                  Custom…
+                  {L("Custom…")}
                 </button>
               )}
             </div>

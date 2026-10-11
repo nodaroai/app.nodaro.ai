@@ -5,7 +5,7 @@ import { Search } from "lucide-react"
 import { ACTION_FX as BASE_ACTION_FX, ACTION_FX_CATEGORY_LABELS, ACTION_FX_CATEGORY_ORDER, type ActionFx, type ActionFxCategory } from "@nodaro/prompts"
 import { Input } from "../ui/input"
 import { cn } from "../lib/cn"
-import { useLocalizedCatalog } from "../i18n"
+import { useLocalizedCatalog, usePickerLabel } from "../i18n"
 import { MultiPickBadge, useMultiPick } from "./multi-pick-ui"
 import { useCuratedEntries } from "../curated.js"
 
@@ -35,6 +35,7 @@ export const ActionFxPicker = memo(function ActionFxPicker({
   className,
   maxSelected = 2,
 }: ActionFxPickerProps) {
+  const L = usePickerLabel()
   // Curated view of the bundled catalog: filtered to ids this deployment
   // offers, relabelled where a pack rewrote an entry. Subscribed, so a late
   // registration re-renders. Identity-equal to the base on mainline.
@@ -165,7 +166,7 @@ export const ActionFxPicker = memo(function ActionFxPicker({
                       : "border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/40",
                   )}
                 >
-                  <span>{ACTION_FX_CATEGORY_LABELS[cat]}</span>
+                  <span>{L(ACTION_FX_CATEGORY_LABELS[cat])}</span>
                   {hasPick && (
                     <span
                       className="inline-flex items-center justify-center min-w-[15px] h-[15px] px-[4px] rounded-full bg-[#ff0073] text-white text-[9px] font-semibold leading-none"
@@ -180,7 +181,7 @@ export const ActionFxPicker = memo(function ActionFxPicker({
           </div>
           <div
             role={maxSelected > 1 ? "group" : "radiogroup"}
-            aria-label={ACTION_FX_CATEGORY_LABELS[activeTab]}
+            aria-label={L(ACTION_FX_CATEGORY_LABELS[activeTab])}
             className="grid grid-cols-2 gap-1.5"
           >
             {(byCategory.get(activeTab) ?? []).map(renderTile)}

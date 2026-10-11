@@ -18,6 +18,8 @@ import {
   refundReservedCreditsForJob,
 } from "../lib/credits-job-lifecycle.js"
 import { sendInternalError } from "../lib/http-errors.js"
+import { userFacingMessage } from "../lib/user-facing-error.js"
+import { describeErrorChain } from "../lib/llm-errors.js"
 
 const imageCriticBody = z.object({
   imageUrl: safeUrlSchema,
@@ -244,7 +246,11 @@ export async function imageCriticRoutes(app: FastifyInstance) {
           details,
         })
       } catch (err) {
-        const message = err instanceof Error ? err.message : "image-critic failed"
+        // The person reads a model-lane failure's plain sentence; the full
+        // diagnostic (it names the vendor and the step that failed) goes to
+        // the log only.
+        const message = userFacingMessage(err, "image-critic failed")
+        req.log.error({ err: describeErrorChain(err), jobId: job.id }, "[image-critic] failed")
         const isParseFail = message.startsWith("invalid_llm_output")
         const rawLlmText = isParseFail ? message.slice("invalid_llm_output: ".length) : undefined
         await supabase

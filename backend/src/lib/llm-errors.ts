@@ -75,22 +75,32 @@ export class LlmStreamResponseError extends Error {
  * the job's `error_detail` (`internalDetails`). `httpStatus` and `bodyCode`
  * let a caller classify the failure by field rather than by message text.
  */
+/** The person-readable sentence for a failed AI call nothing more specific
+ *  describes — what a lane error with no status says, and what a route falls
+ *  back to for a failure that is not even an `Error`. Names no vendor. */
+export const LLM_ANSWER_UNREADABLE_MESSAGE = "The AI model's answer could not be read. Please try again, or choose another model."
+
 export class LlmLaneError extends Error {
   readonly internalDetails: string
   readonly lane: "kie" | "direct"
   readonly httpStatus?: number
   readonly bodyCode?: number
+  /** A sentence that names the actual problem when no status code can (a
+   *  request's own media that could not be prepared). Takes precedence. */
+  private readonly userMessageOverride?: string
 
-  constructor(message: string, opts: { lane: "kie" | "direct"; httpStatus?: number; bodyCode?: number }) {
+  constructor(message: string, opts: { lane: "kie" | "direct"; httpStatus?: number; bodyCode?: number; userMessage?: string }) {
     super(message)
     this.name = "LlmLaneError"
     this.internalDetails = message
     this.lane = opts.lane
     if (opts.httpStatus !== undefined) this.httpStatus = opts.httpStatus
     if (opts.bodyCode !== undefined) this.bodyCode = opts.bodyCode
+    if (opts.userMessage !== undefined) this.userMessageOverride = opts.userMessage
   }
 
   get userMessage(): string {
+    if (this.userMessageOverride !== undefined) return this.userMessageOverride
     const status = this.httpStatus ?? this.bodyCode
     if (status === 429) return "The AI model is busy right now. Please try again in a moment."
     if (status !== undefined && (status >= 500 || this.bodyCode !== undefined)) {
@@ -99,7 +109,7 @@ export class LlmLaneError extends Error {
     if (status !== undefined) {
       return `The AI model's service rejected the request (${status}). Please try again, or choose another model.`
     }
-    return "The AI model's answer could not be read. Please try again, or choose another model."
+    return LLM_ANSWER_UNREADABLE_MESSAGE
   }
 }
 

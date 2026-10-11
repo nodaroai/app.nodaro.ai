@@ -1,6 +1,7 @@
 import type { ReactNode } from "react"
 import { PickerUiProvider } from "@/lib/picker-ui"
 import { useUserLocale } from "@/lib/locale-store"
+import { useLocalizePickerLabel } from "@/lib/i18n/labels"
 
 /**
  * Feeds the app's locale into the picker-ui seam.
@@ -13,5 +14,8 @@ import { useUserLocale } from "@/lib/locale-store"
  */
 export function PickerUiLocaleBridge({ children }: { children: ReactNode }) {
   const locale = useUserLocale()
-  return <PickerUiProvider locale={locale}>{children}</PickerUiProvider>
+  // The pickers render English section, group and field names from the
+  // catalogs; the host's tables translate them (labels.<locale>.ts `picker`).
+  const localizeLabel = useLocalizePickerLabel()
+  return <PickerUiProvider locale={locale} localizeLabel={localizeLabel}>{children}</PickerUiProvider>
 }

@@ -6,7 +6,7 @@ import { ERAS as BASE_ERAS, ERA_CATEGORY_LABELS, ERA_CATEGORY_ORDER, type Era, t
 import { Input } from "../ui/input"
 import { FitText } from "../ui/fit-text"
 import { cn } from "../lib/cn"
-import { useLocalizedCatalog } from "../i18n"
+import { useLocalizedCatalog, usePickerLabel } from "../i18n"
 import { useCuratedEntries } from "../curated.js"
 import { LookArt } from "../look-previews/look-art"
 
@@ -27,6 +27,7 @@ export const EraPicker = memo(function EraPicker({
   onValueChange,
   className,
 }: EraPickerProps) {
+  const L = usePickerLabel()
   // Curated view of the bundled catalog: filtered to ids this deployment
   // offers, relabelled where a pack rewrote an entry. Subscribed, so a late
   // registration re-renders. Identity-equal to the base on mainline.
@@ -76,11 +77,11 @@ export const EraPicker = memo(function EraPicker({
         return (
           <div key={category} className="flex flex-col gap-1.5">
             <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground px-0.5">
-              {ERA_CATEGORY_LABELS[category]}
+              {L(ERA_CATEGORY_LABELS[category])}
             </div>
             <div
               role="radiogroup"
-              aria-label={ERA_CATEGORY_LABELS[category]}
+              aria-label={L(ERA_CATEGORY_LABELS[category])}
               className="grid grid-cols-2 gap-1.5"
             >
               {eras.map((era) => {

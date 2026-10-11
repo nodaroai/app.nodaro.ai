@@ -10,7 +10,7 @@ import { Switch } from "../ui/switch"
 import { FitText } from "../ui/fit-text"
 import { cn } from "../lib/cn"
 import { FramingPreview } from "../previews/framing-preview"
-import { useLocalizedCatalog } from "../i18n"
+import { useLocalizedCatalog, usePickerLabel, fillLabel } from "../i18n"
 import { MultiPickBadge } from "./multi-pick-ui"
 import { useCuratedEntries } from "../curated.js"
 
@@ -181,10 +181,11 @@ function CategorySection({
   onActivateMulti,
   onDemoteToSingle,
 }: CategorySectionProps) {
+  const L = usePickerLabel()
   const id = useId()
-  const baseLabel = FRAMING_CATEGORY_LABELS[category]
+  const baseLabel = L(FRAMING_CATEGORY_LABELS[category])
   const multi = maxSelected > 1
-  const label = multi ? `${baseLabel} (pick up to ${maxSelected})` : baseLabel
+  const label = multi ? fillLabel(L("{section} (pick up to {n})"), { section: baseLabel, n: maxSelected }) : baseLabel
   const switchId = `${id}-${field}`
   return (
     <div className="flex flex-col gap-1.5 border-t-[3px] border-border/40">
@@ -199,7 +200,7 @@ function CategorySection({
           {baseLabel}
           {multi && checked && (
             <span className="ml-2 text-[10px] font-normal normal-case tracking-normal text-muted-foreground">
-              pick up to {maxSelected}
+              {fillLabel(L("pick up to {n}"), { n: maxSelected })}
             </span>
           )}
         </label>

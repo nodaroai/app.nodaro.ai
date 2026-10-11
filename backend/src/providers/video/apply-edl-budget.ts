@@ -155,8 +155,11 @@ export function audioMuxTimeoutMs(outputSec: number): number {
 export const INPUT_SEEK_MARGIN_SEC = 2
 
 /**
- * ffmpeg kill budget per chunk — a hung encode is killed by its own spawn, not
- * by anything watching from outside. It is sized from the work the chunk
+ * ffmpeg kill budget per chunk — the most time a chunk's launches get, all
+ * attempts together. A STALLED launch (frozen output, idle CPU) is stopped long
+ * before it by the no-progress watchdog and relaunched with what is left
+ * (`ffmpeg-stall-watchdog.ts`); this budget still ends one that keeps working
+ * past it. It is sized from the work the chunk
  * really does, measured on the production-pinned ffmpeg (2 CPUs, the video
  * worker's slot shape): wall clock grows with the seconds of OUTPUT it encodes
  * AND with the seconds of SOURCE it must decode to reach them. Each input is

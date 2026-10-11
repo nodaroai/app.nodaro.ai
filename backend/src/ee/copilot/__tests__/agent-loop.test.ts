@@ -171,7 +171,7 @@ describe("runAgentLoop", () => {
 })
 
 describe("the model ladder in the loop", () => {
-  it("premium streams Opus at xhigh; economy streams Haiku with NO thinking block", async () => {
+  it("premium streams Opus at xhigh; economy streams Haiku 5.5 with NO thinking param", async () => {
     const { COPILOT_TIERS } = await import("../constants.js")
 
     streamMock.mockReturnValue(scriptStream({ content: [textBlock("done")] }, "done"))
@@ -184,7 +184,9 @@ describe("the model ladder in the loop", () => {
     await runAgentLoop({ ...baseInput(), tier: COPILOT_TIERS.economy })
     const economyParams = streamMock.mock.calls.at(-1)![0] as Record<string, unknown>
     expect(economyParams.model).toBe(COPILOT_TIERS.economy.anthropicModelId)
-    // Haiku declares no efforts — sending thinking/output_config is an API error.
+    expect(economyParams.model).toBe("claude-haiku-5-5")
+    // Economy names no effort, so nothing is sent and the model reasons at its
+    // own default.
     expect(economyParams.thinking).toBeUndefined()
     expect(economyParams.output_config).toBeUndefined()
   })
