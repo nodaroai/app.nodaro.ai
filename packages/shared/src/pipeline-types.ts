@@ -95,16 +95,29 @@ export type PipelinePinnableVideoModel = (typeof PIPELINE_PINNABLE_VIDEO_MODELS)
 // the upfront credit reservation. Adding GPT/Gemini support requires routing
 // through `lib/llm-client.ts` first; until then, keep this list tight.
 export const PIPELINE_PINNABLE_SCRIPT_LLMS = [
-  "claude-haiku-4-5",
+  "claude-haiku-5-5",
   "claude-sonnet-4-6",
   "claude-opus-4-7",
   "claude-opus-5",
 ] as const
-export type PipelinePinnableScriptLlm = (typeof PIPELINE_PINNABLE_SCRIPT_LLMS)[number]
+
+// Script LLMs no longer OFFERED as a pin but still honoured when a saved
+// pipeline names one: Claude Haiku 5.5 replaced Claude Haiku 4.5 in the picker
+// (decided 2026-10-10), and a pipeline pinned to Haiku 4.5 before that keeps
+// its pin.
+export const PIPELINE_LEGACY_PINNED_SCRIPT_LLMS = ["claude-haiku-4-5"] as const
+
+/** Every script LLM a pipeline's config may name: the offered pins plus the legacy ones. */
+export const PIPELINE_ACCEPTED_SCRIPT_LLMS = [
+  ...PIPELINE_PINNABLE_SCRIPT_LLMS,
+  ...PIPELINE_LEGACY_PINNED_SCRIPT_LLMS,
+] as const
+/** A script LLM a pipeline config may carry — an offered pin or a legacy one a saved pipeline still names. */
+export type PipelinePinnableScriptLlm = (typeof PIPELINE_ACCEPTED_SCRIPT_LLMS)[number]
 
 const ImageModelEnum = z.enum(PIPELINE_ACCEPTED_IMAGE_MODELS)
 const VideoModelEnum = z.enum(PIPELINE_PINNABLE_VIDEO_MODELS)
-const ScriptLlmEnum = z.enum(PIPELINE_PINNABLE_SCRIPT_LLMS)
+const ScriptLlmEnum = z.enum(PIPELINE_ACCEPTED_SCRIPT_LLMS)
 
 // Per-stage override map. Each stage key maps to a model id valid for its
 // kind. Defined as a discriminated shape (instead of `Record<stage, string>`)

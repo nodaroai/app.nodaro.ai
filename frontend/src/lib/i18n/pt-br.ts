@@ -3955,7 +3955,7 @@ export const ptBR: ChromeDict = {
   "cfgext.genImgNanoBananaPro": "Nano Banana Pro — maior fidelidade",
   "cfgext.genImgNanoBanana2": "Nano Banana 2 — versão anterior",
   "cfgext.genVidKlingTurbo": "Kling Turbo — o mais barato",
-  "cfgext.genLlmHaiku45": "Claude Haiku 4.5 — o mais rápido",
+  "cfgext.genLlmHaiku55": "Claude Haiku 5.5 — o mais rápido",
   "cfgext.genLlmSonnet46": "Claude Sonnet 4.6 — padrão",
   "cfgext.genLlmOpus5": "Claude Opus 5 — o mais profundo",
   "cfgext.genAutoDirectorPicks": "Automático (o diretor escolhe por tomada)",

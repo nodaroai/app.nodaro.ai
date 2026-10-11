@@ -4061,7 +4061,7 @@ export const he: ChromeDict = {
   "cfgext.genImgNanoBananaPro": "Nano Banana Pro — נאמנות גבוהה יותר",
   "cfgext.genImgNanoBanana2": "Nano Banana 2 — גרסה קודמת",
   "cfgext.genVidKlingTurbo": "Kling Turbo — הזול ביותר",
-  "cfgext.genLlmHaiku45": "Claude Haiku 4.5 — המהיר ביותר",
+  "cfgext.genLlmHaiku55": "Claude Haiku 5.5 — המהיר ביותר",
   "cfgext.genLlmSonnet46": "Claude Sonnet 4.6 — ברירת מחדל",
   "cfgext.genLlmOpus5": "Claude Opus 5 — המעמיק ביותר",
   "cfgext.genAutoDirectorPicks": "אוטומטי (הבמאי בוחר לכל שוט)",

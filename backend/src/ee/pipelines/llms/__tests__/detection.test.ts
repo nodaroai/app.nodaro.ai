@@ -43,7 +43,7 @@ describe("runDetection", () => {
     expect(result.audio_intent.music.mood_hint).toBe("epic")
     const call = (callLLM as ReturnType<typeof vi.fn>).mock.calls[0][0]
     expect(call.role).toBe("detection")
-    expect(call.modelId).toBe("claude-haiku-4-5")
+    expect(call.modelId).toBe("claude-haiku-5-5")
     expect(call.userPrompt).toContain("A pilot's final mission")
     expect(call.userPrompt).toContain("FORMAT: short_film")
   })

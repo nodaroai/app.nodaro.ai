@@ -4088,7 +4088,7 @@ export const en = {
   "cfgext.genImgNanoBananaPro": "Nano Banana Pro — higher fidelity",
   "cfgext.genImgNanoBanana2": "Nano Banana 2 — previous version",
   "cfgext.genVidKlingTurbo": "Kling Turbo — cheapest",
-  "cfgext.genLlmHaiku45": "Claude Haiku 4.5 — fastest",
+  "cfgext.genLlmHaiku55": "Claude Haiku 5.5 — fastest",
   "cfgext.genLlmSonnet46": "Claude Sonnet 4.6 — default",
   "cfgext.genLlmOpus5": "Claude Opus 5 — deepest",
   "cfgext.genAutoDirectorPicks": "Auto (Director picks per shot)",

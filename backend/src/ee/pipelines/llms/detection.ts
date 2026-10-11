@@ -34,7 +34,7 @@ Extract entities.`
     userId: args.userId,
     role: "detection",
     task: "detection",
-    modelId: "claude-haiku-4-5",
+    modelId: "claude-haiku-5-5",
     temperature: 0.1,
     systemPrompt,
     userPrompt,

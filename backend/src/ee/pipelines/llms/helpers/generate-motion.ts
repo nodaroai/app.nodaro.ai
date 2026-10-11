@@ -50,7 +50,7 @@ Generate motion_prompt for each shot and respond as JSON.`
     userId: args.userId,
     role: "helper",
     task: "generate_motion",
-    modelId: "claude-haiku-4-5",
+    modelId: "claude-haiku-5-5",
     temperature: 0.5,
     systemPrompt,
     userPrompt,

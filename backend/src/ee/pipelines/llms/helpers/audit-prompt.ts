@@ -36,7 +36,7 @@ Audit the shots and respond as JSON.`
     userId: args.userId,
     role: "helper",
     task: "audit_prompt",
-    modelId: "claude-haiku-4-5",
+    modelId: "claude-haiku-5-5",
     temperature: 0.2,
     systemPrompt,
     userPrompt,

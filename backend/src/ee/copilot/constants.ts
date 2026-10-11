@@ -23,7 +23,7 @@ export type { CopilotSurface } from "./store.js"
  *
  * `registryId` prices the call (LLM_MODELS / calculateLlmCost); `anthropicModelId`
  * is what the SDK is asked for; `creditId` scales the reservation ceiling.
- * Economy carries NO reasoning effort — the registry declares none for Haiku.
+ * Economy names NO reasoning effort: its model runs at its own default.
  */
 export type CopilotModelTier = "economy" | "standard" | "premium"
 
@@ -58,8 +58,12 @@ export interface CopilotTierSpec {
 
 export const COPILOT_TIERS: Record<CopilotModelTier, CopilotTierSpec> = {
   economy: {
-    registryId: "claude-haiku-4.5",
-    anthropicModelId: "claude-haiku-4-5-20251001",
+    // Haiku 5.5 since 2026-10-10 (decided: it replaces Haiku 4.5). No effort
+    // is named, so it reasons at the vendor default (`medium`); `low` is the
+    // lever if this rung should be quicker still. Its thinking is
+    // conversation-bound, handled like the premium tier's (see agent-loop.ts).
+    registryId: "claude-haiku-5.5",
+    anthropicModelId: "claude-haiku-5-5",
     creditId: "workflow-copilot:economy",
     // The fast rung: quick edits, not long builds. A tighter cap keeps its
     // spend as low as its price.

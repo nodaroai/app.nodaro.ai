@@ -3955,7 +3955,7 @@ export const ko: ChromeDict = {
   "cfgext.genImgNanoBananaPro": "Nano Banana Pro — 더 높은 충실도",
   "cfgext.genImgNanoBanana2": "Nano Banana 2 — 이전 버전",
   "cfgext.genVidKlingTurbo": "Kling Turbo — 가장 저렴",
-  "cfgext.genLlmHaiku45": "Claude Haiku 4.5 — 가장 빠름",
+  "cfgext.genLlmHaiku55": "Claude Haiku 5.5 — 가장 빠름",
   "cfgext.genLlmSonnet46": "Claude Sonnet 4.6 — 기본값",
   "cfgext.genLlmOpus5": "Claude Opus 5 — 가장 깊은 추론",
   "cfgext.genAutoDirectorPicks": "자동(디렉터가 샷마다 선택)",

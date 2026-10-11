@@ -143,8 +143,9 @@ export async function runAgentLoop(input: LoopInput): Promise<LoopResult> {
         system: cachedSystem,
         messages: withBreakpoint,
         tools: input.tools.map((t) => ({ name: t.name, description: t.description, input_schema: t.input_schema })),
-        // Economy (Haiku) declares no reasoning efforts — sending one anyway
-        // is an API error, so the thinking block rides only with an effort.
+        // A tier that names no effort sends no thinking param at all: its
+        // model runs at its own default (economy — Haiku 5.5 reasons at
+        // `medium` unasked).
         ...(tier.reasoningEffort
           ? { thinking: { type: "adaptive" as const }, output_config: { effort: tier.reasoningEffort } }
           : {}),

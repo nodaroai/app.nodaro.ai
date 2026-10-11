@@ -42,7 +42,7 @@ describe("runVoiceMatcher", () => {
     const call = (callLLM as ReturnType<typeof vi.fn>).mock.calls[0][0]
     expect(call.role).toBe("specialist")
     expect(call.task).toBe("voice_match")
-    expect(call.modelId).toBe("claude-haiku-4-5")
+    expect(call.modelId).toBe("claude-haiku-5-5")
     expect(call.userPrompt).toContain("Captain Riley")
     expect(call.userPrompt).toContain("weathered male pilot")
   })

@@ -109,7 +109,7 @@ Recommend an ElevenLabs voice.`
     userId: args.userId,
     role: "specialist",
     task: "voice_match",
-    modelId: "claude-haiku-4-5",
+    modelId: "claude-haiku-5-5",
     temperature: 0.3,
     systemPrompt,
     userPrompt,

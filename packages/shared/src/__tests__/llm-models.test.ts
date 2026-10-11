@@ -27,7 +27,7 @@ import {
   LLM_CREDIT_RUNGS,
 } from "../llm-models.js"
 import type { LlmModelDef, LlmTier, LlmFeature } from "../llm-models.js"
-import { PIPELINE_PINNABLE_SCRIPT_LLMS } from "../pipeline-types.js"
+import { PIPELINE_ACCEPTED_SCRIPT_LLMS, PIPELINE_LEGACY_PINNED_SCRIPT_LLMS, PIPELINE_PINNABLE_SCRIPT_LLMS, PipelineConfigSchema } from "../pipeline-types.js"
 
 // The provider-$ per-token rate table and `calculateLlmCost` moved to
 // backend/src/lib/pricing/llm-cost.ts (S5) — its tests live in
@@ -178,10 +178,22 @@ describe("getLlmModel", () => {
     expect(getLlmModel("claude-haiku-4-5")?.id).toBe("claude-haiku-4.5")
   })
 
-  it("resolves every PIPELINE_PINNABLE_SCRIPT_LLMS member (the film pipeline's pin surface)", () => {
-    for (const id of PIPELINE_PINNABLE_SCRIPT_LLMS) {
+  it("resolves every script LLM a pipeline config may name (the film pipeline's pin surface)", () => {
+    for (const id of PIPELINE_ACCEPTED_SCRIPT_LLMS) {
       expect(getLlmModel(id), `pinnable script llm ${id} must resolve`).toBeDefined()
     }
+  })
+
+  it("Claude Haiku 5.5 is the offered Haiku pin; a saved Haiku 4.5 pin is still accepted", () => {
+    expect(PIPELINE_PINNABLE_SCRIPT_LLMS).toContain("claude-haiku-5-5")
+    expect(PIPELINE_PINNABLE_SCRIPT_LLMS).not.toContain("claude-haiku-4-5")
+    expect(PIPELINE_LEGACY_PINNED_SCRIPT_LLMS).toEqual(["claude-haiku-4-5"])
+    expect(getLlmModel("claude-haiku-5-5")?.id).toBe("claude-haiku-5.5")
+    for (const id of ["claude-haiku-5-5", "claude-haiku-4-5"] as const) {
+      expect(PipelineConfigSchema.safeParse({ script_llm: id }).success, id).toBe(true)
+      expect(PipelineConfigSchema.safeParse({ stage_models: { script_llm: id } }).success, `stage ${id}`).toBe(true)
+    }
+    expect(PipelineConfigSchema.safeParse({ script_llm: "claude-haiku-3" }).success).toBe(false)
   })
 
   it("resolves provider slugs as historical aliases", () => {
@@ -1207,7 +1219,7 @@ describe("supportsForcedToolChoice / conversationBoundThinking", () => {
   // through PIPELINE_PINNABLE_SCRIPT_LLMS. A model that 400s on forcing must not
   // join that list until callLLM reads `supportsForcedToolChoice`.
   it("no pipeline-pinnable script LLM rejects a forced tool choice", () => {
-    for (const id of PIPELINE_PINNABLE_SCRIPT_LLMS) {
+    for (const id of PIPELINE_ACCEPTED_SCRIPT_LLMS) {
       expect(getLlmModel(id)?.supportsForcedToolChoice, id).not.toBe(false)
     }
   })

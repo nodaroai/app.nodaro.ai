@@ -4021,7 +4021,7 @@ export const ja: ChromeDict = {
   "cfgext.genImgNanoBananaPro": "Nano Banana Pro：より高精細",
   "cfgext.genImgNanoBanana2": "Nano Banana 2：旧バージョン",
   "cfgext.genVidKlingTurbo": "Kling Turbo：最安",
-  "cfgext.genLlmHaiku45": "Claude Haiku 4.5：最速",
+  "cfgext.genLlmHaiku55": "Claude Haiku 5.5：最速",
   "cfgext.genLlmSonnet46": "Claude Sonnet 4.6：デフォルト",
   "cfgext.genLlmOpus5": "Claude Opus 5：最も高度な推論",
   "cfgext.genAutoDirectorPicks": "自動（監督がショットごとに選択）",
