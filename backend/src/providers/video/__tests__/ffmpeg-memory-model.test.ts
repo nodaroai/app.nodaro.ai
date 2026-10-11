@@ -544,10 +544,14 @@ describe("census: every caller of the memory model states its input count", () =
       for (const call of callsIn(readFileSync(file, "utf8"))) sites.push({ file: file.slice(SRC.length + 1), call })
     }
     // Every production caller today: the re-encode, the yt-dlp recode, the
-    // media proxy, the face detector's frame decode, and the timeline slice.
+    // media proxy, the face detector's frame decode, the timeline slice, Mask
+    // Composite (three files) and Video Mask (its source re-encode and its mask encode).
     expect(sites.map((s) => s.file).sort()).toEqual([
       "providers/video/edl-timeline.ts",
+      "providers/video/mask-composite.ts",
       "providers/video/video-file-stages.ts",
+      "providers/video/video-mask.ts",
+      "providers/video/video-mask.ts",
       "providers/video/ytdlp-ffmpeg-limits.ts",
       "services/face-detect/face-detect-budget.ts",
       "services/video-proxy-encode.ts",
@@ -560,7 +564,7 @@ describe("census: every caller of the memory model states its input count", () =
 
   it("the launches that decode ONE file say 1; only the timeline slice passes a counted value", () => {
     const read = (rel: string) => readFileSync(join(SRC, rel), "utf8")
-    for (const rel of ["providers/video/video-file-stages.ts", "providers/video/ytdlp-ffmpeg-limits.ts", "services/face-detect/face-detect-budget.ts", "services/video-proxy-encode.ts"]) {
+    for (const rel of ["providers/video/video-file-stages.ts", "providers/video/ytdlp-ffmpeg-limits.ts", "services/face-detect/face-detect-budget.ts", "services/video-proxy-encode.ts", "providers/video/video-mask.ts"]) {
       for (const call of callsIn(read(rel))) {
         expect(call, rel).toMatch(/inputs:\s*1\b/)
         expect(call, rel).toMatch(/cameraMegapixels:\s*cameraMegapixelsOf\(/)

@@ -214,7 +214,9 @@ export async function maskComposite(params: MaskCompositeParams): Promise<MaskCo
     // Three decoded pictures at the foreground's size feed one encode.
     const canvas = { width: even(fg.width * (fg.sar > 0 ? fg.sar : 1)), height: even(fg.height) }
     await runFfmpeg(argv, maskCompositeTimeoutMs(fg.streamDurationSec), {
-      peakMemoryMiB: canvasPeakMemoryMiB(canvas, 3, ffmpegEffectiveThreads()),
+      // Three input files; only the foreground's size is probed, so the largest
+      // camera is left unknown (charged as 4K — conservative).
+      peakMemoryMiB: canvasPeakMemoryMiB(canvas, 3, ffmpegEffectiveThreads(), { inputs: 3, cameraMegapixels: undefined }),
     })
     return { outputPath, width: canvas.width, height: canvas.height, durationSec: fg.streamDurationSec }
   } catch (err) {

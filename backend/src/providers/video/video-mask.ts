@@ -18,7 +18,7 @@ import { DeterministicJobError } from "../../lib/deterministic-job-error.js"
 import { constantFrameRate, downloadFile, parseFrameRate, probeVideoOverlayBase, runFfmpeg, withFfmpegSlot, type VideoOverlayBaseProbe } from "./ffmpeg-utils.js"
 import { spawnFfmpeg } from "./ffmpeg-process.js"
 import { DEFAULT_FFMPEG_TIMEOUT_MS } from "./ffmpeg-timeouts.js"
-import { canvasPeakMemoryMiB } from "./ffmpeg-memory-model.js"
+import { cameraMegapixelsOf, canvasPeakMemoryMiB } from "./ffmpeg-memory-model.js"
 import { ffmpegEffectiveThreads } from "./ffmpeg-threads.js"
 
 /** Longest edge the model is sent. Larger clips are scaled down (the mask is
@@ -94,7 +94,10 @@ export async function prepareVideoMaskSource(videoUrl: string, workDir: string):
   }
   const normalisedPath = join(workDir, "normalised.mp4")
   await runFfmpeg(buildNormaliseArgs(sourcePath, normalisedPath, plan), DEFAULT_FFMPEG_TIMEOUT_MS, {
-    peakMemoryMiB: canvasPeakMemoryMiB({ width: Math.max(probe.width, plan.width), height: Math.max(probe.height, plan.height) }, 1, ffmpegEffectiveThreads()),
+    peakMemoryMiB: canvasPeakMemoryMiB({ width: Math.max(probe.width, plan.width), height: Math.max(probe.height, plan.height) }, 1, ffmpegEffectiveThreads(), {
+      inputs: 1,
+      cameraMegapixels: cameraMegapixelsOf(probe),
+    }),
   })
   const after = await probeVideoOverlayBase(normalisedPath)
   return {
@@ -194,7 +197,7 @@ export async function renderMaskVideo(rle: readonly string[], geometry: MaskGeom
   }), {
     timeoutMs: DEFAULT_FFMPEG_TIMEOUT_MS,
     label: "video mask encode",
-    peakMemoryMiB: canvasPeakMemoryMiB(geometry, 1, ffmpegEffectiveThreads()),
+    peakMemoryMiB: canvasPeakMemoryMiB(geometry, 1, ffmpegEffectiveThreads(), { inputs: 1, cameraMegapixels: cameraMegapixelsOf(geometry) }),
   })
   return { coveredFraction: covered / (pixels * rle.length) }
 }
