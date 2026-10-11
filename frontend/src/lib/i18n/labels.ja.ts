@@ -465,6 +465,7 @@ const PRESET_GROUPS_JA: Record<string, string> = {
   "Product & Commerce": "商品と EC",
   "Professional & Assistant": "ビジネスとアシスタント",
   "Reactions & Social": "リアクションと SNS",
+  "Realism & Authentic": "リアリズムと自然さ",
   "Reference Sheet": "リファレンスシート",
   "Relight & Composite": "リライティングと合成",
   "Restyle Looks": "スタイル変換",

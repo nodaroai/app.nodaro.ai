@@ -465,6 +465,7 @@ const PRESET_GROUPS_KO: Record<string, string> = {
   "Product & Commerce": "제품 및 커머스",
   "Professional & Assistant": "비즈니스 및 어시스턴트",
   "Reactions & Social": "리액션 및 SNS",
+  "Realism & Authentic": "사실감과 자연스러움",
   "Reference Sheet": "레퍼런스 시트",
   "Relight & Composite": "조명 변경 및 합성",
   "Restyle Looks": "스타일 변환",

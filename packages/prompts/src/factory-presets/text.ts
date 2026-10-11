@@ -318,4 +318,15 @@ export const IMAGE_TO_TEXT_PRESETS: readonly FactoryPreset[] = [
     group: "Creative",
     data: { detailLevel: "detailed", customPrompt: "Describe this image as a detailed text-to-image generation prompt: subject, style, lighting, composition and lens. Return only the prompt." },
   },
+  {
+    id: "image-to-text/realism-audit",
+    name: "Realism Audit",
+    description: "Lists the signs an image was generated, with a count.",
+    group: "Creative",
+    data: {
+      detailLevel: "structured",
+      customPrompt:
+        "Check this image for signs that it was generated rather than photographed. Answer each question yes or no, with a few words why. 1. Is the skin smooth, waxy or airbrushed, with no visible pores? 2. Is the face unusually symmetrical, or are the teeth unnaturally even and white? 3. Are any hands or fingers malformed, merged or the wrong count? 4. Is any text, logo or sign garbled? 5. Is the background blurred far more than an everyday snapshot would be? 6. Are the catchlights in the eyes perfect rings, or identical in both eyes? 7. Is the hair uniformly perfect, with no flyaways? 8. Do edges look over-sharpened or haloed? 9. Is there a glow or bloom on the skin? 10. Do shadows or reflections disagree with the light? Finish with one line: \"Tells found: N of 10\".",
+    },
+  },
 ]

@@ -479,6 +479,7 @@ const PRESET_GROUPS_HE: Record<string, string> = {
   "Product & Commerce": "מוצר ומסחר",
   "Professional & Assistant": "מקצועי ועוזר",
   "Reactions & Social": "תגובות ורשתות",
+  "Realism & Authentic": "ריאליזם ואותנטיות",
   "Reference Sheet": "גיליון ייחוס",
   "Relight & Composite": "תאורה מחדש והרכבה",
   "Restyle Looks": "עיצוב מראה מחדש",

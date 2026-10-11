@@ -465,6 +465,7 @@ const PRESET_GROUPS_PT_BR: Record<string, string> = {
   "Product & Commerce": "Produto e comércio",
   "Professional & Assistant": "Profissional e assistente",
   "Reactions & Social": "Reações e redes sociais",
+  "Realism & Authentic": "Realismo e autenticidade",
   "Reference Sheet": "Folha de referência",
   "Relight & Composite": "Reiluminação e composição",
   "Restyle Looks": "Novos looks",
