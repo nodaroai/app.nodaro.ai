@@ -82,6 +82,8 @@ import {
   isValidAiAvatarConnection,
   isValidCinematicAvatarConnection,
   isValidSwitchXConnection,
+  isValidVideoMaskConnection,
+  isValidMaskCompositeConnection,
 } from "./video-producer-handles"
 import {
   isValidCharacterConnection,
@@ -735,6 +737,8 @@ const VIDEO_PRODUCER_VALIDATORS: Record<string, AudioTextValidator> = {
   "ai-avatar":        isValidAiAvatarConnection,
   "cinematic-avatar": isValidCinematicAvatarConnection,
   "switchx":          isValidSwitchXConnection,
+  "video-mask":       isValidVideoMaskConnection,
+  "mask-composite":   (h, s) => isValidMaskCompositeConnection(h, s),
 }
 
 const IDENTITY_VALIDATORS: Record<string, AudioTextValidator> = {

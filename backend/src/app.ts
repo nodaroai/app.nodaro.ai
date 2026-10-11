@@ -155,6 +155,8 @@ import { motionTransferRoutes } from "./routes/motion-transfer.js"
 import { videoUpscaleRoutes } from "./routes/video-upscale.js"
 import { faceSwapRoutes } from "./routes/face-swap.js"
 import { generateMaskRoutes } from "./routes/generate-mask.js"
+import { videoMaskRoutes } from "./routes/video-mask.js"
+import { maskCompositeRoutes } from "./routes/mask-composite.js"
 import { statsRoutes } from "./routes/stats.js"
 import { cancelJobsRoutes } from "./routes/cancel-jobs.js"
 import { creditsRoutes } from "./ee/routes/credits.js"
@@ -644,6 +646,8 @@ export async function buildApp() {
   await app.register(videoUpscaleRoutes)
   await app.register(faceSwapRoutes)
   await app.register(generateMaskRoutes)
+  await app.register(videoMaskRoutes)
+  await app.register(maskCompositeRoutes)
   await app.register(statsRoutes)
   await app.register(executionStatsRoutes)
   await app.register(cancelJobsRoutes)

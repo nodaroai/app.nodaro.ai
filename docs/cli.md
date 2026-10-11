@@ -375,6 +375,15 @@ nodaro media video-overlay <videoUrl> [layerUrls...] [--at <start[-end]>...] [--
                                                          # "1.2-2.6"); --preset/--corner apply to every positional layer. --layers-file takes the full API
                                                          # layers array instead (per-layer boxes, opacity, animate, zIndex). --base-fit and --background-color
                                                          # need --aspect. See docs/nodes/processing-video/video-overlay.md.
+nodaro media video-mask <videoUrl> <prompt> [--threshold <n>] [--watch] [--poll-interval <ms>] [--json]
+                                                         # tracks a subject described in text through a video (SAM 3) and returns a black-and-white
+                                                         # mask video (white = the subject). --threshold 0.05-0.95 (default 0.5; lower finds more).
+                                                         # Clips up to 60 s at 30 fps (a faster clip counts proportionally longer), priced by length:
+                                                         # 25 / 48 / 73 / 143 / 283 credits up to 5 / 10 / 15 / 30 / 60 s. See docs/nodes/ai-video/video-mask.md.
+nodaro media mask-composite <foregroundUrl> <backgroundUrl> <maskUrl> [--invert] [--feather <px>] [--grow <px>] [--background-fit cover|contain|stretch] [--audio foreground|background|mix|none] [--watch] [--poll-interval <ms>] [--json]
+                                                         # the foreground over the background through the mask (white = foreground), local FFmpeg, 20 credits.
+                                                         # The result follows the foreground's size, rate and length; the background loops, the mask holds its
+                                                         # last frame. --feather 0-20 px, --grow -10..10 px. See docs/nodes/processing-video/mask-composite.md.
 nodaro media save <url> [--filename <name>] [--type image|video|audio] [--watch] [--poll-interval <ms>] [--json]
 
 # Audio — the primitives Voice Changer Pro composes, standalone, plus speech-to-text

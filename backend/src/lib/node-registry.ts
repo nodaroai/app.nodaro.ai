@@ -128,6 +128,7 @@ export const CREDIT_BAND_SOURCES: Readonly<Record<string, CreditBandSource>> = {
   "modify-image": { ids: familyIds(...MODIFY_IMAGE_PROVIDERS) },
   "upscale-image": { ids: familyIds(...UPSCALE_IMAGE_PROVIDERS) },
   "generate-mask": { ids: familyIds("generate-mask") },
+  "video-mask": { ids: idsMatching(/^sam-3-video:\d+s$/) },
   "reference-board": {
     ids: familyIds(...REFERENCE_BOARD_PROVIDERS),
     note: "Pass-through: reserves under the chosen IMAGE provider's own row (routes/reference-board.ts), with no pricing row of its own.",
@@ -1423,6 +1424,23 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
   },
 
   {
+    type: "video-mask",
+    label: "Video Mask",
+    category: "ai-video",
+    description:
+      "Track a subject described in plain text through a video and output a black-and-white mask video (white = the subject), using SAM 3. Credit cost scales with the clip's length at 30 fps — one row per length (`sam-3-video:<bucket>s`, up to 60 s). Pair it with Mask Composite to put the subject over another video.",
+    outputType: "video",
+    creditCost: creditBandFor("video-mask"),
+    providers: ["sam-3"],
+    capabilities: ["segmentation", "video-matting"],
+    inputSchema: {
+      fields: [
+        { key: "videoUrl", type: "video-url", required: true },
+        { key: "prompt", type: "text", required: true },
+      ],
+    },
+  },
+  {
     type: "generate-mask",
     label: "Generate Mask",
     category: "ai-image",
@@ -1625,6 +1643,7 @@ const RAW_NODE_REGISTRY: NodeDescriptor[] = [
   // ---- Additional processing nodes (video → VIDEO_OUTPUT_NODE_TYPES, audio → AUDIO_OUTPUT_NODE_TYPES in input-resolver.ts; creditCost auto-filled from STATIC_CREDIT_COSTS) ----
   { type: "gif-to-video", label: "Gif to Video", category: "processing", description: "Convert an animated GIF into a widely-compatible H.264 MP4 so it can be used as a motion reference for video models that reject GIF input. Optional loop-to-minimum, seam-aware looping (ping-pong for non-seamless GIFs), and 24fps interpolation. Local FFmpeg — no provider, zero credits.", outputType: "video", creditCost: 0 },
   { type: "loop-video", label: "Loop Video", category: "processing", description: "Repeat video to reach a target duration or count, with optional smart-loop-cut for seamless seams.", outputType: "video" },
+  { type: "mask-composite", label: "Mask Composite", category: "processing", description: "Put a foreground video over a background video through a mask video (white = foreground) — e.g. the subject from Video Mask over a new scene. Feather, grow/shrink and invert the mask; fit the background; pick the audio. Local FFmpeg — no provider.", outputType: "video" },
   { type: "fade-video", label: "Fade Video", category: "processing", description: "Add fade transitions to the beginning and end of video.", outputType: "video" },
   { type: "transcode-video", label: "Transcode Video", category: "processing", description: "Convert video codec, quality, and resolution.", outputType: "video" },
   { type: "social-media-format", label: "Social Media Format", category: "processing", description: "Auto-format video for specific platform specifications.", outputType: "video" },

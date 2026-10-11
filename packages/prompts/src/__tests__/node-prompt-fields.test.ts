@@ -16,10 +16,10 @@ describe("nodeSupportsPromptAffixes", () => {
     expect(nodeSupportsPromptAffixes("not-a-node")).toBe(false)
     expect(nodeSupportsPromptAffixes(undefined)).toBe(false)
   })
-  it("PROMPT_AFFIX_NODE_TYPES is exactly the registry minus opt-outs (41 types)", () => {
+  it("PROMPT_AFFIX_NODE_TYPES is exactly the registry minus opt-outs (42 types)", () => {
     const expected = Object.entries(NODE_PROMPT_FIELDS).filter(([, s]) => s.affixes !== false).map(([t]) => t)
     expect([...PROMPT_AFFIX_NODE_TYPES].sort()).toEqual(expected.sort())
-    expect(PROMPT_AFFIX_NODE_TYPES.size).toBe(41)
+    expect(PROMPT_AFFIX_NODE_TYPES.size).toBe(42)
   })
   it("getPromptFields still resolves", () => expect(getPromptFields("generate-image")?.prompt).toBe("prompt"))
 })

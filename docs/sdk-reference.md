@@ -4421,6 +4421,46 @@ keeps the video's own size and frame rate. Poll `jobs.get(jobId)`: the output ca
 `animated_first_frame`, `audio_reencoded`). Full reference:
 [Video Overlay](./nodes/processing-video/video-overlay.md).
 
+#### `videoMask(input)`
+
+```ts
+videoMask(input: {
+  videoUrl: string
+  prompt: string                  // ≤500 chars; commas track several subjects
+  threshold?: number              // 0.05..0.95, default 0.5 (lower finds more)
+  provider?: "sam-3"
+}): Promise<{ jobId: string }>
+```
+
+Track a subject described in plain text through a video (`POST /v1/video-mask`,
+SAM 3) and get a black-and-white **mask video** back — white = the subject.
+Clips up to 60 s at 30 fps (a faster clip counts proportionally longer),
+priced by length (`sam-3-video:5s` … `:60s`, 25–283 credits). Poll
+`jobs.get(jobId)`: the output carries `videoUrl` (the mask), `width`,
+`height`, `frames` and `coverage`. Full reference:
+[Video Mask](./nodes/ai-video/video-mask.md).
+
+#### `maskComposite(input)`
+
+```ts
+maskComposite(input: {
+  foregroundUrl: string
+  backgroundUrl: string
+  maskUrl: string                 // white = foreground
+  invertMask?: boolean
+  feather?: number                // 0..20 px, default 2
+  grow?: number                   // -10..10 px, default 0
+  backgroundFit?: "cover" | "contain" | "stretch"           // default cover
+  audioSource?: "foreground" | "background" | "mix" | "none" // default foreground
+}): Promise<{ jobId: string }>
+```
+
+Place a foreground video over a background video through a mask video
+(`POST /v1/mask-composite`) — local FFmpeg, **20 credits**. The result follows
+the foreground's size, frame rate and length; the background is fitted and
+loops when shorter, the mask holds its last frame. Full reference:
+[Mask Composite](./nodes/processing-video/mask-composite.md).
+
 #### `saveToStorage(input)`
 
 ```ts

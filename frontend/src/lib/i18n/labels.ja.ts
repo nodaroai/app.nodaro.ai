@@ -224,6 +224,8 @@ const NODE_LABELS_JA: Record<string, string> = {
   "Photographer": "写真家",
   "Aesthetic": "テイスト",
   "Era": "年代／時代",
+  "Video Mask": "動画マスク",
+  "Mask Composite": "マスク合成",
 }
 
 const HANDLE_LABELS_JA: Record<string, string> = {
@@ -414,6 +416,7 @@ const HANDLE_LABELS_JA: Record<string, string> = {
   "Voice Character": "声の特徴",
   "Voice Delivery": "話し方",
   "Shot stills": "ショットの静止画",
+  "Foreground": "前景",
 }
 
 const PRESET_GROUPS_JA: Record<string, string> = {

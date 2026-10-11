@@ -27,6 +27,8 @@ export const NODE_MAPPABLE_FIELDS: Readonly<Record<string, readonly string[]>> =
   // Span-replace sibling of generate-video-pro — prompt only, no
   // negativePrompt field on the node.
   "edit-video-pro":      ["prompt"],
+  // The subject to track — a {Label} reference or a mapping writes it.
+  "video-mask":          ["prompt"],
   "video-analysis":      ["analysisFocus", "youtubeUrl"],
   "video-to-video":      ["prompt"],
   // + the two neighbour-text fields (continuity across clips): a wired Text node can feed

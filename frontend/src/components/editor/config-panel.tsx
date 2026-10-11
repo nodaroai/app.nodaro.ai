@@ -125,6 +125,8 @@ import {
   GenerateVideoProConfig,
   EditVideoProConfig,
   VideoSfxConfig,
+  VideoMaskConfig,
+  MaskCompositeConfig,
   TextToSpeechConfig,
   TextToAudioConfig,
   AudioIsolationConfig,
@@ -465,6 +467,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "video-retake": return <VideoRetakeConfig {...configProps} nodeId={selectedNodeId} />
     case "face-swap": return <FaceSwapConfig {...configProps} nodeId={selectedNodeId} />
     case "video-sfx": return <VideoSfxConfig {...configProps} nodeId={selectedNodeId} />
+    case "video-mask": return <VideoMaskConfig {...configProps} nodeId={selectedNodeId} />
     case "combine-videos": return <CombineVideosConfig {...configProps} />
     case "apply-edl": return <ApplyEdlConfig {...configProps} nodeId={selectedNodeId} />
     case "edit-plan": return <EditPlanConfig {...configProps} />
@@ -507,6 +510,7 @@ function NodeTypeConfig({ nodeType, nodeData, configProps, updateNodeData, onExp
     case "loop-video": return <LoopVideoConfig {...configProps} />
     case "gif-to-video": return <GifToVideoConfig {...configProps} />
     case "fade-video": return <FadeVideoConfig {...configProps} />
+    case "mask-composite": return <MaskCompositeConfig {...configProps} />
     case "still-to-video": return <StillToVideoConfig {...configProps} />
     case "slideshow": return <SlideshowConfig {...configProps} />
     case "transcode-video": return <TranscodeVideoConfig {...configProps} />

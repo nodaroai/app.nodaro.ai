@@ -105,7 +105,7 @@ describe("inline-prompt capability (media-preview nodes)", () => {
     // video
     "generate-video", "generate-video-pro", "edit-video-pro", "text-to-video", "image-to-video", "video-to-video",
     "switchx", "extend-video", "speech-to-video", "motion-transfer",
-    "cinematic-avatar", "video-retake", "video-sfx",
+    "cinematic-avatar", "video-retake", "video-sfx", "video-mask",
     // audio / music / speech / voice
     "generate-music", "suno-generate", "suno-cover", "suno-extend",
     "suno-replace-section", "suno-upload-extend", "text-to-audio",

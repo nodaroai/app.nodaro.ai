@@ -390,6 +390,7 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     type === "video-retake" ||
     type === "face-swap" ||
     type === "video-sfx" ||
+    type === "video-mask" ||
     type === "suno-music-video" ||
     type === "render-video"
   ) {
@@ -598,6 +599,7 @@ export function extractNodeOutput(node: WorkflowNode, sourceHandle?: string): st
     type === "loop-video" ||
     type === "gif-to-video" ||
     type === "fade-video" ||
+    type === "mask-composite" ||
     type === "video-overlay" ||
     type === "manual-edit" ||
     type === "transcode-video" ||
@@ -1219,6 +1221,8 @@ export const VIDEO_SOURCE_TYPES_FOR_RENDER = new Set([
   "transcode-video",
   "manual-edit",
   "video-sfx",
+  "video-mask",
+  "mask-composite",
 ]);
 export const AUDIO_SOURCE_TYPES = new Set([
   "text-to-speech",

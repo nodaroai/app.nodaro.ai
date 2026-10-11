@@ -84,6 +84,8 @@ import {
   loopVideoApi,
   gifToVideoApi,
   fadeVideoApi,
+  maskCompositeApi,
+  videoMaskApi,
   stillToVideoApi,
   slideshowApi,
   resizeVideoApi,
@@ -126,6 +128,7 @@ import { applySocialSearchFailure, applySocialSearchResult, socialSearchRunStart
 import { metaAdsAdvertisersFrom, metaAdsNodeMode, metaAdsScrapeWireSources, splitMetaAdsAdvertiserNames, splitInstagramTargets, instagramScrapeMode, socialSearchRequestFromNode, resolveNodeRefs, fitCollectionField } from "@nodaro/shared";
 import { clampContentIdeasCount, CONTENT_IDEAS_MAX_RECIPE_INPUTS } from "@nodaro/shared";
 import { ttsSupportsStitching, normalizeTtsNeighbourText } from "@nodaro/shared";
+import { VIDEO_MASK_LIMITS, resolveVideoMaskProvider, resolveMaskCompositeSettings } from "@nodaro/shared";
 import { tx } from "@/lib/i18n";
 import { previewSingleRunRefusal } from "./preview-gate";
 import { completeAsPassThrough } from "./pass-through";
@@ -190,6 +193,7 @@ import type {
   VideoRetakeData,
   FaceSwapData,
   VideoSfxNodeData,
+  VideoMaskNodeData,
   GenerateMaskData,
   ReferenceBoardData,
   ReferenceSheetData,
@@ -226,6 +230,7 @@ import type {
   LoopVideoData,
   GifToVideoData,
   FadeVideoData,
+  MaskCompositeData,
   StillToVideoData,
   SlideshowData,
   ResizeVideoData,
@@ -6787,6 +6792,38 @@ function executeNodeCore(
     );
   }
 
+  if (node.type === "video-mask") {
+    const vmData = node.data as VideoMaskNodeData;
+    const videoUrl = overrideMediaUrl ?? inputs.videoUrl;
+    if (!videoUrl) {
+      toast.error(nodeRunError(vmData.label, "nodeRun.noVideoConnectedUseThe"));
+      return Promise.reject(new Error("No video"));
+    }
+    // Prompt: the wired `prompt` handle wins, else the node's own text; then
+    // the pre/post affixes. Mirrors the orchestrator's payload-builder
+    // `case "video-mask"`.
+    const prompt = (applyPromptAffixes((inputs.prompt as string | undefined)?.trim() || (vmData.prompt ?? "").trim(), readPromptAffixes(vmData), refMap) ?? "").trim();
+    if (!prompt) {
+      toast.error(nodeRunError(vmData.label, "nodeRun.promptIsRequired"));
+      return Promise.reject(new Error("No prompt"));
+    }
+    setUserPromptTemplate(vmData.prompt?.trim() || undefined);
+    return runProcessingNode(
+      node.id,
+      () =>
+        videoMaskApi({
+          videoUrl,
+          prompt,
+          threshold: vmData.threshold ?? VIDEO_MASK_LIMITS.THRESHOLD_DEFAULT,
+          provider: resolveVideoMaskProvider(vmData.provider),
+          userId: ctx.userId,
+        }),
+      "generatedVideoUrl",
+      "Video Mask",
+      ctx,
+    );
+  }
+
   if (node.type === "generate-mask") {
     const maskData = node.data as GenerateMaskData;
     const imageUrl = inputs.imageUrl as string | undefined;
@@ -8284,6 +8321,42 @@ function executeNodeCore(
         ),
       "generatedVideoUrl",
       "Fade In/Out",
+      ctx,
+    );
+  }
+
+  if (node.type === "mask-composite") {
+    const d = node.data as MaskCompositeData;
+    // The foreground rides the ordinary `video` handle; `background` and
+    // `mask-video` are routed by handle in node-input-resolver (mirrors the
+    // backend input-resolver + payload-builder `case "mask-composite"`).
+    const foregroundUrl = overrideMediaUrl ?? inputs.videoUrl;
+    const backgroundUrl = inputs.backgroundVideoUrl;
+    const maskUrl = inputs.maskUrl;
+    if (!foregroundUrl) {
+      toast.error(nodeRunError(d.label, "nodeRun.maskCompositeNoForeground"));
+      return Promise.reject(new Error("No foreground video"));
+    }
+    if (!backgroundUrl) {
+      toast.error(nodeRunError(d.label, "nodeRun.maskCompositeNoBackground"));
+      return Promise.reject(new Error("No background video"));
+    }
+    if (!maskUrl) {
+      toast.error(nodeRunError(d.label, "nodeRun.maskCompositeNoMask"));
+      return Promise.reject(new Error("No mask video"));
+    }
+    return runProcessingNode(
+      node.id,
+      () =>
+        maskCompositeApi({
+          foregroundUrl,
+          backgroundUrl,
+          maskUrl,
+          ...resolveMaskCompositeSettings(d),
+          userId: ctx.userId,
+        }),
+      "generatedVideoUrl",
+      "Mask Composite",
       ctx,
     );
   }

@@ -1927,6 +1927,13 @@ function routeOutput(
     inputs.maskUrl = output
     return
   }
+  // Mask Composite: the `background-video` handle is the video the foreground goes
+  // over (the foreground rides the ordinary `video` handle, the mask the
+  // `mask-video` one above). Mirrors the frontend node-input-resolver.
+  if (targetType === "mask-composite" && edge.targetHandle === "background-video") {
+    inputs.backgroundVideoUrl = output
+    return
+  }
   if (edge.targetHandle === "lottie") {
     if (output.startsWith("http") || output.startsWith("/")) {
       const name = (src.data.label as string | undefined) ?? "Lottie Asset"

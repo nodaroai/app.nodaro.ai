@@ -224,6 +224,8 @@ const NODE_LABELS_PT_BR: Record<string, string> = {
   "Photographer": "Fotógrafo",
   "Aesthetic": "Estética",
   "Era": "Época",
+  "Video Mask": "Máscara de vídeo",
+  "Mask Composite": "Composição por máscara",
 }
 
 const HANDLE_LABELS_PT_BR: Record<string, string> = {
@@ -414,6 +416,7 @@ const HANDLE_LABELS_PT_BR: Record<string, string> = {
   "Voice Character": "Perfil da voz",
   "Voice Delivery": "Estilo de fala",
   "Shot stills": "Imagens fixas das tomadas",
+  "Foreground": "Primeiro plano",
 }
 
 const PRESET_GROUPS_PT_BR: Record<string, string> = {

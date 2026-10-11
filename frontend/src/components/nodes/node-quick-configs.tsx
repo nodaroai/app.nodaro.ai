@@ -55,6 +55,8 @@ import { ALL_LANGUAGES } from "@/lib/audio-tags"
 import { ttsModelSwitchPatch, type TtsSwitchFields } from "@/lib/tts-model-switch"
 import { dialogueModelSwitchPatch, type DialogueSwitchFields } from "@/lib/dialogue-model-switch"
 import { IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
+import { VIDEO_MASK_LIMITS, MASK_COMPOSITE_AUDIO_SOURCES, MASK_COMPOSITE_BACKGROUND_FITS, MASK_COMPOSITE_DEFAULTS } from "@nodaro/shared"
+import { MASK_COMPOSITE_AUDIO_LABEL_KEYS, MASK_COMPOSITE_FIT_LABEL_KEYS } from "@/components/editor/config-panels/mask-composite-config"
 
 /**
  * Data-driven quick-config controls for {@link NodeQuickStrip}. Each AI node
@@ -495,6 +497,36 @@ const maskThresholdControl = (): QuickConfigControl => ({
   ],
 })
 
+/** video-mask detection threshold. Three presets around the shared default,
+ *  plus "Custom…" for any value the panel slider can set — `customRange` (the
+ *  route's own VIDEO_MASK_LIMITS bounds) also exempts in-range values from the
+ *  stale-value snap, so the strip never overwrites a slider value. */
+const videoMaskThresholdControl = (): QuickConfigControl => ({
+  field: "threshold", ariaLabel: tx("scriptcfg.threshold"), icon: Sparkles, numeric: true,
+  defaultValue: String(VIDEO_MASK_LIMITS.THRESHOLD_DEFAULT),
+  options: [
+    { value: "0.3", label: tx("node.thresholdLow") },
+    { value: String(VIDEO_MASK_LIMITS.THRESHOLD_DEFAULT), label: tx("node.thresholdMed") },
+    { value: "0.7", label: tx("node.thresholdHigh") },
+  ],
+  customRange: { min: VIDEO_MASK_LIMITS.THRESHOLD_MIN, max: VIDEO_MASK_LIMITS.THRESHOLD_MAX, step: VIDEO_MASK_LIMITS.THRESHOLD_STEP },
+})
+
+/** mask-composite's two enum levers — static lists straight from the shared
+ *  enums (no provider lever), captions from the panel's own label maps. */
+const maskCompositeQuickConfigs = (): ReadonlyArray<QuickConfigControl> => [
+  {
+    field: "backgroundFit", ariaLabel: tx("proccfg.maskCompositeBackgroundFit"), icon: Maximize2,
+    defaultValue: MASK_COMPOSITE_DEFAULTS.backgroundFit,
+    options: MASK_COMPOSITE_BACKGROUND_FITS.map((v) => ({ value: v, label: tx(MASK_COMPOSITE_FIT_LABEL_KEYS[v]) })),
+  },
+  {
+    field: "audioSource", ariaLabel: tx("proccfg.maskCompositeAudio"), icon: Volume2,
+    defaultValue: MASK_COMPOSITE_DEFAULTS.audioSource,
+    options: MASK_COMPOSITE_AUDIO_SOURCES.map((v) => ({ value: v, label: tx(MASK_COMPOSITE_AUDIO_LABEL_KEYS[v]) })),
+  },
+]
+
 /** assemble-narrated-video's three ffmpeg-fit knobs. No provider lever exists
  *  on this node (pure ffmpeg logic — see assemble-narrated-video-config.tsx),
  *  so these are static option lists; every value is within the route's Zod
@@ -875,6 +907,8 @@ export function NODE_QUICK_CONFIGS(): Readonly<Record<string, ReadonlyArray<Quic
   "face-swap": [faceSwapProviderControl()],
   "remove-background": [removeBgMotionControl()],
   "generate-mask": [maskThresholdControl()],
+  "video-mask": [videoMaskThresholdControl()],
+  "mask-composite": maskCompositeQuickConfigs(),
   // ── Video Analysis — the two "how should this run" levers the config panel
   // exposes: Analysis quality (tier) + best-of-N Result selection. Both are
   // static enums (not provider-dependent), sourced from the SAME shared lists /

@@ -89,6 +89,8 @@ export const NODE_PROMPT_FIELDS: Readonly<Record<string, PromptFieldSpec>> = {
   "cinematic-avatar": { prompt: "prompt", media: "video", inline: true },
   "video-sfx": { prompt: "prompt", negative: "negativePrompt", promptLabel: "Sound prompt", media: "audio", inline: true },
   "video-retake": { prompt: "prompt", promptLabel: "Retake prompt", media: "video", inline: true },
+  // Video Mask (SAM 3) — the subject to track, like Generate Mask's "what to mask".
+  "video-mask": { prompt: "prompt", promptLabel: "What to mask", media: "video", inline: true },
   // ── Audio / music ──
   "generate-music": { prompt: "prompt", media: "audio", inline: true },
   "suno-generate": { prompt: "prompt", media: "audio", inline: true },

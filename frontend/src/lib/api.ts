@@ -7,6 +7,7 @@ import type { SubWorkflowRouteSnapshot, SocialConnection, CharacterVoice, JobErr
 import type { PresentationSettings } from "@/hooks/use-workflow-store"
 import { FLUX_LORA_CHARACTER_MODEL_ID } from "@nodaro/shared"
 import type { ExpandedVideoOverlayRequest, EditPlanMode } from "@nodaro/shared"
+import type { VideoMaskProvider, MaskCompositeBackgroundFit, MaskCompositeAudioSource } from "@nodaro/shared"
 import type { Pro3DRenderQuote, Pro3DRenderSource, ReduceMeta, ImageCriticMode, WorkflowExport, WorkflowImportReport, ReferenceSheet, TtsProvider, SheetType, SheetSkin, SheetFlavour, EntityKind, CharacterAttachColumn, ObjectAttachColumn, CreatureAttachColumn, LocationAttachColumn, CommunityCard, CommunitySort } from "@nodaro/shared"
 import type { WardrobeValue, PersonValue } from "@nodaro/prompts"
 export type { CommunityCard } from "@nodaro/shared"
@@ -3883,6 +3884,30 @@ export async function fadeVideoApi(videoUrl: string, fadeIn: boolean, fadeInDura
   })
 }
 
+/** Mask Composite — POST /v1/mask-composite. A foreground video over a
+ *  background video through a mask video (white = foreground). Settings are the
+ *  normalised `resolveMaskCompositeSettings` output (bounds in @nodaro/shared). */
+export async function maskCompositeApi(params: {
+  foregroundUrl: string
+  backgroundUrl: string
+  maskUrl: string
+  invertMask?: boolean
+  feather?: number
+  grow?: number
+  backgroundFit?: MaskCompositeBackgroundFit
+  audioSource?: MaskCompositeAudioSource
+  userId?: string
+}): Promise<{ jobId: string }> {
+  const { userId, ...rest } = params
+  const body: Record<string, unknown> = { ...rest }
+  if (userId) body.userId = userId
+  return apiJson("/v1/mask-composite", {
+    body,
+    workflowId: true,
+    label: "apiErr.startMaskComposite",
+  })
+}
+
 export async function gifToVideoApi(
   gifUrl: string,
   opts?: {
@@ -6060,6 +6085,26 @@ export async function generateMask(params: {
     body: params,
     workflowId: true,
     label: "apiErr.startMaskGeneration",
+  })
+}
+
+/** Video Mask — POST /v1/video-mask. SAM 3 tracks the described subject
+ *  through the clip; the job completes with a black-and-white mask video
+ *  (`output_data.videoUrl`). Priced per clip length (the route measures it). */
+export async function videoMaskApi(params: {
+  videoUrl: string
+  prompt: string
+  threshold?: number
+  provider?: VideoMaskProvider
+  userId?: string
+}): Promise<{ jobId: string }> {
+  const { userId, ...rest } = params
+  const body: Record<string, unknown> = { ...rest }
+  if (userId) body.userId = userId
+  return apiJson("/v1/video-mask", {
+    body,
+    workflowId: true,
+    label: "apiErr.startVideoMask",
   })
 }
 

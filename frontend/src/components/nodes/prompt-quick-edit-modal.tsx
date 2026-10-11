@@ -23,6 +23,7 @@ import {
   Type,
   Users,
   VenetianMask,
+  ScanEye,
   Volume2,
   Wand2,
   Waypoints,
@@ -92,6 +93,7 @@ const NODE_TYPE_ICON_MAP: Readonly<Record<string, LucideIcon>> = {
   "image-to-text": Eye,
   "image-critic": Eye,
   // Video
+  "video-mask": ScanEye,
   "generate-video": Clapperboard,
   "generate-video-pro": Clapperboard,
   // Span-replace edit of an existing clip — same semantic as video-retake

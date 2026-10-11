@@ -57,6 +57,9 @@ export const NODE_CREDIT_COSTS: Record<string, number> = {
   "video-upscale": 150,
   "extend-video": 400,
   "face-swap": 160,
+  // Video Mask: the bare id is the ceiling row (the 60 s bucket) — a cold-cache
+  // quote for a clip of unknown length, never under what a run reserves.
+  "video-mask": 283,
   "transcribe": 10,
   "combine-videos": 10,
   // apply-edl: per-minute RATES, one row per render quality (applyEdlCreditId)
@@ -113,6 +116,7 @@ export const NODE_CREDIT_COSTS: Record<string, number> = {
   "loop-video": 10,
   "gif-to-video": 0,
   "fade-video": 10,
+  "mask-composite": 20,
   "resize-video": 20,
   "adjust-volume": 10,
   "audio-fx": 20,
@@ -691,6 +695,7 @@ export const EXECUTABLE_TYPES = new Set([
   "video-retake",
   "face-swap",
   "video-sfx",
+  "video-mask",
   "generate-mask",
   "video-composer",
   "after-effects",
@@ -728,6 +733,7 @@ export const EXECUTABLE_TYPES = new Set([
   "loop-video",
   "gif-to-video",
   "fade-video",
+  "mask-composite",
   "resize-video",
   "adjust-volume",
   "audio-fx",

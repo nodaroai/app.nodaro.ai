@@ -85,6 +85,24 @@ export function videoSfxQuotedSec(
   return estimateVideoSfxClipSec(node, nodes, edges, rerunIds) ?? upstreamVideoDurationSec(node.id, "video", nodes, edges)
 }
 
+/**
+ * The clip length, in seconds, a Video Mask is QUOTED at, or `null` when it is
+ * unknown (the longest price row). The SAME reading as Video SFX
+ * ({@link videoSfxQuotedSec}) — the server's run estimate prices Video Mask
+ * through the same wire-length rule (`videoSfxClipSecOf` in the backend
+ * estimator), so the node's Run button, the confirm dialog and the workflow
+ * badge quote one row. Rows above 60 s collapse onto the last row inside
+ * `videoMaskCreditId`.
+ */
+export function videoMaskQuotedSec(
+  node: Pick<WorkflowNode, "id">,
+  nodes: ReadonlyArray<WorkflowNode>,
+  edges: ReadonlyArray<WorkflowEdge>,
+  rerunIds: ReadonlySet<string> = new Set(),
+): number | null {
+  return videoSfxQuotedSec(node, nodes, edges, rerunIds)
+}
+
 export function estimateVideoUtilityBaseCredits(
   node: WorkflowNode,
   nodes: ReadonlyArray<WorkflowNode>,

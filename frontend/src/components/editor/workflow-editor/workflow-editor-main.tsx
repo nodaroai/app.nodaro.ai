@@ -275,6 +275,7 @@ export function WorkflowEditor({ projectId, workflowId }: WorkflowEditorProps) {
       "merge-video-audio", "resize-video", "trim-video", "speed-ramp",
       "loop-video", "fade-video", "extend-video", "motion-transfer",
       "video-upscale", "suno-music-video", "manual-edit", "video-overlay",
+      "video-mask", "mask-composite",
     ]);
     const IMAGE_TYPES = new Set([
       "generate-image", "upload-image", "image-to-image", "edit-image",

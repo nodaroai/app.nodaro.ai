@@ -148,6 +148,8 @@ const VIDEO_TYPES = new Set([
   "speed-ramp",
   "loop-video",
   "fade-video",
+  "mask-composite",
+  "video-mask",
   "video-overlay",
   "add-captions",
   "render-video",

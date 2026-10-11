@@ -35,6 +35,7 @@ export const SKIP_CATEGORIES = new Set([
   "loop-video",
   "fade-video",
   "video-overlay",
+  "mask-composite",
   "transcode-video",
   "extract-audio",
   "audio-isolation",

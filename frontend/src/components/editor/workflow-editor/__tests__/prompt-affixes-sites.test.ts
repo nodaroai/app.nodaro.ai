@@ -15,7 +15,7 @@ const SRC = readFileSync(join(__dirname, "..", "execute-node.ts"), "utf8")
 const CATEGORY_B = [
   "modify-image", "generate-mask", "voice-remix", "voice-design", "forced-alignment", "video-analysis",
   "suno-generate", "suno-cover", "suno-extend", "suno-lyrics", "suno-style-boost", "suno-upload-extend",
-  "image-to-text", "lip-sync", "motion-transfer", "video-sfx", "3d-title", "motion-graphics", "image-critic",
+  "image-to-text", "lip-sync", "motion-transfer", "video-sfx", "video-mask", "3d-title", "motion-graphics", "image-critic",
 ]
 
 /** Bespoke blocks whose shared composer applies the affixes itself — the one

@@ -85,6 +85,7 @@ const VIDEO_OUTPUT_TYPES = [
   "fade-video",
   "video-overlay",
   "suno-music-video",
+  "mask-composite",
 ]
 
 const PROVIDER_LABELS: Record<string, string> = {

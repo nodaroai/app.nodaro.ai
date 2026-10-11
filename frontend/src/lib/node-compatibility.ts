@@ -116,6 +116,9 @@ export const HANDLE_COMPATIBILITY: Record<string, readonly string[]> = {
   video: ["video", "video1", "video2", "video3", "video4", "media", "background", "ref-video", "videoReferences", "in"],
   audio: ["audio", "audio1", "audio2", "audio3", "audio4", "audio5", "ref-audio", "media"],
   "silent-video": ["video", "video1", "video2", "video3", "video4", "media"],
+  // Dragging from a video-only INPUT lists the nodes with a video output, not every node.
+  "background-video": ["video", "video-out"],
+  "mask-video": ["video", "video-out"],
 
   // Text-like outputs → text-like inputs
   prompt: ["prompt", "text"],
@@ -248,8 +251,13 @@ export const TYPED_HANDLE_IDS: ReadonlySet<string> = new Set([
   //   - negative: text-only negative-prompt handle on Generate Video /
   //     Video-to-Video / Motion Transfer / Video SFX.
   "negative",
-  //   - mask-video: SwitchX (Relight & Switch) custom-mode matte-video input.
+  //   - mask-video: SwitchX (Relight & Switch) custom-mode matte-video input,
+  //     and Mask Composite's mask video (white = foreground).
   "mask-video",
+  //   - background-video: Mask Composite's background video (the foreground
+  //     goes over it through the mask). Not "background": that id is 3D Title's
+  //     IMAGE input, which an image drag lists.
+  "background-video",
   //   - analysis: AI Audit's optional finished-analysis input (accepts only
   //     ANALYSIS_PRODUCER_TYPES, never the Parameter pickers).
   "analysis",

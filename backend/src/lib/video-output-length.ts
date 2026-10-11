@@ -355,6 +355,9 @@ export const VIDEO_OUTPUT_LENGTH_RULES: Readonly<Record<string, OutputLengthRule
   "resize-video": passVideo,
   "social-media-format": passVideo,
   "fade-video": passVideo,
+  // The mask has its clip's frames; the composite follows its foreground (the `video` wire).
+  "video-mask": passVideo,
+  "mask-composite": passVideo,
   "transcode-video": passVideo,
   "remove-audio": passVideo,
   "video-overlay": passVideo,

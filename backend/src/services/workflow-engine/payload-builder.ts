@@ -9,6 +9,7 @@ import {
   CAMERA_SWITCH_CREDIT_ID, cameraSwitchEdlProblem, cameraSwitchSettingsPayload, transcriptSpeakerLabels, type CameraSwitchNodeSettings } from "@nodaro/shared"
 import { assembleVideoOverlayRequest, formatVideoOverlayError, validateVideoOverlayRequest, videoOverlayCompositionKey, videoOverlaySlotSources, type VideoOverlayNodeFields } from "@nodaro/shared"
 import { defaultImageModel, IMAGE_MODEL_ROLE_DEFAULTS } from "@nodaro/shared"
+import { VIDEO_MASK_LIMITS, resolveVideoMaskProvider, resolveMaskCompositeSettings } from "@nodaro/shared"
 import type { SourceImageSize } from "@nodaro/shared"
 import { applyOrder, generateImageNodeProvider, getNodeImageUrl, orderedSourceImages, sourceImageNodeProvider } from "./source-image.js"
 import { aspectRatioForLoraModel } from "../../lib/image-auto-aspect.js"
@@ -239,6 +240,12 @@ export const REQUIRED_MEDIA_INPUTS: Readonly<Record<string, RequiredMediaInput |
   "speed-ramp": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
   "loop-video": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
   "fade-video": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
+  "video-mask": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
+  "mask-composite": [
+    { anyOf: ["videoUrl"], kind: "video", noun: "a foreground video" },
+    { anyOf: ["backgroundVideoUrl"], kind: "video", noun: "a background video" },
+    { anyOf: ["maskUrl"], kind: "video", noun: "a mask video" },
+  ],
   "video-overlay": { anyOf: ["videoUrl"], kind: "video", noun: "a base video" },
   "transcode-video": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
   "add-captions": { anyOf: ["videoUrl"], kind: "video", noun: "a video" },
@@ -4679,6 +4686,42 @@ export function buildPayload(
         },
       }
     }
+
+    case "video-mask": {
+      // Priced per clip length: node-executor measures the clip and stamps
+      // the row (`stampVideoMaskLength`) before the reservation. The route's
+      // Zod is never met on this path, so its rules are applied here: a blank
+      // prompt is refused (a throw lands before any reservation, like the
+      // route's 400) and the threshold is held to the model's range.
+      const maskPrompt = (resolvedInputs.prompt?.trim() || (typeof data.prompt === "string" ? data.prompt.trim() : "")) || undefined
+      if (!maskPrompt) throw new Error("Video Mask: no prompt — describe what to track (e.g. \"the dancer\")")
+      const rawThreshold = typeof data.threshold === "number" && Number.isFinite(data.threshold) ? data.threshold : VIDEO_MASK_LIMITS.THRESHOLD_DEFAULT
+      return {
+        jobName: "video-mask",
+        queueName: "video-generation",
+        modelIdentifier: "video-mask",
+        payload: {
+          jobId,
+          videoUrl: resolvedInputs.videoUrl ?? (data.videoUrl as string | undefined),
+          prompt: applyPromptAffixes(maskPrompt, readPromptAffixes(data), refMap),
+          threshold: Math.min(VIDEO_MASK_LIMITS.THRESHOLD_MAX, Math.max(VIDEO_MASK_LIMITS.THRESHOLD_MIN, rawThreshold)),
+          provider: resolveVideoMaskProvider(data.provider),
+          usageLogId,
+        },
+      }
+    }
+
+    case "mask-composite":
+      return ffmpegResult("mask-composite", {
+        jobId,
+        // The same keys, and the same `||`, as its REQUIRED_MEDIA_INPUTS row: a
+        // value that passes the guard is the value sent.
+        foregroundUrl: resolvedInputs.videoUrl || (data.videoUrl as string | undefined),
+        backgroundUrl: resolvedInputs.backgroundVideoUrl || (data.backgroundVideoUrl as string | undefined),
+        maskUrl: resolvedInputs.maskUrl || (data.maskUrl as string | undefined),
+        ...resolveMaskCompositeSettings(data),
+        usageLogId,
+      })
 
     case "face-swap": {
       return {

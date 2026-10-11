@@ -11,6 +11,8 @@ import type { EditedEdl, PassThroughWarning } from "@nodaro/shared"
 import type { ScheduleRule } from "@nodaro/shared"
 import type { SocialPlatform, SocialPost, SocialReadPeriod, CompetitorReadRole } from "@nodaro/shared"
 import type { VideoOverlayFit, VideoOverlayLayerInput, VideoOverlayOutputAspect, VideoOverlayWarning } from "@nodaro/shared"
+import type { VideoMaskProvider, MaskCompositeBackgroundFit, MaskCompositeAudioSource } from "@nodaro/shared"
+import { MASK_COMPOSITE_DEFAULTS, VIDEO_MASK_DEFAULTS } from "@nodaro/shared"
 
 export type NodeCategory = "input" | "parameter" | "ai" | "processing" | "output" | "scene" | "character" | "face" | "object" | "creature" | "location" | "utility"
 
@@ -2381,6 +2383,39 @@ export interface VideoSfxNodeData extends PromptAffixFields {
   fieldMappings: FieldMappings
   videoPlayState?: "loop" | "paused" | "stopped"
   pausedAtTime?: number
+}
+
+/** Video Mask — text-prompted video segmentation (SAM 3).
+ *
+ *  Tracks the subject described by `prompt` through the connected clip and
+ *  outputs a black-and-white MASK VIDEO (white = the subject) on its single
+ *  `video` handle — a video producer, so it wires straight into Mask
+ *  Composite's `mask-video` handle or Relight & Switch's matte input.
+ *
+ *  Pricing: a price row per clip length at the 30 fps basis
+ *  (`videoMaskCreditId` in @nodaro/shared); the route and a workflow run
+ *  measure the real file. Backend Zod schema is `videoMaskBody` in
+ *  `backend/src/routes/video-mask.ts`; bounds come from `VIDEO_MASK_LIMITS`.
+ */
+export interface VideoMaskNodeData extends PromptAffixFields {
+  [key: string]: unknown
+  label: string
+  /** The subject to track ("the dog", "the woman in the red coat"). */
+  prompt: string
+  /** Detection confidence (VIDEO_MASK_LIMITS.THRESHOLD_MIN–MAX). Lower finds more. */
+  threshold: number
+  /** Segmentation model — `"sam-3"` is the only one (VIDEO_MASK_PROVIDERS). */
+  provider: VideoMaskProvider
+  /** Resolved at execution time from the connected video edge. */
+  videoUrl?: string
+  activeResultIndex?: number
+  generatedResults?: GeneratedResult[]
+  generatedVideoUrl?: string
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  currentJobId?: string
+  currentJobProgress?: number
+  fieldMappings: FieldMappings
 }
 
 export type VideoToVideoData = PromptAffixFields & {
@@ -4798,6 +4833,31 @@ export type FadeVideoData = {
   activeResultIndex?: number
 }
 
+/** Mask Composite — a foreground video over a background video through a mask
+ *  video (white = foreground). Local ffmpeg, keyless. Inputs: `video`
+ *  (foreground), `background`, `mask-video`. Settings are normalised by
+ *  `resolveMaskCompositeSettings` (@nodaro/shared) on both engines; bounds and
+ *  defaults are `MASK_COMPOSITE_BOUNDS` / `MASK_COMPOSITE_DEFAULTS`. */
+export type MaskCompositeData = {
+  currentJobProgress?: number
+  [key: string]: unknown
+  label: string
+  invertMask: boolean
+  /** Edge softening, px of blur on the mask. */
+  feather: number
+  /** Grow (+) / shrink (−) the white region, px. */
+  grow: number
+  backgroundFit: MaskCompositeBackgroundFit
+  audioSource: MaskCompositeAudioSource
+  fieldMappings: FieldMappings
+  executionStatus?: "idle" | "running" | "completed" | "failed"
+  errorMessage?: string
+  currentJobId?: string
+  generatedVideoUrl?: string
+  generatedResults?: readonly GeneratedResult[]
+  activeResultIndex?: number
+}
+
 export type StillToVideoData = {
   currentJobProgress?: number
   [key: string]: unknown
@@ -6986,6 +7046,7 @@ export type SceneNodeData =
   | GenerateVideoProNodeData
   | EditVideoProNodeData
   | VideoSfxNodeData
+  | VideoMaskNodeData
   | TextToSpeechData
   | QACheckData
   | ImageCriticData
@@ -7053,6 +7114,7 @@ export type SceneNodeData =
   | LoopVideoData
   | GifToVideoData
   | FadeVideoData
+  | MaskCompositeData
   | VideoOverlayData
   | TranscodeVideoData
   | ManualEditData
@@ -7199,6 +7261,7 @@ export type SceneNodeType =
   | "generate-video-pro"
   | "edit-video-pro"
   | "video-sfx"
+  | "video-mask"
   | "text-to-speech"
   | "qa-check"
   | "image-critic"
@@ -7275,6 +7338,7 @@ export type SceneNodeType =
   | "loop-video"
   | "gif-to-video"
   | "fade-video"
+  | "mask-composite"
   | "video-overlay"
   | "transcode-video"
   | "manual-edit"
@@ -8298,6 +8362,28 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
       activeResultIndex: 0,
     } as VideoSfxNodeData,
     exposableOutputs: [{ key: "result", label: "Result", outputType: "video" as const }],
+  },
+  {
+    // SAM 3 text-prompted video segmentation → a black-and-white mask VIDEO.
+    // Priced per clip length (`videoMaskCreditId`); `creditCost` is a coarse
+    // popup display only. Defaults spread from VIDEO_MASK_DEFAULTS (@nodaro/shared);
+    // `video-mask-composite-defaults.test.ts` pins them to the route's defaults.
+    type: "video-mask",
+    label: "Video Mask",
+    category: "ai",
+    creditCost: 25,
+    inputs: ["video", "prompt"],
+    outputs: ["video"],
+    defaultData: {
+      label: "Video Mask",
+      prompt: "",
+      ...VIDEO_MASK_DEFAULTS,
+      fieldMappings: {},
+      executionStatus: "idle",
+      generatedResults: [],
+      activeResultIndex: 0,
+    } as VideoMaskNodeData,
+    exposableOutputs: [{ key: "result", label: "Mask", outputType: "video" as const }],
   },
   {
     type: "video-to-video",
@@ -9542,6 +9628,25 @@ export const NODE_DEFINITIONS: ReadonlyArray<NodeTypeDefinition> = [
     inputs: ["video"],
     outputs: ["video"],
     defaultData: { label: "Fade In/Out", fadeIn: true, fadeInDuration: 0.5, fadeOut: true, fadeOutDuration: 0.5, color: "black", fieldMappings: {} },
+  },
+  {
+    // Foreground over background through a mask video (white = foreground).
+    // Local ffmpeg, flat price. Settings spread from MASK_COMPOSITE_DEFAULTS.
+    type: "mask-composite",
+    label: "Mask Composite",
+    category: "processing",
+    creditCost: 20,
+    inputs: ["video", "background-video", "mask-video"],
+    outputs: ["video"],
+    defaultData: {
+      label: "Mask Composite",
+      ...MASK_COMPOSITE_DEFAULTS,
+      fieldMappings: {},
+      executionStatus: "idle",
+      generatedResults: [],
+      activeResultIndex: 0,
+    } as MaskCompositeData,
+    exposableOutputs: [{ key: "result", label: "Result", outputType: "video" as const }],
   },
   {
     type: "transcode-video",

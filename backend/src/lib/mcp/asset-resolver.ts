@@ -52,6 +52,8 @@ const VIDEO_TYPES = new Set<string>([
   "trim-video",
   "fade-video",
   "video-overlay",
+  "video-mask",
+  "mask-composite",
   "loop-video",
   "transcode-video",
   "speech-to-video",

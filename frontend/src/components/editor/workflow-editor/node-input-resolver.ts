@@ -633,6 +633,10 @@ export interface FrontendResolvedInputs {
   negativePrompt?: string;
   imageUrl?: string;
   videoUrl?: string;
+  /** Mask Composite: the video wired into its `background` handle (the
+   *  foreground rides `videoUrl`, the mask `maskUrl`). Mirrors the backend
+   *  ResolvedInputs.backgroundVideoUrl. */
+  backgroundVideoUrl?: string;
   faceImageUrl?: string;
   videoUrls?: string[];
   videoUrlsWithSourceIds?: Array<{ nodeId: string; url: string }>;
@@ -879,6 +883,7 @@ const LLM_REF_VIDEO_NODE_TYPES = new Set<string>([
   "resize-video", "social-media-format", "speed-ramp", "loop-video",
   "fade-video", "transcode-video", "add-captions", "manual-edit",
   "video-sfx", "remove-audio", "assemble-narrated-video", "video-overlay",
+  "video-mask", "mask-composite",
 ]);
 /** Node types whose primary output is an audio URL. */
 const LLM_REF_AUDIO_NODE_TYPES = new Set<string>([
@@ -2045,9 +2050,17 @@ export function resolveNodeInputs(
       inputs.maskUrl = output;
       continue;
     }
-    // SwitchX custom-mode alpha matte video → the single alpha_uri slot (maskUrl).
+    // SwitchX custom-mode alpha matte video → the single alpha_uri slot (maskUrl);
+    // Mask Composite's mask video lands in the same slot.
     if (srcEdge.targetHandle === "mask-video") {
       inputs.maskUrl = output;
+      continue;
+    }
+    // Mask Composite: the `background` handle is the video the foreground goes
+    // over (the foreground rides the ordinary `video` handle). Mirrors the
+    // backend input-resolver.
+    if (node.type === "mask-composite" && srcEdge.targetHandle === "background-video") {
+      inputs.backgroundVideoUrl = output;
       continue;
     }
     // SwitchX reference image (the "new look") → referenceImageUrls (the execute

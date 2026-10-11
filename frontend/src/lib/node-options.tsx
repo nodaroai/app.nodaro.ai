@@ -104,6 +104,8 @@ import {
   Sparkles,
   StickyNote,
   SunDim,
+  Blend,
+  ScanEye,
   SwatchBook,
   Swords,
   Trophy,
@@ -871,6 +873,14 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     keywords: ["relight", "relighting", "relit", "lighting", "switch", "swap background", "replace background", "change background", "scene swap", "restyle", "recolor", "composite", "compositing", "green screen", "chroma key", "rotoscope", "matte", "alpha", "color match", "harmonize", "vfx", "video to video", "beeble"],
   },
   {
+    type: "video-mask",
+    label: "Video Mask",
+    icon: <ScanEye className="h-4 w-4" />,
+    category: "AI",
+    group: "video-continue-restyle",
+    keywords: ["mask", "segment", "segmentation", "sam", "sam 3", "track", "tracking", "rotoscope", "matte", "cutout", "isolate", "subject", "alpha"],
+  },
+  {
     type: "generative-pipeline",
     label: "Story → Video",
     icon: <Film className="h-4 w-4" />,
@@ -1422,6 +1432,14 @@ export const NODE_OPTIONS: ReadonlyArray<NodeOption> = [
     icon: <SunDim className="h-4 w-4" />,
     category: "Processing",
     group: "video-cut-assemble",
+  },
+  {
+    type: "mask-composite",
+    label: "Mask Composite",
+    icon: <Blend className="h-4 w-4" />,
+    category: "Processing",
+    group: "video-cut-assemble",
+    keywords: ["mask", "composite", "compositing", "matte", "background", "replace background", "green screen", "chroma key", "keying", "layer", "overlay"],
   },
   {
     type: "transcode-video",

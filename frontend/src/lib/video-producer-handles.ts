@@ -330,6 +330,42 @@ export function isValidSwitchXConnection(
   }
 }
 
+// ─── video-mask (SAM 3 text-prompted segmentation) ─────────────────────
+// Inputs: video (the clip to segment), prompt (the subject — text producers or
+// pickers, like every prompt slot). Source: video (the mask video).
+export function isValidVideoMaskConnection(
+  targetHandleId: string,
+  sourceType: string,
+  isVisualPicker: (t: string) => boolean,
+): boolean {
+  switch (targetHandleId) {
+    case "video":
+      return ACCEPTS_VIDEO_OR_DYN(sourceType)
+    case "prompt":
+      return ACCEPTS_PROMPT(sourceType, isVisualPicker)
+    default:
+      return false
+  }
+}
+
+// ─── mask-composite (foreground over background through a mask video) ──
+// Inputs: video (foreground), background, mask-video (white = foreground) —
+// all three video producers. `mask-video` is the same handle id SwitchX's
+// matte input uses. Source: video.
+export function isValidMaskCompositeConnection(
+  targetHandleId: string,
+  sourceType: string,
+): boolean {
+  switch (targetHandleId) {
+    case "video":
+    case "background-video":
+    case "mask-video":
+      return ACCEPTS_VIDEO_OR_DYN(sourceType)
+    default:
+      return false
+  }
+}
+
 // ─── Friendly labels for source-direction popover candidate rows ──────
 
 export const VIDEO_PRODUCER_HANDLE_LABELS: Record<string, Record<string, string>> = {
@@ -344,4 +380,6 @@ export const VIDEO_PRODUCER_HANDLE_LABELS: Record<string, Record<string, string>
   "ai-avatar":        { image: "Image", script: "Script", audio: "Audio", video: "Video" },
   "cinematic-avatar": { prompt: "Prompt", "ref-video": "Video ref", "ref-audio": "Audio ref", "ref-image": "Image ref", video: "Video" },
   "switchx":          { video: "Source video", image: "Reference", mask: "Mask", "mask-video": "Mask video", prompt: "Prompt" },
+  "video-mask":       { video: "Video", prompt: "Prompt" },
+  "mask-composite":   { video: "Foreground", "background-video": "Background", "mask-video": "Mask" },
 }

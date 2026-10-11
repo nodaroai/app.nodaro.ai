@@ -1,4 +1,4 @@
-import { usdToCredits, PARAMETER_NODE_TYPES, withWiredSettings, MUSIC_CREDIT_ID, TEXT_TO_AUDIO_SFX_CREDIT_IDS, textToAudioCreditId, CAMERA_SWITCH_CREDIT_ID, LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec, LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec, videoSfxCreditId, VIDEO_SFX_PRICING, VIDEO_UTIL_PRICING, applyEdlCreditId, UGC_NODE_TYPES, dialogueProviderOf, EDIT_PLAN_MAX_MINUTES, isRenderNodeType } from "@nodaro/shared"
+import { usdToCredits, videoMaskCreditId, resolveVideoMaskProvider, PARAMETER_NODE_TYPES, withWiredSettings, MUSIC_CREDIT_ID, TEXT_TO_AUDIO_SFX_CREDIT_IDS, textToAudioCreditId, CAMERA_SWITCH_CREDIT_ID, LTX_EXTEND_PER_SECOND_CREDIT_ID, ltxExtendDurationSec, LTX_RETAKE_PER_SECOND_CREDIT_ID, ltxRetakeDurationSec, videoSfxCreditId, VIDEO_SFX_PRICING, VIDEO_UTIL_PRICING, applyEdlCreditId, UGC_NODE_TYPES, dialogueProviderOf, EDIT_PLAN_MAX_MINUTES, isRenderNodeType } from "@nodaro/shared"
 import { trySettleManagedJob } from "./managed-job-settlement.js"
 import {
   generatedVoiceLength,
@@ -1575,6 +1575,19 @@ export const STATIC_CREDIT_COSTS: Record<string, number> = {
   "video-retake": 1000,
   "roop-face-swap": 130,           // Replicate ×
   "generate-mask": 50,             // adirik/grounded-sam (Replicate) — segmentation mask
+  // ── Video Mask (SAM 3 on fal, video-mask node) — one row per clip length at
+  // the 30 fps basis (`videoMaskCreditId` in @nodaro/shared; a faster clip is
+  // priced proportionally longer). BASE credits = usdToCredits(provider cost
+  // at the bucket's top length); creditGuard applies the markup. The bare id
+  // is the ceiling row (never reserved — every run measures its clip).
+  "video-mask": 283,
+  "sam-3-video:5s": 25,
+  "sam-3-video:10s": 48,
+  "sam-3-video:15s": 73,
+  "sam-3-video:30s": 143,
+  "sam-3-video:60s": 283,
+  // Mask Composite: local ffmpeg, flat like merge-video-audio.
+  "mask-composite": 20,
   "transcribe": 10,
   // ── Web Scrape (Apify + direct RSS) ──
   "web-scrape": 20,
@@ -3943,6 +3956,7 @@ function estimateNodeCredits(
     audioSyncSourceCount: audioSyncWiredSourceCount(node, edges),
     editPlan: node.type === "edit-plan" ? { sourceSec: editPlanSourceSecOf(node, nodes, edges), perMinute: prices.editPlanPerMinute === true } : undefined,
     videoSfxSec: node.type === "video-sfx" ? videoSfxClipSecOf(node, edges, wireSec) : undefined,
+    videoMaskSec: node.type === "video-mask" ? videoSfxClipSecOf(node, edges, wireSec) : undefined,
   })
   return (chargedCredits(prices, modelId, unitsOf(node, priced)) ?? chargedCredits(prices, node.type) ?? 0)
 }
@@ -4569,6 +4583,8 @@ function getNodeModelIdentifier(
     editPlan?: { readonly sourceSec: number | undefined; readonly perMinute: boolean }
     /** Video SFX: the input clip's length a run estimate knows (undefined = an unmeasured clip). */
     videoSfxSec?: number
+    /** Video Mask: the input clip's length a run estimate knows (undefined = not known yet). */
+    videoMaskSec?: number
   } = {},
 ): string {
   const nodeType = node.type
@@ -4766,6 +4782,12 @@ function getNodeModelIdentifier(
   // other clip at the row for the length an unmeasurable clip is charged
   // (8 seconds).
   if (nodeType === "video-sfx") return videoSfxCreditId(graph.videoSfxSec)
+
+  // Video Mask: a price row per clip length, chosen when the run measures the
+  // clip (at its real frame rate). Before a run, a clip whose length the graph
+  // tells is quoted at that length's row at the 30 fps basis; any other clip at
+  // the longest row (an upper bound — the run is charged its measured row).
+  if (nodeType === "video-mask") return videoMaskCreditId(graph.videoMaskSec, resolveVideoMaskProvider(data.provider))
 
   // Apply EDL: the per-minute row of the render's quality — a preview on
   // `apply-edl:proxy`, a final on `apply-edl` — the id the route and the

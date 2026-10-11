@@ -1,6 +1,6 @@
 ---
-generated_at: 2026-10-09T11:07:24.412Z
-generated_from: 2c74d4b4d
+generated_at: 2026-10-11T22:03:57.901Z
+generated_from: 3b192eb31
 ---
 
 # Nodaro Workflow Editor — General Patterns
@@ -165,6 +165,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `loop-video` — Loop Video
 - `lottie-overlay` — Lottie Overlay
 - `manual-edit` — Manual Edit
+- `mask-composite` — Mask Composite
 - `material` — Material
 - `merge-lists` — Merge Lists
 - `merge-video-audio` — Merge Video & Audio
@@ -268,6 +269,7 @@ Call `get_node_skill(<type>)` for the full schema of any node type:
 - `video-analysis` — Video Analysis
 - `video-audit` — AI Audit
 - `video-composer` — Compose Video
+- `video-mask` — Video Mask
 - `video-overlay` — Video Overlay
 - `video-retake` — Retake Video
 - `video-sfx` — Video SFX

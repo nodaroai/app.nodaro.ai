@@ -1,6 +1,6 @@
 import type { NodaroClient } from "../client.js"
 import { readSseStream } from "../sse.js"
-import type { OverlayAnchor, CaptionStyle, CaptionLookId, SupportedFontName, TranscribeLane, VideoOverlayRequest } from "@nodaro/shared"
+import type { OverlayAnchor, CaptionStyle, CaptionLookId, SupportedFontName, TranscribeLane, VideoOverlayRequest, VideoMaskRequest, MaskCompositeRequest } from "@nodaro/shared"
 
 /** One word-timed caption entry (one per WORD for the kinetic styles). */
 export interface CaptionEntry {
@@ -425,6 +425,33 @@ export class MediaResource {
    */
   videoOverlay(input: VideoOverlayRequest): Promise<{ jobId: string }> {
     return this.client.request<{ jobId: string }>("POST", "/v1/video-overlay", { body: input })
+  }
+
+  /**
+   * Track a subject described in plain text through a video and get a
+   * black-and-white MASK VIDEO back (`POST /v1/video-mask`, SAM 3) — white =
+   * the subject. Clips up to 60 s at 30 fps (a faster clip counts
+   * proportionally longer), priced by the clip's length. Poll
+   * `jobs.get(jobId)`: the output carries `videoUrl` (the mask), `width`,
+   * `height`, `frames` and `coverage` (the fraction of pixels selected). Feed
+   * the mask to {@link MediaResource.maskComposite}.
+   */
+  videoMask(input: VideoMaskRequest): Promise<{ jobId: string }> {
+    return this.client.request<{ jobId: string }>("POST", "/v1/video-mask", { body: input })
+  }
+
+  /**
+   * Place a foreground video over a background video through a mask video
+   * (`POST /v1/mask-composite`; white = foreground) — local FFmpeg, no AI.
+   * The result follows the foreground's size, frame rate and length; the
+   * background is fitted (`backgroundFit`, default cover) and loops when
+   * shorter; the mask holds its last frame when shorter. Optional
+   * `invertMask`, `feather` (0–20 px), `grow` (−10–10 px) and `audioSource`
+   * (foreground / background / mix / none). Poll `jobs.get(jobId)` for
+   * `videoUrl`.
+   */
+  maskComposite(input: MaskCompositeRequest): Promise<{ jobId: string }> {
+    return this.client.request<{ jobId: string }>("POST", "/v1/mask-composite", { body: input })
   }
 
   /**

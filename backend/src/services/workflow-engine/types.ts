@@ -498,6 +498,8 @@ export interface ResolvedInputs {
   refAudioUrl?: string
   refImageUrl?: string
   maskUrl?: string
+  /** Mask Composite's `background` handle — the video the foreground is placed over. */
+  backgroundVideoUrl?: string
   /** Inpaint base image (the canvas being edited) wired for generate-image
    *  inpainting. Distinct from imageUrl/referenceImageUrls so an inpaint base
    *  never collides with a generic image input or reference. Mirrors maskUrl. */

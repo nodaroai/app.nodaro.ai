@@ -1212,6 +1212,9 @@ const VIDEO_RESULT_TYPES = new Set([
   "speed-ramp",
   "loop-video",
   "fade-video",
+  // Video Mask (the mask video) and Mask Composite (the composite): generatedVideoUrl + per-result `url`.
+  "video-mask",
+  "mask-composite",
   // Video Overlay: timed image layers over a video — generatedVideoUrl + per-result `url`.
   "video-overlay",
   "transcode-video",

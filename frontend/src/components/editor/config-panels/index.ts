@@ -5,6 +5,8 @@ export { GenerateImageConfig, ModifyImageConfig, UpscaleImageConfig, RemoveBackg
 export { PaintMaskConfig } from "./paint-mask-config"
 export { ImageToVideoConfig, VideoToVideoConfig, SwitchXConfig, MotionTransferConfig, VideoUpscaleConfig, TextToVideoConfig, GenerateVideoConfig, GenerateVideoProConfig, EditVideoProConfig, ExtendVideoConfig, SpeechToVideoConfig, FaceSwapConfig, VideoRetakeConfig, VideoAnalysisConfig, VideoAuditConfig } from "./video-configs"
 export { VideoSfxConfig } from "./video-sfx-config"
+export { VideoMaskConfig } from "./video-mask-config"
+export { MaskCompositeConfig } from "./mask-composite-config"
 export { TextToSpeechConfig, TextToAudioConfig, AudioIsolationConfig, TextToDialogueConfig, VoiceChangerConfig, VoiceChangerProConfig, DubbingConfig, VoiceRemixConfig, VoiceDesignConfig, ForcedAlignmentConfig, SunoVoiceConfig, SunoGenerateConfig, SunoCoverConfig, SunoExtendConfig, SunoLyricsConfig, SunoSeparateConfig, AudioSeparationConfig, SilenceDetectConfig, AudioSyncConfig, AudioFxConfig, SunoMusicVideoConfig, SunoMashupConfig, SunoReplaceSectionConfig, SunoStyleBoostConfig, SunoAddInstrumentalConfig, SunoAddVocalsConfig, SunoConvertWavConfig, SunoUploadExtendConfig, TranscribeConfig, LipSyncConfig } from "./audio-configs"
 export { GenerateMusicConfig } from "./music-config"
 export { ImageOverlayConfig } from "./image-overlay-config"

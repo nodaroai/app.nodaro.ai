@@ -54,6 +54,8 @@ import {
   isValidAiAvatarConnection,
   isValidCinematicAvatarConnection,
   isValidSwitchXConnection,
+  isValidVideoMaskConnection,
+  isValidMaskCompositeConnection,
 } from "./video-producer-handles"
 import {
   IDENTITY_HANDLE_LABELS,
@@ -800,6 +802,17 @@ const BASE_TARGET_HANDLE_ACCEPTS: Record<string, ReadonlyArray<TargetHandleEntry
     { handleId: "mask",       label: VIDEO_PRODUCER_HANDLE_LABELS["switchx"].mask,         accepts: (s) => isValidSwitchXConnection("mask",       s, isVisualPickerType) },
     { handleId: "mask-video", label: VIDEO_PRODUCER_HANDLE_LABELS["switchx"]["mask-video"], accepts: (s) => isValidSwitchXConnection("mask-video", s, isVisualPickerType) },
     { handleId: "prompt",     label: VIDEO_PRODUCER_HANDLE_LABELS["switchx"].prompt,       accepts: (s) => isValidSwitchXConnection("prompt",     s, isVisualPickerType) },
+  ],
+  // Video Mask — the clip to segment + the subject prompt (text or pickers).
+  "video-mask": [
+    { handleId: "video",  label: VIDEO_PRODUCER_HANDLE_LABELS["video-mask"].video,  accepts: (s) => isValidVideoMaskConnection("video",  s, isVisualPickerType) },
+    { handleId: "prompt", label: VIDEO_PRODUCER_HANDLE_LABELS["video-mask"].prompt, accepts: (s) => isValidVideoMaskConnection("prompt", s, isVisualPickerType) },
+  ],
+  // Mask Composite — three video inputs: foreground, background, mask video.
+  "mask-composite": [
+    { handleId: "video",      label: VIDEO_PRODUCER_HANDLE_LABELS["mask-composite"].video,        accepts: (s) => isValidMaskCompositeConnection("video",      s) },
+    { handleId: "background-video", label: VIDEO_PRODUCER_HANDLE_LABELS["mask-composite"]["background-video"], accepts: (s) => isValidMaskCompositeConnection("background-video", s) },
+    { handleId: "mask-video", label: VIDEO_PRODUCER_HANDLE_LABELS["mask-composite"]["mask-video"], accepts: (s) => isValidMaskCompositeConnection("mask-video", s) },
   ],
   // Video Retake — three typed inputs (video / prompt / look) built from
   // VIDEO_RETAKE_HANDLE_IDS so the popover candidate set can't drift from the

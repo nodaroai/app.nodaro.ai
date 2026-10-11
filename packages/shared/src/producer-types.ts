@@ -72,6 +72,9 @@ export const VIDEO_PRODUCER_TYPES: ReadonlySet<string> = new Set([
   "speed-ramp",
   "loop-video",
   "fade-video",
+  // Video Mask emits its mask as a video; Mask Composite its composite.
+  "video-mask",
+  "mask-composite",
   "transcode-video",
   "manual-edit",
   // Remove Audio: strips the audio track, emits a silent video.

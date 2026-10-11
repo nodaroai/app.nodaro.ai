@@ -46,6 +46,7 @@ import type { ComponentMetadata } from "@nodaro/shared"
 import { getAppSettings } from "../../lib/app-settings.js"
 import { videoUtilityBaseCredits } from "../../lib/video-utility-credits.js"
 import { stampVideoSfxDuration, videoSfxReserveId } from "../../lib/video-sfx-duration.js"
+import { stampVideoMaskLength, videoMaskReserveId } from "../../lib/video-mask-length.js"
 import { ltxExtendBaseCredits } from "../../lib/ltx-extend-credits.js"
 import { ltxRetakeBaseCredits } from "../../lib/ltx-retake-credits.js"
 import { probeAndCheckRefVideoDurations, probeRefVideoDurations } from "../../lib/ref-video-probe.js"
@@ -208,6 +209,11 @@ export function extractUserPromptTemplate(node: SimpleNode): string | undefined 
     case "edit-image":
     case "image-to-image":
     case "modify-image":
+      return pick("prompt")
+
+    // --- Segmentation (the subject description, a plain prompt) ---
+    case "generate-mask":
+    case "video-mask":
       return pick("prompt")
 
     // --- Video generation ---
@@ -1896,6 +1902,16 @@ async function executeWorkerNode(
     err.errorCode = sfxRefusal.code
     throw err
   }
+  // Video Mask: the same — measure the clip by the route's rule and stamp the
+  // price row before input_data is written; a clip the route refuses (unreadable,
+  // over the cap) leaves no jobs row.
+  const maskRefusal = await stampVideoMaskLength(jobName, payload)
+  if (maskRefusal) {
+    await supabase.from("jobs").delete().eq("id", jobId)
+    const err = new Error(maskRefusal.message) as Error & { errorCode?: string }
+    err.errorCode = maskRefusal.code
+    throw err
+  }
 
   // 2b''. Dubbing (every language but Hebrew, which probes in its credit
   // override): measure the source by the route's own rule and stamp the span,
@@ -2001,6 +2017,7 @@ async function executeWorkerNode(
       const reserveModelIdentifier =
         (await computeEditPlanReserveId(jobName, payload, editPlanPerMinute)) ??
         videoSfxReserveId(jobName, payload) ??
+        videoMaskReserveId(jobName, payload) ??
         modelIdentifier
 
       const creditOverride =

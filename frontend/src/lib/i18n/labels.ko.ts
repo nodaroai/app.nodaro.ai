@@ -224,6 +224,8 @@ const NODE_LABELS_KO: Record<string, string> = {
   "Photographer": "사진작가",
   "Aesthetic": "감성",
   "Era": "시대",
+  "Video Mask": "동영상 마스크",
+  "Mask Composite": "마스크 합성",
 }
 
 const HANDLE_LABELS_KO: Record<string, string> = {
@@ -414,6 +416,7 @@ const HANDLE_LABELS_KO: Record<string, string> = {
   "Voice Character": "보이스 특성",
   "Voice Delivery": "말하기 스타일",
   "Shot stills": "샷 스틸",
+  "Foreground": "전경",
 }
 
 const PRESET_GROUPS_KO: Record<string, string> = {

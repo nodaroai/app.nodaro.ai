@@ -747,6 +747,13 @@ const READ_COLLECTION_USAGE_BYTES = 166
 // rises by exactly that, keeping whatever headroom the list had (none).
 const GENERATE_IMAGE_AUTO_ASPECT_WORDING_BYTES = 93
 
+// RAISED 2026-10-12 by two NEW tools, `video_mask` (SAM 3 video segmentation → a mask video)
+// and `mask_composite` (a foreground video over a background through that mask), registered
+// together in verbs-video-mask.ts. The fixture moves by exactly those two names (cloud/all and
+// community/all). Measured by this suite: 413_276 total − 408_142 before = 5_134 B, and the
+// budget rises by exactly that.
+const VIDEO_MASK_TOOLS_BYTES = 5_134
+
 export const TOOL_WIRE_BUDGET = {
   perToolBytes: 8_192 + CHARACTER_REFERENCES_BYTES,
   totalBytes:
@@ -831,7 +838,8 @@ export const TOOL_WIRE_BUDGET = {
     UGC_CREATOR_CANDIDATES_WORDING_BYTES +
     MODIFY_IMAGE_AUTO_ASPECT_WORDING_BYTES +
     GENERATE_IMAGE_AUTO_ASPECT_WORDING_BYTES +
-    CLAUDE_HAIKU_5_5_ID_BYTES,
+    CLAUDE_HAIKU_5_5_ID_BYTES +
+    VIDEO_MASK_TOOLS_BYTES,
 }
 
 type ToolDef = { name: string; description?: string }
